@@ -510,7 +510,12 @@ if (import.meta.main) {
     )
     : await types(await changes())
   if (all) {
-    let published = await spawn(['publish', '--dry-run', '--allow-dirty'])
+    let published = await spawn([
+      'publish',
+      '--node-modules-dir=none',
+      '--dry-run',
+      '--allow-dirty',
+    ])
     ok = ok && published
   }
   if (!ok) Deno.exit(1)

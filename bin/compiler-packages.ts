@@ -5,7 +5,7 @@ import { dirname, join, relative, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { existsSync } from 'node:fs'
 import { parse } from 'es-module-lexer/js'
-import type ts from 'npm:typescript@6.0.3'
+import type ts from 'typescript'
 import { expandGlob } from 'jsr:@std/fs@^1.0.0/expand-glob'
 import type { Catalog } from '../packages/esbuild/platform.ts'
 
@@ -65,9 +65,7 @@ let script = async (path: string, source: string, memo: Transpiled) => {
   let key = (await digest(`${await salt}\0${path}\0${source}`)).slice(7)
   let code = memo.kept[key]
   if (code == null) {
-    let tsc = await (typescript ??= import('npm:typescript@6.0.3').then((m) =>
-      m.default
-    ))
+    let tsc = await (typescript ??= import('typescript').then((m) => m.default))
     code = tsc.transpileModule(source, {
       fileName: path,
       compilerOptions: {

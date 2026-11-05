@@ -1,6 +1,6 @@
 // The public about sheet offers hosting, source and the carried guide.
 import { equal, ok, test } from '@yaks/testing'
-import { JSDOM } from 'npm:jsdom@26.1.0'
+import { JSDOM } from 'jsdom'
 import { about } from './about.ts'
 import { panels } from './panel.ts'
 import { pageState } from './page-state.ts'

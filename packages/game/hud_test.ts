@@ -4,7 +4,7 @@ import { equal, ok, test } from '@yaks/testing'
 import { everforest, sheet } from '@yaks/ui'
 import { print } from '@yaks/tui/print'
 import { h, type VNode } from 'preact'
-import { render } from 'npm:preact-render-to-string@6.7.0'
+import { render } from 'preact-render-to-string'
 import { Grid, kit, Stats, Stick } from './hud.ts'
 
 let dress = sheet({ kits: { game: kit }, theme: everforest })

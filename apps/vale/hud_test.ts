@@ -2,7 +2,7 @@
 // compass opens the map, and a frame draws only what changed.
 import { equal, ok, test, tick } from '@yaks/testing'
 import { assert, assertEquals, assertStringIncludes } from '@std/assert'
-import { JSDOM, VirtualConsole } from 'npm:jsdom@26.1.0'
+import { JSDOM, VirtualConsole } from 'jsdom'
 import { options } from 'preact'
 import { hud, type Talk, talkView } from './hud.ts'
 import { GIVERS } from './quests.ts'

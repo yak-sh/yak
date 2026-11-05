@@ -1,7 +1,7 @@
 // Native headless canvas timings; no browser or server. The baseline uses its
 // own tracked painter, images and seeds, with its scratch removed on exit.
 // deno run -A bin/vale-map-time.ts --before=<commit>
-import { createCanvas, ImageData } from 'npm:@napi-rs/canvas@0.1.80'
+import { createCanvas, ImageData } from '@napi-rs/canvas'
 import { chart, chartPatch, chartRegions } from '../apps/vale/chart.ts'
 import { chartbook } from '@yaks/voxel/chartbook'
 import { chartsheet } from '@yaks/voxel/chartsheet'

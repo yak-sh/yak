@@ -217,6 +217,8 @@ export let project = (
   let external = new Set<string>()
   let node = false
   if (!placed.size) links['node_modules'] = `${checkout}/node_modules`
+  else {links['node_modules/@types/node'] =
+      `${checkout}/node_modules/@types/node`}
 
   // The files tsc may read, in turn, for a module Deno resolved.
   let candidates = (url: string): string[] => {
@@ -304,7 +306,11 @@ export let project = (
         strict: true,
         noImplicitOverride: true,
         types: node ? ['node'] : [],
-        typeRoots: ['./node_modules/@types', './node_modules'],
+        typeRoots: [
+          `${checkout}/node_modules/@types`,
+          './node_modules/@types',
+          './node_modules',
+        ],
         rootDirs: [relative(dir, checkout), './overlay'],
         paths,
       },

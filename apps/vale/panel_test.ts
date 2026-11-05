@@ -2,7 +2,7 @@
 // A sheet draws what changed after the change, before the browser paints, so
 // each look at the page waits a tick.
 import { equal, ok, test, tick } from '@yaks/testing'
-import { JSDOM } from 'npm:jsdom@26.1.0'
+import { JSDOM } from 'jsdom'
 import { render } from 'preact'
 import { cap, panels } from './panel.ts'
 import { pageState } from './page-state.ts'

@@ -5,7 +5,7 @@ import { assert, assertEquals } from '@std/assert'
 import { print } from '@yaks/tui/print'
 import { parts, sheet, stylesheet } from '@yaks/ui'
 import { h } from 'preact'
-import { render } from 'npm:preact-render-to-string@6.7.0'
+import { render } from 'preact-render-to-string'
 import {
   composition,
   kit,

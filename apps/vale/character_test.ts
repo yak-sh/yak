@@ -1,6 +1,6 @@
 // Both character panes stay usable together, including a live look preview.
 import { equal, ok, test } from '@yaks/testing'
-import { JSDOM } from 'npm:jsdom@26.1.0'
+import { JSDOM } from 'jsdom'
 import { character } from './character.ts'
 import { LINES, numbers, said } from './compare.ts'
 import { kitOf } from './gear.ts'

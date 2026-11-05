@@ -85,6 +85,47 @@ function browserEntries(config: Config, deno: URL): string[] {
   return files
 }
 
+// A standalone compiler keeps its own globals while taking resolution from
+// package manifests, just as the workspace's runtime and bundler do.
+let packageImports = (root: URL, platform: string): Record<string, string> => {
+  let read = (at: URL) => JSON.parse(Deno.readTextFileSync(at))
+  let manifest
+  try {
+    manifest = read(new URL('package.json', root))
+  } catch (error) {
+    if (error instanceof Deno.errors.NotFound) return {}
+    throw error
+  }
+  let imports: Record<string, string> = {}
+  for (let at of ['', ...manifest.workspaces ?? []]) {
+    let url = new URL(`${at ? at + '/' : ''}package.json`, root)
+    let pkg = at ? read(url) : manifest
+    for (
+      let [name, version] of Object.entries({
+        ...pkg.devDependencies,
+        ...pkg.dependencies,
+      })
+    ) {
+      if (
+        name.startsWith('@yaks/') ||
+        platform == 'browser' && name == '@cloudflare/workers-types'
+      ) continue
+      imports[name] = String(version).startsWith('npm:')
+        ? String(version)
+        : `npm:${name}@${version}`
+    }
+    let map = typeof pkg.exports == 'string'
+      ? { '.': pkg.exports }
+      : pkg.exports ?? {}
+    for (let [key, target] of Object.entries(map)) {
+      if (typeof target == 'string') {
+        imports[pkg.name + key.slice(1)] = new URL(target, url).href
+      }
+    }
+  }
+  return imports
+}
+
 export async function platformConfig(root: URL, platform: string) {
   if (!['browser', 'workers'].includes(platform)) {
     throw new Error('Expected browser or workers')
@@ -114,7 +155,9 @@ export async function platformConfig(root: URL, platform: string) {
     }
   }
   configs.sort((a, b) => a.url.href.localeCompare(b.url.href))
-  return { config: mergeConfigs(configs), entries: entries.sort() }
+  let config = mergeConfigs(configs)
+  config.imports = { ...packageImports(root, platform), ...config.imports }
+  return { config, entries: entries.sort() }
 }
 
 if (import.meta.main) {

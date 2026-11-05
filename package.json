@@ -184,6 +184,8 @@
     "@sqliteai/sqlite-vector-win32-x86_64": "1.1.2"
   },
   "devDependencies": {
-    "@types/semver": "^7.8.0"
+    "@types/jsdom": "^21.1.7",
+    "@types/semver": "^7.8.0",
+    "jsdom": "^26.1.0"
   }
 }

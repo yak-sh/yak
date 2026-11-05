@@ -3,8 +3,8 @@
 // and the exported runtime classes while avoiding hundreds of eager links.
 import * as io from '@yaks/file/io'
 import * as system from '@yaks/process/system'
-import { build, type Metafile, stop } from 'npm:esbuild@0.28.1'
-import { rollup } from 'npm:rollup@4.65.1'
+import { build, type Metafile, stop } from 'esbuild'
+import { rollup } from 'rollup'
 import { dirname, join, resolve } from 'node:path'
 import { isBuiltin } from 'node:module'
 import { fileURLToPath } from 'node:url'

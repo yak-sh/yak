@@ -2,7 +2,7 @@
 import { test } from '@yaks/testing'
 import { assertEquals, assertStringIncludes } from '@std/assert'
 import { h } from 'preact'
-import { render } from 'npm:preact-render-to-string@6.7.0'
+import { render } from 'preact-render-to-string'
 import { type Row, songs } from './music_takes.ts'
 import { catalog } from './music_catalog.ts'
 import { Takes } from './music-takes-view.ts'
