@@ -28,6 +28,7 @@
 // same directives. With neither, the order is the source's: an array's own, or
 // whatever order a store's index yields.
 
+import { fromBase64, toBase64 } from '@yaks/fp'
 import {
   type After,
   type And,
@@ -507,7 +508,7 @@ export let rows = (
       v == null
         ? null
         : counted == 'binary'
-        ? (v as Uint8Array).toBase64()
+        ? toBase64(v as Uint8Array)
         : counted == 'number'
         ? v
         : String(v) || null
@@ -519,7 +520,7 @@ export let rows = (
         if (k != null) n.set(k, (n.get(k) ?? 0) + 1)
       }
       let restored = (v: unknown) =>
-        counted == 'binary' ? Uint8Array.fromBase64(v as string) : v
+        counted == 'binary' ? fromBase64(v as string) : v
       let values = [...n.keys()].sort((a, b) =>
         compare(restored(a), restored(b))
       )

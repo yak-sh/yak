@@ -2909,6 +2909,9 @@ importers:
 
   packages/match:
     dependencies:
+      "@yaks/fp":
+        specifier: 0.2.17
+        version: link:../fp
       "@yaks/query":
         specifier: 0.2.17
         version: link:../query
@@ -3515,6 +3518,9 @@ importers:
 
   packages/process:
     dependencies:
+      "@yaks/fp":
+        specifier: 0.2.17
+        version: link:../fp
       "@yaks/graph":
         specifier: 0.2.17
         version: link:../graph
@@ -4405,6 +4411,9 @@ importers:
       "@yaks/effects":
         specifier: 0.2.17
         version: link:../effects
+      "@yaks/fp":
+        specifier: 0.2.17
+        version: link:../fp
       "@yaks/graph":
         specifier: 0.2.17
         version: link:../graph
@@ -4762,6 +4771,9 @@ importers:
       "@preact/signals":
         specifier: 2.9.4
         version: 2.9.4(preact@10.29.7)
+      "@yaks/fp":
+        specifier: 0.2.17
+        version: link:../fp
       "@yaks/process":
         specifier: 0.2.17
         version: link:../process

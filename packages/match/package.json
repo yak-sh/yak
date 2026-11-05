@@ -6,6 +6,7 @@
   "license": "Apache-2.0",
   "description": "Evaluates queries over bundles in memory: selections, filters, rows and routing, without SQL or a database.",
   "dependencies": {
+    "@yaks/fp": "0.2.17",
     "@yaks/query": "0.2.17",
     "@yaks/sql": "0.2.17",
     "@yaks/vocab": "0.2.17"

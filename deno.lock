@@ -3839,6 +3839,7 @@
             "npm:@jsr/std__assert@1",
             "npm:@yaks/archetype@0.2.17",
             "npm:@yaks/edge@0.2.17",
+            "npm:@yaks/fp@0.2.17",
             "npm:@yaks/fts@0.2.17",
             "npm:@yaks/kernel@0.2.17",
             "npm:@yaks/project@0.2.17",
@@ -4128,6 +4129,7 @@
         "packageJson": {
           "dependencies": [
             "npm:@jsr/std__assert@1",
+            "npm:@yaks/fp@0.2.17",
             "npm:@yaks/graph@0.2.17",
             "npm:@yaks/model@0.2.17",
             "npm:@yaks/query@0.2.17",
@@ -4517,6 +4519,7 @@
         "packageJson": {
           "dependencies": [
             "npm:@yaks/effects@0.2.17",
+            "npm:@yaks/fp@0.2.17",
             "npm:@yaks/graph@0.2.17",
             "npm:@yaks/ram@0.2.17",
             "npm:@yaks/sync@0.2.17",
@@ -4670,6 +4673,7 @@
           "dependencies": [
             "npm:@jsr/std__assert@1",
             "npm:@preact/signals@2.9.4",
+            "npm:@yaks/fp@0.2.17",
             "npm:@yaks/markdown@0.2.17",
             "npm:@yaks/process@0.2.17",
             "npm:@yaks/testing@0.2.17",

@@ -1,11 +1,12 @@
 /** Shared Worker entry point for graph duties. @module */
+import { resolvers } from '@yaks/fp'
 import { type Port, portLink } from '@yaks/sync/port'
 
 import type { Host, Open, Start } from './types.ts'
 
 let scope = globalThis as unknown as Port & { close: () => void }
 
-let host = Promise.withResolvers<Host>()
+let host = resolvers<Host>()
 host.promise.catch(() => {})
 let live: AbortController | undefined
 let going: Promise<void> = Promise.resolve()

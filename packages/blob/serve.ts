@@ -8,6 +8,7 @@
 //
 // `Response` is the web platform's own, so this loads anywhere the package
 // does.
+import { wellFormed } from '@yaks/fp'
 import type { Opened } from './object.ts'
 import { fixed } from './fixed.ts'
 
@@ -128,7 +129,7 @@ let disposition = (name: string) => {
   // deno-lint-ignore no-control-regex
   let clean = name.replace(/[\x00-\x1f\x7f"\\]/g, '')
   let ascii = clean.replace(/[^\x20-\x7e]/g, '_')
-  let encoded = encodeURIComponent(clean.toWellFormed())
+  let encoded = encodeURIComponent(wellFormed(clean))
     .replace(
       /[!'()*]/g,
       (c) => `%${c.charCodeAt(0).toString(16).toUpperCase()}`,

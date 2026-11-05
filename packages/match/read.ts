@@ -14,6 +14,7 @@
 // see: an entity outside it does not exist, the same way a row outside a table
 // does not.
 
+import { toBase64 } from '@yaks/fp'
 import { type Tag, tagOf } from '@yaks/sql/core'
 import type { Hop, Vocab } from '@yaks/vocab'
 
@@ -116,7 +117,7 @@ export let keyOf = (v: unknown): string | undefined =>
   v == null
     ? undefined
     : v instanceof Uint8Array
-    ? v.toBase64()
+    ? toBase64(v)
     : String(held(v))
 
 /**

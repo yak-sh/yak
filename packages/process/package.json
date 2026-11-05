@@ -21,6 +21,7 @@
   "license": "Apache-2.0",
   "description": "Starts, adopts and supervises operating-system processes, recording each one as a graph entity with its pid and exit code.",
   "dependencies": {
+    "@yaks/fp": "0.2.17",
     "@yaks/graph": "0.2.17",
     "@yaks/query": "0.2.17",
     "@yaks/render": "0.2.17",

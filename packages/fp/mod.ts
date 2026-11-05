@@ -355,6 +355,57 @@ export let groupBy = <X, K>(
   return groups
 }
 
+/// toBase64(new Uint8Array([104, 105])) -> 'aGk='
+/**
+ * Bytes as base64: `Uint8Array.prototype.toBase64`, which browsers before
+ * Chrome 140 and Safari 18.2 lack.
+ */
+export let toBase64 = (bytes: Uint8Array): string => {
+  let text = ''
+  for (let i = 0; i < bytes.length; i += 0x8000) {
+    text += String.fromCharCode(...bytes.subarray(i, i + 0x8000))
+  }
+  return btoa(text)
+}
+
+/// fromBase64('aGk=') -> new Uint8Array([104, 105])
+/**
+ * The bytes base64 text names: `Uint8Array.fromBase64`, which browsers before
+ * Chrome 140 and Safari 18.2 lack.
+ */
+export let fromBase64 = (text: string): Uint8Array<ArrayBuffer> =>
+  Uint8Array.from(atob(text), (c) => c.charCodeAt(0))
+
+/// wellFormed('a\uD800b') -> 'a�b'
+/// wellFormed('😀') -> '😀'
+/**
+ * Text with each lone surrogate replaced by U+FFFD: `String.prototype.
+ * toWellFormed`, which browsers before Safari 16.4 and Chrome 111 lack.
+ */
+export let wellFormed = (text: string): string =>
+  text.replace(
+    /[\uD800-\uDBFF][\uDC00-\uDFFF]|[\uD800-\uDFFF]/g,
+    (c) => c.length == 2 ? c : '�',
+  )
+
+/**
+ * A promise with its resolve and reject: `Promise.withResolvers`, which
+ * browsers before Safari 17.4 and Chrome 119 lack.
+ */
+export let resolvers = <T>(): {
+  promise: Promise<T>
+  resolve: (value: T | PromiseLike<T>) => void
+  reject: (reason?: unknown) => void
+} => {
+  let resolve!: (value: T | PromiseLike<T>) => void
+  let reject!: (reason?: unknown) => void
+  let promise = new Promise<T>((yes, no) => {
+    resolve = yes
+    reject = no
+  })
+  return { promise, resolve, reject }
+}
+
 /// map(inc)([1, 2]) -> [2, 3]
 /** A list's items mapped. */
 export let map =

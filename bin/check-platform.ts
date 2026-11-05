@@ -26,7 +26,18 @@ export type Config = {
   [key: string]: unknown
 }
 
-export function mergeConfigs(configs: { url: URL; config: Config }[]): Config {
+/** The libs a platform's program may name. ES2023 is the language the oldest
+ * browsers a page supports have (Safari 16, Chrome 110), so a built-in newer
+ * than that fails the browser check; workerd is always current. */
+let LIBS: Record<string, string[]> = {
+  browser: ['dom', 'dom.asynciterable', 'dom.iterable', 'es2023'],
+  workers: ['dom', 'dom.asynciterable', 'dom.iterable', 'esnext'],
+}
+
+export function mergeConfigs(
+  configs: { url: URL; config: Config }[],
+  platform = 'browser',
+): Config {
   let imports: Record<string, string> = {}
   let libs = new Set<string>()
   let options: Record<string, unknown> | undefined
@@ -47,9 +58,7 @@ export function mergeConfigs(configs: { url: URL; config: Config }[]): Config {
     }
     options = sorted
     for (let name of lib) {
-      if (
-        !['dom', 'dom.asynciterable', 'dom.iterable', 'esnext'].includes(name)
-      ) {
+      if (!LIBS[platform].includes(name)) {
         throw new Error(`${url}: non-web platform lib ${name}`)
       }
       libs.add(name)
@@ -161,7 +170,7 @@ export async function platformConfig(root: URL, platform: string) {
     }
   }
   configs.sort((a, b) => a.url.href.localeCompare(b.url.href))
-  let config = mergeConfigs(configs)
+  let config = mergeConfigs(configs, platform)
   config.imports = { ...packageImports(root, platform), ...config.imports }
   return { config, entries: entries.sort() }
 }

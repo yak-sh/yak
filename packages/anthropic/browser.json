@@ -3,7 +3,7 @@
     "lib": [
       "dom",
       "dom.asynciterable",
-      "esnext"
+      "es2023"
     ],
     "strict": true
   }

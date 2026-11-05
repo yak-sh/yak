@@ -19,6 +19,7 @@
 // since last time"; the loop that asks it lives where a process keeps its
 // timers (./graph.ts `feed`).
 
+import { fromBase64, toBase64 } from '@yaks/fp'
 import type { Bundle, Plugin } from '@yaks/graph'
 import { composed, comps, dead } from '@yaks/graph/bundle'
 import {
@@ -90,7 +91,7 @@ export let carried = (bundles: Bundle[]): Bundle[] =>
 let pack = (bundles: Bundle[]): string =>
   JSON.stringify(
     bundles,
-    (_k, v) => v instanceof Uint8Array ? { $binary: v.toBase64() } : v,
+    (_k, v) => v instanceof Uint8Array ? { $binary: toBase64(v) } : v,
   )
 let unpack = (text: string): Bundle[] =>
   JSON.parse(
@@ -98,7 +99,7 @@ let unpack = (text: string): Bundle[] =>
     (_k, v) =>
       v && typeof v == 'object' && typeof v.$binary == 'string' &&
         Object.keys(v).length == 1
-        ? Uint8Array.fromBase64(v.$binary)
+        ? fromBase64(v.$binary)
         : v,
   )
 

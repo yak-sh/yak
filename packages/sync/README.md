@@ -644,7 +644,7 @@ Finish pending work before discarding the graph; browser unload does not
 guarantee time to await it. HTTP `headers` do not authenticate the socket; that
 belongs to the supplied `connect` implementation or server session handling.
 
-The package uses web transport APIs and `lib: ["dom", "esnext"]`, without Deno
+The package uses web transport APIs and `lib: ["dom", "es2023"]`, without Deno
 runtime types. Inject transports when a runtime lacks compatible defaults.
 [@yaks/ram](../ram/README.md) supplies in-memory storage;
 [@yaks/api](../api/README.md) implements the server protocol.

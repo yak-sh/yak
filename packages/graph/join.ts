@@ -30,6 +30,7 @@
 // is how a template's arguments work (T-37570). Deciding which is which is the
 // compiler's job, not the grammar's.
 
+import { toBase64 } from '@yaks/fp'
 import {
   type And,
   bare,
@@ -351,7 +352,7 @@ export let collected = (
  * ```
  */
 let operand = (value: unknown): string =>
-  value instanceof Uint8Array ? value.toBase64() : String(value)
+  value instanceof Uint8Array ? toBase64(value) : String(value)
 
 export let filled = (
   m: Match | string,

@@ -1,3 +1,4 @@
+import { resolvers } from '@yaks/fp'
 import * as system from './system.ts'
 // How this process ends when it is asked to: wound down, not cut off, unless
 // it is asked twice.
@@ -55,7 +56,7 @@ export type Wind = {
 export let winding = (): Wind => {
   let holds = new Set<Hold>()
   let state: 'open' | 'draining' | 'forced' | 'done' = 'open'
-  let end = Promise.withResolvers<number>()
+  let end = resolvers<number>()
   // Every hold asked at once; one that throws has still answered.
   let each = (ask: (h: Hold) => unknown) =>
     Promise.allSettled([...holds].map(async (h) => await ask(h)))

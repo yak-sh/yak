@@ -15,6 +15,7 @@ import * as system from '@yaks/process/system'
  * @module
  */
 
+import { resolvers } from '@yaks/fp'
 import { type ComponentType, h, render } from 'preact'
 import { useEffect } from 'preact/hooks'
 import { type Hold, listen, wind } from '@yaks/process/wind'
@@ -110,8 +111,8 @@ export let run = async (
   // components have drained, or been forced, and the hold is answered once
   // the terminal is given back. A drain that fails ends it too, and `run`
   // throws what it threw.
-  let ending = Promise.withResolvers<void>()
-  let given = Promise.withResolvers<void>()
+  let ending = resolvers<void>()
+  let given = resolvers<void>()
   let failure: unknown
   let unhold = wind.hold({
     drain: async () => {

@@ -2,7 +2,7 @@ import { test } from '@yaks/testing'
 import { assertEquals, assertThrows } from '@std/assert'
 import { type Config, mergeConfigs, platformConfig } from './check-platform.ts'
 
-let config = (imports = {}, lib = ['dom', 'esnext']): Config => ({
+let config = (imports = {}, lib = ['dom', 'es2023']): Config => ({
   compilerOptions: { lib, strict: true },
   imports,
 })
@@ -18,14 +18,14 @@ test('platform maps resolve at their own config, then share one program', () => 
         config: config({
           '@yaks/a': '../a/mod.ts',
           external: 'jsr:@example/package@1',
-        }, ['dom', 'dom.asynciterable', 'esnext']),
+        }, ['dom', 'dom.asynciterable', 'es2023']),
       },
     ]),
     {
       nodeModulesDir: 'manual',
       compilerOptions: {
         strict: true,
-        lib: ['dom', 'dom.asynciterable', 'esnext'],
+        lib: ['dom', 'dom.asynciterable', 'es2023'],
       },
       imports: {
         '@yaks/a': 'file:///repo/packages/a/mod.ts',
@@ -83,6 +83,13 @@ test('platform merging refuses conflicts, hidden options and runtime libs', () =
       ]),
     Error,
     'non-web platform lib deno.ns',
+  )
+  // A page meets browsers that lack what ES2023 does not have; workerd has it.
+  let esnext = [{ url: a, config: config({}, ['dom', 'esnext']) }]
+  assertThrows(() => mergeConfigs(esnext), Error, 'platform lib esnext')
+  assertEquals(
+    mergeConfigs(esnext, 'workers').compilerOptions.lib,
+    ['dom', 'esnext'],
   )
 })
 

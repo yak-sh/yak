@@ -2,7 +2,7 @@
   "compilerOptions": {
     "lib": [
       "dom",
-      "esnext"
+      "es2023"
     ],
     "strict": true
   },

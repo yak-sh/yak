@@ -218,7 +218,7 @@ components directly.
 
 Pure TypeScript. It imports no platform API — no `Deno`, no Node built-in, no
 DOM global beyond `TextEncoder` — and type-checks under
-`lib: ["dom", "esnext"]`, so it runs unchanged in a **browser**, on **Deno**,
+`lib: ["dom", "es2023"]`, so it runs unchanged in a **browser**, on **Deno**,
 and on **Node** (via JSR / npm). The library depends on sibling schema and graph
 libraries. The optional `./tools` implementations additionally require the
 configured graph and, for search queries, the appropriate search extensions.

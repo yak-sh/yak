@@ -8,6 +8,8 @@
 // cleared, and a component that was not there are all `null` here — the same
 // rule a client's JSON follows, where a `null` property is the cleared one.
 
+import { fromBase64, toBase64 } from '@yaks/fp'
+
 /** A value as the journal stores it: JSON, marked base64 bytes, or `null`
  * for no value at all. JSON strings include their quotes and cannot collide
  * with the binary prefix. */
@@ -15,7 +17,7 @@ export let enc = (v: unknown): string | null =>
   v == null
     ? null
     : v instanceof Uint8Array
-    ? `binary:${v.toBase64()}`
+    ? `binary:${toBase64(v)}`
     : JSON.stringify(v)
 
 /** A stored value read back. Text that is not JSON comes back as itself, so a
@@ -24,7 +26,7 @@ export let dec = (v: unknown): unknown => {
   if (v == null) return null
   try {
     if (typeof v == 'string' && v.startsWith('binary:')) {
-      return Uint8Array.fromBase64(v.slice(7))
+      return fromBase64(v.slice(7))
     }
     return JSON.parse(String(v))
   } catch {

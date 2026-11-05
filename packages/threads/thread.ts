@@ -1,3 +1,4 @@
+import { resolvers } from '@yaks/fp'
 import type { Access, Eid } from '@yaks/graph'
 import { type PortLink, portLink } from '@yaks/sync/port'
 import { serve } from './graph.ts'
@@ -37,7 +38,7 @@ export let thread = <T = unknown>(
   let link: PortLink | undefined
   let graphLink: PortLink | undefined
   let graphPort: MessagePort | undefined
-  let planned = Promise.withResolvers<Plan<T> | undefined>()
+  let planned = resolvers<Plan<T> | undefined>()
   planned.promise.catch(() => {})
   let over = false
   let born = false

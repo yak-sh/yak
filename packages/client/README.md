@@ -475,7 +475,7 @@ equal(await vault.load(), [])
 ## Compatibility
 
 Browser, Deno, Node, Bun, and Cloudflare Workers. The package uses standard web
-APIs and type-checks with `lib: ["dom", "esnext"]` without Deno types. Fetch,
+APIs and type-checks with `lib: ["dom", "es2023"]` without Deno types. Fetch,
 socket creation, timers, and persistence can be supplied by the caller.
 Environments without IndexedDB have no persistence unless given a vault.
 

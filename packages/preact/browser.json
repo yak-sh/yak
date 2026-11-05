@@ -7,7 +7,7 @@
     "lib": [
       "dom",
       "dom.iterable",
-      "esnext"
+      "es2023"
     ],
     "strict": true
   }

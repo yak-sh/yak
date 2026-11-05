@@ -672,7 +672,7 @@ equal(refused, true)
 ## Compatibility
 
 Pure TypeScript. It imports no platform API — no `Deno` global, no Node
-built-in, no DOM global — and type-checks under `lib: ["dom", "esnext"]`, so it
+built-in, no DOM global — and type-checks under `lib: ["dom", "es2023"]`, so it
 runs unchanged in a browser, on Deno, and on Node (via JSR or npm). Its only
 dependencies are sibling packages: a @yaks/query AST, a @yaks/vocab schema, and
 @yaks/sql's `Unsupported` error and property type categories.
