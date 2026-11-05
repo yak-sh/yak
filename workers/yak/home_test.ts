@@ -60,8 +60,9 @@ test('one side is the whole menu: your account, then the space you are in', asyn
     { label: 'Shared with you', href: '/manage/account/shared' },
   ])
   assertEquals(space.map((l) => l.label), [
-    'Apps',
+    'Dashboard',
     'Operator',
+    'Apps',
     'People',
     'Connections',
     'Visits',
@@ -69,7 +70,9 @@ test('one side is the whole menu: your account, then the space you are in', asyn
     'Settings',
     'Trash',
   ])
-  assertEquals(space[6].href, '/manage/dana/settings')
+  let to = Object.fromEntries(space.map((l) => [l.label, l.href]))
+  assertEquals(to.Dashboard, '/manage/dana')
+  assertEquals(to.Settings, '/manage/dana/settings')
   assertStringIncludes(page, 'Connect your agent')
   assertEquals(
     document.querySelector('.Desk_Connect .Button')?.getAttribute('href'),

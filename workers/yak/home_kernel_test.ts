@@ -84,7 +84,7 @@ test('a space with no front page lists what you may open', async () => {
     assertStringIncludes(mine, 'href="/garden/"')
     assertStringIncludes(
       mine,
-      `href="https://yaks.app${managePath('apps', jeff21)}"`,
+      `href="https://yaks.app${managePath('home', jeff21)}"`,
     )
     assert(!mine.includes('name="name"'), mine)
     assert(!mine.includes('What is yaks.app?'), mine)
@@ -111,7 +111,7 @@ test('a space with no front page lists what you may open', async () => {
     })
     assertStringIncludes(
       await ready.text(),
-      `href="https://yaks.app${managePath('apps', bare21Space)}"`,
+      `href="https://yaks.app${managePath('home', bare21Space)}"`,
     )
 
     // An API address is still a machine door when no app answers there: a
