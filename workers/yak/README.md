@@ -189,7 +189,10 @@ Builds run on watched-path pushes and finish in any order. The deploy guard
 already live. It reads live versions beside preparation, then again before each
 upload and retry, since another build can deploy while this one prepares or
 waits. A push to main does not stop a completed build from deploying. A build
-behind a newer live version deploys nothing and says why in its log.
+behind a newer live version deploys nothing and says why in its log. A newer
+build can still go live during an older one's upload, so after its deploy the
+door reads the release it replaced (`undo`), and when that release's commit is
+ahead of its own, it deploys that version again.
 
 The sandbox tools use the Cloudflare provider in
 [@yaks/machine](../../packages/machine/README.md#cloudflare-containers).

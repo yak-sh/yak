@@ -305,14 +305,16 @@ let transient = ({ output, log = '' }: StepResult) => {
  * boundary supplies diagnostics; the timer and signal belong to the caller.
  * Deploys get three attempts; permanent failures and other commands get one.
  * Each attempt that would change what serves first asks `allowed`, the deploy
- * guard as it stands then; one it refuses deploys nothing and exits 0. */
+ * guard as it stands then; one it refuses deploys nothing and exits 0. One
+ * that went live then runs `landed`, which looks at what it replaced. */
 export let runStep = async (
   args: string[],
   execute: (args: string[]) => Promise<StepResult>,
-  { wait = sleep, signal, allowed }: {
+  { wait = sleep, signal, allowed, landed }: {
     wait?: typeof sleep
     signal?: AbortSignal
     allowed?: () => Promise<boolean>
+    landed?: () => Promise<unknown>
   } = {},
 ): Promise<number> => {
   let promotes = deploying(args) && !args.includes('--dry-run')
@@ -320,6 +322,7 @@ export let runStep = async (
     if (signal?.aborted) return 130
     if (promotes && allowed && !await allowed()) return 0
     let result = await execute(args)
+    if (promotes && !result.code && landed) await landed()
     if (
       !result.code || result.code == 130 || result.code == 143 ||
       !deploying(args) || attempt == 3 || !transient(result)
@@ -1079,7 +1082,13 @@ export let descendants = (pid: number): number[] => {
 //
 // Builds finish in any order. A completed build may deploy unless a newer
 // commit is already live. Read live versions again before each upload and
-// retry: a newer build can finish while this one prepares or waits.
+// retry: a newer build can finish while this one prepares or waits. A check
+// before an upload cannot see a newer build that goes live during it, so two
+// builds that both looked before either went live both deploy, and the last
+// to finish serves (9c39a10f went live 3 s after its child d348e1ab on
+// 2026-11-05). Cloudflare deploys without comparing what it replaces, so the
+// door looks after its deploy too (`undo`): when the release it replaced
+// carries a commit ahead of its own, it puts that release back.
 
 /** This build's commit and the commits live now, with whether each is ahead
  * of this one (null when git cannot tell). */
@@ -1186,18 +1195,75 @@ export let seen = async (
     live,
   ])
   let head = checked.out
-  let ahead = async (sha: string) => {
-    if (sha == head) return false
-    await fetched(root, sha, 'tree:0', read)
-    let { code } = await read(root, 'merge-base', '--is-ancestor', head, sha)
-    return code == 0 ? true : code == 1 ? false : null
-  }
   return {
     head,
     live: await Promise.all(
-      named.map(async (sha) => ({ sha, ahead: await ahead(sha) })),
+      named.map(async (sha) => ({
+        sha,
+        ahead: await aheadOf(root, head, sha, read),
+      })),
     ),
   }
+}
+
+/** Whether `sha` descends from `head` (null when git cannot tell), fetching
+ * the ancestry a shallow clone lacks. */
+export let aheadOf = async (
+  root: string,
+  head: string,
+  sha: string,
+  read = git,
+): Promise<boolean | null> => {
+  if (sha == head) return false
+  await fetched(root, sha, 'tree:0', read)
+  let { code } = await read(root, 'merge-base', '--is-ancestor', head, sha)
+  return code == 0 ? true : code == 1 ? false : null
+}
+
+/** A deployment of the Worker, newest first: the commit its message names,
+ * its one version at 100% (null when split or unread), its message, and
+ * whether its commit is ahead of this build's. */
+export type Release = {
+  sha: string | null
+  version: string | null
+  message: string
+  ahead: boolean | null
+}
+
+/// let ours = { sha: 'a', version: 'v2', message: 'a', ahead: false }
+/// let newer = { sha: 'b', version: 'v1', message: 'b', ahead: true }
+/// overtook('a', [ours, newer])?.version -> 'v1'
+/// overtook('a', [ours, { ...newer, ahead: false }]) -> undefined
+/// overtook('a', [ours, { ...newer, ahead: null }]) -> undefined
+/// overtook('a', [ours, { ...newer, version: null }]) -> undefined
+/// overtook('a', [newer, ours]) -> undefined
+/// overtook('a', [ours]) -> undefined
+/** The release this build's deploy replaced, when its commit is ahead of this
+ * build's: an older build that finished last went live over a newer one. Only
+ * while this build's deploy is the newest; a later one answers for itself. */
+export let overtook = (head: string, releases: Release[]) => {
+  let [now, before] = releases
+  return now?.sha == head && before?.ahead && before.version
+    ? before
+    : undefined
+}
+
+/** After this build went live, puts back the release it replaced when that
+ * release is ahead of it ({@link overtook}), through `restore`. */
+export let undo = (
+  head: string,
+  releases: () => Promise<Release[]>,
+  restore: (release: Release) => Promise<number>,
+  note = console.log,
+) =>
+async () => {
+  let newer = overtook(head, await releases())
+  if (!newer) return false
+  note(
+    `${short(head)} went live over ${short(newer.sha!)}, which is ahead of ` +
+      `it; restoring version ${newer.version}`,
+  )
+  return !await restore(newer)
 }
 
 /** The deploy guard looks beside preparation (`first`) and reads fresh live
@@ -1238,44 +1304,74 @@ let envs = (args: string[]): string[] =>
       : []
   )
 
+// One read of wrangler's JSON in the deploy's own environment; anything
+// wrangler will not answer is null.
+let wrangled = async (args: string[], env: string[], wrangler = WRANGLER) => {
+  let r = await spawnCommand(wrangler[0], {
+    args: [...wrangler.slice(1), ...args, ...env, '--json'],
+    cwd: dir,
+    stdout: 'piped',
+    stderr: 'null',
+  }).output()
+  try {
+    return r.success ? JSON.parse(new TextDecoder().decode(r.stdout)) : null
+  } catch {
+    return null
+  }
+}
+
+// The Worker's deployments, newest first.
+let deployments = async (
+  env: string[],
+  wrangler = WRANGLER,
+): Promise<Deployment[]> =>
+  ((await wrangled(['deployments', 'list'], env, wrangler)) ??
+    [] as Deployment[])
+    .toSorted((a: Deployment, b: Deployment) =>
+      Date.parse(b.created_on) - Date.parse(a.created_on)
+    )
+
 /** The commits the versions live now were deployed from, as the message this
  * door gives every version says (`--message` below), in the deploy's own
  * environment. Anything wrangler will not answer names no commit. */
 let serving = async (env: string[], wrangler = WRANGLER): Promise<string[]> => {
-  let read = async (args: string[]) => {
-    let r = await spawnCommand(wrangler[0], {
-      args: [...wrangler.slice(1), ...args, ...env, '--json'],
-      cwd: dir,
-      stdout: 'piped',
-      stderr: 'null',
-    }).output()
-    try {
-      return r.success ? JSON.parse(new TextDecoder().decode(r.stdout)) : null
-    } catch {
-      return null
-    }
-  }
-  let deployments: {
-    created_on: string
-    annotations?: Record<string, string>
-    versions: { version_id: string; percentage: number }[]
-  }[] = await read(['deployments', 'list']) ?? []
-  let now =
-    deployments.toSorted((a, b) =>
-      Date.parse(b.created_on) - Date.parse(a.created_on)
-    )[0]
-  let annotated = SHA.exec(now?.annotations?.['workers/message'] ?? '')?.[0]
+  let [now] = await deployments(env, wrangler)
+  let annotated = SHA.exec(annotation(now ?? null))?.[0]
   if (
     now?.versions.length == 1 && now.versions[0].percentage == 100 && annotated
   ) return [annotated]
   let named = await Promise.all(
     (now?.versions ?? []).filter((v) => v.percentage > 0).map(async (v) => {
-      let version = await read(['versions', 'view', v.version_id])
-      return SHA.exec(version?.annotations?.['workers/message'] ?? '')?.[0]
+      let version = await wrangled(
+        ['versions', 'view', v.version_id],
+        env,
+        wrangler,
+      )
+      return SHA.exec(annotation(version))?.[0]
     }),
   )
   return named.filter((sha) => sha != null)
 }
+
+/** The Worker's two newest deployments as {@link Release}s for `head`. */
+let releases = async (head: string, env: string[], wrangler = WRANGLER) =>
+  Promise.all(
+    (await deployments(env, wrangler)).slice(0, 2).map(
+      async (d): Promise<Release> => {
+        let message = annotation(d)
+        let sha = SHA.exec(message)?.[0] ?? null
+        let [one] = d.versions
+        return {
+          sha,
+          version: d.versions.length == 1 && one.percentage == 100
+            ? one.version_id
+            : null,
+          message,
+          ahead: sha ? await aheadOf(dir, head, sha) : null,
+        }
+      },
+    ),
+  )
 
 if (system.main(import.meta.url)) {
   let began = new Date()
@@ -1291,6 +1387,7 @@ if (system.main(import.meta.url)) {
     : undefined
   let inspect = async () => door ? await door.first() : true
   let still = async () => door ? await door.still() : true
+  let head = ''
   if (command(argv) === 'deploy') {
     // Versions carry their commit so `yak admin deploys` need not infer it by
     // time, and when this door began, which the deploy catch-up times.
@@ -1301,10 +1398,9 @@ if (system.main(import.meta.url)) {
       stderr: 'inherit',
     }).output()
     if (!commit.success) system.exit(commit.code)
-    argv.push(
-      '--message',
-      versionMessage(new TextDecoder().decode(commit.stdout).trim(), began),
-    )
+    let line = new TextDecoder().decode(commit.stdout).trim()
+    head = line.split(' ')[0]
+    argv.push('--message', versionMessage(line, began))
   }
   let children = new Set<system.ChildProcess>()
   let stopped = new AbortController()
@@ -1330,7 +1426,7 @@ if (system.main(import.meta.url)) {
     })
   }
   // env(1) execs wrangler in its own place, so the pid signalled is the same.
-  let run = (argv: string[], unpinned = false) =>
+  let run = (argv: string[], unpinned = false): Promise<number> =>
     runStep(argv, async (argv) => {
       console.log(
         `Wrangler ${command(argv)} ${
@@ -1382,7 +1478,29 @@ if (system.main(import.meta.url)) {
       } finally {
         if (log) io.removeSync(log)
       }
-    }, { signal: stopped.signal, allowed: still })
+    }, {
+      signal: stopped.signal,
+      allowed: still,
+      // A sibling's message names its inputs, not its commit, and an older
+      // sibling with the same inputs serves the same code; a restore is not
+      // looked after again.
+      landed: guarded && !unpinned && command(argv) == 'deploy'
+        ? undo(
+          head,
+          () => releases(head, envs(argv), wrangler),
+          ({ version, message }) =>
+            run([
+              'versions',
+              'deploy',
+              `${version}@100%`,
+              '--yes',
+              '--message',
+              message,
+              ...envs(argv),
+            ]),
+        )
+        : undefined,
+    })
   let made = preparing()
   let readied = made.dependencies.then(() => {
     // Choose after npm has installed: a cold checkout has this pin now too.

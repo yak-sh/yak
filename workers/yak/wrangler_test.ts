@@ -15,6 +15,7 @@ import { Buffer } from 'node:buffer'
 import { parse } from '@std/toml'
 import { globToRegExp } from 'jsr:@std/path@^1.0.0/glob-to-regexp'
 import {
+  aheadOf,
   aliased,
   bundled,
   command,
@@ -35,6 +36,7 @@ import {
   siblingMessage,
   SIBLINGS,
   siblings,
+  undo,
   uploadSibling,
 } from './wrangler.ts'
 
@@ -1025,6 +1027,68 @@ test('a retry leaves a newer version live when it activates after an attempt', a
   let b = await build(main)
   let activating = () => Promise.resolve(void (main.live = B))
   assertEquals([await b.deploy(1, activating), b.uploads()], [0, 1])
+})
+
+// Two builds racing to one Worker, as on 2026-11-05: the parent's build (`a`)
+// and its child's (`b`) both look while an older commit serves, the child's
+// upload finishes first, and the parent's finishes 3 s later. `undo` is the
+// door's look after its deploy; without it the parent serves.
+let race = async (looks: boolean) => {
+  let [a, b, old] = ['a'.repeat(40), 'b'.repeat(40), 'f'.repeat(40)]
+  let cf = [{ sha: old, version: 'v0' }]
+  let read = (_root: string, ...[op, , head, sha]: string[]) =>
+    Promise.resolve({
+      code: op == 'merge-base' && !(head == a && sha == b) ? 1 : 0,
+      out: '',
+    })
+  let releases = (head: string) => () =>
+    Promise.all(
+      cf.slice(0, 2).map(async ({ sha, version }) => ({
+        sha,
+        version,
+        message: sha,
+        ahead: await aheadOf('/c', head, sha, read),
+      })),
+    )
+  let finished = {
+    a: Promise.withResolvers<void>(),
+    b: Promise.withResolvers<void>(),
+  }
+  let door = async (head: string, after?: Promise<void>) => {
+    let g = guard(
+      () =>
+        seen(
+          '/c',
+          [cf[0].sha],
+          (_r, ...args) =>
+            args[0] == 'rev-parse'
+              ? Promise.resolve({ code: 0, out: head })
+              : read(_r, ...args),
+        ),
+      () => {},
+    )
+    assert(await g.first())
+    let restore = (
+      { sha, version }: { sha: string | null; version: string | null },
+    ) => Promise.resolve(cf.unshift({ sha: sha!, version: version! }) && 0)
+    return runStep(['deploy'], async () => {
+      await after
+      cf.unshift({ sha: head, version: `v-${head[0]}` })
+      return { code: 0, output: '' }
+    }, {
+      allowed: g.still,
+      landed: looks ? undo(head, releases(head), restore, () => {}) : undefined,
+    })
+  }
+  let child = door(b).then(() => finished.b.resolve())
+  let parent = door(a, finished.b.promise)
+  await Promise.all([child, parent])
+  return cf.map((d) => d.sha[0]).join('')
+}
+
+test('an older build that finishes last puts back the newer one it replaced', async () => {
+  assertEquals(await race(false), 'abf')
+  assertEquals(await race(true), 'babf')
 })
 
 test('only a Wrangler step that changes what serves asks the guard', async () => {
