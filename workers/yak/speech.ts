@@ -59,23 +59,71 @@ export let BUTLERS = ['aura-2-draco-en', 'aura-2-pandora-en']
  * platform's speech hears and speaks around. */
 export let CALL_MODELS = ['claude-haiku-5-5', 'claude-sonnet-5-5']
 
-/** Every model that may answer `space`'s calls on the providers that are on
- * here, as the picker names them: the Operator's own, then each provider's
- * talking ones. */
-export let callModels = (env: Speaking) => [
-  { id: CALL_MODELS[0], name: 'Claude Haiku, the quickest to answer' },
-  { id: CALL_MODELS[1], name: 'Claude Sonnet, the Operator’s own' },
-  ...[...SECRETS.keys()].filter((p) => speechOf(env, p)).flatMap((p) =>
-    (p.talk?.models ?? []).map((id) => ({
-      id,
-      name: `${p.title} ${id}, which hears and speaks itself`,
-    }))
-  ),
+/** How a call may be answered, in the words the settings page says it to
+ * someone who isn't technical: the model, and what choosing it means. */
+export type Way = { model: string; name: string; about: string }
+
+// The ways the settings page offers, the quickest first. A model a provider
+// talks with is offered only where that provider is on.
+let WAYS: Way[] = [
+  {
+    model: 'gpt-realtime-2.1',
+    name: 'Quickest',
+    about:
+      'Replies almost at once, like talking with a person. Speaks only in some of the voices.',
+  },
+  {
+    model: CALL_MODELS[0],
+    name: 'Quick',
+    about: 'Replies after a short pause.',
+  },
+  {
+    model: CALL_MODELS[1],
+    name: 'Thorough',
+    about:
+      'Pauses a few seconds before each reply, and handles harder requests better.',
+  },
 ]
 
-/** The voices of the providers that are on here. */
-export let voicesOn = (env: Speaking) =>
-  VOICES.filter((v) => speechOf(env, v.provider))
+// The voices the settings page offers, the butler-like ones first.
+let OFFERED = [...BUTLERS, 'cedar', 'marin', 'ash', 'coral']
+
+/** Whether `model` can speak in the voice `id`: the Operator's own models
+ * speak every voice, a talking model only its provider's own. */
+export let speaks = (model: string, id: string) =>
+  CALL_MODELS.includes(model) ||
+  VOICES.some((v) =>
+    v.id == id && talks(v.provider, model) &&
+    v.provider.talk!.voices.some((t) => t.id == id)
+  )
+
+/** What the settings page offers for `space`'s calls on the providers on
+ * here: a few voices and the ways to answer, each with the one picked now
+ * even where it is not among them, so a save never changes it unasked. */
+export let offered = (
+  env: Speaking,
+  space: Pick<Space, 'voice' | 'voice_model'>,
+) => {
+  let setup = setupOf(space)
+  let on = (v: Voiced) => speechOf(env, v.provider)
+  let voices = VOICES.filter((v) =>
+    on(v) && (OFFERED.includes(v.id) || v.id == setup.voice)
+  ).toSorted((a, b) =>
+    (OFFERED.indexOf(a.id) + 1 || 99) - (OFFERED.indexOf(b.id) + 1 || 99)
+  )
+  let ways = WAYS.filter((w) =>
+    CALL_MODELS.includes(w.model) ||
+    VOICES.some((v) => on(v) && talks(v.provider, w.model))
+  )
+  if (!ways.some((w) => w.model == setup.model)) {
+    ways.push({
+      model: setup.model,
+      name: 'As set before',
+      about: 'Kept until you pick one of the others.',
+    })
+  }
+  return { setup, voices, ways }
+}
 
 /** The voice `space`'s Operator speaks in on a call. */
 export let operatorVoice = (space: Pick<Space, 'voice'>) =>
@@ -96,16 +144,13 @@ export let talks = (provider: Provider, model: string) =>
  * answers calls here nor talks in that voice: a provider may speak voices
  * its talking model does not (OpenAI's Fable, Nova and Onyx). */
 export let modelOf = (id: string, voice: string) => {
-  let { provider } = voiceOf(voice)
-  if (CALL_MODELS.includes(id)) return id
-  if (
-    talks(provider, id) && provider.talk!.voices.some((v) => v.id == voice)
-  ) return id
+  voiceOf(voice)
+  if (speaks(id, voice)) return id
   throw new CallError(
     'arguments',
     VOICES.some((v) => talks(v.provider, id))
-      ? 'That model speaks only in its own voices: pick one of them first.'
-      : 'Pick one of the models listed.',
+      ? 'That way of answering can’t speak in this voice: pick another voice, or another way.'
+      : 'Pick one of the ways listed.',
   )
 }
 

@@ -28,13 +28,11 @@ import {
 import { given } from './operator-name.ts'
 import {
   BUTLERS,
-  callModels,
   modelOf,
+  offered,
   sampled,
-  setupOf,
-  type Voiced,
+  speaks,
   voiceOf,
-  voicesOn,
 } from './speech.ts'
 import { ModelError } from '@yaks/model'
 import { CallError } from '@yaks/tools/errors'
@@ -112,49 +110,43 @@ export let nameCard = (at: string, name: string) =>
   }" maxlength="40" required autocomplete="off"></label>
 <button class="Button" type="submit">Save</button><p role="status" data-status></p></form>`
 
-// Where a space's people hear the voices its Operator may speak in on a
-// call, provider by provider, and pick one and the model that answers. Play
-// speaks a sample (speech.ts `sampled`).
+// Where a space's people hear a few voices its Operator may speak in on a
+// call, pick one, and pick how its calls are answered, each said in a line
+// (speech.ts `offered`). Play speaks a sample (speech.ts `sampled`); a voice
+// the chosen way cannot speak is greyed (`settingsScript`).
 export let voiceCard = (
   at: string,
-  space: Pick<Space, 'operator' | 'voice' | 'voice_model'>,
-  voices: Voiced[],
-  models: { id: string; name: string }[],
-) => {
-  let setup = setupOf(space)
-  let first = (v: Voiced) => BUTLERS.includes(v.id) ? 0 : 1
-  let titles = [...new Set(voices.map((v) => v.provider.title))]
-  return `<form class="Card Form" id="voice" method="post" action="${at}?voice=1">
+  space: Pick<Space, 'operator'>,
+  { setup, voices, ways }: ReturnType<typeof offered>,
+) =>
+  `<form class="Card Form" id="voice" method="post" action="${at}?voice=1">
 <h2 class="Card_Title">Voice</h2>
 <p>How ${
     esc(space.operator)
-  } sounds when you call. Play a few to compare, then pick one and save.</p>
+  } sounds and answers when you call. Play a few voices, pick one, and save.</p>
 <div class="Voices">${
-    titles.map((title) =>
-      `<p class="Voices_Group">${esc(title)}</p>\n` +
-      voices.filter((v) => v.provider.title == title)
-        .toSorted((a, b) => first(a) - first(b)).map((v) =>
-          `<div class="Voices_Row"><label class="Choice"><input type="radio" name="voice" value="${v.id}"${
-            v.id == setup.voice ? ' checked' : ''
-          }><span><b>${esc(v.name)}</b>${
-            first(v) ? '' : ' (like a butler)'
-          } <span class="Note Note-small">${
-            esc(v.about)
-          }</span></span></label><button class="Button Button-quiet" type="button" data-sample="${at}?sample=${v.id}" aria-label="Play ${
-            esc(v.name)
-          }">Play</button></div>`
-        ).join('\n')
+    voices.map((v) =>
+      `<div class="Voices_Row"><label class="Choice"><input type="radio" name="voice" value="${v.id}" data-ways="${
+        ways.filter((w) => speaks(w.model, v.id)).map((w) => w.model).join(' ')
+      }"${v.id == setup.voice ? ' checked' : ''}><span><b>${esc(v.name)}</b>${
+        BUTLERS.includes(v.id) ? ' (like a butler)' : ''
+      } <span class="Note Note-small">${
+        esc(v.about)
+      }</span></span></label><button class="Button Button-quiet" type="button" data-sample="${at}?sample=${v.id}" aria-label="Play ${
+        esc(v.name)
+      }">Play</button></div>`
     ).join('\n')
   }</div>
-<label class="Form_Field">Answered by<select class="Field" name="voice_model">${
-    models.map((m) =>
-      `<option value="${m.id}"${m.id == setup.model ? ' selected' : ''}>${
-        esc(m.name)
-      }</option>`
-    ).join('')
-  }</select></label>
+<fieldset class="Form_Field"><legend>Answers</legend>${
+    ways.map((w) =>
+      `<label class="Choice"><input type="radio" name="voice_model" value="${w.model}"${
+        w.model == setup.model ? ' checked' : ''
+      }><span><b>${esc(w.name)}</b> <span class="Note Note-small">${
+        esc(w.about)
+      }</span></span></label>`
+    ).join('\n')
+  }</fieldset>
 <button class="Button" type="submit">Save</button><p role="status" data-status></p></form>`
-}
 
 // What a person agreed to be texted at. Any opt-in this space's operator
 // store still keeps from before the number moved onto the person is handed to
@@ -510,7 +502,7 @@ export let operatorBody = async (env: Env, space: Space, who: Who) => {
   } answers by email.</p></section>
 ${talks(space.slug)}
 ${nameCard(at, space.operator)}
-${voiceCard(at, space, voicesOn(env), callModels(env))}
+${voiceCard(at, space, offered(env, space))}
 ${textsCard(at, consent, settings(env, space.sender).number)}
 ${settingsScript}`
 }
@@ -562,6 +554,17 @@ for (let play of document.querySelectorAll('[data-sample]')) {
     play.disabled = false
   })
 }
+let voice = document.querySelector('#voice')
+let fit = () => {
+  let way = voice?.querySelector('[name=voice_model]:checked')?.value
+  for (let v of voice?.querySelectorAll('[name=voice]') ?? []) {
+    v.disabled = !!way && !v.dataset.ways.split(' ').includes(way)
+  }
+  let picked = voice?.querySelector('[name=voice]:checked')
+  if (picked?.disabled) voice.querySelector('[name=voice]:not(:disabled)').checked = true
+}
+voice?.addEventListener('change', fit)
+fit()
 for (let form of document.querySelectorAll('#texts, #name, #voice')) {
   form.addEventListener('submit', async (e) => {
     e.preventDefault()

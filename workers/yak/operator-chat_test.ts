@@ -540,7 +540,7 @@ let voiced = async (voice: string, voice_model: string) => {
     status: saved!.status,
     voice: document.querySelector('#voice [name=voice]:checked')
       ?.getAttribute('value'),
-    model: document.querySelector('#voice option[selected]')
+    model: document.querySelector('#voice [name=voice_model]:checked')
       ?.getAttribute('value'),
   }
 }
