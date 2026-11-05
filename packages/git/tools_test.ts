@@ -18,6 +18,7 @@ import { machineDoc } from '@yaks/machine/vocab'
 import { loadVocab } from '@yaks/vocab'
 import { gitDoc } from './comp.ts'
 import { landing, runs } from './tools.ts'
+import { land, type Run } from './land.ts'
 import { runner, toolsDoc } from '@yaks/tools'
 import { faulted, toolEid } from '@yaks/tools/result'
 
@@ -267,4 +268,46 @@ test('landing uses the checkout named by the call, even on a shared session', as
     assert(faulted(await r.call(asked), asked.entity.eid))
   }
   assertEquals(seen, ['/parent', '/child'])
+})
+
+test("a push the remote refuses reaches the host's report through the land tool", async () => {
+  let refusing: Run = (args) => {
+    let answers: Record<string, string> = {
+      'rev-parse --show-toplevel': '/work',
+      'symbolic-ref -q --short HEAD': 'work',
+      'worktree list --porcelain':
+        'worktree /repo\nbranch refs/heads/main\n\nworktree /work\nbranch refs/heads/work\n',
+      'rev-parse HEAD': 'sha',
+      'rev-parse --abbrev-ref main@{u}': 'origin/main',
+    }
+    let code = args[0] == 'push' ? 1 : 0
+    let err = code ? 'remote: fatal error in commit_refs' : ''
+    return Promise.resolve({
+      ok: !code,
+      code,
+      out: answers[args.join(' ')] ?? '',
+      err,
+    })
+  }
+  let reported: string[] = []
+  let words = loadVocab([kernelDoc, docDoc, toolsDoc, gitDoc])
+  let g = graph({ vocab: words, storage: ram(words) })
+  let tools = loadTools(gitDoc, {
+    ...runs(),
+    land: landing(
+      (ops) => land({ ...ops, run: refusing, format: refusing }),
+      (error) => void reported.push(String(error)),
+    ),
+  })
+  let asked = {
+    entity: { eid: crypto.randomUUID() },
+    call: { to: toolEid('land'), args: { cwd: '/work' } },
+    $actor: { by: crypto.randomUUID(), via: crypto.randomUUID() },
+  }
+  let answer = await runner(g, { tools }).call(asked)
+  assertEquals(faulted(answer, asked.entity.eid), false)
+  assertEquals(reported, [
+    'Error: land: publish to origin/main failed with exit 1:\n' +
+    'remote: fatal error in commit_refs',
+  ])
 })

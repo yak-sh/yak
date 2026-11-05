@@ -33,7 +33,7 @@ import { once } from '@yaks/fp'
 import type { Finding, Level } from '@yaks/tools'
 import { CallError } from '@yaks/tools/errors'
 import { checked } from '@yaks/tools/check'
-import { land, run as git } from './land.ts'
+import { land, type LandOps, run as git } from './land.ts'
 import { localFilesystem, locate, repositoryEid } from './host.ts'
 import {
   type Checkout,
@@ -135,7 +135,8 @@ let verdict = (
 
 /** Landing with Git supplied at the effect boundary. */
 export let landing =
-  (run: typeof land) => async (call: Bundle): Promise<Bundle[]> => {
+  (run: typeof land, report?: LandOps['report']) =>
+  async (call: Bundle): Promise<Bundle[]> => {
     let args = argsOf(call)
     let cwd = str(args.cwd)
     // Git's output, exactly as Git wrote it, collected in the order it
@@ -145,6 +146,7 @@ export let landing =
     let outcome = await run({
       cwd,
       allow: str(args['allow-revert']).split(',').filter(Boolean),
+      report,
       write: (text) => {
         let line = text.trimEnd()
         if (line) said.push(line)
@@ -160,9 +162,10 @@ export let landing =
     }]
   }
 
-/** The implementations of the tools ./vocab.json declares. */
-export let runs = (): Runs => ({
-  land: landing(land),
+/** The implementations of the tools ./vocab.json declares. The host's
+ * `report` hears a failure land catches and carries on past. */
+export let runs = (host?: { report?: LandOps['report'] }): Runs => ({
+  land: landing(land, host?.report),
 
   cites_check: async (call, graph): Promise<Bundle[]> => {
     let args = argsOf(call)

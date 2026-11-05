@@ -8,6 +8,7 @@ let fixture = (answers: Record<string, Answer> = {}) => {
   let calls: { args: string[]; cwd: string }[] = []
   let said: string[] = []
   let formats: { files: string[]; cwd: string }[] = []
+  let reports: { error: string; tags?: Record<string, string> }[] = []
   let moved = false
   let values: Record<string, Answer> = {
     'rev-parse --show-toplevel': { out: '/work' },
@@ -45,12 +46,15 @@ let fixture = (answers: Record<string, Answer> = {}) => {
       },
       allow,
       write: (text) => said.push(text),
+      report: (error, context) =>
+        reports.push({ error: String(error), tags: context?.tags }),
     })
   return {
     invoke,
     calls,
     formats,
     said,
+    reports,
     commands: () => calls.map((c) => c.args.join(' ')),
   }
 }
@@ -156,13 +160,25 @@ test('a base without an upstream lands without a push', async () => {
   assert(!f.calls.some((c) => c.args[0] == 'push'))
 })
 
-test('a failed push leaves the landing in place without retrying', async () => {
+test('a refused push leaves the landing in place and reports it once', async () => {
+  let refused = 'remote: fatal error in commit_refs\nerror: failed to push'
   let f = fixture({
-    'push --quiet origin main:main': { code: 1, err: 'network unavailable' },
+    'push --quiet origin main:main': { code: 1, err: refused },
   })
   assertEquals(await f.invoke(), { landed: 'sha', root: '/repo' })
   assertEquals(f.calls.filter((c) => c.args[0] == 'push').length, 1)
   assert(f.said.join('\n').includes('landed locally, publish separately'))
+  assertEquals(f.reports, [{
+    error:
+      `Error: land: publish to origin/main failed with exit 1:\n${refused}`,
+    tags: { step: 'land: publish', remote: 'origin' },
+  }])
+})
+
+test('a push that goes through reports nothing', async () => {
+  let f = fixture()
+  await f.invoke()
+  assertEquals(f.reports, [])
 })
 
 let rewound = {

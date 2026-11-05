@@ -133,6 +133,12 @@ export type LandOps = {
   write?: (text: string, error?: boolean) => void
   /** files whose rewind is deliberate: warned about, then landed */
   allow?: string[]
+  /** where a failure land catches and carries on past is reported: a push
+   * the remote refused. The host's telemetry (@yaks/host `report`). */
+  report?: (
+    error: unknown,
+    context?: { tags?: Record<string, string> },
+  ) => unknown
 }
 
 let defaultWrite = (text: string, error = false) => {
@@ -488,7 +494,7 @@ export let land = async (ops: LandOps = {}): Promise<Outcome> => {
       // only failure reachable is "not locked". Neither it nor the publish
       // needs the other, and neither throws.
       await Promise.all([
-        publish(git, write, root, base),
+        publish(git, write, ops.report, root, base),
         git(root, ['worktree', 'unlock', tree], false),
       ])
       return { landed: sha, root }
@@ -525,12 +531,15 @@ export let land = async (ops: LandOps = {}): Promise<Outcome> => {
 // Best-effort push of the base branch to its upstream, if it has one — just
 // `@{u}`, nothing configured anywhere else. Never throws: an unreachable
 // remote, or no upstream at all, leaves the work landed but unpushed, since
-// the merge has already taken effect in the shared checkout. The push runs to
+// the merge has already taken effect in the shared checkout. A refused push is
+// still a failure, so it is reported with the remote's whole account, once:
+// land pushes once. The push runs to
 // completion with no deadline: its exit code is the only report of whether
 // the remote has the commit, and a killed push may already have reached it.
 let publish = async (
   git: (at: string, args: string[], show?: boolean) => Promise<Ran>,
   write: (text: string, error?: boolean) => void,
+  report: LandOps['report'],
   root: string,
   base: string,
 ) => {
@@ -546,10 +555,17 @@ let publish = async (
     false,
   )
   if (sent.code) {
+    let label = `land: publish to ${remote}/${branch}`
     write(
-      `${message(`land: publish to ${remote}/${branch}`, sent)} — landed ` +
-        'locally, publish separately',
+      `${message(label, sent)} — landed locally, publish separately`,
       true,
+    )
+    let said = (sent.err || sent.out).trim()
+    await report?.(
+      new Error(
+        `${label} failed with exit ${sent.code}${said ? `:\n${said}` : ''}`,
+      ),
+      { tags: { step: 'land: publish', remote } },
     )
   }
 }
