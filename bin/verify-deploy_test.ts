@@ -21,7 +21,8 @@ let SITE = 'https://yaks.app'
 type Reply = [number, string, string?]
 let fake = (table: Record<string, Reply>) =>
   ((url: string | URL | Request, init?: RequestInit) => {
-    let path = new URL(String(url)).pathname
+    let { pathname, search } = new URL(String(url))
+    let path = pathname + search
     let [status, body, location] =
       table[init?.method == 'POST' ? `POST ${path}` : path] ??
         [404, '']
@@ -36,7 +37,7 @@ let fake = (table: Record<string, Reply>) =>
 let TOOLS = JSON.stringify({ result: { tools: [{ name: 'about' }] } })
 
 let healthy = () => {
-  let table: Record<string, Reply> = { 'POST /mcp': [200, TOOLS] }
+  let table: Record<string, Reply> = { 'POST /mcp?auth=mixed': [200, TOOLS] }
   for (let path of DOORS) table[path] = [200, '$9 a month']
   table['/connect'] = [303, '', '/login?return=%2Fconnect']
   return table
@@ -125,7 +126,7 @@ test('verify: pricing must show the price and hide the checkout door', async () 
 
 test('connector: 200 without `about` is a failure, and names what it got', async () => {
   let table = healthy()
-  table['POST /mcp'] = [
+  table['POST /mcp?auth=mixed'] = [
     200,
     JSON.stringify({ result: { tools: [{ name: 'x' }] } }),
   ]
@@ -134,7 +135,7 @@ test('connector: 200 without `about` is a failure, and names what it got', async
     '/mcp: tools/list has no `about` (x)',
   )
 
-  table['POST /mcp'] = [200, 'not json']
+  table['POST /mcp?auth=mixed'] = [200, 'not json']
   assertEquals(
     await connector(fake(table), SITE),
     '/mcp: tools/list has no `about` (nothing)',
@@ -143,7 +144,7 @@ test('connector: 200 without `about` is a failure, and names what it got', async
 
 test('connector: the auth challenge is a failure here — this door is public', async () => {
   let table = healthy()
-  table['POST /mcp'] = [401, '']
+  table['POST /mcp?auth=mixed'] = [401, '']
   assertEquals(await connector(fake(table), SITE), '/mcp: 401, want 200')
 })
 

@@ -75,10 +75,11 @@ export let door = async (get: Fetch, site: string, path: string) => {
   return null
 }
 
-// The connector door, anonymous: one stateless JSON-RPC POST, no handshake and
+// The connector door, anonymous (`?auth=mixed`, since sign-in is the default,
+// T-134490): one stateless JSON-RPC POST, no handshake and
 // no Origin header (route.ts refuses a foreign one). It must list `about`.
 export let connector = async (get: Fetch, site: string) => {
-  let res = await get(`${site}/mcp`, {
+  let res = await get(`${site}/mcp?auth=mixed`, {
     method: 'POST',
     headers: { 'content-type': 'application/json' },
     body: JSON.stringify({
