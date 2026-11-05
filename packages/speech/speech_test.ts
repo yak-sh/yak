@@ -205,6 +205,7 @@ let talking = (calls: (name: string, args: string) => Promise<string>) => {
       audio: (bytes) => told.push([...bytes]),
       said: (text) => told.push({ said: text }),
       call: calls,
+      done: () => told.push('done'),
     },
   })
   let event = (e: object) => s.fire('message', JSON.stringify(e))
@@ -234,10 +235,11 @@ test('a talk stream is set up with the voice, tools and μ-law, then hears and s
   })
   event({ type: 'response.output_audio.delta', delta: 'AwQ=' })
   event({ type: 'response.output_audio_transcript.done', transcript: 'Hi.' })
+  // The response names no model, so it is priced at the session's.
   event({
     type: 'response.done',
     response: {
-      model: 'gpt-realtime-2.1-mini',
+      model: null,
       usage: {
         input_token_details: { audio_tokens: 100_000 },
         output_token_details: { audio_tokens: 50_000 },
@@ -246,7 +248,7 @@ test('a talk stream is set up with the voice, tools and μ-law, then hears and s
   })
   equal(told, ['start', 'stopped', { heard: 'Hello' }, [3, 4], {
     said: 'Hi.',
-  }])
+  }, 'done'])
   equal(stream.close(), { seconds: 2 / 8000, dollars: 2 })
 })
 

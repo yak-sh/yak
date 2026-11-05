@@ -68,6 +68,12 @@ export let about = (app: string) =>
   `About the app ${app}, open beside the chat as they wrote: `
 let ABOUT = /^About the app [^,]+, open beside the chat as they wrote: /
 
+/** How a line said on a call its talking model answered itself reaches the
+ * Operator (operator.ts `note`): the caller's words, or (`SAID`) the talking
+ * model's, which the conversation draws as the Operator's own. */
+export let HEARD = 'By phone: '
+export let SAID = 'On the phone, you said: '
+
 // Attachments travel in the words as their extracted text; the conversation
 // names the files instead.
 let spoken = (body: string) =>
@@ -363,6 +369,14 @@ let line = (b: Bundle, id: string, body: string): Row[] => {
     }]
   }
   if (b.output && body) return [{ id, html: reply(body) }]
+  // A line of a call its talking model answered itself: theirs, or its own.
+  let called = comp(b, 'operator_call')
+  if (called && body) {
+    return [{
+      id,
+      html: called.said ? reply(body.replace(SAID, '')) : input(b, body),
+    }]
+  }
   if (told(b, body)) return [{ id, html: helper(b, body) }]
   if (b.failed || b.exception) {
     return [{

@@ -228,7 +228,7 @@ export let OPENAI: Provider = {
         type: 'input_audio_buffer.append',
         audio: base64(bytes),
       }),
-    read: (data) => {
+    read: (data, model) => {
       let e = parsed(data)
       let said: Said[] = []
       switch (e.type) {
@@ -258,7 +258,8 @@ export let OPENAI: Provider = {
           break
         case 'response.done': {
           let usage = e.response?.usage
-          if (usage) said.push({ spent: costOf(modelOf(e), usage) })
+          if (usage) said.push({ spent: costOf(modelOf(e) || model, usage) })
+          said.push({ done: true })
           break
         }
         case 'error':
@@ -282,6 +283,7 @@ export let OPENAI: Provider = {
   },
 }
 
-// The model a `response.done` was answered by, as the session reported it.
+// The model a `response.done` was answered by, where it says: it reports
+// none, so the session's own model prices it.
 let modelOf = (e: Event) =>
   String((e.response as { model?: string } | undefined)?.model ?? '')

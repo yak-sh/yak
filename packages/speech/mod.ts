@@ -48,6 +48,8 @@ export type Said = {
   call?: { id: string; name: string; args: string }
   /** what the turn just finished cost, in dollars */
   spent?: number
+  /** the model's response ended */
+  done?: true
   error?: string
 }
 
@@ -115,7 +117,8 @@ export type Provider = {
     path: (model: string) => string
     opening: (setup: Setup) => string[]
     audio: (bytes: Uint8Array) => string
-    read: (data: unknown) => Said[]
+    /** what one message means, on a stream talking with `model` */
+    read: (data: unknown, model: string) => Said[]
     /** a tool's answer given back, and the model asked to go on */
     answer: (call: string, output: string) => string[]
     /** the model asked to say `text` */
@@ -428,6 +431,8 @@ export type Talked = {
   said?: (text: string) => void
   /** a tool the model asked for, answered with its output */
   call: (name: string, args: string) => Promise<string>
+  /** the model's response ended, whatever it said or asked in it */
+  done?: () => void
   /** the stream failed or closed before `close` was asked */
   lost?: (reason: string) => void
 }
@@ -475,13 +480,14 @@ export let talk = (
       tools: o.tools ?? [],
     }),
     (data) => {
-      for (let said of t.read(data)) {
+      for (let said of t.read(data, model)) {
         if (said.start) o.told.start?.()
         if (said.stopped) o.told.stopped?.()
         if (said.heard) o.told.heard?.(said.heard)
         if (said.audio) o.told.audio(said.audio)
         if (said.said) o.told.said?.(said.said)
         if (said.spent) dollars += said.spent
+        if (said.done) o.told.done?.()
         if (said.error) o.told.lost?.(said.error)
         let call = said.call
         if (call) {

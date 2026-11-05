@@ -19,6 +19,7 @@ import {
 } from '@yaks/session'
 import { derivedEid } from '@yaks/graph/identity'
 import { LIMIT } from '@yaks/session/status'
+import { HEARD, SAID } from './operator-view.ts'
 import { listing } from '@yaks/mcp'
 import { billed, type Item, type Model, type Price } from '@yaks/model'
 import { workersAi } from '@yaks/workers-ai'
@@ -1061,6 +1062,16 @@ export let operating = (
       using,
     })
 
+  // What any words given need first: the model and persona rows, the space
+  // and the person.
+  let readying = async (held: Asker, space: Space, model?: string) => {
+    await Promise.all([seeding(model), basing()])
+    await g.apply([
+      ...await spaced(g.storage, space),
+      { entity: { eid: held.person }, person: {} },
+    ], { trusted: true })
+  }
+
   let ask: Operator['ask'] = async (held, space, args, o = {}) => {
     let text = typeof args.say == 'string' ? args.say.trim() : ''
     let named = typeof args.task == 'string' ? args.task : o.task
@@ -1069,11 +1080,7 @@ export let operating = (
     let input = o.request
       ? derivedEid('operator-input|' + o.request)
       : crypto.randomUUID()
-    await Promise.all([seeding(o.model), basing()])
-    await g.apply([
-      ...await spaced(g.storage, space),
-      { entity: { eid: held.person }, person: {} },
-    ], { trusted: true })
+    await readying(held, space, o.model)
     // A person's words with no task are the next input of their one
     // conversation with the Operator.
     if (!named) {
@@ -1142,6 +1149,31 @@ export let operating = (
     ], { trusted: true })
     options.tell?.(session)
     return { task, session, input }
+  }
+
+  // What was said on a call its talking model answered itself goes to the
+  // person's conversation as passive context: the Operator reads it the next
+  // time it is asked, and no turn of its own model starts for it. Its words
+  // say who spoke, as a notice is read as the person's side.
+  let note: Operator['note'] = async (held, space, text, o) => {
+    let session = rootOf(space.eid, held.person)
+    let fresh = !(await g.get([session]))[0]?.session
+    if (fresh) {
+      await readying(held, space)
+      await started(session, held.person, space)
+    }
+    await g.apply([
+      ...fresh ? [await carrying(session, held, space, {})] : [],
+      {
+        entity: { eid: crypto.randomUUID() },
+        entry: { session },
+        content: { body: (o.said ? SAID : HEARD) + text },
+        notice: {},
+        operator_call: { call: o.call, ...o.said ? { said: true } : {} },
+        $actor: { by: o.said ? space.eid : held.person, via: session },
+      },
+    ], { trusted: true })
+    options.tell?.(session)
   }
 
   // An agent asking through operator_run waits on one answer, so its words
@@ -1221,7 +1253,7 @@ export let operating = (
   // What to call a person in what the Operator shows of its work.
   let named = (person: string) => dir().nameAt(person)
 
-  return { store, reads, ask, run, stop, named }
+  return { store, reads, ask, note, run, stop, named }
 }
 
 export type Asking = {
@@ -1255,6 +1287,15 @@ export type Operator = {
     args: Args,
     o?: Asking,
   ) => Promise<{ task: string; session: string; input: string }>
+  /** Words said on a call that asked the Operator nothing, the caller's or
+   * (`said`) its talking model's: kept in the person's conversation as
+   * passive context, starting no turn. */
+  note: (
+    held: Asker,
+    space: Space,
+    text: string,
+    o: { call: string; said?: boolean },
+  ) => Promise<void>
   /** Stop a conversation (with its helpers) or a task's running session at
    * once, the step in flight included: nothing more is done until new words
    * reopen it. */

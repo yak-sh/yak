@@ -64,6 +64,18 @@ export let operatorDoc: VocabDoc = {
         files: { type: 'array', items: { type: 'object' } },
       },
     },
+    operator_call: {
+      component: true,
+      description:
+        "A line said on a phone call that its talking model answered without asking the Operator, kept in the person's conversation as a notice.",
+      properties: {
+        call: { type: 'string', description: "The line's id for the call." },
+        said: {
+          type: 'boolean',
+          description: "The talking model's words, rather than the caller's.",
+        },
+      },
+    },
     operator_letter: {
       component: true,
       description:

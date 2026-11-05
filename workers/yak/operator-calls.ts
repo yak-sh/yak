@@ -11,8 +11,10 @@
 // hears the caller a turn at a time, each turn goes to their one conversation
 // as the `voice` channel, and what the Operator writes is spoken a sentence
 // at a time as it is written (`typed`). With a model that hears and speaks
-// itself (`talking`), the call's audio goes to that model, which asks the
-// Operator, through the same conversation, for anything it does or knows.
+// itself (`talking`), the call's audio goes to that model, which answers
+// small talk itself and asks the Operator, through the same conversation,
+// for anything it does or knows; what it heard and said without asking is
+// kept in that conversation too, starting no turn (operator.ts `note`).
 //
 // While calls are a pilot, only an owner of the platform's own space is
 // answered; `CALLS = "on"` answers everyone the platform knows by number.
@@ -175,7 +177,7 @@ export type Call = {
 /** How long one of the caller's turns waited, in milliseconds from their
  * last word: for the first sound played back, and for the first of the
  * answer itself (not an acknowledgement). */
-export type Timed = { first?: number; answer?: number }
+export type Timed = { first?: number; answer?: number; asked?: true }
 
 /** What every call needs from the world around it. */
 export type Around = {
@@ -209,6 +211,9 @@ export type Talk = Around & {
 /** A call a model hears and speaks itself, asking the Operator. */
 export type Talking = Around & {
   talk: (told: Talked) => Talker
+  /** words said on the call that asked the Operator nothing, the caller's
+   * or (`said`) the model's, for their conversation */
+  note: (text: string, said: boolean) => void
 }
 
 // The least audio sent to the line at once: a tenth of a second at 8 kHz.
@@ -266,9 +271,12 @@ let carry = (
       turn = { at: Date.now(), timed: {} }
       turns.push(turn.timed)
     },
-    /** what played since the turn ended was an acknowledgement */
+    /** what played since the turn ended was an acknowledgement, and the
+     * turn asked the Operator */
     acked: () => {
-      if (turn) delete turn.timed.answer
+      if (!turn) return
+      delete turn.timed.answer
+      turn.timed.asked = true
     },
     /** audio played to the caller, the answer's unless `answer` is false */
     play: (audio: Uint8Array, answer = true) => {
@@ -419,7 +427,7 @@ export let ASK = {
 /** What a talking model is told: who it is, how it sounds, and that the
  * Operator, through `ask`, does the work. */
 export let instructed = (name: string) =>
-  `You are ${name}, a person's Operator on yaks.app, on the phone with them. Speak like a refined British butler: cool, calm, professional, and brief, a sentence or two in plain speech. Anything they want done, found, remembered or changed, and any question about their apps, messages, accounts or work, goes to the ask tool at once with their request in their own words: say only "Certainly, one moment." before it, and never speak of the tool or of anyone else doing the work. Then say what it answers, in your own voice, as briefly as it allows. Greetings, thanks and goodbyes you answer yourself. Never guess what the tool would know.`
+  `You are ${name}, a person's Operator on yaks.app, on the phone with them. Speak like a refined British butler: cool, calm, professional, and brief, a sentence or two in plain speech. Greetings, thanks, goodbyes and small talk you answer yourself. Everything else goes to the ask tool at once, with their request in their own words: anything they want done, found, remembered or changed, and any question about their apps, messages, accounts, work, what was said before, or what you can do for them. Through it you can do anything they could ask of you in writing, so never say you cannot do something or have no tools: ask. Say only "Certainly, one moment." before it, and never speak of the tool or of anyone else doing the work. Then say what it answers, in your own voice, as briefly as it allows. Never guess what the tool would know.`
 
 /**
  * One call's conversation with a model that hears and speaks itself: the
@@ -431,21 +439,43 @@ export let instructed = (name: string) =>
 export let talking = (o: Talking): Call => {
   let pending: ((text: string) => void)[] = []
   let talker: Talker | undefined
+  // What the response under way heard and said, kept in the conversation
+  // once it ends, unless it is one of the next `dropping`: one that asked
+  // the Operator, whose request and answer are in the conversation already,
+  // or one that says such an answer.
+  let lines: { text: string; said: boolean }[] = []
+  let dropping = 0
+  let kept = () => {
+    for (let l of lines) o.note(l.text, l.said)
+    lines = []
+  }
   let c = carry(
     o,
     (audio) => talker?.send(audio),
-    () => talker?.close().dollars ?? 0,
+    () => {
+      if (!dropping) kept()
+      return talker?.close().dollars ?? 0
+    },
   )
   let asking = false
   talker = o.talk({
     start: () => c.clear(),
     stopped: () => c.stopped(),
+    heard: (text) => void lines.push({ text, said: false }),
+    said: (text) => void lines.push({ text, said: true }),
+    done: () => {
+      if (!dropping) return kept()
+      dropping--
+      lines = []
+    },
     audio: (bytes) => c.play(bytes, !asking),
     call: async (name, args) => {
       if (name != ASK.name) return `There is no tool called ${name}.`
       let { request } = JSON.parse(args) as { request?: string }
       c.acked()
       asking = true
+      // This response and the one that says the answer.
+      dropping = 2
       let answer!: (text: string) => void
       let answered = new Promise<string>((resolve) => answer = resolve)
       pending.push(answer)
@@ -472,8 +502,10 @@ export let talking = (o: Talking): Call => {
     answered: (text) => {
       let next = pending.shift()
       asking = pending.length > 0
-      if (next) next(plain(text))
-      else talker?.say(plain(text))
+      if (next) return next(plain(text))
+      // Said as it comes, and in the conversation already.
+      dropping++
+      talker?.say(plain(text))
     },
     waiting: () => pending.length > 0,
     ended: c.ended,
@@ -620,11 +652,21 @@ export let answering = (
     },
     hangup: () => provider.caller!(settings(env)).hangup(ticket.call),
   }
+  // What a talking model said and heard on its own, kept in order.
+  let noted = Promise.resolve()
   let call: Call = setup.talks
     ? talking({
       ...around,
       // Behind a talking model the Operator answers with the fastest model.
       ask: asking(CALL_MODELS[0]),
+      note: (text, said) => {
+        noted = noted.then(() =>
+          operator.note({ person: ticket.person }, space, text, {
+            call: ticket.call,
+            said,
+          })
+        ).catch((e) => caught(e, { request: 'operator call' }))
+      },
       talk: (told) =>
         talk({
           ...speech,

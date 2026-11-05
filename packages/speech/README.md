@@ -31,8 +31,10 @@ argument; nothing here reads the environment.
   `told.audio(bytes)` is what to play them, `told.start()` and `told.stopped()`
   mark their turn, `told.heard` and `told.said` are each side's words, and
   `told.call(name, args)` answers a tool the model asked for with its output,
-  before it goes on. `say(text)` asks it to say something; `close()` answers the
-  seconds heard and what the stream cost. A provider without `talk` refuses.
+  before it goes on, and `told.done()` ends each of its responses. `say(text)`
+  asks it to say something; `close()` answers the seconds heard and what the
+  stream cost, each response priced at its model's rates, or the stream's when
+  it names none. A provider without `talk` refuses.
 - A stream's `open(url, {authorization, protocols})` makes its socket: by
   default the platform's `WebSocket`, offering the key as the provider's
   subprotocols; a host whose sockets take headers sends `authorization`.
