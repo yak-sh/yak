@@ -53,7 +53,8 @@ let docIn = (args: Record<string, unknown>): Comp | undefined =>
  * of overwriting a value.
  */
 export let marked: Record<string, Record<string, Comp | null>> = {
-  open: { completed: null, cancelled: null },
+  open: { started: null, completed: null, cancelled: null },
+  wip: { started: {}, completed: null, cancelled: null },
   done: { completed: {}, cancelled: null },
   cancelled: { cancelled: {}, completed: null },
 }

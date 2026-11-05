@@ -37,6 +37,7 @@ import {
   replyChanges,
   type Row,
   spec,
+  statusChanges,
   type Stdin,
   taskChanges,
   uniq,
@@ -212,8 +213,8 @@ let page = (body: string, ctx: Ctx) =>
 
 // Status is DERIVED (D-24102): a close mints its mark, apply() stamps at/by/via.
 // `done` wears `completed`, `cancel` wears `cancelled`, `reopen` retracts both
-// (and, with no claim, the task reads open again). wip is derived from a claim,
-// so `wip` leases rather than moves — see the verb below.
+// with `started` and any claim. `wip` leases under a session and wears
+// `started` without one — see the verb below.
 let complete: Verb = (_rest, ctx) => {
   let r = here(ctx)
   if (!r.comps.task) throw new Error(`${idOf(r)} is not a task`)
@@ -232,6 +233,7 @@ let reopen: Verb = (_rest, ctx) => {
     changes: [
       { eid: r.eid, name: 'completed', comp: null },
       { eid: r.eid, name: 'cancelled', comp: null },
+      { eid: r.eid, name: 'started', comp: null },
       { eid: r.eid, name: 'claim', comp: null },
     ],
     msg: `${idOf(r)} → open`,
@@ -590,17 +592,13 @@ export let commands: Record<string, Command> = {
   wip: {
     args: [],
     about:
-      'take up the focused task — wip is a live claim now (shell: `task wip T-3`)',
+      'take up the focused task — a session claims it, a person marks it started (shell: `task wip T-3`)',
     words: [0, 0],
     run: (_rest, ctx) => {
       let r = here(ctx)
       if (!r.comps.task) throw new Error(`${idOf(r)} is not a task`)
-      let session = ctx.session
-      if (!session) {
-        throw new Error('wip: run under a session to hold the claim')
-      }
       return {
-        changes: [{ eid: r.eid, name: 'claim', comp: { session } }],
+        changes: statusChanges(r.eid, 'wip', ctx.session),
         msg: `${idOf(r)} → wip`,
       }
     },

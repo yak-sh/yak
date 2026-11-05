@@ -3,6 +3,7 @@
 //
 //   task{}                            a to-do item, with a computed status
 //   cancelled{at, by, reason}         it got called off, and why
+//   started{at, by, via}              somebody said they are on it
 //   blocked{on}                       something outside is in the way
 //   requires / contains               the two relations between tasks
 //
@@ -14,13 +15,14 @@
 // somebody would otherwise make differently.
 //
 // Status is not stored. `task` declares it with the `status` keyword: a ladder
-// over the `completed` and `cancelled` marks (`completed` is @yaks/kernel's,
-// the mark anything finished wears), which gives it a computed `task.status`
+// over the `cancelled`, `completed` and `started` marks (`completed` is
+// @yaks/kernel's, the mark anything finished wears), which gives it a computed `task.status`
 // that is readable and filterable, and that no writer sets. Finishing a task
 // means writing a fact with a time and an author rather than overwriting a
 // value. Both evaluators read the one declaration, so `.task.status=done` selects
 // the same tasks in a database and in a page, and a package that adds a rung
-// (@yaks/session's `wip`) widens the closed set where it declares the rung.
+// (@yaks/session's held `claim`, also `wip`) widens the set where it declares
+// the rung. `started` is how a person says "I'm on it", having no claim to hold.
 //
 // The two relations are `requires` and `contains`, as @yaks/edge reads them: a
 // component that an edge entity carries beside `edge{from, to}`. Neither has

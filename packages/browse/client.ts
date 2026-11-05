@@ -42,7 +42,8 @@ export let taskStatus = (r: { comps: Record<string, unknown> }) =>
 // The changes a UI picker sends to set a task to a chosen DERIVED status
 // (D-24102): each move retracts conflicting facets before minting its own, so
 // cancelled→done and done→wip are real transitions rather than precedence
-// accidents. wip is a live claim; open retracts that lease too.
+// accidents. A session's wip is its live claim; anyone else's is the `started`
+// mark. Open retracts both.
 export let statusChanges = (
   eid: string,
   status: string,
@@ -58,15 +59,18 @@ export let statusChanges = (
       { eid, name: 'completed', comp: null },
       { eid, name: 'cancelled', comp: {} },
     ]
-    : status == 'wip' && session
+    : status == 'wip'
     ? [
       { eid, name: 'completed', comp: null },
       { eid, name: 'cancelled', comp: null },
-      { eid, name: 'claim', comp: { session } },
+      session
+        ? { eid, name: 'claim', comp: { session } }
+        : { eid, name: 'started', comp: {} },
     ]
     : [
       { eid, name: 'completed', comp: null },
       { eid, name: 'cancelled', comp: null },
+      { eid, name: 'started', comp: null },
       { eid, name: 'claim', comp: null },
     ]
 

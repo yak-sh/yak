@@ -16,6 +16,7 @@ test('the components this package ships', () => {
       'board',
       'completed',
       'cancelled',
+      'started',
       'blocked',
       'requires',
       'contains',
@@ -26,7 +27,7 @@ test('the components this package ships', () => {
 test('status is readable and routable, and nobody can write it', () => {
   let status = team.prop('task', 'status')!
   assertEquals(status.computed, true)
-  assertEquals(status.values, ['cancelled', 'done', 'open'])
+  assertEquals(status.values, ['cancelled', 'done', 'wip', 'open'])
   assert(!team.comp('task')!.writable.includes('status'))
   // still routable, so a board can filter on it
   assertEquals(team.aim('task.status'), [{ comp: 'task', prop: 'status' }])

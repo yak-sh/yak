@@ -41,23 +41,24 @@ test('a status outside the closed set is refused, by name', () => {
   let why = unroutable('.task.status=complete', team)
   assertEquals(
     why,
-    'no such status: complete — this board knows cancelled, done, open',
+    'no such status: complete — this board knows cancelled, done, wip, open',
   )
   // and in a list, where one bad member is just as invisible
   assertEquals(typeof unroutable('.task.status=open,finished', team), 'string')
 })
 
 test("the statuses a board may name are the vocabulary's ladder's", () => {
-  // a graph with no lease has no `wip`
-  assertEquals(typeof unroutable('.task.status=wip', team), 'string')
+  // a graph with no review rung has no `review`
+  assertEquals(typeof unroutable('.task.status=review', team), 'string')
   // and one whose vocabulary adds the rung routes it, without @yaks/project
-  // being told about leases
+  // being told about reviews
   let leased = loadVocab([...team.docs, {
     $defs: {
-      task: { component: true, extends: true, status: { claim: 'wip' } },
+      reviewed: { component: true, type: 'object', properties: {} },
+      task: { component: true, extends: true, status: { reviewed: 'review' } },
     },
   }], team.keywords)
-  assertEquals(unroutable('.task.status=wip', leased), null)
+  assertEquals(unroutable('.task.status=review', leased), null)
 })
 
 // A team graph, installed, holding `bundles`.

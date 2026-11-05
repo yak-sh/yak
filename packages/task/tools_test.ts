@@ -69,9 +69,9 @@ test('a status is the marks that mean it', async () => {
     await g.apply(said)
     return statusOf(g.vocab, (await g.get(['t']))[0])
   }
-  assertEquals(await move('done'), 'done')
-  assertEquals(await move('cancelled'), 'cancelled')
-  assertEquals(await move('open'), 'open')
+  for (let s of ['wip', 'done', 'cancelled', 'wip', 'open']) {
+    assertEquals(await move(s), s)
+  }
 })
 
 test('what the line left out is left alone', async () => {

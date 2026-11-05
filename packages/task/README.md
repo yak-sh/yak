@@ -151,7 +151,7 @@ generated during a preview are not reserved for a later write. The HTTP form is
 ([@yaks/vocab](../vocab)): an ordered map from a mark to the status it gives.
 
 ```json
-"status": { "cancelled": "cancelled", "completed": "done", "default": "open" }
+"status": { "cancelled": "cancelled", "completed": "done", "started": "wip", "default": "open" }
 ```
 
 Every store reads `.task.status` from that declaration: @yaks/sql as a `case`
@@ -174,11 +174,12 @@ matcher('.task.status=open', vocab)(tasks) // t1 alone
 statusOf(vocab, tasks[1]) // done
 ```
 
-Another package adds a rung with an `extends` entry, appended after these.
-[@yaks/session](../session) reads a held `claim` as `wip`:
+`started` is a person saying they are on a task. Another package adds a rung
+with an `extends` entry, appended after these. [@yaks/session](../session) reads
+a held `claim` as `wip`:
 `"task": {"component": true, "extends": true, "status": {"claim": "wip"}}`. A
-claim marks work in progress, which is not completion: `settled(status)` is true
-for `done` and `cancelled` alone.
+claim, like `started`, marks work in progress, which is not completion:
+`settled(status)` is true for `done` and `cancelled` alone.
 
 `statusComps(vocab)` names what the status reads: `task` and the mark on every
 rung, including those another package adds. A read naming only these answers the

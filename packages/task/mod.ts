@@ -13,7 +13,7 @@
  *   `filed{project, priority, domain, assignee}` places it in a portfolio.
  * - **Where does it stand?** No stored property holds the answer. A task with a
  *   `completed` component (@yaks/kernel's mark) is done, one with `cancelled`
- *   is cancelled, and one with neither is open. `status` is computed from
+ *   is cancelled, one with `started` is wip, and one with none is open. `status` is computed from
  *   those components, so finishing something records when and by whom instead
  *   of overwriting a value, and reopening it means removing a component rather
  *   than guessing what the status used to be.
@@ -35,7 +35,7 @@
  * ## The status rule is written once
  * The rule is data in the vocabulary: `task` declares its status as a ladder
  * of marks (`"status": {"cancelled": "cancelled", "completed": "done",
- * "default": "open"}`, @yaks/vocab's `status` keyword). @yaks/sql and
+ * "started": "wip", "default": "open"}`, @yaks/vocab's `status` keyword). @yaks/sql and
  * @yaks/match read it from that declaration, so a saved filter selects the
  * same tasks in a database and in a page, and {@link statusOf} reads it off an
  * entity in hand. A graph that leases its tasks adds a rung where it declares

@@ -97,6 +97,7 @@ test('statusOf: marks first, a projected task.status beneath them', () => {
     [{ task: {}, completed: {} }, 'done'],
     [{ task: {}, cancelled: {} }, 'cancelled'],
     [{ task: {}, claim: {} }, 'wip'],
+    [{ task: {}, started: {} }, 'wip'],
     // A peer: the projection, no marks.
     [{ task: { status: 'done' } }, 'done'],
     [{ task: { status: 'cancelled' } }, 'cancelled'],

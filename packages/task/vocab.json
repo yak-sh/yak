@@ -67,6 +67,33 @@
         }
       }
     },
+    "started": {
+      "component": true,
+      "type": "object",
+      "description": "the mark on a task somebody said they are working on: a person's wip, where a session's is its claim",
+      "properties": {
+        "at": {
+          "type": "string",
+          "format": "date-time",
+          "description": "when it was started",
+          "stamped": true
+        },
+        "by": {
+          "type": "string",
+          "ref": "entity",
+          "death": "keep",
+          "description": "who started it — kept as history when that entity is deleted",
+          "stamped": true
+        },
+        "via": {
+          "type": "string",
+          "ref": "entity",
+          "death": "keep",
+          "stamped": true,
+          "description": "what the write came in through — the session or client that made it"
+        }
+      }
+    },
     "contains": {
       "component": true,
       "type": "object",
@@ -97,6 +124,7 @@
       "status": {
         "cancelled": "cancelled",
         "completed": "done",
+        "started": "wip",
         "default": "open"
       },
       "properties": {}
@@ -272,7 +300,7 @@
           }
         }
       },
-      "description": "Patch one task or atomic updates; rows inherit top-level fields. Omitted fields stay; null clears. status writes completion/cancellation marks. edit replaces, appends or prepends body text with a concurrency guard; body with was checks the supplied read token. Returns applied bundles.",
+      "description": "Patch one task or atomic updates; rows inherit top-level fields. Omitted fields stay; null clears. status writes started/completion/cancellation marks. edit replaces, appends or prepends body text with a concurrency guard; body with was checks the supplied read token. Returns applied bundles.",
       "input": {
         "task": {
           "type": "string",
@@ -283,6 +311,7 @@
           "type": "string",
           "enum": [
             "open",
+            "wip",
             "done",
             "cancelled"
           ],
@@ -404,6 +433,7 @@
                 "type": "string",
                 "enum": [
                   "open",
+                  "wip",
                   "done",
                   "cancelled"
                 ]

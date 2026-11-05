@@ -3,7 +3,14 @@
 import { test } from '@yaks/testing'
 import './testing.ts'
 import { assertEquals } from '@std/assert'
-import { aliasNames, find, type Row, subChanges } from './client.ts'
+import {
+  aliasNames,
+  find,
+  type Row,
+  statusChanges,
+  subChanges,
+} from './client.ts'
+import { statusOf } from './types.ts'
 import { bundlesOf } from './wire.ts'
 import { graph } from '@yaks/graph'
 import { ram } from '@yaks/ram'
@@ -76,4 +83,20 @@ test('clearing a watch keeps personal archive and opening without watching or mu
   assertEquals(subscription.after.archived, subscription.before.archived)
   assertEquals([...subscription.reader.watching], [])
   assertEquals([...subscription.reader.muting], [])
+})
+
+// A picker move reads back as the status it chose, from any status, with or
+// without a session: a person's wip is the `started` mark, a session's its claim.
+test('a status move reads back as the status it chose', () => {
+  for (let session of [undefined, 's1']) {
+    let comps: Record<string, unknown> = { task: {} }
+    for (let want of ['wip', 'done', 'wip', 'cancelled', 'wip', 'open']) {
+      for (let c of statusChanges('t', want, session)) {
+        if (c.comp) comps[c.name] = c.comp
+        else delete comps[c.name]
+      }
+      assertEquals(statusOf(comps), want, `${want} via ${session}`)
+    }
+    assertEquals(Object.keys(comps), ['task'])
+  }
 })

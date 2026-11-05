@@ -382,9 +382,8 @@ defineActions([
     acts: (e) => {
       let s = statusOf(e)
       // Status is DERIVED (D-24102): a move mints/retracts the mark
-      // (statusChanges), never a status column. wip is a live claim, so on the
-      // web (no session) 'start' falls back to reopening — the task reads open
-      // until it is claimed.
+      // (statusChanges), never a status column. 'start' with no session (the
+      // web, a person's TUI) wears the `started` mark.
       let move = (label: string, status: string): Action => ({
         label,
         run: () =>
