@@ -6,7 +6,7 @@ import { type ComponentChild, type FunctionComponent, h } from 'preact'
 import { useEffect, useRef, useState } from 'preact/hooks'
 import { parse } from '@yaks/query/core'
 import { define } from '@yaks/render'
-import { Markdown } from '@yaks/markdown'
+import { Prose, words } from './prose.ts'
 import { ink, mount, type Mounted, progress, type Tip } from '@yaks/diagram'
 import type { Bundle } from '@yaks/graph'
 import type { EntityProps } from '@yaks/preact'
@@ -96,11 +96,11 @@ let Hero: FunctionComponent<Ctx & { e: Bundle }> = ({ e }) =>
       h('span', { class: 'Kicker_Dot' }),
       'yak and the @yaks packages · open source',
     ]),
-    h('h1', null, text(e, 'doc', 'title')),
+    h('h1', null, words(text(e, 'doc', 'title'))),
     h(
       'div',
       { class: 'Lead' },
-      h(Markdown, { source: proseOf(text(e, 'doc', 'body')) }),
+      h(Prose, { source: proseOf(text(e, 'doc', 'body')) }),
     ),
     h(Copy, { line: INSTALL }),
     h(
@@ -191,8 +191,8 @@ let Step: FunctionComponent<
   let body = text(e, 'doc', 'body')
   return h('li', { class: 'Step', ref: at, 'data-eid': e.entity.eid }, [
     h('span', { class: 'Step_No' }, String(n)),
-    h('h2', null, text(e, 'doc', 'title')),
-    h(Markdown, { source: proseOf(body) }),
+    h('h2', null, words(text(e, 'doc', 'title'))),
+    h(Prose, { source: proseOf(body) }),
     h(
       'ul',
       { class: 'Step_Lines' },

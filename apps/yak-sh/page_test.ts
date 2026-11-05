@@ -472,3 +472,22 @@ test('the apply() band sends its letter as the source of its bundle, beside the 
   equal(stack.querySelector('.Outbox, .Toast'), null)
   page.page.close()
 })
+
+test('every yaks.app in the words is a link to it that opens in a new tab, and code keeps its own as typed', async () => {
+  let { root, page, settle } = await open()
+  await page.term.reach(steps, steps.length)
+  await settle()
+  let said = [...root.querySelectorAll('*')].flatMap((el) =>
+    [...el.childNodes].filter((n) =>
+      n.nodeType == 3 && /\byaks\.app\b/.test(n.textContent!)
+    ).map(() => el)
+  )
+  let away = (el: Element) =>
+    el.localName == 'a' && el.getAttribute('href') == 'https://yaks.app' &&
+    el.getAttribute('target') == '_blank' &&
+    el.getAttribute('rel') == 'noopener'
+  equal(said.filter((el) => !el.closest('code, pre, nav') && !away(el)), [])
+  equal(said.filter(away).length > 8, true)
+  equal(said.some((el) => el.closest('code')), true)
+  page.page.close()
+})

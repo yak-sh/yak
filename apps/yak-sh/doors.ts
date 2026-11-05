@@ -8,7 +8,7 @@
 // an effect handed a letter to.
 import { type FunctionComponent, h } from 'preact'
 import { useEffect, useLayoutEffect, useRef, useState } from 'preact/hooks'
-import { Markdown } from '@yaks/markdown'
+import { Prose, words } from './prose.ts'
 import { half, type Layout, mount } from '@yaks/diagram'
 import type { Bundle } from '@yaks/graph'
 import { human } from '@yaks/id'
@@ -184,8 +184,8 @@ let band = (
   return h('section', { class: 'Band Doors', 'data-eid': key }, [
     h('div', { class: 'Doors_Text' }, [
       h('div', { class: 'Band_Text' }, [
-        h('h2', null, text(e, 'doc', 'title')),
-        h(Markdown, { source: head }),
+        h('h2', null, words(text(e, 'doc', 'title'))),
+        h(Prose, { source: head }),
       ]),
       h(
         'ol',
@@ -197,8 +197,8 @@ let band = (
             key: i,
           }, [
             h('span', { class: 'Dot' }),
-            h('b', null, b.title),
-            h(Markdown, { source: b.prose }),
+            h('b', null, words(b.title)),
+            h(Prose, { source: b.prose }),
             b.kind == 'outbox'
               ? null
               : h('code', null, WINDOWS[b.kind]?.sign + b.line),
@@ -256,7 +256,10 @@ let band = (
       declared.length
         ? h('div', { class: 'Declares' }, declared.map((d) => h(Declared, d)))
         : null,
-      h('figcaption', null, [h('span', { class: 'No' }, no), caption]),
+      h('figcaption', null, [
+        h('span', { class: 'No' }, no),
+        ...words(caption),
+      ]),
     ]),
     sent?.delivered
       ? h(Toast, {

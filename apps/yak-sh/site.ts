@@ -30,6 +30,7 @@ export let FILES = [
   'editor.ts',
   'doors.ts',
   'turns.ts',
+  'prose.ts',
   'shop.ts',
   'outbox.ts',
 ]
@@ -268,7 +269,7 @@ export let SECTIONS: Section[] = [
     view: 'Part',
     title: 'yaks.app hosts web apps on the same packages',
     body: part(
-      '[yaks.app](https://yaks.app) builds, hosts and shares web apps. You ask Claude or ChatGPT for an app, and yaks.app keeps it online at its own address, with its data in a graph made of these packages.',
+      'yaks.app builds, hosts and shares web apps. You ask Claude or ChatGPT for an app, and yaks.app keeps it online at its own address, with its data in a graph made of these packages.',
       [
         "- **One toolkit in two places.** On your machine, `yak` keeps a graph in a SQLite file. On yaks.app, the same `@yaks/graph` keeps each app's data in a Cloudflare Durable Object.",
         '- **Your assistant builds the app.** Add yaks.app to Claude or ChatGPT and ask for what you need. It writes the app, and yaks.app serves it at an address like `yourname.yaks.app/recipes`.',
@@ -300,7 +301,7 @@ export let SECTIONS: Section[] = [
       "Each Claude Code session becomes a session entity in the graph. Any MCP client can call the graph's tools at `http://127.0.0.1:8787/mcp`.",
       '### Reach yaks.app',
       sh('yak auth yaks.app'),
-      'Signs you in, so the same `yak` calls your [yaks.app](https://yaks.app) account.',
+      'Signs you in, so the same `yak` calls your yaks.app account.',
     ),
   },
   {

@@ -6,7 +6,7 @@
 // commit is shown: the outbox it was handed to, and a toast once it was sent.
 import { type FunctionComponent, h } from 'preact'
 import { useRef } from 'preact/hooks'
-import { Markdown } from '@yaks/markdown'
+import { Prose, words } from './prose.ts'
 import { human } from '@yaks/id'
 import { INSIDE, type Phase, PHASES } from '@yaks/graph/plugin'
 import { type Bundle, composed } from '@yaks/graph'
@@ -21,8 +21,8 @@ type Band = FunctionComponent<Ctx & { e: Bundle }>
 
 let Head = ({ e }: { e: Bundle }) =>
   h('div', { class: 'Band_Text' }, [
-    h('h2', null, text(e, 'doc', 'title')),
-    h(Markdown, { source: proseOf(text(e, 'doc', 'body')) }),
+    h('h2', null, words(text(e, 'doc', 'title'))),
+    h(Prose, { source: proseOf(text(e, 'doc', 'body')) }),
   ])
 
 // ------------------------------------------------------------------ #12
@@ -382,7 +382,7 @@ export let Stack: Band = (ctx) => {
     }, [
       h('span', { class: 'Dot' }),
       h('b', null, p),
-      h(Markdown, { source: DOES[p] }),
+      h(Prose, { source: DOES[p] }),
       h(
         'span',
         { class: 'Skip' },

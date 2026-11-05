@@ -5,7 +5,7 @@
 // `###` heading starts a numbered item. The title block signs the page off.
 import { type FunctionComponent, h } from 'preact'
 import { useState } from 'preact/hooks'
-import { Markdown } from '@yaks/markdown'
+import { Prose, words } from './prose.ts'
 import type { Bundle } from '@yaks/graph'
 import type { Ctx } from './views.ts'
 import { text } from './told.ts'
@@ -63,7 +63,7 @@ export let partOf = (body: string) => {
 }
 
 let piece = (p: Piece) =>
-  p.kind == 'md' ? h(Markdown, { source: p.text }) : p.kind == 'sh'
+  p.kind == 'md' ? h(Prose, { source: p.text }) : p.kind == 'sh'
     ? h(
       'div',
       { class: 'Part_Lines' },
@@ -93,7 +93,10 @@ let held = (pieces: Piece[]) => {
         'ol',
         { class: 'Part_List' },
         items.map((it) =>
-          h('li', null, [h('h3', null, it.title), ...it.pieces.map(piece)])
+          h('li', null, [
+            h('h3', null, words(it.title)),
+            ...it.pieces.map(piece),
+          ])
         ),
       )
       : null,
@@ -113,8 +116,8 @@ let Part: FunctionComponent<Ctx & { e: Bundle }> = ({ e, yak }) => {
   return h('section', { class: 'Part', id: ANCHORS[eid], 'data-eid': eid }, [
     h('div', { class: 'Part_Head' }, [
       h('span', { class: 'Bubble' }, String(parts.indexOf(eid) + 1)),
-      h('h2', null, text(e, 'doc', 'title')),
-      h(Markdown, { source: head }),
+      h('h2', null, words(text(e, 'doc', 'title'))),
+      h(Prose, { source: head }),
     ]),
     h('div', { class: 'Part_Body' }, held(pieces)),
   ])
@@ -129,13 +132,13 @@ let Block: FunctionComponent<Ctx & { e: Bundle }> = ({ e }) => {
   })
   return h('footer', { class: 'Block', 'data-eid': e.entity.eid }, [
     h('div', { class: 'Block_Sign' }, [
-      h('strong', null, text(e, 'doc', 'title')),
-      h('span', null, line),
+      h('strong', null, words(text(e, 'doc', 'title'))),
+      h('span', null, words(line)),
     ]),
     ...facts.map(([term, value]) =>
       h('dl', null, [
         h('dt', null, term),
-        h('dd', null, h(Markdown, { source: value })),
+        h('dd', null, h(Prose, { source: value })),
       ])
     ),
   ])
