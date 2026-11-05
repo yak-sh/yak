@@ -26,6 +26,32 @@ let open = async () => {
   }
   return { document, root, page, settle }
 }
+// Each element under `root` as its path of tags and classes, and a leaf's
+// words, so two pages can be compared by what they show.
+let outline = (root: Element) => {
+  let lines: string[] = []
+  let walk = (el: Element, at: string) => {
+    for (let c of el.children) {
+      let path = `${at}>${c.localName}.${c.getAttribute('class') ?? ''}`
+      lines.push(
+        c.children.length || !c.textContent ? path : `${path} ${c.textContent}`,
+      )
+      walk(c, path)
+    }
+  }
+  walk(root, '')
+  return lines
+}
+
+test('the page paints in its drawn layout before its scripts run', async () => {
+  let shell = parseHTML(await Deno.readTextFile(new URL('index.html', dir)))
+  let before = outline(shell.document.querySelector('#page')!)
+  let { root, page } = await open()
+  let after = new Set(outline(root))
+  equal(before.filter((l) => !after.has(l)), [])
+  page.page.close()
+})
+
 let steps = SECTIONS.filter((s) => s.view == 'Step').map((s) => s.body)
 
 test('the page draws every section from the graph, in its layout order', async () => {

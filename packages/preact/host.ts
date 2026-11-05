@@ -7,7 +7,8 @@
  * page's client, socket and graph, which the host never owns, are untouched.
  * Scroll and focus are kept across the draw. A module that fails to import
  * or to draw leaves the old registry drawn, and the page reloads as it would
- * have.
+ * have. Whatever the root held before, such as a static first screen for
+ * the page to paint before its scripts run, is replaced by the first draw.
  *
  * ```ts
  * import { equal } from '@yaks/testing'
@@ -222,6 +223,9 @@ export let host = async (page: Page): Promise<Host> => {
       root,
     )
 
+  // Preact draws beside what it did not make, so the first draw clears the
+  // root in the same task, before the browser can paint it empty.
+  root.replaceChildren()
   drawn()
   // Writes can land faster than their modules import; only the newest draws.
   let newest = 0

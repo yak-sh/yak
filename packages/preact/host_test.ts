@@ -74,8 +74,10 @@ let module = (tag: string, Render?: ComponentRenderer['Render']): Views => ({
 let page = async (
   modules: Record<string, Views | (() => never)>,
   words?: (url: string) => Promise<Response>,
+  shell = '',
 ) => {
   let { root, document, free } = stage()
+  root.innerHTML = shell
   Object.defineProperty(document, 'baseURI', {
     value: BASE,
     configurable: true,
@@ -144,6 +146,22 @@ let page = async (
 }
 
 let next = (sha: string) => `${VIEWS}?yak-draft=${sha}`
+
+test('the first draw replaces what the root held before the scripts ran', async () => {
+  let p = await page(
+    { [VIEWS]: module('old') },
+    undefined,
+    '<header>Soup</header>',
+  )
+  try {
+    equal([p.text(), p.root.querySelectorAll('header').length], [
+      'old Soup',
+      0,
+    ])
+  } finally {
+    p.done()
+  }
+})
 
 test('a write of the views module draws its renderers in the same root over the same graph, and takes the write from the reload', async () => {
   let p = await page({ [VIEWS]: module('old'), [next('abc')]: module('new') })

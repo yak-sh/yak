@@ -17,7 +17,7 @@
   </head>
   <body>
     <main id="page">
-      <header class="Hero">
+      <div class="Site">
         <nav class="Nav">
           <a class="Nav_Mark" href="./"><span class="Nav_Dot"></span>yak.sh</a>
           <span class="Nav_Links">
@@ -26,17 +26,27 @@
             <a href="https://github.com/yak-sh/yak">GitHub</a>
           </span>
         </nav>
-        <div class="Hero_Body">
-          <p
-            class="Kicker"><span class="Kicker_Dot"></span>yak and the @yaks packages · open source</p>
-          <h1>A shared graph for your data, tools, and agents.</h1>
-          <div class="Lead">
-            <p><code>yak</code> is a command line, and <code>@yaks</code> a set of open-source TypeScript packages, for one graph that you and your agents both read and write.</p>
+        <section class="Plot">
+          <div class="Plot_Words">
+            <header class="Hero">
+              <p
+                class="Kicker"><span class="Kicker_Dot"></span>yak and the @yaks packages · open source</p>
+              <h1>A shared graph for your data, tools, and agents.</h1>
+              <div class="Lead">
+                <div class="Markdown">
+                  <p><code>yak</code> is a command line, and <code>@yaks</code> a set of open-source TypeScript packages, for one graph that you and your agents both read and write.</p>
+                </div>
+              </div>
+              <div
+                class="Copy"><code><span class="Copy_Sign">$ </span>deno run -A jsr:@yaks/cli/install</code><button type="button">Copy</button></div>
+              <p
+                class="Hint">Scroll, and each step below runs in the graph in this tab while the drawing beside it adds what it wrote.</p>
+            </header>
+            <ol class="Steps"></ol>
           </div>
-          <div
-            class="Copy"><code><span class="Copy_Sign">$ </span>deno run -A jsr:@yaks/cli/install</code></div>
-        </div>
-      </header>
+          <div class="Plot_Side"></div>
+        </section>
+      </div>
     </main>
   </body>
 </html>
