@@ -603,6 +603,17 @@ prompt channel. Existing `opts.instructions` and `sending.instructions` remain
 the base instruction channel; delegated `instructions` append local guidance
 rather than replacing that base.
 
+A host whose transcripts run for weeks lends `wear` instead of opening them with
+a snapshot: every ask's system prompt is the persona the transcript wears
+(`session.persona`, or that of the session that started it, so a fork or a
+helper wears its parent's), said by @yaks/persona `voice`, and then whatever
+`opts.instructions` adds. Both are read again for every ask, so an edit to the
+persona, or to the base it is worn on (`persona.base`), reaches the transcript
+on its next turn, and `sending.instructions` records the text each ask was sent.
+`wear.bases` is where those bases are kept when this graph does not keep them;
+the yaks.app Operator wears each space's persona on the platform's, which the
+directory keeps.
+
 Fresh children copy shared prompt snapshots from their parent. Forks copy no
 files: their exact inherited prefix is followed by a local fork-execution note,
 optional child guidance, and the assignment. Fresh children intentionally

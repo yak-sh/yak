@@ -70,6 +70,8 @@ import {
 } from './model_selection.ts'
 import { type EntrySource, entrySource, type SourceRequest } from './detail.ts'
 import { inheritedInstructions } from './legacy_instructions.ts'
+import { wornBy } from './worn.ts'
+import type { Reads } from '@yaks/persona'
 import { type RuntimeAction, runtimeAction, runtimeRows } from './runtime.ts'
 
 let comp = (b: Bundle, name: string) => b[name] as Comp | undefined
@@ -194,6 +196,14 @@ export type Opts<H extends Host = Host> = ChildLimits & {
    * read again for every ask, so what it reads (a name, the apps in reach)
    * is current in a transcript that runs for weeks. */
   instructions?: string | ((session: Eid) => Promise<string>)
+  /** Wear each transcript's persona on every ask (`session.persona`, or that
+   * of the session that started it): its text (@yaks/persona `voice`) leads
+   * the system prompt and `instructions` follows it, both read again for
+   * every ask, so an edit to the persona reaches a transcript on its next
+   * turn. `bases` is where a persona's base (`persona.base`) is kept when this
+   * graph does not keep it. A host that opens a transcript with its persona's
+   * text (`opening`) leaves this out. */
+  wear?: { bases?: Reads }
   /** Maximum tool-result code points before model-facing handle projection. */
   outputLimit?: number
   /** the share of its model's context window a transcript fills before it is
@@ -516,10 +526,20 @@ export let lend = <H extends Host>(opts: Opts<H>): Runner => {
     instructions: typeof opts.instructions == 'string'
       ? opts.instructions
       : undefined,
-    resolveInstructions: async (inherited, session) =>
-      typeof opts.instructions == 'function'
+    resolveInstructions: async (inherited, session) => {
+      if (!opts.wear) {
+        return typeof opts.instructions == 'function'
+          ? await opts.instructions(session)
+          : inheritedInstructions(inherited, opts.instructions)
+      }
+      // What was sent before already says the persona, so only what the host
+      // adds follows the persona's text as it reads now.
+      let worn = await wornBy(h.g, session, opts.wear.bases)
+      let added = typeof opts.instructions == 'function'
         ? await opts.instructions(session)
-        : inheritedInstructions(inherited, opts.instructions),
+        : opts.instructions
+      return [worn, added].filter(Boolean).join('\n\n') || undefined
+    },
     inputText: async (transcript) =>
       inputText(transcript, await senders(h.g, transcript)),
     contextItems: opts.context,

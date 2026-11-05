@@ -49,6 +49,7 @@ import { standing } from './standing.ts'
 import { drain, type operatorStore } from './operator-store.ts'
 import { asIs, type File, rootOf, SHOWN } from './operator-channels.ts'
 import { textSend } from './operator-texts.ts'
+import { bases, declare, type Declared, spaced } from './operator-persona.ts'
 
 type Store = ReturnType<typeof operatorStore>
 export type Options = {
@@ -96,20 +97,22 @@ export let operatorContext = async (
   }
 }
 
-/** Who the Operator is, as its instructions open: its name and whose it is. */
-export let introduced = (space: Space) =>
-  `You are ${space.operator}, the Operator of ${space.slug}, and answer to that name. Don't sign your replies; a letter or a text is signed for you.`
+// How the Operator works in its conversations, declared beside the code that
+// makes it so (`operating`): every message arrives in one conversation, which
+// forks for the work, and a fork shares its instructions and tools so its
+// request starts with the conversation's cached prefix. The base persona
+// contains it (operator-persona.ts).
+export let conversation: Declared = {
+  key: 'conversation',
+  title: 'Your conversations, and the work they fork',
+  body:
+    "You talk with each person in one conversation that lasts for weeks: every message they send you, in the chat app, by email or by text, arrives there, marked with how it came when not by chat. Keep the conversation itself light. For anything that needs a tool (reading or changing apps, rows, files or code), use fork with a short prompt saying what to do, then reply at once in a sentence saying what you are doing, and nothing more; your reply goes to them the way their message came. When a fork comes back, tell them in a few lines what was done or what is needed from them. Answer without a fork only what needs no tool.\n\nWhen you were started for a piece of work (a fork, a helper, or a task), do the work with your tools, using the space's existing apps and rows, then end with a short report of what changed and the next step, for the conversation or the task to pass on.",
+}
 
-// How the Operator works in that conversation, said beside the code that
-// makes it so: a fork shares the conversation's instructions and tools, so its
-// request starts with the conversation's cached prefix.
-let CONVERSATION =
-  ' You talk with this person in one conversation that lasts for weeks: every message they send you, in the chat app, by email or by text, arrives here, marked with how it came when not by chat. Keep the conversation itself light. For anything that needs a tool (reading or changing apps, rows, files or code), use fork with a short prompt saying what to do, then reply at once in a sentence saying what you are doing, and nothing more; your reply goes to them the way their message came. When a fork comes back, tell them in a few lines what was done or what is needed from them. Answer without a fork only what needs no tool. When you were started for a piece of work (a fork, or a helper), do the work with your tools, then end with a short report for the conversation to pass on.'
-let TASKED =
-  " Carry out this task using the space's existing apps and rows, then explain what changed and the next step. Your conversation and tools are recorded on its task. Use task_update with status done on this task only when the requested work is finished. Leave it open when asking a question, reporting a limit, or explaining unfinished work."
-// Where the Operator finds what it no longer holds in front of it (`SELF`).
-let REMEMBERS =
-  ' Everything you have done is kept in your own store: each conversation and every entry in it, your forks and helpers, your memories and your tasks. When something said earlier is not in front of you, find it there: search, graph_query and graph_show with self true (`.entry` rows are what was said, each in a `.session`), and memory_around for what was said around an entry. When someone tells you something worth keeping, memory_save it with on naming the entry they said it in; memory_recall finds it again.'
+// What a session carrying on a task is told, where it is given the tool that
+// closes it.
+let ON_TASK =
+  ' This session carries on that task: its conversation and tools are recorded on it. Set status done on it only when the requested work is finished; leave it open when asking a question, reporting a limit, or explaining unfinished work.'
 
 // What the Operator is told of the spaces it reaches beyond its own.
 let told = (
@@ -117,7 +120,7 @@ let told = (
   space: Space,
 ) =>
   ctx.beyond.length
-    ? `\n\n${
+    ? `${
       ctx.pa
         ? `${space.slug} is this person's own space, so you are their personal assistant and also reach their other spaces`
         : `You also reach the spaces that let ${space.slug}'s Operator in`
@@ -165,6 +168,15 @@ let SELF = {
     'Read your own store instead of the apps: your conversations and every entry in them, your forks and helpers, your memories, your persona, and your tasks and requests.',
 }
 let mine = new Set(['memory_save', 'memory_recall', 'memory_around'])
+// Where the Operator finds what it no longer holds in front of it, declared
+// beside the code that gives it `self` and the memory loop. The base persona
+// contains it (operator-persona.ts).
+export let remembering: Declared = {
+  key: 'remembering',
+  title: 'What you have done, and finding it again',
+  body:
+    'Everything you have done is kept in your own store: each conversation and every entry in it, your forks and helpers, your memories and your tasks. When something said earlier is not in front of you, find it there: search, graph_query and graph_show with self true (`.entry` rows are what was said, each in a `.session`), and memory_around for what was said around an entry. When someone tells you something worth keeping, memory_save it with on naming the entry they said it in; memory_recall finds it again.',
+}
 
 // Discovery is refreshed before every ask: a deploy may add words and tools.
 export let operatorRoster = async (
@@ -265,7 +277,13 @@ export let operatorRoster = async (
     }),
     ...[...own.values()]
       .filter((t) => mine.has(t.name) || t.name == 'task_update')
-      .map((t) => ({ ...shaped(t), run: run(t, work.g, work.g) })),
+      .map((t) => ({
+        ...shaped(t),
+        ...t.name == 'task_update'
+          ? { description: t.description + ON_TASK }
+          : {},
+        run: run(t, work.g, work.g),
+      })),
   ]
 }
 
@@ -511,6 +529,14 @@ export let operating = (
   let delegate = provider == 'anthropic'
     ? env.OPERATOR_DELEGATE ?? OPUS
     : undefined
+  let spawn = sessionTools(g).find((t) => t.name == 'spawn')!
+  let delegated: Tool | undefined = delegate
+    ? {
+      ...spawn,
+      description:
+        `${spawn.description} For writing or fixing code, or work that needs careful reasoning, use spawn with model ${delegate} and a prompt that carries everything it needs; its answer comes back to you.`,
+    }
+    : undefined
   let using = {
     provider: identityEid('provider', [provider]),
     model: identityEid('model', [name]),
@@ -593,6 +619,19 @@ export let operating = (
     let cost = billed(reply, price)
     return { ...reply, cost: cost?.dollars, costReported: cost?.reported }
   }, base)
+  // The base persona as this code declares it, written once per wake; one
+  // that could not be written is reported and tried again on the next ask,
+  // while the Operator wears the base the directory holds.
+  let based: Promise<void> | undefined
+  let basing = () =>
+    based ??= declare(env, [
+      { key: 'platform', title: 'yaks.app', body: instructions(env) },
+      conversation,
+      remembering,
+    ]).catch((e) => {
+      based = undefined
+      caught(e, { request: 'operator base persona' })
+    })
   let seeded: Promise<void> | undefined
   let seeding = () =>
     seeded ??= (async () => {
@@ -699,11 +738,11 @@ export let operating = (
       // Its text is shown as it is written (@yaks/session run.ts `step`).
       streaming: true,
       context: shown,
-      // The conversation forks for its work; coding and careful reasoning
-      // go to the stronger model in a fresh helper.
-      tools: sessionTools(g).filter((t) =>
-        t.name == 'fork' || (delegate && t.name == 'spawn')
-      ),
+      // The conversation forks for its work.
+      tools: sessionTools(g).filter((t) => t.name == 'fork'),
+      // Each ask wears the space's persona on the platform's base, read from
+      // the directory (operator-persona.ts).
+      wear: { bases: bases(env) },
       // A child works for the same space and person as the session that
       // started it, and is charged to that space.
       prepareChild: async ({ parent }) => {
@@ -713,31 +752,25 @@ export let operating = (
       remote: async (session) => {
         let { space, ctx, files } = await working(env, store, session)
         let tasked = !!await taskOf(store, session)
+        let [row] = await g.get([session])
         return [
+          // A conversation and its forks hand coding and careful reasoning
+          // to the stronger model in a fresh helper, which starts no other.
+          ...delegated && !(row?.spawned && !row.fork) ? [delegated] : [],
           ...await operatorRoster(ctx, store, tasked),
           platformBug(space),
           textSend(env, ctx, space),
           ...options.tools?.(ctx, files) ?? [],
         ]
       },
-      // A conversation and every fork of it are told the same, so a fork's
-      // request begins with the conversation's cached prefix; a fresh helper
-      // on the stronger model is not told to start another.
+      // Where it is, after the persona: the apps in reach with what each
+      // keeps of itself, what the person has said, and the spaces it
+      // reaches. A conversation and every fork of it are told the same, so
+      // a fork's request begins with the conversation's cached prefix.
       instructions: async (session) => {
         let { space, ctx } = await working(env, store, session)
-        let tasked = !!await taskOf(store, session)
-        let [row] = await g.get([session])
-        let asks = delegate && !(row?.spawned && !row.fork)
-        return `${instructions(env)}\n\n${await standing(ctx)
-          .notes()}\n\n${
-          introduced(space)
-        } You work for the owner of ${space.slug}.${
-          tasked ? TASKED : CONVERSATION
-        }${REMEMBERS} Read the app's schema and rows before changing data. Ask when required details are missing; never invent meeting dates, times or legal text. A request may be an idea or a design prepared by another agent.${
-          asks
-            ? ` For writing or fixing code, or work that needs careful reasoning, use spawn with model ${delegate} and a prompt that carries everything it needs; its answer comes back to you.`
-            : ''
-        }${told(ctx, space)}`
+        return [await standing(ctx).notes(), told(ctx, space)]
+          .filter(Boolean).join('\n\n')
       },
       each: async (step, session) => {
         if (!session) return
@@ -805,14 +838,9 @@ export let operating = (
     let input = o.request
       ? derivedEid('operator-input|' + o.request)
       : crypto.randomUUID()
-    await seeding()
+    await Promise.all([seeding(), basing()])
     await g.apply([
-      {
-        entity: { eid: space.eid },
-        doc: { title: `${space.operator}, the Operator of ${space.slug}` },
-        project: {},
-        persona: {},
-      },
+      ...await spaced(g.storage, space),
       { entity: { eid: held.person }, person: {} },
     ], { trusted: true })
     // A person's words with no task are the next input of their one

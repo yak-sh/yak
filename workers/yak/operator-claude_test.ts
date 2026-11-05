@@ -76,11 +76,12 @@ test('on Claude the Operator hands code to Opus, which works for its space at it
   let on = (name: string) => asked.filter((r) => r.model == name)
   let [opus] = on(OPUS)
   assertEquals(on(OPUS).length, 1)
+  // Told where spawn is given, which the helper on Opus is not.
   assertStringIncludes(
-    String(on(SONNET)[0].instructions),
+    on(SONNET)[0].tools.find((t) => t.name == 'spawn')!.description,
     `spawn with model ${OPUS}`,
   )
-  assertEquals(String(opus.instructions).includes('spawn with model'), false)
+  assertEquals(opus.tools.some((t) => t.name == 'spawn'), false)
   // The child's answer wakes the session that asked, once.
   assertEquals(on(SONNET).filter(said).length, 1)
   assertEquals(said(on(SONNET).at(-1)!), true)

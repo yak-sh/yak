@@ -855,13 +855,28 @@ otherwise on `BUILDER_MODEL_PAID` (`@cf/zai-org/glm-5.3`); `OPERATOR_MODEL`
 overrides either. A `@cf/…` model runs on the Workers AI binding and a
 `claude-…` model on Anthropic's API (claude.ts `providerOf`); the model must
 have a price, from the Workers AI catalogue or @yaks/model's list. On Anthropic
-the Operator has `spawn`, and its instructions send writing or fixing code and
-tasks that need careful reasoning to `OPERATOR_DELEGATE` (`claude-opus-5-5`) in
-a child session working for the same space and charged to it; the child's answer
-comes back to the session that asked. This entry accepts text. Picture
-attachments and the email, chat and SMS interfaces are separate work.
-Interrupted requests remain in the graph and can be continued explicitly; they
-do not resume automatically.
+a conversation and its forks have `spawn`, whose description sends writing or
+fixing code and tasks that need careful reasoning to `OPERATOR_DELEGATE`
+(`claude-opus-5-5`) in a child session working for the same space and charged to
+it; the child's answer comes back to the session that asked, and the child is
+offered no `spawn` of its own. This entry accepts text. Picture attachments and
+the email, chat and SMS interfaces are separate work. Interrupted requests
+remain in the graph and can be continued explicitly; they do not resume
+automatically.
+
+What the Operator is told is two personas, worn through @yaks/persona
+(operator-persona.ts). The yaks.app Operator persona is kept in the directory:
+its own text is the general guidance, written by the code only where there is
+none, so a person edits it there; it contains what the Operator knows because of
+code (the connector guide, how its conversation and forks work), each declared
+beside that code and rewritten when its text changes. Each space's own persona,
+in its Operator store at the space's eid, is worn on it (`persona.base`): it
+contains whose it is and what it is called, and its text is the space's to
+write. The runner wears both on every ask (@yaks/harness `wear`), so an edit to
+either reaches every Operator on its next turn, and `sending.instructions`
+records what each ask was sent. After them come where it is: the apps in reach,
+what the person has said here, and the spaces it reaches (standing.ts). What a
+tool is for is said in that tool's description, where the code gives it.
 
 Model spending reserves each provider call's maximum in the directory before
 submission. The atomic reservation debits the space's shared model and voice

@@ -22,6 +22,13 @@
 // only listed: the edge records where it is, not that its text belongs here.
 // A registered tool it contains is offered to whoever wears it rather than
 // said, and an included persona's tools are offered with its own.
+//
+// A persona may be worn on a base (`persona.base`): the base's text and
+// documents come first, and this persona's follow them, as {@link fold} says
+// them. An edge stays within one store, and a base is often kept in another
+// (a platform's, under each space's own), so the base is named by its eid and
+// read from where the wearer says it is kept: reference at authoring, resolve
+// at delivery.
 // This walks level by level rather than recursing, so an embedded store
 // answers the whole read synchronously and a remote one needs exactly one
 // chain of calls (@yaks/edge's `reach` walks the same way).
@@ -108,11 +115,41 @@ let links = (storage: Reads, from: Eid[], tag: string | undefined) =>
  * if (worn) console.log(voice(vocab)(worn))
  * ```
  *
+ * A persona worn on a base (`persona.base`) is said base first, the base read
+ * from `bases` (by default the same storage): a platform's persona, say, under
+ * each space's own.
+ *
  * Synchronous in, synchronous out: over an embedded database this returns a
  * value directly, and over a storage that returns promises it returns a
  * promise.
  */
 export let wear = (
+  storage: Reads,
+  vocab: Vocab,
+  bases: Reads = storage,
+): (eid: Eid) => Worn | undefined | Promise<Worn | undefined> => {
+  let alone = gathered(storage, vocab)
+  let below = gathered(bases, vocab)
+  // Down a persona's bases, each read where bases are kept, then said base
+  // first. A base missing, or one already worn, ends the stack where it is.
+  let on = (
+    worn: Worn | undefined,
+    seen: Set<Eid>,
+  ): Worn | undefined | Promise<Worn | undefined> => {
+    let base = (worn?.persona[PERSONA] as { base?: unknown } | undefined)?.base
+    if (!worn || typeof base != 'string' || seen.has(base)) return worn
+    if (seen.size >= DEPTH) return worn
+    return after(below(base), (under) =>
+      after(
+        on(under, new Set([...seen, base])),
+        (stack) => stack ? fold(stack, worn) : worn,
+      ))
+  }
+  return (eid) => after(alone(eid), (worn) => on(worn, new Set([eid])))
+}
+
+// One persona and what its edges reach, its base left aside.
+let gathered = (
   storage: Reads,
   vocab: Vocab,
 ): (eid: Eid) => Worn | undefined | Promise<Worn | undefined> => {

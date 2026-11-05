@@ -38,6 +38,10 @@
           "ref": "project",
           "death": "detach",
           "description": "the project it works for"
+        },
+        "base": {
+          "type": "string",
+          "description": "the persona this one is worn on, whose text and documents come first; it may be kept in another store, which whoever wears this one reads it from"
         }
       },
       "description": "instructions an agent runs with: the doc body on the same entity is the instruction text"

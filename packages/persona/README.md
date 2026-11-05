@@ -11,11 +11,12 @@ deno add jsr:@yaks/persona
 ```
 
 - `person` — a human being the graph knows, addressable by name.
-- `persona{home}` — a set of instructions an agent runs with. The `doc` body on
-  the same entity is the instruction text, and `home` is the project it works
-  for. The component declares `governed`, meaning it should be associated with a
-  project, so [@yaks/project](../project)'s check reports a persona no project
-  can reach.
+- `persona{home, base}` — a set of instructions an agent runs with. The `doc`
+  body on the same entity is the instruction text, `home` is the project it
+  works for, and `base` is the persona it is worn on, which may be kept in
+  another store. The component declares `governed`, meaning it should be
+  associated with a project, so [@yaks/project](../project)'s check reports a
+  persona no project can reach.
 - `skill{invoke, arguments, paths, fork, options}` — instructions an agent loads
   on demand ([Repository skills](#repository-skills)).
 
@@ -67,7 +68,7 @@ relationships. The minimal example has no linked documents.
 
 Rendering behavior:
 
-Five things this shape decides:
+Six things this shape decides:
 
 - **It returns text.** Where the document goes — `AGENTS.md` in a repo, the
   system prompt of a spawned agent, a card in a browser — is the caller's
@@ -93,6 +94,12 @@ Five things this shape decides:
   those tools and no others ([@yaks/harness](../harness)). A persona containing
   none leaves a session its runner's own tools. `wearing(g, path, as)` is the
   persona an agent wears, chosen or common, whatever its files already say.
+- **A base is worn beneath, wherever it is kept.** A persona with `persona.base`
+  is said base first: the base's text and documents, then its own, as `fold`
+  says several personas. An edge stays within one store, so the base is named by
+  its eid, and `wear(storage, vocab, bases)` reads it from `bases` (by default
+  the same storage). That is how one platform persona sits under every space's
+  own, read again each time it is worn, with nothing copied into the spaces.
 
 At each nesting level, documents are ordered by their edge's `ord` property,
 then by the target entity id. Missing `ord` values sort last. Nested personas

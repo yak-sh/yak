@@ -36,8 +36,8 @@ let marks = [
   'interrupted',
   'failed',
 ]
-let machine: Plug[] = [
-  { use: '@yaks/persona', facets: ['vocab'], words: ['person'] },
+let machine = (persona = ['person']): Plug[] => [
+  { use: '@yaks/persona', facets: ['vocab'], words: persona },
   { use: '@yaks/archetype', words: [] },
   '@yaks/edge',
   '@yaks/key',
@@ -63,7 +63,7 @@ export let appConfig: Config = {
       ],
     },
     provenance,
-    ...machine,
+    ...machine(),
     // Apps have no numbers, but every store accepts human ids on input.
     { use: '@yaks/id', words: [] },
     ...addressed,
@@ -174,7 +174,9 @@ export let directoryConfig: Config = {
       words: [...spine, ...relations, ...marks, 'completed'],
     },
     provenance,
-    ...machine,
+    // The directory keeps the persona every Operator is worn on
+    // (operator-persona.ts).
+    ...machine(['person', 'persona']),
     '@yaks/id',
     ...addressed,
     '@yaks/doc',
@@ -252,7 +254,7 @@ export let gitConfig: Config = {
   plugins: storePlugins([
     { use: '@yaks/kernel', facets: ['vocab'], words: spine },
     provenance,
-    ...machine,
+    ...machine(),
     '@yaks/id',
     ...addressed,
     { use: '@yaks/blob', words: [] },

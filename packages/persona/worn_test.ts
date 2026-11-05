@@ -104,6 +104,48 @@ test('a ring of personas ends the gather rather than spinning', () => {
   assertEquals(ids(now(g, 'n1')!.contains), ['n2', 'm1'])
 })
 
+// A space's persona n1 worn on a base kept in another store: the platform's
+// b1, which contains m9 and is worn on b2.
+let on = (base: string): Bundle => ({
+  ...voiced('n1', 'TaskMaster', 'the voice'),
+  persona: { base },
+})
+let platform = world()
+platform.apply([
+  { ...voiced('b1', 'Operator', 'the platform'), persona: { base: 'b2' } },
+  voiced('b2', 'floor', 'under it all'),
+  memory('m9', 'nine', 'the guide'),
+  link('b1', 'contains', 'm9'),
+])
+let layered = (g: Graph, eid = 'n1') => {
+  let worn = wear(held(g), said, held(platform))(eid)
+  assert(!isPromise(worn), 'the gather went async over a Map')
+  return worn
+}
+
+test('a persona worn on a base kept elsewhere says the base first, then its own', () => {
+  let worn = layered(graph(on('b1'), link('n1', 'contains', 'm1')))!
+  assertEquals(worn.persona.entity.eid, 'b2')
+  assertEquals(ids(worn.contains), ['b1', 'm9', 'n1', 'm1'])
+})
+
+test('a base that is not there leaves the persona as it is', () => {
+  let worn = layered(graph(on('gone'), link('n1', 'contains', 'm1')))!
+  assertEquals(worn.persona.entity.eid, 'n1')
+  assertEquals(ids(worn.contains), ['m1'])
+})
+
+test('a ring of bases ends the stack rather than spinning', () => {
+  let g = graph(
+    { ...voiced('n2', 'ring', 'round'), persona: { base: 'n1' } },
+    on('n2'),
+  )
+  let worn = wear(held(g), said)('n1')
+  assert(!isPromise(worn))
+  assertEquals(worn!.persona.entity.eid, 'n2')
+  assertEquals(ids(worn!.contains), ['n1'])
+})
+
 test('a proposal is said only once somebody approves it', () => {
   let g = graph(
     { entity: { eid: 'm1' }, proposed: {} },
