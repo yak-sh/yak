@@ -8,9 +8,9 @@ argument; nothing here reads the environment.
 
 - `DEEPGRAM`: Nova-3 hears a recording, Flux hears a call and says when a
   speaker's turn ends, and Aura-2 speaks. It has no model that talks.
-- `OPENAI`: gpt-transcribe hears a recording, gpt-live-transcribe a call's
-  turns, gpt-4o-mini-tts speaks (its 24 kHz PCM made μ-law for a call), and
-  gpt-realtime-2.1 and its mini hear and speak in one stream (`talk`).
+- `OPENAI`: gpt-transcribe hears a recording and a call's turns, gpt-4o-mini-tts
+  speaks (its 24 kHz PCM made μ-law for a call), and gpt-realtime-2.1 and its
+  mini hear and speak in one stream (`talk`).
 
 ## Speaking and hearing
 

@@ -1,5 +1,5 @@
-// OpenAI: gpt-transcribe hears a recording, gpt-live-transcribe a call's
-// turns, gpt-4o-mini-tts speaks, and gpt-realtime-2.1 hears and speaks in one
+// OpenAI: gpt-transcribe hears a recording and a call's turns,
+// gpt-4o-mini-tts speaks, and gpt-realtime-2.1 hears and speaks in one
 // stream, answering as it goes. Its TTS speaks 24 kHz PCM, made μ-law for a
 // call here; the realtime model takes and speaks a telephone's μ-law itself.
 // Prices are its list, 2026-11-05.
@@ -143,8 +143,10 @@ export let OPENAI: Provider = {
     },
   },
   turns: {
-    model: 'gpt-live-transcribe',
-    perMinute: 0.017,
+    // gpt-live-transcribe takes no turn detection, refusing the session, so
+    // it cannot say when a caller's turn ends.
+    model: 'gpt-transcribe',
+    perMinute: 0.0045,
     path: () => '/v1/realtime?intent=transcription',
     opening: (format, model) => [JSON.stringify({
       type: 'session.update',
