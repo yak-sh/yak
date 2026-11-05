@@ -28,6 +28,7 @@ import {
   YEARLY,
 } from './meter.ts'
 import { AWAKE } from './sandbox.ts'
+import { sheeted } from './sheets.ts'
 import { CAP } from './invite.ts'
 import type { Tier } from './directory.ts'
 import { quoted, rate } from './sell.ts'
@@ -224,15 +225,18 @@ test('the style guide demonstrates every shared component', () => {
 // The nav is the same places on every page, or it is not a nav: a link
 // that appears on one page and not the next is how a visitor loses the thread
 // (T-33643). The current page marks itself with aria-current and nothing else,
-// so the set of destinations is identical everywhere.
+// so the set of destinations is identical everywhere. A person signed in reads
+// "Open yaks.app" where "Sign in" was, on every page as it leaves.
 test('every page carries the same nav links', () => {
   let want = ['/#how', '/gallery', '/pricing', '/docs', '/login', '/manage']
   for (let page of branded) {
-    let nav = read(page).split('<nav class="Nav"')[1]?.split('</nav>')[0] ?? ''
-    assert(nav, `${page} has no nav`)
+    let { document } = parseHTML(sheeted(read(page), {}))
+    let nav = [...document.querySelectorAll('.Nav a')]
+    assert(nav.length, `${page} has no nav`)
+    assertEquals(nav.map((a) => a.getAttribute('href')), want, page)
     assertEquals(
-      [...nav.matchAll(/href="([^"]+)"/g)].map((m) => m[1]),
-      want,
+      document.querySelector('.Nav_Open')?.textContent,
+      'Open yaks.app',
       page,
     )
   }
@@ -462,6 +466,7 @@ test('the gallery is a page of this site, drawn rather than filed', async () => 
     [...nav.matchAll(/href="([^"]+)"/g)].map((m) => m[1]),
     ['/#how', '/gallery', '/pricing', '/docs', '/login', '/manage'],
   )
+  assertStringIncludes(nav, '>Open yaks.app</a>')
   assertEquals(links(one.split('<footer')[1]), FOOT)
   assertStringIncludes(sitemap(null), `<loc>${url}</loc>`)
   // And the home page points at it, since it is in no nav.

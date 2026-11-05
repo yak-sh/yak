@@ -410,14 +410,14 @@
     color: var(--ink);
   }
 
-  /* A person signed in reads "Dashboard" where "Sign in" is (signed.ts sets
+  /* A person signed in reads "Open yaks.app" where "Sign in" is (signed.ts sets
      data-signed on the root before the page paints). */
-  .Nav_Dashboard,
+  .Nav_Open,
   :root[data-signed] .Nav_SignIn {
     display: none;
   }
 
-  :root[data-signed] .Nav_Dashboard {
+  :root[data-signed] .Nav_Open {
     display: revert;
   }
 

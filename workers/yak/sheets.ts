@@ -2,7 +2,7 @@
 // on another site. The bundle states the content-made names (sheet-assets.ts);
 // without one, in a test or under `wrangler dev`, the sources answer instead.
 import { type Host, url } from './host.ts'
-import { island } from './signed.ts'
+import { island, signedIn } from './signed.ts'
 
 declare const YAK_SHEETS: Record<string, string> | undefined
 
@@ -23,13 +23,14 @@ export let links = (env: Host, sheet: string, names = NAMES) => {
 <link rel="stylesheet" href="${at(sheet)}">`
 }
 
-/** A static page with its source's link swapped for what `links` says, and
- * the nav's island beside it (signed.ts). */
+/** A static page with its source's link swapped for what `links` says, the
+ * nav's island beside it, and beside its Sign in the link the island shows a
+ * person signed in instead (signed.ts). */
 export let sheeted = (html: string, env: Host, names = NAMES) =>
   html.replace(
     /<link rel="stylesheet" href="style\.css"\s*\/?>/,
     () => `${links(env, 'style.css', names)}\n${island}`,
-  )
+  ).replace(/<a class="Nav_SignIn"[^>]*>Sign in<\/a>/, (a) => a + signedIn)
 
 /** The source behind a content-made address, for one no longer deployed. */
 export let named = (path: string) => {
