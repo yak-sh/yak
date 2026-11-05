@@ -82,14 +82,17 @@ let page = async (column = 144) => {
   ) => (env.scrollY = y, env.on.scroll?.(), await step(16))
   let yak = () => document.querySelector('.Wander') as HTMLElement
   // where he is: in the hero, or his place in the window and what he shows
-  let where = () =>
-    yak().parentElement == slot
-      ? 'home'
-      : `${yak().style.transform} ${
-        yak().querySelector('[data-on]')!.matches('[data-idle]')
-          ? 'sitting'
-          : 'moving'
-      }`
+  let where = () => {
+    let on = yak().querySelector('[data-on]')
+    let showing = on?.matches('[data-idle]')
+      ? 'sitting'
+      : on
+      ? 'moving'
+      : 'hidden'
+    return yak().parentElement == slot
+      ? `home ${showing}`
+      : `${yak().style.transform} ${showing}`
+  }
   await step(64)
   return { step, scroll, where }
 }
@@ -111,11 +114,16 @@ test('the home page draws the yak as its logo, and loads what moves him', async 
   }
 })
 
+test('once loaded he shows, sitting as the logo', async () => {
+  let p = await page()
+  assertEquals(p.where(), 'home sitting')
+})
+
 test('scrolled out of view, he scampers in just far enough to be in frame, and there he stays', async () => {
   let p = await page()
   await p.scroll(1500)
   await p.step(500)
-  assertEquals(p.where(), 'home', 'he waits for the page to be still')
+  assertEquals(p.where(), 'home sitting', 'he waits for the page to be still')
   await p.step(3000)
   assertEquals(p.where(), 'translate(21px, 12px) sitting')
   await p.scroll(1400)
@@ -142,12 +150,12 @@ test('scrolled back to the hero, he goes up into his place', async () => {
   await p.step(1000)
   assert(p.where().endsWith('moving'), p.where())
   await p.step(8000)
-  assertEquals(p.where(), 'home')
+  assertEquals(p.where(), 'home sitting')
 })
 
 test('with no margin to walk in, he stays the logo', async () => {
   let p = await page(40)
   await p.scroll(1500)
   await p.step(3000)
-  assertEquals(p.where(), 'home')
+  assertEquals(p.where(), 'home sitting')
 })

@@ -111,13 +111,13 @@
     addEventListener('load', measure)
 
     let shown = still
+    still.dataset.on = ''
     let show = (layer, i = 0) => {
       if (layer != shown) {
         layer.dataset.on = '', delete shown.dataset.on, shown = layer
       }
       if (layer != still) layer.firstChild.style.marginLeft = `${-100 * i}%`
     }
-    show(still)
 
     // where: 'home' (in the hero) or 'out' (in the margin)
     // act: 'sit', 'rise', 'walk', 'step' (into his place), 'plop'
