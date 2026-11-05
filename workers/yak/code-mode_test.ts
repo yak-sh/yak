@@ -121,10 +121,13 @@ let three = fixture([echo])
 test('deadline revokes bridge; completed scripts cannot leave new calls behind', async () => {
   let time = clock()
   let bridge: Parameters<typeof evaluate>[1] | undefined
+  let started = Promise.withResolvers<void>()
   let out = execute('', three.catalog, three.run, three.asked, async (_, b) => {
     bridge = b
+    started.resolve()
     return await new Promise(() => {})
   }, time)
+  await started.promise
   await time.advance(LIMITS.wallMs)
   ok((await out).error?.includes('30 seconds'))
   await throws(

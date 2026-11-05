@@ -13,7 +13,6 @@ import {
   toolEid,
 } from '@yaks/tools'
 import { catalog, declarations } from './types.ts'
-import { source } from './source.ts'
 export { catalog, declarations, type Entry } from './types.ts'
 
 export let LIMITS = {
@@ -175,9 +174,15 @@ export let execute = async (
     })
   })
   try {
-    let module = source(script, entries, LIMITS.outputBytes)
     let text = await Promise.race([
-      evaluate(module, { call }, controller.signal),
+      import('./source.ts').then(({ source }) => {
+        controller.signal.throwIfAborted()
+        return evaluate(
+          source(script, entries, LIMITS.outputBytes),
+          { call },
+          controller.signal,
+        )
+      }),
       timeout,
     ])
     active = false
