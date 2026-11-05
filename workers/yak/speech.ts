@@ -85,6 +85,34 @@ let WAYS: Way[] = [
   },
 ]
 
+/** How fast an Operator speaks on a call, in the settings page's words: a
+ * multiple of each provider's own pace, which each holds within the speeds
+ * it has (@yaks/speech `paced`). Brisk is what nobody picked. */
+export type Pace = { id: string; name: string; about: string; speed: number }
+
+export let PACES: Pace[] = [
+  {
+    id: 'relaxed',
+    name: 'Relaxed',
+    about: 'Unhurried, at the voice’s own pace.',
+    speed: 1,
+  },
+  { id: 'normal', name: 'Normal', about: 'A little quicker.', speed: 1.15 },
+  {
+    id: 'brisk',
+    name: 'Brisk',
+    about: 'Quick and to the point, like an assistant on the move.',
+    speed: 1.3,
+  },
+]
+
+/** The pace named `id`, refused when there is none by that id. */
+export let paceOf = (id: string) => {
+  let pace = PACES.find((p) => p.id == id)
+  if (!pace) throw new CallError('arguments', 'Pick one of the speeds listed.')
+  return pace
+}
+
 // The voices the settings page offers, the butler-like ones first.
 let OFFERED = [...BUTLERS, 'cedar', 'marin', 'ash', 'coral']
 
@@ -102,7 +130,7 @@ export let speaks = (model: string, id: string) =>
  * even where it is not among them, so a save never changes it unasked. */
 export let offered = (
   env: Speaking,
-  space: Pick<Space, 'voice' | 'voice_model'>,
+  space: Pick<Space, 'voice' | 'voice_model' | 'voice_speed'>,
 ) => {
   let setup = setupOf(space)
   let on = (v: Voiced) => speechOf(env, v.provider)
@@ -122,7 +150,7 @@ export let offered = (
       about: 'Kept until you pick one of the others.',
     })
   }
-  return { setup, voices, ways }
+  return { setup, voices, ways, paces: PACES }
 }
 
 /** The voice `space`'s Operator speaks in on a call. */
@@ -155,9 +183,12 @@ export let modelOf = (id: string, voice: string) => {
 }
 
 /** How `space`'s Operator is on a call: the provider it speaks through, its
- * voice, and the model that answers, which hears and speaks itself when it
- * is one of the provider's own (`talks`). */
-export let setupOf = (space: Pick<Space, 'voice' | 'voice_model'>) => {
+ * voice, how fast it speaks, and the model that answers, which hears and
+ * speaks itself when it is one of the provider's own (`talks`). */
+export let setupOf = (
+  space: Pick<Space, 'voice' | 'voice_model' | 'voice_speed'>,
+) => {
+  let pace = PACES.find((p) => p.id == space.voice_speed) ?? PACES.at(-1)!
   let voice = VOICES.find((v) => v.id == operatorVoice(space)) ??
     voiceOf(BUTLERS[0])
   let model = space.voice_model ?? CALL_MODELS[0]
@@ -168,25 +199,34 @@ export let setupOf = (space: Pick<Space, 'voice' | 'voice_model'>) => {
     voice: !talk || talk.voices.some((v) => v.id == voice.id)
       ? voice.id
       : talk.voice,
+    pace: pace.id,
+    speed: pace.speed,
     model,
     talks: !!talk,
   }
 }
 
-// What every voice's sample says. A new line needs a new SAMPLES prefix, so
-// no voice keeps playing the old one.
+// What every voice's sample says, kept by voice and pace. A new line needs a
+// new SAMPLES prefix, so no voice keeps playing the old one.
 let SAMPLE =
   'Hello, I’m your Operator. Tell me what you’d like changed, and I’ll get it done.'
 let SAMPLES = 'speech/samples/1/'
 
-/** `voice` saying the sample line, as an MP3: spoken once, charged to the
- * space that first asked, and kept in the bucket for every space after. */
-export let sampled = async (env: Env, space: Space, voice: string) => {
+/** `voice` saying the sample line at `pace`, as an MP3: spoken once, charged
+ * to the space that first asked, and kept in the bucket for every space
+ * after. Relaxed is the voice's own pace, kept where samples always were. */
+export let sampled = async (
+  env: Env,
+  space: Space,
+  voice: string,
+  pace = 'relaxed',
+) => {
   let { id, provider } = voiceOf(voice)
-  let key = SAMPLES + id + '.mp3'
+  let { speed } = paceOf(pace)
+  let key = SAMPLES + id + (speed == 1 ? '' : `-${pace}`) + '.mp3'
   let kept = await env.BLOBS.get(key)
   if (kept) return new Uint8Array(await kept.arrayBuffer())
-  let said = await speaking(env, space, SAMPLE, { voice, provider })
+  let said = await speaking(env, space, SAMPLE, { voice, provider, speed })
   let bytes = new Uint8Array(await new Response(said.body).arrayBuffer())
   await env.BLOBS.put(key, bytes)
   return bytes
@@ -316,6 +356,7 @@ export let speaking = async (
     provider?: Provider
     voice?: string
     format?: Format
+    speed?: number
     signal?: AbortSignal
   } = {},
 ) => {

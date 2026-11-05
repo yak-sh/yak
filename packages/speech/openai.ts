@@ -178,8 +178,9 @@ export let OPENAI: Provider = {
     ],
     // $12 a million audio tokens, 1,200 a minute, and about a thousand
     // characters said a minute.
+    speeds: { min: 0.25, max: 4 },
     perThousand: 0.015,
-    request: (text, voice, format) => ({
+    request: (text, voice, format, speed) => ({
       path: '/v1/audio/speech',
       init: {
         method: 'POST',
@@ -190,6 +191,7 @@ export let OPENAI: Provider = {
           input: text,
           response_format: format.encoding == 'mp3' ? 'mp3' : 'pcm',
           stream_format: 'audio',
+          ...speed == 1 ? {} : { speed },
         }),
       },
     }),
@@ -201,6 +203,7 @@ export let OPENAI: Provider = {
     models: ['gpt-realtime-2.1-mini', 'gpt-realtime-2.1'],
     voice: 'cedar',
     voices: VOICES,
+    speeds: { min: 0.25, max: 1.5 },
     path: (model) => `/v1/realtime?model=${encodeURIComponent(model)}`,
     opening: (setup) => [JSON.stringify({
       type: 'session.update',
@@ -217,7 +220,11 @@ export let OPENAI: Provider = {
             transcription: { model: 'gpt-live-transcribe', language: 'en' },
             turn_detection: { ...TURN, create_response: true },
           },
-          output: { format: wire(setup.format), voice: setup.voice },
+          output: {
+            format: wire(setup.format),
+            voice: setup.voice,
+            ...setup.speed == 1 ? {} : { speed: setup.speed },
+          },
         },
         tools: setup.tools.map((t) => ({ type: 'function', ...t })),
         tool_choice: 'auto',

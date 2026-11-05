@@ -48,6 +48,25 @@ test('speaking asks the voice for the format, with the key, and prices the chara
   ])
 })
 
+test('each provider is asked to speak at the speed given, held within its own', async () => {
+  let asked = async (provider: Provider, speed: number) => {
+    let o = answering(() => new Response(new Uint8Array(1)), provider)
+    await speak({ ...o, text: 'Hi.', speed })
+    let { url, init } = o.asked[0]
+    return provider == DEEPGRAM
+      ? new URL(url).searchParams.get('speed')
+      : JSON.parse(String(init.body)).speed
+  }
+  equal(await asked(DEEPGRAM, 1.3), '1.3')
+  equal(await asked(DEEPGRAM, 2), '1.5')
+  equal(await asked(DEEPGRAM, 1), null)
+  equal(await asked(OPENAI, 1.3), 1.3)
+  equal(await asked(OPENAI, 1), undefined)
+  let { s } = talking(() => Promise.resolve(''), 2)
+  s.fire('open')
+  equal(s.json()[0].session.audio.output.speed, 1.5)
+})
+
 test('a refusal says the provider’s words, and only a 429 or 5xx is tried again', async () => {
   for (let [status, retry] of [[401, false], [429, true], [503, true]]) {
     let o = answering(() => new Response('nope', { status: Number(status) }))
@@ -187,7 +206,10 @@ test('OpenAI speaks PCM made into a call’s μ-law, at its own price', async ()
 
 // A talk stream on OpenAI's realtime model, the caller's audio sent and the
 // model's events fired back.
-let talking = (calls: (name: string, args: string) => Promise<string>) => {
+let talking = (
+  calls: (name: string, args: string) => Promise<string>,
+  speed?: number,
+) => {
   let s = socket()
   let told: unknown[] = []
   let stream = talk({
@@ -195,6 +217,7 @@ let talking = (calls: (name: string, args: string) => Promise<string>) => {
     key: 'k1',
     format: { encoding: 'mulaw', rate: 8000 },
     voice: 'cedar',
+    speed,
     instructions: 'Be brief.',
     tools: [{ name: 'ask', description: 'Ask.', parameters: {} }],
     open: s.open,

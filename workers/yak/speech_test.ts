@@ -165,23 +165,28 @@ test('text spoken in a voice of another provider goes to it, with its own key', 
   equal(budget(await space()).spent.toFixed(6), '0.000165')
 })
 
-test('an Operator’s setup: its voice names the provider, and its model whether that provider talks', () => {
-  let of = (voice?: string, voice_model?: string) => {
-    let { provider, ...rest } = setupOf({ voice, voice_model })
+test('an Operator’s setup: its voice names the provider, its pace how fast it speaks, and its model whether that provider talks', () => {
+  let of = (voice?: string, voice_model?: string, voice_speed?: string) => {
+    let { provider, ...rest } = setupOf({ voice, voice_model, voice_speed })
     return { provider: provider.name, ...rest }
   }
   equal(of(), {
     provider: 'deepgram',
     voice: 'aura-2-draco-en',
+    pace: 'brisk',
+    speed: 1.3,
     model: 'claude-haiku-5-5',
     talks: false,
   })
-  equal(of('cedar', 'gpt-realtime-2.1-mini'), {
+  equal(of('cedar', 'gpt-realtime-2.1-mini', 'relaxed'), {
     provider: 'openai',
     voice: 'cedar',
+    pace: 'relaxed',
+    speed: 1,
     model: 'gpt-realtime-2.1-mini',
     talks: true,
   })
+  equal(of(undefined, undefined, 'gone').pace, 'brisk')
   equal(of('fable', 'claude-sonnet-5-5').talks, false)
   equal(of('fable', 'gpt-realtime-2.1').voice, 'cedar')
 })

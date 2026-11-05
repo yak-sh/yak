@@ -566,10 +566,10 @@ test('a renamed Operator goes by its new name in its chat app, its settings and 
 })
 
 // A Voice card saved through its door, then the settings drawn again.
-let voiced = async (voice: string, voice_model: string) => {
+let voiced = async (voice: string, voice_model: string, speed = 'brisk') => {
   let saved = await answer(`${at}?voice=1`, {
     method: 'POST',
-    body: new URLSearchParams({ voice, voice_model }),
+    body: new URLSearchParams({ voice, voice_model, voice_speed: speed }),
   })
   let { document } = parseHTML(
     await operatorBody(
@@ -584,24 +584,35 @@ let voiced = async (voice: string, voice_model: string) => {
       ?.getAttribute('value'),
     model: document.querySelector('#voice [name=voice_model]:checked')
       ?.getAttribute('value'),
+    speed: document.querySelector('#voice [name=voice_speed]:checked')
+      ?.getAttribute('value'),
   }
 }
-test('the Voice card shows back the voice and model each save picked', async () => {
+test('the Voice card shows back the voice, speed and model each save picked', async () => {
   for (
-    let [voice, model] of [
-      ['aura-2-pandora-en', 'claude-haiku-5-5'],
-      ['fable', 'claude-sonnet-5-5'],
-      ['cedar', 'claude-haiku-5-5'],
-      ['marin', 'gpt-realtime-2.1-mini'],
+    let [voice, model, speed] of [
+      ['aura-2-pandora-en', 'claude-haiku-5-5', 'relaxed'],
+      ['fable', 'claude-sonnet-5-5', 'normal'],
+      ['cedar', 'claude-haiku-5-5', 'brisk'],
+      ['marin', 'gpt-realtime-2.1-mini', 'normal'],
     ]
   ) {
-    assertEquals(await voiced(voice, model), { status: 200, voice, model })
+    assertEquals(await voiced(voice, model, speed), {
+      status: 200,
+      voice,
+      model,
+      speed,
+    })
   }
   // A voice the talking model cannot speak is refused, and the last save stays.
+  let kept = { voice: 'marin', model: 'gpt-realtime-2.1-mini', speed: 'normal' }
   assertEquals(await voiced('fable', 'gpt-realtime-2.1'), {
     status: 400,
-    voice: 'marin',
-    model: 'gpt-realtime-2.1-mini',
+    ...kept,
+  })
+  assertEquals(await voiced('marin', 'gpt-realtime-2.1-mini', 'zippy'), {
+    status: 400,
+    ...kept,
   })
 })
 

@@ -197,6 +197,8 @@ export type Space = {
   // The voice its Operator speaks in on a call (speech.ts `VOICES`), or none
   // for the provider's own.
   voice?: string | null
+  // How fast its Operator speaks (speech.ts `PACES`), or none for Brisk.
+  voice_speed?: string | null
   // The model that answers its calls (speech.ts `setupOf`), or none for the
   // platform's.
   voice_model?: string | null
@@ -605,6 +607,7 @@ export type Row = {
   operator?: {
     name?: string | null
     voice?: string | null
+    voice_speed?: string | null
     voice_model?: string | null
     cache_retention?: number | null
   }
@@ -1114,6 +1117,7 @@ export let spaceOf = (r: Row): Space => ({
   title: r.doc?.title || r.space!.slug,
   operator: calledOf(r),
   voice: r.operator?.voice ?? null,
+  voice_speed: r.operator?.voice_speed ?? null,
   voice_model: r.operator?.voice_model ?? null,
   cache_retention: r.operator?.cache_retention ?? null,
   logo: r.space_logo?.sha
@@ -1891,11 +1895,16 @@ export let directoryRows = (rows: {
       return (await self.at(space.eid))!
     },
     // The space's Operator called `name` (operator-name.ts `given`), or
-    // speaking in `voice` and answered on a call by `voice_model` (speech.ts
-    // `setupOf`).
+    // speaking in `voice` at `voice_speed` and answered on a call by
+    // `voice_model` (speech.ts `setupOf`).
     operate: async (
       space: Space,
-      operator: { name?: string; voice?: string; voice_model?: string },
+      operator: {
+        name?: string
+        voice?: string
+        voice_speed?: string
+        voice_model?: string
+      },
       headers: Record<string, string>,
     ): Promise<Space> => {
       await self.apply({

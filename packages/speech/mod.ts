@@ -22,6 +22,20 @@ export type Raw = Extract<Format, { rate: number }>
  * calls it, and how it sounds. */
 export type Voice = { id: string; name: string; about: string }
 
+/** The speeds a provider speaks at, as multiples of its own pace. */
+export type Speeds = { min: number; max: number }
+
+/** `speed` as near as `speeds` allows.
+ *
+ * ```ts
+ * import { equal } from '@yaks/testing'
+ * equal(paced({ min: 0.7, max: 1.5 }, 1.3), 1.3)
+ * equal(paced({ min: 0.25, max: 1.5 }, 2), 1.5)
+ * ```
+ */
+export let paced = ({ min, max }: Speeds, speed = 1): number =>
+  Math.min(max, Math.max(min, speed))
+
 /** A request as a provider words it: the path under its API, and the rest. */
 export type Asked = { path: string; init: RequestInit }
 
@@ -58,6 +72,8 @@ export type Setup = {
   model: string
   voice: string
   format: Raw
+  /** how fast it speaks, within the talking model's `speeds` */
+  speed: number
   instructions: string
   tools: { name: string; description: string; parameters: object }[]
 }
@@ -101,8 +117,15 @@ export type Provider = {
   speak: {
     voice: string
     voices: Voice[]
+    speeds: Speeds
     perThousand: number
-    request: (text: string, voice: string, format: Format) => Asked
+    /** `speed` is within `speeds` */
+    request: (
+      text: string,
+      voice: string,
+      format: Format,
+      speed: number,
+    ) => Asked
     /** what turns its audio into `format`, when it does not speak it */
     audio?: (
       format: Format,
@@ -114,6 +137,7 @@ export type Provider = {
     models: string[]
     voice: string
     voices: Voice[]
+    speeds: Speeds
     path: (model: string) => string
     opening: (setup: Setup) => string[]
     audio: (bytes: Uint8Array) => string
@@ -243,11 +267,22 @@ async (path, init = {}) => {
  * ```
  */
 export let speak = async (
-  o: Calling & { text: string; voice?: string; format?: Format },
+  o: Calling & {
+    text: string
+    voice?: string
+    format?: Format
+    /** a multiple of the provider's pace (`paced`) */
+    speed?: number
+  },
 ): Promise<Spoken> => {
   let format = o.format ?? { encoding: 'mp3' }
   let { speak } = o.provider
-  let { path, init } = speak.request(o.text, o.voice ?? speak.voice, format)
+  let { path, init } = speak.request(
+    o.text,
+    o.voice ?? speak.voice,
+    format,
+    paced(speak.speeds, o.speed),
+  )
   let response = await asking(o)(path, init)
   if (!response.body) {
     throw new SpeechError(`${o.provider.name} returned no audio`, 502)
@@ -459,6 +494,8 @@ export let talk = (
     format: Raw
     model?: string
     voice?: string
+    /** a multiple of the provider's pace (`paced`) */
+    speed?: number
     instructions: string
     tools?: Setup['tools']
     told: Talked
@@ -476,6 +513,7 @@ export let talk = (
       model,
       voice: o.voice ?? t.voice,
       format: o.format,
+      speed: paced(t.speeds, o.speed),
       instructions: o.instructions,
       tools: o.tools ?? [],
     }),

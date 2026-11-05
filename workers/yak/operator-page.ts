@@ -30,6 +30,7 @@ import {
   BUTLERS,
   modelOf,
   offered,
+  paceOf,
   sampled,
   speaks,
   voiceOf,
@@ -111,13 +112,14 @@ export let nameCard = (at: string, name: string) =>
 <button class="Button" type="submit">Save</button><p role="status" data-status></p></form>`
 
 // Where a space's people hear a few voices its Operator may speak in on a
-// call, pick one, and pick how its calls are answered, each said in a line
-// (speech.ts `offered`). Play speaks a sample (speech.ts `sampled`); a voice
-// the chosen way cannot speak is greyed (`settingsScript`).
+// call, pick one, how fast it speaks, and how its calls are answered, each
+// said in a line (speech.ts `offered`). Play speaks a sample at the speed
+// picked (speech.ts `sampled`); a voice the chosen way cannot speak is
+// greyed (`settingsScript`).
 export let voiceCard = (
   at: string,
   space: Pick<Space, 'operator'>,
-  { setup, voices, ways }: ReturnType<typeof offered>,
+  { setup, voices, ways, paces }: ReturnType<typeof offered>,
 ) =>
   `<form class="Card Form" id="voice" method="post" action="${at}?voice=1">
 <h2 class="Card_Title">Voice</h2>
@@ -137,6 +139,15 @@ export let voiceCard = (
       }">Play</button></div>`
     ).join('\n')
   }</div>
+<fieldset class="Form_Field"><legend>Speed</legend>${
+    paces.map((p) =>
+      `<label class="Choice"><input type="radio" name="voice_speed" value="${p.id}"${
+        p.id == setup.pace ? ' checked' : ''
+      }><span><b>${esc(p.name)}</b> <span class="Note Note-small">${
+        esc(p.about)
+      }</span></span></label>`
+    ).join('\n')
+  }</fieldset>
 <fieldset class="Form_Field"><legend>Answers</legend>${
     ways.map((w) =>
       `<label class="Choice"><input type="radio" name="voice_model" value="${w.model}"${
@@ -283,15 +294,21 @@ export let operatorAnswer = async (
     try {
       let { id } = voiceOf(String(form.get('voice') ?? ''))
       let model = form.get('voice_model')
+      let speed = form.get('voice_speed')
       let set = await directoryOf(env.STORE).operate(
         space,
         {
           voice: id,
+          ...speed ? { voice_speed: paceOf(String(speed)).id } : {},
           ...model ? { voice_model: modelOf(String(model), id) } : {},
         },
         vouched(who),
       )
-      return Response.json({ voice: set.voice, voice_model: set.voice_model })
+      return Response.json({
+        voice: set.voice,
+        voice_speed: set.voice_speed,
+        voice_model: set.voice_model,
+      })
     } catch (e) {
       if (!(e instanceof CallError)) throw e
       return Response.json({ message: e.message }, { status: 400 })
@@ -299,7 +316,8 @@ export let operatorAnswer = async (
   }
   if (q.has('sample') && req.method == 'GET') {
     try {
-      return new Response(await sampled(env, space, q.get('sample')!), {
+      let pace = q.get('pace') ?? undefined
+      return new Response(await sampled(env, space, q.get('sample')!, pace), {
         headers: {
           'content-type': 'audio/mpeg',
           'cache-control': 'private, max-age=86400',
@@ -545,7 +563,8 @@ for (let play of document.querySelectorAll('[data-sample]')) {
     said.textContent = ''
     play.disabled = true
     try {
-      let response = await fetch(play.dataset.sample)
+      let pace = document.querySelector('#voice [name=voice_speed]:checked')?.value
+      let response = await fetch(play.dataset.sample + (pace ? '&pace=' + pace : ''))
       if (!response.ok) throw new Error((await response.json().catch(() => null))?.message ?? 'That voice could not be played. Try again.')
       URL.revokeObjectURL(playing.src)
       playing.src = URL.createObjectURL(await response.blob())

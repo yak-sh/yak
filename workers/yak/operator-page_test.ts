@@ -17,11 +17,16 @@ test('the texts card names the number to text as an sms: link', () => {
 })
 
 let on = { DEEPGRAM_API_KEY: 'a', OPENAI_VOICE_KEY: 'b' }
-let card = (voice?: string, voice_model?: string, env: object = on) =>
+let card = (
+  voice?: string,
+  voice_model?: string,
+  env: object = on,
+  voice_speed?: string,
+) =>
   voiceCard(
     '/manage/x/operator',
     { operator: 'Elihu' },
-    offered(env, { voice, voice_model }),
+    offered(env, { voice, voice_model, voice_speed }),
   )
 let names = (html: string, field: string) =>
   [...html.matchAll(
@@ -66,6 +71,15 @@ test('the voice card says each way of answering plainly, the realtime one only w
   equal(
     names(card('cedar', 'gpt-realtime-2.1'), 'voice_model').at(-1),
     'As set before',
+  )
+})
+
+test('the voice card offers a few speeds, Brisk until another is picked', () => {
+  equal(names(card(), 'voice_speed'), ['Relaxed', 'Normal', 'Brisk'])
+  assertStringIncludes(card(), 'value="brisk" checked')
+  assertStringIncludes(
+    card(undefined, undefined, on, 'relaxed'),
+    'value="relaxed" checked',
   )
 })
 

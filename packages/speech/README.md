@@ -14,11 +14,15 @@ argument; nothing here reads the environment.
 
 ## Speaking and hearing
 
-- `speak({provider, key, text, voice?, format?})` answers the audio as it
-  streams (`body`), its media type, and what it cost in `dollars`. `format` is
-  `{encoding: 'mp3'}` (the default) or raw samples,
+- `speak({provider, key, text, voice?, format?, speed?})` answers the audio as
+  it streams (`body`), its media type, and what it cost in `dollars`. `format`
+  is `{encoding: 'mp3'}` (the default) or raw samples,
   `{encoding: 'mulaw' | 'linear16', rate}`, which come without a container,
   ready for a phone call.
+- `speed` is a multiple of the provider's own pace (1 by default), held within
+  the `speeds` each provider declares for speaking and for talking
+  (`paced(speeds, speed)`): Aura-2 0.7 to 1.5, gpt-4o-mini-tts 0.25 to 4, the
+  realtime models 0.25 to 1.5.
 - `hear({provider, key, audio, type})` answers a recording's `text`, its length
   in `seconds`, and `dollars`.
 - `turns({provider, key, format, told})` hears audio as it streams. `send` takes
@@ -26,15 +30,15 @@ argument; nothing here reads the environment.
   whatever is playing to them), `told.end(text)` when they finish one, and
   `told.lost(reason)` when the stream drops. `close()` answers the seconds heard
   and their cost.
-- `talk({provider, key, format, instructions, tools?, model?, voice?, told})` is
-  a model that hears and speaks itself. `send` takes the caller's raw samples;
-  `told.audio(bytes)` is what to play them, `told.start()` and `told.stopped()`
-  mark their turn, `told.heard` and `told.said` are each side's words, and
-  `told.call(name, args)` answers a tool the model asked for with its output,
-  before it goes on, and `told.done()` ends each of its responses. `say(text)`
-  asks it to say something; `close()` answers the seconds heard and what the
-  stream cost, each response priced at its model's rates, or the stream's when
-  it names none. A provider without `talk` refuses.
+- `talk({provider, key, format, instructions, tools?, model?, voice?, speed?, told})`
+  is a model that hears and speaks itself. `send` takes the caller's raw
+  samples; `told.audio(bytes)` is what to play them, `told.start()` and
+  `told.stopped()` mark their turn, `told.heard` and `told.said` are each side's
+  words, and `told.call(name, args)` answers a tool the model asked for with its
+  output, before it goes on, and `told.done()` ends each of its responses.
+  `say(text)` asks it to say something; `close()` answers the seconds heard and
+  what the stream cost, each response priced at its model's rates, or the
+  stream's when it names none. A provider without `talk` refuses.
 - A stream's `open(url, {authorization, protocols})` makes its socket: by
   default the platform's `WebSocket`, offering the key as the provider's
   subprotocols; a host whose sockets take headers sends `authorization`.

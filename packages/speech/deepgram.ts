@@ -299,12 +299,15 @@ export let DEEPGRAM: Provider = {
         about: 'masculine, American, deep, trustworthy, smooth',
       },
     ],
+    // https://developers.deepgram.com/docs/tts-voice-controls
+    speeds: { min: 0.7, max: 1.5 },
     perThousand: 0.030,
-    request: (text, voice, format) => ({
+    request: (text, voice, format, speed) => ({
       path: `/v1/speak?${
         query({
           model: voice,
           ...encoded(format),
+          ...speed == 1 ? {} : { speed: String(speed) },
           ...format.encoding == 'mp3' ? {} : { container: 'none' },
         })
       }`,
