@@ -111,7 +111,10 @@ test('dependency bookkeeping changes select their consumers without selecting un
   )
 })
 
-let readied = async (read: (file: string) => string[] | undefined) => {
+let readied = async (
+  read: (file: string) => string[] | undefined,
+  reached = ['workers/yak/testing.ts'],
+) => {
   let made: boolean[] = []
   let order: string[] = []
   let plan = await prepare([], '/sqlite.so', {
@@ -127,7 +130,7 @@ let readied = async (read: (file: string) => string[] | undefined) => {
         affected: files,
         sources: ['worker.ts'],
         beyond: 0,
-        reaches: (paths) => paths.includes('workers/yak/testing.ts'),
+        reaches: (paths) => paths.some((p) => reached.includes(p)),
         read,
       })
     },
@@ -159,6 +162,11 @@ test('source checks begin before selection and receive completed generated impor
 test('a run makes the generated assets only when a file it runs read one, or has no reads kept', async () => {
   equal(await readied(() => ['workers/yak/public/docs.md']), [false])
   equal(await readied(() => ['workers/yak/public/_client.js']), [true])
+})
+
+test('a run whose files import a generated module makes the assets, whatever they read', async () => {
+  let docs = () => ['workers/yak/public/docs/speed.md']
+  equal(await readied(docs, ['workers/yak/public/_wire.js']), [true])
 })
 
 test('planning and readiness failures settle source jobs waiting for their imports', async () => {

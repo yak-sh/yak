@@ -37,7 +37,9 @@ let { fileURLToPath } = await import('node:url')
 let { choose } = await import('@yaks/testing/choose')
 let { changes } = await import('./test-changes.ts')
 let { check, format } = await import('./test-checks.ts')
-let { excluded, sourceSurvey } = await import('./check-types.ts')
+let { excluded, MADE: GENERATORS, sourceSurvey } = await import(
+  './check-types.ts'
+)
 let { discover, tested } = await import('@yaks/testing/find')
 let { survey, took } = await import('@yaks/testing/deps')
 let { own } = await import('@yaks/testing/own')
@@ -319,6 +321,11 @@ export let READIES = [
  * them is seconds a run whose files never read them need not wait. */
 export let MADE = /^workers\/yak\/public\/_(?!headers$)/
 
+/** The generated modules a source imports (check-types.ts `MADE`): a run
+ * whose files import one, as the public client imports its parts, makes the
+ * assets whatever its files read. */
+let IMPORTED = Object.values(GENERATORS).flat()
+
 /** What a change's own run may expect its tests to take, in milliseconds,
  * loading included: with choosing and starting them, under the ten seconds an
  * agent may wait. The rest of its consumers run in main's CI after the push. */
@@ -462,10 +469,12 @@ export let prepare = async (
       parsed,
     )
     if (!inspected) snapshot.resolve(undefined)
-    let prepared = reaches(READIES)
+    let imported = reaches(IMPORTED)
+    let prepared = imported || reaches(READIES)
       ? effects.ready(
         !flags.includes('--verbose'),
-        run.some((f) => read(f)?.some((p) => MADE.test(p)) ?? true),
+        imported ||
+          run.some((f) => read(f)?.some((p) => MADE.test(p)) ?? true),
       ).then((outputs) => outputs ?? [])
       : Promise.resolve([])
     // Source discovery and other checks run beside readiness. Only preparing
