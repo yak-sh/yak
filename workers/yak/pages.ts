@@ -981,8 +981,8 @@ let invitation = (r: Invitation, space: string, env: Host) => {
         link: r.text,
         label: 'QR code that opens a text to sign up for yaks.app',
         agree: 'Sending it signs you up for yaks.app and agrees to texts ' +
-          'from yaks.app about your space and the apps you build. Message ' +
-          'frequency varies. Msg &amp; data rates may apply. Reply STOP to ' +
+          "from yaks.app: your Operator's answers, and its alerts about " +
+          'your space and the apps you build. Message frequency varies. Msg &amp; data rates may apply. Reply STOP to ' +
           'stop, HELP for help. US numbers only.',
       }]
       : [],

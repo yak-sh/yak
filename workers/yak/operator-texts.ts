@@ -23,19 +23,19 @@ import { fault } from './unseen.ts'
 
 /** The consent box's words, kept with each person who agreed to them. */
 export let CONSENT =
-  'I agree to receive app notifications by text from yaks.app about my site: when the operator finishes a change, needs an answer from me, or my site needs attention. About 1-10 msgs/month. Msg & data rates may apply. Reply STOP to opt out, HELP for help. Terms: https://yaks.app/terms Privacy: https://yaks.app/privacy'
+  "I agree to receive texts from yaks.app: my Operator's answers when I text it, its alerts about my space (when it finishes a change, needs an answer from me, or something needs me) and reminders from apps I build. Message frequency varies. Msg & data rates may apply. Reply STOP to opt out, HELP for help. Terms: https://yaks.app/terms Privacy: https://yaks.app/privacy"
 
 /** The campaign's words (T-134538): the text sent when someone agrees on the
  * Operator page, and the answers to START, STOP and HELP. */
 export let REPLIES = {
   welcome:
-    'yaks.app: Welcome! You will get texts from yaks.app about your site, about 1-10 a month. Msg & data rates may apply. Reply STOP to opt out, HELP for help. Terms: https://yaks.app/terms',
+    "yaks.app: Welcome! Text your Operator here anytime. You'll get its answers and its alerts about your space; message frequency varies. Msg & data rates may apply. Reply STOP to opt out, HELP for help. Terms: https://yaks.app/terms",
   start:
-    "yaks.app: You're subscribed to texts about your site, about 1-10 a month. Msg & data rates may apply. Reply STOP to opt out, HELP for help.",
+    "yaks.app: You're subscribed to texts with your Operator: its answers and its alerts about your space. Message frequency varies. Msg & data rates may apply. Reply STOP to opt out, HELP for help.",
   stop:
     'yaks.app: You are unsubscribed and will get no more texts. Reply START to subscribe again.',
   help:
-    'yaks.app: Help with your site texts: email hello@yaks.app. Msg & data rates may apply. Reply STOP to opt out.',
+    'yaks.app: Text your Operator anything here. For help, email hello@yaks.app. Msg & data rates may apply. Reply STOP to opt out.',
 }
 
 /** What the Operator's first answer to a text that signed someone up says
@@ -170,14 +170,17 @@ let pictures = async (env: Env, space: Space, arrival: Arrival) => {
 // A stranger's text to the platform's number (D-136811) is the whole of
 // signing up, once `TEXT_SIGNUP` is `on`: off until the toll-free
 // verification covers it (T-138775), since texting outside what a number was
-// verified for is what gets it suspended. The words they sent are their
-// consent to be texted back, and they are a person wearing the number with
-// their own space (identity.ts `textedIn`). A number that is no US mobile, an
-// RCS sender and a text with no words sign nobody up.
+// verified for is what gets it suspended. So only the number the platform
+// sends from (`PHONE_SENDER`) signs anyone up, not one it is retiring that
+// still hears replies. The words they sent are their consent to be texted
+// back, and they are a person wearing the number with their own space
+// (identity.ts `textedIn`). A number that is no US mobile, an RCS sender and
+// a text with no words sign nobody up.
 let signedUp = async (env: Env, arrival: Arrival) => {
   let number = mobile(arrival.from)
   if (env.TEXT_SIGNUP != 'on' || arrival.rcs || !number) return null
   if (!arrival.text.trim()) return null
+  if (arrival.to != await texter(env).from?.()) return null
   let { textedIn } = await import('./identity.ts')
   return (await textedIn(env, number, arrival.text.trim(), arrival.at)).person
 }

@@ -24,6 +24,7 @@ let NUMBER = '+18885550100'
 let texting = {
   PHONE_SENDER: { via: 'pinnacle', number: NUMBER },
   PINNACLE_API_KEY: 'test-only',
+  TEXT_SIGNUP: 'on',
 } as Env
 let jeff = await person('Jeff')
 let first = await invitation(texting, dir, jeff)
@@ -33,6 +34,11 @@ let ana = await person('Ana')
 let tries = [code, 'xxxxx']
 let taken = await codeOf(dir, ana, () => tries.shift()!)
 let mailOnly = await invitation({} as Env, dir, jeff)
+let signupOff = await invitation(
+  { ...texting, TEXT_SIGNUP: undefined },
+  dir,
+  jeff,
+)
 let { document } = parseHTML(
   await desk({ space: 'jeff', view: 'invite', apps: [], referral: first })
     .text(),
@@ -58,8 +64,8 @@ test('the invite opens a text to the number, or a letter to the sign-up address,
   )
 })
 
-test('with no provider to text through, the invite is the letter alone', () => {
-  equal(mailOnly.text, null)
+test('with no provider to text through, or signing up by text off, the invite is the letter alone', () => {
+  equal([mailOnly.text, signupOff.text], [null, null])
   equal(mailOnly.mail, first.mail)
 })
 

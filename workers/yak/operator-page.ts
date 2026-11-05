@@ -53,7 +53,7 @@ let shown = (number: string) =>
 export let textsCard = (at: string, consent: Texting | null) =>
   `<form class="Card Form" id="texts" method="post" action="${at}?texts=1">
 <h2 class="Card_Title">Text messages</h2>
-<p>The operator can text you when it finishes a change, needs an answer from you, or something about your site needs you. You can still use chat and email.</p>${
+<p>Text your Operator about anything, and it answers by text. It also texts you when it finishes a change, needs an answer from you, or something about your space needs you, and apps you build can text you reminders. You can still use chat and email.</p>${
     consent
       ? `<p>Texts go to <b>${esc(shown(consent.number))}</b>. You agreed on ${
         esc(new Date(consent.at).toLocaleDateString('en-US', {

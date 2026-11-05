@@ -122,13 +122,14 @@ export let codeOf = async (
 }
 
 /**
- * The number a friend texts to sign up: the platform sender's own, which only
- * the provider knows (Telnyx picks the profile's toll-free number). Null where
- * no provider holds a key here, which is no number to text; a provider that
- * can't say just now is reported, and the invite offers the letter alone.
+ * The number a friend texts to sign up: the platform sender's own
+ * (`PHONE_SENDER`'s `number`, else the one its provider picks). Null until
+ * signing up by text is on (`TEXT_SIGNUP`) and where no provider holds a key
+ * here, so the invite offers no text nobody would read; a provider that can't
+ * say just now is reported, and the invite offers the letter alone.
  */
 export let numberOf = async (env: Env): Promise<string | null> => {
-  if (!settings(env).key) return null
+  if (env.TEXT_SIGNUP != 'on' || !settings(env).key) return null
   try {
     return await texter(env).from?.() ?? null
   } catch (e) {

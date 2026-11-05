@@ -139,6 +139,12 @@ STRIPE_PRICE = "price_1UEDP0ITlUS6lUlggbJ9klVH"
 # var. Staging has none, so its webhook door answers 404.
 TELNYX_PUBLIC_KEY = "RA8+wmOD4ivICcJNznDMWuA8DoM+StbPtYr0srTKaKI="
 
+# The platform's texting number (phone-providers.ts): every text yaks.app sends
+# goes from it, and only a text to it signs anyone up. +18557292688 takes over
+# once its toll-free verification is approved (T-138775); the yaks.app profile
+# holds both, so the number is named rather than picked.
+PHONE_SENDER = { via = "telnyx", number = "+18663141594" }
+
 # The Organization plan's live prices (billing.ts, T-135234): $49 a month and
 # $490 a year. Staging has none, so its checkout for the plan stays off.
 STRIPE_PRICE_ORGANIZATION = "price_1UXaBQITlUS6lUlgf2JQems1"

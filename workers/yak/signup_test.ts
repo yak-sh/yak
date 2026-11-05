@@ -209,11 +209,16 @@ let telnyx = endpoints(globalThis).open(async (req) => {
 cleanup(() => telnyx.stop())
 Object.assign(env, { TELNYX_API: telnyx.url, TELNYX_API_KEY: 'a-key' })
 let SAY = 'Hi yaks.app, sign me up! (invite from Jeff, k7q2)'
-let texting = async (from: string, text: string, id: string = from + text) => {
+let texting = async (
+  from: string,
+  text: string,
+  id: string = from + text,
+  to = FREE,
+) => {
   await textArrived(env, {
     id,
     from,
-    to: FREE,
+    to,
     text,
     at: '2026-11-05T15:00:00Z',
     rcs: false,
@@ -222,7 +227,7 @@ let texting = async (from: string, text: string, id: string = from + text) => {
   await drained()
 }
 
-let ANA = '+12695550177', ABROAD = '+447700900123'
+let ANA = '+12695550177', ABROAD = '+447700900123', BO = '+12695550188'
 await texting(ANA, SAY)
 let unread = { person: await dir.phoned(ANA), texts: texts.length }
 env.TEXT_SIGNUP = 'on'
@@ -237,10 +242,13 @@ let firstText = texts.splice(0)
 await texting(ANA, 'Make me a recipe box')
 let secondText = texts.splice(0)
 await texting(ABROAD, SAY)
+// A number the platform is retiring still hears replies, and signs nobody up.
+await texting(BO, SAY, 'bo-1', '+18665550111')
 
-test('a stranger who texts is left unread until signing up by text is switched on, and a number abroad signs nobody up', async () => {
+test('a stranger who texts is left unread until signing up by text is switched on, and a number abroad, or a text to a number the platform does not send from, signs nobody up', async () => {
   assertEquals([unread.person ?? null, unread.texts], [null, 0])
   assertEquals(await dir.phoned(ABROAD), null)
+  assertEquals(await dir.phoned(BO), null)
 })
 
 test('a text from a number nobody wears makes a person wearing it, their consent in their words, and their own space', () => {
