@@ -94,9 +94,9 @@ test('the log becomes the transcript: one entry per line that says something', a
     await follow(g, 'S1', claude.read, { dir })
     let said = await entries(g)
     // The request, what it said, the model request that said it with what
-    // that used, the provider's ending and the final import receipt — the
-    // line that was not JSON is left in the file.
-    assertEquals(said.length, 5)
+    // that used, and the final import receipt — the line that was not JSON is
+    // left in the file, and the result closes a turn, not the run.
+    assertEquals(said.length, 4)
     assertEquals(comp(said[1], 'content').body, 'hi')
     // Everything a provider prints is output, and the run is the session.
     assertEquals(comp(said[1], 'output').source, 'S1')
@@ -112,7 +112,7 @@ test('the log becomes the transcript: one entry per line that says something', a
 
     // The stamp is the cursor: reading the same file again imports nothing.
     await follow(g, 'S1', claude.read, { dir })
-    assertEquals((await entries(g)).length, 5)
+    assertEquals((await entries(g)).length, 4)
   } finally {
     close()
   }
