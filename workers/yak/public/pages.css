@@ -312,7 +312,9 @@
 
   /* The dashboard's frame: the side with the brand and the tabs, and the body
      the current tab leans into. What fills the body is the style guide's cards,
-     rows and forms (public/controls.css); only what no other page draws is here. */
+     rows and forms (public/controls.css); only what no other page draws is here.
+     The frame fills the window, as the chat app's does, so the body's paper
+     runs to the window's right edge; its content keeps its own width. */
   .Desk {
     display: block;
   }
@@ -320,9 +322,8 @@
     display: grid;
     grid-template-columns: 15rem minmax(0, 1fr);
     align-items: start;
-    max-width: 80rem;
+    max-width: none;
     min-height: 100vh;
-    margin: auto;
     padding: 0;
     text-align: left;
   }
