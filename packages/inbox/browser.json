@@ -8,6 +8,8 @@
   },
   "entries": [
     ".",
+    "./letters",
+    "./mail",
     "./queries",
     "./vocab"
   ]
