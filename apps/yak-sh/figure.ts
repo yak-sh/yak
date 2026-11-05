@@ -55,10 +55,19 @@ export const LINE = .62
 export let into = (top: number, height: number, view: number) =>
   clamp((view * LINE - top) / Math.max(1, Math.min(height, view) * .5))
 
+/** The last write: the entity it made or changed, the phases of apply() it
+ * ran, who wrote it, and whether it made that entity. */
+export type Last = {
+  eid?: string
+  phases: string[]
+  by?: string
+  made?: boolean
+}
+
 export let figure = (yak: Yak, term: Term) => {
   let query = STORY
   let picked: string | undefined
-  let last: { eid?: string; phases: string[] } = { phases: [] }
+  let last: Last = { phases: [] }
   let listeners = new Set<() => void>()
   let told = () => listeners.forEach((l) => l())
   // The command that first wrote each entity, and each component on one.
@@ -76,7 +85,14 @@ export let figure = (yak: Yak, term: Term) => {
     let made = bundles.filter((b) => !b.call && !b.result && !b.tool)
     if (!made.length) return
     let subject = made.find((b) => !b.edge) ?? made[0]
-    last = { eid: subject.entity.eid, phases: [...phases] }
+    let eid = subject.entity.eid
+    last = {
+      eid,
+      phases: [...phases],
+      by: bundles.find((b) => b.$actor)?.$actor?.by,
+      // apply() stamps `created` on what the write made.
+      made: bundles.some((b) => b.entity.eid == eid && b.created),
+    }
     told()
   })
 

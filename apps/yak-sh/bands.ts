@@ -260,11 +260,8 @@ export let Stack: Band = (ctx) => {
   let { e, yak, figure } = ctx
   useTold(figure.listen)
   useTold((l) => yak.watch('*', l))
-  let { eid, phases } = figure.last()
+  let { eid, phases, made = false } = figure.last()
   let subject = eid ? yak.row(eid) : undefined
-  // apply() stamps `created` on what it makes and `updated` on what it
-  // changes, so an entity with no `updated` was made by its last write.
-  let made = !!subject?.created && !subject.updated
   let rows = subject ? rowsOf(subject, yak.vocab) : []
   let ran = new Set<string>(phases)
   // How far down the phases the reader is, measured each frame they scroll;
@@ -566,10 +563,8 @@ let remote = (id: string, x: number, name: string, a: string, b: string) =>
   ])
 
 /** The door a write came through: the agent's, or the visitor's terminal. */
-export let doorOf = (row: Bundle | undefined, agent: string) => {
-  let by = row && (text(row, 'updated', 'by') || text(row, 'created', 'by'))
-  return by == agent ? 'agent' : by ? 'terminal' : ''
-}
+export let doorOf = (by: string | undefined, agent: string) =>
+  by == agent ? 'agent' : by ? 'terminal' : ''
 
 export let Doors: Band = (ctx) => {
   let { e, yak, figure } = ctx
@@ -577,8 +572,8 @@ export let Doors: Band = (ctx) => {
   useTold((l) => yak.watch('*', l))
   let places = useRef(new Map<string, Spot>())
   let rows = yak.rows()
-  let { eid } = figure.last()
-  let door = doorOf(eid ? yak.row(eid) : undefined, yak.agent)
+  let { eid, by } = figure.last()
+  let door = doorOf(by, yak.agent)
   let keep = rows.filter(shown).slice(-36)
   let on = new Set(keep.map((b) => b.entity.eid))
   let wires = wiresOf(rows, on)
