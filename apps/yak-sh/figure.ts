@@ -36,20 +36,6 @@ const RAMP = 1100
 
 let clamp = (v: number) => Math.max(0, Math.min(1, v))
 
-/** Where the reader reads, as a fraction of the window's height from its
- * top: what has passed it has been read. */
-export const LINE = .62
-
-/** How much of the window's height a step plays out over: from the reading
- * line almost to the top of the window. */
-export const SPAN = .55
-
-/** How far past a step the reader is, 0 to 1, from where its top sits in the
- * window: it starts as the top passes the reading line and is done SPAN of
- * the window later, and scrolling back runs it backwards. */
-export let into = (top: number, view: number) =>
-  clamp((view * LINE - top) / Math.max(1, view * SPAN))
-
 /** The last write the prompt made: the command that made it, the entity it
  * made or changed, the phases of apply() it ran with the batch as each left
  * it, and what the effects it owed wrote to that entity after its commit. */
@@ -104,8 +90,7 @@ export let figure = (yak: Yak, term: Term) => {
     // The last write is the prompt's own, not another interface's.
     let eid = subjectOf(bundles)
     if (!eid || !term.busy()) return
-    let line = term.lines().findLast((l) => l.kind == 'in' || l.kind == 'agent')
-    last = { line, eid, phases: [...phases], steps, later: [] }
+    last = { line: term.running(), eid, phases: [...phases], steps, later: [] }
     told()
   })
 

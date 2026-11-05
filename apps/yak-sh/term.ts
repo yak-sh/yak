@@ -1,7 +1,7 @@
 // The prompt on the page: what has been typed into the tab's graph and what
 // it printed, a line being typed, and the story's steps, each typed in once
 // as its section is reached. The visitor types into the same prompt.
-import type { Yak } from './yak.ts'
+import type { Said, Yak } from './yak.ts'
 import { called, type Command, scriptOf, shown } from './site.ts'
 
 /** A line the prompt shows: what was typed, what the agent called, what
@@ -67,36 +67,70 @@ export let term = (yak: Yak, pace: Pace = { key: 0, pause: 0 }) => {
     let kind: Line['kind'] = code ? 'fault' : 'out'
     lines.push(...out.map((text) => ({ kind, text })))
   }
-  let submit = async (line: string) => {
+  // The line running now: what the write it makes came from.
+  let running: Line | undefined
+  // A typed line entered: it runs, unless it already is (`said`).
+  let submit = async (line: string, said?: Promise<Said>) => {
     typed(line)
-    lines.push({ kind: 'in', text: line })
+    running = { kind: 'in', text: line }
+    lines.push(running)
     told()
-    let { code, out } = await yak.run(line)
+    let { code, out } = await (said ?? yak.run(line))
     printed(code, out)
     await yak.settled()
     told()
     return { code, out }
   }
-  // How many of the story's commands are waiting to run behind the one
-  // running: the reader has scrolled past them.
+  // How many lines are waiting to run behind the one running: the reader
+  // has scrolled past them, or typed one of their own.
   let behind = 0
-  // A line is typed a key at a time, unless the reader has scrolled past
-  // commands still to come: then the rest of it is typed at once, so the
-  // prompt keeps up with them.
-  let type = async (line: string) => {
+  // How far the reader has played each of the story's commands, once the
+  // page measures it (`scroll`), and who waits for them to scroll on.
+  let progress: number[] | undefined
+  let moved: (() => void)[] = []
+  let wake = () => moved.splice(0).forEach((ok) => ok())
+  // One more line waits: the one being typed finishes at once.
+  let queued = () => {
+    behind++
+    wake()
+  }
+  // A line typed a key at a time.
+  let keyed = async (line: string) => {
     for (let i = 1; i <= line.length && !behind; i++) {
       typing = line.slice(0, i)
       told()
       await wait(pace.key)
     }
     if (!behind) await wait(pace.pause)
+  }
+  // A line typed as far as the reader has played command `drawn`.
+  let along = async (line: string, drawn: number) => {
+    for (;;) {
+      let p = behind ? 1 : progress?.[drawn - 1] ?? 1
+      typing = line.slice(0, Math.ceil(p * line.length))
+      told()
+      if (p >= 1) return
+      await new Promise<void>((ok) => moved.push(ok))
+    }
+  }
+  // A line typed, then entered. A story command the page measures runs as
+  // it starts to be typed, so what it writes draws in while it is typed, as
+  // the reader scrolls; any other is typed a key at a time, and runs once
+  // entered. Either is typed at once while lines wait behind it, so the
+  // prompt keeps up with the reader.
+  let type = async (line: string, drawn: number) => {
+    let read = !!progress && drawn < BAND
+    running = { kind: 'in', text: line }
+    let said = read ? yak.run(line) : undefined
+    await (read ? along(line, drawn) : keyed(line))
     typing = ''
-    let { code, out } = await submit(line)
+    let { code, out } = await submit(line, said)
     if (code) reported(line, out)
   }
   let ask = async (c: Command) => {
     let { tool, args } = called(c.line)
-    lines.push({ kind: 'agent', text: shown(c) })
+    running = { kind: 'agent', text: shown(c) }
+    lines.push(running)
     told()
     let { code, out } = await yak.ask(tool, args)
     if (code) reported(shown(c), out)
@@ -126,13 +160,13 @@ export let term = (yak: Yak, pace: Pace = { key: 0, pause: 0 }) => {
   // One command, drawn in stage `drawn` as command `i` of `step`: its
   // comment printed, then the line typed or the call made.
   let run = (c: Command, drawn: number, step: number, i: number) => {
-    behind++
+    queued()
     return queue(async () => {
       behind--
       stage = drawn
       at = { step, line: i }
       if (c.note) lines.push({ kind: 'note', text: `# ${c.note}` })
-      if (c.kind == 'sh') return await type(c.line)
+      if (c.kind == 'sh') return await type(c.line, drawn)
       await ask(c)
     })
   }
@@ -159,12 +193,23 @@ export let term = (yak: Yak, pace: Pace = { key: 0, pause: 0 }) => {
       return () => void listeners.delete(l)
     },
     /** Type a line the visitor wrote and run it. */
-    enter: (text: string) =>
-      queue(() => {
+    enter: (text: string) => {
+      queued()
+      return queue(() => {
+        behind--
         stage = LIVE + entered++
         at = { step: stage, line: 0 }
         return submit(text)
-      }),
+      })
+    },
+    /** How far the reader has played each of the story's commands, 0 to 1:
+     * each is typed as far. */
+    scroll: (p: number[]) => {
+      progress = p
+      wake()
+    },
+    /** The line whose write is being made: typed, or called by the agent. */
+    running: () => running,
     /** The stage what runs now is drawn in. */
     stage: () => stage,
     /** The command running now. */

@@ -4,10 +4,10 @@
 import { equal, test } from '@yaks/testing'
 import { PHASES } from '@yaks/graph/plugin'
 import { seen, stagesOf, standing } from './bands.ts'
-import { passed } from './told.ts'
+import { allot, played } from './told.ts'
 import { yak } from './yak.ts'
 import { term } from './term.ts'
-import { figure, into, LINE, SPAN } from './figure.ts'
+import { figure } from './figure.ts'
 import { SECTIONS } from './site.ts'
 import { SHOP, YOURS } from './shop.ts'
 
@@ -31,25 +31,40 @@ test('the write happens as far as the reader has scrolled, and undoes as they go
   equal(at(PHASES.length - 1).skipped, ['journal', 'audit'])
 })
 
-test('a phase the write did not run is known before the reader gets to it, and every phase runs until there is a write', () => {
-  let skips = (r: Set<string>) => PHASES.filter((p) => !standing(r, -1).runs(p))
-  equal([skips(ran), skips(new Set())], [['journal', 'audit'], []])
+// Each trigger's share in a window 1000 tall, live from 100 in at its bottom
+// to 100 in at its top: how far the page scrolls before it starts and ends.
+let shares = (tops: number[]) =>
+  allot(tops, 100, 900).map(([a, b]) => [Math.round(a), Math.round(b)])
+
+test('a lone trigger plays over the window less its buffers, and backwards as the reader goes back', () => {
+  equal(shares([500]), [[-400, 400]])
+  equal([950, 900, 500, 100, 50].map((t) => played([t], 1000)[0]), [
+    0,
+    0,
+    .5,
+    1,
+    1,
+  ])
 })
 
-test('the reader is past each phase whose dot is above the reading line', () => {
-  equal(
-    [passed([500, 600], 400), passed([100, 600], 400), passed([1, 2], 400)],
-    [-1, 0, 1],
-  )
+test('triggers in view together share out the scrolling they are live for, one after another', () => {
+  equal(shares([500, 520, 540]), [[-400, -120], [-120, 160], [160, 440]])
+  equal(shares([400, 420, 440, 460, 480]), [
+    [-500, -324],
+    [-324, -148],
+    [-148, 28],
+    [28, 204],
+    [204, 380],
+  ])
 })
 
-test('a step plays out as its top rises from the reading line over most of the window, and back as the reader goes back', () => {
-  let view = 1000
-  let at = (top: number) => into(top, view)
-  equal(
-    [view, LINE, LINE - SPAN / 2, LINE - SPAN, 0].map((f) => at(f * view)),
-    [0, 0, .5, 1, 1],
-  )
+test('in a tall band the triggers share the whole of its scrolling, and only scrolling where none is live goes unused', () => {
+  equal(shares([0, 600, 1200]), [[-900, -233], [-233, 433], [433, 1100]])
+  equal(shares([0, 2000]), [[-900, -100], [1100, 1900]])
+})
+
+test('a trigger that must be done before it leaves gets less, and those beside it share the rest', () => {
+  equal(shares([0, 0, 700]), [[-900, -500], [-500, -100], [-100, 600]])
 })
 
 test('each phase does its own work on the letter, and its effect delivers it after the commit', async () => {

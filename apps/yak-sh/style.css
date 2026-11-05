@@ -1,7 +1,4 @@
 :root {
-  /* The scrolling each step of the story and of a band takes: what it shows
-     plays out over most of it (figure.ts SPAN), then the next step starts. */
-  --scroll-step: 62vh;
   /* The painted yak's colours: cotton paper, Payne's grey ink, slate lines,
      the teal in its mane for what is lit, burnt sienna for a fault. */
   --paper: #f6f1e7;
@@ -210,10 +207,11 @@ h2 {
   margin: 0;
   padding: 0 0 12vh;
 }
-/* A step is as long as its commands: each takes a slot of scrolling, runs
-   as its comment passes the reading line, and draws in over the rest. */
+/* A step takes most of a screen, and its commands share out its scrolling
+   (told.ts `allot`): each runs as its share starts, typed as it draws in. */
 .Step {
   position: relative;
+  min-height: 70vh;
   padding: clamp(1.8rem, 4vw, 2.8rem) 0 0 58px;
   border-top: 1px solid var(--rule);
 }
@@ -259,8 +257,8 @@ h2 {
   padding: 0;
   margin: 1.2rem 0 0;
 }
-.Step_Lines > li {
-  min-height: var(--scroll-step);
+.Step_Lines > li + li {
+  margin-top: .7rem;
 }
 .Step_Note {
   display: block;
@@ -837,12 +835,6 @@ h2 {
   position: relative;
   padding: .55rem 0 .9rem;
 }
-/* The write and each phase it ran take a slot of scrolling, its lines
-   lighting as the reader passes it; a phase it didn't run takes none. */
-.Phases .Call,
-.Phases [data-phase]:not([data-ran='no']) {
-  min-height: var(--scroll-step);
-}
 .Phases .Call code {
   display: block;
   margin-top: .3rem;
@@ -1117,13 +1109,13 @@ h2 {
   margin: 1.6rem 0 0 2.1rem;
   padding: 0;
 }
-/* Each beat takes a slot of scrolling, so the windows open one at a time
-   while the drawing stays in view, each as far as the reader is past it
+/* Each beat takes a stretch of scrolling, so the windows open one at a time
+   while the drawing stays in view, each as far as the reader has played it
    (`--p`, told.ts). */
 .Beats li {
   position: relative;
   flex: 1 0 auto;
-  min-height: var(--scroll-step);
+  min-height: 30vh;
   padding: .7rem 0 1.4rem;
   border-top: 1px solid var(--faint);
   transition: background .3s;

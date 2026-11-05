@@ -95,6 +95,23 @@ test('the prompt keeps up with a reader who scrolls ahead: lines they have passe
   equal([...typed], [...last].map((_, i) => last.slice(0, i + 1)))
 })
 
+test('a command the page measures runs as its share of the scrolling starts, and is typed as far as the reader has played it', async () => {
+  let { y, t } = await page()
+  let [first] = scriptOf(steps[0])
+  t.scroll([.5])
+  let done = t.reach(steps, 1)
+  for (let i = 0; i < 500 && !y.rows().some((b) => b.task); i++) {
+    await new Promise((ok) => setTimeout(ok, 1))
+  }
+  equal(t.typing(), first.line.slice(0, Math.ceil(first.line.length / 2)))
+  equal(t.lines().filter((l) => l.kind == 'in'), [])
+  t.scroll([1])
+  await done
+  equal(t.lines().filter((l) => l.kind == 'in').map((l) => l.text), [
+    first.line,
+  ])
+})
+
 test('a visitor types into the same prompt: help, a refusal, a write the page sees', async () => {
   let { y, t } = await page()
   await t.enter('help')

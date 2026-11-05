@@ -12,13 +12,13 @@ import type { Bundle } from '@yaks/graph'
 import type { EntityProps } from '@yaks/preact'
 import type { Yak } from './yak.ts'
 import type { Line, Term } from './term.ts'
-import { type Figure, into, SHEET, WIDER } from './figure.ts'
+import { type Figure, SHEET, WIDER } from './figure.ts'
 import { INSTALL, LOGO, proseOf, scriptOf, shown } from './site.ts'
 import { Copy, parts } from './parts.ts'
 import { Stack } from './bands.ts'
 import { Doors, Memory, Rules } from './doors.ts'
 import type { Turns } from './turns.ts'
-import { text, useHeard, useTold } from './told.ts'
+import { BUFFER, played, text, useHeard, useTold } from './told.ts'
 import { clicked, Editor, opener } from './editor.ts'
 import { human } from '@yaks/id'
 
@@ -121,10 +121,11 @@ let Hero: FunctionComponent<Ctx & { e: Bundle }> = ({ e }) =>
 
 // ------------------------------------------------------------------ the story
 
-/** What the story's parts share: each step's element, and the drawing's
- * painter, which the scroll calls. */
+/** What the story's parts share: each step's element, the drawing and
+ * prompt beside them, and the drawing's painter, which the scroll calls. */
 type Pen = {
   steps: (HTMLElement | null)[]
+  side?: HTMLElement | null
   paint?: () => void
 }
 
@@ -135,28 +136,33 @@ let Story: FunctionComponent<Ctx & { hero?: string; steps: string[] }> = (
   let pen = useRef<Pen>({ steps: [] }).current
   let bodies = () =>
     steps.map((eid) => text(yak.row(eid) ?? { entity: { eid } }, 'doc', 'body'))
-  // How far the reader is past each command, measured each frame they
-  // scroll: each runs as it passes the reading line, and what it wrote draws
-  // in over the scrolling after it.
+  // How far the reader has played each command, measured each frame they
+  // scroll: the commands share out the scrolling (told.ts `allot`), each
+  // runs as its share starts, and is typed while what it wrote draws in.
   useEffect(() => {
     if (typeof requestAnimationFrame == 'undefined') return
     let frame = 0
     let measure = () => {
       frame = 0
-      let past = (el: Element) =>
-        into(el.getBoundingClientRect().top, innerHeight) > 0
       let lines = pen.steps.map((el) => [
         ...el?.querySelectorAll('.Step_Lines > li') ?? [],
       ])
-      figure.scroll(
-        lines.flat().map((li) =>
-          into(li.getBoundingClientRect().top, innerHeight)
-        ),
+      let p = played(
+        lines.flat().map((li) => li.getBoundingClientRect().top),
+        innerHeight,
+        covered(pen.side),
       )
-      let on = pen.steps.map((el) => !!el && past(el))
-      pen.steps.forEach((el, i) => el?.classList.toggle('is-on', on[i]))
-      let n = on.lastIndexOf(true) + 1
-      term.reach(bodies(), n, lines[n - 1]?.filter(past).length)
+      figure.scroll(p)
+      term.scroll(p)
+      let from = 0
+      let started = lines.map((l) =>
+        p.slice(from, from += l.length).filter((x) => x > 0).length
+      )
+      pen.steps.forEach((el, i) =>
+        el?.classList.toggle('is-on', started[i] > 0)
+      )
+      let n = started.findLastIndex((m) => m > 0) + 1
+      term.reach(bodies(), n, started[n - 1])
       pen.paint?.()
     }
     let soon = () => frame ||= requestAnimationFrame(measure)
@@ -187,11 +193,23 @@ let Story: FunctionComponent<Ctx & { hero?: string; steps: string[] }> = (
         ),
       ),
     ]),
-    h('div', { class: 'Plot_Side' }, [
+    h('div', {
+      class: 'Plot_Side',
+      ref: (el: HTMLElement | null) => void (pen.side = el),
+    }, [
       h(Figure, { ...ctx, pen }),
       h(Prompt, ctx),
     ]),
   ])
+}
+
+// Where a command's stretch ends, stacked: the drawing and the prompt sit
+// over the top of the window, so a command is live below them; side by
+// side, the whole window less its buffer.
+let covered = (side?: HTMLElement | null) => {
+  if (!side || !matchMedia('(max-width: 899px)').matches) return undefined
+  let below = side.getBoundingClientRect().bottom + innerHeight * BUFFER
+  return Math.min(below, innerHeight * .8)
 }
 
 let Step: FunctionComponent<
