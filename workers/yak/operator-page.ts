@@ -43,7 +43,7 @@ import {
 import { DOCUMENTS } from './documents.ts'
 import { settings } from './phone-providers.ts'
 import { icon } from './icons.ts'
-import { needing, needsCard, updates, updatesOf } from './updates.ts'
+import { needing, needsCard, updates, updatesOf, visitsOf } from './updates.ts'
 
 // What the message box takes: up to COUNT files at a time, each up to SIZE
 // (keepFile's ceiling), and the kinds the Operator reads (operator-channels.ts
@@ -858,9 +858,10 @@ export let updatesPage = async (
   beside: Beside = {},
 ) => {
   // Opening them reads them, and the count beside them goes with it.
-  let [items, news] = await Promise.all([
+  let [items, news, views] = await Promise.all([
     workOf(env, space, who),
     updatesOf(env, space, who, true),
+    visitsOf(env, beside.apps ?? []),
   ])
   return talkPage(env, space, who, beside, {
     title: `Updates from ${space.operator}`,
@@ -870,7 +871,7 @@ export let updatesPage = async (
     current: ['updates'],
     skip: ['#content', 'Skip to content'],
     main: `<div class="Talk_Column Updates">${
-      updates(env, space, news, beside.apps)
+      updates(env, space, news, beside.apps, views)
     }</div>`,
   })
 }

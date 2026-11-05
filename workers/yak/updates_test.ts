@@ -6,6 +6,7 @@ import { assertEquals } from '@std/assert'
 import { parseHTML } from 'linkedom'
 import { connector, kernel, seed, signIn, unique } from './probe.ts'
 import { managePath } from './route.ts'
+import { lastDayLine } from './updates.ts'
 
 let k = await kernel()
 let slug = unique('told')
@@ -32,7 +33,7 @@ let said = async (as: string) => {
   })
   return [
     ...parseHTML(await page.text()).document.querySelectorAll(
-      '.Update_Words',
+      '.Update:not(.Update-day) .Update_Words',
     ),
   ].map((p) => p.textContent)
 }
@@ -42,4 +43,26 @@ test('a change to an app tells the space’s other people, and not who made it',
   assertEquals(words.length, 1)
   assertEquals(words[0]!.endsWith(' changed notes.'), true)
   assertEquals(await said(cookie), [])
+})
+
+test('the last day in a line: visits, the busiest app, and what needs the person', () => {
+  let apps = ['Recipe box', 'Chores', 'Book club']
+    .map((title, i) => ({ eid: `a${i}`, slug: `a${i}`, title }))
+  let line = (views: [string, number][] | undefined, needs = 0, of = apps) =>
+    lastDayLine(of, views && new Map(views), needs)
+  assertEquals(
+    line([['a0', 70], ['a1', 16]], 1),
+    'In the last day, your apps had 86 visits. Recipe box was the busiest. One thing needs you.',
+  )
+  assertEquals(
+    line([['a2', 1]]),
+    'In the last day, your apps had 1 visit. Nothing needs you.',
+  )
+  assertEquals(
+    line([], 3),
+    'Nobody visited your apps in the last day. Three things need you.',
+  )
+  // Visits not switched on, or no apps to count: what needs them alone.
+  assertEquals(line(undefined, 12), '12 things need you.')
+  assertEquals(line([['a0', 5]], 0, []), 'Nothing needs you.')
 })

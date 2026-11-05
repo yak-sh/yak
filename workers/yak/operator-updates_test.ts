@@ -192,6 +192,10 @@ test('the Updates page and a new chat show what needs the person, and a button o
   assertEquals(Number(count(fresh)) > 1, true)
   let updates = await page(updatesPage(p.env, space, who))
   assertEquals(buttons(updates), ['Send', 'Not yet'])
+  assertEquals(
+    updates.querySelector('.Update-day')?.textContent?.trim(),
+    'One thing needs you.',
+  )
   assertStringIncludes(
     updates.querySelector('.Updates')!.textContent!,
     'Bo joined Book club.',

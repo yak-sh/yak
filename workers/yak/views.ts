@@ -400,20 +400,48 @@ export let statsFor = (
 }
 
 /**
- * Every app's views over the last {@link DAYS} days, in one query, for the
- * hourly reading to keep on each row (usage.ts): an app absent from the answer
- * had none.
+ * Every app's views over the last `days` ({@link DAYS} by default), in one
+ * query, for the hourly reading to keep on each row (usage.ts): an app absent
+ * from the answer had none.
  */
 export let visited = async (
   env: Env,
   apps: string[],
+  days = DAYS,
 ): Promise<Map<string, number>> => {
   if (!apps.length) return new Map()
   let rows = await ran(
     env,
-    totals(apps, DAYS, env.VIEWS_DATASET ?? DATASET),
+    totals(apps, days, env.VIEWS_DATASET ?? DATASET),
   )
   return new Map(rows.map((r) => [word(r.app), num(r.views)]))
+}
+
+// The last day's answers, by the apps asked about, held like `held`.
+let lastDays = new Map<
+  string,
+  { at: number; views: Promise<Map<string, number>> }
+>()
+
+/** Each app's views over the last day, for a space's Updates (updates.ts),
+ * held for {@link FRESH}; `null` where analytics are not switched on. */
+export let lastDay = (
+  env: Env,
+  apps: string[],
+  now = Date.now(),
+): Promise<Map<string, number>> | null => {
+  if (!env.CF_ANALYTICS_TOKEN || !env.CF_ACCOUNT) return null
+  let key = `${sqlAt(env)}:${env.VIEWS_DATASET ?? DATASET}:${
+    [...apps].sort().join(',')
+  }`
+  let kept = lastDays.get(key)
+  if (kept && now - kept.at < FRESH) return kept.views
+  let views = visited(env, apps, 1)
+  lastDays.set(key, { at: now, views })
+  views.catch(() => {
+    if (lastDays.get(key)?.views == views) lastDays.delete(key)
+  })
+  return views
 }
 
 /** Who visited one app: {@link statsFor} asked about it alone. */

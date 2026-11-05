@@ -7,13 +7,20 @@
 // `sum(_sample_interval)` rather than `count()`, or a busy app under-reports
 // by exactly the factor that made it busy — so the queries are pinned too.
 import { clock, test } from '@yaks/testing'
-import { assert, assertEquals, assertRejects, assertThrows } from '@std/assert'
+import {
+  assert,
+  assertEquals,
+  assertRejects,
+  assertStringIncludes,
+  assertThrows,
+} from '@std/assert'
 import type { Env } from './env.ts'
 import {
   classed,
   cut,
   daily,
   hedged,
+  lastDay,
   NOT_ON,
   perDay,
   point,
@@ -464,4 +471,22 @@ test('the counter records HTML pages and skips files and redirects', () => {
     at,
   )
   assertEquals(wrote.length, 1)
+})
+
+test('the last day’s visits are one query over a day, held for a few minutes', async () => {
+  let [app, other] = [crypto.randomUUID(), crypto.randomUUID()]
+  let api = sql(() => ({
+    body: JSON.stringify({ data: [{ app, views: 86 }] }),
+  }))
+  try {
+    let now = Date.parse('2026-11-05T12:00:00Z')
+    let views = await lastDay(env(), [app, other], now)
+    assertEquals([views?.get(app), views?.get(other)], [86, undefined])
+    await lastDay(env(), [other, app], now + 60_000)
+    assertEquals(api.asked.length, 1)
+    assertStringIncludes(api.asked[0], "INTERVAL '1' DAY")
+    assertEquals(lastDay(env({ CF_ANALYTICS_TOKEN: undefined }), [app]), null)
+  } finally {
+    api.done()
+  }
 })

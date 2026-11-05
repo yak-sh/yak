@@ -14,6 +14,8 @@ import { operatorDoor } from './build-door.ts'
 import { chatPath, managePath } from './route.ts'
 import { spaceHost } from './host.ts'
 import type { Update } from './operator-updates.ts'
+import { lastDay } from './views.ts'
+import { caught } from './defects.ts'
 
 /** A person's Updates in a space, and how many wait on them: what needs
  * them, and what they have not read, which the side counts beside "Updates
@@ -137,16 +139,85 @@ let card = (env: Env, space: Space, u: Update, apps: Apps) => {
 ${replying(space, u)}</section>`
 }
 
+/** How long the Updates page waits on the last day's visits before it is
+ * drawn without them: they are a curiosity, never worth a slow page. */
+export let VISITS_WAIT = 1500
+
+/** Each app's visits in the last day, or none where they are not switched on
+ * or not answered within `wait`. */
+export let visitsOf = async (
+  env: Env,
+  apps: Apps,
+  wait = VISITS_WAIT,
+): Promise<Map<string, number> | undefined> => {
+  let asked = apps.length ? lastDay(env, apps.map((a) => a.eid)) : null
+  if (!asked) return undefined
+  let timer: number | undefined
+  try {
+    return await Promise.race([
+      asked,
+      new Promise<undefined>((done) => timer = setTimeout(done, wait)),
+    ])
+  } catch (e) {
+    caught(e, { request: 'updates visits' })
+    return undefined
+  } finally {
+    clearTimeout(timer)
+  }
+}
+
+let COUNT = new Intl.NumberFormat('en')
+let SMALL = ['No', 'One', 'Two', 'Three', 'Four', 'Five']
+
+/** The Operator's word on the last day, said when the page is drawn: the
+ * visits across the apps and the busiest of them, when there are any to
+ * count, and what needs the person. The server knows no one's clock, so it
+ * is the last day and not today. */
+export let lastDayLine = (
+  apps: Apps,
+  views: Map<string, number> | undefined,
+  needs: number,
+) => {
+  let said: string[] = []
+  if (views && apps.length) {
+    let counted = apps.map((a) => ({ a, n: views.get(a.eid) ?? 0 }))
+      .filter((c) => c.n > 0).sort((x, y) => y.n - x.n)
+    let total = counted.reduce((sum, c) => sum + c.n, 0)
+    said.push(
+      total
+        ? `In the last day, your apps had ${COUNT.format(total)} visit${
+          total == 1 ? '' : 's'
+        }.`
+        : 'Nobody visited your apps in the last day.',
+    )
+    if (counted.length > 1) {
+      said.push(`${counted[0].a.title || counted[0].a.slug} was the busiest.`)
+    }
+  }
+  said.push(
+    needs
+      ? `${SMALL[needs] ?? COUNT.format(needs)} thing${
+        needs == 1 ? ' needs' : 's need'
+      } you.`
+      : 'Nothing needs you.',
+  )
+  return said.join(' ')
+}
+
 /** What the Updates page shows under its bar. */
 export let updates = (
   env: Env,
   space: Space,
   { updates }: Updates,
   apps: Apps = [],
+  views?: Map<string, number>,
 ) =>
   `<p class="Note Update_About">${
     esc(space.operator)
-  } writes here when something happens in your apps, and asks here when something needs you. Ask about any of it, and the chat opens.</p>${
+  } writes here when something happens in your apps, and asks here when something needs you. Ask about any of it, and the chat opens.</p>
+<section class="Card Update Update-day"><p class="Update_Words">${
+    esc(lastDayLine(apps, views, updates.filter((u) => u.needs).length))
+  }</p></section>${
     updates.length
       ? updates.map((u) => card(env, space, u, apps)).join('\n')
       : `<div class="Talk_Hello"><h2>Nothing yet</h2><p>When ${
