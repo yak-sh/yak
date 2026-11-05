@@ -67,7 +67,7 @@ export type Way = { model: string; name: string; about: string }
 // talks with is offered only where that provider is on.
 let WAYS: Way[] = [
   {
-    model: 'gpt-realtime-2.1',
+    model: 'gpt-realtime-2.1-mini',
     name: 'Quickest',
     about:
       'Replies almost at once, like talking with a person. Speaks only in some of the voices.',

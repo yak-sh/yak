@@ -550,7 +550,7 @@ test('the Voice card shows back the voice and model each save picked', async () 
       ['aura-2-pandora-en', 'claude-haiku-5-5'],
       ['fable', 'claude-sonnet-5-5'],
       ['cedar', 'claude-haiku-5-5'],
-      ['marin', 'gpt-realtime-2.1'],
+      ['marin', 'gpt-realtime-2.1-mini'],
     ]
   ) {
     assertEquals(await voiced(voice, model), { status: 200, voice, model })
@@ -559,7 +559,7 @@ test('the Voice card shows back the voice and model each save picked', async () 
   assertEquals(await voiced('fable', 'gpt-realtime-2.1'), {
     status: 400,
     voice: 'marin',
-    model: 'gpt-realtime-2.1',
+    model: 'gpt-realtime-2.1-mini',
   })
 })
 

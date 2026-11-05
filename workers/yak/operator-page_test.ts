@@ -64,7 +64,7 @@ test('the voice card says each way of answering plainly, the realtime one only w
   )
   assertStringIncludes(card(), 'value="claude-haiku-5-5" checked')
   equal(
-    names(card('cedar', 'gpt-realtime-2.1-mini'), 'voice_model').at(-1),
+    names(card('cedar', 'gpt-realtime-2.1'), 'voice_model').at(-1),
     'As set before',
   )
 })
