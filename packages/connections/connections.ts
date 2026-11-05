@@ -3,8 +3,10 @@
 //
 // A connection is one entity wearing two components. `connection` says what it
 // is — which integration, whose, which account, what was granted, and whether
-// it works — and `secret` (@yaks/secrets) is its credential: a pasted key, or
-// an OAuth grant's tokens as a JSON record. The graph holds the secret's handle
+// it works — and `secret` (@yaks/secrets) is its credential: a pasted key, the
+// fields its integration names as a JSON object by name (S3's access key ID,
+// secret key and region), or an OAuth grant's tokens as a JSON record. An app
+// is handed a sentinel for each field, and the egress swaps in each one alone. The graph holds the secret's handle
 // and the vault holds what it stands for, so a key goes from the person
 // straight to the vault, and nothing that reads the graph — an agent, a sync, a
 // backup — ever holds more than the handle. Being one entity is what makes its
@@ -79,6 +81,8 @@ import {
 import {
   type About,
   connectable,
+  type Field,
+  fieldsOf,
   type Integration,
   keyed,
   known,
@@ -112,6 +116,9 @@ export type Need = About & {
   scopes?: string[]
   /** for a custom key: the hosts it may be sent to */
   hosts?: string[]
+  /** for a custom key: what a person gives to connect it, when it is more
+   * than one key */
+  fields?: Field[]
   /** each person connects their own, and only they call out through it */
   each?: boolean
   /** the name the app's code reads it by (default: the integration's name in
@@ -139,12 +146,18 @@ export type Ctx = {
 export type Owners = (apps: Eid[]) => Promise<Record<Eid, Eid>>
 
 /** What a caller calling out through a connection is given: the connection,
- * the `uses` link to it from the app, and the sentinel for its credential. */
-export type Resolved = { connection: Bundle; link: Bundle; sentinel: string }
+ * the `uses` link to it from the app, and the sentinel for each field of its
+ * credential, by the field's name: `key` for one key or a sign-in's token. */
+export type Resolved = {
+  connection: Bundle
+  link: Bundle
+  sentinels: Record<string, string>
+}
 
-/** How a connection's credential arrives: a pasted key, or the return from
- * the service's sign-in page with the attempt `begin` gave. */
-export type Given = { key: string } | {
+/** How a connection's credential arrives: a pasted key, each field its
+ * integration names, or the return from the service's sign-in page with the
+ * attempt `begin` gave. */
+export type Given = { key: string } | { fields: Record<string, string> } | {
   attempt: Attempt
   callback: string | URL
   /** A website session obtained alongside a bot OAuth sign-in, kept only in the vault. */
@@ -217,8 +230,44 @@ export let using = async (
 let same = (a: string[], b: string[]) =>
   [...a].sort().join('\n') == [...b].sort().join('\n')
 
+// What a custom integration's fields say, checked: each a name an app can
+// read, said once, with a label a person reads.
+let FIELD = /^[a-z][a-z0-9_]{0,31}$/
+let fielded = (fields: Field[]): Field[] => {
+  let out = fields.map((f) => ({
+    name: String(f.name ?? ''),
+    label: String(f.label ?? '').trim(),
+    ...f.shown ? { shown: true } : {},
+  }))
+  for (let f of out) {
+    if (!FIELD.test(f.name)) {
+      throw new CallError(
+        'fields',
+        `${f.name} is not a field name: lowercase letters, digits and ` +
+          `underscores, starting with a letter`,
+      )
+    }
+    if (!f.label) throw new CallError('fields', `${f.name} needs a label`)
+  }
+  if (new Set(out.map((f) => f.name)).size < out.length) {
+    throw new CallError('fields', 'each field is named once')
+  }
+  return out
+}
+
 // A binding is a name in the app's own code, so it must be one.
 let NAME = /^[A-Za-z_][A-Za-z0-9_]{0,63}$/
+
+/** The names an app's code reads a connection by, by field name: its
+ * binding, for one key or a sign-in, or for several fields the binding and
+ * each field's name in capitals, `S3_ACCESS_KEY_ID`. */
+export let namesOf = (
+  binding: string,
+  fields: string[],
+): Record<string, string> =>
+  fields.length == 1 ? { [fields[0]]: binding } : Object.fromEntries(
+    fields.map((f) => [f, `${binding}_${f.toUpperCase()}`]),
+  )
 
 /** The name an app reads an integration's connection by when it names none:
  * `google-calendar` is `GOOGLE_CALENDAR`. */
@@ -250,9 +299,29 @@ let linked = (
  * owner holds. The connection comes first. */
 export let need = async (read: Read, a: Need): Promise<Bundle[]> => {
   let hosts = a.hosts ?? []
+  let fields = a.fields?.length ? fielded(a.fields) : []
   let name = a.integration
   let about = told(a)
   let i = await known(read, name)
+  if (fields.length && (i ? !i.fields?.length : !hosts.length && !a.direct)) {
+    throw new CallError(
+      'fields',
+      i
+        ? `${name} is connected with ${
+          keyed(i) ? 'one key' : 'a sign-in'
+        }, and its fields never change`
+        : 'fields are for a custom key, given with its hosts',
+    )
+  }
+  if (
+    fields.length && i?.fields &&
+    JSON.stringify(fielded(i.fields)) != JSON.stringify(fields)
+  ) {
+    throw new CallError(
+      'fields',
+      `${name} already asks for ${i.fields.map((f) => f.name).join(', ')}`,
+    )
+  }
   if (hosts.length && i?.built) {
     throw new CallError(
       'hosts',
@@ -330,7 +399,13 @@ export let need = async (read: Read, a: Need): Promise<Bundle[]> => {
     made,
     ...i ? retold : [{
       entity: { eid: integrationEid(name) },
-      [INTEGRATION]: { name, hosts, owner: a.owner, ...written },
+      [INTEGRATION]: {
+        name,
+        hosts,
+        ...fields.length ? { fields } : {},
+        owner: a.owner,
+        ...written,
+      },
       // Refused, rather than written over, where one was made meanwhile.
       $was: { [INTEGRATION]: { name: null } },
     }],
@@ -634,13 +709,39 @@ export let used = async (
   let all = await Promise.all(found.map(async (connection) => ({
     connection,
     link: out.find((l) => far(l, 'from') == connection.entity.eid)!,
-    sentinel: await sentinelOf(c.vault, nameOf(connection)),
+    sentinels: await sentinelsOf(c, connection),
   })))
-  return all.filter((r): r is Resolved =>
-    !!r.sentinel &&
+  return all.filter((r) =>
+    Object.keys(r.sentinels).length &&
     (!comp(r.link, USES).each ||
       comp(r.connection, CONNECTION).owner == person)
   )
+}
+
+// The fields a connection's credential is kept as: its integration's, or one
+// key, which a sign-in's token is too.
+let fieldsFor = async (read: Read, b: Bundle): Promise<Field[]> => {
+  let i = await known(read, String(comp(b, CONNECTION).integration))
+  return i && keyed(i) ? fieldsOf(i) : fieldsOf()
+}
+
+// The sentinel for each field of a connection's credential: the secret's own
+// for one, and one for each field of several; none while nothing is kept.
+let sentinelsOf = async (
+  c: Ctx,
+  b: Bundle,
+): Promise<Record<string, string>> => {
+  let fields = await fieldsFor(c.graph.read, b)
+  let out: Record<string, string> = {}
+  for (let f of fields) {
+    let s = await sentinelOf(
+      c.vault,
+      nameOf(b),
+      fields.length == 1 ? undefined : f.name,
+    )
+    if (s) out[f.name] = s
+  }
+  return out
 }
 
 /** What an app's code is handed for each connected connection it uses, for a
@@ -655,10 +756,13 @@ export let envOf = async (
   for (let r of await used(c, app, person)) {
     let u = comp(r.link, USES)
     if (typeof u.binding != 'string') continue
-    let value = u.direct && u.lender == null
-      ? await credential(c, r.connection.entity.eid)
-      : r.sentinel
-    if (value) out[u.binding] = value
+    let names = namesOf(u.binding, Object.keys(r.sentinels))
+    for (let [f, name] of Object.entries(names)) {
+      let value = u.direct && u.lender == null
+        ? await credential(c, r.connection.entity.eid, f)
+        : r.sentinels[f]
+      if (value) out[name] = value
+    }
   }
   return out
 }
@@ -830,7 +934,7 @@ export let connect = async (
     status: 'connected' satisfies Status,
     ...account ? { account } : {},
   }
-  if ('key' in given) {
+  if ('key' in given || 'fields' in given) {
     let name = String(comp(b, CONNECTION).integration)
     let i = await known(c.graph.read, name)
     if (!i || (!keyed(i) && name != 'yaks.app')) {
@@ -838,7 +942,7 @@ export let connect = async (
     }
     return c.graph.apply([{
       entity: { eid: connection },
-      [SECRET]: { name: nameOf(b), value: given.key },
+      [SECRET]: { name: nameOf(b), value: keptOf(name, fieldsOf(i), given) },
       [CONNECTION]: now,
     }])
   }
@@ -968,18 +1072,80 @@ let marking = async (
   }
 }
 
-/** What a call out sends in its sentinel's place: the pasted key, or an access
- * token, refreshed first when it is about to expire. */
+// What the vault keeps for a pasted credential: one field's value as it is,
+// so one key is kept as it always was, and several as a JSON object by name.
+let keptOf = (
+  name: string,
+  fields: Field[],
+  given: { key: string } | { fields: Record<string, string> },
+): string => {
+  let said = 'key' in given
+    ? fields.length == 1 ? { [fields[0].name]: given.key } : {}
+    : given.fields
+  let extra = Object.keys(said).filter((k) => !fields.some((f) => f.name == k))
+  let missing = fields.filter((f) => !said[f.name])
+  if (extra.length || missing.length) {
+    throw new Error(
+      `${name} is connected with ${fields.map((f) => f.label).join(', ')}; ${
+        missing.length
+          ? `${missing.map((f) => f.label).join(', ')} not given`
+          : `it has no ${extra.join(', ')}`
+      }`,
+    )
+  }
+  return fields.length == 1 ? said[fields[0].name] : JSON.stringify(
+    Object.fromEntries(fields.map((f) => [f.name, said[f.name]])),
+  )
+}
+
+// A connection's fields, as the vault keeps them. A voip.ms key pasted before
+// its integration named fields was its fields joined by colons; it is read so
+// and kept as the object it is now, behind the same handle, so its sentinels
+// hold. TODO: delete the colon reading once no such record is left.
+let fieldsKept = async (
+  c: Ctx,
+  b: Bundle,
+  fields: Field[],
+  raw: string,
+): Promise<Record<string, string>> => {
+  if (raw.trimStart().startsWith('{')) return JSON.parse(raw)
+  let parts = raw.split(':')
+  let said = Object.fromEntries(fields.map((f, n) => [
+    f.name,
+    (n < fields.length - 1 ? parts[n] : parts.slice(n).join(':'))?.trim() ??
+      '',
+  ]))
+  await c.graph.apply([{
+    entity: { eid: b.entity.eid },
+    [SECRET]: { name: nameOf(b), value: JSON.stringify(said) },
+  }])
+  return said
+}
+
+/** What a call out sends in a sentinel's place: the pasted key, one `field` of
+ * several by name, or an access token, refreshed first when it is about to
+ * expire. A credential kept as several fields is only ever read one at a
+ * time. */
 export let credential = async (
   c: Ctx,
   connection: Eid,
+  field?: string,
 ): Promise<string | undefined> => {
   let b = await held(c.graph.read, connection)
-  let i = await known(c.graph.read, String(comp(b, CONNECTION).integration))
-  if (i && keyed(i)) {
-    return await reveal(c.vault, nameOf(b), { env: () => undefined })
-  }
+  let name = String(comp(b, CONNECTION).integration)
+  let i = await known(c.graph.read, name)
   let raw = await reveal(c.vault, nameOf(b), { env: () => undefined })
+  if (i && keyed(i)) {
+    let fields = fieldsOf(i)
+    if (fields.length == 1) {
+      return field == null || field == fields[0].name ? raw : undefined
+    }
+    if (field == null) {
+      throw new Error(`${name} is kept as several fields; read one by name`)
+    }
+    return raw ? (await fieldsKept(c, b, fields, raw))[field] : undefined
+  }
+  if (field != null && field != fieldsOf()[0].name) return undefined
   if (raw && !raw.trimStart().startsWith('{')) return raw
   let oauth = await signIn(c, b)
   return marking(c, connection, oauth.token)

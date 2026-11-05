@@ -42,13 +42,22 @@ export let reveal = (
   after(vault.read(secretEid(name)), (kept) => valueOf(kept, name, s))
 
 /** The sentinel for a secret, by name: its handle hashed under the vault's
- * salt (./sentinel.ts). A name nothing was written for has none. */
+ * salt (./sentinel.ts). A name nothing was written for has none. A secret
+ * kept as several named parts (a connection's fields) has one for each
+ * `part`, its handle and the part's name hashed together; a handle holds no
+ * `#`, so none is another's. */
 export let sentinelOf = (
   vault: Vault,
   name: string,
+  part?: string,
 ): Promise<string | undefined> =>
   Promise.resolve(vault.read(secretEid(name))).then(async (kept) =>
-    kept ? sentinel(await vault.salt(), kept.handle) : undefined
+    kept
+      ? sentinel(
+        await vault.salt(),
+        part == null ? kept.handle : `${kept.handle}#${part}`,
+      )
+      : undefined
   )
 
 /** A secret's value, by name, answered on the spot. */

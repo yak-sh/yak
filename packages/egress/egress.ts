@@ -1,6 +1,8 @@
 // The egress: a call going out with a credential. An app never holds one. It
 // holds sentinels (@yaks/secrets), and puts one wherever the service wants its
-// key or token: a header, a Basic credential, the query, the body. The egress
+// key or token: a header, a Basic credential, the query, the body. A
+// credential kept as several fields (an access key ID and a secret key) has a
+// sentinel for each, and each is swapped for its own field alone. The egress
 // finds each, checks
 // who is calling and where the request goes, and sends it on with the
 // credential in the sentinel's place, verbatim. A service that refuses an
@@ -161,7 +163,7 @@ let check = async (
 ): Promise<Hit[]> => {
   let mine = await used(c, caller.app, caller.person)
   return Promise.all(found.map(async (sentinel) => {
-    let r = mine.find((r) => r.sentinel == sentinel)
+    let r = mine.find((r) => Object.values(r.sentinels).includes(sentinel))
     if (!r) {
       throw new Refused(
         `a sentinel stands for no connected connection ${caller.app} uses`,
@@ -183,7 +185,8 @@ let check = async (
       let owner = String(comp(r.connection, CONNECTION).owner)
       throw new Capped(owner, name, i?.title || name, cap)
     }
-    let value = await credential(c, eid)
+    let field = Object.keys(r.sentinels).find((f) => r.sentinels[f] == sentinel)
+    let value = await credential(c, eid, field)
     if (!value) throw new Refused(`${name} holds no credential`)
     let link = r.link.entity.eid
     return { eid, sentinel, value, hosts, oauth: !keyed(i!), link }

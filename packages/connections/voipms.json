@@ -6,5 +6,16 @@
   "hosts": [
     "voip.ms"
   ],
-  "instructions": "1. Sign in at [voip.ms](https://voip.ms) and open **Main Menu → SOAP & REST/JSON API**.\n2. Turn on **Enable API** and save it.\n3. Set an **API Password** and save it.\n4. Under **Enable IP Addresses**, enter `0.0.0.0` and save it. yaks.app calls from changing addresses.\n5. Paste your voip.ms sign-in email and that API password here, with a colon between them:\n\n   ```\n   you@example.com:your-api-password\n   ```\n\nYour Operator texts from the first number on the account with SMS turned on. yaks.app points that number's SMS URL callback at your Operator, so replies to its texts reach your conversation; every other way its texts reach you stays as it is."
+  "fields": [
+    {
+      "name": "username",
+      "label": "Sign-in email",
+      "shown": true
+    },
+    {
+      "name": "password",
+      "label": "API password"
+    }
+  ],
+  "instructions": "1. Sign in at [voip.ms](https://voip.ms) and open **Main Menu → SOAP & REST/JSON API**.\n2. Turn on **Enable API** and save it.\n3. Set an **API Password** and save it.\n4. Under **Enable IP Addresses**, enter `0.0.0.0` and save it. yaks.app calls from changing addresses.\n5. Enter your voip.ms sign-in email and that API password here.\n\nYour Operator texts from the first number on the account with SMS turned on. yaks.app points that number's SMS URL callback at your Operator, so replies to its texts reach your conversation; every other way its texts reach you stays as it is."
 }

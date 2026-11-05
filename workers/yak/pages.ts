@@ -10,6 +10,7 @@
 // the HTML host's escaping. A page carries an email address a stranger typed,
 // and web content never speaks HTML (the repo's md.ts rule, one floor down).
 
+import { type Field, KEY } from '@yaks/connections'
 import type { Frame } from './build-door.ts'
 import type { Agent } from './connected.ts'
 import type {
@@ -1171,14 +1172,39 @@ let reach = (hosts: string[]) =>
     : ''
 
 // The box a key is pasted in and the button that saves it, one line under
-// its label.
-let keyBox = (id: string, label: string, send: string, hint = '') =>
-  labeled(
-    id,
-    label,
-    `<div class="Form_Line"><input class="Field" id="${id}" name="key" type="password" autocomplete="off" spellcheck="false" required>${send}</div>`,
-    hint,
-  )
+// its label; or, for a service that asks for several fields, a box for each
+// under its own label, masked unless the field is shown, and the button under
+// them. connections.ts `givenOf` reads what was typed.
+let keyBox = (
+  id: string,
+  label: string,
+  send: string,
+  hint = '',
+  fields: Field[] = [KEY],
+) => {
+  let box = (at: string, name: string, shown = false) =>
+    `<input class="Field" id="${at}" name="${name}" type="${
+      shown ? 'text' : 'password'
+    }" autocomplete="off" spellcheck="false" required>`
+  if (fields.length == 1) {
+    return labeled(
+      id,
+      fields[0] == KEY ? label : esc(fields[0].label),
+      `<div class="Form_Line">${box(id, 'key', fields[0].shown)}${send}</div>`,
+      hint,
+    )
+  }
+  return fields.map((f) =>
+    labeled(
+      `${id}-${f.name}`,
+      esc(f.label),
+      box(`${id}-${f.name}`, `key.${f.name}`, f.shown),
+    )
+  ).join('') +
+    `<div class="Form_Actions">${send}</div>${
+      hint ? `<p class="Form_Hint">${hint}</p>` : ''
+    }`
+}
 
 // A button a connection's form sends: quiet unless it is the card's one
 // next step.
@@ -1249,6 +1275,7 @@ let connection = (c: Shown, on: boolean, action: string) => {
         'Paste the key',
         press('key', 'Save key', false),
         reach(c.hosts),
+        c.face.fields,
       ),
     )
     : ''
@@ -1336,6 +1363,7 @@ let connection = (c: Shown, on: boolean, action: string) => {
         'Replace the key',
         press('key', 'Save key'),
         reach(c.hosts),
+        c.face.fields,
       ),
     )
     : ''
@@ -1485,6 +1513,7 @@ let borrowing = (
           'Paste your key',
           press('own', 'Save key', false),
           reach(b.hosts),
+          b.face.fields,
         ),
       )
     }</div></details>`
@@ -1540,6 +1569,8 @@ let connections = (at: DeskPage, env: Host) => {
           `add-${esc(i.name)}`,
           'Paste the key',
           press('add', 'Save key', false),
+          '',
+          i.face.fields,
         )
         : ''
     }</form>`
@@ -2324,6 +2355,8 @@ export let askConnect = (at: {
             'key',
             'Paste your key',
             '<button class="Button" type="submit">Save key</button>',
+            '',
+            at.face.fields,
           )
         }</form>`
         : ''

@@ -1,6 +1,6 @@
 // A person's own phone number, in their Operator's hands: they connect their
-// voip.ms number (@yaks/connections' `voipms`, its key their sign-in email
-// and API password), and the Operator texts the people they ask it to from
+// voip.ms number (@yaks/connections' `voipms`, its fields their sign-in
+// email and API password), and the Operator texts the people they ask it to from
 // it, as they would by hand (`phoneSend`). Connecting points the number's SMS
 // URL callback at `/voipms/<ticket>` here (`lined`); voip.ms signs nothing,
 // so the ticket is the kernel's own seal naming the connection, and a text
@@ -14,7 +14,11 @@
 // which lets any address call with the API password.
 import type { Bundle, Comp } from '@yaks/graph'
 import { writes } from '@yaks/member'
-import { CONNECTION, credential } from '@yaks/connections'
+import {
+  CONNECTION,
+  credential,
+  type Ctx as Connections,
+} from '@yaks/connections'
 import {
   type Account,
   Blocked,
@@ -42,12 +46,17 @@ export let LINE = 'voipms'
 
 let comp = (b: Bundle | undefined, name: string) => (b?.[name] ?? {}) as Comp
 
-/** The account a voip.ms key opens: its sign-in email and API password,
- * pasted with a colon between them; null when it is not that. */
-export let accountOf = (key: string, number?: string): Account | null => {
-  let at = key.indexOf(':')
-  let [user, password] = [key.slice(0, at).trim(), key.slice(at + 1).trim()]
-  if (at < 0 || !user.includes('@') || !password) return null
+/** The account a voip.ms connection opens, read through its credential: its
+ * sign-in email and API password; null when they are not that. */
+export let accountOf = async (
+  c: Connections,
+  connection: string,
+  number?: string,
+): Promise<Account | null> => {
+  let [user, password] = await Promise.all(
+    ['username', 'password'].map((f) => credential(c, connection, f)),
+  )
+  if (!user?.includes('@') || !password) return null
   return voipms({
     user,
     key: password,
@@ -81,7 +90,7 @@ export let lined = async (
   connection: string,
 ): Promise<{ say: string; no: boolean }> => {
   let c = ctxOf(env)
-  let account = accountOf(String(await credential(c, connection) ?? ''))
+  let account = await accountOf(c, connection)
   let broken = async (say: string) => {
     await c.graph.apply([{
       entity: { eid: connection },
@@ -91,7 +100,7 @@ export let lined = async (
   }
   if (!account) {
     return broken(
-      'Paste your voip.ms sign-in email and API password with a colon between them, like you@example.com:your-api-password.',
+      'Enter your voip.ms sign-in email and its API password.',
     )
   }
   let lines
@@ -104,7 +113,7 @@ export let lined = async (
   let line = lines.find((l) => l.sms)
   if (!line) {
     return broken(
-      'No number on this voip.ms account has SMS turned on. Turn it on under DID Numbers, then Manage DIDs, and paste the key again.',
+      'No number on this voip.ms account has SMS turned on. Turn it on under DID Numbers, then Manage DIDs, and save the connection again.',
     )
   }
   await c.graph.apply([{
@@ -199,8 +208,9 @@ export let phoneSend = (
       )
     }
     let from = String(comp(line, CONNECTION).account ?? '')
-    let account = accountOf(
-      String(await credential(ctxOf(env), line.entity.eid) ?? ''),
+    let account = await accountOf(
+      ctxOf(env),
+      line.entity.eid,
       from || undefined,
     )
     if (!account) {

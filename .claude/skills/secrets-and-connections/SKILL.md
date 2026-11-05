@@ -149,9 +149,13 @@ Deleting the entity, or its `secret` component, drops it from the vault
 A key or sign-in for an outside service is a **connection**
 (packages/connections/README.md): `connection{integration, owner, account,
 scopes, status}` on an entity that also wears `secret{name, value}`, its name
-`connection:` and a random id. The value is the handle of a pasted key, or of
-the OAuth tokens kept as a record. An **integration** is the service as data,
-and its `hosts` are the only hosts its credential may be sent to.
+`connection:` and a random id. The value is the handle of a pasted key, of
+the several fields its integration names (`integration.fields`: S3's access
+key ID, secret key and region) kept as a JSON object, or of the OAuth tokens
+kept as a record. Each field has a sentinel of its own, which an app reads as
+`env.<BINDING>_<FIELD>`, and `credential(ctx, eid, field)` reads one. An
+**integration** is the service as data, and its `hosts` are the only hosts its
+credential may be sent to.
 
 A new service is data, not code. The owner, verbatim (M-39503): "We implemented
 oauth once, and the providers are specified via data. You can see this

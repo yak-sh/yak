@@ -3,7 +3,9 @@
 // An integration says where a person signs in to a service and where its codes
 // are exchanged, for one reached by OAuth, which hosts its credential may be
 // sent to, and how a page shows it: its name, a line about it, its site and its
-// logo. One with no token endpoint is reached with a pasted key instead.
+// logo. One with no token endpoint is reached with a pasted key instead, or
+// with the several fields it names (`fields`): S3's access key ID, secret key
+// and region. One key is the case of one field, named `key`.
 //
 // Every integration is an entity in the graph wearing `integration`, and one
 // name is one entity. The ones this package builds ship as seed data, one JSON
@@ -64,6 +66,9 @@ export type Integration = {
   client_id?: string
   /** the API hosts its credential may be sent to, and no others */
   hosts: string[]
+  /** what a person gives to connect a pasted-key one, when it is more than
+   * one key; none is one key */
+  fields?: Field[]
   /** how the service signs the webhooks it sends */
   signature?: Scheme
   /** still in the service's testing mode, where only the people it lists may
@@ -77,6 +82,19 @@ export type Integration = {
    * text; none for a built one */
   owner?: string
 }
+
+/** One thing a person gives to connect a pasted-key integration: what an app
+ * reads it by, what the page asks for it by, and whether it is typed in the
+ * open, as a username or a region is. */
+export type Field = { name: string; label: string; shown?: boolean }
+
+/** The one field of an integration that declares none: its key. */
+export let KEY: Field = { name: 'key', label: 'Key' }
+
+/** What a person gives to connect a pasted-key integration, in the order the
+ * page asks for it: the fields it declares, or its one key. */
+export let fieldsOf = (i?: Integration): Field[] =>
+  i?.fields?.length ? i.fields : [KEY]
 
 /** A read of the graph: what a tool's context and a graph both offer. */
 export type Read = (query: Query) => Bundle[] | Promise<Bundle[]>

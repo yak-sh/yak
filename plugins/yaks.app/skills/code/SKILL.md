@@ -548,6 +548,23 @@ same page.
 A connection that is made or attached is available to the app immediately,
 whatever release it is running: there is nothing to redeploy.
 
+### A service that takes more than one key
+
+    store_connection_need(app, owner: space, integration: 'S3',
+      hosts: ['s3.us-east-1.amazonaws.com'], direct: true, fields: [
+        { name: 'access_key_id', label: 'Access key ID', shown: true },
+        { name: 'secret_access_key', label: 'Secret access key' },
+        { name: 'region', label: 'Region', shown: true }])
+
+Some services take several credentials together: S3's access key ID, secret key
+and region, or a username and a password. `fields` names each one, with the
+label the connections page asks for it by; `shown` types it in the open rather
+than masked. The app reads each by the binding and its name in capitals:
+`env.S3_ACCESS_KEY_ID`, `env.S3_SECRET_ACCESS_KEY`, `env.S3_REGION`, each a
+sentinel of its own, swapped for that one field on the way out, or the value
+itself where the connection is `direct` (a request signature such as S3's needs
+the key). Fields are given when the integration is made, and never change.
+
 ### Instructions for getting a key
 
     store_connection_need(app, owner: space, integration: 'ESV',

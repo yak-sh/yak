@@ -5,7 +5,9 @@ import type { D1Like } from '@yaks/d1'
 import { d1 } from '../../packages/d1/testing.ts'
 import { platform } from './testing.ts'
 import { directoryOf } from './directory.ts'
-import { connecting } from './connections.ts'
+import { connecting, ctxOf } from './connections.ts'
+import { credential } from '@yaks/connections'
+import { reveal } from '@yaks/secrets'
 import { operatorModel, operatorService } from './operator-testing.ts'
 import { receive, rootOf } from './operator-channels.ts'
 import { conversationOf } from './operator-host.ts'
@@ -72,10 +74,15 @@ globalThis.fetch = (input, init) => {
 }
 let of = (method: string) => asked.filter((q) => q.get('method') == method)
 
-let page = (key: string) => {
+let page = (username: string, password: string) => {
   let form = new FormData()
   for (
-    let [k, v] of Object.entries({ do: 'add', integration: 'voipms', key })
+    let [k, v] of Object.entries({
+      do: 'add',
+      integration: 'voipms',
+      'key.username': username,
+      'key.password': password,
+    })
   ) {
     form.set(k, v)
   }
@@ -88,8 +95,9 @@ let page = (key: string) => {
   )
 }
 type Said = { say: string; no: boolean }
-let refused = await page('jeff@example.com:wrong') as Said
-let connected = await page('jeff@example.com:pw') as Said
+let unfilled = await page('jeff@example.com', '') as Said
+let refused = await page('jeff@example.com', 'wrong') as Said
+let connected = await page('jeff@example.com', 'pw') as Said
 let [pointed] = of('setSMS')
 let callback = pointed.get('url_callback')!
 
@@ -166,7 +174,8 @@ let forged = await lineDoor(
   env,
 )
 
-test('a voip.ms key is checked, names the number, and points its callback here, keeping how texts reach the person', () => {
+test('a voip.ms connection is checked, names the number, and points its callback here, keeping how texts reach the person', () => {
+  assertEquals(unfilled, { say: 'Fill in API password first.', no: true })
   assertEquals(refused.no, true)
   assertStringIncludes(refused.say, 'username or API password')
   assertEquals(connected, {
@@ -232,4 +241,28 @@ test("a text back comes into the person's conversation as its writer's words; an
   assertStringIncludes(root.html, 'Dr Alvarez says Tuesday at 3 works.')
   assert(!root.html.includes('golf'))
   assertEquals(forged.status, 403)
+})
+
+test('a voip.ms key kept as its email and password joined by a colon is read as its fields, and kept as them', async () => {
+  let c = ctxOf(env)
+  let [line] = await c.graph.read(
+    `.connection.integration=voipms&.connection.status=connected&*`,
+  )
+  let name = String((line.secret as Record<string, unknown>).name)
+  await c.graph.apply([{
+    entity: { eid: line.entity.eid },
+    secret: { name, value: 'jeff@example.com:pw:with-colon' },
+  }])
+  assertEquals(
+    await credential(c, line.entity.eid, 'username'),
+    'jeff@example.com',
+  )
+  assertEquals(
+    await credential(c, line.entity.eid, 'password'),
+    'pw:with-colon',
+  )
+  assertEquals(
+    JSON.parse((await reveal(c.vault, name, { env: () => undefined }))!),
+    { username: 'jeff@example.com', password: 'pw:with-colon' },
+  )
 })

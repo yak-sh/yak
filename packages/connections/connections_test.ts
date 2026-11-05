@@ -42,6 +42,7 @@ import {
   type Ctx,
   disconnect,
   envOf,
+  type Given,
   install,
   installed,
   type Integration,
@@ -554,7 +555,7 @@ test(
     assertEquals(await resolve(c, 'app', 'texts'), {
       connection: b!,
       link: (await g.read('.uses&*'))[0],
-      sentinel: (await sentinelOf(vault, name))!,
+      sentinels: { key: (await sentinelOf(vault, name))! },
     })
     let signs = await needs()
     await assertRejects(() => connect(c, signs, { key: 'k' }))
@@ -811,7 +812,7 @@ let lent = async () => {
 // Each case measures one connection verb; its graph and credentials stand
 // before the case starts, as they do when the caller asks it.
 let loans = await lent()
-let sourceSentinel = (await resolve(loans.c, 'app', 'texts'))!.sentinel
+let sourceSentinel = (await resolve(loans.c, 'app', 'texts'))!.sentinels.key
 let loanLink = (app: string, connection = loans.texts) =>
   edgeEid(app, 'uses', connection)
 let needing = (bundles: Bundle[]) =>
@@ -1085,7 +1086,7 @@ await hostile.g.apply([{
   entity: { eid: edgeEid('other', 'uses', hostile.texts) },
   uses: { direct: true },
 }], { trusted: true })
-let hostileSentinel = (await resolve(hostile.c, 'app', 'texts'))!.sentinel
+let hostileSentinel = (await resolve(hostile.c, 'app', 'texts'))!.sentinels.key
 test('envOf: an old direct mark cannot release a borrowed key', async () => {
   assertEquals((await envOf(hostile.c, 'other')).SMS, hostileSentinel)
 })
@@ -1351,3 +1352,105 @@ for (
     )
   })
 }
+
+// A custom key of three fields, as S3's is: an access key ID, a secret key
+// and a region typed in the open.
+let S3 = [
+  { name: 'access_key_id', label: 'Access key ID', shown: true },
+  { name: 'secret_access_key', label: 'Secret access key' },
+  { name: 'region', label: 'Region', shown: true },
+]
+let s3 = async (direct = false) => {
+  let s = await setup()
+  let eid = await s.needs({
+    integration: 's3',
+    hosts: ['s3.example'],
+    fields: S3,
+    binding: 'S3',
+    direct,
+  })
+  await connect(s.c, eid, {
+    fields: {
+      access_key_id: 'AKIA1',
+      secret_access_key: 'shh/secret',
+      region: 'us-east-1',
+    },
+  })
+  return { ...s, eid }
+}
+let fielded = await s3()
+let handed = await s3(true)
+
+test('an integration of several fields keeps them together, each read by name', async () => {
+  let { c, eid, g, vault } = fielded
+  assertEquals((await known(g.read, 's3'))!.fields, S3)
+  assertEquals(
+    JSON.parse(
+      (await reveal(vault, String(of(await at(g, eid), 'secret').name)))!,
+    ),
+    {
+      access_key_id: 'AKIA1',
+      secret_access_key: 'shh/secret',
+      region: 'us-east-1',
+    },
+  )
+  assertEquals(await credential(c, eid, 'secret_access_key'), 'shh/secret')
+  assertEquals(await credential(c, eid, 'region'), 'us-east-1')
+  await assertRejects(() => credential(c, eid))
+})
+
+test('an app reads each field of several by its own name: a sentinel for each, or the value where the link is direct', async () => {
+  let env = await envOf(fielded.c, 'app')
+  assertEquals(Object.keys(env), [
+    'S3_ACCESS_KEY_ID',
+    'S3_SECRET_ACCESS_KEY',
+    'S3_REGION',
+  ])
+  assertEquals(new Set(Object.values(env)).size, 3)
+  assert(Object.values(env).every((s) => s.startsWith('yak_sentinel_')))
+  assertEquals(await envOf(handed.c, 'app'), {
+    S3_ACCESS_KEY_ID: 'AKIA1',
+    S3_SECRET_ACCESS_KEY: 'shh/secret',
+    S3_REGION: 'us-east-1',
+  })
+})
+
+test('a connection of several fields takes every one of them, and no other', async () => {
+  let { c, eid } = fielded
+  for (
+    let given of <Given[]> [
+      { key: 'one-key' },
+      { fields: { access_key_id: 'A', secret_access_key: 'B' } },
+      {
+        fields: {
+          access_key_id: 'A',
+          secret_access_key: 'B',
+          region: 'r',
+          x: 'y',
+        },
+      },
+    ]
+  ) {
+    await assertRejects(() => connect(c, eid, given))
+  }
+})
+
+test('fields are said once, when a custom integration is made, and never for one that stands', async () => {
+  let { g } = fielded
+  let asks = [
+    { integration: 's3', hosts: ['s3.example'], fields: S3.slice(1) },
+    { integration: 'texts', fields: S3 },
+    { integration: 'calendar', fields: S3 },
+    {
+      integration: 'new',
+      hosts: ['new.example'],
+      fields: [{ name: 'Bad', label: 'x' }],
+    },
+    { integration: 'new', hosts: ['new.example'], fields: [S3[0], S3[0]] },
+  ]
+  for (let a of asks) {
+    await assertRejects(() =>
+      need(g.read, { owner: 'space', app: 'app', ...a })
+    )
+  }
+})

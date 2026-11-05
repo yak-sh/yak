@@ -61,6 +61,14 @@ let SEEDS: Integration[] = [
   },
   { name: 'texts', hosts: ['api.texts.example'] },
   { name: 'notes', hosts: ['api.notes.example'] },
+  {
+    name: 'bucket',
+    hosts: ['s3.example'],
+    fields: [
+      { name: 'id', label: 'Access key ID' },
+      { name: 'secret', label: 'Secret key' },
+    ],
+  },
 ]
 
 // The network: every request it is sent, and the replies each test scripts.
@@ -150,9 +158,13 @@ await needs('notes', 'space', true)
 for (let who of ['ann', 'bob']) {
   await connect(c, await needs('notes', who, true), { key: `${who}-key` })
 }
-let KEY = (await resolve(c, 'app', 'texts'))!.sentinel
-let GRANT = (await resolve(c, 'app', 'calendar'))!.sentinel
-let ANN = (await resolve(c, 'app', 'notes', 'ann'))!.sentinel
+await connect(c, await needs('bucket'), {
+  fields: { id: 'AKIA1', secret: 'shh' },
+})
+let BUCKET = (await resolve(c, 'app', 'bucket'))!.sentinels
+let KEY = (await resolve(c, 'app', 'texts'))!.sentinels.key
+let GRANT = (await resolve(c, 'app', 'calendar'))!.sentinels.key
+let ANN = (await resolve(c, 'app', 'notes', 'ann'))!.sentinels.key
 
 let viewer: Caller = { app: 'app', level: 'viewer', person: null }
 let ann: Caller = { app: 'app', level: null, person: 'ann' }
@@ -397,7 +409,7 @@ test(
       (connected.connection.connection as Comp).account,
       'ann@example.com',
     )
-    let sentinel = connected.sentinel
+    let sentinel = connected.sentinels.key
     let call = (at: string) =>
       forward(
         c,
@@ -487,4 +499,31 @@ test('a link below its cap, or at it only last month, calls out', async () => {
     200,
     200,
   ])
+})
+
+test('each field of several goes out alone in its own sentinel’s place', async () => {
+  answering([200])
+  await forward(
+    c,
+    viewer,
+    new Request(`https://s3.example/?id=${BUCKET.id}`, {
+      headers: { 'x-secret': BUCKET.secret },
+    }),
+  )
+  assertEquals(
+    [
+      new URL(seen[0].url).searchParams.get('id'),
+      seen[0].headers.get('x-secret'),
+    ],
+    ['AKIA1', 'shh'],
+  )
+  await assertRejects(
+    () =>
+      forward(
+        c,
+        viewer,
+        new Request(`https://api.texts.example/?k=${BUCKET.id}`),
+      ),
+    Refused,
+  )
 })

@@ -100,6 +100,32 @@
           },
           "description": "the API hosts a connection's credential may be sent to, and no others"
         },
+        "fields": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": [
+              "name",
+              "label"
+            ],
+            "properties": {
+              "name": {
+                "type": "string",
+                "pattern": "^[a-z][a-z0-9_]*$",
+                "description": "what an app reads it by: env.<BINDING>_<NAME> in capitals, and the field of the connection's secret it is kept as"
+              },
+              "label": {
+                "type": "string",
+                "description": "what the connections page asks for it by, written for a person: Access key ID, API password"
+              },
+              "shown": {
+                "type": "boolean",
+                "description": "typed in the open rather than masked, as a username or a region is"
+              }
+            }
+          },
+          "description": "what a person gives to connect a pasted-key integration, each asked for by its label: S3's access key ID, secret key and region. Kept together as the connection's secret, each with its own sentinel. None is one key; it is set when the integration is made and never changes"
+        },
         "signature": {
           "type": [
             "string",
@@ -278,6 +304,32 @@
             "type": "string"
           },
           "description": "for a custom key only: the hosts it may be sent to"
+        },
+        "fields": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": [
+              "name",
+              "label"
+            ],
+            "properties": {
+              "name": {
+                "type": "string",
+                "pattern": "^[a-z][a-z0-9_]*$",
+                "description": "what an app reads it by: env.<BINDING>_<NAME> in capitals, and the field of the connection's secret it is kept as"
+              },
+              "label": {
+                "type": "string",
+                "description": "what the connections page asks for it by, written for a person: Access key ID, API password"
+              },
+              "shown": {
+                "type": "boolean",
+                "description": "typed in the open rather than masked, as a username or a region is"
+              }
+            }
+          },
+          "description": "for a custom key only: what a person gives to connect it, when it is more than one key (an access key ID, a secret key, a region), each with a name and the label the connections page asks for it by. The app reads each as env.<BINDING>_<NAME>. Omit for one key"
         },
         "each": {
           "type": "boolean",

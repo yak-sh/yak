@@ -1,6 +1,7 @@
 import { test } from '@yaks/testing'
 import { assert, assertEquals, assertStringIncludes } from '@std/assert'
 import { parseHTML } from 'linkedom'
+import { KEY } from '@yaks/connections'
 import {
   askCode,
   askConnect,
@@ -23,6 +24,7 @@ let named = (title: string) => ({
   logo: '',
   instructions: '',
   theirs: false,
+  fields: [KEY],
 })
 let CAL = {
   title: 'Cal',
@@ -31,6 +33,7 @@ let CAL = {
   logo: '<svg xmlns="http://www.w3.org/2000/svg"/>',
   instructions: '',
   theirs: false,
+  fields: [KEY],
 }
 // What a face draws: its logo as an image, never as markup, its line, and its
 // site linked by its host.

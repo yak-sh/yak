@@ -28,15 +28,20 @@ them.
   an SVG document, which a page draws as an image and never as markup. An
   integration with `authorize` and `token` is connected by signing in (OAuth 2
   with PKCE, through [@yaks/oauth](../oauth)); one without is a pasted key.
-  `hosts` are the only API hosts its credential may be sent to, and `signature`
-  is the [@yaks/hook](../hook) scheme its webhooks are signed with. `built` is
-  server-owned: it marks one this package builds. `instructions` is markdown
-  saying how a person gets the credential (where to sign up, which page issues
-  the key, what to paste), written for them and for the agent helping them; a
-  host shows it wherever the integration is met. `owner` is the space or person
-  that made a custom integration, and the only one who may change its `title`,
-  `tagline`, `site` or `instructions`; nobody changes its `hosts`. A built
-  integration has no owner, and one whose owner is gone is nobody's to change.
+  `fields` are what a person gives to connect one that takes more than a key,
+  each `{name, label, shown}`: S3's access key ID, secret key and region. The
+  connections page asks for each by its label, masked unless `shown`. None is
+  one key, the field `key`; fields are said when the integration is made and
+  never change. `hosts` are the only API hosts its credential may be sent to,
+  and `signature` is the [@yaks/hook](../hook) scheme its webhooks are signed
+  with. `built` is server-owned: it marks one this package builds.
+  `instructions` is markdown saying how a person gets the credential (where to
+  sign up, which page issues the key, what to paste), written for them and for
+  the agent helping them; a host shows it wherever the integration is met.
+  `owner` is the space or person that made a custom integration, and the only
+  one who may change its `title`, `tagline`, `site` or `instructions`; nobody
+  changes its `hosts`. A built integration has no owner, and one whose owner is
+  gone is nobody's to change.
 - `listed{at, by, via}` marks a custom integration its owner listed in the
   **integration directory**, which anyone may read and add to a space of their
   own apart from any app; taking the mark off takes it out. Every built
@@ -47,7 +52,8 @@ them.
   (no credential yet), `connected`, or `broken` (the service refused it). The
   same entity wears `secret{name, value}`: its name is `connection:` and a
   random id, and the entity id is derived from it. Its value is the handle of a
-  pasted key, or of the OAuth tokens kept as a JSON record.
+  pasted key, of its several fields kept as a JSON object by name, or of the
+  OAuth tokens kept as a JSON record.
 - `uses{anyone, each, binding, direct, cap}` is the relation on an
   [@yaks/edge](../edge) link from an app to the connection it calls out through.
   Only a caller holding a level on the app may call out through it, unless
@@ -57,10 +63,11 @@ them.
   ask, a needed connection its space holds, and the link to every person's own
   connection through that integration, and a link marked so is spent only by the
   person who owns its connection. `binding` is the name the app's code reads it
-  by (`env.NAME` in a worker), and `direct` hands that code the key itself
-  rather than a sentinel, for a key it must sign with; only a pasted key shared
-  by everyone may be direct. `cap` is the most calls a month that may go out
-  through the link, which [@yaks/egress](../egress) counts on it as
+  by (`env.NAME` in a worker; for several fields, one name each,
+  `env.NAME_FIELD`, as `namesOf` says), and `direct` hands that code the key
+  itself rather than a sentinel, for a key it must sign with; only a pasted key
+  shared by everyone may be direct. `cap` is the most calls a month that may go
+  out through the link, which [@yaks/egress](../egress) counts on it as
   `calls{month, count}` and refuses past; none is no limit. Only the host sets
   it, never the app it caps.
 
@@ -73,14 +80,15 @@ sent, and only the host can mark one `built`. Each logo is the service's mark
 from [Simple Icons](https://simpleicons.org) (CC0, simple-icons 16.32.0), in its
 brand colour. `anthropic` is built: a pasted API key, sent to
 `api.anthropic.com` alone, with no logo yet. `voipms` is built: a person's own
-phone number at voip.ms, its pasted key the account's sign-in email and API
-password joined by a colon (`you@example.com:api-password`), sent to `voip.ms`
-alone, with no logo yet. `openrouter` is built: its sign-in needs no registered
-client, and its exchange answers an API key (`answers: 'key'`, @yaks/oauth),
-kept as the connection's grant. `google-calendar` is built: it asks for
-`calendar.events` and `calendar.calendarlist.readonly` unless an app needs
-narrower, asks Google for offline access so the grant can be refreshed, and
-sends its token to `www.googleapis.com` alone. It is `testing: true` while
+phone number at voip.ms, its fields the account's sign-in email (`username`) and
+API password (`password`), sent to `voip.ms` alone, with no logo yet. A voip.ms
+key kept before it named fields, the two joined by a colon, is read as them the
+first time it is used and kept as them. `openrouter` is built: its sign-in needs
+no registered client, and its exchange answers an API key (`answers: 'key'`,
+@yaks/oauth), kept as the connection's grant. `google-calendar` is built: it
+asks for `calendar.events` and `calendar.calendarlist.readonly` unless an app
+needs narrower, asks Google for offline access so the grant can be refreshed,
+and sends its token to `www.googleapis.com` alone. It is `testing: true` while
 Google's app is in testing mode, where only the people Google lists may sign in,
 so yaks.app offers it only on a connections page opened with
 `?enable=google-calendar`. `openai` is built for the native harness's ChatGPT
@@ -104,22 +112,22 @@ directly as data; there is no secret to register or reveal.
 The two an untrusted caller may ask are the tools. Each returns bundles for the
 caller to apply in its own name:
 
-- `need(read, {owner, integration, app?, scopes?, hosts?, each?, binding?,
-  direct?, title?, tagline?, site?, instructions?})`
+- `need(read, {owner, integration, app?, scopes?, hosts?, fields?, each?,
+  binding?, direct?, title?, tagline?, site?, instructions?})`
   makes a `needed` connection and the `uses` link from the app, read by
   `binding` (default: the integration's name in capitals, `bindingOf`). For a
-  service with no integration, `hosts` makes a custom key integration, owned by
-  `owner` and saying what `title`, `tagline`, `site` and `instructions` give,
-  and hosts that differ from an existing one's are refused; any of those four
-  given for an integration that stands is `set` by its owner, and refused for
-  anyone else; a `direct` key, handed to the app's code and never sent by
-  anything here, may name none. An app that already uses a connection through
-  that integration is answered with it, and with its link renamed where
-  `binding` or `direct` was given. `need` never links an app to a connection
-  that holds a credential: giving an app a person's account is the person's act.
-  With `each`, the owner is the space asking each person, or a person making
-  their own, and an app is answered with the one that owner holds. The
-  connection comes first in what it returns.
+  service with no integration, `hosts` makes a custom key integration, asking
+  for the `fields` given, owned by `owner` and saying what `title`, `tagline`,
+  `site` and `instructions` give, and hosts that differ from an existing one's
+  are refused; any of those four given for an integration that stands is `set`
+  by its owner, and refused for anyone else; a `direct` key, handed to the app's
+  code and never sent by anything here, may name none. An app that already uses
+  a connection through that integration is answered with it, and with its link
+  renamed where `binding` or `direct` was given. `need` never links an app to a
+  connection that holds a credential: giving an app a person's account is the
+  person's act. With `each`, the owner is the space asking each person, or a
+  person making their own, and an app is answered with the one that owner holds.
+  The connection comes first in what it returns.
 - `list(read, owner)` returns the owner's connections, the `uses` links to them,
   and the integrations they go through.
 
@@ -199,27 +207,28 @@ its vault, and the redirect):
 
 - `begin(ctx, connection)` returns the sign-in link and the attempt to keep
   until the person returns.
-- `connect(ctx, connection, given, account?)` keeps a pasted key (`{key}`), or
-  completes a sign-in (`{attempt, callback}`), and marks the connection
-  `connected`. A key goes from here straight to the vault. An OAuth sign-in
-  names its account from the exchanged `id_token` email or
-  `integration.userinfo`. Another account makes another connection; the same
-  account renews behind its held handle.
+- `connect(ctx, connection, given, account?)` keeps a pasted key (`{key}`),
+  every field its integration names (`{fields}`), and no other, or completes a
+  sign-in (`{attempt, callback}`), and marks the connection `connected`. A key
+  goes from here straight to the vault. An OAuth sign-in names its account from
+  the exchanged `id_token` email or `integration.userinfo`. Another account
+  makes another connection; the same account renews behind its held handle.
 - `disconnect(ctx, connection)` deletes the connection, which drops its
   credential from the vault. Each app that shared it is linked to a new `needed`
   connection in the same batch, by the same name, as directly and as openly; a
   person's own is not replaced, since the app still asks them.
 - `resolve(ctx, app, integration, person?)` returns the connected connection an
   app uses through an integration for that person, its `uses` link and the
-  sentinel for its credential, or nothing. `used(ctx, app, person?)` returns
-  every one: the shared ones, and the person's own. Whether the caller may use a
-  shared one is the egress's check.
+  sentinel for each field of its credential by name (`key` for one key or a
+  sign-in), or nothing. `used(ctx, app, person?)` returns every one: the shared
+  ones, and the person's own. Whether the caller may use a shared one is the
+  egress's check.
 - `envOf(ctx, app, person?)` is what the app's code is handed, by binding: the
   sentinel for each connected connection it uses, or the key itself where the
-  link is direct.
-- `credential(ctx, connection)` returns what a call out sends in the sentinel's
-  place: the pasted key, or an access token, refreshed first when it is about to
-  expire.
+  link is direct, and for several fields each under its own name.
+- `credential(ctx, connection, field?)` returns what a call out sends in a
+  sentinel's place: the pasted key, the one `field` of several it names, or an
+  access token, refreshed first when it is about to expire.
 - `refresh(ctx, connection, stale)` gets a new access token behind the same
   handle once the service has refused `stale`. A grant the service refuses, here
   or in `credential`, marks the connection `broken`. A failure on the wire does

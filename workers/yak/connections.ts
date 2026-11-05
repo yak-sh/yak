@@ -45,6 +45,9 @@ import {
   type Ctx,
   disconnect,
   envOf,
+  type Field,
+  fieldsOf,
+  type Given,
   installed,
   type Integration,
   integrationEid,
@@ -53,6 +56,7 @@ import {
   lend,
   list,
   LISTED,
+  namesOf,
   need,
   type Owners,
   type Read,
@@ -136,6 +140,9 @@ export type Face = {
   instructions: string
   /** what it says was written by the space that made it, not by yaks.app */
   theirs: boolean
+  /** what a person gives to connect it with a pasted key: its one key, or
+   * the fields it names */
+  fields: Field[]
 }
 
 /** The face of an integration, called by its name where it has no title. */
@@ -146,7 +153,22 @@ export let faceOf = async (name: string, i?: Integration): Promise<Face> => ({
   logo: i?.logo ?? '',
   instructions: await drawn(i?.instructions),
   theirs: !i?.built,
+  fields: fieldsOf(i),
 })
+
+/** What a person typed into a key box (pages.ts `keyBox`): the one key, or
+ * each field by name; or what the page says when one was left empty. */
+export let givenOf = (form: FormData, fields: Field[]): Given | string => {
+  let at = (k: string) => String(form.get(k) ?? '').trim()
+  if (fields.length == 1) {
+    return at('key') ? { key: at('key') } : 'Paste the key first.'
+  }
+  let said = Object.fromEntries(
+    fields.map((f) => [f.name, at(`key.${f.name}`)]),
+  )
+  let missing = fields.find((f) => !said[f.name])
+  return missing ? `Fill in ${missing.label} first.` : { fields: said }
+}
 
 /** One connection, as the page shows it. */
 export type Shown = {
@@ -322,8 +344,25 @@ export let rebind = async (
     throw Error(`${space.slug}/${app.slug}'s worker ${script} is not there`)
   }
   let want = await connectedEnv(env, app)
-  let links = await readOf(env)(`.edge.from=${app.eid}&.${USES}&*`)
-  let owned = [...links.map((l) => comp(l, USES).binding), ...gone]
+  let read = readOf(env)
+  let links = await read(`.edge.from=${app.eid}&.${USES}&*`)
+  let held = links.length
+    ? await read(
+      `.entity.eid=${
+        links.map((l) => comp(l, 'edge').to).join(',')
+      }&.${CONNECTION}`,
+    )
+    : []
+  // Every name a link gives: its binding, or one for each field of several.
+  let names = async (l: Bundle) => {
+    let b = held.find((b) => b.entity.eid == comp(l, 'edge').to)
+    let i = b && await known(read, integrationOf(b))
+    let fields = i && keyed(i) ? fieldsOf(i) : fieldsOf()
+    return Object.values(
+      namesOf(String(comp(l, USES).binding), fields.map((f) => f.name)),
+    )
+  }
+  let owned = [...(await Promise.all(links.map(names))).flat(), ...gone]
   for (let [name, value] of Object.entries(want)) {
     await setSecret(env, script, name, value)
   }
@@ -834,7 +873,9 @@ export let connecting = async (
   let field = (k: string) => String(form.get(k) ?? '').trim()
   let act = field('do')
   let c = ctxOf(env, who)
-  let key = field('key')
+  // What was typed into the key box, for a connection through `integration`.
+  let pasted = async (integration: string) =>
+    givenOf(form, fieldsOf(await known(c.graph.read, integration)))
   // The page is its space owner's alone (apps.ts `manage`).
   if (who.role != 'owner') {
     return no('Only this space’s owner can change its connections.')
@@ -876,7 +917,8 @@ export let connecting = async (
     if (act == 'own') {
       let integration = integrationOf(b)
       let i = await known(c.graph.read, integration)
-      if ((!i || keyed(i)) && !key) return no('Paste the key first.')
+      let given = await pasted(integration)
+      if ((!i || keyed(i)) && typeof given == 'string') return no(given)
       let made = await c.graph.apply(
         await need(c.graph.read, {
           owner: space.eid,
@@ -888,7 +930,7 @@ export let connecting = async (
       if (i && !keyed(i)) {
         return signingIn(req, env, c, space, who, own, undefined, app)
       }
-      await connect(c, own, { key })
+      await connect(c, own, given as Given)
       await ready(env, own)
       await attached(env, who, space, app, own)
       return { say: 'The app uses your own connection now.', no: false }
@@ -982,8 +1024,9 @@ export let connecting = async (
       return no('Each person connects their own, from the app.')
     }
     if (act == 'signin') return signingIn(req, env, c, space, who, eid)
-    if (!key) return no('Paste the key first.')
-    await connect(c, eid, { key })
+    let given = await pasted(integrationOf(b))
+    if (typeof given == 'string') return no(given)
+    await connect(c, eid, given)
     await rebound(env, apps)
     let [now] = await c.graph.read(`.entity.eid=${eid}&.${CONNECTION}&*`)
     if (now?.exception) {
@@ -1116,11 +1159,11 @@ export let own: Answer = async (
   }
   if (req.method != 'POST') return page()
   let form = await req.formData().catch(() => new FormData())
-  let key = String(form.get('key') ?? '').trim()
+  let given = givenOf(form, fieldsOf(i))
   if (keyed(i) && !vaulted(env)) {
     return page(no("Keys can't be saved here yet."))
   }
-  if (keyed(i) && !key) return page(no('Paste the key first.'))
+  if (keyed(i) && typeof given == 'string') return page(no(given))
   try {
     // Their own is read by the name the app's ask gives it.
     let [ask] = await c.graph.read(
@@ -1139,7 +1182,7 @@ export let own: Answer = async (
     )
     let eid = made.entity.eid
     if (!keyed(i)) return signingIn(req, env, c, space, who, eid, back)
-    await connect(c, eid, { key })
+    await connect(c, eid, given as Given)
     let [now] = await c.graph.read(`.entity.eid=${eid}&.${CONNECTION}&*`)
     return now?.exception
       ? page(

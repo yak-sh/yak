@@ -1,7 +1,7 @@
 // The kernel lends hosted execution and authenticates each callback against
 // the original ask. Private inputs contain app identity and credential sentinels.
 import { artifactStore, type Bucket, objectBlobs } from '@yaks/blob'
-import { resolve } from '@yaks/connections'
+import { KEY, resolve } from '@yaks/connections'
 import { type Grant, grants as authorized } from '@yaks/egress'
 import type { Comp } from '@yaks/graph'
 import { derivedEid } from '@yaks/graph/identity'
@@ -143,7 +143,7 @@ let providerAt = async (
         'Connect OpenRouter to this app before asking its models',
       )
     }
-    return { api: provider, key: link.sentinel }
+    return { api: provider, key: link.sentinels[KEY.name] }
   }
   return {
     api: 'openai',

@@ -26,7 +26,7 @@ import { records } from '@yaks/secrets'
 import type { VocabDoc } from '@yaks/vocab'
 import { said, unfit, workersAi } from '@yaks/workers-ai'
 import { artifactStore, objectBlobs } from '@yaks/blob'
-import { resolve } from '@yaks/connections'
+import { KEY, resolve } from '@yaks/connections'
 import { gateway as openai } from '@yaks/openai'
 import { responses as openrouter } from '@yaks/openrouter'
 import { appStore, type Directory, directoryOf } from './directory.ts'
@@ -280,7 +280,7 @@ let connected = (at: Stored) =>
           'Connect OpenRouter to this app before asking its models',
         )
       }
-      return link.sentinel
+      return link.sentinels[KEY.name]
     },
     fetch: (input, init) => {
       if (!at.env.STORE) {

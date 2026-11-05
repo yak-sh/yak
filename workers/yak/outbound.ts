@@ -27,7 +27,7 @@
 // a write to the directory nobody waits on (@yaks/egress `defer`), and a link
 // at its monthly cap is refused, saying whose limit it is and where the person
 // calling connects a key of their own.
-import { used, USES } from '@yaks/connections'
+import { namesOf, used, USES } from '@yaks/connections'
 import {
   type Caller,
   Capped,
@@ -150,8 +150,9 @@ let OURS =
   /^(cookie|host|origin|referer|content-length|connection|x-real-ip|true-client-ip|(x-yak|cf|x-forwarded|sec)-)/i
 
 // `./api/env`: the sentinel for each connected connection the app uses, by the
-// name its code reads it by, where this visitor may call out through it: a
-// shared one as its link allows, and their own where the app asks each person.
+// name its code reads it by (one for each field of several, `S3_REGION`),
+// where this visitor may call out through it: a shared one as its link
+// allows, and their own where the app asks each person.
 // A direct link's key is for a worker's code and never a page's. Both doors
 // are the app's to those who may read it, as its store doors are: a private
 // app's link opened to anyone is open to anyone it lets in.
@@ -162,9 +163,9 @@ export let envDoor: Answer = async ({ env, path, app, who, refuse }) => {
   for (let r of await used(ctxOf(env), app.eid, who.person)) {
     let u = (r.link[USES] ?? {}) as Comp
     if (u.direct || typeof u.binding != 'string') continue
-    if (u.each || callsOut(u.anyone == true, who.role)) {
-      out[u.binding] = r.sentinel
-    }
+    if (!u.each && !callsOut(u.anyone == true, who.role)) continue
+    let names = namesOf(u.binding, Object.keys(r.sentinels))
+    for (let [f, name] of Object.entries(names)) out[name] = r.sentinels[f]
   }
   return Response.json(out)
 }
