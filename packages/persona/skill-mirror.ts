@@ -365,17 +365,25 @@ let syncRepository = async (
       } else pending.set(d.path, null)
     }
     if (pending.size) await memoryStore.remember!(pending)
+    // Exports commit in a linked worktree and land by fast-forward, which
+    // leaves unrelated edits in the primary checkout alone. Only a skill file
+    // someone is changing there waits: committing or reverting it moves the
+    // stamp, and the next pass writes it.
+    let changing = new Set(
+      (await git(root, [
+        'status',
+        '--porcelain=v1',
+        '-z',
+        '--no-renames',
+        '--untracked-files=all',
+        '--',
+        '.claude/skills',
+      ])).split('\0').filter(Boolean).map((l) => `${root}/${l.slice(3)}`),
+    )
     let writes = decisions.filter((d) =>
-      d.act == 'write' && !blocked.has(d.path)
+      d.act == 'write' && !blocked.has(d.path) && !changing.has(d.path)
     )
     if (!writes.length) return out
-    if (
-      (await git(root, ['status', '--porcelain=v1', '--untracked-files=all']))
-        .trim()
-    ) {
-      fail('skills: primary checkout is dirty; graph exports not staged')
-      return out
-    }
     let head = (await git(root, ['rev-parse', 'HEAD'])).trim()
     let tree = opts.worktree ?? `${common}/skill-mirror`
     out.worktree = tree

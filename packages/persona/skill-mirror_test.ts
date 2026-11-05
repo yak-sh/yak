@@ -38,6 +38,7 @@ let checkout = async (link: string) => {
       references: {},
     },
   ] as Bundle[])
+  let git = { status: '' }
   let run: Run = (args) =>
     Promise.resolve({
       ok: true,
@@ -45,13 +46,15 @@ let checkout = async (link: string) => {
       err: '',
       out: args[0] == 'rev-parse'
         ? `false\n${root}\n${root}/.git\n${root}/.git\nrefs/heads/main\n`
+        : args[0] == 'status'
+        ? git.status
         : `100644 ${'0'.repeat(40)} 0\t${PATH}\0`,
     })
   let write = (text: string) => Deno.writeTextFile(`${root}/${PATH}`, text)
   await write(renderSkill(parts as never))
   let sync = () => syncSkills(g, root, memo, { run })
   assertEquals((await sync()).conflicts, [])
-  return { g, sync, write, file }
+  return { g, sync, write, file, root, git }
 }
 
 test('an edited skill imports through the locator it holds, whatever its id', async () => {
@@ -70,4 +73,19 @@ test('an edited skill imports through the locator it holds, whatever its id', as
   )
   let [skill] = await g.get(['skill'], ['content'])
   assertEquals((skill.content as { body: string }).body.trim(), 'Edited')
+})
+
+test('a skill file someone is changing waits, and is no failure', async () => {
+  let { g, sync, root, git } = await checkout(crypto.randomUUID())
+  let text = await Deno.readTextFile(`${root}/${PATH}`)
+  git.status = ` M ${PATH}\0`
+  await g.apply([{ entity: { eid: 'skill' }, content: { body: 'Newer\n' } }])
+  let { conflicts, failed, wrote, worktree } = await sync()
+  assertEquals({ conflicts, failed, wrote, worktree }, {
+    conflicts: [],
+    failed: [],
+    wrote: [],
+    worktree: undefined,
+  })
+  assertEquals(await Deno.readTextFile(`${root}/${PATH}`), text)
 })
