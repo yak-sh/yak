@@ -2,7 +2,7 @@ import { equal, test, throws } from '@yaks/testing'
 import { affected } from '@yaks/testing/choose'
 import { survey } from '@yaks/testing/deps'
 import { changes } from './test-changes.ts'
-import { prepare, RUNS } from './test.ts'
+import { prepare, READIES, RUNS } from './test.ts'
 
 // A module graph with a runner consumer and an unrelated example page.
 let helpers = [
@@ -113,7 +113,7 @@ test('dependency bookkeeping changes select their consumers without selecting un
 
 let readied = async (
   read: (file: string) => string[] | undefined,
-  reached = ['workers/yak/testing.ts'],
+  reached = READIES,
 ) => {
   let made: boolean[] = []
   let order: string[] = []

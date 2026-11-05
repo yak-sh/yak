@@ -307,12 +307,12 @@ export let RUNS = [
 ]
 
 /** What the Worker's `ready` makes (workers/yak/wrangler.ts) is read by these:
- * the OAuth provider out of its npm tree, and the in-memory platform's static
- * assets over the generated public/ files (testing.ts `assets`). Both are
- * gitignored, so a fresh worktree has neither until a run that reaches them
+ * the in-memory platform's static assets over the generated public/ files
+ * (binding-probe.ts `assets`, which testing.ts and the RAM probes use). They
+ * are gitignored, so a fresh worktree has none until a run that reaches them
  * makes them. */
 export let READIES = [
-  'workers/yak/testing.ts',
+  'workers/yak/binding-probe.ts',
 ]
 
 /// MADE.test('workers/yak/public/_client.js') -> true
