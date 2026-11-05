@@ -12,7 +12,7 @@ transaction.
 deno run -A jsr:@yaks/cli/install
 
 yak init                        # Start this machine's own graph, worked at by you.
-yak task new 'Buy the cake'     # Open that graph, run a tool, and exit.
+yak task new 'Add the sign-up page' # Open that graph, run a tool, and exit.
 yak task list
 yak serve                       # Run the graph's serve tool: HTTP.
 yak --config yak.json task list # The same, on the graph another config names.

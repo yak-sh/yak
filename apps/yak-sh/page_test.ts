@@ -71,20 +71,21 @@ test('the story types into the prompt and the drawing draws what it made', async
   await page.term.reach(steps, 4)
   await settle()
   let screen = root.querySelector('.Prompt_Screen')!.textContent!
-  match(screen, /\$ yak task new 'Throw the party'/)
+  match(screen, /\$ yak task new 'Add the sign-up page'/)
   match(screen, /agent ▸ task_update/)
   let sheet = root.querySelector('.Figure_Sheet')!.innerHTML
-  for (let id of ['U-1', 'T-2', 'T-3', 'N-4', 'C-5']) {
+  for (let id of ['U-1', 'T-2', 'T-3', 'T-4', 'N-5', 'C-6']) {
     match(sheet, new RegExp(`>${id}<`))
   }
-  match(sheet, />Buy the cake</)
+  match(sheet, />Build the checkout</)
   match(sheet, /data-name="requires"/)
+  match(sheet, /data-name="filed.assignee"/)
   match(sheet, /data-name="completed.by"/)
   let doors = root.querySelector('.Doors_Draw')!
   equal(doors.getAttribute('data-door'), 'agent')
   equal(
     [...doors.querySelectorAll('.N .id')].map((t) => t.textContent),
-    ['U-1', 'T-2 open', 'T-3 done', 'C-5'],
+    ['U-1', 'T-2 done', 'T-3 open', 'T-4 open', 'C-6'],
   )
   page.page.close()
 })
@@ -104,13 +105,15 @@ test('each thing the story draws leads back to the command whose write made it',
   let titled = (title: string) =>
     page.yak.rows().find((b) => (b.doc as { title?: string })?.title == title)!
       .entity.eid
-  let [cake, edge] = scriptOf(steps[1]).sh
+  let [account, checkout, edge] = scriptOf(steps[1]).sh
   equal([
-    madeBy(titled('Buy the cake')),
+    madeBy(titled('Sign up for payments')),
+    madeBy(drawn('[data-name="filed.assignee"]')),
+    madeBy(titled('Build the checkout')),
     madeBy(drawn('[data-name="requires"]')),
     madeBy(drawn('[data-name="comment.target"]')),
     madeBy(drawn('[data-name="completed.by"]')),
-  ], [cake, edge, 'comment_new', 'task_update'])
+  ], [account, account, checkout, edge, 'comment_new', 'task_update'])
   page.page.close()
 })
 
@@ -170,11 +173,13 @@ test('an entity clicked in the drawing opens in the editor, and a value changed 
   let { root, page, settle } = await open()
   await page.term.reach(steps, 3)
   await settle()
-  let cake = page.yak.rows().find((b) =>
-    (b.doc as { title?: string })?.title == 'Buy the cake'
+  let account = page.yak.rows().find((b) =>
+    (b.doc as { title?: string })?.title == 'Sign up for payments'
   )!
   fire(
-    root.querySelector(`.Figure_Sheet [data-eid="${cake.entity.eid}"] text`)!,
+    root.querySelector(
+      `.Figure_Sheet [data-eid="${account.entity.eid}"] text`,
+    )!,
     'click',
   )
   await settle()
@@ -186,13 +191,13 @@ test('an entity clicked in the drawing opens in the editor, and a value changed 
   let title = editor().querySelector(
     '[aria-label="doc.title"]',
   ) as unknown as HTMLInputElement
-  title.value = 'Buy Ada\'s "cake"'
+  title.value = 'Sign up for Ada\'s "payments"'
   fire(title as unknown as Element, 'input')
   fire(title as unknown as Element, 'blur')
   await settle()
   equal(
-    (page.yak.row(cake.entity.eid)!.doc as { title: string }).title,
-    `Buy Ada's "cake"`,
+    (page.yak.row(account.entity.eid)!.doc as { title: string }).title,
+    `Sign up for Ada's "payments"`,
   )
   match(screen(), /\$ graph apply T-3 /)
   let id = [...root.querySelectorAll('.Prompt_Id')].find((b) =>
@@ -209,7 +214,7 @@ test('an entity clicked in the drawing opens in the editor, and a value changed 
     await settle()
     return editor().querySelector('.Editor_Bar b')?.textContent
   }
-  equal(await opened(root.querySelector('#door-agent')!), 'N-4')
+  equal(await opened(root.querySelector('#door-agent')!), 'N-5')
   equal(await opened(root.querySelector('.Doors_Draw .N-task')!), 'T-2')
   equal(await opened(root.querySelector('.Source .R[data-row] .c')!), 'T-3')
   page.page.close()

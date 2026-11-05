@@ -28,11 +28,12 @@ export const SHEET = { width: 560, height: 620 }
 /** Where the story's entities sit, as fractions of the sheet, by the number
  * each is given as the story runs. */
 export const PLACES: Record<string, [number, number]> = {
-  'U-1': [.2, .11],
-  'T-2': [.64, .22],
-  'T-3': [.64, .55],
-  'N-4': [.2, .8],
-  'C-5': [.7, .86],
+  'U-1': [.2, .1],
+  'T-2': [.2, .45],
+  'T-3': [.66, .14],
+  'T-4': [.66, .45],
+  'N-5': [.2, .8],
+  'C-6': [.66, .8],
 }
 
 /** The first stage what a wider query adds is drawn in; a visitor's lines

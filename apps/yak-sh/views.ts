@@ -280,7 +280,7 @@ let Prompt: FunctionComponent<Ctx> = (ctx) => {
       h('input', {
         value: line,
         'aria-label': 'Type a yak command',
-        placeholder: "task new 'Book the band'",
+        placeholder: "task new 'Write the launch post'",
         autocomplete: 'off',
         spellcheck: false,
         onInput: (ev: Event) =>

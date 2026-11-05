@@ -39,6 +39,7 @@ import * as provenanceVocab from '@yaks/provenance/vocab'
 import * as canvasVocab from '@yaks/canvas/vocab'
 import * as canvasGraph from '@yaks/canvas/graph'
 import * as fileVocab from '@yaks/file/vocab'
+import * as projectVocab from '@yaks/project/vocab'
 
 type Facets = {
   name: string
@@ -72,6 +73,7 @@ export let PACKAGES: Facets[] = [
   { name: '@yaks/provenance', vocab: provenanceVocab },
   { name: '@yaks/canvas', vocab: canvasVocab, graph: canvasGraph },
   { name: '@yaks/file', vocab: fileVocab },
+  { name: '@yaks/project', vocab: projectVocab },
 ] as Facets[]
 
 // What `yak init` leaves unnumbered (@yaks/cli init.ts), so a page's first

@@ -13,6 +13,7 @@
     "@yaks/names": "platform",
     "@yaks/persona": "platform",
     "@yaks/preact": "platform",
+    "@yaks/project": "platform",
     "@yaks/provenance": "platform",
     "@yaks/query": "platform",
     "@yaks/ram": "platform",

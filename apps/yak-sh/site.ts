@@ -79,8 +79,8 @@ export let SECTIONS: Section[] = [
     view: 'Step',
     title: 'A task is an entity',
     body: [
-      'An entity is an id and the components it carries. `task new` writes one with `doc{title}` and `task{}`, and the graph gives it a number.',
-      sh("yak task new 'Throw the party'"),
+      "Say you're starting a business, and agents build the product. An entity is an id and the components it carries. `task new` writes one with `doc{title}` and `task{}`, and the graph gives it a number.",
+      sh("yak task new 'Add the sign-up page'"),
     ].join('\n\n'),
   },
   {
@@ -89,10 +89,11 @@ export let SECTIONS: Section[] = [
     view: 'Step',
     title: 'A link is an entity too',
     body: [
-      'An edge ties one entity to another. This one says the party requires the cake.',
+      'Some work only a person can do, such as signing up with a payment processor, so that task is assigned to you. An edge ties one entity to another: this one says the checkout requires it.',
       sh(
-        "yak task new 'Buy the cake'",
-        `yak graph apply --bundles '[{"edge": {"from": "T-2", "to": "T-3"}, "requires": {}}]'`,
+        "yak task new 'Sign up for payments' --assignee U-1",
+        "yak task new 'Build the checkout'",
+        `yak graph apply --bundles '[{"edge": {"from": "T-4", "to": "T-3"}, "requires": {}}]'`,
       ),
     ].join('\n\n'),
   },
@@ -102,10 +103,10 @@ export let SECTIONS: Section[] = [
     view: 'Step',
     title: 'Your agent calls the same tools',
     body: [
-      'Every `yak` command is also an MCP tool, served at `/mcp` by `yak serve`. An agent comments and finishes the cake, and its writes carry its own id.',
+      'Every `yak` command is also an MCP tool, served at `/mcp` by `yak serve`. An agent finishes the sign-up page and says so, and its writes carry its own id.',
       mcp(
-        'comment_new {"target": "T-3", "body": "Ordered a chocolate one for Saturday."}',
-        'task_update {"task": "T-3", "status": "done"}',
+        'comment_new {"target": "T-2", "body": "The sign-up page is up at /signup, with tests."}',
+        'task_update {"task": "T-2", "status": "done"}',
       ),
     ].join('\n\n'),
   },
@@ -115,7 +116,7 @@ export let SECTIONS: Section[] = [
     view: 'Step',
     title: 'One query finds them',
     body: [
-      'The same query grammar reads the graph in the terminal, over MCP and in the browser.',
+      "What's left is the payments sign-up only you can do, and the checkout that waits on it. The same query grammar reads the graph in the terminal, over MCP and in the browser.",
       sh("yak graph query '.task.status=open ?doc'"),
     ].join('\n\n'),
   },
@@ -194,7 +195,7 @@ export let SECTIONS: Section[] = [
       sh('yak init'),
       "It writes `~/.yak/yak.json`, with the graph's SQLite file beside it, and never replaces a config that is already there.",
       '### Add a task, and list them',
-      sh("yak task new 'Buy the cake'", 'yak task list'),
+      sh("yak task new 'Add the sign-up page'", 'yak task list'),
       '### Open it in a browser',
       sh('yak serve'),
       'Serves the web canvas, `/mcp` for agents and `/query` for programs at `http://127.0.0.1:8787`, on this machine only.',

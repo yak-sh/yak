@@ -37,13 +37,16 @@ test('the story runs every step in order, typed and called, and the graph holds 
   equal(t.lines().filter((l) => l.kind == 'fault'), [])
   let tasks = await y.graph.read('.task ?doc')
   equal(tasks.map((b) => [at(b, 'doc.title'), at(b, 'task.status')]), [
-    ['Throw the party', 'open'],
-    ['Buy the cake', 'done'],
+    ['Add the sign-up page', 'done'],
+    ['Sign up for payments', 'open'],
+    ['Build the checkout', 'open'],
   ])
+  let [account] = await y.graph.read('.doc.title="Sign up for payments" *')
+  equal(at(account, 'filed.assignee'), y.you)
   equal((await y.graph.read('.requires .edge')).length, 1)
   let [comment] = await y.graph.read('.comment *')
   equal(at(comment, 'created.by'), y.agent)
-  match(printed(t), /T-2 Throw the party open/)
+  match(printed(t), /T-3 Sign up for payments open/)
   equal(at(y.row(SELF), 'doc.title'), 'This page is a graph you can change')
 })
 
@@ -52,7 +55,7 @@ test('a step reached twice runs once, and steps reached at once run in order', a
   t.reach(steps, 2)
   t.reach(steps, 1)
   await t.reach(steps, 2)
-  equal((await y.graph.read('.task')).length, 2)
+  equal((await y.graph.read('.task')).length, 3)
 })
 
 test('a visitor types into the same prompt: help, a refusal, a write the page sees', async () => {

@@ -19,7 +19,7 @@ jsr.io and two more.
 ```sh
 deno run -A jsr:@yaks/cli/install
 yak init            # ~/.yak/yak.json and its graph, worked at by you
-yak task new 'Buy the cake'
+yak task new 'Add the sign-up page'
 yak task list
 yak serve           # the canvas, /mcp and /query on http://127.0.0.1:8787
 yak hooks install   # Claude Code sessions join the graph
