@@ -66,7 +66,7 @@ let fixture = async () => {
       },
     },
   } as Partial<Env>)
-  let { dir, space } = await seeded(p.env)
+  let { dir, space } = await seeded(p.env, 'public', p.dir)
   let ctx: Ctx = { env: p.env, dir, person: ADA }
   let run = (name: string, args: Record<string, unknown>) =>
     TOOLS.find((t) => t.name == name)!.run(ctx, args)

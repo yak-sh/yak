@@ -70,14 +70,7 @@ let scenario = async (
     CF_ACCOUNT: 'acct',
     CF_WORKERS_TOKEN: 'a-token',
     ...(compiler ? { ESBUILD } : {}),
-  } as Partial<Env>)
-  let assets = p.env.ASSETS
-  p.env.ASSETS = {
-    fetch: (req) =>
-      new URL(req.url).pathname == '/_compiler/packages.json'
-        ? Promise.resolve(Response.json(catalog))
-        : assets.fetch(req),
-  }
+  } as Partial<Env>, catalog)
   let { dir } = await seeded(p.env, 'public', p.dir)
   let ctx = { env: p.env, dir, person: ADA } as Ctx
   let tool = async (name: string, args: Record<string, unknown> = {}) =>

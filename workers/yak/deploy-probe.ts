@@ -1,12 +1,17 @@
 // A deployment's Store boundary accepts the app's empty declaration. Tests
 // about vocabulary or saved rows use directory-probe's app Stores instead.
 import { assertEquals } from '@std/assert'
+import type { Catalog } from '../../packages/esbuild/platform.ts'
 import type { Env } from './env.ts'
 import { operators } from './operator-service-probe.ts'
 import { platform as runtime } from './directory-rows-probe.ts'
 
-export let platform = (secret: string, vars: Partial<Env> = {}) =>
-  runtime(secret, {
+export let platform = (
+  secret: string,
+  vars: Partial<Env> = {},
+  catalog: Catalog = {},
+) => {
+  let scenario = runtime(secret, {
     BUILDER: operators,
     STORE: {
       idFromName: (name) => name,
@@ -47,3 +52,13 @@ export let platform = (secret: string, vars: Partial<Env> = {}) =>
     },
     ...vars,
   })
+
+  let assets = scenario.env.ASSETS
+  scenario.env.ASSETS = {
+    fetch: (req) =>
+      new URL(req.url).pathname == '/_compiler/packages.json'
+        ? Promise.resolve(Response.json(catalog))
+        : assets.fetch(req),
+  }
+  return scenario
+}
