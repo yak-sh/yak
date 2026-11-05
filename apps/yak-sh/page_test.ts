@@ -16,6 +16,7 @@ let open = async () => {
   let page = await start(root, {
     fetch: (path) => fetch(new URL(path, dir)),
     load: () => import("./views.ts"),
+    pace: { key: 0, pause: 0 },
   });
   let settle = async () => {
     await page.term.idle();
@@ -49,7 +50,7 @@ test("the story types into the prompt and the drawing draws what it made", async
   match(sheet, /data-name="requires"/);
   equal(
     root.querySelector(".Doors .is-open")?.className.includes("is-agent"),
-    false,
+    true,
   );
   page.page.close();
 });

@@ -131,11 +131,7 @@ let Story: FunctionComponent<Ctx & { steps: string[] }> = (ctx) => {
     steps.map((eid) =>
       text(yak.row(eid) ?? { entity: { eid } }, "doc", "body")
     );
-  let reach = (n: number) => {
-    term.reach(bodies(), n);
-    let q = scriptOf(bodies()[n - 1] ?? "").query;
-    if (q) ctx.figure.ask(q);
-  };
+  let reach = (n: number) => term.reach(bodies(), n);
   return h("section", { class: "Story" }, [
     h("div", { class: "Story_Steps" }, [
       ...steps.map((eid, i) =>
@@ -198,9 +194,9 @@ let Prompt: FunctionComponent<Ctx> = ({ term }) => {
   });
   return h("div", { class: "Prompt" }, [
     h("div", { class: "Prompt_Bar" }, [
-      h("i"),
-      h("i"),
-      h("i"),
+      h("i", null),
+      h("i", null),
+      h("i", null),
       h("span", null, "yak, in this tab"),
     ]),
     h("div", { class: "Prompt_Screen", ref: screen }, [
