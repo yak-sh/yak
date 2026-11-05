@@ -401,6 +401,8 @@ export let dependencies = (host: Host = system) => {
 export let { stale, installed, restored } = dependencies()
 
 if (platform.main(import.meta.url)) {
-  if (platform.args[0]) await restored(platform.args[0], dir, { mode: 'copy' })
+  let cache = platform.args[0] ?? platform.env.get('XDG_CACHE_HOME') ??
+    platform.env.get('HOME')?.concat('/.cache')
+  if (cache) await restored(cache, dir, { mode: 'copy' })
   else await installed()
 }

@@ -1,2 +1,5 @@
 #!/bin/sh
+# Rebase's temporary checkout is followed by post-rewrite at its final tree.
+[ -d "$(git rev-parse --git-path rebase-merge)" ] && exit 0
+[ -d "$(git rev-parse --git-path rebase-apply)" ] && exit 0
 exec "$(git rev-parse --show-toplevel)/bin/workspace-dependencies"
