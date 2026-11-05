@@ -281,6 +281,29 @@ test('a token that may not read analytics is a throw, not a zero', () => {
   )
 })
 
+// 2026-11-05T00:01Z: the meter's sweep asked Cloudflare's GraphQL and it
+// answered 200 with `errors: [{ message: "Internal server error" }]`.
+// Cloudflare failed on its own side, so the sweep is `Unavailable`, an outage
+// the next run reads past (wake.ts `reporting`); a token it refuses is ours.
+test("a 200 whose errors are Cloudflare's own failure is Unavailable, a refusal an Error", async () => {
+  let { env } = platform('meter-down', { CF_ANALYTICS_TOKEN: 'read-only' })
+  let was = globalThis.fetch
+  let got = []
+  try {
+    for (let message of ['Internal server error', 'not authorized']) {
+      globalThis.fetch = () =>
+        Promise.resolve(Response.json({ data: null, errors: [{ message }] }))
+      got.push(await sweep(env).catch((e: Error) => [e.name, e.message]))
+    }
+  } finally {
+    globalThis.fetch = was
+  }
+  assertEquals(got, [
+    ['Unavailable', 'analytics: Internal server error'],
+    ['Error', 'analytics: not authorized'],
+  ])
+})
+
 test('bytes read as a person says them', () => {
   assertEquals(size(0), '0 B')
   assertEquals(size(999), '999 B')

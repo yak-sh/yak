@@ -6,10 +6,12 @@
 // idempotent call (workers_api.ts `resent`): a failure that is Cloudflare's
 // own is sent again, and one that outlasts every resend is `Unavailable`. A
 // token that cannot read analytics answers 200 with `errors`, which `said`
-// turns into the same throw as a refused call.
+// turns into the same throw as a refused call; a 200 whose `errors` say
+// Cloudflare failed inside ("Internal server error") is `Unavailable`, an
+// outage the next run reads past (wake.ts `reporting`).
 import type { Env } from './env.ts'
 import { sleep } from '@yaks/fp'
-import { failure, resent } from './workers_api.ts'
+import { failure, resent, Unavailable } from './workers_api.ts'
 
 /** Cloudflare's API. */
 export let API = 'https://api.cloudflare.com/client/v4'
@@ -58,16 +60,26 @@ export let ask = async <T>(
   return await r.json() as Answer<T>
 }
 
-/** The answer's data, or the errors it carries as one throw.
+/** The answer's data, or the errors it carries as one throw: `Unavailable`
+ * when every error is Cloudflare's own failure inside, else an Error.
  *
  * ```ts
  * import { assertEquals, assertThrows } from '@std/assert'
+ * import { Unavailable } from './workers_api.ts'
  * assertEquals(said({ data: 1 }), 1)
  * assertThrows(() => said({ errors: [{ message: 'no' }] }), Error, 'analytics: no')
+ * let down = { errors: [{ message: 'Internal server error' }] }
+ * assertThrows(() => said(down), Unavailable, 'analytics: Internal server error')
  * ```
  */
 export let said = <T>(answer: Answer<T>): T | undefined => {
-  let errors = answer.errors?.map((e) => e.message).join('; ')
-  if (errors) throw new Error(`analytics: ${errors}`)
-  return answer.data
+  let messages = answer.errors?.map((e) => e.message ?? '') ?? []
+  if (!messages.length) return answer.data
+  let error = `analytics: ${messages.join('; ')}`
+  throw messages.every((m) => INTERNAL.test(m))
+    ? new Unavailable(error)
+    : new Error(error)
 }
+
+/** What Cloudflare's GraphQL says when it failed on its own side. */
+let INTERNAL = /internal server error/i
