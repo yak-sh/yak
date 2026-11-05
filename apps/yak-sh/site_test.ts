@@ -1,6 +1,7 @@
 // The page's graph, story and prompt, run in this process as the page runs
 // them in a tab.
 import { equal, match, test } from '@yaks/testing'
+import { parseHTML } from 'linkedom'
 import { yak } from './yak.ts'
 import { LIVE, term } from './term.ts'
 import { FILES, files, HERO, SECTIONS, seed, SELF, SITE } from './site.ts'
@@ -77,8 +78,29 @@ test('every file the app serves is a file read in the site, text with its conten
   let served = [...Deno.readDirSync(dir)].map((e) => e.name)
     .filter((n) => !n.endsWith('_test.ts')).sort()
   equal([...FILES].sort(), served)
-  let read = await files((path) => fetch(new URL(path, dir)))
+  let asked: string[] = []
+  let read = await files((path) => {
+    asked.push(path)
+    return fetch(new URL(path, dir))
+  })
   let index = read.find((b) => at(b, 'file.path') == 'index.html')
   equal(at(index, 'file.root'), SITE)
   match(String(at(index, 'content.body')), /<html/)
+  let og = read.find((b) => at(b, 'file.path') == 'og.png')
+  equal([asked.includes('og.png'), at(og, 'content')], [false, undefined])
+})
+
+test("a pasted link's preview is a file the app serves, on the page's paper", async () => {
+  let dir = new URL('./', import.meta.url)
+  let { document } = parseHTML(
+    await Deno.readTextFile(new URL('index.html', dir)),
+  )
+  let meta = (key: string) =>
+    document.querySelector(`meta[property="${key}"], meta[name="${key}"]`)
+      ?.getAttribute('content')
+  let css = await Deno.readTextFile(new URL('style.css', dir))
+  equal(meta('theme-color'), /--paper:\s*([^;]+);/.exec(css)?.[1])
+  let image = new URL(meta('og:image') ?? '').pathname.slice(1)
+  let icon = document.querySelector('link[rel="icon"]')?.getAttribute('href')
+  equal([FILES.includes(image), FILES.includes(icon ?? '')], [true, true])
 })
