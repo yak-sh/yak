@@ -8,7 +8,11 @@ import { answered } from './meta.ts'
 import { esc, type Picked, shell, spaceChoice } from './pages.ts'
 import { url } from './host.ts'
 import { chatPath, managePath } from './route.ts'
-import { keepFile, type Request as Intake } from './operator-channels.ts'
+import {
+  keepFile,
+  type Request as Intake,
+  rootOf,
+} from './operator-channels.ts'
 import { mailFrom } from './post.ts'
 import { parts } from './form.ts'
 import { gathered } from './bytes.ts'
@@ -304,10 +308,10 @@ export let operatorAnswer = async (
       }
     }
     let request = String(form.get('request') || crypto.randomUUID())
-    let task = String(form.get('task') ?? '')
+    // Whichever page it is sent from, it goes to the person's conversation.
     let received = await operatorDoor(env, space, who, 'receive', {
       say: String(form.get('say') ?? ''),
-      request: { channel: 'chat', files, ...(task ? { task } : {}) },
+      request: { channel: 'chat', files },
       options: { id: request },
       ...(form.has('draft')
         ? { draft: JSON.parse(String(form.get('draft'))) }
@@ -316,7 +320,7 @@ export let operatorAnswer = async (
     if (form.has('draft')) return Response.json(received)
     return new Response(null, {
       status: 303,
-      headers: { location: chatPath(space.slug, task || request) },
+      headers: { location: chatPath(space.slug, request) },
     })
   }
   if (q.has('live')) {
@@ -483,7 +487,7 @@ export let chatPage = async (
     workOf(env, space, who),
   ])
   let fresh = open == 'new'
-  let title = fresh ? 'New conversation' : talked.title || 'Not here'
+  let title = fresh ? `Message ${space.operator}` : talked.title || 'Not here'
   let named = space.title || space.slug
   let whose = `${space.operator}, ${named}’s Operator`
   let here = spaces.find((s) => s.slug == space.slug) ?? {
@@ -515,7 +519,9 @@ export let chatPage = async (
         (s) => s.operator ?? '',
       )
     }</div>
-<a class="Button Talk_New" href="${chatPath(space.slug)}">+ New conversation</a>
+<a class="Button Talk_New" href="${chatPath(space.slug)}">+ Message ${
+      esc(space.operator)
+    }</a>
 <nav class="Talk_Nav" aria-label="Your conversations" data-side>${
       sidebar(items, space.slug, [open, talked.task])
     }</nav>
@@ -535,7 +541,7 @@ export let chatPage = async (
         } for a change in the space’s apps, or send a document or a photo.</p></div>`
         : '<div class="Talk_Hello"><h2>This conversation is not here</h2><p>It may have been removed. Your other conversations are listed beside this one.</p></div>')
     }</div>
-${fresh || talked.title ? composer(at, talked.task) : ''}
+${fresh || talked.title ? composer(at) : ''}
 </div>
 </div>
 ${chatScript(at, who, space, open, talked.begun || open)}`,
@@ -548,11 +554,9 @@ ${chatScript(at, who, space, open, talked.begun || open)}`,
 // the files going with them along its top (a gathering drop part,
 // public/drop.js: picked, pasted or dropped anywhere on the box, each a
 // preview or a chip to take back), Send, and Stop while the Operator works.
-let composer = (at: string, task: string) =>
+let composer = (at: string) =>
   `<form class="Talk_Box" id="ask" method="post" action="${at}" enctype="multipart/form-data">
-<input type="hidden" name="request" value="${crypto.randomUUID()}"><input type="hidden" name="task" value="${
-    esc(task)
-  }">
+<input type="hidden" name="request" value="${crypto.randomUUID()}">
 <div class="Talk_Write Drop Drop-gather"><ul class="Drop_Chosen" aria-label="Files to send" aria-live="polite"></ul><textarea class="Field Talk_Field" name="say" placeholder="Message the Operator" aria-label="Message the Operator"></textarea>
 <div class="Talk_Tools"><label class="Talk_Attach" title="Add images or documents, or paste or drop them here">＋ Add files<input class="Drop_File" type="file" name="file" multiple data-count="${COUNT}" data-size="${SIZE}" data-reads="${READ}" data-unread="The Operator can't read this kind of file. It is kept with your message."></label><p class="Drop_Said" role="status"></p><button class="Button Button-quiet Talk_Stop" type="button" data-stop>Stop</button><button class="Button Talk_Send" type="submit">Send</button></div></div>
 <p class="Talk_Status" role="status" data-send-status></p></form>`
@@ -606,6 +610,7 @@ let chatScript = (
   `<script type="module">
 import { browserDrafts } from '/_draft.js'
 let open = ${JSON.stringify(open)}
+let root = ${JSON.stringify(rootOf(space.eid, who.person ?? ''))}
 let chats = ${JSON.stringify(chatPath(space.slug, ''))}
 let box = document.querySelector('[data-conversation]')
 let side = document.querySelector('[data-side]')
@@ -685,7 +690,6 @@ let read = async () => {
       if (got.html) redraw(box, got.html)
       side.innerHTML = got.side
       if (got.title) heading.textContent = got.title
-      if (got.task && form) form.elements.task.value = got.task
       follow(was)
     } while (again)
   })()
@@ -764,8 +768,9 @@ form?.addEventListener('submit', async (e) => {
     if (!saved) throw new Error('Your message could not be confirmed. Your words are kept; try sending again.')
     form.elements.file.value = ''; form.elements.file.dispatchEvent(new Event('change', { bubbles: true })); form.elements.request.value = crypto.randomUUID()
     status.textContent = ''
-    // A new conversation opens on its own page, where its work appears.
-    if (open == 'new') return void location.assign(chats + request)
+    // Words go to the person's conversation, which opens to show them when
+    // another page sent them.
+    if (thread()?.dataset.task != root) return void location.assign(chats + request)
     await read(); poll()
   } catch (error) { said(error) }
   finally { button.disabled = false }

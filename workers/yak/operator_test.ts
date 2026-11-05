@@ -337,7 +337,9 @@ let steerer = operating(
     }
   }),
 )
-given = await steerer.ask(roundsHeld, roundsSpace, { say: 'Post the meeting.' })
+given = await steerer.ask(roundsHeld, roundsSpace, {
+  say: 'Post the meeting.',
+}, { task: crypto.randomUUID() })
 let before = steering.length
 let { drain } = await import('./operator-store.ts')
 await drain(steered)
@@ -379,7 +381,9 @@ let halter = operating(
     }
   }),
 )
-begun = await halter.ask(roundsHeld, roundsSpace, { say: 'Look at every app.' })
+begun = await halter.ask(roundsHeld, roundsSpace, {
+  say: 'Look at every app.',
+}, { task: crypto.randomUUID() })
 await drain(halted)
 let afterStop = halting.length
 let stopRead = await readOperator(halted, begun.task)

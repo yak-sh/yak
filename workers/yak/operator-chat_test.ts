@@ -12,7 +12,8 @@ import { type Item, ModelError } from '@yaks/model'
 import { directoryOf } from './directory.ts'
 import { platform } from './testing.ts'
 import { operatorModel, operatorService } from './operator-testing.ts'
-import { receive } from './operator-channels.ts'
+import { receive, rootOf } from './operator-channels.ts'
+import { CONVERSATION } from './operator-host.ts'
 import { chatPage, operatorAnswer, operatorBody } from './operator-page.ts'
 import { NAMES, pick } from './operator-name.ts'
 import { chatPath, managed, managePath } from './route.ts'
@@ -93,8 +94,8 @@ let request = await receive(service.store, {
   channel: 'chat',
 }, 'Post a special meeting Thursday at 7 about the road millage.')
 await service.drain()
-let [asked] = await service.store.g.get([request])
-let task = (asked.operator_answer as { task: string }).task
+// Every message goes to the person's one conversation with the Operator.
+let task = rootOf(eid, person)
 
 let at = managePath('operator', 'clerk')
 let drawn = async (open: string) => {
@@ -111,10 +112,7 @@ let text = (s: string) =>
 
 test('a conversation opens in the chat app: its words, each step in plain words, and the reply', () => {
   assertEquals(page.code, 200)
-  assertEquals(
-    text('[data-title]'),
-    ['Post a special meeting Thursday at 7 about the road millage.'],
-  )
+  assertEquals(text('[data-title]'), [CONVERSATION])
   assertEquals(text('.Talk_You'), [
     'Post a special meeting Thursday at 7 about the road millage.',
   ])
@@ -166,10 +164,7 @@ test('the chat app lists every conversation beside the open one, and links to th
     byRequest.document.querySelector('[data-task]')?.getAttribute('data-task'),
     task,
   )
-  assertEquals(
-    byRequest.document.querySelector('[name=task]')?.getAttribute('value'),
-    task,
-  )
+  assertEquals(byRequest.document.querySelector('[name=task]'), null)
 })
 
 test('a new conversation asks what to do, and one that is gone says so', () => {
@@ -201,7 +196,10 @@ test("the chat app says whose Operator it is, and opens another space's", async 
       await (await chatPage(p.env, at, who, 'new', spaces)).text(),
     )
     let said = (s: string) => document.querySelector(s)?.textContent?.trim()
-    assertEquals(said('title'), `New conversation · ${at.operator} · yaks.app`)
+    assertEquals(
+      said('title'),
+      `Message ${at.operator} · ${at.operator} · yaks.app`,
+    )
     assertEquals(said('.Talk_Whose .Desk_Space b'), name)
     assertEquals(said('.Talk_Who'), `${at.operator}, ${name}’s Operator`)
     assertStringIncludes(
@@ -293,20 +291,21 @@ let broke = await receive(service.store, {
   channel: 'chat',
 }, BREAKS)
 await service.drain()
-let [failed] = await service.store.g.get([broke])
-let failedTask = (failed.operator_answer as { task: string }).task
-let crashed = (await drawn(failedTask)).document
-let reread = await (await answer(`${at}?talk=${failedTask}`))!.json()
+// The second message reaches the same conversation, opened by its request.
+let crashed = (await drawn(broke)).document
+let reread = await (await answer(`${at}?talk=${broke}`))!.json()
 test('a conversation the provider refused reads as ended: no Stop, nothing under way, plain words', () => {
   let thread = crashed.querySelector('[data-task]')!
+  assertEquals(thread.getAttribute('data-task'), task)
   assertEquals(thread.hasAttribute('data-pending'), false)
   assertEquals(crashed.querySelector('[data-now]')?.textContent, '')
+  let last = (s: string) => [...crashed.querySelectorAll(s)].at(-1)
   assertEquals(
-    crashed.querySelector('.Talk_Trouble > p')?.textContent,
+    last('.Talk_Trouble > p')?.textContent,
     'The Operator could not get an answer from its model, so it stopped before replying. Send your message again to try once more.',
   )
   // Its error shows only inside the closed Details.
-  let details = crashed.querySelector('.Talk_Trouble > details')!
+  let details = last('.Talk_Trouble > details')!
   assertEquals(details.hasAttribute('open'), false)
   assertStringIncludes(details.textContent!, 'invalid_request_error')
   details.remove()

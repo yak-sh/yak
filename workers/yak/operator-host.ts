@@ -2,7 +2,7 @@ import type { Bundle } from '@yaks/graph'
 import { draftEid } from '@yaks/draft'
 import type { Held } from './build-door.ts'
 import { type Operator, readOperator } from './operator.ts'
-import { receive, type Request } from './operator-channels.ts'
+import { receive, type Request, rootOf } from './operator-channels.ts'
 import type { operatorStore } from './operator-store.ts'
 import { transcript } from '@yaks/session'
 import { stepOf } from '@yaks/tools/title'
@@ -76,16 +76,35 @@ let entriesOf = async (store: Store, sessions: Bundle[]) =>
     .flat()
 
 // The helpers these sessions started, each with the call that started it and
-// its transcript.
-let helpersOf = async (store: Store, sessions: Bundle[]): Promise<Helper[]> => {
+// its own lines (a fork's, without the conversation it was forked from).
+// `calls`, when given, keeps only the helpers started by the calls drawn.
+let helpersOf = async (
+  store: Store,
+  sessions: Bundle[],
+  calls?: Set<string>,
+): Promise<Helper[]> => {
   let children = (await Promise.all(
     sessions.map((b) => store.g.read(`.spawned.parent=${b.entity.eid}`)),
-  )).flat()
+  )).flat().filter((b) => !calls || calls.has(String(comp(b, 'spawned')?.call)))
   return await Promise.all(children.map(async (b) => ({
     call: comp(b, 'spawned')?.call as string | undefined,
-    entries: await transcript(store.g, b.entity.eid),
+    entries: await linesOf(store, b.entity.eid, SHOWN),
   })))
 }
+
+// A session's own newest lines, oldest first: never the conversation a fork
+// was forked from, and never the whole of one that has run for weeks.
+let linesOf = async (store: Store, session: string, most: number) =>
+  (await store.g.read(
+    `.entry.session=${session}&.order=-entry.seq&.limit=${most}&*`,
+  )).reverse()
+// What a helper was started with: its first lines.
+let openingOf = (store: Store, session: string) =>
+  store.g.read(`.entry.session=${session}&.order=entry.seq&.limit=3&*`)
+// The newest lines a conversation draws: a long one is read from its end.
+let SHOWN = 300
+// The newest lines that say what a session is doing, and what a step changed.
+let TAIL = 60
 
 // The tool offers these transcripts' asks name, by their sha.
 let offersOf = async (store: Store, entries: Bundle[]): Promise<Offers> => {
@@ -105,8 +124,13 @@ let offersOf = async (store: Store, entries: Bundle[]): Promise<Offers> => {
 }
 
 // What a conversation draws beside its sessions' transcripts.
-let seenOf = async (store: Store, sessions: Bundle[], entries: Bundle[]) => {
-  let helpers = await helpersOf(store, sessions)
+let seenOf = async (
+  store: Store,
+  sessions: Bundle[],
+  entries: Bundle[],
+  calls?: Set<string>,
+) => {
+  let helpers = await helpersOf(store, sessions, calls)
   return {
     helpers,
     offers: await offersOf(store, [
@@ -122,16 +146,52 @@ let holding = async (store: Store, session: string) => {
   return String(comp(link, 'edge')?.from ?? '')
 }
 
-let REQUESTS =
-  '.operator_request ?operator_answer ?doc ?delivered ?failed ?bounced .order=-created.at .limit=100'
+let REQUESTS = '.operator_request ?doc ?failed .order=-created.at .limit=100'
 
-// The task a request was taken up by: the one its answer names, or the one
-// holding the session it started.
+/** Requests with the newest answer each was given, and whether that answer
+ * reached them, as one row each: an answer is its own row
+ * (`operator_answer{request}`), or, from before, kept on its request. */
+export let answering = async (store: Store, requests: Bundle[]) => {
+  if (!requests.length) return requests
+  let answers = await store.g.read(
+    `.operator_answer.request=${
+      requests.map((r) => r.entity.eid).join(',')
+    } ?delivered ?bounced .order=created.at`,
+  )
+  let newest = new Map(
+    answers.map((a) => [String(comp(a, 'operator_answer')!.request), a]),
+  )
+  let kept = await store.g.get(
+    requests.filter((r) => !newest.has(r.entity.eid)).map((r) => r.entity.eid),
+  )
+  let own = new Map(kept.filter(Boolean).map((b) => [b.entity.eid, b]))
+  return requests.map((r) => {
+    let a = newest.get(r.entity.eid) ?? own.get(r.entity.eid)
+    return a?.operator_answer
+      ? {
+        ...r,
+        operator_answer: a.operator_answer,
+        ...a.delivered ? { delivered: a.delivered } : {},
+        ...a.bounced ? { bounced: a.bounced } : {},
+      }
+      : r
+  })
+}
+let requested = async (store: Store, query = REQUESTS) =>
+  answering(store, await store.g.read(query))
+
+// What the chat app opens a session by: the task holding it, or the session
+// itself when it is a person's conversation or a helper of one.
+let keyOf = async (store: Store, session: string) =>
+  await holding(store, session) || session
+
+// The conversation a request was taken up by: the task its answer names, or
+// the task or conversation holding the session it went to.
 let taskOf = async (store: Store, request: Bundle) => {
   let named = comp(request, 'operator_answer')?.task
   if (named) return String(named)
   let session = comp(request, 'operator_request')?.session
-  return session ? await holding(store, String(session)) : ''
+  return session ? await keyOf(store, String(session)) : ''
 }
 
 // A request no task has taken yet, named by its first line.
@@ -144,15 +204,36 @@ let taken = (requests: Bundle[]) =>
     !comp(r, 'operator_request')?.session && !comp(r, 'operator_answer')?.task
   )
 
+// What a helper was asked, in a line: the words it was started with.
+let askedOf = (entries: Bundle[]) =>
+  String(
+    comp(entries.find((b) => !b.prompt && b.content), 'content')?.body ?? '',
+  ).split('\n')[0].slice(0, 80) || 'A piece of work'
+
+/** What the chat app calls a person's conversation with the Operator. */
+export let CONVERSATION = 'Conversation'
+
+let busy = (state: string) =>
+  state == 'Working on it' || state == 'Waiting to start'
+
 /**
- * The Operator's work, newest first, as its conversations are listed
- * (operator-view.ts `worked`, `sidebar`): each task in the words its newest session says of it, and the
- * requests no session has taken yet.
+ * The Operator's work for `person`, as its conversations are listed
+ * (operator-view.ts `worked`, `sidebar`): their conversation first, then,
+ * newest first, the pieces of work it started, the requests no session has
+ * taken yet, the tasks it worked on before a person had one conversation,
+ * and the breaks it took up itself.
  */
-export let workOf = async (store: Store): Promise<Worked[]> => {
-  let [tasks, requests] = await Promise.all([
+export let workOf = async (
+  store: Store,
+  space = '',
+  person = '',
+): Promise<Worked[]> => {
+  let root = rootOf(space, person)
+  let [tasks, requests, [conversation], helpers] = await Promise.all([
     store.g.read('.task ?doc .order=-created.at .limit=50'),
-    store.g.read(REQUESTS),
+    requested(store),
+    store.g.get([root]),
+    store.g.read(`.spawned.parent=${root} .order=-created.at .limit=50`),
   ])
   let drawn = await Promise.all(tasks.map(async (task) => {
     let entries = await entriesOf(
@@ -165,7 +246,18 @@ export let workOf = async (store: Store): Promise<Worked[]> => {
       title: String(comp(task, 'doc')?.title ?? 'A request'),
       state,
       at: String(comp(task, 'updated')?.at ?? comp(task, 'created')?.at ?? ''),
-      busy: state == 'Working on it' || state == 'Waiting to start',
+      busy: busy(state),
+    }
+  }))
+  let work = await Promise.all(helpers.map(async (helper) => {
+    let eid = helper.entity.eid
+    let state = stateOf(await linesOf(store, eid, TAIL), true)
+    return {
+      open: eid,
+      title: askedOf(await openingOf(store, eid)),
+      state,
+      at: String(comp(helper, 'created')?.at ?? ''),
+      busy: busy(state),
     }
   }))
   let waiting = taken(requests).map((r) => {
@@ -178,29 +270,92 @@ export let workOf = async (store: Store): Promise<Worked[]> => {
       busy: !failed,
     }
   })
-  return [...waiting, ...drawn]
+  let talking = []
+  if (conversation?.session) {
+    let entries = await linesOf(store, root, TAIL)
+    let state = stateOf(entries, false)
+    talking.push({
+      open: root,
+      title: CONVERSATION,
+      state,
+      at: String(comp(entries.at(-1), 'created')?.at ?? ''),
+      busy: busy(state),
+    })
+  }
+  return [
+    ...talking,
+    ...[...waiting, ...work, ...drawn].sort((a, b) => b.at.localeCompare(a.at)),
+  ]
 }
 
+// The files sent with each request, to link beside the conversation.
+let filesOf = (asked: Bundle[]) =>
+  asked.flatMap((r) =>
+    ((comp(r, 'operator_request')?.files ?? []) as { name: string }[])
+      .map((f, index) => ({ request: r.entity.eid, name: f.name, index }))
+  )
+
 /**
- * One conversation in the Operator's chat app, opened by its task or by a
- * request: its title and the task drawn with its sessions' transcripts
- * (operator-view.ts `talk`), or the request alone while no session has taken
- * it, for the page to draw as it always has. `begun` is the request it began
- * with, the same before and after a task takes it up (the task, for one no
- * request began).
+ * One conversation in the Operator's chat app, opened by a person's
+ * conversation, a piece of work it started, a task, or a request: its title
+ * and its lines drawn (operator-view.ts `talk`), or the request alone while
+ * no session has taken it, for the page to draw as it always has. `task` is
+ * what the page keys the conversation by (a task, or the session), and
+ * `begun` the request it began with, the same before and after a session
+ * takes it up (the key, for one no request began).
  */
 export let conversationOf = async (
   store: Store,
   at: string,
   open: string,
   named: Named = nameless,
-) => {
+): Promise<{
+  task: string
+  begun: string
+  title: string
+  html: string
+  waiting: Bundle[]
+}> => {
   let [row] = await store.g.get([open])
+  if (row?.session) {
+    let helper = !!row.spawned
+    let entries = await linesOf(store, open, SHOWN)
+    let asked = helper ? [] : await requested(
+      store,
+      `.operator_request.session=${open} ?doc .order=created.at .limit=100`,
+    )
+    let calls = new Set(
+      entries.flatMap((b) => b.call ? [b.entity.eid] : []),
+    )
+    return {
+      task: open,
+      begun: open,
+      title: helper ? askedOf(await openingOf(store, open)) : CONVERSATION,
+      html: talk(
+        { entity: { eid: open } } as Bundle,
+        entries,
+        await namesOf(store, entries, named),
+        filesOf(asked),
+        at,
+        await seenOf(store, [row], entries, calls),
+      ),
+      waiting: [],
+    }
+  }
   let task = row?.task
     ? open
     : row?.operator_request
-    ? await taskOf(store, row)
+    ? await taskOf(store, (await answering(store, [row]))[0])
     : ''
+  if (task && task != open) {
+    let [held] = await store.g.get([task])
+    if (held?.session) {
+      return {
+        ...await conversationOf(store, at, task, named),
+        begun: open,
+      }
+    }
+  }
   let [held] = task ? await store.g.get([task]) : []
   if (!held?.task) {
     return row?.operator_request
@@ -209,11 +364,11 @@ export let conversationOf = async (
         begun: open,
         title: firstLine(row),
         html: '',
-        waiting: [row],
+        waiting: await answering(store, [row]),
       }
       : { task: '', begun: '', title: '', html: '', waiting: [] }
   }
-  let requests = await store.g.read(REQUESTS)
+  let requests = await requested(store)
   let sessions = await sessionsOf(store, task)
   let ids = new Set(sessions.map((b) => b.entity.eid))
   let entries = await entriesOf(store, sessions)
@@ -226,10 +381,6 @@ export let conversationOf = async (
       String(comp(b, 'created')?.at ?? ''),
     )
   )
-  let files = asked.flatMap((r) =>
-    ((comp(r, 'operator_request')?.files ?? []) as { name: string }[])
-      .map((f, index) => ({ request: r.entity.eid, name: f.name, index }))
-  )
   return {
     task,
     begun: asked[0]?.entity.eid ?? task,
@@ -238,7 +389,7 @@ export let conversationOf = async (
       held,
       entries,
       await namesOf(store, entries, named),
-      files,
+      filesOf(asked),
       at,
       await seenOf(store, sessions, entries),
     ),
@@ -247,9 +398,10 @@ export let conversationOf = async (
 }
 
 /**
- * What a session's step changed, as its task's frame for the page's socket:
- * the lines past `from` (by `entry.seq`, the last 30 when unknown), and the
- * newest seq it covers, to start the next from.
+ * What a session's step changed, as its conversation's frame for the page's
+ * socket: the lines past `from` (by `entry.seq`, the last 30 when unknown),
+ * and the newest seq it covers, to start the next from. A helper's step
+ * shows in the conversation that started it.
  */
 export let frameOf = async (
   store: Store,
@@ -257,17 +409,25 @@ export let frameOf = async (
   from?: number,
   named: Named = nameless,
 ) => {
-  let entries = await transcript(store.g, session)
+  let [row] = await store.g.get([session])
+  if (!row?.session) return null
+  // A task's session is short; a person's conversation and its helpers are
+  // read from their own newest lines.
+  let read = async (session: string) =>
+    await holding(store, session)
+      ? await transcript(store.g, session)
+      : await linesOf(store, session, TAIL)
+  let entries = await read(session)
   let seq = Math.max(
     0,
     ...entries.map((b) => Number(comp(b, 'entry')?.seq ?? 0)),
   )
-  let task = await holding(store, session)
-  if (task) {
+  let parent = String(comp(row, 'spawned')?.parent ?? '')
+  if (!parent) {
     return {
       seq,
       frame: frame(
-        task,
+        await keyOf(store, session),
         entries,
         await namesOf(store, entries, named),
         from ?? seq - 30,
@@ -275,16 +435,11 @@ export let frameOf = async (
       ),
     }
   }
-  // A helper's step shows in the conversation of the Operator that started it.
-  let [row] = await store.g.get([session])
-  let parent = String(comp(row, 'spawned')?.parent ?? '')
-  task = parent && await holding(store, parent)
-  if (!task) return null
-  let started = await transcript(store.g, parent)
+  let started = await read(parent)
   return {
     seq,
     frame: helperFrame(
-      task,
+      await keyOf(store, parent),
       entries,
       started,
       await namesOf(store, started, named),
@@ -335,8 +490,7 @@ export let operatorFrames = (
       if (!pages.length) return
       let task = tasks.get(session)
       if (!task) {
-        task = await holding(store, session)
-        if (!task) return
+        task = await keyOf(store, session)
         tasks.set(session, task)
       }
       send(pages, { operator: { task, typing: text } })
@@ -401,22 +555,6 @@ export let operatorRequest = async (
       space: spaceId,
       administrative: access.administrative === true,
     }
-    if (typeof args.in_reply_to == 'string') {
-      let message = args.in_reply_to.replace(/[<>]/g, '')
-      let previous = await store.g.read(
-        `(.operator_answer.message_id=${
-          JSON.stringify(message)
-        }|.mail.message_id=${
-          JSON.stringify(message)
-        }) ?operator_request ?operator_answer`,
-      )
-      let same = previous.find((r) =>
-        (r.operator_request as { person?: string })?.person == person
-      )
-      if (same) {
-        intake.task = (same.operator_answer as { task?: string })?.task
-      }
-    }
     let options = args.options as Parameters<typeof receive>[3]
     if (Array.isArray(args.draft)) {
       options = { ...options, also: drafts(args.draft as Bundle[], person) }
@@ -438,17 +576,20 @@ export let operatorRequest = async (
   if (path == '/operator/request') {
     let [row] = await store.g.get([String(args.id ?? '')])
     return row?.operator_request
-      ? Response.json(row)
+      ? Response.json((await answering(store, [row]))[0])
       : Response.json({ message: 'That request is missing.' }, { status: 404 })
   }
   if (path == '/operator/requests') {
     let ids = Array.isArray(args.ids) ? args.ids.map(String) : []
     return Response.json(
-      (await store.g.get(ids)).filter((row) => row?.operator_request),
+      await answering(
+        store,
+        (await store.g.get(ids)).filter((row) => row?.operator_request),
+      ),
     )
   }
   if (path == '/operator/messages') {
-    let rows = (await store.g.read(REQUESTS)).reverse()
+    let rows = (await requested(store)).reverse()
     let failed = await store.g.read('.effect.state=failed')
     return Response.json(rows.map((row) => {
       let run = failed.find((b) =>
@@ -462,7 +603,9 @@ export let operatorRequest = async (
         : row
     }))
   }
-  if (path == '/operator/work') return Response.json(await workOf(store))
+  if (path == '/operator/work') {
+    return Response.json(await workOf(store, spaceId, person))
+  }
   if (path == '/operator/conversation') {
     return Response.json(
       await conversationOf(

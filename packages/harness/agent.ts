@@ -190,7 +190,9 @@ export type Opts<H extends Host = Host> = ChildLimits & {
   named?: () => Tool[]
   streaming?: boolean
   checkpointMs?: number
-  /** The system prompt every ask carries, or what reads each transcript's */
+  /** The system prompt every ask carries, or what reads each transcript's:
+   * read again for every ask, so what it reads (a name, the apps in reach)
+   * is current in a transcript that runs for weeks. */
   instructions?: string | ((session: Eid) => Promise<string>)
   /** Maximum tool-result code points before model-facing handle projection. */
   outputLimit?: number
@@ -515,12 +517,9 @@ export let lend = <H extends Host>(opts: Opts<H>): Runner => {
       ? opts.instructions
       : undefined,
     resolveInstructions: async (inherited, session) =>
-      inheritedInstructions(
-        inherited,
-        typeof opts.instructions == 'function'
-          ? await opts.instructions(session)
-          : opts.instructions,
-      ),
+      typeof opts.instructions == 'function'
+        ? await opts.instructions(session)
+        : inheritedInstructions(inherited, opts.instructions),
     inputText: async (transcript) =>
       inputText(transcript, await senders(h.g, transcript)),
     contextItems: opts.context,

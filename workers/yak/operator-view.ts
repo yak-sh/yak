@@ -501,7 +501,7 @@ let meta = (w: Worked) =>
 export let worked = (items: Worked[], space: string) =>
   `<section class="Card"><header class="Card_Head"><h2 class="Card_Title">Conversations</h2><div class="Card_Actions"><a class="Button" href="${
     esc(chatPath(space))
-  }">New conversation</a></div></header>${
+  }">Message the Operator</a></div></header>${
     items.length
       ? `<ul class="Rows">${
         items.map((w) =>
@@ -514,7 +514,7 @@ export let worked = (items: Worked[], space: string) =>
           }</span></div></li>`
         ).join('')
       }</ul>`
-      : '<p>Nothing yet. Each conversation with the Operator appears here.</p>'
+      : '<p>Nothing yet. Your conversation with the Operator, and the work it does, appear here.</p>'
   }</section>`
 
 /** The chat app's list of conversations, newest first, the one open
@@ -530,4 +530,4 @@ export let sidebar = (items: Worked[], space: string, current: string[]) =>
         }</span><span class="Talk_Meta">${meta(w)}</span></a></li>`
       ).join('')
     }</ul>`
-    : '<p class="Talk_None">Your conversations appear here.</p>'
+    : '<p class="Talk_None">Your conversation and the work it starts appear here.</p>'

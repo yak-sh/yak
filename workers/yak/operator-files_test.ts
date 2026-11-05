@@ -108,10 +108,8 @@ test('a picture and a PDF sent from the page reach Claude as they are', () => {
   )
 })
 
-let task = ((await service.store.g.get([request]))[0]
-  .operator_answer as { task: string }).task
 let { document } = parseHTML(
-  await (await chatPage(p.env, space, who, task)).text(),
+  await (await chatPage(p.env, space, who, request)).text(),
 )
 test('the files show in the message they were sent with, a picture as itself', () => {
   let message = document.querySelector('.Talk_Said > div:has(.Talk_You)')!
@@ -134,7 +132,7 @@ test('the files show in the message they were sent with, a picture as itself', (
 })
 
 let opened = (await operatorAnswer(
-  new Request(`${at}/${task}?attachment=${request}&file=0`),
+  new Request(`${at}/${request}?attachment=${request}&file=0`),
   p.env,
   space,
   who,

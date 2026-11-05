@@ -1,7 +1,6 @@
 import { test } from '@yaks/testing'
 import { assertEquals, assertStringIncludes } from '@std/assert'
 import { parseHTML } from 'linkedom'
-import { derivedEid } from '@yaks/graph/identity'
 import type { Item, Model, Request } from '@yaks/model'
 import { directoryOf } from './directory.ts'
 import { declared } from './directory-fixture.ts'
@@ -22,7 +21,7 @@ import {
   receive,
 } from './operator-channels.ts'
 import { operating, type Operator, operatorContext } from './operator.ts'
-import { operatorRequest } from './operator-host.ts'
+import { answering, operatorRequest } from './operator-host.ts'
 import { handed } from './operator-texts.ts'
 import { drain, type operatorStore as Stored } from './operator-store.ts'
 
@@ -172,8 +171,10 @@ let id = await receive(f.store, {
   channel: 'chat',
 }, 'Post a special meeting Thursday at 7 about the road millage.')
 await drain(f.store)
-let [result] = await f.store.g.get([id])
-let task = (result.operator_answer as { task: string }).task
+// A request with the newest answer it was given, as the page reads it.
+let answerOf = async (store: ReturnType<typeof Stored>, id: string) =>
+  (await answering(store, await store.g.get([id])))[0]
+let result = await answerOf(f.store, id)
 
 let { reaching } = await import('./agent.ts')
 let { inReach } = await import('./declared.ts')
@@ -188,12 +189,9 @@ let duplicate = await receive(
   { id },
 )
 await drain(f.store)
-let session = derivedEid('operator-session|' + id)
 // The intake of the same request again, as a retried effect gives it.
-await operator.ask(f.held, f.space, { say: 'Post the notice.', task }, {
+await operator.ask(f.held, f.space, { say: 'Post the notice.' }, {
   request: id,
-  session,
-  task,
 })
 await drain(f.store)
 let afterResume = asks.length
@@ -211,7 +209,7 @@ await f.store.g.apply([{
 let reopened = operatorMemory(f.raw)
 handleChannels(operatorOf(reopened, f.env, model), f.env)
 await drain(reopened)
-let [recovered] = await reopened.g.get([pending])
+let recovered = await answerOf(reopened, pending)
 
 test('chat reaches the scoped operator, changes app rows, answers and charges the space', () => {
   assertEquals(sent, ['The road millage notice is posted.'])
@@ -558,7 +556,7 @@ let original = new TextDecoder().decode(
   await (await f.env.BLOBS.get(file.key))!.arrayBuffer(),
 )
 let attachmentAnswer =
-  (await attachmentStore.g.get([attachmentId]))[0].operator_answer
+  (await answerOf(attachmentStore, attachmentId)).operator_answer
 test('attachment contents reach the model and the original is retained for publishing', () => {
   assertStringIncludes(
     JSON.stringify(attachmentRequests[0].items),
@@ -654,7 +652,11 @@ let heard = operatorPage.flatMap((frame) =>
 )
 test('a page watching the Operator hears each step as the lines it changed, and a build page hears none', () => {
   assertEquals(heard.length > 1, true)
-  assertStringIncludes(heard[0].rows[0].html, 'Schedule the special meeting.')
+  // The letter is the newest words of the person's one conversation.
+  assertStringIncludes(
+    heard[0].rows.map((r) => r.html).join(''),
+    'Schedule the special meeting.',
+  )
   assertEquals(heard[0].now, 'Thinking…')
   assertStringIncludes(
     heard.flatMap((h) => h.rows.map((r) => r.html)).join(''),
@@ -675,14 +677,13 @@ let messages = await operatorDoor(
   'messages',
   {},
 ) as import('@yaks/graph').Bundle[]
-let emailTask =
-  (messages.find((row) => row.entity.eid == firstEmail)!.operator_answer as {
-    task: string
-  }).task
-let followedTask =
-  (messages.find((row) => row.entity.eid == secondEmail)!.operator_answer as {
-    task: string
-  }).task
+// Both letters reach the person's one conversation with the Operator.
+let sessionOf = (id: string) =>
+  (messages.find((row) => row.entity.eid == id)!.operator_request as {
+    session: string
+  }).session
+let emailTask = sessionOf(firstEmail)
+let followedTask = sessionOf(secondEmail)
 let emailMeter = (await f.dir.at(f.space.eid))!.meter!.emails
 let rejected: unknown
 try {
@@ -761,12 +762,10 @@ attachmentModel = (req) => {
     cost: 0,
   })
 }
-let attachmentTask = (attachmentAnswer as { task: string }).task
 await receive(attachmentStore, {
   space: f.space.eid,
   person: f.person,
   channel: 'chat',
-  task: attachmentTask,
 }, 'Post the original minutes in notices.')
 await drain(attachmentStore)
 let originalRows = await graph.read('.attachment ?created *')
@@ -835,7 +834,7 @@ let mediaId = await receive(media, {
   files: [photo, pdf],
 }, 'Read the attached minutes.')
 await drain(media)
-let mediaAnswer = (await media.g.get([mediaId]))[0].operator_answer
+let mediaAnswer = (await answerOf(media, mediaId)).operator_answer
 let afterMedia = (await f.dir.at(f.space.eid))!.meter!.models
 test('PDF pages and a JPEG photo are read through metered extraction before asking the operator', () => {
   assertStringIncludes(

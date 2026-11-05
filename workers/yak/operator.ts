@@ -38,7 +38,7 @@ import { caught, defect } from './defects.ts'
 import { instructions } from './guide.ts'
 import { standing } from './standing.ts'
 import { drain, type operatorStore } from './operator-store.ts'
-import { asIs, type File, SHOWN } from './operator-channels.ts'
+import { asIs, type File, rootOf, SHOWN } from './operator-channels.ts'
 import { textSend } from './operator-texts.ts'
 
 type Store = ReturnType<typeof operatorStore>
@@ -89,7 +89,15 @@ export let operatorContext = async (
 
 /** Who the Operator is, as its instructions open: its name and whose it is. */
 export let introduced = (space: Space) =>
-  `You are ${space.operator}, the Operator of ${space.slug}: introduce yourself as ${space.operator}, and answer to it. Don't sign your replies; a letter is signed for you.`
+  `You are ${space.operator}, the Operator of ${space.slug}, and answer to that name. Don't sign your replies; a letter or a text is signed for you.`
+
+// How the Operator works in that conversation, said beside the code that
+// makes it so: a fork shares the conversation's instructions and tools, so its
+// request starts with the conversation's cached prefix.
+let CONVERSATION =
+  ' You talk with this person in one conversation that lasts for weeks: every message they send you, in the chat app, by email or by text, arrives here, marked with how it came when not by chat. Keep the conversation itself light. For anything that needs a tool (reading or changing apps, rows, files or code), use fork with a short prompt saying what to do, then reply at once in a sentence saying what you are doing, and nothing more; your reply goes to them the way their message came. When a fork comes back, tell them in a few lines what was done or what is needed from them. Answer without a fork only what needs no tool. When you were started for a piece of work (a fork, or a helper), do the work with your tools, then end with a short report for the conversation to pass on.'
+let TASKED =
+  " Carry out this task using the space's existing apps and rows, then explain what changed and the next step. Your conversation and tools are recorded on its task. Use task_update with status done on this task only when the requested work is finished. Leave it open when asking a question, reporting a limit, or explaining unfinished work."
 
 // What the Operator is told of the spaces it reaches beyond its own.
 let told = (
@@ -307,6 +315,45 @@ let working = async (env: Env, store: Store, session: string) => {
 
 let ENDED = ['settled', 'failed', 'stopped']
 
+// The session a helper works for, up its `spawned` links: a person's
+// conversation, or a task's session.
+let topOf = async (store: Store, session: string): Promise<string> => {
+  let [row] = await store.g.get([session])
+  let parent = comp(row, 'spawned')?.parent
+  return parent ? topOf(store, String(parent)) : session
+}
+// The task a session (or the session its helper works for) carries on, or ''
+// for a person's conversation.
+let taskOf = async (store: Store, session: string) => {
+  let [link] = await store.g.read(
+    `.contains .edge.to=${await topOf(store, session)}`,
+  )
+  return String(comp(link, 'edge')?.from ?? '')
+}
+
+// The inputs a turn ending at `end` answers: each line given since the reply
+// before it. A helper's result stands for the inputs of the turn that started
+// it, so its answer goes where they came from.
+// `calls` names the call that started each child (`spawned{parent, call}`).
+export let origins = (
+  entries: Bundle[],
+  end: number,
+  calls: Map<string, string>,
+): Bundle[] => {
+  let from = entries.findLastIndex((b, i) =>
+    i < end && kindOf(b) == 'output' && !!b.content
+  )
+  return entries.slice(from + 1, end).filter((b) => kindOf(b) == 'input')
+    .flatMap((b) => {
+      let child = comp(b, 'delivery')?.child
+      if (!child) return [b]
+      let call = entries.findIndex((c) =>
+        c.entity.eid == calls.get(String(child))
+      )
+      return call < 0 ? [] : origins(entries, call, calls)
+    })
+}
+
 // What a model's refusal tells the person, by its code (@yaks/model
 // `ModelError`); any other is a refused request. A ceiling (@yaks/session
 // `LIMIT`) is said in its own sentence. yaks.app's own credit with the
@@ -504,25 +551,64 @@ export let operating = (
       await g.apply(rows, { trusted: true })
     })()
 
-  // The session's answer, once it ends: its newest reply as a comment on its
-  // task, and as the answer of each request it was given that has none yet,
-  // which its channel then delivers (operator_deliver).
+  // The session's answer, once its turn ends: an answer to each request the
+  // turn answers, which its channel delivers (operator_deliver), and on a
+  // task's session a comment on its task. A request's words, and a helper's
+  // result standing for the words that started it, are answered on the
+  // channel they came by: a quick word when the conversation forks, and the
+  // outcome when the fork comes back. A helper's end is told to the session
+  // that started it, not to the person.
   let answered = async (session: string) => {
-    let entries = await transcript(g, session)
+    let [row] = await g.get([session])
+    if (row?.spawned) return
+    let entries = ordered(await transcript(g, session))
     let reply = replyOf(turnOf(entries))
     // One answer for each time it was given words: the turn ended again
     // (stopped, then a step in flight finishing) says it anew.
     let mark = entries.findLast((b) => kindOf(b) == 'input')
-    let [link] = await g.read(`.contains .edge.to=${session}`)
-    let task = String(comp(link, 'edge')?.from ?? '')
+    if (!mark) return
+    let task = await taskOf(store, session)
     let space = (await workingOf(store, session))?.space
-    let answer = task && mark
+    let children = await g.get([
+      ...new Set(
+        entries.flatMap((b) => {
+          let child = comp(b, 'delivery')?.child
+          return child ? [String(child)] : []
+        }),
+      ),
+    ])
+    let calls = new Map(
+      children.filter((b) => b?.spawned).map((
+        b,
+      ) => [b.entity.eid, String(comp(b, 'spawned')!.call)]),
+    )
+    // The turn ends at its reply, or where the transcript does when it
+    // ended without one (stopped, failed).
+    let said = entries.findLastIndex((b) =>
+      kindOf(b) == 'output' && !!b.content
+    )
+    let end = said > entries.indexOf(mark) ? said : entries.length
+    let given = new Set(origins(entries, end, calls).map((b) => b.entity.eid))
+    let requests = (await g.read(`.operator_request.session=${session}`))
+      .filter((r) => given.has(derivedEid('operator-input|' + r.entity.eid)))
+    let comment = task
       ? derivedEid('operator-answer|' + mark.entity.eid)
       : undefined
+    let answers = requests.map((r) => ({
+      entity: {
+        eid: derivedEid(`operator-answer|${r.entity.eid}|${mark.entity.eid}`),
+      },
+      operator_answer: {
+        request: r.entity.eid,
+        text: reply.text,
+        ...task ? { task } : {},
+      },
+    }))
+    let ids = [...comment ? [comment] : [], ...answers.map((b) => b.entity.eid)]
+    let kept = (await g.get(ids)).some(Boolean)
     // A conversation that could not finish reaches the tracker once, when
     // its answer is first written (M-37965).
-    let { text } = reply
-    if (reply.fault && !(answer && (await g.get([answer]))[0])) {
+    if (reply.fault && !kept) {
       let slug = space ? (await directoryOf(env.STORE).at(space))?.slug : null
       defect(Error(`Operator could not finish: ${reply.fault}`), {
         request: 'operator conversation',
@@ -530,21 +616,17 @@ export let operating = (
         space: slug,
       })
     }
-    let waiting = (await g.read(`.operator_request.session=${session}`))
-      .filter((b) => !b.operator_answer)
+    if (kept) return
     await g.apply([
-      ...answer
+      ...comment
         ? [{
-          entity: { eid: answer },
+          entity: { eid: comment },
           comment: { target: task },
-          doc: { body: text },
+          doc: { body: reply.text },
           $actor: { by: space ?? task, via: session },
         }]
         : [],
-      ...waiting.map((b) => ({
-        entity: b.entity,
-        operator_answer: { text, ...task ? { task } : {} },
-      })),
+      ...answers,
     ], { trusted: true })
   }
 
@@ -558,7 +640,11 @@ export let operating = (
       // Its text is shown as it is written (@yaks/session run.ts `step`).
       streaming: true,
       context: shown,
-      tools: delegate ? sessionTools(g).filter((t) => t.name == 'spawn') : [],
+      // The conversation forks for its work; coding and careful reasoning
+      // go to the stronger model in a fresh helper.
+      tools: sessionTools(g).filter((t) =>
+        t.name == 'fork' || (delegate && t.name == 'spawn')
+      ),
       // A child works for the same space and person as the session that
       // started it, and is charged to that space.
       prepareChild: async ({ parent }) => {
@@ -567,23 +653,30 @@ export let operating = (
       },
       remote: async (session) => {
         let { space, ctx, files } = await working(env, store, session)
+        let tasked = !!await taskOf(store, session)
         return [
-          ...await operatorRoster(ctx, store),
+          ...await operatorRoster(ctx, tasked ? store : undefined),
           platformBug(space),
           textSend(env, ctx, space),
           ...options.tools?.(ctx, files) ?? [],
         ]
       },
+      // A conversation and every fork of it are told the same, so a fork's
+      // request begins with the conversation's cached prefix; a fresh helper
+      // on the stronger model is not told to start another.
       instructions: async (session) => {
         let { space, ctx } = await working(env, store, session)
+        let tasked = !!await taskOf(store, session)
         let [row] = await g.get([session])
-        let asks = delegate && !row?.spawned
+        let asks = delegate && !(row?.spawned && !row.fork)
         return `${instructions(env)}\n\n${await standing(ctx)
           .notes()}\n\n${
           introduced(space)
-        } You work for the owner of ${space.slug}. Carry out this task using the space's existing apps and rows. Read the app's schema and rows before changing data. Make the requested change, then explain what changed and the next step. Ask when required details are missing; never invent meeting dates, times or legal text. A request may be an idea or a design prepared by another agent. Your conversation and tools are recorded on its task. Use task_update with status done on this task only when the requested work is finished. Leave it open when asking a question, reporting a limit, or explaining unfinished work.${
+        } You work for the owner of ${space.slug}.${
+          tasked ? TASKED : CONVERSATION
+        } Read the app's schema and rows before changing data. Ask when required details are missing; never invent meeting dates, times or legal text. A request may be an idea or a design prepared by another agent.${
           asks
-            ? ` For writing or fixing code, or a task that needs careful reasoning, use spawn with model ${delegate} and a prompt that carries everything it needs; its answer comes back to you, and you tell the person.`
+            ? ` For writing or fixing code, or work that needs careful reasoning, use spawn with model ${delegate} and a prompt that carries everything it needs; its answer comes back to you.`
             : ''
         }${told(ctx, space)}`
       },
@@ -596,17 +689,93 @@ export let operating = (
     }),
   ))
 
+  // Whoever carries a session on, the newest words' reach applies, and the
+  // files it was given stay with it.
+  let carrying = async (
+    session: string,
+    held: Asker,
+    space: Space,
+    o: Asking,
+  ) => {
+    let files = [
+      ...new Map(
+        [...(await workingOf(store, session))?.files ?? [], ...o.files ?? []]
+          .map((f) => [f.key, f]),
+      ).values(),
+    ]
+    return {
+      entity: { eid: session },
+      operator_session: {
+        space: space.eid,
+        person: held.person,
+        ...held.administrative ? { administrative: true } : {},
+        ...files.length ? { files } : {},
+      },
+    }
+  }
+  let given = (
+    session: string,
+    input: string,
+    body: string,
+    by: string,
+    o: Asking,
+  ) => ({
+    entity: { eid: input },
+    entry: { session },
+    content: { body },
+    ...o.request && o.files?.length
+      ? { operator_files: { request: o.request, files: o.files } }
+      : {},
+    using,
+    $actor: { by, via: session },
+  })
+  let started = (session: string, by: string, space: Space) =>
+    begin(g, undefined, {
+      eid: session,
+      persona: space.eid,
+      by,
+      project: space.eid,
+      using,
+    })
+
   let ask: Operator['ask'] = async (held, space, args, o = {}) => {
     let text = typeof args.say == 'string' ? args.say.trim() : ''
-    let task = typeof args.task == 'string'
-      ? args.task
-      : o.task ?? crypto.randomUUID()
+    let named = typeof args.task == 'string' ? args.task : o.task
+    if (!text) throw refuse('arguments', 'say what you want done')
+    let by = o.by ?? held.person
+    let input = o.request
+      ? derivedEid('operator-input|' + o.request)
+      : crypto.randomUUID()
+    await seeding()
+    await g.apply([
+      {
+        entity: { eid: space.eid },
+        doc: { title: `${space.slug}'s operator` },
+        project: {},
+        persona: {},
+      },
+      { entity: { eid: held.person }, person: {} },
+    ], { trusted: true })
+    // A person's words with no task are the next input of their one
+    // conversation with the Operator.
+    if (!named) {
+      let session = rootOf(space.eid, held.person)
+      if ((await g.get([input]))[0]) return { task: '', session, input }
+      if (!(await g.get([session]))[0]?.session) {
+        await started(session, held.person, space)
+      }
+      await g.apply([
+        await carrying(session, held, space, o),
+        given(session, input, text, by, o),
+      ], { trusted: true })
+      options.tell?.(session)
+      return { task: '', session, input }
+    }
+    let task = named
     let [old] = await g.get([task])
     if (args.task && !old?.task) {
       throw refuse('missing', `no operator task ${task}`)
     }
-    if (!text) throw refuse('arguments', 'say what you want done')
-    await seeding()
     let links = old ? await g.read(`.contains .edge.from=${task}`) : []
     let newest = (await g.get(links.map((b) => String(comp(b, 'edge')!.to))))
       .filter((b) => b.session)
@@ -616,62 +785,27 @@ export let operating = (
         )
       ).at(-1)
     let session = newest?.entity.eid ?? o.session ?? crypto.randomUUID()
-    let by = o.by ?? held.person
-    let input = o.request
-      ? derivedEid('operator-input|' + o.request)
-      : crypto.randomUUID()
-    let [sent] = await g.get([input])
-    if (sent) return { task, session, input }
+    if ((await g.get([input]))[0]) return { task, session, input }
     await g.apply([
-      {
-        entity: { eid: space.eid },
-        doc: { title: `${space.slug}'s operator` },
-        project: {},
-        persona: {},
+      old ? { entity: { eid: task }, completed: null, cancelled: null } : {
+        entity: { eid: task },
+        task: {},
+        doc: { title: text.split('\n')[0].slice(0, 160), body: text },
+        filed: { project: space.eid },
+        $actor: { by },
       },
-      { entity: { eid: held.person }, person: {} },
-      ...old
-        ? [{ entity: { eid: task }, completed: null, cancelled: null }]
-        : [{
-          entity: { eid: task },
-          task: {},
-          doc: { title: text.split('\n')[0].slice(0, 160), body: text },
-          filed: { project: space.eid },
-          $actor: { by },
-        }],
     ], { trusted: true })
     if (!newest) {
-      await begin(g, undefined, {
-        eid: session,
-        persona: space.eid,
-        by,
-        project: space.eid,
-        using,
-      })
+      await started(session, by, space)
       await g.apply([{
         entity: { eid: crypto.randomUUID() },
         edge: { from: task, to: session },
         contains: {},
       }])
     }
-    // Whoever carries the task on, the newest words' reach applies.
-    let files = [
-      ...new Map(
-        [...(await workingOf(store, session))?.files ?? [], ...o.files ?? []]
-          .map((f) => [f.key, f]),
-      ).values(),
-    ]
     let [row] = await g.get([task])
     await g.apply([
-      {
-        entity: { eid: session },
-        operator_session: {
-          space: space.eid,
-          person: held.person,
-          ...held.administrative ? { administrative: true } : {},
-          ...files.length ? { files } : {},
-        },
-      },
+      await carrying(session, held, space, o),
       ...old
         ? [{
           entity: { eid: derivedEid('operator-comment|' + input) },
@@ -680,23 +814,25 @@ export let operating = (
           $actor: { by },
         }]
         : [],
-      {
-        entity: { eid: input },
-        entry: { session },
-        content: { body: newest ? text : JSON.stringify({ task: row }) },
-        ...o.request && o.files?.length
-          ? { operator_files: { request: o.request, files: o.files } }
-          : {},
-        using,
-        $actor: { by, via: session },
-      },
+      given(
+        session,
+        input,
+        newest ? text : JSON.stringify({ task: row }),
+        by,
+        o,
+      ),
     ], { trusted: true })
     options.tell?.(session)
     return { task, session, input }
   }
 
+  // An agent asking through operator_run waits on one answer, so its words
+  // are a task of their own rather than a person's conversation.
   let run: Operator['run'] = async (held, space, args, o = {}) => {
-    let { task, session, input } = await ask(held, space, args, o)
+    let { task, session, input } = await ask(held, space, args, {
+      task: crypto.randomUUID(),
+      ...o,
+    })
     let entries = await transcript(g, session)
     while (!ENDED.includes(statusOf(entries))) {
       let next = await drain(store)
@@ -722,35 +858,46 @@ export let operating = (
 
   // The harness's interrupt (runtime.ts): a stop that withdraws the step in
   // flight, its model request or tool call, and that no step goes on past
-  // (@yaks/session run.ts `withdrawn`).
-  let stop: Operator['stop'] = async (task, by) => {
-    let links = await g.read(`.contains .edge.from=${task}`)
-    let newest = (await g.get(links.map((b) => String(comp(b, 'edge')!.to))))
+  // (@yaks/session run.ts `withdrawn`). A person's conversation stops with
+  // the helpers working for it.
+  let stop: Operator['stop'] = async (open, by) => {
+    let [row] = await g.get([open])
+    let links = row?.task ? await g.read(`.contains .edge.from=${open}`) : []
+    let newest = row?.session ? row : (await g.get(
+      links.map((b) => String(comp(b, 'edge')!.to)),
+    ))
       .filter((b) => b?.session)
       .sort((a, b) =>
         String(comp(a, 'created')?.at).localeCompare(
           String(comp(b, 'created')?.at),
         )
       ).at(-1)
-    if (!newest) throw refuse('missing', `no operator task ${task}`)
+    if (!newest) throw refuse('missing', `no operator conversation ${open}`)
     let session = newest.entity.eid
-    if (
-      !['pending', 'running'].includes(statusOf(await transcript(g, session)))
-    ) {
-      return { task, session, stopped: false }
+    let helpers = row?.session
+      ? (await g.read(`.spawned.parent=${session}`)).map((b) => b.entity.eid)
+      : []
+    let busy = []
+    for (let s of [session, ...helpers]) {
+      let status = statusOf(await transcript(g, s))
+      if (['pending', 'running'].includes(status)) busy.push(s)
     }
-    await g.apply([
-      {
+    if (!busy.length) {
+      return { task: open, session, stopped: false }
+    }
+    await g.apply(
+      busy.map((s) => ({
         entity: { eid: crypto.randomUUID() },
-        entry: { session },
+        entry: { session: s },
         stop: {},
         content: { body: 'Stopped by the person watching.' },
-        $actor: { by, via: session },
-      },
-    ], { trusted: true })
-    await answered(session)
+        $actor: { by, via: s },
+      })),
+      { trusted: true },
+    )
+    if (busy.includes(session)) await answered(session)
     options.tell?.(session)
-    return { task, session, stopped: true }
+    return { task: open, session, stopped: true }
   }
 
   // What to call a person in what the Operator shows of its work.
@@ -765,8 +912,11 @@ export type Asking = {
   by?: string
   // The request the words came in, which makes giving them again a no-op.
   request?: string
-  session?: string
+  // The task the words carry on; without one they go to the person's
+  // conversation with the Operator (`rootOf`).
   task?: string
+  // The session a new task starts, for a replay to find.
+  session?: string
   files?: File[]
 }
 type Asker = Pick<Held, 'person' | 'administrative'>
@@ -774,18 +924,20 @@ export type Operator = {
   store: Store
   /** What its model reads as it is, beside text (claude.ts `readsOf`). */
   reads: Record<string, number>
-  /** Words on a task: a new task and session, or the next input of the
-   * task's newest session. Answers at once with where they went. */
+  /** Words given: the next input of the person's conversation, or on a task
+   * a new task and session or the next input of the task's newest session.
+   * Answers at once with where they went (`task` is '' in a conversation). */
   ask: (
     held: Asker,
     space: Space,
     args: Args,
     o?: Asking,
   ) => Promise<{ task: string; session: string; input: string }>
-  /** Stop the task's running session at once, the step in flight included:
-   * nothing more is done until new words reopen it. */
+  /** Stop a conversation (with its helpers) or a task's running session at
+   * once, the step in flight included: nothing more is done until new words
+   * reopen it. */
   stop: (
-    task: string,
+    open: string,
     by: string,
   ) => Promise<{ task: string; session: string; stopped: boolean }>
   /** operator_run's door: the words, then the answer once the session ends,

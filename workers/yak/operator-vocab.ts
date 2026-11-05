@@ -49,8 +49,16 @@ export let operatorDoc: VocabDoc = {
     },
     operator_answer: {
       component: true,
-      description: 'The answer kept before its channel attempts delivery.',
+      description:
+        'An answer to a request, kept before its channel attempts delivery: a request is answered once on a task, and in a conversation once when the Operator starts on it and again when the work comes back.',
       properties: {
+        request: {
+          type: 'string',
+          ref: 'entity',
+          death: 'keep',
+          description:
+            'The request whose channel carries it; absent on an answer kept on its request.',
+        },
         task: { type: 'string', ref: 'task', death: 'keep' },
         text: { type: 'string' },
         message_id: { type: 'string' },
