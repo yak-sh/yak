@@ -223,7 +223,9 @@ page.
 
 The request keeps its full address, so `url.pathname` includes the app's own
 slug: a visit to `<space>.yaks.app/recipes/mine` reaches the worker as
-`/recipes/mine`.
+`/recipes/mine`. On a custom domain the request still names that address; the
+one the visitor asked for, such as `https://example.com/mine`, is in the
+`x-yak-address` header, so build absolute links from it when it is there.
 
 This has two consequences:
 

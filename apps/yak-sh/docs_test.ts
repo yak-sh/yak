@@ -3,8 +3,8 @@ import { equal, match, test } from '@yaks/testing'
 import worker from './worker.ts'
 import { INSTALL, SECTIONS } from './site.ts'
 
-let get = async (url: string) => {
-  let res = await worker.fetch(new Request(url))
+let get = async (url: string, headers: HeadersInit = {}) => {
+  let res = await worker.fetch(new Request(url, { headers }))
   return {
     status: res.status,
     type: res.headers.get('content-type'),
@@ -24,9 +24,13 @@ test('llms.txt says what yak is and links pages the site answers', async () => {
   }
 })
 
-test("an installed copy's pages link under its own address", async () => {
+test('the pages link under the address the visitor asked for', async () => {
   let { text } = await get('https://jeff.yaks.app/yak-sh/llms.txt')
   match(text, /\(https:\/\/jeff\.yaks\.app\/yak-sh\/setup\.md\)/)
+  let domain = await get('https://jeff.yaks.app/yak-sh/llms.txt', {
+    'x-yak-address': 'https://yak.sh/llms.txt',
+  })
+  match(domain.text, /\(https:\/\/yak\.sh\/setup\.md\)/)
 })
 
 test('setup.md holds the steps from installing yak to an app online', async () => {
