@@ -854,3 +854,82 @@ test('PDF pages and a JPEG photo are read through metered extraction before aski
   assertEquals(afterMedia > beforeMedia, true)
   assertEquals((mediaAnswer as { text: string }).text, 'Read the documents.')
 })
+
+// The same Operator conversation over Pinnacle's documented webhook and HTTP
+// contracts. No provider payload is retained in the request or its reply.
+let pf = await fixture()
+let pinnacleTexts: { from: string; to: string; text: string }[] = []
+let pinnacleApi = endpoints(globalThis).open(async (req) => {
+  pinnacleTexts.push(await req.json())
+  return Response.json({ messageId: `msg_${pinnacleTexts.length}` })
+})
+Object.assign(pf.env, {
+  PHONE_SENDER: { via: 'pinnacle' },
+  PINNACLE_API_KEY: 'test-key',
+  PINNACLE_NUMBER: FREE,
+  PINNACLE_API: pinnacleApi.url,
+  PINNACLE_SIGNING_SECRET: 'pss_test',
+})
+let { textDoor, texts } = await import('./operator-texts.ts')
+await pf.dir.apply({
+  entities: texts(pf.person, ANA, true, undefined, pf.space.eid),
+}, {
+  'x-yak-person': pf.person,
+  'x-yak-role': 'owner',
+})
+let pinnacleInbound = (id: string, text: string, signed = true) =>
+  textDoor(
+    new Request('https://yaks.app/pinnacle/webhook', {
+      method: 'POST',
+      headers: signed ? { 'PINNACLE-SIGNING-SECRET': 'pss_test' } : {},
+      body: JSON.stringify({
+        type: 'MESSAGE.RECEIVED',
+        direction: 'INBOUND',
+        status: 'RECEIVED',
+        sentAt: '2026-11-05T12:00:00Z',
+        conversation: { id: 'conv_1', from: ANA, to: FREE },
+        message: { id, type: 'SMS', text },
+      }),
+    }),
+    pf.env,
+    'pinnacle',
+  )
+let pinnacleUnsigned = await pinnacleInbound(
+  'unsigned',
+  'Post the agenda',
+  false,
+)
+let pinnacleSigned = await pinnacleInbound('msg_request', 'Post the agenda')
+await pf.drain()
+await pinnacleInbound('msg_request', 'Post the agenda')
+await pf.drain()
+let pinnacleRequests =
+  (await operatorDoor(pf.env, pf.space, pf.held, 'messages', {}) as Bundle[])
+    .filter((row) =>
+      (row.operator_request as { channel: string }).channel == 'text'
+    )
+await pinnacleInbound('msg_stop', 'STOP')
+let pinnacleStopped = await pf.dir.texting(pf.person)
+await pinnacleApi.stop()
+
+test('Pinnacle webhooks reach one Operator conversation and its replies and STOP use the shared channel', () => {
+  assertEquals([pinnacleUnsigned.status, pinnacleSigned.status], [400, 200])
+  assertEquals(pinnacleRequests.length, 1)
+  assertEquals(pinnacleRequests[0].doc, {
+    title: 'Post the agenda',
+    body: 'Post the agenda',
+  })
+  assertEquals(
+    (pinnacleRequests[0].operator_request as { via: string }).via,
+    'pinnacle',
+  )
+  assertEquals(pinnacleTexts, [
+    {
+      from: FREE,
+      to: ANA,
+      text: `Which date and time?\n\n${textSigned(pf.space)}`,
+    },
+    { from: FREE, to: ANA, text: REPLIES.stop },
+  ])
+  assertEquals(pinnacleStopped, null)
+})

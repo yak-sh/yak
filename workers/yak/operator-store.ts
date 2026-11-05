@@ -24,6 +24,8 @@ import {
   sqliteBlobs,
 } from '@yaks/blob'
 import { plugins as blobs } from '@yaks/blob/graph'
+import { phoneDoc } from '@yaks/phone'
+import { phoneTexts } from './phone-move.ts'
 import { mailDoc } from '@yaks/mail/vocab'
 import { operatorDoc } from './operator-vocab.ts'
 import { draftDoc, drafts } from '@yaks/draft'
@@ -48,6 +50,13 @@ export let operatorVocab = loadVocab([
   artifactDoc,
   mailDoc,
   operatorDoc,
+  {
+    $defs: Object.fromEntries(
+      Object.entries(phoneDoc.$defs!).filter(([name]) =>
+        ['text', 'sender'].includes(name)
+      ),
+    ),
+  },
   draftDoc,
   memoryDoc,
   topicDoc,
@@ -103,6 +112,7 @@ export let operatorGraph = (
 export let drain = async (
   { g, fx }: Pick<ReturnType<typeof operatorStore>, 'g' | 'fx'>,
 ): Promise<number | null> => {
+  await phoneTexts(g)
   // A pending run no handler here takes arms nothing: words declared before
   // their handler was (sessions' were, until the Operator ran on them).
   let handled = fx.slots().filter((s) => s.effect && s.run).map((s) => s.id)

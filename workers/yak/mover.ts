@@ -48,6 +48,7 @@ import { workerRule } from './worker-move.ts'
 import { blobsRule } from './blobs-move.ts'
 import { importedRule } from './imported-move.ts'
 import { integrationOwnerRule } from './integration-move.ts'
+import { phoneRule } from './phone-move.ts'
 import { operatorNameRule } from './operator-name.ts'
 /** A rule's name: where its stamp is kept in a store's memory, and the
  * `BOUNDARIES` entry its live release adds. */
@@ -176,6 +177,7 @@ export let RULES: Rule[] = [
   importedRule,
   integrationOwnerRule,
   operatorNameRule,
+  phoneRule,
 ]
 
 /** How far one rule got in one store. `after` is the last row it moved past;

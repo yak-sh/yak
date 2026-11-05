@@ -20,6 +20,11 @@ export let operatorDoc: VocabDoc = {
         administrative: { type: 'boolean' },
         address: { type: 'string' },
         reply_to: { type: 'string' },
+        via: {
+          type: 'string',
+          description:
+            'The phone transport a text arrived on, used for its reply.',
+        },
         files: { type: 'array', items: { type: 'object' } },
         app: {
           type: 'string',
@@ -64,7 +69,7 @@ export let operatorDoc: VocabDoc = {
     operator_text: {
       component: true,
       description:
-        "A text the Operator sent for a person from their own number to someone else, beside its `doc{body}`: a text back from that number comes into that person's conversation.",
+        "A text the Operator sent for a person from their own number to someone else, beside its `text{from, to, at, message_id, via}` and `doc{body}`: a text back from that number comes into that person's conversation.",
       properties: {
         person: { type: 'string', ref: 'person', death: 'keep' },
         session: {

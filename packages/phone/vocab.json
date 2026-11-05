@@ -7,7 +7,7 @@
     "phone": {
       "component": true,
       "type": "object",
-      "description": "a phone number, as a component of what it reaches — on a person, their mobile, beside the `email{address}` they wear",
+      "description": "a phone number, as a component of what it reaches \u2014 on a person, their mobile, beside the `email{address}` they wear",
       "properties": {
         "number": {
           "type": "string",
@@ -78,6 +78,10 @@
         "rcs": {
           "type": "boolean",
           "description": "whether it came, or goes, as RCS rather than SMS"
+        },
+        "via": {
+          "type": "string",
+          "description": "The transport that carried the message, scoping its opaque message_id."
         }
       }
     },
@@ -90,6 +94,17 @@
       "target": ".text",
       "tries": 6,
       "description": "Hand an outbound text to the sender and record its outcome. A send the sender knows never left is tried again."
+    },
+    "sender": {
+      "component": true,
+      "type": "object",
+      "description": "The phone provider selected for this entity; its sending number is phone{number}. Without one the host selection applies. Credentials belong to the host.",
+      "properties": {
+        "via": {
+          "type": "string",
+          "description": "The phone provider, such as telnyx, voipms or pinnacle."
+        }
+      }
     }
   }
 }

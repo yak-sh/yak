@@ -1,0 +1,19 @@
+{
+  "name": "@yaks/voipms",
+  "version": "0.2.17",
+  "exports": {
+    ".": "./mod.ts"
+  },
+  "license": "Apache-2.0",
+  "description": "voip.ms texting transport, account numbers and inbound callbacks for @yaks/phone.",
+  "type": "module",
+  "dependencies": {
+    "@yaks/phone": "0.2.17",
+    "@yaks/host": "0.2.17",
+    "@yaks/hook": "0.2.17"
+  },
+  "devDependencies": {
+    "@yaks/testing": "0.2.17",
+    "@std/assert": "npm:@jsr/std__assert@^1.0.0"
+  }
+}

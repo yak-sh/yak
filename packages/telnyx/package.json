@@ -1,0 +1,19 @@
+{
+  "name": "@yaks/telnyx",
+  "version": "0.2.17",
+  "exports": {
+    ".": "./mod.ts"
+  },
+  "license": "Apache-2.0",
+  "description": "Telnyx texting transport and verified webhook events for @yaks/phone.",
+  "type": "module",
+  "dependencies": {
+    "@yaks/phone": "0.2.17",
+    "@yaks/host": "0.2.17",
+    "@yaks/hook": "0.2.17"
+  },
+  "devDependencies": {
+    "@yaks/testing": "0.2.17",
+    "@std/assert": "npm:@jsr/std__assert@^1.0.0"
+  }
+}

@@ -19,5 +19,6 @@ export {
   ours,
   refusal,
   type Scheme,
+  type SecretHeader,
   SKEW,
 } from './signed.ts'

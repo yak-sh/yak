@@ -52,6 +52,8 @@ export type Text = {
 
 /** What a texter reports about a text it accepted. */
 export type TextReceipt = {
+  /** The transport that accepted it; an opaque provider name. */
+  via?: string
   /** the provider's id for the message, which its outcome names */
   id?: string
   /** the number it left from, when the texter chose it */

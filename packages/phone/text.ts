@@ -1,7 +1,6 @@
 // Texting's shapes: a text on its way out, one that arrived, what became of
 // one that left, and the keywords a person texts to stop or ask for help.
-// No provider is named here; ./telnyx.ts and ./voipms.ts are two, given as
-// data.
+// Providers translate their wire formats at the boundary.
 
 import type { Texter } from '@yaks/host/senders'
 import { identityEid } from '@yaks/graph/identity'
@@ -22,6 +21,8 @@ export type Sender = Texter
 
 /** A text that arrived. */
 export type Arrival = {
+  /** The transport it arrived on, when the host names one. */
+  via?: string
   /** the provider's id for the message */
   id: string
   /** the number it came from */

@@ -1,6 +1,6 @@
 // The `@yaks/phone/routes` facet: the door a box's provider posts to, reached
 // from outside through the box's Cloudflare tunnel like any other inbound
-// request. Nothing is read until @yaks/hook finds it signed by Telnyx.
+// request. Events are decoded only after @yaks/hook verifies the provider.
 
 import type { Graph } from '@yaks/graph'
 import { fault, json, refuse, type Route } from '@yaks/api'
@@ -8,26 +8,30 @@ import { Refused } from '@yaks/graph/errors'
 import { ours, refusal } from '@yaks/hook'
 import type { Options } from './options.ts'
 import { kept, settled } from './received.ts'
-import { heard } from './telnyx.ts'
+import { type Load, provider } from './provider.ts'
 
-/** The path texts arrive on, unless the config sets another. */
-export let PATH = '/telnyx/webhook'
-
-/** `POST /telnyx/webhook`: one event, signed by Telnyx. A missing or stale
+/** `POST /<via>/webhook`: one verified provider event. A missing or stale
  * signature is refused quietly; one that is complete and does not match,
  * which is what a wrong key looks like, is refused and reported. */
 export let routes = (
   host: { graph: Graph },
   options: Options = {},
+  load: Load = provider,
 ): Route[] =>
   options.door
     ? [{
       method: 'POST',
-      path: options.door.path ?? PATH,
+      path: options.door.path ??
+        `/${options.door.via ?? options.sender?.via ?? 'telnyx'}/webhook`,
       handle: async (request) => {
+        let via = options.door!.via ?? options.sender?.via ?? 'telnyx'
+        let transport = (await load(via)).provider
+        if (!transport.scheme || !transport.heard) {
+          throw new Error(`${via} has no verified webhook door`)
+        }
         let body = await request.text()
         let why = await refusal(
-          'telnyx',
+          transport.scheme,
           options.door!.key,
           body,
           request.headers,
@@ -37,22 +41,24 @@ export let routes = (
             fault(new Error(why), `POST ${new URL(request.url).pathname}`)
           }
           return refuse(
-            new Refused(`not signed by Telnyx: ${why}`),
+            new Refused(`not signed by ${via}: ${why}`),
             request,
           )
         }
         try {
-          let { arrival, outcome } = heard(JSON.parse(body))
+          let { arrival, outcome } = transport.heard(JSON.parse(body))
           let g = host.graph
           if (arrival) {
             let people = await g.read(
               `.phone.number=${JSON.stringify(arrival.from)}`,
             )
-            await g.apply(kept(arrival, people.map((p) => p.entity.eid)))
+            await g.apply(
+              kept({ ...arrival, via }, people.map((p) => p.entity.eid)),
+            )
           }
           if (outcome) {
             let [sent] = await g.read(
-              `.text.message_id=${JSON.stringify(outcome.id)}`,
+              `.text.via=${via}&.text.message_id=${JSON.stringify(outcome.id)}`,
             )
             if (sent) {
               await g.apply(settled(outcome, sent.entity.eid), {

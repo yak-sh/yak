@@ -221,8 +221,12 @@ test("a fork's text goes from the person's own number, signed as their assistant
       textedFor(space, 'Jeff Peterson')
     }`,
   )
-  let text = kept.operator_text as Record<string, unknown>
-  assertEquals([text.person, text.from, text.to], [
+  let text = kept.text as Record<string, unknown>
+  assertEquals([
+    (kept.operator_text as { person: string }).person,
+    text.from,
+    text.to,
+  ], [
     person,
     '+12695550100',
     '+12695550142',

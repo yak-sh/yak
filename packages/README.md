@@ -426,6 +426,12 @@ grouped approximately by function, **not** by dependency order.
   supplied transport. Incoming messages become bundles; subjects and bodies use
   @yaks/doc, and a configured package's `./mail` facet says what else one means.
   Failed delivery cannot roll back the original graph transaction.
+- **[@yaks/pinnacle](./pinnacle)** — Pinnacle texting transport and webhook
+  events.
+- **[@yaks/telnyx](./telnyx)** — Telnyx texting transport and signed webhook
+  events.
+- **[@yaks/voipms](./voipms)** — voip.ms texting transport, numbers and
+  callbacks.
 - **[@yaks/phone](./phone)** — A person's mobile number as `phone{number}`
   beside their `email{address}`, the words they agreed to before being texted as
   `sms_consent{person, consent, at, space}`, and `mobile()` for US numbers in

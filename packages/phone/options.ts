@@ -1,45 +1,26 @@
-// What a config passes to @yaks/phone, read by `./effects` (the sender) and
-// `./routes` (the webhook door).
-//
-// ```json
-// { "use": "@yaks/phone",
-//   "with": { "sender": { "via": "telnyx",
-//                         "key": { "secret": "TELNYX_API_KEY" },
-//                         "profile": "yaks.app" },
-//             "door": { "key": "RA8+wmOD4ivICcJNznDMWuA8DoM+StbPtYr0srTKaKI=" } } }
-// ```
-//
-// `{"secret": "NAME"}` anywhere is that secret's value when it is read, so
-// the file holds no key.
-
-/** What a config passes to @yaks/phone. */
+/** What a config passes to @yaks/phone. Secrets are resolved by the host. */
 export type Options = {
-  /** the transport outbound texts go through; with none, none are sent */
   sender?: Transport
-  /** where texts arrive; with none, no door */
   door?: Door
 }
 
-/** A sender by name: one the host lends as a texter (`texters`), else
- * `telnyx`, `voipms` or `stash`. */
+/** Provider selection and credentials, passed to that provider's factory. */
 export type Transport = {
   via: string
-  /** Telnyx's API key, or voip.ms's API password */
   key?: string
-  /** Telnyx's messaging profile, by name */
   profile?: string
-  /** the email a voip.ms account signs in with */
   user?: string
-  /** the voip.ms number texts go from; absent, the account's first that texts */
   number?: string
-  /** the API's base URL, to point a test at a stand-in */
+  tollFree?: boolean
   api?: string
+  fetch?: typeof fetch
 }
 
-/** The webhook door: where the provider posts, and its signing key. */
+/** The provider's webhook door and verification key. */
 export type Door = {
-  /** the path (default `/telnyx/webhook`) */
+  /** Defaults to sender.via, then telnyx for existing configurations. */
+  via?: string
+  /** Defaults to /<via>/webhook. */
   path?: string
-  /** Telnyx's webhook public key, base64 (Mission Control, Keys & Credentials) */
   key: string
 }

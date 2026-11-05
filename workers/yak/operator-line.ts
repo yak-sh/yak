@@ -19,15 +19,9 @@ import {
   credential,
   type Ctx as Connections,
 } from '@yaks/connections'
-import {
-  type Account,
-  Blocked,
-  called,
-  Denied,
-  mobile,
-  VOIPMS,
-  voipms,
-} from '@yaks/phone'
+import { Blocked, Denied, mobile } from '@yaks/phone'
+import { type Account, called, VOIPMS, voipms } from '@yaks/voipms'
+import { texter } from './phone-providers.ts'
 import type { Tool } from '@yaks/session'
 import type { Env } from './env.ts'
 import type { Space } from './directory.ts'
@@ -199,7 +193,7 @@ export let phoneSend = (
     }
     if (!text) throw refuse('arguments', 'Say what to text.')
     let line = await lineOf(env, ctx, space)
-    if (!line) {
+    if (!line && !space.sender) {
       throw refuse(
         'missing',
         `They have not connected a phone number of their own. They connect their voip.ms number at ${
@@ -207,12 +201,11 @@ export let phoneSend = (
         }.`,
       )
     }
-    let from = String(comp(line, CONNECTION).account ?? '')
-    let account = await accountOf(
-      ctxOf(env),
-      line.entity.eid,
-      from || undefined,
-    )
+    let from = space.sender?.number ??
+      String(comp(line, CONNECTION).account ?? '')
+    let account = space.sender
+      ? texter(env, space.sender)
+      : await accountOf(ctxOf(env), line!.entity.eid, from || undefined)
     if (!account) {
       throw refuse('connection', 'Their voip.ms key is not one that opens it.')
     }
@@ -223,9 +216,9 @@ export let phoneSend = (
       receipt = await account.send({ to, text: body })
     } catch (error) {
       if (error instanceof Blocked) throw refuse('blocked', error.message)
-      if (error instanceof Denied) {
+      if (error instanceof Denied && line && !space.sender) {
         await ctxOf(env).graph.apply([{
-          entity: { eid: line.entity.eid },
+          entity: { eid: line!.entity.eid },
           [CONNECTION]: { status: 'broken' },
         }])
         throw refuse('connection', error.message)
@@ -241,13 +234,16 @@ export let phoneSend = (
       operator_text: {
         person: ctx.person,
         ...(context?.session ? { session: context.session } : {}),
-        from,
+      },
+      text: {
+        from: receipt.from ?? from,
         to,
         at,
+        via: receipt.via ?? 'voipms',
         ...(receipt.id ? { message_id: receipt.id } : {}),
       },
     }], { trusted: true })
-    return JSON.stringify({ text: sent, to, from })
+    return JSON.stringify({ text: sent, to, from: receipt.from ?? from })
   },
 })
 
@@ -282,8 +278,6 @@ export let lineDoor = async (req: Request, env: Env): Promise<Response> => {
   )
   let owner = String(comp(line, CONNECTION).owner ?? '')
   if (!arrival || !line || !owner) return ok()
-  let { requestId } = await import('./operator-channels.ts')
-  let { builderOf, SPACE } = await import('./build.ts')
   let { directoryOf } = await import('./directory.ts')
   let dir = directoryOf(env.STORE)
   // A connection is its own space's, or a person's, whose Operator may have
@@ -293,6 +287,18 @@ export let lineDoor = async (req: Request, env: Env): Promise<Response> => {
     ? [mine]
     : (await dir.seats(owner)).filter((s) => writes(s.role))
       .sort((a, b) => Number(!!b.own) - Number(!!a.own)).map((s) => s.space)
+  await lineArrived(env, spaces, { ...arrival, via: 'voipms' })
+  return ok()
+}
+
+/** A reply from any provider enters the conversation of the text it answers. */
+export let lineArrived = async (
+  env: Env,
+  spaces: Space[],
+  arrival: import('@yaks/phone').Arrival,
+) => {
+  let { requestId } = await import('./operator-channels.ts')
+  let { builderOf, SPACE } = await import('./build.ts')
   for (let space of spaces.filter((s) => !s.trashed)) {
     let response = await builderOf(env, space.eid)(() =>
       new Request('https://builder/operator/replied', {
@@ -308,9 +314,15 @@ export let lineDoor = async (req: Request, env: Env): Promise<Response> => {
             channel: 'texted',
             address: arrival.from,
             reply_to: arrival.to,
+            ...(arrival.via ? { via: arrival.via } : {}),
             files: [],
           },
-          options: { id: requestId(space.eid, `voipms:${arrival.id}`) },
+          options: {
+            id: requestId(
+              space.eid,
+              `${arrival.via ?? 'voipms'}:${arrival.id}`,
+            ),
+          },
           texted: { from: arrival.from, to: arrival.to },
         }),
       })
@@ -323,7 +335,7 @@ export let lineDoor = async (req: Request, env: Env): Promise<Response> => {
       throw new Error('Operator text intake failed: ' + await response.text())
     }
     await response.body?.cancel()
-    return ok()
+    return true
   }
-  return ok()
+  return false
 }

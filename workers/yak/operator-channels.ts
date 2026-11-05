@@ -20,6 +20,7 @@ import { CallError } from '@yaks/tools/errors'
 import { esc } from './html.ts'
 import { fullFiles } from './usage.ts'
 import type { Operator } from './operator.ts'
+import { phoneTexts } from './phone-move.ts'
 import type { operatorStore } from './operator-store.ts'
 import { unsaid } from './operator-view.ts'
 
@@ -47,6 +48,7 @@ export type Request = {
   channel: string
   address?: string
   reply_to?: string
+  via?: string
   // The task a request carried on, before every person's words went to
   // their one conversation (operator.ts `rootOf`); kept on old rows.
   task?: string
@@ -213,7 +215,10 @@ export let channels = (env: Env): Record<string, Channel> => {
     let space = await directoryOf(env.STORE).at(request.space)
     if (!space) throw new Error('Operator reply has no space')
     let { texter } = await import('./operator-texts.ts')
-    return texter(env).send({
+    return texter(
+      env,
+      request.via ? { ...space.sender, via: request.via } : space.sender,
+    ).send({
       to: request.address!,
       text: `${answer.text}\n\n${textSigned(space)}`,
       ...(back.from ? { from: back.from } : {}),
@@ -367,12 +372,13 @@ export let textOf = async (
   { from, to }: { from: string; to: string },
   now = Date.now(),
 ) => {
+  await phoneTexts(store.g)
   let [row] = await store.g.read(
-    `.operator_text.to=${JSON.stringify(from)}&.operator_text.from=${
+    `.operator_text&.text.to=${JSON.stringify(from)}&.text.from=${
       JSON.stringify(to)
-    }&.order=-operator_text.at&.limit=1&*`,
+    }&.order=-text.at&.limit=1&*`,
   )
-  let at = Date.parse(String(part<Comp>(row, 'operator_text')?.at ?? ''))
+  let at = Date.parse(String(part<Comp>(row, 'text')?.at ?? ''))
   return row && now - at <= REPLYING ? row : undefined
 }
 

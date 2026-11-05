@@ -12,12 +12,11 @@ import {
   arrivalEid,
   Blocked,
   consentEid,
-  heard,
   phoneDoc,
   type Sender,
   stash,
-  telnyx,
 } from './mod.ts'
+import { heard, provider as telnyxProvider, telnyx } from '@yaks/telnyx'
 import { effects } from './effects.ts'
 import { sending } from './send.ts'
 import { routes } from './routes.ts'
@@ -218,7 +217,11 @@ let received = (id: string, text: string, payload = {}) => ({
 test('the door keeps a signed text, takes STOP as the end of consent and START as it again, and refuses an unsigned one', async () => {
   let g = rig(stash())
   await g.apply(person)
-  let [door] = routes({ graph: g }, { door: { key } })
+  let [door] = routes(
+    { graph: g },
+    { door: { key } },
+    () => Promise.resolve({ provider: telnyxProvider }),
+  )
   let unsigned = await door.handle(await signed(received('m0', 'hi'), false))
   let hi = await door.handle(await signed(received('m1', 'Post the agenda')))
   await door.handle(await signed(received('m2', 'STOP')))

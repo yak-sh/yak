@@ -180,6 +180,7 @@ export type Space = {
   title: string
   // What its Operator is called (operator-name.ts).
   operator: string
+  sender?: import('@yaks/phone').Transport
   // What this space pays (D-32751). Null for a space the sweep has not
   // reached yet, which means free — the terms every space is on today.
   tier: Tier | null
@@ -582,6 +583,7 @@ export type Row = {
   inviting?: { hour?: string | null; sent?: number | null }
   person?: Record<string, unknown>
   email?: { address: string }
+  sender?: { via: string }
   phone?: { number: string }
   sms_consent?: { person: Id; consent: string; at: string; space?: Id }
   signed_in?: { at?: string | null; via?: string | null }
@@ -965,6 +967,8 @@ export let SPACE_PARTS = [
   'former',
   'tunnel',
   'operator',
+  'sender',
+  'phone',
 ]
 let SPACE_ABOUT = SPACE_PARTS.map((part) => `?${part}`).join('&')
 
@@ -1022,6 +1026,11 @@ export let spaceOf = (r: Row): Space => ({
   store: r.space!.store ?? unrooted(r.entity.eid, r.space!.slug),
   title: r.doc?.title || r.space!.slug,
   operator: calledOf(r),
+  ...(r.sender
+    ? {
+      sender: { ...r.sender, ...(r.phone ? { number: r.phone.number } : {}) },
+    }
+    : {}),
   tier: tierOf(r.space!.slug, r.plan?.tier ?? null),
   plan: planOf(r),
   stripe: stripeOf(r),
@@ -2179,6 +2188,13 @@ export let directoryRows = (rows: {
     phoned: async (number: string) =>
       (await one(`.person&.phone.number=${JSON.stringify(number)}`))
         ?.entity.eid ?? null,
+    // A space's registered line, independent of the transport selected for it.
+    textSpace: async (number: string) => {
+      let row = await one(
+        `.space&.phone.number=${JSON.stringify(number)}&${SPACE_ABOUT}`,
+      )
+      return row ? spaceOf(row) : null
+    },
     // The app whose own number this is (an app row's `phone{number}`), with
     // its space: where a text that arrived at it is kept (app-texts.ts).
     lined: async (number: string) => {

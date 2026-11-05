@@ -301,6 +301,7 @@ export let respelled = (text: string): string | null => {
  * names the first shape its rules can produce, even though only declaring apps
  * move. Code without the name is code from before it could read that shape. */
 export let BOUNDARIES = [
+  'yak/store/phone-provider/1',
   // The directory's file left `yak/platform` for a new object, and only code
   // holding relocate.ts hands a request on from the rows left behind.
   'yak/store/directory-relocated/1',

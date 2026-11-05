@@ -12,7 +12,7 @@ import {
   type Receipt,
   type Sender,
   type Text,
-} from './text.ts'
+} from '@yaks/phone'
 
 /** Telnyx as data: its API, and the error codes that mean a carrier will not carry a text, in a person's words. */
 export let TELNYX = {
@@ -151,7 +151,7 @@ let FAILED = ['sending_failed', 'delivery_failed']
  *
  * ```ts
  * import { equal } from '@yaks/testing'
- * import { heard } from '@yaks/phone'
+ * import { heard } from '@yaks/telnyx'
  * let { arrival } = heard({
  *   data: {
  *     event_type: 'message.received',
@@ -213,4 +213,17 @@ export let heard = (
     }
   }
   return {}
+}
+
+/** The transport plugged into @yaks/phone's provider boundary. */
+export let provider: import('@yaks/phone').Provider = {
+  needs: ['key', 'profile'],
+  scheme: 'telnyx',
+  heard,
+  sender: (options) => {
+    if (!options.key || !options.profile) {
+      throw new Error('a telnyx sender needs `key` and `profile`')
+    }
+    return telnyx({ ...options, key: options.key, profile: options.profile })
+  },
 }

@@ -225,9 +225,9 @@ let serve = async (req: Request, env: Env, r: Route) => {
   // an absent Origin is allowed (route.ts `sameOrigin`).
   if (path == '/stripe/connect') return sell.fetch(req, env)
   // Texts and their outcomes, as Telnyx posts them (operator-texts.ts).
-  if (path == '/telnyx/webhook') {
-    let { telnyxDoor } = await import('./operator-texts.ts')
-    return telnyxDoor(req, env)
+  if (path == '/telnyx/webhook' || path == '/pinnacle/webhook') {
+    let { textDoor } = await import('./operator-texts.ts')
+    return textDoor(req, env, path.split('/')[1])
   }
   // Texts to a person's own number, as voip.ms's callback sends them
   // (operator-line.ts).

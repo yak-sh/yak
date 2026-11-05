@@ -196,7 +196,11 @@ export let directoryConfig: Config = {
     // A person's mobile number beside their address, and the words they
     // agreed to before being texted. Texts themselves are kept by the
     // Operator, not here, so `text` stays free for apps.
-    { use: '@yaks/phone', facets: ['vocab'], words: ['phone', 'sms_consent'] },
+    {
+      use: '@yaks/phone',
+      facets: ['vocab'],
+      words: ['phone', 'sms_consent', 'sender'],
+    },
     '@yaks/tunnel',
     {
       use: '@yaks/memory',

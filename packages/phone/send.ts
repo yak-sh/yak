@@ -102,6 +102,7 @@ export let sending =
     await settle({
       text: {
         to,
+        ...(receipt.via ? { via: receipt.via } : {}),
         ...(receipt.from ? { from: receipt.from } : {}),
         ...(receipt.id ? { message_id: receipt.id } : {}),
       },

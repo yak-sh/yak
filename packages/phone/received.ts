@@ -9,7 +9,8 @@ import { type Arrival, consentEid, keyword, type Outcome } from './text.ts'
 
 /** The eid of a text that arrived, derived from the provider's id for it, so
  * a webhook posted twice keeps one. */
-export let arrivalEid = (id: string): string => derivedEid(`text|${id}`)
+export let arrivalEid = (id: string, via?: string): string =>
+  derivedEid(!via || via == 'telnyx' ? `text|${id}` : `text|${via}|${id}`)
 
 /**
  * The bundles that keep a text that arrived from the people at `people`
@@ -32,13 +33,14 @@ export let kept = (arrival: Arrival, people: string[]): Bundle[] => {
   let word = keyword(arrival.text)
   return [
     {
-      entity: { eid: arrivalEid(arrival.id) },
+      entity: { eid: arrivalEid(arrival.id, arrival.via) },
       doc: { body: arrival.text },
       text: {
         from: arrival.from,
         to: arrival.to,
         at: arrival.at,
         message_id: arrival.id,
+        ...(arrival.via ? { via: arrival.via } : {}),
         rcs: arrival.rcs,
       },
     },

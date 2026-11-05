@@ -224,6 +224,14 @@ export type Env = {
   // Worker sends with; TELNYX_PUBLIC_KEY is Telnyx's webhook signing key,
   // public, a `[vars]` line; unset, the webhook door answers 404. TELNYX_API
   // aims the sender somewhere other than Telnyx, for a test.
+  PHONE_SENDER?: import('@yaks/phone').Transport
+  PINNACLE_API_KEY?: string
+  PINNACLE_SIGNING_SECRET?: string
+  PINNACLE_NUMBER?: string
+  PINNACLE_API?: string
+  VOIPMS_USERNAME?: string
+  VOIPMS_API_PASSWORD?: string
+  VOIPMS_NUMBER?: string
   TELNYX_API_KEY?: string
   TELNYX_PUBLIC_KEY?: string
   TELNYX_API?: string

@@ -14,7 +14,7 @@ import {
   type Receipt,
   type Sender,
   type Text,
-} from './text.ts'
+} from '@yaks/phone'
 
 /** voip.ms as data: its API, how long a text may be, and the statuses that
  * mean a text will not go, in a person's words. */
@@ -101,7 +101,7 @@ type Did = Record<string, string | number | null | undefined>
  *
  * ```ts
  * import { equal } from '@yaks/testing'
- * import { voipms } from '@yaks/phone'
+ * import { voipms } from '@yaks/voipms'
  * let asked: URL[] = []
  * let line = voipms({
  *   user: 'jeff@example.com',
@@ -227,7 +227,7 @@ export let voipms = (
  *
  * ```ts
  * import { equal } from '@yaks/testing'
- * import { called } from '@yaks/phone'
+ * import { called } from '@yaks/voipms'
  * let arrival = called(new URLSearchParams(
  *   'id=77&from=2695550142&to=2695550100&message=Tuesday%20works',
  * ))
@@ -250,4 +250,15 @@ export let called = (
     rcs: false,
     media: [],
   }
+}
+
+/** The transport plugged into @yaks/phone's provider boundary. */
+export let provider: import('@yaks/phone').Provider = {
+  needs: ['key', 'user'],
+  sender: (options) => {
+    if (!options.key || !options.user) {
+      throw new Error('a voipms sender needs `user` and `key`')
+    }
+    return voipms({ ...options, key: options.key, user: options.user })
+  },
 }

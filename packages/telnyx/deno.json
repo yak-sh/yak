@@ -1,0 +1,14 @@
+{
+  "name": "@yaks/telnyx",
+  "version": "0.2.17",
+  "exports": {
+    ".": "./mod.ts"
+  },
+  "license": "Apache-2.0",
+  "description": "Telnyx texting transport and verified webhook events for @yaks/phone.",
+  "publish": {
+    "exclude": [
+      "**/*_test.ts"
+    ]
+  }
+}

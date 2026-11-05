@@ -45,9 +45,17 @@ export type Ed25519 = {
   join: string
 }
 
-/** How a sender signs: a named scheme, an {@link Hmac} of the body, or an
- * {@link Ed25519} signature. */
-export type Scheme = 'stripe' | 'github' | 'telnyx' | Hmac | Ed25519
+/** A provider that authenticates with a secret header rather than a signature. */
+export type SecretHeader = { header: string; token: true }
+
+/** Signature verification or bearer-secret authentication, specified as data. */
+export type Scheme =
+  | 'stripe'
+  | 'github'
+  | 'telnyx'
+  | Hmac
+  | Ed25519
+  | SecretHeader
 
 /** Where a signature's header is read from: a fetch `Headers` is one. */
 export type HeaderLookup = { get(name: string): string | null }
@@ -127,6 +135,28 @@ let pairs = (line: string) =>
       ? ['', p.trim()]
       : [p.slice(0, at).trim(), p.slice(at + 1).trim()]
   })
+
+// A provider that sends a bearer secret in a header (Pinnacle). Compare
+// through WebCrypto, just as digests are compared, before the body is decoded.
+let bearer = async (
+  scheme: SecretHeader,
+  secret: string,
+  headers: HeaderLookup,
+) => {
+  let sent = headers.get(scheme.header)
+  if (!sent) return `no ${scheme.header} header`
+  let k = await crypto.subtle.importKey(
+    'raw',
+    enc.encode(secret),
+    { name: 'HMAC', hash: 'SHA-256' },
+    false,
+    ['sign', 'verify'],
+  )
+  let digest = await crypto.subtle.sign('HMAC', k, enc.encode(secret))
+  return await crypto.subtle.verify('HMAC', k, digest, enc.encode(sent))
+    ? ''
+    : MISMATCH
+}
 
 // Stripe: `t=<unix>,v1=<hex>` over `<t>.<raw body>`.
 let stripe = async (
@@ -213,6 +243,8 @@ export let refusal = (
     ? stripe(secret, body, headers, now)
     : scheme == 'telnyx'
     ? ed25519(TELNYX, secret, body, headers, now)
+    : typeof scheme == 'object' && 'token' in scheme
+    ? bearer(scheme, secret, headers)
     : scheme != 'github' && 'timestamp' in scheme
     ? ed25519(scheme, secret, body, headers, now)
     : hmac(scheme == 'github' ? GITHUB : scheme, secret, body, headers)

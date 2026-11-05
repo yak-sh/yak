@@ -1,7 +1,8 @@
 import { test } from '@yaks/testing'
 import { assertEquals, assertRejects } from '@std/assert'
 import { Unsent } from '@yaks/host/senders'
-import { Blocked, Denied, voipms } from './mod.ts'
+import { Blocked, Denied } from '@yaks/phone'
+import { voipms } from './mod.ts'
 
 // An account whose API answers every call with `said`, keeping what it was
 // asked.

@@ -1,6 +1,6 @@
 // Text messages between a space's Operator and the people who agreed to them:
 // the number a person gave and the words they agreed to, on the person in the
-// directory (@yaks/phone); the door Telnyx posts texts to; and the campaign's
+// directory (@yaks/phone); the provider webhook door; and the campaign's
 // replies (T-134538). The Operator answers by text as one of its channels
 // (operator-channels.ts).
 import type { Bundle } from '@yaks/graph'
@@ -8,11 +8,8 @@ import {
   type Arrival,
   Blocked,
   consentEid,
-  heard,
   keyword,
   mobile,
-  type Sender,
-  telnyx,
   type Text,
 } from '@yaks/phone'
 import { ours, refusal } from '@yaks/hook'
@@ -40,9 +37,6 @@ export let REPLIES = {
   help:
     'yaks.app: Help with your site texts: email hello@yaks.app. Msg & data rates may apply. Reply STOP to opt out.',
 }
-
-/** The messaging profile the platform's number is on, at Telnyx. */
-export let PROFILE = 'yaks.app'
 
 /** The number a person is texted at, the words and moment they agreed, and
  * the space whose Operator texts them. */
@@ -118,29 +112,13 @@ export let handed = (
   },
 ]
 
-/** What sends the platform's texts: Telnyx, from the "yaks.app" profile's
- * toll-free number, verified to text while the 10DLC campaign waits. */
-export let texter = (env: Env): Sender => {
-  if (!env.TELNYX_API_KEY) throw new Error('TELNYX_API_KEY is not set')
-  let at = `${env.TELNYX_API ?? ''}|${env.TELNYX_API_KEY}`
-  // One per key for the isolate's life, so the profile's number is asked once.
-  return senders.get(at) ?? senders.set(
-    at,
-    telnyx({
-      key: env.TELNYX_API_KEY,
-      profile: PROFILE,
-      tollFree: true,
-      ...(env.TELNYX_API ? { api: env.TELNYX_API } : {}),
-    }),
-  ).get(at)!
-}
-let senders = new Map<string, Sender>()
-
+export { texter } from './phone-providers.ts'
+import { PROVIDERS, signingKey, texter } from './phone-providers.ts'
 /** Send a platform text that nothing waits on: a carrier's block is
  * expected until the campaign is approved, and anything else is reported. */
-export let tell = async (env: Env, text: Text, why: string) => {
+export let tell = async (env: Env, text: Text, why: string, via?: string) => {
   try {
-    await texter(env).send(text)
+    await texter(env, via ? { via } : undefined).send(text)
   } catch (error) {
     if (!(error instanceof Blocked)) caught(error, { request: why })
   }
@@ -169,7 +147,7 @@ let pictures = async (env: Env, space: Space, arrival: Arrival) => {
   let files = []
   for (let [i, m] of arrival.media.entries()) {
     let got = await fetch(m.url)
-    if (!got.ok) throw new Error(`Telnyx media answered ${got.status}`)
+    if (!got.ok) throw new Error(`Text media answered ${got.status}`)
     files.push(
       await keepFile(
         env,
@@ -198,11 +176,21 @@ export let arrived = async (env: Env, arrival: Arrival) => {
     let { appArrived } = await import('./app-texts.ts')
     return await appArrived(env, line, arrival)
   }
+  let own = await dir.textSpace(arrival.to)
+  if (own) {
+    let { lineArrived } = await import('./operator-line.ts')
+    if (await lineArrived(env, [own], arrival)) return
+  }
   let person = await dir.phoned(arrival.from)
   let word = keyword(arrival.text)
   let as = (person: string) => ({ 'x-yak-person': person })
   let reply = (text: string) =>
-    tell(env, { to: arrival.from, text, ...back(arrival) }, `text ${word}`)
+    tell(
+      env,
+      { to: arrival.from, text, ...back(arrival) },
+      `text ${word}`,
+      arrival.via,
+    )
   if (word == 'stop') {
     if (person) {
       await dir.apply({ entities: texts(person, '', false) }, as(person))
@@ -243,9 +231,12 @@ export let arrived = async (env: Env, arrival: Arrival) => {
           channel: arrival.rcs ? 'rcs' : 'text',
           address: arrival.from,
           reply_to: arrival.to,
+          ...(arrival.via ? { via: arrival.via } : {}),
           files,
         },
-        options: { id: requestId(space.eid, `telnyx:${arrival.id}`) },
+        options: {
+          id: requestId(space.eid, `${arrival.via ?? 'telnyx'}:${arrival.id}`),
+        },
       }),
     })
   )
@@ -255,34 +246,42 @@ export let arrived = async (env: Env, arrival: Arrival) => {
 }
 
 /**
- * `POST /telnyx/webhook`: what Telnyx says about a text, signed under its
- * public key. A missing or stale signature is refused quietly; one that is
+ * `POST /<via>/webhook`: the selected provider's event, authenticated by its
+ * verification scheme. A missing or stale signature is refused quietly; one that is
  * complete and does not match, which is what a wrong key looks like, is
  * refused and reported. A text that failed to arrive is reported unless a
  * carrier blocked it, which is expected until the campaign is approved.
  */
-export let telnyxDoor = async (req: Request, env: Env): Promise<Response> => {
-  if (!env.TELNYX_PUBLIC_KEY) {
+export let textDoor = async (
+  req: Request,
+  env: Env,
+  via: string,
+): Promise<Response> => {
+  let transport = PROVIDERS[via]
+  let key = signingKey(env, via)
+  if (!key || !transport?.scheme || !transport.heard) {
     return new Response('Texts are not switched on here.', { status: 404 })
   }
   if (req.method != 'POST') return new Response(null, { status: 405 })
   let raw = await req.text()
-  let no = await refusal('telnyx', env.TELNYX_PUBLIC_KEY, raw, req.headers)
+  let no = await refusal(transport.scheme, key, raw, req.headers)
   if (no) {
-    if (ours(no)) await fault(env, 'POST /telnyx/webhook', new Error(no))
+    if (ours(no)) await fault(env, `POST /${via}/webhook`, new Error(no))
     return Response.json({ error: { code: 'bad_signature', message: no } }, {
       status: 400,
     })
   }
-  let { arrival, outcome } = heard(JSON.parse(raw))
+  let { arrival, outcome } = transport.heard(JSON.parse(raw))
   if (outcome?.failed && !outcome.failed.blocked) {
     caught(new Error(`A text did not arrive: ${outcome.failed.reason}`), {
-      request: 'telnyx outcome',
+      request: `${via} outcome`,
     })
   }
-  if (arrival) await arrived(env, arrival)
+  if (arrival) await arrived(env, { ...arrival, via })
   return Response.json({})
 }
+
+export let telnyxDoor = (req: Request, env: Env) => textDoor(req, env, 'telnyx')
 
 /**
  * The Operator's `text_send`: a text to the person it works for, at the
@@ -312,7 +311,7 @@ export let textSend = (env: Env, ctx: Ctx, space: Space): Tool => ({
     }
     let { textSigned } = await import('./operator-channels.ts')
     try {
-      let { id } = await texter(env).send({
+      let { id } = await texter(env, space.sender).send({
         to: texting.number,
         text: `${text}\n\n${textSigned(space)}`,
       })

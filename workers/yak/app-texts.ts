@@ -93,7 +93,7 @@ export let appTexter = (
       let agreed = person ? await dir.texting(person) : null
       if (agreed?.number != text.to) throw new Blocked(PILOT)
     }
-    let receipt = await texter(env).send({
+    let receipt = await texter(env, at.sender).send({
       to: text.to,
       text: text.text,
       ...(from ? { from } : {}),
@@ -130,7 +130,12 @@ export let appArrived = async (
   // The answer a carrier requires goes whatever the budget says, and is
   // counted all the same.
   try {
-    let { id } = await texter(env).send({
+    let { id } = await texter(
+      env,
+      arrival.via
+        ? { ...line.space.sender, via: arrival.via }
+        : line.space.sender,
+    ).send({
       to: arrival.from,
       text: said,
       from: arrival.to,
@@ -139,6 +144,7 @@ export let appArrived = async (
     answer.text = {
       ...answer.text as object,
       ...(id ? { message_id: id } : {}),
+      ...(arrival.via ? { via: arrival.via } : {}),
     }
     answer.delivered = { at: new Date().toISOString() }
   } catch (error) {
