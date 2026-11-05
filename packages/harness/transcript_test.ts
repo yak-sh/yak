@@ -8,7 +8,7 @@ import { define, resolve } from '@yaks/render'
 import { assert, assertEquals } from '@std/assert'
 import { render } from '@yaks/preact'
 import { words } from '@yaks/cli/host'
-import { at, mount } from './testing.ts'
+import { at, mount, wears } from './testing.ts'
 import type { Bundle, Comp } from '@yaks/graph'
 import { toolEid } from '@yaks/tools'
 import { transcriptViews } from './transcript.ts'
@@ -59,10 +59,10 @@ test('transcript dims sequence and tool prose and colors each entry kind', async
       )
       if (kind != 'entry') assert(ui.text().includes('second line'))
       let ansi = ui.out.join('')
-      assert(ansi.includes('\x1b[38;2;122;132;120;2m  7\x1b[0m'), ansi)
+      assert(ansi.includes(wears('Dim') + '  7\x1b[0m'), ansi)
       assert(ansi.includes(kind.padEnd(9) + '\x1b[0m'), ansi)
       assertEquals(
-        ansi.includes('\x1b[38;2;122;132;120;2mfirst line'),
+        ansi.includes(wears('Dim') + 'first line'),
         kind == 'result',
       )
     } finally {
@@ -185,7 +185,7 @@ test('user inputs share composer borders, machine entries do not', async () => {
       assertEquals(ui.text().includes('╭'), boxed, ui.text())
       assert(ui.text().includes('hello'), ui.text())
       if (boxed) {
-        assert(ui.out.join('').includes('\x1b[38;2;122;132;120;2m╭'))
+        assert(ui.out.join('').includes(wears('Composer_Border') + '╭'))
         assert(!ui.text().includes('**hello**'))
       }
     } finally {

@@ -8,7 +8,7 @@ import type { Model } from '@yaks/model'
 import { App, changes } from './app.ts'
 import { panels, type UIAgent } from './panels.ts'
 import { local } from './local.ts'
-import { harness, mount } from './testing.ts'
+import { harness, mount, wears } from './testing.ts'
 import { until } from '../process/testing.ts'
 import { ShuttingDown } from './shutdown.ts'
 
@@ -75,11 +75,11 @@ test('fake agent: panels, burst selector keys, editing and stale reads', async (
     for (let p of panels) assert(ui.text().includes(p.title), p.title)
     assert(!ui.text().includes('test task'))
     let ansi = ui.out.join('')
-    assert(ansi.includes('38;2;167;192;128mmessage'))
+    assert(ansi.includes(wears('Good') + 'message'))
     assert(ansi.includes('Browse sessions'))
-    assert(ansi.includes('38;2;122;132;120;2m╭'))
+    assert(ansi.includes(wears('Composer_Border') + '╭'))
     await ui.send('\t')
-    assert(ui.out.join('').includes('38;2;230;152;117mtask'))
+    assert(ui.out.join('').includes(wears('Task') + 'task'))
     await ui.send('\t')
     let before = reads
     // Composer growth reallocates bounded sidebar panels as well as the thumb.
@@ -954,7 +954,7 @@ test('Ctrl directions navigate visual rows and spatial focus; legacy Enter and B
       'preserve',
     )
     assert(
-      ui.out.join('').includes('48;2;52;63;68'),
+      ui.out.join('').includes(wears('Session_Selected')),
       'selected background reaches ANSI',
     )
   } finally {

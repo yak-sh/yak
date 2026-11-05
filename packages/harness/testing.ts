@@ -8,6 +8,7 @@ import { install } from '@yaks/connections'
 import { type Harness, hosted } from './store.ts'
 import { type ComponentType } from 'preact'
 import { mount as tui } from '../tui/testing.ts'
+import { ansi } from '../tui/paint.ts'
 import { dress } from './sheet.ts'
 import { HARNESS } from './default.ts'
 
@@ -122,6 +123,16 @@ export let working = (h: Harness, deps: Omit<Runner, 'holder'>) => {
 /** A harness view on a fake terminal, dressed as the harness is. */
 export let mount = (App: ComponentType, columns?: number, rows?: number) =>
   tui(App, columns, rows, dress)
+
+/** The escape that opens text wearing `name`, one of the harness's classes,
+ * in whatever theme it is dressed: what a test looks for in the bytes a
+ * view wrote, so it checks the class a part wears and not a colour. A class
+ * that paints nothing has no escape, and is refused. */
+export let wears = (name: string): string => {
+  let open = ansi([{ text: '', style: dress[name] ?? {} }])
+  if (!open) throw new Error(`${name} paints nothing`)
+  return open.slice(0, -'\x1b[0m'.length)
+}
 
 /** A workspace reading only the fixture's temporary directory, without a shell. */
 export let attachedWorkspace = async (h: Pick<Harness, 'g'>, root: string) => {
