@@ -11,12 +11,15 @@ let NAMES = typeof YAK_SHEETS == 'undefined' ? {} : YAK_SHEETS
 // The face nearly every page's text is in, asked for before the sheet is parsed.
 let FONT = 'nunito-latin.woff2'
 
-/** The head's links for one of the site's sheets. */
+/** The head's links for one of the site's sheets, after the reporter
+ * (page-report.ts), which runs before any of the page's own scripts so a
+ * break in them reaches the tracker. */
 export let links = (env: Host, sheet: string, names = NAMES) => {
   let at = (name: string) => url(env, `/${names[name] ?? name}`)
-  return `<link rel="preload" href="${
-    at(FONT)
-  }" as="font" type="font/woff2" crossorigin>
+  return `<script src="${at('report.js')}" data-yak-at="${
+    url(env, '/')
+  }"></script>
+<link rel="preload" href="${at(FONT)}" as="font" type="font/woff2" crossorigin>
 <link rel="stylesheet" href="${at(sheet)}">`
 }
 

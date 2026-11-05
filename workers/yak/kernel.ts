@@ -126,6 +126,7 @@ import {
   sameOrigin,
   shared,
 } from './route.ts'
+import * as pageReport from './page-report.ts'
 import * as sell from './sell.ts'
 import * as sweep from './sweep.ts'
 import * as tunnel from './tunnel.ts'
@@ -254,6 +255,9 @@ let serve = async (req: Request, env: Env, r: Route) => {
   ) {
     return sweep.fetch(req, env)
   }
+  // What breaks in the platform's own pages (page-report.ts), before the
+  // connector for the same reason as the fee's.
+  if (path == pageReport.PATH) return pageReport.answer(req)
   if (path == '/mcp' || path.startsWith('/api/')) {
     return bound(env.MCP, mcp, env).fetch(req)
   }

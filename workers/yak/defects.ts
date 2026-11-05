@@ -7,6 +7,7 @@ import { status } from '@yaks/graph/errors'
 import { CallError } from '@yaks/tools/errors'
 import { refused as toolRefusal } from '@yaks/tools/routes'
 import {
+  type Break,
   capture,
   coalesce,
   type Coalesced,
@@ -219,7 +220,13 @@ export let redone = (error: unknown, replaced?: () => boolean): boolean =>
 export let defect = (
   error: unknown,
   tags: Tags,
-  details: { hit?: Hit; fault?: string; commit?: string } = {},
+  details: {
+    hit?: Hit
+    fault?: string
+    commit?: string
+    // How a page's reporter met it, and what the page did before (./page-report.ts).
+    page?: Pick<Break, 'mechanism' | 'breadcrumbs'>
+  } = {},
 ) => {
   let invocation = context.getStore()
   if (!invocation?.env.ERRORS || redone(error, invocation.replaced)) return
@@ -235,6 +242,7 @@ export let defect = (
   }
   let rows = capture(error, {
     ...invocation.origin,
+    ...details.page,
     sink,
     commit: details.commit ?? env.CF_VERSION_METADATA?.id,
     fault: details.fault ??
