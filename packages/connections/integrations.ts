@@ -23,6 +23,7 @@ import type { Scheme } from '@yaks/hook'
 import { CallError } from '@yaks/tools/errors'
 import { INTEGRATION, integrationEid } from './identity.ts'
 import anthropic from './anthropic.json' with { type: 'json' }
+import gmail from './gmail.json' with { type: 'json' }
 import googleCalendar from './google-calendar.json' with { type: 'json' }
 import openrouter from './openrouter.json' with { type: 'json' }
 import openai from './openai.json' with { type: 'json' }
@@ -104,6 +105,7 @@ export type Read = (query: Query) => Bundle[] | Promise<Bundle[]>
 // is.
 let SEEDS: Integration[] = [
   anthropic,
+  gmail,
   googleCalendar,
   { ...openai, refresh_encoding: 'json' },
   { ...openrouter, answers: 'key' },

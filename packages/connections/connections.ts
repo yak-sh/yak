@@ -1163,6 +1163,43 @@ export let refresh = async (
   return marking(c, connection, () => oauth.refresh(stale))
 }
 
+/** Send a request through a connection for the one who holds it, its
+ * credential as the bearer: over https to a host its integration names, and
+ * to no other, following no redirect. A service that refuses the access token
+ * (401) is asked once more with a refreshed one. */
+export let call = async (
+  c: Ctx,
+  connection: Eid,
+  req: Request,
+): Promise<Response> => {
+  let b = await held(c.graph.read, connection)
+  let name = String(comp(b, CONNECTION).integration)
+  let i = await known(c.graph.read, name)
+  let url = new URL(req.url)
+  if (url.protocol != 'https:' || !i?.hosts.includes(url.host)) {
+    throw new Error(`${name} sends its credential to no ${url.host}`)
+  }
+  let bearer = await credential(c, connection)
+  if (!bearer) throw new Error(`${name} holds no credential yet`)
+  let body = req.body ? await req.arrayBuffer() : undefined
+  let send = (token: string) => {
+    let headers = new Headers(req.headers)
+    headers.set('authorization', `Bearer ${token}`)
+    return (c.fetch ?? fetch)(url, {
+      method: req.method,
+      headers,
+      body,
+      redirect: 'manual',
+    })
+  }
+  let res = await send(bearer)
+  if (res.status != 401 || keyed(i)) return res
+  let fresh = await refresh(c, connection, bearer)
+  if (!fresh || fresh == bearer) return res
+  await res.body?.cancel()
+  return send(fresh)
+}
+
 /** A selected account's bearer and optional website session, read privately
  * from its vault. The session is not handed to browser-only API doors. */
 export let accountCredential = async (

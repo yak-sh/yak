@@ -34,6 +34,7 @@ import {
   attach,
   begin,
   borrowed,
+  call,
   carry,
   clientOf,
   connect,
@@ -655,6 +656,45 @@ test(
     assertEquals(of(await at(g, eid), 'connection').status, 'needed')
     await assertRejects(() => refresh(c, eid, 'A2'))
     assertEquals(of(await at(g, eid), 'connection').status, 'broken')
+  },
+)
+
+test(
+  'call: the bearer goes to its own hosts alone, and is refreshed once when refused',
+  async () => {
+    let { g, c, needs } = await setup()
+    let eid = await needs()
+    let name = String(of(await at(g, eid), 'secret').name)
+    await g.apply([{
+      entity: { eid: secretEid(name) },
+      secret: { name, value: '{"access_token":"A1","refresh_token":"R1"}' },
+    }])
+    let sent: string[] = []
+    let fetch = (input: RequestInfo | URL, init: RequestInit = {}) => {
+      if (String(input) == 'https://auth.example/token') {
+        return Promise.resolve(Response.json({ access_token: 'A2' }))
+      }
+      let bearer = new Headers(init.headers).get('authorization')
+      let body = new TextDecoder().decode(init.body as ArrayBuffer)
+      sent.push(`${init.method} ${input} ${bearer} ${body}`)
+      return Promise.resolve(
+        new Response(null, { status: bearer == 'Bearer A1' ? 401 : 204 }),
+      )
+    }
+    let calling = (url: string) =>
+      call(
+        { ...c, fetch },
+        eid,
+        new Request(url, { method: 'POST', body: 'hi' }),
+      )
+    assertEquals((await calling('https://api.example/events')).status, 204)
+    assertEquals(sent, [
+      'POST https://api.example/events Bearer A1 hi',
+      'POST https://api.example/events Bearer A2 hi',
+    ])
+    await assertRejects(() => calling('https://evil.example/events'))
+    await assertRejects(() => calling('http://api.example/events'))
+    assertEquals(sent.length, 2)
   },
 )
 

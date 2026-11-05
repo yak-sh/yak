@@ -91,13 +91,16 @@ needs narrower, asks Google for offline access so the grant can be refreshed,
 and sends its token to `www.googleapis.com` alone. It is `testing: true` while
 Google's app is in testing mode, where only the people Google lists may sign in,
 so yaks.app offers it only on a connections page opened with
-`?enable=google-calendar`. `openai` is built for the native harness's ChatGPT
-sign-in; it uses a public OAuth client, asks for a refreshable grant, and sends
-its bearer to `chatgpt.com`.
+`?enable=google-calendar`. `gmail` is built the same way, signing in as the same
+`google` client: it asks for `gmail.send` alone, so the mail it sends goes out
+from the person's own address, and sends its token to `gmail.googleapis.com`
+alone. Reading mail is a scope added to its `scopes`, a change of data. `openai`
+is built for the native harness's ChatGPT sign-in; it uses a public OAuth
+client, asks for a refreshable grant, and sends its bearer to `chatgpt.com`.
 
 An integration reached by OAuth signs in as the client it names
 (`client: 'google'`), registered once with the service and shared by every
-integration that names it: google-calendar names `google`, as a later
+integration that names it: google-calendar and gmail name `google`, as a later
 google-drive would. The client is a secret, kept as `oauth_client <name>`:
 `registration(name, {id, secret})` is the bundle that seals it, so the graph
 holds its handle and the vault its id and secret, and `clientOf` reads it back
@@ -233,6 +236,11 @@ its vault, and the redirect):
   handle once the service has refused `stale`. A grant the service refuses, here
   or in `credential`, marks the connection `broken`. A failure on the wire does
   not.
+- `call(ctx, connection, request)` sends a request for the one who holds the
+  connection, as their host's own code does for them (yaks.app's Operator), with
+  the credential as its bearer: over https to a host its integration names and
+  no other, following no redirect, and once more with a refreshed token when the
+  service answers 401.
 
 ## Hosting it
 

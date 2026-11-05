@@ -1,6 +1,6 @@
 // OAuth clients: what an integration signs in as, registered once with a
 // service and kept once, however many integrations share it. google-calendar
-// names `google`, and so will a later google-drive; a product that needs a
+// and gmail name `google`, and so will a later google-drive; a product that needs a
 // client of its own names another. An integration names its client
 // (`Integration.client`); the client is a secret (@yaks/secrets), so the graph
 // holds its handle and the vault its id and secret. It is set the way any

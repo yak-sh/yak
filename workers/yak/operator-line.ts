@@ -26,7 +26,7 @@ import type { Tool } from '@yaks/session'
 import type { Env } from './env.ts'
 import type { Space } from './directory.ts'
 import { type Ctx, refuse } from './tool.ts'
-import { ctxOf, pageOf } from './connections.ts'
+import { ctxOf, ownConnection, pageOf } from './connections.ts'
 import { apex } from './host.ts'
 import { opened, seal } from './lib/token.ts'
 import { meta } from './meta.ts'
@@ -132,17 +132,8 @@ export let lined = async (
 }
 
 /** The person's own connected number, theirs or their own space's. */
-export let lineOf = async (env: Env, ctx: Ctx, space: Space) => {
-  let owners = [ctx.person]
-  if (await ctx.dir.role(space, ctx.person) == 'owner') owners.push(space.eid)
-  for (let owner of owners) {
-    let [b] = await meta(env).query(
-      `.${CONNECTION}.owner=${owner}&.${CONNECTION}.integration=${LINE}&.${CONNECTION}.status=connected&*`,
-    )
-    if (b) return b
-  }
-  return undefined
-}
+export let lineOf = (env: Env, ctx: Ctx, space: Space) =>
+  ownConnection(env, ctx, space, LINE)
 
 /** How a text the Operator sends from a person's number is signed: its name,
  * and whose assistant it is. */

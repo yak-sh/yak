@@ -37,7 +37,8 @@
  * lent to the copies, {@link using},
  * {@link through},
  * {@link begin} and {@link connect}, {@link disconnect}, {@link resolve},
- * {@link used} and {@link envOf}, {@link credential}, {@link refresh}. A host
+ * {@link used} and {@link envOf}, {@link credential}, {@link refresh}, and
+ * {@link call} for a call out by the one who holds the connection. A host
  * that composes this package
  * composes @yaks/secrets, over its vault, and @yaks/edge beside it; the egress
  * that swaps sentinels is @yaks/egress.
@@ -81,6 +82,7 @@ export {
   begin,
   bindingOf,
   borrowed,
+  call,
   carry,
   connect,
   credential,

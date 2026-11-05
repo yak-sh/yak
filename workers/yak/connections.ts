@@ -93,6 +93,7 @@ import { caught } from './defects.ts'
 import { domainOf, vouched, type Who, whoIs } from './session.ts'
 import {
   APP,
+  type Ctx as Asking,
   inApp,
   inSpace,
   refuse,
@@ -807,6 +808,34 @@ type Held = {
 // The connections page of a space, where a sign-in begun there comes back to.
 export let pageOf = (env: Env, space: string) =>
   manageAt(space, 'connections', env)
+
+/** The connections page opened to add one integration, still naming it while
+ * it is in its service's testing mode (`enabled`). */
+export let addingAt = (env: Env, space: string, i: Integration) =>
+  enabling(
+    `${pageOf(env, space)}?add=${encodeURIComponent(i.name)}`,
+    i.testing ? [i.name] : [],
+  )
+
+/** A person's own connected connection through `integration`, held for them by
+ * an agent working in `space` (the Operator): theirs, or else that space's when
+ * they own it. */
+export let ownConnection = async (
+  env: Env,
+  ctx: Pick<Asking, 'person' | 'dir'>,
+  space: Space,
+  integration: string,
+): Promise<Bundle | undefined> => {
+  let owners = [ctx.person]
+  if (await ctx.dir.role(space, ctx.person) == 'owner') owners.push(space.eid)
+  for (let owner of owners) {
+    let [b] = await meta(env).query(
+      `.${CONNECTION}.owner=${owner}&.${CONNECTION}.integration=${integration}&.${CONNECTION}.status=connected&*`,
+    )
+    if (b) return b
+  }
+  return undefined
+}
 
 // A page, told how a sign-in went.
 let told = (page: string, how: 'connected' | 'refused') => {

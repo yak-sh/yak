@@ -62,6 +62,7 @@ import {
 } from './operator-channels.ts'
 import { textSend } from './operator-texts.ts'
 import { phoneSend } from './operator-line.ts'
+import { googleTold, googleTools } from './operator-google.ts'
 import {
   bases,
   declare,
@@ -796,6 +797,7 @@ export let operating = (
           textSend(env, ctx, space),
           mailSend(env, ctx, space, store),
           phoneSend(env, ctx, space, store),
+          ...await googleTools(env, ctx, space),
           ...options.tools?.(ctx, files) ?? [],
         ]
       },
@@ -813,6 +815,7 @@ export let operating = (
         return [
           topic ? await oracleContext(ctx, g, topic) : await oracleMap(ctx, g),
           told(ctx, space),
+          await googleTold(env, ctx, space),
         ]
           .filter(Boolean).join('\n\n')
       },
