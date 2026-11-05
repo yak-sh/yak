@@ -65,6 +65,10 @@ let guarded = (before: Bundle | undefined, change: Bundle): Bundle => {
 /** Current local primary checkouts, including repositories using master. */
 export let skillRoots = primaryRoots
 
+// An export lands the bytes the graph renders, which agreement records.
+// Formatting them would leave every exported file disagreeing with its source.
+let format: Run = () => Promise.resolve({ ok: true, code: 0, out: '', err: '' })
+
 /** Mirror tracked skill text, keeping agreement outside the graph. Expected
  * conflicts and Git refusals are reports. A failed landing retains its linked
  * worktree for inspection and never acknowledges unlanded graph writes. */
@@ -452,7 +456,12 @@ let syncRepository = async (
     }
     await git(tree, ['add', '--all', '--', '.claude/skills'])
     await git(tree, ['commit', '-m', 'Mirror graph skills'])
-    let outcome = await land({ cwd: tree, run: command, write: () => {} })
+    let outcome = await land({
+      cwd: tree,
+      run: command,
+      format,
+      write: () => {},
+    })
     // These commits contain validated skill text only. A clean rebase does not
     // require TS tests, but must validate the newly combined documents again.
     if ('diverged' in outcome && !outcome.conflict) {
@@ -461,7 +470,7 @@ let syncRepository = async (
       for (let path of paths.filter(primary)) {
         parseSkill(await fs.readTextFile(`${tree}/${path}`), titleOf(path))
       }
-      outcome = await land({ cwd: tree, run: command, write: () => {} })
+      outcome = await land({ cwd: tree, run: command, format, write: () => {} })
     }
     if (!('landed' in outcome)) {
       out.conflicts.push(
