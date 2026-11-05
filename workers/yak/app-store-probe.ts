@@ -208,10 +208,15 @@ export let appWire = (vocab: Vocab, name: string, composition: Composition) => {
 }
 
 /** The graph API's receipt words beside the app's declared vocabulary. */
-export let wireVocab = (words: Vocab) =>
-  words.comp('apply_receipt')
-    ? words
-    : loadVocab([...words.docs, apiDoc], words.keywords)
+let wires = new WeakMap<Vocab, Vocab>()
+export let wireVocab = (words: Vocab) => {
+  if (words.comp('apply_receipt')) return words
+  let held = wires.get(words)
+  if (!held) {
+    wires.set(words, held = loadVocab([...words.docs, apiDoc], words.keywords))
+  }
+  return held
+}
 
 /** Keep each app's API rows apart, with the fixture's directory unchanged. */
 export let stores = (

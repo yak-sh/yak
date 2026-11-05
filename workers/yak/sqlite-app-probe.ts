@@ -53,6 +53,7 @@ export let sqliteApp = (
     vocab: Vocab,
     previous?: Graph,
     prepare?: (driver: Driver) => void,
+    reset = false,
   ) => {
     let held = shapeOf(vocab)
     let { derived, searchable, extra } = held
@@ -73,7 +74,7 @@ export let sqliteApp = (
       extend: [search(searchable, driver)],
       schemaReady: () => true,
     })
-    if (previous || prepare) {
+    if ((previous && (previous.vocab !== vocab || reset)) || prepare) {
       let [failure] = rows.install(extra)
       if (failure) throw failure
     }

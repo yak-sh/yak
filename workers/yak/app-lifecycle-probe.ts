@@ -112,7 +112,7 @@ export let lifecycleStores = (
       failed: (error) => void failures.push(error),
       wait,
     })
-    let make = (doc: VocabDoc) => {
+    let make = (doc: VocabDoc, reset = false) => {
       let words = wireVocab(appVocab(doc))
       let g = backend.graph(
         words,
@@ -129,6 +129,7 @@ export let lifecycleStores = (
             if (failure) throw failure
           }
           : undefined,
+        reset,
       )
       if (sql && !raw) {
         sql.query(KV)
@@ -157,7 +158,8 @@ export let lifecycleStores = (
       }
       return next
     }
-    let bind = () => wire = make(appDoc(read('vocab') ?? '{}'))
+    let bind = (reset = false) =>
+      wire = make(appDoc(read('vocab') ?? '{}'), reset)
     let rows = (comp: string, prop?: string) => {
       if (!wire.graph.vocab.comp(comp)) return 0
       let held = wire.graph.read(
@@ -340,7 +342,7 @@ export let lifecycleStores = (
               hydrated = false
               unselectable.clear()
               deployed = false
-              bind()
+              bind(true)
               return json({ ok: true })
             },
           })
