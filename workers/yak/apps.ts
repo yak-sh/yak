@@ -1043,7 +1043,6 @@ let asset = async (
   // which is woven the platform's scripts on its way out (`served`), so it
   // gets none here, or the browser would run each of them twice.
   let base = files.baseOf(at, got.headers.get(files.FILE) ?? '', !!app.rooted)
-  refresh(env, space, app)
   let page = await c.time('render', async () =>
     woven(
       env,
