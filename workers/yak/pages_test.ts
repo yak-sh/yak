@@ -56,8 +56,10 @@ test('pages: staging sign-in and error pages link to their own apex', async () =
   for (
     let response of [
       lost(env),
-      askEmail(null, null, undefined, undefined, 200, env),
-      askCode('ada@example.test', null, null, undefined, 200, env),
+      askEmail({}, env),
+      askEmail({ texts: true }, env),
+      askCode({ address: 'ada@example.test' }, env),
+      askCode({ address: '+12695550142' }, env),
       spaceBinned({ slug: 'ada', title: 'Ada', days: 3 }, env),
     ]
   ) {

@@ -25,7 +25,7 @@ Deno.bench(
       let email = 'cold@yaks.app'
       b.start()
       await (await k.at('yaks.app', '/login')).body?.cancel()
-      await (await form(k, '/login', { email })).body?.cancel()
+      await (await form(k, '/login', { address: email })).body?.cancel()
       let inn = await form(k, '/login/code', {
         email,
         code: await mailed(k, email),

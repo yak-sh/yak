@@ -70,7 +70,7 @@ test('the kernel routes, vouches, serves, and surfaces', async () => {
     let { document } = parseHTML(await login.text())
     assert(
       document.querySelector(
-        'form[method="post"][action="/login"] input[name="email"][type="email"][required]',
+        'form[method="post"][action="/login"] input[name="address"][type="email"][required]',
       ),
     )
     // The connector answers POST (the calls) and get (the session's stream,

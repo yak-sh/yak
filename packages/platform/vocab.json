@@ -409,7 +409,18 @@
       "properties": {
         "email": {
           "type": "string",
-          "stamped": true
+          "stamped": true,
+          "description": "the address the code was mailed to"
+        },
+        "phone": {
+          "type": "string",
+          "stamped": true,
+          "description": "the US mobile number the code was texted to, in E.164 form; set instead of `email`"
+        },
+        "from": {
+          "type": "string",
+          "stamped": true,
+          "description": "on a texted code, who asked: a mac of the address the request came from, so texts per visitor are counted"
         },
         "code": {
           "type": "string",
@@ -425,7 +436,7 @@
           "stamped": true
         }
       },
-      "description": "a sign-in in progress: the code mailed out, when it expires, and how many tries are left",
+      "description": "a sign-in in progress: the code mailed or texted out, when it expires, and how many tries are left",
       "before": [
         "doc"
       ]

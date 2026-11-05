@@ -28,6 +28,8 @@ import { holder, tile } from './render/mod.ts'
 import type { People, Person } from './people.ts'
 import type { Plain } from './unseen.ts'
 import { type Invitation, qr } from './referral.ts'
+import { shown } from '@yaks/phone'
+import { SIGNIN_CONSENT, texted } from './signin.ts'
 export { esc } from './html.ts'
 import {
   accountView,
@@ -2138,49 +2140,71 @@ let welcome = (back: string | null, env: Host) => {
 // consent page is this page — signing in is the consent), and `why` is the
 // soft refusal, when there was one: a sign-in link that had already been used
 // lands here, carrying whatever it was going to finish (identity.ts, T-34351).
-export let askEmail = (
-  q: string | null,
-  back: string | null,
-  who?: string,
-  why?: string,
-  status = 200,
-  env: Host = {},
-) =>
+//
+// `texts` is whether a code can go by text (identity.ts `textable`): then the
+// one box takes an email address or a US mobile number (T-136826), and what
+// giving a number agrees to sits under it, where it is read before sending.
+// The note stands aside once the box holds an address, so a person typing
+// their email reads nothing about texts; without script it stays.
+export let askEmail = (at: {
+  q?: string | null
+  back?: string | null
+  who?: string
+  why?: string
+  status?: number
+  texts?: boolean
+}, env: Host = {}) =>
   shell(
     env,
     'Sign in or sign up',
-    why ?? welcome(back, env),
-    status,
-    `<form method="post" action="/login">${carried(q, back)}
-<p>${
-      who ? `${esc(who)} would like to use your apps. ` : ''
-    }Enter your email to get a sign-in code.</p>
-<input class="Field" name="email" type="email" required autofocus autocomplete="email" placeholder="you@example.com" aria-label="Your email">
+    at.why ?? welcome(at.back ?? null, env),
+    at.status ?? 200,
+    `<form method="post" action="/login">${carried(at.q ?? null, at.back)}
+<p>${at.who ? `${esc(at.who)} would like to use your apps. ` : ''}Enter your ${
+      at.texts ? 'email or mobile number' : 'email'
+    } to get a sign-in code.</p>
+${
+      at.texts
+        ? `<input class="Field" name="address" type="text" required autofocus autocomplete="email" autocapitalize="off" spellcheck="false" placeholder="you@example.com or 269-555-0142" aria-label="Your email or mobile number" aria-describedby="by-text">
+<p class="Note" id="by-text">${TEXTED} <a href="${
+          url(env, '/terms')
+        }">Terms</a> · <a href="${url(env, '/privacy')}">Privacy</a></p>
+<script>{let n=document.currentScript.previousElementSibling,f=n.previousElementSibling,s=()=>n.hidden=f.value.includes('@');f.addEventListener('input',s);s()}</script>`
+        : '<input class="Field" name="address" type="email" required autofocus autocomplete="email" placeholder="you@example.com" aria-label="Your email">'
+    }
 <button class="Button" type="submit">Send me a code</button>
 </form>${home(env)}`,
   )
 
-// Ask for the code just mailed, and nothing else (T-34236). Signing up is two
+let TEXTED = esc(SIGNIN_CONSENT)
+
+// Ask for the code just sent, and nothing else (T-34236). Signing up is two
 // steps and both are the address: give it, then prove it. What a person is
 // called and where their apps live are theirs to set on their own space page,
 // once they are standing on it — a question in front of the door is a step
 // somebody has to get past to see anything at all. `why` is the soft refusal,
 // when there was one. A code that expired while they looked for the letter, or
 // one that never came, is answered by a second door to the same address: the
-// first step again, without typing it again.
-export let askCode = (
-  email: string,
-  q: string | null,
-  back: string | null,
-  why?: string,
-  status = 200,
-  env: Host = {},
-) =>
-  shell(
+// first step again, without typing it again. A number was texted, and the
+// card says so.
+export let askCode = (at: {
+  address: string
+  q?: string | null
+  back?: string | null
+  why?: string
+  status?: number
+}, env: Host = {}) => {
+  let { address } = at
+  let q = at.q ?? null, back = at.back ?? null
+  let text = texted(address)
+  return shell(
     env,
-    'Check your email',
-    why ?? `We sent a six-digit code to ${esc(email)}. It lasts ten minutes.`,
-    status,
+    text ? 'Check your texts' : 'Check your email',
+    at.why ??
+      `We ${text ? 'texted' : 'sent'} a six-digit code to ${
+        esc(text ? shown(address) : address)
+      }. It lasts ten minutes.`,
+    at.status ?? 200,
     `<form method="post" action="/login/code">${carried(q, back)}
 <p>${
       q
@@ -2189,14 +2213,15 @@ export let askCode = (
         ? 'Enter it to sign in and continue.'
         : 'Enter it to land on your own space.'
     }</p>
-<input type="hidden" name="email" value="${esc(email)}">
+<input type="hidden" name="address" value="${esc(address)}">
 <input class="Field Code" name="code" inputmode="numeric" pattern="[0-9]{6}" maxlength="6" required autofocus autocomplete="one-time-code" aria-label="Your six-digit code">
 <button class="Button" type="submit">Sign in</button>
 </form><form class="Again" method="post" action="/login">${carried(q, back)}
-<input type="hidden" name="email" value="${esc(email)}">
+<input type="hidden" name="address" value="${esc(address)}">
 <button class="Button Button-quiet" type="submit">Send a new code</button>
 </form>${home(env)}`,
   )
+}
 
 // Closing a space (T-33166, erase.ts): the page that stands in front of it.
 // It names what goes — every app, every domain, everyone who loses their way
@@ -2343,7 +2368,7 @@ export let invited = (o: Offer, env: Host = {}) => {
           })
         }</div>`
         : ''
-    }<form method="post" action="/login">${held('email', o.email)}${
+    }<form method="post" action="/login">${held('address', o.email)}${
       held('return', o.back)
     }
 <p>It was sent to ${esc(o.email)}. Sign in with that address to accept it.</p>

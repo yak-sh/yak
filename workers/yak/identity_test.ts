@@ -46,7 +46,7 @@ let emailCard = async (r: Response) => {
   let { document } = parseHTML(await r.text())
   assert(
     document.querySelector(
-      'form[method="post"][action="/login"] input[name="email"][type="email"][required]',
+      'form[method="post"][action="/login"] input[name="address"][type="email"][required]',
     ),
   )
 }

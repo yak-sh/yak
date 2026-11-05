@@ -6,18 +6,24 @@
 // opens another, and an address gets three letters an hour — a window no test
 // can sit through, and a count nobody buys back by burning a code.
 import { test } from '@yaks/testing'
-import { assert, assertEquals, assertFalse } from '@std/assert'
+import { assert, assertEquals, assertFalse, assertMatch } from '@std/assert'
 import {
+  called,
+  canon,
   chose,
   LIFE,
   mac,
+  mayText,
   mint,
   nameOf,
   personOf,
   SENDS,
   type Signin,
   spend,
+  texted,
   TRIES,
+  visitor,
+  VISITS,
   WINDOW,
 } from './signin.ts'
 import { type Bundle, Stale, token } from '@yaks/graph'
@@ -259,4 +265,129 @@ test('an invitation names someone unnamed, and only them', async () => {
   let named = door([person('Dana')])
   await personOf(named.at, ME, 'Someone else')
   assertEquals(named.wrote.length, 0)
+})
+
+// A number is an address too (T-136826): kept in E.164 form under
+// `signin{phone}`, and a person found or minted by `phone{number}`.
+let NUMBER = '+12695550142'
+
+test('an address is an email or a US mobile number, however it is typed', () => {
+  assertEquals(canon(' Me@Yaks.App '), ME)
+  assertEquals(canon('(269) 555-0142'), NUMBER)
+  assertEquals(canon('269.555.0142'), NUMBER)
+  assertEquals(
+    ['me@yaks.app', NUMBER, '+447700900123', '555-0142'].map(texted),
+    [false, true, false, false],
+  )
+  // Canada, the Caribbean, premium-rate and toll-free share +1 but are no US
+  // mobile number.
+  assertEquals(
+    ['(416) 555-0142', '(876) 555-0142', '(900) 555-0142', '(888) 555-0142']
+      .map(canon).map(texted),
+    [false, false, false, false],
+  )
+  assertEquals([called(ME), called(NUMBER)], ['me', undefined])
+})
+
+// What the store was asked, and what a stub answering only those lines holds.
+let asking = (rows: (line: string) => unknown[]) => {
+  let asked: string[] = []
+  let wrote: Bundle[] = []
+  let at: Meta = {
+    query: (line) => {
+      asked.push(line)
+      return Promise.resolve(rows(line) as Bundle[])
+    },
+    apply: (bundles) => {
+      wrote.push(...bundles)
+      return Promise.resolve(
+        bundles.map((b) =>
+          b.entity.eid == '$who'
+            ? { ...b, entity: { eid: 'p1' }, $alias: '$who' }
+            : b
+        ),
+      )
+    },
+  }
+  return { at, asked, wrote }
+}
+
+test('a code for a number is kept under the number, with who asked', async () => {
+  let d = asking(() => [])
+  let code = await mint(d.at, SECRET, '269-555-0142', 'v1')
+  assertEquals(d.asked, [`.signin.phone="${NUMBER}"`])
+  let [{ signin }] = minted(d.wrote) as unknown as Signin[]
+  assertEquals([signin.phone, signin.email, signin.from], [
+    NUMBER,
+    undefined,
+    'v1',
+  ])
+  assertEquals(signin.code, await mac(NUMBER, code!, SECRET))
+  // A letter keeps no visitor: only texts are counted per visitor.
+  let mailed = asking(() => [])
+  await mint(mailed.at, SECRET, ME, 'v1')
+  assertEquals(
+    (minted(mailed.wrote)[0].signin as Signin['signin']).from,
+    undefined,
+  )
+})
+
+test('a number signs in with its code, and a person wears the number', async () => {
+  let code = await mac(NUMBER, '123456', SECRET)
+  let d = asking(
+    () => [{
+      entity: { eid: 'e1' },
+      signin: { phone: NUMBER, code, expires: soon(), tries: 0 },
+    }],
+  )
+  assert(await spend(d.at, SECRET, '(269) 555-0142', '123456'))
+  let fresh = asking(() => [])
+  assertEquals(await personOf(fresh.at, NUMBER), 'p1')
+  assertEquals(fresh.asked, [`.person&.phone.number="${NUMBER}"&?doc`])
+  assertEquals(fresh.wrote, [{
+    entity: { eid: '$who' },
+    person: {},
+    phone: { number: NUMBER },
+  }])
+})
+
+// Who asks is kept as a mac, so a row names nobody, and the same visitor is
+// the same mac.
+let visit = (from: string, ago: number) => ({
+  entity: { eid: `e${++n}` },
+  signin: {
+    phone: NUMBER,
+    from,
+    code: 'x'.repeat(64),
+    expires: new Date(Date.now() - ago + LIFE).toISOString(),
+    tries: 0,
+  },
+})
+
+test('five texted codes an hour from one visitor, and no more', async () => {
+  let me = await visitor(SECRET, '203.0.113.9')
+  assertMatch(me, /^[0-9a-f]{64}$/)
+  assertEquals(await visitor(SECRET, '203.0.113.9'), me)
+  assertEquals(await visitor(SECRET, ''), '')
+  // An IPv6 subscriber holds a whole /64, so it is one visitor.
+  let six = await visitor(SECRET, '2001:db8:0:1::7')
+  assertEquals(await visitor(SECRET, '2001:DB8:0:1:abcd::9'), six)
+  assertFalse(await visitor(SECRET, '2001:db8:0:2::7') == six)
+  let under = asking(() =>
+    Array.from({ length: VISITS - 1 }, () => visit(me, 60_000))
+  )
+  assert(await mayText(under.at, me))
+  assertEquals(under.asked, [`.signin.from="${me}"`])
+  let full = asking(() =>
+    Array.from({ length: VISITS }, () => visit(me, 60_000))
+  )
+  assertFalse(await mayText(full.at, me))
+  // The hour passes, and what fell out of it is swept.
+  let old = asking(() =>
+    Array.from({ length: VISITS }, () => visit(me, WINDOW + 60_000))
+  )
+  assert(await mayText(old.at, me))
+  assert(forgotten(old.wrote))
+  // A request from inside is never counted.
+  assert(await mayText(asking(() => []).at, ''))
 })

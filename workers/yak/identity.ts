@@ -6,7 +6,8 @@
 // six-digit code (signin.ts) — up to three an hour for any one address, and
 // over that it mints nothing and mails nothing while answering the same card,
 // so the ceiling says nothing about the address (T-33020) — and hands it to
-// the mail seam (mail.ts);
+// the mail seam (mail.ts); or a text, when the address is a US mobile number
+// and the platform texts strangers (T-136826);
 // `POST /login/code` spends it, finds or mints the person, and sets the
 // platform session cookie (lib/token.ts). No password exists to lose. Those
 // two steps are the whole of signing up (T-34236): give the address, prove it,
@@ -144,6 +145,8 @@ export let NO_MAIL = 'Sign-in mail is not switched on here yet: this deploy ' +
 export let TOO_MANY = 'Too many codes have been asked for from here just ' +
   'now. Try again in a minute.'
 export let NOT_EMAIL = 'That is not an email address. Check it and try again.'
+export let NOT_ADDRESS = 'That is not an email address or a US mobile ' +
+  'number. Check it and try again.'
 import { KERNEL, type Meta, meta } from './meta.ts'
 import {
   askAllow,
@@ -167,7 +170,22 @@ import {
   says,
   SLUG,
 } from './route.ts'
-import { canon, guess, mac, mint, nameOf, personOf, spend } from './signin.ts'
+import {
+  called,
+  canon,
+  codeText,
+  guess,
+  mac,
+  mayText,
+  mint,
+  nameOf,
+  personOf,
+  SIGNIN_CONSENT,
+  spend,
+  texted,
+  visitor,
+} from './signin.ts'
+import { textable } from './phone-providers.ts'
 import { RETRY, source, within } from './rate.ts'
 import {
   type Caller,
@@ -180,7 +198,7 @@ import { WHO } from './signed.ts'
 import { background, caught, refusing } from './defects.ts'
 import { step } from './funnel.ts'
 import { sha256 } from '@yaks/graph/sha256'
-import { consentEid } from '@yaks/phone'
+import { consentEid, shown } from '@yaks/phone'
 import { credit } from './referral.ts'
 
 // What a grant carries and a token gives back: the person, nothing else.
@@ -784,21 +802,55 @@ let landed = async (
 /** A code attempt either opens or returns the same closed sign-in card. */
 export let codeCheck = async (
   store: Meta,
-  email: string,
+  address: string,
   digest: string,
   q = '',
   back = '',
   env: Host = {},
   now: () => number = Date.now,
 ): Promise<Response | null> =>
-  await guess(store, email, digest, now) ? null : askCode(
-    email,
-    q || null,
-    back || null,
-    'That code has expired or was mistyped. Type it again, or send a new one.',
-    400,
-    env,
-  )
+  await guess(store, address, digest, now) ? null : askCode({
+    address,
+    q,
+    back,
+    why:
+      'That code has expired or was mistyped. Type it again, or send a new one.',
+    status: 400,
+  }, env)
+
+// The number a person wears, for one with no address.
+let phoneAt = async (env: Env, person: string) => {
+  let [row] = await meta(env).query(`.entity.eid=${person}`) as {
+    phone?: { number: string }
+  }[]
+  return row?.phone?.number ?? null
+}
+
+// The sign-in card, saying whether a number works on it here (`textable`).
+let signCard = (env: Env, at: Parameters<typeof askEmail>[0] = {}) =>
+  askEmail({ ...at, texts: textable(env) }, env)
+
+// A person signing up with a number agreed, on the card, to what it says
+// beside the box (signin.ts SIGNIN_CONSENT): those words are kept as their
+// consent to be texted, as a text that signs someone up is (`textedIn`). Only
+// the first sign-in is signing up: a person who has signed in before and
+// since said STOP is not subscribed again by signing in.
+let agreed = async (env: Env, person: string) => {
+  let store = meta(env)
+  let [[them], [consent]] = await Promise.all([
+    store.query(`.entity.eid=${person} ?signed_in`),
+    store.query(`.sms_consent.person=${person}`),
+  ])
+  if (them?.signed_in || consent) return
+  await store.apply([{
+    entity: { eid: consentEid(person) },
+    sms_consent: {
+      person,
+      consent: SIGNIN_CONSENT,
+      at: new Date().toISOString(),
+    },
+  }], KERNEL)
+}
 
 // A letter's one click, spent: the very code the form would have spent
 // (signin.ts), so following the link is single use, dies with the code, and
@@ -1033,7 +1085,7 @@ let ours = async (req: Request, env: Env): Promise<Response> => {
     // return, just as it does after a fresh sign-in.
     let who = await withAuth(env, req)
     if (who) return landed(req, env, who.person, '', back ?? '')
-    return askEmail(null, back, undefined, undefined, undefined, env)
+    return signCard(env, { back })
   }
 
   if (path == '/login/handoff' && req.method == 'POST') {
@@ -1066,49 +1118,89 @@ let ours = async (req: Request, env: Env): Promise<Response> => {
     return to ? quiet(redirect(to, undefined, 303)) : lost(env)
   }
 
-  // An address, and a code on its way to it. The platform reads nothing about
-  // the address here — not whether anyone has named it, not whether it has
-  // spaces or apps or an account at all (T-34236 took the last of that away
-  // with the card's second question): a stranger learns exactly what a letter
-  // to somebody else's address teaches them, which is nothing.
+  // An address, and a code on its way to it: a letter to an email address,
+  // or a text to a US mobile number once the platform texts strangers
+  // (`textable`, T-136826). The platform reads nothing about the address
+  // here — not whether anyone has named it, not whether it has spaces or apps
+  // or an account at all (T-34236 took the last of that away with the card's
+  // second question): a stranger learns exactly what a letter to somebody
+  // else's address teaches them, which is nothing.
   //
-  // An address that has had its letters for the hour mints nothing (signin.ts
+  // An address that has had its codes for the hour mints nothing (signin.ts
   // sends) and this answers the card it always answers: same status, same
   // bytes. A refusal that showed would say that somebody had been asking about
   // this address, which is more than the door was ever willing to tell.
+  //
+  // The box was `email` before it took a number, and a card a browser still
+  // holds from before posts that name.
   if (path == '/login' && req.method == 'POST') {
-    let email = canon(field('email'))
+    let address = canon(field('address') || field('email'))
+    let q = field('q') || null
     let back = field('return') || null
-    if (!email.includes('@')) {
-      return askEmail(field('q') || null, back, undefined, NOT_EMAIL, 400, env)
+    let texts = textable(env)
+    let text = texts && texted(address)
+    if (!text && !address.includes('@')) {
+      return signCard(env, {
+        q,
+        back,
+        why: texts ? NOT_ADDRESS : NOT_EMAIL,
+        status: 400,
+      })
     }
     // A deploy that cannot post a letter says so in one sentence, the way
     // sell.ts answers for a missing secret, rather than minting a code nobody
     // can receive and breaking on the send. Asked before `mint`, so the
     // address spends none of its hour's letters (signin.ts sends) on it; and
     // the same card for every address, which is all this door ever tells.
-    if (!mailable(env)) {
-      return askEmail(field('q') || null, back, undefined, NO_MAIL, 503, env)
+    if (!text && !mailable(env)) {
+      return signCard(env, { q, back, why: NO_MAIL, status: 503 })
     }
     // Each wait a named stage on the answer's `Server-Timing` (timing.ts):
     // this is the first thing a new person waits on.
     let c = clock()
     // Per source, before `mint`, so a loop spends none of any address's
     // letters: the address cap above protects an inbox, this one the
-    // platform's mail from somebody asking for a code at every address.
-    if (!await c.time('rate', () => within(env.SIGNIN_RATE, source(req)))) {
-      return askEmail(field('q') || null, back, undefined, TOO_MANY, 429, env)
+    // platform's mail from somebody asking for a code at every address. A
+    // text is counted per visitor by the hour as well (signin.ts VISITS),
+    // since this one is by the minute and a text costs.
+    let from = text ? await visitor(secret(env), source(req)) : ''
+    if (
+      !await c.time(
+        'rate',
+        async () =>
+          (await Promise.all([
+            within(env.SIGNIN_RATE, source(req)),
+            mayText(meta(env), from),
+          ])).every(Boolean),
+      )
+    ) {
+      return signCard(env, { q, back, why: TOO_MANY, status: 429 })
     }
-    let code = await c.time('mint', () => mint(meta(env), secret(env), email))
-    if (code) {
+    let code = await c.time(
+      'mint',
+      () => mint(meta(env), secret(env), address, from),
+    )
+    if (code && text) {
+      // The text goes after the answer, as the letter does, from the
+      // platform's number (operator-texts.ts `tell`).
+      step(env, 'code_sent', req)
+      let { tell } = await import('./operator-texts.ts')
+      background(
+        tell(
+          env,
+          { to: address, text: codeText(code) },
+          'POST /login',
+        ),
+      )
+    } else if (code) {
       // The letter carries the code and the one click that spends it
       // (link.ts): the same code said as a link, so it lasts the same ten
       // minutes and dies the moment either one is used. Somebody reading this
       // on a phone should not have to retype anything.
       let link = await onceLink(secret(env), {
-        email,
+        email: address,
         code,
-        q: field('q') || undefined,
+        q: q || undefined,
         back: back || undefined,
       }, apex(env))
       // The letter goes after the answer (T-124082): posting it was a second
@@ -1119,7 +1211,7 @@ let ours = async (req: Request, env: Env): Promise<Response> => {
       step(env, 'code_sent', req)
       background(
         mail(env)({
-          to: email,
+          to: address,
           subject: `${code} is your yaks.app code`,
           body: `Your yaks.app sign-in code is ${code}.\n\n` +
             `Or sign in with one click: ${link}\n\n` +
@@ -1128,20 +1220,17 @@ let ours = async (req: Request, env: Env): Promise<Response> => {
         }).catch((e) => fault(env, 'POST /login', e)),
       )
     }
-    return timed(
-      askCode(email, field('q') || null, back, undefined, undefined, env),
-      c,
-    )
+    return timed(askCode({ address, q, back }, env), c)
   }
 
   if (path == '/login/code' && req.method == 'POST') {
-    let email = canon(field('email'))
+    let address = canon(field('address') || field('email'))
     let q = field('q')
     let back = field('return')
     let refused = await codeCheck(
       meta(env),
-      email,
-      await mac(email, field('code'), secret(env)),
+      address,
+      await mac(address, field('code'), secret(env)),
       q,
       back,
       env,
@@ -1150,8 +1239,10 @@ let ours = async (req: Request, env: Env): Promise<Response> => {
     // Nothing here asks what to call them (T-34236), so the front of their
     // address does — written, not merely derived, because a member row names a
     // person by their title and a titleless one reads back as a bare eid
-    // (T-32733). It is theirs to change on their own space page.
-    let person = await personOf(meta(env), email, nameOf(null, email))
+    // (T-32733). It is theirs to change on their own space page. A number is
+    // no name, and a person found by one is the one wearing it.
+    let person = await personOf(meta(env), address, called(address))
+    if (texted(address)) await agreed(env, person)
     return landed(req, env, person, q, back, 'code')
   }
 
@@ -1168,14 +1259,12 @@ let ours = async (req: Request, env: Env): Promise<Response> => {
       ? await whose(pass.standing, links(env.OAUTH_KV))
       : null
     if (!person) {
-      return askEmail(
-        once?.q ?? null,
-        once?.back ?? null,
-        undefined,
-        'That link has expired or was already used. Ask for a fresh one?',
-        400,
-        env,
-      )
+      return signCard(env, {
+        q: once?.q,
+        back: once?.back,
+        why: 'That link has expired or was already used. Ask for a fresh one?',
+        status: 400,
+      })
     }
     return quiet(
       await landed(req, env, person, once?.q ?? '', once?.back ?? '', 'link'),
@@ -1238,20 +1327,15 @@ let ours = async (req: Request, env: Env): Promise<Response> => {
     step(env, 'connector_start', req)
     let who = await withAuth(env, req)
     if (!who) {
-      return askEmail(
-        q,
-        null,
-        await clientName(env, ask),
-        undefined,
-        undefined,
-        env,
-      )
+      return signCard(env, { q, who: await clientName(env, ask) })
     }
     let [row] = await meta(env).query(`.entity.eid=${who.person}`) as {
       email?: { address: string }
+      phone?: { number: string }
     }[]
     return askAllow(
-      row?.email?.address ?? 'yourself',
+      row?.email?.address ??
+        (row?.phone ? shown(row.phone.number) : 'yourself'),
       q,
       await clientName(env, ask),
       await consenting(secret(env), who.person, q),
@@ -1262,9 +1346,7 @@ let ours = async (req: Request, env: Env): Promise<Response> => {
   if (path == '/oauth/allow' && req.method == 'POST') {
     let who = await withAuth(env, req)
     let q = field('q')
-    if (!who) {
-      return askEmail(q || null, null, undefined, undefined, undefined, env)
-    }
+    if (!who) return signCard(env, { q })
     if (!await consented(secret(env), who.person, q, field('consent'))) {
       return new Response('That consent page has expired. Connect again.', {
         status: 403,
@@ -1460,12 +1542,20 @@ export let fetch = async (req: Request, env: Env): Promise<Response> => {
         headers: { ...Object.fromEntries(res.headers), ...headers },
       })
     }
+    // A person who signed up with a number has no address: their number is
+    // OpenID's `phone_number` claim instead.
     let email = await directory(bound(env.DIRECTORY, dirPart.fetch, env))
       .emailAt(who.person)
-    if (!email) {
+    let number = email ? null : await phoneAt(env, who.person)
+    if (!email && !number) {
       return Response.json({ error: 'no_account' }, { status: 404, headers })
     }
-    return Response.json({ sub: who.person, email }, { headers })
+    return Response.json(
+      email
+        ? { sub: who.person, email }
+        : { sub: who.person, phone_number: number },
+      { headers },
+    )
   }
   let sent = await plain(req, env)
   let res = await new OAuthProvider<Env>(opts(env))

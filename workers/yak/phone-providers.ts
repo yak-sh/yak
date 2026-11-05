@@ -48,3 +48,13 @@ export let texter = (env: Env, chosen?: Transport): Sender => {
   if (!built) senders.set(key, built = sender(options, provider))
   return built
 }
+
+/**
+ * Whether the platform texts people who are not signed in: signing up by text
+ * (`TEXT_SIGNUP`) is switched on, off until the toll-free verification covers
+ * it (T-138775), and the selected provider holds a key here. The invite's
+ * QR code (referral.ts `numberOf`) and a code by text on the sign-in card
+ * (identity.ts) wait on it alike.
+ */
+export let textable = (env: Env) =>
+  env.TEXT_SIGNUP == 'on' && !!settings(env).key

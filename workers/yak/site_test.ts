@@ -567,7 +567,7 @@ test('every public page hands a stranger sign-in, never /connect', () => {
 })
 
 test('an assistant name is escaped on the sign-in page', async () => {
-  let html = await askEmail(null, null, 'A & B').text()
+  let html = await askEmail({ who: 'A & B' }).text()
   assertStringIncludes(html, 'A &amp; B')
   assertEquals(html.includes('A & B'), false)
 })

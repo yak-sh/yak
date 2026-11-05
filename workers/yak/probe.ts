@@ -535,11 +535,11 @@ export let signIn = async (
       body: new URLSearchParams(fields).toString(),
     })
   let received = letters(k, email).length
-  let asked = await form('/login', { email })
+  let asked = await form('/login', { address: email })
   if (asked.status != 200) throw new Error(`login: ${await asked.text()}`)
   await asked.body?.cancel()
   let code = await mailed(k, email, received)
-  let inn = await form('/login/code', { email, code })
+  let inn = await form('/login/code', { address: email, code })
   if (inn.status != 303) throw new Error(`code: ${await inn.text()}`)
   await inn.body?.cancel()
   let cookie = (inn.headers.get('set-cookie') ?? '').split(';')[0]

@@ -1,13 +1,16 @@
 // A sign-in code's whole life (D-32318 §Auth), over the meta store and
 // nothing else: ask for one, spend it, and find or mint the person behind the
-// address. Every write is a bundle through `/apply` — `{entity, ...comps}`,
+// address. An address is where a code goes: an email address, mailed, or a US
+// mobile number in E.164 form (@yaks/phone `mobile`), texted (T-136826). A
+// row and a person are keyed by whichever it is, `signin{email}` or
+// `signin{phone}` and `email{address}` or `phone{number}`. Every write is a bundle through `/apply` — `{entity, ...comps}`,
 // the read shape written back — under the kernel flag, because a `signin` is
 // wholly server-stamped and no client may author one.
 //
 // What is stored is never the code. `mac` keys HMAC-SHA256 with the session
-// secret over `<email>:<code>`, so a row read out of the store cannot be
+// secret over `<address>:<code>`, so a row read out of the store cannot be
 // brute-forced back to the digits, and a row whose email was edited stops
-// matching its own code — the address is inside the mac, not beside it.
+// matching its own code: the address is inside the mac, not beside it.
 // A code is looked up by its address and compared, so a wrong guess still
 // finds the row it is guessing at and spends one of its `tries`; a lookup by
 // digest would leave brute force uncounted.
@@ -25,6 +28,7 @@ import { Stale } from '@yaks/graph/errors'
 import { token } from '@yaks/graph/sha256'
 import { KERNEL, type Meta, minted } from './meta.ts'
 import { hmac } from './lib/hmac.ts'
+import { mobile } from '@yaks/phone'
 
 // Ten minutes, five guesses: long enough to switch to the mail app, short
 // enough that a six-digit code is never worth grinding.
@@ -50,25 +54,65 @@ let counted = (tries: number | null | undefined) =>
 export let SENDS = 3
 export let WINDOW = 60 * 60_000
 
+// Five texted codes an hour from any one visitor. A text costs us and lands on
+// a stranger's phone, and the form texts whatever number is typed into it, so
+// a loop walking numbers (SMS pumping) is held per number by SENDS and per
+// visitor here. The door's per-minute ceiling (rate.ts `SIGNIN_RATE`) would
+// still let one visitor text thousands of numbers a day. Mail has no such
+// count: a letter costs nothing that matters.
+export let VISITS = 5
+
 export type Signin = {
   entity: { eid: string }
-  signin: { email: string; code: string; expires: string; tries: number }
+  signin: {
+    email?: string
+    phone?: string
+    from?: string
+    code: string
+    expires: string
+    tries: number
+  }
 }
 
 // One address, one spelling: a mail domain is case-insensitive and nobody
-// means the spaces they paste.
-export let canon = (email: string) => email.trim().toLowerCase()
+// means the spaces they paste, and a number is the same number however it is
+// punctuated. What is neither comes back trimmed, for the door to refuse.
+export let canon = (typed: string) => {
+  let t = typed.trim()
+  return t.includes('@') ? t.toLowerCase() : mobile(t) ?? t.toLowerCase()
+}
+
+/** Whether an address (canon's) is a US mobile number, which a code reaches
+ * by text. */
+export let texted = (address: string) => /^\+1\d{10}$/.test(address)
+
+/** What giving a number on the sign-in card agrees to: said beside the box
+ * (pages.ts `askEmail`), and kept as the consent of a person who signs up
+ * with it (identity.ts `agreed`). */
+export let SIGNIN_CONSENT =
+  "Using a mobile number agrees to texts from yaks.app: sign-in codes, your Operator's answers, and alerts about your account, your space and the apps you build. Message frequency varies. Msg & data rates may apply. Reply STOP to opt out, HELP for help. US numbers only."
+
+/** The text a code goes out in, word for word the sample the toll-free
+ * verification was filed with (T-138775). iOS offers a texted code on the
+ * card's `one-time-code` box by itself. */
+export let codeText = (code: string) =>
+  `yaks.app: your sign-in code is ${code}. It expires in 10 minutes. Reply STOP to opt out, HELP for help.`
+
+// The property an address is kept under, on a `signin` and on a person.
+let key = (address: string) => texted(canon(address)) ? 'phone' : 'email'
+let line = (address: string) =>
+  `.signin.${key(address)}=${JSON.stringify(canon(address))}`
 
 let hex = (b: ArrayBuffer) => new Uint8Array(b).toHex()
 
 let enc = new TextEncoder()
 
-export let mac = async (email: string, code: string, secret: string) =>
+export let mac = async (address: string, code: string, secret: string) =>
   hex(
     await crypto.subtle.sign(
       'HMAC',
       await hmac(secret),
-      enc.encode(`${canon(email)}:${code}`),
+      enc.encode(`${canon(address)}:${code}`),
     ),
   )
 
@@ -89,39 +133,93 @@ let forget = (store: Meta, eids: string[]) =>
 // Every row ever written for an address, newest first. A row outlives the code
 // it carried: dead, it is the record that the letter went out, and that record
 // is what the ceiling counts.
-let sent = async (store: Meta, email: string) =>
-  ((await store.query(`.signin.email=${canon(email)}`))
+let signins = async (store: Meta, filter: string) =>
+  ((await store.query(filter))
     .filter((r) => r.signin) as unknown as Signin[])
     .sort((a, b) => Date.parse(b.signin.expires) - Date.parse(a.signin.expires))
 
+let sent = (store: Meta, address: string) => signins(store, line(address))
+
 // When the letter went out. `expires` is the code's death and LIFE is fixed,
 // so a row carries its own send time without a second property.
-let at = (r: Signin) => Date.parse(r.signin.expires) - LIFE
+let when = (r: Signin) => Date.parse(r.signin.expires) - LIFE
+
+// The rows that still count, the rest swept: nothing else sweeps them.
+let recent = async (store: Meta, all: Signin[]) => {
+  let floor = Date.now() - WINDOW
+  await forget(
+    store,
+    all.filter((r) => when(r) <= floor).map((r) => r.entity.eid),
+  )
+  return all.filter((r) => when(r) > floor)
+}
+
+/**
+ * Who is asking, as a row may keep it: the address a request came from (rate.ts
+ * `source`), under the session secret so a row read out of the store names no
+ * one. An IPv6 address counts by its /64, which one subscriber holds whole and
+ * can walk. Empty for a request from inside, which is never counted.
+ */
+export let visitor = async (secret: string, source: string) =>
+  source
+    ? hex(
+      await crypto.subtle.sign(
+        'HMAC',
+        await hmac(secret),
+        enc.encode(`visitor:${network(source)}`),
+      ),
+    )
+    : ''
+
+// An IPv6 address's first four groups, written out; an IPv4 address as it is.
+let network = (ip: string) => {
+  if (!ip.includes(':')) return ip
+  let [head, tail = ''] = ip.toLowerCase().split('::')
+  let front = head ? head.split(':') : []
+  let back = ip.includes('::') && tail ? tail.split(':') : []
+  let groups = [
+    ...front,
+    ...Array(8 - front.length - back.length).fill('0'),
+    ...back,
+  ]
+  return groups.slice(0, 4).map((g) => g.replace(/^0+(?=.)/, '')).join(':')
+}
+
+/** Whether this visitor may have another code texted this hour (VISITS). */
+export let mayText = async (store: Meta, from: string) =>
+  !from ||
+  (await recent(
+      store,
+      await signins(store, `.signin.from=${JSON.stringify(from)}`),
+    )).length < VISITS
 
 // A code still worth typing: not expired, and not already out of guesses.
 let open = (r: Signin, now: number) =>
   Date.parse(r.signin.expires) > now && (r.signin.tries ?? 0) < TRIES
 
-// Mint a code for an address and return it for the mail seam to carry, or null
-// when this address has had its letters for the hour — nothing minted, nothing
-// to mail. Codes already standing are left standing: the store keeps a mac and
-// not the digits, so a second ask cannot re-send the first letter's code, and
-// letting the first one live is what a slow letter needs. Rows that have
-// fallen out of the window are swept here; nothing else sweeps them.
-export let mint = async (store: Meta, secret: string, email: string) => {
-  let rows = await sent(store, email)
-  let floor = Date.now() - WINDOW
-  await forget(
-    store,
-    rows.filter((r) => at(r) <= floor).map((r) => r.entity.eid),
-  )
-  if (rows.filter((r) => at(r) > floor).length >= SENDS) return null
+// Mint a code for an address and return it for the mail or text seam to
+// carry, or null when this address has had its letters for the hour: nothing
+// minted, nothing to send. Codes already standing are left standing: the
+// store keeps a mac and not the digits, so a second ask cannot re-send the
+// first letter's code, and letting the first one live is what a slow letter
+// needs. Rows that have fallen out of the window are swept here. `from` is
+// the visitor (`visitor`), kept on a texted code so `welcome` can count it.
+export let mint = async (
+  store: Meta,
+  secret: string,
+  address: string,
+  from = '',
+) => {
+  if ((await recent(store, await sent(store, address))).length >= SENDS) {
+    return null
+  }
   let code = digits()
   await apply(store, [{
     entity: { eid: '$code' },
     signin: {
-      email: canon(email),
-      code: await mac(email, code, secret),
+      [key(address)]: canon(address),
+      ...(from && texted(canon(address)) ? { from } : {}),
+      code: await mac(address, code, secret),
       expires: new Date(Date.now() + LIFE).toISOString(),
       tries: 0,
     },
@@ -149,21 +247,21 @@ export let mint = async (store: Meta, secret: string, email: string) => {
 export let spend = async (
   store: Meta,
   secret: string,
-  email: string,
+  address: string,
   code: string,
 ) => {
-  return guess(store, email, await mac(email, code, secret))
+  return guess(store, address, await mac(address, code, secret))
 }
 
 /** Spend a prepared code digest, keeping concurrent guesses on guarded counts. */
 export let guess = async (
   store: Meta,
-  email: string,
+  address: string,
   want: string,
   now: () => number = Date.now,
 ) => {
   for (;;) {
-    let rows = await sent(store, email)
+    let rows = await sent(store, address)
     let live = rows.filter((r) => open(r, now()))
     if (!live.length) return false
     try {
@@ -187,10 +285,14 @@ export let guess = async (
 
 type Person = { entity: { eid: string }; doc?: { title?: string } }
 
-let personAt = async (store: Meta, email: string) =>
-  (await store.query(
-    `.person&.email.address=${canon(email)}&?doc`,
+let personAt = async (store: Meta, typed: string) => {
+  let address = canon(typed)
+  return (await store.query(
+    texted(address)
+      ? `.person&.phone.number=${JSON.stringify(address)}&?doc`
+      : `.person&.email.address=${address}&?doc`,
   ))[0] as Person | undefined
+}
 
 // An address is not a name. A person minted before anyone was asked wears
 // their address as `doc.title` (T-32627), so that title reads as no name at
@@ -205,6 +307,11 @@ export let chose = (title?: string | null) =>
 export let nameOf = (title: string | null | undefined, email: string) =>
   chose(title) ?? canon(email).split('@')[0]
 
+// What a person signing in is first called: the front of their address, and
+// nothing for a number, which is no name; their space page asks.
+export let called = (address: string) =>
+  texted(address) ? undefined : nameOf(null, address)
+
 // Whether anyone has ever named this address, which is what the code card
 // asks about when it asks (identity.ts).
 export let nameAt = async (store: Meta, email: string) =>
@@ -212,7 +319,8 @@ export let nameAt = async (store: Meta, email: string) =>
 
 // The person behind an address, minted on first sight. `email` is a facet any
 // entity may wear (the mail plugin's address book), so a person is `person` +
-// `email` + a `doc` titled with what to call them, once someone says.
+// `email` (or `phone`, for a number) + a `doc` titled with what to call them,
+// once someone says.
 //
 // `name` is that: what an invitation called them (tools.ts member_add), or
 // the front of their address when they sign in (identity.ts, T-34236). It is
@@ -224,8 +332,12 @@ export let nameAt = async (store: Meta, email: string) =>
 // them: nothing, a name, or the person minted under `$who`, so a caller can
 // write them beside rows that name them (member_add's invitation), in one
 // batch. `personOf` writes it alone.
-export let addressee = async (store: Meta, email: string, name?: string) => {
-  let at = canon(email)
+export let addressee = async (
+  store: Meta,
+  address: string,
+  name?: string,
+) => {
+  let at = canon(address)
   let row = await personAt(store, at)
   if (row) {
     let eid = row.entity.eid
@@ -247,13 +359,17 @@ export let addressee = async (store: Meta, email: string, name?: string) => {
       entity: { eid: '$who' },
       ...(name ? { doc: { title: name } } : {}),
       person: {},
-      email: { address: at },
+      ...texted(at) ? { phone: { number: at } } : { email: { address: at } },
     }],
   }
 }
 
-export let personOf = async (store: Meta, email: string, name?: string) => {
-  let who = await addressee(store, email, name)
+export let personOf = async (
+  store: Meta,
+  address: string,
+  name?: string,
+) => {
+  let who = await addressee(store, address, name)
   if (!who.write.length) return who.eid
   let applied = await apply(store, who.write)
   if (!who.fresh) return who.eid
