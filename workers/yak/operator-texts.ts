@@ -38,6 +38,12 @@ export let REPLIES = {
     'yaks.app: Help with your site texts: email hello@yaks.app. Msg & data rates may apply. Reply STOP to opt out.',
 }
 
+/** What the Operator's first answer to a text that signed someone up says
+ * after its sign-off, so the brand (in the sign-off), STOP and HELP are in
+ * the first text they get. */
+export let DISCLOSURE =
+  'Msg & data rates may apply. Reply STOP to opt out, HELP for help.'
+
 /** The number a person is texted at, the words and moment they agreed, and
  * the space whose Operator texts them. */
 export type Texting = {
@@ -161,13 +167,29 @@ let pictures = async (env: Env, space: Space, arrival: Arrival) => {
   return files
 }
 
+// A stranger's text to the platform's number (D-136811) is the whole of
+// signing up, once `TEXT_SIGNUP` is `on`: off until the toll-free
+// verification covers it (T-138775), since texting outside what a number was
+// verified for is what gets it suspended. The words they sent are their
+// consent to be texted back, and they are a person wearing the number with
+// their own space (identity.ts `textedIn`). A number that is no US mobile, an
+// RCS sender and a text with no words sign nobody up.
+let signedUp = async (env: Env, arrival: Arrival) => {
+  let number = mobile(arrival.from)
+  if (env.TEXT_SIGNUP != 'on' || arrival.rcs || !number) return null
+  if (!arrival.text.trim()) return null
+  let { textedIn } = await import('./identity.ts')
+  return (await textedIn(env, number, arrival.text.trim(), arrival.at)).person
+}
+
 /**
  * A text that arrived. One at an app's own number is that app's
  * (app-texts.ts). At the platform's: STOP takes back the sender's consent,
  * START gives it again, and both and HELP are answered in the campaign's
  * words; anything else from a person who agreed to texts is a request to
- * their space's Operator, which answers by text. A text from anyone else is
- * not read.
+ * their space's Operator, which answers by text. A text from a number
+ * nobody wears signs its sender up when that is switched on (`signedUp`),
+ * and is not read otherwise.
  */
 export let arrived = async (env: Env, arrival: Arrival) => {
   let dir = directoryOf(env.STORE)
@@ -181,7 +203,7 @@ export let arrived = async (env: Env, arrival: Arrival) => {
     let { lineArrived } = await import('./operator-line.ts')
     if (await lineArrived(env, [own], arrival)) return
   }
-  let person = await dir.phoned(arrival.from)
+  let person: string | null = await dir.phoned(arrival.from)
   let word = keyword(arrival.text)
   let as = (person: string) => ({ 'x-yak-person': person })
   let reply = (text: string) =>
@@ -210,10 +232,17 @@ export let arrived = async (env: Env, arrival: Arrival) => {
     }
     return reply(REPLIES.start)
   }
+  if (!person && (person = await signedUp(env, arrival))) {
+    texting = await dir.texting(person)
+  }
   if (!person || !texting) return
   if (!arrival.text.trim() && !arrival.media.length) return
   let space = await spaceFor(env, person, texting.space)
   if (!space) return
+  // The text that signed them up is the one their consent is in, however
+  // often it is posted.
+  let signup = Date.parse(texting.at) == Date.parse(arrival.at) &&
+    texting.consent == arrival.text.trim()
   let { requestId } = await import('./operator-channels.ts')
   let { builderOf, SPACE } = await import('./build.ts')
   let files = await pictures(env, space, arrival)
@@ -233,6 +262,7 @@ export let arrived = async (env: Env, arrival: Arrival) => {
           reply_to: arrival.to,
           ...(arrival.via ? { via: arrival.via } : {}),
           files,
+          ...(signup ? { signup: true } : {}),
         },
         options: {
           id: requestId(space.eid, `${arrival.via ?? 'telnyx'}:${arrival.id}`),

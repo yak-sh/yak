@@ -180,6 +180,7 @@ import { WHO } from './signed.ts'
 import { background, caught, refusing } from './defects.ts'
 import { step } from './funnel.ts'
 import { sha256 } from '@yaks/graph/sha256'
+import { consentEid } from '@yaks/phone'
 
 // What a grant carries and a token gives back: the person, nothing else.
 // Membership is read from the directory at request time, never a claim.
@@ -652,7 +653,8 @@ export let handoff = async (req: Request, env: Env): Promise<Response> => {
  * to ask them for a name and the card asks nothing but the address and the
  * code (T-34236). It is also what their dashboard shows when nothing else aims
  * them (`backTo`), and the first person ever to arrive owns the platform.
- * Every way of signing up ends here: a code, a link and a letter (`joined`).
+ * Every way of signing up ends here: a code, a link, a letter (`joined`) and
+ * a text (`textedIn`).
  */
 export let settle = async (env: Env, person: string): Promise<Space> => {
   let dir = dirOf(env)
@@ -675,6 +677,30 @@ export let settle = async (env: Env, person: string): Promise<Space> => {
  */
 export let joined = async (env: Env, email: string, name?: string) => {
   let person = await personOf(meta(env), email, name || nameOf(null, email))
+  return { person, space: await settle(env, person) }
+}
+
+/**
+ * Signing up by a text to the platform's number (operator-texts.ts,
+ * D-136811): the same sign-up, for a number nobody wears. The person is minted
+ * wearing it, with the words they sent kept as their consent to be texted
+ * back (`sms_consent`, in one write with them, so no person is left with a
+ * number and no consent), and given their own space.
+ */
+export let textedIn = async (
+  env: Env,
+  number: string,
+  consent: string,
+  at: string,
+) => {
+  let person = crypto.randomUUID()
+  await meta(env).apply([
+    { entity: { eid: person }, person: {}, phone: { number } },
+    {
+      entity: { eid: consentEid(person) },
+      sms_consent: { person, consent, at },
+    },
+  ], KERNEL)
   return { person, space: await settle(env, person) }
 }
 

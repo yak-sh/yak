@@ -237,6 +237,11 @@ export type Env = {
   TELNYX_API_KEY?: string
   TELNYX_PUBLIC_KEY?: string
   TELNYX_API?: string
+  // `on` signs up a stranger who texts the platform's number
+  // (operator-texts.ts `signedUp`); anything else leaves their text unread.
+  // Off until the toll-free verification covers it (T-138775). Read per text,
+  // so it is one `wrangler secret put` and no deploy, as CIMD is.
+  TEXT_SIGNUP?: string
   STRIPE_KEY?: string
   STRIPE_WEBHOOK_SECRET?: string
   STRIPE_PRICE?: string

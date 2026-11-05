@@ -2215,16 +2215,19 @@ export let directoryRows = (rows: {
     emailAt: async (person: string): Promise<string | null> =>
       (await self.known(person))?.email ?? null,
     // The number a person agreed to be texted at, in the words they agreed
-    // to (@yaks/phone), or null when they have not agreed.
+    // to (@yaks/phone), or null when they have not agreed. Read off their
+    // row rather than through `known`: a person who signed up by text has a
+    // number and no address.
     texting: async (person: string): Promise<Texting | null> => {
       let [them, [row]] = await Promise.all([
-        self.known(person),
+        one(`.entity.eid=${person}`),
         theirs(person, `.sms_consent.person=${person}`),
       ])
       let agreed = row?.sms_consent
-      return them?.phone && agreed
+      let number = them?.phone?.number
+      return number && agreed
         ? {
-          number: them.phone,
+          number,
           consent: agreed.consent,
           at: agreed.at,
           ...(agreed.space ? { space: idOf(agreed.space) } : {}),
@@ -2412,7 +2415,13 @@ export let directoryRows = (rows: {
       let marked = mine.find((s) => s.own)
       if (marked) return marked.space
       let row = await one(`.entity.eid=${person}`)
-      let wanted = slugFor(row?.email?.address ?? 'space')
+      // A person with no address (one who signed up by text) has nothing to
+      // name their space after, so it is named at random until they rename
+      // it: one name for all of them would number its way past every space
+      // already holding it, a read each.
+      let wanted = row?.email?.address
+        ? slugFor(row.email.address)
+        : `space-${crypto.randomUUID().slice(0, 6)}`
       let found = mine.find((s) => s.space.slug == wanted) ??
         (mine.length == 1 ? mine[0] : null)
       if (found) {
