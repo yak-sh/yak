@@ -55,7 +55,9 @@ export let textsCard = (at: string, consent: Texting | null) =>
 <h2 class="Card_Title">Text messages</h2>
 <p>Text your Operator about anything, and it answers by text. It also texts you when it finishes a change, needs an answer from you, or something about your space needs you, and apps you build can text you reminders. You can still use chat and email.</p>${
     consent
-      ? `<p>Texts go to <b>${esc(shown(consent.number))}</b>. You agreed on ${
+      ? `<p>Texts go to <b>${
+        esc(shown(consent.number))
+      }</b>; to text your Operator, reply to the number your welcome text came from. You agreed on ${
         esc(new Date(consent.at).toLocaleDateString('en-US', {
           dateStyle: 'long',
           timeZone: 'UTC',
@@ -421,11 +423,13 @@ export let operatorBody = async (env: Env, space: Space, who: Who) => {
     pa
       ? '<p>This is your own space, so its Operator can also work in your other spaces, with your role in each.</p>'
       : ''
-  }${
-    elsewhere(beyond, pa)
-  }<p>Email it from your member address: <a href="mailto:${esc(address)}">${
+  }${elsewhere(beyond, pa)}<p>You can also email ${
+    esc(space.operator)
+  } from any mail app: write to <a href="mailto:${esc(address)}">${
     esc(address)
-  }</a></p></section>
+  }</a> with what you want changed, and attach a PDF or a photo if you have one. Send it from the email address you sign in with; ${
+    esc(space.operator)
+  } answers by email.</p></section>
 <div data-work aria-live="polite">${worked(items, space.slug)}</div>
 ${nameCard(at, space.operator)}
 ${textsCard(at, consent)}
