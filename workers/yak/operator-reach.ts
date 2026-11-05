@@ -16,7 +16,7 @@ let RANK: Role[] = ['viewer', 'editor', 'owner']
  * both let it into one space, the greater role stands. */
 export let reachOf = async (
   dir: Directory,
-  space: Space,
+  space: Pick<Space, 'eid'>,
   person: string,
 ): Promise<{ pa: boolean; beyond: Reach[] }> => {
   let [seats, granted] = await Promise.all([

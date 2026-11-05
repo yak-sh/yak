@@ -160,12 +160,36 @@ export let speechOf = (env: Speaking, provider: Provider = PROVIDER) => {
     : null
 }
 
-// Each provider's balance, read at most once a minute per isolate.
+// Each provider's balance, read at most once a minute per isolate, and what
+// the newest reading that came back said: whether speech through it was under
+// the floor. A reading older than a minute answers at once while the next is
+// read, so only an isolate's first ask of a provider waits on it. A reading
+// that failed is null, and one the provider gives none for undefined: both
+// let speech go ahead.
 let read = new Map<
   string,
-  { at: number; dollars: Promise<number | undefined> }
+  { at: number; dollars: Promise<number | null | undefined> }
 >()
+let last = new Map<string, { at: number; under: boolean }>()
+let PAUSED = 'Speech has spent what its pilot may, so it is paused for now.'
 let MINUTE = 60_000
+
+let reading = (
+  on: NonNullable<ReturnType<typeof speechOf>>,
+  provider: Provider,
+  now: number,
+) => {
+  let r: { at: number; dollars: Promise<number | null | undefined> } = {
+    at: now,
+    dollars: balance(on).catch((error) => {
+      if (read.get(provider.name) == r) read.delete(provider.name)
+      caught(error, { request: 'speech balance', provider: provider.name })
+      return null
+    }),
+  }
+  read.set(provider.name, r)
+  return r.dollars
+}
 
 /** Why speech through `provider` is refused here, or null to go ahead:
  * switched off, or the pilot's spending reached (`SPEECH_FLOOR`). A balance
@@ -181,24 +205,37 @@ export let paused = async (
   if (!provider.balance || !env.SPEECH_FLOOR || !Number.isFinite(floor)) {
     return null
   }
-  let last = read.get(provider.name)
-  if (!last || now - last.at > MINUTE) {
-    last = { at: now, dollars: balance(on) }
-    read.set(provider.name, last)
+  let under = (dollars: number | null | undefined) =>
+    (dollars ?? Infinity) < floor
+  let had = read.get(provider.name)
+  if (had && now - had.at <= MINUTE) {
+    return under(await had.dollars) ? PAUSED : null
   }
-  try {
-    return (await last.dollars ?? Infinity) < floor
-      ? 'Speech has spent what its pilot may, so it is paused for now.'
-      : null
-  } catch (error) {
-    read.delete(provider.name)
-    caught(error, { request: 'speech balance', provider: provider.name })
-    return null
-  }
+  let held = last.get(provider.name)
+  let asked = reading(on, provider, now)
+  asked.then((dollars) => {
+    let newest = last.get(provider.name)
+    if (dollars !== null && (!newest || newest.at <= now)) {
+      last.set(provider.name, { at: now, under: under(dollars) })
+    }
+  })
+  if (held) return held.under ? PAUSED : null
+  return under(await asked) ? PAUSED : null
+}
+
+/** That speech through `provider` went ahead at `at` elsewhere (a call the
+ * Worker let ring through, operator-calls.ts `reached`): what this isolate
+ * says until its own reading of the balance comes back. */
+export let passed = (at: number, provider: Provider = PROVIDER) => {
+  let newest = last.get(provider.name)
+  if (!newest || newest.at < at) last.set(provider.name, { at, under: false })
 }
 
 /** Forget the balances read, for a test. */
-export let unread = () => read.clear()
+export let unread = () => {
+  read.clear()
+  last.clear()
+}
 
 // What stops this much speech in this space, as a refusal: the pilot, or the
 // space's budget.

@@ -533,11 +533,14 @@ export let lend = <H extends Host>(opts: Opts<H>): Runner => {
           : inheritedInstructions(inherited, opts.instructions)
       }
       // What was sent before already says the persona, so only what the host
-      // adds follows the persona's text as it reads now.
-      let worn = await wornBy(h.g, session, opts.wear.bases)
-      let added = typeof opts.instructions == 'function'
-        ? await opts.instructions(session)
-        : opts.instructions
+      // adds follows the persona's text as it reads now. The two are read at
+      // once.
+      let [worn, added] = await Promise.all([
+        wornBy(h.g, session, opts.wear.bases),
+        typeof opts.instructions == 'function'
+          ? opts.instructions(session)
+          : opts.instructions,
+      ])
       return [worn, added].filter(Boolean).join('\n\n') || undefined
     },
     inputText: async (transcript) =>

@@ -46,6 +46,9 @@ export let tallying = <T>(tally: Tally, work: () => T): T =>
     return out.finally(close) as T
   })
 
+/** The tally the work running now counts on, if any. */
+export let ambient = (): Tally | undefined => here.getStore()
+
 /** Run `work` outside any request's count. What a store does on its own
  * after answering (its effect pool) is no request's round trip, though it
  * starts inside one. */

@@ -1010,6 +1010,20 @@ export let react = async (
     : open.length
     ? (asked ? comp(asked, 'sending') : undefined) ?? sendingBefore(entries)
     : sendingBefore(entries)
+  // A step that will ask the model reads its instructions while its tools are
+  // found: neither waits on the other, and each may be round trips away.
+  const resolve = deps.resolveInstructions
+  const instructed = !deps.runCall && !open.length && resolve
+    ? Promise.resolve().then(() =>
+      resolve(
+        sending?.instructions == null
+          ? undefined
+          : String(sending.instructions),
+        session,
+      )
+    )
+    : undefined
+  instructed?.catch(() => {})
   const tools = offered(
     deps.toolSnapshot
       ? await deps.toolSnapshot(
@@ -1396,7 +1410,9 @@ export let react = async (
     ...modalities ? { modalities } : {},
     ...questions ? { questions } : {},
     effort: effort == null ? undefined : String(effort),
-    instructions: deps.resolveInstructions
+    instructions: instructed
+      ? await instructed
+      : deps.resolveInstructions
       ? await deps.resolveInstructions(
         sending?.instructions == null
           ? undefined

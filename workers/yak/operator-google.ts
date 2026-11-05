@@ -27,6 +27,8 @@ import type { Space } from './directory.ts'
 import { type Ctx, refuse } from './tool.ts'
 import { addingAt, ctxOf, ownConnection } from './connections.ts'
 import { vaulted, vaultOf } from './vault.ts'
+import { recall } from './lib/hops.ts'
+import { PLATFORM_STORE } from './door.ts'
 
 /** The integrations a person's calendar and mail connect through. */
 export let CALENDAR = 'google-calendar'
@@ -219,17 +221,35 @@ let asking = async (
   )
 }
 
+// Each Google integration as the platform holds it, and the person's
+// connection through it: read once for a step's tools and its instructions,
+// all at once (lib/hops.ts `recall`).
+let accounts = (env: Env, ctx: Ctx, space: Space) =>
+  recall(
+    PLATFORM_STORE,
+    `operator google ${ctx.person} ${space.eid}`,
+    () =>
+      Promise.all([CALENDAR, GMAIL].map(async (name) => {
+        let [i, held] = await Promise.all([
+          known(ctxOf(env).graph.read, name),
+          ownConnection(env, ctx, space, name),
+        ])
+        return { i, held }
+      })),
+  )
+
 /** The person's Google tools, each while its connection is connected. */
 export let googleTools = async (
   env: Env,
   ctx: Ctx,
   space: Space,
 ): Promise<Tool[]> => {
-  let [calendar, mail] = await Promise.all(
-    [CALENDAR, GMAIL].map((n) => ownConnection(env, ctx, space, n)),
+  let [{ held: calendar }, { held: mail, i: gmail }] = await accounts(
+    env,
+    ctx,
+    space,
   )
-  let gmail = mail && await known(ctxOf(env).graph.read, GMAIL)
-  let reads = !!gmail?.scopes?.some((s) => READS.includes(s))
+  let reads = !!(mail && gmail?.scopes?.some((s) => READS.includes(s)))
   return [
     ...calendar ? calendarTools(env, calendar) : [],
     ...mail ? [gmailSend(env, ctx, space, mail)] : [],
@@ -242,28 +262,27 @@ export let googleTools = async (
  * they have not. */
 export let googleTold = async (env: Env, ctx: Ctx, space: Space) => {
   let read = ctxOf(env).graph.read
-  let lines = []
-  for (let name of [CALENDAR, GMAIL]) {
-    let i = await known(read, name)
-    if (!i) continue
-    let held = await ownConnection(env, ctx, space, name)
-    if (held) {
-      let account = str(comp(held, CONNECTION).account)
-      lines.push(`- ${titled(i)}: connected${account ? ` as ${account}` : ''}`)
-      continue
-    }
-    let client = vaulted(env) && await clientOf(vaultOf(env), read, i)
-    if (!connectable(i, client)) continue
-    lines.push(
-      `- ${titled(i)}: not connected. They connect it at ${
-        addingAt(env, space.slug, i)
-      }${
-        i.testing
-          ? ' (Google has not verified it yet, so only the people Google lists can; offer it only when they ask for what it does)'
-          : ''
-      }`,
-    )
-  }
+  let said = await Promise.all(
+    (await accounts(env, ctx, space)).map(async ({ i, held }) => {
+      if (!i) return []
+      if (held) {
+        let account = str(comp(held, CONNECTION).account)
+        return [`- ${titled(i)}: connected${account ? ` as ${account}` : ''}`]
+      }
+      let client = vaulted(env) && await clientOf(vaultOf(env), read, i)
+      if (!connectable(i, client)) return []
+      return [
+        `- ${titled(i)}: not connected. They connect it at ${
+          addingAt(env, space.slug, i)
+        }${
+          i.testing
+            ? ' (Google has not verified it yet, so only the people Google lists can; offer it only when they ask for what it does)'
+            : ''
+        }`,
+      ]
+    }),
+  )
+  let lines = said.flat()
   return lines.length
     ? `The person's own Google accounts, which you use for them as their assistant:\n${
       lines.join('\n')

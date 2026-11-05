@@ -826,12 +826,19 @@ export let ownConnection = async (
   space: Space,
   integration: string,
 ): Promise<Bundle | undefined> => {
-  let owners = [ctx.person]
-  if (await ctx.dir.role(space, ctx.person) == 'owner') owners.push(space.eid)
+  // Both owners' and the person's role are asked at once; the space's is
+  // theirs only when they own it.
+  let [role, held] = await Promise.all([
+    ctx.dir.role(space, ctx.person),
+    meta(env).query(
+      `.${CONNECTION}.owner=${
+        [ctx.person, space.eid].filter(Boolean).join(',')
+      }&.${CONNECTION}.integration=${integration}&.${CONNECTION}.status=connected&*`,
+    ),
+  ])
+  let owners = role == 'owner' ? [ctx.person, space.eid] : [ctx.person]
   for (let owner of owners) {
-    let [b] = await meta(env).query(
-      `.${CONNECTION}.owner=${owner}&.${CONNECTION}.integration=${integration}&.${CONNECTION}.status=connected&*`,
-    )
+    let b = held.find((b) => comp(b, CONNECTION).owner == owner)
     if (b) return b
   }
   return undefined

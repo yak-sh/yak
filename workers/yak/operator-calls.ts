@@ -36,7 +36,14 @@ import { opened, seal } from './lib/token.ts'
 import { apex } from './host.ts'
 import { countedSpend } from './meter.ts'
 import { PROVIDERS, settings } from './phone-providers.ts'
-import { CALL_MODELS, paused, setupOf, speaking, speechOf } from './speech.ts'
+import {
+  CALL_MODELS,
+  passed,
+  paused,
+  setupOf,
+  speaking,
+  speechOf,
+} from './speech.ts'
 import type { Operator } from './operator.ts'
 import { ownerOf } from './operator-access.ts'
 import { receive, requestId } from './operator-channels.ts'
@@ -564,6 +571,9 @@ export let answering = (
     return new Response(null, { status: 404 })
   }
   let line = provider.line
+  // The ring was let through at `ticket.at`, its speech not paused: the
+  // greeting goes ahead on that while this object reads the balance itself.
+  passed(ticket.at, setup.provider)
   let pair = new WebSocketPair()
   pair[1].accept()
   let turn = 0

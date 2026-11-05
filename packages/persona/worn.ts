@@ -38,7 +38,7 @@
 // above them, and {@link beside} leaves out what another file already says.
 
 import { and, eq, type Input, list, present } from '@yaks/query'
-import { after, each } from '@yaks/fp'
+import { after, each, isPromise } from '@yaks/fp'
 import type { Bundle, Eid, Storage } from '@yaks/graph'
 import { EDGE, relations } from '@yaks/edge'
 import { DOC } from '@yaks/doc'
@@ -104,6 +104,13 @@ let links = (storage: Reads, from: Eid[], tag: string | undefined) =>
     (found) => found.filter(far).sort(served).map(far),
   )
 
+// Two reads at once, a promise only when either is one.
+let both = <A, B>(
+  a: A | Promise<A>,
+  b: B | Promise<B>,
+): [A, B] | Promise<[A, B]> =>
+  isPromise(a) || isPromise(b) ? Promise.all([a, b]) : [a, b]
+
 /**
  * The documents one persona is built from, read out of a storage. Returns
  * `undefined` when the eid does not exist, or is not a persona — what to do
@@ -154,8 +161,16 @@ let gathered = (
   vocab: Vocab,
 ): (eid: Eid) => Worn | undefined | Promise<Worn | undefined> => {
   let tags = relations(vocab)
+  // A level's links, both relations read at once.
+  let linked = (level: Eid[]) =>
+    both(
+      links(storage, level, tags[CONTAINS]),
+      links(storage, level, tags[READS]),
+    )
+  // The persona and its own links are read together: a remote storage
+  // answers both in one round trip's time.
   return (eid) =>
-    after(storage.get([eid]), (found) => {
+    after(both(storage.get([eid]), linked([eid])), ([found, first]) => {
       let persona = found[0]
       if (!persona?.[PERSONA]) return undefined
       let contained = new Map<Eid, Bundle>()
@@ -164,52 +179,51 @@ let gathered = (
       let seen = new Set<Eid>([eid])
       let level = [eid]
       return after(
-        each(Array.from({ length: DEPTH }, (_, i) => i), null, () => {
+        each(Array.from({ length: DEPTH }, (_, i) => i), null, (_, i) => {
           if (!level.length) return null
-          return after(links(storage, level, tags[CONTAINS]), (held) =>
-            after(links(storage, level, tags[READS]), (said) =>
-              after(
-                storage.get([...new Set([...held, ...said])]),
-                (docs) => {
-                  let by = new Map(docs.map((b) => [b.entity.eid, b]))
-                  let next: Eid[] = []
-                  for (let id of held) {
-                    let b = by.get(id)
-                    if (b?.[TOOL]) {
-                      tools.set(id, b)
-                      continue
-                    }
-                    // `seen` holds the persona itself, so a cycle of
-                    // personas never includes the text it started from
-                    // twice.
-                    if (
-                      !b || !(b[DOC] || b.content) || seen.has(id) ||
-                      undecided(b)
-                    ) {
-                      continue
-                    }
-                    seen.add(id)
-                    contained.set(id, b)
-                    // An included persona's text is included like any other
-                    // document; the documents it links to are read on the
-                    // next level.
-                    if (b[PERSONA]) {
-                      next.push(id)
-                    }
+          return after(i ? linked(level) : first, ([held, said]) =>
+            after(
+              storage.get([...new Set([...held, ...said])]),
+              (docs) => {
+                let by = new Map(docs.map((b) => [b.entity.eid, b]))
+                let next: Eid[] = []
+                for (let id of held) {
+                  let b = by.get(id)
+                  if (b?.[TOOL]) {
+                    tools.set(id, b)
+                    continue
                   }
-                  for (let id of said) {
-                    let b = by.get(id)
-                    if (
-                      b && (b[DOC] || b.content) && !names.has(id) &&
-                      !undecided(b)
-                    ) {
-                      names.set(id, b)
-                    }
+                  // `seen` holds the persona itself, so a cycle of
+                  // personas never includes the text it started from
+                  // twice.
+                  if (
+                    !b || !(b[DOC] || b.content) || seen.has(id) ||
+                    undecided(b)
+                  ) {
+                    continue
                   }
-                  level = next
-                  return null
-                },
-              )))
+                  seen.add(id)
+                  contained.set(id, b)
+                  // An included persona's text is included like any other
+                  // document; the documents it links to are read on the
+                  // next level.
+                  if (b[PERSONA]) {
+                    next.push(id)
+                  }
+                }
+                for (let id of said) {
+                  let b = by.get(id)
+                  if (
+                    b && (b[DOC] || b.content) && !names.has(id) &&
+                    !undecided(b)
+                  ) {
+                    names.set(id, b)
+                  }
+                }
+                level = next
+                return null
+              },
+            ))
         }),
         () => {
           // Inclusion wins: a document listed in one place and included in

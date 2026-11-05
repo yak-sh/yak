@@ -32,6 +32,7 @@ import { runs as memoryRuns } from '@yaks/memory/tools'
 import { taskDoc } from '@yaks/task/vocab'
 import { runs as taskRuns } from '@yaks/task/tools'
 import { worded } from '@yaks/tools'
+import type { Handlers } from '@yaks/effects'
 import {
   type Directory,
   directory,
@@ -52,6 +53,7 @@ import { bound, type Env } from './env.ts'
 import type { Held } from './build-door.ts'
 import { accounted } from './meter.ts'
 import { caught, defect } from './defects.ts'
+import { ambient, counts, type Tally, tallying } from './lib/hops.ts'
 import { drain, type operatorStore } from './operator-store.ts'
 import {
   asIs,
@@ -99,19 +101,23 @@ export type Options = {
 let comp = (b: Bundle | undefined, name: string) =>
   b?.[name] as Comp | undefined
 
+// The directory an Operator reads through: the Worker's binding onto it.
+let opening = (env: Env) => () =>
+  directory(bound(env.DIRECTORY, directoryPart.fetch, env), {
+    copy: copyOf(env),
+    time: env.CLOCK,
+  })
+
 // Each space has its own Operator, working on that space and the spaces that
 // let it in (operator-reach.ts), the PA's among them.
 export let operatorContext = async (
   env: Env,
   held: Pick<Held, 'person' | 'administrative'>,
   space: Space,
-  open: () => Directory = () =>
-    directory(bound(env.DIRECTORY, directoryPart.fetch, env), {
-      copy: copyOf(env),
-      time: env.CLOCK,
-    }),
+  open: () => Directory = opening(env),
+  reach: ReturnType<typeof reachOf> = reachOf(open(), space, held.person),
 ): Promise<Ctx & { pa: boolean; beyond: Reach[] }> => {
-  let { pa, beyond } = await reachOf(open(), space, held.person)
+  let { pa, beyond } = await reach
   let reopen = () =>
     narrowed(open(), space.slug, space.eid, held.administrative, beyond)
   return {
@@ -445,14 +451,59 @@ let working = async (
 ) => {
   let o = await workingOf(store, session)
   if (!o) throw new Error(`Operator session ${session} names no space`)
+  let reading = open ?? opening(env)
+  // The space, the person's reach in it, and the apps the step's roster and
+  // map read next are asked at once: the directory answers them together,
+  // and the step's later asks are answered from these (lib/hops.ts
+  // `recall`).
+  let dir = reading()
+  let reach = reachOf(dir, { eid: o.space }, o.person)
+  let apps = o.administrative ? undefined : dir.reachable(o.person)
+  for (let asked of [reach, apps]) asked?.catch(() => {})
   let space = await (open?.() ?? directoryOf(env.STORE)).at(o.space)
   if (!space || space.trashed) throw refuse('missing', 'That space is gone.')
-  let ctx = await operatorContext(env, o, space, open)
+  let ctx = await operatorContext(env, o, space, reading, reach)
   ctx.who!.instrument = session
   return { space, ctx, files: o.files ?? [] }
 }
 
 let ENDED = ['settled', 'failed', 'stopped']
+
+// Each step of an Operator session is counted and remembered as a request
+// is (lib/hops.ts): what it reads of the directory is asked once, until it
+// writes there, and its tool roster, instructions and payer share the
+// answers.
+let begun = new WeakMap<Tally, number>()
+let stepwise = (handlers: Handlers): Handlers =>
+  Object.fromEntries(
+    Object.entries(handlers).map(([name, handler]) => [
+      name,
+      (...args: Parameters<typeof handler>) => {
+        let tally: Tally = new Map()
+        begun.set(tally, Date.now())
+        return tallying(tally, () => handler(...args))
+      },
+    ]),
+  )
+
+// How long a step took to ask its model, and the round trips it made on the
+// way, in the Worker's logs.
+let asked = (session?: string) => {
+  let tally = ambient()
+  let at = tally && begun.get(tally)
+  if (!tally || at == null) return
+  console.log(
+    'yak operator ask',
+    JSON.stringify({
+      session,
+      ms: Date.now() - at,
+      ...counts(tally),
+      ...Object.fromEntries(
+        [...tally].filter(([name]) => name.endsWith('_wait')),
+      ),
+    }),
+  )
+}
 
 // The session a helper works for, up its `spawned` links: a person's
 // conversation, or a task's session.
@@ -611,15 +662,30 @@ export let operating = (
   let using = usingOf()
   let base = options.model ?? operatorModel(env, provider)
   let reads = readsOf(provider)
+  // A file's key is the digest of its bytes, so the bytes the last step
+  // showed are kept for the next, which shows them again: a wake reads each
+  // file once, and the files of one step all at once.
+  let bytes = new Map<string, Promise<Uint8Array>>()
+  let bytesOf = (file: File) => {
+    let held = bytes.get(file.key) ?? env.BLOBS.get(file.key).then((kept) => {
+      if (!kept) throw new Error('Operator attachment is missing: ' + file.name)
+      return kept.arrayBuffer().then((b) => new Uint8Array(b))
+    })
+    bytes.set(file.key, held)
+    held.catch(() => bytes.delete(file.key))
+    return held
+  }
   // The files the model reads as they are, shown beside the words they came
   // with: the newest first, until SHOWN bytes are in the request; one past
   // that is named instead, and its words still say what it held.
   let shown = async (window: Bundle[]) => {
     let out = new Map<string, Item[]>()
     let room = SHOWN
+    let wanted: File[] = []
+    let placed: [string, (File | Item)[]][] = []
     for (let entry of [...window].reverse()) {
       let files = (comp(entry, 'operator_files')?.files ?? []) as File[]
-      let items: Item[] = []
+      let items: (File | Item)[] = []
       for (let file of files.filter((f) => asIs(reads, f))) {
         if (file.size! > room) {
           items.push({
@@ -629,19 +695,32 @@ export let operating = (
           })
           continue
         }
-        let kept = await env.BLOBS.get(file.key)
-        if (!kept) {
-          throw new Error('Operator attachment is missing: ' + file.name)
-        }
         room -= file.size!
-        items.push({
-          kind: file.mime == 'application/pdf' ? 'document' : 'image',
-          bytes: new Uint8Array(await kept.arrayBuffer()),
-          mediaType: file.mime,
-          label: 'Attached: ' + file.name,
-        })
+        wanted.push(file)
+        items.push(file)
       }
-      if (items.length) out.set(entry.entity.eid, items)
+      if (items.length) placed.push([entry.entity.eid, items])
+    }
+    let read = new Map(
+      await Promise.all(
+        wanted.map(async (f) => [f.key, await bytesOf(f)] as const),
+      ),
+    )
+    for (let key of bytes.keys()) if (!read.has(key)) bytes.delete(key)
+    for (let [eid, items] of placed) {
+      out.set(
+        eid,
+        items.map((i): Item =>
+          'key' in i
+            ? {
+              kind: i.mime == 'application/pdf' ? 'document' : 'image',
+              bytes: read.get(i.key)!,
+              mediaType: i.mime,
+              label: 'Attached: ' + i.name,
+            }
+            : i
+        ),
+      )
     }
     return out
   }
@@ -658,13 +737,15 @@ export let operating = (
   // Each ask is charged to the space of the session asking, at the price of
   // the model it asks.
   let model: Model = Object.assign(async (req: Parameters<Model>[0]) => {
-    let price = await priced(req.model)
+    let [price, [ask], space] = await Promise.all([
+      priced(req.model),
+      req.call ? g.get([req.call]) : [],
+      payerOf(store, req.call),
+    ])
     if (!options.model && !price) {
       throw new Error(`No catalogue price for operator model ${req.model}`)
     }
-    let [ask] = req.call ? await g.get([req.call]) : []
     let session = comp(ask, 'entry')?.session
-    let space = await payerOf(store, req.call)
     let heard = req.onText
     let reply = await accounted(
       env,
@@ -673,6 +754,10 @@ export let operating = (
       () => Promise.resolve(price),
     )({
       ...req,
+      onSubmit: async () => {
+        await req.onSubmit?.()
+        asked(session ? String(session) : undefined)
+      },
       ...heard
         ? {
           onText: (delta) => {
@@ -701,15 +786,26 @@ export let operating = (
       caught(e, { request: 'operator base persona' })
     })
   // Each model's rows, written once per wake: the Operator's own and its
-  // delegate's, and one an input asks for when it first does.
+  // delegate's, and one an input asks for when it first does. A price is
+  // written when its catalogue answers, which no turn waits on: the ask that
+  // needs it waits on the same lookup, already in flight, and refuses if it
+  // fails.
   let seeded = new Map<string, Promise<void>>()
   let seedOf = (m: string) => {
     let held = seeded.get(m) ?? (async () => {
-      let price = await priced(m)
-      await g.apply([
-        ...seed({ provider, model: m }),
-        ...price ? [{ entity: { eid: identityEid('model', [m]) }, price }] : [],
-      ], { trusted: true })
+      priced(m).then(
+        async (price) => {
+          if (!price) return
+          await g.apply(
+            [{ entity: { eid: identityEid('model', [m]) }, price }],
+            {
+              trusted: true,
+            },
+          )
+        },
+        () => {},
+      ).catch((e) => caught(e, { request: 'operator model price' }))
+      await g.apply(seed({ provider, model: m }), { trusted: true })
     })()
     seeded.set(m, held)
     held.catch(() => seeded.delete(m))
@@ -815,7 +911,7 @@ export let operating = (
     ], { trusted: true })
   }
 
-  fx.handle(running(
+  fx.handle(stepwise(running(
     g,
     lend({
       h: { g, fx, vocab, me: identityEid('operator', ['runner']) },
@@ -845,49 +941,43 @@ export let operating = (
         }
       },
       remote: async (session) => {
-        let { space, ctx, files } = await working(
-          env,
-          store,
-          session,
-          options.directory,
-        )
+        let [{ space, ctx, files }, task, [row]] = await Promise.all([
+          working(env, store, session, options.directory),
+          taskOf(store, session),
+          g.get([session]),
+        ])
         let persona = await spaced(g.storage, space)
         if (persona.length) await g.apply(persona, { trusted: true })
-        let tasked = !!await taskOf(store, session)
-        let [row] = await g.get([session])
+        let [roster, google] = await Promise.all([
+          operatorRoster(ctx, store, { space: space.eid, tasked: !!task }),
+          googleTools(env, ctx, space),
+        ])
         return [
           // A conversation and its forks hand coding and careful reasoning
           // to the stronger model in a fresh helper, which starts no other.
           ...!(row?.spawned && !row.fork && !topicOf(row)) ? [delegated] : [],
-          ...await operatorRoster(ctx, store, {
-            space: space.eid,
-            tasked,
-          }),
+          ...roster,
           platformBug(space),
           textSend(env, ctx, space),
           mailSend(env, ctx, space, store),
           phoneSend(env, ctx, space, store),
-          ...await googleTools(env, ctx, space),
+          ...google,
           ...options.tools?.(ctx, files) ?? [],
         ]
       },
       // The conversation and its work forks share a short topic map. Only a
       // session opened on a topic carries that topic's compiled context.
       instructions: async (session) => {
-        let { space, ctx } = await working(
-          env,
-          store,
-          session,
-          options.directory,
-        )
-        let [row] = await g.get([session])
+        let [{ space, ctx }, [row]] = await Promise.all([
+          working(env, store, session, options.directory),
+          g.get([session]),
+        ])
         let topic = topicOf(row)
-        return [
-          topic ? await oracleContext(ctx, g, topic) : await oracleMap(ctx, g),
-          told(ctx, space),
-          await googleTold(env, ctx, space),
-        ]
-          .filter(Boolean).join('\n\n')
+        let [map, google] = await Promise.all([
+          topic ? oracleContext(ctx, g, topic) : oracleMap(ctx, g),
+          googleTold(env, ctx, space),
+        ])
+        return [map, told(ctx, space), google].filter(Boolean).join('\n\n')
       },
       each: async (step, session) => {
         if (!session) return
@@ -896,7 +986,7 @@ export let operating = (
       },
       report: (e, where) => caught(e, { request: 'operator', ...where }),
     }),
-  ))
+  )))
 
   // Whoever carries a session on, the newest words' reach applies, and the
   // files it was given stay with it.
