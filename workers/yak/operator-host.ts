@@ -1,5 +1,6 @@
 import type { Bundle } from '@yaks/graph'
 import { draftEid } from '@yaks/draft'
+import { ownerOf, owns } from './operator-access.ts'
 import type { Held } from './build-door.ts'
 import { type Operator, readOperator } from './operator.ts'
 import {
@@ -234,7 +235,9 @@ let conversationsOf = async (
   if (!everyone) {
     let root = rootOf(space, person)
     let [held] = await store.g.get([root])
-    return held?.session ? [{ root, title: CONVERSATION }] : []
+    return held?.session && await owns(store, root, { person, space })
+      ? [{ root, title: CONVERSATION }]
+      : []
   }
   let held = (await store.g.read('.operator_session ?spawned')).filter((b) =>
     !b.spawned &&
@@ -264,8 +267,8 @@ let whose = async (session: Bundle, named: Named) =>
  */
 export let workOf = async (
   store: Store,
-  space = '',
-  person = '',
+  space: string,
+  person: string,
   everyone?: Named,
 ): Promise<Worked[]> => {
   let conversations = await conversationsOf(store, space, person, everyone)
@@ -280,7 +283,14 @@ export let workOf = async (
       )
       : [],
   ])
-  let drawn = await Promise.all(tasks.map(async (task) => {
+  let own = async (rows: Bundle[]) => {
+    if (everyone) return rows
+    let allowed = await Promise.all(
+      rows.map((b) => owns(store, b.entity.eid, { person, space })),
+    )
+    return rows.filter((_, i) => allowed[i])
+  }
+  let drawn = await Promise.all((await own(tasks)).map(async (task) => {
     let entries = await entriesOf(
       store,
       (await sessionsOf(store, task.entity.eid)).slice(-1),
@@ -305,7 +315,7 @@ export let workOf = async (
       busy: busy(state),
     }
   }))
-  let waiting = taken(requests).map((r) => {
+  let waiting = taken(await own(requests)).map((r) => {
     let failed = r.failed ?? r.bounced
     return {
       open: r.entity.eid,
@@ -511,10 +521,18 @@ export let operatorFrames = (
 ) => {
   let told = new Map<string, number>()
   let tasks = new Map<string, string>()
-  let watching = () =>
-    sockets().filter((ws) =>
-      (ws.deserializeAttachment() as { operator?: boolean } | null)?.operator
-    )
+  let watching = async (session: string) => {
+    let owner = await ownerOf(store, session)
+    return owner
+      ? sockets().filter((ws) => {
+        let held = ws.deserializeAttachment() as
+          | (Held & { operator?: boolean })
+          | null
+        return held?.operator && held.person == owner.person &&
+          held.space == owner.space
+      })
+      : []
+  }
   let send = (watching: Listener[], frame: unknown) => {
     let sent = JSON.stringify(frame)
     for (let ws of watching) {
@@ -527,7 +545,7 @@ export let operatorFrames = (
   }
   return {
     tell: async (session: string) => {
-      let pages = watching()
+      let pages = await watching(session)
       if (!pages.length) return
       let made = await frameOf(store, session, told.get(session), named)
       if (!made) return
@@ -535,7 +553,7 @@ export let operatorFrames = (
       send(pages, made.frame)
     },
     typing: async (session: string, text: string) => {
-      let pages = watching()
+      let pages = await watching(session)
       if (!pages.length) return
       let task = tasks.get(session)
       if (!task) {
@@ -628,19 +646,40 @@ export let operatorRequest = async (
   let { person, space: spaceId } = held
   let { store } = operator
   let access = held
+  let own = (id: string) => owns(store, id, held)
+  let missing = () =>
+    Response.json({ message: 'That conversation is missing.' }, { status: 404 })
+  let allowedDrafts = async (bundles: Bundle[]) => {
+    let allowed = await Promise.all(bundles.map(async (b) => {
+      let place = placeOf(b)
+      return place == 'operator' || place == 'operator:new' ||
+        await own(place.slice('operator:'.length))
+    }))
+    return bundles.filter((_, i) => allowed[i])
+  }
   // The platform's admin, inspecting: every person's conversations, each
   // called by whose it is.
   let everyone = args.everyone === true && access.administrative
     ? operator.named
     : undefined
+  if (
+    (path == '/operator/stop' || path == '/operator/run') && args.task &&
+    !await own(String(args.task))
+  ) return missing()
   if (path == '/operator/stop') {
     return Response.json(await operator.stop(String(args.task ?? ''), person))
   }
   if (path == '/operator/draft') {
     if (Array.isArray(args.bundles)) {
-      await store.g.apply(drafts(args.bundles as Bundle[], person))
+      let bundles = drafts(args.bundles as Bundle[], person)
+      if ((await allowedDrafts(bundles)).length != bundles.length) {
+        return missing()
+      }
+      await store.g.apply(bundles)
     }
-    return Response.json({ bundles: await store.g.read(`.draft.by=${person}`) })
+    return Response.json({
+      bundles: await allowedDrafts(await store.g.read(`.draft.by=${person}`)),
+    })
   }
   // The opt-ins this store kept before the number moved onto the person
   // (operator-texts.ts `handed`): listed for the page to hand to the
@@ -664,9 +703,12 @@ export let operatorRequest = async (
     }
     let options = args.options as Parameters<typeof receive>[3]
     if (Array.isArray(args.draft)) {
-      options = { ...options, also: drafts(args.draft as Bundle[], person) }
+      let also = drafts(args.draft as Bundle[], person)
+      if ((await allowedDrafts(also)).length != also.length) return missing()
+      options = { ...options, also }
     }
     let [old] = options?.id ? await store.g.get([options.id]) : []
+    if (old && !await own(old.entity.eid)) return missing()
     let id = await receive(store, intake, String(args.say ?? ''), options)
     await armed()
     return Response.json({
@@ -682,7 +724,7 @@ export let operatorRequest = async (
   }
   if (path == '/operator/request') {
     let [row] = await store.g.get([String(args.id ?? '')])
-    return row?.operator_request
+    return row?.operator_request && await own(row.entity.eid)
       ? Response.json((await answering(store, [row]))[0])
       : Response.json({ message: 'That request is missing.' }, { status: 404 })
   }
@@ -691,12 +733,18 @@ export let operatorRequest = async (
     return Response.json(
       await answering(
         store,
-        (await store.g.get(ids)).filter((row) => row?.operator_request),
+        (await Promise.all(
+          ids.map(async (id) =>
+            await own(id) ? (await store.g.get([id]))[0] : undefined
+          ),
+        )).filter((row): row is Bundle => !!row?.operator_request),
       ),
     )
   }
   if (path == '/operator/messages') {
     let rows = (await requested(store)).reverse()
+    let allowed = await Promise.all(rows.map((r) => own(r.entity.eid)))
+    rows = rows.filter((_, i) => allowed[i])
     let failed = await store.g.read('.effect.state=failed')
     return Response.json(rows.map((row) => {
       let run = failed.find((b) =>
@@ -714,6 +762,7 @@ export let operatorRequest = async (
     return Response.json(await workOf(store, spaceId, person, everyone))
   }
   if (path == '/operator/conversation') {
+    if (!everyone && !await own(String(args.open ?? ''))) return missing()
     return Response.json(
       await conversationOf(
         store,
@@ -725,6 +774,12 @@ export let operatorRequest = async (
     )
   }
   if (path == '/operator/read') {
+    if (typeof args.task == 'string' && !await own(args.task)) return missing()
+    if (!args.task) {
+      let { tasks = [] } = await readOperator(store)
+      let allowed = await Promise.all(tasks.map((t) => own(t.entity.eid)))
+      return Response.json({ tasks: tasks.filter((_, i) => allowed[i]) })
+    }
     return Response.json(
       await readOperator(
         store,

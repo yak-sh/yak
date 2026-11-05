@@ -169,7 +169,7 @@ let out = await operator.run(f.held, f.space, {
 
 let history = await readOperator(f.store, out.task)
 let drawn = await conversationOf(f.store, '/manage/clerk/operator', out.task)
-let work = await workOf(f.store)
+let work = await workOf(f.store, f.space.eid, f.held.person)
 test('the Operator page lists its work in plain words, each opening on a page of its own', () => {
   assertEquals(work.map((w) => [w.open, w.state, w.busy]), [
     [out.task, 'Done', false],

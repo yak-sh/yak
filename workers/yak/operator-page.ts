@@ -338,6 +338,11 @@ export let operatorAnswer = async (
       conversationOf(env, space, who, at, open),
       workOf(env, space, who),
     ])
+    if (!talked.title) {
+      return Response.json({ message: 'That conversation is missing.' }, {
+        status: 404,
+      })
+    }
     return Response.json({
       title: talked.title,
       task: talked.task,
@@ -384,7 +389,10 @@ let conversationOf = async (
     who,
     'conversation',
     { at, open },
-  ) as {
+  ).catch((e) => {
+    if (e.status != 404) throw e
+    return { task: '', begun: '', title: '', html: '', waiting: [] }
+  }) as {
     task: string
     begun: string
     title: string
