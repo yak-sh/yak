@@ -14,11 +14,11 @@ let platform = {
 /** The platform library's path, only when the name resolves to a local file. */
 export let vectorPath = (resolve = import.meta.resolve): string | undefined => {
   let names: Record<string, string> = {
-    'linux-x86_64': '@sqlite-vector-linux-x86_64',
-    'linux-aarch64': '@sqlite-vector-linux-aarch64',
-    'darwin-x86_64': '@sqlite-vector-darwin-x86_64',
-    'darwin-aarch64': '@sqlite-vector-darwin-aarch64',
-    'windows-x86_64': '@sqlite-vector-windows-x86_64',
+    'linux-x86_64': '@sqliteai/sqlite-vector-linux-x86_64',
+    'linux-aarch64': '@sqliteai/sqlite-vector-linux-arm64',
+    'darwin-x86_64': '@sqliteai/sqlite-vector-darwin-x86_64',
+    'darwin-aarch64': '@sqliteai/sqlite-vector-darwin-arm64',
+    'windows-x86_64': '@sqliteai/sqlite-vector-win32-x86_64',
   }
   let name = platform && names[`${platform.os}-${platform.arch}`]
   if (!name || !platform) return

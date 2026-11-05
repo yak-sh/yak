@@ -1,9 +1,9 @@
 // Storage capabilities share graph transactions and observe other hosts.
 import { equal, ok, test } from '@yaks/testing'
-import { assertThrows } from '@std/assert'
+import { assert, assertThrows } from '@std/assert'
 import { loadVocab } from '@yaks/vocab'
 import { docDoc } from '@yaks/doc'
-import { insert, select, table } from '@yaks/sql'
+import { as, fn, insert, select, table } from '@yaks/sql'
 import { open } from './db.ts'
 import { storage } from './mod.ts'
 import { statements, vectorPath } from './statements.ts'
@@ -14,7 +14,7 @@ test('an unresolved vector library leaves the native facility unavailable', () =
     undefined,
   )
   equal(vectorPath(() => 'https://example.com/vector/index.js'), undefined)
-  // Outside this repository nothing maps the name, as in a yak from JSR.
+  // Optional native packages can be absent on unsupported platforms.
   equal(
     vectorPath((name) => {
       throw new TypeError(`Import "${name}" not a dependency`)
@@ -30,6 +30,21 @@ test('an unresolved vector library leaves the native facility unavailable', () =
     vectorPath(() => 'file:///libraries/vector/index.js'),
     `/libraries/vector/vector.${ext}`,
   )
+})
+
+test('the installed vector package loads into a SQLite connection', () => {
+  let db = open(':memory:')
+  try {
+    let sql = statements(db)
+    assert(sql.facilities?.vector)
+    sql.facilities.vector()
+    let [row] = sql.query(
+      select({ cols: [as(fn('vector_version'), 'version')] }),
+    )
+    ok(typeof row.version == 'string' && row.version.length > 0)
+  } finally {
+    db.close()
+  }
 })
 
 test('statement writes roll back with the graph transaction and nested units', () => {
