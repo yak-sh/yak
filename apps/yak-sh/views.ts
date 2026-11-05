@@ -84,7 +84,8 @@ let Nav = () =>
     ]),
     h('span', { class: 'Nav_Links' }, [
       h('a', { href: '#install' }, 'Install'),
-      h('a', { href: '#yaks-app' }, 'yaks.app'),
+      h('a', { href: '#yaks-app' }, 'Hosting'),
+      ...words('yaks.app'),
       h('a', { href: 'https://jsr.io/@yaks' }, 'Packages'),
       h('a', { href: 'https://github.com/yak-sh/yak' }, 'GitHub'),
     ]),

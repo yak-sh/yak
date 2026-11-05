@@ -117,7 +117,9 @@ h2 {
 }
 .Nav_Links {
   display: flex;
-  gap: 1.2rem;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: .4rem 1.2rem;
 }
 .Hero {
   padding: clamp(2rem, 8vh, 5rem) 0 clamp(2.2rem, 5vw, 4rem);

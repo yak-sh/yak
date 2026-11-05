@@ -486,7 +486,7 @@ test('every yaks.app in the words is a link to it that opens in a new tab, and c
     el.localName == 'a' && el.getAttribute('href') == 'https://yaks.app' &&
     el.getAttribute('target') == '_blank' &&
     el.getAttribute('rel') == 'noopener'
-  equal(said.filter((el) => !el.closest('code, pre, nav') && !away(el)), [])
+  equal(said.filter((el) => !el.closest('code, pre') && !away(el)), [])
   equal(said.filter(away).length > 8, true)
   equal(said.some((el) => el.closest('code')), true)
   page.page.close()
