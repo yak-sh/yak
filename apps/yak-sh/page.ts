@@ -5,6 +5,7 @@ import { host } from '@yaks/preact/host'
 import { yak } from './yak.ts'
 import { term } from './term.ts'
 import { files, seed, SITE } from './site.ts'
+import { fileOf } from '@yaks/file'
 import { css } from '@yaks/diagram'
 import { figure } from './figure.ts'
 
@@ -28,6 +29,7 @@ export let start = async (
   let style = root.ownerDocument.createElement('style')
   style.textContent = css
   root.ownerDocument.head.append(style)
+  restyled(y, root.ownerDocument)
   let page = await host({
     root,
     views: 'views.ts',
@@ -46,4 +48,26 @@ export let start = async (
       }),
   })
   return { yak: y, term: t, figure: f, page }
+}
+
+/** The page wears the style.css its graph holds: a change to that file's
+ * contents restyles the page in place of the one it loaded. */
+let restyled = (y: Awaited<ReturnType<typeof yak>>, doc: Document) => {
+  let eid = fileOf(SITE, 'style.css')
+  let body = () => (y.row(eid)?.content as { body?: string } | undefined)?.body
+  let loaded = body()
+  y.watch(eid, () => {
+    let css = body()
+    if (css == null || css == loaded) return
+    let own = doc.querySelector<HTMLStyleElement>('style[data-site]')
+    if (!own) {
+      own = doc.createElement('style')
+      own.dataset.site = ''
+      doc.head.append(own)
+      for (let link of doc.querySelectorAll('link[rel="stylesheet"]')) {
+        if (link.getAttribute('href')?.endsWith('style.css')) link.remove()
+      }
+    }
+    own.textContent = css
+  })
 }

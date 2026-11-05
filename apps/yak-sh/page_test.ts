@@ -4,7 +4,8 @@
 import { equal, match, test } from '@yaks/testing'
 import { parseHTML } from 'linkedom'
 import { start } from './page.ts'
-import { SECTIONS, SELF } from './site.ts'
+import { SECTIONS, SELF, SITE } from './site.ts'
+import { fileOf } from '@yaks/file'
 import { STORY } from './figure.ts'
 
 let dir = new URL('./', import.meta.url)
@@ -82,7 +83,7 @@ test('the story types into the prompt and the drawing draws what it made', async
   equal(doors.getAttribute('data-door'), 'agent')
   equal(
     [...doors.querySelectorAll('.N .id')].map((t) => t.textContent),
-    ['T-2 open', 'T-3 done', 'C-5'],
+    ['U-1', 'T-2 open', 'T-3 done', 'C-5'],
   )
   page.page.close()
 })
@@ -131,6 +132,76 @@ test('the drawing widened and back to the demo still draws each step as far as i
   let at = (n: number) => page.figure.reached(n, performance.now() + 5000)
   page.figure.scroll([1, .5])
   equal([at(1), at(2), at(3)], [1, .5, 0])
+  page.page.close()
+})
+
+// Fire `type` on `el` the way a reader's browser does: bubbling up from it.
+let { Event: Dom } = parseHTML('<html></html>')
+let fire = (el: Element, type: string) =>
+  el.dispatchEvent(new Dom(type, { bubbles: true }))
+
+test('an entity clicked in the drawing opens in the editor, and a value changed there is typed into the prompt', async () => {
+  let { root, page, settle } = await open()
+  await page.term.reach(steps, 3)
+  await settle()
+  let cake = page.yak.rows().find((b) =>
+    (b.doc as { title?: string })?.title == 'Buy the cake'
+  )!
+  fire(
+    root.querySelector(`.Figure_Sheet [data-eid="${cake.entity.eid}"] text`)!,
+    'click',
+  )
+  await settle()
+  let editor = () => root.querySelector('.Editor')!
+  equal(editor().querySelector('.Editor_Bar b')?.textContent, 'T-3')
+  match(editor().textContent!, /doc\{title, body\}/)
+  let screen = () => root.querySelector('.Prompt_Screen')!.textContent!
+  match(screen(), /\$ graph show T-3/)
+  let title = editor().querySelector(
+    '[aria-label="doc.title"]',
+  ) as unknown as HTMLInputElement
+  title.value = 'Buy Ada\'s "cake"'
+  fire(title as unknown as Element, 'input')
+  fire(title as unknown as Element, 'blur')
+  await settle()
+  equal(
+    (page.yak.row(cake.entity.eid)!.doc as { title: string }).title,
+    `Buy Ada's "cake"`,
+  )
+  match(screen(), /\$ graph apply T-3 /)
+  let id = [...root.querySelectorAll('.Prompt_Id')].find((b) =>
+    b.textContent == 'T-2'
+  )!
+  fire(id, 'click')
+  await settle()
+  equal(editor().querySelector('.Editor_Bar b')?.textContent, 'T-2')
+  fire(editor().querySelector('.Editor_Bar button')!, 'click')
+  await settle()
+  equal(root.querySelector('.Editor'), null)
+  let opened = async (el: Element) => {
+    fire(el, 'click')
+    await settle()
+    return editor().querySelector('.Editor_Bar b')?.textContent
+  }
+  equal(await opened(root.querySelector('#door-agent')!), 'N-4')
+  equal(await opened(root.querySelector('.Doors_Draw .N-task')!), 'T-2')
+  equal(await opened(root.querySelector('.Stack_Draw .pl')!), 'T-3')
+  page.page.close()
+})
+
+test("a change to the graph's style.css restyles the page", async () => {
+  let { document, page, settle } = await open()
+  let sheet = fileOf(SITE, 'style.css')
+  await page.yak.graph.apply([{
+    entity: { eid: sheet },
+    content: { body: 'body { color: red }' },
+  }])
+  await settle()
+  equal(
+    document.querySelector('style[data-site]')?.textContent,
+    'body { color: red }',
+  )
+  equal(document.querySelector('link[href="style.css"]'), null)
   page.page.close()
 })
 

@@ -16,7 +16,9 @@ import { type Figure, into, PLACES, SHEET, WIDER } from './figure.ts'
 import { INSTALL, proseOf, scriptOf } from './site.ts'
 import { Copy, parts } from './parts.ts'
 import { Doors, Stack } from './bands.ts'
-import { text, useTold } from './told.ts'
+import { text, useHeard, useTold } from './told.ts'
+import { clicked, Editor, opener } from './editor.ts'
+import { human } from '@yaks/id'
 
 /** What every view is given beside its bundle. */
 export type Ctx = {
@@ -66,6 +68,7 @@ let Page: FunctionComponent<Ctx & { e: Bundle }> = (ctx) => {
     parts.push(h(Entity, { ...ctx, eid: content, view, key: content }))
   }
   flush()
+  parts.push(h(Editor, { ...ctx, key: 'editor' }))
   return h('div', { class: 'Site' }, parts)
 }
 
@@ -200,8 +203,33 @@ let sign: Record<Line['kind'], string> = {
   fault: '',
 }
 
-let Prompt: FunctionComponent<Ctx> = ({ term }) => {
+// A printed line with each short id the graph knows as a button that opens
+// that entity.
+let linked = (
+  line: string,
+  ids: Map<string, string>,
+  open: (eid: string) => void,
+) =>
+  line.split(/\b([A-Z]+-\d+)\b/).map((part, i) => {
+    let eid = i % 2 ? ids.get(part) : undefined
+    return eid
+      ? h('button', {
+        type: 'button',
+        class: 'Prompt_Id',
+        onClick: () => open(eid),
+      }, part)
+      : part
+  })
+
+let Prompt: FunctionComponent<Ctx> = (ctx) => {
+  let { term, yak } = ctx
   useTold(term.listen)
+  let id = human(yak.vocab)
+  let ids = new Map(
+    yak.rows().filter((b) => b.entity.num != null)
+      .map((b) => [id(b), b.entity.eid]),
+  )
+  let open = opener(ctx)
   let [line, set] = useState('')
   // Where the arrows have walked to in the history: its length is the line
   // being written.
@@ -227,7 +255,7 @@ let Prompt: FunctionComponent<Ctx> = ({ term }) => {
       ...term.lines().map((l) =>
         h('div', { class: `Prompt_Line is-${l.kind}` }, [
           h('span', { class: 'Prompt_Sign' }, sign[l.kind]),
-          l.text,
+          ...(l.kind == 'in' ? [l.text] : linked(l.text, ids, open)),
         ])
       ),
       term.typing()
@@ -286,9 +314,8 @@ let lead = (
   return { d: `M${sx},${sy}H${gx}V${to.y}H${to.x}`, sx, sy }
 }
 
-let Figure: FunctionComponent<Ctx & { pen: Pen }> = (
-  { yak, term, figure, pen },
-) => {
+let Figure: FunctionComponent<Ctx & { pen: Pen }> = (ctx) => {
+  let { yak, term, figure, pen } = ctx
   useTold((l) => yak.watch('*', l))
   let sheet = useRef<HTMLDivElement>(null)
   let leader = useRef<SVGSVGElement>(null)
@@ -355,6 +382,14 @@ let Figure: FunctionComponent<Ctx & { pen: Pen }> = (
       pen.paint = undefined
     }
   }, [])
+  // An entity clicked in the drawing, or chosen with Enter, opens.
+  useHeard(sheet, ['click', 'keydown'], (ev) => {
+    let eid = sheet.current && clicked(ev, sheet.current)
+    let key = (ev as KeyboardEvent).key
+    if (!eid || ev.type == 'keydown' && key != 'Enter' && key != ' ') return
+    ev.preventDefault()
+    opener(ctx)(eid)
+  })
   let ask = (q: string) => {
     setAsked(q)
     drawing.current?.query(q, figure.ask(q)).then(() => setFault('')).catch((

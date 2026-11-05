@@ -249,6 +249,9 @@ export let yak = async () => {
     }
   }
 
+  // The person was written before anything listened.
+  for (let b of await g.get([you])) rows.set(b.entity.eid, b)
+
   return {
     graph: g,
     vocab,

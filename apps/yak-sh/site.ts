@@ -25,6 +25,7 @@ export let FILES = [
   'parts.ts',
   'bands.ts',
   'told.ts',
+  'editor.ts',
 ]
 
 /** A section: the view that draws it and what it says. A step's `sh` block

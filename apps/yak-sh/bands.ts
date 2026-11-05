@@ -9,10 +9,11 @@ import { Markdown } from '@yaks/markdown'
 import { human } from '@yaks/id'
 import { INSIDE, type Phase, PHASES } from '@yaks/graph/plugin'
 import type { Bundle } from '@yaks/graph'
-import { proseOf } from './site.ts'
 import { LINE } from './figure.ts'
 import type { Ctx } from './views.ts'
-import { text, useTold } from './told.ts'
+import { text, useHeard, useTold } from './told.ts'
+import { clicked, opener } from './editor.ts'
+import { proseOf, SITE } from './site.ts'
 
 type Band = FunctionComponent<Ctx & { e: Bundle }>
 
@@ -264,7 +265,8 @@ let StackDrawing = (
   }, [defs(), axes, ...ghosts, ...drawn, ...callouts, rail])
 }
 
-export let Stack: Band = ({ e, yak, figure }) => {
+export let Stack: Band = (ctx) => {
+  let { e, yak, figure } = ctx
   useTold(figure.listen)
   useTold((l) => yak.watch('*', l))
   let { eid, phases } = figure.last()
@@ -295,6 +297,12 @@ export let Stack: Band = ({ e, yak, figure }) => {
       cancelAnimationFrame(frame)
     }
   }, [])
+  // A plate clicked opens the entity they are.
+  let drawing = useRef<HTMLElement>(null)
+  useHeard(drawing, ['click'], (ev) => {
+    let plate = (ev.target as Element | null)?.closest?.('.pl, .co')
+    if (plate && eid) opener(ctx)(eid)
+  })
   let state = standing(ran, upto)
   let inside = new Set<string>(INSIDE)
   return h('section', { class: 'Band Stack', 'data-eid': e.entity.eid }, [
@@ -310,6 +318,13 @@ export let Stack: Band = ({ e, yak, figure }) => {
         PHASES.map((p, i) =>
           h('li', {
             class: state.phase(p, i) || undefined,
+            // A phase clicked comes to the reading line, so the write runs
+            // to it.
+            onClick: (ev: Event) =>
+              (ev.currentTarget as Element).scrollIntoView?.({
+                block: 'center',
+                behavior: 'smooth',
+              }),
             'data-phase': p,
             'data-tx': inside.has(p) ? '' : undefined,
             'data-tx-first': p == INSIDE[0] ? '' : undefined,
@@ -329,7 +344,7 @@ export let Stack: Band = ({ e, yak, figure }) => {
         ),
       ),
     ]),
-    h('figure', { class: 'Stack_Figure' }, [
+    h('figure', { class: 'Stack_Figure', ref: drawing }, [
       h(StackDrawing, { plates, ran, upto }),
       h(
         'figcaption',
@@ -556,7 +571,8 @@ export let doorOf = (row: Bundle | undefined, agent: string) => {
   return by == agent ? 'agent' : by ? 'terminal' : ''
 }
 
-export let Doors: Band = ({ e, yak, figure }) => {
+export let Doors: Band = (ctx) => {
+  let { e, yak, figure } = ctx
   useTold(figure.listen)
   useTold((l) => yak.watch('*', l))
   let places = useRef(new Map<string, Spot>())
@@ -584,6 +600,23 @@ export let Doors: Band = ({ e, yak, figure }) => {
   let calls = rows.filter((b) => b.call).length
   let target = eid ? at.get(eid) : undefined
   let port = PORT[door]
+  // An entity clicked opens; the terminal's door goes to the prompt, the
+  // agent's opens the agent, and the browser's the page itself.
+  let drawn = useRef<SVGSVGElement>(null)
+  useHeard(drawn, ['click'], (ev) => {
+    let svg = drawn.current!
+    let picked = clicked(ev, svg)
+    let door = (ev.target as Element | null)?.closest?.('.Door')?.id
+    if (picked) return opener(ctx)(picked)
+    if (door == 'door-agent') return opener(ctx)(yak.agent)
+    if (door == 'door-browser') return opener(ctx)(SITE)
+    if (door != 'door-terminal') return
+    let input = svg.ownerDocument.querySelector<HTMLInputElement>(
+      '.Prompt_Form input',
+    )
+    input?.scrollIntoView?.({ block: 'center', behavior: 'smooth' })
+    input?.focus({ preventScroll: true })
+  })
   return h('section', { class: 'Band Doors', 'data-eid': e.entity.eid }, [
     h(Head, { e }),
     h('figure', { class: 'Doors_Figure' }, [
@@ -593,6 +626,7 @@ export let Doors: Band = ({ e, yak, figure }) => {
       ]),
       h('svg', {
         class: 'Doors_Draw',
+        ref: drawn,
         'data-door': door,
         viewBox: '0 0 600 520',
         role: 'img',

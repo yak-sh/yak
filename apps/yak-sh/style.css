@@ -523,6 +523,130 @@ h2 {
   }
 }
 
+/* ---------------------------------------------------------------- editor
+   The entity a reader opened, from anywhere on the page. */
+.Editor {
+  position: fixed;
+  right: 1rem;
+  bottom: 1rem;
+  z-index: 20;
+  width: min(25rem, calc(100vw - 2rem));
+  max-height: min(70vh, 40rem);
+  overflow: auto;
+  border: 1px solid var(--line);
+  background: var(--plate);
+  box-shadow: 0 10px 30px rgba(35, 48, 31, .18);
+  font: .8125rem/1.45 var(--mono);
+}
+.Editor_Bar {
+  position: sticky;
+  top: 0;
+  display: flex;
+  align-items: center;
+  gap: .6rem;
+  padding: .6rem .5rem .6rem .9rem;
+  border-bottom: 1px solid var(--rule);
+  background: var(--plate);
+}
+.Editor_Bar span {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  color: var(--soft);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.Editor_Bar button {
+  border: 0;
+  padding: 0 .45rem;
+  background: none;
+  color: var(--soft);
+  font-size: 1.2rem;
+  cursor: pointer;
+}
+.Editor_Hint {
+  margin: 0;
+  padding: .5rem .9rem 0;
+  color: var(--soft);
+  font: .75rem/1.45 var(--sans);
+}
+.Editor_Comp {
+  padding: .6rem .9rem .2rem;
+}
+.Editor_Comp h3 {
+  margin: 0 0 .35rem;
+  font: 500 .8125rem/1.3 var(--mono);
+  color: var(--ink);
+}
+.Editor_Comp dl {
+  margin: 0;
+}
+.Editor_Prop {
+  display: grid;
+  grid-template-columns: 6.5rem minmax(0, 1fr);
+  gap: .6rem;
+  padding: .2rem 0;
+}
+.Editor_Prop dt {
+  padding-top: .3rem;
+  color: var(--soft);
+  overflow-wrap: anywhere;
+}
+.Editor_Prop dd {
+  margin: 0;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.Editor_Prop code {
+  display: block;
+  padding-top: .3rem;
+  color: var(--soft);
+}
+.Editor_Field {
+  width: 100%;
+  padding: .25rem .4rem;
+  border: 1px solid var(--rule);
+  border-radius: 4px;
+  background: var(--paper);
+  color: var(--ink);
+  font: inherit;
+  resize: vertical;
+}
+.Editor_Field:focus {
+  outline: none;
+  border-color: var(--meadow);
+  box-shadow: 0 0 0 2px rgba(167, 192, 128, .45);
+}
+.Editor_Ref,
+.Prompt_Id {
+  padding: 0;
+  border: 0;
+  background: none;
+  color: inherit;
+  font: inherit;
+  text-decoration: underline;
+  text-decoration-thickness: 1px;
+  text-underline-offset: 3px;
+  cursor: pointer;
+}
+.Editor_Ref {
+  padding-top: .3rem;
+  color: var(--line);
+}
+.Prompt_Id:hover {
+  color: var(--moss);
+}
+.Editor_Ref:hover {
+  color: var(--meadow);
+}
+.Doors_Draw .N,
+.Doors_Draw .Door,
+.Stack_Draw .pl,
+.Stack_Draw .co,
+.Phases li {
+  cursor: pointer;
+}
+
 /* ---------------------------------------------------------------- bands */
 .Band {
   display: grid;

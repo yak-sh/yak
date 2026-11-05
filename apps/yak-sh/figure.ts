@@ -55,6 +55,7 @@ export let into = (top: number, height: number, view: number) =>
 
 export let figure = (yak: Yak) => {
   let query = STORY
+  let picked: string | undefined
   let last: { eid?: string; phases: string[] } = { phases: [] }
   let listeners = new Set<() => void>()
   let told = () => listeners.forEach((l) => l())
@@ -86,6 +87,13 @@ export let figure = (yak: Yak) => {
       return ASKED + asked++
     },
     last: () => last,
+    /** The entity the reader opened, if any. */
+    picked: () => picked,
+    /** Open an entity, or close the one open (undefined). */
+    pick: (eid: string | undefined) => {
+      picked = eid
+      told()
+    },
     listen: (l: () => void) => {
       listeners.add(l)
       return () => void listeners.delete(l)
