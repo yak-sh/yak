@@ -7,7 +7,7 @@ import { command as spawnCommand } from '@yaks/process/command'
 import { fileURLToPath } from 'node:url'
 import { resolve } from 'node:path'
 import { createHash, randomUUID } from 'node:crypto'
-import { cpSync, existsSync } from 'node:fs'
+import { existsSync } from 'node:fs'
 
 let dir = (): string => fileURLToPath(new URL('../../', import.meta.url))
 export type Lock = {
@@ -30,6 +30,7 @@ export type Host = {
   directory(path: string): boolean
   exists(path: string): boolean
   realpath(path: string): string
+  /** A copy of the tree at `from` as `to`, symlinks kept verbatim. */
   copy(from: string, to: string): void
   rename(from: string, to: string): void
   symlink(target: string, path: string): void
@@ -57,8 +58,7 @@ let system: Host = {
   directory: (path) => io.statSync(path).isDirectory,
   exists: existsSync,
   realpath: io.realPathSync,
-  copy: (from, to) =>
-    cpSync(from, to, { recursive: true, verbatimSymlinks: true }),
+  copy: (from, to) => tree(from, to),
   rename: io.renameSync,
   symlink: (target, path) => io.symlinkSync(target, path, { type: 'dir' }),
   link: (path) =>
@@ -86,6 +86,29 @@ let system: Host = {
   },
   report: (message) => console.error(message),
   nonce: randomUUID,
+}
+
+// A package tree is ~30,000 files and 700 MB, readied into every checkout and
+// runtime copy. Copied, its bytes are a burst of writes that starve the box's
+// servers' disk (bace8585) and fill it; linked, each file shares the seed's
+// inode and only the directories and links are written. npm replaces a tree by
+// unlinking it, so a linked copy keeps its files when the seed reinstalls.
+let tree = (from: string, to: string) => {
+  io.mkdirSync(to)
+  for (let e of io.readDirSync(from)) {
+    let a = `${from}/${e.name}`, b = `${to}/${e.name}`
+    if (e.isSymlink) io.symlinkSync(io.readLinkSync(a), b)
+    else if (e.isDirectory) tree(a, b)
+    else {
+      try {
+        io.linkSync(a, b)
+      } catch (error) {
+        // Another filesystem, where a file cannot be linked: its bytes.
+        if ((error as { code?: string })?.code != 'EXDEV') throw error
+        io.copyFileSync(a, b)
+      }
+    }
+  }
 }
 
 let key = (inputs: string[][]) =>
