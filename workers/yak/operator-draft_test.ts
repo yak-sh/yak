@@ -11,6 +11,7 @@ import { directoryOf } from './directory.ts'
 import { platform } from './testing.ts'
 import { type Beside, chatPage, operatorAnswer } from './operator-page.ts'
 import { redraw } from './public/redraw.js'
+import { when } from './public/when.js'
 
 let p = platform('operator-draft')
 let person = crypto.randomUUID(), eid = crypto.randomUUID()
@@ -128,6 +129,8 @@ let load = async (
   new Function(
     'browserDrafts',
     'redraw',
+    'when',
+    'setInterval',
     'document',
     'fetch',
     'location',
@@ -140,6 +143,9 @@ let load = async (
   )(
     opened,
     redraw,
+    when,
+    // the stamps' minute, which no test waits for
+    () => 0,
     document,
     fetch,
     { reload: () => void loads.page++, origin: 'https://yaks.app' },

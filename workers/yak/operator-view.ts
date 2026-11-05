@@ -19,6 +19,7 @@ import { day, esc } from './html.ts'
 import { chatPath } from './route.ts'
 import { poseOf, yak } from './mascot.ts'
 import { icon, type IconName } from './icons.ts'
+import { when } from './public/when.js'
 
 let comp = (b: Bundle | undefined, name: string) =>
   b?.[name] as Comp | undefined
@@ -116,6 +117,16 @@ let spoken = (b: Bundle, body: string) => {
 
 let yours = (b: Bundle, text: string) =>
   `<p class="Talk_You">${via(b)}${esc(text)}</p>`
+
+// When a line was sent, small under it (public/when.js), the page saying it
+// again in the person's own time.
+let stamp = (b: Bundle) => {
+  let at = String(comp(b, 'created')?.at ?? '')
+  let said = when(at)
+  return said
+    ? `<time class="Talk_When" datetime="${esc(at)}">${said}</time>`
+    : ''
+}
 
 type Sent = { name: string; mime?: string }
 
@@ -477,13 +488,14 @@ let line = (b: Bundle, id: string, body: string): Row[] => {
       ),
     }]
   }
-  if (b.output && body) return [{ id, html: reply(body) }]
+  if (b.output && body) return [{ id, html: reply(body) + stamp(b) }]
   // A line of a call its talking model answered itself: theirs, or its own.
   let called = comp(b, 'operator_call')
   if (called && body) {
     return [{
       id,
-      html: called.said ? reply(spoken(b, body)) : input(b, body),
+      html: (called.said ? reply(spoken(b, body)) : input(b, body)) +
+        stamp(b),
     }]
   }
   if (told(b, body)) return [{ id, html: helper(b, body) }]
@@ -500,7 +512,7 @@ let line = (b: Bundle, id: string, body: string): Row[] => {
     return [{ id, html: '<p class="Talk_Note">Stopped.</p>' }]
   }
   if (body && !NOT_INPUT.some((c) => b[c])) {
-    return [{ id, html: input(b, body) }]
+    return [{ id, html: input(b, body) + stamp(b) }]
   }
   return []
 }

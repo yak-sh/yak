@@ -946,6 +946,7 @@ let chatScript = (
   `<script type="module">
 import { browserDrafts } from '/_draft.js'
 import { redraw } from '/redraw.js'
+import { when } from '/when.js'
 let open = ${JSON.stringify(open)}
 let root = ${JSON.stringify(rootOf(space.eid, who.person ?? ''))}
 let chats = ${JSON.stringify(chatPath(space.slug, ''))}
@@ -1150,6 +1151,12 @@ form?.addEventListener('submit', async (e) => {
   } catch (error) { said(error) }
   finally { button.disabled = false }
 })
+// When each message was sent, in the person's own time, kept current.
+let stamps = () => {
+  for (let t of box.querySelectorAll('time[datetime]')) t.textContent = when(t.dateTime)
+}
+stamps()
+setInterval(stamps, 60_000)
 follow(true)
 listen()
 </script>`
