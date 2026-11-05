@@ -2,7 +2,7 @@
 // commit's first failure and the build of it again started: then it is only
 // logged. Nothing else is filed or built again.
 import { clock, test } from '@yaks/testing'
-import type { Bundle } from '@yaks/graph'
+import type { Bundle, Comp } from '@yaks/graph'
 import { Stale } from '@yaks/graph/errors'
 import { within } from './defects.ts'
 import {
@@ -409,14 +409,13 @@ let diagnoses = async (logs: Record<string, string>) => {
   }
 }
 
-test('builds: failures of one cause are one bug, each under the commit it built', async () => {
+test('builds: different failed commits keep their own bugs', async () => {
   let [first, second, third] = await diagnoses({
     'build-1': 'error: TS2322 in report.ts:103',
     'build-2': 'error: TS2322 in report.ts:105',
     'build-3': 'the upload timed out',
   })
-  assertEquals(first[0], second[0])
-  assertEquals(first[0] == third[0], false)
+  assertEquals([first[0], second[0], third[0]], ['c0', 'c1', 'c2'])
   assertEquals([first[1], second[1], third[1]], ['c0', 'c1', 'c2'])
 })
 
@@ -444,4 +443,105 @@ test('builds: unreadable causes keep unrelated commits and hook builds apart', a
   for (let r of reports) {
     assertStringIncludes(r.error.message, 'BUILD_LOG_TOKEN unavailable')
   }
+})
+
+// Exercise the queue's report boundary without sending anything to the tracker.
+let reported = async (readable: boolean, recordStatus = 200) => {
+  let commit = '0b5802113' + '1'.repeat(31)
+  let rows: Bundle[] = []
+  let requests: string[] = []
+  let env = {
+    CF_ACCOUNT: 'account',
+    CF_WORKERS_TOKEN: 'worker-token',
+    WORKERS_API: 'https://cloudflare.test',
+    META: receipts(),
+    ERRORS: {
+      send: (sent: Bundle[]) => {
+        rows.push(...sent)
+        return Promise.resolve()
+      },
+    },
+  } as Env
+  let was = globalThis.fetch
+  globalThis.fetch = (input, init) => {
+    let url = String(input)
+    requests.push(url)
+    assertEquals(
+      new Headers(init?.headers).get('authorization'),
+      'Bearer worker-token',
+    )
+    if (!url.endsWith('/logs')) {
+      return Promise.resolve(Response.json({
+        success: recordStatus == 200,
+        result: { build_trigger_metadata: { commit_hash: commit } },
+      }, { status: recordStatus }))
+    }
+    return Promise.resolve(
+      readable
+        ? Response.json({
+          success: true,
+          result: { lines: [[1, 'error: missing module']] },
+        })
+        : new Response('', { status: 403 }),
+    )
+  }
+  let time = clock()
+  try {
+    await within(env, {}, async () => {
+      for (let uuid of ['build-2', 'build-3']) {
+        let body = hooked()
+        body.payload!.buildUuid = uuid
+        await builds({ messages: [{ body, ack() {} }] }, env)
+      }
+    }, time)
+    await time.advance(10_000)
+    return {
+      rows: rows.map((row) => ({
+        error: row.error as Comp,
+        exception: row.exception as Comp,
+      })),
+      requests,
+      commit,
+    }
+  } finally {
+    globalThis.fetch = was
+  }
+}
+
+test('builds: record commit groups repeated failures with unreadable logs', async () => {
+  let { rows, requests, commit } = await reported(false)
+  assertStringIncludes(requests[0], '/builds/builds/build-2')
+  assertEquals(rows.length, 2)
+  for (let row of rows) {
+    let error = row.error as {
+      fault: string
+      commit: string
+      tags: { commit: string }
+    }
+    assertEquals(error.fault, `build failed:yak:${commit}`)
+    assertEquals(error.commit, commit)
+    assertEquals(error.tags.commit, commit)
+    assertStringIncludes(String(row.exception?.value), 'at 0b580211')
+    assertStringIncludes(
+      String(row.exception?.value),
+      'build logs returned HTTP 403',
+    )
+  }
+})
+
+test('builds: readable logs quote the error under the same commit key', async () => {
+  let { rows, commit } = await reported(true)
+  assertEquals(rows.length, 2)
+  for (let row of rows) {
+    assertEquals(row.error?.fault, `build failed:yak:${commit}`)
+    assertStringIncludes(String(row.exception?.value), 'error: missing module')
+  }
+})
+
+test('builds: an unreadable record and log retain separate build identities', async () => {
+  let { rows } = await reported(false, 403)
+  assertEquals(rows.map((row) => row.error?.fault), [
+    'build failed:yak:build-2',
+    'build failed:yak:build-3',
+  ])
 })

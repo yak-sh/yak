@@ -31,11 +31,11 @@
 // never reports back leaves its commit not live, which the box's deploy
 // catch-up reports (NotLive, packages/admin/catchup.ts).
 //
-// Builds that fail for one cause are one tracker bug, filed under the failing
-// step and error the log names (or the commit/build while the log is
-// unreadable), so one cause brings one letter and one fixer however many
-// commits it breaks. Each failure is a hit under the commit it built, so a
-// build that fails after its bug was resolved brings the bug back.
+// A failed commit is one tracker bug, however many builds fail or whether
+// their logs can be read. The build record names its commit when the event
+// omits it; hook builds can leave both empty, so their checked-out commit is
+// read from the log. A build with neither keeps its own identity. A build
+// that fails after its bug was resolved brings the bug back.
 //
 // The meta store holds the receipts that make each decision once (unseen.ts
 // `metaBreaks`): a failed build is noted as its own entity, and a commit's
@@ -44,7 +44,6 @@
 // only the commit's first note earns the rebuild.
 
 import { Stale } from '@yaks/graph/errors'
-import { normalize } from '@yaks/tracker'
 import type { Env } from './env.ts'
 import { caught, defect } from './defects.ts'
 import { type Hooked, hooked, PENDING } from './hook.ts'
@@ -104,6 +103,34 @@ export let buildUrl = (env: Env, b: Broke) =>
       `/workers/services/view/${encodeURIComponent(b.tags.worker)}` +
       `/production/builds/${encodeURIComponent(b.uuid)}`
     : undefined
+
+let buildToken = (env: Env) => env.BUILD_LOG_TOKEN || env.CF_WORKERS_TOKEN
+
+/** The build's source commit, independent of access to its log. Hook builds
+ * can leave it empty; their checked-out commit is printed in the log. */
+export let commitOf = async (env: Env, uuid?: string) => {
+  if (!uuid || !env.CF_ACCOUNT || !buildToken(env)) return undefined
+  try {
+    let res = await resent(
+      accountUrl(env, `/builds/builds/${encodeURIComponent(uuid)}`),
+      {
+        headers: { authorization: `Bearer ${buildToken(env)}` },
+        signal: AbortSignal.timeout(20_000),
+      },
+    )
+    if (!res.ok) return undefined
+    let page = await res.json() as {
+      success?: boolean
+      result?: { build_trigger_metadata?: { commit_hash?: string } }
+    }
+    return page.success
+      ? page.result?.build_trigger_metadata?.commit_hash || undefined
+      : undefined
+  } catch (error) {
+    caught(error, { request: 'read build record', build: uuid })
+    return undefined
+  }
+}
 
 type Logs = {
   success?: boolean
@@ -245,7 +272,7 @@ export let deployed = (step: string) =>
  * logs API leaves the build report intact and says why details are absent. */
 export let logsOf = async (env: Env, uuid?: string) => {
   if (!uuid || !env.CF_ACCOUNT) return 'build UUID or account unavailable'
-  if (!env.BUILD_LOG_TOKEN) return 'BUILD_LOG_TOKEN unavailable'
+  if (!buildToken(env)) return 'BUILD_LOG_TOKEN unavailable'
   let lines: string[] = []
   let seen = new Set<string>()
   let cursor: string | undefined
@@ -259,7 +286,7 @@ export let logsOf = async (env: Env, uuid?: string) => {
       let at = new URL(url)
       if (cursor) at.searchParams.set('cursor', cursor)
       let res = await resent(at.href, {
-        headers: { authorization: `Bearer ${env.BUILD_LOG_TOKEN}` },
+        headers: { authorization: `Bearer ${buildToken(env)}` },
         signal,
       })
       if (!res.ok) return `build logs returned HTTP ${res.status}`
@@ -288,14 +315,17 @@ export let logsOf = async (env: Env, uuid?: string) => {
 }
 
 /** Enrich one failure at the reporting boundary, leaving raw logs behind.
- * Its `cause` is what its bug is filed under: the step and error the log
- * names, with volatile parts gone, or the commit/build when logs can't be read. */
+ * Its `cause` is the commit it built, independent of log access, falling back
+ * to the build only when no source names its commit. */
 export let diagnosed = async (
   env: Env,
   b: Broke,
 ): Promise<Broke & { cause: string }> => {
-  let detail = await logsOf(env, b.uuid)
-  let commit = b.commit ??
+  let [record, detail] = await Promise.all([
+    b.commit ? undefined : commitOf(env, b.uuid),
+    logsOf(env, b.uuid),
+  ])
+  let commit = record ?? b.commit ??
     (typeof detail == 'string' ? undefined : detail.commit)
   if (commit && !b.commit) {
     b = {
@@ -314,9 +344,7 @@ export let diagnosed = async (
   let link = buildUrl(env, b)
   return {
     ...b,
-    cause: typeof detail == 'string'
-      ? `unreadable:${b.commit ?? b.build}`
-      : normalize(`${detail.step}: ${detail.reason}`),
+    cause: b.commit ?? b.build,
     error: new BuildFailed(
       `${b.error.message}. ${summary}. Build log: ${
         link ?? 'location unavailable'
