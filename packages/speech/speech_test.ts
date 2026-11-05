@@ -1,23 +1,30 @@
-import { equal, test } from '@yaks/testing'
+import { equal, test, until } from '@yaks/testing'
 import { assertRejects } from '@std/assert'
 import {
   balance,
   DEEPGRAM,
   hear,
+  type Keyed,
+  OPENAI,
+  type Provider,
   type Socket,
   speak,
   SpeechError,
+  talk,
   turns,
 } from './mod.ts'
 
 // A provider answering every call with `said`, keeping what it was asked.
-let answering = (said: (url: string) => Response) => {
+let answering = (
+  said: (url: string) => Response,
+  provider: Provider = DEEPGRAM,
+) => {
   let asked: { url: string; init: RequestInit }[] = []
   let fetch = ((url: string, init: RequestInit) => {
     asked.push({ url: String(url), init })
     return Promise.resolve(said(String(url)))
   }) as typeof globalThis.fetch
-  return { asked, fetch, provider: DEEPGRAM, key: 'k1' }
+  return { asked, fetch, provider, key: 'k1' }
 }
 
 test('speaking asks the voice for the format, with the key, and prices the characters', async () => {
@@ -87,6 +94,7 @@ let socket = () => {
   let on: Record<string, ((e: { data?: unknown }) => void)[]> = {}
   let sent: (string | Uint8Array)[] = []
   let opened: { url: string; protocols: string[] }[] = []
+  let json = () => sent.map((m) => JSON.parse(String(m)))
   let s: Socket = {
     send: (data) => void sent.push(data),
     close: () => {},
@@ -96,9 +104,10 @@ let socket = () => {
     on[type]?.forEach((f) => f({ data }))
   return {
     sent,
+    json,
     opened,
     fire,
-    open: (url: string, protocols: string[]) => {
+    open: (url: string, { protocols }: Keyed) => {
       opened.push({ url, protocols })
       return s
     },
@@ -154,4 +163,113 @@ test('a stream that drops says so once', () => {
   s.fire('error')
   s.fire('close')
   equal(told, ['the stream failed'])
+})
+
+test('OpenAI speaks PCM made into a call’s μ-law, at its own price', async () => {
+  let pcm = new Int16Array(2400).fill(8000)
+  let o = answering(() => new Response(new Uint8Array(pcm.buffer)), OPENAI)
+  let said = await speak({
+    ...o,
+    text: 'x'.repeat(1000),
+    voice: 'fable',
+    format: { encoding: 'mulaw', rate: 8000 },
+  })
+  equal(new URL(o.asked[0].url).pathname, '/v1/audio/speech')
+  equal(
+    (o.asked[0].init.headers as Record<string, string>).authorization,
+    'Bearer k1',
+  )
+  let body = JSON.parse(String(o.asked[0].init.body))
+  equal([body.voice, body.response_format], ['fable', 'pcm'])
+  let audio = new Uint8Array(await new Response(said.body).arrayBuffer())
+  equal([audio.length, said.type, said.dollars], [800, 'audio/basic', 0.015])
+})
+
+// A talk stream on OpenAI's realtime model, the caller's audio sent and the
+// model's events fired back.
+let talking = (calls: (name: string, args: string) => Promise<string>) => {
+  let s = socket()
+  let told: unknown[] = []
+  let stream = talk({
+    provider: OPENAI,
+    key: 'k1',
+    format: { encoding: 'mulaw', rate: 8000 },
+    voice: 'cedar',
+    instructions: 'Be brief.',
+    tools: [{ name: 'ask', description: 'Ask.', parameters: {} }],
+    open: s.open,
+    told: {
+      start: () => told.push('start'),
+      stopped: () => told.push('stopped'),
+      heard: (text) => told.push({ heard: text }),
+      audio: (bytes) => told.push([...bytes]),
+      said: (text) => told.push({ said: text }),
+      call: calls,
+    },
+  })
+  let event = (e: object) => s.fire('message', JSON.stringify(e))
+  return { s, told, stream, event }
+}
+
+test('a talk stream is set up with the voice, tools and μ-law, then hears and speaks', () => {
+  let { s, told, stream, event } = talking(() => Promise.resolve(''))
+  equal(s.opened[0], {
+    url: 'wss://api.openai.com/v1/realtime?model=gpt-realtime-2.1-mini',
+    protocols: ['realtime', 'openai-insecure-api-key.k1'],
+  })
+  stream.send(new Uint8Array([1, 2]))
+  s.fire('open')
+  let [setup, audio] = s.json()
+  equal(setup.session.audio.output, {
+    format: { type: 'audio/pcmu' },
+    voice: 'cedar',
+  })
+  equal(setup.session.tools[0].type, 'function')
+  equal(audio, { type: 'input_audio_buffer.append', audio: 'AQI=' })
+  event({ type: 'input_audio_buffer.speech_started' })
+  event({ type: 'input_audio_buffer.speech_stopped' })
+  event({
+    type: 'conversation.item.input_audio_transcription.completed',
+    transcript: ' Hello ',
+  })
+  event({ type: 'response.output_audio.delta', delta: 'AwQ=' })
+  event({ type: 'response.output_audio_transcript.done', transcript: 'Hi.' })
+  event({
+    type: 'response.done',
+    response: {
+      model: 'gpt-realtime-2.1-mini',
+      usage: {
+        input_token_details: { audio_tokens: 100_000 },
+        output_token_details: { audio_tokens: 50_000 },
+      },
+    },
+  })
+  equal(told, ['start', 'stopped', { heard: 'Hello' }, [3, 4], {
+    said: 'Hi.',
+  }])
+  equal(stream.close(), { seconds: 2 / 8000, dollars: 2 })
+})
+
+test('a tool the model asks for is answered with its output, and it goes on', async () => {
+  let asked: string[] = []
+  let { s, event } = talking((name, args) => {
+    asked.push(`${name} ${args}`)
+    return Promise.resolve('Booked.')
+  })
+  s.fire('open')
+  event({
+    type: 'response.function_call_arguments.done',
+    call_id: 'c1',
+    name: 'ask',
+    arguments: '{"request":"Book it"}',
+  })
+  await until(() => s.sent.length == 3)
+  equal(asked, ['ask {"request":"Book it"}'])
+  equal(s.json().slice(1), [
+    {
+      type: 'conversation.item.create',
+      item: { type: 'function_call_output', call_id: 'c1', output: 'Booked.' },
+    },
+    { type: 'response.create' },
+  ])
 })

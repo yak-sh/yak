@@ -4,12 +4,18 @@
 import { equal, test, until } from '@yaks/testing'
 import { line } from '@yaks/telnyx'
 import { consentEid } from '@yaks/phone'
-import type { Socket, Told } from '@yaks/speech'
+import type { Socket, Talked, Told } from '@yaks/speech'
 import { platform } from './directory-rows-probe.ts'
 import { stamp } from './directory.ts'
 import { endpoints } from './endpoints.ts'
 import { telnyxDoor } from './operator-texts.ts'
-import { converse, streamDoor, voiced } from './operator-calls.ts'
+import {
+  type Around,
+  converse,
+  streamDoor,
+  talking,
+  voiced,
+} from './operator-calls.ts'
 import { seal } from './lib/token.ts'
 
 let NUMBER = '+18663141594', JEFF = '+12695550142', ANA = '+12695550143'
@@ -179,7 +185,7 @@ test('an answer is texted once the call is over, to a caller who agreed to texts
 
 // One call, its line a socket a test speaks into, its speech and Operator
 // stand-ins that keep what they were given.
-let calling = (patience = 60_000) => {
+let calling = (ack?: string) => {
   let on: Record<string, ((e: { data?: unknown }) => void)[]> = {}
   let sent: string[] = []
   let wire: Socket = {
@@ -190,7 +196,7 @@ let calling = (patience = 60_000) => {
   let told!: Told
   let heard: Uint8Array[] = []
   let asked: string[] = [], said: string[] = []
-  let done: { seconds: number; heard: number }[] = []
+  let done: Parameters<Around['done']>[0][] = []
   let call = converse({
     wire,
     line,
@@ -215,7 +221,7 @@ let calling = (patience = 60_000) => {
       return Promise.resolve()
     },
     hangup: () => Promise.resolve(),
-    patience,
+    ack,
     report: (e) => {
       throw e
     },
@@ -265,16 +271,98 @@ test('a call says hello, hears a turn, and speaks the reply a sentence at a time
   await c.call.ended
   equal(c.done.length, 1)
   equal(c.done[0].heard, 0.5)
+  equal(c.done[0].turns.length, 1)
+  equal(typeof c.done[0].turns[0].answer, 'number')
 })
 
-test('a caller who starts talking stops what is playing, and silence after a question is covered', async () => {
-  let c = calling(10)
+test('a caller who starts talking stops what is playing, and a turn is acknowledged the moment it ends', async () => {
+  let c = calling('One moment.')
+  // The acknowledgement is made as the call starts, and said only once.
   await until(() => c.played() == 1)
+  equal(c.said, ['One moment.', "Hi, it's Ada."])
   c.told().start!()
   equal(JSON.parse(c.sent.at(-1)!), { event: 'clear' })
   c.told().end('What is on my calendar?')
-  await until(() => c.said.length == 2)
-  equal(c.said[1], 'One moment.')
+  await until(() => c.played() == 2)
+  equal(c.said.length, 2)
+  // What the model wrote before its tool is said before the tool runs.
+  c.call.typed('Let me look')
+  c.call.paused()
+  await until(() => c.said.length == 3)
+  equal(c.said[2], 'Let me look')
+  c.call.answered('Let me look. You have choir at 7.')
   c.frame({ event: 'stop' })
   await c.call.ended
+  let [turn] = c.done[0].turns
+  equal(turn.first! <= turn.answer!, true)
+})
+
+// A call a model hears and speaks itself, the model stood in for.
+let talkingCall = () => {
+  let on: Record<string, ((e: { data?: unknown }) => void)[]> = {}
+  let sent: string[] = []
+  let wire: Socket = {
+    send: (data) => void sent.push(String(data)),
+    close: () => {},
+    addEventListener: (type, f) => void (on[type] ??= []).push(f),
+  }
+  let told!: Talked
+  let heard: Uint8Array[] = [], said: string[] = [], asked: string[] = []
+  let done: Parameters<Around['done']>[0][] = []
+  let call = talking({
+    wire,
+    line,
+    talk: (t) => {
+      told = t
+      return {
+        send: (audio) => void heard.push(audio),
+        say: (text) => void said.push(text),
+        close: () => ({ seconds: 1, dollars: 0.25 }),
+      }
+    },
+    ask: (text) => {
+      asked.push(text)
+      return Promise.resolve()
+    },
+    hello: "Hi, it's Ada.",
+    done: (call) => {
+      done.push(call)
+      return Promise.resolve()
+    },
+    hangup: () => Promise.resolve(),
+    report: (e) => {
+      throw e
+    },
+  })
+  let frame = (f: object) =>
+    on.message.forEach((h) => h({ data: JSON.stringify(f) }))
+  let played = () => sent.filter((s) => JSON.parse(s).event == 'media').length
+  return { call, told: () => told, heard, said, asked, done, frame, played }
+}
+
+test('a talking model hears the call, asks the Operator, and says its answer', async () => {
+  let c = talkingCall()
+  equal(c.said, ["Hi, it's Ada."])
+  c.frame({ event: 'media', media: { track: 'inbound', payload: 'AQI=' } })
+  equal(c.heard, [new Uint8Array([1, 2])])
+  c.told().stopped!()
+  c.told().audio(new Uint8Array([9]))
+  let output = c.told().call('ask', '{"request":"Book the hall"}')
+  await until(() => c.asked.length == 1)
+  equal(c.asked, ['Book the hall'])
+  equal(c.call.waiting(), true)
+  c.call.answered('**Booked** for Friday: https://hall.yaks.app')
+  equal(await output, 'Booked for Friday: the link')
+  c.told().audio(new Uint8Array([8]))
+  equal(c.played(), 2)
+  // An answer nobody is waiting on, such as a helper's, is said as it comes.
+  c.call.answered('Your build finished.')
+  equal(c.said.at(-1), 'Your build finished.')
+  equal(await c.told().call('nope', '{}'), 'There is no tool called nope.')
+  c.frame({ event: 'stop' })
+  await c.call.ended
+  equal(c.done[0].heard, 0.25)
+  let [turn] = c.done[0].turns
+  // The words before the Operator answered were its acknowledgement.
+  equal(turn.first! <= turn.answer!, true)
 })

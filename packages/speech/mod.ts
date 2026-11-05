@@ -1,267 +1,129 @@
-// Speech to text and text to speech. A provider is data: where it answers,
-// which models hear and speak, and what each costs. One implementation calls
-// any provider described so; the key is an argument, and nothing here reads
-// the environment.
-// https://developers.deepgram.com/reference/speech-to-text/listen-pre-recorded
-// https://developers.deepgram.com/reference/text-to-speech/speak-request
-// https://developers.deepgram.com/docs/flux/quickstart
+// Speech to text, text to speech, and speech to speech. A provider is data:
+// where it answers, which models hear and speak, what each costs, and how its
+// requests and streams are worded, all in its own entry (deepgram.ts,
+// openai.ts). One implementation here calls any provider described so; the
+// key is an argument, and nothing here reads the environment.
 
-/** A speech provider as data. */
-export type Provider = {
-  name: string
-  /** the HTTP API's base */
-  api: string
-  /** the streaming API's base */
-  live: string
-  /** what a request names before its key: `Authorization: <scheme> <key>`,
-   * and the WebSocket subprotocol a stream offers its key under */
-  scheme: string
-  /** a recording heard whole, priced by the minute of audio */
-  hear: { path: string; model: string; perMinute: number }
-  /** audio heard as it streams, told back a turn at a time */
-  turns: { path: string; model: string; perMinute: number }
-  /** text spoken, priced by the thousand characters, in `voice` unless
-   * another of `voices` is asked for */
-  speak: { path: string; voice: string; perThousand: number }
-  /** the voices it speaks in */
-  voices: Voice[]
-  /** where the account's projects and their balances are read */
-  projects: string
-}
-
-/** A voice a provider speaks in: the `id` a request names, what a person
- * calls it, and how it sounds. */
-export type Voice = { id: string; name: string; about: string }
-
-/** Deepgram: Nova-3 hears a recording, Flux hears a call and knows when a
- * speaker's turn ends, Aura-2 speaks. Prices are its pay-as-you-go list,
- * 2026-11-05. */
-export let DEEPGRAM: Provider = {
-  name: 'deepgram',
-  api: 'https://api.deepgram.com',
-  live: 'wss://api.deepgram.com',
-  scheme: 'token',
-  hear: { path: '/v1/listen', model: 'nova-3', perMinute: 0.0043 },
-  turns: { path: '/v2/listen', model: 'flux-general-en', perMinute: 0.0077 },
-  speak: { path: '/v1/speak', voice: 'aura-2-thalia-en', perThousand: 0.030 },
-  // Aura-2's English voices, as its voice list describes them.
-  // https://developers.deepgram.com/docs/tts-models
-  voices: [
-    {
-      id: 'aura-2-amalthea-en',
-      name: 'Amalthea',
-      about: 'feminine, Filipino, engaging, natural, cheerful',
-    },
-    {
-      id: 'aura-2-andromeda-en',
-      name: 'Andromeda',
-      about: 'feminine, American, casual, expressive, comfortable',
-    },
-    {
-      id: 'aura-2-apollo-en',
-      name: 'Apollo',
-      about: 'masculine, American, confident, comfortable, casual',
-    },
-    {
-      id: 'aura-2-arcas-en',
-      name: 'Arcas',
-      about: 'masculine, American, natural, smooth, clear, comfortable',
-    },
-    {
-      id: 'aura-2-aries-en',
-      name: 'Aries',
-      about: 'masculine, American, warm, energetic, caring',
-    },
-    {
-      id: 'aura-2-asteria-en',
-      name: 'Asteria',
-      about: 'feminine, American, clear, confident, knowledgeable, energetic',
-    },
-    {
-      id: 'aura-2-athena-en',
-      name: 'Athena',
-      about: 'feminine, American, calm, smooth, professional',
-    },
-    {
-      id: 'aura-2-atlas-en',
-      name: 'Atlas',
-      about:
-        'masculine, American, enthusiastic, confident, approachable, friendly',
-    },
-    {
-      id: 'aura-2-aurora-en',
-      name: 'Aurora',
-      about: 'feminine, American, cheerful, expressive, energetic',
-    },
-    {
-      id: 'aura-2-callista-en',
-      name: 'Callista',
-      about: 'feminine, American, clear, energetic, professional, smooth',
-    },
-    {
-      id: 'aura-2-cora-en',
-      name: 'Cora',
-      about: 'feminine, American, smooth, melodic, caring',
-    },
-    {
-      id: 'aura-2-cordelia-en',
-      name: 'Cordelia',
-      about: 'feminine, American, approachable, warm, polite',
-    },
-    {
-      id: 'aura-2-delia-en',
-      name: 'Delia',
-      about: 'feminine, American, casual, friendly, cheerful, breathy',
-    },
-    {
-      id: 'aura-2-draco-en',
-      name: 'Draco',
-      about: 'masculine, British, warm, approachable, trustworthy, baritone',
-    },
-    {
-      id: 'aura-2-electra-en',
-      name: 'Electra',
-      about: 'feminine, American, professional, engaging, knowledgeable',
-    },
-    {
-      id: 'aura-2-harmonia-en',
-      name: 'Harmonia',
-      about: 'feminine, American, empathetic, clear, calm, confident',
-    },
-    {
-      id: 'aura-2-helena-en',
-      name: 'Helena',
-      about: 'feminine, American, caring, natural, positive, friendly, raspy',
-    },
-    {
-      id: 'aura-2-hera-en',
-      name: 'Hera',
-      about: 'feminine, American, smooth, warm, professional',
-    },
-    {
-      id: 'aura-2-hermes-en',
-      name: 'Hermes',
-      about: 'masculine, American, expressive, engaging, professional',
-    },
-    {
-      id: 'aura-2-hyperion-en',
-      name: 'Hyperion',
-      about: 'masculine, Australian, caring, warm, empathetic',
-    },
-    {
-      id: 'aura-2-iris-en',
-      name: 'Iris',
-      about: 'feminine, American, cheerful, positive, approachable',
-    },
-    {
-      id: 'aura-2-janus-en',
-      name: 'Janus',
-      about: 'feminine, American, Southern, smooth, trustworthy',
-    },
-    {
-      id: 'aura-2-juno-en',
-      name: 'Juno',
-      about: 'feminine, American, natural, engaging, melodic, breathy',
-    },
-    {
-      id: 'aura-2-jupiter-en',
-      name: 'Jupiter',
-      about: 'masculine, American, expressive, knowledgeable, baritone',
-    },
-    {
-      id: 'aura-2-luna-en',
-      name: 'Luna',
-      about: 'feminine, American, friendly, natural, engaging',
-    },
-    {
-      id: 'aura-2-mars-en',
-      name: 'Mars',
-      about: 'masculine, American, smooth, patient, trustworthy, baritone',
-    },
-    {
-      id: 'aura-2-minerva-en',
-      name: 'Minerva',
-      about: 'feminine, American, positive, friendly, natural',
-    },
-    {
-      id: 'aura-2-neptune-en',
-      name: 'Neptune',
-      about: 'masculine, American, professional, patient, polite',
-    },
-    {
-      id: 'aura-2-odysseus-en',
-      name: 'Odysseus',
-      about: 'masculine, American, calm, smooth, comfortable, professional',
-    },
-    {
-      id: 'aura-2-ophelia-en',
-      name: 'Ophelia',
-      about: 'feminine, American, expressive, enthusiastic, cheerful',
-    },
-    {
-      id: 'aura-2-orion-en',
-      name: 'Orion',
-      about: 'masculine, American, approachable, comfortable, calm, polite',
-    },
-    {
-      id: 'aura-2-orpheus-en',
-      name: 'Orpheus',
-      about: 'masculine, American, professional, clear, confident, trustworthy',
-    },
-    {
-      id: 'aura-2-pandora-en',
-      name: 'Pandora',
-      about: 'feminine, British, smooth, calm, melodic, breathy',
-    },
-    {
-      id: 'aura-2-phoebe-en',
-      name: 'Phoebe',
-      about: 'feminine, American, energetic, warm, casual',
-    },
-    {
-      id: 'aura-2-pluto-en',
-      name: 'Pluto',
-      about: 'masculine, American, smooth, calm, empathetic, baritone',
-    },
-    {
-      id: 'aura-2-saturn-en',
-      name: 'Saturn',
-      about: 'masculine, American, knowledgeable, confident, baritone',
-    },
-    {
-      id: 'aura-2-selene-en',
-      name: 'Selene',
-      about: 'feminine, American, expressive, engaging, energetic',
-    },
-    {
-      id: 'aura-2-thalia-en',
-      name: 'Thalia',
-      about: 'feminine, American, clear, confident, energetic, enthusiastic',
-    },
-    {
-      id: 'aura-2-theia-en',
-      name: 'Theia',
-      about: 'feminine, Australian, expressive, polite, sincere',
-    },
-    {
-      id: 'aura-2-vesta-en',
-      name: 'Vesta',
-      about: 'feminine, American, natural, expressive, patient, empathetic',
-    },
-    {
-      id: 'aura-2-zeus-en',
-      name: 'Zeus',
-      about: 'masculine, American, deep, trustworthy, smooth',
-    },
-  ],
-  projects: '/v1/projects',
-}
+export { DEEPGRAM } from './deepgram.ts'
+export { OPENAI } from './openai.ts'
+export { base64, mulawed, mulawOf, unbase64 } from './audio.ts'
+export { query } from './query.ts'
 
 /** How audio is encoded: an MP3, or raw samples at a rate (`mulaw` is the
  * telephone's 8 kHz μ-law; `linear16` is 16-bit PCM). */
 export type Format =
   | { encoding: 'mp3' }
   | { encoding: 'mulaw' | 'linear16'; rate: number }
+
+/** Raw samples at a rate, as a call streams them. */
+export type Raw = Extract<Format, { rate: number }>
+
+/** A voice a provider speaks in: the `id` a request names, what a person
+ * calls it, and how it sounds. */
+export type Voice = { id: string; name: string; about: string }
+
+/** A request as a provider words it: the path under its API, and the rest. */
+export type Asked = { path: string; init: RequestInit }
+
+/** A provider's HTTP API, its base and key already given. */
+export type Ask = (path: string, init?: RequestInit) => Promise<Response>
+
+/** What one message on a turns stream means: the speaker started a turn, or
+ * ended one saying `end`, or the stream failed. */
+export type Turn = { start?: true; end?: string; error?: string }
+
+/** What one message on a talk stream means. */
+export type Said = {
+  /** the caller started talking: whatever is playing should stop */
+  start?: true
+  /** the caller stopped talking, and the model is about to answer */
+  stopped?: true
+  /** what the caller said, once heard */
+  heard?: string
+  /** audio the model speaks, in the stream's format */
+  audio?: Uint8Array
+  /** what the model said, once said */
+  said?: string
+  /** the model asks for a tool */
+  call?: { id: string; name: string; args: string }
+  /** what the turn just finished cost, in dollars */
+  spent?: number
+  error?: string
+}
+
+/** What a talk stream is set up with. */
+export type Setup = {
+  model: string
+  voice: string
+  format: Raw
+  instructions: string
+  tools: { name: string; description: string; parameters: object }[]
+}
+
+/** A speech provider as data. */
+export type Provider = {
+  name: string
+  /** what a person calls it */
+  title: string
+  /** the HTTP API's base */
+  api: string
+  /** the streaming API's base */
+  live: string
+  /** the Authorization header's value for a key */
+  authorization: (key: string) => string
+  /** the WebSocket subprotocols a browser offers a key under */
+  protocols: (key: string) => string[]
+  /** a recording heard whole, priced by the minute of audio */
+  hear: {
+    model: string
+    perMinute: number
+    request: (audio: BodyInit, type: string, model: string) => Asked
+    /** the words in its answer, and the seconds heard if it says */
+    read: (said: unknown) => { text: string; seconds?: number }
+  }
+  /** audio heard as it streams, told back a turn at a time */
+  turns: {
+    model: string
+    perMinute: number
+    path: (format: Raw, model: string) => string
+    /** what is sent once the stream opens, before any audio */
+    opening: (format: Raw, model: string) => string[]
+    /** raw samples as the stream carries them */
+    audio: (bytes: Uint8Array) => string | Uint8Array
+    read: (data: unknown) => Turn
+    /** what ends the stream before it closes */
+    closing?: string
+  }
+  /** text spoken, priced by the thousand characters, in `voice` unless
+   * another of `voices` is asked for */
+  speak: {
+    voice: string
+    voices: Voice[]
+    perThousand: number
+    request: (text: string, voice: string, format: Format) => Asked
+    /** what turns its audio into `format`, when it does not speak it */
+    audio?: (
+      format: Format,
+    ) => TransformStream<Uint8Array, Uint8Array> | undefined
+  }
+  /** a model that hears and speaks in one stream, answering as it goes */
+  talk?: {
+    /** the models it offers, the fastest first */
+    models: string[]
+    voice: string
+    voices: Voice[]
+    path: (model: string) => string
+    opening: (setup: Setup) => string[]
+    audio: (bytes: Uint8Array) => string
+    read: (data: unknown) => Said[]
+    /** a tool's answer given back, and the model asked to go on */
+    answer: (call: string, output: string) => string[]
+    /** the model asked to say `text` */
+    say: (text: string) => string[]
+  }
+  /** the account's credit left, in dollars, where the provider says */
+  balance?: (ask: Ask) => Promise<number>
+}
 
 let MEDIA: Record<Format['encoding'], string> = {
   mp3: 'audio/mpeg',
@@ -325,18 +187,18 @@ export type Calling = {
   signal?: AbortSignal
 }
 
-let calling = async (
+/** The provider's API, asked with the key; a refusal is a SpeechError. */
+export let asking = (
   { provider, key, fetch: given, signal }: Calling,
-  path: string,
-  init: RequestInit = {},
-) => {
+): Ask =>
+async (path, init = {}) => {
   let response
   try {
     response = await (given ?? globalThis.fetch)(provider.api + path, {
       ...init,
       signal,
       headers: {
-        authorization: `${provider.scheme} ${key}`,
+        authorization: provider.authorization(key),
         ...init.headers as Record<string, string>,
       },
     })
@@ -353,16 +215,6 @@ let calling = async (
     response.status,
   )
 }
-
-let query = (o: Record<string, string | number | undefined>) =>
-  new URLSearchParams(
-    Object.entries(o).flatMap(([k, v]) => v == null ? [] : [[k, String(v)]]),
-  )
-
-let encoded = (format: Format) =>
-  format.encoding == 'mp3'
-    ? { encoding: 'mp3' }
-    : { encoding: format.encoding, sample_rate: format.rate }
 
 /**
  * `text` spoken: the audio as it streams from the provider, its media type,
@@ -391,29 +243,18 @@ export let speak = async (
   o: Calling & { text: string; voice?: string; format?: Format },
 ): Promise<Spoken> => {
   let format = o.format ?? { encoding: 'mp3' }
-  let params = query({
-    model: o.voice ?? o.provider.speak.voice,
-    ...encoded(format),
-    ...format.encoding == 'mp3' ? {} : { container: 'none' },
-  })
-  let response = await calling(o, `${o.provider.speak.path}?${params}`, {
-    method: 'POST',
-    headers: { 'content-type': 'application/json' },
-    body: JSON.stringify({ text: o.text }),
-  })
+  let { speak } = o.provider
+  let { path, init } = speak.request(o.text, o.voice ?? speak.voice, format)
+  let response = await asking(o)(path, init)
   if (!response.body) {
     throw new SpeechError(`${o.provider.name} returned no audio`, 502)
   }
+  let audio = speak.audio?.(format)
   return {
-    body: response.body,
+    body: audio ? response.body.pipeThrough(audio) : response.body,
     type: MEDIA[format.encoding],
     dollars: spoken(o.provider, o.text),
   }
-}
-
-type Listened = {
-  metadata?: { duration?: number }
-  results?: { channels?: { alternatives?: { transcript?: string }[] }[] }
 }
 
 /**
@@ -442,36 +283,17 @@ type Listened = {
 export let hear = async (
   o: Calling & { audio: BodyInit; type: string },
 ): Promise<Heard> => {
-  let params = query({ model: o.provider.hear.model, smart_format: 'true' })
-  let response = await calling(o, `${o.provider.hear.path}?${params}`, {
-    method: 'POST',
-    headers: { 'content-type': o.type },
-    body: o.audio,
-  })
-  let said = await response.json() as Listened
-  let seconds = said.metadata?.duration ?? 0
-  return {
-    text: said.results?.channels?.[0]?.alternatives?.[0]?.transcript ?? '',
-    seconds,
-    dollars: heard(o.provider, seconds),
-  }
+  let { hear } = o.provider
+  let { path, init } = hear.request(o.audio, o.type, hear.model)
+  let said = hear.read(await (await asking(o)(path, init)).json())
+  let seconds = said.seconds ?? 0
+  return { text: said.text, seconds, dollars: heard(o.provider, seconds) }
 }
 
-/** The account's credit left, in dollars, across its projects. */
-export let balance = async (o: Calling): Promise<number> => {
-  let { projects } = await (await calling(o, o.provider.projects)).json() as {
-    projects?: { project_id: string }[]
-  }
-  let total = 0
-  for (let { project_id } of projects ?? []) {
-    let { balances } = await (await calling(
-      o,
-      `${o.provider.projects}/${project_id}/balances`,
-    )).json() as { balances?: { amount?: number }[] }
-    for (let b of balances ?? []) total += b.amount ?? 0
-  }
-  return total
-}
+/** The account's credit left, in dollars, or undefined where the provider
+ * does not say. */
+export let balance = (o: Calling): Promise<number | undefined> =>
+  o.provider.balance?.(asking(o)) ?? Promise.resolve(undefined)
 
 /** The socket a stream speaks over: the platform's WebSocket, or a stand-in. */
 export type Socket = {
@@ -481,6 +303,62 @@ export type Socket = {
     type: 'open' | 'message' | 'close' | 'error',
     listener: (event: { data?: unknown }) => void,
   ) => void
+}
+
+/** How a stream's key is offered: as a header where the platform's sockets
+ * take one, else as subprotocols. */
+export type Keyed = { authorization: string; protocols: string[] }
+
+/** What makes a stream's socket. */
+export type Open = (url: string, key: Keyed) => Socket
+
+let browser: Open = (url, { protocols }) =>
+  new WebSocket(url, protocols) as unknown as Socket
+
+// A socket to `url` that holds what is sent until it opens, sends `opening`
+// first, and says once if it fails or closes before `close` is asked.
+let stream = (
+  o: { provider: Provider; key: string; open?: Open },
+  url: string,
+  opening: string[],
+  heard: (data: unknown) => void,
+  lost: (reason: string) => void,
+) => {
+  let socket = (o.open ?? browser)(url, {
+    authorization: o.provider.authorization(o.key),
+    protocols: o.provider.protocols(o.key),
+  })
+  let ready = false, closing = false
+  let waiting: (string | Uint8Array)[] = [...opening]
+  socket.addEventListener('open', () => {
+    ready = true
+    for (let part of waiting.splice(0)) socket.send(part)
+  })
+  socket.addEventListener('message', (event) => heard(event.data))
+  let dropped = (reason: string) => () => {
+    if (!closing) lost(reason)
+    closing = true
+  }
+  socket.addEventListener('close', dropped('the stream closed'))
+  socket.addEventListener('error', dropped('the stream failed'))
+  return {
+    closed: () => closing,
+    send: (data: string | Uint8Array) => {
+      if (closing) return
+      if (ready) socket.send(data)
+      else waiting.push(data)
+    },
+    close: (last?: string) => {
+      if (closing) return
+      closing = true
+      try {
+        if (ready && last) socket.send(last)
+        socket.close(1000)
+      } catch {
+        // A socket already gone has nothing more to close.
+      }
+    },
+  }
 }
 
 /** What a stream tells as a speaker talks. */
@@ -493,104 +371,142 @@ export type Told = {
   lost?: (reason: string) => void
 }
 
-type Info = { type?: string; event?: string; transcript?: string }
-
-/**
- * What one message from the turns stream means: a turn starting, a turn
- * ended with its words, or nothing to act on.
- *
- * ```ts
- * import { equal } from '@yaks/testing'
- * import { turnOf } from '@yaks/speech'
- * equal(
- *   turnOf('{"type":"TurnInfo","event":"EndOfTurn","transcript":"Hi"}'),
- *   { end: 'Hi' },
- * )
- * equal(turnOf('{"type":"TurnInfo","event":"StartOfTurn"}'), { start: true })
- * equal(turnOf('{"type":"TurnInfo","event":"Update"}'), {})
- * ```
- */
-export let turnOf = (
-  data: unknown,
-): { start?: true; end?: string; error?: string } => {
-  let info: Info
-  try {
-    info = JSON.parse(String(data))
-  } catch {
-    return {}
-  }
-  if (info.type == 'Error') {
-    return { error: String((info as { description?: string }).description) }
-  }
-  if (info.type != 'TurnInfo') return {}
-  if (info.event == 'StartOfTurn') return { start: true }
-  if (info.event == 'EndOfTurn') return { end: info.transcript?.trim() ?? '' }
-  return {}
-}
-
 /**
  * Audio heard as it streams, told back a turn at a time (`told`). `send`
  * takes raw samples in `format`; `close` ends the stream and answers how many
  * seconds were heard and what they cost. `open` makes the socket, the
- * platform's WebSocket by default, offering the key as its subprotocol.
+ * platform's WebSocket by default, offering the key as subprotocols.
  */
 export let turns = (
   o: {
     provider: Provider
     key: string
-    format: Extract<Format, { rate: number }>
+    format: Raw
     told: Told
-    open?: (url: string, protocols: string[]) => Socket
+    open?: Open
   },
 ): Turns => {
-  let url = `${o.provider.live}${o.provider.turns.path}?${
-    query({ model: o.provider.turns.model, ...encoded(o.format) })
-  }`
-  let socket = (o.open ??
-    ((url, protocols) => new WebSocket(url, protocols) as unknown as Socket))(
-      url,
-      [
-        o.provider.scheme,
-        o.key,
-      ],
-    )
-  let ready = false, closing = false, bytes = 0
-  let waiting: Uint8Array[] = []
-  socket.addEventListener('open', () => {
-    ready = true
-    for (let part of waiting.splice(0)) socket.send(part)
-  })
-  socket.addEventListener('message', (event) => {
-    let turn = turnOf(event.data)
-    if (turn.start) o.told.start?.()
-    if (turn.end) o.told.end(turn.end)
-    if (turn.error) o.told.lost?.(turn.error)
-  })
-  let lost = (reason: string) => () => {
-    if (!closing) o.told.lost?.(reason)
-    closing = true
-  }
-  socket.addEventListener('close', lost('the stream closed'))
-  socket.addEventListener('error', lost('the stream failed'))
+  let { turns: t, live } = o.provider
+  let bytes = 0
+  let s = stream(
+    o,
+    live + t.path(o.format, t.model),
+    t.opening(o.format, t.model),
+    (data) => {
+      let turn = t.read(data)
+      if (turn.start) o.told.start?.()
+      if (turn.end) o.told.end(turn.end)
+      if (turn.error) o.told.lost?.(turn.error)
+    },
+    (reason) => o.told.lost?.(reason),
+  )
   return {
-    send: (audio: Uint8Array) => {
-      if (closing) return
+    send: (audio) => {
+      if (s.closed()) return
       bytes += audio.length
-      if (ready) socket.send(audio)
-      else waiting.push(audio)
+      s.send(t.audio(audio))
     },
     close: () => {
-      if (!closing) {
-        closing = true
-        try {
-          if (ready) socket.send(JSON.stringify({ type: 'CloseStream' }))
-          socket.close(1000)
-        } catch {
-          // A socket already gone has nothing more to close.
-        }
-      }
+      s.close(t.closing)
       let seconds = bytes / perSecond(o.format)!
       return { seconds, dollars: heard(o.provider, seconds, 'turns') }
+    },
+  }
+}
+
+/** What a talk stream tells as the caller and the model speak. */
+export type Talked = {
+  /** the caller started talking: whatever is playing should stop */
+  start?: () => void
+  /** the caller stopped talking; the model's answer is on its way */
+  stopped?: () => void
+  /** what the caller said, once heard */
+  heard?: (text: string) => void
+  /** audio to play to the caller */
+  audio: (bytes: Uint8Array) => void
+  /** what the model said, once said */
+  said?: (text: string) => void
+  /** a tool the model asked for, answered with its output */
+  call: (name: string, args: string) => Promise<string>
+  /** the stream failed or closed before `close` was asked */
+  lost?: (reason: string) => void
+}
+
+/** A talk stream: audio in, the model's audio and words out. */
+export type Talk = {
+  send: (audio: Uint8Array) => void
+  /** ask the model to say `text` */
+  say: (text: string) => void
+  /** end the stream; what it cost */
+  close: () => { seconds: number; dollars: number }
+}
+
+/**
+ * A model that hears and speaks in one stream: `send` takes the caller's raw
+ * samples in `format`, and `told` hears what the model says back and the
+ * tools it asks for, each answered with its output before it goes on. The
+ * provider's `talk` says how; one without it refuses.
+ */
+export let talk = (
+  o: {
+    provider: Provider
+    key: string
+    format: Raw
+    model?: string
+    voice?: string
+    instructions: string
+    tools?: Setup['tools']
+    told: Talked
+    open?: Open
+  },
+): Talk => {
+  let t = o.provider.talk
+  if (!t) throw new Error(`${o.provider.name} has no model that talks`)
+  let model = o.model ?? t.models[0]
+  let bytes = 0, dollars = 0
+  let s = stream(
+    o,
+    o.provider.live + t.path(model),
+    t.opening({
+      model,
+      voice: o.voice ?? t.voice,
+      format: o.format,
+      instructions: o.instructions,
+      tools: o.tools ?? [],
+    }),
+    (data) => {
+      for (let said of t.read(data)) {
+        if (said.start) o.told.start?.()
+        if (said.stopped) o.told.stopped?.()
+        if (said.heard) o.told.heard?.(said.heard)
+        if (said.audio) o.told.audio(said.audio)
+        if (said.said) o.told.said?.(said.said)
+        if (said.spent) dollars += said.spent
+        if (said.error) o.told.lost?.(said.error)
+        let call = said.call
+        if (call) {
+          o.told.call(call.name, call.args)
+            .catch((error) => `That did not work: ${error?.message ?? error}`)
+            .then((output) => {
+              for (let m of t.answer(call.id, output)) s.send(m)
+            })
+        }
+      }
+    },
+    (reason) => o.told.lost?.(reason),
+  )
+  return {
+    send: (audio) => {
+      if (s.closed()) return
+      bytes += audio.length
+      s.send(t.audio(audio))
+    },
+    say: (text) => {
+      for (let m of t.say(text)) s.send(m)
+    },
+    close: () => {
+      s.close()
+      return { seconds: bytes / perSecond(o.format)!, dollars }
     },
   }
 }

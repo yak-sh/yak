@@ -26,8 +26,16 @@ import {
   texts,
 } from './operator-texts.ts'
 import { given } from './operator-name.ts'
-import { BUTLERS, operatorVoice, sampled, voiceOf, VOICES } from './speech.ts'
-import type { Voice } from '@yaks/speech'
+import {
+  BUTLERS,
+  callModels,
+  modelOf,
+  sampled,
+  setupOf,
+  type Voiced,
+  voiceOf,
+  voicesOn,
+} from './speech.ts'
 import { ModelError } from '@yaks/model'
 import { CallError } from '@yaks/tools/errors'
 import {
@@ -105,28 +113,46 @@ export let nameCard = (at: string, name: string) =>
 <button class="Button" type="submit">Save</button><p role="status" data-status></p></form>`
 
 // Where a space's people hear the voices its Operator may speak in on a
-// call, and pick one. Play speaks a sample (speech.ts `sampled`).
-export let voiceCard = (at: string, name: string, voice?: string | null) => {
-  let picked = operatorVoice({ voice })
-  let first = (v: Voice) => BUTLERS.includes(v.id) ? 0 : 1
+// call, provider by provider, and pick one and the model that answers. Play
+// speaks a sample (speech.ts `sampled`).
+export let voiceCard = (
+  at: string,
+  space: Pick<Space, 'operator' | 'voice' | 'voice_model'>,
+  voices: Voiced[],
+  models: { id: string; name: string }[],
+) => {
+  let setup = setupOf(space)
+  let first = (v: Voiced) => BUTLERS.includes(v.id) ? 0 : 1
+  let titles = [...new Set(voices.map((v) => v.provider.title))]
   return `<form class="Card Form" id="voice" method="post" action="${at}?voice=1">
 <h2 class="Card_Title">Voice</h2>
 <p>How ${
-    esc(name)
+    esc(space.operator)
   } sounds when you call. Play a few to compare, then pick one and save.</p>
 <div class="Voices">${
-    VOICES.toSorted((a, b) => first(a) - first(b)).map((v) =>
-      `<div class="Voices_Row"><label class="Choice"><input type="radio" name="voice" value="${v.id}"${
-        v.id == picked ? ' checked' : ''
-      }><span><b>${esc(v.name)}</b>${
-        first(v) ? '' : ' (like a butler)'
-      } <span class="Note Note-small">${
-        esc(v.about)
-      }</span></span></label><button class="Button Button-quiet" type="button" data-sample="${at}?sample=${v.id}" aria-label="Play ${
-        esc(v.name)
-      }">Play</button></div>`
+    titles.map((title) =>
+      `<p class="Voices_Group">${esc(title)}</p>\n` +
+      voices.filter((v) => v.provider.title == title)
+        .toSorted((a, b) => first(a) - first(b)).map((v) =>
+          `<div class="Voices_Row"><label class="Choice"><input type="radio" name="voice" value="${v.id}"${
+            v.id == setup.voice ? ' checked' : ''
+          }><span><b>${esc(v.name)}</b>${
+            first(v) ? '' : ' (like a butler)'
+          } <span class="Note Note-small">${
+            esc(v.about)
+          }</span></span></label><button class="Button Button-quiet" type="button" data-sample="${at}?sample=${v.id}" aria-label="Play ${
+            esc(v.name)
+          }">Play</button></div>`
+        ).join('\n')
     ).join('\n')
   }</div>
+<label class="Form_Field">Answered by<select class="Field" name="voice_model">${
+    models.map((m) =>
+      `<option value="${m.id}"${m.id == setup.model ? ' selected' : ''}>${
+        esc(m.name)
+      }</option>`
+    ).join('')
+  }</select></label>
 <button class="Button" type="submit">Save</button><p role="status" data-status></p></form>`
 }
 
@@ -264,12 +290,16 @@ export let operatorAnswer = async (
     let form = await req.formData()
     try {
       let { id } = voiceOf(String(form.get('voice') ?? ''))
+      let model = form.get('voice_model')
       let set = await directoryOf(env.STORE).operate(
         space,
-        { voice: id },
+        {
+          voice: id,
+          ...model ? { voice_model: modelOf(String(model), id) } : {},
+        },
         vouched(who),
       )
-      return Response.json({ voice: set.voice })
+      return Response.json({ voice: set.voice, voice_model: set.voice_model })
     } catch (e) {
       if (!(e instanceof CallError)) throw e
       return Response.json({ message: e.message }, { status: 400 })
@@ -480,7 +510,7 @@ export let operatorBody = async (env: Env, space: Space, who: Who) => {
   } answers by email.</p></section>
 ${talks(space.slug)}
 ${nameCard(at, space.operator)}
-${voiceCard(at, space.operator, space.voice)}
+${voiceCard(at, space, voicesOn(env), callModels(env))}
 ${textsCard(at, consent, settings(env, space.sender).number)}
 ${settingsScript}`
 }

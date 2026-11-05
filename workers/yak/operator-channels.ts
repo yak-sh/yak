@@ -60,6 +60,9 @@ export type Request = {
   // Sent to sign up (inbox.ts `signingUp`, operator-texts.ts `arrived`): their
   // first words to yaks.app, unless they had signed up before.
   signup?: boolean
+  // The model that answers it, where not the Operator's own (a call's,
+  // speech.ts `setupOf`).
+  model?: string
   // What in their Updates the words answer, on the `update` channel
   // (operator-updates.ts).
   about?: string
@@ -579,6 +582,7 @@ export let handleChannels = (
             task,
             session: derivedEid('operator-session|' + row.entity.eid),
             files: request.files ?? [],
+            ...request.model ? { model: request.model } : {},
             // Nobody asked for a break's fix: the Operator started it.
             ...request.channel == 'error' ? { by: space.eid } : {},
           },

@@ -434,9 +434,10 @@ grouped approximately by function, **not** by dependency order.
   Failed delivery cannot roll back the original graph transaction.
 - **[@yaks/pinnacle](./pinnacle)** — Pinnacle texting transport and webhook
   events.
-- **[@yaks/speech](./speech)** — Speech to text and text to speech, the provider
-  given as data (Deepgram): a recording heard, text spoken, and a call's audio
-  heard a turn at a time.
+- **[@yaks/speech](./speech)** — Speech to text, text to speech and speech to
+  speech, each provider given as data (Deepgram, OpenAI): a recording heard,
+  text spoken, a call's audio heard a turn at a time, and a model that hears and
+  speaks a call itself.
 - **[@yaks/telnyx](./telnyx)** — Telnyx texting transport, signed webhook
   events, and Call Control with its media stream.
 - **[@yaks/voipms](./voipms)** — voip.ms texting transport, numbers and

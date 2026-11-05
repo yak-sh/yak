@@ -5,7 +5,7 @@
     ".": "./mod.ts"
   },
   "license": "Apache-2.0",
-  "description": "Speech to text and text to speech, with the provider given as data: Deepgram's endpoints, models, voices and prices.",
+  "description": "Speech to text, text to speech and speech to speech, each provider given as data: Deepgram and OpenAI, their endpoints, models, voices and prices.",
   "type": "module",
   "devDependencies": {
     "@yaks/testing": "0.2.17",

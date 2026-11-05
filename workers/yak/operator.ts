@@ -92,6 +92,9 @@ export type Options = {
   tell?: (session: string) => void
   // Told each piece of a reply as the model writes it.
   typing?: (session: string, text: string) => void
+  // Told when a model's step ends, its words written (before a tool call it
+  // asked for, or its answer).
+  stepped?: (session: string) => void
 }
 let comp = (b: Bundle | undefined, name: string) =>
   b?.[name] as Comp | undefined
@@ -599,10 +602,13 @@ export let operating = (
         ? ` For writing or fixing code, or work that needs careful reasoning, use spawn with model ${delegate} and a prompt that carries everything it needs; its answer comes back to you.`
         : ''),
   }
-  let using = {
+  // The model an input asks for: one its provider serves, else the
+  // Operator's own.
+  let usingOf = (model = name) => ({
     provider: identityEid('provider', [provider]),
-    model: identityEid('model', [name]),
-  }
+    model: identityEid('model', [providerOf(model) == provider ? model : name]),
+  })
+  let using = usingOf()
   let base = options.model ?? operatorModel(env, provider)
   let reads = readsOf(provider)
   // The files the model reads as they are, shown beside the words they came
@@ -676,6 +682,7 @@ export let operating = (
         }
         : {},
     })
+    if (session && heard) options.stepped?.(String(session))
     let cost = billed(reply, price)
     return { ...reply, cost: cost?.dollars, costReported: cost?.reported }
   }, base)
@@ -693,22 +700,27 @@ export let operating = (
       based = undefined
       caught(e, { request: 'operator base persona' })
     })
-  let seeded: Promise<void> | undefined
-  let seeding = () =>
-    seeded ??= (async () => {
-      let rows: Bundle[] = []
-      for (let m of delegate ? [name, delegate] : [name]) {
-        let price = await priced(m)
-        rows.push(...seed({ provider, model: m }))
-        if (price) {
-          rows.push({
-            entity: { eid: identityEid('model', [m]) },
-            price,
-          })
-        }
-      }
-      await g.apply(rows, { trusted: true })
+  // Each model's rows, written once per wake: the Operator's own and its
+  // delegate's, and one an input asks for when it first does.
+  let seeded = new Map<string, Promise<void>>()
+  let seedOf = (m: string) => {
+    let held = seeded.get(m) ?? (async () => {
+      let price = await priced(m)
+      await g.apply([
+        ...seed({ provider, model: m }),
+        ...price ? [{ entity: { eid: identityEid('model', [m]) }, price }] : [],
+      ], { trusted: true })
     })()
+    seeded.set(m, held)
+    held.catch(() => seeded.delete(m))
+    return held
+  }
+  let seeding = (model?: string) =>
+    Promise.all(
+      [name, delegate, model && providerOf(model) == provider ? model : null]
+        .filter((m): m is string => !!m)
+        .map(seedOf),
+    )
 
   // The session's answer, once its turn ends: an answer to each request the
   // turn answers, which its channel delivers (operator_deliver), and on a
@@ -923,7 +935,7 @@ export let operating = (
     ...o.request && o.files?.length
       ? { operator_files: { request: o.request, files: o.files } }
       : {},
-    using,
+    using: usingOf(o.model),
     $actor: { by, via: session },
   })
   let started = (session: string, by: string, space: Space) =>
@@ -943,7 +955,7 @@ export let operating = (
     let input = o.request
       ? derivedEid('operator-input|' + o.request)
       : crypto.randomUUID()
-    await Promise.all([seeding(), basing()])
+    await Promise.all([seeding(o.model), basing()])
     await g.apply([
       ...await spaced(g.storage, space),
       { entity: { eid: held.person }, person: {} },
@@ -1110,6 +1122,10 @@ export type Asking = {
   // The session a new task starts, for a replay to find.
   session?: string
   files?: File[]
+  // The model that answers these words, where not the Operator's own (a
+  // call's, speech.ts `setupOf`); one its provider does not serve is
+  // answered by the Operator's own.
+  model?: string
 }
 type Asker = Pick<Held, 'person' | 'administrative'>
 export type Operator = {

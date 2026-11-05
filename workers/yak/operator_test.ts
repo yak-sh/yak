@@ -434,3 +434,31 @@ test('the Operator tells its host each piece of a reply as the model writes it',
   ]])
   assertEquals(written.text, 'Posting it now.')
 })
+
+// A call's words ask for the model the Operator answers calls with, and the
+// next words, asking for none, go back to its own; each step's end is told.
+let models: string[] = [], steps: string[] = []
+let caller = operate(operatorMemory(), roundsPlatform, {
+  ...operatorModel((req) => {
+    models.push(req.model)
+    req.onText?.({ index: 0, text: 'Hi.' })
+    return Promise.resolve({
+      id: crypto.randomUUID(),
+      model: req.model,
+      items: [{ kind: 'assistant', text: 'Hi.' }],
+      cost: 0.001,
+    })
+  }),
+  name: 'claude-sonnet-5-5',
+  stepped: (session) => void steps.push(session),
+})
+let byCall = await caller.run(roundsHeld, roundsSpace, { say: 'Hello.' }, {
+  model: 'claude-haiku-5-5',
+})
+await caller.run(roundsHeld, roundsSpace, { say: 'Hello again.' }, {
+  task: byCall.task,
+})
+test('words given with a model are answered by it, and the next words by the Operator’s own', () => {
+  assertEquals(models, ['claude-haiku-5-5', 'claude-sonnet-5-5'])
+  assertEquals(steps, [byCall.session, byCall.session])
+})

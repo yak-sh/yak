@@ -238,11 +238,15 @@ export type Env = {
   TELNYX_API_KEY?: string
   TELNYX_PUBLIC_KEY?: string
   TELNYX_API?: string
-  // Speech (speech.ts, T-140123): DEEPGRAM_API_KEY is the secret yaks.app
-  // hears and speaks with; unset, speech is off. SPEECH_FLOOR, a `[vars]`
-  // line, is the credit left on Deepgram's account below which speech is
-  // refused while it is a pilot. SPEECH_API aims it elsewhere, for a test.
+  // Speech (speech.ts, T-140123): each provider's key is a secret of its own,
+  // DEEPGRAM_API_KEY for Deepgram and OPENAI_VOICE_KEY for OpenAI (its
+  // "yaks.app voice" project, held to $10 a month while it is a pilot,
+  // T-140668); a provider whose key is unset is off. SPEECH_FLOOR, a `[vars]`
+  // line, is the credit left on an account that says its balance (Deepgram's)
+  // below which speech is refused while it is a pilot. SPEECH_API aims every
+  // provider elsewhere, for a test.
   DEEPGRAM_API_KEY?: string
+  OPENAI_VOICE_KEY?: string
   // `on` answers everyone the platform knows by number when they call
   // PHONE_SENDER's number (operator-calls.ts); anything else, only an owner
   // of the platform's own space, while calls are a pilot.

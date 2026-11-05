@@ -558,6 +558,10 @@ export class Builder {
             typed(store, session, text)
           ).catch((e) => caught(e, { request: 'operator call' }))
         },
+        stepped: (session) =>
+          void import('./operator-calls.ts').then(({ stepped }) =>
+            stepped(store, session)
+          ).catch((e) => caught(e, { request: 'operator call' })),
       })
       handleChannels(operator, this.#env)
       return operator

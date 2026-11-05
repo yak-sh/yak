@@ -256,11 +256,14 @@ recording to `./api/speech/hear` and gets its words:
     let { text, seconds } = await heard.json()
 
 `text` is up to 2,000 characters, and `voice` names another Aura-2 voice
-(<https://developers.deepgram.com/docs/tts-models>). A recording is up to 25 MB
-in any audio type a browser's `MediaRecorder` makes. The same people who may
-call a model may use speech, and it spends the same space budget: $0.030 a
-thousand characters spoken, and $0.0043 a minute heard. A refusal is
-`{error: {code, message}}`: `402` past the budget, `503` while speech is paused.
+(<https://developers.deepgram.com/docs/tts-models>), or one of OpenAI's
+(`cedar`, `marin`, `alloy`, `ash`, `ballad`, `coral`, `echo`, `sage`, `shimmer`,
+`verse`, `fable`, `nova` or `onyx`), spoken at $0.015 a thousand characters. A
+recording is up to 25 MB in any audio type a browser's `MediaRecorder` makes.
+The same people who may call a model may use speech, and it spends the same
+space budget: $0.030 a thousand characters spoken, and $0.0043 a minute heard. A
+refusal is `{error: {code, message}}`: `402` past the budget, `503` while speech
+is paused.
 
 ## Image input (vision models)
 

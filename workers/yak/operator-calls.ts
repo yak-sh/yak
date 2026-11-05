@@ -3,18 +3,32 @@
 // share it. The provider rings the webhook its texts post to (`rang`); a
 // person the platform knows by that number is answered with the call's audio
 // streamed both ways to `/<via>/stream`, which carries a sealed ticket to the
-// space's Builder object, where the Operator runs (`answering`). There their
-// words are heard a turn at a time (speech.ts, Deepgram's Flux) and given to
-// their one conversation as the `voice` channel, and what the Operator writes
-// is spoken a sentence at a time as it is written (`typed`), so the first
-// words of a reply are heard while the rest is still being written.
+// space's Builder object, where the Operator runs (`answering`).
+//
+// The Operator's setup (speech.ts `setupOf`: its voice, which names the
+// provider, and the model that answers) says how the call runs, the same for
+// every provider. Around the Operator's own model (`converse`), the provider
+// hears the caller a turn at a time, each turn goes to their one conversation
+// as the `voice` channel, and what the Operator writes is spoken a sentence
+// at a time as it is written (`typed`). With a model that hears and speaks
+// itself (`talking`), the call's audio goes to that model, which asks the
+// Operator, through the same conversation, for anything it does or knows.
 //
 // While calls are a pilot, only an owner of the platform's own space is
 // answered; `CALLS = "on"` answers everyone the platform knows by number.
 // A call lasts at most MINUTES, and what it costs (the line, what was heard
 // and what was said) is charged to the space.
 import type { Frame, Line, Ring } from '@yaks/phone'
-import { type Socket, type Told, type Turns, turns } from '@yaks/speech'
+import {
+  type Keyed,
+  type Socket,
+  type Talk as Talker,
+  talk,
+  type Talked,
+  type Told,
+  type Turns,
+  turns,
+} from '@yaks/speech'
 import { directoryOf, META, type Space } from './directory.ts'
 import type { Env } from './env.ts'
 import { caught } from './defects.ts'
@@ -22,7 +36,7 @@ import { opened, seal } from './lib/token.ts'
 import { apex } from './host.ts'
 import { countedSpend } from './meter.ts'
 import { PROVIDERS, settings } from './phone-providers.ts'
-import { operatorVoice, paused, speaking, speechOf } from './speech.ts'
+import { CALL_MODELS, paused, setupOf, speaking, speechOf } from './speech.ts'
 import type { Operator } from './operator.ts'
 import { ownerOf } from './operator-access.ts'
 import { receive, requestId } from './operator-channels.ts'
@@ -58,10 +72,10 @@ let reached = async (env: Env, ring: Ring) => {
     let meta = await dir.space(META.space)
     if (!meta || await dir.role(meta, person) != 'owner') return null
   }
-  if (await paused(env)) return null
   let { spaceFor } = await import('./operator-texts.ts')
   let space = await spaceFor(env, person, (await dir.texting(person))?.space)
-  return space ? { person, space } : null
+  if (!space || await paused(env, setupOf(space).provider)) return null
+  return { person, space }
 }
 
 /**
@@ -140,6 +154,9 @@ let SENTENCE = /^(.+?[.!?])(?:["')\]]*)\s+/s
 export type Call = {
   /** words the Operator wrote while answering this call's caller */
   typed: (text: string) => void
+  /** the Operator's model stopped writing for a step, such as a tool call:
+   * what it wrote is said now rather than after the step */
+  paused: () => void
   /** the Operator's answer, once its turn ended */
   answered: (text: string) => void
   /** whether the caller is waiting on an answer */
@@ -148,129 +165,205 @@ export type Call = {
   ended: Promise<void>
 }
 
-/** What a conversation needs from the world around it. */
-export type Talk = {
+/** How long one of the caller's turns waited, in milliseconds from their
+ * last word: for the first sound played back, and for the first of the
+ * answer itself (not an acknowledgement). */
+export type Timed = { first?: number; answer?: number }
+
+/** What every call needs from the world around it. */
+export type Around = {
   /** the provider's side of the call */
   wire: Socket
   line: Line
-  /** audio heard a turn at a time */
-  listen: (told: Told) => Turns
-  /** text spoken as raw samples in the line's format */
-  say: (text: string) => Promise<ReadableStream<Uint8Array>>
   /** the caller's words, given to the Operator */
   ask: (text: string) => Promise<void>
   /** what is said when the call is answered */
   hello: string
-  /** what the call cost to hear and carry, once it ends */
-  done: (cost: { seconds: number; heard: number }) => Promise<void>
+  /** what the call cost to hear and carry, and how its turns were timed,
+   * once it ends */
+  done: (
+    call: { seconds: number; heard: number; turns: Timed[] },
+  ) => Promise<void>
   hangup: () => Promise<void>
-  /** how long silence after a question lasts before "One moment." */
-  patience?: number
   minutes?: number
   report?: (error: unknown) => void
+}
+
+/** A call heard and spoken around the Operator's own model. */
+export type Talk = Around & {
+  /** audio heard a turn at a time */
+  listen: (told: Told) => Turns
+  /** text spoken as raw samples in the line's format */
+  say: (text: string) => Promise<ReadableStream<Uint8Array>>
+  /** what is said the moment a caller's turn ends, made as the call starts */
+  ack?: string
+}
+
+/** A call a model hears and speaks itself, asking the Operator. */
+export type Talking = Around & {
+  talk: (told: Talked) => Talker
 }
 
 // The least audio sent to the line at once: a tenth of a second at 8 kHz.
 let CHUNK = 800
 
-/**
- * One call's conversation: the caller's turns given to the Operator, and
- * what it writes spoken back a sentence at a time. A caller who starts
- * talking stops whatever is playing; an answer slow to start is covered with
- * "One moment."
- */
-export let converse = (o: Talk): Call => {
-  let report = o.report ?? ((e) => caught(e, { request: 'operator call' }))
-  let started = Date.now()
-  let over = false, asked = false, streamed = false, buffer = ''
-  // Each barge-in starts a new generation; speech of an older one is dropped.
-  let generation = 0
-  let chain = Promise.resolve()
-  let spokenSince = 0
+let GOODBYE = 'I have to go now. Call me back any time.'
+
+let reporter = (o: Around) =>
+  o.report ?? ((e: unknown) => caught(e, { request: 'operator call' }))
+
+// What every call shares: the caller's audio taken off the wire (`hear`),
+// audio played to them, each turn timed from their last word, the time
+// limit, and the call ended once (`close` answers what hearing cost).
+let carry = (
+  o: Around,
+  hear: (audio: Uint8Array) => void,
+  close: () => number,
+) => {
+  let report = reporter(o)
+  let started = Date.now(), over = false
   let timers: ReturnType<typeof setTimeout>[] = []
-  let speak = (text: string) => {
-    let words = plain(text)
-    if (!words || over) return
-    spokenSince++
-    let mine = generation
-    chain = chain.then(async () => {
-      if (mine != generation || over) return
-      let reader = (await o.say(words)).getReader()
-      let held = new Uint8Array(0)
-      let send = () => {
-        if (held.length) o.wire.send(o.line.play(held))
-        held = new Uint8Array(0)
-      }
-      while (true) {
-        let next = await reader.read()
-        if (mine != generation || over) {
-          await reader.cancel()
-          return
-        }
-        if (next.done) break
-        let value = next.value
-        let more = new Uint8Array(held.length + value.length)
-        more.set(held)
-        more.set(value, held.length)
-        held = more
-        if (held.length >= CHUNK) send()
-      }
-      send()
-    }).catch(report)
-  }
+  let turns: Timed[] = []
+  let turn: { at: number; timed: Timed } | undefined
   let finished: () => void
   let ended = new Promise<void>((resolve) => finished = resolve)
-  let stream = o.listen({
-    start: () => {
-      generation++
-      o.wire.send(o.line.clear())
-    },
-    end: (text) => {
-      if (!text || over) return
-      asked = true
-      streamed = false
-      buffer = ''
-      let before = spokenSince
-      timers.push(setTimeout(() => {
-        if (asked && spokenSince == before) speak('One moment.')
-      }, o.patience ?? 2500))
-      o.ask(text).catch((error) => {
-        report(error)
-        speak('Sorry, I could not take that. Please say it again.')
-      })
-    },
-    lost: (why) => {
-      report(new Error(`A call's speech stream was lost: ${why}`))
-      finish()
-    },
-  })
   let finish = () => {
     if (over) return
     over = true
     for (let t of timers) clearTimeout(t)
-    let heard = stream.close()
+    let heard = close()
     try {
       o.wire.close(1000)
     } catch {
       // Already closed by the other side.
     }
-    o.done({
-      seconds: (Date.now() - started) / 1000,
-      heard: heard.dollars,
-    }).catch(report).finally(finished)
+    o.done({ seconds: (Date.now() - started) / 1000, heard, turns })
+      .catch(report).finally(finished)
   }
   o.wire.addEventListener('message', (event) => {
     let frame: Frame = o.line.frame(String(event.data))
-    if (frame.audio) stream.send(frame.audio)
+    if (frame.audio) hear(frame.audio)
     if (frame.stop) finish()
   })
   o.wire.addEventListener('close', finish)
   o.wire.addEventListener('error', finish)
-  timers.push(setTimeout(() => {
-    speak('I have to go now. Call me back any time.')
-    timers.push(setTimeout(() => o.hangup().catch(report), 6000))
-  }, (o.minutes ?? MINUTES) * 60_000))
-  speak(o.hello)
+  let later = (ms: number, f: () => void) => timers.push(setTimeout(f, ms))
+  return {
+    report,
+    ended,
+    finish,
+    later,
+    over: () => over,
+    /** the caller's turn ended now */
+    stopped: () => {
+      turn = { at: Date.now(), timed: {} }
+      turns.push(turn.timed)
+    },
+    /** what played since the turn ended was an acknowledgement */
+    acked: () => {
+      if (turn) delete turn.timed.answer
+    },
+    /** audio played to the caller, the answer's unless `answer` is false */
+    play: (audio: Uint8Array, answer = true) => {
+      if (!audio.length || over) return
+      if (turn) {
+        let ms = Date.now() - turn.at
+        turn.timed.first ??= ms
+        if (answer) turn.timed.answer ??= ms
+      }
+      o.wire.send(o.line.play(audio))
+    },
+    /** stop what is playing */
+    clear: () => o.wire.send(o.line.clear()),
+    /** at the time limit, `goodbye` said and the call hung up */
+    limit: (goodbye: () => void) =>
+      later((o.minutes ?? MINUTES) * 60_000, () => {
+        goodbye()
+        later(6000, () => o.hangup().catch(report))
+      }),
+  }
+}
+
+/**
+ * One call's conversation, heard and spoken around the Operator's own model:
+ * the caller's turns given to the Operator, and what it writes spoken back a
+ * sentence at a time, what it wrote before a tool said before the tool runs.
+ * The moment a turn ends `ack` is played, from audio made as the call
+ * starts; a caller who starts talking stops whatever is playing.
+ */
+export let converse = (o: Talk): Call => {
+  let asked = false, streamed = false, buffer = ''
+  // Each barge-in starts a new generation; speech of an older one is dropped.
+  let generation = 0
+  let chain = Promise.resolve()
+  let stream: Turns | undefined
+  let c = carry(
+    o,
+    (audio) => stream?.send(audio),
+    () => stream?.close().dollars ?? 0,
+  )
+  let queue = (play: (mine: number) => Promise<void>) => {
+    let mine = generation
+    chain = chain.then(() =>
+      mine == generation && !c.over() ? play(mine) : undefined
+    ).catch(c.report)
+  }
+  let speak = (text: string, answer = true) => {
+    let words = plain(text)
+    if (!words || c.over()) return
+    queue(async (mine) => {
+      let reader = (await o.say(words)).getReader()
+      let held = new Uint8Array(0)
+      let send = () => {
+        c.play(held, answer)
+        held = new Uint8Array(0)
+      }
+      while (true) {
+        let next = await reader.read()
+        if (mine != generation || c.over()) {
+          await reader.cancel()
+          return
+        }
+        if (next.done) break
+        let more = new Uint8Array(held.length + next.value.length)
+        more.set(held)
+        more.set(next.value, held.length)
+        held = more
+        if (held.length >= CHUNK) send()
+      }
+      send()
+    })
+  }
+  let ack = o.ack
+    ? o.say(plain(o.ack)).then(async (body) =>
+      new Uint8Array(await new Response(body).arrayBuffer())
+    )
+    : undefined
+  ack?.catch(c.report)
+  stream = o.listen({
+    start: () => {
+      generation++
+      c.clear()
+    },
+    end: (text) => {
+      if (!text || c.over()) return
+      c.stopped()
+      asked = true
+      streamed = false
+      buffer = ''
+      if (ack) queue(async () => c.play(await ack, false))
+      o.ask(text).catch((error) => {
+        c.report(error)
+        speak('Sorry, I could not take that. Please say it again.')
+      })
+    },
+    lost: (why) => {
+      c.report(new Error(`A call's speech stream was lost: ${why}`))
+      c.finish()
+    },
+  })
+  c.limit(() => speak(GOODBYE))
+  speak(o.hello, false)
   return {
     typed: (text) => {
       if (!asked) return
@@ -282,6 +375,11 @@ export let converse = (o: Talk): Call => {
         buffer = buffer.slice(m[0].length)
       }
     },
+    paused: () => {
+      if (!asked || !buffer.trim()) return
+      speak(buffer)
+      buffer = ''
+    },
     answered: (text) => {
       if (streamed) speak(buffer)
       else speak(text)
@@ -289,7 +387,89 @@ export let converse = (o: Talk): Call => {
       asked = streamed = false
     },
     waiting: () => asked,
-    ended,
+    ended: c.ended,
+  }
+}
+
+/** The one tool a talking model has: the Operator, given what the caller
+ * wants. */
+export let ASK = {
+  name: 'ask',
+  description:
+    'Ask the Operator, who has every tool, the conversation so far and the person’s apps, messages and memory. Give their request in their own words, with anything said earlier that it depends on. It answers with what to tell them.',
+  parameters: {
+    type: 'object',
+    properties: {
+      request: {
+        type: 'string',
+        description: 'what they want, as they said it',
+      },
+    },
+    required: ['request'],
+  },
+}
+
+/** What a talking model is told: who it is, how it sounds, and that the
+ * Operator, through `ask`, does the work. */
+export let instructed = (name: string) =>
+  `You are ${name}, a person's Operator on yaks.app, on the phone with them. Speak like a refined British butler: cool, calm, professional, and brief, a sentence or two in plain speech. Anything they want done, found, remembered or changed, and any question about their apps, messages, accounts or work, goes to the ask tool at once with their request in their own words: say only "Certainly, one moment." before it, and never speak of the tool or of anyone else doing the work. Then say what it answers, in your own voice, as briefly as it allows. Greetings, thanks and goodbyes you answer yourself. Never guess what the tool would know.`
+
+/**
+ * One call's conversation with a model that hears and speaks itself: the
+ * caller's audio goes to it and its audio to them, and what it asks of the
+ * Operator (`ASK`) goes to their one conversation, the Operator's answer
+ * given back for it to say. An answer that comes with nothing asked, such as
+ * a helper's outcome, it says as it comes.
+ */
+export let talking = (o: Talking): Call => {
+  let pending: ((text: string) => void)[] = []
+  let talker: Talker | undefined
+  let c = carry(
+    o,
+    (audio) => talker?.send(audio),
+    () => talker?.close().dollars ?? 0,
+  )
+  let asking = false
+  talker = o.talk({
+    start: () => c.clear(),
+    stopped: () => c.stopped(),
+    audio: (bytes) => c.play(bytes, !asking),
+    call: async (name, args) => {
+      if (name != ASK.name) return `There is no tool called ${name}.`
+      let { request } = JSON.parse(args) as { request?: string }
+      c.acked()
+      asking = true
+      let answer!: (text: string) => void
+      let answered = new Promise<string>((resolve) => answer = resolve)
+      pending.push(answer)
+      try {
+        await o.ask(String(request ?? ''))
+      } catch (error) {
+        pending.splice(pending.indexOf(answer), 1)
+        asking = false
+        c.report(error)
+        throw error
+      }
+      return await answered
+    },
+    lost: (why) => {
+      c.report(new Error(`A call's talk stream was lost: ${why}`))
+      c.finish()
+    },
+  })
+  c.limit(() => talker?.say(GOODBYE))
+  talker.say(o.hello)
+  return {
+    typed: () => {},
+    paused: () => {},
+    answered: (text) => {
+      let next = pending.shift()
+      asking = pending.length > 0
+      if (next) next(plain(text))
+      else talker?.say(plain(text))
+    },
+    waiting: () => pending.length > 0,
+    ended: c.ended,
   }
 }
 
@@ -301,37 +481,48 @@ let keyOf = (space: string, person: string) => `${space} ${person}`
 export let callOf = (space: string, person: string) =>
   live.get(keyOf(space, person))
 
-/**
- * Words an Operator session wrote: spoken on the call its person is on, when
- * the session is their conversation (not a helper's) and they are waiting.
- */
-export let typed = async (
+// The call waiting on an Operator session, when the session is its person's
+// conversation (not a helper's) and they are on a call waiting for it.
+let waitingOn = async (
   store: Parameters<typeof ownerOf>[0],
   session: string,
-  text: string,
 ) => {
   if (!live.size) return
   let [row] = await store.g.get([session])
   if (!row || row.spawned) return
   let owner = await ownerOf(store, session)
   let call = owner && callOf(owner.space, owner.person)
-  if (call?.waiting()) call.typed(text)
+  return call?.waiting() ? call : undefined
 }
+
+/** Words an Operator session wrote: spoken on the call waiting on it. */
+export let typed = async (
+  store: Parameters<typeof ownerOf>[0],
+  session: string,
+  text: string,
+) => (await waitingOn(store, session))?.typed(text)
+
+/** An Operator session's model ended a step, such as before a tool call:
+ * what it wrote is said on the call waiting on it now. */
+export let stepped = async (
+  store: Parameters<typeof ownerOf>[0],
+  session: string,
+) => (await waitingOn(store, session))?.paused()
 
 type Upgraded = Socket & { accept: () => void }
 
 /**
  * A client socket as Workers open one: a fetch with `Upgrade`, which also
- * carries the key as the request's Authorization rather than a subprotocol.
- * What is sent before it opens waits in @yaks/speech's `turns`.
+ * carries the key as the request's Authorization rather than subprotocols.
+ * What is sent before it opens waits in @yaks/speech's stream.
  */
-export let upgraded = (url: string, [scheme, key]: string[]): Socket => {
+export let upgraded = (url: string, { authorization }: Keyed): Socket => {
   let on: Record<string, ((event: { data?: unknown }) => void)[]> = {}
   let fire = (type: string, event: { data?: unknown } = {}) =>
     on[type]?.forEach((f) => f(event))
   let ws: Upgraded | undefined
   fetch(url.replace(/^wss:/, 'https:'), {
-    headers: { upgrade: 'websocket', authorization: `${scheme} ${key}` },
+    headers: { upgrade: 'websocket', authorization },
   }).then((res) => {
     let socket = (res as Response & { webSocket?: Upgraded }).webSocket
     if (!socket) throw new Error(`the stream answered ${res.status}`)
@@ -367,7 +558,8 @@ export let answering = (
   armed: () => Promise<void> | undefined,
 ): Response => {
   let provider = PROVIDERS[ticket.via]
-  let speech = speechOf(env)
+  let setup = setupOf(space)
+  let speech = speechOf(env, setup.provider)
   if (!provider?.line || !provider.caller || !speech) {
     return new Response(null, { status: 404 })
   }
@@ -376,37 +568,39 @@ export let answering = (
   pair[1].accept()
   let turn = 0
   let key = keyOf(space.eid, ticket.person)
-  let call: Call = converse({
+  // The caller's words, to their conversation, answered by `model`.
+  let asking = (model: string) => async (text: string) => {
+    await receive(
+      operator.store,
+      {
+        space: space.eid,
+        person: ticket.person,
+        channel: 'voice',
+        address: ticket.from,
+        reply_to: ticket.to,
+        via: ticket.via,
+        model,
+      },
+      text,
+      { id: requestId(space.eid, `${ticket.via}:${ticket.call}:${++turn}`) },
+    )
+    await armed()
+  }
+  let around = {
     wire: pair[1],
     line,
-    listen: (told) =>
-      turns({ ...speech, format: line.format, told, open: upgraded }),
-    say: async (text) =>
-      (await speaking(env, space, text, {
-        format: line.format,
-        voice: operatorVoice(space),
-      })).body,
-    ask: async (text) => {
-      await receive(
-        operator.store,
-        {
-          space: space.eid,
-          person: ticket.person,
-          channel: 'voice',
-          address: ticket.from,
-          reply_to: ticket.to,
-          via: ticket.via,
-        },
-        text,
-        {
-          id: requestId(space.eid, `${ticket.via}:${ticket.call}:${++turn}`),
-        },
-      )
-      await armed()
-    },
     hello: `Hi, it's ${space.operator ?? 'your Operator'}.`,
-    done: async ({ seconds, heard }) => {
+    done: async ({ seconds, heard, turns }: Parameters<Around['done']>[0]) => {
       if (live.get(key) == call) live.delete(key)
+      // How long each turn waited, for comparing providers and models.
+      console.log(JSON.stringify({
+        call: 'operator',
+        provider: setup.provider.name,
+        model: setup.model,
+        voice: setup.voice,
+        seconds: Math.round(seconds),
+        turns,
+      }))
       await countedSpend(
         env,
         space,
@@ -415,7 +609,37 @@ export let answering = (
       )
     },
     hangup: () => provider.caller!(settings(env)).hangup(ticket.call),
-  })
+  }
+  let call: Call = setup.talks
+    ? talking({
+      ...around,
+      // Behind a talking model the Operator answers with the fastest model.
+      ask: asking(CALL_MODELS[0]),
+      talk: (told) =>
+        talk({
+          ...speech,
+          format: line.format,
+          model: setup.model,
+          voice: setup.voice,
+          instructions: instructed(space.operator ?? 'the Operator'),
+          tools: [ASK],
+          told,
+          open: upgraded,
+        }),
+    })
+    : converse({
+      ...around,
+      ask: asking(setup.model),
+      listen: (told) =>
+        turns({ ...speech, format: line.format, told, open: upgraded }),
+      say: async (text) =>
+        (await speaking(env, space, text, {
+          provider: setup.provider,
+          format: line.format,
+          voice: setup.voice,
+        })).body,
+      ack: 'One moment.',
+    })
   live.set(key, call)
   return new Response(
     null,

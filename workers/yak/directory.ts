@@ -197,6 +197,9 @@ export type Space = {
   // The voice its Operator speaks in on a call (speech.ts `VOICES`), or none
   // for the provider's own.
   voice?: string | null
+  // The model that answers its calls (speech.ts `setupOf`), or none for the
+  // platform's.
+  voice_model?: string | null
   // The picture it wears in place of its first letter, or null for none.
   logo?: { sha: string; type: string } | null
   sender?: import('@yaks/phone').Transport
@@ -596,7 +599,11 @@ export type Row = {
   fee?: { bps?: number | null }
   budget?: { dollars?: number | null }
   space_logo?: { sha?: string | null; type?: string | null }
-  operator?: { name?: string | null; voice?: string | null }
+  operator?: {
+    name?: string | null
+    voice?: string | null
+    voice_model?: string | null
+  }
   starter?: { dollars?: number | null }
   started?: { space?: Id | null }
   created?: { at?: string }
@@ -1103,6 +1110,7 @@ export let spaceOf = (r: Row): Space => ({
   title: r.doc?.title || r.space!.slug,
   operator: calledOf(r),
   voice: r.operator?.voice ?? null,
+  voice_model: r.operator?.voice_model ?? null,
   logo: r.space_logo?.sha
     ? { sha: r.space_logo.sha, type: r.space_logo.type ?? '' }
     : null,
@@ -1878,10 +1886,11 @@ export let directoryRows = (rows: {
       return (await self.at(space.eid))!
     },
     // The space's Operator called `name` (operator-name.ts `given`), or
-    // speaking in `voice` (speech.ts `voiceOf`).
+    // speaking in `voice` and answered on a call by `voice_model` (speech.ts
+    // `setupOf`).
     operate: async (
       space: Space,
-      operator: { name?: string; voice?: string },
+      operator: { name?: string; voice?: string; voice_model?: string },
       headers: Record<string, string>,
     ): Promise<Space> => {
       await self.apply({

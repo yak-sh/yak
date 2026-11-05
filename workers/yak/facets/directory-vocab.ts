@@ -116,17 +116,18 @@ export let directoryDoc: VocabDoc = {
         by: owned(ref('keep')),
       },
     },
-    // What the space's Operator is called (operator-name.ts) and the voice it
-    // speaks in on a call (@yaks/speech's voice id; none, the provider's
-    // own). The space is its Operator's entity, as `operator_reach.operator`
-    // says, so they sit here: the name given when the space is made, both
-    // changed by its people.
+    // What the space's Operator is called (operator-name.ts), the voice it
+    // speaks in on a call (a @yaks/speech voice id, which names its provider
+    // too), and the model that answers it there (speech.ts `setupOf`); none,
+    // the platform's. The space is its Operator's entity, as
+    // `operator_reach.operator` says, so they sit here: the name given when
+    // the space is made, each changed by its people.
     operator: {
       component: true,
       type: 'object',
       description:
-        "The space's Operator, the assistant that works in it: the name it goes by and the voice it speaks in.",
-      properties: { name: text, voice: text },
+        "The space's Operator, the assistant that works in it: the name it goes by, the voice it speaks in, and the model that answers it on a call.",
+      properties: { name: text, voice: text, voice_model: text },
     },
     // The picture a space wears where its first letter stood (pages.ts
     // `spaceChoice`): the bytes at `sha` in the bucket under the space's

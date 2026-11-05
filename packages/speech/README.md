@@ -1,19 +1,23 @@
 # @yaks/speech
 
-Speech to text and text to speech, with the provider given as data. A `Provider`
-says where the provider answers, which models hear and speak, and what each
-costs; one implementation calls any provider described that way. `DEEPGRAM` is
-the one given today: Nova-3 hears a recording, Flux hears a call and says when a
-speaker's turn ends, and Aura-2 speaks. The key is an argument; nothing here
-reads the environment.
+Speech to text, text to speech and speech to speech, with each provider given as
+data. A `Provider` says where it answers, which models hear, speak and talk,
+what each costs, and how its requests and streams are worded, all in its own
+entry; one implementation calls any provider described that way. The key is an
+argument; nothing here reads the environment.
+
+- `DEEPGRAM`: Nova-3 hears a recording, Flux hears a call and says when a
+  speaker's turn ends, and Aura-2 speaks. It has no model that talks.
+- `OPENAI`: gpt-transcribe hears a recording, gpt-live-transcribe a call's
+  turns, gpt-4o-mini-tts speaks (its 24 kHz PCM made μ-law for a call), and
+  gpt-realtime-2.1 and its mini hear and speak in one stream (`talk`).
 
 ## Speaking and hearing
 
 - `speak({provider, key, text, voice?, format?})` answers the audio as it
   streams (`body`), its media type, and what it cost in `dollars`. `format` is
   `{encoding: 'mp3'}` (the default) or raw samples,
-  `{encoding: 'mulaw' |
-  'linear16', rate}`, which come without a container,
+  `{encoding: 'mulaw' | 'linear16', rate}`, which come without a container,
   ready for a phone call.
 - `hear({provider, key, audio, type})` answers a recording's `text`, its length
   in `seconds`, and `dollars`.
@@ -21,13 +25,25 @@ reads the environment.
   raw samples; `told.start()` fires when the speaker starts a turn (stop
   whatever is playing to them), `told.end(text)` when they finish one, and
   `told.lost(reason)` when the stream drops. `close()` answers the seconds heard
-  and their cost. `open` makes the socket, the platform's `WebSocket` offering
-  the key as its subprotocol by default.
-- `provider.voices` lists the voices it speaks in, each an `id` to pass as
-  `voice`, a `name` and a line on how it sounds (`about`).
-- `balance({provider, key})` is the credit left on the account, in dollars.
+  and their cost.
+- `talk({provider, key, format, instructions, tools?, model?, voice?, told})` is
+  a model that hears and speaks itself. `send` takes the caller's raw samples;
+  `told.audio(bytes)` is what to play them, `told.start()` and `told.stopped()`
+  mark their turn, `told.heard` and `told.said` are each side's words, and
+  `told.call(name, args)` answers a tool the model asked for with its output,
+  before it goes on. `say(text)` asks it to say something; `close()` answers the
+  seconds heard and what the stream cost. A provider without `talk` refuses.
+- A stream's `open(url, {authorization, protocols})` makes its socket: by
+  default the platform's `WebSocket`, offering the key as the provider's
+  subprotocols; a host whose sockets take headers sends `authorization`.
+- `provider.speak.voices` (and `provider.talk.voices`) list the voices it speaks
+  in, each an `id` to pass as `voice`, a `name` and how it sounds (`about`).
+- `balance({provider, key})` is the credit left on the account, in dollars, or
+  undefined where the provider does not say.
 - `spoken(provider, text)` and `heard(provider, seconds)` price speech before it
   is asked for.
+- `mulawed(from, to)` turns a stream of 16-bit PCM into μ-law at a lower rate;
+  `base64` and `unbase64` carry audio in JSON.
 
 A refusal rejects with `SpeechError`, carrying the provider's HTTP `status` and
 its words; `retry` is true for a 429, a 5xx, or no answer at all.

@@ -7,7 +7,7 @@ import { platform } from './directory-rows-probe.ts'
 import { stamp } from './directory.ts'
 import { endpoints } from './endpoints.ts'
 import { budget } from './meter.ts'
-import { sampled, speechDoor, unread } from './speech.ts'
+import { sampled, setupOf, speechDoor, unread } from './speech.ts'
 import type { Asked } from './apps.ts'
 
 let left = 199.5
@@ -24,6 +24,12 @@ let deepgram = endpoints(globalThis).open(async (req) => {
     voices.push(url.searchParams.get('model')!)
     return new Response(new Uint8Array([1, 2, 3]))
   }
+  // OpenAI's voice, which says who asked.
+  if (url.pathname == '/v1/audio/speech') {
+    let { voice } = await req.json()
+    voices.push(`${voice} ${req.headers.get('authorization')}`)
+    return new Response(new Uint8Array([4, 5]))
+  }
   await req.arrayBuffer()
   return Response.json({
     metadata: { duration: 120 },
@@ -34,6 +40,7 @@ let deepgram = endpoints(globalThis).open(async (req) => {
 let fixture = async (dollars = 1) => {
   let p = platform('speech', {
     DEEPGRAM_API_KEY: 'a-key',
+    OPENAI_VOICE_KEY: 'o-key',
     SPEECH_API: deepgram.url,
     SPEECH_FLOOR: '195',
   })
@@ -140,4 +147,41 @@ test('a voice’s sample is spoken once and kept for every space after', async (
     ),
     'Pick one of the voices listed.',
   )
+})
+
+test('text spoken in a voice of another provider goes to it, with its own key', async () => {
+  unread()
+  left = 199.5
+  voices = []
+  let { ask, space } = await fixture()
+  let spoke = await ask(
+    '/speech/speak',
+    '{"text":"Hello choir","voice":"cedar"}',
+    'text/json',
+  )
+  equal([...new Uint8Array(await spoke.arrayBuffer())], [4, 5])
+  equal(voices, ['cedar Bearer o-key'])
+  // 11 characters at OpenAI's $0.015 a thousand.
+  equal(budget(await space()).spent.toFixed(6), '0.000165')
+})
+
+test('an Operator’s setup: its voice names the provider, and its model whether that provider talks', () => {
+  let of = (voice?: string, voice_model?: string) => {
+    let { provider, ...rest } = setupOf({ voice, voice_model })
+    return { provider: provider.name, ...rest }
+  }
+  equal(of(), {
+    provider: 'deepgram',
+    voice: 'aura-2-draco-en',
+    model: 'claude-haiku-5-5',
+    talks: false,
+  })
+  equal(of('cedar', 'gpt-realtime-2.1-mini'), {
+    provider: 'openai',
+    voice: 'cedar',
+    model: 'gpt-realtime-2.1-mini',
+    talks: true,
+  })
+  equal(of('fable', 'claude-sonnet-5-5').talks, false)
+  equal(of('fable', 'gpt-realtime-2.1').voice, 'cedar')
 })

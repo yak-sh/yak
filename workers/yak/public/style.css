@@ -121,6 +121,11 @@
     overflow-y: auto;
   }
 
+  .Voices_Group {
+    margin-block-start: .75rem;
+    font-weight: 600;
+  }
+
   .Voices_Row {
     display: flex;
     align-items: center;
