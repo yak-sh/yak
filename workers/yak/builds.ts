@@ -31,15 +31,17 @@
 // never reports back leaves its commit not live, which the box's deploy
 // catch-up reports (NotLive, packages/admin/catchup.ts).
 //
-// A failed commit is one tracker bug, however many builds fail or whether
-// their logs can be read. A push's build names its commit in its event. A
-// deploy hook's build names none, in its event or its own record, so the
-// commit comes from whoever asked for it: the kernel notes the commit it
-// rebuilds on the build the hook started (`built{commit}`), and the log's
-// checked-out commit stands in when it can be read. A hook build with neither
-// is the deploy catch-up's, which builds main's head and reports that head
-// when it still is not live (catchup.ts `stuck`), so here it is a log line. A
-// build that fails after its bug was resolved brings the bug back.
+// A cause is one tracker bug, however many builds and commits it fails: the
+// failing step and the error its log names, or, when the log cannot be read,
+// why not. Each occurrence names the commit it built. A push's build names its
+// commit in its event. A deploy hook's build names none, in its event or its
+// own record, so the commit comes from whoever asked for it: the kernel notes
+// the commit it rebuilds on the build the hook started (`built{commit}`), and
+// the log's checked-out commit stands in when it can be read. A hook build
+// with neither is the deploy catch-up's, which builds main's head and reports
+// that head when it still is not live (catchup.ts `stuck`), so here it is a
+// log line. A build that fails after its bug was resolved brings the bug
+// back.
 //
 // The meta store holds the receipts that make each decision once (unseen.ts
 // `metaBreaks`): a failed build is noted as its own entity, and a commit's
@@ -92,8 +94,8 @@ export let broke = (b: Built) => {
     commit: commitHash || undefined,
     request: `BUILD ${worker} ${short}`,
     error: new BuildFailed(
-      `the Workers Build of ${worker} at ${short} (${branch ?? '?'}) ` +
-        `failed: ${commitMessage ?? ''}`.trim(),
+      `the Workers Build of ${worker} at ${short} (${branch ?? '?'}) failed` +
+        (commitMessage ? `: ${commitMessage}` : ''),
     ),
     tags: { worker, commit: commitHash, branch },
   }
@@ -318,8 +320,8 @@ export let logsOf = async (env: Env, uuid?: string) => {
 }
 
 /** Enrich one failure at the reporting boundary, leaving raw logs behind.
- * Its `cause` is the commit it built, from its event, the kernel's note or its
- * log, falling back to the build only when none names its commit. */
+ * It names the commit it built, from its event, the kernel's note or its log.
+ * Its `cause` is the failing step and its error, or why the log is unread. */
 export let diagnosed = async (
   env: Env,
   b: Broke,
@@ -333,7 +335,9 @@ export let diagnosed = async (
   let link = buildUrl(env, b)
   return {
     ...b,
-    cause: b.commit ?? b.build,
+    cause: typeof detail == 'string'
+      ? `log unread: ${detail}`
+      : `${detail.step}: ${detail.reason}`,
     error: new BuildFailed(
       `${b.error.message}. ${summary}. Build log: ${
         link ?? 'location unavailable'

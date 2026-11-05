@@ -1,6 +1,6 @@
-// A failed Workers Build of main is filed with its commit, unless it is its
-// commit's first failure and the build of it again started: then it is only
-// logged. Nothing else is filed or built again.
+// A failed Workers Build of main is filed under its cause, naming its commit,
+// unless it is its commit's first failure and the build of it again started:
+// then it is only logged. Nothing else is filed or built again.
 import { clock, test } from '@yaks/testing'
 import type { Bundle, Comp } from '@yaks/graph'
 import { Stale } from '@yaks/graph/errors'
@@ -405,7 +405,7 @@ let diagnoses = async (logs: Record<string, string>) => {
         e.payload!.buildUuid = uuid
         e.payload!.buildTriggerMetadata!.commitHash = `c${i}`
         let b = await diagnosed(env, broke(e)!)
-        return [b.cause, b.commit]
+        return [b.cause, b.commit, b.error.message]
       }),
     )
   } finally {
@@ -413,14 +413,25 @@ let diagnoses = async (logs: Record<string, string>) => {
   }
 }
 
-test('builds: different failed commits keep their own bugs', async () => {
-  let [first, second, third] = await diagnoses({
-    'build-1': 'error: TS2322 in report.ts:103',
-    'build-2': 'error: TS2322 in report.ts:105',
-    'build-3': 'the upload timed out',
+test('builds: one cause across commits is one bug, naming each commit', async () => {
+  let mkdtemp = 'error: Uncaught (in promise) Error: ENOENT: no such file or ' +
+    "directory, mkdtemp '/opt/buildhome/repo/workers/yak/.wrangler/sibling-X'"
+  let error = 'Uncaught (in promise) Error: ENOENT: no such file or ' +
+    "directory, mkdtemp 'workers/yak/.wrangler/sibling-X'"
+  let found = await diagnoses({
+    'build-1': mkdtemp,
+    'build-2': mkdtemp,
+    'build-3': 'error: TS2322 in report.ts:105',
   })
-  assertEquals([first[0], second[0], third[0]], ['c0', 'c1', 'c2'])
-  assertEquals([first[1], second[1], third[1]], ['c0', 'c1', 'c2'])
+  assertEquals(found.map(([cause]) => cause), [
+    `deno task check: ${error}`,
+    `deno task check: ${error}`,
+    'deno task check: TS2322 in report.ts:105',
+  ])
+  found.forEach(([cause, commit, message]) => {
+    assertStringIncludes(message!, `at ${commit} (main) failed`)
+    assertStringIncludes(message!, cause!.replace('deno task check: ', ''))
+  })
 })
 
 test('builds: the bundler diagnostic survives its wrapper errors', () => {
@@ -435,18 +446,21 @@ test('builds: the bundler diagnostic survives its wrapper errors', () => {
   )
 })
 
-test('builds: unreadable causes keep unrelated commits and hook builds apart', async () => {
+test('builds: unread logs are one cause, each failure naming its commit', async () => {
   let env = { CF_ACCOUNT: 'account' } as Env
   let first = event('failed'), second = event('failed')
   second.payload!.buildTriggerMetadata!.commitHash = 'another-commit'
   let reports = await Promise.all(
     [first, second, hooked()].map((e) => diagnosed(env, broke(e)!)),
   )
-  assertEquals(new Set(reports.map((r) => r.cause)).size, 3)
-  assertStringIncludes(reports[2].cause, 'build-2')
-  for (let r of reports) {
-    assertStringIncludes(r.error.message, 'BUILD_LOG_TOKEN unavailable')
-  }
+  assertEquals(
+    reports.map((r) => r.cause),
+    Array(3).fill('log unread: BUILD_LOG_TOKEN unavailable'),
+  )
+  assertEquals(
+    reports.map((r) => r.error.message.match(/ at (\S+) /)?.[1]),
+    ['191f7134', 'another-', 'unknown'],
+  )
 })
 
 // A push of one commit whose build fails, the kernel's rebuild of it
@@ -510,19 +524,25 @@ let reported = async (readable: boolean) => {
   }
 }
 
-test('builds: a rebuild with an unreadable log is filed under its commit', async () => {
+test('builds: a rebuild with an unreadable log is filed under why', async () => {
   let { rows, commit } = await reported(false)
   assertEquals(rows.length, 1)
   let [{ error, message }] = rows
-  assertEquals(error.fault, `build failed:yak:${commit}`)
+  assertEquals(
+    error.fault,
+    'build failed:yak:log unread: build logs returned HTTP 401',
+  )
   assertEquals(error.commit, commit)
   assertEquals(error.tags.commit, commit)
   assertStringIncludes(message, 'at 0b580211')
   assertStringIncludes(message, 'build logs returned HTTP 401')
 })
 
-test('builds: a readable log is quoted under the same commit key', async () => {
+test('builds: a readable log is filed under its error', async () => {
   let { rows, commit } = await reported(true)
-  assertEquals(rows.map((r) => r.error.fault), [`build failed:yak:${commit}`])
+  assertEquals(rows.map((r) => r.error.fault), [
+    'build failed:yak:Workers Builds setup: missing module',
+  ])
+  assertEquals(rows[0].error.commit, commit)
   assertStringIncludes(rows[0].message, 'error: missing module')
 })
