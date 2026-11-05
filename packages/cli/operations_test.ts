@@ -11,6 +11,7 @@ test('host operations answer through MCP without a CLI plugin', async () => {
     { process: false },
   )
   let calls: string[][] = []
+  let last = ''
   ok(
     host.anatomy().tools.some((t) =>
       t.name == 'restart' && t.package == '@yaks/cli'
@@ -19,7 +20,15 @@ test('host operations answer through MCP without a CLI plugin', async () => {
   let tools = operations(host, {
     runtimeDir: '/unused',
     roles: [{ unit: 'yak-test', old: ['yak-test@*.service'] }],
-    lock: () => Promise.resolve({ close() {} }),
+    lock: () =>
+      Promise.resolve({
+        read: () => Promise.resolve(last),
+        write: (text: string) => {
+          last = text
+          return Promise.resolve()
+        },
+        close() {},
+      }),
     ready: () => Promise.resolve(true),
     run: (_command, args) => {
       calls.push(args)
