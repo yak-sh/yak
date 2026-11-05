@@ -10,7 +10,7 @@ let html = await Deno.readTextFile(at('./public/index.html'))
 let code = await Deno.readTextFile(at('./public/wander.js'))
 
 let page = async (column = 144) => {
-  let { document, window } = parseHTML(html)
+  let { document, window, Event, CustomEvent } = parseHTML(html)
   let env = {
     scrollY: 0,
     innerWidth: 1440,
@@ -25,12 +25,17 @@ let page = async (column = 144) => {
     ({
       left: 120,
       right: 248,
+      width: 128,
+      height: 128,
       top: 150 - env.scrollY,
       bottom: 278 - env.scrollY,
     }) as DOMRect
   window.HTMLElement.prototype.getBoundingClientRect = () =>
     ({ width: 0 }) as DOMRect
   window.HTMLImageElement.prototype.decode = () => Promise.resolve()
+  Object.defineProperty(document, 'currentScript', {
+    value: { src: 'https://yaks.app/wander.js' },
+  })
   Object.assign(document, {
     fonts: { ready: Promise.resolve() },
     createRange: () => ({
@@ -51,6 +56,7 @@ let page = async (column = 144) => {
   })
   let scope = {
     document,
+    CustomEvent,
     window,
     NodeFilter: { SHOW_TEXT: 4, FILTER_ACCEPT: 1, FILTER_REJECT: 2 },
     matchMedia: () => ({ matches: false }),
@@ -94,13 +100,30 @@ let page = async (column = 144) => {
       : `${yak().style.transform} ${showing}`
   }
   await step(64)
-  return { step, scroll, where }
+  // at home his box is the slot's
+  let point = async (x: number, y: number) => {
+    yak().getBoundingClientRect = slot.getBoundingClientRect
+    env.on.pointermove({ clientX: x, clientY: y } as unknown as Event)
+    await step(16)
+  }
+  // the eye frame he shows over his rest frame, or none
+  let eyes = () => {
+    let look = yak().querySelector('[data-look] img') as HTMLElement | null
+    return look ? -parseInt(look.style.marginLeft) / 100 : 'none'
+  }
+  let asked: string[] = []
+  slot.querySelector('img[data-idle]')!.addEventListener(
+    'idle',
+    (e) => asked.push((e as CustomEvent).detail),
+  )
+  let click = () => yak().dispatchEvent(new Event('click'))
+  return { step, scroll, where, point, eyes, click, asked }
 }
 
 test('the home page draws the yak as its logo, and loads what moves him', async () => {
   let { document } = parseHTML(html)
   let logo = document.querySelector('.Hello [data-wander] img[data-idle]')!
-  assert(logo.getAttribute('srcset')!.includes('/mascot/idle-rest-128-3x.webp'))
+  assert(logo.getAttribute('srcset')!.includes('mascot/idle-rest-128-3x.webp'))
   for (let script of ['idle.js', 'wander.js']) {
     assert(document.querySelector(`script[src="${script}"]`))
   }
@@ -158,4 +181,31 @@ test('with no margin to walk in, he stays the logo', async () => {
   await p.scroll(1500)
   await p.step(3000)
   assertEquals(p.where(), 'home sitting')
+})
+
+test('at rest his eyes follow the pointer', async () => {
+  let p = await page()
+  // his eyes are a third of the way down his 128 px frame, at x 184, y 193
+  let looks = [
+    [184, 193, 0],
+    [184, 20, 1],
+    [400, 20, 2],
+    [400, 193, 3],
+    [400, 600, 4],
+    [184, 600, 5],
+    [0, 600, 6],
+    [0, 193, 7],
+    [0, 0, 8],
+    [190, 200, 0],
+  ]
+  for (let [x, y, frame] of looks) {
+    await p.point(x, y)
+    assertEquals(p.eyes(), frame, `${x}, ${y}`)
+  }
+})
+
+test('a click while he sits asks for his nose lick', async () => {
+  let p = await page()
+  p.click()
+  assertEquals(p.asked, ['lick'])
 })

@@ -11,13 +11,18 @@
 // strip is too narrow for him (a phone, a small window) he stays the logo,
 // and so he does for anyone who asks their system for less motion.
 //
+// At rest his eyes follow the pointer, drawn looking ahead or one of eight
+// ways (mascot/look-128.webp), and a click on him plays his nose lick.
+//
 // Every strip of frames is decoded before he first moves, and each one is a
 // layer of its own, shown or hidden whole, so no frame waits on a picture.
 {
   let slot = document.querySelector('[data-wander]')
   let still = slot?.querySelector('img')
   let calm = matchMedia('(prefers-reduced-motion: reduce)')
-  const STRIPS = ['down', 'up', 'plop'] // mascot/wander-<strip>-128.webp, six frames across
+  let base = document.currentScript.src
+  // mascot/<file>-128.webp and its frames across: his eyes, then his walks
+  const STRIPS = { look: 9, 'wander-down': 6, 'wander-up': 6, 'wander-plop': 6 }
   const FRAMES = 6
   const MIN = 72, PAD = 12 // his smallest size in the margin, and his room from the words, in css px
   const FIG = [.1, .87] // the share of his frame his figure spans across, tail swish included
@@ -80,17 +85,20 @@
     let yak = document.createElement('div')
     yak.className = 'Wander'
     yak.setAttribute('aria-hidden', 'true')
-    let strips = Object.fromEntries(STRIPS.map((name) => {
-      let span = document.createElement('span')
-      span.className = 'Wander_Strip'
-      let img = document.createElement('img')
-      let file = (d) => `/mascot/wander-${name}-128${d}.webp`
-      img.src = file('')
-      img.srcset = `${file('-1x')} 1x, ${file('')} 2x, ${file('-3x')} 3x`
-      img.alt = ''
-      span.append(img)
-      return [name, span]
-    }))
+    let strips = Object.fromEntries(
+      Object.entries(STRIPS).map(([name, n]) => {
+        let span = document.createElement('span')
+        span.className = 'Wander_Strip'
+        let img = document.createElement('img')
+        let file = (d) => new URL(`mascot/${name}-128${d}.webp`, base).href
+        img.src = file('')
+        img.srcset = `${file('-1x')} 1x, ${file('')} 2x, ${file('-3x')} 3x`
+        img.alt = ''
+        img.style.width = `${n * 100}%`
+        span.append(img)
+        return [name.replace('wander-', ''), span]
+      }),
+    )
     yak.append(still, ...Object.values(strips))
     slot.append(yak)
     await Promise.all(Object.values(strips).map((s) => s.firstChild.decode()))
@@ -118,6 +126,40 @@
       }
       if (layer != still) layer.firstChild.style.marginLeft = `${-100 * i}%`
     }
+
+    // His eyes: while his rest frame shows, the look layer covers it with
+    // the frame for where the pointer is: ahead when it is on his face or
+    // gone, else n, ne, e, se, s, sw, w or nw (look-128.webp's order).
+    let pointer = null
+    addEventListener('pointermove', (e) => pointer = [e.clientX, e.clientY], {
+      passive: true,
+    })
+    document.addEventListener('pointerout', (e) => {
+      if (!e.relatedTarget) pointer = null
+    })
+    let look = () => {
+      let eyes = strips.look
+      if (shown != still || still.src.startsWith('blob:')) {
+        return delete eyes.dataset.look
+      }
+      let i = 0
+      if (pointer) {
+        let r = yak.getBoundingClientRect()
+        let dx = pointer[0] - (r.left + r.width * .5)
+        let dy = pointer[1] - (r.top + r.height * .34)
+        if (Math.hypot(dx, dy) > r.width * .2) {
+          i = 1 + (Math.round(Math.atan2(dx, -dy) / (Math.PI / 4)) + 8) % 8
+        }
+      }
+      eyes.firstChild.style.marginLeft = `${-100 * i}%`
+      eyes.dataset.look = ''
+    }
+    // a click on him while he sits plays his nose lick (idle.js)
+    yak.addEventListener('click', () => {
+      if (shown == still) {
+        still.dispatchEvent(new CustomEvent('idle', { detail: 'lick' }))
+      }
+    })
 
     // where: 'home' (in the hero) or 'out' (in the margin)
     // act: 'sit', 'rise', 'walk', 'step' (into his place), 'plop'
@@ -154,6 +196,7 @@
 
     let tick = (now) => {
       requestAnimationFrame(tick)
+      look()
       let dt = Math.min(.05, (now - last) / 1000 || 0)
       last = now
       let quiet = now - scrolled > DELAY

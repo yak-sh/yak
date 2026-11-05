@@ -615,11 +615,13 @@
 
   /* The yak out in the margin is fixed in the window, above the page and
      never in the way of a click. Each of his pictures is a layer: the one
-     marked data-on shows, and a strip of frames shows one frame at a time. */
+     marked data-on shows, his eyes (data-look) over his rest frame, and a
+     strip of frames shows one frame at a time. */
   .Wander {
     position: relative;
     width: 100%;
     height: 100%;
+    cursor: pointer;
   }
 
   .Wander-out {
@@ -637,7 +639,8 @@
     visibility: hidden;
   }
 
-  .Wander > [data-on] {
+  .Wander > [data-on],
+  .Wander > [data-look] {
     visibility: visible;
   }
 
@@ -646,7 +649,6 @@
   }
 
   .Wander_Strip img {
-    width: 600%;
     max-width: none;
   }
 
