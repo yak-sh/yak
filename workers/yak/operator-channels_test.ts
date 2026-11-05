@@ -974,7 +974,8 @@ test('Pinnacle webhooks reach one Operator conversation and its replies and STOP
 })
 
 // A call's turn, as operator-calls.ts `asking` gives it: answered by the
-// model the Operator's calls are set to answer with.
+// model the Operator's calls are set to answer with, one its provider serves
+// (this Operator's `test-model` is OpenAI's by its name, operator.ts `usingOf`).
 let voiceAsks = asks.length
 let spoken = await receive(f.store, {
   space: f.space.eid,
@@ -983,7 +984,7 @@ let spoken = await receive(f.store, {
   address: '+12695550142',
   reply_to: '+18663141594',
   via: 'telnyx',
-  model: 'claude-haiku-5-5',
+  model: 'gpt-5-mini',
 }, 'Can you add a recipe to my recipe box?')
 await drain(f.store)
 
@@ -992,5 +993,5 @@ test("a call's turn reaches the Operator, answered by the call's model", async (
     title: 'Can you add a recipe to my recipe box?',
     body: 'Can you add a recipe to my recipe box?',
   })
-  assertEquals(asks.slice(voiceAsks).map((r) => r.model), ['claude-haiku-5-5'])
+  assertEquals(asks.slice(voiceAsks).map((r) => r.model), ['gpt-5-mini'])
 })
