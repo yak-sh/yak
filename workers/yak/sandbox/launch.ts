@@ -110,6 +110,7 @@ let args = (path: string) => [
   '--quiet',
   // Keep the lockfile without prefetching unrelated workspace packages.
   '--unstable-npm-lazy-caching',
+  '--node-modules-dir=none',
   '--allow-net',
   '--allow-env',
   '--allow-read',

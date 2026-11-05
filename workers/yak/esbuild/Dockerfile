@@ -12,7 +12,7 @@ FROM denoland/deno:debian-2.9.1
 
 WORKDIR /compiler
 COPY . .
-RUN deno cache --config deno.json compile.ts
+RUN deno install --prod --node-modules-dir=auto && deno cache --config deno.json compile.ts
 
 EXPOSE 8080
 CMD ["deno", "serve", "--allow-net", "--allow-read", "--allow-env", "--allow-run", "--allow-sys", "--port", "8080", "--config", "deno.json", "compile.ts"]
