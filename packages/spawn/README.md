@@ -26,8 +26,11 @@ yak session spawn T-123 --provider codex --model gpt-6.1-sol --effort high
 claim atomically and includes the task body in the request. With `worktrees`
 configured, each run has its own branch off main. Its final report becomes a
 comment on the task and a knock to the spawning session, delivered through the
-session bus that `yak session listen` reads. Dirty or unlanded work is kept;
-landed checkouts and their branches are removed after the run ends.
+session bus that `yak session listen` reads. A provider's subagents run in its
+process and stop when it ends (`claude -p` stops its background agents as its
+turn ends), so the report names each subagent whose transcript never settled,
+whatever the run's last words said. Dirty or unlanded work is kept; landed
+checkouts and their branches are removed after the run ends.
 
 Write a session and its first input in one transaction. A **bundle** is one
 entity's components as a JSON object, and a **batch** is a list of bundles

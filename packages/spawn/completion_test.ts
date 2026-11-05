@@ -78,8 +78,37 @@ let continuing = bare([
   ...rows,
   entry('continuation', 6, { using: {}, content: { body: 'Next step' } }),
 ])
-let name = async (g: typeof finished) =>
-  human(g.vocab)((await g.get(['child'], ['session']))[0])
+// Subagents the run started, as a provider's hooks record them: one still
+// mid-call, one interrupted as the run ended, one that finished.
+let kid = (eid: string, title: string, ...said: object[]): Bundle[] => [
+  {
+    entity: { eid },
+    session: {},
+    spawned: { parent: 'child' },
+    doc: { title },
+  },
+  ...said.map((comps, i) => ({
+    entity: { eid: `${eid}-${i}` },
+    entry: { session: eid, seq: i + 1 },
+    ...comps,
+  })),
+]
+let orphaning = bare([
+  ...rows,
+  ...kid('busy', 'Build the app', { content: { body: 'build it' } }, {
+    call: { to: 'Bash', args: {} },
+  }),
+  ...kid('cut', 'Wire texting', { content: { body: 'wire it' } }, {
+    stop: {},
+    content: { body: '[Request interrupted by user]' },
+  }),
+  ...kid('done', 'File the tasks', { content: { body: 'file them' } }, {
+    output: {},
+    content: { body: 'Filed.' },
+  }),
+])
+let name = async (g: typeof finished, eid = 'child') =>
+  human(g.vocab)((await g.get([eid], ['session']))[0])
 let delivered = bare(rows)
 await complete(delivered, 'child')
 let heard: string[] = []
@@ -118,6 +147,22 @@ test('a failed run reports its exit and preserves the last account of its work',
     (report.doc as { body: string }).body,
     `${await name(failure)} — exited 9\n\nFixed it; checks pass.`,
   )
+})
+
+test('a run that ends while its subagents are live names each one cut off', async () => {
+  await complete(orphaning, 'child')
+  let [report] = await orphaning.read('.comment.target=work&*')
+  equal(
+    (report.doc as { body: string }).body,
+    [
+      `${await name(orphaning)} — exited 0, 2 unfinished subagents`,
+      'Its subagents stopped with it, their work unfinished:\n' +
+      `- ${await name(orphaning, 'busy')} Build the app (running)\n` +
+      `- ${await name(orphaning, 'cut')} Wire texting (stopped)`,
+      'Fixed it; checks pass.',
+    ].join('\n\n'),
+  )
+  equal(report.knock, { target: 'parent' })
 })
 
 test('a run with no spoken output still reports its ending', async () => {

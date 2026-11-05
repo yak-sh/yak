@@ -1,17 +1,31 @@
 // An ended CLI run leaves its report on its task and a knock for whoever
 // started it. The knock is ordinary session-bus delivery, so listen, hooks
 // and native transcripts all hear the same receipt.
+//
+// A provider's subagents run inside its process, so they end when it does:
+// `claude -p` stops its background agents as its turn ends. A run's last words
+// can still say they are at work, so the receipt names each one that never
+// settled, from its own transcript.
 import type { Bundle, Comp, Graph } from '@yaks/graph'
 import { derivedEid } from '@yaks/graph/identity'
 import { Stale } from '@yaks/graph/errors'
 import { signed } from '@yaks/graph/provenance'
 import { argsOf } from '@yaks/graph/call'
 import { human } from '@yaks/id'
-import { cleanEnd, ordered, parked, speaking, textOf } from '@yaks/session'
+import {
+  children,
+  cleanEnd,
+  ordered,
+  parked,
+  speaking,
+  statusOf,
+  textOf,
+} from '@yaks/session'
 
 let comp = (b: Bundle | undefined, name: string) =>
   b?.[name] as Comp | undefined
 let str = (v: unknown): string => v == null ? '' : String(v)
+let s = (n: number) => n == 1 ? '' : 's'
 
 /** The account a session wrote, otherwise its last spoken output. Tool
  * results and private reasoning are never the report of its work. */
@@ -23,6 +37,20 @@ export let reportOf = (row: Bundle | undefined, entries: Bundle[]): string => {
   ).at(-1)
   let failure = entries.filter((b) => b.stop && b.content).at(-1)
   return spoken || failure ? textOf((spoken ?? failure)!) : ''
+}
+
+/** The subagents a run started that did not settle before it ended, each
+ * with its title and the status its entries leave. */
+export let unfinished = async (
+  g: Graph,
+  session: string,
+): Promise<{ row: Bundle; status: string }[]> => {
+  let kids = await children(g, session)
+  let said = await Promise.all(kids.map(async (row) => ({
+    row,
+    status: statusOf(await g.read(`.entry.session=${row.entity.eid}&*`)),
+  })))
+  return said.filter(({ status }) => status != 'settled')
 }
 
 /** Publish one completion per ended run. A parked run still owes work and
@@ -57,8 +85,19 @@ export let complete = async (g: Graph, session: string): Promise<void> => {
   let [owner] = parent ? await g.get([parent], ['session']) : []
   let notify = owner?.session && g.vocab.comp('knock') ? parent : ''
   if (!tasks.length && !notify) return
-  let title = `${human(g.vocab)(row)} — exited ${str(comp(row, 'exit')?.code)}`
-  let body = [title, reportOf(row, entries)].filter(Boolean).join('\n\n')
+  let name = human(g.vocab)
+  let cut = await unfinished(g, session)
+  let title = `${name(row)} — exited ${str(comp(row, 'exit')?.code)}` +
+    (cut.length ? `, ${cut.length} unfinished subagent${s(cut.length)}` : '')
+  let line = ({ row, status }: { row: Bundle; status: string }) =>
+    `- ${name(row)} ${str(comp(row, 'doc')?.title)} (${status})`
+  let stopped = cut.length
+    ? `Its subagents stopped with it, their work unfinished:\n${
+      cut.map(line).join('\n')
+    }`
+    : ''
+  let body = [title, stopped, reportOf(row, entries)].filter(Boolean)
+    .join('\n\n')
   let reports = tasks.length ? tasks : ['']
   let actor = await speaking(g, row)
   for (let target of reports) {
