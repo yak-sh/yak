@@ -56,7 +56,6 @@ export let ROOTS = [
   'bin',
   'packages',
   'workers',
-  'homepage-concepts',
 ]
 
 /** The module cache this process runs on: DENO_DIR where the environment
