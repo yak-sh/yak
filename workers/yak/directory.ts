@@ -2131,21 +2131,26 @@ export let directoryRows = (rows: {
     // always works in one space, and a person only ever sees their own.
     all: async (): Promise<Space[]> =>
       (await query(`.space&${SPACE_ABOUT}`)).map(spaceOf),
-    // Every person, space, app and seat there is, each row whole with when it
-    // was made and last used: the platform admin's directory (admin.ts), and
-    // nothing else, asks this. Fresh, since the admin opens it to see what is.
+    // Every person, space, app, seat and invite there is, each row whole with
+    // when it was made and last used: the platform admin's directory
+    // (admin.ts), and nothing else, asks this. Fresh, since the admin opens it
+    // to see what is. A person says the number they text from and which space
+    // their starter went to.
     census: async () => {
       let stamps = '?created&?used'
-      let [people, spaces, apps, seats, deploys] = await Promise.all([
-        query(`.person&?doc&?email&?signed_in&${stamps}`),
-        // A row's days ride only here: every other read of a row does without.
-        query(`.space&${SPACE_ABOUT}&?trend&${stamps}`),
-        query(`.app&${ABOUT}&?trend&${stamps}&?changed&?errored`),
-        query('.member'),
-        // Only which app and when: a release's whole row is its file list.
-        query('.deploy&.fields=deploy.app,created.at'),
-      ])
-      return { people, spaces, apps, seats, deploys }
+      let [people, spaces, apps, seats, deploys, referrals] = await Promise
+        .all([
+          query(`.person&?doc&?email&?phone&?signed_in&?started&${stamps}`),
+          // A row's days ride only here: every other read of a row does
+          // without.
+          query(`.space&${SPACE_ABOUT}&?trend&${stamps}`),
+          query(`.app&${ABOUT}&?trend&${stamps}&?changed&?errored`),
+          query('.member'),
+          // Only which app and when: a release's whole row is its file list.
+          query('.deploy&.fields=deploy.app,created.at'),
+          query('.referral&?rewarded&?created'),
+        ])
+      return { people, spaces, apps, seats, deploys, referrals }
     },
     // The app that answers the space's bare hostname, if it has one: the one
     // in this space wearing `home` (T-34227). At most one does — `homing`

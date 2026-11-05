@@ -4,12 +4,14 @@
 // storage and apps of the spaces they own, and when they were last active; a
 // space's says its own spend, storage, apps and latest use; an app's, its
 // requests, visits, storage, version, owners, last deploy, last write to its
-// store, last error and latest use. Each opens to a page of its own.
+// store, last error and latest use. Each opens to a page of its own. The
+// Invites page says who signed up through whose invite and the month each
+// first app gave, and who was given the starter and when.
 //
 // Only an owner of the `yak` space sees it, signed in by the platform's
 // session cookie (`staff`); anybody else is told nothing is here, and an
 // agent reads the same rows through `yak admin query yak/platform`. It only
-// reads: five directory reads a page, one trip together, nothing written and
+// reads: six directory reads a page, one trip together, nothing written and
 // no socket, so an open tab costs the directory nothing. What a row says is
 // kept on the rows as the app changes (used.ts, usage.ts), so no store, tracker
 // or analytics read waits under a list.
@@ -35,7 +37,7 @@ import {
   type Space,
   spaceOf,
 } from './directory.ts'
-import { budget, monthOf } from './meter.ts'
+import { budget, monthOf, starterOf } from './meter.ts'
 import { isTestAddress } from './lib/bots.ts'
 import { sessionAt } from './session.ts'
 import { drawn } from './render/mod.ts'
@@ -275,6 +277,85 @@ let rows = (d: Reading, all: Row[]) =>
 let grouped = (d: Reading, title: string, all: Row[]) =>
   all.length ? `<h2 class="Group">${esc(title)}</h2>${rows(d, all)}` : ''
 
+// A person a row points at, by name, or said gone once erased.
+let personRef = (d: Reading, eid: string): Ref => {
+  let r = d.census.people.find((p) => p.entity.eid == eid)
+  return r ? refOf(d, r) : { eid, name: 'Someone gone' }
+}
+let newest = (rows: Row[], at: (r: Row) => string) =>
+  [...rows].sort((a, b) => at(b).localeCompare(at(a)))
+
+// Who signed up through somebody's invite (referral.ts), newest first; with
+// tests asked for, those between test accounts too.
+let invited = (d: Reading) =>
+  newest(
+    d.census.referrals.filter((r) =>
+      d.tests || [r.referral!.invitee, r.referral!.inviter]
+        .every((p) => !d.uses.get(idOf(p))?.test)
+    ),
+    (r) => r.created?.at ?? '',
+  )
+let referrals = (d: Reading, all: Row[]) =>
+  `<ul class="Card Directory">${
+    all.map((r) =>
+      `<li>${
+        drawn(r, 'Directory.List.Tile', {
+          base: PATH,
+          invitee: personRef(d, idOf(r.referral!.invitee)),
+          inviter: personRef(d, idOf(r.referral!.inviter)),
+          space: r.rewarded ? slugOf(d, idOf(r.rewarded.space)) : '',
+        })
+      }</li>`
+    ).join('')
+  }</ul>`
+
+// Everybody given the starter (meter.ts `STARTER`), newest first: when their
+// first space was made, what of it is left and what their spaces spent.
+let starters = (d: Reading) => {
+  let made = new Map(
+    d.census.spaces.map((r) => [r.entity.eid, r.created?.at ?? '']),
+  )
+  let given = (r: Row) => made.get(idOf(r.started!.space!)) ?? ''
+  let all = newest(
+    shown(d, d.census.people.filter((r) => r.started?.space)),
+    given,
+  )
+  return all.length
+    ? `<ul class="Card Directory">${
+      all.map((r) => {
+        let space = d.spaces.get(idOf(r.started!.space!))
+        return `<li>${
+          drawn(r, 'Directory.Starter.Tile', {
+            base: PATH,
+            uses: d.uses.get(r.entity.eid),
+            at: given(r),
+            space: space?.slug ?? '',
+            left: space ? starterOf(space) : 0,
+          })
+        }</li>`
+      }).join('')
+    }</ul>`
+    : '<section class="Empty"><h2>Nobody has been given the starter yet</h2></section>'
+}
+
+// Who invited whom and the month each first app gave, then everybody given
+// the starter. Inviting yourself and making accounts for the starter are
+// against the terms, and are watched here rather than refused anywhere
+// (D-136811, 'Invites').
+let invitesPage = (d: Reading) => {
+  let all = invited(d)
+  return desk(
+    d,
+    'Invites',
+    'invites',
+    `<h2 class="Group">Signed up through an invite</h2>${
+      all.length
+        ? referrals(d, all)
+        : '<section class="Empty"><h2>Nobody has signed up through an invite yet</h2></section>'
+    }<h2 class="Group">Given the starter</h2>${starters(d)}`,
+  )
+}
+
 let lists = (c: Census): Record<List, Row[]> => ({
   people: c.people,
   spaces: c.spaces,
@@ -282,28 +363,31 @@ let lists = (c: Census): Record<List, Row[]> => ({
 })
 let tested = (d: Reading) => d.tests ? '?tests=1' : ''
 
-// The desk: the three lists down the side, each with how many it holds, and
-// the funnel below them.
+// The desk: the three lists down the side, each with how many it holds, the
+// funnel below them, and the invites with how many signed up through one.
 let desk = (
   d: Reading,
   title: string,
-  current: List | 'funnel' | null,
+  current: List | 'funnel' | 'invites' | null,
   body: string,
   kicker = '',
   status = 200,
 ) => {
   let all = lists(d.census)
+  let at = (key: string) => current == key ? ' aria-current="page"' : ''
+  let counted = (n: number) => `<span class="Desk_Count">${n}</span>`
   let nav =
     KEYS.map((key) =>
-      `<a href="${PATH}/${key}${tested(d)}"${
-        current == key ? ' aria-current="page"' : ''
-      }>${icon(LISTS[key].icon)}${LISTS[key].title}<span class="Desk_Count">${
-        shown(d, all[key]).length
-      }</span></a>`
+      `<a href="${PATH}/${key}${tested(d)}"${at(key)}>${icon(LISTS[key].icon)}${
+        LISTS[key].title
+      }${counted(shown(d, all[key]).length)}</a>`
     ).join('') +
-    `<a href="${PATH}/funnel"${
-      current == 'funnel' ? ' aria-current="page"' : ''
-    }>${icon('chart-no-axes-column-increasing')}Funnel</a>`
+    `<a href="${PATH}/funnel"${at('funnel')}>${
+      icon('chart-no-axes-column-increasing')
+    }Funnel</a>` +
+    `<a href="${PATH}/invites${tested(d)}"${at('invites')}>${
+      icon('qr-code')
+    }Invites${counted(invited(d).length)}</a>`
   return shell(
     d.env,
     esc(title),
@@ -370,10 +454,16 @@ let page = async (d: Reading, dir: Directory, r: Row, env: Env) => {
       seats.filter((s) => s.member!.role == role)
         .flatMap((s) => byId(seatSpace(s)) ?? [])
     let owns = new Set(held('owner').map((s) => s.entity.eid))
+    let brought = invited(d).filter((i) =>
+      idOf(i.referral!.inviter) == r.entity.eid
+    )
     more = grouped(d, 'Owner of', held('owner')) +
       grouped(d, 'Editor of', held('editor')) +
       grouped(d, 'Viewer of', held('viewer')) +
-      grouped(d, 'Apps', c.apps.filter((a) => owns.has(appSpace(a))))
+      grouped(d, 'Apps', c.apps.filter((a) => owns.has(appSpace(a)))) +
+      (brought.length
+        ? `<h2 class="Group">Invited</h2>${referrals(d, brought)}`
+        : '')
   }
   if (r.space) {
     let seats = c.seats.filter((s) => seatSpace(s) == r.entity.eid)
@@ -574,6 +664,7 @@ export let answer = async (
   }
   let d = read(env, await dir.census(), asked.searchParams.has('tests'))
   if (isList(rest)) return list(d, rest, asked.searchParams.get('q') ?? '')
+  if (rest == 'invites') return invitesPage(d)
   if (rest == 'funnel') {
     let days = Number(asked.searchParams.get('days')) || 7
     let f = await funnel(env, days).catch((e) => {

@@ -2,6 +2,7 @@
 // the whole directory, and the door that draws it for the admin alone.
 import { test } from '@yaks/testing'
 import { assertEquals, assertStringIncludes } from '@std/assert'
+import { parseHTML } from 'linkedom'
 import { answer, type Census, uses } from './admin.ts'
 import {
   type Directory,
@@ -9,12 +10,14 @@ import {
   fetch as directoryFetch,
   META,
   type Meter,
+  type Row,
   type Space,
 } from './directory.ts'
 import { analytics, platform } from './testing.ts'
 import type { Env } from './env.ts'
 import { COOKIE, sign } from './lib/token.ts'
 import { drawn } from './render/mod.ts'
+import { referralEid } from './referral.ts'
 
 let ROOT = { eid: 'meta', slug: META.space } as Space
 let SECRET = 'secret'
@@ -24,6 +27,7 @@ let EMPTY: Census = {
   apps: [],
   seats: [],
   deploys: [],
+  referrals: [],
 }
 // Sessions as the sign-in mints them, made once.
 let SIGNED_IN = Object.fromEntries(
@@ -253,10 +257,17 @@ test("the admin's people list shows who a search finds", async () => {
   assertStringIncludes(await found.text(), 'ann@x.com')
 })
 
-test('the census reads which app each release is of and when, never its files', async () => {
+test('the census reads which app each release is of and when, never its files, and who invited whom', async () => {
   await using p = platform('census deploys')
   let dir = directory({ fetch: (r) => directoryFetch(r, p.env) })
   let space = await dir.own('census-owner', 'census-deploys')
+  let invitee = crypto.randomUUID()
+  await dir.stamp({
+    entities: [{ entity: { eid: invitee }, person: {} }, {
+      entity: { eid: referralEid(invitee) },
+      referral: { inviter: 'census-owner', invitee },
+    }],
+  })
   await dir.apply({
     entities: [
       {
@@ -274,10 +285,17 @@ test('the census reads which app each release is of and when, never its files', 
       },
     ],
   })
-  let { deploys } = await dir.census()
+  let { deploys, people, referrals } = await dir.census()
   let [row] = deploys
   assertEquals([deploys.length, row.deploy], [1, { app: 'census-app' }])
   assertEquals(typeof row.created?.at, 'string')
+  // The owner was given the starter with their first space, and invited one.
+  let owner = people.find((r) => r.entity.eid == 'census-owner')
+  assertEquals(owner?.started, { space: space.eid })
+  assertEquals(
+    referrals.map((r) => [r.referral, typeof r.created?.at]),
+    [[{ inviter: 'census-owner', invitee }, 'string']],
+  )
 })
 
 test("a row's figures carry their days, and a person's are their spaces' added", () => {
@@ -342,4 +360,142 @@ test("the admin's funnel shows each step's count", async () => {
   } finally {
     sql.done()
   }
+})
+
+// Jeff invited Ana, who built and gave his space a month, Bo, who signed up
+// by text and hasn't built, and a probe account. Dee pays through Stripe, so
+// Eve's first app moved her charge. Jeff and Bo were each given the starter.
+let on = (day: string) => `2026-10-${day}T12:00:00.000Z`
+let someone = (eid: string, name: string, more: Partial<Row> = {}): Row => ({
+  entity: { eid },
+  person: {},
+  doc: { title: name },
+  email: { address: `${eid}@x.com` },
+  ...more,
+})
+let invite = (
+  inviter: string,
+  invitee: string,
+  day: string,
+  rewarded?: NonNullable<Row['rewarded']>,
+): Row => ({
+  entity: { eid: `${inviter}-${invitee}` },
+  referral: { inviter, invitee },
+  created: { at: on(day) },
+  ...rewarded ? { rewarded } : {},
+})
+let made = (eid: string, slug: string, day?: string): Row => ({
+  entity: { eid },
+  space: { slug },
+  ...day ? { created: { at: on(day) } } : {},
+})
+let inviting = {
+  ...EMPTY,
+  people: [
+    someone('jeff', 'Jeff', { started: { space: 'jhome' } }),
+    someone('ana', 'Ana'),
+    someone('bo', 'Bo', {
+      email: undefined,
+      phone: { number: '+12695550177' },
+      started: { space: 'bhome' },
+    }),
+    someone('probe', 'Probe', { email: { address: 'probe@bot.yak.sh' } }),
+    someone('dee', 'Dee'),
+    someone('eve', 'Eve'),
+  ],
+  spaces: [made('jhome', 'jeff', '01'), made('bhome', 'bo', '03'), {
+    ...made('dhome', 'dee'),
+    plan: { tier: 'plus' },
+  }],
+  referrals: [
+    invite('jeff', 'ana', '02', {
+      at: on('05'),
+      space: 'jhome',
+      until: '2026-11-05T12:00:00.000Z',
+    }),
+    invite('jeff', 'bo', '03'),
+    invite('jeff', 'probe', '04'),
+    invite('dee', 'eve', '06', {
+      at: on('07'),
+      space: 'dhome',
+      until: '2026-12-01T12:00:00.000Z',
+      subscription: 'sub_dee',
+    }),
+  ],
+} as Census
+let admin = { ...dir, census: () => Promise.resolve(inviting) } as Directory
+// A page as the admin reads it: which side link is current, and each row
+// under a heading, where it opens, its name, the line under it, its tags and
+// its figures.
+let page = async (path: string) => {
+  let [req, , at] = asking(path, 'root')
+  let { document } = parseHTML(
+    await (await answer(req, env, at, admin))!.text(),
+  )
+  let tiles = (heading: string) => {
+    let group = [...document.querySelectorAll('h2.Group')]
+      .find((h) => h.textContent == heading)
+    return [
+      ...group?.nextElementSibling?.querySelectorAll('.Directory_Row') ?? [],
+    ].map((row) => [
+      row.querySelector('.Directory_Open')?.getAttribute('href'),
+      row.querySelector('strong')?.textContent,
+      row.querySelector('.Directory_Sub')?.textContent,
+      ...[...row.querySelectorAll('.Apps_Tag, .Directory_Uses dd')]
+        .map((t) => t.textContent),
+    ])
+  }
+  return {
+    current: document.querySelector('[aria-current="page"]')?.textContent,
+    signedUp: tiles('Signed up through an invite'),
+    starters: tiles('Given the starter'),
+    invited: tiles('Invited'),
+  }
+}
+let invites = await page('/admin/invites')
+let jeffs = await page('/admin/jeff')
+
+test("the admin's Invites page says who invited whom, when, and the month each first app gave", () => {
+  assertEquals(invites.current, 'Invites3')
+  assertEquals(invites.signedUp, [
+    [
+      '/admin/eve',
+      'Eve',
+      'invited by Dee',
+      'charge moved',
+      '6 Oct 2026',
+      '7 Oct 2026',
+      'dee',
+      '1 Dec 2026',
+    ],
+    ['/admin/bo', 'Bo', 'invited by Jeff', '3 Oct 2026', 'not yet', '', ''],
+    [
+      '/admin/ana',
+      'Ana',
+      'invited by Jeff',
+      '2 Oct 2026',
+      '5 Oct 2026',
+      'jeff',
+      '5 Nov 2026',
+    ],
+  ])
+})
+
+test("the admin's Invites page says who was given the starter, when and to which space", () => {
+  assertEquals(invites.starters, [
+    ['/admin/bo', 'Bo', '+12695550177', '3 Oct 2026', 'bo', '$100.00', '$0.00'],
+    [
+      '/admin/jeff',
+      'Jeff',
+      'jeff@x.com',
+      '1 Oct 2026',
+      'jeff',
+      '$100.00',
+      '$0.00',
+    ],
+  ])
+})
+
+test("an inviter's page lists whom they invited", () => {
+  assertEquals(jeffs.invited.map(([, name]) => name), ['Bo', 'Ana'])
 })

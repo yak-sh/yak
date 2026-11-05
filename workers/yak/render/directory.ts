@@ -4,6 +4,8 @@
 // the whole directory by the page (admin.ts `uses`) and rides as context,
 // since a space's apps and a person's budget are other rows. So do the names
 // of what it points at: a reference is drawn by name and links to its page.
+// The Invites page draws an invite somebody signed up with, and a person
+// given the starter, as rows of the same shape.
 
 import { parse } from '@yaks/query'
 import { type Days, sparkline } from '@yaks/ui/chart'
@@ -158,8 +160,10 @@ let facts = <N>(h: H<N>, all: [string, Child<N>][]) =>
 
 let personOf = (b: Record<string, unknown>) => {
   let email = str((b.email as Comp)?.address)
+  let phone = str((b.phone as Comp)?.number)
   return {
     email,
+    phone,
     name: str((b.doc as Comp)?.title) || email.split('@')[0] || 'Someone',
   }
 }
@@ -170,12 +174,20 @@ let person: Renderer = {
   render: (b, h, ctx) => {
     let u = uses(ctx)
     let p = personOf(b)
-    return row(h, ctx, b.entity.eid, p.name, p.email, tags(h, b, u), [
-      ['Spent this month', trended(h, spend(u.spend), u.spending)],
-      ['Storage', size(u.storage ?? 0)],
-      ['Apps', count(u.apps ?? 0)],
-      ['Last active', when(u.active, 'short')],
-    ])
+    return row(
+      h,
+      ctx,
+      b.entity.eid,
+      p.name,
+      p.email || p.phone,
+      tags(h, b, u),
+      [
+        ['Spent this month', trended(h, spend(u.spend), u.spending)],
+        ['Storage', size(u.storage ?? 0)],
+        ['Apps', count(u.apps ?? 0)],
+        ['Last active', when(u.active, 'short')],
+      ],
+    )
   },
 }
 
@@ -244,6 +256,60 @@ let app: Renderer = {
 let stamp = (b: Record<string, unknown>, comp: string) =>
   str((b[comp] as Comp)?.at)
 
+// Somebody who signed up through an invite (referral.ts), drawn on the
+// admin's Invites page: who invited them and when, and the month their first
+// app gave (reward.ts), to which space and through when, a space Stripe bills
+// having had its next charge moved. The row opens the person invited.
+let referral: Renderer = {
+  view: 'Directory.List.Tile',
+  match: parse('.referral'),
+  render: (b, h, ctx) => {
+    let invitee = ctx.invitee as Ref, inviter = ctx.inviter as Ref
+    let given = b.rewarded as Comp
+    return row(
+      h,
+      ctx,
+      invitee.eid,
+      invitee.name,
+      `invited by ${inviter.name}`,
+      [given?.subscription ? tag(h, 'charge moved') : null],
+      [
+        ['Signed up', when(stamp(b, 'created'), 'short')],
+        ['First app', given ? when(str(given.at), 'short') : 'not yet'],
+        ['Month to', given ? str(ctx.space) || 'a space gone' : ''],
+        ['Free through', given ? when(str(given.until), 'short') : ''],
+      ],
+    )
+  },
+}
+
+// Somebody given the starter (meter.ts `STARTER`), drawn on the admin's
+// Invites page: when, to which space, what of it is left and what their
+// spaces spent this month.
+let starter: Renderer = {
+  view: 'Directory.Starter.Tile',
+  match: parse('.started'),
+  render: (b, h, ctx) => {
+    let u = uses(ctx)
+    let p = personOf(b)
+    let at = str(ctx.at)
+    return row(
+      h,
+      ctx,
+      b.entity.eid,
+      p.name,
+      p.email || p.phone,
+      tags(h, b, u),
+      [
+        ['Given', at ? day(at, 'short') : 'unknown'],
+        ['Space', str(ctx.space) || 'gone'],
+        ['Starter left', dollars(num(ctx.left))],
+        ['Spent this month', trended(h, spend(u.spend), u.spending)],
+      ],
+    )
+  },
+}
+
 let personPage: Renderer = {
   view: 'Directory.Page',
   match: parse('.person'),
@@ -253,6 +319,7 @@ let personPage: Renderer = {
     let signed = b.signed_in as Comp
     return facts(h, [
       ['Email', p.email],
+      ['Phone', p.phone],
       ['Joined', day(stamp(b, 'created'))],
       [
         'Signed in',
@@ -357,4 +424,13 @@ let appPage: Renderer = {
   },
 }
 
-export let directory = [person, space, app, personPage, spacePage, appPage]
+export let directory = [
+  person,
+  space,
+  app,
+  referral,
+  starter,
+  personPage,
+  spacePage,
+  appPage,
+]
