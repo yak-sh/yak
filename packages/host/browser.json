@@ -1,0 +1,13 @@
+{
+  "_": "Browser exports checked with web globals by deno task check:browser. Resolution comes from the npm workspace.",
+  "compilerOptions": {
+    "lib": [
+      "dom",
+      "es2023"
+    ],
+    "strict": true
+  },
+  "entries": [
+    "./assembly"
+  ]
+}

@@ -4,7 +4,8 @@
 // command line typed into it.
 import { type Bundle, type Comp, graph, mint, type Plugin } from '@yaks/graph'
 import { type Phase, PHASES } from '@yaks/graph/plugin'
-import { assembly, type Config, type Load } from '@yaks/host'
+import { assembly } from '@yaks/host/assembly'
+import type { Config, Load } from '@yaks/host'
 import { memoryBlobs } from '@yaks/blob/store'
 import { ramVault } from '@yaks/secrets/vault'
 import { ram } from '@yaks/ram'
