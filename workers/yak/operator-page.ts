@@ -37,6 +37,7 @@ import {
   type Worked,
 } from './operator-view.ts'
 import { DOCUMENTS } from './documents.ts'
+import { settings } from './phone-providers.ts'
 
 // What the message box takes: up to COUNT files at a time, each up to SIZE
 // (keepFile's ceiling), and the kinds the Operator reads (operator-channels.ts
@@ -49,15 +50,25 @@ let READ = ['image/*', 'text/*', ...DOCUMENTS.map((d) => '.' + d)].join(',')
 let shown = (number: string) =>
   number.replace(/^\+1(\d{3})(\d{3})(\d{4})$/, '$1-$2-$3')
 
-// Where a person agrees to texts from the operator, or stops them.
-export let textsCard = (at: string, consent: Texting | null) =>
+// Where a person agrees to texts from the operator, or stops them. `from` is
+// the number the Operator texts from (`settings(env, space.sender).number`),
+// read from configuration, so the card names it with no call to the provider.
+export let textsCard = (
+  at: string,
+  consent: Texting | null,
+  from?: string,
+) =>
   `<form class="Card Form" id="texts" method="post" action="${at}?texts=1">
 <h2 class="Card_Title">Text messages</h2>
 <p>Text your Operator about anything, and it answers by text. It also texts you when it finishes a change, needs an answer from you, or something about your space needs you, and apps you build can text you reminders. You can still use chat and email.</p>${
     consent
       ? `<p>Texts go to <b>${
         esc(shown(consent.number))
-      }</b>; to text your Operator, reply to the number your welcome text came from. You agreed on ${
+      }</b>; to text your Operator, ${
+        from
+          ? `text <a href="sms:${esc(from)}">${esc(shown(from))}</a>`
+          : 'reply to the number your welcome text came from'
+      }. You agreed on ${
         esc(new Date(consent.at).toLocaleDateString('en-US', {
           dateStyle: 'long',
           timeZone: 'UTC',
@@ -419,7 +430,7 @@ export let operatorBody = async (env: Env, space: Space, who: Who) => {
   } answers by email.</p></section>
 ${talks(space.slug)}
 ${nameCard(at, space.operator)}
-${textsCard(at, consent)}
+${textsCard(at, consent, settings(env, space.sender).number)}
 ${settingsScript}`
 }
 
