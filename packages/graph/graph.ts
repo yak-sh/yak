@@ -99,6 +99,7 @@ import { cascade } from './cascade.ts'
 import {
   actorOf,
   births,
+  editing,
   marks,
   provenance,
   signed,
@@ -607,13 +608,14 @@ export let graph = (opts: Options): Graph => {
   }
 
   // The singletons a rule may bind with `#Name`: each plugin's, then this
-  // graph's own three, which take precedence — nothing a plugin registers can
+  // graph's own, which take precedence — nothing a plugin registers can
   // change the transaction's timestamp or its actor out from under the stamps.
   let resourced = (now: () => string): Record<string, Resource> => ({
     ...plugins.some((p) => p.resources)
       ? registry(plugins.map((p) => p.resources))
       : {},
     Vocab: () => vocab,
+    Edits: (tick) => editing(tick.bundles, vocab),
     Now: () => stands({ at: now() }),
     // A copy, so a rule cannot mutate the batch's own `$actor`.
     Actor: (tick) => {

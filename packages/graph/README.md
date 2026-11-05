@@ -1058,7 +1058,8 @@ rules in that phase see the same state before their output is written.
 
 A **resource** is a singleton built from the phase context and bound by `#Name`
 (`Resource`). A resource is built only when requested; its name must start with
-a capital letter. The graph supplies `#Vocab`, `#Now`, and `#Actor`. `stands()`
+a capital letter. The graph supplies `#Vocab`, `#Now`, `#Actor`, and `#Edits`
+(the set of entity ids whose patches write content beyond marks). `stands()`
 gives a resource the value it writes into a property. Resources are read-only
 and cannot appear on the value side of a match comparison: read them in `run()`.
 
@@ -1416,14 +1417,15 @@ equal(proseOf(vocab, { kind: 'book' }).startsWith('# book'), true)
 
 ## Stamps and actors
 
-The `stamp` phase fills `created` once, `updated` on subsequent writes, and
-[marks](../vocab/README.md#vocabulary) when first written. These components must
-be declared in the vocabulary. `now` or `clock` supplies the timestamp;
-`graph({ provenance })` can choose per-entity attribution while retaining the
-stamp mechanism. `graph({ provenance: false })` leaves `created` and `updated`
-to another graph while still stamping marks. Trusted writes with `stamp: false`
-skip core stamps and marks, while plugin rules, hooks, validation, journaling,
-and effects still run.
+The `stamp` phase fills `created` once, `updated` on subsequent content edits,
+and [marks](../vocab/README.md#vocabulary) when first written. Adding or
+removing only marks preserves `updated`: each mark records its own event. These
+components must be declared in the vocabulary. `now` or `clock` supplies the
+timestamp; `graph({ provenance })` can choose per-entity attribution while
+retaining the stamp mechanism. `graph({ provenance: false })` leaves `created`
+and `updated` to another graph while still stamping marks. Trusted writes with
+`stamp: false` skip core stamps and marks, while plugin rules, hooks,
+validation, journaling, and effects still run.
 
 ```ts
 import { graph, signed } from '@yaks/graph'

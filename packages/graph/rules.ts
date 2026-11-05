@@ -172,7 +172,7 @@ export let registry = (
  * applied — plus the resources its `#names` referred to, under those names.
  * There is nothing else; a rule reads only what it declared.
  *
- * The three resources @yaks/graph provides itself are typed here because the
+ * The resources @yaks/graph provides itself are typed here because the
  * core's own rules read them; a resource the calling program adds is reached by
  * name, like a component. The capital letter is what tells the two apart:
  * `({ trashed, Actor, Now })`.
@@ -183,6 +183,8 @@ export let registry = (
 export type Bound = Bundle & {
   /** `#Vocab` — the component vocabulary this graph uses */
   Vocab: Vocab
+  /** `#Edits` — entities whose patches write content beyond marks */
+  Edits: Set<Eid>
   /** `#Now` — the timestamp this transaction stamps with; `Now.at` reads it,
    * and a property written `at: Now` is given it */
   Now: { at: string }

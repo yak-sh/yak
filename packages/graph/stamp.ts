@@ -1,11 +1,11 @@
 // Provenance: who wrote this, and when. Two paired components — `created` is
-// set once, when the entity is created; `updated` records the last write, and
+// set once, when the entity is created; `updated` records the last edit, and
 // is absent until the first edit after creation. Both are server-owned: a
 // caller may not write them, and this phase is their only writer.
 //
-// A mark is the third form, and records an event rather than the entity's
-// lifecycle: `completed`, `archived`, `notified` — a component a client writes
-// empty and the server fills in with the same `{at, by, via}` properties. There
+// A mark records an event: `completed`, `archived`, `notified`. A client
+// writes the component empty and the server fills in `{at, by, via}`. Marks
+// carry their own provenance and do not count as edits to the entity. There
 // is no list of marks here either; any component whose vocabulary declares that
 // trio server-owned is a mark, and gets filled in.
 //
@@ -140,7 +140,7 @@ export type StampPolicy = (bundle: Bound) =>
   | null
 
 /** The default provenance: two rules evaluated against one frozen state. A
- * newly created entity gets `created`, a later write gets `updated`. `#Now`,
+ * newly created entity gets `created`, a later content edit gets `updated`. `#Now`,
  * `#Actor` and `#Vocab` are rule resources; no application vocabulary is
  * assumed. */
 export let stamps: Rule[] = [
@@ -153,8 +153,11 @@ export let stamps: Rule[] = [
   {
     name: 'updated',
     phase: 'stamp',
-    match: '.entity, .created, +updated, *updated, #Vocab, #Actor, #Now',
-    run: (b) => wear('updated', b.Vocab, b.Now.at, writer(b)),
+    match: '.entity, .created, #Edits, #Vocab, #Actor, #Now',
+    run: (b) =>
+      b.Edits.has(b.entity.eid)
+        ? wear('updated', b.Vocab, b.Now.at, writer(b))
+        : undefined,
   },
 ]
 
@@ -198,6 +201,18 @@ export let provenance = (policy?: StampPolicy | false): Rule[] => {
  * written, so they keep their own rules and are excluded by name. */
 export let marked = (vocab: Vocab, comp: string): boolean =>
   comp != 'created' && comp != 'updated' && !!vocab.comp(comp)?.mark
+
+/** Entities whose patches change content. Marks carry their own provenance;
+ * adding or removing one leaves the entity's last edit alone. Inspect the
+ * patches, since the frozen view also contains unchanged content. */
+export let editing = (bundles: Bundle[], vocab: Vocab): Set<Eid> =>
+  new Set(
+    bundles.filter((b) =>
+      comps(b).some(([c]) =>
+        c != 'created' && c != 'updated' && !marked(vocab, c)
+      )
+    ).map((b) => b.entity.eid),
+  )
 
 /**
  * One rule per mark: its `{at, by, via}` are filled the first time the mark is
