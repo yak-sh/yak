@@ -39,8 +39,7 @@ type Section = {
 let sh = (...lines: string[]) => '```sh\n' + lines.join('\n') + '\n```'
 let mcp = (...lines: string[]) => '```mcp\n' + lines.join('\n') + '\n```'
 
-export let INSTALL =
-  'deno run -A --minimum-dependency-age=0 jsr:@yaks/cli/install'
+export let INSTALL = 'deno run -A jsr:@yaks/cli/install'
 
 /** A part's body: what its heading says beside it, a rule, then what it
  * holds. A `###` heading in what it holds starts a numbered item. */

@@ -9,7 +9,7 @@ current state or a change to it. A batch is a list of bundles applied in one
 transaction.
 
 ```sh
-deno run -A --minimum-dependency-age=0 jsr:@yaks/cli/install
+deno run -A jsr:@yaks/cli/install
 
 yak init                        # Start this machine's own graph, worked at by you.
 yak task new 'Buy the cake'     # Open that graph, run a tool, and exit.

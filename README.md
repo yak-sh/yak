@@ -17,7 +17,7 @@ jsr.io and two more.
 `yak` runs on [Deno](https://deno.com) 2.9 or later.
 
 ```sh
-deno run -A --minimum-dependency-age=0 jsr:@yaks/cli/install
+deno run -A jsr:@yaks/cli/install
 yak init            # ~/.yak/yak.json and its graph, worked at by you
 yak task new 'Buy the cake'
 yak task list
@@ -28,13 +28,13 @@ yak help            # every command
 ```
 
 The installer puts `yak` on your PATH at its own release, so the command and
-every package a config names are one set; `--minimum-dependency-age=0` lets it
-install a release published today, which Deno otherwise waits a day for. Deno
-remembers which release it last found, so to update, run it with
-`--reload=jsr:@yaks/cli` too, which asks jsr.io again. From a checkout,
-`deno task install` runs the checkout itself. `yak init` writes the config
-(`db`, the plugins, and who you are) and never replaces one. It asks for no
-name: it takes git's `user.name`, or else your login, and the graph's first
+every package a config names are one set: the newest release at least a day old,
+since Deno waits a day for a new one. Deno remembers which release it last
+found, so to update, run it with `--reload=jsr:@yaks/cli` too, which asks jsr.io
+again; add `--minimum-dependency-age=0` to take a release published today. From
+a checkout, `deno task install` runs the checkout itself. `yak init` writes the
+config (`db`, the plugins, and who you are) and never replaces one. It asks for
+no name: it takes git's `user.name`, or else your login, and the graph's first
 task, filed to you, is for an agent to ask you whether that is right. `yak name`
 renames you. `yak serve` listens on this machine alone; a config's `hostname`
 offers it to a network, and it has no authentication of its own.

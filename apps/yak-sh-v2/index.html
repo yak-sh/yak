@@ -246,7 +246,7 @@
         and <a href=https://yaks.app>yaks.app</a> hosts the apps built with it.
         Each bundle is an entity patch, and every list is a query.
       </p>
-      <pre><code>deno run -A --minimum-dependency-age=0 jsr:@yaks/cli/install</code></pre>
+      <pre><code>deno run -A jsr:@yaks/cli/install</code></pre>
       <p class=Only-crt>
         This screen runs <b>yak</b>: @yaks/graph over @yaks/ram, with the task
         vocabulary, every package fetched from JSR as the page loaded. Type
@@ -775,7 +775,7 @@ yak graph query .imported</code></pre>
         page</p>
 
       <h2>A box</h2>
-      <pre><code>deno run -A --minimum-dependency-age=0 jsr:@yaks/cli/install
+      <pre><code>deno run -A jsr:@yaks/cli/install
 yak init
 yak serve</code></pre>
       <p>

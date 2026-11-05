@@ -12,10 +12,10 @@ import { command as launchCommand } from '@yaks/process/command'
 // installed with. What it does keep is a config, copied beside the command,
 // so the config written here is the release's (./release.ts `released`).
 //
-// Run it with `--minimum-dependency-age=0` to install the release published
-// today; without, it installs the newest release a day old, whole. Deno keeps
-// the release list it fetched, so an update adds `--reload=jsr:@yaks/cli`,
-// or it installs the release it found before.
+// It installs the newest release a day old, whole; `--minimum-dependency-age=0`
+// takes the release published today. Deno keeps the release list it fetched,
+// so an update adds `--reload=jsr:@yaks/cli`, or it installs the release it
+// found before.
 
 import cli from './deno.json' with { type: 'json' }
 import { released } from './release.ts'

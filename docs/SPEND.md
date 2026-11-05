@@ -12,14 +12,14 @@ You need [Deno](https://deno.com) 2.9 or later.
 
 ```sh
 brew install deno        # or: curl -fsSL https://deno.land/install.sh | sh
-deno run -A --minimum-dependency-age=0 jsr:@yaks/cli/install
+deno run -A jsr:@yaks/cli/install
 ```
 
 The installer takes `yak` and its plugins from [jsr.io](https://jsr.io/@yaks)
 and puts the command in `~/.deno/bin`. If that folder isn't on your `PATH` yet,
 add it (`echo 'export PATH="$HOME/.deno/bin:$PATH"' >> ~/.zshrc`) and open a new
-terminal. `--minimum-dependency-age=0` lets it take a release published today,
-which Deno otherwise waits a day for. To update later, run the same line with
+terminal. It installs the newest release at least a day old, since Deno waits a
+day for a new one. To update later, run the same line with
 `--reload=jsr:@yaks/cli` added: Deno remembers the release it found last, and
 the flag asks jsr.io again.
 
@@ -55,7 +55,8 @@ The same report is in the terminal: `yak spend show` for this week, or
 ## Updating
 
 Run the install line with `--reload=jsr:@yaks/cli` added, which asks jsr.io for
-the newest release; running it unchanged keeps the release Deno found before.
+the newest release a day old; running it unchanged keeps the release Deno found
+before. `--minimum-dependency-age=0` takes a release published today.
 
 ```sh
 deno run -A --reload=jsr:@yaks/cli --minimum-dependency-age=0 jsr:@yaks/cli/install
