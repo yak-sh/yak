@@ -4724,6 +4724,9 @@ importers:
       '@yaks/render':
         specifier: 0.2.17
         version: link:../render
+      '@yaks/secrets':
+        specifier: 0.2.17
+        version: link:../secrets
       '@yaks/sql':
         specifier: 0.2.17
         version: link:../sql

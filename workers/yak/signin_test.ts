@@ -63,7 +63,7 @@ let past = () => new Date(Date.now() - 1).toISOString()
 let SECRET = 'a probe secret'
 let ME = 'me@yaks.app'
 // The mac of the code most tests send, made once: the first one imports the
-// secret's key (lib/hmac.ts), which every sign-in after reuses.
+// secret's key (@yaks/secrets/signed `secretKey`), which every sign-in after reuses.
 let CODE = await mac(ME, '123456', SECRET)
 
 // A bundle that buries the entity: a tombstone.

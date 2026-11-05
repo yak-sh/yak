@@ -40,6 +40,7 @@
     "@yaks/process": "0.2.17",
     "@yaks/query": "0.2.17",
     "@yaks/render": "0.2.17",
+    "@yaks/secrets": "0.2.17",
     "@yaks/sql": "0.2.17",
     "@yaks/tools": "0.2.17",
     "@yaks/ui": "0.2.17",

@@ -23,14 +23,18 @@
 // worker is handed for every signed-in visitor, set as a cookie, renewed into
 // a ninety-day session and minted a standing link (T-37873).
 //
-// WebCrypto only, so the same file runs in a Worker, in Deno, and in a browser.
-// Nothing here reads a cookie or an env: the kernel's session.ts reads the
-// cookie, the login page (T-32327) mints one with `sign` and sets it with
-// `cookie`.
-import { fromBase64url, toBase64url } from '@yaks/fp'
+// The protocol itself is @yaks/secrets/signed's, a use signing under the
+// label `yaks.app/<use>`. Nothing here reads a cookie or an env: the kernel's
+// session.ts reads the cookie, the login page (T-32327) mints one with `sign`
+// and sets it with `cookie`.
+import {
+  labelKey,
+  openedWith,
+  secretKey,
+  signedWith,
+} from '@yaks/secrets/signed'
 import { COOKIE, cookieValue } from './cookie.ts'
 import { oldUse, today } from './token_legacy.ts'
-import { HMAC, hmac, kept } from './hmac.ts'
 
 export type Claims = {
   person: string
@@ -43,9 +47,6 @@ export type Claims = {
 // The cookie's name. Set on `Domain=yaks.app`, so every space's hostname
 // carries it and one sign-in serves the platform.
 export { COOKIE, cookieValue }
-
-let enc = new TextEncoder()
-let dec = new TextDecoder()
 
 /** What a sealed value is for: one word per kind of token the kernel mints.
  * A new kind of token is a new word here, never a reuse of an old one. */
@@ -70,89 +71,27 @@ export type Use =
   | 'line' // a person's own number's SMS callback (operator-line.ts)
   | 'call' // a call's audio stream, from its ring to its space (operator-calls.ts)
 
-// The use's own key: HMAC-SHA256 of the use's name under the secret. One
-// secret to hold and rotate, and no two uses that can verify each other.
-let key = (secret: string, use: Use) =>
-  kept(
-    JSON.stringify([use, secret]),
-    async () =>
-      crypto.subtle.importKey(
-        'raw',
-        await crypto.subtle.sign(
-          'HMAC',
-          await hmac(secret),
-          enc.encode(`yaks.app/${use}`),
-        ),
-        HMAC,
-        false,
-        ['sign', 'verify'],
-      ),
-  )
+type Obj = Record<string, unknown>
 
-let sealWith = async (k: CryptoKey, value: unknown) => {
-  let body = toBase64url(enc.encode(JSON.stringify(value)))
-  let mac = await crypto.subtle.sign('HMAC', k, enc.encode(body))
-  let sealed = `${body}.${toBase64url(new Uint8Array(mac))}`
-  remember(k, sealed)
-  return sealed
-}
-
-// Only successful WebCrypto signatures and verifications, kept by the key and
-// exact seal. Count and length bound the memory per key; the WeakMap lets it
-// go with the key. Values and expiry decisions are never kept.
-let verified = new WeakMap<CryptoKey, Set<string>>()
-let verificationLimit = 256
-let sealLimit = 4096
-
-let remember = (k: CryptoKey, sealed: string) => {
-  if (sealed.length > sealLimit) return
-  let seen = verified.get(k)
-  if (!seen) verified.set(k, seen = new Set())
-  seen.delete(sealed)
-  seen.add(sealed)
-  if (seen.size > verificationLimit) seen.delete(seen.values().next().value!)
-}
-
-// The value under a mac this key made, or null. A miss uses WebCrypto's
-// constant-time verify; a hit reuses its result and parses the value afresh.
-let openWith = async (k: CryptoKey, sealed: string) => {
-  let dot = sealed.lastIndexOf('.')
-  if (dot < 0) return null
-  let body = sealed.slice(0, dot)
-  try {
-    let seen = verified.get(k)
-    if (seen?.delete(sealed)) seen.add(sealed)
-    else {
-      let ok = await crypto.subtle.verify(
-        'HMAC',
-        k,
-        fromBase64url(sealed.slice(dot + 1)),
-        enc.encode(body),
-      )
-      if (!ok) return null
-      remember(k, sealed)
-    }
-    return JSON.parse(dec.decode(fromBase64url(body)))
-  } catch {
-    return null
-  }
-}
+// The use's own key, under its label. One secret to hold and rotate, and no
+// two uses that can verify each other.
+let key = (secret: string, use: Use) => labelKey(secret, `yaks.app/${use}`)
 
 // A value nobody but this secret can have written, for this use alone:
 // `<body>.<mac>`, the body base64url JSON and the mac HMAC-SHA256 over the
 // body text under the use's key. What is sealed is the caller's to shape, and
 // its expiry is the caller's to check.
 export let seal = async (use: Use, value: unknown, secret: string) =>
-  sealWith(await key(secret, use), value)
+  signedWith(await key(secret, use), value)
 
 // What was sealed for this use, and whether it was sealed the way tokens were
 // before 2c05d0f6: under the raw secret, accepted only when its claims are
 // this use's old shape and no other's (token_legacy.ts, deleted after
 // 2027-09-22T20:00Z by T-37927).
 let open = async (use: Use, sealed: string, secret: string) => {
-  let value = await openWith(await key(secret, use), sealed)
+  let value = await openedWith<Obj>(await key(secret, use), sealed)
   if (value != null) return { value, legacy: false }
-  let old = await openWith(await hmac(secret), sealed)
+  let old = await openedWith<Obj>(await secretKey(secret), sealed)
   return old != null && oldUse(old) == use
     ? { value: today(use, old), legacy: true }
     : null
@@ -160,7 +99,7 @@ let open = async (use: Use, sealed: string, secret: string) => {
 
 /** The seal before 2c05d0f6, for a test to mint an old token with. */
 export let sealedOld = async (value: unknown, secret: string) =>
-  sealWith(await hmac(secret), value)
+  signedWith(await secretKey(secret), value)
 
 // What was sealed, or null for anything but a well-formed value sealed for
 // this use under this secret.
@@ -168,7 +107,7 @@ export let opened = async <T>(
   use: Use,
   sealed: string,
   secret: string,
-): Promise<T | null> => (await open(use, sealed, secret))?.value ?? null
+): Promise<T | null> => ((await open(use, sealed, secret))?.value as T) ?? null
 
 export let sign = (claims: Claims, secret: string) =>
   seal('session', claims, secret)
@@ -189,7 +128,7 @@ export let verify = async (
   if (c.exp * 1000 <= now) return null
   return {
     person: c.person,
-    space: c.space ?? null,
+    space: (c.space as string | null) ?? null,
     exp: c.exp,
     ...(typeof c.via == 'string' && c.via ? { via: c.via } : {}),
     ...(o.legacy ? { legacy: true as const } : {}),

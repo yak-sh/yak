@@ -14,7 +14,7 @@
 // code is asked for.
 //
 // The platform's own names are imported, never retyped: `PLATFORM` from the
-// router, `COOKIE` from the token. A drift on either side is a type error
+// router, `COOKIE` from its cookie. A drift on either side is a type error
 // rather than a puzzling 401.
 
 import * as systemProcess from '@yaks/process/system'
@@ -25,11 +25,12 @@ import { type Registered, registration } from '@yaks/connections'
 
 import { CallError } from '@yaks/tools/errors'
 import { valueIn } from '@yaks/tools/value'
+import { claimed } from '@yaks/secrets/signed'
 import { PLATFORM_STORE } from '../../workers/yak/door.ts'
 import type { Swept } from '../../workers/yak/sweep.ts'
 import type { Asked } from './move.ts'
 import { INVITE, LINK, PLATFORM, SLUG } from '../../workers/yak/route.ts'
-import { COOKIE } from '../../workers/yak/lib/token.ts'
+import { COOKIE } from '../../workers/yak/lib/cookie.ts'
 
 // The zone this client points at, so a probe can aim somewhere else.
 export let zone = () => systemProcess.env.get('YAKS_ZONE') ?? PLATFORM
@@ -61,21 +62,15 @@ let head = (credential: string, browser: boolean) =>
     ? { cookie: `${COOKIE}=${credential}` }
     : { authorization: `Bearer ${credential}` }
 
-// The claims a session carries, read WITHOUT the secret: the body half is
-// plain base64url JSON (workers/yak/lib/token.ts), so a client can say whose session it
-// holds and when it dies without asking the platform. Unverifiable here by
+// The claims a session carries, read without the secret (@yaks/secrets/signed
+// `claimed`), so a client can say whose session it holds and when it dies
+// without asking the platform. Unverifiable here by
 // design — the platform is the only one that can say a token is good.
 export type Claims = { person: string; space: string | null; exp: number }
 
 export let claimsOf = (session: string): Claims | null => {
-  try {
-    let body = session.slice(0, session.lastIndexOf('.'))
-    let json = atob(body.replaceAll('-', '+').replaceAll('_', '/'))
-    let c = JSON.parse(json)
-    return typeof c?.person == 'string' ? c : null
-  } catch {
-    return null
-  }
+  let c = claimed(session) as Claims | null
+  return typeof c?.person == 'string' ? c : null
 }
 
 // The cookie the sign-in card set, out of the response's own header.

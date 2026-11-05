@@ -1,8 +1,8 @@
-import { toBase64url } from '@yaks/fp'
+import { opened as openedFor, signed } from '@yaks/secrets/signed'
 
-/** Short-lived tracker tickets issued by a trusted host. The tracker use has
- * its own HMAC key, matching the platform's sealed-value protocol. No ticket
- * or secret is persisted; callers issue one when they call remotely. */
+/** Short-lived tracker tickets issued by a trusted host: a signed value
+ * (@yaks/secrets/signed) under the tracker's own label. No ticket or secret is
+ * persisted; callers issue one when they call remotely. */
 export type Access = {
   scope: string
   person: string
@@ -11,44 +11,14 @@ export type Access = {
   ingest?: boolean
   mark?: boolean
 }
-let enc = new TextEncoder()
-let key = (bytes: Uint8Array<ArrayBuffer>) =>
-  crypto.subtle.importKey(
-    'raw',
-    bytes,
-    { name: 'HMAC', hash: 'SHA-256' },
-    false,
-    ['sign'],
-  )
-// The signing key belongs to the configured secret, not to a ticket. Keep
-// only the latest nonextractable key; a rotation derives its replacement.
-let held:
-  | { secret: string; key: CryptoKey; body?: string; ticket?: string }
-  | undefined
-let signingKey = async (secret: string) => {
-  if (held?.secret == secret) return held.key
-  let derived = await crypto.subtle.sign(
-    'HMAC',
-    await key(enc.encode(secret)),
-    enc.encode('yaks.app/tracker'),
-  )
-  let result = await key(new Uint8Array(derived))
-  held = { secret, key: result }
-  return result
-}
-/** Signs the same tracker ticket that the Worker's authorization opens. */
-export let sign = async (access: Access, secret: string): Promise<string> => {
-  let body = toBase64url(enc.encode(JSON.stringify(access)))
-  let key = await signingKey(secret)
-  // Signing is deterministic. An identical body (including its expiry) under
-  // this key needs no new MAC; changed claims and rotated secrets always do.
-  if (held?.key == key && held.body == body) return held.ticket!
-  let mac = await crypto.subtle.sign(
-    'HMAC',
-    key,
-    enc.encode(body),
-  )
-  let ticket = `${body}.${toBase64url(new Uint8Array(mac))}`
-  if (held?.key == key) Object.assign(held, { body, ticket })
-  return ticket
-}
+
+let LABEL = 'yaks.app/tracker'
+
+/** Signs the tracker ticket the tracker's authorization opens. */
+export let sign = (access: Access, secret: string): Promise<string> =>
+  signed(LABEL, access, secret)
+
+/** What a ticket grants, or null for anything but a ticket signed under this
+ * secret; its expiry and scope are the caller's to check. */
+export let opened = (ticket: string, secret: string): Promise<Access | null> =>
+  openedFor<Access>(LABEL, ticket, secret)

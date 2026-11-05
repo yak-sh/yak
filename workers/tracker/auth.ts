@@ -1,10 +1,9 @@
 // Tracker access is a short-lived, signed scope, not a directory lookup. Yak
 // vouches for a member after its own authorization; the box holds platform scope.
 
-import { opened } from '../yak/lib/token.ts'
 import { platform } from './core.ts'
 
-import type { Access } from '@yaks/tracker/ticket'
+import { type Access, opened } from '@yaks/tracker/ticket'
 export { type Access, sign } from '@yaks/tracker/ticket'
 export let authorize = async (
   request: Request,
@@ -17,7 +16,7 @@ export let authorize = async (
   // minutes and is never returned in a report or request bundle.
   let token = bearer ?? new URL(request.url).searchParams.get('ticket')
   if (!secret || !token) return null
-  let access = await opened<Access>('tracker', token, secret)
+  let access = await opened(token, secret)
   return access && typeof access.exp == 'number' && access.exp * 1000 > now &&
       typeof access.person == 'string' && !!access.person &&
       access.scope == scope && (scope != platform || access.admin === true)

@@ -27,7 +27,7 @@ import type { Bundle } from '@yaks/graph'
 import { Stale } from '@yaks/graph/errors'
 import { token } from '@yaks/graph/sha256'
 import { KERNEL, type Meta, minted } from './meta.ts'
-import { hmac } from './lib/hmac.ts'
+import { secretKey } from '@yaks/secrets/signed'
 import { mobile } from '@yaks/phone'
 
 // Ten minutes, five guesses: long enough to switch to the mail app, short
@@ -112,7 +112,7 @@ export let mac = async (address: string, code: string, secret: string) =>
   hex(
     await crypto.subtle.sign(
       'HMAC',
-      await hmac(secret),
+      await secretKey(secret),
       enc.encode(`${canon(address)}:${code}`),
     ),
   )
@@ -166,7 +166,7 @@ export let visitor = async (secret: string, source: string) =>
     ? hex(
       await crypto.subtle.sign(
         'HMAC',
-        await hmac(secret),
+        await secretKey(secret),
         enc.encode(`visitor:${network(source)}`),
       ),
     )
