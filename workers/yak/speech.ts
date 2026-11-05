@@ -25,9 +25,9 @@ import {
 } from '@yaks/speech'
 import type { Answer } from './apps.ts'
 import { caught } from './defects.ts'
-import { directoryOf, type Space } from './directory.ts'
+import type { Space } from './directory.ts'
 import type { Env } from './env.ts'
-import { countedSpend, refusedSpend } from './meter.ts'
+import { onHold } from './model-spend.ts'
 import { modelAccess } from './models.ts'
 
 /** The providers yaks.app hears and speaks through, and the secret each
@@ -286,19 +286,23 @@ export let unread = () => {
   last.clear()
 }
 
-// What stops this much speech in this space, as a refusal: the pilot, or the
-// space's budget.
-let refused = async (
+// Speech for `space` while the pilot lets it, on a hold of the most it can
+// cost: the space's budget refuses it in the directory's own transaction
+// (model-spend.ts `onHold`), and it is charged what it cost.
+let charged = async <T extends { dollars: number }>(
   env: Env,
   space: Space,
-  dollars: number,
-  provider: Provider = PROVIDER,
+  most: number,
+  provider: Provider | undefined,
+  work: () => Promise<T>,
 ) => {
   let why = await paused(env, provider)
   if (why) throw new ModelError('speech_off', why)
-  let fresh = await directoryOf(env.STORE).space(space.slug) ?? space
-  let over = refusedSpend(fresh, 'models', env, dollars)
-  if (over) throw new ModelError('limit', over)
+  return await onHold(env, space, most, 'models', async (spent) => {
+    let done = await work()
+    spent(done.dollars)
+    return done
+  })
 }
 
 /** `text` spoken for `space` through `provider` (the platform's by
@@ -317,10 +321,13 @@ export let speaking = async (
 ) => {
   let on = speechOf(env, provider)
   if (!on) throw new ModelError('speech_off', 'Speech is not switched on here.')
-  await refused(env, space, spoken(on.provider, text), provider)
-  let said = await speak({ ...on, ...o, text })
-  await countedSpend(env, space, said.dollars, 0)
-  return said
+  return await charged(
+    env,
+    space,
+    spoken(on.provider, text),
+    provider,
+    () => speak({ ...on, ...o, text }),
+  )
 }
 
 /** A recording heard for `space`, its minutes charged once heard. */
@@ -331,11 +338,14 @@ export let hearing = async (
   type: string,
 ) => {
   let on = speechOf(env)!
-  // Ten seconds' worth before the provider says how long it was.
-  await refused(env, space, heard(on.provider, 10))
-  let got = await hear({ ...on, audio, type })
-  await countedSpend(env, space, got.dollars, 0)
-  return got
+  // Ten seconds' worth held before the provider says how long it was.
+  return await charged(
+    env,
+    space,
+    heard(on.provider, 10),
+    undefined,
+    () => hear({ ...on, audio, type }),
+  )
 }
 
 let MAX_TEXT = 2000

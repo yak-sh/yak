@@ -26,7 +26,9 @@ import {
 import { type App, appStore, directoryOf, type Space } from './directory.ts'
 import type { Env } from './env.ts'
 import { KERNEL, metaOf } from './meta.ts'
-import { countedTexts, refusedSpend } from './meter.ts'
+import { countedTexts } from './meter.ts'
+import { onHold } from './model-spend.ts'
+import { ModelError } from '@yaks/model'
 import { texter } from './operator-texts.ts'
 import { refuse } from './tool.ts'
 
@@ -85,20 +87,29 @@ export let appTexter = (
     let dir = directoryOf(env.STORE)
     let at = await dir.at(space() ?? '')
     if (!at) throw new Error('this store cannot name its space')
-    let no = refusedSpend(at, 'texts', env)
-    if (no) throw refuse('limit', no)
     let from = number() || null
     if (!from) {
       let person = await dir.phoned(text.to)
       let agreed = person ? await dir.texting(person) : null
       if (agreed?.number != text.to) throw new Blocked(PILOT)
     }
-    let receipt = await texter(env, at.sender).send({
-      to: text.to,
-      text: text.text,
-      ...(from ? { from } : {}),
+    // Held on the space's budget before it goes, refused there in the
+    // directory's own transaction, and charged once sent (model-spend.ts
+    // `onHold`).
+    let cost = segments(text.text) * PER_SEGMENT
+    let receipt = await onHold(env, at, cost, 'texts', async (spent) => {
+      let sent = await texter(env, at.sender).send({
+        to: text.to,
+        text: text.text,
+        ...(from ? { from } : {}),
+      })
+      spent(cost)
+      return sent
+    }).catch((e) => {
+      throw e instanceof ModelError && e.code == 'limit'
+        ? refuse('limit', e.message)
+        : e
     })
-    await countedTexts(env, at, segments(text.text) * PER_SEGMENT)
     return { ...receipt, ...(from ? { from } : {}) }
   },
 })

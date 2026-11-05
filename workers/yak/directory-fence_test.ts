@@ -201,6 +201,47 @@ await proof(
   },
 )
 
+// A model call's hold on its space's budget is refused past the budget in the
+// directory's own transaction, so it holds back no serving check; a plain
+// spend still fences (T-141144).
+await proof(
+  'a budget hold leaves serving checks standing, and a plain spend still fences them',
+  async () => {
+    let f = await fixture()
+    let month = new Date().toISOString().slice(0, 7)
+    await f.at.apply([{
+      entity: { eid: 'hold' },
+      model_reservation: {
+        space: 'space',
+        month,
+        dollars: 0.01,
+        what: 'models',
+      },
+    }, {
+      entity: { eid: 'space' },
+      spend: { month, models: 0.01, held: true },
+    }], KERNEL)
+    let [space] = await f.at.query('.entity.eid=space')
+    let held = {
+      fences: f.begins.length,
+      current: f.core().valid(f.initial),
+      models: (space.meter as { models?: number }).models,
+      // Read for the budget, never given to a space that has none.
+      kept: ['plan', 'comped', 'budget', 'starter'].filter((c) => c in space),
+    }
+    await f.at.apply([{
+      entity: { eid: 'space' },
+      spend: { month, emails: 1 },
+    }], KERNEL)
+    let plain = { fences: f.begins.length, current: f.core().valid(f.initial) }
+    return () =>
+      equal({ held, plain }, {
+        held: { fences: 0, current: true, models: 0.01, kept: [] },
+        plain: { fences: 1, current: false },
+      })
+  },
+)
+
 await proof(
   'begin precedes mutation and finish sees its committed epoch',
   async () => {

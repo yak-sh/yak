@@ -44,7 +44,8 @@ import { baseOf, fileBytes, inside, prefixOf } from './files.ts'
 import { spaceHost } from './host.ts'
 import { r2RawObjects } from './lib/objects.ts'
 import { opened, seal } from './lib/token.ts'
-import { countedSpend, refusedSpend } from './meter.ts'
+import { onHold } from './model-spend.ts'
+import { ModelError } from '@yaks/model'
 import { filesIn, staged } from './release.ts'
 import { loaded, pinned, seedy } from './seed.ts'
 import { vouched, type Who } from './session.ts'
@@ -469,10 +470,6 @@ export let preview = async (ctx: Ctx, args: Args) => {
       'Cloudflare Browser Rendering is not configured',
     )
   }
-  if (screenshot) {
-    let why = refusedSpend(space, 'models', ctx.env, 15 * RATE)
-    if (why) throw refuse('limit', why)
-  }
   let open = await followed(ctx.dir, space, app, who)
   let ticket = await seal(
     'preview',
@@ -505,12 +502,24 @@ export let preview = async (ctx: Ctx, args: Args) => {
     }
   }
   let { render } = await import('./browser.ts')
-  let rendered = await render(
+  // Fifteen seconds of the browser held on the space's budget, refused there
+  // in the directory's own transaction, and charged the time it took, failing
+  // or not (model-spend.ts `onHold`).
+  let rendered = await onHold(
     ctx.env,
-    url,
-    view,
-    (duration) => countedSpend(ctx.env, space, duration / 1000 * RATE, 0),
-  )
+    space,
+    15 * RATE,
+    'models',
+    (spent) =>
+      render(ctx.env, url, view, (duration) => {
+        spent(duration / 1000 * RATE)
+        return Promise.resolve()
+      }),
+  ).catch((e) => {
+    throw e instanceof ModelError && e.code == 'limit'
+      ? refuse('limit', e.message)
+      : e
+  })
   let cost = rendered.duration / 1000 * RATE
   let { image, ...diagnostics } = rendered
   Object.assign(value, diagnostics, { cost })

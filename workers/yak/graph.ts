@@ -722,9 +722,35 @@ installContext({
 // (T-131212). A delete, or any other component, fences.
 let UNFENCED = new Set([...RECEIPTS, 'archetype'])
 let UNREAD = -2
-let unfenced = (bundles: Bundle[]): boolean =>
+let unfenced = (bundles: Bundle[], words = UNFENCED): boolean =>
   bundles.every((b) =>
-    !deleted(b) && comps(b).every(([name]) => UNFENCED.has(name))
+    !deleted(b) && comps(b).every(([name]) => words.has(name))
+  )
+
+// A hold on a space's budget raises no fence either (T-141144): its receipt,
+// and a `held` spend the directory's own transaction refuses past the budget
+// (meter-graph.ts `spend`), so no refusal to spend reads a copied balance. It
+// commits the `meter` and `trend` that rule writes, and the receipt's own
+// `created` and `updated`; a copy that has not heard of them shows a slightly
+// older balance, never a spend past the budget.
+let HOLD = -3
+let HOLDING = new Set([
+  ...UNFENCED,
+  'model_reservation',
+  'spend',
+  'meter',
+  'trend',
+  'created',
+  'updated',
+])
+let hold = (bundles: Bundle[]): boolean =>
+  bundles.some((b) => (b.spend as { held?: unknown } | undefined)?.held) &&
+  bundles.every((b) =>
+    !deleted(b) &&
+    comps(b).every(([name]) =>
+      UNFENCED.has(name) || name == 'model_reservation' ||
+      name == 'spend' && (b.spend as { held?: unknown }).held === true
+    )
   )
 
 export class Store {
@@ -1378,7 +1404,10 @@ export class Store {
                   commit: (bundles: Bundle[]) => {
                     let revision = this.#copyWrite.getStore()
                     if (revision === -1) return bundles
-                    if (revision === UNREAD) {
+                    if (revision === HOLD && unfenced(bundles, HOLDING)) {
+                      return bundles
+                    }
+                    if (revision === UNREAD || revision === HOLD) {
                       if (unfenced(bundles)) return bundles
                       let named = bundles.flatMap((b) =>
                         comps(b).map(([name]) => name)
@@ -1479,6 +1508,7 @@ export class Store {
           if (!copy) return under(-1)
           // A write no authorization reads raises no fence (`unfenced`).
           if (unfenced(bundles)) return under(UNREAD)
+          if (hold(bundles)) return under(HOLD)
           // Effects may themselves write the directory and acquire a newer
           // fence. Only explicit synchronous mover batches reuse an epoch.
           return fenced(copy, under, this.#committed, clockOf(this.#time))

@@ -10,7 +10,7 @@ import type { Namespace } from './door.ts'
 import { meta } from './meta.ts'
 
 type Env = { STORE: Namespace }
-type Kind = 'models' | 'realtime'
+export type Kind = 'models' | 'realtime' | 'texts'
 export type Hold = { space: string; month: string; dollars: number; what: Kind }
 
 export let receiptEid = (call: string) =>
@@ -154,6 +154,40 @@ export let reserved = async <T extends { dollars: number }>(
         throw new ModelError('limit', (error as Error).message)
       }
       reading = await again(env, space.eid)
+    }
+  }
+}
+
+/** `work`, run on a hold of the most it can cost, and charged what it says it
+ * spent (`spent`), failing or not: whether it may go ahead at all is decided
+ * in the directory's own transaction (`reserved`), never on a reading of the
+ * space. What it spent past the hold was spent all the same, and is counted. */
+export let onHold = async <T>(
+  env: Env,
+  space: Space,
+  most: number,
+  what: Kind,
+  work: (spent: (dollars: number) => void) => Promise<T>,
+): Promise<T> => {
+  let hold = await reserved(
+    env,
+    space,
+    (left) => most <= left ? { dollars: most } : null,
+    mint(),
+    what,
+  )
+  let cost = 0
+  try {
+    return await work((dollars) => void (cost += dollars))
+  } finally {
+    await hold.settle(Math.min(cost, most))
+    if (cost > most) {
+      await stamp(env, {
+        entities: [{
+          entity: { eid: space.eid },
+          spend: { month: monthOf(new Date()), [what]: cost - most },
+        }],
+      })
     }
   }
 }

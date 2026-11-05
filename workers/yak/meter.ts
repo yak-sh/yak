@@ -304,7 +304,7 @@ export let budget = (space: Space, now = new Date()): Budget => ({
  * `spend`), and a caller quoting a call says it before asking. */
 export let unaffordable = (
   space: Space,
-  what: 'models' | 'realtime',
+  what: 'models' | 'realtime' | 'texts',
   dollars: number,
   now = new Date(),
 ) => {

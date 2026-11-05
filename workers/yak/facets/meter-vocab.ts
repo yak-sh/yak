@@ -10,7 +10,7 @@ export let docs: VocabDoc[] = [{
         space: { type: 'string', ref: 'space', death: 'cascade' },
         month: { type: 'string' },
         dollars: { type: 'number' },
-        what: { type: 'string', enum: ['models', 'realtime'] },
+        what: { type: 'string', enum: ['models', 'realtime', 'texts'] },
       },
     },
     account_usage: {

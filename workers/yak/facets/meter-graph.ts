@@ -47,7 +47,8 @@ export let plugins = (_host: unknown, options: Options): Plugin[] => [{
       let said = props(spend)
       if (said.held) {
         if (!row.space) throw new Refused('The paying space is missing')
-        let what = said.realtime ? 'realtime' as const : 'models' as const
+        let what: 'models' | 'realtime' | 'texts' =
+          (['realtime', 'texts'] as const).find((k) => said[k]) ?? 'models'
         let no = unaffordable(
           spaceOf(row as unknown as Row),
           what,
