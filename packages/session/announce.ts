@@ -7,13 +7,21 @@
 // that pairs that id with the session and the subagent behind it.
 //
 // The graph keeps the pairing: a hook and its call can reach different
-// processes, including either side of a ready-first restart.
+// processes, including either side of a ready-first restart. A harness waits
+// on its hook only so long (./hooks.ts), then makes the call anyway, so a call
+// can reach the door while this process is still hearing its hook and the
+// pairing is not yet written. The door waits on that hearing rather than
+// reading the graph too soon and writing as nobody.
 
 import type { Eid, Graph } from '@yaks/graph'
 import { identityEid } from '@yaks/graph/identity'
 import { sessionFor, speaking, subagentSession } from './who.ts'
 
 let announcement = (call: string): Eid => identityEid('announced', [call])
+
+// The calls whose `PreToolUse` this process is hearing, each to the run that
+// makes it. A harness's call id is its own, so the id alone keys it.
+let hearing = new Map<string, Promise<Eid | undefined>>()
 
 /** Remember that `run` makes the harness's call `call`. */
 export let announce = async (
@@ -33,6 +41,8 @@ export let announced = async (
   graph: Graph,
   call: string,
 ): Promise<Eid | undefined> => {
+  let heard = await hearing.get(call)?.catch(() => undefined)
+  if (heard) return heard
   let [row] = await graph.get([announcement(call)], ['announced'])
   let named = row?.announced as { session?: Eid } | undefined
   return named?.session
@@ -97,11 +107,20 @@ export let hear = async (graph: Graph, hook: Heard): Promise<boolean> => {
   }
   let session = str(hook.session_id)
   let agent = str(hook.agent_id)
-  let run = agent
-    ? await subagentSession(graph, session, agent)
-    : session
-    ? (await sessionFor(graph, session, ['session.id']))?.entity.eid
-    : undefined
-  if (run) await announce(graph, call, run)
+  let heard = (async () => {
+    let run = agent
+      ? await subagentSession(graph, session, agent)
+      : session
+      ? (await sessionFor(graph, session, ['session.id']))?.entity.eid
+      : undefined
+    if (run) await announce(graph, call, run)
+    return run
+  })()
+  hearing.set(call, heard)
+  try {
+    await heard
+  } finally {
+    if (hearing.get(call) == heard) hearing.delete(call)
+  }
   return true
 }

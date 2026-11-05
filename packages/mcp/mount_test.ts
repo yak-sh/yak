@@ -496,6 +496,67 @@ test("a subagent's announced call writes via its own session, its parent's spawn
   assertEquals((await announced.get([child]))[0].spawned, { parent: 'parent' })
 })
 
+// Two harnesses' calls interleaved, one whose hook is still being heard when
+// its call reaches the door: a harness stops waiting on a slow hook and makes
+// the call anyway. Each call writes as its own run, never the process's.
+let racing = sessionGraph()
+let OTHER = derivedEid('fixture:m2')
+await racing.apply([
+  { entity: { eid: MEMBER }, doc: { title: 'A member' } },
+  { entity: { eid: OTHER }, doc: { title: 'Another member' } },
+  { entity: { eid: 'process' }, doc: { title: 'The serving process' } },
+  { entity: { eid: 'run-a' }, session: { id: 'harness-a', actor: MEMBER } },
+  { entity: { eid: 'run-b' }, session: { id: 'harness-b', actor: OTHER } },
+])
+let entered = Promise.withResolvers<void>()
+let release = Promise.withResolvers<void>()
+let slow = new Proxy(racing, {
+  get: (g, key) =>
+    key == 'apply'
+      ? async (...args: Parameters<typeof racing.apply>) => {
+        entered.resolve()
+        await release.promise
+        return await g.apply(...args)
+      }
+      : Reflect.get(g, key),
+})
+let hookOf = (g: typeof racing) =>
+  sessionRoutes({ graph: g }).find((r) => r.path == HOOK)!.handle
+let raceDoor = mcp({
+  graph: racing,
+  authenticate: async (request, message) =>
+    (await sessionAuth({ graph: racing })(request, message)) ??
+      { by: 'process', via: 'process' },
+})
+let pre = (call: string, session: string) =>
+  post({
+    hook_event_name: 'PreToolUse',
+    tool_use_id: call,
+    session_id: session,
+  })
+let apply = async (eid: string, call: string) =>
+  await (await raceDoor(rpc('tools/call', {
+    name: 'graph_apply',
+    arguments: { bundles: [{ entity: { eid }, book: { price: 12 } }] },
+    _meta: { 'claudecode/toolUseId': call },
+  }))).text()
+let heardA = hookOf(slow)(pre('toolu_a', 'harness-a'))
+await entered.promise
+await hookOf(racing)(pre('toolu_b', 'harness-b'))
+let calledA = apply('ra', 'toolu_a')
+await apply('rb', 'toolu_b')
+release.resolve()
+await Promise.all([heardA, calledA])
+let stamp = async (eid: string) => {
+  let { by, via } = comp((await racing.get([eid]))[0], 'created')
+  return [by, via]
+}
+let raced = { a: await stamp('ra'), b: await stamp('rb') }
+
+test('interleaved calls each write as their own run, one whose hook is still being heard too', () => {
+  assertEquals(raced, { a: [MEMBER, 'run-a'], b: [OTHER, 'run-b'] })
+})
+
 for (let modern of [false, true]) {
   let storage = ram(sessionVocab)
   let opened = () => graph({ storage, vocab: sessionVocab })
