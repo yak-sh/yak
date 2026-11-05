@@ -59,6 +59,7 @@ import {
   mailSend,
   rootOf,
   SHOWN,
+  starting,
 } from './operator-channels.ts'
 import { textSend } from './operator-texts.ts'
 import { phoneSend } from './operator-line.ts'
@@ -648,6 +649,7 @@ export let operating = (
       oracular,
       conversation,
       remembering,
+      starting,
     ]).catch((e) => {
       based = undefined
       caught(e, { request: 'operator base persona' })

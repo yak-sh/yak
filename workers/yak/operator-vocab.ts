@@ -30,6 +30,11 @@ export let operatorDoc: VocabDoc = {
           type: 'string',
           description: 'The app whose break started the request.',
         },
+        signup: {
+          type: 'boolean',
+          description:
+            "Sent to yaks.app's sign-up address or number: the sender's first words, unless they had signed up before.",
+        },
       },
     },
     operator_session: {

@@ -646,6 +646,38 @@ export let handoff = async (req: Request, env: Env): Promise<Response> => {
   })
 }
 
+/**
+ * The person is known, and signing in is having a space (T-32482): theirs
+ * already, or minted here at the front of their address, so no agent ever has
+ * to ask them for a name and the card asks nothing but the address and the
+ * code (T-34236). It is also what their dashboard shows when nothing else aims
+ * them (`backTo`), and the first person ever to arrive owns the platform.
+ * Every way of signing up ends here: a code, a link and a letter (`joined`).
+ */
+export let settle = async (env: Env, person: string): Promise<Space> => {
+  let dir = dirOf(env)
+  let own = await dir.own(person)
+  let space = await dir.space(META.space)
+  if (space && await dir.memberless(space)) {
+    await meta(env).apply([{
+      entity: { eid: '$seat' },
+      member: { space: space.eid, person, role: 'owner' },
+    }], KERNEL)
+  }
+  return own
+}
+
+/**
+ * Signing up by a letter whose domain vouched for its sender (inbox.ts,
+ * D-136811): the same sign-up a code gives, for someone who never opened the
+ * page. The person behind the address, found or minted and called what the
+ * letter called them, else the front of their address; and their own space.
+ */
+export let joined = async (env: Env, email: string, name?: string) => {
+  let person = await personOf(meta(env), email, name || nameOf(null, email))
+  return { person, space: await settle(env, person) }
+}
+
 // The person is known: the cookie, the space that is theirs, the first-owner
 // bootstrap, and wherever they were going.
 //
@@ -663,19 +695,8 @@ let landed = async (
   via?: 'code' | 'link',
 ) => {
   let store = meta(env)
-  let dir = directory(bound(env.DIRECTORY, dirPart.fetch, env))
-  // Signing in is having a space (T-32482): theirs already, or minted here at
-  // the front of their address — so no agent ever has to ask them for a name,
-  // and the card asks nothing but the address and the code (T-34236). It is
-  // also what their dashboard shows when nothing else aims them (`backTo`).
-  await dir.own(person)
-  let space = await dir.space(META.space)
-  if (space && await dir.memberless(space)) {
-    await store.apply([{
-      entity: { eid: '$seat' },
-      member: { space: space.eid, person, role: 'owner' },
-    }], KERNEL)
-  }
+  let dir = dirOf(env)
+  await settle(env, person)
   if (via) {
     // A person who has never signed in before is the funnel's sign-up
     // (funnel.ts): the first time, whether their row came from this sign-in

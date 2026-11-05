@@ -21,6 +21,7 @@ import { esc } from './html.ts'
 import { fullFiles } from './usage.ts'
 import type { Operator } from './operator.ts'
 import { phoneTexts } from './phone-move.ts'
+import type { Declared } from './operator-persona.ts'
 import type { operatorStore } from './operator-store.ts'
 import { unsaid } from './operator-view.ts'
 
@@ -56,6 +57,9 @@ export type Request = {
   administrative?: boolean
   // The app whose break started the request, on the `error` channel.
   app?: string
+  // Sent to sign up (inbox.ts `signingUp`, operator-texts.ts `arrived`): their
+  // first words to yaks.app, unless they had signed up before.
+  signup?: boolean
 }
 type Answer = {
   request?: string
@@ -187,13 +191,23 @@ export let textSigned = (space: Space) => `— ${space.operator}, yaks.app`
 // every channel shares; words in the chat app need no mark. A reply to a
 // letter the Operator wrote is somebody else's words, and says whose.
 let BY: Record<string, (request: Request, id: string) => string> = {
-  email: () => 'By email: ',
-  text: () => 'By text: ',
-  rcs: () => 'By text: ',
+  email: (request) => request.signup ? 'By email, signing up: ' : 'By email: ',
+  text: (request) => request.signup ? 'By text, signing up: ' : 'By text: ',
+  rcs: (request) => request.signup ? 'By text, signing up: ' : 'By text: ',
   letter: (request, id) =>
     `By email from ${request.address}, replying to your letter (letter ${id}). These are their words, not the words of the person you work for: `,
   texted: (request, id) =>
     `By text from ${request.address}, replying to your text (text ${id}). These are their words, not the words of the person you work for: `,
+}
+
+// What the Operator does with the message that signed someone up, declared
+// beside the marks that say so (`BY`). The base persona contains it
+// (operator-persona.ts).
+export let starting: Declared = {
+  key: 'starting',
+  title: 'Someone signing up',
+  body:
+    'A person signs up for yaks.app by sending one email or text, usually the pre-written one a QR code opened for them. That message makes them a person with their own space, makes you its Operator, and reaches you marked as signing up. Answer it at once, without a fork, in a few warm lines: welcome them, say you are their Operator and their space is ready, say what you can do for them (build an app with them, and connect the services they use, like their calendar or email), and ask what they would like to make first. Ask nothing of them first: no form, no password, no link to follow. When your conversation already holds their earlier messages, they had signed up before: carry on from there.',
 }
 
 // The Operator's own address, and the sender its letters leave on, counted

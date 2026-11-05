@@ -6,11 +6,12 @@ import { copyOf } from './directory-copy.ts'
 //
 // The whole of the routing is the local part: `<space>.<app>@yaks.app` is that
 // app's store, `<space>@yaks.app` is the space's home app (post.ts `mailedTo`,
-// the same derivation an app's letters leave under). An address the app has
-// left still reaches it, the way its old hostname does. An address naming a
-// space or an app that is not
-// there is refused — a bounce the sender reads — rather than accepted and
-// dropped, because silence is the one answer that cannot be corrected later.
+// the same derivation an app's letters leave under), and `signup@yaks.app`
+// signs its sender up (`signingUp`). An address the app has left still
+// reaches it, the way its old hostname does. An address naming a space or an
+// app that is not there is refused — a bounce the sender reads — rather than
+// accepted and dropped, because silence is the one answer that cannot be
+// corrected later.
 // Anything that fails on our side throws instead: a throw is a temporary
 // failure the sending server retries, where a reject is forever.
 //
@@ -44,6 +45,7 @@ import PostalMime, { type Email } from 'postal-mime'
 import { link } from '@yaks/edge'
 import type { Bundle } from '@yaks/graph'
 import { author, type Head, inbound, messageId, verdict } from '@yaks/mail'
+import { automated } from '@yaks/mail/answers'
 import { writes } from '@yaks/member'
 import { acceptsOf, filed, Untaken } from './apps.ts'
 import * as dirPart from './directory.ts'
@@ -55,6 +57,7 @@ import {
   type Space,
 } from './directory.ts'
 import { bound, type Env, type Inbound } from './env.ts'
+import { signupAddress, url } from './host.ts'
 import { KERNEL, metaOf } from './meta.ts'
 import { mailedTo, mailFrom } from './post.ts'
 import { counted } from './meter.ts'
@@ -129,6 +132,16 @@ export let plain = (html: string) =>
     .replace(/&amp;/g, '&')
     .replace(/\n{3,}/g, '\n\n')
     .trim()
+
+// The letter as postal-mime reads it, read once: its raw stream can be read
+// only once, and a letter may be asked for its sender's name before it is
+// handed on whole.
+let parsings = new WeakMap<Inbound, Promise<Email>>()
+let parsed = (m: Inbound) => {
+  let mail = parsings.get(m) ?? PostalMime.parse(m.raw)
+  parsings.set(m, mail)
+  return mail
+}
 
 /** The words the letter carried: its plain text, else its html read as text. */
 export let words = (mail: Email) =>
@@ -209,10 +222,10 @@ let carried = async (
  * told; anything else thrown is ours, and the sending server will try again.
  */
 export let arrived = async (m: Inbound, env: Env): Promise<string> => {
-  let requested = await operatorMail(m, env)
+  let requested = await signingUp(m, env) ?? await operatorMail(m, env)
   if (requested) return requested
   let { space, app } = await opened(env, m.to)
-  let mail = await PostalMime.parse(m.raw)
+  let mail = await parsed(m)
   let head = read(m, mail)
   let signed = verdict(head)
   let eid = crypto.randomUUID()
@@ -241,6 +254,41 @@ export let arrived = async (m: Inbound, env: Env): Promise<string> => {
   // because a letter refused here is somebody else's words lost.
   await counted(env, space)
   return eid
+}
+
+// A letter to the sign-up address (D-136811): the whole of signing up, with
+// no form, no link and no password. Its domain must vouch that the sender
+// wrote it (DMARC, as for a member's letter to the Operator), and a
+// machine's address signs nobody up. Then the sender is a person with their
+// own space (identity.ts `joined`, the sign-up a code gives), and the letter is
+// their first words to its Operator, which answers in the letter's thread.
+// Someone who already has a space is writing to its Operator.
+let signingUp = async (m: Inbound, env: Env): Promise<string | null> => {
+  if (m.to.trim().toLowerCase() != signupAddress(env)) return null
+  let from = author(m).trim().toLowerCase()
+  let { authenticated } = await import('./operator-channels.ts')
+  if (
+    automated(from) ||
+    !authenticated(m.headers.get('authentication-results'), from)
+  ) {
+    throw new Refused(
+      `yaks.app could not confirm that ${from} sent this letter, so it signed nobody up. Sign up at ${
+        url(env, '/login')
+      } instead.`,
+    )
+  }
+  let { joined } = await import('./identity.ts')
+  let name = (await parsed(m)).from?.name?.trim()
+  let { person, space } = await joined(env, from, name)
+  return await asked(
+    m,
+    env,
+    space,
+    '/operator/receive',
+    { 'x-yak-person': person },
+    { verified: true },
+    { signup: true },
+  )
 }
 
 // App addresses keep receiving app mail. A member writing the space itself
@@ -326,10 +374,10 @@ let asked = async (
   path: string,
   who: Record<string, string>,
   arrival: { verified?: boolean; reply?: string },
-  extra: { address?: string; thread?: string[] } = {},
+  extra: { address?: string; thread?: string[]; signup?: boolean } = {},
 ): Promise<string> => {
   let { keepFile, requestId } = await import('./operator-channels.ts')
-  let mail = await PostalMime.parse(m.raw)
+  let mail = await parsed(m)
   let head = read(m, mail)
   let files = []
   for (let a of mail.attachments) {
@@ -370,6 +418,7 @@ let asked = async (
           address: extra.address ?? author(m).trim().toLowerCase(),
           reply_to: messageId({ ...m, headers: head }),
           files,
+          ...(extra.signup ? { signup: true } : {}),
         },
         options: { id, mail: received.mail, title: mail.subject },
         in_reply_to: mail.inReplyTo,

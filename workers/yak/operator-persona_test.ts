@@ -63,6 +63,7 @@ test('the base comes first, then the space persona worn on it, then where it is'
     'yaks.app',
     'Your conversations, and the work they fork',
     'What you have done, and finding it again',
+    'Someone signing up',
     `${space.operator}, the Operator of home`,
     'Who you are',
   ])
