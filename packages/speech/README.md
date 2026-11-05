@@ -23,6 +23,8 @@ reads the environment.
   `told.lost(reason)` when the stream drops. `close()` answers the seconds heard
   and their cost. `open` makes the socket, the platform's `WebSocket` offering
   the key as its subprotocol by default.
+- `provider.voices` lists the voices it speaks in, each an `id` to pass as
+  `voice`, a `name` and a line on how it sounds (`about`).
 - `balance({provider, key})` is the credit left on the account, in dollars.
 - `spoken(provider, text)` and `heard(provider, seconds)` price speech before it
   is asked for.

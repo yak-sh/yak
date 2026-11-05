@@ -194,6 +194,9 @@ export type Space = {
   title: string
   // What its Operator is called (operator-name.ts).
   operator: string
+  // The voice its Operator speaks in on a call (speech.ts `VOICES`), or none
+  // for the provider's own.
+  voice?: string | null
   // The picture it wears in place of its first letter, or null for none.
   logo?: { sha: string; type: string } | null
   sender?: import('@yaks/phone').Transport
@@ -593,6 +596,7 @@ export type Row = {
   fee?: { bps?: number | null }
   budget?: { dollars?: number | null }
   space_logo?: { sha?: string | null; type?: string | null }
+  operator?: { name?: string | null; voice?: string | null }
   starter?: { dollars?: number | null }
   started?: { space?: Id | null }
   created?: { at?: string }
@@ -1098,6 +1102,7 @@ export let spaceOf = (r: Row): Space => ({
   store: r.space!.store ?? unrooted(r.entity.eid, r.space!.slug),
   title: r.doc?.title || r.space!.slug,
   operator: calledOf(r),
+  voice: r.operator?.voice ?? null,
   logo: r.space_logo?.sha
     ? { sha: r.space_logo.sha, type: r.space_logo.type ?? '' }
     : null,
@@ -1872,14 +1877,15 @@ export let directoryRows = (rows: {
       }, headers)
       return (await self.at(space.eid))!
     },
-    // The space's Operator called `name` (operator-name.ts `given`).
-    christen: async (
+    // The space's Operator called `name` (operator-name.ts `given`), or
+    // speaking in `voice` (speech.ts `voiceOf`).
+    operate: async (
       space: Space,
-      name: string,
+      operator: { name?: string; voice?: string },
       headers: Record<string, string>,
     ): Promise<Space> => {
       await self.apply({
-        entities: [{ entity: { eid: space.eid }, operator: { name } }],
+        entities: [{ entity: { eid: space.eid }, operator }],
       }, headers)
       return (await self.at(space.eid))!
     },

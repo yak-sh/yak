@@ -7,10 +7,11 @@ import { platform } from './directory-rows-probe.ts'
 import { stamp } from './directory.ts'
 import { endpoints } from './endpoints.ts'
 import { budget } from './meter.ts'
-import { speechDoor, unread } from './speech.ts'
+import { sampled, speechDoor, unread } from './speech.ts'
 import type { Asked } from './apps.ts'
 
 let left = 199.5
+let voices: string[] = []
 let deepgram = endpoints(globalThis).open(async (req) => {
   let url = new URL(req.url)
   if (url.pathname == '/v1/projects') {
@@ -20,6 +21,7 @@ let deepgram = endpoints(globalThis).open(async (req) => {
     return Response.json({ balances: [{ amount: left }] })
   }
   if (url.pathname == '/v1/speak') {
+    voices.push(url.searchParams.get('model')!)
     return new Response(new Uint8Array([1, 2, 3]))
   }
   await req.arrayBuffer()
@@ -114,4 +116,28 @@ test('speech is refused once the pilot spent its share, or the space its budget'
     400,
     'bad_request',
   ])
+})
+
+test('a voice’s sample is spoken once and kept for every space after', async () => {
+  unread()
+  left = 199.5
+  voices = []
+  let { p, space } = await fixture()
+  equal([...await sampled(p.env, await space(), 'aura-2-draco-en')], [
+    1,
+    2,
+    3,
+  ])
+  equal([...await sampled(p.env, await space(), 'aura-2-draco-en')], [
+    1,
+    2,
+    3,
+  ])
+  equal(voices, ['aura-2-draco-en'])
+  equal(
+    await sampled(p.env, await space(), 'aura-2-nobody-en').catch((e) =>
+      e.message
+    ),
+    'Pick one of the voices listed.',
+  )
 })

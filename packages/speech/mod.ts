@@ -20,11 +20,18 @@ export type Provider = {
   hear: { path: string; model: string; perMinute: number }
   /** audio heard as it streams, told back a turn at a time */
   turns: { path: string; model: string; perMinute: number }
-  /** text spoken, priced by the thousand characters */
+  /** text spoken, priced by the thousand characters, in `voice` unless
+   * another of `voices` is asked for */
   speak: { path: string; voice: string; perThousand: number }
+  /** the voices it speaks in */
+  voices: Voice[]
   /** where the account's projects and their balances are read */
   projects: string
 }
+
+/** A voice a provider speaks in: the `id` a request names, what a person
+ * calls it, and how it sounds. */
+export type Voice = { id: string; name: string; about: string }
 
 /** Deepgram: Nova-3 hears a recording, Flux hears a call and knows when a
  * speaker's turn ends, Aura-2 speaks. Prices are its pay-as-you-go list,
@@ -37,6 +44,216 @@ export let DEEPGRAM: Provider = {
   hear: { path: '/v1/listen', model: 'nova-3', perMinute: 0.0043 },
   turns: { path: '/v2/listen', model: 'flux-general-en', perMinute: 0.0077 },
   speak: { path: '/v1/speak', voice: 'aura-2-thalia-en', perThousand: 0.030 },
+  // Aura-2's English voices, as its voice list describes them.
+  // https://developers.deepgram.com/docs/tts-models
+  voices: [
+    {
+      id: 'aura-2-amalthea-en',
+      name: 'Amalthea',
+      about: 'feminine, Filipino, engaging, natural, cheerful',
+    },
+    {
+      id: 'aura-2-andromeda-en',
+      name: 'Andromeda',
+      about: 'feminine, American, casual, expressive, comfortable',
+    },
+    {
+      id: 'aura-2-apollo-en',
+      name: 'Apollo',
+      about: 'masculine, American, confident, comfortable, casual',
+    },
+    {
+      id: 'aura-2-arcas-en',
+      name: 'Arcas',
+      about: 'masculine, American, natural, smooth, clear, comfortable',
+    },
+    {
+      id: 'aura-2-aries-en',
+      name: 'Aries',
+      about: 'masculine, American, warm, energetic, caring',
+    },
+    {
+      id: 'aura-2-asteria-en',
+      name: 'Asteria',
+      about: 'feminine, American, clear, confident, knowledgeable, energetic',
+    },
+    {
+      id: 'aura-2-athena-en',
+      name: 'Athena',
+      about: 'feminine, American, calm, smooth, professional',
+    },
+    {
+      id: 'aura-2-atlas-en',
+      name: 'Atlas',
+      about:
+        'masculine, American, enthusiastic, confident, approachable, friendly',
+    },
+    {
+      id: 'aura-2-aurora-en',
+      name: 'Aurora',
+      about: 'feminine, American, cheerful, expressive, energetic',
+    },
+    {
+      id: 'aura-2-callista-en',
+      name: 'Callista',
+      about: 'feminine, American, clear, energetic, professional, smooth',
+    },
+    {
+      id: 'aura-2-cora-en',
+      name: 'Cora',
+      about: 'feminine, American, smooth, melodic, caring',
+    },
+    {
+      id: 'aura-2-cordelia-en',
+      name: 'Cordelia',
+      about: 'feminine, American, approachable, warm, polite',
+    },
+    {
+      id: 'aura-2-delia-en',
+      name: 'Delia',
+      about: 'feminine, American, casual, friendly, cheerful, breathy',
+    },
+    {
+      id: 'aura-2-draco-en',
+      name: 'Draco',
+      about: 'masculine, British, warm, approachable, trustworthy, baritone',
+    },
+    {
+      id: 'aura-2-electra-en',
+      name: 'Electra',
+      about: 'feminine, American, professional, engaging, knowledgeable',
+    },
+    {
+      id: 'aura-2-harmonia-en',
+      name: 'Harmonia',
+      about: 'feminine, American, empathetic, clear, calm, confident',
+    },
+    {
+      id: 'aura-2-helena-en',
+      name: 'Helena',
+      about: 'feminine, American, caring, natural, positive, friendly, raspy',
+    },
+    {
+      id: 'aura-2-hera-en',
+      name: 'Hera',
+      about: 'feminine, American, smooth, warm, professional',
+    },
+    {
+      id: 'aura-2-hermes-en',
+      name: 'Hermes',
+      about: 'masculine, American, expressive, engaging, professional',
+    },
+    {
+      id: 'aura-2-hyperion-en',
+      name: 'Hyperion',
+      about: 'masculine, Australian, caring, warm, empathetic',
+    },
+    {
+      id: 'aura-2-iris-en',
+      name: 'Iris',
+      about: 'feminine, American, cheerful, positive, approachable',
+    },
+    {
+      id: 'aura-2-janus-en',
+      name: 'Janus',
+      about: 'feminine, American, Southern, smooth, trustworthy',
+    },
+    {
+      id: 'aura-2-juno-en',
+      name: 'Juno',
+      about: 'feminine, American, natural, engaging, melodic, breathy',
+    },
+    {
+      id: 'aura-2-jupiter-en',
+      name: 'Jupiter',
+      about: 'masculine, American, expressive, knowledgeable, baritone',
+    },
+    {
+      id: 'aura-2-luna-en',
+      name: 'Luna',
+      about: 'feminine, American, friendly, natural, engaging',
+    },
+    {
+      id: 'aura-2-mars-en',
+      name: 'Mars',
+      about: 'masculine, American, smooth, patient, trustworthy, baritone',
+    },
+    {
+      id: 'aura-2-minerva-en',
+      name: 'Minerva',
+      about: 'feminine, American, positive, friendly, natural',
+    },
+    {
+      id: 'aura-2-neptune-en',
+      name: 'Neptune',
+      about: 'masculine, American, professional, patient, polite',
+    },
+    {
+      id: 'aura-2-odysseus-en',
+      name: 'Odysseus',
+      about: 'masculine, American, calm, smooth, comfortable, professional',
+    },
+    {
+      id: 'aura-2-ophelia-en',
+      name: 'Ophelia',
+      about: 'feminine, American, expressive, enthusiastic, cheerful',
+    },
+    {
+      id: 'aura-2-orion-en',
+      name: 'Orion',
+      about: 'masculine, American, approachable, comfortable, calm, polite',
+    },
+    {
+      id: 'aura-2-orpheus-en',
+      name: 'Orpheus',
+      about: 'masculine, American, professional, clear, confident, trustworthy',
+    },
+    {
+      id: 'aura-2-pandora-en',
+      name: 'Pandora',
+      about: 'feminine, British, smooth, calm, melodic, breathy',
+    },
+    {
+      id: 'aura-2-phoebe-en',
+      name: 'Phoebe',
+      about: 'feminine, American, energetic, warm, casual',
+    },
+    {
+      id: 'aura-2-pluto-en',
+      name: 'Pluto',
+      about: 'masculine, American, smooth, calm, empathetic, baritone',
+    },
+    {
+      id: 'aura-2-saturn-en',
+      name: 'Saturn',
+      about: 'masculine, American, knowledgeable, confident, baritone',
+    },
+    {
+      id: 'aura-2-selene-en',
+      name: 'Selene',
+      about: 'feminine, American, expressive, engaging, energetic',
+    },
+    {
+      id: 'aura-2-thalia-en',
+      name: 'Thalia',
+      about: 'feminine, American, clear, confident, energetic, enthusiastic',
+    },
+    {
+      id: 'aura-2-theia-en',
+      name: 'Theia',
+      about: 'feminine, Australian, expressive, polite, sincere',
+    },
+    {
+      id: 'aura-2-vesta-en',
+      name: 'Vesta',
+      about: 'feminine, American, natural, expressive, patient, empathetic',
+    },
+    {
+      id: 'aura-2-zeus-en',
+      name: 'Zeus',
+      about: 'masculine, American, deep, trustworthy, smooth',
+    },
+  ],
   projects: '/v1/projects',
 }
 

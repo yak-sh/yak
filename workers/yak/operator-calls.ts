@@ -22,7 +22,7 @@ import { opened, seal } from './lib/token.ts'
 import { apex } from './host.ts'
 import { countedSpend } from './meter.ts'
 import { PROVIDERS, settings } from './phone-providers.ts'
-import { paused, speaking, speechOf } from './speech.ts'
+import { operatorVoice, paused, speaking, speechOf } from './speech.ts'
 import type { Operator } from './operator.ts'
 import { ownerOf } from './operator-access.ts'
 import { receive, requestId } from './operator-channels.ts'
@@ -382,7 +382,10 @@ export let answering = (
     listen: (told) =>
       turns({ ...speech, format: line.format, told, open: upgraded }),
     say: async (text) =>
-      (await speaking(env, space, text, { format: line.format })).body,
+      (await speaking(env, space, text, {
+        format: line.format,
+        voice: operatorVoice(space),
+      })).body,
     ask: async (text) => {
       await receive(
         operator.store,

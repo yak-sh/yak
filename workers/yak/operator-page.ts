@@ -25,6 +25,9 @@ import {
   texts,
 } from './operator-texts.ts'
 import { given } from './operator-name.ts'
+import { BUTLERS, operatorVoice, sampled, voiceOf, VOICES } from './speech.ts'
+import type { Voice } from '@yaks/speech'
+import { ModelError } from '@yaks/model'
 import { CallError } from '@yaks/tools/errors'
 import {
   attached,
@@ -99,6 +102,32 @@ export let nameCard = (at: string, name: string) =>
     esc(name)
   }" maxlength="40" required autocomplete="off"></label>
 <button class="Button" type="submit">Save</button><p role="status" data-status></p></form>`
+
+// Where a space's people hear the voices its Operator may speak in on a
+// call, and pick one. Play speaks a sample (speech.ts `sampled`).
+export let voiceCard = (at: string, name: string, voice?: string | null) => {
+  let picked = operatorVoice({ voice })
+  let first = (v: Voice) => BUTLERS.includes(v.id) ? 0 : 1
+  return `<form class="Card Form" id="voice" method="post" action="${at}?voice=1">
+<h2 class="Card_Title">Voice</h2>
+<p>How ${
+    esc(name)
+  } sounds when you call. Play a few to compare, then pick one and save.</p>
+<div class="Voices">${
+    VOICES.toSorted((a, b) => first(a) - first(b)).map((v) =>
+      `<div class="Voices_Row"><label class="Choice"><input type="radio" name="voice" value="${v.id}"${
+        v.id == picked ? ' checked' : ''
+      }><span><b>${esc(v.name)}</b>${
+        first(v) ? '' : ' (like a butler)'
+      } <span class="Note Note-small">${
+        esc(v.about)
+      }</span></span></label><button class="Button Button-quiet" type="button" data-sample="${at}?sample=${v.id}" aria-label="Play ${
+        esc(v.name)
+      }">Play</button></div>`
+    ).join('\n')
+  }</div>
+<button class="Button" type="submit">Save</button><p role="status" data-status></p></form>`
+}
 
 // What a person agreed to be texted at. Any opt-in this space's operator
 // store still keeps from before the number moved onto the person is handed to
@@ -230,12 +259,47 @@ export let operatorAnswer = async (
       return Response.json({ message: e.message }, { status: 400 })
     }
   }
+  if (q.has('voice') && req.method == 'POST') {
+    let form = await req.formData()
+    try {
+      let { id } = voiceOf(String(form.get('voice') ?? ''))
+      let set = await directoryOf(env.STORE).operate(
+        space,
+        { voice: id },
+        vouched(who),
+      )
+      return Response.json({ voice: set.voice })
+    } catch (e) {
+      if (!(e instanceof CallError)) throw e
+      return Response.json({ message: e.message }, { status: 400 })
+    }
+  }
+  if (q.has('sample') && req.method == 'GET') {
+    try {
+      return new Response(await sampled(env, space, q.get('sample')!), {
+        headers: {
+          'content-type': 'audio/mpeg',
+          'cache-control': 'private, max-age=86400',
+        },
+      })
+    } catch (e) {
+      if (e instanceof CallError) {
+        return Response.json({ message: e.message }, { status: 400 })
+      }
+      if (e instanceof ModelError) {
+        return Response.json({ message: e.message }, {
+          status: e.code == 'limit' ? 402 : 503,
+        })
+      }
+      throw e
+    }
+  }
   if (q.has('name') && req.method == 'POST') {
     let form = await req.formData()
     try {
-      let named = await directoryOf(env.STORE).christen(
+      let named = await directoryOf(env.STORE).operate(
         space,
-        given(String(form.get('name') ?? '')),
+        { name: given(String(form.get('name') ?? '')) },
         vouched(who),
       )
       return Response.json({ name: named.operator })
@@ -415,6 +479,7 @@ export let operatorBody = async (env: Env, space: Space, who: Who) => {
   } answers by email.</p></section>
 ${talks(space.slug)}
 ${nameCard(at, space.operator)}
+${voiceCard(at, space.operator, space.voice)}
 ${textsCard(at, consent, settings(env, space.sender).number)}
 ${settingsScript}`
 }
@@ -447,9 +512,26 @@ export let elsewhere = (beyond: Reach[], pa: boolean) => {
 
 let LIST = new Intl.ListFormat('en', { type: 'conjunction' })
 
-// The settings page's script: the name and the texts choice.
+// The settings page's script: the name, the voice and the texts choice, and
+// each voice's sample played in place of whichever was playing.
 let settingsScript = `<script type="module">
-for (let form of document.querySelectorAll('#texts, #name')) {
+let playing = new Audio()
+for (let play of document.querySelectorAll('[data-sample]')) {
+  play.addEventListener('click', async () => {
+    let said = document.querySelector('#voice [data-status]')
+    said.textContent = ''
+    play.disabled = true
+    try {
+      let response = await fetch(play.dataset.sample)
+      if (!response.ok) throw new Error((await response.json().catch(() => null))?.message ?? 'That voice could not be played. Try again.')
+      URL.revokeObjectURL(playing.src)
+      playing.src = URL.createObjectURL(await response.blob())
+      await playing.play()
+    } catch (error) { said.textContent = error.message }
+    play.disabled = false
+  })
+}
+for (let form of document.querySelectorAll('#texts, #name, #voice')) {
   form.addEventListener('submit', async (e) => {
     e.preventDefault()
     let said = form.querySelector('[data-status]')

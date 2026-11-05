@@ -114,6 +114,20 @@
     --note-size: var(--small);
   }
 
+  /* A list of voices to play and pick from (the Operator's settings). */
+  .Voices {
+    display: grid;
+    max-height: 24rem;
+    overflow-y: auto;
+  }
+
+  .Voices_Row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: .75rem;
+  }
+
   /* A conversation. The frame is the point: it says at a glance that these
      words were spoken, by two people, as an example — not that the thing
      being described is what this page is selling. Who says what is a

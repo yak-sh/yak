@@ -9,6 +9,7 @@
 // account below which every request is refused: its balance at the start
 // less what the pilot may spend.
 import { ModelError } from '@yaks/model'
+import { CallError } from '@yaks/tools/errors'
 import {
   balance,
   DEEPGRAM,
@@ -27,6 +28,43 @@ import { modelAccess } from './models.ts'
 
 /** The provider yaks.app speaks through. */
 export let PROVIDER = DEEPGRAM
+
+/** The voices an Operator may speak in. */
+export let VOICES = PROVIDER.voices
+
+/** The voices like a butler's: British, cool and professional. The picker
+ * lists them first, and an Operator nobody has picked a voice for speaks in
+ * the first. */
+export let BUTLERS = ['aura-2-draco-en', 'aura-2-pandora-en']
+
+/** The voice `space`'s Operator speaks in on a call. */
+export let operatorVoice = (space: Pick<Space, 'voice'>) =>
+  space.voice ?? BUTLERS[0]
+
+/** The voice named `id`, refused when the provider has none by that id. */
+export let voiceOf = (id: string) => {
+  let voice = VOICES.find((v) => v.id == id)
+  if (!voice) throw new CallError('arguments', 'Pick one of the voices listed.')
+  return voice
+}
+
+// What every voice's sample says. A new line needs a new SAMPLES prefix, so
+// no voice keeps playing the old one.
+let SAMPLE =
+  'Hello, I’m your Operator. Tell me what you’d like changed, and I’ll get it done.'
+let SAMPLES = 'speech/samples/1/'
+
+/** `voice` saying the sample line, as an MP3: spoken once, charged to the
+ * space that first asked, and kept in the bucket for every space after. */
+export let sampled = async (env: Env, space: Space, voice: string) => {
+  let key = SAMPLES + voiceOf(voice).id + '.mp3'
+  let kept = await env.BLOBS.get(key)
+  if (kept) return new Uint8Array(await kept.arrayBuffer())
+  let said = await speaking(env, space, SAMPLE, { voice })
+  let bytes = new Uint8Array(await new Response(said.body).arrayBuffer())
+  await env.BLOBS.put(key, bytes)
+  return bytes
+}
 
 type Speaking = Pick<Env, 'DEEPGRAM_API_KEY' | 'SPEECH_FLOOR' | 'SPEECH_API'>
 
