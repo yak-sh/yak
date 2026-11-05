@@ -76,13 +76,19 @@ export let term = (yak: Yak, pace: Pace = { key: 0, pause: 0 }) => {
     told()
     return { code, out }
   }
+  // How many of the story's commands are waiting to run behind the one
+  // running: the reader has scrolled past them.
+  let behind = 0
+  // A line is typed a key at a time, unless the reader has scrolled past
+  // commands still to come: then the rest of it is typed at once, so the
+  // prompt keeps up with them.
   let type = async (line: string) => {
-    for (let i = 1; i <= line.length; i++) {
+    for (let i = 1; i <= line.length && !behind; i++) {
       typing = line.slice(0, i)
       told()
       await wait(pace.key)
     }
-    await wait(pace.pause)
+    if (!behind) await wait(pace.pause)
     typing = ''
     let { code, out } = await submit(line)
     if (code) reported(line, out)
@@ -92,7 +98,7 @@ export let term = (yak: Yak, pace: Pace = { key: 0, pause: 0 }) => {
     lines.push({ kind: 'agent', text: shown(c) })
     told()
     let { code, out } = await yak.ask(tool, args)
-    if (code) reported(`${tool} ${JSON.stringify(args)}`, out)
+    if (code) reported(shown(c), out)
     printed(code, out)
     await yak.settled()
     told()
@@ -116,14 +122,17 @@ export let term = (yak: Yak, pace: Pace = { key: 0, pause: 0 }) => {
   let entered = 0
   // One command of a section, drawn in `at` as its `i`th: its comment
   // printed, then the line typed or the call made.
-  let run = (c: Command, at: number, i: number) =>
-    queue(async () => {
+  let run = (c: Command, at: number, i: number) => {
+    behind++
+    return queue(async () => {
+      behind--
       stage = at
       line = i
       if (c.note) lines.push({ kind: 'note', text: `# ${c.note}` })
       if (c.kind == 'sh') return await type(c.line)
       await ask(c)
     })
+  }
   // Settles once every step of the story has been typed, with whatever the
   // bands had queued by then: the turns below run after it, however soon the
   // reader is past them.

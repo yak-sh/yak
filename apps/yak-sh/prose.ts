@@ -36,7 +36,9 @@ let link = (text: string): Token => ({
 // words of links as they are.
 let linked = (tokens: Token[]): Token[] =>
   tokens.flatMap((t): Token[] => {
-    if (t.type == 'link' || t.type == 'codespan' || t.type == 'code') return [t]
+    if (t.type == 'link' || t.type == 'codespan' || t.type == 'code') {
+      return [t]
+    }
     if (t.type == 'list') {
       return [{
         ...t,

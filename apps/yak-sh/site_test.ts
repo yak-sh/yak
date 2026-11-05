@@ -82,6 +82,19 @@ test("a step's commands run one at a time as each is reached, each under its com
   equal((await y.graph.read('.task')).length, 3)
 })
 
+test('the prompt keeps up with a reader who scrolls ahead: lines they have passed are typed at once', async () => {
+  let y = await yak()
+  await y.graph.apply(seed())
+  let t = term(y, { key: 1, pause: 0 })
+  let typed = new Set<string>()
+  t.listen(() => void (t.typing() && typed.add(t.typing())))
+  await t.reach(steps, 2)
+  let run = [...scriptOf(steps[0]), ...scriptOf(steps[1])].map((c) => c.line)
+  equal(t.lines().filter((l) => l.kind == 'in').map((l) => l.text), run)
+  let last = run.at(-1)!
+  equal([...typed], [...last].map((_, i) => last.slice(0, i + 1)))
+})
+
 test('a visitor types into the same prompt: help, a refusal, a write the page sees', async () => {
   let { y, t } = await page()
   await t.enter('help')
