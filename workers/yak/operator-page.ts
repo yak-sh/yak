@@ -557,6 +557,42 @@ let composer = (at: string, task: string) =>
 <div class="Talk_Tools"><label class="Talk_Attach" title="Add images or documents, or paste or drop them here">＋ Add files<input class="Drop_File" type="file" name="file" multiple data-count="${COUNT}" data-size="${SIZE}" data-reads="${READ}" data-unread="The Operator can't read this kind of file. It is kept with your message."></label><p class="Drop_Said" role="status"></p><button class="Button Button-quiet Talk_Stop" type="button" data-stop>Stop</button><button class="Button Talk_Send" type="submit">Send</button></div></div>
 <p class="Talk_Status" role="status" data-send-status></p></form>`
 
+/**
+ * Puts `html` in `at`, keeping open every entry (a `details`) the person had
+ * open there, each known by the row it sits in and the summaries leading to
+ * it, so a live update never closes what they opened. Runs in the page as
+ * the chat script's own (`chatScript`), so it reaches nothing outside itself.
+ */
+export function redraw(at: Element, html: string) {
+  let key = (entry: Element) => {
+    let path = []
+    for (let e: Element | null = entry; e && e != at; e = e.parentElement) {
+      if (e.id) return [e.id, ...path].join('\n')
+      if (e.localName == 'details') {
+        path.unshift(
+          [...e.children].find((c) => c.localName == 'summary')
+            ?.textContent ?? '',
+        )
+      }
+    }
+    return path.join('\n')
+  }
+  // Entries alike in all of that are told apart by their order.
+  let keys = () => {
+    let seen: Record<string, number> = {}
+    return [...at.querySelectorAll('details')].map((d) => {
+      let k = key(d)
+      seen[k] = (seen[k] ?? 0) + 1
+      return [d, k + '\n' + seen[k]] as const
+    })
+  }
+  let open = new Set(
+    keys().filter(([d]) => d.hasAttribute('open')).map(([, k]) => k),
+  )
+  at.innerHTML = html
+  for (let [d, k] of keys()) if (open.has(k)) d.setAttribute('open', '')
+}
+
 // The chat app's script: the durable draft and sending, Stop, and the
 // conversation kept current from the Builder object's socket, each step's
 // lines put in place by id.
@@ -607,6 +643,7 @@ let drafts = browserDrafts(draftClient, '${space.eid}:operator', { by: '${who.pe
 let place = ${JSON.stringify('operator:' + talk)}
 if (form) { drafts.bind(form.elements.say, place); form.elements.say.focus() }
 let said = (e) => { status.textContent = e.message }
+let redraw = ${redraw}
 let thread = () => box.querySelector('[data-task]')
 let working = () => !!box.querySelector('[data-pending]')
 // The page follows the conversation down as it grows, unless the person has
@@ -645,7 +682,7 @@ let read = async () => {
       if (!response.ok) throw new Error('This page could not be brought up to date. Your conversation is saved; reload to try again.')
       let got = await response.json()
       let was = near()
-      if (got.html) box.innerHTML = got.html
+      if (got.html) redraw(box, got.html)
       side.innerHTML = got.side
       if (got.title) heading.textContent = got.title
       if (got.task && form) form.elements.task.value = got.task
@@ -695,10 +732,8 @@ let hear = (frame) => {
       rows.append(at)
     }
     if (at.dataset.html == row.html) continue
-    let open = at.querySelector('details')?.open
-    at.innerHTML = row.html
+    redraw(at, row.html)
     at.dataset.html = row.html
-    if (open) at.querySelector('details').open = true
   }
   card.querySelector('[data-now]').textContent = o.now
   card.toggleAttribute('data-pending', !!o.now)
