@@ -183,7 +183,7 @@ import { drafted, fullAt, hashed, recoverRelease, TOOLS } from './tools.ts'
 import { stale } from './toolkit.ts'
 import { ask } from './remake.ts'
 import { ADDRESS } from './route.ts'
-import { background, caught, refusing } from './defects.ts'
+import { background, caught, defect, refusing } from './defects.ts'
 import { invitation } from './referral.ts'
 import {
   barOf,
@@ -936,10 +936,11 @@ export let refresh = (
   let refreshed = remakes.get(env.ASSETS) ?? new Map<string, Promise<void>>()
   remakes.set(env.ASSETS, refreshed)
   if (refreshed.has(source)) return refreshed.get(source)
+  // A refusal here is the platform's own write refused: every failure is ours.
   let work = (async () => {
     if (await stale(env, source)) await ask(env, { app: app.eid, source })
   })().catch((e) =>
-    caught(e, { request: 'toolkit refresh', space: space.slug, app: app.slug })
+    defect(e, { request: 'toolkit refresh', space: space.slug, app: app.slug })
   )
   refreshed.set(source, work)
   for (let old of refreshed.keys()) {
