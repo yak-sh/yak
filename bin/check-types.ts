@@ -41,7 +41,8 @@ export const DIRS = ['apps', 'bench', 'bin', 'packages', 'plugins', 'workers']
  * kernel's tests import the workspace source catalog, and the public client
  * the browser assets. */
 export const MADE: Record<string, string[]> = {
-  'bin/compiler-packages.ts': ['workers/yak/public/_compiler/packages.json'],
+  'bin/compiler-packages.ts': ['packages.json', 'toolkit.json']
+    .map((name) => `workers/yak/public/_compiler/${name}`),
   'workers/yak/client-assets.ts': ['_draft.js', '_outbox.js', '_wire.js']
     .map((name) => `workers/yak/public/${name}`),
 }

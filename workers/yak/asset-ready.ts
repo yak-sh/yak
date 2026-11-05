@@ -88,6 +88,7 @@ let outputs = async (root: string) => {
       .map((name) => join(publicDir, '_web', name)),
     ...[
       '_compiler/packages.json',
+      '_compiler/toolkit.json',
       '_draft.js',
       '_outbox.js',
       '_wire.js',

@@ -34,6 +34,7 @@ import { BUILT, type Files, own, sha256 } from './versions.ts'
 import { type Config, sourceOf } from './wrangler_app.ts'
 import { url } from './host.ts'
 import { fillable, noted, valid as sharedPath } from './shared.ts'
+import { RECORD, used } from './toolkit.ts'
 
 export let LOCK = 'package-lock.json'
 let CACHE = `${BUILT}.compile.json`
@@ -317,8 +318,10 @@ export let compiled = async (
     }
   }
   // Installing a published release carries its completed build, including
-  // the compiler identity used to fingerprint it. It is never rebuilt with
-  // a newer toolkit merely because another app is taking that release.
+  // the compiler identity used to fingerprint it. It is not rebuilt with a
+  // newer toolkit merely because another app is taking that release; once the
+  // copy serves, a toolkit that has moved on remakes it like any release
+  // (toolkit.ts).
   if (retained && old) compiler = old.compiler
   let planned
   try {
@@ -481,9 +484,21 @@ export let compiled = async (
     served,
   }
   await blobs.put(prefix + CACHE, encode(JSON.stringify(cache)))
+  // What it was made of, read wherever the release serves (toolkit.ts). A
+  // published release installed as it is keeps the record it came with: its
+  // build is the one its publisher's toolkit made.
+  if (!retained) {
+    await blobs.put(
+      prefix + RECORD,
+      encode(JSON.stringify(
+        await used(ctx.env, current.files['package.json'] ?? null),
+      )),
+    )
+  }
   await drop(
     new Set([
       CACHE,
+      RECORD,
       ...(ask.worker ? [MODULE] : []),
       ...ask.pages.map((page) => BUILT + page),
       ...assets.map((path) => BUILT + path),

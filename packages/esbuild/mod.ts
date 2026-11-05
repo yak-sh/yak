@@ -28,6 +28,9 @@ export {
   mapped,
   type Plan,
   plan,
+  toolkitOf,
+  type Toolkits,
+  toolkits,
   Unplanned,
 } from './plan.ts'
 export { homeOf, REGISTRY, type Tarball } from './home.ts'

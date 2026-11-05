@@ -994,6 +994,7 @@ let published = async (
   reload?: Reload,
   preserve = false,
   accepted: string[] = [],
+  recompile = false,
 ) => {
   let c = ctx.clock ?? clock()
   let blobs = files.files
@@ -1012,7 +1013,7 @@ let published = async (
   // manifest the store refuses fails the release: the words and the tables
   // must agree, and a half-planted vocabulary is what `unknown component` is
   // made of.
-  let kept = target?.source && target.script ? target : undefined
+  let kept = !recompile && target?.source && target.script ? target : undefined
   let held = pins(r2Objects(ctx.env.BLOBS))
   let early = Promise.all([
     versions(ctx.dir, standing),
@@ -1449,6 +1450,7 @@ let published = async (
           dirPart.storeName(space, app),
           appDoc(source ?? {}, vocabFile),
         ),
+        recompile ? standing.draft ?? null : null,
       ),
   )
   // Recording the release changed the directory epoch. Replace the app,
@@ -1579,6 +1581,7 @@ let released = async (
     base,
     confirm = false,
     expectedVersion,
+    recompile = false,
   }: {
     target?: Version
     reload?: Reload
@@ -1587,6 +1590,9 @@ let released = async (
     base?: number
     confirm?: boolean
     expectedVersion?: number
+    /** `target` made again from its files, compiled by today's toolkit,
+     * rather than its kept release put back. */
+    recompile?: boolean
   } = {},
 ): Promise<
   { version: number; said: string; serves?: string; review?: DeployReview }
@@ -1610,7 +1616,7 @@ let released = async (
     )
   }
   let blobs = r2RawObjects(ctx.env.BLOBS)
-  let kept = target?.source && target.script ? target : undefined
+  let kept = !recompile && target?.source && target.script ? target : undefined
   let release = kept?.source ?? releaseOf(space, standing)
   let draft = standing.draft ?? null
   let reviewing = base != null && base < (standing.version ?? 0) && !confirm
@@ -1695,6 +1701,7 @@ let released = async (
       reload,
       preserve,
       accepted,
+      recompile,
     )
     released = true
     await c.time('purge', () => purged)
@@ -1754,6 +1761,30 @@ export let recoverRelease = async (
       data,
     }, data)
   }
+}
+
+/** Make an app's live version again as itself, its pages and worker compiled
+ * by the toolkit that serves it now, where the toolkit it was compiled with
+ * has moved on (toolkit.ts): how a fix in a shared package reaches an app
+ * that has not deployed since. Its files and its draft are as they were. */
+export let recompileRelease = async (ctx: Ctx, space: Space, app: App) => {
+  let current = await ctx.dir.app(space, app.slug)
+  if (
+    !current || current.eid != app.eid || current.source != app.source ||
+    current.fence
+  ) return
+  let live = (await versions(ctx.dir, current))
+    .find((v) => v.version == current.version)
+  if (!live) return
+  let who: Who = { person: null, role: 'owner', administrative: true }
+  await released(
+    ctx,
+    space,
+    current,
+    who,
+    appStore(ctx.env.STORE, space, current, ctx.env),
+    { target: live, expectedVersion: live.version, recompile: true },
+  )
 }
 
 // Select the publication, rather than whatever its publisher currently serves.

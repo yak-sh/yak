@@ -7,6 +7,7 @@ import { parse } from 'es-module-lexer/js'
 import type ts from 'typescript'
 import { glob, stat } from 'node:fs/promises'
 import type { Catalog } from '../packages/esbuild/platform.ts'
+import { toolkits } from '../packages/esbuild/plan.ts'
 import { members as workspace } from '@yaks/cli/dependencies'
 
 type Manifest = {
@@ -291,6 +292,9 @@ export let write = async (
   let made: Record<string, string> = {}
   let packages = await catalog(root, { kept: kept(memo), made })
   materialize(to, packages)
+  // Beside it, each package's digest alone: what a page's serving reads to
+  // tell a release compiled by an older toolkit (workers/yak/toolkit.ts).
+  materialize(join(dirname(to), 'toolkit.json'), toolkits(packages))
   materialize(memo, made)
   return packages
 }

@@ -2,6 +2,7 @@
 // about vocabulary or saved rows use directory-probe's app Stores instead.
 import { assertEquals } from '@std/assert'
 import type { Catalog } from '../../packages/esbuild/platform.ts'
+import { toolkits } from '@yaks/esbuild'
 import type { Env } from './env.ts'
 import { operators } from './operator-service-probe.ts'
 import { platform as runtime } from './directory-rows-probe.ts'
@@ -55,10 +56,14 @@ export let platform = (
 
   let assets = scenario.env.ASSETS
   scenario.env.ASSETS = {
-    fetch: (req) =>
-      new URL(req.url).pathname == '/_compiler/packages.json'
+    fetch: (req) => {
+      let path = new URL(req.url).pathname
+      return path == '/_compiler/packages.json'
         ? Promise.resolve(Response.json(catalog))
-        : assets.fetch(req),
+        : path == '/_compiler/toolkit.json'
+        ? Promise.resolve(Response.json(toolkits(catalog)))
+        : assets.fetch(req)
+    },
   }
   return scenario
 }

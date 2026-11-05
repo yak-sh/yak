@@ -108,6 +108,7 @@ let scenario = async (
   let seconds = async () => (await dir.space('ada'))!.meter?.seconds ?? 0
   return {
     env: p.env,
+    dir,
     asks,
     uploads,
     tool,
@@ -294,6 +295,64 @@ test('a changed lock or previously plain script replans a release', async () => 
   await s.write({ 'plain.js': "import 'three'" })
   await s.tool('app_deploy')
   assertEquals(s.asks.at(-1)?.pages, ['plain.js'])
+})
+
+// A page served from a release whose toolkit has moved on has the release
+// made again, as itself, by the toolkit serving it now (toolkit.ts).
+let remade = await (async () => {
+  let n = 0
+  await using s = await scenario((ask) => ({
+    pages: Object.fromEntries(ask.pages.map((p) => [p, `/* ${++n} */`])),
+  }))
+  await s.write({
+    'index.html': PAGE,
+    'main.ts': 'let n: number = 1',
+    'package.json': '{"dependencies": {"@yaks/client": "platform"}}',
+  })
+  await s.tool('app_deploy')
+  let dir = s.dir
+  let at = async () => {
+    let space = (await dir.space('ada'))!
+    return { space, app: (await dir.app(space, 'cookbook'))! }
+  }
+  let page = async () => {
+    await (await s.response('')).text()
+    let { space, app } = await at()
+    await apps.refresh(s.env, space, app)
+  }
+  await page()
+  let same = { asks: s.asks.length, release: await s.release() }
+  await s.write({ 'main.ts': 'let n: number = 2' })
+  // A new kernel, whose toolkit has other source for @yaks/client.
+  let was = catalog['@yaks/client'].version
+  catalog['@yaks/client'].version = 'client-source-sha-2'
+  let assets = s.env.ASSETS
+  s.env.ASSETS = { fetch: (req) => assets.fetch(req) } as typeof assets
+  s.env.CF_VERSION_METADATA = { id: 'a later kernel' }
+  try {
+    await page()
+  } finally {
+    catalog['@yaks/client'].version = was
+  }
+  return {
+    same,
+    asks: s.asks.slice(1),
+    release: await s.release(),
+    version: (await at()).app.version,
+    served: (await s.served('main.ts')).body,
+    draft: await s.tool('app_files', { op: 'read', path: 'main.ts' }),
+  }
+})()
+
+test('a release compiled by an older toolkit is made again as itself', () => {
+  let { same, asks, release, version, served, draft } = remade
+  assertEquals(same.asks, 1)
+  assertEquals(asks.map((ask) => ask.pages), [['main.ts']])
+  assertEquals(asks[0].files['main.ts'], 'let n: number = 1')
+  assertEquals(release == same.release, false)
+  assertEquals(version, 1)
+  assertEquals(served, '/* 2 */')
+  assertStringIncludes(draft, 'let n: number = 2')
 })
 
 let failedCompile = await (async () => {

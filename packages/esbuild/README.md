@@ -199,10 +199,18 @@ URLs and npm pins, and cache hits validate every source file the group read; a
 claimed digest or unchanged npm manifest cannot conceal changed source bytes.
 The catalog travels with every job. Hosts need no compiler redeploy when toolkit
 packages change, and include their catalog identity in compile reuse
-fingerprints. An absent toolkit package or browser export refuses compilation
-with the missing specifier in its error. App files cannot use the reserved
-`node_modules/` namespace, and shared builds read only compiler-owned package
-files, so an app's private source cannot enter public shared output.
+fingerprints. A page's shared modules are the toolkit its compile saw, for as
+long as its output serves, so a host that wants a toolkit fix to reach output
+already made keeps what each compile was made of: `toolkits(catalog)` is each
+toolkit package's source digest and the toolkit packages it depends on, small
+enough to keep beside the catalog, and `toolkitOf(packageJson, toolkits)` is the
+digest of each one a package.json reaches. yaks.app records the latter with
+every compile and compiles a release again when a page of it is served by a
+toolkit whose digests differ (workers/yak/toolkit.ts). An absent toolkit package
+or browser export refuses compilation with the missing specifier in its error.
+App files cannot use the reserved `node_modules/` namespace, and shared builds
+read only compiler-owned package files, so an app's private source cannot enter
+public shared output.
 
 ## What is compiled
 

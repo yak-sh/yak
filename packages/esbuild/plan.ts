@@ -14,6 +14,7 @@
 //
 // An app with no TypeScript and no package.json plans nothing, without a
 // file read, and its deploy is the one it always was.
+import type { Catalog } from './platform.ts'
 import type { Timing } from './timing.ts'
 import {
   packageOf,
@@ -127,6 +128,70 @@ export let dependencies = (text: string | null): Record<string, string> => {
     )
   }
   return deps as Record<string, string>
+}
+
+/** Each toolkit package of a catalog: its source digest, and the toolkit
+ * packages it depends on. A host keeps this beside the catalog, small enough
+ * to read wherever it asks whether a compile's toolkit is still current. */
+export type Toolkits = Record<string, { version: string; uses: string[] }>
+
+/** A catalog's {@link Toolkits}.
+ *
+ * ```ts
+ * import { assertEquals } from '@std/assert'
+ * assertEquals(
+ *   toolkits({
+ *     '@yaks/a': {
+ *       files: {},
+ *       dependencies: { '@yaks/b': 'platform', preact: '10.29.7' },
+ *       version: 'sha256:a',
+ *     },
+ *   }),
+ *   { '@yaks/a': { version: 'sha256:a', uses: ['@yaks/b'] } },
+ * )
+ * ```
+ */
+export let toolkits = (catalog: Catalog): Toolkits =>
+  Object.fromEntries(
+    Object.entries(catalog).map(([name, pkg]) => [name, {
+      version: pkg.version,
+      uses: Object.keys(pkg.dependencies).filter((dep) =>
+        dep.startsWith('@yaks/')
+      ),
+    }]),
+  )
+
+/** The source digest of each toolkit package a package.json reaches, through
+ * the toolkit's own dependencies, as a compile seeds them: what that compile
+ * was made of. A package the toolkit does not have is left out.
+ *
+ * ```ts
+ * import { assertEquals } from '@std/assert'
+ * let kit = {
+ *   '@yaks/a': { version: 'sha256:a', uses: ['@yaks/b'] },
+ *   '@yaks/b': { version: 'sha256:b', uses: [] },
+ *   '@yaks/c': { version: 'sha256:c', uses: [] },
+ * }
+ * let pkg = '{"dependencies": {"@yaks/a": "platform", "three": "1"}}'
+ * assertEquals(toolkitOf(pkg, kit), {
+ *   '@yaks/a': 'sha256:a',
+ *   '@yaks/b': 'sha256:b',
+ * })
+ * assertEquals(toolkitOf(null, kit), {})
+ * ```
+ */
+export let toolkitOf = (
+  pkg: string | null,
+  kit: Toolkits,
+): Record<string, string> => {
+  let out: Record<string, string> = {}
+  let visit = (name: string) => {
+    if (name in out || !kit[name]) return
+    out[name] = kit[name].version
+    kit[name].uses.forEach(visit)
+  }
+  Object.keys(dependencies(pkg)).forEach(visit)
+  return out
 }
 
 let TAG = /<script\b[^>]*>/gi

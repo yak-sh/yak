@@ -311,6 +311,10 @@ export let record = async (
   target?: Version,
   declaration = String(version),
   speaks?: Record<string, number>,
+  // The draft a release leaves: none, its edits released, except where the
+  // release is the live version made again (tools.ts `recompileRelease`),
+  // whose files are the ones the draft was laid over.
+  draft: string | null = null,
 ) => {
   let all = await dir.deploys(app)
   let prior = all.find((v) => v.version == app.version)
@@ -323,7 +327,7 @@ export let record = async (
           version,
           declaration,
           source: app.source,
-          draft: null,
+          draft,
           fence: null,
           script: app.script,
           worker,
