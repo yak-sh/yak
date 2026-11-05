@@ -65,6 +65,21 @@ let request = (n: number) =>
 let said = (n: number, source: string) =>
   entry(n, { content: { body: 'done' }, output: { source } })
 
+// Each line a harness wrote, as the importer reads it in: it wears its line.
+let read = (b: Bundle): Bundle => ({
+  ...b,
+  lines: { file: child, start: (b.entry as Comp).seq },
+})
+let subagentRun = [
+  input(1),
+  entry(2, { ask: { to: M } }),
+  entry(3, { call: { to: T, id: 'c1', source: 'e2' } }),
+  entry(4, { result: { call: 'e3' }, content: { body: 'echo' } }),
+  entry(5, { ask: { to: M } }),
+  said(6, 'e5'),
+  entry(7, {}),
+].map(read)
+
 let asyncTurn = () => [
   request(1),
   entry(2, { ask: { to: M, through: 'e1' }, attempt: { by: null } }),
@@ -541,6 +556,21 @@ let shapes: [string, Bundle[], TranscriptStatus][] = [
   ['an input nobody here answers', [input(1)], 'running'],
   ['a harness turn answered', [input(1), said(2, S)], 'settled'],
   ['a harness turn asked again', [input(1), said(2, S), input(3)], 'running'],
+  // A Claude Code subagent, read line by line from its file: its asks are its
+  // harness's, so it runs while it writes, and rests on its last prose.
+  ...([
+    'running',
+    'running',
+    'running',
+    'running',
+    'running',
+    'settled',
+    'running',
+  ] as const).map((want, i): [string, Bundle[], TranscriptStatus] => [
+    `a subagent read through line ${i + 1}`,
+    subagentRun.slice(0, i + 1),
+    want,
+  ]),
   [
     'an ask open',
     [input(1), entry(2, { ask: { to: M }, attempt: { by: S } })],

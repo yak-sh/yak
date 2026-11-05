@@ -477,6 +477,7 @@ const STATUS = [
   'stop',
   'exception',
   'refusal',
+  'lines',
 ]
 
 /** What a transcript is doing, read off the entries a status looks at. The

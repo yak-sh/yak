@@ -31,7 +31,7 @@ import {
   settled,
   statusOf as taskStatus,
 } from '@yaks/task'
-import { CLAIM } from './comp.ts'
+import { CLAIM, SESSION } from './comp.ts'
 import { STOP_ENTRY } from './native.ts'
 import { currentStatus } from './react.ts'
 import { unattended } from './dependencies.ts'
@@ -58,22 +58,26 @@ const WOKEN = 'woken'
 let ENDED = ['stopped', 'failed']
 
 // What says whether a transcript's run is over: a managed one's process, how
-// it exited, and whether it was asked to stop.
-let SEEN = ['process', 'exit', STOP_ENTRY]
+// it exited, and whether it was asked to stop; and the session, which names
+// the harness's file a transcript run outside the graph is read from.
+let SEEN = ['process', 'exit', STOP_ENTRY, SESSION]
 
 /** Whether a transcript's run is over, so that a request starts its next: a
  * native transcript has settled, and a managed one ended cleanly
- * ({@link cleanEnd}) with its ending read in, every request it had answered.
- * `seen` is the session's row, where the caller has read it already. */
+ * ({@link cleanEnd}) with its ending read in, every request it had answered;
+ * one a harness runs from its file never is. `seen` is the session's row, where the caller has read it already. */
 export let resting = async (
   g: Graph,
   session: Eid,
   seen?: Bundle,
 ): Promise<boolean> => {
   let row = seen ?? await one(g, session, SEEN)
-  return row?.process
-    ? cleanEnd(row) && !await requested(g, session)
-    : await currentStatus(g, session) == 'settled'
+  if (row?.process) return cleanEnd(row) && !await requested(g, session)
+  // A harness runs a transcript read from its file (a Claude Code subagent
+  // inside its parent's process): it reads its tasks itself and is never ours
+  // to resume.
+  if (comp(row, SESSION)?.transcript) return false
+  return await currentStatus(g, session) == 'settled'
 }
 
 // Where what a transcript's last turn or run was given ends: the entry its

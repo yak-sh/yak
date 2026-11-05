@@ -155,9 +155,10 @@ let abandoned = (calls: Bundle[]): boolean =>
   })
 
 /** A transcript the runner answers: one that asked it, by a request or a turn
- * it took. */
+ * it took. A turn read from a harness's file (`lines`) is that harness's, which
+ * answers its own transcript. */
 export let served = (entries: Bundle[]): boolean =>
-  entries.some((b) => USING in b || ASK in b)
+  entries.some((b) => USING in b || (ASK in b && !('lines' in b)))
 
 /** The transcripts a runner is working on: the ones the session cap counts
  * and a restart wakes. That is a transcript the runner answers ({@link served})
@@ -233,8 +234,10 @@ let entriesSay = (entries: Bundle[]): TranscriptStatus => {
   if (calls.length) return 'running'
   if (background && modelReady(all)) return 'pending'
   if (pending) return 'running'
+  // An ask with no attempt is a line a harness wrote before the rest of its
+  // reply: the turn runs on.
   if (
-    kind == 'ask' && attemptState(newest) == 'completed'
+    kind == 'ask' && newest.attempt && attemptState(newest) == 'completed'
   ) return 'settled'
   if (kind == 'ask' || kind == 'call') return 'running'
   // Inputs can be admitted while a provider request is in flight. Its reply

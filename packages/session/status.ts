@@ -21,8 +21,9 @@
 //   refusal       → failed    a deliberate no, until new input
 // `pending` is the runner's to answer (./run.ts), and it answers only a
 // transcript that asked it: one carrying a `using` (its request) or an `ask`
-// (a turn it took). One with neither is run outside the graph — a harness's
-// session its hooks record, a run from before the runner — so its newest input
+// (a turn it took, not one read from a harness's file). One with neither is run
+// outside the graph — a harness's session its hooks record, a Claude Code
+// subagent, a run from before the runner — so its newest input
 // is owed by whatever runs it: running, never pending, which the runner would
 // answer with no model to ask.
 //
@@ -933,6 +934,16 @@ export let sessionStatus = {
       joins,
     })
     let has = (comp: string, alias = 't') => notNull(col(comp, alias))
+    // Whether the entry `alias` was read from a harness's file: looked up only
+    // for an ask, the one entry it changes.
+    let read = (alias: string) =>
+      declared('lines')
+        ? exists(select({
+          cols: [lit(1)],
+          from: table('lines', 'line'),
+          where: eq(col('entity', 'line'), col('entity', alias)),
+        }))
+        : lit(false)
     let lacks = (comp: string, alias = 't') => isNull(col(comp, alias))
     let current = col('current', 't')
     let open = and(
@@ -980,7 +991,6 @@ export let sessionStatus = {
       'failed',
       'provisional',
       'seq',
-      'entity',
     ]
     // Keep these historical predicates out of the turn aggregate: earlier
     // verdicts need neither. Presence includes answered background calls;
@@ -1070,7 +1080,7 @@ export let sessionStatus = {
         ),
         as(fn('max', iff(row.input, col('seq', 't'), lit(null))), 'input_seq'),
         as(fn('max', iff(row.halted, col('seq', 't'), lit(null))), 'stop_seq'),
-        flag('served', or(has('using'), has('ask'))),
+        flag('served', or(has('using'), and(has('ask'), not(read('t'))))),
         ...names.map((name) =>
           as(fn('max', iff(newest, value(name), lit(null))), 'n_' + name)
         ),
@@ -1133,12 +1143,9 @@ export let sessionStatus = {
     }))
     // Before the first ask, a model selection on the original request still
     // makes a later input owed by this runner. Once asked, the turn itself is
-    // the proof of service and no historical request is read.
-    let owed = iff(
-      or(f('served'), notNull(col('a_entity', 'f'))),
-      lit('pending'),
-      lit('running'),
-    )
+    // the proof of service and no historical request is read, unless it was
+    // read from a harness's file: that harness answers its own transcript.
+    let owed = iff(f('served'), lit('pending'), lit('running'))
     // Once these branches decline, only nonterminal answers remain. A test
     // for stopped/failed needs none of the historical progress census below.
     let verdict = (rest: Expr) =>

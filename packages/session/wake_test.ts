@@ -180,6 +180,7 @@ let native = [
     entry: { session: 's1' },
     content: { body: 'done' },
     ask: { through: 's1:in' },
+    attempt: { by: null },
     output: {},
   },
   { entity: { eid: 'y' }, claim: { session: 's1' } },
@@ -284,6 +285,27 @@ let HUMAN = await image(managed('m1', 0), OUTSIDE, [
   { entity: { eid: 'human' }, person: {} },
   { entity: { eid: 'x' }, filed: { assignee: 'human' } },
 ])
+// A Claude Code subagent holding `y`, read from its file into its parent's
+// process: it rests on its prose, and runs no request of ours.
+let SUBAGENT = await image(OUTSIDE, finished('x'), [
+  { entity: { eid: 'parent' }, session: {} },
+  { entity: { eid: 'sub.jsonl' }, transcript: { session: 'sub' } },
+  {
+    entity: { eid: 'sub' },
+    session: { id: 'sub', transcript: 'sub.jsonl' },
+    spawned: { parent: 'parent' },
+  },
+  ...[
+    { content: { body: 'work y' } },
+    { ask: { to: M } },
+    { content: { body: 'working' }, output: { source: 'sub:2' } },
+  ].map((b, i) => ({
+    entity: { eid: `sub:${i + 1}` },
+    entry: { session: 'sub', seq: i + 1 },
+    ...b,
+  })),
+  { entity: { eid: 'y' }, claim: { session: 'sub' } },
+])
 let NO_PROVIDER = await image(managed('m1', 0), OUTSIDE, [
   { entity: { eid: 'parent' }, session: {} },
   { entity: { eid: 'm1' }, spawned: { parent: 'parent' } },
@@ -379,6 +401,14 @@ test('removing a nested dependency resumes the ancestor’s newly runnable task'
     to: 'leaf',
   })
   assertEquals(await LEAF_GONE.claim('x'), 'm1')
+})
+
+test('a subagent its harness runs is passed over, its parent told nothing', async () => {
+  let before = await count(SUBAGENT.g, 'sub')
+  await SUBAGENT.finish('x')
+  await rouse(SUBAGENT.g, 'sub')
+  assertEquals(await count(SUBAGENT.g, 'sub'), before)
+  assertEquals(await SUBAGENT.g.read('.knock.target=parent'), [])
 })
 
 test('a run without a provider reports its impossible wait to its parent before failing', async () => {
