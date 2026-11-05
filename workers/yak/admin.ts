@@ -16,6 +16,13 @@
 //
 // The rows and pages are drawn by the worker's registry (render/directory.ts);
 // this file counts what each uses and draws the desk around them.
+//
+// A space's page opens on its Operator's conversations, every person's, each
+// drawn as its own chat app draws it (operator-view.ts `talk`), with
+// everything its model was told and offered, for inspecting while the
+// Operator's prompts change (T-137672). They are read from the space's
+// Builder object, which lets the admin in by the platform's administrative
+// vouch.
 
 import type { Env } from './env.ts'
 import { type Held, holding } from './held.ts'
@@ -41,6 +48,9 @@ import { DAYS, NOT_ON, statsOf } from './views.ts'
 import { type Funnel, funnel, STEPS } from './funnel.ts'
 import { type ByDay, series, summed } from '@yaks/ui/chart'
 import { caught } from './defects.ts'
+import { operatorDoor } from './operator-page.ts'
+import { listed, type Worked } from './operator-view.ts'
+import { managePath } from './route.ts'
 
 export let PATH = '/admin'
 
@@ -371,7 +381,11 @@ let page = async (d: Reading, dir: Directory, r: Row, env: Env) => {
       seats.filter((s) => s.member!.role == role)
         .flatMap((s) => byId(seatPerson(s)) ?? [])
     ctx.owners = held('owner').map((p) => refOf(d, p))
-    more = grouped(d, 'Owners', held('owner')) +
+    more =
+      `<p><a href="${PATH}/${r.entity.eid}/operator">${
+        esc(spaceOf(r).operator)
+      }’s conversations, and what its model was told</a></p>` +
+      grouped(d, 'Owners', held('owner')) +
       grouped(d, 'Editors', held('editor')) +
       grouped(d, 'Viewers', held('viewer')) +
       grouped(d, 'Apps', c.apps.filter((a) => appSpace(a) == r.entity.eid))
@@ -407,6 +421,73 @@ let page = async (d: Reading, dir: Directory, r: Row, env: Env) => {
     `<a class="Desk_Address" href="${PATH}/${key}${tested(d)}">${
       LISTS[key].title
     }</a>`,
+  )
+}
+
+// What the admin is to a space's Builder object: the platform's
+// administrative access, which it checks against the directory again.
+let vouch = (person: string) => ({
+  person,
+  role: null,
+  administrative: true,
+})
+
+// A space's Operator, inspected: every person's conversation with it and the
+// work each started, or, with `open`, one of them drawn as its chat app
+// draws it. Each is read when asked, so a reload shows what has happened.
+let operatorPage = async (
+  d: Reading,
+  env: Env,
+  r: Row,
+  person: string,
+  open: string,
+) => {
+  let space = spaceOf(r)
+  let home = `${PATH}/${r.entity.eid}/operator`
+  let back = (to: string, said: string) =>
+    `<a class="Desk_Address" href="${to}${tested(d)}">${esc(said)}</a>`
+  let ask = (path: string, args: unknown) =>
+    operatorDoor(env, space, vouch(person), path, args).catch((e) => {
+      caught(e, { request: `admin operator ${path}` })
+      return e instanceof Error ? e : new Error(String(e))
+    })
+  let failed = (e: Error) =>
+    `<section class="Empty"><h2>The Operator could not be read: ${
+      esc(e.message)
+    }</h2></section>`
+  if (!open) {
+    let items = await ask('work', { everyone: true }) as Worked[] | Error
+    return desk(
+      d,
+      `${space.operator}’s conversations`,
+      'spaces',
+      items instanceof Error
+        ? failed(items)
+        : items.length
+        ? `<div class="Card">${listed(items, (o) => `${home}/${o}`)}</div>`
+        : '<section class="Empty"><h2>Nobody has talked to this Operator yet</h2></section>',
+      back(`${PATH}/${r.entity.eid}`, space.slug),
+    )
+  }
+  let talked = await ask('conversation', {
+    at: managePath('operator', space.slug),
+    open,
+    everyone: true,
+  }) as { title: string; html: string } | Error
+  let found = !(talked instanceof Error) && talked.html
+  return desk(
+    d,
+    talked instanceof Error || !talked.title
+      ? 'Not a conversation'
+      : talked.title,
+    'spaces',
+    talked instanceof Error
+      ? failed(talked)
+      : found
+      ? talked.html
+      : '<section class="Empty"><h2>This Operator has no conversation with that id</h2></section>',
+    back(home, `${space.operator}’s conversations`),
+    talked instanceof Error || found ? 200 : 404,
   )
 }
 
@@ -501,8 +582,11 @@ export let answer = async (
     })
     return funnelPage(d, f, f && !(f instanceof Error) ? f.days : days)
   }
+  let [eid, part, open = ''] = rest.split('/')
   let r = [...d.census.people, ...d.census.spaces, ...d.census.apps]
-    .find((x) => x.entity.eid == rest)
+    .find((x) =>
+      x.entity.eid == eid && (!part || part == 'operator' && x.space)
+    )
   if (!r) {
     return desk(
       d,
@@ -513,5 +597,7 @@ export let answer = async (
       404,
     )
   }
-  return await page(d, dir, r, env)
+  return part
+    ? await operatorPage(d, env, r, who, open)
+    : await page(d, dir, r, env)
 }

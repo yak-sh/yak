@@ -496,6 +496,21 @@ export let stateOf = (entries: Bundle[], done: boolean) => {
 let meta = (w: Worked) =>
   `${esc(w.state)}${day(w.at, 'short') ? ` · ${esc(day(w.at, 'short'))}` : ''}`
 
+/** The Operator's conversations as rows, newest first, each a link to the
+ * page `href` gives it. */
+export let listed = (items: Worked[], href: (open: string) => string) =>
+  `<ul class="Rows">${
+    items.map((w) =>
+      `<li class="Rows_Item"${
+        w.busy ? ' data-pending' : ''
+      }><div class="Rows_Main"><a class="Rows_Name" href="${
+        esc(href(w.open))
+      }">${esc(w.title)}</a><span class="Rows_Meta">${
+        meta(w)
+      }</span></div></li>`
+    ).join('')
+  }</ul>`
+
 /** The Operator's conversations on its settings page, newest first, each a
  * link to its own page in the chat app. */
 export let worked = (items: Worked[], space: string) =>
@@ -503,17 +518,7 @@ export let worked = (items: Worked[], space: string) =>
     esc(chatPath(space))
   }">Message the Operator</a></div></header>${
     items.length
-      ? `<ul class="Rows">${
-        items.map((w) =>
-          `<li class="Rows_Item"${
-            w.busy ? ' data-pending' : ''
-          }><div class="Rows_Main"><a class="Rows_Name" href="${
-            esc(chatPath(space, w.open))
-          }">${esc(w.title)}</a><span class="Rows_Meta">${
-            meta(w)
-          }</span></div></li>`
-        ).join('')
-      }</ul>`
+      ? listed(items, (open) => chatPath(space, open))
       : '<p>Nothing yet. Your conversation with the Operator, and the work it does, appear here.</p>'
   }</section>`
 

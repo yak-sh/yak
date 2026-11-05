@@ -222,24 +222,63 @@ export let CONVERSATION = 'Conversation'
 let busy = (state: string) =>
   state == 'Working on it' || state == 'Waiting to start'
 
+// The conversations these list: `person`'s own, or, for the platform's admin
+// (`everyone`), every person's with this space's Operator, each called by
+// whose it is.
+let conversationsOf = async (
+  store: Store,
+  space: string,
+  person: string,
+  everyone?: Named,
+) => {
+  if (!everyone) {
+    let root = rootOf(space, person)
+    let [held] = await store.g.get([root])
+    return held?.session ? [{ root, title: CONVERSATION }] : []
+  }
+  let held = (await store.g.read('.operator_session ?spawned')).filter((b) =>
+    !b.spawned &&
+    b.entity.eid == rootOf(space, String(comp(b, 'operator_session')!.person))
+  )
+  return await Promise.all(held.map(async (b) => ({
+    root: b.entity.eid,
+    title: await whose(b, everyone),
+  })))
+}
+
+// What the admin calls a person's conversation: whose it is.
+let whose = async (session: Bundle, named: Named) =>
+  `Conversation with ${
+    await named(String(comp(session, 'operator_session')?.person ?? '')) ??
+      'someone'
+  }`
+
 /**
  * The Operator's work for `person`, as its conversations are listed
  * (operator-view.ts `worked`, `sidebar`): their conversation first, then,
  * newest first, the pieces of work it started, the requests no session has
  * taken yet, the tasks it worked on before a person had one conversation,
- * and the breaks it took up itself.
+ * and the breaks it took up itself. Given `everyone`, what to call a person,
+ * it lists every person's conversation and the work each started, as the
+ * platform's admin inspects them.
  */
 export let workOf = async (
   store: Store,
   space = '',
   person = '',
+  everyone?: Named,
 ): Promise<Worked[]> => {
-  let root = rootOf(space, person)
-  let [tasks, requests, [conversation], helpers] = await Promise.all([
+  let conversations = await conversationsOf(store, space, person, everyone)
+  let [tasks, requests, helpers] = await Promise.all([
     store.g.read('.task ?doc .order=-created.at .limit=50'),
     requested(store),
-    store.g.get([root]),
-    store.g.read(`.spawned.parent=${root} .order=-created.at .limit=50`),
+    conversations.length
+      ? store.g.read(
+        `.spawned.parent=${
+          conversations.map((c) => c.root).join(',')
+        } .order=-created.at .limit=50`,
+      )
+      : [],
   ])
   let drawn = await Promise.all(tasks.map(async (task) => {
     let entries = await entriesOf(
@@ -276,18 +315,17 @@ export let workOf = async (
       busy: !failed,
     }
   })
-  let talking = []
-  if (conversation?.session) {
+  let talking = await Promise.all(conversations.map(async ({ root, title }) => {
     let entries = await linesOf(store, root, TAIL)
     let state = stateOf(entries, false)
-    talking.push({
+    return {
       open: root,
-      title: CONVERSATION,
+      title,
       state,
       at: String(comp(entries.at(-1), 'created')?.at ?? ''),
       busy: busy(state),
-    })
-  }
+    }
+  }))
   return [
     ...talking,
     ...[...waiting, ...work, ...drawn].sort((a, b) => b.at.localeCompare(a.at)),
@@ -315,6 +353,7 @@ export let conversationOf = async (
   at: string,
   open: string,
   named: Named = nameless,
+  everyone?: Named,
 ): Promise<{
   task: string
   begun: string
@@ -336,7 +375,11 @@ export let conversationOf = async (
     return {
       task: open,
       begun: open,
-      title: helper ? askedOf(await openingOf(store, open)) : CONVERSATION,
+      title: helper
+        ? askedOf(await openingOf(store, open))
+        : everyone
+        ? await whose(row, everyone)
+        : CONVERSATION,
       html: talk(
         { entity: { eid: open } } as Bundle,
         entries,
@@ -585,6 +628,11 @@ export let operatorRequest = async (
   let { person, space: spaceId } = held
   let { store } = operator
   let access = held
+  // The platform's admin, inspecting: every person's conversations, each
+  // called by whose it is.
+  let everyone = args.everyone === true && access.administrative
+    ? operator.named
+    : undefined
   if (path == '/operator/stop') {
     return Response.json(await operator.stop(String(args.task ?? ''), person))
   }
@@ -663,7 +711,7 @@ export let operatorRequest = async (
     }))
   }
   if (path == '/operator/work') {
-    return Response.json(await workOf(store, spaceId, person))
+    return Response.json(await workOf(store, spaceId, person, everyone))
   }
   if (path == '/operator/conversation') {
     return Response.json(
@@ -672,6 +720,7 @@ export let operatorRequest = async (
         String(args.at ?? ''),
         String(args.open ?? ''),
         operator.named,
+        everyone,
       ),
     )
   }
