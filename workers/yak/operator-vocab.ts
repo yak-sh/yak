@@ -47,6 +47,20 @@ export let operatorDoc: VocabDoc = {
         files: { type: 'array', items: { type: 'object' } },
       },
     },
+    operator_letter: {
+      component: true,
+      description:
+        "A letter the Operator wrote for a person to someone else, beside its `mail` and `doc`: a reply that names it comes back into that person's conversation.",
+      properties: {
+        person: { type: 'string', ref: 'person', death: 'keep' },
+        session: {
+          type: 'string',
+          ref: 'session',
+          death: 'keep',
+          description: 'The session that wrote it.',
+        },
+      },
+    },
     operator_answer: {
       component: true,
       description:

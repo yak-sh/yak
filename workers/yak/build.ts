@@ -390,6 +390,25 @@ export class Builder {
     }
     if (url.pathname.startsWith('/operator/')) {
       try {
+        // A reply to the Operator's letter is the kernel's to bring (inbox.ts),
+        // and is asked by no person.
+        if (
+          url.pathname == '/operator/letter' ||
+          url.pathname == '/operator/replied'
+        ) {
+          let space = request.headers.get(SPACE)
+          if (request.headers.get('x-yak-kernel') != '1' || !space) {
+            return no(403, NOBODY)
+          }
+          let { operatorReply } = await import('./operator-host.ts')
+          return await operatorReply(
+            await this.#work(),
+            space,
+            url.pathname,
+            await request.json(),
+            () => this.#arming,
+          )
+        }
         return await this.#operate(request)
       } catch (e) {
         return no(

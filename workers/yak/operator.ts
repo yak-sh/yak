@@ -47,7 +47,13 @@ import { caught, defect } from './defects.ts'
 import { instructions } from './guide.ts'
 import { standing } from './standing.ts'
 import { drain, type operatorStore } from './operator-store.ts'
-import { asIs, type File, rootOf, SHOWN } from './operator-channels.ts'
+import {
+  asIs,
+  type File,
+  mailSend,
+  rootOf,
+  SHOWN,
+} from './operator-channels.ts'
 import { textSend } from './operator-texts.ts'
 import { bases, declare, type Declared, spaced } from './operator-persona.ts'
 
@@ -141,9 +147,11 @@ let SELF = {
 let mine = new Set(['memory_save', 'memory_recall', 'memory_around'])
 // The connector's tools the Operator holds as its own: memory_save and
 // memory_recall are its own memories (the space's are store_memory_save and
-// store_memory_recall), and operator_run and operator_read reach the Operator
-// itself, whose fork, spawn and reads with self are its own of them.
-let ownNamed = new Set([...mine, 'operator_run', 'operator_read'])
+// store_memory_recall), mail_send is its own letter for the person it works
+// for (an app's is store_mail_send), and operator_run and operator_read reach
+// the Operator itself, whose fork, spawn and reads with self are its own of
+// them.
+let ownNamed = new Set([...mine, 'mail_send', 'operator_run', 'operator_read'])
 // Where the Operator finds what it no longer holds in front of it, declared
 // beside the code that gives it `self` and the memory loop. The base persona
 // contains it (operator-persona.ts).
@@ -739,6 +747,7 @@ export let operating = (
           ...await operatorRoster(ctx, store, tasked),
           platformBug(space),
           textSend(env, ctx, space),
+          mailSend(env, ctx, space, store),
           ...options.tools?.(ctx, files) ?? [],
         ]
       },

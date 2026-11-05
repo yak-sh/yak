@@ -244,7 +244,8 @@ export let arrived = async (m: Inbound, env: Env): Promise<string> => {
 }
 
 // App addresses keep receiving app mail. A member writing the space itself
-// asks its operator; unauthenticated arrivals remain ordinary app mail.
+// asks its operator, and so does a reply to a letter the Operator wrote for
+// one; other arrivals remain ordinary app mail.
 let operatorMail = async (m: Inbound, env: Env): Promise<string | null> => {
   let box = mailedTo(m.to, env)
   if (!box || box.app) return null
@@ -253,15 +254,81 @@ let operatorMail = async (m: Inbound, env: Env): Promise<string | null> => {
   if (!space || space.trashed) return null
   let from = author(m).trim().toLowerCase()
   let person = await dir.personAt(from)
-  if (!person || !writes(await dir.role(space, person))) return null
-  let { authenticated, keepFile, requestId } = await import(
-    './operator-channels.ts'
-  )
+  if (!person || !writes(await dir.role(space, person))) {
+    return await replied(m, env, space, from)
+  }
+  let { authenticated } = await import('./operator-channels.ts')
   if (!authenticated(m.headers.get('authentication-results'), from)) {
     throw new Refused(
       'The operator needs an authenticated email from your member address. Sign in and use Operator chat, or resend with DMARC authentication.',
     )
   }
+  return await asked(m, env, space, '/operator/receive', {
+    'x-yak-person': person,
+  }, { verified: true })
+}
+
+// The Message-IDs a letter answers, its In-Reply-To first and then its
+// References, newest first.
+let threadOf = (m: Inbound) =>
+  [
+    ...(m.headers.get('in-reply-to') ?? '').split(/\s+/),
+    ...(m.headers.get('references') ?? '').split(/\s+/).reverse(),
+  ].map((id) => id.replace(/[<>]/g, '').trim()).filter(Boolean)
+
+// A reply to a letter the Operator wrote for a person (operator-channels.ts
+// `mailSend`), from whoever it went to: the kernel brings it to that person's
+// conversation, as the writer's words (operator-host.ts `operatorReply`).
+let replied = async (
+  m: Inbound,
+  env: Env,
+  space: Space,
+  from: string,
+): Promise<string | null> => {
+  let thread = threadOf(m)
+  if (!thread.length) return null
+  let { builderOf, SPACE } = await import('./build.ts')
+  let found = await builderOf(env, space.eid)(() =>
+    new Request('https://builder/operator/letter', {
+      method: 'POST',
+      headers: {
+        'content-type': 'application/json',
+        'x-yak-kernel': '1',
+        [SPACE]: space.eid,
+      },
+      body: JSON.stringify({ thread }),
+    })
+  )
+  if (found.status == 404) return null
+  if (!found.ok) {
+    throw new Error('Operator letter lookup failed: ' + await found.text())
+  }
+  let { letter } = await found.json() as { letter: string }
+  return await asked(
+    m,
+    env,
+    space,
+    '/operator/replied',
+    {
+      'x-yak-kernel': '1',
+    },
+    { reply: letter },
+    { address: from, thread },
+  )
+}
+
+// A letter for the Operator, its attachments kept, handed to the space's
+// builder object at `path` as the request it answers on.
+let asked = async (
+  m: Inbound,
+  env: Env,
+  space: Space,
+  path: string,
+  who: Record<string, string>,
+  arrival: { verified?: boolean; reply?: string },
+  extra: { address?: string; thread?: string[] } = {},
+): Promise<string> => {
+  let { keepFile, requestId } = await import('./operator-channels.ts')
   let mail = await PostalMime.parse(m.raw)
   let head = read(m, mail)
   let files = []
@@ -280,30 +347,33 @@ let operatorMail = async (m: Inbound, env: Env): Promise<string | null> => {
     )
   }
   let id = requestId(space.eid, messageId({ ...m, headers: head }))
+  let signed = arrival.verified ?? verdict(head)
   let received = inbound({ ...m, headers: head }, {
     eid: id,
     text: words(mail),
-    verified: true,
+    ...(arrival.reply ? { reply: arrival.reply } : {}),
+    ...(signed == null ? {} : { verified: signed }),
   })[0]
   let { builderOf, SPACE } = await import('./build.ts')
   let response = await builderOf(env, space.eid)(() =>
-    new Request('https://builder/operator/receive', {
+    new Request('https://builder' + path, {
       method: 'POST',
       headers: {
         'content-type': 'application/json',
-        'x-yak-person': person,
+        ...who,
         [SPACE]: space.eid,
       },
       body: JSON.stringify({
         say: words(mail),
         request: {
           channel: 'email',
-          address: from,
+          address: extra.address ?? author(m).trim().toLowerCase(),
           reply_to: messageId({ ...m, headers: head }),
           files,
         },
         options: { id, mail: received.mail, title: mail.subject },
         in_reply_to: mail.inReplyTo,
+        ...(extra.thread ? { thread: extra.thread } : {}),
       }),
     })
   )

@@ -14,6 +14,7 @@ import { operating, type Options } from './operator.ts'
 import {
   type Listener,
   operatorFrames,
+  operatorReply,
   operatorRequest,
 } from './operator-host.ts'
 import { attachmentTools, handleChannels } from './operator-channels.ts'
@@ -77,13 +78,24 @@ export let operatorService = (env: Env, held: Held, options: Options) => {
   handleChannels(operator, env)
   let fetch = async (req: Request) => {
     assertEquals(req.method, 'POST')
-    assertEquals(req.headers.get('x-yak-person'), held.person)
     assertEquals(req.headers.get('x-space-eid'), held.space)
+    let path = new URL(req.url).pathname
+    // A reply to the Operator's letter, which the kernel brings for nobody.
+    if (req.headers.get('x-yak-kernel') == '1') {
+      return operatorReply(
+        operator,
+        held.space,
+        path,
+        await req.json(),
+        () => undefined,
+      )
+    }
+    assertEquals(req.headers.get('x-yak-person'), held.person)
     try {
       let response = await operatorRequest(
         operator,
         held,
-        new URL(req.url).pathname,
+        path,
         await req.json(),
         () => undefined,
       )

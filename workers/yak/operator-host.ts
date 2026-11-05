@@ -2,7 +2,7 @@ import type { Bundle } from '@yaks/graph'
 import { draftEid } from '@yaks/draft'
 import type { Held } from './build-door.ts'
 import { type Operator, readOperator } from './operator.ts'
-import { receive, type Request, rootOf } from './operator-channels.ts'
+import { letterOf, receive, type Request, rootOf } from './operator-channels.ts'
 import type { operatorStore } from './operator-store.ts'
 import { transcript } from '@yaks/session'
 import { stepOf } from '@yaks/tools/title'
@@ -515,6 +515,52 @@ let drafts = (bundles: Bundle[], person: string) =>
     typed: { over: String((b.typed as { over?: string })?.over ?? '') },
     $actor: { by: person },
   }))
+
+/**
+ * A reply to a letter the Operator wrote, which the kernel brings (inbox.ts)
+ * from someone who need be nobody here: `/operator/letter` finds the letter
+ * its Message-IDs name (`thread`), and `/operator/replied` puts it in the
+ * conversation of the person the letter was written for.
+ */
+export let operatorReply = async (
+  operator: Operator,
+  space: string,
+  path: string,
+  args: Record<string, unknown>,
+  armed: () => Promise<void> | undefined,
+): Promise<Response> => {
+  let { store } = operator
+  let thread = Array.isArray(args.thread) ? args.thread.map(String) : []
+  let letter = await letterOf(store, thread)
+  if (!letter) {
+    return Response.json(
+      { message: 'That answers no letter of the Operator.' },
+      {
+        status: 404,
+      },
+    )
+  }
+  if (path == '/operator/letter') {
+    return Response.json({ letter: letter.entity.eid })
+  }
+  let options = args.options as Parameters<typeof receive>[3]
+  let [old] = options?.id ? await store.g.get([options.id]) : []
+  let id = await receive(
+    store,
+    {
+      ...args.request as Request,
+      channel: 'letter',
+      person: String(comp(letter, 'operator_letter')!.person),
+      space,
+    },
+    String(args.say ?? ''),
+    options,
+  )
+  await armed()
+  return Response.json({ request: id }, {
+    status: old?.operator_request ? 200 : 202,
+  })
+}
 
 export let operatorRequest = async (
   operator: Operator,

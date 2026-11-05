@@ -28,6 +28,8 @@ export type Payload = {
   from: { address: string; name: string }
   /** the recipients */
   to: string[]
+  /** the addresses copied */
+  cc?: string[]
   /** where a reply should go — the sender, unless you say otherwise */
   reply_to: string
   /** the subject line */
@@ -47,6 +49,7 @@ export type Payload = {
 export let payload = (m: Message): Payload => ({
   from: { address: m.from, name: m.name ?? m.from.split('@')[0] },
   to: [m.to],
+  ...(m.cc ? { cc: [m.cc] } : {}),
   reply_to: m.from,
   subject: m.subject,
   text: m.text,

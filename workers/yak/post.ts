@@ -100,6 +100,7 @@ export type Binding = {
   send(letter: {
     from: Address
     to: string
+    cc?: string
     subject: string
     text?: string
     html?: string
@@ -133,6 +134,8 @@ export let posting = (
     let sent = await mail.send({
       from: m.name ? { name: m.name, email: m.from } : m.from,
       ...sink(env, m.to, m.subject),
+      // A sink takes the copy too: nobody but the sink is written to.
+      ...(m.cc && !env.MAIL_SINK ? { cc: m.cc } : {}),
       text: m.text,
       html: m.html,
       // The threading headers carry the bracketed Message-ID; the receipt

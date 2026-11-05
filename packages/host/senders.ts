@@ -9,6 +9,8 @@ export type Message = {
   name?: string
   /** the address it is going to */
   to: string
+  /** the address copied on it, who sees it and its replies */
+  cc?: string
   /** the subject line */
   subject: string
   /** the body as plain text */

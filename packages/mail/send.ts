@@ -105,6 +105,7 @@ export let message = (
   return {
     from: str(mail, 'from'),
     to,
+    ...(str(mail, 'cc') ? { cc: str(mail, 'cc') } : {}),
     subject: str(doc, TITLE),
     text: text(body),
     html: html(body),

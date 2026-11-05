@@ -25,6 +25,13 @@
             "bob@example.com"
           ]
         },
+        "cc": {
+          "type": "string",
+          "description": "the address copied on it",
+          "examples": [
+            "ann@example.com"
+          ]
+        },
         "at": {
           "type": "string",
           "format": "date-time",
