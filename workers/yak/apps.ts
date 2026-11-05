@@ -177,6 +177,7 @@ import {
   trackedIn,
 } from './unseen.ts'
 import { broken } from '@yaks/tracker/report'
+import { flood } from './lib/flood.ts'
 import { isVerifiedBot } from './lib/bots.ts'
 import { drafted, fullAt, hashed, recoverRelease, TOOLS } from './tools.ts'
 import { ADDRESS } from './route.ts'
@@ -1120,23 +1121,10 @@ let reporting = (res: Response, req: Request, at: string) => {
   })
 }
 
-// A flood guard, not a quota: reports per app per minute, counted in this
-// isolate and no further. A page in a render loop that throws every frame
-// must not write a thousand entities a second; a busy app spread over many
-// isolates reporting a few extra breaks is the harmless direction to err.
-let RATE = 30
-let counted = new Map<string, { minute: number; n: number }>()
-
-let flooding = (space: Space, app: App) => {
-  let key = `${space.eid}/${app.eid}`
-  let minute = Math.floor(Date.now() / 60_000)
-  let hit = counted.get(key)
-  if (!hit || hit.minute != minute) {
-    counted.set(key, { minute, n: 1 })
-    return false
-  }
-  return ++hit.n > RATE
-}
+// Reports per app per minute (lib/flood.ts): a page in a render loop that
+// throws every frame must not write a thousand entities a second.
+let over = flood(30)
+let flooding = (space: Space, app: App) => over(`${space.eid}/${app.eid}`)
 
 // The bytes' own name (versions.ts `sha256`, the content address a version's
 // manifest is made of) is the object's key and the entity's eid here, so the

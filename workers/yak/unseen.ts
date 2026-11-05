@@ -32,6 +32,7 @@ import { type Break, capture, origin, queue } from '@yaks/tracker/report'
 import { errorsAt, errorsIn } from './app-errors.ts'
 import { refuse } from './tool.ts'
 import { isTestAddress } from './lib/bots.ts'
+import { flood } from './lib/flood.ts'
 
 // A refusal is NOT a break (C-32652 item 3, T-32655; C-32869 item 5) — one
 // rule, read off whichever half of the answer the platform is holding.
@@ -98,21 +99,9 @@ export let serving = async (env: Env, space: Space, app: App) => {
 // The ceiling on what one app may push down its members' streams in a
 // minute (T-33006): a crash-looping page writes a break per frame, and every
 // break past the first few says the same thing. Per-isolate memory, like the
-// report door's own write ceiling (apps.ts `flooding`) — approximate on
-// purpose.
-let PUSHES = 10
-let pushed = new Map<string, { minute: number; n: number }>()
-
-let hushed = (space: Space, app: App) => {
-  let key = `${space.slug}/${app.slug}`
-  let minute = Math.floor(Date.now() / 60_000)
-  let hit = pushed.get(key)
-  if (!hit || hit.minute != minute) {
-    pushed.set(key, { minute, n: 1 })
-    return false
-  }
-  return ++hit.n > PUSHES
-}
+// report door's own write ceiling (lib/flood.ts).
+let pushes = flood(10)
+let hushed = (space: Space, app: App) => pushes(`${space.slug}/${app.slug}`)
 
 // Whose a space is, as a failure's `account` tag: `test` when every member is
 // a test account (lib/bots.ts), so the owner's letter says a probe broke, not

@@ -2,7 +2,7 @@
 // and effects are separate facets so a browser does not load a box service.
 
 export { bugDoc, trackerDoc } from './vocab.ts'
-export { faultKey, normalize } from './fault.ts'
+export { faultKey, faultOf, normalize } from './fault.ts'
 export {
   bugEid,
   type Enrich,

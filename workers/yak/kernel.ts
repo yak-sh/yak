@@ -257,7 +257,7 @@ let serve = async (req: Request, env: Env, r: Route) => {
   }
   // What breaks in the platform's own pages (page-report.ts), before the
   // connector for the same reason as the fee's.
-  if (path == pageReport.PATH) return pageReport.answer(req)
+  if (path == pageReport.PATH) return pageReport.answer(req, env)
   if (path == '/mcp' || path.startsWith('/api/')) {
     return bound(env.MCP, mcp, env).fetch(req)
   }
