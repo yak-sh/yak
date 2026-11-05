@@ -235,6 +235,33 @@ every endpoint uses, `{error: {code, message}}`: `400` for a model not offered
 here or an input the model refuses, `429` past the budget, with a message that
 says so, and `503` while the model is busy. Show the person `error.message`.
 
+## Speech with `./api/speech`
+
+yaks.app hears and speaks through Deepgram, with nothing to connect. A page or
+worker POSTs text to `./api/speech/speak` and gets an MP3 back, or POSTs a
+recording to `./api/speech/hear` and gets its words:
+
+    let spoken = await fetch('./api/speech/speak', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ text: 'Your table is booked for Friday.' }),
+    })
+    new Audio(URL.createObjectURL(await spoken.blob())).play()
+
+    let heard = await fetch('./api/speech/hear', {
+      method: 'POST',
+      headers: { 'content-type': recording.type },
+      body: recording,
+    })
+    let { text, seconds } = await heard.json()
+
+`text` is up to 2,000 characters, and `voice` names another Aura-2 voice
+(<https://developers.deepgram.com/docs/tts-models>). A recording is up to 25 MB
+in any audio type a browser's `MediaRecorder` makes. The same people who may
+call a model may use speech, and it spends the same space budget: $0.030 a
+thousand characters spoken, and $0.0043 a minute heard. A refusal is
+`{error: {code, message}}`: `402` past the budget, `503` while speech is paused.
+
 ## Image input (vision models)
 
 A vision model takes the image inside the request, in the same single call:
