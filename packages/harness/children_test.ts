@@ -373,3 +373,41 @@ test('child completion is queued behind an in-flight parent ask without collidin
   )
   await a.close()
 })
+
+test("a fork reports once, after its own helper's report, when it settled first", async () => {
+  let helperAsked = deferred<void>()
+  let helperReply = deferred<Reply>()
+  let said = (req: Request, text: string) =>
+    req.items.some((i) => i.kind == 'user' && i.text.endsWith(text))
+  let model: Model = (req) => {
+    let has = (text: string) =>
+      req.items.some((i) => 'text' in i && i.text.includes(text))
+    if (said(req, 'helper work') && !said(req, 'fork work')) {
+      helperAsked.resolve()
+      return helperReply.promise
+    }
+    if (said(req, 'fork work')) {
+      if (has('helper final')) return Promise.resolve(reply('fork final'))
+      if (req.items.some((i) => i.kind == 'result' && i.id == 'h')) {
+        return Promise.resolve(reply('fork first'))
+      }
+      return Promise.resolve(call('spawn', { prompt: 'helper work' }, 'h'))
+    }
+    if (req.items.some((i) => i.kind == 'result' && i.id == 'f')) {
+      return Promise.resolve(reply('parent reacted'))
+    }
+    return Promise.resolve(call('fork', { prompt: 'fork work' }, 'f'))
+  }
+  let h = await harness()
+  let a = local({ h, model, tools: sessionTools(h.g) })
+  let parent = await a.start('parent')
+  await helperAsked.promise
+  let [fork] = await a.children(parent)
+  let [helper] = await a.children(fork.entity.eid)
+  await a.idle(fork.entity.eid) // the fork settles while its helper works
+  helperReply.resolve(reply('helper final'))
+  for (let s of [helper.entity.eid, fork.entity.eid, parent]) await a.idle(s)
+  let told = (await a.transcript(parent)).filter((b) => b.delivery)
+  assertEquals(told.map((b) => textOf(b).split('\n').at(-1)), ['fork final'])
+  await a.close()
+})

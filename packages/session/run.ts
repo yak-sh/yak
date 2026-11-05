@@ -126,9 +126,14 @@ let ended = async (g: Graph, session: Eid, r: Runner) => {
   }
   let self = await one(g, session, admission)
   let d = comp(self, 'dispatch')
-  if (self?.spawned) await deliverChild(g, session)
+  let parent = comp(self, 'spawned')?.parent as Eid | undefined
+  if (parent) await deliverChild(g, session)
   if (!d || dispatchStatus(self) == 'settled') return
   await swap(g, session, dispatchStatus(self), { state: 'settled' })
+  // A parent that settled while this child worked held its own report.
+  if (parent && (await one(g, parent, ['spawned']))?.spawned) {
+    await deliverChild(g, parent)
+  }
   await admitNext(g, r)
 }
 

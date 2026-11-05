@@ -478,6 +478,18 @@ export let sessionTools = (g: Graph, limits: ChildLimits = {}): Tool[] => {
   }]
 }
 
+// Whether any of a session's children has yet to end and be told: a child's
+// dispatch settles only after its receipt is written (./run.ts).
+let working = async (g: Graph, session: Eid): Promise<boolean> => {
+  for (let c of await children(g, session)) {
+    let place = dispatchStatus(c)
+    if (place != null && place != 'settled') return true
+    let status = await entryStatus(g, c.entity.eid)
+    if (!['settled', 'failed', 'stopped'].includes(status)) return true
+  }
+  return false
+}
+
 /** Build one idempotent completion receipt, while holding the parent's queue.
  * The final-entry-derived id also allows a child to be sent another turn. */
 export let deliverChild = async (g: Graph, child: Eid): Promise<void> => {
@@ -516,6 +528,9 @@ export let deliverChild = async (g: Graph, child: Eid): Promise<void> => {
   let status = await entryStatus(g, child)
   // A new receipt still requires the full transcript's terminal outcome.
   if (!['settled', 'failed', 'stopped'].includes(status)) return
+  // A child whose own helpers still work has not answered yet: their reports
+  // will wake it, and one call reports once, after they end.
+  if (status == 'settled' && await working(g, child)) return
   // The model may have finished while the fast-path reads were awaiting.
   // Use the same terminal snapshot for the receipt identity and its text.
   last = (await newestOf(g, child))!
