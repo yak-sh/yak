@@ -669,8 +669,8 @@ The complete list of reserved names:
     inviting key lease lines listed mail mail_answered mail_post mail_task
     member memory meter model model_reservation notice notice_confirmed
     notice_letter notice_posted notice_subscription notified notify_trash
-    occupancy openai opened openrouter operator operator_reach order output
-    output_of parent pending person phone plan price product project
+    occupancy offer openai opened openrouter operator operator_reach order
+    output output_of parent pending person phone plan price product project
     provider provisional public_file published quarantined questions reads
     recalled ref referenced refusal register_writes report repository
     representation requires restored result retired revision rtc rtc_lapse
