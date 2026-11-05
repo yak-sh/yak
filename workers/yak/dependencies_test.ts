@@ -509,3 +509,31 @@ test('workspace manifests travel with a cached install and invalidate it when ch
   await m.restore()
   assertEquals(m.state(), [2, false])
 })
+
+test('a cached workspace install preserves nested dependency trees', async () => {
+  let m = memory(), path = 'packages/one/node_modules/dep'
+  m.host.mkdir(`${m.root}/packages/one`, true)
+  m.write(
+    `${m.root}/package.json`,
+    JSON.stringify({ workspaces: ['packages/one'] }),
+  )
+  m.write(`${m.root}/packages/one/package.json`, '{"name":"one"}')
+  m.write(
+    `${m.root}/package-lock.json`,
+    JSON.stringify(lock({ ...packages, [path]: pkg })),
+  )
+  let npm = m.host.npm
+  m.host.npm = async (root) => {
+    let code = await npm(root)
+    m.host.mkdir(`${root}/${path}`, true)
+    m.write(`${root}/${path}/package.json`, '{"version":"1"}')
+    m.write(
+      `${root}/node_modules/.package-lock.json`,
+      JSON.stringify(lock({ 'node_modules/dep': pkg, [path]: pkg })),
+    )
+    return code
+  }
+  await m.restored(m.cache, m.root, { mode: 'copy' })
+  assertEquals(m.read(`${m.root}/${path}/package.json`), '{"version":"1"}')
+  assertEquals(m.stale(m.root), false)
+})

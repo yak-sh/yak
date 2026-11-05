@@ -1,7 +1,7 @@
 #!/usr/bin/env -S deno run -A
 // Each executor release keeps its Worker and Workflow names. A changed bundle
 // gets another release, leaving accepted calls on the Worker that accepted them.
-import { aliased, dir as dependencies, WRANGLER } from '../yak/wrangler.ts'
+import { aliased, WRANGLER } from '../yak/wrangler.ts'
 import { installed } from '../yak/dependencies.ts'
 import { fileURLToPath } from 'node:url'
 import { parse } from '@std/toml'
@@ -12,7 +12,7 @@ export let root = fileURLToPath(new URL('./', import.meta.url)).replace(
 )
 
 export let ready = async () => {
-  await installed(dependencies)
+  await installed()
   aliased(undefined, `${root}/.wrangler/paths.json`)
 }
 

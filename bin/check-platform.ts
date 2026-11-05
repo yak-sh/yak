@@ -122,12 +122,15 @@ if (import.meta.main) {
     new URL('../', import.meta.url),
     Deno.args[0],
   )
-  // Outside the workspace so its Deno globals/imports cannot leak in. All map
-  // targets and entrypoints are absolute; random scratch paths do not change
-  // the program's module identities or its shared type cache.
-  let scratch = await Deno.makeTempDir({ prefix: 'check-platform-' })
+  // A separate config keeps platform globals independent, beside package.json
+  // so its workspace and npm dependencies still resolve normally.
+  let scratch = await Deno.makeTempFile({
+    dir: new URL('../', import.meta.url).pathname,
+    prefix: '.platform-',
+    suffix: '.json',
+  })
   try {
-    let path = `${scratch}/deno.json`
+    let path = scratch
     await Deno.writeTextFile(path, JSON.stringify(config))
     let status = await new Deno.Command('deno', {
       args: ['check', '--no-lock', '--config', path, ...entries],

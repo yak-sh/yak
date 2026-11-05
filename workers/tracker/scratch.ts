@@ -25,14 +25,6 @@ let server = createTestHarness({
       compatibility_date: '2026-07-01',
       compatibility_flags: ['nodejs_compat'],
       tsconfig: '.wrangler/paths.json',
-      alias: {
-        fflate: `${root}/../yak/node_modules/fflate/esm/browser.js`,
-        croner: `${root}/../yak/node_modules/croner/dist/croner.js`,
-        marked: `${root}/../yak/node_modules/marked/lib/marked.esm.js`,
-        '@cfworker/json-schema':
-          `${root}/../yak/node_modules/@cfworker/json-schema/dist/esm/index.js`,
-        '@std/yaml': `${root}/../yak/node_modules/@std/yaml/mod.js`,
-      },
       durable_objects: {
         bindings: [{ name: 'TRACKERS', class_name: 'Tracker' }],
       },

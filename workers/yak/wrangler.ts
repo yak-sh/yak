@@ -1376,7 +1376,7 @@ if (system.main(import.meta.url)) {
   let argv = [...system.args]
   // npm ci pins this executable already. npx adds an npm process and package
   // resolution to every read/upload even when the exact package is installed.
-  let executable = join(repo, 'node_modules/.bin/wrangler')
+  let executable = join(dir, 'node_modules/.bin/wrangler')
   let wrangler = WRANGLER
   let guarded = command(argv) === 'deploy' && !argv.includes('--dry-run')
   let door = guarded

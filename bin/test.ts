@@ -29,6 +29,11 @@ if (import.meta.main && Deno.args[0] !== '--bulk') {
   }
 }
 
+if (import.meta.main) {
+  let { installed } = await import('../workers/yak/dependencies.ts')
+  await installed()
+}
+
 let { relative } = await import('node:path')
 let { default: config } = await import('../deno.json', {
   with: { type: 'json' },

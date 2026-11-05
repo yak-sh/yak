@@ -287,10 +287,26 @@ export let dependencies = (host: Host = system) => {
         }
         let seedIssue = seedReason()
         if (!seedIssue) {
-          let modules = `${root}/node_modules`, copy = `${lock}/node_modules`
-          host.copy(host.realpath(`${seed}/node_modules`), copy)
-          remove(modules)
-          host.rename(copy, modules)
+          let lockfile: Lock = JSON.parse(
+            host.read(`${seed}/package-lock.json`),
+          )
+          let trees = new Set([
+            'node_modules',
+            ...Object.keys(lockfile.packages)
+              .filter((path) =>
+                !path.startsWith('node_modules/') &&
+                path.includes('/node_modules/')
+              )
+              .map((path) => path.split('/node_modules/')[0] + '/node_modules'),
+          ])
+          for (let tree of trees) {
+            let modules = `${root}/${tree}`, copy = `${lock}/${tree}`
+            host.mkdir(resolve(copy, '..'), true)
+            host.copy(host.realpath(`${seed}/${tree}`), copy)
+            remove(modules)
+            host.mkdir(resolve(modules, '..'), true)
+            host.rename(copy, modules)
+          }
           return false
         }
         let inputs = key(files(root))

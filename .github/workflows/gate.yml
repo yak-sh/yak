@@ -61,6 +61,11 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - name: workspace dependencies
+        env:
+          SUITE_STEP: workspace dependencies
+        run: deno run -A workers/yak/dependencies.ts
+
       # Verbose, here and below: the gate's log is read whole, so it keeps
       # every check's output and every test's line.
       - name: deno task check
