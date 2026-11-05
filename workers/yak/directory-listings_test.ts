@@ -85,6 +85,9 @@ let fixture = async () => {
       })),
     ],
   }, ADA_OWNS)
+  // What the stamp owes runs after it answers (an app owes reward_referral),
+  // and each of its writes clears the copy: finish it before the copy warms.
+  await p.settled()
 
   let time = clock()
   let stalled = false
