@@ -1,9 +1,71 @@
 import { clock, test } from '@yaks/testing'
 import { assertEquals, assertRejects, assertStringIncludes } from '@std/assert'
-import { type Browser, capture, type Message, type Page } from './browser.ts'
+import {
+  type Browser,
+  capture,
+  type Message,
+  type Page,
+  type Session,
+} from './browser.ts'
 
 let view = { width: 390, height: 844, wait: 0 }
-let page = (options: { loading?: Error; screenshot?: Error } = {}) => {
+
+// The page's main world runs its own scripts; only the audit's isolated
+// world answers axe-core, the way Chrome keeps the two realms apart.
+let devtools = (
+  main: (expression: string) => unknown,
+  world: (expression: string) => unknown,
+) => {
+  let worlds = 0
+  let cdp: Session = {
+    send: (method, params) => {
+      if (method == 'Page.getFrameTree') {
+        return Promise.resolve({ frameTree: { frame: { id: 'main' } } })
+      }
+      if (method == 'Page.createIsolatedWorld') {
+        return Promise.resolve({ executionContextId: ++worlds })
+      }
+      let { expression, contextId } = params as {
+        expression: string
+        contextId?: number
+      }
+      try {
+        let value = contextId ? world(expression) : main(expression)
+        return Promise.resolve({ result: { value } })
+      } catch (e) {
+        return Promise.resolve({
+          result: {},
+          exceptionDetails: {
+            text: 'Uncaught',
+            exception: { description: (e as Error).stack },
+          },
+        })
+      }
+    },
+  }
+  return cdp
+}
+let axe = (expression: string) =>
+  expression.includes('axe.run(document')
+    ? {
+      violations: [{
+        id: 'image-alt',
+        help: 'Add alternative text',
+        impact: 'critical',
+        nodes: [{ html: '<img src=photo.png>', target: ['img'] }],
+      }],
+      incomplete: [],
+    }
+    : undefined
+let page = (
+  options: {
+    loading?: Error
+    screenshot?: Error
+    main?: typeof axe
+    world?: typeof axe
+  } = {},
+) => {
+  let cdp = devtools(options.main ?? axe, options.world ?? axe)
   let hear = new Map<string, (value: unknown) => void>()
   let viewport: unknown
   let closed = false
@@ -24,20 +86,7 @@ let page = (options: { loading?: Error; screenshot?: Error } = {}) => {
         ? Promise.reject(options.loading)
         : Promise.resolve({ status: () => 200 })
     },
-    evaluate: (expression) =>
-      Promise.resolve(
-        expression.includes('axe.run(document')
-          ? {
-            violations: [{
-              id: 'image-alt',
-              help: 'Add alternative text',
-              impact: 'critical',
-              nodes: [{ html: '<img src=photo.png>', target: ['img'] }],
-            }],
-            incomplete: [],
-          }
-          : undefined,
-      ),
+    createCDPSession: () => Promise.resolve(cdp),
     screenshot: () =>
       options.screenshot
         ? Promise.reject(options.screenshot)
@@ -67,6 +116,41 @@ test('draft rendering captures loading diagnostics at the requested viewport and
   assertStringIncludes(result.errors[0], 'page exception')
   assertEquals(result.status, 200)
   assertEquals(p.closed(), true)
+})
+
+test('a page that extends Object.prototype still gets its accessibility audit', async () => {
+  // orbits adds an enumerable Object.prototype.tap, which axe-core's color
+  // spaces read as a fourth coordinate when it loads in that world.
+  let p = page({
+    main: () => {
+      throw new TypeError("Cannot read properties of undefined (reading '0')")
+    },
+  })
+  let result = await capture(
+    () => Promise.resolve(p.browser),
+    'https://private.invalid/',
+    view,
+  )
+  assertEquals(result.image, 'png-bytes')
+  assertEquals(result.accessibility.problems[0].rule, 'image-alt')
+})
+
+test('an audit that throws in its own world rejects with what it threw', async () => {
+  let p = page({
+    world: () => {
+      throw new RangeError('axe gave up')
+    },
+  })
+  await assertRejects(
+    () =>
+      capture(
+        () => Promise.resolve(p.browser),
+        'https://private.invalid/',
+        view,
+      ),
+    Error,
+    'RangeError: axe gave up',
+  )
 })
 
 test('a failed page load still returns the screenshot and its error', async () => {

@@ -17,8 +17,12 @@ export type Page = {
     waitUntil: 'domcontentloaded'
     timeout: number
   }): Promise<{ status(): number } | null>
-  evaluate(expression: string): Promise<unknown>
+  createCDPSession(): Promise<Session>
   screenshot(options: { type: 'png'; encoding: 'base64' }): Promise<string>
+}
+export type Session = {
+  // deno-lint-ignore no-explicit-any
+  send(method: any, params?: Record<string, unknown>): Promise<any>
 }
 export type Browser = {
   newPage(): Promise<Page>
@@ -30,6 +34,33 @@ let message = (error: unknown) =>
     0,
     2000,
   )
+
+// The audit runs in its own JavaScript world over the page's DOM, so what a
+// page adds to its globals and prototypes never reaches axe-core.
+let isolated = async (page: Page) => {
+  let cdp = await page.createCDPSession()
+  let { frameTree } = await cdp.send('Page.getFrameTree')
+  let { executionContextId } = await cdp.send('Page.createIsolatedWorld', {
+    frameId: frameTree.frame.id,
+    worldName: 'audit',
+  })
+  return {
+    evaluate: async (expression: string) => {
+      let { result, exceptionDetails } = await cdp.send('Runtime.evaluate', {
+        expression,
+        contextId: executionContextId,
+        awaitPromise: true,
+        returnByValue: true,
+      })
+      if (exceptionDetails) {
+        throw new Error(
+          exceptionDetails.exception?.description ?? exceptionDetails.text,
+        )
+      }
+      return result.value
+    },
+  }
+}
 
 let bounded = async <T>(work: () => Promise<T>, time: Clock): Promise<T> => {
   let cancel = () => {}
@@ -90,7 +121,7 @@ export let capture = async (
       }
       if (view.wait) await sleep(view.wait, undefined, time)
       let image = await page.screenshot({ type: 'png', encoding: 'base64' })
-      let accessibility = await audit(page)
+      let accessibility = await audit(await isolated(page))
       return { image, console, errors, status, accessibility }
     }, time)
   } finally {
