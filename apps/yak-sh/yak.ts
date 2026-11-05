@@ -161,6 +161,25 @@ export let yak = async () => {
     query: (q: string) => g.read(q),
   }
 
+  // What a view reads without waiting: each entity a commit touched, read
+  // again once it has committed, and told to whoever watches it.
+  let rows = new Map<string, Bundle>()
+  let watchers = new Map<string, Set<() => void>>()
+  let tell = (eid: string) => {
+    for (let w of [...watchers.get(eid) ?? [], ...watchers.get('*') ?? []]) w()
+  }
+  let reading = Promise.resolve()
+  listeners.add(({ bundles }) => {
+    let eids = [...new Set(bundles.map((b) => b.entity.eid))]
+    reading = reading.then(async () => {
+      let read = await g.get(eids)
+      let found = new Set(read.map((b) => b.entity.eid))
+      for (let b of read) rows.set(b.entity.eid, b)
+      for (let eid of eids) if (!found.has(eid)) rows.delete(eid)
+      eids.forEach(tell)
+    })
+  })
+
   /** Run one tool as `by`, the way @yaks/cli's local.ts runs a command: a
    * call is written and run, or a read is run, and its answer kept. */
   let invoke = async (
@@ -177,6 +196,17 @@ export let yak = async () => {
     }
     let landed = await (tool.readOnly ? calls.read(call) : calls.call(call))
     return { tool, id, landed, answer: answerOf(landed, id) }
+  }
+
+  /** A call's answer printed the way `yak` prints it. */
+  let said = async (
+    made: ReturnType<typeof invoke>,
+    say: (text: string) => void,
+    out: string[],
+  ): Promise<Said> => {
+    let { tool, landed, id, answer } = await made
+    await show({ tui: false, out: say }, views, vocab, answer, {}, from, tool)
+    return { code: faulted(landed, id) ? 1 : 0, out }
   }
 
   /** One line typed at the prompt, printed the way `yak` prints it. */
@@ -199,17 +229,7 @@ export let yak = async () => {
         return { code: 0, out }
       }
       let args = await argsFor(found.verb, found.args)
-      let { tool, landed, id, answer } = await invoke(found.verb.name, args)
-      await show(
-        { tui: false, out: say },
-        views,
-        vocab,
-        answer,
-        {},
-        from,
-        tool,
-      )
-      return { code: faulted(landed, id) ? 1 : 0, out }
+      return await said(invoke(found.verb.name, args), say, out)
     } catch (e) {
       say(e instanceof Error ? e.message : String(e))
       return { code: e instanceof Usage ? 2 : 1, out }
@@ -224,12 +244,27 @@ export let yak = async () => {
     tools,
     run,
     /** A call the agent makes over MCP: the same tool, its own name. */
-    ask: (name: string, args: Record<string, unknown>) =>
-      invoke(name, args, agent),
+    ask: (name: string, args: Record<string, unknown>): Promise<Said> => {
+      let out: string[] = []
+      let say = (text: string) => out.push(...String(text).split('\n'))
+      return said(invoke(name, args, agent), say, out)
+    },
     /** Hear every change the graph commits. */
     listen: (each: (change: Change) => void) => {
       listeners.add(each)
       return () => listeners.delete(each)
     },
+    /** An entity as last committed, read without waiting. */
+    row: (eid: string) => rows.get(eid),
+    /** Every entity as last committed. */
+    rows: () => [...rows.values()],
+    /** Be told when an entity changes (`*`: any of them). */
+    watch: (eid: string, notify: () => void) => {
+      let set = watchers.get(eid) ?? new Set()
+      watchers.set(eid, set.add(notify))
+      return () => void set.delete(notify)
+    },
+    /** Settles once every commit so far is in `row`. */
+    settled: () => reading,
   }
 }
