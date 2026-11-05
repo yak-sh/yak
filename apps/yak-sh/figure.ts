@@ -1,9 +1,10 @@
 // What the page's drawing shows and how far it is drawn: the query it draws,
 // where the story's entities sit, how far the reader has scrolled into each
-// step, and what the last write made and which phases of apply() it ran.
+// step, which command made each thing it draws, and what the last write made
+// and which phases of apply() it ran.
 import type { Layout } from '@yaks/diagram'
 import type { Yak } from './yak.ts'
-import { LIVE } from './term.ts'
+import { type At, LIVE, type Term } from './term.ts'
 
 /** The page's drawing: the query it shows, how far each stage is drawn, and
  * the last write it saw. */
@@ -53,15 +54,24 @@ export const LINE = .62
 export let into = (top: number, height: number, view: number) =>
   clamp((view * LINE - top) / Math.max(1, Math.min(height, view) * .5))
 
-export let figure = (yak: Yak) => {
+export let figure = (yak: Yak, term: Term) => {
   let query = STORY
   let picked: string | undefined
   let last: { eid?: string; phases: string[] } = { phases: [] }
   let listeners = new Set<() => void>()
   let told = () => listeners.forEach((l) => l())
+  // The command that first wrote each entity, and each component on one.
+  let wrote = new Map<string, At>()
   // A write's subject is the entity it made or changed that is not the call
   // that asked for it.
   yak.listen(({ bundles, phases }) => {
+    let at = term.at()
+    for (let b of bundles) {
+      let eid = b.entity.eid
+      for (let k of [eid, ...Object.keys(b).map((c) => `${eid} ${c}`)]) {
+        if (!wrote.has(k)) wrote.set(k, at)
+      }
+    }
     let made = bundles.filter((b) => !b.call && !b.result && !b.tool)
     if (!made.length) return
     let subject = made.find((b) => !b.edge) ?? made[0]
@@ -74,6 +84,7 @@ export let figure = (yak: Yak) => {
   let born = new Map<number, number>()
   let asked = 0
   let live = false
+  let seen: Layout | undefined
   let since = (stage: number, now: number) => {
     let at = born.get(stage)
     return at == null ? 1 : clamp((now - at) / RAMP)
@@ -87,6 +98,16 @@ export let figure = (yak: Yak) => {
       return ASKED + asked++
     },
     last: () => last,
+    /** The command that made what the drawing draws under `key`: a shape's
+     * entity, a line's edge entity, or the component on the line's first end
+     * that names its other. */
+    madeBy: (key: string): At | undefined => {
+      let node = seen?.nodes.find((n) => n.eid == key)
+      if (node) return wrote.get(node.eid)
+      let link = seen?.links.find((l) => l.key == key)
+      if (!link) return
+      return wrote.get(link.eid ?? `${link.from} ${link.name.split('.')[0]}`)
+    },
     /** The entity the reader opened, if any. */
     picked: () => picked,
     /** Open an entity, or close the one open (undefined). */
@@ -105,6 +126,7 @@ export let figure = (yak: Yak) => {
     /** A layout was drawn at `now`: each stage it shows for the first time
      * starts drawing in. */
     saw: (layout: Layout, now: number) => {
+      seen = layout
       for (let x of [...layout.nodes, ...layout.links]) {
         if (!born.has(x.stage)) born.set(x.stage, now)
         if (x.stage >= LIVE && x.stage < ASKED) live = true

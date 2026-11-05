@@ -295,21 +295,33 @@ let Prompt: FunctionComponent<Ctx> = (ctx) => {
   ])
 }
 
-// The leader: a line from the step being drawn to the pen drawing it, across
-// the gutter between them, in the window's own coordinates.
+// Where an element's words end on the page: the last line they wrap to.
+let ending = (el: Element) => {
+  let range = el.ownerDocument.createRange()
+  range.selectNodeContents(el)
+  let rects = range.getClientRects()
+  return rects[rects.length - 1] ?? el.getBoundingClientRect()
+}
+
+// The leader: a line from the command whose write the pen is drawing to the
+// pen, across the gutter between them, in the window's own coordinates. Side
+// by side it leaves the end of the command; stacked, with the drawing above,
+// it leaves the command's start and climbs the page's margin.
 let lead = (
-  from: HTMLElement,
+  from: Element,
+  step: Element,
   to: { x: number; y: number },
   gutter: number,
 ) => {
-  let bubble = (from.querySelector('.Step_No') ?? from).getBoundingClientRect()
-  let side = from.getBoundingClientRect()
   if (matchMedia('(max-width: 899px)').matches) {
-    let sx = bubble.left + bubble.width / 2, sy = bubble.top - 4
+    let words = from.getBoundingClientRect()
+    let sx = words.left - 6, sy = words.top + Math.min(words.height, 24) / 2
+    let gx = step.getBoundingClientRect().left - 10
     let mid = Math.max(gutter + 10, Math.min(sy - 12, gutter + 24))
-    return { d: `M${sx},${sy}V${mid}H${to.x}V${to.y}`, sx, sy }
+    return { d: `M${sx},${sy}H${gx}V${mid}H${to.x}V${to.y}`, sx, sy }
   }
-  let sx = side.right + 10, sy = bubble.top + bubble.height / 2
+  let end = ending(from)
+  let sx = end.right + 8, sy = end.top + end.height / 2
   let gx = Math.max(sx + 8, gutter - 16)
   return { d: `M${sx},${sy}H${gx}V${to.y}H${to.x}`, sx, sy }
 }
@@ -327,7 +339,7 @@ let Figure: FunctionComponent<Ctx & { pen: Pen }> = (ctx) => {
     if (!el) return
     let frame = 0
     // Ink the drawing as far as the reader has come, point the leader from
-    // the step to the pen, and keep going while a stage draws itself in.
+    // the command to the pen, and keep going while a stage draws itself in.
     let paint = () => {
       frame = 0
       let layout = drawing.current?.layout
@@ -345,17 +357,28 @@ let Figure: FunctionComponent<Ctx & { pen: Pen }> = (ctx) => {
         frame ||= requestAnimationFrame(paint)
       }
     }
+    // The leader runs from the command that made what the pen is drawing,
+    // which is lit while it does.
     let point = (svg: SVGSVGElement, at: Tip | undefined) => {
       let line = leader.current
-      let step = at && pen.steps[at.stage - 1]
+      let made = at && figure.madeBy(at.key)
+      let step = made && pen.steps[made.stage - 1]
+      let said = made && step?.querySelectorAll('.Step_Lines > li')[made.line]
+      for (let lit of svg.ownerDocument.querySelectorAll('.is-led')) {
+        if (lit != said) lit.classList.remove('is-led')
+      }
+      let words = said?.querySelector('code')
       let m = svg.getScreenCTM?.()
-      if (!line || !step || !m || !at) return line?.classList.remove('is-on')
+      if (!line || !step || !words || !m || !at) {
+        return line?.classList.remove('is-on')
+      }
+      said!.classList.add('is-led')
       let to = { x: m.a * at.x + m.e, y: m.d * at.y + m.f }
       let box = svg.getBoundingClientRect()
       let gutter = matchMedia('(max-width: 899px)').matches
         ? box.bottom
         : box.left
-      let { d, sx, sy } = lead(step, to, gutter)
+      let { d, sx, sy } = lead(words, step, to, gutter)
       line.querySelector('path')?.setAttribute('d', d)
       let dot = line.querySelector('circle')
       dot?.setAttribute('cx', String(sx))

@@ -253,6 +253,14 @@ h2 {
 .Step_Lines .is-agent code::before {
   content: 'agent ▸ ';
 }
+/* The command whose write the pen is drawing, where the leader starts. */
+.Step_Lines code {
+  transition: color .3s, text-shadow .3s;
+}
+.Step_Lines .is-led code {
+  color: var(--meadow);
+  text-shadow: 0 0 10px var(--diagram-glow);
+}
 
 .Plot_Side {
   position: sticky;

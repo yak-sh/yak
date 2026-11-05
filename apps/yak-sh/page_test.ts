@@ -4,7 +4,7 @@
 import { equal, match, test } from '@yaks/testing'
 import { parseHTML } from 'linkedom'
 import { start } from './page.ts'
-import { SECTIONS, SELF, SITE } from './site.ts'
+import { scriptOf, SECTIONS, SELF, SITE } from './site.ts'
 import { fileOf } from '@yaks/file'
 import { STORY } from './figure.ts'
 import { INSIDE, PHASES } from '@yaks/graph/plugin'
@@ -86,6 +86,31 @@ test('the story types into the prompt and the drawing draws what it made', async
     [...doors.querySelectorAll('.N .id')].map((t) => t.textContent),
     ['U-1', 'T-2 open', 'T-3 done', 'C-5'],
   )
+  page.page.close()
+})
+
+test('each thing the story draws leads back to the command whose write made it', async () => {
+  let { root, page, settle } = await open()
+  await page.term.reach(steps, 3)
+  await settle()
+  let drawn = (sel: string) =>
+    root.querySelector(`.Figure_Sheet ${sel}`)!.getAttribute('data-key')!
+  // The command that made a drawn thing, as its step lists it.
+  let madeBy = (key: string) => {
+    let at = page.figure.madeBy(key)!
+    let { sh, mcp } = scriptOf(steps[at.stage - 1])
+    return [...sh, ...mcp.map((m) => m.tool)][at.line]
+  }
+  let titled = (title: string) =>
+    page.yak.rows().find((b) => (b.doc as { title?: string })?.title == title)!
+      .entity.eid
+  let [cake, edge] = scriptOf(steps[1]).sh
+  equal([
+    madeBy(titled('Buy the cake')),
+    madeBy(drawn('[data-name="requires"]')),
+    madeBy(drawn('[data-name="comment.target"]')),
+    madeBy(drawn('[data-name="completed.by"]')),
+  ], [cake, edge, 'comment_new', 'task_update'])
   page.page.close()
 })
 

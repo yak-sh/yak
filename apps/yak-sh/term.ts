@@ -8,6 +8,10 @@ import { scriptOf } from './site.ts'
  * came back (`fault` when it failed). */
 export type Line = { kind: 'in' | 'agent' | 'out' | 'fault'; text: string }
 
+/** Where in the story a line is: its step (or LIVE and on for a visitor's
+ * line), and which of that step's commands it is, counting from 0. */
+export type At = { stage: number; line: number }
+
 /** How long the prompt waits between typed characters; none in a test. */
 export type Pace = { key: number; pause: number }
 
@@ -80,6 +84,7 @@ export let term = (yak: Yak, pace: Pace = { key: 0, pause: 0 }) => {
   // What the prompt is running: a story step's number, or a visitor's line
   // as LIVE and on; 0 before anything has run.
   let stage = 0
+  let line = 0
   let entered = 0
   return {
     lines: () => lines,
@@ -90,13 +95,16 @@ export let term = (yak: Yak, pace: Pace = { key: 0, pause: 0 }) => {
       return () => void listeners.delete(l)
     },
     /** Type a line the visitor wrote and run it. */
-    enter: (line: string) =>
+    enter: (text: string) =>
       queue(() => {
         stage = LIVE + entered++
-        return submit(line)
+        line = 0
+        return submit(text)
       }),
     /** The stage what runs now is drawn in. */
     stage: () => stage,
+    /** The command running now. */
+    at: (): At => ({ stage, line }),
     /** Every line typed at the prompt, oldest first, as a shell keeps them. */
     history: () => history,
     /** Run every step up to `n` (counting from 1) that has not run, typing
@@ -107,8 +115,14 @@ export let term = (yak: Yak, pace: Pace = { key: 0, pause: 0 }) => {
         let step = ran
         queue(async () => {
           stage = step
-          for (let line of sh) await type(line)
-          for (let { tool, args } of mcp) await ask(tool, args)
+          for (let [i, said] of sh.entries()) {
+            line = i
+            await type(said)
+          }
+          for (let [i, { tool, args }] of mcp.entries()) {
+            line = sh.length + i
+            await ask(tool, args)
+          }
         })
       }
       return chain
