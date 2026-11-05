@@ -99,4 +99,11 @@ export { arrivalEid, kept, settled } from './received.ts'
 export { owed, sending, type Texting } from './send.ts'
 export type { Door, Options, Transport } from './options.ts'
 
-export { type Load, type Provider, provider, sender } from './provider.ts'
+export {
+  type Heard,
+  type Load,
+  type Provider,
+  provider,
+  sender,
+} from './provider.ts'
+export type { Caller, Frame, Line, Ring } from './call.ts'

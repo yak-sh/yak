@@ -437,8 +437,8 @@ grouped approximately by function, **not** by dependency order.
 - **[@yaks/speech](./speech)** — Speech to text and text to speech, the provider
   given as data (Deepgram): a recording heard, text spoken, and a call's audio
   heard a turn at a time.
-- **[@yaks/telnyx](./telnyx)** — Telnyx texting transport and signed webhook
-  events.
+- **[@yaks/telnyx](./telnyx)** — Telnyx texting transport, signed webhook
+  events, and Call Control with its media stream.
 - **[@yaks/voipms](./voipms)** — voip.ms texting transport, numbers and
   callbacks.
 - **[@yaks/phone](./phone)** — A person's mobile number as `phone{number}`
@@ -447,7 +447,8 @@ grouped approximately by function, **not** by dependency order.
   E.164 form. Texts are `text{from, to, at, message_id, rcs}` entities, sent
   through a sender the caller supplies (Telnyx or voip.ms over HTTP, or a stash)
   with their outcomes written back; a box takes Telnyx's signed webhook at
-  `/telnyx/webhook`.
+  `/telnyx/webhook`. A provider that takes calls says when one rings, answers it
+  with its audio streamed, and names its stream's frames.
 
 - **[@yaks/inbox](./inbox)** — A person's inbox, as a plugin a config may leave
   out: the thread and attention policy (Needs you, Replies, Updates and Recent

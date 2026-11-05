@@ -112,6 +112,23 @@ credentials stay with the host, and apps keep `phone{number}` for their own
 registered line. Text rows, conversation links, delivery outcomes and opt-outs
 have the same shape for every provider.
 
+## Calls
+
+A provider that takes calls adds `caller(options)` and `line` beside its sender,
+and its `heard(event)` also answers `ring{id, from, to, at}` when a call comes
+in and `ended{id}` when one hangs up, so the webhook that brings texts brings
+calls too.
+
+- `Caller` is `answer(id, stream)`, which picks up and streams the call's audio
+  both ways over the WebSocket at `stream`, `reject(id)` and `hangup(id)`.
+- `Line` is the stream's wire format: its `format` (μ-law at 8 kHz), `perMinute`
+  for an answered minute, `frame(data)` reading a frame as `start{call}`,
+  `audio`, `stop` or `played`, and the frames `play(audio)`, `clear()` and
+  `mark(name)` that a host sends back.
+
+What a call says and hears is the host's: yaks.app's Operator hears it and
+speaks through @yaks/speech (workers/yak/operator-calls.ts).
+
 ## Example
 
 ```ts

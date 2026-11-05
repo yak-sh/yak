@@ -228,6 +228,11 @@ let serve = async (req: Request, env: Env, r: Route) => {
   // an absent Origin is allowed (route.ts `sameOrigin`).
   if (path == '/stripe/connect') return sell.fetch(req, env)
   // Texts and their outcomes, as Telnyx posts them (operator-texts.ts).
+  // A call's audio, streamed to the Operator it reached (operator-calls.ts).
+  if (path == '/telnyx/stream') {
+    let { streamDoor } = await import('./operator-calls.ts')
+    return streamDoor(req, env)
+  }
   if (path == '/telnyx/webhook' || path == '/pinnacle/webhook') {
     let { textDoor } = await import('./operator-texts.ts')
     return textDoor(req, env, path.split('/')[1])

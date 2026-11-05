@@ -243,6 +243,10 @@ export type Env = {
   // line, is the credit left on Deepgram's account below which speech is
   // refused while it is a pilot. SPEECH_API aims it elsewhere, for a test.
   DEEPGRAM_API_KEY?: string
+  // `on` answers everyone the platform knows by number when they call
+  // PHONE_SENDER's number (operator-calls.ts); anything else, only an owner
+  // of the platform's own space, while calls are a pilot.
+  CALLS?: string
   SPEECH_FLOOR?: string
   SPEECH_API?: string
   // `on` signs up a stranger who texts the platform's number

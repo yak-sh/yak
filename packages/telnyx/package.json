@@ -5,7 +5,7 @@
     ".": "./mod.ts"
   },
   "license": "Apache-2.0",
-  "description": "Telnyx texting transport and verified webhook events for @yaks/phone.",
+  "description": "Telnyx texting, calls and verified webhook events for @yaks/phone.",
   "type": "module",
   "dependencies": {
     "@yaks/phone": "0.2.17",

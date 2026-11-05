@@ -467,6 +467,16 @@ export class Builder {
     let role = access.administrative ? 'owner' as const : access.role ?? null
     if (!writes(role)) return no(403, NOT_A_WRITER)
     let operator = await this.#work()
+    if (new URL(request.url).pathname == '/operator/call') {
+      let { answering } = await import('./operator-calls.ts')
+      return answering(
+        this.#env,
+        operator,
+        space,
+        JSON.parse(request.headers.get('x-yak-call') ?? '{}'),
+        () => this.#arming,
+      )
+    }
     if (new URL(request.url).pathname == '/operator/ws') {
       return this.#accept({
         person,
@@ -529,10 +539,14 @@ export class Builder {
           void frames.tell(session).catch((e) =>
             caught(e, { request: 'operator socket' })
           ),
-        typing: (session, text) =>
+        typing: (session, text) => {
           void frames.typing(session, text).catch((e) =>
             caught(e, { request: 'operator socket' })
-          ),
+          )
+          void import('./operator-calls.ts').then(({ typed }) =>
+            typed(store, session, text)
+          ).catch((e) => caught(e, { request: 'operator call' }))
+        },
       })
       handleChannels(operator, this.#env)
       return operator

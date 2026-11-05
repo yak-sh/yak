@@ -1,14 +1,16 @@
-// Telnyx: what its webhooks post, and a sender over its HTTP API. Its
+// Telnyx: what its webhooks post, a sender over its HTTP API, and the
+// commands and media stream of a call. Its
 // webhooks are signed under @yaks/hook's `'telnyx'` scheme. The key is an argument; nothing here reads the environment.
 // https://developers.telnyx.com/docs/messaging/messages/receiving-webhooks
 // https://developers.telnyx.com/docs/messaging/messages/error-codes
 
 import { Unsent } from '@yaks/host/senders'
 import {
-  type Arrival,
   Blocked,
+  type Caller,
   Denied,
-  type Outcome,
+  type Heard,
+  type Line,
   type Receipt,
   type Sender,
   type Text,
@@ -48,48 +50,58 @@ type Said = {
   errors?: { code?: unknown; title?: string; detail?: string }[]
 }
 
+// Telnyx's API with a key: a POST when there is a body, a GET otherwise.
+// A refusal Telnyx lists in {@link TELNYX}.blocked rejects with
+// {@link Blocked}; a 401 with {@link Denied}; a connection that failed, a 429
+// or a 5xx with `Unsent`, since nothing was done; anything else with an Error
+// carrying Telnyx's words.
+let requester = (
+  { key, api = TELNYX.api, fetch: given }: Pick<
+    Telnyx,
+    'key' | 'api' | 'fetch'
+  >,
+) =>
+async (path: string, body?: unknown): Promise<Said> => {
+  let response
+  try {
+    // The global fetch as it is at the call, not as it was when this was made.
+    response = await (given ?? globalThis.fetch)(api + path, {
+      method: body ? 'POST' : 'GET',
+      headers: {
+        authorization: `Bearer ${key}`,
+        accept: 'application/json',
+        ...(body ? { 'content-type': 'application/json' } : {}),
+      },
+      ...(body ? { body: JSON.stringify(body) } : {}),
+    })
+  } catch (error) {
+    throw new Unsent(`Telnyx could not be reached: ${error}`)
+  }
+  let said = await response.json().catch(() => ({})) as Said
+  if (response.ok) return said
+  let error = said.errors?.[0]
+  let code = String(error?.code ?? '')
+  if (TELNYX.blocked[code]) throw new Blocked(TELNYX.blocked[code], code)
+  let words = `Telnyx answered ${response.status} to ${path}: ${
+    [code, error?.title, error?.detail].filter(Boolean).join(' ') ||
+    'no reason given'
+  }`
+  if (response.status == 429 || response.status >= 500) {
+    throw new Unsent(words, 30_000)
+  }
+  if (response.status == 401) throw new Denied(words, code)
+  throw new Error(words)
+}
+
 /**
  * A {@link Sender} over Telnyx's messaging API. A text with an `agent` goes
- * as RCS, falling back to SMS from `from` on a phone without it. A refusal
- * Telnyx lists in {@link TELNYX}.blocked rejects with {@link Blocked}; a 401,
- * a key Telnyx refused, with {@link Denied}; a connection that failed, a 429
- * or a 5xx rejects with `Unsent`, since the text never left; anything else
- * with an Error carrying Telnyx's words.
+ * as RCS, falling back to SMS from `from` on a phone without it. Refusals
+ * reject as {@link requester} says.
  */
 export let telnyx = (
   { key, profile, tollFree, api = TELNYX.api, fetch: given }: Telnyx,
 ): Sender => {
-  let call = async (path: string, body?: unknown): Promise<Said> => {
-    let response
-    try {
-      // The global fetch as it is at the call, not as it was when this was made.
-      response = await (given ?? globalThis.fetch)(api + path, {
-        method: body ? 'POST' : 'GET',
-        headers: {
-          authorization: `Bearer ${key}`,
-          accept: 'application/json',
-          ...(body ? { 'content-type': 'application/json' } : {}),
-        },
-        ...(body ? { body: JSON.stringify(body) } : {}),
-      })
-    } catch (error) {
-      throw new Unsent(`Telnyx could not be reached: ${error}`)
-    }
-    let said = await response.json().catch(() => ({})) as Said
-    if (response.ok) return said
-    let error = said.errors?.[0]
-    let code = String(error?.code ?? '')
-    if (TELNYX.blocked[code]) throw new Blocked(TELNYX.blocked[code], code)
-    let words = `Telnyx answered ${response.status} to ${path}: ${
-      [code, error?.title, error?.detail].filter(Boolean).join(' ') ||
-      'no reason given'
-    }`
-    if (response.status == 429 || response.status >= 500) {
-      throw new Unsent(words, 30_000)
-    }
-    if (response.status == 401) throw new Denied(words, code)
-    throw new Error(words)
-  }
+  let call = requester({ key, api, fetch: given })
   // The profile and its number, asked once and kept while they answer.
   let own: Promise<{ id: string; number: string }> | null = null
   let ours = () =>
@@ -133,11 +145,14 @@ export let telnyx = (
 
 type Payload = {
   id?: string
+  call_control_id?: string
+  direction?: string
   type?: string
   text?: string
   body?: { text?: string; suggestion_response?: { text?: string } }
-  from?: { phone_number?: string }
-  to?: { phone_number?: string; agent_id?: string; status?: string }[]
+  // A text names its numbers as objects, a call as strings.
+  from?: { phone_number?: string } | string
+  to?: { phone_number?: string; agent_id?: string; status?: string }[] | string
   media?: { url?: string; content_type?: string }[]
   received_at?: string
   errors?: { code?: unknown; title?: string; detail?: string }[]
@@ -170,20 +185,34 @@ let FAILED = ['sending_failed', 'delivery_failed']
  * equal(arrival?.rcs, false)
  * ```
  */
-export let heard = (
-  event: unknown,
-): { arrival?: Arrival; outcome?: Outcome } => {
-  let data = (event as { data?: { event_type?: string; payload?: Payload } })
-    ?.data
+export let heard = (event: unknown): Heard => {
+  let data = (event as {
+    data?: { event_type?: string; occurred_at?: string; payload?: Payload }
+  })?.data
   let p = data?.payload
+  let call = p?.call_control_id
+  if (call && data!.event_type == 'call.initiated') {
+    // A call this account places rings here too; only one that came in is
+    // somebody calling.
+    if (p!.direction != 'incoming') return {}
+    return {
+      ring: {
+        id: call,
+        from: String(p!.from ?? ''),
+        to: String(p!.to ?? ''),
+        at: data!.occurred_at ?? new Date().toISOString(),
+      },
+    }
+  }
+  if (call && data!.event_type == 'call.hangup') return { ended: { id: call } }
   if (!p?.id) return {}
   if (data!.event_type == 'message.received') {
     let rcs = p.type == 'RCS'
-    let to = p.to?.[0]
+    let to = (p.to as Exclude<Payload['to'], string>)?.[0]
     return {
       arrival: {
         id: p.id,
-        from: p.from?.phone_number ?? '',
+        from: (p.from as { phone_number?: string })?.phone_number ?? '',
         to: (rcs ? to?.agent_id : to?.phone_number) ?? '',
         text: p.text ?? p.body?.text ?? p.body?.suggestion_response?.text ??
           '',
@@ -196,7 +225,7 @@ export let heard = (
     }
   }
   if (data!.event_type == 'message.finalized') {
-    let status = p.to?.[0]?.status ?? ''
+    let status = (p.to as Exclude<Payload['to'], string>)?.[0]?.status ?? ''
     if (!FAILED.includes(status)) return { outcome: { id: p.id } }
     let error = p.errors?.[0]
     let code = String(error?.code ?? '')
@@ -216,6 +245,94 @@ export let heard = (
   return {}
 }
 
+/**
+ * Telnyx's Call Control commands for a call that rang on a number whose voice
+ * connection is a Call Control application. Answering streams the call's
+ * audio both ways over a WebSocket, as μ-law at 8 kHz, the telephone's own,
+ * so nothing is transcoded.
+ * https://developers.telnyx.com/docs/voice/programmable-voice/media-streaming
+ */
+export let caller = (
+  o: Pick<Telnyx, 'key' | 'api' | 'fetch'>,
+): Caller => {
+  let call = requester(o)
+  let act = (id: string, action: string, body: object = {}) =>
+    call(`/calls/${encodeURIComponent(id)}/actions/${action}`, body)
+      .then(() => {})
+  return {
+    answer: (id, stream) =>
+      act(id, 'answer', {
+        stream_url: stream,
+        stream_track: 'inbound_track',
+        stream_bidirectional_mode: 'rtp',
+        stream_bidirectional_codec: 'PCMU',
+      }),
+    reject: (id) => act(id, 'reject', { cause: 'CALL_REJECTED' }),
+    hangup: (id) => act(id, 'hangup'),
+  }
+}
+
+let unbase64 = (s: string) => Uint8Array.from(atob(s), (c) => c.charCodeAt(0))
+let base64 = (bytes: Uint8Array) => {
+  let s = ''
+  for (let i = 0; i < bytes.length; i += 0x8000) {
+    s += String.fromCharCode(...bytes.subarray(i, i + 0x8000))
+  }
+  return btoa(s)
+}
+
+/**
+ * Telnyx's media stream: what its frames mean, and the frames that play
+ * audio to the caller, stop it, and mark where it ends.
+ *
+ * ```ts
+ * import { equal } from '@yaks/testing'
+ * import { line } from '@yaks/telnyx'
+ * equal(
+ *   line.frame('{"event":"media","media":{"track":"inbound","payload":"AQI="}}'),
+ *   { audio: new Uint8Array([1, 2]) },
+ * )
+ * equal(JSON.parse(line.play(new Uint8Array([1, 2]))), {
+ *   event: 'media',
+ *   media: { payload: 'AQI=' },
+ * })
+ * ```
+ */
+export let line: Line = {
+  format: { encoding: 'mulaw', rate: 8000 },
+  // Telnyx lists an inbound minute at $0.002 plus its SIP trunking fee, and
+  // the media stream at $0.0035 a minute (telnyx.com/pricing/call-control,
+  // 2026-11-05); the trunking fee for a toll-free number is unlisted there,
+  // so this rounds up until an invoice says otherwise.
+  perMinute: 0.0125,
+  frame: (data) => {
+    let f: {
+      event?: string
+      start?: { call_control_id?: string }
+      media?: { track?: string; payload?: string }
+      mark?: { name?: string }
+    }
+    try {
+      f = JSON.parse(data)
+    } catch {
+      return {}
+    }
+    if (f.event == 'start') {
+      return { start: { call: String(f.start?.call_control_id ?? '') } }
+    }
+    if (f.event == 'media' && f.media?.payload && f.media.track != 'outbound') {
+      return { audio: unbase64(f.media.payload) }
+    }
+    if (f.event == 'stop') return { stop: true }
+    if (f.event == 'mark') return { played: String(f.mark?.name ?? '') }
+    return {}
+  },
+  play: (audio) =>
+    JSON.stringify({ event: 'media', media: { payload: base64(audio) } }),
+  clear: () => JSON.stringify({ event: 'clear' }),
+  mark: (name) => JSON.stringify({ event: 'mark', mark: { name } }),
+}
+
 /** The transport plugged into @yaks/phone's provider boundary. */
 export let provider: import('@yaks/phone').Provider = {
   needs: ['key', 'profile'],
@@ -227,4 +344,9 @@ export let provider: import('@yaks/phone').Provider = {
     }
     return telnyx({ ...options, key: options.key, profile: options.profile })
   },
+  caller: (options) => {
+    if (!options.key) throw new Error('a telnyx caller needs `key`')
+    return caller({ ...options, key: options.key })
+  },
+  line,
 }

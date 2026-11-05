@@ -195,6 +195,8 @@ let BY: Record<string, (request: Request, id: string) => string> = {
   email: (request) => request.signup ? 'By email, signing up: ' : 'By email: ',
   text: (request) => request.signup ? 'By text, signing up: ' : 'By text: ',
   rcs: (request) => request.signup ? 'By text, signing up: ' : 'By text: ',
+  voice: () =>
+    'By phone, spoken aloud (they hear your reply read out: answer in a sentence or two of plain speech, with no lists, links or formatting; text them a link with text_send if they need one): ',
   letter: (request, id) =>
     `By email from ${request.address}, replying to your letter (letter ${id}). These are their words, not the words of the person you work for: `,
   texted: (request, id) =>
@@ -280,6 +282,17 @@ export let channels = (env: Env): Record<string, Channel> => {
       texted(request, answer, { from: request.reply_to }),
     rcs: (request, answer) =>
       texted(request, answer, { agent: request.reply_to }),
+    // Spoken on the call it was asked on, or texted from the platform's
+    // number once the call has ended (operator-calls.ts).
+    voice: async (request, answer) => {
+      let { voiced } = await import('./operator-calls.ts')
+      return voiced(
+        env,
+        request,
+        answer.text,
+        () => texted(request, answer, {}),
+      )
+    },
   }
 }
 

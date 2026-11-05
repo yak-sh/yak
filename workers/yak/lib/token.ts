@@ -73,6 +73,7 @@ export type Use =
   | 'page' // a sandboxed app's page speaking to its own API (installed.ts)
   | 'connect' // a connection's sign-in, on its way back (connections.ts)
   | 'line' // a person's own number's SMS callback (operator-line.ts)
+  | 'call' // a call's audio stream, from its ring to its space (operator-calls.ts)
 
 // The use's own key: HMAC-SHA256 of the use's name under the secret. One
 // secret to hold and rotate, and no two uses that can verify each other.

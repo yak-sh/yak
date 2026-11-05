@@ -3,12 +3,25 @@
 import type { Scheme } from '@yaks/hook'
 import type { Arrival, Outcome, Sender } from './text.ts'
 import type { Transport } from './options.ts'
+import type { Caller, Line, Ring } from './call.ts'
+
+/** What a provider's webhook said: a text arrived or settled, a call rang,
+ * or a call ended. */
+export type Heard = {
+  arrival?: Arrival
+  outcome?: Outcome
+  ring?: Ring
+  ended?: { id: string }
+}
 
 export type Provider = {
   needs?: (keyof Transport)[]
   sender: (options: Transport) => Sender
-  heard?: (event: unknown) => { arrival?: Arrival; outcome?: Outcome }
+  heard?: (event: unknown) => Heard
   scheme?: Scheme
+  /** a provider that takes calls: its commands, and its audio stream */
+  caller?: (options: Transport) => Caller
+  line?: Line
 }
 export type Load = (via: string) => Promise<{ provider: Provider }>
 

@@ -137,7 +137,11 @@ let back = (arrival: Arrival) =>
 
 // The space whose Operator a text goes to: the one they agreed on, else one
 // they write in, their own first.
-let spaceFor = async (env: Env, person: string, agreed?: string) => {
+export let spaceFor = async (
+  env: Env,
+  person: string,
+  agreed?: string,
+) => {
   let dir = directoryOf(env.STORE)
   let chosen = agreed ? await dir.at(agreed) : null
   if (chosen && !chosen.trashed) return chosen
@@ -304,7 +308,11 @@ export let textDoor = async (
       status: 400,
     })
   }
-  let { arrival, outcome } = transport.heard(JSON.parse(raw))
+  let { arrival, outcome, ring } = transport.heard(JSON.parse(raw))
+  if (ring) {
+    let { rang } = await import('./operator-calls.ts')
+    await rang(env, via, ring)
+  }
   if (outcome?.failed && !outcome.failed.blocked) {
     caught(new Error(`A text did not arrive: ${outcome.failed.reason}`), {
       request: `${via} outcome`,
