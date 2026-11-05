@@ -704,10 +704,15 @@ test('pages: the space home leads with its Operator and a link to each page that
   assertEquals(cards[1].querySelectorAll('.Apps > *').length, 6)
   assertStringIncludes(cards[1].textContent!, '1 needs fixing')
   assertEquals(links(1).slice(0, 2), ['/manage/ada/apps', '/manage/ada/new'])
-  assertEquals(
-    [...document.querySelectorAll('.SideNav a')].slice(4, 7).map((a) =>
-      a.getAttribute('href')
+  // The side's Operator opens its settings (T-140223); the chat is reached
+  // from the Operator's card above.
+  let side = Object.fromEntries(
+    [...document.querySelectorAll('nav[aria-label="This space"] a')].map(
+      (a) => [a.textContent!.trim(), a.getAttribute('href')],
     ),
-    ['/manage/ada', '/manage/ada/operator/new', '/manage/ada/apps'],
+  )
+  assertEquals(
+    [side.Dashboard, side.Operator, side.Apps],
+    ['/manage/ada', '/manage/ada/operator', '/manage/ada/apps'],
   )
 })
