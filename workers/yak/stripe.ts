@@ -29,12 +29,19 @@ export let form = (
 
 // A Stripe error as the sentence it gave us. Its own `message` is written for
 // a person to read, so it is the one worth keeping; the code is what a log
-// needs and rides beside it.
-let said = (body: unknown, status: number) => {
-  let e = (body as { error?: { message?: string; code?: string } })?.error
-  return e?.message
-    ? `stripe: ${e.message}${e.code ? ` (${e.code})` : ''}`
-    : `stripe: HTTP ${status}`
+// needs and rides beside it, and what a caller tells one refusal from another
+// by (`code`).
+export class StripeError extends Error {
+  code?: string
+  constructor(body: unknown, status: number) {
+    let e = (body as { error?: { message?: string; code?: string } })?.error
+    super(
+      e?.message
+        ? `stripe: ${e.message}${e.code ? ` (${e.code})` : ''}`
+        : `stripe: HTTP ${status}`,
+    )
+    this.code = e?.code
+  }
 }
 
 // One call. A GET has no body; a POST is form-encoded, which is the only shape
@@ -79,7 +86,7 @@ export let ask = async (
       })
     if (r && (last || r.headers.get('stripe-should-retry') != 'true')) {
       let out = await r.json().catch(() => null)
-      if (!r.ok) throw new Error(said(out, r.status))
+      if (!r.ok) throw new StripeError(out, r.status)
       return out as Record<string, unknown>
     }
     await r?.body?.cancel()

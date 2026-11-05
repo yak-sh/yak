@@ -57,7 +57,7 @@ import { apex, type Host } from './host.ts'
 import { sessionAt } from './session.ts'
 import { ours, refusal } from '@yaks/hook'
 import { fault } from './unseen.ts'
-import { ask } from './stripe.ts'
+import { ask, StripeError } from './stripe.ts'
 
 // ---- the signature -------------------------------------------------------
 
@@ -543,13 +543,21 @@ type Event = {
   data?: { object?: Record<string, unknown> }
 }
 
+// Whether Stripe could not find the subscription a sandbox event names. Every
+// one bought through this deployment is made with its own key, so one that key
+// cannot see was made elsewhere (by hand, or by another deployment) and is not
+// ours. In live mode only this deployment holds the key, and it is a fault.
+export let unseen = (e: unknown, event: Pick<Event, 'livemode'>) =>
+  event.livemode === false && e instanceof StripeError &&
+  e.code == 'resource_missing'
+
 // The subscription an event is about, and the space to attribute it to. Two of
 // the five events carry the subscription whole and are read from the payload
 // itself; the other three name it, and one GET answers what they left out.
 let subjectOf = async (
   env: Env,
   event: Event,
-): Promise<{ sub: Sub; space?: string } | null> => {
+): Promise<{ sub: Sub; space?: string } | 'elsewhere' | null> => {
   let o = (event.data?.object ?? {}) as Record<string, unknown>
   let type = event.type ?? ''
   if (type.startsWith('customer.subscription.')) {
@@ -568,7 +576,11 @@ let subjectOf = async (
       parent.subscription_details?.subscription,
   )
   if (!named) return null
-  let sub = await ask(env, `/v1/subscriptions/${named}`) as Sub
+  let sub = await ask(env, `/v1/subscriptions/${named}`).catch((e) => {
+    if (unseen(e, event)) return null
+    throw e
+  }) as Sub | null
+  if (!sub) return 'elsewhere'
   return {
     sub,
     space: sub.metadata?.space ||
@@ -588,7 +600,7 @@ export let apply = async (env: Env, event: Event) => {
   if (elsewhere(event.data?.object ?? {}, here)) return 'elsewhere'
   let subject = await subjectOf(env, event)
   if (!subject) return 'nothing to do'
-  if (elsewhere(subject.sub, here)) return 'elsewhere'
+  if (subject == 'elsewhere' || elsewhere(subject.sub, here)) return 'elsewhere'
   let next = planOf(subject.sub, at, organizationPrices(env))
   let dir = dirOf(env)
   let space = await whose(dir, {

@@ -214,7 +214,8 @@ export type Env = {
   // DNS-over-HTTPS JSON endpoint for hostname ownership TXT lookups.
   DNS_API?: string
   // The paid tier (billing.ts, T-33125). STRIPE_KEY is the restricted API key
-  // checkout, the portal and one subscription read speak to Stripe with;
+  // checkout, the portal, subscription reads and an invite's month (reward.ts,
+  // Subscriptions write) speak to Stripe with;
   // STRIPE_WEBHOOK_SECRET is what the events Stripe posts are verified
   // against. Both are secrets and both are the owner's to set (T-32760);
   // unset, the doors say the paid tier is not switched on here rather than

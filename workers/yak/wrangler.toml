@@ -514,8 +514,9 @@ database_id = "88b2e161-99bf-4777-ab6d-b18fcf66ca95"
 # CF_HOSTNAMES_TOKEN attaches a person's own domain as a custom hostname on
 # the zone above (Zone → SSL and Certificates → Edit on yaks.app, T-33038);
 # unset, domain_attach refuses saying so and nothing is half-attached.
-# STRIPE_KEY is the restricted Stripe API key checkout, the customer portal and
-# one subscription read speak with (T-32760); STRIPE_WEBHOOK_SECRET is what the
+# STRIPE_KEY is the restricted Stripe API key checkout, the customer portal,
+# subscription reads and an invite's month (reward.ts, which needs Subscriptions
+# write) speak with (T-32760); STRIPE_WEBHOOK_SECRET is what the
 # events Stripe posts to /stripe/webhook are verified against
 # (billing.ts). Unset, those doors say the paid tier is not switched on here
 # rather than half-working, and a webhook that arrives unread is filed where

@@ -16,8 +16,10 @@ import {
   stale,
   type Sub,
   trialFor,
+  unseen,
   wanted,
 } from './billing.ts'
+import { StripeError } from './stripe.ts'
 import type { Env } from './env.ts'
 import { type Plan, tierOf } from './directory.ts'
 
@@ -234,6 +236,15 @@ test('another apex is elsewhere, and ours or none is not', () => {
   }
   assert(elsewhere(invoice, 'yaks.fyi'))
   assert(!elsewhere(invoice, 'yaks.app'))
+})
+
+test('a subscription the sandbox key cannot find is not ours; in live mode it is a fault', () => {
+  let refused = (code: string) =>
+    new StripeError({ error: { message: 'No such subscription', code } }, 404)
+  assert(unseen(refused('resource_missing'), { livemode: false }))
+  assert(!unseen(refused('resource_missing'), { livemode: true }))
+  assert(!unseen(refused('rate_limit'), { livemode: false }))
+  assert(!unseen(new Error('stripe: HTTP 500'), { livemode: false }))
 })
 
 test('a subscription no space holds is lost in live mode, and in the sandbox only when it names our apex', () => {
