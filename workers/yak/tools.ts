@@ -1,4 +1,5 @@
 import { groupBy } from '@yaks/fp'
+import { tell } from './operator-updates.ts'
 import { operatorTools } from './operator-tools.ts'
 import { ownedPrefix, rootedPrefix } from './file-root.ts'
 // The connector's platform tools (D-32318 §Code, build, deploy): the least
@@ -1495,6 +1496,28 @@ let published = async (
       app: app.slug,
     }),
   )
+  // The space's people hear who changed which app, in their Updates
+  // (operator-updates.ts); whoever did it knows. A release nobody made (a
+  // script that failed to load put back, the live version compiled again)
+  // tells nobody, and a run of deploys in an hour is one change.
+  let person = who.person
+  if (person && !recompile) {
+    let title = app.title || app.slug
+    background(after(async () => {
+      let name = await ctx.dir.nameAt(person) ?? 'Someone'
+      await tell(ctx.env, space, {
+        to: space.eid,
+        words: target
+          ? `${name} put ${title} back to an earlier version.`
+          : `${name} changed ${title}.`,
+        about: app.eid,
+        by: person,
+        id: `changed|${app.eid}|${person}|${
+          new Date().toISOString().slice(0, 13)
+        }`,
+      })
+    }))
+  }
   // A preview link open on the app goes on following it: its pages show what
   // was released, then the next draft's writes.
   if (app.followed) {
