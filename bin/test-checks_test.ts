@@ -7,9 +7,20 @@ test('source checks format, lint and byte-check the change', () => {
   equal(planned, [
     {
       name: 'format',
-      args: ['fmt', '--permit-no-files', 'a.ts', 'doc.md', 'data.json'],
+      args: [
+        'fmt',
+        '--config',
+        'deno.json',
+        '--permit-no-files',
+        'a.ts',
+        'doc.md',
+        'data.json',
+      ],
     },
-    { name: 'lint', args: ['lint', '--permit-no-files', 'a.ts'] },
+    {
+      name: 'lint',
+      args: ['lint', '--config', 'deno.json', '--permit-no-files', 'a.ts'],
+    },
     {
       name: 'bytes',
       args: [

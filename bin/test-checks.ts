@@ -33,12 +33,13 @@ export let checks = (changed: string[], configs: string[] = []): Check[] => {
     let dir = config.replace(/^\.\//, '').replace(/deno\.json$/, '')
     return changed.some((path) => path.startsWith(dir))
   })
+  // The workspace's own config, named: a yaks app's package.json is a config
+  // to Deno too, and found beside a file it would replace the workspace's.
+  let config = ['--config', 'deno.json', '--permit-no-files']
   return [
-    ...fmt.length
-      ? [{ name: 'format', args: ['fmt', '--permit-no-files', ...fmt] }]
-      : [],
+    ...fmt.length ? [{ name: 'format', args: ['fmt', ...config, ...fmt] }] : [],
     ...lint.length
-      ? [{ name: 'lint', args: ['lint', '--permit-no-files', ...lint] }]
+      ? [{ name: 'lint', args: ['lint', ...config, ...lint] }]
       : [],
     ...changed.length
       ? [{
