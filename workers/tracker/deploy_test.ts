@@ -1,7 +1,7 @@
 // Deploy hooks prove changed-bundle activation and reporting without account
 // credentials, paid resources, or waiting for deployment propagation.
 import { clock, equal, ok, test, throws } from '@yaks/testing'
-import { canary, deploy, Failed, type Hooks } from './deploy.ts'
+import { canary, deploy, Failed, fingerprint, type Hooks } from './deploy.ts'
 import { canary as receipt, STALL, worker } from './worker.ts'
 import { grouped } from '@yaks/tracker'
 import { json } from './door.ts'
@@ -468,4 +468,13 @@ test('a missing canary is reported to the tracker with why, read there', () => {
 })
 test('an arrived canary is not reported missing', () => {
   equal(late.status, 409)
+})
+
+test('a deployment is its bundle and its configuration together', async () => {
+  let bytes = (s: string) => new TextEncoder().encode(s)
+  let code = bytes('bundle')
+  let base = await fingerprint(code, bytes('MAIL_VIA = "binding"'))
+  ok(base != await fingerprint(code, bytes('MAIL_VIA = "resend"')))
+  ok(base != await fingerprint(bytes('bundleMAIL_VIA'), bytes(' = "binding"')))
+  equal(base, await fingerprint(code, bytes('MAIL_VIA = "binding"')))
 })

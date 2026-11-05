@@ -1,5 +1,5 @@
 #!/usr/bin/env -S deno run -A
-// Deploy only a changed bundle, then wait for its queue canary to become a bug
+// Deploy only a changed bundle or configuration, then wait for its queue canary to become a bug
 // in a Tracker object that runs this bundle: objects move to a new version
 // minutes after the Worker, and the deploy is confirmed only once they have.
 // A canary the tracker says failed, or one still missing after ten minutes, is
@@ -40,6 +40,21 @@ let confirmed = async (hooks: Hooks) => {
     await hooks.wait()
   } while (hooks.now() < until)
   return false
+}
+/** What a deployment is: its bundle and the wrangler.toml it deploys with,
+ * so a changed var deploys as surely as changed code. */
+export let fingerprint = async (...parts: Uint8Array[]): Promise<string> => {
+  let all = new Uint8Array(parts.reduce((n, p) => n + 8 + p.length, 0))
+  let at = 0
+  for (let part of parts) {
+    new DataView(all.buffer).setBigUint64(at, BigInt(part.length))
+    all.set(part, at + 8)
+    at += 8 + part.length
+  }
+  return Array.from(
+    new Uint8Array(await crypto.subtle.digest('SHA-256', all)),
+    (b) => b.toString(16).padStart(2, '0'),
+  ).join('')
 }
 export let deploy = async (hash: string, hooks: Hooks): Promise<boolean> => {
   if ((await hooks.current()).hash == hash) return false
@@ -127,11 +142,10 @@ if (import.meta.main) {
   let scratch = await Deno.makeTempDir({ prefix: 'tracker-bundle-' })
   try {
     if (await run(['deploy', '--dry-run', '--outdir', scratch])) Deno.exit(1)
-    let bytes = await Deno.readFile(`${scratch}/index.js`)
-    let hash = Array.from(
-      new Uint8Array(await crypto.subtle.digest('SHA-256', bytes)),
-      (b) => b.toString(16).padStart(2, '0'),
-    ).join('')
+    let hash = await fingerprint(
+      await Deno.readFile(`${scratch}/index.js`),
+      await Deno.readFile(`${root}/wrangler.toml`),
+    )
     let probe = canary(url, hash)
     let head = new TextDecoder().decode(
       (await new Deno.Command('git', {
