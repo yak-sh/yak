@@ -1,4 +1,4 @@
-import type { Bundle } from '@yaks/graph'
+import type { Bundle, Graph } from '@yaks/graph'
 import { draftEid } from '@yaks/draft'
 import { ownerOf, owns } from './operator-access.ts'
 import type { Held } from './build-door.ts'
@@ -791,4 +791,27 @@ export let operatorRequest = async (
     )
   }
   return null
+}
+
+/** A kernel-vouched delivery receipt for this space's private mail. */
+export let operatorReceipt = async (
+  operator: { store: { g: Pick<Graph, 'get' | 'apply'> } },
+  args: { letter: string; id: string; kind?: string },
+): Promise<Response> => {
+  let [row] = await operator.store.g.get([args.letter])
+  let name = args.kind == 'answer' ? 'operator_answer' : 'mail'
+  if (!row?.[name]) {
+    throw new Error('Operator receipt awaits its recorded letter')
+  }
+  let before = comp(row, name)?.message_id
+  if (before && before != args.id) {
+    throw new Error('Operator receipt disagrees with the recorded Message-ID')
+  }
+  if (!before) {
+    await operator.store.g.apply([{
+      entity: row.entity,
+      [name]: { message_id: args.id },
+    }], { trusted: true })
+  }
+  return Response.json({ ok: true })
 }

@@ -27,6 +27,7 @@ import { json, refuse, type Route, Unauthorized } from '@yaks/api'
 import { arrived } from './arrive.ts'
 import type { Head } from './inbound.ts'
 import type { Options } from './options.ts'
+import { receipts } from './receipts.ts'
 import { readings } from './readings.ts'
 
 /** The path a letter arrives on, unless the config sets another. */
@@ -87,7 +88,7 @@ export let routes = (
   // Asked at the first letter, not at start-up: a host serving no letter
   // imports no other package's reading.
   let read: ReturnType<typeof readings> | undefined
-  return [{
+  return [...(options.receipts ? receipts(host, options.receipts) : []), {
     method: 'POST',
     path,
     handle: async (request) => {

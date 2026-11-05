@@ -7,6 +7,7 @@ import { platform } from './core.ts'
 export type Mailbox = {
   MAIL?: Binding
   MAIL_VIA?: string
+  RESEND_WEBHOOK_SECRET?: string
   RESEND_TOKEN?: string
   RESEND_API?: string
   MAIL_FETCH?: import('@yaks/mail').Fetch
@@ -14,9 +15,10 @@ export type Mailbox = {
   MAIL_TO?: string
 }
 
-export let sender = (env: Mailbox) =>
+export let sender = (env: Mailbox, scope = platform) =>
   post({
     via: env.MAIL_VIA ?? 'binding',
+    tags: { yak_tracker: scope },
     token: env.RESEND_TOKEN,
     base: env.RESEND_API,
     fetch: env.MAIL_FETCH,

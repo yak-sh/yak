@@ -11,6 +11,7 @@ import { BARE } from '@yaks/id'
 import { status } from '@yaks/graph/errors'
 import type { Bundle } from '@yaks/graph'
 import { platform } from './core.ts'
+import { receipted } from '@yaks/mail'
 import { batch } from './queue.ts'
 
 let uuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
@@ -32,6 +33,13 @@ async (request: Request): Promise<Response> => {
   if (!access) return json({ error: 'tracker scope denied' }, 403)
   let url = new URL(request.url)
   let path = url.pathname
+  if (request.method == 'POST' && path == '/mail/receipt') {
+    if (!access.admin || access.ingest !== true) {
+      return json({ error: 'mail receipt denied' }, 403)
+    }
+    await receipted(tracker.graph, await request.json())
+    return json({ ok: true })
+  }
   if (request.method == 'POST' && path == '/regroup') {
     if (!access.admin || access.mark !== true) {
       return json({ error: 'tracker regroup denied' }, 403)

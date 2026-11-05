@@ -1,39 +1,28 @@
-// One name selects one sender: host capabilities take precedence over the
-// built-ins. A missing credential keeps queued letters waiting, untried.
+// One name selects one sender. Providers own their configuration; mail owns
+// the selection and leaves unavailable senders' durable letters waiting.
 import type { Host } from '@yaks/host'
 import type { Transport } from './options.ts'
 import type { Sender } from './send.ts'
-import { cloudflare } from './cloudflare.ts'
-import { resend } from './resend.ts'
+import { configured as cloudflare } from '@yaks/cloudflare-mail/sender'
+import { configured as resend } from '@yaks/resend/sender'
 import { stash } from './stash.ts'
 
-/** A selected sender or the reason it cannot be constructed yet. */
+type Selected = { sender?: Sender; waiting?: string }
+let providers: Record<string, (options: Transport) => Selected> = {
+  cloudflare,
+  resend,
+  stash: () => ({ sender: stash() }),
+}
+
+/** A selected host capability or provider, or why it cannot be built yet. */
 export let post = (
   said: Transport,
   host?: Pick<Host, 'senders'> | null,
-): { sender?: Sender; waiting?: string } => {
+): Selected => {
   if (host?.senders && Object.hasOwn(host.senders, said.via)) {
     return { sender: host.senders[said.via] }
   }
-  if (said.via == 'stash') return { sender: stash() }
-  if (said.via == 'resend') {
-    return said.token
-      ? { sender: resend({ ...said, token: said.token }) }
-      : { waiting: 'waiting for credentials: a resend sender needs `token`' }
-  }
-  if (said.via == 'cloudflare') {
-    return said.account && said.token
-      ? {
-        sender: cloudflare({
-          ...said,
-          account: said.account,
-          token: said.token,
-        }),
-      }
-      : {
-        waiting:
-          'waiting for credentials: a cloudflare sender needs `account` and `token`',
-      }
-  }
-  return { waiting: `no sender called ${JSON.stringify(said.via)}` }
+  return Object.hasOwn(providers, said.via)
+    ? providers[said.via]({ ...said, ...said.providers?.[said.via] })
+    : { waiting: `no sender called ${JSON.stringify(said.via)}` }
 }

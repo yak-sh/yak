@@ -115,7 +115,9 @@ export type Env = {
   MAIL_SINK?: string
   // Provider selection changes only after the configured addresses pass pilots.
   MAIL_VIA?: string
+  RESEND_WEBHOOK_SECRET?: string
   RESEND_TOKEN?: string
+  RESEND_PLATFORM_TOKEN?: string
   RESEND_API?: string
   MAIL_FETCH?: import('@yaks/mail').Fetch
   MAIL_TOKEN?: string

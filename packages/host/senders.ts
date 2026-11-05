@@ -3,6 +3,8 @@
 
 /** One message, composed and ready to leave. */
 export type Message = {
+  /** the caller's letter UUID, for asynchronous delivery receipts */
+  id?: string
   /** the address it is from */
   from: string
   /** the name it is from, as the reader's mail shows it beside the address */
@@ -75,4 +77,18 @@ export class Unsent extends Error {
     this.name = 'Unsent'
     this.retry = { after }
   }
+}
+
+/** An incoming letter at the portable mail boundary. Authentication is a
+ * provider's verdict, never inferred from a stranger's supplied headers. */
+export type Incoming = {
+  /** the name in the message's From header, if any */
+  name?: string
+  from: string
+  to: string
+  headers: { get(name: string): string | null }
+  text: string
+  html?: string
+  verified?: boolean
+  attachments: { name: string; type: string; bytes: Uint8Array<ArrayBuffer> }[]
 }

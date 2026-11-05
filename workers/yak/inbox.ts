@@ -41,10 +41,11 @@ import { copyOf } from './directory-copy.ts'
 //   around what it read and asks the graph nothing. An html-only letter is
 //   read as its own text (`plain` below), so a body is words in every case and
 //   markup in none.
-import PostalMime, { type Email } from 'postal-mime'
+import { received as read } from '@yaks/cloudflare-mail/receive'
+import type { Incoming } from '@yaks/host/senders'
 import { link } from '@yaks/edge'
 import type { Bundle } from '@yaks/graph'
-import { author, type Head, inbound, messageId, verdict } from '@yaks/mail'
+import { author, inbound, messageId, verdict } from '@yaks/mail'
 import { automated } from '@yaks/mail/answers'
 import { writes } from '@yaks/member'
 import { acceptsOf, filed, Untaken } from './apps.ts'
@@ -136,15 +137,15 @@ export let plain = (html: string) =>
 // The letter as postal-mime reads it, read once: its raw stream can be read
 // only once, and a letter may be asked for its sender's name before it is
 // handed on whole.
-let parsings = new WeakMap<Inbound, Promise<Email>>()
+let parsings = new WeakMap<Inbound, Promise<Incoming>>()
 let parsed = (m: Inbound) => {
-  let mail = parsings.get(m) ?? PostalMime.parse(m.raw)
+  let mail = parsings.get(m) ?? read(m)
   parsings.set(m, mail)
   return mail
 }
 
 /** The words the letter carried: its plain text, else its html read as text. */
-export let words = (mail: Email) =>
+export let words = (mail: { text?: string; html?: string }) =>
   mail.text?.trim() || (mail.html ? plain(mail.html) : '')
 
 // A time property takes a date-time, and a `Date:` header is RFC 5322 ("Tue, 27
@@ -157,22 +158,6 @@ let when = (said: string | undefined) => {
     : new Date().toISOString()
 }
 
-// The letter's headers, with the parser's reading in front of the raw one: a
-// subject is `=?UTF-8?B?…?=` on the wire and words only after it is decoded,
-// and only the parser decoded it. Everything else is the header as it arrived
-// — the DKIM verdict is read off `Authentication-Results`, which the receiving
-// MTA wrote and no parser improves.
-let read = (m: Inbound, mail: Email): Head => ({
-  get: (name) => {
-    let said: Record<string, string | undefined> = {
-      subject: mail.subject,
-      'message-id': mail.messageId,
-      from: mail.from?.address,
-    }
-    return said[name.toLowerCase()] ?? m.headers.get(name)
-  },
-})
-
 // A letter's attachments, filed where an app's own uploads are (apps.ts
 // `filed`), as far as the app takes them (`"blob"` in its vocab.json), and
 // hung off the letter with a `contains` edge: the letter contains them, and
@@ -183,7 +168,7 @@ let carried = async (
   space: Space,
   app: App,
   graph: ReturnType<typeof metaOf>,
-  mail: Email,
+  mail: Incoming,
   of: string,
 ) => {
   let out: Bundle[] = []
@@ -191,9 +176,7 @@ let carried = async (
     ? await acceptsOf(env, space, app)
     : undefined
   for (let a of mail.attachments) {
-    let bytes = typeof a.content == 'string'
-      ? new TextEncoder().encode(a.content)
-      : new Uint8Array(a.content as ArrayBuffer)
+    let bytes = a.bytes
     if (!bytes.byteLength) continue
     // An attachment the app does not take is left off; the letter still lands.
     let file = await filed(
@@ -202,8 +185,8 @@ let carried = async (
       app,
       graph,
       bytes,
-      a.mimeType || 'application/octet-stream',
-      a.filename ?? '',
+      a.type || 'application/octet-stream',
+      a.name,
       accepts,
     ).catch((e) => {
       if (e instanceof Untaken) return null
@@ -226,13 +209,13 @@ export let arrived = async (m: Inbound, env: Env): Promise<string> => {
   if (requested) return requested
   let { space, app } = await opened(env, m.to)
   let mail = await parsed(m)
-  let head = read(m, mail)
+  let head = mail.headers
   let signed = verdict(head)
   let eid = crypto.randomUUID()
   let letter = inbound({ from: m.from, to: m.to, headers: head }, {
     eid,
     text: words(mail),
-    at: when(mail.date),
+    at: when(head.get('date') ?? undefined),
     // The MTA's verdict, recorded either way. No header at all — nobody
     // checked — leaves the property unwritten rather than claiming a `false`
     // nobody said.
@@ -278,7 +261,7 @@ let signingUp = async (m: Inbound, env: Env): Promise<string | null> => {
     )
   }
   let { joined } = await import('./identity.ts')
-  let name = (await parsed(m)).from?.name?.trim()
+  let name = (await parsed(m)).name?.trim()
   let { person, space } = await joined(env, from, name)
   return await asked(
     m,
@@ -378,18 +361,16 @@ let asked = async (
 ): Promise<string> => {
   let { keepFile, requestId } = await import('./operator-channels.ts')
   let mail = await parsed(m)
-  let head = read(m, mail)
+  let head = mail.headers
   let files = []
   for (let a of mail.attachments) {
-    let bytes = typeof a.content == 'string'
-      ? new TextEncoder().encode(a.content)
-      : new Uint8Array(a.content as ArrayBuffer)
+    let bytes = a.bytes
     files.push(
       await keepFile(
         env,
         space,
-        a.filename ?? 'attachment',
-        a.mimeType || 'application/octet-stream',
+        a.name || 'attachment',
+        a.type || 'application/octet-stream',
         bytes,
       ),
     )
@@ -420,8 +401,8 @@ let asked = async (
           files,
           ...(extra.signup ? { signup: true } : {}),
         },
-        options: { id, mail: received.mail, title: mail.subject },
-        in_reply_to: mail.inReplyTo,
+        options: { id, mail: received.mail, title: head.get('subject') ?? '' },
+        in_reply_to: head.get('in-reply-to') ?? undefined,
         ...(extra.thread ? { thread: extra.thread } : {}),
       }),
     })

@@ -102,11 +102,20 @@ let diverted = (sender: Sender, env: Pick<Env, 'MAIL_SINK'>): Sender => ({
 /** The host's named sender, or a built-in selected by configuration. Native
  * platform letters default to the REST sender; apps default to the binding.
  * A migration explicitly selects Resend only after its address passed a pilot. */
-export let transport = (env: Delivery, fallback = 'binding') =>
+export let transport = (
+  env: Delivery,
+  fallback = 'binding',
+  tags: Record<string, string> = {},
+) =>
   post({
     via: env.MAIL_VIA ?? fallback,
+    tags,
     account: env.MAIL_ACCOUNT || env.CF_ACCOUNT,
-    token: env.MAIL_VIA == 'resend' ? env.RESEND_TOKEN : env.MAIL_TOKEN,
+    token: env.MAIL_VIA == 'resend'
+      ? (fallback == 'cloudflare'
+        ? env.RESEND_PLATFORM_TOKEN
+        : env.RESEND_TOKEN)
+      : env.MAIL_TOKEN,
     base: env.MAIL_VIA == 'resend' ? env.RESEND_API : env.MAIL_API,
     fetch: env.MAIL_FETCH ?? (env.MAIL_VIA == 'resend' ? undefined : resent),
   }, { senders: { binding: bound(env.MAIL) } })
@@ -117,6 +126,7 @@ export type Delivery = Pick<
   | 'MAIL_SINK'
   | 'MAIL_VIA'
   | 'RESEND_TOKEN'
+  | 'RESEND_PLATFORM_TOKEN'
   | 'RESEND_API'
   | 'MAIL_TOKEN'
   | 'MAIL_ACCOUNT'
@@ -126,10 +136,21 @@ export type Delivery = Pick<
 >
 
 /** The capability lent to apps and Operators, with one selected transport. */
-export let outgoing = (env: Delivery): Sender => ({
+export let outgoing = (
+  env: Delivery,
+  tags: Record<string, string> = {},
+): Sender => ({
   send: (m) => {
-    let { sender, waiting } = transport(env)
+    let { sender, waiting } = transport(env, 'binding', tags)
     if (!sender) throw new Unsent(waiting!, 60_000)
     return diverted(sender, env).send(m)
   },
+})
+
+/** A store locator as provider correlation metadata, never stored on mail. */
+export let mailTags = (store: string): Record<string, string> => ({
+  yak_store: btoa(store).replaceAll('+', '-').replaceAll('/', '_').replaceAll(
+    '=',
+    '',
+  ),
 })

@@ -172,6 +172,12 @@ when the service sends from only one domain. `resend({token, base?, fetch?})`
 also implements `Sender` directly. Credentials are arguments; the transport
 reads no environment or vault.
 
+A host can keep credentials under `sender.providers`, for example
+`sender: {via: "resend", providers: {resend: {token: {secret: "RESEND_TOKEN"}},
+cloudflare: {account: "account-id", token: {secret: "CF_EMAIL_TOKEN"}}}}`.
+Changing only `sender.via` selects the matching provider's credentials. Inline
+options remain supported.
+
 A message's `to` accepts an address or a list, and `replyAddress` chooses where
 replies arrive. `replyTo` remains the RFC Message-ID being answered. Both HTTP
 transports preserve those fields and `cc`. `bound(binding)` adapts Cloudflare's
@@ -179,9 +185,14 @@ Workers Email Sending binding to the same interface.
 
 Resend's send response contains an API email id, not the RFC Message-ID. The
 sender returns an empty receipt, rather than storing that API id as
-`mail.message_id`. A mailbox that correlates replies must obtain Message-IDs
-through Resend's signed events or its retrieval API before switching transports.
-The sending-only key cannot retrieve sent or received mail. Receiving requires
+`mail.message_id`. For a graph, configure
+`receipts: {via: "resend", secret: {secret:
+"RESEND_WEBHOOK_SECRET"}, tags: {yak_host: "box"}}`
+beside `sender`, and `sender.tags: {yak_host: "box"}`. `@yaks/mail/routes` then
+answers `POST /mail/resend`, verifies the endpoint signature, and fills
+`mail.message_id` on the same letter. A receipt arriving before its letter is
+retried rather than discarded. No provider API id enters the letter. The
+sending-only key cannot retrieve sent or received mail. Receiving requires
 Resend MX records, an authenticated webhook, and retrieval of message bodies and
 attachments; the webhook's metadata alone is not a received letter.
 

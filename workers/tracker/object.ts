@@ -141,7 +141,7 @@ export class Tracker {
         get: (k) => this.#traceMeta().get(k),
         set: (k, v) => this.#traceMeta().set(k, v),
       },
-      sender: sender(env),
+      sender: sender(env, this.scope),
     }
   }
   #mailReady = false

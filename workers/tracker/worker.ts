@@ -5,6 +5,7 @@ import type { Bundle, Comp } from '@yaks/graph'
 import { minted } from '@yaks/graph/identity'
 import { sha256 } from '@yaks/graph/sha256'
 import { bugEid } from '@yaks/tracker'
+import { notification, Unsigned } from '@yaks/resend'
 import { sign } from './auth.ts'
 import { capture, caught, origin, queue } from '@yaks/tracker/report'
 import { evicted, jittered, lost, opaque, retried } from '@yaks/durable-object'
@@ -220,7 +221,7 @@ export let worker = (
       scope: platform,
       person: platform,
       admin: true,
-      exp: now() / 1000 + 60,
+      exp: Math.floor(now() / 1000) + 60,
     }, env.TRACKER_SECRET)
     let headers = { authorization: `Bearer ${signed}` }
     return standing(
@@ -238,9 +239,48 @@ export let worker = (
   return {
     fetch: async (request: Request): Promise<Response> => {
       let url = new URL(request.url)
-      let scope = scopeOf(url)
+      let scope = url.pathname == '/mail/resend' ? platform : scopeOf(url)
       if (!scope) return json({ error: 'tracker global scope required' }, 400)
       try {
+        if (url.pathname == '/mail/resend' && request.method == 'POST') {
+          if (!env.RESEND_WEBHOOK_SECRET || !env.TRACKER_SECRET) {
+            throw new Error('Mail webhook is not configured')
+          }
+          let arrived
+          try {
+            arrived = await notification(request, env.RESEND_WEBHOOK_SECRET)
+          } catch (error) {
+            if (error instanceof Unsigned) {
+              return json({ error: error.message }, 401)
+            }
+            throw error
+          }
+          let target = arrived.tags?.yak_tracker, found = arrived.receipt
+          if (!target || !found) return json({ ok: true })
+          if (!uuid.test(target)) {
+            throw new Error('Invalid tracker mail receipt scope')
+          }
+          let bearer = await ticket({
+            scope: target,
+            person: 'mail-receipt',
+            admin: true,
+            ingest: true,
+            exp: Math.floor(now() / 1000) + 60,
+          }, env.TRACKER_SECRET)
+          let raw = new TextEncoder().encode(JSON.stringify(found)).buffer
+          return await send(
+            target,
+            new Request('https://tracker.internal/mail/receipt', {
+              method: 'POST',
+              headers: {
+                authorization: 'Bearer ' + bearer,
+                'content-type': 'application/json',
+              },
+              body: raw,
+            }),
+            raw,
+          )
+        }
         if (url.pathname == '/canary' || url.pathname == '/canary/missing') {
           if (scope != platform) return json({ error: 'platform only' }, 403)
           let hash = url.searchParams.get('hash')

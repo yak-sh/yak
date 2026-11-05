@@ -62,6 +62,7 @@ export type Request = {
   signup?: boolean
 }
 type Answer = {
+  id?: string
   request?: string
   task?: string
   text: string
@@ -212,9 +213,16 @@ export let starting: Declared = {
 
 // The Operator's own address, and the sender its letters leave on, counted
 // against the space's mail allowance (meter.ts).
-let postOf = (env: Env, space: Space) => {
+let postOf = (env: Env, space: Space, kind = 'mail') => {
   let from = mailFrom(space.slug, null, env)
-  return { from, sender: metering(env, () => from, outgoing(env)) }
+  return {
+    from,
+    sender: metering(
+      env,
+      () => from,
+      outgoing(env, { yak_operator: space.eid, yak_kind: kind }),
+    ),
+  }
 }
 
 let html = (text: string) => `<p>${esc(text).replaceAll('\n', '<br>')}</p>`
@@ -246,9 +254,10 @@ export let channels = (env: Env): Record<string, Channel> => {
     email: async (request, answer, subject) => {
       let space = await directoryOf(env.STORE).at(request.space)
       if (!space) throw new Error('Operator reply has no space')
-      let { from, sender } = postOf(env, space)
+      let { from, sender } = postOf(env, space, 'answer')
       let text = `${answer.text}\n\n${signed(space)}`
       return sender.send({
+        id: answer.id,
         from,
         name: space.operator,
         to: request.address!,
@@ -342,16 +351,6 @@ export let mailSend = (
     let body = `${text}\n\n${cc ? signedFor(space, me.name) : signed(space)}`
     let replyTo = String(envelope?.message_id ?? '')
     let { from, sender } = postOf(env, space)
-    let receipt = await sender.send({
-      from,
-      name: cc ? `${space.operator} for ${me.name}` : space.operator,
-      to,
-      ...(cc ? { cc } : {}),
-      subject,
-      text: body,
-      html: html(body),
-      ...(replyTo ? { replyTo } : {}),
-    })
     let letter = crypto.randomUUID()
     let at = new Date().toISOString()
     await store.g.apply([{
@@ -362,14 +361,28 @@ export let mailSend = (
         to,
         ...(cc ? { cc } : {}),
         at,
-        ...(receipt.id ? { message_id: receipt.id } : {}),
         ...(answered ? { reply_to: answered.entity.eid } : {}),
       },
-      delivered: { at },
       operator_letter: {
         person: ctx.person,
         ...(context?.session ? { session: context.session } : {}),
       },
+    }], { trusted: true })
+    let receipt = await sender.send({
+      id: letter,
+      from,
+      name: cc ? `${space.operator} for ${me.name}` : space.operator,
+      to,
+      ...(cc ? { cc } : {}),
+      subject,
+      text: body,
+      html: html(body),
+      ...(replyTo ? { replyTo } : {}),
+    })
+    await store.g.apply([{
+      entity: { eid: letter },
+      delivered: { at },
+      ...(receipt.id ? { mail: { message_id: receipt.id } } : {}),
     }], { trusted: true })
     return JSON.stringify({ letter, to, cc: cc ?? null })
   },
@@ -577,7 +590,7 @@ export let handleChannels = (
       try {
         receipt = await adapter(
           request,
-          answer,
+          { ...answer, id: row.entity.eid },
           String(part<Comp>(asked, 'doc').title ?? 'Your request'),
         )
       } catch (error) {

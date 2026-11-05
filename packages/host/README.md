@@ -154,10 +154,13 @@ workspace. Only explicit sandbox disposal destroys a resource. See
 [senders](../mail/README.md#the-transport-is-supplied-by-the-caller).
 `@yaks/mail` selects one with `sender: {via: name}` in its plugin options. The
 host constructs the sender and owns its credentials, metering and lifetime. A
-lent name takes precedence over mail's built-in Cloudflare and stash senders.
-The assembly passes this capability to plugin factories through `Binding.host`
-or `Binding.ready`. A sender rejects with `Unsent` (`@yaks/host/senders`) when
-the message certainly never left, so mail tries it again instead of bouncing it.
+lent name takes precedence over the configured provider. `Message.id` is the
+caller's letter UUID, for an asynchronous receipt. `Incoming` is a
+provider-neutral letter with headers, text and attachments; a provider supplies
+an authentication verdict separately from the author's headers. The assembly
+passes this capability to plugin factories through `Binding.host` or
+`Binding.ready`. A sender rejects with `Unsent` (`@yaks/host/senders`) when the
+message certainly never left, so mail tries it again instead of bouncing it.
 
 ```ts
 import type { Host, Message } from '@yaks/host'

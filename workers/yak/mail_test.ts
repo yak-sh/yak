@@ -578,13 +578,17 @@ test('platform mail uses the selected Resend sender without the Cloudflare accou
   let sent: Record<string, unknown>[] = []
   let env = {
     MAIL_VIA: 'resend',
-    RESEND_TOKEN: 'sending-only',
+    RESEND_PLATFORM_TOKEN: 'sending-only',
     MAIL_FETCH: (url: string, init: RequestInit) => {
       assertEquals(url, 'https://api.resend.com/emails')
       sent.push(JSON.parse(String(init.body)))
       return Promise.resolve(Response.json({ id: 'provider-id' }))
     },
   }
+  assertEquals(
+    mailable({ MAIL_VIA: 'resend', RESEND_TOKEN: 'app-only' }),
+    false,
+  )
   assert(mailable(env))
   await mail(env)({
     to: ['jeff@example.com', 'other@example.com'],

@@ -3075,6 +3075,16 @@
           ]
         }
       },
+      "packages/cloudflare-mail": {
+        "packageJson": {
+          "dependencies": [
+            "npm:@jsr/std__assert@1",
+            "npm:@yaks/host@0.2.17",
+            "npm:@yaks/testing@0.2.17",
+            "npm:postal-mime@3.0.0"
+          ]
+        }
+      },
       "packages/code": {
         "packageJson": {
           "dependencies": [
@@ -3789,6 +3799,7 @@
             "npm:@jsr/std__assert@1",
             "npm:@yaks/api@0.2.17",
             "npm:@yaks/cli@0.2.17",
+            "npm:@yaks/cloudflare-mail@0.2.17",
             "npm:@yaks/doc@0.2.17",
             "npm:@yaks/edge@0.2.17",
             "npm:@yaks/effects@0.2.17",
@@ -3802,6 +3813,7 @@
             "npm:@yaks/project@0.2.17",
             "npm:@yaks/query@0.2.17",
             "npm:@yaks/ram@0.2.17",
+            "npm:@yaks/resend@0.2.17",
             "npm:@yaks/task@0.2.17",
             "npm:@yaks/testing@0.2.17",
             "npm:@yaks/tools@0.2.17",
@@ -4192,6 +4204,15 @@
             "npm:@yaks/testing@0.2.17",
             "npm:@yaks/text@0.2.17",
             "npm:@yaks/vocab@0.2.17"
+          ]
+        }
+      },
+      "packages/resend": {
+        "packageJson": {
+          "dependencies": [
+            "npm:@jsr/std__assert@1",
+            "npm:@yaks/host@0.2.17",
+            "npm:@yaks/testing@0.2.17"
           ]
         }
       },
@@ -4866,6 +4887,7 @@
             "npm:@yaks/claude@0.2.17",
             "npm:@yaks/cli@0.2.17",
             "npm:@yaks/client@0.2.17",
+            "npm:@yaks/cloudflare-mail@0.2.17",
             "npm:@yaks/code-mode@0.2.17",
             "npm:@yaks/code@0.2.17",
             "npm:@yaks/connections@0.2.17",
@@ -4924,6 +4946,7 @@
             "npm:@yaks/query@0.2.17",
             "npm:@yaks/ram@0.2.17",
             "npm:@yaks/render@0.2.17",
+            "npm:@yaks/resend@0.2.17",
             "npm:@yaks/rtc@0.2.17",
             "npm:@yaks/sandbox@0.2.17",
             "npm:@yaks/secrets@0.2.17",

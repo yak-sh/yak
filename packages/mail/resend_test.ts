@@ -35,6 +35,7 @@ test('Resend sends every reader in one request with the reply address and thread
   equal(init.method, 'POST')
   equal(new Headers(init.headers).get('authorization'), 'Bearer sending-only')
   equal(JSON.parse(String(init.body)), {
+    tags: [],
     from: 'Book club <hello@books.example>',
     to: ['ana@example.com', 'ben@example.com'],
     cc: ['chair@example.com'],
@@ -104,4 +105,34 @@ test('missing Resend credentials keep the selected transport waiting', () => {
   equal(post({ via: 'resend' }), {
     waiting: 'waiting for credentials: a resend sender needs `token`',
   })
+})
+
+test('changing only the selected provider changes credentials and preserves the letter', async () => {
+  let seen: string[] = []
+  let selection = {
+    via: 'cloudflare',
+    providers: {
+      cloudflare: { account: 'account', token: 'cf-token' },
+      resend: { token: 'resend-token' },
+    },
+    fetch: (url: string, init: RequestInit) => {
+      seen.push(
+        `${new URL(url).hostname} ${
+          new Headers(init.headers).get('authorization')
+        }`,
+      )
+      return Promise.resolve(
+        Response.json(
+          url.includes('/accounts/') ? { success: true } : { id: 'api-id' },
+        ),
+      )
+    },
+  }
+  await post(selection).sender!.send(message)
+  selection.via = 'resend'
+  await post(selection).sender!.send(message)
+  equal(seen, [
+    'api.cloudflare.com Bearer cf-token',
+    'api.resend.com Bearer resend-token',
+  ])
 })

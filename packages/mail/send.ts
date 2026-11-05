@@ -230,7 +230,10 @@ export let sending =
             tried().then(
               (claimed) =>
                 claimed
-                  ? sender.send(message(letter!, to, replyTo || undefined))
+                  ? sender.send({
+                    ...message(letter!, to, replyTo || undefined),
+                    id: letter!.entity.eid,
+                  })
                   : undefined,
             ).then(
               (receipt) =>

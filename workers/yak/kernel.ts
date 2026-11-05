@@ -155,6 +155,9 @@ let unconditional = (req: Request) => {
 
 let serve = async (req: Request, env: Env, r: Route) => {
   let asked = new URL(req.url).pathname
+  if (r.space == null && asked == '/mail/resend') {
+    return (await import('./mail-receipts.ts')).receipts(req, env)
+  }
   if (r.space == null && asked.startsWith('/__packages/')) {
     // The canonical origin is common to every app. Files caches compiler
     // assets by content, without a tenant or release discriminator.

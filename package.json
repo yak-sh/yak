@@ -55,6 +55,8 @@
     "packages/wake",
     "packages/canvas",
     "packages/mail",
+    "packages/cloudflare-mail",
+    "packages/resend",
     "packages/member",
     "packages/doc",
     "packages/draft",

@@ -327,10 +327,13 @@ it. Values never appear here or in the repo.
 Mail uses the portable `@yaks/mail` sender selected by `MAIL_VIA`. When unset,
 platform letters use Cloudflare's REST sender and apps and Operators use the
 `MAIL` binding. `MAIL_VIA=resend` selects Resend for each, with a
-service-specific `sending_access` key in the Worker secret `RESEND_TOKEN`.
-`RESEND_API` and `MAIL_FETCH` replace only the HTTP boundary in probes.
-Staging's `MAIL_SINK` redirects every recipient and removes copies for either
-provider. Missing Resend credentials never fall back to Cloudflare.
+service-specific `sending_access` app-domain key in the Worker secret
+`RESEND_TOKEN` and a separate bot-domain key in `RESEND_PLATFORM_TOKEN`.
+`RESEND_WEBHOOK_SECRET` authenticates signed receipts at `POST /mail/resend`;
+they fill Message-IDs in app and Operator mail without granting Resend account
+access to a Worker. `RESEND_API` and `MAIL_FETCH` replace only the HTTP boundary
+in probes. Staging's `MAIL_SINK` redirects every recipient and removes copies
+for either provider. Missing Resend credentials never fall back to Cloudflare.
 
 Before selecting Resend, verify `bot.yak.sh` and the deployment's apex with
 Resend and pilot each sending address. Reply-tracking mailboxes also need the

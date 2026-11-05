@@ -393,12 +393,20 @@ export class Builder {
         // A reply to the Operator's letter is the kernel's to bring (inbox.ts),
         // and is asked by no person.
         if (
+          url.pathname == '/operator/receipt' ||
           url.pathname == '/operator/letter' ||
           url.pathname == '/operator/replied'
         ) {
           let space = request.headers.get(SPACE)
           if (request.headers.get('x-yak-kernel') != '1' || !space) {
             return no(403, NOBODY)
+          }
+          if (url.pathname == '/operator/receipt') {
+            let { operatorReceipt } = await import('./operator-host.ts')
+            return await operatorReceipt(
+              await this.#work(),
+              await request.json(),
+            )
           }
           let { operatorReply } = await import('./operator-host.ts')
           return await operatorReply(

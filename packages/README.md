@@ -5,6 +5,12 @@ for agent sessions, tools and application domains. Packages can be imported
 individually, but many depend on other `@yaks/*` packages. They are intended for
 publication through JSR and npm; runtime requirements vary by package.
 
+Mail providers: [@yaks/resend](resend/README.md) supplies Resend sending, signed
+receipts and receiving; [@yaks/cloudflare-mail](cloudflare-mail/README.md)
+supplies Cloudflare REST and Workers sending and Email Routing receiving. Both
+use the portable mail boundary from @yaks/host; @yaks/mail owns letters and
+their delivery outcomes.
+
 ## Start here
 
 An **entity** is a record identified by `entity.eid`. Its **components** are

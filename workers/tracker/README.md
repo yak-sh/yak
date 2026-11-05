@@ -50,6 +50,8 @@ let bugs = await fetch(`${trackerUrl}/bugs?scope=${spaceEid}&app=${appEid}`, {
 Mail uses `@yaks/mail`'s named transport selection. With no `MAIL_VIA`, the
 Worker lends its `MAIL` binding. `MAIL_VIA=resend` selects the built-in Resend
 sender and requires a separate sending-only Worker secret `RESEND_TOKEN`.
+`RESEND_WEBHOOK_SECRET` authenticates `POST /mail/resend`; the verified
+correlation data routes each receipt into its tracker using an intake ticket.
 `RESEND_API` and `MAIL_FETCH` replace the HTTP boundary in probes. Missing
 Resend credentials leave queued delivery effects waiting for configuration; they
 never select the binding instead. `MAIL_FROM` and `MAIL_TO` keep their
