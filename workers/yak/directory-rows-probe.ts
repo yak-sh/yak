@@ -25,7 +25,7 @@ import { EPOCH, fenced, READS, type ServingCopyDoor } from './directory-copy.ts'
 import type { Env } from './env.ts'
 import { vouchOf } from './app-authority.ts'
 import { directoryOf, directoryRows, part, type Row } from './directory.ts'
-import { metaOf } from './meta.ts'
+import { type Meta, metaOf } from './meta.ts'
 import { platformVocab } from './vocab.ts'
 import { bindings } from './binding-probe.ts'
 
@@ -149,7 +149,8 @@ export let rows = (
       return Response.json(refusal(e), { status: status(e), headers })
     }
   }
-  let local = part({
+  let meta: Meta = {
+    door: doorOf(fetch, PLATFORM_STORE),
     query: async (q) => await g.read(q),
     apply: (entities, headers = {}, opts = {}) =>
       apply(
@@ -157,7 +158,8 @@ export let rows = (
         new Request('http://directory/apply', { headers }),
         opts.stamp !== false,
       ),
-  })
+  }
+  let local = part(meta)
   let dir = directoryRows({
     query: async (q) =>
       (await g.read(q) as Row[]).map((row) => ({
@@ -166,7 +168,13 @@ export let rows = (
       })),
     apply: local.apply,
   })
-  return { graph: g, dir, fetch, meta: metaOf(doorOf(fetch, PLATFORM_STORE)) }
+  return {
+    graph: g,
+    dir,
+    fetch,
+    // Physical storage fixtures also measure the store door's round trips.
+    meta: storage ? metaOf(meta.door!) : meta,
+  }
 }
 
 /** Runtime bindings with the directory's decisions served by a RAM graph.
