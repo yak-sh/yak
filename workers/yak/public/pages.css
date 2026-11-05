@@ -318,7 +318,7 @@
   }
   .Desk main {
     display: grid;
-    grid-template-columns: 13.5rem minmax(0, 1fr);
+    grid-template-columns: 15rem minmax(0, 1fr);
     align-items: start;
     max-width: 80rem;
     min-height: 100vh;
@@ -399,12 +399,14 @@
      another to go to, a button on its hatch, so it reads as something to
      press and not as the page you are on. Change opens the list over the
      page, wider than the side, drawn in pencil on a hatch the way a button
-     sits on its. */
+     sits on its. Change sits under the name, so a long name has the
+     side's width and nothing draws over it. */
   .Desk_Space {
     display: grid;
-    grid-template-columns: 2rem minmax(0, 1fr) auto;
+    grid-template-columns: 2rem minmax(0, 1fr);
     align-items: center;
-    gap: .6rem;
+    column-gap: .6rem;
+    row-gap: .15rem;
     padding: .55rem .7rem;
     list-style: none;
   }
@@ -443,6 +445,9 @@
     --lift: 1.5px;
     transform: translate(2.5px, 2.5px);
   }
+  .Desk_Pick > summary > .Desk_Tile {
+    grid-row: span 2;
+  }
   .Desk_Pick > summary::-webkit-details-marker {
     display: none;
   }
@@ -462,13 +467,14 @@
     line-height: 1.25;
   }
   .Desk_Name b {
-    overflow-wrap: break-word;
+    overflow-wrap: anywhere;
   }
   .Desk_Name small {
     color: var(--soft-ink);
     font-size: var(--fine);
   }
   .Desk_Change {
+    grid-column: 2;
     display: inline-flex;
     align-items: center;
     gap: .15rem;
