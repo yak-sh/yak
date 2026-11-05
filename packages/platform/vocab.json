@@ -262,6 +262,10 @@
         "built": {
           "type": "number"
         },
+        "drawn": {
+          "type": "number",
+          "description": "dollars models, voice and texts have spent, every month together"
+        },
         "at": {
           "type": "string",
           "format": "date-time"

@@ -482,6 +482,21 @@ test("a person's own space stays theirs after they rename it", async () => {
   assertEquals((await m.dir.own(matt)).eid, mine.eid)
 })
 
+test("the starter is a person's once, on their first space", async () => {
+  let m = held()
+  let ana = crypto.randomUUID()
+  let bo = crypto.randomUUID()
+  m.put(ana, { person: {}, email: { address: 'ana@yaks.app' } })
+  let first = await m.dir.own(ana)
+  assertEquals(first.starter, null)
+  let club = await m.dir.mint(ana, 'club', 'Club', {})
+  assertEquals((await m.dir.space('club'))!.starter, 0)
+  // Theirs went to the first, and stays theirs after it is gone.
+  m.put(bo, { person: {}, email: { address: 'bo@yaks.app' } })
+  m.put(bo, { started: { space: club } })
+  assertEquals((await m.dir.own(bo)).starter, 0)
+})
+
 test('a seat from before the mark is marked at the space their address names', async () => {
   let m = held()
   let ana = crypto.randomUUID()

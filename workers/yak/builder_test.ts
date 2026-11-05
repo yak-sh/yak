@@ -30,8 +30,12 @@ import * as dirPart from './directory.ts'
 import type { Env } from './env.ts'
 import { embeds, platform } from './testing.ts'
 import { invokePackage } from './package-tools.ts'
-import { BUDGET, BUILDS, monthOf } from './meter.ts'
+import { BUILDS, monthOf } from './meter.ts'
 import type { Who } from './session.ts'
+
+// The fixture space's month, set by the platform, and no starter: each case
+// counts against figures it states.
+let MONTH = 0.2
 
 let SECRET = 'a probe secret'
 let ADA = 'a0000000-0000-4000-8000-0000000000ad'
@@ -54,13 +58,15 @@ let seeded = async (vars: Partial<Env> = {}) => {
     ...vars,
   })
   let dir = dirOf(env)
-  await dir.apply({
+  await dir.stamp({
     entities: [
       { entity: { eid: ADA }, person: {} },
       {
         entity: { eid: '$space' },
         doc: { title: 'ada' },
         space: { slug: 'ada', store: 'ada' },
+        budget: { dollars: MONTH },
+        starter: { dollars: 0 },
       },
       {
         entity: { eid: '$seat' },
@@ -210,7 +216,7 @@ test('an account out of budget is told so before a model is asked', async () => 
     meter: {
       month: monthOf(new Date()),
       built: 0,
-      models: BUDGET.free,
+      models: MONTH,
       realtime: 0,
     },
   } as Space
@@ -549,7 +555,7 @@ test('the builder bounds output tokens to the affordable maximum and charges onc
   assertEquals(cappedTokens, 200)
   assertEquals(
     (await dirOf(capped.env).space('ada'))!.meter?.models,
-    BUDGET.free,
+    MONTH,
   )
 })
 
@@ -586,6 +592,6 @@ test('a builder answer without measured usage retains its reserved maximum', asy
   assertEquals(out.refused, undefined)
   assertEquals(
     (await dirOf(unknown.env).space('ada'))!.meter?.models,
-    BUDGET.free,
+    MONTH,
   )
 })

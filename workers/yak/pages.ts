@@ -48,9 +48,9 @@ import {
   type Ceiling,
   ceilings,
   count,
-  dollars,
   type Gauge,
   PRICE,
+  share,
   size,
   WARN,
   YEARLY,
@@ -2683,7 +2683,7 @@ let allowances = (
   } has used since the 1st, counted hourly${read}. Each starts again on the 1st, except what the space holds.</p><ul class="Rows">${rows}${
     gaugeRow(
       'Models and voice',
-      `${dollars(spent)} of ${dollars(limit)}`,
+      `${share(spent, limit)} used`,
       'The builder’s and your apps’ models and voices, from this space’s budget.',
       limit ? spent / limit : 0,
     )

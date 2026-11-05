@@ -363,7 +363,7 @@ test('billing shows the space’s allowances', async () => {
         'Get the Plus plan for Books — $9 a month',
         'Nothing is billed.',
         '0 of 5',
-        '$0.00 of $0.20',
+        '0% used',
         '30 of 100',
       ]
     ) assertStringIncludes(html, text)

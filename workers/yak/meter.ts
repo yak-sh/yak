@@ -169,14 +169,25 @@ export let BUILDS: Record<Tier, number> = {
 
 export let builds = (tier: Tier | null): number => BUILDS[tier ?? 'free']
 
-// Each space's models and voice spend its one monthly dollar budget. The
-// Organization plan's $15 pays for the operator and document search
-// (D-134567).
+// Each space's models and voice spend its one monthly dollar budget, and a
+// person's first space draws on {@link STARTER} before it. The free month is
+// sized so a year of free spaces spends the model credits we hold rather than
+// saving them (T-138720): a free person talks with their Operator and never
+// meets a figure. Each paid plan holds more than the one below it, which is
+// what a refusal's "the Plus plan allows more" promises.
 export let BUDGET: Record<Tier, number> = {
-  free: 0.2,
-  plus: 3,
-  organization: 15,
+  free: 20,
+  plus: 30,
+  organization: 60,
 }
+
+// The dollars a person's first space holds once, spent before its monthly
+// budget (T-138717: "Once, then a larger monthly"). It guards a spike rather
+// than rationing: Jeff, 2026-11-05, "the $100 is just to prevent a random
+// spike, but basically we want them to not think about or hit the limit".
+// Once per person: a space minted for someone who already holds one, or who
+// has had theirs, holds none (directory.ts `mint`, `starter`).
+export let STARTER = 100
 
 // Build seconds a month: the sandbox container's (sandbox.ts) and the compile
 // at app_deploy's (esbuild.ts). An hour free is six builds' whole sandbox
@@ -267,15 +278,23 @@ export let free = (space: Space) => !paid(space.tier)
 export let over = (space: Space, what: Limited, more = 0, now = new Date()) =>
   used(spent(space, now), what) + more >= allowance(what, space.tier)
 
-/** The dollars a space's models and voice may spend a month: the one the
- * platform's owner set on it (budget.ts), else its plan's. */
-export let limitOf = (space: Space) =>
-  space.budget ?? BUDGET[space.tier ?? 'free']
+/** What is left of a space's starter as this month began: what it holds,
+ * less every dollar it drew before this month (`drawn` counts them all). */
+export let starterOf = (space: Space, now = new Date()) => {
+  let before = (space.meter?.drawn ?? 0) - used(spent(space, now), 'models')
+  return Math.max(0, (space.starter ?? STARTER) - Math.max(0, before))
+}
+
+/** The dollars a space's models and voice may spend this month: the month
+ * the platform's owner set on it (budget.ts), else its plan's, and what is
+ * left of its starter. */
+export let limitOf = (space: Space, now = new Date()) =>
+  (space.budget ?? BUDGET[space.tier ?? 'free']) + starterOf(space, now)
 
 /** The space's models and voice this month, against its budget. */
 export let budget = (space: Space, now = new Date()): Budget => ({
   spent: used(spent(space, now), 'models'),
-  limit: limitOf(space),
+  limit: limitOf(space, now),
 })
 
 /** What stops this spend in this space, or null to go ahead. */
@@ -323,7 +342,8 @@ export let spent = (space: Space, now = new Date()): Meter =>
 /**
  * A meter with a spend added, as the patch that writes it: onto what it holds
  * when it holds the spend's month, and onto a fresh month when it holds
- * another. `built` counts every build ever, so a new month carries it.
+ * another. `built` counts every build ever and `drawn` every dollar, so a
+ * new month carries them.
  *
  * ```ts
  * import { added } from './meter.ts'
@@ -333,6 +353,7 @@ export let spent = (space: Space, now = new Date()): Meter =>
  * // { month: '2026-09', models: 0.75 }
  * added(sep, { month: '2026-10', builds: 1 }).built // 4
  * added(sep, { month: '2026-10', builds: 1 }).models // 0
+ * added({ ...sep, drawn: 4 }, { month: '2026-10', models: 0.5 }).drawn // 4.5
  * ```
  */
 export let added = (
@@ -347,6 +368,8 @@ export let added = (
     : empty(month, n(meter?.built))
   for (let k of SPENDS) if (n(spend[k])) out[k] = n(held?.[k]) + n(spend[k])
   if (n(spend.builds)) out.built = n(meter?.built) + n(spend.builds)
+  let cost = DOLLARS.reduce((sum, k) => sum + n(spend[k]), 0)
+  if (cost) out.drawn = n(meter?.drawn) + cost
   return out
 }
 
@@ -440,8 +463,8 @@ export let dollars = (n: number) =>
     : `$${n.toFixed(1 - Math.floor(Math.log10(n))).replace(/0+$/, '')}`
 
 /** A share of the model and voice budget as a person reads it, a percent:
- * the budget's dollars are the plan's to say, never a conversation's. */
-let share = (n: number, of: number) =>
+ * the budget's dollars are ours to allocate, never shown (T-138720). */
+export let share = (n: number, of: number) =>
   n <= 0 || !of
     ? '0%'
     : n / of < 0.01
@@ -534,7 +557,7 @@ export let gauged = (
   let close = shown.filter(([, g]) => full(g) >= WARN)
   let over = close.filter(([, g]) => full(g) >= 1).length
   let state = !over ? 'near' : over == close.length ? 'at' : 'at or near'
-  let limit = limitOf(space)
+  let limit = limitOf(space, now)
   let voice = m.realtime ? ` (${share(m.realtime, limit)} on voice)` : ''
   return `This month${read}: ${
     shown.map(([what, g]) => READ[what](g)).join(', ')

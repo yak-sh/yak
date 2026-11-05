@@ -108,6 +108,9 @@ export type Meter = {
   // number nobody can add up.
   seconds: number
   built: number
+  // Every dollar models, voice and texts have spent here, all months
+  // together: what the starter is drawn against (meter.ts `starterOf`).
+  drawn?: number
   at: string
 }
 export type Tier = 'free' | 'plus' | 'organization'
@@ -199,6 +202,10 @@ export type Space = {
   // platform's owner set one (budget.ts), in place of its plan's (meter.ts
   // `BUDGET`). Null on every space nobody has given one, which is almost all.
   budget: number | null
+  // The dollars this space holds once, before its monthly budget, where it
+  // holds other than meter.ts `STARTER`: none for a person's later spaces
+  // (`mint`). Absent on almost every space.
+  starter?: number | null
   meter: Meter | null
   // Whether the agent has already been told where this space stands against
   // its ceilings (unseen.ts `ceiling`). The mark is `notified`, the same one
@@ -569,6 +576,8 @@ export type Row = {
   }
   fee?: { bps?: number | null }
   budget?: { dollars?: number | null }
+  starter?: { dollars?: number | null }
+  started?: { space?: Id | null }
   created?: { at?: string }
   member?: { space: Id; person: Id; role: Role; own?: boolean }
   grant?: { app: Id; person: Id; access: Role }
@@ -638,6 +647,7 @@ let meterOf = (r: Row): Meter | null =>
       texts: r.meter.texts ?? 0,
       seconds: r.meter.seconds ?? 0,
       built: r.meter.built ?? 0,
+      drawn: r.meter.drawn ?? 0,
       at: r.meter.at ?? '',
     }
     : null
@@ -965,6 +975,7 @@ export let SPACE_PARTS = [
   'stripe',
   'fee',
   'budget',
+  'starter',
   'former',
   'tunnel',
   'operator',
@@ -1037,6 +1048,7 @@ export let spaceOf = (r: Row): Space => ({
   stripe: stripeOf(r),
   fee: r.fee?.bps ?? 0,
   budget: r.budget?.dollars ?? null,
+  starter: r.starter?.dollars ?? null,
   meter: meterOf(r),
   told: r.notified != null,
   trashed: trashedOf(r),
@@ -1704,8 +1716,11 @@ export let directoryRows = (rows: {
     // minted here rather than by a `$alias` the store resolves, because the
     // handle is made out of it and there is no second moment to write it in
     // (`spaceHandle`); a bundle mints at an eid its author chose (T-32455).
-    // Taking a name from another space is the platform's act, not the
-    // caller's, so a batch that does is the kernel's. Answers the eid.
+    // A person's first space draws the starter (meter.ts `STARTER`) and the
+    // person wears `started` from then on; a space minted for someone who
+    // owns one already, or who has had theirs, holds none. Both are the
+    // platform's to say, and so is taking a name from another space, so the
+    // batch is the kernel's. Answers the eid.
     mint: async (
       person: string,
       slug: string,
@@ -1714,22 +1729,29 @@ export let directoryRows = (rows: {
       own = false,
     ) => {
       let eid = crypto.randomUUID()
-      let [claims, seats] = await Promise.all([
+      let [claims, seats, row] = await Promise.all([
         self.claimed(slug),
         self.seats(person),
+        one(`.entity.eid=${person}&?started`),
       ])
       let name = christened(
         eid,
         seats.map((s) => ({ eid: s.space.eid, name: s.space.operator })),
       )
-      await (claims.length ? self.stamp : self.apply)({
+      let first = !row?.started && !seats.some((s) => s.role == 'owner')
+      await self.stamp({
         entities: [
-          { entity: { eid: person }, person: {} },
+          {
+            entity: { eid: person },
+            person: {},
+            ...(first ? { started: { space: eid } } : {}),
+          },
           {
             entity: { eid },
             doc: { title },
             space: { slug, store: spaceHandle(slug, eid) },
             operator: { name },
+            ...(first ? {} : { starter: { dollars: 0 } }),
           },
           {
             entity: { eid: '$seat' },

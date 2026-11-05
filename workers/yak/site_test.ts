@@ -14,11 +14,9 @@ import { assert, assertEquals, assertStringIncludes } from '@std/assert'
 import { parseHTML } from 'linkedom'
 import { REPLY_TO } from './mail.ts'
 import {
-  BUDGET,
   BUILDS,
   count,
   CURRENCY,
-  dollars,
   FILES,
   FREE,
   LETTERS,
@@ -355,10 +353,7 @@ test('every pricing card lists the same features in the same order', () => {
         : line
     )
     assertEquals(named, FEATURES, TIERS[i])
-    assertEquals(
-      lines[FEATURES.indexOf('AI use')],
-      `${dollars(BUDGET[TIERS[i]])} of AI use a month`,
-    )
+    assertEquals(lines[FEATURES.indexOf('AI use')], 'AI use included')
   })
 })
 
@@ -371,7 +366,7 @@ test('the pricing page tabulates the limits the code holds a space to', () => {
     ['Photos and files', (t) => size(FILES[t])],
     ['Visits a month', (t) => count(LIMITS[t].requests)],
     ['Emails a month', (t) => count(LETTERS[t])],
-    ['AI use a month', (t) => dollars(BUDGET[t])],
+    ['AI use', () => 'Included'],
     ['Builds a month', (t) => String(BUILDS[t])],
     ['Build time a month', (t) => hours(SECONDS[t])],
     ['Builds at once', (t) => String(AWAKE[t])],

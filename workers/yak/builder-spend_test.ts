@@ -16,6 +16,8 @@ let fixture = async () => {
     entities: [{
       entity: { eid },
       space: { slug: 'builder-' + eid, store: eid },
+      budget: { dollars: 0.2 },
+      starter: { dollars: 0 },
       meter: { month: monthOf(new Date()), models: 0 },
     }],
   })

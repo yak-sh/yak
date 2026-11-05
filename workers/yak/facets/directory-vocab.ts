@@ -370,6 +370,22 @@ export let directoryDoc: VocabDoc = {
       type: 'object',
       properties: { dollars: owned(num) },
     },
+    // The dollars a space holds once, before its monthly budget, where it
+    // holds other than meter.ts `STARTER`: none on a person's later spaces
+    // (directory.ts `mint`). Stamped, for the reason the budget is.
+    starter: {
+      component: true,
+      type: 'object',
+      properties: { dollars: owned(num) },
+    },
+    // The space a person's starter went to (directory.ts `mint`): worn from
+    // their first space on, and kept once that space is gone, so the starter
+    // is theirs once.
+    started: {
+      component: true,
+      type: 'object',
+      properties: { space: owned(ref('keep')) },
+    },
     // What a space just spent on its month: a letter, a build, a model call, a
     // voice's lease, an app's text, container seconds. The directory adds it to the `meter`
     // inside the write's own transaction (meter.ts `spend`), so two spends at

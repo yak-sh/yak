@@ -88,10 +88,9 @@ Voice is charged by listening time: about $0.001 for each voice a page receives
 for an hour, and nothing for speaking. Ten people each hearing three others talk
 for an hour costs about $0.03.
 
-Voice spends the same monthly allowance as AI models: $0.20 a month on a free
-space and $3.00 on the Plus plan, each space its own. `app_list` reports how
-much of each space's allowance has been spent this month, and how much of that
-was voice. When the allowance is spent, new calls and new voice requests are
-refused (`limit`), the voices already being received stop within a minute, and
-everything else in the app keeps working. Voice works again on the 1st of the
-month, or as soon as the space moves to the Plus plan.
+Voice spends the same monthly allowance as AI models, each space its own.
+`app_list` reports how much of each space's allowance has been spent this month,
+and how much of that was voice. When the allowance is spent, new calls and new
+voice requests are refused (`limit`), the voices already being received stop
+within a minute, and everything else in the app keeps working. Voice works again
+on the 1st of the month, or as soon as the space moves to the Plus plan.

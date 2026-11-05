@@ -14,7 +14,7 @@ import type { Bundle, Comp } from '@yaks/graph'
 import { appStore, directory } from './directory.ts'
 import * as dirPart from './directory.ts'
 import type { Env } from './env.ts'
-import { accounted, BUDGET, countedMedia, monthOf } from './meter.ts'
+import { accounted, countedMedia, monthOf } from './meter.ts'
 import { identityEid } from '@yaks/graph'
 import { edgeEid } from '@yaks/edge'
 import {
@@ -48,6 +48,10 @@ import {
   submit,
 } from '../model/worker.ts'
 import type { Inference } from '@yaks/model'
+
+// The fixture space's month, set by the platform, and no starter: each case
+// counts against figures it states.
+let MONTH = 0.2
 
 let ADA = 'a0000000-0000-4000-8000-0000000000ad'
 let BOB = 'b0000000-0000-4000-8000-0000000000b0'
@@ -99,13 +103,15 @@ let vale = async (
     } as Partial<Env>,
   )
   let dir = directory({ fetch: (r) => dirPart.fetch(r, p.env) })
-  await dir.apply({
+  await dir.stamp({
     entities: [
       { entity: { eid: ADA }, person: {} },
       {
         entity: { eid: '$space' },
         doc: { title: 'Ada' },
         space: { slug: 'ada', store: 'ada' },
+        budget: { dollars: MONTH },
+        starter: { dollars: 0 },
         ...(models ? { meter: { month: monthOf(new Date()), models } } : {}),
       },
       {
@@ -216,7 +222,7 @@ let hosted = async () => {
   let vaultKey = btoa(String.fromCharCode(...new Uint8Array(32).fill(4)))
   let v = await vale(() => ({ response: 'workers-only' }), {
     env: { VAULT: d1() as unknown as D1Like, VAULT_KEY: vaultKey },
-    models: BUDGET.free - 0.125,
+    models: MONTH - 0.125,
   })
   v.env.MODEL_RECEIPTS = v.env.BLOBS
   let executorEnv: ExecutorEnv = {
@@ -473,7 +479,7 @@ test('an existing OpenRouter receipt delivers audio and settles once without gen
     }
     assertEquals(reports.length, 2)
     assertEquals(reports[0][0].entity.eid, reports[1][0].entity.eid)
-    assertEquals((await v.spent()).meter!.models, BUDGET.free)
+    assertEquals((await v.spent()).meter!.models, MONTH)
     let [cost] = await v.read(`.entry.session=${session}&.cost&*`)
     assertEquals(cost.cost, { dollars: 0.125, reported: true })
     let [built] = await v.read(`.entity.eid=${build}&.build&*`)
@@ -485,7 +491,7 @@ test('an existing OpenRouter receipt delivers audio and settles once without gen
     assertEquals((error.refusal as Comp).code, 'limit')
     assertEquals(dispatched.length, 0)
     assertEquals(v.asked.length, 0)
-    assertEquals((await v.spent()).meter!.models, BUDGET.free)
+    assertEquals((await v.spent()).meter!.models, MONTH)
     assert(
       !JSON.stringify(await v.read(`.entry.session=${session}&*`))
         .includes(key),
@@ -504,7 +510,7 @@ test('an existing OpenRouter receipt delivers audio and settles once without gen
     for (let i = 0; i < 2; i++) {
       await assertRejects(() => host.delivered(dormant))
     }
-    assertAlmostEquals((await v.spent()).meter!.models, BUDGET.free + 0.02)
+    assertAlmostEquals((await v.spent()).meter!.models, MONTH + 0.02)
     await host.report(dormant, {
       code: 'inference_delivery',
       reason: 'Awaiting restore',
@@ -580,7 +586,7 @@ test('a hosted text call freezes and sends the output its remaining space budget
       new TextDecoder().decode(await object!.arrayBuffer()),
     )
     assertEquals(frozen.request.tokens, tokens)
-    assert((await v.spent()).meter!.models <= BUDGET.free)
+    assert((await v.spent()).meter!.models <= MONTH)
   } finally {
     globalThis.fetch = original
   }
@@ -611,7 +617,7 @@ test('a connected hosted model refuses unbounded speech before provider submissi
     assertEquals((failed.refusal as Comp).code, 'limit')
     assertEquals(posts, 0)
     assertEquals(dispatched, [])
-    assertAlmostEquals((await v.spent()).meter!.models, BUDGET.free - 0.125)
+    assertAlmostEquals((await v.spent()).meter!.models, MONTH - 0.125)
   } finally {
     globalThis.fetch = original
   }
@@ -939,7 +945,7 @@ test('a visitor asks an app for a turn only where it opens its models', async ()
 })
 
 test('a space past its budget is told so, and the transcript rests', async () => {
-  let v = await vale(() => ({ response: 'never' }), { models: BUDGET.free })
+  let v = await vale(() => ({ response: 'never' }), { models: MONTH })
   let s = crypto.randomUUID()
   await v.send('/apply', asking(s, FLASH))
   let [stopped] = await v.landed(`.entry.session=${s}&.refusal&*`)
@@ -968,7 +974,7 @@ test('./api/ai/run bounds the final answered call and concurrent spend to the sp
     response: 'affordable',
     usage: { input_tokens: 100, output_tokens: Number(input.max_tokens) },
   }), {
-    models: BUDGET.free - 0.0005,
+    models: MONTH - 0.0005,
     env: {
       MODEL_FETCH: () =>
         Promise.resolve(
@@ -984,10 +990,10 @@ test('./api/ai/run bounds the final answered call and concurrent spend to the sp
   assertEquals(v.asked.length, 1)
   assert(Number(v.asked[0].input.max_tokens) > 0)
   assert(Number(v.asked[0].input.max_tokens) < 1000)
-  assert((await v.spent()).meter!.models <= BUDGET.free)
+  assert((await v.spent()).meter!.models <= MONTH)
   assertEquals((await run()).status, 429)
   assertEquals(v.asked.length, 1)
-  assert((await v.spent()).meter!.models <= BUDGET.free)
+  assert((await v.spent()).meter!.models <= MONTH)
 })
 
 test('./api/ai/run answers what the model said, and the space pays for it', async () => {
@@ -1245,7 +1251,7 @@ test('./api/ai/run carries affinity through its metered binding', async () => {
 
 test('raw Workers AI audio debits its tariff once and refuses at the space limit', async () => {
   let v = await vale(() => ({ audio: 'https://media.example/song.mp3' }), {
-    models: BUDGET.free - 0.15,
+    models: MONTH - 0.15,
   })
   let raw = workersAi(v.env.AI!, {
     media: { store: artifactStore(memoryBlobs()) },
@@ -1273,7 +1279,7 @@ test('raw Workers AI audio debits its tariff once and refuses at the space limit
   assertEquals(reply.cost, 0.15)
   assertEquals(reply.costReported, false)
   assertEquals(reply.artifacts?.[0].media_type, 'audio/mpeg')
-  assertAlmostEquals((await v.spent()).meter!.models, BUDGET.free)
+  assertAlmostEquals((await v.spent()).meter!.models, MONTH)
   await assertRejects(() => model(req), ModelError)
   assertEquals(v.asked.length, 1)
 })

@@ -14,12 +14,16 @@ import { reserved, settled } from './model-spend.ts'
 
 let p = platform('model spending')
 let dir = directoryOf(p.env.STORE)
+// A space held to a 20-cent month, with no starter, so each case counts
+// against figures it states.
 let fixture = async (models = 0) => {
   let eid = mint()
   await stamp(p.env, {
     entities: [{
       entity: { eid },
       space: { slug: 'budget-' + eid, store: eid },
+      budget: { dollars: 0.2 },
+      starter: { dollars: 0 },
       meter: { month: monthOf(new Date()), models },
     }],
   })

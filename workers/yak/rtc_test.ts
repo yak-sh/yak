@@ -5,7 +5,7 @@
 // call at Realtime.
 import { assert, assertEquals } from '@std/assert'
 import { test, until } from '@yaks/testing'
-import { BUDGET, monthOf } from './meter.ts'
+import { BUDGET, monthOf, STARTER } from './meter.ts'
 import {
   cloudflare,
   connector,
@@ -105,7 +105,7 @@ test("an app's voice door calls for its members, and for visitors where it opens
     // Models and voice spend one account budget: spent on models, no new call.
     await meta(k).apply([{
       entity: { eid: eids[slug] },
-      meter: { month: monthOf(new Date()), models: BUDGET.free },
+      meter: { month: monthOf(new Date()), models: BUDGET.free + STARTER },
     }])
     assertEquals(await code(owner, 'sessions/new', {}), [429, 'limit'])
   } finally {

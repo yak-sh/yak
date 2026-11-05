@@ -918,8 +918,7 @@ Token-model bounds reserve the prompt's own input bound (@yaks/model
 context window) at the most expensive input/cache tariff, then limit output to
 what remains. A prompt with media, or one continuing provider-held history,
 reserves the whole context window: GLM-5.3's 1,048,576 tokens at $1.40 per
-million is $1.4680064, beyond the free space's $0.20 budget. Unknown bounds
-refuse before generation. MiniMax music's fixed per-track tariff is bounded;
-speech with post-generation-only pricing and ElevenLabs' measured
-output-duration tariff require a verified bound before a new call can be bought.
-Existing paid receipts remain recoverable.
+million is $1.4680064. Unknown bounds refuse before generation. MiniMax music's
+fixed per-track tariff is bounded; speech with post-generation-only pricing and
+ElevenLabs' measured output-duration tariff require a verified bound before a
+new call can be bought. Existing paid receipts remain recoverable.

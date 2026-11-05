@@ -60,12 +60,13 @@ let app = async (
       ),
   } as Partial<Env>)
   let dir = directory({ fetch: (r) => dirPart.fetch(r, p.env) })
-  await dir.apply({
+  await dir.stamp({
     entities: [
       { entity: { eid: ADA }, person: {} },
       {
         entity: { eid: '$space' },
         space: { slug: 'builder-test', store: 'builder-test' },
+        starter: { dollars: 0 },
         ...(models ? { meter: { month: monthOf(new Date()), models } } : {}),
       },
       {

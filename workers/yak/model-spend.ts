@@ -4,7 +4,7 @@ import { type Bundle, type Comp, mint, token } from '@yaks/graph'
 import { Stale } from '@yaks/graph/errors'
 import { derivedEid } from '@yaks/graph/identity'
 import { ModelError } from '@yaks/model'
-import { atCeiling, limitOf, monthOf, plans } from './meter.ts'
+import { atCeiling, budget, monthOf, plans } from './meter.ts'
 import { type Row, type Space, spaceOf, stamp } from './directory.ts'
 import type { Namespace } from './door.ts'
 import { meta } from './meta.ts'
@@ -101,12 +101,8 @@ export let reserved = async <T extends { dollars: number }>(
     let row = await read(env, space.eid)
     if (!row?.space) throw new Error('The paying space is missing')
     let fresh = spaceOf(row as unknown as Row)
-    let meter = row.meter as Comp | undefined
     let month = monthOf(now)
-    let spent = meter?.month == month
-      ? Number(meter.models ?? 0) + Number(meter.realtime ?? 0)
-      : 0
-    let limit = limitOf(fresh)
+    let { spent, limit } = budget(fresh, now)
     let remaining = Math.max(0, limit - spent)
     let value = quote(remaining)
     if (
@@ -137,7 +133,13 @@ export let reserved = async <T extends { dollars: number }>(
           },
         }, {
           entity: { eid: space.eid },
-          $was: guard(row, 'meter', ['month', 'models', 'realtime']),
+          $was: guard(row, 'meter', [
+            'month',
+            'models',
+            'realtime',
+            'texts',
+            'drawn',
+          ]),
           spend: { month, [what]: value.dollars },
         }],
       })

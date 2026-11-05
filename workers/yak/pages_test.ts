@@ -618,7 +618,7 @@ test('billing shows each allowance and whom it bills', async () => {
       '3 of 5',
       '41,000 of 50,000',
       '12 of 100',
-      '$0.05 of $0.20',
+      '25% used',
     ]
   ) assertStringIncludes(one, text)
   // Four fifths of request units is near; all of the files is at the limit.

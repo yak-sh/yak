@@ -49,6 +49,7 @@ import {
   size,
   type Spend,
   spent,
+  STARTER,
   WARN,
   weighed,
 } from './meter.ts'
@@ -326,6 +327,8 @@ let space = (meter: Partial<Meter> = {}, tier: Tier | null = null): Space => ({
   stripe: null,
   fee: 0,
   budget: null,
+  // The month alone: a starter is its own test's.
+  starter: 0,
   told: false,
   trashed: null,
   slugs: [],
@@ -411,8 +414,8 @@ test("a space's month is one line, and names a ceiling only near or at it", () =
     space({
       requests: 39_000,
       bytes: 700 * 1024 ** 2,
-      models: 0.05,
-      realtime: 0.01,
+      models: 5,
+      realtime: 1,
     }),
     3,
     NOW,
@@ -590,7 +593,7 @@ test('the build line warns at 80%, and the line says both numbers', () => {
 
   // Build counts are per space; model cost is attributed to this space while
   // each space's models and voice share its budget.
-  let said = gauged(space({ builds: 1, models: 0.04, built: 1 }), 2, NOW)
+  let said = gauged(space({ builds: 1, models: 4, built: 1 }), 2, NOW)
   assertStringIncludes(said, '1 of 5 builds, 0 of 3,600 build seconds')
   assertStringIncludes(said, "20% of jeff's model and voice budget used")
   let plus = gauged(
@@ -903,10 +906,17 @@ test("each space answers to its own allowances and budget, never its owner's oth
     eid,
     slug: eid,
   })
-  let a = as('a', { emails: 60, models: 0.125 })
+  let a = { ...as('a', { emails: 60, models: 0.125 }), starter: 0 }
   let b = as('b', { emails: 99, seconds: 3_000 })
-  let full = as('full', { emails: 100, builds: 5, models: 0.2 })
-  let paid = as('paid', { emails: 900, models: 3 }, 'plus')
+  let full = as('full', {
+    emails: 100,
+    builds: 5,
+    models: BUDGET.free + STARTER,
+  })
+  let paid = {
+    ...as('paid', { emails: 900, models: BUDGET.plus }, 'plus'),
+    starter: 0,
+  }
   // b has sent 99 of its own 100, whatever a has sent.
   assertEquals(refusedSpend(b, 'emails', {}, 0, NOW), null)
   let no = refusedSpend(full, 'emails', {}, 0, NOW)!
@@ -916,17 +926,33 @@ test("each space answers to its own allowances and budget, never its owner's oth
   // What a build holds uncounted is added to the reading.
   assertEquals(refusedSpend(b, 'seconds', {}, 599, NOW), null)
   assert(refusedSpend(b, 'seconds', {}, 600, NOW))
-  assertEquals(budget(a, NOW), { spent: 0.125, limit: 0.2 })
-  assertEquals(refusedSpend(a, 'models', {}, 0.0625, NOW), null)
-  assert(refusedSpend(a, 'models', {}, 0.075, NOW))
+  assertEquals(budget(a, NOW), { spent: 0.125, limit: BUDGET.free })
+  assertEquals(refusedSpend(a, 'models', {}, BUDGET.free - 0.25, NOW), null)
+  assert(refusedSpend(a, 'models', {}, BUDGET.free - 0.125, NOW))
   assert(refusedSpend(full, 'realtime', {}, 0, NOW))
   // The Plus plan space is held to its own plan's figures.
   assert(refusedSpend(paid, 'models', {}, 0.075, NOW))
   assertEquals(refusedSpend(paid, 'emails', {}, 0, NOW), null)
   // A budget the platform set stands in place of the plan's.
   let given = { ...paid, budget: 300 }
-  assertEquals(budget(given, NOW), { spent: 3, limit: 300 })
+  assertEquals(budget(given, NOW), { spent: BUDGET.plus, limit: 300 })
   assertEquals(refusedSpend(given, 'models', {}, 0.075, NOW), null)
+})
+
+test('a space draws its starter once, before its months', () => {
+  let limit = (meter: Partial<Meter>, starter?: number) =>
+    budget({ ...space(meter), starter }, NOW).limit
+  assertEquals(limit({}), STARTER + BUDGET.free)
+  // What earlier months drew comes off the starter; this month's does not.
+  assertEquals(limit({ models: 30, drawn: 70 }), STARTER - 40 + BUDGET.free)
+  assertEquals(limit({ drawn: 500 }), BUDGET.free)
+  // A month behind is all drawn before this one.
+  assertEquals(
+    limit({ month: '2026-08', models: 30, drawn: 30 }),
+    STARTER - 30 + BUDGET.free,
+  )
+  // A person's later space holds none.
+  assertEquals(limit({}, 0), BUDGET.free)
 })
 
 test('a conversation that shipped nothing pays for its model and seconds', async () => {

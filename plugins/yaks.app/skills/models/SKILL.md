@@ -331,10 +331,9 @@ These platform models spend the space's monthly yaks.app budget:
 | `@cf/baai/bge-base-en-v1.5`               | embeddings      | $0.067                | —     |
 
 Every platform call is charged at its model's price against that budget, which
-belongs to the space the app is in: $0.20 a month on the free plan, $3.00 on the
-Plus plan and $15.00 on the Organization plan. What one space spends never
-counts against another. The builder and app voice calls spend it too. `app_list`
-shows what each space spent.
+belongs to the space the app is in. What one space spends never counts against
+another. The builder and app voice calls spend it too. `app_list` shows what
+each space spent.
 
 `bytedance-seed/seed-audio-1-0` uses the app's connected OpenRouter account.
 OpenRouter bills that account for generated audio at its published rate; it does
