@@ -188,7 +188,11 @@ inside quotes escapes the next character. A quoted value is one literal:
 `.doc.body="Hi, there."` equals that sentence, and `.priority="1..5"` equals the
 text `1..5`. A list of quoted values quotes each member, with the commas between
 them outside the quotes: `.doc.title="Hi, there.","Bye"` selects either title,
-and `.entity.eid=a,b` either id. A written word (`+comp.prop=`, `*comp.prop=`)
+and `.entity.eid=a,b` either id. A range quotes each end the same way, with its
+`..` outside: `.created.at="30s ago"...now`. Code that builds a list from values
+writes it with `listed()`, which quotes each member as it needs:
+`` `.doc.title=${listed(titles)}` ``. Quoting the joined list instead makes it
+one literal that matches nothing. A written word (`+comp.prop=`, `*comp.prop=`)
 takes one value, so a list or range there is refused with a message saying to
 quote it, never written as nothing. Unquoted `.doc.title~=two words` is a
 predicate containing `two` followed by the text term `words`. Paths with

@@ -70,6 +70,11 @@ let cases: [string, ReturnType<typeof and>][] = [
   ['.tag=x,"a..b"', and(eq('tag', list('x', 'a..b')))],
   ['.tag=x,a..b', and(eq('tag', list('x', range('a', 'b'))))],
   ['$x="a, b"', and({ kind: 'var', name: 'x', value: scalar('a, b') })],
+  ['.p="a b".."c d"', and(eq('p', range('a b', 'c d')))],
+  ['.p="30s ago"...now', and(eq('p', range('30s ago', 'now', true)))],
+  ['.p=1.."c d"', and(eq('p', range('1', 'c d')))],
+  ['.p="a..b".."c,d"', and(eq('p', range('a..b', 'c,d')))],
+  ['.p="a b"..z,"c d"', and(eq('p', list(range('a b', 'z'), 'c d')))],
   [
     '.entity.eid=root,dependent',
     and(eq('entity.eid', list('root', 'dependent'))),

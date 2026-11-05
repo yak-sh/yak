@@ -72,6 +72,14 @@ let glued = (value: string, term = false) =>
     ? JSON.stringify(value)
     : value
 
+// A value's members and a range's ends, each between the commas and `..` it
+// is written with outside quotes. Each is glued on its own: a list or a range
+// glued whole is one quoted literal (@yaks/query), not the list it was.
+let SEGMENT =
+  /((?:"(?:\\.|[^"\\])*"|'(?:\\.|[^'\\])*'|[^,.'"]|\.(?!\.))*)(\.\.\.?|,|$)/g
+let members = (value: string) =>
+  value.replace(SEGMENT, (_, member, sep) => glued(member) + sep)
+
 /** A line's tokens written back as one line: `&` between clauses, nothing
  * around the `|` that separates two arms. */
 /// joined(['.doc', '.task', '|', '.recipe']) -> '.doc&.task|.recipe'
@@ -105,8 +113,10 @@ export let lined = (search: string): string =>
       if (seg.startsWith('(')) return `(${lined(seg.slice(1, -1))})`
       let m = OPERATOR.exec(seg)
       if (!m) return glued(plain(seg), true)
+      // Contains (`~=`) reads its value as one literal, commas and all.
+      let value = plain(seg.slice(m[0].length))
       return `${RIDERS[m[1]] ?? m[1]}${m[2]}${
-        glued(plain(seg.slice(m[0].length)))
+        m[2] == '~=' ? glued(value) : members(value)
       }`
     }),
   )

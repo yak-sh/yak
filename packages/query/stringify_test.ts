@@ -7,6 +7,7 @@ import {
   contains,
   eq,
   list,
+  listed,
   parse,
   range,
   scalar,
@@ -114,11 +115,34 @@ test('a literal comma or range marker is written quoted', () => {
   assertEquals(parse(stringify(quotedList)), quotedList)
 })
 
-test('a value the grammar cannot say throws rather than say another', () => {
-  assertThrows(
-    () => stringify(and(eq('t', range('a,b', 'c')))),
-    SyntaxError,
+test('a range end that reads as structure is quoted on its own', () => {
+  let ends: [string, string][] = [
+    ['30s ago', 'now'],
+    ['a b', 'c d'],
+    ['a,b', 'c..d'],
+    ['-5', '5.'],
+    ['x&y', "it's"],
+  ]
+  for (let [lo, hi] of ends) {
+    for (let q of [eq('t', range(lo, hi)), eq('t', range(lo, hi, true))]) {
+      assertEquals(parse(stringify(and(q))), and(q), `${lo}..${hi}`)
+    }
+  }
+  assertEquals(
+    stringify(and(eq('t', range('30s ago', 'now')))),
+    '.t="30s ago"..now',
   )
+})
+
+test('listed writes values as one any-of value, each quoted as it needs', () => {
+  let values = ['a', 'Hi, there.', 'two words', '1..5', 'x&y']
+  assertEquals(listed(values), 'a,"Hi, there.","two words","1..5","x&y"')
+  assertEquals(parse(`.t=${listed(values)}`), and(eq('t', list(...values))))
+  assertEquals(parse(`.t=${listed(['only, one'])}`), and(eq('t', 'only, one')))
+  assertEquals(listed([]), '')
+})
+
+test('a value the grammar cannot say throws rather than say another', () => {
   assertThrows(() => stringify(contains('t', list('a', 'b'))), SyntaxError)
   assertEquals(
     parse(stringify(and(contains('doc.title', scalar('a,b..c'))))),

@@ -22,6 +22,12 @@ let cases: [string, string][] = [
   ['.doc.title~=salt%26pepper', '.doc.title~="salt&pepper"'],
   ['.doc.title~=two%20words', '.doc.title~="two words"'],
   ['.doc.title~=a%20.b', '.doc.title~="a .b"'],
+  // A list or a range is glued member by member, so it stays a list
+  ['.doc.title=lemon%20cake,pie', '.doc.title="lemon cake",pie'],
+  ['.doc.title=a%20b,c%26d,e', '.doc.title="a b","c&d",e'],
+  ['.at=30s%20ago...now', '.at="30s ago"...now'],
+  ['.doc.title="a, b",c%20d', '.doc.title="a, b","c d"'],
+  ['.doc.title~=a%20b,c', '.doc.title~="a b,c"'],
   // A bare word is a full-text term and carries no operator
   ['lemon%20drizzle', 'lemon drizzle'],
   ['cake&?doc', 'cake&?doc'],
@@ -47,6 +53,8 @@ test('wire translation preserves query clauses and quoted values', () => {
       '.doc.title~="a&|&b" .count',
       '.doc.title~=cake words',
       '.call.source=a,b .fields=call.source',
+      '.doc.title="lemon cake",pie .count',
+      '.at="30s ago"...now .count',
       '.comment.reply_to[<=3]->C-1 .count',
     ]
   ) assertEquals(parse(lined(q)), parse(q), q)

@@ -50,7 +50,10 @@ filter. A malformed clause throws rather than becoming a search term.
   group. Inside a value `,` means any-of, and a list has no spaces.
 - A quoted value is one literal: `+doc.body="Hi, there."` writes the sentence
   and `.p="1..5"` equals the text. A list of quoted values quotes each member:
-  `.doc.title="Hi, there.","Bye"`. A written word (`+`/`*comp.prop=`) takes one
+  `.doc.title="Hi, there.","Bye"`, and a range each end:
+  `.created.at="30s ago"...now`. Code builds a list with @yaks/query's
+  `listed(values)`; quoting a joined list makes one literal that matches
+  nothing. A written word (`+`/`*comp.prop=`) takes one
   value and refuses a list or range. The query string is a published door that
   shipped apps keep sending, so a parser change preserves its answers.
 - A value with a space is quoted: `.created.at>'1 hour ago'`. Unquoted, the

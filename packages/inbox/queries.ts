@@ -1,3 +1,4 @@
+import { listed } from '@yaks/query'
 import { type Reader, type Row } from './reader.ts'
 import type { Search } from './threads.ts'
 import { threadOf } from './threads.ts'
@@ -16,13 +17,11 @@ export let words = (
   return path == 'entity.eid' ||
     (!!vocab.comp(name) && (!prop || vocab.props(name).includes(prop)))
 }
-/** A query's list of values: each one quoted, so a comma or `..` inside one
- * stays part of it, joined by the commas outside the quotes. */
-export let listed = (items: Iterable<string | undefined>) =>
-  [...new Set([...items].filter(Boolean))].sort().map((v) => JSON.stringify(v))
-    .join(',')
+// Each set of values is sorted, so the same set always reads as one line.
 let select = (prop: string, items: Iterable<string | undefined>) => {
-  let v = listed(items)
+  let v = listed(
+    [...new Set([...items].filter((i): i is string => !!i))].sort(),
+  )
   return v ? `.${prop}=${v}` : ''
 }
 let union = (arms: string[], has: Words) =>

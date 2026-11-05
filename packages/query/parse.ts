@@ -93,14 +93,34 @@ let LIST =
   'a list has no spaces and no empty member (.task.status=open,wip); ' +
   'quote a value with spaces (.doc.title="open wip")'
 
+// Where a range's `..` sits outside quotes, or -1: `"a..b"..c` splits at 6.
+let rangeAt = (raw: string): number => {
+  for (let i = 0, quote = ''; i < raw.length; i++) {
+    let c = raw[i]
+    if (quote) {
+      if (c == '\\') i++
+      else if (c == quote) quote = ''
+    } else if (c == '"' || c == "'") quote = c
+    else if (raw.startsWith('..', i)) return i
+  }
+  return -1
+}
+
 // One atom: a range (`x..y`, or `x...y` for an exclusive end) or a scalar.
-// Recognizing a range needs no type, because the current matcher applies `..`
-// to every property.
+// Each end is one literal when quoted, so `"30s ago"...now` and `"a b".."c d"`
+// are ranges. Recognizing a range needs no type, because the current matcher
+// applies `..` to every property.
 let atom = (raw: string): Value => {
-  let m = raw.match(/^(.*?)\.\.(\.?)(.*)$/s)
-  if (!m) return scalar(raw)
-  let [, lo, excl, hi] = m
-  return { kind: 'range', lo: scalar(lo), hi: scalar(hi), exclusiveEnd: !!excl }
+  let at = rangeAt(raw)
+  if (at < 0) return scalar(raw)
+  let excl = raw[at + 2] == '.'
+  let lo = raw.slice(0, at), hi = raw.slice(at + (excl ? 3 : 2))
+  return {
+    kind: 'range',
+    lo: scalar(stripQuotes(lo)),
+    hi: scalar(stripQuotes(hi)),
+    exclusiveEnd: excl,
+  }
 }
 
 // One member as its author typed it: quoted, it is one literal scalar, commas,
@@ -543,14 +563,14 @@ export let tokens = (q: string): string[] => {
       if (c == '\\' && i + 1 < q.length) cur += q[++i]
       else if (c == quote) quote = ''
     } else if (depth) {
-      if ((c == '"' || c == "'") && /[=<>,(\s&|]$/.test(cur)) quote = c
+      if ((c == '"' || c == "'") && /[=<>,(\s&|]$|\.\.$/.test(cur)) quote = c
       else if (c == '(') depth++
       else if (c == ')') depth--
       cur += c
     } else if (bracket) {
       cur += c
       if (c == ']') bracket = false
-    } else if ((c == '"' || c == "'") && /^$|[=<>,]$/.test(cur)) {
+    } else if ((c == '"' || c == "'") && /^$|[=<>,]$|\.\.$/.test(cur)) {
       quote = c
       cur += c
     } else if (c == '(' && !cur) {

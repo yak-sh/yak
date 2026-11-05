@@ -3,6 +3,7 @@
 import type { Bundle, Comp, Graph } from '@yaks/graph'
 import type { Vocab } from '@yaks/vocab'
 import { tablesOf } from '@yaks/archetype/sets'
+import { listed } from '@yaks/query'
 import {
   boundedReads,
   candidates,
@@ -12,7 +13,6 @@ import {
   type Words,
   words,
 } from './queries.ts'
-import { listed } from './queries.ts'
 import { type Reader, readerAt, type Row } from './reader.ts'
 import { type Search, type Thread, threadOf, threads } from './threads.ts'
 

@@ -7,11 +7,16 @@
 // `or` grouped wherever it sits beside other terms, a value quoted where the
 // grammar would read it as structure. A few trees have no text form, because
 // the grammar has no way to say them (README, Separators, grouping, and
-// quoting): a range bound holding a comma or a range marker, a reverse
-// association whose child test is not a single predicate. Those throw rather
-// than write a different query.
+// quoting): a value nested in a value, a reverse association whose child test
+// is not a single predicate. Those throw rather than write a different query.
 
-import type { Clause, Pred, Value } from './ast.ts'
+import {
+  type Clause,
+  coerce,
+  type Input,
+  type Pred,
+  type Value,
+} from './ast.ts'
 import { parseDot } from './parse.ts'
 
 let unwritable = (what: string) =>
@@ -22,27 +27,41 @@ let SPECIAL = /[\s&|()"']|^[=<>~!-]|^$/
 let quoted = (raw: string) => `"${raw.replace(/["'\\]/g, '\\$&')}"`
 let plain = (raw: string) => SPECIAL.test(raw) ? quoted(raw) : raw
 
-// A value as text. A quoted member is one literal, so a scalar holding a comma
-// or `..` is quoted; a range's bounds sit unquoted around its `..`, so a bound
-// holding either has no text form.
-let bound = (v: Value): string => {
+// A value as text. A quoted member or range end is one literal, so a scalar
+// holding a comma or `..` is quoted, and so is a range end whose own `.` would
+// run into its `..`.
+let END = /,|\.\.|^\.|\.$/
+let scalarText = (v: Value, literal = /,|\.\./): string => {
   if (v.kind != 'scalar' && v.kind != 'time') {
     throw unwritable('a value nested in a value')
   }
-  if (/,|\.\./.test(v.raw)) throw unwritable(`the range bound ${v.raw}`)
-  return v.raw
+  return literal.test(v.raw) ? quoted(v.raw) : plain(v.raw)
 }
-let member = (v: Value): string => {
-  if (v.kind == 'scalar' || v.kind == 'time') {
-    return /,|\.\./.test(v.raw) ? quoted(v.raw) : plain(v.raw)
-  }
-  if (v.kind == 'list') throw unwritable('a value nested in a value')
-  let lo = bound(v.lo), hi = bound(v.hi)
-  if (lo.endsWith('.') || hi.startsWith('.')) throw unwritable(`${lo}..${hi}`)
-  return plain(`${lo}${v.exclusiveEnd ? '...' : '..'}${hi}`)
-}
+let member = (v: Value): string =>
+  v.kind == 'range'
+    ? scalarText(v.lo, END) + (v.exclusiveEnd ? '...' : '..') +
+      scalarText(v.hi, END)
+    : scalarText(v)
 let value = (v: Value): string =>
   v.kind == 'list' ? v.items.map(member).join(',') : member(v)
+
+/**
+ * Values as one any-of value in a query line: each member written as `parse`
+ * reads it back, quoted where it holds a comma, `..` or a space, joined by
+ * commas outside the quotes. Quoting the joined list instead makes it one
+ * literal. Empty for no values.
+ *
+ * ```ts
+ * import { listed } from '@yaks/query'
+ * import { equal } from '@yaks/testing'
+ *
+ * equal(`.doc.title=${listed(['Hi, there.', 'Bye'])}`,
+ *   '.doc.title="Hi, there.",Bye')
+ * equal(listed([]), '')
+ * ```
+ */
+export let listed = (values: Iterable<Input>): string =>
+  [...values].map((v) => member(coerce(v))).join(',')
 
 // A bare word is a text term unless it reads as a clause, a group, `*` (or
 // `?*`) or a list; then it is quoted.
