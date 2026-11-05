@@ -17,9 +17,11 @@ export let start = async (
     fetch?: (path: string) => Promise<Response>
     load?: (url: string) => Promise<{ views: unknown }>
     pace?: { key: number; pause: number }
+    /** how long a failed effect waits to be tried again, in ms */
+    retry?: number
   } = {},
 ) => {
-  let y = await yak()
+  let y = await yak({ retry: opts.retry })
   await y.graph.apply(seed())
   let read = opts.fetch ??
     ((path: string) => fetch(new URL(path, root.ownerDocument.baseURI)))
@@ -27,7 +29,7 @@ export let start = async (
   await y.settled()
   let t = term(y, opts.pace ?? { key: 28, pause: 380 })
   let f = figure(y, t)
-  let d = turns(y, t, f)
+  let d = turns(y, t)
   let style = root.ownerDocument.createElement('style')
   style.textContent = css
   root.ownerDocument.head.append(style)

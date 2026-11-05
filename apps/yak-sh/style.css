@@ -760,6 +760,21 @@ h2 {
   font: 500 .6875rem/1 var(--mono);
   color: var(--ink);
 }
+/* The write the phases follow: the command it came from, its dot green once
+   the reader has passed it and it has been made. */
+.Phases .Call {
+  position: relative;
+  padding: .55rem 0 .9rem;
+}
+.Phases .Call code {
+  display: block;
+  margin-top: .3rem;
+  font: 400 .75rem/1.5 var(--mono);
+  color: var(--ink);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
 /* A phase that has happened: green, with its green dot. */
 .Phases [data-phase].on {
   background: linear-gradient(
@@ -875,23 +890,15 @@ h2 {
 .Source.now-normalize .c {
   background: rgba(252, 250, 245, .8);
 }
-.Source .alias i {
-  display: none;
-  font-style: normal;
-  color: var(--meadow);
-}
-.Source .alias s {
-  text-decoration: none;
-}
-.Source.p-mint .alias i {
-  display: inline;
-}
-.Source.p-mint .alias s {
-  display: none;
-}
-.Source.now-mint .ent > div,
-.Source.now-stamp .stamp > div {
+/* A line the phase the reader is at changed, its margin saying what it did. */
+.Source .is-now > div {
   background: rgba(167, 192, 128, .4);
+}
+.Source .is-now .n {
+  color: var(--ink);
+}
+.Source .n b {
+  font: 500 .75rem/1 var(--mono);
 }
 .Source.now-mutate .body > .c {
   background: rgba(252, 250, 245, .9);
@@ -900,22 +907,113 @@ h2 {
 .Source .stamp .c {
   color: var(--meadow);
 }
-/* Not written yet: apply() stamps it when the reader reaches stamp. */
-.Source .is-out > div {
-  max-height: 0;
-  opacity: 0;
-  padding-top: 0;
-  padding-bottom: 0;
-}
-.Source .stamp > div {
-  max-height: 60px;
-}
 .Source .brace {
   transition: color .4s, text-shadow .4s;
 }
 .Source.p-commit .brace {
   color: var(--meadow);
   text-shadow: 0 0 8px var(--diagram-glow);
+}
+/* The mail service the letter's effect hands it to: each try it made. */
+.Outbox {
+  margin-top: .8rem;
+  border: 1px solid var(--rule);
+  background: rgba(252, 250, 245, .55);
+  font: 400 .75rem/1.5 var(--mono);
+}
+.Outbox_Bar {
+  padding: 4px 12px;
+  border-bottom: 1px solid var(--rule);
+  color: var(--soft);
+}
+.Outbox_Bar b {
+  font-weight: 500;
+  color: var(--ink);
+  margin-right: .4rem;
+}
+.Outbox ol {
+  list-style: none;
+  margin: 0;
+  padding: 6px 12px;
+}
+.Outbox li {
+  animation: pop .4s both;
+}
+.Outbox li::before {
+  content: '✓ ';
+  color: var(--meadow);
+}
+.Outbox li.is-refused::before {
+  content: '✗ ';
+  color: var(--brick);
+}
+.Outbox_At {
+  display: inline-block;
+  min-width: 4.5em;
+  color: var(--soft);
+}
+/* The letter was sent: a notice in the corner of the window, which goes
+   by itself. */
+.Toast {
+  position: fixed;
+  right: 1.2rem;
+  bottom: 1.2rem;
+  z-index: 10;
+  display: grid;
+  gap: .15rem;
+  max-width: min(22rem, calc(100vw - 2.4rem));
+  padding: .7rem 1rem .75rem 2.4rem;
+  border: 1px solid var(--ink);
+  border-radius: 4px;
+  background: var(--paper);
+  box-shadow: 0 6px 24px rgba(54, 83, 45, .18);
+  font-size: .875rem;
+  animation: toast 6s both;
+}
+.Toast::before {
+  content: '';
+  position: absolute;
+  left: 1rem;
+  top: 1.05rem;
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  background: var(--meadow);
+  box-shadow: 0 0 6px var(--moss);
+}
+.Toast b {
+  font-weight: 500;
+}
+.Toast span {
+  color: var(--soft);
+}
+@keyframes toast {
+  0% {
+    opacity: 0;
+    transform: translateY(.6rem);
+  }
+  6%,
+  85% {
+    opacity: 1;
+    transform: none;
+  }
+  100% {
+    opacity: 0;
+    visibility: hidden;
+  }
+}
+@keyframes fade {
+  0% {
+    opacity: 0;
+  }
+  6%,
+  85% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 0;
+    visibility: hidden;
+  }
 }
 @media (max-width: 760px) {
   .Source {
@@ -1344,7 +1442,11 @@ h2 {
   }
 }
 @media (prefers-reduced-motion: reduce) {
+  .Toast {
+    animation-name: fade;
+  }
   .Source .comp > div,
+  .Outbox li,
   .Window.is-open,
   .Doors_Wire path,
   .Caret {

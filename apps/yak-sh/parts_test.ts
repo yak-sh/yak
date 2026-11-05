@@ -39,6 +39,7 @@ test('the page draws its parts from the graph: numbered steps, package tables, t
     fetch: (path) => fetch(new URL(path, dir)),
     load: () => import('./views.ts'),
     pace: { key: 0, pause: 0 },
+    retry: 0,
   })
   let all = (s: string) => [...root.querySelectorAll(s)]
   equal(all('.Part .Bubble').map((b) => b.textContent), ['1', '2', '3', '4'])

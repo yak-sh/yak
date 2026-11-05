@@ -21,6 +21,7 @@ let open = async () => {
     fetch: (path) => fetch(new URL(path, dir)),
     load: () => import('./views.ts'),
     pace: { key: 0, pause: 0 },
+    retry: 0,
   })
   let settle = async () => {
     await page.term.idle()
@@ -275,20 +276,33 @@ test("a change to the graph's style.css restyles the page", async () => {
   page.page.close()
 })
 
-test('the apply() band writes the last entity as the source of its bundle, beside the phases it ran', async () => {
+test('the apply() band sends its letter as the source of its bundle, beside the phases it ran, and its effect delivers it', async () => {
   let { root, page, settle } = await open()
-  await page.term.enter("task new 'Water the plants'")
+  await page.term.reach(steps, steps.length)
+  let band = SECTIONS.find((s) => s.view == 'Stack')!
+  await page.term.once(band.eid, band.body)
   await settle()
-  let rows = [...root.querySelectorAll('.Source [data-row]')].map((p) =>
+  let stack = root.querySelector('.Stack')!
+  let rows = [...stack.querySelectorAll('.Source [data-row]')].map((p) =>
     p.getAttribute('data-row')
   )
-  equal(rows, ['entity', 'doc', 'task', 'created'])
-  let source = root.querySelector('.Source')!.textContent!
-  match(source, /doc: +\{ title: "Water the plants" \},/)
-  match(source, /doc\{title, body\}/)
-  match(source, /\$new is an alias until mint names it/)
+  equal(rows, ['entity', 'deliver', 'doc', 'mail', 'delivered', 'created'])
+  let source = stack.querySelector('.Source')!.textContent!
+  match(source, /title: "Can you sign up for payments\?"/)
+  match(source, /from: "hello@example.com"/)
+  match(source, /message_id: "outbox-1"/)
+  match(stack.querySelector('.Call')!.textContent!, /agent ▸ graph_apply/)
+  equal(
+    [...stack.querySelectorAll('.Outbox li')].map((l) => l.className),
+    ['is-refused', 'is-taken'],
+  )
+  match(stack.querySelector('.Outbox')!.textContent!, /taken as outbox-1/)
+  equal(
+    stack.querySelector('.Toast')?.textContent,
+    'Email sent to you@example.comCan you sign up for payments?',
+  )
   let phases = (state: string) =>
-    [...root.querySelectorAll(`.Phases li.${state}`)].map((p) =>
+    [...stack.querySelectorAll(`.Phases li.${state}`)].map((p) =>
       p.getAttribute('data-phase')
     )
   equal(
@@ -297,8 +311,22 @@ test('the apply() band writes the last entity as the source of its bundle, besid
   )
   equal(phases('skip'), ['audit'])
   let named = (sel: string) =>
-    [...root.querySelectorAll(sel)].map((p) => p.getAttribute('data-phase'))
+    [...stack.querySelectorAll(sel)].map((p) => p.getAttribute('data-phase'))
   equal(named('.Phases [data-phase]'), PHASES)
   equal(named('.Phases .Tx [data-phase]'), INSIDE)
+  // A write the visitor types is the band's next.
+  await page.term.enter("task new 'Water the plants'")
+  await settle()
+  equal(
+    [...stack.querySelectorAll('.Source [data-row]')].map((p) =>
+      p.getAttribute('data-row')
+    ),
+    ['entity', 'doc', 'task', 'created'],
+  )
+  match(
+    stack.querySelector('.Call')!.textContent!,
+    /\$ task new 'Water the plants'/,
+  )
+  equal(stack.querySelector('.Outbox, .Toast'), null)
   page.page.close()
 })

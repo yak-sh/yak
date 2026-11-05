@@ -21,6 +21,10 @@ export type Term = ReturnType<typeof term>
  * stages 1 to n, and each line the visitor enters is one after this. */
 export const LIVE = 100
 
+/** The stage a band's own commands run in, below the story: what they write
+ * is drawn as soon as it is written. */
+export const BAND = 50
+
 export let term = (yak: Yak, pace: Pace = { key: 0, pause: 0 }) => {
   let lines: Line[] = []
   let history: string[] = []
@@ -85,7 +89,33 @@ export let term = (yak: Yak, pace: Pace = { key: 0, pause: 0 }) => {
   // as LIVE and on; 0 before anything has run.
   let stage = 0
   let line = 0
+  // The bands run once each, by key, and only once every step of the story
+  // has: a band is below the story, so reaching it is passing them all, and
+  // what it writes may need what they wrote. How many steps there are is
+  // known once the story is first reached.
+  let done = new Set<string>()
+  let waiting: string[] = []
+  let story = Infinity
   let entered = 0
+  // A section's commands, typed, then its agent's calls, drawn in `at`.
+  let play = (body: string, at: number) => {
+    let { sh, mcp } = scriptOf(body)
+    return queue(async () => {
+      stage = at
+      for (let [i, said] of sh.entries()) {
+        line = i
+        await type(said)
+      }
+      for (let [i, { tool, args }] of mcp.entries()) {
+        line = sh.length + i
+        await ask(tool, args)
+      }
+    })
+  }
+  let bands = () => {
+    if (ran >= story) { for (let body of waiting.splice(0)) play(body, BAND) }
+    return chain
+  }
   return {
     lines: () => lines,
     typing: () => typing,
@@ -107,25 +137,19 @@ export let term = (yak: Yak, pace: Pace = { key: 0, pause: 0 }) => {
     at: (): At => ({ stage, line }),
     /** Every line typed at the prompt, oldest first, as a shell keeps them. */
     history: () => history,
+    /** Run a band's commands and its agent's calls once, the first time it
+     * is reached, after every step of the story. */
+    once: (key: string, body: string) => {
+      if (!done.has(key)) waiting.push(body)
+      done.add(key)
+      return bands()
+    },
     /** Run every step up to `n` (counting from 1) that has not run, typing
      * each step's commands and making its agent's calls. */
     reach: (bodies: string[], n: number) => {
-      while (ran < Math.min(n, bodies.length)) {
-        let { sh, mcp } = scriptOf(bodies[ran++])
-        let step = ran
-        queue(async () => {
-          stage = step
-          for (let [i, said] of sh.entries()) {
-            line = i
-            await type(said)
-          }
-          for (let [i, { tool, args }] of mcp.entries()) {
-            line = sh.length + i
-            await ask(tool, args)
-          }
-        })
-      }
-      return chain
+      story = bodies.length
+      while (ran < Math.min(n, bodies.length)) play(bodies[ran], ++ran)
+      return bands()
     },
     /** Settles once everything queued has run. */
     idle: () => chain,

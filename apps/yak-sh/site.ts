@@ -30,6 +30,8 @@ export let FILES = [
   'editor.ts',
   'doors.ts',
   'turns.ts',
+  'shop.ts',
+  'outbox.ts',
 ]
 
 /** A section: the view that draws it and what it says. A step's `sh` block
@@ -144,8 +146,13 @@ export let SECTIONS: Section[] = [
     pane: 'd57ac900-730b-417c-8798-5cafc5c891d5',
     view: 'Stack',
     title: 'A write is a list of bundles, applied in one transaction',
-    body:
-      "A bundle is one entity's components. `apply()` takes a list of them through the phases below, and the rules and checks of every package the graph loads run inside them. As you scroll, each phase your last command ran turns green when it happens. The phases in the box are one transaction: the batch is stored whole at commit, or not at all.",
+    body: [
+      "A bundle is one entity's components, and a write is a list of them. Here your agent writes you a letter: one bundle, its `doc` the words, `mail` the task it is about and `deliver` who it goes to.",
+      '`apply()` takes the list through the phases below, and the rules and checks of every package the graph loads run inside them. As you scroll past each, it does its work on the letter: the short ids become eids, the alias is given one, a rule fills in the sender, and after the commit an effect hands the letter to a mail service. The phases in the box are one transaction: the batch is stored whole at commit, or not at all.',
+      mcp(
+        'graph_apply {"bundles": [{"entity": {"eid": "$letter"}, "doc": {"title": "Can you sign up for payments?", "body": "The checkout can\'t be built until T-3 is done."}, "mail": {"target": "T-3"}, "deliver": {"to": "U-1"}}]}',
+      ),
+    ].join('\n\n'),
   },
   {
     eid: 'daf368d7-bfd4-4fe4-ae77-3545d58f4cd7',

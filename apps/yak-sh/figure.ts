@@ -3,8 +3,9 @@
 // step, which command made each thing it draws, and what the last write made
 // and which phases of apply() it ran.
 import type { Layout } from '@yaks/diagram'
-import type { Yak } from './yak.ts'
-import { type At, LIVE, type Term } from './term.ts'
+import type { Bundle } from '@yaks/graph'
+import type { Change, Yak } from './yak.ts'
+import { type At, BAND, type Line, LIVE, type Term } from './term.ts'
 
 /** The page's drawing: the query it shows, how far each stage is drawn, and
  * the last write it saw. */
@@ -56,26 +57,43 @@ export const LINE = .62
 export let into = (top: number, height: number, view: number) =>
   clamp((view * LINE - top) / Math.max(1, Math.min(height, view) * .5))
 
-/** The last write: the entity it made or changed, the phases of apply() it
- * ran, who wrote it, and whether it made that entity. */
+/** The last write the prompt made: the command that made it, the entity it
+ * made or changed, the phases of apply() it ran with the batch as each left
+ * it, and what the effects it owed wrote to that entity after its commit. */
 export type Last = {
+  line?: Line
   eid?: string
   phases: string[]
-  by?: string
-  made?: boolean
+  steps: Change['steps']
+  later: Bundle[]
+}
+
+// What a pool or a tool call keeps about the work, rather than the work.
+const KEPT = ['call', 'result', 'tool', 'execution', 'effect', 'lease']
+
+// What every bundle has or apply() stamps on it, rather than what was written.
+const ANY = ['entity', 'created', 'updated']
+
+/** A write's subject: the first entity it wrote a component to that is not
+ * the call that asked for it or the pool's record of a run, and not an edge
+ * where it wrote anything else. */
+export let subjectOf = (bundles: Bundle[]) => {
+  let said = bundles.filter((b) =>
+    !KEPT.some((c) => b[c]) &&
+    Object.keys(b).some((k) => !k.startsWith('$') && !ANY.includes(k))
+  )
+  return (said.find((b) => !b.edge) ?? said[0])?.entity.eid
 }
 
 export let figure = (yak: Yak, term: Term) => {
   let query = STORY
   let picked: string | undefined
-  let last: Last = { phases: [] }
+  let last: Last = { phases: [], steps: [], later: [] }
   let listeners = new Set<() => void>()
   let told = () => listeners.forEach((l) => l())
   // The command that first wrote each entity, and each component on one.
   let wrote = new Map<string, At>()
-  // A write's subject is the entity it made or changed that is not the call
-  // that asked for it.
-  yak.listen(({ bundles, phases }) => {
+  yak.listen(({ bundles, phases, steps, generation }) => {
     let at = term.at()
     for (let b of bundles) {
       let eid = b.entity.eid
@@ -83,17 +101,18 @@ export let figure = (yak: Yak, term: Term) => {
         if (!wrote.has(k)) wrote.set(k, at)
       }
     }
-    let made = bundles.filter((b) => !b.call && !b.result && !b.tool)
-    if (!made.length) return
-    let subject = made.find((b) => !b.edge) ?? made[0]
-    let eid = subject.entity.eid
-    last = {
-      eid,
-      phases: [...phases],
-      by: bundles.find((b) => b.$actor)?.$actor?.by,
-      // apply() stamps `created` on what the write made.
-      made: bundles.some((b) => b.entity.eid == eid && b.created),
+    // What an effect wrote after the commit, to the last write's entity.
+    if (generation) {
+      let more = bundles.filter((b) => b.entity.eid == last.eid)
+      if (!more.length) return
+      last = { ...last, later: [...last.later, ...more] }
+      return told()
     }
+    // The last write is the prompt's own, not another interface's.
+    let eid = subjectOf(bundles)
+    if (!eid || !term.busy()) return
+    let line = term.lines().findLast((l) => l.kind == 'in' || l.kind == 'agent')
+    last = { line, eid, phases: [...phases], steps, later: [] }
     told()
   })
 
@@ -151,13 +170,13 @@ export let figure = (yak: Yak, term: Term) => {
       }
     },
     /** How far a stage has come in at `now`: a step as far as the reader has
-     * scrolled into it, once it has been written; the start and anything the
-     * visitor did as soon as it is written. Once the visitor has typed, the
+     * scrolled into it, once it has been written; the start, what a band
+     * runs and anything the visitor did as soon as it is written. Once the visitor has typed, the
      * story stays drawn wherever they scroll; widening the query does not
      * count as typing. */
     reached: (stage: number, now: number) => {
       let t = since(stage, now)
-      if (stage == 0 || stage >= LIVE || live) return t
+      if (stage == 0 || stage >= BAND || live) return t
       return Math.min(t, scrolled[stage - 1] ?? 0)
     },
     /** Some stage is still drawing in by itself at `now`. */

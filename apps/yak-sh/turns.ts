@@ -3,7 +3,7 @@
 // the story's steps, and what each printed and changed is kept for its window.
 import type { Yak } from './yak.ts'
 import type { Term } from './term.ts'
-import type { Figure } from './figure.ts'
+import { subjectOf } from './figure.ts'
 import { type Beat, called } from './site.ts'
 
 /** What a turn did: what its window printed, and the entity it changed. */
@@ -11,7 +11,7 @@ export type Done = { out: string[]; fault: boolean; eid?: string }
 
 export type Turns = ReturnType<typeof turns>
 
-export let turns = (yak: Yak, term: Term, figure: Figure) => {
+export let turns = (yak: Yak, term: Term) => {
   let done: Done[] = []
   let ran = 0
   let chain = Promise.resolve()
@@ -30,9 +30,14 @@ export let turns = (yak: Yak, term: Term, figure: Figure) => {
       while (ran < Math.min(n, beats.length)) {
         let i = ran++
         chain = chain.then(() => term.idle()).then(async () => {
-          let { code, out } = await run(beats[i])
+          // What the turn changed is the subject of its last write.
+          let eid: string | undefined
+          let stop = yak.listen(({ bundles, generation }) => {
+            if (!generation) eid = subjectOf(bundles) ?? eid
+          })
+          let { code, out } = await run(beats[i]).finally(stop)
           await yak.settled()
-          done[i] = { out, fault: code != 0, eid: figure.last().eid }
+          done[i] = { out, fault: code != 0, eid }
           told()
         })
       }

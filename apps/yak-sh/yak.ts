@@ -1,7 +1,7 @@
 // The graph this page runs in the visitor's tab: the packages `yak init` lists
 // that a page has a use for, composed from their facets over memory, and the
 // `yak` command line typed into it.
-import { type Bundle, graph, mint, type Plugin } from '@yaks/graph'
+import { type Bundle, type Comp, graph, mint, type Plugin } from '@yaks/graph'
 import { loadTools, tier } from '@yaks/graph/tools'
 import { type Phase, PHASES } from '@yaks/graph/plugin'
 import { ram } from '@yaks/ram'
@@ -40,6 +40,13 @@ import * as canvasVocab from '@yaks/canvas/vocab'
 import * as canvasGraph from '@yaks/canvas/graph'
 import * as fileVocab from '@yaks/file/vocab'
 import * as projectVocab from '@yaks/project/vocab'
+import * as effectsVocab from '@yaks/effects/vocab'
+import * as mailVocab from '@yaks/mail/vocab'
+import * as mailGraph from '@yaks/mail/graph'
+import { effects as mailEffects } from '@yaks/mail/effects'
+import { effects, generation } from '@yaks/effects'
+import { outbox } from './outbox.ts'
+import { shopDoc, YOURS } from './shop.ts'
 
 type Facets = {
   name: string
@@ -74,12 +81,14 @@ export let PACKAGES: Facets[] = [
   { name: '@yaks/canvas', vocab: canvasVocab, graph: canvasGraph },
   { name: '@yaks/file', vocab: fileVocab },
   { name: '@yaks/project', vocab: projectVocab },
+  { name: '@yaks/effects', vocab: effectsVocab },
+  { name: '@yaks/mail', vocab: mailVocab, graph: mailGraph },
 ] as Facets[]
 
 // What `yak init` leaves unnumbered (@yaks/cli init.ts), so a page's first
 // task is T-1.
-let UNNUMBERED = ['call', 'edge', 'effect', 'execution', 'lease', 'output']
-  .concat(['process', 'result', 'tool', 'file', 'pane', 'layout'])
+let UNNUMBERED = ['call', 'edge', 'effect', 'execution', 'lease', 'mail']
+  .concat(['output', 'process', 'result', 'tool', 'file', 'pane', 'layout'])
 
 /** The commands a tab can answer: no files to write, no process to watch. */
 export let OFFERED = new Set([
@@ -96,15 +105,22 @@ export let OFFERED = new Set([
 /** One line typed, and what it printed. */
 export type Said = { code: number; out: string[] }
 
-/** A change the graph committed: the bundles it wrote and the phases it ran. */
-export type Change = { bundles: Bundle[]; phases: Phase[] }
+/** A change the graph committed: the bundles it wrote, the phases it ran and
+ * the batch as each phase left it, and whether an effect wrote it (its
+ * generation, 0 for a write anybody asked for). */
+export type Change = {
+  bundles: Bundle[]
+  phases: Phase[]
+  steps: [Phase, Bundle[]][]
+  generation: number
+}
 
 export type Yak = Awaited<ReturnType<typeof yak>>
 
 /** A graph in memory with the page's packages, a person typing into it, and
- * an agent beside them. */
-export let yak = async () => {
-  let docs = PACKAGES.flatMap((p) => p.vocab.docs ?? [])
+ * an agent beside them. A failed effect is tried again `retry` ms later. */
+export let yak = async ({ retry = 1500 } = {}) => {
+  let docs = [...PACKAGES.flatMap((p) => p.vocab.docs ?? []), shopDoc]
   let keywords = [
     ...PACKAGES.flatMap((p) => p.vocab.keywords ?? []),
     nameKeywords,
@@ -113,9 +129,10 @@ export let yak = async () => {
   let you = mint()
   let agent = mint()
   let host = { vocab }
-  // Every phase each write runs, and what it committed, told to whoever
-  // listens: the page draws from these.
+  // Every phase each write runs, the batch as it left each one, and what it
+  // committed, told to whoever listens: the page draws from these.
   let ran: Phase[] = []
+  let steps: [Phase, Bundle[]][] = []
   let listeners = new Set<(change: Change) => void>()
   let watch: Plugin = {
     name: 'yak.sh',
@@ -123,29 +140,84 @@ export let yak = async () => {
       phase,
       (bundles: Bundle[]) => {
         ran.push(phase)
+        steps.push([phase, structuredClone(bundles)])
         if (phase == 'effect') {
-          let change = { bundles, phases: ran }
+          let change = {
+            bundles,
+            phases: ran,
+            steps,
+            // The marker an effect's own write carries is gone by the effect
+            // phase; the batch as it arrived still has it.
+            generation: generation(steps[0]?.[1] ?? bundles),
+          }
           ran = []
+          steps = []
           for (let l of listeners) l(change)
         }
         return bundles
       },
     ])),
   } as Plugin
+  // The effects the graph's packages declare, run in this tab as a store
+  // runs them: each commit records the runs it owes, and the pool works them
+  // after it, trying a failed one again once its wait is up. The mail effect
+  // hands a letter to the page's outbox, never to a mail service.
+  let box = outbox(retry)
+  let fx = effects(vocab, {
+    singleOwner: true,
+    write: (b) => g.apply(b, { trusted: true }),
+    nudge: () => void work(),
+    backoff: () => retry,
+    report: (error) => globalThis.reportError(error),
+  })
+  fx.handle({
+    mail_post: mailEffects({ senders: { outbox: box } }, {
+      sender: { via: 'outbox' },
+    }).mail_post,
+  })
+  // Work what is owed after the commit that owed it, again while a run is due,
+  // then wake when the next waiting one falls due.
+  let working = Promise.resolve()
+  let alarm: ReturnType<typeof setTimeout> | undefined
+  let tick = () => new Promise((ok) => setTimeout(ok, 0))
+  let work = (): Promise<void> =>
+    working = working.then(tick).then(async () => {
+      for (;;) {
+        await fx.work(g)
+        let next = Math.min(
+          ...(await g.read('.effect.next ?effect'))
+            .map((b) => Date.parse(String((b.effect as Comp).next)))
+            .filter(Number.isFinite),
+        )
+        clearTimeout(alarm)
+        if (next == Infinity) return
+        if (next > Date.now()) {
+          alarm = setTimeout(work, next - Date.now())
+          return
+        }
+      }
+    })
   let storage = ram(vocab, { number: { except: UNNUMBERED } })
   let g = graph({
     storage,
     vocab,
     actor: { by: you },
     plugins: [
+      fx,
       ...PACKAGES.flatMap((p) => p.graph?.plugins?.(host) ?? []),
       watch,
     ],
   })
   await g.install()
-  // The person typing is in the graph from the start; the agent joins it,
-  // writing its own row, when it first calls a tool.
-  await g.apply([{ entity: { eid: you }, person: {}, doc: { title: 'You' } }])
+  // The person typing is in the graph from the start, with the address their
+  // mail goes to; the agent joins it, writing its own row, when it first
+  // calls a tool.
+  await g.apply([{
+    entity: { eid: you },
+    person: {},
+    doc: { title: 'You' },
+    email: { address: YOURS },
+  }])
   let met: Promise<unknown> | undefined
   let meet = () =>
     met ??= Promise.resolve(g.apply([{
@@ -296,7 +368,14 @@ export let yak = async () => {
       watchers.set(eid, set.add(notify))
       return () => void set.delete(notify)
     },
-    /** Settles once every commit so far is in `row`. */
-    settled: () => reading,
+    /** Settles once every commit so far is in `row`, and the effects it owed
+     * have run as far as they can now. */
+    settled: async () => {
+      await reading
+      await working
+      await reading
+    },
+    /** The outbox the mail effect delivers to. */
+    outbox: box,
   }
 }
