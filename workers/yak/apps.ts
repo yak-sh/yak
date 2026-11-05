@@ -924,7 +924,9 @@ let wearing = (space: Space, app: App, env: Host, who: Who): Scripts => ({
 // on from asks for that release to be made again as itself (toolkit.ts,
 // remake.ts), after the page is answered: a later page imports the shared
 // modules the toolkit makes now. Asked once per release by a kernel
-// deployment (its assets binding).
+// deployment (its assets binding); an ask that failed is asked again by the
+// next page, so a release is never left stale by one refused write (a Store
+// still on the last deploy's code refuses the remake's words until it moves).
 let remakes = new WeakMap<Env['ASSETS'], Map<string, Promise<void>>>()
 export let refresh = (
   env: Env,
@@ -939,9 +941,10 @@ export let refresh = (
   // A refusal here is the platform's own write refused: every failure is ours.
   let work = (async () => {
     if (await stale(env, source)) await ask(env, { app: app.eid, source })
-  })().catch((e) =>
+  })().catch((e) => {
+    refreshed.delete(source)
     defect(e, { request: 'toolkit refresh', space: space.slug, app: app.slug })
-  )
+  })
   refreshed.set(source, work)
   for (let old of refreshed.keys()) {
     if (refreshed.size <= 512) break

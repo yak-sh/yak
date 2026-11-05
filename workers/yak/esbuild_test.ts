@@ -21,8 +21,8 @@ import { ADA, seeded, visit } from './serving-data-probe.ts'
 import { platform } from './deploy-probe.ts'
 import { call, type Ctx } from './tools.ts'
 import { handler } from './kernel.ts'
-import { meta } from './meta.ts'
-import { remade, type Remake } from './remake.ts'
+import { KERNEL, meta } from './meta.ts'
+import { ask, remade, type Remake } from './remake.ts'
 import { addressed, SHA, sha256 } from './versions.ts'
 
 let WORKER = 'export default { fetch: () => new Response("compiled") }'
@@ -365,6 +365,65 @@ test('a release compiled by an older toolkit is made again as itself', () => {
   assertEquals(version, 1)
   assertEquals(served, '/* 2 */')
   assertStringIncludes(draft, 'let n: number = 2')
+})
+
+// A page whose ask for a remake is refused (a Store still on the last
+// deploy's code does not know the remake's words) has the next page ask again,
+// and a remake that fired and left the release serving is woken again.
+let asksAgain = await (async () => {
+  await using s = await scenario(compiles)
+  await s.write({
+    'index.html': PAGE,
+    'main.ts': 'let n: number = 1',
+    'package.json': '{"dependencies": {"@yaks/client": "platform"}}',
+  })
+  await s.tool('app_deploy')
+  let space = (await s.dir.space('ada'))!
+  let app = (await s.dir.app(space, 'cookbook'))!
+  let graph = meta(s.env)
+  let refusals = 1
+  s.env.META = {
+    ...graph,
+    apply: (...args: Parameters<typeof graph.apply>) => {
+      if (refusals-- > 0) throw new Error('unknown component release_remake')
+      return graph.apply(...args)
+    },
+  } as typeof graph
+  // A new kernel, whose toolkit has other source for @yaks/client.
+  let assets = s.env.ASSETS
+  s.env.ASSETS = { fetch: (req) => assets.fetch(req) } as typeof assets
+  s.env.CF_VERSION_METADATA = { id: 'a later kernel' }
+  let rows = () => graph.query('.release_remake&?wake')
+  let was = catalog['@yaks/client'].version
+  catalog['@yaks/client'].version = 'client-source-sha-2'
+  let refused, row
+  try {
+    await apps.refresh(s.env, space, app)
+    refused = (await rows()).length
+    await apps.refresh(s.env, space, app)
+    ;[row] = await rows()
+  } finally {
+    catalog['@yaks/client'].version = was
+  }
+  await graph.apply([{ entity: row.entity, wake: { at: null } }])
+  let job = { app: app.eid, source: app.source! }
+  await ask(s.env, job)
+  let at = async () => ((await rows())[0].wake as { at?: string }).at
+  let woken = await at()
+  await graph.apply([{
+    entity: row.entity,
+    wake: { at: null },
+    sweep: { began: woken },
+  }], KERNEL)
+  await ask(s.env, job)
+  return { refused, asked: !!row, woken, running: await at() }
+})()
+
+test('a refused remake is asked again, and a fired one woken again', () => {
+  assertEquals(asksAgain.refused, 0)
+  assert(asksAgain.asked)
+  assert(asksAgain.woken)
+  assertEquals(asksAgain.running, undefined)
 })
 
 let failedCompile = await (async () => {

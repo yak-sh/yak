@@ -1775,7 +1775,12 @@ export let recompileRelease = async (ctx: Ctx, space: Space, app: App) => {
   }
   let live = (await versions(ctx.dir, current))
     .find((v) => v.version == current.version)
-  if (!live) return
+  if (!live) {
+    throw new Error(
+      `${space.slug}/${app.slug} serves version ${current.version}, which ` +
+        'has no retained release to make again',
+    )
+  }
   let who: Who = { person: null, role: 'owner', administrative: true }
   await released(
     ctx,

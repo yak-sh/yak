@@ -8,8 +8,10 @@
 //
 // Its compile is yaks.app's to pay for, never the space's (esbuild.ts
 // `Payer`): the person did not ask for it and gains only our fix. A deploy
-// getting there first is the remake not needed. Anything else is a failure of
-// ours, which the sweep reports (wake.ts `reporting`).
+// getting there first is the remake not needed, and a deploy under way leaves
+// the release to it; if that release still serves, its next page asks again.
+// Anything else is a failure of ours, which the sweep reports (wake.ts
+// `reporting`).
 import { derivedEid } from '@yaks/graph/identity'
 import { CallError } from '@yaks/tools/errors'
 import { copyOf } from './directory-copy.ts'
@@ -24,12 +26,18 @@ export type Remake = { app: string; source: string }
 
 let EXPECTED = ['stale', 'conflict']
 
-/** Ask for the release at `source` to be made again, once: the row is named
- * for the release, and a release already asked for is left as it stands. */
+/** Ask for the release at `source` to be made again. The row is named for the
+ * release: one waiting or under way is left as it stands, and one that fired
+ * and left the release serving (a deploy held its fence, or the remake
+ * failed) is woken again. */
 export let ask = async (env: Env, job: Remake) => {
   let eid = derivedEid(`remake ${job.source}`)
   let graph = meta(env)
-  if ((await graph.query(`.entity.eid=${eid}`)).length) return
+  let [held] = await graph.query(`.entity.eid=${eid}&?wake&?sweep`) as {
+    wake?: { at?: string | null }
+    sweep?: { began?: string | null }
+  }[]
+  if (held?.wake?.at || held?.sweep?.began) return
   await graph.apply([{
     entity: { eid },
     wake: {
