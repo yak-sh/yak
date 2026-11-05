@@ -1,7 +1,7 @@
 // What the page's drawing shows and how far it is drawn: the query it draws,
-// where the story's entities sit, how far the reader has scrolled into each
-// step, which command made each thing it draws, and what the last write made
-// and which phases of apply() it ran.
+// where the story's entities sit, how far the reader has scrolled past each
+// command, which command made each thing it draws, and what the last write
+// made and which phases of apply() it ran.
 import type { Layout } from '@yaks/diagram'
 import type { Bundle } from '@yaks/graph'
 import type { Change, Yak } from './yak.ts'
@@ -61,11 +61,15 @@ let clamp = (v: number) => Math.max(0, Math.min(1, v))
  * top: what has passed it has been read. */
 export const LINE = .62
 
-/** How far into a step the reader is, 0 to 1, from where the step sits in
- * the window: it starts as the step's top passes the reading line and is
- * done half a screen (or half the step) later. */
-export let into = (top: number, height: number, view: number) =>
-  clamp((view * LINE - top) / Math.max(1, Math.min(height, view) * .5))
+/** How much of the window's height a step plays out over: from the reading
+ * line almost to the top of the window. */
+export const SPAN = .55
+
+/** How far past a step the reader is, 0 to 1, from where its top sits in the
+ * window: it starts as the top passes the reading line and is done SPAN of
+ * the window later, and scrolling back runs it backwards. */
+export let into = (top: number, view: number) =>
+  clamp((view * LINE - top) / Math.max(1, view * SPAN))
 
 /** The last write the prompt made: the command that made it, the entity it
  * made or changed, the phases of apply() it ran with the batch as each left
@@ -126,7 +130,8 @@ export let figure = (yak: Yak, term: Term) => {
     told()
   })
 
-  // How far the reader is into each step, and when each stage first showed.
+  // How far the reader is past each command of the story, and when each
+  // stage first showed.
   let scrolled: number[] = []
   let born = new Map<number, number>()
   let asked = 0
@@ -166,9 +171,9 @@ export let figure = (yak: Yak, term: Term) => {
       listeners.add(l)
       return () => void listeners.delete(l)
     },
-    /** The reader is `p[i]` of the way into step i + 1. */
+    /** The reader is `p[i]` of the way past the story's command i + 1. */
     scroll: (p: number[]) => void (scrolled = p),
-    /** How far into step n (from 1) the reader is. */
+    /** How far past the story's command n (from 1) the reader is. */
     into: (n: number) => scrolled[n - 1] ?? 0,
     /** A layout was drawn at `now`: each stage it shows for the first time
      * starts drawing in. */
@@ -179,8 +184,8 @@ export let figure = (yak: Yak, term: Term) => {
         if (x.stage >= LIVE && x.stage < ASKED) live = true
       }
     },
-    /** How far a stage has come in at `now`: a step as far as the reader has
-     * scrolled into it, once it has been written; the start, what a band
+    /** How far a stage has come in at `now`: a command of the story as far
+     * as the reader has scrolled past it, once it has been written; the start, what a band
      * runs and anything the visitor did as soon as it is written. Once the visitor has typed, the
      * story stays drawn wherever they scroll; widening the query does not
      * count as typing. */

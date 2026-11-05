@@ -12,7 +12,7 @@ import type { Bundle } from '@yaks/graph'
 import type { EntityProps } from '@yaks/preact'
 import type { Yak } from './yak.ts'
 import type { Line, Term } from './term.ts'
-import { type Figure, into, LINE, placeOf, SHEET, WIDER } from './figure.ts'
+import { type Figure, into, placeOf, SHEET, WIDER } from './figure.ts'
 import { INSTALL, proseOf, scriptOf, shown } from './site.ts'
 import { Copy, parts } from './parts.ts'
 import { Stack } from './bands.ts'
@@ -127,31 +127,31 @@ let Story: FunctionComponent<Ctx & { hero?: string; steps: string[] }> = (
   let pen = useRef<Pen>({ steps: [] }).current
   let bodies = () =>
     steps.map((eid) => text(yak.row(eid) ?? { entity: { eid } }, 'doc', 'body'))
-  // How far the reader is into each step, measured each frame they scroll:
-  // each command runs as it passes the reading line, and the drawing
-  // follows.
+  // How far the reader is past each command, measured each frame they
+  // scroll: each runs as it passes the reading line, and what it wrote draws
+  // in over the scrolling after it.
   useEffect(() => {
     if (typeof requestAnimationFrame == 'undefined') return
     let frame = 0
     let measure = () => {
       frame = 0
-      let p = pen.steps.map((el) => {
-        if (!el) return 0
-        let r = el.getBoundingClientRect()
-        return into(r.top, r.height, innerHeight)
-      })
-      figure.scroll(p)
-      pen.steps.forEach((el, i) => el?.classList.toggle('is-on', p[i] > 0))
-      let n = p.reduce((k, x, i) => x > 0 ? i + 1 : k, 0)
-      let lines = pen.steps[n - 1]?.querySelectorAll('.Step_Lines > li') ?? []
-      let m = [...lines].filter((li) =>
-        li.getBoundingClientRect().top < innerHeight * LINE
-      ).length
-      term.reach(bodies(), n, m)
+      let past = (el: Element) =>
+        into(el.getBoundingClientRect().top, innerHeight) > 0
+      let lines = pen.steps.map((el) => [
+        ...el?.querySelectorAll('.Step_Lines > li') ?? [],
+      ])
+      figure.scroll(
+        lines.flat().map((li) =>
+          into(li.getBoundingClientRect().top, innerHeight)
+        ),
+      )
+      let on = pen.steps.map((el) => !!el && past(el))
+      pen.steps.forEach((el, i) => el?.classList.toggle('is-on', on[i]))
+      let n = on.lastIndexOf(true) + 1
+      term.reach(bodies(), n, lines[n - 1]?.filter(past).length)
       pen.paint?.()
     }
-    let soon = () =>
-      frame ||= requestAnimationFrame(measure)
+    let soon = () => frame ||= requestAnimationFrame(measure)
     addEventListener('scroll', soon, { passive: true })
     addEventListener('resize', soon)
     soon()
@@ -374,7 +374,7 @@ let Figure: FunctionComponent<Ctx & { pen: Pen }> = (ctx) => {
     let point = (svg: SVGSVGElement, at: Tip | undefined) => {
       let line = leader.current
       let made = at && figure.madeBy(at.key)
-      let step = made && pen.steps[made.stage - 1]
+      let step = made && pen.steps[made.step - 1]
       let said = made && step?.querySelectorAll('.Step_Lines > li')[made.line]
       for (let lit of svg.ownerDocument.querySelectorAll('.is-led')) {
         if (lit != said) lit.classList.remove('is-led')

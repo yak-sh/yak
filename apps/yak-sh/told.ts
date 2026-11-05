@@ -4,7 +4,7 @@
 import { type RefObject } from 'preact'
 import { useEffect, useLayoutEffect, useRef, useState } from 'preact/hooks'
 import type { Bundle } from '@yaks/graph'
-import { LINE } from './figure.ts'
+import { into, LINE } from './figure.ts'
 
 /** Draw again whenever `listen` tells. */
 export let useTold = (listen: (l: () => void) => () => void) => {
@@ -43,7 +43,10 @@ export let passed = (tops: number[], line: number) =>
 
 /** How far down the list `ref` holds the reader is: the index of the last of
  * its `.Dot`s above the reading line, measured each frame they scroll and
- * told to `each`; `fallback` where nothing measures, as in a test. */
+ * told to `each`; `fallback` where nothing measures, as in a test. How far
+ * past that dot they are, 0 to 1, is `--p` on the band the list is in, so
+ * what the step shows plays out as they scroll, and backwards as they go
+ * back. */
 export let useReached = (
   ref: RefObject<Element>,
   fallback: number,
@@ -61,6 +64,11 @@ export let useReached = (
       let tops = [...list.querySelectorAll('.Dot')]
         .map((d) => d.getBoundingClientRect().top + 4)
       let k = passed(tops, innerHeight * LINE)
+      let p = k < 0 ? 0 : into(tops[k], innerHeight)
+      list.closest<HTMLElement>('.Band')?.style.setProperty(
+        '--p',
+        p.toFixed(3),
+      )
       set(k)
       latest.current?.(k)
     }

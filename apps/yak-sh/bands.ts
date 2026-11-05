@@ -150,10 +150,12 @@ export let seen = (
 
 /** How the last write stands with the reader `upto` phases into it (the
  * index of the last phase they have passed): each phase passed ran or was
- * passed by, which have been passed, and the phase the reader is at. */
+ * passed by, each phase whether the write ran it (all of them until there is
+ * a write), which have been passed, and the phase the reader is at. */
 export let standing = (ran: Set<string>, upto: number) => ({
   phase: (p: Phase, i: number) =>
     !ran.size || i > upto ? '' : ran.has(p) ? 'on' : 'skip',
+  runs: (p: Phase) => !ran.size || ran.has(p),
   passed: ran.size ? PHASES.slice(0, Math.max(0, upto + 1)) : [],
   now: ran.size ? PHASES[upto] : undefined,
 })
@@ -378,6 +380,7 @@ export let Stack: Band = (ctx) => {
           behavior: 'smooth',
         }),
       'data-phase': p,
+      'data-ran': state.runs(p) ? undefined : 'no',
       key: p,
     }, [
       h('span', { class: 'Dot' }),

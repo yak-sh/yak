@@ -1,4 +1,7 @@
 :root {
+  /* The scrolling each step of the story and of a band takes: what it shows
+     plays out over most of it (figure.ts SPAN), then the next step starts. */
+  --scroll-step: 62vh;
   --paper: #f5f1e8;
   --plate: #fcfaf5;
   --side: #e6dfcf;
@@ -190,8 +193,8 @@ h2 {
   margin: 0;
   padding: 0 0 12vh;
 }
-/* A step is as long as its commands: each takes the same stretch of
-   scrolling, and runs as its comment passes the reading line. */
+/* A step is as long as its commands: each takes a slot of scrolling, runs
+   as its comment passes the reading line, and draws in over the rest. */
 .Step {
   position: relative;
   padding: clamp(1.8rem, 4vw, 2.8rem) 0 0 58px;
@@ -239,7 +242,7 @@ h2 {
   margin: 1.2rem 0 0;
 }
 .Step_Lines > li {
-  min-height: 24vh;
+  min-height: var(--scroll-step);
 }
 .Step_Note {
   display: block;
@@ -797,6 +800,12 @@ h2 {
   position: relative;
   padding: .55rem 0 .9rem;
 }
+/* The write and each phase it ran take a slot of scrolling, its lines
+   lighting as the reader passes it; a phase it didn't run takes none. */
+.Phases .Call,
+.Phases [data-phase]:not([data-ran='no']) {
+  min-height: var(--scroll-step);
+}
 .Phases .Call code {
   display: block;
   margin-top: .3rem;
@@ -896,17 +905,20 @@ h2 {
 .Source.p-admit .ok {
   opacity: 1;
 }
+/* Admit reads each line in turn as the reader scrolls past the phase. */
 .Source.now-admit .comp > div {
-  animation: scan 1.6s both;
+  --at: 0s;
+  animation: scan 1.6s linear both paused;
+  animation-delay: calc(var(--at) - var(--p, 1) * 2.65s);
 }
 .Source.now-admit .d2 > div {
-  animation-delay: .35s;
+  --at: .35s;
 }
 .Source.now-admit .d3 > div {
-  animation-delay: .7s;
+  --at: .7s;
 }
 .Source.now-admit .d4 > div {
-  animation-delay: 1.05s;
+  --at: 1.05s;
 }
 @keyframes scan {
   0%,
@@ -921,9 +933,10 @@ h2 {
 .Source.now-normalize .c {
   background: rgba(252, 250, 245, .8);
 }
-/* A line the phase the reader is at changed, its margin saying what it did. */
+/* A line the phase the reader is at changed, its margin saying what it did,
+   lit as they scroll past the phase. */
 .Source .is-now > div {
-  background: rgba(167, 192, 128, .4);
+  background: rgba(167, 192, 128, calc(.4 * var(--p, 1)));
 }
 .Source .is-now .n {
   color: var(--ink);
@@ -1069,12 +1082,13 @@ h2 {
   margin: 1.6rem 0 0 2.1rem;
   padding: 0;
 }
-/* Each beat takes a stretch of scrolling, so the windows open one at a time
-   while the drawing stays in view. */
+/* Each beat takes a slot of scrolling, so the windows open one at a time
+   while the drawing stays in view, each as far as the reader is past it
+   (`--p`, told.ts). */
 .Beats li {
   position: relative;
   flex: 1 0 auto;
-  min-height: 30vh;
+  min-height: var(--scroll-step);
   padding: .7rem 0 1.4rem;
   border-top: 1px solid var(--faint);
   transition: background .3s;
@@ -1176,13 +1190,7 @@ h2 {
   stroke-linejoin: round;
   filter: drop-shadow(0 0 3px var(--moss));
   stroke-dasharray: 1;
-  stroke-dashoffset: 1;
-  animation: wire .6s .15s ease-out forwards;
-}
-@keyframes wire {
-  to {
-    stroke-dashoffset: 0;
-  }
+  stroke-dashoffset: calc(1 - var(--p, 1));
 }
 .Windows {
   position: absolute;
@@ -1208,11 +1216,17 @@ h2 {
   background: var(--card);
   color: var(--ink);
   box-shadow: 0 1px 2px rgba(35, 48, 31, .06), 0 6px 18px rgba(35, 48, 31, .1);
-  animation: pop .35s ease-out;
 }
 .Window.is-last {
   border-color: var(--meadow);
   box-shadow: 0 0 0 1px var(--meadow), 0 8px 22px rgba(35, 48, 31, .16);
+}
+/* The newest window comes in as the reader scrolls past its beat, and goes
+   back out as they scroll back (`--p`, told.ts). */
+.Window.is-last,
+.Declared {
+  opacity: calc(.3 + .7 * var(--p, 1));
+  transform: translateY(calc(6px - 6px * var(--p, 1)));
 }
 @keyframes pop {
   from {
@@ -1559,7 +1573,6 @@ h2 {
 .Declared {
   border: 1px solid var(--rule);
   background: rgba(252, 250, 245, .55);
-  animation: pop .35s ease-out;
 }
 .Declared_Bar {
   padding: 4px 12px;
@@ -1845,11 +1858,7 @@ h2 {
   .Toast {
     animation-name: fade;
   }
-  .Source .comp > div,
   .Outbox li,
-  .Declared,
-  .Window,
-  .Doors_Wire path,
   .Caret {
     animation: none;
   }

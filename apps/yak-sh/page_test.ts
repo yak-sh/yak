@@ -277,7 +277,7 @@ test('each thing the story draws leads back to the command whose write made it',
   // The command that made a drawn thing, as its step lists it.
   let madeBy = (key: string) => {
     let at = page.figure.madeBy(key)!
-    return scriptOf(steps[at.stage - 1])[at.line].line
+    return scriptOf(steps[at.step - 1])[at.line].line
   }
   let titled = (title: string) =>
     page.yak.rows().find((b) => (b.doc as { title?: string })?.title == title)!
@@ -315,7 +315,7 @@ test('a section changed from the prompt redraws in place, and the drawing keeps 
   page.page.close()
 })
 
-test('the start draws at once, and each step only as far as it is scrolled into', async () => {
+test('the start draws at once, and each command only as far as the reader has scrolled past it', async () => {
   let { page, settle } = await open()
   await page.term.reach(steps, 4)
   await settle()
@@ -325,7 +325,7 @@ test('the start draws at once, and each step only as far as it is scrolled into'
   equal([at(1), at(2), at(3)], [1, .5, 0])
 })
 
-test('the drawing widened and back to the demo still draws each step as far as it is scrolled', async () => {
+test('the drawing widened and back to the demo still draws each command as far as it is scrolled past', async () => {
   let { root, page, settle } = await open()
   await page.term.reach(steps, 4)
   await settle()
