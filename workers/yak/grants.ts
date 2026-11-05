@@ -255,6 +255,24 @@ export let narrowed = (
       }))
       : []
   }
+  // The apps of each space that let the holder in, with the role it gave. A
+  // space the person also sits in is in their own reach, which the request
+  // has already read (an Operator's step asks it with the space, operator.ts
+  // `working`); the rest are asked together, in one round trip.
+  let reachBeyond = async (person: string) => {
+    if (!beyond.length) return []
+    let theirs = over ? [] : await dir.reachable(person)
+    let sat = new Set(theirs.map((r) => r.space.eid))
+    let asked = beyond.filter((r) => !sat.has(r.space.eid))
+    let apps = asked.length ? await dir.apps(asked.map((r) => r.space)) : []
+    return beyond.flatMap((r) =>
+      (sat.has(r.space.eid)
+        ? theirs.filter((t) => t.space.eid == r.space.eid).map((t) => t.app)
+        : apps.filter((app) => app.space == r.space.eid))
+        .filter((app) => !app.trashed)
+        .map((app) => ({ space: r.space, app, role: r.role }))
+    )
+  }
   return {
     ...dir,
     space: async (want: string) => {
@@ -286,14 +304,9 @@ export let narrowed = (
     reachable: async (person: string) => {
       let [here, there] = await Promise.all([
         reachHere(person),
-        Promise.all(
-          beyond.map(async (r) =>
-            (await dir.apps(r.space)).filter((app) => !app.trashed)
-              .map((app) => ({ space: r.space, app, role: r.role }))
-          ),
-        ),
+        reachBeyond(person),
       ])
-      return [...here, ...there.flat()]
+      return [...here, ...there]
     },
     seated: async (person: string, role?: Role) => [
       ...(await dir.seated(person, role)).filter((s) => matches(s.space)),
