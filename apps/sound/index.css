@@ -1,0 +1,43 @@
+body {
+  width: 100vw;
+  height: 100vh;
+  display: grid;
+  grid-template:
+    "header" auto
+    "main" 1fr / 1fr;
+  margin: 0;
+}
+
+header {
+  margin: 0 1em;
+  overflow: hidden;
+}
+
+nav {
+  flex-wrap: wrap;
+}
+
+main {
+  display: flex;
+  flex-direction: column;
+  max-width: none;
+  margin: 0;
+  place-self: stretch;
+  place-items: end start;
+  overflow: hidden;
+}
+
+canvas {
+  flex-basis: 0;
+  transform-origin: top right;
+  transform: scaleY(var(--scale, 1));
+  image-rendering: pixelated;
+}
+
+#scale {
+  position: absolute;
+  bottom: 1em;
+  left: 1em;
+  transform-origin: left;
+  transform: rotate(-90deg);
+}

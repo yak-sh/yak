@@ -1,0 +1,28 @@
+<!doctype html>
+<html lang=en class=full>
+  <meta name=viewport content="width=device-width, initial-scale=1.0">
+  <link rel=stylesheet href=main.css>
+  <link rel=stylesheet href=./index.css>
+  <script type=module src=index.js></script>
+
+  <title>Audio Spectrogram</title>
+
+  <header>
+    <nav id=nav class='row right'>
+      <a href=# id=save download=sound-frame.png>Save</a>
+      <label><input data-store id=live type=checkbox>Live</label>
+      <label><input data-store id=max type=checkbox>Max</label>
+      <input data-store id=sensitivity type=range min=31 max=150 value=100
+        list=ticks title=Sensitivity>
+      <datalist id=ticks>
+        <option>100</option>
+      </datalist>
+    </nav>
+  </header>
+
+  <main id=main>
+    <canvas id=output></canvas>
+  </main>
+
+  <input data-var data-store id=scale type=range min=1 max=10 value=1 step=any
+    title=Scale>

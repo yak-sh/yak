@@ -1,0 +1,65 @@
+<!DOCTYPE html>
+<html lang=en>
+  <meta name=viewport content="width=device-width,initial-scale=1.0">
+  <link href=style.css rel=stylesheet>
+  <script src=main.js type=module></script>
+
+  <title>Settlement Market</title>
+
+  <main id=app>
+    <section id=stage>
+      <canvas id=map></canvas>
+      <div id=toolbar>
+        <button id=play type=button aria-label="Pause simulation">Pause</button>
+        <label>
+				Speed
+				<input id=speed type=range min=0 max=5 step=1 value=3>
+			</label>
+        <label>
+				Bounty
+				<input id=bounty type=range min=0 max=24 step=1 value=6>
+			</label>
+        <label>
+				Subsidy
+				<select id=industry>
+					<option value=farm>Farm</option>
+					<option value=kitchen>Kitchen</option>
+					<option value=woodcutter>Wood</option>
+					<option value=sawmill>Sawmill</option>
+					<option value=kiln>Kiln</option>
+					<option value=mine>Mine</option>
+					<option value=smelter>Smelter</option>
+					<option value=blacksmith>Forge</option>
+					<option value=builderYard>Build</option>
+				</select>
+				<input id=subsidy type=range min=0 max=80 step=5 value=0>
+			</label>
+        <button id=seed type=button>New Seed</button>
+      </div>
+    </section>
+
+    <aside id=inspector>
+      <header>
+        <h1>Settlement Market</h1>
+        <p id=clock></p>
+      </header>
+
+      <section id=stats></section>
+      <section>
+        <h2>Shortages</h2>
+        <ol id=shortages></ol>
+      </section>
+      <section>
+        <h2>Orders</h2>
+        <ol id=orders></ol>
+      </section>
+      <section>
+        <h2>Citizens</h2>
+        <ol id=citizens></ol>
+      </section>
+      <section>
+        <h2>Selection</h2>
+        <div id=selection></div>
+      </section>
+    </aside>
+  </main>
