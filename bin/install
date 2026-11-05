@@ -18,6 +18,7 @@ set -eu
 root=$(git worktree list --porcelain | head -1 | cut -c 10-)
 bin="${DENO_INSTALL_ROOT:-$HOME/.deno}/bin"
 git -C "$root" config core.hooksPath .githooks
+"$root/bin/workspace-dependencies"
 sqlite=$(deno run -A "$root/bin/sqlite.ts")
 mkdir -p "$bin"
 # The copied config a `deno install -g` of this CLI left behind.
@@ -25,6 +26,7 @@ rm -rf "$bin/.yak"
 cat >"$bin/yak" <<EOF
 #!/bin/sh
 export DENO_SQLITE_PATH="\${DENO_SQLITE_PATH:-$sqlite}"
+deno run -q -A --config '$root/deno.json' '$root/workers/yak/dependencies.ts' || exit \$?
 exec deno run -q -A --unstable-no-legacy-abort --config '$root/deno.json' '$root/packages/cli/yak.ts' "\$@"
 EOF
 chmod +x "$bin/yak"
