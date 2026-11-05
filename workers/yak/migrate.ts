@@ -349,6 +349,9 @@ export let BOUNDARIES = [
   'yak/store/integration-owner/1',
   // Every space's Operator's name (T-137432).
   'yak/store/operator-name/1',
+  // No space keeps an empty plan, comped, budget or starter a hold gave it
+  // (T-141144).
+  'yak/store/hold-empty/1',
 ]
 
 /** A column dropped from a table. */

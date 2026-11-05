@@ -22,6 +22,7 @@ let empty = (row: Bundle, comp: string) => {
 export let holdEmptyRule: Rule = {
   mark: 'yak/store/hold-empty/1',
   stores: [PLATFORM_STORE],
+  live: 'all',
   find:
     Object.entries(EMPTY).map(([comp, props]) =>
       `(.space&.${comp}${props.map((p) => `&!${comp}.${p}`).join('')})`
