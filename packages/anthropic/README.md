@@ -31,7 +31,10 @@ A request becomes one streamed `POST /v1/messages`:
   results of parallel calls answer together. A `call` is a `tool_use` block, a
   `result` a `tool_result`, an `image` a base64 image block.
 - Tools are sent in name order and the request carries top-level
-  `cache_control`, so each request reads the prefix the last one wrote.
+  `cache_control`, so each request reads the prefix the last one wrote. It is
+  kept five minutes, or an hour (`ttl: "1h"`, written at twice the input price
+  where five minutes cost 1.25 times) when `Request.cacheRetention` is 3600 or
+  more; the reply's `cacheExpiresAt` is the request's start plus that lifetime.
 - `Request.tokens` is `max_tokens` (64,000 without it); `Request.effort`, when
   it is one of `low`, `medium`, `high`, `xhigh`, `max`, is
   `output_config.effort`. Thinking is left to the model's default.

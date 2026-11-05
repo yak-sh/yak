@@ -234,6 +234,10 @@ export type Request = {
    * requests, so a provider that keys its prompt cache by conversation finds
    * the prefix the last one cached */
   conversation?: string
+  /** how long, in seconds, the request asks its provider to keep the prefix
+   * it caches; a provider offers a few lifetimes and keeps the longest one
+   * not over this, or its default where none fits or this is absent */
+  cacheRetention?: number
 }
 
 /** One typed question, in Jev's terms: a `noul` is answered with the

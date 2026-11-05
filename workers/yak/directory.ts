@@ -200,6 +200,9 @@ export type Space = {
   // The model that answers its calls (speech.ts `setupOf`), or none for the
   // platform's.
   voice_model?: string | null
+  // How long, in seconds, its Operator's conversations ask the model's
+  // provider to keep their cached prefix, or none for the provider's default.
+  cache_retention?: number | null
   // The picture it wears in place of its first letter, or null for none.
   logo?: { sha: string; type: string } | null
   sender?: import('@yaks/phone').Transport
@@ -603,6 +606,7 @@ export type Row = {
     name?: string | null
     voice?: string | null
     voice_model?: string | null
+    cache_retention?: number | null
   }
   starter?: { dollars?: number | null }
   started?: { space?: Id | null }
@@ -1111,6 +1115,7 @@ export let spaceOf = (r: Row): Space => ({
   operator: calledOf(r),
   voice: r.operator?.voice ?? null,
   voice_model: r.operator?.voice_model ?? null,
+  cache_retention: r.operator?.cache_retention ?? null,
   logo: r.space_logo?.sha
     ? { sha: r.space_logo.sha, type: r.space_logo.type ?? '' }
     : null,

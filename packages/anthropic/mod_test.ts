@@ -100,6 +100,28 @@ let ask = (over: Partial<Request> = {}): Request => ({
   ...over,
 })
 
+test('a prefix is kept five minutes, or the hour a request asks for', async () => {
+  for (
+    let [asked, ttl, seconds] of [[undefined, undefined, 300], [
+      3600,
+      '1h',
+      3600,
+    ]] as const
+  ) {
+    let { sent, fetch } = api(() => sse(reply()))
+    let before = Date.now()
+    let out = await messages({ key: () => 'k', fetch })(
+      ask({ cacheRetention: asked }),
+    )
+    equal(sent[0].body.cache_control, {
+      type: 'ephemeral',
+      ...ttl ? { ttl } : {},
+    })
+    let kept = (Date.parse(out.cacheExpiresAt!) - before) / 1000
+    ok(kept >= seconds && kept < seconds + 5)
+  }
+})
+
 test('a request streams text, returns calls, and counts cache reads as input', async () => {
   let { sent, fetch } = api(() => sse(reply()))
   let deltas: TextDelta[] = []

@@ -761,6 +761,9 @@ export let operating = (
       throw new Error(`No catalogue price for operator model ${req.model}`)
     }
     reached('payer', space)
+    // The space may ask its provider to keep the cached prefix longer than
+    // the default (`operator{cache_retention}`).
+    let kept = space ? (await dir().at(space))?.cache_retention : undefined
     let session = comp(ask, 'entry')?.session
     let heard = req.onText
     let reply = await accounted(
@@ -770,6 +773,7 @@ export let operating = (
       () => Promise.resolve(price),
     )({
       ...req,
+      ...kept ? { cacheRetention: kept } : {},
       onSubmit: async () => {
         await req.onSubmit?.()
         reached('submit', null)

@@ -132,6 +132,10 @@ export let conversation = (req: Request): Param[] => {
   return out
 }
 
+/** Whether a request keeps its cached prefix the hour Anthropic offers
+ * beside its default five minutes, at a dearer write. */
+let hour = (req: Request) => (req.cacheRetention ?? 0) >= 3600
+
 /** Tools in name order, so the cached prefix is the same each request. */
 export let tools = (list: Tool[]): Anthropic.Tool[] =>
   [...list].sort((a, b) => a.name < b.name ? -1 : a.name > b.name ? 1 : 0)
@@ -260,12 +264,16 @@ export let messages = (options: Options): Model => {
     let body: Anthropic.MessageStreamParams = {
       model: req.model,
       max_tokens: req.tokens ?? TOKENS,
-      cache_control: { type: 'ephemeral' },
+      cache_control: {
+        type: 'ephemeral',
+        ...hour(req) ? { ttl: '1h' as const } : {},
+      },
       system: system(req),
       messages: conversation(req),
       ...req.tools.length ? { tools: tools(req.tools) } : {},
       ...effort ? { output_config: { effort } } : {},
     }
+    let started = Date.now()
     await submitted(req)
     let message: Anthropic.Message
     try {
@@ -309,6 +317,8 @@ export let messages = (options: Options): Model => {
       model: message.model,
       items: items(message.content),
       usage: usage(message.usage),
+      cacheExpiresAt: new Date(started + (hour(req) ? 3600 : 300) * 1000)
+        .toISOString(),
     }
   }
   return Object.assign(model, {
