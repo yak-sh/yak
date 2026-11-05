@@ -25,8 +25,12 @@ for (const name of [PLATFORM_STORE, GIT_STORE]) {
       )
     const eid = 'a0000000-0000-4000-8000-000000000099'
     const seed = name == PLATFORM_STORE
-      ? { person: {}, doc: { title: 'Test person' } }
-      : { gitobj: { type: 'blob', size: 3 }, blob: { sha: 'a'.repeat(64) } }
+      ? { person: {} }
+      : { blob: { sha: 'a'.repeat(64) } }
+    let component = name == PLATFORM_STORE ? 'doc' : 'gitobj'
+    let addition = name == PLATFORM_STORE
+      ? { title: 'classified-test' }
+      : { type: 'blob', size: 3 }
     let res = await request('/apply', [{ entity: { eid }, ...seed }])
     assertEquals(res.status, 200, await res.clone().text())
     const read = async () =>
@@ -54,22 +58,24 @@ for (const name of [PLATFORM_STORE, GIT_STORE]) {
     store = new Store(ctx)
     assertEquals((await read())[0], original)
     assertEquals(slot(ctx, 'schema'), stamp)
+    // A stored component changes the entity's shape; alias{name} is a key
+    // on another entity and leaves this shape alone.
     res = await request('/apply', [{
       entity: { eid },
-      alias: { name: 'classified-test' },
+      [component]: addition,
     }])
     assertEquals(res.status, 200, await res.clone().text())
     assert((await read())[0].entity.archetype != original.entity.archetype)
-    res = await request('/apply', [{ entity: { eid }, alias: null }])
+    res = await request('/apply', [{ entity: { eid }, [component]: null }])
     assertEquals(res.status, 200)
-    assertEquals((await read())[0].alias, undefined)
+    assertEquals((await read())[0][component], undefined)
     const final = (await read())[0]
     const shape =
       (await (await request('/query?q=.entity.eid=' + final.entity.archetype))
         .json())[
           0
         ]
-    assert(!JSON.parse(shape.archetype.tables).includes('alias'))
+    assert(!JSON.parse(shape.archetype.tables).includes(component))
     storage[Symbol.dispose]()
   })
 }
