@@ -19,7 +19,10 @@
 // While calls are a pilot, only an owner of the platform's own space is
 // answered; `CALLS = "on"` answers everyone the platform knows by number.
 // A call lasts at most MINUTES, and what it costs (the line, what was heard
-// and what was said) is charged to the space.
+// and what was said) is charged to the space as it goes: what is said as it
+// is said, the line and what was heard every CHARGED and as the call ends,
+// so an object restarted under a call loses at most that much of its charge,
+// and the stream opened again charges only its own.
 import type { Frame, Line, Ring } from '@yaks/phone'
 import {
   type Keyed,
@@ -57,6 +60,10 @@ export let MINUTES = 10
 // A stream opened this long after the ring is the call's own, opened again
 // when its object restarted mid-call.
 let RESUMED = 15_000
+
+/** How often a call charges its line and what it heard since it last did, in
+ * milliseconds. */
+export let CHARGED = 10_000
 
 /** What the Operator says when a call's stream comes back mid-call. */
 export let BACK = "Sorry, I lost you for a moment. I'm back."
@@ -173,7 +180,9 @@ export let rang = async (env: Env, via: string, ring: Ring) => {
  * stream, carried to the space's object with the ticket the answer sealed.
  * The provider opens it again when the object restarts under it, as a deploy
  * restarts it, for as long as the call may last; a ticket older than that,
- * or not sealed here, opens nothing.
+ * or not sealed here, opens nothing, and is reported: the provider asks for
+ * a stream only on a call it was told to stream, so a refused one is a call
+ * that lost its stream.
  */
 export let streamDoor = async (req: Request, env: Env, now = Date.now()) => {
   if ((req.headers.get('upgrade') ?? '').toLowerCase() != 'websocket') {
@@ -181,7 +190,13 @@ export let streamDoor = async (req: Request, env: Env, now = Date.now()) => {
   }
   let sealed = new URL(req.url).searchParams.get('call') ?? ''
   let ticket = await opened<Ticket>('call', sealed, secretOf(env))
-  if (!ticket || now - ticket.at > (MINUTES + 1) * 60_000) {
+  let refused = !ticket
+    ? 'its ticket was not sealed here'
+    : now - ticket.at > (MINUTES + 1) * 60_000
+    ? `its ticket is ${Math.round((now - ticket.at) / 1000)} s old`
+    : undefined
+  if (!ticket || refused) {
+    defect(new Error(`A call's stream was refused: ${refused}`), CALL)
     return new Response(null, { status: 404 })
   }
   let { builderOf } = await import('./build-door.ts')
@@ -241,13 +256,17 @@ export type Around = {
   ask: (text: string) => Promise<void>
   /** what is said when the call is answered */
   hello: string
-  /** what the call cost to hear and carry, and how its turns were timed,
-   * once it ends */
+  /** what the call used since it was last charged: seconds of the line and
+   * the dollars of what it heard, every CHARGED and as it ends */
+  charge: (used: { seconds: number; heard: number }) => Promise<void>
+  /** what the call used in all, and how its turns were timed, once it ends */
   done: (
     call: { seconds: number; heard: number; turns: Timed[] },
   ) => Promise<void>
   hangup: () => Promise<void>
   minutes?: number
+  /** how often it charges, in milliseconds: CHARGED */
+  every?: number
   report?: (error: unknown) => void
 }
 
@@ -304,41 +323,63 @@ let held = (socket: Socket): Socket => ({
 
 // What every call shares: the caller's audio taken off the wire (`hear`),
 // audio played to them, each turn timed from their last word, the time
-// limit, and the call ended once (`close` answers what hearing cost).
+// limit, what it used charged as it goes (`heard` answers what hearing has
+// cost so far), and the call ended once (`close`). A line that closes or
+// fails before the provider says the call stopped is a stream the call lost.
 let carry = (
   o: Around,
   hear: (audio: Uint8Array) => void,
-  close: () => number,
+  heard: () => number,
+  close: () => void,
 ) => {
   let report = reporter(o)
   let wire = held(o.wire)
   let started = Date.now(), over = false
   let timers: ReturnType<typeof setTimeout>[] = []
+  let later = (ms: number, f: () => void) => timers.push(setTimeout(f, ms))
   let turns: Timed[] = []
   let turn: { at: number; timed: Timed } | undefined
   let finished: () => void
   let ended = new Promise<void>((resolve) => finished = resolve)
+  let used = { seconds: 0, heard: 0 }
+  let charge = () => {
+    let last = used
+    used = { seconds: (Date.now() - started) / 1000, heard: heard() }
+    return o.charge({
+      seconds: used.seconds - last.seconds,
+      heard: used.heard - last.heard,
+    }).catch(report)
+  }
+  let charging = () =>
+    later(o.every ?? CHARGED, () => {
+      charge()
+      charging()
+    })
+  charging()
   let finish = () => {
     if (over) return
     over = true
     for (let t of timers) clearTimeout(t)
-    let heard = close()
+    close()
     try {
       wire.close(1000)
     } catch {
       // Already closed by the other side.
     }
-    o.done({ seconds: (Date.now() - started) / 1000, heard, turns })
-      .catch(report).finally(finished)
+    Promise.all([charge(), o.done({ ...used, turns }).catch(report)])
+      .finally(finished)
+  }
+  let lost = (why: string) => () => {
+    if (!over) report(new Error(`A call's line ${why} before the call ended`))
+    finish()
   }
   wire.addEventListener('message', (event) => {
     let frame: Frame = o.line.frame(String(event.data))
     if (frame.audio) hear(frame.audio)
     if (frame.stop) finish()
   })
-  wire.addEventListener('close', finish)
-  wire.addEventListener('error', finish)
-  let later = (ms: number, f: () => void) => timers.push(setTimeout(f, ms))
+  wire.addEventListener('close', lost('closed'))
+  wire.addEventListener('error', lost('failed'))
   return {
     report,
     ended,
@@ -394,7 +435,8 @@ export let converse = (o: Talk): Call => {
   let c = carry(
     o,
     (audio) => stream?.send(audio),
-    () => stream?.close().dollars ?? 0,
+    () => stream?.spent().dollars ?? 0,
+    () => stream?.close(),
   )
   let queue = (play: (mine: number) => Promise<void>) => {
     let mine = generation
@@ -532,9 +574,10 @@ export let talking = (o: Talking): Call => {
   let c = carry(
     o,
     (audio) => talker?.send(audio),
+    () => talker?.spent().dollars ?? 0,
     () => {
       if (!dropping) kept()
-      return talker?.close().dollars ?? 0
+      talker?.close()
     },
   )
   let asking = false
@@ -680,6 +723,14 @@ export let answering = (
   let setup = setupOf(space)
   let speech = speechOf(env, setup.provider)
   if (!provider?.line || !provider.caller || !speech) {
+    defect(
+      new Error(
+        `A call's stream was refused: ${
+          speech ? `no line on ${ticket.via}` : 'speech is off'
+        }`,
+      ),
+      CALL,
+    )
     return new Response(null, { status: 404 })
   }
   let line = provider.line
@@ -714,7 +765,9 @@ export let answering = (
     line,
     hello: opens.hello,
     minutes: opens.minutes,
-    done: async ({ seconds, heard, turns }: Parameters<Around['done']>[0]) => {
+    charge: ({ seconds, heard }: Parameters<Around['charge']>[0]) =>
+      countedSpend(env, space, heard + seconds / 60 * line.perMinute, 0),
+    done: ({ seconds, turns }: Parameters<Around['done']>[0]) => {
       if (live.get(key) == call) live.delete(key)
       // How long each turn waited, for comparing providers and models.
       console.log(JSON.stringify({
@@ -726,12 +779,7 @@ export let answering = (
         seconds: Math.round(seconds),
         turns,
       }))
-      await countedSpend(
-        env,
-        space,
-        heard + seconds / 60 * line.perMinute,
-        0,
-      )
+      return Promise.resolve()
     },
     hangup: () => provider.caller!(settings(env)).hangup(ticket.call),
   }

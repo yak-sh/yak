@@ -203,6 +203,8 @@ export type Heard = { text: string; seconds: number; dollars: number }
 /** A stream being heard. */
 export type Turns = {
   send: (audio: Uint8Array) => void
+  /** the seconds heard so far, and what they cost */
+  spent: () => { seconds: number; dollars: number }
   close: () => { seconds: number; dollars: number }
 }
 
@@ -438,16 +440,20 @@ export let turns = (
     },
     (reason) => o.told.lost?.(reason),
   )
+  let spent = () => {
+    let seconds = bytes / perSecond(o.format)!
+    return { seconds, dollars: heard(o.provider, seconds, 'turns') }
+  }
   return {
     send: (audio) => {
       if (s.closed()) return
       bytes += audio.length
       s.send(t.audio(audio))
     },
+    spent,
     close: () => {
       s.close(t.closing)
-      let seconds = bytes / perSecond(o.format)!
-      return { seconds, dollars: heard(o.provider, seconds, 'turns') }
+      return spent()
     },
   }
 }
@@ -477,6 +483,8 @@ export type Talk = {
   send: (audio: Uint8Array) => void
   /** ask the model to say `text` */
   say: (text: string) => void
+  /** the seconds heard so far, and what the stream cost */
+  spent: () => { seconds: number; dollars: number }
   /** end the stream; what it cost */
   close: () => { seconds: number; dollars: number }
 }
@@ -548,6 +556,7 @@ export let talk = (
     say: (text) => {
       for (let m of t.say(text)) s.send(m)
     },
+    spent: () => ({ seconds: bytes / perSecond(o.format)!, dollars }),
     close: () => {
       s.close()
       return { seconds: bytes / perSecond(o.format)!, dollars }

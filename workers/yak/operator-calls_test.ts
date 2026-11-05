@@ -197,6 +197,81 @@ test('the stream door opens nothing without a ticket sealed here for a call that
   )
 })
 
+test('a stream reopened on a ticket too old for its call is refused and reported', async () => {
+  let { p, own, ana } = await fixture()
+  let rows: Bundle[][] = []
+  let env = {
+    ...p.env,
+    ERRORS: {
+      send: (sample: Bundle[]) => Promise.resolve(void rows.push(sample)),
+    },
+  }
+  let ticket = {
+    space: own,
+    person: ana,
+    call: 'v3:c',
+    from: ANA,
+    to: NUMBER,
+    via: 'telnyx',
+    at: Date.now() - 12 * 60_000,
+  }
+  let sealed = await seal('call', ticket, p.env.SESSION_SECRET!)
+  let refused = await within(env, {}, () =>
+    streamDoor(
+      new Request(
+        `https://yaks.app/telnyx/stream?call=${encodeURIComponent(sealed)}`,
+        { headers: { upgrade: 'websocket' } },
+      ),
+      env,
+    ), clock())
+  equal(refused.status, 404)
+  await until(() => rows.length == 1)
+  let [failure] = rows[0]
+  equal(
+    (failure.exception as { value: string }).value,
+    "A call's stream was refused: its ticket is 720 s old",
+  )
+  equal((failure.error as { tags: unknown }).tags, { request: 'operator call' })
+})
+
+test('a call charges what it used as it goes, so the object restarted under it and the stream opened again charge it all once', async () => {
+  let charged: { seconds: number; heard: number }[] = []
+  let lost: unknown[] = []
+  // Each opening hears a cent's worth a frame, and charges every 10 ms.
+  let opening = () => {
+    let cents = 0
+    return calling(undefined, {
+      every: 10,
+      charge: (used) => Promise.resolve(void charged.push(used)),
+      listen: () => ({
+        send: () => void cents++,
+        spent: () => ({ seconds: cents, dollars: cents / 100 }),
+        close: () => ({ seconds: cents, dollars: cents / 100 }),
+      }),
+      report: (e) => void lost.push(e),
+    })
+  }
+  let sum = () => charged.reduce((n, u) => n + u.heard, 0)
+  let audio = { event: 'media', media: { track: 'inbound', payload: 'AQI=' } }
+  let first = opening()
+  for (let i = 0; i < 3; i++) first.frame(audio)
+  // Charged before anything ended it.
+  await until(() => sum() == 0.03)
+  first.frame(audio)
+  // The object restarts: the line it carried is gone before the call ended.
+  first.wire.close()
+  await first.call.ended
+  equal(lost.map((e) => (e as Error).message), [
+    "A call's line closed before the call ended",
+  ])
+  let again = opening()
+  for (let i = 0; i < 2; i++) again.frame(audio)
+  again.frame({ event: 'stop' })
+  await again.call.ended
+  equal(sum().toFixed(2), '0.06')
+  equal(lost.length, 1)
+})
+
 test('an answer is texted once the call is over, to a caller who agreed to texts', async () => {
   let { p, ana, own } = await fixture()
   let texts = 0
@@ -238,6 +313,7 @@ let calling = (
       told = t
       return {
         send: (audio) => void heard.push(audio),
+        spent: () => ({ seconds: 1, dollars: 0.5 }),
         close: () => ({ seconds: 1, dollars: 0.5 }),
       }
     },
@@ -250,6 +326,7 @@ let calling = (
       return Promise.resolve()
     },
     hello: HI,
+    charge: () => Promise.resolve(),
     done: (cost) => {
       done.push(cost)
       return Promise.resolve()
@@ -274,6 +351,8 @@ let calling = (
     sent,
     frame,
     played,
+    /** the provider's side of the line */
+    wire: { close: () => on.close.forEach((h) => h({})) },
   }
 }
 
@@ -361,6 +440,7 @@ test('a call whose hearing stream is refused once the call is answered reports t
       report: undefined,
       listen: (told) => ({
         send: () => told.lost!('Turn detection is not supported'),
+        spent: () => ({ seconds: 0, dollars: 0 }),
         close: () => ({ seconds: 0, dollars: 0 }),
       }),
     }), clock())
@@ -415,6 +495,7 @@ let talkingCall = (real = false) => {
       return {
         send: (audio) => void heard.push(audio),
         say: (text) => void said.push(text),
+        spent: () => ({ seconds: 1, dollars: 0.25 }),
         close: () => ({ seconds: 1, dollars: 0.25 }),
       }
     },
@@ -424,6 +505,7 @@ let talkingCall = (real = false) => {
       return Promise.resolve()
     },
     hello: HI,
+    charge: () => Promise.resolve(),
     done: (call) => {
       done.push(call)
       return Promise.resolve()
