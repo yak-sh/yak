@@ -4,6 +4,7 @@ import { generatedImages, type Images } from './images.ts'
 // calls to the Responses API.
 import {
   acknowledged,
+  began,
   type CacheContext,
   cacheExpiry,
   type Item,
@@ -300,6 +301,7 @@ let ask = (opts: Options) => {
                 [opts.provider ?? OPENAI_COMP]: { response_id: id },
               })
             }
+            if (event.type == 'response.output_item.added') began(req)
             if (
               event.type == 'response.output_item.done' && record(event.item)
             ) {

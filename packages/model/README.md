@@ -527,7 +527,10 @@ recover its receipt or report an uncertain outcome.
 before the adapter consumes more output. `Request.onReceipt` receives private
 output before conversion, download, delivery or cost lookup, including partial
 media. These callbacks finish before the adapter proceeds; a storage failure
-stops it.
+stops it. `Request.onFirst` is told once, when the reply's first output arrives
+(text, reasoning or a tool call, or the whole reply from a request that does not
+stream); an adapter calls `began(req)` there, and the time to it is the
+request's time to first token.
 
 ```ts
 import { acknowledged, type Request, submitted } from '@yaks/model'

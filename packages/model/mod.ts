@@ -113,7 +113,7 @@ export {
   requestBound,
 } from './afford.ts'
 export { cachedPrefixExpires, cacheExpiry, prefixCacheMark } from './cache.ts'
-export { acknowledged, submitCall, submitted } from './submission.ts'
+export { acknowledged, began, submitCall, submitted } from './submission.ts'
 export type { CacheContext } from './cache.ts'
 import type { CacheContext } from './cache.ts'
 
@@ -202,6 +202,10 @@ export type Request = {
   onReceipt?: (receipt: MediaReceipt) => Promise<void>
   /** A private receipt is already durable when this checkpoint runs. */
   onMedia?: (receipt: MediaReceipt) => Promise<void>
+  /** The reply's first output reached us: a token of text, reasoning or a
+   * tool call, or the whole reply from a request that does not stream. Called
+   * once, so the time to it is the request's time to first token. */
+  onFirst?: () => void
   /** Optional cancellation of this request, not of independent tool processes. */
   signal?: AbortSignal
   onText?: (delta: TextDelta) => void

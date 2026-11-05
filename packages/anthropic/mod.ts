@@ -26,6 +26,7 @@
 import Anthropic from '@anthropic-ai/sdk'
 import {
   acknowledged,
+  began,
   type Item,
   type Listed,
   listPrice,
@@ -272,6 +273,8 @@ export let messages = (options: Options): Model => {
       // A text block's place among the reply's assistant items.
       let ordinal = new Map<number, number>()
       for await (let event of stream) {
+        // Any block, text, thinking or a tool call, is the reply's output.
+        if (event.type == 'content_block_start') began(req)
         if (event.type == 'message_start') {
           await acknowledged(req, {
             anthropic: { response_id: event.message.id },

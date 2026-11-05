@@ -24,6 +24,14 @@ export let submitted = async (req: Request): Promise<void> => {
   await req.onSubmit?.()
 }
 
+let begun = new WeakSet<Request>()
+/** The reply's first output arrived; tells `onFirst` the first time only. */
+export let began = (req: Request): void => {
+  if (begun.has(req)) return
+  begun.add(req)
+  req.onFirst?.()
+}
+
 /** Provider-owned components keep provider bookkeeping out of the host. */
 export let acknowledged = async (req: Request, mark: Mark): Promise<void> => {
   await req.onAck?.(mark)

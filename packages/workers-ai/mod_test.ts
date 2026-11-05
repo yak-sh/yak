@@ -368,10 +368,11 @@ test('a native model told to stream its text says each piece as it comes, and an
   let { asked, model } = binding(stream())
   let told: string[] = []
   let reply = await model(ask([{ kind: 'user', text: 'apps?' }], {
+    onFirst: () => told.push('first'),
     onText: (d) => told.push(d.text),
   }))
   assertEquals((asked[0].input as { stream?: boolean }).stream, true)
-  assertEquals(told, ['Looking', ' now.'])
+  assertEquals(told, ['first', 'Looking', ' now.'])
   assertEquals(reply.items, [
     { kind: 'assistant', text: 'Looking now.' },
     { kind: 'call', id: 'call-1', name: 'app_list', args: '{"space":1}' },
@@ -384,6 +385,8 @@ test('a native model told to stream its text says each piece as it comes, and an
 
 test('a request nobody listens to is answered whole', async () => {
   let { asked, model } = binding({ response: 'ok' })
-  await model(ask([{ kind: 'user', text: 'hi' }]))
+  let first = 0
+  await model(ask([{ kind: 'user', text: 'hi' }], { onFirst: () => first++ }))
   assertEquals('stream' in (asked[0].input as object), false)
+  assertEquals(first, 1)
 })

@@ -1,6 +1,7 @@
 /** Chat Completions for generated media and Alibaba explicit-cache models. */
 import {
   acknowledged,
+  began,
   cacheExpiry,
   type MediaReceipt,
   type MediaReceipts,
@@ -185,6 +186,10 @@ export let chat = async (
     let delta = obj(choice.delta ?? choice.message)
     let audioPart = obj(delta.audio)
     let said = str(delta.content) || str(audioPart.transcript)
+    if (
+      said || delta.reasoning || list(delta.tool_calls).length ||
+      audioPart.data || list(delta.images).length
+    ) began(req)
     if (said) {
       req.onText?.({ index: 0, text: said })
       text += said

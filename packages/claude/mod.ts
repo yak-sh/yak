@@ -9,6 +9,7 @@ import { claudeDoc } from './vocab.ts'
  */
 import {
   acknowledged,
+  began,
   type Item,
   type Listed,
   type Model,
@@ -199,6 +200,7 @@ export let claude = (opts: Options = {}): Model =>
               )
             }
             if (frame.error) throw new ModelError('claude', String(frame.error))
+            began(req)
             let message = frame.message
             let prior = reply?.items ?? []
             let output = items(message, req)

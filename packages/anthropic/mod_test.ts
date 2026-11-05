@@ -110,9 +110,10 @@ test('a request streams text, returns calls, and counts cache reads as input', a
     tokens: 500,
     onSubmit: () => Promise.resolve(void order.push('submit')),
     onAck: (mark) => Promise.resolve(void order.push(JSON.stringify(mark))),
+    onFirst: () => order.push('first'),
     onText: (d) => deltas.push(d),
   }))
-  equal(order, ['submit', '{"anthropic":{"response_id":"msg_1"}}'])
+  equal(order, ['submit', '{"anthropic":{"response_id":"msg_1"}}', 'first'])
   equal(deltas, [{ index: 0, text: 'Let me ' }, { index: 0, text: 'look.' }])
   equal(out.items, [
     { kind: 'assistant', text: 'Let me look.' },

@@ -32,6 +32,7 @@ export { listed, listing, modelInfo, pagePrice } from './list.ts'
 
 import {
   type Answer,
+  began,
   type Item,
   type MediaReceipt,
   type MediaReceipts,
@@ -467,11 +468,13 @@ export let streamed = async (
     id ||= str(at(chunk, 'id'))
     let delta = at(chunk, 'choices', 0, 'delta')
     let piece = str(at(delta, 'content') ?? at(chunk, 'response'))
+    let said = at(delta, 'tool_calls') ?? at(chunk, 'tool_calls')
+    let thought = at(delta, 'reasoning') ?? at(delta, 'reasoning_content')
+    if (piece || thought || Array.isArray(said) && said.length) began(req)
     if (piece) {
       text += piece
       req.onText?.({ index: 0, text: piece })
     }
-    let said = at(delta, 'tool_calls') ?? at(chunk, 'tool_calls')
     for (let c of Array.isArray(said) ? said : []) {
       let fn = at(c, 'function') ?? c
       let args = at(fn, 'arguments')
@@ -611,6 +614,7 @@ export let workersAi = (
         throw failure(e)
       }),
     )
+    if (!(response instanceof ReadableStream)) began(req)
     let out = response instanceof ReadableStream
       ? await streamed(response, req)
       : said(response)

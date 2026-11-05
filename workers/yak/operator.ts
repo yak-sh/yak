@@ -494,9 +494,11 @@ let stepwise = (handlers: Handlers): Handlers =>
     ]),
   )
 
-// How long a step took to ask its model, and the round trips it made on the
-// way, in the Worker's logs: store hops, bucket reads, and trips to the cached
-// Files door (files.ts `door`).
+// How long a step took to ask its model and hear its answer, and the round
+// trips it made on the way, in the Worker's logs: store hops, bucket reads,
+// and trips to the cached Files door (files.ts `door`). Its stage marks
+// include when the request was sent (`at_submit`) and when the reply's first
+// output arrived (`at_first_token`).
 let asked = (session?: string) => {
   let tally = ambient()
   let ms = tally && steps.has(tally) && since(tally)
@@ -770,7 +772,11 @@ export let operating = (
       ...req,
       onSubmit: async () => {
         await req.onSubmit?.()
-        asked(session ? String(session) : undefined)
+        reached('submit', null)
+      },
+      onFirst: () => {
+        reached('first_token', null)
+        req.onFirst?.()
       },
       ...heard
         ? {
@@ -780,7 +786,7 @@ export let operating = (
           },
         }
         : {},
-    })
+    }).finally(() => asked(session ? String(session) : undefined))
     if (session && heard) options.stepped?.(String(session))
     let cost = billed(reply, price)
     return { ...reply, cost: cost?.dollars, costReported: cost?.reported }
