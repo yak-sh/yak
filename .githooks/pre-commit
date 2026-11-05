@@ -2,7 +2,8 @@
 # Format what a commit carries, so an unformatted file never reaches main:
 # deno fmt rewrites each staged file in place and it is staged again. It
 # refuses nothing. A file with unstaged changes beside its staged ones is left
-# alone, since staging it again would commit those too.
+# alone, since staging it again would commit those too. The workspace config
+# is named, since a yaks app's package.json beside a file would replace it.
 
 git diff --cached --name-only --diff-filter=ACMR -z |
   tr '\0' '\n' |
@@ -10,6 +11,7 @@ git diff --cached --name-only --diff-filter=ACMR -z |
   while IFS= read -r file
   do
     git diff --quiet -- "$file" || continue
-    deno fmt --quiet -- "$file" 2>/dev/null && git add -- "$file"
+    deno fmt --config deno.json --quiet -- "$file" 2>/dev/null &&
+      git add -- "$file"
   done
 exit 0
