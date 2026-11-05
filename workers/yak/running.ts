@@ -229,8 +229,9 @@ export let skewed = async (
   let theirs = caller(headers), here = versionOf(mine)
   if (answer.status < 400 || answer.status >= 500) return null
   if (!theirs || !here || !newer(theirs, here)) return null
-  let said: { message?: unknown } | null = await answer.clone().json()
-    .catch(() => null)
+  let said = await answer.clone().json().catch(() => null) as
+    | { message?: unknown }
+    | null
   let why = typeof said?.message == 'string' ? said.message : answer.status
   return Object.assign(new Error(`${SKEWED} ${why}`), {
     name: 'Skewed',
