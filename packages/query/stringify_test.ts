@@ -2,7 +2,16 @@
 
 import { test } from '@yaks/testing'
 import { assertEquals, assertThrows } from '@std/assert'
-import { and, contains, eq, list, parse, scalar, stringify } from './mod.ts'
+import {
+  and,
+  contains,
+  eq,
+  list,
+  parse,
+  range,
+  scalar,
+  stringify,
+} from './mod.ts'
 
 let back = (q: string) => assertEquals(parse(stringify(parse(q))), parse(q), q)
 
@@ -95,10 +104,21 @@ test('a built tree is written in the grammar', () => {
   assertEquals(stringify('.left as=is'), '.left as=is')
 })
 
-test('a value the grammar cannot say throws rather than say another', () => {
-  for (let v of ['a,b', '1..5']) {
-    assertThrows(() => stringify(and(eq('doc.title', v))), SyntaxError)
+test('a literal comma or range marker is written quoted', () => {
+  for (let v of ['a,b', '1..5', 'Hi, there.']) {
+    let q = and(eq('doc.title', v))
+    assertEquals(parse(stringify(q)), q)
   }
+  let quotedList = and(eq('tag', list('a, b', 'c', range('1', '5'))))
+  assertEquals(stringify(quotedList), '.tag="a, b",c,1..5')
+  assertEquals(parse(stringify(quotedList)), quotedList)
+})
+
+test('a value the grammar cannot say throws rather than say another', () => {
+  assertThrows(
+    () => stringify(and(eq('t', range('a,b', 'c')))),
+    SyntaxError,
+  )
   assertThrows(() => stringify(contains('t', list('a', 'b'))), SyntaxError)
   assertEquals(
     parse(stringify(and(contains('doc.title', scalar('a,b..c'))))),

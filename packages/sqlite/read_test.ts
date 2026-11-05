@@ -63,19 +63,15 @@ test('literal inequality and parsed any-of select different operands', () => {
   assertEquals(eids(s.read('.doc.title=a,b')), ['literal-2', 'literal-3'])
 })
 
-test('quoted query lists and ranges select their members', () => {
+test('a quoted query value is one literal', () => {
   let s = literalStore
   for (let q of ['.doc.title="a,b"', ".doc.title='a,b'"]) {
-    assertEquals(eids(s.read(q)), ['literal-2', 'literal-3'])
+    assertEquals(eids(s.read(q)), ['literal-0'])
   }
   for (let q of ['.doc.title="a..b"', ".doc.title='a..b'"]) {
-    assertEquals(eids(s.read(q)), [
-      'literal-0',
-      'literal-1',
-      'literal-2',
-      'literal-3',
-    ])
+    assertEquals(eids(s.read(q)), ['literal-1'])
   }
+  assertEquals(eids(s.read('.doc.title="a,b",a')), ['literal-0', 'literal-2'])
 })
 
 let literalRefs = (() => {

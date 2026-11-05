@@ -137,9 +137,9 @@ component prefix or an operator identifies a clause. Malformed clauses throw
 | `!comp` / `!comp.prop`        | absent                                    |
 | `?comp` / `?comp.prop`        | requested when present, without filtering |
 
-Contains keeps its entire value as one scalar, including commas or `..`. The
-other operators parse list and range structure, including a whole quoted
-operand. Quotes group tokens; they do not turn that structure into a literal.
+A quoted value is one literal, as its author typed it: commas and `..` inside
+quotes are text. Contains keeps its entire value as one scalar, quoted or not.
+The other operators read list and range structure only outside quotes.
 
 ```ts
 import {
@@ -184,14 +184,17 @@ with no spaces and no empty members. `.p=a,b` is one predicate; `.p=a, b`
 throws. A comma between valued clauses can follow whitespace: `.p=a, .q=b`.
 
 Quote values containing spaces, using single or double quotes; a backslash
-inside quotes escapes the next character. `.entity.eid="a,b"` selects either id,
-and `.priority="1..5"` compares against the range. Literal equality with commas
-or range markers is expressed by an AST scalar, such as
-`eq('doc.title', 'a,b..c')`. Contains (`~=`) keeps these characters literal in
-string queries too. Unquoted `.doc.title~=two words` is a predicate containing
-`two` followed by the text term `words`. Paths with operators may omit the
-leading dot: `task.status=open` and `.task.status=open` parse alike. Without an
-operator, `task` is a text term and `.task` tests presence.
+inside quotes escapes the next character. A quoted value is one literal:
+`.doc.body="Hi, there."` equals that sentence, and `.priority="1..5"` equals the
+text `1..5`. A list of quoted values quotes each member, with the commas between
+them outside the quotes: `.doc.title="Hi, there.","Bye"` selects either title,
+and `.entity.eid=a,b` either id. A written word (`+comp.prop=`, `*comp.prop=`)
+takes one value, so a list or range there is refused with a message saying to
+quote it, never written as nothing. Unquoted `.doc.title~=two words` is a
+predicate containing `two` followed by the text term `words`. Paths with
+operators may omit the leading dot: `task.status=open` and `.task.status=open`
+parse alike. Without an operator, `task` is a text term and `.task` tests
+presence.
 
 `conjoin()` combines query strings so each narrows the whole of the others,
 grouping a string with a top-level `|` before joining it.

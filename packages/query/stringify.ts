@@ -7,9 +7,9 @@
 // `or` grouped wherever it sits beside other terms, a value quoted where the
 // grammar would read it as structure. A few trees have no text form, because
 // the grammar has no way to say them (README, Separators, grouping, and
-// quoting): an equality on a value holding a comma or a range marker, a
-// reverse association whose child test is not a single predicate. Those throw
-// rather than write a different query.
+// quoting): a range bound holding a comma or a range marker, a reverse
+// association whose child test is not a single predicate. Those throw rather
+// than write a different query.
 
 import type { Clause, Pred, Value } from './ast.ts'
 import { parseDot } from './parse.ts'
@@ -22,25 +22,27 @@ let SPECIAL = /[\s&|()"']|^[=<>~!-]|^$/
 let quoted = (raw: string) => `"${raw.replace(/["'\\]/g, '\\$&')}"`
 let plain = (raw: string) => SPECIAL.test(raw) ? quoted(raw) : raw
 
-// A value as raw text. A value is split on commas and read for `..` after its
-// quotes come off, so neither can be quoted away inside a scalar, and a range's
-// bounds are scalars.
-let raw = (v: Value): string => {
-  if (v.kind == 'scalar' || v.kind == 'time') {
-    if (/,|\.\./.test(v.raw)) throw unwritable(`the value ${v.raw}`)
-    return v.raw
-  }
-  if (v.kind == 'list' || v.lo.kind == 'range' || v.hi.kind == 'range') {
+// A value as text. A quoted member is one literal, so a scalar holding a comma
+// or `..` is quoted; a range's bounds sit unquoted around its `..`, so a bound
+// holding either has no text form.
+let bound = (v: Value): string => {
+  if (v.kind != 'scalar' && v.kind != 'time') {
     throw unwritable('a value nested in a value')
   }
-  let lo = raw(v.lo), hi = raw(v.hi)
+  if (/,|\.\./.test(v.raw)) throw unwritable(`the range bound ${v.raw}`)
+  return v.raw
+}
+let member = (v: Value): string => {
+  if (v.kind == 'scalar' || v.kind == 'time') {
+    return /,|\.\./.test(v.raw) ? quoted(v.raw) : plain(v.raw)
+  }
+  if (v.kind == 'list') throw unwritable('a value nested in a value')
+  let lo = bound(v.lo), hi = bound(v.hi)
   if (lo.endsWith('.') || hi.startsWith('.')) throw unwritable(`${lo}..${hi}`)
-  return `${lo}${v.exclusiveEnd ? '...' : '..'}${hi}`
+  return plain(`${lo}${v.exclusiveEnd ? '...' : '..'}${hi}`)
 }
 let value = (v: Value): string =>
-  v.kind == 'list'
-    ? v.items.map((item) => plain(raw(item))).join(',')
-    : plain(raw(v))
+  v.kind == 'list' ? v.items.map(member).join(',') : member(v)
 
 // A bare word is a text term unless it reads as a clause, a group, `*` (or
 // `?*`) or a list; then it is quoted.

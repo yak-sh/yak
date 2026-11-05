@@ -48,11 +48,11 @@ filter. A malformed clause throws rather than becoming a search term.
 - Whitespace, `&` and `,` between terms all mean AND; `&` survives a URL.
   `|` is OR and binds looser: `.a .b|.c` is `(a and b) or c`; parentheses
   group. Inside a value `,` means any-of, and a list has no spaces.
-- Quotes group tokens; list and range syntax inside a whole quoted operand
-  still applies: `.entity.eid="a,b"` selects either id. The query string is a
-  published door that shipped apps keep sending, so a parser change preserves
-  its answers. AST scalars are literal values; preserving them through readers
-  does not require changing the string grammar.
+- A quoted value is one literal: `+doc.body="Hi, there."` writes the sentence
+  and `.p="1..5"` equals the text. A list of quoted values quotes each member:
+  `.doc.title="Hi, there.","Bye"`. A written word (`+`/`*comp.prop=`) takes one
+  value and refuses a list or range. The query string is a published door that
+  shipped apps keep sending, so a parser change preserves its answers.
 - A value with a space is quoted: `.created.at>'1 hour ago'`. Unquoted, the
   second word becomes a search term.
 - The leading dot may be dropped after an operator (`task.status=open`), but

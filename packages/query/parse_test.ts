@@ -60,13 +60,18 @@ let cases: [string, ReturnType<typeof and>][] = [
   // quoted first and last members are still three, never one quoted value
   [".tag='a b',c,'d e'", and(eq('tag', list('a b', 'c', 'd e')))],
   ['.tag="a\\"b",c', and(eq('tag', list('a"b', 'c')))],
-  // Quotes group the operand; list and range syntax still has its meaning.
-  ['.tag="a,b"', and(eq('tag', list('a', 'b')))],
-  [".tag='a,b'", and(eq('tag', list('a', 'b')))],
-  [".tag='a..b'", and(eq('tag', range('a', 'b')))],
-  ['.tag=x,"a..b"', and(eq('tag', list('x', range('a', 'b'))))],
+  // A quoted value is one literal, as its author typed it: a comma or `..`
+  // inside quotes is text. A list of quoted values quotes each member.
+  ['.body="Hi, there."', and(eq('body', 'Hi, there.'))],
+  ['.tag="a,b"', and(eq('tag', 'a,b'))],
+  [".tag='a,b'", and(eq('tag', 'a,b'))],
+  [".tag='a..b'", and(eq('tag', 'a..b'))],
+  ['.tag="a, b","c"', and(eq('tag', list('a, b', 'c')))],
+  ['.tag=x,"a..b"', and(eq('tag', list('x', 'a..b')))],
+  ['.tag=x,a..b', and(eq('tag', list('x', range('a', 'b'))))],
+  ['$x="a, b"', and({ kind: 'var', name: 'x', value: scalar('a, b') })],
   [
-    '.entity.eid="root,dependent"',
+    '.entity.eid=root,dependent',
     and(eq('entity.eid', list('root', 'dependent'))),
   ],
   ['.priority=1..5', and(eq('priority', range('1', '5')))],
@@ -400,6 +405,10 @@ refused([
   ['.requires->a,b', 'one entity'],
   ['.edges[a,b,c]', 'one edge type'],
   ['.edges[<=3]', 'one edge type'],
+  // a written property takes one value; an unquoted comma makes a list
+  ['+doc.body=Hi,there', 'is a list; quote a value'],
+  ['+doc.body="Hi, there.",x', 'is a list; quote a value'],
+  ['*task.priority=1..3', 'is a range; quote a value'],
   // a kept release's suffix excuses no bracket
   ['.drill[foo]!', 'no qualifier'],
   ['.doc[foo]?', 'no qualifier'],
@@ -512,5 +521,17 @@ test('nested reverse negations preserve each quantifier', () => {
   assertEquals(
     parse('.comments.reviews!.stars=5'),
     and({ kind: 'pred', path: ['comments'], op: '!', value: null, where: one }),
+  )
+})
+
+test('a quoted sentence is the one value a rule writes', () => {
+  assertEquals(
+    parse('+doc.body="Hi, there."'),
+    and({
+      kind: 'ensure',
+      comp: 'doc',
+      prop: 'body',
+      value: scalar('Hi, there.'),
+    }),
   )
 })

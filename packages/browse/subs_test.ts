@@ -17,8 +17,9 @@ let cases = ([
   ['.order=hot', []],
   ['.filed.assignee.doc.title~=jeff', []],
   ['.updated.at=today', ['moving-time']],
-  ['.updated.at="today,yesterday"', ['moving-time']],
-  ['.updated.at=today,"today,yesterday"', []],
+  ['.updated.at=today,yesterday', ['moving-time']],
+  // a quoted value is one literal, and that text names no time
+  ['.updated.at="today,yesterday"', []],
   ['.updated.at>="1 hour ago"', ['moving-time']],
 ] as [string, string[]][]).map(([q, want]) => ({
   q,

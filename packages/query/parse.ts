@@ -53,10 +53,10 @@ let closes = (v: string): number => {
   }
   return -1
 }
-let stripQuotes = (v: string): string =>
+let isQuoted = (v: string): boolean =>
   (v[0] == '"' || v[0] == "'") && closes(v) == v.length - 1
-    ? v.slice(1, -1).replace(/\\(.)/gs, '$1')
-    : v
+let stripQuotes = (v: string): string =>
+  isQuoted(v) ? v.slice(1, -1).replace(/\\(.)/gs, '$1') : v
 
 // A split on `sep` that leaves quoted runs whole — and, when asked, leaves a
 // path's bracket whole too, since its commas separate its own arguments.
@@ -103,16 +103,20 @@ let atom = (raw: string): Value => {
   return { kind: 'range', lo: scalar(lo), hi: scalar(hi), exclusiveEnd: !!excl }
 }
 
+// One member as its author typed it: quoted, it is one literal scalar, commas,
+// `..` and all; bare, it is an atom.
+let member = (raw: string): Value =>
+  isQuoted(raw) ? scalar(stripQuotes(raw)) : atom(raw)
+
 // A whole value: a comma-separated list means any-of; a single part is its
-// atom. A member is never empty — `open,,wip` and a trailing comma are refused
-// rather than repaired — and a member containing a space was quoted, so the
-// quotes come off here.
+// member. A member is never empty — `open,,wip` and a trailing comma are
+// refused rather than repaired. A list of quoted members quotes each one:
+// `"a, b","c"` is two members, `"a, b"` one.
 let value = (raw: string): Value => {
-  if (!raw.includes(',')) return atom(raw)
   let items = splitOutside(raw, ',')
-  if (items.length == 1) return atom(raw)
+  if (items.length == 1) return member(raw)
   if (items.some((s) => !s)) throw new SyntaxError(LIST)
-  return { kind: 'list', items: items.map((s) => atom(stripQuotes(s))) }
+  return { kind: 'list', items: items.map(member) }
 }
 
 // ---- component names ----
@@ -343,6 +347,14 @@ export let parseDot = (token: string): Clause[] | null => {
         `a written word names a component and a property: ${token}`,
       )
     }
+    // A property holds one value, so a list or a range here would write
+    // nothing; the author meant a literal and is told how to say one.
+    if (c.value.kind == 'list' || c.value.kind == 'range') {
+      throw new SyntaxError(
+        `a written word takes one value, and ${token} is a ${c.value.kind}; ` +
+          `quote a value with a comma or .. in it: ${mark}doc.body="Hi, there."`,
+      )
+    }
     let [comp, prop] = c.path
     return [
       mark == '+'
@@ -499,9 +511,10 @@ export let parseDot = (token: string): Clause[] | null => {
   if (!rawValue && op == '!=') throw spelled(token, `.${pathStr}`)
 
   // An ordinary predicate. Contains (`~=`) is deliberately literal, so its
-  // value is one raw scalar; every other form parses list and range structure.
+  // value is one raw scalar; every other form parses list and range structure
+  // outside quotes.
   if (op == '~=') return [{ kind: 'pred', path: segs, op, value: scalar(val) }]
-  return [{ kind: 'pred', path: segs, op: op as Op, value: value(val) }]
+  return [{ kind: 'pred', path: segs, op: op as Op, value: value(rawValue) }]
 }
 
 // ---- tokenizing a whole query ----
@@ -591,9 +604,10 @@ export type ParseOpts = {
 }
 
 // A token that has already taken an operator, so every comma after it is part
-// of its value rather than a separator.
+// of its value rather than a separator: a predicate, a written word
+// (`+doc.body=`, `*doc.body=`) or a bound variable (`$x=`).
 let VALUED = new RegExp(
-  `^\\.?${WORD}(?:\\[[^\\]]*\\])?(?:!=|~=|<=|>=|->|<-|<|>|=)`,
+  `^[.+*$]?${WORD}(?:\\[[^\\]]*\\])?(?:!=|~=|<=|>=|->|<-|<|>|=)`,
 )
 
 /**

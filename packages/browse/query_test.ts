@@ -20,13 +20,17 @@ let select = (q: string) => {
   return titles.filter((title) => matchQuery({ doc: { title } }, preds))
 }
 
-test('browser matching keeps a quoted list a list, which no drop adopts', () => {
-  assertEquals(select('.doc.title="a,b"'), ['a', 'b'])
-  assertEquals(adopt(parse('.doc.title="a,b"'), vocab), {})
+test('browser matching and drops take a quoted value as one literal', () => {
+  assertEquals(select('.doc.title="a,b"'), ['a,b'])
+  assertEquals(select(".doc.title='a..b'"), ['a..b'])
+  assertEquals(adopt(parse('.doc.title="a,b"'), vocab), {
+    doc: { title: 'a,b' },
+  })
 })
 
-test('browser matching keeps a quoted range a range', () => {
-  assertEquals(select(".doc.title='a..b'"), titles)
+test('browser matching reads a bare list, which no drop adopts', () => {
+  assertEquals(select('.doc.title=a,b'), ['a', 'b'])
+  assertEquals(adopt(parse('.doc.title=a,b'), vocab), {})
 })
 
 test('browser matching keeps a quoted list item whole and reads a bare range', () => {
