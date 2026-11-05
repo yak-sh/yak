@@ -986,9 +986,20 @@ export let connecting = async (
     await connect(c, eid, { key })
     await rebound(env, apps)
     let [now] = await c.graph.read(`.entity.eid=${eid}&.${CONNECTION}&*`)
-    return now?.exception
-      ? no(String(comp(now, 'content').body ?? 'The key could not be saved.'))
-      : { say: 'Saved. The key is kept safe and never shown again.', no: false }
+    if (now?.exception) {
+      return no(
+        String(comp(now, 'content').body ?? 'The key could not be saved.'),
+      )
+    }
+    // A person's own number is set up once its key is kept (operator-line.ts).
+    if (integrationOf(now) == 'voipms') {
+      let { lined } = await import('./operator-line.ts')
+      return await lined(env, eid)
+    }
+    return {
+      say: 'Saved. The key is kept safe and never shown again.',
+      no: false,
+    }
   } catch (e) {
     caught(e, { request: 'POST /manage/connections' })
     return no(e instanceof Error ? e.message : "That didn't work.")

@@ -7,6 +7,7 @@ import { Unsent } from '@yaks/host/senders'
 import {
   type Arrival,
   Blocked,
+  Denied,
   type Outcome,
   type Receipt,
   type Sender,
@@ -50,9 +51,10 @@ type Said = {
 /**
  * A {@link Sender} over Telnyx's messaging API. A text with an `agent` goes
  * as RCS, falling back to SMS from `from` on a phone without it. A refusal
- * Telnyx lists in {@link TELNYX}.blocked rejects with {@link Blocked}; a
- * connection that failed, a 429 or a 5xx rejects with `Unsent`, since the
- * text never left; anything else with an Error carrying Telnyx's words.
+ * Telnyx lists in {@link TELNYX}.blocked rejects with {@link Blocked}; a 401,
+ * a key Telnyx refused, with {@link Denied}; a connection that failed, a 429
+ * or a 5xx rejects with `Unsent`, since the text never left; anything else
+ * with an Error carrying Telnyx's words.
  */
 export let telnyx = (
   { key, profile, tollFree, api = TELNYX.api, fetch: given }: Telnyx,
@@ -85,6 +87,7 @@ export let telnyx = (
     if (response.status == 429 || response.status >= 500) {
       throw new Unsent(words, 30_000)
     }
+    if (response.status == 401) throw new Denied(words, code)
     throw new Error(words)
   }
   // The profile and its number, asked once and kept while they answer.

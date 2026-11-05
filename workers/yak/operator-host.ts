@@ -2,7 +2,13 @@ import type { Bundle } from '@yaks/graph'
 import { draftEid } from '@yaks/draft'
 import type { Held } from './build-door.ts'
 import { type Operator, readOperator } from './operator.ts'
-import { letterOf, receive, type Request, rootOf } from './operator-channels.ts'
+import {
+  letterOf,
+  receive,
+  type Request,
+  rootOf,
+  textOf,
+} from './operator-channels.ts'
 import type { operatorStore } from './operator-store.ts'
 import { transcript } from '@yaks/session'
 import { stepOf } from '@yaks/tools/title'
@@ -517,10 +523,12 @@ let drafts = (bundles: Bundle[], person: string) =>
   }))
 
 /**
- * A reply to a letter the Operator wrote, which the kernel brings (inbox.ts)
- * from someone who need be nobody here: `/operator/letter` finds the letter
- * its Message-IDs name (`thread`), and `/operator/replied` puts it in the
- * conversation of the person the letter was written for.
+ * A reply to a letter or text the Operator wrote, which the kernel brings
+ * from someone who need be nobody here: a letter's (inbox.ts) by the
+ * Message-IDs it names (`thread`), a text's (operator-line.ts) by the numbers
+ * it went between (`texted`). `/operator/letter` finds the letter, and
+ * `/operator/replied` puts the reply in the conversation of the person the
+ * letter or text was written for.
  */
 export let operatorReply = async (
   operator: Operator,
@@ -531,10 +539,13 @@ export let operatorReply = async (
 ): Promise<Response> => {
   let { store } = operator
   let thread = Array.isArray(args.thread) ? args.thread.map(String) : []
-  let letter = await letterOf(store, thread)
+  let texted = args.texted as { from: string; to: string } | undefined
+  let letter = texted
+    ? await textOf(store, texted)
+    : await letterOf(store, thread)
   if (!letter) {
     return Response.json(
-      { message: 'That answers no letter of the Operator.' },
+      { message: 'That answers no letter or text of the Operator.' },
       {
         status: 404,
       },
@@ -549,8 +560,10 @@ export let operatorReply = async (
     store,
     {
       ...args.request as Request,
-      channel: 'letter',
-      person: String(comp(letter, 'operator_letter')!.person),
+      channel: texted ? 'texted' : 'letter',
+      person: String(
+        comp(letter, texted ? 'operator_text' : 'operator_letter')!.person,
+      ),
       space,
     },
     String(args.say ?? ''),

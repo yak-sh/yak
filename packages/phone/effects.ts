@@ -7,10 +7,18 @@ import type { Options } from './options.ts'
 import { sending } from './send.ts'
 import { type Stash, stash } from './stash.ts'
 import { telnyx } from './telnyx.ts'
+import { voipms } from './voipms.ts'
+
+// What each sender needs said before it can send.
+let NEEDS = {
+  telnyx: 'a telnyx sender needs `key` and `profile`',
+  voipms: 'a voipms sender needs `user` and `key`',
+}
 
 /** `text_post`, through the sender the config names. With none, or a
- * Telnyx sender missing its key or profile, a text waits in the graph with
- * the reason and is tried again a minute later. */
+ * Telnyx sender missing its key or profile or a voip.ms one its user or key,
+ * a text waits in the graph with the reason and is tried again a minute
+ * later. */
 export let effects = (_host?: unknown, options: Options = {}): Handlers => {
   let kept: Stash | undefined
   return {
@@ -20,10 +28,17 @@ export let effects = (_host?: unknown, options: Options = {}): Handlers => {
         ? kept ??= stash()
         : said?.via == 'telnyx' && said.key && said.profile
         ? telnyx({ key: said.key, profile: said.profile, api: said.api })
+        : said?.via == 'voipms' && said.user && said.key
+        ? voipms({
+          user: said.user,
+          key: said.key,
+          number: said.number,
+          api: said.api,
+        })
         : null
       if (sender) return sending({ sender })(event, tx, write, attempt)
-      let reason = said
-        ? 'waiting for credentials: a telnyx sender needs `key` and `profile`'
+      let reason = said?.via == 'telnyx' || said?.via == 'voipms'
+        ? `waiting for credentials: ${NEEDS[said.via]}`
         : 'waiting for a configured sender'
       await write([{ entity: event.entity, deliver: { waiting: reason } }])
       if (attempt?.defer) return attempt.defer(60_000)

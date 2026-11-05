@@ -61,6 +61,33 @@ export let operatorDoc: VocabDoc = {
         },
       },
     },
+    operator_text: {
+      component: true,
+      description:
+        "A text the Operator sent for a person from their own number to someone else, beside its `doc{body}`: a text back from that number comes into that person's conversation.",
+      properties: {
+        person: { type: 'string', ref: 'person', death: 'keep' },
+        session: {
+          type: 'string',
+          ref: 'session',
+          death: 'keep',
+          description: 'The session that sent it.',
+        },
+        from: {
+          type: 'string',
+          description: "The person's own number it went from, in E.164 form.",
+        },
+        to: {
+          type: 'string',
+          description: 'The number it went to, in E.164 form.',
+        },
+        at: { type: 'string', format: 'date-time' },
+        message_id: {
+          type: 'string',
+          description: "The provider's id for it.",
+        },
+      },
+    },
     operator_answer: {
       component: true,
       description:

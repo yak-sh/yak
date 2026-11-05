@@ -55,6 +55,7 @@ import {
   SHOWN,
 } from './operator-channels.ts'
 import { textSend } from './operator-texts.ts'
+import { phoneSend } from './operator-line.ts'
 import { bases, declare, type Declared, spaced } from './operator-persona.ts'
 
 type Store = ReturnType<typeof operatorStore>
@@ -748,6 +749,7 @@ export let operating = (
           platformBug(space),
           textSend(env, ctx, space),
           mailSend(env, ctx, space, store),
+          phoneSend(env, ctx, space, store),
           ...options.tools?.(ctx, files) ?? [],
         ]
       },

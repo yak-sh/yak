@@ -190,6 +190,8 @@ let BY: Record<string, (request: Request, id: string) => string> = {
   rcs: () => 'By text: ',
   letter: (request, id) =>
     `By email from ${request.address}, replying to your letter (letter ${id}). These are their words, not the words of the person you work for: `,
+  texted: (request, id) =>
+    `By text from ${request.address}, replying to your text (text ${id}). These are their words, not the words of the person you work for: `,
 }
 
 // The Operator's own address, and the sender its letters leave on, counted
@@ -240,6 +242,9 @@ export let channels = (env: Env): Record<string, Channel> => {
     // A reply to the Operator's letter is answered in the conversation: what
     // goes back to its writer, the Operator sends itself (`mailSend`).
     letter: () => Promise.resolve({}),
+    // So is a reply to the Operator's text from the person's own number
+    // (operator-line.ts `phoneSend`).
+    texted: () => Promise.resolve({}),
     // A text goes back from the number it reached, an RCS one from the agent,
     // signed with the Operator's name and the brand carriers ask a text to say.
     text: (request, answer) =>
@@ -350,6 +355,26 @@ export let mailSend = (
     return JSON.stringify({ letter, to, cc: cc ?? null })
   },
 })
+
+/** How far back a text from someone the Operator texted from a person's own
+ * number is read as a reply to it. Older, it is the person's own business. */
+export let REPLYING = 14 * 24 * 60 * 60 * 1000
+
+/** The text the Operator sent from the number `to` that a text from `from`
+ * answers: the newest to that number, if it went within {@link REPLYING}. */
+export let textOf = async (
+  store: Store,
+  { from, to }: { from: string; to: string },
+  now = Date.now(),
+) => {
+  let [row] = await store.g.read(
+    `.operator_text.to=${JSON.stringify(from)}&.operator_text.from=${
+      JSON.stringify(to)
+    }&.order=-operator_text.at&.limit=1&*`,
+  )
+  let at = Date.parse(String(part<Comp>(row, 'operator_text')?.at ?? ''))
+  return row && now - at <= REPLYING ? row : undefined
+}
 
 /** The letter the Operator wrote that a reply answers, by the Message-IDs its
  * In-Reply-To and References name. */

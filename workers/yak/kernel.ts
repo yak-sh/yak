@@ -228,6 +228,12 @@ let serve = async (req: Request, env: Env, r: Route) => {
     let { telnyxDoor } = await import('./operator-texts.ts')
     return telnyxDoor(req, env)
   }
+  // Texts to a person's own number, as voip.ms's callback sends them
+  // (operator-line.ts).
+  if (path.startsWith('/voipms/')) {
+    let { lineDoor } = await import('./operator-line.ts')
+    return lineDoor(req, env)
+  }
   // What the platform takes from a sale (sell.ts `fees`, T-34554), read and
   // set by whoever owns the `yak` space. Before the connector, for the reason
   // the billing doors are: `/api/*` at the apex is otherwise all mcp.ts's, and

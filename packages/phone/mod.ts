@@ -33,6 +33,7 @@ export let consentEid = (person: string): string =>
 export {
   type Arrival,
   Blocked,
+  Denied,
   type Keyword,
   keyword,
   type Outcome,
@@ -41,6 +42,15 @@ export {
   type Text,
 } from './text.ts'
 export { heard, TELNYX, type Telnyx, telnyx } from './telnyx.ts'
+export {
+  type Account,
+  called,
+  e164,
+  type Line,
+  VOIPMS,
+  type Voipms,
+  voipms,
+} from './voipms.ts'
 export { type Stash, stash } from './stash.ts'
 export { arrivalEid, kept, settled } from './received.ts'
 export { owed, sending, type Texting } from './send.ts'

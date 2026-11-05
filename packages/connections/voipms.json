@@ -1,0 +1,10 @@
+{
+  "name": "voipms",
+  "title": "voip.ms",
+  "tagline": "Your own phone number: your Operator texts the people you ask it to from it.",
+  "site": "https://voip.ms",
+  "hosts": [
+    "voip.ms"
+  ],
+  "instructions": "On voip.ms, open Main Menu, then SOAP & REST/JSON API. Enable the API, set an API password, enter 0.0.0.0 under Enable IP Addresses (yaks.app calls from changing addresses) and save each. Then paste your voip.ms sign-in email and that API password here with a colon between them, like you@example.com:your-api-password. Your Operator texts from the first number on the account with SMS turned on, and yaks.app points that number's SMS URL callback at your Operator, so replies to its texts reach your conversation; every other way its texts reach you stays as it is."
+}

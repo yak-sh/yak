@@ -1,6 +1,7 @@
 // Texting's shapes: a text on its way out, one that arrived, what became of
 // one that left, and the keywords a person texts to stop or ask for help.
-// No provider is named here; ./telnyx.ts is one, given as data.
+// No provider is named here; ./telnyx.ts and ./voipms.ts are two, given as
+// data.
 
 /** One text, composed and ready to leave. */
 export type Text = {
@@ -23,7 +24,8 @@ export type Receipt = {
 
 /** A sender resolves when the text is accepted and rejects when it is not:
  * {@link Blocked} when the carrier will not carry it, through nobody's fault
- * here; any other rejection is a failure. */
+ * here; {@link Denied} when the provider refused the credentials; any other
+ * rejection is a failure. */
 export type Sender = { send: (text: Text) => Promise<Receipt> }
 
 /** A text that arrived. */
@@ -60,6 +62,18 @@ export class Blocked extends Error {
   constructor(message: string, code = '') {
     super(message)
     this.name = 'Blocked'
+    this.code = code
+  }
+}
+
+/** The provider refused the credentials it was given: the key is wrong, or
+ * the account does not let this address call. Nothing about the text is
+ * wrong; whoever holds the account mends it, and the message says how. */
+export class Denied extends Error {
+  code: string
+  constructor(message: string, code = '') {
+    super(message)
+    this.name = 'Denied'
     this.code = code
   }
 }

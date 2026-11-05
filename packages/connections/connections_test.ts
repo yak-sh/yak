@@ -495,6 +495,7 @@ test('the integration directory: every built one but those in testing, and each 
     'OpenAI',
     'OpenRouter',
     'texts',
+    'voip.ms',
   ])
   let [esv] = await listing(g.read, 'API.ESV.org esv')
   assert(esv.listed && esv.instructions == undefined)
