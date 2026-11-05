@@ -4065,9 +4065,22 @@
             "npm:@yaks/hook@0.2.17",
             "npm:@yaks/host@0.2.17",
             "npm:@yaks/mail@0.2.17",
+            "npm:@yaks/pinnacle@0.2.17",
             "npm:@yaks/ram@0.2.17",
+            "npm:@yaks/telnyx@0.2.17",
             "npm:@yaks/testing@0.2.17",
             "npm:@yaks/vocab@0.2.17"
+          ]
+        }
+      },
+      "packages/pinnacle": {
+        "packageJson": {
+          "dependencies": [
+            "npm:@jsr/std__assert@1",
+            "npm:@yaks/hook@0.2.17",
+            "npm:@yaks/host@0.2.17",
+            "npm:@yaks/phone@0.2.17",
+            "npm:@yaks/testing@0.2.17"
           ]
         }
       },
@@ -4440,6 +4453,17 @@
           ]
         }
       },
+      "packages/telnyx": {
+        "packageJson": {
+          "dependencies": [
+            "npm:@jsr/std__assert@1",
+            "npm:@yaks/hook@0.2.17",
+            "npm:@yaks/host@0.2.17",
+            "npm:@yaks/phone@0.2.17",
+            "npm:@yaks/testing@0.2.17"
+          ]
+        }
+      },
       "packages/testing": {
         "packageJson": {
           "dependencies": [
@@ -4717,6 +4741,17 @@
           ]
         }
       },
+      "packages/voipms": {
+        "packageJson": {
+          "dependencies": [
+            "npm:@jsr/std__assert@1",
+            "npm:@yaks/hook@0.2.17",
+            "npm:@yaks/host@0.2.17",
+            "npm:@yaks/phone@0.2.17",
+            "npm:@yaks/testing@0.2.17"
+          ]
+        }
+      },
       "packages/voxel": {
         "packageJson": {
           "dependencies": [
@@ -4880,6 +4915,7 @@
             "npm:@yaks/page@0.2.17",
             "npm:@yaks/persona@0.2.17",
             "npm:@yaks/phone@0.2.17",
+            "npm:@yaks/pinnacle@0.2.17",
             "npm:@yaks/platform@0.2.17",
             "npm:@yaks/preact@0.2.17",
             "npm:@yaks/process@0.2.17",
@@ -4898,6 +4934,7 @@
             "npm:@yaks/sqlite@0.2.17",
             "npm:@yaks/sync@0.2.17",
             "npm:@yaks/task@0.2.17",
+            "npm:@yaks/telnyx@0.2.17",
             "npm:@yaks/testing@0.2.17",
             "npm:@yaks/text@0.2.17",
             "npm:@yaks/timing@0.2.17",
@@ -4911,6 +4948,7 @@
             "npm:@yaks/ux@0.2.17",
             "npm:@yaks/visualize@0.2.17",
             "npm:@yaks/vocab@0.2.17",
+            "npm:@yaks/voipms@0.2.17",
             "npm:@yaks/wake@0.2.17",
             "npm:@yaks/workerd@0.2.17",
             "npm:@yaks/workers-ai@0.2.17",
