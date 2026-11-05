@@ -41,10 +41,21 @@ export let connection = (server: string): Connection => ({
   headersHelper: HELPER,
 })
 
+// One door, however its host is spelled: `localhost` and `127.0.0.1` are the
+// same server to everyone on this machine.
+let LOOPBACK = ['localhost', '127.0.0.1', '[::1]']
+let door = (url: unknown): string | undefined => {
+  if (typeof url != 'string' || !URL.canParse(url)) return
+  let u = new URL(url)
+  let host = LOOPBACK.includes(u.hostname) ? 'loopback' : u.hostname
+  return `${u.protocol}//${host}:${u.port}${u.pathname.replace(/\/+$/, '')}`
+}
+
 /**
  * Write the connection into Claude Code's config, keeping everything else in
- * it: an entry already on this door is replaced under its own name, else it
- * is added as `name`. `remove` takes it out. Answers the name it is under.
+ * it: the first entry already on this door is replaced under its own name and
+ * any other on it taken out, else it is added as `name`. `remove` takes them
+ * all out. Answers the name it is under.
  */
 export let connect = (
   path: string,
@@ -58,10 +69,11 @@ export let connect = (
   }
   let entry = connection(opts.server)
   let servers = { ...config.mcpServers as Record<string, { url?: string }> }
-  let name = Object.keys(servers).find((n) => servers[n]?.url == entry.url) ??
-    opts.name ?? 'yak'
-  if (opts.remove) delete servers[name]
-  else servers[name] = entry
+  let ours = Object.keys(servers)
+    .filter((n) => door(servers[n]?.url) == door(entry.url))
+  let name = ours[0] ?? opts.name ?? 'yak'
+  for (let n of ours) delete servers[n]
+  if (!opts.remove) servers[name] = entry
   fs.writeTextFileSync(
     path,
     `${JSON.stringify({ ...config, mcpServers: servers }, null, 2)}\n`,

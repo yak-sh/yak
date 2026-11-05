@@ -103,10 +103,17 @@ test("the connection goes into Claude Code's config beside everything else", () 
   assertEquals(read(path).mcpServers, { docs: { url: 'x' } })
 })
 
-test('an entry already on this door keeps its name', () => {
+test('an entry already on this door keeps its name, however its host is spelled', () => {
   let path = config({
-    mcpServers: { tasks: { type: 'http', url: `${at}/mcp` } },
+    mcpServers: {
+      tasks: { type: 'http', url: 'http://localhost:8787/mcp' },
+      again: { type: 'http', url: `${at}/mcp/` },
+      elsewhere: { type: 'http', url: 'http://localhost:9999/mcp' },
+    },
   })
   assertEquals(connect(path, { server: at, name: 'other' }), 'tasks')
-  assertEquals(read(path).mcpServers, { tasks: connection(at) })
+  assertEquals(read(path).mcpServers, {
+    tasks: connection(at),
+    elsewhere: { type: 'http', url: 'http://localhost:9999/mcp' },
+  })
 })
