@@ -1,15 +1,17 @@
 // Calling the Operator (operator-calls.ts): whom a ring on the platform's
 // number answers, the stream door's refusals, the `voice` channel, and one
 // call's conversation with its line, speech and Operator stood in for.
-import { equal, test, until } from '@yaks/testing'
+import { clock, equal, test, until } from '@yaks/testing'
 import { line } from '@yaks/telnyx'
 import { consentEid } from '@yaks/phone'
 import { OPENAI, type Socket, talk, type Talked, type Told } from '@yaks/speech'
 import type { Request } from '@yaks/model'
+import type { Bundle } from '@yaks/graph'
 import { platform } from './directory-rows-probe.ts'
 import { stamp } from './directory.ts'
 import { endpoints } from './endpoints.ts'
 import { telnyxDoor } from './operator-texts.ts'
+import { within } from './defects.ts'
 import {
   type Around,
   converse,
@@ -193,7 +195,10 @@ test('an answer is texted once the call is over, to a caller who agreed to texts
 
 // One call, its line a socket a test speaks into, its speech and Operator
 // stand-ins that keep what they were given.
-let calling = (ack?: string) => {
+let calling = (
+  ack?: string,
+  more: Partial<Parameters<typeof converse>[0]> = {},
+) => {
   let on: Record<string, ((e: { data?: unknown }) => void)[]> = {}
   let sent: string[] = []
   let wire: Socket = {
@@ -233,6 +238,7 @@ let calling = (ack?: string) => {
     report: (e) => {
       throw e
     },
+    ...more,
   })
   let frame = (f: object) =>
     on.message.forEach((h) => h({ data: JSON.stringify(f) }))
@@ -303,6 +309,34 @@ test('a caller who starts talking stops what is playing, and a turn is acknowled
   await c.call.ended
   let [turn] = c.done[0].turns
   equal(turn.first! <= turn.answer!, true)
+})
+
+test('a call whose hearing stream is refused once the call is answered reports to the tracker', async () => {
+  let rows: Bundle[][] = []
+  let env = {
+    ERRORS: {
+      send: (sample: Bundle[]) => Promise.resolve(void rows.push(sample)),
+    },
+  }
+  // The call starts in its request's invocation; the caller's audio, and the
+  // refusal it meets, arrive on the wire after that request has answered.
+  let c = await within(env, {}, () =>
+    calling(undefined, {
+      report: undefined,
+      listen: (told) => ({
+        send: () => told.lost!('Turn detection is not supported'),
+        close: () => ({ seconds: 0, dollars: 0 }),
+      }),
+    }), clock())
+  c.frame({ event: 'media', media: { track: 'inbound', payload: 'AQI=' } })
+  await c.call.ended
+  await until(() => rows.length == 1)
+  let [failure] = rows[0]
+  equal(
+    (failure.exception as { value: string }).value,
+    "A call's speech stream was lost: Turn detection is not supported",
+  )
+  equal((failure.error as { tags: unknown }).tags, { request: 'operator call' })
 })
 
 // A call a model hears and speaks itself, the model stood in for, or with

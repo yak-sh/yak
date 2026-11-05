@@ -99,6 +99,18 @@ export let within = <T>(
   })
 }
 
+/** `run` kept to be called later from outside this invocation, such as by a
+ * socket's event: it runs in this invocation, its failures reported with
+ * `tags` as an entry's are. */
+export let bound = <A extends unknown[], R>(
+  run: (...args: A) => R,
+  tags: Tags = {},
+): (...args: A) => R => {
+  let invocation = context.getStore()
+  return (...args) =>
+    context.run(invocation!, () => within({}, tags, () => run(...args)))
+}
+
 /** An accepted write has already been reported where it failed. */
 export let refused = (error: unknown) =>
   error instanceof Pending || refusal(error)

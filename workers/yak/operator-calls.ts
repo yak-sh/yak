@@ -33,7 +33,7 @@ import {
 } from '@yaks/speech'
 import { directoryOf, META, type Space } from './directory.ts'
 import type { Env } from './env.ts'
-import { caught } from './defects.ts'
+import { bound, caught } from './defects.ts'
 import { opened, seal } from './lib/token.ts'
 import { apex } from './host.ts'
 import { countedSpend } from './meter.ts'
@@ -221,8 +221,17 @@ let CHUNK = 800
 
 let GOODBYE = 'I have to go now. Call me back any time.'
 
-let reporter = (o: Around) =>
-  o.report ?? ((e: unknown) => caught(e, { request: 'operator call' }))
+let CALL = { request: 'operator call' }
+
+let reporter = (o: Around) => o.report ?? ((e: unknown) => caught(e, CALL))
+
+// A socket's events come from the runtime after the call's request was
+// answered: each listener runs, and reports, in the call's invocation.
+let held = (socket: Socket): Socket => ({
+  send: (data) => socket.send(data),
+  close: (code, reason) => socket.close(code, reason),
+  addEventListener: (type, f) => socket.addEventListener(type, bound(f, CALL)),
+})
 
 // What every call shares: the caller's audio taken off the wire (`hear`),
 // audio played to them, each turn timed from their last word, the time
@@ -233,6 +242,7 @@ let carry = (
   close: () => number,
 ) => {
   let report = reporter(o)
+  let wire = held(o.wire)
   let started = Date.now(), over = false
   let timers: ReturnType<typeof setTimeout>[] = []
   let turns: Timed[] = []
@@ -245,20 +255,20 @@ let carry = (
     for (let t of timers) clearTimeout(t)
     let heard = close()
     try {
-      o.wire.close(1000)
+      wire.close(1000)
     } catch {
       // Already closed by the other side.
     }
     o.done({ seconds: (Date.now() - started) / 1000, heard, turns })
       .catch(report).finally(finished)
   }
-  o.wire.addEventListener('message', (event) => {
+  wire.addEventListener('message', (event) => {
     let frame: Frame = o.line.frame(String(event.data))
     if (frame.audio) hear(frame.audio)
     if (frame.stop) finish()
   })
-  o.wire.addEventListener('close', finish)
-  o.wire.addEventListener('error', finish)
+  wire.addEventListener('close', finish)
+  wire.addEventListener('error', finish)
   let later = (ms: number, f: () => void) => timers.push(setTimeout(f, ms))
   return {
     report,
@@ -286,10 +296,10 @@ let carry = (
         turn.timed.first ??= ms
         if (answer) turn.timed.answer ??= ms
       }
-      o.wire.send(o.line.play(audio))
+      wire.send(o.line.play(audio))
     },
     /** stop what is playing */
-    clear: () => o.wire.send(o.line.clear()),
+    clear: () => wire.send(o.line.clear()),
     /** at the time limit, `goodbye` said and the call hung up */
     limit: (goodbye: () => void) =>
       later((o.minutes ?? MINUTES) * 60_000, () => {
@@ -575,11 +585,11 @@ export let upgraded = (url: string, { authorization }: Keyed): Socket => {
     }
     fire('open')
   }).catch(() => fire('error'))
-  return {
+  return held({
     send: (data) => ws?.send(data),
     close: (code, reason) => ws?.close(code, reason),
     addEventListener: (type, f) => void (on[type] ??= []).push(f),
-  }
+  })
 }
 
 // The WebSocket pair the runtime makes, declared structurally as build.ts does.
