@@ -1288,10 +1288,25 @@
     margin: 0 0 .5rem;
     font-size: 1.5rem;
   }
+  /* The yak waiting to the left of the box (operator-page.ts `composer`),
+     out of the way while he works above it. */
+  .Talk_Box {
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr);
+    column-gap: .75rem;
+    align-items: end;
+  }
   .Talk_Yak {
-    display: block;
-    margin: 0 auto .75rem;
+    width: 4rem;
+    height: 4rem;
+    margin-bottom: .25rem;
     object-fit: contain;
+  }
+  .Talk_Status {
+    grid-column: 2;
+  }
+  .Talk:has([data-task][data-pending]) .Talk_Yak {
+    visibility: hidden;
   }
   /* A new chat (operator-page.ts `chatPage`): the greeting, what needs the
      person, the box and the ways to start, held together in the middle of
@@ -1728,6 +1743,10 @@
     }
     .Talk_Hello {
       padding-top: 10vh;
+    }
+    .Talk_Yak {
+      width: 3rem;
+      height: 3rem;
     }
     /* The same side, behind the bar's button: the whole screen while it is
        open. */

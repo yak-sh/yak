@@ -828,9 +828,7 @@ export let chatPage = async (
     ? `<div class="Talk_Hello"><h2>What should change in ${
       esc(app.title || app.slug)
     }?</h2><p>Tell ${operator}, and watch it change beside this chat.</p></div>`
-    : `<div class="Talk_Hello">${
-      idle('Talk_Yak', url(env))
-    }<h2>What can I do for you${
+    : `<div class="Talk_Hello"><h2>What can I do for you${
       first ? `, ${esc(first)}` : ''
     }?</h2><p>Ask ${operator} to make an app, change one, or find something out. You can send a photo or a document too.</p></div>`
   // A new chat with no app beside it is where the person lands: what needs
@@ -867,7 +865,7 @@ ${
         }</div>`
         : ''
     }
-${fresh || talked.title ? composer(at, space.operator, app) : ''}
+${fresh || talked.title ? composer(env, at, space.operator, app) : ''}
 ${
       landing
         ? `<div class="Talk_Starts" role="group" aria-label="Ways to start">${
@@ -917,16 +915,17 @@ export let updatesPage = async (
 // the files going with them along its top (a gathering drop part,
 // public/drop.js: picked, pasted or dropped anywhere on the box, each a
 // preview or a chip to take back), Send, and Stop while the Operator works.
-// It asks for a message to the Operator by name, or with an app open beside
+// The yak waits to its left (mascot.ts `idle`), and steps aside while he is
+// at work above it (`Talk_Now`). It asks for a message to the Operator by name, or with an app open beside
 // it, what should change there, and the words say which (`about`).
-let composer = (at: string, operator: string, app?: Shown) => {
+let composer = (env: Env, at: string, operator: string, app?: Shown) => {
   let asked = app
     ? `What should change in ${esc(app.title || app.slug)}?`
     : `Message ${esc(operator)}`
   return `<form class="Talk_Box" id="ask" method="post" action="${at}" enctype="multipart/form-data">
 <input type="hidden" name="request" value="${crypto.randomUUID()}">${
     app ? `<input type="hidden" name="app" value="${esc(app.slug)}">` : ''
-  }
+  }${idle('Talk_Yak', url(env))}
 <div class="Talk_Write Drop Drop-gather"><ul class="Drop_Chosen" aria-label="Files to send" aria-live="polite"></ul><textarea class="Field Talk_Field" name="say" placeholder="${asked}" aria-label="${asked}"></textarea>
 <div class="Talk_Tools"><label class="Talk_Attach" title="Add images or documents, or paste or drop them here">＋ Add files<input class="Drop_File" type="file" name="file" multiple data-count="${COUNT}" data-size="${SIZE}" data-reads="${READ}" data-unread="The Operator can't read this kind of file. It is kept with your message."></label><p class="Drop_Said" role="status"></p><button class="Button Button-quiet Talk_Stop" type="button" data-stop>Stop</button><button class="Button Talk_Send" type="submit">Send</button></div></div>
 <p class="Talk_Status" role="status" data-send-status></p></form>`
