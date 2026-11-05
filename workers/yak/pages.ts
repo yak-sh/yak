@@ -728,9 +728,7 @@ ${icon(navIcons[key])}${label}${
         ? `<span class="Desk_Count">${at.trash.length}</span>`
         : ''
     }</a>`
-  // The Operator opens its conversations; its settings page is reached from
-  // there and from the home, and marks this link while it is open.
-  let operator = link('operator', 'Operator', chatPath(at.space))
+  let operator = link('operator', 'Operator')
   return `<a class="Desk_Skip" href="#content">Skip to content</a>
 <aside class="Desk_Side" id="menu" aria-label="Menu">
 <div class="Desk_Top"><a class="Desk_Brand" href="${url(env, '/')}"><img src="${
