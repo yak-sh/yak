@@ -118,11 +118,13 @@ yak admin client google 'op://vault/google/client id' 'op://vault/google/client 
 
 ## Push a directory
 
-`push` makes an app hold exactly a directory's files and deploys them. Each
-source directory, account and target remembers its **base version**: the live
-version first read, or the version its last successful push deployed. The record
-lives under `push/` beside the box's graph, separate from the source files. A
-fresh file list leaves that base version intact.
+`push` makes an app hold exactly a directory's files and deploys them, keeping
+the `package-lock.json` the compile wrote beside a pushed `package.json`. A push
+that changes nothing deploys nothing. Each source directory, account and target
+remembers its **base version**: the live version first read, or the version its
+last successful push deployed. The record lives under `push/` beside the box's
+graph, separate from the source files. A fresh file list leaves that base
+version intact.
 
 A base version behind the live version returns the live files the deploy would
 remove or replace and leaves the live version alone. After reviewing that

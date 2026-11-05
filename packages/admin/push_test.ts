@@ -280,6 +280,21 @@ test('a released app with the same bytes causes no write or deploy', async () =>
   assertEquals(p.deployed, [])
 })
 
+test('the lock the compile wrote stays while its package.json is pushed', async () => {
+  let p = platform({
+    mail: held('package.json', 'package-lock.json', 'site/package-lock.json'),
+  })
+  assertEquals(await push(p.ask, [file('package.json')], { app: 'mail' }), [
+    'wrote 0 files, deleted site/package-lock.json',
+    'done',
+  ])
+  assertEquals(await push(p.ask, [file('package.json')], { app: 'mail' }), [
+    'no files changed',
+  ])
+  assertEquals(p.held('mail'), ['package-lock.json', 'package.json'])
+  assertEquals(p.deployed, ['mail'])
+})
+
 let retryPlatform = platform({ mail: held('index.html') })
 let retryFiles = [file('index.html'), file('new.js')]
 let lostDeploy: Ask = (method, params) => {

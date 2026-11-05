@@ -7,6 +7,11 @@
 // A file is sent as text when its bytes are UTF-8 and as base64 when they are
 // not (an icon, a .wasm). Dotfiles are left out: nothing the platform serves
 // starts with a dot, and `.DS_Store` is not part of an app.
+//
+// The one file the app holds that git need not is the package-lock.json the
+// compile writes beside a package.json (workers/yak esbuild.ts): it pins what
+// the deploy installed, so a push keeps it while its package.json is pushed,
+// and a push that changes nothing deploys nothing.
 
 import * as fs from '@yaks/file/io'
 
@@ -142,6 +147,11 @@ export let read = async (dir: string): Promise<File[]> => {
   return files.sort((a, b) => a.path < b.path ? -1 : 1)
 }
 
+// A lock the compile wrote beside a package.json the directory still has.
+let pinned = (path: string, keep: Set<string>) =>
+  /(^|\/)package-lock\.json$/.test(path) &&
+  keep.has(path.replace(/package-lock\.json$/, 'package.json'))
+
 let reply = async (ask: Ask, name: string, args: Record<string, unknown>) =>
   await ask('tools/call', { name, arguments: args }) as Reply
 
@@ -275,7 +285,9 @@ export let push = async (
   let hashes = await Promise.all(files.map(shaOf))
   let changed = files.filter((f, i) => held.held.get(f.path) != hashes[i])
   let keep = new Set(files.map((f) => f.path))
-  let gone = [...held.held.keys()].filter((p) => !keep.has(p))
+  let gone = [...held.held.keys()].filter((p) =>
+    !keep.has(p) && !pinned(p, keep)
+  )
   opts.progress?.({
     phase: 'hash',
     state: 'done',
