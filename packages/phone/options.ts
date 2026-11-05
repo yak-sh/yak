@@ -20,9 +20,10 @@ export type Options = {
   door?: Door
 }
 
-/** A sender by name: `telnyx`, `voipms` or `stash`. */
+/** A sender by name: one the host lends as a texter (`texters`), else
+ * `telnyx`, `voipms` or `stash`. */
 export type Transport = {
-  via: 'telnyx' | 'voipms' | 'stash'
+  via: string
   /** Telnyx's API key, or voip.ms's API password */
   key?: string
   /** Telnyx's messaging profile, by name */

@@ -34,6 +34,32 @@ export type Sender = {
   send: (message: Message) => Promise<Receipt>
 }
 
+/** One text message, composed and ready to leave: the portable texter
+ * capability, which @yaks/phone sends through. */
+export type Text = {
+  /** the number it goes to, in E.164 form */
+  to: string
+  /** the words */
+  text: string
+  /** the number it is from; absent, the texter's own */
+  from?: string
+  /** an RCS agent to send it as, with the text going as SMS from `from`
+   * where the phone has no RCS */
+  agent?: string
+}
+
+/** What a texter reports about a text it accepted. */
+export type TextReceipt = {
+  /** the provider's id for the message, which its outcome names */
+  id?: string
+  /** the number it left from, when the texter chose it */
+  from?: string
+}
+
+/** A texter resolves when the text is accepted and rejects when it is not,
+ * as a {@link Sender} does for a letter. */
+export type Texter = { send: (text: Text) => Promise<TextReceipt> }
+
 /** A rejection that knows the message never left: the connection was never
  * made, or the provider refused to take it yet. Sending is at most once, so
  * only this rejection lets a letter be handed over again, no sooner than

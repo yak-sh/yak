@@ -184,13 +184,20 @@ let pictures = async (env: Env, space: Space, arrival: Arrival) => {
 }
 
 /**
- * A text that arrived. STOP takes back the sender's consent, START gives it
- * again, and both and HELP are answered in the campaign's words; anything
- * else from a person who agreed to texts is a request to their space's
- * Operator, which answers by text. A text from anyone else is not read.
+ * A text that arrived. One at an app's own number is that app's
+ * (app-texts.ts). At the platform's: STOP takes back the sender's consent,
+ * START gives it again, and both and HELP are answered in the campaign's
+ * words; anything else from a person who agreed to texts is a request to
+ * their space's Operator, which answers by text. A text from anyone else is
+ * not read.
  */
 export let arrived = async (env: Env, arrival: Arrival) => {
   let dir = directoryOf(env.STORE)
+  let line = arrival.rcs ? null : await dir.lined(arrival.to)
+  if (line) {
+    let { appArrived } = await import('./app-texts.ts')
+    return await appArrived(env, line, arrival)
+  }
   let person = await dir.phoned(arrival.from)
   let word = keyword(arrival.text)
   let as = (person: string) => ({ 'x-yak-person': person })

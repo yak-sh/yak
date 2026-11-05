@@ -100,6 +100,8 @@ export type Meter = {
   // Realtime's egress, weighed at each renewal of a session's lease. It spends
   // the same space budget as `models` (meter.ts `budgets`).
   realtime: number
+  // Dollars an app's texts cost this month (app-texts.ts), the same budget.
+  texts?: number
   // The seconds the builder's workbench spent awake (sandbox.ts, T-34264).
   // Its own property beside `models` because a model call and a
   // container-second are billed separately, and one number made of both is a
@@ -260,6 +262,11 @@ export type AppInfo = {
   // `handled`), which no read can be: the pass runs on the directory's first
   // request of the deploy, before any app of it is answered for.
   store: string | null
+  // The app's own number, its row's `phone{number}`: what its texts leave
+  // from and arrive at (app-texts.ts). An admin writes it once the number is
+  // registered to text; null for every app without one, which texts only in
+  // its pilot.
+  phone?: string | null
   // Every address this app has answered at within its space — the slug it was
   // born at first, then each one a rename left behind, oldest first. They
   // resolve like ids ({@link slugsOf}), which is how an old link still finds
@@ -625,6 +632,7 @@ let meterOf = (r: Row): Meter | null =>
       builds: r.meter.builds ?? 0,
       models: r.meter.models ?? 0,
       realtime: r.meter.realtime ?? 0,
+      texts: r.meter.texts ?? 0,
       seconds: r.meter.seconds ?? 0,
       built: r.meter.built ?? 0,
       at: r.meter.at ?? '',
@@ -940,6 +948,7 @@ export let APP_PARTS = [
   'theme',
   'rooted',
   'publishing',
+  'phone',
 ]
 let ABOUT = APP_PARTS.map((part) => `?${part}`).join('&')
 
@@ -1083,6 +1092,7 @@ export let appAbout = (r: Row): AppInfo => ({
   access: r.app!.access ?? unsaid(r.entity.eid),
   title: r.doc?.title || r.app!.slug || r.former?.slug || '',
   store: r.app!.store ?? null,
+  phone: r.phone?.number ?? null,
   slugs: slugsOf(r.former),
   home: r.home != null,
   first: firstOf(r.home),
@@ -1284,6 +1294,7 @@ let served = (space: Space, app: App, env: HostEnv) => ({
   space: space.eid,
   access: app.access,
   mail: mailbox(space, app, env),
+  phone: app.phone ?? '',
 })
 
 /**
@@ -2148,6 +2159,12 @@ export let directory = (
     phoned: async (number: string) =>
       (await one(`.person&.phone.number=${JSON.stringify(number)}`))
         ?.entity.eid ?? null,
+    // The app whose own number this is (an app row's `phone{number}`), with
+    // its space: where a text that arrived at it is kept (app-texts.ts).
+    lined: async (number: string) => {
+      let row = await one(`.app&.phone.number=${JSON.stringify(number)}`)
+      return row ? await self.appAt(row.entity.eid) : null
+    },
     // The same question the other way: where the platform writes to this
     // person — the letter's envelope, and nothing else (T-32629).
     emailAt: async (person: string): Promise<string | null> =>

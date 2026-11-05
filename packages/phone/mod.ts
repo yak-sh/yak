@@ -4,8 +4,6 @@
  * typed number in the form both are kept in.
  */
 
-import { identityEid } from '@yaks/graph/identity'
-
 export { phoneDoc } from './vocab.ts'
 
 /**
@@ -26,13 +24,10 @@ export let mobile = (typed: string): string | null => {
   return /^1[2-9]\d{2}[2-9]\d{6}$/.test(digits) ? '+' + digits : null
 }
 
-/** The eid of a person's `sms_consent`, derived from them. */
-export let consentEid = (person: string): string =>
-  identityEid('sms_consent', [person])
-
 export {
   type Arrival,
   Blocked,
+  consentEid,
   Denied,
   type Keyword,
   keyword,

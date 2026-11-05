@@ -54,7 +54,7 @@
       "properties": {
         "from": {
           "type": "string",
-          "description": "the number it came from, in E.164 form; absent on one to send, which goes from the sender's own",
+          "description": "the number it came from, in E.164 form; on one sent, the number it left from, written once it leaves (absent before, when it goes from the sender's own)",
           "examples": [
             "+12695550142"
           ]

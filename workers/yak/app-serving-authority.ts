@@ -7,7 +7,7 @@ import { EPOCH, FENCE_WAIT } from './directory-copy.ts'
 import { PLATFORM_STORE } from './door.ts'
 import { type Vouch, vouchOf } from './app-authority.ts'
 
-type Word = 'name' | 'app' | 'access' | 'mail' | 'policy'
+type Word = 'name' | 'app' | 'access' | 'mail' | 'phone' | 'policy'
 type Host = {
   read(key: Word): string | null
   write(key: Word, value: string): void
@@ -141,10 +141,14 @@ export let servingAuthority = (host: Host) => {
         // page, writes from its new address on the very next request. Nothing
         // is rebuilt for it: `#posting` reads the word at write time.
         ['mail', req.headers.get('x-yak-mail')],
+        // The app's own number, the same way: the directory's word, read at
+        // send time (app-texts.ts). Empty is a word too, the number taken
+        // away, which sends the app's texts back to its pilot.
+        ['phone', req.headers.get('x-yak-phone')],
       )
     }
     return said.filter((s): s is [Word, string] =>
-      !!s[1] && s[1] != host.read(s[0])
+      s[1] != null && (!!s[1] || s[0] == 'phone') && s[1] != host.read(s[0])
     )
   }
 

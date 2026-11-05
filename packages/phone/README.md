@@ -27,11 +27,14 @@ that keeps texts in memory.
 ## Sending
 
 ```ts
-type Sender = { send: (text: Text) => Promise<Receipt> }
 type Text = { to: string; text: string; from?: string; agent?: string }
+type Receipt = { id?: string; from?: string }
+type Sender = { send: (text: Text) => Promise<Receipt> }
 ```
 
-A sender resolves with the provider's id for the message, or rejects:
+These are @yaks/host's portable `Texter`, so a host can lend one. A sender
+resolves with the provider's id for the message, and the number it left from
+when it chose one, or rejects:
 
 - `Blocked`: a carrier will not carry it, and that is expected: the number is
   not yet registered for business texting, or the person replied STOP. Its
@@ -73,7 +76,10 @@ needs `0.0.0.0` there, which lets any address call with the API password.
 
 `sending({ sender })` is the `text_post` effect's handler: after the write
 commits, it claims `deliver.tried`, hands the text over once, and writes the
-outcome back. The `./effects` facet builds it from the config's `sender`.
+outcome back. Nobody is texted before they agree: a text to someone with no
+`sms_consent` is bounced, never handed over, and reports nothing. The
+`./effects` facet builds it from the config's `sender`: the texter the host
+lends under that name (`host.texters`), else one built from the config.
 
 ## Receiving
 
@@ -82,9 +88,10 @@ it, and nothing here reads a request it has not checked. `heard(event)` reads a
 Telnyx event: `{ arrival }` for a text that arrived (SMS, MMS or RCS; a tapped
 RCS suggestion reads as its label), `{ outcome }` for what became of a text that
 left, or nothing. `keyword(text)` says whether a text is STOP, HELP or START in
-any of the words carriers require. `kept(arrival, person)` answers the bundles
-that keep a text that arrived, with the end of the sender's consent when it says
-STOP.
+any of the words carriers require. `kept(arrival, people)` answers the bundles
+that keep a text that arrived from everyone with its number: the text, kept as
+the record of what they said, with the end of their consent when it says STOP
+and their consent again, in the words they sent, when it says START.
 
 voip.ms's SMS URL callback is a GET nobody signs, so the URL a host gives it
 carries the host's own secret, and nothing here reads one. `called(query)` reads

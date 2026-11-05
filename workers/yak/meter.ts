@@ -219,10 +219,20 @@ export let CURRENCY = 'USD'
 /** The free spaces one person may own. */
 export let SPACES = 1
 
-/** The monthly usage counters. Models and realtime spend the same space
- * budget; their separate counters still say what each source cost. */
-export type Spend = 'emails' | 'builds' | 'models' | 'realtime' | 'seconds'
-export type Limited = Exclude<Spend, 'models' | 'realtime'>
+/** The monthly usage counters. Models, realtime and texts spend the same
+ * space budget; their separate counters still say what each source cost. */
+export type Spend =
+  | 'emails'
+  | 'builds'
+  | 'models'
+  | 'realtime'
+  | 'texts'
+  | 'seconds'
+/** The spends counted in dollars against the space's one budget. */
+export type Dollars = 'models' | 'realtime' | 'texts'
+let DOLLARS: Spend[] = ['models', 'realtime', 'texts']
+let budgeted = (what: Spend): what is Dollars => DOLLARS.includes(what)
+export type Limited = Exclude<Spend, Dollars>
 export type Budget = { spent: number; limit: number }
 
 let ALLOWANCE: Record<Limited, Record<Tier, number>> = {
@@ -230,12 +240,19 @@ let ALLOWANCE: Record<Limited, Record<Tier, number>> = {
   builds: BUILDS,
   seconds: SECONDS,
 }
-let SPENDS: Spend[] = ['emails', 'builds', 'models', 'realtime', 'seconds']
+let SPENDS: Spend[] = [
+  'emails',
+  'builds',
+  'models',
+  'realtime',
+  'texts',
+  'seconds',
+]
 let LIMITED = Object.keys(ALLOWANCE) as Limited[]
 
-/** What a reading has spent: model and voice dollars together. */
+/** What a reading has spent: model, voice and text dollars together. */
 let used = (m: Meter, what: Spend) =>
-  what == 'models' || what == 'realtime' ? m.models + m.realtime : m[what]
+  budgeted(what) ? m.models + m.realtime + (m.texts ?? 0) : m[what]
 
 export let allowance = (what: Limited, tier: Tier | null) =>
   ALLOWANCE[what][tier ?? 'free']
@@ -269,7 +286,7 @@ export let refusedSpend = (
   more = 0,
   now = new Date(),
 ) => {
-  if (what == 'models' || what == 'realtime') {
+  if (budgeted(what)) {
     let b = budget(space, now)
     return b.spent + more >= b.limit ? atCeiling(space, what, env) : null
   }
@@ -285,6 +302,7 @@ let empty = (month: string, built = 0): Omit<Meter, 'bytes'> => ({
   builds: 0,
   models: 0,
   realtime: 0,
+  texts: 0,
   seconds: 0,
   built,
   at: '',
@@ -579,6 +597,11 @@ export let atCeiling = (
     realtime: () =>
       `${space.slug}'s model and voice budget for this month is spent — ` +
       `voices go quiet until the 1st`,
+    // An app's broadcast stops here; the answers to STOP and HELP a carrier
+    // requires go regardless (app-texts.ts).
+    texts: () =>
+      `${space.slug}'s model and voice budget for this month is spent, and ` +
+      `its apps' texts spend it too — they go again on the 1st`,
     seconds: () =>
       `${space.slug} is on the ${tier} tier, which is ${
         count(allowance('seconds', space.tier))
@@ -829,6 +852,17 @@ export let countedRealtime = async (
 ) => {
   if (cost <= 0) return
   await spending(env, space, { realtime: cost }, now)
+}
+
+/** The dollars an app's texts cost (app-texts.ts), on the space's month. */
+export let countedTexts = async (
+  env: { STORE: Namespace },
+  space: Pick<Space, 'eid'>,
+  cost: number,
+  now = new Date(),
+) => {
+  if (cost <= 0) return
+  await spending(env, space, { texts: cost }, now)
 }
 
 /**

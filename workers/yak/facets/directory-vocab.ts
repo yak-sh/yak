@@ -371,7 +371,7 @@ export let directoryDoc: VocabDoc = {
       properties: { dollars: owned(num) },
     },
     // What a space just spent on its month: a letter, a build, a model call, a
-    // voice's lease, container seconds. The directory adds it to the `meter`
+    // voice's lease, an app's text, container seconds. The directory adds it to the `meter`
     // inside the write's own transaction (meter.ts `spend`), so two spends at
     // once both count, and takes it off again: it is never kept.
     spend: {
@@ -383,6 +383,7 @@ export let directoryDoc: VocabDoc = {
         builds: num,
         models: num,
         realtime: num,
+        texts: num,
         seconds: num,
       },
     },

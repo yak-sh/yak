@@ -83,6 +83,14 @@ export let appConfig: Config = {
       facets: toolFacets,
       with: { sender: { via: 'worker' } },
     },
+    // An app's texts: the people it texts and their agreement, the texts it
+    // sends from its number and those that arrive at it (app-texts.ts).
+    {
+      use: '@yaks/phone',
+      facets: ['vocab', 'effects'],
+      words: ['phone', 'sms_consent', 'text', 'text_post'],
+      with: { sender: { via: 'worker' } },
+    },
     {
       use: '@yaks/tools',
       words: [

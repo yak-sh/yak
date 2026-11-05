@@ -3,30 +3,22 @@
 // No provider is named here; ./telnyx.ts and ./voipms.ts are two, given as
 // data.
 
-/** One text, composed and ready to leave. */
-export type Text = {
-  /** the number it goes to, in E.164 form */
-  to: string
-  /** the words */
-  text: string
-  /** the number it is from; absent, the sender's own */
-  from?: string
-  /** an RCS agent to send it as, with the text going as SMS from `from`
-   * where the phone has no RCS */
-  agent?: string
-}
+import type { Texter } from '@yaks/host/senders'
+import { identityEid } from '@yaks/graph/identity'
 
-/** What a sender reports about a text it accepted. */
-export type Receipt = {
-  /** the provider's id for the message, which its outcome names */
-  id?: string
-}
+/** The eid of a person's `sms_consent`, derived from them. */
+export let consentEid = (person: string): string =>
+  identityEid('sms_consent', [person])
+
+// A text and its receipt are the host's portable texter capability, so a
+// host can lend one (`texters`) without knowing this package.
+export type { Text, TextReceipt as Receipt } from '@yaks/host/senders'
 
 /** A sender resolves when the text is accepted and rejects when it is not:
  * {@link Blocked} when the carrier will not carry it, through nobody's fault
  * here; {@link Denied} when the provider refused the credentials; any other
  * rejection is a failure. */
-export type Sender = { send: (text: Text) => Promise<Receipt> }
+export type Sender = Texter
 
 /** A text that arrived. */
 export type Arrival = {

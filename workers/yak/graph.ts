@@ -309,6 +309,7 @@ import { meet } from '@yaks/host/config'
 import { configs } from './config.ts'
 import { load } from './load.ts'
 import { metering } from './meter.ts'
+import { appTexter } from './app-texts.ts'
 import { posting } from './post.ts'
 import { realtimeOf } from './rtc.ts'
 import { storedTools } from './package-tools.ts'
@@ -608,6 +609,8 @@ type Word =
   | 'space'
   | 'access'
   | 'mail'
+  // The app's own number (app-texts.ts), empty when it has none.
+  | 'phone'
   | 'schema'
   // The Worker version, words and stamp of the last schema pass that left
   // nothing undone (`#schema`).
@@ -1280,6 +1283,13 @@ export class Store {
             this.#bind,
             () => this.#get('mail'),
             posting(this.#bind.MAIL, this.#bind),
+          ),
+        },
+        texters: {
+          worker: appTexter(
+            this.#bind as Env,
+            () => this.#get('phone'),
+            () => this.#get('space'),
           ),
         },
         stopping: new AbortController().signal,
@@ -2051,8 +2061,10 @@ export class Store {
     let letter = (b: Bundle): Bundle => {
       let mail = b[MAIL] as Comp | null | undefined
       // Dropping the envelope is not writing one, and a bundle that is neither
-      // a letter nor an ask to send has nothing to say about an address.
-      if (mail === null || (!mail && !b[DELIVER])) return b
+      // a letter nor an ask to send has nothing to say about an address. A
+      // text asks to be sent with `deliver` too (@yaks/phone), and is no
+      // letter: it goes from the app's number (app-texts.ts).
+      if (mail === null || (!mail && (!b[DELIVER] || b.text))) return b
       return {
         ...b,
         [MAIL]: { ...(mail ?? {}), from: this.#get('mail') ?? '' },

@@ -1,0 +1,59 @@
+{
+  "$defs": {
+    "individual": {
+      "properties": {
+        "first": { "type": "string" },
+        "middle": { "type": "string" },
+        "last": { "type": "string" },
+        "nickname": { "type": "string" },
+        "suffix": { "type": "string" },
+        "phone": { "type": "string" },
+        "status": { "type": "string" },
+        "deceased": { "type": "boolean" }
+      }
+    },
+    "congregation": {
+      "properties": {
+        "name": { "type": "string" },
+        "phone": { "type": "string" },
+        "accent": { "type": "string" },
+        "paper": { "type": "string" },
+        "heading_font": { "type": "string" },
+        "body_font": { "type": "string" }
+      }
+    },
+    "group": {
+      "description": "a list the church texts, named by its doc.title",
+      "properties": {}
+    },
+    "membership": {
+      "description": "a person on a list",
+      "properties": {
+        "group": {
+          "type": "string",
+          "ref": "entity",
+          "death": "cascade",
+          "identity": true
+        },
+        "person": {
+          "type": "string",
+          "ref": "entity",
+          "death": "cascade",
+          "identity": true
+        }
+      }
+    },
+    "broadcast": {
+      "description": "one message sent to a list; doc.body is what was sent, and each text it became carries copy{broadcast}",
+      "properties": {
+        "group": { "type": "string", "ref": "entity", "death": "detach" }
+      }
+    },
+    "copy": {
+      "description": "on a text: the broadcast it is one copy of",
+      "properties": {
+        "broadcast": { "type": "string", "ref": "entity", "death": "detach" }
+      }
+    }
+  }
+}

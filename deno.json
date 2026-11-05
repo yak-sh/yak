@@ -235,6 +235,7 @@
     "./apps/handouts/api/": "./workers/yak/public/",
     "./apps/housebook/api/": "./workers/yak/public/",
     "./apps/hypermerge/api/": "./workers/yak/public/",
+    "./apps/messages/api/": "./workers/yak/public/",
     "./apps/practice/api/": "./workers/yak/public/",
     "./apps/village-tasks/api/": "./workers/yak/public/",
     "preact-render-to-string": "npm:preact-render-to-string@6.7.0",

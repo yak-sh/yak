@@ -1,0 +1,14 @@
+[
+  {
+    "entity": { "eid": "$general" },
+    "alias": { "name": "list:general" },
+    "group": {},
+    "doc": { "title": "General" }
+  },
+  {
+    "entity": { "eid": "$prayer" },
+    "alias": { "name": "list:prayer" },
+    "group": {},
+    "doc": { "title": "Prayer" }
+  }
+]

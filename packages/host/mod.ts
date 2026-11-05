@@ -22,8 +22,15 @@ import type { Finding, Registry, Reply, Runner } from '@yaks/tools'
 import type { Context } from '@yaks/tracker/report'
 import type { Config } from './config.ts'
 import type { Meaning } from './facets.ts'
-import type { Sender } from './senders.ts'
-export type { Message, Receipt, Sender } from './senders.ts'
+import type { Sender, Texter } from './senders.ts'
+export type {
+  Message,
+  Receipt,
+  Sender,
+  Text,
+  Texter,
+  TextReceipt,
+} from './senders.ts'
 export type { Config, Configured, Options, Plug } from './config.ts'
 export type Role = string
 export type Feed = (each: (news: News) => void | Promise<void>) => () => void
@@ -85,6 +92,9 @@ export interface Host {
   /** Named mail senders this host lends, selected by @yaks/mail's
    * `sender: {via}`. The host owns credentials, metering and lifetime. */
   senders?: Readonly<Record<string, Sender>>
+  /** Named texters this host lends, selected by @yaks/phone's
+   * `sender: {via}`. The host owns credentials, metering and lifetime. */
+  texters?: Readonly<Record<string, Texter>>
   /** Explicit workspace execution bindings; never an implicit local default. */
   workspaces?: import('@yaks/machine/targets').Workspaces
   /** Default sandbox intentions; provisioning is the sandbox effect's work. */

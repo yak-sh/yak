@@ -285,6 +285,10 @@
         "realtime": {
           "type": "number",
           "description": "dollars spent on realtime models this month"
+        },
+        "texts": {
+          "type": "number",
+          "description": "dollars spent on its apps' text messages this month"
         }
       },
       "description": "what a space used in one month"

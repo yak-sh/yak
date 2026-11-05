@@ -172,6 +172,7 @@ let VOUCH = [
   'x-yak-access',
   'x-yak-policy',
   'x-yak-mail',
+  'x-yak-phone',
   'x-yak-release',
   'x-yak-speaks',
   'x-yak-base-release',
@@ -204,6 +205,8 @@ export type Served = {
   space?: string
   access: string
   mail?: string
+  /** the app's own number, empty when it has none (app-texts.ts) */
+  phone?: string
   release?: string
   base?: string
 }
@@ -243,6 +246,8 @@ export let doorOf = (
         req.headers.set('x-yak-policy', String(app.policy))
       }
       if (app.mail) req.headers.set('x-yak-mail', app.mail)
+      // Said even when empty, so a number taken away is heard.
+      if (app.phone != null) req.headers.set('x-yak-phone', app.phone)
       if (app.release != null) {
         req.headers.set('x-yak-release', String(app.release))
       }

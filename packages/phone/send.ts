@@ -13,7 +13,7 @@ import { Stale } from '@yaks/graph/errors'
 import { token } from '@yaks/graph/sha256'
 import type { Handler } from '@yaks/effects'
 import { Unsent } from '@yaks/host/senders'
-import { Blocked, type Sender } from './text.ts'
+import { Blocked, consentEid, type Sender } from './text.ts'
 
 /** How the effect is built. */
 export type Texting = {
@@ -59,6 +59,13 @@ export let sending =
       await bounce(`no phone number on file for ${deliver.to}`)
       throw new Error(`text ${entity.eid}: no number for ${deliver.to}`)
     }
+    // Nobody is texted before they agree; a text to someone who has not, or
+    // who replied STOP, comes to rest as a bounce, which is expected.
+    if (!comp(await get(tx, consentEid(String(deliver.to))), 'sms_consent')) {
+      return await bounce(
+        `${deliver.to} has not agreed to texts: no sms_consent is kept for them`,
+      )
+    }
     let stamp = now()
     try {
       await write([{
@@ -93,7 +100,11 @@ export let sending =
       throw error
     }
     await settle({
-      text: { to, ...(receipt.id ? { message_id: receipt.id } : {}) },
+      text: {
+        to,
+        ...(receipt.from ? { from: receipt.from } : {}),
+        ...(receipt.id ? { message_id: receipt.id } : {}),
+      },
       delivered: { at: now() },
     })
   }

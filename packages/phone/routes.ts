@@ -45,10 +45,10 @@ export let routes = (
           let { arrival, outcome } = heard(JSON.parse(body))
           let g = host.graph
           if (arrival) {
-            let [person] = await g.read(
+            let people = await g.read(
               `.phone.number=${JSON.stringify(arrival.from)}`,
             )
-            await g.apply(kept(arrival, person?.entity.eid ?? null))
+            await g.apply(kept(arrival, people.map((p) => p.entity.eid)))
           }
           if (outcome) {
             let [sent] = await g.read(

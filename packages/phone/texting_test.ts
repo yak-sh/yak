@@ -40,10 +40,13 @@ let one = async (g: ReturnType<typeof rig>, eid: string) =>
   (await g.get([eid]))[0] as
     | Record<string, Record<string, unknown> | undefined>
     | undefined
-let person = {
-  entity: { eid: ana },
-  phone: { number: ANA },
+let number = { entity: { eid: ana }, phone: { number: ANA } }
+let agreed = {
+  entity: { eid: consentEid(ana) },
+  sms_consent: { person: ana, consent: 'Text me.', at: '2026-11-04T00:00:00Z' },
 }
+// Ana's number, and her agreement to be texted at it.
+let person = [number, agreed]
 let outbound = (eid: string): Bundle => ({
   entity: { eid },
   doc: { body: 'Your agenda is posted.' },
@@ -55,7 +58,7 @@ test('a text asking to go is sent to the number on its recipient and marked deli
   let texts = stash()
   let g = rig(texts)
   let eid = crypto.randomUUID()
-  await g.apply([person, outbound(eid)])
+  await g.apply([...person, outbound(eid)])
   let row = (await one(g, eid))!
   assertEquals(texts.sent, [{ to: ANA, text: 'Your agenda is posted.' }])
   assertEquals(row.text?.message_id, 'stash-1')
@@ -65,14 +68,47 @@ test('a text asking to go is sent to the number on its recipient and marked deli
 test('a text the carrier blocks is bounced with its reason and fails nothing', async () => {
   let g = rig(stash({ block: 'Not registered yet.' }))
   let eid = crypto.randomUUID()
-  await g.apply([person, outbound(eid)])
+  await g.apply([...person, outbound(eid)])
   assertEquals((await one(g, eid))?.bounced?.reason, 'Not registered yet.')
+})
+
+test('a text to someone who has not agreed is bounced and never handed over', async () => {
+  let texts = stash()
+  let g = rig(texts)
+  let eid = crypto.randomUUID()
+  await g.apply([number, outbound(eid)])
+  assertEquals(texts.sent, [])
+  assertEquals(
+    (await one(g, eid))?.bounced?.reason,
+    `${ana} has not agreed to texts: no sms_consent is kept for them`,
+  )
+})
+
+test("a host's texter is used by name, and the number it chose is kept", async () => {
+  let sent: unknown[] = []
+  let texter: Sender = {
+    send: (t) => (sent.push(t), Promise.resolve({ id: 'h-1', from: OURS })),
+  }
+  let vocab = loadVocab([docDoc, mailDoc, phoneDoc])
+  let fx = registry(vocab, { write: (b) => g.apply(b, { trusted: true }) })
+  let g = graph({ storage: ram(vocab), vocab, plugins: [fx, docs()] })
+  fx.handle(
+    effects({ texters: { worker: texter } }, { sender: { via: 'worker' } }),
+  )
+  let eid = crypto.randomUUID()
+  await g.apply([...person, outbound(eid)])
+  assertEquals(sent, [{ to: ANA, text: 'Your agenda is posted.' }])
+  assertEquals((await one(g, eid))?.text, {
+    to: ANA,
+    from: OURS,
+    message_id: 'h-1',
+  })
 })
 
 test('a text with no sender configured waits with the reason', async () => {
   let g = rig()
   let eid = crypto.randomUUID()
-  await Promise.resolve(g.apply([person, outbound(eid)])).catch(() => {})
+  await Promise.resolve(g.apply([...person, outbound(eid)])).catch(() => {})
   assertEquals(
     (await one(g, eid))?.deliver?.waiting,
     'waiting for a configured sender',
@@ -179,16 +215,9 @@ let received = (id: string, text: string, payload = {}) => ({
   },
 })
 
-test('the door keeps a signed text, takes STOP as the end of consent, and refuses an unsigned one', async () => {
+test('the door keeps a signed text, takes STOP as the end of consent and START as it again, and refuses an unsigned one', async () => {
   let g = rig(stash())
-  await g.apply([person, {
-    entity: { eid: consentEid(ana) },
-    sms_consent: {
-      person: ana,
-      consent: 'Text me.',
-      at: '2026-11-04T00:00:00Z',
-    },
-  }])
+  await g.apply(person)
   let [door] = routes({ graph: g }, { door: { key } })
   let unsigned = await door.handle(await signed(received('m0', 'hi'), false))
   let hi = await door.handle(await signed(received('m1', 'Post the agenda')))
@@ -198,6 +227,11 @@ test('the door keeps a signed text, takes STOP as the end of consent, and refuse
   assertEquals((await one(g, arrivalEid('m1')))?.doc?.body, 'Post the agenda')
   assertEquals((await one(g, arrivalEid('m1')))?.text?.from, ANA)
   assertEquals((await g.read('.sms_consent')).length, 0)
+  await door.handle(await signed(received('m3', 'start')))
+  assertEquals(
+    (await one(g, consentEid(ana)))?.sms_consent?.consent,
+    'start',
+  )
   assertEquals((await one(g, ana))?.phone, { number: ANA })
 })
 
