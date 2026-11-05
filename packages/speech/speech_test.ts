@@ -105,7 +105,7 @@ let socket = () => {
   }
 }
 
-test('a stream sends what it heard once open, tells turns, and prices its seconds', async () => {
+test('a stream sends what it heard once open, tells turns, and prices its seconds', () => {
   let s = socket()
   let told: string[] = []
   let stream = turns({
