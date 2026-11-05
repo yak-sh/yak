@@ -1,3 +1,4 @@
+/// <reference path="./lucide.d.ts" />
 // The public pages' icon vocabulary, drawn from Lucide's SVG nodes. Each icon
 // is its own module, imported by path: the package's barrel re-exports all
 // ~1,800 icons, and every module that reaches this one (the kernel does) would

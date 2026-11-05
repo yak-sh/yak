@@ -1,0 +1,25 @@
+{
+  "name": "@yaks/testing",
+  "version": "0.2.17",
+  "type": "module",
+  "exports": {
+    ".": "./mod.ts",
+    "./choose": "./choose.ts",
+    "./deps": "./deps.ts",
+    "./examples": "./examples.ts",
+    "./find": "./find.ts",
+    "./main": "./main.ts",
+    "./own": "./own.ts",
+    "./reads": "./reads.ts"
+  },
+  "license": "Apache-2.0",
+  "description": "Declare tests, check their results, and run test modules and examples in one runtime. The runner skips files whose dependencies have not changed since they passed.",
+  "dependencies": {
+    "@std/assert": "npm:@jsr/std__assert@^1.0.0",
+    "@yaks/benchmark": "0.2.17",
+    "@yaks/file": "0.2.17",
+    "@yaks/fp": "0.2.17",
+    "@yaks/process": "0.2.17",
+    "@yaks/ram": "0.2.17"
+  }
+}

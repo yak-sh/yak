@@ -1,3 +1,18 @@
+import { registerHooks } from 'node:module'
+
+// The in-process kernel uses the same host module at every import, including
+// imports inside npm dependencies, where Deno import maps do not apply.
+registerHooks({
+  resolve(specifier, context, next) {
+    return next(
+      specifier == 'cloudflare:workers'
+        ? new URL('../workers/yak/runtime.ts', import.meta.url).href
+        : specifier,
+      context,
+    )
+  },
+})
+
 // Preloaded into each platform's runtime (bin/test.ts `runtime`): the runtime
 // runs on a module cache of its own, and what it starts runs on the run's.
 

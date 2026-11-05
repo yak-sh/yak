@@ -9,9 +9,6 @@
     "./reads": "./reads.ts"
   },
   "license": "Apache-2.0",
-  "imports": {
-    "@anthropic-ai/sdk": "npm:@anthropic-ai/sdk@1.4.0"
-  },
   "publish": {
     "exclude": [
       "**/*_test.ts",

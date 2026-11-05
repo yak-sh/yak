@@ -1,0 +1,44 @@
+{
+  "name": "@yaks/host",
+  "version": "0.2.17",
+  "type": "module",
+  "exports": {
+    ".": "./mod.ts",
+    "./assembly": "./assembly.ts",
+    "./roles": "./roles.ts",
+    "./senders": "./senders.ts",
+    "./words": "./words.ts",
+    "./config": "./config.ts",
+    "./documents": "./documents.ts",
+    "./keywords": "./keywords.ts",
+    "./anatomy": "./anatomy.ts"
+  },
+  "license": "Apache-2.0",
+  "description": "The portable capabilities a host lends the plugins it composes.",
+  "dependencies": {
+    "@yaks/api": "0.2.17",
+    "@yaks/blob": "0.2.17",
+    "@yaks/code": "0.2.17",
+    "@yaks/edge": "0.2.17",
+    "@yaks/effects": "0.2.17",
+    "@yaks/file": "0.2.17",
+    "@yaks/fp": "0.2.17",
+    "@yaks/fts": "0.2.17",
+    "@yaks/git": "0.2.17",
+    "@yaks/graph": "0.2.17",
+    "@yaks/id": "0.2.17",
+    "@yaks/machine": "0.2.17",
+    "@yaks/names": "0.2.17",
+    "@yaks/sandbox": "0.2.17",
+    "@yaks/secrets": "0.2.17",
+    "@yaks/sql": "0.2.17",
+    "@yaks/testing": "0.2.17",
+    "@yaks/tools": "0.2.17",
+    "@yaks/tracker": "0.2.17",
+    "@yaks/ui": "0.2.17",
+    "@yaks/vocab": "0.2.17"
+  },
+  "devDependencies": {
+    "@yaks/ram": "0.2.17"
+  }
+}

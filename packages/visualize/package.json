@@ -1,0 +1,42 @@
+{
+  "name": "@yaks/visualize",
+  "version": "0.2.17",
+  "type": "module",
+  "exports": {
+    ".": "./mod.ts",
+    "./snapshot": "./snapshot.ts",
+    "./activity": "./activity.ts",
+    "./capture": "./capture.ts",
+    "./http": "./http.ts",
+    "./front": "./front.ts",
+    "./model": "./model.ts",
+    "./routes": "./routes.ts",
+    "./cli": "./cli.ts",
+    "./tools": "./tools.ts",
+    "./vocab": "./vocab.ts",
+    "./main": "./main.ts"
+  },
+  "license": "Apache-2.0",
+  "description": "A value-free atlas of a composed platform and its subscriber-owned live causal activity, on /visualize and through agent doors.",
+  "dependencies": {
+    "@preact/signals": "2.9.4",
+    "@yaks/api": "0.2.17",
+    "@yaks/cli": "0.2.17",
+    "@yaks/client": "0.2.17",
+    "@yaks/code": "0.2.17",
+    "@yaks/draft": "0.2.17",
+    "@yaks/fp": "0.2.17",
+    "@yaks/graph": "0.2.17",
+    "@yaks/host": "0.2.17",
+    "@yaks/tools": "0.2.17",
+    "@yaks/trace": "0.2.17",
+    "@yaks/ui": "0.2.17",
+    "@yaks/vocab": "0.2.17",
+    "preact": "10.29.7"
+  },
+  "devDependencies": {
+    "@std/assert": "npm:@jsr/std__assert@^1.0.0",
+    "@yaks/connections": "0.2.17",
+    "@yaks/testing": "0.2.17"
+  }
+}

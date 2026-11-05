@@ -5,8 +5,7 @@
 .env.production.local
 .env.local
 
-# npm droppings — the kernel Worker's are the only ones, and they are installed
-# on demand (workers/yak/wrangler.ts); the .lock is that install's mutex.
+# npm installs the repository workspace; .lock is the install's mutex.
 node_modules
 node_modules.lock/
 node_modules.lock.*/

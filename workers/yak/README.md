@@ -96,16 +96,16 @@ instead; it was reverted the same day (M-37262).
 
 The dashboard settings, in full (Workers & Pages → `yak` → Settings → Builds):
 
-| setting                 | value                                                                                                                                                                  |
-| ----------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Repository              | `yak-sh/yak` (Cloudflare GitHub App)                                                                                                                                   |
-| Production branch       | `main`                                                                                                                                                                 |
-| Root directory          | `workers/yak`                                                                                                                                                          |
-| Build variable          | `SKIP_DEPENDENCY_INSTALL=1`                                                                                                                                            |
-| Build command           | `../../bin/build-yak install`                                                                                                                                          |
-| Deploy command          | `../../bin/build-yak deploy`                                                                                                                                           |
-| Build watch paths       | include `workers/yak/**`, `packages/**`, `src/**`, `deno.json`, `deno.lock`; exclude `**/*_test.*`, `**/README.md`, `.github/**`, `bench/**` (`wrangler.ts` `WATCHED`) |
-| Non-production branches | build only; previews off for now (below)                                                                                                                               |
+| setting                 | value                                                                                                                                                                                                                 |
+| ----------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Repository              | `yak-sh/yak` (Cloudflare GitHub App)                                                                                                                                                                                  |
+| Production branch       | `main`                                                                                                                                                                                                                |
+| Root directory          | `workers/yak`                                                                                                                                                                                                         |
+| Build variable          | `SKIP_DEPENDENCY_INSTALL=1`                                                                                                                                                                                           |
+| Build command           | `../../bin/build-yak install`                                                                                                                                                                                         |
+| Deploy command          | `../../bin/build-yak deploy`                                                                                                                                                                                          |
+| Build watch paths       | include `workers/yak/**`, `packages/**`, `src/**`, `deno.json`, `deno.lock`, `package.json`, `package-lock.json`, `.npmrc`; exclude `**/*_test.*`, `**/README.md`, `.github/**`, `bench/**` (`wrangler.ts` `WATCHED`) |
+| Non-production branches | build only; previews off for now (below)                                                                                                                                                                              |
 
 Worker Previews give a branch its own URL, and since Cloudflare's 2026-09-22
 launch each preview gets its own Durable Object namespace
@@ -132,8 +132,9 @@ runs neither `deno task check` nor the tests. `SKIP_DEPENDENCY_INSTALL=1`
 disables Builds' automatic install
 ([build image variables](https://developers.cloudflare.com/workers/ci-cd/builds/build-image/)).
 `bin/build-yak install` keeps Deno and the installed npm project under npm's
-restored cache directory, linking the checkout's `node_modules` to that tree.
-Builds saves this cache after the build command and before the deploy command
+restored cache directory, copying its npm tree into the checkout so workspace
+links resolve to that checkout's packages. Builds saves this cache after the
+build command and before the deploy command
 ([build caching](https://developers.cloudflare.com/workers/ci-cd/builds/build-caching/)).
 `bin/build-yak deploy` repeats the dependency check, reusing the ready tree or
 installing it when the build command has not run. Each package manifest,

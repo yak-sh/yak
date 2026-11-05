@@ -90,14 +90,12 @@ export let moved = (source: string, value: () => string | undefined) => {
 }
 
 // A flat install must satisfy every consumer, not whichever was visited last.
-type Bound = { value: string }
-
 let together = (name: string, a: string, b: string) => {
   if (a == b) return a
   try {
     if (intersects(a, b)) {
-      let choices = new Range(a).set.flatMap((left: Bound[]) =>
-        new Range(b).set.map((right: Bound[]) =>
+      let choices = new Range(a).set.flatMap((left) =>
+        new Range(b).set.map((right) =>
           [...left, ...right].map((c) => c.value).filter(Boolean).join(' ')
         )
       )

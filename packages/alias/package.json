@@ -1,0 +1,23 @@
+{
+  "name": "@yaks/alias",
+  "version": "0.2.17",
+  "type": "module",
+  "exports": {
+    ".": "./mod.ts",
+    "./vocab": "./vocab.ts",
+    "./graph": "./graph.ts"
+  },
+  "license": "Apache-2.0",
+  "description": "Assigns persistent, unique names to graph entities and resolves those names wherever an entity id is accepted.",
+  "dependencies": {
+    "@yaks/fp": "0.2.17",
+    "@yaks/graph": "0.2.17",
+    "@yaks/key": "0.2.17",
+    "@yaks/ram": "0.2.17",
+    "@yaks/vocab": "0.2.17"
+  },
+  "devDependencies": {
+    "@std/assert": "npm:@jsr/std__assert@^1.0.0",
+    "@yaks/testing": "0.2.17"
+  }
+}

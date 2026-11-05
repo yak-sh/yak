@@ -1,0 +1,42 @@
+{
+  "name": "@yaks/mail",
+  "version": "0.2.17",
+  "type": "module",
+  "exports": {
+    ".": "./mod.ts",
+    "./vocab": "./vocab.ts",
+    "./answers": "./answers.ts",
+    "./graph": "./graph.ts",
+    "./tools": "./tools.ts",
+    "./effects": "./effects.ts",
+    "./routes": "./routes.ts",
+    "./service": "./service.ts"
+  },
+  "license": "Apache-2.0",
+  "description": "Represents letters and their delivery outcomes as graph components, sends them through a sender the caller supplies, and converts arrivals to bundles.",
+  "dependencies": {
+    "@std/assert": "npm:@jsr/std__assert@^1.0.0",
+    "@yaks/api": "0.2.17",
+    "@yaks/cli": "0.2.17",
+    "@yaks/doc": "0.2.17",
+    "@yaks/edge": "0.2.17",
+    "@yaks/effects": "0.2.17",
+    "@yaks/fp": "0.2.17",
+    "@yaks/graph": "0.2.17",
+    "@yaks/hook": "0.2.17",
+    "@yaks/host": "0.2.17",
+    "@yaks/id": "0.2.17",
+    "@yaks/kernel": "0.2.17",
+    "@yaks/member": "0.2.17",
+    "@yaks/notify": "0.2.17",
+    "@yaks/query": "0.2.17",
+    "@yaks/ram": "0.2.17",
+    "@yaks/tools": "0.2.17",
+    "@yaks/vocab": "0.2.17"
+  },
+  "devDependencies": {
+    "@yaks/project": "0.2.17",
+    "@yaks/task": "0.2.17",
+    "@yaks/testing": "0.2.17"
+  }
+}

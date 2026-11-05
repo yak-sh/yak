@@ -149,7 +149,8 @@ export let located = (
   try {
     resolve(spec)
     return spec
-  } catch {
+  } catch (error) {
+    if (String(error).includes('ERR_PACKAGE_PATH_NOT_EXPORTED')) return spec
     let [scope, name, ...rest] = spec.split('/')
     return ['jsr:' + scope, `${name}@${release}`, ...rest].join('/')
   }
@@ -249,13 +250,18 @@ let imported = new Map<string, Promise<unknown>>()
 let dependencies = new Map<string, string[]>()
 let optional = async <M>(key: string): Promise<M | null> => {
   let spec = located(key)
+  let resolved = false
   try {
     // Missing-module errors name the resolved URL, including for a plugin
     // whose declaring package is an absolute path in a remote vocabulary.
     spec = import.meta.resolve(spec)
+    resolved = true
     dependencies.set(key, [spec])
     return await importing(spec)
   } catch (error) {
+    if (!resolved && String(error).includes('ERR_PACKAGE_PATH_NOT_EXPORTED')) {
+      return null
+    }
     if (unexported(error, spec)) return null
     throw error
   }

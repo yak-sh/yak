@@ -1,0 +1,28 @@
+{
+  "name": "@yaks/phone",
+  "version": "0.2.17",
+  "type": "module",
+  "exports": {
+    ".": "./mod.ts",
+    "./vocab": "./vocab.ts",
+    "./effects": "./effects.ts",
+    "./routes": "./routes.ts"
+  },
+  "license": "Apache-2.0",
+  "description": "Phone numbers and texts in the graph: a person's number beside their email address, the words they agreed to before being texted, texts and their delivery outcomes as entities, sent through a transport the caller supplies (Telnyx, voip.ms, or a stash).",
+  "dependencies": {
+    "@yaks/api": "0.2.17",
+    "@yaks/effects": "0.2.17",
+    "@yaks/graph": "0.2.17",
+    "@yaks/hook": "0.2.17",
+    "@yaks/host": "0.2.17",
+    "@yaks/testing": "0.2.17",
+    "@yaks/vocab": "0.2.17"
+  },
+  "devDependencies": {
+    "@std/assert": "npm:@jsr/std__assert@^1.0.0",
+    "@yaks/doc": "0.2.17",
+    "@yaks/mail": "0.2.17",
+    "@yaks/ram": "0.2.17"
+  }
+}

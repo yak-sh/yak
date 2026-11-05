@@ -4,15 +4,8 @@
 // (bin/test.ts) all come through here, so the pinned version is written once
 // and `node_modules` is current before wrangler reads it.
 //
-// Why the install has to happen first: wrangler bundles with esbuild, which
-// resolves `zod` and the MCP SDK as files under this directory's
-// `node_modules` (wrangler.toml `[alias]`). node_modules is gitignored, so a
-// fresh worktree has none and every wrangler command dies unresolved at
-// mcp.ts's `import { z } from 'zod'` (T-34159). npm is the only thing that
-// fills that directory: esbuild wants files on disk, so no import map or
-// deno cache reaches those two deps. Deno reads from it too: the kernel in
-// memory imports the OAuth provider as a file there (oauth-provider.ts), so a
-// test run installs before its first test loads.
+// npm installs the repository workspace before bundling. Package manifests
+// own dependencies and exports, so esbuild follows the same names as Deno.
 
 // The pin. `--yes` so a cold npx cache installs it instead of asking.
 //
@@ -153,9 +146,10 @@ let modules = (root: string, timeout: number, quiet: boolean) =>
   timed('npm dependencies', async () => {
     let cache = system.env.get('XDG_CACHE_HOME') ??
       system.env.get('HOME')?.concat('/.cache')
+    let workspace = resolve(root, '../..')
     let changed = cache
-      ? await restored(join(cache, 'yak'), root, { timeout, mode: 'copy' })
-      : await installed(root, { timeout })
+      ? await restored(join(cache, 'yak'), workspace, { timeout, mode: 'copy' })
+      : await installed(workspace, { timeout })
     aliased()
     return changed
   }, quiet)
@@ -1127,6 +1121,9 @@ export let WATCHED = [
   'src',
   'deno.json',
   'deno.lock',
+  'package.json',
+  'package-lock.json',
+  '.npmrc',
   ':(exclude,glob)**/*_test.*',
   ':(exclude,glob)**/README.md',
   ':(exclude,glob).github/**',
@@ -1379,7 +1376,7 @@ if (system.main(import.meta.url)) {
   let argv = [...system.args]
   // npm ci pins this executable already. npx adds an npm process and package
   // resolution to every read/upload even when the exact package is installed.
-  let executable = join(dir, 'node_modules/.bin/wrangler')
+  let executable = join(repo, 'node_modules/.bin/wrangler')
   let wrangler = WRANGLER
   let guarded = command(argv) === 'deploy' && !argv.includes('--dry-run')
   let door = guarded

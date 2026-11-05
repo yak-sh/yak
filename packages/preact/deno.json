@@ -1,21 +1,23 @@
 {
   "name": "@yaks/preact",
   "version": "0.2.17",
-  "exports": { ".": "./mod.ts", "./host": "./host.ts" },
+  "exports": {
+    ".": "./mod.ts",
+    "./host": "./host.ts"
+  },
   "license": "Apache-2.0",
   "description": "Renders registry-selected views with Preact and binds them to an entity store with subscriptions scoped to mounted components.",
   "imports": {
-    "preact": "npm:preact@^10.29.1",
-    "preact/hooks": "npm:preact@^10.29.1/hooks",
-    "@preact/signals": "npm:@preact/signals@^2.9.0",
-    "@std/assert": "jsr:@std/assert@^1.0.0",
-    "linkedom": "npm:linkedom@^0.18.12",
-    "sucrase": "npm:sucrase@^3.35.0"
+    "@std/assert": "jsr:@std/assert@^1.0.0"
   },
   "tasks": {
     "example": "deno run --allow-read --allow-net=127.0.0.1 example/serve.ts"
   },
   "publish": {
-    "exclude": ["**/*_test.ts", "testing.ts", "example/"]
+    "exclude": [
+      "**/*_test.ts",
+      "testing.ts",
+      "example/"
+    ]
   }
 }

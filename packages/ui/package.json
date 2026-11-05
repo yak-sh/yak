@@ -1,0 +1,30 @@
+{
+  "name": "@yaks/ui",
+  "version": "0.2.17",
+  "type": "module",
+  "exports": {
+    ".": "./mod.ts",
+    "./routes": "./routes.ts",
+    "./cli": "./cli.ts",
+    "./ui": "./ui.ts",
+    "./chart": "./chart-marks.ts",
+    "./contributions": "./contributions.ts",
+    "./guide": "./guide.ts",
+    "./history": "./history.ts",
+    "./relative": "./relative.ts"
+  },
+  "license": "Apache-2.0",
+  "description": "Preact parts with semantic variants, CSS and terminal sheet entries; compose kits with themes and skins, and inspect their specimens in the style guide.",
+  "dependencies": {
+    "@preact/signals": "2.9.4",
+    "@yaks/api": "0.2.17",
+    "@yaks/render": "0.2.17",
+    "@yaks/testing": "0.2.17",
+    "@yaks/tui": "0.2.17",
+    "preact": "10.29.7",
+    "preact-render-to-string": "6.7.0"
+  },
+  "devDependencies": {
+    "@std/assert": "npm:@jsr/std__assert@^1.0.0"
+  }
+}

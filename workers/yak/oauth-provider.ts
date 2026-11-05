@@ -5,4 +5,4 @@
 // that import too, and runtime.ts answers it. esbuild resolves the name from
 // node_modules itself and never reads this.
 // @ts-types="npm:@cloudflare/workers-oauth-provider@0.10.3"
-export * from './node_modules/@cloudflare/workers-oauth-provider/dist/oauth-provider.js'
+export * from '../../node_modules/@cloudflare/workers-oauth-provider/dist/oauth-provider.js'

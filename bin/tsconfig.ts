@@ -216,6 +216,7 @@ export let project = (
   let paths: Record<string, string[]> = {}
   let external = new Set<string>()
   let node = false
+  if (!placed.size) links['node_modules'] = `${checkout}/node_modules`
 
   // The files tsc may read, in turn, for a module Deno resolved.
   let candidates = (url: string): string[] => {
@@ -250,6 +251,9 @@ export let project = (
       let tos = url ? candidates(at(url)) : []
       if (!tos.length) continue
       if (!/^\.\.?\//.test(d.specifier)) {
+        if (
+          url?.includes('/node_modules/') && !d.specifier.startsWith('npm:')
+        ) continue
         paths[d.specifier] ??= tos.map((to) => relative(dir, to))
         continue
       }

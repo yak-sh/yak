@@ -1,0 +1,37 @@
+{
+  "name": "@yaks/sandbox",
+  "version": "0.2.17",
+  "type": "module",
+  "exports": {
+    ".": "./mod.ts",
+    "./vocab": "./vocab.ts",
+    "./docker": "./docker.ts",
+    "./cloudflare": "./cloudflare.ts",
+    "./bubblewrap": "./bubblewrap.ts",
+    "./pve": "./pve.ts",
+    "./effects": "./effects.ts",
+    "./tools": "./tools.ts",
+    "./lifecycle": "./lifecycle.ts",
+    "./configuration": "./configuration.ts"
+  },
+  "license": "Apache-2.0",
+  "description": "Containers and jails recorded separately from computers, with provisioning intentions and confirmed disposal in the graph.",
+  "dependencies": {
+    "@std/encoding": "npm:@jsr/std__encoding@1.0.10",
+    "@std/path": "npm:@jsr/std__path@1.1.2",
+    "@yaks/effects": "0.2.17",
+    "@yaks/file": "0.2.17",
+    "@yaks/fp": "0.2.17",
+    "@yaks/graph": "0.2.17",
+    "@yaks/machine": "0.2.17",
+    "@yaks/process": "0.2.17",
+    "@yaks/tools": "0.2.17",
+    "@yaks/vocab": "0.2.17"
+  },
+  "devDependencies": {
+    "@yaks/harness": "0.2.17",
+    "@yaks/kernel": "0.2.17",
+    "@yaks/ram": "0.2.17",
+    "@yaks/testing": "0.2.17"
+  }
+}

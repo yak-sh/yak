@@ -1,0 +1,30 @@
+{
+  "name": "@yaks/stage",
+  "version": "0.2.17",
+  "type": "module",
+  "exports": {
+    ".": "./mod.ts",
+    "./pace": "./pace.ts",
+    "./aim": "./aim.ts",
+    "./cam": "./cam.ts",
+    "./render": "./render.ts",
+    "./halo": "./halo.ts",
+    "./flames": "./flames.ts",
+    "./instances": "./instances.ts",
+    "./ears": "./ears.ts",
+    "./bus": "./bus.ts",
+    "./sound": "./sound.ts",
+    "./samples": "./samples.ts",
+    "./fx": "./fx.ts",
+    "./air": "./air.ts"
+  },
+  "license": "Apache-2.0",
+  "description": "Three.js scenes, effects, instancing, orbit cameras, picking and positional sound over caller-supplied values.",
+  "dependencies": {
+    "@std/assert": "npm:@jsr/std__assert@^1.0.0",
+    "three": "^0.186.1"
+  },
+  "devDependencies": {
+    "@yaks/testing": "0.2.17"
+  }
+}

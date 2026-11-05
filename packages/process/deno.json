@@ -22,8 +22,7 @@
   "imports": {
     "@std/assert": "jsr:@std/assert@^1.0.0",
     "@std/path": "jsr:@std/path@^1.0.0",
-    "@std/encoding": "jsr:@std/encoding@^1.0.10",
-    "undici": "npm:undici@^7.28.0"
+    "@std/encoding": "jsr:@std/encoding@^1.0.10"
   },
   "publish": {
     "exclude": [

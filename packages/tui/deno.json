@@ -11,9 +11,6 @@
   "license": "Apache-2.0",
   "description": "Renders Preact trees in a terminal through a replaceable backend, with a diffing ANSI painter and scrolling, input, and layout widgets.",
   "imports": {
-    "preact": "npm:preact@^10.29.1",
-    "preact/hooks": "npm:preact@^10.29.1/hooks",
-    "@preact/signals": "npm:@preact/signals@^2.9.0",
     "@std/assert": "jsr:@std/assert@^1.0.0"
   },
   "tasks": {

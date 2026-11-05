@@ -1,0 +1,30 @@
+{
+  "name": "@yaks/client",
+  "version": "0.2.17",
+  "type": "module",
+  "exports": {
+    ".": "./mod.ts",
+    "./named": "./named.ts"
+  },
+  "license": "Apache-2.0",
+  "description": "Assembles a browser graph with server synchronization, reactive queries, and IndexedDB persistence for local components and retained server data.",
+  "dependencies": {
+    "@preact/signals": "2.9.4",
+    "@yaks/alias": "0.2.17",
+    "@yaks/fp": "0.2.17",
+    "@yaks/graph": "0.2.17",
+    "@yaks/match": "0.2.17",
+    "@yaks/query": "0.2.17",
+    "@yaks/ram": "0.2.17",
+    "@yaks/sync": "0.2.17",
+    "@yaks/vocab": "0.2.17",
+    "fake-indexeddb": "^6.2.2"
+  },
+  "devDependencies": {
+    "@std/assert": "npm:@jsr/std__assert@^1.0.0",
+    "@yaks/benchmark": "0.2.17",
+    "@yaks/id": "0.2.17",
+    "@yaks/key": "0.2.17",
+    "@yaks/testing": "0.2.17"
+  }
+}

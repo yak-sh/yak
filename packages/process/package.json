@@ -1,0 +1,39 @@
+{
+  "name": "@yaks/process",
+  "version": "0.2.17",
+  "type": "module",
+  "exports": {
+    ".": "./mod.ts",
+    "./vocab": "./vocab.ts",
+    "./graph": "./graph.ts",
+    "./self": "./self.ts",
+    "./wind": "./wind.ts",
+    "./isolate": "./isolate.ts",
+    "./views": "./views.ts",
+    "./http": "./http.ts",
+    "./system": "./system.ts",
+    "./env": "./env.ts",
+    "./platform": "./platform.ts",
+    "./command": "./command.ts",
+    "./socket": "./socket.ts",
+    "./clock": "./clock.ts"
+  },
+  "license": "Apache-2.0",
+  "description": "Starts, adopts and supervises operating-system processes, recording each one as a graph entity with its pid and exit code.",
+  "dependencies": {
+    "@std/assert": "npm:@jsr/std__assert@^1.0.0",
+    "@std/path": "npm:@jsr/std__path@1.1.2",
+    "@yaks/graph": "0.2.17",
+    "@yaks/model": "0.2.17",
+    "@yaks/query": "0.2.17",
+    "@yaks/ram": "0.2.17",
+    "@yaks/render": "0.2.17",
+    "@yaks/session": "0.2.17",
+    "@yaks/tools": "0.2.17",
+    "@yaks/vocab": "0.2.17",
+    "undici": "^7.28.0"
+  },
+  "devDependencies": {
+    "@yaks/testing": "0.2.17"
+  }
+}

@@ -1,0 +1,24 @@
+{
+  "name": "@yaks/workers-ai",
+  "version": "0.2.17",
+  "type": "module",
+  "exports": "./mod.ts",
+  "license": "Apache-2.0",
+  "description": "Implements the model interface over Cloudflare Workers AI, through the AI binding a Worker is given: chat messages out, either answer shape back, no key.",
+  "dependencies": {
+    "@std/assert": "npm:@jsr/std__assert@^1.0.0",
+    "@yaks/blob": "0.2.17",
+    "@yaks/fp": "0.2.17",
+    "@yaks/model": "0.2.17",
+    "@yaks/openai": "0.2.17"
+  },
+  "devDependencies": {
+    "@yaks/effects": "0.2.17",
+    "@yaks/graph": "0.2.17",
+    "@yaks/ram": "0.2.17",
+    "@yaks/secrets": "0.2.17",
+    "@yaks/testing": "0.2.17",
+    "@yaks/tools": "0.2.17",
+    "@yaks/vocab": "0.2.17"
+  }
+}

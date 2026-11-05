@@ -1,0 +1,34 @@
+{
+  "name": "@yaks/blob",
+  "version": "0.2.17",
+  "type": "module",
+  "exports": {
+    ".": "./mod.ts",
+    "./backend": "./backend.ts",
+    "./file": "./file.ts",
+    "./sqlite": "./sqlite.ts",
+    "./vocab": "./vocab.ts",
+    "./graph": "./graph.ts",
+    "./routes": "./routes.ts"
+  },
+  "license": "Apache-2.0",
+  "description": "Stores text and binary content under SHA-256 addresses, with transparent graph text reads and writes, verified artifacts and HTTP responses.",
+  "dependencies": {
+    "@std/assert": "npm:@jsr/std__assert@^1.0.0",
+    "@yaks/api": "0.2.17",
+    "@yaks/file": "0.2.17",
+    "@yaks/fp": "0.2.17",
+    "@yaks/graph": "0.2.17",
+    "@yaks/process": "0.2.17",
+    "@yaks/ram": "0.2.17",
+    "@yaks/sql": "0.2.17",
+    "@yaks/sqlite": "0.2.17",
+    "@yaks/testing": "0.2.17",
+    "@yaks/tools": "0.2.17",
+    "@yaks/vocab": "0.2.17",
+    "file-type": "21.3.4"
+  },
+  "devDependencies": {
+    "@yaks/fts": "0.2.17"
+  }
+}

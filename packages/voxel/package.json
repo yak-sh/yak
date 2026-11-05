@@ -1,0 +1,24 @@
+{
+  "name": "@yaks/voxel",
+  "version": "0.2.17",
+  "type": "module",
+  "exports": {
+    ".": "./mod.ts",
+    "./mesh": "./mesh.ts",
+    "./boxes": "./boxes.ts",
+    "./light": "./light.ts",
+    "./stream": "./stream.ts",
+    "./chartbook": "./chartbook.ts",
+    "./chartsheet": "./chartsheet.ts",
+    "./three": "./three/mod.ts"
+  },
+  "license": "Apache-2.0",
+  "description": "Worker-safe voxel geometry, baked lamp light, chunk detail and heightfield charts, with Three.js materials and box rigs at /three.",
+  "dependencies": {
+    "@std/assert": "npm:@jsr/std__assert@^1.0.0",
+    "three": "^0.186.1"
+  },
+  "devDependencies": {
+    "@yaks/testing": "0.2.17"
+  }
+}

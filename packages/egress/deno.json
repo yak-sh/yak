@@ -8,6 +8,12 @@
   },
   "license": "Apache-2.0",
   "description": "Calls going out with a credential the caller never holds: each sentinel swapped for its connection's key, for an allowed caller and a host its integration names, a refused token refreshed once, and each call counted against its link's monthly cap.",
-  "imports": { "@std/assert": "jsr:@std/assert@^1.0.0" },
-  "publish": { "exclude": ["**/*_test.ts"] }
+  "imports": {
+    "@std/assert": "jsr:@std/assert@^1.0.0"
+  },
+  "publish": {
+    "exclude": [
+      "**/*_test.ts"
+    ]
+  }
 }

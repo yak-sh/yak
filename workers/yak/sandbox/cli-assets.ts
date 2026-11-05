@@ -15,6 +15,10 @@ export let sources = (paths: string[], members: string[]): string[] => {
   let configs = new Set([
     'deno.json',
     'deno.lock',
+    'package.json',
+    'package-lock.json',
+    '.npmrc',
+    ...members.map((path) => `${path.replace(/^\.\//, '')}/package.json`),
     ...members.map((path) => `${path.replace(/^\.\//, '')}/deno.json`),
   ])
   return paths.filter((path) => {

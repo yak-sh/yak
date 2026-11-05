@@ -5,10 +5,9 @@ import * as io from '@yaks/file/io'
 import * as system from '@yaks/process/system'
 import { build, type Metafile, stop } from 'npm:esbuild@0.28.1'
 import { rollup } from 'npm:rollup@4.65.1'
-import { createRequire } from 'node:module'
 import { dirname, join, resolve } from 'node:path'
+import { isBuiltin } from 'node:module'
 import { fileURLToPath } from 'node:url'
-import { parse } from '@std/toml'
 import { from, plan } from './sheet-assets.ts'
 
 /** The entry's static imports, leaving every dynamic door unopened. */
@@ -28,23 +27,9 @@ export let closure = (meta: Metafile, entry: string): Set<string> => {
 let native = (name: string) =>
   name.startsWith('node:') || name.startsWith('cloudflare:')
 
-// Wrangler's aliases match a whole specifier. esbuild's native aliases also
-// match subpaths, which would turn zod/v3 into zod/index.js/v3.
-let aliases = (root: string, names: Record<string, string>) => ({
-  name: 'aliases',
-  setup(build: import('npm:esbuild@0.28.1').PluginBuild) {
-    let require = createRequire(join(root, 'package.json'))
-    build.onResolve({ filter: /.*/ }, ({ path }) => {
-      let alias = names[path]
-      return alias ? { path: require.resolve(alias) } : undefined
-    })
-  },
-})
-
 /** Build the source once, then group its eager closure without duplicating
  * the modules shared with a deferred door. Both passes compose source maps. */
 export let bundle = async (root: string, output: string, meta: string) => {
-  let config = parse(io.readTextFileSync(join(root, 'wrangler.toml')))
   let scratch = io.makeTempDirSync({
     dir: dirname(output),
     prefix: '.modules-',
@@ -61,7 +46,21 @@ export let bundle = async (root: string, output: string, meta: string) => {
       target: 'es2022',
       conditions: ['workerd', 'worker', 'browser'],
       external: ['node:*', 'cloudflare:*'],
-      plugins: [aliases(root, config.alias as Record<string, string>)],
+      plugins: [{
+        name: 'builtins',
+        setup(build) {
+          build.onResolve(
+            { filter: /.*/ },
+            ({ path }) =>
+              isBuiltin(path)
+                ? {
+                  path: path.startsWith('node:') ? path : `node:${path}`,
+                  external: true,
+                }
+                : undefined,
+          )
+        },
+      }],
       tsconfig: join(root, '.wrangler/paths.json'),
       minify: true,
       keepNames: true,

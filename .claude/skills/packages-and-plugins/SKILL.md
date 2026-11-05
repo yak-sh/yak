@@ -66,17 +66,12 @@ What the walls are made of:
 
 packages/draft is a good small one to copy:
 
-- **deno.json**: `name`, the family's current `version` (every package moves
-  together; bin/release.ts), `exports`, `license`, `description` and `publish`
-  excludes. The description is the one place a package says what it is: its
-  `./vocab` facet re-exports it (packages/draft/vocab.ts), the graph's package
-  rows read it, and `deno task jsr` puts it on jsr.io. Its `imports` name
-  outside dependencies only; workspace packages resolve through the workspace.
-  An npm name the kernel Worker bundles (anything workers/yak imports, however
-  deep) also needs its exact pin in workers/yak/package.json and an entry in
-  wrangler.toml's `[alias]` pointing at its ESM entry, or main's Workers Build
-  fails and nothing deploys.
-- **The workspace list** in the root deno.json, which names the package.
+- **package.json**: `name`, the family's current `version`, `type: module`,
+  `exports` and `dependencies`. npm installs the root workspace, and Deno and
+  esbuild resolve the same package exports and dependencies. Add an import and
+  its package dependency where it is used; the kernel needs no matching alias.
+- **deno.json** keeps JSR publishing metadata and Deno compiler settings.
+- **The workspace list** in the root package.json names every package.
 - **README.md**, written the way `writing-documentation` describes.
 - **vocab.json and vocab.ts** if it declares words (`vocabulary`).
 - **browser.json** if a page imports it. `deno task check:browser`

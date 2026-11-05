@@ -1,0 +1,21 @@
+{
+  "name": "@yaks/claude",
+  "version": "0.2.17",
+  "type": "module",
+  "exports": {
+    ".": "./mod.ts",
+    "./vocab": "./vocab.ts"
+  },
+  "license": "Apache-2.0",
+  "description": "Claude Code print mode as a one-turn model; the graph harness alone executes tools.",
+  "dependencies": {
+    "@yaks/file": "0.2.17",
+    "@yaks/model": "0.2.17",
+    "@yaks/process": "0.2.17",
+    "@yaks/vocab": "0.2.17"
+  },
+  "devDependencies": {
+    "@std/assert": "npm:@jsr/std__assert@^1.0.0",
+    "@yaks/testing": "0.2.17"
+  }
+}

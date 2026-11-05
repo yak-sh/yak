@@ -1,0 +1,24 @@
+{
+  "name": "@yaks/canvas",
+  "version": "0.2.17",
+  "type": "module",
+  "exports": {
+    ".": "./mod.ts",
+    "./vocab": "./vocab.ts",
+    "./graph": "./graph.ts"
+  },
+  "license": "Apache-2.0",
+  "description": "Represents canvases, cards, viewports, and split layouts as graph components and supplies geometry functions for rendering them.",
+  "dependencies": {
+    "@yaks/graph": "0.2.17",
+    "@yaks/query": "0.2.17",
+    "@yaks/ram": "0.2.17",
+    "@yaks/vocab": "0.2.17"
+  },
+  "devDependencies": {
+    "@std/assert": "npm:@jsr/std__assert@^1.0.0",
+    "@yaks/id": "0.2.17",
+    "@yaks/names": "0.2.17",
+    "@yaks/testing": "0.2.17"
+  }
+}

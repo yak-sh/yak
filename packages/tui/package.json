@@ -1,0 +1,25 @@
+{
+  "name": "@yaks/tui",
+  "version": "0.2.17",
+  "type": "module",
+  "exports": {
+    ".": "./mod.ts",
+    "./print": "./print.ts",
+    "./theme": "./theme.ts",
+    "./history": "./history.ts",
+    "./interaction": "./interaction.ts"
+  },
+  "license": "Apache-2.0",
+  "description": "Renders Preact trees in a terminal through a replaceable backend, with a diffing ANSI painter and scrolling, input, and layout widgets.",
+  "dependencies": {
+    "@preact/signals": "2.9.4",
+    "@std/assert": "npm:@jsr/std__assert@^1.0.0",
+    "@yaks/process": "0.2.17",
+    "@yaks/text": "0.2.17",
+    "preact": "10.29.7"
+  },
+  "devDependencies": {
+    "@yaks/markdown": "0.2.17",
+    "@yaks/testing": "0.2.17"
+  }
+}

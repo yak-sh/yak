@@ -1,0 +1,16 @@
+{
+  "name": "@yaks/names",
+  "version": "0.2.17",
+  "type": "module",
+  "exports": "./mod.ts",
+  "license": "Apache-2.0",
+  "description": "Resolves entity names from the properties a component vocabulary marks for name lookup.",
+  "dependencies": {
+    "@yaks/doc": "0.2.17",
+    "@yaks/vocab": "0.2.17"
+  },
+  "devDependencies": {
+    "@std/assert": "npm:@jsr/std__assert@^1.0.0",
+    "@yaks/testing": "0.2.17"
+  }
+}

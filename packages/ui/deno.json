@@ -15,11 +15,7 @@
   "license": "Apache-2.0",
   "description": "Preact parts with semantic variants, CSS and terminal sheet entries; compose kits with themes and skins, and inspect their specimens in the style guide.",
   "imports": {
-    "@std/assert": "jsr:@std/assert@^1.0.0",
-    "preact": "npm:preact@^10.29.1",
-    "preact/hooks": "npm:preact@^10.29.1/hooks",
-    "@preact/signals": "npm:@preact/signals@^2.9.0",
-    "preact-render-to-string": "npm:preact-render-to-string@6.7.0"
+    "@std/assert": "jsr:@std/assert@^1.0.0"
   },
   "publish": {
     "exclude": [

@@ -1,0 +1,31 @@
+{
+  "name": "@yaks/project",
+  "version": "0.2.17",
+  "type": "module",
+  "exports": {
+    ".": "./mod.ts",
+    "./vocab": "./vocab.ts",
+    "./graph": "./graph.ts",
+    "./tools": "./tools.ts",
+    "./views": "./views.ts"
+  },
+  "license": "Apache-2.0",
+  "description": "A portfolio: the projects work is filed under, the boards that are saved filters over it, the ventures being built, and where a project lands its source.",
+  "dependencies": {
+    "@yaks/doc": "0.2.17",
+    "@yaks/edge": "0.2.17",
+    "@yaks/fp": "0.2.17",
+    "@yaks/graph": "0.2.17",
+    "@yaks/id": "0.2.17",
+    "@yaks/kernel": "0.2.17",
+    "@yaks/query": "0.2.17",
+    "@yaks/ram": "0.2.17",
+    "@yaks/task": "0.2.17",
+    "@yaks/tools": "0.2.17",
+    "@yaks/vocab": "0.2.17"
+  },
+  "devDependencies": {
+    "@std/assert": "npm:@jsr/std__assert@^1.0.0",
+    "@yaks/testing": "0.2.17"
+  }
+}

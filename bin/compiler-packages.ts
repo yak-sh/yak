@@ -3,6 +3,7 @@
 // Each package keeps its exports and paths; the compiler picks the app's roots.
 import { dirname, join, relative, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
+import { existsSync } from 'node:fs'
 import { parse } from 'es-module-lexer/js'
 import type ts from 'npm:typescript@6.0.3'
 import { expandGlob } from 'jsr:@std/fs@^1.0.0/expand-glob'
@@ -12,6 +13,7 @@ type Manifest = {
   name?: string
   exports?: string | Record<string, string>
   imports?: Record<string, string>
+  dependencies?: Record<string, string>
   workspace?: string[]
 }
 type Member = {
@@ -188,7 +190,12 @@ export let catalog = async (
   let members = new Map<string, Member>()
   for (let path of config.workspace ?? []) {
     let dir = resolve(root, path)
-    let manifest = read(join(dir, 'deno.json'))
+    let manifest = {
+      ...existsSync(join(dir, 'package.json'))
+        ? read(join(dir, 'package.json'))
+        : {},
+      ...read(join(dir, 'deno.json')),
+    }
     if (!manifest.name?.startsWith('@yaks/') || !manifest.exports) continue
     members.set(manifest.name, {
       dir,
@@ -275,6 +282,12 @@ export let catalog = async (
       if (target == spec) {
         target = mapped(spec, config.imports ?? {})
         if (target != spec) base = root
+      }
+      let dependency = member.manifest.dependencies?.[packageOf(target)]
+      if (target == spec && dependency && !target.startsWith('@yaks/')) {
+        target = `npm:${packageOf(target)}@${dependency}${
+          target.slice(packageOf(target).length)
+        }`
       }
       if (target.startsWith('@yaks/')) {
         member.dependencies[exported(target)] = 'platform'

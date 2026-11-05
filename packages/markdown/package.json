@@ -1,0 +1,20 @@
+{
+  "name": "@yaks/markdown",
+  "version": "0.2.17",
+  "type": "module",
+  "exports": {
+    ".": "./mod.ts",
+    "./structural": "./structural.ts"
+  },
+  "license": "Apache-2.0",
+  "description": "Parses GitHub Flavored Markdown into structural renderer nodes rather than HTML strings or terminal escape sequences.",
+  "dependencies": {
+    "@yaks/render": "0.2.17",
+    "marked": "18.0.6",
+    "preact": "10.29.7"
+  },
+  "devDependencies": {
+    "@std/assert": "npm:@jsr/std__assert@^1.0.0",
+    "@yaks/testing": "0.2.17"
+  }
+}

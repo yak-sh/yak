@@ -1,0 +1,41 @@
+{
+  "name": "@yaks/task",
+  "version": "0.2.17",
+  "type": "module",
+  "exports": {
+    ".": "./mod.ts",
+    "./vocab": "./vocab.ts",
+    "./graph": "./graph.ts",
+    "./tools": "./tools.ts",
+    "./form": "./DecisionForm.ts",
+    "./views": "./views.ts"
+  },
+  "license": "Apache-2.0",
+  "description": "Task components for a graph: a status computed from marks instead of stored, dependency counts, and completion attribution.",
+  "dependencies": {
+    "@std/assert": "npm:@jsr/std__assert@^1.0.0",
+    "@yaks/doc": "0.2.17",
+    "@yaks/draft": "0.2.17",
+    "@yaks/edge": "0.2.17",
+    "@yaks/fp": "0.2.17",
+    "@yaks/graph": "0.2.17",
+    "@yaks/inspect": "0.2.17",
+    "@yaks/kernel": "0.2.17",
+    "@yaks/markdown": "0.2.17",
+    "@yaks/match": "0.2.17",
+    "@yaks/project": "0.2.17",
+    "@yaks/query": "0.2.17",
+    "@yaks/ram": "0.2.17",
+    "@yaks/render": "0.2.17",
+    "@yaks/ui": "0.2.17",
+    "@yaks/vocab": "0.2.17",
+    "preact": "10.29.7"
+  },
+  "devDependencies": {
+    "@preact/signals": "2.9.4",
+    "@yaks/provenance": "0.2.17",
+    "@yaks/testing": "0.2.17",
+    "@yaks/tools": "0.2.17",
+    "linkedom": "^0.18.12"
+  }
+}

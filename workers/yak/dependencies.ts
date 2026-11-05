@@ -9,7 +9,7 @@ import { resolve } from 'node:path'
 import { createHash, randomUUID } from 'node:crypto'
 import { cpSync, existsSync } from 'node:fs'
 
-let dir = fileURLToPath(new URL('./', import.meta.url))
+let dir = fileURLToPath(new URL('../../', import.meta.url))
 export type Lock = {
   lockfileVersion: number
   packages: Record<string, {
@@ -121,10 +121,21 @@ export let matching = (wanted: Lock, held: Lock) => !mismatch(wanted, held)
 
 /** Install/cache policy with its effects supplied by the host. */
 export let dependencies = (host: Host = system) => {
-  let files = (root: string) =>
-    ['package.json', 'package-lock.json'].map((
-      file,
-    ) => [file, host.read(`${root}/${file}`)])
+  let files = (root: string) => {
+    let manifest = host.read(`${root}/package.json`)
+    let { workspaces = [] } = JSON.parse(manifest)
+    return [
+      ['package.json', manifest],
+      ['package-lock.json', host.read(`${root}/package-lock.json`)],
+      ...host.exists(`${root}/.npmrc`)
+        ? [['.npmrc', host.read(`${root}/.npmrc`)]]
+        : [],
+      ...workspaces.map((path: string) => [
+        `${path}/package.json`,
+        host.read(`${root}/${path}/package.json`),
+      ]),
+    ]
+  }
   let remove = host.remove
 
   let incomplete = (root: string) => {
@@ -334,6 +345,7 @@ export let dependencies = (host: Host = system) => {
     } catch { /* An incomplete legacy cache installs normally. */ }
     for (let [file, contents] of inputs) {
       let pending = `${project}/${file}.${host.nonce()}`
+      host.mkdir(resolve(project, file, '..'), true)
       host.write(pending, contents)
       host.rename(pending, `${project}/${file}`)
     }
@@ -365,6 +377,6 @@ export let dependencies = (host: Host = system) => {
 export let { stale, installed, restored } = dependencies()
 
 if (platform.main(import.meta.url)) {
-  if (platform.args[0]) await restored(platform.args[0])
+  if (platform.args[0]) await restored(platform.args[0], dir, { mode: 'copy' })
   else await installed()
 }

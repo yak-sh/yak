@@ -1,0 +1,16 @@
+{
+  "name": "@yaks/yaml",
+  "version": "0.2.17",
+  "type": "module",
+  "exports": "./mod.ts",
+  "license": "Apache-2.0",
+  "description": "Parses YAML and JSON declarations and extracts Markdown frontmatter as graph bundles.",
+  "dependencies": {
+    "@std/yaml": "npm:@jsr/std__yaml@1.2.0",
+    "@yaks/graph": "0.2.17"
+  },
+  "devDependencies": {
+    "@std/assert": "npm:@jsr/std__assert@^1.0.0",
+    "@yaks/testing": "0.2.17"
+  }
+}

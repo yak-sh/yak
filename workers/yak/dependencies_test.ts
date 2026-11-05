@@ -486,3 +486,26 @@ test('two cleaners of a dead installer cannot take a successor’s lock', async 
   assertEquals(JSON.parse(m.read(`${lock}/owner.json`)).pid, 2)
   assertEquals(m.state(), [0, true])
 })
+
+test('workspace manifests travel with a cached install and invalidate it when changed', async () => {
+  let m = memory()
+  m.write(
+    `${m.root}/package.json`,
+    JSON.stringify({ workspaces: ['packages/one'] }),
+  )
+  m.host.mkdir(`${m.root}/packages/one`, true)
+  m.write(`${m.root}/packages/one/package.json`, '{"name":"one","version":"1"}')
+  await m.restore()
+  let project = m.host.link(`${m.root}/node_modules`)!.replace(
+    /\/node_modules$/,
+    '',
+  )
+  assertEquals(
+    m.read(`${project}/packages/one/package.json`),
+    '{"name":"one","version":"1"}',
+  )
+  m.write(`${m.root}/packages/one/package.json`, '{"name":"one","version":"2"}')
+  assertEquals(m.stale(m.root), true)
+  await m.restore()
+  assertEquals(m.state(), [2, false])
+})

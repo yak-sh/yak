@@ -541,48 +541,6 @@ database_id = "88b2e161-99bf-4777-ab6d-b18fcf66ca95"
 # (wrangler.ts `aliased`) before wrangler runs: no `@yaks/*` name is listed
 # here, and none can be missing.
 #
-# The npm ones are aliased here, and only because of WHERE they are imported
-# from: esbuild walks up from the importing file, and a `packages/mcp/*.ts`
-# has no `node_modules` above it. Each points into this directory's own, which
-# is what `npm ci` here fills (package.json), so an SDK subpath is aliased to
-# the file it actually is.
-[alias]
-fflate = "./node_modules/fflate/esm/browser.js"
-"@cloudflare/puppeteer" = "./node_modules/@cloudflare/puppeteer/lib/esm/puppeteer/puppeteer-cloudflare.js"
-# @yaks/yaml's own dependency, aliased to the file it is. esbuild walks up from
-# packages/yaml/yaml.ts and finds no node_modules above it — the same reason
-# every npm name below is aliased — so the JSR package's npm build is named
-# here, out of this directory's own install (package.json).
-"@std/yaml" = "./node_modules/@std/yaml/mod.js"
-"file-type/core" = "./node_modules/file-type/core.js"
-"croner" = "./node_modules/croner/dist/croner.js"
-"marked" = "./node_modules/marked/lib/marked.esm.js"
-"stemmer" = "./node_modules/stemmer/index.js"
-"preact" = "./node_modules/preact/dist/preact.module.js"
-"preact/hooks" = "./node_modules/preact/hooks/dist/hooks.module.js"
-"@preact/signals" = "./node_modules/@preact/signals/dist/signals.module.js"
-"preact-render-to-string" = "./node_modules/preact-render-to-string/dist/index.mjs"
-"zod" = "./node_modules/zod/index.js"
-# Both MCP packages use Zod 4. Share one copy while older tool declarations
-# keep their Zod 3 schemas and conversion.
-"zod/v4" = "./node_modules/@modelcontextprotocol/server/node_modules/zod/v4/index.js"
-# @yaks/esbuild parses an app's module graph at deploy (packages/esbuild/graph.ts).
-"es-module-lexer/js" = "./node_modules/es-module-lexer/dist/lexer.asm.js"
-"sucrase" = "./node_modules/sucrase/dist/esm/index.js"
-# And hashes an npm tarball as it streams in, filling a package's home
-# (packages/esbuild/unpack.ts, shared.ts).
-"@noble/hashes/sha2.js" = "./node_modules/@noble/hashes/sha2.js"
-# @yaks/vocab validates a tool's arguments with @cfworker/json-schema, which
-# interprets a schema rather than compiling it to code the runtime refuses.
-"@cfworker/json-schema" = "./node_modules/@cfworker/json-schema/dist/esm/index.js"
-"zod-to-json-schema" = "./node_modules/zod-to-json-schema/dist/esm/index.js"
-"@modelcontextprotocol/core" = "./node_modules/@modelcontextprotocol/core/dist/index.mjs"
-"@modelcontextprotocol/server" = "./node_modules/@modelcontextprotocol/server/dist/index.mjs"
-"@modelcontextprotocol/server/_shims" = "./node_modules/@modelcontextprotocol/server/dist/shimsWorkerd.mjs"
-"@modelcontextprotocol/server/validators/cf-worker" = "./node_modules/@modelcontextprotocol/server/dist/validators/cfWorker.mjs"
-# @yaks/anthropic calls the Messages API through the official SDK.
-"@anthropic-ai/sdk" = "./node_modules/@anthropic-ai/sdk/index.mjs"
-
 # Bindings and vars do not inherit into named environments. Repeat every
 # binding here so staging has its own resources. Migrations, containers and
 # routing are repeated too, keeping the whole deployment visible in one place.

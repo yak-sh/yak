@@ -19,6 +19,7 @@ import * as disk from '@yaks/file/io'
 
 import { fault } from '@yaks/api/refuse'
 import { released } from './release.ts'
+import { fileURLToPath } from 'node:url'
 import { settling } from './held.ts'
 
 /** A body a page loads. */
@@ -175,12 +176,45 @@ export let bundle = async (
   signal?: AbortSignal,
 ): Promise<string> => {
   if (signal?.aborted) throw new Error('browser bundle was stopped')
+  let at = entry instanceof URL ? entry : entry.at
+  if (at.protocol == 'file:') {
+    let { context } = await import('esbuild')
+    let build = await context({
+      absWorkingDir: new URL('./', at).pathname,
+      ...entry instanceof URL ? { entryPoints: [entry.pathname] } : {
+        stdin: {
+          contents: entry.code,
+          sourcefile: at.pathname,
+          resolveDir: new URL('./', at).pathname,
+          loader: 'ts',
+        },
+      },
+      plugins: [{
+        name: 'file-urls',
+        setup(build) {
+          build.onResolve(
+            { filter: /^file:/ },
+            ({ path }) => ({ path: fileURLToPath(path) }),
+          )
+        },
+      }],
+      bundle: true,
+      format: 'esm',
+      platform: 'browser',
+      target: 'esnext',
+      jsx: 'automatic',
+      jsxImportSource: 'preact',
+      minify: true,
+      write: false,
+      logLevel: 'silent',
+    })
+    return compiled(build, signal)
+  }
   let [{ context }, { denoPlugins, urlToEsbuildResolution }] = await Promise
     .all([
       import('esbuild'),
       import('@luca/esbuild-deno-loader'),
     ])
-  let at = entry instanceof URL ? entry : entry.at
   let dir = at.protocol == 'file:'
     ? undefined
     : await disk.makeTempDir({ prefix: 'yaks-page-' })

@@ -1,0 +1,21 @@
+{
+  "name": "@yaks/anthropic",
+  "version": "0.2.17",
+  "type": "module",
+  "exports": {
+    ".": "./mod.ts",
+    "./vocab": "./vocab.ts",
+    "./mark": "./mark.ts",
+    "./reads": "./reads.ts"
+  },
+  "license": "Apache-2.0",
+  "description": "Implements the model interface over Anthropic's Messages API with the official SDK: streamed text, tool use, automatic prompt caching and cancellation, with usage that names what the cache read and wrote.",
+  "dependencies": {
+    "@anthropic-ai/sdk": "1.4.0",
+    "@yaks/model": "0.2.17",
+    "@yaks/vocab": "0.2.17"
+  },
+  "devDependencies": {
+    "@yaks/testing": "0.2.17"
+  }
+}

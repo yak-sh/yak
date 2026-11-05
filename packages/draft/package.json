@@ -1,0 +1,28 @@
+{
+  "name": "@yaks/draft",
+  "version": "0.2.17",
+  "type": "module",
+  "exports": {
+    ".": "./mod.ts",
+    "./vocab": "./vocab.ts",
+    "./graph": "./graph.ts",
+    "./input": "./input.ts",
+    "./browser": "./browser.ts"
+  },
+  "license": "Apache-2.0",
+  "description": "What a person has typed and not yet sent, kept in the graph per person and place, synced to every interface they use, and merged when two type at once.",
+  "dependencies": {
+    "@preact/signals": "2.9.4",
+    "@std/assert": "npm:@jsr/std__assert@^1.0.0",
+    "@yaks/client": "0.2.17",
+    "@yaks/fp": "0.2.17",
+    "@yaks/graph": "0.2.17",
+    "@yaks/ram": "0.2.17",
+    "@yaks/vocab": "0.2.17",
+    "preact": "10.29.7"
+  },
+  "devDependencies": {
+    "@yaks/doc": "0.2.17",
+    "@yaks/testing": "0.2.17"
+  }
+}

@@ -1,0 +1,23 @@
+{
+  "name": "@yaks/lens",
+  "version": "0.2.17",
+  "type": "module",
+  "exports": {
+    ".": "./mod.ts",
+    "./vocab": "./vocab.ts",
+    "./graph": "./graph.ts"
+  },
+  "license": "Apache-2.0",
+  "description": "Compiles reversible JSON document changes, with graph bundle, query, and migration adapters.",
+  "dependencies": {
+    "@yaks/fp": "0.2.17",
+    "@yaks/graph": "0.2.17",
+    "@yaks/match": "0.2.17",
+    "@yaks/query": "0.2.17",
+    "@yaks/vocab": "0.2.17"
+  },
+  "devDependencies": {
+    "@yaks/ram": "0.2.17",
+    "@yaks/testing": "0.2.17"
+  }
+}

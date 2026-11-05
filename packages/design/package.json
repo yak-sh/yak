@@ -1,0 +1,20 @@
+{
+  "name": "@yaks/design",
+  "version": "0.2.17",
+  "type": "module",
+  "exports": {
+    ".": "./mod.ts",
+    "./vocab": "./vocab.ts",
+    "./tools": "./tools.ts"
+  },
+  "license": "Apache-2.0",
+  "description": "A proposal, the review it gets, and the architecture that stands once it is decided.",
+  "dependencies": {
+    "@yaks/graph": "0.2.17",
+    "@yaks/vocab": "0.2.17"
+  },
+  "devDependencies": {
+    "@std/assert": "npm:@jsr/std__assert@^1.0.0",
+    "@yaks/testing": "0.2.17"
+  }
+}

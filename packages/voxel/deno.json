@@ -13,8 +13,5 @@
   },
   "license": "Apache-2.0",
   "description": "Worker-safe voxel geometry, baked lamp light, chunk detail and heightfield charts, with Three.js materials and box rigs at /three.",
-  "publish": false,
-  "imports": {
-    "three": "npm:three@^0.186.1"
-  }
+  "publish": false
 }

@@ -1,0 +1,34 @@
+{
+  "name": "@yaks/embedding",
+  "version": "0.2.17",
+  "type": "module",
+  "exports": {
+    ".": "./mod.ts",
+    "./vocab": "./vocab.ts",
+    "./tools": "./tools.ts",
+    "./graph": "./graph.ts",
+    "./service": "./service.ts"
+  },
+  "license": "Apache-2.0",
+  "description": "Maintains text embeddings for graph entities and adds nearest-neighbor ranking to queries through an injected embedder.",
+  "dependencies": {
+    "@std/assert": "npm:@jsr/std__assert@^1.0.0",
+    "@yaks/edge": "0.2.17",
+    "@yaks/effects": "0.2.17",
+    "@yaks/graph": "0.2.17",
+    "@yaks/model": "0.2.17",
+    "@yaks/model2vec": "0.2.17",
+    "@yaks/query": "0.2.17",
+    "@yaks/ram": "0.2.17",
+    "@yaks/sql": "0.2.17",
+    "@yaks/sqlite": "0.2.17",
+    "@yaks/testing": "0.2.17",
+    "@yaks/tools": "0.2.17",
+    "@yaks/vocab": "0.2.17"
+  },
+  "devDependencies": {
+    "@yaks/api": "0.2.17",
+    "@yaks/archetype": "0.2.17",
+    "@yaks/cli": "0.2.17"
+  }
+}
