@@ -207,8 +207,8 @@ export let operatorRoster = async (
   { space, tasked = false }: { space: string; tasked?: boolean },
 ): Promise<Tool[]> => {
   ctx.dir = ctx.reopen!()
-  let reach = await inReach(ctx)
-  let g = await reaching(ctx, reach)
+  let reach = reached('reach', await inReach(ctx))
+  let g = reached('vocab', await reaching(ctx, reach))
   // A tool's answer in words is the call's own, as at the connector's door:
   // only what it wrote for an app goes on to the app (ledger.ts).
   let landing = ledger(g)
@@ -486,6 +486,18 @@ let stepwise = (handlers: Handlers): Handlers =>
     ]),
   )
 
+// When a step first finished each stage on its way to the model, in ms from
+// its start, logged beside its count (`asked`): which stage a slow ask waited
+// on, since the waits a tally sums overlap.
+let reached = <T>(stage: string, value: T): T => {
+  let tally = ambient()
+  let at = tally && begun.get(tally)
+  if (tally && at != null && !tally.has(`at_${stage}`)) {
+    tally.set(`at_${stage}`, Date.now() - at)
+  }
+  return value
+}
+
 // How long a step took to ask its model, and the round trips it made on the
 // way, in the Worker's logs: store hops, bucket reads, and trips to the cached
 // Files door (files.ts `door`).
@@ -501,7 +513,9 @@ let asked = (session?: string) => {
       ...counts(tally),
       files: tally.get('files') ?? 0,
       ...Object.fromEntries(
-        [...tally].filter(([name]) => name.endsWith('_wait')),
+        [...tally].filter(([name]) =>
+          name.endsWith('_wait') || name.startsWith('at_')
+        ),
       ),
     }),
   )
@@ -739,6 +753,7 @@ export let operating = (
   // Each ask is charged to the space of the session asking, at the price of
   // the model it asks.
   let model: Model = Object.assign(async (req: Parameters<Model>[0]) => {
+    reached('request', req)
     let [price, [ask], space] = await Promise.all([
       priced(req.model),
       req.call ? g.get([req.call]) : [],
@@ -747,6 +762,7 @@ export let operating = (
     if (!options.model && !price) {
       throw new Error(`No catalogue price for operator model ${req.model}`)
     }
+    reached('payer', space)
     let session = comp(ask, 'entry')?.session
     let heard = req.onText
     let reply = await accounted(
@@ -948,11 +964,14 @@ export let operating = (
           taskOf(store, session),
           g.get([session]),
         ])
+        reached('working', space)
         let persona = await spaced(g.storage, space)
         if (persona.length) await g.apply(persona, { trusted: true })
+        reached('persona', persona)
         let [roster, google] = await Promise.all([
-          operatorRoster(ctx, store, { space: space.eid, tasked: !!task }),
-          googleTools(env, ctx, space),
+          operatorRoster(ctx, store, { space: space.eid, tasked: !!task })
+            .then((r) => reached('roster', r)),
+          googleTools(env, ctx, space).then((t) => reached('google', t)),
         ])
         return [
           // A conversation and its forks hand coding and careful reasoning
@@ -979,7 +998,10 @@ export let operating = (
           topic ? oracleContext(ctx, g, topic) : oracleMap(ctx, g),
           googleTold(env, ctx, space),
         ])
-        return [map, told(ctx, space), google].filter(Boolean).join('\n\n')
+        return reached(
+          'instructions',
+          [map, told(ctx, space), google].filter(Boolean).join('\n\n'),
+        )
       },
       each: async (step, session) => {
         if (!session) return
