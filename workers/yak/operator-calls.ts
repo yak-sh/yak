@@ -63,6 +63,8 @@ export type Ticket = {
   to: string
   via: string
   at: number
+  /** the caller's first name, when the platform knows what to call them */
+  first?: string
 }
 
 let secretOf = (env: Env) => {
@@ -82,10 +84,23 @@ let reached = async (env: Env, ring: Ring) => {
     if (!meta || await dir.role(meta, person) != 'owner') return null
   }
   let { spaceFor } = await import('./operator-texts.ts')
-  let space = await spaceFor(env, person, (await dir.texting(person))?.space)
+  // What to call them is read beside the space, so the ring waits on neither.
+  let [name, space] = await Promise.all([
+    dir.nameAt(person),
+    dir.texting(person).then((t) => spaceFor(env, person, t?.space)),
+  ])
   if (!space || await paused(env, setupOf(space).provider)) return null
-  return { person, space }
+  return { person, space, first: name?.trim().split(/\s+/)[0] || undefined }
 }
+
+/**
+ * What the Operator says on picking up, brisk as a personal assistant: hello,
+ * by name when it knows the caller's, who is answering, and an offer to help.
+ */
+/// greeting('Elihu', 'Jeff') -> 'Hi Jeff, Elihu here. How can I help?'
+/// greeting('Elihu') -> 'Hi, Elihu here. How can I help?'
+export let greeting = (operator: string, first?: string) =>
+  `Hi${first ? ` ${first}` : ''}, ${operator} here. How can I help?`
 
 /**
  * A call rang on `via`'s webhook. One to the platform's number from someone
@@ -109,6 +124,7 @@ export let rang = async (env: Env, via: string, ring: Ring) => {
     to: ring.to,
     via,
     at: Date.now(),
+    first: who.first,
   }
   let sealed = await seal('call', ticket, secretOf(env))
   await caller.answer(
@@ -658,7 +674,7 @@ export let answering = (
   let around = {
     wire: pair[1],
     line,
-    hello: `Hi, it's ${space.operator ?? 'your Operator'}.`,
+    hello: greeting(space.operator ?? 'your Operator', ticket.first),
     done: async ({ seconds, heard, turns }: Parameters<Around['done']>[0]) => {
       if (live.get(key) == call) live.delete(key)
       // How long each turn waited, for comparing providers and models.

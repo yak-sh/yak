@@ -15,11 +15,13 @@ import { within } from './defects.ts'
 import {
   type Around,
   converse,
+  greeting,
   streamDoor,
   talking,
+  type Ticket,
   voiced,
 } from './operator-calls.ts'
-import { seal } from './lib/token.ts'
+import { opened, seal } from './lib/token.ts'
 import { directoryOf } from './directory.ts'
 import { operatorMemory, operatorModel } from './operator-testing.ts'
 import { drain } from './operator-store.ts'
@@ -28,6 +30,7 @@ import { rootOf } from './operator-channels.ts'
 import { conversationOf, workOf } from './operator-host.ts'
 import { ANSWERED, ASKED, HELLO, SMALL_TALK } from './operator-calls_fixture.ts'
 
+let HI = greeting('Ada', 'Jeff')
 let NUMBER = '+18663141594', JEFF = '+12695550142', ANA = '+12695550143'
 
 // Telnyx's API, keeping the calls it was told to answer or reject.
@@ -61,7 +64,13 @@ let fixture = async (calls?: string) => {
   let mine = crypto.randomUUID()
   await stamp(p.env, {
     entities: [
-      { entity: { eid: jeff }, person: {}, phone: { number: JEFF } },
+      {
+        entity: { eid: jeff },
+        person: {},
+        phone: { number: JEFF },
+        email: { address: 'jeff@x.test' },
+        doc: { title: 'Jeff Peterson' },
+      },
       { entity: { eid: ana }, person: {}, phone: { number: ANA } },
       { entity: { eid: meta }, space: { slug: 'yak', store: 'yak' } },
       { entity: { eid: own }, space: { slug: 'ana', store: 'ana' } },
@@ -126,7 +135,7 @@ let fixture = async (calls?: string) => {
 }
 
 test('while calls are a pilot only the platform’s owner is answered, streamed to the stream door', async () => {
-  let { ring } = await fixture()
+  let { p, ring } = await fixture()
   equal(await ring(JEFF, NUMBER, 'c1'), ['answer'])
   let answer = acted[0]
   equal(answer.call, 'v3:c1')
@@ -135,6 +144,12 @@ test('while calls are a pilot only the platform’s owner is answered, streamed 
   equal(
     answer.body.stream_url.startsWith('wss://yaks.app/telnyx/stream?call='),
     true,
+  )
+  // The ticket carries what to call them, for the greeting.
+  let sealed = new URL(answer.body.stream_url).searchParams.get('call')!
+  equal(
+    (await opened<Ticket>('call', sealed, p.env.SESSION_SECRET!))?.first,
+    'Jeff',
   )
   equal(await ring(ANA), ['reject'])
   equal(await ring('+12695550199'), ['reject'])
@@ -228,7 +243,7 @@ let calling = (
       asked.push(text)
       return Promise.resolve()
     },
-    hello: "Hi, it's Ada.",
+    hello: HI,
     done: (cost) => {
       done.push(cost)
       return Promise.resolve()
@@ -259,7 +274,7 @@ let calling = (
 test('a call says hello, hears a turn, and speaks the reply a sentence at a time as it is written', async () => {
   let c = calling()
   await until(() => c.played() == 1)
-  equal(c.said, ["Hi, it's Ada."])
+  equal(c.said, [HI])
   c.frame({ event: 'media', media: { track: 'inbound', payload: 'AQI=' } })
   equal(c.heard, [new Uint8Array([1, 2])])
   // Words before a question are not the caller's reply.
@@ -308,7 +323,7 @@ test('a caller who starts talking stops what is playing, and a turn is acknowled
   let c = calling('One moment.')
   // The acknowledgement is made as the call starts, and said only once.
   await until(() => c.played() == 1)
-  equal(c.said, ['One moment.', "Hi, it's Ada."])
+  equal(c.said, ['One moment.', HI])
   c.told().start!()
   equal(JSON.parse(c.sent.at(-1)!), { event: 'clear' })
   c.told().end('What is on my calendar?')
@@ -402,7 +417,7 @@ let talkingCall = (real = false) => {
       asked.push(text)
       return Promise.resolve()
     },
-    hello: "Hi, it's Ada.",
+    hello: HI,
     done: (call) => {
       done.push(call)
       return Promise.resolve()
@@ -472,7 +487,7 @@ test('a recorded call answers small talk itself, keeping it in the conversation,
 
 test('a talking model hears the call, asks the Operator, and says its answer', async () => {
   let c = talkingCall()
-  equal(c.said, ["Hi, it's Ada."])
+  equal(c.said, [HI])
   c.frame({ event: 'media', media: { track: 'inbound', payload: 'AQI=' } })
   equal(c.heard, [new Uint8Array([1, 2])])
   c.told().stopped!()
