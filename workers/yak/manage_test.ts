@@ -189,6 +189,17 @@ test('the dashboard is at the apex, whatever serves the space', async () => {
       'role="status"',
     )
     assertEquals(await title(), 'Dana')
+    // Its name changes there too, reached from the dashboard's Rename, and
+    // the page shows the new one.
+    assertStringIncludes(
+      await (await get(managePath('home', slug))).text(),
+      `href="${settings}#space-title">Rename</a>`,
+    )
+    await post(settings, { title: 'Peterson Reunion 2027', space: slug })
+    assertStringIncludes(
+      await (await get(settings)).text(),
+      'name="title" maxlength="60" value="Peterson Reunion 2027"',
+    )
 
     let discarded = (await dir.query('.app.slug=discarded'))[0].entity.eid
     await agent.tool('app_delete', { space: slug, app: 'discarded' })

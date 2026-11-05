@@ -664,7 +664,7 @@ export type DeskPage = {
   invite?: { email: string; app: string; role: string; note: string }
   /** what was typed into the settings form, when a change was refused and
    * the page is drawn again */
-  typed?: { space: string; home: string }
+  typed?: { title: string; space: string; home: string }
   /** what was typed into the new space form, when it was refused */
   made?: { title: string; slug: string }
   /** the apps of other people's spaces this person may open, each with the
@@ -1196,17 +1196,27 @@ let newSpace = (at: DeskPage, env: Host) =>
   }</div></section>
 <div class="Form_Actions"><button class="Button" type="submit">Create space</button></div></form>`
 
-// A space's Settings: its address and what it opens, one form and one Save,
+// A space's Settings: its name, its address and what it opens, one form and
+// one Save,
 // then deleting it, which asks again on its own page (identity.ts
 // `closing`). A refusal draws the page again with what was typed still in
 // the fields (`at.typed`).
 let preferences = (at: DeskPage, env: Host) => {
   let home = at.apps.find((a) => a.home)
-  let was = at.typed ?? { space: at.space, home: home?.slug ?? '' }
+  let was = at.typed ??
+    { title: named(picked(at)), space: at.space, home: home?.slug ?? '' }
   let host = esc(spaceHost(env, at.space))
   return `<form class="Form" method="post" action="${
     managePath('settings', at.space)
   }"><section class="Card">${heading('General')}<div class="Form">${
+    labeled(
+      'space-title',
+      'Name',
+      `<input class="Field" id="space-title" name="title" maxlength="60" value="${
+        esc(was.title)
+      }">`,
+    )
+  }${
     labeled(
       'your-address',
       'Address',
@@ -2108,6 +2118,10 @@ export let desk = (at: DeskPage, env: Host = {}) => {
         ? `<a class="Button" href="${
           managePath('new', at.space)
         }">+ New app</a>`
+        : view == 'home'
+        ? `<a class="Button Button-quiet" href="${
+          managePath('settings', at.space)
+        }#space-title">Rename</a>`
         : ''
     }</header><div class="Desk_Content" id="content" tabindex="-1">${
       at.say

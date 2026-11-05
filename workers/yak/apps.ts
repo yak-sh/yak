@@ -3194,17 +3194,29 @@ let saved = async (
       })
     }
   }
-  // Settings: the space's homepage and its address, one form and one Save. A
+  // Settings: the space's name, homepage and address, one form and one Save. A
   // refusal draws the page again with everything typed still in the fields,
   // and the address goes last because moving renames the space the homepage
   // is written against.
   if (view != 'settings') return nothingHere(env)
   let typed = {
+    title: String(form.get('title') ?? '').trim(),
     space: String(form.get('space') ?? '').trim().toLowerCase(),
     home: String(form.get('home') ?? '').trim(),
   }
   let refused = (said: { say: string; no: boolean }) =>
     desk(req, env, dir, space, who, 'settings', said, { typed })
+  // The name is space_set's `title`, as the assistant asks it; a blank one
+  // leaves the name as it was. The move below reads the space as renamed, so
+  // a new name saved with a new address stays.
+  if (typed.title && typed.title != space.title) {
+    let { said } = await pressed(env, dir, who, 'space_set', {
+      space: space.slug,
+      title: typed.title,
+    })
+    if (said) return refused(said)
+    space = (await dir.at(space.eid)) ?? space
+  }
   // The homepage is app_set's `home`, as the assistant asks it. The library is
   // no app at all, so choosing it takes the word off the app that has it.
   if (form.has('home')) {
