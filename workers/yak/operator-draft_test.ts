@@ -9,7 +9,7 @@ import type { Stash } from '@yaks/draft'
 import { browserDrafts } from '../../packages/draft/browser.ts'
 import { directoryOf } from './directory.ts'
 import { platform } from './testing.ts'
-import { chatPage, operatorAnswer } from './operator-page.ts'
+import { type Beside, chatPage, operatorAnswer } from './operator-page.ts'
 import { redraw } from './public/redraw.js'
 
 let p = platform('operator-draft')
@@ -55,8 +55,15 @@ let storage = (): Stash => {
 
 // A load of the page: its script run as served. `cut` holds every save that
 // leaves while the person is on it, as a page that is left before they land.
-let load = async (stash: Stash, cut = false, open = 'new') => {
-  let html = await (await chatPage(p.env, space, who, open)).text()
+let load = async (
+  stash: Stash,
+  cut = false,
+  open = 'new',
+  beside: Beside = {},
+  app?: string,
+) => {
+  let html = await (await chatPage(p.env, space, who, open, beside, app))
+    .text()
   let { document, Event } = parseHTML(html)
   // What linkedom's forms lack: their fields by name, their action, and a
   // FormData of them.
@@ -100,10 +107,22 @@ let load = async (stash: Stash, cut = false, open = 'new') => {
     kept.push(d)
     return d
   }
-  // linkedom keeps no focus: the box records being given it.
+  // linkedom keeps no focus or selection: the box records being given it.
   let say = document.querySelector('[name=say]') as HTMLTextAreaElement
   let focused = false
   say.focus = () => void (focused = true)
+  say.setSelectionRange = () => {}
+  // Each load of the app beside the chat, and of the page.
+  let loads = { app: 0, page: 0 }
+  let frame = document.querySelector('[data-frame]')
+  if (frame) {
+    Object.defineProperty(frame, 'src', {
+      get: () => frame.getAttribute('src'),
+      set: () => void loads.app++,
+    })
+  }
+  // The page's socket, which a test speaks for.
+  let sockets: { onmessage?: (e: { data: string }) => void }[] = []
   let source = document.querySelector('script[type=module]')!.textContent!
     .replace(/^import .*$/gm, '')
   new Function(
@@ -116,13 +135,14 @@ let load = async (stash: Stash, cut = false, open = 'new') => {
     'clearTimeout',
     'FormData',
     'WebSocket',
+    'Event',
     source,
   )(
     opened,
     redraw,
     document,
     fetch,
-    { reload() {}, origin: 'https://yaks.app' },
+    { reload: () => void loads.page++, origin: 'https://yaks.app' },
     after,
     clearTimeout,
     FormOf,
@@ -131,11 +151,22 @@ let load = async (stash: Stash, cut = false, open = 'new') => {
       onopen?: () => void
       onmessage?: () => void
       onclose?: () => void
+      constructor() {
+        sockets.push(this)
+      }
     },
+    Event,
   )
   return {
     say,
     focused,
+    loads,
+    document,
+    // A frame the Operator's socket sends the page.
+    hear: (frame: unknown) =>
+      sockets[0].onmessage!({ data: JSON.stringify(frame) }),
+    press: (button: Element) =>
+      button.dispatchEvent(new Event('click', { bubbles: true })),
     // Once the page has heard the store's drafts.
     heard: async () => {
       while (!reads) await new Promise((ok) => setTimeout(ok, 1))
@@ -255,4 +286,46 @@ test('each Operator conversation keeps its own draft', async () => {
 test('opening or starting a conversation puts the cursor in the message box', () => {
   assertEquals(roadFocused, true)
   assertEquals(freshFocused, true)
+})
+
+let apps = {
+  apps: [{ slug: 'notes', title: 'Notes' }, { slug: 'club', title: 'Club' }],
+}
+let changing = (task: string, ...changed: object[]) => ({
+  operator: { task, rows: [], now: '', changed },
+})
+
+test('a way to start fills the box with its words, for the person to finish', async () => {
+  let page = await load(storage(), false, 'new', apps)
+  page.press(page.document.querySelector('[data-say]')!)
+  assertEquals(page.say.value, 'Make me an app for ')
+  assertEquals(page.focused, true)
+  page.leave()
+})
+
+test('the app beside the chat loads again when the Operator changes it, and only then', async () => {
+  let page = await load(storage(), false, 'new', apps, 'notes')
+  page.hear(changing('x', { space: '', app: 'club' }))
+  page.hear(changing('x', { space: 'mill', app: 'notes' }))
+  page.hear(changing('x', { space: 'clerk', app: 'notes' }))
+  page.hear(changing('x', { space: '', app: 'notes' }))
+  assertEquals(page.loads, { app: 2, page: 0 })
+  page.leave()
+})
+
+test('a chat with no app beside it opens again to show one it changed, unless the person is writing', async () => {
+  let page = await load(storage(), false, road, apps)
+  let task = page.document.querySelector('[data-task]')!.getAttribute(
+    'data-task',
+  )!
+  // Another chat's change, or one to an app they may not open, opens nothing.
+  page.hear(changing(crypto.randomUUID(), { space: '', app: 'club' }))
+  page.hear(changing(task, { space: '', app: 'secret' }))
+  assertEquals(page.loads.page, 0)
+  page.hear(changing(task, { space: '', app: 'club' }))
+  assertEquals(page.loads.page, 1)
+  page.type('Make the header')
+  page.hear(changing(task, { space: '', app: 'club' }))
+  assertEquals(page.loads.page, 1)
+  page.leave()
 })

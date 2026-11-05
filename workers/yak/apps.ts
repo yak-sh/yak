@@ -2557,7 +2557,14 @@ let manage = async (req: Request, env: Env): Promise<Response> => {
     let { chatPage, operatorAnswer } = await import('./operator-page.ts')
     if (at.open && !new URL(req.url).searchParams.has('attachment')) {
       return reading
-        ? chatPage(env, space, who, at.open, await beside(dir, space, who))
+        ? chatPage(
+          env,
+          space,
+          who,
+          at.open,
+          await beside(dir, space, who),
+          url.searchParams.get('app'),
+        )
         : nothingHere(env)
     }
     return await operatorAnswer(req, env, space, who) ??

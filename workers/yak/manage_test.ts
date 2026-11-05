@@ -243,8 +243,14 @@ test('the dashboard is at the apex, whatever serves the space', async () => {
     assertEquals(chat.status, 200)
     let chatted = await chat.text()
     assertStringIncludes(chatted, 'class="Talk"')
-    // Its side holds the space's apps, and Updates opens beside it.
-    assertStringIncludes(chatted, `href="https://${host}/site/"`)
+    // Its side holds the space's apps, each opening a chat about it with the
+    // app beside it, and Updates opens beside it.
+    assertStringIncludes(chatted, `href="${chatPath(slug)}?app=site"`)
+    let about = await (await get(`${chatPath(slug)}?app=site`)).text()
+    assertStringIncludes(
+      about,
+      `<iframe class="Talk_Frame" src="https://${host}/site/"`,
+    )
     assertEquals((await get(chatPath(slug), other.cookie)).status, 404)
     let updates = await get(managePath('updates', slug))
     assertEquals(updates.status, 200)

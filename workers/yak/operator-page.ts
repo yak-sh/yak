@@ -7,7 +7,7 @@ import { vouched, type Who } from './session.ts'
 import { answered } from './meta.ts'
 import { esc, type Picked, shell, spaceChoice } from './pages.ts'
 import { spaceHost, url } from './host.ts'
-import { chatPath, logoPath, managePath } from './route.ts'
+import { chatPath, logoPath, managePath, SLUG } from './route.ts'
 import {
   keepFile,
   type Request as Intake,
@@ -29,6 +29,7 @@ import { given } from './operator-name.ts'
 import { CallError } from '@yaks/tools/errors'
 import {
   attached,
+  type Changed,
   PICTURES,
   reply,
   sidebar,
@@ -315,10 +316,12 @@ export let operatorAnswer = async (
       }
     }
     let request = String(form.get('request') || crypto.randomUUID())
+    // The app open beside the chat, which the words are about.
+    let app = String(form.get('app') ?? '')
     // Whichever page it is sent from, it goes to the person's conversation.
     let received = await operatorDoor(env, space, who, 'receive', {
       say: String(form.get('say') ?? ''),
-      request: { channel: 'chat', files },
+      request: { channel: 'chat', files, ...SLUG.test(app) ? { app } : {} },
       options: { id: request },
       ...(form.has('draft')
         ? { draft: JSON.parse(String(form.get('draft'))) }
@@ -386,8 +389,10 @@ let conversationOf = async (
   at: string,
   open: string,
 ) => {
-  if (open == 'new') return { task: '', begun: '', title: '', html: '' }
-  let { task, begun, title, html, waiting } = await operatorDoor(
+  let none = { task: '', begun: '', title: '', html: '', changed: [] }
+  if (open == 'new') return none
+  // A Builder object still on the deploy before T-140509 names no changes.
+  let { task, begun, title, html, waiting, changed = [] } = await operatorDoor(
     env,
     space,
     who,
@@ -395,15 +400,16 @@ let conversationOf = async (
     { at, open },
   ).catch((e) => {
     if (e.status != 404) throw e
-    return { task: '', begun: '', title: '', html: '', waiting: [] }
+    return { ...none, waiting: [] }
   }) as {
     task: string
     begun: string
     title: string
     html: string
     waiting: Bundle[]
+    changed?: Changed[]
   }
-  return { task, begun, title, html: html + conversation(waiting) }
+  return { task, begun, title, html: html + conversation(waiting), changed }
 }
 
 // The Operator's settings, which the dashboard draws beside its side like
@@ -501,14 +507,15 @@ let APPS = 4
 // the foot Manage, the settings behind the product (today's dashboard pages:
 // its Apps for the space's owner, the Operator's settings for a member, the
 // only one of them they may open). `current` holds the chats this page shows,
-// or `updates`. On a phone the bar's Menu opens it over the page (`:target`,
-// no script).
+// or `updates`, and `app` the app open beside them. Each app opens a chat
+// about it, with the app beside it (T-140509). On a phone the bar's Menu
+// opens the side over the page (`:target`, no script).
 let side = (
   env: Env,
   space: Space,
   who: Who,
   beside: Beside,
-  at: { items: Worked[]; unread: number; current: string[] },
+  at: { items: Worked[]; unread: number; current: string[]; app?: string },
 ) => {
   let owner = who.role == 'owner'
   let here = beside.spaces?.find((s) => s.slug == space.slug) ?? {
@@ -553,9 +560,9 @@ ${
     apps.length
       ? `<nav class="Talk_Places" aria-labelledby="side-apps">${
         apps.slice(0, APPS).map((a) =>
-          `<a href="${host}/${
-            esc(a.slug)
-          }/" target="_blank" rel="noopener"><img class="Talk_Icon" src="${host}/${
+          `<a href="${esc(aboutPath(space.slug, a.slug))}"${
+            a.slug == at.app ? ' aria-current="page"' : ''
+          }><img class="Talk_Icon" src="${host}/${
             esc(a.slug)
           }/icon.png" width="24" height="24" alt="" loading="lazy">${
             esc(a.title || a.slug)
@@ -580,8 +587,34 @@ ${
 </aside>`
 }
 
+/** A new chat about one of the space's apps, with the app beside it. */
+export let aboutPath = (space: string, app: string) =>
+  `${chatPath(space)}?app=${encodeURIComponent(app)}`
+
+/** An app as the chat shows it. */
+type Shown = { slug: string; title: string }
+
+// The app open beside the chat (T-140509): its icon, its name and where it
+// lives, a way to open it in a tab of its own, and the app itself, live,
+// which the page reloads when the Operator changes it (`chatScript`). The
+// app's host lets the platform frame it (cache.ts `sealed`). On a phone it
+// takes the screen in the chat's place while chosen (`#app`), and Chat goes
+// back.
+let canvas = (env: Env, space: Space, app: Shown) => {
+  let host = esc(`${spaceHost(env, space.slug)}/${app.slug}`)
+  let title = esc(app.title || app.slug)
+  return `<section class="Talk_App" id="app" aria-label="${title}" data-app="${
+    esc(app.slug)
+  }">
+<header class="Talk_AppHead"><a class="Button Button-quiet Talk_Back" href="#">← Chat</a><img class="Talk_Icon" src="https://${host}/icon.png" width="24" height="24" alt=""><span class="Talk_AppName"><b>${title}</b><small>${host}</small></span><a class="Button Button-quiet" href="https://${host}/" target="_blank" rel="noopener">${
+    icon('external-link')
+  }Open</a></header>
+<div class="Talk_Stage"><iframe class="Talk_Frame" src="https://${host}/" title="${title}" data-frame></iframe></div>
+</section>`
+}
+
 // A page of the chat app: the side, and beside it the bar naming the page
-// and whose Operator it is, over `main`.
+// and whose Operator it is, over `main`, and the app open beside them.
 let talkPage = async (
   env: Env,
   space: Space,
@@ -598,6 +631,7 @@ let talkPage = async (
     // where the skip link goes, and what it says
     skip: [string, string]
     script?: string
+    app?: Shown
   },
 ) => {
   let named = space.title || space.slug
@@ -608,20 +642,28 @@ let talkPage = async (
     null,
     page.status,
     `<a class="Desk_Skip" href="${page.skip[0]}">${page.skip[1]}</a>
-<div class="Talk">
+<div class="Talk${page.app ? ' Talk-app' : ''}">
 ${
       side(env, space, who, beside, {
         items: page.items,
         unread: await unread(env, space, who),
         current: page.current,
+        app: page.app?.slug,
       })
     }
 <div class="Talk_Main${page.kind ? ` ${page.kind}` : ''}" id="content">
 <header class="Talk_Bar"><a class="Button Button-quiet Talk_Menu" href="#menu" aria-label="Menu">☰</a><div class="Talk_Heads"><h1 class="Talk_Head" data-title>${
       esc(page.title)
-    }</h1><p class="Talk_Who">${esc(whose)}</p></div></header>
+    }</h1><p class="Talk_Who">${esc(whose)}</p></div>${
+      page.app
+        ? `<a class="Button Button-quiet Talk_Show" href="#app">${
+          esc(page.app.title || page.app.slug)
+        }</a>`
+        : ''
+    }</header>
 ${page.main}
 </div>
+${page.app ? canvas(env, space, page.app) : ''}
 </div>
 ${page.script ?? ''}`,
     { 'cache-control': 'private, no-store', 'x-robots-tag': 'noindex' },
@@ -655,6 +697,11 @@ let starts = (operator: string, apps: Beside['apps'] = []) =>
  * works. `open` is a task, a request no task has taken yet, or `new`, which
  * greets the person by name, holds over the box what needs them
  * (`data-needs`, T-140508), and under it a few ways to start.
+ *
+ * Beside it, the app the person chose (`chosen`, the side's `aboutPath`), or
+ * else the last app of this space the conversation changed, of those the
+ * person may open (T-140509). A new chat about an app asks what should change
+ * in it, and the words sent say which app is open (operator-view.ts `about`).
  */
 export let chatPage = async (
   env: Env,
@@ -662,6 +709,7 @@ export let chatPage = async (
   who: Who,
   open: string,
   beside: Beside = {},
+  chosen?: string | null,
 ) => {
   let at = managePath('operator', space.slug)
   let [talked, items] = await Promise.all([
@@ -670,8 +718,28 @@ export let chatPage = async (
   ])
   let fresh = open == 'new'
   let first = beside.name?.trim().split(/\s+/)[0]
+  let mine = (slug?: string | null) => beside.apps?.find((a) => a.slug == slug)
+  let ours = talked.changed.filter((c) => !c.space || c.space == space.slug)
+  let app = mine(chosen) ?? mine(ours.at(-1)?.app)
+  let operator = esc(space.operator)
+  let hello = !fresh
+    ? '<div class="Talk_Hello"><h2>This chat is not here</h2><p>It may have been removed. Your other chats are listed beside this one.</p></div>'
+    : app
+    ? `<div class="Talk_Hello"><h2>What should change in ${
+      esc(app.title || app.slug)
+    }?</h2><p>Tell ${operator}, and watch it change beside this chat.</p></div>`
+    : `<div class="Talk_Hello"><img class="Talk_Yak" src="${
+      url(env, '/mascot/thinking-still.webp')
+    }" width="64" height="64" alt=""><h2>What can I do for you${
+      first ? `, ${esc(first)}` : ''
+    }?</h2><p>Ask ${operator} to make an app, change one, or find something out. You can send a photo or a document too.</p></div>`
+  // A new chat with no app beside it is where the person lands: what needs
+  // them, and ways to start.
+  let landing = fresh && !app
   return talkPage(env, space, who, beside, {
-    title: fresh ? `Message ${space.operator}` : talked.title || 'Not here',
+    title: fresh
+      ? app ? app.title || app.slug : `Message ${space.operator}`
+      : talked.title || 'Not here',
     status: fresh || talked.title ? 200 : 404,
     items,
     current: [open, talked.task],
@@ -680,27 +748,26 @@ export let chatPage = async (
       ? ['#ask', 'Skip to the message box']
       : ['#content', 'Skip to content'],
     main: `<div class="Talk_Column" data-conversation aria-live="polite">${
-      talked.html ||
-      (fresh
-        ? `<div class="Talk_Hello"><img class="Talk_Yak" src="${
-          url(env, '/mascot/thinking-still.webp')
-        }" width="64" height="64" alt=""><h2>What can I do for you${
-          first ? `, ${esc(first)}` : ''
-        }?</h2><p>Ask ${
-          esc(space.operator)
-        } to make an app, change one, or find something out. You can send a photo or a document too.</p></div>`
-        : '<div class="Talk_Hello"><h2>This chat is not here</h2><p>It may have been removed. Your other chats are listed beside this one.</p></div>')
+      talked.html || hello
     }</div>
-${fresh ? '<div class="Talk_Needs" data-needs></div>' : ''}
-${fresh || talked.title ? composer(at) : ''}
+${landing ? '<div class="Talk_Needs" data-needs></div>' : ''}
+${fresh || talked.title ? composer(at, app) : ''}
 ${
-      fresh
+      landing
         ? `<div class="Talk_Starts" role="group" aria-label="Ways to start">${
           starts(space.operator, beside.apps)
         }</div>`
         : ''
     }`,
-    script: chatScript(at, who, space, open, talked.begun || open),
+    script: chatScript(
+      at,
+      who,
+      space,
+      open,
+      talked.begun || open,
+      (beside.apps ?? []).map((a) => a.slug),
+    ),
+    app,
   })
 }
 
@@ -729,12 +796,19 @@ export let updatesPage = async (
 // the files going with them along its top (a gathering drop part,
 // public/drop.js: picked, pasted or dropped anywhere on the box, each a
 // preview or a chip to take back), Send, and Stop while the Operator works.
-let composer = (at: string) =>
-  `<form class="Talk_Box" id="ask" method="post" action="${at}" enctype="multipart/form-data">
-<input type="hidden" name="request" value="${crypto.randomUUID()}">
-<div class="Talk_Write Drop Drop-gather"><ul class="Drop_Chosen" aria-label="Files to send" aria-live="polite"></ul><textarea class="Field Talk_Field" name="say" placeholder="Message the Operator" aria-label="Message the Operator"></textarea>
+// With an app open beside it, the words say which (`about`).
+let composer = (at: string, app?: Shown) => {
+  let asked = app
+    ? `What should change in ${esc(app.title || app.slug)}?`
+    : 'Message the Operator'
+  return `<form class="Talk_Box" id="ask" method="post" action="${at}" enctype="multipart/form-data">
+<input type="hidden" name="request" value="${crypto.randomUUID()}">${
+    app ? `<input type="hidden" name="app" value="${esc(app.slug)}">` : ''
+  }
+<div class="Talk_Write Drop Drop-gather"><ul class="Drop_Chosen" aria-label="Files to send" aria-live="polite"></ul><textarea class="Field Talk_Field" name="say" placeholder="${asked}" aria-label="${asked}"></textarea>
 <div class="Talk_Tools"><label class="Talk_Attach" title="Add images or documents, or paste or drop them here">＋ Add files<input class="Drop_File" type="file" name="file" multiple data-count="${COUNT}" data-size="${SIZE}" data-reads="${READ}" data-unread="The Operator can't read this kind of file. It is kept with your message."></label><p class="Drop_Said" role="status"></p><button class="Button Button-quiet Talk_Stop" type="button" data-stop>Stop</button><button class="Button Talk_Send" type="submit">Send</button></div></div>
 <p class="Talk_Status" role="status" data-send-status></p></form>`
+}
 
 // The chat app's script: the durable draft and sending, Stop, and the
 // conversation kept current from the Builder object's socket, each step's
@@ -745,6 +819,8 @@ let chatScript = (
   space: Space,
   open: string,
   talk: string,
+  // the apps of this space the person may open
+  apps: string[],
 ) =>
   `<script type="module">
 import { browserDrafts } from '/_draft.js'
@@ -756,6 +832,20 @@ let box = document.querySelector('[data-conversation]')
 let side = document.querySelector('[data-side]')
 let heading = document.querySelector('[data-title]')
 let form = document.querySelector('#ask')
+// The app open beside the chat (T-140509) is loaded again when the Operator
+// changes it. With none open, a change this chat makes to an app of this
+// space the person may open opens the page again to show it, unless they
+// are writing.
+let here = ${JSON.stringify(space.slug)}
+let theirs = ${JSON.stringify(apps)}
+let app = document.querySelector('[data-app]')
+let shown = app?.querySelector('[data-frame]')
+let changes = (o) => (o.changed ?? []).filter((c) => (!c.space || c.space == here) && theirs.includes(c.app))
+let changing = (o) => {
+  let apps = changes(o)
+  if (shown && apps.some((c) => c.app == app.dataset.app)) shown.src = shown.getAttribute('src')
+  else if (!app && apps.length && thread()?.dataset.task == o.task && !form?.elements.say.value.trim()) location.reload()
+}
 let status = document.querySelector('[data-send-status]') ?? document.createElement('p')
 let draftAt = '${at}?draft=1'
 let submission
@@ -870,6 +960,7 @@ let live = false
 let hear = (frame) => {
   let o = frame.operator
   if (!o) return
+  changing(o)
   let card = thread()
   if (!card) return void read().catch(said)
   if (card.dataset.task != o.task) return void (o.typing || list())
@@ -933,7 +1024,7 @@ form?.addEventListener('submit', async (e) => {
     status.textContent = ''
     // Words go to the person's conversation, which opens to show them when
     // another page sent them.
-    if (thread()?.dataset.task != root) return void location.assign(chats + request)
+    if (thread()?.dataset.task != root) return void location.assign(chats + request + (app ? '?app=' + encodeURIComponent(app.dataset.app) : ''))
     await read(); poll()
   } catch (error) { said(error) }
   finally { button.disabled = false }

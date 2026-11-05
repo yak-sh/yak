@@ -1225,7 +1225,9 @@
     border-top: 1px solid var(--edge);
   }
   .Talk_Close,
-  .Talk_Menu {
+  .Talk_Menu,
+  .Talk_Back,
+  .Talk_Show {
     display: none;
   }
   .Talk_Main {
@@ -1319,6 +1321,57 @@
     gap: .5rem;
     margin-bottom: auto;
     padding-bottom: 2rem;
+  }
+  /* An app open beside the chat (operator-page.ts `canvas`): a third column
+     the height of the window, held in place while the chat scrolls, the app
+     itself filling it under its name. */
+  .Talk-app {
+    grid-template-columns: 17rem minmax(20rem, 1fr) minmax(0, 1.4fr);
+  }
+  .Talk_App {
+    position: sticky;
+    top: 0;
+    display: grid;
+    grid-template-rows: auto minmax(0, 1fr);
+    height: 100dvh;
+    border-left: 1px solid var(--edge);
+    background: var(--behind);
+  }
+  .Talk_AppHead {
+    display: flex;
+    align-items: center;
+    gap: .6rem;
+    min-width: 0;
+    padding: .6rem 1rem;
+  }
+  .Talk_AppName {
+    display: grid;
+    min-width: 0;
+    margin-right: auto;
+    line-height: 1.25;
+  }
+  .Talk_AppName b,
+  .Talk_AppName small {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .Talk_AppName small {
+    color: var(--soft-ink);
+    font-size: var(--fine);
+  }
+  .Talk_Stage {
+    min-height: 0;
+    padding: 0 1rem 1rem;
+  }
+  .Talk_Frame {
+    display: block;
+    width: 100%;
+    height: 100%;
+    border: 0;
+    border-radius: .75rem;
+    background: var(--paper);
+    box-shadow: 0 0 0 1px var(--edge);
   }
   .Talk_Thread,
   .Talk_Said {
@@ -1644,6 +1697,29 @@
     }
     .Talk_Close {
       display: inline-flex;
+    }
+    /* The app takes the screen in the chat's place while chosen from the
+       bar (`#app`), and Chat goes back. */
+    .Talk-app .Talk_Show {
+      display: inline-flex;
+      margin-left: auto;
+    }
+    .Talk_App {
+      display: none;
+    }
+    .Talk_App:target {
+      position: fixed;
+      inset: 0;
+      z-index: 3;
+      display: grid;
+      height: auto;
+      border: 0;
+    }
+    .Talk_Back {
+      display: inline-flex;
+    }
+    .Talk_Stage {
+      padding: 0 .5rem .5rem;
     }
     .Talk_Facts > div {
       grid-template-columns: minmax(0, 1fr);

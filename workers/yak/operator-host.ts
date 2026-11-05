@@ -16,11 +16,14 @@ import { transcript } from '@yaks/session'
 import { stepOf } from '@yaks/tools/title'
 import type { Tool } from '@yaks/model'
 import {
+  type Changed,
+  changed,
   frame,
   type Helper,
   helperFrame,
   type Names,
   type Offers,
+  type Seen,
   stateOf,
   talk,
   type Worked,
@@ -147,6 +150,10 @@ let seenOf = async (
     ]),
   }
 }
+
+// The apps a conversation changed: in its own lines and its helpers'.
+let changedIn = (entries: Bundle[], seen: Seen) =>
+  changed([...entries, ...(seen.helpers ?? []).flatMap((h) => h.entries)])
 
 // The task holding a session, by the link a task keeps to it.
 let holding = async (store: Store, session: string) => {
@@ -371,6 +378,8 @@ export let conversationOf = async (
   title: string
   html: string
   waiting: Bundle[]
+  // the apps its lines and its helpers' changed, oldest first
+  changed: Changed[]
 }> => {
   let [row] = await store.g.get([open])
   if (row?.session) {
@@ -383,6 +392,7 @@ export let conversationOf = async (
     let calls = new Set(
       entries.flatMap((b) => b.call ? [b.entity.eid] : []),
     )
+    let seen = await seenOf(store, [row], entries, calls)
     return {
       task: open,
       begun: open,
@@ -397,9 +407,10 @@ export let conversationOf = async (
         await namesOf(store, entries, named),
         filesOf(asked),
         at,
-        await seenOf(store, [row], entries, calls),
+        seen,
       ),
       waiting: [],
+      changed: changedIn(entries, seen),
     }
   }
   let task = row?.task
@@ -425,8 +436,9 @@ export let conversationOf = async (
         title: firstLine(row),
         html: '',
         waiting: await answering(store, [row]),
+        changed: [],
       }
-      : { task: '', begun: '', title: '', html: '', waiting: [] }
+      : { task: '', begun: '', title: '', html: '', waiting: [], changed: [] }
   }
   let requests = await requested(store)
   let sessions = await sessionsOf(store, task)
@@ -441,6 +453,7 @@ export let conversationOf = async (
       String(comp(b, 'created')?.at ?? ''),
     )
   )
+  let seen = await seenOf(store, sessions, entries)
   return {
     task,
     begun: asked[0]?.entity.eid ?? task,
@@ -451,9 +464,10 @@ export let conversationOf = async (
       await namesOf(store, entries, named),
       filesOf(asked),
       at,
-      await seenOf(store, sessions, entries),
+      seen,
     ),
     waiting: [],
+    changed: changedIn(entries, seen),
   }
 }
 

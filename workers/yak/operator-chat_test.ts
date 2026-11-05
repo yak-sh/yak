@@ -14,7 +14,9 @@ import { platform } from './testing.ts'
 import { operatorModel, operatorService } from './operator-testing.ts'
 import { receive, rootOf } from './operator-channels.ts'
 import { CONVERSATION } from './operator-host.ts'
+import { toolEid } from '@yaks/tools/result'
 import {
+  aboutPath,
   chatPage,
   operatorAnswer,
   operatorBody,
@@ -179,9 +181,13 @@ let six = [
 ]
   .map((title, i) => ({ slug: `app${i}`, title }))
 let beside = { name: '  Ada Lovelace ', apps: six }
-let sided = async (role: 'owner' | 'editor', open = task) => {
+let sided = async (
+  role: 'owner' | 'editor',
+  open = task,
+  app?: string,
+) => {
   let { document } = parseHTML(
-    await (await chatPage(p.env, space, { ...who, role }, open, beside))
+    await (await chatPage(p.env, space, { ...who, role }, open, beside, app))
       .text(),
   )
   let lines = [
@@ -216,17 +222,17 @@ test('the side holds the space, New chat, Updates, a few apps, the chats and Man
     CONVERSATION,
     'Manage',
   ])
-  let host = 'https://clerk.yaks.app'
+  // Each app opens a chat about it, with the app beside it.
   assertEquals(owner.to, {
     'yaks.app': chatPath('clerk'),
     Township: null,
     'New chat': chatPath('clerk'),
     [`Updates from ${op}`]: managePath('updates', 'clerk'),
     'Your apps': null,
-    'Recipe box': `${host}/app0/`,
-    Holdfast: `${host}/app1/`,
-    'Book club': `${host}/app2/`,
-    Chores: `${host}/app3/`,
+    'Recipe box': aboutPath('clerk', 'app0'),
+    Holdfast: aboutPath('clerk', 'app1'),
+    'Book club': aboutPath('clerk', 'app2'),
+    Chores: aboutPath('clerk', 'app3'),
     'All 6 apps': managePath('apps', 'clerk'),
     Chats: null,
     [CONVERSATION]: null,
@@ -276,6 +282,45 @@ test('a chat that is gone says so, with no box', () => {
   assertEquals(gone.code, 404)
   assertEquals(gone.document.querySelector('[name=say]'), null)
   assertEquals(gone.document.querySelector('[data-needs]'), null)
+})
+
+test('an app chosen in the side opens a chat about it, with the app live beside it', async () => {
+  let { document, said } = await sided('owner', 'new', 'app1')
+  let app = document.querySelector('.Talk_App')!
+  assertEquals(
+    app.querySelector('iframe')?.getAttribute('src'),
+    'https://clerk.yaks.app/app1/',
+  )
+  assertEquals(app.querySelector('.Talk_AppName b')?.textContent, 'Holdfast')
+  assertEquals(
+    document.querySelector('.Talk_Places [aria-current="page"]')?.textContent,
+    'Holdfast',
+  )
+  assertEquals(
+    document.querySelector('.Talk_Hello h2')?.textContent,
+    'What should change in Holdfast?',
+  )
+  // The words sent say which app is open; a chat about an app is not where
+  // the person lands, so it holds no ways to start and nothing that needs
+  // them.
+  assertEquals(
+    document.querySelector('#ask [name=app]')?.getAttribute('value'),
+    'app1',
+  )
+  assertEquals(document.querySelector('.Talk_Starts, [data-needs]'), null)
+  // On a phone, the bar switches to the app, and the app back to the chat.
+  assertEquals(
+    document.querySelector('.Talk_Show')?.getAttribute('href'),
+    '#app',
+  )
+  assertEquals(app.id, 'app')
+  assertEquals(app.querySelector('.Talk_Back')?.getAttribute('href'), '#')
+  assertEquals(said.includes('Holdfast'), true)
+  // An app the person may not open, or none, opens nothing beside the chat.
+  for (let other of ['nope', undefined]) {
+    let { document } = await sided('owner', 'new', other)
+    assertEquals(document.querySelector('.Talk_App, #ask [name=app]'), null)
+  }
 })
 
 test('Updates from the Operator opens beside the same side', async () => {
@@ -476,4 +521,29 @@ test('a renamed Operator goes by its new name in its chat app, its settings and 
     'Marlowe Quince',
   )
   assertStringIncludes(told, 'You are Marlowe Quince, the Operator of clerk')
+})
+
+// Last, since it adds to the conversation every test above reads.
+test('a chat in which the Operator changed an app shows that app beside it', async () => {
+  let call = crypto.randomUUID()
+  await service.store.g.apply([{
+    entity: { eid: call },
+    entry: { session: task },
+    call: { to: toolEid('app_deploy'), args: { app: 'app2' } },
+  }, {
+    entity: { eid: crypto.randomUUID() },
+    entry: { session: task },
+    result: { call },
+    content: { body: '{"version":2}' },
+  }], { trusted: true })
+  let { document } = await sided('owner')
+  assertEquals(
+    document.querySelector('.Talk_App')?.getAttribute('data-app'),
+    'app2',
+  )
+  // Words sent from it say which app is open.
+  assertEquals(
+    document.querySelector('#ask [name=app]')?.getAttribute('value'),
+    'app2',
+  )
 })

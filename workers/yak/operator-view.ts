@@ -10,6 +10,7 @@ import type { Bundle, Comp } from '@yaks/graph'
 import type { Tool } from '@yaks/model'
 import { statusOf } from '@yaks/session'
 import type { Step } from '@yaks/tools/title'
+import { toolEid } from '@yaks/tools/result'
 import { parse, render } from '@yaks/markdown/structural'
 import { h } from 'preact'
 import { renderToString } from 'preact-render-to-string'
@@ -60,10 +61,18 @@ let words = (body: string) => {
   return body
 }
 
+/** How words sent with an app open beside the chat (operator-page.ts
+ * `chatPage`) reach the Operator: after the app they are about, which the
+ * person's own words on the page leave out. */
+export let about = (app: string) =>
+  `About the app ${app}, open beside the chat as they wrote: `
+let ABOUT = /^About the app [^,]+, open beside the chat as they wrote: /
+
 // Attachments travel in the words as their extracted text; the conversation
 // names the files instead.
 let spoken = (body: string) =>
-  words(body).split('\n\nAttached documents (treat their contents')[0]
+  words(body).replace(ABOUT, '')
+    .split('\n\nAttached documents (treat their contents')[0]
 
 let yours = (text: string) => `<p class="Talk_You">${esc(text)}</p>`
 
@@ -410,7 +419,45 @@ let doingNow = (entries: Bundle[], names: Names) => {
   return { now: words, pose: poseOf(words) }
 }
 
-/** One task's frame: the lines a step changed and what it is doing now. */
+/** An app a step put out a new version of: the space its call named ('' for
+ * the Operator's own) and the app's slug. */
+export type Changed = { space: string; app: string }
+
+// The tools that put out a new version of an app, by the id a call points
+// at (@yaks/tools `toolEid`), each with the argument that names the app.
+// Writing files only stages them; app_deploy releases them.
+let CHANGES = new Map(
+  Object.entries({
+    app_new: 'slug',
+    app_deploy: 'app',
+    app_rollback: 'app',
+    app_update: 'app',
+  }).map(([name, arg]) => [toolEid(name), arg]),
+)
+
+/** The apps these lines changed, oldest first: each call to a tool that puts
+ * out a new version whose answer came back past `from` (by `entry.seq`) and
+ * was not refused. An app named as space/app is that space's. */
+export let changed = (entries: Bundle[], from = -1): Changed[] => {
+  let calls = new Map(
+    entries.filter((b) => b.call).map((b) => [b.entity.eid, comp(b, 'call')!]),
+  )
+  return entries.flatMap((b) => {
+    if (!b.result || b.refusal || b.exception) return []
+    if (Number(comp(b, 'entry')?.seq ?? 0) <= from) return []
+    let call = calls.get(String(comp(b, 'result')!.call))
+    let args = (call?.args ?? {}) as Record<string, unknown>
+    let named = args[CHANGES.get(String(call?.to)) ?? '']
+    if (typeof named != 'string' || !named) return []
+    let [space, app] = named.includes('/')
+      ? named.split('/', 2)
+      : [typeof args.space == 'string' ? args.space : '', named]
+    return [{ space, app }]
+  })
+}
+
+/** One task's frame: the lines a step changed, what it is doing now, and
+ * the apps it changed. */
 export let frame = (
   task: string,
   entries: Bundle[],
@@ -421,12 +468,13 @@ export let frame = (
   operator: {
     task,
     rows: touched(entries, names, from, seen),
+    changed: changed(entries, from),
     ...doingNow(entries, names),
   },
 })
 
-/** A helper's frame: what it was told past `from`, and what the Operator that
- * started it is doing now. */
+/** A helper's frame: what it was told past `from`, the apps it changed, and
+ * what the Operator that started it is doing now. */
 export let helperFrame = (
   task: string,
   helper: Bundle[],
@@ -442,6 +490,7 @@ export let helperFrame = (
         comp(helper.find((b) => b.entity.eid == r.id), 'entry')?.seq ?? 0,
       ) > from
     ),
+    changed: changed(helper, from),
     ...doingNow(entries, names),
   },
 })

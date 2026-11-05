@@ -23,7 +23,7 @@ import type { Operator } from './operator.ts'
 import { phoneTexts } from './phone-move.ts'
 import type { Declared } from './operator-persona.ts'
 import type { operatorStore } from './operator-store.ts'
-import { unsaid } from './operator-view.ts'
+import { about, unsaid } from './operator-view.ts'
 
 /** What a person reads when the Operator could not start on their request
  * for a reason that is not theirs to fix. */
@@ -189,9 +189,11 @@ export let signedFor = (space: Space, name: string) =>
 export let textSigned = (space: Space) => `— ${space.operator}, yaks.app`
 
 // How a person's words came, said before them in their conversation, which
-// every channel shares; words in the chat app need no mark. A reply to a
+// every channel shares; words in the chat app need no mark but the app open
+// beside them, when one is (`about`). A reply to a
 // letter the Operator wrote is somebody else's words, and says whose.
 let BY: Record<string, (request: Request, id: string) => string> = {
+  chat: (request) => request.app ? about(request.app) : '',
   email: (request) => request.signup ? 'By email, signing up: ' : 'By email: ',
   text: (request) => request.signup ? 'By text, signing up: ' : 'By text: ',
   rcs: (request) => request.signup ? 'By text, signing up: ' : 'By text: ',
