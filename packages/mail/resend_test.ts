@@ -79,11 +79,23 @@ test('only a definite nonacceptance permits a Resend retry', async () => {
       },
     })
     let error = await sender.send(message).catch((e) => e)
-    equal(error instanceof Unsent, status == 429)
+    equal(error instanceof Unsent, [429, 401, 403].includes(status))
     equal(error.message.includes('private echoed content'), false)
     equal(calls, 1)
     if (status == 429) equal(error.retry.after, 7000)
   }
+  let refused = await resend({
+    token: 'bot-only',
+    fetch: () =>
+      Promise.resolve(Response.json({
+        statusCode: 403,
+        message: 'This API key is not authorized to send emails from yaks.app',
+      }, { status: 403 })),
+  }).send(message).catch((e) => e)
+  equal(
+    refused.message,
+    'Resend refused the key (HTTP 403): This API key is not authorized to send emails from yaks.app',
+  )
   for (let reason of ['client error (Connect): TLS', 'connection closed']) {
     let error = await resend({
       token: 'sending-only',

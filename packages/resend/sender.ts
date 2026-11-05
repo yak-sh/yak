@@ -34,7 +34,8 @@ let payload = (m: Message, tags: Record<string, string>) => ({
     : {}),
 })
 
-/** Resend's sending API. Only a refusal known to precede acceptance retries;
+/** Resend's sending API. Only a refusal known to precede acceptance retries
+ * (a dropped connection, a 429, a refused key);
  * an uncertain response never causes another send or another provider to send.
  * Resend exposes the RFC Message-ID through webhooks and retrieval, rather
  * than its send response. An accepted letter therefore has an empty receipt. */
@@ -61,6 +62,23 @@ export let resend = (
       throw new Unsent(
         'Resend has not accepted the letter (HTTP 429)',
         seconds > 0 ? seconds * 1000 : 1000,
+      )
+    }
+    // A refused key (401, 403: unknown, revoked, or not allowed this from
+    // domain) is refused before the letter is taken, and a repaired key
+    // cures it, so the letter waits rather than bounces. Its answer speaks
+    // of the key and the domain, never the letter.
+    if (response.status == 401 || response.status == 403) {
+      let said = await response.json().then(
+        (body: unknown) => {
+          let message = (body as { message?: unknown } | null)?.message
+          return typeof message == 'string' ? message : ''
+        },
+        () => '',
+      )
+      throw new Unsent(
+        `Resend refused the key (HTTP ${response.status})` +
+          (said ? `: ${said.slice(0, 200)}` : ''),
       )
     }
     if (!response.ok) {
