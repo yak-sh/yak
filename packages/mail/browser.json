@@ -6,5 +6,10 @@
       "esnext"
     ],
     "strict": true
-  }
+  },
+  "entries": [
+    ".",
+    "./graph",
+    "./effects"
+  ]
 }
