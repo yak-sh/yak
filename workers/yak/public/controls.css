@@ -766,6 +766,21 @@
     color: var(--warn);
   }
 
+  /* Something at work: the yak doing it (mascot.ts `yak`), then the words
+     that say what it is. */
+  .Working {
+    display: flex;
+    align-items: center;
+    gap: .5rem;
+  }
+  .Working_Yak,
+  .Working_Yak img {
+    display: block;
+    flex: none;
+    width: 40px;
+    height: 40px;
+  }
+
   /* Words to paste somewhere else, in a well, with the button that copies
      them beside it (pages.ts `copyable`). */
   .Copy {

@@ -15,6 +15,7 @@ import { h } from 'preact'
 import { renderToString } from 'preact-render-to-string'
 import { day, esc } from './html.ts'
 import { chatPath } from './route.ts'
+import { poseOf, yak } from './mascot.ts'
 
 let comp = (b: Bundle | undefined, name: string) =>
   b?.[name] as Comp | undefined
@@ -403,6 +404,12 @@ export let now = (entries: Bundle[], names: Names) => {
     : 'Thinking…'
 }
 
+// What it is doing now, in words and as the yak's pose.
+let doingNow = (entries: Bundle[], names: Names) => {
+  let words = now(entries, names)
+  return { now: words, pose: poseOf(words) }
+}
+
 /** One task's frame: the lines a step changed and what it is doing now. */
 export let frame = (
   task: string,
@@ -414,7 +421,7 @@ export let frame = (
   operator: {
     task,
     rows: touched(entries, names, from, seen),
-    now: now(entries, names),
+    ...doingNow(entries, names),
   },
 })
 
@@ -435,7 +442,7 @@ export let helperFrame = (
         comp(helper.find((b) => b.entity.eid == r.id), 'entry')?.seq ?? 0,
       ) > from
     ),
-    now: now(entries, names),
+    ...doingNow(entries, names),
   },
 })
 
@@ -461,7 +468,9 @@ export let talk = (
     rows(entries, names, seen).map((r) =>
       `<div id="row-${esc(r.id)}">${r.html}</div>`
     ).join('')
-  }</div><p class="Talk_Now" role="status" data-now>${esc(working)}</p>${
+  }</div><p class="Working Talk_Now" role="status">${
+    yak(poseOf(working))
+  }<span data-now>${esc(working)}</span></p>${
     rest.length
       ? `<p class="Talk_Files">${
         rest.map((f) =>

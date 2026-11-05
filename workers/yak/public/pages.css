@@ -1286,17 +1286,14 @@
     white-space: pre-wrap;
     overflow-wrap: anywhere;
   }
-  .Talk_Now:empty {
+  /* What the Operator is doing now, and the yak doing it while its thread is
+     pending; "Stopped." stands alone. */
+  .Talk_Now:has([data-now]:empty),
+  .Talk_Thread:not([data-pending]) > .Talk_Now > .Working_Yak {
     display: none;
   }
   [data-pending] > .Talk_Now {
     color: var(--accent);
-    animation: Talk_Pulse 1.6s ease-in-out infinite;
-  }
-  @keyframes Talk_Pulse {
-    50% {
-      opacity: .45;
-    }
   }
   /* The files a person sent, under their words at the right: a picture as
      itself, any other file as a chip with its kind and name. */

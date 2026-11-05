@@ -25,6 +25,7 @@ let said = chat && chat.querySelector('.Chat_Said')
 let ask = chat && chat.querySelector('.Chat_Ask')
 let box = ask && ask.querySelector('textarea')
 let go = ask && ask.querySelector('button')
+let wait = ask && ask.querySelector('[data-wait]')
 
 let el = (tag, cls, text) => {
   let node = document.createElement(tag)
@@ -77,11 +78,12 @@ let add = (node) => {
   node.scrollIntoView({ block: 'nearest' })
 }
 
-// Whether the builder is busy, said to whoever is typing.
+// Whether the builder is busy, said to whoever is typing: the yak at its
+// keyboard and "Building…" over a button that waits.
 let waiting = (yes) => {
   box.disabled = yes
   go.disabled = yes
-  go.textContent = yes ? 'Building…' : 'Build it'
+  if (wait) wait.hidden = !yes
 }
 
 let draw = (f) => {

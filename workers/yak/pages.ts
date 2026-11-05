@@ -44,6 +44,7 @@ import {
 import { CONNECTOR } from './seo.ts'
 import { AGENT } from './docs.ts'
 import { apex, type Host, spaceHost, url } from './host.ts'
+import { yak } from './mascot.ts'
 import { links } from './sheets.ts'
 import {
   type Budget,
@@ -353,19 +354,24 @@ let transcript = (frames: Frame[]) => {
 }
 
 // The line a person types. `required` is the browser's own guard; the door
-// keeps the same one, for whoever posts without it.
-let chatAsk = (to = '/api/build') =>
+// keeps the same one, for whoever posts without it. While a build runs, the
+// script shows the yak at its keyboard above the button; its files are the
+// apex's, which a space's page names whole.
+let chatAsk = (env: Host, to = '/api/build') =>
   `<form class="Chat_Ask" method="post" action="${esc(to)}">
 <p><textarea class="Field" name="say" rows="3" required placeholder="A recipe box I can share with my sister" aria-label="What do you want to build?"></textarea></p>
+<p class="Working Chat_Note" role="status" data-wait hidden>${
+    yak('typing', url(env))
+  }<span>Building…</span></p>
 <button class="Button" type="submit">Build it</button>
 </form>`
 
 // The optional built-in builder, reached from New app: the dashboard's page
 // is at the apex, so its form names the space's door whole, and the script
 // opens its socket wherever the form points.
-let chat = (to: string) =>
+let chat = (env: Host, to: string) =>
   `<section class="Card Chat">${heading('Build an app here')}
-${transcript([])}${chatAsk(to)}
+${transcript([])}${chatAsk(env, to)}
 </section>`
 
 // The live half (public/build.js), served at the address of the page it is
@@ -392,7 +398,7 @@ export let building = (at: {
     at.why ? esc(at.why) : 'Here is what happened. Say the next thing below.',
     at.why ? 400 : 200,
     `<section class="Card Chat">
-${transcript(at.frames ?? [])}${chatAsk()}
+${transcript(at.frames ?? [])}${chatAsk(env)}
 </section>
 <p><a class="Away" href="${
       url(env, managePath('apps', at.space))
@@ -1917,7 +1923,7 @@ export let desk = (at: DeskPage, env: Host = {}) => {
     }<div class="Form_Field"><p class="Form_Label">Try this</p>${firstAsk}</div></section>${
       connectCard(at, env)
     }
-<div class="Desk_Options">${chat(`${site}/api/build`)}
+<div class="Desk_Options">${chat(env, `${site}/api/build`)}
 <section class="Card">${heading('Upload your website')}${
       dropZone(undefined, `${site}/deploy`)
     }</section></div>${chatLive('/build.js')}${dropping}`
@@ -3083,8 +3089,10 @@ for (let b of document.querySelectorAll('.Bill_Go')) {
   b.addEventListener('click', async () => {
     let say = b.closest('.Bill').querySelector('.Bill_Say')
     b.disabled = true
-    say.className = 'Say Bill_Say'
-    say.textContent = 'One moment…'
+    say.className = 'Say Bill_Say Working'
+    say.innerHTML = ${
+  JSON.stringify(yak('calculating') + '<span>One moment…</span>')
+}
     try {
       let r = await fetch(b.dataset.target || '/api/billing/' + b.dataset.door, {
         method: 'POST',

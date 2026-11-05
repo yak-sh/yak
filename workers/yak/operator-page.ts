@@ -623,6 +623,16 @@ if (form) { drafts.bind(form.elements.say, place); form.elements.say.focus() }
 let said = (e) => { status.textContent = e.message }
 let thread = () => box.querySelector('[data-task]')
 let working = () => !!box.querySelector('[data-pending]')
+// The yak beside what it is doing now takes the pose the words call for
+// (mascot.ts), each of its files swapped for the same pose's.
+let pose = (card, name) => {
+  let yak = card.querySelector('[data-pose]')
+  if (!yak || yak.dataset.pose == name) return
+  for (let [el, at] of [[yak.querySelector('source'), 'srcset'], [yak.querySelector('img'), 'src']]) {
+    el.setAttribute(at, el.getAttribute(at).replace('/' + yak.dataset.pose, '/' + name))
+  }
+  yak.dataset.pose = name
+}
 // The page follows the conversation down as it grows, unless the person has
 // scrolled up to read.
 let near = () => !globalThis.innerHeight || globalThis.innerHeight + globalThis.scrollY >= document.body.scrollHeight - 120
@@ -697,6 +707,8 @@ let hear = (frame) => {
       rows.append(typing)
     }
     typing.textContent += o.typing
+    card.querySelector('[data-now]').textContent = 'Typing…'
+    pose(card, 'typing')
     return follow(was)
   }
   typing?.remove()
@@ -712,6 +724,7 @@ let hear = (frame) => {
     at.dataset.html = row.html
   }
   card.querySelector('[data-now]').textContent = o.now
+  if (o.pose) pose(card, o.pose)
   card.toggleAttribute('data-pending', !!o.now)
   follow(was)
 }
