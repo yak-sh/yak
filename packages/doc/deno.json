@@ -9,9 +9,6 @@
   },
   "license": "Apache-2.0",
   "description": "A shared doc component for an entity's title and Markdown body, with portable views for displaying both.",
-  "imports": {
-    "@std/assert": "jsr:@std/assert@^1.0.0"
-  },
   "publish": {
     "exclude": [
       "**/*_test.ts",

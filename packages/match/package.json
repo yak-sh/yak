@@ -6,12 +6,12 @@
   "license": "Apache-2.0",
   "description": "Evaluates queries over bundles in memory: selections, filters, rows and routing, without SQL or a database.",
   "dependencies": {
-    "@std/assert": "npm:@jsr/std__assert@^1.0.0",
     "@yaks/query": "0.2.17",
     "@yaks/sql": "0.2.17",
     "@yaks/vocab": "0.2.17"
   },
   "devDependencies": {
+    "@std/assert": "npm:@jsr/std__assert@^1.0.0",
     "@yaks/archetype": "0.2.17",
     "@yaks/edge": "0.2.17",
     "@yaks/fts": "0.2.17",

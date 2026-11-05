@@ -1,7 +1,7 @@
 // An indexed value already proves its component exists; status still excludes
 // closed rows, and predicates accepting NULL must keep explicit presence.
 import './sqlitepath.ts'
-import { Database } from '@db/sqlite'
+import { Database } from './legacy.ts'
 import { loadVocab } from '@yaks/vocab'
 import { compile, render } from '@yaks/sql'
 import { and, eq, list, parse, scalar } from '@yaks/query'

@@ -11,9 +11,6 @@
   },
   "license": "Apache-2.0",
   "description": "The graph browsing app: domain views, editing and navigation, painted through @yaks/ui in browsers and terminals.",
-  "imports": {
-    "@std/assert": "jsr:@std/assert@^1.0.0"
-  },
   "publish": {
     "exclude": [
       "**/*_test.ts",

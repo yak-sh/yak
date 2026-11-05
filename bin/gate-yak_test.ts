@@ -1,6 +1,6 @@
 import { test } from '@yaks/testing'
 import { assertEquals } from '@std/assert'
-import { parse } from '@std/yaml'
+import { parse } from 'yaml'
 
 type Step = {
   name?: string

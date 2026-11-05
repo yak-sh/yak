@@ -9,7 +9,7 @@
 
 import type { VocabDoc } from '@yaks/vocab'
 import doc from './vocab.json' with { type: 'json' }
-import manifest from './deno.json' with { type: 'json' }
+import manifest from './package.json' with { type: 'json' }
 
 /** `package`, `module`, `symbol`, the `imports` relation and `code sync`. */
 export let codeDoc: VocabDoc = doc

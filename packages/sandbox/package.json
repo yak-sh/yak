@@ -17,8 +17,6 @@
   "license": "Apache-2.0",
   "description": "Containers and jails recorded separately from computers, with provisioning intentions and confirmed disposal in the graph.",
   "dependencies": {
-    "@std/encoding": "npm:@jsr/std__encoding@1.0.10",
-    "@std/path": "npm:@jsr/std__path@1.1.2",
     "@yaks/effects": "0.2.17",
     "@yaks/file": "0.2.17",
     "@yaks/fp": "0.2.17",

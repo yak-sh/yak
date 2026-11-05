@@ -44,6 +44,8 @@ export let bundle = async (root: string, output: string, meta: string) => {
       format: 'esm',
       platform: 'browser',
       target: 'es2022',
+      jsx: 'automatic',
+      jsxImportSource: 'preact',
       conditions: ['workerd', 'worker', 'browser'],
       external: ['node:*', 'cloudflare:*'],
       plugins: [{
@@ -61,7 +63,6 @@ export let bundle = async (root: string, output: string, meta: string) => {
           )
         },
       }],
-      tsconfig: join(root, '.wrangler/paths.json'),
       minify: true,
       keepNames: true,
       sourcemap: true,

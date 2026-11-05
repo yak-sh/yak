@@ -1,4 +1,3 @@
-import * as disk from '@yaks/file/io'
 /**
  * A page a plugin serves, exported as `@yaks/cli/page`: what a plugin's
  * routes answer with besides the graph's doors, in the process that serves
@@ -18,7 +17,6 @@ import * as disk from '@yaks/file/io'
  */
 
 import { fault } from '@yaks/api/refuse'
-import { released } from './release.ts'
 import { fileURLToPath } from 'node:url'
 import { settling } from './held.ts'
 
@@ -148,125 +146,46 @@ export let compiled = async (
   }
 }
 
-// Pass the discovered config to both halves of the loader: its native loader
-// otherwise starts `deno info --no-config`, losing the workspace's lock pins.
-let configAt = async (at: URL): Promise<string | undefined> => {
-  let dir = new URL('./', at)
-  for (;;) {
-    for (let name of ['deno.json', 'deno.jsonc']) {
-      let path = new URL(name, dir)
-      try {
-        if ((await disk.stat(path)).isFile) return path.pathname
-      } catch (error) {
-        if (!(error instanceof disk.errors.NotFound)) throw error
-      }
-    }
-    let parent = new URL('../', dir)
-    if (parent.href == dir.href) return
-    dir = parent
-  }
-}
-
-/** One browser module, compiled by esbuild's JavaScript service bridge and
- * Deno's workspace resolver, replacing the `deno bundle` bridge that can
- * deadlock (T-38240). Each context owns its cancellation and cleanup, so
- * concurrent builds cannot stop one another's compiler. */
+/** One browser module, resolved through the npm workspace. Every build owns
+ * its cancellation and cleanup, so concurrent builds stay independent. */
 export let bundle = async (
   entry: URL | Written,
   signal?: AbortSignal,
 ): Promise<string> => {
   if (signal?.aborted) throw new Error('browser bundle was stopped')
   let at = entry instanceof URL ? entry : entry.at
-  if (at.protocol == 'file:') {
-    let { context } = await import('esbuild')
-    let build = await context({
-      absWorkingDir: new URL('./', at).pathname,
-      ...entry instanceof URL ? { entryPoints: [entry.pathname] } : {
-        stdin: {
-          contents: entry.code,
-          sourcefile: at.pathname,
-          resolveDir: new URL('./', at).pathname,
-          loader: 'ts',
-        },
+  if (at.protocol != 'file:') {
+    return (await import('./remote-page.ts')).bundle(entry, signal)
+  }
+  let { context } = await import('esbuild')
+  let build = await context({
+    absWorkingDir: fileURLToPath(new URL('./', at)),
+    ...entry instanceof URL ? { entryPoints: [fileURLToPath(entry)] } : {
+      stdin: {
+        contents: entry.code,
+        sourcefile: fileURLToPath(at),
+        resolveDir: fileURLToPath(new URL('./', at)),
+        loader: 'ts',
       },
-      plugins: [{
-        name: 'file-urls',
-        setup(build) {
-          build.onResolve(
-            { filter: /^file:/ },
-            ({ path }) => ({ path: fileURLToPath(path) }),
-          )
-        },
-      }],
-      bundle: true,
-      format: 'esm',
-      platform: 'browser',
-      target: 'esnext',
-      jsx: 'automatic',
-      jsxImportSource: 'preact',
-      minify: true,
-      write: false,
-      logLevel: 'silent',
-    })
-    return compiled(build, signal)
-  }
-  let [{ context }, { denoPlugins, urlToEsbuildResolution }] = await Promise
-    .all([
-      import('esbuild'),
-      import('@luca/esbuild-deno-loader'),
-    ])
-  let dir = at.protocol == 'file:'
-    ? undefined
-    : await disk.makeTempDir({ prefix: 'yaks-page-' })
-  let from = entry instanceof URL ? entry : new URL('./.yak-page.ts', at)
-  let virtual = urlToEsbuildResolution(from)
-  try {
-    if (dir) {
-      await disk.writeTextFile(`${dir}/deno.json`, JSON.stringify(released))
-    }
-    let configPath = dir ? `${dir}/deno.json` : await configAt(at)
-    if (signal?.aborted) throw new Error('browser bundle was stopped')
-    let build = await context({
-      absWorkingDir: dir ?? new URL('./', at).pathname,
-      entryPoints: [from.href],
-      bundle: true,
-      format: 'esm',
-      platform: 'browser',
-      target: 'esnext',
-      // esbuild reads no deno.json: said here, or JSX compiles to `React`.
-      jsx: 'automatic',
-      jsxImportSource: 'preact',
-      minify: true,
-      write: false,
-      logLevel: 'silent',
-      plugins: [
-        ...entry instanceof URL ? [] : [{
-          name: 'written',
-          setup(build: import('esbuild').PluginBuild) {
-            build.onResolve(
-              { filter: /.*/ },
-              (args) =>
-                args.kind == 'entry-point' && args.path == from.href
-                  ? virtual
-                  : undefined,
-            )
-            build.onLoad(
-              { filter: /.*/, namespace: virtual.namespace },
-              (args) =>
-                args.path == virtual.path
-                  ? { contents: entry.code, loader: 'ts' }
-                  : undefined,
-            )
-          },
-        }],
-        // The loader carries esbuild 0.20 types; its plugin API is unchanged.
-        ...denoPlugins(
-          { configPath },
-        ) as import('esbuild').Plugin[],
-      ],
-    })
-    return await compiled(build, signal)
-  } finally {
-    if (dir) await disk.remove(dir, { recursive: true })
-  }
+    },
+    plugins: [{
+      name: 'file-urls',
+      setup(build) {
+        build.onResolve(
+          { filter: /^file:/ },
+          ({ path }) => ({ path: fileURLToPath(path) }),
+        )
+      },
+    }],
+    bundle: true,
+    format: 'esm',
+    platform: 'browser',
+    target: 'esnext',
+    jsx: 'automatic',
+    jsxImportSource: 'preact',
+    minify: true,
+    write: false,
+    logLevel: 'silent',
+  })
+  return compiled(build, signal)
 }

@@ -43,7 +43,7 @@ import { meta, REQUIRED } from '@yaks/sqlite/meta'
 import { signer } from './local.ts'
 import { clock, test, until } from '@yaks/testing'
 import { claude, codex } from '@yaks/spawn'
-import { parse as parseToml } from '@std/toml'
+import { parse as parseToml } from 'smol-toml'
 
 // The host of these tests, as its own writes are signed: this process, whose
 // row every composition here writes on the way in.

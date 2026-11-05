@@ -9,7 +9,6 @@
   "license": "Apache-2.0",
   "description": "A tmux pane as an entity: what is running in the terminal somebody is watching, and the target string tmux accepts.",
   "dependencies": {
-    "@yaks/kernel": "0.2.17",
     "@yaks/vocab": "0.2.17"
   },
   "devDependencies": {

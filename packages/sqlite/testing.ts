@@ -8,7 +8,8 @@
 // knowledge outside this file.
 
 import { sqlitePath } from './sqlitepath.ts'
-import { Database } from '@db/sqlite'
+import { Database } from './legacy.ts'
+export { Database } from './legacy.ts'
 import { open } from './db.ts'
 import { deserialize, driver, prepared, serialize } from './native.ts'
 import { loadVocab, type Vocab, type VocabDoc } from '@yaks/vocab'

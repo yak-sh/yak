@@ -28,14 +28,14 @@ import { fileURLToPath } from 'node:url'
 import { createHash } from 'node:crypto'
 import { Buffer } from 'node:buffer'
 import { stripVTControlCharacters } from 'node:util'
-import { parse, stringify } from '@std/toml'
+import { parse, stringify } from 'smol-toml'
 import packages from './package.json' with { type: 'json' }
 import { imaged } from './sandbox/base.ts'
-import { installed, restored } from './dependencies.ts'
+import { installed, restored } from '@yaks/cli/dependencies'
 import { assets } from './asset-ready.ts'
 import { from as sources, plan } from './sheet-assets.ts'
 import { sleep } from '@yaks/fp'
-export { stale } from './dependencies.ts'
+export { stale } from '@yaks/cli/dependencies'
 
 export let WRANGLER = [
   'npx',
@@ -49,50 +49,7 @@ export let dir = fileURLToPath(new URL('./', import.meta.url)).replace(
   '',
 )
 
-// Where a `@yaks/*` name goes when esbuild bundles. The kernel imports the
-// packages by name, which deno resolves through the repo's workspace; esbuild
-// knows nothing of the workspace. So the workspace itself is handed to it:
-// every member's name and exports, read out of its deno.json, written as the
-// tsconfig `paths` wrangler.toml points esbuild at. A package the kernel starts
-// importing is bundled because it is in the workspace, never because somebody
-// remembered to list it.
-export let TSCONFIG = `${dir}/.wrangler/paths.json`
-
 let repo = fileURLToPath(new URL('../../', import.meta.url))
-
-type Member = { name?: string; exports?: string | Record<string, string> }
-
-/** Every import name the workspace exports, to the file it is. */
-export let members = (root = repo): Record<string, string> => {
-  let config = (at: string) =>
-    JSON.parse(io.readTextFileSync(join(root, at, 'deno.json')))
-  let { workspace = [] } = config('.') as { workspace?: string[] }
-  return Object.fromEntries(workspace.flatMap((at) => {
-    let { name, exports } = config(at) as Member
-    if (!name || exports == null) return []
-    let map = typeof exports == 'string' ? { '.': exports } : exports
-    return Object.entries(map).map(([sub, file]) => [
-      name + sub.slice(1),
-      join(root, at, file),
-    ])
-  }))
-}
-
-/**
- * Write {@link TSCONFIG}: the workspace as `paths`, relative to the file.
- * Through a rename, so a parallel probe never reads half of one.
- */
-export let aliased = (root = repo, to = TSCONFIG) => {
-  let paths = Object.fromEntries(
-    Object.entries(members(root)).map((
-      [name, file],
-    ) => [name, [relative(dirname(to), file)]]),
-  )
-  io.mkdirSync(dirname(to), { recursive: true })
-  let tmp = `${to}.${system.pid}`
-  io.writeTextFileSync(tmp, JSON.stringify({ compilerOptions: { paths } }))
-  io.renameSync(tmp, to)
-}
 
 // A prerequisite made, and what making it took; `quiet` says only a failure.
 let timed = async <T>(name: string, make: () => Promise<T>, quiet = false) => {
@@ -150,7 +107,6 @@ let modules = (root: string, timeout: number, quiet: boolean) =>
     let changed = cache
       ? await restored(join(cache, 'yak'), workspace, { timeout, mode: 'copy' })
       : await installed(workspace, { timeout })
-    aliased()
     return changed
   }, quiet)
 
@@ -729,7 +685,10 @@ export let modelBound = async (
   let parsed = parse(io.readTextFileSync(path))
   let services = Array.isArray(parsed.services) ? parsed.services : []
   parsed.services = [
-    ...services.filter((service) => service.binding != 'MODEL'),
+    ...services.filter((service) =>
+      !service || typeof service != 'object' || !('binding' in service) ||
+      service.binding != 'MODEL'
+    ),
     { binding: 'MODEL', service: name },
   ]
   let config = io.makeTempFileSync({

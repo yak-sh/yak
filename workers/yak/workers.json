@@ -1,42 +1,10 @@
 {
-  "_": "The Cloudflare gate for the Store Durable Object (graph.ts): the shipped source, type-checked with the RUNTIME's own types in scope — `ctx` is the `DurableObjectState` wrangler constructs the object with, and a hibernatable socket is the runtime's. `deno task check:types` checks conform.ts in the Workers program on any change it reaches. It stands alone because those types are GLOBAL: in scope, every other file in the repo would be checked against a Worker it does not run in.",
+  "_": "Worker entrypoints checked with Cloudflare globals by deno task check:types. Resolution comes from the npm workspace.",
   "compilerOptions": {
-    "lib": ["esnext", "dom"],
+    "lib": [
+      "esnext",
+      "dom"
+    ],
     "strict": true
-  },
-  "imports": {
-    "@cloudflare/workers-types": "npm:@cloudflare/workers-types@^4.20260702.1",
-    "@yaks/alias": "../../packages/alias/mod.ts",
-    "@yaks/api": "../../packages/api/mod.ts",
-    "@yaks/blob": "../../packages/blob/mod.ts",
-    "@yaks/doc": "../../packages/doc/mod.ts",
-    "@yaks/durable-object": "../../packages/durable-object/mod.ts",
-    "@yaks/edge": "../../packages/edge/mod.ts",
-    "@yaks/effects": "../../packages/effects/mod.ts",
-    "@yaks/fts": "../../packages/fts/mod.ts",
-    "@yaks/git": "../../packages/git/mod.ts",
-    "@yaks/fp": "../../packages/fp/mod.ts",
-    "@yaks/graph": "../../packages/graph/mod.ts",
-    "@yaks/html": "../../packages/html/mod.ts",
-    "@yaks/id": "../../packages/id/mod.ts",
-    "@yaks/key": "../../packages/key/mod.ts",
-    "@yaks/mail": "../../packages/mail/mod.ts",
-    "@yaks/match": "../../packages/match/mod.ts",
-    "@yaks/member": "../../packages/member/mod.ts",
-    "@yaks/memory": "../../packages/memory/mod.ts",
-    "@yaks/preact": "../../packages/preact/mod.ts",
-    "@yaks/query": "../../packages/query/mod.ts",
-    "@yaks/render": "../../packages/render/mod.ts",
-    "@yaks/sql": "../../packages/sql/mod.ts",
-    "@yaks/archetype": "../../packages/archetype/mod.ts",
-    "@yaks/sqlite": "../../packages/sqlite/mod.ts",
-    "@yaks/vocab": "../../packages/vocab/mod.ts",
-    "@yaks/vocab/tools": "../../packages/vocab/tools.ts",
-    "@yaks/wake": "../../packages/wake/mod.ts",
-    "@yaks/wake/cloudflare": "../../packages/wake/cloudflare.ts",
-    "croner": "jsr:@hexagon/croner@^10.0.1",
-    "preact": "npm:preact@10.29.7",
-    "preact/hooks": "npm:preact@10.29.7/hooks",
-    "preact-render-to-string": "npm:preact-render-to-string@6.7.0"
   }
 }

@@ -25,6 +25,8 @@
 //   git push origin main v0.1.0
 
 import { read, REPO } from './jsr.ts'
+import { versions } from './release-packages.ts'
+export { versioned } from './release-packages.ts'
 
 // The first top-level `"version"` line of a deno.json. A regex rather than
 // JSON.parse/stringify because a rewrite must move one field and leave every
@@ -42,19 +44,26 @@ export let bump = (json: string, version: string) =>
 /// semver('0.1') -> false
 export let semver = (v: string) => /^\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?$/.test(v)
 
-// The workspace members that are publishable packages: a member with no
-// deno.json (workers/yak is an npm-only member) has no version to move.
+// Workspace members with JSR metadata; npm-only members have none.
 export let configs = async (root = '.') => {
-  let { workspace = [] } = JSON.parse(
-    await Deno.readTextFile(`${root}/deno.json`),
+  let { workspaces = [] } = JSON.parse(
+    await Deno.readTextFile(`${root}/package.json`),
   )
   let out: string[] = []
-  for (let member of workspace as string[]) {
+  for (let member of workspaces as string[]) {
     let path = `${root}/${member}/deno.json`.replace('/./', '/')
     if (await Deno.stat(path).then(() => true, () => false)) out.push(path)
   }
   return out
 }
+
+/** Runtime package metadata beside its JSR-only options. */
+export let manifest = async (path: string) => ({
+  ...JSON.parse(await Deno.readTextFile(path)),
+  ...JSON.parse(
+    await Deno.readTextFile(path.replace(/deno\.json$/, 'package.json')),
+  ),
+})
 
 // The members `deno publish` publishes: a name, and no `"publish": false`.
 export let publishing = async (
@@ -62,7 +71,7 @@ export let publishing = async (
 ): Promise<{ name: string; config: string }[]> => {
   let out: { name: string; config: string }[] = []
   for (let path of await configs(root)) {
-    let config = JSON.parse(await Deno.readTextFile(path))
+    let config = await manifest(path)
     if (config.name && config.publish !== false) {
       out.push({ name: config.name, config: path })
     }
@@ -104,10 +113,7 @@ export let release = async (version: string, root = '.') => {
         `link it to ${REPO.owner}/${REPO.name} in its settings, then release.`,
     )
   }
-  let paths = await configs(root)
-  for (let path of paths) {
-    await Deno.writeTextFile(path, bump(await Deno.readTextFile(path), version))
-  }
+  let paths = await versions(root, version)
   await Deno.writeTextFile(
     `${root}/${LIST}`,
     list((await publishing(root)).map((p) => p.name)),

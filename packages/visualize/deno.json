@@ -17,9 +17,6 @@
   },
   "license": "Apache-2.0",
   "description": "A value-free atlas of a composed platform and its subscriber-owned live causal activity, on /visualize and through agent doors.",
-  "imports": {
-    "@std/assert": "jsr:@std/assert@^1.0.0"
-  },
   "publish": {
     "exclude": [
       "**/*_test.ts",

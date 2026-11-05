@@ -4,7 +4,7 @@
 
 import type { VocabDoc } from '@yaks/vocab'
 import doc from './vocab.json' with { type: 'json' }
-import manifest from './deno.json' with { type: 'json' }
+import manifest from './package.json' with { type: 'json' }
 
 /** What this adapter records about a reply, in the form `loadVocab` accepts. */
 export let openrouterDoc: VocabDoc = doc

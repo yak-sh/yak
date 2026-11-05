@@ -15,7 +15,6 @@
   "license": "Apache-2.0",
   "description": "Computers, explicit connection transports and durable file-and-command workspaces, separate from sandbox provisioning.",
   "dependencies": {
-    "@std/assert": "npm:@jsr/std__assert@^1.0.0",
     "@yaks/fp": "0.2.17",
     "@yaks/graph": "0.2.17",
     "@yaks/process": "0.2.17",

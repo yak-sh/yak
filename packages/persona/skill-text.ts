@@ -3,7 +3,7 @@
 // loading metadata. Only the frontmatter is interpreted here. The body is an
 // opaque string: commands, file references and substitutions are never run.
 
-import { parse, stringify, YamlSyntaxError } from '@std/yaml'
+import { parse, stringify, YamlSyntaxError } from '@yaks/yaml'
 import { Refused } from '@yaks/graph/errors'
 
 /** The normalized parts of a skill, without an entity id or graph effects. */

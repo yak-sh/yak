@@ -4,7 +4,7 @@
 
 import type { VocabDoc } from '@yaks/vocab'
 import { projectDoc } from './comp.ts'
-import manifest from './deno.json' with { type: 'json' }
+import manifest from './package.json' with { type: 'json' }
 
 export { projectDoc }
 

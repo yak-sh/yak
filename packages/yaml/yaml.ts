@@ -8,7 +8,17 @@
 // An error names the file. A loader is usually reading a dozen of them and the
 // parser only knows the text it was given, so the name is passed in and used in
 // the one message that has to say which file was wrong.
-import { parse } from '@std/yaml'
+import { parseDocument, YAMLParseError } from 'yaml'
+export { stringify, YAMLParseError as YamlSyntaxError } from 'yaml'
+
+/** YAML with unresolved tags treated as syntax errors, like malformed input. */
+export let parse = (text: string): unknown => {
+  let doc = parseDocument(text)
+  if (doc.errors.length) throw doc.errors[0]
+  let tag = doc.warnings.find((warning) => warning.code == 'TAG_RESOLVE_FAILED')
+  if (tag) throw new YAMLParseError(tag.pos, 'TAG_RESOLVE_FAILED', tag.message)
+  return doc.toJS()
+}
 import type { Bundle } from '@yaks/graph'
 
 // What an error message calls the language. A file named `.json` is JSON to

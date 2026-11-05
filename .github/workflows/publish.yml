@@ -49,4 +49,4 @@ jobs:
       # pristine, and a tree that is not is a reason to stop.
       - name: deno publish
         if: steps.linked.outputs.go == 'yes'
-        run: deno publish
+        run: deno task publish

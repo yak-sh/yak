@@ -5,7 +5,7 @@
 import type { Keywords, VocabDoc } from '@yaks/vocab'
 import { edgeDoc } from './comp.ts'
 import { edgeKeywords } from './keywords.ts'
-import manifest from './deno.json' with { type: 'json' }
+import manifest from './package.json' with { type: 'json' }
 
 export { edgeDoc, edgeKeywords }
 export { names, relations, reversed } from './relations.ts'

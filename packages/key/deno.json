@@ -8,9 +8,6 @@
   },
   "license": "Apache-2.0",
   "description": "Represents an entity's identifying values as separate graph entities, with ids derived from each value and its kind to enforce uniqueness.",
-  "imports": {
-    "@std/assert": "jsr:@std/assert@^1.0.0"
-  },
   "publish": {
     "exclude": [
       "**/*_test.ts",

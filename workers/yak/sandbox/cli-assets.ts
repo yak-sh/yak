@@ -45,9 +45,9 @@ export let assets = async (
   output = join(root, 'workers/yak/public/_cli'),
 ): Promise<Release & { files: number; bytes: number }> => {
   root = resolve(root)
-  let { workspace = [] } = JSON.parse(
-    await io.readTextFile(join(root, 'deno.json')),
-  ) as { workspace?: string[] }
+  let { workspaces = [] } = JSON.parse(
+    await io.readTextFile(join(root, 'package.json')),
+  ) as { workspaces?: string[] }
   let listed = await spawnCommand('git', {
     args: ['ls-files', '-z'],
     cwd: root,
@@ -59,7 +59,7 @@ export let assets = async (
   }
   let paths = sources(
     new TextDecoder().decode(listed.stdout).split('\0').filter(Boolean),
-    workspace,
+    workspaces,
   )
   let files: Record<string, string> = {}
   for (let path of paths) {

@@ -8,9 +8,6 @@
   },
   "license": "Apache-2.0",
   "description": "Compiles an app's TypeScript and npm imports: the module graph of its files, what a deploy must compile, and the compile itself with native esbuild, which yaks.app runs in a container.",
-  "imports": {
-    "@std/assert": "jsr:@std/assert@^1.0.0"
-  },
   "publish": {
     "exclude": [
       "**/*_test.ts"

@@ -1,7 +1,7 @@
 // Tests run on Deno, with a separate document for the terminal UI. Page
 // behavior runs in process on linkedom. With no paths, the dependency graph
-// selects tests reached by branch and working changes: every one of a changed
-// workspace package, then those importing one and the nearest, as many as a
+// selects tests reached by branch and working changes: a changed
+// workspace package first, then its nearest consumers, as many as a
 // few seconds hold by what each took as it last ran here; main's CI runs the
 // rest after the push. Cached passes leave out tests already passed unchanged.
 // Paths narrow an explicit run.
@@ -30,12 +30,12 @@ if (import.meta.main && Deno.args[0] !== '--bulk') {
 }
 
 if (import.meta.main) {
-  let { installed } = await import('../workers/yak/dependencies.ts')
+  let { installed } = await import('@yaks/cli/dependencies')
   await installed()
 }
 
 let { relative } = await import('node:path')
-let { default: config } = await import('../deno.json', {
+let { default: workspace } = await import('../package.json', {
   with: { type: 'json' },
 })
 let { fileURLToPath } = await import('node:url')
@@ -295,6 +295,9 @@ export let ALSO = [
   'deno.json',
   'deno.jsonc',
   'deno.lock',
+  'package.json',
+  'package-lock.json',
+  '.npmrc',
   rel(new URL('./test.gitconfig', import.meta.url)),
 ]
 
@@ -312,7 +315,6 @@ export let RUNS = [
  * gitignored, so a fresh worktree has neither until a run that reaches them
  * makes them. */
 export let READIES = [
-  'workers/yak/oauth-provider.ts',
   'workers/yak/testing.ts',
 ]
 
@@ -364,7 +366,9 @@ export let expected = (
 /// member('bin/test.ts') -> undefined
 /** The workspace package a path belongs to. */
 export let member = (path: string): string | undefined =>
-  config.workspace.map((w) => w.slice(2)).find((w) => path.startsWith(`${w}/`))
+  workspace.workspaces.map((w) => w.replace(/^\.\//, '')).find((w) =>
+    path.startsWith(`${w}/`)
+  )
 
 /** Relevant files, leaving out sources and observed dependencies already
  * passed, and those past what a change's own run has time for. */

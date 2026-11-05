@@ -7,9 +7,6 @@
   },
   "license": "Apache-2.0",
   "description": "Renders registry-selected views with Preact and binds them to an entity store with subscriptions scoped to mounted components.",
-  "imports": {
-    "@std/assert": "jsr:@std/assert@^1.0.0"
-  },
   "tasks": {
     "example": "deno run --allow-read --allow-net=127.0.0.1 example/serve.ts"
   },

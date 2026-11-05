@@ -1,7 +1,7 @@
 // A page of recent documents must not sort their entire numbered history.
 import { equal, ok, test } from '@yaks/testing'
 import './sqlitepath.ts'
-import { Database } from '@db/sqlite'
+import { Database } from './legacy.ts'
 import { loadVocab } from '@yaks/vocab'
 import { compile, type Extension, insert, render } from '@yaks/sql'
 import { raw } from '../sql/ast.ts'

@@ -2,7 +2,7 @@
 // not sort every matching historical owner through a second entity lookup.
 import { equal, ok, test } from '@yaks/testing'
 import './sqlitepath.ts'
-import { Database } from '@db/sqlite'
+import { Database } from './legacy.ts'
 import { loadVocab } from '@yaks/vocab'
 import { compile, type Extension, insert, render } from '@yaks/sql'
 import { raw as sql } from '../sql/ast.ts'

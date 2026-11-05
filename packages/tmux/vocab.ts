@@ -5,7 +5,7 @@
 
 import type { VocabDoc } from '@yaks/vocab'
 import doc from './vocab.json' with { type: 'json' }
-import manifest from './deno.json' with { type: 'json' }
+import manifest from './package.json' with { type: 'json' }
 
 /** The component recording that an entity is showing in a terminal. */
 export let TMUX = 'tmux'

@@ -13,7 +13,7 @@ import type { Vocab, VocabDoc } from '@yaks/vocab'
 import doc from './vocab.json' with { type: 'json' }
 import { buildCost } from './cost.ts'
 import { buildOutdated, builtCurrent } from './current.ts'
-import manifest from './deno.json' with { type: 'json' }
+import manifest from './package.json' with { type: 'json' }
 
 export { buildCost, buildOutdated, builtCurrent }
 

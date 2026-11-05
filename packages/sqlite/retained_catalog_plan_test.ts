@@ -1,6 +1,6 @@
 import { sqlitePath } from './sqlitepath.ts'
 import { equal, ok, test } from '@yaks/testing'
-import { Database } from '@db/sqlite'
+import { Database } from './legacy.ts'
 import { graph } from '@yaks/graph'
 import { archetypeDoc, archetypes } from '@yaks/archetype'
 import { loadVocab } from '@yaks/vocab'

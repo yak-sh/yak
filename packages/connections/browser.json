@@ -1,5 +1,5 @@
 {
-  "_": "The browser check: @yaks/connections' ./vocab and ./views type-check with only the web platform in scope. The main entry point reads secrets, which may fall back to the environment. Run `deno task check:browser`.",
+  "_": "Browser exports checked with web globals by deno task check:browser. Resolution comes from the npm workspace.",
   "entries": [
     "./vocab",
     "./views"
@@ -10,8 +10,5 @@
       "esnext"
     ],
     "strict": true
-  },
-  "imports": {
-    "@yaks/vocab": "../vocab/mod.ts"
   }
 }

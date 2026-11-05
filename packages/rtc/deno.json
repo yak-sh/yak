@@ -9,9 +9,6 @@
   },
   "license": "Apache-2.0",
   "description": "Voice between pages over Cloudflare Realtime: a page joins a session, publishes its microphone and hears the tracks it asks for, and a host answers the door that keeps the secret, the sessions and the meter.",
-  "imports": {
-    "@std/assert": "jsr:@std/assert@^1.0.0"
-  },
   "compilerOptions": {
     "lib": [
       "dom",

@@ -11,7 +11,7 @@ import type { Bundle, Graph } from '@yaks/graph'
 import { Refused } from '@yaks/graph/errors'
 import { repoSkills, skillFiles } from '@yaks/persona/skills'
 import { renderSkill } from '@yaks/persona/skill-text'
-import { parse, YamlSyntaxError } from '@std/yaml'
+import { parse, YamlSyntaxError } from '@yaks/yaml'
 import { validator } from './validator.ts'
 import type { Exchange } from './server.ts'
 

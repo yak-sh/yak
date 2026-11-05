@@ -5,7 +5,7 @@
 // to do, and a thing you can ask a graph to do is a tool.
 import type { VocabDoc } from '@yaks/vocab'
 import doc from './vocab.json' with { type: 'json' }
-import manifest from './deno.json' with { type: 'json' }
+import manifest from './package.json' with { type: 'json' }
 
 /** The components and the tool this plugin declares. */
 export let apiDoc: VocabDoc = doc

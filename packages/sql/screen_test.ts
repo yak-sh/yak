@@ -1,6 +1,6 @@
 // An extension's screen widens its own clauses without changing owner scope.
 import '../sqlite/sqlitepath.ts'
-import { Database } from '@db/sqlite'
+import { Database } from '@yaks/sqlite/testing'
 import { assertEquals } from '@std/assert'
 import { test } from '@yaks/testing'
 import { driver } from '../sqlite/native.ts'

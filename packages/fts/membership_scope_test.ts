@@ -157,4 +157,4 @@ test('a finite text membership returns repeated identity operands once', () => {
   assertEquals(db.query(duplicate).map((r) => r.eid), ['book-1'])
 })
 import '../sqlite/sqlitepath.ts'
-import { Database } from '@db/sqlite'
+import { Database } from '@yaks/sqlite/testing'

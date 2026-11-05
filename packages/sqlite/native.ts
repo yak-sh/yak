@@ -4,7 +4,7 @@
 // text.
 
 import { sqlitePath } from './sqlitepath.ts'
-import { Database, Statement } from '@db/sqlite'
+import { Database, Statement } from './legacy.ts'
 import { driver as connection } from './driver.ts'
 import { meter } from './budget.ts'
 import { scope } from '@yaks/trace'

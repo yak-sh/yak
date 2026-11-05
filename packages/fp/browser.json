@@ -1,13 +1,10 @@
 {
-  "_": "The browser gate: @yaks/fp is pure functions over plain values, so the whole package must type-check with only the web platform in scope.",
+  "_": "Browser exports checked with web globals by deno task check:browser. Resolution comes from the npm workspace.",
   "compilerOptions": {
     "lib": [
       "dom",
       "esnext"
     ],
     "strict": true
-  },
-  "imports": {
-    "@yaks/fp": "./mod.ts"
   }
 }

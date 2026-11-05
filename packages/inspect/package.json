@@ -8,10 +8,9 @@
     "./front": "./front.ts"
   },
   "license": "Apache-2.0",
-  "description": "Inspect views: graph entities, vocabulary components, packages, properties, query rows and the map, drawn through the host\u2019s shared renderer registry.",
+  "description": "Inspect views: graph entities, vocabulary components, packages, properties, query rows and the map, drawn through the host’s shared renderer registry.",
   "dependencies": {
     "@preact/signals": "2.9.4",
-    "@std/assert": "npm:@jsr/std__assert@^1.0.0",
     "@yaks/edge": "0.2.17",
     "@yaks/graph": "0.2.17",
     "@yaks/markdown": "0.2.17",
@@ -24,6 +23,7 @@
     "preact": "10.29.7"
   },
   "devDependencies": {
+    "@std/assert": "npm:@jsr/std__assert@^1.0.0",
     "@yaks/client": "0.2.17",
     "@yaks/draft": "0.2.17",
     "@yaks/filter": "0.2.17",

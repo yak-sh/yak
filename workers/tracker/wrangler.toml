@@ -1,7 +1,6 @@
 # Independent error intake, stores and delivery. No binding points to yak.
 name = "yak-tracker"
 main = "index.ts"
-tsconfig = ".wrangler/paths.json"
 compatibility_date = "2026-07-01"
 compatibility_flags = ["nodejs_compat"]
 workers_dev = true

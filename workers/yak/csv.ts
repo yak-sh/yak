@@ -20,7 +20,7 @@
 // the row and the header in the sentence — a cell nobody can find is a cell
 // nobody can fix. The parsing itself is @std/csv's (quotes, embedded commas
 // and newlines, CRLF); this file is only the mapping.
-import { parse } from '@std/csv'
+import { parse } from 'csv-parse/sync'
 import type { Bundle } from '@yaks/graph'
 import type { Sown } from './seed.ts'
 import { refuse } from './tool.ts'
@@ -138,7 +138,7 @@ export let sheet = (file: string, text: string, spec?: Sheet): Sown[] => {
   let rows: string[][]
   try {
     // The BOM a spreadsheet writes is not part of the first header's name.
-    rows = parse(text.replace(/^\uFEFF/, ''))
+    rows = parse(text.replace(/^\uFEFF/, ''), { relax_column_count: true })
   } catch (e) {
     throw refuse(
       'arguments',

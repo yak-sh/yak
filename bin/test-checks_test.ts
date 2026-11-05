@@ -60,7 +60,14 @@ test("a change touching a package checks the whole workspace's public API", () =
   let publish = (changed: string[]) =>
     checks(changed, ['./packages/a/deno.json', './packages/ab/deno.json'])
       .filter((c) => c.name == 'publish').map((c) => c.args)
-  let workspace = [['publish', '--dry-run', '--allow-dirty', '--no-check']]
+  let workspace = [[
+    'run',
+    '-A',
+    'bin/publish.ts',
+    '--dry-run',
+    '--allow-dirty',
+    '--no-check',
+  ]]
   equal(publish(['packages/a/a.ts', 'packages/ab/b.ts']), workspace)
   equal(publish(['packages/ab/deno.json']), workspace)
   equal(publish(['workers/yak/a.ts', 'packages/abc/a.ts']), [])

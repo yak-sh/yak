@@ -174,11 +174,17 @@
     "undici": "^7.28.0",
     "web-tree-sitter": "0.20.8",
     "zod": "3.25.76",
-    "zod-to-json-schema": "3.25.2"
+    "zod-to-json-schema": "3.25.2",
+    "csv-parse": "^7.0.3",
+    "mime-types": "^3.0.2",
+    "smol-toml": "^1.9.1",
+    "yaml": "^2.9.1",
+    "@luca/esbuild-deno-loader": "npm:@jsr/luca__esbuild-deno-loader@0.11.1"
   },
   "devDependencies": {
     "@types/jsdom": "^21.1.7",
     "@types/semver": "^7.8.0",
-    "jsdom": "^26.1.0"
+    "jsdom": "^26.1.0",
+    "@types/mime-types": "^3.0.1"
   }
 }

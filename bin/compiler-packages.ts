@@ -3,18 +3,16 @@
 // Each package keeps its exports and paths; the compiler picks the app's roots.
 import { dirname, join, relative, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
-import { existsSync } from 'node:fs'
 import { parse } from 'es-module-lexer/js'
 import type ts from 'typescript'
-import { expandGlob } from 'jsr:@std/fs@^1.0.0/expand-glob'
+import { glob, stat } from 'node:fs/promises'
 import type { Catalog } from '../packages/esbuild/platform.ts'
 
 type Manifest = {
   name?: string
   exports?: string | Record<string, string>
-  imports?: Record<string, string>
   dependencies?: Record<string, string>
-  workspace?: string[]
+  workspaces?: string[]
 }
 type Member = {
   dir: string
@@ -92,108 +90,19 @@ let excluded = (path: string) =>
   /(^|\/)(?:fixtures?|node_modules|\.wrangler|tests?)(\/|$)/.test(path) ||
   /(?:_test|\.test|_bench|\.bench)\.[^.]+$/.test(path)
 
-type Module = {
-  specifier: string
-  local?: string
-  dependencies?: { specifier: string; code?: { specifier: string } }[]
-}
-
-// JSR has no npm install identity. Deno resolves its published module graph at
-// platform deployment; the compiler receives those sources as package files.
-let remote = async (
-  spec: string,
-  memo: Transpiled,
-): Promise<{ files: Record<string, string>; entry: string }> => {
-  let command = await new Deno.Command('deno', {
-    args: ['info', '--json', '--no-lock', spec],
-    stdout: 'piped',
-    stderr: 'piped',
-  }).output()
-  if (!command.success) {
-    throw new Error(new TextDecoder().decode(command.stderr))
-  }
-  let graph: {
-    modules: Module[]
-    redirects: Record<string, string>
-  } = JSON.parse(new TextDecoder().decode(command.stdout))
-  let files = new Map<string, string>()
-  let out: Record<string, string> = {}
-  for (let mod of graph.modules.filter((m) => m.local)) {
-    let hash = (await digest(mod.specifier)).slice(7)
-    files.set(mod.specifier, `.jsr/${hash}.ts`)
-  }
-  for (let mod of graph.modules.filter((m) => m.local)) {
-    let file = files.get(mod.specifier)!
-    let code = await script(
-      mod.specifier,
-      Deno.readTextFileSync(mod.local!),
-      memo,
-    )
-    let edits: { start: number; end: number; text: string }[] = []
-    for (let imp of parse(code)[0]) {
-      if (imp.n == null) continue
-      let url = mod.dependencies?.find((d) => d.specifier == imp.n)
-        ?.code?.specifier ?? new URL(imp.n, mod.specifier).href
-      let target = files.get(graph.redirects[url] ?? url)
-      if (!target) {
-        throw new Error(`${mod.specifier}: unsupported JSR dependency ${imp.n}`)
-      }
-      edits.push({
-        start: imp.s,
-        end: imp.e,
-        text: imp.d == -1
-          ? './' + target.slice(5)
-          : JSON.stringify('./' + target.slice(5)),
-      })
-    }
-    for (let edit of edits.toReversed()) {
-      code = code.slice(0, edit.start) + edit.text + code.slice(edit.end)
-    }
-    out[file] = code
-  }
-  let entry = files.get(graph.redirects[spec] ?? spec)
-  if (!entry) throw new Error(`No JSR source entry for ${spec}`)
-  return { files: out, entry }
-}
-
-let mapped = (spec: string, map: Record<string, string>) => {
-  if (map[spec]) return map[spec]
-  let prefix = Object.keys(map).sort((a, b) => b.length - a.length)
-    .find((key) =>
-      spec.startsWith(key.endsWith('/') ? key : key + '/') &&
-      (key.endsWith('/') || npm(map[key]))
-    )
-  return prefix ? map[prefix] + spec.slice(prefix.length) : spec
-}
-
 /** Capture the workspace's browser exports and their source dependency graph.
- * Import maps become npm specifiers or workspace names; type-only imports and
+ * Dependencies come from package.json; type-only imports and
  * doctest examples never introduce dependencies. No source is bundled. */
 export let catalog = async (
   root: string,
   memo: Transpiled = { kept: {}, made: {} },
 ): Promise<Catalog> => {
   root = resolve(root)
-  let captured = new Map<
-    string,
-    Promise<{ files: Record<string, string>; entry: string }>
-  >()
-  let imported = async (spec: string, member: Member) => {
-    if (!captured.has(spec)) captured.set(spec, remote(spec, memo))
-    let result = await captured.get(spec)!
-    Object.assign(member.files, result.files)
-    return result.entry
-  }
-  let config = read(join(root, 'deno.json'))
+  let config = read(join(root, 'package.json'))
   let members = new Map<string, Member>()
-  for (let path of config.workspace ?? []) {
+  for (let path of config.workspaces ?? []) {
     let dir = resolve(root, path)
-    let manifest = {
-      ...existsSync(join(dir, 'package.json'))
-        ? read(join(dir, 'package.json'))
-        : {},
-      ...read(join(dir, 'deno.json')),
-    }
+    let manifest = read(join(dir, 'package.json'))
     if (!manifest.name?.startsWith('@yaks/') || !manifest.exports) continue
     members.set(manifest.name, {
       dir,
@@ -232,16 +141,17 @@ export let catalog = async (
   for (let [name, member] of members) {
     let browser = optional(join(member.dir, 'browser.json'))
     if (!browser) continue
-    for (let glob of browser.resources ?? []) {
-      if (glob.startsWith('/') || glob.split('/').includes('..')) {
+    for (let pattern of browser.resources ?? []) {
+      if (pattern.startsWith('/') || pattern.split('/').includes('..')) {
         throw new Error(
-          `${name}: resource glob must be package-relative: ${glob}`,
+          `${name}: resource glob must be package-relative: ${pattern}`,
         )
       }
-      for await (let hit of expandGlob(glob, { root: member.dir })) {
-        let file = relative(member.dir, hit.path)
-        if (!hit.isFile || excluded(file)) continue
-        member.resources[file] = Deno.readTextFileSync(hit.path)
+      for await (let hit of glob(pattern, { cwd: member.dir })) {
+        let file = hit.replaceAll('\\', '/')
+        let path = join(member.dir, hit)
+        if (!(await stat(path)).isFile() || excluded(file)) continue
+        member.resources[file] = Deno.readTextFileSync(path)
       }
     }
     for (
@@ -274,44 +184,28 @@ export let catalog = async (
     for (let imp of parse(code)[0]) {
       if (imp.n == null) continue
       let spec = imp.n
-      let own = member.manifest.imports ?? {}
-      let target = mapped(spec, own)
-      let base = member.dir
-      if (target == spec) {
-        target = mapped(spec, config.imports ?? {})
-        if (target != spec) base = root
-      }
-      let dependency = member.manifest.dependencies?.[packageOf(target)]
-      if (target == spec && dependency && !target.startsWith('@yaks/')) {
-        target = `npm:${packageOf(target)}@${dependency}${
-          target.slice(packageOf(target).length)
-        }`
-      }
+      let target = spec
+      let dependency = member.manifest.dependencies?.[packageOf(spec)]
       if (target.startsWith('@yaks/')) {
         member.dependencies[exported(target)] = 'platform'
       } else if (local(target)) {
-        let at = resolve(target == spec ? dirname(path) : base, target)
+        let at = resolve(dirname(path), target)
         if (!at.startsWith(member.dir + '/')) {
           throw new Error(`${name}/${file}: cross-package path ${target}`)
         }
         enqueue(name, relative(member.dir, at))
-        target = relative(dirname(path), at)
-        if (!target.startsWith('.')) target = './' + target
-      } else if (target.startsWith('jsr:')) {
-        let at = await imported(target, member)
-        target = relative(dirname(file), at)
-        if (!target.startsWith('.')) target = './' + target
-      } else if (npm(target)) {
-        let [, pkg, version, sub = ''] = npm(target)!
-        if (!version) throw new Error(`Unversioned dependency: ${target}`)
+      } else if (dependency) {
+        let alias = npm(dependency)
+        let pkg = alias?.[1] ?? packageOf(spec)
+        let version = alias?.[2] ?? dependency
         let previous = member.dependencies[pkg]
         if (previous && previous != version) {
           throw new Error(`${name}: conflicting ${pkg} versions`)
         }
         member.dependencies[pkg] = version
-        target = pkg + sub
+        target = pkg + spec.slice(packageOf(spec).length)
       } else if (!/^(?:node|cloudflare):/.test(target)) {
-        throw new Error(`${name}/${file}: unmapped runtime import ${target}`)
+        throw new Error(`${name}/${file}: undeclared runtime import ${target}`)
       }
       if (target != spec) {
         edits.push({

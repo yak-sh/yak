@@ -64,7 +64,14 @@ export let checks = (changed: string[], configs: string[] = []): Check[] => {
     ...touched
       ? [{
         name: 'publish',
-        args: ['publish', '--dry-run', '--allow-dirty', '--no-check'],
+        args: [
+          'run',
+          '-A',
+          'bin/publish.ts',
+          '--dry-run',
+          '--allow-dirty',
+          '--no-check',
+        ],
       }]
       : [],
   ]

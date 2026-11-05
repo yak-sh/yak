@@ -5,7 +5,7 @@
 // through the kernel, is erase_kernel_test.ts's.
 import { cleanup, test } from '@yaks/testing'
 import { assert, assertEquals, assertStringIncludes } from '@std/assert'
-import { parse } from '@std/toml'
+import { parse } from 'smol-toml'
 import { next } from '@yaks/wake'
 import { r2Objects } from './lib/objects.ts'
 import { receiptPrefix } from './blob-key.ts'

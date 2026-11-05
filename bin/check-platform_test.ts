@@ -22,6 +22,7 @@ test('platform maps resolve at their own config, then share one program', () => 
       },
     ]),
     {
+      nodeModulesDir: 'manual',
       compilerOptions: {
         strict: true,
         lib: ['dom', 'dom.asynciterable', 'esnext'],
@@ -108,7 +109,7 @@ test('platform entrypoints cover every standalone config and the tail Worker', a
           Deno.readTextFileSync(new URL('browser.json', base)),
         ).entries as string[] | undefined
         let exports = JSON.parse(
-          Deno.readTextFileSync(new URL('deno.json', base)),
+          Deno.readTextFileSync(new URL('package.json', base)),
         ).exports as string | Record<string, string>
         let map = typeof exports === 'string' ? { '.': exports } : exports
         for (

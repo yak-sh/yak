@@ -1,7 +1,7 @@
 // Count native statement executions, including the cached driver's schema
 // probes. Installed only in the separate counts process, never during timing.
 import '../packages/sqlite/sqlitepath.ts'
-import { Database } from '@db/sqlite'
+import { Database } from '@yaks/sqlite/testing'
 
 export function sqlStatements() {
   let count = 0

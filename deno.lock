@@ -3,36 +3,13 @@
   "specifiers": {
     "jsr:@db/sqlite@0.13.0": "0.13.0",
     "jsr:@denosaurs/plug@1": "1.1.0",
-    "jsr:@hexagon/croner@^10.0.1": "10.0.1",
-    "jsr:@luca/esbuild-deno-loader@~0.11.1": "0.11.1",
-    "jsr:@std/assert@*": "1.0.19",
-    "jsr:@std/assert@1": "1.0.19",
-    "jsr:@std/assert@^1.0.19": "1.0.19",
-    "jsr:@std/async@^1.5.0": "1.5.0",
-    "jsr:@std/bytes@^1.0.2": "1.0.6",
-    "jsr:@std/bytes@^1.0.6": "1.0.6",
-    "jsr:@std/collections@^1.1.3": "1.3.0",
-    "jsr:@std/csv@^1.0.6": "1.0.6",
-    "jsr:@std/data-structures@^1.1.2": "1.1.2",
     "jsr:@std/encoding@1": "1.0.11",
-    "jsr:@std/encoding@^1.0.10": "1.0.11",
-    "jsr:@std/encoding@^1.0.5": "1.0.11",
     "jsr:@std/fmt@1": "1.0.10",
     "jsr:@std/fs@1": "1.0.24",
-    "jsr:@std/fs@^1.0.24": "1.0.24",
-    "jsr:@std/internal@^1.0.12": "1.0.14",
     "jsr:@std/internal@^1.0.14": "1.0.14",
-    "jsr:@std/media-types@^1.1.0": "1.1.0",
-    "jsr:@std/path@1": "1.1.6",
+    "jsr:@std/path@1": "1.0.9",
     "jsr:@std/path@1.0": "1.0.9",
-    "jsr:@std/path@^1.0.6": "1.1.6",
     "jsr:@std/path@^1.1.5": "1.1.6",
-    "jsr:@std/path@^1.1.6": "1.1.6",
-    "jsr:@std/streams@^1.0.9": "1.1.2",
-    "jsr:@std/testing@1": "1.0.20",
-    "jsr:@std/toml@1": "1.0.11",
-    "jsr:@std/yaml@1.2.0": "1.2.0",
-    "jsr:@std/yaml@^1.2.0": "1.2.0",
     "npm:@anthropic-ai/sdk@1.4.0": "1.4.0_zod@3.25.76",
     "npm:@cfworker/json-schema@4.1.1": "4.1.1",
     "npm:@cloudflare/containers@0.3.7": "0.3.7",
@@ -84,8 +61,7 @@
     "npm:typescript@6.0.3": "6.0.3",
     "npm:typescript@7.0.2": "7.0.2",
     "npm:undici@^7.28.0": "7.28.0",
-    "npm:web-tree-sitter@0.20.8": "0.20.8",
-    "npm:wrangler@4.111.0": "4.111.0_@cloudflare+workers-types@4.20260702.1"
+    "npm:web-tree-sitter@0.20.8": "0.20.8"
   },
   "jsr": {
     "@db/sqlite@0.13.0": {
@@ -98,46 +74,11 @@
     "@denosaurs/plug@1.1.0": {
       "integrity": "eb2f0b7546c7bca2000d8b0282c54d50d91cf6d75cb26a80df25a6de8c4bc044",
       "dependencies": [
-        "jsr:@std/encoding@1",
+        "jsr:@std/encoding",
         "jsr:@std/fmt",
-        "jsr:@std/fs@1",
+        "jsr:@std/fs",
         "jsr:@std/path@1"
       ]
-    },
-    "@hexagon/croner@10.0.1": {
-      "integrity": "95120f312b5e63afaaa4861838fe2d7b42f32554d2af96b7524b072abf63dabd"
-    },
-    "@luca/esbuild-deno-loader@0.11.1": {
-      "integrity": "dc020d16d75b591f679f6b9288b10f38bdb4f24345edb2f5732affa1d9885267",
-      "dependencies": [
-        "jsr:@std/bytes@^1.0.2",
-        "jsr:@std/encoding@^1.0.5",
-        "jsr:@std/path@^1.0.6"
-      ]
-    },
-    "@std/assert@1.0.19": {
-      "integrity": "eaada96ee120cb980bc47e040f82814d786fe8162ecc53c91d8df60b8755991e",
-      "dependencies": [
-        "jsr:@std/internal@^1.0.12"
-      ]
-    },
-    "@std/async@1.5.0": {
-      "integrity": "4c1f22d287a17ad7d8643b1952bc5a4d21e5d8b68dc8c20d8268eecc69096e82"
-    },
-    "@std/bytes@1.0.6": {
-      "integrity": "f6ac6adbd8ccd99314045f5703e23af0a68d7f7e58364b47d2c7f408aeb5820a"
-    },
-    "@std/collections@1.3.0": {
-      "integrity": "eb36b43d784477ea0b476483ac034a14bdd182aff921c812ecf662a1fcef9498"
-    },
-    "@std/csv@1.0.6": {
-      "integrity": "52ef0e62799a0028d278fa04762f17f9bd263fad9a8e7f98c14fbd371d62d9fd",
-      "dependencies": [
-        "jsr:@std/streams"
-      ]
-    },
-    "@std/data-structures@1.1.2": {
-      "integrity": "2471377c9e0051f9ec34e57d0ebd0ad133a5a889677446ec6ba9938e4e102918"
     },
     "@std/encoding@1.0.11": {
       "integrity": "e7cef2f0b3153bccc17431e7c864a1de03a4b6d9647389c43e08aaa775d37385"
@@ -148,15 +89,12 @@
     "@std/fs@1.0.24": {
       "integrity": "f3061b45b81673a2bece689da041df32d174be064c89eb6397fb5718d3fb7877",
       "dependencies": [
-        "jsr:@std/internal@^1.0.14",
+        "jsr:@std/internal",
         "jsr:@std/path@^1.1.5"
       ]
     },
     "@std/internal@1.0.14": {
       "integrity": "291516b3d4c35024d6ffbc0a9df5bf4c64116e05b50012cf846710152d2ffdf7"
-    },
-    "@std/media-types@1.1.0": {
-      "integrity": "c9d093f0c05c3512932b330e3cc1fe1d627b301db33a4c2c2185c02471d6eaa4"
     },
     "@std/path@1.0.9": {
       "integrity": "260a49f11edd3db93dd38350bf9cd1b4d1366afa98e81b86167b4e3dd750129e"
@@ -164,34 +102,8 @@
     "@std/path@1.1.6": {
       "integrity": "c68485c2a4dfbb5ae3cc74fae4e8c4e5d874cf8a8ed12927917235c758b46cbe",
       "dependencies": [
-        "jsr:@std/internal@^1.0.14"
+        "jsr:@std/internal"
       ]
-    },
-    "@std/streams@1.1.2": {
-      "integrity": "0249bf9b78a999f57032ca4d8e7ccaa57579090242640b35ddc948fbb745d3af",
-      "dependencies": [
-        "jsr:@std/bytes@^1.0.6"
-      ]
-    },
-    "@std/testing@1.0.20": {
-      "integrity": "21380ed438672762e4ec549cbf4fe41c5b68f5598773a30b64abe7375513e721",
-      "dependencies": [
-        "jsr:@std/assert@^1.0.19",
-        "jsr:@std/async",
-        "jsr:@std/data-structures",
-        "jsr:@std/fs@^1.0.24",
-        "jsr:@std/internal@^1.0.14",
-        "jsr:@std/path@^1.1.6"
-      ]
-    },
-    "@std/toml@1.0.11": {
-      "integrity": "e084988b872ca4bad6aedfb7350f6eeed0e8ba88e9ee5e1590621c5b5bb8f715",
-      "dependencies": [
-        "jsr:@std/collections"
-      ]
-    },
-    "@std/yaml@1.2.0": {
-      "integrity": "20beb41e4983ba3437dbefac62b14061ab058e8a187596f19d28ff9035f6e6cf"
     }
   },
   "npm": {
@@ -2764,15 +2676,6 @@
     }
   },
   "workspace": {
-    "dependencies": [
-      "jsr:@db/sqlite@0.13.0",
-      "jsr:@std/assert@1",
-      "jsr:@std/csv@^1.0.6",
-      "jsr:@std/media-types@^1.1.0",
-      "jsr:@std/testing@1",
-      "jsr:@std/toml@1",
-      "jsr:@std/yaml@^1.2.0"
-    ],
     "packageJson": {
       "dependencies": [
         "npm:@anthropic-ai/sdk@1.4.0",
@@ -2784,6 +2687,7 @@
         "npm:@cloudflare/workers-types@^4.20260702.1",
         "npm:@huggingface/tokenizers@0.2.0",
         "npm:@hyzyla/pdfium@3.0.0",
+        "npm:@jsr/luca__esbuild-deno-loader@0.11.1",
         "npm:@jsr/std__assert@1",
         "npm:@jsr/std__csv@1.0.6",
         "npm:@jsr/std__encoding@1.0.10",
@@ -2803,6 +2707,7 @@
         "npm:@preact/signals@2.9.4",
         "npm:@resvg/resvg-wasm@2.6.2",
         "npm:@types/jsdom@^21.1.7",
+        "npm:@types/mime-types@^3.0.1",
         "npm:@types/node@26",
         "npm:@types/semver@^7.8.0",
         "npm:@types/three@0.186",
@@ -2811,6 +2716,7 @@
         "npm:blakejs@1.2.1",
         "npm:bs58@6.0.0",
         "npm:croner@10.0.1",
+        "npm:csv-parse@^7.0.3",
         "npm:es-module-lexer@2.3.2",
         "npm:esbuild@0.28.1",
         "npm:fake-indexeddb@^6.2.2",
@@ -2823,12 +2729,14 @@
         "npm:linkedom@~0.18.12",
         "npm:lucide@1.31.0",
         "npm:marked@18.0.6",
+        "npm:mime-types@^3.0.2",
         "npm:postal-mime@3.0.0",
         "npm:preact-render-to-string@6.7.0",
         "npm:preact@10.29.7",
         "npm:resolve.exports@2.0.3",
         "npm:rollup@4.65.1",
         "npm:semver@7.8.5",
+        "npm:smol-toml@^1.9.1",
         "npm:stemmer@2.0.1",
         "npm:sucrase@3.35.1",
         "npm:three@~0.186.1",
@@ -2836,15 +2744,13 @@
         "npm:typescript@6.0.3",
         "npm:undici@^7.28.0",
         "npm:web-tree-sitter@0.20.8",
+        "npm:yaml@^2.9.1",
         "npm:zod-to-json-schema@3.25.2",
         "npm:zod@3.25.76"
       ]
     },
     "members": {
       "packages/admin": {
-        "dependencies": [
-          "jsr:@std/assert@1"
-        ],
         "packageJson": {
           "dependencies": [
             "npm:@jsr/std__assert@1",
@@ -2875,9 +2781,6 @@
         }
       },
       "packages/alias": {
-        "dependencies": [
-          "jsr:@std/assert@1"
-        ],
         "packageJson": {
           "dependencies": [
             "npm:@jsr/std__assert@1",
@@ -2901,9 +2804,6 @@
         }
       },
       "packages/api": {
-        "dependencies": [
-          "jsr:@std/assert@1"
-        ],
         "packageJson": {
           "dependencies": [
             "npm:@jsr/std__assert@1",
@@ -2949,9 +2849,6 @@
         }
       },
       "packages/blob": {
-        "dependencies": [
-          "jsr:@std/assert@1"
-        ],
         "packageJson": {
           "dependencies": [
             "npm:@jsr/std__assert@1",
@@ -2960,7 +2857,6 @@
             "npm:@yaks/fp@0.2.17",
             "npm:@yaks/fts@0.2.17",
             "npm:@yaks/graph@0.2.17",
-            "npm:@yaks/process@0.2.17",
             "npm:@yaks/ram@0.2.17",
             "npm:@yaks/sql@0.2.17",
             "npm:@yaks/sqlite@0.2.17",
@@ -2972,9 +2868,6 @@
         }
       },
       "packages/browse": {
-        "dependencies": [
-          "jsr:@std/assert@1"
-        ],
         "packageJson": {
           "dependencies": [
             "npm:@jsr/std__assert@1",
@@ -3055,9 +2948,6 @@
         }
       },
       "packages/builders": {
-        "dependencies": [
-          "jsr:@std/assert@1"
-        ],
         "packageJson": {
           "dependencies": [
             "npm:@jsr/std__assert@1",
@@ -3086,9 +2976,6 @@
         }
       },
       "packages/canvas": {
-        "dependencies": [
-          "jsr:@std/assert@1"
-        ],
         "packageJson": {
           "dependencies": [
             "npm:@jsr/std__assert@1",
@@ -3096,7 +2983,6 @@
             "npm:@yaks/id@0.2.17",
             "npm:@yaks/names@0.2.17",
             "npm:@yaks/query@0.2.17",
-            "npm:@yaks/ram@0.2.17",
             "npm:@yaks/testing@0.2.17",
             "npm:@yaks/vocab@0.2.17"
           ]
@@ -3115,14 +3001,10 @@
         }
       },
       "packages/cli": {
-        "dependencies": [
-          "jsr:@luca/esbuild-deno-loader@~0.11.1",
-          "jsr:@std/assert@1"
-        ],
         "packageJson": {
           "dependencies": [
+            "npm:@jsr/luca__esbuild-deno-loader@0.11.1",
             "npm:@jsr/std__assert@1",
-            "npm:@jsr/std__toml@1.0.10",
             "npm:@yaks/api@0.2.17",
             "npm:@yaks/blob@0.2.17",
             "npm:@yaks/code@0.2.17",
@@ -3168,18 +3050,15 @@
             "npm:es-module-lexer@2.3.2",
             "npm:esbuild@0.28.1",
             "npm:preact@10.29.7",
+            "npm:smol-toml@^1.9.1",
             "npm:typescript@6.0.3"
           ]
         }
       },
       "packages/client": {
-        "dependencies": [
-          "jsr:@std/assert@1"
-        ],
         "packageJson": {
           "dependencies": [
             "npm:@jsr/std__assert@1",
-            "npm:@preact/signals@2.9.4",
             "npm:@yaks/alias@0.2.17",
             "npm:@yaks/benchmark@0.2.17",
             "npm:@yaks/fp@0.2.17",
@@ -3197,9 +3076,6 @@
         }
       },
       "packages/code": {
-        "dependencies": [
-          "jsr:@std/assert@1"
-        ],
         "packageJson": {
           "dependencies": [
             "npm:@jsr/std__assert@1",
@@ -3234,9 +3110,6 @@
         }
       },
       "packages/connections": {
-        "dependencies": [
-          "jsr:@std/assert@1"
-        ],
         "packageJson": {
           "dependencies": [
             "npm:@jsr/std__assert@1",
@@ -3276,9 +3149,6 @@
         }
       },
       "packages/d1": {
-        "dependencies": [
-          "jsr:@std/assert@1"
-        ],
         "packageJson": {
           "dependencies": [
             "npm:@jsr/std__assert@1",
@@ -3298,9 +3168,6 @@
         }
       },
       "packages/design": {
-        "dependencies": [
-          "jsr:@std/assert@1"
-        ],
         "packageJson": {
           "dependencies": [
             "npm:@jsr/std__assert@1",
@@ -3311,9 +3178,6 @@
         }
       },
       "packages/diagram": {
-        "dependencies": [
-          "jsr:@std/assert@1"
-        ],
         "packageJson": {
           "dependencies": [
             "npm:@jsr/std__assert@1",
@@ -3327,9 +3191,6 @@
         }
       },
       "packages/doc": {
-        "dependencies": [
-          "jsr:@std/assert@1"
-        ],
         "packageJson": {
           "dependencies": [
             "npm:@jsr/std__assert@1",
@@ -3345,9 +3206,6 @@
         }
       },
       "packages/draft": {
-        "dependencies": [
-          "jsr:@std/assert@1"
-        ],
         "packageJson": {
           "dependencies": [
             "npm:@jsr/std__assert@1",
@@ -3364,9 +3222,6 @@
         }
       },
       "packages/dreaming": {
-        "dependencies": [
-          "jsr:@std/assert@1"
-        ],
         "packageJson": {
           "dependencies": [
             "npm:@jsr/std__assert@1",
@@ -3379,9 +3234,6 @@
         }
       },
       "packages/durable-object": {
-        "dependencies": [
-          "jsr:@std/assert@1"
-        ],
         "packageJson": {
           "dependencies": [
             "npm:@jsr/std__assert@1",
@@ -3401,9 +3253,6 @@
         }
       },
       "packages/edge": {
-        "dependencies": [
-          "jsr:@std/assert@1"
-        ],
         "packageJson": {
           "dependencies": [
             "npm:@jsr/std__assert@1",
@@ -3419,9 +3268,6 @@
         }
       },
       "packages/effects": {
-        "dependencies": [
-          "jsr:@std/assert@1"
-        ],
         "packageJson": {
           "dependencies": [
             "npm:@jsr/std__assert@1",
@@ -3448,9 +3294,6 @@
         }
       },
       "packages/egress": {
-        "dependencies": [
-          "jsr:@std/assert@1"
-        ],
         "packageJson": {
           "dependencies": [
             "npm:@jsr/std__assert@1",
@@ -3468,9 +3311,6 @@
         }
       },
       "packages/embedding": {
-        "dependencies": [
-          "jsr:@std/assert@1"
-        ],
         "packageJson": {
           "dependencies": [
             "npm:@jsr/std__assert@1",
@@ -3493,29 +3333,21 @@
         }
       },
       "packages/esbuild": {
-        "dependencies": [
-          "jsr:@std/assert@1"
-        ],
         "packageJson": {
           "dependencies": [
             "npm:@jsr/std__assert@1",
             "npm:@noble/hashes@2.4.0",
-            "npm:@yaks/client@0.2.17",
             "npm:@yaks/testing@0.2.17",
             "npm:es-module-lexer@2.3.2",
             "npm:esbuild@0.28.1",
             "npm:fflate@0.8.3",
             "npm:resolve.exports@2.0.3",
             "npm:semver@7.8.5",
-            "npm:sucrase@3.35.1",
-            "npm:three@~0.186.1"
+            "npm:sucrase@3.35.1"
           ]
         }
       },
       "packages/file": {
-        "dependencies": [
-          "jsr:@std/assert@1"
-        ],
         "packageJson": {
           "dependencies": [
             "npm:@yaks/fp@0.2.17",
@@ -3535,9 +3367,6 @@
         }
       },
       "packages/filter": {
-        "dependencies": [
-          "jsr:@std/assert@1"
-        ],
         "packageJson": {
           "dependencies": [
             "npm:@jsr/std__assert@1",
@@ -3556,9 +3385,6 @@
         }
       },
       "packages/fts": {
-        "dependencies": [
-          "jsr:@std/assert@1"
-        ],
         "packageJson": {
           "dependencies": [
             "npm:@jsr/std__assert@1",
@@ -3587,9 +3413,6 @@
         }
       },
       "packages/git": {
-        "dependencies": [
-          "jsr:@std/assert@1"
-        ],
         "packageJson": {
           "dependencies": [
             "npm:@jsr/std__assert@1",
@@ -3615,9 +3438,6 @@
         }
       },
       "packages/goal": {
-        "dependencies": [
-          "jsr:@std/assert@1"
-        ],
         "packageJson": {
           "dependencies": [
             "npm:@yaks/vocab@0.2.17"
@@ -3625,9 +3445,6 @@
         }
       },
       "packages/graph": {
-        "dependencies": [
-          "jsr:@std/assert@1"
-        ],
         "packageJson": {
           "dependencies": [
             "npm:@jsr/std__assert@1",
@@ -3647,14 +3464,9 @@
         }
       },
       "packages/harness": {
-        "dependencies": [
-          "jsr:@std/assert@1",
-          "jsr:@std/path@1"
-        ],
         "packageJson": {
           "dependencies": [
             "npm:@jsr/std__assert@1",
-            "npm:@jsr/std__path@1.1.2",
             "npm:@modelcontextprotocol/sdk@^1.29.0",
             "npm:@preact/signals@2.9.4",
             "npm:@yaks/anthropic@0.2.17",
@@ -3709,9 +3521,6 @@
         }
       },
       "packages/heal": {
-        "dependencies": [
-          "jsr:@std/assert@1"
-        ],
         "packageJson": {
           "dependencies": [
             "npm:@jsr/std__assert@1",
@@ -3747,9 +3556,6 @@
         }
       },
       "packages/hook": {
-        "dependencies": [
-          "jsr:@std/assert@1"
-        ],
         "packageJson": {
           "dependencies": [
             "npm:@jsr/std__assert@1",
@@ -3790,9 +3596,6 @@
         }
       },
       "packages/html": {
-        "dependencies": [
-          "jsr:@std/assert@1"
-        ],
         "packageJson": {
           "dependencies": [
             "npm:@jsr/std__assert@1",
@@ -3808,9 +3611,6 @@
         }
       },
       "packages/id": {
-        "dependencies": [
-          "jsr:@std/assert@1"
-        ],
         "packageJson": {
           "dependencies": [
             "npm:@jsr/std__assert@1",
@@ -3860,9 +3660,6 @@
         }
       },
       "packages/inspect": {
-        "dependencies": [
-          "jsr:@std/assert@1"
-        ],
         "packageJson": {
           "dependencies": [
             "npm:@jsr/std__assert@1",
@@ -3889,9 +3686,6 @@
         }
       },
       "packages/journal": {
-        "dependencies": [
-          "jsr:@std/assert@1"
-        ],
         "packageJson": {
           "dependencies": [
             "npm:@jsr/std__assert@1",
@@ -3919,9 +3713,6 @@
         }
       },
       "packages/kernel": {
-        "dependencies": [
-          "jsr:@std/assert@1"
-        ],
         "packageJson": {
           "dependencies": [
             "npm:@jsr/std__assert@1",
@@ -3944,9 +3735,6 @@
         }
       },
       "packages/key": {
-        "dependencies": [
-          "jsr:@std/assert@1"
-        ],
         "packageJson": {
           "dependencies": [
             "npm:@jsr/std__assert@1",
@@ -3981,7 +3769,6 @@
       "packages/machine": {
         "packageJson": {
           "dependencies": [
-            "npm:@jsr/std__assert@1",
             "npm:@yaks/fp@0.2.17",
             "npm:@yaks/graph@0.2.17",
             "npm:@yaks/harness@0.2.17",
@@ -3996,9 +3783,6 @@
         }
       },
       "packages/mail": {
-        "dependencies": [
-          "jsr:@std/assert@1"
-        ],
         "packageJson": {
           "dependencies": [
             "npm:@jsr/std__assert@1",
@@ -4013,7 +3797,6 @@
             "npm:@yaks/host@0.2.17",
             "npm:@yaks/id@0.2.17",
             "npm:@yaks/kernel@0.2.17",
-            "npm:@yaks/member@0.2.17",
             "npm:@yaks/notify@0.2.17",
             "npm:@yaks/project@0.2.17",
             "npm:@yaks/query@0.2.17",
@@ -4026,9 +3809,6 @@
         }
       },
       "packages/markdown": {
-        "dependencies": [
-          "jsr:@std/assert@1"
-        ],
         "packageJson": {
           "dependencies": [
             "npm:@jsr/std__assert@1",
@@ -4040,9 +3820,6 @@
         }
       },
       "packages/match": {
-        "dependencies": [
-          "jsr:@std/assert@1"
-        ],
         "packageJson": {
           "dependencies": [
             "npm:@jsr/std__assert@1",
@@ -4061,14 +3838,9 @@
         }
       },
       "packages/mcp": {
-        "dependencies": [
-          "jsr:@std/assert@1",
-          "jsr:@std/yaml@^1.2.0"
-        ],
         "packageJson": {
           "dependencies": [
             "npm:@jsr/std__assert@1",
-            "npm:@jsr/std__yaml@1.2.0",
             "npm:@modelcontextprotocol/client@2.2.0",
             "npm:@modelcontextprotocol/core@2.2.0",
             "npm:@modelcontextprotocol/sdk@^1.29.0",
@@ -4086,14 +3858,12 @@
             "npm:@yaks/tools@0.2.17",
             "npm:@yaks/vocab@0.2.17",
             "npm:ajv@^8.17.1",
+            "npm:yaml@^2.9.1",
             "npm:zod@3.25.76"
           ]
         }
       },
       "packages/mcp-client": {
-        "dependencies": [
-          "jsr:@std/assert@1"
-        ],
         "packageJson": {
           "dependencies": [
             "npm:@jsr/std__assert@1",
@@ -4106,9 +3876,6 @@
         }
       },
       "packages/member": {
-        "dependencies": [
-          "jsr:@std/assert@1"
-        ],
         "packageJson": {
           "dependencies": [
             "npm:@jsr/std__assert@1",
@@ -4125,9 +3892,6 @@
         }
       },
       "packages/memory": {
-        "dependencies": [
-          "jsr:@std/assert@1"
-        ],
         "packageJson": {
           "dependencies": [
             "npm:@jsr/std__assert@1",
@@ -4145,9 +3909,6 @@
         }
       },
       "packages/mirror": {
-        "dependencies": [
-          "jsr:@std/assert@1"
-        ],
         "packageJson": {
           "dependencies": [
             "npm:@jsr/std__assert@1",
@@ -4158,9 +3919,6 @@
         }
       },
       "packages/model": {
-        "dependencies": [
-          "jsr:@std/assert@1"
-        ],
         "packageJson": {
           "dependencies": [
             "npm:@jsr/std__assert@1",
@@ -4177,9 +3935,6 @@
         }
       },
       "packages/model2vec": {
-        "dependencies": [
-          "jsr:@std/assert@1"
-        ],
         "packageJson": {
           "dependencies": [
             "npm:@huggingface/tokenizers@0.2.0",
@@ -4189,22 +3944,15 @@
         }
       },
       "packages/names": {
-        "dependencies": [
-          "jsr:@std/assert@1"
-        ],
         "packageJson": {
           "dependencies": [
             "npm:@jsr/std__assert@1",
-            "npm:@yaks/doc@0.2.17",
             "npm:@yaks/testing@0.2.17",
             "npm:@yaks/vocab@0.2.17"
           ]
         }
       },
       "packages/notify": {
-        "dependencies": [
-          "jsr:@std/assert@1"
-        ],
         "packageJson": {
           "dependencies": [
             "npm:@yaks/graph@0.2.17",
@@ -4216,9 +3964,6 @@
         }
       },
       "packages/oauth": {
-        "dependencies": [
-          "jsr:@std/assert@1"
-        ],
         "packageJson": {
           "dependencies": [
             "npm:@jsr/std__assert@1",
@@ -4227,25 +3972,18 @@
         }
       },
       "packages/openai": {
-        "dependencies": [
-          "jsr:@std/assert@1"
-        ],
         "packageJson": {
           "dependencies": [
             "npm:@jsr/std__assert@1",
             "npm:@yaks/blob@0.2.17",
             "npm:@yaks/fp@0.2.17",
             "npm:@yaks/model@0.2.17",
-            "npm:@yaks/process@0.2.17",
             "npm:@yaks/testing@0.2.17",
             "npm:@yaks/vocab@0.2.17"
           ]
         }
       },
       "packages/openrouter": {
-        "dependencies": [
-          "jsr:@std/assert@1"
-        ],
         "packageJson": {
           "dependencies": [
             "npm:@jsr/std__assert@1",
@@ -4258,9 +3996,6 @@
         }
       },
       "packages/page": {
-        "dependencies": [
-          "jsr:@std/assert@1"
-        ],
         "packageJson": {
           "dependencies": [
             "npm:@jsr/std__assert@1",
@@ -4279,14 +4014,9 @@
         }
       },
       "packages/persona": {
-        "dependencies": [
-          "jsr:@std/assert@1",
-          "jsr:@std/yaml@^1.2.0"
-        ],
         "packageJson": {
           "dependencies": [
             "npm:@jsr/std__assert@1",
-            "npm:@jsr/std__yaml@1.2.0",
             "npm:@yaks/client@0.2.17",
             "npm:@yaks/doc@0.2.17",
             "npm:@yaks/edge@0.2.17",
@@ -4318,14 +4048,12 @@
             "npm:linkedom@~0.18.12",
             "npm:lucide@1.31.0",
             "npm:preact-render-to-string@6.7.0",
-            "npm:preact@10.29.7"
+            "npm:preact@10.29.7",
+            "npm:yaml@^2.9.1"
           ]
         }
       },
       "packages/phone": {
-        "dependencies": [
-          "jsr:@std/assert@1"
-        ],
         "packageJson": {
           "dependencies": [
             "npm:@jsr/std__assert@1",
@@ -4343,9 +4071,6 @@
         }
       },
       "packages/platform": {
-        "dependencies": [
-          "jsr:@std/assert@1"
-        ],
         "packageJson": {
           "dependencies": [
             "npm:@jsr/std__assert@1",
@@ -4355,9 +4080,6 @@
         }
       },
       "packages/preact": {
-        "dependencies": [
-          "jsr:@std/assert@1"
-        ],
         "packageJson": {
           "dependencies": [
             "npm:@jsr/std__assert@1",
@@ -4376,15 +4098,9 @@
         }
       },
       "packages/process": {
-        "dependencies": [
-          "jsr:@std/assert@1",
-          "jsr:@std/encoding@^1.0.10",
-          "jsr:@std/path@1"
-        ],
         "packageJson": {
           "dependencies": [
             "npm:@jsr/std__assert@1",
-            "npm:@jsr/std__path@1.1.2",
             "npm:@yaks/graph@0.2.17",
             "npm:@yaks/model@0.2.17",
             "npm:@yaks/query@0.2.17",
@@ -4399,9 +4115,6 @@
         }
       },
       "packages/project": {
-        "dependencies": [
-          "jsr:@std/assert@1"
-        ],
         "packageJson": {
           "dependencies": [
             "npm:@jsr/std__assert@1",
@@ -4428,9 +4141,6 @@
         }
       },
       "packages/query": {
-        "dependencies": [
-          "jsr:@std/assert@1"
-        ],
         "packageJson": {
           "dependencies": [
             "npm:@jsr/std__assert@1",
@@ -4441,13 +4151,9 @@
         }
       },
       "packages/ram": {
-        "dependencies": [
-          "jsr:@std/assert@1"
-        ],
         "packageJson": {
           "dependencies": [
             "npm:@jsr/std__assert@1",
-            "npm:@yaks/doc@0.2.17",
             "npm:@yaks/fp@0.2.17",
             "npm:@yaks/graph@0.2.17",
             "npm:@yaks/match@0.2.17",
@@ -4460,9 +4166,6 @@
         }
       },
       "packages/render": {
-        "dependencies": [
-          "jsr:@std/assert@1"
-        ],
         "packageJson": {
           "dependencies": [
             "npm:@jsr/std__assert@1",
@@ -4479,9 +4182,6 @@
         }
       },
       "packages/rtc": {
-        "dependencies": [
-          "jsr:@std/assert@1"
-        ],
         "packageJson": {
           "dependencies": [
             "npm:@jsr/std__assert@1",
@@ -4495,14 +4195,8 @@
         }
       },
       "packages/sandbox": {
-        "dependencies": [
-          "jsr:@std/encoding@^1.0.10",
-          "jsr:@std/path@1"
-        ],
         "packageJson": {
           "dependencies": [
-            "npm:@jsr/std__encoding@1.0.10",
-            "npm:@jsr/std__path@1.1.2",
             "npm:@yaks/effects@0.2.17",
             "npm:@yaks/file@0.2.17",
             "npm:@yaks/fp@0.2.17",
@@ -4519,9 +4213,6 @@
         }
       },
       "packages/secrets": {
-        "dependencies": [
-          "jsr:@std/assert@1"
-        ],
         "packageJson": {
           "dependencies": [
             "npm:@jsr/std__assert@1",
@@ -4543,9 +4234,6 @@
         }
       },
       "packages/session": {
-        "dependencies": [
-          "jsr:@std/assert@1"
-        ],
         "packageJson": {
           "dependencies": [
             "npm:@jsr/std__assert@1",
@@ -4592,13 +4280,9 @@
         }
       },
       "packages/spawn": {
-        "dependencies": [
-          "jsr:@std/assert@1"
-        ],
         "packageJson": {
           "dependencies": [
             "npm:@jsr/std__assert@1",
-            "npm:@jsr/std__toml@1.0.10",
             "npm:@yaks/context@0.2.17",
             "npm:@yaks/doc@0.2.17",
             "npm:@yaks/edge@0.2.17",
@@ -4624,7 +4308,8 @@
             "npm:@yaks/testing@0.2.17",
             "npm:@yaks/text@0.2.17",
             "npm:@yaks/tools@0.2.17",
-            "npm:@yaks/vocab@0.2.17"
+            "npm:@yaks/vocab@0.2.17",
+            "npm:smol-toml@^1.9.1"
           ]
         }
       },
@@ -4653,9 +4338,6 @@
         }
       },
       "packages/sql": {
-        "dependencies": [
-          "jsr:@std/assert@1"
-        ],
         "packageJson": {
           "dependencies": [
             "npm:@jsr/std__assert@1",
@@ -4671,11 +4353,6 @@
         }
       },
       "packages/sqlite": {
-        "dependencies": [
-          "jsr:@db/sqlite@0.13.0",
-          "jsr:@std/assert@1",
-          "jsr:@std/path@1"
-        ],
         "packageJson": {
           "dependencies": [
             "npm:@jsr/std__assert@1",
@@ -4714,15 +4391,13 @@
         "packageJson": {
           "dependencies": [
             "npm:@jsr/std__assert@1",
+            "npm:@types/three@0.186",
             "npm:@yaks/testing@0.2.17",
             "npm:three@~0.186.1"
           ]
         }
       },
       "packages/sync": {
-        "dependencies": [
-          "jsr:@std/assert@1"
-        ],
         "packageJson": {
           "dependencies": [
             "npm:@jsr/std__assert@1",
@@ -4737,9 +4412,6 @@
         }
       },
       "packages/task": {
-        "dependencies": [
-          "jsr:@std/assert@1"
-        ],
         "packageJson": {
           "dependencies": [
             "npm:@jsr/std__assert@1",
@@ -4768,25 +4440,17 @@
         }
       },
       "packages/testing": {
-        "dependencies": [
-          "jsr:@std/assert@1",
-          "jsr:@std/testing@1"
-        ],
         "packageJson": {
           "dependencies": [
             "npm:@jsr/std__assert@1",
             "npm:@yaks/benchmark@0.2.17",
             "npm:@yaks/file@0.2.17",
             "npm:@yaks/fp@0.2.17",
-            "npm:@yaks/process@0.2.17",
-            "npm:@yaks/ram@0.2.17"
+            "npm:@yaks/process@0.2.17"
           ]
         }
       },
       "packages/text": {
-        "dependencies": [
-          "jsr:@std/assert@1"
-        ],
         "packageJson": {
           "dependencies": [
             "npm:@jsr/std__assert@1",
@@ -4839,22 +4503,15 @@
         }
       },
       "packages/tmux": {
-        "dependencies": [
-          "jsr:@std/assert@1"
-        ],
         "packageJson": {
           "dependencies": [
             "npm:@jsr/std__assert@1",
-            "npm:@yaks/kernel@0.2.17",
             "npm:@yaks/testing@0.2.17",
             "npm:@yaks/vocab@0.2.17"
           ]
         }
       },
       "packages/tools": {
-        "dependencies": [
-          "jsr:@std/assert@1"
-        ],
         "packageJson": {
           "dependencies": [
             "npm:@jsr/std__assert@1",
@@ -4884,9 +4541,6 @@
         }
       },
       "packages/topic": {
-        "dependencies": [
-          "jsr:@std/assert@1"
-        ],
         "packageJson": {
           "dependencies": [
             "npm:@jsr/std__assert@1",
@@ -4929,7 +4583,6 @@
       "packages/tracker": {
         "packageJson": {
           "dependencies": [
-            "npm:@jsr/std__assert@1",
             "npm:@yaks/api@0.2.17",
             "npm:@yaks/code@0.2.17",
             "npm:@yaks/doc@0.2.17",
@@ -4965,9 +4618,6 @@
         }
       },
       "packages/tui": {
-        "dependencies": [
-          "jsr:@std/assert@1"
-        ],
         "packageJson": {
           "dependencies": [
             "npm:@jsr/std__assert@1",
@@ -4981,9 +4631,6 @@
         }
       },
       "packages/tunnel": {
-        "dependencies": [
-          "jsr:@std/assert@1"
-        ],
         "packageJson": {
           "dependencies": [
             "npm:@jsr/std__assert@1",
@@ -4995,9 +4642,6 @@
         }
       },
       "packages/ui": {
-        "dependencies": [
-          "jsr:@std/assert@1"
-        ],
         "packageJson": {
           "dependencies": [
             "npm:@jsr/std__assert@1",
@@ -5012,9 +4656,6 @@
         }
       },
       "packages/ux": {
-        "dependencies": [
-          "jsr:@std/assert@1"
-        ],
         "packageJson": {
           "dependencies": [
             "npm:@jsr/std__assert@1",
@@ -5037,9 +4678,6 @@
         }
       },
       "packages/visualize": {
-        "dependencies": [
-          "jsr:@std/assert@1"
-        ],
         "packageJson": {
           "dependencies": [
             "npm:@jsr/std__assert@1",
@@ -5063,9 +4701,6 @@
         }
       },
       "packages/vocab": {
-        "dependencies": [
-          "jsr:@std/assert@1"
-        ],
         "packageJson": {
           "dependencies": [
             "npm:@cfworker/json-schema@4.1.1",
@@ -5084,16 +4719,13 @@
         "packageJson": {
           "dependencies": [
             "npm:@jsr/std__assert@1",
+            "npm:@types/three@0.186",
             "npm:@yaks/testing@0.2.17",
             "npm:three@~0.186.1"
           ]
         }
       },
       "packages/wake": {
-        "dependencies": [
-          "jsr:@hexagon/croner@^10.0.1",
-          "jsr:@std/assert@1"
-        ],
         "packageJson": {
           "dependencies": [
             "npm:@jsr/std__assert@1",
@@ -5108,9 +4740,6 @@
         }
       },
       "packages/web": {
-        "dependencies": [
-          "jsr:@std/assert@1"
-        ],
         "packageJson": {
           "dependencies": [
             "npm:@jsr/std__assert@1",
@@ -5137,9 +4766,6 @@
         }
       },
       "packages/workerd": {
-        "dependencies": [
-          "jsr:@std/assert@1"
-        ],
         "packageJson": {
           "dependencies": [
             "npm:@jsr/std__assert@1",
@@ -5152,9 +4778,6 @@
         }
       },
       "packages/workers-ai": {
-        "dependencies": [
-          "jsr:@std/assert@1"
-        ],
         "packageJson": {
           "dependencies": [
             "npm:@jsr/std__assert@1",
@@ -5173,46 +4796,34 @@
         }
       },
       "packages/yaml": {
-        "dependencies": [
-          "jsr:@std/assert@1",
-          "jsr:@std/yaml@^1.2.0"
-        ],
         "packageJson": {
           "dependencies": [
             "npm:@jsr/std__assert@1",
-            "npm:@jsr/std__yaml@1.2.0",
             "npm:@yaks/graph@0.2.17",
-            "npm:@yaks/testing@0.2.17"
+            "npm:@yaks/testing@0.2.17",
+            "npm:yaml@^2.9.1"
           ]
         }
       },
       "workers/yak": {
         "packageJson": {
           "dependencies": [
-            "npm:@anthropic-ai/sdk@1.4.0",
-            "npm:@cfworker/json-schema@4.1.1",
             "npm:@cloudflare/containers@0.3.7",
             "npm:@cloudflare/puppeteer@1.4.0",
             "npm:@cloudflare/sandbox@0.12.9",
             "npm:@cloudflare/workers-oauth-provider@0.10.3",
             "npm:@hyzyla/pdfium@3.0.0",
-            "npm:@jsr/std__csv@1.0.6",
-            "npm:@jsr/std__media-types@1.1.0",
-            "npm:@jsr/std__toml@1.0.10",
-            "npm:@jsr/std__yaml@1.2.0",
-            "npm:@modelcontextprotocol/core@2.2.0",
+            "npm:@jsr/std__assert@1",
+            "npm:@jsr/std__path@1.1.2",
+            "npm:@jsr/std__testing@1",
             "npm:@modelcontextprotocol/server@2.2.0",
-            "npm:@noble/hashes@2.4.0",
-            "npm:@preact/signals@2.9.4",
             "npm:@resvg/resvg-wasm@2.6.2",
             "npm:@yaks/admin@0.2.17",
             "npm:@yaks/alias@0.2.17",
             "npm:@yaks/anthropic@0.2.17",
             "npm:@yaks/api@0.2.17",
             "npm:@yaks/archetype@0.2.17",
-            "npm:@yaks/benchmark@0.2.17",
             "npm:@yaks/blob@0.2.17",
-            "npm:@yaks/browse@0.2.17",
             "npm:@yaks/builders@0.2.17",
             "npm:@yaks/canvas@0.2.17",
             "npm:@yaks/claude@0.2.17",
@@ -5224,7 +4835,6 @@
             "npm:@yaks/context@0.2.17",
             "npm:@yaks/d1@0.2.17",
             "npm:@yaks/design@0.2.17",
-            "npm:@yaks/diagram@0.2.17",
             "npm:@yaks/doc@0.2.17",
             "npm:@yaks/draft@0.2.17",
             "npm:@yaks/dreaming@0.2.17",
@@ -5249,12 +4859,10 @@
             "npm:@yaks/html@0.2.17",
             "npm:@yaks/id@0.2.17",
             "npm:@yaks/inbox@0.2.17",
-            "npm:@yaks/inspect@0.2.17",
             "npm:@yaks/journal@0.2.17",
             "npm:@yaks/kernel@0.2.17",
             "npm:@yaks/key@0.2.17",
             "npm:@yaks/lens@0.2.17",
-            "npm:@yaks/logic@0.2.17",
             "npm:@yaks/machine@0.2.17",
             "npm:@yaks/mail@0.2.17",
             "npm:@yaks/markdown@0.2.17",
@@ -5263,12 +4871,8 @@
             "npm:@yaks/mcp@0.2.17",
             "npm:@yaks/member@0.2.17",
             "npm:@yaks/memory@0.2.17",
-            "npm:@yaks/mirror@0.2.17",
-            "npm:@yaks/model2vec@0.2.17",
             "npm:@yaks/model@0.2.17",
-            "npm:@yaks/names@0.2.17",
             "npm:@yaks/notify@0.2.17",
-            "npm:@yaks/oauth@0.2.17",
             "npm:@yaks/openai@0.2.17",
             "npm:@yaks/openrouter@0.2.17",
             "npm:@yaks/page@0.2.17",
@@ -5290,46 +4894,40 @@
             "npm:@yaks/spend@0.2.17",
             "npm:@yaks/sql@0.2.17",
             "npm:@yaks/sqlite@0.2.17",
-            "npm:@yaks/stage@0.2.17",
             "npm:@yaks/sync@0.2.17",
             "npm:@yaks/task@0.2.17",
             "npm:@yaks/testing@0.2.17",
             "npm:@yaks/text@0.2.17",
-            "npm:@yaks/threads@0.2.17",
             "npm:@yaks/timing@0.2.17",
             "npm:@yaks/tmux@0.2.17",
             "npm:@yaks/tools@0.2.17",
             "npm:@yaks/topic@0.2.17",
             "npm:@yaks/trace@0.2.17",
             "npm:@yaks/tracker@0.2.17",
-            "npm:@yaks/tui@0.2.17",
             "npm:@yaks/tunnel@0.2.17",
             "npm:@yaks/ui@0.2.17",
             "npm:@yaks/ux@0.2.17",
             "npm:@yaks/visualize@0.2.17",
             "npm:@yaks/vocab@0.2.17",
-            "npm:@yaks/voxel@0.2.17",
             "npm:@yaks/wake@0.2.17",
-            "npm:@yaks/web@0.2.17",
             "npm:@yaks/workerd@0.2.17",
             "npm:@yaks/workers-ai@0.2.17",
             "npm:@yaks/yaml@0.2.17",
-            "npm:croner@10.0.1",
+            "npm:ajv@^8.17.1",
+            "npm:csv-parse@^7.0.3",
             "npm:es-module-lexer@2.3.2",
             "npm:esbuild@0.28.1",
             "npm:fast-png@8.0.0",
-            "npm:fflate@0.8.3",
-            "npm:file-type@21.3.4",
+            "npm:html-rewriter-wasm@0.4.1",
+            "npm:linkedom@~0.18.12",
             "npm:lucide@1.31.0",
-            "npm:marked@18.0.6",
+            "npm:mime-types@^3.0.2",
             "npm:postal-mime@3.0.0",
             "npm:preact-render-to-string@6.7.0",
             "npm:preact@10.29.7",
             "npm:rollup@4.65.1",
-            "npm:stemmer@2.0.1",
-            "npm:sucrase@3.35.1",
+            "npm:smol-toml@^1.9.1",
             "npm:wrangler@4.111.0",
-            "npm:zod-to-json-schema@3.25.2",
             "npm:zod@3.25.76"
           ]
         }

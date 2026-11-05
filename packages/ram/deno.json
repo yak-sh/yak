@@ -4,9 +4,6 @@
   "exports": "./mod.ts",
   "license": "Apache-2.0",
   "description": "Synchronous in-memory graph storage over a Map of bundles, with queries evaluated by @yaks/match.",
-  "imports": {
-    "@std/assert": "jsr:@std/assert@^1.0.0"
-  },
   "compilerOptions": {
     "lib": [
       "dom",

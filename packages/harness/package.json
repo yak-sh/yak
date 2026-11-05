@@ -18,8 +18,6 @@
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.29.0",
     "@preact/signals": "2.9.4",
-    "@std/assert": "npm:@jsr/std__assert@^1.0.0",
-    "@std/path": "npm:@jsr/std__path@1.1.2",
     "@yaks/anthropic": "0.2.17",
     "@yaks/api": "0.2.17",
     "@yaks/blob": "0.2.17",
@@ -53,7 +51,6 @@
     "@yaks/render": "0.2.17",
     "@yaks/secrets": "0.2.17",
     "@yaks/session": "0.2.17",
-    "@yaks/sql": "0.2.17",
     "@yaks/sqlite": "0.2.17",
     "@yaks/sync": "0.2.17",
     "@yaks/text": "0.2.17",
@@ -65,9 +62,11 @@
     "preact": "10.29.7"
   },
   "devDependencies": {
+    "@std/assert": "npm:@jsr/std__assert@^1.0.0",
     "@yaks/benchmark": "0.2.17",
     "@yaks/ram": "0.2.17",
     "@yaks/sandbox": "0.2.17",
+    "@yaks/sql": "0.2.17",
     "@yaks/testing": "0.2.17",
     "@yaks/tracker": "0.2.17"
   }

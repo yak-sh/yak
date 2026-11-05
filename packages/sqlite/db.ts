@@ -12,7 +12,7 @@ import * as io from '@yaks/file/io'
 // this.
 
 import './sqlitepath.ts'
-import { Database } from '@db/sqlite'
+import { Database } from './legacy.ts'
 import { type Driver, render } from '@yaks/sql'
 import { configure, driver } from './native.ts'
 

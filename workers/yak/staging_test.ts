@@ -2,7 +2,7 @@
 // resource writes staging traffic into production. Hold both boundaries.
 import { test } from '@yaks/testing'
 import { assert, assertEquals, assertNotEquals } from '@std/assert'
-import { parse } from '@std/toml'
+import { parse } from 'smol-toml'
 
 let config = parse(
   Deno.readTextFileSync(new URL('./wrangler.toml', import.meta.url)),

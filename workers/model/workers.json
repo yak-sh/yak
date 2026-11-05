@@ -1,22 +1,10 @@
 {
-  "_": "The runtime gate for the executor Workflow and service entrypoints. `deno task check:types` checks conform.ts in the Workers program, with Cloudflare's own types, on any change it reaches, and keeps those globals out of the Deno program.",
+  "_": "Worker entrypoints checked with Cloudflare globals by deno task check:types. Resolution comes from the npm workspace.",
   "compilerOptions": {
-    "lib": ["esnext", "dom"],
+    "lib": [
+      "esnext",
+      "dom"
+    ],
     "strict": true
-  },
-  "imports": {
-    "@cloudflare/workers-types": "npm:@cloudflare/workers-types@^4.20260702.1",
-    "@yaks/archetype": "../../packages/archetype/mod.ts",
-    "@yaks/blob": "../../packages/blob/mod.ts",
-    "@yaks/egress": "../../packages/egress/mod.ts",
-    "@yaks/fp": "../../packages/fp/mod.ts",
-    "@yaks/graph": "../../packages/graph/mod.ts",
-    "@yaks/model": "../../packages/model/mod.ts",
-    "@yaks/openai": "../../packages/openai/mod.ts",
-    "@yaks/openrouter": "../../packages/openrouter/mod.ts",
-    "@yaks/query": "../../packages/query/mod.ts",
-    "@yaks/secrets": "../../packages/secrets/mod.ts",
-    "@yaks/sql": "../../packages/sql/mod.ts",
-    "@yaks/vocab": "../../packages/vocab/mod.ts"
   }
 }

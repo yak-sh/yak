@@ -1,5 +1,5 @@
 {
-  "_": "The browser gate: @yaks/ui's front door, the components web's page imports, must type-check with only the web platform in scope. `./routes` and `./cli` run on the host and are not part of it.",
+  "_": "Browser exports checked with web globals by deno task check:browser. Resolution comes from the npm workspace.",
   "compilerOptions": {
     "lib": [
       "dom",
@@ -12,11 +12,6 @@
     ".",
     "./ui"
   ],
-  "imports": {
-    "@yaks/tui/theme": "../tui/theme.ts",
-    "preact": "npm:preact@^10.29.1",
-    "preact/hooks": "npm:preact@^10.29.1/hooks"
-  },
   "resources": [
     "**/*.css"
   ]

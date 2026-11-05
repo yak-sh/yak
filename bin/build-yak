@@ -61,7 +61,7 @@ case "${1:-}" in
   install|deploy)
     mode=$1
     shift
-    deno run --allow-read --allow-write --allow-env --allow-run=npm workers/yak/dependencies.ts "$cache"
+    deno run --allow-read --allow-write --allow-env --allow-run=npm packages/cli/dependencies.ts "$cache"
     [ "$mode" = install ] && exit 0
     deno task deploy:yak "$@"
     # Builds pins these to its connected production Worker. Leaving them set

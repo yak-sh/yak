@@ -2,7 +2,7 @@
 // statement through the root reference's index, whatever is beside it.
 import { equal, ok, test } from '@yaks/testing'
 import './sqlitepath.ts'
-import { Database } from '@db/sqlite'
+import { Database } from './legacy.ts'
 import { loadVocab } from '@yaks/vocab'
 import { compile, render } from '@yaks/sql'
 import { archetypeDoc, archetypes } from '@yaks/archetype'

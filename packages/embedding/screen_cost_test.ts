@@ -1,6 +1,6 @@
 // A selective screen stays selective after it grows beyond 5,000 owners.
 import '../sqlite/sqlitepath.ts'
-import { Database } from '@db/sqlite'
+import { Database } from '@yaks/sqlite/testing'
 import { col, insert, le, render, select, table, val } from '@yaks/sql'
 import { driver } from '../sqlite/native.ts'
 import { sqlitePath } from '../sqlite/sqlitepath.ts'

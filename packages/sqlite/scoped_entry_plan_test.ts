@@ -2,7 +2,7 @@
 // old entry belonging to the same session.
 import { ok, test } from '@yaks/testing'
 import './sqlitepath.ts'
-import { Database } from '@db/sqlite'
+import { Database } from './legacy.ts'
 import { loadVocab } from '@yaks/vocab'
 import { compile, insert, render } from '@yaks/sql'
 import { parse } from '@yaks/query'

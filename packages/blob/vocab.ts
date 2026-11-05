@@ -13,7 +13,7 @@ import type { Derived } from '@yaks/sql'
 import { artifactDoc } from './artifact.ts'
 import { blobKeywords } from './keywords.ts'
 import { blobRead } from './sqlite.ts'
-import manifest from './deno.json' with { type: 'json' }
+import manifest from './package.json' with { type: 'json' }
 
 export { artifactDoc, blobKeywords, blobRead }
 

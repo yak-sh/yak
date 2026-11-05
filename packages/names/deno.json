@@ -4,9 +4,6 @@
   "description": "Resolves entity names from the properties a component vocabulary marks for name lookup.",
   "exports": "./mod.ts",
   "license": "Apache-2.0",
-  "imports": {
-    "@std/assert": "jsr:@std/assert@^1.0.0"
-  },
   "publish": {
     "exclude": [
       "**/*_test.ts"

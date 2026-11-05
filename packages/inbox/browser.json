@@ -10,10 +10,5 @@
     ".",
     "./queries",
     "./vocab"
-  ],
-  "imports": {
-    "@yaks/inbox": "./mod.ts",
-    "@yaks/inbox/queries": "./queries.ts",
-    "@yaks/inbox/vocab": "./vocab.ts"
-  }
+  ]
 }

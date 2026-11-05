@@ -1,7 +1,7 @@
 // Reading one text for embedding must not resolve it again just to decide
 // whether it is blank. A resolver can seek another table for every evaluation.
 import '../sqlite/sqlitepath.ts'
-import { Database } from '@db/sqlite'
+import { Database } from '@yaks/sqlite/testing'
 import { assertEquals } from '@std/assert'
 import { test } from '@yaks/testing'
 import { type Expr, fn } from '@yaks/sql'

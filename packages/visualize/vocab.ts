@@ -2,7 +2,7 @@
 
 import type { VocabDoc } from '@yaks/vocab'
 import doc from './vocab.json' with { type: 'json' }
-import manifest from './deno.json' with { type: 'json' }
+import manifest from './package.json' with { type: 'json' }
 
 /** The agent doors into the same snapshots the standalone page reads. */
 export let visualizeDoc: VocabDoc = doc

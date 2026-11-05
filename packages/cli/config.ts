@@ -17,7 +17,7 @@ import { imported as observed, importing } from '@yaks/fp/imports'
 // module that opens no graph. This package's deno.json supplies the release a
 // plugin named without a map entry is taken from (`located`).
 
-import cli from './deno.json' with { type: 'json' }
+import cli from './package.json' with { type: 'json' }
 import { runtimePath } from './runtime.ts'
 
 export type { Config, Options, Plug } from '@yaks/host'

@@ -11,9 +11,6 @@ main = "index.ts"
 # The kernel and apps are reached through the zone or service bindings only.
 workers_dev = false
 preview_urls = false
-# Where esbuild finds each `@yaks/*` package: the workspace, written out by
-# the wrangler door before every run (wrangler.ts `aliased`; see `[alias]`).
-tsconfig = ".wrangler/paths.json"
 account_id = "0f9613dfd3f0451df0bd0f12a1372ea3"
 compatibility_date = "2025-05-08"
 # global_fetch_strictly_public sends every outbound fetch out to the public
@@ -533,14 +530,6 @@ database_id = "88b2e161-99bf-4777-ab6d-b18fcf66ca95"
 # key's token (rtc.ts, D-40615). All four are in 1Password beside each other.
 # Unset, every app's ./api/rtc/ says voice is not switched on here.
 
-# Where a bare specifier goes. The kernel is Deno source that imports the
-# packages by NAME (`@yaks/graph`), which deno resolves through the workspace
-# in the repo's one deno.json — wrangler's esbuild has no idea about that. So
-# the workspace is handed to esbuild as tsconfig `paths` (the `tsconfig` line
-# at the top), written from every member's deno.json by the wrangler door
-# (wrangler.ts `aliased`) before wrangler runs: no `@yaks/*` name is listed
-# here, and none can be missing.
-#
 # Bindings and vars do not inherit into named environments. Repeat every
 # binding here so staging has its own resources. Migrations, containers and
 # routing are repeated too, keeping the whole deployment visible in one place.

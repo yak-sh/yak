@@ -7,6 +7,9 @@ import {
 // A long-lived command pins its source tree. Deno's resolver is fixed when a
 // process starts, so deferred imports must never read a checkout that can land.
 import { wind } from '@yaks/process/wind'
+import { registerHooks } from 'node:module'
+import { isAbsolute } from 'node:path'
+import { pathToFileURL } from 'node:url'
 
 let ROOT = new URL('../../', import.meta.url)
 let decode = (bytes: Uint8Array) => new TextDecoder().decode(bytes)
@@ -227,23 +230,7 @@ let build = async ({ root, commit, patch, files, target, hash }: {
     await disk.mkdir(to.slice(0, to.lastIndexOf('/')), { recursive: true })
     await disk.writeFile(to, bytes, { mode: mode ?? undefined })
   }
-  // Absolute source imports from a file plugin or provider follow the same
-  // tree, including imports made by modules outside the source checkout.
-  let config = JSON.parse(await disk.readTextFile(`${target}/deno.json`))
-  config.imports = {
-    ...config.imports,
-    [new URL(`file://${root}/`).href]: new URL(`file://${target}/`).href,
-  }
-  await disk.writeTextFile(`${target}/deno.json`, JSON.stringify(config))
-  // The tree's own install, as a checkout's hooks and the yak wrapper run it.
-  await run(system.execPath(), [
-    'run',
-    '-q',
-    '-A',
-    '--config',
-    `${target}/deno.json`,
-    `${target}/workers/yak/dependencies.ts`,
-  ])
+  await (await import('./dependencies.ts')).ready(target)
   await disk.writeTextFile(`${target}/.hash`, hash)
 }
 
@@ -257,6 +244,19 @@ export let runtimePath = (
   from && to && spec.startsWith(from + '/')
     ? to + spec.slice(from.length)
     : spec
+
+// Deferred imports in a pinned runtime keep the same source tree, including
+// absolute file imports from a provider outside that tree.
+if (runtimeRoot()) {
+  registerHooks({
+    resolve(specifier, context, next) {
+      let url = isAbsolute(specifier)
+        ? pathToFileURL(specifier).href
+        : specifier
+      return next(runtimePath(url), context)
+    },
+  })
+}
 
 /// runtimeSource('file:///cache/0/packages/', 'file:///src', 'file:///cache/0') -> 'file:///src/packages/'
 /// runtimeSource('file:///elsewhere/a.ts', 'file:///src', 'file:///cache/0') -> 'file:///elsewhere/a.ts'

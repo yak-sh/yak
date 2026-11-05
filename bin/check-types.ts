@@ -511,8 +511,9 @@ if (import.meta.main) {
     : await types(await changes())
   if (all) {
     let published = await spawn([
-      'publish',
-      '--node-modules-dir=none',
+      'run',
+      '-A',
+      'bin/publish.ts',
       '--dry-run',
       '--allow-dirty',
     ])

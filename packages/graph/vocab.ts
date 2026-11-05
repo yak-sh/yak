@@ -19,7 +19,7 @@ import { toolsSaid } from '@yaks/vocab/tools'
 import type { NamedTool } from './tool_meta.ts'
 export { offered, type ToolId, toolName } from './tool_meta.ts'
 import doc from './vocab.json' with { type: 'json' }
-import manifest from './deno.json' with { type: 'json' }
+import manifest from './package.json' with { type: 'json' }
 
 /** The tool declarations the generic tier is listed and typed from. */
 export let graphDoc: VocabDoc = doc

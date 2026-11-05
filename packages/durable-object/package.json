@@ -6,7 +6,6 @@
   "license": "Apache-2.0",
   "description": "Provides graph storage on a Cloudflare Durable Object's embedded SQLite and connects hibernatable WebSockets to query subscriptions.",
   "dependencies": {
-    "@std/assert": "npm:@jsr/std__assert@^1.0.0",
     "@yaks/api": "0.2.17",
     "@yaks/fp": "0.2.17",
     "@yaks/graph": "0.2.17",
@@ -17,6 +16,7 @@
     "fflate": "0.8.3"
   },
   "devDependencies": {
+    "@std/assert": "npm:@jsr/std__assert@^1.0.0",
     "@yaks/blob": "0.2.17",
     "@yaks/query": "0.2.17",
     "@yaks/ram": "0.2.17",

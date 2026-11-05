@@ -9,19 +9,19 @@
   "license": "Apache-2.0",
   "description": "Renders registry-selected views with Preact and binds them to an entity store with subscriptions scoped to mounted components.",
   "dependencies": {
-    "@std/assert": "npm:@jsr/std__assert@^1.0.0",
     "@yaks/file": "0.2.17",
     "@yaks/process": "0.2.17",
     "@yaks/query": "0.2.17",
     "@yaks/render": "0.2.17",
-    "@yaks/testing": "0.2.17",
     "@yaks/vocab": "0.2.17",
-    "linkedom": "^0.18.12",
     "preact": "10.29.7",
     "sucrase": "3.35.1"
   },
   "devDependencies": {
     "@preact/signals": "2.9.4",
-    "@yaks/client": "0.2.17"
+    "@std/assert": "npm:@jsr/std__assert@^1.0.0",
+    "@yaks/client": "0.2.17",
+    "@yaks/testing": "0.2.17",
+    "linkedom": "^0.18.12"
   }
 }

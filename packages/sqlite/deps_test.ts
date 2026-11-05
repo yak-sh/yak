@@ -1,7 +1,6 @@
-// The driver runs on this package's ./deps.ts in place of its own
-// (deno.json `scopes`), so the driver tested here is the one every graph opens.
+// The driver tested here is the one every graph opens.
 import './sqlitepath.ts'
-import { Database } from '@db/sqlite'
+import { Database } from './legacy.ts'
 import { assertEquals } from '@std/assert'
 import { test } from '@yaks/testing'
 

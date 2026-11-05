@@ -1,18 +1,10 @@
 {
-  "_": "The browser check: @yaks/graph must type-check with only the web platform in scope — no Deno namespace, no Node types. Run it with `deno check --config packages/graph/browser.json packages/graph/mod.ts`; it is part of `deno task check`.",
+  "_": "Browser exports checked with web globals by deno task check:browser. Resolution comes from the npm workspace.",
   "compilerOptions": {
-    "lib": ["dom", "esnext"],
+    "lib": [
+      "dom",
+      "esnext"
+    ],
     "strict": true
-  },
-  "imports": {
-    "@yaks/archetype": "../archetype/mod.ts",
-    "@yaks/fp": "../fp/mod.ts",
-    "@yaks/graph": "./mod.ts",
-    "@yaks/trace": "../trace/mod.ts",
-    "@yaks/id": "../id/mod.ts",
-    "@yaks/match": "../match/mod.ts",
-    "@yaks/query": "../query/mod.ts",
-    "@yaks/sql": "../sql/mod.ts",
-    "@yaks/vocab": "../vocab/mod.ts"
   }
 }

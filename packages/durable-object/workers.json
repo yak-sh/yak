@@ -1,19 +1,10 @@
 {
-  "_": "The Cloudflare gate: the shipped source, type-checked with the RUNTIME's own types in scope — `ctx.storage` is the storage wrangler hands you, and a hibernatable socket is the runtime's. `deno task check:types` checks conform.ts in the Workers program on any change it reaches. It stands alone because those types are global: in scope, every other file in the repo would be checked against a Worker it does not run in.",
+  "_": "Worker entrypoints checked with Cloudflare globals by deno task check:types. Resolution comes from the npm workspace.",
   "compilerOptions": {
-    "lib": ["esnext", "dom"],
+    "lib": [
+      "esnext",
+      "dom"
+    ],
     "strict": true
-  },
-  "imports": {
-    "@cloudflare/workers-types": "npm:@cloudflare/workers-types@^4.20260702.1",
-    "@yaks/api": "../api/mod.ts",
-    "@yaks/fp": "../fp/mod.ts",
-    "@yaks/graph": "../graph/mod.ts",
-    "@yaks/match": "../match/mod.ts",
-    "@yaks/query": "../query/mod.ts",
-    "@yaks/sql": "../sql/mod.ts",
-    "@yaks/archetype": "../archetype/mod.ts",
-    "@yaks/sqlite": "../sqlite/mod.ts",
-    "@yaks/vocab": "../vocab/mod.ts"
   }
 }

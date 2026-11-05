@@ -1,7 +1,7 @@
 // A rule asked about a batch costs the batch, not the tables its match reads.
 import { ok, test } from '@yaks/testing'
 import './sqlitepath.ts'
-import { Database } from '@db/sqlite'
+import { Database } from './legacy.ts'
 import { type Bundle, match, reads } from '@yaks/graph'
 import { render, rule } from '@yaks/sql'
 import { storage } from './mod.ts'

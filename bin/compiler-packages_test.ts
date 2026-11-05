@@ -23,23 +23,17 @@ let scratch = async (
 
 let json = JSON.stringify
 let workspace = (): Record<string, string> => ({
-  'deno.json': json({
-    workspace: ['./packages/a', './packages/b', './apps/demo'],
-    imports: { preact: 'npm:preact@^10.29.1' },
+  'package.json': json({
+    workspaces: ['./packages/a', './packages/b', './apps/demo'],
   }),
-  'packages/a/deno.json': json({
+  'packages/a/package.json': json({
     name: '@yaks/a',
     exports: {
       '.': './mod.tsx',
       './server': './server.ts',
       './style': './base.css',
     },
-    imports: {
-      alias: 'npm:tiny@2.0.0/sub',
-      preact: 'npm:preact@10.29.2',
-      'preact/hooks': 'npm:preact@10.29.2/hooks',
-      '@std/assert': 'jsr:@std/assert@^1',
-    },
+    dependencies: { tiny: '2.0.0', preact: '10.29.2', '@yaks/b': '1.0.0' },
   }),
   'packages/a/browser.json': '{}',
   'packages/a/mod.tsx': `
@@ -50,7 +44,7 @@ let workspace = (): Record<string, string> => ({
     import obj from './value.json' with { type: 'json' }
     import './base.css'
     export { extra } from './extra.ts'
-    export let load = () => import('alias')
+    export let load = () => import('tiny/sub')
     export let view = <span>{hook(value + obj.n)}</span>
   `,
   'packages/a/extra.ts': 'export let extra: number = 3',
@@ -59,13 +53,13 @@ let workspace = (): Record<string, string> => ({
   'packages/a/server.ts': "import './fixtures/missing.ts'",
   'packages/a/fixtures/unused.ts': 'ignored',
   'packages/a/unused_test.ts': 'ignored',
-  'packages/b/deno.json': json({
+  'packages/b/package.json': json({
     name: '@yaks/b',
     exports: { '.': './server.ts', './item': './item.ts' },
   }),
   'packages/b/item.ts': 'export let value: number = 5',
   'packages/b/server.ts': "import 'node:fs'",
-  'apps/demo/deno.json': json({ name: '@demo/app', exports: './main.ts' }),
+  'apps/demo/package.json': json({ name: '@demo/app', exports: './main.ts' }),
   'apps/demo/main.ts': "import 'broken-app-import'",
 })
 
@@ -126,22 +120,6 @@ test('compiler catalog is stable, content-addressed and materialized atomically'
       Object.hasOwn(JSON.parse(await Deno.readTextFile(memo)), key),
       false,
     )
-  })
-})
-
-test('compiler catalog normalizes relative import-map aliases', async () => {
-  let files = workspace()
-  files['packages/a/mod.tsx'] =
-    "import { extra } from 'helper'; export { extra }"
-  files['packages/a/deno.json'] = json({
-    name: '@yaks/a',
-    exports: './mod.tsx',
-    imports: { helper: './extra.ts' },
-  })
-  await scratch(files, async (root) => {
-    let out = await catalog(root)
-    assertMatch(out['@yaks/a'].files['mod.tsx'], /from ['"]\.\/extra.ts['"]/)
-    assertEquals(out['@yaks/a'].dependencies, {})
   })
 })
 

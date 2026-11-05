@@ -2,7 +2,7 @@
 // The commit and the tag are git, exercised by cutting a release, not here.
 import { test } from '@yaks/testing'
 import { assertEquals } from '@std/assert'
-import { bump, semver, unlisted } from './release.ts'
+import { bump, semver, unlisted, versioned } from './release.ts'
 
 test('semver: three numbers, optionally a prerelease, never a `v`', () => {
   assertEquals([semver('0.1.0'), semver('1.0.0'), semver('0.1.0-rc.1')], [
@@ -49,10 +49,14 @@ let root = await Deno.makeTempDir()
 let member = async (dir: string, config: Record<string, unknown>) => {
   await Deno.mkdir(`${root}/${dir}`)
   await Deno.writeTextFile(`${root}/${dir}/deno.json`, JSON.stringify(config))
+  await Deno.writeTextFile(
+    `${root}/${dir}/package.json`,
+    JSON.stringify(config),
+  )
 }
 await Deno.writeTextFile(
-  `${root}/deno.json`,
-  JSON.stringify({ workspace: ['./new', './old', './kept', './npm'] }),
+  `${root}/package.json`,
+  JSON.stringify({ workspaces: ['./new', './old', './kept', './npm'] }),
 )
 await member('new', { name: '@yaks/new' })
 await member('old', { name: '@yaks/old' })
@@ -68,4 +72,18 @@ let missing = await unlisted(root, pages)
 await Deno.remove(root, { recursive: true })
 test('unlisted: a package it would publish that jsr.io has no page for', () => {
   assertEquals(missing, ['@yaks/new'])
+})
+
+test('family versions update internal dependencies without changing external ranges', () => {
+  let before = {
+    name: '@yaks/a',
+    version: '1.0.0',
+    dependencies: { '@yaks/b': '1.0.0', yaml: '^2' },
+  }
+  assertEquals(versioned(before, '1.1.0', new Set(['@yaks/a', '@yaks/b'])), {
+    name: '@yaks/a',
+    version: '1.1.0',
+    dependencies: { '@yaks/b': '1.1.0', yaml: '^2' },
+  })
+  assertEquals(before.version, '1.0.0')
 })

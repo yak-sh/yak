@@ -1,10 +1,14 @@
 {
-  "entries": [".", "./host"],
+  "entries": [
+    ".",
+    "./host"
+  ],
   "compilerOptions": {
-    "lib": ["dom", "dom.iterable", "esnext"],
+    "lib": [
+      "dom",
+      "dom.iterable",
+      "esnext"
+    ],
     "strict": true
-  },
-  "imports": {
-    "@yaks/vocab": "../vocab/mod.ts"
   }
 }

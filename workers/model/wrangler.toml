@@ -3,7 +3,6 @@
 name = "yak-model-v1"
 main = "index.ts"
 account_id = "0f9613dfd3f0451df0bd0f12a1372ea3"
-tsconfig = ".wrangler/paths.json"
 compatibility_date = "2026-07-01"
 compatibility_flags = ["nodejs_compat"]
 workers_dev = false

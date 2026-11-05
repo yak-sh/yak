@@ -8,7 +8,7 @@
 
 import type { VocabDoc } from '@yaks/vocab'
 import { taskDoc } from './comp.ts'
-import manifest from './deno.json' with { type: 'json' }
+import manifest from './package.json' with { type: 'json' }
 
 export { taskDoc }
 

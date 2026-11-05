@@ -5,7 +5,7 @@
 import { type Keywords, pick, type VocabDoc } from '@yaks/vocab/runtime'
 import { kernelKeywords } from './keywords.ts'
 import doc from './vocab.json' with { type: 'json' }
-import manifest from './deno.json' with { type: 'json' }
+import manifest from './package.json' with { type: 'json' }
 
 export { kernelKeywords }
 

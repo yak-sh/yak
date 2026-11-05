@@ -1,6 +1,6 @@
 // Reference absence must not enumerate unrelated archetypes to reject a leaf.
 import '../sqlite/sqlitepath.ts'
-import { Database } from '@db/sqlite'
+import { Database } from '@yaks/sqlite/testing'
 import { equal, ok, test } from '@yaks/testing'
 import { Archetypes } from '@yaks/archetype'
 import { loadVocab } from '@yaks/vocab'

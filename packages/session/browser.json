@@ -1,30 +1,10 @@
 {
-  "_": "The browser gate: @yaks/session must type-check with only the web platform in scope \u2014 no Deno namespace, no Node types. `deno check --config packages/session/browser.json packages/session/mod.ts` is the check; it is part of `deno task check`.",
+  "_": "Browser exports checked with web globals by deno task check:browser. Resolution comes from the npm workspace.",
   "compilerOptions": {
     "lib": [
       "dom",
       "esnext"
     ],
     "strict": true
-  },
-  "imports": {
-    "@yaks/archetype": "../archetype/mod.ts",
-    "@yaks/query": "../query/mod.ts",
-    "@yaks/vocab": "../vocab/mod.ts",
-    "@yaks/fp": "../fp/mod.ts",
-    "@yaks/graph": "../graph/mod.ts",
-    "@yaks/trace": "../trace/mod.ts",
-    "@yaks/match": "../match/mod.ts",
-    "@yaks/render": "../render/mod.ts",
-    "@yaks/model": "../model/mod.ts",
-    "@yaks/effects": "../effects/mod.ts",
-    "@yaks/task": "../task/mod.ts",
-    "@yaks/edge": "../edge/mod.ts",
-    "@yaks/sql": "../sql/mod.ts",
-    "@yaks/context": "../context/mod.ts",
-    "@yaks/blob": "../blob/mod.ts",
-    "@yaks/tools": "../tools/mod.ts",
-    "@yaks/vocab/tools": "../vocab/tools.ts",
-    "@yaks/tools/vocab": "../tools/vocab.ts"
   }
 }

@@ -3,8 +3,8 @@
 import * as fs from '@yaks/file/io'
 import * as systemProcess from '@yaks/process/system'
 import type { Saved, Vault } from '@yaks/client'
-import { join } from '@std/path/join'
-import { resolve } from '@std/path/resolve'
+import { join } from 'node:path'
+import { resolve } from 'node:path'
 import { frontend } from './frontend.ts'
 
 let home = (env: (name: string) => string | undefined) =>

@@ -1,7 +1,7 @@
 // A worker's bounded eligible read must seek past blocked work, including a
 // large ready set. Counting VM work detects scans hidden behind LIMIT 1.
 import './sqlitepath.ts'
-import { Database } from '@db/sqlite'
+import { Database } from './legacy.ts'
 import { assert, assertEquals } from '@std/assert'
 import { and, fields, limit } from '@yaks/query'
 import { graph } from '@yaks/graph'

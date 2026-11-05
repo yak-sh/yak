@@ -7,9 +7,6 @@
   },
   "license": "Apache-2.0",
   "description": "Implements the model interface over OpenAI's streaming Responses API using fetch, with API-key or Codex sign-in authentication.",
-  "imports": {
-    "@std/assert": "jsr:@std/assert@^1.0.0"
-  },
   "publish": {
     "exclude": [
       "**/*_test.ts",

@@ -18,7 +18,6 @@
     "@yaks/inspect": "0.2.17",
     "@yaks/match": "0.2.17",
     "@yaks/query": "0.2.17",
-    "@yaks/ram": "0.2.17",
     "@yaks/tools": "0.2.17",
     "@yaks/trace": "0.2.17",
     "@yaks/ui": "0.2.17",
@@ -29,6 +28,7 @@
   "devDependencies": {
     "@std/assert": "npm:@jsr/std__assert@^1.0.0",
     "@yaks/journal": "0.2.17",
+    "@yaks/ram": "0.2.17",
     "@yaks/sql": "0.2.17",
     "@yaks/sqlite": "0.2.17",
     "@yaks/testing": "0.2.17",

@@ -20,7 +20,7 @@
 // oneOf (https://api.jsr.io/.well-known/openapi) — so an edit here is a field
 // and a value, and a package with three stale fields is three requests.
 import { cmp } from '@yaks/fp'
-import { configs } from './release.ts'
+import { configs, manifest } from './release.ts'
 
 export let API = 'https://api.jsr.io'
 export let TOKENS = 'https://jsr.io/account/tokens'
@@ -191,7 +191,7 @@ export let lines = ({ name, have, edits }: Plan) => {
 export let packages = async (root = '.'): Promise<Pkg[]> => {
   let out: Pkg[] = []
   for (let path of await configs(root)) {
-    let config = JSON.parse(await Deno.readTextFile(path))
+    let config = await manifest(path)
     if (!config.name) continue
     let dir = path.slice(0, path.lastIndexOf('/'))
     out.push({

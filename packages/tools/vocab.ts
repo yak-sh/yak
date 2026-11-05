@@ -3,7 +3,7 @@
 // these components loads nothing else.
 import type { VocabDoc } from '@yaks/vocab'
 import doc from './vocab.json' with { type: 'json' }
-import manifest from './deno.json' with { type: 'json' }
+import manifest from './package.json' with { type: 'json' }
 const { tool, ...calls } = doc.$defs
 /** Invocation records; compose with toolDoc or an existing tool declaration. */
 export const callDoc: VocabDoc = { $defs: calls }

@@ -3,4 +3,4 @@
 set -eu
 root=$(git rev-parse --show-toplevel)
 [ -f "$root/package-lock.json" ] || exit 0
-exec deno run -q -A --config "$root/deno.json" "$root/workers/yak/dependencies.ts"
+exec deno run -q -A --config "$root/deno.json" "$root/packages/cli/dependencies.ts"

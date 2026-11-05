@@ -4,7 +4,7 @@
 
 import type { VocabDoc } from '@yaks/vocab'
 import doc from './vocab.json' with { type: 'json' }
-import manifest from './deno.json' with { type: 'json' }
+import manifest from './package.json' with { type: 'json' }
 
 /** The `prompt` entry's vocabulary, in the form `loadVocab` accepts. */
 export let contextDoc: VocabDoc = doc

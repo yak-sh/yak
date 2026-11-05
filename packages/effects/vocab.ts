@@ -5,7 +5,7 @@
 import type { VocabDoc } from '@yaks/vocab'
 import { effectDoc } from './docs.ts'
 import { provisionalDoc } from './provisional.ts'
-import manifest from './deno.json' with { type: 'json' }
+import manifest from './package.json' with { type: 'json' }
 
 export { effectDoc, provisionalDoc }
 

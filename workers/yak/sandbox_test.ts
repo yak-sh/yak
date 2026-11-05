@@ -23,7 +23,7 @@ import {
   assertRejects,
   assertStringIncludes,
 } from '@std/assert'
-import { parse } from '@std/toml'
+import { parse } from 'smol-toml'
 import { imaged, pinned as from, tag } from './sandbox/base.ts'
 import { build, fake } from './builder.ts'
 import { directory, spaceOf } from './directory.ts'

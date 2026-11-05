@@ -11,9 +11,6 @@
   },
   "license": "Apache-2.0",
   "description": "Stores a person's words with context as graph entities and retrieves them for subsequent conversations.",
-  "imports": {
-    "@std/assert": "jsr:@std/assert@^1.0.0"
-  },
   "publish": {
     "exclude": [
       "**/*_test.ts",

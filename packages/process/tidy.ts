@@ -1,7 +1,7 @@
 // Machines share the process-file directory, even when each lend creates a new
 // machine. Keep both the hourly throttle and in-flight sweep at that boundary.
 
-import { resolve } from '@std/path/posix/resolve'
+import { resolve } from 'node:path/posix'
 import { type Opts, paths, sweep } from './run.ts'
 import type { Store } from './store.ts'
 

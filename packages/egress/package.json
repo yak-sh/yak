@@ -13,15 +13,15 @@
     "@yaks/connections": "0.2.17",
     "@yaks/graph": "0.2.17",
     "@yaks/member": "0.2.17",
-    "@yaks/ram": "0.2.17",
     "@yaks/secrets": "0.2.17",
-    "@yaks/testing": "0.2.17",
     "@yaks/vocab": "0.2.17"
   },
   "devDependencies": {
     "@std/assert": "npm:@jsr/std__assert@^1.0.0",
     "@yaks/edge": "0.2.17",
     "@yaks/effects": "0.2.17",
-    "@yaks/query": "0.2.17"
+    "@yaks/query": "0.2.17",
+    "@yaks/ram": "0.2.17",
+    "@yaks/testing": "0.2.17"
   }
 }

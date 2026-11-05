@@ -10,7 +10,7 @@
 import type { VocabDoc } from '@yaks/vocab'
 import { gitDoc, refDoc } from './comp.ts'
 import { checkoutDoc } from './checkout_vocab.ts'
-import manifest from './deno.json' with { type: 'json' }
+import manifest from './package.json' with { type: 'json' }
 
 export { checkoutDoc, gitDoc, refDoc }
 

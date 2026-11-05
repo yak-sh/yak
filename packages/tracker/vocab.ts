@@ -6,7 +6,7 @@ import type { Derived } from '@yaks/sql'
 import type { VocabDoc } from '@yaks/vocab'
 import doc from './vocab.json' with { type: 'json' }
 import bug from './bug.json' with { type: 'json' }
-import manifest from './deno.json' with { type: 'json' }
+import manifest from './package.json' with { type: 'json' }
 
 export let bugDoc: VocabDoc = bug as VocabDoc
 export let trackerDoc: VocabDoc = {

@@ -1,6 +1,6 @@
 // Mixed extension/presence reads must seek hits under stale small statistics.
 import '../sqlite/sqlitepath.ts'
-import { Database } from '@db/sqlite'
+import { Database } from '@yaks/sqlite/testing'
 import { assert, assertEquals } from '@std/assert'
 import { test } from '@yaks/testing'
 import { search } from '@yaks/fts'

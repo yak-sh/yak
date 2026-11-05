@@ -4,7 +4,7 @@
 
 import type { VocabDoc } from '@yaks/vocab'
 import doc from './vocab.json' with { type: 'json' }
-import manifest from './deno.json' with { type: 'json' }
+import manifest from './package.json' with { type: 'json' }
 
 /** `calls{month, count}` on a `uses` link, and the `called{month}` event that
  * adds one, in the form `loadVocab` accepts. */

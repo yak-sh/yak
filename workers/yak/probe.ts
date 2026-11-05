@@ -12,7 +12,7 @@ import type { Load } from '@yaks/host'
 import type { Env } from './env.ts'
 import { type Directory, directoryOf, spaceHandle } from './directory.ts'
 import { valueIn } from '@yaks/tools/value'
-import { parse } from '@std/toml'
+import { parse } from 'smol-toml'
 import { endpoints } from './endpoints.ts'
 import { Ajv } from 'ajv'
 

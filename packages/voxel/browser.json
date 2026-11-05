@@ -15,16 +15,5 @@
     "./chartbook",
     "./chartsheet",
     "./three"
-  ],
-  "imports": {
-    "@yaks/voxel": "./mod.ts",
-    "@yaks/voxel/mesh": "./mesh.ts",
-    "@yaks/voxel/boxes": "./boxes.ts",
-    "@yaks/voxel/light": "./light.ts",
-    "@yaks/voxel/stream": "./stream.ts",
-    "@yaks/voxel/chartbook": "./chartbook.ts",
-    "@yaks/voxel/chartsheet": "./chartsheet.ts",
-    "@yaks/voxel/three": "./three/mod.ts",
-    "three": "npm:three@^0.186.1"
-  }
+  ]
 }

@@ -1,6 +1,6 @@
 // A named owner read does not transfer an unrelated archetype catalog.
 import '../sqlite/sqlitepath.ts'
-import { Database } from '@db/sqlite'
+import { Database } from '@yaks/sqlite/testing'
 import { assert, assertEquals } from '@std/assert'
 import { test } from '@yaks/testing'
 import { driver } from '../sqlite/native.ts'

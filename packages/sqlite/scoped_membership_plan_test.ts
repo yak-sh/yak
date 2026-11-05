@@ -1,7 +1,7 @@
 import './sqlitepath.ts'
 // Selective session and workspace reads must not build global visible component
 // owning sets, even when statistics still describe the small initial graph.
-import { Database } from '@db/sqlite'
+import { Database } from './legacy.ts'
 import { equal, ok, test } from '@yaks/testing'
 import { loadVocab } from '@yaks/vocab'
 import { compile, insert, render } from '@yaks/sql'

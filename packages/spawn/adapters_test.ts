@@ -1,6 +1,6 @@
 import { test } from '@yaks/testing'
 import { assert, assertEquals } from '@std/assert'
-import { parse } from '@std/toml'
+import { parse } from 'smol-toml'
 import { claude, codex } from './adapters.ts'
 
 let job = {

@@ -13,15 +13,15 @@
   "license": "Apache-2.0",
   "description": "Stores one-shot and recurring schedules as graph components, marking due wakes as fired and advancing their next scheduled times.",
   "dependencies": {
-    "@std/assert": "npm:@jsr/std__assert@^1.0.0",
     "@yaks/fp": "0.2.17",
     "@yaks/graph": "0.2.17",
     "@yaks/query": "0.2.17",
-    "@yaks/ram": "0.2.17",
     "@yaks/vocab": "0.2.17",
     "croner": "10.0.1"
   },
   "devDependencies": {
+    "@std/assert": "npm:@jsr/std__assert@^1.0.0",
+    "@yaks/ram": "0.2.17",
     "@yaks/testing": "0.2.17"
   }
 }

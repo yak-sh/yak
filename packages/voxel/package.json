@@ -15,10 +15,11 @@
   "license": "Apache-2.0",
   "description": "Worker-safe voxel geometry, baked lamp light, chunk detail and heightfield charts, with Three.js materials and box rigs at /three.",
   "dependencies": {
-    "@std/assert": "npm:@jsr/std__assert@^1.0.0",
+    "@types/three": "^0.186.0",
     "three": "^0.186.1"
   },
   "devDependencies": {
+    "@std/assert": "npm:@jsr/std__assert@^1.0.0",
     "@yaks/testing": "0.2.17"
   }
 }

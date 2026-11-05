@@ -1,5 +1,5 @@
 import './sqlitepath.ts'
-import { Database } from '@db/sqlite'
+import { Database } from './legacy.ts'
 import { equal, ok, test } from '@yaks/testing'
 import { compile, render } from '@yaks/sql'
 import { parse } from '@yaks/query'

@@ -1,14 +1,10 @@
 {
-  "_": "The browser gate: @yaks/logic is pure functions over plain values, and its two effects use fetch and setTimeout, so the whole package must type-check with only the web platform in scope.",
+  "_": "Browser exports checked with web globals by deno task check:browser. Resolution comes from the npm workspace.",
   "compilerOptions": {
     "lib": [
       "dom",
       "esnext"
     ],
     "strict": true
-  },
-  "imports": {
-    "@yaks/fp": "../fp/mod.ts",
-    "@yaks/logic": "./mod.ts"
   }
 }

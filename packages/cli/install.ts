@@ -17,7 +17,7 @@ import { command as launchCommand } from '@yaks/process/command'
 // so an update adds `--reload=jsr:@yaks/cli`, or it installs the release it
 // found before.
 
-import cli from './deno.json' with { type: 'json' }
+import cli from './package.json' with { type: 'json' }
 import { released } from './release.ts'
 
 /** The `deno` arguments that install `yak` at `version` under `config`.

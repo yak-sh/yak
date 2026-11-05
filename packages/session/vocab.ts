@@ -14,7 +14,7 @@ import type { Derived } from '@yaks/sql'
 import { sessionDoc } from './comp.ts'
 import { sessionDerived } from './status.ts'
 import { blobRead } from '@yaks/blob/vocab'
-import manifest from './deno.json' with { type: 'json' }
+import manifest from './package.json' with { type: 'json' }
 
 export { sessionDoc }
 

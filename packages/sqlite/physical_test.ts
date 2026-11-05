@@ -3,7 +3,7 @@ import { equal, test } from '@yaks/testing'
 import { open } from './db.ts'
 import { componentTables } from './physical.ts'
 import './sqlitepath.ts'
-import { Database } from '@db/sqlite'
+import { Database } from './legacy.ts'
 import { driver } from './native.ts'
 
 let d = open(':memory:')

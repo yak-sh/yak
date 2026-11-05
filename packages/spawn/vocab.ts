@@ -8,7 +8,7 @@
 
 import type { VocabDoc } from '@yaks/vocab'
 import doc from './vocab.json' with { type: 'json' }
-import manifest from './deno.json' with { type: 'json' }
+import manifest from './package.json' with { type: 'json' }
 
 /** The three tools a managed session answers to, and the two effects. */
 export let spawnDoc: VocabDoc = doc

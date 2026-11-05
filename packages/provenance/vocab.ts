@@ -5,7 +5,7 @@
 
 import type { VocabDoc } from '@yaks/vocab'
 import doc from './vocab.json' with { type: 'json' }
-import manifest from './deno.json' with { type: 'json' }
+import manifest from './package.json' with { type: 'json' }
 
 /** `created{at, by, via}` and `updated{at, by, via}`, in the form `loadVocab`
  * accepts. */

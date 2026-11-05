@@ -5,7 +5,7 @@
 
 import type { VocabDoc } from '@yaks/vocab'
 import { archetypeDoc } from './sets.ts'
-import manifest from './deno.json' with { type: 'json' }
+import manifest from './package.json' with { type: 'json' }
 
 export { archetypeDoc }
 

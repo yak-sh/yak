@@ -1,6 +1,6 @@
 // A finite membership screen preserves conjunctive text across indexes.
 import '../sqlite/sqlitepath.ts'
-import { Database } from '@db/sqlite'
+import { Database } from '@yaks/sqlite/testing'
 import { assertEquals } from '@std/assert'
 import { test } from '@yaks/testing'
 import { parse } from '@yaks/query'

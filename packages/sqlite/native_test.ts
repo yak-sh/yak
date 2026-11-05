@@ -5,7 +5,7 @@
 
 import { test } from '@yaks/testing'
 import './sqlitepath.ts'
-import { Database } from '@db/sqlite'
+import { Database } from './legacy.ts'
 import { assertEquals, assertThrows } from '@std/assert'
 import {
   col,

@@ -4,7 +4,7 @@
 
 import type { VocabDoc } from '@yaks/vocab'
 import doc from './vocab.json' with { type: 'json' }
-import manifest from './deno.json' with { type: 'json' }
+import manifest from './package.json' with { type: 'json' }
 
 /** The phone vocabulary: `phone{number}`, `sms_consent{person, consent,
  * at, space}` and `text{from, to, at, message_id, rcs}`, in the form

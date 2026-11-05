@@ -11,7 +11,7 @@
 // depends on, so they are not read.
 
 import { API } from './jsr.ts'
-import { configs } from './release.ts'
+import { configs, manifest } from './release.ts'
 
 let SOURCE = /\.(ts|tsx|js|mjs)$/
 let ASIDE = /(_test|_bench)\.(ts|tsx|js)$|\/testing\.ts$|\/node_modules\//
@@ -73,7 +73,7 @@ export let packages = async (
 ): Promise<Package[]> => {
   let out: Package[] = []
   for (let path of await configs(root)) {
-    let config = JSON.parse(await Deno.readTextFile(path))
+    let config = await manifest(path)
     let name = String(config.name ?? '')
     if (!name.startsWith('@yaks/')) continue
     let short = name.slice('@yaks/'.length)

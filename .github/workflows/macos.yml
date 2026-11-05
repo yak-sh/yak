@@ -34,6 +34,6 @@ jobs:
       - name: the tools the launcher runs
         run: sw_vers; ls -l /usr/bin/perl /bin/sh /bin/kill; perl -MPOSIX=setsid -e 1
       - name: workspace dependencies
-        run: deno run -A workers/yak/dependencies.ts
+        run: deno run -A packages/cli/dependencies.ts
       - name: '@yaks/process tests'
         run: deno run -A packages/testing/main.ts --all --verbose packages/process

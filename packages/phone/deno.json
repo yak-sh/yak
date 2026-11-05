@@ -9,9 +9,6 @@
   },
   "license": "Apache-2.0",
   "description": "Phone numbers and texts in the graph: a person's number beside their email address, the words they agreed to before being texted, texts and their delivery outcomes as entities, sent through a transport the caller supplies (Telnyx, voip.ms, or a stash).",
-  "imports": {
-    "@std/assert": "jsr:@std/assert@^1.0.0"
-  },
   "publish": {
     "exclude": [
       "**/*_test.ts"

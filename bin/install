@@ -26,7 +26,7 @@ rm -rf "$bin/.yak"
 cat >"$bin/yak" <<EOF
 #!/bin/sh
 export DENO_SQLITE_PATH="\${DENO_SQLITE_PATH:-$sqlite}"
-deno run -q -A --config '$root/deno.json' '$root/workers/yak/dependencies.ts' || exit \$?
+deno run -q -A --config '$root/deno.json' '$root/packages/cli/dependencies.ts' || exit \$?
 exec deno run -q -A --unstable-no-legacy-abort --config '$root/deno.json' '$root/packages/cli/yak.ts' "\$@"
 EOF
 chmod +x "$bin/yak"

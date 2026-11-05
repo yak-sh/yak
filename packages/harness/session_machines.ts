@@ -10,7 +10,7 @@ import { targetFor, unlent, type Workspaces } from '@yaks/machine/targets'
 import type { ChildLimits } from '@yaks/session'
 import { type Snapshot, snapshot } from '@yaks/context'
 import { type As, owed } from '@yaks/persona'
-import { isAbsolute, relative, resolve } from '@std/path/posix'
+import { isAbsolute, relative, resolve } from 'node:path/posix'
 import type { Host } from '@yaks/host'
 
 export let homeAt = (workspace?: string, cwd?: string): Comp => ({

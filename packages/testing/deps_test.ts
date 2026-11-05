@@ -382,7 +382,7 @@ test('a shared-core change does not make its consumers mandatory when their pack
     packageOwner,
   )
   equal(rank(at('app/consumer_test.ts')), 1)
-  equal(within(packageFiles, rank, () => 100, 0), [
+  equal(within(packageFiles, rank, () => 100, 200), [
     at('lib/core_test.ts'),
     at('app/own_test.ts'),
   ])

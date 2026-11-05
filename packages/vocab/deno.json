@@ -11,9 +11,6 @@
     "./wire": "./wire.ts"
   },
   "license": "Apache-2.0",
-  "imports": {
-    "@std/assert": "jsr:@std/assert@^1.0.0"
-  },
   "publish": {
     "exclude": [
       "**/*_test.ts",

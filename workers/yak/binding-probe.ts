@@ -2,7 +2,7 @@ import { decodedPath } from './request-path.ts'
 import { HTMLRewriter as LolHtml } from 'html-rewriter-wasm'
 import { createHash } from 'node:crypto'
 import { memoryMultipart } from '@yaks/blob'
-import { contentType } from '@std/media-types'
+import { contentType } from 'mime-types'
 import { ram } from '@yaks/ram'
 import { group } from '@yaks/tracker'
 import {
@@ -279,7 +279,7 @@ export let assets = (root: URL) => {
   ) => {
     let etag = `"${(await sha256(bytes)).slice(0, 32)}"`
     let headers = {
-      'content-type': contentType(path.slice(path.lastIndexOf('.'))) ??
+      'content-type': contentType(path.slice(path.lastIndexOf('.'))) ||
         'application/octet-stream',
       'cache-control': 'public, max-age=0, must-revalidate',
       etag,

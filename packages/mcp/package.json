@@ -14,24 +14,24 @@
   "description": "Exposes a graph through generic MCP tools for writes, queries, entity inspection, schema inspection, and optional search.",
   "dependencies": {
     "@modelcontextprotocol/core": "2.2.0",
-    "@modelcontextprotocol/sdk": "^1.29.0",
     "@modelcontextprotocol/server": "2.2.0",
-    "@std/assert": "npm:@jsr/std__assert@^1.0.0",
-    "@std/yaml": "npm:@jsr/std__yaml@1.2.0",
     "@yaks/api": "0.2.17",
     "@yaks/file": "0.2.17",
     "@yaks/fp": "0.2.17",
     "@yaks/graph": "0.2.17",
     "@yaks/persona": "0.2.17",
     "@yaks/process": "0.2.17",
-    "@yaks/ram": "0.2.17",
     "@yaks/session": "0.2.17",
     "@yaks/tools": "0.2.17",
-    "@yaks/vocab": "0.2.17"
+    "@yaks/vocab": "0.2.17",
+    "yaml": "^2.9.1"
   },
   "devDependencies": {
     "@modelcontextprotocol/client": "2.2.0",
+    "@modelcontextprotocol/sdk": "^1.29.0",
+    "@std/assert": "npm:@jsr/std__assert@^1.0.0",
     "@yaks/cli": "0.2.17",
+    "@yaks/ram": "0.2.17",
     "@yaks/testing": "0.2.17",
     "ajv": "^8.17.1",
     "zod": "3.25.76"

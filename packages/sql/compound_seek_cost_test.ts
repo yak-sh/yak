@@ -1,6 +1,6 @@
 // Compound seeks must stay bounded when sibling indexes and OR arms compete.
 import '../sqlite/sqlitepath.ts'
-import { Database } from '@db/sqlite'
+import { Database } from '@yaks/sqlite/testing'
 import { assert, assertEquals } from '@std/assert'
 import { test } from '@yaks/testing'
 import { parse } from '@yaks/query'

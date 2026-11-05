@@ -2,7 +2,7 @@
 // paying for a second pass through the selected owners.
 import { equal, ok, test } from '@yaks/testing'
 import './sqlitepath.ts'
-import { Database } from '@db/sqlite'
+import { Database } from './legacy.ts'
 import { archetypeDoc } from '@yaks/archetype'
 import { loadVocab } from '@yaks/vocab'
 import { compile, insert, render } from '@yaks/sql'

@@ -234,7 +234,7 @@ contributes nothing to that process.
 
 | Subpath     | Role       | Expected exports                                                                                                              |
 | ----------- | ---------- | ----------------------------------------------------------------------------------------------------------------------------- |
-| `./vocab`   | `graph`    | `docs?`, `keywords?`, `derived?` and `backed?` declarations, and `description?` from deno.json                                |
+| `./vocab`   | `graph`    | `docs?`, `keywords?`, `derived?` and `backed?` declarations, and `description?` from package.json                             |
 | `./graph`   | `graph`    | `schema?`, `plugins?: (host, options) => Plugin[]`, `extend?`, `reply?`, `meaning?`, `feed?`, and at most one `authenticate?` |
 | `./tools`   | `graph`    | `runs?: (host, options) => Runs`, keyed by declared tool name                                                                 |
 | `./cli`     | `yak`      | `commands?: CliCommand[]`, direct terminal controls with a composed host                                                      |

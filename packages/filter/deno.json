@@ -7,9 +7,6 @@
   },
   "license": "Apache-2.0",
   "description": "The query field: completion wherever a query is typed, in a browser and in a terminal, its state a component in the page's own graph and its parts @yaks/ui's.",
-  "imports": {
-    "@std/assert": "jsr:@std/assert@^1.0.0"
-  },
   "publish": {
     "exclude": [
       "**/*_test.ts",

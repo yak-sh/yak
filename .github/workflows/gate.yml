@@ -64,7 +64,7 @@ jobs:
       - name: workspace dependencies
         env:
           SUITE_STEP: workspace dependencies
-        run: deno run -A workers/yak/dependencies.ts
+        run: deno run -A packages/cli/dependencies.ts
 
       # Verbose, here and below: the gate's log is read whole, so it keeps
       # every check's output and every test's line.

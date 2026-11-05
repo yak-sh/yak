@@ -5,8 +5,7 @@ import { command as processCommand } from '@yaks/process/command'
 // Bubblewrap sandboxes with one aggregate systemd user scope per sandbox.
 // Only workspace is writable and visible to commands; durable control files
 // stay outside that mount. The supervisor outlives the host that requested it.
-import { resolve } from '@std/path/posix/resolve'
-import { decodeBase64, encodeBase64 } from '@std/encoding/base64'
+import { resolve } from 'node:path/posix'
 import { derivedEid } from '@yaks/graph/identity'
 import { CallError } from '@yaks/tools/errors'
 import type { Proc, Stat, Workspace } from '@yaks/machine'
@@ -332,7 +331,7 @@ export let sandboxProvider = (o: SandboxProviderOpts): SandboxProvider => {
       kill: (id, signal) => rpc<void>(ref, { op: 'kill', id, signal }),
       read: async (path) =>
         new TextDecoder().decode(
-          decodeBase64(
+          Uint8Array.fromBase64(
             await rpc<string>(ref, { op: 'read', path: guestPath(path) }),
           ),
         ),
@@ -344,7 +343,7 @@ export let sandboxProvider = (o: SandboxProviderOpts): SandboxProvider => {
         rpc<void>(ref, {
           op: 'write',
           path: guestPath(path),
-          bytes: encodeBase64(new TextEncoder().encode(content)),
+          bytes: new TextEncoder().encode(content).toBase64(),
         }),
     }
     return { workspace, root: '/workspace' }
@@ -483,7 +482,7 @@ export let sandboxProvider = (o: SandboxProviderOpts): SandboxProvider => {
         }
         // Read inside bubblewrap, not on the host: a workspace symlink must
         // never turn a file export into a read of the host's private files.
-        let bytes = decodeBase64(
+        let bytes = Uint8Array.fromBase64(
           await rpc<string>(ref, { op: 'export', path: guest }),
         )
         yield { path, bytes }

@@ -1,6 +1,6 @@
 // Pending owners stay sparse even on a connection's first lifecycle read.
 import { sqlitePath } from './sqlitepath.ts'
-import { Database } from '@db/sqlite'
+import { Database } from './legacy.ts'
 import { archetypeDoc, archetypes } from '@yaks/archetype'
 import { graph } from '@yaks/graph'
 import { loadVocab } from '@yaks/vocab'

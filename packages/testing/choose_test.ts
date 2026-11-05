@@ -36,3 +36,8 @@ test('selection uses the supplied command snapshot and retains dependency keys',
   equal(selected.reaches(['a.ts']), true)
   equal(selected.keys.size, 1)
 })
+
+test('a workspace-wide change keeps its own tests within the local budget', async () => {
+  let { within } = await import('./choose.ts')
+  equal(within(['a', 'b', 'c'], () => 0, () => 10, 20), ['a', 'b'])
+})

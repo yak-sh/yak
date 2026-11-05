@@ -36,9 +36,9 @@ export type Chosen = {
 /// let rank = (f: string) => ({ own: 0, near: 1, slow: 1, far: Infinity })[f]!
 /// let cost = (f: string) => ({ own: 1, near: 1, slow: 5, far: 1 })[f]!
 /// within(['far', 'slow', 'near', 'own'], rank, cost, 3) -> ['far', 'near', 'own']
-/// within(['far', 'slow', 'near', 'own'], rank, cost, 0) -> ['own']
-/** Of `files`, what fits `budget`: the change's own files whatever they cost
- * (rank 0), then the nearest and cheapest first. A file that does not fit is
+/// within(['far', 'slow', 'near', 'own'], rank, cost, 0) -> []
+/** Of `files`, what fits `budget`: the change's own files first (rank 0),
+ * then the nearest and cheapest first. A file that does not fit is
  * passed over for a cheaper one behind it. Their order is kept. */
 export let within = (
   files: string[],
@@ -54,7 +54,7 @@ export let within = (
   let r = (f: string) => ranks.get(f)!, c = (f: string) => costs.get(f)!
   let order = files.toSorted((a, b) => r(a) == r(b) ? c(a) - c(b) : r(a) - r(b))
   for (let f of order) {
-    if (r(f) && c(f) > left) continue
+    if (c(f) > left) continue
     left -= c(f)
     kept.add(f)
   }
@@ -73,7 +73,7 @@ export let within = (
  * `within`), and only those a distance reaches unless none is, and counts the
  * rest `beyond`: a run elsewhere with all of its files covers those. Given
  * each path's package (`owner`), the files of a changed package its distance
- * reaches always run, and those importing one come first of the rest.
+ * reaches come first, followed by those importing it.
  * When deno cannot say what a module imports, a narrowed run reports that
  * selection is unavailable; an explicit run has no keys and runs its files.
  */

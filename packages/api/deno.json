@@ -12,9 +12,6 @@
   },
   "license": "Apache-2.0",
   "description": "Serves graph writes, queries, and live query subscriptions through an HTTP and WebSocket request handler.",
-  "imports": {
-    "@std/assert": "jsr:@std/assert@^1.0.0"
-  },
   "compilerOptions": {
     "lib": [
       "dom",

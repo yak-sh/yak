@@ -10,7 +10,7 @@
 import type { VocabDoc } from '@yaks/vocab'
 import type { Paid } from './attribute.ts'
 import doc from './vocab.json' with { type: 'json' }
-import manifest from './deno.json' with { type: 'json' }
+import manifest from './package.json' with { type: 'json' }
 
 /** The `provider` and `model` components, to load beside your own. */
 export let modelDoc: VocabDoc = doc

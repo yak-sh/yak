@@ -9,7 +9,7 @@
 // wrangler.toml gives the Worker, which is where it learns whether it may
 // fetch a client's metadata document (identity.ts `cimd`).
 import * as io from '@yaks/file/io'
-import { parse } from '@std/toml'
+import { parse } from 'smol-toml'
 
 type Flags = { compatibility_flags: string[] }
 let { compatibility_flags } = parse(

@@ -4,9 +4,6 @@
   "description": "Evaluates queries over bundles in memory: selections, filters, rows and routing, without SQL or a database.",
   "exports": "./mod.ts",
   "license": "Apache-2.0",
-  "imports": {
-    "@std/assert": "jsr:@std/assert@^1.0.0"
-  },
   "compilerOptions": {
     "lib": [
       "dom",

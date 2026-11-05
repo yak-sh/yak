@@ -5,7 +5,7 @@
 import type { Keywords, VocabDoc } from '@yaks/vocab'
 import { keyDoc } from './comp.ts'
 import { keyKeywords } from './keywords.ts'
-import manifest from './deno.json' with { type: 'json' }
+import manifest from './package.json' with { type: 'json' }
 
 export { keyDoc, keyKeywords }
 

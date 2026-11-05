@@ -62,6 +62,7 @@ export function mergeConfigs(configs: { url: URL; config: Config }[]): Config {
   if (!options) throw new Error('No platform configs found')
   return {
     compilerOptions: { ...options, lib: [...libs].sort() },
+    nodeModulesDir: 'manual',
     imports: Object.fromEntries(Object.entries(imports).sort()),
   }
 }
@@ -72,15 +73,17 @@ let WEB = ['./vocab', './views', './ui']
 // Which files of one package the browser program checks: what its browser.json
 // names (default its front door), plus `./vocab`, `./views` and `./ui` whenever the
 // package exports them — the web door's half of the facet split.
-function browserEntries(config: Config, deno: URL): string[] {
-  let exports = JSON.parse(Deno.readTextFileSync(deno)).exports as
+function browserEntries(config: Config, manifest: URL): string[] {
+  let exports = JSON.parse(Deno.readTextFileSync(manifest)).exports as
     | string
     | Record<string, string>
   let map = typeof exports === 'string' ? { '.': exports } : exports
   let want = new Set([...(config.entries ?? ['.']), ...WEB])
   let files = [...want].filter((k) => k in map).map((k) => map[k])
   if (!files.length) {
-    throw new Error(`${deno}: no browser entry among ${[...want].join(' ')}`)
+    throw new Error(
+      `${manifest}: no browser entry among ${[...want].join(' ')}`,
+    )
   }
   return files
 }
@@ -149,7 +152,7 @@ export async function platformConfig(root: URL, platform: string) {
         entries.push(new URL('conform.ts', url).href)
         continue
       }
-      for (let file of browserEntries(config, new URL('deno.json', url))) {
+      for (let file of browserEntries(config, new URL('package.json', url))) {
         entries.push(new URL(file, url).href)
       }
     }

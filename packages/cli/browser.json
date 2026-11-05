@@ -1,5 +1,5 @@
 {
-  "_": "Only the IO-free grammar and answer exports are browser-safe; the CLI runtime is not.",
+  "_": "Browser exports checked with web globals by deno task check:browser. Resolution comes from the npm workspace.",
   "compilerOptions": {
     "lib": [
       "dom",
@@ -7,9 +7,6 @@
       "esnext"
     ],
     "strict": true
-  },
-  "imports": {
-    "@yaks/vocab/tools": "../vocab/tools.ts"
   },
   "entries": [
     "./grammar",

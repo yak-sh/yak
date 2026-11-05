@@ -347,11 +347,11 @@ let pack = (files: Record<string, Uint8Array>) => {
 // Workspace manifests are the export authority. Reading them here keeps the
 // runtime free of filesystem discovery and every generated import literal.
 let root = new URL('../../', HERE)
-let workspace: { workspace: string[] } = JSON.parse(
-  io.readTextFileSync(new URL('deno.json', root)),
+let workspace: { workspaces: string[] } = JSON.parse(
+  io.readTextFileSync(new URL('package.json', root)),
 )
-let manifests: Manifest[] = workspace.workspace.map((path) =>
-  JSON.parse(io.readTextFileSync(new URL(`${path}/deno.json`, root)))
+let manifests: Manifest[] = workspace.workspaces.map((path) =>
+  JSON.parse(io.readTextFileSync(new URL(`${path}/package.json`, root)))
 )
 let local = Object.fromEntries(
   Object.entries(domains).flatMap(([plugin, facets]) =>

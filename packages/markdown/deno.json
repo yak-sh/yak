@@ -7,9 +7,6 @@
   },
   "license": "Apache-2.0",
   "description": "Parses GitHub Flavored Markdown into structural renderer nodes rather than HTML strings or terminal escape sequences.",
-  "imports": {
-    "@std/assert": "jsr:@std/assert@^1.0.0"
-  },
   "publish": {
     "exclude": [
       "**/*_test.ts"

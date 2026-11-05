@@ -9,7 +9,7 @@ import { sign } from './auth.ts'
 import { platform } from './core.ts'
 import { ready, root } from './wrangler.ts'
 
-ready()
+await ready()
 let require = createRequire(
   fileURLToPath(new URL('../yak/package.json', import.meta.url)),
 )
@@ -24,7 +24,6 @@ let server = createTestHarness({
       main: 'index.ts',
       compatibility_date: '2026-07-01',
       compatibility_flags: ['nodejs_compat'],
-      tsconfig: '.wrangler/paths.json',
       durable_objects: {
         bindings: [{ name: 'TRACKERS', class_name: 'Tracker' }],
       },

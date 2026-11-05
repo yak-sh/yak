@@ -6,7 +6,7 @@
 // invariants are checked through the same mechanism every other package's are.
 import type { VocabDoc } from '@yaks/vocab'
 import doc from './vocab.json' with { type: 'json' }
-import manifest from './deno.json' with { type: 'json' }
+import manifest from './package.json' with { type: 'json' }
 
 /** The tool declarations this plugin contributes. */
 export let sqliteDoc: VocabDoc = doc

@@ -1,7 +1,7 @@
 // Native scans require a single model. Checking that model must seek the
 // model index rather than reading every stored vector.
 import '../sqlite/sqlitepath.ts'
-import { Database } from '@db/sqlite'
+import { Database } from '@yaks/sqlite/testing'
 import { assert, assertEquals } from '@std/assert'
 import { test } from '@yaks/testing'
 import { type Driver, insert, render } from '@yaks/sql'
