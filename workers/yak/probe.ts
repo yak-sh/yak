@@ -106,6 +106,9 @@ export let vars = (secret: string, cloudflare: string) => {
     SESSION_SECRET: secret,
     MAIL_TOKEN: 'a-token',
     MAIL_API: cloudflare,
+    RESEND_TOKEN: 'a-token',
+    RESEND_PLATFORM_TOKEN: 'a-token',
+    RESEND_API: `${cloudflare}/resend`,
     CF_ZONE: 'zone',
     CF_HOSTNAMES_TOKEN: 'a-token',
     HOSTNAMES_API: cloudflare,
@@ -672,7 +675,8 @@ export let seed = async (
 //
 // The conversations a kernel has with Cloudflare, over the API's
 // `{success, errors, result}` envelope. A letter sent through Email Sending,
-// by its API or its binding, is written to `log` as one `yak-mail` line, which
+// by its API or its binding, or through Resend's API at `/resend`, which the
+// deploy's MAIL_VIA selects, is written to `log` as one `yak-mail` line, which
 // is where a test reads its letters back (`letters`). And the three calls a domain makes — list by name,
 // create, delete — go to custom hostnames kept in memory. A hostname is
 // answered active, which is the state a domain reaches once the person's
@@ -797,6 +801,12 @@ export let cloudflare = (log = crypto.randomUUID()) => {
       let { to, subject, text, reply_to } = await req.json()
       wrote(to, subject, text, reply_to)
       return ok({})
+    }
+    // Resend's sending API, which wrangler.toml's MAIL_VIA selects.
+    if (url.pathname == '/resend/emails') {
+      let { to, subject, text, reply_to } = await req.json()
+      wrote(to, subject, text, reply_to)
+      return Response.json({ id: crypto.randomUUID() })
     }
     if (req.method == 'POST') {
       let made = async () => {
