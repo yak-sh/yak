@@ -1,6 +1,6 @@
 #!/bin/sh
-# Updating a checkout also updates its npm workspace, before its code runs.
+# Updating a checkout also updates its node_modules, before its code runs.
 set -eu
 root=$(git rev-parse --show-toplevel)
-[ -f "$root/package-lock.json" ] || exit 0
+[ -f "$root/pnpm-lock.yaml" ] || exit 0
 exec deno run -q -A --config "$root/deno.json" "$root/packages/cli/dependencies.ts"

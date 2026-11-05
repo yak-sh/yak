@@ -14,21 +14,21 @@ From the repository root, bundle without deploying:
 deno run -A workers/model/wrangler.ts deploy --dry-run
 ```
 
-The wrapper reuses the kernel's pinned Wrangler, npm installation and workspace
+The wrapper reuses the kernel's pinned Wrangler, pnpm installation and workspace
 import paths. A push to main deploys through this Worker's own Workers Builds
 connection. The kernel build does not deploy the executor.
 
-| Workers Builds setting  | Value                                                                                                                                                                     |
-| ----------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Repository              | `yak-sh/yak`                                                                                                                                                              |
-| Production branch       | `main`                                                                                                                                                                    |
-| Root directory          | repository root                                                                                                                                                           |
-| Build command           | empty                                                                                                                                                                     |
-| Deploy command          | `sh bin/build-model`                                                                                                                                                      |
-| Build variable          | `SKIP_DEPENDENCY_INSTALL=1`                                                                                                                                               |
-| Build caching           | enabled                                                                                                                                                                   |
-| Watch paths             | `workers/model/*`, `packages/*`, `bin/build-model`, `workers/yak/wrangler.ts`, `workers/yak/dependencies.ts`, `workers/yak/package.json`, `workers/yak/package-lock.json` |
-| Non-production branches | disabled                                                                                                                                                                  |
+| Workers Builds setting  | Value                                                                                                                       |
+| ----------------------- | --------------------------------------------------------------------------------------------------------------------------- |
+| Repository              | `yak-sh/yak`                                                                                                                |
+| Production branch       | `main`                                                                                                                      |
+| Root directory          | repository root                                                                                                             |
+| Build command           | empty                                                                                                                       |
+| Deploy command          | `sh bin/build-model`                                                                                                        |
+| Build variable          | `SKIP_DEPENDENCY_INSTALL=1`                                                                                                 |
+| Build caching           | enabled                                                                                                                     |
+| Watch paths             | `workers/model/*`, `packages/*`, `bin/build-model`, `workers/yak/wrangler.ts`, `workers/yak/package.json`, `pnpm-lock.yaml` |
+| Non-production branches | disabled                                                                                                                    |
 
 The build records the commit and a hash of the bundle, bindings and Wrangler
 pin. It skips an unchanged executor release and refuses to replace a published

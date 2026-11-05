@@ -292,7 +292,8 @@ export let ALSO = [
   'deno.jsonc',
   'deno.lock',
   'package.json',
-  'package-lock.json',
+  'pnpm-lock.yaml',
+  'pnpm-workspace.yaml',
   '.npmrc',
   rel(new URL('./test.gitconfig', import.meta.url)),
 ]

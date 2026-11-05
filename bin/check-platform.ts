@@ -11,6 +11,9 @@
 // the facet split" and "these two subpaths type-check with only the web
 // platform in scope" are the same statement. A package whose front door starts
 // child processes says `"entries": ["./vocab"]` and is still held to it.
+import { members } from '@yaks/cli/dependencies'
+import { fileURLToPath } from 'node:url'
+
 export type Config = {
   compilerOptions: { lib: string[]; [key: string]: unknown }
   imports?: Record<string, string>
@@ -100,7 +103,7 @@ let packageImports = (root: URL, platform: string): Record<string, string> => {
     throw error
   }
   let imports: Record<string, string> = {}
-  for (let at of ['', ...manifest.workspaces ?? []]) {
+  for (let at of ['', ...members(fileURLToPath(root))]) {
     let url = new URL(`${at ? at + '/' : ''}package.json`, root)
     let pkg = at ? read(url) : manifest
     for (

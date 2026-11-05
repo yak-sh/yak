@@ -1,10 +1,10 @@
-#!/usr/bin/env -S deno run --allow-read --allow-write --allow-net=registry.cloudflare.com --allow-env --allow-run=deno,node,npm,npx,git,pgrep,kill,docker,env
+#!/usr/bin/env -S deno run --allow-read --allow-write --allow-net=registry.cloudflare.com --allow-env --allow-run=deno,node,pnpm,git,pgrep,kill,docker,env
 // The one door to this Worker's wrangler: `deno task deploy:yak`,
 // `deno task dev:yak`, their `-staging` variants and the test runner
 // (bin/test.ts) all come through here, so the pinned version is written once
 // and `node_modules` is current before wrangler reads it.
 //
-// npm installs the repository workspace before bundling. Package manifests
+// pnpm installs the repository workspace before bundling. Package manifests
 // own dependencies and exports, so esbuild follows the same names as Deno.
 
 // The workspace pins Wrangler; every caller runs that installed package.
@@ -19,7 +19,7 @@
 // And not the newest either: 4.128.0 boots the same probes three times slower
 // and drops kernels under parallel load (`Network connection lost`), where
 // 4.111.0 runs them at the old pin's pace. Measure before moving.
-// Installation is shared with the rest of the npm workspace.
+// Installation is shared with the rest of the pnpm workspace.
 import * as io from '@yaks/file/io'
 import * as system from '@yaks/process/system'
 import { command as spawnCommand } from '@yaks/process/command'
@@ -31,7 +31,7 @@ import { stripVTControlCharacters } from 'node:util'
 import { parse, stringify } from 'smol-toml'
 import pinned from 'wrangler/package.json' with { type: 'json' }
 import { imaged } from './sandbox/base.ts'
-import { installed, restored } from '@yaks/cli/dependencies'
+import { installed } from '@yaks/cli/dependencies'
 import { assets } from './asset-ready.ts'
 import { from as sources, plan } from './sheet-assets.ts'
 import { sleep } from '@yaks/fp'
@@ -100,21 +100,13 @@ export let readiness = (
   return { dependencies, web, catalog, all }
 }
 
-let modules = (root: string, timeout: number, quiet: boolean) =>
-  timed('npm dependencies', async () => {
-    let cache = system.env.get('XDG_CACHE_HOME') ??
-      system.env.get('HOME')?.concat('/.cache')
-    let workspace = resolve(root, '../..')
-    let changed = cache
-      ? await restored(join(cache, 'yak'), workspace, { timeout })
-      : await installed(workspace, { timeout })
-    return changed
-  }, quiet)
+let modules = (root: string, quiet: boolean) =>
+  timed('pnpm dependencies', () => installed(resolve(root, '../..')), quiet)
 
 let preparing = (
   root = dir,
   quiet = false,
-  dependencies: () => Promise<boolean> = () => modules(root, 600_000, quiet),
+  dependencies: () => Promise<boolean> = () => modules(root, quiet),
 ) =>
   readiness({
     dependencies,
@@ -152,26 +144,24 @@ let preparing = (
 export let READIED = 'YAK_WORKER_READIED'
 
 /** Prepare every prerequisite before a probe reads it, unless this process or
- * the one that started it already did. Answers whether npm installed. `quiet`
+ * the one that started it already did. Answers whether pnpm installed. `quiet`
  * says only what failed: a test run's reader acts on nothing else. Without
- * `assets`, only the npm tree: a run none of whose files read a generated
+ * `assets`, only node_modules: a run none of whose files read a generated
  * asset leaves them as they are. */
 export let ready = async (
   quiet = false,
   {
     root = dir,
-    timeout = 600_000,
     assets: made = true,
     prepared,
   }: {
     root?: string
-    timeout?: number
     assets?: boolean
     prepared?: (outputs: readonly string[]) => void
   } = {},
 ) => {
   if (system.env.get(READIED) == root) return false
-  let dependencies = modules(root, timeout, quiet)
+  let dependencies = modules(root, quiet)
   let make = async () => {
     await preparing(root, quiet, () => dependencies).all
   }
@@ -1082,8 +1072,11 @@ export let WATCHED = [
   'deno.json',
   'deno.lock',
   'package.json',
-  'package-lock.json',
+  'pnpm-lock.yaml',
+  'pnpm-workspace.yaml',
   '.npmrc',
+  'bin/build-yak',
+  'bin/build-tools',
   ':(exclude,glob)**/*_test.*',
   ':(exclude,glob)**/README.md',
   ':(exclude,glob).github/**',
@@ -1363,7 +1356,7 @@ if (system.main(import.meta.url)) {
   // closes (verify-deploy.ts hung ten minutes on a three-minute tail). The
   // whole subtree is signalled, deepest first. Through kill(1), not
   // system.kill: that needs the unrestricted run permission, and this door
-  // runs with an allowlist (node, npm, npx, git, pgrep, kill, docker, env).
+  // runs with an allowlist (node, pnpm, git, pgrep, kill, docker, env).
   for (let signal of ['SIGINT', 'SIGTERM'] as const) {
     system.addSignalListener(signal, () => {
       stopped.abort()
@@ -1456,7 +1449,7 @@ if (system.main(import.meta.url)) {
     })
   let made = preparing()
   let readied = made.dependencies.then(() => {
-    // Choose after npm has installed: a cold checkout has this pin now too.
+    // Choose after pnpm has installed: a cold checkout has this pin now too.
   })
   let inspected = inspect()
   let uploads = new Map(

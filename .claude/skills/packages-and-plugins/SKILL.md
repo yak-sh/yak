@@ -67,11 +67,14 @@ What the walls are made of:
 packages/draft is a good small one to copy:
 
 - **package.json**: `name`, the family's current `version`, `type: module`,
-  `exports` and `dependencies`. npm installs the root workspace, and Deno and
+  `exports` and `dependencies`. pnpm installs the root workspace, and Deno and
   esbuild resolve the same package exports and dependencies. Add an import and
   its package dependency where it is used; the kernel needs no matching alias.
 - **deno.json** keeps JSR publishing metadata and Deno compiler settings.
-- **The workspace list** in the root package.json names every package.
+- **Workspace membership** comes from its place: `packages/*` in the root
+  package.json's `workspaces` and pnpm-workspace.yaml takes in every directory
+  there with a package.json. Run `pnpm install` after adding one, and commit
+  pnpm-lock.yaml.
 - **README.md**, written the way `writing-documentation` describes.
 - **vocab.json and vocab.ts** if it declares words (`vocabulary`).
 - **browser.json** if a page imports it. `deno task check:browser`

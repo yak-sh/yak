@@ -208,7 +208,7 @@ export let snapshot = async (
   }
 }
 
-/** Write a slot from scratch, npm workspace included. Its `.hash` comes last,
+/** Write a slot from scratch, its node_modules linked from pnpm's store. Its `.hash` comes last,
  * so a slot cut short while building is never matched and is rewritten by the
  * next launch. */
 let build = async ({ root, commit, patch, files, target, hash }: {
@@ -230,7 +230,7 @@ let build = async ({ root, commit, patch, files, target, hash }: {
     await disk.mkdir(to.slice(0, to.lastIndexOf('/')), { recursive: true })
     await disk.writeFile(to, bytes, { mode: mode ?? undefined })
   }
-  await (await import('./dependencies.ts')).ready(target)
+  await (await import('./dependencies.ts')).installed(target)
   await disk.writeTextFile(`${target}/.hash`, hash)
 }
 

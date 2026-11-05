@@ -71,7 +71,7 @@ changes need no CLI image rollout. Production finishes before staging begins;
 both versions carry the same commit.
 
 Never `wrangler deploy` by hand. Both tasks go through `wrangler.ts`, which runs
-`npm ci` when `node_modules` is behind `package-lock.json` — wrangler bundles
+`pnpm install` when `node_modules` is behind `pnpm-lock.yaml` — wrangler bundles
 `zod` and the MCP SDK as files out of that directory, and it is gitignored, so a
 fresh worktree has none and a bare `wrangler deploy` dies at `mcp.ts`
 `import { z } from 'zod'`.
@@ -96,16 +96,16 @@ instead; it was reverted the same day (M-37262).
 
 The dashboard settings, in full (Workers & Pages → `yak` → Settings → Builds):
 
-| setting                 | value                                                                                                                                                                                                                 |
-| ----------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Repository              | `yak-sh/yak` (Cloudflare GitHub App)                                                                                                                                                                                  |
-| Production branch       | `main`                                                                                                                                                                                                                |
-| Root directory          | `workers/yak`                                                                                                                                                                                                         |
-| Build variable          | `SKIP_DEPENDENCY_INSTALL=1`                                                                                                                                                                                           |
-| Build command           | `../../bin/build-yak install`                                                                                                                                                                                         |
-| Deploy command          | `../../bin/build-yak deploy`                                                                                                                                                                                          |
-| Build watch paths       | include `workers/yak/**`, `packages/**`, `src/**`, `deno.json`, `deno.lock`, `package.json`, `package-lock.json`, `.npmrc`; exclude `**/*_test.*`, `**/README.md`, `.github/**`, `bench/**` (`wrangler.ts` `WATCHED`) |
-| Non-production branches | build only; previews off for now (below)                                                                                                                                                                              |
+| setting                 | value                                                                                                                                                                                                                                                                         |
+| ----------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Repository              | `yak-sh/yak` (Cloudflare GitHub App)                                                                                                                                                                                                                                          |
+| Production branch       | `main`                                                                                                                                                                                                                                                                        |
+| Root directory          | `workers/yak`                                                                                                                                                                                                                                                                 |
+| Build variable          | `SKIP_DEPENDENCY_INSTALL=1`                                                                                                                                                                                                                                                   |
+| Build command           | `../../bin/build-yak install`                                                                                                                                                                                                                                                 |
+| Deploy command          | `../../bin/build-yak deploy`                                                                                                                                                                                                                                                  |
+| Build watch paths       | include `workers/yak/**`, `packages/**`, `src/**`, `deno.json`, `deno.lock`, `package.json`, `pnpm-lock.yaml`, `pnpm-workspace.yaml`, `.npmrc`, `bin/build-yak`, `bin/build-tools`; exclude `**/*_test.*`, `**/README.md`, `.github/**`, `bench/**` (`wrangler.ts` `WATCHED`) |
+| Non-production branches | build only; previews off for now (below)                                                                                                                                                                                                                                      |
 
 Worker Previews give a branch its own URL, and since Cloudflare's 2026-09-22
 launch each preview gets its own Durable Object namespace
@@ -127,58 +127,51 @@ compiler Worker streams that body to its container and preserves its response.
 Catalog transpilation is reused from the restored Deno cache between builds.
 Package changes update the kernel without changing the compiler Worker's bundle.
 
-The build command installs Deno and the kernel's npm tree only; a Workers Build
-runs neither `deno task check` nor the tests. `SKIP_DEPENDENCY_INSTALL=1`
-disables Builds' automatic install
+The build command installs Deno, pnpm and the workspace's node_modules only
+(`bin/build-tools`); a Workers Build runs neither `deno task check` nor the
+tests. `SKIP_DEPENDENCY_INSTALL=1` disables Builds' automatic install
 ([build image variables](https://developers.cloudflare.com/workers/ci-cd/builds/build-image/)).
-`bin/build-yak install` keeps Deno and the installed npm project under npm's
-restored cache directory, copying its npm tree into the checkout so workspace
-links resolve to that checkout's packages. Builds saves this cache after the
-build command and before the deploy command
+Deno lives under npm's restored cache directory and pnpm's packages in its
+default store, both of which Builds saves after the build command and before the
+deploy command
 ([build caching](https://developers.cloudflare.com/workers/ci-cd/builds/build-caching/)).
-`bin/build-yak deploy` repeats the dependency check, reusing the ready tree or
-installing it when the build command has not run. Each package manifest,
-lockfile and platform has its own project. It runs `npm ci` only when the
-successful install's exact inputs change, package identities differ or installed
-packages are missing. npm's hidden lockfile may omit package metadata;
-`node_modules/.yak-install` records the manifest, lockfile and platform digest
-after success. Existing complete cache projects are adopted by their matching
-content key. Restored matching packages are reused regardless of file
-timestamps. An empty cache installs normally. Deploy mode generates web assets
-and the compiler catalog together with npm readiness. Sibling bundles and the
-deploy pre-flight check (`superseded`) start once npm is ready; the kernel
-bundle also waits for its catalog. Uploads wait for all generated files and the
-guard. Each changed sibling's upload runs as its own preparation allows. The
-kernel activates after all succeed. Each sibling is bundled locally and compared
-with its fully serving deployment's `inputs:<sha256>` annotation. The full
-digest is encoded as base64url, fitting Cloudflare's 50-character deployment
-summary; the version annotation also retains the full commit on its next line. A
-truncated hex annotation from an earlier release is read from its sole serving
-version, then that same version's deployment summary is refreshed once with the
-compact digest. The digest covers every upload module, the inputs of each
-container image the sibling runs (its Dockerfile and every file of its build
-context, `wrangler.ts` `images`), its configuration, Wrangler pin and
-environment. A matching sibling stays serving without another upload; changed
-inputs, an unreadable deployment or a release without the annotation upload
-normally. The compiler image has its own `inputs:<sha256>` registry tag,
-covering its Dockerfile and build context. A changed compiler Worker reuses that
-image; only a missing image tag builds and pushes it. A changed sibling uploads
-its prepared modules and source maps through a temporary config beside the
-original, preserving its bindings and naming the registry image. Wrangler
-bundles no second time and rolls the image out without rebuilding it. Registry,
-build or push failures refuse the sibling and kernel deploy. Workers Builds has
-Docker for changed compiler images. `bin/build-yak` with no argument still runs
-the check and the workers tests by hand. Within a build, a Wrangler deploy whose
-Cloudflare call fails for a moment (a 5xx, the containers API's internal error,
-a version not yet readable after its upload, a spent or refused asset upload
-session) runs again, three attempts in all (`wrangler.ts` `runStep`). A push's
-build that fails is started once more through the `BUILD_HOOK` deploy hook
-(builds.ts), since most failures are the network's. While that build runs, the
-first failure is a log line, as it is when the hook answers that a build of main
-is already pending (`hook.ts`, which the catch-up reads its answers with too);
-the second build's failure is filed, and so is a failure the hook refused or
-could not be reached for. A push Builds starts no build for fails nowhere, so
-the box looks: its deploy catch-up
+pnpm is the version package.json's `packageManager` pins. `bin/build-yak deploy`
+repeats the dependency check, which installs nothing when
+`node_modules/.pnpm/lock.yaml` already matches `pnpm-lock.yaml`. Deploy mode
+generates web assets and the compiler catalog together with the install. Sibling
+bundles and the deploy pre-flight check (`superseded`) start once node_modules
+is ready; the kernel bundle also waits for its catalog. Uploads wait for all
+generated files and the guard. Each changed sibling's upload runs as its own
+preparation allows. The kernel activates after all succeed. Each sibling is
+bundled locally and compared with its fully serving deployment's
+`inputs:<sha256>` annotation. The full digest is encoded as base64url, fitting
+Cloudflare's 50-character deployment summary; the version annotation also
+retains the full commit on its next line. A truncated hex annotation from an
+earlier release is read from its sole serving version, then that same version's
+deployment summary is refreshed once with the compact digest. The digest covers
+every upload module, the inputs of each container image the sibling runs (its
+Dockerfile and every file of its build context, `wrangler.ts` `images`), its
+configuration, Wrangler pin and environment. A matching sibling stays serving
+without another upload; changed inputs, an unreadable deployment or a release
+without the annotation upload normally. The compiler image has its own
+`inputs:<sha256>` registry tag, covering its Dockerfile and build context. A
+changed compiler Worker reuses that image; only a missing image tag builds and
+pushes it. A changed sibling uploads its prepared modules and source maps
+through a temporary config beside the original, preserving its bindings and
+naming the registry image. Wrangler bundles no second time and rolls the image
+out without rebuilding it. Registry, build or push failures refuse the sibling
+and kernel deploy. Workers Builds has Docker for changed compiler images.
+`bin/build-yak` with no argument still runs the check and the workers tests by
+hand. Within a build, a Wrangler deploy whose Cloudflare call fails for a moment
+(a 5xx, the containers API's internal error, a version not yet readable after
+its upload, a spent or refused asset upload session) runs again, three attempts
+in all (`wrangler.ts` `runStep`). A push's build that fails is started once more
+through the `BUILD_HOOK` deploy hook (builds.ts), since most failures are the
+network's. While that build runs, the first failure is a log line, as it is when
+the hook answers that a build of main is already pending (`hook.ts`, which the
+catch-up reads its answers with too); the second build's failure is filed, and
+so is a failure the hook refused or could not be reached for. A push Builds
+starts no build for fails nowhere, so the box looks: its deploy catch-up
 ([@yaks/admin](../../packages/admin/README.md#the-deploy-catch-up)) starts
 main's build through a deploy hook of its own once main's head is not live 3
 minutes after it landed with no build under way, and reports it. A head whose

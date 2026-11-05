@@ -61,6 +61,9 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      # pnpm at package.json's `packageManager`; its store stays on the runner.
+      - uses: pnpm/action-setup@v4
+
       - name: workspace dependencies
         env:
           SUITE_STEP: workspace dependencies

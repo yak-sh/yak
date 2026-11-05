@@ -7,6 +7,7 @@ import { parse } from 'es-module-lexer/js'
 import type ts from 'typescript'
 import { glob, stat } from 'node:fs/promises'
 import type { Catalog } from '../packages/esbuild/platform.ts'
+import { members as workspace } from '@yaks/cli/dependencies'
 
 type Manifest = {
   name?: string
@@ -98,9 +99,8 @@ export let catalog = async (
   memo: Transpiled = { kept: {}, made: {} },
 ): Promise<Catalog> => {
   root = resolve(root)
-  let config = read(join(root, 'package.json'))
   let members = new Map<string, Member>()
-  for (let path of config.workspaces ?? []) {
+  for (let path of workspace(root)) {
     let dir = resolve(root, path)
     let manifest = read(join(dir, 'package.json'))
     if (!manifest.name?.startsWith('@yaks/') || !manifest.exports) continue

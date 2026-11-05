@@ -24,8 +24,8 @@ removes its scratch directory. It checks SQLite intake, duplicate delivery,
 tenant authorization, subscription frames, heartbeat intake and the queue canary
 through the runtime consumer. It sends no email and deploys nothing. The build
 door uses the pinned Wrangler and workspace paths from
-`workers/yak/wrangler.ts`; npm dependencies are installed with
-`npm ci --prefix workers/yak` before a cold build.
+`workers/yak/wrangler.ts`; `packages/cli/dependencies.ts` installs the workspace
+with pnpm before a cold build.
 
 ## Access and RPC
 

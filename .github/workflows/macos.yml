@@ -33,6 +33,7 @@ jobs:
           deno-version: v2.9.1
       - name: the tools the launcher runs
         run: sw_vers; ls -l /usr/bin/perl /bin/sh /bin/kill; perl -MPOSIX=setsid -e 1
+      - uses: pnpm/action-setup@v4
       - name: workspace dependencies
         run: deno run -A packages/cli/dependencies.ts
       - name: '@yaks/process tests'

@@ -1,5 +1,6 @@
 // Family package manifests, JSR metadata and lockfiles move in one release.
 import { matchesGlob } from 'node:path'
+import { members } from '@yaks/cli/dependencies'
 
 let read = async (path: string) => JSON.parse(await Deno.readTextFile(path))
 let write = (path: string, value: unknown) =>
@@ -62,7 +63,7 @@ let metadata = (
 }
 
 export let versions = async (root: string, version: string) => {
-  let { workspaces } = await read(`${root}/package.json`)
+  let workspaces = members(root)
   let paths = workspaces.map((dir: string) => `${root}/${dir}/deno.json`)
   let npm = workspaces.map((dir: string) => `${root}/${dir}/package.json`)
   let packages: Manifest[] = await Promise.all(
@@ -79,17 +80,13 @@ export let versions = async (root: string, version: string) => {
     let pkg = await read(path.replace(/deno\.json$/, 'package.json'))
     await write(path, metadata(pkg, await read(path)))
   }
-  let lockPath = `${root}/package-lock.json`
-  let lock = JSON.parse(await Deno.readTextFile(lockPath))
-  let members = new Set(
-    workspaces.map((dir: string) => dir.replace(/^\.\//, '')),
-  )
-  for (let [path, pkg] of Object.entries<Manifest>(lock.packages)) {
-    if (!path || members.has(path)) {
-      lock.packages[path] = versioned(pkg, version, names)
-    }
-  }
-  await Deno.writeTextFile(lockPath, JSON.stringify(lock, null, 2) + '\n')
+  // pnpm rewrites the members' specifiers its lockfile records.
+  let { code } = await new Deno.Command('pnpm', {
+    args: ['install', '--lockfile-only', '--prefer-offline'],
+    cwd: root,
+  }).spawn().status
+  if (code) throw new Error(`pnpm install --lockfile-only exited ${code}`)
+  let lockPath = `${root}/pnpm-lock.yaml`
   let denoPath = `${root}/deno.lock`
   let deno = JSON.parse(await Deno.readTextFile(denoPath))
   let workspace = JSON.stringify(deno.workspace)

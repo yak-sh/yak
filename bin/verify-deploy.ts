@@ -134,7 +134,7 @@ export let WRANGLER = [
   '--allow-read',
   '--allow-write',
   '--allow-env',
-  '--allow-run=npm,npx,pgrep,kill',
+  '--allow-run=node,pnpm,pgrep,kill',
   'workers/yak/wrangler.ts',
 ]
 

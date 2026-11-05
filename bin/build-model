@@ -3,16 +3,5 @@
 set -eu
 root=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)
 cd "$root"
-cache=$(npm config get cache)
-DENO_INSTALL=${DENO_INSTALL:-"$cache/deno-install"}
-DENO_DIR=${DENO_DIR:-"$cache/deno"}
-export DENO_INSTALL DENO_DIR
-if ! command -v deno >/dev/null 2>&1; then
-  if [ ! -x "$DENO_INSTALL/bin/deno" ]; then
-    curl -fsSL https://deno.land/install.sh | sh -s -- -y --no-modify-path
-  fi
-  PATH="$DENO_INSTALL/bin:$PATH"
-  export PATH
-fi
-deno run --allow-read --allow-write --allow-env --allow-run=npm packages/cli/dependencies.ts "$cache"
+. bin/build-tools
 exec deno run -A workers/model/wrangler.ts deploy

@@ -26,6 +26,7 @@
 
 import { read, REPO } from './jsr.ts'
 import { versions } from './release-packages.ts'
+import { members } from '@yaks/cli/dependencies'
 export { versioned } from './release-packages.ts'
 
 // The first top-level `"version"` line of a deno.json. A regex rather than
@@ -46,11 +47,8 @@ export let semver = (v: string) => /^\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?$/.test(v)
 
 // Workspace members with JSR metadata; npm-only members have none.
 export let configs = async (root = '.') => {
-  let { workspaces = [] } = JSON.parse(
-    await Deno.readTextFile(`${root}/package.json`),
-  )
   let out: string[] = []
-  for (let member of workspaces as string[]) {
+  for (let member of members(root)) {
     let path = `${root}/${member}/deno.json`.replace('/./', '/')
     if (await Deno.stat(path).then(() => true, () => false)) out.push(path)
   }

@@ -1,7 +1,7 @@
 // JSR publication uses the npm workspace's membership and each package's JSR
 // metadata, without making that metadata the runtime's import resolver.
 import config from '../deno.json' with { type: 'json' }
-import workspace from '../package.json' with { type: 'json' }
+import { members } from '@yaks/cli/dependencies'
 
 if (import.meta.main) {
   let path = await Deno.makeTempFile({
@@ -15,9 +15,7 @@ if (import.meta.main) {
       JSON.stringify({
         ...config,
         nodeModulesDir: 'none',
-        workspace: workspace.workspaces.map((dir) =>
-          './' + dir.replace(/^\.\//, '')
-        ),
+        workspace: members().map((dir) => `./${dir}`),
       }),
     )
     let status = await new Deno.Command(Deno.execPath(), {

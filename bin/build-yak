@@ -3,8 +3,8 @@
 # the kernel Worker (T-34165), and its sibling Workers ahead of it
 # (workers/yak/wrangler.ts `siblings`). The dashboard's deploy command calls
 # `../../bin/build-yak deploy`; its build command is
-# `../../bin/build-yak install`. Install mode prepares Deno and the kernel's
-# npm tree in npm's cache before Builds saves it, ahead of deploy. With no
+# `../../bin/build-yak install`. Install mode prepares Deno, pnpm and the
+# workspace's node_modules before Builds saves its cache, ahead of deploy. With no
 # argument, this runs the check and the workers tests by hand.
 #
 # Workers Builds is the whole deploy: the Cloudflare GitHub App watches
@@ -16,14 +16,12 @@
 # The dashboard settings are written down in
 # workers/yak/README.md.
 #
-# What a push's Workers Build does: clone, install stale npm deps, save cache,
+# What a push's Workers Build does: clone, install stale pnpm deps, save cache,
 # pre-flight (wrangler.ts `superseded`), yak-out, esbuild, then upload.
-# No check, no tests.
-#
-# The image is Ubuntu 24.04 with node and npm; Deno is absent, so the first
-# thing this does is fetch one. The build runs with the ROOT DIRECTORY set to
+# No check, no tests. The build runs with the ROOT DIRECTORY set to
 # workers/yak, so nothing here may assume a working directory — every path is
-# derived from this file's own location.
+# derived from this file's own location. bin/build-tools readies Deno, pnpm and
+# node_modules.
 #
 # The no-argument checks omit the workerd tests (they boot the kernel and
 # reach the Stripe sandbox, and are the Actions runner's job,
@@ -34,34 +32,12 @@ set -eu
 root=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)
 cd "$root"
 
-# Workers Builds restores npm's cache, but not Deno's default directories.
-# Keep Deno's executable and module cache beside the cached npm packages so
-# both build and deploy reuse them. Enable Build cache in the dashboard.
-cache=$(npm config get cache)
-DENO_INSTALL=${DENO_INSTALL:-"$cache/deno-install"}
-DENO_DIR=${DENO_DIR:-"$cache/deno"}
-export DENO_INSTALL DENO_DIR
-
-if ! command -v deno >/dev/null 2>&1; then
-  # -y answers the prompts; --no-modify-path keeps it out of the image's shell
-  # rc files, which nothing in a build container ever sources anyway. The PATH
-  # this build needs is the line below, not a login shell's.
-  if [ ! -x "$DENO_INSTALL/bin/deno" ]; then
-    echo "--- installing deno (not on the Workers Builds image)"
-    curl -fsSL https://deno.land/install.sh | sh -s -- -y --no-modify-path
-  fi
-  PATH="$DENO_INSTALL/bin:$PATH"
-  export PATH
-fi
-deno --version
-
-echo "Build commit: $(git rev-parse HEAD)"
+. bin/build-tools
 
 case "${1:-}" in
   install|deploy)
     mode=$1
     shift
-    deno run --allow-read --allow-write --allow-env --allow-run=npm packages/cli/dependencies.ts "$cache"
     [ "$mode" = install ] && exit 0
     deno task deploy:yak "$@"
     # Builds pins these to its connected production Worker. Leaving them set

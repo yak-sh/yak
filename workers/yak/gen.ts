@@ -33,6 +33,7 @@ import { command as spawnCommand } from '@yaks/process/command'
 import { front, read } from '@yaks/yaml'
 import { contentIdentity } from './content-identity.ts'
 import { fileURLToPath } from 'node:url'
+import { members } from '@yaks/cli/dependencies'
 import { configs, domains } from './config.ts'
 import { imports, loader, type Manifest, vocabs } from './load-gen.ts'
 
@@ -347,10 +348,7 @@ let pack = (files: Record<string, Uint8Array>) => {
 // Workspace manifests are the export authority. Reading them here keeps the
 // runtime free of filesystem discovery and every generated import literal.
 let root = new URL('../../', HERE)
-let workspace: { workspaces: string[] } = JSON.parse(
-  io.readTextFileSync(new URL('package.json', root)),
-)
-let manifests: Manifest[] = workspace.workspaces.map((path) =>
+let manifests: Manifest[] = members(fileURLToPath(root)).map((path) =>
   JSON.parse(io.readTextFileSync(new URL(`${path}/package.json`, root)))
 )
 let local = Object.fromEntries(

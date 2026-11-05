@@ -1,0 +1,17 @@
+# The members, as package.json's `workspaces` names them for Deno and our tools
+# (packages/cli/dependencies.ts `members`).
+packages:
+  - packages/*
+  - workers/yak
+# Members depend on each other by their published version: link them.
+linkWorkspacePackages: true
+# Members import each other in cycles; pnpm links them all the same.
+ignoreWorkspaceCycles: true
+# Scripts, benches, apps and the other Workers import every member from the
+# repository root.
+publicHoistPattern:
+  - '@yaks/*'
+allowBuilds:
+  esbuild: true
+  sharp: true
+  workerd: true

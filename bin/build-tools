@@ -1,0 +1,39 @@
+# Sourced by the Workers Builds scripts (bin/build-yak, bin/build-model,
+# bin/build-tracker) from the repository root: Deno and pnpm, then the
+# workspace's node_modules.
+#
+# The image is Ubuntu 24.04 with node and npm; Deno is absent, so the first
+# thing this does is fetch one. Builds restores npm's cache and pnpm's default
+# store (Build cache in the dashboard), but not Deno's default directories, so
+# Deno's executable and module cache live beside npm's cache. pnpm comes from
+# Corepack when Builds provides it at package.json's `packageManager`, and from
+# npm otherwise.
+cache=$(npm config get cache)
+DENO_INSTALL=${DENO_INSTALL:-"$cache/deno-install"}
+DENO_DIR=${DENO_DIR:-"$cache/deno"}
+export DENO_INSTALL DENO_DIR
+
+if ! command -v deno >/dev/null 2>&1; then
+  # -y answers the prompts; --no-modify-path keeps it out of the image's shell
+  # rc files, which nothing in a build container ever sources anyway. The PATH
+  # this build needs is the line below, not a login shell's.
+  if [ ! -x "$DENO_INSTALL/bin/deno" ]; then
+    echo "--- installing deno (not on the Workers Builds image)"
+    curl -fsSL https://deno.land/install.sh | sh -s -- -y --no-modify-path
+  fi
+  PATH="$DENO_INSTALL/bin:$PATH"
+  export PATH
+fi
+deno --version
+
+pinned=$(node -p 'require("./package.json").packageManager.split("@")[1]')
+if [ "$(pnpm --version 2>/dev/null)" != "$pinned" ]; then
+  echo "--- installing pnpm $pinned"
+  npm install --global --prefix "$cache/pnpm-install" "pnpm@$pinned"
+  PATH="$cache/pnpm-install/bin:$PATH"
+  export PATH
+fi
+pnpm --version
+
+echo "Build commit: $(git rev-parse HEAD)"
+deno run --allow-read --allow-write --allow-env --allow-run=pnpm packages/cli/dependencies.ts

@@ -6,6 +6,7 @@ import * as system from '@yaks/process/system'
 import { command as spawnCommand } from '@yaks/process/command'
 import { join, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
+import { members } from '@yaks/cli/dependencies'
 
 export type Workspace = { files: Record<string, string> }
 export type Release = { hash: string; url: string }
@@ -16,7 +17,8 @@ export let sources = (paths: string[], members: string[]): string[] => {
     'deno.json',
     'deno.lock',
     'package.json',
-    'package-lock.json',
+    'pnpm-lock.yaml',
+    'pnpm-workspace.yaml',
     '.npmrc',
     ...members.map((path) => `${path.replace(/^\.\//, '')}/package.json`),
     ...members.map((path) => `${path.replace(/^\.\//, '')}/deno.json`),
@@ -45,9 +47,6 @@ export let assets = async (
   output = join(root, 'workers/yak/public/_cli'),
 ): Promise<Release & { files: number; bytes: number }> => {
   root = resolve(root)
-  let { workspaces = [] } = JSON.parse(
-    await io.readTextFile(join(root, 'package.json')),
-  ) as { workspaces?: string[] }
   let listed = await spawnCommand('git', {
     args: ['ls-files', '-z'],
     cwd: root,
@@ -59,7 +58,7 @@ export let assets = async (
   }
   let paths = sources(
     new TextDecoder().decode(listed.stdout).split('\0').filter(Boolean),
-    workspaces,
+    members(root),
   )
   let files: Record<string, string> = {}
   for (let path of paths) {

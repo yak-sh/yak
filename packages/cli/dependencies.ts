@@ -1,486 +1,75 @@
-// The workspace's npm install, shared by the CLI, builds and probes.
-// Keep successful install inputs beside the tree: npm versions omit different
-// metadata from their hidden lockfiles, and restored mtimes tell us nothing.
+// The workspace's members and install, shared by the CLI, its hooks, runtime
+// copies, builds and probes. pnpm keeps one content-addressed store on the
+// machine and hard-links each checkout's node_modules from it
+// (pnpm-workspace.yaml), so an install writes directories and links, not
+// packages.
 import * as io from '@yaks/file/io'
 import * as platform from '@yaks/process/system'
 import { command as spawnCommand } from '@yaks/process/command'
 import { fileURLToPath } from 'node:url'
-import { resolve } from 'node:path'
-import { createHash, randomUUID } from 'node:crypto'
 import { existsSync } from 'node:fs'
 
 let dir = (): string => fileURLToPath(new URL('../../', import.meta.url))
-export type Lock = {
-  lockfileVersion: number
-  packages: Record<string, {
-    optional?: boolean
-    version?: string
-    resolved?: string
-    integrity?: string
-    link?: boolean
-  }>
-}
+let wanted = (root: string) => `${root}/pnpm-lock.yaml`
+// pnpm's copy of the lockfile it last installed, without the document that
+// pins pnpm itself.
+let current = (root: string) => `${root}/node_modules/.pnpm/lock.yaml`
+let packages = (lock?: string) => lock?.split(/^---\n/m).at(-1)
 
-export type Inode = { dev: number; ino: number; nlink: number; mtime: number }
-
-/** The filesystem and process boundary used by the install policy. */
-export type Host = {
-  read(path: string): string
-  write(path: string, contents: string): void
-  mkdir(path: string, recursive?: boolean): void
-  remove(path: string): void
-  directory(path: string): boolean
-  exists(path: string): boolean
-  realpath(path: string): string
-  /** A copy of the tree at `from` as `to`, symlinks kept verbatim. */
-  copy(from: string, to: string): void
-  rename(from: string, to: string): void
-  link(path: string): string | undefined
-  /** The names in a directory. */
-  list(path: string): string[]
-  /** A path's inode: what hard links share, and when its entries changed. */
-  inode(path: string): Inode
-  now(): number
-  pid(): number
-  alive(pid: number): boolean
-  wait(): Promise<void>
-  npm(root: string): Promise<number>
-  report(message: string): void
-  nonce(): string
-}
-
-let system: Host = {
-  read: io.readTextFileSync,
-  write: io.writeTextFileSync,
-  mkdir: (path, recursive = false) => io.mkdirSync(path, { recursive }),
-  remove: (path) => {
-    try {
-      io.removeSync(path, { recursive: true })
-    } catch (error) {
-      if (!(error instanceof io.errors.NotFound)) throw error
-    }
-  },
-  directory: (path) => io.statSync(path).isDirectory,
-  exists: existsSync,
-  realpath: io.realPathSync,
-  copy: (from, to) => tree(from, to),
-  rename: io.renameSync,
-  link: (path) =>
-    io.lstatSync(path).isSymlink ? io.readLinkSync(path) : undefined,
-  list: (path) => [...io.readDirSync(path)].map((e) => e.name),
-  inode: (path) => {
-    let { dev, ino, nlink, mtime } = io.statSync(path)
-    return { dev, ino, nlink, mtime: mtime?.getTime() ?? 0 }
-  },
-  now: Date.now,
-  pid: () => platform.pid,
-  alive: (pid) => {
-    try {
-      platform.kill(pid, 0)
-      return true
-    } catch (error) {
-      if (error instanceof io.errors.NotFound) return false
-      if (error instanceof io.errors.PermissionDenied) return true
-      throw error
-    }
-  },
-  wait: () => new Promise((ok) => setTimeout(ok, 200)),
-  npm: async (root) => {
-    let { code } = await spawnCommand('npm', {
-      args: ['ci', '--prefer-offline', '--no-audit', '--no-fund'],
-      cwd: root,
-      stdin: 'null',
-    }).spawn().status
-    return code
-  },
-  report: (message) => console.error(message),
-  nonce: randomUUID,
-}
-
-// A package tree is ~30,000 files and 700 MB, readied into every checkout and
-// runtime copy. Copied, its bytes are a burst of writes that starve the box's
-// servers' disk (bace8585) and fill it; linked, each file shares the seed's
-// inode and only the directories and links are written. npm replaces a tree by
-// unlinking it, so a linked copy keeps its files when the seed reinstalls.
-let tree = (from: string, to: string) => {
-  io.mkdirSync(to)
-  for (let e of io.readDirSync(from)) {
-    let a = `${from}/${e.name}`, b = `${to}/${e.name}`
-    if (e.isSymlink) io.symlinkSync(io.readLinkSync(a), b)
-    else if (e.isDirectory) tree(a, b)
-    else {
-      try {
-        io.linkSync(a, b)
-      } catch (error) {
-        // Another filesystem, where a file cannot be linked: its bytes.
-        if ((error as { code?: string })?.code != 'EXDEV') throw error
-        io.copyFileSync(a, b)
-      }
-    }
+let read = (path: string) => {
+  try {
+    return io.readTextFileSync(path)
+  } catch (error) {
+    if (error instanceof io.errors.NotFound) return undefined
+    throw error
   }
 }
 
-let key = (inputs: string[][]) =>
-  createHash('sha256').update(
-    JSON.stringify([platform.build.os, platform.build.arch, inputs]),
-  ).digest('hex')
-let receipt = (root: string) => `${root}/node_modules/.yak-install`
-let hidden = (root: string) => `${root}/node_modules/.package-lock.json`
-// Longer than any install holds its inputs unused: restored() rewrites them
-// into the cached project, which dates the project's directory.
-let idle = 3_600_000
-let identity = ['version', 'resolved', 'integrity', 'link'] as const
-
-/** npm may omit optional packages, including binaries for other platforms. */
-let mismatch = (wanted: Lock, held: Lock): string | undefined => {
-  if (held.lockfileVersion !== wanted.lockfileVersion) {
-    return 'lockfile mismatch: lockfileVersion'
-  }
-  for (let [path, pkg] of Object.entries(wanted.packages)) {
-    if (path && !pkg.optional && !held.packages[path]) {
-      return `lockfile mismatch: ${JSON.stringify(path)} package missing`
-    }
-  }
-  for (let [path, pkg] of Object.entries(held.packages)) {
-    if (!wanted.packages[path]) {
-      return `lockfile mismatch: ${JSON.stringify(path)} package unexpected`
-    }
-    for (let field of identity) {
-      if (pkg[field] !== wanted.packages[path][field]) {
-        return `lockfile mismatch: ${JSON.stringify(path)} ${field}`
-      }
-    }
-  }
+/** The workspace's member directories under root: package.json's
+ * `workspaces`, each a directory or `dir/*` for every package beneath it. */
+export let members = (root: string = dir()): string[] => {
+  let { workspaces = [] } = JSON.parse(
+    io.readTextFileSync(`${root}/package.json`),
+  ) as { workspaces?: string[] }
+  return workspaces.flatMap((pattern) => {
+    let path = pattern.replace(/^\.\//, '')
+    if (!path.endsWith('/*')) return [path]
+    let parent = path.slice(0, -2)
+    return [...io.readDirSync(`${root}/${parent}`)]
+      .filter((e) =>
+        e.isDirectory && existsSync(`${root}/${parent}/${e.name}/package.json`)
+      )
+      .map((e) => `${parent}/${e.name}`)
+      .sort()
+  })
 }
 
-export let matching = (wanted: Lock, held: Lock): boolean =>
-  !mismatch(wanted, held)
+/** Whether root's node_modules was installed from another lockfile. */
+export let stale = (root: string = dir()): boolean =>
+  packages(read(wanted(root))) !== read(current(root))
 
-export type InstallOptions = {
-  timeout?: number
-  seed?: string
-  cacheKey?: string
-  copy?: boolean
-}
-export type RestoreOptions = { timeout?: number }
-export type Dependencies = {
-  stale(root?: string): boolean
-  installed(root?: string, options?: InstallOptions): Promise<boolean>
-  restored(
-    cache: string,
-    root?: string,
-    options?: RestoreOptions,
-  ): Promise<boolean>
-}
-
-/** Install/cache policy with its effects supplied by the host. */
-export let dependencies = (host: Host = system): Dependencies => {
-  let files = (root: string) => {
-    let manifest = host.read(`${root}/package.json`)
-    let { workspaces = [] } = JSON.parse(manifest)
-    return [
-      ['package.json', manifest],
-      ['package-lock.json', host.read(`${root}/package-lock.json`)],
-      ...host.exists(`${root}/.npmrc`)
-        ? [['.npmrc', host.read(`${root}/.npmrc`)]]
-        : [],
-      ...workspaces.map((path: string) => [
-        `${path}/package.json`,
-        host.read(`${root}/${path}/package.json`),
-      ]),
-    ]
-  }
-  let remove = host.remove
-  let standalone = (root: string): string[] => {
-    let { workspaces = [] } = JSON.parse(host.read(`${root}/package.json`))
-    return workspaces.map((path: string) => `${root}/${path}/node_modules`)
-      .filter((path: string) => host.exists(`${path}/.yak-install`))
-  }
-
-  let incomplete = (root: string) => {
-    let read = (path: string): Lock => JSON.parse(host.read(`${root}/${path}`))
-    let path = 'package-lock.json'
-    try {
-      let old = standalone(root)
-      if (old.length) return `standalone workspace install: ${old.join(', ')}`
-      let wanted = read(path)
-      path = 'node_modules/.package-lock.json'
-      let held = read(path), reason = mismatch(wanted, held)
-      if (reason) return reason
-      for (let path of Object.keys(held.packages)) {
-        try {
-          if (host.directory(`${root}/${path}`)) continue
-        } catch { /* A missing or inaccessible package cannot be reused. */ }
-        return `tree incomplete: ${JSON.stringify(`${root}/${path}`)}`
-      }
-    } catch (error) {
-      return `lockfile ${
-        error instanceof io.errors.NotFound ? 'missing' : 'unreadable'
-      }: ${JSON.stringify(`${root}/${path}`)}`
+/** Install a stale checkout. Installers take turns by locking the lockfile,
+ * which a frozen install only reads. */
+export let installed = async (root: string = dir()): Promise<boolean> => {
+  if (!stale(root)) return false
+  using lock = await io.open(wanted(root))
+  await lock.lock(true)
+  if (!stale(root)) return false
+  // pnpm installs around a tree another installer made, leaving its packages
+  // resolvable: start that one over.
+  if (!existsSync(`${root}/node_modules/.modules.yaml`)) {
+    for (let path of ['.', ...members(root)]) {
+      let tree = `${root}/${path}/node_modules`
+      if (existsSync(tree)) io.removeSync(tree, { recursive: true })
     }
   }
-
-  let complete = (root: string) => !incomplete(root)
-
-  let changed = (root: string) => {
-    try {
-      let held: string
-      try {
-        held = host.read(receipt(root))
-      } catch (error) {
-        return `receipt ${
-          error instanceof io.errors.NotFound ? 'missing' : 'unreadable'
-        }: ${JSON.stringify(receipt(root))}`
-      }
-      let wanted = key(files(root))
-      if (held !== wanted) {
-        return `receipt different key: ${JSON.stringify(held)} != ${wanted}`
-      }
-      return incomplete(root)
-    } catch (error) {
-      return `install inputs unreadable: ${JSON.stringify(String(error))}`
-    }
-  }
-
-  /** Whether the successful install inputs or its package tree changed. */
-  let stale = (root = dir()) => !!changed(root)
-
-  let adopted = (root: string, cacheKey: string) => {
-    try {
-      if (
-        host.exists(receipt(root)) || key(files(root)) !== cacheKey ||
-        !complete(root)
-      ) return false
-      host.write(receipt(root), cacheKey)
-      return true
-    } catch {
-      return false
-    }
-  }
-
-  // A tree npm wrote, or a copy of its bytes, where it could share the seed's.
-  let apart = (root: string, seed?: string) => {
-    if (!seed) return false
-    try {
-      let own = host.inode(hidden(root)), shared = host.inode(hidden(seed))
-      return own.dev == shared.dev && own.ino != shared.ino
-    } catch (error) {
-      if (error instanceof io.errors.NotFound) return false
-      throw error
-    }
-  }
-
-  let linked = (root: string) => {
-    try {
-      return host.link(`${root}/node_modules`) !== undefined
-    } catch (error) {
-      if (error instanceof io.errors.NotFound) return false
-      throw error
-    }
-  }
-
-  // Publish the owner beside the lock atomically, so a killed installer never
-  // leaves an ownerless lock. Its abandoned directory returns to its unique
-  // claim path: a second cleaner cannot rename a successor over that receipt.
-  let acquire = async (lock: string, due: number, needed: () => boolean) => {
-    let claim = `${lock}.${host.nonce()}`
-    host.mkdir(claim)
-    host.write(
-      `${claim}/owner.json`,
-      JSON.stringify({ pid: host.pid(), claim }),
-    )
-    let conflict = (error: unknown) =>
-      error instanceof io.errors.AlreadyExists ||
-      (error as { code?: string })?.code == 'ENOTEMPTY'
-    try {
-      while (needed()) {
-        if (host.exists(lock)) {
-          let owner: { pid: number; claim: string } | undefined
-          try {
-            owner = JSON.parse(host.read(`${lock}/owner.json`))
-          } catch (error) {
-            if (!(error instanceof io.errors.NotFound)) throw error
-          }
-          if (owner && !host.alive(owner.pid)) {
-            try {
-              host.rename(lock, owner.claim)
-            } catch (error) {
-              if (!conflict(error) && !(error instanceof io.errors.NotFound)) {
-                throw error
-              }
-            }
-            continue
-          }
-        } else {
-          try {
-            host.rename(claim, lock)
-            return () => host.remove(lock)
-          } catch (error) {
-            if (!conflict(error)) throw error
-            continue
-          }
-        }
-        if (host.now() > due) {
-          throw new Error(`npm ci never finished; installer holds ${lock}`)
-        }
-        await host.wait()
-      }
-    } finally {
-      host.remove(claim)
-    }
-  }
-
-  /** Install only a stale tree. An atomic directory keeps simultaneous callers
-   * from deleting each other's node_modules while npm ci replaces it. */
-  let installed = async (root = dir(), {
-    timeout = 600_000,
-    seed,
-    cacheKey,
-    copy = false,
-  }: { timeout?: number; seed?: string; cacheKey?: string; copy?: boolean } =
-    {}) => {
-    let lock = `${root}/node_modules.lock`
-    let due = host.now() + timeout
-    let needed = () =>
-      stale(root) || (copy && (linked(root) || apart(root, seed)))
-    while (needed()) {
-      let release = await acquire(lock, due, needed)
-      if (!release) return false
-      try {
-        // Another installer may have finished between the read and the mkdir.
-        if (!needed()) return false
-        for (let tree of standalone(root)) remove(tree)
-        // The restored project's content key certifies an older complete tree.
-        if (cacheKey && adopted(root, cacheKey)) return false
-        let seedReason = () => {
-          if (!seed) return 'seed missing'
-          if (key(files(root)) !== key(files(seed))) {
-            return `seed different key: ${JSON.stringify(seed)}`
-          }
-          let reason = changed(seed)
-          if (reason) return `seed stale: ${JSON.stringify(seed)} (${reason})`
-        }
-        let seedIssue = seedReason()
-        if (!seedIssue) {
-          let lockfile: Lock = JSON.parse(
-            host.read(`${seed}/package-lock.json`),
-          )
-          let trees = new Set([
-            'node_modules',
-            ...Object.keys(lockfile.packages)
-              .filter((path) =>
-                !path.startsWith('node_modules/') &&
-                path.includes('/node_modules/')
-              )
-              .map((path) => path.split('/node_modules/')[0] + '/node_modules'),
-          ])
-          for (let tree of trees) {
-            let modules = `${root}/${tree}`, copy = `${lock}/${tree}`
-            host.mkdir(resolve(copy, '..'), true)
-            host.copy(host.realpath(`${seed}/${tree}`), copy)
-            remove(modules)
-            host.mkdir(resolve(modules, '..'), true)
-            host.rename(copy, modules)
-          }
-          return false
-        }
-        let inputs = key(files(root))
-        let reason = changed(root)
-        let cacheReason = cacheKey
-          ? inputs !== cacheKey
-            ? `cache different key: ${cacheKey} != ${inputs}`
-            : incomplete(root)
-          : undefined
-        host.report(
-          `npm ci in ${JSON.stringify(root)}: ${
-            [reason, cacheReason, seedIssue].filter(Boolean).join('; ')
-          }`,
-        )
-        remove(receipt(root))
-        try {
-          let code = await host.npm(root)
-          if (code) throw new Error(`npm ci in ${root} exited ${code}`)
-          host.write(receipt(root), inputs)
-        } catch (error) {
-          // npm can write its hidden lock before an install script fails.
-          if (host.exists(`${root}/node_modules`)) {
-            remove(host.realpath(`${root}/node_modules`))
-          }
-          remove(`${root}/node_modules`)
-          throw error
-        }
-        return true
-      } finally {
-        release()
-      }
-    }
-    return false
-  }
-
-  /** Remove each cached project no checkout's tree links to, once it has sat
-   * unused past any install in flight. A held lock is an install in flight. */
-  let prune = (projects: string, kept: string) => {
-    for (let name of host.list(projects)) {
-      let project = `${projects}/${name}`
-      try {
-        if (
-          project == kept || host.exists(`${project}/node_modules.lock`) ||
-          host.now() - host.inode(project).mtime < idle ||
-          host.exists(hidden(project)) && host.inode(hidden(project)).nlink > 1
-        ) continue
-      } catch (error) {
-        // Another pruner removed it first.
-        if (error instanceof io.errors.NotFound) continue
-        throw error
-      }
-      remove(project)
-    }
-  }
-
-  /** Ready a checkout from npm's restored cache: its tree hard-links the cached
-   * project's files, so module URLs stay under the checkout and a project
-   * nothing links to costs only its own bytes, which prune() frees. */
-  let restored = async (
-    cache: string,
-    root = dir(),
-    { timeout = 600_000 }: RestoreOptions = {},
-  ) => {
-    let inputs = files(root), projects = resolve(cache, 'yak-installed')
-    let digest = key(inputs), project = `${projects}/${digest}`
-    host.mkdir(project, true)
-    let legacy = false
-    try {
-      legacy = key(files(project)) === digest
-    } catch { /* An incomplete legacy cache installs normally. */ }
-    for (let [file, contents] of inputs) {
-      let pending = `${project}/${file}.${host.nonce()}`
-      host.mkdir(resolve(project, file, '..'), true)
-      host.write(pending, contents)
-      host.rename(pending, `${project}/${file}`)
-    }
-    let changed = await installed(project, {
-      timeout,
-      seed: root,
-      cacheKey: legacy ? digest : undefined,
-    })
-    await installed(root, { timeout, seed: project, copy: true })
-    prune(projects, project)
-    return changed
-  }
-
-  return { stale, installed, restored }
+  let { code } = await spawnCommand('pnpm', {
+    args: ['install', '--frozen-lockfile', '--prefer-offline'],
+    cwd: root,
+    stdin: 'null',
+  }).spawn().status
+  if (code) throw new Error(`pnpm install in ${root} exited ${code}`)
+  return true
 }
 
-let policy: Dependencies = dependencies()
-export let stale: Dependencies['stale'] = policy.stale
-export let installed: Dependencies['installed'] = policy.installed
-export let restored: Dependencies['restored'] = policy.restored
-
-/** Ready a checkout through the shared cache; workspace links keep its sources. */
-export let ready = (
-  root: string = dir(),
-  cache: string | undefined = (platform.env.get('XDG_CACHE_HOME') ??
-    platform.env.get('HOME')?.concat('/.cache'))?.concat('/yak'),
-): Promise<boolean> => cache ? restored(cache, root) : installed(root)
-
-if (platform.main(import.meta.url)) await ready(undefined, platform.args[0])
+if (platform.main(import.meta.url)) await installed(platform.args[0])
