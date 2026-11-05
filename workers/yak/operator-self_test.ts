@@ -149,10 +149,6 @@ let recalled = asked.slice(before)
 let marks = await store.g.get(
   (await store.g.read('.memory')).map((b) => b.entity.eid),
 )
-Deno.writeTextFileSync(
-  '/tmp/t137793/asked.json',
-  JSON.stringify(found.map((r) => r.items.slice(-3)), null, 1),
-)
 
 test('words that have left the context are found in its own store, from a fork', () => {
   let [first] = found
