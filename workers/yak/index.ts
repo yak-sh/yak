@@ -36,6 +36,21 @@ import { hosting } from './inference.ts'
 import { scheduleUse } from './used.ts'
 import type { Inference, InferenceReceipt, Mark } from '@yaks/model'
 
+// Agent entrypoints share the same isolated code evaluator.
+let agentEnv = (env: Env): Env => ({
+  ...env,
+  ...(env.LOADER
+    ? {
+      CODE_MODE: evaluator(env.LOADER, (bridge) =>
+        new class extends RpcTarget {
+          call(set: string, name: string, args: string) {
+            return bridge.call(set, name, args)
+          }
+        }()),
+    }
+    : {}),
+})
+
 // The Store, at every address the binding names — the directory at
 // `yak/platform` and every app's own beside it (T-33815). It carries the DO's
 // own name, so wrangler's migration list never moves — the name is the one the
@@ -45,7 +60,11 @@ import type { Inference, InferenceReceipt, Mark } from '@yaks/model'
 // catch, and what it reports itself, is a defect we hear about.
 export let Store = instrument(Stored)
 export let Wire = instrument(Wired)
-export let Builder = instrument(Built)
+export class Builder extends instrument(Built) {
+  constructor(ctx: ConstructorParameters<typeof Built>[0], env: Env) {
+    super(ctx, agentEnv(env))
+  }
+}
 
 // Stable runtime class names and bindings; the SDK loads with a Sandbox
 // incarnation or an outbound proxy fetch, never with a page request.
@@ -221,20 +240,7 @@ export class ModelHost extends WorkerEntrypoint {
 // build of this Worker failed (builds.ts).
 export default {
   fetch: (req: Request, env: Env) =>
-    entry(env, 'gateway fetch', () =>
-      handler.fetch(req, {
-        ...env,
-        ...(env.LOADER
-          ? {
-            CODE_MODE: evaluator(env.LOADER, (bridge) =>
-              new class extends RpcTarget {
-                call(set: string, name: string, args: string) {
-                  return bridge.call(set, name, args)
-                }
-              }()),
-          }
-          : {}),
-      }), req),
+    entry(env, 'gateway fetch', () => handler.fetch(req, agentEnv(env)), req),
   email: (message: Inbound, env: Env, ctx?: Lent) =>
     entry(
       env,

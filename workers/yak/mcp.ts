@@ -64,16 +64,8 @@ import { copyOf } from './directory-copy.ts'
 // existing connectors. All three addresses share one resource and OAuth flow.
 import { fromJsonSchema, type McpServer } from '@modelcontextprotocol/server'
 import { CfWorkerJsonSchemaValidator } from '@modelcontextprotocol/server/validators/cf-worker'
-import {
-  type Exchange,
-  listing,
-  mcp,
-  type Options,
-  roster,
-  rosterVersion,
-} from '@yaks/mcp'
-import { registry, runner } from '@yaks/tools'
-import { tool as codeMode } from '@yaks/code-mode'
+import { type Exchange, mcp, roster, rosterVersion } from '@yaks/mcp'
+import { coded } from './agent-code.ts'
 import { translated } from '@yaks/mcp/tools'
 import {
   connected,
@@ -363,47 +355,6 @@ let instrumentOf = async (
     : null
 }
 
-// The MCP server itself, built per request around the person the edge
-// verified: the caller's whole reach as one graph, the platform's tools on it
-// as a plugin, and the same `Authenticate` callback every other way into this
-// data uses — here it has already run, so it returns what the edge decided.
-//
-// It returns the handler and the tool list it is about to serve (T-34277): the
-// tool names, and the version naming them, which `initialize` records for this
-// session and every later call is compared against.
-let coded = <T extends Options>(opts: T, ctx: Ctx) => {
-  let catalog = registry([{ name: 'yaks', tools: listing(opts) }])
-  let run = runner(opts.calls ?? opts.graph, {
-    tools: catalog,
-    host: opts.graph,
-    report: opts.report,
-  })
-  let code = codeMode(
-    catalog,
-    run,
-    ctx.env.CODE_MODE ?? (() => {
-      throw refuse('unavailable', 'code mode is unavailable on this kernel')
-    }),
-    ctx.env.CLOCK,
-    async () => {
-      let now = { ...ctx, dir: ctx.reopen?.() ?? ctx.dir }
-      let reach = await inReach(now)
-      let graph = await reaching(now, reach)
-      let catalog = registry([{
-        name: 'yaks',
-        tools: listing({ ...opts, graph, search: searching(now, reach) }),
-      }])
-      return runner(ledger(graph, opts.calls), {
-        tools: catalog,
-        host: graph,
-        report: opts.report,
-      })
-    },
-  )
-  catalog.replace('code', [code])
-  return { ...opts, registry: catalog, runner: run }
-}
-
 let needsReach = (
   rpc: Rpc,
 ) => (rpc.method == 'initialize' ||
@@ -420,6 +371,14 @@ let needsReach = (
     ]
       .includes(String(rpc.params?.name)))
 
+// The MCP server itself, built per request around the person the edge
+// verified: the caller's whole reach as one graph, the platform's tools on it
+// as a plugin, and the same `Authenticate` callback every other way into this
+// data uses — here it has already run, so it returns what the edge decided.
+//
+// It returns the handler and the tool list it is about to serve (T-34277): the
+// tool names, and the version naming them, which `initialize` records for this
+// session and every later call is compared against.
 let door = async (ctx: Ctx, session: string, rpc: Rpc) => {
   // Each read made before any tool runs is a named stage on the call's
   // `Server-Timing` (timing.ts): this runs on every call, so what it costs is

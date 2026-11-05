@@ -38,6 +38,7 @@ import { narrowed } from './grants.ts'
 import { reachOf } from './operator-reach.ts'
 import { inReach } from './declared.ts'
 import { connected, reaching } from './agent.ts'
+import { coded } from './agent-code.ts'
 import { ledger } from './ledger.ts'
 import { type Args, type Ctx, refuse } from './tool.ts'
 import { bound, type Env } from './env.ts'
@@ -241,7 +242,11 @@ export let operatorRoster = async (
   // Every tool the connector lists for the person (agent.ts `connected`), to
   // the conversation and each of its forks alike: the list heads the request,
   // so one list keeps the conversation's cached prefix for every fork.
-  let apps = listing(connected(ctx, reach, g)).map(namedTool)
+  let apps = listing(coded({
+    ...connected(ctx, reach, g),
+    calls: ledger(g, work.g),
+    report: (e) => caught(e, { request: 'operator code mode' }),
+  }, ctx)).map(namedTool)
     .filter((t) => !ownNamed.has(t.name))
   return [
     ...apps.map((t): Tool => {
