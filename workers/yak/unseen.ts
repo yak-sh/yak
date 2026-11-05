@@ -154,7 +154,9 @@ export type Breaks = (bundles: Bundle[]) => Promise<unknown>
 // platform's tracker. Its record there is its own occurrence and bug, never
 // the space's: no space or app in `during`, so it groups by fault alone, and
 // its release is the platform build, the app's version beside it. Archiving
-// it there (the app's own code broke) leaves the owner's record open. Tagged
+// it there (the app's own code broke) leaves the owner's record open;
+// resolving it (yaks.app fixed it) archives the owner's record, which its
+// `scope` and `occurrence` tags name (@yaks/tracker `settle`). Tagged
 // `source: app`, the space's tracker writes the one letter. A `mistake` is the
 // page's code wrong about its own words, as the store refused it (apps.ts
 // `mistaken`): a refusal of the caller's own input, so the owner's alone.
@@ -247,7 +249,7 @@ export let noted = async (
     ...viewer ? { user_id: viewer } : {},
   }
   let page = { mechanism: broke.mechanism, breadcrumbs: broke.breadcrumbs }
-  await queue(at.env.ERRORS)(capture(error, {
+  let owned = capture(error, {
     ...place,
     ...page,
     commit: undefined,
@@ -260,10 +262,15 @@ export let noted = async (
       kind: 'exception',
     },
     tags: { ...place.tags, ...reached },
-  }))
+  })
+  await queue(at.env.ERRORS)(owned)
   if (account == 'person' && !broke.mistake) {
     await queue(at.env.ERRORS)(
-      seenByPlatform(error, broke.version, at, reached, page),
+      seenByPlatform(error, broke.version, at, {
+        ...reached,
+        scope: at.space.eid,
+        occurrence: owned[0].entity.eid,
+      }, page),
     )
   }
   scheduleMark(at.env, at.app.eid, 'errored')

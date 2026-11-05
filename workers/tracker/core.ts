@@ -294,6 +294,21 @@ export let store = (storage: Storage, config: Config) => {
       }
       return found.length
     },
+    // The platform's resolution of a bug these occurrences stand for
+    // (@yaks/tracker/effects `settle`): they are archived as their owner's
+    // `fixed` would archive them.
+    settle: async (eids: string[]) => {
+      let found = (await g.get(eids)).filter((row) =>
+        row.error && row.during && !row.archived
+      )
+      if (found.length) {
+        await g.apply(
+          found.map((row) => ({ entity: row.entity, archived: {} })),
+          { trusted: true },
+        )
+      }
+      return found.length
+    },
     // Only composed handlers can make progress. Unknown or disabled errands
     // must not keep an otherwise idle object awake.
     next: async (now = Date.now()): Promise<number | null> => {

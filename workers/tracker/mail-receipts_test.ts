@@ -24,6 +24,7 @@ let env: Env = {
       monitor: () => Promise.resolve(),
       admitTrace: () => Promise.resolve({}),
       ingestTrace: () => Promise.resolve(true),
+      settle: () => Promise.resolve(0),
     }),
   },
 }

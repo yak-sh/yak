@@ -72,7 +72,10 @@ export type Settings = {
   TRACKERS?: {
     getByName: (
       scope: string,
-    ) => { ingestTrace: (rows: Bundle[]) => Promise<boolean> }
+    ) => {
+      ingestTrace: (rows: Bundle[]) => Promise<boolean>
+      settle: (eids: string[]) => Promise<number>
+    }
   }
   TRACKER_SECRET?: string
   ERRORS?: { send: (rows: Bundle[]) => Promise<void> }
@@ -142,6 +145,14 @@ export class Tracker {
         set: (k, v) => this.#traceMeta().set(k, v),
       },
       sender: sender(env, this.scope),
+      // The platform resolves the bugs of breaks in people's apps; each
+      // space's tracker archives its own record of them.
+      ...this.scope == platform && env.TRACKERS
+        ? {
+          settle: (scope: string, eids: string[]) =>
+            env.TRACKERS!.getByName(scope).settle(eids),
+        }
+        : {},
     }
   }
   #mailReady = false
@@ -258,6 +269,18 @@ export class Tracker {
       throw error
     }
   }
+  // Reached only by the platform tracker's `bug_settle`, never HTTP.
+  settle = (eids: string[]): Promise<number> =>
+    this.#run('settle', async () => {
+      try {
+        let tracker = await this.boot()
+        await this.live?.wake()
+        return await tracker.settle(eids)
+      } catch (error) {
+        await this.recover(error, 'Tracker.settle')
+        throw error
+      }
+    })
   // This RPC is reached only by the queue's platform authority, never HTTP.
   // Empty storage is installed inside the reserved setup bound; marked storage
   // reopens without installation writes. Notification setup is ordinary work.

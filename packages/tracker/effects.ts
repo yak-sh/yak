@@ -44,6 +44,10 @@ export type Options = {
   retain?: number
   /** A box with remote standing suppresses historical follow-up catch-up. */
   remote?: import('./remote.ts').Remote
+  /** Archive these occurrences in the tracker of `scope` (a space's), as its
+   * owner's `fixed` would: the platform's, which resolves bugs reported from
+   * people's apps ({@link settle}). */
+  settle?: (scope: string, eids: string[]) => Promise<unknown>
 }
 
 let openedAt = (row: Bundle) =>
@@ -230,6 +234,53 @@ export let follow = async (
   }], { trusted: true })
 }
 
+/** A resolved bug closes the reports its occurrences stand for elsewhere: an
+ * occurrence tagged with another tracker's `scope` and its `occurrence` there
+ * (a break in a person's app, which yaks.app also records) is archived in
+ * that tracker, so the app's owner and their Operator stop hearing of a break
+ * yaks.app fixed. Only occurrences from before the resolution are closed; a
+ * later one is the bug back, open in both. Archiving again changes nothing,
+ * so a retry is safe.
+ *
+ * ```ts
+ * import { settle } from './effects.ts'
+ * import { equal } from '@yaks/testing'
+ * let at = (eid: string, t: string, tags = {}) =>
+ *   ({ entity: { eid }, error: { at: t, bug: 'b', tags } })
+ * let rows = [
+ *   { entity: { eid: 'b' }, bug: {}, resolved: { at: '2026-10-18T16:00Z' } },
+ *   at('e1', '2026-10-18T15:49Z', { scope: 's', occurrence: 'o1' }),
+ *   at('e2', '2026-10-18T15:50Z', { scope: 's', occurrence: 'o2' }),
+ *   at('e3', '2026-10-18T15:51Z'),
+ *   at('e4', '2026-10-19T09:00Z', { scope: 's', occurrence: 'o4' }),
+ * ]
+ * let g = {
+ *   get: (eids: string[]) => Promise.resolve(rows.filter((r) => eids.includes(r.entity.eid))),
+ *   read: () => Promise.resolve(rows.filter((r) => 'error' in r)),
+ * }
+ * let sent: [string, string[]][] = []
+ * await settle(g as never, 'b', { settle: (s, e) => Promise.resolve(sent.push([s, e])) })
+ * equal(sent, [['s', ['o1', 'o2']]])
+ * ```
+ */
+export let settle = async (
+  g: Desk,
+  eid: string,
+  options: Options,
+): Promise<void> => {
+  if (!options.settle) return
+  let [row] = await g.get([eid])
+  if (!row?.bug || !row.resolved) return
+  let until = str(comp(row, 'resolved').at)
+  let by = new Map<string, string[]>()
+  for (let b of await g.read(occurring(eid))) {
+    if (str(comp(b, 'error').at) > until) continue
+    let { scope, occurrence } = Object.fromEntries(tags(b))
+    if (scope && occurrence) by.set(scope, [...by.get(scope) ?? [], occurrence])
+  }
+  for (let [scope, eids] of by) await options.settle(scope, eids)
+}
+
 export let effects = (
   host: { graph: Graph; config?: { port?: number } },
   options: Options = {},
@@ -270,6 +321,7 @@ export let effects = (
     },
     bug_follow: (e) =>
       follow(host.graph, e.entity.eid, { ...options, since: followSince, url }),
+    bug_settle: (e) => settle(host.graph, e.entity.eid, options),
     error_trim: async (e) => {
       let [row] = await host.graph.get([e.entity.eid], ['error'])
       let bug = str(comp(row, 'error').bug)

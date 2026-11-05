@@ -131,6 +131,7 @@ let setup = (now: () => number = Date.now) => {
     monitor: async () => {},
     admitTrace: () => Promise.resolve(false),
     ingestTrace: () => Promise.resolve(false),
+    settle: () => Promise.resolve(0),
   }
   let w = worker({
     BUNDLE_HASH: hash,

@@ -19,6 +19,7 @@ let fixture = () => {
     monitor: () => Promise.resolve(),
     admitTrace: () => Promise.resolve(),
     ingestTrace: () => Promise.resolve(true),
+    settle: () => Promise.resolve(0),
   }
   let env = {
     TRACKERS: { getByName: () => stub },

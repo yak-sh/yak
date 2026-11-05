@@ -258,3 +258,40 @@ test('same batch duplicate eids do not multiply occurrence counts', async () => 
   equal(((await g.bugs())[0].bug as Comp)?.hits, 1)
   equal(batch(rows).scope, platform)
 })
+
+test("the platform's resolution archives the space's report of a break in a person's app", async () => {
+  let owned = fixture()
+  let platformed = store(ram(vocab, options), {
+    sink: () => {},
+    settle: (scope, eids) => {
+      equal(scope, space)
+      return owned.settle(eids)
+    },
+  })
+  let broke = (eid: string, at: string, scope?: string, tags = {}) =>
+    capture(Error('out of memory: SQLITE_NOMEM'), {
+      eid,
+      at,
+      sink: () => {},
+      during: scope ? { space: scope, app: other } : {},
+      tags,
+    })
+  let earlier = '00000000-0000-4000-8000-000000000011'
+  let later = '00000000-0000-4000-8000-000000000012'
+  await deliver(owned, [broke(earlier, '2026-10-18T15:49:30Z', space)])
+  let tagged = { source: 'app', scope: space, occurrence: earlier }
+  let { bugs: [bug] } = await deliver(platformed, [
+    broke(occurrence, '2026-10-18T15:49:31Z', undefined, tagged),
+  ])
+  await platformed.mark(bug.entity.eid, 'resolved', {
+    cause: 'a statement past the step limit',
+    recur: 'no',
+  })
+  await platformed.drain()
+  let open = async () =>
+    (await owned.graph.read('.error !archived')).map((r) => r.entity.eid)
+  equal(await open(), [])
+  // A break after the resolution is the bug back: the owner hears of it.
+  await deliver(owned, [broke(later, new Date().toISOString(), space)])
+  equal(await open(), [later])
+})

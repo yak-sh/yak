@@ -30,6 +30,7 @@ let fixture = (doors: Partial<Stub> = {}) => {
     monitor: fail,
     admitTrace: fail,
     ingestTrace: fail,
+    settle: fail,
     ...doors,
   }
   // No stub reads a ticket, so a scratch one stands in for signing: a

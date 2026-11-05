@@ -359,6 +359,14 @@
       ],
       "target": ".bug .resolved|.bug .archived|.bug .taken"
     },
+    "bug_settle": {
+      "effect": true,
+      "description": "Archive, in a space's tracker, the reports of a person's app that a resolved bug's occurrences stand for, so its owner and Operator stop hearing of a break yaks.app fixed.",
+      "created": [
+        "resolved"
+      ],
+      "target": ".bug .resolved"
+    },
     "error_trim": {
       "effect": true,
       "description": "Keep the newest hundred occurrences and the first of each commit or version.",

@@ -12,6 +12,7 @@ import { authorize, sign } from './auth.ts'
 
 let space = '00000000-0000-4000-8000-000000000001'
 let uuid = () => crypto.randomUUID()
+let settle = () => Promise.resolve(0)
 let rows = (scope = space, spans = 1): Bundle[] => {
   let root = uuid()
   let body: Bundle[] = [{
@@ -98,7 +99,9 @@ test('global ceiling serializes spaces, persists across reboot, rolls from compl
     clock += 1000
     return target.ingestTrace(body)
   }
-  let env = { TRACKERS: { getByName: () => ({ ingestTrace: forward }) } }
+  let env = {
+    TRACKERS: { getByName: () => ({ ingestTrace: forward, settle }) },
+  }
   let authority = new Tracker(state(db, platform), env, () => clock)
   await authority.boot()
   let outcomes = await Promise.all(
@@ -129,7 +132,10 @@ test('failed forwarding keeps a pending durable charge rather than refunding on 
   let db = durable(), clock = 0
   let env = {
     TRACKERS: {
-      getByName: () => ({ ingestTrace: () => Promise.reject(Error('failed')) }),
+      getByName: () => ({
+        ingestTrace: () => Promise.reject(Error('failed')),
+        settle,
+      }),
     },
   }
   let authority = new Tracker(state(db, platform), env, () => clock)

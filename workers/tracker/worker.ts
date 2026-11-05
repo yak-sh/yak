@@ -21,6 +21,7 @@ export type Stub = {
   monitor: () => Promise<void>
   admitTrace: (scope: string, rows: Bundle[]) => Promise<unknown>
   ingestTrace: (rows: Bundle[]) => Promise<boolean>
+  settle: (eids: string[]) => Promise<number>
 }
 export type Env = Omit<Settings, 'TRACKERS'> & {
   BUNDLE_HASH?: string
