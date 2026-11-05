@@ -112,6 +112,7 @@ export let telnyx = (
       throw error
     })
   return {
+    from: async () => (await ours()).number,
     send: async ({ to, text, from, agent }: Text): Promise<Receipt> => {
       let sender = from ?? (await ours()).number
       let said = agent

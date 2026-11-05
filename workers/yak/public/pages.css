@@ -276,6 +276,40 @@
     font-weight: 800;
   }
 
+  /* A person's invite (pages.ts `invitation`), shown to a friend on a phone:
+     the code is what the page is for, so it is centred and as wide as the
+     column allows, up to what a camera reads from across a table. */
+  .Invite_Way {
+    text-align: center;
+  }
+  .Invite_Lead {
+    margin: 0 0 .75rem;
+    color: var(--ink);
+    font-size: 1.2rem;
+    font-weight: 800;
+  }
+  .Invite_Code {
+    display: block;
+    width: min(100%, 20rem);
+    margin: 0 auto 1rem;
+  }
+  .Qr {
+    display: block;
+    width: 100%;
+    height: auto;
+    border-radius: var(--corner);
+  }
+  .Invite_Words {
+    margin: 0 auto .75rem;
+    max-width: 22rem;
+    color: var(--ink);
+    font-weight: 700;
+  }
+  .Invite_Way .Note {
+    max-width: 30rem;
+    margin: 0 auto;
+  }
+
   /* The dashboard's frame: the side with the brand and the tabs, and the body
      the current tab leans into. What fills the body is the style guide's cards,
      rows and forms (public/controls.css); only what no other page draws is here. */

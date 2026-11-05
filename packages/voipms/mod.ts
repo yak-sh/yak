@@ -185,6 +185,7 @@ export let voipms = (
   let flag = (v: unknown) => String(v) == '1' ? '1' : '0'
   return {
     lines,
+    from,
     point: async (at, url) => {
       let did = (await dids()).find((d) => ten(String(d.did ?? '')) == ten(at))
       if (!did) throw new Error(`${at} is not a number on this voip.ms account`)

@@ -581,6 +581,7 @@ export type Row = {
     by?: Id | null
   }
   inviting?: { hour?: string | null; sent?: number | null }
+  referral_code?: { code: string }
   person?: Record<string, unknown>
   email?: { address: string }
   sender?: { via: string }
@@ -2163,6 +2164,14 @@ export let directoryRows = (rows: {
     // two invitations a second apart must not both read the same count.
     inviting: async (person: string) =>
       (await one(`.entity.eid=${person}`))?.inviting ?? null,
+    // The code this person's invite carries (referral.ts), or null for one
+    // whose invite page never opened.
+    referralCode: async (person: string) =>
+      (await one(`.entity.eid=${person}`))?.referral_code?.code ?? null,
+    // Whose invite carries this code, by person eid, or null.
+    referrer: async (code: string) =>
+      (await one(`.referral_code.code=${JSON.stringify(code)}`))?.entity.eid ??
+        null,
     // Everyone in a space, by person eid — who to tell when an app's tools
     // move (declared.ts `toolsChanged`), since reaching the app is exactly
     // being in the space.

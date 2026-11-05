@@ -42,7 +42,7 @@ export type SpaceView =
   | 'settings'
   | 'trash'
 /** A page of the person's own, the same in every space. `space` makes one. */
-export type AccountView = 'profile' | 'agents' | 'shared' | 'space'
+export type AccountView = 'profile' | 'invite' | 'agents' | 'shared' | 'space'
 export type ManageView = SpaceView | AccountView
 let SPACE_VIEWS: SpaceView[] = [
   'apps',
@@ -56,7 +56,13 @@ let SPACE_VIEWS: SpaceView[] = [
   'settings',
   'trash',
 ]
-let ACCOUNT_VIEWS: AccountView[] = ['profile', 'agents', 'shared', 'space']
+let ACCOUNT_VIEWS: AccountView[] = [
+  'profile',
+  'invite',
+  'agents',
+  'shared',
+  'space',
+]
 export let accountView = (view: ManageView): view is AccountView =>
   (ACCOUNT_VIEWS as string[]).includes(view)
 // The pages before the space moved into the path, `/manage/<page>` with

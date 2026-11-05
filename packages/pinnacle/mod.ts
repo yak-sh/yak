@@ -23,6 +23,7 @@ type Said = { messageId?: string; error?: string; description?: string }
 export let pinnacle = (
   { key, number, api = PINNACLE.api, fetch: given }: Pinnacle,
 ): Sender => ({
+  from: () => Promise.resolve(number),
   send: async ({ to, text, from = number, agent }) => {
     let path = `/messages/send/${agent ? 'rcs' : 'sms'}`
     let response

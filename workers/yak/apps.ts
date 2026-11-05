@@ -182,6 +182,7 @@ import { isVerifiedBot } from './lib/bots.ts'
 import { drafted, fullAt, hashed, recoverRelease, TOOLS } from './tools.ts'
 import { ADDRESS } from './route.ts'
 import { background, caught, refusing } from './defects.ts'
+import { invitation } from './referral.ts'
 import {
   barOf,
   born,
@@ -2818,12 +2819,13 @@ let mine = async (
     return nothingHere(env)
   }
   if (req.method != 'POST') foresee(dir, person, view)
-  let [picks, name, email, agents, theirs, own] = await Promise.all([
+  let [picks, name, email, agents, theirs, referral, own] = await Promise.all([
     dir.seats(person).then((seats) => pickable(dir, seats)),
     dir.nameAt(person),
     view == 'profile' ? dir.emailAt(person) : undefined,
     view == 'agents' ? identity().then((part) => part.agents(env, person)) : [],
     view == 'shared' ? shared(dir, person) : undefined,
+    view == 'invite' ? invitation(env, dir, person) : undefined,
     dir.own(person),
   ])
   let chosen = q.get('space') ?? inOf(req)
@@ -2836,6 +2838,7 @@ let mine = async (
     email: email ?? '',
     agents,
     shared: theirs,
+    referral,
     spaces: picks.some((s) => s.slug == own.slug) ? picks : [
       { slug: own.slug, title: own.title, owner: true, own: true },
       ...picks,

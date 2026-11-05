@@ -20,6 +20,7 @@ import { heard, provider as telnyxProvider, telnyx } from '@yaks/telnyx'
 import { effects } from './effects.ts'
 import { sending } from './send.ts'
 import { routes } from './routes.ts'
+import { sender as configured } from './provider.ts'
 
 let ana = '0b1c2d3e-0000-4000-8000-000000000001'
 let ANA = '+12695550142'
@@ -157,6 +158,19 @@ test("telnyx sends from its profile's number, as RCS with an SMS fallback when g
   await telnyx({ key: 'k', profile: 'yaks.app', tollFree: true, fetch: fake })
     .send({ to: ANA, text: 'Hi' })
   assertEquals(posted[0].body.from, FREE)
+})
+
+test('a sender says the number people text to reach it', async () => {
+  let free = telnyx({
+    key: 'k',
+    profile: 'yaks.app',
+    tollFree: true,
+    fetch: fake,
+  })
+  assertEquals(await free.from?.(), FREE)
+  assertEquals(await sender.from?.(), OURS)
+  let pinned = { via: 'telnyx', key: 'k', profile: 'yaks.app', number: ANA }
+  assertEquals(await configured(pinned, telnyxProvider).from?.(), ANA)
 })
 
 test('telnyx refuses an unregistered number as Blocked, a 5xx as Unsent, else an error', async () => {

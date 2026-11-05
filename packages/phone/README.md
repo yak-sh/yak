@@ -29,12 +29,17 @@ that keeps texts in memory.
 ```ts
 type Text = { to: string; text: string; from?: string; agent?: string }
 type Receipt = { id?: string; from?: string }
-type Sender = { send: (text: Text) => Promise<Receipt> }
+type Sender = {
+  send: (text: Text) => Promise<Receipt>
+  from?: () => Promise<string>
+}
 ```
 
-These are @yaks/host's portable `Texter`, so a host can lend one. A sender
-resolves with the provider's id for the message, and the number it left from
-when it chose one, or rejects:
+These are @yaks/host's portable `Texter`, so a host can lend one. `from`, where
+the provider can say it, answers the number texts go from when a text names
+none, which is the number people text to reach the sender. A sender resolves
+with the provider's id for the message, and the number it left from when it
+chose one, or rejects:
 
 - `Blocked`: a carrier will not carry it, and that is expected: the number is
   not yet registered for business texting, or the person replied STOP. Its

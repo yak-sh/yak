@@ -16,8 +16,10 @@ export type { Text, TextReceipt as Receipt } from '@yaks/host/senders'
 /** A sender resolves when the text is accepted and rejects when it is not:
  * {@link Blocked} when the carrier will not carry it, through nobody's fault
  * here; {@link Denied} when the provider refused the credentials; any other
- * rejection is a failure. */
-export type Sender = Texter
+ * rejection is a failure. `from`, where the provider can say it, answers the
+ * number its texts go from when a text names none: the number people text to
+ * reach whoever sends through it. */
+export type Sender = Texter & { from?: () => Promise<string> }
 
 /** A text that arrived. */
 export type Arrival = {

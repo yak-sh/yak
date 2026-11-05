@@ -493,8 +493,28 @@ export let servingDoc: VocabDoc = {
     },
   },
 }
+// A person's own invite to yaks.app (referral.ts, D-136811): words only the
+// directory keeps, about people, so no app's manifest needs them kept from it.
+export let referralDoc: VocabDoc = {
+  title: 'directory-referral',
+  reserved: false,
+  $defs: {
+    // The code a person's invite carries (referral.ts `words`), on their own
+    // row, minted the first time their invite page opens. Unique, so a code
+    // names one person and the sign-up that sends it finds them.
+    referral_code: {
+      description:
+        "The code a person's invite to yaks.app carries: whoever signs up sending it was invited by them.",
+      component: true,
+      type: 'object',
+      unique: [['code']],
+      properties: { code: owned(text) },
+    },
+  },
+}
 export let docs: VocabDoc[] = [
   directoryDoc,
+  referralDoc,
   sweepDoc,
   useDoc,
   servingDoc,

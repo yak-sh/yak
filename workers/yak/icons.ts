@@ -27,6 +27,8 @@ import Plug from 'lucide/dist/esm/icons/plug.mjs'
 // @ts-types="@yaks/ui/lucide"
 import Plus from 'lucide/dist/esm/icons/plus.mjs'
 // @ts-types="@yaks/ui/lucide"
+import QrCode from 'lucide/dist/esm/icons/qr-code.mjs'
+// @ts-types="@yaks/ui/lucide"
 import Receipt from 'lucide/dist/esm/icons/receipt.mjs'
 // @ts-types="@yaks/ui/lucide"
 import Settings2 from 'lucide/dist/esm/icons/settings-2.mjs'
@@ -47,6 +49,7 @@ export let icons = {
   users: Users,
   user: User,
   'share-2': Share2,
+  'qr-code': QrCode,
   receipt: Receipt,
   'chart-no-axes-column-increasing': ChartNoAxesColumnIncreasing,
   'credit-card': CreditCard,

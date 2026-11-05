@@ -17,14 +17,19 @@ export let provider: Load = (via) => import(`@yaks/${via}`)
 /** A configured provider, with a texter's outbound provenance attached. */
 export let sender = (options: Transport, transport: Provider): Sender => {
   let built = transport.sender(options)
+  // A number the options name is the number it sends from; otherwise the
+  // provider says, where it can.
+  let from = options.number
+  let own = from ? () => Promise.resolve(from) : built.from
   return {
+    ...(own ? { from: own } : {}),
     send: async (text) => {
-      let from = text.from ?? options.number
-      let receipt = await built.send({ ...text, ...(from ? { from } : {}) })
+      let by = text.from ?? from
+      let receipt = await built.send({ ...text, ...(by ? { from: by } : {}) })
       return {
         ...receipt,
         via: options.via,
-        ...(receipt.from || from ? { from: receipt.from ?? from } : {}),
+        ...(receipt.from || by ? { from: receipt.from ?? by } : {}),
       }
     },
   }

@@ -27,6 +27,7 @@ import { day, esc, fileDrop } from './html.ts'
 import { holder, tile } from './render/mod.ts'
 import type { People, Person } from './people.ts'
 import type { Plain } from './unseen.ts'
+import { type Invitation, qr } from './referral.ts'
 export { esc } from './html.ts'
 import {
   accountView,
@@ -662,6 +663,8 @@ export type DeskPage = {
   shared?: (Listed & { space: string })[]
   /** every space this person may work in, this one among them */
   spaces?: Picked[]
+  /** the person's own invite to yaks.app (referral.ts `invitation`) */
+  referral?: Invitation
   /** the Operator page's content (operator-page.ts `operatorBody`) */
   operator?: string
   /** a member of the space who does not own it: of its pages they may open
@@ -671,6 +674,7 @@ export type DeskPage = {
 
 let navIcons = {
   profile: 'user',
+  invite: 'qr-code',
   agents: 'bot',
   shared: 'share-2',
   operator: 'bot',
@@ -713,9 +717,9 @@ ${icon(navIcons[key])}${label}${
   }" width="36" height="36" alt="">yaks.app</a><a class="Button Button-quiet Desk_Close" href="#">✕ Close</a></div>
 <div class="Desk_Section"><h2 class="Desk_Group" id="side-account">Your account</h2>
 <nav class="SideNav" aria-labelledby="side-account">
-${link('profile', 'Profile')}${link('agents', 'Agents')}${
-    link('shared', 'Shared with you')
-  }</nav></div>
+${link('profile', 'Profile')}${link('invite', 'Invite')}${
+    link('agents', 'Agents')
+  }${link('shared', 'Shared with you')}</nav></div>
 <div class="Desk_Section"><h2 class="Desk_Group" id="side-space">Space you’re working in</h2>${
     chooser(at, view)
   }
@@ -957,6 +961,60 @@ let profile = (at: DeskPage, env: Host) => {
       : ''
   }</div></section>
 <div class="Form_Actions"><button class="Button" type="submit">Save</button></div></form>`
+}
+
+// Invite (Your account, T-138777): the person's own QR code, shown to a
+// friend on their phone, so it is the code first and large. Scanning it opens
+// a text to yaks.app with the words written, or, under Email, a letter to the
+// sign-up address; sending is signing up, so what sending agrees to is said
+// beside the code, where the friend reads it (D-136811). The two ways are
+// radios, which switch with no script.
+let invitation = (r: Invitation, env: Host) => {
+  let terms = `<a href="${url(env, '/terms')}">Terms</a> · <a href="${
+    url(env, '/privacy')
+  }">Privacy</a>`
+  let ways = [
+    ...r.text
+      ? [{
+        key: 'text',
+        tab: 'Text',
+        link: r.text,
+        label: 'QR code that opens a text to sign up for yaks.app',
+        agree: 'Sending it signs you up for yaks.app and agrees to texts ' +
+          'from yaks.app about your space and the apps you build. Message ' +
+          'frequency varies. Msg &amp; data rates may apply. Reply STOP to ' +
+          'stop, HELP for help. US numbers only.',
+      }]
+      : [],
+    {
+      key: 'email',
+      tab: 'Email',
+      link: r.mail,
+      label: 'QR code that opens an email to sign up for yaks.app',
+      agree: `Sending it to ${
+        esc(r.address)
+      } signs you up for yaks.app, and the answer comes by email.`,
+    },
+  ]
+  return `<p class="Invite_Head">Show this to a friend. They scan it with their phone’s camera and send what opens: that signs them up, with their own space ready and its Operator writing back.</p>
+<fieldset class="Tabs Invite">
+<legend class="Tabs_Legend">Sign up by</legend>
+${
+    ways.map((w, i) =>
+      `<div class="Tabs_Item">
+<input type="radio" name="way" id="way-${w.key}" value="${w.key}"${
+        i ? '' : ' checked'
+      }>
+<label class="Tabs_Tab" for="way-${w.key}">${w.tab}</label>
+<section class="Card Tabs_Panel Invite_Way">
+<p class="Invite_Lead">Scan to sign up for yaks.app</p>
+<a class="Invite_Code" href="${esc(w.link)}">${qr(w.link, w.label)}</a>
+<p class="Invite_Words">${esc(r.said)}</p>
+<p class="Note">${w.agree} ${terms}</p>
+</section></div>`
+    ).join('')
+  }
+</fieldset>`
 }
 
 // A new space (from the selector's + New space): its name and its address,
@@ -1807,6 +1865,7 @@ export let desk = (at: DeskPage, env: Host = {}) => {
   let site = `https://${spaceHost(env, at.space)}`
   let titles = {
     profile: 'Profile',
+    invite: 'Invite',
     agents: 'Agents',
     shared: 'Shared with you',
     space: 'New space',
@@ -1826,6 +1885,7 @@ export let desk = (at: DeskPage, env: Host = {}) => {
   let whose = accountView(view) ? 'Your account' : named(picked(at))
   let body = ''
   if (view == 'profile') body = profile(at, env)
+  if (view == 'invite' && at.referral) body = invitation(at.referral, env)
   if (view == 'shared') body = sharedWith(at, env)
   if (view == 'space') body = newSpace(at, env)
   if (view == 'apps') body = library(at, env)
