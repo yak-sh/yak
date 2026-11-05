@@ -57,6 +57,7 @@ import {
 } from './catchup.ts'
 import {
   command,
+  copied,
   debuts,
   type Deployment,
   git,
@@ -64,6 +65,8 @@ import {
   rowsIn,
   serving,
   shaIn,
+  sourceOf,
+  type Version,
   wrangler,
 } from './deploys.ts'
 import {
@@ -211,7 +214,14 @@ export let box = (
       let sha = now.sha
       if (!sha) {
         let raw = await wrangled(['versions', 'view', now.version])
-        sha = shaIn((raw.result ?? raw).annotations?.['workers/message'])
+        let version: Version = raw.result ?? raw
+        let source = sourceOf(
+          version,
+          copied(version)
+            ? rowsIn<Version>(await wrangled(['versions', 'list']), 'versions')
+            : [],
+        )
+        sha = shaIn(source?.annotations?.['workers/message'])
       }
       if (!sha) {
         throw new Error(`yak serves ${now.version}, which names no commit`)

@@ -295,7 +295,8 @@ An account’s credential is a connection in the CLI’s graph, never a token fi
 `migrate.ts` (`MARKS` in older commits). Rollback retains every boundary main
 has carried, even after its deployment ages out of Cloudflare’s history. This
 conservatively includes failed builds. A secret change's version has no message
-and carries the commit of the upload it copied, the one just before it; once
+and carries the commit of the upload it copied, the one just before it
+(`sourceOf`, which deploy catch-up reads too when such a version serves); once
 that upload ages out of the list, the copy's commit is inferred, which refuses
 rolling back to it but to no other version. An inferred commit or incomplete
 migration history cannot authorize rollback. `errors` reads every unresolved

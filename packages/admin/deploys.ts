@@ -197,6 +197,42 @@ export let deploymentsFor = (id: string, deployments: Deployment[]) =>
     d.versions.some((v) => v.version_id == id && v.percentage > 0)
   ).sort((a, b) => Date.parse(a.created_on) - Date.parse(b.created_on))
 
+/** The commit a version's message leads with, short or full, and its subject. */
+let named = (message = '') =>
+  message.split('\n')[0].match(/^([a-f\d]{7,40})(?:\s+(.*))?$/i)
+
+/** Whether a version is a secret change's copy of earlier code: Cloudflare
+ * makes one, naming no commit, for a secret or settings change. */
+export let copied = (v: Version) =>
+  v.annotations?.['workers/triggered_by'] == 'secret' &&
+  !named(v.annotations?.['workers/message'])
+
+/// let v = (id: string, created_on: string, triggered_by = 'upload', message?: string) => ({ id, metadata: { created_on }, annotations: { 'workers/triggered_by': triggered_by, ...message && { 'workers/message': message } } })
+/// let a = v('a', '2026-11-05T14:00:00Z', 'upload', 'e89d4f79 subject')
+/// sourceOf(v('s', '2026-11-05T15:05:29Z', 'secret'), [v('t', '2026-11-05T15:00:00Z', 'secret'), a])?.id -> 'a'
+/// sourceOf(a, [])?.id -> 'a'
+/// sourceOf(v('s', '2026-11-05T15:05:29Z', 'secret'), [])?.id -> undefined
+/** The version whose message names a version's code: itself, or for a secret
+ * change's copy, the upload just before it. Wrangler's `secret put` refuses
+ * unless the latest upload serves, `versions secret put` copies the latest
+ * upload outright, and a dashboard change copies what serves, which the deploy
+ * door always put there last. Undefined when that upload has aged out of
+ * `versions`. */
+export let sourceOf = (
+  v: Version,
+  versions: Version[],
+): Version | undefined => {
+  if (!copied(v)) return v
+  let made = Date.parse(v.metadata.created_on)
+  let prior = versions
+    .filter((u) => Date.parse(u.metadata.created_on) < made)
+    .toSorted((a, b) =>
+      Date.parse(a.metadata.created_on) - Date.parse(b.metadata.created_on)
+    )
+    .at(-1)
+  return prior && sourceOf(prior, versions)
+}
+
 export let deploysIn = (
   versions: Version[],
   deployments: Deployment[],
@@ -207,25 +243,8 @@ export let deploysIn = (
   )
   let latest = history.at(-1)
   let log = [...commits].sort((a, b) => Date.parse(b.at) - Date.parse(a.at))
-  let uploads = versions.toSorted((a, b) =>
-    Date.parse(a.metadata?.created_on) - Date.parse(b.metadata?.created_on)
-  )
-  let named = (message = '') =>
-    message.split('\n')[0].match(/^([a-f\d]{7,40})(?:\s+(.*))?$/i)
-  // A secret change copies the latest upload and names no commit of its own:
-  // Wrangler's `secret put` refuses unless that upload serves, and `versions
-  // secret put` copies it outright. Its code is the upload just before it.
-  let copy = (v: Version) =>
-    v.annotations?.['workers/triggered_by'] == 'secret' &&
-    !named(v.annotations?.['workers/message'])
-  let source = (v: Version): RegExpMatchArray | null => {
-    if (!copy(v)) return named(v.annotations?.['workers/message'])
-    let made = Date.parse(v.metadata.created_on)
-    let prior = uploads.findLast((u) =>
-      Date.parse(u.metadata.created_on) < made
-    )
-    return prior ? source(prior) : null
-  }
+  let source = (v: Version) =>
+    named(sourceOf(v, versions)?.annotations?.['workers/message'])
   return versions.map((v): Deploy => {
     if (!v.id || !Number.isFinite(Date.parse(v.metadata?.created_on))) {
       throw new Error('version has no id or creation time')
@@ -244,7 +263,7 @@ export let deploysIn = (
       created: v.metadata.created_on,
       commit,
       estimated: !lead,
-      ...copy(v) && { copy: true },
+      ...copied(v) && { copy: true },
       marks: null,
       first: served[0]?.created_on,
       last: served.at(-1)?.created_on,
