@@ -26,11 +26,12 @@ import { text, useHeard, useReached, useTold } from './told.ts'
 import { clicked, opener } from './editor.ts'
 import { beatsOf, SITE } from './site.ts'
 import { Look, SIGNS } from './windows.ts'
-import { fate, since, Toast } from './bands.ts'
+import { Toast } from './bands.ts'
+import { happened } from './outbox.ts'
 
 /** What the rules band draws: the story, and the letters its questions sent. */
 export const MAILED =
-  '.task|.comment|.edge|.person|.persona|.mail.target.decision *'
+  '.task|.comment|.edge|.person|.persona|.mail.target.decision .deliver *'
 
 /** The desk the windows sit on, in the drawing's own units: a column of
  * them left of the drawing, one slot for each beat of the band, with a space
@@ -146,6 +147,16 @@ let band = (
     let r = find(eid)
     return r ? id(r) : eid
   }
+  // The window each beat shows in: an outbox beat after another about the
+  // same letter shows one more of what happened to it, in the same window.
+  let place: number[] = []
+  beats.forEach((b, i) => {
+    let before = beats[i - 1]
+    let same = b.kind == 'outbox' && before?.kind == 'outbox' &&
+      before.line == b.line
+    place.push(same ? place[i - 1] : (place[i - 1] ?? -1) + 1)
+  })
+  let slots = (place.at(-1) ?? -1) + 1
   let open = beats.flatMap((b, i) => {
     let d = turns.done(key, i)
     if (!d || i > upto) return []
@@ -157,14 +168,26 @@ let band = (
     let tries = b.kind == 'outbox'
       ? yak.outbox.tries().filter((t) => t.subject == b.line)
       : []
-    // What its window prints: what came back, or the letter's tries.
+    // What its window prints: what came back, or as much of what happened
+    // to the letter as this beat is about.
+    let told = happened(tries).slice(0, i - place.indexOf(place[i]) + 1)
+    let waits = told.at(-1)?.kind == 'refused' &&
+      told.length < i - place.indexOf(place[i]) + 1
     let out = b.kind == 'outbox'
-      ? tries.map((t) => `${since(t, tries[0])}  ${fate(t)}`)
+      ? [
+        ...told.map((ev) => ev.line),
+        ...waits ? ['The effect is waiting to try again.'] : [],
+      ]
       : d.out
+    let sent = told.some((ev) => ev.kind == 'sent')
     let row = eid ? find(eid) : undefined
-    return [{ b, d, i, eid, out, row }]
+    return [{ b, d, i, eid, out, row, sent }]
   })
   let last = open.at(-1)
+  // Each window as the newest beat in it left it.
+  let windows = open.filter((w, k) =>
+    k == open.length - 1 || place[open[k + 1].i] != place[w.i]
+  )
   // What the open window changed is marked in the drawing, as each render
   // and each drawing commits, before the page paints.
   useLayoutEffect(() => {
@@ -194,14 +217,16 @@ let band = (
     input?.focus({ preventScroll: true })
   })
   let path = layout && last?.eid
-    ? wire(layout, beats.length, last.i, last.eid, view)
+    ? wire(layout, slots, place[last.i], last.eid, view)
     : undefined
   let desk = layout && {
     width: DESK.column + DESK.space + layout.width,
     height: layout.height,
   }
-  // The letter the open outbox window follows, once it was sent.
-  let sent = last?.b.kind == 'outbox' ? letter(last.b.line) : undefined
+  // The letter the open outbox window follows, once it shows it sent.
+  let sent = last?.b.kind == 'outbox' && last.sent
+    ? letter(last.b.line)
+    : undefined
   let declared = (last?.b.shows ?? []).flatMap((name) => {
     let d = yak.declared(name)
     return d?.def ? [{ name, from: d.from, def: d.def }] : []
@@ -224,9 +249,11 @@ let band = (
             h('span', { class: 'Dot' }),
             h('b', null, words(b.title)),
             h(Prose, { source: b.prose }),
-            b.kind == 'outbox'
-              ? null
-              : h('code', null, (SIGNS[b.kind] ?? '') + b.line),
+            b.kind == 'outbox' ? null : h(
+              'code',
+              null,
+              (SIGNS[b.kind] ?? '') + b.line.split('\n').at(-1),
+            ),
           ])
         ),
       ),
@@ -241,7 +268,7 @@ let band = (
             DESK.column / desk.width * 100
           }%; --sheet: ${
             layout!.width / desk.width * 100
-          }%; --slots: ${beats.length}; --gap: ${DESK.gap / desk.height * 100}%`
+          }%; --slots: ${slots}; --gap: ${DESK.gap / desk.height * 100}%`
           : undefined,
       }, [
         h('div', { class: 'Doors_Sheet' }, [
@@ -257,7 +284,7 @@ let band = (
         h(
           'div',
           { class: 'Windows' },
-          open.map(({ b, d, i, out, row }) =>
+          windows.map(({ b, d, i, out, row }) =>
             h(Look, {
               kind: b.kind,
               line: b.line,
@@ -267,7 +294,7 @@ let band = (
               find,
               id: short,
               class: i == last?.i ? 'is-last' : undefined,
-              style: `--slot: ${i + 1}`,
+              style: `--slot: ${place[i] + 1}`,
               key: i,
             })
           ),

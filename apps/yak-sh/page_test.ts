@@ -190,7 +190,7 @@ test("a band's call that fails is reported, for the tracker", async () => {
   page.page.close()
 })
 
-test('in the rules band a rule makes a question a letter, an effect sends it, and a rule closes the question once answered', async () => {
+test('in the rules band a rule makes a question a letter with its choices, an effect hands it over and tries again on its own when the mail service refuses it, and your reply answers it', async () => {
   let { root, page, settle } = await open()
   await page.term.reach(steps, steps.length)
   let band = SECTIONS.find((s) => s.view == 'Rules')!
@@ -202,6 +202,9 @@ test('in the rules band a rule makes a question a letter, an effect sends it, an
     return {
       door: open.getAttribute('data-door'),
       said: open.textContent!,
+      happened: [...open.querySelectorAll('.Letter_Tries li')]
+        .map((li) => li.textContent!),
+      windows: rules.querySelectorAll('.Window').length,
       declared: [...rules.querySelectorAll('.Declared')]
         .map((d) => d.getAttribute('data-declared')),
       told: rules.querySelector('.is-told')?.getAttribute('data-key'),
@@ -212,29 +215,68 @@ test('in the rules band a rule makes a question a letter, an effect sends it, an
   // The bands above ran first, so the build's fix is T-7 and this is T-8.
   match(asked.said, /T-8 Which payments key should the build use\? open/)
   equal(asked.declared, ['question_mail', 'letter_from'])
-  let [letter] = await page.yak.graph.read('.mail.target.decision *')
+  let [letter] = await page.yak.graph.read('.mail.target.decision .deliver *')
   equal(
     [text(letter, 'mail', 'from'), text(letter, 'mail', 'to')],
     [SHOP, YOURS],
   )
-  let sent = await reach(2)
-  equal([sent.door, sent.declared, sent.told], [
-    'outbox',
-    ['mail_post'],
-    letter.entity.eid,
+  // Each step of the effect shows one more thing that happened to the
+  // letter, in the letter's own window.
+  let [handed, refused, again, taken] = [
+    await reach(2),
+    await reach(3),
+    await reach(4),
+    await reach(5),
+  ]
+  equal([handed, refused, again, taken].map((w) => [w.door, w.windows]), [
+    ['outbox', 2],
+    ['outbox', 2],
+    ['outbox', 2],
+    ['outbox', 2],
   ])
-  match(sent.said, /turned away: .*taken as outbox-\d/)
-  equal(sent.toast, `Email sent to ${YOURS}${text(letter, 'doc', 'title')}`)
-  let closed = await reach(3)
-  equal([closed.door, closed.declared, closed.toast], [
-    'web',
-    ['decision_answered'],
+  equal([handed.declared, handed.told], [['mail_post'], letter.entity.eid])
+  match(
+    handed.said,
+    /The test key: The build never charges a card\. \(recommended\)/,
+  )
+  match(handed.said, /The live key: The build checks the live account\./)
+  match(handed.said, /Reply with the number of a choice/)
+  equal(/on the task/.test(handed.said), false)
+  equal([handed, refused, again, taken].map((w) => w.happened.length), [
+    1,
+    2,
+    3,
+    4,
+  ])
+  match(refused.happened[1], /refuses it: .*busy\. Nothing here failed/)
+  match(again.happened[2], /^Second try, .* later: .* again, on its own\.$/)
+  equal(taken.happened[3], 'The mail service takes it: sent.')
+  equal([handed.toast, refused.toast, again.toast], [
+    undefined,
+    undefined,
     undefined,
   ])
+  equal(taken.toast, `Email sent to ${YOURS}${text(letter, 'doc', 'title')}`)
+  let replied = await reach(6)
   let [question] = await page.yak.graph.read('.decision *')
+  equal(
+    [replied.door, replied.windows, replied.declared, replied.told],
+    ['reply', 3, ['decision_answered'], question.entity.eid],
+  )
+  match(
+    replied.said,
+    /Re: Which payments key.*The test key.*T-8 answered: The test key/,
+  )
   equal(
     [text(question, 'task', 'status'), text(question, 'decided', 'choice')],
     ['done', 'The test key'],
+  )
+  let [reply] = await page.yak.graph.read(
+    `.mail.target=${question.entity.eid} !deliver *`,
+  )
+  equal(
+    [text(reply, 'mail', 'from'), text(reply, 'doc', 'body')],
+    [YOURS, 'The test key'],
   )
   page.page.close()
 })
@@ -435,9 +477,12 @@ test('the apply() band sends its letter as the source of its bundle, beside the 
   match(stack.querySelector('.Call')!.textContent!, /agent → graph_apply/)
   equal(
     [...stack.querySelectorAll('.Outbox li')].map((l) => l.className),
-    ['is-refused', 'is-taken'],
+    ['is-handed', 'is-refused', 'is-handed', 'is-sent'],
   )
-  match(stack.querySelector('.Outbox')!.textContent!, /taken as outbox-1/)
+  match(
+    stack.querySelector('.Outbox')!.textContent!,
+    /busy\. Nothing here failed.*on its own\..*takes it: sent\./,
+  )
   equal(
     stack.querySelector('.Toast')?.textContent,
     'Email sent to you@example.comCan you sign up for payments?',

@@ -12,7 +12,7 @@ import { INSIDE, type Phase, PHASES } from '@yaks/graph/plugin'
 import { type Bundle, composed } from '@yaks/graph'
 import type { Ctx } from './views.ts'
 import type { Change } from './yak.ts'
-import type { Try } from './outbox.ts'
+import { happened, type Try } from './outbox.ts'
 import { text, useHeard, useReached, useTold } from './told.ts'
 import { opener } from './editor.ts'
 import { proseOf, scriptOf, shown } from './site.ts'
@@ -290,17 +290,6 @@ let Source = (
   ])
 }
 
-/** How long after the first try `t` was, as the outbox lists it. */
-export let since = (t: Try, first: Try) =>
-  `+${((t.at - first.at) / 1000).toFixed(1)} s`
-
-/** What became of a try at the outbox: the id it was given, or why it was
- * turned away. */
-export let fate = (t: Try) =>
-  t.id
-    ? `taken as ${t.id}, from ${t.from} to ${t.to}`
-    : `turned away: ${t.said}. The effect tries again.`
-
 /** The notice that a letter was sent, in the corner of the window. */
 export let Toast = ({ to, title }: { to: string; title: string }) =>
   h('div', { class: 'Toast', role: 'status' }, [
@@ -308,8 +297,8 @@ export let Toast = ({ to, title }: { to: string; title: string }) =>
     h('span', null, title),
   ])
 
-/** What the mail service the letter's effect hands it to did with it: each
- * try, how long after the first, and what became of it. */
+/** What the mail service the letter's effect hands it to did with it, in
+ * plain words: each time the effect handed it over, and what it answered. */
 let Outbox = ({ tries }: { tries: Try[] }) =>
   h('div', { class: 'Outbox' }, [
     h('div', { class: 'Outbox_Bar' }, [
@@ -319,12 +308,7 @@ let Outbox = ({ tries }: { tries: Try[] }) =>
     h(
       'ol',
       null,
-      tries.map((t) =>
-        h('li', { class: t.id ? 'is-taken' : 'is-refused' }, [
-          h('span', { class: 'Outbox_At' }, since(t, tries[0])),
-          fate(t),
-        ])
-      ),
+      happened(tries).map((ev) => h('li', { class: `is-${ev.kind}` }, ev.line)),
     ),
   ])
 

@@ -6,8 +6,10 @@
 // one opens.
 import { type ComponentChildren, h } from 'preact'
 import type { Bundle } from '@yaks/graph'
+import type { Decision } from '@yaks/task'
 import { called } from './site.ts'
 import { text } from './told.ts'
+import { SHOP } from './shop.ts'
 
 /** What a door's window draws: the beat's line, what came back, the entity
  * it changed, and each eid by its short id. */
@@ -27,6 +29,7 @@ export const SIGNS: Record<string, string> = {
   mcp: 'agent → ',
   sh: '$ ',
   session: 'wears ',
+  reply: 'you reply: ',
 }
 
 let said = (s: Shown) =>
@@ -142,10 +145,22 @@ let Page = (s: Shown) => [
   h('div', { class: 'Page_Status' }, `called ${called(s.line).tool}`),
 ]
 
-/** The letter the mail effect handed the outbox, and each time it tried. */
+let field = (k: string, v: string) => [h('dt', null, k), h('dd', null, v)]
+
+/** What happened to a letter, a line each. */
+let Happened = (s: Shown) =>
+  h(
+    'ol',
+    { class: 'Letter_Tries', 'aria-label': 'What happened to it' },
+    s.out.map((line) => h('li', null, line)),
+  )
+
+/** The letter the mail effect handed the mail service: the question it is
+ * about with each choice, what it asks of you, and what happened to it. */
 let Letter = (s: Shown) => {
   let r = s.row
-  let field = (k: string, v: string) => [h('dt', null, k), h('dd', null, v)]
+  let about = r ? s.find(text(r, 'mail', 'target')) : undefined
+  let d = about?.decision as Decision | undefined
   return [
     h('div', { class: 'Letter_Stamp', 'aria-hidden': 'true' }),
     h('dl', { class: 'Letter_Head' }, [
@@ -153,15 +168,40 @@ let Letter = (s: Shown) => {
       ...r ? field('To', text(r, 'mail', 'to')) : [],
       ...field('Subject', r ? text(r, 'doc', 'title') : s.line),
     ]),
-    r ? h('p', { class: 'Letter_Body' }, text(r, 'doc', 'body')) : null,
-    h(
-      'ol',
-      {
-        class: 'Letter_Tries',
-        'aria-label': 'Each time the effect handed it to the outbox',
-      },
-      s.out.map((line) => h('li', null, line)),
-    ),
+    r
+      ? h('div', { class: 'Letter_Body' }, [
+        d ? h('p', null, d.question) : null,
+        d
+          ? h(
+            'ol',
+            { class: 'Letter_Choices' },
+            d.choices.map((c) =>
+              h('li', null, [
+                h('b', null, c.label),
+                `: ${c.description}`,
+                c.label == d.recommended ? ' (recommended)' : '',
+              ])
+            ),
+          )
+          : null,
+        h('p', null, text(r, 'doc', 'body')),
+      ])
+      : null,
+    Happened(s),
+  ]
+}
+
+/** Your reply to a letter, as your mail client writes it: to whom, about
+ * what, your words, and what it did once it arrived. */
+let Reply = (s: Shown) => {
+  let [subject, words] = s.line.split('\n')
+  return [
+    h('dl', { class: 'Letter_Head' }, [
+      ...field('To', SHOP),
+      ...field('Subject', `Re: ${subject}`),
+    ]),
+    h('div', { class: 'Letter_Body' }, h('p', null, words)),
+    Happened(s),
   ]
 }
 
@@ -194,6 +234,7 @@ let LOOKS: Record<string, [string, (s: Shown) => ComponentChildren]> = {
   mcp: ['Chat', Chat],
   web: ['Page', Page],
   outbox: ['Letter', Letter],
+  reply: ['Letter', Reply],
   session: ['Tui', Session],
 }
 

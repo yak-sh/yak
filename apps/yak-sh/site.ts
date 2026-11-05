@@ -54,14 +54,22 @@ let web = (...lines: string[]) => '```web\n' + lines.join('\n') + '\n```'
 /** The rules and effects a beat shows, by name. */
 let declared = (...names: string[]) =>
   '```declared\n' + names.join('\n') + '\n```'
-/** A beat that writes nothing: its window is the outbox, showing what was
- * tried with the letter of this subject. */
+/** A beat that writes nothing: its window is the letter of this subject,
+ * showing what happened to it at the mail service, one thing more than the
+ * outbox beat about it before. */
 let outbox = (subject: string) => '```outbox\n' + subject + '\n```'
+/** A beat where you reply to the letter of this subject, in these words. */
+let reply = (subject: string, words: string) =>
+  '```reply\n' + subject + '\n' + words + '\n```'
 /** A beat that starts a session wearing a persona, by its short id: its
  * window is what the session is given. */
 let session = (persona: string) => '```session\n' + persona + '\n```'
 
 export let INSTALL = 'deno run -A jsr:@yaks/cli/install'
+
+/** The question the rules band's agent asks you, which is also its letter's
+ * subject. */
+const ASKED = 'Which payments key should the build use?'
 
 /** A part's body: what its heading says beside it, a rule, then what it
  * holds. A `###` heading in what it holds starts a numbered item. */
@@ -206,19 +214,28 @@ export let SECTIONS: Section[] = [
     body: [
       "You don't write code that watches the graph. A **rule** is a query a vocabulary declares, and the graph runs it inside every write, whichever door the write came through: what it matches, it changes before the write is stored, so nothing ever reads the graph without it. An **effect** is work a write leaves behind. The commit records it in the same transaction, so it can't be lost, and after the commit it runs on its own, tried again until it succeeds.",
       '### A rule turns a question into a letter',
-      "Fixing the build, your agent needs an answer only you can give, and asks. The shop's rule matches a question for someone with an address, and writes them a letter in the same write; `letter_from` then gives the letter its sender.",
+      "Fixing the build, your agent needs an answer only you can give, and asks. The shop's rule matches a question for someone with an address, and writes them a letter about it in the same write, asking for a reply; `letter_from` then gives the letter its sender.",
       declared('question_mail', 'letter_from'),
       mcp(
-        'decision_new {"question": "Which payments key should the build use?", "choices": [{"label": "The test key", "description": "The build never charges a card."}, {"label": "The live key", "description": "The build checks the live account."}], "recommended": "The test key", "assignee": "U-1"}',
+        `decision_new {"question": "${ASKED}", "choices": [{"label": "The test key", "description": "The build never charges a card."}, {"label": "The live key", "description": "The build checks the live account."}], "recommended": "The test key", "assignee": "U-1"}`,
       ),
-      '### An effect sends it',
-      '`@yaks/mail` declares an effect for every letter written: hand it to the mail service, and record what happened. The commit owed it, and it runs after. The outbox turns the letter away once, so the effect waits and tries again.',
+      '### An effect hands it to the mail service',
+      '`@yaks/mail` declares an effect for every letter written: hand it to the mail service, and record what happened. The commit owed it, so it runs after the write, on its own.',
       declared('mail_post'),
-      outbox('Which payments key should the build use?'),
-      '### A rule closes the question',
-      "You pick an answer in the browser. `@yaks/task`'s rule finishes a question once it is answered, in the same write.",
+      outbox(ASKED),
+      '### The mail service is busy',
+      "The mail service refuses the letter for now. That is the far end's answer: nothing in the graph or in the effect failed, and the letter is kept as it was written.",
+      outbox(ASKED),
+      '### The effect tries again on its own',
+      'The effect waits as long as the mail service asked, then hands the letter over again. Nobody runs it again: the work it owes stays in the graph until it is done.',
+      outbox(ASKED),
+      '### The mail service takes it',
+      'This time the mail service takes the letter, and the effect records that it was sent.',
+      outbox(ASKED),
+      '### You answer by replying',
+      "You reply with the choice you want. The reply arrives as a letter on the question and records your answer, and `@yaks/task`'s rule finishes the question in the same write.",
       declared('decision_answered'),
-      web('decision_answer {"decision": "T-8", "choice": "The test key"}'),
+      reply(ASKED, 'The test key'),
     ].join('\n\n'),
   },
   {
@@ -515,7 +532,8 @@ export let scriptOf = (body: string): Command[] =>
  * called by the agent over MCP (`mcp`) or by a page in the browser (`web`).
  * An `outbox` beat runs nothing; its line is the subject of the letter whose
  * tries it shows. A `session` beat starts a session wearing the persona its
- * line names. */
+ * line names. A `reply` beat's line is a letter's subject and the words you
+ * reply to it with, a line each. */
 export type Beat = {
   title: string
   prose: string
@@ -525,7 +543,7 @@ export type Beat = {
 }
 
 // The blocks a section's body holds that the page acts on, not prints.
-const BLOCK = /```(sh|mcp|web|outbox|session|declared)\n([\s\S]*?)\n```/g
+const BLOCK = /```(sh|mcp|web|outbox|session|reply|declared)\n([\s\S]*?)\n```/g
 
 /** A band's body: what it says first, then each `###` beat. */
 export let beatsOf = (body: string) => {

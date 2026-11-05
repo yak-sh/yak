@@ -1011,17 +1011,16 @@ h2 {
   animation: pop .4s both;
 }
 .Outbox li::before {
+  content: '→ ';
+  color: var(--soft);
+}
+.Outbox li.is-sent::before {
   content: '✓ ';
   color: var(--meadow);
 }
 .Outbox li.is-refused::before {
   content: '✗ ';
   color: var(--brick);
-}
-.Outbox_At {
-  display: inline-block;
-  min-width: 4.5em;
-  color: var(--soft);
 }
 /* The letter was sent: a notice in the corner of the window, which goes
    by itself. */
@@ -1548,6 +1547,13 @@ h2 {
 }
 .Letter_Body {
   margin: 0 0 .6em;
+}
+.Letter_Body p {
+  margin: 0 0 .3em;
+}
+.Letter_Choices {
+  margin: 0 0 .3em;
+  padding-left: 1.5em;
 }
 .Letter_Tries {
   margin: auto 0 0;

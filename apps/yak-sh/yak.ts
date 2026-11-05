@@ -50,7 +50,8 @@ import * as mailGraph from '@yaks/mail/graph'
 import { effects as mailEffects } from '@yaks/mail/effects'
 import { effects, generation } from '@yaks/effects'
 import { outbox } from './outbox.ts'
-import { shopDoc, YOURS } from './shop.ts'
+import { SHOP, shopDoc, YOURS } from './shop.ts'
+import { answer } from '@yaks/task'
 
 type Facets = {
   name: string
@@ -397,6 +398,41 @@ export let yak = async ({ retry = 1500 } = {}) => {
       return worn
         ? { code: 0, out: voice(vocab)(worn).trimEnd().split('\n') }
         : { code: 1, out: [`${persona} is no persona`] }
+    },
+    /** Your reply to the letter of `subject`, in `words`, arriving as the
+     * mail service hands it in: a letter from you about what the letter was
+     * about, and, where that is an open question, your words as the answer
+     * to it, as @yaks/inbox reads a reply to a question. */
+    reply: async (subject: string, words: string): Promise<Said> => {
+      let asked = [...rows.values()].find((r) =>
+        r.mail && r.deliver && (r.doc as Comp | undefined)?.title == subject
+      )
+      let target = String((asked?.mail as Comp | undefined)?.target ?? '')
+      let q = rows.get(target)
+      if (!asked || !q) return { code: 1, out: [`no letter ${subject}`] }
+      let open = !!q.decision && !q.decided
+      await g.apply([
+        ...(open ? answer(target, words) : []),
+        {
+          entity: { eid: mint() },
+          mail: {
+            from: YOURS,
+            to: SHOP,
+            target,
+            reply_to: asked.entity.eid,
+            at: new Date().toISOString(),
+          },
+          doc: { title: `Re: ${subject}`, body: words },
+        },
+      ])
+      return {
+        code: 0,
+        out: [
+          open
+            ? `${named(q)} answered: ${words}`
+            : `${named(q)} was already answered`,
+        ],
+      }
     },
     /** A rule or effect by name, as the vocabulary that declares it writes
      * it, and the package that declares it (`shop`: the page's own). */
