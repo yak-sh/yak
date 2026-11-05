@@ -17,7 +17,12 @@ let fixture = (extra: string[] = []) => {
   let elapsed = 0
   let options: RestartOptions = {
     runtimeDir: '/runtime/',
-    lock: () => Promise.resolve({ close: () => {} }),
+    lock: () =>
+      Promise.resolve({
+        read: () => Promise.resolve(''),
+        write: () => Promise.resolve(),
+        close: () => {},
+      }),
     systemctl: '/fake/systemctl',
     run: (command, args) => {
       assertEquals(command, '/fake/systemctl')
@@ -287,7 +292,8 @@ test('restart rolls configured mail even on its first installation', async () =>
   assertEquals(started(first).length, 1)
 })
 
-// Exercise the OS lock too: both calls start before either snapshot completes.
+// Exercise the OS lock too: three calls start before the first snapshot
+// completes.
 // Finish filesystem work outside the timed assertion.
 let concurrent = await Deno.makeTempDir({ prefix: 'yak-restart-' })
 let active = new Set(['probe@old.service'])
@@ -313,6 +319,8 @@ let options: RestartOptions = {
     })
   },
 }
+let tick = 0
+options.clock = () => ++tick
 let listed = Promise.withResolvers<void>()
 let proceed = Promise.withResolvers<void>()
 let run = options.run!
@@ -323,9 +331,10 @@ options.run = async (command, args) => {
 }
 let first = restart(options)
 await listed.promise
-await assertRejects(() => restart(options), Error, 'already in progress')
+let waiting = [restart(options), restart(options)]
 proceed.resolve()
 await first
+let said = await Promise.all(waiting)
 options.run = run
 // A failed handover must release the same lock for the next caller.
 await assertRejects(() =>
@@ -337,9 +346,14 @@ await assertRejects(() =>
 await restart(options)
 await Deno.remove(concurrent, { recursive: true })
 
-test('concurrent restarts return immediately and release the lock on failure', () => {
-  assertEquals(snapshots, [['probe@old.service'], [starts[0]]])
-  assertEquals([...active], [starts[1]])
+test('a restart called during another rolls once more after it, and a third coalesces', () => {
+  assertEquals(said.filter((s) => s.startsWith('Coalesced')).length, 1)
+  assertEquals(snapshots, [
+    ['probe@old.service'],
+    [starts[0]],
+    [starts[1]],
+  ])
+  assertEquals([...active], [starts[2]])
 })
 
 test('restart queues the handover and its failure reporter without waiting for readiness', async () => {
@@ -364,10 +378,12 @@ test('restart queues the handover and its failure reporter without waiting for r
     '--handover',
   ])
   assert(!args.includes('--wait'))
-  assert(args.includes('--unit=yak-restart'))
+  let unit = args.find((a) => a.startsWith('--unit='))!.slice(7)
+  assertMatch(unit, /^yak-restart-[0-9a-f-]{36}$/)
+  assertMatch(said, new RegExp(unit))
   assertEquals(
     args.find((a) => a.startsWith('--property=ExecStopPost=')),
-    '--property=ExecStopPost="/deno" "run" "-A" "/code/yak.ts" "--config" "/config/a b%%\\".json" "unit" "failure" "yak-restart.service"',
+    `--property=ExecStopPost="/deno" "run" "-A" "/code/yak.ts" "--config" "/config/a b%%\\".json" "unit" "failure" "${unit}.service"`,
   )
 })
 

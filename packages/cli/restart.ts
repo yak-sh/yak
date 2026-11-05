@@ -15,7 +15,9 @@ export type Role = {
 }
 
 export type RestartOptions = {
-  lock?: (path: string) => Promise<{ close: () => void }>
+  /** Wait for, then hold, the box's one handover lock, which keeps the last
+   * successful handover's record. */
+  lock?: (path: string) => Promise<Held>
   processes?: import('./config.ts').Config['processes']
   runtimeDir: string
   roles?: Role[]
@@ -26,7 +28,16 @@ export type RestartOptions = {
   ) => Promise<{ code: number; stdout: string; stderr: string }>
   ready?: (path: string) => Promise<boolean>
   now?: () => number
+  /** Wall-clock milliseconds, finer than one, shared by every caller on the
+   * box. */
+  clock?: () => number
   sleep?: (milliseconds: number) => Promise<void>
+}
+
+export type Held = {
+  read: () => Promise<string>
+  write: (text: string) => Promise<void>
+  close: () => void
 }
 
 /** The box's roles: its graph's workers and web, then the tracker's, rolled
@@ -75,7 +86,10 @@ export let queueRestart = async (
     '"' + word.replace(/[%$\\"]/g, (c) =>
       c == '%' || c == '$' ? c + c : '\\' + c) +
     '"'
-  let report = [...aimed, 'unit', 'failure', 'yak-restart.service']
+  // Each queued handover is its own unit, so a second one queues behind the
+  // running one's lock instead of being refused.
+  let unit = `yak-restart-${crypto.randomUUID()}`
+  let report = [...aimed, 'unit', 'failure', `${unit}.service`]
     .map(quote).join(' ')
   let result = await execute('systemd-run', [
     '--user',
@@ -84,7 +98,7 @@ export let queueRestart = async (
     '--expand-environment=no',
     '--quiet',
     '--collect',
-    '--unit=yak-restart',
+    `--unit=${unit}`,
     '--property=Type=exec',
     `--property=ExecStopPost=${report}`,
     '--',
@@ -95,7 +109,7 @@ export let queueRestart = async (
   if (result.code) {
     throw new Error(`Could not queue restart: ${result.stderr.trim()}`)
   }
-  return 'Restart queued in yak-restart.service; handover and failure reporting continue in the background'
+  return `Restart queued in ${unit}.service; handover and failure reporting continue in the background`
 }
 
 /** Where an instance of a unit template says it is ready: the file its
@@ -124,27 +138,47 @@ let matches = (pattern: string, unit: string) => {
 }
 
 // Keep the inode: unlinking it would let a waiter and a new caller lock
-// different files. The OS releases the lock even if the CLI is killed.
-let lock = async (path: string) => {
+// different files, so the record is written in place. The OS releases the lock
+// even if the CLI is killed.
+let lock = async (path: string): Promise<Held> => {
   let file = await disk.open(path, { create: true, write: true })
   try {
-    if (!await file.tryLock(true)) {
-      throw new Error('A restart is already in progress')
-    }
-    return file
+    await file.lock(true)
   } catch (error) {
     file.close()
     throw error
   }
+  return {
+    read: () => disk.readTextFile(path),
+    write: (text) => disk.writeTextFile(path, text),
+    close: () => file.close(),
+  }
 }
 
-/** Serialize the snapshot and handover across CLI processes. */
+/** Serialize the snapshot and handover across CLI processes. A second caller
+ * waits for the running handover; if one began after it was called, that one
+ * already started its code, so it coalesces into it instead of rolling again. */
 export let restart = async (options: RestartOptions): Promise<string> => {
+  let clock = options.clock ??
+    (() => performance.timeOrigin + performance.now())
+  let asked = clock()
   let held = await (options.lock ?? lock)(
     `${options.runtimeDir.replace(/\/$/, '')}/yak-restart.lock`,
   )
   try {
-    return await handover(options)
+    let text = await held.read()
+    let last: { began: number; said: string } | undefined = text
+      ? JSON.parse(text)
+      : undefined
+    if (last && last.began > asked) {
+      return `Coalesced into the restart that began at ${
+        new Date(last.began).toISOString()
+      }, after this call:\n${last.said}`
+    }
+    let began = clock()
+    let said = await handover(options)
+    await held.write(JSON.stringify({ began, said }))
+    return said
   } finally {
     held.close()
   }
