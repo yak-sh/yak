@@ -4,8 +4,7 @@
 import { test } from '@yaks/testing'
 import { assertEquals, assertStringIncludes } from '@std/assert'
 import { call, type Ctx } from './tools.ts'
-import { appStore, directory, storeName } from './directory.ts'
-import * as dirPart from './directory.ts'
+import { appStore, storeName } from './directory.ts'
 import { declared } from './directory-fixture.ts'
 import { platform } from './directory-rows-probe.ts'
 import { lifecycleStores } from './app-lifecycle-probe.ts'
@@ -43,8 +42,7 @@ let fixture = async (
   slug: string,
   { reuse = false, saving = false, store = false } = {},
 ) => {
-  let { env } = saving || store ? backed : addresses
-  let dir = directory({ fetch: (r) => dirPart.fetch(r, env) })
+  let { env, dir } = saving || store ? backed : addresses
   let blobs = r2Objects(env.BLOBS)
   let person = crypto.randomUUID()
   let by = { 'x-yak-person': person, 'x-yak-role': 'owner' }
