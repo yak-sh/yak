@@ -65,4 +65,22 @@ test('candidate declarations and seed trials leave the serving graph alone until
   equal(rows.map((row: { note: { text: string } }) => row.note.text), [
     'accepted',
   ])
+
+  let deleted = rows[0].entity.eid
+  equal(
+    (await request('/apply', '1', [{
+      entity: { eid: deleted },
+      $delete: true,
+    }])).status,
+    200,
+  )
+  equal((await request('/vocab', '3', next, '1')).status, 200)
+  equal(
+    (await request(`/seed?from=${crypto.randomUUID()}`, '3', [{
+      entity: { eid: deleted },
+      note: { text: 'must stay deleted' },
+    }], '1')).status,
+    200,
+  )
+  equal(await (await request('/query?q=.note', '3')).json(), [])
 })

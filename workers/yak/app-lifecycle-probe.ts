@@ -2,7 +2,7 @@ import { servingAuthority } from './app-serving-authority.ts'
 import { copyOf, servingDirectory } from './directory-copy.ts'
 import { fetch as directoryFetch } from './directory.ts'
 import type { Driver } from '@yaks/sql'
-// App graph lifecycle over private SQLite rows. The production declaration
+// App graph lifecycle over RAM rows, or private SQLite for storage behavior. The production declaration
 // selector owns staging and release changes; this host supplies transactions,
 // graph binding and sockets without Durable Object alarms or runtime duties.
 import { json, readBody, refuse } from '@yaks/api'
@@ -25,6 +25,7 @@ import { broadcast, drafted, released } from './page-notice.ts'
 import { expiring } from './expires.ts'
 import { appDoc, appVocab, grew } from './vocab.ts'
 import { sqliteApp } from './sqlite-app-probe.ts'
+import { ramApp } from './ram-app-probe.ts'
 import { PLATFORM_OBJECT } from './door.ts'
 import type { Env } from './env.ts'
 import { mode } from '@yaks/member'
@@ -46,6 +47,9 @@ type Page = {
   close?(code: number, reason: string): void
 }
 type Physical = ReturnType<typeof durable>
+type Backend =
+  & Pick<ReturnType<typeof sqliteApp>, 'graph' | 'atomic'>
+  & Partial<Pick<ReturnType<typeof sqliteApp>, 'found' | 'adopt'>>
 
 /** An independent graph for each app or preview name; the directory stays put. */
 export let lifecycleStores = (
@@ -72,16 +76,18 @@ export let lifecycleStores = (
     let unselectable = new Set<string>()
     let physical: Physical | undefined
     let sql: (Driver & Disposable) | undefined
-    let backend = sqliteApp(
-      (dispose) => disposals.add(dispose),
-      storage && ((from) => {
-        let owned = physical = storage(name, from)
-        states.set(name, { storage: owned })
-        return sql = Object.assign(driver(owned, undefined, measure), {
-          [Symbol.dispose]: () => owned[Symbol.dispose](),
-        })
-      }),
-    )
+    let backend: Backend = storage || restored
+      ? sqliteApp(
+        (dispose) => disposals.add(dispose),
+        storage && ((from) => {
+          let owned = physical = storage(name, from)
+          states.set(name, { storage: owned })
+          return sql = Object.assign(driver(owned, undefined, measure), {
+            [Symbol.dispose]: () => owned[Symbol.dispose](),
+          })
+        }),
+      )
+      : ramApp()
     let hydrated = !!restored
     let slotCache = new Map<string, string | null>()
     let raw: ReturnType<typeof slotsOf> | undefined
@@ -91,7 +97,7 @@ export let lifecycleStores = (
         [Symbol.dispose]: () => owned[Symbol.dispose](),
       })
       states.set(name, { storage: owned })
-      backend.adopt(sql)
+      backend.adopt!(sql)
       raw = slotsOf(() => sql!, slotCache)
       reshapeSlots(raw.read, raw.write)
     }
