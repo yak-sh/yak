@@ -101,9 +101,11 @@ export type { Door, Options, Transport } from './options.ts'
 
 export {
   type Heard,
+  listens,
   type Load,
   type Provider,
   provider,
   sender,
+  verified,
 } from './provider.ts'
 export type { Caller, Frame, Line, Ring } from './call.ts'

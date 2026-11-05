@@ -9,10 +9,11 @@ import {
   Blocked,
   consentEid,
   keyword,
+  listens,
   mobile,
   type Text,
+  verified,
 } from '@yaks/phone'
-import { ours, refusal } from '@yaks/hook'
 import { writes } from '@yaks/member'
 import { type Ctx, refuse } from './tool.ts'
 import type { Tool } from '@yaks/session'
@@ -296,19 +297,19 @@ export let textDoor = async (
 ): Promise<Response> => {
   let transport = PROVIDERS[via]
   let key = signingKey(env, via)
-  if (!key || !transport?.scheme || !transport.heard) {
+  if (!key || !listens(transport)) {
     return new Response('Texts are not switched on here.', { status: 404 })
   }
   if (req.method != 'POST') return new Response(null, { status: 405 })
-  let raw = await req.text()
-  let no = await refusal(transport.scheme, key, raw, req.headers)
-  if (no) {
-    if (ours(no)) await fault(env, `POST /${via}/webhook`, new Error(no))
-    return Response.json({ error: { code: 'bad_signature', message: no } }, {
+  let said = await verified(transport, key, req)
+  if ('refused' in said) {
+    let message = said.refused
+    if (said.ours) await fault(env, `POST /${via}/webhook`, new Error(message))
+    return Response.json({ error: { code: 'bad_signature', message } }, {
       status: 400,
     })
   }
-  let { arrival, outcome, ring } = transport.heard(JSON.parse(raw))
+  let { arrival, outcome, ring } = said.heard
   if (ring) {
     let { rang } = await import('./operator-calls.ts')
     await rang(env, via, ring)

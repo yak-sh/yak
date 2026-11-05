@@ -5,10 +5,9 @@
 import type { Graph } from '@yaks/graph'
 import { fault, json, refuse, type Route } from '@yaks/api'
 import { Refused } from '@yaks/graph/errors'
-import { ours, refusal } from '@yaks/hook'
 import type { Options } from './options.ts'
 import { kept, settled } from './received.ts'
-import { type Load, provider } from './provider.ts'
+import { listens, type Load, provider, verified } from './provider.ts'
 
 /** `POST /<via>/webhook`: one verified provider event. A missing or stale
  * signature is refused quietly; one that is complete and does not match,
@@ -26,27 +25,24 @@ export let routes = (
       handle: async (request) => {
         let via = options.door!.via ?? options.sender?.via ?? 'telnyx'
         let transport = (await load(via)).provider
-        if (!transport.scheme || !transport.heard) {
+        if (!listens(transport)) {
           throw new Error(`${via} has no verified webhook door`)
         }
-        let body = await request.text()
-        let why = await refusal(
-          transport.scheme,
-          options.door!.key,
-          body,
-          request.headers,
-        )
-        if (why) {
-          if (ours(why)) {
-            fault(new Error(why), `POST ${new URL(request.url).pathname}`)
+        let said = await verified(transport, options.door!.key, request)
+        if ('refused' in said) {
+          if (said.ours) {
+            fault(
+              new Error(said.refused),
+              `POST ${new URL(request.url).pathname}`,
+            )
           }
           return refuse(
-            new Refused(`not signed by ${via}: ${why}`),
+            new Refused(`not signed by ${via}: ${said.refused}`),
             request,
           )
         }
         try {
-          let { arrival, outcome } = transport.heard(JSON.parse(body))
+          let { arrival, outcome } = said.heard
           let g = host.graph
           if (arrival) {
             let people = await g.read(
