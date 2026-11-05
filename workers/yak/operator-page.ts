@@ -443,7 +443,7 @@ export let elsewhere = (beyond: Reach[], pa: boolean) => {
   let named = (rs: Reach[]) =>
     LIST.format(
       rs.map((r) =>
-        `<a href="${managePath('home', r.space.slug)}">${
+        `<a href="${chatPath(r.space.slug)}">${
           esc(r.space.title || r.space.slug)
         }</a>`
       ),
@@ -523,7 +523,7 @@ export let chatPage = async (
 <div class="Talk">
 <aside class="Talk_Side" id="menu" aria-label="Conversations">
 <div class="Talk_Top"><a class="Talk_Brand" href="${
-      url(env, managePath('home', space.slug))
+      url(env, chatPath(space.slug))
     }"><img src="${
       url(env, '/yak.webp')
     }" width="28" height="28" alt="">Operator</a><a class="Button Button-quiet Talk_Close" href="#">✕ Close</a></div>
@@ -543,8 +543,8 @@ export let chatPage = async (
       sidebar(items, space.slug, [open, talked.task])
     }</nav>
 <div class="Talk_Foot"><a href="${
-      managePath('home', space.slug)
-    }">Dashboard</a><a href="${at}">Operator settings</a></div>
+      managePath('apps', space.slug)
+    }">Manage</a><a href="${at}">Operator settings</a></div>
 </aside>
 <div class="Talk_Main">
 <header class="Talk_Bar"><a class="Button Button-quiet Talk_Menu" href="#menu" aria-label="Conversations">☰</a><div class="Talk_Heads"><h1 class="Talk_Head" data-title>${

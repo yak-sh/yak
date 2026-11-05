@@ -11,6 +11,8 @@ import ChartNoAxesColumnIncreasing from 'lucide/dist/esm/icons/chart-no-axes-col
 // @ts-types="@yaks/ui/lucide"
 import Check from 'lucide/dist/esm/icons/check.mjs'
 // @ts-types="@yaks/ui/lucide"
+import ChevronLeft from 'lucide/dist/esm/icons/chevron-left.mjs'
+// @ts-types="@yaks/ui/lucide"
 import ChevronRight from 'lucide/dist/esm/icons/chevron-right.mjs'
 // @ts-types="@yaks/ui/lucide"
 import ChevronsUpDown from 'lucide/dist/esm/icons/chevrons-up-down.mjs'
@@ -64,6 +66,7 @@ export let icons = {
   'external-link': ExternalLink,
   check: Check,
   download: Download,
+  'chevron-left': ChevronLeft,
   'chevron-right': ChevronRight,
   'chevrons-up-down': ChevronsUpDown,
 }

@@ -414,7 +414,7 @@ through the connector's graph tier (tool.ts `roleIn`).
   admin@bot.yak.sh` erases one now.
 - An app's own errors surface through `app_errors` and the unseen block
   (`unseen.ts`). Each distinct one starts its space's Operator (unseen.ts
-  `fix`, one request per break by `fixOf`), and the owner's dashboard shows
+  `fix`, one request per break by `fixOf`), and the owner's Apps page shows
   its state beside the error; `operator_read` with the space reads its work.
   The Operator's tool `platform_bug` files what yaks.app got wrong in our
   tracker.

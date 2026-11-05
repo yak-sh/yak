@@ -19,6 +19,7 @@ import {
   signIn,
 } from './probe.ts'
 import { chatPath, LOGOUT, MANAGE, managePath } from './route.ts'
+import { parseHTML } from 'linkedom'
 import type { App } from './directory.ts'
 import { library } from './pages.ts'
 import { folds, type Plain, plain, type Seen } from './unseen.ts'
@@ -99,14 +100,25 @@ test('the dashboard is at the apex, whatever serves the space', async () => {
       '<h1>My manage app</h1>',
     )
     let apps = managePath('apps', slug)
-    let home = managePath('home', slug)
+    let home = `${MANAGE}/${slug}`
     let first = await get(MANAGE)
     assertEquals(first.status, 302)
     assertEquals(first.headers.get('location'), `https://yaks.app${home}`)
-    // The space's home leads with its Operator and links to the apps list.
-    let landed = await (await get(home)).text()
-    assertStringIncludes(landed, `href="${chatPath(slug)}"`)
-    assertStringIncludes(landed, `href="${apps}"`)
+    // The space's own address is a new chat with its Operator, as its old
+    // address for one still is, and its settings are behind Manage.
+    assertEquals(chatPath(slug), home)
+    for (let path of [home, `${home}/operator/new`]) {
+      let landed = await get(path)
+      assertEquals(landed.status, 200)
+      let { document } = parseHTML(await landed.text())
+      assert(document.querySelector('.Talk [data-conversation]'), path)
+      assertEquals(
+        [...document.querySelectorAll('a')].find((a) =>
+          a.textContent == 'Manage'
+        )?.getAttribute('href'),
+        apps,
+      )
+    }
     assertStringIncludes(
       await (await get(apps)).text(),
       `href="https://${host}/private-notes/"`,
@@ -189,12 +201,7 @@ test('the dashboard is at the apex, whatever serves the space', async () => {
       'role="status"',
     )
     assertEquals(await title(), 'Dana')
-    // Its name changes there too, reached from the dashboard's Rename, and
-    // the page shows the new one.
-    assertStringIncludes(
-      await (await get(managePath('home', slug))).text(),
-      `href="${settings}#space-title">Rename</a>`,
-    )
+    // Its name changes there too, and the page shows the new one.
     await post(settings, { title: 'Peterson Reunion 2027', space: slug })
     assertStringIncludes(
       await (await get(settings)).text(),
@@ -239,7 +246,7 @@ test('the dashboard is at the apex, whatever serves the space', async () => {
     let theirs = (await get(MANAGE, other.cookie)).headers.get('location')!
     assertEquals(
       theirs,
-      to(managePath('home', other.email.split('@')[0])),
+      to(chatPath(other.email.split('@')[0])),
     )
     // Nobody but its owner moves the space, and no other page names them.
     let away = { space: `away-${crypto.randomUUID().slice(0, 6)}` }
@@ -288,7 +295,7 @@ test('a person makes a space, opens it first, and signs out', async () => {
       }))
         .headers.get('location')
     let own = ada.email.split('@')[0]
-    let mine = `https://yaks.app${managePath('home', own)}`
+    let mine = `https://yaks.app${chatPath(own)}`
     assertEquals(await opens(), mine)
     // Her one free space on the Plus plan makes room for another.
     let [first] = await meta(k).query(`.space.slug=${own}`)
@@ -296,7 +303,7 @@ test('a person makes a space, opens it first, and signs out', async () => {
 
     let made = await post(managePath('space'), { title: 'Books', slug: fresh })
     assertEquals(made.status, 303)
-    let theirs = `https://yaks.app${managePath('home', fresh)}`
+    let theirs = `https://yaks.app${chatPath(fresh)}`
     assertEquals(made.headers.get('location'), theirs)
     assertEquals(await opens(), mine)
 

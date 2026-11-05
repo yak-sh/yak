@@ -46,7 +46,6 @@ import { AGENT } from './docs.ts'
 import { apex, type Host, spaceHost, url } from './host.ts'
 import { yak } from './mascot.ts'
 import { links } from './sheets.ts'
-import { listed, type Worked } from './operator-view.ts'
 import {
   type Budget,
   type Ceiling,
@@ -678,17 +677,12 @@ export type DeskPage = {
   referral?: Invitation
   /** the Operator page's content (operator-page.ts `operatorBody`) */
   operator?: string
-  /** what the space's Operator is called */
-  operatorName?: string
-  /** the Operator's conversations, newest first, for the space's home */
-  talks?: Worked[]
   /** a member of the space who does not own it: of its pages they may open
    * only the Operator, so the side links only that */
   member?: boolean
 }
 
 let navIcons = {
-  home: 'house',
   profile: 'user',
   invite: 'qr-code',
   agents: 'bot',
@@ -710,9 +704,19 @@ let picked = (at: DeskPage) =>
     { slug: at.space, title: '', owner: !at.member, own: false }
 let named = (s: Pick<Picked, 'slug' | 'title'>) => s.title || s.slug
 
-// The whole menu, one side (T-136122): what is the person's own wherever they
-// are, then the space they are working in, chosen in place, and under it that
-// space's pages, held with the selector on one sheet (T-140072). On a phone the same side opens full screen from the top
+// The space's Operator as the side and its page name it ("Pip, your
+// Operator"), and as the way back to its chat names it ("Pip").
+let yourOperator = (at: DeskPage) => {
+  let name = picked(at).operator
+  return name
+    ? { title: `${esc(name)}, your Operator`, back: esc(name) }
+    : { title: 'Your Operator', back: 'your Operator' }
+}
+
+// The settings' one side, Manage (T-136122, T-140507): the way back to the
+// Operator's chat on top, then the space being managed, chosen in place, with
+// its pages under it on one sheet (T-140072), then what is the person's own
+// wherever they are. On a phone the same side opens full screen from the top
 // bar's Menu (`:target`, no script).
 let navigation = (at: DeskPage, view: ManageView, env: Host) => {
   let link = (
@@ -730,32 +734,34 @@ ${icon(navIcons[key])}${label}${
         ? `<span class="Desk_Count">${at.trash.length}</span>`
         : ''
     }</a>`
-  let operator = link('operator', 'Operator')
+  let { title, back } = yourOperator(at)
+  let operator = link('operator', title)
   return `<a class="Desk_Skip" href="#content">Skip to content</a>
-<aside class="Desk_Side" id="menu" aria-label="Menu">
-<div class="Desk_Top"><a class="Desk_Brand" href="${url(env, '/')}"><img src="${
-    url(env, '/yak.webp')
-  }" width="36" height="36" alt="">yaks.app</a><a class="Button Button-quiet Desk_Close" href="#">✕ Close</a></div>
-<div class="Desk_Section"><h2 class="Desk_Group" id="side-account">Your account</h2>
-<nav class="SideNav" aria-labelledby="side-account">
-${link('profile', 'Profile')}${link('invite', 'Invite')}${
-    link('agents', 'Agents')
-  }${link('shared', 'Shared with you')}</nav></div>
-<div class="Desk_Section"><h2 class="Desk_Group" id="side-space">This space</h2>
+<aside class="Desk_Side" id="menu" aria-label="Manage">
+<div class="Desk_Top"><a class="Button Desk_Back" href="${
+    chatPath(at.space)
+  }">${
+    icon('chevron-left')
+  }Back to ${back}</a><a class="Button Button-quiet Desk_Close" href="#">✕ Close</a></div>
+<h2 class="Desk_Title">Manage</h2>
+<div class="Desk_Section"><h3 class="Desk_Group" id="side-space">This space</h3>
 <div class="Desk_Here">${chooser(at, view)}
-<nav class="SideNav" aria-label="This space">
+<nav class="SideNav" aria-labelledby="side-space">
 ${
     at.member
       ? operator
-      : `${link('home', 'Dashboard')}${operator}${link('apps', 'Apps')}${
-        link('people', 'People')
-      }${link('connections', 'Connections')}${link('visits', 'Visits')}${
-        at.sell ? link('selling', 'Selling') : ''
-      }${link('billing', 'Billing')}${link('settings', 'Settings')}${
-        link('trash', 'Trash')
-      }`
+      : `${link('apps', 'Apps')}${link('people', 'People')}${operator}${
+        link('connections', 'Linked accounts')
+      }${link('visits', 'Visits')}${at.sell ? link('selling', 'Selling') : ''}${
+        link('billing', 'Billing')
+      }${link('settings', 'Space settings')}${link('trash', 'Trash')}`
   }
 </nav></div></div>
+<div class="Desk_Section"><h3 class="Desk_Group" id="side-account">Your account</h3>
+<nav class="SideNav" aria-labelledby="side-account">
+${link('profile', 'Profile')}${link('invite', 'Invite a friend')}${
+    link('agents', 'Agents')
+  }${link('shared', 'Shared with you')}</nav></div>
 <div class="Desk_Foot"><a href="https://${
     esc(spaceHost(env, at.space))
   }/" target="_blank" rel="noopener">Open ${esc(spaceHost(env, at.space))} ${
@@ -920,131 +926,6 @@ let sharedWith = (at: DeskPage, env: Host) =>
       }).join('')
     }</div>`
     : '<section class="Empty"><h2>Nothing shared with you yet</h2><p>An app someone invites you to, in a space of theirs, appears here.</p></section>'
-
-// The space's home (T-140050), where "Dashboard" and `/manage` land: its
-// Operator first, to message or to pick up a conversation where it was left,
-// then its apps, who is in it, and its month so far. Each card leads to the
-// page that holds all of it.
-let TALKS = 3
-let TILES = 6
-let MEMBERS = 4
-let spaceHome = (at: DeskPage, env: Host) => {
-  let name = esc(at.operatorName || 'the Operator')
-  let talks = at.talks ?? []
-  let operator = `<section class="Card Desk_Operator">${
-    heading(name, {
-      mark: `<img class="Card_Mark" src="${
-        url(env, '/mascot/thinking-still.webp')
-      }" width="24" height="24" alt="">`,
-      actions: `<a class="Button" href="${
-        chatPath(at.space)
-      }">Message ${name}</a>`,
-    })
-  }<p class="Card_Sub">This space’s Operator. Ask ${name} for a new app or a change to one, or send a document or a photo.</p>${
-    talks.length
-      ? listed(talks.slice(0, TALKS), (open) => chatPath(at.space, open))
-      : ''
-  }<p class="Desk_More">${
-    talks.length > TALKS
-      ? `<a href="${chatPath(at.space)}">All ${talks.length} conversations</a>`
-      : ''
-  }<a href="${
-    managePath('operator', at.space)
-  }">Operator settings</a></p></section>`
-  let broken = at.apps.filter((a) => a.errors?.length).length
-  let apps = `<section class="Card">${
-    heading('Apps', {
-      status: broken
-        ? status(
-          broken == 1 ? '1 needs fixing' : `${broken} need fixing`,
-          'warn',
-        )
-        : '',
-      actions: `${
-        at.apps.length
-          ? `<a class="Button Button-quiet" href="${
-            managePath('apps', at.space)
-          }">${
-            at.apps.length > TILES ? `All ${at.apps.length}` : 'All apps'
-          }</a>`
-          : ''
-      }<a class="Button" href="${managePath('new', at.space)}">+ New app</a>`,
-    })
-  }${
-    at.apps.length
-      ? `<div class="Apps">${
-        at.apps.slice(0, TILES).map((a) =>
-          tile(a, { at: `https://${spaceHost(env, at.space)}`, editor: true })
-        ).join('')
-      }</div>`
-      : `<p class="Card_Sub">No apps yet. Tell ${name} what you’d like to make, and it builds it with you.</p>`
-  }</section>`
-  let r = at.people
-  let waiting = r?.invited.length ?? 0
-  let people = r
-    ? `<section class="Card">${
-      heading('People', {
-        actions: `<a class="Button Button-quiet" href="${
-          managePath('people', at.space)
-        }">Invite someone</a>`,
-      })
-    }${
-      r.members.length > 1
-        ? `<ul class="Rows">${
-          r.members.slice(0, MEMBERS).map((p) =>
-            `<li class="Rows_Item">${holder(p)}</li>`
-          ).join('')
-        }</ul>`
-        : '<p class="Card_Sub">Just you so far. Invite someone to work on every app here, or on one.</p>'
-    }${
-      r.members.length > MEMBERS || waiting
-        ? `<p class="Desk_More"><a href="${managePath('people', at.space)}">${
-          [
-            r.members.length > MEMBERS ? `All ${r.members.length} members` : '',
-            waiting == 1
-              ? '1 invitation waiting'
-              : waiting
-              ? `${waiting} invitations waiting`
-              : '',
-          ].filter(Boolean).join(' · ')
-        }</a></p>`
-        : ''
-    }</section>`
-    : ''
-  let tier = at.plan?.tier ?? 'free'
-  let month = at.bill
-    ? `<section class="Card">${
-      heading('This month', {
-        actions: `<a class="Button Button-quiet" href="${
-          managePath('billing', at.space)
-        }">Billing</a>`,
-      })
-    }<p class="Card_Sub">On ${
-      tier == 'free' ? 'the free plan' : NAMES[tier]
-    }.</p><ul class="Rows">${
-      at.bill.limits.apps
-        ? gaugeRow(
-          'Apps',
-          `${count(at.bill.limits.apps.used)} of ${
-            count(at.bill.limits.apps.limit)
-          }`,
-          '',
-          at.bill.limits.apps.used / at.bill.limits.apps.limit,
-        )
-        : ''
-    }${
-      gaugeRow(
-        'Models and voice',
-        `${share(at.bill.budget.spent, at.bill.budget.limit)} used`,
-        '',
-        at.bill.budget.limit ? at.bill.budget.spent / at.bill.budget.limit : 0,
-      )
-    }</ul></section>`
-    : ''
-  return `${operator}${apps}${
-    people || month ? `<div class="Desk_Options">${people}${month}</div>` : ''
-  }`
-}
 
 /** The apps view: the space's apps, each marked where it broke with what to
  * ask about it, and with none, the way to make one. */
@@ -2073,19 +1954,18 @@ export let desk = (at: DeskPage, env: Host = {}) => {
   let site = `https://${spaceHost(env, at.space)}`
   let titles = {
     profile: 'Profile',
-    invite: 'Invite',
+    invite: 'Invite a friend',
     agents: 'Agents',
     shared: 'Shared with you',
     space: 'New space',
-    home: 'Dashboard',
-    operator: 'Operator settings',
+    operator: yourOperator(at).title,
     apps: 'Apps',
     people: 'People',
-    connections: 'Connections',
+    connections: 'Linked accounts',
     new: 'New app',
     visits: 'Visits',
     selling: 'Selling',
-    settings: 'Settings',
+    settings: 'Space settings',
     billing: 'Billing',
     trash: 'Trash',
   } satisfies Record<ManageView, string>
@@ -2100,7 +1980,6 @@ export let desk = (at: DeskPage, env: Host = {}) => {
   }
   if (view == 'shared') body = sharedWith(at, env)
   if (view == 'space') body = newSpace(at, env)
-  if (view == 'home') body = spaceHome(at, env)
   if (view == 'apps') body = library(at, env)
   if (view == 'agents') {
     body = `${
@@ -2163,10 +2042,6 @@ export let desk = (at: DeskPage, env: Host = {}) => {
         ? `<a class="Button" href="${
           managePath('new', at.space)
         }">+ New app</a>`
-        : view == 'home'
-        ? `<a class="Button Button-quiet" href="${
-          managePath('settings', at.space)
-        }#space-title">Rename</a>`
         : ''
     }</header><div class="Desk_Content" id="content" tabindex="-1">${
       at.say

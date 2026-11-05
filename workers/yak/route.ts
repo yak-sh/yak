@@ -24,15 +24,15 @@ export let SLUG = /^[a-z0-9][a-z0-9-]{0,62}$/
 
 // The dashboard: a person's account and the spaces they work in, at the apex
 // rather than on any space's hostname, so no app sharing a space's origin can
-// reach them (T-39354). A space's home, where a person lands in it, is
-// `/manage/<space>` (T-140050), and its other pages `/manage/<space>/<page>`; the
+// reach them (T-39354). A space's own address, `/manage/<space>`, is where a
+// person lands in it: a new chat with its Operator (T-140507). Its settings
+// are its other pages, `/manage/<space>/<page>`, behind Manage; the
 // person's own, wherever they are, are `/manage/account/<page>` (T-136122),
 // which no space can be named (`RESERVED` holds `account`).
 export let MANAGE = '/manage'
 export let ACCOUNT = 'account'
 /** A page of one space's. */
 export type SpaceView =
-  | 'home'
   | 'apps'
   | 'new'
   | 'operator'
@@ -74,22 +74,23 @@ let LEGACY: Record<string, ManageView> = {
   ...Object.fromEntries(SPACE_VIEWS.map((v) => [v, v])),
   connect: 'agents',
 }
-/** A dashboard page's path. A space's page without a space names the one the
+/** A settings page's path. A space's page without a space names the one the
  * person opens first, whichever that is when they follow it. */
-export let managePath = (view: ManageView = 'home', space?: string) =>
+export let managePath = (view: ManageView, space?: string) =>
   accountView(view)
     ? `${MANAGE}/${ACCOUNT}/${view}`
-    : view == 'home'
-    ? space ? `${MANAGE}/${encodeURIComponent(space)}` : MANAGE
     : space
     ? `${MANAGE}/${encodeURIComponent(space)}/${view}`
     : `${MANAGE}/${view}`
 // What a conversation opens by: a task's or a request's eid, or `new`.
 let OPEN = /^(new|[0-9a-f]{8}(-[0-9a-f]{4}){3}-[0-9a-f]{12})$/
 /** An Operator conversation's own page, the chat app (operator-page.ts
- * `chatPage`): one opened by its task or request, or a new one. */
+ * `chatPage`): one opened by its task or request, or a new one, which is the
+ * space's own address (`/manage/<space>/operator/new` opens it too). */
 export let chatPath = (space: string, open = 'new') =>
-  `${managePath('operator', space)}/${open}`
+  open == 'new'
+    ? `${MANAGE}/${encodeURIComponent(space)}`
+    : `${managePath('operator', space)}/${open}`
 /** Where a space's logo is drawn from, or none where it has none: its bytes'
  * own address, so the address changes with the picture and nothing is ever
  * shown stale.
@@ -109,9 +110,9 @@ export let logoPath = (
     ? `${MANAGE}/${encodeURIComponent(space.slug)}/logo/${space.logo.sha}`
     : undefined
 let SHA = /^[0-9a-f]{64}$/
-/** What a dashboard path asks for: an account page, a space's page (its home
- * when none is named), its logo's bytes, or an address from before T-136122
- * (`legacy`), to be sent on. Null is no page. */
+/** What a manage path asks for: an account page, a space's page (a new chat
+ * with its Operator when none is named), its logo's bytes, or an address from
+ * before T-136122 (`legacy`), to be sent on. Null is no page. */
 export type Managed =
   | { account: AccountView }
   | { space: string; view: SpaceView; open?: string; logo?: string }
@@ -145,26 +146,30 @@ export let managed = (path: string): Managed | null => {
     return Object.hasOwn(LEGACY, one)
       ? { legacy: LEGACY[one] }
       : SLUG.test(one)
-      ? { space: one, view: 'home' }
+      ? { space: one, view: 'operator', open: 'new' }
       : null
   }
   return SLUG.test(one) && (SPACE_VIEWS as string[]).includes(two)
     ? { space: one, view: two as SpaceView }
     : null
 }
-/** The page an address from before the dashboard named its space in the path
- * stands for (`/_yaks/<page>`, `/manage/<page>`), or null. */
-export let manageView = (path: string): ManageView | null => {
-  let at = managed(path)
-  return !at ? null : 'first' in at ? 'home' : 'legacy' in at ? at.legacy : null
-}
-/** One space's dashboard page, as an address to put in a letter or an
- * answer. */
-export let manageAt = (
+/** Where an address that names no space (`/manage`, or one from before the
+ * space was in the path) is now, for `space`: a page names its own, and none
+ * is the space's chat. */
+export let landing = (
+  at: { first: true } | { legacy: ManageView },
   space: string,
-  view: ManageView = 'home',
-  env: Host = {},
-) => url(env, managePath(view, space))
+) => 'first' in at ? chatPath(space) : managePath(at.legacy, space)
+/** The path an address from before the dashboard named its space in the path
+ * (`/_yaks/<page>`, `/manage/<page>`) stands for in `space`, or null. */
+export let movedFor = (path: string, space: string): string | null => {
+  let at = managed(path)
+  return at && ('first' in at || 'legacy' in at) ? landing(at, space) : null
+}
+/** One space's settings page, as an address to put in a letter or an
+ * answer. */
+export let manageAt = (space: string, view: ManageView, env: Host = {}) =>
+  url(env, managePath(view, space))
 /** A connections page's address, still naming the testing integrations it
  * was opened for (connections.ts `enabled`), so its forms and a sign-in begun
  * there come back to the page as it was. */

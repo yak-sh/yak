@@ -366,8 +366,19 @@
   .Desk_Bar {
     display: none;
   }
-  /* The side's two sections (pages.ts `navigation`): the person's own, then
-     the space they are working in, each under a small heading. */
+  /* The way back to the Operator's chat, over everything the side manages
+     (pages.ts `navigation`). */
+  .Desk_Back {
+    gap: .4rem;
+    min-width: 0;
+  }
+  .Desk_Title {
+    margin: 0 .8rem;
+    font-size: 1.25rem;
+    font-weight: 800;
+  }
+  /* The side's two sections (pages.ts `navigation`): the space being
+     managed, then the person's own, each under a small heading. */
   .Desk_Section {
     display: grid;
     gap: .4rem;

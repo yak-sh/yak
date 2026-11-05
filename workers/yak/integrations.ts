@@ -114,7 +114,7 @@ ${
 </section>
 <section class="Join Card" aria-labelledby="yours">
 <h2 id="yours" class="Title">Share a service of your own</h2>
-<p class="Note">On your space's connections page, add a key for any service, write how to get one, and list it here. Anyone can then add it to a space of theirs, with their own key.</p>
+<p class="Note">On your space's Linked accounts page, add a key for any service, write how to get one, and list it here. Anyone can then add it to a space of theirs, with their own key.</p>
 <p class="Join_Doors"><a class="Button" href="${
       esc(url(env, managePath('connections')))
     }">Your connections</a></p>

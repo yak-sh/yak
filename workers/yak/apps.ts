@@ -120,15 +120,17 @@ import { untrash, untrashSpace } from './erase.ts'
 import {
   type AccountView,
   accountView,
+  chatPath,
   hostOf,
+  landing,
   logoPath,
   MANAGE,
   manageAt,
   managed,
   managePath,
   type ManageView,
-  manageView,
   MOUNT,
+  movedFor,
   OURS,
   paged as pagePath,
   route,
@@ -2476,7 +2478,7 @@ let index = async (
     role: who.role,
     person: !!who.person,
     signIn: signInAt(req.url, env),
-    manage: owner ? manageAt(space.slug, 'home', env) : undefined,
+    manage: owner ? manageAt(space.slug, 'apps', env) : undefined,
   }, env)
 }
 
@@ -2500,14 +2502,15 @@ let manage = async (req: Request, env: Env): Promise<Response> => {
   if (!person) return redirect(signInAt(sentFrom(req, env).href, env), 303)
   let asked = url.searchParams.get('space')
   if (asked && !SLUG.test(asked)) return nothingHere(env)
-  // `/manage` opens the space the person opens first, and an address from
-  // before the space was in the path (`?space=`, or none for their own) is
-  // sent on to where its page is now, so links in letters keep working.
+  // `/manage` opens a new chat in the space the person opens first, and an
+  // address from before the space was in the path (`?space=`, or none for
+  // their own) is sent on to where its page is now, so links in letters keep
+  // working.
   if ('first' in at || 'legacy' in at) {
-    let view = 'first' in at ? 'home' : at.legacy
-    let slug = accountView(view) ? undefined : asked ?? (await dir.own(person))
-      .slug
-    let to = new URL(managePath(view, slug), hostUrl(env))
+    let slug = 'legacy' in at && accountView(at.legacy)
+      ? ''
+      : asked ?? (await dir.own(person)).slug
+    let to = new URL(landing(at, slug), hostUrl(env))
     for (let [k, v] of url.searchParams) {
       if (k != 'space') to.searchParams.append(k, v)
     }
@@ -2695,7 +2698,7 @@ let desk = async (
   let q = new URL(req.url).searchParams
   // Everything a page shows, asked at once: nothing here waits on anything but
   // the apps it says something about.
-  if (view == 'apps' || view == 'home') {
+  if (view == 'apps') {
     void trackedIn(env, space, who, true).catch(() => {})
   }
   let shelved = shelf(dir, space, who)
@@ -2709,14 +2712,13 @@ let desk = async (
     connections,
     picks,
     operator,
-    talks,
     billed,
   ] = await Promise.all([
     shelved,
     // What is broken in each app (unseen.ts `brokenIn`), read only for the
     // page that lists them: one read of the space's tracker, no app's store
     // woken. A read that fails is reported and the apps are drawn without it.
-    view == 'apps' || view == 'home'
+    view == 'apps'
       ? shelved.then(({ all }) =>
         all.length
           ? brokenIn(env, space, who, all).catch((e) => {
@@ -2740,7 +2742,7 @@ let desk = async (
       : undefined,
     // Who is in the space and its apps (people.ts), read only for the page
     // that shows it.
-    view == 'people' || view == 'home'
+    view == 'people'
       ? Promise.all([
         shelved.then(({ all }) => peopleIn(dir, [space], all)),
         dir.admits(space.eid),
@@ -2767,12 +2769,6 @@ let desk = async (
     view == 'operator'
       ? import('./operator-page.ts').then((part) =>
         part.operatorBody(env, space, who)
-      )
-      : undefined,
-    // The Operator's latest conversations, which the home page leads with.
-    view == 'home'
-      ? import('./operator-page.ts').then((part) =>
-        part.workOf(env, space, who)
       )
       : undefined,
     // Whom Stripe bills, for the Billing page (T-131895). A read that fails
@@ -2814,7 +2810,7 @@ let desk = async (
     paid: q.get('paid') == '1',
     // The space's month against its allowances (meter.ts), as the
     // directory's row holds it.
-    bill: view == 'billing' || view == 'home'
+    bill: view == 'billing'
       ? {
         limits: gauges(space, all.length),
         budget: budget(space),
@@ -2838,13 +2834,12 @@ let desk = async (
         title: space.title,
         owner: who.role == 'owner',
         own: false,
+        operator: space.operator,
         logo: logoPath(space),
       },
       ...picks,
     ],
     operator,
-    operatorName: space.operator,
-    talks,
     member: who.role != 'owner',
     ...typed,
     say: said?.say ?? returned(q)?.say ?? '',
@@ -2933,7 +2928,7 @@ let account = async (
     })
     if (said) return mine(req, env, dir, who, view, said, { made })
     return keptIn(
-      redirect(hostUrl(env, managePath('home', made.slug)), 303),
+      redirect(hostUrl(env, chatPath(made.slug)), 303),
       made.slug,
     )
   }
@@ -2980,7 +2975,7 @@ let account = async (
 // space went and given the button back, because they are the only person the
 // news belongs to.
 //
-// The restore button lands on the space's dashboard, at the apex: a custom
+// The restore button lands on a new chat in the space, at the apex: a custom
 // domain of a space that was in the trash a second ago is a hostname that has
 // to warm up again.
 let closed = async (
@@ -3007,7 +3002,7 @@ let closed = async (
   if (String(form.get('restore-space') ?? '').trim() == space.slug) {
     await untrashSpace(env, dir, space, who)
   }
-  return redirect(manageAt(space.slug, 'home', env), 303)
+  return redirect(hostUrl(env, chatPath(space.slug)), 303)
 }
 
 // Another letter for an invitation to this space or one of its apps, from the
@@ -3523,9 +3518,9 @@ let served = async (
   // new one, query and all. A form posted from a page left open since has
   // nothing to land on and is sent to the page instead.
   if (url.pathname == OURS || url.pathname.startsWith(`${OURS}/`)) {
-    let view = manageView(MANAGE + url.pathname.slice(OURS.length))
-    if (!view) return nothingHere(env)
-    let to = new URL(manageAt(space.slug, view, env))
+    let path = movedFor(MANAGE + url.pathname.slice(OURS.length), space.slug)
+    if (!path) return nothingHere(env)
+    let to = new URL(path, hostUrl(env))
     for (let [k, v] of url.searchParams) to.searchParams.append(k, v)
     return req.method == 'GET' || req.method == 'HEAD'
       ? moved(req, to.href)

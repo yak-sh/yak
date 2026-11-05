@@ -30,7 +30,8 @@ let face = (at: Partial<Parameters<typeof spaceIndex>[0]> = {}) =>
     ...at,
   }).text()
 
-// The side's links, by section: the person's own, then the space's.
+// The side's links, by section: the space's, then the person's own, and the
+// way back to the Operator over them.
 let sides = (html: string) => {
   let { document } = parseHTML(html)
   let links = (nav: string) =>
@@ -41,38 +42,57 @@ let sides = (html: string) => {
   return {
     document,
     account: links('aria-labelledby="side-account"'),
-    space: links('aria-label="This space"'),
+    space: links('aria-labelledby="side-space"'),
+    back: document.querySelector('.Desk_Back'),
     current: document.querySelector('.SideNav [aria-current]')?.textContent
       ?.trim(),
   }
 }
 
-test('one side is the whole menu: your account, then the space you are in', async () => {
+// A space of Dana's whose Operator is Pip.
+let pip = [{ slug: 'dana', title: '', owner: true, own: true, operator: 'Pip' }]
+
+test('Manage is one side: back to the Operator, the space you manage, then your account', async () => {
   let page = await block({
     apps: [{ eid: 'recipes', slug: 'recipes', title: 'Recipes' }],
+    spaces: pip,
   })
   assertStringIncludes(page, 'href="https://dana.yaks.app/recipes/"')
-  let { document, account, space } = sides(page)
+  let { document, account, space, back } = sides(page)
+  assertEquals(back?.textContent, 'Back to Pip')
+  assertEquals(back?.getAttribute('href'), '/manage/dana')
+  assertEquals(document.querySelector('.Desk_Title')?.textContent, 'Manage')
   assertEquals(account, [
     { label: 'Profile', href: '/manage/account/profile' },
-    { label: 'Invite', href: '/manage/account/invite' },
+    { label: 'Invite a friend', href: '/manage/account/invite' },
     { label: 'Agents', href: '/manage/account/agents' },
     { label: 'Shared with you', href: '/manage/account/shared' },
   ])
-  assertEquals(space.map((l) => l.label), [
-    'Dashboard',
-    'Operator',
-    'Apps',
-    'People',
-    'Connections',
-    'Visits',
-    'Billing',
-    'Settings',
-    'Trash',
+  // No Dashboard: the space's own address is its chat.
+  assertEquals(space, [
+    { label: 'Apps', href: '/manage/dana/apps' },
+    { label: 'People', href: '/manage/dana/people' },
+    { label: 'Pip, your Operator', href: '/manage/dana/operator' },
+    { label: 'Linked accounts', href: '/manage/dana/connections' },
+    { label: 'Visits', href: '/manage/dana/visits' },
+    { label: 'Billing', href: '/manage/dana/billing' },
+    { label: 'Space settings', href: '/manage/dana/settings' },
+    { label: 'Trash', href: '/manage/dana/trash' },
   ])
-  let to = Object.fromEntries(space.map((l) => [l.label, l.href]))
-  assertEquals(to.Dashboard, '/manage/dana')
-  assertEquals(to.Settings, '/manage/dana/settings')
+  // Each page is titled as the side names it.
+  for (
+    let [view, title] of [
+      ['operator', 'Pip, your Operator'],
+      ['connections', 'Linked accounts'],
+      ['settings', 'Space settings'],
+      ['invite', 'Invite a friend'],
+    ] as const
+  ) {
+    let { document } = parseHTML(await block({ view, spaces: pip }))
+    assertEquals(document.querySelector('h1')?.textContent, title)
+  }
+  // Where the space's Operator has no name, it is yours.
+  assertEquals(sides(await block()).back?.textContent, 'Back to your Operator')
   assertStringIncludes(page, 'Connect your agent')
   assertEquals(
     document.querySelector('.Desk_Connect .Button')?.getAttribute('href'),
@@ -193,14 +213,15 @@ test('the Operator page is drawn beside the side, which a member sees with only 
   let owner = sides(
     await block({ view: 'operator', operator: '<p id="ask">Ask</p>' }),
   )
-  assertEquals(owner.current, 'Operator')
+  assertEquals(owner.current, 'Your Operator')
   assertEquals(owner.space.length > 1, true)
   assertStringIncludes(
     owner.document.querySelector('#content')!.innerHTML,
     '<p id="ask">Ask</p>',
   )
   let member = sides(await block({ view: 'operator', member: true }))
-  assertEquals(member.space.map((l) => l.label), ['Operator'])
+  assertEquals(member.space.map((l) => l.label), ['Your Operator'])
+  assertEquals(member.back?.getAttribute('href'), '/manage/dana')
   assertEquals(member.account.length, 4)
   // On the person's own space it is the Operator too.
   let own = sides(
@@ -209,7 +230,7 @@ test('the Operator page is drawn beside the side, which a member sees with only 
       spaces: [{ slug: 'dana', title: 'Dana', owner: true, own: true }],
     }),
   )
-  assertEquals(own.current, 'Operator')
+  assertEquals(own.current, 'Your Operator')
 })
 
 test('on a phone, Menu opens the same side', async () => {
@@ -503,8 +524,8 @@ test('Billing is a management page beside Settings with space checkout and porta
     )
     assertEquals(document.querySelector('.Settings_Tabs'), null)
     assertEquals(
-      [...document.querySelectorAll('.SideNav a')].map((a) =>
-        a.getAttribute('href')
+      [...document.querySelectorAll('nav[aria-labelledby="side-space"] a')].map(
+        (a) => a.getAttribute('href'),
       ).slice(-4),
       (['visits', 'billing', 'settings', 'trash'] as const).map((view) =>
         managePath(view, 'dana')
