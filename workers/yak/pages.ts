@@ -1959,6 +1959,7 @@ export let desk = (at: DeskPage, env: Host = {}) => {
     shared: 'Shared with you',
     space: 'New space',
     operator: yourOperator(at).title,
+    updates: 'Updates',
     apps: 'Apps',
     people: 'People',
     connections: 'Linked accounts',

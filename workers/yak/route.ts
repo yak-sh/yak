@@ -36,6 +36,7 @@ export type SpaceView =
   | 'apps'
   | 'new'
   | 'operator'
+  | 'updates'
   | 'people'
   | 'connections'
   | 'visits'
@@ -50,6 +51,7 @@ let SPACE_VIEWS: SpaceView[] = [
   'apps',
   'new',
   'operator',
+  'updates',
   'people',
   'connections',
   'visits',

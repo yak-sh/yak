@@ -14,7 +14,12 @@ import { platform } from './testing.ts'
 import { operatorModel, operatorService } from './operator-testing.ts'
 import { receive, rootOf } from './operator-channels.ts'
 import { CONVERSATION } from './operator-host.ts'
-import { chatPage, operatorAnswer, operatorBody } from './operator-page.ts'
+import {
+  chatPage,
+  operatorAnswer,
+  operatorBody,
+  updatesPage,
+} from './operator-page.ts'
 import { NAMES, pick } from './operator-name.ts'
 import { chatPath, managed, managePath } from './route.ts'
 
@@ -152,14 +157,9 @@ test('a conversation opens in the chat app: its words, each step in plain words,
   )
 })
 
-test('the chat app lists every conversation beside the open one, and links to the settings', () => {
+test('the chat app lists every conversation beside the open one', () => {
   let item = page.document.querySelector('.Talk_Item[aria-current="page"]')
   assertEquals(item?.getAttribute('href'), chatPath('clerk', task))
-  assertEquals(
-    page.document.querySelector('.Talk_New')?.getAttribute('href'),
-    chatPath('clerk'),
-  )
-  assertStringIncludes(page.document.querySelector('.Talk_Foot')!.innerHTML, at)
   assertEquals(
     byRequest.document.querySelector('[data-task]')?.getAttribute('data-task'),
     task,
@@ -167,15 +167,134 @@ test('the chat app lists every conversation beside the open one, and links to th
   assertEquals(byRequest.document.querySelector('[name=task]'), null)
 })
 
-test('a new conversation asks what to do, and one that is gone says so', () => {
+// The side as a person with six apps meets it, as the space's owner or a
+// member who may change it: each line it shows, in order, and where each goes.
+let six = [
+  'Recipe box',
+  'Holdfast',
+  'Book club',
+  'Chores',
+  'Garden log',
+  'RSVP',
+]
+  .map((title, i) => ({ slug: `app${i}`, title }))
+let beside = { name: '  Ada Lovelace ', apps: six }
+let sided = async (role: 'owner' | 'editor', open = task) => {
+  let { document } = parseHTML(
+    await (await chatPage(p.env, space, { ...who, role }, open, beside))
+      .text(),
+  )
+  let lines = [
+    ...document.querySelectorAll(
+      '.Talk_Side :is(.Talk_Brand, .Desk_Space b, .Talk_New, .Talk_Places a, .Talk_Group, .Talk_Title, .Talk_Foot a)',
+    ),
+  ]
+  return {
+    document,
+    said: lines.map((e) => e.textContent!.trim()),
+    to: Object.fromEntries(
+      lines.map((e) => [e.textContent!.trim(), e.getAttribute('href')]),
+    ),
+  }
+}
+let owner = await sided('owner')
+let member = await sided('editor')
+test('the side holds the space, New chat, Updates, a few apps, the chats and Manage', () => {
+  let op = space.operator
+  assertEquals(owner.said, [
+    'yaks.app',
+    'Township',
+    'New chat',
+    `Updates from ${op}`,
+    'Your apps',
+    'Recipe box',
+    'Holdfast',
+    'Book club',
+    'Chores',
+    'All 6 apps',
+    'Chats',
+    CONVERSATION,
+    'Manage',
+  ])
+  let host = 'https://clerk.yaks.app'
+  assertEquals(owner.to, {
+    'yaks.app': chatPath('clerk'),
+    Township: null,
+    'New chat': chatPath('clerk'),
+    [`Updates from ${op}`]: managePath('updates', 'clerk'),
+    'Your apps': null,
+    'Recipe box': `${host}/app0/`,
+    Holdfast: `${host}/app1/`,
+    'Book club': `${host}/app2/`,
+    Chores: `${host}/app3/`,
+    'All 6 apps': managePath('apps', 'clerk'),
+    Chats: null,
+    [CONVERSATION]: null,
+    Manage: managePath('apps', 'clerk'),
+  })
+  // A member may open none of the settings but the Operator's.
+  assertEquals(member.said.includes('All 6 apps'), false)
+  assertEquals(member.to.Manage, managePath('operator', 'clerk'))
+})
+
+test('a new chat greets the person by name, with ways to start that fill the box', async () => {
+  let { document } = await sided('owner', 'new')
+  assertEquals(
+    document.querySelector('.Talk_Hello h2')?.textContent,
+    'What can I do for you, Ada?',
+  )
+  assertEquals(
+    [...document.querySelectorAll('.Talk_Starts [data-say]')].map((b) => [
+      b.textContent,
+      b.getAttribute('data-say'),
+    ]),
+    [
+      ['Make a new app', 'Make me an app for '],
+      ['Change Recipe box', 'In Recipe box, '],
+      ['Something isn’t working', 'Something isn’t working: '],
+      [`What can ${space.operator} do?`, 'What can you do for me?'],
+    ],
+  )
+  // What needs the person waits over the box (T-140508).
+  assertEquals(
+    document.querySelector('[data-needs]')?.nextElementSibling?.id,
+    'ask',
+  )
   assertEquals(fresh.code, 200)
   assertStringIncludes(
     fresh.document.querySelector('.Talk_Hello')!.textContent!,
-    'What would you like done in Township?',
+    'What can I do for you?',
   )
   assertEquals(fresh.document.querySelector('[name=say]') != null, true)
+  assertEquals(
+    fresh.document.querySelector('.Talk_Starts button')?.textContent,
+    'Make a new app',
+  )
+})
+
+test('a chat that is gone says so, with no box', () => {
   assertEquals(gone.code, 404)
   assertEquals(gone.document.querySelector('[name=say]'), null)
+  assertEquals(gone.document.querySelector('[data-needs]'), null)
+})
+
+test('Updates from the Operator opens beside the same side', async () => {
+  let { document } = parseHTML(
+    await (await updatesPage(p.env, space, who, beside)).text(),
+  )
+  assertEquals(
+    document.querySelector('[data-title]')?.textContent,
+    `Updates from ${space.operator}`,
+  )
+  assertEquals(
+    document.querySelector('.Talk_Places [aria-current="page"]')
+      ?.getAttribute('href'),
+    managePath('updates', 'clerk'),
+  )
+  assertEquals(managed(managePath('updates', 'clerk')), {
+    space: 'clerk',
+    view: 'updates',
+  })
 })
 
 test("the chat app says whose Operator it is, and opens another space's", async () => {
@@ -193,7 +312,7 @@ test("the chat app says whose Operator it is, and opens another space's", async 
   let mill = { ...space, slug: 'mill', title: 'Mill Pond', operator: 'Fern' }
   for (let [at, name] of [[space, 'Township'], [mill, 'Mill Pond']] as const) {
     let { document } = parseHTML(
-      await (await chatPage(p.env, at, who, 'new', spaces)).text(),
+      await (await chatPage(p.env, at, who, 'new', { spaces })).text(),
     )
     let said = (s: string) => document.querySelector(s)?.textContent?.trim()
     assertEquals(
@@ -202,10 +321,7 @@ test("the chat app says whose Operator it is, and opens another space's", async 
     )
     assertEquals(said('.Talk_Whose .Desk_Space b'), name)
     assertEquals(said('.Talk_Who'), `${at.operator}, ${name}’s Operator`)
-    assertStringIncludes(
-      said('.Talk_Hello')!,
-      `You’re talking to ${at.operator}, ${name}’s Operator.`,
-    )
+    assertStringIncludes(said('.Talk_Hello')!, `Ask ${at.operator}`)
     assertEquals(
       [...document.querySelectorAll('.Talk_Whose .Desk_Row small')].map((a) =>
         a.textContent

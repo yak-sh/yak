@@ -5,6 +5,8 @@
 // same paths without any browser JavaScript.
 import type { IconNode } from 'lucide'
 // @ts-types="@yaks/ui/lucide"
+import Bell from 'lucide/dist/esm/icons/bell.mjs'
+// @ts-types="@yaks/ui/lucide"
 import Bot from 'lucide/dist/esm/icons/bot.mjs'
 // @ts-types="@yaks/ui/lucide"
 import ChartNoAxesColumnIncreasing from 'lucide/dist/esm/icons/chart-no-axes-column-increasing.mjs'
@@ -41,6 +43,8 @@ import Settings2 from 'lucide/dist/esm/icons/settings-2.mjs'
 // @ts-types="@yaks/ui/lucide"
 import Share2 from 'lucide/dist/esm/icons/share-2.mjs'
 // @ts-types="@yaks/ui/lucide"
+import SlidersHorizontal from 'lucide/dist/esm/icons/sliders-horizontal.mjs'
+// @ts-types="@yaks/ui/lucide"
 import Trash2 from 'lucide/dist/esm/icons/trash-2.mjs'
 // @ts-types="@yaks/ui/lucide"
 import User from 'lucide/dist/esm/icons/user.mjs'
@@ -52,6 +56,8 @@ export let icons = {
   'layout-grid': LayoutGrid,
   globe: Globe,
   bot: Bot,
+  bell: Bell,
+  'sliders-horizontal': SlidersHorizontal,
   plug: Plug,
   users: Users,
   user: User,

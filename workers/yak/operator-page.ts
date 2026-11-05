@@ -6,7 +6,7 @@ import { builderOf, SPACE } from './build-door.ts'
 import { vouched, type Who } from './session.ts'
 import { answered } from './meta.ts'
 import { esc, type Picked, shell, spaceChoice } from './pages.ts'
-import { url } from './host.ts'
+import { spaceHost, url } from './host.ts'
 import { chatPath, logoPath, managePath } from './route.ts'
 import {
   keepFile,
@@ -38,6 +38,8 @@ import {
 } from './operator-view.ts'
 import { DOCUMENTS } from './documents.ts'
 import { settings } from './phone-providers.ts'
+import { icon } from './icons.ts'
+import { unread, updates } from './updates.ts'
 
 // What the message box takes: up to COUNT files at a time, each up to SIZE
 // (keepFile's ceiling), and the kinds the Operator reads (operator-channels.ts
@@ -481,21 +483,185 @@ for (let form of document.querySelectorAll('#texts, #name')) {
 }
 </script>`
 
+/** What the chat app's side holds beside every page of it, read by its door
+ * (apps.ts `beside`): every space the person may open (its selector), the
+ * apps of this one they may open, and what they are called. */
+export type Beside = {
+  spaces?: Picked[]
+  apps?: { slug: string; title: string }[]
+  name?: string | null
+}
+
+// How many of the space's apps the side shows before "All N apps".
+let APPS = 4
+
+// The chat app's side, the product's whole menu (T-140506): whose Operator
+// it is, in the space selector; a new chat; Updates from the Operator, with
+// how many are unread; the space's apps; the person's chats with it; and at
+// the foot Manage, the settings behind the product (today's dashboard pages:
+// its Apps for the space's owner, the Operator's settings for a member, the
+// only one of them they may open). `current` holds the chats this page shows,
+// or `updates`. On a phone the bar's Menu opens it over the page (`:target`,
+// no script).
+let side = (
+  env: Env,
+  space: Space,
+  who: Who,
+  beside: Beside,
+  at: { items: Worked[]; unread: number; current: string[] },
+) => {
+  let owner = who.role == 'owner'
+  let here = beside.spaces?.find((s) => s.slug == space.slug) ?? {
+    slug: space.slug,
+    title: space.title,
+    owner,
+    own: false,
+    operator: space.operator,
+    logo: logoPath(space),
+  }
+  let spaces = beside.spaces ?? []
+  let apps = beside.apps ?? []
+  let host = `https://${spaceHost(env, space.slug)}`
+  let operator = esc(space.operator)
+  return `<aside class="Talk_Side" id="menu" aria-label="Menu">
+<div class="Talk_Top"><a class="Talk_Brand" href="${
+    chatPath(space.slug)
+  }"><img src="${
+    url(env, '/yak.webp')
+  }" width="28" height="28" alt="">yaks.app</a><a class="Button Button-quiet Talk_Close" href="#">✕ Close</a></div>
+<div class="Talk_Whose">${
+    spaceChoice(
+      here,
+      spaces.some((s) => s.slug == space.slug) ? spaces : [here, ...spaces],
+      (s) => chatPath(s.slug),
+      '',
+      (s) => s.operator ?? '',
+    )
+  }</div>
+<a class="Button Button-quiet Talk_New" href="${chatPath(space.slug)}">${
+    icon('plus')
+  }New chat</a>
+<nav class="Talk_Places" aria-label="From ${operator}"><a href="${
+    managePath('updates', space.slug)
+  }"${at.current.includes('updates') ? ' aria-current="page"' : ''}>${
+    icon('bell')
+  }Updates from ${operator}${
+    at.unread ? `<span class="Talk_Count">${at.unread}</span>` : ''
+  }</a></nav>
+<h2 class="Talk_Group" id="side-apps">Your apps</h2>
+${
+    apps.length
+      ? `<nav class="Talk_Places" aria-labelledby="side-apps">${
+        apps.slice(0, APPS).map((a) =>
+          `<a href="${host}/${
+            esc(a.slug)
+          }/" target="_blank" rel="noopener"><img class="Talk_Icon" src="${host}/${
+            esc(a.slug)
+          }/icon.png" width="24" height="24" alt="" loading="lazy">${
+            esc(a.title || a.slug)
+          }</a>`
+        ).join('')
+      }${
+        owner && apps.length > APPS
+          ? `<a class="Talk_All" href="${
+            managePath('apps', space.slug)
+          }">All ${apps.length} apps</a>`
+          : ''
+      }</nav>`
+      : `<p class="Talk_None">None yet. Ask ${operator} to make one.</p>`
+  }
+<h2 class="Talk_Group" id="side-chats">Chats</h2>
+<nav class="Talk_Nav" aria-labelledby="side-chats" data-side>${
+    sidebar(at.items, space.slug, at.current)
+  }</nav>
+<div class="Talk_Foot"><a href="${
+    managePath(owner ? 'apps' : 'operator', space.slug)
+  }">${icon('sliders-horizontal')}Manage</a></div>
+</aside>`
+}
+
+// A page of the chat app: the side, and beside it the bar naming the page
+// and whose Operator it is, over `main`.
+let talkPage = async (
+  env: Env,
+  space: Space,
+  who: Who,
+  beside: Beside,
+  page: {
+    title: string
+    status: number
+    items: Worked[]
+    current: string[]
+    main: string
+    // the main's own modifier, beside `Talk_Main`
+    kind?: string
+    // where the skip link goes, and what it says
+    skip: [string, string]
+    script?: string
+  },
+) => {
+  let named = space.title || space.slug
+  let whose = `${space.operator}, ${named}’s Operator`
+  return shell(
+    env,
+    `${esc(page.title)} · ${esc(space.operator)}`,
+    null,
+    page.status,
+    `<a class="Desk_Skip" href="${page.skip[0]}">${page.skip[1]}</a>
+<div class="Talk">
+${
+      side(env, space, who, beside, {
+        items: page.items,
+        unread: await unread(env, space, who),
+        current: page.current,
+      })
+    }
+<div class="Talk_Main${page.kind ? ` ${page.kind}` : ''}" id="content">
+<header class="Talk_Bar"><a class="Button Button-quiet Talk_Menu" href="#menu" aria-label="Menu">☰</a><div class="Talk_Heads"><h1 class="Talk_Head" data-title>${
+      esc(page.title)
+    }</h1><p class="Talk_Who">${esc(whose)}</p></div></header>
+${page.main}
+</div>
+</div>
+${page.script ?? ''}`,
+    { 'cache-control': 'private, no-store', 'x-robots-tag': 'noindex' },
+    'Talk_Page',
+  )
+}
+
+// What a new chat offers to start with, each a few words the box is filled
+// with for the person to finish: an app made, one of theirs changed, a
+// problem, and what the Operator can do.
+let starts = (operator: string, apps: Beside['apps'] = []) =>
+  [
+    ['Make a new app', 'Make me an app for '],
+    ...apps.slice(0, 1).map((a) => [
+      `Change ${a.title || a.slug}`,
+      `In ${a.title || a.slug}, `,
+    ]),
+    ['Something isn’t working', 'Something isn’t working: '],
+    [`What can ${operator} do?`, 'What can you do for me?'],
+  ].map(([label, say]) =>
+    `<button class="Button Button-quiet" type="button" data-say="${esc(say)}">${
+      esc(label)
+    }</button>`
+  ).join('')
+
 /**
  * One conversation with the Operator in its chat app, a page of its own
- * (route.ts `chatPath`): the conversations down the side, newest first, with
- * a way to start one; the conversation filling the page, what it is doing
+ * (route.ts `chatPath`): the product's side (`side`) with the person's chats
+ * in it, newest first; the conversation filling the page, what it is doing
  * now under it; and the box to write in at the foot, with Stop while it
- * works. `open` is a task, a request no task has taken yet, or `new`. Whose
- * Operator it is heads the side, the title and the greeting, and the side's
- * space selector over `spaces` opens another space's Operator.
+ * works. `open` is a task, a request no task has taken yet, or `new`, which
+ * greets the person by name, holds over the box what needs them
+ * (`data-needs`, T-140508), and under it a few ways to start.
  */
 export let chatPage = async (
   env: Env,
   space: Space,
   who: Who,
   open: string,
-  spaces: Picked[] = [],
+  beside: Beside = {},
 ) => {
   let at = managePath('operator', space.slug)
   let [talked, items] = await Promise.all([
@@ -503,70 +669,60 @@ export let chatPage = async (
     workOf(env, space, who),
   ])
   let fresh = open == 'new'
-  let title = fresh ? `Message ${space.operator}` : talked.title || 'Not here'
-  let named = space.title || space.slug
-  let whose = `${space.operator}, ${named}’s Operator`
-  let here = spaces.find((s) => s.slug == space.slug) ?? {
-    slug: space.slug,
-    title: space.title,
-    owner: true,
-    own: false,
-    operator: space.operator,
-    logo: logoPath(space),
-  }
-  return shell(
-    env,
-    `${esc(title)} · ${esc(space.operator)}`,
-    null,
-    fresh || talked.title ? 200 : 404,
-    `<a class="Desk_Skip" href="#ask">Skip to the message box</a>
-<div class="Talk">
-<aside class="Talk_Side" id="menu" aria-label="Conversations">
-<div class="Talk_Top"><a class="Talk_Brand" href="${
-      url(env, chatPath(space.slug))
-    }"><img src="${
-      url(env, '/yak.webp')
-    }" width="28" height="28" alt="">Operator</a><a class="Button Button-quiet Talk_Close" href="#">✕ Close</a></div>
-<div class="Talk_Whose"><p class="Talk_Of">The Operator of</p>${
-      spaceChoice(
-        here,
-        spaces.some((s) => s.slug == space.slug) ? spaces : [here, ...spaces],
-        (s) => chatPath(s.slug),
-        '',
-        (s) => s.operator ?? '',
-      )
-    }</div>
-<a class="Button Talk_New" href="${chatPath(space.slug)}">+ Message ${
-      esc(space.operator)
-    }</a>
-<nav class="Talk_Nav" aria-label="Your conversations" data-side>${
-      sidebar(items, space.slug, [open, talked.task])
-    }</nav>
-<div class="Talk_Foot"><a href="${
-      managePath('apps', space.slug)
-    }">Manage</a><a href="${at}">Operator settings</a></div>
-</aside>
-<div class="Talk_Main">
-<header class="Talk_Bar"><a class="Button Button-quiet Talk_Menu" href="#menu" aria-label="Conversations">☰</a><div class="Talk_Heads"><h1 class="Talk_Head" data-title>${
-      esc(title)
-    }</h1><p class="Talk_Who">${esc(whose)}</p></div></header>
-<div class="Talk_Column" data-conversation aria-live="polite">${
+  let first = beside.name?.trim().split(/\s+/)[0]
+  return talkPage(env, space, who, beside, {
+    title: fresh ? `Message ${space.operator}` : talked.title || 'Not here',
+    status: fresh || talked.title ? 200 : 404,
+    items,
+    current: [open, talked.task],
+    kind: fresh ? 'Talk_Main-new' : '',
+    skip: fresh || talked.title
+      ? ['#ask', 'Skip to the message box']
+      : ['#content', 'Skip to content'],
+    main: `<div class="Talk_Column" data-conversation aria-live="polite">${
       talked.html ||
       (fresh
-        ? `<div class="Talk_Hello"><h2>What would you like done in ${
-          esc(named)
-        }?</h2><p>You’re talking to ${esc(whose)}. Ask ${
+        ? `<div class="Talk_Hello"><img class="Talk_Yak" src="${
+          url(env, '/mascot/thinking-still.webp')
+        }" width="64" height="64" alt=""><h2>What can I do for you${
+          first ? `, ${esc(first)}` : ''
+        }?</h2><p>Ask ${
           esc(space.operator)
-        } for a change in the space’s apps, or send a document or a photo.</p></div>`
-        : '<div class="Talk_Hello"><h2>This conversation is not here</h2><p>It may have been removed. Your other conversations are listed beside this one.</p></div>')
+        } to make an app, change one, or find something out. You can send a photo or a document too.</p></div>`
+        : '<div class="Talk_Hello"><h2>This chat is not here</h2><p>It may have been removed. Your other chats are listed beside this one.</p></div>')
     }</div>
+${fresh ? '<div class="Talk_Needs" data-needs></div>' : ''}
 ${fresh || talked.title ? composer(at) : ''}
-</div>
-</div>
-${chatScript(at, who, space, open, talked.begun || open)}`,
-    { 'cache-control': 'private, no-store', 'x-robots-tag': 'noindex' },
-    'Talk_Page',
-  )
+${
+      fresh
+        ? `<div class="Talk_Starts" role="group" aria-label="Ways to start">${
+          starts(space.operator, beside.apps)
+        }</div>`
+        : ''
+    }`,
+    script: chatScript(at, who, space, open, talked.begun || open),
+  })
+}
+
+/** Updates from the Operator (updates.ts), beside the chat app's side. */
+export let updatesPage = async (
+  env: Env,
+  space: Space,
+  who: Who,
+  beside: Beside = {},
+) => {
+  let [items, main] = await Promise.all([
+    workOf(env, space, who),
+    updates(env, space, who),
+  ])
+  return talkPage(env, space, who, beside, {
+    title: `Updates from ${space.operator}`,
+    status: 200,
+    items,
+    current: ['updates'],
+    skip: ['#content', 'Skip to content'],
+    main: `<div class="Talk_Column">${main}</div>`,
+  })
 }
 
 // The box a person writes in, at the foot of the conversation: their words,
@@ -651,6 +807,17 @@ let follow = (was) => { if (was) globalThis.scrollTo?.(0, document.body.scrollHe
 // Enter sends, Shift+Enter starts a new line.
 form?.elements.say.addEventListener('keydown', (e) => {
   if (e.key == 'Enter' && !e.shiftKey && !e.isComposing) { e.preventDefault(); form.requestSubmit?.() }
+})
+// A way to start fills the box with its words, kept as the draft, for the
+// person to finish.
+document.addEventListener('click', (e) => {
+  let start = e.target.closest('[data-say]')
+  if (!start || !form) return
+  let say = form.elements.say
+  say.value = start.dataset.say
+  say.dispatchEvent(new Event('input', { bubbles: true }))
+  say.focus()
+  say.setSelectionRange(say.value.length, say.value.length)
 })
 // Stop takes effect on the page at once; the Operator's own word follows.
 document.addEventListener('click', async (e) => {

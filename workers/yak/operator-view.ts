@@ -540,4 +540,4 @@ export let sidebar = (items: Worked[], space: string, current: string[]) =>
         }</span><span class="Talk_Meta">${meta(w)}</span></a></li>`
       ).join('')
     }</ul>`
-    : '<p class="Talk_None">Your conversation and the work it starts appear here.</p>'
+    : '<p class="Talk_None">Your chats appear here.</p>'

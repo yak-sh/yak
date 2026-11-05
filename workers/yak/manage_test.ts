@@ -241,8 +241,18 @@ test('the dashboard is at the apex, whatever serves the space', async () => {
     // An Operator conversation opens in its chat app, for nobody else.
     let chat = await get(chatPath(slug))
     assertEquals(chat.status, 200)
-    assertStringIncludes(await chat.text(), 'class="Talk"')
+    let chatted = await chat.text()
+    assertStringIncludes(chatted, 'class="Talk"')
+    // Its side holds the space's apps, and Updates opens beside it.
+    assertStringIncludes(chatted, `href="https://${host}/site/"`)
     assertEquals((await get(chatPath(slug), other.cookie)).status, 404)
+    let updates = await get(managePath('updates', slug))
+    assertEquals(updates.status, 200)
+    assertStringIncludes(await updates.text(), 'aria-current="page"')
+    assertEquals(
+      (await get(managePath('updates', slug), other.cookie)).status,
+      404,
+    )
     let theirs = (await get(MANAGE, other.cookie)).headers.get('location')!
     assertEquals(
       theirs,

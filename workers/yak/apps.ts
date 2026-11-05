@@ -63,6 +63,7 @@ import * as dirPart from './directory.ts'
 import { ahead, bearing, granted, itsApp, ran } from './dispatch.ts'
 import { bound, type Env } from './env.ts'
 import type { Mail } from './mail.ts'
+import type { Beside } from './operator-page.ts'
 import { pageAt, pilled, standing } from './gallery.ts'
 import { billedTo, checkout, planCard, portal, wanted } from './billing.ts'
 import { connecting, connectionsOf, enabled } from './connections.ts'
@@ -2525,7 +2526,7 @@ let manage = async (req: Request, env: Env): Promise<Response> => {
     at.space,
     null,
     person,
-    view == 'operator',
+    view == 'operator' || view == 'updates',
   )
   if (!space) {
     // A link written before the space moved to another name (T-34658).
@@ -2545,17 +2546,18 @@ let manage = async (req: Request, env: Env): Promise<Response> => {
   // requests are answered by it, its settings page is drawn like every
   // other, and each conversation with it opens in its chat app, which
   // opens the files sent in it where it stands (operator-view.ts `attached`).
+  // Its Updates open in the chat app too.
+  let reading = req.method == 'GET' || req.method == 'HEAD'
+  if (view == 'updates' && writes(who.role) && !space.trashed) {
+    if (!reading) return nothingHere(env)
+    let { updatesPage } = await import('./operator-page.ts')
+    return updatesPage(env, space, who, await beside(dir, space, who))
+  }
   if (view == 'operator' && writes(who.role) && !space.trashed) {
     let { chatPage, operatorAnswer } = await import('./operator-page.ts')
     if (at.open && !new URL(req.url).searchParams.has('attachment')) {
-      return req.method == 'GET' || req.method == 'HEAD'
-        ? chatPage(
-          env,
-          space,
-          who,
-          at.open,
-          await dir.seats(person).then((seats) => pickable(dir, seats)),
-        )
+      return reading
+        ? chatPage(env, space, who, at.open, await beside(dir, space, who))
         : nothingHere(env)
     }
     return await operatorAnswer(req, env, space, who) ??
@@ -2680,6 +2682,26 @@ let pickable = async (dir: ReturnType<typeof directory>, seats: Seat[]) => {
     operator: s.space.operator,
     logo: logoPath(s.space),
   }))
+}
+
+// What the chat app's side holds (operator-page.ts `Beside`), asked at once:
+// the spaces its selector offers, the apps here this person may open, and
+// what they are called.
+let beside = async (
+  dir: ReturnType<typeof directory>,
+  space: Space,
+  who: Owner,
+): Promise<Beside> => {
+  let [spaces, { mine }, name] = await Promise.all([
+    dir.seats(who.person).then((seats) => pickable(dir, seats)),
+    shelf(dir, space, who),
+    dir.nameAt(who.person),
+  ])
+  return {
+    spaces,
+    apps: mine.map((a) => ({ slug: a.slug, title: a.title })),
+    name,
+  }
 }
 
 // One page of a space's (pages.ts `desk`), for its owner, or its Operator for
