@@ -216,6 +216,9 @@ let band = (
     input?.scrollIntoView?.({ block: 'center', behavior: 'smooth' })
     input?.focus({ preventScroll: true })
   })
+  // A beat that carries on its window, as the outbox's retries do, finds its
+  // wire drawn and its window in: only a window's first beat plays them in.
+  let held = last && place.indexOf(place[last.i]) < last.i
   let path = layout && last?.eid
     ? wire(layout, slots, place[last.i], last.eid, view)
     : undefined
@@ -277,6 +280,7 @@ let band = (
         path
           ? h('svg', {
             class: 'Doors_Wire',
+            style: held ? '--p: 1' : undefined,
             viewBox: `0 0 ${desk!.width} ${desk!.height}`,
             'aria-hidden': 'true',
           }, h('path', { d: path, key: path, pathLength: 1 }))
@@ -294,7 +298,9 @@ let band = (
               find,
               id: short,
               class: i == last?.i ? 'is-last' : undefined,
-              style: `--slot: ${place[i] + 1}`,
+              style: `--slot: ${place[i] + 1}${
+                i == last?.i && held ? '; --p: 1' : ''
+              }`,
               key: i,
             })
           ),
