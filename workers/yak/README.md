@@ -335,8 +335,10 @@ access to a Worker. `RESEND_API` and `MAIL_FETCH` replace only the HTTP boundary
 in probes. Staging's `MAIL_SINK` redirects every recipient and removes copies
 for either provider. Missing Resend credentials never fall back to Cloudflare.
 
-Before selecting Resend, verify `bot.yak.sh` and the deployment's apex with
-Resend and pilot each sending address. Reply-tracking mailboxes also need the
+Production selects Resend (`MAIL_VIA = "resend"` in wrangler.toml); staging
+leaves it unset. Both `bot.yak.sh` and `yaks.app` are verified sending domains
+in Resend. A deployment on another apex verifies that apex with Resend before
+selecting it. Reply-tracking mailboxes also need the
 [Message-ID receipt bridge](../../packages/mail/README.md#named-transports).
 Receiving remains on Email Routing until Resend's MX, signed webhook, body and
 attachment retrieval, and durable acknowledgement path are configured and
