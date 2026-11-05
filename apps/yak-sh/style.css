@@ -28,6 +28,7 @@
   --diagram-line: var(--line);
   --diagram-soft: var(--soft);
   --diagram-fill: var(--plate);
+  --diagram-paper: var(--paper);
   --diagram-glow: var(--meadow);
   --diagram-font: var(--mono);
 }
@@ -313,9 +314,12 @@ h2 {
   margin: 0;
   border: 1px solid var(--rule);
   border-radius: 10px;
-  background: rgba(252, 249, 243, .8);
+  /* The figure's ground, opaque, so the halo behind the drawing's words is
+     the colour they sit on. */
+  --ground: color-mix(in srgb, var(--plate) 80%, var(--paper));
+  background: var(--ground);
   overflow: hidden;
-  --diagram-paper: var(--plate);
+  --diagram-paper: var(--ground);
 }
 .Figure_Bar {
   display: flex;

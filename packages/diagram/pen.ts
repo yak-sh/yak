@@ -4,12 +4,11 @@
 // stroke is going. Pure: a layout and how far each stage has come in, how far
 // each item is drawn and where the pen is out.
 import type { Layout, Link, Node } from './layout.ts'
-import { along, type Curve, on, rim } from './shape.ts'
+import { along, type Curve, curve, on } from './shape.ts'
 
 /**
  * The curve each line is drawn along, by its key: from the rim of one shape
- * to the rim of the other, straight for the first line between a pair and
- * bending further aside for each line after it.
+ * to the rim of the other, bent as far as its `bend`.
  *
  * ```ts
  * import { curves, layout } from '@yaks/diagram'
@@ -22,31 +21,12 @@ import { along, type Curve, on, rim } from './shape.ts'
  */
 export let curves = (layout: Layout): Map<string, Curve> => {
   let at = new Map(layout.nodes.map((d) => [d.eid, d]))
-  let pairs = new Map<string, number>()
-  let out = new Map<string, Curve>()
-  for (let l of layout.links) {
-    let a = at.get(l.from)!, b = at.get(l.to)!
-    let pair = [l.from, l.to].sort().join('|')
-    let k = pairs.get(pair) ?? 0
-    pairs.set(pair, k + 1)
-    let bend = k == 0 ? 0 : (k % 2 ? -1 : 1) * (24 + 14 * Math.floor(k / 2)) *
-      (l.from < l.to ? 1 : -1)
-    let dx = b.x - a.x, dy = b.y - a.y
-    let [ox, oy] = rim(a.shape, !!a.state, dx, dy)
-    let [ix, iy] = rim(b.shape, !!b.state, -dx, -dy)
-    let x0 = a.x + ox, y0 = a.y + oy, x1 = b.x + ix, y1 = b.y + iy
-    let len = Math.hypot(x1 - x0, y1 - y0) || 1
-    let nx = -(y1 - y0) / len, ny = (x1 - x0) / len
-    out.set(l.key, {
-      x0,
-      y0,
-      cx: (x0 + x1) / 2 + nx * bend,
-      cy: (y0 + y1) / 2 + ny * bend,
-      x1,
-      y1,
-    })
-  }
-  return out
+  return new Map(
+    layout.links.map((l) => [
+      l.key,
+      curve(at.get(l.from)!, at.get(l.to)!, l.bend),
+    ]),
+  )
 }
 
 /** A shape or a line, by the key a drawing marks it with: a node's eid or a

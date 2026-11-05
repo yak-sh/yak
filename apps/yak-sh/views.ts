@@ -12,7 +12,7 @@ import type { Bundle } from '@yaks/graph'
 import type { EntityProps } from '@yaks/preact'
 import type { Yak } from './yak.ts'
 import type { Line, Term } from './term.ts'
-import { type Figure, into, placeOf, SHEET, WIDER } from './figure.ts'
+import { type Figure, into, SHEET, WIDER } from './figure.ts'
 import { INSTALL, proseOf, scriptOf, shown } from './site.ts'
 import { Copy, parts } from './parts.ts'
 import { Stack } from './bands.ts'
@@ -409,7 +409,6 @@ let Figure: FunctionComponent<Ctx & { pen: Pen }> = (ctx) => {
       query: figure.query(),
       ...SHEET,
       stage: term.stage,
-      at: placeOf,
       title: 'The graph in this tab',
       drawn: (layout) => {
         figure.saw(layout, performance.now())

@@ -5,7 +5,7 @@
 // `is-new` and `--i`, its place in the order it is drawn.
 import { cut, type Layout, type Link, type Node } from './layout.ts'
 import { curves } from './pen.ts'
-import { type Curve, half, outline, radius } from './shape.ts'
+import { type Curve, half, outline, radius, tag } from './shape.ts'
 
 /** How a layout is drawn. */
 export type SvgOptions = {
@@ -39,14 +39,19 @@ let words = (d: Node) => {
     let r = radius(d.shape)
     return text('Diagram_Id', 0, 4, d.label, 'middle') +
       text('Diagram_Title', 0, r + 15, cut(d.title, 18), 'middle') +
-      text('Diagram_Comps', 0, r + 27, cut(comps, 28), 'middle')
+      text('Diagram_Comps', 0, r + 27, cut(comps, 22), 'middle')
   }
   let [w, h] = half(d.shape, !!d.state)
   let room = Math.floor((2 * w - 18) / 6.6)
   let x = -w + 9
   return text('Diagram_Id', x, -h + 15, d.label) +
     text('Diagram_Title', x, 4, cut(d.title, room)) +
-    text('Diagram_Comps', x, h - 8, cut(comps, Math.floor(room * 1.3))) +
+    text(
+      'Diagram_Comps',
+      x,
+      h - 8,
+      cut(comps, Math.floor((2 * w - 18) / 5.4)),
+    ) +
     (d.state
       ? `<circle class="Diagram_Mark" cx="${w - 11}" cy="${
         -h + 11
@@ -71,8 +76,6 @@ let node = (d: Node, i: number) => {
 
 let link = (l: Link, i: number, c: Curve) => {
   let { x0, y0, cx, cy, x1, y1 } = c
-  // The curve's midpoint, where its name sits.
-  let mx = .25 * x0 + .5 * cx + .25 * x1, my = .25 * y0 + .5 * cy + .25 * y1
   let [cls, style] = fresh(l.fresh, i)
   let kind = l.eid ? 'Diagram_Link-edge' : 'Diagram_Link-ref'
   let head = l.eid ? 'Diagram-tip' : 'Diagram-tip-ref'
@@ -80,19 +83,15 @@ let link = (l: Link, i: number, c: Curve) => {
     n(cx)
   },${n(cy)} ${n(x1)},${n(y1)}" marker-end="url(#${head})"/>`
   // An edge is an entity: a diamond on its line, its relation and its id
-  // beside it, on the side away from the line's run.
-  let len = Math.hypot(x1 - x0, y1 - y0) || 1
-  let side = Math.abs(y1 - y0) / len > .5 ? Math.sign(-(y1 - y0) || 1) : 1
-  let anchor = side > 0 ? 'start' : 'end'
+  // beside it.
+  let { x, y, name, sub } = tag(c, l.mid, l.name, l.eid && (l.label ?? ''))
   let named = l.eid
-    ? `<path class="Diagram_Dia" d="M${n(mx)},${n(my - 7)}L${n(mx + 7)},${
-      n(my)
-    }L${n(mx)},${n(my + 7)}L${n(mx - 7)},${n(my)}Z"/>` +
-      text('Diagram_Name', mx + side * 12, my - 1, l.name, anchor) +
-      (l.label
-        ? text('Diagram_Sub', mx + side * 12, my + 11, l.label, anchor)
-        : '')
-    : text('Diagram_Name', mx, my + 3, l.name, 'middle')
+    ? `<path class="Diagram_Dia" d="M${n(x)},${n(y - 7)}L${n(x + 7)},${n(y)}L${
+      n(x)
+    },${n(y + 7)}L${n(x - 7)},${n(y)}Z"/>` +
+      text('Diagram_Name', name[0], name[1], l.name, name[2]) +
+      (l.label ? text('Diagram_Sub', sub[0], sub[1], l.label, sub[2]) : '')
+    : text('Diagram_Name', name[0], name[1], l.name, name[2])
   return `<g class="Diagram_Link ${kind}${cls}" data-key="${
     esc(l.key)
   }" data-from="${esc(l.from)}" data-to="${esc(l.to)}" data-name="${

@@ -10,10 +10,10 @@
 import { type FunctionComponent, h } from 'preact'
 import { useEffect, useLayoutEffect, useRef, useState } from 'preact/hooks'
 import { Prose, words } from './prose.ts'
-import { half, type Layout, mount } from '@yaks/diagram'
+import { type Layout, mount, rim } from '@yaks/diagram'
 import type { Bundle } from '@yaks/graph'
 import { human } from '@yaks/id'
-import { placeOf, SHEET, STORY } from './figure.ts'
+import { SHEET, STORY } from './figure.ts'
 import type { Ctx } from './views.ts'
 import { text, useHeard, useReached, useTold } from './told.ts'
 import { clicked, opener } from './editor.ts'
@@ -41,10 +41,10 @@ let slot = (height: number, n: number, i: number) => {
 export let wire = (layout: Layout, n: number, i: number, eid: string) => {
   let node = layout.nodes.find((n) => n.eid == eid)
   if (!node) return
-  let [w] = half(node.shape, !!node.state)
+  let [dx] = rim(node.shape, !!node.state, -1, 0)
   let [top, tall] = slot(layout.height, n, i)
   let x0 = DESK.column, y0 = top + tall / 2
-  let x1 = DESK.column + DESK.space + node.x - w, y1 = node.y
+  let x1 = DESK.column + DESK.space + node.x + dx, y1 = node.y
   let mid = DESK.column + DESK.space / 2
   return `M${x0.toFixed(1)},${y0.toFixed(1)}H${mid.toFixed(1)}V${
     y1.toFixed(1)
@@ -110,7 +110,6 @@ let band = (
       graph: yak.graph,
       query,
       ...SHEET,
-      at: placeOf,
       title: 'The graph in this tab',
       drawn: setLayout,
     })

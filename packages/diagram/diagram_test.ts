@@ -7,7 +7,16 @@ import { graph } from '@yaks/graph'
 import { ram } from '@yaks/ram'
 import { loadVocab } from '@yaks/vocab'
 import { parseHTML } from 'linkedom'
-import { ink, type Layout, layout, mount, progress, svg, tip } from './mod.ts'
+import {
+  ink,
+  type Layout,
+  layout,
+  mount,
+  progress,
+  svg,
+  tangles,
+  tip,
+} from './mod.ts'
 
 let eid = (n: number) =>
   `00000000-0000-4000-8000-${String(n).padStart(12, '0')}`
@@ -17,7 +26,7 @@ let doc = (n: number, title = `doc ${n}`, more: object = {}): Bundle => ({
   ...more,
 })
 let names = (b: Bundle[]) => layout(b).links.map((l) => l.name)
-// Boxes are 72 by 25 each way, round shapes 46 by 44.
+// Boxes are 72 by 25 each way, round shapes 60 by 54.
 let overlap = (a: { x: number; y: number }, b: { x: number; y: number }) =>
   Math.abs(a.x - b.x) < 2 * 72 && Math.abs(a.y - b.y) < 2 * 25
 
@@ -204,6 +213,80 @@ test('a pinned entity sits where it is pinned, and the rest spread from the midd
   assertEquals([drawn.nodes[0].x, drawn.nodes[0].y], [120, 50])
   let [, b] = drawn.nodes
   assert(Math.abs(b.x - 300) < 80 && Math.abs(b.y - 250) < 80, `${b.x},${b.y}`)
+})
+
+// Pins by the number at the end of an eid, as fractions of the sheet.
+let pinned = (pins: Record<number, [number, number]>) => ({
+  width: 800,
+  height: 400,
+  label: (b: Bundle) => `D-${Number(b.entity.eid.slice(-2))}`,
+  at: ({ eid }: { eid: string }) => pins[Number(eid.slice(-2))],
+})
+
+test('a line bends around a shape in its way, and lines between the same two fan apart', () => {
+  let drawn = layout([
+    doc(1),
+    doc(2),
+    doc(3, 'c', { cites: { a: eid(1), b: eid(1) } }),
+  ], pinned({ 1: [.15, .5], 2: [.5, .5], 3: [.85, .5] }))
+  assertEquals(tangles(drawn), [])
+  let [a, b] = drawn.links.map((l) => l.bend)
+  assert(a && b && a != b, `${a}, ${b}`)
+})
+
+test('people and agents keep to the sides, and what names both lands between them', () => {
+  let you = doc(1, 'You', { person: {} })
+  let agent = doc(2, 'Agent', { persona: {} })
+  let task = doc(3, 'Do it', { created: { by: eid(1) }, done: { by: eid(2) } })
+  let drawn = layout([you, agent, task], { width: 640, height: 480 })
+  let [y, a, t] = drawn.nodes.map((n) => n.x)
+  assert(y < 160 && a > 480 && y < t && t < a, `${y} ${t} ${a}`)
+  assertEquals(tangles(drawn), [])
+})
+
+test('tangles says what is too close, runs through a shape, crosses, and writes over a name', () => {
+  let at = (n: number, x: number, y: number) => ({
+    eid: eid(n),
+    label: `D-${n}`,
+    title: '',
+    comps: [],
+    shape: 'box' as const,
+    order: n,
+    stage: 0,
+    x,
+    y,
+    fresh: true,
+  })
+  let line = (from: number, to: number, mid = .5) => ({
+    key: `${from}>${to}`,
+    from: eid(from),
+    to: eid(to),
+    name: 'n',
+    bend: 0,
+    mid,
+    order: 0,
+    stage: 0,
+    fresh: true,
+  })
+  let drawn: Layout = {
+    width: 900,
+    height: 600,
+    nodes: [
+      at(1, 100, 100),
+      at(2, 700, 100),
+      at(3, 400, 100),
+      at(4, 400, 500),
+      at(5, 100, 160),
+      at(6, 700, 500),
+    ],
+    links: [line(1, 2, .3), line(4, 6), line(3, 6), line(4, 2, .52)],
+  }
+  assertEquals(tangles(drawn), [
+    'D-1 is too close to D-5',
+    'D-1 n D-2 runs through D-3',
+    'D-3 n D-6 crosses D-4 n D-2',
+    'the names of D-3 n D-6 and D-4 n D-2 sit on each other',
+  ])
 })
 
 let story = () => {

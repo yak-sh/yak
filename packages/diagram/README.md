@@ -7,6 +7,8 @@ graph changes, so what a write adds is drawn in beside what it names.
 - `layout(bundles, options?)` places a selection. It is pure: bundles in, a
   `Layout` of nodes and links with positions out.
 - `svg(layout, options?)` draws a layout as one `<svg>` string.
+- `tangles(layout)` lists what makes a layout hard to read, as `svg()` draws it.
+  It is pure.
 - `progress(layout, reached)` and `tip(layout, drawn)` say how far a pen has
   drawn each part as a reader moves through a story, and where the pen is. Both
   are pure.
@@ -53,13 +55,41 @@ decides how much of the graph is on the sheet.
 ## Places
 
 `layout(bundles, { was })` keeps every entity of `was` where it was, with its
-`order`. A new entity `at` gives a place (fractions of the sheet's width and
-height, by its eid, label or bundle) goes there. Each other new entity, in the
-order given, takes the cheapest free spot: one that overlaps no shape, crosses
-few lines, sits a short reach from the entities it names, and is not far from
-the sheet's middle. When no spot is free the sheet grows downward, so `height`
-can come back larger than asked. An entity that leaves the selection gives up
-its place.
+`order`, and every line between two of them keeps its bend and the place of its
+name. A new entity `at` gives a place (fractions of the sheet's width and
+height, by its eid, label or bundle) goes there. Each other new entity is placed
+one at a time, the one with the most lines to what is already placed first, at
+the cheapest free spot. A spot costs more when:
+
+- it is within `APART` of another shape;
+- a line already drawn runs through it, or one of its own lines would cross a
+  line, run through a shape, or leave a shape at nearly the angle of another;
+- its lines are far from about 110 long between the shapes' rims, or too short
+  to write their names on;
+- a shape already placed cannot be reached from it in a straight line, since a
+  later line to it would cross something;
+- it is far from the sheet's middle, or below the sheet's bottom.
+
+An actor (a round or hex shape: a person, persona or session) keeps to a side of
+the sheet, the one with fewer actors, so what names both lands between them.
+When no spot is free the sheet grows downward, so `height` can come back larger
+than asked. An entity that leaves the selection gives up its place.
+
+A line is straight unless something is in its way: once both its ends are placed
+it takes the `bend` (how far its middle sits to one side) that runs through no
+shape, crosses fewest lines and keeps clear of the lines beside it. Its `mid` is
+how far along it its name is written, the spot nearest the middle that covers no
+shape and no other name.
+
+`tangles(layout)` names what is still tangled, with the short ids it involves:
+shapes too close, a line through a shape, lines that cross or run over each
+other, and a name written on a shape or another name.
+
+The placement is greedy and keeps what is placed, so it cannot foresee a line
+that arrives later between two entities already placed; a bend is how such a
+line gets around. Libraries were weighed for this: dagre and elkjs lay out a
+whole graph at once, so what is placed moves as the graph grows, and d3-force
+can hold placed nodes still but does not weigh crossings.
 
 Every node and link carries `fresh`, true when it joined in this layout, and
 `stage`, the `options.stage` it joined in (default 0).

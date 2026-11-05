@@ -23,30 +23,9 @@ export const WIDER: [string, string][] = [
   ['everything', '*'],
 ]
 
-/** The drawing's size, in its own units: taller than wide, beside the words. */
-export const SHEET = { width: 560, height: 620 }
-
-/** Where the story's entities sit, as fractions of the sheet, by the number
- * each is given as the story runs. */
-export const PLACES: Record<string, [number, number]> = {
-  'U-1': [.18, .12],
-  'T-3': [.68, .1],
-  'T-4': [.68, .34],
-  'T-2': [.68, .56],
-  'N-5': [.18, .78],
-  'T-7': [.68, .8],
-  'T-8': [.42, .24],
-  'C-9': [.47, .45],
-  'C-6': [.36, .93],
-}
-
-/** Where a letter sits, which has no number: under you, beside the question
- * it asks, above where the windows dock. */
-const LETTER: [number, number] = [.14, .33]
-
-/** Where an entity the story makes sits: by its number, or a letter's. */
-export let placeOf = ({ label, bundle }: { label: string; bundle: Bundle }) =>
-  PLACES[label] ?? (bundle.mail ? LETTER : undefined)
+/** The drawing's size, in its own units: a little wider than tall, as the
+ * figure beside the words mostly is. */
+export const SHEET = { width: 640, height: 580 }
 
 /** The first stage what a wider query adds is drawn in; a visitor's lines
  * are drawn from LIVE up to it. */
