@@ -9,10 +9,15 @@
 # placeholder, `{{pages}}` in `guide` for example, which the code fills in when
 # the tool is built.
 #
-# A tool whose arguments choose what it does also has `titles`: by argument,
-# then by that argument's value ('' when it is left out), the title of the one
-# thing a call with it does, so a person reads "Listing app files…" and not
-# the title of everything the tool can do.
+# A tool the Operator calls also has a `step`: how a call reads in its
+# conversation, from the side of the person it works for, as two locale
+# strings, `doing` while it runs and `done` once it answered. Each `%{name}`
+# is filled in from the call's arguments (`%{app}`, `%{path}`); a string whose
+# names cannot all be filled is passed over for the next. Under `by`, by
+# argument then that argument's value ('' when it is left out), the same two
+# for each thing the arguments choose, so a person reads "Listing the files of
+# recipes…" and not the title of everything the tool can do (@yaks/tools
+# `stepOf`).
 
 space_new:
   title: Create a space
@@ -88,6 +93,9 @@ space_sell:
     https://yaks.app/docs/selling.
 app_new:
   title: Create an app
+  step:
+    doing: 'Creating the app %{slug}…'
+    done: 'Created the app %{slug}'
   description: >-
     Create a new app, served at <space>.yaks.app/<slug>/. Pass its slug and
     its title (its name). Creating it does not choose a front page for
@@ -103,17 +111,38 @@ app_new:
     Documentation: https://yaks.app/docs.
 app_files:
   title: Read or write app files
-  titles:
-    op:
-      '': Write app files
-      list: List app files
-      read: Read app files
-      write: Write app files
-      patch: Edit app files
-      fetch: Download a file into an app
-      delete: Delete an app file
-      history: List an app file's earlier versions
-      restore: Restore an app file
+  step:
+    doing: 'Working on the files of %{app}…'
+    done: 'Worked on the files of %{app}'
+    by:
+      op:
+        '':
+          doing: 'Writing the files of %{app}…'
+          done: 'Wrote the files of %{app}'
+        list:
+          doing: 'Listing the files of %{app}…'
+          done: 'Listed the files of %{app}'
+        read:
+          doing: 'Reading %{path}…'
+          done: 'Read %{path}'
+        write:
+          doing: 'Writing %{path}…'
+          done: 'Wrote %{path}'
+        patch:
+          doing: 'Editing %{path}…'
+          done: 'Edited %{path}'
+        fetch:
+          doing: 'Downloading %{path}…'
+          done: 'Downloaded %{path}'
+        delete:
+          doing: 'Deleting %{path}…'
+          done: 'Deleted %{path}'
+        history:
+          doing: 'Looking up earlier versions of %{path}…'
+          done: 'Looked up earlier versions of %{path}'
+        restore:
+          doing: 'Restoring %{path}…'
+          done: 'Restored %{path}'
   description: >-
     Write the app's files (index.html and any css, js or images beside it),
     or list, read or delete them. files: [{path, content}, …] writes a whole
@@ -159,6 +188,9 @@ app_files:
     write. Documentation: https://yaks.app/docs/files.
 sandbox_shell:
   title: Run a build command
+  step:
+    doing: 'Running a build command…'
+    done: 'Ran a build command'
   description: >-
     Run one command in this space's build sandbox, a Linux container for
     what a browser cannot do alone: compile to WebAssembly, build a site
@@ -191,6 +223,9 @@ sandbox_shell:
     https://yaks.app/docs/code.
 sandbox_wait:
   title: Wait for a build command
+  step:
+    doing: 'Waiting for the build…'
+    done: 'Waited for the build'
   description: >-
     Wait for a command sandbox_shell left running in this space's build
     sandbox, by the process id its answer gave. Returns the exit code and the
@@ -200,6 +235,9 @@ sandbox_wait:
     https://yaks.app/docs/code.
 sandbox_stop:
   title: Stop a build command
+  step:
+    doing: 'Stopping the build…'
+    done: 'Stopped the build'
   description: >-
     Stop a command sandbox_shell left running in this space's build sandbox,
     by the process id its answer gave, and return its exit code. Waking the
@@ -208,6 +246,9 @@ sandbox_stop:
     again. Documentation: https://yaks.app/docs/code.
 sandbox_write:
   title: Write a build file
+  step:
+    doing: 'Writing %{path} for the build…'
+    done: 'Wrote %{path} for the build'
   description: >-
     Write one file inside this space's build sandbox: a Cargo.toml, a
     src/lib.rs, whatever the build needs. These are not the app's files:
@@ -221,6 +262,9 @@ sandbox_write:
     Documentation: https://yaks.app/docs/code.
 sandbox_read:
   title: Read a build file
+  step:
+    doing: 'Reading %{path} from the build…'
+    done: 'Read %{path} from the build'
   description: >-
     Read one file out of this space's build sandbox: a generated source, a
     build log, whatever the last command left behind. Waking the sandbox is
@@ -230,6 +274,9 @@ sandbox_read:
     Documentation: https://yaks.app/docs/code.
 sandbox_ship:
   title: Copy build output into the app
+  step:
+    doing: 'Copying the build into %{app}…'
+    done: 'Copied the build into %{app}'
   description: >-
     Copy what the build produced into the app's draft, as if app_files had
     written it. Name files, folders or wildcard patterns (globs) relative to
@@ -273,6 +320,9 @@ app_preview:
     A draft worker's external service calls still reach those services.
 app_deploy:
   title: Release a version
+  step:
+    doing: 'Releasing %{app}…'
+    done: 'Released %{app}'
   description: >-
     Release the app's staged files as a version: files, vocabulary and
     worker begin serving together, and error reports name this version.
@@ -346,6 +396,9 @@ store_load:
     https://yaks.app/docs/store.
 app_versions:
   title: List app versions
+  step:
+    doing: 'Listing the versions of %{app}…'
+    done: 'Listed the versions of %{app}'
   description: >-
     List the newest 20 kept deploys, newest first, their dates and file changes,
     which version is live, and recorded pointer moves (from, to, when, by whom
@@ -354,6 +407,9 @@ app_versions:
     https://yaks.app/docs/errors.
 app_rollback:
   title: Roll back to an earlier version
+  step:
+    doing: 'Rolling %{app} back…'
+    done: 'Rolled %{app} back'
   description: >-
     Move the live pointer to a kept version without minting a new version.
     Its files, vocabulary, commands and worker become live together, and the
@@ -440,6 +496,9 @@ builder_build:
     reconciled.
 app_set:
   title: Rename, move or reshare an app
+  step:
+    doing: 'Changing the settings of %{app}…'
+    done: 'Changed the settings of %{app}'
   description: >-
     Rename an app, move it to another address, or change who may use it. The
     title is its name; the slug is its address, so a new slug moves the app,
@@ -581,6 +640,9 @@ app_restore:
     Documentation: https://yaks.app/docs/errors.
 app_errors:
   title: List open errors
+  step:
+    doing: 'Checking %{app} for errors…'
+    done: 'Checked %{app} for errors'
   description: >-
     List unarchived error reports for the named app: what a page threw in
     someone's browser, what a request threw on the server, and what the
@@ -595,6 +657,9 @@ app_errors:
     https://yaks.app/docs/errors.
 app_list:
   title: List the person's apps
+  step:
+    doing: 'Listing apps…'
+    done: 'Listed apps'
   description: >-
     What the person already has here, short enough to pass on as it is:
     every space of theirs and which app its address opens, a line of what
@@ -615,6 +680,9 @@ app_list:
     Documentation: https://yaks.app/docs.
 commands:
   title: List app commands
+  step:
+    doing: 'Listing the commands of %{app}…'
+    done: 'Listed the commands of %{app}'
   description: >-
     The commands yaks apps declare, with the arguments each one accepts. An
     app's own commands (the ones its vocab.json declares, and the two every
@@ -626,6 +694,9 @@ commands:
     https://yaks.app/docs/tools.
 command:
   title: Run an app command
+  step:
+    doing: 'Running %{name} in %{app}…'
+    done: 'Ran %{name} in %{app}'
   description: >-
     Run one of an app's own commands: name it and pass its arguments as
     args, exactly as commands lists them. app is only needed when two apps
@@ -638,6 +709,9 @@ command:
     payment. Documentation: https://yaks.app/docs/tools.
 domain_attach:
   title: Attach a custom domain
+  step:
+    doing: 'Attaching %{hostname} to %{app}…'
+    done: 'Attached %{hostname} to %{app}'
   description: >-
     Serve a domain the person already owns, example.com instead of
     yourname.yaks.app. Name an app and that app answers at the root of the
@@ -656,6 +730,9 @@ domain_attach:
     https://yaks.app/docs/domains.
 domain_status:
   title: Check a domain
+  step:
+    doing: 'Checking %{hostname}…'
+    done: 'Checked %{hostname}'
   description: >-
     How far a domain has come, and what it points at: the space, or one of
     its apps. Whether the DNS record has arrived, whether Cloudflare has
@@ -668,6 +745,9 @@ domain_status:
     https://yaks.app/docs/domains.
 domain_detach:
   title: Detach a custom domain
+  step:
+    doing: 'Detaching %{hostname}…'
+    done: 'Detached %{hostname}'
   description: >-
     Stop serving at a domain, whether it served a space or one app. The
     hostname is released back to Cloudflare and what it served is untouched:
@@ -828,6 +908,14 @@ feedback:
     https://yaks.app/docs/errors.
 guide:
   title: Read the guide
+  step:
+    doing: 'Reading the guide on %{page}…'
+    done: 'Read the guide on %{page}'
+    by:
+      page:
+        '':
+          doing: 'Reading the guide…'
+          done: 'Read the guide'
   description: >-
     The guide, read here instead of fetched from the web. With no page: the
     overview, which says what an app is, how its pages read and write its
@@ -838,6 +926,9 @@ guide:
     web pages at https://yaks.app/docs.
 about:
   title: Read what yaks.app is
+  step:
+    doing: 'Reading about yaks.app…'
+    done: 'Read about yaks.app'
   description: >-
     What yaks.app is and what gets made here, in a paragraph. Signed out, it
     adds what works signed out, what signing in adds, and where to sign in,

@@ -364,6 +364,15 @@ export type ToolDefinition = {
   revision?: string
   name?: string
   title?: string
+  /** how a call reads to a person, as locale strings: `doing` while it runs
+   * and `done` once it answered, each `%{name}` filled from its arguments, and
+   * under `by` the same for each thing its arguments choose (@yaks/tools
+   * `Steps`) */
+  step?: {
+    doing: string
+    done: string
+    by?: Record<string, Record<string, { doing: string; done: string }>>
+  }
   inputSchema?: Record<string, unknown>
   outputSchema?: Record<string, unknown>
   /** Input names in order; a final name ending in ... receives the rest. */
@@ -422,6 +431,23 @@ let GRAMMAR = {
 }
 
 /** JSON Schema for tool declarations. Their location within vocab.json is not fixed. */
+// A step's two strings, and under `by` a step for each value of an argument.
+let PAIR = {
+  type: 'object',
+  required: ['doing', 'done'],
+  properties: { doing: { type: 'string' }, done: { type: 'string' } },
+}
+let STEP = {
+  ...PAIR,
+  properties: {
+    ...PAIR.properties,
+    by: {
+      type: 'object',
+      additionalProperties: { type: 'object', additionalProperties: PAIR },
+    },
+  },
+}
+
 export const toolDefinitionSchema: Record<string, unknown> = {
   $schema: 'https://json-schema.org/draft/2020-12/schema',
   type: 'object',
@@ -435,6 +461,7 @@ export const toolDefinitionSchema: Record<string, unknown> = {
     verb: { type: 'string', pattern: '^[a-z][a-z0-9-]*$' },
     name: { type: 'string', minLength: 1 },
     title: { type: 'string' },
+    step: STEP,
     description: { type: 'string' },
     revision: { type: 'string' },
     inputSchema: { type: 'object' },
@@ -573,6 +600,7 @@ let inputOf = (entry: PropSchema): Record<string, unknown> => ({
 let HINTS = [
   'revision',
   'title',
+  'step',
   'positional',
   'forward',
   'readOnly',

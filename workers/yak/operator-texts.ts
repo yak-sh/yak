@@ -284,7 +284,8 @@ export let telnyxDoor = async (req: Request, env: Env): Promise<Response> => {
  */
 export let textSend = (env: Env, ctx: Ctx, space: Space): Tool => ({
   name: 'text_send',
-  title: 'Text the person you work for',
+  title: 'Send a text',
+  step: { doing: 'Texting %{person}…', done: 'Texted %{person}' },
   description:
     'Send a text message to the person you are working for, at the mobile number they agreed to be texted at. Use it when they asked to be texted, or to tell them something they would want to know away from the page. Keep it short; it is signed with your name. Their reply reaches you as a new request. Refused when they have not agreed to texts.',
   parameters: {

@@ -165,9 +165,9 @@
           "type": "string",
           "description": "what a person reads in place of the name: an imperative phrase, such as Read or write app files"
         },
-        "titles": {
+        "step": {
           "type": "object",
-          "description": "for a tool whose arguments choose what it does: by argument, then by that argument's value ('' when left out), the title of what a call with it does, such as op list: List app files"
+          "description": "how a call reads to a person, as locale strings: doing while it runs (Texting %{person}…) and done once it answered (Texted %{person}), each %{name} filled from the call's arguments and the person it works for; under by, by argument then its value ('' when left out), the step of each thing the arguments choose"
         },
         "description": {
           "type": "string"

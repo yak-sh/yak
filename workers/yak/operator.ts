@@ -150,7 +150,7 @@ export let operatorRoster = async (ctx: Ctx, work?: Store): Promise<Tool[]> => {
     .map((t) => ({
       name: t.name,
       ...t.title ? { title: t.title } : {},
-      ...t.titles ? { titles: t.titles } : {},
+      ...t.step ? { step: t.step } : {},
       description: t.description,
       parameters: inputSchemaOf(t),
       readOnly: t.readOnly,
@@ -208,6 +208,10 @@ export let operatorRoster = async (ctx: Ctx, work?: Store): Promise<Tool[]> => {
 let platformBug = (space: Space): Tool => ({
   name: 'platform_bug',
   title: 'Report a yaks.app fault',
+  step: {
+    doing: 'Telling the yaks.app team about a fault…',
+    done: 'Told the yaks.app team about a fault',
+  },
   description:
     "Report that yaks.app itself is at fault, not the app's own files: a tool that answered wrongly, a refusal the guide says should pass, a deploy that lost what was sent. Say what you did, what yaks.app answered, and why the app is not the cause. It reaches the people who run yaks.app; leave the app as it is.",
   parameters: {
@@ -749,7 +753,10 @@ export let operating = (
     return { task, session, stopped: true }
   }
 
-  return { store, reads, ask, run, stop }
+  // What to call a person in what the Operator shows of its work.
+  let named = (person: string) => directoryOf(env.STORE).nameAt(person)
+
+  return { store, reads, ask, run, stop, named }
 }
 
 export type Asking = {
@@ -791,4 +798,6 @@ export type Operator = {
     cost: number
     model: string
   }>
+  /** What to call a person, as the page names them (directory `nameAt`). */
+  named: (person: string) => Promise<string | null>
 }

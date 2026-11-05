@@ -209,7 +209,7 @@ let said = (t: Sugar, env: Host): Omit<Tool, 'run'> => {
       hit = {
         name: t.name,
         title: t.title,
-        ...t.titles ? { titles: t.titles } : {},
+        ...t.step ? { step: t.step } : {},
         description: hosted(t.description, env),
         inputSchema: inputOf(t.input, env) as Record<string, unknown>,
         // What it does, carried whole — the transport turns these four into

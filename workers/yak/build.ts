@@ -491,7 +491,11 @@ export class Builder {
           )
         },
       })
-      let frames = operatorFrames(store, () => this.#ctx.getWebSockets())
+      let frames = operatorFrames(
+        store,
+        () => this.#ctx.getWebSockets(),
+        (person) => operator.named(person),
+      )
       let operator = operating(store, this.#env, {
         tools: attachmentTools(this.#env),
         tell: (session) =>

@@ -260,6 +260,18 @@
       "noun": "task",
       "verb": "update",
       "title": "Update a task",
+      "step": {
+        "doing": "Updating this task…",
+        "done": "Updated this task",
+        "by": {
+          "status": {
+            "done": {
+              "doing": "Marking this task done…",
+              "done": "Marked this task done"
+            }
+          }
+        }
+      },
       "description": "Patch one task or atomic updates; rows inherit top-level fields. Omitted fields stay; null clears. status writes completion/cancellation marks. edit replaces, appends or prepends body text with a concurrency guard; body with was checks the supplied read token. Returns applied bundles.",
       "input": {
         "task": {

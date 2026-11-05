@@ -216,6 +216,10 @@ export let attachmentTools = (env: Env) => (ctx: Ctx, files: File[]): Tool[] =>
     ? [{
       name: 'operator_attachment',
       title: 'Copy an attachment into an app',
+      step: {
+        doing: 'Copying an attachment into %{app}…',
+        done: 'Copied an attachment into %{app}',
+      },
       description:
         'Copy an original request attachment into an app. Returns its attachment eid and URL so app rows can reference the original. Read the app schema first.',
       parameters: {

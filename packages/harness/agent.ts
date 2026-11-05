@@ -99,7 +99,7 @@ export let seed = (
       [TOOL]: {
         name: t.name,
         ...t.title ? { title: t.title } : {},
-        ...t.titles ? { titles: t.titles } : {},
+        ...t.step ? { step: t.step } : {},
         description: t.description,
       },
     })),

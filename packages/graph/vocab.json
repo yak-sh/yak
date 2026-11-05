@@ -10,6 +10,10 @@
       "noun": "graph",
       "verb": "apply",
       "title": "Apply atomic changes",
+      "step": {
+        "doing": "Changing the data…",
+        "done": "Changed the data"
+      },
       "description": "Create, edit, link or delete entities atomically via edits/links, q, bundles, or id/text (path defaults to doc.body). Ids accept eids, human ids and names; $name creates an entity reusable within this call. Omitted fields stay; null clears properties/components. Text edits replace literal find (one match unless all), then prepend/append; reads are guarded automatically, with optional was tokens. links add relations; drop removes them. q patches one entity: T-12 .doc.title=\"New title\" !blocked; $new .task creates one. bundles use [{entity:{eid},component:{fields}}], $was guards and $delete deletes. Returns applied bundles with resolved ids, $alias and stamps. check previews then rolls back; reuse $names, since preview ids are temporary. graph_schema lists fields. https://yaks.app/docs/store",
       "input": {
         "q": {
@@ -171,6 +175,10 @@
       "noun": "graph",
       "verb": "query",
       "title": "Query entities",
+      "step": {
+        "doing": "Looking through the data…",
+        "done": "Looked through the data"
+      },
       "description": "Query .component.property=value with & (and), | (or), bare search words, presence .component/!component, or ?component to include without filtering. Always qualify properties. Operators: != ~= < >, lists a,b, ranges 1..9. Directives: .order=-created.at .limit=20 .fields=doc.title .refs=T-12. filters narrow all of q. Returns named components; * or no named component returns whole entities. Bare search defaults to 20 compact hits. doc.body includes $was. graph_show reads whole entities; graph_schema lists vocabulary. https://yaks.app/docs/querying",
       "input": {
         "q": {
@@ -204,6 +212,10 @@
       "noun": "graph",
       "verb": "show",
       "title": "Show entities",
+      "step": {
+        "doing": "Reading records…",
+        "done": "Read records"
+      },
       "description": "Read whole entities by eid, human id or name, once each. $was.doc.body holds its SHA-256 for guarded writes. Missing ids are reported; all missing refuses. Backlinks: graph_query .refs=<id>; text search: search.",
       "input": {
         "ids": {
@@ -228,6 +240,10 @@
       "noun": "graph",
       "verb": "schema",
       "title": "Read the schema",
+      "step": {
+        "doing": "Reading the schema…",
+        "done": "Read the schema"
+      },
       "description": "Read vocabulary JSON Schema. No arguments returns a component/property index; component returns full declarations, types, refs and write examples. kind returns its definition and associated components, taking precedence over component. https://yaks.app/docs/components",
       "input": {
         "component": {

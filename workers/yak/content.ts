@@ -298,22 +298,57 @@ export let WORDS: Record<string, Words> = {
   },
   'app_new': {
     'title': 'Create an app',
+    'step': {
+      'doing': 'Creating the app %{slug}…',
+      'done': 'Created the app %{slug}',
+    },
     'description':
       "Create a new app, served at <space>.yaks.app/<slug>/. Pass its slug and its title (its name). Creating it does not choose a front page for the space; the owner can do that with app_set(home: true). app_files writes its files and app_deploy releases a version. Pass access when the app is for other people too: 'open' if anyone with the link should be able to write to it (vote, add a line, sign up), and 'private' if only the person and whoever they invite (member_add) should see it at all. The default access is 'public': anyone can read, but only members allowed to write can change data. Returns the app's entity id, URL and access setting. The URL serves nothing until app_deploy releases a version, so hand the person the link app_deploy answers, not this one. Documentation: https://yaks.app/docs.",
   },
   'app_files': {
     'title': 'Read or write app files',
-    'titles': {
-      'op': {
-        '': 'Write app files',
-        'list': 'List app files',
-        'read': 'Read app files',
-        'write': 'Write app files',
-        'patch': 'Edit app files',
-        'fetch': 'Download a file into an app',
-        'delete': 'Delete an app file',
-        'history': "List an app file's earlier versions",
-        'restore': 'Restore an app file',
+    'step': {
+      'doing': 'Working on the files of %{app}…',
+      'done': 'Worked on the files of %{app}',
+      'by': {
+        'op': {
+          '': {
+            'doing': 'Writing the files of %{app}…',
+            'done': 'Wrote the files of %{app}',
+          },
+          'list': {
+            'doing': 'Listing the files of %{app}…',
+            'done': 'Listed the files of %{app}',
+          },
+          'read': {
+            'doing': 'Reading %{path}…',
+            'done': 'Read %{path}',
+          },
+          'write': {
+            'doing': 'Writing %{path}…',
+            'done': 'Wrote %{path}',
+          },
+          'patch': {
+            'doing': 'Editing %{path}…',
+            'done': 'Edited %{path}',
+          },
+          'fetch': {
+            'doing': 'Downloading %{path}…',
+            'done': 'Downloaded %{path}',
+          },
+          'delete': {
+            'doing': 'Deleting %{path}…',
+            'done': 'Deleted %{path}',
+          },
+          'history': {
+            'doing': 'Looking up earlier versions of %{path}…',
+            'done': 'Looked up earlier versions of %{path}',
+          },
+          'restore': {
+            'doing': 'Restoring %{path}…',
+            'done': 'Restored %{path}',
+          },
+        },
       },
     },
     'description':
@@ -321,31 +356,55 @@ export let WORDS: Record<string, Words> = {
   },
   'sandbox_shell': {
     'title': 'Run a build command',
+    'step': {
+      'doing': 'Running a build command…',
+      'done': 'Ran a build command',
+    },
     'description':
       "Run one command in this space's build sandbox, a Linux container for what a browser cannot do alone: compile to WebAssembly, build a site with any tool (Vite, Astro, Eleventy, SvelteKit), run a generator, minify an asset. html, css and js need none of it. Installed: Rust 1.98.1 with wasm32-unknown-unknown, wasm-bindgen 0.2.128 and wasm-opt 132; Python 3.13.15 with pip; Go 1.27.1; Zig 0.16.0, also the C and C++ compiler (`zig cc -target wasm32-freestanding -nostdlib -Wl,--no-entry` makes a module a browser loads with no glue code, -target wasm32-wasi one a WASI layer runs); Deno 2.9.1, and the image's Node and Bun. The command runs as root, so `apt-get install -y <pkg>`, cargo, pip, npm and go get install anything for that build. Its network reaches the whole internet, so git clone, npm create and any API work. sandbox_write writes source in; sandbox_ship copies a built artifact into the app. It is signed in as the person: `yak` is installed with $YAKS_TOKEN and $YAKS_HOST set, so `yak <tool>` and curl call these same tools. $YAKS_TOKEN is a placeholder, which yaks.app swaps for a short-lived token of the person's on its way to yaks.app or the space's own address, and nowhere else; the token is revoked when the container is destroyed. Use is metered in seconds charged to the space: a {{budget}}-second budget per managed build (or standalone tool call), and the space's monthly allowance. One sandbox awake in a space at a time on the free tier, two on the Plus plan. The container is destroyed when the build ends; separate MCP calls reuse it until five idle minutes put it to sleep, and its files are temporary. A command ending within timeout milliseconds returns its exit code and last 40 lines of output, stdout then stderr, cut after 8,000 characters; one still running keeps running for at most 240 seconds, and the answer gives its process id for sandbox_wait and sandbox_stop. What a command did through these tools to apps is not undone by discarding the container. Documentation: https://yaks.app/docs/code.",
   },
   'sandbox_wait': {
     'title': 'Wait for a build command',
+    'step': {
+      'doing': 'Waiting for the build…',
+      'done': 'Waited for the build',
+    },
     'description':
       "Wait for a command sandbox_shell left running in this space's build sandbox, by the process id its answer gave. Returns the exit code and the last 40 lines of output, stdout then stderr, or says it is still running when timeout milliseconds pass (default 60000). Waiting keeps the sandbox awake, metered by the second as with sandbox_shell. Documentation: https://yaks.app/docs/code.",
   },
   'sandbox_stop': {
     'title': 'Stop a build command',
+    'step': {
+      'doing': 'Stopping the build…',
+      'done': 'Stopped the build',
+    },
     'description':
       "Stop a command sandbox_shell left running in this space's build sandbox, by the process id its answer gave, and return its exit code. Waking the sandbox is metered by the second, as with sandbox_shell. Nothing to undo: what it already wrote to the sandbox stays, and sandbox_shell runs it again. Documentation: https://yaks.app/docs/code.",
   },
   'sandbox_write': {
     'title': 'Write a build file',
+    'step': {
+      'doing': 'Writing %{path} for the build…',
+      'done': 'Wrote %{path} for the build',
+    },
     'description':
       "Write one file inside this space's build sandbox: a Cargo.toml, a src/lib.rs, whatever the build needs. These are not the app's files: nothing here is served, and files are temporary, not durable app storage. app_files stages what app_deploy will serve; sandbox_ship copies a built artifact from the sandbox into the app. Waking the sandbox is metered by the second, as with sandbox_shell. Pass a sandbox path and nonempty text; this overwrites that path without file history and returns the path written. Nothing to undo: nothing of the app lives here, and only sandbox_ship copies build output into durable app files. Documentation: https://yaks.app/docs/code.",
   },
   'sandbox_read': {
     'title': 'Read a build file',
+    'step': {
+      'doing': 'Reading %{path} from the build…',
+      'done': 'Read %{path} from the build',
+    },
     'description':
       "Read one file out of this space's build sandbox: a generated source, a build log, whatever the last command left behind. Waking the sandbox is metered by the second, as with sandbox_shell. Pass a path relative to /workspace. Returns file text, truncated after 8,000 characters; sandbox_shell can inspect a large or binary file with a command. Documentation: https://yaks.app/docs/code.",
   },
   'sandbox_ship': {
     'title': 'Copy build output into the app',
+    'step': {
+      'doing': 'Copying the build into %{app}…',
+      'done': 'Copied the build into %{app}',
+    },
     'description':
       "Copy what the build produced into the app's draft, as if app_files had written it. Name files, folders or wildcard patterns (globs) relative to /workspace. A folder copies every file inside it and keeps its subfolders: dist lands dist/about/index.html at about/index.html. A file or glob match lands under its own name, below the deepest folder its matches share: pkg/*.wasm lands beside index.html, and dist/* lands as dist does. into names a folder of the app to land them under instead of its root, and replace: true makes that folder hold exactly this build, deleting each file an earlier build left there (kept in its history). Two different files landing on one path are refused. The app keeps the artifact independently of the temporary sandbox. This call does not itself destroy the sandbox. Binary files are copied as bytes, so a .wasm arrives intact. Waking the sandbox is metered by the second, as with sandbox_shell. To undo: these are written through app_files, so each keeps the bytes it replaced; use app_files op: history, then op: restore. Returns the copied paths, file count and app URL. Check the staged build with app_preview before app_deploy; it runs the browser on Cloudflare and returns the screenshot, console messages and page errors. Documentation: https://yaks.app/docs/code.",
   },
@@ -356,6 +415,10 @@ export let WORDS: Record<string, Words> = {
   },
   'app_deploy': {
     'title': 'Release a version',
+    'step': {
+      'doing': 'Releasing %{app}…',
+      'done': 'Released %{app}',
+    },
     'description':
       "Release the app's staged files as a version: files, vocabulary and worker begin serving together, and error reports name this version. Before releasing, check the private draft with app_preview at widths 390 and 1280; inspect the returned screenshots, accessibility problems, console messages and page errors and fix the files. No local computer or browser is needed. Send base as the live version the files were made on (app_files op: list says it). When base is behind, the answer names the files this draft would remove or replace and keeps it unreleased; after reviewing them, repeat with the same base and confirm: true. Leaving base out releases as usual. reload: required marks a contract change open pages must reload to use; optional (or none) derives severity from what changed. Open pages are notified after the release and never reload on their own. It creates the components the app's vocab.json declares ({{vocab}}): a component is a named group of typed fields on a stored record, an entity. A component name the platform already uses refuses the whole manifest before anything is created; a component or property the manifest no longer names that holds nothing is dropped. It reports the properties added, and those still holding values the manifest no longer names: a property with values is never renamed or retyped, so a new name is added beside the old one, which keeps its rows. A seed.json beside index.html (a list of bundles, each an entity id and its components; or a seed/ folder of *.json) is written into the store once per store, after the components; deploying again seeds nothing. A $defs entry marked \"tool\": true gives the app a command of its own ({{tools}}), which everyone who can reach the app runs with the command tool. A worker.js beside index.html is the app's server code: it handles every request not under /api/ before the files, and its 404s fall through to them. esbuild compiles TypeScript and npm packages here: a worker.ts, a worker importing a package, and each page module script that is TypeScript or imports a package package.json lists under dependencies. A compiled page script serves at its own address as JavaScript; package-lock.json pins the versions installed; a compile error refuses the deploy with the compiler's lines while the last release keeps serving. A published app's published version stays put until app_publish, and this tool says when it falls behind. Every deploy is kept. To undo: app_rollback, which moves the live pointer to a kept version. Returns the new version, URL, and any schema, seed, command or worker details. Documentation: https://yaks.app/docs.",
   },
@@ -366,11 +429,19 @@ export let WORDS: Record<string, Words> = {
   },
   'app_versions': {
     'title': 'List app versions',
+    'step': {
+      'doing': 'Listing the versions of %{app}…',
+      'done': 'Listed the versions of %{app}',
+    },
     'description':
       'List the newest 20 kept deploys, newest first, their dates and file changes, which version is live, and recorded pointer moves (from, to, when, by whom and through which session). All deploys are kept; the total is reported, and any kept version can be selected by app_rollback. Documentation: https://yaks.app/docs/errors.',
   },
   'app_rollback': {
     'title': 'Roll back to an earlier version',
+    'step': {
+      'doing': 'Rolling %{app} back…',
+      'done': 'Rolled %{app} back',
+    },
     'description':
       'Move the live pointer to a kept version without minting a new version. Its files, vocabulary, commands and worker become live together, and the move is recorded. Leave version out for the deploy before the live one, or name any kept version from app_versions, including a newer one to undo a rollback. Existing data rows are not restored or deleted. Returns the version now live, URL and changed files. Documentation: https://yaks.app/docs/errors.',
   },
@@ -411,6 +482,10 @@ export let WORDS: Record<string, Words> = {
   },
   'app_set': {
     'title': 'Rename, move or reshare an app',
+    'step': {
+      'doing': 'Changing the settings of %{app}…',
+      'done': 'Changed the settings of %{app}',
+    },
     'description':
       "Rename an app, move it to another address, or change who may use it. The title is its name; the slug is its address, so a new slug moves the app, files and data included, to <space>.yaks.app/<new>/, and the old address redirects there until another app takes it. access is app_new's choice: 'public' (the default: anyone reads, members with write permission change data), 'open' (everyone with the link writes) or 'private' (members only). home makes this app the space's front page, what <space>.yaks.app/ opens; no app is the front page just by being created. home: false removes this app as the front page if it is one, never another app; with none, the space address lists the apps a visitor can open. first is the front page's own routing, as globs of paths its worker.js handles before the app owning them: [\"/recipes/*\"] sends everything under /recipes/ to the front page; an empty list puts every path back. gallery: true submits a published app to https://yaks.app/gallery, the public page of yaks apps, for review by the platform's owner; false withdraws it at once. review: false with gallery: true lists it without review: only the platform admin may, and only when the platform's owner asks. screenshot takes the eid of an image uploaded to this app through /api/blob for its gallery and homepage cards, without redeploying; an empty string clears it. forget with a slug this app has left drops it: it stops redirecting and another app can take it, final for that address. sandboxed: true runs an app installed from someone else's release in a browser origin of its own, reaching only its own data, with localStorage supplied by the platform; false lets it out again. Only the space owner may set home, screenshot, forget or sandboxed. Returns the current URL and a summary of the changes. Documentation: https://yaks.app/docs/home.",
   },
@@ -456,36 +531,64 @@ export let WORDS: Record<string, Words> = {
   },
   'app_errors': {
     'title': 'List open errors',
+    'step': {
+      'doing': 'Checking %{app} for errors…',
+      'done': 'Checked %{app} for errors',
+    },
     'description':
       "List unarchived error reports for the named app: what a page threw in someone's browser, what a request threw on the server, and what the platform reported. Each is a stored record with its own id in the tracker; ids from older app-store reports keep answering. New ones are also appended, once, to the next reply from a tool that changes something; a read-only tool leaves them unseen. `fixed` archives the ids it names, which removes them from this list and from replies; `seen` archives without listing every id: `all`, `v3` for everything up to and including that deploy, or a date. Returns any archive count followed by the remaining reports, or “no open errors”. Archiving a report does not fix the underlying problem. Documentation: https://yaks.app/docs/errors.",
   },
   'app_list': {
     'title': "List the person's apps",
+    'step': {
+      'doing': 'Listing apps…',
+      'done': 'Listed apps',
+    },
     'description':
       "What the person already has here, short enough to pass on as it is: every space of theirs and which app its address opens, a line of what its month has counted against each of its limits and what models and voice spent there (and, near or at a limit, where its plan is settled), then each app in a line with its address, its access (public, open or private), how many errors are still open in it (app_errors lists them) and how much of the space's app data and photos and files it holds, so the person can see where the space's storage goes before it fills. In a space they own, it names every invitation not accepted yet with the day its latest letter went, so \"my friend can't get in\" starts here (member_add sends another letter, member_remove withdraws one), and counts everyone else; people: true names them. Name an app to list it alone and in full: its email address, version, bindings, month's usage and everyone who can open it. Deleted apps are listed with the days each has left and what each still holds, until app_restore brings it back or the 30 days run out. Documentation: https://yaks.app/docs.",
   },
   'commands': {
     'title': 'List app commands',
+    'step': {
+      'doing': 'Listing the commands of %{app}…',
+      'done': 'Listed the commands of %{app}',
+    },
     'description':
       "The commands yaks apps declare, with the arguments each one accepts. An app's own commands (the ones its vocab.json declares, and the two every component it holds gets, such as add_recipe and find_recipe) are listed here rather than in this tool list, which is the same for everybody. command runs one of them. Omit app to list all reachable apps, or pass an app slug (space/app if ambiguous). The result groups commands by app and says whether each reads or writes. Documentation: https://yaks.app/docs/tools.",
   },
   'command': {
     'title': 'Run an app command',
+    'step': {
+      'doing': 'Running %{name} in %{app}…',
+      'done': 'Ran %{name} in %{app}',
+    },
     'description':
       "Run one of an app's own commands: name it and pass its arguments as args, exactly as commands lists them. app is only needed when two apps here declare the same command name. The command runs through the app's ordinary API endpoints as the person calling it, so it can do what they could do on the page and never more. To undo whatever it wrote: store_restore, to the moment just before it ran. Returns the command result from the app. Its description in commands says what it does; restoring data cannot undo an external effect such as an email or payment. Documentation: https://yaks.app/docs/tools.",
   },
   'domain_attach': {
     'title': 'Attach a custom domain',
+    'step': {
+      'doing': 'Attaching %{hostname} to %{app}…',
+      'done': 'Attached %{hostname} to %{app}',
+    },
     'description':
       'Serve a domain the person already owns, example.com instead of yourname.yaks.app. Name an app and that app answers at the root of the domain; leave app out and the whole space answers there, exactly as it does at <space>.yaks.app: the front page at /, every app at /<app>/. A space and each of its apps can have their own domain at the same time. The tool registers the hostname here and returns the DNS record the person has to add where their domain is managed, in the response text: type, name, value. Nothing serves until that record is in place at the registrar; domain_status reports when it has arrived. Only the space owner may attach one. Custom domains require Plus unless the space is exempt. If the space is not eligible, the tool returns the plan-settings URL, where paid plans are compared in the space settings, and returns no checkout link; signing in returns the person to that page. No hostname is registered until the space is eligible. Documentation: https://yaks.app/docs/domains.',
   },
   'domain_status': {
     'title': 'Check a domain',
+    'step': {
+      'doing': 'Checking %{hostname}…',
+      'done': 'Checked %{hostname}',
+    },
     'description':
       'How far a domain has come, and what it points at: the space, or one of its apps. Whether the DNS record has arrived, whether Cloudflare has accepted the hostname, and whether the certificate is issued, each reported specifically enough to tell the person what is still waiting on them. It is read from Cloudflare, not from what was last recorded here. Leave hostname out to check every domain in the space. After domain_attach, the record, the hostname and the certificate arrive over a few minutes; nothing needs doing in between. Documentation: https://yaks.app/docs/domains.',
   },
   'domain_detach': {
     'title': 'Detach a custom domain',
+    'step': {
+      'doing': 'Detaching %{hostname}…',
+      'done': 'Detached %{hostname}',
+    },
     'description':
       "Stop serving at a domain, whether it served a space or one app. The hostname is released back to Cloudflare and what it served is untouched: it still answers at its <space>.yaks.app address, and its data and files are not involved. The person's DNS record is theirs to remove wherever their domain is managed; until they do, it points at nothing. Only the space owner may detach. To undo: domain_attach with the same hostname, which starts the certificate again. Returns the detached hostname, the original yaks.app URL and a reminder to remove the DNS record. Documentation: https://yaks.app/docs/domains.",
   },
@@ -536,11 +639,27 @@ export let WORDS: Record<string, Words> = {
   },
   'guide': {
     'title': 'Read the guide',
+    'step': {
+      'doing': 'Reading the guide on %{page}…',
+      'done': 'Read the guide on %{page}',
+      'by': {
+        'page': {
+          '': {
+            'doing': 'Reading the guide…',
+            'done': 'Read the guide',
+          },
+        },
+      },
+    },
     'description':
       'The guide, read here instead of fetched from the web. With no page: the overview, which says what an app is, how its pages read and write its store, and has a paragraph on every feature there is. It is the map. With a page: the whole of one subject. The pages are {{pages}}. A name that is none of them returns the overview, which lists them all. The same pages are served to a person at https://yaks.app/docs.md, and as web pages at https://yaks.app/docs.',
   },
   'about': {
     'title': 'Read what yaks.app is',
+    'step': {
+      'doing': 'Reading about yaks.app…',
+      'done': 'Read about yaks.app',
+    },
     'description':
       'What yaks.app is and what gets made here, in a paragraph. Signed out, it adds what works signed out, what signing in adds, and where to sign in, and reads nothing about anybody: the same answer for everyone. Signed in, it adds who you are signed in as, how (a browser, a connector, a CLI token) and until when, the tools this connector is listing right now, and every app you can reach: its address, what it holds, the notes it keeps and whatever the person has said in that space.',
   },

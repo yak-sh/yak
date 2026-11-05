@@ -126,22 +126,38 @@ let prompts = () => {
   return out
 }
 
-// A tool's `titles`: by argument, then by its value ('' when left out), the
-// title of the one thing a call with it does.
-let titled = (v: unknown, where: string) => {
-  if (!v || typeof v != 'object' || Array.isArray(v)) {
-    refuse(`${where} is not a map of argument to {value: title}`)
+// A tool's `step`: how a call reads while it runs (doing) and once it
+// answered (done), and under `by`, by argument then its value ('' when left
+// out), the same two for each thing the arguments choose.
+let pair = (v: unknown, where: string) => {
+  let one = v as Record<string, unknown> | null
+  return {
+    doing: said(one?.doing, `${where}.doing`),
+    done: said(one?.done, `${where}.done`),
   }
-  return Object.fromEntries(
-    Object.entries(v as Record<string, unknown>).map(([arg, by]) => [
-      arg,
-      Object.fromEntries(
-        Object.entries(by as Record<string, unknown> ?? {}).map((
-          [value, title],
-        ) => [value, said(title, `${where}.${arg}.${value}`)]),
-      ),
-    ]),
-  )
+}
+let stepped = (v: unknown, where: string) => {
+  if (!v || typeof v != 'object' || Array.isArray(v)) {
+    refuse(`${where} is not {doing, done, by}`)
+  }
+  let { by, ...step } = v as Record<string, unknown>
+  return {
+    ...pair(step, where),
+    ...by
+      ? {
+        by: Object.fromEntries(
+          Object.entries(by as Record<string, unknown>).map(([arg, values]) => [
+            arg,
+            Object.fromEntries(
+              Object.entries(values as Record<string, unknown> ?? {}).map((
+                [value, one],
+              ) => [value, pair(one, `${where}.by.${arg}.${value}`)]),
+            ),
+          ]),
+        ),
+      }
+      : {},
+  }
 }
 
 /** What every tool says about itself, by name: tools.yml. */
@@ -156,9 +172,7 @@ let words = () => {
     let one = row as Record<string, unknown>
     out[name] = {
       title: said(one?.title, `${at} ${name}.title`),
-      ...one?.titles
-        ? { titles: titled(one.titles, `${at} ${name}.titles`) }
-        : {},
+      ...one?.step ? { step: stepped(one.step, `${at} ${name}.step`) } : {},
       description: said(one?.description, `${at} ${name}.description`),
     }
   }

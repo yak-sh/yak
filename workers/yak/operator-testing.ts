@@ -62,7 +62,11 @@ export let operatorMemory = (storage: Storage = ram(operatorVocab, {
 export let operatorService = (env: Env, held: Held, options: Options) => {
   let store = operatorMemory()
   let sockets: Listener[] = []
-  let frames = operatorFrames(store, () => sockets)
+  let frames = operatorFrames(
+    store,
+    () => sockets,
+    (person) => operator.named(person),
+  )
   let pending: Promise<void>[] = []
   let operator = operating(store, env, {
     tools: attachmentTools(env),

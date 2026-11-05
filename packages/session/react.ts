@@ -4,6 +4,7 @@ import { actionable, exceptionOf } from '@yaks/tools/fault'
 import { UnfinishedCall } from '@yaks/tools/errors'
 import { CallError } from '@yaks/tools/errors'
 import { toolEid } from '@yaks/tools/result'
+import type { Steps } from '@yaks/tools/title'
 export { CallError as ToolError } from '@yaks/tools/errors'
 import { argsOf } from '@yaks/graph/call'
 import { derivedEid, identityEid } from '@yaks/graph/identity'
@@ -158,9 +159,9 @@ export type Tool = Declared & {
   /** What a person reads in place of its name: an imperative phrase
    * (@yaks/tools `titleOf`). It is never sent to the model. */
   title?: string
-  /** The title of the one thing a call does, by argument and its value
-   * (@yaks/tools `Titles`). */
-  titles?: Record<string, Record<string, string>>
+  /** How a call reads to a person, while it runs and once it answered
+   * (@yaks/tools `Steps`). It is never sent to the model. */
+  step?: Steps
   run: (
     args: Record<string, unknown>,
     ctx?: ToolContext,

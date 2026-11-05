@@ -15,6 +15,7 @@
 import type { Security } from '@yaks/mcp'
 import { writes } from '@yaks/member'
 import { CallError } from '@yaks/tools/errors'
+import type { Steps } from '@yaks/tools/title'
 import type { Image } from '@yaks/tools/value'
 import { fill } from '@yaks/yaml'
 import { WORDS } from './content.ts'
@@ -121,10 +122,10 @@ export type Tool = {
   // directories require one on every tool, and a person picking through a
   // permission prompt reads it instead of the snake_case name.
   title: string
-  // The title of the one thing a call does, for a tool whose arguments choose
-  // it: by argument, then by its value ('' when left out), as tools.yml says
-  // (@yaks/tools `Titles`).
-  titles?: Record<string, Record<string, string>>
+  // How a call reads to the person it is done for, as tools.yml says: while
+  // it runs and once it answered, with %{name} filled in (@yaks/tools
+  // `Steps`).
+  step?: Steps
   description: string
   // What this one does, as the four MCP hints (@yaks/graph `Tool`, emitted by
   // @yaks/mcp `annotated`). A host reads them to decide what it may call
@@ -149,7 +150,7 @@ export type Tool = {
  * name. The words are the file's; everything else about a row is code's. */
 export type Words = {
   title: string
-  titles?: Record<string, Record<string, string>>
+  step?: Steps
   description: string
 }
 
@@ -158,7 +159,7 @@ export type Words = {
  * out of tools.yml — the Rails-locale shape of M-34605, where the code refers
  * to a key and the file holds the sentence.
  */
-export type Row = Omit<Tool, 'title' | 'titles' | 'description'> & {
+export type Row = Omit<Tool, 'title' | 'step' | 'description'> & {
   /** what a `{{slot}}` in those words stands for, for the few rows whose
    * description is not a constant — `guide` names the pages there are today. */
   slots?: Record<string, string>
@@ -176,7 +177,7 @@ export let worded = (row: Row): Tool => {
   return {
     ...rest,
     title: said.title,
-    ...said.titles ? { titles: said.titles } : {},
+    ...said.step ? { step: said.step } : {},
     description: fill(said.description, slots),
   }
 }

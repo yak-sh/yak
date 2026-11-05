@@ -9,7 +9,7 @@
 import type { Bundle, Comp } from '@yaks/graph'
 import type { Tool } from '@yaks/model'
 import { statusOf } from '@yaks/session'
-import { did, doing } from '@yaks/tools/title'
+import type { Step } from '@yaks/tools/title'
 import { parse, render } from '@yaks/markdown/structural'
 import { h } from 'preact'
 import { renderToString } from 'preact-render-to-string'
@@ -21,10 +21,10 @@ let comp = (b: Bundle | undefined, name: string) =>
 
 /** A drawn line of a transcript: what it shows, under the id it is put by. */
 export type Row = { id: string; html: string }
-/** A tool's English name by its eid, as a call names it (`call.to`), said as
- * the one thing the call's arguments chose: an imperative phrase (@yaks/tools
- * `titleOf`). */
-export type Names = (tool: string, args?: Record<string, unknown>) => string
+/** How a call reads to the person, by its tool's eid (`call.to`) and its
+ * arguments: what it is doing while it runs and what it did once it answered
+ * (@yaks/tools `stepOf`). */
+export type Names = (tool: string, args?: Record<string, unknown>) => Step
 
 let cut = (text: string, most: number) =>
   text.length > most ? text.slice(0, most) + '…' : text
@@ -172,19 +172,17 @@ export let trouble = (said: string, detail?: unknown) =>
       }</pre></details>`
   }</div>`
 
-let lower = (title: string) => title.replace(/^./, (c) => c.toLowerCase())
+// A step that did not work: "Tried texting Jeff".
+let tried = (doing: string) =>
+  'Tried ' + doing.replace(/…$/, '').replace(/^./, (c) => c.toLowerCase())
 
 // A tool call and, once it came back, its answer: one row, under the call's
 // id, so the answer takes the call's place on the page.
 let tool = (call: Bundle, names: Names, result?: Bundle) => {
   let c = comp(call, 'call')!
-  let title = names(String(c.to), c.args as Record<string, unknown>)
+  let step = names(String(c.to), c.args as Record<string, unknown>)
   let ok = result ? !comp(result, 'refusal') && !result.exception : null
-  let name = ok == null
-    ? doing(title)
-    : ok
-    ? did(title)
-    : `Tried to ${lower(title)}`
+  let name = ok == null ? step.doing : ok ? step.done : tried(step.doing)
   return `<details class="Talk_Step${
     ok == null ? ' Talk_Step-on' : ok ? '' : ' Talk_Step-no'
   }"><summary>${
@@ -396,7 +394,7 @@ export let now = (entries: Bundle[], names: Names) => {
   return open.length
     ? open.map((b) => {
       let c = comp(b, 'call')!
-      return doing(names(String(c.to), c.args as Record<string, unknown>))
+      return names(String(c.to), c.args as Record<string, unknown>).doing
     }).join(' ')
     : 'Thinking…'
 }

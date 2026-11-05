@@ -425,6 +425,29 @@
         "title": {
           "type": "string"
         },
+        "step": {
+          "description": "How a call reads to a person, as locale strings: doing while it runs (Updating this task…), done once it answered (Updated this task), each %{name} filled from its arguments; under by, by argument then its value ('' when left out), the same for each thing the arguments choose.",
+          "type": "object",
+          "required": ["doing", "done"],
+          "properties": {
+            "doing": { "type": "string" },
+            "done": { "type": "string" },
+            "by": {
+              "type": "object",
+              "additionalProperties": {
+                "type": "object",
+                "additionalProperties": {
+                  "type": "object",
+                  "required": ["doing", "done"],
+                  "properties": {
+                    "doing": { "type": "string" },
+                    "done": { "type": "string" }
+                  }
+                }
+              }
+            }
+          }
+        },
         "description": {
           "type": "string"
         },

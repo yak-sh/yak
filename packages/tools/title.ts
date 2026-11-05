@@ -1,32 +1,68 @@
 // What a person reads in place of a tool's name. A tool's `title` is an
-// imperative phrase ("Read or write app files"); a view showing a call says it
-// in the tense of the call: "Reading or writing app files…" while it runs,
-// "Read or wrote app files" once it answered. A tool without a title is its
+// imperative phrase ("Read or write app files"); a tool without one is its
 // name in words ("graph_schema" is "Graph schema").
 //
-// A tool whose arguments choose what it does (`app_files` lists, reads or
-// writes by its `op`) also has `titles`: by argument, then by that argument's
-// value, the title of the one thing a call with it does. The empty value is the
-// argument left out. A call reads as the thing it did ("Listing app files…"),
-// and a call no entry names reads as the tool's title.
+// A call reads from the person's side, as what is being done for them: its
+// tool's `step` holds the two strings, the way a locale file holds them, one
+// while it runs ("Texting %{person}…") and one once it answered ("Texted
+// %{person}"). Each `%{name}` is filled in from the call's arguments and from
+// what the view knows (the person it works for). A tool whose arguments choose
+// what it does keeps a step for each under `by`: by argument, then by that
+// argument's value ('' when left out). The first step whose names all fill in
+// is the one said; with none, the title is said in the tense of the call.
 
-/** By argument, then by its value ('' when left out): a call's title. */
-export type Titles = Record<string, Record<string, string>>
+/** How a call reads: while it runs, and once it answered. */
+export type Step = { doing: string; done: string }
 
-/** A tool's English name, or the one thing a call with these arguments does:
- * a title from its `titles`, its title, or its name in words. */
+/** A tool's step, and under `by` the step of each thing its arguments choose. */
+export type Steps = Step & { by?: Record<string, Record<string, Step>> }
+
+/** A tool's English name: its title, or its name in words. */
 export let titleOf = (
-  t: { name?: string | null; title?: string | null; titles?: Titles | null },
-  args?: Record<string, unknown> | null,
+  t: { name?: string | null; title?: string | null },
 ): string =>
-  Object.entries(t.titles ?? {}).map(([arg, by]) =>
-    by[args?.[arg] == null ? '' : String(args[arg])]
-  ).find(Boolean)?.trim() ||
   t.title?.trim() ||
   (t.name ?? '').replace(/[_-]+/g, ' ').trim().replace(
     /^./,
     (c) => c.toUpperCase(),
   )
+
+// A step's words with each `%{name}` filled in, or null when a name has
+// nothing to fill it.
+let filled = (text: string, values: Record<string, unknown>) => {
+  let missing = false
+  let out = text.replace(/%\{(\w+)\}/g, (_, name: string) => {
+    let v = values[name]
+    let said = typeof v == 'string' || typeof v == 'number'
+      ? String(v).trim()
+      : ''
+    if (!said) missing = true
+    return said.length > 60 ? said.slice(0, 60) + '…' : said
+  })
+  return missing ? null : out
+}
+
+/** How one call reads to the person: the step its arguments chose, its
+ * tool's step, or its title in the tense of the call. */
+export let stepOf = (
+  t: { name?: string | null; title?: string | null; step?: Steps | null },
+  args?: Record<string, unknown> | null,
+  known: Record<string, string> = {},
+): Step => {
+  let values = { ...args, ...known }
+  let chosen = Object.entries(t.step?.by ?? {}).map(([arg, by]) =>
+    by[args?.[arg] == null ? '' : String(args[arg])]
+  )
+  for (let s of [...chosen, t.step]) {
+    if (!s) continue
+    let [running, answered] = [filled(s.doing, values), filled(s.done, values)]
+    if (running != null && answered != null) {
+      return { doing: running, done: answered }
+    }
+  }
+  let title = titleOf(t)
+  return { doing: doing(title), done: did(title) }
+}
 
 // The past tense of the verbs whose past is not their base plus -ed.
 let PAST: Record<string, string> = {

@@ -29,12 +29,7 @@ export type GraphLog = {
 }
 
 /** The words for a referenced entity (a model, a tool), when they're held. */
-/** What an entity a transcript names is in words; a tool's is said as the one
- * thing its call's arguments chose. */
-export type Names = (
-  eid: string,
-  args?: Record<string, unknown>,
-) => string | undefined
+export type Names = (eid: string) => string | undefined
 
 let text = (value: unknown) => String(value ?? '')
 let clip = (value: unknown, limit = 240) => {
@@ -64,7 +59,7 @@ let usage = (u?: Record<string, unknown>) => {
 }
 
 let toolOf = (c: EntryRow['comps'], name: Names) =>
-  name(text(c.call?.to), c.call?.args as Record<string, unknown>) || 'tool'
+  name(text(c.call?.to)) || 'tool'
 
 let failure = (c: EntryRow['comps']) => {
   let refusal = c.refusal

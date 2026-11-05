@@ -1,5 +1,5 @@
 import { assertEquals } from '@std/assert'
-import { did, doing, titleOf } from './title.ts'
+import { did, doing, stepOf, titleOf } from './title.ts'
 
 Deno.test('a title is said in the tense of the call', () => {
   for (
@@ -37,18 +37,68 @@ Deno.test('a tool without a title is its name in words', () => {
   )
 })
 
-Deno.test('a call reads as the one thing its arguments chose', () => {
+Deno.test('a call reads as its step, filled in from its arguments and the person', () => {
   let files = {
     name: 'app_files',
     title: 'Read or write app files',
-    titles: { op: { list: 'List app files', '': 'Write app files' } },
+    step: {
+      doing: 'Working on the files of %{app}…',
+      done: 'Worked on the files of %{app}',
+      by: {
+        op: {
+          '': {
+            doing: 'Writing the files of %{app}…',
+            done: 'Wrote the files of %{app}',
+          },
+          read: { doing: 'Reading %{path}…', done: 'Read %{path}' },
+        },
+      },
+    },
+  }
+  let text = {
+    name: 'text_send',
+    title: 'Send a text',
+    step: { doing: 'Texting %{person}…', done: 'Texted %{person}' },
   }
   for (
-    let [args, said] of [
-      [{ op: 'list' }, 'List app files'],
-      [{ path: 'index.html' }, 'Write app files'],
-      [{ op: 'nonsense' }, 'Read or write app files'],
-      [undefined, 'Write app files'],
+    let [tool, args, known, running, answered] of [
+      [text, {}, { person: 'Jeff' }, 'Texting Jeff…', 'Texted Jeff'],
+      // A person the view does not know by name: the title, in the tense.
+      [text, {}, {}, 'Sending a text…', 'Sent a text'],
+      [
+        files,
+        { op: 'read', path: 'index.html', app: 'cake' },
+        {},
+        'Reading index.html…',
+        'Read index.html',
+      ],
+      [
+        files,
+        { app: 'cake' },
+        {},
+        'Writing the files of cake…',
+        'Wrote the files of cake',
+      ],
+      // The step its op chose names a path it was not given.
+      [
+        files,
+        { op: 'read', app: 'cake' },
+        {},
+        'Working on the files of cake…',
+        'Worked on the files of cake',
+      ],
+      [
+        files,
+        { op: 'read' },
+        {},
+        'Reading or writing app files…',
+        'Read or wrote app files',
+      ],
     ] as const
-  ) assertEquals(titleOf(files, args), said)
+  ) {
+    assertEquals(stepOf(tool, args, known as Record<string, string>), {
+      doing: running,
+      done: answered,
+    })
+  }
 })

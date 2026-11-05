@@ -5,7 +5,7 @@ import { type Operator, readOperator } from './operator.ts'
 import { receive, type Request } from './operator-channels.ts'
 import type { operatorStore } from './operator-store.ts'
 import { transcript } from '@yaks/session'
-import { titleOf } from '@yaks/tools/title'
+import { stepOf } from '@yaks/tools/title'
 import type { Tool } from '@yaks/model'
 import {
   frame,
@@ -22,9 +22,29 @@ type Store = ReturnType<typeof operatorStore>
 let comp = (b: Bundle | undefined, name: string) =>
   b?.[name] as Record<string, unknown> | undefined
 
-// The English names of the tools a transcript's calls name (`call.to` is a
-// tool's eid), each said as the one thing its call's arguments chose.
-let namesOf = async (store: Store, entries: Bundle[]): Promise<Names> => {
+/** What to call a person: directory `nameAt`. */
+export type Named = (person: string) => Promise<string | null>
+
+// Nobody known by name: a call says its step without one.
+let nameless: Named = () => Promise.resolve(null)
+
+// The person a transcript's sessions work for, by what they are called.
+let personOf = async (store: Store, entries: Bundle[], named: Named) => {
+  let sessions = await store.g.get([
+    ...new Set(entries.map((b) => String(comp(b, 'entry')?.session ?? ''))),
+  ].filter(Boolean))
+  let person = sessions.map((b) => comp(b, 'operator_session')?.person)
+    .find(Boolean)
+  return person ? await named(String(person)) : null
+}
+
+// How each call in a transcript reads to the person it works for, by its
+// tool's step (`call.to` is a tool's eid).
+let namesOf = async (
+  store: Store,
+  entries: Bundle[],
+  named: Named,
+): Promise<Names> => {
   let tools = await store.g.get([
     ...new Set(
       entries.flatMap((b) => b.call ? [String(comp(b, 'call')!.to)] : []),
@@ -33,10 +53,10 @@ let namesOf = async (store: Store, entries: Bundle[]): Promise<Names> => {
   let held = new Map(
     tools.filter(Boolean).map((b) => [b.entity.eid, comp(b, 'tool') ?? {}]),
   )
-  return (tool, args) => {
-    let t = held.get(tool)
-    return t ? titleOf(t, args) : 'Use a tool'
-  }
+  let person = await personOf(store, entries, named)
+  let known = person ? { person } : undefined
+  return (tool, args) =>
+    stepOf(held.get(tool) ?? { title: 'Use a tool' }, args, known)
 }
 
 // A task's sessions, oldest first.
@@ -169,7 +189,12 @@ export let workOf = async (store: Store): Promise<Worked[]> => {
  * with, the same before and after a task takes it up (the task, for one no
  * request began).
  */
-export let conversationOf = async (store: Store, at: string, open: string) => {
+export let conversationOf = async (
+  store: Store,
+  at: string,
+  open: string,
+  named: Named = nameless,
+) => {
   let [row] = await store.g.get([open])
   let task = row?.task
     ? open
@@ -212,7 +237,7 @@ export let conversationOf = async (store: Store, at: string, open: string) => {
     html: talk(
       held,
       entries,
-      await namesOf(store, entries),
+      await namesOf(store, entries, named),
       files,
       at,
       await seenOf(store, sessions, entries),
@@ -226,7 +251,12 @@ export let conversationOf = async (store: Store, at: string, open: string) => {
  * the lines past `from` (by `entry.seq`, the last 30 when unknown), and the
  * newest seq it covers, to start the next from.
  */
-export let frameOf = async (store: Store, session: string, from?: number) => {
+export let frameOf = async (
+  store: Store,
+  session: string,
+  from?: number,
+  named: Named = nameless,
+) => {
   let entries = await transcript(store.g, session)
   let seq = Math.max(
     0,
@@ -239,7 +269,7 @@ export let frameOf = async (store: Store, session: string, from?: number) => {
       frame: frame(
         task,
         entries,
-        await namesOf(store, entries),
+        await namesOf(store, entries, named),
         from ?? seq - 30,
         { offers: await offersOf(store, entries) },
       ),
@@ -257,7 +287,7 @@ export let frameOf = async (store: Store, session: string, from?: number) => {
       task,
       entries,
       started,
-      await namesOf(store, started),
+      await namesOf(store, started, named),
       from ?? 0,
       await offersOf(store, entries),
     ),
@@ -270,7 +300,11 @@ export type Listener = {
 }
 
 /** Frames for the pages watching this Operator, with each session's cursor. */
-export let operatorFrames = (store: Store, sockets: () => Listener[]) => {
+export let operatorFrames = (
+  store: Store,
+  sockets: () => Listener[],
+  named: Named = nameless,
+) => {
   let told = new Map<string, number>()
   let tasks = new Map<string, string>()
   let watching = () =>
@@ -291,7 +325,7 @@ export let operatorFrames = (store: Store, sockets: () => Listener[]) => {
     tell: async (session: string) => {
       let pages = watching()
       if (!pages.length) return
-      let made = await frameOf(store, session, told.get(session))
+      let made = await frameOf(store, session, told.get(session), named)
       if (!made) return
       told.set(session, made.seq)
       send(pages, made.frame)
@@ -435,6 +469,7 @@ export let operatorRequest = async (
         store,
         String(args.at ?? ''),
         String(args.open ?? ''),
+        operator.named,
       ),
     )
   }

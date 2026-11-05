@@ -21,7 +21,12 @@ let p = platform('operator-chat')
 let person = crypto.randomUUID(), eid = crypto.randomUUID()
 await directoryOf(p.env.STORE).apply({
   entities: [
-    { entity: { eid: person }, person: {} },
+    {
+      entity: { eid: person },
+      person: {},
+      doc: { title: 'Jeff' },
+      email: { address: 'jeff@example.com' },
+    },
     {
       entity: { eid },
       space: { slug: 'clerk', store: 'clerk' },
@@ -45,6 +50,7 @@ let call = (name: string, args: unknown): Item[] => [{
 let script = [
   call('graph_schema', {}),
   call('app_files', { op: 'list', app: 'notices' }),
+  call('text_send', { text: 'Posted.' }),
   [{
     kind: 'assistant',
     text: 'The notice is **posted**.\n\n- Thursday at 7',
@@ -112,10 +118,12 @@ test('a conversation opens in the chat app: its words, each step in plain words,
   assertEquals(text('.Talk_You'), [
     'Post a special meeting Thursday at 7 about the road millage.',
   ])
-  // One step that answered and one that did not, each said as what it did.
+  // Each step said from the person's side, as what it did for them, or
+  // tried to: the step names the app and the person it acted on.
   assertEquals(text('.Talk_Step > summary'), [
     'Read the schema',
-    'Tried to list app files',
+    'Tried listing the files of notices',
+    'Tried texting Jeff',
   ])
   assertEquals(
     page.document.querySelector('.Talk_Reply strong')?.textContent,
@@ -132,8 +140,9 @@ test('a conversation opens in the chat app: its words, each step in plain words,
   assertEquals(said.innerHTML.includes('&quot;'), false)
   assertEquals(text('.Talk_Trouble > p'), [
     'This step did not work, so the Operator went on without it.',
+    'This step did not work, so the Operator went on without it.',
   ])
-  assertEquals(text('.Talk_Step-no .Talk_Facts dt'), ['Op', 'App'])
+  assertEquals(text('.Talk_Step-no .Talk_Facts dt'), ['Op', 'App', 'Text'])
   // Done: nothing is said to be under way, and Stop is not offered.
   assertEquals(page.document.querySelector('[data-pending]'), null)
   assertEquals(

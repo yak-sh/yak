@@ -54,7 +54,7 @@ export {
 export { valueIn } from './value.ts'
 export { actionable, exceptionOf } from './fault.ts'
 export { display } from './display.ts'
-export { did, doing, titleOf, type Titles } from './title.ts'
+export { did, doing, type Step, stepOf, type Steps, titleOf } from './title.ts'
 
 export {
   executionComputed,

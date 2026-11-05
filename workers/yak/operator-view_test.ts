@@ -41,7 +41,8 @@ let entries = [
 let drawn = () =>
   parseHTML(
     `<main>${
-      rows(entries, (t) => `Read ${t}`).map((r) => r.html).join('')
+      rows(entries, (t) => ({ doing: `Reading ${t}…`, done: `Read ${t}` }))
+        .map((r) => r.html).join('')
     }</main>`,
   ).document
 
