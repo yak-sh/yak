@@ -349,6 +349,14 @@ test("an app opens beside the person's one conversation, its words on screen fro
   )
 })
 
+test('the box asks for a message to the Operator by name', async () => {
+  let { document } = await sided('owner')
+  assertEquals(
+    document.querySelector('#ask textarea')?.getAttribute('placeholder'),
+    `Message ${space.operator}`,
+  )
+})
+
 test('Updates from the Operator opens beside the same side', async () => {
   let { document } = parseHTML(
     await (await updatesPage(p.env, space, who, beside)).text(),

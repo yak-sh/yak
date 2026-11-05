@@ -867,7 +867,7 @@ ${
         }</div>`
         : ''
     }
-${fresh || talked.title ? composer(at, app) : ''}
+${fresh || talked.title ? composer(at, space.operator, app) : ''}
 ${
       landing
         ? `<div class="Talk_Starts" role="group" aria-label="Ways to start">${
@@ -917,11 +917,12 @@ export let updatesPage = async (
 // the files going with them along its top (a gathering drop part,
 // public/drop.js: picked, pasted or dropped anywhere on the box, each a
 // preview or a chip to take back), Send, and Stop while the Operator works.
-// With an app open beside it, the words say which (`about`).
-let composer = (at: string, app?: Shown) => {
+// It asks for a message to the Operator by name, or with an app open beside
+// it, what should change there, and the words say which (`about`).
+let composer = (at: string, operator: string, app?: Shown) => {
   let asked = app
     ? `What should change in ${esc(app.title || app.slug)}?`
-    : 'Message the Operator'
+    : `Message ${esc(operator)}`
   return `<form class="Talk_Box" id="ask" method="post" action="${at}" enctype="multipart/form-data">
 <input type="hidden" name="request" value="${crypto.randomUUID()}">${
     app ? `<input type="hidden" name="app" value="${esc(app.slug)}">` : ''
