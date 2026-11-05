@@ -6,8 +6,12 @@
 //
 // The files are public/mascot/<pose>.webp and <pose>-still.webp, each at 40,
 // 80 and 120 px (`-1x`, none, `-3x`), so a screen of any density gets one it
-// shows pixel for pixel. The greeting's still is also made at 64, 128 and 192
-// px (<pose>-still-64). A new round of drawings replaces them in place.
+// shows pixel for pixel. A new round of drawings replaces them in place.
+//
+// While the Operator waits for the person, the yak sits on the new chat's
+// greeting at 128 px and now and then does something small (T-141047): his
+// rest frame is public/mascot/idle-rest-128.webp and each loop
+// idle-<loop>-128.webp, at 128, 256 and 384 px. public/idle.js plays them.
 
 /** What the yak can be seen doing. */
 export type Pose =
@@ -32,14 +36,25 @@ export let yak = (pose: Pose, base = '') =>
     srcset(pose, base)
   }" width="40" height="40" alt=""></picture>`
 
-/** The yak still, at rest in `pose`, with `className`, `size` px across (40,
- * or 64 for the thinking still a new chat greets with). */
-export let still = (pose: Pose, className: string, base = '', size = 40) => {
-  let name = size == 40 ? `${pose}-still` : `${pose}-still-${size}`
-  return `<img class="${className}" src="${base}/mascot/${name}.webp" srcset="${
-    srcset(name, base)
-  }" width="${size}" height="${size}" alt="">`
+/** What the yak does now and then while he waits, each loop this many ms,
+ * starting and ending on his rest frame so one follows another seamlessly. */
+export let IDLE: Record<string, number> = {
+  glance: 3370,
+  ears: 2070,
+  tail: 2380,
+  stretch: 2250,
+  lick: 2070,
+  doze: 3550,
 }
+
+/** The yak waiting, 128 px across, with `className`: at rest, and with
+ * public/idle.js every several seconds one of his loops (`IDLE`). */
+export let idle = (className: string, base = '') =>
+  `<img class="${className}" src="${base}/mascot/idle-rest-128.webp" srcset="${
+    srcset('idle-rest-128', base)
+  }" width="128" height="128" alt="" data-idle="${
+    Object.entries(IDLE).map(([loop, ms]) => `${loop}:${ms}`).join(' ')
+  }">`
 
 // What a step's first word shows the yak doing (@yaks/tools `stepOf`: "Checking
 // cookbook for errors…"). Any other work is the yak at its keyboard.

@@ -144,6 +144,10 @@ ${links(env, 'pages.css')}
       inner.includes('data-menu')
         ? `<script src="${url(env, '/menu.js')}" defer></script>`
         : ''
+    }${
+      inner.includes('data-idle')
+        ? `<script src="${url(env, '/idle.js')}" defer></script>`
+        : ''
     }<script src="${url(env, '/drop.js')}" defer></script></body>
 </html>`,
     {

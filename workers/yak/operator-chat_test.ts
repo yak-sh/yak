@@ -6,7 +6,7 @@
 // page and in its instructions.
 
 import { test } from '@yaks/testing'
-import { assertEquals, assertStringIncludes } from '@std/assert'
+import { assert, assertEquals, assertStringIncludes } from '@std/assert'
 import { parseHTML } from 'linkedom'
 import { type Item, ModelError } from '@yaks/model'
 import { directoryOf } from './directory.ts'
@@ -367,6 +367,9 @@ test("the chat app says whose Operator it is, and opens another space's", async 
     assertEquals(said('.Talk_Whose .Desk_Space b'), name)
     assertEquals(said('.Talk_Who'), `${at.operator}, ${name}’s Operator`)
     assertStringIncludes(said('.Talk_Hello')!, `Ask ${at.operator}`)
+    // the yak waits on the greeting, played by its script (mascot.ts `idle`)
+    assert(document.querySelector('.Talk_Hello img[data-idle]'))
+    assert(document.querySelector('script[src$="/idle.js"]'))
     assertEquals(
       [...document.querySelectorAll('.Talk_Whose .Desk_Row small')].map((a) =>
         a.textContent
