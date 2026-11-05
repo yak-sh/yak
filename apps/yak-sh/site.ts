@@ -13,6 +13,7 @@ export let FILES = [
   "index.html",
   "style.css",
   "main.ts",
+  "page.ts",
   "views.ts",
   "figure.ts",
   "yak.ts",

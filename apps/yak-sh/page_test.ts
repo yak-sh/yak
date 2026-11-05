@@ -3,7 +3,7 @@
 // section changed from the prompt redrawn in place.
 import { equal, match, test } from "@yaks/testing";
 import { parseHTML } from "linkedom";
-import { start } from "./main.ts";
+import { start } from "./page.ts";
 import { SECTIONS, SELF } from "./site.ts";
 
 let dir = new URL("./", import.meta.url);
