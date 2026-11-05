@@ -834,7 +834,7 @@ export let cloudflare = (log = crypto.randomUUID()) => {
     // The same product as a Worker binding (post.ts `Binding`), which is how
     // an app's own letters leave.
     binding: {
-      send: (l: { to: string; subject: string; text?: string }) => {
+      send: (l: { to: string | string[]; subject: string; text?: string }) => {
         wrote(l.to, l.subject, l.text)
         return Promise.resolve({ messageId: crypto.randomUUID() })
       },

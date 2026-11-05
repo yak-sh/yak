@@ -11,6 +11,7 @@ import type { View } from '@yaks/inspect'
 import { parse } from '@yaks/query/core'
 import { type Bundle, define, type H, type Registry } from '@yaks/render'
 import type { Shown } from '@yaks/render/views'
+// @ts-types="@yaks/ui/lucide"
 import History from 'lucide/dist/esm/icons/rotate-ccw-clock.mjs'
 
 type Tx = { seq?: number; at?: string; by?: string; via?: string }

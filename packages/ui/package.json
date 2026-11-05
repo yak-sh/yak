@@ -11,7 +11,8 @@
     "./contributions": "./contributions.ts",
     "./guide": "./guide.ts",
     "./history": "./history.ts",
-    "./relative": "./relative.ts"
+    "./relative": "./relative.ts",
+    "./lucide": "./lucide.d.ts"
   },
   "license": "Apache-2.0",
   "description": "Preact parts with semantic variants, CSS and terminal sheet entries; compose kits with themes and skins, and inspect their specimens in the style guide.",

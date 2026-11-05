@@ -1,26 +1,42 @@
-/// <reference path="./lucide.d.ts" />
 // The public pages' icon vocabulary, drawn from Lucide's SVG nodes. Each icon
 // is its own module, imported by path: the package's barrel re-exports all
 // ~1,800 icons, and every module that reaches this one (the kernel does) would
 // load them all. Inline icons and the style guide's external sprite share the
 // same paths without any browser JavaScript.
 import type { IconNode } from 'lucide'
+// @ts-types="@yaks/ui/lucide"
 import Bot from 'lucide/dist/esm/icons/bot.mjs'
+// @ts-types="@yaks/ui/lucide"
 import ChartNoAxesColumnIncreasing from 'lucide/dist/esm/icons/chart-no-axes-column-increasing.mjs'
+// @ts-types="@yaks/ui/lucide"
 import Check from 'lucide/dist/esm/icons/check.mjs'
+// @ts-types="@yaks/ui/lucide"
 import ChevronRight from 'lucide/dist/esm/icons/chevron-right.mjs'
+// @ts-types="@yaks/ui/lucide"
 import CreditCard from 'lucide/dist/esm/icons/credit-card.mjs'
+// @ts-types="@yaks/ui/lucide"
 import Download from 'lucide/dist/esm/icons/download.mjs'
+// @ts-types="@yaks/ui/lucide"
 import ExternalLink from 'lucide/dist/esm/icons/external-link.mjs'
+// @ts-types="@yaks/ui/lucide"
 import Globe from 'lucide/dist/esm/icons/globe.mjs'
+// @ts-types="@yaks/ui/lucide"
 import LayoutGrid from 'lucide/dist/esm/icons/layout-grid.mjs'
+// @ts-types="@yaks/ui/lucide"
 import Plug from 'lucide/dist/esm/icons/plug.mjs'
+// @ts-types="@yaks/ui/lucide"
 import Plus from 'lucide/dist/esm/icons/plus.mjs'
+// @ts-types="@yaks/ui/lucide"
 import Receipt from 'lucide/dist/esm/icons/receipt.mjs'
+// @ts-types="@yaks/ui/lucide"
 import Settings2 from 'lucide/dist/esm/icons/settings-2.mjs'
+// @ts-types="@yaks/ui/lucide"
 import Share2 from 'lucide/dist/esm/icons/share-2.mjs'
+// @ts-types="@yaks/ui/lucide"
 import Trash2 from 'lucide/dist/esm/icons/trash-2.mjs'
+// @ts-types="@yaks/ui/lucide"
 import User from 'lucide/dist/esm/icons/user.mjs'
+// @ts-types="@yaks/ui/lucide"
 import Users from 'lucide/dist/esm/icons/users.mjs'
 
 export let icons = {
