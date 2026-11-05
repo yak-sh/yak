@@ -8,6 +8,25 @@
     display: none !important;
   }
 
+  /* A control is pressed, not read: clicking or tapping one never selects its
+     words. Links in prose, addresses, numbers and code stay selectable. */
+  button,
+  summary,
+  label,
+  select,
+  [role='button'],
+  [role='tab'],
+  [role='menuitem'],
+  .Button,
+  a.Pill,
+  .Tabs_Tab,
+  .SideNav a,
+  .Desk_Space,
+  .Desk_Row {
+    -webkit-user-select: none;
+    user-select: none;
+  }
+
   /* The paper: one grain tile, speckled in ink and cream, laid over the
      whole page so cards, buttons and pictures share its tooth. It covers the
      document, not the window, so it scrolls with what is drawn on it. */

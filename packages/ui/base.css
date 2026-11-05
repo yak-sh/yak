@@ -60,6 +60,13 @@
   color: var(--link);
 }
 
+/* A control is pressed, not read: clicking or tapping one never selects its
+   words. */
+:where(button, summary, label, select, [role='button'], [role='tab'], [role='menuitem'], .Button) {
+  -webkit-user-select: none;
+  user-select: none;
+}
+
 /* Where the keyboard is: vim's cursor (@yaks/ux/keys marks the item it
    stands on) and whatever a key gave the focus wear the theme's accent ring,
    plain to see in every theme. A part that rings its own focus says so and
