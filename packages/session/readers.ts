@@ -318,19 +318,16 @@ let line: Reader = (e) => {
     // A message typed while a turn runs reaches the model as this attachment.
     : e.type == 'attachment' && a.type == 'queued_command'
     ? prompt(text(a.prompt), human(a))
-    : e.type == 'result'
-    // The run is over either way; what differs is whether it ended well.
-    // Claude reports an API refusal as subtype `success` with is_error set,
-    // and the result text holds the diagnosis.
+    // A result closes a turn, not the run: a run with background tasks takes
+    // another turn when one finishes. Its process exiting is the run's end
+    // (@yaks/spawn `ended`). Only a failed turn says something: Claude reports
+    // an API refusal as subtype `success` with is_error set, and the result
+    // text holds the diagnosis.
+    : e.type == 'result' && e.is_error
     ? [{
-      ...(e.is_error
-        ? {
-          refusal: { code: String(e.subtype ?? 'error') },
-          content: { body: String(e.result ?? 'the turn failed') },
-          output: {},
-        }
-        : {}),
-      stop: {},
+      refusal: { code: String(e.subtype ?? 'error') },
+      content: { body: String(e.result ?? 'the turn failed') },
+      output: {},
     }]
     : []
   let about = e.type == 'system' && e.subtype == 'init' && e.session_id
@@ -350,7 +347,7 @@ let line: Reader = (e) => {
  * (`~/.claude/projects/<project>/<session>.jsonl`), and the stream
  * `claude -p --output-format stream-json` prints. The two share their message
  * lines; the file adds the queue and the harness's own notes, and the stream
- * adds the line that opens a run and the one that ends it. A side
+ * adds the line that opens a run and the one that closes each turn. A side
  * conversation, which older files keep inline and the stream marks with the
  * call that started it, is a subagent's, read from its own transcript, not
  * this session's.

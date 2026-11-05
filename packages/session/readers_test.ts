@@ -161,9 +161,10 @@ test('claude: a managed run opens with its id, and each reply names its request'
       total_cost_usd: 0.0185394,
       usage: { input_tokens: 12 },
     }),
-    [{ stop: {} }],
+    // A turn's end is not the run's: the process exiting says that.
+    [],
   )
-  // A refusal is an ending too — with the diagnosis it carried.
+  // A refused turn says so, with the diagnosis it carried.
   assertEquals(
     entries(claude, {
       type: 'result',
@@ -175,7 +176,6 @@ test('claude: a managed run opens with its id, and each reply names its request'
       refusal: { code: 'success' },
       content: { body: 'over quota' },
       output: {},
-      stop: {},
     }],
   )
   assertEquals(claude(say('hi', { timestamp: 'T1' })).at, 'T1')
