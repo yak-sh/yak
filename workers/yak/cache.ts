@@ -89,6 +89,12 @@ export let at = (eid: string, path: string, source = '') =>
 export let blobAt = (eid: string, sha: string) =>
   generation(`https://files.invalid/blob/${eid}/${sha}`)
 
+// An object the platform keeps about an app under a name written once, such
+// as a release's declaration (declaration.ts). The app's eid and the name are
+// the key; where in the bucket it lives is told beside them, as a blob's is.
+export let keptAt = (eid: string, name: string) =>
+  generation(`https://files.invalid/kept/${eid}/${name}`)
+
 // Whether an app's rows still name the bytes at `sha` as representation `rep`
 // (files.ts `serves`). Both are in the key: one upload may be framed under
 // more than one representation, and each is its own answer.

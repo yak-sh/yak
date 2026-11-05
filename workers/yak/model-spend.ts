@@ -5,9 +5,14 @@ import { Stale } from '@yaks/graph/errors'
 import { derivedEid } from '@yaks/graph/identity'
 import { ModelError } from '@yaks/model'
 import { atCeiling, budget, monthOf, plans } from './meter.ts'
-import { type Row, type Space, spaceOf, stamp } from './directory.ts'
+import {
+  directoryOf,
+  type Row,
+  type Space,
+  spaceOf,
+  stamp,
+} from './directory.ts'
 import type { Namespace } from './door.ts'
-import { meta } from './meta.ts'
 
 type Env = { STORE: Namespace }
 type Kind = 'models' | 'realtime'
@@ -15,8 +20,11 @@ export type Hold = { space: string; month: string; dollars: number; what: Kind }
 
 export let receiptEid = (call: string) =>
   derivedEid('generated-media-spend|' + call)
-let read = async (env: Env, eid: string) =>
-  (await meta(env).query(`.entity.eid=${eid}`))[0]
+// A row as this request last read it (hops.ts `recall`): the reading the
+// caller already made of its space answers a reservation's first try, and a
+// write refused as stale is a write, so the next try reads afresh.
+let read = async (env: Env, eid: string): Promise<Bundle | undefined> =>
+  await directoryOf(env.STORE).row(eid)
 let guard = (row: Bundle | undefined, comp: string, props: string[]) => ({
   [comp]: Object.fromEntries(
     props.map((p) => [p, token((row?.[comp] as Comp)?.[p] ?? null)]),

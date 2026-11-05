@@ -487,7 +487,8 @@ let stepwise = (handlers: Handlers): Handlers =>
   )
 
 // How long a step took to ask its model, and the round trips it made on the
-// way, in the Worker's logs.
+// way, in the Worker's logs: store hops, bucket reads, and trips to the cached
+// Files door (files.ts `door`).
 let asked = (session?: string) => {
   let tally = ambient()
   let at = tally && begun.get(tally)
@@ -498,6 +499,7 @@ let asked = (session?: string) => {
       session,
       ms: Date.now() - at,
       ...counts(tally),
+      files: tally.get('files') ?? 0,
       ...Object.fromEntries(
         [...tally].filter(([name]) => name.endsWith('_wait')),
       ),

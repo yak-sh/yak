@@ -7,12 +7,14 @@ import type { Tools } from '@yaks/tools/declared'
 import { type App, releaseOf, type Space } from './directory.ts'
 import type { Env } from './env.ts'
 import { r2RawObjects } from './lib/objects.ts'
+import { keptBytes } from './files.ts'
 
 export type Declaration = { vocab: VocabDoc; tools: Tools }
-let key = (space: Space, app: App, release: string) =>
-  `${space.store}/.declarations/${app.eid}/${
-    app.source?.split('/').pop() ?? 'legacy'
-  }/${release}.json`
+// Where an app's declarations are kept, and each one's name there.
+let prefix = (space: Space, app: App) =>
+  `${space.store}/.declarations/${app.eid}/`
+let name = (app: App, release: string) =>
+  `${app.source?.split('/').pop() ?? 'legacy'}/${release}.json`
 
 // A declaration is written once, under a name no other write uses (a deploy's
 // release and version, a rollback's or a home's own name), so what a key
@@ -20,7 +22,10 @@ let key = (space: Space, app: App, release: string) =>
 // call composes the caller's vocabulary from the declarations of every app
 // they reach (agent.ts `spoken`), and a bucket read is a fifth of a second
 // (T-123988). The text, so each caller parses a value of its own; the newest
-// HELD are kept.
+// HELD are kept. An isolate that has not read one asks Files (files.ts
+// `keptBytes`), whose cache answers what any isolate nearby already read: an
+// Operator's first turn after a wake reads every app it reaches, and from the
+// bucket that was a third of a second each (T-140858).
 let HELD = 256
 let held = new Map<string, Promise<string>>()
 let hold = (at: string, text: Promise<string>) => {
@@ -41,7 +46,7 @@ export let keepDeclaration = async (
   release: string,
   value: Declaration,
 ) => {
-  let at = key(space, app, release)
+  let at = prefix(space, app) + name(app, release)
   let text = JSON.stringify(value)
   await r2RawObjects(env.BLOBS).put(at, new TextEncoder().encode(text))
   hold(at, Promise.resolve(text))
@@ -54,16 +59,19 @@ export let declarationOf = (
 ): Promise<Declaration> => {
   let release = releaseOf(app)
   if (release == '0') return Promise.resolve({ vocab: {}, tools: {} })
-  let at = key(space, app, release)
+  let at = prefix(space, app) + name(app, release)
   return hold(
     at,
-    held.get(at) ?? r2RawObjects(env.BLOBS).read(at).then((bytes) => {
-      if (!bytes) {
-        throw new Error(
-          `${space.slug}/${app.slug} release ${release} has no declaration`,
-        )
-      }
-      return new TextDecoder().decode(bytes)
-    }),
+    held.get(at) ??
+      keptBytes(env, app, prefix(space, app), name(app, release)).then(
+        (bytes) => {
+          if (!bytes) {
+            throw new Error(
+              `${space.slug}/${app.slug} release ${release} has no declaration`,
+            )
+          }
+          return new TextDecoder().decode(bytes)
+        },
+      ),
   ).then((text): Declaration => JSON.parse(text))
 }

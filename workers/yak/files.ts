@@ -26,7 +26,8 @@ import {
   type Representation,
 } from '@yaks/blob'
 import { servable } from './blob-key.ts'
-import { at, blobAt, immutable, servableAt } from './cache.ts'
+import { at, blobAt, immutable, keptAt, servableAt } from './cache.ts'
+import { elapsed, hop } from './lib/hops.ts'
 import { type Served, storeOf } from './door.ts'
 import { answered, metaOf } from './meta.ts'
 import { caught, relayed, responding } from './defects.ts'
@@ -261,22 +262,30 @@ export let nearest = (path: string) => {
 // saying it got no answer from the entrypoint behind it, which this module
 // never answers with itself. That failure is reported, and the bytes are read
 // in-process the same way, so a person's image still loads.
+//
+// Each trip is one `files` hop on the request's tally (hops.ts), and its wait
+// `files_wait`: a hit never reaches the bucket, so no `r2` counts it.
 export let door = (env: Env): Fetcher => ({
-  fetch: async (req) => {
-    if (!env.FILES) return relayed(await fetch(req, env))
-    try {
-      let cached = await env.FILES.fetch(req)
-      if (cached.status < 520 || cached.status > 530) return relayed(cached)
-      await cached.body?.cancel()
-      caught(new Error(`the files cache answered ${cached.status}`), {
-        request: `${req.method} files`,
-      })
-    } catch (e) {
-      if ((e as Error | null)?.name != 'DataCloneError') throw e
-    }
-    return relayed(await fetch(req, env))
+  fetch: (req) => {
+    hop('files')
+    return elapsed('files_wait', () => through(env, req))
   },
 })
+
+let through = async (env: Env, req: Request) => {
+  if (!env.FILES) return relayed(await fetch(req, env))
+  try {
+    let cached = await env.FILES.fetch(req)
+    if (cached.status < 520 || cached.status > 530) return relayed(cached)
+    await cached.body?.cancel()
+    caught(new Error(`the files cache answered ${cached.status}`), {
+      request: `${req.method} files`,
+    })
+  } catch (e) {
+    if ((e as Error | null)?.name != 'DataCloneError') throw e
+  }
+  return relayed(await fetch(req, env))
+}
 
 // The files that are the app's platform manifest rather than its page: the
 // server code the dispatch namespace runs (dispatch.ts), the manifest a
@@ -414,6 +423,25 @@ export let blobBytes = (
     }),
   )
 
+/** What the platform keeps about an app at `prefix` + `name`, a name written
+ * once (cache.ts `keptAt`), through the cache, or null where nothing is. */
+export let keptBytes = async (
+  env: Env,
+  app: { eid: string },
+  prefix: string,
+  name: string,
+): Promise<Uint8Array | null> => {
+  let r = await door(env).fetch(
+    new Request(keptAt(app.eid, name), { headers: { [PREFIX]: prefix } }),
+  )
+  if (r.ok) return new Uint8Array(await r.arrayBuffer())
+  if (r.status == 404) {
+    await r.body?.cancel()
+    return null
+  }
+  throw await answered(r)
+}
+
 /** The representation `rep` of the bytes at `sha` that an app anyone may
  * read still serves, as this part keeps it, or none known (blob-key.ts
  * `servable`). A store that could not say throws what it said. */
@@ -513,6 +541,7 @@ let fileFetch = async (req: Request, env: Env, c: Clock): Promise<Response> => {
     return shared.fetch(req, env)
   }
   if (url.pathname.startsWith('/blob/')) return blob(req, env, url.pathname)
+  if (url.pathname.startsWith('/kept/')) return kept(req, env, url.pathname)
   if (url.pathname.startsWith('/servable/')) {
     return serves(req, env, url.pathname)
   }
@@ -631,6 +660,21 @@ let blob = async (req: Request, env: Env, path: string) => {
     'content-type': 'application/octet-stream',
     etag: `"${sha}"`,
     ...immutable,
+  })
+}
+
+// `/kept/<app eid>/<name>` (cache.ts `keptAt`): the object at the told prefix
+// and the name, kept whole. Nothing kept is not kept either, so the object
+// written moments later is found.
+let kept = async (req: Request, env: Env, path: string) => {
+  let match = /^\/kept\/[^/]+\/(.+)$/.exec(path)
+  let prefix = req.headers.get(PREFIX)
+  if (req.method != 'GET') return no(405)
+  if (!match || !prefix?.endsWith('/')) return no(404)
+  let bytes = await r2RawObjects(env.BLOBS).read(prefix + match[1])
+  if (!bytes) return no(404)
+  return new Response(bytes, {
+    headers: { 'content-type': 'application/octet-stream', ...immutable },
   })
 }
 
