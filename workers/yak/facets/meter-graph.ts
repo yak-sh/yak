@@ -39,8 +39,9 @@ export let plugins = (_host: unknown, options: Options): Plugin[] => [{
     // another (model-spend.ts `reserved`).
     name: 'spend',
     phase: 'rules',
-    match:
-      '+meter, +trend, *spend, +space, +plan, +comped, +budget, +starter, #Now',
+    // The space's plan and budget are read from its view, never named in the
+    // match: a `+` there would give a space that has none an empty one.
+    match: '+meter, +trend, *spend, #Now',
     run: (row) => {
       let { meter, trend, spend, Now } = row
       let said = props(spend)
