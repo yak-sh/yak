@@ -1,10 +1,10 @@
-// The chat page's live updates (operator-page.ts `redraw`), over linkedom: an
+// The chat page's live updates (public/redraw.js), over linkedom: an
 // entry a person opened stays open through every redraw, a row's own and the
 // whole conversation's, nested ones too, and what they left closed stays closed.
 import { test } from '@yaks/testing'
 import { assertEquals } from '@std/assert'
 import { parseHTML } from 'linkedom'
-import { redraw } from './operator-page.ts'
+import { redraw } from './public/redraw.js'
 
 let entry = (title: string, inside = '') =>
   `<details><summary>${title}</summary>${inside}</details>`

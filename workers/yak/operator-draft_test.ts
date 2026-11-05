@@ -10,6 +10,7 @@ import { browserDrafts } from '../../packages/draft/browser.ts'
 import { directoryOf } from './directory.ts'
 import { platform } from './testing.ts'
 import { chatPage, operatorAnswer } from './operator-page.ts'
+import { redraw } from './public/redraw.js'
 
 let p = platform('operator-draft')
 let person = crypto.randomUUID(), eid = crypto.randomUUID()
@@ -104,9 +105,10 @@ let load = async (stash: Stash, cut = false, open = 'new') => {
   let focused = false
   say.focus = () => void (focused = true)
   let source = document.querySelector('script[type=module]')!.textContent!
-    .replace(/^import .*$/m, '')
+    .replace(/^import .*$/gm, '')
   new Function(
     'browserDrafts',
+    'redraw',
     'document',
     'fetch',
     'location',
@@ -117,6 +119,7 @@ let load = async (stash: Stash, cut = false, open = 'new') => {
     source,
   )(
     opened,
+    redraw,
     document,
     fetch,
     { reload() {}, origin: 'https://yaks.app' },
