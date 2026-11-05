@@ -12,6 +12,7 @@ import { parse } from '@yaks/query/core'
 import type { Bundle } from '@yaks/graph'
 import type { View } from '@yaks/inspect'
 import type { Shown } from '@yaks/render/views'
+// @ts-types="@yaks/ui/lucide"
 import Coins from 'lucide/dist/esm/icons/coins.mjs'
 import { ranked, type Spend, spendOf } from './tally.ts'
 import { dollars, tokens } from './words.ts'

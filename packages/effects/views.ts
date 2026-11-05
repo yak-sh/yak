@@ -1,6 +1,7 @@
 // The `@yaks/effects/views` facet: the page the sidebar offers as Effects
 // (./page.ts), loaded only by an interface that draws it.
 import type { View } from '@yaks/inspect'
+// @ts-types="@yaks/ui/lucide"
 import Gauge from 'lucide/dist/esm/icons/gauge.mjs'
 
 /** The page, as the inspector draws it. */

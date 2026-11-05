@@ -21,6 +21,7 @@
     "@yaks/api": "0.2.17",
     "@yaks/render": "0.2.17",
     "@yaks/tui": "0.2.17",
+    "lucide": "1.31.0",
     "preact": "10.29.7",
     "preact-render-to-string": "6.7.0"
   },

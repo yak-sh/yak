@@ -1,3 +1,4 @@
+// @ts-types="@types/semver"
 // Compiler-owned toolkit sources, seeded as npm-shaped packages. Only declared
 // toolkit roots and their catalog dependency closure enter a build; their source
 // digests describe what was compiled, never a version to ask the registry for.

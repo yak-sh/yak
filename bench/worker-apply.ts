@@ -218,7 +218,7 @@ export async function measure(path: string, samples: number, backlog: number) {
       })
       : undefined
     // Imported once the store has loaded its own SQLite library.
-    let { Database } = await import('@db/sqlite')
+    let { Database } = await import('@yaks/sqlite/testing')
     let prepares = new Map<string, number>()
     let prepare = Database.prototype.prepare
     if (Deno.env.get('PREPARES')) {

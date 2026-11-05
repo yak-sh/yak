@@ -10,6 +10,7 @@
  * @module
  */
 
+// @ts-types="@yaks/ui/lucide"
 import Glyph from 'lucide/dist/esm/icons/inbox.mjs'
 import type { View } from '@yaks/inspect'
 import { waiting } from './asks.ts'

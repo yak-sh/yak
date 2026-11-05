@@ -6,6 +6,7 @@
  * @module
  */
 import type { View } from '@yaks/inspect'
+// @ts-types="@yaks/ui/lucide"
 import HardDrive from 'lucide/dist/esm/icons/hard-drive.mjs'
 
 /** The page and the tab, loaded when first drawn. */

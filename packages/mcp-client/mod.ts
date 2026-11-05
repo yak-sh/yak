@@ -8,7 +8,7 @@ import type {
 import type { Tool, ToolId } from '@yaks/graph'
 import { argsOf } from '@yaks/graph/call'
 import { errorsText, toolCheck } from '@yaks/vocab/tools'
-import type { jsonSchemaValidator } from '@modelcontextprotocol/sdk/validation/types.js'
+import type { jsonSchemaValidator } from '@modelcontextprotocol/sdk/validation'
 
 // The MCP SDK, imported the first time a connection is used rather than when
 // this module is: a host with no server configured never loads it, and it is

@@ -2,6 +2,7 @@
 // tree, loaded only by an interface that draws them (./inspect.ts); the tabs a
 // topic opens on; and the page the sidebar offers, every topic on its shelf.
 import type { View } from '@yaks/inspect'
+// @ts-types="@yaks/ui/lucide"
 import Library from 'lucide/dist/esm/icons/library-big.mjs'
 
 /** The shelves, the page, the tree and a topic's tile, as the inspector

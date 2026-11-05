@@ -4,6 +4,7 @@
 // on; and the page the sidebar offers, Context, every persona and skill on the
 // desk.
 import type { View } from '@yaks/inspect'
+// @ts-types="@yaks/ui/lucide"
 import NotebookPen from 'lucide/dist/esm/icons/notebook-pen.mjs'
 
 /** The desk, the workshop and the bodies, as the inspector draws them. */
