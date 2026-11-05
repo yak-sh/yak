@@ -251,3 +251,28 @@ test('archived entities do not demand attention as alerts or assigned work', () 
     'Replies',
   ]])
 })
+
+test('a notification tells its person, or everyone in its project, unless they did it', () => {
+  let told = (to: string, by = 'agent') =>
+    row('told', { notification: {}, deliver: { to }, doc: {} }, 2, by)
+  let lane = (to: string, reader: Reader = who, by?: string) =>
+    threads([told(to, by)], reader).map((t) => [t.lane, t.reason, t.unread])
+  let space = { ...who, scope: 'space' }
+  assertEquals(lane('person'), [['Updates', 'told you what happened', true]])
+  assertEquals(lane('space'), [])
+  assertEquals(lane('space', space), [[
+    'Updates',
+    'told you what happened',
+    true,
+  ]])
+  assertEquals(lane('other', space), [])
+  assertEquals(lane('space', space, 'person').map(([l]) => l), ['Recent'])
+  let opened = row('seen', { opened: { at: at(3) } })
+  assertEquals(
+    threads([told('person')], {
+      ...who,
+      attention: new Map([['told', opened]]),
+    }).map((t) => t.unread),
+    [false],
+  )
+})

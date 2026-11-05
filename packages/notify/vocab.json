@@ -42,6 +42,23 @@
       },
       "description": "a nudge aimed at an entity, with the message that came with it"
     },
+    "notification": {
+      "component": true,
+      "type": "object",
+      "kind": true,
+      "before": [
+        "doc"
+      ],
+      "properties": {
+        "about": {
+          "type": "string",
+          "ref": "entity",
+          "death": "keep",
+          "description": "what it tells of, which may live in another graph"
+        }
+      },
+      "description": "words emitted, not said, telling whoever its deliver{to} names (a person, or a project for everyone standing in it) what happened; doc{body} holds them, and it is a thread of its own"
+    },
     "subscription": {
       "component": true,
       "type": "object",

@@ -86,10 +86,12 @@ the person started, a comment on the root also answers their opening words.
 Direct address retains session/claim policy. Session prose answers personal
 inputs; instructions, tool traffic and reasoning are excluded. Updates are
 completion, failure, stuck and other state marks, or commits on work the person
-started or watches. Watching alone does not deliver progress chatter. Recent
-contains what the person said, started, opened or decided. Said search includes
-decision choices; received search excludes the person's words. Mute wins over
-direct address.
+started or watches. Watching alone does not deliver progress chatter. A
+@yaks/notify `notification{about}` is an update too, a thread of its own: it
+reaches whoever its `deliver{to}` names, or everyone standing in the project it
+names, except whoever wrote it. Recent contains what the person said, started,
+opened or decided. Said search includes decision choices; received search
+excludes the person's words. Mute wins over direct address.
 
 **Personal attention** lives on the existing `subscription{actor, target, mode}`
 row for that actor and thread. Its `opened{at, by, via}` mark records reading;
@@ -104,6 +106,13 @@ so repeated attention gets a fresh server timestamp. Both accept `who`,
 defaulting to the caller. Mail, web and TUI use the same row and canonical
 thread subject. Reading and arbitrary edits do not resurface threads. No sweep
 is involved.
+
+A person can read as one of a project's people:
+`readInbox(graph, vocab,
+person, search, project)` and
+`readThread(…, root, project)` stand them in it (the reader's `scope`), so what
+is addressed to the project reaches them, and its unassigned decisions are
+theirs to answer.
 
 A **thread summary** is an exact policy record without historical message
 bodies. `readInbox` reads metadata on the server and returns the same lanes,

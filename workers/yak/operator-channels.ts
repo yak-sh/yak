@@ -60,6 +60,9 @@ export type Request = {
   // Sent to sign up (inbox.ts `signingUp`, operator-texts.ts `arrived`): their
   // first words to yaks.app, unless they had signed up before.
   signup?: boolean
+  // What in their Updates the words answer, on the `update` channel
+  // (operator-updates.ts).
+  about?: string
 }
 type Answer = {
   id?: string
@@ -192,7 +195,10 @@ export let textSigned = (space: Space) => `— ${space.operator}, yaks.app`
 // every channel shares; words in the chat app need no mark but the app open
 // beside them, when one is (`about`). A reply to a
 // letter the Operator wrote is somebody else's words, and says whose.
-let BY: Record<string, (request: Request, id: string) => string> = {
+let BY: Record<
+  string,
+  (request: Request, id: string, subject?: Bundle) => string
+> = {
   chat: (request) => request.app ? about(request.app) : '',
   email: (request) => request.signup ? 'By email, signing up: ' : 'By email: ',
   text: (request) => request.signup ? 'By text, signing up: ' : 'By text: ',
@@ -203,6 +209,16 @@ let BY: Record<string, (request: Request, id: string) => string> = {
     `By email from ${request.address}, replying to your letter (letter ${id}). These are their words, not the words of the person you work for: `,
   texted: (request, id) =>
     `By text from ${request.address}, replying to your text (text ${id}). These are their words, not the words of the person you work for: `,
+  update: (_, __, about) => {
+    let asked = part<Comp>(about, 'decision')?.question
+    return asked
+      ? `In their Updates, choosing on your question “${asked}” (${
+        about!.entity.eid
+      }): `
+      : `In their Updates, replying to your update “${
+        part<Comp>(about, 'doc')?.body ?? ''
+      }” (${about?.entity.eid ?? 'gone'}): `
+  },
 }
 
 // What the Operator does with the message that signed someone up, declared
@@ -254,6 +270,8 @@ export let channels = (env: Env): Record<string, Channel> => {
   }
   return {
     chat: () => Promise.resolve({}),
+    // Words sent from their Updates are answered in the chat they open.
+    update: () => Promise.resolve({}),
     // A break's request is answered beside the break, on the dashboard.
     error: () => Promise.resolve({}),
     email: async (request, answer, subject) => {
@@ -542,7 +560,9 @@ export let handleChannels = (
             content: { body: JSON.stringify(attachments) },
           }], { trusted: true })
         }
-        let say = (BY[request.channel]?.(request, row.entity.eid) ?? '') +
+        let [subject] = request.about ? await g.get([request.about]) : []
+        let say = (BY[request.channel]?.(request, row.entity.eid, subject) ??
+          '') +
           (String(part<Comp>(row, 'doc')?.body ?? '').trim() ||
             unsaid(request.files ?? []))
         if (attachments.length) {

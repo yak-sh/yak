@@ -27,6 +27,7 @@ import { plugins as blobs } from '@yaks/blob/graph'
 import { phoneDoc } from '@yaks/phone'
 import { phoneTexts } from './phone-move.ts'
 import { mailDoc } from '@yaks/mail/vocab'
+import { notifyDoc } from '@yaks/notify/vocab'
 import { operatorDoc } from './operator-vocab.ts'
 import { draftDoc, drafts } from '@yaks/draft'
 import { memoryDoc } from '@yaks/memory/vocab'
@@ -54,6 +55,15 @@ export let operatorVocab = loadVocab([
     $defs: Object.fromEntries(
       Object.entries(phoneDoc.$defs!).filter(([name]) =>
         ['text', 'sender'].includes(name)
+      ),
+    ),
+  },
+  // A person's Updates from the Operator (operator-updates.ts): what it
+  // tells them, and what each has read.
+  {
+    $defs: Object.fromEntries(
+      Object.entries(notifyDoc.$defs!).filter(([name]) =>
+        ['notification', 'subscription'].includes(name)
       ),
     ),
   },

@@ -2549,6 +2549,10 @@ let manage = async (req: Request, env: Env): Promise<Response> => {
   // Its Updates open in the chat app too.
   let reading = req.method == 'GET' || req.method == 'HEAD'
   if (view == 'updates' && writes(who.role) && !space.trashed) {
+    if (req.method == 'POST') {
+      let { updatesAnswer } = await import('./updates.ts')
+      return updatesAnswer(req, env, space, who)
+    }
     if (!reading) return nothingHere(env)
     let { updatesPage } = await import('./operator-page.ts')
     return updatesPage(env, space, who, await beside(dir, space, who))
@@ -2706,7 +2710,7 @@ let beside = async (
   ])
   return {
     spaces,
-    apps: mine.map((a) => ({ slug: a.slug, title: a.title })),
+    apps: mine.map((a) => ({ eid: a.eid, slug: a.slug, title: a.title })),
     name,
   }
 }

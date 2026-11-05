@@ -1,3 +1,4 @@
+import { updating } from './operator-updates.ts'
 import type { Bundle, Graph } from '@yaks/graph'
 import { draftEid } from '@yaks/draft'
 import { ownerOf, owns } from './operator-access.ts'
@@ -776,6 +777,12 @@ export let operatorRequest = async (
   }
   if (path == '/operator/work') {
     return Response.json(await workOf(store, spaceId, person, everyone))
+  }
+  // Their Updates from the Operator, and what they do there.
+  if (path == '/operator/updates') {
+    let answer = await updating(store, held, args)
+    if ('request' in answer) await armed()
+    return Response.json(answer)
   }
   if (path == '/operator/conversation') {
     if (!everyone && !await own(String(args.open ?? ''))) return missing()

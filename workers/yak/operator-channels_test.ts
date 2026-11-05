@@ -49,7 +49,7 @@ import {
   operatorAnswer,
   operatorBody,
 } from './operator-page.ts'
-import { operatorDoor } from './operator-page.ts'
+import { operatorDoor } from './build-door.ts'
 import { arrived, Refused } from './inbox.ts'
 import { chatPath } from './route.ts'
 import type { Inbound } from './env.ts'
@@ -540,7 +540,7 @@ test('the operator store hands its old opt-ins over and keeps none', () => {
 })
 
 let draft = async (text?: string, over = '') => {
-  let { operatorDoor } = await import('./operator-page.ts')
+  let { operatorDoor } = await import('./build-door.ts')
   return operatorDoor(
     f.env,
     f.space,

@@ -507,7 +507,7 @@ let fixings = async (
   ids: string[],
 ): Promise<Map<string, Fixing>> => {
   if (!ids.length) return new Map()
-  let { operatorDoor } = await import('./operator-page.ts')
+  let { operatorDoor } = await import('./build-door.ts')
   let rows = await operatorDoor(env, space, who, 'requests', {
     ids,
   }) as Bundle[]

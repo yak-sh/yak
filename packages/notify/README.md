@@ -9,8 +9,14 @@ application decides when to create a notification and how to display or send it.
 An entity is a record identified by `entity.eid`; components are named objects
 on that record.
 
-- `knock{target}` records a notification for another entity. Put its message in
-  a `doc{body}` component from [@yaks/doc](../doc) on the same record.
+- `knock{target}` records a nudge aimed at another entity, one that asks for
+  attention. Put its message in a `doc{body}` component from [@yaks/doc](../doc)
+  on the same record.
+- `notification{about}` records words emitted, not said, telling someone what
+  happened to `about` (which may live in another graph). Its words are its
+  `doc{body}`, and who it is for is [@yaks/mail](../mail)'s `deliver{to}`: a
+  person, or a project for everyone standing in it. It is a thread of its own;
+  @yaks/inbox lanes it as Updates.
 - `subscription{actor, target, mode}` records whether an actor watches (`watch`)
   or mutes (`mute`) a target. The actor is the entity identifying the recipient.
   An absent mode neither watches nor mutes. Personal `opened{at, by, via}` and
@@ -20,8 +26,9 @@ on that record.
 
 Both `subscription` and `chat` declare uniqueness for `(actor, target)`.
 Deleting either referenced entity cascades to its subscriptions; deleting a
-notification's target cascades to the notification. Chat references instead use
-`death: detach`, clearing the reference when its target is deleted.
+knock's target cascades to the knock, while a notification keeps its `about`.
+Chat references instead use `death: detach`, clearing the reference when its
+target is deleted.
 
 Email belongs to [@yaks/mail](../mail), and scheduled reminders belong to
 [@yaks/wake](../wake). This package does not send either.

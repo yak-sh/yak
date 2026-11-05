@@ -1314,6 +1314,42 @@
   .Talk_Needs:empty {
     display: none;
   }
+  /* Updates from the Operator (updates.ts): a card for each, what needs the
+     person first, then what happened, newest first. */
+  .Updates {
+    display: grid;
+    align-content: start;
+    gap: .75rem;
+  }
+  .Update_Words {
+    font-size: 1.0625rem;
+  }
+  .Update_Meta,
+  .Update_When,
+  .Update_Choices {
+    color: var(--soft-ink);
+    font-size: var(--fine);
+  }
+  .Update-needs .Update_When {
+    margin-left: auto;
+  }
+  .Update_Choices {
+    padding-left: 1.25rem;
+  }
+  .Update_Reply > summary {
+    color: var(--soft-ink);
+    font-size: var(--fine);
+    cursor: pointer;
+  }
+  .Update_Reply .Update_Form {
+    display: grid;
+    gap: .5rem;
+    margin-top: .5rem;
+    justify-items: end;
+  }
+  .Update_Reply textarea {
+    width: 100%;
+  }
   .Talk_Starts {
     display: flex;
     flex-wrap: wrap;

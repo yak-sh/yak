@@ -42,7 +42,7 @@ let defs: Record<string, string[]> = {
   notified: ['message_id'],
   knock: ['target'],
   deliver: ['to'],
-  signal: ['target'],
+  notification: ['about'],
   bug: ['title', 'app', 'first', 'last'],
   created: ['by', 'at'],
   opened: ['by', 'at'],
@@ -236,6 +236,19 @@ let fixture = (): Bundle[] => [
     },
     doc: { body: 'received mail' },
   }, 4),
+  ...[['told', 'person'], ['spaced', 'space'], ['elsewhere', 'other']].map((
+    [eid, to],
+  ) => row(eid, { notification: {}, deliver: { to }, doc: { body: eid } }, 6)),
+  row(
+    'own-notice',
+    {
+      notification: { about: 'app' },
+      deliver: { to: 'space' },
+      doc: { body: 'person joined' },
+    },
+    6,
+    'person',
+  ),
   row('digest', {
     mail_notice: {},
     mail: { to: 'person@example.com', message_id: '<digest>' },
@@ -272,7 +285,7 @@ for (let kind of ['ram', 'sqlite'] as const) {
     let { tx, close } = await setup(kind, fixture())
     try {
       let all = asRows(await tx.get(fixture().map((b) => b.entity.eid)))
-      let who = readerAt(all, 'person')
+      let person = readerAt(all, 'person')
       let searches: Search[] = [
         {},
         { all: true },
@@ -285,12 +298,16 @@ for (let kind of ['ram', 'sqlite'] as const) {
         { text: 'prompt needle' },
         { text: 'passive needle' },
       ]
-      for (let search of searches) {
-        assertEquals(
-          policy(await readInbox(tx, vocab, 'person', search)),
-          policy(threads(all, who, search)),
-        )
+      for (let scope of [undefined, 'space']) {
+        let who = { ...person, ...scope ? { scope } : {} }
+        for (let search of searches) {
+          assertEquals(
+            policy(await readInbox(tx, vocab, 'person', search, scope)),
+            policy(threads(all, who, search)),
+          )
+        }
       }
+      let who = person
       let metadata = await readInbox(tx, vocab, 'person', { all: true })
       for (let t of metadata) {
         for (let r of [t.row, t.latest, ...t.messages]) {

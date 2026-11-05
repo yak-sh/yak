@@ -289,7 +289,10 @@ test('opening or starting a conversation puts the cursor in the message box', ()
 })
 
 let apps = {
-  apps: [{ slug: 'notes', title: 'Notes' }, { slug: 'club', title: 'Club' }],
+  apps: [
+    { eid: 'notes', slug: 'notes', title: 'Notes' },
+    { eid: 'club', slug: 'club', title: 'Club' },
+  ],
 }
 let changing = (task: string, ...changed: object[]) => ({
   operator: { task, rows: [], now: '', changed },

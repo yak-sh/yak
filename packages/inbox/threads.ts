@@ -150,7 +150,9 @@ export let threads = <R extends Row>(
         r.comps.comment?.target == eid) ||
       (!!r.comps.entry?.session && started && !!r.comps.output)
     )
-    let direct = group.some(to) ||
+    // A notification tells its reader what happened, unless they did it.
+    let told = !!root.comps.notification && to(root) && !started
+    let direct = group.some((r) => !r.comps.notification && to(r)) ||
       (root.comps.mail && root.comps.deliver?.to == who.actor)
     let assigned = !!who.actor && root.comps.filed?.assignee == who.actor
     let alert = !!root.comps.bug && !root.comps.resolved &&
@@ -170,7 +172,8 @@ export let threads = <R extends Row>(
       r.comps.commit ||
       (r.comps.entry && (r.comps.exception || r.comps.refusal || r.comps.stop))
     )
-    let update = (started || watched) && (!!stateAt(root) || !!changes.length)
+    let update = told ||
+      (started || watched) && (!!stateAt(root) || !!changes.length)
     let visible = [
       'doc',
       'task',
@@ -245,6 +248,8 @@ export let threads = <R extends Row>(
         ? alert ? 'alert' : root.comps.decision ? 'decision' : 'assigned to you'
         : lane == 'Replies'
         ? 'reply to your words'
+        : told
+        ? 'told you what happened'
         : lane == 'Updates'
         ? 'work changed state'
         : 'had your attention',

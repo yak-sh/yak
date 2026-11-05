@@ -1,6 +1,7 @@
 /**
  * Being notified. A `knock` is a nudge aimed at an entity, with the message
- * that came with it; a `subscription` records whether somebody watches or mutes
+ * that came with it; a `notification` tells someone what happened, a thread
+ * of its own; a `subscription` records whether somebody watches or mutes
  * that entity, with their archived/opened attention marks on the same row;
  * and a `chat` is an open conversation between an actor and an
  * entity.
@@ -27,8 +28,8 @@ export let threadOf = (
       [who.actor, who.session, who.scope].includes(str(r.comps.mail.target))
     ? ''
     : String(
-      r.comps.comment?.target ?? r.comps.signal?.target ??
-        r.comps.mail?.target ?? r.comps.knock?.target ?? '',
+      r.comps.comment?.target ?? r.comps.mail?.target ??
+        r.comps.knock?.target ?? '',
     )
   return target || str(r.comps.entry?.session ?? r.comps.commit?.target) ||
     r.eid

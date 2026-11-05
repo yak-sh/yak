@@ -6,7 +6,8 @@ import { fetchOf } from './door.ts'
 import type { Space } from './directory.ts'
 import type { Env } from './env.ts'
 import { building } from './pages.ts'
-import type { Who } from './session.ts'
+import { vouched, type Who } from './session.ts'
+import { answered } from './meta.ts'
 
 /** What a socket remembers about itself across a hibernation: who is on the
  * other end, and which space they opened it in. The attachment is the only
@@ -129,4 +130,28 @@ export let posting = async (
   }
   let { frames } = await asked.json() as { frames: Frame[] }
   return building({ space: space.slug, frames }, env)
+}
+
+/** A request to a space's Operator, in its builder object, as `who`
+ * (operator-host.ts `operatorRequest`): its answer, or the refusal thrown. */
+export let operatorDoor = async (
+  env: Env,
+  space: Space,
+  who: Who,
+  path: string,
+  args: unknown,
+) => {
+  let response = await builderOf(env, space.eid)(() =>
+    new Request(`https://builder/operator/${path}`, {
+      method: 'POST',
+      headers: {
+        'content-type': 'application/json',
+        [SPACE]: space.eid,
+        ...vouched(who),
+      },
+      body: JSON.stringify(args),
+    })
+  )
+  if (!response.ok) throw await answered(response)
+  return response.json()
 }

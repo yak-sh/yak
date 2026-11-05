@@ -179,7 +179,7 @@ let six = [
   'Garden log',
   'RSVP',
 ]
-  .map((title, i) => ({ slug: `app${i}`, title }))
+  .map((title, i) => ({ eid: `app${i}`, slug: `app${i}`, title }))
 let beside = { name: '  Ada Lovelace ', apps: six }
 let sided = async (
   role: 'owner' | 'editor',

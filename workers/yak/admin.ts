@@ -50,7 +50,7 @@ import { DAYS, NOT_ON, statsOf } from './views.ts'
 import { type Funnel, funnel, STEPS } from './funnel.ts'
 import { type ByDay, series, summed } from '@yaks/ui/chart'
 import { caught } from './defects.ts'
-import { operatorDoor } from './operator-page.ts'
+import { operatorDoor } from './build-door.ts'
 import { listed, type Worked } from './operator-view.ts'
 import { managePath } from './route.ts'
 

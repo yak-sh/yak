@@ -56,7 +56,7 @@ let dependencies = [
   'notified',
   'knock',
   'deliver',
-  'signal',
+  'notification',
   'bug',
   'created',
   'opened',

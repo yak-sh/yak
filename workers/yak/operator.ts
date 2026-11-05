@@ -64,6 +64,7 @@ import {
 import { textSend } from './operator-texts.ts'
 import { phoneSend } from './operator-line.ts'
 import { googleTold, googleTools } from './operator-google.ts'
+import { notification } from './operator-updates.ts'
 import {
   bases,
   declare,
@@ -143,6 +144,11 @@ export let conversation: Declared = {
 let ON_TASK =
   ' This session carries on that task: its conversation and tools are recorded on it. Set status done on it only when the requested work is finished; leave it open when asking a question, reporting a limit, or explaining unfinished work.'
 
+// What every session is told where it is given the tool that asks the person
+// it works for to choose (operator-updates.ts).
+let ASKING =
+  ' Ask the person you work for: the question reaches them in their Updates under Needs you, with a button for each choice, and what they choose comes back to you in your conversation with them. Use it for a choice that is theirs to make (spending money, sending to people, deleting), not to confirm routine work.'
+
 // What the Operator is told of the spaces it reaches beyond its own.
 let told = (
   ctx: Awaited<ReturnType<typeof operatorContext>>,
@@ -189,7 +195,7 @@ export let remembering: Declared = {
 export let operatorRoster = async (
   ctx: Ctx,
   work: Store,
-  tasked = false,
+  { space, tasked = false }: { space: string; tasked?: boolean },
 ): Promise<Tool[]> => {
   ctx.dir = ctx.reopen!()
   let reach = await inReach(ctx)
@@ -204,7 +210,7 @@ export let operatorRoster = async (
         search: textSearch(work.g),
       }),
       ...loadTools([memoryDoc], memoryRuns()),
-      ...tasked ? loadTools([taskDoc], taskRuns()) : [],
+      ...loadTools([taskDoc], taskRuns()),
     ].map(namedTool).map((t) => [t.name, t]),
   )
   let run =
@@ -289,14 +295,34 @@ export let operatorRoster = async (
       }
     }),
     ...[...own.values()]
-      .filter((t) => mine.has(t.name) || t.name == 'task_update')
-      .map((t) => ({
-        ...shaped(t),
-        ...t.name == 'task_update'
-          ? { description: t.description + ON_TASK }
-          : {},
-        run: run(t, work.g, work.g),
-      })),
+      .filter((t) =>
+        mine.has(t.name) || (tasked && t.name == 'task_update') ||
+        t.name == 'decision_new'
+      )
+      .map((t) => {
+        let tool = { ...shaped(t), run: run(t, work.g, work.g) }
+        if (t.name == 'task_update') {
+          return { ...tool, description: t.description + ON_TASK }
+        }
+        if (t.name != 'decision_new') return tool
+        // Asked of the person it works for, in their space, whatever the
+        // model says.
+        let { properties, ...parameters } = tool.parameters
+        let { assignee: _, project: __, ...rest } = properties as Record<
+          string,
+          unknown
+        >
+        return {
+          ...tool,
+          description: t.description + ASKING,
+          parameters: { ...parameters, properties: rest },
+          run: (args, context) =>
+            tool.run(
+              { ...args, assignee: ctx.person, project: space },
+              context,
+            ),
+        } as Tool
+      }),
   ]
 }
 
@@ -750,7 +776,21 @@ export let operating = (
       })
     }
     if (kept) return
+    // A break's fix nobody asked for: what came of it is told to everyone
+    // in the space, in their Updates (operator-updates.ts).
+    let fixes = space && task
+      ? requests.filter((r) => comp(r, 'operator_request')?.channel == 'error')
+      : []
     await g.apply([
+      ...fixes.map((r) =>
+        notification({
+          to: space!,
+          words: reply.text,
+          about: task,
+          by: space,
+          id: r.entity.eid,
+        })
+      ),
       ...comment
         ? [{
           entity: { eid: comment },
@@ -807,7 +847,10 @@ export let operating = (
           // A conversation and its forks hand coding and careful reasoning
           // to the stronger model in a fresh helper, which starts no other.
           ...!(row?.spawned && !row.fork && !topicOf(row)) ? [delegated] : [],
-          ...await operatorRoster(ctx, store, tasked),
+          ...await operatorRoster(ctx, store, {
+            space: space.eid,
+            tasked,
+          }),
           platformBug(space),
           textSend(env, ctx, space),
           mailSend(env, ctx, space, store),

@@ -34,6 +34,7 @@ import { type Mail, mail } from './mail.ts'
 import { closed, invited, lost } from './pages.ts'
 import { INVITE } from './route.ts'
 import { refuse } from './tool.ts'
+import { tell } from './operator-updates.ts'
 
 /** Invitations one person may send in an hour. Enough to bring a whole team
  * or a class in at once, few enough that a loop aimed at strangers stops
@@ -334,6 +335,17 @@ export let door = async (
     }, env)
   }
   await accept(dir, invite, place)
+  // Its people hear who joined, in their Updates; the joiner knows.
+  let { space, app } = place
+  await tell(env, space, {
+    to: space.eid,
+    words: `${await dir.nameAt(person) ?? 'Someone'} joined ${
+      app ? app.title || app.slug : space.title || space.slug
+    }.`,
+    about: app?.eid ?? space.eid,
+    by: person,
+    id: invite.eid,
+  })
   // A seat is a deploy from where they stand: every view the space's apps
   // declare just came into their reach (declared.ts, T-33004). A grant is a
   // page they open, not a store their agent lists.

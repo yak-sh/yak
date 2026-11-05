@@ -52,7 +52,7 @@ let components = [
   'notified',
   'knock',
   'deliver',
-  'signal',
+  'notification',
   'bug',
   'created',
   'opened',
@@ -89,7 +89,7 @@ let scalars = [
   'notified.message_id',
   'knock.target',
   'deliver.to',
-  'signal.target',
+  'notification.about',
   'bug.title',
   'bug.app',
   'bug.first',
@@ -241,6 +241,7 @@ let reader = async (
   tx: ReadTx,
   has: Words,
   actor: string,
+  scope?: string,
 ): Promise<Reader> => {
   let fields = [
     'entity.eid',
@@ -290,7 +291,8 @@ let reader = async (
       ) targets.get(r.eid)!.comps[name] ??= {}
     }
   }
-  return readerAt([...person, ...subs], actor)
+  let who = readerAt([...person, ...subs], actor)
+  return scope ? { ...who, scope } : who
 }
 
 let index = (all: Row[]): Map<string, Row> => {
@@ -366,12 +368,15 @@ let conversation = async (
 
 /** Exact server inbox summaries. Bodies are absent, not truncated previews.
  * Text/direction searches read complete words on the server, then apply the
- * same pure policy; callers receive threads rather than the source history. */
+ * same pure policy; callers receive threads rather than the source history.
+ * `scope` is the project the person stands in, when they read as one of its
+ * people: what is addressed to it reaches them too. */
 export let readInbox = async (
   tx: ReadTx,
   vocab: Vocabulary,
   actor: string,
   search: Search = {},
+  scope?: string,
 ): Promise<Thread[]> => {
   let txGet = tx.get.bind(tx), txRead = tx.read.bind(tx)
   tx = {
@@ -379,7 +384,7 @@ export let readInbox = async (
     read: (q) => txRead(q, { native: true }),
   }
   let has = words(vocab)
-  let who = await reader(tx, has, actor)
+  let who = await reader(tx, has, actor, scope)
   let { read } = reads(
     tx,
     has,
@@ -405,6 +410,7 @@ export let readThread = async (
   vocab: Vocabulary,
   actor: string,
   root: string,
+  scope?: string,
 ): Promise<Thread | undefined> => {
   let txGet = tx.get.bind(tx), txRead = tx.read.bind(tx)
   tx = {
@@ -412,7 +418,7 @@ export let readThread = async (
     read: (q) => txRead(q, { native: true }),
   }
   let has = words(vocab)
-  let who = await reader(tx, has, actor)
+  let who = await reader(tx, has, actor, scope)
   let { read, hydrate } = reads(tx, has, 'detail')
   let seed = await hydrate([{ eid: root, comps: {} }])
   if (!seed.length) return undefined

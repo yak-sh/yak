@@ -30,6 +30,13 @@ export let operatorDoc: VocabDoc = {
           type: 'string',
           description: 'The app whose break started the request.',
         },
+        about: {
+          type: 'string',
+          ref: 'entity',
+          death: 'keep',
+          description:
+            'What in their Updates the words answer: an update, or a question asked of them.',
+        },
         signup: {
           type: 'boolean',
           description:

@@ -2,9 +2,8 @@ import type { Bundle } from '@yaks/graph'
 import type { Env } from './env.ts'
 import { directoryOf, type Reach, type Space } from './directory.ts'
 import { reachOf } from './operator-reach.ts'
-import { builderOf, SPACE } from './build-door.ts'
+import { builderOf, operatorDoor, SPACE } from './build-door.ts'
 import { vouched, type Who } from './session.ts'
-import { answered } from './meta.ts'
 import { esc, type Picked, shell, spaceChoice } from './pages.ts'
 import { spaceHost, url } from './host.ts'
 import { chatPath, logoPath, managePath, SLUG } from './route.ts'
@@ -40,7 +39,7 @@ import {
 import { DOCUMENTS } from './documents.ts'
 import { settings } from './phone-providers.ts'
 import { icon } from './icons.ts'
-import { unread, updates } from './updates.ts'
+import { needing, needsCard, updates, updatesOf } from './updates.ts'
 
 // What the message box takes: up to COUNT files at a time, each up to SIZE
 // (keepFile's ceiling), and the kinds the Operator reads (operator-channels.ts
@@ -100,28 +99,6 @@ export let nameCard = (at: string, name: string) =>
     esc(name)
   }" maxlength="40" required autocomplete="off"></label>
 <button class="Button" type="submit">Save</button><p role="status" data-status></p></form>`
-
-export let operatorDoor = async (
-  env: Env,
-  space: Space,
-  who: Who,
-  path: string,
-  args: unknown,
-) => {
-  let response = await builderOf(env, space.eid)(() =>
-    new Request(`https://builder/operator/${path}`, {
-      method: 'POST',
-      headers: {
-        'content-type': 'application/json',
-        [SPACE]: space.eid,
-        ...vouched(who),
-      },
-      body: JSON.stringify(args),
-    })
-  )
-  if (!response.ok) throw await answered(response)
-  return response.json()
-}
 
 // What a person agreed to be texted at. Any opt-in this space's operator
 // store still keeps from before the number moved onto the person is handed to
@@ -494,7 +471,7 @@ for (let form of document.querySelectorAll('#texts, #name')) {
  * apps of this one they may open, and what they are called. */
 export type Beside = {
   spaces?: Picked[]
-  apps?: { slug: string; title: string }[]
+  apps?: { eid: string; slug: string; title: string }[]
   name?: string | null
 }
 
@@ -503,7 +480,7 @@ let APPS = 4
 
 // The chat app's side, the product's whole menu (T-140506): whose Operator
 // it is, in the space selector; a new chat; Updates from the Operator, with
-// how many are unread; the space's apps; the person's chats with it; and at
+// how many wait on the person; the space's apps; the person's chats with it; and at
 // the foot Manage, the settings behind the product (today's dashboard pages:
 // its Apps for the space's owner, the Operator's settings for a member, the
 // only one of them they may open). `current` holds the chats this page shows,
@@ -515,7 +492,7 @@ let side = (
   space: Space,
   who: Who,
   beside: Beside,
-  at: { items: Worked[]; unread: number; current: string[]; app?: string },
+  at: { items: Worked[]; waiting: number; current: string[]; app?: string },
 ) => {
   let owner = who.role == 'owner'
   let here = beside.spaces?.find((s) => s.slug == space.slug) ?? {
@@ -553,7 +530,7 @@ let side = (
   }"${at.current.includes('updates') ? ' aria-current="page"' : ''}>${
     icon('bell')
   }Updates from ${operator}${
-    at.unread ? `<span class="Talk_Count">${at.unread}</span>` : ''
+    at.waiting ? `<span class="Talk_Count">${at.waiting}</span>` : ''
   }</a></nav>
 <h2 class="Talk_Group" id="side-apps">Your apps</h2>
 ${
@@ -615,7 +592,7 @@ let canvas = (env: Env, space: Space, app: Shown) => {
 
 // A page of the chat app: the side, and beside it the bar naming the page
 // and whose Operator it is, over `main`, and the app open beside them.
-let talkPage = async (
+let talkPage = (
   env: Env,
   space: Space,
   who: Who,
@@ -624,6 +601,8 @@ let talkPage = async (
     title: string
     status: number
     items: Worked[]
+    // how many Updates wait on the person (updates.ts `updatesOf`)
+    waiting: number
     current: string[]
     main: string
     // the main's own modifier, beside `Talk_Main`
@@ -646,7 +625,7 @@ let talkPage = async (
 ${
       side(env, space, who, beside, {
         items: page.items,
-        unread: await unread(env, space, who),
+        waiting: page.waiting,
         current: page.current,
         app: page.app?.slug,
       })
@@ -712,9 +691,10 @@ export let chatPage = async (
   chosen?: string | null,
 ) => {
   let at = managePath('operator', space.slug)
-  let [talked, items] = await Promise.all([
+  let [talked, items, news] = await Promise.all([
     conversationOf(env, space, who, at, open),
     workOf(env, space, who),
+    updatesOf(env, space, who),
   ])
   let fresh = open == 'new'
   let first = beside.name?.trim().split(/\s+/)[0]
@@ -736,12 +716,14 @@ export let chatPage = async (
   // A new chat with no app beside it is where the person lands: what needs
   // them, and ways to start.
   let landing = fresh && !app
+  let needs = landing ? needing(news) : undefined
   return talkPage(env, space, who, beside, {
     title: fresh
       ? app ? app.title || app.slug : `Message ${space.operator}`
       : talked.title || 'Not here',
     status: fresh || talked.title ? 200 : 404,
     items,
+    waiting: news.waiting,
     current: [open, talked.task],
     kind: fresh ? 'Talk_Main-new' : '',
     skip: fresh || talked.title
@@ -750,7 +732,21 @@ export let chatPage = async (
     main: `<div class="Talk_Column" data-conversation aria-live="polite">${
       talked.html || hello
     }</div>
-${landing ? '<div class="Talk_Needs" data-needs></div>' : ''}
+${
+      landing
+        ? `<div class="Talk_Needs" data-needs>${
+          needs
+            ? needsCard(
+              space,
+              needs,
+              `<p><a href="${managePath('updates', space.slug)}#u-${
+                esc(needs.eid)
+              }">Ask ${esc(space.operator)} about it</a></p>`,
+            )
+            : ''
+        }</div>`
+        : ''
+    }
 ${fresh || talked.title ? composer(at, app) : ''}
 ${
       landing
@@ -778,17 +774,21 @@ export let updatesPage = async (
   who: Who,
   beside: Beside = {},
 ) => {
-  let [items, main] = await Promise.all([
+  // Opening them reads them, and the count beside them goes with it.
+  let [items, news] = await Promise.all([
     workOf(env, space, who),
-    updates(env, space, who),
+    updatesOf(env, space, who, true),
   ])
   return talkPage(env, space, who, beside, {
     title: `Updates from ${space.operator}`,
     status: 200,
     items,
+    waiting: news.updates.filter((u) => u.needs).length,
     current: ['updates'],
     skip: ['#content', 'Skip to content'],
-    main: `<div class="Talk_Column">${main}</div>`,
+    main: `<div class="Talk_Column Updates">${
+      updates(env, space, news, beside.apps)
+    }</div>`,
   })
 }
 

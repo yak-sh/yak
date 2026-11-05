@@ -34,7 +34,7 @@ export type Reader = {
 // watch/mute sets are asked about.
 export let aboutOf = (r: Row): string =>
   String(
-    r.comps.comment?.target ?? r.comps.signal?.target ??
+    r.comps.comment?.target ?? r.comps.notification?.about ??
       r.comps.mail?.target ?? r.comps.knock?.target ?? '',
   )
 
@@ -77,14 +77,13 @@ export let addressed = (who: Reader) => (r: Row): boolean => {
     return t == who.session || !!who.claims?.has(t) ||
       (who.operator == true && !!who.actor && t == who.actor)
   }
-  // A notice reaches the same doors a comment does — claimed work, the
-  // session itself, or the actor for an operator loop — but it was emitted,
-  // not said (D-13858). Same addressing, different provenance.
-  let n = r.comps.signal
-  if (n) {
-    let t = String(n.target ?? '')
-    return t == who.session || !!who.claims?.has(t) ||
-      (who.operator == true && !!who.actor && t == who.actor)
+  // A notification was emitted, not said: it reaches whoever its `deliver`
+  // names, the session or the actor, and for an operator loop the project it
+  // stands in, which is everyone there.
+  if (r.comps.notification) {
+    let t = String(r.comps.deliver?.to ?? '')
+    return !!t && (t == who.session || t == who.actor ||
+      (who.operator == true && t == who.scope))
   }
   let k = r.comps.knock
   if (k) {

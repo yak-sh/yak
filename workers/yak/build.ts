@@ -395,11 +395,22 @@ export class Builder {
         if (
           url.pathname == '/operator/receipt' ||
           url.pathname == '/operator/letter' ||
-          url.pathname == '/operator/replied'
+          url.pathname == '/operator/replied' ||
+          url.pathname == '/operator/tell'
         ) {
           let space = request.headers.get(SPACE)
           if (request.headers.get('x-yak-kernel') != '1' || !space) {
             return no(403, NOBODY)
+          }
+          // What happened in the space, for its people's Updates
+          // (operator-updates.ts `tell`).
+          if (url.pathname == '/operator/tell') {
+            let { notification } = await import('./operator-updates.ts')
+            let { store } = await this.#work()
+            await store.g.apply([notification(await request.json())], {
+              trusted: true,
+            })
+            return Response.json({ ok: true })
           }
           if (url.pathname == '/operator/receipt') {
             let { operatorReceipt } = await import('./operator-host.ts')

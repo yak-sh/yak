@@ -57,7 +57,7 @@ let fields = [
   'notified',
   'knock',
   'deliver',
-  'signal',
+  'notification',
   'bug',
   'created',
   'opened',
@@ -102,8 +102,7 @@ export let candidates = (who: Reader, has: Words = () => true): string => {
   return read(
     union([
       select('comment.target', targets),
-      select('signal.target', targets),
-      select('deliver.to', [who.actor, who.session]),
+      select('deliver.to', [who.actor, who.session, who.scope]),
       select('mail.to', who.addrs ?? []),
       select('mail.from', who.addrs ?? []),
       select('mail.target', [who.scope, who.session, ...who.watching ?? []]),
