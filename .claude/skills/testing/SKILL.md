@@ -127,7 +127,7 @@ formatting to changed files, lints them, and, when it touches a package,
 checks every package's public API as one workspace (`deno publish --dry-run`,
 under two seconds): slow types, and a package import that closes a cycle,
 which a package checked alone cannot see. Beside the tests it checks the types of source and doc comments the
-change reaches, each changed module and each importing one, as
+change reaches, each changed module, each importing one, and each of its package importing one however far, as
 `deno task check:types` does alone: TypeScript's native compiler (tsgo) checks
 them in the project Deno's resolution describes, in seconds where the whole
 repository takes about fifteen. Each `conform.ts` beside a `workers.json` that

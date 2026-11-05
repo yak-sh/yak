@@ -1,10 +1,11 @@
 // `deno task check:types [--all] [paths…]`: the types of source and of the
 // code in its doc comments, checked by TypeScript's native compiler (tsgo) in
 // the project Deno's resolution describes (./tsconfig.ts). With no paths it
-// checks what the branch and working changes reach: each changed module and
-// each module importing one (`types`), as `deno task test` does on every run
-// with no paths. The consumers past those are main's CI's: `deno task check`
-// runs `--all`, every module, after the push. Raycast is a Node/React host
+// checks what the branch and working changes reach: each changed module, the
+// rest of its package that imports one, and each module importing one
+// (`types`), as `deno task test` does on every run with no paths. The
+// consumers past those are main's CI's: `deno task check` runs `--all`, every
+// module, after the push. Raycast is a Node/React host
 // with its own tsconfig, checked by check:raycast, so it is not among DIRS.
 // The full CI run also checks the release's public types through Deno's
 // publisher: package-local compiler options and the public-type transform
@@ -27,7 +28,7 @@ import { dirname } from 'node:path'
 import config from '../deno.json' with { type: 'json' }
 import { remembered, type Survey, survey } from '@yaks/testing/deps'
 import { exported, fences, typed } from '@yaks/testing/examples'
-import { changes, git } from './test-changes.ts'
+import { changes, git, member } from './test-changes.ts'
 import { type Info, type Project, project, relative } from './tsconfig.ts'
 import { platformConfig } from './check-platform.ts'
 import { incremental } from './check-incremental.ts'
@@ -150,8 +151,26 @@ export let sourceSurvey = async (
   return await survey([...paths, ...all, ...entries])
 }
 
-/** The modules a change reaches: those changed and their importers, and the
- * Workers entries reaching one. */
+/** Of `all`, the modules whose types `changed` can change: each changed, each
+ * importing one, and each of a changed one's package (`owner`) importing one
+ * however far, past a module loading a whole platform, where `distance` stops.
+ * A type leaves a package only by what it exports, which an importer checks. */
+export let scope = (
+  s: Survey,
+  all: string[],
+  changed: string[],
+  owner: (path: string) => string | undefined = member,
+) => {
+  let far = s.distance(changed)
+  let homes = new Set(changed.map(owner).filter(Boolean))
+  return all.filter((f) =>
+    far(f) <= 1 || homes.has(owner(f)) && s.reaches([f], changed)
+  )
+}
+
+/** The modules a change reaches: those changed, the rest of their package
+ * that imports one, each module importing one, and the Workers entries
+ * reaching one. */
 let reached = async (
   changed: string[],
   hosted: string[],
@@ -165,8 +184,7 @@ let reached = async (
         '`deno task check:types --all` checks every module.',
     )
   }
-  let far = s.distance(changed)
-  let roots = all.filter((f) => far(f) <= 1)
+  let roots = scope(s, all, changed)
   let entries = hosted.filter((e) => s.reaches([e], changed))
   let imports = (roots: string[]) =>
     Object.entries(MADE)

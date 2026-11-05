@@ -39,13 +39,13 @@ graph, including consumers and examples, the nearest to the change first, as
 many as about eight seconds hold. The rest of its consumers run in main CI after
 the push, and the closing line counts them. It applies formatting to changed
 files, lints changed code, checks the public API of each changed package for
-slow types, and checks the types of the modules a change reaches, those changed
-and those importing one, with their doc comment examples
-(`deno task check:types` alone); main CI checks every module after the push
-(`--all`). Paths and tags narrow a run while iterating; the finished change uses
-the no-path command to include its consumers. Tests run in process; page
-behavior uses linkedom, and terminal behavior uses @yaks/tui's `lay`. There are
-no browser tests or slow platform tier.
+slow types, and checks the types of the modules a change reaches, those changed,
+those importing one, and those of their package importing one however far, with
+their doc comment examples (`deno task check:types` alone); main CI checks every
+module after the push (`--all`). Paths and tags narrow a run while iterating;
+the finished change uses the no-path command to include its consumers. Tests run
+in process; page behavior uses linkedom, and terminal behavior uses @yaks/tui's
+`lay`. There are no browser tests or slow platform tier.
 
 ## Exports
 

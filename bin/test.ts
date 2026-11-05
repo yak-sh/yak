@@ -35,12 +35,9 @@ if (import.meta.main) {
 }
 
 let { relative } = await import('node:path')
-let { default: workspace } = await import('../package.json', {
-  with: { type: 'json' },
-})
 let { fileURLToPath } = await import('node:url')
 let { choose } = await import('@yaks/testing/choose')
-let { changes } = await import('./test-changes.ts')
+let { changes, member } = await import('./test-changes.ts')
 let { check, format } = await import('./test-checks.ts')
 let { excluded, MADE: GENERATORS, sourceSurvey } = await import(
   './check-types.ts'
@@ -361,14 +358,6 @@ export let expected = (
         mean,
       )
 }
-
-/// member('packages/sql/render.ts') -> 'packages/sql'
-/// member('bin/test.ts') -> undefined
-/** The workspace package a path belongs to. */
-export let member = (path: string): string | undefined =>
-  workspace.workspaces.map((w) => w.replace(/^\.\//, '')).find((w) =>
-    path.startsWith(`${w}/`)
-  )
 
 /** Relevant files, leaving out sources and observed dependencies already
  * passed, and those past what a change's own run has time for. */

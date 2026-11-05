@@ -1,5 +1,6 @@
 import { equal, test, throws } from '@yaks/testing'
-import { generate, MADE, programs } from './check-types.ts'
+import { type Info, survey, WIDE } from '@yaks/testing/deps'
+import { generate, MADE, programs, scope } from './check-types.ts'
 
 test('source imports reuse complete readiness receipts and make the remaining outputs', async () => {
   let called: string[][] = []
@@ -98,4 +99,44 @@ test('hosts share generation and retain failures without blocking independent ch
   equal(result, false)
   equal(checked, ['independent'])
   equal(generated, [['run', '--no-lock', '-A', catalog]])
+})
+
+test('a change checks its importers, and its own package past a module loading a whole platform', async () => {
+  let dir = Deno.makeTempDirSync({ prefix: 'yaks-scope-' })
+  let world = Array.from({ length: WIDE }, (_, i) => `world${i}.ts`)
+  let imports: Record<string, string[]> = {
+    'pkg/lock.ts': [],
+    'pkg/host.ts': ['pkg/lock.ts', ...world],
+    'pkg/host_test.ts': ['pkg/host.ts'],
+    'pkg/apart.ts': [],
+    'app/direct.ts': ['pkg/lock.ts'],
+    'app/far.ts': ['pkg/host.ts'],
+    ...Object.fromEntries(world.map((m) => [m, []])),
+  }
+  let at = (m: string) => `${dir}/${m}`
+  for (let m of Object.keys(imports)) {
+    Deno.mkdirSync(at(m).replace(/\/[^/]+$/, ''), { recursive: true })
+    Deno.writeTextFileSync(at(m), '')
+  }
+  let info = (): Promise<Info> =>
+    Promise.resolve({
+      modules: Object.entries(imports).map(([m, deps]) => ({
+        specifier: `file://${at(m)}`,
+        local: at(m),
+        dependencies: deps.map((d) => ({
+          code: { specifier: `file://${at(d)}` },
+        })),
+      })),
+      redirects: {},
+    })
+  let all = Object.keys(imports).filter((m) => !m.startsWith('world')).map(at)
+  let s = (await survey(all, info))!
+  let owner = (p: string) => /\/(pkg|app)\//.exec(p)?.[1]
+  equal(
+    scope(s, all, [at('pkg/lock.ts')], owner).map((p) =>
+      p.slice(dir.length + 1)
+    ),
+    ['pkg/lock.ts', 'pkg/host.ts', 'pkg/host_test.ts', 'app/direct.ts'],
+  )
+  Deno.removeSync(dir, { recursive: true })
 })

@@ -1,4 +1,6 @@
 // Git supplies the changed paths; dependency selection stays in @yaks/testing.
+import workspace from '../package.json' with { type: 'json' }
+
 type Run = (args: string[]) => Promise<string>
 
 /** Git's answer to `args`, or why it refused. */
@@ -29,3 +31,11 @@ export let changes = async (run: Run = git): Promise<string[]> => {
   let added = await run(['ls-files', '--others', '--exclude-standard', '-z'])
   return [...new Set((tracked + added).split('\0').filter(Boolean))]
 }
+
+/// member('packages/sql/render.ts') -> 'packages/sql'
+/// member('bin/test.ts') -> undefined
+/** The workspace package a path belongs to. */
+export let member = (path: string): string | undefined =>
+  workspace.workspaces.map((w) => w.replace(/^\.\//, '')).find((w) =>
+    path.startsWith(`${w}/`)
+  )
