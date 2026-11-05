@@ -1,5 +1,5 @@
 import { test } from '@yaks/testing'
-import { assertEquals, assertStringIncludes } from '@std/assert'
+import { assert, assertEquals, assertStringIncludes } from '@std/assert'
 import { type Item, type Model, ModelError, type Request } from '@yaks/model'
 import { parseHTML } from 'linkedom'
 import { platform } from './directory-probe.ts'
@@ -7,7 +7,8 @@ import { directoryOf } from './directory.ts'
 import { operatorMemory } from './operator-testing.ts'
 import { drain } from './operator-store.ts'
 import { operating } from './operator.ts'
-import { conversationOf } from './operator-host.ts'
+import { conversationOf, frameOf } from './operator-host.ts'
+import { esc } from './html.ts'
 import { transcript } from '@yaks/session'
 
 // On Claude the Operator runs on Sonnet and hands code to Opus in a child
@@ -85,6 +86,64 @@ test('on Claude the Operator hands code to Opus, which works for its space at it
   assertEquals(said(on(SONNET).at(-1)!), true)
   assertEquals(await entries(child.entity.eid), [0.004])
   assertEquals((await entries(out.session)).every((d) => d == 0.002), true)
+})
+
+// Everything the Operator and its helper were sent besides the conversation
+// (the system prompt, every tool with its description and schema) is an
+// entry of its own, closed, holding what the model received, the helper's
+// under the step that started it.
+test('the conversation shows what the Operator and each helper were told and offered, closed until opened', async () => {
+  let { html } = await conversationOf(
+    store,
+    '/manage/claude/operator',
+    out.task,
+  )
+  let { document } = parseHTML(`<main>${html}</main>`)
+  let told = [...document.querySelectorAll('.Talk_Told')]
+  let first = (m: string) => asked.find((r) => r.model == m)!
+  assertEquals(
+    told.map((d) => d.querySelector('summary')!.textContent),
+    [SONNET, OPUS].flatMap((m) => {
+      let who = m == SONNET ? 'the Operator' : 'a helper'
+      return [
+        `What ${who} was told`,
+        `The ${first(m).tools.length} tools ${who} was offered`,
+      ]
+    }),
+  )
+  for (let d of told) assertEquals(d.hasAttribute('open'), false)
+  let helperSaid = told[2]
+  // Each in full, as the model received it.
+  for (let m of [SONNET, OPUS]) {
+    assertStringIncludes(
+      html,
+      `<pre>${esc(first(m).instructions!)}</pre>`,
+    )
+  }
+  let spawn = first(SONNET).tools.find((t) => t.name == 'spawn')!
+  assertStringIncludes(
+    html,
+    `<details><summary>spawn</summary><p>${esc(spawn.description)}</p><pre>${
+      esc(JSON.stringify(spawn.parameters, null, 2))
+    }</pre></details>`,
+  )
+  // The helper's entry sits under the step that started it.
+  assert(
+    helperSaid.parentElement!.previousElementSibling!.querySelector(
+      '.Talk_Step',
+    ),
+  )
+  let words = document.querySelectorAll('.Talk_You, .Talk_Reply, .Talk_Trouble')
+  for (let w of words) assertEquals(w.querySelector('.Talk_Told'), null)
+  let live = await frameOf(store, child.entity.eid)
+  assertEquals(live!.frame.operator.task, out.task)
+  // A helper's step brings the page the same entry, live.
+  let rows = live!.frame.operator.rows
+  assertEquals(rows.map((r) => `row-${r.id}`), [helperSaid.parentElement!.id])
+  assertStringIncludes(
+    html,
+    `<div id="row-${rows[0].id}">${rows[0].html}</div>`,
+  )
 })
 
 // A helper's end reaches the conversation as one of the Operator's steps,

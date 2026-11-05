@@ -8,7 +8,7 @@ export { CallError as ToolError } from '@yaks/tools/errors'
 import { argsOf } from '@yaks/graph/call'
 import { derivedEid, identityEid } from '@yaks/graph/identity'
 import { Refused, Stale } from '@yaks/graph/errors'
-import { token } from '@yaks/graph/sha256'
+import { sha256, token } from '@yaks/graph/sha256'
 import { transient } from '@yaks/graph/read'
 // The runner's one step. `react(graph, session)` reads the newest entry of a
 // transcript and does the one next thing it calls for: a pending input or
@@ -1547,6 +1547,9 @@ export let react = async (
         : req.items.slice(dynamic.length),
     ),
   }
+  // The tools sent, kept once per set under their sha (`offer{tools}`), so a
+  // reader sees exactly what the model was offered.
+  let offer = req.tools.length ? sha256(JSON.stringify(req.tools)) : ''
   let ask = unfinished && executor ? unfinished : line({
     [ASK]: { to: modelEid, through: newest.entity.eid },
     ...using
@@ -1556,12 +1559,13 @@ export let react = async (
         },
       }
       : {},
-    ...sending || req.instructions || executor
+    ...sending || req.instructions || executor || offer
       ? {
         sending: {
           ...sending,
           instructions: req.instructions ?? null,
           ...executor ? { tools: req.tools.map((tool) => tool.name) } : {},
+          ...offer ? { offer } : {},
         },
       }
       : {},
@@ -1592,7 +1596,10 @@ export let react = async (
     entity: b.entity,
     provisional: null,
   }))
-  ;[ask] = (await g.apply([ask, ...pending], { trusted: true }))
+  let kept = offer && !(await g.get([offer]))[0]
+    ? [{ entity: { eid: offer }, offer: { tools: req.tools } }]
+    : []
+  ;[ask] = (await g.apply([ask, ...pending, ...kept], { trusted: true }))
     .filter((b) => b.entity.eid == ask.entity.eid)
   if (deps.streaming) {
     req.onText = ({ index, id, text }) => {

@@ -6,9 +6,13 @@ import { receive, type Request } from './operator-channels.ts'
 import type { operatorStore } from './operator-store.ts'
 import { transcript } from '@yaks/session'
 import { titleOf } from '@yaks/tools/title'
+import type { Tool } from '@yaks/model'
 import {
   frame,
+  type Helper,
+  helperFrame,
   type Names,
+  type Offers,
   stateOf,
   talk,
   type Worked,
@@ -51,6 +55,53 @@ let entriesOf = async (store: Store, sessions: Bundle[]) =>
   (await Promise.all(sessions.map((b) => transcript(store.g, b.entity.eid))))
     .flat()
 
+// The helpers these sessions started, each with the call that started it and
+// its transcript.
+let helpersOf = async (store: Store, sessions: Bundle[]): Promise<Helper[]> => {
+  let children = (await Promise.all(
+    sessions.map((b) => store.g.read(`.spawned.parent=${b.entity.eid}`)),
+  )).flat()
+  return await Promise.all(children.map(async (b) => ({
+    call: comp(b, 'spawned')?.call as string | undefined,
+    entries: await transcript(store.g, b.entity.eid),
+  })))
+}
+
+// The tool offers these transcripts' asks name, by their sha.
+let offersOf = async (store: Store, entries: Bundle[]): Promise<Offers> => {
+  let named = new Set(
+    entries.flatMap((b) => {
+      let offer = comp(b, 'sending')?.offer
+      return b.ask && typeof offer == 'string' ? [offer] : []
+    }),
+  )
+  let rows = await store.g.get([...named])
+  return new Map(
+    rows.filter((b) => b?.offer).map((b) => [
+      b.entity.eid,
+      comp(b, 'offer')!.tools as Tool[],
+    ]),
+  )
+}
+
+// What a conversation draws beside its sessions' transcripts.
+let seenOf = async (store: Store, sessions: Bundle[], entries: Bundle[]) => {
+  let helpers = await helpersOf(store, sessions)
+  return {
+    helpers,
+    offers: await offersOf(store, [
+      ...entries,
+      ...helpers.flatMap((h) => h.entries),
+    ]),
+  }
+}
+
+// The task holding a session, by the link a task keeps to it.
+let holding = async (store: Store, session: string) => {
+  let [link] = await store.g.read(`.contains .edge.to=${session}`)
+  return String(comp(link, 'edge')?.from ?? '')
+}
+
 let REQUESTS =
   '.operator_request ?operator_answer ?doc ?delivered ?failed ?bounced .order=-created.at .limit=100'
 
@@ -60,9 +111,7 @@ let taskOf = async (store: Store, request: Bundle) => {
   let named = comp(request, 'operator_answer')?.task
   if (named) return String(named)
   let session = comp(request, 'operator_request')?.session
-  if (!session) return ''
-  let [link] = await store.g.read(`.contains .edge.to=${session}`)
-  return String(comp(link, 'edge')?.from ?? '')
+  return session ? await holding(store, String(session)) : ''
 }
 
 // A request no task has taken yet, named by its first line.
@@ -160,7 +209,14 @@ export let conversationOf = async (store: Store, at: string, open: string) => {
     task,
     begun: asked[0]?.entity.eid ?? task,
     title: String(comp(held, 'doc')?.title ?? 'A request'),
-    html: talk(held, entries, await namesOf(store, entries), files, at),
+    html: talk(
+      held,
+      entries,
+      await namesOf(store, entries),
+      files,
+      at,
+      await seenOf(store, sessions, entries),
+    ),
     waiting: [],
   }
 }
@@ -171,21 +227,39 @@ export let conversationOf = async (store: Store, at: string, open: string) => {
  * newest seq it covers, to start the next from.
  */
 export let frameOf = async (store: Store, session: string, from?: number) => {
-  let [link] = await store.g.read(`.contains .edge.to=${session}`)
-  let task = String(comp(link, 'edge')?.from ?? '')
-  if (!task) return null
   let entries = await transcript(store.g, session)
   let seq = Math.max(
     0,
     ...entries.map((b) => Number(comp(b, 'entry')?.seq ?? 0)),
   )
+  let task = await holding(store, session)
+  if (task) {
+    return {
+      seq,
+      frame: frame(
+        task,
+        entries,
+        await namesOf(store, entries),
+        from ?? seq - 30,
+        { offers: await offersOf(store, entries) },
+      ),
+    }
+  }
+  // A helper's step shows in the conversation of the Operator that started it.
+  let [row] = await store.g.get([session])
+  let parent = String(comp(row, 'spawned')?.parent ?? '')
+  task = parent && await holding(store, parent)
+  if (!task) return null
+  let started = await transcript(store.g, parent)
   return {
     seq,
-    frame: frame(
+    frame: helperFrame(
       task,
       entries,
-      await namesOf(store, entries),
-      from ?? seq - 30,
+      started,
+      await namesOf(store, started),
+      from ?? 0,
+      await offersOf(store, entries),
     ),
   }
 }
@@ -227,8 +301,7 @@ export let operatorFrames = (store: Store, sockets: () => Listener[]) => {
       if (!pages.length) return
       let task = tasks.get(session)
       if (!task) {
-        let [link] = await store.g.read(`.contains .edge.to=${session}`)
-        task = String(comp(link, 'edge')?.from ?? '')
+        task = await holding(store, session)
         if (!task) return
         tasks.set(session, task)
       }

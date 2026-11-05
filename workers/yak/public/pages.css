@@ -1224,6 +1224,25 @@
     white-space: pre-wrap;
     overflow-wrap: anywhere;
   }
+  /* What a model was told (a system prompt, a persona), set apart in a dashed
+     frame, closed until opened. */
+  .Talk_Told {
+    padding: .4rem .8rem;
+    border: 1px dashed var(--edge);
+    border-radius: .6rem;
+    font-size: var(--small);
+  }
+  .Talk_Told > summary {
+    color: var(--soft-ink);
+    cursor: pointer;
+  }
+  .Talk_Told pre {
+    max-height: 60vh;
+    margin: .4rem 0 0;
+    overflow: auto;
+    white-space: pre-wrap;
+    overflow-wrap: anywhere;
+  }
   .Talk_Now:empty {
     display: none;
   }

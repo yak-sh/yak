@@ -7,6 +7,7 @@
 // sends the rows a step changed to the page's socket (`frame`), which puts
 // each in place by its id.
 import type { Bundle, Comp } from '@yaks/graph'
+import type { Tool } from '@yaks/model'
 import { statusOf } from '@yaks/session'
 import { did, doing } from '@yaks/tools/title'
 import { parse, render } from '@yaks/markdown/structural'
@@ -40,6 +41,7 @@ let NOT_INPUT = [
   'interrupted',
   'call',
   'ask',
+  'prompt',
 ]
 
 // What a person wrote. A task's first input is the task itself as JSON (its
@@ -225,50 +227,147 @@ let helper = (b: Bundle, body: string) => {
     }</div></details>`
 }
 
-/** Every line of a transcript worth showing, in order. */
-export let rows = (entries: Bundle[], names: Names): Row[] => {
+/** What a model was told before anything was said to it, closed until
+ * opened, and drawn apart from the words, the replies and the errors. */
+export let instructed = (said: string, inside: string) =>
+  `<details class="Talk_Told"><summary>${
+    esc(said)
+  }</summary>${inside}</details>`
+
+let text = (body: string) => `<pre>${esc(body)}</pre>`
+
+// Each tool as the model was offered it: its name, opening on its
+// description and the arguments it takes.
+let offered = (tools: Tool[]) =>
+  tools.map((t) =>
+    `<details><summary>${esc(t.name)}</summary><p>${esc(t.description)}</p>${
+      text(JSON.stringify(t.parameters, null, 2))
+    }</details>`
+  ).join('')
+
+/** The tool offers asks name (`sending{offer}`), by their sha. */
+export type Offers = Map<string, Tool[]>
+
+/** What a transcript's model was told, from the record: the system prompt
+ * (`sending{instructions}`) and the tools (`sending{offer}`) each ask sent,
+ * where they began and wherever they changed, and each prompt entry (a
+ * persona, a helper's guidance). */
+export let briefed = (
+  entries: Bundle[],
+  who: string,
+  offers: Offers = new Map(),
+): Row[] => {
+  let last = new Map<string, { said?: string; offer?: string }>()
+  return entries.flatMap((b): Row[] => {
+    let id = b.entity.eid
+    if (b.prompt) {
+      let body = String(comp(b, 'content')?.body ?? '')
+      return body
+        ? [{ id, html: instructed(`What ${who} was told`, text(body)) }]
+        : []
+    }
+    let sending = comp(b, 'sending')
+    if (!b.ask || !sending) return []
+    let session = String(comp(b, 'entry')?.session)
+    let was = last.get(session)
+    let said = typeof sending.instructions == 'string' && sending.instructions
+      ? sending.instructions
+      : undefined
+    let offer = typeof sending.offer == 'string' ? sending.offer : undefined
+    last.set(session, { said, offer })
+    let again = was ? ' from here on' : ''
+    let tools = offer ? offers.get(offer) : undefined
+    let html = [
+      said && said != was?.said
+        ? instructed(`What ${who} was told${again}`, text(said))
+        : '',
+      tools && offer != was?.offer
+        ? instructed(
+          `The ${tools.length} tools ${who} was offered${again}`,
+          offered(tools),
+        )
+        : '',
+    ].join('')
+    return html ? [{ id, html }] : []
+  })
+}
+
+/** A helper the Operator started: the call that started it, when one did, and
+ * its transcript. */
+export type Helper = { call?: string; entries: Bundle[] }
+
+/** What a conversation draws beside its own transcript: the helpers it
+ * started and the tool offers its asks name. */
+export type Seen = { helpers?: Helper[]; offers?: Offers }
+
+/** Every line of a transcript worth showing, in order, each helper's
+ * instructions under the step that started it. */
+export let rows = (
+  entries: Bundle[],
+  names: Names,
+  { helpers = [], offers }: Seen = {},
+): Row[] => {
   let results = new Map(
     entries.filter((b) => b.result).map((b) => [
       String(comp(b, 'result')!.call),
       b,
     ]),
   )
-  return entries.flatMap((b): Row[] => {
-    let id = b.entity.eid
-    let body = String(comp(b, 'content')?.body ?? '')
-    if (b.call) {
-      return [{ id, html: tool(b, names, results.get(id)) }]
-    }
-    // A provider's refusal (its own response kept beside it) is said in plain
-    // words; its error waits in Details.
-    if (b.refusal && !b.result && (b.response || !b.output)) {
-      return [{
-        id,
-        html: trouble(
-          'The Operator could not get an answer from its model, so it stopped before replying. Send your message again to try once more.',
-          body || comp(b, 'response')?.body || comp(b, 'refusal'),
-        ),
-      }]
-    }
-    if (b.output && body) return [{ id, html: reply(body) }]
-    if (told(b, body)) return [{ id, html: helper(b, body) }]
-    if (b.failed || b.exception) {
-      return [{
-        id,
-        html: trouble(
-          'Something went wrong, and the Operator stopped before it finished. Send your message again to try once more.',
-          body || b.exception || b.failed,
-        ),
-      }]
-    }
-    if (b.stop || b.interrupted || b.cancel) {
-      return [{ id, html: '<p class="Talk_Note">Stopped.</p>' }]
-    }
-    if (body && !NOT_INPUT.some((c) => b[c])) {
-      return [{ id, html: input(b, body) }]
-    }
-    return []
-  })
+  let prompts = new Map(
+    briefed(entries, 'the Operator', offers).map((r) => [r.id, r]),
+  )
+  let under = (call?: string) =>
+    helpers.filter((h) => h.call == call)
+      .flatMap((h) => briefed(h.entries, 'a helper', offers))
+  let calls = new Set(entries.map((b) => b.entity.eid))
+  return [
+    ...entries.flatMap((b): Row[] => {
+      let id = b.entity.eid
+      let body = String(comp(b, 'content')?.body ?? '')
+      if (prompts.has(id)) return [prompts.get(id)!]
+      if (b.call) {
+        return [{ id, html: tool(b, names, results.get(id)) }, ...under(id)]
+      }
+      return line(b, id, body)
+    }),
+    // A helper no step of these started (one given a task) closes the list.
+    ...helpers.filter((h) => !h.call || !calls.has(h.call))
+      .flatMap((h) => briefed(h.entries, 'a helper', offers)),
+  ]
+}
+
+// Any other line: a refusal, a reply, a helper's end, a failure, a stop, or a
+// person's words.
+let line = (b: Bundle, id: string, body: string): Row[] => {
+  // A provider's refusal (its own response kept beside it) is said in plain
+  // words; its error waits in Details.
+  if (b.refusal && !b.result && (b.response || !b.output)) {
+    return [{
+      id,
+      html: trouble(
+        'The Operator could not get an answer from its model, so it stopped before replying. Send your message again to try once more.',
+        body || comp(b, 'response')?.body || comp(b, 'refusal'),
+      ),
+    }]
+  }
+  if (b.output && body) return [{ id, html: reply(body) }]
+  if (told(b, body)) return [{ id, html: helper(b, body) }]
+  if (b.failed || b.exception) {
+    return [{
+      id,
+      html: trouble(
+        'Something went wrong, and the Operator stopped before it finished. Send your message again to try once more.',
+        body || b.exception || b.failed,
+      ),
+    }]
+  }
+  if (b.stop || b.interrupted || b.cancel) {
+    return [{ id, html: '<p class="Talk_Note">Stopped.</p>' }]
+  }
+  if (body && !NOT_INPUT.some((c) => b[c])) {
+    return [{ id, html: input(b, body) }]
+  }
+  return []
 }
 
 /** The line a step changed: a new line, or the call a new answer belongs to. */
@@ -276,12 +375,13 @@ export let touched = (
   entries: Bundle[],
   names: Names,
   from: number,
+  seen: Seen = {},
 ): Row[] => {
   let ids = new Set(
     entries.filter((b) => Number(comp(b, 'entry')?.seq ?? 0) > from)
       .map((b) => b.result ? String(comp(b, 'result')!.call) : b.entity.eid),
   )
-  return rows(entries, names).filter((r) => ids.has(r.id))
+  return rows(entries, names, seen).filter((r) => ids.has(r.id))
 }
 
 /** What the session is doing now, in a line; nothing once it ended, however
@@ -307,10 +407,32 @@ export let frame = (
   entries: Bundle[],
   names: Names,
   from: number,
+  seen: Seen = {},
 ) => ({
   operator: {
     task,
-    rows: touched(entries, names, from),
+    rows: touched(entries, names, from, seen),
+    now: now(entries, names),
+  },
+})
+
+/** A helper's frame: what it was told past `from`, and what the Operator that
+ * started it is doing now. */
+export let helperFrame = (
+  task: string,
+  helper: Bundle[],
+  entries: Bundle[],
+  names: Names,
+  from: number,
+  offers?: Offers,
+) => ({
+  operator: {
+    task,
+    rows: briefed(helper, 'a helper', offers).filter((r) =>
+      Number(
+        comp(helper.find((b) => b.entity.eid == r.id), 'entry')?.seq ?? 0,
+      ) > from
+    ),
     now: now(entries, names),
   },
 })
@@ -323,6 +445,7 @@ export let talk = (
   names: Names,
   files: { request: string; name: string; index: number }[],
   at: string,
+  seen: Seen = {},
 ) => {
   let working = now(entries, names)
   // Files drawn under the words they came with are not listed again.
@@ -333,7 +456,7 @@ export let talk = (
   return `<div class="Talk_Thread" data-task="${esc(task.entity.eid)}"${
     working ? ' data-pending' : ''
   }><div class="Talk_Said" data-rows>${
-    rows(entries, names).map((r) =>
+    rows(entries, names, seen).map((r) =>
       `<div id="row-${esc(r.id)}">${r.html}</div>`
     ).join('')
   }</div><p class="Talk_Now" role="status" data-now>${esc(working)}</p>${

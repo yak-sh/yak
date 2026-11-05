@@ -982,6 +982,26 @@
             "type": "string"
           },
           "description": "the tools a turn is offered, by name: exactly these, from every tool the runner can run; the runner's own set where absent"
+        },
+        "offer": {
+          "type": "string",
+          "ref": "offer",
+          "death": "keep",
+          "description": "on an ask, the tools it sent the model, as the offer row named by their sha256"
+        }
+      }
+    },
+    "offer": {
+      "component": true,
+      "type": "object",
+      "description": "the tools an ask sent a model, exactly as sent; its eid is the sha256 of them, so a set many asks send is kept once",
+      "properties": {
+        "tools": {
+          "type": "array",
+          "items": {
+            "type": "object"
+          },
+          "description": "each tool's name, description and parameters (JSON Schema)"
         }
       }
     }
