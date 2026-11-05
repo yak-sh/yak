@@ -494,6 +494,7 @@ export class Builder {
         role,
         space: spaceId,
         administrative: access.administrative,
+        called: space.operator,
         operator: true,
       })
     }
@@ -504,6 +505,7 @@ export class Builder {
       role,
       space: spaceId,
       administrative: access.administrative,
+      called: space.operator,
     }
     let response = await operatorRequest(
       operator,

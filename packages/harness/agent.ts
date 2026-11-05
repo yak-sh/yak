@@ -71,7 +71,7 @@ import {
 import { type EntrySource, entrySource, type SourceRequest } from './detail.ts'
 import { inheritedInstructions } from './legacy_instructions.ts'
 import { wornBy } from './worn.ts'
-import type { Reads } from '@yaks/persona'
+import { PART, type Reads } from '@yaks/persona'
 import { type RuntimeAction, runtimeAction, runtimeRows } from './runtime.ts'
 
 let comp = (b: Bundle, name: string) => b[name] as Comp | undefined
@@ -533,15 +533,15 @@ export let lend = <H extends Host>(opts: Opts<H>): Runner => {
           : inheritedInstructions(inherited, opts.instructions)
       }
       // What was sent before already says the persona, so only what the host
-      // adds follows the persona's text as it reads now. The two are read at
-      // once.
+      // adds follows the persona's text as it reads now, a part of its own.
+      // The two are read at once.
       let [worn, added] = await Promise.all([
         wornBy(h.g, session, opts.wear.bases),
         typeof opts.instructions == 'function'
           ? opts.instructions(session)
           : opts.instructions,
       ])
-      return [worn, added].filter(Boolean).join('\n\n') || undefined
+      return [worn?.trimEnd(), added].filter(Boolean).join(PART) || undefined
     },
     inputText: async (transcript) =>
       inputText(transcript, await senders(h.g, transcript)),

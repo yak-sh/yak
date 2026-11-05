@@ -10,6 +10,7 @@ import { operating } from './operator.ts'
 import { conversationOf, frameOf } from './operator-host.ts'
 import { reply } from './operator-view.ts'
 import { transcript } from '@yaks/session'
+import { PART } from '@yaks/persona'
 
 // On Claude the Operator runs on Sonnet and hands code to Opus in a child
 // session: each ask is priced at its own model's price.
@@ -90,65 +91,81 @@ test('on Claude the Operator hands code to Opus, which works for its space at it
 })
 
 // Everything the Operator and its helper were sent besides the conversation
-// (the system prompt, every tool with its description and schema) is an
-// entry of its own, closed, holding what the model received, the helper's
-// under the step that started it.
-test('the conversation shows what the Operator and each helper were told and offered, closed until opened', async () => {
+// is one entry each, closed, opening on each layer of the system prompt and
+// on the tools (each with its description and schema), the helper's inside
+// the step that started it.
+test('the conversation shows the context the Operator and each helper were given, closed until opened', async () => {
   let { html } = await conversationOf(
     store,
     '/manage/claude/operator',
     out.task,
+    undefined,
+    undefined,
+    space.operator,
   )
   let { document } = parseHTML(`<main>${html}</main>`)
-  let told = [...document.querySelectorAll('.Talk_Told')]
+  let named = (d: Element) => d.querySelector(':scope > summary')!.textContent
+  let layers = (d: Element) => [...d.querySelectorAll(':scope > .Talk_Told')]
+  let [operator, helper, ...more] = [
+    ...document.querySelectorAll('.Talk_Told:not(.Talk_Told .Talk_Told)'),
+  ]
+  assertEquals(more, [])
+  assertEquals(named(operator), `The context ${space.operator} was given`)
+  assertEquals(named(helper), 'The context the helper was given')
   let first = (m: string) => asked.find((r) => r.model == m)!
-  assertEquals(
-    told.map((d) => d.querySelector('summary')!.textContent),
-    [SONNET, OPUS].flatMap((m) => {
-      let who = m == SONNET ? 'the Operator' : 'a helper'
-      return [
-        `What ${who} was told`,
-        `The ${first(m).tools.length} tools ${who} was offered`,
-      ]
-    }),
-  )
-  for (let d of told) assertEquals(d.hasAttribute('open'), false)
-  let helperSaid = told[2]
-  // Each in full, as the model received it, its Markdown drawn as text.
   let shown = (at: Element) =>
     [...at.children].find((c) => c.classList.contains('Talk_Written'))!
       .innerHTML
   let drawn = (md: string) =>
     parseHTML(reply(md)).document.querySelector('.Talk_Reply')!.innerHTML
-  for (let [i, m] of [[0, SONNET], [2, OPUS]] as const) {
-    assertEquals(shown(told[i]), drawn(first(m).instructions!))
+  for (let [d, m] of [[operator, SONNET], [helper, OPUS]] as const) {
+    let all = layers(d)
+    assertEquals(
+      [all[0], ...all.slice(-3)].map(named),
+      [
+        'yaks.app Operator',
+        'Who you are',
+        'Oracles',
+        `${first(m).tools.length} tools`,
+      ],
+    )
+    for (let l of [d, ...all]) assertEquals(l.hasAttribute('open'), false)
+    // Every layer is its part of what the model received, in order: each
+    // document under its heading, drawn as written.
+    let said = first(m).instructions!
+    let at = 0
+    for (let l of all.slice(0, -1)) {
+      let found = said.indexOf(` ${named(l)}\n`, at)
+      assert(found >= at, named(l))
+      at = found
+    }
+    let who = all.find((l) => named(l) == 'Who you are')!
+    assertEquals(
+      shown(who),
+      drawn(said.split(' Who you are\n')[1].split(PART)[0].trim()),
+    )
   }
+  // Each tool by its name, opening on its description and its schema.
   let spawn = first(SONNET).tools.find((t) => t.name == 'spawn')!
-  let tool = [...told[1].querySelectorAll('details')].find((d) =>
-    d.querySelector('summary')!.textContent == 'spawn'
+  let tool = [...layers(operator).at(-1)!.querySelectorAll('details')].find(
+    (d) => named(d) == 'spawn',
   )!
   assertEquals(shown(tool), drawn(spawn.description))
   assertEquals(
     tool.querySelector('pre')!.textContent,
     JSON.stringify(spawn.parameters, null, 2),
   )
-  // The helper's entry sits under the step that started it.
-  assert(
-    helperSaid.parentElement!.previousElementSibling!.querySelector(
-      '.Talk_Step',
-    ),
-  )
+  // The helper's context sits inside the step that started it.
+  let step = helper.closest('.Talk_Step')!
+  assertEquals(named(step), 'Started a helper')
   let words = document.querySelectorAll('.Talk_You, .Talk_Reply, .Talk_Trouble')
   for (let w of words) assertEquals(w.querySelector('.Talk_Told'), null)
   let live = await frameOf(store, child.entity.eid)
   assertEquals(live!.frame.operator.task, out.task)
-  // A helper's step brings the page the same entry, live.
+  // A helper's step brings the page that step, live, its context inside.
   let rows = live!.frame.operator.rows
-  assertEquals(rows.map((r) => `row-${r.id}`), [helperSaid.parentElement!.id])
-  assertStringIncludes(
-    html,
-    `<div id="row-${rows[0].id}">${rows[0].html}</div>`,
-  )
+  assertEquals(rows.map((r) => `row-${r.id}`), [step.parentElement!.id])
+  assertStringIncludes(rows[0].html, 'The context the helper was given')
 })
 
 // A helper's end reaches the conversation as one of the Operator's steps,

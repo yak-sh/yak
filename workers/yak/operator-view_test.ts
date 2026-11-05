@@ -115,7 +115,8 @@ test('a conversation says which apps it put out a new version of, in which space
     { space: '', app: 'chores' },
   ])
   assertEquals(
-    helperFrame('t', steps.slice(0, 4), [], names, 0).operator.changed,
+    helperFrame('t', { entries: steps.slice(0, 4) }, [], names, 0).operator
+      .changed,
     [{ space: '', app: 'notes' }],
   )
 })

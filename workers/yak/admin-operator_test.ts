@@ -111,14 +111,12 @@ test('a conversation opens on what was said and everything its model was told an
   assertEquals(texts(talk.document, '.Talk_Reply'), ['Posted.'])
   let told = [...talk.document.querySelectorAll('.Talk_Told')]
   let summaries = told.map((d) => d.querySelector('summary')!.textContent!)
-  assertEquals(summaries[0], 'What the Operator was told')
-  assertEquals(
-    /^The \d+ tools the Operator was offered$/.test(summaries[1]),
-    true,
-  )
+  assertEquals(summaries[0], 'The context the Operator was given')
+  let tools = told.at(-1)!
+  assertEquals(/^\d+ tools$/.test(summaries.at(-1)!), true)
   assertEquals(told.every((d) => !d.hasAttribute('open')), true)
   // Each tool by its name, opening on its description and its schema.
-  assertEquals(told[1].querySelectorAll('details > pre').length > 0, true)
+  assertEquals(tools.querySelectorAll('details > pre').length > 0, true)
 })
 
 let missing = await get(`${at}/${crypto.randomUUID()}`)

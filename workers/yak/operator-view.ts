@@ -12,6 +12,7 @@ import { statusOf } from '@yaks/session'
 import type { Step } from '@yaks/tools/title'
 import { toolEid } from '@yaks/tools/result'
 import { parse, render } from '@yaks/markdown/structural'
+import { PART } from '@yaks/persona'
 import { h } from 'preact'
 import { renderToString } from 'preact-render-to-string'
 import { day, esc } from './html.ts'
@@ -230,7 +231,7 @@ let tried = (doing: string) =>
 
 // A tool call and, once it came back, its answer: one row, under the call's
 // id, so the answer takes the call's place on the page.
-let tool = (call: Bundle, names: Names, result?: Bundle) => {
+let tool = (call: Bundle, names: Names, result?: Bundle, told = '') => {
   let c = comp(call, 'call')!
   let step = names(String(c.to), c.args as Record<string, unknown>)
   let ok = result ? !comp(result, 'refusal') && !result.exception : null
@@ -241,7 +242,7 @@ let tool = (call: Bundle, names: Names, result?: Bundle) => {
     esc(name)
   }</summary><div class="Talk_Detail"><p>What it asked for</p>${
     readable(c.args ?? {})
-  }${
+  }${told}${
     ok == null
       ? ''
       : ok
@@ -300,48 +301,118 @@ let offered = (tools: Tool[]) =>
 /** The tool offers asks name (`sending{offer}`), by their sha. */
 export type Offers = Map<string, Tool[]>
 
-/** What a transcript's model was told, from the record: the system prompt
- * (`sending{instructions}`) and the tools (`sending{offer}`) each ask sent,
- * where they began and wherever they changed, and each prompt entry (a
- * persona, a helper's guidance). */
+/** A layer of what a model was told: its name, what it holds drawn, and what
+ * tells a later ask's from it (`key`, its text). */
+type Layer = { name: string; key: string; inside: string; text: string }
+
+// What a part a persona voiced is called: its heading, without the id before
+// its title (@yaks/persona `voice`).
+let heading = (part: string) =>
+  part.match(/^#+ (?:(?:#\S+|[A-Z]+-\d+) )?(.*)\n?/)
+
+// The layers of a system prompt: each document its persona wears, by its
+// title, base first, and what its host added after them (@yaks/persona
+// `PART`). A rule inside a document stays in it.
+let voiced = (said: string): Layer[] =>
+  said.split(PART).reduce(
+    (parts: { name: string; text: string }[], part, i, all) => {
+      let head = heading(part)
+      let last = parts.at(-1)
+      if (!head && last && i < all.length - 1) {
+        last.text += PART + part
+        return parts
+      }
+      return [...parts, {
+        name: head?.[1].trim() ||
+          (i ? 'Its spaces, apps and connections' : 'Its instructions'),
+        text: head ? part.slice(head[0].length) : part,
+      }]
+    },
+    [],
+  ).map((l) => ({ ...l, text: l.text.trim() })).filter((l) => l.text)
+    .map((l) => ({ ...l, key: l.name, inside: written(l.text) }))
+
+// What a prompt entry is, by where it came from (@yaks/session `spawn`).
+let NOTES: Record<string, string> = {
+  'harness:fork': 'That it is a fork of the conversation',
+  'delegation:instructions': 'The guidance it was started with',
+}
+
+// One entry holding a context's layers, each closed until opened; one that
+// changed at a later ask marks what changed since the ask before (`was`).
+let context = (who: string, layers: Layer[], was?: Map<string, string>) =>
+  instructed(
+    was
+      ? `The context ${who} was given changed here`
+      : `The context ${who} was given`,
+    layers.map((l) =>
+      instructed(
+        l.name + (!was
+          ? ''
+          : !was.has(l.key)
+          ? ' (new)'
+          : was.get(l.key) != l.text
+          ? ' (changed)'
+          : ''),
+        l.inside,
+      )
+    ).join(''),
+  )
+
+/** What a transcript's model was told, from the record: at its first ask, one
+ * entry holding each layer of its system prompt (`sending{instructions}`),
+ * each prompt entry before it (a fork's note, a helper's guidance) and the
+ * tools it was offered (`sending{offer}`); and again at a later ask whose
+ * context differs from the ask before it. */
 export let briefed = (
   entries: Bundle[],
   who: string,
   offers: Offers = new Map(),
 ): Row[] => {
-  let last = new Map<string, { said?: string; offer?: string }>()
-  return entries.flatMap((b): Row[] => {
+  let last = new Map<string, Map<string, string>>()
+  let notes: (Layer & { id: string })[] = []
+  let rows = entries.flatMap((b): Row[] => {
     let id = b.entity.eid
     if (b.prompt) {
-      let body = String(comp(b, 'content')?.body ?? '')
-      return body
-        ? [{ id, html: instructed(`What ${who} was told`, written(body)) }]
-        : []
+      let text = String(comp(b, 'content')?.body ?? '')
+      let name = NOTES[String(comp(b, 'prompt')?.source)] ??
+        'A note it was given'
+      if (text) notes.push({ id, name, key: name, inside: written(text), text })
+      return []
     }
     let sending = comp(b, 'sending')
     if (!b.ask || !sending) return []
     let session = String(comp(b, 'entry')?.session)
     let was = last.get(session)
-    let said = typeof sending.instructions == 'string' && sending.instructions
+    let said = typeof sending.instructions == 'string'
       ? sending.instructions
-      : undefined
-    let offer = typeof sending.offer == 'string' ? sending.offer : undefined
-    last.set(session, { said, offer })
-    let again = was ? ' from here on' : ''
-    let tools = offer ? offers.get(offer) : undefined
-    let html = [
-      said && said != was?.said
-        ? instructed(`What ${who} was told${again}`, written(said))
-        : '',
-      tools && offer != was?.offer
-        ? instructed(
-          `The ${tools.length} tools ${who} was offered${again}`,
-          offered(tools),
-        )
-        : '',
-    ].join('')
-    return html ? [{ id, html }] : []
+      : ''
+    let offer = typeof sending.offer == 'string' ? sending.offer : ''
+    let tools = offers.get(offer)
+    let layers: Layer[] = [
+      ...voiced(said),
+      ...notes.splice(0),
+      ...tools
+        ? [{
+          name: `${tools.length} tools`,
+          key: 'tools',
+          inside: offered(tools),
+          text: offer,
+        }]
+        : [],
+    ]
+    let now = new Map(layers.map((l) => [l.key, l.text]))
+    last.set(session, now)
+    let same = was?.size == now.size &&
+      [...now].every(([key, text]) => was!.get(key) == text)
+    return layers.length && !same
+      ? [{ id, html: context(who, layers, was) }]
+      : []
   })
+  // Notes no ask has sent yet.
+  return notes.length
+    ? [...rows, { id: notes[0].id, html: context(who, notes) }]
+    : rows
 }
 
 /** A helper the Operator started: the call that started it, when one did, and
@@ -349,15 +420,19 @@ export let briefed = (
 export type Helper = { call?: string; entries: Bundle[] }
 
 /** What a conversation draws beside its own transcript: the helpers it
- * started and the tool offers its asks name. */
-export type Seen = { helpers?: Helper[]; offers?: Offers }
+ * started, the tool offers its asks name, and what its Operator is called. */
+export type Seen = { helpers?: Helper[]; offers?: Offers; called?: string }
 
-/** Every line of a transcript worth showing, in order, each helper's
- * instructions under the step that started it. */
+// What a helper was told, all its asks', in one place.
+let helped = (h: Helper, offers?: Offers) =>
+  briefed(h.entries, 'the helper', offers)
+
+/** Every line of a transcript worth showing, in order, what each helper was
+ * told inside the step that started it. */
 export let rows = (
   entries: Bundle[],
   names: Names,
-  { helpers = [], offers }: Seen = {},
+  { helpers = [], offers, called = 'the Operator' }: Seen = {},
 ): Row[] => {
   let results = new Map(
     entries.filter((b) => b.result).map((b) => [
@@ -366,11 +441,11 @@ export let rows = (
     ]),
   )
   let prompts = new Map(
-    briefed(entries, 'the Operator', offers).map((r) => [r.id, r]),
+    briefed(entries, called, offers).map((r) => [r.id, r]),
   )
-  let under = (call?: string) =>
+  let under = (call: string) =>
     helpers.filter((h) => h.call == call)
-      .flatMap((h) => briefed(h.entries, 'a helper', offers))
+      .flatMap((h) => helped(h, offers)).map((r) => r.html).join('')
   let calls = new Set(entries.map((b) => b.entity.eid))
   return [
     ...entries.flatMap((b): Row[] => {
@@ -378,13 +453,13 @@ export let rows = (
       let body = String(comp(b, 'content')?.body ?? '')
       if (prompts.has(id)) return [prompts.get(id)!]
       if (b.call) {
-        return [{ id, html: tool(b, names, results.get(id)) }, ...under(id)]
+        return [{ id, html: tool(b, names, results.get(id), under(id)) }]
       }
       return line(b, id, body)
     }),
     // A helper no step of these started (one given a task) closes the list.
     ...helpers.filter((h) => !h.call || !calls.has(h.call))
-      .flatMap((h) => briefed(h.entries, 'a helper', offers)),
+      .flatMap((h) => helped(h, offers)),
   ]
 }
 
@@ -521,27 +596,36 @@ export let frame = (
   },
 })
 
-/** A helper's frame: what it was told past `from`, the apps it changed, and
- * what the Operator that started it is doing now. */
+/** A helper's frame: what it was told past `from`, drawn inside the step
+ * that started it (that step drawn again) or, for a helper no step drawn
+ * started, on its own; the apps it changed; and what the Operator that
+ * started it is doing now. */
 export let helperFrame = (
   task: string,
-  helper: Bundle[],
+  helper: Helper,
   entries: Bundle[],
   names: Names,
   from: number,
-  offers?: Offers,
-) => ({
-  operator: {
-    task,
-    rows: briefed(helper, 'a helper', offers).filter((r) =>
-      Number(
-        comp(helper.find((b) => b.entity.eid == r.id), 'entry')?.seq ?? 0,
-      ) > from
-    ),
-    changed: changed(helper, from),
-    ...doingNow(entries, names),
-  },
-})
+  seen: Seen = {},
+) => {
+  let seq = (id: string) =>
+    Number(
+      comp(helper.entries.find((b) => b.entity.eid == id), 'entry')?.seq ?? 0,
+    )
+  let told = helped(helper, seen.offers).filter((r) => seq(r.id) > from)
+  let call = entries.some((b) => b.entity.eid == helper.call)
+  return {
+    operator: {
+      task,
+      rows: told.length && call
+        ? rows(entries, names, { ...seen, helpers: [helper] })
+          .filter((r) => r.id == helper.call)
+        : told,
+      changed: changed(helper.entries, from),
+      ...doingNow(entries, names),
+    },
+  }
+}
 
 /** A task as its conversation draws it: every line, what it is doing now,
  * and the files sent with it. */

@@ -111,6 +111,18 @@ let linesOf = async (store: Store, session: string, most: number) =>
   (await store.g.read(
     `.entry.session=${session}&.order=-entry.seq&.limit=${most}&*`,
   )).reverse()
+// The helpers these calls started, each with its own lines.
+let helpersBy = async (store: Store, calls: Set<string>): Promise<Helper[]> =>
+  calls.size
+    ? await Promise.all(
+      (await store.g.read(`.spawned.call=${[...calls].join(',')}`)).map(
+        async (b) => ({
+          call: comp(b, 'spawned')?.call as string | undefined,
+          entries: await linesOf(store, b.entity.eid, SHOWN),
+        }),
+      ),
+    )
+    : []
 // What a helper was started with: its first lines.
 let openingOf = (store: Store, session: string) =>
   store.g.read(`.entry.session=${session}&.order=entry.seq&.limit=3&*`)
@@ -366,7 +378,8 @@ let filesOf = (asked: Bundle[]) =>
  * no session has taken it, for the page to draw as it always has. `task` is
  * what the page keys the conversation by (a task, or the session), and
  * `begun` the request it began with, the same before and after a session
- * takes it up (the key, for one no request began).
+ * takes it up (the key, for one no request began). `called` is what its
+ * Operator is called.
  */
 export let conversationOf = async (
   store: Store,
@@ -374,6 +387,7 @@ export let conversationOf = async (
   open: string,
   named: Named = nameless,
   everyone?: Named,
+  called?: string,
 ): Promise<{
   task: string
   begun: string
@@ -394,7 +408,7 @@ export let conversationOf = async (
     let calls = new Set(
       entries.flatMap((b) => b.call ? [b.entity.eid] : []),
     )
-    let seen = await seenOf(store, [row], entries, calls)
+    let seen = { ...await seenOf(store, [row], entries, calls), called }
     return {
       task: open,
       begun: open,
@@ -424,7 +438,7 @@ export let conversationOf = async (
     let [held] = await store.g.get([task])
     if (held?.session) {
       return {
-        ...await conversationOf(store, at, task, named),
+        ...await conversationOf(store, at, task, named, undefined, called),
         begun: open,
       }
     }
@@ -455,7 +469,7 @@ export let conversationOf = async (
       String(comp(b, 'created')?.at ?? ''),
     )
   )
-  let seen = await seenOf(store, sessions, entries)
+  let seen = { ...await seenOf(store, sessions, entries), called }
   return {
     task,
     begun: asked[0]?.entity.eid ?? task,
@@ -484,6 +498,7 @@ export let frameOf = async (
   session: string,
   from?: number,
   named: Named = nameless,
+  called?: string,
 ) => {
   let [row] = await store.g.get([session])
   if (!row?.session) return null
@@ -500,27 +515,60 @@ export let frameOf = async (
   )
   let parent = String(comp(row, 'spawned')?.parent ?? '')
   if (!parent) {
+    let since = from ?? seq - 30
+    // The steps it changed that started helpers are drawn with what each was
+    // told inside.
+    let calls = new Set(
+      entries.filter((b) => Number(comp(b, 'entry')?.seq ?? 0) > since)
+        .flatMap((b) =>
+          b.call
+            ? [b.entity.eid]
+            : b.result
+            ? [String(comp(b, 'result')!.call)]
+            : []
+        ),
+    )
+    let helpers = await helpersBy(store, calls)
     return {
       seq,
       frame: frame(
         await keyOf(store, session),
         entries,
         await namesOf(store, entries, named),
-        from ?? seq - 30,
-        { offers: await offersOf(store, entries) },
+        since,
+        {
+          helpers,
+          offers: await offersOf(store, [
+            ...entries,
+            ...helpers.flatMap((h) => h.entries),
+          ]),
+          called,
+        },
       ),
     }
+  }
+  let call = comp(row, 'spawned')?.call as string | undefined
+  // What a helper was told changes only at an ask: only then is the step
+  // that started it drawn again, from as many of its lines as a
+  // conversation draws.
+  let told = from == null ||
+    entries.some((b) =>
+      (b.ask || b.prompt) && Number(comp(b, 'entry')?.seq ?? 0) > from
+    )
+  let helper = {
+    call,
+    entries: told && call ? await linesOf(store, session, SHOWN) : entries,
   }
   let started = await read(parent)
   return {
     seq,
     frame: helperFrame(
       await keyOf(store, parent),
-      entries,
+      helper,
       started,
       await namesOf(store, started, named),
       from ?? 0,
-      await offersOf(store, entries),
+      { offers: await offersOf(store, helper.entries), called },
     ),
   }
 }
@@ -564,7 +612,14 @@ export let operatorFrames = (
     tell: async (session: string) => {
       let pages = await watching(session)
       if (!pages.length) return
-      let made = await frameOf(store, session, told.get(session), named)
+      let { called } = pages[0].deserializeAttachment() as Held
+      let made = await frameOf(
+        store,
+        session,
+        told.get(session),
+        named,
+        called,
+      )
       if (!made) return
       told.set(session, made.seq)
       send(pages, made.frame)
@@ -795,6 +850,7 @@ export let operatorRequest = async (
         String(args.open ?? ''),
         operator.named,
         everyone,
+        held.called,
       ),
     )
   }
