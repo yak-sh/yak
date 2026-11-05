@@ -4,19 +4,22 @@
 // door redraws it.
 import { human } from '@yaks/id'
 import type { Bundle, Graph } from '@yaks/graph'
-import { type Layout, layout } from './layout.ts'
+import { type Layout, layout, type Options } from './layout.ts'
 import { svg, type SvgOptions } from './svg.ts'
 
 /** What a drawing is drawn into: an element's markup. */
 export type Sheet = { innerHTML: string }
 
 /** What a mounted drawing draws, and how. */
-export type MountOptions = SvgOptions & {
+export type MountOptions = SvgOptions & Pick<Options, 'at' | 'shapes'> & {
   graph: Graph
   /** What is drawn. */
   query: string
   width?: number
   height?: number
+  /** The stage a commit belongs to, asked as it commits: what it adds is
+   * stamped with it (default 0). */
+  stage?: () => number
   /** Told each layout once it is drawn. */
   drawn?: (layout: Layout) => void
   /** Told when a redraw after a commit fails (default: reportError). */
@@ -25,10 +28,11 @@ export type MountOptions = SvgOptions & {
 
 /** A mounted drawing. */
 export type Mounted = {
-  /** Draw another query's answer, keeping the places of what both select.
+  /** Draw another query's answer, keeping the places of what both select;
+   * what it adds is stamped with `stage` (default: `MountOptions.stage`).
    * Settles once drawn, and refuses as the graph refuses the query; the old
    * drawing stays then. */
-  query: (query: string) => Promise<Layout>
+  query: (query: string, stage?: number) => Promise<Layout>
   /** Read and draw again. */
   redraw: () => Promise<Layout>
   /** The layout last drawn. */
@@ -75,35 +79,54 @@ let follow = (graph: Graph, fn: () => void) => {
  * ```
  */
 export let mount = (sheet: Sheet, opts: MountOptions): Mounted => {
-  let { graph, width, height, drawn } = opts
+  let { graph, width, height, drawn, at, shapes } = opts
   let failed = opts.failed ?? ((err: unknown) => globalThis.reportError(err))
   let label = human(graph.vocab)
   let current = opts.query
   let last: Layout | undefined
   let running: Promise<Layout> | undefined
   let again = false
-  let draw = (bundles: Bundle[]) => {
-    last = layout(bundles, { was: last, width, height, label })
+  // The stage of the first commit not yet read.
+  let stage: number | undefined
+  let take = () => {
+    let s = stage ?? opts.stage?.() ?? 0
+    stage = undefined
+    return s
+  }
+  let draw = (bundles: Bundle[], s: number) => {
+    last = layout(bundles, {
+      was: last,
+      width,
+      height,
+      label,
+      at,
+      shapes,
+      stage: s,
+    })
     sheet.innerHTML = svg(last, opts)
     drawn?.(last)
     return last
   }
-  let read = (query: string) => Promise.resolve(graph.read(query)).then(draw)
+  let read = (query: string, s: number) =>
+    Promise.resolve(graph.read(query)).then((bundles) => draw(bundles, s))
   let redraw = (): Promise<Layout> => {
     if (running) return (again = true, running)
-    running = read(current).finally(() => {
+    running = read(current, take()).finally(() => {
       running = undefined
       if (again) (again = false, redraw().catch(failed))
     })
     return running
   }
-  let stop = follow(graph, () => void redraw().catch(failed))
+  let stop = follow(graph, () => {
+    stage ??= opts.stage?.()
+    redraw().catch(failed)
+  })
   redraw().catch(failed)
   return {
-    query: (query) =>
+    query: (query, stage) =>
       Promise.resolve(graph.read(query)).then((bundles) => {
         current = query
-        return draw(bundles)
+        return draw(bundles, stage ?? opts.stage?.() ?? 0)
       }),
     redraw,
     get layout() {

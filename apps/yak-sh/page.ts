@@ -24,7 +24,7 @@ export let start = async (
   await y.graph.apply(await files(read))
   await y.settled()
   let t = term(y, opts.pace ?? { key: 28, pause: 380 })
-  let f = figure(y, t)
+  let f = figure(y)
   let style = root.ownerDocument.createElement('style')
   style.textContent = css
   root.ownerDocument.head.append(style)

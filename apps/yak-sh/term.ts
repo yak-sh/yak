@@ -13,8 +13,16 @@ export type Pace = { key: number; pause: number }
 
 export type Term = ReturnType<typeof term>
 
+/** The first stage a visitor's own line is drawn in: the story's steps are
+ * stages 1 to n, and each line the visitor enters is one after this. */
+export const LIVE = 100
+
 export let term = (yak: Yak, pace: Pace = { key: 0, pause: 0 }) => {
   let lines: Line[] = []
+  let history: string[] = []
+  let typed = (line: string) => {
+    if (history.at(-1) != line) history.push(line)
+  }
   let typing = ''
   let busy = false
   let listeners = new Set<() => void>()
@@ -39,6 +47,7 @@ export let term = (yak: Yak, pace: Pace = { key: 0, pause: 0 }) => {
     lines.push(...out.map((text) => ({ kind, text })))
   }
   let submit = async (line: string) => {
+    typed(line)
     lines.push({ kind: 'in', text: line })
     told()
     let { code, out } = await yak.run(line)
@@ -68,7 +77,10 @@ export let term = (yak: Yak, pace: Pace = { key: 0, pause: 0 }) => {
   // The steps reached so far run once each, in order, however fast the page
   // is scrolled past them.
   let ran = 0
-  let query: string | undefined
+  // What the prompt is running: a story step's number, or a visitor's line
+  // as LIVE and on; 0 before anything has run.
+  let stage = 0
+  let entered = 0
   return {
     lines: () => lines,
     typing: () => typing,
@@ -78,26 +90,29 @@ export let term = (yak: Yak, pace: Pace = { key: 0, pause: 0 }) => {
       return () => void listeners.delete(l)
     },
     /** Type a line the visitor wrote and run it. */
-    enter: (line: string) => queue(() => submit(line)),
+    enter: (line: string) =>
+      queue(() => {
+        stage = LIVE + entered++
+        return submit(line)
+      }),
+    /** The stage what runs now is drawn in. */
+    stage: () => stage,
+    /** Every line typed at the prompt, oldest first, as a shell keeps them. */
+    history: () => history,
     /** Run every step up to `n` (counting from 1) that has not run, typing
      * each step's commands and making its agent's calls. */
     reach: (bodies: string[], n: number) => {
       while (ran < Math.min(n, bodies.length)) {
-        let script = scriptOf(bodies[ran++])
-        let { sh, mcp } = script
-        if (script.query) {
-          query = script.query
-          told()
-        }
+        let { sh, mcp } = scriptOf(bodies[ran++])
+        let step = ran
         queue(async () => {
+          stage = step
           for (let line of sh) await type(line)
           for (let { tool, args } of mcp) await ask(tool, args)
         })
       }
       return chain
     },
-    /** The drawing's query the furthest step reached asks for, if any. */
-    query: () => query,
     /** Settles once everything queued has run. */
     idle: () => chain,
   }

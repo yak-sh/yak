@@ -141,6 +141,17 @@ export let yak = async () => {
     ],
   })
   await g.install()
+  // The person typing is in the graph from the start; the agent joins it,
+  // writing its own row, when it first calls a tool.
+  await g.apply([{ entity: { eid: you }, person: {}, doc: { title: 'You' } }])
+  let met: Promise<unknown> | undefined
+  let meet = () =>
+    met ??= Promise.resolve(g.apply([{
+      entity: { eid: agent },
+      persona: {},
+      doc: { title: 'Your agent', body: 'Calls the same tools over MCP.' },
+      $actor: { by: agent },
+    }]))
   let tools = [
     ...tier({ keywords: vocab.keywords }),
     ...PACKAGES.flatMap((p) =>
@@ -246,10 +257,11 @@ export let yak = async () => {
     tools,
     run,
     /** A call the agent makes over MCP: the same tool, its own name. */
-    ask: (name: string, args: Record<string, unknown>): Promise<Said> => {
+    ask: async (name: string, args: Record<string, unknown>): Promise<Said> => {
+      await meet()
       let out: string[] = []
       let say = (text: string) => out.push(...String(text).split('\n'))
-      return said(invoke(name, args, agent), say, out)
+      return await said(invoke(name, args, agent), say, out)
     },
     /** Hear every change the graph commits. */
     listen: (each: (change: Change) => void) => {

@@ -23,11 +23,11 @@ export let FILES = [
   'paper.webp',
   'term.ts',
   'parts.ts',
+  'bands.ts',
 ]
 
 /** A section: the view that draws it and what it says. A step's `sh` block
- * is what it types into the prompt, its `mcp` block what an agent calls, and
- * its `query` block what the drawing beside it shows. */
+ * is what it types into the prompt, and its `mcp` block what an agent calls. */
 type Section = {
   eid: string
   pane: string
@@ -38,7 +38,6 @@ type Section = {
 
 let sh = (...lines: string[]) => '```sh\n' + lines.join('\n') + '\n```'
 let mcp = (...lines: string[]) => '```mcp\n' + lines.join('\n') + '\n```'
-let query = (q: string) => '```query\n' + q + '\n```'
 
 export let INSTALL =
   'deno run -A --minimum-dependency-age=0 jsr:@yaks/cli/install'
@@ -91,7 +90,7 @@ export let SECTIONS: Section[] = [
       'An edge ties one entity to another. This one says the party requires the cake.',
       sh(
         "yak task new 'Buy the cake'",
-        `yak graph apply --bundles '[{"edge": {"from": "T-1", "to": "T-2"}, "requires": {}}]'`,
+        `yak graph apply --bundles '[{"edge": {"from": "T-2", "to": "T-3"}, "requires": {}}]'`,
       ),
     ].join('\n\n'),
   },
@@ -103,8 +102,8 @@ export let SECTIONS: Section[] = [
     body: [
       'Every `yak` command is also an MCP tool, served at `/mcp` by `yak serve`. An agent comments and finishes the cake, and its writes carry its own id.',
       mcp(
-        'comment_new {"target": "T-2", "body": "Ordered a chocolate one for Saturday."}',
-        'task_update {"task": "T-2", "status": "done"}',
+        'comment_new {"target": "T-3", "body": "Ordered a chocolate one for Saturday."}',
+        'task_update {"task": "T-3", "status": "done"}',
       ),
     ].join('\n\n'),
   },
@@ -129,7 +128,6 @@ export let SECTIONS: Section[] = [
         "yak graph query '.file ?file'",
         `yak graph apply ${SELF} '.doc.title="This page is a graph you can change"'`,
       ),
-      query('.file|.pane|.layout *'),
     ].join('\n\n'),
   },
   {
@@ -358,7 +356,6 @@ export let scriptOf = (body: string) => {
     [...body.matchAll(new RegExp('```' + kind + '\\n([\\s\\S]*?)\\n```', 'g'))]
       .flatMap((m) => m[1].split('\n')).filter(Boolean)
   return {
-    query: block('query')[0],
     sh: block('sh'),
     mcp: block('mcp').map((line) => {
       let at = line.indexOf(' ')
@@ -369,4 +366,4 @@ export let scriptOf = (body: string) => {
 
 /** A section's prose: its body without the blocks it runs. */
 export let proseOf = (body: string) =>
-  body.replace(/```(sh|mcp|query)\n[\s\S]*?\n```/g, '').trim()
+  body.replace(/```(sh|mcp)\n[\s\S]*?\n```/g, '').trim()

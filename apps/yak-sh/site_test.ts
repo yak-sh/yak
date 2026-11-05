@@ -2,7 +2,7 @@
 // them in a tab.
 import { equal, match, test } from '@yaks/testing'
 import { yak } from './yak.ts'
-import { term } from './term.ts'
+import { LIVE, term } from './term.ts'
 import { FILES, files, HERO, SECTIONS, seed, SELF, SITE } from './site.ts'
 
 let page = async () => {
@@ -43,7 +43,7 @@ test('the story runs every step in order, typed and called, and the graph holds 
   equal((await y.graph.read('.requires .edge')).length, 1)
   let [comment] = await y.graph.read('.comment *')
   equal(at(comment, 'created.by'), y.agent)
-  match(printed(t), /T-1 Throw the party open/)
+  match(printed(t), /T-2 Throw the party open/)
   equal(at(y.row(SELF), 'doc.title'), 'This page is a graph you can change')
 })
 
@@ -65,6 +65,8 @@ test('a visitor types into the same prompt: help, a refusal, a write the page se
   y.watch(HERO, () => told++)
   await t.enter(`graph apply ${HERO} .doc.title=Hi`)
   equal([at(y.row(HERO), 'doc.title'), told], ['Hi', 1])
+  equal(t.history(), ['help', 'nope', `graph apply ${HERO} .doc.title=Hi`])
+  equal(t.stage(), LIVE + 2)
 })
 
 test('every file the app serves is a file read in the site, text with its contents', async () => {

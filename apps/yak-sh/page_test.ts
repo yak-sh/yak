@@ -5,6 +5,7 @@ import { equal, match, test } from '@yaks/testing'
 import { parseHTML } from 'linkedom'
 import { start } from './page.ts'
 import { SECTIONS, SELF } from './site.ts'
+import { STORY } from './figure.ts'
 
 let dir = new URL('./', import.meta.url)
 let open = async () => {
@@ -45,36 +46,66 @@ test('the story types into the prompt and the drawing draws what it made', async
   match(screen, /\$ yak task new 'Throw the party'/)
   match(screen, /agent ▸ task_update/)
   let sheet = root.querySelector('.Figure_Sheet')!.innerHTML
-  match(sheet, />T-1</)
+  for (let id of ['U-1', 'T-2', 'T-3', 'N-4', 'C-5']) {
+    match(sheet, new RegExp(`>${id}<`))
+  }
   match(sheet, />Buy the cake</)
   match(sheet, /data-name="requires"/)
+  match(sheet, /data-name="completed.by"/)
+  let doors = root.querySelector('.Doors_Draw')!
+  equal(doors.getAttribute('data-door'), 'agent')
   equal(
-    root.querySelector('.Doors .is-open')?.className.includes('is-agent'),
-    true,
+    [...doors.querySelectorAll('.N .id')].map((t) => t.textContent),
+    ['T-2 open', 'T-3 done', 'C-5'],
   )
   page.page.close()
 })
 
-test('a section changed from the prompt redraws in place, and the drawing takes its query', async () => {
+test('a section changed from the prompt redraws in place, and the drawing keeps to the demo', async () => {
   let { root, page, settle } = await open()
   await page.term.reach(steps, steps.length)
   await settle()
   let heading = root.querySelector(`[data-eid="${SELF}"] h2`)?.textContent
   equal(heading, 'This page is a graph you can change')
-  equal(page.figure.query(), '.file|.pane|.layout *')
-  match(root.querySelector('.Figure_Sheet')!.innerHTML, />index.html</)
+  equal(page.figure.query(), STORY)
+  let sheet = () => root.querySelector('.Figure_Sheet')!.innerHTML
+  equal(sheet().includes('>index.html<'), false)
+  let files = [...root.querySelectorAll('.Figure_Wider button')]
+    .find((b) => b.textContent == "the site's files") as unknown as {
+      click: () => void
+    }
+  files.click()
+  await settle()
+  match(sheet(), />index.html</)
   page.page.close()
+})
+
+test('the start draws at once, and each step only as far as it is scrolled into', async () => {
+  let { page, settle } = await open()
+  await page.term.reach(steps, 4)
+  await settle()
+  let at = (n: number) => page.figure.reached(n, performance.now() + 5000)
+  equal([at(0), at(1), at(3)], [1, 0, 0])
+  page.figure.scroll([1, .5])
+  equal([at(1), at(2), at(3)], [1, .5, 0])
 })
 
 test('the stack shows the last entity written and the phases apply() ran', async () => {
   let { root, page, settle } = await open()
   await page.term.enter("task new 'Water the plants'")
   await settle()
-  let plates = [...root.querySelectorAll('.Plate b')].map((b) => b.textContent)
-  equal(plates.includes('task') && plates.includes('doc'), true)
-  let lit = [...root.querySelectorAll('.Phase.is-lit')].map((p) =>
-    p.textContent
+  let plates = [...root.querySelectorAll('.pl')].map((p) =>
+    p.getAttribute('data-pl')
   )
-  equal(lit.includes('commit') && lit.includes('rules'), true)
+  equal(plates, ['entity', 'doc', 'task', 'created'])
+  let phases = (state: string) =>
+    [...root.querySelectorAll(`.Phases li.${state}`)].map((p) =>
+      p.getAttribute('data-phase')
+    )
+  equal(
+    phases('on').includes('commit') && phases('on').includes('rules'),
+    true,
+  )
+  equal(phases('skip'), ['audit'])
   page.page.close()
 })

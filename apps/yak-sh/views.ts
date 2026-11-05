@@ -7,15 +7,15 @@ import { useEffect, useRef, useState } from 'preact/hooks'
 import { parse } from '@yaks/query/core'
 import { define } from '@yaks/render'
 import { Markdown } from '@yaks/markdown'
-import { mount } from '@yaks/diagram'
-import { INSIDE, PHASES } from '@yaks/graph/plugin'
+import { ink, mount, type Mounted, progress, type Tip } from '@yaks/diagram'
 import type { Bundle } from '@yaks/graph'
 import type { EntityProps } from '@yaks/preact'
 import type { Yak } from './yak.ts'
 import type { Line, Term } from './term.ts'
-import type { Figure } from './figure.ts'
+import { type Figure, into, PLACES, SHEET, WIDER } from './figure.ts'
 import { INSTALL, proseOf, scriptOf } from './site.ts'
-import { parts } from './parts.ts'
+import { Copy, parts } from './parts.ts'
+import { Doors, Stack } from './bands.ts'
 
 /** What every view is given beside its bundle. */
 export type Ctx = {
@@ -27,12 +27,12 @@ export type Ctx = {
 }
 
 /** Draw again whenever `listen` tells. */
-let useTold = (listen: (l: () => void) => () => void) => {
+export let useTold = (listen: (l: () => void) => () => void) => {
   let [, tick] = useState(0)
   useEffect(() => listen(() => tick((n) => n + 1)), [listen])
 }
 
-let text = (b: Bundle, comp: string, prop: string) =>
+export let text = (b: Bundle, comp: string, prop: string) =>
   String((b[comp] as Record<string, unknown> | undefined)?.[prop] ?? '')
 
 // ------------------------------------------------------------------ the page
@@ -46,28 +46,32 @@ let Page: FunctionComponent<Ctx & { e: Bundle }> = (ctx) => {
     .sort((a, b) =>
       Number(text(a, 'pane', 'order')) - Number(text(b, 'pane', 'order'))
     )
-  // Consecutive steps share one story: a prompt and a drawing beside them.
-  let parts: ComponentChild[] = []
-  let steps: string[] = []
+  // The hero and the steps after it share one story: the words on the left,
+  // and the drawing and the prompt beside them.
+  let parts: ComponentChild[] = [h(Nav, { key: 'nav' })]
+  let story: { hero?: string; steps: string[] } | undefined
   let flush = () => {
-    if (steps.length) parts.push(h(Story, { ...ctx, steps, key: steps[0] }))
-    steps = []
+    if (story) {
+      parts.push(
+        h(Story, { ...ctx, ...story, key: story.hero ?? story.steps[0] }),
+      )
+    }
+    story = undefined
   }
   for (let p of panes) {
     let content = text(p, 'pane', 'content')
-    if (text(p, 'pane', 'view') == 'Step') {
-      steps.push(content)
+    let view = text(p, 'pane', 'view')
+    if (view == 'Hero') {
+      flush()
+      story = { hero: content, steps: [] }
+      continue
+    }
+    if (view == 'Step') {
+      ;(story ??= { steps: [] }).steps.push(content)
       continue
     }
     flush()
-    parts.push(
-      h(Entity, {
-        ...ctx,
-        eid: content,
-        view: text(p, 'pane', 'view'),
-        key: content,
-      }),
-    )
+    parts.push(h(Entity, { ...ctx, eid: content, view, key: content }))
   }
   flush()
   return h('div', { class: 'Site' }, parts)
@@ -86,81 +90,101 @@ let Nav = () =>
     ]),
   ])
 
-let Copy = ({ line }: { line: string }) => {
-  let [done, set] = useState(false)
-  return h('div', { class: 'Copy' }, [
-    h('code', null, [h('span', { class: 'Copy_Sign' }, '$ '), line]),
-    h('button', {
-      type: 'button',
-      onClick: () =>
-        navigator.clipboard?.writeText(line).then(() => {
-          set(true)
-          setTimeout(() => set(false), 1500)
-        }),
-    }, done ? 'Copied' : 'Copy'),
-  ])
-}
-
 let Hero: FunctionComponent<Ctx & { e: Bundle }> = ({ e }) =>
   h('header', { class: 'Hero', 'data-eid': e.entity.eid }, [
-    h(Nav, null),
-    h('div', { class: 'Hero_Body' }, [
-      h('p', { class: 'Kicker' }, [
-        h('span', { class: 'Kicker_Dot' }),
-        'yak and the @yaks packages · open source',
-      ]),
-      h('h1', null, text(e, 'doc', 'title')),
-      h(
-        'div',
-        { class: 'Lead' },
-        h(Markdown, { source: proseOf(text(e, 'doc', 'body')) }),
-      ),
-      h(Copy, { line: INSTALL }),
-      h(
-        'p',
-        { class: 'Hint' },
-        'Scroll, and the graph below runs each command in this tab.',
-      ),
+    h('p', { class: 'Kicker' }, [
+      h('span', { class: 'Kicker_Dot' }),
+      'yak and the @yaks packages · open source',
     ]),
+    h('h1', null, text(e, 'doc', 'title')),
+    h(
+      'div',
+      { class: 'Lead' },
+      h(Markdown, { source: proseOf(text(e, 'doc', 'body')) }),
+    ),
+    h(Copy, { line: INSTALL }),
+    h(
+      'p',
+      { class: 'Hint' },
+      'Scroll, and each step below runs in the graph in this tab while the drawing beside it adds what it wrote.',
+    ),
   ])
 
 // ------------------------------------------------------------------ the story
 
-let Story: FunctionComponent<Ctx & { steps: string[] }> = (ctx) => {
-  let { yak, term, Entity, steps } = ctx
+/** What the story's parts share: each step's element, and the drawing's
+ * painter, which the scroll calls. */
+type Pen = {
+  steps: (HTMLElement | null)[]
+  paint?: () => void
+}
+
+let Story: FunctionComponent<Ctx & { hero?: string; steps: string[] }> = (
+  ctx,
+) => {
+  let { yak, term, figure, Entity, hero, steps } = ctx
+  let pen = useRef<Pen>({ steps: [] }).current
   let bodies = () =>
     steps.map((eid) => text(yak.row(eid) ?? { entity: { eid } }, 'doc', 'body'))
-  let reach = (n: number) => term.reach(bodies(), n)
-  return h('section', { class: 'Story' }, [
-    h('div', { class: 'Story_Steps' }, [
-      ...steps.map((eid, i) =>
-        h(Entity, { ...ctx, eid, view: 'Step', key: eid, n: i + 1, reach })
+  // How far the reader is into each step, measured each frame they scroll:
+  // a step's commands run once it is reached, and the drawing follows.
+  useEffect(() => {
+    if (typeof requestAnimationFrame == 'undefined') return
+    let frame = 0
+    let measure = () => {
+      frame = 0
+      let p = pen.steps.map((el) => {
+        if (!el) return 0
+        let r = el.getBoundingClientRect()
+        return into(r.top, r.height, innerHeight)
+      })
+      figure.scroll(p)
+      pen.steps.forEach((el, i) => el?.classList.toggle('is-on', p[i] > 0))
+      term.reach(bodies(), p.reduce((k, x, i) => x > 0 ? i + 1 : k, 0))
+      pen.paint?.()
+    }
+    let soon = () => frame ||= requestAnimationFrame(measure)
+    addEventListener('scroll', soon, { passive: true })
+    addEventListener('resize', soon)
+    soon()
+    return () => {
+      removeEventListener('scroll', soon)
+      removeEventListener('resize', soon)
+      cancelAnimationFrame(frame)
+    }
+  }, [steps.join()])
+  return h('section', { class: 'Plot' }, [
+    h('div', { class: 'Plot_Words' }, [
+      hero ? h(Entity, { ...ctx, eid: hero, view: 'Hero', key: hero }) : null,
+      h(
+        'ol',
+        { class: 'Steps' },
+        steps.map((eid, i) =>
+          h(Entity, {
+            ...ctx,
+            eid,
+            view: 'Step',
+            key: eid,
+            n: i + 1,
+            at: (el: HTMLElement | null) => void (pen.steps[i] = el),
+          })
+        ),
       ),
+    ]),
+    h('div', { class: 'Plot_Side' }, [
+      h(Figure, { ...ctx, pen }),
       h(Prompt, ctx),
     ]),
-    h('div', { class: 'Story_Figure' }, h(Figure, ctx)),
   ])
 }
 
 let Step: FunctionComponent<
-  Ctx & { e: Bundle; n: number; reach: (n: number) => void }
-> = (
-  { e, n, reach },
-) => {
-  let ref = useRef<HTMLElement>(null)
-  useEffect(() => {
-    let el = ref.current
-    if (!el || typeof IntersectionObserver == 'undefined') return
-    let seen = new IntersectionObserver((entries) => {
-      if (entries.some((x) => x.isIntersecting)) reach(n)
-    }, { rootMargin: '0px 0px -45% 0px' })
-    seen.observe(el)
-    return () => seen.disconnect()
-  }, [n])
+  Ctx & { e: Bundle; n: number; at: (el: HTMLElement | null) => void }
+> = ({ e, n, at }) => {
   let body = text(e, 'doc', 'body')
   let { sh, mcp } = scriptOf(body)
-  return h('article', { class: 'Step', ref, 'data-eid': e.entity.eid }, [
-    h('p', { class: 'Step_N' }, String(n).padStart(2, '0')),
+  return h('li', { class: 'Step', ref: at, 'data-eid': e.entity.eid }, [
+    h('span', { class: 'Step_No' }, String(n)),
     h('h2', null, text(e, 'doc', 'title')),
     h(Markdown, { source: proseOf(body) }),
     h('ul', { class: 'Step_Lines' }, [
@@ -186,11 +210,19 @@ let sign: Record<Line['kind'], string> = {
 let Prompt: FunctionComponent<Ctx> = ({ term }) => {
   useTold(term.listen)
   let [line, set] = useState('')
+  // Where the arrows have walked to in the history: its length is the line
+  // being written.
+  let back = useRef(0)
   let screen = useRef<HTMLDivElement>(null)
   useEffect(() => {
     let el = screen.current
     if (el) el.scrollTop = el.scrollHeight
   })
+  let walk = (by: number) => {
+    let past = term.history()
+    back.current = Math.max(0, Math.min(past.length, back.current + by))
+    set(past[back.current] ?? '')
+  }
   return h('div', { class: 'Prompt' }, [
     h('div', { class: 'Prompt_Bar' }, [
       h('i', null),
@@ -219,6 +251,7 @@ let Prompt: FunctionComponent<Ctx> = ({ term }) => {
         ev.preventDefault()
         if (!line.trim()) return
         term.enter(line)
+        back.current = term.history().length + 1
         set('')
       },
     }, [
@@ -226,48 +259,134 @@ let Prompt: FunctionComponent<Ctx> = ({ term }) => {
       h('input', {
         value: line,
         'aria-label': 'Type a yak command',
-        placeholder: 'help',
+        placeholder: "task new 'Book the band'",
         autocomplete: 'off',
         spellcheck: false,
         onInput: (ev: Event) =>
           set((ev.currentTarget as HTMLInputElement).value),
+        onKeyDown: (ev: KeyboardEvent) => {
+          if (ev.key != 'ArrowUp' && ev.key != 'ArrowDown') return
+          ev.preventDefault()
+          walk(ev.key == 'ArrowUp' ? -1 : 1)
+        },
       }),
     ]),
   ])
 }
 
-let Figure: FunctionComponent<Ctx> = ({ yak, figure }) => {
-  useTold(figure.listen)
+// The leader: a line from the step being drawn to the pen drawing it, across
+// the gutter between them, in the window's own coordinates.
+let lead = (
+  from: HTMLElement,
+  to: { x: number; y: number },
+  gutter: number,
+) => {
+  let bubble = (from.querySelector('.Step_No') ?? from).getBoundingClientRect()
+  let side = from.getBoundingClientRect()
+  if (matchMedia('(max-width: 899px)').matches) {
+    let sx = bubble.left + bubble.width / 2, sy = bubble.top - 4
+    let mid = Math.max(gutter + 10, Math.min(sy - 12, gutter + 24))
+    return { d: `M${sx},${sy}V${mid}H${to.x}V${to.y}`, sx, sy }
+  }
+  let sx = side.right + 10, sy = bubble.top + bubble.height / 2
+  let gx = Math.max(sx + 8, gutter - 16)
+  return { d: `M${sx},${sy}H${gx}V${to.y}H${to.x}`, sx, sy }
+}
+
+let Figure: FunctionComponent<Ctx & { pen: Pen }> = (
+  { yak, term, figure, pen },
+) => {
+  useTold((l) => yak.watch('*', l))
   let sheet = useRef<HTMLDivElement>(null)
-  let drawing = useRef<ReturnType<typeof mount>>()
+  let leader = useRef<SVGSVGElement>(null)
+  let drawing = useRef<Mounted>()
   let [asked, setAsked] = useState(figure.query())
   let [fault, setFault] = useState('')
   useEffect(() => {
-    if (!sheet.current) return
-    let m = mount(sheet.current, {
+    let el = sheet.current
+    if (!el) return
+    let frame = 0
+    // Ink the drawing as far as the reader has come, point the leader from
+    // the step to the pen, and keep going while a stage draws itself in.
+    let paint = () => {
+      frame = 0
+      let layout = drawing.current?.layout
+      let svg = el.querySelector('svg')
+      if (!layout || !svg) return
+      let now = performance.now()
+      let at = ink(
+        svg as never,
+        layout,
+        progress(layout, (s) => figure.reached(s, now)),
+      )
+      el.classList.toggle('is-started', figure.into(1) > 0)
+      point(svg, at)
+      if (figure.busy(now) && typeof requestAnimationFrame != 'undefined') {
+        frame ||= requestAnimationFrame(paint)
+      }
+    }
+    let point = (svg: SVGSVGElement, at: Tip | undefined) => {
+      let line = leader.current
+      let step = at && pen.steps[at.stage - 1]
+      let m = svg.getScreenCTM?.()
+      if (!line || !step || !m || !at) return line?.classList.remove('is-on')
+      let to = { x: m.a * at.x + m.e, y: m.d * at.y + m.f }
+      let box = svg.getBoundingClientRect()
+      let gutter = matchMedia('(max-width: 899px)').matches
+        ? box.bottom
+        : box.left
+      let { d, sx, sy } = lead(step, to, gutter)
+      line.querySelector('path')?.setAttribute('d', d)
+      let dot = line.querySelector('circle')
+      dot?.setAttribute('cx', String(sx))
+      dot?.setAttribute('cy', String(sy))
+      line.classList.add('is-on')
+    }
+    pen.paint = paint
+    let m = mount(el, {
       graph: yak.graph,
       query: figure.query(),
-      width: 560,
-      height: 520,
+      ...SHEET,
+      stage: term.stage,
+      at: ({ label }) => PLACES[label],
+      title: 'The graph in this tab',
+      drawn: (layout) => {
+        figure.saw(layout, performance.now())
+        paint()
+      },
     })
     drawing.current = m
-    return () => m.stop()
+    return () => {
+      m.stop()
+      if (frame) cancelAnimationFrame(frame)
+      pen.paint = undefined
+    }
   }, [])
-  useEffect(() => {
-    setAsked(figure.query())
-    drawing.current?.query(figure.query()).then(() => setFault('')).catch((e) =>
-      setFault(e.message)
-    )
-  }, [figure.query()])
+  let ask = (q: string) => {
+    setAsked(q)
+    drawing.current?.query(q, figure.ask(q)).then(() => setFault('')).catch((
+      e,
+    ) => setFault(e.message))
+  }
   return h('figure', { class: 'Figure' }, [
+    h('div', { class: 'Figure_Bar' }, [
+      h('span', null, [h('b', null, 'fig. 1'), ' · the graph in this tab']),
+      h('span', { class: 'Figure_State' }, `${yak.rows().length} entities`),
+    ]),
+    h('div', { class: 'Figure_Sheet', ref: sheet }),
+    h(
+      'p',
+      { class: 'Figure_Hint' },
+      'Scroll down: each command runs in this tab, and the pen draws what it writes.',
+    ),
     h('form', {
       class: 'Figure_Query',
       onSubmit: (ev: Event) => {
         ev.preventDefault()
-        figure.ask(asked)
+        ask(asked)
       },
     }, [
-      h('label', null, 'Drawing'),
+      h('label', null, 'Showing'),
       h('input', {
         value: asked,
         'aria-label': 'The query the drawing shows',
@@ -276,102 +395,26 @@ let Figure: FunctionComponent<Ctx> = ({ yak, figure }) => {
           setAsked((ev.currentTarget as HTMLInputElement).value),
       }),
     ]),
-    h('div', { class: 'Figure_Sheet', ref: sheet }),
     h(
-      'figcaption',
-      null,
-      fault || 'What this query selects in the graph in this tab.',
+      'p',
+      { class: 'Figure_Wider' },
+      WIDER.map(([name, q]) =>
+        h('button', {
+          type: 'button',
+          class: q == asked ? 'is-on' : '',
+          onClick: () => ask(q),
+        }, name)
+      ),
     ),
-  ])
-}
-
-// ------------------------------------------------------------------ the loop
-
-let Stack: FunctionComponent<Ctx & { e: Bundle }> = ({ e, yak, figure }) => {
-  useTold(figure.listen)
-  useTold((l) => yak.watch('*', l))
-  let { eid, phases } = figure.last()
-  let subject = eid ? yak.row(eid) : undefined
-  let comps = subject
-    ? Object.entries(subject).filter(([k, v]) =>
-      !k.startsWith('$') && v && typeof v == 'object'
-    )
-    : []
-  let lit = new Set(phases)
-  return h('section', { class: 'Band Stack', 'data-eid': e.entity.eid }, [
-    h('div', { class: 'Band_Text' }, [
-      h('h2', null, text(e, 'doc', 'title')),
-      h(Markdown, { source: proseOf(text(e, 'doc', 'body')) }),
-    ]),
-    h('div', { class: 'Stack_Figure' }, [
-      h('ol', {
-        class: 'Plates',
-        'aria-label': 'The components of the last entity written',
-      }, [
-        ...comps.reverse().map(([name, v], i) =>
-          h('li', { class: 'Plate', style: `--i:${i}` }, [
-            h('b', null, name),
-            `{${Object.keys(v as object).join(', ')}}`,
-          ])
-        ),
-        comps.length
-          ? null
-          : h('li', { class: 'Plate is-empty' }, 'type a command above'),
-      ]),
-      h(
-        'ol',
-        { class: 'Phases', 'aria-label': 'The phases of apply()' },
-        PHASES.map((p) =>
-          h('li', {
-            class: [
-              'Phase',
-              lit.has(p) ? 'is-lit' : '',
-              INSIDE.includes(p) ? 'is-inside' : '',
-            ].join(' '),
-          }, p)
-        ),
-      ),
+    fault ? h('p', { class: 'Figure_Fault' }, fault) : null,
+    h('svg', { class: 'Leader', ref: leader, 'aria-hidden': 'true' }, [
+      h('path', { class: 'Leader_Line' }),
+      h('circle', { class: 'Leader_Dot', r: 3 }),
     ]),
   ])
 }
 
-let DOORS = [
-  { at: 'terminal', name: 'Terminal', line: 'yak task list' },
-  { at: 'agent', name: 'Your agents', line: 'POST /mcp' },
-  { at: 'browser', name: 'A browser', line: '@yaks/client' },
-  { at: 'remote', name: 'yaks.app', line: 'yak --host yaks.app' },
-]
-
-let Doors: FunctionComponent<Ctx & { e: Bundle }> = ({ e, yak, figure }) => {
-  useTold(figure.listen)
-  useTold((l) => yak.watch('*', l))
-  let { eid } = figure.last()
-  let row = eid ? yak.row(eid) : undefined
-  let by = row && (text(row, 'updated', 'by') || text(row, 'created', 'by'))
-  let open = by == yak.agent ? 'agent' : by ? 'terminal' : ''
-  return h('section', { class: 'Band Doors', 'data-eid': e.entity.eid }, [
-    h('div', { class: 'Band_Text' }, [
-      h('h2', null, text(e, 'doc', 'title')),
-      h(Markdown, { source: proseOf(text(e, 'doc', 'body')) }),
-    ]),
-    h('div', { class: 'Doors_Figure' }, [
-      h('div', { class: 'Doors_Graph' }, [
-        h('b', null, 'one graph'),
-        h('span', null, `${yak.rows().length} entities`),
-      ]),
-      ...DOORS.map((d) =>
-        h(
-          'div',
-          { class: `Door is-${d.at}${open == d.at ? ' is-open' : ''}` },
-          [
-            h('b', null, d.name),
-            h('code', null, d.line),
-          ],
-        )
-      ),
-    ]),
-  ])
-}
+// ------------------------------------------------------------------ the end
 
 let doc = parse('.doc')
 export let views = define([

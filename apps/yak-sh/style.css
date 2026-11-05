@@ -116,9 +116,8 @@ h2 {
   display: flex;
   gap: 1.2rem;
 }
-.Hero_Body {
-  padding: clamp(2rem, 10vh, 7rem) clamp(1rem, 4vw, 3rem) 3rem;
-  max-width: 70rem;
+.Hero {
+  padding: clamp(2rem, 8vh, 5rem) 0 clamp(2.2rem, 5vw, 4rem);
 }
 .Kicker {
   display: flex;
@@ -171,35 +170,67 @@ h2 {
   box-shadow: 0 0 18px var(--diagram-glow);
 }
 
-/* ---------------------------------------------------------------- story */
-.Story {
+/* ---------------------------------------------------------------- plot */
+/* #11's plot: the hero and the steps scroll on the left while the drawing
+   and the prompt stay on the right, the drawing beside the hero from the
+   start. */
+.Plot {
   display: grid;
   grid-template-columns: minmax(0, 1fr) minmax(0, 1.1fr);
-  gap: clamp(1rem, 4vw, 3rem);
-  padding: 2rem clamp(1rem, 4vw, 3rem);
-  border-top: 1px solid var(--rule);
+  column-gap: clamp(1.8rem, 4vw, 4rem);
+  padding: 0 clamp(1rem, 4vw, 3rem);
 }
-.Story_Steps {
-  display: flex;
-  flex-direction: column;
+.Steps {
+  list-style: none;
+  margin: 0;
+  padding: 0 0 12vh;
 }
 .Step {
-  min-height: 72vh;
-  padding: 3rem 0;
-  max-width: 34rem;
+  position: relative;
+  min-height: 82vh;
+  padding: clamp(1.8rem, 4vw, 2.8rem) 0 0 58px;
+  border-top: 1px solid var(--rule);
 }
-.Step_N {
+.Step::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: -5px;
+  width: 1px;
+  height: 9px;
+  background: var(--line);
+}
+.Step_No {
+  position: absolute;
+  left: 0;
+  top: clamp(1.6rem, 4vw, 2.6rem);
+  display: grid;
+  place-items: center;
+  width: 38px;
+  height: 38px;
+  border: 1px solid var(--line);
+  border-radius: 50%;
+  background: var(--paper);
   font: 500 .8rem var(--mono);
+  transition: border-color .3s, color .3s, box-shadow .3s;
+}
+.Step.is-on .Step_No {
+  border-color: var(--meadow);
   color: var(--meadow);
-  margin: 0 0 .4rem;
+  box-shadow: 0 0 0 3px rgba(167, 192, 128, .25), 0 0 14px var(--diagram-glow);
+}
+.Step h2 {
+  font-size: clamp(1.45rem, 2.3vw, 1.85rem);
+  margin: .2rem 0 .9rem;
 }
 .Step p {
   color: var(--soft);
+  max-width: 33em;
 }
 .Step_Lines {
   list-style: none;
   padding: 0;
-  margin: 1rem 0 0;
+  margin: 1.2rem 0 0;
   display: grid;
   gap: .4rem;
 }
@@ -220,14 +251,161 @@ h2 {
   content: 'agent ▸ ';
 }
 
-.Prompt {
+.Plot_Side {
   position: sticky;
-  bottom: 1rem;
-  margin-top: 2rem;
+  top: 1rem;
+  align-self: start;
+  display: flex;
+  flex-direction: column;
+  gap: .8rem;
+  height: calc(100vh - 2rem);
+  max-height: 980px;
+  margin-top: 1rem;
+}
+
+.Figure {
+  position: relative;
+  flex: 1 1 auto;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  margin: 0;
+  border: 1px solid var(--rule);
+  background: rgba(252, 250, 245, .82);
+  --diagram-paper: var(--paper);
+}
+.Figure_Bar {
+  display: flex;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: .7rem .9rem .5rem;
+  border-bottom: 1px solid var(--rule);
+  font: .75rem var(--mono);
+  color: var(--soft);
+}
+.Figure_Bar b {
+  font-weight: 500;
+  color: var(--ink);
+}
+.Figure_State::before {
+  content: '';
+  display: inline-block;
+  width: 6px;
+  height: 6px;
+  margin-right: .45rem;
+  border-radius: 50%;
+  vertical-align: .08em;
+  background: var(--meadow);
+  box-shadow: 0 0 6px var(--moss);
+}
+.Figure_Sheet {
+  flex: 1 1 auto;
+  min-height: 0;
+}
+.Figure_Sheet svg {
+  width: 100%;
+  height: 100%;
+}
+.Figure_Sheet .Diagram_Title {
+  font-family: var(--sans);
+}
+.Figure_Hint {
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 52%;
+  margin: 0;
+  padding: 0 2rem;
+  text-align: center;
+  font: .8rem/1.6 var(--mono);
+  color: var(--soft);
+  pointer-events: none;
+  transition: opacity .4s;
+}
+.Figure_Sheet.is-started + .Figure_Hint {
+  opacity: 0;
+}
+.Figure_Query {
+  display: flex;
+  align-items: center;
+  gap: .6rem;
+  padding: .55rem .9rem 0;
+  border-top: 1px solid var(--rule);
+  font: .75rem var(--mono);
+  color: var(--soft);
+}
+.Figure_Query input {
+  flex: 1;
+  min-width: 0;
+  padding: .35rem .55rem;
+  border: 1px solid var(--rule);
+  background: var(--plate);
+  color: var(--ink);
+  font: inherit;
+}
+.Figure_Wider {
+  display: flex;
+  flex-wrap: wrap;
+  gap: .4rem;
+  margin: 0;
+  padding: .5rem .9rem .7rem;
+}
+.Figure_Wider button {
+  padding: .3rem .55rem;
+  border: 1px solid var(--rule);
+  background: rgba(252, 250, 245, .6);
+  color: var(--soft);
+  font: .72rem var(--mono);
+  cursor: pointer;
+}
+.Figure_Wider button:hover,
+.Figure_Wider button.is-on {
+  border-color: var(--meadow);
+  color: var(--ink);
+}
+.Figure_Fault {
+  margin: 0;
+  padding: 0 .9rem .6rem;
+  font: .75rem var(--mono);
+  color: var(--brick);
+}
+
+/* The leader: a line from the step being drawn to the pen drawing it. */
+.Leader {
+  position: fixed;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  overflow: visible;
+  pointer-events: none;
+  z-index: 15;
+  opacity: 0;
+  transition: opacity .35s;
+}
+.Leader.is-on {
+  opacity: 1;
+}
+.Leader_Line {
+  fill: none;
+  stroke: var(--meadow);
+  stroke-width: 1.2;
+  stroke-linejoin: round;
+  filter: drop-shadow(0 0 3px var(--moss));
+}
+.Leader_Dot {
+  fill: var(--meadow);
+  filter: drop-shadow(0 0 4px var(--moss));
+}
+
+.Prompt {
+  flex: none;
+  display: flex;
+  flex-direction: column;
+  height: clamp(190px, 30vh, 300px);
   border-radius: 8px;
   background: var(--term);
   color: var(--term-ink);
-  font: .82rem/1.5 var(--mono);
+  font: .8rem/1.5 var(--mono);
   box-shadow: 0 12px 40px rgba(31, 42, 28, .25);
   overflow: hidden;
 }
@@ -235,7 +413,7 @@ h2 {
   display: flex;
   align-items: center;
   gap: .35rem;
-  padding: .5rem .8rem;
+  padding: .45rem .8rem;
   border-bottom: 1px solid rgba(227, 234, 214, .1);
   color: #9aa58f;
 }
@@ -249,9 +427,10 @@ h2 {
   margin-left: .5rem;
 }
 .Prompt_Screen {
-  height: 15rem;
+  flex: 1 1 auto;
+  min-height: 0;
   overflow-y: auto;
-  padding: .7rem .9rem;
+  padding: .6rem .9rem;
 }
 .Prompt_Line {
   white-space: pre-wrap;
@@ -300,46 +479,45 @@ h2 {
   font: inherit;
 }
 
-.Story_Figure {
-  position: relative;
-}
-.Figure {
-  position: sticky;
-  top: 1rem;
-  margin: 0;
-}
-.Figure_Query {
-  display: flex;
-  align-items: center;
-  gap: .6rem;
-  font: .78rem var(--mono);
-  color: var(--soft);
-}
-.Figure_Query input {
-  flex: 1;
-  min-width: 0;
-  padding: .4rem .6rem;
-  border: 1px solid var(--rule);
-  border-radius: 5px;
-  background: var(--plate);
-  color: var(--ink);
-  font: inherit;
-}
-.Figure_Sheet {
-  margin-top: .6rem;
-  border: 1px solid var(--rule);
-  border-radius: 8px;
-  background: rgba(252, 250, 245, .7);
-}
-.Figure_Sheet svg {
-  display: block;
-  width: 100%;
-  height: auto;
-}
-.Figure figcaption {
-  font: .75rem var(--mono);
-  color: var(--soft);
-  margin-top: .4rem;
+@media (max-width: 899px) {
+  .Plot {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .Plot_Words {
+    display: contents;
+  }
+  .Plot_Side {
+    grid-row: 2;
+    top: 0;
+    z-index: 6;
+    height: auto;
+    margin: 0 calc(-1 * clamp(1rem, 4vw, 3rem) + 6px);
+    background: var(--paper);
+  }
+  .Figure {
+    height: 42svh;
+    min-height: 250px;
+    flex: none;
+  }
+  .Figure_Query,
+  .Figure_Wider {
+    display: none;
+  }
+  .Prompt {
+    height: 9.5rem;
+  }
+  .Steps {
+    grid-row: 3;
+  }
+  .Step {
+    min-height: 72svh;
+    padding-left: 46px;
+  }
+  .Step_No {
+    width: 32px;
+    height: 32px;
+    font-size: .75rem;
+  }
 }
 
 /* ---------------------------------------------------------------- bands */
@@ -356,140 +534,382 @@ h2 {
   max-width: 34rem;
 }
 
-.Stack_Figure {
-  display: grid;
-  grid-template-columns: 1fr auto;
-  gap: 2rem;
-  align-items: center;
+/* The stack (#12) and the doors (#14): drawings in the sheet's own pen, lit
+   in meadow green where the last write went. */
+.Stack,
+.Doors {
+  --faint: rgba(54, 83, 45, .08);
+  align-items: start;
 }
-.Plates {
-  list-style: none;
+.Stack_Figure,
+.Doors_Figure {
   margin: 0;
-  padding: 2rem 0;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
+  position: sticky;
+  top: 1.5rem;
 }
-.Plate {
-  width: min(18rem, 100%);
-  margin-top: -.6rem;
-  padding: .7rem 1rem;
-  border: 1px solid var(--line);
-  border-radius: 6px;
-  background: var(--plate);
-  font: .8rem var(--mono);
+.Stack_Figure figcaption,
+.Doors_Figure figcaption {
+  font-size: .875rem;
   color: var(--soft);
-  box-shadow: 0 6px 0 var(--side);
-  transform: perspective(600px) rotateX(38deg);
-  animation: rise .5s both calc(var(--i) * 80ms);
+  margin-top: .6rem;
+  padding-top: .5rem;
+  border-top: 1px solid var(--rule);
 }
-.Plate b {
+.No {
+  font: 500 .75rem/1 var(--mono);
   color: var(--ink);
-  font-weight: 500;
+  margin-right: .5rem;
 }
-.Plate.is-empty {
-  border-style: dashed;
+.Stack_Draw,
+.Doors_Draw {
+  display: block;
+  width: 100%;
+  height: auto;
+  overflow: visible;
 }
-@keyframes rise {
-  from {
-    opacity: 0;
-    transform: perspective(600px) rotateX(38deg) translateY(-14px);
-  }
+.Hatch_Ground {
+  fill: var(--paper);
 }
+.Hatch_Line {
+  stroke: var(--line);
+  stroke-width: .5;
+  opacity: .35;
+}
+
 .Phases {
   list-style: none;
-  margin: 0;
-  padding: 0 0 0 1rem;
-  border-left: 1px solid var(--rule);
-  font: .78rem/1 var(--mono);
-  display: grid;
-  gap: .55rem;
+  margin: 1.2rem 0 0 2.1rem;
+  padding: 0;
 }
-.Phase {
+.Phases li {
   position: relative;
-  color: var(--soft);
-  opacity: .55;
-  transition: opacity .3s, color .3s;
+  padding: .55rem 0 .75rem;
+  border-top: 1px solid var(--faint);
 }
-.Phase::before {
-  content: '';
+.Phases li:last-child {
+  border-bottom: 1px solid var(--faint);
+}
+.Phases .Dot {
   position: absolute;
-  left: -1.33rem;
-  top: .1rem;
+  left: -2.1rem;
+  top: .95rem;
   width: 9px;
   height: 9px;
   border: 1px solid var(--line);
   border-radius: 50%;
   background: var(--paper);
+  transition: background .3s, border-color .3s, box-shadow .3s;
 }
-.Phase.is-inside {
-  padding-left: .6rem;
-  border-left: 2px solid var(--moss);
+.Phases b {
+  display: block;
+  font: 500 .875rem/1.3 var(--mono);
+  color: var(--soft);
+  transition: color .3s;
 }
-.Phase.is-lit {
-  color: var(--ink);
-  opacity: 1;
+.Phases li > :not(.Dot, b, .Skip) {
+  color: var(--soft);
+  font-size: .90625rem;
+  line-height: 1.5;
+  margin-top: .2rem;
 }
-.Phase.is-lit::before {
+.Phases li > :not(.Dot, b, .Skip) p {
+  margin: 0;
+}
+.Phases li[data-tx] {
+  background: linear-gradient(
+    90deg,
+    rgba(167, 192, 128, .14),
+    transparent 70%
+  );
+}
+.Phases li[data-tx-first]::after {
+  content: 'inside one transaction';
+  position: absolute;
+  right: 0;
+  top: .55rem;
+  font: 400 .6875rem/1 var(--mono);
+  color: var(--meadow);
+  border: 1px solid var(--meadow);
+  padding: 3px 5px;
+  background: var(--paper);
+}
+.Phases li.on .Dot {
   background: var(--meadow);
-  box-shadow: 0 0 8px var(--moss);
+  border-color: var(--meadow);
+  box-shadow: 0 0 6px var(--moss);
+}
+.Phases li.on b {
+  color: var(--ink);
+}
+.Phases li.skip .Dot {
+  border-style: dashed;
+}
+.Phases .Skip {
+  display: none;
+}
+.Phases li.skip .Skip {
+  display: block;
+  font: 400 .75rem/1.5 var(--mono);
+  color: var(--meadow);
 }
 
-.Doors_Figure {
-  display: grid;
-  grid-template: 'terminal graph agent' auto 'browser graph remote' auto / 1fr
-    1.1fr 1fr;
-  gap: 1rem 1.6rem;
-  align-items: center;
+.gh path {
+  fill: none;
+  stroke: var(--line);
+  stroke-width: .75;
+  stroke-dasharray: 3 3;
+  opacity: .28;
 }
-.Doors_Graph {
-  grid-area: graph;
-  display: grid;
-  place-items: center;
-  align-content: center;
-  aspect-ratio: 1;
-  border: 1px solid var(--line);
-  border-radius: 50%;
-  background: var(--plate);
-  font: .85rem var(--mono);
-  box-shadow: 0 0 0 10px rgba(167, 192, 128, .15);
+.axis {
+  fill: none;
+  stroke: var(--line);
+  stroke-width: .75;
+  stroke-dasharray: 3 4;
+  opacity: .4;
 }
-.Doors_Graph span {
+.pl {
+  animation: plate .6s cubic-bezier(.2, .7, .2, 1) calc(var(--i) * 70ms)
+    backwards;
+}
+@keyframes plate {
+  from {
+    opacity: 0;
+    transform: translateY(-26px);
+  }
+}
+.pl path {
+  stroke: var(--line);
+  stroke-width: 1;
+  stroke-linejoin: round;
+}
+.pl .f {
+  fill: var(--plate);
+}
+.pl .l {
+  fill: var(--side);
+}
+.pl .r {
+  fill: color-mix(in srgb, var(--side) 55%, var(--plate));
+}
+.stored .pl[data-pl='entity'] .l,
+.stored .pl[data-pl='entity'] .r {
+  fill: url(#band-hatch);
+}
+.face {
+  font: 500 14px var(--mono);
+  fill: var(--ink);
+}
+.co path {
+  fill: none;
+  stroke: var(--line);
+  stroke-width: .75;
+}
+.co circle {
+  fill: var(--line);
+}
+.nm {
+  font: 500 13px var(--mono);
+  fill: var(--ink);
+}
+.nt {
+  font: 400 11.5px var(--sans);
+  fill: var(--soft);
+}
+.vl {
+  font: 400 10.5px var(--mono);
+  fill: var(--soft);
+}
+.rail-base {
+  stroke: var(--rule);
+  stroke-width: 1.5;
+  fill: none;
+}
+.rail-lit {
+  stroke: var(--meadow);
+  stroke-width: 1.5;
+  fill: none;
+  filter: url(#band-glow);
+  transition: stroke-dashoffset .35s;
+}
+.st circle {
+  fill: var(--paper);
+  stroke: var(--line);
+  stroke-width: 1;
+  transition: fill .3s, stroke .3s;
+}
+.st text {
+  font: 400 12px var(--mono);
+  fill: var(--soft);
+}
+.st.on circle {
+  fill: var(--meadow);
+  stroke: var(--meadow);
+}
+.st.on text {
+  fill: var(--ink);
+}
+.st.skip circle {
+  stroke-dasharray: 2 2;
+}
+.rail-title {
+  font: 500 12.5px var(--mono);
+  fill: var(--ink);
+}
+.bracket {
+  fill: none;
+  stroke: var(--line);
+  stroke-width: .75;
+}
+.bracket-label {
+  font: 400 11px var(--sans);
+  fill: var(--soft);
+}
+
+.Doors_Bar {
+  display: flex;
+  align-items: baseline;
+  gap: .6rem;
+  font: 400 .75rem/1.4 var(--mono);
   color: var(--soft);
-  font-size: .75rem;
+  padding-bottom: .5rem;
+  margin-bottom: .6rem;
+  border-bottom: 1px solid var(--rule);
 }
-.Door {
-  padding: .7rem .8rem;
-  border: 1px solid var(--rule);
-  border-radius: 6px;
-  background: var(--plate);
-  display: grid;
-  gap: .2rem;
-  transition: border-color .3s, box-shadow .3s;
+.Doors_Draw .sheet {
+  fill: rgba(252, 250, 245, .7);
+  stroke: var(--line);
+  stroke-width: 1;
 }
-.Door b {
-  font-weight: 500;
-  font-size: .9rem;
+.sheet-ticks {
+  stroke: var(--rule);
+  stroke-width: 1;
 }
-.Door code {
-  font-size: .75rem;
-  color: var(--soft);
+.cap {
+  font: 500 11px var(--mono);
+  fill: var(--ink);
 }
-.Door.is-terminal {
-  grid-area: terminal;
+.cap2 {
+  font: 400 10px var(--mono);
+  fill: var(--soft);
 }
-.Door.is-agent {
-  grid-area: agent;
+.Door .box {
+  fill: rgba(252, 250, 245, .95);
+  stroke: var(--line);
+  stroke-width: 1;
+  transition: stroke .3s;
 }
-.Door.is-browser {
-  grid-area: browser;
+.Door .ico {
+  fill: none;
+  stroke: var(--line);
+  stroke-width: 1;
+  stroke-linecap: round;
+  stroke-linejoin: round;
 }
-.Door.is-remote {
-  grid-area: remote;
+.Door .glyph {
+  font: 500 10px var(--mono);
+  fill: var(--ink);
 }
-.Door.is-open {
-  border-color: var(--meadow);
-  box-shadow: 0 0 16px var(--diagram-glow);
+.Wire {
+  fill: none;
+  stroke: var(--rule);
+  stroke-width: 1.2;
+  transition: stroke .3s;
+}
+[data-door='terminal'] #door-terminal .box,
+[data-door='agent'] #door-agent .box,
+[data-door='browser'] #door-browser .box,
+[data-door='terminal'] #wire-terminal,
+[data-door='agent'] #wire-agent,
+[data-door='browser'] #wire-browser {
+  stroke: var(--meadow);
+  filter: url(#band-glow);
+}
+.Remote {
+  opacity: .32;
+}
+.Remote .sheet {
+  fill: url(#band-hatch);
+  stroke-dasharray: 3 3;
+}
+.Reach {
+  fill: none;
+  stroke: var(--rule);
+  stroke-width: 1.2;
+  stroke-dasharray: 3 4;
+  opacity: .45;
+}
+.L {
+  stroke: var(--line);
+  stroke-width: .9;
+  opacity: .75;
+}
+.L.stamp {
+  stroke-dasharray: 1.5 3.5;
+  opacity: .5;
+}
+.L.held {
+  stroke: var(--meadow);
+  stroke-dasharray: 4 3;
+  opacity: 1;
+  filter: url(#band-glow);
+}
+.L_Label {
+  font: 400 9px var(--mono);
+  fill: var(--soft);
+  paint-order: stroke;
+  stroke: var(--paper);
+  stroke-width: 3px;
+}
+.L_Label.stamp {
+  display: none;
+}
+.N .g {
+  fill: rgba(252, 250, 245, .96);
+  stroke: var(--line);
+  stroke-width: 1;
+  transition: fill .4s;
+}
+.N.is-done .g {
+  fill: rgba(167, 192, 128, .45);
+}
+.N.is-new .g {
+  stroke: var(--meadow);
+  stroke-width: 1.6;
+  filter: url(#band-glow);
+}
+.N .id {
+  font: 500 10.5px var(--mono);
+  fill: var(--ink);
+  text-anchor: middle;
+  paint-order: stroke;
+  stroke: var(--paper);
+  stroke-width: 3px;
+}
+.N .nm {
+  font: 400 9.5px var(--sans);
+  fill: var(--soft);
+  text-anchor: middle;
+  paint-order: stroke;
+  stroke: var(--paper);
+  stroke-width: 3px;
+}
+.Pulse {
+  fill: #fff;
+  stroke: var(--meadow);
+  stroke-width: 1.5;
+  filter: url(#band-glow);
+  opacity: 0;
+  animation: pulse .62s ease-in;
+}
+@keyframes pulse {
+  from {
+    opacity: 1;
+    transform: translate(var(--x0), var(--y0));
+  }
+  to {
+    opacity: 1;
+    transform: translate(var(--x1), var(--y1));
+  }
 }
 
 /* ---------------------------------------------------------------- parts
@@ -714,35 +1134,22 @@ h2 {
 }
 
 @media (max-width: 760px) {
-  .Story,
   .Band {
     grid-template-columns: 1fr;
   }
-  .Story_Figure {
-    order: -1;
-  }
-  .Figure {
-    position: relative;
-    top: 0;
-  }
-  .Step {
-    min-height: 0;
-    padding: 2rem 0;
-  }
-  .Stack_Figure {
-    grid-template-columns: 1fr;
-  }
+  .Stack_Figure,
   .Doors_Figure {
-    grid-template: 'graph graph' auto 'terminal agent' auto 'browser remote'
-      auto / 1fr 1fr;
+    position: static;
   }
-  .Doors_Graph {
-    width: 9rem;
-    justify-self: center;
+  .Phases li[data-tx-first]::after {
+    position: static;
+    display: inline-block;
+    margin-top: 6px;
   }
 }
 @media (prefers-reduced-motion: reduce) {
-  .Plate,
+  .pl,
+  .Pulse,
   .Caret {
     animation: none;
   }

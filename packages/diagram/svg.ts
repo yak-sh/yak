@@ -3,7 +3,9 @@
 // Each stroke has pathLength 1, so a stylesheet can draw it in with
 // stroke-dashoffset the way a pen would; what joined in this layout carries
 // `is-new` and `--i`, its place in the order it is drawn.
-import { BOX, type Layout, type Link, type Node } from './layout.ts'
+import { cut, type Layout, type Link, type Node } from './layout.ts'
+import { curves } from './pen.ts'
+import { type Curve, half, outline, radius } from './shape.ts'
 
 /** How a layout is drawn. */
 export type SvgOptions = {
@@ -20,62 +22,95 @@ let esc = (s: string) =>
   )
 let n = (x: number) => +x.toFixed(1)
 
-const BOXPATH = `M${-BOX.w},${-BOX.h}H${BOX.w}V${BOX.h}H${-BOX.w}Z`
-
-// Where a line from a box's centre toward (dx, dy) leaves the box.
-let rim = (dx: number, dy: number): [number, number] => {
-  let t = Math.min(
-    (BOX.w + 3) / (Math.abs(dx) || 1e-9),
-    (BOX.h + 3) / (Math.abs(dy) || 1e-9),
-  )
-  return [dx * t, dy * t]
-}
-
 let fresh = (on: boolean, i: number) =>
   on ? [' is-new', ` style="--i:${i}"`] : ['', '']
 
-let node = (d: Node, i: number) => {
-  let [cls, style] = fresh(d.fresh, i)
-  let x = -BOX.w + 9
-  let comps = d.comps.join(' ')
-  return `<g class="Diagram_Node${cls}" data-eid="${esc(d.eid)}" data-comps="${
-    esc(comps)
-  }" tabindex="0" transform="translate(${n(d.x)} ${n(d.y)})"${style}>` +
-    `<path class="Diagram_Fill" d="${BOXPATH}"/>` +
-    `<path class="Diagram_Stroke" pathLength="1" d="${BOXPATH}"/>` +
-    `<text class="Diagram_Id" x="${x}" y="${-BOX.h + 14}">${
-      esc(d.label)
-    }</text>` +
-    `<text class="Diagram_Title" x="${x}" y="4">${esc(d.title)}</text>` +
-    `<text class="Diagram_Comps" x="${x}" y="${BOX.h - 8}">${
-      esc(d.comps.join(' · '))
-    }</text></g>`
+let text = (cls: string, x: number, y: number, s: string, anchor = '') =>
+  `<text class="${cls}" x="${n(x)}" y="${n(y)}"${
+    anchor ? ` text-anchor="${anchor}"` : ''
+  }>${esc(s)}</text>`
+
+// What a shape says: a round one its id inside and its title and components
+// beneath; any other its id, title and components inside, and a task's state
+// with a mark at its top right.
+let words = (d: Node) => {
+  let comps = d.comps.join(' · ')
+  if (d.shape == 'round' || d.shape == 'hex') {
+    let r = radius(d.shape)
+    return text('Diagram_Id', 0, 4, d.label, 'middle') +
+      text('Diagram_Title', 0, r + 15, cut(d.title, 18), 'middle') +
+      text('Diagram_Comps', 0, r + 27, cut(comps, 28), 'middle')
+  }
+  let [w, h] = half(d.shape, !!d.state)
+  let room = Math.floor((2 * w - 18) / 6.6)
+  let x = -w + 9
+  return text('Diagram_Id', x, -h + 15, d.label) +
+    text('Diagram_Title', x, 4, cut(d.title, room)) +
+    text('Diagram_Comps', x, h - 8, cut(comps, Math.floor(room * 1.3))) +
+    (d.state
+      ? `<circle class="Diagram_Mark" cx="${w - 11}" cy="${
+        -h + 11
+      }" r="3.6"/>` +
+        text('Diagram_State', w - 19, -h + 14.5, d.state, 'end')
+      : '')
 }
 
-let link = (l: Link, i: number, at: Map<string, Node>, bend: number) => {
-  let a = at.get(l.from)!, b = at.get(l.to)!
-  let dx = b.x - a.x, dy = b.y - a.y
-  let [ox, oy] = rim(dx, dy), [ix, iy] = rim(-dx, -dy)
-  let x0 = a.x + ox, y0 = a.y + oy, x1 = b.x + ix, y1 = b.y + iy
-  let len = Math.hypot(x1 - x0, y1 - y0) || 1
-  let nx = -(y1 - y0) / len, ny = (x1 - x0) / len
-  let cx = (x0 + x1) / 2 + nx * bend, cy = (y0 + y1) / 2 + ny * bend
+let node = (d: Node, i: number) => {
+  let [cls, style] = fresh(d.fresh, i)
+  let path = outline(d.shape, !!d.state)
+  let state = d.state ? ` is-${esc(d.state)}` : ''
+  return `<g class="Diagram_Node Diagram_Node-${d.shape}${state}${cls}" data-key="${
+    esc(d.eid)
+  }" data-eid="${esc(d.eid)}" data-comps="${
+    esc(d.comps.join(' '))
+  }" tabindex="0" transform="translate(${n(d.x)} ${n(d.y)})"${style}>` +
+    `<path class="Diagram_Fill" d="${path}"/>` +
+    `<path class="Diagram_Stroke" pathLength="1" d="${path}"/>` +
+    words(d) + '</g>'
+}
+
+let link = (l: Link, i: number, c: Curve) => {
+  let { x0, y0, cx, cy, x1, y1 } = c
   // The curve's midpoint, where its name sits.
   let mx = .25 * x0 + .5 * cx + .25 * x1, my = .25 * y0 + .5 * cy + .25 * y1
   let [cls, style] = fresh(l.fresh, i)
   let kind = l.eid ? 'Diagram_Link-edge' : 'Diagram_Link-ref'
-  return `<g class="Diagram_Link ${kind}${cls}" data-from="${
-    esc(l.from)
-  }" data-to="${esc(l.to)}" data-name="${esc(l.name)}"${
-    l.eid ? ` data-eid="${esc(l.eid)}"` : ''
-  }${style}>` +
-    `<path class="Diagram_Line" pathLength="1" d="M${n(x0)},${n(y0)}Q${n(cx)},${
-      n(cy)
-    } ${n(x1)},${n(y1)}"/>` +
-    `<text class="Diagram_Name" x="${n(mx)}" y="${n(my - 4)}">${
-      esc(l.name)
-    }</text></g>`
+  let head = l.eid ? 'Diagram-tip' : 'Diagram-tip-ref'
+  let line = `<path class="Diagram_Line" pathLength="1" d="M${n(x0)},${n(y0)}Q${
+    n(cx)
+  },${n(cy)} ${n(x1)},${n(y1)}" marker-end="url(#${head})"/>`
+  // An edge is an entity: a diamond on its line, its relation and its id
+  // beside it, on the side away from the line's run.
+  let len = Math.hypot(x1 - x0, y1 - y0) || 1
+  let side = Math.abs(y1 - y0) / len > .5 ? Math.sign(-(y1 - y0) || 1) : 1
+  let anchor = side > 0 ? 'start' : 'end'
+  let named = l.eid
+    ? `<path class="Diagram_Dia" d="M${n(mx)},${n(my - 7)}L${n(mx + 7)},${
+      n(my)
+    }L${n(mx)},${n(my + 7)}L${n(mx - 7)},${n(my)}Z"/>` +
+      text('Diagram_Name', mx + side * 12, my - 1, l.name, anchor) +
+      (l.label
+        ? text('Diagram_Sub', mx + side * 12, my + 11, l.label, anchor)
+        : '')
+    : text('Diagram_Name', mx, my + 3, l.name, 'middle')
+  return `<g class="Diagram_Link ${kind}${cls}" data-key="${
+    esc(l.key)
+  }" data-from="${esc(l.from)}" data-to="${esc(l.to)}" data-name="${
+    esc(l.name)
+  }"${l.eid ? ` data-eid="${esc(l.eid)}"` : ''}${style}>` + line + named +
+    '</g>'
 }
+
+// Arrowheads for both kinds of line, and the pen: a tip with a halo and
+// crosshairs, hidden until a page puts it where a stroke is being drawn.
+const DEFS = '<defs>' +
+  '<marker id="Diagram-tip" viewBox="0 0 8 8" refX="7.2" refY="4" markerWidth="6.5" markerHeight="6.5" orient="auto"><path class="Diagram_Head" d="M0 0.6L8 4L0 7.4Z"/></marker>' +
+  '<marker id="Diagram-tip-ref" viewBox="0 0 8 8" refX="7.2" refY="4" markerWidth="5.5" markerHeight="5.5" orient="auto"><path class="Diagram_Head Diagram_Head-ref" d="M0 0.8L8 4L0 7.2Z"/></marker>' +
+  '</defs>'
+const PEN = '<g class="Diagram_Pen" opacity="0">' +
+  '<circle class="Diagram_Halo" r="9"/>' +
+  '<path class="Diagram_Hair" d="M-14 0H-5M5 0H14M0 -14V-5M0 5V14"/>' +
+  '<circle class="Diagram_Tip" r="2.8"/></g>'
 
 /**
  * Draw a layout as one `<svg>` element: lines under boxes, each box a group
@@ -90,26 +125,21 @@ let link = (l: Link, i: number, at: Map<string, Node>, bend: number) => {
  * ```
  */
 export let svg = (layout: Layout, opts: SvgOptions = {}): string => {
-  let at = new Map(layout.nodes.map((d) => [d.eid, d]))
-  // New strokes draw in the order they joined: boxes, then the lines to them.
+  let lines = curves(layout)
+  // New strokes draw in the order they joined: shapes, then the lines to them.
   let order = [...layout.nodes, ...layout.links].filter((x) => x.fresh)
     .sort((a, b) => a.order - b.order)
   let index = new Map<object, number>(order.map((x, i) => [x, i]))
-  let pairs = new Map<string, number>()
-  let lines = layout.links.map((l) => {
-    let pair = [l.from, l.to].sort().join('|')
-    let k = pairs.get(pair) ?? 0
-    pairs.set(pair, k + 1)
-    let bend = k == 0 ? 0 : (k % 2 ? -1 : 1) * (24 + 14 * Math.floor(k / 2)) *
-      (l.from < l.to ? 1 : -1)
-    return link(l, index.get(l) ?? 0, at, bend)
-  })
   let title = opts.title ? `<title>${esc(opts.title)}</title>` : ''
   return `<svg xmlns="http://www.w3.org/2000/svg" class="${
     esc(opts.class ?? 'Diagram')
   }" viewBox="0 0 ${n(layout.width)} ${n(layout.height)}" role="img">${title}` +
-    `<g class="Diagram_Links">${lines.join('')}</g>` +
+    DEFS +
+    `<g class="Diagram_Links">${
+      layout.links.map((l) => link(l, index.get(l) ?? 0, lines.get(l.key)!))
+        .join('')
+    }</g>` +
     `<g class="Diagram_Nodes">${
       layout.nodes.map((d) => node(d, index.get(d) ?? 0)).join('')
-    }</g></svg>`
+    }</g>${PEN}</svg>`
 }
