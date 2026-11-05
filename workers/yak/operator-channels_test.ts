@@ -2,7 +2,7 @@ import { test } from '@yaks/testing'
 import { assertEquals, assertStringIncludes } from '@std/assert'
 import { parseHTML } from 'linkedom'
 import type { Item, Model, Request } from '@yaks/model'
-import { directoryOf } from './directory.ts'
+import { type Directory, directoryOf } from './directory.ts'
 import { declared } from './directory-fixture.ts'
 import { modelPage } from './model-probe.ts'
 import { platform } from './directory-rows-probe.ts'
@@ -30,9 +30,11 @@ let operatorOf = (
   store: ReturnType<typeof Stored>,
   env: Parameters<typeof operating>[1],
   model: Model,
+  dir: Directory,
 ) =>
   operating(store, env, {
     ...operatorModel(model),
+    directory: () => dir,
     tools: attachmentTools(env),
   })
 import { TOOLS } from './tools.ts'
@@ -48,7 +50,7 @@ import type { Bundle } from '@yaks/graph'
 
 let fixture = async () => {
   let p = platform('operator-intake')
-  let dir = directoryOf(p.env.STORE)
+  let dir = p.dir
   let person = crypto.randomUUID(), eid = crypto.randomUUID()
   await dir.apply({
     entities: [
@@ -72,7 +74,7 @@ let fixture = async () => {
   let store = operatorMemory()
   let raw = store.storage
   let held = { person, role: 'owner' as const, space: eid }
-  let ctx = await operatorContext(p.env, held, space)
+  let ctx = await operatorContext(p.env, held, space, () => dir)
   let words = {
     $defs: { meeting: { properties: { title: { type: 'string' } } } },
     imports: ['blob'],
@@ -101,14 +103,17 @@ let fixture = async () => {
   let service = operatorService(
     p.env,
     held,
-    operatorModel((req) =>
-      Promise.resolve({
-        id: crypto.randomUUID(),
-        model: req.model,
-        items: [{ kind: 'assistant', text: 'Which date and time?' }],
-        cost: 0.001,
-      })
-    ),
+    {
+      directory: () => dir,
+      ...operatorModel((req) =>
+        Promise.resolve({
+          id: crypto.randomUUID(),
+          model: req.model,
+          items: [{ kind: 'assistant', text: 'Which date and time?' }],
+          cost: 0.001,
+        })
+      ),
+    },
   )
   p.env.BUILDER = service.binding
   return {
@@ -158,7 +163,7 @@ let model: Model = (req) => {
   })
 }
 let sent: string[] = []
-let operator = operatorOf(f.store, f.env, model)
+let operator = operatorOf(f.store, f.env, model, f.dir)
 handleChannels(operator, f.env, {
   chat: (_request, answer) => {
     sent.push(answer.text)
@@ -207,7 +212,7 @@ await f.store.g.apply([{
   effect: { attempts: 1, state: 'pending' },
 }], { trusted: true })
 let reopened = operatorMemory(f.raw)
-handleChannels(operatorOf(reopened, f.env, model), f.env)
+handleChannels(operatorOf(reopened, f.env, model, f.dir), f.env)
 await drain(reopened)
 let recovered = await answerOf(reopened, pending)
 
@@ -542,7 +547,7 @@ let attachmentModel: Model = (req) => {
   })
 }
 handleChannels(
-  operatorOf(attachmentStore, f.env, (req) => attachmentModel(req)),
+  operatorOf(attachmentStore, f.env, (req) => attachmentModel(req), f.dir),
   f.env,
 )
 let attachmentId = await receive(attachmentStore, {
@@ -824,7 +829,7 @@ handleChannels(
       items: [{ kind: 'assistant', text: 'Read the documents.' }],
       cost: 0,
     })
-  }),
+  }, f.dir),
   f.env,
 )
 let mediaId = await receive(media, {

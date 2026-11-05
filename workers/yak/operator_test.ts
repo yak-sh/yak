@@ -4,7 +4,7 @@ import type { Item, Model, Request } from '@yaks/model'
 import { comp } from '../../packages/graph/testing.ts'
 import { platform } from './directory-rows-probe.ts'
 import { operatorMemory, operatorModel } from './operator-testing.ts'
-import { appStore, directoryOf } from './directory.ts'
+import { appStore } from './directory.ts'
 import { stores } from './app-store-probe.ts'
 import { operating, readOperator } from './operator.ts'
 import { conversationOf, frameOf, workOf } from './operator-host.ts'
@@ -37,10 +37,10 @@ let fixture = async () => {
     valid: (revision) => Promise.resolve(copy.valid(revision)),
     publish: (...args) => Promise.resolve(copy.publish(...args)),
   }
-  let { env } = platform('operator-test', {
+  let p = platform('operator-test', {
     SERVING_COPY: { idFromName: (name) => name, get: () => rpc },
   }, { copy: rpc })
-  let dir = directoryOf(env.STORE)
+  let { env, dir } = p
   await dir.apply({
     entities: [
       { entity: { eid: owner }, person: {} },
@@ -106,8 +106,13 @@ let fixture = async () => {
     tools: withKinds({}, words, 'clerk/notices'),
   })
   let store = operatorMemory()
-  return { env, space, held, store }
+  return { env, dir, space, held, store }
 }
+let operate = (
+  store: Parameters<typeof operating>[0],
+  p: Pick<ReturnType<typeof platform>, 'env' | 'dir'>,
+  options: Parameters<typeof operating>[2],
+) => operating(store, p.env, { ...options, directory: () => p.dir })
 let f = await fixture()
 let calls = (
   name: string,
@@ -161,7 +166,7 @@ let model: Model = async (req) => {
   })
 }
 let answer = model
-let operator = operating(f.store, f.env, operatorModel((req) => answer(req)))
+let operator = operate(f.store, f, operatorModel((req) => answer(req)))
 let out = await operator.run(f.held, f.space, {
   say:
     'Post a special meeting Thursday at 7 about the road millage in notices.',
@@ -184,7 +189,7 @@ test("a piece of the Operator's work draws its task as its session ran: the word
   assertEquals(drawn.html.includes('data-pending'), false)
   assertEquals(drawn.task, out.task)
 })
-let ctx = await operatorContext(f.env, f.held, f.space)
+let ctx = await operatorContext(f.env, f.held, f.space, () => f.dir)
 let { reaching } = await import('./agent.ts')
 let { inReach } = await import('./declared.ts')
 let g = await reaching(ctx, await inReach(ctx))
@@ -245,7 +250,7 @@ test('a follow-up reopens completed work and a clarification leaves it open', ()
 
 // Model rounds and concurrent input need a scoped graph, without app storage.
 let roundsPlatform = platform('operator-rounds')
-let roundsDir = directoryOf(roundsPlatform.env.STORE)
+let roundsDir = roundsPlatform.dir
 let roundsId = await roundsDir.mint(owner, 'rounds', 'Rounds', {
   'x-yak-person': owner,
   'x-yak-role': 'owner',
@@ -253,9 +258,9 @@ let roundsId = await roundsDir.mint(owner, 'rounds', 'Rounds', {
 let roundsSpace = (await roundsDir.at(roundsId))!
 let roundsHeld = { person: owner, role: 'owner' as const, space: roundsId }
 let rounds = 0
-let pastTwelve = await operating(
+let pastTwelve = await operate(
   operatorMemory(),
-  roundsPlatform.env,
+  roundsPlatform,
   operatorModel((req) =>
     Promise.resolve({
       id: crypto.randomUUID(),
@@ -272,18 +277,19 @@ test('the space budget, rather than twelve model rounds, bounds the operator', (
   assertEquals(pastTwelve.status, 'settled')
 })
 
-let homeSpace = (await directoryOf(f.env.STORE).space('home'))!
+let homeSpace = (await f.dir.space('home'))!
 let pa = await operatorContext(
   f.env,
   f.held,
   homeSpace,
+  () => f.dir,
 )
 let paGraph = await reaching(pa, await inReach(pa))
 let paMeetings = await paGraph.read('.meeting')
 let paAsked: Request[] = []
-await operating(
+await operate(
   operatorMemory(),
-  f.env,
+  f,
   operatorModel((req) => {
     paAsked.push(req)
     return Promise.resolve({
@@ -314,9 +320,9 @@ let steered = operatorMemory()
 let steering: Request[] = []
 let given: { task: string; session: string } | undefined
 let mid: Awaited<ReturnType<typeof frameOf>> = null
-let steerer = operating(
+let steerer = operate(
   steered,
-  roundsPlatform.env,
+  roundsPlatform,
   operatorModel(async (req) => {
     steering.push(req)
     if (steering.length == 1) {
@@ -365,9 +371,9 @@ test('words given while the Operator works land in its running session, which an
 let halted = operatorMemory()
 let halting: Request[] = []
 let begun: { task: string; session: string } | undefined
-let halter = operating(
+let halter = operate(
   halted,
-  roundsPlatform.env,
+  roundsPlatform,
   operatorModel(async (req) => {
     halting.push(req)
     if (halting.length == 1) await halter.stop(begun!.task, roundsHeld.person)
@@ -404,9 +410,9 @@ test('Stop ends the run at once with one answer, and new words reopen the sessio
 
 // A reply streamed: its host is told each piece, for the page watching.
 let pieces: [string, string][] = []
-let writer = operating(
+let writer = operate(
   operatorMemory(),
-  roundsPlatform.env,
+  roundsPlatform,
   {
     ...operatorModel((req) => {
       for (let text of ['Posting ', 'it now.']) req.onText?.({ index: 0, text })

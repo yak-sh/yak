@@ -32,7 +32,13 @@ import { runs as memoryRuns } from '@yaks/memory/tools'
 import { taskDoc } from '@yaks/task/vocab'
 import { runs as taskRuns } from '@yaks/task/tools'
 import { worded } from '@yaks/tools'
-import { directory, directoryOf, type Reach, type Space } from './directory.ts'
+import {
+  type Directory,
+  directory,
+  directoryOf,
+  type Reach,
+  type Space,
+} from './directory.ts'
 import * as directoryPart from './directory.ts'
 import { copyOf } from './directory-copy.ts'
 import { narrowed } from './grants.ts'
@@ -73,6 +79,7 @@ import {
 
 type Store = ReturnType<typeof operatorStore>
 export type Options = {
+  directory?: () => Directory
   model?: Model
   name?: string
   price?: Price
@@ -92,12 +99,12 @@ export let operatorContext = async (
   env: Env,
   held: Pick<Held, 'person' | 'administrative'>,
   space: Space,
-): Promise<Ctx & { pa: boolean; beyond: Reach[] }> => {
-  let open = () =>
+  open: () => Directory = () =>
     directory(bound(env.DIRECTORY, directoryPart.fetch, env), {
       copy: copyOf(env),
       time: env.CLOCK,
-    })
+    }),
+): Promise<Ctx & { pa: boolean; beyond: Reach[] }> => {
   let { pa, beyond } = await reachOf(open(), space, held.person)
   let reopen = () =>
     narrowed(open(), space.slug, space.eid, held.administrative, beyond)
@@ -384,12 +391,17 @@ let workingOf = async ({ g }: Store, session: string) => {
   let [row] = await g.get([session])
   return comp(row, 'operator_session') as Working | undefined
 }
-let working = async (env: Env, store: Store, session: string) => {
+let working = async (
+  env: Env,
+  store: Store,
+  session: string,
+  open?: () => Directory,
+) => {
   let o = await workingOf(store, session)
   if (!o) throw new Error(`Operator session ${session} names no space`)
-  let space = await directoryOf(env.STORE).at(o.space)
+  let space = await (open?.() ?? directoryOf(env.STORE)).at(o.space)
   if (!space || space.trashed) throw refuse('missing', 'That space is gone.')
-  let ctx = await operatorContext(env, o, space)
+  let ctx = await operatorContext(env, o, space, open)
   ctx.who!.instrument = session
   return { space, ctx, files: o.files ?? [] }
 }
@@ -525,6 +537,7 @@ export let operating = (
   options: Options = {},
 ): Operator => {
   let { g, fx, vocab } = store
+  let dir = () => options.directory?.() ?? directoryOf(env.STORE)
   let name = options.name ?? env.OPERATOR_MODEL ??
     (env.ANTHROPIC_API_KEY ? SONNET : env.BUILDER_MODEL_PAID ?? GLM)
   let provider = providerOf(name)
@@ -713,7 +726,7 @@ export let operating = (
     // A conversation that could not finish reaches the tracker once, when
     // its answer is first written (M-37965).
     if (reply.fault && !kept) {
-      let slug = space ? (await directoryOf(env.STORE).at(space))?.slug : null
+      let slug = space ? (await dir().at(space))?.slug : null
       defect(Error(`Operator could not finish: ${reply.fault}`), {
         request: 'operator conversation',
         session,
@@ -755,7 +768,7 @@ export let operating = (
         let o = await workingOf(store, parent)
         if (!o) return {}
         if (!args.topic) return { operator_session: o }
-        let { ctx } = await working(env, store, parent)
+        let { ctx } = await working(env, store, parent, options.directory)
         let topic = String(args.topic)
         await oracleContext(ctx, g, topic)
         return {
@@ -764,7 +777,12 @@ export let operating = (
         }
       },
       remote: async (session) => {
-        let { space, ctx, files } = await working(env, store, session)
+        let { space, ctx, files } = await working(
+          env,
+          store,
+          session,
+          options.directory,
+        )
         let persona = await spaced(g.storage, space)
         if (persona.length) await g.apply(persona, { trusted: true })
         let tasked = !!await taskOf(store, session)
@@ -784,7 +802,12 @@ export let operating = (
       // The conversation and its work forks share a short topic map. Only a
       // session opened on a topic carries that topic's compiled context.
       instructions: async (session) => {
-        let { space, ctx } = await working(env, store, session)
+        let { space, ctx } = await working(
+          env,
+          store,
+          session,
+          options.directory,
+        )
         let [row] = await g.get([session])
         let topic = topicOf(row)
         return [
@@ -1009,7 +1032,7 @@ export let operating = (
   }
 
   // What to call a person in what the Operator shows of its work.
-  let named = (person: string) => directoryOf(env.STORE).nameAt(person)
+  let named = (person: string) => dir().nameAt(person)
 
   return { store, reads, ask, run, stop, named }
 }
