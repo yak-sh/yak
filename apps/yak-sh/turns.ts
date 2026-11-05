@@ -1,11 +1,11 @@
 // The bands' turns: each beat of a band makes one change to the tab's graph
 // through the door its block names (the browser, an agent over MCP, a
-// terminal), once, in order, after the story's steps, and what each printed
+// terminal), once, in order, after the whole story, and what each printed
 // and changed is kept for its window. A band reached runs every band above it
 // first: the reader has passed them, and what a beat names may be what an
 // earlier one made.
 import type { Yak } from './yak.ts'
-import type { Term } from './term.ts'
+import { reported, type Term } from './term.ts'
 import { subjectOf } from './figure.ts'
 import { type Beat, called } from './site.ts'
 
@@ -34,17 +34,21 @@ export let turns = (yak: Yak, term: Term) => {
     return b.kind == 'mcp' ? yak.ask(tool, args) : yak.call(tool, args)
   }
   let turn = (band: Band, i: number) =>
-    chain = chain.then(() => term.idle()).then(async () => {
-      // What the turn changed is the subject of its last write.
-      let eid: string | undefined
-      let stop = yak.listen(({ bundles, generation }) => {
-        if (!generation) eid = subjectOf(bundles) ?? eid
-      })
-      let { code, out } = await run(band.beats[i]).finally(stop)
-      await yak.settled()
-      band.done[i] = { out, fault: code != 0, eid }
-      told()
-    })
+    chain = chain.then(() => term.story()).then(() => term.idle()).then(
+      async () => {
+        // What the turn changed is the subject of its last write.
+        let eid: string | undefined
+        let stop = yak.listen(({ bundles, generation }) => {
+          if (!generation) eid = subjectOf(bundles) ?? eid
+        })
+        let beat = band.beats[i]
+        let { code, out } = await run(beat).finally(stop)
+        await yak.settled()
+        if (code) reported(beat.line, out)
+        band.done[i] = { out, fault: code != 0, eid }
+        told()
+      },
+    )
   let upto = (band: Band, n: number) => {
     while (band.ran < Math.min(n, band.beats.length)) turn(band, band.ran++)
   }
@@ -56,8 +60,11 @@ export let turns = (yak: Yak, term: Term) => {
       else bands.set(key, { beats, ran: 0, done: [] })
     },
     /** Run every beat of a band up to `n` (counting from 1) that has not
-     * run, after every beat of each band above it. */
+     * run, after every beat of each band above it. A band reached nowhere
+     * runs nothing: it is below the reader, as each band is when the page
+     * first measures it from the top. */
     reach: (key: string, n: number) => {
+      if (n < 1) return chain
       for (let [k, band] of bands) {
         if (k == key) {
           upto(band, n)

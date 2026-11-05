@@ -29,6 +29,14 @@ export const LIVE = 100
  * is drawn as soon as it is written. */
 export const BAND = 50
 
+/** A line the page itself runs (a step of the story, a band's turn) that
+ * failed: the page is broken, not the visitor's typing, so it is reported,
+ * and the tracker's page reporter yaks.app weaves in files it. */
+export let reported = (line: string, out: string[]) =>
+  globalThis.reportError(
+    new Error(`yak.sh: ${line} failed: ${out.join(' ').slice(0, 500)}`),
+  )
+
 export let term = (yak: Yak, pace: Pace = { key: 0, pause: 0 }) => {
   let lines: Line[] = []
   let history: string[] = []
@@ -42,7 +50,7 @@ export let term = (yak: Yak, pace: Pace = { key: 0, pause: 0 }) => {
   let wait = (ms: number) =>
     ms ? new Promise((ok) => setTimeout(ok, ms)) : Promise.resolve()
   let chain = Promise.resolve()
-  let queue = (work: () => Promise<void>) =>
+  let queue = (work: () => Promise<unknown>) =>
     chain = chain.then(async () => {
       busy = true
       told()
@@ -66,6 +74,7 @@ export let term = (yak: Yak, pace: Pace = { key: 0, pause: 0 }) => {
     printed(code, out)
     await yak.settled()
     told()
+    return { code, out }
   }
   let type = async (line: string) => {
     for (let i = 1; i <= line.length; i++) {
@@ -75,13 +84,15 @@ export let term = (yak: Yak, pace: Pace = { key: 0, pause: 0 }) => {
     }
     await wait(pace.pause)
     typing = ''
-    await submit(line)
+    let { code, out } = await submit(line)
+    if (code) reported(line, out)
   }
   let ask = async (c: Command) => {
     let { tool, args } = called(c.line)
     lines.push({ kind: 'agent', text: shown(c) })
     told()
     let { code, out } = await yak.ask(tool, args)
+    if (code) reported(`${tool} ${JSON.stringify(args)}`, out)
     printed(code, out)
     await yak.settled()
     told()
@@ -113,11 +124,17 @@ export let term = (yak: Yak, pace: Pace = { key: 0, pause: 0 }) => {
       if (c.kind == 'sh') return await type(c.line)
       await ask(c)
     })
+  // Settles once every step of the story has been typed, with whatever the
+  // bands had queued by then: the turns below run after it, however soon the
+  // reader is past them.
+  let whole!: () => void
+  let storied = new Promise<void>((ok) => whole = ok)
   let bands = () => {
     if (next.step >= story) {
       for (let body of waiting.splice(0)) {
         scriptOf(body).forEach((c, i) => run(c, BAND, i))
       }
+      whole()
     }
     return chain
   }
@@ -167,6 +184,8 @@ export let term = (yak: Yak, pace: Pace = { key: 0, pause: 0 }) => {
       }
       return bands()
     },
+    /** Settles once the whole story has run, and the bands queued by then. */
+    story: () => storied.then(() => chain),
     /** Settles once everything queued has run. */
     idle: () => chain,
   }

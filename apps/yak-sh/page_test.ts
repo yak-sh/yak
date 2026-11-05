@@ -129,6 +129,68 @@ test('each interface in the doors band makes its own change to the one graph, dr
   page.page.close()
 })
 
+// Where a reader can arrive: the top, or past a band's first beat, every
+// band above it passed. The page measures its bands as it mounts, before the
+// story, a band below the reader at nothing; then the reader scrolls on to
+// the bottom.
+let BANDS = SECTIONS.filter((s) =>
+  ['Doors', 'Rules', 'Memory'].includes(s.view)
+)
+let arrivals = [
+  { at: -1, n: 0 },
+  ...BANDS.flatMap((b, at) =>
+    [1, beatsOf(b.body).beats.length].map((n) => ({ at, n }))
+  ),
+]
+let STACK = SECTIONS.find((s) => s.view == 'Stack')!
+
+test('every example call in the bands succeeds wherever the reader arrives', async () => {
+  for (let { at, n } of arrivals) {
+    let { page, settle } = await open()
+    let all = (b: typeof BANDS[0]) => beatsOf(b.body).beats.length
+    if (at >= 0) page.term.once(STACK.eid, STACK.body)
+    BANDS.forEach((b, i) =>
+      page.turns.reach(b.eid, i < at ? all(b) : i == at ? n : 0)
+    )
+    page.term.reach(steps, at >= 0 ? steps.length : 0)
+    await settle()
+    page.term.reach(steps, steps.length)
+    page.term.once(STACK.eid, STACK.body)
+    for (let b of BANDS) await page.turns.reach(b.eid, all(b))
+    await settle()
+    let faults = BANDS.flatMap((b) =>
+      beatsOf(b.body).beats.flatMap((beat, i) => {
+        let d = page.turns.done(b.eid, i)
+        return d && !d.fault ? [] : [`${beat.line}: ${d?.out.join(' ')}`]
+      })
+    )
+    equal([at, n, faults], [at, n, []])
+    page.page.close()
+  }
+})
+
+test("a band's call that fails is reported, for the tracker", async () => {
+  let { page } = await open()
+  let heard: string[] = []
+  let hear = (e: Event) => {
+    e.preventDefault()
+    heard.push(String((e as ErrorEvent).error?.message))
+  }
+  globalThis.addEventListener('error', hear)
+  await page.term.reach(steps, steps.length)
+  page.turns.band('lost', [{
+    title: 'Lost',
+    prose: '',
+    kind: 'mcp',
+    line: 'task_update {"task": "T-99", "status": "done"}',
+    shows: [],
+  }])
+  await page.turns.reach('lost', 1)
+  globalThis.removeEventListener('error', hear)
+  match(heard.join(), /yak\.sh: task_update .*T-99.* failed: .*T-99/)
+  page.page.close()
+})
+
 test('in the rules band a rule makes a question a letter, an effect sends it, and a rule closes the question once answered', async () => {
   let { root, page, settle } = await open()
   await page.term.reach(steps, steps.length)
