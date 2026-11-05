@@ -1,7 +1,7 @@
 // The page drawn from its graph in a LinkeDOM document, as a tab draws it:
 // the story typed into the prompt, the drawing following the graph, and a
 // section changed from the prompt redrawn in place.
-import { equal, match, test } from '@yaks/testing'
+import { cleanup, equal, match, test } from '@yaks/testing'
 import { parseHTML } from 'linkedom'
 import { start } from './page.ts'
 import { beatsOf, scriptOf, SECTIONS, SELF, SITE } from './site.ts'
@@ -171,12 +171,12 @@ test('every example call in the bands succeeds wherever the reader arrives', asy
 
 test("a band's call that fails is reported, for the tracker", async () => {
   let { page } = await open()
+  // Heard at reportError, where the tracker's page reporter hears it: the
+  // test runner's own error listener counts every error event as uncaught.
   let heard: string[] = []
-  let hear = (e: Event) => {
-    e.preventDefault()
-    heard.push(String((e as ErrorEvent).error?.message))
-  }
-  globalThis.addEventListener('error', hear)
+  let report = globalThis.reportError
+  globalThis.reportError = (e) => heard.push(String((e as Error).message))
+  cleanup(() => globalThis.reportError = report)
   await page.term.reach(steps, steps.length)
   page.turns.band('lost', [{
     title: 'Lost',
@@ -186,7 +186,6 @@ test("a band's call that fails is reported, for the tracker", async () => {
     shows: [],
   }])
   await page.turns.reach('lost', 1)
-  globalThis.removeEventListener('error', hear)
   match(heard.join(), /yak\.sh: task_update .*T-99.* failed: .*T-99/)
   page.page.close()
 })
