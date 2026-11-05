@@ -131,11 +131,14 @@ test('a conversation opens in the chat app: its words, each step in plain words,
   )
   assertEquals(text('.Talk_Reply li'), ['Thursday at 7'])
   // A step opens on what it asked for in words; what its error said shows
-  // only inside its closed Details.
+  // only inside its closed Details, and what the model was told only in its
+  // own frame.
   let said = page.document.querySelector('[data-conversation]')!.cloneNode(
     true,
   ) as Element
-  said.querySelectorAll('.Talk_Trouble details').forEach((d) => d.remove())
+  said.querySelectorAll('.Talk_Trouble details, .Talk_Told').forEach((d) =>
+    d.remove()
+  )
   assertEquals(said.innerHTML.includes('<pre'), false)
   assertEquals(said.innerHTML.includes('&quot;'), false)
   assertEquals(text('.Talk_Trouble > p'), [
