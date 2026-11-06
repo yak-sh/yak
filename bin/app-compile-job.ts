@@ -5,6 +5,7 @@
 import { resolve } from 'node:path'
 import { write } from './compiler-packages.ts'
 import { plan } from '../packages/esbuild/plan.ts'
+import { strip } from '../packages/esbuild/strip.ts'
 
 if (import.meta.main) {
   let [root, app = 'apps/vale', output = 'compile-job.json'] = Deno.args
@@ -27,6 +28,7 @@ if (import.meta.main) {
     paths,
     main,
     flags: ['nodejs_compat'],
+    strip,
     read: async (path) => {
       try {
         return await Deno.readFile(`${dir}/${path}`)

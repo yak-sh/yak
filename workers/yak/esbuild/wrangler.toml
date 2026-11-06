@@ -1,8 +1,11 @@
 # yak-esbuild (@yaks/esbuild, D-40376): compiles an app's TypeScript and npm
 # imports at app_deploy, in a container running native esbuild (./Dockerfile,
-# @yaks/esbuild/compile). This Worker is only the door to it (index.ts): the
+# @yaks/esbuild/compile). This Worker is the door to it (index.ts): the
 # kernel's ESBUILD service binding posts an app's ask here, and the Worker
-# posts it on to the container with the platform's toolkit catalog.
+# posts it on to the container with the platform's toolkit catalog. The
+# binding also calls its `strip`, which reads TypeScript as JavaScript in the
+# Worker itself, no container woken, for the kernel's module walk and code
+# mode: sucrase is in this upload so it is not in the kernel's.
 #
 # A container rather than a Worker because a Worker's isolate has 128 MB and
 # 30 s of CPU, and esbuild as WebAssembly needed more than both for Vale

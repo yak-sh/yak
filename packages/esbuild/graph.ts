@@ -6,14 +6,14 @@
 // and index files a TypeScript import leaves off (`sources`).
 //
 // Specifiers are parsed: an import in a comment or a string names nothing.
-// sucrase strips TypeScript and JSX down to JavaScript, keeping every import
-// esbuild might keep (only `import type` and its kin go, since missing an
-// import would leave a module out, the bug a walk exists to prevent), and
-// es-module-lexer reads the imports of what is left. A file that does not
-// parse is a leaf: whatever loads it (esbuild, the runtime, the browser) says
-// why, in a better sentence than a walk could.
+// A `Strip` the walk is handed turns TypeScript and JSX into JavaScript,
+// keeping every import esbuild might keep (only `import type` and its kin go,
+// since missing an import would leave a module out, the bug a walk exists to
+// prevent), and es-module-lexer reads the imports of what is left. The runtime
+// links neither, so its walk reads JavaScript alone and needs no `Strip`. A
+// file that does not parse is a leaf: whatever loads it (esbuild, the runtime,
+// the browser) says why, in a better sentence than a walk could.
 import { parse } from 'es-module-lexer/js'
-import type { Transform } from 'sucrase'
 
 /** An app file's bytes, or null when the app has no file at that path. */
 export type Read = (path: string) => Promise<Uint8Array<ArrayBuffer> | null>
@@ -31,31 +31,13 @@ export type Reached = {
   started: [string, string][]
 }
 
-// What sucrase strips from each kind of file before it is lexed. JavaScript
-// is lexed as it is written.
-let STRIP: Record<string, Transform[]> = {
-  ts: ['typescript'],
-  mts: ['typescript'],
-  cts: ['typescript'],
-  tsx: ['typescript', 'jsx'],
-  jsx: ['jsx'],
-}
+/** TypeScript or JSX as the JavaScript it becomes, every import kept, read
+ * by what its path says it is; JavaScript as it is written. Throws a
+ * SyntaxError where the source does not parse. `./strip` is sucrase's, at
+ * once; a host may answer from elsewhere, later. */
+export type Strip = (path: string, source: string) => string | Promise<string>
 
-// sucrase loads with the first TypeScript or JSX file a walk reads, not with
-// every isolate that imports this module: in the kernel that is every request.
-let javascript = async (path: string, source: string) => {
-  let transforms = STRIP[path.slice(path.lastIndexOf('.') + 1)]
-  if (!transforms) return source
-  let { transform } = await import('sucrase')
-  return transform(source, {
-    transforms,
-    keepUnusedImports: true,
-    disableESTransforms: true,
-    production: true,
-  }).code
-}
-
-// sucrase refuses a file with a SyntaxError, es-module-lexer with an Error
+// A Strip refuses a file with a SyntaxError, es-module-lexer with an Error
 // carrying the offset (`idx`).
 let unparsed = (e: unknown) =>
   e instanceof SyntaxError || e instanceof Error && 'idx' in e
@@ -68,54 +50,69 @@ let STARTS =
 
 type Lexed = { specifiers: string[]; started: string[] }
 
+let NOTHING: Lexed = { specifiers: [], started: [] }
+
 // A module read once: what it imports, and what it starts as a worker. A
-// module that does not parse imports and starts nothing.
-let lexed = async (path: string, source: string): Promise<Lexed> => {
+// module that does not parse imports and starts nothing, and neither does
+// TypeScript or JSX read with no `Strip`, which only a compiler runs.
+let lexed = async (
+  path: string,
+  source: string,
+  strip?: Strip,
+): Promise<Lexed> => {
+  let read = typed(path) ? strip : (_: string, js: string) => js
+  if (!read) return NOTHING
   try {
-    let js = await javascript(path, source)
+    let js = await read(path, source)
     return {
       specifiers: parse(js)[0].map((i) => i.n)
         .filter((n): n is string => n != null),
       started: [...js.matchAll(STARTS)].map((m) => m[2]),
     }
   } catch (e) {
-    if (unparsed(e)) return { specifiers: [], started: [] }
+    if (unparsed(e)) return NOTHING
     throw e
   }
 }
 
 /** The specifiers a module imports, in reading order, or none when it does
- * not parse. Its path says how to read it: TypeScript, JSX or JavaScript.
+ * not parse. Its path says how to read it: TypeScript or JSX through `strip`,
+ * JavaScript as it is.
  *
  * ```ts
  * import { assertEquals } from '@std/assert'
+ * import { strip } from '@yaks/esbuild/strip'
  * assertEquals(
  *   await specifiers(
  *     'a.tsx',
  *     `// import x from 'said'\nimport type { T } from 'types'\n` +
  *       `import a from './a.js'\nexport * from "three"\n` +
  *       `let b = <b>it's</b>\nimport('./b')`,
+ *     strip,
  *   ),
  *   ['./a.js', 'three', './b'],
  * )
- * assertEquals(await specifiers('a.ts', 'let n: = 1'), [])
+ * assertEquals(await specifiers('a.ts', 'let n: = 1', strip), [])
  * ```
  */
 export let specifiers = async (
   path: string,
   source: string,
-): Promise<string[]> => (await lexed(path, source)).specifiers
+  strip: Strip,
+): Promise<string[]> => (await lexed(path, source, strip)).specifiers
 
 /** The specifiers of the scripts a module starts as Web Workers.
  *
  * ```ts
  * import { assertEquals } from '@std/assert'
+ * import { strip } from '@yaks/esbuild/strip'
  * assertEquals(
  *   await started(
  *     'main.ts',
  *     `let w: Worker = new Worker(new URL('./grow.ts', import.meta.url), ` +
  *       `{ type: 'module' })\nnew SharedWorker(new URL("../hub.js", ` +
  *       `import.meta.url))\nnew Worker('plain.js')`,
+ *     strip,
  *   ),
  *   ['./grow.ts', '../hub.js'],
  * )
@@ -124,7 +121,8 @@ export let specifiers = async (
 export let started = async (
   path: string,
   source: string,
-): Promise<string[]> => (await lexed(path, source)).started
+  strip: Strip,
+): Promise<string[]> => (await lexed(path, source, strip)).started
 
 /** Whether a specifier names a file of the app rather than a package. */
 export let relative = (spec: string): boolean =>
@@ -235,7 +233,7 @@ let loose: Find = async (read, path) => {
   return null
 }
 
-let walk = (find: Find): Walk => async (read, entry) => {
+let walk = (find: Find, strip?: Strip): Walk => async (read, entry) => {
   type Node = {
     at: string
     bytes: Uint8Array<ArrayBuffer>
@@ -248,7 +246,9 @@ let walk = (find: Find): Walk => async (read, entry) => {
     return {
       at,
       bytes,
-      lex: script(at) ? await lexed(at, new TextDecoder().decode(bytes)) : null,
+      lex: script(at)
+        ? await lexed(at, new TextDecoder().decode(bytes), strip)
+        : null,
     }
   }
   let pending = [entry]
@@ -294,9 +294,11 @@ let walk = (find: Find): Walk => async (read, entry) => {
   return { files, named, started }
 }
 
-/** What the runtime loads from `entry`: each specifier names a file exactly. */
+/** What the runtime loads from `entry`: each specifier names a file exactly,
+ * and only JavaScript is linked, so a TypeScript or JSX file is a leaf. */
 export let modules: Walk = walk(exact)
 
-/** What esbuild compiles from `entry`: an import may leave off the extension
- * or name a directory's index. */
-export let sources: Walk = walk(loose)
+/** What esbuild compiles from `entry`, reading TypeScript and JSX through
+ * `strip`: an import may leave off the extension or name a directory's
+ * index. */
+export let sources = (strip: Strip): Walk => walk(loose, strip)

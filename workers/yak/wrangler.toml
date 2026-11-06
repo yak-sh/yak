@@ -515,6 +515,8 @@ entrypoint = "Site"
 # What compiles an app's TypeScript and npm imports at app_deploy
 # (esbuild.ts, @yaks/esbuild): yak-esbuild (esbuild/), a Worker in front of a
 # container running native esbuild, so a build's memory is never the kernel's.
+# It also strips TypeScript to JavaScript for the module walk and code mode
+# (esbuild.ts `stripping`), so sucrase is in its upload rather than this one's.
 # This Worker's deploy deploys it first (wrangler.ts `siblings`). Absent under
 # `wrangler dev` and the workerd probes, where a deploy that needs compiling is
 # refused in a sentence.

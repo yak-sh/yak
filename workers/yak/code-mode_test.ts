@@ -3,6 +3,8 @@ import { connector, fresh, meta, seed } from './probe.ts'
 import { evaluate } from '../../packages/code-mode/testing.ts'
 import { catalog, declarations, execute, LIMITS } from '@yaks/code-mode'
 import { source } from '@yaks/code-mode/source'
+import { strip } from '@yaks/esbuild/strip'
+import { compiler } from './testing.ts'
 import { COOKIE, sign } from './lib/token.ts'
 import { type as typeOf } from '../../packages/code-mode/types.ts'
 import {
@@ -60,6 +62,7 @@ test('code mode compiles TS, preserves identity, records calls and validates eac
     one.run,
     one.asked,
     evaluate,
+    strip,
   )
   equal(out.error, undefined)
   match(out.value, {
@@ -74,6 +77,7 @@ test('code mode compiles TS, preserves identity, records calls and validates eac
     one.run,
     one.asked,
     evaluate,
+    strip,
   )
   match(bad.value, { isError: true })
   equal(echoed.length, 1)
@@ -87,6 +91,7 @@ test('code mode caps calls, arguments, script and combined output', async () => 
     two.run,
     two.asked,
     evaluate,
+    strip,
   )
   equal(many.calls.length, 16)
   ok(many.error?.includes('16 tool calls'))
@@ -96,11 +101,20 @@ test('code mode caps calls, arguments, script and combined output', async () => 
     two.run,
     two.asked,
     evaluate,
+    strip,
   )
   equal(huge.calls.length, 0)
   ok(huge.error?.includes('64 KiB'))
   await throws(
-    () => execute(' '.repeat(70000), two.catalog, two.run, two.asked, evaluate),
+    () =>
+      execute(
+        ' '.repeat(70000),
+        two.catalog,
+        two.run,
+        two.asked,
+        evaluate,
+        strip,
+      ),
     '64 KiB',
   )
   let large = await execute(
@@ -109,6 +123,7 @@ test('code mode caps calls, arguments, script and combined output', async () => 
     two.run,
     two.asked,
     evaluate,
+    strip,
   )
   ok(
     new TextEncoder().encode(JSON.stringify(large)).length <=
@@ -122,11 +137,19 @@ test('deadline revokes bridge; completed scripts cannot leave new calls behind',
   let time = clock()
   let bridge: Parameters<typeof evaluate>[1] | undefined
   let started = Promise.withResolvers<void>()
-  let out = execute('', three.catalog, three.run, three.asked, async (_, b) => {
-    bridge = b
-    started.resolve()
-    return await new Promise(() => {})
-  }, time)
+  let out = execute(
+    '',
+    three.catalog,
+    three.run,
+    three.asked,
+    async (_, b) => {
+      bridge = b
+      started.resolve()
+      return await new Promise(() => {})
+    },
+    strip,
+    time,
+  )
   await started.promise
   await time.advance(LIMITS.wallMs)
   ok((await out).error?.includes('30 seconds'))
@@ -137,14 +160,13 @@ test('deadline revokes bridge; completed scripts cannot leave new calls behind',
   equal((await three.g.read('.call')).length, 0)
 })
 
-test('declarations preserve exact paths and resolve nested unions without recursive expansion', () => {
+test('declarations preserve exact paths and resolve nested unions without recursive expansion', async () => {
   let names = catalog(one.catalog)
   ok(declarations(names).includes('"echo": (args: { "text": string }'))
   ok(
-    source('return tools.yaks.echo({text:"x"})', names, 1000)['script.js']
-      .includes(
-        'Object.create(null)',
-      ),
+    (await source('return tools.yaks.echo({text:"x"})', names, 1000, strip))[
+      'script.js'
+    ].includes('Object.create(null)'),
   )
   equal(
     typeOf({
@@ -155,7 +177,7 @@ test('declarations preserve exact paths and resolve nested unions without recurs
   )
 })
 
-let k = await fresh({ CODE_MODE: evaluate })
+let k = await fresh({ CODE_MODE: evaluate, ESBUILD: compiler() })
 let agent = connector(k, k.owner.cookie)
 let graphPerson = await seed(k, [{ slug: 'code-mode-person', apps: [] }])
 let graphAgent = connector(k, graphPerson.cookie)

@@ -5,7 +5,8 @@
   "exports": {
     ".": "./mod.ts",
     "./compile": "./compile.ts",
-    "./unpack": "./unpack.ts"
+    "./unpack": "./unpack.ts",
+    "./strip": "./strip.ts"
   },
   "license": "Apache-2.0",
   "description": "Compiles an app's TypeScript and npm imports: the module graph of its files, what a deploy must compile, and the compile itself with native esbuild, which yaks.app runs in a container.",

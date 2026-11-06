@@ -11,8 +11,7 @@
   "dependencies": {
     "@yaks/fp": "0.2.23",
     "@yaks/graph": "0.2.25",
-    "@yaks/tools": "0.2.24",
-    "sucrase": "3.35.1"
+    "@yaks/tools": "0.2.24"
   },
   "devDependencies": {}
 }

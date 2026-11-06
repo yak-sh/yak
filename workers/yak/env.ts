@@ -23,6 +23,7 @@ import type { Sandboxes } from '@yaks/sandbox/cloudflare'
 import type { Workspaces } from './workspaces.ts'
 import type { Inference } from '@yaks/model'
 import type { Clock } from '@yaks/fp'
+import type { Strip } from '@yaks/esbuild'
 
 // The door's own word, said again here: every part of this kernel names its
 // bindings out of env.ts, and where a request may be handed is the door's to
@@ -324,8 +325,10 @@ export type Env = {
   // unless it asks, and then every store is asked.
   LEXICON?: Lexicons
   // yak-esbuild, whose container compiles an app's TypeScript and npm imports
-  // at deploy (esbuild.ts). Absent in a test run and the workerd probes.
-  ESBUILD?: Fetcher
+  // at deploy, and which strips TypeScript to JavaScript for the module walk
+  // and code mode, so sucrase is in its upload and not this one (esbuild.ts
+  // `stripping`). Absent in a test run and the workerd probes.
+  ESBUILD?: Fetcher & { strip: Strip }
   // yak-raster, which draws an app's icon.svg as its icon.png (raster.ts).
   // Absent in a test run and the workerd probes.
   RASTER?: Fetcher

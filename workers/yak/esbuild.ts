@@ -21,7 +21,10 @@
 //
 // A compile that fails refuses the deploy with the compiler's own lines, and
 // nothing here has moved: the last release's worker and pages still serve.
-import type { Answer, Ask, Plan } from '@yaks/esbuild'
+//
+// yak-esbuild also reads TypeScript as JavaScript for this Worker (`stripping`):
+// for the walk that plans a compile, and for code mode's scripts.
+import type { Answer, Ask, Plan, Strip } from '@yaks/esbuild'
 import type { Objects } from '@yaks/blob'
 import { plan, Unplanned } from '@yaks/esbuild'
 import type { App, Space } from './directory.ts'
@@ -226,6 +229,32 @@ let asked = async (
   )
 }
 
+/** TypeScript and JSX read as JavaScript by yak-esbuild, over the binding.
+ * sucrase is in that Worker's upload rather than this one's, where every
+ * isolate compiled it at start for the few requests that strip (T-133988). A
+ * source that does not parse throws its SyntaxError, which the binding
+ * carries as it is; a compiler missing or out of reach refuses. */
+export let stripping = (env: Env): Strip => async (path, source) => {
+  if (!env.ESBUILD) {
+    throw refuse(
+      'unavailable',
+      `${path} must be compiled, and this platform has no compiler bound ` +
+        'here (ESBUILD)',
+    )
+  }
+  try {
+    return await env.ESBUILD.strip(path, source)
+  } catch (e) {
+    if (e instanceof SyntaxError) throw e
+    caught(e, { request: 'esbuild strip' })
+    throw refuse(
+      'unavailable',
+      `could not reach the compiler to read ${path}; nothing has moved, so ` +
+        'try again',
+    )
+  }
+}
+
 /** Validate the compiler's resources before writing any of its output. An
  * app-owned path, an invalid shared path or package home, or a file that is
  * not text, leaves all files untouched. */
@@ -347,6 +376,7 @@ export let compiled = async (
         main,
         flags: config.compatibility_flags,
         served,
+        strip: stripping(ctx.env),
       })
   } catch (e) {
     if (e instanceof Unplanned) throw refuse('arguments', e.message)

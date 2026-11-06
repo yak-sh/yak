@@ -1,18 +1,20 @@
-import { transform } from 'sucrase'
+import type { Strip } from './mod.ts'
 import type { Entry } from './types.ts'
 
-/** User code lives in its own module. The trusted entrypoint loads it inside
- * its catch, with no bindings and no lexical access to the bridge. */
-export let source = (
+/** User code lives in its own module, its TypeScript read as JavaScript by
+ * the host's `strip`. The trusted entrypoint loads it inside its catch, with
+ * no bindings and no lexical access to the bridge. */
+export let source = async (
   script: string,
   entries: Entry[],
   most: number,
+  strip: Strip,
   wallMs = 30_000,
-): Record<string, string> => ({
-  'user.js':
-    transform(`export default async function execute(tools) {\n${script}\n}`, {
-      transforms: ['typescript'],
-    }).code,
+): Promise<Record<string, string>> => ({
+  'user.js': await strip(
+    'user.ts',
+    `export default async function execute(tools) {\n${script}\n}`,
+  ),
   'script.js': `import { WorkerEntrypoint } from 'cloudflare:workers';
 const wait = scheduler.wait.bind(scheduler);
 const race = Promise.race.bind(Promise);

@@ -1271,9 +1271,6 @@ importers:
       '@yaks/tools':
         specifier: 0.2.24
         version: link:../tools
-      sucrase:
-        specifier: 3.35.1
-        version: 3.35.1
 
   packages/connections:
     dependencies:

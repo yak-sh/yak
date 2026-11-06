@@ -3,6 +3,7 @@ import { registry, runner } from '@yaks/tools'
 import { tool as codeMode } from '@yaks/code-mode'
 import { reaching, searching } from './agent.ts'
 import { inReach } from './declared.ts'
+import { stripping } from './esbuild.ts'
 import { ledger } from './ledger.ts'
 import { type Ctx, refuse } from './tool.ts'
 
@@ -15,12 +16,14 @@ export let coded = <T extends Options>(opts: T, ctx: Ctx) => {
     host: opts.graph,
     report: opts.report,
   })
+  let unavailable = () => {
+    throw refuse('unavailable', 'code mode is unavailable on this kernel')
+  }
   let code = codeMode(
     catalog,
     run,
-    ctx.env.CODE_MODE ?? (() => {
-      throw refuse('unavailable', 'code mode is unavailable on this kernel')
-    }),
+    ctx.env.CODE_MODE ?? unavailable,
+    ctx.env.ESBUILD ? stripping(ctx.env) : unavailable,
     ctx.env.CLOCK,
     async () => {
       let now = { ...ctx, dir: ctx.reopen?.() ?? ctx.dir }

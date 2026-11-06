@@ -1,5 +1,6 @@
 import { equal, test } from '@yaks/testing'
 import type { Ask } from '@yaks/esbuild'
+import { strip } from '@yaks/esbuild/strip'
 import { ADA, seeded } from './serving-data-probe.ts'
 import { platform } from './deploy-probe.ts'
 import { broadcast, drafted } from './page-notice.ts'
@@ -64,6 +65,7 @@ let fixture = async () => {
           errors: [],
         })
       },
+      strip,
     },
   } as Partial<Env>)
   let { dir, space } = await seeded(p.env, 'public', p.dir)

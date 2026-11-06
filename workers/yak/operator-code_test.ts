@@ -4,13 +4,17 @@ import type { Comp } from '@yaks/graph'
 import { toolEid } from '@yaks/tools'
 import { evaluate } from '../../packages/code-mode/testing.ts'
 import { platform } from './directory-probe.ts'
+import { compiler } from './testing.ts'
 import { directoryOf } from './directory.ts'
 import { operatorMemory, operatorModel } from './operator-testing.ts'
 import { operating } from './operator.ts'
 import { drain } from './operator-store.ts'
 import { handleChannels, receive, rootOf } from './operator-channels.ts'
 
-let { env } = platform('operator-code', { CODE_MODE: evaluate })
+let { env } = platform('operator-code', {
+  CODE_MODE: evaluate,
+  ESBUILD: compiler(),
+})
 let owner = crypto.randomUUID()
 let dir = directoryOf(env.STORE)
 let id = await dir.mint(owner, 'bulk-home', 'Bulk home', {

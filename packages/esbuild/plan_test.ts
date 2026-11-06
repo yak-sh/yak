@@ -2,6 +2,7 @@ import { test } from '@yaks/testing'
 import { assertEquals, assertRejects } from '@std/assert'
 import { plan, Unplanned } from './plan.ts'
 import { modules, sources } from './graph.ts'
+import { strip } from './strip.ts'
 
 let encoder = new TextEncoder()
 let bytes = (text: string) => encoder.encode(text)
@@ -13,6 +14,7 @@ let app = (files: Record<string, string>, main?: string) => ({
     Promise.resolve(path in files ? bytes(files[path]) : null),
   main,
   flags: ['nodejs_compat'],
+  strip,
 })
 
 // What a deploy of these files compiles: the worker's entry, the page
@@ -48,7 +50,7 @@ test('a module graph reads siblings together and keeps import order', async () =
     active--
     return path in files ? bytes(files[path]) : null
   }
-  let found = await sources(read, 'main.ts')
+  let found = await sources(strip)(read, 'main.ts')
   assertEquals(peak > 1, true)
   assertEquals([...found.files.keys()], [
     'main.ts',
@@ -225,6 +227,7 @@ let unresolved = [
     paths: [...encoded.keys()],
     read: (path: string) => Promise.resolve(encoded.get(path) ?? null),
     flags: ['nodejs_compat'],
+    strip,
   }
 })
 
@@ -274,22 +277,27 @@ test('a package.json that says nothing readable refuses in a sentence', async ()
   }
 })
 
-test('the runtime reads a specifier exactly, esbuild tries the extensions', async () => {
+test('the runtime reads a specifier exactly and links only JavaScript, esbuild tries the extensions', async () => {
   let files = app({
-    'worker.js': `import './lib'\nimport './dir'\nimport './w.js'`,
+    'worker.js': `import './lib'\nimport './dir'\nimport './w.js'\n` +
+      `import './t.ts'`,
     'lib.ts': '',
     'dir/index.js': '',
     'w.js': `import '../w.js'`,
+    't.ts': `import './x.js'\nlet n: number = 1`,
+    'x.js': '',
   })
-  assertEquals([...(await modules(files.read, 'worker.js')).files.keys()], [
-    'worker.js',
-    'w.js',
-  ])
-  assertEquals([...(await sources(files.read, 'worker.js')).files.keys()], [
+  let walked = async (
+    walk: typeof modules,
+  ) => [...(await walk(files.read, 'worker.js')).files.keys()]
+  assertEquals(await walked(modules), ['worker.js', 'w.js', 't.ts'])
+  assertEquals(await walked(sources(strip)), [
     'worker.js',
     'lib.ts',
     'dir/index.js',
     'w.js',
+    't.ts',
+    'x.js',
   ])
 })
 

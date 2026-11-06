@@ -6,6 +6,7 @@ export {
   assets,
   bucket,
   cards,
+  compiler,
   dataset,
   emailed,
   kv,

@@ -13,6 +13,7 @@ import {
   assertStringIncludes,
 } from '@std/assert'
 import type { Answer, Ask } from '@yaks/esbuild'
+import { strip } from '@yaks/esbuild/strip'
 import type { Catalog } from '../../packages/esbuild/platform.ts'
 import * as apps from './apps.ts'
 import { writeResources } from './esbuild.ts'
@@ -69,6 +70,7 @@ let scenario = async (
         ...out,
       })
     },
+    strip,
   }
   let p = platform('a probe secret', {
     CF_ACCOUNT: 'acct',
@@ -723,6 +725,34 @@ test('a compile too big for the compiler says so, and the last release serves', 
     fails = failure
     await assertRejects(() => s.tool('app_deploy'), Error, said)
   }
+  assertEquals((await s.served('main.ts')).body, '/* main.ts */')
+})
+
+test('the walk reads TypeScript through the compiler, and one out of reach refuses in a sentence', async () => {
+  await using s = await scenario(compiles)
+  let compiler = s.env.ESBUILD!
+  let stripped: string[] = []
+  compiler.strip = (path, source) => {
+    stripped.push(path)
+    return strip(path, source)
+  }
+  await s.write({
+    'index.html': PAGE,
+    'main.ts': "import './view.ts'\nlet n: number = 1",
+    'view.ts': 'let v: = 1',
+  })
+  await s.tool('app_deploy')
+  assertEquals(stripped.sort(), ['main.ts', 'view.ts'])
+  assertEquals(s.asks.at(-1)!.files['view.ts'], 'let v: = 1')
+  compiler.strip = () => {
+    throw new Error('Network connection lost.')
+  }
+  await s.write({ 'main.ts': 'let n: number = 2' })
+  await assertRejects(
+    () => s.tool('app_deploy'),
+    Error,
+    'could not reach the compiler to read main.ts',
+  )
   assertEquals((await s.served('main.ts')).body, '/* main.ts */')
 })
 

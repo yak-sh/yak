@@ -5,7 +5,9 @@ provider and tool name as an object path; `declarations()` generates TypeScript
 from the registry's input and output schemas. `execute()` records nested calls
 through the supplied runner with the outer call's actor, instrument and source.
 
-The host supplies an isolated evaluator. The yaks.app connector exposes
+The host supplies an isolated evaluator, and a `Strip` that reads a script's
+TypeScript as JavaScript: yaks.app strips through its compiler Worker, which
+carries sucrase so the kernel need not. The yaks.app connector exposes
 `code_mode`; omit `script` to read declarations, with `search`, `offset` and
 `limit` for discovery. A script is an async function body with `tools` in scope.
 For example, to publish your HTML in an app:

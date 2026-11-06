@@ -1,5 +1,6 @@
 /** Short, isolated code executions over a caller's scoped registry. The host
- * supplies an evaluator; this package owns discovery, limits and the bridge. */
+ * supplies an evaluator and reads a script's TypeScript as JavaScript; this
+ * package owns discovery, limits and the bridge. */
 import { argsOf, type Bundle, mint, type Tool, who } from '@yaks/graph'
 import { type Clock, system } from '@yaks/fp'
 import {
@@ -13,6 +14,7 @@ import {
   toolEid,
 } from '@yaks/tools'
 import { catalog, declarations } from './types.ts'
+import { source } from './source.ts'
 export { catalog, declarations, type Entry } from './types.ts'
 
 export let LIMITS = {
@@ -41,6 +43,9 @@ export type Evaluate = (
   bridge: { call(set: string, name: string, args: string): Promise<Result> },
   signal: AbortSignal,
 ) => Promise<string>
+/** How the host reads a module's TypeScript as JavaScript, by its path.
+ * Throws a SyntaxError where the source does not parse. */
+export type Strip = (path: string, source: string) => string | Promise<string>
 let bytes = (v: unknown) => new TextEncoder().encode(JSON.stringify(v)).length
 let message = (e: unknown) =>
   (e instanceof Error ? e.message : String(e)).slice(0, 1024)
@@ -73,6 +78,7 @@ export let execute = async (
   run: Runner,
   asked: Bundle,
   evaluate: Evaluate,
+  strip: Strip,
   clock: Clock = system,
   current: () => Promise<Runner> = () => Promise.resolve(run),
 ): Promise<Answer> => {
@@ -175,13 +181,9 @@ export let execute = async (
   })
   try {
     let text = await Promise.race([
-      import('./source.ts').then(({ source }) => {
+      source(script, entries, LIMITS.outputBytes, strip).then((modules) => {
         controller.signal.throwIfAborted()
-        return evaluate(
-          source(script, entries, LIMITS.outputBytes),
-          { call },
-          controller.signal,
-        )
+        return evaluate(modules, { call }, controller.signal)
       }),
       timeout,
     ])
@@ -212,6 +214,7 @@ export let tool = (
   registry: Registry,
   run: Runner,
   evaluate: Evaluate,
+  strip: Strip,
   clock?: Clock,
   current?: () => Promise<Runner>,
 ): Tool => ({
@@ -266,6 +269,7 @@ export let tool = (
         run,
         asked,
         evaluate,
+        strip,
         clock,
         current,
       )

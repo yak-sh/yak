@@ -14,7 +14,15 @@
 // container stops under a compile for any other reason, a new version's
 // rollout replacing it most often, the compile was sound: this answers
 // REPLACED, and the door sends the job again (./forward.ts).
+//
+// It also strips TypeScript and JSX to JavaScript for the kernel, here in the
+// Worker with no container woken: the kernel's module walk and code mode
+// call `strip` over the binding, so sucrase is in this upload and not the
+// kernel's, whose every isolate compiles all it uploads (../esbuild.ts
+// `stripping`, T-133988).
+import { WorkerEntrypoint } from 'cloudflare:workers'
 import { Container, getContainer } from '@cloudflare/containers'
+import { strip } from '@yaks/esbuild/strip'
 import { forwarded, REPLACED } from './forward.ts'
 
 // The compilers' Durable Object namespace, as getContainer takes it.
@@ -77,7 +85,15 @@ export class Compiler extends Container<Env> {
   }
 }
 
-export default {
-  fetch: async (req: Request, env: Env): Promise<Response> =>
-    await forwarded(req, (job) => getContainer(env.COMPILER).fetch(job)),
+export default class extends WorkerEntrypoint {
+  // The runtime sets this; `declare` names its type without a field.
+  declare env: Env
+
+  fetch(req: Request): Promise<Response> {
+    return forwarded(req, (job) => getContainer(this.env.COMPILER).fetch(job))
+  }
+
+  strip(path: string, source: string): string | Promise<string> {
+    return strip(path, source)
+  }
 }

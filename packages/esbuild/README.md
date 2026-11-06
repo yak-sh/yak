@@ -14,7 +14,10 @@ deciding does not:
   packages from the registry and builds each entry with native esbuild. It is
   handed every file it reads and holds no binding and no secret.
 
-And `./unpack`, the host's when it fills an npm package's home (below).
+And `./strip`, sucrase reading TypeScript and JSX as JavaScript for the walk,
+which a host whose upload cannot carry sucrase reaches elsewhere (yaks.app's
+kernel asks its compiler Worker); and `./unpack`, the host's when it fills an
+npm package's home (below).
 
 An **ask** (`Ask`) is what a compile is handed: the text of every file it reads,
 and the entries to build. An **answer** (`Answer`) is what it returns: one
@@ -22,23 +25,26 @@ module per entry, the lock, and any errors, each a line an agent can act on.
 
 ## The verbs
 
-- `plan({paths, read, main, flags})` returns `{ask, notes, inputs, reads}`, or
-  `null` when nothing needs compiling. `main` is the server source, if the app
-  has one; `flags` its compatibility flags. It throws `Unplanned` with a
-  sentence the author can act on, such as a `package.json` that is not JSON. Its
-  `inputs` name each compiled entry's source paths, so a host can reuse
-  unchanged output across deploys. `reads` names every source examined to form
-  the plan, including plain scripts and HTML. A host with an immutable file
-  manifest can reuse the plan when its paths and the digests of these files are
-  unchanged.
-- `modules(read, entry)` and `sources(read, entry)` walk the module graph from
-  one file: `modules` as the runtime links (a specifier names a file exactly),
-  `sources` as esbuild resolves (extensions, `index` files, the `.ts` twin of a
-  `.js` import). Each returns the files reached, the packages named, and each
-  Web Worker a file starts (`new Worker(new URL('./grow.ts', import.meta.url))`)
-  as that file and the specifier: an entry of its own, not walked. Both parse:
-  an import in a comment or a string names nothing, and `import type` is gone
-  with the types.
+- `plan({paths, read, main, flags, strip})` returns
+  `{ask, notes, inputs,
+  reads}`, or `null` when nothing needs compiling.
+  `main` is the server source, if the app has one; `flags` its compatibility
+  flags; `strip` how its TypeScript and JSX are read as JavaScript. It throws
+  `Unplanned` with a sentence the author can act on, such as a `package.json`
+  that is not JSON. Its `inputs` name each compiled entry's source paths, so a
+  host can reuse unchanged output across deploys. `reads` names every source
+  examined to form the plan, including plain scripts and HTML. A host with an
+  immutable file manifest can reuse the plan when its paths and the digests of
+  these files are unchanged.
+- `modules(read, entry)` and `sources(strip)(read, entry)` walk the module graph
+  from one file: `modules` as the runtime links (a specifier names a file
+  exactly, and a TypeScript or JSX file is a leaf), `sources` as esbuild
+  resolves (extensions, `index` files, the `.ts` twin of a `.js` import),
+  reading TypeScript and JSX through `strip`. Each returns the files reached,
+  the packages named, and each Web Worker a file starts
+  (`new Worker(new URL('./grow.ts', import.meta.url))`) as that file and the
+  specifier: an entry of its own, not walked. Both parse: an import in a comment
+  or a string names nothing, and `import type` is gone with the types.
 - `loaded(page, html)` is the module scripts a page loads, and `mapped(html)`
   what its import maps name.
 - `dependencies(text)` reads `package.json`'s `dependencies`.

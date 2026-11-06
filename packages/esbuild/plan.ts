@@ -22,6 +22,7 @@ import {
   resolved,
   script,
   sources,
+  type Strip,
   typed,
 } from './graph.ts'
 
@@ -42,6 +43,9 @@ export type App = {
   /** The folder its pages are served from, when not its root (a build's
    * `dist`): only HTML inside it is a page whose scripts are compiled. */
   served?: string
+  /** How its TypeScript and JSX are read as JavaScript (`./strip`), asked
+   * only of an app that has some. */
+  strip: Strip
 }
 
 /** What the compiler is handed: the text of every file a build reads, and
@@ -290,9 +294,10 @@ export let plan = async (app: App): Promise<Plan | null> => {
       if (COMPILED.test(path)) files[path] = decode(bytes)
     }
   }
+  let walk = sources(app.strip)
   let worker: Ask['worker']
   if (app.main && has.has(app.main)) {
-    let { files: reached, named: specs } = await sources(readApp, app.main)
+    let { files: reached, named: specs } = await walk(readApp, app.main)
     let packages = specs.filter((s) => packageOf(s))
     if ([...reached.keys()].some(typed) || packages.length) {
       send(reached)
@@ -323,7 +328,7 @@ export let plan = async (app: App): Promise<Plan | null> => {
   let pages: string[] = []
   for (let [entry, maps] of loads) {
     if (!has.has(entry) || !script(entry)) continue
-    let { files: reached, named: specs, started: starts } = await sources(
+    let { files: reached, named: specs, started: starts } = await walk(
       readApp,
       entry,
     )

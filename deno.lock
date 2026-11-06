@@ -3535,8 +3535,7 @@
           "dependencies": [
             "npm:@yaks/fp@0.2.23",
             "npm:@yaks/graph@0.2.25",
-            "npm:@yaks/tools@0.2.24",
-            "npm:sucrase@3.35.1"
+            "npm:@yaks/tools@0.2.24"
           ]
         }
       },

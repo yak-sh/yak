@@ -4,6 +4,7 @@ import { createHash } from 'node:crypto'
 import { memoryMultipart } from '@yaks/blob'
 import { contentType } from 'mime-types'
 import { ram } from '@yaks/ram'
+import { strip } from '@yaks/esbuild/strip'
 import { group } from '@yaks/tracker'
 import {
   options as trackerOptions,
@@ -379,6 +380,14 @@ export let limiter = (limit: number, period: number): Limiter => {
 
 /** Worker bindings independent of Store and Builder hosts. Namespaces are
  * supplied by the scenario that owns their behavior. */
+// yak-esbuild as the kernel binds it: it strips TypeScript with sucrase, as
+// the Worker in front of the container does, and answers a compile job as
+// `compile` says, by default with a compiler that cannot be reached.
+export let compiler = (
+  compile: (req: Request) => Promise<Response> = () =>
+    Promise.resolve(new Response('no compiler here', { status: 500 })),
+): NonNullable<Env['ESBUILD']> => ({ fetch: compile, strip })
+
 export let bindings = (secret: string, vars: Vars = {}) => {
   // A person's stream (stream.ts), one object per person, made on demand and
   // kept like a store: what a session was told, and the roster it holds.
