@@ -947,7 +947,7 @@ export let recounted = async (
   o: Opts = {},
 ): Promise<number> => {
   let after = Date.parse(since)
-  let copies = kept()
+  let copies = await kept()
   let wrote = 0
   for (let b of await g.read(`.${SESSION}&.${PROCESS}&*`)) {
     if (o.signal?.aborted) break

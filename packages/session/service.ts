@@ -97,6 +97,9 @@ export type Options = {
   /** how long a session keeps its full depth after it was last written, in
    * milliseconds (default 14 days) */
   full?: number
+  /** how often every transcript is listed again, in milliseconds (default
+   * {@link SCAN}) */
+  scan?: number
 }
 
 /** How long a session keeps its full depth once it stops being written. */
@@ -111,6 +114,10 @@ export type Seen = {
   retry?: Map<string, number>
   turns?: Map<string, number>
   turn?: number
+  /** every transcript, as the last listing found them */
+  listed?: { at: number; files: Found[] }
+  /** when each transcript was last seen written */
+  written?: Map<string, number>
 }
 
 /** Whether a session is a managed run: its transcript asks a provider for
@@ -221,7 +228,9 @@ let opened = async (
       'session.persona',
     ])
     if (s && await managed(g, s.entity.eid)) return null
-    let version = f.path.endsWith('.zst') ? versionOf(stat(f.path)) : undefined
+    let version = f.path.endsWith('.zst')
+      ? versionOf(await stat(f.path))
+      : undefined
     let read = version ? await transcriptOf(g, f.path) : undefined
     if (version && read?.finished == version) return null
     let stream = version ? archive(f.path, signal) : undefined
@@ -320,9 +329,9 @@ let format = (f: Found, t: Pick<Tail, 'operator'> = {}): Reader =>
     ? subagent
     : claude
 
-let stat = (path: string) => {
+let stat = async (path: string) => {
   try {
-    return fs.statSync(path)
+    return await fs.stat(path)
   } catch {
     return undefined
   }
@@ -338,6 +347,36 @@ export let SLICE = 100
 /** How long one look reads in all, in milliseconds. */
 export let BUDGET = 1000
 
+/** How often a look lists every transcript again, in milliseconds. Listing
+ * and asking after each of the thousands a box keeps is a look's dearest
+ * part, so the looks between listings ask only after the transcripts open or
+ * written in the last {@link HOT}, and the next one to read in. A new
+ * transcript, or an old one written again, is found by the next listing. */
+export let SCAN = 30_000
+
+/** How lately a transcript was written for the looks between listings to ask
+ * after it, in milliseconds. */
+export let HOT = 10 * 60_000
+
+// Every transcript, listed again once `scan` has passed since the last
+// listing; `all` says whether this look listed them.
+let listed = async (
+  dir: string,
+  codex: string | undefined,
+  seen: Seen,
+  now: number,
+  scan: number,
+): Promise<{ files: Found[]; all: boolean }> => {
+  let last = seen.listed
+  if (last && now - last.at < scan) return { files: last.files, all: false }
+  let files = [
+    ...await transcripts(dir),
+    ...codex ? await rollouts(codex) : [],
+  ]
+  seen.listed = { at: now, files }
+  return { files, all: true }
+}
+
 /**
  * One look at every transcript under `dir`: each written to in the last
  * `full` milliseconds is read on at full depth, and one older transcript not
@@ -345,7 +384,8 @@ export let BUDGET = 1000
  * first, each for a `slice` (and at least a line), until the look has read for
  * its `budget`: a long backlog is read over many looks, and what a live
  * session says next never waits behind it. A look whose `signal` aborts stops
- * between lines, and the next process reads on from there.
+ * between lines, and the next process reads on from there. Every transcript is
+ * listed again only each `scan` ({@link SCAN}).
  */
 export let look = async (
   g: Graph,
@@ -355,6 +395,7 @@ export let look = async (
     person?: Eid
     codex?: string
     full?: number
+    scan?: number
     now?: number
     signal?: AbortSignal
     slice?: number
@@ -363,6 +404,7 @@ export let look = async (
   } = {},
 ): Promise<void> => {
   let now = o.now ?? Date.now()
+  let full = o.full ?? FULL
   let start = performance.now()
   let spent = () => performance.now() - start >= (o.budget ?? BUDGET)
   type Due = { f: Found; lag?: number; at: number; prose?: boolean }
@@ -375,9 +417,20 @@ export let look = async (
   // Each transcript with lines to read: how far behind a tail on it is, or
   // when it was written where none is open yet.
   let owed: Due[] = []
-  for (let f of [...transcripts(dir), ...o.codex ? rollouts(o.codex) : []]) {
-    let st = stat(f.path)
+  let { files, all } = await listed(dir, o.codex, seen, now, o.scan ?? SCAN)
+  let written = seen.written ??= new Map()
+  for (let f of files) {
     let t = seen.tails.get(f.path)
+    if (!all) {
+      // Between listings: what is open or written lately, and the next old
+      // transcript to read in.
+      let was = written.get(f.path)
+      let hot = !!t || (was != null && now - was < HOT)
+      let next = !old && was != null && !seen.done.has(f.path)
+      if (!hot && !next) continue
+    }
+    let st = await stat(f.path)
+    if (st) written.set(f.path, st.mtime?.getTime() ?? 0)
     if (f.path.endsWith('.zst')) {
       let version = versionOf(st)
       seen.versions ??= new Map()
@@ -393,7 +446,7 @@ export let look = async (
     if ((seen.retry?.get(f.path) ?? 0) > now) continue
     let at = st?.mtime?.getTime() ?? 0
     if (!st || t === null || (t && !pending(t, st.size))) continue
-    if (now - at >= (o.full ?? FULL)) {
+    if (now - at >= full) {
       if (!seen.done.has(f.path)) old ??= { f, at, prose: true }
       continue
     }
@@ -443,7 +496,7 @@ export let look = async (
       turns.set(f.path, seen.turn = (seen.turn ?? 0) + 1)
       if (
         prose && !o.signal?.aborted &&
-        !(t && pending(t, stat(f.path)?.size ?? 0))
+        !(t && pending(t, (await stat(f.path))?.size ?? 0))
       ) {
         seen.done.add(f.path)
         seen.tails.delete(f.path)
@@ -473,7 +526,9 @@ export let look = async (
     ;(o.report ?? console.error)(error)
     return
   }
-  if (!o.signal?.aborted && !(t && pending(t, stat(f.path)?.size ?? 0))) {
+  if (
+    !o.signal?.aborted && !(t && pending(t, (await stat(f.path))?.size ?? 0))
+  ) {
     seen.done.add(f.path)
     seen.tails.delete(f.path)
   }
@@ -581,6 +636,7 @@ export let service = async (
             codex,
             ...(person ? { person: person as Eid } : {}),
             full: options.full,
+            scan: options.scan,
             signal,
           })
         }
@@ -642,15 +698,13 @@ export let recounted = async (
 ): Promise<number> => {
   let after = Date.parse(since)
   let found = [
-    ...transcripts(o.transcripts ?? claudeProjects() ?? ''),
-    ...rollouts(o.codex ?? codexSessions() ?? ''),
-  ].filter((f) =>
-    !f.path.endsWith('.zst') &&
-    (stat(f.path)?.mtime?.getTime() ?? 0) >= after
-  )
+    ...await transcripts(o.transcripts ?? claudeProjects() ?? ''),
+    ...await rollouts(o.codex ?? codexSessions() ?? ''),
+  ].filter((f) => !f.path.endsWith('.zst'))
   let wrote = 0
   for (let f of found) {
     if (o.signal?.aborted) break
+    if (((await stat(f.path))?.mtime?.getTime() ?? 0) < after) continue
     let session = (await transcriptOf(g, f.path))?.session
     if (!session) continue
     if (await managed(g, String(session))) continue
@@ -687,16 +741,16 @@ export let recounted = async (
  * ```ts
  * import { kept } from '@yaks/session/service'
  *
- * // let copy = kept().get(thread)
+ * // let copy = (await kept()).get(thread)
  * ```
  */
-export let kept = (
+export let kept = async (
   o: Options = {},
-): Map<string, { path: string; read: Reader }> =>
+): Promise<Map<string, { path: string; read: Reader }>> =>
   new Map(
     [
-      ...transcripts(o.transcripts ?? claudeProjects() ?? ''),
-      ...rollouts(o.codex ?? codexSessions() ?? ''),
+      ...await transcripts(o.transcripts ?? claudeProjects() ?? ''),
+      ...await rollouts(o.codex ?? codexSessions() ?? ''),
     ].filter((f) => !f.parent && !f.path.endsWith('.zst'))
       .map((f) => [f.id, { path: f.path, read: format(f) }]),
   )

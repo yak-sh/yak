@@ -134,6 +134,27 @@ test('a recent transcript is followed in full; an old one is read in later, its 
     ])
   }))
 
+test('between listings a look reads on what is live, and the next listing finds a new transcript', () =>
+  projects({ live: { text: lines('hi') } }, async (dir) => {
+    let g = locked(store())
+    let seen: Seen = { tails: new Map(), done: new Set() }
+    let at = (now: number) => read(g, dir, seen, { now, scan: 60_000 })
+    let now = Date.now()
+    await at(now)
+    Deno.writeTextFileSync(`${dir}/-home-me-code/later.jsonl`, lines('new'))
+    Deno.writeTextFileSync(`${dir}/-home-me-code/live.jsonl`, lines('more'), {
+      append: true,
+    })
+    await at(now + 1000)
+    let between = [await told(g, 'live'), await told(g, 'later')]
+    await at(now + 60_000)
+    assertEquals(between, [
+      ['hi', 'thought 0', 'said 0', 'more', 'thought 0', 'said 0'],
+      undefined,
+    ])
+    assertEquals(await told(g, 'later'), ['new', 'thought 0', 'said 0'])
+  }))
+
 let fairness: {
   first: (string[] | undefined)[]
   last: (string[] | undefined)[]
@@ -459,7 +480,8 @@ await projects(
     Deno.writeTextFileSync(`${dir}/-home-me-code/old.jsonl`, lines('new'), {
       append: true,
     })
-    await read(g, dir, seen)
+    // An old transcript written again is found by the next listing.
+    await read(g, dir, seen, { scan: 0 })
     speaking = await told(g, 'old')
   },
 )

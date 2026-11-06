@@ -44,21 +44,15 @@ export type Found = {
 }
 
 /** Every transcript under a Claude projects directory: the sessions', then
- * their subagents'. */
-export let transcripts = (dir: string): Found[] => {
+ * their subagents'. Listed a directory at a time, so the thread runs its
+ * timers between them: a box keeps thousands. */
+export let transcripts = async (dir: string): Promise<Found[]> => {
   let out: Found[] = []
   let agents: Found[] = []
-  let list = (d: string) => {
-    try {
-      return [...fs.readDirSync(d)]
-    } catch {
-      return []
-    }
-  }
-  for (let project of list(dir)) {
+  for (let project of await list(dir)) {
     if (!project.isDirectory) continue
     let at = `${dir}/${project.name}`
-    for (let f of list(at)) {
+    for (let f of await list(at)) {
       if (f.isFile && f.name.endsWith('.jsonl')) {
         out.push({
           id: f.name.slice(0, -'.jsonl'.length),
@@ -66,7 +60,7 @@ export let transcripts = (dir: string): Found[] => {
         })
       }
       if (!f.isDirectory) continue
-      for (let a of list(`${at}/${f.name}/subagents`)) {
+      for (let a of await list(`${at}/${f.name}/subagents`)) {
         let id = a.name.match(/^agent-(.+)\.jsonl$/)?.[1]
         if (!a.isFile || !id) continue
         let path = `${at}/${f.name}/subagents/${a.name}`
@@ -77,31 +71,38 @@ export let transcripts = (dir: string): Found[] => {
   return [...out, ...agents]
 }
 
-// Rollouts are dated YYYY/MM/DD, and the filename carries the thread UUID.
-// The same bounded look follows both providers; no second duty scans them.
-export let rollouts = (dir: string, depth = 0): Found[] => {
-  let files: fs.DirEntry[]
+// A directory's entries; none where it is missing or unreadable.
+let list = async (dir: string): Promise<fs.DirEntry[]> => {
   try {
-    files = [...fs.readDirSync(dir)]
+    return await Array.fromAsync(fs.readDir(dir))
   } catch {
     return []
   }
+}
+
+// Rollouts are dated YYYY/MM/DD, and the filename carries the thread UUID.
+// The same bounded look follows both providers; no second duty scans them.
+export let rollouts = async (dir: string, depth = 0): Promise<Found[]> => {
+  let files = await list(dir)
   let names = new Set(files.map((f) => f.name))
-  return files.flatMap((f) => {
+  let found: Found[] = []
+  for (let f of files) {
     let path = `${dir}/${f.name}`
     if (f.isDirectory && depth < 3 && /^\d+$/.test(f.name)) {
-      return rollouts(path, depth + 1)
+      found.push(...await rollouts(path, depth + 1))
+      continue
     }
     let id = f.name.match(
       /^rollout-.+-([\da-f]{8}-(?:[\da-f]{4}-){3}[\da-f]{12})\.jsonl(?:\.zst)?$/i,
     )?.[1]
-    if (!f.isFile || !id) return []
+    if (!f.isFile || !id) continue
     if (
       f.name.endsWith('.zst') &&
       names.has(f.name.slice(0, -4))
-    ) return []
-    return [{ id, path, runner: 'codex' as const }]
-  })
+    ) continue
+    found.push({ id, path, runner: 'codex' })
+  }
+  return found
 }
 
 // Only the header is needed to identify a child. Never read its whole log
