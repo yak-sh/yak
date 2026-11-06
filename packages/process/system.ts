@@ -28,9 +28,11 @@ export let pid = process.pid
 export let ppid = process.ppid
 export let cwd = (): string => process.cwd()
 export let execPath = (): string => process.execPath
-export let mainModule: string = process.argv[1]
-  ? pathToFileURL(process.argv[1]).href
-  : ''
+// Deno names a module run from a URL (`deno run jsr:…`) only as
+// `Deno.mainModule`: its `process.argv[1]` is a placeholder file.
+let deno = (globalThis as { Deno?: { mainModule: string } }).Deno
+export let mainModule: string = deno?.mainModule ??
+  (process.argv[1] ? pathToFileURL(process.argv[1]).href : '')
 export let main = (url: string): boolean => url == mainModule
 export let version = { ...process.versions }
 export let runtimeName = process.versions.deno ? 'deno' : 'node'
