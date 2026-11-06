@@ -160,7 +160,7 @@ test('removing and restoring a source extracts again; a late old completion cann
   assertEquals((await e.g.read('zoning .document_page&*')).length, 1)
   await e.g.apply([{
     entity: { eid: e.document },
-    attachment: { name: 'notes.txt', mime: 'text/plain' },
+    attachment: { name: 'photo.png', mime: 'image/png' },
   }], { trusted: true })
   await e.g.apply([
     pageBundle(e.document, e.blob, {

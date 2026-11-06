@@ -9,6 +9,7 @@ import { parseHTML } from 'linkedom'
 import type { Item, Request as Ask } from '@yaks/model'
 import { conversation } from '@yaks/anthropic'
 import { READS } from '@yaks/anthropic/reads'
+import { addressOf } from '@yaks/blob'
 import { directoryOf } from './directory.ts'
 import { platform } from './testing.ts'
 import { operatorService } from './operator-testing.ts'
@@ -61,6 +62,7 @@ let png = Uint8Array.from(
   (c) => c.charCodeAt(0),
 )
 let pdf = new TextEncoder().encode('%PDF-1.7\n1 0 obj << >> endobj\n%%EOF')
+let [pngId, pdfId] = await Promise.all([png, pdf].map(addressOf))
 let request = crypto.randomUUID()
 let form = new FormData()
 form.set('request', request)
@@ -87,8 +89,12 @@ test('a picture and a PDF sent from the page reach Claude as they are', () => {
   assertEquals(
     media.map((i) => [i.kind, i.mediaType, i.label]),
     [
-      ['image', 'image/png', 'Attached: flyer.png'],
-      ['document', 'application/pdf', 'Attached: agenda.pdf'],
+      ['image', 'image/png', `Attached: flyer.png (attachment ${pngId})`],
+      [
+        'document',
+        'application/pdf',
+        `Attached: agenda.pdf (attachment ${pdfId})`,
+      ],
     ],
   )
   assertEquals(media.map((i) => i.bytes.length), [png.length, pdf.length])
