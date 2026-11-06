@@ -264,6 +264,7 @@ let BORN = at('06:00')
 let died = async (
   sweep: { began: string; since?: string | null },
   wake: { at: string | null; every?: string } = { at: iso('05:00') },
+  deployed: number | null = null,
 ) => {
   let row: Bundle = {
     entity: { eid: 'yak-meter' },
@@ -280,6 +281,7 @@ let died = async (
     graph as never,
     BORN,
     (_job, e) => (reported.push(e.message), Promise.resolve()),
+    deployed,
   )
   return { writes, reported }
 }
@@ -298,6 +300,10 @@ test('a job its instance died in runs again at the next alarm, reported once stu
     `the run begun ${began} died unfinished`,
   ])
   assertEquals(stuck.writes[0].sweep, { began: null, since })
+  // A deploy inside the allowance starts it over: the burst killed the run.
+  let burst = await died({ began, since }, undefined, at('05:50'))
+  assertEquals(burst.reported, [])
+  assertEquals(burst.writes[0].sweep, { began: null, since })
   // A run this incarnation began is still going, and a paused job stays so.
   assertEquals((await died({ began: iso('06:01') })).writes, [])
   let paused = await died({ began }, { at: null, every: 'daily' })

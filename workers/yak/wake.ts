@@ -16,7 +16,9 @@
 // `wrangler tail` starting — so a run it kills is not a failure: the run after
 // it finishes. The failure is a job that never does, so a death is reported
 // only once no run has finished for `STUCK` since the first one of the streak
-// began (`sweep.since`), and every death after that says so again.
+// began (`sweep.since`) and since the code now running was deployed, and every
+// death after that says so again. A burst of deploys longer than `STUCK` kills
+// every run in it, and the run after the last one is what finishes.
 //
 // A run Cloudflare could not answer for now (workers_api.ts `Unavailable`:
 // its own failure, through every resend) is the same: no fault of the job's,
@@ -178,12 +180,14 @@ export let STUCK = 15 * 60_000
 /** The jobs an object died in the middle of: a run marked begun before this
  * incarnation was `born`, which only a dead one could have left. Each is
  * fired again, unless its recurrence was paused, and reported once no run has
- * finished for `STUCK`; a run this incarnation began is still going and is
- * left alone. */
+ * finished for `STUCK`, counted from the code's own `deployed` instant when
+ * that is later; a run this incarnation began is still going and is left
+ * alone. */
 export let resumed = async (
   graph: Pick<Graph, 'read' | 'apply'>,
   born: number,
   report: (job: string, error: Error) => Promise<unknown>,
+  deployed: number | null = null,
 ): Promise<void> => {
   for (let row of await graph.read('.sweep&?wake')) {
     let sweep = row.sweep as { began?: string | null; since?: string | null }
@@ -191,7 +195,7 @@ export let resumed = async (
     if (!began || Date.parse(began) >= born) continue
     let since = sweep.since ?? began
     let job = jobOf(row as Fired)
-    if (born - Date.parse(since) >= STUCK) {
+    if (born - Math.max(Date.parse(since), deployed ?? 0) >= STUCK) {
       await report(
         job,
         new Error(

@@ -2809,6 +2809,7 @@ export class Store {
             this.#clock,
             this.#born,
             (job, e) => this.#broke(`wake ${job}`, e),
+            this.#versionAt(),
           )
         }
         await this.#tick(this.#now())
@@ -2986,6 +2987,10 @@ export class Store {
   // The Worker version this object runs under, which is a platform store's
   // release (`#select`).
   #version = () => this.#bind.CF_VERSION_METADATA?.id ?? null
+  #versionAt = () => {
+    let at = Date.parse(this.#bind.CF_VERSION_METADATA?.timestamp ?? '')
+    return Number.isNaN(at) ? null : at
+  }
 
   // ---- the mover (mover.ts, D-45640) ---------------------------------------
   //
