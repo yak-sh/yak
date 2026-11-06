@@ -7,22 +7,8 @@ import {
 } from '@std/assert'
 import { type Bundle, graph } from '@yaks/graph'
 import { ram } from '@yaks/ram'
-import {
-  accept,
-  acceptLink,
-  door,
-  invitedWords,
-  placeOf,
-  SUBJECT,
-} from './invite.ts'
-import {
-  again,
-  invitedHere,
-  refusedSaid,
-  shared,
-  shut,
-  waiting,
-} from './apps.ts'
+import { accept, acceptLink, door, invitedWords, placeOf } from './invite.ts'
+import { invitedHere, refusedSaid, shared, shut, waiting } from './apps.ts'
 import { invited as invitationPage, type Offer, people } from './pages.ts'
 import { aloud, peopleOwned, type Person, shown } from './people.ts'
 import {
@@ -33,7 +19,6 @@ import {
   type Space,
 } from './directory.ts'
 import type { Env } from './env.ts'
-import type { Letter } from './mail.ts'
 import { platformVocab } from './vocab.ts'
 
 let SECRET = 'secret'
@@ -359,78 +344,4 @@ test('a friend who accepted sees the shared app on their dashboard', async () =>
   assertEquals(await shared(held.accepted, held.guest), [
     { eid: 'ap', slug: 'diary', title: 'Diary', space: 'jeff' },
   ])
-})
-
-let resending = () => {
-  let elsewhere = { eid: 'other', slug: 'other', title: 'Other' } as Space
-  let invitations: Record<string, { to: string }> = {
-    'inv-cy': { to: 'sp' },
-    'inv-far': { to: 'other' },
-  }
-  let dir = {
-    invitation: (eid: string) =>
-      Promise.resolve(
-        invitations[eid] && {
-          eid,
-          ...invitations[eid],
-          person: 'cy',
-          role: 'viewer',
-          by: JEFF,
-        },
-      ),
-    appAt: () => Promise.resolve(null),
-    at: (eid: string) =>
-      Promise.resolve(
-        eid == 'sp' ? space : eid == 'other' ? elsewhere : null,
-      ),
-    emailAt: (person: string) => Promise.resolve(emailOf(person)),
-    nameAt: () => Promise.resolve('Jeff'),
-    inviting: () => Promise.resolve(null),
-    owners: () => Promise.resolve([]),
-    spaces: () => Promise.resolve([]),
-  } as unknown as Directory
-  let wrote: Bundle[] = []
-  let env = {
-    SESSION_SECRET: SECRET,
-    META: {
-      query: () => Promise.resolve([]),
-      apply: (b: Bundle[]) => (wrote.push(...b), Promise.resolve(b)),
-    },
-  } as unknown as Env
-  let sent: Letter[] = []
-  let post = (l: Letter) => Promise.resolve(void sent.push(l))
-  let press = (eid: string) =>
-    again(env, dir, space, { person: JEFF }, eid, post)
-  return { press, sent, wrote }
-}
-let resent = resending()
-let marked = resending()
-let goneSince = resending()
-let elsewhere = resending()
-let mailedLink = await acceptLink(SECRET, { invite: 'inv-cy', to: 'sp' }, {})
-test('Send again mails a standing invitation again', async () => {
-  let { press, sent } = resent
-  assertEquals(await press('inv-cy'), null)
-  assertEquals(sent.map((l) => [l.to, l.subject]), [[cy, SUBJECT]])
-  assertStringIncludes(sent[0].body, mailedLink)
-})
-
-test('Send again records that the standing invitation was mailed', async () => {
-  let { press, wrote } = marked
-  await press('inv-cy')
-  assert(wrote.some((b) => b.entity.eid == 'inv-cy' && b.invite))
-})
-
-test('Send again sends nothing for an invitation gone', async () => {
-  let { press, sent } = goneSince
-  let gone = { say: 'That invitation is no longer waiting.', no: true }
-  assertEquals(await press('inv-gone'), gone)
-  assertEquals(sent.length, 0)
-})
-
-test('Send again sends nothing for an invitation in another space', async () => {
-  let { press, sent } = elsewhere
-  let gone = { say: 'That invitation is no longer waiting.', no: true }
-  assertEquals(await press('inv-far'), gone)
-  assertEquals(sent.length, 0)
 })

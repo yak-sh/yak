@@ -62,7 +62,6 @@ import {
 import * as dirPart from './directory.ts'
 import { ahead, bearing, granted, itsApp, ran } from './dispatch.ts'
 import { bound, type Env } from './env.ts'
-import type { Mail } from './mail.ts'
 import type { Beside } from './operator-page.ts'
 import { pageAt, pilled, standing } from './gallery.ts'
 import { billedTo, checkout, planCard, portal, wanted } from './billing.ts'
@@ -115,7 +114,7 @@ import {
   spaceIndex,
   type Visits,
 } from './pages.ts'
-import { allowed, placeOf, send } from './invite.ts'
+import { again } from './invite.ts'
 import { peopleIn } from './people.ts'
 import { CallError } from '@yaks/tools/errors'
 import { untrash, untrashSpace } from './erase.ts'
@@ -3019,44 +3018,6 @@ let closed = async (
     await untrashSpace(env, dir, space, who)
   }
   return redirect(hostUrl(env, chatPath(space.slug)), 303)
-}
-
-// Another letter for an invitation to this space or one of its apps, from the
-// owner pressing the button: nothing when it went, else what to say. An
-// invitation that is gone (accepted or withdrawn since the page was drawn)
-// or is somebody else's space's says so and sends nothing.
-export let again = async (
-  env: Env,
-  dir: ReturnType<typeof directory>,
-  space: Space,
-  who: Pick<Owner, 'person'>,
-  eid: string,
-  post?: Mail,
-): Promise<{ say: string; no: boolean } | null> => {
-  let invite = await dir.invitation(eid)
-  let place = invite && await placeOf(dir, invite.to)
-  if (!invite || place?.space.eid != space.eid) {
-    return { say: 'That invitation is no longer waiting.', no: true }
-  }
-  let email = await dir.emailAt(invite.person)
-  if (!email) return { say: 'That invitation is no longer waiting.', no: true }
-  try {
-    await allowed(env, dir, who.person)
-  } catch (e) {
-    if (e instanceof CallError) return { say: sentence(e.message), no: true }
-    throw e
-  }
-  let sent = await send(env, dir, {
-    invite: invite.eid,
-    place: place!,
-    email,
-    role: invite.role,
-    by: who.person,
-  }, post)
-  return sent ? null : {
-    say: "The letter couldn't be sent just now. Try again in a minute.",
-    no: true,
-  }
 }
 
 // A dashboard control is the tool the person's assistant would call, called

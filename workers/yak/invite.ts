@@ -31,9 +31,10 @@ import { caught } from './defects.ts'
 import type { Env } from './env.ts'
 import { type Host, spaceHost, url as hostUrl } from './host.ts'
 import { type Mail, mail } from './mail.ts'
-import { closed, invited, lost } from './pages.ts'
+import { closed, invited, lost, sentence } from './pages.ts'
 import { INVITE } from './route.ts'
 import { refuse } from './tool.ts'
+import { CallError } from '@yaks/tools/errors'
 import { tell } from './operator-updates.ts'
 
 /** Invitations one person may send in an hour. Enough to bring a whole team
@@ -233,6 +234,44 @@ export let placeOf = async (
   if (at) return at
   let space = await dir.at(to)
   return space ? { space, app: null } : null
+}
+
+// Another letter for an invitation to this space or one of its apps, from the
+// owner pressing the button: nothing when it went, else what to say. An
+// invitation that is gone (accepted or withdrawn since the page was drawn)
+// or is somebody else's space's says so and sends nothing.
+export let again = async (
+  env: Env,
+  dir: Directory,
+  space: Space,
+  who: { person: string },
+  eid: string,
+  post?: Mail,
+): Promise<{ say: string; no: boolean } | null> => {
+  let invite = await dir.invitation(eid)
+  let place = invite && await placeOf(dir, invite.to)
+  if (!invite || place?.space.eid != space.eid) {
+    return { say: 'That invitation is no longer waiting.', no: true }
+  }
+  let email = await dir.emailAt(invite.person)
+  if (!email) return { say: 'That invitation is no longer waiting.', no: true }
+  try {
+    await allowed(env, dir, who.person)
+  } catch (e) {
+    if (e instanceof CallError) return { say: sentence(e.message), no: true }
+    throw e
+  }
+  let sent = await send(env, dir, {
+    invite: invite.eid,
+    place: place!,
+    email,
+    role: invite.role,
+    by: who.person,
+  }, post)
+  return sent ? null : {
+    say: "The letter couldn't be sent just now. Try again in a minute.",
+    no: true,
+  }
 }
 
 /** Where accepting lands them: the app, or the space's own address. */
