@@ -486,9 +486,9 @@ test('an app reaches the gallery only when yaks.app says yes', async () => {
     // which answers where the picture is.
     let card = /https:\/\/yaks\.app(\/gallery\/image\/[^/"]+\/card)"/
       .exec(page)![1]
-    let shot = await k.at('yaks.app', card)
+    let carded = await k.at('yaks.app', card)
     assertEquals(
-      [shot.status, shot.headers.get('location')],
+      [carded.status, carded.headers.get('location')],
       [302, `https://${mine}.yaks.app/recipes/card.png`],
     )
     let upload = await k.at(`${mine}.yaks.app`, '/recipes/api/blob', {
