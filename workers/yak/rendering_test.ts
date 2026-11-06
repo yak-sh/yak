@@ -6,8 +6,10 @@ import {
   type Browser,
   type Browsing,
   capture,
+  CHECK,
   type Message,
   type Page,
+  RENDER,
   type Session,
 } from './browser/capture.ts'
 import { render } from './browser.ts'
@@ -210,7 +212,7 @@ test('the audit runs the script it is given in its own world', async () => {
   assertEquals((result.accessibility as Audit).engine, 'axe-core 9')
 })
 
-test('a check that stalls keeps the preview and fails at the deadline', async () => {
+test('a check that stalls keeps the preview and fails at its own deadline', async () => {
   let p = page()
   let time = clock()
   p.p.createCDPSession = () => new Promise(() => {})
@@ -221,14 +223,45 @@ test('a check that stalls keeps the preview and fails at the deadline', async ()
     undefined,
     time,
   )
-  await time.advance(15_000)
+  await time.advance(CHECK)
   let result = await running
   assertEquals(result.image, 'png-bytes')
   assertStringIncludes(
     report(result.accessibility),
-    'Browser preview timed out',
+    'Accessibility check timed out after 10 seconds',
   )
   assertEquals(time.pending(), 0)
+})
+
+test('a slow load leaves the check its own time', async () => {
+  let p = page()
+  let time = clock()
+  let after = <T>(ms: number, value: () => Promise<T>) =>
+    new Promise<T>((done) => time.after(ms, () => done(value())))
+  let { goto, createCDPSession } = p.p
+  p.p.goto = (...args) => after(RENDER - 1000, () => goto(...args))
+  p.p.createCDPSession = () => after(CHECK - 1000, createCDPSession)
+  let running = capture(p.browsing, 'https://x.invalid/', view, undefined, time)
+  await time.advance(RENDER - 1000)
+  await time.advance(CHECK - 1000)
+  let result = await running
+  assertEquals((result.accessibility as Audit).problems[0].rule, 'image-alt')
+  assertEquals(result.duration, RENDER + CHECK - 2000)
+})
+
+test('a failed check is reported with the space and app it previewed', async () => {
+  let p = page({
+    world: () => {
+      throw new RangeError('axe gave up')
+    },
+  })
+  let { reports } = await reported(() =>
+    render(bound(p.browsing), 'https://x.invalid/', view, undefined, {
+      space: 'jeff',
+      app: 'jolly-wedding',
+    })
+  )
+  assertStringIncludes(reports, 'jolly-wedding')
 })
 
 test('a failed page load still returns the screenshot and its error', async () => {

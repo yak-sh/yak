@@ -502,19 +502,21 @@ export let preview = async (ctx: Ctx, args: Args) => {
     }
   }
   let { render } = await import('./browser.ts')
-  // Fifteen seconds of the browser held on the space's budget, refused there
-  // in the directory's own transaction, and charged the time it took, failing
-  // or not (model-spend.ts `onHold`).
+  let { RENDER, CHECK } = await import('./browser/capture.ts')
+  // The most browser time a preview can take, its load's and its check's
+  // (browser/capture.ts), held on the space's budget, refused there in the
+  // directory's own transaction, and charged the time it took, failing or not
+  // (model-spend.ts `onHold`).
   let rendered = await onHold(
     ctx.env,
     space,
-    15 * RATE,
+    (RENDER + CHECK) / 1000 * RATE,
     'models',
     (spent) =>
       render(ctx.env, url, view, (duration) => {
         spent(duration / 1000 * RATE)
         return Promise.resolve()
-      }),
+      }, { space: space.slug, app: app.slug }),
   ).catch((e) => {
     throw e instanceof ModelError && e.code == 'limit'
       ? refuse('limit', e.message)

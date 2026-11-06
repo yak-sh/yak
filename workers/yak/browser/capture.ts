@@ -104,14 +104,11 @@ let open = async (
   return connect(session)
 }
 
-// One deadline bounds the whole preview, its accessibility check included.
-let deadline = (time: Clock) => {
+// A deadline for one stage of a preview, failing with what ran out of time.
+let deadline = (time: Clock, ms: number, said: string) => {
   let cancel = () => {}
   let timeout = new Promise<never>((_, reject) => {
-    cancel = time.after(
-      15_000,
-      () => reject(new Error('Browser preview timed out')),
-    )
+    cancel = time.after(ms, () => reject(new Error(said)))
   })
   timeout.catch(() => {})
   return {
@@ -120,17 +117,25 @@ let deadline = (time: Clock) => {
   }
 }
 
+// The page's load and screenshot have fifteen seconds; the accessibility
+// check then has ten of its own, so a slow load never leaves it the remainder.
+export let RENDER = 15_000
+export let CHECK = 10_000
+
 // A check that fails is its own result: the preview keeps its screenshot,
 // console and errors, and the kernel reports the failure (../browser.ts).
-let checked = async (
-  page: Page,
-  axe: Axe,
-  bounded: <T>(work: Promise<T>) => Promise<T>,
-): Promise<Checked> => {
+let checked = async (page: Page, axe: Axe, time: Clock): Promise<Checked> => {
+  let { bounded, cancel } = deadline(
+    time,
+    CHECK,
+    `Accessibility check timed out after ${CHECK / 1000} seconds`,
+  )
   try {
     return await bounded(isolated(page).then((world) => audit(world, axe)))
   } catch (e) {
     return { failed: message(e) }
+  } finally {
+    cancel()
   }
 }
 
@@ -144,7 +149,7 @@ export let capture = async (
   let start = time.now()
   let browser = await open(browsing, time)
   let duration = 0
-  let { bounded, cancel } = deadline(time)
+  let { bounded, cancel } = deadline(time, RENDER, 'Browser preview timed out')
   let result: Omit<Rendered, 'duration'>
   try {
     let loaded = await bounded((async () => {
@@ -175,11 +180,9 @@ export let capture = async (
       let image = await page.screenshot({ type: 'png', encoding: 'base64' })
       return { page, image, console, errors, status }
     })())
+    cancel()
     let { page, ...rest } = loaded
-    result = {
-      ...rest,
-      accessibility: await checked(page, browsing.axe, bounded),
-    }
+    result = { ...rest, accessibility: await checked(page, browsing.axe, time) }
   } finally {
     cancel()
     try {

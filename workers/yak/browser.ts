@@ -21,13 +21,14 @@ let answered = async (r: Response) => {
  * What yak-browser rendered of `url`, charged through `used` the browser time
  * it held, failing or not; the time this waited when it could not say. A check
  * that failed stays the preview's own result and is reported here, for the
- * tracker to hear.
+ * tracker to hear, tagged with `where` the preview was of.
  */
 export let render = async (
   env: Pick<Env, 'BROWSER' | 'CLOCK'>,
   url: string,
   view: View,
   used: (duration: number) => Promise<void> = () => Promise.resolve(),
+  where: Record<string, string> = {},
 ): Promise<Rendered> => {
   if (!env.BROWSER) {
     throw new Error('Cloudflare Browser Rendering is not configured')
@@ -51,6 +52,7 @@ export let render = async (
   if ('failed' in said.accessibility) {
     caught(new Error(said.accessibility.failed), {
       request: 'app_preview accessibility',
+      ...where,
     })
   }
   return said
