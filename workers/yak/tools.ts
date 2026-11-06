@@ -303,7 +303,7 @@ import {
   when,
   type Written,
 } from './written.ts'
-import { appTag, purge } from './purge.ts'
+import { appTag, purge, spaceTag } from './purge.ts'
 import { keepable } from './page-cache.ts'
 import { within } from './rate.ts'
 import {
@@ -1672,11 +1672,14 @@ let released = async (
   // rather than after it: Site keeps none of a fenced app's pages
   // (page-cache.ts `keep`), so the commit purges nothing of the app's
   // (facets/pages-graph.ts), and the answer waits only on this. An app whose
-  // pages Site never keeps has none to purge.
-  let purged = reviewing || !keepable(standing) ? Promise.resolve() : purge(
-    ctx.env,
-    [appTag(standing.eid)],
-  ).catch((e) =>
+  // pages Site never keeps has none to purge. Before its first release an app
+  // answered nothing, and nothing written to it was purged, so the space's
+  // 404s kept at its address go now, whoever may read it.
+  let tags = reviewing ? [] : [
+    ...keepable(standing) ? [appTag(standing.eid)] : [],
+    ...standing.version ? [] : [spaceTag(space.eid)],
+  ]
+  let purged = purge(ctx.env, tags).catch((e) =>
     caught(e, { request: 'release purge', space: space.slug, app: app.slug })
   )
   // A committed release clears the fence in its own record (versions.ts
@@ -3141,7 +3144,17 @@ let OURS: Row[] = [
       let free = ceilings(space.tier, space.slug)
       // What the space has: an app in the trash is one the person has already
       // said they are done with, so it stands against nothing (erase.ts).
-      let apps = (await ctx.dir.apps(space)).filter((a) => !a.trashed)
+      // Being first claims nothing (T-33040). Until somebody says which app
+      // is the front page, the space's bare hostname lists the apps its
+      // visitor may open; which app opens there is a choice, and arrival
+      // order is not a choice anyone made. Said in the answer, because
+      // nothing else tells a person the front page is theirs to set. Both
+      // are asked at once, as one trip.
+      let [had, front] = await Promise.all([
+        ctx.dir.apps(space),
+        ctx.dir.home(space),
+      ])
+      let apps = had.filter((a) => !a.trashed)
       if (free?.apps != null && apps.length >= free.apps) {
         throw refuse('limit', atCeiling(space, 'apps', ctx.env))
       }
@@ -3153,12 +3166,6 @@ let OURS: Row[] = [
           access: args.access == null ? 'public' : access(args.access),
         }),
       ]
-      // Being first claims nothing (T-33040). Until somebody says which app
-      // is the front page, the space's bare hostname lists the apps its
-      // visitor may open; which app opens there is a choice, and arrival
-      // order is not a choice anyone made. Said in the answer, because
-      // nothing else tells a person the front page is theirs to set.
-      let front = await ctx.dir.home(space)
       let applied = await ctx.dir.apply({ entities }, vouched(who))
       let eid = applied.find((row) => row.app)?.entity.eid
       if (!eid) throw new Error('app creation returned no identity')
@@ -3174,6 +3181,15 @@ let OURS: Row[] = [
         who = current.who
         app = current.app!
       }
+      // Its store is made now, behind the answer (T-143070). A new object
+      // and its first schema took most of a second, and the person's first
+      // write or deploy waited on them.
+      background(
+        appStore(ctx.env.STORE, space, app, ctx.env)('/graph').then(
+          (r) => r.body?.cancel(),
+          (e) => caught(e, { tool: 'app_new', space: space.slug, app: s }),
+        ),
+      )
       if (!apps.length) step(ctx.env, 'first_app')
       // No link to hand on yet (T-135905): its address serves nothing until
       // a version is released, so the text says not to give it, and

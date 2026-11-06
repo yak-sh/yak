@@ -119,11 +119,15 @@ test('a kept page answers a revalidation with a 304, and counts a HEAD as a view
   assertEquals(g.views.points.length, 1)
 })
 
-// A write, and the rows it leaves (the app `a` of space `s`, and the space).
+// A write, and the rows it leaves (the released app `a` of space `s`, and the
+// space).
 let owes = (b: Bundle) =>
   owed([b], () =>
     Promise.resolve([
-      { entity: { eid: 'a' }, app: { slug: 'cookbook', space: 's' } },
+      {
+        entity: { eid: 'a' },
+        app: { slug: 'cookbook', space: 's', version: 1 },
+      },
       { entity: { eid: 's' }, space: { slug: 'ada', store: 'ada' } },
     ].filter((row) => row.entity.eid == b.entity.eid)))
 

@@ -16,9 +16,17 @@
 // after it, and while the fence is up Site keeps none of them (page-cache.ts
 // `keep`). So the commit that lowers the fence owes its app nothing, and
 // app_deploy answers once that first purge has.
+//
+// So is an app before its first release (T-143070). It answers nothing at its
+// address, so what Site kept there (the space's 404, or that nothing) still
+// stands, and no write to it owes a purge: its birth answers without waiting
+// on one. Its first release purges its space as it raises its fence, which
+// takes those pages out before it serves anything. A file it published is
+// shown, so an app with one, or a write to what it publishes, owes as any
+// other does.
 import type { Bundle, Hook, Plugin, Tx } from '@yaks/graph'
 import type { Options } from './store.ts'
-import { APP_PARTS, idOf, SPACE_PARTS } from '../directory.ts'
+import { APP_PARTS, idOf, publishingOf, SPACE_PARTS } from '../directory.ts'
 import { appTag, purge, SITE_TAG, spaceTag } from '../purge.ts'
 
 // What a row is made of (directory.ts) is what its pages can show, except
@@ -49,6 +57,11 @@ let sets = (comp: unknown, props: string[]) =>
 // refusal, which shows nothing.
 let lowers = (b: Bundle) =>
   sets(b.app, ['fence']) && (b.app as { fence: unknown }).fence == null
+// Whether a patch leaves an app that shows nothing: never released, and
+// publishing no file.
+let unshown = (b: Bundle, row: Bundle) =>
+  !(row.app as { version?: number | null }).version && !('publishing' in b) &&
+  !publishingOf(row.publishing as { paths?: string | null }).length
 // Whether a patch writes something a page could show.
 let shows = (b: Bundle) =>
   SHOWN.some((part) =>
@@ -65,7 +78,10 @@ let shows = (b: Bundle) =>
  * import { owed } from './pages-graph.ts'
  * import { assertEquals } from '@std/assert'
  * let rows = async (eids: string[]) =>
- *   eids.map((eid) => ({ entity: { eid }, app: { slug: 'a', space: 's' } }))
+ *   eids.map((eid) => ({
+ *     entity: { eid },
+ *     app: { slug: 'a', space: 's', version: 1 },
+ *   }))
  * assertEquals(
  *   await owed([{ entity: { eid: 'x' }, app: { source: 'r2' } }], rows),
  *   ['app:x'],
@@ -92,6 +108,19 @@ let shows = (b: Bundle) =>
  *   await owed([{ entity: { eid: 'x' }, app: { version: 2, fence: null } }], rows),
  *   [],
  * )
+ * // An app born, or anything else before its first release: it shows nothing.
+ * let unreleased = async (eids: string[]) =>
+ *   eids.map((eid) => ({
+ *     entity: { eid },
+ *     app: { slug: 'b', space: 's', version: 0 },
+ *   }))
+ * let born = { entity: { eid: 'y' }, app: { slug: 'b', space: 's', version: 0 } }
+ * assertEquals(await owed([born], unreleased), [])
+ * // Until it publishes a file there.
+ * assertEquals(
+ *   await owed([{ entity: { eid: 'y' }, publishing: { paths: '["p"]' } }], unreleased),
+ *   ['app:y'],
+ * )
  * ```
  */
 export let owed = async (
@@ -114,6 +143,7 @@ export let owed = async (
     let row = now.get(b.entity.eid)
     if (row?.app) {
       if (row.published || 'published' in b) tags.add(SITE_TAG)
+      if (unshown(b, row)) continue
       let app = row.app as { space: string | { eid: string } }
       if (has(b, ROUTING) || sets(b.app, ['slug', 'space'])) {
         tags.add(spaceTag(idOf(app.space)))
