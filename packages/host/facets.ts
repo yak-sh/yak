@@ -8,7 +8,7 @@ import type { Runs } from '@yaks/graph/tools'
 import type { Contributions } from '@yaks/ui/contributions'
 import type { Keywords, Vocab, VocabDoc } from '@yaks/vocab'
 import type { Embedding, Feed, Host } from './mod.ts'
-import type { Sender, Texter } from './senders.ts'
+import type { Arrival, Notices, Sender, Texter } from './senders.ts'
 import type { Options } from './config.ts'
 /** `<plugin>/vocab` — what the plugin declares, and nothing that could not
  * run in a browser tab: a page importing this must never reach SQL, a database
@@ -61,6 +61,12 @@ export type GraphFacet = {
   texters?: (host: Host, options: Options) => Record<string, Texter>
   /** The embedders this plugin lends, by name ({@link Host.embedders}). */
   embedders?: (host: Host, options: Options) => Record<string, Embedding>
+  /** The readers of a provider's signed notices about the letters it
+   * carried, by name, for a host that routes them itself (./lending.ts). */
+  notices?: (host: Host, options: Options) => Record<string, Notices>
+  /** The readers of a letter a runtime handed its host, by name, for a host
+   * that receives one itself (./lending.ts). */
+  arrivals?: (host: Host, options: Options) => Record<string, Arrival>
   /** who a request is from, or none where these options name nobody to ask */
   authenticate?: (host: Host, options: Options) => Authenticate | undefined
   /** the commits other hosts make to this store (@yaks/journal's feed) */

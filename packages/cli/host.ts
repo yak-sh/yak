@@ -88,8 +88,8 @@ import { faults } from '@yaks/api/refuse'
 import { artifactsAt, type Backend, backend } from '@yaks/blob/backend'
 import { blobSchema, sqliteBlobs } from '@yaks/blob/sqlite'
 import type { Blobs } from '@yaks/blob'
-import { type Config, dbOf, given, type Options, used } from './config.ts'
-import { chosen, type Configured, facetsOf, meet } from '@yaks/host/config'
+import { type Config, dbOf, given, used } from './config.ts'
+import { configured, facetsOf, meet, type Reveal } from '@yaks/host/config'
 import { facet } from './words.ts'
 import {
   assembly,
@@ -282,15 +282,6 @@ let moding = (): ComposeOpts['mode'] => {
 
 export { dbOf } from './config.ts'
 
-// The name in `{"secret": "NAME"}`, when the object holds nothing else.
-let secretIn = (value: unknown): string | undefined => {
-  let said = value as Record<string, unknown> | null
-  return said && typeof said == 'object' && typeof said.secret == 'string' &&
-      Object.keys(said).length == 1
-    ? said.secret
-    : undefined
-}
-
 // `{"secret": "NAME"}` anywhere in a plugin's options reads that secret at the
 // moment the value is accessed (@yaks/secrets `peek`): the local vault value,
 // or else the environment variable of that name. It is the one thing a config
@@ -300,25 +291,8 @@ let secretIn = (value: unknown): string | undefined => {
 // from this box's vault; no config read starts a 1Password process. A secret
 // nobody has provided reads as undefined, so the plugin reports in its own
 // words what it is waiting for.
-let revealing = (value: unknown, vault: Local): unknown => {
-  let name = secretIn(value)
-  // A whole options object written `{"secret": …}` has no parent object to
-  // define a getter on, so it is read here, once.
-  if (name) return peek(vault, name, { env: process.env.get })
-  if (!value || typeof value != 'object') return value
-  let out = (Array.isArray(value) ? [] : {}) as Record<string, unknown>
-  for (let [k, v] of Object.entries(value)) {
-    let said = secretIn(v)
-    if (said) {
-      Object.defineProperty(out, k, {
-        get: () => peek(vault, said, { env: process.env.get }),
-        enumerable: true,
-        configurable: true,
-      })
-    } else out[k] = revealing(v, vault)
-  }
-  return out
-}
+let revealing = (vault?: Local): Reveal =>
+  vault ? { secret: (name) => peek(vault, name, { env: process.env.get }) } : {}
 
 /**
  * Who a host writes as when no request named a caller: this PROCESS, acting
@@ -336,16 +310,6 @@ let revealing = (value: unknown, vault: Local): unknown => {
  */
 export let writer = (vocab: Vocab): Actor | null =>
   vocab.comp(PROCESS) ? { by: selfEid(), via: selfEid() } : null
-
-// Each plugin a config names, with its options, a secret among them read when
-// accessed.
-let named = (config: Config, vault?: Local): Configured[] =>
-  (config.plugins ?? []).map((plug) => [
-    used(plug),
-    (vault ? revealing(given(plug), vault) : given(plug)) as Options,
-    chosen(plug),
-    facetsOf(plug),
-  ])
 
 /**
  * Open the graph a config names, for the roles this process serves: import
@@ -488,7 +452,7 @@ let composed = async (
     let secretDeclarations = (config.plugins ?? []).flatMap((p) =>
       secretNames(given(p)).map((name) => ({ name, package: used(p) }))
     )
-    let plugins = named(config, vault)
+    let plugins = configured(config, revealing(vault))
     let declared = load === facet ? await declarations(config) : undefined
     let stored = new Map(
       declared?.vocabs.filter((v) => v.value !== null).map((

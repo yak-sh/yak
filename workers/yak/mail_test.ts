@@ -25,7 +25,7 @@ import { FROM, mail, mailable, REPLY_TO, sending } from './mail.ts'
 import { Store } from './graph.ts'
 import { KERNEL, metaOf } from './meta.ts'
 import { monthOf } from './meter.ts'
-import { mailedTo, mailFrom, posting } from './post.ts'
+import { mailedTo, mailFrom, outgoing } from './post.ts'
 
 test('an app writes from a local part at the apex', () => {
   assertEquals(mailFrom('ada', 'cookbook'), 'ada.cookbook@yaks.app')
@@ -145,15 +145,14 @@ test('a platform letter that never left is tried again, a few times', async () =
 // A deploy can send when it has the local adapter, or a token and an account;
 // the account may be the Worker's own (CF_ACCOUNT), so the token is the one
 // secret a deploy must set. Staging with only the Connect secret cannot.
-test('mailable: the token is the one secret a deploy needs', () => {
-  assertEquals(mailable({}), false)
-  assertEquals(mailable({ MAIL_DEV: '1' }), true)
-  assertEquals(mailable({ MAIL_TOKEN: 't' }), false)
-  assertEquals(mailable({ MAIL_TOKEN: 't', CF_ACCOUNT: 'acct' }), true)
-  assertEquals(mailable({ MAIL_TOKEN: 't', MAIL_ACCOUNT: 'm' }), true)
+test('mailable: the token is the one secret a deploy needs', async () => {
+  assertEquals(await mailable({}), false)
+  assertEquals(await mailable({ MAIL_DEV: '1' }), true)
+  assertEquals(await mailable({ MAIL_TOKEN: 't' }), false)
+  assertEquals(await mailable({ MAIL_TOKEN: 't', CF_ACCOUNT: 'acct' }), true)
 })
 
-test('mail: the Worker account carries the send when MAIL_ACCOUNT is unset', async () => {
+test('mail: the Worker account carries the send', async () => {
   let urls: string[] = []
   let real = globalThis.fetch
   globalThis.fetch = ((url: string) => {
@@ -562,7 +561,7 @@ test('past the month allowance a send bounces naming the ceiling', async () => {
 })
 
 test('no binding, no letter: the sender that refuses says why', async () => {
-  let refused = await posting().send({
+  let refused = await outgoing({}).send({
     from: 'ada@yaks.app',
     to: 'ana@example.com',
     subject: 'x',
@@ -586,10 +585,10 @@ test('platform mail uses the selected Resend sender without the Cloudflare accou
     },
   }
   assertEquals(
-    mailable({ MAIL_VIA: 'resend', RESEND_TOKEN: 'app-only' }),
+    await mailable({ MAIL_VIA: 'resend', RESEND_TOKEN: 'app-only' }),
     false,
   )
-  assert(mailable(env))
+  assert(await mailable(env))
   await mail(env)({
     to: ['jeff@example.com', 'other@example.com'],
     subject: 's',
@@ -600,7 +599,7 @@ test('platform mail uses the selected Resend sender without the Cloudflare accou
   assertEquals(sent[0].to, ['jeff@example.com', 'other@example.com'])
   assertEquals(sent[0].reply_to, REPLY_TO)
   assertEquals(
-    mailable({ MAIL_VIA: 'resend', MAIL_TOKEN: 'cf', CF_ACCOUNT: 'cf' }),
+    await mailable({ MAIL_VIA: 'resend', MAIL_TOKEN: 'cf', CF_ACCOUNT: 'cf' }),
     false,
   )
 })

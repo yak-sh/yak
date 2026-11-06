@@ -30,6 +30,9 @@ the webhook Resend posts delivery receipts to (`./routes`, default
 `POST /mail/resend`), verifies the endpoint's signature, and fills
 `mail.message_id` on the letter it names. A receipt counts only where it carries
 every one of the sender's `tags`, so several hosts can share one Resend account.
+A host that routes receipts itself, such as a Worker, asks the graph facet for
+the notices named `resend` instead: they verify a request with the same
+`receipts.secret` and answer the receipt and the letter's tags.
 
 ```json
 {

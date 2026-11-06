@@ -4,9 +4,10 @@ import { CallError } from '@yaks/tools/errors'
 /** The options a config passes to one plugin, given to each of that plugin's
  * exported factories as the second argument, after the host. A value written
  * `{"secret": "NAME"}` is that secret's value, read every time it is accessed
- * (host.ts `revealing`), so a config names a secret without holding one — and
+ * ({@link revealed}), so a config names a secret without holding one — and
  * a factory that re-reads its options picks up a secret written after the host
- * started. */
+ * started. A runtime that holds bindings lends one written `{"binding":
+ * "NAME"}` the same way. */
 export type Options = Record<string, unknown>
 
 /** A plugin a config names: a bare specifier, or one with options and chosen words. */
@@ -103,6 +104,87 @@ export let chosen = (plug: Plug): string[] | undefined =>
 /** The facets selected for this host, or all when omitted. */
 export let facetsOf = (plug: Plug): FacetName[] | undefined =>
   typeof plug == 'string' ? undefined : plug.facets
+
+/** How a host reads what a config names without holding: each kind of
+ * reference (`secret`, `binding`) it can read, by the name written in it. */
+export type Reveal = Partial<
+  Record<'secret' | 'binding', (name: string) => unknown>
+>
+
+// Only data is looked into: an instance a host passed in keeps its prototype.
+let plain = (value: unknown): value is object =>
+  !!value && typeof value == 'object' &&
+  [Object.prototype, Array.prototype, null].includes(
+    Object.getPrototypeOf(value),
+  )
+
+// The kind and name of a reference, `{"secret": "NAME"}`, when the object
+// holds nothing else and the host reads that kind.
+let reference = (value: unknown, reveal: Reveal) => {
+  if (!plain(value) || Array.isArray(value)) return
+  let [entry, ...rest] = Object.entries(value)
+  if (!entry || rest.length || typeof entry[1] != 'string') return
+  let read = reveal[entry[0] as keyof Reveal]
+  if (read) return () => read(entry[1] as string)
+}
+
+/**
+ * Options with each reference in them read by `reveal` at the moment it is
+ * accessed, so a value that arrives after the host started is read the next
+ * time. A reference whose kind the host does not read stays as written.
+ *
+ * ```ts
+ * import { revealed } from '@yaks/host/config'
+ * import { equal } from '@yaks/testing'
+ *
+ * let env: Record<string, unknown> = { TOKEN: 't' }
+ * let options = revealed(
+ *   { token: { secret: 'TOKEN' }, mail: { binding: 'MAIL' }, base: 'x' },
+ *   { secret: (name) => env[name] },
+ * ) as Record<string, unknown>
+ * equal(options, { token: 't', mail: { binding: 'MAIL' }, base: 'x' })
+ * env.TOKEN = 'u'
+ * equal(options.token, 'u')
+ * ```
+ */
+export let revealed = (value: unknown, reveal: Reveal): unknown => {
+  // A whole value written as a reference has no parent object to define a
+  // getter on, so it is read here, once.
+  let read = reference(value, reveal)
+  if (read) return read()
+  if (!plain(value)) return value
+  let out = (Array.isArray(value) ? [] : {}) as Record<string, unknown>
+  for (let [k, v] of Object.entries(value)) {
+    let later = reference(v, reveal)
+    if (later) {
+      Object.defineProperty(out, k, {
+        get: later,
+        enumerable: true,
+        configurable: true,
+      })
+    } else out[k] = revealed(v, reveal)
+  }
+  return out
+}
+
+/** A {@link Reveal} that reads every kind from one record by name: a Worker's
+ * env, which holds its secrets and its bindings alike. */
+export let holding = (held: object): Reveal => {
+  let read = (name: string) => (held as Record<string, unknown>)[name]
+  return { secret: read, binding: read }
+}
+
+/** Each plugin a config names, with its options, each reference among them
+ * read by `reveal` when accessed. */
+export let configured = (config: Config, reveal: Reveal = {}): Configured[] =>
+  (config.plugins ?? []).map((plug) => [
+    used(plug),
+    (Object.keys(reveal).length
+      ? revealed(given(plug), reveal)
+      : given(plug)) as Options,
+    chosen(plug),
+    facetsOf(plug),
+  ])
 
 /**
  * Refuse a store whose data requires a plugin this config does not compose:

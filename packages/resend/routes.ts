@@ -23,9 +23,6 @@ export let routes = (
     path: receipts.path ?? '/mail/resend',
     handle: async (request) => {
       try {
-        if (!receipts.secret) {
-          throw new Error('Resend webhook secret is not configured')
-        }
         let arrived = await notification(request, receipts.secret)
         let ours = Object.entries(options.tags ?? {}).every(([key, value]) =>
           arrived.tags?.[key] == value

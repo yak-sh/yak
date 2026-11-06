@@ -16,19 +16,17 @@ import { gather } from '@yaks/ui/contributions'
 import type { Authenticate, Filter, Handler, Route } from '@yaks/api'
 import type { Host, Role } from './mod.ts'
 import {
-  chosen,
   type Config,
   type Configured,
-  facetsOf,
-  given,
+  configured,
   type Options,
-  used,
 } from './config.ts'
 import type { Duty, FacetName, Load, Meaning } from './facets.ts'
 import { type Composition, compositionAnatomy } from './anatomy.ts'
 import { common, ROLES } from './roles.ts'
 import { type Taken, taking, type Words, wordsOf } from './words.ts'
 import { selected } from './documents.ts'
+import { lending } from './lending.ts'
 
 /** The parts built from facets, rather than lent by a concrete host. */
 type Built =
@@ -142,33 +140,6 @@ let doorman = (
     : () => self
 }
 
-// What the host lends by name and what the plugins lend beside it, one party
-// per name: a letter or a vector made through a name two parties answer to
-// would depend on order.
-let lending = <K extends 'senders' | 'texters' | 'embedders'>(
-  graphs: Taken<'graph'>,
-  host: Host,
-  kind: K,
-  lent: Host[K],
-): Host[K] => {
-  let what = kind.slice(0, -1)
-  let by = new Map(Object.keys(lent ?? {}).map((name) => [name, 'the host']))
-  let all: Record<string, unknown> = { ...lent }
-  for (let [r, options, plugin] of graphs) {
-    for (let [name, one] of Object.entries(r[kind]?.(host, options) ?? {})) {
-      if (by.has(name)) {
-        throw new CallError(
-          'config',
-          `the ${what} ${name} is lent by both ${by.get(name)} and ${plugin}`,
-        )
-      }
-      by.set(name, plugin)
-      all[name] = one
-    }
-  }
-  return by.size ? all as Host[K] : lent
-}
-
 // A plugin's `./effects` handling a name no vocabulary declares: code that
 // would never run, since nothing owes it.
 let undeclared = (plugin: string, name: string) =>
@@ -204,9 +175,6 @@ export type Prepared = {
   service: Taken<'service'>
   factories: { graph: typeof graph; runner: typeof runner }
 }
-
-let configured = (config: Config): Configured[] =>
-  (config.plugins ?? []).map((p) => [used(p), given(p), chosen(p), facetsOf(p)])
 
 /** Import only the facets a host serves; binding the result performs no imports. */
 export let prepare = async (

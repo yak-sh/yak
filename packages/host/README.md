@@ -26,9 +26,10 @@ equal(stopped(), true)
 | `@yaks/host`                                  | `assembly`, facet contracts, `Host`, `Config`, `Configured`, `Options`, `Plug`, `Role`, `Feed`, `MigrationMonitor`, `Message`, `Receipt`, `Sender`, `ROLES`, `every` |
 | `@yaks/host/assembly`                         | `assembly`, `prepare`, `assemble`, `Prepared`, `Assembly`, `AssemblyOpts`, `Binding`, `Meaning`                                                                      |
 | `@yaks/host/roles`                            | Role and facet selection data without loading the assembly runtime                                                                                                   |
-| `@yaks/host/senders`                          | `Message`, `Receipt`, `Sender`, `Built`, `afresh`, `Unsent`                                                                                                          |
+| `@yaks/host/senders`                          | `Message`, `Receipt`, `Sender`, `Built`, `afresh`, `Unsent`, `Notice`, `Notices`, `Unsigned`, `Arrival`, `Incoming`                                                  |
+| `@yaks/host/lending`                          | `lending`, `Lends`: what plugins lend a host by name                                                                                                                 |
 | `@yaks/host/words`                            | Vocabulary assembly, `wordsOf`, `taking`, `Words`, `Declared`, `Taken`                                                                                               |
-| `@yaks/host/config`                           | Configuration types, `used`, `given`, `chosen`, `meet`, `Unmet`                                                                                                      |
+| `@yaks/host/config`                           | Configuration types, `used`, `given`, `chosen`, `configured`, `revealed`, `holding`, `Reveal`, `meet`, `Unmet`                                                       |
 | `@yaks/host/documents`, `@yaks/host/keywords` | Shared intrinsic declarations and vocabulary keywords                                                                                                                |
 | `@yaks/host/anatomy`                          | Composition evidence, projected when read                                                                                                                            |
 
@@ -193,6 +194,20 @@ let receipt = await sender!.send({
 equal(receipt, { id: 'letter-1' })
 equal(sent.map((message) => message.subject), ['Friday'])
 ```
+
+## Hosts that route mail themselves
+
+A host that composes no graph, such as a Worker, names its mail providers in a
+config too, and asks their graph facets with `lending` (`@yaks/host/lending`)
+for what each lends by name: `senders`, the `notices` readers of a provider's
+signed word about a letter it carried (a `Notice`: the receipt, and the tags the
+letter was sent with, which say whose it was), and the `arrivals` that read a
+letter the runtime handed the host, in the runtime's own shape, as an
+`Incoming`. A request its provider did not sign rejects as `Unsigned`. The host
+reads each option a config writes as a reference through
+`configured(config,
+reveal)`: `{"secret": NAME}` and `{"binding": NAME}`, read
+when accessed; `holding(env)` reads both from a Worker's env.
 
 ## Embedders
 

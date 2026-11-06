@@ -319,7 +319,6 @@ import { storedTools } from './package-tools.ts'
 import type { Env } from './env.ts'
 import { conditionalWakes } from './conditional-wakes.ts'
 import { resumed } from './wake.ts'
-import type { Binding } from './post.ts'
 import { ledger } from './ledger.ts'
 import {
   doorOf,
@@ -569,7 +568,6 @@ export type Stored = {
  * stores receive no platform bindings, even if an app declares matching tags.
  * A stand-in may supply only the bindings its operations need. */
 export type Bindings = Partial<Env> & {
-  MAIL?: Binding
   STORE?: Namespace
 }
 

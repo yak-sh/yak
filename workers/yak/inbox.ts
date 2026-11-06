@@ -36,12 +36,12 @@ import { copyOf } from './directory-copy.ts'
 //   which is the receiving MTA's DKIM verdict. An unsigned letter is recorded
 //   with `verified: false`, never dropped.
 //
-//   The MIME is parsed by A parser. postal-mime turns the raw RFC 5322 stream
-//   into a subject, a body and attachments; @yaks/mail composes the bundles
-//   around what it read and asks the graph nothing. An html-only letter is
+//   The MIME is parsed by A parser: the arrival the mail provider config.ts
+//   names lends (`ARRIVAL`) turns the raw RFC 5322 stream into a subject, a
+//   body and attachments; @yaks/mail composes the bundles around what it
+//   read and asks the graph nothing. An html-only letter is
 //   read as its own text (`plain` below), so a body is words in every case and
 //   markup in none.
-import { received as read } from '@yaks/cloudflare-mail/receive'
 import type { Incoming } from '@yaks/host/senders'
 import { link } from '@yaks/edge'
 import type { Bundle } from '@yaks/graph'
@@ -62,6 +62,8 @@ import { signupAddress, url } from './host.ts'
 import { KERNEL, metaOf } from './meta.ts'
 import { mailedTo, mailFrom } from './post.ts'
 import { counted } from './meter.ts'
+import { ARRIVAL } from './config.ts'
+import { lent } from './lent.ts'
 
 /** A letter refused at the door: the sender is told, and nothing is written. */
 export class Refused extends Error {}
@@ -134,14 +136,19 @@ export let plain = (html: string) =>
     .replace(/\n{3,}/g, '\n\n')
     .trim()
 
-// The letter as postal-mime reads it, read once: its raw stream can be read
-// only once, and a letter may be asked for its sender's name before it is
-// handed on whole.
+// The letter as its provider's arrival reads it, read once: its raw stream
+// can be read only once, and a letter may be asked for its sender's name
+// before it is handed on whole.
 let parsings = new WeakMap<Inbound, Promise<Incoming>>()
-let parsed = (m: Inbound) => {
-  let mail = parsings.get(m) ?? read(m)
+let parsed = (m: Inbound, env: Env) => {
+  let mail = parsings.get(m) ?? reading(m, env)
   parsings.set(m, mail)
   return mail
+}
+let reading = async (m: Inbound, env: Env) => {
+  let read = (await lent(env, 'arrivals'))[ARRIVAL]
+  if (!read) throw new Error(`no arrival called ${ARRIVAL} reads a letter`)
+  return read(m)
 }
 
 /** The words the letter carried: its plain text, else its html read as text. */
@@ -208,7 +215,7 @@ export let arrived = async (m: Inbound, env: Env): Promise<string> => {
   let requested = await signingUp(m, env) ?? await operatorMail(m, env)
   if (requested) return requested
   let { space, app } = await opened(env, m.to)
-  let mail = await parsed(m)
+  let mail = await parsed(m, env)
   let head = mail.headers
   let signed = verdict(head)
   let eid = crypto.randomUUID()
@@ -261,7 +268,7 @@ let signingUp = async (m: Inbound, env: Env): Promise<string | null> => {
     )
   }
   let { joined } = await import('./identity.ts')
-  let mail = await parsed(m)
+  let mail = await parsed(m, env)
   let { person, space } = await joined(
     env,
     from,
@@ -365,7 +372,7 @@ let asked = async (
   extra: { address?: string; thread?: string[]; signup?: boolean } = {},
 ): Promise<string> => {
   let { keepFile, requestId } = await import('./operator-channels.ts')
-  let mail = await parsed(m)
+  let mail = await parsed(m, env)
   let head = mail.headers
   let files = []
   for (let a of mail.attachments) {

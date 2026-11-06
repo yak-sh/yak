@@ -5,6 +5,7 @@ import { esc } from './html.ts'
 import { type Sender, Unsent } from '@yaks/mail'
 import { FROM } from './mail-config.ts'
 import { type Delivery, sink, transport } from './post.ts'
+import { posts } from './config.ts'
 import { type Host, replyTo } from './host.ts'
 export { FROM, REPLY_TO } from './mail-config.ts'
 
@@ -54,15 +55,12 @@ async (l) => {
 
 type Posting = Delivery & Pick<Env, 'MAIL_DEV' | 'APEX' | 'LOCAL_DEV'>
 
-export let mailable = (env: Posting) =>
-  env.MAIL_DEV == '1' ||
-  (env.MAIL_VIA == 'binding'
-    ? !!env.MAIL
-    : !!transport(env, 'cloudflare').sender)
+export let mailable = async (env: Posting) =>
+  env.MAIL_DEV == '1' || !!(await transport(env, posts.platform)).sender
 
 export let mail = (env: Posting): Mail => {
-  let send: Mail = env.MAIL_DEV == '1' ? printed() : (letter) => {
-    let { sender, waiting } = transport(env, 'cloudflare')
+  let send: Mail = env.MAIL_DEV == '1' ? printed() : async (letter) => {
+    let { sender, waiting } = await transport(env, posts.platform)
     if (!sender) throw new Error(`mail is not configured: ${waiting}`)
     return sending(sender, env)(letter)
   }

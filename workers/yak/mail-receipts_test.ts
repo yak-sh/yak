@@ -47,8 +47,14 @@ test('an app receipt fills the recorded letter without sending another letter', 
       tags: { yak_letter: id, ...mailTags('receipts/home') },
     },
   }
-  equal((await receipts(await webhook(arrived, secret), env)).status, 200)
-  equal((await receipts(await webhook(arrived, secret), env)).status, 200)
+  equal(
+    (await receipts(await webhook(arrived, secret), env, 'resend')).status,
+    200,
+  )
+  equal(
+    (await receipts(await webhook(arrived, secret), env, 'resend')).status,
+    200,
+  )
   equal((row.mail as Comp).message_id, 'thread@example.com')
   equal(writes, 1)
   equal(names.every((n) => n == 'receipts/home'), true)

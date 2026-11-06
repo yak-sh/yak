@@ -1,4 +1,5 @@
 import { test } from '@yaks/testing'
+import type { Binding } from '@yaks/cloudflare-mail'
 import { assertEquals, assertStringIncludes } from '@std/assert'
 import type { Item, Request } from '@yaks/model'
 import { platform } from './directory-rows-probe.ts'
@@ -36,14 +37,14 @@ await dir.apply({
 let space = (await dir.at(eid))!
 let held = { person, role: 'owner' as const, space: eid }
 
-type Letter = Parameters<NonNullable<typeof env.MAIL>['send']>[0]
+type Letter = Parameters<Binding['send']>[0]
 let letters: Letter[] = []
 env.MAIL = {
   send: (letter) => {
     letters.push(letter)
     return Promise.resolve({ messageId: `sent-${letters.length}` })
   },
-}
+} satisfies Binding
 
 let asked: Request[] = []
 let reply = (text: string): Item[] => [{ kind: 'assistant', text }]

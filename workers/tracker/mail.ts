@@ -1,34 +1,44 @@
 // An ordinary wake enables mail from its first activation onward. The stored
 // date survives eviction; a trace wake never asks for this setup.
 import type { Bundle, Comp, Graph } from '@yaks/graph'
-import { post } from '@yaks/mail'
-import { type Binding, bound } from '@yaks/cloudflare-mail/binding'
-import { configured as resend } from '@yaks/resend/sender'
+import { configured, holding, type Options } from '@yaks/host/config'
+import { lending, type Lends } from '@yaks/host/lending'
+import { post as select } from '@yaks/mail'
 import { platform } from './core.ts'
+import { facets, post } from './config.ts'
 
 export type Mailbox = {
-  MAIL?: Binding
+  MAIL?: object
   MAIL_VIA?: string
   RESEND_WEBHOOK_SECRET?: string
   RESEND_TOKEN?: string
   RESEND_API?: string
-  MAIL_FETCH?: import('@yaks/cloudflare-mail').Fetch
+  MAIL_FETCH?: (url: string, init: RequestInit) => Promise<Response>
   MAIL_FROM?: string
   MAIL_TO?: string
 }
 
-export let sender = (env: Mailbox, scope = platform) => {
-  let via = env.MAIL_VIA ?? 'binding'
-  return (via == 'resend'
-    ? resend({
-      tags: { yak_tracker: scope },
-      token: env.RESEND_TOKEN,
-      base: env.RESEND_API,
-      fetch: env.MAIL_FETCH,
-    })
-    : post({ via }, { senders: env.MAIL ? { binding: bound(env.MAIL) } : {} }))
-    .sender
-}
+/** What the providers config.ts names lend of one kind, by name, their
+ * options read from `env` with `add` beside them. */
+export let lent = <K extends keyof Lends>(
+  env: Mailbox,
+  kind: K,
+  add: Options = {},
+): Readonly<Record<string, Lends[K]>> =>
+  lending(
+    configured(post, holding(env)).map(([plugin, options]) =>
+      [facets[plugin], { ...options, ...add }, plugin] as const
+    ),
+    {},
+    kind,
+  ) ?? {}
+
+/** The sender MAIL_VIA selects, else the binding, its letters tagged with
+ * the tracker scope a provider's notice about them is routed back to. */
+export let sender = (env: Mailbox, scope = platform) =>
+  select({ via: env.MAIL_VIA ?? post.via }, {
+    senders: lent(env, 'senders', { tags: { yak_tracker: scope } }),
+  }).sender
 
 let enabled = (env: Mailbox) => !!(sender(env) && env.MAIL_FROM && env.MAIL_TO)
 

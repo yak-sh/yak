@@ -15,7 +15,11 @@ binding's rate-limit error. Both senders return RFC Message-IDs for threading.
 Listed in a config, the package lends its host the sender named `cloudflare`
 (`./graph`), which `@yaks/mail` selects with `sender: {"via": "cloudflare"}`.
 Its options are `account` and `token`, and `base` and `fetch`; the sender reads
-them at every letter, and until both are set a letter waits.
+them at every letter, and until both are set a letter waits. A Worker lends it
+what its runtime holds: options naming an Email Sending `binding` lend a second
+sender, `binding`, that sends through it (a letter bounces where the deploy
+holds none), and the arrival named `cloudflare` reads a letter Email Routing
+handed the Worker's `email()` as an `Incoming`.
 
 ```json
 {

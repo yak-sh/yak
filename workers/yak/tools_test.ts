@@ -43,7 +43,8 @@ import * as dirPart from './directory.ts'
 import { inApp } from './tool.ts'
 import { accept } from './invite.ts'
 import { narrowed } from './grants.ts'
-import { type Address, posting } from './post.ts'
+import type { Address, Binding } from '@yaks/cloudflare-mail'
+import { outgoing } from './post.ts'
 import { letters } from './letters.ts'
 import { invokePackage } from './package-tools.ts'
 import { type Graph, graph } from '@yaks/graph'
@@ -102,7 +103,7 @@ test('staging tool URLs and app mail use the same configured host', async () => 
         delivered.push({ to: letter.to, from: letter.from })
         return Promise.resolve({ messageId: 'sent' })
       },
-    },
+    } satisfies Binding,
   })
   stores(env, undefined, {
     declaration: {},
@@ -117,7 +118,7 @@ test('staging tool URLs and app mail use the same configured host', async () => 
           fx,
           mailbox({
             domain: env.APEX,
-            sender: posting(env.MAIL, env),
+            sender: outgoing(env),
             effects: fx,
           }),
         ],

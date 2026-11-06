@@ -287,6 +287,53 @@ export let configs = {
   git: gitConfig,
 }
 
+/** The mail providers the kernel Worker itself lends to its layers: letters
+ * it sends (post.ts), the notices a provider posts about them
+ * (mail-receipts.ts) and the letters that arrive (inbox.ts). An option names
+ * the Worker's env it is read from when accessed: `{"secret": NAME}` a secret
+ * or var, `{"binding": NAME}` a binding the Worker holds. */
+export type Post = Config & {
+  /** the sender these letters take where the deploy's MAIL_VIA names none */
+  via: string
+}
+
+// The same providers carry both kinds of letter, each kind on its own Resend
+// key: Resend restricts a key to one sending domain.
+let mailing = (token: string): Plug[] => [
+  {
+    use: '@yaks/cloudflare-mail',
+    facets: ['graph'],
+    with: {
+      // The Worker's own account sends its mail.
+      account: { secret: 'CF_ACCOUNT' },
+      token: { secret: 'MAIL_TOKEN' },
+      base: { secret: 'MAIL_API' },
+      fetch: { binding: 'MAIL_FETCH' },
+      binding: { binding: 'MAIL' },
+    },
+  },
+  {
+    use: '@yaks/resend',
+    facets: ['graph'],
+    with: {
+      token: { secret: token },
+      base: { secret: 'RESEND_API' },
+      fetch: { binding: 'MAIL_FETCH' },
+      receipts: { secret: { secret: 'RESEND_WEBHOOK_SECRET' } },
+    },
+  },
+]
+
+export let posts: Record<'platform' | 'apps', Post> = {
+  // The platform's own letters, sign-in codes and notices, from bot.yak.sh.
+  platform: { via: 'cloudflare', plugins: mailing('RESEND_PLATFORM_TOKEN') },
+  // What apps and Operators send, from yaks.app.
+  apps: { via: 'binding', plugins: mailing('RESEND_TOKEN') },
+}
+
+/** The arrival that reads a letter Email Routing hands `email()` (inbox.ts). */
+export let ARRIVAL = 'cloudflare'
+
 /** Worker domains export the same store facets as packages, at local paths. */
 export let domains = {
   'yak/app': {

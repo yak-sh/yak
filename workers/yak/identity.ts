@@ -1129,7 +1129,7 @@ let ours = async (req: Request, env: Env): Promise<Response> => {
     // can receive and breaking on the send. Asked before `mint`, so the
     // address spends none of its hour's letters (signin.ts sends) on it; and
     // the same card for every address, which is all this door ever tells.
-    if (!text && !mailable(env)) {
+    if (!text && !(await mailable(env))) {
       return signCard(env, { q, back, why: NO_MAIL, status: 503 })
     }
     // Each wait a named stage on the answer's `Server-Timing` (timing.ts):

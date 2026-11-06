@@ -1,8 +1,8 @@
 // Resend's signed events and receiving API. Provider ids remain in this file;
 // callers receive a neutral letter, or a correlation id and RFC Message-ID.
-import type { Incoming } from '@yaks/host/senders'
+import { type Incoming, type Notice, Unsigned } from '@yaks/host/senders'
 
-export class Unsigned extends Error {}
+export { Unsigned }
 
 export type Event = {
   type: string
@@ -150,13 +150,13 @@ export let received = async (
   }))
 }
 
-/** A signed provider event at the neutral receipt boundary. */
+/** A signed provider event at the neutral receipt boundary, verified with
+ * the endpoint's signing secret. */
 export let notification = async (
   request: Request,
-  secret: string,
-): Promise<
-  { tags?: Record<string, string>; receipt?: { letter: string; id: string } }
-> => {
+  secret: string | undefined,
+): Promise<Notice> => {
+  if (!secret) throw new Error('Resend webhook secret is not configured')
   let arrived = await event(request, secret)
   let found = receipt(arrived)
   if (

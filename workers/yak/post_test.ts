@@ -2,7 +2,8 @@ import { equal, test, throws } from '@yaks/testing'
 import { assertEquals } from '@std/assert'
 import type { Env } from './env.ts'
 import { mail } from './mail.ts'
-import { type Binding, outgoing, posting } from './post.ts'
+import type { Binding } from '@yaks/cloudflare-mail'
+import { outgoing } from './post.ts'
 
 test('the app mail transport sinks recipients and keeps threading intact', async () => {
   let sent: Parameters<Binding['send']>[0][] = []
@@ -13,7 +14,7 @@ test('the app mail transport sinks recipients and keeps threading intact', async
     },
   }
   for (let MAIL_SINK of [undefined, 'owner@example.com']) {
-    let receipt = await posting(binding, { MAIL_SINK }).send({
+    let receipt = await outgoing({ MAIL: binding, MAIL_SINK }).send({
       from: 'ada.recipes@yaks.fyi',
       to: 'reader@example.com',
       subject: 'Your recipe',
@@ -48,7 +49,7 @@ test('platform letters sink every recipient, including feedback copies', async (
         APEX: 'yaks.fyi',
         MAIL_SINK,
         MAIL_TOKEN: 'test',
-        MAIL_ACCOUNT: 'test',
+        CF_ACCOUNT: 'test',
         MAIL_API: 'https://mail.example',
       } as Env
       for (
@@ -88,7 +89,10 @@ test('a rate-limited app letter is unsent, any other refusal is not', async () =
     html: '<p>The recipe</p>',
   }
   let named = (code: string) =>
-    posting(refusing(code)).send(letter).then(() => '', (e: Error) => e.name)
+    outgoing({ MAIL: refusing(code) }).send(letter).then(
+      () => '',
+      (e: Error) => e.name,
+    )
   assertEquals(await named('E_RATE_LIMIT_EXCEEDED'), 'Unsent')
   assertEquals(await named('E_DELIVERY_FAILED'), 'Error')
 })
@@ -114,7 +118,7 @@ test('the host Resend capability sends app and Operator mail through the staging
       send: () => {
         throw new Error('Cloudflare must not send')
       },
-    },
+    } satisfies Binding,
     MAIL_FETCH: (_url, init) => {
       requests.push(JSON.parse(String(init.body)))
       return Promise.resolve(Response.json({ id: 'provider-id' }))
@@ -139,7 +143,7 @@ test('an unconfigured selected sender never falls back to the host binding', asy
       send: () => {
         throw new Error('Cloudflare must not send')
       },
-    },
+    } satisfies Binding,
   })
   await throws(() => sender.send(message), 'a resend sender needs `token`')
 })

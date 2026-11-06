@@ -1,4 +1,5 @@
 import { cleanup, test } from '@yaks/testing'
+import type { Binding } from '@yaks/cloudflare-mail'
 import { assertEquals, assertStringIncludes } from '@std/assert'
 import type { Item, Request } from '@yaks/model'
 import { platform } from './directory-rows-probe.ts'
@@ -18,14 +19,14 @@ import type { Env, Inbound } from './env.ts'
 let { env } = platform('signup')
 let dir = directoryOf(env.STORE)
 
-type Letter = Parameters<NonNullable<typeof env.MAIL>['send']>[0]
+type Letter = Parameters<Binding['send']>[0]
 let letters: Letter[] = []
 env.MAIL = {
   send: (letter) => {
     letters.push(letter)
     return Promise.resolve({ messageId: `sent-${letters.length}` })
   },
-}
+} satisfies Binding
 
 // The space's Operator is made by the letter, so its object starts with the
 // first request it is sent, as the Builder object does.

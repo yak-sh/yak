@@ -13,7 +13,6 @@ import type { ServingCopies } from './directory-copy.ts'
 // handler, and none keeps state another reads.
 import type { Bucket, Multipart } from '@yaks/blob'
 import type { D1Like } from '@yaks/d1'
-import type { Binding } from './post.ts'
 import type { Dispatch, Fetcher, Namespace } from './door.ts'
 import type { Meta } from './meta.ts'
 import type { Purgers, Purges } from './purge.ts'
@@ -107,34 +106,34 @@ export type Env = {
   // `wrangler secret put` and no deploy of new code.
   CIMD?: string
   // The mail seam (mail.ts). MAIL_DEV=1 files a letter in the meta store
-  // instead of sending it — local runs only. The other three are Cloudflare
-  // Email Sending: the API token (a secret, the one thing a deploy must set
-  // to send), the account (falls back to CF_ACCOUNT), and a base URL a probe
-  // aims somewhere else. Unset token: `mailable` says no and the sign-in door
-  // answers 503 in one sentence.
+  // instead of sending it — local runs only. Unset credentials for the
+  // selected sender: `mailable` says no and the sign-in door answers 503 in
+  // one sentence.
   MAIL_DEV?: string
   // Staging keeps every outbound letter in the owner's inbox.
   MAIL_SINK?: string
   // Provider selection changes only after the configured addresses pass pilots.
   MAIL_VIA?: string
+  // What the mail providers config.ts names (`posts`) read, each by its name
+  // there: Resend's two sending keys, its webhook's signing secret and API
+  // root, and Cloudflare Email Sending's token and API root (its account is
+  // CF_ACCOUNT). A probe
+  // aims an API root somewhere else, and calls through MAIL_FETCH.
   RESEND_WEBHOOK_SECRET?: string
   RESEND_TOKEN?: string
   RESEND_PLATFORM_TOKEN?: string
   RESEND_API?: string
-  MAIL_FETCH?: import('@yaks/cloudflare-mail').Fetch
+  MAIL_FETCH?: (url: string, init: RequestInit) => Promise<Response>
   MAIL_TOKEN?: string
-  MAIL_ACCOUNT?: string
   MAIL_API?: string
-  // The same product, reached the other way: Email Sending as a binding
-  // rather than the REST API (wrangler.toml `[[send_email]]`, T-33684). No
-  // token rides with it — the deploy is the authorization — so it is what an
-  // app's own address sends on (post.ts, T-33686): the Store is handed this
-  // whole env and reads this one binding out of it. Absent under `wrangler
-  // dev` without `remote = true` and in the workerd probes, where a letter
-  // bounces saying so; mail.ts still speaks the REST API, because the
-  // platform's own sign-in codes go out from bot.yak.sh rather than an app's
-  // address.
-  MAIL?: Binding
+  // The same Email Sending, reached the other way: a binding rather than the
+  // REST API (wrangler.toml `[[send_email]]`, T-33684). No token rides with
+  // it — the deploy is the authorization — so it is what an app's own address
+  // sends on by default (post.ts, T-33686). The Worker never calls it; it
+  // lends it to the provider config.ts names. Absent under `wrangler dev`
+  // without `remote = true` and in the workerd probes, where no `binding`
+  // sender is lent.
+  MAIL?: object
   // Account Analytics Read serves every analytics read (analytics.ts): the
   // meter (usage.ts), the kill sweep (kills.ts) and page visits (views.ts).
   // CF_ACCOUNT is public and configured in wrangler.toml. ANALYTICS_API aims

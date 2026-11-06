@@ -56,6 +56,7 @@ import { endpoints } from './endpoints.ts'
 import { REPLIES, telnyxDoor, textSend } from './operator-texts.ts'
 import { textSigned } from './operator-channels.ts'
 import type { Bundle } from '@yaks/graph'
+import type { Binding } from '@yaks/cloudflare-mail'
 
 let fixture = async () => {
   let p = platform('operator-intake')
@@ -641,7 +642,7 @@ f.env.MAIL = {
     letters.push(letter)
     return Promise.resolve({ messageId: `reply-${letters.length}` })
   },
-}
+} satisfies Binding
 let email = (id: string, reply?: string, authenticated = true): Inbound => {
   let headers = new Headers({
     From: 'clerk@example.com',

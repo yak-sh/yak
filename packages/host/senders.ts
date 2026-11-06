@@ -133,3 +133,28 @@ export type Incoming = {
   verified?: boolean
   attachments: { name: string; type: string; bytes: Uint8Array<ArrayBuffer> }[]
 }
+
+/** A provider's signed word on a letter it carried: the receipt @yaks/mail's
+ * `receipted` applies, if it names one, and the tags the letter was sent
+ * with, which say whose letter it was. */
+export type Notice = {
+  receipt?: { letter: string; id: string }
+  tags?: Record<string, string>
+}
+
+/** Reads one request a provider posted about the letters it carried. A
+ * request the provider did not sign rejects as {@link Unsigned}. */
+export type Notices = (request: Request) => Promise<Notice>
+
+/** A request that does not carry its provider's signature: the caller is
+ * refused, never retried. */
+export class Unsigned extends Error {
+  constructor(message: string) {
+    super(message)
+    this.name = 'Unsigned'
+  }
+}
+
+/** Reads one letter a runtime handed its host, in the runtime's own shape,
+ * as an {@link Incoming}. Only the provider knows that shape. */
+export type Arrival = (message: unknown) => Promise<Incoming>

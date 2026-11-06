@@ -1,5 +1,6 @@
 // An app's post room: the address it writes from, the (space, app) an address
-// names, and Cloudflare's Email Sending binding as an @yaks/mail `Sender`.
+// names, and the sender a letter leaves through, which a provider config.ts
+// names lends (lent.ts).
 //
 // The address is A local part at the apex, and that is not a style choice.
 // Cloudflare onboards mail per domain, thirty to a zone, and a wildcard MX is
@@ -19,13 +20,12 @@
 // a local part is unambiguously the seam between the space and the app.
 import { toBase64url } from '@yaks/fp'
 import { parts, post, type Sender, Unsent } from '@yaks/mail'
-import { type Binding, bound } from '@yaks/cloudflare-mail/binding'
-import { configured as cloudflare } from '@yaks/cloudflare-mail/sender'
-import { configured as resend } from '@yaks/resend/sender'
+import type { Built } from '@yaks/host/senders'
 import { SLUG } from './route.ts'
 import { apex, type Host } from './host.ts'
 import type { Env } from './env.ts'
-import { resent } from './workers_api.ts'
+import { type Post, posts } from './config.ts'
+import { lent } from './lent.ts'
 
 // Apply at the transport so app effects and platform letters obey one rule.
 export let sink = <T extends string | string[]>(
@@ -79,14 +79,6 @@ export let mailedTo = (address: string, env: Host = {}): Mailbox | null => {
   return { space, app: app ?? null }
 }
 
-export type { Address, Binding } from '@yaks/cloudflare-mail/binding'
-
-/** Keep the staging sink at the sender boundary, for every provider. */
-export let posting = (
-  mail?: Binding,
-  env: Pick<Env, 'MAIL_SINK'> = {},
-): Sender => diverted(bound(mail), env)
-
 let diverted = (sender: Sender, env: Pick<Env, 'MAIL_SINK'>): Sender => ({
   send: (m) =>
     sender.send({
@@ -96,57 +88,32 @@ let diverted = (sender: Sender, env: Pick<Env, 'MAIL_SINK'>): Sender => ({
     }),
 })
 
-/** The sender this deploy's configuration selects, built from its env, or
- * why it cannot send yet. Native platform letters default to the REST sender;
- * apps default to the binding. A migration explicitly selects Resend only
- * after its address passed a pilot. */
-export let transport = (
+/** The sender the deploy's MAIL_VIA selects for a kind of letter (config.ts
+ * `posts`), else the one that kind defaults to, or why it cannot send yet.
+ * The providers config.ts names lend the senders, read from the env, and
+ * `tags` beside: what a provider's notice about the letter carries back
+ * (mail-receipts.ts). */
+export let transport = async (
   env: Delivery,
-  fallback = 'binding',
+  kind: Post = posts.apps,
   tags: Record<string, string> = {},
-) => {
-  let via = env.MAIL_VIA ?? fallback
-  return via == 'cloudflare'
-    ? cloudflare({
-      account: env.MAIL_ACCOUNT || env.CF_ACCOUNT,
-      token: env.MAIL_TOKEN,
-      base: env.MAIL_API,
-      fetch: env.MAIL_FETCH ?? resent,
-    })
-    : via == 'resend'
-    ? resend({
-      token: fallback == 'cloudflare'
-        ? env.RESEND_PLATFORM_TOKEN
-        : env.RESEND_TOKEN,
-      base: env.RESEND_API,
-      fetch: env.MAIL_FETCH,
-      tags,
-    })
-    : post({ via }, { senders: { binding: bound(env.MAIL) } })
-}
+): Promise<Built> =>
+  post({ via: env.MAIL_VIA ?? kind.via }, {
+    senders: await lent(env, 'senders', kind, { tags }),
+  })
 
-export type Delivery = Pick<
-  Env,
-  | 'MAIL'
-  | 'MAIL_SINK'
-  | 'MAIL_VIA'
-  | 'RESEND_TOKEN'
-  | 'RESEND_PLATFORM_TOKEN'
-  | 'RESEND_API'
-  | 'MAIL_TOKEN'
-  | 'MAIL_ACCOUNT'
-  | 'MAIL_API'
-  | 'MAIL_FETCH'
-  | 'CF_ACCOUNT'
->
+/** What a transport reads: the env the providers' options name, the deploy's
+ * selection and the staging sink. */
+export type Delivery = Partial<Env>
 
-/** The capability lent to apps and Operators, with one selected transport. */
+/** The capability lent to apps and Operators, with one selected transport,
+ * the staging sink kept at its boundary. */
 export let outgoing = (
   env: Delivery,
   tags: Record<string, string> = {},
 ): Sender => ({
-  send: (m) => {
-    let { sender, waiting } = transport(env, 'binding', tags)
+  send: async (m) => {
+    let { sender, waiting } = await transport(env, posts.apps, tags)
     if (!sender) throw new Unsent(waiting!, 60_000)
     return diverted(sender, env).send(m)
   },

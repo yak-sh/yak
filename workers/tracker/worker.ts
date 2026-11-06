@@ -5,7 +5,7 @@ import type { Bundle, Comp } from '@yaks/graph'
 import { minted } from '@yaks/graph/identity'
 import { sha256 } from '@yaks/graph/sha256'
 import { bugEid } from '@yaks/tracker'
-import { notification, Unsigned } from '@yaks/resend'
+import { Unsigned } from '@yaks/host/senders'
 import { sign } from './auth.ts'
 import { capture, caught, origin, queue } from '@yaks/tracker/report'
 import { evicted, jittered, lost, opaque, retried } from '@yaks/durable-object'
@@ -13,6 +13,7 @@ import { type Clock, system } from '@yaks/fp'
 import { platform } from './core.ts'
 import { consume, type Message } from './queue.ts'
 import { json } from './door.ts'
+import { lent } from './mail.ts'
 import type { Settings } from './object.ts'
 
 export type Stub = {
@@ -240,16 +241,21 @@ export let worker = (
   return {
     fetch: async (request: Request): Promise<Response> => {
       let url = new URL(request.url)
-      let scope = url.pathname == '/mail/resend' ? platform : scopeOf(url)
+      // A provider's notice about a letter, at `/mail/<via>`, is read by the
+      // notices that provider lends (config.ts).
+      let via = url.pathname.match(/^\/mail\/([a-z0-9-]+)$/)?.[1]
+      let notices = via ? lent(env, 'notices') : {}
+      let noticed = via && Object.hasOwn(notices, via) ? notices[via] : null
+      let scope = noticed ? platform : scopeOf(url)
       if (!scope) return json({ error: 'tracker global scope required' }, 400)
       try {
-        if (url.pathname == '/mail/resend' && request.method == 'POST') {
-          if (!env.RESEND_WEBHOOK_SECRET || !env.TRACKER_SECRET) {
+        if (noticed && request.method == 'POST') {
+          if (!env.TRACKER_SECRET) {
             throw new Error('Mail webhook is not configured')
           }
           let arrived
           try {
-            arrived = await notification(request, env.RESEND_WEBHOOK_SECRET)
+            arrived = await noticed(request)
           } catch (error) {
             if (error instanceof Unsigned) {
               return json({ error: error.message }, 401)
