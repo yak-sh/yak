@@ -27,6 +27,13 @@ over that driver creates the schema, reads components, and applies row changes.
 synchronous; graph plugins can make an operation asynchronous, but code
 executing inside `transactionSync` must remain synchronous.
 
+A new object's schema is hundreds of statements, one for each table, index and
+trigger. The driver offers @yaks/sql's `Driver.template`: the first object an
+isolate makes under a key records what its `make` wrote, and a later object
+holding the same objects before it runs that record as a script of a few
+statements instead, with an epoch of its own. `install()` asks for it on an
+object holding no component table.
+
 Pass an optional observer to `driver(ctx.storage, observe)` or as the fourth
 argument to `storage(ctx.storage, vocab, base, observe)` to receive each drained
 cursor's `rowsRead` and `rowsWritten` with a value-free SQL shape.

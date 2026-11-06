@@ -29,7 +29,7 @@ test('a plain SQL schema is copied without store metadata', () => {
   try {
     for (let d of [a, b]) {
       d.template!('plain SQL schema', () =>
-        d.query({
+        void d.query({
           t: 'create table',
           name: 'sample',
           cols: [{ name: 'value', type: 'integer' }],

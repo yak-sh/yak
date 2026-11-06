@@ -218,6 +218,12 @@ A query that works on the box can be refused in a store.
   while the store keeps serving the shape it holds. `admin_move` with rehearse
   true runs every rule in a transaction the store rolls back and says what it
   found. Moving rows people already have is `data-migration`'s ground.
+- **A new store's schema is a copy.** An empty app store holds a table,
+  indexes and triggers for every core word: about 290 objects and 1.1 MB. Its
+  first schema pass (migrate.ts `passed`, no stamp held) asks the driver for a
+  template (@yaks/durable-object `template`): the first new store of a shape
+  in an isolate records what its pass wrote, and the next runs that as a
+  script of a few statements. A store that already ran a pass never takes one.
 
 ## Asleep is the normal state
 
