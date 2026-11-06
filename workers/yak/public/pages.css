@@ -428,8 +428,10 @@
      another to go to, a button on its hatch, so it reads as something to
      press and not as the page you are on. Change opens the list over the
      page, wider than the side, drawn in pencil on a hatch the way a button
-     sits on its. Change sits right of the name, which wraps rather than
-     running under it. */
+     sits on its. Change sits right of the name, and the name holds one
+     line: whole where it fits, else cut with an ellipsis (its full text is
+     the summary's title and the menu's row). A name that wraps in the
+     column beside Change breaks every few letters (T-145350). */
   .Desk_Space {
     display: grid;
     grid-template-columns: 2rem minmax(0, 1fr);
@@ -508,11 +510,17 @@
   }
   .Desk_Name {
     display: grid;
+    grid-template-columns: minmax(0, 1fr);
     min-width: 0;
     line-height: 1.25;
   }
   .Desk_Name b {
     overflow-wrap: anywhere;
+  }
+  .Desk_Space .Desk_Name > * {
+    overflow: hidden;
+    white-space: nowrap;
+    text-overflow: ellipsis;
   }
   .Desk_Name small {
     color: var(--muted);

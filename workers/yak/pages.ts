@@ -1077,14 +1077,17 @@ export let choice = (
     ]
   }
   if (all.length < 2) {
-    return [h('div', { class: 'Desk_Space' }, box(here)), make]
+    return [
+      h('div', { class: 'Desk_Space', title: named(here) }, box(here)),
+      make,
+    ]
   }
   return h(
     'details',
     { class: 'Desk_Pick', 'data-menu': '' },
     h(
       'summary',
-      { class: 'Desk_Space' },
+      { class: 'Desk_Space', title: named(here) },
       box(here),
       h('span', { class: 'Desk_Change' }, 'Change', glyph('chevrons-up-down')),
     ),
