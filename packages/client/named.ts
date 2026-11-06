@@ -127,18 +127,20 @@ export let namedClient = (
       if (type != 'message') return s.addEventListener(type, fn)
       // A message is one frame, or several the host batched for one
       // acknowledgement (@yaks/sync `frames`); each is reported alike.
-      let land = (e: Event & { data?: unknown }) => {
+      let read = (e: Event & { data?: unknown }) => {
         let packed =
           e.data instanceof ArrayBuffer || e.data instanceof Uint8Array
             ? unpack(e.data)
             : undefined
-        let packet = decode(
+        return decode(
           opts.vocab,
           packed ? packed.value : JSON.parse(String(e.data)),
           packed?.payload,
         ) as Frame | {
           frames: Frame[]
         }
+      }
+      let land = (e: Event & { data?: unknown }, packet = read(e)) => {
         let frames = 'frames' in packet ? packet.frames : [packet]
         let lined = frames.map((f) => ({
           f,
@@ -162,16 +164,22 @@ export let namedClient = (
       // burst of answers is one render pass, not one per frame. A macrotask is
       // the coalescing point on purpose: the message events already queued
       // behind this one run before it.
-      let arrived: (Event & { data?: unknown })[] = []
+      let arrived: {
+        event: Event & { data?: unknown }
+        packet: ReturnType<typeof read>
+      }[] = []
       let pending: Promise<void> | undefined
       let accept = (e: Event & { data?: unknown }) => {
-        arrived.push(e)
+        let packet = read(e)
+        // Clock replies calibrate the wire at receipt, outside frame batching.
+        if ('clock' in packet) return fn(e)
+        arrived.push({ event: e, packet })
         if (arrived.length > 1) return
         setTimeout(() => {
           let frames = arrived
           arrived = []
           ;(opts.batch ?? ((work: () => void) => work()))(() =>
-            frames.forEach(land)
+            frames.forEach(({ event, packet }) => land(event, packet))
           )
         })
       }

@@ -3,7 +3,8 @@
 // the test answers with. `answer` sees each subscribe and may return the frame
 // that goes back for it; `say` sends any frame later and resolves once it has
 // landed, a timer turn on (T-37445), and `drop` loses the connection. The
-// socket opens a turn after it is dialed, as a browser's does.
+// socket opens a turn after it is dialed, as a browser's does, and answers
+// clock probes independently of the subscription's answer.
 // A new socket means a new replica, so installing one (and free()) starts the
 // page's box afresh.
 import type { Bundle } from '@yaks/graph'
@@ -74,6 +75,13 @@ export let host = (answer?: (a: Ask) => Omit<Frame, 'id'> | undefined) => {
       send: (text) => {
         let m = JSON.parse(text)
         sent.push(m)
+        if (typeof m.clock == 'number' && Number.isFinite(m.clock)) {
+          let received = Date.now()
+          fire(
+            'message',
+            JSON.stringify({ clock: m.clock, received, sent: Date.now() }),
+          )
+        }
         let f = typeof m.subscribe == 'string' ? answer?.(m) : undefined
         if (f) queueMicrotask(() => say({ ...f, id: m.id }))
       },
