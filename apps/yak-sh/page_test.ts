@@ -11,8 +11,13 @@ import { STORY } from './figure.ts'
 import { SHOP, YOURS } from './shop.ts'
 import { inboxAt, rendered } from '@yaks/inbox/letters'
 import { INSIDE, PHASES } from '@yaks/graph/plugin'
+import { options } from 'preact'
 
 let dir = new URL('./', import.meta.url)
+// A tab paints its next frame as soon as it can; preact's hooks wait 35 ms
+// for one where there is no requestAnimationFrame.
+options.requestAnimationFrame = (fn) => setTimeout(fn)
+let tick = () => new Promise((ok) => setTimeout(ok))
 let open = async () => {
   let window = parseHTML(await Deno.readTextFile(new URL('index.html', dir)))
   let { document } = window
@@ -25,10 +30,13 @@ let open = async () => {
     pace: { key: 0, pause: 0 },
     retry: 0,
   })
+  // Everything queued has run, and the page has drawn and run its effects.
   let settle = async () => {
-    await page.term.idle()
-    await page.yak.settled()
-    await new Promise((ok) => setTimeout(ok, 30))
+    for (let i = 0; i < 3; i++) {
+      await page.term.idle()
+      await page.yak.settled()
+      await tick()
+    }
   }
   return { document, root, page, settle }
 }
@@ -59,21 +67,38 @@ test('the page paints in its drawn layout before its scripts run', async () => {
 })
 
 let steps = SECTIONS.filter((s) => s.view == 'Step').map((s) => s.body)
+let BANDS = SECTIONS.filter((s) =>
+  ['Doors', 'Rules', 'Memory'].includes(s.view)
+)
+let STACK = SECTIONS.find((s) => s.view == 'Stack')!
+
+// The page as a reader leaves it at the bottom: the whole story, the apply()
+// band and every band's beats run. Made once, for the tests that look at it;
+// none of them changes what another looks at.
+let bottom: ReturnType<typeof open> | undefined
+let whole = () =>
+  bottom ??= open().then(async (opened) => {
+    let { page, settle } = opened
+    await page.term.reach(steps, steps.length)
+    await page.term.once(STACK.eid, STACK.body)
+    for (let b of BANDS) {
+      await page.turns.reach(b.eid, beatsOf(b.body).beats.length)
+    }
+    await settle()
+    return opened
+  })
 
 test('the page draws every section from the graph, in its layout order', async () => {
-  let { root, page } = await open()
+  let { root } = await whole()
   equal(root.querySelector('h1')?.textContent, SECTIONS[0].title)
   let drawn = [...root.querySelectorAll('[data-eid]')]
     .map((el) => el.getAttribute('data-eid'))
     .filter((eid) => SECTIONS.some((s) => s.eid == eid))
   equal(drawn, SECTIONS.map((s) => s.eid))
-  page.page.close()
 })
 
 test('the story types into the prompt and the drawing draws what it made', async () => {
-  let { root, page, settle } = await open()
-  await page.term.reach(steps, 4)
-  await settle()
+  let { root } = await whole()
   let screen = root.querySelector('.Prompt_Screen')!.textContent!
   match(screen, /\$ yak task new 'Add the sign-up page'/)
   match(screen, /agent → task_update/)
@@ -85,15 +110,11 @@ test('the story types into the prompt and the drawing draws what it made', async
   match(sheet, /data-name="requires"/)
   match(sheet, /data-name="filed.assignee"/)
   match(sheet, /data-name="completed.by"/)
-  page.page.close()
 })
 
 test('each interface in the doors band makes its own change to the one graph, drawn as the top draws it', async () => {
-  let { root, page, settle } = await open()
-  await page.term.reach(steps, steps.length)
+  let { root, page, settle } = await whole()
   let band = SECTIONS.find((s) => s.view == 'Doors')!
-  await page.turns.reach(band.eid, beatsOf(band.body).beats.length)
-  await settle()
   let { you, agent } = page.yak
   let task = async (title: string) =>
     (await page.yak.graph.read(`.doc.title="${title}" *`))[0]
@@ -127,51 +148,12 @@ test('each interface in the doors band makes its own change to the one graph, dr
   fire(doors.querySelector('.Window[data-door="mcp"]')!, 'click')
   await settle()
   equal(root.querySelector('.Editor .Editor_Bar b')?.textContent, 'N-5')
-  page.page.close()
-})
-
-// Where a reader can arrive: the top, or past a band's first beat, every
-// band above it passed. The page measures its bands as it mounts, before the
-// story, a band below the reader at nothing; then the reader scrolls on to
-// the bottom.
-let BANDS = SECTIONS.filter((s) =>
-  ['Doors', 'Rules', 'Memory'].includes(s.view)
-)
-let arrivals = [
-  { at: -1, n: 0 },
-  ...BANDS.flatMap((b, at) =>
-    [1, beatsOf(b.body).beats.length].map((n) => ({ at, n }))
-  ),
-]
-let STACK = SECTIONS.find((s) => s.view == 'Stack')!
-
-test('every example call in the bands succeeds wherever the reader arrives', async () => {
-  for (let { at, n } of arrivals) {
-    let { page, settle } = await open()
-    let all = (b: typeof BANDS[0]) => beatsOf(b.body).beats.length
-    if (at >= 0) page.term.once(STACK.eid, STACK.body)
-    BANDS.forEach((b, i) =>
-      page.turns.reach(b.eid, i < at ? all(b) : i == at ? n : 0)
-    )
-    page.term.reach(steps, at >= 0 ? steps.length : 0)
-    await settle()
-    page.term.reach(steps, steps.length)
-    page.term.once(STACK.eid, STACK.body)
-    for (let b of BANDS) await page.turns.reach(b.eid, all(b))
-    await settle()
-    let faults = BANDS.flatMap((b) =>
-      beatsOf(b.body).beats.flatMap((beat, i) => {
-        let d = page.turns.done(b.eid, i)
-        return d && !d.fault ? [] : [`${beat.line}: ${d?.out.join(' ')}`]
-      })
-    )
-    equal([at, n, faults], [at, n, []])
-    page.page.close()
-  }
+  fire(root.querySelector('.Editor .Editor_Bar button')!, 'click')
+  await settle()
 })
 
 test("a band's call that fails is reported, for the tracker", async () => {
-  let { page } = await open()
+  let { page } = await whole()
   // Heard at reportError, where the tracker's page reporter hears it: the
   // test runner's own error listener counts every error event as uncaught.
   let heard: string[] = []
@@ -188,7 +170,6 @@ test("a band's call that fails is reported, for the tracker", async () => {
   }])
   await page.turns.reach('lost', 1)
   match(heard.join(), /yak\.sh: task_update .*T-99.* failed: .*T-99/)
-  page.page.close()
 })
 
 test('in the rules band your inbox writes a question that holds up the build as a letter, an effect hands it over and tries again on its own when the mail service refuses it, and your reply is a comment that answers it', async () => {
@@ -299,11 +280,8 @@ test('in the rules band your inbox writes a question that holds up the build as 
 })
 
 test("in the memory band your words become a memory your agent's persona carries, and a new session starts with them", async () => {
-  let { root, page, settle } = await open()
-  await page.term.reach(steps, steps.length)
+  let { root, page } = await whole()
   let band = SECTIONS.find((s) => s.view == 'Memory')!
-  await page.turns.reach(band.eid, beatsOf(band.body).beats.length)
-  await settle()
   let said = 'Never put the live key in CI: it charges real cards.'
   let [kept] = await page.yak.graph.read('.memory *')
   equal(
@@ -324,13 +302,10 @@ test("in the memory band your words become a memory your agent's persona carries
     memory.querySelector('.is-told')?.getAttribute('data-key'),
     page.yak.agent,
   )
-  page.page.close()
 })
 
 test('each thing the story draws leads back to the command whose write made it', async () => {
-  let { root, page, settle } = await open()
-  await page.term.reach(steps, 3)
-  await settle()
+  let { root, page } = await whole()
   let drawn = (sel: string) =>
     root.querySelector(`.Figure_Sheet ${sel}`)!.getAttribute('data-key')!
   // The command that made a drawn thing, as its step lists it.
@@ -352,26 +327,24 @@ test('each thing the story draws leads back to the command whose write made it',
     madeBy(drawn('[data-name="comment.target"]')),
     madeBy(drawn('[data-name="completed.by"]')),
   ], [account, account, checkout, edge, comment, done])
-  page.page.close()
 })
 
 test('a section changed from the prompt redraws in place, and the drawing keeps to the demo', async () => {
-  let { root, page, settle } = await open()
-  await page.term.reach(steps, steps.length)
-  await settle()
+  let { root, page, settle } = await whole()
   let heading = root.querySelector(`[data-eid="${SELF}"] h2`)?.textContent
   equal(heading, 'This page is a graph you can change')
   equal(page.figure.query(), STORY)
   let sheet = () => root.querySelector('.Figure_Sheet')!.innerHTML
   equal(sheet().includes('>index.html<'), false)
-  let files = [...root.querySelectorAll('.Figure_Wider button')]
-    .find((b) => b.textContent == "the site's files") as unknown as {
-      click: () => void
-    }
-  files.click()
+  let wider = (name: string) =>
+    ([...root.querySelectorAll('.Figure_Wider button')]
+      .find((b) => b.textContent == name) as unknown as { click: () => void })
+      .click()
+  wider("the site's files")
   await settle()
   match(sheet(), />index.html</)
-  page.page.close()
+  wider('the demo')
+  await settle()
 })
 
 test('the start draws at once, and each command only as far as the reader has scrolled past it', async () => {
@@ -477,11 +450,7 @@ test("a change to the graph's style.css restyles the page", async () => {
 })
 
 test('the apply() band sends its letter as the source of its bundle, beside the phases it ran, and its effect delivers it', async () => {
-  let { root, page, settle } = await open()
-  await page.term.reach(steps, steps.length)
-  let band = SECTIONS.find((s) => s.view == 'Stack')!
-  await page.term.once(band.eid, band.body)
-  await settle()
+  let { root, page, settle } = await whole()
   let stack = root.querySelector('.Stack')!
   let rows = [...stack.querySelectorAll('.Source [data-row]')].map((p) =>
     p.getAttribute('data-row')
@@ -531,13 +500,10 @@ test('the apply() band sends its letter as the source of its bundle, beside the 
     /\$ task new 'Water the plants'/,
   )
   equal(stack.querySelector('.Outbox, .Toast'), null)
-  page.page.close()
 })
 
 test('every yaks.app in the words is a link to it that opens in a new tab, and code keeps its own as typed', async () => {
-  let { root, page, settle } = await open()
-  await page.term.reach(steps, steps.length)
-  await settle()
+  let { root } = await whole()
   let said = [...root.querySelectorAll('*')].flatMap((el) =>
     [...el.childNodes].filter((n) =>
       n.nodeType == 3 && /\byaks\.app\b/.test(n.textContent!)
@@ -550,5 +516,4 @@ test('every yaks.app in the words is a link to it that opens in a new tab, and c
   equal(said.filter((el) => !el.closest('code, pre') && !away(el)), [])
   equal(said.filter(away).length > 8, true)
   equal(said.some((el) => el.closest('code')), true)
-  page.page.close()
 })

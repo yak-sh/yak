@@ -2,6 +2,7 @@
 // captions is a link to yaks.app that opens in a new tab. Code and terminal
 // lines keep theirs as typed, where a link would break the command.
 import { h } from 'preact'
+import { useMemo } from 'preact/hooks'
 import { parse, render, type Token } from '@yaks/markdown'
 import type { H } from '@yaks/render'
 
@@ -64,6 +65,6 @@ let host = ((tag: string, props: Record<string, unknown> | null, ...kids) =>
   )) as H<ReturnType<typeof h>>
 
 /** Markdown, as @yaks/markdown draws it, with each mention of yaks.app a
- * link to it. */
+ * link to it, parsed again only when it changes. */
 export let Prose = ({ source }: { source: string }) =>
-  render(linked(parse(source)), host)
+  useMemo(() => render(linked(parse(source)), host), [source])

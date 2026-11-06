@@ -83,7 +83,8 @@ let follow = (graph: Graph, fn: () => void) => {
 
 /**
  * Keep `sheet` drawing what `query` selects in `graph`. Commits that land
- * while a read is under way are drawn by one more read, not one each.
+ * while a read is under way are drawn by one more read, not one each, and a
+ * commit that leaves the answer as it was draws nothing.
  *
  * ```ts
  * import { graph } from '@yaks/graph'
@@ -113,6 +114,8 @@ export let mount = (sheet: Sheet, opts: MountOptions): Mounted => {
   let seen: Layout | undefined
   let running: Promise<Layout> | undefined
   let again = false
+  // The answer last drawn: a commit that leaves it as it was redraws nothing.
+  let answer = ''
   // The stage of the first commit not yet read.
   let stage: number | undefined
   let take = () => {
@@ -149,7 +152,12 @@ export let mount = (sheet: Sheet, opts: MountOptions): Mounted => {
     return last
   }
   let read = (query: string, s: number) =>
-    Promise.resolve(graph.read(query)).then((bundles) => draw(bundles, s))
+    Promise.resolve(graph.read(query)).then((bundles) => {
+      let now = JSON.stringify([query, bundles])
+      if (last && now == answer) return last
+      answer = now
+      return draw(bundles, s)
+    })
   let redraw = (): Promise<Layout> => {
     if (running) return (again = true, running)
     running = read(current, take()).finally(() => {
@@ -174,6 +182,7 @@ export let mount = (sheet: Sheet, opts: MountOptions): Mounted => {
     query: (query, stage) =>
       Promise.resolve(graph.read(query)).then((bundles) => {
         current = query
+        answer = JSON.stringify([query, bundles])
         return draw(bundles, stage ?? opts.stage?.() ?? 0)
       }),
     redraw,

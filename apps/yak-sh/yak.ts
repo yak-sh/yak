@@ -218,11 +218,15 @@ export let yak = async ({ retry = 1500 } = {}) => {
   let door = { person: you, from: SHOP, base: 'http://127.0.0.1:8787' }
   // Work what is owed after each commit: the inbox's pass, then each effect,
   // again while a run is due, then wake when the next waiting one falls due.
+  // A pass not yet started works every commit made before it starts, so the
+  // commits a write makes while one waits share it.
   let working = Promise.resolve()
+  let waiting: Promise<void> | undefined
   let alarm: ReturnType<typeof setTimeout> | undefined
   let tick = () => new Promise((ok) => setTimeout(ok, 0))
   let work = (): Promise<void> =>
-    working = working.then(tick).then(async () => {
+    waiting ??= working = working.then(tick).then(async () => {
+      waiting = undefined
       await queue(g, vocab, door, (b) => g.apply(b), new Date().toISOString())
       for (;;) {
         await fx.work(g)
