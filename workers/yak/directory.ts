@@ -2809,6 +2809,9 @@ export let directoryRows = (rows: {
       }
       return (await self.space(slug))!
     },
+    // The space this directory is narrowed to: none, for the whole directory
+    // (grants.ts `narrowed` answers one).
+    narrowedTo: (): Promise<Space | null> => Promise.resolve(null),
     // Whether nobody belongs yet: read only to admit the first member.
     // Whether anybody at all holds a seat here — what identity.ts asks of the
     // meta space, so the first person ever to sign in owns the platform. The

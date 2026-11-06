@@ -21,7 +21,7 @@ import { mailbox } from './directory.ts'
 import { read } from './reach.ts'
 import { apex, type Host } from './host.ts'
 import { type Ctx, inApp } from './tools.ts'
-import { refuse } from './tool.ts'
+import { refuse, SPACE } from './tool.ts'
 
 /**
  * The sentence mail_list carries, because the tool list is where a model
@@ -73,10 +73,6 @@ let NEWEST = '&.order=-created.at'
 let address = (env: Host) =>
   `the app slug; its email address is <space>.<app>@${apex(env)}`
 
-let SPACE = 'the space slug in <space>.yaks.app; omit to infer it from the ' +
-  'app slug, or fall back to the only space the person owns. If more than ' +
-  'one matches, the error asks you to choose'
-
 let listing = (ctx: Ctx): Tool => ({
   name: 'mail_list',
   readOnly: true,
@@ -94,7 +90,7 @@ let listing = (ctx: Ctx): Tool => ({
     required: ['app'],
     properties: {
       app: { type: 'string', description: address(ctx.env) },
-      space: { type: 'string', description: SPACE },
+      space: SPACE,
       direction: {
         type: 'string',
         enum: ['received', 'sent', 'all'],

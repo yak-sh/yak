@@ -212,9 +212,8 @@ export let revoke = async (
 // this platform already gives for a space that is not theirs. One wrapper, so
 // the narrowing holds for every tool at once rather than tool by tool.
 //
-// `own` answers the narrowed space too: a tool that was given no space asks
-// for the caller's own, and under a grant for one space that is the space it
-// means. Whether they may write there is still their membership, read below.
+// `own` and `narrowedTo` answer the narrowed space: a tool that was given no space
+// means the one the grant or the Operator is for (tool.ts `ownSpace`). Whether they may write there is still their membership, read below.
 //
 // `beyond` is each other space its holder was let into, with the role it was
 // given there, which stands in for the caller's membership in it: a space's
@@ -273,6 +272,11 @@ export let narrowed = (
         .map((app) => ({ space: r.space, app, role: r.role }))
     )
   }
+  let narrowedTo = async () => {
+    let space = eid ? await dir.at(eid) : await dir.space(slug)
+    if (!space) throw refuse('missing', `no space ${slug}`)
+    return space
+  }
   return {
     ...dir,
     space: async (want: string) => {
@@ -327,10 +331,7 @@ export let narrowed = (
         ? got
         : { ...got, role: r?.role ?? null }
     },
-    own: async () => {
-      let space = eid ? await dir.at(eid) : await dir.space(slug)
-      if (!space) throw refuse('missing', `no space ${slug}`)
-      return space
-    },
+    own: narrowedTo,
+    narrowedTo,
   }
 }

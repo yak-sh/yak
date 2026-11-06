@@ -242,7 +242,8 @@ export let str = (description: string) => ({ type: 'string', description })
 // per tool on every listing.
 export let SPACE = str(
   'the space slug, as in <space>.yaks.app; if optional and omitted, the ' +
-    "space holding the app, else the person's only space",
+    "space holding the app, else an Operator's own space, else the " +
+    "person's only space",
 )
 
 export let APP = str('the app slug, as in <space>.yaks.app/<app>/')
@@ -296,6 +297,11 @@ export let byCaller = async (ctx: Ctx, who: Who) => ({
 // one read as the platform forgetting what it had just been told (C-32730
 // item 6). Two spaces holding the same slug is the one genuine question, and
 // only then are the names said.
+//
+// An Operator means its own space, and a grant for one space means that one
+// (grants.ts `narrowed`): after the app, since an app it was let in to work
+// on lives in another space, and before the spaces the person owns, which
+// for an admin's or a PA's Operator are many.
 export let ownSpace = async (ctx: Ctx, app?: unknown) => {
   if (typeof app == 'string' && app) {
     let holding: Space[] = []
@@ -319,6 +325,8 @@ export let ownSpace = async (ctx: Ctx, app?: unknown) => {
       )
     }
   }
+  let narrow = await ctx.dir.narrowedTo()
+  if (narrow) return narrow
   let owned = await ctx.dir.spaces(ctx.person, 'owner')
   if (owned.length > 1) {
     throw refuse(
