@@ -247,10 +247,6 @@ export type Env = {
   // provider elsewhere, for a test.
   DEEPGRAM_API_KEY?: string
   OPENAI_VOICE_KEY?: string
-  // `on` answers everyone the platform knows by number when they call
-  // PHONE_SENDER's number (operator-calls.ts); anything else, only an owner
-  // of the platform's own space, while calls are a pilot.
-  CALLS?: string
   SPEECH_FLOOR?: string
   SPEECH_API?: string
   // `on` signs up a stranger who texts the platform's number

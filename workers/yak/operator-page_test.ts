@@ -9,19 +9,34 @@ import { modelOf, offered } from './speech.ts'
 let consent = { number: '+12695550142', at: '2026-11-01T00:00:00Z' } as never
 let drawn = (card: VNode) => parseHTML(renderToString(card)).document
 
-test('the texts card names the number to text as an sms: link', () => {
-  let at = drawn(textsCard('/manage/x/operator', consent, '+18663141594'))
-  let to = at.querySelector('a[href^="sms:"]')!
-  equal([to.getAttribute('href'), to.textContent], [
-    'sms:+18663141594',
-    '866-314-1594',
-  ])
-  let says = (at: Document, words: string) =>
-    at.querySelector('#texts')!.textContent!.includes(words)
-  equal(says(at, 'to text your Operator, text 866-314-1594.'), true)
-  let none = drawn(textsCard('/manage/x/operator', consent))
-  equal(none.querySelector('a[href^="sms:"]'), null)
-  equal(says(none, 'reply to the number your welcome text came from.'), true)
+test('the texts card names the numbers to text and call, to anyone', () => {
+  let N = '+18663141594'
+  let card = (agreed: unknown, from?: string, call?: string) =>
+    drawn(textsCard('/manage/x/operator', agreed as never, from, call))
+  let link = (at: Document, scheme: string) => {
+    let a = at.querySelector(`a[href^="${scheme}:"]`)
+    return a && [a.getAttribute('href'), a.textContent]
+  }
+  let says = (at: Document) => at.querySelector('#texts')!.textContent!
+  let both = card(consent, N, N)
+  equal(link(both, 'sms'), [`sms:${N}`, '866-314-1594'])
+  equal(link(both, 'tel'), [`tel:${N}`, '866-314-1594'])
+  equal(
+    says(both).includes(
+      'Text 866-314-1594 or call 866-314-1594 to reach your Operator.',
+    ),
+    true,
+  )
+  let stranger = card(null, N, N)
+  equal(link(stranger, 'tel'), [`tel:${N}`, '866-314-1594'])
+  equal(says(stranger).includes('from the mobile number you agree'), true)
+  equal(link(card(consent, N), 'tel'), null)
+  let none = card(consent)
+  equal(link(none, 'sms'), null)
+  equal(
+    says(none).includes('reply to the number your welcome text came from.'),
+    true,
+  )
 })
 
 let on = { DEEPGRAM_API_KEY: 'a', OPENAI_VOICE_KEY: 'b' }

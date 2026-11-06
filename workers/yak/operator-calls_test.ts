@@ -54,9 +54,8 @@ let signer = await crypto.subtle.generateKey('Ed25519', true, [
 ]) as CryptoKeyPair
 let b64 = (b: ArrayBuffer) => btoa(String.fromCharCode(...new Uint8Array(b)))
 
-let fixture = async (calls?: string) => {
+let fixture = async () => {
   let p = platform('calls', {
-    CALLS: calls,
     PHONE_SENDER: { via: 'telnyx', number: NUMBER },
     TELNYX_API: telnyxApi.url,
     TELNYX_API_KEY: 'a-key',
@@ -141,7 +140,7 @@ let fixture = async (calls?: string) => {
   return { p, ring, jeff, ana, own }
 }
 
-test('while calls are a pilot only the platform’s owner is answered, streamed to the stream door', async () => {
+test('everyone the platform knows by number is answered, streamed to the stream door', async () => {
   let { p, ring } = await fixture()
   equal(await ring(JEFF, NUMBER, 'c1'), ['answer'])
   let answer = acted[0]
@@ -158,16 +157,10 @@ test('while calls are a pilot only the platform’s owner is answered, streamed 
     (await opened<Ticket>('call', sealed, p.env.SESSION_SECRET!))?.first,
     'Jeff',
   )
-  equal(await ring(ANA), ['reject'])
+  equal(await ring(ANA), ['answer'])
   equal(await ring('+12695550199'), ['reject'])
   // A call to another number is not the Operator's to take.
   equal(await ring(JEFF, '+18885550100'), [])
-})
-
-test('with calls on, everyone the platform knows by number is answered', async () => {
-  let { ring } = await fixture('on')
-  equal(await ring(ANA), ['answer'])
-  equal(await ring('+12695550199'), ['reject'])
 })
 
 test('the stream door opens nothing without a ticket sealed here for a call that may still be on', async () => {

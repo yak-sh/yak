@@ -1,6 +1,7 @@
 // Calls: calling the platform's number reaches the person's Operator by voice
 // (T-136828, D-136811). The number is PHONE_SENDER's, so texting and calling
-// share it. The provider rings the webhook its texts post to (`rang`); a
+// share it; its voice connection is the Telnyx Call Control application
+// "yaks.app Operator", whose webhook is `/telnyx/webhook`. The provider rings the webhook its texts post to (`rang`); a
 // person the platform knows by that number is answered with the call's audio
 // streamed both ways to `/<via>/stream`, which carries a sealed ticket to the
 // space's Builder object, where the Operator runs (`answering`).
@@ -16,9 +17,7 @@
 // for anything it does or knows; what it heard and said without asking is
 // kept in that conversation too, starting no turn (operator.ts `note`).
 //
-// While calls are a pilot, only an owner of the platform's own space is
-// answered; `CALLS = "on"` answers everyone the platform knows by number.
-// A call lasts at most MINUTES, and what it costs (the line, what was heard
+// Everyone the platform knows by number is answered. A call lasts at most MINUTES, and what it costs (the line, what was heard
 // and what was said) is charged to the space as it goes: what is said as it
 // is said, the line and what was heard every CHARGED and as the call ends,
 // so an object restarted under a call loses at most that much of its charge,
@@ -34,7 +33,7 @@ import {
   type Turns,
   turns,
 } from '@yaks/speech'
-import { directoryOf, META, type Space } from './directory.ts'
+import { directoryOf, type Space } from './directory.ts'
 import type { Env } from './env.ts'
 import { bound, defect } from './defects.ts'
 import { opened, seal } from './lib/token.ts'
@@ -99,16 +98,12 @@ let secretOf = (env: Env) => {
 }
 
 // Whom a ring reaches: the person the platform knows by the number, in the
-// space they texted in or write in, their own first, while calls are open to
-// them and speech is not paused. Null hangs up on them.
+// space they texted in or write in, their own first, while speech is not
+// paused. Null hangs up on them.
 let reached = async (env: Env, ring: Ring) => {
   let dir = directoryOf(env.STORE)
   let person = await dir.phoned(ring.from)
   if (!person) return null
-  if (env.CALLS != 'on') {
-    let meta = await dir.space(META.space)
-    if (!meta || await dir.role(meta, person) != 'owner') return null
-  }
   let { spaceFor } = await import('./operator-texts.ts')
   // What to call them is read beside the space, so the ring waits on neither.
   let [name, space] = await Promise.all([

@@ -144,33 +144,47 @@ let terms = (said: string) =>
     i % 2 ? h('a', { href: `/${part}` }, `yaks.app/${part}`) : part
   )
 
-// Where a person agrees to texts from the operator, or stops them. `from` is
-// the number the Operator texts from (its phone's `transport().number`),
-// read from configuration, so the card names it with no call to the provider.
+// Where a person agrees to texts from the operator, or stops them, and finds
+// the numbers to text and call it at. `from` is the number the Operator texts
+// from (its phone's `transport().number`) and `call` the platform's number
+// that answers calls (operator-calls.ts `rang`), both read from
+// configuration, so the card names them with no call to the provider.
 export let textsCard = (
   at: string,
   consent: Texting | null,
   from?: string,
+  call?: string,
 ) =>
   setting(
     at,
     'texts',
-    'Text messages',
+    'Texts and calls',
     h(
       'p',
       null,
-      'Text your Operator about anything, and it answers by text. It also texts you when it finishes a change, needs an answer from you, or something about your space needs you, and apps you build can text you reminders. You can still use chat and email.',
+      'Text your Operator about anything, and it answers by text; call it, and it answers by voice. It also texts you when it finishes a change, needs an answer from you, or something about your space needs you, and apps you build can text you reminders. You can still use chat and email.',
     ),
+    from || call
+      ? h(
+        'p',
+        null,
+        from ? ['Text ', h('a', { href: `sms:${from}` }, shown(from))] : null,
+        from && call ? ' or call ' : call ? 'Call ' : null,
+        call ? h('a', { href: `tel:${call}` }, shown(call)) : null,
+        consent
+          ? ' to reach your Operator.'
+          : ' from the mobile number you agree to texts at below to reach your Operator.',
+      )
+      : null,
     consent
       ? h(
         'p',
         null,
         'Texts go to ',
         h('b', null, shown(consent.number)),
-        '; to text your Operator, ',
         from
-          ? ['text ', h('a', { href: `sms:${from}` }, shown(from))]
-          : 'reply to the number your welcome text came from',
+          ? ''
+          : '; to text your Operator, reply to the number your welcome text came from',
         `. You agreed on ${
           new Date(consent.at).toLocaleDateString('en-US', {
             dateStyle: 'long',
@@ -657,12 +671,14 @@ export let conversationOf = async (
 // conversations in the chat app (`chatPage`), and the texts it may send.
 export let operatorBody = async (env: Env, space: Space, who: Who) => {
   let at = managePath('operator', space.slug)
-  let [consent, { pa, beyond }, phone] = await Promise.all([
+  let [consent, { pa, beyond }, phone, platform] = await Promise.all([
     textingOf(env, space, who),
     reachOf(directoryOf(env.STORE), space, who.person ?? ''),
     phoneAt(env, space.sender),
+    phoneAt(env),
   ])
   let from = phone?.transport().number
+  let call = platform?.caller ? platform.transport().number : undefined
   let address = mailFrom(space.slug, null, env)
   let operator = space.operator
   return html([
@@ -693,7 +709,7 @@ export let operatorBody = async (env: Env, space: Space, who: Who) => {
     talks(space.slug),
     nameCard(at, operator),
     voiceCard(at, space, offered(env, space)),
-    textsCard(at, consent, from),
+    textsCard(at, consent, from, call),
   ]) + settingsScript
 }
 
