@@ -203,16 +203,17 @@ for code enumerating application-owned tables.
 ## Resets
 
 The runtime moves an object to a new instance when it likes (a deploy, a runtime
-update, another machine, a failure inside its own storage), and the instance it
-moved fails its work in flight; whoever owns that work runs it again.
-`moved(error)` recognizes those words. `replaced(ctx.storage)` says whether this
-instance is the one that was moved: a reset instance still answers a read but
-refuses every write, so it asks through a transaction. `evicted(error)` is a
-reset a caller should send again for, and `killed(error)` a kill for the CPU or
-memory limit, which no code of the object sees. `opaque(error)` is the runtime's
-own internal error, which names only a reference: the work is tried again, and
-reported if it keeps failing. `lost(error)` is the connection to the object
-dropped under a call, which the runtime names in words alone.
+update, another machine, a failure inside its own storage, a lost connection to
+it), and the instance it moved fails its work in flight; whoever owns that work
+runs it again. `moved(error)` recognizes those words, "Network connection lost."
+among them: a caller meets it when its call is cut off, and an instance whose
+own storage lost its connection refuses every statement in it.
+`replaced(ctx.storage)` says whether this instance is the one that was moved: a
+reset instance still answers a read but refuses every write, so it asks through
+a transaction. `evicted(error)` is a reset a caller should send again for, and
+`killed(error)` a kill for the CPU or memory limit, which no code of the object
+sees. `opaque(error)` is the runtime's own internal error, which names only a
+reference: the work is tried again, and reported if it keeps failing.
 `retried(send, replayable, retry, wait)` sends a call again while it fails in
 words `retry` knows (`evicted` by default), pausing before each resend as
 `backoff` says; `wait` waits a pause out, `jittered(clock)` by default (half of
@@ -245,7 +246,7 @@ The package has one import path, `@yaks/durable-object`:
 | `sockets(subs, ctx)`                                    | Returns `accept`, `message`, `close`, and `wake`    |
 | `prohibited`, `reserved`                                | Identify internal runtime tables                    |
 | `moved`, `replaced`, `evicted`, `killed`, `opaque`      | Tell a reset of this instance from a failure        |
-| `lost`, `retried`, `backoff`, `jittered`                | Send a call again when the object was reset or lost |
+| `retried`, `backoff`, `jittered`                        | Send a call again when the object was reset or lost |
 | `DurableStorage`, `DurableSql`, `SqlCursor`, `SqlValue` | Structural storage types                            |
 | `Hibernation`, `Wire`, `Sockets`, `Store`               | Structural socket and store types                   |
 

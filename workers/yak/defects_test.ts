@@ -240,6 +240,8 @@ test('a reset out of retries is one fault per wording, whichever caller and depl
     'Error\n    at fetch (kernel-aaaaaaaa.js:9:9)',
   )
   fails(CODE, 'Error\n    at async kernel-dSEYHG67.js:1:1')
+  fails(LOST, 'Error\n    at execute (kernel-CtzHyLJm.js:111:9375)')
+  fails(LOST, 'Error\n    at answered (kernel-CtzHyLJm.js:135:128)')
   fails('boom', 'Error\n    at async kernel-dSEYHG67.js:1:1')
   await Promise.resolve()
   equal(
@@ -249,6 +251,7 @@ test('a reset out of retries is one fault per wording, whichever caller and depl
     [
       'reset:durable object reset because a newer deploy reached it: #',
       'reset:durable object reset because its code was updated.',
+      'reset:network connection lost.',
       undefined,
     ],
   )

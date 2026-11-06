@@ -145,7 +145,11 @@ occurrence carries the version it ran (`commit`); one from the previous version
 in that window is the lag, not the change. Keep a Worker-to-store call working
 against the previous store code. A restart can cut off an answer already being
 read, so the store door (door.ts `storeOf`) reads every answer it may send again
-whole inside its retry, and a caller never handles a reset. A reset that still
+whole inside its retry, and a caller never handles a reset. A lost connection
+("Network connection lost.") is a reset too (@yaks/durable-object `moved`): a
+call cut off is sent again, and an instance whose own storage lost its
+connection reports nothing it meets, since its replacement redoes the work
+(defects.ts `redone`). A reset that still
 outlasts the retries files under one bug per wording (defects.ts `defect`),
 whichever caller and deploy it names. The tracker's own deploy waits for its object
 (`workers/tracker/deploy.ts`).

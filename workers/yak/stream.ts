@@ -45,7 +45,7 @@ import { rosterLine } from '@yaks/mcp/roster'
 import { VERSION } from './seo.ts'
 import type { Env } from './env.ts'
 import { fetchOf } from './door.ts'
-import { evicted, jittered, lost } from '@yaks/durable-object'
+import { evicted, jittered } from '@yaks/durable-object'
 import { behind, type Restartable } from './running.ts'
 
 // The slice of the Durable Object runtime this object touches, structurally,
@@ -367,10 +367,6 @@ export class Wire {
 let wireOf = (env: Env, person: string) =>
   fetchOf(env.WIRE, person, jittered(env.CLOCK))
 
-// The object went away under a stream it held: reset (@yaks/durable-object
-// `evicted`), or the connection to it lost with it.
-let gone = (e: unknown) => evicted(e) || lost(e)
-
 /**
  * A held stream that ends when the object behind it does. Every deploy resets
  * the Wire, and so does a `wrangler tail` starting, and the body breaks under
@@ -395,7 +391,9 @@ export let resumable = (
         read.done ? out.close() : out.enqueue(read.value)
       } catch (e) {
         if (over) return
-        if (!gone(e)) await lost(e)
+        // The object went away under it: reset, or the connection to it lost
+        // with it (@yaks/durable-object `evicted`).
+        if (!evicted(e)) await lost(e)
         out.close()
       }
     },

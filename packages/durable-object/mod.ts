@@ -79,7 +79,6 @@ export {
   evicted,
   jittered,
   killed,
-  lost,
   moved,
   opaque,
   type Own,

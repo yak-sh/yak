@@ -8,7 +8,7 @@ import { bugEid } from '@yaks/tracker'
 import { Unsigned } from '@yaks/host/senders'
 import { sign } from './auth.ts'
 import { capture, caught, origin, queue } from '@yaks/tracker/report'
-import { evicted, jittered, lost, opaque, retried } from '@yaks/durable-object'
+import { evicted, jittered, opaque, retried } from '@yaks/durable-object'
 import { type Clock, system } from '@yaks/fp'
 import { platform } from './core.ts'
 import { consume, type Message } from './queue.ts'
@@ -203,7 +203,7 @@ export let worker = (
     retried(
       () => use(env.TRACKERS.getByName(scope)),
       true,
-      (error) => evicted(error) || lost(error) || opaque(error),
+      (error) => evicted(error) || opaque(error),
       wait,
     )
   // An HTTP door, its body read again by each send. A request without one has

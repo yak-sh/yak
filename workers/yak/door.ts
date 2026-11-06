@@ -16,14 +16,7 @@ import { type Location, locationOf } from './location.ts'
 import { elapsed, heard, hop, WAITS, writing } from './lib/hops.ts'
 import { defect } from './defects.ts'
 import { stamp } from './running.ts'
-import {
-  evicted,
-  killed,
-  lost,
-  opaque,
-  retried,
-  starved,
-} from '@yaks/durable-object'
+import { evicted, killed, opaque, retried, starved } from '@yaks/durable-object'
 
 // A store reports the statements it ran for this fetch, including any store
 // it asked in turn, how long it waited to start when this fetch woke it, and
@@ -302,7 +295,7 @@ export let reset = async (r: Response): Promise<Error | null> => {
   let e = typeof said?.message == 'string'
     ? Object.assign(new Error(said.message), { retryable: said.retryable })
     : null
-  return evicted(e) || lost(e) || starved(e) ? e : null
+  return evicted(e) || starved(e) ? e : null
 }
 
 /** A request factory, not a spent Request: every send gets its own body.
@@ -390,7 +383,7 @@ export let storeOf = (
         }
       },
       replayable,
-      (e) => evicted(e) || lost(e) || (!!read && safe && opaque(e)),
+      (e) => evicted(e) || (!!read && safe && opaque(e)),
       wait,
     )
   }

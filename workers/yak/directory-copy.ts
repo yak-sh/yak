@@ -9,7 +9,7 @@ import { type Fetcher, reset } from './door.ts'
 import type { Env } from './env.ts'
 import { background, defect } from './defects.ts'
 import { elapsed } from './lib/hops.ts'
-import { evicted, jittered, lost, opaque, retried } from '@yaks/durable-object'
+import { evicted, jittered, opaque, retried } from '@yaks/durable-object'
 import { type Clock, system } from '@yaks/fp'
 import { setImmediate } from 'node:timers'
 
@@ -162,7 +162,7 @@ export let fenced = async <T>(
 // next one supersedes, and the write commits under the newer revision. A
 // copy still moving after `backoff`'s pauses fails the write, which commits
 // nothing without its fence.
-let moving = (e: unknown) => evicted(e) || lost(e) || opaque(e)
+let moving = (e: unknown) => evicted(e) || opaque(e)
 
 export let EPOCH = 'x-yak-directory-revision'
 /** A signed read still fenced asks the directory to mend an orphaned fence. */
