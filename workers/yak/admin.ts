@@ -682,6 +682,7 @@ let operatorPage = async (
     managePath('operator', space.slug),
     open,
     true,
+    home,
   ).catch((e) => {
     caught(e, { request: 'admin operator conversation' })
     return e instanceof Error ? e : new Error(String(e))

@@ -86,6 +86,7 @@ import type { Who } from './session.ts'
 import { caught, refusing } from './defects.ts'
 import { type Browsers, browsers, type Lent } from './operator-browser.ts'
 import { PROTOCOL, protocolled } from './protocol.ts'
+import { managePath } from './route.ts'
 import {
   type Frame,
   type Held,
@@ -507,6 +508,7 @@ export class Builder {
         space: spaceId,
         administrative: access.administrative,
         called: space.operator,
+        opens: managePath('operator', space.slug),
         operator: true,
       })
     }

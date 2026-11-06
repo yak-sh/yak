@@ -482,13 +482,19 @@ let briefed = (
     : rows
 }
 
-/** A helper the Operator started: the call that started it, when one did, and
- * its transcript. */
-export type Helper = { call?: string; entries: Bundle[] }
+/** A helper the Operator started: its session, the call that started it,
+ * when one did, and its transcript. */
+export type Helper = { session?: string; call?: string; entries: Bundle[] }
 
 /** What a conversation draws beside its own transcript: the helpers it
- * started, the tool offers its asks name, and what its Operator is called. */
-export type Seen = { helpers?: Helper[]; offers?: Offers; called?: string }
+ * started, the tool offers its asks name, what its Operator is called, and
+ * where a conversation opens, by its id after `opens/`. */
+export type Seen = {
+  helpers?: Helper[]
+  offers?: Offers
+  called?: string
+  opens?: string
+}
 
 // What a helper was told, all its asks', in one place.
 let helped = (h: Helper, offers?: Offers) =>
@@ -502,7 +508,7 @@ export let rows = (entries: Bundle[], names: Names, seen: Seen = {}): Row[] =>
 let lines = (
   entries: Bundle[],
   names: Names,
-  { helpers = [], offers, called = 'the Operator' }: Seen = {},
+  { helpers = [], offers, called = 'the Operator', opens }: Seen = {},
 ): Line[] => {
   let results = new Map(
     entries.filter((b) => b.result).map((b) => [
@@ -513,9 +519,23 @@ let lines = (
   let prompts = new Map(
     briefed(entries, called, offers).map((r) => [r.id, r]),
   )
+  // What each helper a step started was told, under a link to its own
+  // conversation.
   let under = (call: string) =>
-    helpers.filter((h) => h.call == call)
-      .flatMap((h) => helped(h, offers)).map((r) => r.node)
+    helpers.filter((one) => one.call == call).flatMap((one) => [
+      opens && one.session
+        ? h(
+          'p',
+          null,
+          h(
+            'a',
+            { href: `${opens}/${one.session}` },
+            'Open the helper’s conversation',
+          ),
+        )
+        : null,
+      ...helped(one, offers).map((r) => r.node),
+    ])
   let calls = new Set(entries.map((b) => b.entity.eid))
   return [
     ...entries.flatMap((b): Line[] => {
@@ -750,6 +770,8 @@ export type Worked = {
   state: string
   at: string
   busy: boolean
+  /** for a helper, the title of the conversation that started it */
+  from?: string
 }
 
 // What a task's newest session says of it, in the words its list shows.
@@ -767,8 +789,12 @@ export type Listed = Worked & { where?: string }
 
 // A list across spaces says when each last changed, to the minute.
 let meta = (w: Listed) =>
-  [w.where, w.state, w.where ? moment(w.at) : day(w.at, 'short')]
-    .filter(Boolean).join(' · ')
+  [
+    w.where,
+    w.from && `Helper of the ${w.from[0].toLowerCase()}${w.from.slice(1)}`,
+    w.state,
+    w.where ? moment(w.at) : day(w.at, 'short'),
+  ].filter(Boolean).join(' · ')
 
 /** The Operator's conversations as rows, newest first, each a link to the
  * page `href` gives it. */

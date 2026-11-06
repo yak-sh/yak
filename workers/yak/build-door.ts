@@ -17,8 +17,10 @@ export type Held = {
   role: Level | null
   space: string
   administrative?: boolean
-  // What the space's Operator is called, for a page watching it.
+  // What the space's Operator is called, and where a conversation opens by
+  // its id, for a page watching it.
   called?: string
+  opens?: string
 }
 
 /** The header the kernel names the space with at the handshake — the object's

@@ -618,7 +618,8 @@ let socketTo = (
 /** One conversation, opened by its task or a request: its sessions as they
  * ran (operator-view.ts `talk`), or the request alone while no session has
  * taken it. `everyone` reads any person's, for the platform's admin, each
- * titled by whose it is. */
+ * titled by whose it is, and `opens` is where its helpers' conversations
+ * open, by their id: the chat app's unless the admin's. */
 export let conversationOf = async (
   env: Env,
   space: Space,
@@ -626,6 +627,7 @@ export let conversationOf = async (
   at: string,
   open: string,
   everyone = false,
+  opens?: string,
 ) => {
   let none = { task: '', begun: '', title: '', html: '', changed: [] }
   if (open == 'new') return none
@@ -635,7 +637,7 @@ export let conversationOf = async (
     space,
     who,
     'conversation',
-    { at, open, ...everyone ? { everyone } : {} },
+    { at, open, ...everyone ? { everyone } : {}, ...opens ? { opens } : {} },
   ).catch((e) => {
     if (e.status != 404) throw e
     return { ...none, waiting: [] }

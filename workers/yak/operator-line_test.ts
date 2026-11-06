@@ -10,7 +10,9 @@ import { credential } from '@yaks/connections'
 import { reveal } from '@yaks/secrets'
 import { operatorModel, operatorService } from './operator-testing.ts'
 import { receive, rootOf } from './operator-channels.ts'
-import { conversationOf } from './operator-host.ts'
+import { conversationOf, workOf } from './operator-host.ts'
+import { listed as listing } from './operator-view.ts'
+import { parseHTML } from 'linkedom'
 import { lineDoor, owned, textedFor } from './operator-line.ts'
 
 // A person connects their own voip.ms number, their Operator texts someone
@@ -237,6 +239,33 @@ test("a fork's text goes from the person's own number, signed as their assistant
     '+12695550142',
   ])
   assertStringIncludes(ofFork.html, 'Texted Dr Alvarez')
+})
+
+test('a helper is listed as one, and the step that started it opens its conversation where it is viewed', async () => {
+  let helper = fork.entity.eid
+  let listed = await workOf(store, eid, person, () => Promise.resolve('Jeff'))
+  assertEquals(
+    listed.filter((w) => w.from).map((w) => [w.open, w.from]),
+    [[helper, 'Conversation with Jeff']],
+  )
+  assertStringIncludes(
+    listing(listed, (w) => w.open),
+    'Helper of the conversation with Jeff',
+  )
+  let link = (html: string) =>
+    parseHTML(html).document
+      .querySelector(`a[href$="/${helper}"]`)?.getAttribute('href')
+  assertEquals(link(root.html), `/at/${helper}`)
+  let admin = await conversationOf(
+    store,
+    '/at',
+    rootOf(eid, person),
+    undefined,
+    undefined,
+    undefined,
+    '/admin/x/operator',
+  )
+  assertEquals(link(admin.html), `/admin/x/operator/${helper}`)
 })
 
 test("a text back comes into the person's conversation as its writer's words; anyone else's stays theirs", async () => {
