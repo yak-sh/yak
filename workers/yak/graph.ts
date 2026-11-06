@@ -2507,7 +2507,7 @@ export class Store {
       (this.#dormant && !(this.#moveOnly && reason == 'mover')) ||
       !this.#alarm || !at
     ) return
-    let result = await arm(this.#alarm, { at })
+    let result = await arm(this.#alarm, { at }, Infinity, this.#now())
     if (this.#profile) {
       let held = await this.#alarm.getAlarm()
       console.log(
@@ -2749,7 +2749,14 @@ export class Store {
       return
     }
     if (expires && this.#alarm) {
-      await arm(this.#alarm, { at: new Date(expires.at).toISOString() })
+      await arm(
+        this.#alarm,
+        {
+          at: new Date(expires.at).toISOString(),
+        },
+        Infinity,
+        this.#now(),
+      )
     }
     if (!await this.#awake() && !this.#moveOnly) return
     await this.#ensureStarted()
@@ -4550,7 +4557,14 @@ export class Store {
       }
       await this.#ctx.storage.put('expires', expires)
       this.#expires = expires
-      await arm(this.#alarm, { at: new Date(expires.at).toISOString() })
+      await arm(
+        this.#alarm,
+        {
+          at: new Date(expires.at).toISOString(),
+        },
+        Infinity,
+        this.#now(),
+      )
       return Response.json({ ok: true })
     }
     // The mover's door (mover.ts), a sweep's one question of each store:

@@ -490,11 +490,28 @@ test('an app store keeps its own schedule, with no platform in the middle', asyn
     wake: { at: string }
   }[]
   assert(row, 'the app store fired its own wake')
+  // A completed effect leaves its recovery alarm for one final delivery.
+  await p.settled()
+  await ring(p, 'ada/app')
   // A recurrence moves on and the object is armed for the next one.
   assertEquals(
     await p.states.get('ada/app')!.storage.getAlarm(),
     Date.parse(row.wake.at),
   )
+})
+
+test('an app arms its earliest wake according to its own clock', async () => {
+  let p = platform('app wake clock', { CLOCK: clock(at('09:00')) })
+  let door = metaOf(storeOf(p.env.STORE, 'ada/app'))
+  await door.apply([{
+    entity: { eid: 'first' },
+    wake: { at: iso('09:05') },
+  }], KERNEL)
+  await door.apply([{
+    entity: { eid: 'later' },
+    wake: { at: iso('09:10') },
+  }], KERNEL)
+  assertEquals(await p.states.get('ada/app')!.storage.getAlarm(), at('09:05'))
 })
 
 test('the git object store keeps a clock too, with nothing owed', async () => {
@@ -610,7 +627,10 @@ let app = (name = 'ada/chores', ctx = state()) => {
     until(async () => (await rows(line)).length == n, {
       label: `${n} of ${line}`,
     })
-  return { ctx, store, ask, rows, holds }
+  let settled = async () => {
+    while (ctx.pending.size) await Promise.all([...ctx.pending])
+  }
+  return { ctx, store, ask, rows, holds, settled }
 }
 
 let chores = async () => {
@@ -796,6 +816,11 @@ test('a world with nobody in it stops ticking, and a player arriving wakes it', 
   await a.store.tick(sec('09:40:30'))
   await a.holds('.tick', 4)
   assertEquals(await owed(), undefined)
+  // Finish the last call, then deliver the alarm that guarded its run.
+  await a.settled()
+  await a.ctx.storage.deleteAlarm()
+  await a.store.alarm()
+  await a.settled()
   assertEquals(await a.ctx.storage.getAlarm(), null)
   assertEquals((await a.store.tick(at('12:00'))).fired, [])
   // Somebody arrives, and the world is owed its next half minute again.
