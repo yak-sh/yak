@@ -2555,6 +2555,22 @@ export let askConnect = (at: {
     }</a></p>`,
   )
 
+// A one-click link, opened (identity.ts LINK). Opening it spends nothing: a
+// messaging app or mail scanner that fetches the address to draw a preview
+// would otherwise sign itself in and leave the person a dead link. The button
+// carries the pass on, and pressing it is what spends the code.
+export let askLink = (t: string, env: Host = {}) =>
+  shell(
+    env,
+    'Sign in to yaks.app',
+    'This link signs you in once, for ten minutes.',
+    200,
+    `<form method="post" action="/login/link">${held('t', t)}
+<button class="Button" type="submit">Sign in</button>
+</form>${home(env)}`,
+    { 'cache-control': 'private, no-store', 'referrer-policy': 'no-referrer' },
+  )
+
 // A custom domain asking to sign in: consent names its host and its space.
 export let askHandoff = (
   host: string,

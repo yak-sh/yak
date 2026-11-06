@@ -15,14 +15,15 @@
 //   Once      the link every code letter carries, and every link to our zone
 //             in the Operator's texts (operator-texts.ts `signingIn`). It
 //             seals the address and the code, so it is that code said another
-//             way — spending the link
-//             spends the code (signin.ts `spend`), which makes it single use,
+//             way — spending the link spends the code (signin.ts `spend`),
+//             which makes it single use,
 //             ten minutes old and counted against the same ceilings without a
 //             ledger of its own. A person is not minted for it either, so
 //             asking for a code still writes nothing about the address but the
 //             row that already counted it. And a leaked store row still cannot
 //             be turned into a link, because that store keeps a mac and never
-//             the digits.
+//             the digits. Opening it spends nothing: the page is one button,
+//             and the press spends it, so a preview fetch leaves it whole.
 //   Standing  the link that signs one person in until an expiry its minter
 //             set. It seals the person and a row id, and it is worth a session
 //             and nothing more: what the holder may then do is their

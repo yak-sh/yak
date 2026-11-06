@@ -1384,10 +1384,22 @@ test('a link signs a person in, once or until it is revoked', async () => {
     }
     let one = where((await letter(k, email, 'sign in with one click')).body)
 
-    // It lands exactly where the code lands: their own space, with the
+    // Opening it spends nothing (T-142867): a messaging app fetching it for a
+    // preview, then the person, each get one button that carries the pass on.
+    let press = ''
+    for (let _ of [1, 2]) {
+      let opened = await click(one)
+      assertEquals(opened.status, 200)
+      assertEquals(opened.headers.get('set-cookie'), null)
+      press = /name="t" value="([^"]+)"/.exec(await opened.text())?.[1] ?? ''
+    }
+    assertEquals(press, new URL(one, 'https://yaks.app').searchParams.get('t'))
+    let pressed = () => form(k, '/login/link', { t: press })
+
+    // The press lands exactly where the code lands: their own space, with the
     // platform cookie — and it says nothing about where it came from, so the
     // pass never rides on to the next page in a Referer.
-    let inn = await click(one)
+    let inn = await pressed()
     assertEquals(inn.status, 303)
     await inn.body?.cancel()
     assertEquals(
@@ -1400,7 +1412,7 @@ test('a link signs a person in, once or until it is revoked', async () => {
 
     // Single use: the link was the code, and the code is spent. The card
     // again, and no session with it.
-    let twice = await click(one)
+    let twice = await pressed()
     assertEquals(twice.status, 400)
     assertEquals(twice.headers.get('set-cookie'), null)
     assertStringIncludes(await twice.text(), 'That link has expired')
@@ -1441,9 +1453,13 @@ test('a link signs a person in, once or until it is revoked', async () => {
     let asked = await form(k, '/login', { email, q })
     assertEquals(asked.status, 200)
     await asked.body?.cancel()
-    let linking = await click(
+    let link = new URL(
       where((await letter(k, email, 'sign in with one click', received)).body),
+      'https://yaks.app',
     )
+    let linking = await form(k, '/login/link', {
+      t: link.searchParams.get('t') ?? '',
+    })
     assertEquals(linking.status, 302)
     await linking.body?.cancel()
     let to = new URL(linking.headers.get('location') ?? '')

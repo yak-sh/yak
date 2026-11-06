@@ -126,6 +126,7 @@ import {
   links,
   type Once,
   onceLink,
+  type Pass,
   passOf,
   revoke,
   stand,
@@ -157,6 +158,7 @@ import {
   askDelete,
   askEmail,
   askHandoff,
+  askLink,
   connect,
   deleted,
   lost,
@@ -843,6 +845,29 @@ let spent = async (env: Env, once: Once) =>
     ? await personOf(meta(env), once.email, called(once.email))
     : null
 
+// A pass followed: it lands where a spent code lands, and one that has been
+// spent, revoked or expired is the sign-in card again, still carrying whatever
+// the link was going to finish.
+let followed = async (req: Request, env: Env, pass: Pass | null) => {
+  let once = pass?.once
+  let person = once
+    ? await spent(env, once)
+    : pass?.standing
+    ? await whose(pass.standing, links(env.OAUTH_KV))
+    : null
+  if (!person) {
+    return signCard(env, {
+      q: once?.q,
+      back: once?.back,
+      why: 'That link has expired or was already used. Ask for a fresh one?',
+      status: 400,
+    })
+  }
+  return quiet(
+    await landed(req, env, person, once?.q ?? '', once?.back ?? '', 'link'),
+  )
+}
+
 // The same answer, saying nothing about where it came from: the address
 // carried the pass, and a redirect off this page — to an app, or to an OAuth
 // client's own redirect_uri — would otherwise hand the link on in a Referer.
@@ -1231,28 +1256,17 @@ let ours = async (req: Request, env: Env): Promise<Response> => {
   }
 
   // One click instead of six digits (link.ts): the letter's own link, or a
-  // standing one somebody was handed. Both land where the code lands, and a
-  // pass that has been spent, revoked or expired is the sign-in card again,
-  // still carrying whatever the link was going to finish.
+  // standing one somebody was handed. Opening a letter's link spends nothing —
+  // a preview fetch would spend it for nobody — so it answers one button that
+  // posts the pass back here, and the press is the spend. A standing link is
+  // not spent at all, and lands at once.
   if (path == LINK && req.method == 'GET') {
-    let pass = await passOf(url.searchParams.get('t') ?? '', secret(env))
-    let once = pass?.once
-    let person = once
-      ? await spent(env, once)
-      : pass?.standing
-      ? await whose(pass.standing, links(env.OAUTH_KV))
-      : null
-    if (!person) {
-      return signCard(env, {
-        q: once?.q,
-        back: once?.back,
-        why: 'That link has expired or was already used. Ask for a fresh one?',
-        status: 400,
-      })
-    }
-    return quiet(
-      await landed(req, env, person, once?.q ?? '', once?.back ?? '', 'link'),
-    )
+    let t = url.searchParams.get('t') ?? ''
+    let pass = await passOf(t, secret(env))
+    return pass?.once ? askLink(t, env) : await followed(req, env, pass)
+  }
+  if (path == LINK && req.method == 'POST' && field('t')) {
+    return await followed(req, env, await passOf(field('t'), secret(env)))
   }
 
   // A standing link, minted for whoever is signed in and for nobody else — the

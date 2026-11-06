@@ -86,9 +86,13 @@ await channels(env).text(
 let [told] = texts.splice(0)
 let link =
   /https:\/\/yaks\.app\/login\/link\?t=[\w-]+\.[\w-]+/.exec(told.text)![0]
+// The link's own button (identity.ts LINK): the press is what spends it.
 let go = (href: string) =>
-  k.at('yaks.app', href.slice('https://yaks.app'.length), {
+  k.at('yaks.app', '/login/link', {
+    method: 'POST',
     redirect: 'manual',
+    headers: { 'content-type': 'application/x-www-form-urlencoded' },
+    body: new URLSearchParams({ t: new URL(href).searchParams.get('t')! }),
   })
 let pass = (await opened<Pass>(
   'link',
