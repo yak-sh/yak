@@ -270,8 +270,9 @@ type Ctx = {
   unordered?: boolean
   points?: Set<string>
   tables: Set<string>
-  /** the first disjunction's entity ids, and the condition that tests them */
-  candidates?: Frag & { test: Cond; whole?: boolean }
+  /** the first disjunction's entity ids, and the condition that tests them;
+   * `arms` reads the same owners one archetype each, in its index's order */
+  candidates?: Frag & { test: Cond; whole?: boolean; arms?: Frag[] }
   shapeCandidates?: boolean
   numberedShapePage?: boolean
   /** A mandatory equality's index reads in the statement's order, and the
@@ -2169,20 +2170,35 @@ let conjuncts = (ctx: Ctx, clauses: Clause[]): Cond[] => {
     !ctx.candidates && !shapes.size && ctx.d.archetypeSource && !ctx.paged
   ) {
     let policy = allowed(ctx)
-    let admitted = policy && byArchetype(ctx, {
+    let admitting = policy && {
       all: [...new Set([...all, ...wearing, ...policy.all ?? []])],
       none: [...new Set([...none, ...policy.none ?? []])],
-    })
+    }
+    let admitted = admitting && byArchetype(ctx, admitting)
     if (admitted) shape = admitted
-    let held = render(shape)
+    let reading = (where: Frag): Frag => ({
+      sql: `select "entity".${admitted ? '*' : '"id"'} from ${
+        ctx.d.archetypeSource!(ctx.v)
+      } where ${where.sql}`,
+      params: where.params,
+    })
+    // An index of the archetype alone keeps each archetype's owners in id
+    // order, the order a page of them is read in. One that keys the number
+    // too (@yaks/id) keeps them in the number's.
+    let ids = ctx.v.prop('entity', 'num') ? undefined : ctx.archetypes!(
+      admitting && admitted
+        ? admitting
+        : { all: [...new Set([...all, ...wearing])], none },
+    )
+    let key = ctx.d.archetype!(ctx.owner)
     ctx.shapeCandidates = true
     ctx.candidates = {
-      sql: `select "entity".${admitted ? '*' : '"id"'} from ${
-        ctx.d.archetypeSource(ctx.v)
-      } where ${held.sql}`,
-      params: held.params,
+      ...reading(render(shape)),
       test: shape,
       whole: !!admitted,
+      arms: ids && ids.length > 1 && ids.length <= MERGED
+        ? ids.map((id) => reading({ sql: `${key} = ?`, params: [id] }))
+        : undefined,
     }
   }
   // A disjunction can provide candidates even when no component is required.
@@ -2375,6 +2391,33 @@ let clause = (ctx: Ctx, c: Clause): Cond => {
 let UNREACHED = new Set(['near', 'edges'])
 let find = <T extends Clause>(cs: Clause[], kind: string): T | undefined =>
   cs.find((c) => c.kind == kind) as T | undefined
+
+// The most archetypes a page merges. Each costs a seek before the page
+// starts; past this many, sorting their owners is the likelier cheaper read.
+let MERGED = 64
+
+// Rows of every arm, each already in its owners' order `dir`, as one
+// relation in that order. SQLite merges the arms of an ordered compound
+// rather than sorting them. A compound carries at most ARMS terms, so wider
+// ones nest in groups; SQLite flattens the groups back into one merge. A
+// group kept apart by a `limit` would be sorted whole by its parent instead.
+// The outermost keeps `limit -1`, which holds it apart from the statement
+// joining it, whose own order then follows the merge's.
+let merged = (arms: Frag[], dir: 'asc' | 'desc'): Frag => {
+  let ordered = (parts: Frag[]): Frag => ({
+    sql: `${parts.map((p) => p.sql).join(' union all ')} order by "id" ${dir}`,
+    params: parts.flatMap((p) => p.params),
+  })
+  while (arms.length > ARMS) {
+    arms = cut(arms, ARMS).map((group) => {
+      if (group.length == 1) return group[0]
+      let g = ordered(group)
+      return { sql: `select * from (${g.sql})`, params: g.params }
+    })
+  }
+  let all = ordered(arms)
+  return { sql: `${all.sql} limit -1`, params: all.params }
+}
 
 // The direction a select orders its owners by their key in, when that is its
 // whole order: the order shape candidates can be read in themselves.
@@ -2943,12 +2986,22 @@ let indexedRelation = (
       // limit stops the visibility and value tests at the page; sorted after
       // the join, every candidate pays them first. `limit -1` keeps SQLite
       // from flattening the subquery, which would drop its order.
-      from: raw(
-        `(${ctx.candidates.sql}${
-          ordered ? ` order by "entity"."id" ${ordered} limit -1` : ''
-        }) as "${alias}"`,
-        ctx.candidates.params,
-      ),
+      //
+      // A page of owners spread over several archetypes reads each one's
+      // owners from the index in that order, and SQLite merges the arms of an
+      // ordered compound: the page stops after about as many index entries as
+      // it keeps, plus one per archetype, where `archetype in (…)` reads every
+      // owner of all of them to sort.
+      from: ordered && page != null && ctx.candidates.arms
+        ? (({ sql, params }) => raw(`(${sql}) as "${alias}"`, params))(
+          merged(ctx.candidates.arms, ordered),
+        )
+        : raw(
+          `(${ctx.candidates.sql}${
+            ordered ? ` order by "entity"."id" ${ordered} limit -1` : ''
+          }) as "${alias}"`,
+          ctx.candidates.params,
+        ),
       order: ordered ? [raw(`"${alias}"."id" ${ordered}`)] : s.order,
       joins: [
         ...ctx.candidates.whole ? [] : [{
