@@ -1473,7 +1473,15 @@ if (import.meta.main) {
       let bundle = await bundled(
         argv,
         (output, meta) =>
-          generated('Kernel modules', [join(dir, 'bundle.ts'), output, meta]),
+          timed(
+            'Kernel modules',
+            () =>
+              generated('Kernel modules', [
+                join(dir, 'bundle.ts'),
+                output,
+                meta,
+              ]),
+          ),
       )
       try {
         let bound = argv.some((a) => /^(-c|--config)(=|$)/.test(a))
