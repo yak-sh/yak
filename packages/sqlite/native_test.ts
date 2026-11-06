@@ -24,6 +24,27 @@ import { storage } from './mod.ts'
 import { epoch, epochAt } from './meta.ts'
 import { mem, shop } from './testing.ts'
 
+test('a plain SQL schema is copied without store metadata', () => {
+  let [a, b] = [open(':memory:'), open(':memory:')]
+  try {
+    for (let d of [a, b]) {
+      d.template!('plain SQL schema', () =>
+        d.query({
+          t: 'create table',
+          name: 'sample',
+          cols: [{ name: 'value', type: 'integer' }],
+        }))
+    }
+    a.query(insert(7))
+    assertEquals(scan(a, 'sample'), [{ value: 7 }])
+    assertEquals(scan(b, 'sample'), [])
+    assertEquals(epochAt(b), undefined)
+  } finally {
+    a.close()
+    b.close()
+  }
+})
+
 // Stores in memory past the first are copies of the schema it made: each has
 // every object a store made by its statements has, and only its own rows.
 test('a store in memory made from a template has the whole schema and only its own rows', () => {
