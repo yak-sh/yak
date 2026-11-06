@@ -248,7 +248,7 @@ export let narrowed = (
     let page = await dir.page(space.slug, null, person, true)
     let role = page.administrative ? 'owner' as const : page.role
     return role
-      ? (await dir.apps(space)).filter((app) => !app.trashed).map((app) => ({
+      ? page.roster!.filter((app) => !app.trashed).map((app) => ({
         space,
         app,
         role,

@@ -1580,8 +1580,9 @@ let revised = async (via: Fetcher, q: string): Promise<Revised> => {
 
 // Every read carries the directory's revision. The app and the homes it borrows
 // from select declarations written by one directory commit.
-// Address lookups select one app, routing the app and the front page;
-// roster consumers explicitly ask apps().
+// Address lookups select one app, routing the app and the front page; the
+// bare address of a space reads its roster (`page`), and other roster
+// consumers explicitly ask apps().
 //
 // A request asks once. The door, the reach it answers over and the tool itself
 // each ask who the caller is and where they sit, and within one request those
@@ -1698,7 +1699,10 @@ export let directoryRows = (rows: {
     // is asking, together. Filtering through app.space and member.space
     // avoids an earlier trip just to learn the space eid; the same
     // authoritative snapshot answers the whole route. `role` is said only
-    // when a person was asked about: their role, or null for no seat.
+    // when a person was asked about: their role, or null for no seat. With no
+    // app named it is the space's bare address, where the front page or else
+    // the listing of every app answers, so the read is every app (`roster`,
+    // oldest first, as `apps` says) and the listing asks nothing more.
     page: async (
       slug: string,
       app?: string | null,
@@ -1706,9 +1710,7 @@ export let directoryRows = (rows: {
       over = false,
     ) => {
       let at = `.app.space.space.slug=${slug}`
-      let which = app
-        ? `((${at}&.app.slug=${app})|(${at}&.home))`
-        : `${at}&.home`
+      let which = app ? `((${at}&.app.slug=${app})|(${at}&.home))` : at
       let seat = person
         ? `|(.member.space.space.slug=${slug}&.member.person=${person})` +
           `|(.grant.app.app.space.space.slug=${slug}&.grant.person=${person})` +
@@ -1730,6 +1732,7 @@ export let directoryRows = (rows: {
         space: space ? spaceOf(space) : null,
         app: apps.find((one) => one.slug == app) ?? null,
         home: apps.find((one) => one.home && !one.trashed) ?? null,
+        roster: app ? null : apps,
         ...person
           ? {
             role: member?.role ?? null,

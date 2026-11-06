@@ -2433,12 +2433,8 @@ let returned = (q: URLSearchParams) =>
 
 // A space's apps, the ones in the trash left in (only its owner is shown
 // those), and the ones whoever is asking may open.
-let shelf = async (
-  dir: ReturnType<typeof directory>,
-  space: Space,
-  who: Who,
-) => {
-  let here = (await dir.apps(space)).filter((a) => !kernels(space, a.slug))
+let shelf = (apps: App[], space: Space, who: Who) => {
+  let here = apps.filter((a) => !kernels(space, a.slug))
   let all = here.filter((a) => !a.trashed)
   let mine = all.filter((a) => reads(mode(a.access), who.role))
   return { here, all, mine }
@@ -2446,20 +2442,17 @@ let shelf = async (
 
 // A space's front door at `/`, when no app answers there (rung 4): its apps,
 // as whoever is asking may see them, and to its owner the way to its
-// dashboard.
+// dashboard. The apps and the asker's seat are the route's own read
+// (directory.ts `page`), so the listing waits on no directory read of its own.
 let index = async (
   req: Request,
   env: Env,
-  dir: ReturnType<typeof directory>,
   space: Space,
+  apps: App[],
+  seatOf: (person: string) => Promise<Role | null>,
 ): Promise<Response> => {
-  let who = await whoIs(
-    req,
-    env.SESSION_SECRET,
-    (p) => dir.role(space, p),
-    space.eid,
-  )
-  let { all, mine } = await shelf(dir, space, who)
+  let who = await whoIs(req, env.SESSION_SECRET, seatOf, space.eid)
+  let { all, mine } = shelf(apps, space, who)
   let owner = who.role == 'owner'
   return spaceIndex({
     space: space.slug,
@@ -2711,7 +2704,7 @@ let beside = async (
 ): Promise<Beside> => {
   let [spaces, { mine }, name] = await Promise.all([
     dir.seats(who.person).then((seats) => pickable(dir, seats)),
-    shelf(dir, space, who),
+    dir.apps(space).then((apps) => shelf(apps, space, who)),
     dir.nameAt(who.person),
   ])
   return {
@@ -2740,7 +2733,7 @@ let desk = async (
   if (view == 'apps') {
     void trackedIn(env, space, who, true).catch(() => {})
   }
-  let shelved = shelf(dir, space, who)
+  let shelved = dir.apps(space).then((apps) => shelf(apps, space, who))
   let [
     { here, all },
     broken,
@@ -3653,7 +3646,7 @@ let served = async (
         let none = nothingAt(url.pathname, env)
         return edge ? keep(none, space, null) : none
       }
-      return await index(req, env, dir, space)
+      return await index(req, env, space, (await routing).roster!, seatOf)
     }
     // `/<x>/api/…` named an app that is not here. That is a wrong address,
     // not one of the front page's own paths: a page asking a store there has
@@ -4124,7 +4117,9 @@ let served = async (
   // nothing answers is nothing, not a listing.
   if (page.status == 404 && url.pathname == '/') {
     await page.body?.cancel()
-    return edge ? passed() : await index(req, env, dir, space)
+    return edge
+      ? passed()
+      : await index(req, env, space, (await routing).roster!, seatOf)
   }
   // Site's page is counted by the gateway that sends it (page-cache.ts).
   if (edge) return marked(keep(reporting(page, req, at), space, app))

@@ -397,6 +397,24 @@ test('a dashboard page reads the directory in two trips at most', async () => {
   }
 })
 
+// A space with no front page answers its bare address with its listing, from
+// the one read that routed it, for a stranger and for its owner alike.
+test("a space's listing reads the directory in one trip", async () => {
+  let k = await kernel()
+  let slug = unique('listed')
+  let { cookie } = await seed(k, [{ slug, apps: ['one', 'two'] }])
+  for (let headers of [{}, { cookie }] as Record<string, string>[]) {
+    await k.settled()
+    let page = await k.at(`${slug}.yaks.app`, '/', { headers })
+    assertEquals(page.status, 200)
+    assertStringIncludes(await page.text(), 'href="/two/"')
+    assertEquals(
+      /hops;dur=(\d+)/.exec(page.headers.get('server-timing') ?? '')?.[1],
+      '1',
+    )
+  }
+})
+
 test("the selector names whose space each one you're a member of is", async () => {
   let k = await kernel()
   let slug = unique('whose')

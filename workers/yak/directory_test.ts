@@ -320,6 +320,27 @@ for (
   })
 }
 
+// A space's bare address is its front page or its listing, so the one read
+// that routes it holds every app, in the order `apps` lists them.
+for (
+  let [name, slug, app, roster, home] of [
+    ['bare address', 'jeff', undefined, ['a1', 'a2'], 'a2'],
+    ['named address', 'jeff', 'recipes', null, 'a2'],
+    ['trashed front page', 'trashed-home', undefined, ['a4'], null],
+  ] as const
+) {
+  test(`directory page: ${name}`, async () => {
+    let page = await routingDir.page(slug, app)
+    assertEquals<unknown>(
+      [page.roster?.map((a) => a.eid) ?? null, page.home?.eid ?? null],
+      [roster, home],
+    )
+    if (page.roster) {
+      assertEquals(page.roster, await routingDir.apps(page.space!))
+    }
+  })
+}
+
 // A comp is the platform holding one of its own spaces to no ceiling. It is a
 // constant read here and a property nowhere: what makes that safe is that
 // nothing on the wire can reach it, which is the same reason `plan` is
