@@ -136,7 +136,7 @@ test('request and transcript doors hide other people’s requests and tasks', as
   )
   assertEquals((await read(bea, 'messages')).body, [])
   assertEquals((await read(bea, 'work')).body, [])
-  assertEquals((await read(bea, 'read')).body, { tasks: [] })
+  assertEquals((await read(bea, 'read')).body, { tasks: [], conversations: [] })
   assertEquals(
     await read(bea, 'read', { task }),
     await read(bea, 'read', { task: unknown }),
