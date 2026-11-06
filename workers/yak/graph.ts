@@ -35,6 +35,7 @@ import {
   stageDeclaration,
   unseeded,
 } from './app-declarations.ts'
+import { storageDoor } from './page-storage.ts'
 import {
   appGuard,
   authenticating,
@@ -634,13 +635,10 @@ type Word =
   | 'embedding-outage'
   // The searchable fields its whole lexicon was last read under (`#lexing`).
   | 'lexicon'
-  // One person's localStorage in a sandboxed app (installed.ts): their keys
+  // One person's localStorage in a walled page (page-storage.ts): their keys
   // as one JSON object, kept here rather than as rows, which the app's other
   // readers could query.
   | `storage:${string}`
-// The most one person keeps in one app's storage, in characters of JSON.
-let STORED = 1024 * 1024
-
 // The most tables one alarm analyzes (`#analyzing`). The object yields between
 // them, so this bounds the alarm, not a request's wait; a deploy owes a few,
 // and only growth or a store's first statistics owe every table holding rows.
@@ -4363,7 +4361,13 @@ export class Store {
     // is not one — so each is a word in this object's own memory, and the
     // kernel is the only caller.
     if (path == '/uses') return this.#slot(request, 'uses')
-    if (path == '/storage') return this.#storage(request)
+    if (path == '/storage') {
+      return storageDoor(
+        request,
+        (key) => this.#get(key as Word),
+        (key, value) => this.#put(key as Word, value),
+      )
+    }
     if (path == '/tools') {
       let candidate = this.#candidate(request)
       let key: Word = candidate ? `tools:${candidate}` : 'tools'
@@ -4926,41 +4930,6 @@ export class Store {
       (key) => this.#get(key as Word),
       (key, value) => this.#put(key as Word, value),
     )
-  }
-
-  // A person's saved keys (apps.ts `/storage`, public/storage.js): GET them
-  // all, or POST `{set, remove, clear}` to change them. The person is the
-  // kernel's vouch and nobody else's, so one person never reads another's.
-  // Held to a megabyte of text each — a page's preferences and its drafts,
-  // not a second database beside the graph.
-  async #storage(request: Request): Promise<Response> {
-    let person = vouchOf(request).person
-    if (!person) {
-      return json({ error: 'Refused', message: 'nobody to keep it for' }, 401)
-    }
-    let word = `storage:${person}` as const
-    let held = JSON.parse(this.#get(word) ?? '{}') as Record<string, string>
-    if (request.method == 'GET') return Response.json(held)
-    let sent = await readBody(request).then(JSON.parse).catch(() => null) as {
-      set?: Record<string, unknown>
-      remove?: unknown[]
-      clear?: boolean
-    } | null
-    if (!sent || typeof sent != 'object') {
-      return json(
-        { error: 'Refused', message: '/storage takes a JSON object' },
-        400,
-      )
-    }
-    let next: Record<string, string> = sent.clear ? {} : { ...held }
-    for (let k of sent.remove ?? []) delete next[String(k)]
-    for (let [k, v] of Object.entries(sent.set ?? {})) next[k] = String(v)
-    let text = JSON.stringify(next)
-    if (text.length > STORED) {
-      return json({ error: 'Refused', message: 'storage is full' }, 413)
-    }
-    this.#put(word, text)
-    return Response.json({ ok: true, keys: Object.keys(next).length })
   }
 
   // Everything in this object, gone, and the object born again on the spot:

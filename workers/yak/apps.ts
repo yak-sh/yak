@@ -4172,8 +4172,10 @@ let presented = async (
 
 // What a sandboxed page is given to keep things in (installed.ts `stored`):
 // the person's saved keys, read from the app's own store, or none for a
-// visitor who is not signed in, whose storage lasts as long as the page.
-let storing = async (
+// visitor who is not signed in, whose storage lasts as long as the page. A
+// draft's preview is walled the same way (preview.ts), so it is given the
+// same, from the preview's own store.
+export let storing = async (
   env: Env,
   space: Space,
   app: App,

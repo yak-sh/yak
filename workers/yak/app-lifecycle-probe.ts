@@ -24,6 +24,7 @@ import {
 import { appWire, wireVocab } from './app-store-probe.ts'
 import { broadcast, drafted, released } from './page-notice.ts'
 import { expiring } from './expires.ts'
+import { storageDoor } from './page-storage.ts'
 import { appDoc, appVocab, grew } from './vocab.ts'
 import { sqliteApp } from './sqlite-app-probe.ts'
 import { ramApp } from './ram-app-probe.ts'
@@ -378,6 +379,7 @@ export let lifecycleStores = (
           write('expires', JSON.stringify(expiring(await request.json())))
           return json({ ok: true })
         }
+        if (path == '/storage') return storageDoor(request, read, write)
         if (['/uses', '/tools'].includes(path)) {
           return declarationSlot(
             request,

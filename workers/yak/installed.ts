@@ -22,7 +22,7 @@
 //    the credential is in the URL and never one the browser attaches.
 //  - Storage: an opaque origin has no localStorage, so the page is given one
 //    (public/storage.js), its keys woven into the page beside the token, its
-//    writes saved per person in the app's own store (graph.ts `/storage`).
+//    writes saved per person in the app's own store (page-storage.ts).
 //
 // The token names no session, because there is no session store: it lives
 // as long as the cookie that loaded the page, and sign-out cannot end it

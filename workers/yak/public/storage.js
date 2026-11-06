@@ -1,15 +1,15 @@
-// localStorage and sessionStorage for a sandboxed app (installed.ts).
-// An installed app its space's owner sandboxed runs in an opaque origin of
-// its own, where the browser's own storage throws. The kernel weaves this
-// script into the page's head, ahead of every script of the page's own, with
-// the person's saved keys in a JSON block beside it, so reads are synchronous
-// from the first line the page runs.
+// localStorage and sessionStorage for a walled page: a sandboxed app
+// (installed.ts) or a draft's preview (preview.ts). Either runs in an opaque
+// origin of its own, where the browser's own storage throws. The kernel
+// weaves this script into the page's head, ahead of every script of the
+// page's own, with the person's saved keys in a JSON block beside it, so
+// reads are synchronous from the first line the page runs.
 //
 // localStorage is the person's own keys in this app's store: a write lands in
 // memory at once and is saved in the background, through the same page token
 // the rest of the page's requests carry. For a visitor who is not signed in
 // it lasts as long as the page, as sessionStorage always does. Nothing here
-// runs where the browser's storage works: an app that is not sandboxed never
+// runs where the browser's storage works: a page that is not walled never
 // reaches it.
 //
 // A classic script, not a module: a module is deferred, and the page's own
@@ -30,7 +30,7 @@
   try {
     said = JSON.parse(block?.textContent || '{}')
   } catch { /* nothing saved, then */ }
-  // The same ceiling the store holds (graph.ts `STORED`), counted the same
+  // The same ceiling the store holds (page-storage.ts `STORED`), counted the same
   // way, so a write the store would refuse is refused here as the browser's
   // own would be.
   let MAX = 1024 * 1024

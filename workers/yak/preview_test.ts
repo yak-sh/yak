@@ -174,6 +174,27 @@ test('a preview ticket never exposes server source or another app', async () => 
   )
 })
 
+test('a walled preview page gets the platform localStorage, kept in the preview store', async () => {
+  let opaque = { origin: 'null', 'content-type': 'application/json' }
+  let html = await (await request()).text()
+  ok(html.includes('id="yak-storage"'), html)
+  ok(html.includes(`<script src="${new URL(url).pathname}api/storage.js">`))
+  equal((await request('api/storage.js', { headers: opaque })).status, 200)
+  let saved = await request('api/storage', {
+    method: 'POST',
+    headers: opaque,
+    body: JSON.stringify({ set: { theme: 'dark' } }),
+  })
+  equal(saved.status, 200)
+  await saved.body?.cancel()
+  ok((await (await request()).text()).includes('"theme":"dark"'))
+  let live = appStore(env.STORE, space, app, env)
+  equal(
+    await live.consume('/storage', (res) => res.json(), {}, ADA_OWNS),
+    {},
+  )
+})
+
 test('preview API cannot publish live files or use live platform connections', async () => {
   for (
     let path of [

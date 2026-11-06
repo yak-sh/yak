@@ -17,7 +17,7 @@ import { writes } from '@yaks/member'
 import { derivedEid } from '@yaks/graph/identity'
 import { appTools } from './tool-grammar.ts'
 import { appVocab, stated } from './vocab.ts'
-import { api, unwritten, woven } from './apps.ts'
+import { api, storing, unwritten, woven } from './apps.ts'
 import {
   type App,
   appStore,
@@ -599,6 +599,7 @@ export let fetch = async (req: Request, env: Env): Promise<Response> => {
       ![
         '/client.js',
         '/storage.js',
+        '/storage',
         '/_draft.js',
         '/_outbox.js',
         '/_wire.js',
@@ -663,7 +664,10 @@ export let fetch = async (req: Request, env: Env): Promise<Response> => {
       mount,
       mount,
       { ...app, source: null },
-      '',
+      // The preview is walled (`privateResponse`), so the browser's own
+      // storage throws in it; the page gets the platform's, as a sandboxed
+      // app's does, kept in the preview's own store.
+      await storing(env, space, found.preview, who, mount),
       { badge: null, draft: found.link },
       baseOf(mount, res.headers.get('x-yak-file') ?? decoded.slice(1), false),
     )
