@@ -138,6 +138,24 @@ test('a private gallery app exposes only its currently selected listing image', 
   assertEquals(reads.length, 1)
 })
 
+test('a private app the home page features shows its image without a listing', async () => {
+  let shown = (slug: string, at: string) => {
+    let current = app({ access: 'private', slug, screenshot: 'chosen' })
+    let dir = {
+      offers: () =>
+        Promise.resolve([{ space: space({ slug: at }), app: current }]),
+    } as unknown as Directory
+    let bytes = new Uint8Array([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a])
+    let objects = { read: () => Promise.resolve(bytes) }
+    let path = `${IMAGE}${current.eid}/chosen`
+    return image(new Request(`https://yaks.app${path}`), dir, objects, path)
+      .then((r) => r.status)
+  }
+  assertEquals(await shown('housebook', 'yourname'), 200)
+  assertEquals(await shown('housebook', 'jeff'), 404)
+  assertEquals(await shown('ledger', 'yourname'), 404)
+})
+
 let shown = (over: Partial<Shown> = {}): Shown => ({
   eid: 'app-eid',
   name: 'recipes',

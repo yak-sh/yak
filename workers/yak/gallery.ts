@@ -305,8 +305,9 @@ export let screenshot = (space: Space, app: App, env: Host = {}) =>
     ? siteUrl(env, `${IMAGE}${app.eid}/${app.screenshot}`)
     : `${url(space, app, env)}api/blob/${app.screenshot}`
 
-/** A private app's selected gallery image is public with its listing. Every
- * request checks the current offer and selection before reaching the bucket. */
+/** A private app's selected gallery image is public with its listing, or while
+ * the home page features it. Every request checks the current offer and
+ * selection before reaching the bucket. */
 export let image = async (
   req: Request,
   dir: Directory,
@@ -315,8 +316,9 @@ export let image = async (
 ) => {
   let [eid, sha, extra] = path.slice(IMAGE.length).split('/')
   let at = !extra &&
-    (await dir.offers()).find(({ app }) =>
-      app.eid == eid && app.gallery?.listedAt && app.screenshot == sha
+    (await dir.offers()).find(({ space, app }) =>
+      app.eid == eid && app.screenshot == sha &&
+      (app.gallery?.listedAt || featured(space, app))
     )
   let bytes = at ? await objects.read(blobPrefix(at.space, at.app) + sha) : null
   let mime = bytes && mediaTypeOf(bytes)
@@ -838,8 +840,11 @@ export let DEMOS = [
   'vale',
 ]
 
+export let featured = (space: Space, app: App) =>
+  space.slug == DEMO && DEMOS.includes(app.slug)
+
 export let examples = async (dir: Directory, env: Host = {}) => {
-  let space = await dir.space('yourname')
+  let space = await dir.space(DEMO)
   if (!space) return [] as Shown[]
   let apps = await dir.apps(space)
   let chosen = DEMOS.map((slug) => apps.find((app) => app.slug == slug))
