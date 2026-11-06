@@ -8,6 +8,7 @@ import { ram } from '@yaks/ram'
 import { capture } from '@yaks/tracker/report'
 import { options, platform, store, vocab } from './core.ts'
 import { batch, consume } from './queue.ts'
+import { settling } from './object.ts'
 
 let space = '00000000-0000-4000-8000-000000000001'
 let other = '00000000-0000-4000-8000-000000000002'
@@ -294,4 +295,35 @@ test("the platform's resolution archives the space's report of a break in a pers
   // A break after the resolution is the bug back: the owner hears of it.
   await deliver(owned, [broke(later, new Date().toISOString(), space)])
   equal(await open(), [later])
+})
+
+test("a space's tracker on the release before settle waits for it, unreported", async () => {
+  let owned = fixture(), reports: unknown[] = []
+  let behind = () => {
+    throw TypeError('The RPC receiver does not implement the method "settle".')
+  }
+  let platformed = store(ram(vocab, options), {
+    sink: () => {},
+    report: (error) => void reports.push(error),
+    settle: settling({
+      getByName: () => ({ ingestTrace: behind, settle: behind }),
+    }),
+  })
+  let at = new Date().toISOString()
+  await deliver(owned, [capture(Error('broken'), {
+    eid: occurrence,
+    at,
+    sink: () => {},
+    during: { space, app: other },
+  })])
+  let { bugs: [bug] } = await deliver(platformed, [capture(Error('broken'), {
+    eid: other,
+    at,
+    sink: () => {},
+    tags: { source: 'app', scope: space, occurrence },
+  })])
+  await platformed.mark(bug.entity.eid, 'resolved', { cause: 'c', recur: 'no' })
+  await platformed.drain()
+  equal(reports, [])
+  equal((await owned.graph.read('.error !archived')).length, 1)
 })

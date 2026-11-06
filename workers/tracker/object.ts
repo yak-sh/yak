@@ -98,6 +98,25 @@ let metaDdl = ddl.find((stmt) =>
   stmt.t == 'create table' && stmt.name == 'server_meta'
 )!
 
+// The platform's call archiving a space's reports (`bug_settle`). During a
+// deploy the space's object can still run the release before `settle`, and the
+// runtime answers that it "does not implement the method": the call asks to be
+// tried again once the object restarts on this release (@yaks/effects `retry`),
+// and only a receiver still without it after every try is reported.
+export let settling =
+  (trackers: NonNullable<Settings['TRACKERS']>) =>
+  async (scope: string, eids: string[]) => {
+    try {
+      return await trackers.getByName(scope).settle(eids)
+    } catch (error) {
+      if (!/does not implement the method/.test(String(error))) throw error
+      throw Object.assign(Error(String(error), { cause: error }), {
+        retry: { after: BEHIND },
+      })
+    }
+  }
+let BEHIND = 60_000
+
 export class Tracker {
   tracker?: TrackerStore
   live?: Sockets
@@ -148,10 +167,7 @@ export class Tracker {
       // The platform resolves the bugs of breaks in people's apps; each
       // space's tracker archives its own record of them.
       ...this.scope == platform && env.TRACKERS
-        ? {
-          settle: (scope: string, eids: string[]) =>
-            env.TRACKERS!.getByName(scope).settle(eids),
-        }
+        ? { settle: settling(env.TRACKERS) }
         : {},
     }
   }
