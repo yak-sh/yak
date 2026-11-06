@@ -1,7 +1,7 @@
 // @yaks/anthropic as a provider a config names (@yaks/model `ProviderFacet`):
 // `anthropic`, on the key the person pasted with `yak auth anthropic`, or the
-// one its options name (`key`), read at each call. The SDK loads on the first
-// ask; a reply is marked without it (./mark.ts).
+// one its options name (`key`), read at each call. The model (./mod.ts) loads
+// on the first ask; a reply is marked without it (./mark.ts).
 
 import { deferredModel, type Lent, type Model } from '@yaks/model'
 import { mark } from './mark.ts'

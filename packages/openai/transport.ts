@@ -3,7 +3,7 @@
 // callers that need provider-native items, usage, evidence, and frame hooks.
 import { type Clock, sleep, system } from '@yaks/fp'
 import { CODEX, type Credential as ProviderCredential } from './credential.ts'
-import { jsonFrames } from './sse.ts'
+import { jsonFrames } from '@yaks/model/sse'
 
 /** A bearer; omitted base uses the public API (or the transport's base). */
 export type TransportCredential = Omit<ProviderCredential, 'base'> & {

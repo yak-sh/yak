@@ -1,4 +1,16 @@
-/** JSON SSE frames across arbitrary byte chunks; protocol errors are supplied by the caller. */
+/**
+ * The server-sent events a provider streams a reply as, each `data:` field
+ * read as one JSON object. Providers frame them alike and fail differently, so
+ * the caller names its own errors: `fault` makes one for a dropped connection
+ * or a frame that is not JSON, and `check` may throw one for an event the
+ * provider sends to say it failed.
+ *
+ * @module
+ */
+
+/** JSON SSE frames across arbitrary byte chunks, CRLF and a final frame with
+ * no blank line after it; `done` hears a `[DONE]` sentinel. The reader is
+ * released even if a consumer stops early or throws. */
 export let jsonFrames = async function* (
   body: ReadableStream<Uint8Array>,
   fault: (kind: 'transport' | 'malformed_stream', message: string) => Error,

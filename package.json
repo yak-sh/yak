@@ -8,7 +8,6 @@
     "workers/yak"
   ],
   "dependencies": {
-    "@anthropic-ai/sdk": "1.4.0",
     "@cfworker/json-schema": "4.1.1",
     "@cloudflare/containers": "0.3.7",
     "@cloudflare/puppeteer": "1.4.0",

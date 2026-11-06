@@ -11,7 +11,8 @@ import {
   type Request,
   submitted,
 } from '@yaks/model'
-import { jsonFrames, type MediaStore } from '@yaks/openai'
+import { jsonFrames } from '@yaks/model/sse'
+import type { MediaStore } from '@yaks/openai'
 import { chatTools, messages } from './prompt.ts'
 import { deliver, type Output } from './media.ts'
 

@@ -1,8 +1,9 @@
 # @yaks/anthropic
 
-Anthropic's Messages API as an `@yaks/model` model, through the official
-`@anthropic-ai/sdk`. Model names are Anthropic's own: `claude-sonnet-5-5`,
-`claude-opus-5-5`, `claude-haiku-5-5`.
+Anthropic's Messages API as an `@yaks/model` model, spoken over `fetch` with no
+SDK, so a Worker that bundles it uploads only the few kilobytes it runs. Model
+names are Anthropic's own: `claude-sonnet-5-5`, `claude-opus-5-5`,
+`claude-haiku-5-5`.
 
 ```ts ignore
 import { messages } from '@yaks/anthropic'
@@ -41,9 +42,9 @@ A request becomes one streamed `POST /v1/messages`:
 
 Text deltas reach `onText` as they arrive. `onSubmit` runs before the POST and
 `onAck` with `anthropic{response_id}` on the stream's first event. `signal`
-stops the stream; the stop is thrown as the SDK's abort, not a `ModelError`. The
-reply's items are its text and `tool_use` blocks, in order; thinking blocks are
-not kept, and the next request is sent without them, which the API accepts.
+stops the stream; the stop is thrown as the signal's reason, not a `ModelError`.
+The reply's items are its text and `tool_use` blocks, in order; thinking blocks
+are not kept, and the next request is sent without them, which the API accepts.
 
 `usage` names input as Anthropic counts it plus what the cache read and wrote,
 so `cached_tokens` and `cache_write_tokens` are parts of `input_tokens`. The API
@@ -51,14 +52,16 @@ reports no dollars: a caller weighs usage at the model row's price.
 
 ## Failures
 
-The SDK does not retry (`maxRetries: 0`); the caller does, since a retry here
-could buy one request twice. A rate limit, an overloaded or failing server, or a
-dropped connection is a `ModelError` coded `busy`, with `retry.after` from
-`Retry-After`. A refused key is `key`, an unknown model `model`, a spent credit
-balance `credit`, any other refused request `request`, and a `refusal` stop
-`refusal`. A spent credit balance is never `limit`, the code of a caller's own
-ceiling: the key's account running dry is a failure for whoever holds the key.
-Typed questions and image or audio output are refused before anything is sent.
+Nothing is retried here; the caller retries, since a retry here could buy one
+request twice. A rate limit, an overloaded or failing server, or a dropped
+connection is a `ModelError` coded `busy`, with `retry.after` from
+`Retry-After`; so is an `error` event mid-stream that names one, and a stream
+that ends before its message does. A refused key is `key`, an unknown model
+`model`, a spent credit balance `credit`, any other refused request `request`,
+and a `refusal` stop `refusal`. A spent credit balance is never `limit`, the
+code of a caller's own ceiling: the key's account running dry is a failure for
+whoever holds the key. Typed questions and image or audio output are refused
+before anything is sent.
 
 ## Models and prices
 

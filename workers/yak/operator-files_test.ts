@@ -94,20 +94,16 @@ test('a picture and a PDF sent from the page reach Claude as they are', () => {
   assertEquals(media.map((i) => i.bytes.length), [png.length, pdf.length])
   // Neither is read through extraction first: its words are the person's.
   assertEquals(JSON.stringify(ask.items).includes('Attached documents'), false)
-  let blocks = conversation(ask).flatMap((m) =>
-    typeof m.content == 'string' ? [] : m.content
-  )
-  let image = blocks.find((b) => b.type == 'image')
-  let document = blocks.find((b) => b.type == 'document')
-  assertEquals(image?.source, {
+  let source = (type: string) =>
+    conversation(ask).flatMap((m) => m.content).flatMap((b) =>
+      b.type == type && 'source' in b ? [b.source] : []
+    )[0]
+  assertEquals(source('image'), {
     type: 'base64',
     media_type: 'image/png',
     data: btoa(String.fromCharCode(...png)),
   })
-  assertEquals(
-    (document?.source as { media_type: string }).media_type,
-    'application/pdf',
-  )
+  assertEquals(source('document')?.media_type, 'application/pdf')
 })
 
 let { document } = parseHTML(

@@ -206,6 +206,33 @@ test('failures are model errors by kind, and a stop is thrown as a stop', async 
   ok(!(e instanceof ModelError))
 })
 
+test('an error event, a stream cut short or a failed connection is busy', async () => {
+  let overloaded = { type: 'error', error: { type: 'overloaded_error' } }
+  let fetches = [
+    api(() => sse(reply().toSpliced(3, 0, overloaded))).fetch,
+    api(() => sse(reply().slice(0, 4))).fetch,
+    () => Promise.reject(new TypeError('connection reset')),
+  ]
+  for (let fetch of fetches) {
+    let e = await messages({ key: () => 'k', fetch })(ask()).catch((e) => e)
+    equal([e.name, e.code], ['ModelError', 'busy'])
+  }
+})
+
+test('list reads every page the API has', async () => {
+  let page = (has_more: boolean, ...ids: string[]) =>
+    Response.json({
+      data: ids.map((id) => ({ id, display_name: id })),
+      has_more,
+      last_id: ids.at(-1),
+    })
+  let { sent, fetch } = api((url) =>
+    url.includes('after_id=b') ? page(false, 'c') : page(true, 'a', 'b')
+  )
+  let listed = await messages({ key: () => 'k', fetch }).list!()
+  equal([listed.map((m) => m.name), sent.length], [['a', 'b', 'c'], 2])
+})
+
 test('a refusal is a model error, not an empty reply', async () => {
   let events = reply().map((e) =>
     e.type == 'message_delta' ? { ...e, delta: { stop_reason: 'refusal' } } : e

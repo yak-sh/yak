@@ -1,5 +1,5 @@
 // What a host writes on the entry recording a reply, importable without the
-// SDK: a host that loads the model lazily still marks its replies at once.
+// model (./mod.ts): a host that loads it lazily still marks its replies at once.
 import { type CacheContext, prefixCacheMark, type Reply } from '@yaks/model'
 
 // The documented lifetime of an ephemeral cache entry, in seconds.
