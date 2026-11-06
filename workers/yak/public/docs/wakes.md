@@ -281,6 +281,21 @@ person's conversation, run as that person and paid from the space's budget, and
 the Operator's answer reaches them in their Updates. An app's schedules stay
 `wake` rows in the app, as above.
 
+## The Operator's subscriptions
+
+A person's Operator can also be woken by a change rather than a time, when they
+ask it to watch something: "tell me when a sign-up arrives", "when the build
+finishes, deploy it". Its tools are `subscription_set` (words to act on, a
+`query` written as for `graph_query`, `mine` to read it over the Operator's own
+store rather than the space, and `every`, how often to look, a minute by
+default), `subscription_list` and `subscription_cancel`. Each is a `wake` row in
+the Operator's own store that also carries the query and the rows it saw last.
+Each time it fires, the query is read again as the person who set it; when its
+rows differ (a row arrives, changes or leaves the answer), the change is a turn
+in their conversation with what changed after the words, paid from the space's
+budget, and the Operator's answer reaches them in their Updates. A look that
+finds nothing new costs no turn. It watches at most 200 rows.
+
 ## Where a firing runs, and its limits
 
 - **Inside the app's own store**, the same object a page writes through. A

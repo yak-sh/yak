@@ -17,8 +17,8 @@ import { refuse } from './tool.ts'
 
 type Store = Pick<ReturnType<typeof operatorStore>, 'g'>
 
-// Whose a call's wake-ups are: the person the session works for.
-let whoseOf = async (store: Store, context?: ToolContext) => {
+/** Whose a call's wake-ups are: the person the session works for. */
+export let whoseOf = async (store: Store, context?: ToolContext) => {
   let [row] = context ? await store.g.get([context.session]) : []
   let o = row?.operator_session as
     | { person: string; administrative?: boolean }
@@ -125,7 +125,7 @@ export let wakeTools = (store: Store, space: Space): Tool[] => [
     run: async (_, context) => {
       let { person } = await whoseOf(store, context)
       let rows = await store.g.read(
-        `.operator_ask.person=${person} .wake.at ?fired .order=wake.at`,
+        `.operator_ask.person=${person} .wake.at !operator_subscription ?fired .order=wake.at`,
       )
       return JSON.stringify(rows.map(shown))
     },

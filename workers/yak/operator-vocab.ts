@@ -40,7 +40,7 @@ export let operatorDoc: VocabDoc = {
           ref: 'entity',
           death: 'keep',
           description:
-            'What the words are about: in their Updates, the update or question they answer; on the wake channel, the wake-up that fired.',
+            'What the words are about: in their Updates, the update or question they answer; on the wake channel, the wake-up that fired; on the subscription channel, the subscription whose rows changed.',
         },
         signup: {
           type: 'boolean',
@@ -209,13 +209,33 @@ export let operatorDoc: VocabDoc = {
         },
       },
     },
+    // A query the Operator watches for the person who set it, beside the
+    // wake-up that looks at it again (operator-subscriptions.ts).
+    operator_subscription: {
+      component: true,
+      description:
+        "A query the space's Operator watches for the person who set it: each time its wake fires the query is read again, and a change in its rows is a turn.",
+      properties: {
+        query: { type: 'string' },
+        mine: {
+          type: 'boolean',
+          description:
+            "Read over the Operator's own store rather than the space.",
+        },
+        seen: {
+          type: 'object',
+          description:
+            'Each row the query answered at the last look, by eid, and a digest of it.',
+        },
+      },
+    },
     operator_fired: {
       effect: true,
       created: ['fired'],
       changed: ['fired'],
       tries: 3,
       description:
-        "Give a fired wake's words to the Operator as a request of the person who set it.",
+        "Give a fired wake's words to the Operator as a request of the person who set it; for a subscription, only when its query's rows changed.",
     },
     operator_receive: {
       effect: true,

@@ -206,14 +206,15 @@ export type Ask = {
  * A row that fired, given to the Operator as the words of the person who set
  * it, on the channel that says what fired: a request like any other, taken in
  * once for each `occurrence`, which a replay or a second driver gives again
- * to no effect. A wake-up is one (`operator_fired`); any trigger that asks
- * the Operator is another.
+ * to no effect. A wake-up is one (`operator_fired`), and a subscription
+ * whose rows changed another, which gives `what` changed after the words.
  */
 export let fire = async (
   store: Store,
   row: Bundle,
   channel: string,
   occurrence: string,
+  what?: string,
 ): Promise<string | undefined> => {
   let ask = part<Ask | undefined>(row, 'operator_ask')
   if (!ask?.say?.trim()) return
@@ -226,7 +227,7 @@ export let fire = async (
       about: row.entity.eid,
       ...ask.administrative ? { administrative: true } : {},
     },
-    ask.say,
+    what ? `${ask.say}\n\n${what}` : ask.say,
     { id: derivedEid(`operator-fired|${row.entity.eid}|${occurrence}`) },
   )
 }
@@ -284,6 +285,10 @@ let BY: Record<
       every ? `, as it does ${every}` : ''
     }. These are the words you set it with, and what you answer reaches them in their Updates: `
   },
+  subscription: (_, __, sub) =>
+    `Your subscription ${
+      sub ? short(sub.entity.eid) : '(gone)'
+    } saw its rows change. These are the words you set it with, then what changed, and what you answer reaches them in their Updates: `,
   update: (_, __, about) => {
     let asked = part<Comp>(about, 'decision')?.question
     return asked
@@ -353,6 +358,7 @@ export let channels = (env: Env): Record<string, Channel> => {
     error: () => Promise.resolve({}),
     // A wake-up's is told in their Updates (operator.ts `answered`).
     wake: () => Promise.resolve({}),
+    subscription: () => Promise.resolve({}),
     email: async (request, answer, subject) => {
       let space = await directoryOf(env.STORE).at(request.space)
       if (!space) throw new Error('Operator reply has no space')
@@ -595,11 +601,17 @@ export let handleChannels = (
 ) => {
   let { g, fx } = operator.store
   fx.handle({
-    // A wake-up that fired is the words it was set with, once per firing.
+    // A wake-up that fired is the words it was set with, once per firing; a
+    // subscription's firing is a look at its query, and words only for a
+    // change (operator-subscriptions.ts).
     operator_fired: async (event) => {
       let [row] = await g.get([event.entity.eid])
       let at = part<{ at?: string } | undefined>(row, 'fired')?.at
-      if (row && at) await fire(operator.store, row, 'wake', at)
+      if (!row || !at) return
+      if (row.operator_subscription) {
+        let { looked } = await import('./operator-subscriptions.ts')
+        await looked(operator.store, row, at, operator.watching)
+      } else await fire(operator.store, row, 'wake', at)
     },
     operator_receive: async (event) => {
       let [row] = await g.get([event.entity.eid])

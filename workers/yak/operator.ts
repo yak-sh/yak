@@ -84,6 +84,7 @@ import { phoneSend } from './operator-line.ts'
 import { googleTold, googleTools } from './operator-google.ts'
 import { notification } from './operator-updates.ts'
 import { wakeTools } from './operator-wakes.ts'
+import { subscriptionTools, type Watching } from './operator-subscriptions.ts'
 import { type Browsers, browserTools } from './operator-browser.ts'
 import {
   bases,
@@ -700,6 +701,21 @@ export let operating = (
 ): Operator => {
   let { g, fx, vocab } = store
   let dir = () => options.directory?.() ?? directoryOf(env.STORE)
+  // What a subscription watches, read as the person who set it: over the
+  // space through their reach, as their graph_query reads it, or over this
+  // store (operator-subscriptions.ts).
+  let watching: Watching = async (ask, query, mine) => {
+    if (mine) return await g.read(query)
+    let space = await dir().at(ask.space)
+    if (!space || space.trashed) throw refuse('missing', 'That space is gone.')
+    let ctx = await operatorContext(
+      env,
+      ask,
+      space,
+      options.directory ?? opening(env),
+    )
+    return await (await reaching(ctx, await inReach(ctx))).read(query)
+  }
   let choice = operatorChoice(env)
   let name = options.name ?? choice.name
   let provider = choice.provider
@@ -989,11 +1005,14 @@ export let operating = (
     let fixes = space && task
       ? requests.filter((r) => comp(r, 'operator_request')?.channel == 'error')
       : []
-    // A wake-up that fired is told to whoever set it, in their Updates, as
-    // what came of it: the quick word when the conversation forks, and the
-    // outcome in its place when the fork comes back.
+    // A wake-up that fired, or a subscription that saw a change, is told to
+    // whoever set it, in their Updates, as what came of it: the quick word
+    // when the conversation forks, and the outcome in its place when the fork
+    // comes back.
     let woken = requests.filter((r) =>
-      comp(r, 'operator_request')?.channel == 'wake'
+      ['wake', 'subscription'].includes(
+        String(comp(r, 'operator_request')?.channel),
+      )
     )
     await g.apply([
       ...fixes.map((r) =>
@@ -1079,6 +1098,7 @@ export let operating = (
           mailSend(env, ctx, space, store),
           phoneSend(env, ctx, space, store),
           ...wakeTools(store, space),
+          ...subscriptionTools(store, space, watching),
           ...google,
           ...options.tools?.(ctx, files) ?? [],
           ...options.browsers
@@ -1368,7 +1388,7 @@ export let operating = (
   // What to call a person in what the Operator shows of its work.
   let named = (person: string) => dir().nameAt(person)
 
-  return { store, reads, ask, note, run, stop, named }
+  return { store, reads, ask, note, run, stop, named, watching }
 }
 
 export type Asking = {
@@ -1437,4 +1457,6 @@ export type Operator = {
   }>
   /** What to call a person, as the page names them (directory `nameAt`). */
   named: (person: string) => Promise<string | null>
+  /** A subscription's query, read as the person who set it. */
+  watching: Watching
 }
