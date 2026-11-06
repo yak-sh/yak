@@ -66,8 +66,9 @@ export let within = (
  * (./deps.ts `shared`); when a run is `observed` its runtimes see what each
  * file reads (./reads.ts), and a pass is kept by that too. `changed` first
  * narrows the files to those reached by these paths, even with no cache.
- * A narrowed run with a `budget` runs what fits it by what each file is
- * expected to `cost`, the nearest to the change first (./deps.ts `distance`,
+ * A narrowed run with a `budget` runs each file `changed` names, then what
+ * fits the rest of it by what each file is expected to `cost`, the nearest to
+ * the change first (./deps.ts `distance`,
  * `within`), and only those a distance reaches unless none is, and counts the
  * rest `beyond`: a run elsewhere with all of its files covers those. Given
  * each path's package (`owner`), the files of a changed package its distance
@@ -197,9 +198,17 @@ export let choose = async (
     let rank = (f: string) =>
       far ? Math.min(far(f), far(plans.get(f) ?? f)) : Infinity
     let near = run.filter((f) => rank(f) < Infinity)
-    let kept = changed && budget != null
-      ? within(near.length ? near : run, rank, cost, budget)
-      : run
+    // A file the change edits is the change, and runs whatever it costs; the
+    // budget left is for the rest of what it reaches.
+    let edited = new Set(changed)
+    let mine = run.filter((f) => edited.has(f))
+    let spent = mine.reduce((sum, f) => sum + cost(f), 0)
+    let rest = (near.length ? near : run).filter((f) => !edited.has(f))
+    let fits = new Set([
+      ...mine,
+      ...within(rest, rank, cost, Math.max(0, (budget ?? 0) - spent)),
+    ])
+    let kept = changed && budget != null ? run.filter((f) => fits.has(f)) : run
     let typed = sources.filter((f) => !changed || s.reaches([f], changed))
     let roots = [...kept.map((f) => plans.get(f) ?? f), ...typed]
     return {

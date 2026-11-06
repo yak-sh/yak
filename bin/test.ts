@@ -1,8 +1,8 @@
 // Tests run on Deno, with a separate document for the terminal UI. Page
 // behavior runs in process on linkedom. With no paths, the dependency graph
-// selects tests reached by branch and working changes: a changed
-// workspace package first, then its nearest consumers, as many as a
-// few seconds hold by what each took as it last ran here; main's CI runs the
+// selects tests reached by branch and working changes: every test file the
+// change edits, then a changed workspace package, then its nearest consumers,
+// as many as a few seconds hold by what each took as it last ran here; main's CI runs the
 // rest after the push. Cached passes leave out tests already passed unchanged.
 // Paths narrow an explicit run.
 // There are no browser or workerd tests. A run whose files reach the Worker's

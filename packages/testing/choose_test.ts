@@ -10,18 +10,24 @@ test('no changed paths selects no tests without needing a dependency graph or ca
   equal(unchanged.reaches(['missing_test.ts']), false)
 })
 
-test('selection uses the supplied command snapshot and retains dependency keys', async () => {
-  let roots = ['a_test.ts', 'a.ts']
-  let s = (await survey(roots, () =>
+// A survey of test files that each import a.ts, and a.ts.
+let importing = async (tests: string[]) => {
+  let url = (f: string) => new URL(f, `file://${Deno.cwd()}/`).href
+  return (await survey([...tests, 'a.ts'], () =>
     Promise.resolve({
-      modules: roots.map((f, i) => ({
-        specifier: new URL(f, `file://${Deno.cwd()}/`).href,
-        dependencies: i ? [] : [{
-          code: { specifier: new URL('a.ts', `file://${Deno.cwd()}/`).href },
-        }],
-      })),
+      modules: [
+        ...tests.map((f) => ({
+          specifier: url(f),
+          dependencies: [{ code: { specifier: url('a.ts') } }],
+        })),
+        { specifier: url('a.ts'), dependencies: [] },
+      ],
       redirects: {},
     })))!
+}
+
+test('selection uses the supplied command snapshot and retains dependency keys', async () => {
+  let s = await importing(['a_test.ts'])
   let asked: string[][] = []
   let selected = await choose(['a_test.ts'], {
     changed: ['a.ts'],
@@ -40,4 +46,18 @@ test('selection uses the supplied command snapshot and retains dependency keys',
 test('a workspace-wide change keeps its own tests within the local budget', async () => {
   let { within } = await import('./choose.ts')
   equal(within(['a', 'b', 'c'], () => 0, () => 10, 20), ['a', 'b'])
+})
+
+test('a test file the change edits runs whatever it costs, and what is left of the budget holds the rest', async () => {
+  let s = await importing(['slow_test.ts', 'b_test.ts', 'c_test.ts'])
+  let cost = (f: string) => ({ 'slow_test.ts': 50 })[f] ?? 10
+  let selected = await choose(['slow_test.ts', 'b_test.ts', 'c_test.ts'], {
+    changed: ['a.ts', 'slow_test.ts'],
+    all: true,
+    budget: 65,
+    cost,
+    inspect: () => Promise.resolve(s),
+  })
+  equal(selected.run, ['slow_test.ts', 'b_test.ts'])
+  equal(selected.beyond, 1)
 })
