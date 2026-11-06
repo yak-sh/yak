@@ -1,3 +1,4 @@
+/** @jsxImportSource preact */
 // @ts-types="@yaks/ui/lucide"
 import ArrowUpRight from 'lucide/dist/esm/icons/arrow-up-right.mjs'
 // The app's icon vocabulary. Lucide owns the SVGs; this small name map keeps

@@ -1,3 +1,4 @@
+/** @jsxImportSource preact */
 import { domainBundle } from '../domain-host.tsx'
 import '../domain-host.tsx'
 // A graph-native Session's durable bodies must PAINT in the terminal. The fake

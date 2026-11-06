@@ -1,3 +1,4 @@
+/** @jsxImportSource preact */
 import { entityPath } from '../url.ts'
 import { useEffect, useRef, useState } from 'preact/hooks'
 import { signal } from '@preact/signals'

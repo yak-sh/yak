@@ -1,3 +1,4 @@
+/** @jsxImportSource preact */
 // Configuration restores the host's secrets and sign-ins using their existing
 // graph and authorization doors. Credential input stays private and is never
 // prefilled; each entity's public face is drawn by the shared renderer.

@@ -1,3 +1,4 @@
+/** @jsxImportSource preact */
 // Large board columns stay bounded until the operator asks for their tail.
 import { test } from '@yaks/testing'
 import '../../testing.ts'

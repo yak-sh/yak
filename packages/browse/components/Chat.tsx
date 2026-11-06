@@ -1,3 +1,4 @@
+/** @jsxImportSource preact */
 // The document-side conversation: one actor's selected Session. The binding is graph data on the session, so a
 // reload or another browser finds the same transcript. On a persona the
 // conversation is with it: a message to it begins a native session wearing it

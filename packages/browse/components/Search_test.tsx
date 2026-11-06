@@ -1,3 +1,4 @@
+/** @jsxImportSource preact */
 // The graph palette lets a word settle before asking the single server loop
 // to search it.
 import { clock, test } from '@yaks/testing'

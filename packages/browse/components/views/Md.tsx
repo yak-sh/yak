@@ -1,3 +1,4 @@
+/** @jsxImportSource preact */
 import { type Ent, idOf, statusOf } from '../../types.ts'
 import { ent, pending } from '../../live.ts'
 import { el } from '@yaks/ui'

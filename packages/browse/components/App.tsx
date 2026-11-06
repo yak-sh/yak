@@ -1,3 +1,4 @@
+/** @jsxImportSource preact */
 import { InspectPage, PagePart, PastPage } from './inspect.tsx'
 import { hosting } from '../hosting.ts'
 import { back, forward, left, scrolledTo } from '../history.ts'

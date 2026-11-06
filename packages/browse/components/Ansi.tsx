@@ -1,3 +1,4 @@
+/** @jsxImportSource preact */
 // ANSI output rendered as inert Preact nodes. SGR presentation has a faithful
 // HTML equivalent; terminal commands and control bytes have none, so they
 // disappear rather than reaching the page or becoming visible garbage.

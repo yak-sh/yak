@@ -1,3 +1,4 @@
+/** @jsxImportSource preact */
 // Markdown owns the DOM injection while its caller keeps the element that
 // participates in layout and interaction.
 import { test } from '@yaks/testing'

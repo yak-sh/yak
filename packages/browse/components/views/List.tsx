@@ -1,3 +1,4 @@
+/** @jsxImportSource preact */
 import { vocab } from '../../types.ts'
 import { type Ent } from '../../types.ts'
 import { useEffect, useLayoutEffect, useRef, useState } from 'preact/hooks'

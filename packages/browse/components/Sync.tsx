@@ -1,3 +1,4 @@
+/** @jsxImportSource preact */
 // The standing sync indicator (T-21441). An optimistic cache shows every local
 // edit as landed the instant it is typed; when the server is unreachable the
 // write sits undelivered in the outbox (live.ts) with nothing on screen to say

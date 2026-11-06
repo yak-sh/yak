@@ -1,3 +1,4 @@
+/** @jsxImportSource preact */
 import { type Ent } from '../../types.ts'
 import { ago } from '../Stamp.tsx'
 import { title } from '../title.tsx'

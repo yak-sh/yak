@@ -1,3 +1,4 @@
+/** @jsxImportSource preact */
 // The ephemeral filter — typed in the titlebar, felt in the face. It ANDs
 // into the view's own query only while it's typed, never stored:
 // board.query is the saved filter, this is the glance. Same grammar as

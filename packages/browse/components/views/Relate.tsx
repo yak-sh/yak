@@ -1,3 +1,4 @@
+/** @jsxImportSource preact */
 import { useEffect, useRef, useState } from 'preact/hooks'
 import { relations, reversed } from '@yaks/edge/vocab'
 import { type Ent, uuid, vocab } from '../../types.ts'

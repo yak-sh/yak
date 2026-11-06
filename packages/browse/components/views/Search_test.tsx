@@ -1,3 +1,4 @@
+/** @jsxImportSource preact */
 // Search decorates real domain tiles; it never supplies a substitute title.
 // Words someone said, and any long text, are one passage row: who, when,
 // where, and the words around what was sought, never the text whole.

@@ -1,3 +1,4 @@
+/** @jsxImportSource preact */
 import { adopt, parse } from '@yaks/query'
 import { vocab } from '../../types.ts'
 import { useEffect, useLayoutEffect, useRef, useState } from 'preact/hooks'

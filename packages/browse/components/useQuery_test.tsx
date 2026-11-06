@@ -1,3 +1,4 @@
+/** @jsxImportSource preact */
 // Query ownership lives at view roots. Exercise the real hooks and transport,
 // including overlapping mounts, retargeting, and reads between cleanup/mount.
 import { test } from '@yaks/testing'

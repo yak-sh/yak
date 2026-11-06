@@ -1,3 +1,4 @@
+/** @jsxImportSource preact */
 // The Tile composition contract. A caller may adorn any tile before or
 // after its own face, and hear its ordinary activation, without knowing which
 // entity-specific renderer the registry chose.

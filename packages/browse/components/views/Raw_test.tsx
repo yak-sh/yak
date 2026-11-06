@@ -1,3 +1,4 @@
+/** @jsxImportSource preact */
 // Raw views keep their source inert while presenting it as highlighted code.
 import { test } from '@yaks/testing'
 import '../../testing.ts'

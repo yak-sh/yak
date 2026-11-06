@@ -1,3 +1,4 @@
+/** @jsxImportSource preact */
 // A session's phone sized controls: choose the model for the next input and
 // open its children and claims without leaving the transcript.
 import { useEffect, useState } from 'preact/hooks'

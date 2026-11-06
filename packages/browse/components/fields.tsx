@@ -1,3 +1,4 @@
+/** @jsxImportSource preact */
 // The query field (@yaks/filter), bound to this page. Every query typed here
 // (a card's filter bar, the search palette, the command line, a board's query,
 // the inspector's bar) is a field in `front`, the page's own graph: a local

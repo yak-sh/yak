@@ -1,3 +1,4 @@
+/** @jsxImportSource preact */
 // A board's Tile and Meta faces: one ordinary linked tile whose second row
 // carries the same status counts as the board's columns.
 //

@@ -1,3 +1,4 @@
+/** @jsxImportSource preact */
 // The sidebar is a short list of places, each a plain link to its own page.
 import { test } from '../testing.ts'
 import { docs as schemaDocs } from '@yaks/vocab/vocab'

@@ -1,3 +1,4 @@
+/** @jsxImportSource preact */
 // A session row names the work and shows its latest activity and model.
 import { test, tick } from '../../testing.ts'
 import { test as preparedTest } from '@yaks/testing'

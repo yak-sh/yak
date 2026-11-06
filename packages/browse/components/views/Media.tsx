@@ -1,3 +1,4 @@
+/** @jsxImportSource preact */
 // An artifact's face, directly or through an attachment. The bytes never ride
 // the graph: GET /blob/<address> serves them from the store beside the db.
 import { type Ent } from '../../types.ts'

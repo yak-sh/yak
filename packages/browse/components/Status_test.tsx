@@ -1,3 +1,4 @@
+/** @jsxImportSource preact */
 // The statusbar's command door and graph-backed spawn answer: its left side
 // enters command mode; session messages follow server-minted ids and lifecycle.
 import { test } from '@yaks/testing'

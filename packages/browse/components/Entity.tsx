@@ -1,3 +1,4 @@
+/** @jsxImportSource preact */
 import '../domain-host.tsx'
 import { views as commentViews } from '@yaks/kernel/component-views'
 import { domainBundle } from '../domain-host.tsx'

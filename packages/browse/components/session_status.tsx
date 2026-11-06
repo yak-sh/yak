@@ -1,3 +1,4 @@
+/** @jsxImportSource preact */
 // One Session status for every browser surface: the host's, from the session
 // row. Entry work is a lazy partition.
 import { ent, subscriptionState, useHold } from '../live.ts'

@@ -1,3 +1,4 @@
+/** @jsxImportSource preact */
 import { Decision } from '../Decision.tsx'
 import { useReference, useRepoUrl, useRows } from '../subscriptions.ts'
 import { useEffect, useRef, useState } from 'preact/hooks'

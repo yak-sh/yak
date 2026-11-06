@@ -1,3 +1,4 @@
+/** @jsxImportSource preact */
 import { useRepoUrl } from '../subscriptions.ts'
 // Session entries as a small renderer vocabulary. Summary and Full faces
 // share this kit; component-specific registrations choose what each face says.

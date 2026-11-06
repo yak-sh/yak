@@ -1,3 +1,4 @@
+/** @jsxImportSource preact */
 import { registry } from '../registry.ts'
 import { parse } from '@yaks/query'
 import { test } from '@yaks/testing'

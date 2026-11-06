@@ -1,3 +1,4 @@
+/** @jsxImportSource preact */
 import { useState } from 'preact/hooks'
 import { type Ent, type Hit, uuid } from '../../types.ts'
 import { backlinks, ent, mutate } from '../../live.ts'

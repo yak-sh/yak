@@ -1,3 +1,4 @@
+/** @jsxImportSource preact */
 // The Peek: what a pressed link to an entity opens where a fine pointer reads
 // (nav.tsx openAt). The entity floats over the page it was pressed on, whole,
 // in the Full view its own page draws, with its title and body typed into

@@ -1,3 +1,4 @@
+/** @jsxImportSource preact */
 // The web keybinding card and its global `?` door. While the card is open its
 // capture listener owns every key, so canvas and mode handlers beneath it
 // cannot act on a hidden surface.

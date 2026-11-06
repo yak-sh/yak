@@ -1,3 +1,4 @@
+/** @jsxImportSource preact */
 import { pagePath } from '../hosting.ts'
 import { entityPath, searchPath } from '../url.ts'
 import {

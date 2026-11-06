@@ -1,3 +1,4 @@
+/** @jsxImportSource preact */
 import { searchPath } from '../../url.ts'
 import { type ComponentChildren, Fragment } from 'preact'
 import { useState } from 'preact/hooks'

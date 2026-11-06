@@ -1,3 +1,4 @@
+/** @jsxImportSource preact */
 // ANSI rendering keeps terminal presentation while refusing terminal control.
 
 import { test } from '@yaks/testing'

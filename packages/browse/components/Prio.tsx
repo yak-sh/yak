@@ -1,3 +1,4 @@
+/** @jsxImportSource preact */
 import { formatProp, propAt } from '../props.ts'
 import { el } from '@yaks/ui'
 

@@ -1,3 +1,4 @@
+/** @jsxImportSource preact */
 // Vim's keys on the web page (@yaks/ux/keys). A linkedom document lays
 // nothing out, so the walk here keeps to reading order; where each item sits
 // is the terminal's test (../tui/walk_test.ts) and @yaks/ux's. j puts the

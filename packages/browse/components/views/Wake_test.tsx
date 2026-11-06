@@ -1,3 +1,4 @@
+/** @jsxImportSource preact */
 // A wake reads from its clock and addressing facets, never a stored title.
 import { test } from '@yaks/testing'
 import '../../testing.ts'

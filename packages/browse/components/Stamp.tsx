@@ -1,3 +1,4 @@
+/** @jsxImportSource preact */
 // An age, said the human way. An entity says when it was created and, when
 // present, edited; `at` names any other graph moment. The ages come off a
 // minute tick, so an open card never fossilizes at the age it rendered, and

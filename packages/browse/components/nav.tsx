@@ -1,3 +1,4 @@
+/** @jsxImportSource preact */
 import { localPath } from '../hosting.ts'
 import { addressId, entityPath } from '../url.ts'
 import { signal } from '@preact/signals'

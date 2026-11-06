@@ -1,3 +1,4 @@
+/** @jsxImportSource preact */
 // Terminal markdown wears the same syntax scopes as HTML, with the painter as
 // the only source of ANSI bytes.
 import { test } from '@yaks/testing'

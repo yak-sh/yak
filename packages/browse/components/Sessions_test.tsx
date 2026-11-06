@@ -1,3 +1,4 @@
+/** @jsxImportSource preact */
 import { test } from '@yaks/testing'
 import { faked, until } from '../testing.ts'
 import { assertEquals } from '@std/assert'

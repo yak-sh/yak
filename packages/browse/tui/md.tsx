@@ -1,3 +1,4 @@
+/** @jsxImportSource preact */
 import { type JSX } from 'preact'
 import { highlight, type Token } from '../highlight.ts'
 import { commitUrl } from '../md.ts'

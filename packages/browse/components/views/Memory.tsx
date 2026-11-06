@@ -1,3 +1,4 @@
+/** @jsxImportSource preact */
 import { menuAt } from '../nav.tsx'
 import { slot, tileLink, type TileProps, tileTitle } from '../Tile.tsx'
 import { block, el } from '@yaks/ui'

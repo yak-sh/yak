@@ -1,3 +1,4 @@
+/** @jsxImportSource preact */
 import { crewed, gated } from '../../live.ts'
 import { statusOf } from '../../types.ts'
 import { Dot } from '../Dot.tsx'

@@ -1,3 +1,4 @@
+/** @jsxImportSource preact */
 import type { ComponentChildren } from 'preact'
 import { useErrorBoundary } from 'preact/hooks'
 import { block } from '@yaks/ui'

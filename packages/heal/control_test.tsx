@@ -1,3 +1,4 @@
+/** @jsxImportSource preact */
 // The Sessions switch reads and edits the follower's persisted home mute.
 // A RAM graph exercises both the metadata route and remount recovery.
 import '../browse/testing.ts'

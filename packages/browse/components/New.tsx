@@ -1,3 +1,4 @@
+/** @jsxImportSource preact */
 // New: Debug on an empty entity. A person adds components by searching the
 // vocabulary, types or picks each property, and may outline more entities
 // like it, one a line, nested by indent. The batch they become shows as it is

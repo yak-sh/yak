@@ -1,3 +1,4 @@
+/** @jsxImportSource preact */
 // Entry renderer tests hold specialization, truncation, and the expanded
 // view picker without a server or session transcript.
 import { test } from '../../testing.ts'

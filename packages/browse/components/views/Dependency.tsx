@@ -1,3 +1,4 @@
+/** @jsxImportSource preact */
 import { type ComponentChildren } from 'preact'
 import { reversed } from '@yaks/edge/vocab'
 import { type Ent, vocab } from '../../types.ts'

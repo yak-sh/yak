@@ -1,3 +1,4 @@
+/** @jsxImportSource preact */
 import { type Signal, useComputed, useSignal } from '@preact/signals'
 import { useEffect, useRef, useState } from 'preact/hooks'
 import { camera, ent, mutate, pinZ, toFront } from '../live.ts'

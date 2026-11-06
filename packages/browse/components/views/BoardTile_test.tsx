@@ -1,3 +1,4 @@
+/** @jsxImportSource preact */
 // A board tile summarizes the same task statuses as its board columns — and it
 // gets them from an AGGREGATE subscription, never from the board's members
 // (T-22509). So these drive the tile the way the wire does: mount it, land the

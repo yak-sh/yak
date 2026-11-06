@@ -1,3 +1,4 @@
+/** @jsxImportSource preact */
 import { DecisionForm } from '@yaks/task/form'
 import type { Bundle } from '@yaks/graph'
 import { type Ent, vocab } from '../types.ts'

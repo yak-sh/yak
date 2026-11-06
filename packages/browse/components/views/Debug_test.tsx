@@ -1,3 +1,4 @@
+/** @jsxImportSource preact */
 // The Debug inspector exposes every component and gives its editing controls
 // the same component vocabulary as its stored rows.
 import { test } from '../../testing.ts'

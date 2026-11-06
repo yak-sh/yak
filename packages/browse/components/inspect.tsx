@@ -1,3 +1,4 @@
+/** @jsxImportSource preact */
 // Browse supplies the inspector's views with the same held queries, page
 // graph and navigation as every other app view. The readings stay in inspect;
 // this is only the app's host adapter, not a second inspector or registry.

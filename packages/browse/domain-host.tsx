@@ -1,3 +1,4 @@
+/** @jsxImportSource preact */
 // Bind portable domain components to Browse's replica and page graph. Domain
 // packages know these interfaces, never the app that supplies them.
 import { computed, effect } from '@preact/signals'

@@ -1,3 +1,4 @@
+/** @jsxImportSource preact */
 // A task tile owns the frame; its facts come through the shared Meta view.
 import { test } from '@yaks/testing'
 import '../../testing.ts'

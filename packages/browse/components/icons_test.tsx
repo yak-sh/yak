@@ -1,3 +1,4 @@
+/** @jsxImportSource preact */
 // The icon vocabulary keeps Lucide behind one stable, data-driven component.
 import { test } from '@yaks/testing'
 import '../testing.ts'

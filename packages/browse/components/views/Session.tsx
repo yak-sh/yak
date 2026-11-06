@@ -1,3 +1,4 @@
+/** @jsxImportSource preact */
 import { domainBundle } from '../../domain-host.tsx'
 import { useJob, useModel, useReference, useRepoUrl } from '../subscriptions.ts'
 import {

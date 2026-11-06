@@ -1,3 +1,4 @@
+/** @jsxImportSource preact */
 // The full document face's section renderers — especially the meta line,
 // where an absent field must paint nothing. A renderer is a component: every
 // case mounts it through Preact (mount.ts) and asserts on the resulting DOM,

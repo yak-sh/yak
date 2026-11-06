@@ -1,3 +1,4 @@
+/** @jsxImportSource preact */
 // The one DOM door for markdown. Callers choose the host so markdown keeps
 // the layout, gestures, and CSS of the face it fills; only this file owns the
 // innerHTML prop fed by md.ts's untrusted-content boundary.

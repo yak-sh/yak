@@ -1,3 +1,4 @@
+/** @jsxImportSource preact */
 // The sidebar: search at the top, then a line per place (home, each
 // destination, the schema), the one you are on lit. Every line is a plain
 // link; a phone folds the sidebar behind the bar's menu, and going anywhere

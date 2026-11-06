@@ -1,3 +1,4 @@
+/** @jsxImportSource preact */
 // The shared visible face of an addressed subscription refusal. The server
 // supplies the durable reason/reference; this component keeps retry on the same
 // stable subscription identity so success replaces the failure normally.
