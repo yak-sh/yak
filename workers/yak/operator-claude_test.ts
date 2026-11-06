@@ -95,7 +95,7 @@ test('on Claude the Operator hands code to Opus, which works for its space at it
 // Everything the Operator and its helper were sent besides the conversation
 // is one entry each, closed, opening on each layer of the system prompt and
 // on the tools (each with its description and schema), the helper's inside
-// the step that started it.
+// the step that started it. What the page drew above is not drawn again.
 test('the conversation shows the context the Operator and each helper were given, closed until opened', async () => {
   let { html } = await conversationOf(
     store,
@@ -116,11 +116,13 @@ test('the conversation shows the context the Operator and each helper were given
   assertEquals(named(helper), 'The context the helper was given')
   let first = (m: string) => asked.find((r) => r.model == m)!
   let shown = (at: Element) =>
-    [...at.children].find((c) => c.classList.contains('Talk_Written'))!
-      .innerHTML
+    [...at.children].find((c) => c.classList.contains('Talk_Written'))
+      ?.innerHTML ?? at.querySelector(':scope > p')?.textContent
   let drawn = (md: string) =>
     parseHTML(renderToString(reply(md))).document.querySelector('.Talk_Reply')!
       .innerHTML
+  let whoOf = (m: string) =>
+    first(m).instructions!.split(' Who you are\n')[1].split(PART)[0].trim()
   for (let [d, m] of [[operator, SONNET], [helper, OPUS]] as const) {
     let all = layers(d)
     assertEquals(
@@ -134,7 +136,7 @@ test('the conversation shows the context the Operator and each helper were given
     )
     for (let l of [d, ...all]) assertEquals(l.hasAttribute('open'), false)
     // Every layer is its part of what the model received, in order: each
-    // document under its heading, drawn as written.
+    // document under its heading, drawn as written unless drawn above.
     let said = first(m).instructions!
     let at = 0
     for (let l of all.slice(0, -1)) {
@@ -145,9 +147,19 @@ test('the conversation shows the context the Operator and each helper were given
     let who = all.find((l) => named(l) == 'Who you are')!
     assertEquals(
       shown(who),
-      drawn(said.split(' Who you are\n')[1].split(PART)[0].trim()),
+      d == helper && whoOf(m) == whoOf(SONNET)
+        ? 'The same as above.'
+        : drawn(whoOf(m)),
     )
   }
+  // Each tool is drawn once on the page, where it was first offered.
+  let offers = [SONNET, OPUS].flatMap((m) =>
+    first(m).tools.map((t) => JSON.stringify(t))
+  )
+  assertEquals(
+    document.querySelectorAll('.Talk_Told details > pre').length,
+    new Set(offers).size,
+  )
   // Each tool by its name, opening on its description and its schema.
   let spawn = first(SONNET).tools.find((t) => t.name == 'spawn')!
   let tool = [...layers(operator).at(-1)!.querySelectorAll('details')].find(

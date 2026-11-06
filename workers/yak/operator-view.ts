@@ -351,30 +351,53 @@ let instructed = (said: string, ...inside: Node[]) =>
 let written = (body: string) =>
   h('div', { class: 'Talk_Written' }, markdown(body))
 
+// What a page has drawn of what its models were told: each layer and each
+// tool, by its text. One drawn above is not drawn again: a conversation's
+// asks and its helpers' are mostly told the same, and drawing each in full
+// made Jeff's conversation 2.5 MB, 94% of it the same 90 tools (T-144992).
+type Drawn = Set<string>
+let fresh = (page: Drawn, text: string) => !page.has(text) && !!page.add(text)
+let SAME = h('p', null, 'The same as above.')
+
 // Each tool as the model was offered it: its name, opening on its
-// description and the arguments it takes.
-let offered = (tools: Tool[]) =>
-  tools.map((t) =>
-    h(
-      'details',
-      null,
-      h('summary', null, t.name),
-      written(t.description),
-      h('pre', null, JSON.stringify(t.parameters, null, 2)),
-    )
-  )
+// description and the arguments it takes; those drawn above are counted.
+let offered = (tools: Tool[], page: Drawn) => {
+  let shown = tools.filter((t) => fresh(page, 'tool ' + JSON.stringify(t)))
+  let rest = tools.length - shown.length
+  return [
+    ...shown.map((t) =>
+      h(
+        'details',
+        null,
+        h('summary', null, t.name),
+        written(t.description),
+        h('pre', null, JSON.stringify(t.parameters, null, 2)),
+      )
+    ),
+    !rest
+      ? null
+      : shown.length
+      ? h('p', null, `The other ${rest} are as above.`)
+      : SAME,
+  ]
+}
 
 /** The tool offers asks name (`sending{offer}`), by their sha. */
 export type Offers = Map<string, Tool[]>
 
-/** A layer of what a model was told: its name, what it holds drawn, and what
- * tells a later ask's from it (`key`, its text). */
+/** A layer of what a model was told: its name, what it holds drawn on a page
+ * (once its text is drawn above, that it is the same), and what tells a later
+ * ask's from it (`key`, its text). */
 type Layer = {
   name: string
   key: string
-  inside: Node | Node[]
+  inside: (page: Drawn) => Node | Node[]
   text: string
 }
+
+// A layer of Markdown, drawn once a page.
+let prose = (key: string, text: string) => (page: Drawn) =>
+  fresh(page, key + '\n' + text) ? written(text) : SAME
 
 // What a part a persona voiced is called: its heading, without the id before
 // its title (@yaks/persona `voice`).
@@ -401,7 +424,7 @@ let voiced = (said: string): Layer[] =>
     },
     [],
   ).map((l) => ({ ...l, text: l.text.trim() })).filter((l) => l.text)
-    .map((l) => ({ ...l, key: l.name, inside: written(l.text) }))
+    .map((l) => ({ ...l, key: l.name, inside: prose(l.name, l.text) }))
 
 // What a prompt entry is, by where it came from (@yaks/session `spawn`).
 let NOTES: Record<string, string> = {
@@ -411,7 +434,12 @@ let NOTES: Record<string, string> = {
 
 // One entry holding a context's layers, each closed until opened; one that
 // changed at a later ask marks what changed since the ask before (`was`).
-let context = (who: string, layers: Layer[], was?: Map<string, string>) =>
+let context = (
+  who: string,
+  layers: Layer[],
+  page: Drawn,
+  was?: Map<string, string>,
+) =>
   instructed(
     was
       ? `The context ${who} was given changed here`
@@ -425,7 +453,7 @@ let context = (who: string, layers: Layer[], was?: Map<string, string>) =>
           : was.get(l.key) != l.text
           ? ' (changed)'
           : ''),
-        l.inside,
+        l.inside(page),
       )
     ),
   )
@@ -434,21 +462,25 @@ let context = (who: string, layers: Layer[], was?: Map<string, string>) =>
  * entry holding each layer of its system prompt (`sending{instructions}`),
  * each prompt entry before it (a fork's note, a helper's guidance) and the
  * tools it was offered (`sending{offer}`); and again at a later ask whose
- * context differs from the ask before it. */
+ * context differs from the ask before it. Each is drawn when its line is,
+ * in the page's order, so what it says is above is. */
 let briefed = (
   entries: Bundle[],
   who: string,
   offers: Offers = new Map(),
-): Line[] => {
+  page: Drawn = new Set(),
+): Told[] => {
   let last = new Map<string, Map<string, string>>()
   let notes: (Layer & { id: string })[] = []
-  let rows = entries.flatMap((b): Line[] => {
+  let rows = entries.flatMap((b): Told[] => {
     let id = b.entity.eid
     if (b.prompt) {
       let text = String(comp(b, 'content')?.body ?? '')
       let name = NOTES[String(comp(b, 'prompt')?.source)] ??
         'A note it was given'
-      if (text) notes.push({ id, name, key: name, inside: written(text), text })
+      if (text) {
+        notes.push({ id, name, key: name, inside: prose(name, text), text })
+      }
       return []
     }
     let sending = comp(b, 'sending')
@@ -467,7 +499,7 @@ let briefed = (
         ? [{
           name: `${tools.length} tools`,
           key: 'tools',
-          inside: offered(tools),
+          inside: (page: Drawn) => offered(tools, page),
           text: offer,
         }]
         : [],
@@ -477,14 +509,17 @@ let briefed = (
     let same = was?.size == now.size &&
       [...now].every(([key, text]) => was!.get(key) == text)
     return layers.length && !same
-      ? [{ id, node: context(who, layers, was) }]
+      ? [{ id, draw: () => context(who, layers, page, was) }]
       : []
   })
   // Notes no ask has sent yet.
   return notes.length
-    ? [...rows, { id: notes[0].id, node: context(who, notes) }]
+    ? [...rows, { id: notes[0].id, draw: () => context(who, notes, page) }]
     : rows
 }
+
+// A line of what a model was told, drawn when the page reaches it.
+type Told = { id: string; draw: () => Node }
 
 /** A helper the Operator started: its session, the call that started it,
  * when one did, and its transcript. */
@@ -501,8 +536,8 @@ export type Seen = {
 }
 
 // What a helper was told, all its asks', in one place.
-let helped = (h: Helper, offers?: Offers) =>
-  briefed(h.entries, 'the helper', offers)
+let helped = (h: Helper, offers?: Offers, page?: Drawn) =>
+  briefed(h.entries, 'the helper', offers, page)
 
 /** Every line of a transcript worth showing, in order, what each helper was
  * told inside the step that started it. */
@@ -520,8 +555,9 @@ let lines = (
       b,
     ]),
   )
+  let page: Drawn = new Set()
   let prompts = new Map(
-    briefed(entries, called, offers).map((r) => [r.id, r]),
+    briefed(entries, called, offers, page).map((r) => [r.id, r]),
   )
   // What each helper a step started was told, under a link to its own
   // conversation.
@@ -538,7 +574,7 @@ let lines = (
           ),
         )
         : null,
-      ...helped(one, offers).map((r) => r.node),
+      ...helped(one, offers, page).map((r) => r.draw()),
     ])
   let calls = new Set(entries.map((b) => b.entity.eid))
   let inside = asked(entries)
@@ -547,8 +583,9 @@ let lines = (
     ...entries.flatMap((b): Line[] => {
       let id = b.entity.eid
       let body = String(comp(b, 'content')?.body ?? '')
-      let drawn: Line[] = prompts.has(id)
-        ? [prompts.get(id)!]
+      let told = prompts.get(id)
+      let drawn: Line[] = told
+        ? [{ id, node: told.draw() }]
         : b.call
         ? [{ id, node: tool(b, names, results.get(id), under(id)) }]
         : line(b, id, body)
@@ -566,7 +603,8 @@ let lines = (
     }),
     // A helper no step of these started (one given a task) closes the list.
     ...helpers.filter((h) => !h.call || !calls.has(h.call))
-      .flatMap((h) => helped(h, offers)),
+      .flatMap((h) => helped(h, offers, page))
+      .map((r) => ({ id: r.id, node: r.draw() })),
   ]
 }
 
@@ -767,7 +805,7 @@ export let helperFrame = (
       rows: told.length && call
         ? rows(entries, names, { ...seen, helpers: [helper] })
           .filter((r) => r.id == helper.call)
-        : told.map(drawn),
+        : told.map((r) => drawn({ id: r.id, node: r.draw() })),
       changed: changed(helper.entries, from),
       ...doingNow(entries, names),
     },
