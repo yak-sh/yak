@@ -382,3 +382,36 @@ moving stores beside the kernel. MCP's handshake is `server/discover`: no
 `startup_time_ms` stayed in its usual range (65 ms for `59912dc3`; 42–193 ms
 over the day before). What is left is led by the MCP SDK with Zod (~385 KB) and
 the Sandbox SDK (~307 KB).
+
+## The connector speaks MCP itself: T-143191
+
+November 6, 2026, `55c2f7b43`. `@modelcontextprotocol/server` and the Zod v4 it
+brings left the kernel: `@yaks/mcp` answers both protocol eras itself
+(`packages/mcp/protocol.ts`), on the JSON Schema checks @yaks/vocab already
+makes. Zod v3 and `zod-to-json-schema` went with the last tool declaring its
+arguments in Zod (`mail_list`).
+
+| Left the kernel's upload                   |  KB |
+| ------------------------------------------ | --: |
+| `@modelcontextprotocol/server` and core    | 227 |
+| Zod v4 and v3, `zod-to-json-schema`        | 197 |
+| `@yaks/mcp`, grown by the protocol it owns | −12 |
+
+`workers/yak/bundle.ts` output, every JS module: 4,123,795 → 3,705,082 bytes
+(gzip 1,387,575 → 1,279,279).
+
+Local workerd, a fresh process per observation, 25 alternating rounds
+(`/home/yaks/bench-T-143191/pair25.jsonl`): ready median 599.4 → 559.1 ms,
+paired −56.1 ms, faster 20 of 25; an empty Worker 134.6 ms in the same run.
+
+`workers/yak/connector-capture.ts` sent the in-process connector 93 requests,
+both eras, signed in and not, well formed and not. Before and after, 91 answers
+are byte-identical, `tools/list` among them; `mail_list`'s refusal of a bad
+argument is now the JSON Schema checker's sentence, like every other tool's.
+
+Deployed with `7e48a0008` as `43ba65f4` at 08:52 UTC. Cloudflare's own
+`startup_time_ms`, one stored value per version: 66 ms for the parent
+`c3de200d`, 59 ms for `43ba65f4`
+(`/home/yaks/bench-T-125212/cloudflare/captures/2026-11-06T08-53-1*-t143191`).
+What is left of the gap to an empty Worker is the rest of the upload, led by the
+Sandbox SDK (~307 KB).
