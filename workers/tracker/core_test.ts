@@ -264,9 +264,9 @@ test("the platform's resolution archives the space's report of a break in a pers
   let owned = fixture()
   let platformed = store(ram(vocab, options), {
     sink: () => {},
-    settle: (scope, eids) => {
+    settle: (scope, eids, reason) => {
       equal(scope, space)
-      return owned.settle(eids)
+      return owned.settle(eids, reason)
     },
   })
   let broke = (eid: string, at: string, scope?: string, tags = {}) =>
@@ -292,6 +292,11 @@ test("the platform's resolution archives the space's report of a break in a pers
   let open = async () =>
     (await owned.graph.read('.error !archived')).map((r) => r.entity.eid)
   equal(await open(), [])
+  let [settled] = await owned.graph.get([earlier], ['archived'])
+  equal(
+    (settled.archived as Comp).reason,
+    'Fixed by yaks.app: a statement past the step limit',
+  )
   // A break after the resolution is the bug back: the owner hears of it.
   await deliver(owned, [broke(later, new Date().toISOString(), space)])
   equal(await open(), [later])

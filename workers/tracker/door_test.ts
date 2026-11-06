@@ -449,3 +449,34 @@ test('tracker /retry answers how many failed runs it put back', async () => {
   let response = await markDoor(request('/retry', marker, { of: 'mail_post' }))
   equal(await response.json(), { retried: 0 })
 })
+for (
+  let [kind, token, body, code] of [
+    ['reader', reader, { eids: [space], reason: 'r' }, 403],
+    ['intake', intakeOnly, { eids: [space], reason: 'r' }, 403],
+    ['other scope', elsewhere, { eids: [space], reason: 'r' }, 403],
+    ['no reason', marker, { eids: [space] }, 400],
+    ['no eids', marker, { eids: [], reason: 'r' }, 400],
+  ] as const
+) {
+  test(`tracker /settle refuses ${kind}`, async () => {
+    equal((await markDoor(request('/settle', token, body))).status, code)
+  })
+}
+test('tracker /settle archives the occurrences it names for its reason', async () => {
+  let g = fixture()
+  let report = '00000000-0000-4000-8000-0000000000a1'
+  await g.graph.apply([{
+    entity: { eid: report },
+    error: { at: '2026-10-18T15:49:30Z', bug: other },
+    during: { space, app: other },
+  }], { trusted: true })
+  let response = await door(g, platform, secret)(
+    request('/settle', marker, {
+      eids: [report],
+      reason: 'Fixed by yaks.app: c',
+    }),
+  )
+  equal(await response.json(), { settled: 1 })
+  let [row] = await g.graph.get([report], ['archived'])
+  equal((row.archived as { reason?: string }).reason, 'Fixed by yaks.app: c')
+})

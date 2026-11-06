@@ -229,6 +229,30 @@ async (request: Request): Promise<Response> => {
     }
     return json({ retried: await tracker.retry(of) })
   }
+  // A space's reports of breaks the platform fixed, archived for the fix as
+  // `bug_settle` archives them: for the reports its tags could not name. The
+  // same capability as a bug's mark.
+  if (request.method == 'POST' && path == '/settle') {
+    if (access.mark !== true) {
+      return json({ error: 'tracker settle denied' }, 403)
+    }
+    let body = await request.json().catch(() => null)
+    let { eids, reason } = body ?? {}
+    if (
+      !Array.isArray(eids) || !eids.length || eids.length > 100 ||
+      eids.some((eid) => typeof eid != 'string' || !minted(eid)) ||
+      typeof reason != 'string' || !reason || reason.length > 4000
+    ) {
+      return json(
+        {
+          error:
+            'body must be JSON with up to 100 occurrence eids and a reason',
+        },
+        400,
+      )
+    }
+    return json({ settled: await tracker.settle(eids, reason) })
+  }
   let marks = {
     '/resolve': 'resolved',
     '/archive': 'archived',

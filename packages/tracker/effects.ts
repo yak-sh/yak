@@ -44,10 +44,10 @@ export type Options = {
   retain?: number
   /** A box with remote standing suppresses historical follow-up catch-up. */
   remote?: import('./remote.ts').Remote
-  /** Archive these occurrences in the tracker of `scope` (a space's), as its
-   * owner's `fixed` would: the platform's, which resolves bugs reported from
-   * people's apps ({@link settle}). */
-  settle?: (scope: string, eids: string[]) => Promise<unknown>
+  /** Archive these occurrences in the tracker of `scope` (a space's) for
+   * `reason`, as its owner's `fixed` would: the platform's, which resolves
+   * bugs reported from people's apps ({@link settle}). */
+  settle?: (scope: string, eids: string[], reason: string) => Promise<unknown>
 }
 
 let openedAt = (row: Bundle) =>
@@ -238,7 +238,7 @@ export let follow = async (
  * occurrence tagged with another tracker's `scope` and its `occurrence` there
  * (a break in a person's app, which yaks.app also records) is archived in
  * that tracker, so the app's owner and their Operator stop hearing of a break
- * yaks.app fixed. Only occurrences from before the resolution are closed; a
+ * yaks.app fixed; the reason is the resolution's cause. Only occurrences from before the resolution are closed; a
  * later one is the bug back, open in both. Archiving again changes nothing,
  * so a retry is safe.
  *
@@ -248,7 +248,7 @@ export let follow = async (
  * let at = (eid: string, t: string, tags = {}) =>
  *   ({ entity: { eid }, error: { at: t, bug: 'b', tags } })
  * let rows = [
- *   { entity: { eid: 'b' }, bug: {}, resolved: { at: '2026-10-18T16:00Z' } },
+ *   { entity: { eid: 'b' }, bug: {}, resolved: { at: '2026-10-18T16:00Z', cause: 'a leak' } },
  *   at('e1', '2026-10-18T15:49Z', { scope: 's', occurrence: 'o1' }),
  *   at('e2', '2026-10-18T15:50Z', { scope: 's', occurrence: 'o2' }),
  *   at('e3', '2026-10-18T15:51Z'),
@@ -258,9 +258,9 @@ export let follow = async (
  *   get: (eids: string[]) => Promise.resolve(rows.filter((r) => eids.includes(r.entity.eid))),
  *   read: () => Promise.resolve(rows.filter((r) => 'error' in r)),
  * }
- * let sent: [string, string[]][] = []
- * await settle(g as never, 'b', { settle: (s, e) => Promise.resolve(sent.push([s, e])) })
- * equal(sent, [['s', ['o1', 'o2']]])
+ * let sent: [string, string[], string][] = []
+ * await settle(g as never, 'b', { settle: (...a) => Promise.resolve(sent.push(a)) })
+ * equal(sent, [['s', ['o1', 'o2'], 'Fixed by yaks.app: a leak']])
  * ```
  */
 export let settle = async (
@@ -271,14 +271,15 @@ export let settle = async (
   if (!options.settle) return
   let [row] = await g.get([eid])
   if (!row?.bug || !row.resolved) return
-  let until = str(comp(row, 'resolved').at)
+  let { at: until, cause } = comp(row, 'resolved')
+  let reason = `Fixed by yaks.app: ${str(cause)}`
   let by = new Map<string, string[]>()
   for (let b of await g.read(occurring(eid))) {
-    if (str(comp(b, 'error').at) > until) continue
+    if (str(comp(b, 'error').at) > str(until)) continue
     let { scope, occurrence } = Object.fromEntries(tags(b))
     if (scope && occurrence) by.set(scope, [...by.get(scope) ?? [], occurrence])
   }
-  for (let [scope, eids] of by) await options.settle(scope, eids)
+  for (let [scope, eids] of by) await options.settle(scope, eids, reason)
 }
 
 export let effects = (

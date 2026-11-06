@@ -298,14 +298,17 @@ export let store = (storage: Storage, config: Config) => {
     },
     // The platform's resolution of a bug these occurrences stand for
     // (@yaks/tracker/effects `settle`): they are archived as their owner's
-    // `fixed` would archive them.
-    settle: async (eids: string[]) => {
+    // `fixed` would archive them, for the resolution's reason.
+    settle: async (eids: string[], reason?: string) => {
       let found = (await g.get(eids)).filter((row) =>
         row.error && row.during && !row.archived
       )
       if (found.length) {
         await g.apply(
-          found.map((row) => ({ entity: row.entity, archived: {} })),
+          found.map((row) => ({
+            entity: row.entity,
+            archived: reason ? { reason } : {},
+          })),
           { trusted: true },
         )
       }
