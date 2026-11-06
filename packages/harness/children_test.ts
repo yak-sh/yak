@@ -81,7 +81,7 @@ for (let kind of ['fork', 'spawn']) {
     assertEquals(
       req.items.some((i) =>
         i.kind == 'instruction' &&
-        i.text.includes('This is your assigned task')
+        i.text.includes('You are a fork of the conversation above')
       ),
       kind == 'fork',
     )
@@ -407,6 +407,55 @@ test("a fork reports once, after its own helper's report, when it settled first"
   await a.idle(fork.entity.eid) // the fork settles while its helper works
   helperReply.resolve(reply('helper final'))
   for (let s of [helper.entity.eid, fork.entity.eid, parent]) await a.idle(s)
+  let told = (await a.transcript(parent)).filter((b) => b.delivery)
+  assertEquals(told.map((b) => textOf(b).split('\n').at(-1)), ['fork final'])
+  await a.close()
+})
+
+test('a fork reports once, after the helpers its helper started, however deep', async () => {
+  let deepAsked = deferred<void>()
+  let deepReply = deferred<Reply>()
+  let said = (req: Request, text: string) =>
+    req.items.some((i) => i.kind == 'user' && i.text.endsWith(text))
+  let has = (req: Request, text: string) =>
+    req.items.some((i) => 'text' in i && i.text.includes(text))
+  let ran = (req: Request, id: string) =>
+    req.items.some((i) => i.kind == 'result' && i.id == id)
+  // Each level starts the next, says it is on it, and answers for real once
+  // the level below reports.
+  let level = (req: Request, below: string, prompt: string, name: string) =>
+    has(req, below + ' final')
+      ? reply(name + ' final')
+      : ran(req, name)
+      ? reply(name + ' first')
+      : call('spawn', { prompt }, name)
+  let model: Model = (req) => {
+    if (said(req, 'deep work')) {
+      deepAsked.resolve()
+      return deepReply.promise
+    }
+    if (said(req, 'helper work')) {
+      return Promise.resolve(level(req, 'deep', 'deep work', 'helper'))
+    }
+    if (said(req, 'fork work')) {
+      return Promise.resolve(level(req, 'helper', 'helper work', 'fork'))
+    }
+    if (ran(req, 'f')) return Promise.resolve(reply('parent reacted'))
+    return Promise.resolve(call('fork', { prompt: 'fork work' }, 'f'))
+  }
+  let h = await harness()
+  let a = await local({ h, model, tools: sessionTools(h.g) })
+  let parent = await a.start('parent')
+  await deepAsked.promise
+  let [fork] = await a.children(parent)
+  let [helper] = await a.children(fork.entity.eid)
+  let [deep] = await a.children(helper.entity.eid)
+  // The helper and the fork each settle on their first word while deep works.
+  await a.idle(helper.entity.eid)
+  await a.idle(fork.entity.eid)
+  deepReply.resolve(reply('deep final'))
+  for (let s of [deep, helper, fork].map((b) => b.entity.eid)) await a.idle(s)
+  await a.idle(parent)
   let told = (await a.transcript(parent)).filter((b) => b.delivery)
   assertEquals(told.map((b) => textOf(b).split('\n').at(-1)), ['fork final'])
   await a.close()

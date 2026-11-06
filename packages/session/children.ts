@@ -251,7 +251,7 @@ let delegation = (
           prompt: { scope: 'local', source: 'harness:fork' },
           content: {
             body:
-              'This is your assigned task in a fork of the parent conversation. Continue the work here; delegate to subagents or a fresh session when that is useful.',
+              'You are a fork of the conversation above, started for the task below. Do it here yourself: you already hold all of its context, so forking it again only repeats you. Start a fresh subagent only for a separate part that needs a clean start. Your final reply is your report to the parent and ends your work, so give it when the task is done, not before.',
           },
         })
       }
@@ -484,14 +484,17 @@ export let sessionTools = (g: Graph, limits: ChildLimits = {}): Tool[] => {
   }]
 }
 
-// Whether any of a session's children has yet to end and be told: a child's
-// dispatch settles only after its receipt is written (./run.ts).
+// Whether any of a session's helpers, at any depth, has yet to end and be
+// told. A child's dispatch settles after its report is written, or held for
+// helpers of its own (./run.ts), so a settled child still works while one of
+// its own does.
 let working = async (g: Graph, session: Eid): Promise<boolean> => {
   for (let c of await children(g, session)) {
     let place = dispatchStatus(c)
     if (place != null && place != 'settled') return true
     let status = await entryStatus(g, c.entity.eid)
     if (!['settled', 'failed', 'stopped'].includes(status)) return true
+    if (status == 'settled' && await working(g, c.entity.eid)) return true
   }
   return false
 }
