@@ -11,8 +11,8 @@
 // worked (./effects.ts): a box's `yak serve`, or another process explicitly
 // serving the effects role. Drawing the reply is the caller's: a line
 // on a command line, the harness itself under `--tui` (./view.ts).
-// `model_list` lists the OpenAI endpoint's catalog through the credential the
-// harness uses. A tool answers, it does not write to a terminal.
+// `model_list` lists a configured provider's catalog, signed in as the
+// harness signs in to it. A tool answers, it does not write to a terminal.
 
 import type { Bundle, Comp, Eid, Graph } from '@yaks/graph'
 import { argsOf, who } from '@yaks/graph/call'
@@ -28,7 +28,9 @@ import { changes } from '@yaks/session/wait'
 import { begin, seed, through } from './agent.ts'
 import { defaultUsing } from './default.ts'
 import { selectedUsing } from './model_selection.ts'
-import { openaiCredential } from './openai_auth.ts'
+import { configured, lending } from './providers.ts'
+import { signins } from '@yaks/connections'
+import * as systemProcess from '@yaks/process/system'
 import { hosted } from './store.ts'
 import { homeAt } from './session_machines.ts'
 import { conversations } from './conversations.ts'
@@ -137,9 +139,6 @@ let text = (call: Bundle, body: string): Bundle => ({
   output: { source: call.entity.eid },
 })
 
-export let CODEX_CLIENT_VERSION = '0.157.1'
-export { listing as modelCatalog } from '@yaks/openai'
-import { listing as modelCatalog } from '@yaks/openai'
 import type { Listed } from '@yaks/model'
 export type { Listed } from '@yaks/model'
 
@@ -308,16 +307,28 @@ export let runs = (host?: Host): Runs => ({
   },
   model_list: async (call, graph) => {
     if (!host) throw new Error('model list needs a host')
-    let auth = openaiCredential(hosted(host))
-    let cred = await auth.credential()
-    let models = await windows(
-      graph,
-      await modelCatalog(cred, fetch, auth.refresh),
+    let provider = word(argsOf(call), 'provider') ??
+      nameOf(
+        (await graph.get([String((await defaultUsing(graph)).provider)]))[0],
+        PROVIDER,
+      )
+    let h = hosted(host)
+    let served = await configured(
+      h.plugins,
+      lending(h, signins(h), fetch, systemProcess.env.get),
     )
+    let model = provider ? served[provider] : undefined
+    if (!model?.list) {
+      throw new Refused(
+        `${provider ?? 'The default provider'} is not a provider this ` +
+          `config names: ${Object.keys(served).join(', ') || 'none'}`,
+      )
+    }
+    let models = await windows(graph, await model.list())
     return [text(
       call,
       [
-        `models from ${cred.base}`,
+        `models from ${provider}`,
         ...models.map(({ name, context }) =>
           `  ${name}` + (context ? `  ${context} tokens` : '')
         ),

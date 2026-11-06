@@ -191,7 +191,7 @@ test('selected session opens alone and the browser requests one page at a time',
 
 test('graph effects paint a model reply without a keypress; sends are input bundles', async () => {
   let reply = deferred<Awaited<ReturnType<Model>>>()
-  let a = local({
+  let a = await local({
     h: await harness(),
     model: () => reply.promise,
     tools: [],
@@ -405,7 +405,7 @@ test('Tab preserves editing and captures message/task mode for each queued submi
 test('task mode paints claimed work and subagent, then its delivered result without keys', async () => {
   let childReply = deferred<Awaited<ReturnType<Model>>>()
   let childAsked = deferred<void>()
-  let a = local({
+  let a = await local({
     h: await harness(),
 
     tools: [],
@@ -797,7 +797,7 @@ test('transcript publishes before slow sidebar reads and despite ongoing changes
   let reply = deferred<Awaited<ReturnType<Model>>>()
   let sidebar = deferred<Bundle[]>()
   let dir = await Deno.makeTempDir()
-  let a = local({
+  let a = await local({
     h: await harness(),
     model: () => reply.promise,
     tools: [],

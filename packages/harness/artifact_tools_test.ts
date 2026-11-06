@@ -104,7 +104,7 @@ test('tool-driven vision reaches the next model request and survives database re
   let record = await artifactStore(h.artifacts)(png, 'image/png')
   await h.g.apply([{ entity: { eid: 'picture' }, artifact: record }])
   let requests: Item[][] = []
-  let a = local({
+  let a = await local({
     h,
     name: 'fake',
     model: (req) => {

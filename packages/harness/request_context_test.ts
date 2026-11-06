@@ -23,7 +23,7 @@ let observed = await (async () => {
     requests.push(req)
     return Promise.resolve({ id: 'fake', model: req.model, items: [] })
   }
-  let { lent } = here(host, { model, tools: [], streaming: false })
+  let { lent } = await here(host, { model, tools: [], streaming: false })
   try {
     await h.g.apply([
       ...seed({ provider: 'openai', model: 'fake' }),

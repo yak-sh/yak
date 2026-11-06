@@ -4,13 +4,7 @@
 
 import * as systemProcess from '@yaks/process/system'
 
-import { artifactStore } from '@yaks/blob/identify'
-import { deferredModel, type Model, prefixCacheMark } from '@yaks/model'
-import { claudeDoc } from '@yaks/claude/vocab'
-import { anthropicDoc } from '@yaks/anthropic/vocab'
-import { mark as anthropicMark } from '@yaks/anthropic/mark'
-import { openrouterDoc } from '@yaks/openrouter/vocab'
-import { openaiDoc } from '@yaks/openai/vocab'
+import type { Model } from '@yaks/model'
 import { type Bundle } from '@yaks/graph'
 import type { ChildLimits, Step, Tool } from '@yaks/session'
 import { watchMigrations } from '@yaks/sqlite/migration'
@@ -18,12 +12,10 @@ import { render as tree } from '@yaks/preact'
 import type { VNode } from 'preact'
 import { type Agent, agent, type Opts as AgentOpts } from './agent.ts'
 import { authorize } from './mcp_authorize.ts'
-import type { OpenAIAuth } from './openai_auth.ts'
 import type { MCPAuthAction, MCPAuthReply } from './mcp_auth.ts'
 import { mcpTools } from './mcp.ts'
 import { streamingEnabled } from './streaming.ts'
 import { imageContext, registered } from './artifact_tools.ts'
-import { configuredImages, type ImageOptions } from './images.ts'
 import { diagnostics, type FailureContext } from './diagnostics.ts'
 import { homeAt, machines } from './session_machines.ts'
 import { homeAt as checkoutHome } from './workspace.ts'
@@ -33,6 +25,7 @@ import type { Harness } from './store.ts'
 import { graphTools, harnessTools } from './tools.ts'
 import { skillItems, skillTools } from './skills.ts'
 import { pooledHttp } from './http.ts'
+import { configured, lending } from './providers.ts'
 
 export { type Harness, hosted } from './store.ts'
 export { graphTools, harnessTools } from './tools.ts'
@@ -50,17 +43,15 @@ export type Opts = ChildLimits & NotHarness & {
   cwd?: string
   /** the graph to run over */
   h: Harness
-  /** what serves an ask (default: @yaks/openai over the found credential) */
+  /** what serves every ask (default: the providers the config names) */
   model?: Model
   /** the model to ask for by name (otherwise the graph's `defaultUsing`) */
   name?: string
   /** the provider to ask, by name, and the one `model` serves */
   provider?: string
-  /** Host implementations keyed by provider.name, for embedding and testing. */
+  /** Implementations keyed by provider.name, over the configured ones, for
+   * embedding and testing. */
   providers?: Record<string, Model>
-  /** Enable native OpenAI image generation with durable external blobs. */
-  web?: boolean
-  images?: ImageOptions | false
   /** what the agent may call (default: the shell and the graph) */
   tools?: Tool[]
   /** Stream responses by default; false overrides HARNESS_STREAM. */
@@ -94,10 +85,6 @@ export type Opts = ChildLimits & NotHarness & {
   workspace?: string
 }
 
-const refuse = (message: string): never => {
-  throw new Error(message)
-}
-
 /** The harness running here: the agent, and what only a box offers it. */
 export type Local = Agent<Harness> & {
   authorizeMCP: (
@@ -122,17 +109,30 @@ export type Here = {
     name?: string,
     callback?: string,
   ) => Promise<MCPAuthReply>
-  /** how the default model names the reply a request continues */
+  /** how the model lent names the reply a request continues */
   anchor: Model['anchor']
   report: (error: unknown, where: FailureContext) => void
 }
 
-/** What this machine lends an agent over `h`: the models behind its
- * credentials and sign-ins, the workspace and sandbox bindings, the MCP
- * servers, the pictures, the instruction files where a session opens, and
- * where a defect is written. */
-export let here = (h: Harness, opts: Omit<Opts, 'h'> = {}): Here => {
+/** What this machine lends an agent over `h`: the models of the providers its
+ * config names, over its credentials and sign-ins, the workspace and sandbox
+ * bindings, the MCP servers, the pictures, the instruction files where a
+ * session opens, and where a defect is written. */
+export let here = async (
+  h: Harness,
+  opts: Omit<Opts, 'h'> = {},
+): Promise<Here> => {
   let env = opts.env ?? systemProcess.env.get
+  let http = pooledHttp(opts.http)
+  let auth = authorize(h)
+  let providers = await configured(
+    h.plugins,
+    lending(h, auth.signin, http.fetch, env),
+  ).catch(async (error) => {
+    http.close()
+    await auth.close()
+    throw error
+  })
   let detach = h.report ? diagnostics().attach(h.report) : () => {}
   let report = (error: unknown, where: FailureContext) =>
     diagnostics().report(error, where)
@@ -142,41 +142,6 @@ export let here = (h: Harness, opts: Omit<Opts, 'h'> = {}): Here => {
     h.resolveHome,
     opts.workspaces ?? h.workspaces,
   )
-  let auth = authorize(h)
-  let credential: Promise<OpenAIAuth> | undefined
-  let credentials = () =>
-    credential ??= import('./openai_auth.ts').then(
-      ({ openaiCredential }) => openaiCredential(h, env, auth.signin),
-    )
-  let openaiAuth: OpenAIAuth = {
-    credential: async () => (await credentials()).credential(),
-    refresh: async (stale) => (await credentials()).refresh(stale),
-  }
-  let http = pooledHttp(opts.http)
-  let images = opts.model
-    ? undefined
-    : configuredImages(h.artifacts, opts.images)
-  let model = opts.model ??
-    deferredModel(
-      () =>
-        import('@yaks/openai').then(({ responses }) =>
-          responses({
-            ...openaiAuth,
-            fetch: http.fetch,
-            redact: true,
-            images,
-            web: opts.web ?? env('HARNESS_WEB') != '0',
-          })
-        ),
-      {
-        vocab: openaiDoc,
-        mark: (reply, cache) => ({
-          openai: { response_id: reply.id, ...prefixCacheMark(reply, cache) },
-        }),
-        anchor: () => undefined,
-        recover: true,
-      },
-    )
   const mcp = mcpTools(h, auth.signin, auth.mcp)
   h.fx.created('mcp_server', mcp.refresh).changed('mcp_server', mcp.refresh)
     .removed('mcp_server', mcp.refresh)
@@ -186,69 +151,7 @@ export let here = (h: Harness, opts: Omit<Opts, 'h'> = {}): Here => {
     ...opts,
     h,
     model: opts.model,
-    providers: {
-      openai: model,
-      claude: deferredModel(
-        () => import('@yaks/claude').then(({ claude }) => claude()),
-        {
-          vocab: claudeDoc,
-          info: true,
-          mark: (reply) => ({
-            claude: {
-              response_id: reply.id,
-              session_id: (reply as typeof reply & { claudeSession?: string })
-                .claudeSession,
-            },
-          }),
-        },
-      ),
-      anthropic: deferredModel(
-        () =>
-          import('@yaks/anthropic').then(({ messages }) =>
-            messages({
-              fetch: http.fetch,
-              key: async () =>
-                (h.person
-                  ? await auth.signin.key(h.person, 'anthropic')
-                  : undefined) ?? refuse(
-                    'Anthropic is not connected. Run yak auth anthropic.',
-                  ),
-            })
-          ),
-        {
-          vocab: anthropicDoc,
-          info: true,
-          mark: anthropicMark,
-        },
-      ),
-      openrouter: deferredModel(
-        () =>
-          import('@yaks/openrouter').then(({ responses }) =>
-            responses({
-              fetch: http.fetch,
-              media: { store: artifactStore(h.artifacts) },
-              key: async () =>
-                (h.person
-                  ? await auth.signin.key(h.person, 'openrouter')
-                  : undefined) ?? refuse(
-                    'OpenRouter is not connected. Run yak auth openrouter.',
-                  ),
-            })
-          ),
-        {
-          vocab: openrouterDoc,
-          info: true,
-          mark: (reply, cache) => ({
-            openrouter: {
-              response_id: reply.id,
-              ...prefixCacheMark(reply, cache),
-            },
-          }),
-          recover: true,
-        },
-      ),
-      ...opts.providers,
-    },
+    providers: { ...providers, ...opts.providers },
     tools: opts.tools ??
       [
         ...harnessTools(h.g, {
@@ -294,7 +197,7 @@ export let here = (h: Harness, opts: Omit<Opts, 'h'> = {}): Here => {
       detach()
     },
   }
-  return { lent, authorize: auth.run, anchor: model.anchor, report }
+  return { lent, authorize: auth.run, anchor: opts.model?.anchor, report }
 }
 
 /**
@@ -304,12 +207,12 @@ export let here = (h: Harness, opts: Omit<Opts, 'h'> = {}): Here => {
  * ```ts ignore
  * import { hosted, local } from '@yaks/harness/local'
  *
- * let a = local({ h: hosted(host), model: fake })
+ * let a = await local({ h: hosted(host), model: fake })
  * let s = await a.start('reply with the word pong')
  * await a.idle(s)
  * ```
  */
-export let local = (opts: Opts): Local => {
+export let local = async (opts: Opts): Promise<Local> => {
   // A harness spread into the options is refused, including for untyped
   // JavaScript callers, whose options TypeScript never saw.
   for (let key of ['path', 'db', 'store', 'g', 'fx', 'vocab', 'close']) {
@@ -321,7 +224,7 @@ export let local = (opts: Opts): Local => {
   }
   let h = opts.h
   let env = opts.env ?? systemProcess.env.get
-  let { lent, authorize, anchor, report } = here(h, opts)
+  let { lent, authorize, anchor, report } = await here(h, opts)
   let watch: { stop: () => void } | undefined
   let a = agent({
     ...lent,

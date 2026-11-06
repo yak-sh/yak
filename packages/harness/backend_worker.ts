@@ -4,7 +4,6 @@ import {
   transcriptSegments,
   type TranscriptWindow,
 } from '@yaks/session'
-import type { ImageOptions } from './images.ts'
 import type { ListPage } from './agent.ts'
 /** Worker owns the authoritative database and all agent execution: the graph
  * the config it is handed names, composed as any `yak` process composes it.
@@ -72,8 +71,6 @@ let serve = (port: MessagePort) => {
         name?: string
         config: Config
         cwd?: string
-        web?: boolean
-        images?: ImageOptions | false
         streaming?: boolean
         migrationPollMs?: number
         hold?: number
@@ -91,7 +88,7 @@ let serve = (port: MessagePort) => {
         { ...options.config, ...options.hold ? { lease: options.hold } : {} },
         ['graph'],
       )
-      a = local({
+      a = await local({
         h: hosted(served, () => served.close()),
         hold: options.hold,
         cwd: options.cwd,
@@ -100,8 +97,6 @@ let serve = (port: MessagePort) => {
         provider: options.provider,
         name: options.name,
         migrationPollMs: options.migrationPollMs,
-        images: options.images,
-        web: options.web,
         ...(options.fake
           ? {
             name: 'fake',

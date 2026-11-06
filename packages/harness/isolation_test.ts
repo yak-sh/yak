@@ -1,12 +1,12 @@
 import { test } from '@yaks/testing'
-import { assertThrows } from '@std/assert'
+import { assertRejects } from '@std/assert'
 import { local } from './local.ts'
 import { harness } from './testing.ts'
 
 test('agent rejects a spread harness', async () => {
   let h = await harness()
   try {
-    assertThrows(
+    await assertRejects(
       // @ts-expect-error A Harness belongs under h, including when spread.
       () => local({ ...h, name: 'fake', tools: [] }),
       TypeError,

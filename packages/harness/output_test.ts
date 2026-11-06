@@ -100,7 +100,7 @@ test('model receives bounded tool result, UI keeps original and prompt/user stay
   const requests: Request[] = []
   const text = 'TOOL '.repeat(30000)
   const user = 'USER '.repeat(4000)
-  const a = local({
+  const a = await local({
     h,
     name: 'fake',
     tools: [...harnessTools(h.g), {

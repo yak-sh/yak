@@ -26,21 +26,21 @@ export let effects = (
   host: Host,
   options: Record<string, unknown> & Pick<Opts, 'env' | 'http'> = {},
 ): Handlers => {
-  let { lent } = here(hosted(host), {
+  // The providers the config names load before the first run is answered.
+  let lent = here(hosted(host), {
     env: options.env,
     http: options.http,
     compactAt: typeof options.compactAt == 'number'
       ? options.compactAt
       : undefined,
-  })
-  host.defer(() => lent.release?.())
+  }).then((here) => here.lent)
+  host.defer(() => lent.then((lent) => lent.release?.(), () => {}))
   let binding = machines(
     host.graph,
     host.sandboxes,
     host.resolveHome,
     host.workspaces,
   )
-  let runner = lend(lent)
   let g = host.graph
   let entries = (session: string, q: string) =>
     g.read(`.entry.session=${session}&${q}&.limit=1&.fields=entity.eid`)
@@ -121,16 +121,20 @@ export let effects = (
       }], { trusted: true })
     }
   }
-  return {
-    ...running(host.graph, {
-      ...runner,
-      each: unfinishedEach(host, runner.each),
-      answers: async (using, session) => {
-        if (!await runner.answers?.(using, session)) return false
-        if (session) await opening(session)
-        return true
-      },
-      stopping: host.stopping,
+  return running(
+    g,
+    lent.then((lent) => {
+      let runner = lend(lent)
+      return {
+        ...runner,
+        each: unfinishedEach(host, runner.each),
+        answers: async (using, session) => {
+          if (!await runner.answers?.(using, session)) return false
+          if (session) await opening(session)
+          return true
+        },
+        stopping: host.stopping,
+      }
     }),
-  }
+  )
 }

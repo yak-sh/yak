@@ -23,7 +23,7 @@ test('closing the agent stops its migration monitor', async () => {
     reads++
     return read()
   }
-  const a = local({ h, clock: time })
+  const a = await local({ h, clock: time })
   try {
     await time.advance(1000)
     assertEquals(reads, 1)
@@ -101,7 +101,7 @@ test('migration observation stops admission but drains current model before data
     closed = true
     close()
   }
-  const a = local({
+  const a = await local({
     h,
     migrationPollMs: 1,
     model: async () => {

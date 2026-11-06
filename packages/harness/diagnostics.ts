@@ -117,9 +117,9 @@ export let createDiagnostics = (opts: {
 let shared: ReturnType<typeof createDiagnostics> | undefined
 export let diagnostics = () =>
   shared ??= createDiagnostics({
-    secrets: ['OPENAI_API_KEY', 'ANTHROPIC_API_KEY'].map((k) =>
-      systemProcess.env.get(k) ?? ''
-    ),
+    // Every provider's key, whichever the config names: `*_API_KEY`.
+    secrets: Object.entries(systemProcess.env.toObject())
+      .filter(([name]) => name.endsWith('_API_KEY')).map(([, key]) => key),
   })
 
 /** Observe fatal runtime events, without preventDefault: runtime exit

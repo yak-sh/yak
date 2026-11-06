@@ -63,6 +63,7 @@ import type { MediaReceipt } from './media.ts'
 import { listPrice } from './prices.ts'
 export { listPrice } from './prices.ts'
 export { deferredModel } from './deferred.ts'
+export type { Lent, ProviderFacet } from './provider.ts'
 export {
   type Executor,
   type FrozenModelRequest,

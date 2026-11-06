@@ -5,7 +5,7 @@ import type { Comp } from '@yaks/graph'
 import type { Reply } from '@yaks/model'
 import { type ChildLimits, sessionTools } from '@yaks/session'
 import { seed } from './agent.ts'
-import { local } from './local.ts'
+import { type Local, local } from './local.ts'
 import type { Harness } from './store.ts'
 import { harness } from './testing.ts'
 
@@ -48,7 +48,7 @@ test('shared FIFO pool admits IDs before preparation and never over-admits acros
       return Promise.resolve({})
     },
   })
-  let a = local({
+  let a = await local({
     h,
     ...bound,
     model: (req) => {
@@ -101,14 +101,14 @@ test('queued intent survives a restart, and closing does not drain the durable q
   let { path, free } = await file()
   let h = await harness(path)
   let bound = limited(h, { maxChildren: 0 })
-  let a = local({
+  let a = await local({
     h,
     ...bound,
     model: () => {
       throw new Error('queued child ran')
     },
   })
-  let b: ReturnType<typeof local> | undefined
+  let b: Local | undefined
   try {
     await h.g.apply([{ entity: { eid: 'p' }, session: {} }])
     await h.g.apply([{
@@ -126,7 +126,7 @@ test('queued intent survives a restart, and closing does not drain the durable q
     await a.close()
     h = await harness(path)
     assertEquals((await h.g.read('.dispatch.state=queued&*')).length, 1)
-    b = local({
+    b = await local({
       h,
       ...limited(h, { maxChildren: 1 }),
       model: () => Promise.resolve(reply('done')),
@@ -147,7 +147,7 @@ test('cap one nested delegated wait releases and reacquires its slot', async () 
   let h = await harness()
   let turns = new Map<string, number>()
   let finished = false
-  let a = local({
+  let a = await local({
     h,
     maxChildren: 1,
     model: (req) => {
@@ -201,12 +201,12 @@ test('queued cancellation skips expensive prep; prep failure has one terminal re
     return Promise.reject(new Error('checkout failed'))
   }
   let bound = limited(h, { maxChildren: 0, prepareChild: prepare })
-  let a = local({
+  let a = await local({
     h,
     ...bound,
     model: () => Promise.resolve(reply('parent')),
   })
-  let b: ReturnType<typeof local> | undefined
+  let b: Local | undefined
   try {
     await h.g.apply([
       { entity: { eid: 'p' }, session: {} },
@@ -232,7 +232,7 @@ test('queued cancellation skips expensive prep; prep failure has one terminal re
     }])
     await a.close()
     h = await harness(path)
-    b = local({
+    b = await local({
       h,
       ...limited(h, { maxChildren: 1, prepareChild: prepare }),
       model: () => Promise.resolve(reply('parent')),
@@ -263,7 +263,7 @@ test('queued submissions and fork anchors survive file reopen without duplicate 
   let { path, free } = await file()
   let h = await harness(path)
   let bound = limited(h, { maxChildren: 0 })
-  let a = local({
+  let a = await local({
     h,
     ...bound,
     model: () => Promise.resolve(reply('done')),
@@ -299,7 +299,7 @@ test('queued submissions and fork anchors survive file reopen without duplicate 
         return Promise.resolve({})
       },
     })
-    a = local({
+    a = await local({
       h,
       ...bound,
       model: () => Promise.resolve(reply('done')),

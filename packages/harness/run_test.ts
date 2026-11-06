@@ -29,7 +29,7 @@ let echo: Model = (req) =>
   })
 
 let started = async (model: Model = echo) =>
-  local({
+  await local({
     name: 'gpt-6-astra',
     h: await harness(),
     model,
@@ -201,7 +201,7 @@ test('the agent reads bare and filed open work, including claims and blocked fac
 test('resume wakes what a restart left owed a turn', async () => {
   let h = await harness()
   // A transcript with an input nobody answered — what a killed harness leaves.
-  let quiet = local({
+  let quiet = await local({
     name: 'gpt-6-astra',
     h,
     model: echo,
@@ -373,7 +373,7 @@ test('session titles use local assignment, not inherited parent context', async 
       stop: {},
     },
   ])
-  let a = local({ name: 'gpt-6-astra', h, model: echo, tools: [] })
+  let a = await local({ name: 'gpt-6-astra', h, model: echo, tools: [] })
   try {
     assertEquals(
       ((await a.sessions()).find((b) => b.entity.eid == 'worker')
@@ -443,7 +443,7 @@ test('send commits during a provider turn and unserved input reaches the next an
   model.anchor = (b) =>
     (b.openai as Comp | undefined)?.response_id as string | undefined
   // The inflight attempt assertion requires streaming, regardless of HARNESS_STREAM.
-  let a = local({
+  let a = await local({
     h: await harness(),
     model,
     tools: [],

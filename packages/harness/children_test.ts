@@ -64,7 +64,7 @@ for (let kind of ['fork', 'spawn']) {
     }
     let h = await harness()
     h.g.apply([{ entity: { eid: '$other' }, model: { name: 'alternate' } }])
-    let a = local({
+    let a = await local({
       h,
       model,
       ...await attachedWorkspace(h, directory),
@@ -161,7 +161,7 @@ test('wait resolves while child completion waits behind the parent tool', async 
     }
     return Promise.resolve(reply('done'))
   }
-  let a = local({ h, model, tools })
+  let a = await local({ h, model, tools })
   let parent = await a.start('parent')
   await childAsked.promise
   await waiting.promise
@@ -190,7 +190,7 @@ test('child capacity queues without rejection; root starts retain their separate
     }
     return Promise.resolve(reply('done'))
   }
-  let a = local({
+  let a = await local({
     h,
     model,
     maxChildren: 1,
@@ -207,7 +207,7 @@ test('child capacity queues without rejection; root starts retain their separate
 
   h = await harness()
   pending = deferred<Reply>()
-  a = local({
+  a = await local({
     h,
     model: () => pending.promise,
     tools: [],
@@ -340,7 +340,7 @@ test('child completion is queued behind an in-flight parent ask without collidin
   let parentAsked = deferred<void>()
   let turns = 0
   let h = await harness()
-  let a = local({
+  let a = await local({
     h,
     tools: sessionTools(h.g),
     model: (req) => {
@@ -399,7 +399,7 @@ test("a fork reports once, after its own helper's report, when it settled first"
     return Promise.resolve(call('fork', { prompt: 'fork work' }, 'f'))
   }
   let h = await harness()
-  let a = local({ h, model, tools: sessionTools(h.g) })
+  let a = await local({ h, model, tools: sessionTools(h.g) })
   let parent = await a.start('parent')
   await helperAsked.promise
   let [fork] = await a.children(parent)

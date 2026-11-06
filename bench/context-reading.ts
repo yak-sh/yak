@@ -11,7 +11,8 @@ import type { Tool } from '@yaks/session'
 import { compose } from '@yaks/cli/host'
 import { configPath, read } from '../packages/cli/config.ts'
 import { vaultOf } from '../packages/cli/vault.ts'
-import { openaiCredential } from '../packages/harness/openai_auth.ts'
+import { signedIn } from '@yaks/openai/provider'
+import { signins } from '@yaks/connections'
 import { instructionFiles } from '../packages/harness/instructions.ts'
 import { owing } from '../packages/harness/session_machines.ts'
 import { executionWorkspace } from '@yaks/machine/execution'
@@ -455,11 +456,20 @@ export async function run(packet: Packet, options: {
               ...packet.skills ?? [],
             ], { trusted: true })
           }
-          let auth = openaiCredential({
+          let signin = signins({
             g: authHost.graph,
             vault: vaultOf(config.db!),
-            person: config.person,
-          }, () => undefined)
+          })
+          let person = config.person
+          let auth = signedIn({
+            env: () => undefined,
+            key: async (integration) =>
+              person ? await signin.key(person, integration) : undefined,
+            refresh: async (integration, stale) =>
+              person
+                ? await signin.refresh(person, integration, stale)
+                : undefined,
+          })
           let model = recording(
             responses({ ...auth, web: false }),
             calls,

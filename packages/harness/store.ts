@@ -9,7 +9,7 @@ import { type Blobs } from '@yaks/blob'
 import type { Effects } from '@yaks/effects'
 import type { Eid, Graph, NamedTool, Storage } from '@yaks/graph'
 import type { Vocab } from '@yaks/vocab'
-import type { Host, MigrationMonitor } from '@yaks/host'
+import type { Host, MigrationMonitor, Plug } from '@yaks/host'
 import type { Vault } from '@yaks/secrets'
 import type { Reply } from '@yaks/tools'
 
@@ -19,6 +19,9 @@ import type { Reply } from '@yaks/tools'
 export type Harness = {
   /** The configured person whose default provider accounts serve native sessions. */
   person?: Eid
+  /** the plugins the config names: the providers among them are the ones
+   * a session may ask (./providers.ts) */
+  plugins?: readonly Plug[]
   store: Storage
   g: Graph
   fx: Effects
@@ -58,6 +61,7 @@ export let hosted = (
 ): Harness => {
   return {
     person: host.config.person,
+    plugins: host.config.plugins,
     store: host.storage,
     g: host.graph,
     fx: host.fx,

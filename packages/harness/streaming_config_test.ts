@@ -36,7 +36,7 @@ test('local streaming options control the model text callback', async () => {
   ) {
     const h = await harness()
     let observed = false
-    const a = local({
+    const a = await local({
       h,
       env: streamAs(undefined),
       ...options,
@@ -62,7 +62,7 @@ test('local streaming options control the model text callback', async () => {
     }
   }
   let calls = 0
-  const failed = local({
+  const failed = await local({
     h: await harness(),
     env: streamAs(undefined),
     model: () => {

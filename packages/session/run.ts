@@ -726,6 +726,8 @@ let release = async (g: Graph, e: Event, tx: ReadTx): Promise<void> => {
 /**
  * The code behind `session_run`, for a host's `./effects` facet: every
  * transcript write owes one leased step, where this host answers its provider.
+ * The runner may still be on its way (a harness loading the providers its
+ * config names); each run waits for it.
  * Without a durable pool, a standalone consumer uses {@link settle}.
  *
  * ```ts
@@ -734,10 +736,17 @@ let release = async (g: Graph, e: Event, tx: ReadTx): Promise<void> => {
  * // export let effects = (host) => running(host.graph, { holder: host.me, … })
  * ```
  */
-export let running = (g: Graph, runner: Runner): Handlers => {
+export let running = (
+  g: Graph,
+  runner: Runner | Promise<Runner>,
+): Handlers => {
   let pooled = !!g.vocab.comp('effect')
-  let r = { ...runner, asyncTools: pooled && !!g.vocab.comp('tool_async') }
+  let asyncTools = pooled && !!g.vocab.comp('tool_async')
+  let ready = Promise.resolve(runner).then((r) => ({ ...r, asyncTools }))
+  // A runner that never came fails each run that awaits it, and nothing else.
+  ready.catch(() => {})
   let run: Handlers[string] = async (e, _tx, _write, attempt) => {
+    let r = await ready
     // Every transcript the event names is answered; a failure in one, a
     // request to ask again among them, is thrown once the others are.
     let thrown: unknown
@@ -755,6 +764,7 @@ export let running = (g: Graph, runner: Runner): Handlers => {
     ...declared(g, 'session_tool')
       ? {
         session_tool: async (e: Event, _tx, _write, attempt) => {
+          let r = await ready
           let [call] = await g.get([e.entity.eid])
           let session = (call?.entry as Comp | undefined)?.session
           if (!call?.tool_async || !session || !r.asyncTools) return

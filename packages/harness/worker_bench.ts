@@ -19,7 +19,7 @@ export async function measure(
     for (let mode of ['inline', 'worker']) {
       let took = stopwatch()
       let inline = mode == 'inline'
-        ? local({
+        ? await local({
           h: await harness(),
           cwd,
           name: 'fake',

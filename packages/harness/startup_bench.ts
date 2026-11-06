@@ -73,7 +73,7 @@ export async function measure(
       }
       let h = await harness(path)
       mark('open')
-      let a = local({
+      let a = await local({
         h,
         model: () => Promise.resolve({ id: 'fake', model: 'fake', items: [] }),
         name: 'fake',

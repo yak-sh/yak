@@ -2064,18 +2064,12 @@ importers:
       '@preact/signals':
         specifier: 2.9.4
         version: 2.9.4(preact@10.29.7)
-      '@yaks/anthropic':
-        specifier: 0.2.17
-        version: link:../anthropic
       '@yaks/api':
         specifier: 0.2.17
         version: link:../api
       '@yaks/blob':
         specifier: 0.2.17
         version: link:../blob
-      '@yaks/claude':
-        specifier: 0.2.17
-        version: link:../claude
       '@yaks/cli':
         specifier: 0.2.17
         version: link:../cli
@@ -2133,12 +2127,6 @@ importers:
       '@yaks/model':
         specifier: 0.2.17
         version: link:../model
-      '@yaks/openai':
-        specifier: 0.2.17
-        version: link:../openai
-      '@yaks/openrouter':
-        specifier: 0.2.17
-        version: link:../openrouter
       '@yaks/persona':
         specifier: 0.2.17
         version: link:../persona
@@ -2197,6 +2185,12 @@ importers:
       '@yaks/benchmark':
         specifier: 0.2.17
         version: link:../benchmark
+      '@yaks/openai':
+        specifier: 0.2.17
+        version: link:../openai
+      '@yaks/openrouter':
+        specifier: 0.2.17
+        version: link:../openrouter
       '@yaks/ram':
         specifier: 0.2.17
         version: link:../ram
@@ -3221,6 +3215,9 @@ importers:
       '@yaks/fp':
         specifier: 0.2.17
         version: link:../fp
+      '@yaks/graph':
+        specifier: 0.2.17
+        version: link:../graph
       '@yaks/model':
         specifier: 0.2.17
         version: link:../model

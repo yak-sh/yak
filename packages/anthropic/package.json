@@ -6,7 +6,8 @@
     ".": "./mod.ts",
     "./vocab": "./vocab.ts",
     "./mark": "./mark.ts",
-    "./reads": "./reads.ts"
+    "./reads": "./reads.ts",
+    "./provider": "./provider.ts"
   },
   "license": "Apache-2.0",
   "description": "Implements the model interface over Anthropic's Messages API with the official SDK: streamed text, tool use, automatic prompt caching and cancellation, with usage that names what the cache read and wrote.",

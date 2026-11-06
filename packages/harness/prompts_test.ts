@@ -213,7 +213,7 @@ test('a native session carries its chosen graph persona into the model request',
     persona: {},
   }])
   await Deno.writeTextFile(dir + '/AGENTS.md', 'Repository guidance.')
-  let a = local({
+  let a = await local({
     h,
     ...await attached(h, dir),
     cwd: dir,
@@ -251,7 +251,7 @@ test('retired CLI instructions are omitted on future asks without rewriting hist
   let dir = await Deno.makeTempDir()
   let h = await harness()
   let requests: import('@yaks/model').Request[] = []
-  let a = local({
+  let a = await local({
     h,
     ...await attached(h, dir),
     cwd: dir,

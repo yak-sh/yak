@@ -18,10 +18,8 @@
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.29.0",
     "@preact/signals": "2.9.4",
-    "@yaks/anthropic": "0.2.17",
     "@yaks/api": "0.2.17",
     "@yaks/blob": "0.2.17",
-    "@yaks/claude": "0.2.17",
     "@yaks/cli": "0.2.17",
     "@yaks/client": "0.2.17",
     "@yaks/connections": "0.2.17",
@@ -41,8 +39,6 @@
     "@yaks/mcp": "0.2.17",
     "@yaks/mcp-client": "0.2.17",
     "@yaks/model": "0.2.17",
-    "@yaks/openai": "0.2.17",
-    "@yaks/openrouter": "0.2.17",
     "@yaks/persona": "0.2.17",
     "@yaks/preact": "0.2.17",
     "@yaks/process": "0.2.17",
@@ -64,6 +60,8 @@
   "devDependencies": {
     "@std/assert": "npm:@jsr/std__assert@^1.0.0",
     "@yaks/benchmark": "0.2.17",
+    "@yaks/openai": "0.2.17",
+    "@yaks/openrouter": "0.2.17",
     "@yaks/ram": "0.2.17",
     "@yaks/sandbox": "0.2.17",
     "@yaks/sql": "0.2.17",

@@ -10,7 +10,7 @@ import { harness, mount } from './testing.ts'
 test('mounted transcript paints partial markdown before the model returns', async () => {
   let release!: () => void
   const wait = new Promise<void>((r) => release = r)
-  const a = local({
+  const a = await local({
     h: await harness(),
     streaming: true,
     model: async (req) => {

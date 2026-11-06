@@ -1,10 +1,8 @@
 import { test } from '@yaks/testing'
 import { assert, assertEquals, assertRejects } from '@std/assert'
 import { local } from './local.ts'
-import { configuredImages, images } from './images.ts'
 import { responses } from '@yaks/openai'
 import { responses as router } from '@yaks/openrouter'
-import { memoryBlobs } from '@yaks/blob'
 import { artifactStore } from '@yaks/blob/identify'
 import { fileBlobs } from '@yaks/blob/file'
 import { routes as blobRoutes } from '@yaks/blob/routes'
@@ -75,7 +73,7 @@ test('generated artifacts survive database reopen and keep payloads out of trans
   }
   let model = responses({
     credential: () => ({ token: 'test', base: 'https://api.openai.com/v1' }),
-    images: images(h.artifacts),
+    images: { store: artifactStore(h.artifacts) },
     fetch: ((_url, init) => {
       requests.push(String(init?.body))
       let frames = [
@@ -94,7 +92,7 @@ test('generated artifacts survive database reopen and keep payloads out of trans
       )
     }) as typeof fetch,
   })
-  let a = local({ h, cwd: dir, model, name: 'gpt-4.1', tools: [] })
+  let a = await local({ h, cwd: dir, model, name: 'gpt-4.1', tools: [] })
   try {
     let id = await a.start('draw')
     await a.idle(id)
@@ -129,7 +127,7 @@ test('generated artifacts survive database reopen and keep payloads out of trans
 test('host store failure returns no artifact and retry repairs partial bytes', async () => {
   let dir = await Deno.makeTempDir()
   try {
-    let store = images(fileBlobs(dir)).store
+    let store = artifactStore(fileBlobs(dir))
     let bytes = Uint8Array.from(atob(png), (c) => c.charCodeAt(0))
     let first = await store(bytes, 'image/png')
     await Deno.writeFile(dir + '/' + first.address, bytes.slice(0, 2))
@@ -137,7 +135,7 @@ test('host store failure returns no artifact and retry repairs partial bytes', a
     assertEquals(await Deno.readFile(dir + '/' + first.address), bytes)
     await Deno.writeTextFile(dir + '/not-dir', 'file')
     await assertRejects(() =>
-      images(fileBlobs(dir + '/not-dir')).store(bytes, 'image/png')
+      artifactStore(fileBlobs(dir + '/not-dir'))(bytes, 'image/png')
     )
   } finally {
     await Deno.remove(dir, { recursive: true })
@@ -169,7 +167,7 @@ test('a model row sends OpenRouter audio to the graph as an artifact', async () 
       )
     },
   })
-  let a = local({
+  let a = await local({
     h,
     provider: 'openrouter',
     name: 'google/lyria-3-clip-preview',
@@ -201,19 +199,4 @@ test('a model row sends OpenRouter audio to the graph as an artifact', async () 
   } finally {
     await a.close()
   }
-})
-
-test('image configuration defaults to enabled with explicit disable and override', () => {
-  let blobs = memoryBlobs()
-  assertEquals(
-    typeof configuredImages(blobs, undefined, '')?.store,
-    'function',
-  )
-  assertEquals(
-    typeof configuredImages(blobs, undefined, '1')?.store,
-    'function',
-  )
-  assertEquals(configuredImages(blobs, undefined, '0'), undefined)
-  assertEquals(configuredImages(blobs, false, '1'), undefined)
-  assertEquals(configuredImages(blobs, {}, '0')?.auto, undefined)
 })

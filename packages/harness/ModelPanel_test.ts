@@ -16,7 +16,7 @@ import { harness, mount } from './testing.ts'
 test('m chooses a model for a new draft; existing choice is passive, Esc preserves draft', async () => {
   const hnd = await harness()
   const requests: Request[] = []
-  const a = local({
+  const a = await local({
     h: hnd,
     model: (req) => {
       requests.push(req)
@@ -104,7 +104,7 @@ test('m chooses a model for a new draft; existing choice is passive, Esc preserv
 test('model row mouse selection preserves INSERT and does not submit a draft', async () => {
   const hnd = await harness()
   let requests = 0
-  const a = local({
+  const a = await local({
     h: hnd,
     model: (req) => {
       requests++

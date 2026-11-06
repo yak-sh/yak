@@ -162,7 +162,7 @@ test('the merged wait preserves process output and child status alongside task w
 test('a transcript naming a plugin’s tool is offered it alone, and it runs', async () => {
   let offered: string[][] = []
   let worktrees = Deno.makeTempDirSync({ prefix: 'yaks-named-' })
-  let a = local({
+  let a = await local({
     name: 'gpt-6-astra',
     h: await harness(),
     tools: [],

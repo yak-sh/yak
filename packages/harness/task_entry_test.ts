@@ -85,7 +85,7 @@ test('taskEntry rejects invalid inputs and durably accepts concurrent queued tas
 })
 
 test('Agent.taskEntry honors agent limits', async () => {
-  let a = local({
+  let a = await local({
     h: await harness(),
 
     tools: [],
@@ -118,7 +118,7 @@ test('auto-task notice is lazy, reaches next ask, and contextual completion is i
   let release!: () => void
   let waiting = new Promise<void>((resolve) => release = resolve)
   let h = await harness()
-  let a = local({
+  let a = await local({
     h,
 
     tools: [],

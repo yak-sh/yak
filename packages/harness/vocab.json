@@ -74,7 +74,7 @@
         },
         "provider": {
           "type": "string",
-          "description": "the backend that serves it, by name: openai or openrouter (otherwise the default's)"
+          "description": "the provider that serves it, by name, one the config names (otherwise the default's)"
         },
         "persona": {
           "type": "string",
@@ -132,7 +132,7 @@
         },
         "provider": {
           "type": "string",
-          "description": "the backend that serves it, by name: openai or openrouter (otherwise the default's)"
+          "description": "the provider that serves it, by name, one the config names (otherwise the default's)"
         }
       },
       "required": [
@@ -152,8 +152,13 @@
       "noun": "model",
       "verb": "list",
       "title": "List the models this machine can reach",
-      "description": "List the models offered by this harness's OpenAI credential (OPENAI_API_KEY, else the OpenAI connection). The credential itself is never shown.",
-      "input": {},
+      "description": "List the models a provider this config names offers, signed in as the harness signs in to it. The credential itself is never shown.",
+      "input": {
+        "provider": {
+          "type": "string",
+          "description": "The provider whose models to list, by name (default: the default model's provider)"
+        }
+      },
       "readOnly": true
     },
     "conversation_projects": {

@@ -137,12 +137,11 @@ budgets.
 
 List `@yaks/harness` among a `yak` config's plugins, beside the packages whose
 words it runs over: `@yaks/session`, `@yaks/tools`, `@yaks/context`,
-`@yaks/model` and its providers (`@yaks/openai`, `@yaks/openrouter`),
-`@yaks/blob`, `@yaks/machine`, `@yaks/process`, `@yaks/secrets`, `@yaks/key`,
-`@yaks/alias`, `@yaks/connections`, `@yaks/mcp-client`, `@yaks/git`,
-`@yaks/effects`, and the work (`@yaks/doc`, `@yaks/edge`, `@yaks/task`,
-`@yaks/project`). `PLUGINS` in `testing.ts` is such a list, in a config's order.
-Then:
+`@yaks/model` and the providers it may ask, `@yaks/blob`, `@yaks/machine`,
+`@yaks/process`, `@yaks/secrets`, `@yaks/key`, `@yaks/alias`,
+`@yaks/connections`, `@yaks/mcp-client`, `@yaks/git`, `@yaks/effects`, and the
+work (`@yaks/doc`, `@yaks/edge`, `@yaks/task`, `@yaks/project`). `PLUGINS` in
+`testing.ts` is such a list, in a config's order. Then:
 
 ```sh
 yak session new 'reply with the word pong'
@@ -190,17 +189,19 @@ persona containing no tool leaves the runner's own set. A tool is the
 `tool{name}` row its host registers (`.tool.name=topic_find`), and a persona
 offers it by a `contains` edge to that row.
 
-The local host also serves `--provider claude --model haiku|sonnet|opus` through
-`@yaks/claude`: a signed-in `claude -p` supplies one model turn while this
-harness alone executes tools and records calls/results. Compose `@yaks/claude`
-to declare its reply metadata. See `packages/claude/README.md` for the CLI/graph
-boundary. New native transcripts carry `native`; outside managed Claude sessions
-remain on `@yaks/spawn`. HTTP fixer requests (for example `openai`) are marked
-`native` before their first turn. The host cuts their own worktree from the
-configured spawn `cwd` under `worktrees`, attaches it through its workspace
-binding, and admits its instruction files and repository persona. Existing
-managed fixers keep their original runner; changing heal config does not migrate
-or stop them.
+The harness names no provider. A provider is a plugin that exports `./provider`
+(@yaks/model `ProviderFacet`): `@yaks/openai`, `@yaks/openrouter`,
+`@yaks/anthropic` and `@yaks/claude` each do, and a session may ask exactly the
+ones its config lists (./providers.ts). Listed, `@yaks/claude` serves
+`--provider claude --model haiku|sonnet|opus`: a signed-in `claude -p` supplies
+one model turn while this harness alone executes tools and records
+calls/results. See `packages/claude/README.md` for the CLI/graph boundary. New
+native transcripts carry `native`; outside managed Claude sessions remain on
+`@yaks/spawn`. HTTP fixer requests (for example `openai`) are marked `native`
+before their first turn. The host cuts their own worktree from the configured
+spawn `cwd` under `worktrees`, attaches it through its workspace binding, and
+admits its instruction files and repository persona. Existing managed fixers
+keep their original runner; changing heal config does not migrate or stop them.
 
 A graph-only model opening needs no workspace and does not borrow the server's
 current directory or filesystem. The local `yak session new` command defaults to
@@ -231,12 +232,13 @@ write changes it:
 yak graph apply --bundles '[{"entity": {"eid": "8b429c76-beb1-8dcf-82fc-c68f7f0e5c73"}, "using": {"provider": "openrouter", "model": "z-ai/glm-5.3"}}]'
 ```
 
-OpenAI is reached with `$OPENAI_API_KEY` or the OpenAI connection. `yak auth`
-belongs to [@yaks/connections](../connections). It lists integrations; pass a
-name or title to sign in. It prints an authorization link and reads the complete
-return URL with terminal echo disabled. The return URL is never a command
-argument or transcript entry. `yak model list` lists names from the OpenAI
-endpoint reached by that credential.
+Each provider signs in its own way (OpenAI: `$OPENAI_API_KEY` or the OpenAI
+connection), over the sign-ins this machine lends it. `yak auth` belongs to
+[@yaks/connections](../connections). It lists integrations; pass a name or title
+to sign in. It prints an authorization link and reads the complete return URL
+with terminal echo disabled. The return URL is never a command argument or
+transcript entry. `yak model list --provider <name>` lists the names a
+configured provider offers, the default model's provider when none is named.
 
 ```ts
 import { compose } from '@yaks/cli/host'

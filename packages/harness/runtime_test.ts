@@ -20,7 +20,7 @@ import { Keyboard } from './keyboard.ts'
 test('runtime cancellation preserves partial text, waits for new input, and resumes explicitly', async () => {
   let entered = Promise.withResolvers<void>()
   let calls = 0
-  let a = local({
+  let a = await local({
     h: await harness(),
     name: 'fake',
     streaming: true,
@@ -74,7 +74,7 @@ let assertMatch = (value: string, part: string) =>
 test('runtime queued cancellation is scoped, and inspection does not schedule execution', async () => {
   let h = await harness()
   let calls = 0
-  let a = local({
+  let a = await local({
     h,
     maxChildren: 0,
     name: 'fake',

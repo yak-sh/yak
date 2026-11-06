@@ -8,7 +8,6 @@ import type {
 } from '@yaks/session'
 import { streamingEnabled } from './streaming.ts'
 import { transient } from '@yaks/graph/read'
-import type { ImageOptions } from './images.ts'
 import type { ModelSelection } from './model_selection.ts'
 /** Worker frontend. UI state remains in the frontend's private graph. */
 import { client } from '@yaks/client'
@@ -35,8 +34,6 @@ export let remote = async (
     /** the `yak` config naming the graph the worker composes */
     config: Config
     cwd?: string
-    web?: boolean
-    images?: ImageOptions | false
     streaming?: boolean
     stream?: boolean
     migrationPollMs?: number
@@ -173,7 +170,6 @@ export let remote = async (
     init = await request('init', [{
       ...config,
       streaming: streamingEnabled(config, env),
-      web: config.web ?? env('HARNESS_WEB') != '0',
     }]) as typeof init
   } catch (e) {
     release()

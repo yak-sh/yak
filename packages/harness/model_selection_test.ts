@@ -21,7 +21,7 @@ test('model selection derives provider, does not ask, and applies only to select
       items: [{ kind: 'assistant', text: 'ok' }],
     })
   }
-  const a = local({
+  const a = await local({
     h,
     providers: { openai: fake('openai'), openrouter: fake('openrouter') },
   })
@@ -70,7 +70,7 @@ test('inflight model is unchanged; a passive selection survives its completion a
   const begun = new Promise<void>((resolve) => started = resolve)
   const held = new Promise<void>((resolve) => release = resolve)
   const seen: string[] = []
-  const a = local({
+  const a = await local({
     h,
     providers: {
       openai: async (req) => {
@@ -116,7 +116,7 @@ test('inflight model is unchanged; a passive selection survives its completion a
 test('passive model controls do not add invented user text to the next request', async () => {
   const seen: Request[] = []
   const h = await harness()
-  const a = local({
+  const a = await local({
     h,
     model: (req) => {
       seen.push(req)
@@ -150,7 +150,7 @@ test('late nonstream ask does not override an explicitly selected model', async 
   let release!: () => void, started!: () => void
   const begun = new Promise<void>((r) => started = r)
   const held = new Promise<void>((r) => release = r)
-  const a = local({
+  const a = await local({
     h,
     streaming: false,
     model: async (req) => {

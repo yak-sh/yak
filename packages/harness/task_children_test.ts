@@ -269,7 +269,7 @@ test('child marks task done through a tool before its final answer: one final re
       return 'intermediate tool output'
     },
   })
-  let a = local({
+  let a = await local({
     h,
     tools,
     model: (req) => {
@@ -556,7 +556,7 @@ test('existing fork receipts do not read inherited transcript bodies on resume',
     reads.push(query)
     return read(query, ...rest as [])
   }) as typeof h.g.read
-  let a = local({
+  let a = await local({
     h,
     name: 'fake',
     model: () => {

@@ -29,7 +29,7 @@ test('OpenRouter provider uses UUIDs and is selected per session/ask, including 
       anchor: (b: Record<string, unknown>) =>
         provider === 'openai' && b.openai ? 'oa' : undefined,
     })
-  const a = local({
+  const a = await local({
     h,
     name: 'gpt-6-astra',
     provider: 'openai',
@@ -69,7 +69,7 @@ test('OpenRouter provider uses UUIDs and is selected per session/ask, including 
   }
 })
 test('explicit default provider seeds correctly and custom model override remains usable', async () => {
-  const a = local({
+  const a = await local({
     h: await harness(),
     provider: 'openrouter',
     name: 'vendor/model',
@@ -91,7 +91,7 @@ test('explicit default provider seeds correctly and custom model override remain
 test('fork and spawn selecting an existing model are served by a provider that serves it', async () => {
   const h = await harness()
   const seen: string[] = []
-  const a = local({
+  const a = await local({
     h,
     name: 'gpt-6-astra',
     providers: {
@@ -147,7 +147,7 @@ test('fork and spawn selecting an existing model are served by a provider that s
 test('provider sign-ins are not MCP authorization targets', async () => {
   let h = await harness()
   await h.g.apply(seed({ provider: 'openrouter', model: 'vendor/model' }))
-  let a = local({ h })
+  let a = await local({ h })
   try {
     assertEquals((await a.authorizeMCP('list')).servers, [])
   } finally {
@@ -162,7 +162,7 @@ test('a model two providers serve is asked by the named one, by its name for it'
     seen.push([provider, req.model])
     return Promise.resolve({ id: 'r', model: req.model, items: [] })
   }
-  const a = local({
+  const a = await local({
     h,
     name: 'gpt-6-astra',
     provider: 'openai',
