@@ -342,3 +342,43 @@ gateway 2.85 MB, gateway without the connector 2.24 MB, connector 2.58 MB, Store
 3.07 MB; the modules are shared in a long tail with no single import to cut. A
 new Worker for any of these needs the kernel's 18 secrets, whose values only the
 Worker itself can read. T-133988 holds that.
+
+## The upload holds what its requests run: T-133988
+
+November 6, 2026. workerd compiles every uploaded module when an isolate starts,
+a dynamically imported chunk included: under load, the whole upload sent as Text
+modules started in about half the time of the same bytes as ES modules. So the
+cut is to what is uploaded, found by size:
+
+| Commit      | Left the kernel's upload                                        |  KB |
+| ----------- | --------------------------------------------------------------- | --: |
+| `dabe2768f` | axe-core, browser code, to static assets (then to yak-browser)  | 656 |
+| `08b1e4fe2` | `@anthropic-ai/sdk`: @yaks/anthropic speaks the API over fetch  | 381 |
+| `a407a02eb` | puppeteer: draft rendering is the `yak-browser` sibling Worker  | 309 |
+| `1efc2cbd7` | sucrase: yak-esbuild strips TypeScript over the ESBUILD binding | 224 |
+
+The upload went from 5.69 MB to 4.12 MB (Wrangler: 4,026 KiB, 1,329 KiB gzip),
+deployed as `59912dc3` at 07:01 UTC. Neither new piece needs a secret, so the
+kernel's 18 stayed where they are.
+
+Local workerd, a fresh process per observation, 25 alternating rounds: ready
+median 587.5 → 518.4 ms, paired −74.5 ms, faster 19 of 25; an empty Worker is
+109 ms.
+
+Production, kernel invocations, synthetic probes excluded, wait = first byte
+minus wall time, 75 ms or more counted
+(`/home/yaks/bench-T-133988/nov6/prod/measure.mjs`):
+
+| Class         | 24 h before: n, waited, wait p50 / p90 | 1 h after: n, waited, wait p50 / p90 |
+| ------------- | -------------------------------------: | -----------------------------------: |
+| Home `GET /`  |                     88, 65%, 302 / 482 |                   13, 39%, 251 / 295 |
+| App page      |                   1684, 41%, 343 / 614 |                  153, 20%, 220 / 370 |
+| MCP handshake |                    287, 25%, 369 / 589 |                    13, 8%, 313 / 313 |
+
+The after window is small, served 7 versions (the day before averaged 10 an
+hour, and each deploy starts new isolates), and from 07:52 includes T-133898
+moving stores beside the kernel. MCP's handshake is `server/discover`: no
+`initialize` reached yaks.app in either window. Cloudflare's own
+`startup_time_ms` stayed in its usual range (65 ms for `59912dc3`; 42–193 ms
+over the day before). What is left is led by the MCP SDK with Zod (~385 KB) and
+the Sandbox SDK (~307 KB).
