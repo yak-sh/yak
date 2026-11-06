@@ -54,7 +54,7 @@ import * as mailGraph from '@yaks/mail/graph'
 import * as mailEffects from '@yaks/mail/effects'
 import { arrived } from '@yaks/mail'
 import * as inboxVocab from '@yaks/inbox/vocab'
-import { queue } from '@yaks/inbox/letters'
+import { queueing } from '@yaks/inbox/letters'
 import * as inboxMail from '@yaks/inbox/mail'
 import { effects, generation } from '@yaks/effects'
 import { outbox } from './outbox.ts'
@@ -147,6 +147,8 @@ export let yak = async ({ retry = 1500 } = {}) => {
   // Every phase each write runs, the batch as it left each one, and what it
   // committed, told to whoever listens: the page draws from these.
   let ran: Phase[] = []
+  // The entities committed since the inbox last passed.
+  let moved = new Set<string>()
   let steps: [Phase, Bundle[]][] = []
   let listeners = new Set<(change: Change) => void>()
   let watch: Plugin = {
@@ -168,6 +170,7 @@ export let yak = async ({ retry = 1500 } = {}) => {
           ran = []
           steps = []
           for (let l of listeners) l(change)
+          for (let b of bundles) moved.add(b.entity.eid)
           void work()
         }
         return bundles
@@ -214,8 +217,14 @@ export let yak = async ({ retry = 1500 } = {}) => {
   let { vocab, storage, graph: g, fx } = host
   // Your inbox's email door, as @yaks/inbox's service opens it: a letter
   // from the shop for each question that holds up work. The tab passes after
-  // every commit instead of every ten seconds, and queues no daily digest.
-  let door = { person: you, from: SHOP, base: 'http://127.0.0.1:8787' }
+  // every commit instead of every ten seconds, at the cost of what the commits
+  // since the last pass touched, and queues no daily digest.
+  let inbox = queueing(
+    g,
+    vocab,
+    { person: you, from: SHOP, base: 'http://127.0.0.1:8787' },
+    (b) => g.apply(b),
+  )
   // Work what is owed after each commit: the inbox's pass, then each effect,
   // again while a run is due, then wake when the next waiting one falls due.
   // A pass not yet started works every commit made before it starts, so the
@@ -227,7 +236,9 @@ export let yak = async ({ retry = 1500 } = {}) => {
   let work = (): Promise<void> =>
     waiting ??= working = working.then(tick).then(async () => {
       waiting = undefined
-      await queue(g, vocab, door, (b) => g.apply(b), new Date().toISOString())
+      let touched = [...moved]
+      moved.clear()
+      await inbox(touched)
       for (;;) {
         await fx.work(g)
         let next = Math.min(

@@ -137,6 +137,7 @@ across processes and does not implement every SQL query feature.
 | `@yaks/graph/vocab`      | `graphDoc`, `docs`, `description`: built-in tool declarations                                                                                                                                      |
 | `@yaks/graph/tools`      | `loadTools`, `runs`, `tier`, `generic`, `edited`, `linked`, and their implementation types                                                                                                         |
 | `@yaks/graph/hit`        | `hit`, `called`, `snippet`, `titleOf`: the one line a search row says itself as, naming it by its human id where it has one                                                                        |
+| `@yaks/graph/held`       | `held`, `Held`: native reads kept across commits, read again only for the entities a commit touched                                                                                                |
 
 ### Read-only graphs
 
@@ -179,6 +180,48 @@ try {
 equal(refused, true)
 equal(prepared, 0)
 equal(await g.get(['b2']), [])
+```
+
+### Held reads
+
+`held(graph, vocab)` keeps the answer of each native read and lookup. Tell it
+the eids each commit touched with `moved`: it reads those entities once, routes
+them through a network of the held queries (@yaks/match `net`) and cuts each
+into the answers it now belongs to, the way a subscription cuts what a commit
+pushes. A pass that asks the same queries after every commit then costs what the
+commit touched, not what its queries select. `moved` says whether any answer
+changed. A query that orders, pages, counts, follows a reference or asks about a
+moment relative to now is read from storage each time, and so is any read that
+is not native.
+
+```ts
+import { graph } from '@yaks/graph'
+import { held } from '@yaks/graph/held'
+import { ram } from '@yaks/ram'
+import { loadVocab } from '@yaks/vocab'
+import { equal } from '@yaks/testing'
+
+const vocab = loadVocab({
+  $defs: {
+    book: {
+      component: true,
+      properties: { pages: { type: 'number' } },
+    },
+  },
+})
+const g = graph({ storage: ram(vocab), vocab })
+await g.apply([{ entity: { eid: 'b1' }, book: { pages: 90 } }])
+let reads = 0
+const h = held({
+  read: (q, o) => (reads++, g.read(q, o)),
+  get: (eids, comps, o) => (reads++, g.get(eids, comps, o)),
+}, vocab)
+const long = () => h.read('.book.pages>100', { native: true })
+equal(await long(), [])
+await g.apply([{ entity: { eid: 'b1' }, book: { pages: 120 } }])
+equal(await h.moved(['b1']), true)
+equal(await long(), [{ entity: { eid: 'b1' }, book: { pages: 120 } }])
+equal(reads, 2)
 ```
 
 ## Writes and reads
@@ -1286,7 +1329,10 @@ import { equal } from '@yaks/testing'
 
 let g = graph({ vocab: books, storage: memory() })
 let [read] = await g.apply([{ entity: { eid: 'b1' }, doc: { title: 'Dune' } }])
-await g.apply([{ entity: { ...read.entity, num: 7 }, doc: { title: 'Dune!' } }])
+await g.apply([{
+  entity: { ...read.entity, num: 7 },
+  doc: { title: 'Dune!' },
+}])
 let [row] = await g.get(['b1'])
 equal([row.entity.num, row.doc.title], [1, 'Dune!']) // the store's own number
 ```

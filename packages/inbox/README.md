@@ -220,10 +220,13 @@ pull.
 
 `./letters` holds the policy: `inboxAt`, `eligible`, `rendered`, `planned` and
 `queue`, for hosts supplying their own clocks and writes. It has no transport of
-its own. `mail_notice{activity, comment, thread, letter}` keeps the activity as
-rendered: on a thread letter it points to the shown comment, on a digest entry
-to its thread and digest letter. These snapshots deduplicate queued mail; they
-are not conversation or new inbox activity.
+its own. A host that passes after every commit uses `queueing`, which holds the
+pass's reads across commits (@yaks/graph/held): each call hears the eids
+committed since the last, reads only those, and does nothing when none of its
+reads changed. `mail_notice{activity, comment, thread, letter}` keeps the
+activity as rendered: on a thread letter it points to the shown comment, on a
+digest entry to its thread and digest letter. These snapshots deduplicate queued
+mail; they are not conversation or new inbox activity.
 
 Thread letters use the previous letter's Message-ID as In-Reply-To. A digest
 contains links and a separate reply address for each thread (or shown comment),

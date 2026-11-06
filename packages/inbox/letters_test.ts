@@ -1,4 +1,4 @@
-import { test } from '@yaks/testing'
+import { equal, test } from '@yaks/testing'
 import { assertEquals, assertMatch, assertStringIncludes } from '@std/assert'
 import { type Bundle, type Comp, detached, graph } from '@yaks/graph'
 import { ram } from '@yaks/ram'
@@ -22,7 +22,7 @@ import {
 import { routes } from '@yaks/mail/routes'
 import { type Row, threads } from './mod.ts'
 import { inboxDoc } from './vocab.ts'
-import { inboxAt, planned, queue } from './letters.ts'
+import { inboxAt, planned, queue, queueing } from './letters.ts'
 import { reading } from './mail.ts'
 import { service } from './service.ts'
 
@@ -173,6 +173,48 @@ test('mail loads complete root/latest words and choices without digest history',
   )
 })
 
+test('a pass after each commit queues what a whole pass would, reading only what the commit touched', async () => {
+  let g = await world()
+  let reads = 0, wrote: Bundle[][] = []
+  let pass = queueing(
+    {
+      read: (q, o) => (reads++, g.read(q, o)),
+      get: (eids, comps, o) => (reads++, g.get(eids, comps, o)),
+    },
+    g.vocab,
+    inbox,
+    (b) => (wrote.push(b), g.apply(b)),
+  )
+  let commit = async (bundles: Bundle[]) => {
+    await g.apply(bundles)
+    let whole: Bundle[][] = []
+    await queue(g, g.vocab, inbox, (b) => whole.push(b), at(9))
+    let before = reads
+    wrote = []
+    await pass(bundles.map((b) => b.entity.eid), at(9))
+    equal(wrote, whole)
+    return reads - before
+  }
+  equal(await commit([]) > 50, true)
+  // A row the inbox never reads, the decision's words, a reply to it, and
+  // the work that held it up done: each reads what it touched, and the new
+  // letter's replies and predecessor, never the inbox again.
+  equal(
+    [
+      await commit([{ entity: { eid: 'note' }, doc: { title: 'Elsewhere' } }]),
+      await commit([{ entity: { eid: 'ask' }, doc: { title: 'Route?' } }]),
+      await commit([{
+        entity: { eid: 'reply' },
+        doc: { body: 'Still deciding' },
+        comment: { target: 'ask' },
+      }]),
+      await commit([{ entity: { eid: 'dep' }, completed: {} }]),
+    ].filter((n) => n > 3),
+    [],
+  )
+  equal((await g.read('.mail_notice&*')).length, 2)
+})
+
 test('the service queues a blocking decision before the digest hour, once', async () => {
   let g = await world()
   let early = { ...inbox, hour: 24 }
@@ -197,7 +239,10 @@ test('email queues blocking decisions once and digests the rest once daily, with
   assertEquals(comp(digest[0], 'mail').target, undefined)
   assertEquals(String(comp(digest[0], 'doc').body).includes('bug@'), false)
   assertEquals(String(comp(digest[0], 'doc').body).includes('work@'), false)
-  assertEquals(planned(list, [...immediate, ...digest], inbox, at(6), true), [])
+  assertEquals(
+    planned(list, [...immediate, ...digest], inbox, at(6), true),
+    [],
+  )
   let later = needs(false)
   later.find((t) => t.eid == 'ask')!.at = '2026-10-03T12:00:00.000Z'
   assertEquals(
@@ -233,7 +278,10 @@ test('sending an inbox rendering threads it by its predecessor and never creates
 })
 
 test('a sent inbox rendering never creates more inbox activity', () => {
-  assertEquals(threads([renderedOriginal, predecessorRow], reader)[0].at, at(1))
+  assertEquals(
+    threads([renderedOriginal, predecessorRow], reader)[0].at,
+    at(1),
+  )
 })
 
 test('archived or read decisions and muted threads never queue email; requested alerts do', () => {
@@ -327,7 +375,10 @@ for (
     let g = await world()
     await queue(g, g.vocab, inbox, (b) => g.apply(b), at(10))
     let [letter] = await g.read('.mail_notice&.mail&*')
-    await g.apply([{ entity: letter.entity, mail: { message_id: 'sent@box' } }])
+    await g.apply([{
+      entity: letter.entity,
+      mail: { message_id: 'sent@box' },
+    }])
     let bundles = await arrived({ graph: g, domain, readings })({
       from,
       to: inbox.from,
@@ -401,7 +452,10 @@ test('replying to a digest keeps the words without choosing its first decision',
   await g.apply([{ entity: { eid: 'dep' }, completed: {} }])
   await queue(g, g.vocab, inbox, (b) => g.apply(b), at(10), true)
   let [digest] = await g.read('.mail_notice&.mail&*')
-  await g.apply([{ entity: digest.entity, mail: { message_id: 'digest@box' } }])
+  await g.apply([{
+    entity: digest.entity,
+    mail: { message_id: 'digest@box' },
+  }])
   let bundles = await arrived({ graph: g, domain, readings })({
     from: 'ana@books.example',
     to: inbox.from,

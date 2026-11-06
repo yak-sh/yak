@@ -3,6 +3,7 @@
  * sends the letters, and clocks are supplied at the boundary. */
 import type { Bundle, Comp, Graph } from '@yaks/graph'
 import { derivedEid } from '@yaks/graph/identity'
+import { held } from '@yaks/graph/held'
 import type { Vocab } from '@yaks/vocab'
 import type { Decision } from '@yaks/task'
 import type { Door } from './options.ts'
@@ -28,7 +29,9 @@ export let inboxAt = async (
   // not the history of every thread in a daily digest.
   let ids = [...new Set(inbox.flatMap((t) => [t.row.eid, t.latest.eid]))]
   let comps = ['doc', 'content', 'decision'].filter((name) => vocab.comp(name))
-  let full = new Map((await tx.get(ids, comps)).map((b) => [b.entity.eid, b]))
+  let full = new Map(
+    (await tx.get(ids, comps, { native: true })).map((b) => [b.entity.eid, b]),
+  )
   let hydrate = (r: Thread['row']): Thread['row'] => {
     let b = full.get(r.eid)
     return {
@@ -192,10 +195,46 @@ export let queue = async (
   let inbox = await inboxAt(tx, vocab, options.person)
   let notices = await tx.read(
     `.mail_notice&.deliver.to=${JSON.stringify(options.person)}&*`,
+    { native: true },
   )
   let bundles = planned(inbox, notices, options, now, daily)
-  let existing = new Set((await tx.get(bundles.map((b) => b.entity.eid)))
-    .map((b) => b.entity.eid))
+  if (!bundles.length) return
+  let existing = new Set(
+    (await tx.get(bundles.map((b) => b.entity.eid), [], { native: true }))
+      .map((b) => b.entity.eid),
+  )
   let fresh = bundles.filter((b) => !existing.has(b.entity.eid))
   if (fresh.length) await write(fresh)
+}
+
+/** `queue` again after commits, at the cost of what they touched: its reads
+ * are held across passes (@yaks/graph/held), and a pass none of whose reads
+ * changed queues what it queued before, so it does nothing. Each call hears
+ * the eids every other writer committed since the last; the pass knows its
+ * own letters. */
+export let queueing = (
+  graph: Pick<Graph, 'get' | 'read'>,
+  vocab: Vocab,
+  options: Door,
+  write: (bundles: Bundle[]) => unknown,
+) => {
+  let reads = held(graph, vocab)
+  let owed = true
+  let wrote: string[] = []
+  let queued = async (bundles: Bundle[]) => {
+    wrote.push(...bundles.map((b) => b.entity.eid))
+    await write(bundles)
+  }
+  return async (
+    moved: Iterable<string>,
+    now: string = new Date().toISOString(),
+    daily = false,
+  ): Promise<void> => {
+    let touched = [...moved, ...wrote]
+    wrote = []
+    if (!await reads.moved(touched) && !owed && !daily) return
+    owed = true
+    await queue(reads, vocab, options, queued, now, daily)
+    owed = false
+  }
 }

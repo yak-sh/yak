@@ -466,7 +466,10 @@ const b1 = {
   entity: { eid: 'b1', num: 1 },
   book: { price: 12, status: 'sold' },
 }
-const b2 = { entity: { eid: 'b2', num: 2 }, book: { price: 7, status: 'sold' } }
+const b2 = {
+  entity: { eid: 'b2', num: 2 },
+  book: { price: 7, status: 'sold' },
+}
 const source = [b1, b2]
 equal(matcher('.book .order=book.price .limit=1', vocab)(source), [b2])
 equal(matcher('.book .order=book.price .after=b2', vocab)(source), [b1])
@@ -542,8 +545,11 @@ membership, and `drop` removes a query.
 
 A network accepts queries about one entity alone. `add` returns `false` for
 queries requiring other entities, ordering, paging or aggregates, or for a query
-it cannot compile; the caller must evaluate those queries separately. Adding
-under an existing key drops its previous query even when refused.
+it cannot compile; the caller must evaluate those queries separately. A network
+made with `{ timeless: true }` also refuses a query whose answer depends on when
+it is asked (`.book.released=today`), since no entity changing tells it that
+answer moved. Adding under an existing key drops its previous query even when
+refused.
 
 ```ts
 import { net } from '@yaks/match'

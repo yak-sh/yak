@@ -68,13 +68,21 @@ export type Net<K> = {
 }
 
 /** How a network compiles its queries: the moment their time phrases resolve
- * against (default: when each is added), and the rules that read the
- * vocabulary's computed properties. */
-export type NetOpts = { now?: number; computed?: Computed }
+ * against (default: when each is added), the rules that read the
+ * vocabulary's computed properties, and whether it refuses a query whose
+ * answer depends on when it is asked (`timeless`), for a caller that hears
+ * only of entities that changed. */
+export type NetOpts = { now?: number; computed?: Computed; timeless?: boolean }
 
 // One shared test, and its answer for the entity being routed now (`at` is
 // the routing it was worked out in).
-type Node = { name: string; test: Test; at: number; hit: boolean; held: number }
+type Node = {
+  name: string
+  test: Test
+  at: number
+  hit: boolean
+  held: number
+}
 // One held query: its nodes, the sets it is filed in, the last routing that
 // reached it (so an entity filed under two of its sets tests it once), and the
 // entities it holds.
@@ -156,7 +164,9 @@ export let net = <K>(vocab: Vocab, opts: NetOpts = {}): Net<K> => {
 
   // One clause compiled, and the name its node is shared under: the clause
   // itself, and the moment it was compiled for when its test read the clock.
-  let compiled = (c: Clause): { name: string; arm: Arm } => {
+  let compiled = (
+    c: Clause,
+  ): { name: string; arm: Arm; timed: boolean } => {
     let now = opts.now ?? Date.now()
     let timed = false
     let ctx: Ctx = {
@@ -168,7 +178,7 @@ export let net = <K>(vocab: Vocab, opts: NetOpts = {}): Net<K> => {
       computed: opts.computed ?? {},
     }
     let arm = compile(ctx, c)
-    return { name: JSON.stringify(c) + (timed ? `@${now}` : ''), arm }
+    return { name: JSON.stringify(c) + (timed ? `@${now}` : ''), arm, timed }
   }
 
   let join = (h: Held<K>, eid: Eid) => {
@@ -196,13 +206,15 @@ export let net = <K>(vocab: Vocab, opts: NetOpts = {}): Net<K> => {
     drop(key)
     let cs = flat(q.clauses).filter((c) => !SHAPE.has(c.kind))
     if (cs.some((c) => SET.has(c.kind))) return false
-    let made: { name: string; arm: Arm }[]
+    let made: { name: string; arm: Arm; timed: boolean }[]
     try {
       made = cs.map(compiled)
     } catch {
       return false
     }
-    if (made.some((m) => !m.arm.alone)) return false
+    if (made.some((m) => !m.arm.alone || opts.timeless && m.timed)) {
+      return false
+    }
     let h: Held<K> = { key, nodes: [], filed: [], seen: 0, has: new Set() }
     for (let { name, arm } of made) {
       let n = into(nodes, name, () => ({

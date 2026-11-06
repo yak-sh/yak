@@ -11,11 +11,17 @@ export let words = (
     comp: (name: string) => unknown
     props: (name: string) => string[]
   },
-): Words =>
-(path) => {
-  let [name, prop] = path.split('.')
-  return path == 'entity.eid' ||
-    (!!vocab.comp(name) && (!prop || vocab.props(name).includes(prop)))
+): Words => {
+  let known = new Map<string, boolean>()
+  return (path) => {
+    let yes = known.get(path)
+    if (yes !== undefined) return yes
+    let [name, prop] = path.split('.')
+    yes = path == 'entity.eid' ||
+      (!!vocab.comp(name) && (!prop || vocab.props(name).includes(prop)))
+    known.set(path, yes)
+    return yes
+  }
 }
 // Each set of values is sorted, so the same set always reads as one line.
 let select = (prop: string, items: Iterable<string | undefined>) => {
@@ -198,6 +204,8 @@ export let dependents = (edges: Row[], has: Words = () => true): string =>
     has,
   )
 
+const BUDGET = 48 * 1024
+
 /** Keep derived inbox reads below the socket's message budget without dropping
  * threads. Each half asks the same query over a disjoint set of input rows;
  * callers union the answers and wait for every half before claiming readiness.
@@ -211,7 +219,12 @@ export let boundedReads = (
     let query = read(part)
     if (!query) return
     // Leave room for the subscription envelope, including escaped query text.
-    if (new TextEncoder().encode(JSON.stringify(query)).length <= 48 * 1024) {
+    // A character is at most three bytes, so a short query needs no count.
+    let text = JSON.stringify(query)
+    if (
+      text.length * 3 <= BUDGET ||
+      new TextEncoder().encode(text).length <= BUDGET
+    ) {
       out.add(query)
       return
     }
