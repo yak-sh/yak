@@ -2,7 +2,13 @@
 // stays available even when the chat report abbreviates a long result.
 import { test } from '@yaks/testing'
 import { assertEquals, assertStringIncludes } from '@std/assert'
-import { audit, report } from './accessibility.ts'
+import { readTextFileSync } from '@yaks/file/io'
+import { audit, type Axe, report } from './accessibility.ts'
+
+// The asset a deployment serves to app_preview's check.
+let shipped = JSON.parse(
+  readTextFileSync(new URL('./public/_preview/axe.json', import.meta.url)),
+) as Axe
 
 let violation = (id: string, elements: string[]) => ({
   id,
@@ -25,7 +31,7 @@ test('accessibility reports each affected element and separates manual review', 
         },
       )
     },
-  })
+  }, shipped)
   assertEquals(result.problems.length, 2)
   assertEquals(result.problems[0], {
     rule: 'label',
@@ -53,7 +59,7 @@ test('a long accessibility report keeps all findings as data and says what chat 
           }
           : undefined,
       ),
-  })
+  }, { source: '', version: 'test' })
   assertEquals(result.problems.length, 40)
   assertStringIncludes(
     report(result),

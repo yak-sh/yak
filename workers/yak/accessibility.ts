@@ -1,6 +1,10 @@
 // The vendored axe-core browser bundle checks WCAG 2.1 A and AA in the
 // rendered document. Findings remain diagnostics, never a deploy restriction.
-import axe from './vendor/axe.json' with { type: 'json' }
+// It runs in the page, never in this Worker, so it is one of the version's
+// static assets (public/_preview/axe.json) that browser.ts reads for a check.
+
+/** axe-core's browser bundle and the version it reports. */
+export type Axe = { source: string; version: string }
 
 export type Finding = {
   rule: string
@@ -41,6 +45,7 @@ let findings = (rules: Violation[]) =>
 
 export let audit = async (
   page: { evaluate(expression: string): Promise<unknown> },
+  axe: Axe,
 ): Promise<Audit> => {
   await page.evaluate(axe.source)
   let result = await page.evaluate(`axe.run(document, {

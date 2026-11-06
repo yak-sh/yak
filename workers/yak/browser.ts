@@ -2,8 +2,9 @@
 // load, diagnostics and cleanup run in process without a local browser.
 import { type Clock, sleep, system } from '@yaks/fp'
 import type { Env } from './env.ts'
-import { audit, type Checked } from './accessibility.ts'
+import { audit, type Axe, type Checked } from './accessibility.ts'
 import { caught } from './defects.ts'
+import { url as at } from './host.ts'
 
 export type View = { width: number; height: number; wait: number }
 export type Message = { type(): string; text(): string }
@@ -24,6 +25,11 @@ export type Page = {
 export type Session = {
   // deno-lint-ignore no-explicit-any
   send(method: any, params?: Record<string, unknown>): Promise<any>
+}
+/** A browser to open and the audit's script to run in its page. */
+export type Browsing = {
+  open: () => Promise<Browser>
+  axe: () => Promise<Axe>
 }
 export type Browser = {
   newPage(): Promise<Page>
@@ -83,10 +89,15 @@ let deadline = (time: Clock) => {
 // console and errors, and the failure is ours, so the tracker hears of it.
 let checked = async (
   page: Page,
+  axe: Browsing['axe'],
   bounded: <T>(work: Promise<T>) => Promise<T>,
 ): Promise<Checked> => {
   try {
-    return await bounded(isolated(page).then(audit))
+    return await bounded(
+      Promise.all([isolated(page), axe()]).then(([world, script]) =>
+        audit(world, script)
+      ),
+    )
   } catch (e) {
     caught(e, { request: 'app_preview accessibility' })
     return { failed: message(e) }
@@ -94,7 +105,7 @@ let checked = async (
 }
 
 export let capture = async (
-  open: () => Promise<Browser>,
+  { open, axe }: Browsing,
   url: string,
   view: View,
   used: (duration: number) => Promise<void> = () => Promise.resolve(),
@@ -141,7 +152,7 @@ export let capture = async (
       return { page, image, console, errors, status }
     })())
     let { page, ...rest } = loaded
-    result = { ...rest, accessibility: await checked(page, bounded) }
+    result = { ...rest, accessibility: await checked(page, axe, bounded) }
   } finally {
     cancel()
     try {
@@ -154,8 +165,27 @@ export let capture = async (
   return { ...result, duration }
 }
 
+// Read once per assets binding, the isolate's one in a deployment, the way
+// esbuild.ts reads the compiler's catalog. In the script it was 650 KB that
+// every isolate compiled, a page view's included (T-133988).
+let scripts = new WeakMap<Env['ASSETS'], Promise<Axe>>()
+let axe = (env: Pick<Env, 'ASSETS' | 'APEX' | 'LOCAL_DEV'>) => {
+  let script = scripts.get(env.ASSETS)
+  if (script) return script
+  // A failed read is forgotten, so the next check reads again.
+  script = env.ASSETS.fetch(new Request(at(env, '/_preview/axe.json'))).then(
+    async (r) => {
+      if (!r.ok) throw new Error(`axe-core asset ${r.status}`)
+      return await r.json() as Axe
+    },
+  )
+  script.catch(() => scripts.delete(env.ASSETS))
+  scripts.set(env.ASSETS, script)
+  return script
+}
+
 export let render = async (
-  env: Pick<Env, 'BROWSER' | 'CLOCK'>,
+  env: Pick<Env, 'BROWSER' | 'CLOCK' | 'ASSETS' | 'APEX' | 'LOCAL_DEV'>,
   url: string,
   view: View,
   used?: (duration: number) => Promise<void>,
@@ -166,10 +196,13 @@ export let render = async (
   }
   let binding = env.BROWSER
   return capture(
-    () =>
-      puppeteer.launch({
-        fetch: (input, init) => binding.fetch(new Request(input, init)),
-      }),
+    {
+      open: () =>
+        puppeteer.launch({
+          fetch: (input, init) => binding.fetch(new Request(input, init)),
+        }),
+      axe: () => axe(env),
+    },
     url,
     view,
     used,
