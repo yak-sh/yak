@@ -117,6 +117,16 @@
   let stranger = (e) =>
     muted(e) && e.message == 'Script error.' &&
     !elsewhere(scripts()).length
+  // A module the browser would not link (an import naming what its module
+  // does not export) throws before any of the page's code ran, so its
+  // SyntaxError's stack names no frame: Chrome's is its message alone,
+  // Firefox's is empty. The event still says where, which becomes its frame.
+  let placed = (e) => {
+    if (e.error == null) return undefined
+    let stack = e.error.stack || `${e.error.name || 'Error'}: ${said(e.error)}`
+    if (!e.filename || stack.includes(e.filename)) return stack
+    return `${stack}\n    at ${e.filename}:${e.lineno || 0}:${e.colno || 0}`
+  }
   let mutedStack = () => {
     let all = scripts()
     return [
@@ -197,7 +207,7 @@
     // no error: its own message is the one that says what happened.
     broke({
       message: (e.error == null && e.message) || said(e.error),
-      stack: muted(e) ? mutedStack() : e.error && e.error.stack,
+      stack: muted(e) ? mutedStack() : placed(e),
       url: e.filename || location.href,
       line: e.lineno,
       mechanism: 'onerror',

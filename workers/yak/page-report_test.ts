@@ -196,3 +196,23 @@ test('the home page files a throw and a frame that will not load, tagged with it
   ok(said.includes('boom'))
   ok(said.includes('failed to load img https://yaks.app/mascot/wander-down'))
 })
+
+test('a platform page whose module will not link is filed, placed where it broke', async () => {
+  let html = await shell({}, 'Operator', null, 200, '').text()
+  let { window, sent } = loaded(html, at)
+  // Chrome's SyntaxError for an import its module lacks names no frame, and
+  // the specifier is relative: nothing in its stack is on the apex.
+  let error = new SyntaxError(
+    "The requested module './answer.js' does not provide an export named 'show'",
+  )
+  error.stack = `SyntaxError: ${error.message}`
+  window.dispatchEvent(Object.assign(new window.Event('error'), {
+    error,
+    message: error.message,
+    filename: 'https://yaks.app/manage/chat.js',
+    lineno: 1,
+  }))
+  let [row] = await filed(sent[0].body)
+  let filedAs = row.error as { tags: Record<string, string> }
+  equal(filedAs.tags.page, '/manage/ada/chat/new')
+})
