@@ -5,7 +5,7 @@ import { assertEquals, assertRejects } from '@std/assert'
 import { clock, test, until } from '@yaks/testing'
 import type { Bundle } from '@yaks/graph'
 import { PROCESS, type Store } from '@yaks/process'
-import { coverage, monitor, ready } from './external.ts'
+import { coverage, monitor, ready, tail } from './external.ts'
 
 let processes = (rows: Bundle[]) => {
   let reads = 0
@@ -168,6 +168,25 @@ test('worker exit is an explicit readiness error, not a successful launch', asyn
     'exited before readiness (code 7)',
   )
   assertEquals(run.counts(), { unrefs: 1, kills: 0 })
+})
+
+test('a worker that exits before readiness says what it wrote to stderr', async () => {
+  let run = child(Promise.resolve({ code: 1 }))
+  await assertRejects(
+    () =>
+      ready(
+        { ...run.process, told: Promise.resolve('error: /proc not found') },
+        () => Promise.resolve(undefined),
+      ),
+    Error,
+    'exited before readiness (code 1):\nerror: /proc not found',
+  )
+})
+
+test('tail keeps the end of a stream', async () => {
+  let stream = ReadableStream.from(['ab', 'cd', 'ef\n'])
+    .pipeThrough(new TextEncoderStream())
+  assertEquals(await tail(stream, 4), 'def')
 })
 
 test('bounded readiness timeout stops only this failed launch', async () => {

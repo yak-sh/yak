@@ -226,6 +226,33 @@ type Child = {
   status: Promise<{ code: number }>
   unref: () => void
   kill: (signal: 'SIGTERM') => void
+  /** The end of what the worker wrote to stderr, once it closes. */
+  told?: Promise<string>
+}
+
+/** The last `limit` characters `stream` carries, once it ends. */
+export let tail = async (
+  stream: ReadableStream<Uint8Array>,
+  limit = 4000,
+): Promise<string> => {
+  let text = ''
+  let decoder = new TextDecoder()
+  for await (let chunk of stream) {
+    text = (text + decoder.decode(chunk, { stream: true })).slice(-limit)
+  }
+  return (text + decoder.decode()).trim()
+}
+
+// What the worker said before it exited, waiting at most a second for its
+// stderr to close: a process it started may still hold it open.
+let telling = async (child: Child): Promise<string> => {
+  let timer: ReturnType<typeof setTimeout> | undefined
+  let late = new Promise<string>((done) => timer = setTimeout(done, 1000, ''))
+  try {
+    return await Promise.race([child.told ?? '', late])
+  } finally {
+    clearTimeout(timer)
+  }
 }
 
 /** Readiness is written only after the worker has assembled its duty host.
@@ -255,7 +282,11 @@ export let ready = async (
       let said = await Promise.race([read(), cancelled])
       signal?.throwIfAborted()
       if (ended != null) {
-        throw new Error(`Duty worker exited before readiness (code ${ended})`)
+        let told = await telling(child)
+        throw new Error(
+          `Duty worker exited before readiness (code ${ended})` +
+            (told ? `:\n${told}` : ''),
+        )
       }
       if (said?.trim() == String(child.pid)) return
       if (now() >= deadline) {
@@ -317,14 +348,24 @@ let start = async (
       ],
       stdin: 'piped',
       stdout: 'null',
-      stderr: 'null',
+      // Read to its end, so a worker that dies says why; it never fills.
+      stderr: 'piped',
       detached: true,
     }).spawn()
+    let told = tail(child.stderr).catch((error) =>
+      `stderr unreadable: ${error}`
+    )
     tethers.add(child.stdin)
     let untie = () => void tethers.delete(child.stdin)
     child.status.then(untie, untie)
     await ready(
-      child,
+      {
+        pid: child.pid,
+        status: child.status,
+        unref: () => child.unref(),
+        kill: (signal) => child.kill(signal),
+        told,
+      },
       async () => {
         try {
           return await disk.readTextFile(file)
