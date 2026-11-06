@@ -372,11 +372,9 @@ test('new app tells an agent with no web link what to ask, not an empty list', a
       connectedAt: 1,
     }],
   })
-  // Whether an element is hidden is its opening tag's; no document is parsed.
+  let { document } = parseHTML(page)
   let hidden = (cls: string) =>
-    /\shidden\b/.test(
-      page.match(new RegExp(`<\\w+ class="[^"]*\\b${cls}\\b[^>]*>`))![0],
-    )
+    document.querySelector(`.${cls}`)!.hasAttribute('hidden')
   assert(!hidden('Desk_Start'))
   assert(hidden('Agents'))
   assertStringIncludes(page, 'chat history')

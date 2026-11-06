@@ -5,47 +5,40 @@
 // page context, the way the app Tile's address does.
 
 import { parse } from '@yaks/query'
-import type { Child, Context, H, Renderer } from '@yaks/render'
+import type { ComponentRenderer } from '@yaks/preact'
+import type { Context } from '@yaks/render'
+import { Rows } from '@yaks/ui/parts'
+import { type ComponentChildren, h } from 'preact'
 import { day } from '../html.ts'
 
-// A row's main part (the style guide's .Rows): the name, then one line of
-// where they stand, their address first.
-let who = <N>(h: H<N>, ctx: Context, ...standing: Child<N>[]) =>
+// A row's main part: the name, then one line of where they stand, their
+// address first.
+let who = (ctx: Context, ...standing: ComponentChildren[]) =>
   h(
-    'div',
-    { class: 'Rows_Main' },
-    h(
-      'strong',
-      { class: 'Rows_Name' },
-      String(ctx.name || ctx.email || 'Someone'),
-    ),
-    h(
-      'span',
-      { class: 'Rows_Meta' },
-      ctx.email ? `${ctx.email} · ` : null,
-      ...standing,
-    ),
+    Rows.Main,
+    null,
+    h(Rows.Name, null, String(ctx.name || ctx.email || 'Someone')),
+    h(Rows.Meta, null, ctx.email ? `${ctx.email} · ` : null, ...standing),
   )
 
-export let seat: Renderer = {
+export let seat: ComponentRenderer = {
   view: 'Tile',
   match: parse('.member'),
-  render: (b, h, ctx) => who(h, ctx, (b.member as { role: string }).role),
+  Render: ({ e, ...ctx }) => who(ctx, (e.member as { role: string }).role),
 }
 
-export let guest: Renderer = {
+export let guest: ComponentRenderer = {
   view: 'Tile',
   match: parse('.grant'),
-  render: (b, h, ctx) => who(h, ctx, (b.grant as { access: string }).access),
+  Render: ({ e, ...ctx }) => who(ctx, (e.grant as { access: string }).access),
 }
 
-export let invitation: Renderer = {
+export let invitation: ComponentRenderer = {
   view: 'Tile',
   match: parse('.invite'),
-  render: (b, h, ctx) => {
-    let i = b.invite as { role: string; sent?: string | null }
+  Render: ({ e, ...ctx }) => {
+    let i = e.invite as { role: string; sent?: string | null }
     return who(
-      h,
       ctx,
       `${i.role} · `,
       h(

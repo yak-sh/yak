@@ -6,6 +6,7 @@ import {
   assertStringIncludes,
 } from '@std/assert'
 import type { App } from './directory.ts'
+import { markup } from './html.ts'
 import { fixing, library, operated } from './pages.ts'
 import { chatPath } from './route.ts'
 import { folds, type Plain, plain, type Seen } from './unseen.ts'
@@ -24,7 +25,7 @@ let report = (eid: string): Seen => ({
   },
 })
 let page = (errors: Plain[]) =>
-  library(
+  markup(library(
     {
       space: 'fixme',
       apps: [
@@ -33,7 +34,7 @@ let page = (errors: Plain[]) =>
       ],
     } as Parameters<typeof library>[0],
     {},
-  )
+  ))
 
 let reports = [report('1'), report('2')]
 let errors = folds(reports).map(plain)
@@ -49,26 +50,26 @@ test('an app that throws is marked on the dashboard, with what to ask', () => {
 })
 
 test('a dashboard error names the break, its recurrence and what to ask', () => {
-  let fix = fixing({
+  let fix = markup(fixing({
     eid: chores.eid,
     slug: chores.slug,
     title: chores.slug,
     errors,
-  }, 'fixme')
+  }, 'fixme'))
   assertStringIncludes(fix, 'chores is not a function')
   assertStringIncludes(fix, '2 times')
   assertStringIncludes(fix, 'Fix the errors in my chores app on yaks.app')
 })
 
 test('a fixed app has no dashboard error mark or repair request', () => {
-  assert(!/Apps_Tag-warn|class="Card Fix"/.test(page([])))
+  assert(!/Apps_Tag-warn|id="fix-/.test(page([])))
 })
 
 // What the space's Operator made of a break stands beside it (T-136297):
 // working, its answer, or why it could not finish, with the way to its work.
 let [broke] = errors
 let shown = (operator?: Plain['operator']) => {
-  return operated({ ...broke, operator }, 'fixme')
+  return markup(operated({ ...broke, operator }, 'fixme'))
 }
 test("a break says what the space's Operator made of it", () => {
   assert(!shown().includes('The Operator'), 'a break it never heard of')

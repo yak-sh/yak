@@ -187,21 +187,23 @@ test('connections: the space’s ask of each person offers nothing to connect, a
       },
     }, env).text()
   // Only the connection's own card, not the page's box for a new key.
-  let card = (html: string) => {
-    let at = html.indexOf('data-connection="c"')
-    return html.slice(at, html.indexOf('</section>', at))
-  }
-  let ask = card(await drawn(false))
-  assertStringIncludes(ask, 'Each person who uses Notes connects their own')
-  assertEquals(ask.includes('name="key"'), false)
-  assertEquals(ask.includes('value="disconnect"'), false)
-  let own = card(await drawn(true))
-  assertStringIncludes(own, 'name="key"')
-  assertStringIncludes(own, 'value="disconnect">Remove')
-  assertStringIncludes(own, '<code>env.WEATHER</code>')
-  assertStringIncludes(own, '3 of 10 calls this month')
-  assertEquals(ask.includes('calls this month'), false)
-  assertEquals(own.includes('Open to anyone'), false)
+  let card = async (own: boolean) =>
+    parseHTML(await drawn(own)).document
+      .querySelector('[data-connection="c"]')!
+  let ask = await card(false)
+  assertStringIncludes(
+    ask.textContent!,
+    'Each person who uses Notes connects their own',
+  )
+  assertEquals(ask.querySelector('[name="key"]'), null)
+  assertEquals(ask.querySelector('[value="disconnect"]'), null)
+  let own = await card(true)
+  assert(own.querySelector('[name="key"]'))
+  assertEquals(pressed(own, 'disconnect'), 'Remove')
+  assertEquals(own.querySelector('code')?.textContent, 'env.WEATHER')
+  assertStringIncludes(own.textContent!, '3 of 10 calls this month')
+  assertEquals(ask.textContent!.includes('calls this month'), false)
+  assertEquals(own.textContent!.includes('Open to anyone'), false)
 })
 
 test('connections: on the person’s own space, theirs and then the space’s with what it could add; elsewhere, only the space’s', async () => {
@@ -328,6 +330,13 @@ let listing = (
     },
   }, env).text()
 
+// The page as a document, its service connected, and listed or not.
+let listed = async (listed = false) =>
+  parseHTML(await listing('connected', listed)).document
+// What the button a form sends with `value` says.
+let pressed = (root: ParentNode, value: string) =>
+  root.querySelector(`button[value="${value}"]`)?.textContent
+
 test('connections: how to get a key sits open beside a connection needing one, and closed once connected', async () => {
   let card = async (status: 'needed' | 'connected') =>
     parseHTML(await listing(status)).document
@@ -337,33 +346,37 @@ test('connections: how to get a key sits open beside a connection needing one, a
 })
 
 test('connections: a service the space added can be changed there, all but where its key goes', async () => {
-  let html = await listing('connected')
-  for (
-    let text of [
-      'Change what Weather says',
-      'name="title" value="Weather"',
-      '>Sign up at [weather.test](https://weather.test) &amp; &lt;b&gt;.</textarea>',
-      'value="about">Save',
-    ]
-  ) assertStringIncludes(html, text)
-  let told = html.slice(html.indexOf('Change what Weather says'))
+  let told = [...(await listed()).querySelectorAll('details')].find((d) =>
+    d.querySelector('summary')?.textContent == 'Change what Weather says'
+  )!
   assertEquals(
-    told.slice(0, told.indexOf('</details>')).includes('name="hosts"'),
-    false,
+    told.querySelector('[name="title"]')?.getAttribute('value'),
+    'Weather',
   )
+  // What the box holds, read as a browser reads it (linkedom leaves a
+  // textarea's entities as they were written).
+  let typed = told.ownerDocument.createElement('p')
+  typed.innerHTML = told.querySelector('textarea[name="instructions"]')!
+    .innerHTML
+  assertEquals(
+    typed.textContent,
+    'Sign up at [weather.test](https://weather.test) & <b>.',
+  )
+  assertEquals(pressed(told, 'about'), 'Save')
+  assertEquals(told.querySelector('[name="hosts"]'), null)
 })
 
 test('connections: a service the space added is listed in the integration directory from there, or taken out', async () => {
-  assertStringIncludes(
-    await listing('connected'),
-    'value="list">List in the integration directory',
+  assertEquals(
+    pressed(await listed(), 'list'),
+    'List in the integration directory',
   )
-  let out = await listing('connected', true)
-  assertStringIncludes(
-    out,
-    'href="/integrations#Weather">integration directory',
+  let out = await listed(true)
+  assertEquals(
+    out.querySelector('a[href="/integrations#Weather"]')?.textContent,
+    'integration directory',
   )
-  assertStringIncludes(out, 'value="unlist">Take it out')
+  assertEquals(pressed(out, 'unlist'), 'Take it out')
 })
 
 test('connections: a page opened to add one from the directory offers it first, saying how to get its key', async () => {

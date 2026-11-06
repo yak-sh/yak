@@ -1,7 +1,10 @@
-// The worker's curated registry. Page projections become component bundles at
-// this door; HTML uses the same portable renderer as a mounted Preact view.
+// The worker's curated registries. Page projections become component bundles
+// at this door. The dashboard's tiles are Preact components wearing the kit's
+// parts, drawn into its pages as nodes; the admin's directory rows are
+// portable renderers, drawn as markup (admin.ts).
 
-import { render } from '@yaks/html'
+import { render as markup } from '@yaks/html'
+import { render } from '@yaks/preact'
 import { type Bundle, type Context, define } from '@yaks/render'
 import type { SpacePage } from '../pages.ts'
 import type { Person } from '../people.ts'
@@ -11,13 +14,14 @@ import { app } from './app.ts'
 import { directory } from './directory.ts'
 import { guest, invitation, seat } from './held.ts'
 
-export let registry = define([app, seat, guest, invitation, ...directory])
+export let registry = define([app, seat, guest, invitation])
+let rows = define(directory)
 // The directory's words, composed when a page first draws a row.
 export let vocab = once(platformVocab)
 
 /** A directory row, drawn as `view` by whichever renderer here draws it. */
 export let drawn = (b: Bundle, view: string, ctx: Context = {}) =>
-  render(registry, b, view, vocab(), ctx)
+  markup(rows, b, view, vocab(), ctx)
 
 /** What a page around a tile says about it (render/app.ts). */
 export type Around = {

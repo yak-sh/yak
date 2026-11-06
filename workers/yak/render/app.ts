@@ -1,4 +1,4 @@
-// The app library's Tile: the worker owns its markup, and each host supplies h.
+// The app library's Tile, the kit's Card worn as the library's item.
 // Gallery wording is page context because its visibility depends on the viewer,
 // and so is `at`, the space's own address, on a page that is not there,
 // `host`, the space's own host, said before the app's path on a page that is
@@ -12,27 +12,27 @@
 // asks for one more, to the app's data editor, on a page for who may open it.
 
 import { parse } from '@yaks/query'
-import type { Renderer } from '@yaks/render'
+import type { ComponentRenderer } from '@yaks/preact'
+import { Card } from '@yaks/ui/parts'
+import { h } from 'preact'
 
-export let app: Renderer = {
+export let app: ComponentRenderer = {
   view: 'Tile',
   match: parse('.app'),
-  render: (b, h, ctx) => {
+  Render: ({ e: b, ...ctx }) => {
     let a = b.app as { slug: string; access?: string | null }
     let doc = b.doc as { title?: string } | undefined
     let errors = Number(ctx.errors ?? 0)
     let tag = (text: string) => h('span', { class: 'Apps_Tag' }, text)
     return h(
-      'div',
-      { class: 'Card Apps_Item' },
-      '\n',
+      Card,
+      { as: 'div', class: 'Apps_Item' },
       h('img', {
         src: ctx.icon ?? `${ctx.at ?? ''}/${a.slug}/icon.png`,
         width: 44,
         height: 44,
         alt: '',
       }),
-      '\n',
       h(
         'a',
         {
@@ -44,7 +44,6 @@ export let app: Renderer = {
         h('strong', null, doc?.title || a.slug),
       ),
       h('span', { class: 'Apps_Path' }, `${ctx.host ?? ''}/${a.slug}`),
-      '\n',
       h(
         'span',
         { class: 'Apps_Tags' },

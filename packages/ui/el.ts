@@ -77,13 +77,16 @@ export let el =
   (tag: string, base: string): Part =>
   ({ mod, class: extra, elRef, children, href, as, ...props }: Props) => {
     let a = anchor(as ?? tag, href, useContext(Surround).href)
+    // A part given no children passes none, rather than children that are
+    // nothing: a textarea's `value` is its content only when it has none.
     let node = h(a.tag, {
       ...props,
       ...(a.href && { href: a.href }),
       ...(a.demote && { role: 'link', tabIndex: 0, 'data-href': a.demote }),
       ref: elRef,
       class: classes(base, mod, extra),
-    }, children)
+      ...(children !== undefined && { children }),
+    })
     // One value per href: a fresh object each render would wake every nested
     // reader as a render of its own.
     let surround = useMemo(() => ({ href: a.href }), [a.href])

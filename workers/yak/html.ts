@@ -2,13 +2,15 @@
 // attributes, a day the way a person reads it, and the parts more than one
 // page draws.
 import { Drop } from '@yaks/ui/parts'
-import { h, type VNode } from 'preact'
+import { type ComponentChildren, Fragment, h, type VNode } from 'preact'
 import { jsxTemplate } from 'preact/jsx-runtime'
 import { renderToString } from 'preact-render-to-string'
 
-/** A page's tree as the HTML it sends, rendered once at the page's edge:
- * every string in it is text, escaped by Preact. */
-export let markup = <P>(node: VNode<P>): string => renderToString(node)
+/** A page's tree, or a run of them, as the HTML it sends, rendered once at
+ * the page's edge: every string in it is text, escaped by Preact. */
+/// markup(['a', null, '<b>']) -> 'a&lt;b>'
+export let markup = (nodes: ComponentChildren): string =>
+  renderToString(h(Fragment, null, nodes))
 
 /** Markup we made ourselves (an entity renderer's row, a guide drawn from
  * Markdown) put into a tree as it is, with no element around it. Never what
@@ -43,17 +45,6 @@ export let day = (iso: string, month: 'long' | 'short' = 'long') => {
   let at = new Date(iso)
   return Number.isNaN(at.getTime()) ? '' : days[month].format(at)
 }
-
-// A link in a side navigation (@yaks/ui `SideNav`): `face` is what it shows,
-// as HTML, and `href` an address already fit for an attribute. The page you
-// are on is lit, and says so; `also` is a page's own class for it.
-/// sideLink('/a', 'A') -> '<a class="SideNav_Link" href="/a">A</a>'
-/// sideLink('/a', 'A', true) -> '<a class="SideNav_Link SideNav_Link-on" href="/a" aria-current="page">A</a>'
-/// sideLink('/a', 'A', false, 'Talk_All') -> '<a class="SideNav_Link Talk_All" href="/a">A</a>'
-export let sideLink = (href: string, face: string, on = false, also = '') =>
-  `<a class="${
-    ['SideNav_Link', on && 'SideNav_Link-on', also].filter(Boolean).join(' ')
-  }" href="${href}"${on ? ' aria-current="page"' : ''}>${face}</a>`
 
 // A file input as a drop zone (@yaks/ui `Drop`, public/drop.js): the
 // form's own input inside a place to press or drop on, and the list of what

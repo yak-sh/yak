@@ -1126,7 +1126,11 @@ test('Profile saves the name, and Settings the address', async () => {
     let again = await taken.text()
     assertMatch(again, /is taken/)
     assertMatch(again, new RegExp(`name="space"[^>]*value="${other}"`))
-    assertEquals(again.match(/type="submit">Save/g)?.length, 1)
+    assertEquals(
+      [...parseHTML(again).document.querySelectorAll('button[type="submit"]')]
+        .filter((b) => b.textContent == 'Save').length,
+      1,
+    )
 
     // A badly shaped one says what an address is.
     let bad = await post(slug, { space: 'Not An Address' }, cookie)

@@ -9,6 +9,7 @@ import { type Bundle, graph } from '@yaks/graph'
 import { ram } from '@yaks/ram'
 import { accept, acceptLink, door, invitedWords, placeOf } from './invite.ts'
 import { invitedHere, refusedSaid, shared, shut, waiting } from './apps.ts'
+import { markup } from './html.ts'
 import { invited as invitationPage, type Offer, people } from './pages.ts'
 import { aloud, peopleOwned, type Person, shown } from './people.ts'
 import {
@@ -233,7 +234,7 @@ test('asked by name, the assistant lists every member and app guest', () => {
 })
 
 test('the People page lists members and offers to resend a pending invitation', () => {
-  let page = people(rosterPage)
+  let page = markup(people(rosterPage))
   for (let them of [ana, bo, cy]) assertStringIncludes(page, them)
   assertStringIncludes(page, 'not accepted yet')
   assertStringIncludes(page, 'name="again" value="cy/sp"')

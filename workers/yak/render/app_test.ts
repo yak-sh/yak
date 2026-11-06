@@ -1,19 +1,20 @@
-// The library keeps its existing card DOM while the registry supplies the view.
+// The library's card is the kit's Card, drawn by the registry's view.
 // Exercise both the served page and a mounted Preact host with the same data.
 
 import { test } from '@yaks/testing'
 import { assertEquals } from '@std/assert'
-import { h } from 'preact'
+import { type ComponentChildren, h } from 'preact'
 import { parseHTML } from 'linkedom'
 import { entity } from '@yaks/preact'
 import { resolve } from '@yaks/render'
 import { mount } from '../../../packages/preact/testing.ts'
+import { markup } from '../html.ts'
 import { desk } from '../pages.ts'
 import { app } from './app.ts'
 import { registry, tile, vocab } from './mod.ts'
 
-let card = (html: string) => {
-  let { document } = parseHTML(html)
+let card = (node: ComponentChildren) => {
+  let { document } = parseHTML(typeof node == 'string' ? node : markup(node))
   return document.querySelector('.Apps_Item')!
 }
 let signature = (root: Element): unknown => [
@@ -53,10 +54,7 @@ test('app Tile resolves by component and keeps the library card DOM', async () =
     view: 'apps',
   }).text()
   let expected = card(
-    `<div class="Card Apps_Item">
-<img src="https://ada.yaks.app/recipes/icon.png" width="44" height="44" alt="">
-<a class="Apps_Open" href="https://ada.yaks.app/recipes/" target="_blank" rel="noopener"><strong>Recipes</strong></a><span class="Apps_Path">/recipes</span>
-<span class="Apps_Tags"><a class="Apps_Tag Apps_Tag-link" href="https://ada.yaks.app/recipes/_web/data" target="_blank" rel="noopener">Edit data</a><span class="Apps_Tag">Homepage</span><span class="Apps_Tag">private</span><span class="Apps_Tag">gallery: waiting</span></span></div>`,
+    `<div class="Card Apps_Item"><img src="https://ada.yaks.app/recipes/icon.png" width="44" height="44" alt=""><a class="Apps_Open" href="https://ada.yaks.app/recipes/" target="_blank" rel="noopener"><strong>Recipes</strong></a><span class="Apps_Path">/recipes</span><span class="Apps_Tags"><a class="Apps_Tag Apps_Tag-link" href="https://ada.yaks.app/recipes/_web/data" target="_blank" rel="noopener">Edit data</a><span class="Apps_Tag">Homepage</span><span class="Apps_Tag">private</span><span class="Apps_Tag">gallery: waiting</span></span></div>`,
   )
   assertEquals(signature(card(html)), signature(expected))
 

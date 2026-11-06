@@ -1,8 +1,9 @@
 // The public pages' icon vocabulary, drawn from Lucide's SVG nodes. Each icon
 // is its own module, imported by path: the package's barrel re-exports all
 // ~1,800 icons, and every module that reaches this one (the kernel does) would
-// load them all. Inline icons and the style guide's external sprite share the
-// same paths without any browser JavaScript.
+// load them all. The kit's Icon draws one inline from its nodes, and the style
+// guide's external sprite shares the same paths, without any browser
+// JavaScript.
 import type { IconNode } from 'lucide'
 // @ts-types="@yaks/ui/lucide"
 import Bell from 'lucide/dist/esm/icons/bell.mjs'
@@ -106,7 +107,7 @@ let drawn = (nodes: IconNode) =>
     }></${tag}>`
   ).join('')
 
-// Lucide's nodes are static; inline icons and the sprite reuse their markup.
+// Lucide's nodes are static; the sprite reuses their markup.
 let bodies = new WeakMap<IconNode, string>()
 let body = (nodes: IconNode) => {
   let html = bodies.get(nodes)
@@ -116,12 +117,6 @@ let body = (nodes: IconNode) => {
 
 let stroke = 'viewBox="0 0 24 24" fill="none" stroke="currentColor" ' +
   'stroke-width="2" stroke-linecap="round" stroke-linejoin="round"'
-
-export let icon = (name: IconName) =>
-  `<svg xmlns="http://www.w3.org/2000/svg" class="Icon" aria-hidden="true" ` +
-  `focusable="false" width="24" height="24" ${stroke}>${
-    body(icons[name])
-  }</svg>`
 
 export let sprite = () =>
   `<svg xmlns="http://www.w3.org/2000/svg">${

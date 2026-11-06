@@ -19,18 +19,24 @@ import {
   At,
   Button,
   Card,
+  Chip,
+  Chips,
   Copy,
+  Empty,
   Field,
   Form,
   Group,
+  Icon,
   Loading,
   More,
   Notice,
+  Report,
+  Rows,
+  SideNav,
   State,
   TabSet,
 } from '@yaks/ui/parts'
-import { type ComponentChildren, Fragment, h, type VNode } from 'preact'
-import { renderToString } from 'preact-render-to-string'
+import { type ComponentChildren, h, type VNode } from 'preact'
 import type { Frame } from './build-door.ts'
 import type { Agent } from './connected.ts'
 import type {
@@ -42,8 +48,8 @@ import type {
 } from './connections.ts'
 import { INTEGRATIONS } from './integrations.ts'
 import { agentList, agentLive } from './connected_ui.ts'
-import { icon, type IconName } from './icons.ts'
-import { day, esc, fileDrop, raw, sideLink } from './html.ts'
+import { type IconName, icons } from './icons.ts'
+import { day, esc, fileDrop, markup, raw } from './html.ts'
 import { holder, tile } from './render/mod.ts'
 import type { People, Person } from './people.ts'
 import type { Plain } from './unseen.ts'
@@ -149,6 +155,13 @@ let labeled = (id: string, label: Kids, control: Kids, hint: Kids = '') =>
     hint ? h(Form.Hint, null, hint) : null,
   )
 
+// A label for what may be left empty.
+let optional = (label: Kids) => [
+  label,
+  ' ',
+  h(Form.Optional, null, '(optional)'),
+]
+
 // A value as text a script can hold: JSON, with nothing that could close it.
 let script = (value: unknown) =>
   JSON.stringify(value).replaceAll('<', '\\u003c')
@@ -213,16 +226,10 @@ export let page = (env: Host, at: Said, ...parts: Kids[]) =>
   documented(
     env,
     esc(at.title),
-    renderToString(
-      h(
-        Fragment,
-        null,
-        at.lead == null
-          ? null
-          : [h('h1', null, at.title), h('p', null, at.lead)],
-        ...parts,
-      ),
-    ),
+    markup([
+      at.lead == null ? null : [h('h1', null, at.title), h('p', null, at.lead)],
+      parts,
+    ]),
     at.status ?? 200,
     at.headers,
     at.layout,
@@ -236,7 +243,7 @@ export let shell = (
   title: string,
   lead: string | null,
   status: number,
-  inner = renderToString(home(env)),
+  inner = markup(home(env)),
   headers: Record<string, string> = {},
   layout = '',
   head = '',
@@ -663,36 +670,6 @@ for (let go of document.querySelectorAll('.Copy_Go')) {
 }
 `)
 
-// ---- the dashboard, still written as markup ----------------------------------
-//
-// TODO(T-136253): the dashboard below still writes its pages as markup, and
-// these say the parts above as markup for it; they go when it draws the kit's
-// parts too, as the pages above do.
-let html = (node: Kids) => renderToString(h(Fragment, null, node))
-let headingHtml = (
-  title: string,
-  at: { mark?: string; status?: string; actions?: string; id?: string } = {},
-) =>
-  html(heading(raw(title), {
-    mark: at.mark ? raw(at.mark) : null,
-    status: at.status ? raw(at.status) : null,
-    actions: at.actions ? raw(at.actions) : null,
-    id: at.id,
-  }))
-let statusHtml = (word: string, tone?: 'positive' | 'negative') =>
-  html(status(raw(word), tone))
-let labeledHtml = (id: string, label: string, control: string, hint = '') =>
-  html(labeled(id, raw(label), raw(control), hint ? raw(hint) : ''))
-let stateHtml = (connected: boolean, show: boolean) =>
-  `data-${connected ? 'connected' : 'disconnected'}${show ? '' : ' hidden'}`
-let keyBoxHtml = (
-  id: string,
-  label: string,
-  send: string,
-  hint = '',
-  fields: Fielded[] = [KEY],
-) => html(keyBox(id, raw(label), raw(send), hint ? raw(hint) : '', fields))
-
 // Who visited, on the space page (views.ts, T-34497): a block per app, the
 // owner's alone. A bar per day for the window, then the three short lists —
 // the pages people opened, the sites that sent them, the countries they were
@@ -709,32 +686,42 @@ let axisDay = (iso: string) => {
 }
 
 let chart = (days: { day: string; views: number }[]) =>
-  `<figure class="Report_Plot">${
-    renderToString(
-      columns(h as never, {
-        from: days[0]?.day ?? '',
-        values: days.map((d) => d.views),
-        noun: 'visit',
-      }) as VNode,
-    )
-  }
-<figcaption class="Report_Span"><span>${
-    esc(axisDay(days[0]?.day ?? ''))
-  }</span><span>${
-    esc(axisDay(days[days.length - 1]?.day ?? ''))
-  }</span></figcaption></figure>`
+  h(
+    Report.Plot,
+    null,
+    columns(h as never, {
+      from: days[0]?.day ?? '',
+      values: days.map((d) => d.views),
+      noun: 'visit',
+    }) as VNode,
+    h(
+      Report.Span,
+      null,
+      h('span', null, axisDay(days[0]?.day ?? '')),
+      h('span', null, axisDay(days[days.length - 1]?.day ?? '')),
+    ),
+  )
 
 let column = (head: string, rows: { name: string; views: number }[]) =>
   rows.length
-    ? `<div class="Report_Column"><h3>${head}</h3>
-<ul class="Report_List">${
-      rows.map((r) =>
-        `<li><span title="${esc(r.name)}">${esc(r.name)}</span><b>${
-          count(r.views)
-        }</b></li>`
-      ).join('')
-    }</ul></div>`
-    : ''
+    ? h(
+      Report.Column,
+      null,
+      h('h3', null, head),
+      h(
+        Report.List,
+        null,
+        rows.map((r) =>
+          h(
+            'li',
+            null,
+            h('span', { title: r.name }, r.name),
+            h('b', null, count(r.views)),
+          )
+        ),
+      ),
+    )
+    : null
 
 /** One app's numbers, as `spaceIndex` is handed them. */
 export type Visits = {
@@ -751,29 +738,44 @@ export type Visits = {
 }
 
 let visits = (v: Visits, site: string) =>
-  `<article class="Card Report" aria-labelledby="visits-${
-    esc(v.slug)
-  }"><header class="Card_Head"><h2 class="Card_Title" id="visits-${
-    esc(v.slug)
-  }"><a href="${site}/${
-    encodeURIComponent(v.slug)
-  }/" target="_blank" rel="noopener">${esc(v.title || v.slug)}</a></h2>
-<p class="Report_Total">${count(v.stats.total)} <span class="Report_Unit">${
-    v.stats.total == 1 ? 'visit' : 'visits'
-  }</span></p></header>${
+  h(
+    Report,
+    { class: 'Card', 'aria-labelledby': `visits-${v.slug}` },
+    h(
+      Card.Head,
+      null,
+      h(
+        Card.Title,
+        { id: `visits-${v.slug}` },
+        h('a', {
+          href: `${site}/${encodeURIComponent(v.slug)}/`,
+          target: '_blank',
+          rel: 'noopener',
+        }, v.title || v.slug),
+      ),
+      h(
+        Report.Total,
+        null,
+        `${count(v.stats.total)} `,
+        h(Report.Unit, null, v.stats.total == 1 ? 'visit' : 'visits'),
+      ),
+    ),
     v.stats.total
-      ? chart(v.stats.daily) +
-        `<div class="Report_Tops">${
-          column('Pages', v.stats.pages) + column('Came from', v.stats.from) +
-          column('Countries', v.stats.countries)
-        }</div>`
-      : ''
-  }</article>`
+      ? [
+        chart(v.stats.daily),
+        h(
+          Report.Tops,
+          null,
+          column('Pages', v.stats.pages),
+          column('Came from', v.stats.from),
+          column('Countries', v.stats.countries),
+        ),
+      ]
+      : null,
+  )
 
 let visited = (apps: Visits[] | null, off: string, site: string) =>
-  apps == null
-    ? `<p class="Form_Hint">${esc(off)}</p>`
-    : apps.map((v) => visits(v, site)).join('')
+  apps == null ? h(Form.Hint, null, off) : apps.map((v) => visits(v, site))
 
 // A space's front door shows the apps whoever is asking may open, and to
 // its owner the way to the dashboard; account controls never enter it. The
@@ -876,6 +878,7 @@ export type DeskPage = {
   member?: boolean
 }
 
+// What each page of the side is, by the glyph beside its name.
 let navIcons = {
   profile: 'user',
   invite: 'qr-code',
@@ -892,6 +895,9 @@ let navIcons = {
   trash: 'trash-2',
 } satisfies Record<string, IconName>
 
+// A glyph the pages draw (icons.ts), as the kit's Icon.
+let glyph = (name: IconName) => h(Icon, { of: icons[name] })
+
 // The space a page is in, as the side and the page's head name it.
 let picked = (at: DeskPage) =>
   at.spaces?.find((s) => s.slug == at.space) ??
@@ -903,7 +909,7 @@ let named = (s: Pick<Picked, 'slug' | 'title'>) => s.title || s.slug
 let yourOperator = (at: DeskPage) => {
   let name = picked(at).operator
   return name
-    ? { title: `${esc(name)}, your Operator`, back: esc(name) }
+    ? { title: `${name}, your Operator`, back: name }
     : { title: 'Your Operator', back: 'your Operator' }
 }
 
@@ -917,54 +923,98 @@ let navigation = (at: DeskPage, view: ManageView, env: Host) => {
     key: keyof typeof navIcons,
     label: string,
     to = managePath(key, at.space),
-  ) =>
-    sideLink(
-      to,
-      `${icon(navIcons[key])}${label}${
-        key == 'trash' && at.trash?.length
-          ? `<span class="Desk_Count">${at.trash.length}</span>`
-          : ''
-      }`,
-      view == key || (view == 'new' && key == 'apps'),
+  ) => {
+    let on = view == key || (view == 'new' && key == 'apps')
+    return h(
+      SideNav.Link,
+      { href: to, mod: on && 'on', 'aria-current': on ? 'page' : undefined },
+      glyph(navIcons[key]),
+      label,
+      key == 'trash' && at.trash?.length
+        ? h('span', { class: 'Desk_Count' }, at.trash.length)
+        : null,
     )
+  }
   let { title, back } = yourOperator(at)
   let operator = link('operator', title)
-  return `<a class="Desk_Skip" href="#content">Skip to content</a>
-<aside class="Desk_Side" id="menu" aria-label="Manage">
-<div class="Desk_Top"><a class="Button Button-go Desk_Back" href="${
-    chatPath(at.space)
-  }">${
-    icon('chevron-left')
-  }Back to ${back}</a><a class="Button Desk_Close" href="#">✕ Close</a></div>
-<h2 class="Desk_Title">Manage</h2>
-<div class="Desk_Section"><h3 class="Desk_Group" id="side-space">This space</h3>
-<div class="Desk_Here">${chooser(at, view)}
-<nav class="SideNav" aria-labelledby="side-space">
-${
-    at.member
-      ? operator
-      : `${link('apps', 'Apps')}${link('people', 'People')}${operator}${
-        link('connections', 'Linked accounts')
-      }${link('visits', 'Visits')}${at.sell ? link('selling', 'Selling') : ''}${
-        link('billing', 'Billing')
-      }${link('settings', 'Space settings')}${link('trash', 'Trash')}`
-  }
-</nav></div></div>
-<div class="Desk_Section"><h3 class="Desk_Group" id="side-account">Your account</h3>
-<nav class="SideNav" aria-labelledby="side-account">
-${link('profile', 'Profile')}${link('invite', 'Invite a friend')}${
-    link('agents', 'Agents')
-  }${link('shared', 'Shared with you')}</nav></div>
-<div class="Desk_Foot"><a href="https://${
-    esc(spaceHost(env, at.space))
-  }/" target="_blank" rel="noopener">Open ${esc(spaceHost(env, at.space))} ${
-    icon('external-link')
-  }</a><a href="${
-    url(env, '/help')
-  }" target="_blank" rel="noopener">Help</a><form method="post" action="${
-    url(env, LOGOUT)
-  }"><button class="Desk_Out" type="submit">Sign out</button></form></div>
-</aside>`
+  let host = spaceHost(env, at.space)
+  return [
+    h('a', { class: 'Desk_Skip', href: '#content' }, 'Skip to content'),
+    h(
+      'aside',
+      { class: 'Desk_Side', id: 'menu', 'aria-label': 'Manage' },
+      h(
+        'div',
+        { class: 'Desk_Top' },
+        h(
+          Button,
+          { mod: 'go', class: 'Desk_Back', href: chatPath(at.space) },
+          glyph('chevron-left'),
+          `Back to ${back}`,
+        ),
+        h(Button, { class: 'Desk_Close', href: '#' }, '✕ Close'),
+      ),
+      h('h2', { class: 'Desk_Title' }, 'Manage'),
+      h(
+        'div',
+        { class: 'Desk_Section' },
+        h('h3', { class: 'Desk_Group', id: 'side-space' }, 'This space'),
+        h(
+          'div',
+          { class: 'Desk_Here' },
+          chooser(at, view),
+          h(
+            SideNav,
+            { 'aria-labelledby': 'side-space' },
+            at.member ? operator : [
+              link('apps', 'Apps'),
+              link('people', 'People'),
+              operator,
+              link('connections', 'Linked accounts'),
+              link('visits', 'Visits'),
+              at.sell ? link('selling', 'Selling') : null,
+              link('billing', 'Billing'),
+              link('settings', 'Space settings'),
+              link('trash', 'Trash'),
+            ],
+          ),
+        ),
+      ),
+      h(
+        'div',
+        { class: 'Desk_Section' },
+        h('h3', { class: 'Desk_Group', id: 'side-account' }, 'Your account'),
+        h(
+          SideNav,
+          { 'aria-labelledby': 'side-account' },
+          link('profile', 'Profile'),
+          link('invite', 'Invite a friend'),
+          link('agents', 'Agents'),
+          link('shared', 'Shared with you'),
+        ),
+      ),
+      h(
+        'div',
+        { class: 'Desk_Foot' },
+        h(
+          'a',
+          { href: `https://${host}/`, target: '_blank', rel: 'noopener' },
+          `Open ${host} `,
+          glyph('external-link'),
+        ),
+        h(
+          'a',
+          { href: url(env, '/help'), target: '_blank', rel: 'noopener' },
+          'Help',
+        ),
+        h(
+          'form',
+          { method: 'post', action: url(env, LOGOUT) },
+          h('button', { class: 'Desk_Out', type: 'submit' }, 'Sign out'),
+        ),
+      ),
+    ),
+  ]
 }
 
 // The space selector (T-135919, T-136122, T-136983, T-137003): the space
@@ -974,7 +1024,7 @@ ${link('profile', 'Profile')}${link('invite', 'Invite a friend')}${
 // the other, a page of the person's own stays where it is, and a space they
 // are only a member of opens at its Operator.
 let chooser = (at: DeskPage, view: ManageView) =>
-  spaceChoice(
+  choice(
     picked(at),
     at.spaces ?? [],
     (s) =>
@@ -984,69 +1034,122 @@ let chooser = (at: DeskPage, view: ManageView) =>
           !s.owner ? 'operator' : view == 'new' ? 'apps' : view,
           s.slug,
         ),
-    `<a class="Desk_New" href="${managePath('space')}">+ New space</a>`,
+    h('a', { class: 'Desk_New', href: managePath('space') }, '+ New space'),
   )
 
 /** A space's logo, or where it has none its first letter. */
-export let spaceTile = (s: Picked) =>
+let spaceTile = (s: Picked) =>
   s.logo
-    ? `<img class="Desk_Tile" src="${
-      esc(s.logo)
-    }" width="32" height="32" alt="" decoding="async">`
-    : `<span class="Desk_Tile" aria-hidden="true">${
-      esc(named(s).charAt(0).toUpperCase())
-    }</span>`
+    ? h('img', {
+      class: 'Desk_Tile',
+      src: s.logo,
+      width: 32,
+      height: 32,
+      alt: '',
+      decoding: 'async',
+    })
+    : h(
+      'span',
+      { class: 'Desk_Tile', 'aria-hidden': 'true' },
+      named(s).charAt(0).toUpperCase(),
+    )
 
-/** The space selector over `all`, holding `here`: each space opens at `to`,
- * `make` follows the list, and `about` leads the line under each space's name
- * (the dashboard's side, and the Operator's chat app, which names each
- * space's Operator: operator-page.ts `chatPage`). */
+// The space selector over `all`, holding `here`: each space opens at `to`,
+// `make` follows the list, and `about` leads the line under each space's name
+// (the dashboard's side, and the Operator's chat app, which names each
+// space's Operator: operator-page.ts `chatPage`).
+let choice = (
+  here: Picked,
+  all: Picked[],
+  to: (s: Picked) => string,
+  make: Kids = null,
+  about: (s: Picked) => string = () => '',
+) => {
+  let box = (s: Picked, line = '') => {
+    let said = [about(s), line].filter(Boolean).join(' · ')
+    return [
+      spaceTile(s),
+      h(
+        'span',
+        { class: 'Desk_Name' },
+        h('b', null, named(s)),
+        said ? h('small', null, said) : null,
+      ),
+    ]
+  }
+  if (all.length < 2) {
+    return [h('div', { class: 'Desk_Space' }, box(here)), make]
+  }
+  return h(
+    'details',
+    { class: 'Desk_Pick', 'data-menu': '' },
+    h(
+      'summary',
+      { class: 'Desk_Space' },
+      box(here),
+      h('span', { class: 'Desk_Change' }, 'Change', glyph('chevrons-up-down')),
+    ),
+    h(
+      'div',
+      { class: 'Desk_Menu' },
+      h(
+        'div',
+        { class: 'Desk_List' },
+        h('p', { class: 'Desk_Ask' }, 'Which space do you want to work in?'),
+        all.map((s) =>
+          h(
+            'a',
+            {
+              class: 'Desk_Row',
+              href: to(s),
+              'aria-current': s.slug == here.slug ? 'true' : undefined,
+            },
+            box(
+              s,
+              s.owner
+                ? ''
+                : s.whose
+                ? `${s.whose}’s space · you’re a member`
+                : 'You’re a member',
+            ),
+            s.slug == here.slug ? h('span', { class: 'Desk_Tick' }, '✓') : null,
+          )
+        ),
+        make,
+      ),
+    ),
+  )
+}
+
+/** The space selector, as markup, for the Operator's chat app's side
+ * (operator-page.ts), which is still written as markup: `make` is markup
+ * too. */
 export let spaceChoice = (
   here: Picked,
   all: Picked[],
   to: (s: Picked) => string,
   make = '',
   about: (s: Picked) => string = () => '',
-) => {
-  let box = (s: Picked, line = '') => {
-    let said = [about(s), line].filter(Boolean).join(' · ')
-    return `${spaceTile(s)}<span class="Desk_Name"><b>${esc(named(s))}</b>${
-      said && `<small>${esc(said)}</small>`
-    }</span>`
-  }
-  if (all.length < 2) {
-    return `<div class="Desk_Space">${box(here)}</div>${make}`
-  }
-  return `<details class="Desk_Pick" data-menu>
-<summary class="Desk_Space">${box(here)}<span class="Desk_Change">Change${
-    icon('chevrons-up-down')
-  }</span></summary>
-<div class="Desk_Menu"><div class="Desk_List"><p class="Desk_Ask">Which space do you want to work in?</p>${
-    all.map((s) =>
-      `<a class="Desk_Row" href="${to(s)}"${
-        s.slug == here.slug ? ' aria-current="true"' : ''
-      }>${
-        box(
-          s,
-          s.owner
-            ? ''
-            : s.whose
-            ? `${s.whose}’s space · you’re a member`
-            : 'You’re a member',
-        )
-      }${s.slug == here.slug ? '<span class="Desk_Tick">✓</span>' : ''}</a>`
-    ).join('')
-  }${make}</div></div></details>`
-}
+) => markup(choice(here, all, to, make && raw(make), about))
 
 let connectCard = (at: DeskPage, env: Host) =>
-  `<section class="Card Desk_Connect" ${stateHtml(false, !at.agents?.length)}>
-<header class="Card_Head"><h2 class="Card_Title">Connect your agent</h2><div class="Card_Actions"><a class="Button Button-go" href="${
-    managePath('agents')
-  }">Connect agent</a></div></header>
-<p class="Card_Sub">Build and improve your apps in the conversations you already have with Claude or ChatGPT.</p>${
-    html(pasteLink(env))
-  }</section>`
+  h(
+    Card,
+    { class: 'Desk_Connect', ...state(false, !at.agents?.length) },
+    heading('Connect your agent', {
+      actions: h(
+        Button,
+        { mod: 'go', href: managePath('agents') },
+        'Connect agent',
+      ),
+    }),
+    h(
+      Card.Sub,
+      null,
+      'Build and improve your apps in the conversations you already have with Claude or ChatGPT.',
+    ),
+    pasteLink(env),
+  )
 
 // What broke in an app, for its owner: each break as its line says it to their
 // assistant, how often and when last, and the one thing to do, which is to
@@ -1056,130 +1159,216 @@ let SHOWN = 5
 // conversation in the Operator's chat app.
 export let operated = (e: Plain, space: string) => {
   let o = e.operator
-  if (!o) return ''
+  if (!o) return null
   let said = o.failed != null
     ? `The Operator could not fix it. ${o.failed}`.trim()
     : o.answer != null
     ? `The Operator: ${o.answer}`
     : 'The Operator is fixing it.'
-  return `<span class="Rows_Meta">${esc(said)} <a href="${
-    esc(chatPath(space, e.fix))
-  }">See what it did</a></span>`
+  return h(
+    Rows.Meta,
+    null,
+    `${said} `,
+    h('a', { href: chatPath(space, e.fix) }, 'See what it did'),
+  )
 }
 export let fixing = (a: DeskPage['apps'][number], space: string) => {
   let errors = a.errors ?? []
   let n = errors.length
   let title = a.title || a.slug
-  return `<section class="Card Fix" id="fix-${
-    esc(a.slug)
-  }"><header class="Card_Head"><h2 class="Card_Title">${
-    esc(title)
-  }</h2><span class="State State-negative"><span class="Dot Dot-negative"></span>${
-    n == 1 ? '1 error' : `${n} errors`
-  }</span></header><ul class="Rows">${
-    errors.slice(0, SHOWN).map((e) =>
-      `<li class="Rows_Item"><div class="Rows_Main"><span class="Fix_Said">${
-        esc(e.said || 'No message')
-      }</span><span class="Rows_Meta">${e.where ? `${esc(e.where)} · ` : ''}${
-        e.times == 1 ? 'once' : `${e.times} times`
-      }${
-        day(e.at) ? `, ${e.times == 1 ? '' : 'last '}on ${day(e.at)}` : ''
-      }</span>${operated(e, space)}</div></li>`
-    ).join('')
-  }</ul>${
-    n > SHOWN ? `<p class="Rows_Meta">And ${n - SHOWN} more.</p>` : ''
-  }<div class="Form_Field"><p class="Form_Label">Ask your assistant to fix ${
-    n == 1 ? 'it' : 'them'
-  }</p>${
-    html(copyable(
-      `Fix the errors in my ${title} app on yaks.app`,
-      `the request to fix ${title}`,
-    ))
-  }</div></section>`
+  return h(
+    Card,
+    { class: 'Fix', id: `fix-${a.slug}` },
+    heading(title, {
+      status: status(n == 1 ? '1 error' : `${n} errors`, 'negative'),
+    }),
+    h(
+      Rows,
+      { as: 'ul' },
+      errors.slice(0, SHOWN).map((e) =>
+        h(
+          Rows.Item,
+          { as: 'li' },
+          h(
+            Rows.Main,
+            null,
+            h('span', { class: 'Fix_Said' }, e.said || 'No message'),
+            h(
+              Rows.Meta,
+              null,
+              `${e.where ? `${e.where} · ` : ''}${
+                e.times == 1 ? 'once' : `${e.times} times`
+              }${
+                day(e.at)
+                  ? `, ${e.times == 1 ? '' : 'last '}on ${day(e.at)}`
+                  : ''
+              }`,
+            ),
+            operated(e, space),
+          ),
+        )
+      ),
+    ),
+    n > SHOWN ? h(Rows.Meta, { as: 'p' }, `And ${n - SHOWN} more.`) : null,
+    h(
+      Form.Field,
+      null,
+      h(
+        Form.Label,
+        { as: 'p' },
+        `Ask your assistant to fix ${n == 1 ? 'it' : 'them'}`,
+      ),
+      copyable(
+        `Fix the errors in my ${title} app on yaks.app`,
+        `the request to fix ${title}`,
+      ),
+    ),
+  )
 }
+
+// Nothing in a list yet: what will be there, and how it gets there.
+let empty = (title: string, ...says: Kids[]) =>
+  h(Empty, null, h('h2', null, title), says)
 
 // What others let this person into (Your account › Shared with you): drawn by
 // the same Tile as their own, each with the address it lives at.
 let sharedWith = (at: DeskPage, env: Host) =>
   at.shared?.length
-    ? `<div class="Apps">${
+    ? h(
+      'div',
+      { class: 'Apps' },
       at.shared.map((a) => {
         let host = spaceHost(env, a.space)
         return tile(a, { at: `https://${host}`, host, editor: true })
-      }).join('')
-    }</div>`
-    : '<section class="Empty"><h2>Nothing shared with you yet</h2><p>An app someone invites you to, in a space of theirs, appears here.</p></section>'
+      }),
+    )
+    : empty(
+      'Nothing shared with you yet',
+      h(
+        'p',
+        null,
+        'An app someone invites you to, in a space of theirs, appears here.',
+      ),
+    )
 
 /** The apps view: the space's apps, each marked where it broke with what to
  * ask about it, and with none, the way to make one. */
 export let library = (at: DeskPage, env: Host) => {
   let broken = at.apps.filter((a) => a.errors?.length)
-  return `${connectCard(at, env)}${
+  return [
+    connectCard(at, env),
     at.apps.length
-      ? `<div class="Apps">${
-        at.apps.map((a) =>
-          tile(a, {
-            at: `https://${spaceHost(env, at.space)}`,
-            errors: a.errors?.length,
-            editor: true,
-          })
-        ).join('')
-      }</div>${
+      ? [
+        h(
+          'div',
+          { class: 'Apps' },
+          at.apps.map((a) =>
+            tile(a, {
+              at: `https://${spaceHost(env, at.space)}`,
+              errors: a.errors?.length,
+              editor: true,
+            })
+          ),
+        ),
         broken.length
-          ? `<h2 class="Group">Needs fixing</h2>${
-            broken.map((a) => fixing(a, at.space)).join(
-              '',
-            )
-          }`
-          : ''
-      }`
-      : `<section class="Empty"><h2>Your apps will live here</h2>
-<div ${
-        stateHtml(true, !!at.agents?.length)
-      }><p>Ask your agent for your first app. Try this:</p>${
-        html(firstAsk())
-      }</div>
-<div ${
-        stateHtml(false, !at.agents?.length)
-      }><p>A recipe box, a book club page, a tool for your day. Start with an idea.</p>
-<a href="${
-        managePath('new', at.space)
-      }">More ways to make an app</a></div></section>`
-  }${html(copying())}`
+          ? [
+            h(Group, null, 'Needs fixing'),
+            broken.map((a) => fixing(a, at.space)),
+          ]
+          : null,
+      ]
+      : empty(
+        'Your apps will live here',
+        h(
+          'div',
+          state(true, !!at.agents?.length),
+          h('p', null, 'Ask your agent for your first app. Try this:'),
+          firstAsk(),
+        ),
+        h(
+          'div',
+          state(false, !at.agents?.length),
+          h(
+            'p',
+            null,
+            'A recipe box, a book club page, a tool for your day. Start with an idea.',
+          ),
+          h(
+            'a',
+            { href: managePath('new', at.space) },
+            'More ways to make an app',
+          ),
+        ),
+      ),
+    copying(),
+  ]
 }
+
+// A form a dashboard card is, and the button that saves it under the card.
+let saving = (
+  action: string,
+  card: Kids,
+  label = 'Save',
+) =>
+  h(
+    Form,
+    { method: 'post', action },
+    card,
+    h(Form.Actions, null, send(label)),
+  )
+
+// The fields a card holds, one under the other.
+let fieldsOf = (...kids: Kids[]) => h(Form, { as: 'div' }, kids)
+
+let option = (value: string, label: string, chosen: boolean) =>
+  h('option', { value, selected: chosen }, label)
 
 // Profile (Your account): the person's name, their email, and the space
 // `/manage` opens, which is the one their seat marks theirs (`member.own`).
 let profile = (at: DeskPage, env: Host) => {
   let mine = (at.spaces ?? []).filter((s) => s.owner)
   let first = mine.find((s) => s.own)?.slug ?? ''
-  return `<form class="Form" method="post" action="${
-    managePath('profile')
-  }"><section class="Card">${headingHtml('Profile')}<div class="Form">${
-    labeledHtml(
-      'your-name',
-      'Your name',
-      `<input class="Field" id="your-name" name="name" maxlength="60" autocomplete="name" placeholder="Dana" value="${
-        esc(at.name ?? '')
-      }">`,
-      'Shown to people in every space you’re in.',
-    )
-  }<div class="Form_Field"><p class="Form_Label">Email</p><p>${
-    esc(at.email ?? '')
-  }</p></div>${
-    mine.length > 1
-      ? labeledHtml(
-        'your-first',
-        'Open first',
-        `<select class="Field" id="your-first" name="first">${
-          mine.map((s) => option(s.slug, esc(named(s)), s.slug == first))
-            .join('')
-        }</select>`,
-        `The space ${apex(env)}${MANAGE} opens.`,
-      )
-      : ''
-  }</div></section>
-<div class="Form_Actions"><button class="Button Button-go" type="submit">Save</button></div></form>`
+  return saving(
+    managePath('profile'),
+    h(
+      Card,
+      null,
+      heading('Profile'),
+      fieldsOf(
+        labeled(
+          'your-name',
+          'Your name',
+          h(Field, {
+            id: 'your-name',
+            name: 'name',
+            maxlength: 60,
+            autocomplete: 'name',
+            placeholder: 'Dana',
+            value: at.name ?? '',
+          }),
+          'Shown to people in every space you’re in.',
+        ),
+        h(
+          Form.Field,
+          null,
+          h(Form.Label, { as: 'p' }, 'Email'),
+          h('p', null, at.email ?? ''),
+        ),
+        mine.length > 1
+          ? labeled(
+            'your-first',
+            'Open first',
+            h(
+              Field,
+              { choose: true, id: 'your-first', name: 'first' },
+              mine.map((s) => option(s.slug, named(s), s.slug == first)),
+            ),
+            `The space ${apex(env)}${MANAGE} opens.`,
+          )
+          : null,
+      ),
+    ),
+  )
 }
 
 // Invite (Your account, T-138777): the person's own QR code, shown to a
@@ -1189,9 +1378,11 @@ let profile = (at: DeskPage, env: Host) => {
 // beside the code, where the friend reads it (D-136811). The two ways are
 // radios, which switch with no script.
 let invitation = (r: Invitation, space: string, env: Host) => {
-  let terms = `<a href="${url(env, '/terms')}">Terms</a> · <a href="${
-    url(env, '/privacy')
-  }">Privacy</a>`
+  let terms = [
+    h('a', { href: url(env, '/terms') }, 'Terms'),
+    ' · ',
+    h('a', { href: url(env, '/privacy') }, 'Privacy'),
+  ]
   let ways = [
     ...r.text
       ? [{
@@ -1201,7 +1392,7 @@ let invitation = (r: Invitation, space: string, env: Host) => {
         label: 'QR code that opens a text to sign up for yaks.app',
         agree: 'Sending it signs you up for yaks.app and agrees to texts ' +
           "from yaks.app: your Operator's answers, and its alerts about " +
-          'your space and the apps you build. Message frequency varies. Msg &amp; data rates may apply. Reply STOP to ' +
+          'your space and the apps you build. Message frequency varies. Msg & data rates may apply. Reply STOP to ' +
           'stop, HELP for help. US numbers only.',
       }]
       : [],
@@ -1210,67 +1401,98 @@ let invitation = (r: Invitation, space: string, env: Host) => {
       tab: 'Email',
       link: r.mail,
       label: 'QR code that opens an email to sign up for yaks.app',
-      agree: `Sending it to ${
-        esc(r.address)
-      } signs you up for yaks.app, and the answer comes by email.`,
+      agree:
+        `Sending it to ${r.address} signs you up for yaks.app, and the answer comes by email.`,
     },
   ]
-  return `<p class="Invite_Head">Show this to a friend. They scan it with their phone’s camera and send what opens: that signs them up, with their own space ready and its Operator writing back.</p>
-<fieldset class="Tabs Invite">
-<legend class="Tabs_Legend">Sign up by</legend>
-${
-    ways.map((w, i) =>
-      `<div class="Tabs_Item">
-<input type="radio" name="way" id="way-${w.key}" value="${w.key}"${
-        i ? '' : ' checked'
-      }>
-<label class="Tabs_Tab" for="way-${w.key}">${w.tab}</label>
-<section class="Card Tabs_Panel Invite_Way">
-<p class="Invite_Lead">Scan to sign up for yaks.app</p>
-<a class="Invite_Code" href="${esc(w.link)}">${qr(w.link, w.label)}</a>
-<p class="Invite_Words">${esc(r.said)}</p>
-<p class="Note">${w.agree} ${terms}</p>
-</section></div>`
-    ).join('')
-  }
-</fieldset>
-<section class="Card">${headingHtml('A free month for each friend')}
-<p>Each friend who signs up and builds their first app gives ${
-    esc(space)
-  } one more free month of the Plus plan.${
-    r.joined
-      ? ` ${r.joined} ${
-        r.joined == 1 ? 'person has' : 'people have'
-      } signed up with your invite so far, and ${r.built} built an app.`
-      : ''
-  }</p></section>`
+  return [
+    h(
+      'p',
+      { class: 'Invite_Head' },
+      'Show this to a friend. They scan it with their phone’s camera and send what opens: that signs them up, with their own space ready and its Operator writing back.',
+    ),
+    h(
+      TabSet,
+      { class: 'Invite' },
+      h(TabSet.Legend, null, 'Sign up by'),
+      ways.map((w, i) =>
+        h(
+          TabSet.Item,
+          null,
+          h('input', {
+            type: 'radio',
+            name: 'way',
+            id: `way-${w.key}`,
+            value: w.key,
+            checked: !i,
+          }),
+          h(TabSet.Tab, { for: `way-${w.key}` }, w.tab),
+          h(
+            TabSet.Panel,
+            { class: 'Card Invite_Way' },
+            h('p', { class: 'Invite_Lead' }, 'Scan to sign up for yaks.app'),
+            h(
+              'a',
+              { class: 'Invite_Code', href: w.link },
+              raw(qr(w.link, w.label)),
+            ),
+            h('p', { class: 'Invite_Words' }, r.said),
+            h('p', { class: 'Note' }, `${w.agree} `, terms),
+          ),
+        )
+      ),
+    ),
+    h(
+      Card,
+      null,
+      heading('A free month for each friend'),
+      h(
+        'p',
+        null,
+        `Each friend who signs up and builds their first app gives ${space} one more free month of the Plus plan.`,
+        r.joined
+          ? ` ${r.joined} ${
+            r.joined == 1 ? 'person has' : 'people have'
+          } signed up with your invite so far, and ${r.built} built an app.`
+          : '',
+      ),
+    ),
+  ]
 }
 
 // A new space (from the selector's + New space): its name and its address,
 // space_new as the assistant asks it.
 let newSpace = (at: DeskPage, env: Host) =>
-  `<form class="Form" method="post" action="${
-    managePath('space')
-  }"><section class="Card">${
-    headingHtml('New space')
-  }<p class="Card_Sub">A space has its own address, apps, people and plan.</p><div class="Form">${
-    labeledHtml(
-      'space-title',
-      'Name',
-      `<input class="Field" id="space-title" name="title" maxlength="60" placeholder="Book club" value="${
-        esc(at.made?.title ?? '')
-      }">`,
-    )
-  }${
-    labeledHtml(
-      'space-slug',
-      'Address',
-      `<span class="At"><input class="Field" id="space-slug" name="slug" maxlength="63" autocomplete="off" spellcheck="false" required value="${
-        esc(at.made?.slug ?? '')
-      }"><span class="At_End">.${apex(env)}</span></span>`,
-    )
-  }</div></section>
-<div class="Form_Actions"><button class="Button Button-go" type="submit">Create space</button></div></form>`
+  saving(
+    managePath('space'),
+    h(
+      Card,
+      null,
+      heading('New space'),
+      h(Card.Sub, null, 'A space has its own address, apps, people and plan.'),
+      fieldsOf(
+        labeled(
+          'space-title',
+          'Name',
+          h(Field, {
+            id: 'space-title',
+            name: 'title',
+            maxlength: 60,
+            placeholder: 'Book club',
+            value: at.made?.title ?? '',
+          }),
+        ),
+        labeled(
+          'space-slug',
+          'Address',
+          addressBox('space-slug', 'slug', at.made?.slug ?? '', env, {
+            required: true,
+          }),
+        ),
+      ),
+    ),
+    'Create space',
+  )
 
 // A space's Settings: its name, its address and what it opens, one form and
 // one Save,
@@ -1290,163 +1512,244 @@ export let LOGO = {
 let logoCard = (at: DeskPage) => {
   let here = picked(at)
   let action = managePath('settings', at.space)
-  return `<section class="Card">${
-    headingHtml('Logo')
-  }<p class="Card_Sub">Shown beside the space’s name. A square picture looks best.</p>
-<form class="Desk_Logo" method="post" action="${action}" enctype="multipart/form-data">${
-    spaceTile(here)
-  }${
-    html(fileDrop({
-      name: 'logo',
-      label: 'Logo',
-      hint: 'PNG, JPEG, WebP or GIF, up to 1 MB',
-      accept: LOGO.accept,
-      size: LOGO.size,
-      required: true,
-      sends: true,
-    }))
-  }<noscript><button class="Button Button-go" type="submit">Upload</button></noscript></form>${
+  return h(
+    Card,
+    null,
+    heading('Logo'),
+    h(
+      Card.Sub,
+      null,
+      'Shown beside the space’s name. A square picture looks best.',
+    ),
+    h(
+      'form',
+      {
+        class: 'Desk_Logo',
+        method: 'post',
+        action,
+        enctype: 'multipart/form-data',
+      },
+      spaceTile(here),
+      fileDrop({
+        name: 'logo',
+        label: 'Logo',
+        hint: 'PNG, JPEG, WebP or GIF, up to 1 MB',
+        accept: LOGO.accept,
+        size: LOGO.size,
+        required: true,
+        sends: true,
+      }),
+      h('noscript', null, send('Upload')),
+    ),
     here.logo
-      ? `<form method="post" action="${action}"><button class="Button" type="submit" name="unlogo" value="1">Remove logo</button></form>`
-      : ''
-  }</section>`
+      ? h(
+        'form',
+        { method: 'post', action },
+        h(
+          Button,
+          { type: 'submit', name: 'unlogo', value: '1' },
+          'Remove logo',
+        ),
+      )
+      : null,
+  )
 }
 
 let preferences = (at: DeskPage, env: Host) => {
   let home = at.apps.find((a) => a.home)
   let was = at.typed ??
     { title: named(picked(at)), space: at.space, home: home?.slug ?? '' }
-  let host = esc(spaceHost(env, at.space))
-  return `${logoCard(at)}<form class="Form" method="post" action="${
-    managePath('settings', at.space)
-  }"><section class="Card">${headingHtml('General')}<div class="Form">${
-    labeledHtml(
-      'space-title',
-      'Name',
-      `<input class="Field" id="space-title" name="title" maxlength="60" value="${
-        esc(was.title)
-      }">`,
-    )
-  }${
-    labeledHtml(
-      'your-address',
-      'Address',
-      `<span class="At"><input class="Field" id="your-address" name="space" maxlength="63" autocomplete="off" spellcheck="false" value="${
-        esc(was.space)
-      }"><span class="At_End">.${apex(env)}</span></span>`,
-      MOVES,
-    )
-  }${
-    at.apps.length
-      ? labeledHtml(
-        'your-home',
-        `What ${host} opens`,
-        `<select class="Field" id="your-home" name="home">${
-          option('', 'Your app library', !was.home)
-        }${
-          at.apps.map((a) =>
-            option(a.slug, esc(a.title || a.slug), a.slug == was.home)
-          ).join('')
-        }</select>`,
-      )
-      : `<p>${host} opens its app library.</p>`
-  }</div></section>
-<div class="Form_Actions"><button class="Button Button-go" type="submit">Save</button></div></form>
-<section class="Card Desk_Danger">${
-    headingHtml('Delete this space', {
-      actions: `<a class="Button" href="${
-        url(env, `/space/${encodeURIComponent(at.space)}/delete`)
-      }">Delete space…</a>`,
-    })
-  }<p class="Card_Sub">Its apps, people and data go to the trash for 30 days.</p></section>`
+  let host = spaceHost(env, at.space)
+  return [
+    logoCard(at),
+    saving(
+      managePath('settings', at.space),
+      h(
+        Card,
+        null,
+        heading('General'),
+        fieldsOf(
+          labeled(
+            'space-title',
+            'Name',
+            h(Field, {
+              id: 'space-title',
+              name: 'title',
+              maxlength: 60,
+              value: was.title,
+            }),
+          ),
+          labeled(
+            'your-address',
+            'Address',
+            addressBox('your-address', 'space', was.space, env),
+            MOVES,
+          ),
+          at.apps.length
+            ? labeled(
+              'your-home',
+              `What ${host} opens`,
+              h(
+                Field,
+                { choose: true, id: 'your-home', name: 'home' },
+                option('', 'Your app library', !was.home),
+                at.apps.map((a) =>
+                  option(a.slug, a.title || a.slug, a.slug == was.home)
+                ),
+              ),
+            )
+            : h('p', null, `${host} opens its app library.`),
+        ),
+      ),
+    ),
+    h(
+      Card,
+      { class: 'Desk_Danger' },
+      heading('Delete this space', {
+        actions: h(Button, {
+          href: url(env, `/space/${encodeURIComponent(at.space)}/delete`),
+        }, 'Delete space…'),
+      }),
+      h(
+        Card.Sub,
+        null,
+        'Its apps, people and data go to the trash for 30 days.',
+      ),
+    ),
+  ]
 }
 
 let selling = (at: DeskPage, env: Host) => {
-  let by = at.provider && esc(at.provider)
-  if (!at.sell || !by) return '<p>Selling is not available here yet.</p>'
+  let by = at.provider
+  if (!at.sell || !by) return h('p', null, 'Selling is not available here yet.')
   let ready = at.sell == 'ready'
   let connected = at.sell != 'none'
   let stop = ready || (!at.paying && connected)
   let account = at.paying || connected
-    ? `<form method="post" action="${
-      managePath('selling', at.space)
-    }"><input type="hidden" name="sell" value="${
-      stop ? 'stop' : 'start'
-    }"><button type="submit" class="Button${stop ? '' : ' Button-go'}">${
-      stop
-        ? `Disconnect ${by}`
-        : at.sell == 'setup'
-        ? 'Continue setup'
-        : `Connect ${by}`
-    }</button></form>`
-    : ''
-  let subscribe = at.paying ? '' : html(billButton(
+    ? h(
+      'form',
+      { method: 'post', action: managePath('selling', at.space) },
+      held('sell', stop ? 'stop' : 'start'),
+      h(
+        Button,
+        { type: 'submit', mod: !stop && 'go' },
+        stop
+          ? `Disconnect ${by}`
+          : at.sell == 'setup'
+          ? 'Continue setup'
+          : `Connect ${by}`,
+      ),
+    )
+    : null
+  let subscribe = at.paying ? null : billButton(
     'checkout',
     `Subscribe — ${plusPrice()} a month`,
     managePath('selling', at.space),
-  ))
-  return `<section class="Card Bill">${
-    headingHtml(
-      !at.paying
-        ? 'Take payments with Plus'
-        : ready
-        ? 'Payments are connected'
-        : 'Take payments in your apps',
-      {
-        status: ready
-          ? statusHtml('Connected', 'positive')
+  )
+  return [
+    h(
+      Card,
+      { class: 'Bill' },
+      heading(
+        !at.paying
+          ? 'Take payments with Plus'
+          : ready
+          ? 'Payments are connected'
+          : 'Take payments in your apps',
+        {
+          status: ready
+            ? status('Connected', 'positive')
+            : at.sell == 'setup'
+            ? status('Setup unfinished', 'negative')
+            : null,
+          actions: subscribe || account ? [subscribe, account] : null,
+        },
+      ),
+      h(
+        'p',
+        null,
+        !at.paying
+          ? connected
+            ? `Your ${by} account is connected. Upgrade to Plus to accept new payments.`
+            : `Connect ${by} and accept payments from your customers on Plus.`
+          : ready
+          ? `Payments go to your ${by} account. You manage refunds and disputes there.`
           : at.sell == 'setup'
-          ? statusHtml('Setup unfinished', 'negative')
-          : '',
-        actions: subscribe + account,
-      },
-    )
-  }
-<p>${
-    !at.paying
-      ? connected
-        ? `Your ${by} account is connected. Upgrade to Plus to accept new payments.`
-        : `Connect ${by} and accept payments from your customers on Plus.`
-      : ready
-      ? `Payments go to your ${by} account. You manage refunds and disputes there.`
-      : at.sell == 'setup'
-      ? `Finish connecting your ${by} account to start accepting payments.`
-      : `Connect your ${by} account to accept payments from your customers.`
-  }</p>${
-    at.paying
-      ? `<p class="Form_Hint">yaks.app takes ${
-        esc(at.fee ?? '')
-      } of each sale. <a href="${
-        url(env, '/pricing')
-      }" target="_blank" rel="noopener">Pricing</a></p>`
-      : `${
-        at.fee
-          ? `<p class="Form_Hint">${
-            esc(at.fee)
-          } per sale, plus ${by} processing fees.</p>`
-          : ''
-      }<p class="Notice Bill_Say" role="status"></p>`
-  }</section>${at.paying ? '' : html(billing())}`
+          ? `Finish connecting your ${by} account to start accepting payments.`
+          : `Connect your ${by} account to accept payments from your customers.`,
+      ),
+      at.paying
+        ? h(
+          Form.Hint,
+          null,
+          `yaks.app takes ${at.fee ?? ''} of each sale. `,
+          h(
+            'a',
+            { href: url(env, '/pricing'), target: '_blank', rel: 'noopener' },
+            'Pricing',
+          ),
+        )
+        : [
+          at.fee
+            ? h(
+              Form.Hint,
+              null,
+              `${at.fee} per sale, plus ${by} processing fees.`,
+            )
+            : null,
+          h(Notice, { class: 'Bill_Say', role: 'status' }),
+        ],
+    ),
+    at.paying ? null : billing(),
+  ]
 }
 
 let trash = (at: DeskPage) =>
   at.trash?.length
-    ? `<section class="Card">${
-      headingHtml('Deleted apps')
-    }<p class="Card_Sub">Each is kept for 30 days, then erased for good. Restoring one brings back everything it held, at its old address if free or a numbered address otherwise.</p><ul class="Rows">${
-      at.trash.map((a) =>
-        `<li class="Rows_Item"><div class="Rows_Main"><span class="Rows_Name">${
-          esc(a.title || a.slug)
-        }</span><span class="Rows_Meta">${a.days} ${
-          a.days == 1 ? 'day' : 'days'
-        } left</span></div><form class="Rows_Actions" method="post" action="${
-          managePath('trash', at.space)
-        }"><input type="hidden" name="restore" value="${
-          esc(a.eid)
-        }"><button type="submit" class="Button">Restore</button></form></li>`
-      ).join('')
-    }</ul></section>`
-    : '<section class="Empty"><h2>Trash is empty</h2><p>A deleted app waits here for 30 days.</p></section>'
+    ? h(
+      Card,
+      null,
+      heading('Deleted apps'),
+      h(
+        Card.Sub,
+        null,
+        'Each is kept for 30 days, then erased for good. Restoring one brings back everything it held, at its old address if free or a numbered address otherwise.',
+      ),
+      h(
+        Rows,
+        { as: 'ul' },
+        at.trash.map((a) =>
+          h(
+            Rows.Item,
+            { as: 'li' },
+            h(
+              Rows.Main,
+              null,
+              h(Rows.Name, { as: 'span' }, a.title || a.slug),
+              h(
+                Rows.Meta,
+                null,
+                `${a.days} ${a.days == 1 ? 'day' : 'days'} left`,
+              ),
+            ),
+            h(
+              Rows.Actions,
+              {
+                as: 'form',
+                method: 'post',
+                action: managePath('trash', at.space),
+              },
+              held('restore', a.eid),
+              h(Button, { type: 'submit' }, 'Restore'),
+            ),
+          )
+        ),
+      ),
+    )
+    : empty(
+      'Trash is empty',
+      h('p', null, 'A deleted app waits here for 30 days.'),
+    )
 
 // A sentence out of a lowercase line: what a failed seal wrote beside it. An
 // email address that opens it stays as it was typed.
@@ -1504,12 +1807,13 @@ let howTo = (f: Face, open: boolean) =>
     : null
 
 // Where a key may be sent, said once beside wherever it is pasted.
+// Addresses, each as code, a comma apart.
+let codes = (hosts: string[]) =>
+  hosts.flatMap((x, i) => [i ? ', ' : null, h('code', null, x)])
 let reach = (hosts: string[]) =>
   hosts.length
-    ? `yaks.app keeps it and only ever sends it to ${
-      hosts.map((h) => `<code>${esc(h)}</code>`).join(', ')
-    }.`
-    : ''
+    ? ['yaks.app keeps it and only ever sends it to ', codes(hosts), '.']
+    : null
 
 // The box a key is pasted in and the button that saves it, one line under
 // its label; or, for a service that asks for several fields, a box for each
@@ -1555,9 +1859,7 @@ let keyBox = (
 // A button a connection's form sends: quiet unless it is the card's one
 // next step.
 let press = (value: string, label: string, quiet = true) =>
-  `<button class="Button${
-    quiet ? '' : ' Button-go'
-  }" type="submit" name="do" value="${value}">${label}</button>`
+  h(Button, { mod: !quiet && 'go', type: 'submit', name: 'do', value }, label)
 
 let callsOf = (n: number) => `${n} ${n == 1 ? 'call' : 'calls'}`
 
@@ -1577,6 +1879,13 @@ let calls = (a: { calls: number; cap: number | null }) =>
     ? `${callsOf(a.calls)} this month`
     : `${a.calls} of ${callsOf(a.cap)} this month`
 
+// What a row's line says, each part a dot apart.
+let dotted = (parts: Kids[]) =>
+  parts.filter(Boolean).flatMap((p, i) => i ? [' · ', p] : [p])
+
+// The kids given, or nothing where none of them is anything.
+let any = (...kids: Kids[]) => kids.some(Boolean) ? kids : null
+
 // One connection, as a card: its head says what it is and how it stands and
 // holds what acts on all of it (connecting, disconnecting); under it the key
 // it still wants, how to get one, the apps using it and the copies borrowing
@@ -1588,11 +1897,14 @@ let calls = (a: { calls: number; cap: number | null }) =>
 // the app asks. Its forms post to the page it is on, `action`.
 let connection = (c: Shown, on: boolean, action: string) => {
   let ask = c.each && !c.own
-  let id = (what: string) => `${what}-${esc(c.eid)}`
-  let form = (inner: string, at = '') =>
-    `<form method="post" action="${action}"${at}><input type="hidden" name="connection" value="${
-      esc(c.eid)
-    }">${inner}</form>`
+  let id = (what: string) => `${what}-${c.eid}`
+  let form = (kids: Kids, at: Record<string, unknown> = {}) =>
+    h(
+      'form',
+      { method: 'post', action, ...at },
+      held('connection', c.eid),
+      kids,
+    )
   let open = c.status != 'connected' || !!c.failed
   // A key is pasted here for a keyed connection this deploy can keep one for.
   let keying = !ask && on && c.keyed
@@ -1600,25 +1912,24 @@ let connection = (c: Shown, on: boolean, action: string) => {
   // removing it would only leave the app a new one waiting. A person's own,
   // for an app that asks each person, is theirs to remove.
   let waiting = c.status == 'needed' && c.apps.length && !c.each
-  let actions =
-    (!ask && !c.keyed && open ? form(press('signin', 'Connect', false)) : '') +
-    (ask || waiting ? '' : form(
+  let actions = any(
+    !ask && !c.keyed && open ? form(press('signin', 'Connect', false)) : null,
+    ask || waiting ? null : form(
       press('disconnect', c.status == 'needed' ? 'Remove' : 'Disconnect'),
-    ))
-  let stands = ask ? statusHtml('Each person connects their own') : statusHtml(
-    `${STATUS[c.status]}${c.account ? ` as ${esc(c.account)}` : ''}`,
+    ),
+  )
+  let stands = ask ? status('Each person connects their own') : status(
+    `${STATUS[c.status]}${c.account ? ` as ${c.account}` : ''}`,
     c.status == 'connected' ? 'positive' : 'negative',
   )
-  let said = c.failed
-    ? `<p class="Notice Notice-negative" role="status">${
-      esc(sentence(c.failed))
-    }</p>`
+  let notice = c.failed
+    ? said(sentence(c.failed), true)
     : c.saving
-    ? `<p class="Notice" role="status">${esc(sentence(c.saving))}</p>`
-    : ''
+    ? said(sentence(c.saving))
+    : null
   let paste = keying && open
     ? form(
-      keyBoxHtml(
+      keyBox(
         id('key'),
         'Paste the key',
         press('key', 'Save key', false),
@@ -1626,9 +1937,9 @@ let connection = (c: Shown, on: boolean, action: string) => {
         c.face.fields,
       ),
     )
-    : ''
-  let forApp = (a: Using, inner: string, at = '') =>
-    form(`<input type="hidden" name="app" value="${esc(a.app)}">${inner}`, at)
+    : null
+  let forApp = (a: Using, kids: Kids, at: Record<string, unknown> = {}) =>
+    form([held('app', a.app), kids], at)
   // An app that uses it: what its code reads and, for one it shares, who may
   // call out through it there, which the person opens to anyone or closes to
   // members, and the calls it made through it this month against any cap. A
@@ -1636,77 +1947,104 @@ let connection = (c: Shown, on: boolean, action: string) => {
   // space borrows it for is that space, its calls against the cap it was lent
   // under, and the button that takes the loan back.
   let using = (a: Using) =>
-    `<li class="Rows_Item"><div class="Rows_Main"><strong class="Rows_Name">${
-      esc(a.borrower ?? a.title)
-    }</strong><span class="Rows_Meta">${
-      (a.borrower != null ? [`Their copy of ${esc(a.title)}`, calls(a)] : [
-        `<code>env.${esc(a.binding)}</code>${
-          a.direct ? ', the key itself' : ''
-        }`,
-        c.each ? '' : callers(a),
-        calls(a),
-        a.lends == null
-          ? ''
-          : `Lent to installed copies, ${callsOf(a.lends)} a month each`,
-      ]).filter(Boolean).join(' · ')
-    }</span></div>${
-      c.each ? '' : `<div class="Rows_Actions">${
+    h(
+      Rows.Item,
+      { as: 'li' },
+      h(
+        Rows.Main,
+        null,
+        h(Rows.Name, null, a.borrower ?? a.title),
+        h(
+          Rows.Meta,
+          null,
+          dotted(
+            a.borrower != null ? [`Their copy of ${a.title}`, calls(a)] : [
+              [
+                h('code', null, `env.${a.binding}`),
+                a.direct ? ', the key itself' : '',
+              ],
+              c.each ? '' : callers(a),
+              calls(a),
+              a.lends == null
+                ? ''
+                : `Lent to installed copies, ${callsOf(a.lends)} a month each`,
+            ],
+          ),
+        ),
+      ),
+      c.each ? null : h(
+        Rows.Actions,
+        null,
         forApp(
           a,
           a.borrower != null ? press('recall', 'Recall') : opening(a),
-        )
-      }</div>`
-    }</li>`
+        ),
+      ),
+    )
   // The space's own apps first, then the copies borrowing it.
   let rows = [...c.apps].sort((a, b) =>
     Number(a.borrower != null) - Number(b.borrower != null)
   )
   let apps = ask
     ? c.apps.length
-      ? `<p class="Card_Sub">Each person who uses ${
-        c.apps.map((a) => esc(a.title)).join(', ')
-      } connects their own account, from the app.</p>`
-      : ''
+      ? h(
+        Card.Sub,
+        null,
+        `Each person who uses ${
+          c.apps.map((a) => a.title).join(', ')
+        } connects their own account, from the app.`,
+      )
+      : null
     : c.apps.length
-    ? `<ul class="Rows">${rows.map(using).join('')}</ul>`
-    : '<p class="Card_Sub">No app uses it yet.</p>'
+    ? h(Rows, { as: 'ul' }, rows.map(using))
+    : h(Card.Sub, null, 'No app uses it yet.')
   // Letting one more app use it: the app, and, folded under the advanced
   // options, the name its code reads it by, which most never change.
   let attaching = c.status == 'connected' && !c.own && c.available.length > 0
   let attach = attaching
     ? form(
-      labeledHtml(
+      labeled(
         id('attach'),
         'Let an app use it',
-        `<div class="Form_Line"><select class="Field" id="${
-          id('attach')
-        }" name="app" required><option value="">Choose an app</option>${
-          c.available.map((a) =>
-            `<option value="${esc(a.app)}">${esc(a.title)}</option>`
-          ).join('')
-        }</select>${press('attach', 'Attach', false)}</div>`,
+        h(
+          Form.Line,
+          null,
+          h(
+            Field,
+            { choose: true, id: id('attach'), name: 'app', required: true },
+            h('option', { value: '' }, 'Choose an app'),
+            c.available.map((a) => h('option', { value: a.app }, a.title)),
+          ),
+          press('attach', 'Attach', false),
+        ),
         'Only its members can call out through it, and its code is handed a sentinel, never the key.',
       ),
-      ` id="${id('attaching')}"`,
+      { id: id('attaching') },
     )
-    : ''
+    : null
   let named = attaching
-    ? labeledHtml(
+    ? labeled(
       id('bind'),
       'Name its code reads it by',
-      `<input class="Field" id="${id('bind')}" form="${
-        id('attaching')
-      }" name="binding" autocomplete="off" spellcheck="false" pattern="[A-Za-z_][A-Za-z0-9_]*" placeholder="${
-        esc(c.binding)
-      }">`,
-      `Left empty, its code reads <code>env.${
-        esc(c.binding)
-      }</code>. An agent can rename it later.`,
+      h(Field, {
+        id: id('bind'),
+        form: id('attaching'),
+        name: 'binding',
+        autocomplete: 'off',
+        spellcheck: 'false',
+        pattern: '[A-Za-z_][A-Za-z0-9_]*',
+        placeholder: c.binding,
+      }),
+      [
+        'Left empty, its code reads ',
+        h('code', null, `env.${c.binding}`),
+        '. An agent can rename it later.',
+      ],
     )
-    : ''
+    : null
   let replace = keying && !open
     ? form(
-      keyBoxHtml(
+      keyBox(
         id('key'),
         'Replace the key',
         press('key', 'Save key'),
@@ -1714,45 +2052,60 @@ let connection = (c: Shown, on: boolean, action: string) => {
         c.face.fields,
       ),
     )
-    : ''
+    : null
   // Where a key nobody pastes here goes, and what a sign-in granted.
   let reached = !keying && (c.hosts.length || c.scopes.length)
-    ? `<p class="Form_Hint">${
+    ? h(
+      Form.Hint,
+      null,
       c.hosts.length
-        ? `Its key is only ever sent to ${
-          c.hosts.map((h) => `<code>${esc(h)}</code>`).join(', ')
-        }.`
-        : ''
-    }${c.hosts.length && c.scopes.length ? ' ' : ''}${
-      c.scopes.length ? `Granted: ${c.scopes.map(esc).join(', ')}.` : ''
-    }</p>`
-    : ''
+        ? ['Its key is only ever sent to ', codes(c.hosts), '.']
+        : null,
+      c.hosts.length && c.scopes.length ? ' ' : null,
+      c.scopes.length ? `Granted: ${c.scopes.join(', ')}.` : null,
+    )
+    : null
   // Whether a service this space added is in the integration directory, for
   // anyone to add with their own key: its owner lists it or takes it out.
   let listing = c.about
-    ? `<div class="Form_Field"><span class="Form_Label">Integration directory</span><p class="Form_Hint">${
-      c.listed
-        ? `Listed in the <a href="${
-          esc(`${INTEGRATIONS.path}#${encodeURIComponent(c.integration)}`)
-        }">integration directory</a>, for anyone to add with their own key.`
-        : 'Once listed, anyone could add it to a space of theirs, with their own key.'
-    }</p>${
+    ? h(
+      Form.Field,
+      null,
+      h(Form.Label, { as: 'span' }, 'Integration directory'),
+      h(
+        Form.Hint,
+        null,
+        c.listed
+          ? [
+            'Listed in the ',
+            h('a', {
+              href: `${INTEGRATIONS.path}#${encodeURIComponent(c.integration)}`,
+            }, 'integration directory'),
+            ', for anyone to add with their own key.',
+          ]
+          : 'Once listed, anyone could add it to a space of theirs, with their own key.',
+      ),
       form(
-        `<div class="Form_Actions">${
+        h(
+          Form.Actions,
+          null,
           c.listed
             ? press('unlist', 'Take it out')
-            : press('list', 'List in the integration directory')
-        }</div>`,
-      )
-    }</div>`
-    : ''
+            : press('list', 'List in the integration directory'),
+        ),
+      ),
+    )
+    : null
   // What is said about a service this space added, its owner's to change.
   let told = c.about
-    ? `<details class="More"><summary>Change what ${
-      esc(c.face.title)
-    } says</summary>${
+    ? h(
+      More,
+      null,
+      h('summary', null, `Change what ${c.face.title} says`),
       form(
-        `<div class="More_Body Form">${
+        h(
+          More.Body,
+          { class: 'Form' },
           (
             [
               ['title', 'Its name', 'What people call it'],
@@ -1760,74 +2113,100 @@ let connection = (c: Shown, on: boolean, action: string) => {
               ['site', 'Its site', 'https://…'],
             ] as const
           ).map(([k, label, hint]) =>
-            labeledHtml(
+            labeled(
               id(k),
               label,
-              `<input class="Field" id="${id(k)}" name="${k}" value="${
-                esc(c.about![k] ?? '')
-              }" placeholder="${esc(hint)}"${
-                k == 'site' ? ' type="url" pattern="https://.*"' : ''
-              }>`,
+              h(Field, {
+                id: id(k),
+                name: k,
+                value: c.about![k] ?? '',
+                placeholder: hint,
+                ...k == 'site' && { type: 'url', pattern: 'https://.*' },
+              }),
             )
-          ).join('')
-        }${
-          labeledHtml(
+          ),
+          labeled(
             id('instructions'),
             'How to get the key',
-            `<textarea class="Field" id="${
-              id('instructions')
-            }" name="instructions" rows="6" placeholder="Where to sign up, which page gives the key, and what to paste">${
-              esc(c.about.instructions ?? '')
-            }</textarea>`,
+            h(Field, {
+              lines: true,
+              id: id('instructions'),
+              name: 'instructions',
+              rows: 6,
+              placeholder:
+                'Where to sign up, which page gives the key, and what to paste',
+              value: c.about.instructions ?? '',
+            }),
             'Written for whoever connects it and the agent helping them, in markdown. Where its key may be sent stays as it is.',
-          )
-        }<div class="Form_Actions">${
-          press('about', 'Save', false)
-        }</div></div>`,
-      )
-    }</details>`
-    : ''
+          ),
+          h(Form.Actions, null, press('about', 'Save', false)),
+        ),
+      ),
+    )
+    : null
   // Lending it to the copies people install of an app here: the calls a
   // month each copy may make, saved again to change it, and the button that
   // stops lending and takes every loan back. Only a shared sentinel the app
   // holds is lent, never the key itself.
   let lendable = c.status == 'connected' && !c.own && !c.each
   let lend = (a: Using) => {
-    let field = `${id('lend')}-${esc(a.app)}`
+    let field = `${id('lend')}-${a.app}`
     let stop = `${field}-stop`
-    return forApp(
-      a,
-      labeledHtml(
-        field,
-        `Lend to copies of ${esc(a.title)}`,
-        `<div class="Form_Line"><input class="Field" id="${field}" name="cap" type="number" min="1" step="1" inputmode="numeric" value="${
-          a.lends ?? 100
-        }" required>${press('lend', a.lends == null ? 'Lend' : 'Save')}${
-          a.lends == null
-            ? ''
-            : `<button class="Button" type="submit" form="${stop}" name="do" value="lend">Stop lending</button>`
-        }</div>`,
-        'The calls a month each copy someone installs may make through it. A copy keeps its own data, never sees the key, and can connect its own instead.',
+    return [
+      forApp(
+        a,
+        labeled(
+          field,
+          `Lend to copies of ${a.title}`,
+          h(
+            Form.Line,
+            null,
+            h(Field, {
+              id: field,
+              name: 'cap',
+              type: 'number',
+              min: 1,
+              step: 1,
+              inputmode: 'numeric',
+              value: a.lends ?? 100,
+              required: true,
+            }),
+            press('lend', a.lends == null ? 'Lend' : 'Save'),
+            a.lends == null ? null : h(
+              Button,
+              { type: 'submit', form: stop, name: 'do', value: 'lend' },
+              'Stop lending',
+            ),
+          ),
+          'The calls a month each copy someone installs may make through it. A copy keeps its own data, never sees the key, and can connect its own instead.',
+        ),
       ),
-    ) + (a.lends == null ? '' : forApp(a, '', ` id="${stop}" hidden`))
+      a.lends == null ? null : forApp(a, null, { id: stop, hidden: true }),
+    ]
   }
   let lent = lendable
-    ? c.apps.filter((a) => a.borrower == null && !a.direct).map(lend).join('')
-    : ''
-  let folded = lent + named + replace + reached + listing + told
-  return `<section class="Card" data-connection="${esc(c.eid)}">${
-    headingHtml(esc(c.face.title), {
-      mark: html(logo(c.face)),
-      status: stands,
-      actions,
-    })
-  }${html(about(c.face))}${said}${
-    html(howTo(c.face, open && !ask))
-  }${paste}${apps}${attach}${
+    ? c.apps.filter((a) => a.borrower == null && !a.direct).map(lend)
+    : []
+  let folded = any(...lent, named, replace, reached, listing, told)
+  return h(
+    Card,
+    { 'data-connection': c.eid },
+    heading(c.face.title, { mark: logo(c.face), status: stands, actions }),
+    about(c.face),
+    notice,
+    howTo(c.face, open && !ask),
+    paste,
+    apps,
+    attach,
     folded
-      ? `<details class="More"><summary>Advanced options</summary><div class="More_Body">${folded}</div></details>`
-      : ''
-  }</section>`
+      ? h(
+        More,
+        null,
+        h('summary', null, 'Advanced options'),
+        h(More.Body, null, folded),
+      )
+      : null,
+  )
 }
 
 // A connection an app here borrows from the space that lent it with the app,
@@ -1841,48 +2220,80 @@ let borrowing = (
   action: string,
   mine?: Shown,
 ) => {
-  let form = (inner: string, connection = b.eid) =>
-    `<form method="post" action="${action}"><input type="hidden" name="connection" value="${
-      esc(connection)
-    }"><input type="hidden" name="app" value="${
-      esc(b.app.app)
-    }">${inner}</form>`
+  let form = (kids: Kids, connection = b.eid) =>
+    h(
+      'form',
+      { method: 'post', action },
+      held('connection', connection),
+      held('app', b.app.app),
+      kids,
+    )
   let actions = mine
     ? form(press('attach', 'Use your own'), mine.eid)
     : on && !b.keyed
     ? form(press('own', 'Connect your own'))
-    : ''
-  let id = `own-${esc(b.eid)}-${esc(b.app.app)}`
+    : null
+  let id = `own-${b.eid}-${b.app.app}`
   let own = on && b.keyed && !mine
-    ? `<details class="More"><summary>Use your own key</summary><div class="More_Body">${b.face.instructions}${
-      form(
-        keyBoxHtml(
-          id,
-          'Paste your key',
-          press('own', 'Save key', false),
-          reach(b.hosts),
-          b.face.fields,
+    ? h(
+      More,
+      null,
+      h('summary', null, 'Use your own key'),
+      h(
+        More.Body,
+        null,
+        b.face.instructions ? raw(b.face.instructions) : null,
+        form(
+          keyBox(
+            id,
+            'Paste your key',
+            press('own', 'Save key', false),
+            reach(b.hosts),
+            b.face.fields,
+          ),
         ),
-      )
-    }</div></details>`
-    : ''
-  return `<section class="Card" data-borrowed="${esc(b.eid)}">${
-    headingHtml(esc(b.face.title), {
-      mark: html(logo(b.face)),
-      status: statusHtml(`Borrowed from ${esc(b.lender)}`, 'positive'),
+      ),
+    )
+    : null
+  return h(
+    Card,
+    { 'data-borrowed': b.eid },
+    heading(b.face.title, {
+      mark: logo(b.face),
+      status: status(`Borrowed from ${b.lender}`, 'positive'),
       actions,
-    })
-  }${html(about(b.face))}<p class="Card_Sub">${
-    esc(b.app.title)
-  } calls out with ${
-    esc(b.lender)
-  }’s key until you use your own. The key stays hidden, and neither of you sees the other’s data.</p><ul class="Rows"><li class="Rows_Item"><div class="Rows_Main"><strong class="Rows_Name">${
-    esc(b.app.title)
-  }</strong><span class="Rows_Meta"><code>env.${esc(b.app.binding)}</code> · ${
-    callers(b.app)
-  } · ${calls(b.app)}</span></div><div class="Rows_Actions">${
-    form(opening(b.app))
-  }</div></li></ul>${own}</section>`
+    }),
+    about(b.face),
+    h(
+      Card.Sub,
+      null,
+      `${b.app.title} calls out with ${b.lender}’s key until you use your own. The key stays hidden, and neither of you sees the other’s data.`,
+    ),
+    h(
+      Rows,
+      { as: 'ul' },
+      h(
+        Rows.Item,
+        { as: 'li' },
+        h(
+          Rows.Main,
+          null,
+          h(Rows.Name, null, b.app.title),
+          h(
+            Rows.Meta,
+            null,
+            dotted([
+              h('code', null, `env.${b.app.binding}`),
+              callers(b.app),
+              calls(b.app),
+            ]),
+          ),
+        ),
+        h(Rows.Actions, null, form(opening(b.app))),
+      ),
+    ),
+    own,
+  )
 }
 
 // The page: one space's connections — what its apps asked for, what is
@@ -1902,74 +2313,115 @@ let connections = (at: DeskPage, env: Host) => {
     Number(a.status == 'connected' && !a.failed) -
     Number(b.status == 'connected' && !b.failed)
   )
-  let action = esc(enabling(managePath('connections', at.space), c.enable))
+  let action = enabling(managePath('connections', at.space), c.enable)
   // A built service nothing here is connected to yet: a key to paste, or a
   // sign-in to start from its head.
   let offer = (i: Connections['built'][number]) =>
-    `<form class="Card" method="post" action="${action}"><input type="hidden" name="integration" value="${
-      esc(i.name)
-    }">${
-      headingHtml(esc(i.face.title), {
-        mark: html(logo(i.face)),
-        actions: i.keyed ? '' : press('add', 'Connect', false),
-      })
-    }${html(about(i.face))}${html(howTo(i.face, true))}${
+    h(
+      Card,
+      { as: 'form', method: 'post', action },
+      held('integration', i.name),
+      heading(i.face.title, {
+        mark: logo(i.face),
+        actions: i.keyed ? null : press('add', 'Connect', false),
+      }),
+      about(i.face),
+      howTo(i.face, true),
       i.keyed
-        ? keyBoxHtml(
-          `add-${esc(i.name)}`,
+        ? keyBox(
+          `add-${i.name}`,
           'Paste the key',
           press('add', 'Save key', false),
           '',
           i.face.fields,
         )
-        : ''
-    }</form>`
-  let add = `<form class="Card" method="post" action="${action}">${
-    headingHtml('Add a key')
-  }<p class="Card_Sub">For a service your apps call that isn't listed above. Services others have added are in the <a href="${
-    esc(url(env, INTEGRATIONS.path))
-  }">integration directory</a>.</p><div class="Form">${
-    labeledHtml(
-      'new-name',
-      'Service',
-      '<input class="Field" id="new-name" name="integration" maxlength="60" placeholder="Weather API" required>',
+        : null,
     )
-  }${
-    labeledHtml(
-      'new-hosts',
-      'Where it may be sent',
-      '<input class="Field" id="new-hosts" name="hosts" autocomplete="off" spellcheck="false" placeholder="api.example.com" required>',
-      'yaks.app keeps the key and only ever sends it to these addresses.',
-    )
-  }${
-    labeledHtml(
-      'new-key',
-      'Key',
-      '<input class="Field" id="new-key" name="key" type="password" autocomplete="off" spellcheck="false" required>',
-    )
-  }${
-    labeledHtml(
-      'new-instructions',
-      'How to get the key <span class="Form_Optional">(optional)</span>',
-      '<textarea class="Field" id="new-instructions" name="instructions" rows="3" placeholder="Where to sign up, which page gives the key, and what to paste"></textarea>',
-    )
-  }<div class="Form_Actions">${
-    press('add', 'Save key', false)
-  }</div></div></form>`
+  let add = h(
+    Card,
+    { as: 'form', method: 'post', action },
+    heading('Add a key'),
+    h(
+      Card.Sub,
+      null,
+      "For a service your apps call that isn't listed above. Services others have added are in the ",
+      h('a', { href: url(env, INTEGRATIONS.path) }, 'integration directory'),
+      '.',
+    ),
+    fieldsOf(
+      labeled(
+        'new-name',
+        'Service',
+        h(Field, {
+          id: 'new-name',
+          name: 'integration',
+          maxlength: 60,
+          placeholder: 'Weather API',
+          required: true,
+        }),
+      ),
+      labeled(
+        'new-hosts',
+        'Where it may be sent',
+        h(Field, {
+          id: 'new-hosts',
+          name: 'hosts',
+          autocomplete: 'off',
+          spellcheck: 'false',
+          placeholder: 'api.example.com',
+          required: true,
+        }),
+        'yaks.app keeps the key and only ever sends it to these addresses.',
+      ),
+      labeled(
+        'new-key',
+        'Key',
+        h(Field, {
+          id: 'new-key',
+          name: 'key',
+          type: 'password',
+          autocomplete: 'off',
+          spellcheck: 'false',
+          required: true,
+        }),
+      ),
+      labeled(
+        'new-instructions',
+        optional('How to get the key'),
+        h(Field, {
+          lines: true,
+          id: 'new-instructions',
+          name: 'instructions',
+          rows: 3,
+          placeholder:
+            'Where to sign up, which page gives the key, and what to paste',
+        }),
+      ),
+      h(Form.Actions, null, press('add', 'Save key', false)),
+    ),
+  )
   // The service the page was opened to add comes first under its space.
-  let group = (title: string, cards: string, lead = '') =>
-    lead + cards ? `<h2 class="Group">${esc(title)}</h2>${lead}${cards}` : ''
-  let yours = first.filter((one) => one.own)
-    .map((one) => connection(one, c.on, action)).join('') +
-    c.services.map((s) =>
-      `<section class="Card">${
-        headingHtml(esc(s.name), {
-          status: statusHtml('Connected', 'positive'),
-        })
-      }<p class="Card_Sub">Signed in with your yaks.app account on ${
-        esc(day(new Date(s.connectedAt * 1000).toISOString()))
-      }.</p></section>`
-    ).join('')
+  let group = (title: string, cards: Kids[], lead: Kids = null) =>
+    lead || cards.length ? [h(Group, null, title), lead, cards] : null
+  let yours = [
+    ...first.filter((one) => one.own).map((one) =>
+      connection(one, c.on, action)
+    ),
+    ...c.services.map((s) =>
+      h(
+        Card,
+        null,
+        heading(s.name, { status: status('Connected', 'positive') }),
+        h(
+          Card.Sub,
+          null,
+          `Signed in with your yaks.app account on ${
+            day(new Date(s.connectedAt * 1000).toISOString())
+          }.`,
+        ),
+      )
+    ),
+  ]
   // What the space holds already that could replace a loan: a connected
   // connection through the same service.
   let mine = (b: Borrowed) =>
@@ -1977,75 +2429,104 @@ let connections = (at: DeskPage, env: Host) => {
       !one.own && one.integration == b.integration &&
       one.status == 'connected' && !one.failed && !one.each
     )
-  let here = first.filter((one) => !one.own)
-    .map((one) => connection(one, c.on, action)).join('') +
-    c.borrowed.map((b) => borrowing(b, c.on, action, mine(b))).join('') +
-    c.built.map(offer).join('') + (c.on ? add : '')
-  let asked = c.asked ? offer(c.asked) : ''
-  return `${
-    c.on
-      ? ''
-      : `<section class="Card">${
-        headingHtml("Keys can't be saved here yet")
-      }<p class="Card_Sub">This server has nowhere safe to keep a key, so connecting is switched off.</p></section>`
-  }${
-    c.list.length || c.services.length || c.borrowed.length
-      ? ''
-      : `<section class="Empty"><h2>No connections yet</h2><p>When an app needs an outside service, like a calendar or an API key, it shows up here for you to connect.</p></section>`
-  }${
-    yours
-      ? group('Yours', yours) + group(spaceHost(env, at.space), here, asked)
-      : asked + here
-  }`
+  let here = [
+    ...first.filter((one) => !one.own).map((one) =>
+      connection(one, c.on, action)
+    ),
+    ...c.borrowed.map((b) => borrowing(b, c.on, action, mine(b))),
+    ...c.built.map(offer),
+    ...c.on ? [add] : [],
+  ]
+  let asked = c.asked ? offer(c.asked) : null
+  return [
+    c.on ? null : h(
+      Card,
+      null,
+      heading("Keys can't be saved here yet"),
+      h(
+        Card.Sub,
+        null,
+        'This server has nowhere safe to keep a key, so connecting is switched off.',
+      ),
+    ),
+    c.list.length || c.services.length || c.borrowed.length ? null : empty(
+      'No connections yet',
+      h(
+        'p',
+        null,
+        'When an app needs an outside service, like a calendar or an API key, it shows up here for you to connect.',
+      ),
+    ),
+    yours.length
+      ? [group('Yours', yours), group(spaceHost(env, at.space), here, asked)]
+      : [asked, here],
+  ]
 }
-
-let option = (value: string, label: string, chosen: boolean) =>
-  `<option value="${esc(value)}"${chosen ? ' selected' : ''}>${label}</option>`
 
 // Inviting someone (apps.ts `saved`, which asks member_add): their address,
 // the whole space or one app, what they may do there, and a note for the
 // letter if the owner wants one.
 let inviting = (at: DeskPage) => {
   let was = at.invite ?? { email: '', app: '', role: '', note: '' }
-  return `<section class="Card">${headingHtml('Invite someone')}
-<form class="Form" method="post" action="${managePath('people', at.space)}">${
-    labeledHtml(
-      'invite-email',
-      'Email address',
-      `<input class="Field" id="invite-email" name="invite" type="email" required autocomplete="off" spellcheck="false" placeholder="friend@example.com" value="${
-        esc(was.email)
-      }">`,
-    )
-  }${
-    labeledHtml(
-      'invite-app',
-      'Invite them to',
-      `<select class="Field" id="invite-app" name="app">${
-        option('', 'Every app here', !was.app)
-      }${
-        at.apps.map((a) =>
-          option(a.slug, esc(a.title || a.slug), was.app == a.slug)
-        ).join('')
-      }</select>`,
-      'Invited to one app, they can open that app and nothing else here.',
-    )
-  }${
-    labeledHtml(
-      'invite-role',
-      'They can',
-      `<select class="Field" id="invite-role" name="role">${
-        option('editor', 'Change things', was.role != 'viewer')
-      }${option('viewer', 'Only look', was.role == 'viewer')}</select>`,
-    )
-  }${
-    labeledHtml(
-      'invite-note',
-      'A note for the email <span class="Form_Optional">(optional)</span>',
-      `<textarea class="Field" id="invite-note" name="note" rows="2" maxlength="500">${
-        esc(was.note)
-      }</textarea>`,
-    )
-  }<div class="Form_Actions"><button class="Button Button-go" type="submit">Send invitation</button></div></form></section>`
+  return h(
+    Card,
+    null,
+    heading('Invite someone'),
+    h(
+      Form,
+      { method: 'post', action: managePath('people', at.space) },
+      labeled(
+        'invite-email',
+        'Email address',
+        h(Field, {
+          id: 'invite-email',
+          name: 'invite',
+          type: 'email',
+          required: true,
+          autocomplete: 'off',
+          spellcheck: 'false',
+          placeholder: 'friend@example.com',
+          value: was.email,
+        }),
+      ),
+      labeled(
+        'invite-app',
+        'Invite them to',
+        h(
+          Field,
+          { choose: true, id: 'invite-app', name: 'app' },
+          option('', 'Every app here', !was.app),
+          at.apps.map((a) =>
+            option(a.slug, a.title || a.slug, was.app == a.slug)
+          ),
+        ),
+        'Invited to one app, they can open that app and nothing else here.',
+      ),
+      labeled(
+        'invite-role',
+        'They can',
+        h(
+          Field,
+          { choose: true, id: 'invite-role', name: 'role' },
+          option('editor', 'Change things', was.role != 'viewer'),
+          option('viewer', 'Only look', was.role == 'viewer'),
+        ),
+      ),
+      labeled(
+        'invite-note',
+        optional('A note for the email'),
+        h(Field, {
+          lines: true,
+          id: 'invite-note',
+          name: 'note',
+          rows: 2,
+          maxlength: 500,
+          value: was.note,
+        }),
+      ),
+      h(Form.Actions, null, send('Send invitation')),
+    ),
+  )
 }
 
 // The Operators of other spaces working here (operator-reach.ts, T-136179):
@@ -2056,44 +2537,69 @@ let operating = (at: DeskPage) => {
   let offered = (at.spaces ?? []).filter((s) =>
     s.slug != at.space && !ins.some((o) => o.slug == s.slug)
   )
+  let action = managePath('people', at.space)
   let rows = ins.map((o) =>
-    `<li class="Rows_Item"><span>${esc(named(o))}'s Operator · ${
-      o.role == 'viewer' ? 'only looks' : 'changes things'
-    }</span><div class="Rows_Actions"><form method="post" action="${
-      managePath('people', at.space)
-    }"><input type="hidden" name="unreach" value="${
-      esc(o.eid)
-    }"><button class="Button" type="submit" aria-label="Remove ${
-      esc(named(o))
-    }'s Operator">Remove</button></form></div></li>`
-  ).join('')
+    h(
+      Rows.Item,
+      { as: 'li' },
+      h(
+        'span',
+        null,
+        `${named(o)}'s Operator · ${
+          o.role == 'viewer' ? 'only looks' : 'changes things'
+        }`,
+      ),
+      h(
+        Rows.Actions,
+        null,
+        h(
+          'form',
+          { method: 'post', action },
+          held('unreach', o.eid),
+          h(Button, {
+            type: 'submit',
+            'aria-label': `Remove ${named(o)}'s Operator`,
+          }, 'Remove'),
+        ),
+      ),
+    )
+  )
   let form = offered.length
-    ? `<form class="Form" method="post" action="${
-      managePath('people', at.space)
-    }">${
-      labeledHtml(
+    ? h(
+      Form,
+      { method: 'post', action },
+      labeled(
         'operator-space',
         "Let this space's Operator work here",
-        `<select class="Field" id="operator-space" name="operator">${
-          offered.map((s, i) => option(s.slug, esc(named(s)), i == 0)).join('')
-        }</select>`,
+        h(
+          Field,
+          { choose: true, id: 'operator-space', name: 'operator' },
+          offered.map((s, i) => option(s.slug, named(s), i == 0)),
+        ),
         'Whoever may ask that Operator can have it work here.',
-      )
-    }${
-      labeledHtml(
+      ),
+      labeled(
         'operator-role',
         'It can',
-        `<select class="Field" id="operator-role" name="role">${
-          option('editor', 'Change things', true)
-        }${option('viewer', 'Only look', false)}</select>`,
-      )
-    }<div class="Form_Actions"><button class="Button Button-go" type="submit">Let it in</button></div></form>`
-    : ''
-  return rows || form
-    ? `<section class="Card">${headingHtml('Operators from other spaces')}${
-      rows ? `<ul class="Rows">${rows}</ul>` : ''
-    }${form}</section>`
-    : ''
+        h(
+          Field,
+          { choose: true, id: 'operator-role', name: 'role' },
+          option('editor', 'Change things', true),
+          option('viewer', 'Only look', false),
+        ),
+      ),
+      h(Form.Actions, null, send('Let it in')),
+    )
+    : null
+  return rows.length || form
+    ? h(
+      Card,
+      null,
+      heading('Operators from other spaces'),
+      rows.length ? h(Rows, { as: 'ul' }, rows) : null,
+      form,
+    )
+    : null
 }
 
 // Who is in the space and in each of its apps, and who has yet to accept
@@ -2104,51 +2610,60 @@ let operating = (at: DeskPage) => {
 // off, which for an invitation withdraws it (member_remove).
 export let people = (at: DeskPage) => {
   let r = at.people
-  if (!r) return ''
-  let hidden = (name: string, value: string) =>
-    `<input type="hidden" name="${name}" value="${esc(value)}">`
-  let press = (fields: string, label: string, aria: string) =>
-    `<form method="post" action="${
-      managePath('people', at.space)
-    }">${fields}<button class="Button" type="submit" aria-label="${aria}">${label}</button></form>`
+  if (!r) return null
+  let act = (fields: Kids, label: string, aria: string) =>
+    h(
+      'form',
+      { method: 'post', action: managePath('people', at.space) },
+      fields,
+      h(Button, { type: 'submit', 'aria-label': aria }, label),
+    )
   let actions = (p: Person, app?: string) => {
-    let them = esc(p.email ?? p.name)
+    let them = p.email ?? p.name
     let waits = p.held == 'invite'
     let again = waits
-      ? press(
-        hidden('again', p.eid),
+      ? act(
+        held('again', p.eid),
         'Send again',
         `Send the invitation to ${them} again`,
       )
-      : ''
+      : null
     let off = p.email && (p.held != 'seat' || p.role != 'owner')
-      ? press(
-        hidden('remove', p.email) + (app ? hidden('app', app) : ''),
+      ? act(
+        [held('remove', p.email), held('app', app)],
         waits ? 'Withdraw' : 'Remove',
         waits ? `Withdraw the invitation to ${them}` : `Remove ${them}`,
       )
-      : ''
-    return again || off ? `<div class="Rows_Actions">${again}${off}</div>` : ''
+      : null
+    return again || off ? h(Rows.Actions, null, again, off) : null
   }
   let list = (title: string, all: Person[], app?: string) =>
     all.length
-      ? `<section class="Card">${headingHtml(esc(title))}<ul class="Rows">${
-        all.map((p) =>
-          `<li class="Rows_Item">${holder(p)}${actions(p, app)}</li>`
-        ).join('')
-      }</ul></section>`
-      : ''
-  return `${inviting(at)}${
-    list('Members · every app', [...r.members, ...r.invited])
-  }${operating(at)}${
+      ? h(
+        Card,
+        null,
+        heading(title),
+        h(
+          Rows,
+          { as: 'ul' },
+          all.map((p) =>
+            h(Rows.Item, { as: 'li' }, holder(p), actions(p, app))
+          ),
+        ),
+      )
+      : null
+  return [
+    inviting(at),
+    list('Members · every app', [...r.members, ...r.invited]),
+    operating(at),
     r.apps.map((a) =>
       list(
         `${a.app.title} · this app only`,
         [...a.guests, ...a.invited],
         a.app.slug,
       )
-    ).join('')
-  }`
+    ),
+  ]
 }
 
 // The dashboard's page for one space, at the apex (apps.ts `manage`). What
@@ -2178,7 +2693,7 @@ export let desk = (at: DeskPage, env: Host = {}) => {
   // The line over the title names whose the page is: the person's own, or
   // the space it changes.
   let whose = accountView(view) ? 'Your account' : named(picked(at))
-  let body = ''
+  let body: Kids = null
   if (view == 'profile') body = profile(at, env)
   if (view == 'invite' && at.referral) {
     let own = at.spaces?.find((s) => s.own)
@@ -2188,83 +2703,127 @@ export let desk = (at: DeskPage, env: Host = {}) => {
   if (view == 'space') body = newSpace(at, env)
   if (view == 'apps') body = library(at, env)
   if (view == 'agents') {
-    body = `${html(agentSetup(at.agents ?? [], env, managePath('agents')))}${
-      html(copying())
-    }${html(tabbing())}`
+    body = [
+      agentSetup(at.agents ?? [], env, managePath('agents')),
+      copying(),
+      tabbing(),
+    ]
   }
   if (view == 'new') {
-    body = `<section class="Card Desk_Start" ${
-      stateHtml(true, !!at.agents?.length)
-    }>${headingHtml('Ask your agent for a new yaks app')}${
-      html(agentList(at.agents ?? [], 'links'))
-    }<div class="Form_Field"><p class="Form_Label">Try this</p>${
-      html(firstAsk())
-    }</div></section>${connectCard(at, env)}
-<div class="Desk_Options">${html(chat(env, `${site}/api/build`))}
-<section class="Card">${headingHtml('Upload your website')}${
-      html(dropZone(undefined, `${site}/deploy`))
-    }</section></div>${html(chatLive('/build.js'))}${html(dropping())}`
+    body = [
+      h(
+        Card,
+        { class: 'Desk_Start', ...state(true, !!at.agents?.length) },
+        heading('Ask your agent for a new yaks app'),
+        agentList(at.agents ?? [], 'links'),
+        h(Form.Field, null, h(Form.Label, { as: 'p' }, 'Try this'), firstAsk()),
+      ),
+      connectCard(at, env),
+      h(
+        'div',
+        { class: 'Desk_Options' },
+        chat(env, `${site}/api/build`),
+        h(
+          Card,
+          null,
+          heading('Upload your website'),
+          dropZone(undefined, `${site}/deploy`),
+        ),
+      ),
+      chatLive('/build.js'),
+      dropping(),
+    ]
   }
   if (view == 'visits') {
     body = at.apps.length
       ? visited(at.views ?? null, at.viewsOff ?? '', site)
-      : '<section class="Empty"><h2>No visits yet</h2><p>Your app visits will appear here once you have an app.</p></section>'
+      : empty(
+        'No visits yet',
+        h('p', null, 'Your app visits will appear here once you have an app.'),
+      )
   }
   if (view == 'selling') body = selling(at, env)
   if (view == 'settings') body = preferences(at, env)
   if (view == 'billing') {
-    body = html(plan(
-      {
-        slug: at.space,
-        title: named(picked(at)),
-        plan: at.plan ?? { tier: 'free', ends: '', known: false },
-        paid: at.paid,
-        provider: at.provider,
-        payer: at.bill?.payer,
-      },
-      env,
-      managePath('billing', at.space),
-    )) + (at.bill ? allowances(at.bill, env, at.space) : '') + html(billing())
+    body = [
+      plan(
+        {
+          slug: at.space,
+          title: named(picked(at)),
+          plan: at.plan ?? { tier: 'free', ends: '', known: false },
+          paid: at.paid,
+          provider: at.provider,
+          payer: at.bill?.payer,
+        },
+        env,
+        managePath('billing', at.space),
+      ),
+      at.bill ? allowances(at.bill, env, at.space) : null,
+      billing(),
+    ]
   }
   if (view == 'trash') body = trash(at)
   if (view == 'connections') body = connections(at, env)
   if (view == 'people') body = people(at)
-  if (view == 'operator') body = at.operator ?? ''
-  return shell(
+  // The Operator's page is drawn by operator-page.ts, as markup.
+  if (view == 'operator') body = at.operator ? raw(at.operator) : null
+  return page(
     env,
-    `${titles[view]} · ${esc(whose)}`,
-    null,
-    at.no ? 400 : 200,
-    `<header class="Desk_Bar"><a class="Button" href="#menu">☰ Menu</a><span class="Desk_Where"><b>${
-      titles[view]
-    }</b><small>${esc(whose)}</small></span></header>${
-      navigation(at, view, env)
-    }<div class="Desk_Body"><header class="Desk_Head"><div>
-<p class="Desk_Whose">${esc(whose)}</p><h1>${titles[view]}</h1>${
-      view == 'visits'
-        ? `<p class="Desk_Period">Last ${at.viewDays ?? 30} days</p>`
-        : ''
-    }</div>${
-      view == 'apps'
-        ? `<a class="Button Button-go" href="${
-          managePath('new', at.space)
-        }">+ New app</a>`
-        : ''
-    }</header><div class="Desk_Content" id="content" tabindex="-1">${
-      at.say
-        ? `<p class="Notice${at.no ? ' Notice-negative' : ''}" role="status">${
-          esc(at.say)
-        }</p>`
-        : ''
-    }${body}</div></div>${
-      ['apps', 'new'].includes(view) ? html(copying()) : ''
-    }${
-      ['apps', 'new', 'agents'].includes(view)
-        ? html(agentLive('/oauth/agents'))
-        : ''
-    }`,
-    { 'cache-control': 'private, no-store', 'x-robots-tag': 'noindex' },
-    'Desk',
+    {
+      title: `${titles[view]} · ${whose}`,
+      status: at.no ? 400 : 200,
+      headers: {
+        'cache-control': 'private, no-store',
+        'x-robots-tag': 'noindex',
+      },
+      layout: 'Desk',
+    },
+    h(
+      'header',
+      { class: 'Desk_Bar' },
+      h(Button, { href: '#menu' }, '☰ Menu'),
+      h(
+        'span',
+        { class: 'Desk_Where' },
+        h('b', null, titles[view]),
+        h('small', null, whose),
+      ),
+    ),
+    navigation(at, view, env),
+    h(
+      'div',
+      { class: 'Desk_Body' },
+      h(
+        'header',
+        { class: 'Desk_Head' },
+        h(
+          'div',
+          null,
+          h('p', { class: 'Desk_Whose' }, whose),
+          h('h1', null, titles[view]),
+          view == 'visits'
+            ? h('p', { class: 'Desk_Period' }, `Last ${at.viewDays ?? 30} days`)
+            : null,
+        ),
+        view == 'apps'
+          ? h(
+            Button,
+            { mod: 'go', href: managePath('new', at.space) },
+            '+ New app',
+          )
+          : null,
+      ),
+      h(
+        'div',
+        { class: 'Desk_Content', id: 'content', tabindex: '-1' },
+        said(at.say, at.no),
+        body,
+      ),
+    ),
+    ['apps', 'new'].includes(view) ? copying() : null,
+    ['apps', 'new', 'agents'].includes(view)
+      ? agentLive('/oauth/agents')
+      : null,
   )
 }
 
@@ -2274,16 +2833,39 @@ export let editor = (
   env: Host,
   at: { app: string; at: string; words: unknown; version: string },
 ) =>
-  shell(
+  page(
     env,
-    `Data · ${esc(at.app)}`,
-    null,
-    200,
-    `<header class="Desk_Head"><div><a class="Desk_Address" href="${
-      esc(at.at)
-    }/">${esc(at.app)} ↗</a><h1>Data</h1></div></header>
-<div id="data"><noscript><p class="Notice Notice-negative">This page needs JavaScript.</p></noscript></div>
-<script type="module">
+    {
+      title: `Data · ${at.app}`,
+      headers: {
+        'cache-control': 'private, no-store',
+        'x-robots-tag': 'noindex',
+      },
+      layout: 'Data',
+    },
+    h(
+      'header',
+      { class: 'Desk_Head' },
+      h(
+        'div',
+        null,
+        h('a', { class: 'Desk_Address', href: `${at.at}/` }, `${at.app} ↗`),
+        h('h1', null, 'Data'),
+      ),
+    ),
+    h(
+      'div',
+      { id: 'data' },
+      h(
+        'noscript',
+        null,
+        h(Notice, { mod: 'negative' }, 'This page needs JavaScript.'),
+      ),
+    ),
+    h('script', {
+      type: 'module',
+      dangerouslySetInnerHTML: {
+        __html: `
 import { open } from ${script(`${at.at}/_web/data.js?v=${at.version}`)}
 import * as client from ${script(`${at.at}/api/client.js`)}
 await open({
@@ -2293,46 +2875,68 @@ await open({
   files: ${script(`${at.at}/api/blob/`)},
   words: ${script(at.words)},
 })
-</script>`,
-    { 'cache-control': 'private, no-store', 'x-robots-tag': 'noindex' },
-    'Data',
+`,
+      },
+    }),
   )
 
 export let spaceIndex = (at: SpacePage, env: Host = {}) => {
   let mine = at.apps.length
-    ? `<nav class="Chips" aria-label="Apps here">${
+    ? h(
+      Chips,
+      { as: 'nav', 'aria-label': 'Apps here' },
       at.apps.map((a) =>
-        `<a class="Chip" href="/${esc(a.slug)}/">${esc(a.title || a.slug)}${
-          a.gallery ? `<span class="Chip_Tag">${esc(a.gallery)}</span>` : ''
-        }</a>`
-      ).join('')
-    }</nav>`
-    : ''
+        h(
+          Chip,
+          { href: `/${a.slug}/` },
+          a.title || a.slug,
+          a.gallery ? h(Chip.Tag, null, a.gallery) : null,
+        )
+      ),
+    )
+    : null
   let ask = at.hidden
-    ? `<p class="Note">${
-      at.hidden == 1 ? 'One app here is' : `${at.hidden} apps here are`
-    } private. Ask whoever runs this space to let you in.</p>`
-    : ''
+    ? h(
+      'p',
+      { class: 'Note' },
+      `${
+        at.hidden == 1 ? 'One app here is' : `${at.hidden} apps here are`
+      } private. Ask whoever runs this space to let you in.`,
+    )
+    : null
   let pitch = at.manage
-    ? `<p><a class="Button Button-go" href="${
-      esc(at.manage)
-    }">Manage your apps</a></p>`
+    ? h(
+      'p',
+      null,
+      h(Button, { mod: 'go', href: at.manage }, 'Manage your apps'),
+    )
     : at.person
-    ? html(home(env))
-    : `<p><a class="Button Button-go" href="${esc(at.signIn)}">Sign in</a></p>
-<section class="Card">${
-      headingHtml('What is yaks.app?')
-    }<p class="Card_Sub">Ask an assistant like Claude or ChatGPT for an app, and it builds one here — a page of your own you can send to anyone.</p><p><a href="${
-      url(env, '/')
-    }">Make one of your own</a></p></section>`
-  return shell(
+    ? home(env)
+    : [
+      h('p', null, h(Button, { mod: 'go', href: at.signIn }, 'Sign in')),
+      h(
+        Card,
+        null,
+        heading('What is yaks.app?'),
+        h(
+          Card.Sub,
+          null,
+          'Ask an assistant like Claude or ChatGPT for an app, and it builds one here — a page of your own you can send to anyone.',
+        ),
+        h('p', null, h('a', { href: url(env, '/') }, 'Make one of your own')),
+      ),
+    ]
+  return page(
     env,
-    esc(at.title || at.space),
-    at.apps.length
-      ? 'Here is what you can open.'
-      : 'Nothing here is open to visitors yet.',
-    200,
-    `${mine}${ask}${pitch}`,
+    {
+      title: at.title || at.space,
+      lead: at.apps.length
+        ? 'Here is what you can open.'
+        : 'Nothing here is open to visitors yet.',
+    },
+    mine,
+    ask,
+    pitch,
   )
 }
 
@@ -2720,11 +3324,11 @@ export let invited = (o: Offer, env: Host = {}) => {
       ? h(
         'div',
         { class: 'Apps Apps-one' },
-        raw(tile(o.app, {
+        tile(o.app, {
           at: `https://${host}`,
           host,
           icon: o.app.open ? undefined : url(env, '/connector-512.png'),
-        })),
+        }),
       )
       : null,
     h(
@@ -3154,15 +3758,21 @@ let ALLOWANCES: [Ceiling, string, (n: number) => string, string][] = [
 // One allowance as a row: its name, how much of it is used, and, from four
 // fifths of it, how it stands.
 let gaugeRow = (name: string, figure: string, hint: string, share: number) =>
-  `<li class="Rows_Item"><div class="Rows_Main"><span class="Rows_Name">${name}</span><span class="Rows_Meta">${figure}${
-    hint ? ` · ${hint}` : ''
-  }</span></div>${
+  h(
+    Rows.Item,
+    { as: 'li' },
+    h(
+      Rows.Main,
+      null,
+      h(Rows.Name, { as: 'span' }, name),
+      h(Rows.Meta, null, figure, hint ? ` · ${hint}` : ''),
+    ),
     share >= 1
-      ? statusHtml('At the limit', 'negative')
+      ? status('At the limit', 'negative')
       : share >= WARN
-      ? statusHtml('Near the limit', 'negative')
-      : ''
-  }</li>`
+      ? status('Near the limit', 'negative')
+      : null,
+  )
 
 /** The Billing page's month (T-131895): every allowance the space answers to
  * and how much of it is used, with its budget for models and voice. */
@@ -3180,23 +3790,32 @@ let allowances = (
         ? `None counted yet this month, of ${read(g.limit)}`
         : `${read(g.used)} of ${read(g.limit)}`
       return gaugeRow(name, figure, hint, g.used / g.limit)
-    }).join('')
+    })
   let { spent, limit } = bill.budget
-  let read = bill.read
-    ? `, last read at ${esc(bill.read.slice(11, 16))} UTC`
-    : ''
-  return `<section class="Card">${
-    headingHtml('This month')
-  }<p class="Card_Sub">What ${
-    esc(spaceHost(env, slug))
-  } has used since the 1st, counted hourly${read}. Each starts again on the 1st, except what the space holds.</p><ul class="Rows">${rows}${
-    gaugeRow(
-      'Models and voice',
-      `${share(spent, limit)} used`,
-      'The builder’s and your apps’ models and voices, from this space’s budget.',
-      limit ? spent / limit : 0,
-    )
-  }</ul></section>`
+  let read = bill.read ? `, last read at ${bill.read.slice(11, 16)} UTC` : ''
+  return h(
+    Card,
+    null,
+    heading('This month'),
+    h(
+      Card.Sub,
+      null,
+      `What ${
+        spaceHost(env, slug)
+      } has used since the 1st, counted hourly${read}. Each starts again on the 1st, except what the space holds.`,
+    ),
+    h(
+      Rows,
+      { as: 'ul' },
+      rows,
+      gaugeRow(
+        'Models and voice',
+        `${share(spent, limit)} used`,
+        'The builder’s and your apps’ models and voices, from this space’s budget.',
+        limit ? spent / limit : 0,
+      ),
+    ),
+  )
 }
 
 // A paid plan as it is said: "the Plus plan", never bare "Plus" (M-37846).

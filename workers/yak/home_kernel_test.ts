@@ -20,6 +20,7 @@
 
 import { test } from '@yaks/testing'
 import { assert, assertEquals, assertStringIncludes } from '@std/assert'
+import { parseHTML } from 'linkedom'
 import { managePath } from './route.ts'
 import {
   accepted,
@@ -194,9 +195,9 @@ test('Settings chooses the homepage the way app_set home does', async () => {
     let { cookie } = await seed(k, [{ slug, apps: ['site', 'garden'] }])
     let at = managePath('settings', slug)
     let chosen = async () =>
-      /<option value="([^"]*)" selected>/.exec(
-        await (await k.at(k.host, at, { headers: { cookie } })).text(),
-      )?.[1]
+      parseHTML(await (await k.at(k.host, at, { headers: { cookie } })).text())
+        .document.querySelector('#your-home option[selected]')
+        ?.getAttribute('value')
     let choose = (home: string) =>
       k.at(k.host, at, {
         method: 'POST',
