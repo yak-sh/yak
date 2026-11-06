@@ -59,11 +59,16 @@ export let installed = async (root: string = dir()): Promise<boolean> => {
       if (existsSync(tree)) io.removeSync(tree, { recursive: true })
     }
   }
-  let { code } = await spawnCommand('pnpm', {
+  // pnpm's progress goes to stderr: whatever installs, a command building its
+  // runtime snapshot (./runtime.ts) among them, keeps stdout for its answer.
+  let child = spawnCommand('pnpm', {
     args: ['install', '--frozen-lockfile', '--prefer-offline'],
     cwd: root,
     stdin: 'null',
-  }).spawn().status
+    stdout: 'piped',
+  }).spawn()
+  for await (let chunk of child.stdout) await platform.stderr.write(chunk)
+  let { code } = await child.status
   if (code) throw new Error(`pnpm install in ${root} exited ${code}`)
   return true
 }
