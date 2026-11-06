@@ -55,6 +55,7 @@ import { letters } from './letters.ts'
 import { packageTools } from './package-tools.ts'
 import { PUBLISHED, sending } from './published.ts'
 import { composed, type Reach, read, vocabAt, written } from './reach.ts'
+import { narrowed } from './lexicon.ts'
 import { queried } from './page-graph.ts'
 import { META } from './directory.ts'
 import { titling } from './session.ts'
@@ -588,11 +589,15 @@ export let ROWS = answerWith({
   space: { type: ['string', 'object', 'null'] },
 })
 
-/** Ranked search over everything in reach, as the package's `search` seam. */
+/** Ranked search over everything in reach, as the package's `search` seam:
+ * of the stores in reach, only those whose lexicon admits the words
+ * (lexicon.ts). */
 export let searching =
   (ctx: Ctx, reach: Reach[]): Search => async (words, opts) => {
     let q = `${encodeURIComponent(words)}&limit=${opts?.limit ?? 20}`
-    let hits = await read(ctx.env, reach, lined(q))
+    let some = await narrowed(ctx.env, reach, words)
+    if (!some.length) return []
+    let hits = await read(ctx.env, some, lined(q))
     return Array.isArray(hits) ? hits as Bundle[] : []
   }
 

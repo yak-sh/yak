@@ -252,6 +252,13 @@ class_name = "PublicDirectory"
 name = "OUTLAST"
 class_name = "Outlast"
 
+# The one object holding every app store's lexicon: the first letters of the
+# words it indexes, so a search asks only the stores that could match
+# (lexicon.ts, index.ts `Lexicon`, T-133890).
+[[durable_objects.bindings]]
+name = "LEXICON"
+class_name = "Lexicon"
+
 # Every object takes up a deploy at once (T-140262). Since 2026-10-30
 # Cloudflare defers a Durable Object's code update until it hibernates, or
 # for at most 300 s, and an object restarted in that time starts again on the
@@ -301,6 +308,10 @@ new_sqlite_classes = ["PublicDirectory"]
 [[migrations]]
 tag = "v8"
 new_sqlite_classes = ["Outlast"]
+
+[[migrations]]
+tag = "v9"
+new_sqlite_classes = ["Lexicon"]
 
 # The container uses a prebuilt registry image. Its tag is the toolchain
 # Dockerfile's hash; sandbox_test.ts checks its SDK against package.json.

@@ -18,6 +18,7 @@ import type { Dispatch, Fetcher, Namespace } from './door.ts'
 import type { Meta } from './meta.ts'
 import type { Purgers, Purges } from './purge.ts'
 import type { Outlasts } from './outlast.ts'
+import type { Lexicons } from './lexicon.ts'
 import type { Limiter } from './rate.ts'
 import type { Sandboxes } from '@yaks/sandbox/cloudflare'
 import type { Workspaces } from './workspaces.ts'
@@ -347,6 +348,10 @@ export type Env = {
   // The objects a call that outlasts its caller runs in (outlast.ts, index.ts
   // `Outlast`). A test run binds none, so every call runs in its request.
   OUTLAST?: Outlasts
+  // The object holding every app store's lexicon, which a search asks before
+  // waking stores (lexicon.ts, index.ts `Lexicon`). A test run binds none
+  // unless it asks, and then every store is asked.
+  LEXICON?: Lexicons
   // yak-esbuild, whose container compiles an app's TypeScript and npm imports
   // at deploy (esbuild.ts). Absent in a test run and the workerd probes.
   ESBUILD?: Fetcher

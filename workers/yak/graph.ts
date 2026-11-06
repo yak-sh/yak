@@ -184,6 +184,7 @@ import {
   revision,
   select,
   type Statements,
+  type Stmt,
   table,
   val,
 } from '@yaks/sql'
@@ -208,7 +209,9 @@ import {
   type Wire,
 } from '@yaks/durable-object'
 import { type Effects, effects } from '@yaks/effects'
-import { fields, find, screens, search } from '@yaks/fts'
+import { type Field, fields, find, screens, search, sources } from '@yaks/fts'
+import { lexemes } from '@yaks/fts/lexicon'
+import { fieldsSaid, lexiconOf, LIMIT } from './lexicon.ts'
 import { admitSchema } from '@yaks/graph/schema'
 import {
   BATCH as EMBED_BATCH,
@@ -631,6 +634,8 @@ type Word =
   | 'weighed'
   // The embedding outage its drains are riding out (`#ride`).
   | 'embedding-outage'
+  // The searchable fields its whole lexicon was last read under (`#lexing`).
+  | 'lexicon'
   // One person's localStorage in a sandboxed app (installed.ts): their keys
   // as one JSON object, kept here rather than as rows, which the app's other
   // readers could query.
@@ -818,6 +823,16 @@ export class Store {
     screen: (line: string, opts?: ReadOpts) => Raw | null
   }
   #vectorWork: Promise<void> | null = null
+  // What this app store's lexicon is read under and off (lexicon.ts): its
+  // searchable fields, as fields and as one word, the text each index is
+  // kept from, and the entries this incarnation has told the Lexicon. None
+  // where there is no Lexicon, or the store is not an app's.
+  #lexis: {
+    searchable: Field[]
+    fields: string
+    sources: Stmt[]
+    told: Set<string>
+  } | null = null
   #vectorAgain = false
   // When a failed drain's retry is due: until then a write or a sooner alarm
   // leaves the model alone and keeps the retry armed, so one failure is one
@@ -1031,6 +1046,8 @@ export class Store {
       // Join this incarnation without discovering or starting work. Its own
       // writes can then persist attempts in the transaction that owes them.
       await this.#effects.work(this.#stored(this.#graph).graph, undefined, 0)
+      // A lexicon not yet read is the alarm's to read, never this request's.
+      if (this.#unread()) await this.#arming(this.#soon(), 'lexicon')
     }
   }
 
@@ -1170,6 +1187,16 @@ export class Store {
       this.#get('vocab'),
     )
     let { vocab, own, derived, searchable } = shape
+    let said = fieldsSaid(searchable)
+    this.#lexis = this.#bind.LEXICON && !own && storeKind(name) == 'app' &&
+        !name.startsWith('preview/')
+      ? {
+        searchable,
+        fields: said,
+        sources: sources(searchable, blobRead(vocab)),
+        told: this.#lexis?.fields == said ? this.#lexis.told : new Set(),
+      }
+      : null
     this.#lensMove = lensRule(name, declaration, (path) => {
       let [comp, prop] = path.split('.')
       return prop ? !!vocab.prop(comp, prop) : !!vocab.comp(comp)
@@ -1475,6 +1502,11 @@ export class Store {
                 },
               },
             },
+            // The words a write brought, told to the Lexicon once it has
+            // committed (`#telling`).
+            ...(this.#lexis
+              ? [{ name: 'yak/lexicon', hooks: { effect: this.#telling } }]
+              : []),
             // Last, so the answer a keyed write keeps is the batch as every other
             // commit hook left it (`#logging`).
             this.#logging,
@@ -2716,6 +2748,7 @@ export class Store {
         this.#workingEffects()
         this.#embedding()
         await this.#moving()
+        await this.#lexing()
         await this.#analyzing()
       } finally {
         this.#profile?.flush()
@@ -2798,6 +2831,7 @@ export class Store {
   #deployed = async (): Promise<void> => {
     await this.#maintenance(() => this.#installDeployment())
     if (this.#owing().length) await this.#arming(this.#soon(), 'mover')
+    if (this.#unread()) await this.#arming(this.#soon(), 'lexicon')
     if (this.#analyze(0)) await this.#arming(this.#soon(), 'statistics')
   }
 
@@ -3318,6 +3352,83 @@ export class Store {
       if (this.#vectorAgain) this.#embedding()
     })
     this.#ctx.waitUntil?.(this.#vectorWork)
+  }
+
+  // ---- its lexicon (lexicon.ts, T-133890) ----------------------------------
+  //
+  // The first letters of every word this store indexes, kept in the Lexicon
+  // so a search across many stores asks only the ones that could match. The
+  // alarm reads the whole of it, once for the fields this store indexes
+  // (`#lexing`); each write after that tells the Lexicon the words it
+  // brought that this incarnation has not told it already (`#telling`). A
+  // failure is reported and the whole is read again. Until it is read, a
+  // search asks this store, as it asks a store with no lexicon at all.
+
+  // Whether the whole lexicon is owed: never read, or read under other fields.
+  #unread = () => !!this.#lexis && this.#get('lexicon') != this.#lexis.fields
+
+  // The whole is owed again, and the alarm reads it.
+  #reread = async (store: string | null) => {
+    this.#put('lexicon', '')
+    await this.#arming(this.#soon(), 'lexicon').catch((e) =>
+      defect(e, { request: 'lexicon arm', store })
+    )
+  }
+
+  #telling = (bundles: Bundle[]): Bundle[] => {
+    let lexis = this.#lexis
+    if (!lexis || this.#dormant) return bundles
+    let words = new Set<string>()
+    for (let b of bundles) {
+      for (let f of lexis.searchable) {
+        let value = (b[f.comp] as Comp | null | undefined)?.[f.prop]
+        if (typeof value != 'string') continue
+        for (let w of lexemes(value)) if (!lexis.told.has(w)) words.add(w)
+      }
+    }
+    if (!words.size) return bundles
+    for (let w of words) lexis.told.add(w)
+    let store = this.#name() ?? ''
+    let read = !this.#unread()
+    this.#ctx.waitUntil?.(
+      lexiconOf(this.#bind.LEXICON!).grow(store, lexis.fields, [...words])
+        .then(
+          // A Lexicon that no longer holds what this store read (a restore
+          // forgot it) is given the whole again.
+          (whole) => read && !whole ? this.#reread(store) : undefined,
+          (e) => {
+            for (let w of words) lexis.told.delete(w)
+            defect(e, { request: 'lexicon grow', store })
+            return this.#reread(store)
+          },
+        ),
+    )
+    return bundles
+  }
+
+  // The whole read stops once it holds more than the Lexicon keeps, which
+  // then admits every word. A failure is reported and read again at the
+  // next wake, so a Lexicon that is down wakes no store that sleeps.
+  #lexing = async (): Promise<void> => {
+    let lexis = this.#lexis
+    if (!lexis || !this.#unread() || this.#refused || this.#dormant) return
+    let store = this.#name() ?? ''
+    try {
+      let words = new Set<string>()
+      read: for (let s of lexis.sources) {
+        for (let row of this.#sql.query(s)) {
+          for (let v of Object.values(row)) {
+            if (typeof v == 'string') { for (let w of lexemes(v)) words.add(w) }
+          }
+          if (words.size > LIMIT) break read
+        }
+      }
+      await lexiconOf(this.#bind.LEXICON!).put(store, lexis.fields, [...words])
+      for (let w of words) lexis.told.add(w)
+      this.#put('lexicon', lexis.fields)
+    } catch (e) {
+      defect(e, { request: 'lexicon read', store })
+    }
   }
 
   // ---- the bytes it holds (meter.ts `weighed`) -----------------------------
@@ -4829,6 +4940,12 @@ export class Store {
   // with it, so the name it answers to is written back before it boots — that
   // word is what says which vocabulary it speaks.
   async #erase(): Promise<Response> {
+    if (this.#lexis) {
+      let store = this.#name() ?? ''
+      await lexiconOf(this.#bind.LEXICON!).forget(store).catch((e) =>
+        defect(e, { request: 'lexicon forget', store })
+      )
+    }
     return await eraseStore(this.#get('name') ?? '', {
       pages: this.#ctx.getWebSockets() as Closable[],
       close: (page) => this.#live.close(page),
@@ -4880,6 +4997,12 @@ export class Store {
       let said = JSON.parse(await readBody(request)) as { bookmark?: string }
       if (!said?.bookmark) throw new Refused('/restore takes a bookmark')
       if (!s.onNextSessionRestoreBookmark) throw new Refused(NO_PITR)
+      // The rows a restore brings back may hold words this store's lexicon
+      // never had, so the Lexicon forgets it and the store is asked until
+      // its next write finds it gone (`#telling`).
+      if (this.#lexis) {
+        await lexiconOf(this.#bind.LEXICON!).forget(this.#name() ?? '')
+      }
       let undo = await s.onNextSessionRestoreBookmark(said.bookmark)
       let ctx = this.#ctx
       if (ctx.abort) setTimeout(() => ctx.abort?.('restoring'), 0)

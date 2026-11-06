@@ -257,6 +257,19 @@ export let schema = (fields: Field[], derived: Derived = {}): Stmt[] => {
   return indexes(fields).flatMap((ix) => index(ix, derived))
 }
 
+/**
+ * The text every index reads, one select per index: its properties off the
+ * table or view it is kept from, the way its triggers read them. What a
+ * whole-store pass over the indexed text reads (./lexicon.ts).
+ */
+export let sources = (fields: Field[], derived: Derived = {}): Stmt[] =>
+  indexes(fields).map((ix) =>
+    select({
+      cols: ix.props.map((p) => col(p)),
+      from: table(sourceOf(ix, derived)),
+    })
+  )
+
 // Is this index still consistent with its table? Two checks, the cheap one
 // first: does it hold one row per row of the component table, and does FTS5's
 // own integrity check pass. Returns a description of the problem, or undefined

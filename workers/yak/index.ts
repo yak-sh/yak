@@ -34,6 +34,7 @@ import * as sitePart from './site.ts'
 import { type Purged, purger } from './purge.ts'
 import { outlast } from './outlast-object.ts'
 import type { Asked, Heard } from './outlast.ts'
+import { type Lexicon as Lexical, lexicon } from './lexicon.ts'
 import { hosting } from './inference.ts'
 import { scheduleUse } from './used.ts'
 import type { Inference, InferenceReceipt, Mark } from '@yaks/model'
@@ -169,6 +170,38 @@ export class Outlast extends DurableObject<Env> {
   call(asked: Asked): Promise<Heard> {
     this.#call ??= outlast(this.ctx.storage, this.env)
     return entry(this.env, 'Outlast call', () => this.#call!(asked))
+  }
+}
+
+// Every app store's lexicon (lexicon.ts): which stores a search could find
+// anything in, asked instead of the stores themselves.
+export class Lexicon extends DurableObject<Env> implements Lexical {
+  declare env: Env
+  #held = lexicon(this.ctx.storage)
+
+  admit(asked: { store: string; fields: string }[], words: string) {
+    return entry(
+      this.env,
+      'Lexicon admit',
+      () => this.#held.admit(asked, words),
+    )
+  }
+  grow(store: string, fields: string, words: string[]) {
+    return entry(
+      this.env,
+      'Lexicon grow',
+      () => this.#held.grow(store, fields, words),
+    )
+  }
+  put(store: string, fields: string, words: string[]) {
+    return entry(
+      this.env,
+      'Lexicon put',
+      () => this.#held.put(store, fields, words),
+    )
+  }
+  forget(store: string) {
+    return entry(this.env, 'Lexicon forget', () => this.#held.forget(store))
   }
 }
 
