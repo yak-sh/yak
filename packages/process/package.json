@@ -23,16 +23,16 @@
   "dependencies": {
     "@yaks/fp": "0.2.23",
     "@yaks/graph": "0.2.30",
-    "@yaks/query": "0.2.23",
+    "@yaks/query": "0.2.32",
     "@yaks/render": "0.2.24",
-    "@yaks/vocab": "0.2.30",
+    "@yaks/vocab": "0.2.32",
     "undici": "^7.28.0"
   },
   "devDependencies": {
     "@std/assert": "npm:@jsr/std__assert@^1.0.0",
-    "@yaks/model": "0.2.30",
+    "@yaks/model": "0.2.32",
     "@yaks/ram": "0.2.24",
-    "@yaks/session": "0.2.31",
+    "@yaks/session": "0.2.32",
     "@yaks/testing": "0.2.30",
     "@yaks/tools": "0.2.30"
   }

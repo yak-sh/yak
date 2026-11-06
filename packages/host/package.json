@@ -37,7 +37,7 @@
     "@yaks/tools": "0.2.30",
     "@yaks/tracker": "0.2.30",
     "@yaks/ui": "0.2.30",
-    "@yaks/vocab": "0.2.30"
+    "@yaks/vocab": "0.2.32"
   },
   "devDependencies": {
     "@yaks/ram": "0.2.24",

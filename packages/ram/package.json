@@ -9,11 +9,11 @@
     "@yaks/fp": "0.2.23",
     "@yaks/graph": "0.2.30",
     "@yaks/match": "0.2.30",
-    "@yaks/vocab": "0.2.30"
+    "@yaks/vocab": "0.2.32"
   },
   "devDependencies": {
     "@std/assert": "npm:@jsr/std__assert@^1.0.0",
-    "@yaks/query": "0.2.23",
+    "@yaks/query": "0.2.32",
     "@yaks/sql": "0.2.30",
     "@yaks/sqlite": "0.2.30",
     "@yaks/testing": "0.2.30"

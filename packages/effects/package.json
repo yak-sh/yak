@@ -17,11 +17,11 @@
     "@yaks/id": "0.2.23",
     "@yaks/inspect": "0.2.30",
     "@yaks/match": "0.2.30",
-    "@yaks/query": "0.2.23",
+    "@yaks/query": "0.2.32",
     "@yaks/tools": "0.2.30",
     "@yaks/trace": "0.2.23",
     "@yaks/ui": "0.2.30",
-    "@yaks/vocab": "0.2.30",
+    "@yaks/vocab": "0.2.32",
     "lucide": "1.31.0",
     "preact": "10.29.7"
   },

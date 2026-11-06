@@ -32,12 +32,12 @@
     "@yaks/graph": "0.2.30",
     "@yaks/match": "0.2.30",
     "@yaks/process": "0.2.28",
-    "@yaks/query": "0.2.23",
+    "@yaks/query": "0.2.32",
     "@yaks/sql": "0.2.30",
     "@yaks/testing": "0.2.30",
     "@yaks/tools": "0.2.30",
     "@yaks/trace": "0.2.23",
-    "@yaks/vocab": "0.2.30"
+    "@yaks/vocab": "0.2.32"
   },
   "devDependencies": {
     "@std/testing": "npm:@jsr/std__testing@^1.0.0",
@@ -48,10 +48,10 @@
     "@yaks/journal": "0.2.30",
     "@yaks/kernel": "0.2.28",
     "@yaks/member": "0.2.25",
-    "@yaks/model": "0.2.30",
+    "@yaks/model": "0.2.32",
     "@yaks/provenance": "0.2.28",
     "@yaks/ram": "0.2.24",
-    "@yaks/session": "0.2.31",
+    "@yaks/session": "0.2.32",
     "@yaks/task": "0.2.23"
   },
   "optionalDependencies": {

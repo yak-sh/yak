@@ -18,10 +18,10 @@
     "@yaks/graph": "0.2.30",
     "@yaks/inspect": "0.2.30",
     "@yaks/process": "0.2.28",
-    "@yaks/query": "0.2.23",
+    "@yaks/query": "0.2.32",
     "@yaks/ui": "0.2.30",
     "@yaks/ux": "0.2.23",
-    "@yaks/vocab": "0.2.30",
+    "@yaks/vocab": "0.2.32",
     "lucide": "1.31.0",
     "preact": "10.29.7"
   },

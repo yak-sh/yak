@@ -15,17 +15,17 @@
     "@yaks/edge": "0.2.24",
     "@yaks/effects": "0.2.25",
     "@yaks/graph": "0.2.30",
-    "@yaks/model": "0.2.30",
-    "@yaks/query": "0.2.23",
+    "@yaks/model": "0.2.32",
+    "@yaks/query": "0.2.32",
     "@yaks/sql": "0.2.30",
     "@yaks/tools": "0.2.30",
-    "@yaks/vocab": "0.2.30"
+    "@yaks/vocab": "0.2.32"
   },
   "devDependencies": {
     "@std/assert": "npm:@jsr/std__assert@^1.0.0",
     "@yaks/api": "0.2.29",
     "@yaks/archetype": "0.2.24",
-    "@yaks/cli": "0.2.31",
+    "@yaks/cli": "0.2.32",
     "@yaks/ram": "0.2.24",
     "@yaks/sqlite": "0.2.30",
     "@yaks/testing": "0.2.30"

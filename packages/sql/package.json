@@ -12,8 +12,8 @@
   "dependencies": {
     "@yaks/fp": "0.2.23",
     "@yaks/id": "0.2.23",
-    "@yaks/query": "0.2.23",
-    "@yaks/vocab": "0.2.30"
+    "@yaks/query": "0.2.32",
+    "@yaks/vocab": "0.2.32"
   },
   "devDependencies": {
     "@std/assert": "npm:@jsr/std__assert@^1.0.0",

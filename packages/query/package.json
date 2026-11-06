@@ -1,6 +1,6 @@
 {
   "name": "@yaks/query",
-  "version": "0.2.23",
+  "version": "0.2.32",
   "type": "module",
   "exports": {
     ".": "./mod.ts",
@@ -10,7 +10,7 @@
   "description": "Parses query strings into a serializable AST, builds the same AST from code, and completes query text against a loaded vocabulary.",
   "dependencies": {
     "@yaks/fp": "0.2.23",
-    "@yaks/vocab": "0.2.30"
+    "@yaks/vocab": "0.2.32"
   },
   "devDependencies": {
     "@std/assert": "npm:@jsr/std__assert@^1.0.0",

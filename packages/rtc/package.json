@@ -13,7 +13,7 @@
   "dependencies": {
     "@yaks/effects": "0.2.25",
     "@yaks/graph": "0.2.30",
-    "@yaks/vocab": "0.2.30"
+    "@yaks/vocab": "0.2.32"
   },
   "devDependencies": {
     "@std/assert": "npm:@jsr/std__assert@^1.0.0",

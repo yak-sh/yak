@@ -9,9 +9,9 @@
   "license": "Apache-2.0",
   "description": "The query field: completion wherever a query is typed, in a browser and in a terminal, its state a component in the page's own graph and its parts @yaks/ui's.",
   "dependencies": {
-    "@yaks/query": "0.2.23",
+    "@yaks/query": "0.2.32",
     "@yaks/ux": "0.2.23",
-    "@yaks/vocab": "0.2.30"
+    "@yaks/vocab": "0.2.32"
   },
   "devDependencies": {
     "@preact/signals": "2.9.4",

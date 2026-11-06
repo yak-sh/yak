@@ -15,7 +15,7 @@
   "dependencies": {
     "@yaks/tui": "0.2.24",
     "@yaks/ui": "0.2.30",
-    "@yaks/vocab": "0.2.30",
+    "@yaks/vocab": "0.2.32",
     "preact": "10.29.7"
   },
   "devDependencies": {

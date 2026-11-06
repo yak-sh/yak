@@ -13,8 +13,8 @@
     "@yaks/fp": "0.2.23",
     "@yaks/graph": "0.2.30",
     "@yaks/match": "0.2.30",
-    "@yaks/query": "0.2.23",
-    "@yaks/vocab": "0.2.30"
+    "@yaks/query": "0.2.32",
+    "@yaks/vocab": "0.2.32"
   },
   "devDependencies": {
     "@yaks/ram": "0.2.24",

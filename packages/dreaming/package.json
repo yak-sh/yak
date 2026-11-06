@@ -11,7 +11,7 @@
   "description": "Standing intentions filed under a project, which @yaks/builders builds on a schedule, a record of how often each memory has been recalled, and the `.order=hot` ranking that record decays along.",
   "dependencies": {
     "@yaks/sql": "0.2.30",
-    "@yaks/vocab": "0.2.30"
+    "@yaks/vocab": "0.2.32"
   },
   "devDependencies": {
     "@std/assert": "npm:@jsr/std__assert@^1.0.0",

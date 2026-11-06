@@ -13,7 +13,7 @@
     "@yaks/blob": "0.2.30",
     "@yaks/embedding": "0.2.30",
     "@yaks/fp": "0.2.23",
-    "@yaks/model": "0.2.30",
+    "@yaks/model": "0.2.32",
     "@yaks/openai": "0.2.26"
   },
   "devDependencies": {
@@ -24,6 +24,6 @@
     "@yaks/secrets": "0.2.28",
     "@yaks/testing": "0.2.30",
     "@yaks/tools": "0.2.30",
-    "@yaks/vocab": "0.2.30"
+    "@yaks/vocab": "0.2.32"
   }
 }

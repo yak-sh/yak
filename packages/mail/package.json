@@ -16,7 +16,7 @@
   "description": "Represents letters and their delivery outcomes as graph components, sends them through a sender the caller supplies, and converts arrivals to bundles.",
   "dependencies": {
     "@yaks/api": "0.2.29",
-    "@yaks/cli": "0.2.31",
+    "@yaks/cli": "0.2.32",
     "@yaks/doc": "0.2.24",
     "@yaks/edge": "0.2.24",
     "@yaks/effects": "0.2.25",
@@ -26,9 +26,9 @@
     "@yaks/host": "0.2.29",
     "@yaks/id": "0.2.23",
     "@yaks/notify": "0.2.28",
-    "@yaks/query": "0.2.23",
+    "@yaks/query": "0.2.32",
     "@yaks/tools": "0.2.30",
-    "@yaks/vocab": "0.2.30"
+    "@yaks/vocab": "0.2.32"
   },
   "devDependencies": {
     "@std/assert": "npm:@jsr/std__assert@^1.0.0",

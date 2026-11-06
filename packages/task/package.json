@@ -20,10 +20,10 @@
     "@yaks/inspect": "0.2.30",
     "@yaks/markdown": "0.2.30",
     "@yaks/match": "0.2.30",
-    "@yaks/query": "0.2.23",
+    "@yaks/query": "0.2.32",
     "@yaks/render": "0.2.24",
     "@yaks/ui": "0.2.30",
-    "@yaks/vocab": "0.2.30",
+    "@yaks/vocab": "0.2.32",
     "preact": "10.29.7"
   },
   "devDependencies": {

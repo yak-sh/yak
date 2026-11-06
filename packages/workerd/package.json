@@ -13,6 +13,6 @@
     "@std/assert": "npm:@jsr/std__assert@^1.0.0",
     "@yaks/ram": "0.2.24",
     "@yaks/testing": "0.2.30",
-    "@yaks/vocab": "0.2.30"
+    "@yaks/vocab": "0.2.32"
   }
 }

@@ -13,7 +13,7 @@
     "@yaks/fp": "0.2.23",
     "@yaks/graph": "0.2.30",
     "@yaks/key": "0.2.24",
-    "@yaks/vocab": "0.2.30"
+    "@yaks/vocab": "0.2.32"
   },
   "devDependencies": {
     "@std/assert": "npm:@jsr/std__assert@^1.0.0",

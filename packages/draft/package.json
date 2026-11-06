@@ -15,7 +15,7 @@
     "@preact/signals": "2.9.4",
     "@yaks/fp": "0.2.23",
     "@yaks/graph": "0.2.30",
-    "@yaks/vocab": "0.2.30",
+    "@yaks/vocab": "0.2.32",
     "preact": "10.29.7"
   },
   "devDependencies": {
