@@ -72,8 +72,9 @@
  *   {@link applied} turns one back into the bundles it committed; a consumer
  *   that stores the cursor before it does the work runs effects at most once.
  * - {@link follow} — the feed as one host sees it: every commit another host
- *   made to the same store since the last look, as the bundles it applied
- *   ({@link carried}), journaled or not. Each {@link Feed} writes as one host,
+ *   made to the same store since the last look, as what it wrote
+ *   ({@link wrote}), journaled or not, its values read from the graph
+ *   ({@link filled}). Each {@link Feed} writes as one host,
  *   so a graph's subscribers can be told of the commits its own `effect` phase
  *   never saw: another process's, another thread's. The feed keeps a commit
  *   for minutes ({@link KEEP}); it is how hosts hear each other, not history.

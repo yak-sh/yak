@@ -7,7 +7,7 @@
 import { clock, test } from '@yaks/testing'
 import { assertEquals, assertThrows } from '@std/assert'
 import type { Bundle, News } from '@yaks/graph'
-import { feedDdl, feedOf, follow } from './feed.ts'
+import { feedDdl, feedOf, filled, follow, wrote } from './feed.ts'
 import { ddl } from './log.ts'
 import { type Each, feed, logFor, plugins, schema, TRIES } from './graph.ts'
 import { mem } from '../sqlite/testing.ts'
@@ -27,7 +27,13 @@ let hosts = (opts: { page?: number } = {}) => {
       { entity: { eid: 'w2' }, render: { state: 'warm' } },
     ]))
   }
-  let next = follow(w.f, opts)
+  let follower = follow(w.f, opts)
+  // What was heard, its values read from the graph as a host's feed reads them.
+  let next = () => {
+    let heard = follower()
+    let applied = sync(filled(heard.map((h) => h.wrote), w.read))
+    return heard.map((h, i) => ({ seq: h.seq, applied: applied[i] }))
+  }
   return { g, j: w.j, them, next }
 }
 let page = (title: string) => (eid: string): Bundle => ({
@@ -43,9 +49,9 @@ let heard = (next: () => { applied: Bundle[] }[]) =>
     }))
   )
 
-// What another host committed is heard whole: the text a store keeps by its
-// address as the text, and what the journal leaves out (`render`) beside what
-// it keeps.
+// What another host committed is heard with its values as the graph holds
+// them: the text a store keeps by its address as the text, and what the
+// journal leaves out (`render`) beside what it keeps.
 let own = hosts()
 test('a follower hears what another host committed, and not its own', () => {
   sync(own.g.apply([page('mine')('p1')]))
@@ -73,6 +79,23 @@ test('a follower hears a deletion as the patches that made it', () => {
   ])
 })
 
+let later = hosts()
+test('a follower reads what the graph holds now, not what was written then', () => {
+  let p1 = { eid: 'p1' }
+  sync(later.them.g.apply([
+    { entity: p1, page: { title: 'first' }, render: { state: 'owed' } },
+  ]))
+  sync(later.them.g.apply([page('second')('p1')]))
+  sync(later.them.g.apply([{ entity: p1, render: null }]))
+  let title = { title: 'second' }
+  let now: Bundle[][] = [
+    [{ entity: p1, page: title, render: null }],
+    [{ entity: p1, page: title }],
+    [{ entity: p1, render: null }],
+  ]
+  assertEquals(heard(later.next), now)
+})
+
 let burst = hosts({ page: 2 })
 test('a follower pages through a burst without losing any of it', () => {
   for (let i = 1; i <= 5; i++) sync(burst.them.g.apply([page('p')(`p${i}`)]))
@@ -93,15 +116,11 @@ let clocked = () => {
   return { clock, mine: feedOf(o), theirs: feedOf(o) }
 }
 
-let binary = clocked()
-let reading = follow(binary.mine)
-test('bytes cross the feed whole', () => {
-  let bytes = new Uint8Array([19, 0, 255, 128])
-  binary.theirs.write([{ entity: { eid: 'd1' }, doc: { bytes } }])
-  assertEquals(reading()[0].applied, [{
-    entity: { eid: 'd1' },
-    doc: { bytes },
-  }])
+let older = clocked()
+let mixed = follow(older.mine)
+test('a row an older feed kept, values and all, is read for its names', () => {
+  older.theirs.write([page('Hi')('p1')] as never)
+  assertEquals(mixed()[0].wrote, [{ entity: { eid: 'p1' }, page: ['title'] }])
 })
 
 let aging = clocked()
@@ -109,16 +128,16 @@ let missed: number[] = []
 let away = follow(aging.mine, { missed: (n) => missed.push(n) })
 test('the feed keeps a commit for a while, and says what a follower missed', () => {
   let { clock, theirs } = aging
-  let eids = () => away().map((h) => h.applied[0].entity.eid)
-  theirs.write([page('a')('p1')])
+  let eids = () => away().map((h) => h.wrote[0].entity.eid)
+  theirs.write(wrote([page('a')('p1')]))
   clock.t = 500
-  theirs.write([page('b')('p2')])
+  theirs.write(wrote([page('b')('p2')]))
   clock.t = 2000
-  theirs.write([page('c')('p3')])
+  theirs.write(wrote([page('c')('p3')]))
   assertEquals(eids(), ['p3'])
   assertEquals(missed, [2])
   clock.t = 5000
-  theirs.write([page('d')('p4')])
+  theirs.write(wrote([page('d')('p4')]))
   assertEquals(eids(), ['p4'])
   assertEquals(missed, [2])
 })
@@ -160,13 +179,13 @@ let looping = async (each: Each) => {
   let time = clock()
   let told: unknown[] = []
   let host = {
-    storage: { statements: statements(db) },
+    storage: { statements: statements(db), get: () => [] },
     stopping: new AbortController().signal,
     report: (e: unknown) => void told.push(e),
   }
   feed(host, { every: 1, timer: (fn, ms) => time.after(ms, fn) })(each)
   await time.advance(1)
-  let write = (eid: string) => theirs.write([page('p')(eid)])
+  let write = (eid: string) => theirs.write(wrote([page('p')(eid)]))
   return { write, told, look: (n = 1) => time.advance(n) }
 }
 let firsts = (news: News) => news.applied.map((tx) => tx[0].entity.eid)

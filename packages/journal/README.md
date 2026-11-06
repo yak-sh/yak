@@ -333,16 +333,25 @@ process or thread that opened the same store — a `yak` command beside
 `yak serve`, a worker serving the effects role — commits where it cannot see.
 The **feed** is how one host hears another: each commit writes one row to the
 `journal_feed` table inside its own transaction, holding the host that made it
-and the bundles it applied, one per entity, with a deletion as `$delete`
-(`carried(bundles)`). A follower pages through it from a cursor and keeps what
-someone else wrote:
+and what it wrote of each entity: the properties of each component it wrote,
+`null` for one it removed, or `$delete` (`wrote(bundles)`). The values stay
+where the graph keeps them. A follower pages through the feed from a cursor,
+keeps what someone else wrote, and reads its values from the graph in one `get`
+(`filled(heard, read)`):
 
 ```ts ignore
 let f = feedOf({ rows }) // writes as a fresh host; feeder(f) is its plugin
 let next = follow(f) // from the feed's tip
 // …another host commits…
-next() // [{ seq, applied: [{ entity: { eid: 'p1' }, page: { title: 'Hi' } }] }]
+let heard = next() // [{ seq, wrote: [{ entity: { eid: 'p1' }, page: ['title'] }] }]
+filled(heard.map((h) => h.wrote), (eids, comps) => store.get(eids, comps))
+// [[{ entity: { eid: 'p1' }, page: { title: 'Hi' } }]]
 ```
+
+A follower reads the values as the graph holds them when it looks, not as the
+commit wrote them: two commits to a title heard in one look both carry the newer
+one, and a component since removed reads as removed. The commit that changed it
+is heard too, so a cache patched with the news ends where the graph is.
 
 The feed is plumbing, not history. It carries every commit, journaled or not, so
 a lease another process renews reaches this host's subscriptions as a task's new
@@ -350,14 +359,12 @@ title does. A row is kept for ten minutes (`KEEP`) and pruned by a later write,
 so the table holds minutes of commits rather than growing with them. A follower
 that was away longer than that is told how many commits it missed.
 
-The feed's plugin writes what the `commit` phase hands it, so it goes after any
-plugin that puts a value back there: @yaks/blob's text for the address it
-stored. A host composes plugins in config order, and `@yaks/journal/graph`'s
-`plugins` returns the journal's and the feed's, bound as the same host
-(`logFor`, `feedFor`). Its `feed` is what a host offers as `host.feed(each)`: it
-looks every 200ms (`{"use": "@yaks/journal", "with": {"every": 50}}` to change
-it), however long `each` takes, and hands `each` the **news**: every commit
-heard since its last call, oldest first, in one call (`{ applied, missed }`,
+A host composes plugins in config order, and `@yaks/journal/graph`'s `plugins`
+returns the journal's and the feed's, bound as the same host (`logFor`,
+`feedFor`). Its `feed` is what a host offers as `host.feed(each)`: it looks
+every 200ms (`{"use": "@yaks/journal", "with": {"every": 50}}` to change it),
+however long `each` takes, and hands `each` the **news**: every commit heard
+since its last call, oldest first, in one call (`{ applied, missed }`,
 @yaks/graph `News`). A consumer still busy is handed more next time rather than
 left behind what the feed keeps. News `each` fails on is offered again at the
 next look, up to five times, before it is reported to the host and passed over.

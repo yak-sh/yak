@@ -200,7 +200,8 @@ export type ReadTx = Pick<
 
 /** What a store's feed hands a consumer at each look (@yaks/journal's
  * `feed`): the transactions other hosts committed since the last, oldest
- * first, each as the bundles it applied; and `missed` when some before them
+ * first, each as bundles of what it wrote, holding the values the store holds
+ * now; and `missed` when some before them
  * never reached this consumer, so what it holds from before is read again
  * rather than patched. */
 export type News = { applied: Bundle[][]; missed: boolean }

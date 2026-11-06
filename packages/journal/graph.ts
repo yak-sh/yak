@@ -10,7 +10,7 @@
 // Both write as the same host, which is what lets the feed leave out what this
 // host wrote itself.
 
-import type { Bundle, News, Plugin } from '@yaks/graph'
+import type { News, Plugin } from '@yaks/graph'
 import {
   as,
   col,
@@ -33,7 +33,16 @@ import {
   type Recording,
   type Rows,
 } from './mod.ts'
-import { type Feed, feedDdl, feeder, feedOf, follow } from './feed.ts'
+import {
+  type Feed,
+  feedDdl,
+  feeder,
+  feedOf,
+  filled,
+  follow,
+  type Read,
+  type Wrote,
+} from './feed.ts'
 
 let logs = new WeakMap<object, Log>()
 let feeds = new WeakMap<object, Feed>()
@@ -164,8 +173,9 @@ export type Each = (news: News) => void | Promise<void>
 export let TRIES = 5
 
 /**
- * The commits other hosts made to this store, handed to `each` as the bundles
- * they applied, oldest first, from the moment `each` is given until the
+ * The commits other hosts made to this store, handed to `each` as bundles of
+ * what each wrote, its values read from the graph as they stand (./feed.ts
+ * `filled`), oldest first, from the moment `each` is given until the
  * returned function is called or the host stops. What a subscription registry
  * or a cache is fed so it also sees writes its own graph did not make: a `yak`
  * command's beside `yak serve`, or a worker's serving the effects role.
@@ -179,6 +189,7 @@ export let TRIES = 5
  */
 export let feed = (
   host: Bound & {
+    storage: { get: Read }
     stopping: AbortSignal
     report?: (error: unknown) => void | Promise<void>
   },
@@ -198,7 +209,7 @@ export let feed = (
       told(new Error(`the feed pruned ${n} commits before they were read`))
     },
   })
-  let heard: Bundle[][] = []
+  let heard: Wrote[][] = []
   let tries = 0
   let taking: Promise<void> | undefined
   let cancel = () => {}
@@ -208,16 +219,17 @@ export let feed = (
   // the next look, ahead of everything heard after it.
   let take = async () => {
     while ((heard.length || missed) && !stopped) {
-      let news = { applied: heard, missed }
+      let [said, was] = [heard, missed]
       heard = []
       missed = false
       try {
-        await each(news)
+        let applied = await filled(said, (e, c) => host.storage.get(e, c))
+        await each({ applied, missed: was })
         tries = 0
       } catch (err) {
         if (++tries < TRIES) {
-          heard = [...news.applied, ...heard]
-          missed ||= news.missed
+          heard = [...said, ...heard]
+          missed ||= was
           break
         }
         tries = 0
@@ -230,7 +242,7 @@ export let feed = (
   // only past what was read.
   let look = () => {
     try {
-      heard.push(...next().map((h) => h.applied))
+      heard.push(...next().map((h) => h.wrote))
     } catch (err) {
       told(err)
     }

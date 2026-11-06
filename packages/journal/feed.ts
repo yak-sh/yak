@@ -4,9 +4,10 @@
 // opened the same store — a `yak` command beside `yak serve`, a worker serving
 // the effects role — commits where this graph cannot see. So each commit
 // writes one row to `journal_feed`, inside its own transaction: the host that
-// made it and the bundles it applied, one per entity. A follower pages through
-// the rows from a cursor and keeps the ones another host wrote; what this host
-// wrote, its own graph already saw.
+// made it and what it wrote, the names of the components and properties of
+// each entity and no values. A follower pages through the rows from a cursor,
+// keeps the ones another host wrote, and reads their values where the graph
+// keeps them (`filled`); what this host wrote, its own graph already saw.
 //
 // The feed is plumbing, not history. The journal keeps what the vocabulary
 // says is history and leaves out what it declares `journal: false`; the feed
@@ -19,7 +20,7 @@
 // since last time"; the loop that asks it lives where a process keeps its
 // timers (./graph.ts `feed`).
 
-import { fromBase64, toBase64 } from '@yaks/fp'
+import { after } from '@yaks/fp'
 import type { Bundle, Plugin } from '@yaks/graph'
 import { composed, comps, dead } from '@yaks/graph/bundle'
 import {
@@ -61,51 +62,126 @@ export let feedDdl = (): Stmt[] => [{
 }]
 
 /**
- * A commit as the feed carries it: one bundle per entity, holding the
- * components it patched, or `$delete` where the entity went.
+ * What a commit wrote to one entity, as the feed keeps it: the properties it
+ * wrote of each component, `null` for a component it removed, or `$delete`
+ * where the entity went. The values stay where the graph keeps them, and a
+ * follower reads them there ({@link filled}).
+ */
+export type Wrote = {
+  entity: Bundle['entity']
+  $delete?: true
+  [comp: string]: string[] | null | true | Bundle['entity'] | undefined
+}
+
+/**
+ * A commit as the feed keeps it: one {@link Wrote} per entity.
  *
  * ```ts
  * import { assertEquals } from '@std/assert'
  *
  * assertEquals(
- *   carried([
+ *   wrote([
  *     { entity: { eid: 'p1' }, page: { title: 'Hi' }, $was: {} },
- *     { entity: { eid: 'p1' }, updated: { by: 'ada' } },
+ *     { entity: { eid: 'p1' }, updated: { by: 'ada' }, pin: null },
  *     { entity: { eid: 'n1' }, $delete: true },
  *   ]),
  *   [
- *     { entity: { eid: 'p1' }, page: { title: 'Hi' }, updated: { by: 'ada' } },
+ *     { entity: { eid: 'p1' }, page: ['title'], updated: ['by'], pin: null },
  *     { entity: { eid: 'n1' }, $delete: true },
  *   ],
  * )
  * ```
  */
-export let carried = (bundles: Bundle[]): Bundle[] =>
-  composed(bundles).map((b): Bundle =>
-    dead(b)
-      ? { entity: b.entity, $delete: true }
-      : { entity: b.entity, ...Object.fromEntries(comps(b)) }
+export let wrote = (bundles: Bundle[]): Wrote[] =>
+  composed(bundles).map((b): Wrote =>
+    dead(b) ? { entity: b.entity, $delete: true } : {
+      entity: b.entity,
+      ...Object.fromEntries(
+        comps(b).map(([k, v]) => [k, v == null ? null : Object.keys(v)]),
+      ),
+    }
   )
 
-// Bytes cross as a tagged object, the one value JSON cannot hold.
-let pack = (bundles: Bundle[]): string =>
-  JSON.stringify(
-    bundles,
-    (_k, v) => v instanceof Uint8Array ? { $binary: toBase64(v) } : v,
-  )
-let unpack = (text: string): Bundle[] =>
-  JSON.parse(
-    text,
-    (_k, v) =>
-      v && typeof v == 'object' && typeof v.$binary == 'string' &&
-        Object.keys(v).length == 1
-        ? fromBase64(v.$binary)
+/** Reads entities as they stand, carrying the components named (@yaks/graph
+ * `Storage.get`). */
+export type Read = (
+  eids: string[],
+  comps: string[],
+) => Bundle[] | Promise<Bundle[]>
+
+/**
+ * The commits a follower heard, each entity's bundle holding what the graph
+ * holds now of what the commit wrote, in one read for all of them. A
+ * component the entity no longer holds, or an entity since deleted, reads as
+ * removed, and a property it no longer holds as `null`: the later commit that
+ * removed it is heard too, so the patches still end where the graph is.
+ *
+ * ```ts
+ * import { assertEquals } from '@std/assert'
+ *
+ * let now = [{ entity: { eid: 'p1' }, page: { title: 'Hi', text: 'x' } }]
+ * assertEquals(
+ *   filled([[
+ *     { entity: { eid: 'p1' }, page: ['title', 'lede'], pin: ['at'] },
+ *     { entity: { eid: 'n1' }, $delete: true },
+ *   ]], () => now),
+ *   [[
+ *     { entity: { eid: 'p1' }, page: { title: 'Hi', lede: null }, pin: null },
+ *     { entity: { eid: 'n1' }, $delete: true },
+ *   ]],
+ * )
+ * ```
+ */
+export let filled = (
+  txs: Wrote[][],
+  read: Read,
+): Bundle[][] | Promise<Bundle[][]> => {
+  let eids = new Set<string>()
+  let names = new Set<string>()
+  for (let w of txs.flat()) {
+    if (w.$delete) continue
+    eids.add(w.entity.eid)
+    for (let [k, v] of Object.entries(w)) if (Array.isArray(v)) names.add(k)
+  }
+  let fill = (now: Bundle[]) => {
+    let held = new Map(
+      now.filter((b) => !dead(b)).map((b) => [b.entity.eid, b]),
+    )
+    return txs.map((tx) =>
+      tx.map((w): Bundle => {
+        if (w.$delete) return { entity: w.entity, $delete: true }
+        let b = held.get(w.entity.eid)
+        let out: Bundle = { entity: w.entity }
+        for (let [k, props] of Object.entries(w)) {
+          if (k == 'entity') continue
+          let comp = b?.[k] as Record<string, unknown> | null | undefined
+          out[k] = Array.isArray(props) && comp
+            ? Object.fromEntries(props.map((p) => [p, comp[p] ?? null]))
+            : null
+        }
+        return out
+      })
+    )
+  }
+  return eids.size ? after(read([...eids], [...names]), fill) : fill([])
+}
+
+/** One commit another host made: its place in the feed, and what it wrote
+ * ({@link wrote}). */
+export type Heard = { seq: number; wrote: Wrote[] }
+
+// A row a feed before {@link wrote} kept holds the values themselves, which a
+// host still running it writes while a restart reaches it: its names are what
+// a follower reads.
+let named = (w: Wrote): Wrote =>
+  Object.fromEntries(
+    Object.entries(w).map(([k, v]) => [
+      k,
+      k != 'entity' && v && typeof v == 'object' && !Array.isArray(v)
+        ? Object.keys(v)
         : v,
-  )
-
-/** One commit another host made: its place in the feed, and the bundles it
- * applied ({@link carried}). */
-export type Heard = { seq: number; applied: Bundle[] }
+    ]),
+  ) as Wrote
 
 /** The feed bound to one store, as one host. */
 export type Feed = {
@@ -114,12 +190,12 @@ export type Feed = {
   host: string
   /** write one commit down inside the caller's own transaction, and prune
    * what has been kept long enough */
-  write: (applied: Bundle[]) => void
+  write: (wrote: Wrote[]) => void
   /** the newest commit's seq, or 0 */
   tip: () => number
   /** the commits after a cursor, oldest first, at most `n`; one this host
-   * made comes without its bundles */
-  since: (cursor: number, n: number) => { seq: number; applied?: Bundle[] }[]
+   * made comes without what it wrote */
+  since: (cursor: number, n: number) => { seq: number; wrote?: Wrote[] }[]
 }
 
 /** How a feed is bound to a store. */
@@ -140,13 +216,13 @@ export let feedOf = (o: FeedOpts): Feed => {
   let host = o.host ?? crypto.randomUUID()
   let keep = o.keep ?? KEEP
   let now = o.now ?? Date.now
-  let write = (applied: Bundle[]) => {
+  let write = (wrote: Wrote[]) => {
     let at = now()
     rows({
       t: 'insert',
       into: FEED,
       cols: ['at', 'host', 'applied'],
-      rows: [[val(at), val(host), val(pack(applied))]],
+      rows: [[val(at), val(host), val(JSON.stringify(wrote))]],
     })
     // Pruned after the insert, so the newest row always stands: the next id
     // is always past every cursor, and a follower never mistakes a fresh row
@@ -187,21 +263,21 @@ export let feedOf = (o: FeedOpts): Feed => {
       limit: val(n),
     })).map((r) => ({
       seq: Number(r.id),
-      ...r.out == null ? {} : { applied: unpack(String(r.out)) },
+      ...r.out == null
+        ? {}
+        : { wrote: (JSON.parse(String(r.out)) as Wrote[]).map(named) },
     }))
   return { host, write, tip, since }
 }
 
 /** The plugin that writes each commit into the feed, as the last thing inside
- * its transaction. It carries what the `commit` phase hands it, so it is
- * registered after any plugin that puts a value back there (@yaks/blob's text
- * for its address); a host composes it in config order, after them. */
+ * its transaction. */
 export let feeder = (f: Feed): Plugin => ({
   name: '@yaks/journal/feed',
   hooks: {
     commit: (bundles: Bundle[]) => {
-      let applied = carried(bundles)
-      if (applied.length) f.write(applied)
+      let said = wrote(bundles)
+      if (said.length) f.write(said)
       return bundles
     },
   },
@@ -237,8 +313,8 @@ export let follow = (f: Feed, opts: FollowOpts = {}): () => Heard[] => {
         let seen = f.since(cursor, page)
         let first = seen[0]?.seq
         if (first > cursor + 1) opts.missed?.(first - cursor - 1)
-        for (let { seq, applied } of seen) {
-          if (applied) out.push({ seq, applied })
+        for (let { seq, wrote } of seen) {
+          if (wrote) out.push({ seq, wrote })
           cursor = seq
         }
         if (seen.length < page) return out

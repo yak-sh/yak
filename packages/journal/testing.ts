@@ -28,7 +28,7 @@ import { preparedDriver, snapshot } from '../sqlite/testing.ts'
 import { statements, storage } from '@yaks/sqlite'
 import { lit, type Statements } from '@yaks/sql'
 import { ddl, journal, type Log, log } from './log.ts'
-import { type Feed, feedDdl, feeder } from './feed.ts'
+import { type Feed, feedDdl, feeder, type Read } from './feed.ts'
 import { feedFor, logFor } from './graph.ts'
 
 let doc: VocabDoc = {
@@ -157,6 +157,9 @@ export let wikiLog = (): {
   j: Log
   f: Feed
   storage: { statements: Statements }
+  /** the store's entities as they stand, which a follower reads what it
+   * heard from (./feed.ts `filled`) */
+  read: Read
   /** another host over the same database: a graph journaling as a log and a
    * feed of its own, the way a second process or thread opening the file
    * would */
@@ -189,6 +192,7 @@ export let wikiLog = (): {
   return {
     ...mine,
     storage: held,
+    read: (eids, comps) => store.get(eids, comps),
     other: () => {
       let theirs = host()
       return { ...theirs, g: theirs.g() }
