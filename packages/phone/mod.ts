@@ -100,8 +100,11 @@ export { owed, sending, type Texting } from './send.ts'
 export type { Options, Transport } from './options.ts'
 
 export {
+  type Account,
   type Heard,
+  type Held,
   listens,
+  type Own,
   type Provider,
   sender,
   verified,

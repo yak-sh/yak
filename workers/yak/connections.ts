@@ -1071,11 +1071,11 @@ export let connecting = async (
         String(comp(now, 'content').body ?? 'The key could not be saved.'),
       )
     }
-    // A person's own number is set up once its key is kept (operator-line.ts).
-    if (integrationOf(now) == 'voipms') {
-      let { lined } = await import('./operator-line.ts')
-      return await lined(env, eid)
-    }
+    // A person's own number is set up once its key is kept, where a phone
+    // connects one through this integration (operator-line.ts).
+    let { lined } = await import('./operator-line.ts')
+    let line = await lined(env, integrationOf(now), eid)
+    if (line) return line
     return {
       say: 'Saved. The key is kept safe and never shown again.',
       no: false,

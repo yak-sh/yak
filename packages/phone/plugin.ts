@@ -17,7 +17,13 @@ import { fault, json, refuse, type Route } from '@yaks/api'
 import { Refused } from '@yaks/graph/errors'
 import type { Transport } from './options.ts'
 import { kept, settled } from './received.ts'
-import { listens, type Provider, sender, verified } from './provider.ts'
+import {
+  listens,
+  type Own,
+  type Provider,
+  sender,
+  verified,
+} from './provider.ts'
 import type { Caller, Line } from './call.ts'
 import type { Texter } from '@yaks/host/senders'
 
@@ -57,6 +63,9 @@ export type Phone = Texter & {
   caller?: () => Caller
   /** the wire its calls' audio streams over, where it takes them */
   line?: Line
+  /** how a person connects a number of their own through it, where it
+   * offers that: their account opens with their own settings alone */
+  own?: Own
 }
 
 let phone = (via: string, provider: Provider, options: () => Lent): Phone => {
@@ -82,6 +91,7 @@ let phone = (via: string, provider: Provider, options: () => Lent): Phone => {
     },
     ...provider.caller ? { caller: () => provider.caller!(transport()) } : {},
     ...provider.line ? { line: provider.line } : {},
+    ...provider.own ? { own: provider.own } : {},
   }
 }
 

@@ -117,7 +117,7 @@ export let handed = (
   },
 ]
 
-import { phoneOf, phones } from './phones.ts'
+import { phoneNamed, phoneOf } from './phones.ts'
 /** Send a platform text that nothing waits on: a carrier's block is
  * expected until the campaign is approved, and anything else is reported. */
 export let tell = async (env: Env, text: Text, why: string, via?: string) => {
@@ -296,7 +296,7 @@ export let textDoor = async (
   via: string,
 ): Promise<Response> => {
   if (req.method != 'POST') return new Response(null, { status: 405 })
-  let said = await (await phones(env))[via]?.hear(req)
+  let said = await (await phoneNamed(env, via))?.hear(req)
   if (!said) {
     return new Response('Texts are not switched on here.', { status: 404 })
   }

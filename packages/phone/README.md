@@ -71,7 +71,16 @@ what the provider `needs`. Beside sending it offers what a host that is no graph
 asks of the provider: `transport()`, its options now; `from()`, the number it
 texts from; `over(more)`, the same phone with more settings laid on its options,
 such as a number of its own; `hear(request)`, its webhook verified with its
-door's key; and, for a provider that takes calls, `caller()` and `line`.
+door's key; for a provider that takes calls, `caller()` and `line`; and, for one
+a person connects a number of their own through, `own`.
+
+A provider's `own` (`Own`) says how: the field of the person's connection each
+setting is read from (`fields`), their `Account` opened with those settings
+alone (a `Sender` with `lines()`, the numbers it holds as `Held`, and
+`point(number, url)`, which sends a number's texts to a URL), the query its
+callback fills in (`callback`), what a callback said (`called(query)`), and the
+words a person is told when their settings open nothing or none of the numbers
+texts (`said`).
 
 `stash()` keeps texts in `sent` with `last()`, and answers receipts `stash-1`,
 `stash-2`, …; `stash({ block })` and `stash({ refuse })` reject every text.

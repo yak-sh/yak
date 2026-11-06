@@ -11,7 +11,7 @@ import { reveal } from '@yaks/secrets'
 import { operatorModel, operatorService } from './operator-testing.ts'
 import { receive, rootOf } from './operator-channels.ts'
 import { conversationOf } from './operator-host.ts'
-import { lineDoor, textedFor } from './operator-line.ts'
+import { lineDoor, owned, textedFor } from './operator-line.ts'
 
 // A person connects their own voip.ms number, their Operator texts someone
 // for them from it, and the text back comes into their one conversation
@@ -156,6 +156,7 @@ let [fork] = await store.g.read(`.spawned.parent=${rootOf(eid, person)}`)
 let ofFork = await conversationOf(store, '/at', fork.entity.eid)
 
 // voip.ms calls back the way its SMS URL callback fills its variables in.
+let { voipms } = await owned(env)
 let texted = (id: string, from: string, message: string) =>
   lineDoor(
     new Request(
@@ -164,6 +165,8 @@ let texted = (id: string, from: string, message: string) =>
         .replace('{MESSAGE}', encodeURIComponent(message)),
     ),
     env,
+    'voipms',
+    voipms,
   )
 let answered = await texted('77', '2695550142', 'Tuesday at 3 works for us.')
 let stranger = await texted('78', '2695550199', 'Are we still on for golf?')
@@ -172,6 +175,8 @@ let root = await conversationOf(store, '/at', rootOf(eid, person))
 let forged = await lineDoor(
   new Request('https://yaks.app/voipms/e30.bm90LW91cnM?id=79&from=1&to=2'),
   env,
+  'voipms',
+  voipms,
 )
 
 test('a voip.ms connection is checked, names the number, and points its callback here, keeping how texts reach the person', () => {

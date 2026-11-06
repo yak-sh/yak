@@ -16,3 +16,8 @@ and `fetch` are supplied by the host. Nothing reads the environment.
 `@yaks/voipms/graph` lends its host the phone `voipms` (@yaks/phone/plugin
 `Phone`), a texter which @yaks/phone selects with `sender: {"via": "voipms"}`.
 The config passes this plugin the sender's options and credentials.
+
+The phone's `own` (@yaks/phone `Own`) is how a person connects a voip.ms number
+of their own: the connection fields their sign-in email and API password are
+kept in (`username`, `password`), their `Account`, the callback's query and
+`called`.

@@ -29,9 +29,14 @@ export let phones = (env: Env): Promise<Record<string, Phone>> => {
   return got
 }
 
-/** Whether the kernel's config lends a phone named `via`. */
-export let lends = async (env: Env, via: string): Promise<boolean> =>
-  Object.hasOwn(await phones(env), via)
+/** The phone config.ts `phoneConfig` lends as `via`, where one does. */
+export let phoneNamed = async (
+  env: Env,
+  via: string,
+): Promise<Phone | undefined> => {
+  let all = await phones(env)
+  return Object.hasOwn(all, via) ? all[via] : undefined
+}
 
 /**
  * The phone a text goes through: the one `chosen` names, a space's own
@@ -45,7 +50,7 @@ export let phoneAt = async (
 ): Promise<Phone | undefined> => {
   let base = env.PHONE_SENDER
   let via = chosen?.via ?? base?.via
-  let phone = via ? (await phones(env))[via] : undefined
+  let phone = via ? await phoneNamed(env, via) : undefined
   if (!phone) return undefined
   let { via: _, ...more } = { ...base?.via == via ? base : {}, ...chosen }
   return phone.over(more)

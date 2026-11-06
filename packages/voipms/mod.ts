@@ -8,11 +8,13 @@
 
 import { Unsent } from '@yaks/host/senders'
 import {
+  type Account,
   type Arrival,
   Blocked,
   Denied,
+  type Held,
+  type Provider,
   type Receipt,
-  type Sender,
   type Text,
 } from '@yaks/phone'
 
@@ -57,24 +59,6 @@ export type Voipms = {
   /** the API's address (default {@link VOIPMS}.api) */
   api?: string
   fetch?: typeof fetch
-}
-
-/** One of an account's numbers, as voip.ms keeps its texting settings. */
-export type Line = {
-  /** in E.164 form */
-  number: string
-  /** whether it sends and receives texts */
-  sms: boolean
-  /** the URL its texts are sent to, when its callback is on */
-  callback?: string
-}
-
-/** A voip.ms account: a {@link Sender}, its numbers, and `point`, which
- * sends a number's texts to a URL and leaves every other way they reach the
- * person as it was. */
-export type Account = Sender & {
-  lines: () => Promise<Line[]>
-  point: (number: string, url: string) => Promise<void>
 }
 
 // voip.ms writes a North American number as its ten digits.
@@ -163,7 +147,7 @@ export let voipms = (
     )
   }
   let dids = async () => ((await call('getDIDsInfo')).dids ?? []) as Did[]
-  let lines = async (): Promise<Line[]> =>
+  let lines = async (): Promise<Held[]> =>
     (await dids()).map((d) => ({
       number: e164(String(d.did ?? '')),
       sms: String(d.sms_enabled) == '1',
@@ -253,13 +237,29 @@ export let called = (
   }
 }
 
-/** The transport plugged into @yaks/phone's provider boundary. */
-export let provider: import('@yaks/phone').Provider = {
+// A voip.ms account from the settings a host gives it.
+let opened = (options: import('@yaks/phone').Transport): Account => {
+  if (!options.key || !options.user) {
+    throw new Error('a voipms sender needs `user` and `key`')
+  }
+  return voipms({ ...options, key: options.key, user: options.user })
+}
+
+/** The transport plugged into @yaks/phone's provider boundary, and a
+ * person's own number: their sign-in email and API password, kept in their
+ * connection as `username` and `password`. */
+export let provider: Provider = {
   needs: ['key', 'user'],
-  sender: (options) => {
-    if (!options.key || !options.user) {
-      throw new Error('a voipms sender needs `user` and `key`')
-    }
-    return voipms({ ...options, key: options.key, user: options.user })
+  sender: opened,
+  own: {
+    fields: { user: 'username', key: 'password' },
+    account: opened,
+    callback: VOIPMS.callback,
+    called,
+    said: {
+      unopened: 'Enter your voip.ms sign-in email and its API password.',
+      untexting:
+        'No number on this voip.ms account has SMS turned on. Turn it on under DID Numbers, then Manage DIDs, and save the connection again.',
+    },
   },
 }

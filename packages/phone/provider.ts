@@ -15,6 +15,42 @@ export type Heard = {
   ended?: { id: string }
 }
 
+/** A number an account holds, as its provider keeps its texting. */
+export type Held = {
+  /** in E.164 form */
+  number: string
+  /** whether it sends and receives texts */
+  sms: boolean
+  /** the URL its texts are sent to, when its callback is on */
+  callback?: string
+}
+
+/** A person's own account at a provider: a {@link Sender}, the numbers it
+ * holds, and `point`, which sends a number's texts to a URL and leaves
+ * every other way they reach the person as it was. */
+export type Account = Sender & {
+  lines: () => Promise<Held[]>
+  point: (number: string, url: string) => Promise<void>
+}
+
+/** How a person connects a number of their own through a provider: their
+ * account, and the callback its texts reach a host by. */
+export type Own = {
+  /** the field of the person's connection each setting is read from */
+  fields: Partial<Record<keyof Transport, string>>
+  /** their account, opened with those settings */
+  account: (options: Transport) => Account
+  /** the query a callback URL asks the provider to fill in, appended to
+   * the host's own address */
+  callback: string
+  /** what a callback said, from its query, once the host has found its own
+   * secret in the URL; null when it names no text */
+  called: (query: URLSearchParams, at?: string) => Arrival | null
+  /** what a person is told, in the provider's words, when their settings
+   * open no account and when none of its numbers texts */
+  said: { unopened: string; untexting: string }
+}
+
 export type Provider = {
   needs?: (keyof Transport)[]
   sender: (options: Transport) => Sender
@@ -23,6 +59,8 @@ export type Provider = {
   /** a provider that takes calls: its commands, and its audio stream */
   caller?: (options: Transport) => Caller
   line?: Line
+  /** a provider a person connects their own number through */
+  own?: Own
 }
 /** Whether a provider takes webhooks: it says how they are signed and how to
  * read one. */

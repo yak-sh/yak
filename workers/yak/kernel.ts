@@ -230,24 +230,26 @@ let serve = async (req: Request, env: Env, r: Route) => {
   // this one nothing: Stripe posts server to server with no Origin at all, and
   // an absent Origin is allowed (route.ts `sameOrigin`).
   if (path == '/stripe/connect') return sell.fetch(req, env)
-  // A phone's doors, for any provider the kernel's config lends as `via`
+  // A phone's doors, for any provider config.ts `phoneConfig` lends as `via`
   // (phones.ts): its texts, their outcomes and its calls ringing, as it
-  // posts them (operator-texts.ts), and a call's audio, streamed to the
-  // Operator it reached (operator-calls.ts).
-  let [, via, door] = /^\/([^/]+)\/(webhook|stream)$/.exec(path) ?? []
-  if (via && await import('./phones.ts').then((p) => p.lends(env, via))) {
-    if (door == 'stream') {
-      let { streamDoor } = await import('./operator-calls.ts')
-      return streamDoor(req, env)
-    }
+  // posts them (operator-texts.ts); a call's audio, streamed to the Operator
+  // it reached (operator-calls.ts); and the texts to a person's own number,
+  // as its callback sends them under the ticket it was given
+  // (operator-line.ts).
+  let [, via, door] = /^\/([^/]+)\/([^/]+)$/.exec(path) ?? []
+  let phone = via &&
+    await import('./phones.ts').then((p) => p.phoneNamed(env, via))
+  if (phone && door == 'webhook') {
     let { textDoor } = await import('./operator-texts.ts')
     return textDoor(req, env, via)
   }
-  // Texts to a person's own number, as voip.ms's callback sends them
-  // (operator-line.ts).
-  if (path.startsWith('/voipms/')) {
+  if (phone && door == 'stream') {
+    let { streamDoor } = await import('./operator-calls.ts')
+    return streamDoor(req, env)
+  }
+  if (phone && phone.own) {
     let { lineDoor } = await import('./operator-line.ts')
-    return lineDoor(req, env)
+    return lineDoor(req, env, via, phone.own)
   }
   // What the platform takes from a sale (sell.ts `fees`, T-34554), read and
   // set by whoever owns the `yak` space. Before the connector, for the reason
