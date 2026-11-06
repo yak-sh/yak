@@ -140,22 +140,38 @@ let plans = (args: Args): Bundle[] => {
     ]
     return [
       { entity: { eid }, task: {}, ...fields(task) },
-      ...links.map(({ from, relation, to }, n) => ({
-        entity: { eid: fresh(`$task-link-${i}-${n}`) },
-        edge: { from, to },
-        [relation]: {},
-      })),
+      ...links.map((l, n) => link(l, fresh(`$task-link-${i}-${n}`))),
     ]
   })
 }
 
+type Link = { from: string; relation: string; to: string }
+
+/** A link as its own entity: an edge, and the relation it is. */
+let link = ({ from, relation, to }: Link, eid: string): Bundle => ({
+  entity: { eid },
+  edge: { from, to },
+  [relation]: {},
+})
+
+/** The `requires` links a task gains: from it to each prerequisite. */
+let required = (task: Args): Link[] =>
+  ((task.requires ?? []) as string[]).map((to) => ({
+    from: String(task.task),
+    relation: 'requires',
+    to,
+  }))
+
 let updates = async (args: Args, graph: Graph): Promise<Bundle[]> => {
   let items = args.updates as Args[] | undefined
-  let edits: Edit[] = (items ?? [args]).map((item) => {
+  let rows = (items ?? [args]).map((item) => {
     let task = items ? { ...args, ...item } : item
     if (typeof task.task != 'string') {
       throw new Refused('Supply task, or updates with a task each')
     }
+    return task
+  })
+  let edits: Edit[] = rows.map((task) => {
     let set = Object.fromEntries(
       Object.entries(fields(task)).flatMap(([comp, value]) =>
         value == null || !Object.keys(value).length
@@ -164,7 +180,7 @@ let updates = async (args: Args, graph: Graph): Promise<Bundle[]> => {
       ),
     )
     return {
-      id: task.task,
+      id: String(task.task),
       set,
       ...((Object.hasOwn(task, 'body') || task.edit) && task.was !== undefined
         ? { was: { 'doc.body': task.was as string | null } }
@@ -180,7 +196,11 @@ let updates = async (args: Args, graph: Graph): Promise<Bundle[]> => {
         : {}),
     }
   })
-  return await edited(graph, edits)
+  let links = rows.flatMap(required)
+  return [
+    ...await edited(graph, edits),
+    ...links.map((l, n) => link(l, `$task-link-${n}`)),
+  ]
 }
 
 /** The implementations behind ./vocab.json. Scalar changes are data; partial

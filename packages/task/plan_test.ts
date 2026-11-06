@@ -16,7 +16,11 @@ import { teamGraph } from './testing.ts'
 // The project the tree hangs from, and a graph holding it.
 let rooted = async () => {
   let { g } = teamGraph()
-  await g.apply([{ entity: { eid: 'p19' }, project: {}, doc: { title: 'TG' } }])
+  await g.apply([{
+    entity: { eid: 'p19' },
+    project: {},
+    doc: { title: 'TG' },
+  }])
   return g
 }
 

@@ -300,7 +300,7 @@
           }
         }
       },
-      "description": "Patch one task or atomic updates; rows inherit top-level fields. Omitted fields stay; null clears. status writes started/completion/cancellation marks. edit replaces, appends or prepends body text with a concurrency guard; body with was checks the supplied read token. Returns applied bundles.",
+      "description": "Patch one task or atomic updates; rows inherit top-level fields. Omitted fields stay; null clears. status writes started/completion/cancellation marks. requires links the task to prerequisites it waits for. edit replaces, appends or prepends body text with a concurrency guard; body with was checks the supplied read token. Returns applied bundles.",
       "input": {
         "task": {
           "type": "string",
@@ -383,6 +383,13 @@
             "null"
           ],
           "description": "External obstacle; null clears."
+        },
+        "requires": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "Prerequisite ids: each becomes a requires link from the task, which waits for them."
         },
         "reason": {
           "type": [
@@ -493,6 +500,12 @@
                   "string",
                   "null"
                 ]
+              },
+              "requires": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
               },
               "reason": {
                 "type": [

@@ -157,3 +157,19 @@ test('a partial task edit guards the body read while preparing its patch', async
   await assertRejects(async () => await g.apply(patch), Stale)
   assertEquals(comp((await g.get(['t']))[0], 'doc').body, 'concurrent')
 })
+
+test('an update can make a task wait on others', async () => {
+  let { g } = teamGraph()
+  await g.apply([
+    { entity: { eid: 'a' }, task: {}, doc: { title: 'checkout' } },
+    { entity: { eid: 'b' }, task: {}, doc: { title: 'sign up' } },
+  ])
+  await g.apply(
+    await tools.task_update!(
+      ...asked({ task: 'a', requires: ['b'] }),
+    ) as Bundle[],
+  )
+  let [edge] = await g.read('.requires ?edge')
+  assertEquals(comp(edge, 'edge'), { from: 'a', to: 'b' })
+  assertEquals(comp((await g.get(['a']))[0], 'doc').title, 'checkout')
+})
