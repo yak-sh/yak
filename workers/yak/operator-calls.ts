@@ -23,6 +23,7 @@
 // is said, the line and what was heard every CHARGED and as the call ends,
 // so an object restarted under a call loses at most that much of its charge,
 // and the stream opened again charges only its own.
+import { type Clock, system } from '@yaks/fp'
 import type { Frame, Line, Ring } from '@yaks/phone'
 import {
   type Keyed,
@@ -70,7 +71,7 @@ let NOTICED = 3000
 // each reported as lost unless its stream opens again first.
 let away = new Map<
   string,
-  { at: number; timer: ReturnType<typeof setTimeout> }
+  { at: number; cancel: () => void }
 >()
 
 /** How often a call charges its line and what it heard since it last did, in
@@ -293,6 +294,8 @@ export type Around = {
    * call is reported lost, in milliseconds: RESUMED */
   back?: number
   report?: (error: unknown) => void
+  /** the clock its timers and turns run on: the runtime's */
+  time?: Clock
 }
 
 /** A call heard and spoken around the Operator's own model. */
@@ -384,19 +387,20 @@ let carry = (
 ) => {
   let report = reporter(o)
   let wire = held(o.wire)
-  clearTimeout(away.get(o.call)?.timer)
+  let time = o.time ?? system
+  away.get(o.call)?.cancel()
   away.delete(o.call)
   let lost = (error: Error) =>
     away.set(o.call, {
-      at: Date.now(),
-      timer: setTimeout(() => {
+      at: time.now(),
+      cancel: time.after(o.back ?? RESUMED, () => {
         away.delete(o.call)
         report(error)
-      }, o.back ?? RESUMED),
+      }),
     })
-  let started = Date.now(), over = false
-  let timers: ReturnType<typeof setTimeout>[] = []
-  let later = (ms: number, f: () => void) => timers.push(setTimeout(f, ms))
+  let started = time.now(), over = false
+  let timers: (() => void)[] = []
+  let later = (ms: number, f: () => void) => timers.push(time.after(ms, f))
   let turns: Timed[] = []
   let turn: { at: number; timed: Timed } | undefined
   let finished: () => void
@@ -404,7 +408,7 @@ let carry = (
   let used = { seconds: 0, heard: 0 }
   let charge = () => {
     let last = used
-    used = { seconds: (Date.now() - started) / 1000, heard: heard() }
+    used = { seconds: (time.now() - started) / 1000, heard: heard() }
     return o.charge({
       seconds: used.seconds - last.seconds,
       heard: used.heard - last.heard,
@@ -419,7 +423,7 @@ let carry = (
   let finish = (ended = 'us') => {
     if (over) return
     over = true
-    for (let t of timers) clearTimeout(t)
+    for (let cancel of timers) cancel()
     close()
     try {
       wire.close(1000)
@@ -452,7 +456,7 @@ let carry = (
     over: () => over,
     /** the caller's turn ended now */
     stopped: () => {
-      turn = { at: Date.now(), timed: {} }
+      turn = { at: time.now(), timed: {} }
       turns.push(turn.timed)
     },
     /** what played since the turn ended was an acknowledgement, and the
@@ -466,7 +470,7 @@ let carry = (
     play: (audio: Uint8Array, answer = true) => {
       if (!audio.length || over) return
       if (turn) {
-        let ms = Date.now() - turn.at
+        let ms = time.now() - turn.at
         turn.timed.first ??= ms
         if (answer) turn.timed.answer ??= ms
       }

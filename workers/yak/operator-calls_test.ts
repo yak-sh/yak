@@ -233,10 +233,12 @@ test('a stream reopened on a ticket too old for its call is refused and reported
 test('a call charges what it used as it goes, so the object restarted under it and the stream opened again charge it all once', async () => {
   let charged: { seconds: number; heard: number }[] = []
   let lost: unknown[] = []
+  let time = clock()
   // Each opening hears a cent's worth a frame, and charges every 10 ms.
   let opening = () => {
     let cents = 0
     return calling(undefined, {
+      time,
       every: 10,
       back: 20,
       charge: (used) => Promise.resolve(void charged.push(used)),
@@ -253,6 +255,7 @@ test('a call charges what it used as it goes, so the object restarted under it a
   let first = opening()
   for (let i = 0; i < 3; i++) first.frame(audio)
   // Charged before anything ended it.
+  await time.advance(10)
   await until(() => sum() == 0.03)
   first.frame(audio)
   // The object restarts: the line it carried drops before the call ended,
@@ -264,19 +267,26 @@ test('a call charges what it used as it goes, so the object restarted under it a
   again.frame({ event: 'stop' })
   await again.call.ended
   equal(sum().toFixed(2), '0.06')
-  await new Promise((r) => setTimeout(r, 40))
+  await time.advance(20)
   equal(lost, [])
 })
 
 test('a line that drops is reported lost once its stream has not opened again', async () => {
   for (let code of [1006, 1011]) {
     let lost: unknown[] = []
-    let c = calling(undefined, { back: 10, report: (e) => void lost.push(e) })
+    let time = clock()
+    let c = calling(undefined, {
+      time,
+      back: 10,
+      report: (e) => void lost.push(e),
+    })
     c.hangup(code)
     await c.call.ended
     equal(c.done[0].ended, `close ${code}`)
+    await time.advance(9)
     equal(lost, [])
-    await until(() => lost.length == 1)
+    await time.advance(1)
+    equal(lost.length, 1)
     equal(
       (lost[0] as Error).message,
       `A call's line closed with ${code} before it ended`,
@@ -435,7 +445,9 @@ test('a turn the Operator could not take is reported, and said plainly, differen
 test('a caller who starts talking stops what is playing, and a turn is acknowledged only once its wait is noticeable, differently each time', async () => {
   // Each line is as many samples long as it has letters, to tell them apart.
   let spoken: string[] = []
+  let time = clock()
   let c = calling(['One moment.', 'Let me see.'], {
+    time,
     wait: 20,
     say: (text) => {
       spoken.push(text)
@@ -454,18 +466,22 @@ test('a caller who starts talking stops what is playing, and a turn is acknowled
   c.told().end('Thanks')
   c.call.answered('You are welcome.')
   await until(() => c.played() == 2)
-  await new Promise((resolve) => setTimeout(resolve, 40))
+  await time.advance(20)
+  await time.advance(0)
   equal(c.played(), 2)
   // A slow one is acknowledged, and the next slow one in other words.
   c.told().end('What is on my calendar?')
+  await time.advance(20)
   await until(() => c.played() == 3)
   // What the model wrote before its tool is said before the tool runs.
+  await time.advance(5)
   c.call.typed('Let me look')
   c.call.paused()
   await until(() => spoken.length == 5)
   equal(spoken[4], 'Let me look')
   c.call.answered('Let me look. You have choir at 7.')
   c.told().end('And tomorrow?')
+  await time.advance(20)
   await until(() => c.played() == 5)
   equal(
     lengths(),
@@ -481,7 +497,7 @@ test('a caller who starts talking stops what is playing, and a turn is acknowled
   await c.call.ended
   let [quick, slow] = c.done[0].turns
   equal(quick.first, quick.answer)
-  equal(slow.first! < slow.answer!, true)
+  equal([slow.first, slow.answer], [20, 25])
 })
 
 test('a call whose hearing stream is refused once the call is answered reports to the tracker', async () => {
