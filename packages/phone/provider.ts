@@ -5,6 +5,7 @@ import { ours, refusal, type Scheme } from '@yaks/hook'
 import type { Arrival, Outcome, Sender } from './text.ts'
 import type { Transport } from './options.ts'
 import type { Caller, Line, Ring } from './call.ts'
+import type { Numbers } from './numbers.ts'
 
 /** What a provider's webhook said: a text arrived or settled, a call rang,
  * or a call ended. */
@@ -61,6 +62,9 @@ export type Provider = {
   line?: Line
   /** a provider a person connects their own number through */
   own?: Own
+  /** a provider that sells numbers: what it has on offer, buying and
+   * giving one back, and their toll-free verification (./numbers.ts) */
+  numbers?: (options: Transport) => Numbers
 }
 /** Whether a provider takes webhooks: it says how they are signed and how to
  * read one. */

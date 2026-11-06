@@ -1,7 +1,7 @@
 // The directory’s Worker-owned words beside the package platform vocabulary.
 import { CORE_URI, type VocabDoc } from '@yaks/vocab'
 import { sweepDoc } from './sweep-vocab.ts'
-import { bool, num, owned, ref, text, time } from './schema.ts'
+import { bool, num, owned, ref, text, time, unique } from './schema.ts'
 export let directoryDoc: VocabDoc = {
   $vocabulary: { [CORE_URI]: true },
   title: 'directory',
@@ -371,6 +371,29 @@ export let directoryDoc: VocabDoc = {
         account: owned(text),
         ready: owned(bool),
         submitted: owned(bool),
+      },
+    },
+    // A number the platform holds for a space (numbers.ts): bought through
+    // the phone lent as `via`, on the platform's account, at the price it was
+    // bought at in dollars, `upfront` once and `monthly`, and the toll-free
+    // verification filed for it by the provider's id. Whichever space or app
+    // row wears it as `phone{number}` is where it texts from; the line says
+    // only who holds it. The space keeps it: a line whose space goes is still
+    // a number somebody pays for until it is released.
+    //
+    // Stamped, all of it, for the reason `seller` is: it is money the
+    // platform spends, written only by the number tools (numbers.ts).
+    phone_line: {
+      component: true,
+      type: 'object',
+      properties: {
+        number: owned(unique(text)),
+        via: owned(text),
+        space: owned(ref('keep')),
+        upfront: owned(num),
+        monthly: owned(num),
+        at: owned(time),
+        verification: owned(text),
       },
     },
     // What the platform takes from one sale, in basis points (sell.ts `fee`),

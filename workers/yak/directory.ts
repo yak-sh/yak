@@ -561,6 +561,21 @@ export let overdue = <T extends { trashed: Trashed | null }>(
 // opens (T-34596). How far provisioning has come, and when that was last read
 // from Cloudflare.
 export type HostStage = 'pending' | 'active' | 'error'
+/** A number the platform holds for a space, bought through the phone `via`
+ * at its price in dollars (numbers.ts), and the toll-free verification
+ * filed for it, by the provider's id. Where it is used is whichever space or
+ * app row carries it as `phone{number}`. */
+export type PhoneLine = {
+  eid: string
+  number: string
+  via: string
+  space: string
+  upfront: number
+  monthly: number
+  at: string
+  verification: string | null
+}
+
 export type Host = {
   eid: string
   name: string
@@ -722,6 +737,15 @@ export type Row = {
   email?: { address: string }
   sender?: { via: string }
   phone?: { number: string }
+  phone_line?: {
+    number: string
+    via: string
+    space: Id
+    upfront?: number | null
+    monthly?: number | null
+    at?: string | null
+    verification?: string | null
+  }
   sms_consent?: { person: Id; consent: string; at: string; space?: Id }
   signed_in?: { at?: string | null; via?: string | null }
   used?: { at?: string | null }
@@ -2480,6 +2504,22 @@ export let directoryRows = (rows: {
       )
       return row ? spaceOf(row) : null
     },
+    // The numbers the platform holds for this space (numbers.ts).
+    lines: async (space: Space): Promise<PhoneLine[]> =>
+      (await query(`.phone_line.space=${space.eid}`)).map((row) => {
+        let r = row as unknown as Row
+        let l = r.phone_line!
+        return {
+          eid: r.entity.eid,
+          number: l.number,
+          via: l.via,
+          space: idOf(l.space),
+          upfront: l.upfront ?? 0,
+          monthly: l.monthly ?? 0,
+          at: l.at ?? '',
+          verification: l.verification ?? null,
+        }
+      }),
     // The app whose own number this is (an app row's `phone{number}`), with
     // its space: where a text that arrived at it is kept (app-texts.ts).
     lined: async (number: string) => {

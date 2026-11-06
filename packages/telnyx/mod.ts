@@ -11,9 +11,13 @@ import {
   Denied,
   type Heard,
   type Line,
+  type Numbers,
+  type Offer,
   type Receipt,
   type Sender,
   type Text,
+  type TollFree,
+  type Verification,
 } from '@yaks/phone'
 
 /** Telnyx as data: its API, and the error codes that mean a carrier will not carry a text, in a person's words. */
@@ -50,7 +54,8 @@ type Said = {
   errors?: { code?: unknown; title?: string; detail?: string }[]
 }
 
-// Telnyx's API with a key: a POST when there is a body, a GET otherwise.
+// Telnyx's API with a key: a POST when there is a body, a GET otherwise,
+// unless `method` says.
 // A refusal Telnyx lists in {@link TELNYX}.blocked rejects with
 // {@link Blocked}; a 401 with {@link Denied}; a connection that failed, a 429
 // or a 5xx with `Unsent`, since nothing was done; anything else with an Error
@@ -61,12 +66,16 @@ let requester = (
     'key' | 'api' | 'fetch'
   >,
 ) =>
-async (path: string, body?: unknown): Promise<Said> => {
+async (
+  path: string,
+  body?: unknown,
+  method = body ? 'POST' : 'GET',
+): Promise<Said> => {
   let response
   try {
     // The global fetch as it is at the call, not as it was when this was made.
     response = await (given ?? globalThis.fetch)(api + path, {
-      method: body ? 'POST' : 'GET',
+      method,
       headers: {
         authorization: `Bearer ${key}`,
         accept: 'application/json',
@@ -93,6 +102,16 @@ async (path: string, body?: unknown): Promise<Said> => {
   throw new Error(words)
 }
 
+// The id of the messaging profile named `profile`.
+let profileOf = async (call: ReturnType<typeof requester>, profile: string) => {
+  let found = await call(
+    `/messaging_profiles?filter[name][eq]=${encodeURIComponent(profile)}`,
+  )
+  let id = String((found.data as unknown as { id: string }[])?.[0]?.id ?? '')
+  if (!id) throw new Error(`Telnyx has no messaging profile "${profile}"`)
+  return id
+}
+
 /**
  * A {@link Sender} over Telnyx's messaging API. A text with an `agent` goes
  * as RCS, falling back to SMS from `from` on a phone without it. Refusals
@@ -106,13 +125,7 @@ export let telnyx = (
   let own: Promise<{ id: string; number: string }> | null = null
   let ours = () =>
     own ??= (async () => {
-      let found = await call(
-        `/messaging_profiles?filter[name][eq]=${encodeURIComponent(profile)}`,
-      )
-      let id = String(
-        (found.data as unknown as { id: string }[])?.[0]?.id ?? '',
-      )
-      if (!id) throw new Error(`Telnyx has no messaging profile "${profile}"`)
+      let id = await profileOf(call, profile)
       let numbers = await call(`/messaging_profiles/${id}/phone_numbers`)
       let all = (numbers.data as unknown as { phone_number: string }[] ?? [])
         .map((n) => n.phone_number).filter(Boolean)
@@ -333,6 +346,160 @@ export let line: Line = {
   mark: (name) => JSON.stringify({ event: 'mark', mark: { name } }),
 }
 
+// What Telnyx calls a toll-free verification's state, as @yaks/phone's.
+let STATUS: Record<string, Verification['status']> = {
+  'Verified': 'verified',
+  'Rejected': 'rejected',
+  'Waiting For Customer': 'needed',
+}
+
+type Request = {
+  id?: string
+  verificationStatus?: string
+  reason?: string | null
+  phoneNumbers?: { phoneNumber?: string }[]
+}
+
+// A verification request as Telnyx answers it, whole or under `data`.
+let stands = (said: Said & Request): Verification => {
+  let r = (said.data ?? said) as Request
+  let word = r.verificationStatus ?? ''
+  return {
+    id: String(r.id ?? ''),
+    number: r.phoneNumbers?.[0]?.phoneNumber ?? '',
+    status: STATUS[word] ?? 'pending',
+    said: word,
+    ...(r.reason ? { reason: r.reason } : {}),
+  }
+}
+
+// A toll-free verification in Telnyx's fields
+// (developers.telnyx.com, `TFVerificationRequest`).
+let form = (f: TollFree) => {
+  let b = f.business
+  return {
+    businessName: b.name,
+    ...(b.dba ? { doingBusinessAs: b.dba } : {}),
+    corporateWebsite: b.website,
+    businessAddr1: b.address.street,
+    ...(b.address.street2 ? { businessAddr2: b.address.street2 } : {}),
+    businessCity: b.address.city,
+    businessState: b.address.state,
+    businessZip: b.address.zip,
+    entityType: b.entity.toUpperCase(),
+    ...(b.registration
+      ? {
+        businessRegistrationNumber: b.registration.number,
+        businessRegistrationType: b.registration.type,
+        businessRegistrationCountry: b.registration.country,
+      }
+      : {}),
+    businessContactFirstName: f.contact.first,
+    businessContactLastName: f.contact.last,
+    businessContactEmail: f.contact.email,
+    businessContactPhone: f.contact.phone,
+    messageVolume: f.volume,
+    phoneNumbers: [{ phoneNumber: f.number }],
+    useCase: f.useCase,
+    useCaseSummary: f.summary,
+    productionMessageContent: f.sample,
+    optInWorkflow: f.optIn,
+    optInWorkflowImageURLs: f.optInImages.map((url) => ({ url })),
+    additionalInformation: f.more ?? '',
+    ...(f.confirmation ? { optInConfirmationResponse: f.confirmation } : {}),
+    ...(f.help ? { helpMessageResponse: f.help } : {}),
+    ...(f.keywords ? { optInKeywords: f.keywords } : {}),
+    ...(f.privacy ? { privacyPolicyURL: f.privacy } : {}),
+    ...(f.terms ? { termsAndConditionURL: f.terms } : {}),
+    ...(f.reseller ? { isvReseller: f.reseller } : {}),
+  }
+}
+
+type Available = {
+  phone_number?: string
+  cost_information?: {
+    upfront_cost?: string
+    monthly_cost?: string
+    currency?: string
+  }
+  features?: { name?: string }[]
+}
+
+/**
+ * Telnyx's numbers: its search of what is on offer, a number order onto the
+ * messaging profile `profile`, deleting a number to give it back, and its
+ * toll-free verification requests.
+ * https://developers.telnyx.com/docs/numbers/phone-numbers/number-orders
+ */
+export let numbers = (
+  { key, profile, api, fetch: given }: Pick<
+    Telnyx,
+    'key' | 'profile' | 'api' | 'fetch'
+  >,
+): Numbers => {
+  let call = requester({ key, api, fetch: given })
+  let held = async (number: string) => {
+    let found = await call(
+      `/phone_numbers?filter[phone_number]=${encodeURIComponent(number)}`,
+    )
+    let id = (found.data as unknown as { id?: string }[])?.[0]?.id
+    if (!id) throw new Error(`Telnyx holds no number ${number} here`)
+    return id
+  }
+  return {
+    find: async (s) => {
+      let q = new URLSearchParams({
+        'filter[country_code]': s.country ?? 'US',
+        'filter[features][]': 'sms',
+        'filter[limit]': String(s.limit ?? 5),
+      })
+      if (s.tollFree) q.set('filter[phone_number_type]', 'toll_free')
+      if (s.area) q.set('filter[national_destination_code]', s.area)
+      if (s.contains) q.set('filter[phone_number][contains]', s.contains)
+      if (s.number) q.set('filter[phone_number][starts_with]', s.number)
+      let said = await call(`/available_phone_numbers?${q}`)
+      return ((said.data ?? []) as unknown as Available[]).flatMap(
+        (n): Offer[] => {
+          let number = n.phone_number
+          if (!number || (s.number && number != s.number)) return []
+          let has = (f: string) => !!n.features?.some((x) => x.name == f)
+          return [{
+            number,
+            upfront: Number(n.cost_information?.upfront_cost ?? 0),
+            monthly: Number(n.cost_information?.monthly_cost ?? 0),
+            currency: n.cost_information?.currency ?? 'USD',
+            sms: has('sms'),
+            voice: has('voice'),
+          }]
+        },
+      )
+    },
+    buy: async (number) => {
+      let said = await call('/number_orders', {
+        phone_numbers: [{ phone_number: number }],
+        messaging_profile_id: await profileOf(call, profile),
+      })
+      let order = said.data as { id?: string; status?: string } | undefined
+      return {
+        number,
+        order: String(order?.id ?? ''),
+        status: order?.status == 'success' ? 'held' : 'pending',
+      }
+    },
+    release: async (number) => {
+      await call(`/phone_numbers/${await held(number)}`, undefined, 'DELETE')
+    },
+    verify: async (f) =>
+      stands(await call('/messaging_tollfree/verification/requests', form(f))),
+    verification: async (id) =>
+      stands(
+        await call(
+          `/messaging_tollfree/verification/requests/${encodeURIComponent(id)}`,
+        ),
+      ),
+  }
+}
+
 /** The transport plugged into @yaks/phone's provider boundary. */
 export let provider: import('@yaks/phone').Provider = {
   needs: ['key', 'profile'],
@@ -349,4 +516,10 @@ export let provider: import('@yaks/phone').Provider = {
     return caller({ ...options, key: options.key })
   },
   line,
+  numbers: (options) => {
+    if (!options.key || !options.profile) {
+      throw new Error('telnyx numbers need `key` and `profile`')
+    }
+    return numbers({ ...options, key: options.key, profile: options.profile })
+  },
 }

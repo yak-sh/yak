@@ -131,6 +131,29 @@ overrides it. The provider's credentials stay with the host, and apps keep
 `phone{number}` for their own registered line. Text rows, conversation links,
 delivery outcomes and opt-outs have the same shape for every provider.
 
+## Numbers
+
+A provider that sells numbers adds `numbers(options)` beside its sender, and the
+`Phone` its plugin lends offers it as `numbers()`, on the account and profile
+the phone texts through. `Numbers` is:
+
+- `find(search)`: what is on offer (`tollFree`, `area`, `contains`, an exact
+  `number` to quote it, `limit`), each
+  `Offer{number, upfront, monthly,
+  currency, sms, voice}`.
+- `buy(number)`: a number on offer onto the account, its texts on the phone's
+  profile; `Bought{number, order, status}`, `pending` until it is held.
+- `release(number)`: a held number given back.
+- `verify(form)`: files a `TollFree` verification, the carriers' own fields (the
+  business, its kind and registration, a contact, the use case, a sample, the
+  volume and how people opt in), and `verification(id)` reads one:
+  `Verification{id, number, status, said, reason}`, where `status` is `pending`,
+  `needed` (waiting on the sender), `verified` or `rejected` and `said` is the
+  provider's word.
+
+`shelf(offers)` keeps numbers in memory: bought ones in `held`, and filed
+verifications in `filed`, pending until a test changes one.
+
 ## Calls
 
 A provider that takes calls adds `caller(options)` and `line` beside its sender,

@@ -25,6 +25,7 @@ import {
   verified,
 } from './provider.ts'
 import type { Caller, Line } from './call.ts'
+import type { Numbers } from './numbers.ts'
 import type { Texter } from '@yaks/host/senders'
 
 /** The webhook door: where the provider posts, and the key that verifies it. */
@@ -66,6 +67,9 @@ export type Phone = Texter & {
   /** how a person connects a number of their own through it, where it
    * offers that: their account opens with their own settings alone */
   own?: Own
+  /** the numbers it sells, on the account it texts through, where it
+   * sells them */
+  numbers?: () => Numbers
 }
 
 let phone = (via: string, provider: Provider, options: () => Lent): Phone => {
@@ -92,6 +96,9 @@ let phone = (via: string, provider: Provider, options: () => Lent): Phone => {
     ...provider.caller ? { caller: () => provider.caller!(transport()) } : {},
     ...provider.line ? { line: provider.line } : {},
     ...provider.own ? { own: provider.own } : {},
+    ...provider.numbers
+      ? { numbers: () => provider.numbers!(transport()) }
+      : {},
   }
 }
 

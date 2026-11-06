@@ -670,16 +670,17 @@ The complete list of reserved names:
     member memory meter model model_reservation notice notice_confirmed
     notice_letter notice_posted notice_subscription notified notify_trash
     occupancy offer openai opened openrouter operator operator_reach order
-    output output_of parent pending person persona phone plan price product
-    project provider provisional public_file published quarantined questions
-    reads recalled ref referenced refusal register_writes release_remake
-    report repository representation requires restored result retired
-    revision rtc rtc_lapse satisfies screenshot secret seeded seller sender
-    sending serves session session_input session_run sfu signed_in signin
-    sms_consent space space_logo spend staged started starter stop submitted
-    subscription supersedes supervises sweep switched task text text_post
-    theme tool topic trashed tree_entry trend tunnel typed updated usage
-    uses using verified visit volume wake wants web worked worktree written
+    output output_of parent pending person persona phone phone_line plan
+    price product project provider provisional public_file published
+    quarantined questions reads recalled ref referenced refusal
+    register_writes release_remake report repository representation requires
+    restored result retired revision rtc rtc_lapse satisfies screenshot
+    secret seeded seller sender sending serves session session_input
+    session_run sfu signed_in signin sms_consent space space_logo spend
+    staged started starter stop submitted subscription supersedes supervises
+    sweep switched task text text_post theme tool topic trashed tree_entry
+    trend tunnel typed updated usage uses using verified visit volume wake
+    wants web worked worktree written
 
 When your first choice is reserved, name the component for its specific purpose:
 the reserved name is the general one, and yours is the specific one. Not

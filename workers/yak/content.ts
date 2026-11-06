@@ -597,6 +597,60 @@ export let WORDS: Record<string, Words> = {
     'description':
       "Stop serving at a domain, whether it served a space or one app. The hostname is released back to Cloudflare and what it served is untouched: it still answers at its <space>.yaks.app address, and its data and files are not involved. The person's DNS record is theirs to remove wherever their domain is managed; until they do, it points at nothing. Only the space owner may detach. To undo: domain_attach with the same hostname, which starts the certificate again. Returns the detached hostname, the original yaks.app URL and a reminder to remove the DNS record. Documentation: https://yaks.app/docs/domains.",
   },
+  'number_find': {
+    'title': 'Find a phone number',
+    'step': {
+      'doing': 'Looking for numbers…',
+      'done': 'Found numbers',
+    },
+    'description':
+      "The phone numbers on offer for a space to buy as its own, each with what it costs up front and each month. Toll-free by default; toll_free false with an area code finds local numbers. A space's own number is how it texts the public as itself, such as a church texting its members or a township texting residents; without one it texts only its owners, from yaks.app's number. Next: number_buy with the number the person chose.",
+  },
+  'number_buy': {
+    'title': 'Buy a phone number',
+    'step': {
+      'doing': 'Buying %{number}…',
+      'done': 'Bought %{number}',
+    },
+    'description':
+      "Buy a number number_find offered, for the space to hold. Its price up front and its first month are spent from the space's monthly budget at once. Only the space owner may buy; tell the person the price before buying. A bought number texts nothing until number_assign puts it on the space or one of its apps, and a toll-free number reaches people only once its toll-free verification (number_verify) is approved.",
+  },
+  'number_assign': {
+    'title': 'Assign a phone number',
+    'step': {
+      'doing': 'Assigning %{number}…',
+      'done': 'Assigned %{number}',
+    },
+    'description':
+      "Put a number the space holds on the space, so its Operator texts from it and texts to it reach the Operator, or on one of its apps (app), so the app's texts go from it and replies reach the app's store. It moves off wherever it was before. Texts still go only to people who agreed to them. Only the space owner may assign.",
+  },
+  'number_release': {
+    'title': 'Release a phone number',
+    'step': {
+      'doing': 'Releasing %{number}…',
+      'done': 'Released %{number}',
+    },
+    'description':
+      "Give a number back to the provider: it stops costing anything, texts to it stop arriving, and whatever texted from it goes back to texting from yaks.app's number. It cannot be bought back for certain, so confirm with the person first. Only the space owner may release.",
+  },
+  'number_verify': {
+    'title': 'Verify a toll-free number',
+    'step': {
+      'doing': 'Filing the verification for %{number}…',
+      'done': 'Filed the verification for %{number}',
+    },
+    'description':
+      'File the toll-free verification carriers require before a toll-free number texts: the organization\'s legal name, address, kind (a church is non_profit, a township government) and EIN, a contact, what the texts are for (use_case, in the provider\'s list: "Religious Services", "Public Works", "Events & Planning" and so on), a sample text, the monthly volume, and how people agree to be texted with a picture of it. Ask the person for each; never invent them. yaks.app files as the reseller. Carriers review it over days; number_status reads where it stands, and a verification waiting on the sender says what they ask. Only the space owner may file.',
+  },
+  'number_status': {
+    'title': 'Check phone numbers',
+    'step': {
+      'doing': 'Checking numbers…',
+      'done': 'Checked numbers',
+    },
+    'description':
+      'The numbers a space holds: where each texts from (the space, an app, or nowhere yet), what it costs, and where its toll-free verification stands, read from the provider now. Leave number out for every number the space holds.',
+  },
   'app_publish': {
     'title': 'Publish an app for others to install',
     'description':

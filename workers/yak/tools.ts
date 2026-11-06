@@ -1,6 +1,7 @@
 import { groupBy } from '@yaks/fp'
 import { tell } from './operator-updates.ts'
 import { operatorTools } from './operator-tools.ts'
+import { numberTools } from './numbers.ts'
 import { ownedPrefix, rootedPrefix } from './file-root.ts'
 // The connector's platform tools (D-32318 §Code, build, deploy): the least
 // that makes an app. The generic graph tier is no longer here — @yaks/mcp
@@ -316,6 +317,8 @@ import {
   inBin,
   inSpace,
   type Out,
+  owner,
+  owns,
   ownSpace,
   reacquire,
   refuse,
@@ -630,14 +633,6 @@ let titled = (v: unknown) => {
 // The caller as the space's owner, of what a door found: who belongs is the
 // owner's to say. An editor writes the data and the files; they do not hand
 // out keys.
-let owner = <T extends { space: Space; who: Who }>(it: T) => {
-  if (it.who.role != 'owner') {
-    throw refuse('access', `not the owner of ${it.space.slug}`)
-  }
-  return it
-}
-
-let owns = async (ctx: Ctx, args: Args) => owner(await inSpace(ctx, args, true))
 
 // The caller as the space's owner, on one of its apps. Offering an app to the
 // whole platform is the space's act, not one its editors make: an editor
@@ -6665,4 +6660,5 @@ export let TOOLS: Tool[] = [
   ...operatorTools.map(worded),
   ...viewsTools,
   ...connectionTools,
+  ...numberTools.map(worded),
 ]

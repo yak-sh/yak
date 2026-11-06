@@ -516,6 +516,18 @@ let admitted = (ctx: Ctx, space: Space, who: Who, apps?: App[] | null) => {
 export let inSpace = (ctx: Ctx, args: Args, write = false, over = false) =>
   seated(ctx, args, write, over, false)
 
+/** The caller, refused unless they own the space. */
+export let owner = <T extends { space: Space; who: Who }>(it: T) => {
+  if (it.who.role != 'owner') {
+    throw refuse('access', `not the owner of ${it.space.slug}`)
+  }
+  return it
+}
+
+/** The caller writing in a space they own. */
+export let owns = async (ctx: Ctx, args: Args) =>
+  owner(await inSpace(ctx, args, true))
+
 /** The caller writing in a space wherever it is, the trash included: the
  * trash's own doors, space_delete and space_restore. */
 export let spaceBin = (ctx: Ctx, args: Args) =>

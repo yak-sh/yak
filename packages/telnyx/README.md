@@ -12,6 +12,11 @@ ways as μ-law (PCMU), the telephone's own, so nothing is transcoded; `reject`
 and `hangup` end it. `line` reads and writes the media stream's frames. `heard`
 answers `ring` for an incoming `call.initiated` and `ended` for `call.hangup`.
 
+`numbers({ key, profile, api?, fetch? })` is its number suite: the search of
+numbers on offer with their prices, a number order onto the named messaging
+profile, deleting a number to give it back, and toll-free verification requests
+(@yaks/phone `Numbers`).
+
 [Telnyx messaging API](https://developers.telnyx.com/docs/messaging/messages/receiving-webhooks),
 [media streaming](https://developers.telnyx.com/docs/voice/programmable-voice/media-streaming)
 

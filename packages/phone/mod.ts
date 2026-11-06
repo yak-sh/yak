@@ -110,3 +110,15 @@ export {
   verified,
 } from './provider.ts'
 export type { Caller, Frame, Line, Ring } from './call.ts'
+export {
+  type Address,
+  type Bought,
+  type Entity,
+  type Numbers,
+  type Offer,
+  type Search,
+  type Shelf,
+  shelf,
+  type TollFree,
+  type Verification,
+} from './numbers.ts'
