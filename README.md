@@ -21,6 +21,7 @@ Codex have cost you, [docs/SPEND.md](docs/SPEND.md) is the short version.
 
 ```sh
 deno run -A jsr:@yaks/cli/install
+# to update, or take a release from today: deno run -A --minimum-dependency-age=0 --reload=jsr:@yaks/cli jsr:@yaks/cli/install
 yak init            # ~/.yak/yak.json and its graph, worked at by you
 yak task new 'Add the sign-up page'
 yak task list
@@ -33,11 +34,11 @@ yak help            # every command
 The installer puts `yak` on your PATH at its own release, so the command and
 every package a config names are one set. Deno refuses any package published
 less than a day ago (its minimum dependency age), so the installer takes the
-newest release at least a day old. If Deno says a version "was newer than the
-specified minimum dependency date", or to update, run it again with
-`--minimum-dependency-age=0 --reload=jsr:@yaks/cli`: the first takes a release
-published today, the second asks jsr.io again instead of reusing the release
-Deno found last.
+newest release at least a day old. To update, or if Deno says a version "was
+newer than the specified minimum dependency date", run the command commented
+below it: `--minimum-dependency-age=0` takes a release published today, and
+`--reload=jsr:@yaks/cli` asks jsr.io again instead of reusing the release Deno
+found last. They are Deno's flags, so they go before the package.
 
 `yak init` writes the config (`db`, the plugins, and who you are) and never
 replaces one. It asks for no name: it takes git's `user.name`, or else your
