@@ -164,9 +164,12 @@ export type Breaks = (bundles: Bundle[]) => Promise<unknown>
 // it there (the app's own code broke) leaves the owner's record open;
 // resolving it (yaks.app fixed it) archives the owner's record, which its
 // `scope` and `occurrence` tags name (@yaks/tracker `settle`). Tagged
-// `source: app`, the space's tracker writes the one letter. A `mistake` is the
-// page's code wrong about its own words, as the store refused it (apps.ts
-// `mistaken`): a refusal of the caller's own input, so the owner's alone.
+// `source: app`, the space's tracker writes the one letter. Only a probe's
+// space is left out: one whose owners could not be read counts as a person's,
+// since the directory failing is when the platform is likeliest at fault. A
+// `mistake` is the page's code wrong about its own words, as the store
+// refused it (apps.ts `mistaken`): a refusal of the caller's own input, so the
+// owner's alone.
 //
 // A file the browser could not load says only its address, which a fault's
 // normalization erases, so every space's broken image would be one bug. Its
@@ -292,7 +295,7 @@ export let noted = async (
     tags: { ...place.tags, ...reached },
   })
   await queue(at.env.ERRORS)(owned)
-  if (account == 'person' && !broke.mistake) {
+  if (account != 'test' && !broke.mistake) {
     await queue(at.env.ERRORS)(
       seenByPlatform(error, broke.version, at, {
         ...reached,

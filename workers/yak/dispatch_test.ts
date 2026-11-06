@@ -677,6 +677,28 @@ test("a person's app break is the platform's to look at too", async () => {
   await workerBreak(env, probe, app, visit(), fell)
   let account = (kept()[0].error as { tags: { account?: string } }).tags.account
   assertEquals([kept().length, shared().length, account], [1, 0, 'test'])
+  // A space whose owners the directory cannot name is no probe's: its break
+  // still reaches the platform beside the directory's own failure, naming the
+  // owner's copy for settling.
+  let lost = { ...space, eid: 's-lost', slug: 'lost' }
+  let blind = {
+    ...envOf(mirror().get),
+    STORE: {
+      idFromName: (n: string) => n,
+      get: () => ({ fetch: () => Promise.reject(Error('directory is down')) }),
+    },
+  } as unknown as Env
+  wrote = []
+  await workerBreak(blind, lost, app, visit(), fell)
+  let tagged = shared().map((row) =>
+    (row.error as { tags: Record<string, unknown> }).tags
+  )
+  let copies = tagged.filter((tags) => tags.source == 'app')
+  let [named] = copies
+  assertEquals(
+    [copies.length, named.scope, named.occurrence, named.account],
+    [1, lost.eid, kept()[0].entity.eid, undefined],
+  )
 })
 
 // A missing file's address normalizes away, so its fault names the app: one
