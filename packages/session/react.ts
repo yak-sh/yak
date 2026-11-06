@@ -1579,6 +1579,10 @@ export let react = async (
         ),
       ])
     } catch (e) {
+      // A step withdrawn (a Stop, a cancel) aborts its summary: the
+      // withdrawal is the line that says so, not a failure of the summary,
+      // and a turn that goes on asks for the summary again.
+      if (deps.signal?.aborted) return current()
       // A summary that may yet come is asked again by the pool, with
       // nothing written; one that stands is the line the bound counts.
       if (passing(e) && deps.attempt && !deps.attempt.last()) throw again(e)

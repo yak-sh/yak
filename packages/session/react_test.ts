@@ -695,6 +695,46 @@ test('a transcript compacts at half its model’s window, not before', async () 
   assertEquals(summarizer.asked.length, 1)
 })
 
+test('a step withdrawn while it summarizes writes and reports nothing, and the next step summarizes', async () => {
+  let g = world()
+  await windowed(g, 100_000)
+  await appendEntry(g, ids.s, 'x'.repeat(240_000))
+  // The step's signal aborts mid-summary, as a Stop does; the provider
+  // throws its reason, as a request relaying the signal does.
+  let stop = new AbortController()
+  let reported: string[] = []
+  let deps = {
+    model: counting(() => says('r', 'ok')).model,
+    tools: [],
+    mint,
+    report: (e: unknown, _: string, phase: string) =>
+      reported.push(`${phase}: ${e}`),
+  }
+  let before = await kinds(g, ids.s)
+  await react(g, ids.s, {
+    ...deps,
+    signal: stop.signal,
+    compactModel: {
+      model: () => {
+        stop.abort()
+        return Promise.reject(stop.signal.reason)
+      },
+      name: 'fake-1',
+    },
+  })
+  assertEquals(await kinds(g, ids.s), before)
+  assertEquals(reported, [])
+  let summarizer = counting(() => says('sum', 'The story so far.'))
+  assertEquals(
+    await rest(g, ids.s, {
+      ...deps,
+      compactModel: { model: summarizer.model, name: 'fake-1' },
+    }),
+    'settled',
+  )
+  assertEquals(summarizer.asked.length, 1)
+})
+
 test('a heavy fixed part makes a cut summarize the newest asks, not only the oldest line', async () => {
   let g = world()
   await windowed(g, 100_000)
