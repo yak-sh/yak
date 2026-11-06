@@ -303,8 +303,11 @@ export let configure = (
  * write lock up front. An in-memory one belongs to this process alone and sets
  * nothing.
  */
-export let driver = (db: Database): Driver => {
-  let run = prepared(db)
+export let driver = (
+  db: Database,
+  { lend = false }: { lend?: boolean } = {},
+): Driver & { close: () => void; database: () => Database } => {
+  let run = runner(db)
   // Memory and temporary names have no file. For every other name ask SQLite:
   // the flags may still have made it a database in memory.
   let main = render(select({
@@ -319,9 +322,49 @@ export let driver = (db: Database): Driver => {
   // interpret them as string literals. The parser checks expressions and WHERE
   // clauses too, without one table_info query per index on every startup.
   configure(db, 'SQLITE_DBCONFIG_DQS_DDL', false)
-  let d = connection(run, { file, changes: () => db.changes })
+  // The key of the template this connection holds under its savepoint, while
+  // it is lent (`spares`).
+  let lent: string | undefined
+  let closed = false
+  // How deep the templates being made here are nested.
+  let making = 0
+  let d = connection((sql, params) => {
+    if (closed) throw new Error('the database is closed')
+    return run(sql, params)
+  }, { file, changes: () => db.changes })
   let query = d.query
+  // A lent connection is already inside its savepoint, so a caller's own
+  // transaction is a savepoint within it, as nested units already are. A
+  // setting said outside any of them, which SQLite would ignore inside a
+  // transaction, ends the loan first: the store keeps what it wrote, and the
+  // connection, no longer its template, closes with it.
+  let nested: string[] = []
+  d.query = (s) => {
+    if (!lent) return query(s)
+    if (s.t == 'pragma' && s.value !== undefined && !nested.length) {
+      query({ t: 'release', name: LENT })
+      lent = undefined
+      return query(s)
+    }
+    let said = standing(s)
+    for (let t of said) {
+      if (t.t == 'savepoint') nested.push(t.name)
+      else if (t.t == 'release' && nested.includes(t.name)) {
+        nested.splice(nested.lastIndexOf(t.name))
+      }
+    }
+    return said.flatMap(query)
+  }
   let watch = listen(() => run(version.sql, version.params)[0]?.data_version)
+  let lendFrom = (at: string, spare?: Database) => {
+    if (spare) {
+      db.close()
+      db = spare
+      run = runner(spare)
+    }
+    query({ t: 'savepoint', name: LENT })
+    lent = at
+  }
   return Object.assign(d, {
     // A database in memory is this process's alone, and copying a schema into
     // one is a page copy where making it is hundreds of statements. One on
@@ -331,19 +374,92 @@ export let driver = (db: Database): Driver => {
         let before = holding(query)
         if (!before.empty || db.inTransaction) return make()
         let at = key + '\n' + before.objects
+        // A schema made inside another's making (the store's own, inside its
+        // host's) is part of the outer template, which alone is lent.
+        let lending = lend && !making
+        let spare = lending ? spares.get(at)?.pop() : undefined
         let kept = templates.get(at)
-        if (kept) {
-          kept.backup(db)
+        if (spare || kept) {
+          if (!spare) kept!.backup(db)
+          if (lending) lendFrom(at, spare)
           // A copy is a store of its own: it never takes the lineage
           // identity of the one its template was made in (./meta.ts `epoch`).
           if (epochAt(d)) meta(d).set(EPOCH, crypto.randomUUID())
           return
         }
-        make()
+        making++
+        try {
+          make()
+        } finally {
+          making--
+        }
         let copy = new Database(':memory:')
         db.backup(copy)
         templates.set(at, copy)
+        if (lending) lendFrom(at)
       },
     },
+    database: () => db,
+    // A lent connection goes back as its template, rolled back to the
+    // savepoint it was lent at, with every statement it compiled kept.
+    close: () => {
+      if (closed) return
+      closed = true
+      let at = lent
+      lent = undefined
+      if (at && db.inTransaction) {
+        try {
+          for (let s of LEAVE) run(s.sql, s.params)
+        } catch (error) {
+          db.close()
+          throw error
+        }
+        let held = spares.get(at) ?? []
+        if (!db.inTransaction && held.length < SPARES) {
+          spares.set(at, [...held, db])
+          return
+        }
+      }
+      db.close()
+    },
   })
+}
+
+// The savepoint a lent connection stands in: what it rolls back to when its
+// store closes.
+let LENT = 'yaks_lent'
+let LEAVE = [
+  render({ t: 'rollback', to: LENT }),
+  render({ t: 'release', name: LENT }),
+]
+
+// A caller's transaction, said to a lent connection: one savepoint within the
+// one it stands in, as a nested unit's is (./unit.ts).
+let standing = (s: Stmt): Stmt[] =>
+  s.t == 'begin'
+    ? [{ t: 'savepoint', name: 'yaks_begun' }]
+    : s.t == 'commit'
+    ? [{ t: 'release', name: 'yaks_begun' }]
+    : s.t == 'rollback' && !s.to
+    ? [{ t: 'rollback', to: 'yaks_begun' }, {
+      t: 'release',
+      name: 'yaks_begun',
+    }]
+    : [s]
+
+// Connections in memory whose stores have closed, each holding the template
+// it was made from, by that template's key. A store lent one starts with
+// every statement the last compiled for that same schema: SQLite compiles
+// per connection, and a statement survives a rollback, where a copy of the
+// template recompiles all of them. A test suite opens thousands of stores in
+// memory, each of whose first model turn compiled two hundred statements.
+let spares = new Map<string, Database[]>()
+let SPARES = 8
+
+// Each connection's statements, kept with it however many stores it serves.
+let runners = new WeakMap<Database, ReturnType<typeof prepared>>()
+let runner = (db: Database) => {
+  let run = runners.get(db)
+  if (!run) runners.set(db, run = prepared(db))
+  return run
 }

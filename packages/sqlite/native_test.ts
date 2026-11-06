@@ -76,6 +76,82 @@ test('each store in memory made from a template mints its own epoch', () => {
   assertEquals(!!a && !!b && a != b, true)
 })
 
+// A store in memory that closed lends its connection to the next store made
+// from the same template: rolled back to it, every statement compiled.
+let lent = (body: (d: Driver) => void) => {
+  let d = open(':memory:')
+  try {
+    storage(d, shop).install()
+    body(d)
+  } finally {
+    d.close()
+  }
+}
+let titles = (d: Driver) => scan(d, 'doc', undefined, ['title'])
+let write = (d: Driver, title: string) =>
+  storage(d, shop).tx((tx) =>
+    tx.patch([{ entity: { eid: title }, doc: { title } }])
+  )
+let compiles = (body: () => void) => {
+  let prepare = Database.prototype.prepare, n = 0
+  Database.prototype.prepare = function (this: Database, sql: string) {
+    n++
+    return prepare.call(this, sql)
+  }
+  try {
+    body()
+  } finally {
+    Database.prototype.prepare = prepare
+  }
+  return n
+}
+
+test('a store in memory lent a closed one’s connection has only its own rows, epoch and compiled writes', () => {
+  let epochs: unknown[] = []
+  lent((d) => {
+    write(d, 'first')
+    epochs.push(epochAt(d))
+  })
+  let n = compiles(() =>
+    lent((d) => {
+      assertEquals(titles(d), [])
+      write(d, 'second')
+      assertEquals(titles(d), [{ title: 'second' }])
+      epochs.push(epochAt(d))
+    })
+  )
+  assertEquals(n < 10, true, `${n} statements compiled again`)
+  assertEquals(!!epochs[0] && epochs[0] != epochs[1], true)
+})
+
+test('a caller’s own transaction on a lent connection commits and rolls back', () =>
+  lent((d) => {
+    d.query({ t: 'begin' })
+    write(d, 'undone')
+    d.query({ t: 'rollback' })
+    d.query({ t: 'begin', mode: 'immediate' })
+    write(d, 'kept')
+    d.query({ t: 'commit' })
+    assertEquals(titles(d), [{ title: 'kept' }])
+  }))
+
+test('a setting said to a lent connection takes effect, and it is not lent again', () => {
+  lent((d) => {
+    write(d, 'kept')
+    d.query({ t: 'pragma', name: 'foreign_keys', value: 'off' })
+    assertEquals(d.query({ t: 'pragma', name: 'foreign_keys' }), [{
+      foreign_keys: 0,
+    }])
+    assertEquals(titles(d), [{ title: 'kept' }])
+  })
+  lent((d) => {
+    assertEquals(titles(d), [])
+    assertEquals(d.query({ t: 'pragma', name: 'foreign_keys' }), [{
+      foreign_keys: 1,
+    }])
+  })
+})
+
 // A database that already holds rows is made in place: a copy would lose them.
 test('a store in memory that already holds rows keeps them through install', () => {
   let kept = (d: Driver) =>

@@ -1099,28 +1099,34 @@ export let storage = (
           // Memory templates keep schema, never a store's lineage identity.
           if (driver.file && clean) seal()
         })
-      driver.query(keys('off'))
-      try {
-        // Templates are only for fresh in-memory files; file installs always
-        // inspect their standing schema under BEGIN IMMEDIATE.
-        let fresh = !installed(driver) &&
-          !Object.keys(standing(driver, vocab)).length
-        fresh && driver.template ? driver.template(print, make) : make()
-        if (!driver.file) {
-          unit(driver, () => {
-            epoch(driver)
-            if (classified) backfill(driver, numbered)
-            if (fresh || clean) {
-              receipt = {
-                schema: mark(componentTables(driver, made)),
-                statistics: receipt?.statistics,
-              }
-              meta(driver).set(SCHEMA, receipt.schema)
-            }
-          })
+      // Foreign keys are off while tables are rebuilt, and only then: setting
+      // the pragma, to any value, makes SQLite compile again every statement
+      // the connection keeps, and a template's copy rebuilds nothing.
+      let rebuild = () => {
+        driver.query(keys('off'))
+        try {
+          make()
+        } finally {
+          driver.query(keys('on'))
         }
-      } finally {
-        driver.query(keys('on'))
+      }
+      // Templates are only for fresh in-memory files; file installs always
+      // inspect their standing schema under BEGIN IMMEDIATE.
+      let fresh = !installed(driver) &&
+        !Object.keys(standing(driver, vocab)).length
+      fresh && driver.template ? driver.template(print, rebuild) : rebuild()
+      if (!driver.file) {
+        unit(driver, () => {
+          epoch(driver)
+          if (classified) backfill(driver, numbered)
+          if (fresh || clean) {
+            receipt = {
+              schema: mark(componentTables(driver, made)),
+              statistics: receipt?.statistics,
+            }
+            meta(driver).set(SCHEMA, receipt.schema)
+          }
+        })
       }
     }
     if (classified && base.counts == 'eager') {

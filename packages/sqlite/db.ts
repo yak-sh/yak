@@ -58,7 +58,9 @@ export let open = (path: string, opts: { readOnly?: boolean } = {}): Opened => {
   if (path != ':memory:') {
     db.exec(render({ t: 'pragma', name: 'busy_timeout', value: 60_000 }).sql)
   }
-  let d = driver(db)
+  // A database in memory is lent a spare connection holding its template
+  // where one waits (./native.ts `spares`), and gives it back as it closes.
+  let d = driver(db, { lend: path == ':memory:' })
   let set = (name: string, value: string | number) =>
     d.query({ t: 'pragma', name, value })
   set('foreign_keys', 'on')
@@ -83,6 +85,7 @@ export let open = (path: string, opts: { readOnly?: boolean } = {}): Opened => {
   return Object.assign(d, {
     ...loadable() && {
       extension: (file: string) => {
+        let db = d.database()
         db.enableLoadExtension = true
         try {
           db.loadExtension(file)
@@ -91,6 +94,5 @@ export let open = (path: string, opts: { readOnly?: boolean } = {}): Opened => {
         }
       },
     },
-    close: () => db.close(),
   })
 }
