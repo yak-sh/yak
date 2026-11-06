@@ -218,6 +218,8 @@ let SESSION = /\/workers\/assets\/upload\b/
 // JSON API errors hide their HTTP status on the console. Wrangler's sanitized
 // debug file records it even at normal verbosity. Use the last response before
 // the final API error, never an earlier request that Wrangler recovered from.
+let REQUEST =
+  /\b(?:GET|POST|PUT|PATCH|DELETE|HEAD|OPTIONS) (\/\S+) -> (\d{3})\b[^\n]*/
 let transient = ({ output, log = '' }: StepResult) => {
   output = stripVTControlCharacters(output).split('[ERROR]').at(-1)!
   if (INTERNAL.test(output)) return true
@@ -227,9 +229,7 @@ let transient = ({ output, log = '' }: StepResult) => {
   )
   if (!malformed && !failed) return false
   if (failed && RACED.test(output)) return true
-  let request =
-    /\b(?:GET|POST|PUT|PATCH|DELETE|HEAD|OPTIONS) (\/\S+) -> (\d{3})\b/
-      .exec(output)
+  let request = REQUEST.exec(output)
   if (request?.[2] == '401' && SESSION.test(request[1])) return true
   let status = request?.[2]
   if (!status) {
@@ -245,6 +245,22 @@ let transient = ({ output, log = '' }: StepResult) => {
   return status
     ? status.startsWith('5') || (malformed && Number(status) < 400)
     : malformed
+}
+
+/** What a failed Wrangler run throws. Cloudflare's API failing is one
+ * fault, whichever endpoint and caller met it, so one outage files one bug. */
+export let failure = (args: string[], result: StepResult): Error => {
+  let output = stripVTControlCharacters(result.output)
+  if (!transient(result)) {
+    return new Error(
+      `wrangler ${command(args)} exited ${result.code}: ${output}`,
+    )
+  }
+  let request = REQUEST.exec(output)?.[0]
+  return Object.assign(
+    new Error(`Cloudflare's API failed${request ? `: ${request}` : ''}`),
+    { fault: 'cloudflare api failed' },
+  )
 }
 
 /** Run Wrangler until it succeeds, fails for good, or a passing Cloudflare

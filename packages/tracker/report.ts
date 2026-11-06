@@ -14,6 +14,8 @@ export type Context = {
   eid?: string
   at?: string
   level?: Level
+  /** the bug this files under; default the error's own `fault`, if it names
+   * one, else one derived from its kind, message and top frame */
   fault?: string
   commit?: string
   version?: number
@@ -205,8 +207,18 @@ export let described = (
   }
 }
 
+// The fault a failure names for itself, wherever it is caught: one cause met
+// by many callers is one bug.
+let named = (error: unknown) => {
+  let fault = error && typeof error == 'object'
+    ? (error as { fault?: unknown }).fault
+    : undefined
+  return typeof fault == 'string' ? fault : undefined
+}
+
 export let capture = (error: unknown, context: Context): Bundle[] => {
   let shown = described(error)
+  let fault = context.fault ?? named(error)
   let row: Bundle = {
     entity: { eid: context.eid ?? crypto.randomUUID() },
     ...context.actor ? { $actor: context.actor } : {},
@@ -216,7 +228,7 @@ export let capture = (error: unknown, context: Context): Bundle[] => {
       ...error instanceof Error
         ? {}
         : { message: shown ? `${shown.type}: ${shown.value}` : String(error) },
-      ...context.fault ? { fault: context.fault } : {},
+      ...fault ? { fault } : {},
       ...context.commit ? { commit: context.commit } : {},
       ...context.version != null ? { version: context.version } : {},
       ...context.environment ? { environment: context.environment } : {},

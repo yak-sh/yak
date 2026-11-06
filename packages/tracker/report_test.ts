@@ -143,6 +143,15 @@ test('capture preserves provenance, scrubs request secrets and bounds breadcrumb
   equal((comp(rows[0], 'breadcrumbs').items as unknown[]).length, 20)
 })
 
+test('an error that names its fault files under it wherever it is caught', () => {
+  let outage = () => Object.assign(new Error('API down'), { fault: 'api down' })
+  let call = capture(outage(), { sink: () => {}, during: { kind: 'call' } })[0]
+  let duty = capture(outage(), { sink: () => {}, tags: { duty: 'look' } })[0]
+  equal([faultOf(call), faultOf(duty)], ['api down', 'api down'])
+  let told = capture(outage(), { sink: () => {}, fault: 'told' })[0]
+  equal(faultOf(told), 'told')
+})
+
 test('a thrown object reports its contents and the place that reported it', async () => {
   let top = (row: Bundle) => str(comp(row, 'exception').stack).split('\n')[1]
   let reportedHere = (value: unknown) => capture(value, { sink: () => {} })[0]

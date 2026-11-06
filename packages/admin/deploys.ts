@@ -7,6 +7,7 @@ import type { Ran } from '@yaks/git/land'
 import { CallError, Interrupted } from '@yaks/tools/errors'
 import { sleep } from '@yaks/fp'
 import {
+  failure,
   retried,
   type StepResult,
   WRANGLER,
@@ -410,7 +411,8 @@ export let needGit = async (
 }
 
 /** Run Wrangler in the Worker's directory. A passing Cloudflare API outage
- * is retried (workers/yak/wrangler.ts `retried`); a lasting one throws. */
+ * is retried (workers/yak/wrangler.ts `retried`); a lasting one throws its
+ * `failure`. */
 export let wrangler = async (
   root: string,
   args: string[],
@@ -423,7 +425,8 @@ export let wrangler = async (
     () => run(`${root}/workers/yak`, cmd, argv, stopping),
     { wait, signal: stopping },
   )
-  return answer(cmd, argv, r)
+  if (r.code) throw failure(args, r)
+  return r.stdout
 }
 
 /** The two deployment-history reads, in order and never at once. Wrangler's
