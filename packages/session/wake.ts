@@ -111,11 +111,29 @@ let given = async (g: Graph, session: Eid): Promise<number> => {
 export let unanswered = async (g: Graph, session: Eid): Promise<Bundle[]> =>
   await g.read(`${await saidSince(g, session)}&.order=entry.seq&*`)
 
+/**
+ * Everything a transcript was told, in order: what a run that never began is
+ * given when it does.
+ *
+ * ```ts
+ * import { told } from '@yaks/session'
+ *
+ * // let said = await told(graph, session)
+ * ```
+ */
+export let told = async (g: Graph, session: Eid): Promise<Bundle[]> =>
+  await g.read(`${inputs(g, session)}&.order=entry.seq&*`)
+
+// What a transcript is told: an input, not its own output, an ending, a notice,
+// a line read from a file or the instructions a run was started with.
+let inputs = (g: Graph, session: Eid): string =>
+  `.entry.session=${session}&.content&!output&!${STOP_ENTRY}&!notice` +
+  ['lines', 'prompt'].filter((c) => g.vocab.comp(c)).map((c) => `&!${c}`)
+    .join('')
+
 // The query for what a transcript was told that it was not given.
 let saidSince = async (g: Graph, session: Eid): Promise<string> =>
-  `.entry.session=${session}&.entry.seq>${await given(g, session)}` +
-  `&.content&!output&!${STOP_ENTRY}&!notice` +
-  (g.vocab.comp('lines') ? '&!lines' : '')
+  `${inputs(g, session)}&.entry.seq>${await given(g, session)}`
 
 /** Whether a request waits in a transcript for its next turn or run: an input
  * asking for one that its newest ask was not given. */

@@ -137,6 +137,36 @@ test('a run that stopped talking is still over, and says so once', async () => {
   }
 })
 
+// How a run that ended `code`, having printed `err` on stderr, reads at its
+// end, and the failures told of it; `asked` when somebody stopped it.
+let ending = async (code: number, err: string, asked = false) => {
+  let { g, dir, close } = await logged([], code)
+  Deno.writeTextFileSync(`${dir}/S1.err`, err)
+  if (asked) await g.apply([{ entity: { eid: 'S1' }, stop: {} }])
+  let told: string[] = []
+  try {
+    await follow(g, 'S1', claude.read, {
+      dir,
+      report: (e, c) => void told.push(`${c?.tags?.step}: ${e}`),
+    })
+    return [comp((await entries(g)).at(-1), 'content').body, told]
+  } finally {
+    close()
+  }
+}
+
+test('a run that ends badly says how in its last line, and is told unless asked', async () => {
+  let ended = 'the provider was ended by SIGKILL (exit 137): out of memory'
+  assertEquals(await ending(137, 'starting\nout of memory\n'), [
+    ended,
+    [`run ended: Error: a spawned run ended: ${ended}`],
+  ])
+  assertEquals(await ending(143, '', true), [
+    'the provider was ended by SIGTERM (exit 143)',
+    [],
+  ])
+})
+
 let said = [
   { type: 'assistant', message: { content: [{ type: 'text', text: 'hi' }] } },
   { type: 'result', usage: { output_tokens: 3 } },

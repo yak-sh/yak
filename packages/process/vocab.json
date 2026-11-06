@@ -65,6 +65,12 @@
           "ref": "workspace",
           "death": "keep",
           "description": "the original launch workspace, retained for wait, stop and output recovery; absent placement is unknown, never local"
+        },
+        "watcher": {
+          "type": "string",
+          "ref": "entity",
+          "death": "detach",
+          "description": "the process (an entity) launching it and reading how it goes, or the one that took it up after; a run whose watcher is over is the next process's to take up, and one it never launched is started again"
         }
       }
     },

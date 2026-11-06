@@ -68,7 +68,17 @@ same logs. It also takes up a run that is over but whose transcript never ended
 (its log was left unread partway), and reads it to its end. A one-shot command
 adopts no run: its tails would outlive the lease it gives back when it closes.
 Start effects await recording the child process; log following runs in the
-background, with failures sent to the configured `report` callback.
+background, with failures sent to the configured `report` callback, which a host
+points at its tracker.
+
+A run's `process{watcher}` is the process that took the session for it and reads
+it. The duty looks again every 30 seconds (`takeUp()`): a run whose watcher is
+over, or leaving (alive, but no longer working the effects, so its tails have
+stopped), becomes the duty's to read; a start whose watcher ended before it
+launched (a restart that lands between the take and the launch) is started
+again, given what the session was told, and reported. A session whose provider
+never began a thread starts its next run as a first run, given everything it was
+told.
 
 <a id="how-the-child-process-is-started"></a>
 
@@ -89,7 +99,10 @@ lines remain in the file and are not entries.
 
 After process exit and final log import, the follower appends its own `stop`
 entry as a final import receipt, even if the provider already printed a stop. A
-nonzero exit is recorded with that entry.
+nonzero exit is recorded with that entry, its text naming the cause: the exit
+code or the signal it names, a wrapper killed before it wrote a code, or one
+that never reported a pid, then the last line the provider wrote on stderr. A
+run nobody asked to stop that ends any way but cleanly is reported.
 
 <a id="carrying-on"></a>
 
@@ -208,7 +221,8 @@ export const service = adopting({ adapters: { ...adapters, mine } })
 
 The main module exports the built-in `claude` and `codex` adapters, the
 `adapters` table, adapter types, and the lower-level `asked()`, `follow()`,
-`start()`, `resume()`, and `down()` functions. Additional entry points are:
+`start()`, `resume()`, `takeUp()`, and `down()` functions. Additional entry
+points are:
 
 - `@yaks/spawn/vocab`: `spawnDoc` and `docs`;
 - `@yaks/spawn/effects`: `effects`, `spawning()`, and effect configuration;

@@ -80,6 +80,11 @@ export type Process = {
   command?: string | null
   /** where it was launched — absent on an adopted process */
   cwd?: string | null
+  /** the roles it serves, where it opened a graph */
+  roles?: string[] | null
+  /** the process launching it and reading how it goes, or the one that took
+   * it up after: an entity, not a pid */
+  watcher?: string | null
 }
 
 /** What a process of ours runs on, as it says about itself. */

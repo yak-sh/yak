@@ -10,7 +10,10 @@ import * as system from '@yaks/process/system'
 //    service manager, a pidfile, and a file holding the exit code — enough
 //    to pick the run back up later. The `process` component is stored on the
 //    session's own entity: one entity, one run at a time. Nothing here reaps
-//    child processes.
+//    child processes. Its `watcher` is the process that took the session for
+//    the run and reads it; once that one is over or leaving, the duty takes
+//    the run up, and starts again a run it never launched (`takeUp`), so a
+//    restart that lands while a run starts costs a moment, not the run.
 // 2. The file is the log. The child's stdout is written to @yaks/process's
 //    `<eid>.out` by the wrapper, and survives every restart of the server. The
 //    graph stores the transcript read out of it by @yaks/session's importer,
@@ -60,6 +63,7 @@ import {
   rouse,
   SESSION,
   sessionEnv,
+  told as everything,
   unanswered,
 } from '@yaks/session'
 import { pull, recount, type Tail, tail } from '@yaks/session/tail'
@@ -67,11 +71,13 @@ import { kept } from '@yaks/session/service'
 import {
   clean,
   EXIT,
+  gone,
   launch,
   paths,
   PROCESS,
   type Process,
   type Run,
+  selfEid,
   signal,
   store,
   watch,
@@ -117,16 +123,37 @@ export type Opts = {
   launch?: typeof launch
   /** mint an entry's eid (default a uuid) */
   mint?: () => string
-  /** where a failure that has nobody to throw at goes */
-  report?: (err: unknown) => void
+  /** where a failure that has nobody to throw at goes: the host's tracker
+   * (@yaks/cli `Host.report`), else the console */
+  report?: Report
   /** the host shutting down (@yaks/cli `Host.stopping`): a run's log is read
    * until the run is over or this aborts, so a tail never polls a graph that
    * has closed (default never) */
   signal?: AbortSignal
 }
 
+/** Where a failure is told, with what it happened to (@yaks/tracker
+ * `Context`). */
+export type Report = (
+  err: unknown,
+  context?: {
+    tags?: Record<string, string>
+    during?: { session?: string }
+  },
+) => unknown
+
 let sleep = (ms: number) => new Promise((go) => setTimeout(go, ms))
-let told = (o: Opts) => o.report ?? ((err: unknown) => console.error(err))
+let told = (o: Opts): Report =>
+  o.report ?? ((err, context) => console.error(err, context ?? ''))
+
+// A failure that happened to a session's run, told where it is seen (M-37965).
+let failure = (o: Opts, session: string, step: string, message: string) =>
+  void Promise.resolve(
+    told(o)(new Error(message), {
+      tags: { package: '@yaks/spawn', step },
+      during: { session },
+    }),
+  ).catch(() => {})
 
 let comp = (b: Bundle | undefined, name: string) =>
   b?.[name] as Comp | undefined
@@ -142,6 +169,45 @@ let one = async (
 // wears (its computed status and cost) reads every entry of its transcript.
 let ran = (g: Graph, session: string) =>
   one(g, session, [PROCESS, EXIT, 'stop'])
+
+let proc = (row: Bundle | undefined) =>
+  comp(row, PROCESS) as Process | undefined
+
+// A run going: launched (it has a pid, or the command line of a wrapper that
+// never reported one) and not over.
+let going = (row: Bundle | undefined): boolean => {
+  let p = proc(row)
+  return !!p && row![EXIT] == null && (p.pid != null || p.command != null)
+}
+
+// A session taken for its next run that has not launched it: the row a take
+// writes, before a launch gives it a pid and a command line.
+let unlaunched = (row: Bundle | undefined): boolean => {
+  let p = proc(row)
+  return !!p && row![EXIT] == null && p.pid == null && p.command == null
+}
+
+/** How the process watching a run stands: this one (`self`); another that
+ * still works the effects, whose tails go on (`reading`); one alive but
+ * leaving, which gave that role up as its tails stopped (`leaving`,
+ * @yaks/cli `retire`); or one that is over, or that nobody recorded
+ * (`over`). */
+export type Watcher = 'self' | 'reading' | 'leaving' | 'over'
+
+export let watcherOf = async (
+  g: Graph,
+  row: Bundle | undefined,
+): Promise<Watcher> => {
+  let w = proc(row)?.watcher
+  if (w == null) return 'over'
+  let me = selfEid()
+  if (w == me) return 'self'
+  if (await gone(store(g), String(w), { me })) return 'over'
+  let roles = proc((await g.get([String(w)], [PROCESS]))[0])?.roles
+  return Array.isArray(roles) && !roles.includes('effects')
+    ? 'leaving'
+    : 'reading'
+}
 
 /** What a session was asked for, as the graph holds it. */
 export type Asked = Job & {
@@ -366,20 +432,24 @@ let given = async (
   return owes.text
 }
 
-/** Carry an ended run's job onto the same provider thread. The caller
- * supplies the current session and unanswered transcript. Starting the
- * command must still take the guarded ending before it launches. */
+/** Carry a session's job onto its next run: on the same provider thread,
+ * given what it was told since its last run (@yaks/session `unanswered`); or,
+ * for a session whose provider never began a thread, as a first run given
+ * everything it was told (@yaks/session `told`). The caller supplies the
+ * current session and that transcript. A run still going carries nothing;
+ * starting the command must still take the session before it launches. */
 export let carry = (
   row: Bundle,
   job: Asked,
   said: Bundle[],
 ): Asked | null => {
   let thread = comp(row, SESSION)?.id
-  if (
-    row.stop || row[EXIT] == null || thread == null ||
-    !said.some(requestOf)
-  ) return null
-  return { ...job, ...since(said, job), thread: String(thread) }
+  if (row.stop || going(row) || !said.some(requestOf)) return null
+  return {
+    ...job,
+    ...since(said, job),
+    ...thread == null ? {} : { thread: String(thread) },
+  }
 }
 
 /**
@@ -404,17 +474,21 @@ export let start = async (
   o: Opts = {},
 ): Promise<Run | null> => {
   let row = await one(g, session)
-  if (row?.stop) return null
+  if (row?.stop || going(row)) return null
   let job = await asked(g, session)
   if (!job) return null
   let adapter = (o.adapters ?? known)[job.provider]
   if (!adapter) return null
   if (row?.[PROCESS]) {
     // A session that ran before carries on its provider's thread, given what
-    // it was told since.
+    // it was told since. One whose start was cut off before its provider
+    // began a thread begins now, given everything it was told.
+    if (!await requested(g, session)) return null
     let thread = comp(row, SESSION)?.id
-    if (thread == null || !await requested(g, session)) return null
-    let carried = carry(row, job, await unanswered(g, session))
+    let said = thread == null
+      ? await everything(g, session)
+      : await unanswered(g, session)
+    let carried = carry(row, job, said)
     if (!carried) return null
     job = carried
   }
@@ -461,27 +535,30 @@ let held = (row: Bundle | undefined) => ({
 })
 
 // Take a session for its next run before anything is cut or launched: one
-// write guarded on the run its row records as read (none yet, or one that
-// ended), which it replaces with a run that has no pid yet. Of two requests
-// that read the same row, one takes it and the other is refused, so a
-// session launches once however many requests arrive while it starts; a wake
-// landing meanwhile is refused rather than missed (@yaks/session `rouse`),
-// and the run reads it with the rest. A run still going is not taken.
+// write guarded on the run its row records as read (none yet, one that ended,
+// or a take whose process is over before it launched), which it replaces with
+// a run that has no pid yet and this process as its watcher. Of two requests
+// that read the same row, one takes it and the other is refused, so a session
+// launches once however many requests arrive while it starts; a wake landing
+// meanwhile is refused rather than missed (@yaks/session `rouse`), and the run
+// reads it with the rest. A run still going is not taken, nor is a take a
+// process that is not over may still launch.
 let take = async (
   g: Graph,
   session: string,
   row: Bundle | undefined,
   cwd: string,
 ): Promise<boolean> => {
+  if (going(row)) return false
+  if (unlaunched(row) && await watcherOf(g, row) != 'over') return false
   let was = held(row)
-  if (was[PROCESS] && was[EXIT] == null) return false
-  let p = was[PROCESS] ?? {}
+  let p = (was[PROCESS] ?? {}) as Process
   try {
     await g.apply([{
       entity: { eid: session },
       // Every claim writes over a value the last one left: a first run's
       // `cwd`, a later run's `command`, which only a launch writes.
-      [PROCESS]: { pid: null, command: null, cwd },
+      [PROCESS]: { pid: null, command: null, cwd, watcher: selfEid() },
       [EXIT]: null,
       brief: null,
       $was: {
@@ -490,6 +567,7 @@ let take = async (
           pid: token(p.pid),
           command: token(p.command),
           cwd: token(p.cwd),
+          watcher: token(p.watcher),
         },
       },
     }])
@@ -519,7 +597,7 @@ let since = (
 export let finish = async (
   g: Graph,
   session: string,
-  o: Pick<Opts, 'mint' | 'report'> = {},
+  o: Opts = {},
   through?: string,
 ): Promise<boolean | undefined> => {
   await ended(g, session, o, through)
@@ -552,13 +630,117 @@ let onward = async (
   if (well && await requested(g, session)) await start(g, session, o)
 }
 
+// Read a run's log on, from where its transcript stands, against the request
+// in force: the newest, which is what the run being read answers.
+let readOn = async (g: Graph, session: string, o: Opts): Promise<void> => {
+  let job = await asked(g, session).catch(() => null)
+  let adapter = job && (o.adapters ?? known)[job.provider]
+  let [request] = await g.read(
+    `.entry.session=${session}&.using&!ask&.order=-entry.seq&.limit=1`,
+  )
+  if (job && adapter) {
+    let ask = { ...job.ask, through: request?.entity.eid ?? job.ask.through }
+    follow(g, session, answering(adapter.read, ask), o, {
+      through: String(ask.through),
+    }).catch(told(o))
+  }
+}
+
+/**
+ * Take up every managed run nobody reads, and start again every start cut off
+ * before its launch. A run going whose watcher is over, or leaving, is this
+ * process's from now on: its watcher, its pid watched and its log read on
+ * from where the transcript stands. A start a process that is over never
+ * launched is started again, given what the session was told, and told to the
+ * tracker, since a process ending with a start half made is a failure of its
+ * own. What another process still reads, or still starts, is left to it, for
+ * the next look. The duty looks once as it starts ({@link resume}) and again
+ * every so often after (@yaks/spawn/service).
+ *
+ * ```ts
+ * import { takeUp } from '@yaks/spawn'
+ *
+ * // let runs = await takeUp(graph)
+ * ```
+ */
+export let takeUp = async (g: Graph, o: Opts = {}): Promise<Run[]> => {
+  let me = selfEid()
+  let mine: Bundle[] = []
+  // Many runs share a watcher, and asking after one starts a process.
+  let looked = new Map<unknown, Promise<Watcher>>()
+  for (let row of await g.read(`.${SESSION}&.${PROCESS}&!${EXIT}&*`)) {
+    let w = proc(row)?.watcher
+    if (!looked.has(w)) looked.set(w, watcherOf(g, row))
+    let watcher = await looked.get(w)!
+    if (unlaunched(row)) {
+      if (watcher == 'over') again(g, row, o).catch(told(o))
+      continue
+    }
+    if (watcher == 'self' || watcher == 'reading') continue
+    // One write guarded on the watcher as read, so of two processes taking
+    // the same run up, one reads it.
+    try {
+      await g.apply([{
+        entity: { eid: row.entity.eid },
+        [PROCESS]: { watcher: me },
+        $was: { [PROCESS]: { watcher: token(proc(row)?.watcher) } },
+      }])
+      mine.push(row)
+    } catch (e) {
+      if (!(e instanceof Stale)) throw e
+    }
+  }
+  // Narrowing the store is the seam @yaks/process already offers: here
+  // `running` returns only the runs taken up, so the shell's own child
+  // processes stay the shell's to watch.
+  let runs = await watch({ ...store(g), running: () => mine }, o)
+  // The watch's own loop outlives this call and nobody awaits it, so its
+  // failure is told rather than thrown at nobody — a process that let the
+  // graph go while a tail was still polling is the ordinary way this ends.
+  for (let run of runs) {
+    run.done.catch(told(o))
+    await readOn(g, run.eid, o)
+  }
+  return runs
+}
+
+// A start cut off before its launch, by a process that is over: started
+// again. One with nothing left to start (asked to stop meanwhile, or a request
+// this host has no provider for) is let go, so it no longer reads as running.
+let again = async (g: Graph, row: Bundle, o: Opts): Promise<void> => {
+  let session = row.entity.eid
+  failure(
+    o,
+    session,
+    'start cut off',
+    `a spawned run's start was cut off before its launch: its process ` +
+      `${proc(row)?.watcher ?? '(unrecorded)'} is over, so it starts again`,
+  )
+  if (await start(g, session, o)) return
+  try {
+    await g.apply([{
+      entity: { eid: session },
+      [EXIT]: {},
+      $was: {
+        [EXIT]: { code: token(undefined) },
+        [PROCESS]: { watcher: token(proc(row)?.watcher) },
+      },
+    }])
+  } catch (e) {
+    if (e instanceof Stale) return
+    throw e
+  }
+  // Its transcript is ended the way any run's is, saying it never started.
+  await readOn(g, session, o)
+}
+
 /**
  * Pick every managed session back up. Call it once at start-up, before
- * serving: a run still going is watched again and its log read on from where
- * the transcript stands; one that ended while we were away is stamped now, and
- * the lines it wrote in between are imported in the same pass. So is a run
- * that ended while nobody was reading its log, whose transcript still reads
- * as going: it is read to its end, and its ending written.
+ * serving: every run nobody reads is taken up ({@link takeUp}); one that ended
+ * while we were away is stamped now, and the lines it wrote in between are
+ * imported in the same pass. So is a run that ended while nobody was reading
+ * its log, whose transcript still reads as going: it is read to its end, and
+ * its ending written.
  *
  * ```ts
  * import { resume } from '@yaks/spawn'
@@ -567,18 +749,7 @@ let onward = async (
  * ```
  */
 export let resume = async (g: Graph, o: Opts = {}): Promise<Run[]> => {
-  // Narrowing the store is the seam @yaks/process already offers: here
-  // `running` returns only the sessions that are running, so the shell's own
-  // child processes stay the shell's to watch.
-  let mine = {
-    ...store(g),
-    running: () => g.read(`.${SESSION}&.${PROCESS}&!${EXIT}&*`),
-  }
-  let runs = await watch(mine, o)
-  // The watch's own loop outlives this call and nobody awaits it, so its
-  // failure is told rather than thrown at nobody — a process that let the
-  // graph go while a tail was still polling is the ordinary way this ends.
-  for (let run of runs) run.done.catch(told(o))
+  let runs = await takeUp(g, o)
   // A run asked here that is over, but whose request has no ending after it,
   // was left unread partway. Each run asks once and ends once, so a session
   // with more requests than stops is looked at.
@@ -605,25 +776,14 @@ export let resume = async (g: Graph, o: Opts = {}): Promise<Run[]> => {
   } catch (error) {
     if (!(error instanceof disk.errors.NotFound)) throw error
   }
+  let read = new Set(runs.map((r) => r.eid))
   let unread = (await g.read(`.${SESSION}&.${PROCESS}&.${EXIT}`))
     .map((b) => b.entity.eid)
     .filter((eid) =>
-      (asks.get(eid) ?? 0) > (over.get(eid) ?? 0) || logs.has(eid)
+      !read.has(eid) &&
+      ((asks.get(eid) ?? 0) > (over.get(eid) ?? 0) || logs.has(eid))
     )
-  for (let eid of [...runs.map((r) => r.eid), ...unread]) {
-    let job = await asked(g, eid).catch(() => null)
-    let adapter = job && (o.adapters ?? known)[job.provider]
-    // The request in force is the newest: what the run being read answers.
-    let [request] = await g.read(
-      `.entry.session=${eid}&.using&!ask&.order=-entry.seq&.limit=1`,
-    )
-    if (job && adapter) {
-      let ask = { ...job.ask, through: request?.entity.eid ?? job.ask.through }
-      follow(g, eid, answering(adapter.read, ask), o, {
-        through: String(ask.through),
-      }).catch(told(o))
-    }
-  }
+  for (let eid of unread) await readOn(g, eid, o)
   return runs
 }
 
@@ -637,7 +797,7 @@ export let resume = async (g: Graph, o: Opts = {}): Promise<Run[]> => {
 let ended = async (
   g: Graph,
   session: string,
-  o: Pick<Opts, 'mint'>,
+  o: Opts,
   through?: string,
 ): Promise<void> => {
   let newest = async (q: string) =>
@@ -650,7 +810,9 @@ let ended = async (
   ])
   let seq = (b?: Bundle) => Number(comp(b, 'entry')?.seq ?? 0)
   if (stop && seq(stop) > seq(request)) return
-  let code = comp(await ran(g, session), EXIT)?.code
+  let row = await ran(g, session)
+  let code = comp(row, EXIT)?.code as number | null | undefined
+  let why = code === 0 ? '' : await cause(session, row, o)
   await g.apply([{
     entity: {
       eid: (o.mint ?? (() =>
@@ -665,14 +827,53 @@ let ended = async (
           ? 'Provider exit was not observed'
           : `Provider exited ${code}`,
       },
-      content: {
-        body: code == null
-          ? 'the provider ended, and nobody saw how'
-          : `the provider exited ${code}`,
-      },
+      content: { body: why },
       output: { source: session },
     }),
   }], { trusted: true })
+  // A run nobody asked to stop that ended any way but cleanly is a failure,
+  // told where it is seen.
+  if (code !== 0 && !row?.stop) {
+    failure(o, session, 'run ended', `a spawned run ended: ${why}`)
+  }
+}
+
+// The signals a provider is commonly ended by, by number: a wrapper's `wait`
+// answers 128 plus the signal for a child a signal ended.
+let SIGNALS: Record<number, string> = {
+  1: 'SIGHUP',
+  2: 'SIGINT',
+  3: 'SIGQUIT',
+  6: 'SIGABRT',
+  9: 'SIGKILL',
+  11: 'SIGSEGV',
+  13: 'SIGPIPE',
+  15: 'SIGTERM',
+}
+
+// How a run ended, as its row and its files show it: the code its wrapper
+// wrote, the signal that code names, or why there is none; then the last line
+// it printed on stderr, which is where a provider says what went wrong.
+let cause = async (
+  session: string,
+  row: Bundle | undefined,
+  o: Opts,
+): Promise<string> => {
+  let code = comp(row, EXIT)?.code as number | null | undefined
+  let signal = code != null && code > 128 ? SIGNALS[code - 128] : undefined
+  let f = paths(session, o)
+  let reported = proc(row)?.pid != null ||
+    await disk.stat(f.pid).then(() => true, () => false)
+  let how = code != null
+    ? signal
+      ? `the provider was ended by ${signal} (exit ${code})`
+      : `the provider exited ${code}`
+    : reported
+    ? 'the provider and its wrapper were killed, so no exit code was written'
+    : 'the provider never started: its wrapper reported no pid'
+  let last = (await text(f.err).catch(() => undefined))
+    ?.split('\n').map((l) => l.trim()).filter(Boolean).at(-1)
+  return last ? `${how}: ${last.slice(0, 300)}` : how
 }
 
 // A run's checkout, taken back now that the run is over — its row brought up

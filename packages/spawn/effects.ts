@@ -33,11 +33,18 @@
 import type { Bundle, Comp, Graph } from '@yaks/graph'
 import type { Handlers } from '@yaks/effects'
 import { EXIT, PROCESS } from '@yaks/process'
-import { down, type Opts, requestOf, start } from './run.ts'
+import { down, type Opts, type Report, requestOf, start } from './run.ts'
 import { complete } from './completion.ts'
 
-/** What these handlers are given: the open graph. */
-export type Host = { graph: Graph; stopping?: AbortSignal }
+/** What these handlers are given: the open graph, and where a failure is told
+ * (@yaks/cli `Host.report`). */
+export type Host = { graph: Graph; stopping?: AbortSignal; report?: Report }
+
+/** Where a run's failures go: the caller's own, else the host's tracker, else
+ * the console. */
+export let reporting = (o: Opts, host: { report?: Report }): Report =>
+  o.report ?? host.report ??
+    ((err, context) => console.error('spawn —', err, context ?? ''))
 
 /** What config can set — the JSON-expressible half of {@link Opts}. */
 export type Options = {
@@ -79,8 +86,8 @@ let one = async (g: Graph, eid: string): Promise<Bundle | undefined> =>
  */
 export let spawning =
   (o: Opts = {}) => (host: Host, options: Options = {}): Handlers => {
-    let opts: Opts = { ...options, ...o, signal: host.stopping }
-    let report = o.report ?? ((err: unknown) => console.error('spawn —', err))
+    let report = reporting(o, host)
+    let opts: Opts = { ...options, ...o, signal: host.stopping, report }
     return {
       spawn_complete: async (e) => {
         let entry = await one(host.graph, e.entity.eid)
@@ -89,14 +96,14 @@ export let spawning =
       },
       // The request. A `using` recorded on an `ask` row says what was
       // served, not what is wanted. A session whose run is going is told when
-      // that run ends (./run.ts); one whose run is over carries on its thread.
+      // that run ends (./run.ts); one whose run is over carries on its thread;
+      // one whose start a process that is over cut off starts again, so this
+      // effect run again after its worker died finishes what it began.
       spawn_start: async (e) => {
         let entry = await one(host.graph, e.entity.eid)
         if (!requestOf(entry)) return
         let session = String(comp(entry, 'entry')?.session ?? '')
-        if (!session) return
-        let row = await one(host.graph, session)
-        if (!row || row[PROCESS] && row[EXIT] == null) return
+        if (!session || !await one(host.graph, session)) return
         await start(host.graph, session, opts)
       },
       // Kill. A `stop` on an entry only marks the end of a transcript; only

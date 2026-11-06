@@ -11,14 +11,28 @@ import { ram } from '@yaks/ram'
 import { sessionDoc, sessions, unanswered, wake } from '@yaks/session'
 import { toolsDoc } from '@yaks/tools/vocab'
 import { loadVocab } from '@yaks/vocab'
-import { launch, processDoc, processes } from '@yaks/process'
+import {
+  launch,
+  type Process,
+  processDoc,
+  processes,
+  selfEid,
+} from '@yaks/process'
 import { spawning } from './effects.ts'
 import { adopting } from './service.ts'
-import { asked as jobOf, carry, finish, type Opts, start } from './run.ts'
+import {
+  asked as jobOf,
+  carry,
+  finish,
+  type Opts,
+  start,
+  takeUp,
+} from './run.ts'
 import { sessionEnv } from '@yaks/session'
 import {
   asking,
   bare,
+  FAKE,
   fake,
   host,
   launching,
@@ -30,6 +44,7 @@ import { transcriptGraph } from '../session/testing.ts'
 
 let comp = (b: Bundle | undefined, name: string) =>
   (b?.[name] ?? undefined) as Comp | undefined
+let proc = (b: Bundle | undefined) => comp(b, 'process') as Process | undefined
 
 let dir = () => Deno.makeTempDirSync({ prefix: 'yaks-spawn-' })
 
@@ -262,6 +277,131 @@ test('a launch that fails gives the session back for the next request', async ()
     assertEquals(comp((await s.g.get(['S1']))[0], 'process'), undefined)
     await s.twice()
     assertEquals(s.started.length, 1)
+  } finally {
+    s.done()
+  }
+})
+
+// A session whose run a watcher holds as `run` left it, the watcher being
+// `P` as `p` describes it; then what one look of the duty did: the commands it
+// launched, and the failures it told.
+let P = crypto.randomUUID()
+let OVER = { pid: 1, command: 'yak work' }
+let READING = { pid: Deno.pid, roles: ['graph', 'effects'] }
+let LEAVING = { pid: Deno.pid, roles: ['graph'] }
+let look = async (
+  run: Record<string, unknown>,
+  p: Record<string, unknown>,
+  ...rows: Bundle[]
+) => {
+  let { g } = tracked()
+  let where = dir()
+  let l = launching()
+  let reports: string[] = []
+  let stop = new AbortController()
+  let o: Opts = {
+    cwd: where,
+    dir: where,
+    poll: 5,
+    signal: stop.signal,
+    adapters: { fake },
+    launch: l.launch,
+    report: (e, c) => void reports.push(`${c?.tags?.step}: ${e}`),
+  }
+  await g.apply([
+    ...asking('S1', 'E1', 'do the thing'),
+    { entity: { eid: P }, process: p, ...p == OVER ? { exit: {} } : {} },
+    { entity: { eid: 'S1' }, process: { watcher: P, ...run } },
+    ...rows,
+  ])
+  let runs = await takeUp(g, o)
+  let row = async () => (await g.get(['S1']))[0]
+  return {
+    g,
+    o,
+    runs,
+    row,
+    started: l.started,
+    reports,
+    // what the run's transcript ended with, once it has
+    ending: () =>
+      until(async () => {
+        let last = (await said(g)).at(-1)
+        return comp(last, 'stop') && String(comp(last, 'content')?.body)
+      }, 'the ending'),
+    done: () => (stop.abort(), Deno.removeSync(where, { recursive: true })),
+  }
+}
+
+test('a start a process that is over cut off before its launch starts again', async () => {
+  let s = await look({ cwd: '/w' }, OVER)
+  try {
+    let argv = await until(() => s.started[0], 'a launch')
+    assert(argv.at(-1)!.includes('do the thing'), argv.join(' '))
+    assertEquals(proc(await s.row())?.watcher, selfEid())
+    assertEquals(s.reports.length, 1)
+    assert(s.reports[0].startsWith('start cut off: '), s.reports[0])
+  } finally {
+    s.done()
+  }
+})
+
+test('a start a process still makes is left to it, by a look and by a request', async () => {
+  for (let p of [READING, LEAVING]) {
+    let s = await look({ cwd: '/w' }, p)
+    try {
+      assertEquals(await start(s.g, 'S1', s.o), null)
+      assertEquals([s.started, s.reports], [[], []])
+    } finally {
+      s.done()
+    }
+  }
+})
+
+test('a run whose watcher is leaving or over is taken up, and one still read is left', async () => {
+  for (let [p, taken] of [[READING, false], [LEAVING, true], [OVER, true]]) {
+    // launched, but its wrapper never reported a pid: over at once
+    let s = await look({ command: 'fake' }, p as Record<string, unknown>)
+    try {
+      assertEquals(s.runs.length, taken ? 1 : 0)
+      assertEquals(proc(await s.row())?.watcher, taken ? selfEid() : P)
+      if (!taken) continue
+      assertEquals(
+        await s.ending(),
+        'the provider never started: its wrapper reported no pid',
+      )
+      assert(s.reports.at(-1)?.startsWith('run ended: '), s.reports.join())
+    } finally {
+      s.done()
+    }
+  }
+})
+
+test('a session whose provider never began starts as a first run, told everything', async () => {
+  let s = await look({ cwd: '/w' }, OVER, {
+    entity: { eid: 'S1' },
+    exit: {},
+  }, {
+    entity: { eid: 'E1:end' },
+    entry: { session: 'S1' },
+    ask: { through: 'E1' },
+    stop: {},
+    content: { body: 'the provider ended, and nobody saw how' },
+    output: { source: 'S1' },
+  }, {
+    entity: { eid: 'E2' },
+    entry: { session: 'S1' },
+    content: { body: 'carry on' },
+    using: FAKE,
+  })
+  try {
+    // what the request `carry on` asks of its effect
+    await start(s.g, 'S1', s.o)
+    let [argv] = s.started
+    let instruction = argv.at(-1)!
+    assert(instruction.includes('do the thing'), instruction)
+    assert(instruction.includes('carry on'), instruction)
+    assert(!instruction.includes('nobody saw how'), instruction)
   } finally {
     s.done()
   }

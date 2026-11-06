@@ -245,8 +245,9 @@ for the transcript, the task and what it tells of, so the same news is told
 once. A native turn settling or a managed run ending calls
 `rouse(graph, session)`, so a dependency that finished while it ran is told at
 once. `waits(graph, session, task)` says whether a held task still waits on
-something the holder is to be woken for, and `unanswered(graph, session)` lists
-what a transcript was told that its last turn or run was not given.
+something the holder is to be woken for, `unanswered(graph, session)` lists what
+a transcript was told that its last turn or run was not given, and
+`told(graph, session)` everything it was told, for a run that never began.
 `parkedLine(graph, session)` says where a parked transcript stands, for a
 person. A wake records the task it woke its transcript for (`woken{task}`), so
 `carrying(graph, task)` finds the transcript already on a task, its claim held
@@ -742,7 +743,7 @@ The main module exports:
   `sessionTools()`, and the provider lookups `offers()`, `providerResolver()`
   and `answers()`;
 - parking: `wake()`, `unlinked()`, `rouse()`, `waits()`, `unanswered()`,
-  `requested()`, `resting()` and `cleanEnd()`;
+  `told()`, `requested()`, `resting()` and `cleanEnd()`;
 - inspection: `statusOf()`, `kindOf()`, `textOf()`, `ordered()`,
   `sessionDerived`, `statusComputed`, and the bounded transcript functions;
 - identity and rendering: `sessionFor()`, `sessionEid()`, `speaking()`,
