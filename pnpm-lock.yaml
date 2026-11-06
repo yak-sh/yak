@@ -2395,6 +2395,9 @@ importers:
       '@yaks/testing':
         specifier: 0.2.17
         version: link:../testing
+      esbuild:
+        specifier: 0.28.1
+        version: 0.28.1
 
   packages/html:
     dependencies:
