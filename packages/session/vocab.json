@@ -937,6 +937,17 @@
       "target": ".task|.requires|.contains",
       "description": "resume a resting transcript on its provider when a dependency finishes, loses its worker or changes its links. Unattended runnable dependencies are claimed by the waiting transcript; external decisions and blockers remain waits. A dependency that cannot run is told to the transcript and its parent. Removed links are read by the ends they had"
     },
+    "session_watch": {
+      "effect": true,
+      "created": [
+        "completed",
+        "cancelled",
+        "decided",
+        "comment"
+      ],
+      "target": ".task|.comment",
+      "description": "knock the sessions watching a task when it is completed, cancelled or answered, or commented on: the session that filed it, those that mention its id and the actors subscribed to watch it. A session that is over is told through its project's operator. One knock per target and change, none for the writer's own"
+    },
     "native": {
       "component": true,
       "journal": false,

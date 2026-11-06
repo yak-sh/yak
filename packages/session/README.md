@@ -776,6 +776,27 @@ The main package runs in Deno, Node, browsers, and Cloudflare Workers. Process
 execution belongs to `@yaks/process`; command-line agent execution belongs to
 `@yaks/spawn`.
 
+## Watching a task
+
+A task's watchers hear it change. They are the session that filed it, each
+session whose own entries mention its id (what it said or was told; a tool's
+result is what it read), the writer of any task, comment or letter whose body
+mentions it, and each actor a `subscription` (@yaks/notify) has watching it; an
+actor muting it hears nothing. When the task is completed, cancelled or
+answered, or someone comments on it, `session_watch` knocks each watcher once:
+
+```text
+knock K-9 at S-4: T-8 completed by Jeff: Give the Worker a token
+```
+
+A watcher's session is knocked while it can hear. Once it is over, the knock
+goes to its project's operator (the live session a person opened for that
+project, the one that spoke last), else to the project. A writer is never
+knocked about its own write, and a person's comment, which reaches the filer and
+the holder as a comment already, knocks neither of them. `knocks(graph, eid)`
+returns the knocks a change owes, and [`watch_test.ts`](./watch_test.ts) runs
+each case through the effect.
+
 ## Claimed-work comments
 
 The session bus delivers no comment to a native transcript: a comment stays a

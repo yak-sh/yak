@@ -42,6 +42,7 @@ import {
 } from './state.ts'
 import { UnknownSession } from './unknown.ts'
 import { cleanEnd, requested, rouse, unlinked, waits, wake } from './wake.ts'
+import { watch } from './watch.ts'
 
 /** What a host lends the runner: how a step is taken (./react.ts `Deps`), the
  * bound on children, and who is running it. */
@@ -802,6 +803,9 @@ export let running = (
       : {},
     ...declared(g, 'session_wake')
       ? { session_wake: (e: Event) => woken(g, e) }
+      : {},
+    ...declared(g, 'session_watch')
+      ? { session_watch: (e: Event) => watch(g, e.entity.eid) }
       : {},
   }
 }
