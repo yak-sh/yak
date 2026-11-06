@@ -1058,8 +1058,13 @@ export let react = async (
     )
     : undefined
   instructed?.catch(() => {})
-  const tools = offered(
-    deps.toolSnapshot
+  // Tools a host cannot assemble end the step at once, as a defect preparing
+  // its context does: asking again finds the same tools. A refusal of the
+  // caller's own (no model chosen) is said; a defect (two tools of one name)
+  // is reported too.
+  let assembled: Tool[]
+  try {
+    assembled = deps.toolSnapshot
       ? await deps.toolSnapshot(
         open.length ? 'call' : 'ask',
         session,
@@ -1068,10 +1073,19 @@ export let react = async (
           : newest.entity.eid,
         calls,
       )
-      : deps.tools,
-    deps.named ?? (() => []),
-    sending?.tools,
-  )
+      : deps.tools
+  } catch (error) {
+    if (error instanceof Stale) throw error
+    if (error instanceof Refused || error instanceof CallError) {
+      let code = error instanceof CallError ? error.code : 'tools'
+      return append([line({ [REFUSAL]: { code } }, error.message)])
+    }
+    return append(
+      [line({ [EXCEPTION]: exceptionOf(error) }, String(error))],
+      { error, phase: 'tools' },
+    )
+  }
+  const tools = offered(assembled, deps.named ?? (() => []), sending?.tools)
   // Legacy synchronous calls are run here. Native async calls are owned by
   // their separate session_tool effect; only that effect enters this branch
   // with runCall naming one invocation.

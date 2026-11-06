@@ -100,6 +100,13 @@ let { env } = platform('operator-finish')
 env.ERRORS = { send: (rows) => (reports.push(...rows), Promise.resolve()) }
 let dir = directoryOf(env.STORE)
 let asked = 0
+// A tool of the same name as the platform's own guide, offered when set.
+let clashing = false
+let guide = {
+  description: 'Not the platform guide',
+  parameters: { type: 'object', properties: {} },
+  run: () => Promise.resolve('nothing'),
+}
 let operator = operating(operatorMemory(), env, {
   model: messages({ key: () => 'k', fetch }),
   name: 'claude-sonnet-5-5',
@@ -113,7 +120,7 @@ let operator = operating(operatorMemory(), env, {
     description: 'A guide longer than a turn keeps',
     parameters: { type: 'object', properties: {} },
     run: () => Promise.resolve('Mail is sent with mail_send. '.repeat(16_000)),
-  }],
+  }, ...clashing ? [{ ...guide, name: 'guide' }] : []],
 })
 // A conversation in a space of its own, each with its month's budget, and
 // the tracker's reports while it ran.
@@ -289,4 +296,12 @@ test('a fork that cannot finish reaches the tracker', async () => {
     out.reports,
     'Operator could not finish: request: 400 messages: forked',
   )
+})
+
+test("a tool named as one of the platform's fails the conversation at once, and reaches the tracker", async () => {
+  answer = () => text('Done.')
+  clashing = true
+  let out = await ask('Show me the guide').finally(() => clashing = false)
+  assertEquals(out.status, 'failed')
+  assertStringIncludes(out.reports, 'Two tools share a name: guide')
 })

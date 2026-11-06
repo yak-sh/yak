@@ -2,7 +2,7 @@
 // persona it wears, the topic it is opened on, its first message) opens with
 // that persona's instructions, the topic's tree after them, and the tools the
 // persona offers, admitted by the runner before its first turn.
-import { equal, ok, test, throws } from '@yaks/testing'
+import { equal, ok, test } from '@yaks/testing'
 import { compose } from '@yaks/cli/host'
 import { type Comp, identityEid } from '@yaks/graph'
 import { link } from '@yaks/edge'
@@ -60,14 +60,13 @@ let opened = await (async () => {
     ], { trusted: true })
     for (let session of ['worn', 'worn', 'tooled', 'plain', 'topical']) {
       // No default model is installed, so the opening is tested without a
-      // paid ask.
-      await throws(() =>
-        handlers.session_run(
-          { entity: { eid: session + '-said' } } as never,
-          g,
-          {} as never,
-          {} as never,
-        ), 'Choose a model')
+      // paid ask: the step ends saying so.
+      await handlers.session_run(
+        { entity: { eid: session + '-said' } } as never,
+        g,
+        {} as never,
+        {} as never,
+      )
     }
     // A command line's `session new --persona` opens the same way, by begin.
     let command = await begin(g, undefined, {

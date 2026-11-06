@@ -34,7 +34,7 @@ import { docDoc } from '@yaks/doc/vocab'
 import { kindOf, statusOf, textOf } from './state.ts'
 import { appendEntry } from './append.ts'
 import { sessions } from './plugin.ts'
-import { type Deps, react, recent, transcript } from './react.ts'
+import { type Deps, react, recent, ToolError, transcript } from './react.ts'
 import { running, runningAt, settle } from './run.ts'
 import { took } from './timing.ts'
 import { GAP } from './compact.ts'
@@ -1505,6 +1505,30 @@ test('unexpected model failures reach diagnostics, expected model errors do not'
     }
   }
   assertEquals(reported.length, 1)
+})
+
+test('tools a host cannot assemble end the step at once, a defect reported and a refusal said, and nothing is asked', async () => {
+  for (
+    let [error, reports] of [
+      [new Error('Two tools share a name: guide'), 1],
+      [new ToolError('model', 'Choose a model'), 0],
+    ] as const
+  ) {
+    let g = world()
+    let { model, asked } = scripted([says('r1', 'done')])
+    let reported: string[] = []
+    let step = await react(g, ids.s, {
+      model,
+      tools: [],
+      mint,
+      toolSnapshot: () => Promise.reject(error),
+      report: (e, _, phase) => reported.push(`${phase}: ${e}`),
+    })
+    assertEquals(
+      [step.status, asked.length, reported.length, textOf(step.added.at(-1)!)],
+      ['failed', 0, reports, reports ? String(error) : error.message],
+    )
+  }
 })
 
 test('provider completion allocates positions after concurrently admitted notices', async () => {

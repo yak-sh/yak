@@ -478,6 +478,15 @@ export let lend = <H extends Host>(opts: Opts<H>): Runner => {
       const held = phase === 'call' && offered.get(key)
       if (held) return [...tools, ...held]
       const served = await remote(session)
+      const all = [...tools, ...served]
+      const twice = [
+        ...new Set(
+          all.map((t) => t.name).filter((n, i, names) => names.indexOf(n) != i),
+        ),
+      ]
+      if (twice.length) {
+        throw new Error(`Two tools share a name: ${twice.join(', ')}`)
+      }
       // Several asks may overlap older calls. Keep each original offer until
       // all of its calls have final results; a later catalogue refresh must
       // not redirect an in-progress call to a newly configured MCP server.
@@ -507,10 +516,6 @@ export let lend = <H extends Host>(opts: Opts<H>): Runner => {
       }
       offered.set(key, served)
       offerSessions.set(key, session)
-      const all = [...tools, ...served]
-      if (
-        new Set(all.map((t) => t.name)).size !== all.length
-      ) throw new Error('Duplicate local/MCP tool name')
       const signature = JSON.stringify(
         served.map((t) => [t.name, t.description, t.parameters]),
       )
