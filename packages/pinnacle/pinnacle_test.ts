@@ -3,7 +3,8 @@ import { assertEquals, assertRejects } from '@std/assert'
 import { Unsent } from '@yaks/host/senders'
 import { arrivalEid, Blocked, consentEid, Denied, phoneDoc } from '@yaks/phone'
 import { effects } from '@yaks/phone/effects'
-import { routes } from '@yaks/phone/routes'
+import { routes } from './routes.ts'
+import { texters } from './graph.ts'
 import { faults } from '@yaks/api'
 import { graph } from '@yaks/graph'
 import { ram } from '@yaks/ram'
@@ -11,7 +12,7 @@ import { loadVocab } from '@yaks/vocab'
 import { docDoc } from '@yaks/doc'
 import { mailDoc } from '@yaks/mail'
 import { effects as pool } from '@yaks/effects'
-import { heard, pinnacle, provider } from './mod.ts'
+import { heard, pinnacle } from './mod.ts'
 
 let FROM = '+12695550100', TO = '+12695550142'
 let at = '2026-11-05T12:00:00Z'
@@ -150,10 +151,7 @@ await g.apply([
   { entity: { eid: 'sent' }, text: { via: 'pinnacle', message_id: 'same' } },
   { entity: { eid: 'other' }, text: { via: 'telnyx', message_id: 'same' } },
 ])
-let load = () => Promise.resolve({ provider })
-let [door] = routes({ graph: g }, {
-  door: { via: 'pinnacle', key: 'pss_test' },
-}, load)
+let [door] = routes({ graph: g }, { door: { key: 'pss_test' } })
 let request = (body: unknown, secret?: string) =>
   new Request('https://box.example/pinnacle/webhook', {
     method: 'POST',
@@ -207,9 +205,10 @@ let selected = graph({ vocab, storage: ram(vocab) })
 let fx = pool(vocab, { write: (b) => selected.apply(b, { trusted: true }) })
 selected.use(fx)
 fx.handle(
-  effects(null, {
-    sender: { via: 'pinnacle', key: 'test', number: FROM, fetch: fake },
-  }, load),
+  effects(
+    { texters: texters(null, { key: 'test', number: FROM, fetch: fake }) },
+    { sender: { via: 'pinnacle' } },
+  ),
 )
 await selected.apply([
   { entity: { eid: 'ana' }, phone: { number: TO } },

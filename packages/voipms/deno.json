@@ -2,7 +2,8 @@
   "name": "@yaks/voipms",
   "version": "0.2.17",
   "exports": {
-    ".": "./mod.ts"
+    ".": "./mod.ts",
+    "./graph": "./graph.ts"
   },
   "license": "Apache-2.0",
   "description": "voip.ms texting transport, account numbers and inbound callbacks for @yaks/phone.",

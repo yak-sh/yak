@@ -3424,15 +3424,9 @@ importers:
       '@yaks/mail':
         specifier: 0.2.19
         version: link:../mail
-      '@yaks/pinnacle':
-        specifier: 0.2.17
-        version: link:../pinnacle
       '@yaks/ram':
         specifier: 0.2.18
         version: link:../ram
-      '@yaks/telnyx':
-        specifier: 0.2.17
-        version: link:../telnyx
       '@yaks/testing':
         specifier: 0.2.17
         version: link:../testing

@@ -1,5 +1,5 @@
 import { test } from '@yaks/testing'
-import { assertEquals, assertRejects } from '@std/assert'
+import { assertEquals } from '@std/assert'
 import type { Bundle } from '@yaks/graph'
 import { graph } from '@yaks/graph'
 import { effects as registry } from '@yaks/effects'
@@ -7,25 +7,15 @@ import { ram } from '@yaks/ram'
 import { loadVocab } from '@yaks/vocab'
 import { docDoc, docs } from '@yaks/doc'
 import { mailDoc } from '@yaks/mail'
-import { Unsent } from '@yaks/host/senders'
-import {
-  arrivalEid,
-  Blocked,
-  consentEid,
-  phoneDoc,
-  type Sender,
-  stash,
-} from './mod.ts'
-import { heard, provider as telnyxProvider, telnyx } from '@yaks/telnyx'
+import { arrivalEid, consentEid, phoneDoc, type Sender, stash } from './mod.ts'
 import { effects } from './effects.ts'
 import { sending } from './send.ts'
-import { routes } from './routes.ts'
-import { sender as configured } from './provider.ts'
+import { lent, routes } from './plugin.ts'
+import type { Heard, Provider } from './provider.ts'
 
 let ana = '0b1c2d3e-0000-4000-8000-000000000001'
 let ANA = '+12695550142'
 let OURS = '+12695550100'
-let FREE = '+18885550100'
 
 // A graph that keeps texts and sends them through `sender`.
 let rig = (sender?: Sender) => {
@@ -115,136 +105,65 @@ test('a text with no sender configured waits with the reason', async () => {
   )
 })
 
-// Telnyx at its HTTP boundary: one profile, one number, and what was posted.
-let posted: { path: string; body: Record<string, unknown> }[] = []
-let refuse = ''
-let telnyxAt = (input: RequestInfo | URL, init?: RequestInit) => {
-  let url = new URL(String(input))
-  let path = url.pathname.replace('/v2', '') + url.search
-  if (path.startsWith('/messaging_profiles?')) {
-    return Response.json({ data: [{ id: 'profile-1', name: 'yaks.app' }] })
-  }
-  if (path == '/messaging_profiles/profile-1/phone_numbers') {
-    return Response.json({
-      data: [{ phone_number: OURS }, { phone_number: FREE }],
-    })
-  }
-  let body = JSON.parse(String(init?.body ?? '{}'))
-  posted.push({ path, body })
-  if (refuse) {
-    return Response.json({ errors: [{ code: refuse, title: 'No' }] }, {
-      status: refuse == '50000' ? 503 : 400,
-    })
-  }
-  return Response.json({ data: { id: `msg-${posted.length}` } })
-}
-let fake: typeof fetch = (input, init) => Promise.resolve(telnyxAt(input, init))
-let sender = telnyx({ key: 'k', profile: 'yaks.app', fetch: fake })
-
-test("telnyx sends from its profile's number, as RCS with an SMS fallback when given an agent", async () => {
-  posted.length = 0
-  refuse = ''
-  let sms = await sender.send({ to: ANA, text: 'Hi' })
-  let rcs = await sender.send({ to: ANA, text: 'Hi', agent: 'agent-1' })
-  assertEquals([sms, rcs], [{ id: 'msg-1' }, { id: 'msg-2' }])
-  assertEquals(posted[0], {
-    path: '/messages',
-    body: { from: OURS, to: ANA, text: 'Hi' },
-  })
-  assertEquals(posted[1].path, '/messages/rcs')
-  assertEquals(posted[1].body.agent_id, 'agent-1')
-  assertEquals(posted[1].body.sms_fallback, { from: OURS, text: 'Hi' })
-  posted.length = 0
-  await telnyx({ key: 'k', profile: 'yaks.app', tollFree: true, fetch: fake })
-    .send({ to: ANA, text: 'Hi' })
-  assertEquals(posted[0].body.from, FREE)
+// A provider given as data: a shared secret in a header signs its webhooks,
+// and its events are already the shape @yaks/phone reads.
+let SECRET = 'webhook-secret'
+let acme = (sent: unknown[] = []): Provider => ({
+  needs: ['key'],
+  scheme: { header: 'acme-secret', token: true },
+  heard: (event) => event as Heard,
+  sender: (o) => ({
+    send: (t) => (sent.push(t), Promise.resolve({ id: `${o.key}-1` })),
+  }),
 })
-
-test('a sender says the number people text to reach it', async () => {
-  let free = telnyx({
-    key: 'k',
-    profile: 'yaks.app',
-    tollFree: true,
-    fetch: fake,
-  })
-  assertEquals(await free.from?.(), FREE)
-  assertEquals(await sender.from?.(), OURS)
-  let pinned = { via: 'telnyx', key: 'k', profile: 'yaks.app', number: ANA }
-  assertEquals(await configured(pinned, telnyxProvider).from?.(), ANA)
-})
-
-test('telnyx refuses an unregistered number as Blocked, a 5xx as Unsent, else an error', async () => {
-  for (
-    let [code, kind] of [
-      ['40010', Blocked],
-      ['40300', Blocked],
-      ['50000', Unsent],
-      ['10002', Error],
-    ] as const
-  ) {
-    refuse = code
-    await assertRejects(() => sender.send({ to: ANA, text: 'Hi' }), kind)
-  }
-  refuse = ''
-})
-
-// Signed by a key of the test's own, standing in for Telnyx's.
-let pair = await crypto.subtle.generateKey('Ed25519', true, [
-  'sign',
-  'verify',
-]) as CryptoKeyPair
-let b64 = (b: ArrayBuffer) => btoa(String.fromCharCode(...new Uint8Array(b)))
-let key = b64(await crypto.subtle.exportKey('raw', pair.publicKey))
-let signed = async (event: unknown, sign = true) => {
-  let body = JSON.stringify(event)
-  let t = String(Math.floor(Date.now() / 1000))
-  let signature = b64(
-    await crypto.subtle.sign(
-      'Ed25519',
-      pair.privateKey,
-      new TextEncoder().encode(`${t}|${body}`),
-    ),
-  )
-  return new Request('https://box.example/telnyx/webhook', {
+let posted = (event: Heard, secret = SECRET) =>
+  new Request('https://box.example/acme/webhook', {
     method: 'POST',
-    headers: sign
-      ? { 'telnyx-timestamp': t, 'telnyx-signature-ed25519': signature }
-      : {},
-    body,
+    headers: { 'acme-secret': secret },
+    body: JSON.stringify(event),
   })
-}
-let received = (id: string, text: string, payload = {}) => ({
-  data: {
-    event_type: 'message.received',
-    payload: {
-      id,
-      type: 'SMS',
-      text,
-      from: { phone_number: ANA },
-      to: [{ phone_number: OURS }],
-      received_at: '2026-11-04T00:00:00Z',
-      ...payload,
-    },
+let received = (id: string, text: string): Heard => ({
+  arrival: {
+    id,
+    from: ANA,
+    to: OURS,
+    text,
+    at: '2026-11-04T00:00:00Z',
+    rcs: false,
+    media: [],
   },
+})
+
+test("a provider's lent texter waits for what it needs, then sends as its name", async () => {
+  let sent: unknown[] = []
+  let options: { key?: string } = {}
+  let texter = lent('acme', acme(sent), options)
+  assertEquals(
+    texter.waiting?.(),
+    'waiting for credentials: a acme sender needs key',
+  )
+  options.key = 'k'
+  assertEquals(texter.waiting?.(), undefined)
+  assertEquals(await texter.send({ to: ANA, text: 'Hi' }), {
+    id: 'k-1',
+    via: 'acme',
+  })
+  assertEquals(sent, [{ to: ANA, text: 'Hi' }])
 })
 
 test('the door keeps a signed text, takes STOP as the end of consent and START as it again, and refuses an unsigned one', async () => {
   let g = rig(stash())
   await g.apply(person)
-  let [door] = routes(
-    { graph: g },
-    { door: { key } },
-    () => Promise.resolve({ provider: telnyxProvider }),
-  )
-  let unsigned = await door.handle(await signed(received('m0', 'hi'), false))
-  let hi = await door.handle(await signed(received('m1', 'Post the agenda')))
-  await door.handle(await signed(received('m2', 'STOP')))
+  let [door] = routes('acme', acme())({ graph: g }, { door: { key: SECRET } })
+  let unsigned = await door.handle(posted(received('m0', 'hi'), 'wrong'))
+  let hi = await door.handle(posted(received('m1', 'Post the agenda')))
+  await door.handle(posted(received('m2', 'STOP')))
   assertEquals([unsigned.status, hi.status], [400, 200])
-  assertEquals(await one(g, arrivalEid('m0')), undefined)
-  assertEquals((await one(g, arrivalEid('m1')))?.doc?.body, 'Post the agenda')
-  assertEquals((await one(g, arrivalEid('m1')))?.text?.from, ANA)
+  assertEquals(await one(g, arrivalEid('m0', 'acme')), undefined)
+  let kept = await one(g, arrivalEid('m1', 'acme'))
+  assertEquals([kept?.doc?.body, kept?.text?.from], ['Post the agenda', ANA])
   assertEquals((await g.read('.sms_consent')).length, 0)
-  await door.handle(await signed(received('m3', 'start')))
+  await door.handle(posted(received('m3', 'start')))
   assertEquals(
     (await one(g, consentEid(ana)))?.sms_consent?.consent,
     'start',
@@ -252,42 +171,6 @@ test('the door keeps a signed text, takes STOP as the end of consent and START a
   assertEquals((await one(g, ana))?.phone, { number: ANA })
 })
 
-test('an RCS reply and a tapped suggestion read as texts that came as RCS', () => {
-  let rcs = (body: unknown) =>
-    heard({
-      data: {
-        event_type: 'message.received',
-        payload: {
-          id: 'r1',
-          type: 'RCS',
-          body,
-          from: { phone_number: ANA },
-          to: [{ agent_id: 'agent-1' }],
-        },
-      },
-    }).arrival
-  assertEquals(rcs({ text: 'Yes' })?.text, 'Yes')
-  assertEquals(rcs({ text: 'Yes' })?.to, 'agent-1')
-  assertEquals(rcs({ text: 'Yes' })?.rcs, true)
-  assertEquals(
-    rcs({ suggestion_response: { text: 'Publish it', postback_data: 'p' } })
-      ?.text,
-    'Publish it',
-  )
-})
-
-test('a finalized failure names its code and whether a carrier blocked it', () => {
-  let finalized = (code: string) =>
-    heard({
-      data: {
-        event_type: 'message.finalized',
-        payload: {
-          id: 'm9',
-          to: [{ phone_number: ANA, status: 'delivery_failed' }],
-          errors: [{ code, title: 'Failed' }],
-        },
-      },
-    }).outcome?.failed
-  assertEquals(finalized('40010')?.blocked, true)
-  assertEquals(finalized('40002')?.blocked, false)
+test('a door is served only where the options name one', () => {
+  assertEquals(routes('acme', acme())({ graph: rig() }, {}), [])
 })

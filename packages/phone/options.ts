@@ -1,7 +1,7 @@
-/** What a config passes to @yaks/phone. Secrets are resolved by the host. */
+/** What a config passes to @yaks/phone: which lent texter sends, by name
+ * (`stash` keeps texts in memory). */
 export type Options = {
-  sender?: Transport
-  door?: Door
+  sender?: { via: string }
 }
 
 /** Provider selection and credentials, passed to that provider's factory. */
@@ -14,13 +14,4 @@ export type Transport = {
   tollFree?: boolean
   api?: string
   fetch?: typeof fetch
-}
-
-/** The provider's webhook door and verification key. */
-export type Door = {
-  /** Defaults to sender.via, then telnyx for existing configurations. */
-  via?: string
-  /** Defaults to /<via>/webhook. */
-  path?: string
-  key: string
 }

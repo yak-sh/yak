@@ -204,6 +204,13 @@ and a provider plugin lends one from its graph facet's
 embedder's `model` names its vector space, and nothing loads until its first
 embed. One name has one embedder.
 
+## Texters
+
+`Host.texters` lends named texters to @yaks/phone's `sender: {via}` the same
+way: a provider plugin lends one from its graph facet's `texters(host, options)`
+(@yaks/phone/plugin builds it), and a texter that cannot send yet says why
+through `waiting()`.
+
 ## Failure reporting
 
 `Host.report(error, context)` hands a failure to the concrete host's reporter.

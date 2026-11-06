@@ -17,3 +17,10 @@ answers `ring` for an incoming `call.initiated` and `ended` for `call.hangup`.
 
 The `provider` export plugs into [@yaks/phone](../phone/README.md). Credentials
 and `fetch` are supplied by the host. Nothing reads the environment.
+
+## As a plugin
+
+`@yaks/telnyx/graph` lends its host the texter `telnyx`, which @yaks/phone
+selects with `sender: {"via": "telnyx"}`. The config passes this plugin the
+sender's options and credentials. `@yaks/telnyx/routes` serves
+`POST /telnyx/webhook` when the options carry a `door: {key}`.

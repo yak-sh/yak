@@ -7,10 +7,10 @@ import type { Bundle } from '@yaks/graph'
 import { derivedEid } from '@yaks/graph/identity'
 import { type Arrival, consentEid, keyword, type Outcome } from './text.ts'
 
-/** The eid of a text that arrived, derived from the provider's id for it, so
- * a webhook posted twice keeps one. */
+/** The eid of a text that arrived, derived from the provider's id for it and
+ * the transport it came by, so a webhook posted twice keeps one. */
 export let arrivalEid = (id: string, via?: string): string =>
-  derivedEid(!via || via == 'telnyx' ? `text|${id}` : `text|${via}|${id}`)
+  derivedEid(via ? `text|${via}|${id}` : `text|${id}`)
 
 /**
  * The bundles that keep a text that arrived from the people at `people`

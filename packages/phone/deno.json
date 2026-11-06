@@ -5,7 +5,7 @@
     ".": "./mod.ts",
     "./vocab": "./vocab.ts",
     "./effects": "./effects.ts",
-    "./routes": "./routes.ts"
+    "./plugin": "./plugin.ts"
   },
   "license": "Apache-2.0",
   "description": "Phone numbers, provider selection, consent, texts and delivery outcomes in the graph, through a provider supplied at the transport boundary.",

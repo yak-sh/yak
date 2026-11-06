@@ -9,7 +9,9 @@
 //                             "model": "minishlab/potion-retrieval-32M@6fc8051",
 //                             "dim": 256 } } } ]
 // ```
-import { model2vec } from './mod.ts'
+import { type Embedder, type Model2Vec, model2vec } from './mod.ts'
 
 /** The `model2vec` embedder, made from the model and width a config names. */
-export let embedders = () => ({ model2vec })
+export let embedders = (): Record<string, (said: Model2Vec) => Embedder> => ({
+  model2vec,
+})

@@ -54,13 +54,20 @@ chose one, or rejects:
 - any other error: the text is bounced and the error thrown to the host's
   reporter.
 
-Provider adapters live in [@yaks/telnyx](../telnyx/README.md),
-[@yaks/voipms](../voipms/README.md) and [@yaks/pinnacle](../pinnacle/README.md).
-Each exports `provider`, whose `sender(options)` returns this package's
-`Sender`; verified webhook providers also supply `scheme` for @yaks/hook and
-`heard(event)` for normalized events. `sender(options, provider)` attaches the
-selected transport to receipts. Provider HTTP fields never become graph
-components.
+This package names no provider. Provider adapters live in
+[@yaks/telnyx](../telnyx/README.md), [@yaks/voipms](../voipms/README.md) and
+[@yaks/pinnacle](../pinnacle/README.md). Each exports `provider`, its `Provider`
+given as data: `sender(options)` returns this package's `Sender`; verified
+webhook providers also supply `scheme` for @yaks/hook and `heard(event)` for
+normalized events. `sender(options, provider)` attaches the selected transport
+to receipts. Provider HTTP fields never become graph components.
+
+Each provider package is also a plugin a config names, built from
+`@yaks/phone/plugin`: `texters(via, provider)` is its graph facet, lending the
+host a texter under its name (`host.texters`), and `routes(via, provider)` its
+routes facet, the webhook door. `lent(via, provider, options)` is that texter:
+built from its options at every text, and `waiting()` until they carry what the
+provider `needs`.
 
 `stash()` keeps texts in `sent` with `last()`, and answers receipts `stash-1`,
 `stash-2`, …; `stash({ block })` and `stash({ refuse })` reject every text.
@@ -69,8 +76,10 @@ components.
 commits, it claims `deliver.tried`, hands the text over once, and writes the
 outcome back. Nobody is texted before they agree: a text to someone with no
 `sms_consent` is bounced, never handed over, and reports nothing. The
-`./effects` facet builds it from the config's `sender`: the texter the host
-lends under that name (`host.texters`), else one built from the config.
+`./effects` facet sends through the texter lent under the config's `sender.via`
+(`host.texters`), by the host or a provider plugin, or keeps texts in memory for
+`stash`. A text waits, with the reason on `deliver.waiting`, while nothing lends
+that name or the texter is `waiting()`.
 
 ## Receiving
 
@@ -78,31 +87,27 @@ lends under that name (`host.texters`), else one built from the config.
 the message and updates consent using the same shapes for every provider.
 `settled(outcome, sent)` records a failed delivery. An opaque `text.message_id`
 is scoped by `text.via`, so different providers cannot settle each other's
-texts. Existing Telnyx arrival identities stay fixed.
+texts. `arrivalEid(id, via)` derives a text's identity from both.
 
-The `./routes` facet verifies a provider webhook before decoding it. The
-`./effects` facet loads the package selected by `sender.via` at its transport
-boundary, unless the host lends a texter by that name. Install the provider
-package beside @yaks/phone. A host can inject the module loader into both facets
-for in-process tests or supply statically imported providers.
+A provider plugin's door verifies its webhook before decoding it. Compose the
+provider plugin beside @yaks/phone and pass it its credentials and door:
 
 ```json
-{
-  "use": "@yaks/phone",
-  "with": {
-    "sender": {
-      "via": "pinnacle",
+[
+  {
+    "use": "@yaks/pinnacle",
+    "with": {
       "key": { "secret": "PINNACLE_API_KEY" },
-      "number": "+12695550100"
-    },
-    "door": { "key": { "secret": "PINNACLE_SIGNING_SECRET" } }
-  }
-}
+      "number": "+12695550100",
+      "door": { "key": { "secret": "PINNACLE_SIGNING_SECRET" } }
+    }
+  },
+  { "use": "@yaks/phone", "with": { "sender": { "via": "pinnacle" } } }
+]
 ```
 
-The webhook path defaults to `/<via>/webhook`; `door.via` and `door.path` can
-select another provider or path independently of outbound sending. Telnyx uses a
-base64 public key and Ed25519. Pinnacle authenticates its
+The webhook path defaults to `/<via>/webhook`; `door.path` chooses another.
+Telnyx uses a base64 public key and Ed25519. Pinnacle authenticates its
 `PINNACLE-SIGNING-SECRET` header against the configured webhook secret; it does
 not sign the body. voip.ms callbacks use a host-authenticated URL.
 

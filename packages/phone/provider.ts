@@ -1,5 +1,6 @@
 // Providers own their wire formats. Phone asks for a sender and normalized
-// events; the host supplies modules, just as it supplies its other plugins.
+// events; a provider package gives its `Provider` as data, and a plugin built
+// from it (./plugin.ts) lends it under its own name.
 import { ours, refusal, type Scheme } from '@yaks/hook'
 import type { Arrival, Outcome, Sender } from './text.ts'
 import type { Transport } from './options.ts'
@@ -23,10 +24,6 @@ export type Provider = {
   caller?: (options: Transport) => Caller
   line?: Line
 }
-export type Load = (via: string) => Promise<{ provider: Provider }>
-
-export let provider: Load = (via) => import(`@yaks/${via}`)
-
 /** Whether a provider takes webhooks: it says how they are signed and how to
  * read one. */
 export let listens = (transport?: Provider): transport is Provider & {

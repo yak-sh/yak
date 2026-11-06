@@ -97,14 +97,12 @@ export {
 export { type Stash, stash } from './stash.ts'
 export { arrivalEid, kept, settled } from './received.ts'
 export { owed, sending, type Texting } from './send.ts'
-export type { Door, Options, Transport } from './options.ts'
+export type { Options, Transport } from './options.ts'
 
 export {
   type Heard,
   listens,
-  type Load,
   type Provider,
-  provider,
   sender,
   verified,
 } from './provider.ts'

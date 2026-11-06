@@ -145,7 +145,7 @@ let doorman = (
 // What the host lends by name and what the plugins lend beside it, one party
 // per name: a letter or a vector made through a name two parties answer to
 // would depend on order.
-let lending = <K extends 'senders' | 'embedders'>(
+let lending = <K extends 'senders' | 'texters' | 'embedders'>(
   graphs: Taken<'graph'>,
   host: Host,
   kind: K,
@@ -485,6 +485,8 @@ export let assemble = (
       let authenticate = doorman(graphs, host, self ?? null)
       let senders = lending(graphs, host, 'senders', lent.senders)
       if (senders) host.senders = senders
+      let texters = lending(graphs, host, 'texters', lent.texters)
+      if (texters) host.texters = texters
       let embedders = lending(graphs, host, 'embedders', lent.embedders)
       if (embedders) host.embedders = embedders
       part?.('storage')

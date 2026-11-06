@@ -100,7 +100,12 @@ export type TextReceipt = {
 
 /** A texter resolves when the text is accepted and rejects when it is not,
  * as a {@link Sender} does for a letter. */
-export type Texter = { send: (text: Text) => Promise<TextReceipt> }
+export type Texter = {
+  send: (text: Text) => Promise<TextReceipt>
+  /** Why it cannot send yet, such as a credential not set; asked before each
+   * text, so the text waits instead. Absent or empty, it can send. */
+  waiting?: () => string | undefined
+}
 
 /** A rejection that knows the message never left: the connection was never
  * made, or the provider refused to take it yet. Sending is at most once, so
