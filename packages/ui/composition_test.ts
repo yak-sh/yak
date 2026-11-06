@@ -6,7 +6,7 @@ import { print } from '@yaks/tui/print'
 // deno-lint-ignore no-control-regex -- read the terminal's words
 let plain = (s: string) => s.replace(/\x1b\[[0-9;]*m/g, '')
 import { el } from './el.ts'
-import { Guide, Page, stopsOf } from './guide.ts'
+import { Guide, Page, stopsOf, Worn } from './guide.ts'
 import { gather, kits, sheet, stylesheet } from './kit.ts'
 import { everforest } from './everforest.ts'
 import type { Composition, Kit } from './theme.ts'
@@ -86,6 +86,17 @@ test('the same guide renders external UI and UX specimens and skin coverage in b
   let text = plain(print(node, 100, sheet(dressed)))
   assert(text.includes('outside'))
   assert(text.includes('selected'))
+})
+
+test("a host's guide shows the parts it wears, in the kit's groups and its skin", () => {
+  let html = renderToString(
+    h(Worn, { parts: ['Button', 'Extra'], composition: c }),
+  )
+  assert(html.includes('id="Controls"'))
+  assert(html.includes('id="Button" data-skin="kit"'))
+  assert(html.includes('id="ui/external/Extra" data-skin="skin"'))
+  assert(!html.includes('id="Field"'), 'a part it does not wear')
+  assert(!html.includes('id="Marks"'), 'a group it wears nothing of')
 })
 
 test('installed facets gather all four contribution kinds and reject ambiguous names', () => {

@@ -57,6 +57,6 @@ export let specimens = (): Specimen[] => [
   ['Chip-code', h(Chip, { mod: 'code' }, 'https://yaks.app/mcp')],
   [
     'Chip, href, Tag',
-    h(Chip, { href: '#recipes' }, 'Recipe box', h(Chip.Tag, {}, 'public')),
+    h(Chip, { href: '#Chip' }, 'Recipe box', h(Chip.Tag, {}, 'public')),
   ],
 ]

@@ -25,7 +25,8 @@ export let UI = '_ui.css'
 /** The kit's parts yaks.app's pages wear, in the order their sheets go,
  * which settles a tie, the order controls.css had them in: rows before the
  * card holding them (a card's child shrinks), a card before what rides one
- * or sits in one (a report's gap, a group's margin). */
+ * or sits in one (a report's gap, a group's margin). The style guide wears
+ * the catalog and the gallery the kit shows its parts in. */
 export let WORN = [
   'base',
   'Button',
@@ -53,6 +54,8 @@ export let WORN = [
   'Icon',
   'SideNav',
   'Check',
+  'Catalog',
+  'Gallery',
 ]
 
 /** What yaks.app wears of the kit. */

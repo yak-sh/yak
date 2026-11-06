@@ -28,7 +28,8 @@
  *   same sheet by what each piece dresses), `sheet(composition)` a terminal
  *   (kit.ts).
  * - `Guide`: every part in every variant, the guide `./routes` serves at `/ui`
- *   and `./cli` paints as `yak ui`; `Specimens`, one part's entry in it.
+ *   and `./cli` paints as `yak ui`; `Specimens`, one part's entry in it;
+ *   `Worn`, the entries of the parts a host wears, for a guide of its own.
  *
  * @module
  */
@@ -116,7 +117,7 @@ export {
   stylesheet,
   themes,
 } from './kit.ts'
-export { Guide, Specimens } from './guide.ts'
+export { Guide, Specimens, Worn } from './guide.ts'
 export type {
   Behaviours,
   Colors,

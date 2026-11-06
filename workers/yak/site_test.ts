@@ -225,7 +225,9 @@ test('every jump names a section on its own page', () => {
 // Every part the pages wear (sheet-assets.ts WORN) has an example in the
 // style guide, in every element and variant the pencil skin draws it in (the
 // kit's own where pencil leaves it alone), and so has every component of the
-// site's own stylesheet.
+// site's own stylesheet. The guide shows the kit's parts by their own
+// specimens (@yaks/ui `Worn`), so a variant pencil draws and no specimen
+// shows is the kit's to add.
 let drawn = async (name: string) => {
   let { css, over } = pencil[name] ?? { css: kit[name].css }
   let urls = [css, ...[over ?? []].flat()].filter((url) => !!url) as URL[]

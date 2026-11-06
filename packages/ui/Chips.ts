@@ -42,7 +42,7 @@ export let specimens = (): Specimen[] => [
       Chips,
       {},
       ['make', 'start', 'ask'].map((at) =>
-        h(Chip, { key: at, href: `#${at}` }, at)
+        h(Chip, { key: at, href: '#Chips' }, at)
       ),
     ),
   ],

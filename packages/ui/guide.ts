@@ -92,15 +92,39 @@ export let Specimens = (
   )
 }
 let Group = (
-  { name, composition: c = composition }: Dressed & { name: string },
+  { name, composition: c = composition, only }: Dressed & {
+    name: string
+    only?: string[]
+  },
 ): VNode =>
   h(
     Catalog.Group,
     { id: name },
     h(Catalog.Heading, {}, groupTitle(name)),
-    Object.keys(sections(c)[name]).map((part) =>
-      h(Specimens, { key: part, name: part, composition: c })
-    ),
+    Object.entries(sections(c)[name]).filter(([id, entry]) =>
+      worn(id, entry, only)
+    )
+      .map(([id]) => h(Specimens, { key: id, name: id, composition: c })),
+  )
+
+// An entry is of a part the host wears, by the part's name.
+let worn = (id: string, entry: Entry, only?: string[]) =>
+  !only || only.includes(entry.part ?? id)
+
+/** The parts a host wears, under the groups the guide shows them in, as its
+ * composition draws them: a site's own style guide shows these beside what
+ * it says of itself, so its examples are the kit's and cannot drift. */
+export let Worn = (
+  { parts: only, composition: c = composition }: Dressed & {
+    parts: string[]
+  },
+): VNode =>
+  h(
+    Catalog,
+    {},
+    Object.entries(sections(c)).filter(([, entries]) =>
+      Object.entries(entries).some(([id, entry]) => worn(id, entry, only))
+    ).map(([name]) => h(Group, { key: name, name, composition: c, only })),
   )
 
 /** The same composition as the page being checked. */

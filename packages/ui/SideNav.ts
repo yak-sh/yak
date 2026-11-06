@@ -42,11 +42,11 @@ export let specimens = (): Specimen[] => [
     h(
       SideNav,
       { 'aria-label': 'Settings' },
-      h(Link, { href: '#apps', mod: 'on', 'aria-current': 'page' }, 'Apps'),
-      h(Link, { href: '#people', mod: 'hover' }, 'People'),
-      h(Link, { href: '#billing' }, 'Billing'),
+      h(Link, { href: '#SideNav', mod: 'on', 'aria-current': 'page' }, 'Apps'),
+      h(Link, { href: '#SideNav', mod: 'hover' }, 'People'),
+      h(Link, { href: '#SideNav' }, 'Billing'),
       h(Rule, {}),
-      h(Link, { href: '#profile' }, 'Profile'),
+      h(Link, { href: '#SideNav' }, 'Profile'),
     ),
   ],
 ]
