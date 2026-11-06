@@ -388,7 +388,7 @@ test('a dashboard page reads the directory in two trips at most', async () => {
     assertEquals(page.status, 200)
     return /hops;dur=(\d+)/.exec(page.headers.get('server-timing') ?? '')?.[1]
   }
-  for (let view of ['apps', 'settings', 'billing'] as const) {
+  for (let view of ['apps', 'settings', 'billing', 'connections'] as const) {
     assertEquals(await trips(managePath(view, slug)), '2', view)
   }
   // A page of the person's own asks only about them, at once.

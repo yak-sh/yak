@@ -327,6 +327,20 @@ let spaceOf = async (ctx: Ctx, args: Args) => {
   return space
 }
 
+// The space a call names with the caller's seat in it, its apps and, where
+// the door says `over`, whether the caller is the platform's admin: one
+// snapshot of the directory (directory.ts `page`), so a door admits a call in
+// one trip. A space it means without naming, or one found only at an address
+// it has left, is read as `spaceOf` reads it, and the caller's seat after.
+let entered = async (ctx: Ctx, args: Args, over: boolean) => {
+  if (args.space == null) return { space: await spaceOf(ctx, args) }
+  let slug = text(args.space, 'space')
+  let page = await ctx.dir.page(slug, null, ctx.person, over)
+  return page.space
+    ? { space: page.space, page }
+    : { space: await named(ctx, slug) }
+}
+
 // The space a call names by its address. An assistant remembers a space by
 // the name it last used, and where that space went is what its old
 // hostname's redirect says to anybody, so the refusal says it too and the
@@ -410,12 +424,19 @@ let seated = async (
   for (let attempt = 0;; attempt++) {
     let scope = { ...ctx, dir: ctx.reopen?.() ?? ctx.dir }
     try {
-      let space = selected
-        ? await scope.dir.at(selected.eid)
-        : await spaceOf(scope, args)
+      let { space, page } = selected
+        ? { space: await scope.dir.at(selected.eid), page: undefined }
+        : await entered(scope, args, over)
       if (!space) throw refuse('missing', 'the selected space no longer exists')
       selected = space
-      let who = await callerIn(scope, space, write, over)
+      let who = await callerIn(
+        scope,
+        space,
+        write,
+        over,
+        page?.role,
+        page?.administrative,
+      )
       if (write && !trash) awake(space)
       ctx.dir = scope.dir
       if (write) ctx.ahead?.(space, who)

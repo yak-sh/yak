@@ -19,7 +19,6 @@ import {
   disconnect,
   INTEGRATION,
   known,
-  knownIn,
   need,
   type Read,
   used,
@@ -34,6 +33,7 @@ import {
   holdOf,
   pageOf,
   rebind,
+  type Using,
 } from './connections.ts'
 import { CWD, TIMEOUT } from './sandbox.ts'
 import { vaulted } from './vault.ts'
@@ -54,7 +54,6 @@ import { call } from './tools.ts'
 import type { Supply } from '@yaks/builders'
 import type { Ask } from '@yaks/builders/tools'
 import { edgeEid } from '@yaks/edge'
-import { capOf, monthOf, spent } from '@yaks/egress'
 import { heard, LAST } from '@yaks/memory'
 import { invokePackage } from './package-tools.ts'
 import { apex } from './host.ts'
@@ -296,22 +295,23 @@ let integrationOf = (b: Bundle | undefined) =>
 
 // How the person gets the key, as its integration says, for an agent to walk
 // them through: nothing where it says nothing.
-let howTo = (i: { instructions?: unknown } | undefined) =>
-  typeof i?.instructions == 'string' && i.instructions
-    ? `\n\nHow to get the key, as the integration says:\n\n${i.instructions}`
+let howTo = (instructions: unknown) =>
+  typeof instructions == 'string' && instructions
+    ? `\n\nHow to get the key, as the integration says:\n\n${instructions}`
     : ''
 
-let said = (u: Comp, title: string) =>
+let said = (
+  u: { binding?: unknown; direct?: unknown; anyone?: unknown },
+  title: string,
+) =>
   `${title} reads it as env.${u.binding}${
     u.direct ? ' (the key itself)' : ' (a sentinel)'
   }${u.anyone ? ', open to anyone using it' : ''}`
 
 // The calls a link made this month against any cap, as the connections page
 // says them: nothing for the space's side of an ask each person answers.
-let calledOn = (l: Bundle) => {
-  if (comp(l, USES).each) return ''
-  let n = spent(l, monthOf(Date.now()))
-  let cap = capOf(l)
+let calledOn = ({ each, calls: n, cap }: Using) => {
+  if (each) return ''
   return `, ${n} ${n == 1 ? 'call' : 'calls'} out this month${
     cap == null ? '' : ` of ${cap} allowed`
   }`
@@ -480,7 +480,7 @@ let CONNECTIONS: Row[] = [
       )
       let status = comp(b, CONNECTION).status
       let u = comp(l, USES)
-      let how = howTo(await known(read, integrationOf(b)))
+      let how = howTo((await known(read, integrationOf(b)))?.instructions)
       if (u.each) {
         let at = `https://${space.slug}.${apex(ctx.env)}/${app.slug}`
         return {
@@ -526,37 +526,28 @@ let CONNECTIONS: Row[] = [
     },
     run: async (ctx, args) => {
       let { space, who } = await inSpace(ctx, args)
-      let all = await invokePackage(ctx, 'connection_list', {
-        space: space.slug,
-        owner: space.eid,
+      let view = await connectionsOf(ctx.env, space, who.person!, {
+        dir: ctx.dir,
       })
-      let view = await connectionsOf(ctx.env, space, who.person!)
       // An app of this space goes by its slug, the name every tool takes;
       // a copy borrowing from another space, by the title its page shows.
+      // The view asked for them, so this asks nothing (hops.ts `recall`).
       let slugs = new Map(
         (await ctx.dir.apps(space)).map((a) => [a.eid, a.slug]),
       )
-      let rows = all.filter((b) => b[CONNECTION]).map((b) => {
-        let c = comp(b, CONNECTION)
-        let uses = all.filter((l) => comp(l, 'edge').to == b.entity.eid)
-          .map((l) => {
-            let app = String(comp(l, 'edge').from)
-            let shown = view.list.find((c) => c.eid == b.entity.eid)?.apps
-              .find((a) => a.app == app)
-            let u = comp(l, USES)
-            return said(u, slugs.get(app) ?? shown?.title ?? 'another app') +
-              (shown?.borrower ? ` in ${shown.borrower} (borrowing)` : '') +
-              calledOn(l) +
-              (typeof u.lends == 'number'
-                ? `; lends to installed copies at ${u.lends} calls a month each`
-                : '')
-          })
-        return `${c.integration} (${b.entity.eid}): ${c.status}${
+      let rows = view.list.map((c) => {
+        let uses = c.apps.map((u) =>
+          said(u, slugs.get(u.app) ?? u.title) +
+          (u.borrower ? ` in ${u.borrower} (borrowing)` : '') +
+          calledOn(u) +
+          (u.lends == null
+            ? ''
+            : `; lends to installed copies at ${u.lends} calls a month each`)
+        )
+        return `${c.integration} (${c.eid}): ${c.status}${
           c.account ? ` as ${c.account}` : ''
         }${uses.length ? `; ${uses.join('; ')}` : ''}${
-          c.status == 'connected'
-            ? ''
-            : howTo(knownIn(all, String(c.integration)))
+          c.status == 'connected' ? '' : howTo(c.instructions)
         }`
       })
       for (let loan of view.borrowed) {

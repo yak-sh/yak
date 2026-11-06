@@ -157,12 +157,14 @@ test('connections: the space’s ask of each person offers nothing to connect, a
             binding: 'WEATHER',
             direct: false,
             anyone: false,
+            each: false,
             calls: 3,
             cap: 10,
             lends: null,
             borrower: null,
           }],
           saving: '',
+          instructions: '',
           failed: '',
         }],
         services: [],
@@ -205,6 +207,7 @@ test('connections: on the person’s own space, theirs and then the space’s wi
     binding: integration.toUpperCase(),
     apps: [],
     saving: '',
+    instructions: '',
     failed: '',
   })
   let drawn = (enable?: string[], own = true) =>
@@ -289,6 +292,7 @@ let added = (status: 'needed' | 'connected', listed = false) => ({
   binding: 'WEATHER',
   apps: [],
   saving: '',
+  instructions: '',
   failed: '',
 })
 let listing = (
@@ -385,6 +389,7 @@ let used = (over: Partial<Using> = {}): Using => ({
   binding: 'WEATHER',
   direct: false,
   anyone: false,
+  each: false,
   calls: 0,
   cap: null,
   lends: null,

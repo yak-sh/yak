@@ -589,14 +589,17 @@ export let recall = async (
   ]
 }
 
-/** The connections these apps borrow rather than hold, each with the link
- * borrowing it and the integration it goes through: what the apps' own space
- * reads beside the connections it keeps. A borrowed connection is read
- * without its secret, which is the lender's. */
-export let borrowed = async (read: Read, apps: Eid[]): Promise<Bundle[]> => {
-  if (!apps.length) return []
-  let loans = (await links(read, 'from', any(apps)))
-    .filter((l) => comp(l, USES).lender != null)
+/** The connections some apps borrow rather than hold, from the `uses` links
+ * out of them, each with the link borrowing it and the integration it goes
+ * through: what the apps' own space reads beside the connections it keeps.
+ * The host reads the links however it names its apps, so they can be asked
+ * beside everything else it shows. A borrowed connection is read without its
+ * secret, which is the lender's. */
+export let borrowed = async (
+  read: Read,
+  out: Bundle[],
+): Promise<Bundle[]> => {
+  let loans = out.filter((l) => l[USES] && comp(l, USES).lender != null)
   if (!loans.length) return []
   let lent = await read(
     `.entity.eid=${any(loans.map((l) => far(l, 'from')))}&.${CONNECTION}`,
@@ -688,14 +691,31 @@ export let attach = async (
 }
 
 /** A space's or a person's connections, the `uses` links from the apps that
- * use them, and the integrations they go through. */
+ * use them, and the integrations they go through. Each is asked by the owner,
+ * so all three are asked at once, and a host whose reads asked together
+ * travel together answers them in one trip: the integrations among the built
+ * ones (the line `installed` asks) and the owner's own. Only one another owner
+ * listed is asked after. */
 export let list = async (read: Read, owner: Eid): Promise<Bundle[]> => {
-  let owned = await read(`.${CONNECTION}.owner=${owner}${ALL}`)
+  let [owned, links, built, theirs] = await Promise.all([
+    read(`.${CONNECTION}.owner=${owner}${ALL}`),
+    read(`.${EDGE}.to.${CONNECTION}.owner=${owner}&.${USES}${ALL}`),
+    read(`.${INTEGRATION}.built`),
+    read(`.${INTEGRATION}.owner=${owner}`),
+  ])
   if (!owned.length) return []
-  let links = await read(
-    `.${EDGE}.to=${any(owned.map((b) => b.entity.eid))}&.${USES}${ALL}`,
+  let names = new Set(
+    owned.map((b) => integrationEid(String(comp(b, CONNECTION).integration))),
   )
-  return [...owned, ...links, ...await through(read, owned)]
+  let kept = [
+    ...new Map([...built, ...theirs].map((b) => [b.entity.eid, b])).values(),
+  ].filter((b) => names.has(b.entity.eid))
+  return [
+    ...owned,
+    ...links,
+    ...kept,
+    ...await through(read, [...owned, ...kept]),
+  ]
 }
 
 /** Every connected connection an app calls out through for a person, or for

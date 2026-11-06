@@ -204,6 +204,8 @@ export type Shown = {
   available: { app: string; title: string }[]
   /** why it is not finished yet: the note on its `provisional` mark */
   saving: string
+  /** how to get its key, as its integration says */
+  instructions: string
   /** why its key could not be saved: the text beside its
    * `exception` */
   failed: string
@@ -220,6 +222,8 @@ export type Using = {
   direct: boolean
   /** anyone using the app may call out through it, not only its members */
   anyone: boolean
+  /** the space's side of an ask each person answers with their own */
+  each: boolean
   /** the calls it made through it this month (@yaks/egress `calls`) */
   calls: number
   /** the most calls a month it may make, or null for no limit */
@@ -301,17 +305,22 @@ export let ownersOf =
       : {}
 
 // What a space's people call it, for each of these: its title, else its
-// address.
-let spaceNames = async (env: Env, spaces: string[]) =>
-  new Map(
-    spaces.length
-      ? (await readOf(env)(`.entity.eid=${spaces.join(',')}&.space&?doc`))
-        .map((b) => [
-          b.entity.eid,
-          String(comp(b, 'doc').title || comp(b, 'space').slug),
-        ])
+// address. The space at hand is known, and only the others are read.
+let spaceNames = async (read: Read, here: Space, spaces: string[]) => {
+  let away = [...new Set(spaces)].filter((eid) => eid != here.eid)
+  return new Map([
+    [here.eid, here.title || here.slug],
+    ...away.length
+      ? (await read(`.entity.eid=${away.join(',')}&.space&?doc`))
+        .map((b) =>
+          [
+            b.entity.eid,
+            String(comp(b, 'doc').title || comp(b, 'space').slug),
+          ] as const
+        )
       : [],
-  )
+  ])
+}
 
 /** What an app's code reads as env.NAME from the connections it uses
  * (@yaks/connections `envOf`), and nothing where no vault is kept. */
@@ -474,31 +483,58 @@ export let connectionsOf = async (
     services?: Service[]
     enable?: string[]
     add?: string
+    /** the request's directory, so these reads travel with what it asks */
+    dir?: ReturnType<typeof dirOf>
   } = {},
 ): Promise<Connections> => {
-  let { own = false, enable = [], add } = at
-  let read = readOf(env)
+  let { own = false, enable = [], add, dir = dirOf(env) } = at
+  let read: Read = (q) => typeof q == 'string' ? dir.read(q) : []
   let month = monthOf(Date.now())
-  let listed = new Set((await read(`.${LISTED}`)).map((b) => b.entity.eid))
-  let all = (await Promise.all(
-    [space.eid, ...own ? [person] : []].map((owner) => list(read, owner)),
-  )).flat()
-  let links = all.filter((b) => b[USES])
-  let named = new Map<string, string>()
+  // What the page is drawn from is asked by the space and the person, all at
+  // once, so it travels as one trip (directory-copy.ts `gathered`); only what
+  // those answers name outside this space is asked after.
+  let [roster, listing, held, loans, built, wanted] = await Promise.all([
+    dir.apps(space),
+    read(`.${LISTED}`),
+    Promise.all(
+      [space.eid, ...own ? [person] : []].map((owner) => list(read, owner)),
+    ),
+    dir.read(`.edge.from.app.space=${space.eid}&.${USES}&*`)
+      .then((out) => borrowed(read, out)),
+    installed(read),
+    add ? known(read, add) : undefined,
+  ])
   // The live apps of this space, which a connection of its own may be given.
-  let available = (await dirOf(env).apps(space))
-    .filter((app) => !app.trashed)
+  let available = roster.filter((app) => !app.trashed)
     .map((app) => ({ app: app.eid, title: app.title || app.slug }))
-  let local = available.map((a) => a.app)
-  let loans = await borrowed(read, local)
-  let apps = [
+  let listed = new Set(listing.map((b) => b.entity.eid))
+  let all = held.flat()
+  let links = all.filter((b) => b[USES])
+  // Each app's space and name: this space's from its roster, and an app
+  // elsewhere borrowing from it, or lending to it, from the directory.
+  let named = new Map(
+    roster.map((app) => [app.eid, app.title || app.slug]),
+  )
+  let owners: Record<string, string> = Object.fromEntries(
+    roster.map((app) => [app.eid, space.eid]),
+  )
+  let away = [
     ...new Set(
       [...links, ...loans.filter((b) => b[USES])]
-        .map((l) => String(comp(l, 'edge').from)),
+        .map((l) => String(comp(l, 'edge').from))
+        .filter((app) => !named.has(app)),
     ),
   ]
-  let owners = await ownersOf(env)(apps)
-  let names = await spaceNames(env, [
+  if (away.length) {
+    for (let b of await read(`.entity.eid=${away.join(',')}&.app&?doc`)) {
+      named.set(
+        b.entity.eid,
+        String(comp(b, 'doc').title || comp(b, 'app').slug),
+      )
+      owners[b.entity.eid] = String(comp(b, 'app').space)
+    }
+  }
+  let names = await spaceNames(read, space, [
     ...Object.values(owners),
     ...loans.filter((b) => b[CONNECTION])
       .map((b) => String(comp(b, CONNECTION).owner)),
@@ -512,20 +548,13 @@ export let connectionsOf = async (
       binding: String(u.binding ?? ''),
       direct: u.direct == true,
       anyone: u.anyone == true,
+      each: u.each == true,
       calls: spent(l, month),
       cap: capOf(l),
       lends: typeof u.lends == 'number' ? u.lends : null,
       borrower: u.lender == null
         ? null
         : names.get(owners[app]) ?? 'another space',
-    }
-  }
-  if (apps.length) {
-    for (let b of await read(`.entity.eid=${apps.join(',')}&.app&*`)) {
-      named.set(
-        b.entity.eid,
-        String(comp(b, 'doc').title || comp(b, 'app').slug),
-      )
     }
   }
   let shown = await Promise.all(
@@ -555,6 +584,7 @@ export let connectionsOf = async (
         available: (c.owner == space.eid ? available : [])
           .filter((app) => !to.some((l) => comp(l, 'edge').from == app.app)),
         saving: String(comp(b, PROVISIONAL).note ?? ''),
+        instructions: typeof i?.instructions == 'string' ? i.instructions : '',
         failed: failed
           ? String(
             comp(b, 'failed').reason ?? comp(b, 'content').body ??
@@ -569,20 +599,19 @@ export let connectionsOf = async (
   let offered = async (i: Integration) =>
     !taken.has(i.name) && (!i.testing || enable.includes(i.name)) &&
     connectable(i, vaulted(env) && await clientOf(vaultOf(env), read, i))
-  let built = []
-  for (let i of await installed(read)) {
+  let offers = []
+  for (let i of built) {
     if (await offered(i)) {
-      built.push({
+      offers.push({
         name: i.name,
         keyed: keyed(i),
         face: await faceOf(i.name, i),
       })
     }
   }
-  built.sort((a, b) => a.name.localeCompare(b.name))
+  offers.sort((a, b) => a.name.localeCompare(b.name))
   // The one the page was opened to add, from the integration directory: a
   // built one offered here, or a custom one its owner listed.
-  let wanted = add ? await known(read, add) : undefined
   let asked = wanted && !taken.has(wanted.name) &&
       (wanted.built
         ? await offered(wanted)
@@ -615,7 +644,7 @@ export let connectionsOf = async (
         }
       }),
     ),
-    built: built.filter((b) => b.name != asked?.name),
+    built: offers.filter((b) => b.name != asked?.name),
     enable,
     ...asked ? { asked } : {},
   }

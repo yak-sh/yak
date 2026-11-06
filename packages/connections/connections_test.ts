@@ -1059,7 +1059,10 @@ test('disconnect: the lender and remaining borrower ask in their own spaces', as
 })
 
 test('borrowed: the space reads its loan without the lender’s secret', async () => {
-  let got = await borrowed(loans.g.read, ['other'])
+  let got = await borrowed(
+    loans.g.read,
+    await loans.g.read('.edge.from=other&.uses&*'),
+  )
   assertEquals(
     got.map((b) => b.entity.eid).sort(),
     [loanLink('other'), integrationEid('texts'), loans.texts].sort(),
@@ -1067,7 +1070,13 @@ test('borrowed: the space reads its loan without the lender’s secret', async (
   assertEquals(got.some((b) => b.secret), false)
 })
 test('borrowed: a lender holds no borrowed connection', async () => {
-  assertEquals(await borrowed(loans.g.read, ['app']), [])
+  assertEquals(
+    await borrowed(
+      loans.g.read,
+      await loans.g.read('.edge.from=app&.uses&*'),
+    ),
+    [],
+  )
 })
 
 let changed = await lent()

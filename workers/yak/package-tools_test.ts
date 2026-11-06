@@ -4,16 +4,12 @@ import { graph } from '@yaks/graph'
 import type { Host } from '@yaks/host'
 import { ram } from '@yaks/ram'
 import { loadVocab } from '@yaks/vocab'
+import { kernelDoc } from '@yaks/kernel'
+import { edgeDoc, edgeKeywords } from '@yaks/edge'
+import { connectionsDoc } from '@yaks/connections'
 import { storedTools } from './package-tools.ts'
 
-let vocab = loadVocab([{
-  $defs: {
-    connection: {
-      component: true,
-      properties: { owner: { type: 'string' } },
-    },
-  },
-}])
+let vocab = loadVocab([kernelDoc, edgeDoc, connectionsDoc], [edgeKeywords])
 let host = { graph: graph({ vocab, storage: ram(vocab) }) } as Host
 
 test('stored package tools observe import and binding on the first call', async () => {

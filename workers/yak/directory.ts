@@ -1775,6 +1775,11 @@ export let directoryRows = (rows: {
     // A write that changes the directory: a batch of bundles, each minting at
     // an eid its author chose (T-32455), answered as applied.
     apply: write,
+    // One filter line, answered as rows: a read the questions below don't
+    // name (connections.ts `connectionsOf`), asked through this client so it
+    // travels with whatever else this moment asks.
+    read: async (line: string): Promise<Bundle[]> =>
+      (await query(line)).map(({ policy: _, ...row }) => row as Bundle),
     stamp: (mutation: { entities: Bundle[] }, headers = {}) =>
       write(mutation, { ...headers, 'x-yak-kernel': '1' }),
     space: async (slug: string) => {

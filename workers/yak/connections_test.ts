@@ -924,19 +924,25 @@ test(
   },
 )
 
-test('connection_list reads the directory as often for one connection as for four', async () => {
+// Admitting the caller is one trip (tool.ts `entered`), and everything the
+// list is drawn from is asked by the space at once, a second (connections.ts
+// `connectionsOf`): however many connections it holds and apps use them.
+test('connection_list reads the directory in two trips, whatever the space holds', async () => {
   let s = await setup()
   let ctx = { env: s.p.env, dir: s.dir, person: s.person }
-  let hops = async () => {
+  let listed = async () => {
     let tally = new Map<string, number>()
-    let listed = await tallying(
+    let out = await tallying(
       tally,
       () =>
         PUBLISHED.find((t) => t.name == 'connection_list')!.run(ctx, {
           space: 'ada',
         }),
     )
-    return [listed.text.match(/^\S+(?= \()/gm), tally.get('hops')]
+    return [
+      out.text.match(/^\S+(?= \()|\w+ reads it as env\.\w+/gm),
+      tally.get('hops'),
+    ]
   }
   let add = (n: number) =>
     s.post({
@@ -945,8 +951,13 @@ test('connection_list reads the directory as often for one connection as for fou
       hosts: `api.w${n}.test`,
       key: 'sk-0123456789',
     })
-  await add(0)
-  let [, one] = await hops()
-  for (let n of [1, 2, 3]) await add(n)
-  assertEquals(await hops(), [['W0', 'W1', 'W2', 'W3'], one])
+  assertEquals(await listed(), [null, 2])
+  for (let n of [0, 1, 2, 3]) await add(n)
+  let app = await liveApp(s)
+  let w0 = (await s.shown()).list.find((c) => c.integration == 'W0')!
+  await s.post({ do: 'attach', connection: w0.eid, app: app.eid })
+  assertEquals(await listed(), [
+    ['W0', 'notes reads it as env.W0', 'W1', 'W2', 'W3'],
+    2,
+  ])
 })

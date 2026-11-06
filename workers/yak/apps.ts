@@ -2772,6 +2772,7 @@ let desk = async (
       ? dir.seats(owner, 'owner').then(async (seats) => {
         let own = seats.some((s) => s.own && s.space.eid == space.eid)
         return connectionsOf(env, space, owner, {
+          dir,
           own,
           services: own
             ? await identity().then((part) => part.services(env, owner))
