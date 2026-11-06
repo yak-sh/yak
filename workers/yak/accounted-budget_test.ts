@@ -30,6 +30,7 @@ let failed = await fixture()
 let prepared = await fixture()
 let unknown = await fixture()
 let over = await fixture()
+let searching = await fixture()
 let req = { model: 'bounded', items: [], tools: [], tokens: 2000 }
 let info = () =>
   Promise.resolve({
@@ -155,6 +156,31 @@ test('a provider violating its quote is surfaced without freeing held dollars', 
     'exceeded its reserved maximum',
   )
   assertAlmostEquals(await over.used(), 0.003)
+})
+
+test('a model that searches reserves its tools’ most and is charged each search it ran', async () => {
+  let held = 0
+  let raw: Model = Object.assign(async (ask: Parameters<Model>[0]) => {
+    await ask.onSubmit!()
+    held = await searching.used()
+    return {
+      id: 'searched',
+      model: ask.model,
+      items: [],
+      usage: { input_tokens: 1500, output_tokens: 100, web_searches: 2 },
+    }
+  }, {
+    info: () =>
+      Promise.resolve({
+        name: 'bounded',
+        context: 1000,
+        price: { input: 1, output: 1, web_search: 0.01 },
+      }),
+    hosted: { searches: 4, input: 1000 },
+  })
+  await withModel(searching.space, raw)(req)
+  assertAlmostEquals(held, 0.002 + 0.04 + 0.002)
+  assertAlmostEquals(await searching.used(), 0.0015 + 0.0001 + 0.02)
 })
 
 test('raw multiple choices and completion-token aliases share one affordable bound', async () => {

@@ -26,6 +26,14 @@ export type ToolParam = {
   input_schema: Record<string, unknown>
 }
 
+/** A tool the API runs itself, named by its `type`. */
+export type HostedParam =
+  & { type: string; name: string }
+  & Record<
+    string,
+    unknown
+  >
+
 /** What a reply used, as the API counts it. */
 export type ApiUsage = {
   input_tokens?: number | null
@@ -33,7 +41,12 @@ export type ApiUsage = {
   cache_read_input_tokens?: number | null
   cache_creation_input_tokens?: number | null
   cache_creation?: { ephemeral_1h_input_tokens?: number } | null
+  server_tool_use?: { web_search_requests?: number | null } | null
 }
+
+/** Where a block of a reply's text came from: a web search result names its
+ * page by `url`. */
+export type Citation = { type: string; url?: string; title?: string | null }
 
 /** A block of a reply: text, a tool call, or one this package passes by.
  * `json` is a call's input as the stream has sent it so far. */
@@ -44,6 +57,7 @@ export type Content = {
   name?: string
   input?: unknown
   json?: string
+  citations?: Citation[]
 }
 
 export type Message = {
@@ -74,6 +88,7 @@ export type Event = {
     type?: string
     text?: string
     partial_json?: string
+    citation?: Citation
     stop_reason?: string | null
     stop_details?: Message['stop_details']
   }
@@ -193,7 +208,8 @@ let present = <T extends object>(o: T) =>
   Object.fromEntries(Object.entries(o).filter(([, v]) => v != null))
 
 /** The message after one more event of its stream: a block begins, grows by
- * its delta or ends, or the message says why it stopped and what it used.
+ * its delta (text, a tool call's input, a citation) or ends, or the message
+ * says why it stopped and what it used.
  * Usage is cumulative, so each count the event names replaces the last. */
 export let built = (m: Message, e: Event): Message => {
   let at = e.index ?? 0
@@ -205,6 +221,9 @@ export let built = (m: Message, e: Event): Message => {
     if (d.type == 'text_delta') block.text = (block.text ?? '') + d.text
     if (d.type == 'input_json_delta') {
       block.json = (block.json ?? '') + d.partial_json
+    }
+    if (d.type == 'citations_delta' && d.citation) {
+      block.citations = [...block.citations ?? [], d.citation]
     }
   } else if (e.type == 'content_block_stop' && block?.json != null) {
     let { json, ...rest } = block

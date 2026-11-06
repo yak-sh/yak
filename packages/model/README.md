@@ -55,10 +55,14 @@ calls sends it nowhere else. `native(lent, options, spending)`, where a plugin
 offers it, is the provider's own door (`Native`): one call as its API takes it,
 held to what the host's `Spending` affords and settled at what it cost, for a
 host that passes a caller's input through whole. A model priced by the call
-rather than by its tokens quotes such a request itself (`Model.quote`). A host
-running conversations ([@yaks/harness](../harness/README.md), the hosted model
-executor in workers/model) asks every plugin its config names, so a config
-serves exactly the providers it lists, and the host depends on none of them.
+rather than by its tokens quotes such a request itself (`Model.quote`). A model
+whose provider runs tools of its own within a request (a web search, a page
+fetch) says the most they add to one (`Model.hosted`: `searches`, and the
+`input` tokens of what they read), which the provider enforces and a meter
+reserves beside the request's own bound. A host running conversations
+([@yaks/harness](../harness/README.md), the hosted model executor in
+workers/model) asks every plugin its config names, so a config serves exactly
+the providers it lists, and the host depends on none of them.
 [@yaks/openai](../openai/README.md),
 [@yaks/openrouter](../openrouter/README.md),
 [@yaks/anthropic](../anthropic/README.md) and
@@ -320,15 +324,17 @@ equal(await model.info!('missing'), undefined)
 
 ## Usage, price and cost
 
-**Usage** (`Usage`, `usage`) is token counts for one model request. Cached
-input, input written to the cache (`cache_write_tokens`, and of those the ones
-kept an hour, `cache_write_1h_tokens`) and reasoning output are subsets of input
-and output, not extra tokens; an absent count is unknown. **Price** (`Price`,
-`price`) is dollars per million input, output and optional cached, cache-write
-and hour-long cache-write tokens. **Cost** (`cost`) is the dollars spent by one
-model request or tool call, with `reported` saying whether the provider supplied
-that amount. A **rate limit** (`rate_limit{provider, window, used, resets, at}`)
-is the latest reading of how much of a provider's plan a window has used.
+**Usage** (`Usage`, `usage`) is token counts for one model request, and the web
+searches its provider ran for it (`web_searches`). Cached input, input written
+to the cache (`cache_write_tokens`, and of those the ones kept an hour,
+`cache_write_1h_tokens`) and reasoning output are subsets of input and output,
+not extra tokens; an absent count is unknown. **Price** (`Price`, `price`) is
+dollars per million input, output and optional cached, cache-write and hour-long
+cache-write tokens, and dollars per web search (`web_search`). **Cost** (`cost`)
+is the dollars spent by one model request or tool call, with `reported` saying
+whether the provider supplied that amount. A **rate limit**
+(`rate_limit{provider, window, used, resets, at}`) is the latest reading of how
+much of a provider's plan a window has used.
 
 A model a graph meets for the first time, by a request that names it or an
 imported transcript, is given its vendor's list price (`listPrice(name)`), so
@@ -341,17 +347,18 @@ fetches it again. A name's bracketed context window (`[1m]`) and release date
 (`-20251001`) are dropped to find it. The price on a model's row is the one a
 graph weighs at: change it there
 (`price{input, output, cached, cache_write,
-cache_write_1h}`, dollars per
-million), and the list never writes over it.
+cache_write_1h, web_search}`,
+dollars per million tokens and per search), and the list never writes over it.
 
 `weigh(price, usage)` calculates dollars, treating missing counts as zero and
 using the input price when the cached or cache-write price is absent.
-`affordable(price, inputUpperTokens, remainingDollars, outputTokens?)` returns
-the largest affordable output limit and its reserved dollars, or `null`. The
-input bound includes provider framing, tools and retained conversation history;
-a token estimate is insufficient. It reserves input at the highest applicable
-cache tariff, rounds the maximum cost upward, and requires the provider to
-enforce the returned output limit.
+`affordable(price, inputUpperTokens, remainingDollars, outputTokens?, searches?)`
+returns the largest affordable output limit and its reserved dollars, or `null`,
+reserving `searches` web searches beside the tokens. The input bound includes
+provider framing, tools and retained conversation history; a token estimate is
+insufficient. It reserves input at the highest applicable cache tariff, rounds
+the maximum cost upward, and requires the provider to enforce the returned
+output limit.
 
 `promptBound(prompt, context)` is that bound for a text prompt, built before the
 call: twice its compact JSON's UTF-8 bytes (a text token covers at least one

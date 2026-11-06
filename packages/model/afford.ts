@@ -58,13 +58,15 @@ let valid = (n: number) => Number.isFinite(n) && n >= 0
 let upward = (dollars: number) => Math.ceil(dollars * 1e12) / 1e12
 
 /** The most output affordable after reserving every input token at its highest
- * possible tariff. The returned dollars cover that entire call; a provider
- * must enforce the returned output token limit before it spends anything. */
+ * possible tariff, and `searches` web searches at theirs. The returned dollars
+ * cover that entire call; a provider must enforce the returned output token
+ * limit before it spends anything. */
 export let affordable = (
   price: Price,
   input: number,
   remaining: number,
   tokens = 4096,
+  searches = 0,
 ): Affordable | null => {
   let rates = [
     price.input,
@@ -74,12 +76,15 @@ export let affordable = (
   ]
   if (
     !rates.every(valid) || !valid(price.output) || !valid(input) ||
-    !valid(remaining) ||
+    !valid(remaining) || !valid(price.web_search ?? 0) ||
+    !Number.isSafeInteger(searches) || searches < 0 ||
     !Number.isSafeInteger(input) || !Number.isSafeInteger(tokens) ||
     tokens < 0 ||
     tokens == 0 && price.output > 0
   ) return null
-  let fixed = upward(input * Math.max(...rates) / 1e6)
+  let fixed = upward(
+    input * Math.max(...rates) / 1e6 + searches * (price.web_search ?? 0),
+  )
   if (fixed > remaining) return null
   let output = price.output
     ? Math.min(tokens, Math.floor((remaining - fixed) * 1e6 / price.output))

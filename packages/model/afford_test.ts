@@ -164,3 +164,17 @@ test('media, or history the provider holds, is bounded by the context window', (
     2 * '[null,[],[],null,null]'.length + FRAMING,
   )
 })
+
+test('a request that may search reserves each search beside its tokens', () => {
+  let price = { input: 1, output: 2, web_search: 0.01 }
+  let quote = affordable(price, 1000, 0.05, 10_000, 3)!
+  assertEquals(quote.tokens, 9500)
+  assert(
+    weigh(price, {
+      input_tokens: 1000,
+      output_tokens: quote.tokens,
+      web_searches: 3,
+    }) <= quote.dollars,
+  )
+  assertEquals(affordable(price, 1000, 0.02, 10_000, 3), null)
+})

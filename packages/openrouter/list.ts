@@ -11,6 +11,7 @@ type Row = {
     completion?: string
     input_cache_read?: string
     input_cache_write?: string
+    web_search?: string
   }
 }
 
@@ -39,6 +40,9 @@ export let listed = (r: Row): Listed => ({
           : {},
         ...r.pricing.input_cache_write != null
           ? { cache_write: perMillion(r.pricing.input_cache_write) }
+          : {},
+        ...Number(r.pricing.web_search)
+          ? { web_search: Number(r.pricing.web_search) }
           : {},
       },
     }

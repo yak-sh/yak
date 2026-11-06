@@ -39,10 +39,12 @@ import {
 import { anthropicDoc } from './vocab.ts'
 import { mark } from './mark.ts'
 import { READS } from './reads.ts'
+import { HOSTED, web } from './web.ts'
 import {
   type ApiUsage,
   type Block,
   built,
+  type Citation,
   type Content,
   events,
   failure,
@@ -62,6 +64,8 @@ export type Options = {
   fetch?: typeof fetch
   /** The API's root, `https://api.anthropic.com` by default. */
   base?: string
+  /** Offer the API's own web search and page fetch. */
+  web?: boolean
 }
 
 // A reply's ceiling where the request names none: streamed, so no timeout.
@@ -158,29 +162,63 @@ export let usage = (u: ApiUsage): Usage => {
   let read = u.cache_read_input_tokens ?? 0
   let wrote = u.cache_creation_input_tokens ?? 0
   let hour = u.cache_creation?.ephemeral_1h_input_tokens
+  let searched = u.server_tool_use?.web_search_requests
   return {
     input_tokens: (u.input_tokens ?? 0) + read + wrote,
     output_tokens: u.output_tokens,
     cached_tokens: read,
     cache_write_tokens: wrote,
     ...hour ? { cache_write_1h_tokens: hour } : {},
+    ...searched ? { web_searches: searched } : {},
   }
 }
 
-/** A reply's items in the order the model wrote them. */
-export let items = (content: Content[]): Item[] =>
-  content.flatMap((b): Item[] =>
-    b.type == 'text'
-      ? b.text ? [{ kind: 'assistant', text: b.text }] : []
-      : b.type == 'tool_use'
-      ? [{
+let page = (url?: string) => {
+  try {
+    let u = new URL(url ?? '')
+    return u.protocol == 'https:' || u.protocol == 'http:' ? u : undefined
+  } catch {
+    return undefined
+  }
+}
+
+/** A link to each page cited that the text has not linked yet. */
+let sources = (cited: Citation[] = [], linked: Set<string>) =>
+  cited.map((c) => {
+    let url = page(c.url)
+    if (!url || linked.has(url.href)) return ''
+    linked.add(url.href)
+    let title = (c.title || url.hostname).replace(/[\[\]\\\r\n]/g, ' ')
+    return ` [${title}](<${url.href.replaceAll('>', '%3E')}>)`
+  }).join('')
+
+/** A reply's items in the order the model wrote them. Text runs on across the
+ * blocks its citations split it into and the searches and fetches the API ran
+ * within it, and each web page it cites is linked after the text citing it. */
+export let items = (content: Content[]): Item[] => {
+  let out: Item[] = []
+  let linked = new Set<string>()
+  let ran = false
+  for (let b of content) {
+    if (b.type == 'tool_use') {
+      out.push({
         kind: 'call',
         id: b.id!,
         name: b.name!,
         args: JSON.stringify(b.input ?? {}),
-      }]
-      : []
-  )
+      })
+    } else if (b.type == 'text') {
+      let last = out.at(-1)
+      if (last?.kind != 'assistant') linked = new Set()
+      let text = (b.text ?? '') + sources(b.citations, linked)
+      if (!text) continue
+      if (last?.kind == 'assistant') last.text += (ran ? '\n\n' : '') + text
+      else out.push({ kind: 'assistant', text })
+    }
+    ran = b.type != 'text'
+  }
+  return out
+}
 
 /** A model as the API lists it, at the price @yaks/model's list has for its
  * name: the API says no price. */
@@ -206,7 +244,10 @@ let ended = () =>
 let read = async (req: Request, response: Response): Promise<Message> => {
   if (!response.body) throw ended()
   let message: Message | undefined
+  // Text runs on until a tool call, as the reply's items say it.
   let ordinal = new Map<number, number>()
+  let said = -1
+  let prose = false
   for await (let e of events(response.body)) {
     if (e.type == 'message_start') {
       message = { ...e.message!, content: [...e.message!.content] }
@@ -218,7 +259,13 @@ let read = async (req: Request, response: Response): Promise<Message> => {
     message = built(message, e)
     if (e.type == 'content_block_start') {
       began(req)
-      if (e.content_block?.type == 'text') ordinal.set(e.index!, ordinal.size)
+      let type = e.content_block?.type
+      if (type == 'text') {
+        if (!prose) said++
+        ordinal.set(e.index!, said)
+        prose = true
+      }
+      if (type == 'tool_use') prose = false
     }
     let text = e.delta?.type == 'text_delta' ? e.delta.text : undefined
     if (text) req.onText?.({ index: ordinal.get(e.index!) ?? 0, text })
@@ -269,13 +316,17 @@ export let messages = (options: Options): Model => {
     let effort = req.effort && EFFORTS.includes(req.effort)
       ? req.effort
       : undefined
+    let offered = [
+      ...tools(req.tools),
+      ...options.web ? web(req.model) : [],
+    ]
     let body = {
       model: req.model,
       max_tokens: req.tokens ?? TOKENS,
       cache_control: { type: 'ephemeral', ...hour(req) ? { ttl: '1h' } : {} },
       system: system(req),
       messages: conversation(req),
-      ...req.tools.length ? { tools: tools(req.tools) } : {},
+      ...offered.length ? { tools: offered } : {},
       ...effort ? { output_config: { effort } } : {},
       stream: true,
     }
@@ -311,6 +362,7 @@ export let messages = (options: Options): Model => {
     vocab: anthropicDoc,
     mark,
     anchor: () => undefined,
+    ...options.web ? { hosted: HOSTED } : {},
   })
 }
 

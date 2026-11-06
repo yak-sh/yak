@@ -318,7 +318,15 @@ export type Model = ((req: Request) => Promise<Reply>) & {
    * music) would cost within `remaining` dollars, null where it would not
    * fit; undefined for a request its tokens price. */
   quote?: (req: Request, remaining: number) => Affordable | null | undefined
+  /** The most its provider-run tools (a hosted web search or page fetch) add
+   * to one request, which a meter reserves beside the request's own bound. */
+  hosted?: Hosted
 }
+
+/** What a model's provider-run tools may add to one request: at most
+ * `searches` web searches, billed at {@link Price} `web_search`, and `input`
+ * tokens of what they read fed back as input. The provider enforces both. */
+export type Hosted = { searches: number; input: number }
 
 /** What a provider answered a failed request with, as it arrived: the body of
  * an error status, or the event that ended its stream, and the headers that

@@ -1097,8 +1097,16 @@ export let accounted = (
               ? 0
               : undefined)
           let output = req.questions ? window : req.tokens
+          // What the provider's own tools may add is reserved beside it.
+          let extra = model.hosted
           let quote = tariff && window != null
-            ? affordable(tariff, requestBound(req, window), remaining, output)
+            ? affordable(
+              tariff,
+              requestBound(req, window) + (extra?.input ?? 0),
+              remaining,
+              output,
+              extra?.searches,
+            )
             : null
           return req.questions && quote?.tokens != output ? null : quote
         },

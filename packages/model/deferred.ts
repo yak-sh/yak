@@ -4,10 +4,15 @@ import type { Model } from './mod.ts'
 
 export let deferredModel = (
   load: () => Promise<Model>,
-  meta: Pick<Model, 'mark' | 'vocab' | 'anchor' | 'lateResults' | 'reads'> & {
-    recover?: true
-    info?: true
-  },
+  meta:
+    & Pick<
+      Model,
+      'mark' | 'vocab' | 'anchor' | 'lateResults' | 'reads' | 'hosted'
+    >
+    & {
+      recover?: true
+      info?: true
+    },
 ): Model => {
   let pending: Promise<Model> | undefined
   let get = () => pending ??= load()

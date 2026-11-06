@@ -181,13 +181,17 @@
         "reasoning_tokens": {
           "type": "integer",
           "description": "reasoning tokens within output tokens"
+        },
+        "web_searches": {
+          "type": "integer",
+          "description": "web searches the provider ran for the request, each billed at the model's web_search price"
         }
       }
     },
     "price": {
       "component": true,
       "type": "object",
-      "description": "what a model costs, in dollars per million tokens, on the model's own row; a request its provider reports no dollars for is weighed at it",
+      "description": "what a model costs, in dollars per million tokens and per web search, on the model's own row; a request its provider reports no dollars for is weighed at it",
       "properties": {
         "input": {
           "type": "number",
@@ -208,6 +212,10 @@
         "cache_write_1h": {
           "type": "number",
           "description": "dollars per million input tokens written to the cache for an hour; the cache_write price where absent"
+        },
+        "web_search": {
+          "type": "number",
+          "description": "dollars per web search the provider runs for a request"
         }
       }
     },

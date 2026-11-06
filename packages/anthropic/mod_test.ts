@@ -312,3 +312,96 @@ test('a turn’s tool results lead its message, an image shown beside one after 
     'image',
   ])
 })
+
+// A reply that searched: it says what it will do, the API searches, and it
+// answers in text its citations split, then calls a tool.
+let searched = () => {
+  let at = 0
+  let block = (content_block: unknown, ...deltas: unknown[]) => {
+    let index = at++
+    return [
+      { type: 'content_block_start', index, content_block },
+      ...deltas.map((delta) => ({ type: 'content_block_delta', index, delta })),
+      { type: 'content_block_stop', index },
+    ]
+  }
+  let text = (t: string) => ({ type: 'text_delta', text: t })
+  let cite = (url: string, title: string | null) => ({
+    type: 'citations_delta',
+    citation: { type: 'web_search_result_location', url, title },
+  })
+  return [
+    reply()[0],
+    ...block({ type: 'text', text: '' }, text('Searching.')),
+    ...block(
+      { type: 'server_tool_use', id: 'srv_1', name: 'web_search', input: {} },
+      { type: 'input_json_delta', partial_json: '{"query":"yak"}' },
+    ),
+    ...block({
+      type: 'web_search_tool_result',
+      tool_use_id: 'srv_1',
+      content: [{ type: 'web_search_result', url: 'https://yak.example/' }],
+    }),
+    ...block({ type: 'text', text: '' }, text('Yaks ')),
+    ...block(
+      { type: 'text', text: '', citations: [] },
+      text('are bovines'),
+      cite('https://yak.example/', 'Yak [wiki]'),
+      cite('https://yak.example/', 'Yak [wiki]'),
+      cite('javascript:alert(1)', 'bad'),
+    ),
+    ...block(
+      { type: 'text', text: '' },
+      text('.'),
+      cite('https://herd.example/a>b', null),
+    ),
+    ...block({ type: 'tool_use', id: 'tu_1', name: 'find', input: {} }),
+    ...block({ type: 'text', text: '' }, text('Done.')),
+    {
+      type: 'message_delta',
+      delta: { stop_reason: 'end_turn' },
+      usage: { output_tokens: 30, server_tool_use: { web_search_requests: 1 } },
+    },
+    { type: 'message_stop' },
+  ]
+}
+
+test('the web is offered beside the tools, and a search is counted and its pages linked', async () => {
+  let { sent, fetch } = api(() => sse(searched()))
+  let deltas: TextDelta[] = []
+  let model = messages({ key: () => 'k', fetch, web: true })
+  let out = await model(ask({ onText: (d) => deltas.push(d) }))
+  equal(
+    sent[0].body.tools.map((t: { name: string; type?: string }) =>
+      t.type ?? t.name
+    ),
+    ['find', 'zap', 'web_search_20260209', 'web_fetch_20260209'],
+  )
+  equal(out.items, [
+    {
+      kind: 'assistant',
+      text:
+        'Searching.\n\nYaks are bovines [Yak  wiki ](<https://yak.example/>)' +
+        '. [herd.example](<https://herd.example/a%3Eb>)',
+    },
+    { kind: 'call', id: 'tu_1', name: 'find', args: '{}' },
+    { kind: 'assistant', text: 'Done.' },
+  ])
+  equal(deltas.map((d) => d.index), [0, 0, 0, 0, 1])
+  equal(out.usage?.web_searches, 1)
+  equal(model.hosted?.searches, 4)
+})
+
+test('an older model is offered the plain web tools, and none without web', async () => {
+  let { sent, fetch } = api(() => sse(reply()))
+  await messages({ key: () => 'k', fetch, web: true })(
+    ask({ model: 'claude-haiku-4-5', tools: [] }),
+  )
+  await messages({ key: () => 'k', fetch })(ask({ tools: [] }))
+  equal(
+    sent[0].body.tools.map((t: { type: string }) => t.type),
+    ['web_search_20250305', 'web_fetch_20250910'],
+  )
+  equal(sent[1].body.tools, undefined)
+  equal(messages({ key: () => 'k', fetch }).hosted, undefined)
+})

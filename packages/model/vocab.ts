@@ -39,25 +39,30 @@ export type Usage = {
   cache_write_tokens?: number
   cache_write_1h_tokens?: number
   reasoning_tokens?: number
+  /** web searches a provider ran for the request, each billed at
+   * {@link Price} `web_search` */
+  web_searches?: number
 }
 
 /** What a model costs, in dollars per million tokens: the `price` component
  * on its row. `cached` is the price of an input token the provider read from
  * its cache, where it has one; `cache_write` of one it wrote there, and
- * `cache_write_1h` of one written to be kept an hour. */
+ * `cache_write_1h` of one written to be kept an hour. `web_search` is dollars
+ * per web search its provider runs for a request. */
 export type Price = {
   input: number
   output: number
   cached?: number
   cache_write?: number
   cache_write_1h?: number
+  web_search?: number
 }
 
 /**
  * What a request cost, in dollars, weighed at its model's price: its cached
  * input at the cached price, what it wrote to the cache at the write price
  * (an hour's writes at theirs), the rest of its input and all of its output at
- * theirs.
+ * theirs, and each web search its provider ran at the search price.
  *
  * ```ts
  * import { assertAlmostEquals } from '@std/assert'
@@ -78,6 +83,9 @@ export type Price = {
  *   cache_write_tokens: 2_000_000,
  *   cache_write_1h_tokens: 1_000_000,
  * }), 0.2 + 5 + 8)
+ *
+ * let searched = { input: 2, output: 10, web_search: 0.01 }
+ * assertAlmostEquals(weigh(searched, { web_searches: 3 }), 0.03)
  * ```
  */
 export let weigh = (price: Price, n: Usage): number => {
@@ -88,7 +96,7 @@ export let weigh = (price: Price, n: Usage): number => {
     price,
     [cached, written, input - cached - written, n.output_tokens ?? 0],
     hourly(n),
-  )
+  ) + (n.web_searches ?? 0) * (price.web_search ?? 0)
 }
 
 /** The share of a request's cache writes kept an hour, 0 to 1. */
