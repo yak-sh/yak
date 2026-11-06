@@ -1,6 +1,6 @@
 {
   "name": "@yaks/session",
-  "version": "0.2.30",
+  "version": "0.2.31",
   "type": "module",
   "exports": {
     ".": "./mod.ts",
@@ -51,7 +51,7 @@
   "devDependencies": {
     "@std/assert": "npm:@jsr/std__assert@^1.0.0",
     "@yaks/archetype": "0.2.24",
-    "@yaks/cli": "0.2.30",
+    "@yaks/cli": "0.2.31",
     "@yaks/context": "0.2.23",
     "@yaks/doc": "0.2.24",
     "@yaks/durable-object": "0.2.28",

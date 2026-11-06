@@ -21,7 +21,7 @@
     "@yaks/id": "0.2.23",
     "@yaks/persona": "0.2.23",
     "@yaks/process": "0.2.28",
-    "@yaks/session": "0.2.30",
+    "@yaks/session": "0.2.31",
     "@yaks/text": "0.2.24",
     "@yaks/tools": "0.2.30",
     "@yaks/vocab": "0.2.30"

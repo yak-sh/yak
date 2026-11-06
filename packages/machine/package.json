@@ -22,10 +22,10 @@
     "@yaks/vocab": "0.2.30"
   },
   "devDependencies": {
-    "@yaks/harness": "0.2.28",
+    "@yaks/harness": "0.2.31",
     "@yaks/kernel": "0.2.28",
     "@yaks/ram": "0.2.24",
-    "@yaks/session": "0.2.30",
+    "@yaks/session": "0.2.31",
     "@yaks/testing": "0.2.30"
   }
 }

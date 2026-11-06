@@ -21,7 +21,7 @@
   "dependencies": {
     "@preact/signals": "2.9.4",
     "@yaks/api": "0.2.29",
-    "@yaks/cli": "0.2.30",
+    "@yaks/cli": "0.2.31",
     "@yaks/client": "0.2.24",
     "@yaks/code": "0.2.23",
     "@yaks/draft": "0.2.24",

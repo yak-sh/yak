@@ -45,7 +45,7 @@
     "@yaks/key": "0.2.24",
     "@yaks/provenance": "0.2.28",
     "@yaks/ram": "0.2.24",
-    "@yaks/session": "0.2.30",
+    "@yaks/session": "0.2.31",
     "@yaks/sqlite": "0.2.30",
     "@yaks/testing": "0.2.30"
   }

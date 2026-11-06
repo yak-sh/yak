@@ -1,6 +1,6 @@
 {
   "name": "@yaks/harness",
-  "version": "0.2.28",
+  "version": "0.2.31",
   "type": "module",
   "exports": {
     ".": "./mod.ts",
@@ -20,7 +20,7 @@
     "@preact/signals": "2.9.4",
     "@yaks/api": "0.2.29",
     "@yaks/blob": "0.2.30",
-    "@yaks/cli": "0.2.30",
+    "@yaks/cli": "0.2.31",
     "@yaks/client": "0.2.24",
     "@yaks/connections": "0.2.28",
     "@yaks/context": "0.2.23",
@@ -46,7 +46,7 @@
     "@yaks/query": "0.2.23",
     "@yaks/render": "0.2.24",
     "@yaks/secrets": "0.2.28",
-    "@yaks/session": "0.2.30",
+    "@yaks/session": "0.2.31",
     "@yaks/sqlite": "0.2.30",
     "@yaks/sync": "0.2.24",
     "@yaks/text": "0.2.24",

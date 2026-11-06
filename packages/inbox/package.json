@@ -38,7 +38,7 @@
   "devDependencies": {
     "@std/assert": "npm:@jsr/std__assert@^1.0.0",
     "@yaks/api": "0.2.29",
-    "@yaks/cli": "0.2.30",
+    "@yaks/cli": "0.2.31",
     "@yaks/doc": "0.2.24",
     "@yaks/edge": "0.2.24",
     "@yaks/persona": "0.2.23",
@@ -46,7 +46,7 @@
     "@yaks/provenance": "0.2.28",
     "@yaks/ram": "0.2.24",
     "@yaks/render": "0.2.24",
-    "@yaks/session": "0.2.30",
+    "@yaks/session": "0.2.31",
     "@yaks/sql": "0.2.30",
     "@yaks/sqlite": "0.2.30",
     "@yaks/testing": "0.2.30",

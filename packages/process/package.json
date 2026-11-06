@@ -32,7 +32,7 @@
     "@std/assert": "npm:@jsr/std__assert@^1.0.0",
     "@yaks/model": "0.2.30",
     "@yaks/ram": "0.2.24",
-    "@yaks/session": "0.2.30",
+    "@yaks/session": "0.2.31",
     "@yaks/testing": "0.2.30",
     "@yaks/tools": "0.2.30"
   }

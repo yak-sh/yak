@@ -51,7 +51,7 @@
     "@yaks/model": "0.2.30",
     "@yaks/provenance": "0.2.28",
     "@yaks/ram": "0.2.24",
-    "@yaks/session": "0.2.30",
+    "@yaks/session": "0.2.31",
     "@yaks/task": "0.2.23"
   },
   "optionalDependencies": {
