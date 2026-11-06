@@ -1,6 +1,6 @@
 {
   "name": "@yaks/task",
-  "version": "0.2.18",
+  "version": "0.2.19",
   "exports": {
     ".": "./mod.ts",
     "./vocab": "./vocab.ts",

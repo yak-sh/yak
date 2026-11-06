@@ -1,6 +1,6 @@
 {
   "name": "@yaks/embedding",
-  "version": "0.2.18",
+  "version": "0.2.19",
   "type": "module",
   "exports": {
     ".": "./mod.ts",
@@ -13,9 +13,9 @@
   "description": "Maintains text embeddings for graph entities and adds nearest-neighbor ranking to queries through an injected embedder.",
   "dependencies": {
     "@yaks/edge": "0.2.18",
-    "@yaks/effects": "0.2.18",
+    "@yaks/effects": "0.2.19",
     "@yaks/graph": "0.2.18",
-    "@yaks/model": "0.2.18",
+    "@yaks/model": "0.2.19",
     "@yaks/query": "0.2.18",
     "@yaks/sql": "0.2.18",
     "@yaks/tools": "0.2.18",
@@ -25,9 +25,9 @@
     "@std/assert": "npm:@jsr/std__assert@^1.0.0",
     "@yaks/api": "0.2.18",
     "@yaks/archetype": "0.2.18",
-    "@yaks/cli": "0.2.18",
+    "@yaks/cli": "0.2.19",
     "@yaks/ram": "0.2.18",
-    "@yaks/sqlite": "0.2.18",
+    "@yaks/sqlite": "0.2.19",
     "@yaks/testing": "0.2.17"
   }
 }

@@ -20,7 +20,7 @@
     "@yaks/archetype": "0.2.18",
     "@yaks/fts": "0.2.18",
     "@yaks/graph": "0.2.18",
-    "@yaks/sqlite": "0.2.18",
+    "@yaks/sqlite": "0.2.19",
     "@yaks/testing": "0.2.17"
   }
 }

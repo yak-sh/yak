@@ -1,6 +1,6 @@
 {
   "name": "@yaks/journal",
-  "version": "0.2.18",
+  "version": "0.2.19",
   "type": "module",
   "exports": {
     ".": "./mod.ts",
@@ -14,27 +14,27 @@
   "license": "Apache-2.0",
   "description": "Records every committed graph transaction, and who wrote it, inside that same transaction: entity history and undo, and a short-lived feed that carries every commit to the other processes on the store.",
   "dependencies": {
-    "@yaks/file": "0.2.18",
+    "@yaks/file": "0.2.19",
     "@yaks/fp": "0.2.18",
     "@yaks/graph": "0.2.18",
-    "@yaks/inspect": "0.2.18",
+    "@yaks/inspect": "0.2.19",
     "@yaks/query": "0.2.18",
     "@yaks/render": "0.2.18",
     "@yaks/sql": "0.2.18",
     "@yaks/tools": "0.2.18",
-    "@yaks/ui": "0.2.18",
+    "@yaks/ui": "0.2.19",
     "@yaks/vocab": "0.2.18",
     "lucide": "1.31.0",
     "preact": "10.29.7"
   },
   "devDependencies": {
     "@std/assert": "npm:@jsr/std__assert@^1.0.0",
-    "@yaks/blob": "0.2.18",
+    "@yaks/blob": "0.2.19",
     "@yaks/edge": "0.2.18",
-    "@yaks/effects": "0.2.18",
-    "@yaks/process": "0.2.18",
+    "@yaks/effects": "0.2.19",
+    "@yaks/process": "0.2.19",
     "@yaks/ram": "0.2.18",
-    "@yaks/sqlite": "0.2.18",
+    "@yaks/sqlite": "0.2.19",
     "@yaks/testing": "0.2.17",
     "@yaks/text": "0.2.18"
   }

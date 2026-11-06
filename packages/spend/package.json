@@ -1,6 +1,6 @@
 {
   "name": "@yaks/spend",
-  "version": "0.2.18",
+  "version": "0.2.19",
   "type": "module",
   "exports": {
     ".": "./mod.ts",
@@ -15,24 +15,24 @@
   "description": "Where model tokens go: each day's requests tallied by part of the context, session, task, model and large entry, at the price paid, beside each plan limit's pace, and a page that reads the tallies so looking costs nothing.",
   "dependencies": {
     "@yaks/api": "0.2.18",
-    "@yaks/file": "0.2.18",
+    "@yaks/file": "0.2.19",
     "@yaks/fp": "0.2.18",
     "@yaks/graph": "0.2.18",
     "@yaks/id": "0.2.18",
-    "@yaks/inspect": "0.2.18",
-    "@yaks/model": "0.2.18",
-    "@yaks/process": "0.2.18",
+    "@yaks/inspect": "0.2.19",
+    "@yaks/model": "0.2.19",
+    "@yaks/process": "0.2.19",
     "@yaks/query": "0.2.18",
     "@yaks/render": "0.2.18",
-    "@yaks/session": "0.2.18",
-    "@yaks/spawn": "0.2.18",
-    "@yaks/ui": "0.2.18",
+    "@yaks/session": "0.2.19",
+    "@yaks/spawn": "0.2.19",
+    "@yaks/ui": "0.2.19",
     "@yaks/vocab": "0.2.18",
     "lucide": "1.31.0",
     "preact": "10.29.7"
   },
   "devDependencies": {
-    "@yaks/cli": "0.2.18",
+    "@yaks/cli": "0.2.19",
     "@yaks/testing": "0.2.17"
   }
 }

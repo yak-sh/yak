@@ -1,6 +1,6 @@
 {
   "name": "@yaks/game",
-  "version": "0.2.18",
+  "version": "0.2.19",
   "type": "module",
   "exports": {
     ".": "./mod.ts",
@@ -13,8 +13,8 @@
   "license": "Apache-2.0",
   "description": "Game rules, browser controls and HUD parts over values, without a graph or a game world.",
   "dependencies": {
-    "@yaks/tui": "0.2.18",
-    "@yaks/ui": "0.2.18",
+    "@yaks/tui": "0.2.19",
+    "@yaks/ui": "0.2.19",
     "@yaks/vocab": "0.2.18",
     "preact": "10.29.7"
   },

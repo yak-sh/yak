@@ -1,6 +1,6 @@
 {
   "name": "@yaks/openai",
-  "version": "0.2.18",
+  "version": "0.2.19",
   "type": "module",
   "exports": {
     ".": "./mod.ts",
@@ -10,10 +10,10 @@
   "license": "Apache-2.0",
   "description": "Implements the model interface over OpenAI's streaming Responses API using fetch, with API-key or Codex sign-in authentication.",
   "dependencies": {
-    "@yaks/blob": "0.2.18",
+    "@yaks/blob": "0.2.19",
     "@yaks/fp": "0.2.18",
     "@yaks/graph": "0.2.18",
-    "@yaks/model": "0.2.18",
+    "@yaks/model": "0.2.19",
     "@yaks/vocab": "0.2.18"
   },
   "devDependencies": {

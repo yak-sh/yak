@@ -1,6 +1,6 @@
 {
   "name": "@yaks/d1",
-  "version": "0.2.18",
+  "version": "0.2.19",
   "type": "module",
   "exports": "./mod.ts",
   "license": "Apache-2.0",
@@ -10,16 +10,16 @@
     "@yaks/match": "0.2.18",
     "@yaks/query": "0.2.18",
     "@yaks/sql": "0.2.18",
-    "@yaks/sqlite": "0.2.18",
+    "@yaks/sqlite": "0.2.19",
     "@yaks/vocab": "0.2.18"
   },
   "devDependencies": {
     "@std/assert": "npm:@jsr/std__assert@^1.0.0",
-    "@yaks/effects": "0.2.18",
+    "@yaks/effects": "0.2.19",
     "@yaks/fp": "0.2.18",
-    "@yaks/member": "0.2.18",
+    "@yaks/member": "0.2.19",
     "@yaks/ram": "0.2.18",
-    "@yaks/secrets": "0.2.18",
+    "@yaks/secrets": "0.2.19",
     "@yaks/testing": "0.2.17"
   }
 }

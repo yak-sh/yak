@@ -15,7 +15,7 @@
     "@std/assert": "npm:@jsr/std__assert@^1.0.0",
     "@yaks/query": "0.2.18",
     "@yaks/sql": "0.2.18",
-    "@yaks/sqlite": "0.2.18",
+    "@yaks/sqlite": "0.2.19",
     "@yaks/testing": "0.2.17"
   }
 }
