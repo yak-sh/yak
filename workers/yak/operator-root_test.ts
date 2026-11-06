@@ -189,7 +189,7 @@ test('texts, chat, email and calls are one conversation, read whole by the Opera
       said: 'Remind me about the dentist Tuesday at 3',
       at: true,
     },
-    { via: 'In the chat', said: 'Make it Wednesday', at: true },
+    { via: undefined, said: 'Make it Wednesday', at: true },
     { via: 'By email', said: 'Or Thursday', at: true },
     { via: 'By phone', said: 'Friday', at: true },
   ])

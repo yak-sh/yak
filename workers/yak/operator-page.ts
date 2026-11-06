@@ -599,15 +599,17 @@ let watching = (env: Env, space: Space, req: globalThis.Request, who: Who) =>
 export let workOf = async (env: Env, space: Space, who: Who) =>
   await operatorDoor(env, space, who, 'work', {}) as Worked[]
 
-// One conversation, opened by its task or a request: its sessions as they
-// ran (operator-view.ts `talk`), or the request alone while no session has
-// taken it.
-let conversationOf = async (
+/** One conversation, opened by its task or a request: its sessions as they
+ * ran (operator-view.ts `talk`), or the request alone while no session has
+ * taken it. `everyone` reads any person's, for the platform's admin, each
+ * titled by whose it is. */
+export let conversationOf = async (
   env: Env,
   space: Space,
   who: Who,
   at: string,
   open: string,
+  everyone = false,
 ) => {
   let none = { task: '', begun: '', title: '', html: '', changed: [] }
   if (open == 'new') return none
@@ -617,7 +619,7 @@ let conversationOf = async (
     space,
     who,
     'conversation',
-    { at, open },
+    { at, open, ...everyone ? { everyone } : {} },
   ).catch((e) => {
     if (e.status != 404) throw e
     return { ...none, waiting: [] }
@@ -1117,6 +1119,16 @@ let starts = (operator: string, apps: Beside['apps'] = []) =>
 
 // What a chat says before anything is in it: what it is for, in a heading
 // and a line.
+/** A conversation as its pages draw it, the chat app and the admin's: the
+ * Builder object's drawing (`conversationOf`), or `empty` in its place. */
+export let column = (html: string, empty: Node = null) =>
+  h('div', {
+    class: 'Talk_Column',
+    'data-conversation': '',
+    'aria-live': 'polite',
+    ...html ? { dangerouslySetInnerHTML: { __html: html } } : {},
+  }, html ? undefined : empty)
+
 let hello = (heading: string, said: string) =>
   h('div', { class: 'Talk_Hello' }, h('h2', null, heading), h('p', null, said))
 
@@ -1190,22 +1202,7 @@ export let chatPage = async (
     main: [
       // The conversation is drawn by the Builder object (operator-view.ts
       // `talk`), and what needs the person by Updates (updates.ts).
-      talked.html
-        ? h('div', {
-          class: 'Talk_Column',
-          'data-conversation': '',
-          'aria-live': 'polite',
-          dangerouslySetInnerHTML: { __html: talked.html },
-        })
-        : h(
-          'div',
-          {
-            class: 'Talk_Column',
-            'data-conversation': '',
-            'aria-live': 'polite',
-          },
-          greeting,
-        ),
+      talked.html ? column(talked.html) : column('', greeting),
       landing
         ? h(
           'div',

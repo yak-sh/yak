@@ -147,7 +147,7 @@ let shown = (entries: Bundle[]) => {
   }))
 }
 
-test('a person sees only their words, marked with the channel they came by', () => {
+test('a person sees only their words, marked with the channel they came by, unless they wrote them in the chat', () => {
   let framed = (moved: boolean) =>
     FRAMED.map(([channel, framing], i) => {
       let row = entry(`in${i}`, i, {
@@ -166,10 +166,9 @@ test('a person sees only their words, marked with the channel they came by', () 
     text: 'By text',
     letter: 'A reply to a letter',
     update: 'In Updates',
-    chat: 'In the chat',
   }
   assertEquals(shown(framed(false)).map((r) => r.via), FRAMED.map(() => null))
-  assertEquals(shown(framed(true)), want((c) => labels[c]))
+  assertEquals(shown(framed(true)), want((c) => labels[c] ?? null))
   // A line a call kept, and words that only mention a channel.
   let heard = entry('h', 9, {
     content: { body: `${HEARD}How are you?` },

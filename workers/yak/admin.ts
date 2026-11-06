@@ -20,14 +20,13 @@
 // this file counts what each uses and draws the desk around them.
 //
 // A space's page opens on its Operator's conversations, every person's, each
-// drawn as its own chat app draws it (operator-view.ts `talk`), with
-// everything its model was told and offered, for inspecting while the
-// Operator's prompts change (T-137672). They are read from the space's
+// read and drawn as its own chat app reads and draws it (operator-page.ts
+// `conversationOf`, `column`), with everything its model was told and
+// offered, for inspecting while the Operator's prompts change (T-137672). They are read from the space's
 // Builder object, which lets the admin in by the platform's administrative
 // vouch. The Sessions page lists them across the most recently active spaces,
 // newest first, each opening on that same page.
 
-import type { Bundle } from '@yaks/graph'
 import type { Env } from './env.ts'
 import { type Held, holding } from './held.ts'
 import {
@@ -64,7 +63,7 @@ import { type ByDay, series, summed } from '@yaks/ui/chart'
 import { caught } from './defects.ts'
 import { operatorDoor } from './build-door.ts'
 import { type Listed, listed, type Worked } from './operator-view.ts'
-import { conversation } from './operator-page.ts'
+import { column, conversationOf } from './operator-page.ts'
 import { managePath } from './route.ts'
 import { Idle } from './mascot.ts'
 
@@ -677,16 +676,19 @@ let operatorPage = async (
       back(`${PATH}/${r.entity.eid}`, space.slug),
     )
   }
-  let talked = await ask('conversation', {
-    at: managePath('operator', space.slug),
+  // Read and drawn as the chat app reads and draws it.
+  let talked = await conversationOf(
+    env,
+    space,
+    vouch(person),
+    managePath('operator', space.slug),
     open,
-    everyone: true,
-  }) as { title: string; html: string; waiting: Bundle[] } | Error
-  // A request no session has taken yet is drawn as the chat app draws it.
-  let drawn = talked instanceof Error
-    ? ''
-    : talked.html + conversation(talked.waiting ?? [])
-  let found = !!drawn
+    true,
+  ).catch((e) => {
+    caught(e, { request: 'admin operator conversation' })
+    return e instanceof Error ? e : new Error(String(e))
+  })
+  let found = !(talked instanceof Error) && !!talked.html
   return desk(
     d,
     talked instanceof Error || !talked.title
@@ -696,7 +698,7 @@ let operatorPage = async (
     talked instanceof Error
       ? failed(talked)
       : found
-      ? raw(drawn)
+      ? column(talked.html)
       : empty('This Operator has no conversation with that id'),
     back(home, `${space.operator}’s conversations`),
     talked instanceof Error || found ? 200 : 404,

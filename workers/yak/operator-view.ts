@@ -90,9 +90,9 @@ export let channelOf = (channel: string, framing = '') => ({
   ...framing ? { framing } : {},
 })
 
-// Each channel's mark beside the words that came by it.
+// Each channel's mark beside the words that came by it. Words written in
+// the chat app itself carry none.
 let VIA: Record<string, [IconName, string]> = {
-  chat: ['message-circle', 'In the chat'],
   email: ['mail', 'By email'],
   letter: ['mail', 'A reply to a letter'],
   text: ['message-square', 'By text'],

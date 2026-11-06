@@ -82,7 +82,7 @@ let get = async (path: string, person = root) => {
   ))!
   return { status: out.status, document: parseHTML(await out.text()).document }
 }
-let texts = (d: Document, s: string) =>
+let texts = (d: ParentNode, s: string) =>
   [...d.querySelectorAll(s)].map((e) => e.textContent?.trim())
 
 let at = `/admin/${eid}/operator`
@@ -107,7 +107,12 @@ test('a conversation opens on what was said and everything its model was told an
   assertEquals(texts(talk.document, '.Desk_Head h1'), [
     'Conversation with Jeff',
   ])
-  assertEquals(texts(talk.document, '.Talk_You'), ['Post the meeting.'])
+  // In the column the chat app draws a conversation in, and written in the
+  // chat app, so marked by no channel.
+  let column = talk.document.querySelector('#content > .Talk_Column')!
+  assertEquals(column.hasAttribute('data-conversation'), true)
+  assertEquals(texts(column, '.Talk_You'), ['Post the meeting.'])
+  assertEquals(column.querySelector('.Talk_Via'), null)
   assertEquals(texts(talk.document, '.Talk_Reply'), ['Posted.'])
   let told = [...talk.document.querySelectorAll('.Talk_Told')]
   let summaries = told.map((d) => d.querySelector('summary')!.textContent!)
