@@ -99,3 +99,17 @@ export let unit = <R>(
     return undo(e)
   }
 }
+
+/** `body` with this connection's busy wait at nothing: a lock another
+ * connection holds refuses it at once, for work that can be left to later
+ * rather than waited for. */
+export let unwaiting = <R>(driver: Driver, body: () => R): R => {
+  let [row] = driver.query({ t: 'pragma', name: 'busy_timeout' })
+  let was = Number(Object.values(row ?? {})[0] ?? 0)
+  driver.query({ t: 'pragma', name: 'busy_timeout', value: 0 })
+  try {
+    return body()
+  } finally {
+    driver.query({ t: 'pragma', name: 'busy_timeout', value: was })
+  }
+}

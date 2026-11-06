@@ -96,7 +96,8 @@ import {
 } from './meta.ts'
 import { ast, get, read, type ReadCache, rows, screened } from './read.ts'
 import { doom } from './doom.ts'
-import { unit } from './unit.ts'
+import { unit, unwaiting } from './unit.ts'
+import { busy } from './error.ts'
 import { options } from './reader.ts'
 import {
   backfill,
@@ -1121,7 +1122,19 @@ export let storage = (
       let statistics = analyzed(driver, receipt?.statistics, unchanged)
       if (statistics && receipt) analyzedAt(driver, receipt.schema, statistics)
     }
-    if (driver.statistics) unit(driver, owe)
+    // A file asks what it owes without the write lock, and takes it only when
+    // there is a receipt to write and nobody holds it: beside another
+    // connection's writer the open goes on without waiting, and the next open
+    // finds the same debt from the file (./owe.ts).
+    let owing = () => analyzed(driver, receipt?.statistics, unchanged)
+    if (driver.statistics && !driver.file) unit(driver, owe)
+    else if (driver.statistics && unit(driver, owing, 'read')) {
+      try {
+        unwaiting(driver, () => unit(driver, owe))
+      } catch (e) {
+        if (!busy(e)) throw e
+      }
+    }
     ready = true
     return left
   }
