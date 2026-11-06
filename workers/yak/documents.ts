@@ -5,6 +5,7 @@
 import type { Bundle, Comp, Graph } from '@yaks/graph'
 import type { Attempt } from '@yaks/effects'
 import { derivedEid } from '@yaks/graph/identity'
+import { mediaTypeOf } from '@yaks/blob'
 import type { Stored } from './graph.ts'
 import { directoryOf } from './directory.ts'
 import { blobPrefix } from './blob-key.ts'
@@ -207,7 +208,9 @@ export let extractor = (
       transcribe(
         (input) => ai.run(VISION, input),
         image,
-        mime?.startsWith('image/') ? mime : undefined,
+        mime?.startsWith('image/')
+          ? mediaTypeOf(new Uint8Array(body)) ?? mime
+          : undefined,
       ),
     markdown: async () => {
       if (!env.AI?.toMarkdown) throw new Error('No document converter bound')

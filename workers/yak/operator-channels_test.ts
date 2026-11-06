@@ -860,6 +860,14 @@ let photo = await keepFile(
   'image/jpeg',
   new Uint8Array([255, 216, 255, 217]),
 )
+// An iPhone's HEIC photo claims image/*, which the vision model cannot read.
+let heic = await keepFile(
+  f.env,
+  f.space,
+  'IMG_0042.heic',
+  'image/heic',
+  new Uint8Array([0, 0, 0, 24, ...new TextEncoder().encode('ftypheic')]),
+)
 let pdf = await keepFile(
   f.env,
   f.space,
@@ -883,7 +891,7 @@ let mediaId = await receive(media, {
   space: f.space.eid,
   person: f.person,
   channel: 'chat',
-  files: [photo, pdf],
+  files: [photo, heic, pdf],
 }, 'Read the attached minutes.')
 await drain(media)
 let mediaAnswer = (await answerOf(media, mediaId)).operator_answer
@@ -900,6 +908,13 @@ test('PDF pages and a JPEG photo are read through metered extraction before aski
   assertStringIncludes(JSON.stringify(ocrInputs), 'data:image/jpeg;base64,')
   assertEquals(afterMedia > beforeMedia, true)
   assertEquals((mediaAnswer as { text: string }).text, 'Read the documents.')
+})
+test('a picture the vision model cannot read is never sent to it, and the person is told which formats it reads', () => {
+  assertEquals(JSON.stringify(ocrInputs).includes('image/heic'), false)
+  assertStringIncludes(
+    JSON.stringify(mediaAsks[0].items),
+    'Ask the sender for a PNG, JPEG, GIF or WebP.',
+  )
 })
 
 // The same Operator conversation over Pinnacle's documented webhook and HTTP

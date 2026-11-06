@@ -1,4 +1,5 @@
 import type { Bundle, Comp } from '@yaks/graph'
+import { mediaTypeOf } from '@yaks/blob'
 import { base64 } from './bytes.ts'
 import { derivedEid } from '@yaks/graph/identity'
 import { writes } from '@yaks/member'
@@ -119,13 +120,21 @@ export let keepFile = async (
   }
 }
 
+let UNREAD_PICTURE =
+  'The original is kept, but this picture format cannot be read. Ask the sender for a PNG, JPEG, GIF or WebP.'
+
 let fileText = async (env: Env, space: Space, file: File) => {
   let kept = await env.BLOBS.get(file.key)
   if (!kept) throw new Error('Operator attachment is missing: ' + file.name)
   let body = await kept.arrayBuffer()
   let source = extractor(env, space, body, file.name, file.mime)
   if (file.mime.startsWith('image/')) {
-    return source.ocr(base64(new Uint8Array(body)))
+    // A picture is read by what its bytes are, not the type it was sent
+    // with: the vision model takes PNG, JPEG, GIF and WebP, and refuses a
+    // HEIC photo or anything else as a fault of ours.
+    let bytes = new Uint8Array(body)
+    if (!mediaTypeOf(bytes)) return UNREAD_PICTURE
+    return source.ocr(base64(bytes))
   }
   if (isPdf(file.name, file.mime)) {
     let { pages } = await source.pdf()
