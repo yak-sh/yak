@@ -1,8 +1,8 @@
 // One TypeScript program per platform, not one per package. Keep each package's
 // standalone config as the source of truth; resolve its relative import map
-// before merging. `deno task check:browser` checks the browser program here;
-// the Workers program is check-types.ts's, beside Deno's. The browser program may use any declared web-platform lib,
-// but never gains Deno, Node or Workers globals from the root configuration.
+// before merging. check-types.ts checks both programs beside Deno's. The
+// browser program may use any declared web-platform lib, but never gains Deno,
+// Node or Workers globals from the root configuration.
 //
 // What the browser program checks is a package's browser-facing exports, not
 // its directory. `entries` in a browser.json names them (default: `.`), and a
@@ -173,40 +173,4 @@ export async function platformConfig(root: URL, platform: string) {
   let config = mergeConfigs(configs, platform)
   config.imports = { ...packageImports(root, platform), ...config.imports }
   return { config, entries: entries.sort() }
-}
-
-if (import.meta.main) {
-  let { config, entries } = await platformConfig(
-    new URL('../', import.meta.url),
-    Deno.args[0],
-  )
-  // A separate config keeps platform globals independent, beside package.json
-  // so its workspace and npm dependencies still resolve normally. Deno checks
-  // it with TypeScript's native compiler (tsgo), which checks the program in
-  // a third of the time its own compiler takes.
-  let scratch = await Deno.makeTempFile({
-    dir: new URL('../', import.meta.url).pathname,
-    prefix: '.platform-',
-    suffix: '.json',
-  })
-  try {
-    let path = scratch
-    await Deno.writeTextFile(path, JSON.stringify(config))
-    let status = await new Deno.Command('deno', {
-      args: [
-        'check',
-        '--unstable-tsgo',
-        '--no-lock',
-        '--config',
-        path,
-        ...entries,
-      ],
-      stdin: 'inherit',
-      stdout: 'inherit',
-      stderr: 'inherit',
-    }).spawn().status
-    if (!status.success) Deno.exitCode = status.code || 1
-  } finally {
-    await Deno.remove(scratch, { recursive: true })
-  }
 }

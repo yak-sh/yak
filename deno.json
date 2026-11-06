@@ -27,28 +27,6 @@
         "!**/.env*"
       ]
     },
-    "check:browser": {
-      "command": "deno run --allow-read --allow-write --allow-run=deno bin/check-platform.ts browser",
-      "files": [
-        "deno.json",
-        "deno.lock",
-        "bin/check-platform.ts",
-        "packages/**/*.ts",
-        "packages/**/*.tsx",
-        "packages/**/*.js",
-        "packages/**/*.mjs",
-        "packages/**/*.json",
-        "packages/**/*.jsonc",
-        "workers/**/*.ts",
-        "workers/**/*.tsx",
-        "workers/**/*.js",
-        "workers/**/*.mjs",
-        "workers/**/*.json",
-        "workers/**/*.jsonc",
-        "!**/node_modules/**",
-        "!**/.wrangler/**"
-      ]
-    },
     "check:content": "deno task content --check",
     "content": "deno run --allow-read --allow-write --allow-env --allow-run=deno workers/yak/gen.ts",
     "dev": "deno run -A --unstable-no-legacy-abort --unstable-net --unstable-worker-options packages/cli/yak.ts serve --config $HOME/.yak/yak.json",
@@ -73,7 +51,6 @@
         "check:bytes",
         "check:types",
         "check:raycast",
-        "check:browser",
         "check:content",
         "check:publish"
       ]

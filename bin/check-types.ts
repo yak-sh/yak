@@ -12,12 +12,16 @@
 // type-checks every package at once with its own compiler, about a minute,
 // and `deno task check:publish` checks the rest of what it reads.
 //
-// Two platforms, two programs, checked at once. Deno's holds the modules with
-// Deno's globals. The Workers program holds each `conform.ts` a `workers.json`
-// lies beside, under Cloudflare's own Workers types (check-platform.ts merges
-// those configs): what a change reaches from there, it checks as the runtime
-// types it, `cloudflare:workers` included, which Deno's program can only call
-// `any`. Those types are globals, so they never share a program with Deno's.
+// Three platforms, three programs, checked at once. Deno's holds the modules
+// with Deno's globals. Each host's holds the entries of the packages that name
+// it, by a `workers.json` or `browser.json` beside their package.json
+// (check-platform.ts merges those configs), and checks what a change reaches
+// from there under that host's globals alone. The Workers program holds each
+// `conform.ts`, under Cloudflare's own Workers types, `cloudflare:workers`
+// included, which Deno's program can only call `any`. The browser program
+// holds each package's browser-facing exports, with only the web platform's
+// libs, so a page's import of one never meets a Deno, Node or Workers global.
+// Globals never share a program with another platform's.
 //
 // Each run's project lies in `.types/` with its process id; the links into
 // Deno's caches there are shared. Each platform keeps a pool of incremental
@@ -31,8 +35,8 @@
 // A program starts no compiler when each of its roots passed while it,
 // everything it and its examples reach, the compiler, its options and its
 // globals held what they hold now (`proofs`); every checkout on the machine
-// shares those passes (`TYPED`). The Workers program's resolution is kept as
-// the Deno program's is (@yaks/testing's `remembered`), and the compiler's
+// shares those passes (`TYPED`). A host program's resolution is kept as the
+// Deno program's is (@yaks/testing's `remembered`), and the compiler's
 // native binary starts without a Deno process running its launcher.
 import { dirname } from 'node:path'
 import config from '../deno.json' with { type: 'json' }
@@ -159,6 +163,41 @@ export let failed = (diagnostics: string[]) => {
   return files.every(Boolean) ? [...new Set(files as string[])] : undefined
 }
 
+/// let info = { redirects: {}, npmPackages: {}, modules: [
+///   { specifier: 'file:///c/a.ts', dependencies: [{ specifier: './b.ts', code: { specifier: 'file:///c/b.ts' } }] },
+///   { specifier: 'file:///c/b.ts' }, { specifier: 'file:///c/d.ts' },
+/// ] }
+/// clear(info, ['a.ts', 'd.ts'], ['b.ts'], 'file:///c/') -> ['d.ts']
+/// clear(info, ['a.ts', 'd.ts'], ['d.ts'], 'file:///c/') -> ['a.ts']
+/** Of `roots`, those reaching none of the files diagnostics were reported in:
+ * a root importing a file that failed failed with it. */
+export let clear = (
+  info: Info,
+  roots: string[],
+  red: string[],
+  base = `file://${CHECKOUT}/`,
+) => {
+  let at = (s: string) => info.redirects[s] ?? s
+  let deps = new Map(info.modules.map((m) => [
+    m.specifier,
+    (m.dependencies ?? []).flatMap((d) =>
+      [d.code?.specifier, d.type?.specifier].flatMap((s) => s ? [at(s)] : [])
+    ),
+  ]))
+  let bad = new Set(red.map((f) => new URL(f, base).href))
+  let reaches = (root: string) => {
+    let seen = new Set<string>(), todo = [at(new URL(root, base).href)]
+    for (let s; (s = todo.pop());) {
+      if (bad.has(s)) return true
+      if (seen.has(s)) continue
+      seen.add(s)
+      todo.push(...deps.get(s) ?? [])
+    }
+    return false
+  }
+  return roots.filter((r) => !reaches(r))
+}
+
 // The config's excludes, each compiled once: `matchesGlob` compiles its glob
 // on every call, and every module in the checkout is asked of each.
 let EXCLUDES = config.exclude.map((p) =>
@@ -253,37 +292,48 @@ let deno = (): Platform => {
   }
 }
 
-/** The Workers program, and the modules it checks: its globals arrive by
- * each entry's `/// <reference types>`. Made once a process: a run's survey,
- * its scope and its check share it. */
-let workers = once(async () => {
-  let { config, entries } = await platformConfig(
-    new URL(`file://${CHECKOUT}/`),
-    'workers',
-  )
-  let dir = `${DIR}/workers`
-  put(`${dir}/config.json`, JSON.stringify(config))
-  let platform: Platform = {
-    name: 'workers',
-    dir,
-    config: `${dir}/config.json`,
-    options: config.compilerOptions,
-    globals: () => Promise.resolve({}),
-    hosted: true,
-    examples: false,
-  }
-  return {
-    platform,
-    entries: entries.map((e) => e.slice(`file://${CHECKOUT}/`.length)),
-  }
-})
+/** A host's program, and the modules it checks. Its globals arrive by its
+ * libs and each entry's `/// <reference types>`; only the Workers types declare
+ * the modules Deno leaves to the host. */
+type Host = { platform: Platform; entries: string[] }
+
+let host = (name: 'workers' | 'browser') =>
+  once(async (): Promise<Host> => {
+    let { config, entries } = await platformConfig(
+      new URL(`file://${CHECKOUT}/`),
+      name,
+    )
+    let dir = `${DIR}/${name}`
+    put(`${dir}/config.json`, JSON.stringify(config))
+    return {
+      platform: {
+        name,
+        dir,
+        config: `${dir}/config.json`,
+        options: config.compilerOptions,
+        globals: () => Promise.resolve({}),
+        hosted: name == 'workers',
+        examples: false,
+      },
+      entries: entries.map((e) => e.slice(`file://${CHECKOUT}/`.length)),
+    }
+  })
+
+/** The host programs, each made once a process: a run's survey, its scope and
+ * its check share them. */
+let HOSTS = [host('workers'), host('browser')]
+let hosts = () => Promise.all(HOSTS.map((h) => h()))
 
 /** One command's resolution snapshot, including source roots and hosted entries. */
 export let sourceSurvey = async (
   paths: string[],
 ): Promise<Survey | undefined> => {
-  let [all, { entries }] = await Promise.all([every(), workers()])
-  return await survey([...paths, ...all, ...entries], undefined, FACTS)
+  let [all, on] = await Promise.all([every(), hosts()])
+  return await survey(
+    [...paths, ...all, ...on.flatMap((h) => h.entries)],
+    undefined,
+    FACTS,
+  )
 }
 
 /** Of `all`, the modules whose types `changed` can change: each changed, each
@@ -304,17 +354,17 @@ export let scope = (
 }
 
 /** The modules a change reaches: those changed, the rest of their package
- * that imports one, each module importing one, and the Workers entries
+ * that imports one, each module importing one, and each host's entries
  * reaching one. */
 let reached = async (
   changed: string[],
-  hosted: string[],
+  on: Host[],
   snapshot?: Promise<Survey | undefined>,
 ) => {
   let all = await every()
   let s = snapshot
     ? await snapshot
-    : await survey([...all, ...hosted], undefined, FACTS)
+    : await survey([...all, ...on.flatMap((h) => h.entries)], undefined, FACTS)
   if (!s) {
     throw new Error(
       'Cannot say what the change reaches: dependency graph unavailable. ' +
@@ -322,18 +372,11 @@ let reached = async (
     )
   }
   let roots = scope(s, all, changed)
-  let entries = hosted.filter((e) => s.reaches([e], changed))
-  let imports = (roots: string[]) =>
-    Object.entries(MADE)
-      .filter(([, out]) => s.reaches(roots, out))
-      .map(([generator]) => generator)
-  return {
-    roots,
-    entries,
-    made: imports([...roots, ...entries]),
-    hostedMade: imports(entries),
-    survey: s,
-  }
+  let hosted = on.map((h) => ({
+    ...h,
+    entries: h.entries.filter((e) => s.reaches([e], changed)),
+  }))
+  return { roots, hosted, survey: s }
 }
 
 /// beside('a/b.ts', 3, 'tsx') -> `a/.b.ts.t3.${Deno.pid}.example.tsx`
@@ -631,7 +674,7 @@ let program = async (on: Platform, roots: string[], snapshot?: Survey) => {
     let red = failed(errors)
     if (red) {
       remember(
-        roots.filter((r) => !red.includes(r)).map((r) => proven.get(r)!),
+        clear(graphed, roots, red).map((r) => proven.get(r)!),
         TYPED,
       )
     }
@@ -679,31 +722,31 @@ export let programs = async (
   )).every(Boolean)
 }
 
+/** Check `roots` in Deno's program and each host's entries in its own, at
+ * once, each after the generated modules it imports are made: those `survey`
+ * says it reaches, or without one every generator's. */
 let check = async (
   roots: string[],
-  entries: string[],
-  made: string[],
+  hosted: Host[],
   run: Run,
   prepared: Prepared = [],
-  hostedMade = made,
   snapshot?: Survey,
 ) => {
-  let hosted = entries.length ? (await workers()).platform : undefined
+  let made = (roots: string[]) =>
+    snapshot
+      ? Object.entries(MADE)
+        .filter(([, out]) => snapshot.reaches(roots, out))
+        .map(([generator]) => generator)
+      : Object.keys(MADE)
   return await programs(
     [
-      {
-        made,
-        check: () =>
-          roots.length
-            ? program(deno(), roots, snapshot)
-            : Promise.resolve(true),
-      },
-      ...hosted
-        ? [{
-          made: hostedMade,
-          check: () => program(hosted, entries, snapshot),
-        }]
+      ...roots.length
+        ? [{ made: made(roots), check: () => program(deno(), roots, snapshot) }]
         : [],
+      ...hosted.filter((h) => h.entries.length).map((h) => ({
+        made: made(h.entries),
+        check: () => program(h.platform, h.entries, snapshot),
+      })),
     ],
     run,
     prepared,
@@ -717,34 +760,28 @@ export let types = async (
   prepared: Prepared = [],
   snapshot?: Promise<Survey | undefined>,
 ) => {
-  let { entries: hosted } = await workers()
-  if (!changed.some((p) => checked(p) || hosted.includes(p))) return true
-  let { roots, entries, made, hostedMade, survey } = await reached(
-    changed,
-    hosted,
-    snapshot,
-  )
-  return !roots.length && !entries.length ||
-    await check(
-      roots,
-      entries,
-      made,
-      run,
-      prepared,
-      hostedMade,
-      survey,
-    )
+  let on = await hosts()
+  let entry = (p: string) => on.some((h) => h.entries.includes(p))
+  if (!changed.some((p) => checked(p) || entry(p))) return true
+  let { roots, hosted, survey } = await reached(changed, on, snapshot)
+  return await check(roots, hosted, run, prepared, survey)
 }
 
 if (import.meta.main) {
   let all = Deno.args.includes('--all')
   let paths = Deno.args.filter((a) => !a.startsWith('--'))
-  let { entries } = await workers()
+  let on = await hosts()
   let ok = all || paths.length
     ? await check(
-      all ? await every() : paths.filter((p) => !entries.includes(p)),
-      all ? entries : paths.filter((p) => entries.includes(p)),
-      Object.keys(MADE),
+      all
+        ? await every()
+        : paths.filter((p) =>
+          checked(p) || !on.some((h) => h.entries.includes(p))
+        ),
+      on.map((h) => ({
+        ...h,
+        entries: all ? h.entries : h.entries.filter((e) => paths.includes(e)),
+      })),
       spawn,
     )
     : await types(await changes())

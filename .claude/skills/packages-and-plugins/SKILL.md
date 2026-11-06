@@ -81,8 +81,8 @@ packages/draft is a good small one to copy:
   pnpm-lock.yaml.
 - **README.md**, written the way `writing-documentation` describes.
 - **vocab.json and vocab.ts** if it declares words (`vocabulary`).
-- **browser.json** if a page imports it. `deno task check:browser`
-  (bin/check-platform.ts) type-checks its browser-facing exports, and always its
+- **browser.json** if a page imports it. `deno task check:types`
+  (bin/check-types.ts) type-checks its browser-facing exports, and always its
   `./vocab` and `./views`, with only the web platform in scope.
 - **Its line in packages/README.md's index.**
 

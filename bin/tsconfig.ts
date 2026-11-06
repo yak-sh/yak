@@ -18,7 +18,9 @@
 //   file a scope maps it to for some importer, unless the platform's types
 //   declare those modules (the Workers types declare `cloudflare:workers`);
 // - a `/// <reference types>` names a package of that `node_modules`;
-// - the platform's globals (Deno's are `deno types`) are written beside.
+// - the platform's globals (Deno's are `deno types`) are written beside;
+// - JSX compiles by the automatic runtime unless the options say otherwise,
+//   as Deno compiles a file naming its `@jsxImportSource`.
 //
 // TODO(D-135458 step 3): once packages resolve through package.json, tsc reads
 // them itself and this goes.
@@ -294,6 +296,7 @@ export let project = (
     spread,
     config: {
       compilerOptions: {
+        jsx: 'react-jsx',
         ...options,
         noEmit: true,
         target: 'esnext',

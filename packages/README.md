@@ -775,7 +775,7 @@ own, so its `./tools` export points at `./runs.ts`).
 
 **`./vocab` and `./views` are the browser's half.** The browser imports those
 two subpaths from every package, so neither may touch storage, SQL or a server
-runtime, and `deno task check:browser` type-checks both with only the web
+runtime, and `deno task check:types` type-checks both with only the web
 platform's types in scope. This separation lets `@yaks/process/vocab` describe a
 running program inside a page that could never start one. A terminal has a half
 of its own: `./tui` exports views that are Preact components, which a `yak`
@@ -867,7 +867,7 @@ distinguish implemented behavior from remaining proposals.
   that wants a computed property the store produces — the property is declared
   as `derived` in `./vocab` and the renderer reads it off the bundle. A
   `./views` that imports a database driver has crossed into the server half, and
-  `deno task check:browser` will fail it.
+  `deno task check:types` will fail it.
 - **`@yaks/render`'s `vocab.json` describes a property schema**, not a set of
   domain components, so it is the one vocabulary document with no `./vocab`
   subpath, and `packages/facets_test.ts` lists it as an exception.
