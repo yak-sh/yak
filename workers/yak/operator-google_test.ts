@@ -64,7 +64,7 @@ let id_token = `e30.${
 globalThis.fetch = (input, init) => {
   let r = new Request(input, init)
   let url = new URL(r.url)
-  if (!url.host.endsWith('googleapis.com')) return real(input, init)
+  if (!url.host.endsWith('googleapis.com')) return real(r)
   asked.push(r.clone())
   if (url.host == 'oauth2.googleapis.com') {
     return Promise.resolve(

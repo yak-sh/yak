@@ -27,10 +27,11 @@ let account = () => {
   let was = globalThis.fetch
   let made: string[] = []
   globalThis.fetch = ((input: string | Request, init?: RequestInit) => {
-    let url = new URL(new Request(input, init).url)
-    if (url.hostname != 'api.cloudflare.com') return was(input, init)
+    let r = new Request(input, init)
+    let url = new URL(r.url)
+    if (url.hostname != 'api.cloudflare.com') return was(r)
     let path = url.pathname.split('/acct')[1]
-    made.push(`${init?.method} ${path}`)
+    made.push(`${r.method} ${path}`)
     let result = path.endsWith('/cfd_tunnel')
       ? { id: T, token: 'the-token' }
       : path.startsWith('/cfd_tunnel/')
