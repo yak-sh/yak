@@ -116,6 +116,15 @@ let member = (dir: string): Member => {
   return { dir, name: pkg.name, deps }
 }
 
+let dirty = async () => {
+  let { stdout } = await new Deno.Command('git', {
+    args: ['status', '--porcelain'],
+    cwd: root,
+    stdout: 'piped',
+  }).output()
+  return stdout.length > 0
+}
+
 if (import.meta.main) {
   let all = members().map(member)
   let held = new Set(
@@ -124,6 +133,11 @@ if (import.meta.main) {
   )
   let left = Deno.args.includes('--dry-run') ? [] : out(all, held, pinned)
   let dirs = all.filter((m) => !left.includes(m.dir)).map((m) => m.dir)
+  // `deno publish` sees the deno.json files written below as uncommitted, so
+  // the tree is checked here, before they are, and the publish allows them.
+  if (!Deno.args.includes('--allow-dirty') && await dirty()) {
+    throw new Error('uncommitted changes: publish a clean tree')
+  }
   let restore = await written(dirs)
   let path = await Deno.makeTempFile({
     dir: root,
@@ -144,7 +158,8 @@ if (import.meta.main) {
         'publish',
         '--config',
         path,
-        ...Deno.args,
+        '--allow-dirty',
+        ...Deno.args.filter((arg) => arg != '--allow-dirty'),
       ],
       stdin: 'inherit',
       stdout: 'inherit',
