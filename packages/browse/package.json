@@ -78,7 +78,6 @@
     "@yaks/member": "0.2.18",
     "@yaks/model": "0.2.18",
     "@yaks/notify": "0.2.18",
-    "@yaks/openai": "0.2.18",
     "@yaks/page": "0.2.18",
     "@yaks/persona": "0.2.18",
     "@yaks/platform": "0.2.18",

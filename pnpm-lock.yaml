@@ -847,9 +847,6 @@ importers:
       '@yaks/notify':
         specifier: 0.2.18
         version: link:../notify
-      '@yaks/openai':
-        specifier: 0.2.18
-        version: link:../openai
       '@yaks/page':
         specifier: 0.2.18
         version: link:../page

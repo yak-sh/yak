@@ -28,7 +28,6 @@ import { docs as session } from '@yaks/session/vocab'
 import { docs as tools } from '@yaks/tools/vocab'
 import { docs as api } from '@yaks/api/vocab'
 import { docs as model } from '@yaks/model/vocab'
-import { docs as openai } from '@yaks/openai/vocab'
 import { docs as processes } from '@yaks/process/vocab'
 import { docs as spawn } from '@yaks/spawn/vocab'
 import { docs as persona } from '@yaks/persona/vocab'
@@ -91,7 +90,6 @@ learn([
   tools,
   api,
   model,
-  openai,
   processes,
   spawn,
   persona,
