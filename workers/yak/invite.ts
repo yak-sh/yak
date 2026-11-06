@@ -291,6 +291,7 @@ export let door = async (
   dir: Directory,
   person: string | null,
   secret: string,
+  notify = tell,
 ): Promise<Response> => {
   let t = new URL(req.url).searchParams.get('t') ?? ''
   let sealed = await unsealed(t, secret)
@@ -337,7 +338,7 @@ export let door = async (
   await accept(dir, invite, place)
   // Its people hear who joined, in their Updates; the joiner knows.
   let { space, app } = place
-  await tell(env, space, {
+  await notify(env, space, {
     to: space.eid,
     words: `${await dir.nameAt(person) ?? 'Someone'} joined ${
       app ? app.title || app.slug : space.title || space.slug

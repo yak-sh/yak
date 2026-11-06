@@ -167,6 +167,27 @@ test('an accepted invitation redirects its person to the app', async () => {
   assertEquals(response.headers.get('location'), 'https://jeff.yaks.app/diary/')
 })
 
+let pending = invited()
+let pendingRequest = new Request(link)
+let announcements: unknown[] = []
+test('a pending invitation is accepted by its person before redirecting to the app', async () => {
+  let response = await door(
+    pendingRequest,
+    env,
+    pending.dir,
+    'ana',
+    SECRET,
+    (...args) => Promise.resolve(void announcements.push(args[2])),
+  )
+  assertEquals(response.status, 303)
+  assertEquals(response.headers.get('location'), 'https://jeff.yaks.app/diary/')
+  assertMatch(
+    JSON.stringify(pending.applied),
+    /"tombstone".*"grant".*"person":"ana"/,
+  )
+  assertEquals(announcements.length, 1)
+})
+
 // The space's roster as the directory holds it: jeff owns it, bo is a member,
 // ana a guest of the diary, and cy invited to the space and not in yet.
 let row = (
