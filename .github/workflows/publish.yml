@@ -40,7 +40,8 @@ jobs:
       - uses: pnpm/action-setup@v4
 
       - name: workspace dependencies
-        run: deno run -A packages/cli/dependencies.ts
+        shell: bash
+        run: bin/workspace-dependencies
 
       - name: are the packages linked on jsr.io yet
         id: linked
