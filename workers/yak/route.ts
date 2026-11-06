@@ -212,7 +212,7 @@ export let LOGOUT = '/logout'
 /** Where an invitation is accepted, on the platform's own host (invite.ts). */
 export let INVITE = '/invite'
 
-// What the plans cost, as a page (public/pricing.html, D-32751). It lives here
+// What the plans cost, as a page (site/pricing.tsx, D-32751). It lives here
 // — beside the platform's own name, in the module with no dependencies —
 // because both halves of the paid tier need it and they must not import each
 // other: billing.ts writes the plan, usage.ts says where a space stands

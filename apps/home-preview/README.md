@@ -1,7 +1,7 @@
 # yaks.app home preview
 
 A separate consumer home page experiment at https://yak.yaks.app/home-preview/.
-It does not replace the platform home page in `workers/yak/public/index.html`.
+It does not replace the platform home page in `workers/yak/site/home.tsx`.
 
 The workbench is a guided demonstration over the live recipe app in the
 `yourname` demo space. A fixed, read-only worker route reads its recipe cards.

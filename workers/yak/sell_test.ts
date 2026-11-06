@@ -34,6 +34,7 @@ import {
 import type { Paid } from '@yaks/host/payments'
 import type { Space } from './directory.ts'
 import { space as spaceOf } from './directory-fixture.ts'
+import { page as drawn } from './site/mod.ts'
 
 let space = (over: Partial<Space> = {}): Space =>
   spaceOf({
@@ -99,12 +100,9 @@ test('the pricing page is quoted the rate that is set', () => {
     '<p>We take nothing.</p>',
   )
   assertEquals(quoted(`<span class="Fee">0%`, 250), `<span class="Fee">0%`)
-  // And the file itself carries the mark, or the splice would quietly do
+  // And the page itself carries the mark, or the splice would quietly do
   // nothing on the page it exists for.
-  assertStringIncludes(
-    Deno.readTextFileSync(new URL('./public/pricing.html', import.meta.url)),
-    MARK,
-  )
+  assertStringIncludes(drawn('pricing.html'), MARK)
 })
 
 let seller = (ready: boolean, submitted: boolean) =>

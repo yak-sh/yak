@@ -5,9 +5,12 @@
  * its `mod` prop adds variants, `<Dot mod='ring' />` rendering
  * `<span class="Dot Dot-ring">`. `block()` hangs a block's elements on it.
  *
- * A part is paint. Everything a caller passes besides `mod`, `class`, `elRef`
- * and `href` (a style, a handler, `draggable`, `type`) lands on the element
- * as given; what a click on it means is the caller's business.
+ * A part is paint. Everything a caller passes besides `mod`, `class`, `elRef`,
+ * `href` and `as` (a style, a handler, `draggable`, `type`) lands on the
+ * element as given; what a click on it means is the caller's business. `as`
+ * names the element where the page's outline wants another than the part's
+ * own: a card's title as an `h3` under the page's `h2`, a card as an `li` of
+ * a list.
  *
  * Links nest the way HTML allows. A part given an `href` renders as an `<a>`
  * and becomes the link around its children ({@link Surround}). Inside it, a
@@ -41,6 +44,8 @@ export type Props = {
   elRef?: unknown
   /** where this part links to */
   href?: string
+  /** the element to render, where the page's outline wants another */
+  as?: string
   children?: ComponentChildren
   [x: string]: unknown
 }
@@ -70,8 +75,8 @@ let classes = (base: string, mod: Props['mod'], extra?: string) =>
 /** A part: `tag`, wearing the class `base`. */
 export let el =
   (tag: string, base: string): Part =>
-  ({ mod, class: extra, elRef, children, href, ...props }: Props) => {
-    let a = anchor(tag, href, useContext(Surround).href)
+  ({ mod, class: extra, elRef, children, href, as, ...props }: Props) => {
+    let a = anchor(as ?? tag, href, useContext(Surround).href)
     let node = h(a.tag, {
       ...props,
       ...(a.href && { href: a.href }),

@@ -240,6 +240,12 @@ options with its default in place. A part a page lacks goes into the kit,
 drawn by pencil, with an example in the style guide (site_test checks every
 worn part has one), not into one page's stylesheet.
 
+The site's static pages (home, pricing, help and the legal pages) are TSX in
+workers/yak/site/, drawn from the kit's parts in one frame (frame.tsx: head,
+nav, footer) and written into public/ by the deploy's build, gitignored like
+_ui.css. A part takes `as` where the page's outline wants another element
+(`<Card as='li'>`, `<Card.Title as='h3'>`); never write its class by hand.
+
 What a person does to their own account (invite someone, take someone off,
 choose the homepage, connect an agent) is a control on its dashboard page that
 calls the tool their assistant would call (apps.ts `pressed`), never a line

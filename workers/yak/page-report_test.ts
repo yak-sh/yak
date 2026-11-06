@@ -11,6 +11,7 @@ import { within } from './defects.ts'
 import { answer, PATH } from './page-report.ts'
 import { shell } from './pages.ts'
 import { sheeted } from './sheets.ts'
+import { page } from './site/mod.ts'
 
 let reporter = await Deno.readTextFile(
   new URL('./public/report.js', import.meta.url),
@@ -160,9 +161,7 @@ test('the same throw on another page is the same bug', async () => {
 })
 
 test('the home page files a throw and a frame that will not load, tagged with it', async () => {
-  let home = await Deno.readTextFile(
-    new URL('./public/index.html', import.meta.url),
-  )
+  let home = page('index.html')
   let { document, window, first, sent } = loaded(
     sheeted(home, {}),
     'https://yaks.app/',

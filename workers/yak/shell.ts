@@ -13,7 +13,7 @@ import { links } from './sheets.ts'
 import { island, signedIn } from './signed.ts'
 
 // What every drawn page wears in its head, in the shape the file pages wear it
-// (public/*.html, site_test.ts): the title and the line, the canonical, the
+// (site/frame.tsx, site_test.ts): the title and the line, the canonical, the
 // Open Graph pair a link unfurls with, and the site's own stylesheet.
 export let head = (
   env: Host,

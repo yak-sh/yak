@@ -13,6 +13,7 @@ import {
 } from '@std/assert'
 import { parseHTML } from 'linkedom'
 import { loadVocab } from '@yaks/vocab'
+import { page } from './site/mod.ts'
 import { SUBJECT } from './invite.ts'
 import {
   accepted,
@@ -38,7 +39,7 @@ import {
 let flat = (html: string) => html.replace(/\s+/g, ' ')
 let hello = flat(
   /<h1[^>]*>([\s\S]*?)<\/h1>/.exec(
-    Deno.readTextFileSync(new URL('./public/index.html', import.meta.url)),
+    page('index.html'),
   )![1],
 ).trim()
 

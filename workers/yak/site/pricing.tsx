@@ -1,0 +1,345 @@
+/** @jsxImportSource preact */
+import { Button, Card } from '@yaks/ui'
+import { Page, Yours } from './frame.tsx'
+
+export let Pricing = () => (
+  <Page
+    name='Pricing: your first space is free, and the Plus plan is $9 a month'
+    description='You pay for a space, not for people, and invite as many as you like on any plan. Your first space is free. The Plus plan is $9 a month for a space, and the Organization plan $49.'
+    path='/pricing'
+    kind='Pricing'
+  >
+    <section class='Hello' aria-labelledby='hello'>
+      <h1 class='Title Title-page' id='hello'>Pricing</h1>
+      <p class='Note Note-lead'>
+        You pay for a space, not for people. Invite as many as you like on any
+        plan.
+      </p>
+      <p class='Note'>
+        A space is your own address, like{' '}
+        <Yours />, with the apps there, their data and the people you invite.
+      </p>
+    </section>
+    <section class='Cost' aria-labelledby='plans'>
+      <h2 class='Title' id='plans'>Each space is free or on a paid plan</h2>
+      <div class='Plans'>
+        <Card as='div' class='Plan'>
+          <h3 class='Plan_Price'>Free</h3>
+          <p class='Note Note-small'>Your first space.</p>
+          <ul class='Plan_List'>
+            <li>5 apps</li>
+            <li>Unlimited visitors</li>
+            <li>1 GB of app data</li>
+            <li>1 GB of photos and files</li>
+            <li>100 emails a month</li>
+            <li>No custom domain</li>
+            <li>No payments</li>
+            <li>A small “Made with yaks.app” badge</li>
+            <li>AI use included</li>
+            <li>You make changes with your assistant</li>
+          </ul>{' '}
+          <Button mod='go' href='/login'>Start Free</Button>
+        </Card>
+        <Card as='div' class='Plan Plan-plus'>
+          <h3 class='Plan_Price'>
+            $9
+            <span class='Plan_Per'>&#32;a month</span>
+          </h3>
+          <p class='Note Note-small'>The Plus plan, for any space.</p>
+          <ul class='Plan_List'>
+            <li>Unlimited apps</li>
+            <li>Unlimited visitors</li>
+            <li>10 GB of app data</li>
+            <li>50 GB of photos and files</li>
+            <li>2,500 emails a month</li>
+            <li>
+              A custom domain, like <b>ourbookclub.com</b>
+            </li>
+            <li>Take payments with Stripe</li>
+            <li>No yaks.app badge</li>
+            <li>AI use included</li>
+            <li>You make changes with your assistant</li>
+          </ul>{' '}
+          <Button mod='go' href='/login?return=%2Fconnect%23plan'>
+            Get Started
+          </Button>
+        </Card>
+        <Card as='div' class='Plan Plan-organization'>
+          <h3 class='Plan_Price'>
+            $49
+            <span class='Plan_Per'>&#32;a month</span>
+          </h3>
+          <p class='Note Note-small'>The Organization plan. Or $490 a year.</p>
+          <ul class='Plan_List'>
+            <li>Unlimited apps</li>
+            <li>Unlimited visitors</li>
+            <li>10 GB of app data</li>
+            <li>50 GB of photos and files</li>
+            <li>2,500 emails a month</li>
+            <li>
+              A custom domain, like <b>ourtownship.org</b>
+            </li>
+            <li>Take payments with Stripe</li>
+            <li>No yaks.app badge</li>
+            <li>AI use included</li>
+            <li>
+              Your staff ask by email or chat, and yaks.app makes the change
+            </li>
+          </ul>{' '}
+          <Button mod='go' href='/login?return=%2Fconnect%23plan'>
+            Get Started
+          </Button>
+        </Card>
+      </div>
+    </section>
+    <section aria-labelledby='always'>
+      <h2 class='Title' id='always'>Free on every plan</h2>
+      <ul class='Plan_List'>
+        <li>Members and invitations, as many as you like</li>
+        <li>Visitors to your apps</li>
+        <li>Joining other people's spaces</li>
+        <li>Publishing your apps to the gallery</li>
+        <li>Installing a copy of someone's published app</li>
+        <li>Exporting your data, and deleting it</li>
+      </ul>
+    </section>
+    <section class='Yours' aria-labelledby='paying'>
+      <h2 class='Title' id='paying'>How paying works</h2>
+      <dl class='Yours_List'>
+        <div>
+          <dt>A space is one address and everything in it.</dt>
+          <dd>
+            That's its apps, their data and its people. Each space has its own
+            plan and its own limits, and what one space uses never counts
+            against another.
+          </dd>
+        </div>
+        <div>
+          <dt>
+            Your first space is free, and you can join as many as you like.
+          </dt>
+          <dd>
+            You can own one free space. Every other space you make is on the
+            Plus plan or the Organization plan. Spaces other people invite you
+            into never count toward yours. If you already own more than one free
+            space, they all stay free.
+          </dd>
+        </div>
+        <div>
+          <dt>A space's owner pays for it, and members never do.</dt>
+          <dd>
+            Only an owner can upgrade a space, change its plan or cancel it,
+            from that space's settings. Editors and viewers never pay, and
+            there's no charge for each person.
+          </dd>
+        </div>
+        <div>
+          <dt>At a limit, nothing is deleted.</dt>
+          <dd>
+            Adding stops: a new app, more data or another email waits until the
+            space has room or moves to a paid plan. The owner is told which
+            limit the space reached and how to upgrade, and your assistant hears
+            when a space nears one. Members keep using everything, and visitors
+            are always served.
+          </dd>
+        </div>
+        <div>
+          <dt>If you stop paying, the space goes back to free.</dt>
+          <dd>
+            A paid plan runs to the end of the month you paid for. Then the
+            space has the free plan's limits again and stops taking payments.
+            Its apps and data stay.
+          </dd>
+        </div>
+        <div>
+          <dt>
+            Your Claude or ChatGPT plan pays for your assistant, and yaks.app
+            keeps what it makes online.
+          </dt>
+          <dd>
+            Your assistant builds and changes your apps on your own
+            subscription, and that never spends a space's AI use. A space's AI
+            use is for the AI its apps use themselves, such as reading a photo
+            or speaking, and for yaks.app's built-in builder.
+          </dd>
+        </div>
+        <div>
+          <dt>Prices include tax.</dt>
+          <dd>
+            Any sales tax or VAT is in the price. Nothing is added at checkout.
+          </dd>
+        </div>
+        <div>
+          <dt>
+            We take <span class='Fee'>0%</span> of each sale.
+          </dt>
+          <dd>
+            Stripe charges its own processing fees. How selling works is below.
+          </dd>
+        </div>
+      </dl>
+    </section>
+    <section class='Limits' aria-labelledby='limits'>
+      <h2 class='Title' id='limits'>Every limit, plan by plan</h2>
+      <div class='Limits_Table'>
+        <table>
+          <thead>
+            <tr>
+              <td />
+              <th scope='col'>Free</th>
+              <th scope='col'>Plus</th>
+              <th scope='col'>Organization</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <th scope='row'>Apps</th>
+              <td>5</td>
+              <td>Unlimited</td>
+              <td>Unlimited</td>
+            </tr>
+            <tr>
+              <th scope='row'>
+                App data{' '}
+                <small>
+                  What your apps save, like entries, lists and settings.
+                </small>
+              </th>
+              <td>1 GB</td>
+              <td>10 GB</td>
+              <td>10 GB</td>
+            </tr>
+            <tr>
+              <th scope='row'>
+                Photos and files{' '}
+                <small>Pictures and documents your apps keep.</small>
+              </th>
+              <td>1 GB</td>
+              <td>50 GB</td>
+              <td>50 GB</td>
+            </tr>
+            <tr>
+              <th scope='row'>
+                Visits a month{' '}
+                <small>
+                  Counted in request units: each request for a page or its data
+                  is one, and 20 live updates are one. Past it, visitors are
+                  still served and the owner is told.
+                </small>
+              </th>
+              <td>50,000</td>
+              <td>1,000,000</td>
+              <td>1,000,000</td>
+            </tr>
+            <tr>
+              <th scope='row'>
+                Emails a month{' '}
+                <small>
+                  Sent or received by your apps. Invitations don't count.
+                </small>
+              </th>
+              <td>100</td>
+              <td>2,500</td>
+              <td>2,500</td>
+            </tr>
+            <tr>
+              <th scope='row'>
+                AI use{' '}
+                <small>
+                  What models and voice cost, in your apps and in the built-in
+                  builder.
+                </small>
+              </th>
+              <td>Included</td>
+              <td>Included</td>
+              <td>Included</td>
+            </tr>
+            <tr>
+              <th scope='row'>
+                Builds a month{' '}
+                <small>
+                  With yaks.app's built-in builder, for people without an
+                  assistant of their own. A build counts when it puts an app
+                  online.
+                </small>
+              </th>
+              <td>5</td>
+              <td>100</td>
+              <td>100</td>
+            </tr>
+            <tr>
+              <th scope='row'>
+                Build time a month{' '}
+                <small>
+                  Time spent compiling code, such as Rust to WebAssembly.
+                </small>
+              </th>
+              <td>1 hour</td>
+              <td>10 hours</td>
+              <td>10 hours</td>
+            </tr>
+            <tr>
+              <th scope='row'>
+                Builds at once{' '}
+                <small>Each build runs on a computer of its own.</small>
+              </th>
+              <td>1</td>
+              <td>2</td>
+              <td>2</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+      <dl class='Yours_List'>
+        <div>
+          <dt>Mail to your apps always arrives.</dt>
+          <dd>
+            At the email limit, only sending stops. The count starts again on
+            the first day of each month.
+          </dd>
+        </div>
+        <div>
+          <dt>Invitations are free, up to 50 an hour.</dt>
+          <dd>
+            Invite as many people as you like, on any plan. Invitations never
+            count toward the month's emails, and one person may send 50 an hour.
+          </dd>
+        </div>
+        <div>
+          <dt>Visitors who aren't signed in have a per-minute pace.</dt>
+          <dd>
+            Anyone not signed in can make up to 300 requests a minute for an
+            app's data from one place, and past that is asked to wait a minute.
+            You and the people in your space aren't counted.
+          </dd>
+        </div>
+        <div>
+          <dt>Visitors to an open app keep a visitor's pace.</dt>
+          <dd>
+            On an app anyone with the link can add to, each visitor may send 30
+            changes a minute, 16 KB at a time, and upload files of up to 2 MB. A
+            visitor changes only what they added. You and your editors aren't
+            held to these limits.
+          </dd>
+        </div>
+      </dl>
+    </section>
+    <section aria-labelledby='selling'>
+      <h2 class='Title' id='selling'>Sell from your apps on a paid plan</h2>
+      <p class='Note'>
+        Take payments on the Plus plan or the Organization plan. Connect your
+        Stripe account to receive payments, and handle refunds and disputes
+        there. <a href='/terms'>Selling terms</a>.
+      </p>
+    </section>
+    <Card class='Join' aria-labelledby='start'>
+      <h2 class='Title' id='start'>Start with a free space</h2>
+      <p class='Note'>
+        You can move a space to a paid plan later, from that space.
+      </p>
+      <p class='Join_Doors'>
+        <Button mod='go' href='/login'>Start free</Button>
+      </p>
+    </Card>
+  </Page>
+)

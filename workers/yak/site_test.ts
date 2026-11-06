@@ -39,6 +39,7 @@ import { page as galleryPage } from './gallery.ts'
 import { INTEGRATIONS, page as integrationsPage } from './integrations.ts'
 import { PAGES, uriOf, WHOLE } from './guide.ts'
 import { askEmail, connect } from './pages.ts'
+import * as site from './site/mod.ts'
 import {
   ADDRESSES,
   CLOSED,
@@ -55,15 +56,27 @@ import {
   sitemap,
 } from './seo.ts'
 
-// Immutable public fixtures are loaded once, before any contract runs.
+// Immutable public fixtures are loaded once, before any contract runs: a page
+// of the site as the deploy draws it (site/mod.ts), any other file as kept.
 let texts = new Map<string, string>()
-let read = (name: string) => {
-  let text = texts.get(name)
-  if (text === undefined) {
-    text = Deno.readTextFileSync(new URL(`./public/${name}`, import.meta.url))
-    texts.set(name, text)
+let read = (name: string): string => {
+  if (!texts.has(name)) {
+    texts.set(
+      name,
+      site.PAGES[name]
+        ? site.page(name)
+        : Deno.readTextFileSync(new URL(`./public/${name}`, import.meta.url)),
+    )
   }
-  return text
+  return texts.get(name)!
+}
+// And as a browser reads it.
+let documents = new Map<string, Document>()
+let parsed = (name: string): Document => {
+  if (!documents.has(name)) {
+    documents.set(name, parseHTML(read(name)).document as unknown as Document)
+  }
+  return documents.get(name)!
 }
 
 // The technical page is markdown under the documentation now (docs.ts,
@@ -85,6 +98,7 @@ for (
 ) {
   read(name)
 }
+for (let name of branded) parsed(name)
 let images = new Map([
   'og.png',
   'yak.webp',
@@ -101,15 +115,17 @@ let images = new Map([
 test('every page wears the raster yak', () => {
   for (let page of branded) {
     let html = read(page)
+    let document = parsed(page)
     // A page in a subdirectory names the site's own files from the root.
     assert(
-      /<link rel="icon" href="\/?favicon-32\.png" type="image\/png" sizes="32x32" \/>/
-        .test(html),
+      document.querySelector(
+        'link[rel="icon"][type="image/png"][sizes="32x32"]',
+      )?.getAttribute('href')?.match(/^\/?favicon-32\.png$/),
       `${page} has no PNG favicon`,
     )
     assert(
-      /<link rel="apple-touch-icon" href="\/?apple-touch-icon\.png" \/>/
-        .test(html),
+      document.querySelector('link[rel="apple-touch-icon"]')
+        ?.getAttribute('href')?.match(/^\/?apple-touch-icon\.png$/),
       `${page} has no home-screen icon`,
     )
     assert(!html.includes('yak.svg'), `${page} still uses the old drawing`)
@@ -428,7 +444,7 @@ test('the pricing page tabulates the limits the code holds a space to', () => {
 
 test('every footer link names a page that is there', () => {
   for (let page of branded) {
-    let foot = parseHTML(read(page)).document.querySelector('body > footer')
+    let foot = parsed(page).querySelector('body > footer')
       ?.outerHTML ?? ''
     assert(foot, `${page} has no footer`)
     assertEquals(links(foot), FOOT, page)
@@ -549,35 +565,45 @@ test('the sitemap and the pages on disk are one list', () => {
   // The style guide is public and deliberately not in it, so it says noindex
   // for itself rather than being quietly absent.
   assert(!SITE.includes('/style-guide'))
-  assertStringIncludes(
-    flat(read('style-guide.html')),
-    '<meta name="robots" content="noindex, follow" />',
+  assertEquals(
+    meta(parsed('style-guide.html'), 'meta[name="robots"]'),
+    'noindex, follow',
   )
 })
+
+// What a page's head says in one of its tags.
+let meta = (document: Document, tag: string) =>
+  document.querySelector(tag)?.getAttribute('content')
 
 test('every page carries the head an engine reads', () => {
   let titles: string[] = []
   for (let page of branded) {
     let html = read(page)
-    let one = flat(html)
     let url = `https://yaks.app${pathOf(page)}`
     let { title, description } = said(html)
     assert(title, `${page} has no title`)
     assert(description, `${page} has no description`)
     titles.push(title)
-    assertStringIncludes(one, '<html lang="en">')
-    assertStringIncludes(one, `<link rel="canonical" href="${url}" />`)
-    assertStringIncludes(one, `<meta property="og:url" content="${url}" />`)
-    assertStringIncludes(
-      one,
-      '<meta property="og:image" content="https://yaks.app/og.png" />',
+    let document = parsed(page)
+    assertEquals(document.documentElement.getAttribute('lang'), 'en', page)
+    assertEquals(
+      document.querySelector('link[rel="canonical"]')?.getAttribute('href'),
+      url,
+      page,
     )
-    assertStringIncludes(
-      one,
-      '<meta name="twitter:card" content="summary_large_image" />',
+    assertEquals(meta(document, 'meta[property="og:url"]'), url, page)
+    assertEquals(
+      meta(document, 'meta[property="og:image"]'),
+      'https://yaks.app/og.png',
+      page,
+    )
+    assertEquals(
+      meta(document, 'meta[name="twitter:card"]'),
+      'summary_large_image',
+      page,
     )
     for (let tag of ['og:title', 'og:description', 'og:site_name']) {
-      assert(one.includes(`property="${tag}"`), `${page} has no ${tag}`)
+      assert(meta(document, `meta[property="${tag}"]`), `${page} has no ${tag}`)
     }
     assertEquals(
       (html.match(/<h1[\s>]/g) ?? []).length,
@@ -593,11 +619,8 @@ test('every public page hands a stranger sign-in, never /connect', () => {
     let body = read(page).split('</head>')[1] ?? ''
     assert(!body.includes('href="/connect"'), `${page} points at /connect`)
   }
-  let html = read('index.html')
-  let doors = [
-    ...html.matchAll(/<a class="Button Button-go"\s+href="([^"]+)"/g),
-  ]
-    .map((m) => m[1])
+  let doors = [...parsed('index.html').querySelectorAll('a.Button-go')]
+    .map((a) => a.getAttribute('href'))
   assertEquals(doors, [
     '/login',
     '/login',

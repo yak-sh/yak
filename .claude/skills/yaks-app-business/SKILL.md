@@ -111,7 +111,7 @@ what's still missing, is in D-131886.
 
 A flat price per space, with every member free, says *for a person, their team
 and the things they run*. yaks.app sells three plans, and meter.ts and
-pricing.html hold what each one carries:
+the pricing page hold what each one carries:
 
 - **The Free plan** is a person's first space: 5 apps, 1 GB of app data, 1 GB
   of photos and files and 100 emails a month, with a small badge, no custom
@@ -165,9 +165,11 @@ assistants' connector directories for those who already use one.
   provider's webhook doors are @yaks/stripe's, served by
   workers/yak/payment-doors.ts. How metering and refusals work is
   `yaks-app`.
-- **The site.** The home page is workers/yak/public/index.html, which carries a
-  JSON-LD copy of the plans and a card for each of the three, as pricing.html
-  has; a plan on sale is a card on both pages, never a note under them. Next to it are pricing.html, help.html and the
+- **The site.** The home page is workers/yak/site/home.tsx (drawn from the
+  kit's parts into public/index.html at deploy), which carries a JSON-LD copy
+  of the plans and a card for each of the three, as site/pricing.tsx has; a
+  plan on sale is a card on both pages, never a note under them. Next to it
+  are site/pricing.tsx, site/help.tsx and the
   Limits section of docs/technical.md. The link a person pastes into their
   own agent to connect it is /agent, public/agent.md drawn by docs.ts, and the
   home page, /connect and the dashboard offer it. The connector's skills in

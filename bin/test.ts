@@ -314,11 +314,14 @@ export let READIES = [
 /// MADE.test('workers/yak/public/_web/app.js') -> true
 /// MADE.test('workers/yak/public/_headers') -> false
 /// MADE.test('workers/yak/public/docs.md') -> false
+/// MADE.test('workers/yak/public/pricing.html') -> true
+/// MADE.test('workers/yak/public/docs/index.html') -> false
 /** The generated assets among those: what public/ holds under a name
- * beginning `_`, but `_headers`, which git keeps. A run makes them only when
- * a file it runs read one as it last passed, or has no reads kept: bundling
- * them is seconds a run whose files never read them need not wait. */
-export let MADE = /^workers\/yak\/public\/_(?!headers$)/
+ * beginning `_`, but `_headers`, which git keeps, and the site's pages at its
+ * top (workers/yak/site/). A run makes them only when a file it runs read one
+ * as it last passed, or has no reads kept: bundling them is seconds a run
+ * whose files never read them need not wait. */
+export let MADE = /^workers\/yak\/public\/(?:_(?!headers$)|[^/]+\.html$)/
 
 /** The generated modules a source imports (check-types.ts `MADE`): a run
  * whose files import one, as the public client imports its parts, makes the

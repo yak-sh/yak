@@ -64,6 +64,10 @@ node_modules
 /workers/yak/public/_ui.css
 /workers/yak/public/_ui/
 
+# The site's own pages, drawn from the kit's parts (workers/yak/site/).
+/workers/yak/public/*.html
+!/workers/yak/public/style-guide.html
+
 # Browser draft helper, generated from @yaks/draft.
 /workers/yak/public/_draft.js
 

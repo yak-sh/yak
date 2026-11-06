@@ -21,6 +21,8 @@ test('a part wears its block, its variants and extra classes', () => {
       '<header class="Card_Head Card_Head-on">x</header>',
     ],
     [h(Dot, { title: 'wip' }), '<span title="wip" class="Dot"></span>'],
+    [h(Card.Head, { as: 'div' }, 'x'), '<div class="Card_Head">x</div>'],
+    [h(Card, { as: 'li', href: '/a' }), '<a href="/a" class="Card"></a>'],
   ]
   for (let [node, want] of cases) assertEquals(html(node), want)
 })

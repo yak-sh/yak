@@ -5,9 +5,10 @@
 import { test } from '@yaks/testing'
 import { assert, assertEquals } from '@std/assert'
 import { parseHTML } from 'linkedom'
+import { page as home } from './site/mod.ts'
 
 let at = (path: string) => new URL(path, import.meta.url)
-let html = await Deno.readTextFile(at('./public/index.html'))
+let html = home('index.html')
 let code = await Deno.readTextFile(at('./public/wander.js'))
 
 let page = async (column = 144) => {

@@ -7,6 +7,7 @@ import { pathToFileURL } from 'node:url'
 import { Buffer } from 'node:buffer'
 import { join } from 'node:path'
 import { from, plan, ui } from './sheet-assets.ts'
+import { PAGES } from './site/mod.ts'
 
 let hash = (bytes: Uint8Array) =>
   createHash('sha256').update(bytes).digest('hex')
@@ -60,7 +61,7 @@ export let materialized = async (
 /** Inputs to the browser bundles, compiler catalog and sandbox workspace. */
 export let assetInputs = (paths: string[]) =>
   paths.filter((path) =>
-    /^(?:packages\/|workers\/yak\/public\/)/.test(path) ||
+    /^(?:packages\/|workers\/yak\/(?:public|site)\/)/.test(path) ||
     /^(?:deno\.(?:jsonc?|lock)|bin\/compiler-packages\.ts)$/.test(path) ||
     /^workers\/yak\/(?:wrangler\.ts|asset-ready\.ts|client-assets\.ts|sheet-assets\.ts|sandbox\/(?:cli-assets|launch)\.ts|package(?:-lock)?\.json|deno\.json)$/
       .test(path)
@@ -97,6 +98,7 @@ let outputs = async (root: string) => {
       '_cli/launch.ts',
       url,
       ...(await ui()).keys(),
+      ...Object.keys(PAGES),
       ...Object.values(plan(await from(publicDir)).names),
     ]
       .map((name) => join(publicDir, name)),
