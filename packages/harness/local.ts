@@ -4,7 +4,7 @@
 
 import * as systemProcess from '@yaks/process/system'
 
-import { artifactStore } from '@yaks/blob'
+import { artifactStore } from '@yaks/blob/identify'
 import { deferredModel, type Model, prefixCacheMark } from '@yaks/model'
 import { claudeDoc } from '@yaks/claude/vocab'
 import { anthropicDoc } from '@yaks/anthropic/vocab'

@@ -4,7 +4,8 @@ import { local } from './local.ts'
 import { configuredImages, images } from './images.ts'
 import { responses } from '@yaks/openai'
 import { responses as router } from '@yaks/openrouter'
-import { artifactStore, memoryBlobs } from '@yaks/blob'
+import { memoryBlobs } from '@yaks/blob'
+import { artifactStore } from '@yaks/blob/identify'
 import { fileBlobs } from '@yaks/blob/file'
 import { routes as blobRoutes } from '@yaks/blob/routes'
 import { compose } from '@yaks/cli/host'
@@ -47,7 +48,10 @@ test('the harness and blob door share the graph artifact store', async () => {
         assertEquals(response.status, 200)
         assertEquals(response.headers.get('content-type'), 'image/png')
         assertEquals(new Uint8Array(await response.arrayBuffer()), bytes)
-        assertEquals(await Deno.readFile(`${place}/${artifact.address}`), bytes)
+        assertEquals(
+          await Deno.readFile(`${place}/${artifact.address}`),
+          bytes,
+        )
       } finally {
         await host.close()
       }
@@ -201,7 +205,10 @@ test('a model row sends OpenRouter audio to the graph as an artifact', async () 
 
 test('image configuration defaults to enabled with explicit disable and override', () => {
   let blobs = memoryBlobs()
-  assertEquals(typeof configuredImages(blobs, undefined, '')?.store, 'function')
+  assertEquals(
+    typeof configuredImages(blobs, undefined, '')?.store,
+    'function',
+  )
   assertEquals(
     typeof configuredImages(blobs, undefined, '1')?.store,
     'function',

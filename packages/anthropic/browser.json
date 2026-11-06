@@ -1,4 +1,5 @@
 {
+  "_": "Hosts call the SDK-backed model; pages import its vocabulary, marks and media declarations.",
   "compilerOptions": {
     "lib": [
       "dom",
@@ -6,5 +7,10 @@
       "es2023"
     ],
     "strict": true
-  }
+  },
+  "entries": [
+    "./vocab",
+    "./mark",
+    "./reads"
+  ]
 }

@@ -19,7 +19,8 @@ import {
   toolLines,
   Usage,
 } from '@yaks/cli/grammar'
-import { registry, show } from '@yaks/cli/answer'
+import { registry } from '@yaks/cli/answer'
+import { show } from '@yaks/cli/terminal'
 import { human } from '@yaks/id'
 import * as kernelVocab from '@yaks/kernel/vocab'
 import * as kernelGraph from '@yaks/kernel/graph'

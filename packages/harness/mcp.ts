@@ -4,7 +4,7 @@ import { toolName } from '@yaks/graph/call'
 import { derivedEid } from '@yaks/graph/identity'
 import type { Harness } from './store.ts'
 import { type Tool, type ToolContext, ToolError } from '@yaks/session'
-import { artifactStore } from '@yaks/blob'
+import { artifactStore } from '@yaks/blob/identify'
 import type { SignIns } from '@yaks/connections'
 
 export const mcpTools = (

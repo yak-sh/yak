@@ -227,7 +227,7 @@ Image generation is opt-in. Supply an external binary store through the existing
 `@yaks/blob` backend interface:
 
 ```ts
-import { artifactStore } from '@yaks/blob'
+import { artifactStore } from '@yaks/blob/identify'
 import { fileBlobs } from '@yaks/blob/file'
 import { responses } from '@yaks/openai'
 

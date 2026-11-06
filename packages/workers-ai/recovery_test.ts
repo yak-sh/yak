@@ -8,7 +8,8 @@ import { provisionalDoc } from '@yaks/effects'
 import { toolsDoc } from '@yaks/tools/vocab'
 import { ramVault, records, secrets, secretsDoc } from '@yaks/secrets'
 import { type MediaReceipt, mediaReceipts, ModelError } from '@yaks/model'
-import { artifactStore, memoryBlobs } from '@yaks/blob'
+import { memoryBlobs } from '@yaks/blob'
+import { artifactStore } from '@yaks/blob/identify'
 import { workersAi } from './mod.ts'
 
 let setup = () => {

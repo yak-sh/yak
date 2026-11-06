@@ -24,7 +24,8 @@ import { token } from '@yaks/graph/sha256'
 import { addressOf, type Artifact, keep } from './artifact.ts'
 import { type Backend, backend } from './backend.ts'
 import { type Served, served, servedOpen } from './serve.ts'
-import { contentType, mediaType } from './content_type.ts'
+import { mediaType } from './content_type.ts'
+import { contentType } from './identify.ts'
 import {
   addressed,
   type Representation,

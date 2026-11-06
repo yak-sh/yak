@@ -3,6 +3,7 @@
   "version": "0.2.17",
   "exports": {
     ".": "./mod.ts",
+    "./identify": "./identify.ts",
     "./backend": "./backend.ts",
     "./store": "./store.ts",
     "./file": "./file.ts",

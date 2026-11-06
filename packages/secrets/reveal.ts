@@ -1,7 +1,6 @@
-import { env } from '@yaks/process/env'
 // Trusted code reads a value from the vault at the moment it uses it. A name
-// the vault has no value for falls back to the environment. A kept 1Password
-// reference stays unresolved: servers have no 1Password sign-in, and only a
+// the vault has no value for falls back to the source its host lends. A kept
+// 1Password reference stays unresolved: servers have no 1Password sign-in, and only a
 // person's interactive command reads references through opRead.
 
 import { after } from '@yaks/fp'
@@ -15,21 +14,11 @@ export type Sources = {
   env?: (name: string) => string | undefined
 }
 
-// The host process environment, including Worker bindings under nodejs_compat.
-// Tenant credential readers supply their own source instead.
-let environment = (name: string): string | undefined => {
-  try {
-    return env.get(name)
-  } catch {
-    return undefined
-  }
-}
-
 // An unresolved reference must neither become an outgoing credential nor
 // select a different credential from the environment.
 let valueOf = (kept: Sealed | undefined, name: string, s: Sources) => {
   if (kept?.op) return undefined
-  let value = kept?.value ?? (s.env ?? environment)(name)
+  let value = kept?.value ?? s.env?.(name)
   return value && isOpRef(value) ? undefined : value
 }
 

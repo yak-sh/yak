@@ -1,6 +1,7 @@
 // The executor's service door and Workflow adapter. Providers, storage and
 // account authorization are lent here; generation policy lives in @yaks/model.
-import { artifactStore, type Bucket, objectBlobs } from '@yaks/blob'
+import { type Bucket, objectBlobs } from '@yaks/blob'
+import { artifactStore } from '@yaks/blob/identify'
 import { type Grant, granted } from '@yaks/egress'
 import {
   type FrozenModelRequest,

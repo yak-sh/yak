@@ -40,7 +40,8 @@ import type { AnatomyObservation } from '@yaks/code/anatomy'
 import type { Vocab } from '@yaks/vocab'
 import { EFFECT } from '@yaks/effects'
 import { answerOf, faulted, structured, toolEid } from '@yaks/tools/result'
-import { registry, show, terminal } from './answer.ts'
+import { registry, terminal } from './answer.ts'
+import { show } from './terminal.ts'
 import {
   type Config,
   exported,

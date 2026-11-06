@@ -1,6 +1,7 @@
 import { test } from '@yaks/testing'
 import { assert, assertEquals, assertRejects } from '@std/assert'
-import { artifactStore, type Blobs } from '@yaks/blob'
+import { type Blobs } from '@yaks/blob'
+import { artifactStore } from '@yaks/blob/identify'
 import { generatedImages } from './images.ts'
 import { body, responses } from './responses.ts'
 

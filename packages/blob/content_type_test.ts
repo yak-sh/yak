@@ -1,6 +1,6 @@
 import { test } from '@yaks/testing'
 import { assertEquals } from '@std/assert'
-import { contentType } from './content_type.ts'
+import { contentType } from './identify.ts'
 
 let bytes = (...parts: (string | number[])[]) =>
   new Uint8Array(
@@ -36,7 +36,10 @@ test('text keeps its declared format when its bytes are valid text', async () =>
   let body = new TextEncoder().encode('# A note\n')
   assertEquals(await contentType(body, 'text/markdown'), 'text/markdown')
   assertEquals(await contentType(body, 'text/plain'), 'text/plain')
-  assertEquals(await contentType(body, 'video/mp4'), 'application/octet-stream')
+  assertEquals(
+    await contentType(body, 'video/mp4'),
+    'application/octet-stream',
+  )
 })
 
 test('unknown binary and malformed declarations are generic', async () => {

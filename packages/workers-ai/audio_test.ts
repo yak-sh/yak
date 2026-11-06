@@ -1,7 +1,8 @@
 // Paid inference is replaced by the binding; output bytes cross the same door.
 import { test } from '@yaks/testing'
 import { assertAlmostEquals, assertEquals, assertRejects } from '@std/assert'
-import { artifactStore, memoryBlobs } from '@yaks/blob'
+import { memoryBlobs } from '@yaks/blob'
+import { artifactStore } from '@yaks/blob/identify'
 import { ModelError } from '@yaks/model'
 import { audioPrice, audioSeconds, music, workersAi } from './mod.ts'
 import { musicInput, pricedAudio } from './audio.ts'

@@ -368,7 +368,9 @@ test('a failure the vault calls retryable is provisional, tried again until it s
   await until(time.pending)
   let said = (await whole(g, 'A'))!
   assertEquals(said.provisional, { note: 'Saving the key, trying again' })
-  assert(String((said.content as Record<string, string>).body).includes('lost'))
+  assert(
+    String((said.content as Record<string, string>).body).includes('lost'),
+  )
   await time.advance(2_000)
   await writing
   let now = (await whole(g, 'A'))!
@@ -470,6 +472,21 @@ test('runtime secret reads use local values and environment without reading 1Pas
     assertEquals(peek(local.vault, name, sources), value)
   }
   assertEquals(reads, 0)
+})
+
+test('a secret reads only the environment source its host lends', async () => {
+  let name = 'YAK_SECRET_HOST_SOURCE'
+  let vault = ramVault()
+  Deno.env.set(name, 'ambient')
+  try {
+    assertEquals(await reveal(vault, name), undefined)
+    assertEquals(peek(vault, name), undefined)
+    let sources = { env: (key: string) => key == name ? 'lent' : undefined }
+    assertEquals(await reveal(vault, name, sources), 'lent')
+    assertEquals(peek(vault, name, sources), 'lent')
+  } finally {
+    Deno.env.delete(name)
+  }
 })
 
 test('a reference kept as a value or exported variable is not returned as a credential', async () => {

@@ -1,8 +1,9 @@
+import { artifactStore } from './identify.ts'
 // An artifact read back is the bytes its row names or nothing: a store that
 // holds other bytes under the address is an error, never a silent substitute.
 import { test } from '@yaks/testing'
 import { assertEquals, assertRejects } from '@std/assert'
-import { artifactBytes, artifactStore } from './artifact.ts'
+import { artifactBytes } from './artifact.ts'
 import type { Blobs } from './store.ts'
 
 let memory = (): Blobs & { map: Map<string, Uint8Array> } => {

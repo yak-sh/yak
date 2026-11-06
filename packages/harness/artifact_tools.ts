@@ -3,13 +3,8 @@
 import type { Bundle, Comp, Graph } from '@yaks/graph'
 import type { Item } from '@yaks/model'
 import { type Tool, ToolError } from '@yaks/session'
-import {
-  artifactBytes,
-  artifactStore,
-  type Blobs,
-  mediaTypeOf,
-  sizeOf,
-} from '@yaks/blob'
+import { artifactBytes, type Blobs, mediaTypeOf, sizeOf } from '@yaks/blob'
+import { artifactStore } from '@yaks/blob/identify'
 import type { WorkspaceFile } from './session_machines.ts'
 
 const MAX = 20 * 1024 * 1024

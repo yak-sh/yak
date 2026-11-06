@@ -3,7 +3,8 @@ import { assert, assertEquals, assertRejects } from '@std/assert'
 import { ModelError, type TextDelta } from '@yaks/model'
 import { responses } from './mod.ts'
 import { generationCost } from './cost.ts'
-import { artifactStore, memoryBlobs } from '@yaks/blob'
+import { memoryBlobs } from '@yaks/blob'
+import { artifactStore } from '@yaks/blob/identify'
 const sse = (events: unknown[]) =>
   new Response(
     events.map((e) => 'data: ' + JSON.stringify(e) + '\n\n').join(''),

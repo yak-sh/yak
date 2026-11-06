@@ -1,7 +1,8 @@
 // Plain tool answers, shared by the CLI and HTTP consumers of a host.
 import type { Bundle } from '@yaks/graph'
 import type { Host } from '@yaks/host'
-import { type Drawn, registry, show } from './answer.ts'
+import { type Drawn, registry } from './answer.ts'
+import { show } from './terminal.ts'
 import { pluginViews, used } from './config.ts'
 
 export let text = (

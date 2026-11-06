@@ -25,7 +25,8 @@ import { records } from '@yaks/secrets'
 
 import type { VocabDoc } from '@yaks/vocab'
 import { said, unfit, workersAi } from '@yaks/workers-ai'
-import { artifactStore, objectBlobs } from '@yaks/blob'
+import { objectBlobs } from '@yaks/blob'
+import { artifactStore } from '@yaks/blob/identify'
 import { KEY, resolve } from '@yaks/connections'
 import { gateway as openai } from '@yaks/openai'
 import { responses as openrouter } from '@yaks/openrouter'
@@ -439,7 +440,9 @@ export let refusal = (
   e: unknown,
   model: string,
 ): [number, string, string] | null => {
-  if (e instanceof ModelError) return [STATUS[e.code] ?? 502, e.code, e.message]
+  if (e instanceof ModelError) {
+    return [STATUS[e.code] ?? 502, e.code, e.message]
+  }
   if (unfit(e)) {
     let why = e instanceof Error ? e.message : String(e)
     return [400, 'bad_request', `${model} refused this input: ${why}`]

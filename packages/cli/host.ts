@@ -304,14 +304,14 @@ let revealing = (value: unknown, vault: Local): unknown => {
   let name = secretIn(value)
   // A whole options object written `{"secret": …}` has no parent object to
   // define a getter on, so it is read here, once.
-  if (name) return peek(vault, name)
+  if (name) return peek(vault, name, { env: process.env.get })
   if (!value || typeof value != 'object') return value
   let out = (Array.isArray(value) ? [] : {}) as Record<string, unknown>
   for (let [k, v] of Object.entries(value)) {
     let said = secretIn(v)
     if (said) {
       Object.defineProperty(out, k, {
-        get: () => peek(vault, said),
+        get: () => peek(vault, said, { env: process.env.get }),
         enumerable: true,
         configurable: true,
       })

@@ -30,7 +30,7 @@
  *
  * Trusted code asks for a value by name ({@link reveal}); a config names one
  * as `{"secret": "NAME"}` (@yaks/cli). A name nothing was written for falls
- * back to the environment variable of that name. A kept `op://` reference
+ * back to the environment source the host supplies. A kept `op://` reference
  * stays unresolved; interactive commands can read one explicitly with
  * `opRead` from `@yaks/secrets/op`, which starts the `op` command and so
  * never loads where there is no operating system.

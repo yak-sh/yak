@@ -150,7 +150,7 @@ export let printed = async (
   if (answer && vocab) {
     // Imported only to draw, so a command that never does pays nothing.
     let [{ show }, { reported }] = await Promise.all([
-      import('./answer.ts'),
+      import('./terminal.ts'),
       import('./reported.ts'),
     ])
     let { views, vocab: read, components } =

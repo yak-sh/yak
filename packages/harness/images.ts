@@ -2,7 +2,8 @@
  * graph's own byte store. No image bytes enter graph prose. */
 
 import * as systemProcess from '@yaks/process/system'
-import { artifactStore, type Blobs } from '@yaks/blob'
+import { type Blobs } from '@yaks/blob'
+import { artifactStore } from '@yaks/blob/identify'
 import type { ImageGeneration, Images } from '@yaks/openai'
 
 export type ImageOptions = {

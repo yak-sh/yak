@@ -29,7 +29,8 @@ import { vaultOf } from './vault.ts'
 import { KERNEL, meta as appMeta, metaOf } from './meta.ts'
 import { receiptPrefix } from './blob-key.ts'
 import { type Binding, workersAi } from '@yaks/workers-ai'
-import { artifactStore, memoryBlobs, objectBlobs } from '@yaks/blob'
+import { memoryBlobs, objectBlobs } from '@yaks/blob'
+import { artifactStore } from '@yaks/blob/identify'
 import { assertRejects } from '@std/assert'
 
 import { parseTools } from '@yaks/tools/declared'
@@ -367,7 +368,9 @@ test('an existing OpenRouter receipt delivers audio and settles once without gen
     )
     await hosting(v.env).delivered(job)
     await quiet()
-    let [attachment] = await v.landed(`.entry.session=${session}&.attachment&*`)
+    let [attachment] = await v.landed(
+      `.entry.session=${session}&.attachment&*`,
+    )
     let eid = (attachment.attachment as Comp).artifact as string
     let [artifact] = await v.read(`.entity.eid=${eid}&.artifact&*`)
     assertEquals((artifact.artifact as Comp).media_type, 'audio/mpeg')
@@ -1157,7 +1160,11 @@ test('./api/ai/run refuses unavailable current pricing before purchasing inferen
     model: { name: FLASH, context: 10000 },
     price: { input: 1, output: 2 },
   }])
-  let result = await within(v.env, {}, () => v.run({ model: FLASH, input: {} }))
+  let result = await within(
+    v.env,
+    {},
+    () => v.run({ model: FLASH, input: {} }),
+  )
   assertEquals(result.status, 502)
   assertEquals(v.asked, [])
   assertEquals((await v.spent()).meter?.models ?? 0, 0)

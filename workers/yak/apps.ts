@@ -81,7 +81,6 @@ import {
   type Accepts,
   addressed,
   broken as undecoded,
-  contentType,
   fits,
   Gone,
   mediaTypeOf,
@@ -97,6 +96,7 @@ import {
   takes,
   Wrong,
 } from '@yaks/blob'
+import { contentType } from '@yaks/blob/identify'
 import { declarationOf } from './declaration.ts'
 import { KERNEL, type Meta, metaOf, minted } from './meta.ts'
 import { Pending } from './writes.ts'

@@ -14,7 +14,6 @@
 
 import type { Blobs } from './store.ts'
 import type { VocabDoc } from '@yaks/vocab'
-import { contentType } from './content_type.ts'
 import doc from './vocab.json' with { type: 'json' }
 
 export type Artifact = {
@@ -57,19 +56,6 @@ export let keep = async (
     throw new Error(`@yaks/blob: the store did not keep ${address}`)
   }
 }
-
-/** Store bytes and their media type, and return the {@link Artifact} a row
- * records. */
-export let artifactStore =
-  (blobs: Blobs): ArtifactStore => async (bytes, mediaType) => {
-    let address = await addressOf(bytes)
-    await keep(blobs, address, bytes)
-    return {
-      address,
-      media_type: await contentType(bytes, mediaType),
-      size: bytes.byteLength,
-    }
-  }
 
 /** The bytes an {@link Artifact} names, read back from where they are kept:
  * `undefined` when the store holds nothing under its address, and an error

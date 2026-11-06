@@ -110,6 +110,5 @@ export {
   artifactBytes,
   artifactDoc,
   type ArtifactStore,
-  artifactStore,
   keep,
 } from './artifact.ts'

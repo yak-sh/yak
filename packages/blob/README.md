@@ -80,33 +80,34 @@ host records that, and refuses the store to a config without @yaks/blob
 
 ## Exports
 
-| Root export                                                                                       | Purpose                                                  |
-| ------------------------------------------------------------------------------------------------- | -------------------------------------------------------- |
-| `blobKeywords`, `BLOB_URI`                                                                        | Register the `store` and `address` keywords              |
-| `Body`, `bodies`, `isBody`, `holders`                                                             | Select marked properties                                 |
-| `blobs`, `BlobOpts`, `Reference`                                                                  | Graph write plugin and optional stored-reference mapping |
-| `Blobs`, `memoryBlobs`, `address`, `encode`, `decode`                                             | Store interface and text addressing                      |
-| `sqliteBlobs`, `blobSchema`, `dropSql`, `Layout`                                                  | SQLite text storage                                      |
-| `objectBlobs`, `Bucket`, `patient`                                                                | Object storage                                           |
-| `Objects`, `Opened`, `Loaded`, `bucketObjects`                                                    | A bucket keyed by name: read, delete, list               |
-| `parts`, `Multipart`, `Assembly`, `memoryMultipart`, `sized`, `Gone`, `Wrong`, `MOST`, `MiB`      | Resumable uploads in parts, checked against their hash   |
-| `hasher`, `fold`, `START`                                                                         | SHA-256 carried from one piece of bytes to the next      |
-| `Accepts`, `acceptsErrors`, `fits`, `takes`, `taken`                                              | Which blobs an application takes, by size and media type |
-| `blobRead`, `hydrate`                                                                             | SQL and post-read text resolution                        |
-| `Artifact`, `ArtifactStore`, `addressOf`, `keep`, `artifactStore`, `artifactBytes`, `artifactDoc` | Artifact storage, verified reads and declarations        |
-| `Size`, `sizeOf`, `mediaTypeOf`, `contentType`, `mediaType`, `matchesMediaType`, `mimeOf`         | Image dimensions, signatures and media types             |
-| `Served`, `served`, `servedOpen`, `servedVia`, `ranged`, `rangedOpen`, `validator`                | HTTP responses, streaming and validators                 |
-| `Representation`, `representation`, `represents`, `addressed`, `representations`                  | Immutable representations and their graph plugin         |
-| `valueTools`, `valueRange`, `valueSearch`, `VALUE_LIMIT`, `ValueTool`                             | Bounded text-inspection tools                            |
+| Root export                                                                                  | Purpose                                                  |
+| -------------------------------------------------------------------------------------------- | -------------------------------------------------------- |
+| `blobKeywords`, `BLOB_URI`                                                                   | Register the `store` and `address` keywords              |
+| `Body`, `bodies`, `isBody`, `holders`                                                        | Select marked properties                                 |
+| `blobs`, `BlobOpts`, `Reference`                                                             | Graph write plugin and optional stored-reference mapping |
+| `Blobs`, `memoryBlobs`, `address`, `encode`, `decode`                                        | Store interface and text addressing                      |
+| `sqliteBlobs`, `blobSchema`, `dropSql`, `Layout`                                             | SQLite text storage                                      |
+| `objectBlobs`, `Bucket`, `patient`                                                           | Object storage                                           |
+| `Objects`, `Opened`, `Loaded`, `bucketObjects`                                               | A bucket keyed by name: read, delete, list               |
+| `parts`, `Multipart`, `Assembly`, `memoryMultipart`, `sized`, `Gone`, `Wrong`, `MOST`, `MiB` | Resumable uploads in parts, checked against their hash   |
+| `hasher`, `fold`, `START`                                                                    | SHA-256 carried from one piece of bytes to the next      |
+| `Accepts`, `acceptsErrors`, `fits`, `takes`, `taken`                                         | Which blobs an application takes, by size and media type |
+| `blobRead`, `hydrate`                                                                        | SQL and post-read text resolution                        |
+| `Artifact`, `ArtifactStore`, `addressOf`, `keep`, `artifactBytes`, `artifactDoc`             | Artifact storage, verified reads and declarations        |
+| `Size`, `sizeOf`, `mediaTypeOf`, `mediaType`, `matchesMediaType`, `mimeOf`                   | Image dimensions, signatures and media types             |
+| `Served`, `served`, `servedOpen`, `servedVia`, `ranged`, `rangedOpen`, `validator`           | HTTP responses, streaming and validators                 |
+| `Representation`, `representation`, `represents`, `addressed`, `representations`             | Immutable representations and their graph plugin         |
+| `valueTools`, `valueRange`, `valueSearch`, `VALUE_LIMIT`, `ValueTool`                        | Bounded text-inspection tools                            |
 
-| Sub-module export    | Purpose                                                                                                    |
-| -------------------- | ---------------------------------------------------------------------------------------------------------- |
-| `@yaks/blob/vocab`   | `docs`, `keywords`, `derived` and declaration/read helpers                                                 |
-| `@yaks/blob/graph`   | `plugins(host)`: the graph plugin over the host's blob store, and `required`: a store it wrote requires it |
-| `@yaks/blob/routes`  | `routes(host, options)`, backend helpers and route settings                                                |
-| `@yaks/blob/file`    | `fileBlobs(dir)`: the filesystem store, which only a runtime with files loads                              |
-| `@yaks/blob/backend` | `Backend`, `backend`, `artifactsAt`: configured and default artifact backends                              |
-| `@yaks/blob/store`   | `Blobs`, `memoryBlobs()`, `address`: the store shape and the memory store, without the rest of the package |
+| Sub-module export     | Purpose                                                                                                    |
+| --------------------- | ---------------------------------------------------------------------------------------------------------- |
+| `@yaks/blob/vocab`    | `docs`, `keywords`, `derived` and declaration/read helpers                                                 |
+| `@yaks/blob/graph`    | `plugins(host)`: the graph plugin over the host's blob store, and `required`: a store it wrote requires it |
+| `@yaks/blob/routes`   | `routes(host, options)`, backend helpers and route settings                                                |
+| `@yaks/blob/identify` | `contentType`, `artifactStore`: host byte detection and artifact storage                                   |
+| `@yaks/blob/file`     | `fileBlobs(dir)`: the filesystem store, which only a runtime with files loads                              |
+| `@yaks/blob/backend`  | `Backend`, `backend`, `artifactsAt`: configured and default artifact backends                              |
+| `@yaks/blob/store`    | `Blobs`, `memoryBlobs()`, `address`: the store shape and the memory store, without the rest of the package |
 
 ## Addresses
 
@@ -466,14 +467,20 @@ indexes, see [@yaks/fts](../fts/README.md).
 
 ## Binary files
 
-`artifactStore(store)` returns a function accepting `(bytes, mediaType)` and
-resolving to `{ address, media_type, size }` after storing and verifying the
-bytes. Known binary signatures determine the media type. Text with valid UTF-8
-keeps a valid declared type; unknown bytes use `application/octet-stream`:
+Byte identification lives at `@yaks/blob/identify`, beside the detector it uses.
+A portable consumer takes an `ArtifactStore` from its host; it reads artifacts
+through `artifactBytes` without loading the detector.
+
+`artifactStore(store)` from `@yaks/blob/identify` returns a function accepting
+`(bytes, mediaType)` and resolving to `{ address, media_type, size }` after
+storing and verifying the bytes. Known binary signatures determine the media
+type. Text with valid UTF-8 keeps a valid declared type; unknown bytes use
+`application/octet-stream`:
 
 ```ts
 import { equal } from '@yaks/testing'
-import { artifactBytes, artifactStore } from '@yaks/blob'
+import { artifactBytes } from '@yaks/blob'
+import { artifactStore } from '@yaks/blob/identify'
 import { fileBlobs } from '@yaks/blob/file'
 
 let dir = await Deno.makeTempDir()
@@ -510,7 +517,8 @@ import { equal } from '@yaks/testing'
 import { graph } from '@yaks/graph'
 import { ram } from '@yaks/ram'
 import { loadVocab } from '@yaks/vocab'
-import { artifactDoc, artifactStore, encode, memoryBlobs } from '@yaks/blob'
+import { artifactDoc, encode, memoryBlobs } from '@yaks/blob'
+import { artifactStore } from '@yaks/blob/identify'
 
 let vocab = loadVocab([artifactDoc])
 let g = graph({ storage: ram(vocab), vocab })
@@ -541,7 +549,8 @@ signatures (`image/png`, `image/jpeg`, `image/gif`, `image/webp`), and
 
 ```ts
 import { equal } from '@yaks/testing'
-import { contentType, encode, mediaTypeOf, mimeOf, sizeOf } from '@yaks/blob'
+import { encode, mediaTypeOf, mimeOf, sizeOf } from '@yaks/blob'
+import { contentType } from '@yaks/blob/identify'
 
 let gif = new Uint8Array([...encode('GIF89a'), 2, 0, 3, 0])
 equal(sizeOf(gif), { w: 2, h: 3 })

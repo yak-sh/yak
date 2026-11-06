@@ -1,7 +1,7 @@
 import { test } from '@yaks/testing'
 import { assertEquals, assertRejects } from '@std/assert'
 import { registered } from './artifact_tools.ts'
-import { artifactStore } from '@yaks/blob'
+import { artifactStore } from '@yaks/blob/identify'
 import { harness } from './testing.ts'
 
 test('image reads resolve registered artifacts and verify bytes; no arbitrary address access', async () => {

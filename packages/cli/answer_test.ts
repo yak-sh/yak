@@ -27,14 +27,8 @@ import type { Shown } from '@yaks/render/views'
 import { graph, token } from '@yaks/graph'
 import { parse } from '@yaks/query'
 import { ram } from '@yaks/ram'
-import {
-  NONE,
-  printed,
-  referenced,
-  registry,
-  show,
-  terminal,
-} from './answer.ts'
+import { NONE, printed, referenced, registry, terminal } from './answer.ts'
+import { show } from './terminal.ts'
 
 let vocab = loadVocab([kernelDoc, edgeDoc, docDoc, taskDoc, toolsDoc], [
   kernelKeywords,

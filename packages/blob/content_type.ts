@@ -4,7 +4,6 @@
 
 import { mediaTypeOf } from './image.ts'
 
-const SAMPLE = 4100
 const UNKNOWN = 'application/octet-stream'
 
 /** A declared media type with no parameters or header control characters. */
@@ -12,15 +11,6 @@ export let mediaType = (declared = ''): string => {
   let mime = declared.split(';')[0].trim().toLowerCase()
   return /^[a-z0-9.+-]+\/[a-z0-9.+-]+$/.test(mime) ? mime : UNKNOWN
 }
-
-let textual = (mime: string) =>
-  mime.startsWith('text/') || mime.endsWith('+json') ||
-  mime.endsWith('+xml') || [
-    'application/json',
-    'application/javascript',
-    'application/xml',
-    'application/vnd.apple.mpegurl',
-  ].includes(mime)
 
 /**
  * Whether bytes are text: UTF-8 with no control character but tab, line feed
@@ -66,23 +56,3 @@ export let matchesMediaType = (bytes: Uint8Array, mime: string): boolean =>
   (mime == 'audio/opus' &&
     (at(bytes, 0, 'OggS') || at(bytes, 0, 'OpusHead'))) ||
   (mime == 'audio/pcm' && bytes.length > 0 && bytes.length % 2 == 0)
-
-/** A stable media type chosen from bytes and, for text, a valid declaration.
- * `whole` false says the bytes are only a file's first ones. */
-export let contentType = async (
-  bytes: Uint8Array,
-  declared = '',
-  whole = true,
-): Promise<string> => {
-  let image = mediaTypeOf(bytes)
-  if (image) return image
-  let { fileTypeFromBuffer } = await import('file-type/core')
-  let found = await fileTypeFromBuffer(bytes.subarray(0, SAMPLE))
-  let mime = mediaType(declared)
-  if (found && (mime == 'audio/pcm' || !found.mime.startsWith('audio/'))) {
-    return found.mime
-  }
-  if (matchesMediaType(bytes, mime)) return mime
-  if (found) return found.mime
-  return textual(mime) && utf8(bytes, whole) ? mime : UNKNOWN
-}

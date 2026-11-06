@@ -13,6 +13,7 @@
     "./release": "./release.ts",
     "./grammar": "./grammar.ts",
     "./answer": "./answer.ts",
+    "./terminal": "./terminal.ts",
     "./dependencies": "./dependencies.ts"
   },
   "license": "Apache-2.0",
