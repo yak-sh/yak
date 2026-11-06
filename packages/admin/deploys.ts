@@ -5,7 +5,12 @@
 import * as systemProcess from '@yaks/process/system'
 import type { Ran } from '@yaks/git/land'
 import { CallError, Interrupted } from '@yaks/tools/errors'
-import { WRANGLER } from '../../workers/yak/wrangler.ts'
+import { sleep } from '@yaks/fp'
+import {
+  retried,
+  type StepResult,
+  WRANGLER,
+} from '../../workers/yak/wrangler.ts'
 import { Refused } from './refusal.ts'
 import { output } from './subprocess.ts'
 
@@ -353,12 +358,15 @@ export let table = (rows: Deploy[]): string => {
   return lines.join('\n')
 }
 
-export let command = async (
+type Output = StepResult & { stdout: string }
+
+// One run of a platform command, its stderr as `output` for `transient`.
+let ran = async (
   cwd: string,
   cmd: string,
   args: string[],
   stopping: AbortSignal,
-) => {
+): Promise<Output> => {
   let r = await output(cmd, {
     cwd,
     args,
@@ -367,13 +375,24 @@ export let command = async (
     stderr: 'piped',
   }, stopping)
   let text = new TextDecoder()
-  if (!r.success) {
-    throw new Error(
-      `${cmd} ${args[0]} exited ${r.code}: ${text.decode(r.stderr).trim()}`,
-    )
+  return {
+    code: r.success ? 0 : r.code || 1,
+    output: text.decode(r.stderr).trim(),
+    stdout: text.decode(r.stdout).trim(),
   }
-  return text.decode(r.stdout).trim()
 }
+
+let answer = (cmd: string, args: string[], r: Output) => {
+  if (r.code) throw new Error(`${cmd} ${args[0]} exited ${r.code}: ${r.output}`)
+  return r.stdout
+}
+
+export let command = async (
+  cwd: string,
+  cmd: string,
+  args: string[],
+  stopping: AbortSignal,
+) => answer(cmd, args, await ran(cwd, cmd, args, stopping))
 
 export let needGit = async (
   root: string,
@@ -390,17 +409,22 @@ export let needGit = async (
   return r.out.trim()
 }
 
-export let wrangler = (
+/** Run Wrangler in the Worker's directory. A passing Cloudflare API outage
+ * is retried (workers/yak/wrangler.ts `retried`); a lasting one throws. */
+export let wrangler = async (
   root: string,
   args: string[],
   stopping: AbortSignal,
-) =>
-  command(
-    `${root}/workers/yak`,
-    WRANGLER[0],
-    [...WRANGLER.slice(1), ...args],
-    stopping,
+  { run = ran, wait = sleep }: { run?: typeof ran; wait?: typeof sleep } = {},
+) => {
+  let [cmd, ...argv] = [...WRANGLER, ...args]
+  let r = await retried(
+    args,
+    () => run(`${root}/workers/yak`, cmd, argv, stopping),
+    { wait, signal: stopping },
   )
+  return answer(cmd, argv, r)
+}
 
 /** The two deployment-history reads, in order and never at once. Wrangler's
  * rotating OAuth refresh rewrites one shared credential file without a lock;

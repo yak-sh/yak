@@ -34,7 +34,7 @@ import { imaged } from './sandbox/base.ts'
 import { installed } from '@yaks/cli/dependencies'
 import { assets } from './asset-ready.ts'
 import { from as sources, plan } from './sheet-assets.ts'
-import { once, sleep } from '@yaks/fp'
+import { backoff, once, sleep } from '@yaks/fp'
 import { credentials, type Reads, reads } from './deployed.ts'
 export { stale } from '@yaks/cli/dependencies'
 
@@ -193,7 +193,7 @@ export let command = (args: string[]) => {
   }
 }
 
-type StepResult = { code: number; output: string; log?: string }
+export type StepResult = { code: number; output: string; log?: string }
 
 let deploying = (args: string[]) =>
   command(args) == 'deploy' ||
@@ -247,6 +247,37 @@ let transient = ({ output, log = '' }: StepResult) => {
     : malformed
 }
 
+/** Run Wrangler until it succeeds, fails for good, or a passing Cloudflare
+ * API outage outlasts `attempts`, each retry waiting longer than the last. An
+ * interrupted run (130, 143) is never retried; `execute` sees an aborted
+ * signal itself, since `wait` returns as soon as it aborts. This is the one
+ * place a transient API failure is retried, for the deploy door and for every
+ * read the box makes. */
+export let retried = async <T extends StepResult>(
+  args: string[],
+  execute: () => Promise<T>,
+  { wait = sleep, signal, attempts = 3 }: {
+    wait?: typeof sleep
+    signal?: AbortSignal
+    attempts?: number
+  } = {},
+): Promise<T> => {
+  for (let attempt = 1;; attempt++) {
+    let result = await execute()
+    if (
+      !result.code || result.code == 130 || result.code == 143 ||
+      attempt >= attempts || !transient(result)
+    ) return result
+    let ms = backoff(attempt)
+    console.log(
+      `Temporary Cloudflare API failure; retrying Wrangler ${
+        command(args)
+      } (attempt ${attempt + 1}/${attempts}) in ${ms / 1000}s`,
+    )
+    await wait(ms, signal)
+  }
+}
+
 /** Run one Wrangler step, keeping its arguments and exit code. The command
  * boundary supplies diagnostics; the timer and signal belong to the caller.
  * Deploys get three attempts; permanent failures and other commands get one.
@@ -264,24 +295,14 @@ export let runStep = async (
   } = {},
 ): Promise<number> => {
   let promotes = deploying(args) && !args.includes('--dry-run')
-  for (let attempt = 1;; attempt++) {
-    if (signal?.aborted) return 130
-    if (promotes && allowed && !await allowed()) return 0
+  let { code } = await retried(args, async () => {
+    if (signal?.aborted) return { code: 130, output: '' }
+    if (promotes && allowed && !await allowed()) return { code: 0, output: '' }
     let result = await execute(args)
     if (promotes && !result.code && landed) await landed()
-    if (
-      !result.code || result.code == 130 || result.code == 143 ||
-      !deploying(args) || attempt == 3 || !transient(result)
-    ) return result.code
-    if (signal?.aborted) return 130
-    let ms = 1000 * 2 ** (attempt - 1)
-    console.log(
-      `Temporary Cloudflare API failure; retrying Wrangler ${
-        command(args)
-      } (attempt ${attempt + 1}/3) in ${ms / 1000}s`,
-    )
-    await wait(ms, signal)
-  }
+    return result
+  }, { wait, signal, attempts: deploying(args) ? 3 : 1 })
+  return code
 }
 
 // Forward bytes immediately, retaining only the diagnostic tail. Parallel

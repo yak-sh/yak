@@ -1,7 +1,7 @@
 // The deploy history's pure seams: how Wrangler's JSON joins uploads to
 // commits, where a data boundary is, and which version a rollback may land on.
 import { test } from '@yaks/testing'
-import { assert, assertEquals, assertThrows } from '@std/assert'
+import { assert, assertEquals, assertRejects, assertThrows } from '@std/assert'
 import { Refused } from './refusal.ts'
 import {
   boundaries,
@@ -18,6 +18,7 @@ import {
   rowsIn,
   table,
   type Version,
+  wrangler,
 } from './deploys.ts'
 
 let at = (n: number) => new Date(n * 1000).toISOString()
@@ -345,4 +346,56 @@ test('deployment history never overlaps Wrangler OAuth refreshes', async () => {
     ['versions', 'list', '--json'],
     ['deployments', 'list', '--json'],
   ])
+})
+
+let outage =
+  '✘ [ERROR] Received a malformed response from the API\n\n  no healthy upstream\n  GET /accounts/a/workers/scripts/yak/versions?deployable=true -> 503 Service Unavailable'
+
+let wrangled = (codes: number[]) => {
+  let runs = 0, waits: number[] = []
+  let read = wrangler(
+    '/repo',
+    ['versions', 'list', '--json'],
+    new AbortController().signal,
+    {
+      run: () => {
+        let code = codes[runs++]
+        return Promise.resolve({
+          code,
+          output: code ? outage : '',
+          stdout: '[]',
+        })
+      },
+      wait: (ms) => (waits.push(ms), Promise.resolve()),
+    },
+  )
+  return { read, runs: () => runs, waits }
+}
+
+test('a passing Cloudflare API outage is waited out, not reported', async () => {
+  let w = wrangled([1, 1, 0])
+  assertEquals(await w.read, '[]')
+  assertEquals({ runs: w.runs(), waits: w.waits }, {
+    runs: 3,
+    waits: [1000, 2000],
+  })
+})
+
+test('a lasting Cloudflare API outage still fails the read', async () => {
+  let w = wrangled([1, 1, 1, 0])
+  await assertRejects(() => w.read, Error, '503 Service Unavailable')
+  assertEquals(w.runs(), 3)
+})
+
+test('a permanent Wrangler failure is not retried', async () => {
+  let runs = 0
+  await assertRejects(() =>
+    wrangler('/repo', ['deployments', 'list'], new AbortController().signal, {
+      run:
+        () => (runs++,
+          Promise.resolve({ code: 1, output: 'Not logged in.', stdout: '' })),
+      wait: () => Promise.resolve(),
+    })
+  )
+  assertEquals(runs, 1)
 })
