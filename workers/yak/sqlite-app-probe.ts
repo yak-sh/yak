@@ -2,7 +2,7 @@
 // blob substitution, personal scope and FTS are the same package interfaces
 // the Store composes; the query door is its production appRead seam.
 import { blobRead, blobs, blobSchema, sqliteBlobs } from '@yaks/blob'
-import { fields, find, schema as ftsSchema, search } from '@yaks/fts'
+import { find, indexed, schema as ftsSchema, search } from '@yaks/fts'
 import { type Graph, graph, type ReadOpts } from '@yaks/graph'
 import { personal } from '@yaks/member'
 import { aliases } from '@yaks/alias'
@@ -21,7 +21,7 @@ let shapes = new WeakMap<Vocab, ReturnType<typeof shape>>()
 let shape = (vocab: Vocab) => {
   let bodies = blobRead(vocab)
   let derived = { ...bodies, ...appDerived(vocab, bodies) }
-  let searchable = fields(vocab)
+  let searchable = indexed(vocab)
   let extra = [...blobSchema(), ...ftsSchema(searchable, bodies)]
   let image: Snapshot | undefined
   return {

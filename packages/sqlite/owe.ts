@@ -44,6 +44,8 @@ import {
   le,
   lit,
   lt,
+  op,
+  over,
   type SchemaObject,
   select,
   type Stmt,
@@ -70,6 +72,10 @@ export let BIG = 10_000
  * 1,000 rows took 164 ms a window and up to 515 ms, and its 356,025 rows
  * take 39 s in one `rebuild`. */
 export let FILL = 500
+/** The text one window fills into a text index, past its first row: a
+ * substring index (@yaks/fts `contains`) takes about 190 ms a MiB, and 500 of
+ * the box's transcript texts held a window for up to 6.8 s. */
+export let FILL_TEXT = 1 << 20
 /** The rows one window copies into a table being rebuilt: 5.6 ms for 20,000
  * of the box's `created`, whose rebuild in one unit holds the lock 10.2 s. */
 export let COPY = 20_000
@@ -88,6 +94,7 @@ export let RECLAIM = 1_000
 export type Sizes = {
   big: number
   fill: number
+  fillText: number
   copy: number
   clear: number
   slack: number
@@ -96,6 +103,7 @@ export type Sizes = {
 export let SIZES: Sizes = {
   big: BIG,
   fill: FILL,
+  fillText: FILL_TEXT,
   copy: COPY,
   clear: CLEAR,
   slack: SLACK,
@@ -115,7 +123,8 @@ export type Owed =
      * index in one statement, so this is the one window that holds the lock
      * for seconds, off the opening path */
     | { kind: 'index'; stmt: CreateIndex }
-    /** a text index filled {@link FILL} rows a window from `source`, its
+    /** a text index filled {@link FILL} rows and {@link FILL_TEXT} of text a
+     * window from `source`, its
      * triggers keeping the rows `cursor` has passed (@yaks/fts `Filler`) */
     | {
       kind: 'fill'
@@ -412,6 +421,43 @@ let next = (driver: Driver, source: string, cursor: number, n: number) => {
   return hi == null ? null : Number(hi)
 }
 
+// The highest id among the next rows of a text index's source past `cursor`,
+// at most `n` of them and as many as the text before each leaves under
+// `text`, or null when there are none.
+let reach = (
+  driver: Driver,
+  w: { source: string; props: string[]; cursor: number },
+  n: number,
+  text: number,
+) => {
+  let size = w.props.map((p) => fn('coalesce', fn('length', col(p)), lit(0)))
+    .reduce((a, b) => op('+', a, b))
+  let rows = select({
+    cols: [col('entity'), as(size, 'size')],
+    from: table(w.source),
+    where: gt(col('entity'), val(w.cursor)),
+    order: [col('entity')],
+    limit: val(n),
+  })
+  let before = op(
+    '-',
+    over(fn('sum', col('size')), undefined, [col('entity')]),
+    col('size'),
+  )
+  let [{ hi }] = driver.query(select({
+    cols: [as(fn('max', col('entity')), 'hi')],
+    from: from(
+      select({
+        cols: [col('entity'), as(before, 'before')],
+        from: from(rows, 'w'),
+      }),
+      'r',
+    ),
+    where: lt(col('before'), val(text)),
+  }))
+  return hi == null ? null : Number(hi)
+}
+
 // The rows of `source` a window takes: past `cursor`, up to `hi`.
 let window = (cursor: number, hi: number) =>
   and(gt(col('entity'), val(cursor)), le(col('entity'), val(hi)))
@@ -497,12 +543,12 @@ let windows: {
     if (here.has(w.stmt.on)) driver.query({ ...w.stmt, ifNot: true })
     return true
   },
-  fill: (driver, w, here, { fill }) => {
+  fill: (driver, w, here, { fill, fillText }) => {
     // An index a later pass rebuilt whole, or dropped, is no longer this
     // work's.
     let guarded = here.get(w.triggers[0]?.name)?.sql?.includes(key(w))
     if (!here.has(w.name) || !guarded) return true
-    let hi = next(driver, w.source, w.cursor, fill)
+    let hi = reach(driver, w, fill, fillText)
     // Filled: the triggers keeping it behind the cursor give way to the ones
     // it keeps for good, each under the name it just gave up.
     if (hi == null) {

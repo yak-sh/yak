@@ -10,6 +10,7 @@ import {
   list,
   or,
   order,
+  parse,
   type Pred,
   present,
   time,
@@ -516,4 +517,25 @@ test('a kept screen answers as the census counts now', () => {
     held = next
     screenSame(and(present('one'), eq('link.left', eid(1))), { census })
   }
+})
+
+test('what a substring index finds is asked again each read', () => {
+  let notes = loadVocab({
+    $defs: {
+      note: { component: true, properties: { text: { type: 'string' } } },
+    },
+  })
+  let few = false
+  let grams: Extension = {
+    name: 'grams',
+    compile: {},
+    contains: () => ({ owners: select({ cols: [lit(7)] }), few }),
+  }
+  let read = () =>
+    compile(parse('.note.text~=wyrm .limit=5'), notes, { extend: [grams] }).sql
+  let walked = read()
+  few = true
+  ok(read() != walked)
+  few = false
+  equal(read(), walked)
 })

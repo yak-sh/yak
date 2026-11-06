@@ -74,13 +74,14 @@ import type { Opened } from '@yaks/sqlite/db'
 import type { Search } from '@yaks/graph/tools'
 import {
   adopt,
-  fields as searched,
   find,
   heal,
   type Hit,
+  indexed,
   schema as textSchema,
   search,
   split,
+  worded as wordFields,
 } from '@yaks/fts'
 import { EFFECT, effects, expiration, released } from '@yaks/effects'
 import { type Local, peek } from '@yaks/secrets'
@@ -556,8 +557,9 @@ let composed = async (
     // a plugin is what takes the vocabulary at its word. Two things follow
     // from that one list of properties — a bare word in any query compiles to a
     // text match (one more clause compiler beside the plugins'), and `/mcp`
-    // lists a ranked `search` tool.
-    let text = searched(vocab)
+    // lists a ranked `search` tool. A property marked `contains: true` keeps a
+    // substring index beside them, which a `~=` test of it reads.
+    let text = indexed(vocab)
 
     let host: Host
     let g: Graph | undefined
@@ -687,7 +689,7 @@ let composed = async (
         return store
       },
       // The text index follows plugin compilers, preserving their precedence.
-      extend: () => text.length ? [search(text, sql)] : [],
+      extend: () => text.length ? [search(text, sql, filler(sql))] : [],
       // One print covers everything this file needs: the store's tables, the
       // ones beside them, the plugins' own and the text indexes. A file that
       // recorded it opens with no DDL; one that did not adds what is missing.
@@ -797,7 +799,7 @@ let composed = async (
       },
       search: (built) => {
         part?.('search')
-        return text.length
+        return wordFields(text).length
           ? async (words, opts) => {
             let limit = Math.max(
               0,

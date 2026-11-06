@@ -908,6 +908,18 @@ let single = (ctx: Ctx, hop: Hop, p: Pred): Cond => {
     ctx.derived[`${hop.comp}.${hop.prop}`]?.worn !== false &&
     needs(op, p.value)
   if (!needsComp) return cond(frag)
+  // A substring test a substring index finds few owners for reads only
+  // theirs: a needle nothing holds read the box's 2.2 GB of transcripts in
+  // 5.6 s. The test still reads each, so the index only narrows, and each
+  // owner's component is probed by its key, never read whole beside them.
+  let few = point ? undefined : gram(ctx, p)
+  if (few) {
+    return and(
+      among(raw(ctx.d.ownerKey('entity')), few),
+      probed(ctx, hop.comp),
+      cond(frag),
+    )
+  }
   // A derived expression is opaque to SQLite's outer-join strength reduction.
   // Name its owning set explicitly; a CASE guard cannot make it seek that set.
   if (ctx.derived[`${hop.comp}.${hop.prop}`]) {
@@ -3466,6 +3478,20 @@ let binding = (s: Select, ctx: Ctx): Select =>
     ? { ...s, with: [...tagged(ctx.tags, ctx.tagged), ...s.with ?? []] }
     : s
 
+// The owners a substring index finds for a `~=` test of one stored property,
+// when they are few (an extension's `contains`), else undefined.
+let gram = (ctx: Ctx, p: Pred): Query | undefined => {
+  if (
+    p.path.length != 2 || opOf(p) != '~' || !needs('~', p.value) ||
+    p.path[0] == 'entity' || computed(ctx.v, p.path[0])
+  ) return
+  let needle = flat(p.value)
+  for (let e of ctx.ext) {
+    let found = e.contains?.(p.path[0], p.path[1], needle)
+    if (found) return found.few ? found.owners : undefined
+  }
+}
+
 // Whether an index can seek a test: an equality or a comparison of an indexed
 // property, or of an entity's own id.
 let indexable = (ctx: Ctx, p: Pred): boolean =>
@@ -3627,7 +3653,8 @@ let halved = (ast: And, ctx: Ctx): Frag | undefined => {
   // An index's seek already bounds the rows the test reads.
   if (
     filters.some((c) =>
-      unnumbered(ctx, c) || c.kind == 'pred' && !c.not && indexable(ctx, c)
+      unnumbered(ctx, c) ||
+      c.kind == 'pred' && !c.not && (indexable(ctx, c) || !!gram(ctx, c))
     )
   ) return
   let scanned = filters.find((c): c is Pred =>

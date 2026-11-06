@@ -101,3 +101,34 @@ export let excerpt = (text: string): string => {
     ? words.map(term).filter(Boolean).join(' ')
     : term(split(text).find((word) => term(word)) ?? '')
 }
+
+// How many of a needle's trigrams a substring test asks the index for. All of
+// them would narrow no better than a spread: what one misses, the test that
+// reads each row catches.
+export let GRAMS = 8
+
+// A `~=` needle as a query of a substring index (`contains: true`): up to
+// `most` of its trigrams, spread from its start to its end, each quoted and
+// all required. An index keeping only which rows hold each trigram answers
+// the rows holding all of them, every row that holds the needle among them.
+// Null for a needle shorter than a trigram, which the index cannot find.
+///
+/// grammed('wyrm') -> '"wyr" AND "yrm"'
+/// grammed('a"b') -> '"a""b"'
+/// grammed('ab') -> null
+/// grammed('abcdefghij', 3) -> '"abc" AND "efg" AND "hij"'
+export let grammed = (needle: string, most = GRAMS): string | null => {
+  let chars = [...needle]
+  let last = chars.length - 3
+  if (last < 0) return null
+  let n = Math.min(most, last + 1)
+  let at = new Set(
+    Array.from(
+      { length: n },
+      (_, i) => Math.round(n > 1 ? i * last / (n - 1) : 0),
+    ),
+  )
+  return [...at]
+    .map((i) => `"${chars.slice(i, i + 3).join('').replaceAll('"', '""')}"`)
+    .join(' AND ')
+}

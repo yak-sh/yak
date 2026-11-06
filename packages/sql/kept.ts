@@ -266,6 +266,14 @@ let view = (e: Extension, begins: boolean): Extension => {
         get begin() {
           return begins ? e.begin : undefined
         },
+        // What a substring index finds sizes the plan, so a statement built
+        // from it is not kept for the next read.
+        get contains() {
+          let contains = e.contains
+          return contains &&
+            ((comp: string, prop: string, needle: string) =>
+              mark(contains(comp, prop, needle)))
+        },
       },
     )
   }

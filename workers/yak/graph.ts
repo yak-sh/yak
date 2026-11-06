@@ -213,7 +213,7 @@ import {
 } from '@yaks/durable-object'
 import { type Effects, effects } from '@yaks/effects'
 import { settling } from '@yaks/effects/tools'
-import { type Field, fields, find, search, sources } from '@yaks/fts'
+import { type Field, fields, find, search, sources, worded } from '@yaks/fts'
 import { lexemes } from '@yaks/fts/lexicon'
 import { fieldsSaid, lexiconOf, LIMIT } from './lexicon.ts'
 import { admitSchema } from '@yaks/graph/schema'
@@ -1204,11 +1204,11 @@ export class Store {
       this.#get('vocab'),
     )
     let { vocab, own, derived, searchable } = shape
-    let said = fieldsSaid(searchable)
+    let said = fieldsSaid(worded(searchable))
     this.#lexis = this.#bind.LEXICON && !own && storeKind(name) == 'app' &&
         !name.startsWith('preview/')
       ? {
-        searchable,
+        searchable: worded(searchable),
         fields: said,
         // Only the indexes standing: a component's is made by its first
         // write (@yaks/sqlite).

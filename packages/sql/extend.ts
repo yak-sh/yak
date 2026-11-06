@@ -126,16 +126,30 @@ export type OrderBy = (value: string, site: Site) => Expr | null
 // screen, and only by the extension that compiles the clauses it ranks.
 export type Ranks = (q: And) => string | null
 
+// What a substring index finds for a `~=` test of `comp.prop`: the owners
+// whose text may hold `needle` (every one that does, and perhaps some that
+// don't, so the test still reads each), and whether they are few enough that a
+// read is driven from them rather than from its own order. Null declines: no
+// index covers the property, or the needle is too short for it. @yaks/fts
+// answers from its trigram indexes; the binder keeps the test either way, so
+// what it answers changes only how a read is planned.
+export type Contains = (
+  comp: string,
+  prop: string,
+  needle: string,
+) => { owners: Query; few: boolean } | null
+
 // A named contribution: which clause kinds it claims, how each of them
-// compiles, and optionally how it writes an ORDER BY and which order a window
-// that states none takes. A kind that is not in the map is left entirely to
-// the binder.
+// compiles, and optionally how it writes an ORDER BY, which order a window
+// that states none takes, and which owners a substring test can read. A kind
+// that is not in the map is left entirely to the binder.
 export type Extension = {
   name: string
   compile: Partial<Record<Clause['kind'], Compile>>
   order?: OrderBy
   ranks?: Ranks
   begin?: Begin
+  contains?: Contains
 }
 
 // Directives after which a query's rows take no order of an extension's: an

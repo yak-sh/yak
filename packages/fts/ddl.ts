@@ -56,8 +56,9 @@ import {
   type Field,
   type Index,
   indexes,
-  indexName,
-  textName,
+  tableOf,
+  viewOf,
+  worded,
 } from './fields.ts'
 import {
   and,
@@ -74,10 +75,12 @@ import {
   exists,
   type Expr,
   fn,
+  gt,
   type Insert,
   join,
   le,
   lit,
+  op,
   render,
   select,
   type Stmt,
@@ -87,10 +90,33 @@ import {
 
 // How one column of `comp` reads as text, given the expression for its stored
 // value: through the registered `text` expression where there is one, else as
-// stored, which is every ordinary column.
+// stored, which is every ordinary column. A substring index reads it `cut`.
 let reader =
-  (comp: string, derived: Derived) => (prop: string, stored: Expr): Expr =>
-    derived[`${comp}.${prop}`]?.text?.(stored) ?? stored
+  (ix: Index, derived: Derived) => (prop: string, stored: Expr): Expr => {
+    let text = derived[`${ix.comp}.${prop}`]?.text?.(stored) ?? stored
+    return ix.trigram ? cut(text) : text
+  }
+
+/** How much of a text a substring index holds: its first mebibyte. One row's
+ * trigrams are made inside the write that stores it, about 190 ms a MiB, and
+ * the box's transcripts hold texts of 33 MB. The 50 past it hold 278 MB of
+ * their 2.2 GB. */
+export let CUT = 1 << 20
+
+/** The trigram a substring index holds for a text longer than {@link CUT}:
+ * three private-use characters, which no needle holds (a `~=` needle is
+ * ASCII), so a test reads each such row whole as well as the ones its
+ * needle's trigrams find. */
+export let PAST = '\u{F8FF}\u{F8FF}\u{F8FF}'
+
+// A text as a substring index holds it: its first CUT characters, then PAST
+// when there were more.
+let cut = (text: Expr): Expr =>
+  op(
+    '||',
+    fn('substr', text, lit(1), lit(CUT)),
+    fn('iif', gt(fn('length', text), lit(CUT)), lit(PAST), lit('')),
+  )
 
 // An FTS5 command: a row written to the index's own hidden column.
 let command = (fts: string, word: string, rank?: number): Insert => ({
@@ -100,19 +126,27 @@ let command = (fts: string, word: string, rank?: number): Insert => ({
   rows: [[lit(word), ...(rank == null ? [] : [lit(rank)])]],
 })
 
+// How a substring index tokenizes: every three characters, case folded, and
+// only which rows hold each (`detail=none`), not where. A test then reads
+// the rows holding all of a needle's trigrams (`grammed`). On the box's
+// transcripts that keeps the index at half the size of the text it covers,
+// where positions would make it 2.4 times the text.
+let GRAMS: [string, string][] = [['tokenize', 'trigram'], ['detail', 'none']]
+
 // The trigger names an index owns: three on its text's table, and two more on
 // `on` for a scoped one.
 let TRIGGERS = ['insert', 'delete', 'update']
 let SCOPED = ['join', 'leave']
 let owned = (ix: Index): string[] =>
-  [...TRIGGERS, ...ix.on ? SCOPED : []].map((s) => `${indexName(ix.name)}_${s}`)
+  [...TRIGGERS, ...ix.on ? SCOPED : []].map((s) => `${tableOf(ix)}_${s}`)
 
 // What an index reads its content back through: the component table, or its
-// text view where a column must be resolved or the text is read on behalf of
-// another component.
+// text view where a column must be resolved, the text is read on behalf of
+// another component, or a substring index holds it cut.
 let sourceOf = (ix: Index, derived: Derived): string =>
-  ix.on || ix.props.some((p) => derived[`${ix.comp}.${p}`]?.text)
-    ? textName(ix.name)
+  ix.on || ix.trigram ||
+    ix.props.some((p) => derived[`${ix.comp}.${p}`]?.text)
+    ? viewOf(ix)
     : ix.comp
 
 // One index and the triggers keeping it, plus the view it reads its content
@@ -122,9 +156,9 @@ let sourceOf = (ix: Index, derived: Derived): string =>
 // it is read as it stands when its window comes, and deleting a row the index
 // never held would corrupt it.
 let index = (ix: Index, derived: Derived, cursor?: Expr): Stmt[] => {
-  let { name, comp, props, on } = ix
-  let fts = indexName(name)
-  let read = reader(comp, derived)
+  let { comp, props, on } = ix
+  let fts = tableOf(ix)
+  let read = reader(ix, derived)
   // The values a trigger inserts: the column read as text, or '' for a null —
   // the index never holds a null term, and the delete side must mirror the
   // insert side exactly.
@@ -196,7 +230,12 @@ let index = (ix: Index, derived: Derived, cursor?: Expr): Stmt[] => {
       name: fts,
       ifNot: true,
       using: 'fts5',
-      args: [...props, ['content', content], ['content_rowid', 'entity']],
+      args: [
+        ...props,
+        ['content', content],
+        ['content_rowid', 'entity'],
+        ...ix.trigram ? GRAMS : [],
+      ],
     },
     trigger('insert', 'insert', comp, [add('new')]),
     trigger('delete', 'delete', comp, [drop]),
@@ -215,12 +254,12 @@ let index = (ix: Index, derived: Derived, cursor?: Expr): Stmt[] => {
 // The view presenting an index's columns as text, joined to `on` for a scoped
 // one.
 let view = (ix: Index, derived: Derived): CreateView => {
-  let { name, comp, props, on } = ix
-  let read = reader(comp, derived)
+  let { comp, props, on } = ix
+  let read = reader(ix, derived)
   let c = on ? 'c' : undefined
   return {
     t: 'create view',
-    name: textName(name),
+    name: viewOf(ix),
     ifNot: true,
     q: select({
       cols: [
@@ -268,7 +307,7 @@ export let sources = (
   derived: Derived = {},
   db?: Driver,
 ): Stmt[] =>
-  (db ? standing(db, fields) : indexes(fields)).map((ix) =>
+  (db ? standing(db, worded(fields)) : indexes(worded(fields))).map((ix) =>
     select({
       cols: ix.props.map((p) => col(p)),
       from: table(sourceOf(ix, derived)),
@@ -286,7 +325,7 @@ let standing = (db: Driver, fields: Field[], made = false): Index[] => {
   )
   return indexes(fields).filter((ix) =>
     tables.has(ix.comp) && (!ix.on || tables.has(ix.on)) ||
-    made && tables.has(indexName(ix.name))
+    made && tables.has(tableOf(ix))
   )
 }
 
@@ -317,13 +356,13 @@ let fault = (
   ix: Index,
   deep: boolean,
 ): string | undefined => {
-  let fts = indexName(ix.name)
+  let fts = tableOf(ix)
   let rows = (t: string) => sub(select({ cols: [count()], from: table(t) }))
   try {
     let counts = db.query(select({
       cols: [
         as(rows(`${fts}_docsize`), 'indexed'),
-        as(rows(ix.on ? textName(ix.name) : ix.comp), 'held'),
+        as(rows(ix.on ? viewOf(ix) : ix.comp), 'held'),
       ],
     }))[0]
     let indexed = Number(counts.indexed), held = Number(counts.held)
@@ -362,7 +401,7 @@ export let heal = (
   let derived = opts.derived ?? {}
   let healed: string[] = []
   for (let ix of standing(db, fields, true)) {
-    let fts = indexName(ix.name)
+    let fts = tableOf(ix)
     if (opts.fill?.pending(fts)) continue
     let before = fault(db, ix, deep)
     if (!before) continue
@@ -440,7 +479,7 @@ let body = (sql: string, name: string): string => {
 // The names of any triggers that write into an index other than this package's
 // own.
 let strays = (schema: ReturnType<typeof catalogue>, ix: Index): string[] => {
-  let fts = indexName(ix.name)
+  let fts = tableOf(ix)
   let ours = new Set(owned(ix))
   let word = new RegExp(`\\b${fts}\\b`)
   return objects(schema, 'trigger')
@@ -485,7 +524,7 @@ export type Fill = {
 // What filling `ix` takes: where it reads its content back from, its
 // columns, and the triggers it keeps once it holds every row.
 let filling = (ix: Index, derived: Derived): Fill => ({
-  fts: indexName(ix.name),
+  fts: tableOf(ix),
   source: sourceOf(ix, derived),
   props: ix.props,
   triggers: index(ix, derived).filter((s) => s.t == 'create trigger'),
@@ -495,7 +534,7 @@ let filling = (ix: Index, derived: Derived): Fill => ({
 // and so do its triggers, whose replacements keep only the rows the cursor
 // has passed. Returns its statements, with those triggers, to raise.
 let behind = (db: Driver, ix: Index, derived: Derived, cursor: Expr) => {
-  let fts = indexName(ix.name)
+  let fts = tableOf(ix)
   if (declared(db, fts).length) db.query(command(fts, 'delete-all'))
   for (let t of owned(ix)) {
     db.query({ t: 'drop', kind: 'trigger', name: t, ifExists: true })
@@ -539,7 +578,7 @@ export let adopt = (
   let planned: { ix: Index; mine: Stmt[]; rebuild: boolean; cursor?: Expr }[] =
     []
   for (let ix of standing(db, fields)) {
-    let fts = indexName(ix.name)
+    let fts = tableOf(ix)
     let have = declared(db, fts)
     let same = have.length == ix.props.length &&
       have.every((c, i) => c == ix.props[i]) &&
@@ -552,7 +591,7 @@ export let adopt = (
     let mine = index(ix, derived, pending)
     let changed = false
     let ours: ['view' | 'trigger', string][] = [
-      ['view', textName(ix.name)],
+      ['view', viewOf(ix)],
       ...owned(ix).map((t): ['trigger', string] => ['trigger', t]),
     ]
     for (let [kind, name] of ours) {
@@ -595,7 +634,7 @@ export let adopt = (
   erect(db, planned.flatMap(({ mine }) => mine))
   for (let { ix, rebuild, cursor } of planned) {
     if (!rebuild) continue
-    let fts = indexName(ix.name)
+    let fts = tableOf(ix)
     if (!cursor) db.query(command(fts, 'rebuild'))
     recut.push(fts)
   }

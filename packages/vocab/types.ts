@@ -70,6 +70,9 @@ export type Prop = {
    * matches it (@yaks/fts builds the index). A property nobody declares is
    * never searched. */
   search: boolean
+  /** this text property keeps a substring index, so a `~=` contains-test on
+   * it is answered from the index (@yaks/fts builds it) */
+  contains: boolean
   /** derived, never stored: no column holds it and nobody writes it, but a
    * reader still sees it (a query-only rank, an aggregate, a derived status) */
   computed: boolean
@@ -281,6 +284,8 @@ export type PropSchema = {
   // reads it). On a component, the `comp.prop` names of the text its entities
   // are found by.
   search?: boolean | string[]
+  // On a property, true = a substring index answers `~=` on it (@yaks/fts).
+  contains?: boolean
   kind?: boolean
   before?: string[]
   // On a component reported out of a vocabulary of several packages: the one

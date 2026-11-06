@@ -159,6 +159,10 @@
         }
       ]
     },
+    "contains": {
+      "description": "On a property, true = this text property keeps a substring index (@yaks/fts), so a `~=` contains-test on it is answered from the index however rare its needle, rather than by reading every value.",
+      "type": "boolean"
+    },
     "kind": {
       "description": "true = this component names a display kind (feeds kindOf / kindOrder).",
       "type": "boolean"

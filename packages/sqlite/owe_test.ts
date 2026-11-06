@@ -75,6 +75,7 @@ let keyed = (name: string): CreateTable => ({
 let tiny: Sizes = {
   big: 3,
   fill: 2,
+  fillText: 100,
   copy: 3,
   clear: 3,
   slack: 4,
@@ -209,6 +210,16 @@ let adopted = (fields: Field[]) => (db: Driver) =>
 let [adopting] = stage(adopted(notes), files)
 let [started] = stage((db) => work(db), adopting)
 let [filled] = stage(drain, started)
+
+test('a fill window takes no more than its share of text, and always a row', () => {
+  let sizes = { ...tiny, fillText: 1 }
+  using db = copy(files)
+  adopt(db, notes, {}, { heal: false, fill: fillerAt(db, sizes) })
+  let windows = 0
+  while (workAt(db, NOW, [], sizes)) windows++
+  // One window a row, and the one that finds none left.
+  assertEquals([windows, match(db, 'w3')], [4, [3]])
+})
 
 test('a text index over many rows is owed, and empty until a window fills it', () => {
   using db = copy(adopting)

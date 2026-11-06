@@ -388,6 +388,7 @@ let propOf = (
     death,
     stamped: !!s.stamped,
     search: s.search === true,
+    contains: s.contains === true,
     computed: s.computed === true,
     ...s.reads ? { reads: [...s.reads] } : {},
     identity: s.identity === true,

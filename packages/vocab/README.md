@@ -139,6 +139,7 @@ Use a JSON Schema validator with it for full document validation.
 | `status`                              | component             | Ordered components and the statuses they give, with a default                                                  |
 | `kind`, `before`                      | component             | Display kind and the kinds it sorts before                                                                     |
 | `search`                              | property or component | Stored text to index, or another component's text property names                                               |
+| `contains`                            | property              | Stored text a substring index answers `~=` on                                                                  |
 | `embed`                               | component             | `false` excludes entities carrying it from embedding                                                           |
 | `journal`                             | component             | `false` keeps its writes, and deletions of entities holding nothing else, out of the journal's history         |
 | `aliases`                             | enum property         | Input forms mapped to enum members                                                                             |
@@ -476,7 +477,8 @@ integer affinity, while `number` uses real affinity.
 `storable` rejects it on numbers, references, enums, computed properties and
 strings formatted as `date-time`, `uri`, `query` or `json`.
 [@yaks/match](../match/README.md) searches text directly and does not consult
-this declaration.
+this declaration. `contains: true` gives a stored text property a substring
+index instead, which answers a `~=` test on it; the same types are refused.
 
 On a component, `search: ['content.body']` selects another component's text. All
 names must belong to that one component and hold stored text. It cannot coexist

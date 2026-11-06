@@ -56,6 +56,31 @@ index text already written when an entity becomes an entry and remove it when it
 stops being one. Whichever row a transaction writes second does the indexing, so
 the order of a bundle's components does not matter.
 
+## Substring indexes
+
+A `~=` test (`.content.body~=wyrmling`) matches a substring, which a word index
+cannot find, so it reads every value it tests. Mark a stored text property
+`contains: true` and it keeps a substring index instead: `grams(vocab)` selects
+those fields, and `indexed(vocab)` is both lists, what a store builds and its
+`search` extension reads. Each component's are one FTS5 trigram index,
+`<comp>_trigram`, kept by the same triggers as a word index and filled in
+windows by the same `Filler`. It keeps only which rows hold each trigram
+(`detail=none`): on the box's transcripts it is half the size of the text, where
+positions made it 2.4 times. It holds each text's first MiB (`CUT`), since a
+row's trigrams are made inside the write that stores it (about 190 ms a MiB),
+and a longer text carries one more trigram (`PAST`) so a test reads it whole as
+well.
+
+The `search` extension answers @yaks/sql's `contains` hook from it: the rows
+holding up to `GRAMS` (8) of the needle's trigrams, spread from its start to its
+end (`grammed`), and whether there are at most `FEW_TEXTS` (4,000) of them. A
+read is then driven from those rows, each still tested, so a needle nothing
+holds reads only the texts longer than the index holds. A needle more rows hold
+reads in its own order and stops at its page, as it does without an index, and
+so does a needle shorter than three characters and a test while `fill` says the
+index is still being filled. Bare words never read a substring index
+(`worded(fields)`).
+
 ## The four pieces
 
 Here `db` is @yaks/sql's synchronous `Driver`, which runs a statement with
@@ -269,11 +294,11 @@ differs. For vector similarity ranking, see
 ## Exports
 
 The root module is the only export path. It exports field selection (`fields`,
-`searched`, `indexes`, `indexName`, `textName`), DDL and maintenance (`schema`,
-`heal`, `adopt`), query integration (`search`), ranked search (`find`, `hits`),
-text conversion (`term`, `match`, `OPEN`, `CLOSE`), and their supporting types,
-including `Field`, `Hit` and `SearchOpts`. The `Driver` it runs on is
-`@yaks/sql`'s.
+`grams`, `indexed`, `worded`, `searched`, `indexes`, `indexName`, `gramName`,
+`textName`), DDL and maintenance (`schema`, `heal`, `adopt`), query integration
+(`search`), ranked search (`find`, `hits`), text conversion (`term`, `match`,
+`OPEN`, `CLOSE`), and their supporting types, including `Field`, `Hit` and
+`SearchOpts`. The `Driver` it runs on is `@yaks/sql`'s.
 
 ## Compatibility
 

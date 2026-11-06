@@ -7,7 +7,7 @@
 // documented}, {@link unholed}, {@link unworded}, {@link respelled}).
 // {@link BOUNDARIES} names the stored shapes this code reads, for `yak admin
 // deploys`.
-import { adopt, fields } from '@yaks/fts'
+import { adopt, indexed as textFields } from '@yaks/fts'
 import { blobRead, blobSchema } from '@yaks/blob'
 import { ddl as journalDdl, dropDdl as journalDrop } from '@yaks/journal'
 import {
@@ -488,7 +488,7 @@ export let install = (
   // the full-text indexes, and the table the vectors are kept in beside the
   // triggers that note which of them changed (@yaks/embedding). The triggers
   // that queue text to embed are the sweep's own (graph.ts `#embedding`).
-  adopt(d, fields(vocab), derived, { heal: false })
+  adopt(d, textFields(vocab), derived, { heal: false })
   rekey(statements(d))
   erect(d, vectorSchema())
   // Only the platform owns the complete vocabulary of its own stores. An

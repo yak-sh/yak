@@ -33,7 +33,7 @@ import { operatorDoc } from './operator-vocab.ts'
 import { draftDoc, drafts } from '@yaks/draft'
 import { memoryDoc } from '@yaks/memory/vocab'
 import { topicDoc } from '@yaks/topic'
-import { adopt, fields, search } from '@yaks/fts'
+import { adopt, indexed, search } from '@yaks/fts'
 
 export let operatorVocab = loadVocab([
   kernelDoc,
@@ -83,7 +83,7 @@ export let operatorStore = (
   let derived = { ...blobRead(vocab), ...sessionDerived(vocab) }
   // The Operator finds what was said in its own work by its words: an
   // entry's text, a doc's title and body, a memory (@yaks/fts).
-  let text = fields(vocab)
+  let text = indexed(vocab)
   let store = storage(durable, vocab, { derived, extend: [search(text, sql)] })
   for (let stmt of blobSchema()) sql.query(stmt)
   store.install()

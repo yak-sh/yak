@@ -9,13 +9,23 @@
 // of another component (`on`) is grouped under that one: `entry` is found by
 // `content.body`, so `entry_fts` indexes the body of every entity that is an
 // entry, and of no other entity carrying `content`.
+//
+// A property can also keep a substring index (`contains: true`): an FTS5
+// trigram index over its text, which a `~=` test reads instead of every value
+// (`grams()`). Its fields are marked `trigram`, and group into indexes of their
+// own beside the word indexes.
 
 import type { Prop, Vocab } from '@yaks/vocab'
 
 // A `comp.prop` pair naming one indexed text property — a book's title, a
 // review's prose, a shop's own description — and, for text an entity is found
 // by through another of its components, that component (`on`).
-export type Field = { comp: string; prop: string; on?: string }
+export type Field = {
+  comp: string
+  prop: string
+  on?: string
+  trigram?: true
+}
 
 // Decides whether a property is indexed. An application passes its own to index
 // less than the vocabulary marked — say, titles only.
@@ -52,26 +62,66 @@ export let fields = (vocab: Vocab, pick: Pick = searched): Field[] => [
   ),
 ]
 
+// The properties that keep a substring index, the vocabulary's `contains`,
+// by component then declaration order. `pick` narrows them.
+export let grams = (vocab: Vocab, pick: Pick = (c) => c.contains): Field[] =>
+  vocab.all.flatMap((comp) =>
+    vocab.props(comp)
+      .map((prop) => vocab.prop(comp, prop)!)
+      .filter((c) => prose(c) && pick(c))
+      .map((c) => ({ comp, prop: c.prop, trigram: true as const }))
+  )
+
+// Every field a vocabulary has indexed: its words and its substrings. What a
+// store keeps indexes for and its `search` extension reads.
+export let indexed = (vocab: Vocab): Field[] => [
+  ...fields(vocab),
+  ...grams(vocab),
+]
+
+// The fields a bare word searches: all but the substring indexes'.
+export let worded = (fields: Field[]): Field[] =>
+  fields.filter((f) => !f.trigram)
+
 // One search index: its name (the component its entities are found through —
 // `on` where there is one, else the text's own), the component whose table
 // holds the text, and the properties it covers, in the order they are declared
 // to FTS5.
-export type Index = { name: string; comp: string; props: string[]; on?: string }
+export type Index = {
+  name: string
+  comp: string
+  props: string[]
+  on?: string
+  trigram?: true
+}
 
 // The fields grouped into indexes, one per name, in first-seen order.
 export let indexes = (fields: Field[]): Index[] => {
   let by = new Map<string, Index>()
-  for (let { comp, prop, on } of fields) {
+  for (let { comp, prop, on, trigram } of fields) {
     let name = on ?? comp
-    let ix = by.get(name) ?? { name, comp, props: [], ...on ? { on } : {} }
+    let key = trigram ? gramName(name) : name
+    let ix = by.get(key) ??
+      { name, comp, props: [], ...on ? { on } : {}, ...trigram && { trigram } }
     ix.props.push(prop)
-    by.set(name, ix)
+    by.set(key, ix)
   }
   return [...by.values()]
 }
 
 // The name of an index: `book` → `book_fts`.
 export let indexName = (name: string): string => `${name}_fts`
+
+// The name of a substring index: `content` → `content_trigram`.
+export let gramName = (name: string): string => `${name}_trigram`
+
+// The FTS5 table an index is: its word index, or its substring index.
+export let tableOf = (ix: Index): string =>
+  ix.trigram ? gramName(ix.name) : indexName(ix.name)
+
+// The view an index reads its text through, where it needs one (`textName`).
+export let viewOf = (ix: Index): string =>
+  textName(ix.trigram ? gramName(ix.name) : ix.name)
 
 // The name of the view that presents an index's columns as text: `doc` →
 // `doc_text`. It is created for an index where at least one column has to be

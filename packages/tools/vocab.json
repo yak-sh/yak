@@ -59,7 +59,8 @@
       "properties": {
         "body": {
           "type": "string",
-          "store": "blob"
+          "store": "blob",
+          "contains": true
         }
       }
     },

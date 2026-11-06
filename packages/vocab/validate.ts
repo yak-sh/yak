@@ -118,15 +118,18 @@ let storableDefault = (comp: string, prop: string, s: PropSchema): string[] => {
 // is rejected anywhere but a stored text property, where it would otherwise
 // declare an index over nothing.
 let WORDLESS = ['date-time', 'uri', 'query', 'json']
-let searched = (comp: string, prop: string, s: PropSchema): string[] =>
-  s.search !== true ||
-    (s.computed !== true && s.ref == null && s.enum == null &&
-      s.type == 'string' && !isBinary(s) &&
-      !WORDLESS.includes(s.format ?? ''))
-    ? []
-    : [
-      `${comp}.${prop} is searched but holds no prose — "search": true is for a stored text property`,
-    ]
+// `contains` declares a substring index, which reads the same stored text.
+let searched = (comp: string, prop: string, s: PropSchema): string[] => {
+  let prose = s.computed !== true && s.ref == null && s.enum == null &&
+    s.type == 'string' && !isBinary(s) && !WORDLESS.includes(s.format ?? '')
+  return prose ? [] : (['search', 'contains'] as const)
+    .filter((k) => s[k] === true)
+    .map((k) =>
+      `${comp}.${prop} is ${
+        k == 'search' ? 'searched' : 'substring-indexed'
+      } but holds no prose — "${k}": true is for a stored text property`
+    )
+}
 
 // A component carrying the whole provenance triple is a mark — `completed`,
 // `archived`, `created` — and the server writes a mark, never a client: the

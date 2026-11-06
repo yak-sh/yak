@@ -51,7 +51,7 @@ import {
   when,
 } from '@yaks/sql'
 import type { Vocab } from '@yaks/vocab'
-import { type Field, type Index, indexes, indexName } from './fields.ts'
+import { type Field, type Index, indexes, indexName, worded } from './fields.ts'
 import { excerpt, match, named } from './term.ts'
 import { cut } from './snippet.ts'
 
@@ -95,7 +95,7 @@ export let screens = (
   opts: BindOpts,
 ): Record<string, Raw> =>
   Object.fromEntries(
-    indexes(fields).flatMap(({ name, comp, on }) => {
+    indexes(worded(fields)).flatMap(({ name, comp, on }) => {
       let screen = sourceScreen(vocab, opts, [comp, ...on ? [on] : []])
       return screen ? [[name, screen]] : []
     }),
@@ -161,7 +161,7 @@ export let hits = (
   // terms unmarked, so FTS5 does less work cutting large matching texts.
   let marked = excerpt(text)
   let b = at('best')
-  let snippets = indexes(fields).map(({ name, props }, i) => {
+  let snippets = indexes(worded(fields)).map(({ name, props }, i) => {
     let fts = indexName(name)
     return {
       name: `__snippets${i}`,
@@ -189,7 +189,7 @@ export let hits = (
     }
   })
   let snippet = when(
-    indexes(fields).map((
+    indexes(worded(fields)).map((
       _,
       i,
     ) => [
@@ -263,7 +263,7 @@ let chosen = (
   t: string,
   opts: SearchOpts,
 ): Select | null => {
-  let arms = indexes(fields)
+  let arms = indexes(worded(fields))
   if (!t || !arms.length) return null
   let limit = opts.limit ?? 20
   let sorting = opts.plan == 'sort'

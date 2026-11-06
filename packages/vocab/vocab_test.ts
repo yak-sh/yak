@@ -39,6 +39,7 @@ test('properties interrogate to their whole shape', () => {
     death: undefined,
     stamped: false,
     search: false,
+    contains: false,
     computed: false,
     identity: false,
     affinity: 'real',

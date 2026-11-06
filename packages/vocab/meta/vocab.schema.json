@@ -618,6 +618,9 @@
         "search": {
           "type": "boolean"
         },
+        "contains": {
+          "type": "boolean"
+        },
         "unique": {
           "type": "boolean"
         },
@@ -712,6 +715,9 @@
           "type": "boolean"
         },
         "search": {
+          "type": "boolean"
+        },
+        "contains": {
           "type": "boolean"
         },
         "unique": {

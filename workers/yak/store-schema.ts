@@ -4,7 +4,7 @@ import {
   schema as vectorSchema,
   triggers as queueTriggers,
 } from '@yaks/embedding'
-import { type Field, fields, schema as ftsSchema } from '@yaks/fts'
+import { type Field, indexed, schema as ftsSchema } from '@yaks/fts'
 import { sha256 } from '@yaks/graph/sha256'
 import { ddl as journalDdl } from '@yaks/journal'
 import {
@@ -92,7 +92,7 @@ export let shapeOf = (name: string, declared: string | null): Shape => {
   let { vocab } = words
   let read = blobRead(vocab)
   let derived = { ...read, ...(own ? {} : appDerived(vocab, read)) }
-  let searchable = fields(vocab)
+  let searchable = indexed(vocab)
   // The blob table first: the `doc_value` view and the search triggers read a
   // body's text out of it, so it has to be standing before they are.
   let after = () => [

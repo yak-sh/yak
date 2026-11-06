@@ -32,16 +32,21 @@
 import {
   among,
   and,
+  as,
   col,
+  count,
   type Driver,
+  eq,
   type Extension,
   FALSE,
+  from,
   lit,
   lookup,
   op,
   or,
   type Raw,
   type Screen,
+  type Select,
   select,
   type Site,
   type Source,
@@ -50,8 +55,9 @@ import {
   val,
 } from '@yaks/sql'
 import { permitted, ranked, screens } from './search.ts'
-import { type Field, indexes, indexName } from './fields.ts'
-import { named, term } from './term.ts'
+import { type Field, indexes, indexName, tableOf, worded } from './fields.ts'
+import { grammed, named, term } from './term.ts'
+import { type Filler, PAST } from './ddl.ts'
 import { type And, type Clause, map, words as wordsIn } from '@yaks/query/core'
 
 // The ranking `.order=` names.
@@ -95,6 +101,13 @@ export let reach = (q: And): number | null => {
   return all == own ? limit.n : null
 }
 
+// How many rows a substring index may find for a `~=` needle for a read to
+// be driven from them, each read and tested. Past it the needle is common, and
+// a read in its own order stops at its page sooner. On the box's 700,000
+// transcript texts the two cost the same near 4,000: a page of 25 of a needle
+// that many hold is found within about 4,400 texts in order.
+export let FEW_TEXTS = 4000
+
 // MATCH opens a cursor per keyed candidate. Keep seeks to a handful of owners;
 // larger screens retain the single walk through a term's postings.
 let FEW = 4
@@ -102,8 +115,35 @@ let FEW = 4
 // The @yaks/sql extension that resolves bare words against the search indexes.
 // It handles the `text` clause, covering every indexed field, and orders by
 // relevance to those words. Without this extension @yaks/sql rejects bare
-// words rather than assuming an index exists.
-export let search = (fields: Field[], db?: Driver): Extension => {
+// words rather than assuming an index exists. It also answers which owners a
+// `~=` test of a substring-indexed property can hold (`contains`), sized
+// through `db`; `fill` says which index is still being filled, and holds only
+// the rows its cursor has passed until it is, so it answers nothing.
+export let search = (
+  fields: Field[],
+  db?: Driver,
+  fill?: Pick<Filler, 'pending'>,
+): Extension => {
+  let grams = indexes(fields).filter((ix) => ix.trigram)
+  // Whether the file holds a substring index, asked once a read.
+  let standing = new Map<string, boolean>()
+  let stands = (fts: string): boolean => {
+    let is = standing.get(fts)
+    if (is == null) {
+      standing.set(
+        fts,
+        is = !!db!.query(select({
+          cols: [lit(1)],
+          from: table('sqlite_schema'),
+          where: eq(col('name'), val(fts)),
+        })).length,
+      )
+    }
+    return is
+  }
+  // What each needle's index found this query, by index and needle: one
+  // read asks again for each plan it weighs.
+  let found = new Map<string, { owners: Select; few: boolean }>()
   // The words this query searched for (as terms, and as typed), and what the
   // rest of it selects, remembered for its `.order=search`.
   let words: string[] = []
@@ -147,6 +187,8 @@ export let search = (fields: Field[], db?: Driver): Extension => {
   return {
     name: 'fts',
     begin: (screen, q) => {
+      found.clear()
+      standing.clear()
       asked = screen
       held = null
       sources = {}
@@ -208,7 +250,7 @@ export let search = (fields: Field[], db?: Driver): Extension => {
           }
         }
         return or(
-          ...indexes(live).map(({ name }) => {
+          ...indexes(worded(live)).map(({ name }) => {
             let fts = indexName(name)
             return among(
               site.owner,
@@ -231,6 +273,42 @@ export let search = (fields: Field[], db?: Driver): Extension => {
         )
       },
     },
+    // The rows of a property's substring index holding all of a needle's
+    // trigrams, or a text longer than it holds (`PAST`), and whether there
+    // are at most FEW_TEXTS of them.
+    contains: (comp, prop, needle) => {
+      let ix = grams.find((ix) => ix.comp == comp && ix.props.includes(prop))
+      let m = ix && grammed(needle)
+      if (!ix || !m) return null
+      let fts = tableOf(ix)
+      let owners = select({
+        cols: [col('rowid')],
+        from: table(fts),
+        where: op('match', col(fts), val(`(${m}) OR "${PAST}"`)),
+      })
+      // An index this file does not hold yet (its writer has not opened it
+      // with this vocabulary), or holds while still filling it, finds too
+      // few: the read goes in its own order, and, answered rather than
+      // declined, is built again next time rather than kept (@yaks/sql
+      // kept.ts).
+      if (!db || !stands(fts) || fill?.pending(fts)) {
+        return { owners, few: false }
+      }
+      let key = `${fts}\0${m}`
+      let known = found.get(key)
+      if (known) return known
+      // Only a caller's read begins, so a compile that never does (a rule's
+      // patterns) keeps no more than a few.
+      if (found.size >= 64) found.clear()
+      let [{ n }] = db.query(select({
+        cols: [as(count(), 'n')],
+        from: from({ ...owners, limit: lit(FEW_TEXTS + 1) }, 'r'),
+      }))
+      let answer = { owners, few: Number(n) <= FEW_TEXTS }
+      found.set(key, answer)
+      return answer
+    },
+
     // A window of a query with words in it is a search's best rows unless it
     // says otherwise, where there is a connection to rank through.
     ranks: (q) => db && wordsIn(q).some((w) => !!term(w)) ? SEARCH : null,
