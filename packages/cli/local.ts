@@ -112,10 +112,12 @@ let open = async (
   // `serve`): its reader's workers start, so a read is as fast as the next,
   // its main thread is watched ({@link watched}), and then workers start for
   // the duty roles nothing covers. Until then its reads run on the graph's
-  // own connection, and the CPU goes to answering. A warming that fails
+  // own connection, and the CPU goes to answering. Warming settles once the
+  // workers it started for uncovered duty roles are ready, so a server's
+  // `--ready` says every module it runs is loaded. A warming that fails
   // rejects, and the server ends.
   let host: Served | undefined
-  let cover = (): void => {}
+  let cover = (): Promise<void> => Promise.resolve()
   let warming: Promise<void> | undefined
   let warm = web
     ? () =>
@@ -133,7 +135,7 @@ let open = async (
   }
   if (web) {
     let served = host = await compose(config, roles, facet, { reader, warm })
-    cover = () => void covered(served, path, config, roles)
+    cover = () => covered(served, path, config, roles)
     return served
   }
   let aside = thread<string>(new URL('./duties.ts', import.meta.url))

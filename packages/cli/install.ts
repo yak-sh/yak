@@ -76,13 +76,15 @@ export let warming = (dir: string): string[][] => [
 ]
 
 /** A first `yak serve` on that scratch graph, at `port`, asked for its canvas
- * and then stopped: serving imports the facets of the web role and bundles the
- * page, which no command before it fetched, so a person's first `yak serve`
- * would otherwise download them as it starts.
+ * and stopped once it says it is ready, in the file `ready`: serving imports
+ * the facets of the web role, bundles the page, and, as it warms, starts its
+ * readers and the workers for its duty roles, none of which a command before
+ * it fetched, so a person's first `yak serve` would otherwise download them as
+ * it starts.
  *
  * ```ts
  * import { assertEquals } from '@std/assert'
- * assertEquals(serving('/tmp/i', 9).slice(-3), ['serve', '--port', '9'])
+ * assertEquals(serving('/tmp/i', 9).slice(-5), ['serve', '--port', '9', '--ready', '/tmp/i/ready'])
  * ```
  */
 export let serving = (dir: string, port: number): string[] => [
@@ -91,10 +93,25 @@ export let serving = (dir: string, port: number): string[] => [
   'serve',
   '--port',
   String(port),
+  '--ready',
+  `${dir}/ready`,
 ]
 
 /** What a warm-up of `yak serve` asks for once it listens. */
 export let CANVAS = ['/', '/web/app.js']
+
+// Once `path` exists, or an error at `by`.
+let appeared = async (path: string, by: number) => {
+  for (;;) {
+    try {
+      return void await disk.stat(path)
+    } catch (error) {
+      if (!disk.isNotFound(error)) throw error
+    }
+    if (Date.now() > by) throw new Error(`${path} never appeared`)
+    await new Promise((r) => setTimeout(r, 100))
+  }
+}
 
 // A port nothing listens on, from the system, released for serve to take.
 let free = () => {
@@ -168,6 +185,7 @@ if (import.meta.main) {
           for (let path of CANVAS) {
             await answered(`http://127.0.0.1:${port}${path}`, by)
           }
+          await appeared(`${dir}/ready`, by)
         } catch (error) {
           console.error(String(error))
           failed = 'yak serve'
