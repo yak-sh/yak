@@ -123,6 +123,17 @@ export let run: Run = (args, cwd) => execute('git', args, cwd)
 let format: Run = (files, cwd) =>
   execute(system.execPath(), ['fmt', '--permit-no-files', ...files], cwd)
 
+// Resolves the manifests into the lockfile without linking node_modules: the
+// checkout's own install (packages/cli/dependencies.ts) follows the lockfile.
+let lock = (cwd: string) =>
+  execute(
+    'pnpm',
+    ['install', '--lockfile-only', '--prefer-offline', '--ignore-scripts'],
+    cwd,
+  )
+
+let lockfile = 'pnpm-lock.yaml'
+
 /** Hold the land lock of the checkout whose Git directory is `gitdir` until
  * the returned release: exclusive for the landing that writes the checkout,
  * shared for a reader that needs it whole. Git's own `index.lock` refuses a
@@ -171,6 +182,8 @@ export type LandOps = {
   run?: Run
   /** Format changed paths; Deno selects file types and honors checkout config. */
   format?: Run
+  /** Bring pnpm-lock.yaml up to the checkout at cwd's manifests. */
+  lock?: (cwd: string) => Promise<Ran>
   write?: (text: string, error?: boolean) => void
   /** files whose rewind is deliberate: warned about, then landed */
   allow?: string[]
@@ -363,6 +376,19 @@ let regular = (raw: string) => {
   return files
 }
 
+/// named(':100644 000000 a b D\0gone.ts\0:000000 100644 a b A\0new.ts\0')
+///   -> ['gone.ts', 'new.ts']
+/** Every path in raw, NUL-delimited diff records. */
+export let named = (raw: string): string[] =>
+  raw.split('\0').filter((_, i) => i % 2)
+
+/// manifest('packages/a/package.json') -> true
+/// manifest('pnpm-workspace.yaml') -> true
+/// manifest('packages/a/mod.ts') -> false
+/** Whether a path is one the pnpm lockfile is resolved from. */
+export let manifest = (path: string): boolean =>
+  /(^|\/)package\.json$/.test(path) || path == 'pnpm-workspace.yaml'
+
 /** Land the branch you are standing on: fast-forward it into the base, or
  * rebase onto a base that moved and return, for the caller to re-run its tests
  * and land again. */
@@ -468,16 +494,16 @@ export let land = async (ops: LandOps = {}): Promise<Outcome> => {
     for (let r of found) {
       write(`land: --allow-revert — landing anyway:${why(r, base, '')}`, true)
     }
-    let files = regular(
-      await read([
-        'diff',
-        '--raw',
-        '-z',
-        '--no-renames',
-        '--diff-filter=ACMT',
-        `${base}...HEAD`,
-      ]),
-    )
+    let changed = await read([
+      'diff',
+      '--raw',
+      '-z',
+      '--no-renames',
+      '--diff-filter=ACDMT',
+      `${base}...HEAD`,
+    ])
+    let files = regular(changed)
+    let edited = new Set(files)
     if (files.length) {
       let formatted = await (ops.format ?? format)(
         files.map((f) => `./${f}`),
@@ -488,24 +514,44 @@ export let land = async (ops: LandOps = {}): Promise<Outcome> => {
       // A parser failure can still leave other files formatted. Keep those
       // changes and land; formatting is an edit, never a new gate.
       if (formatted.code) write(message('land: format', formatted), true)
+    }
+    // A manifest the branch changed lands with the lockfile resolved from it,
+    // so a frozen install of the base never meets a stale lockfile. Only a
+    // checkout that tracks one is asked.
+    if (
+      named(changed).some(manifest) &&
+      (await read(['ls-files', '--', lockfile])).trim()
+    ) {
+      let locked = await (ops.lock ?? lock)(tree)
+      write(locked.out)
+      write(locked.err, true)
+      if (locked.code) {
+        let said = message(`land: update ${lockfile}`, locked)
+        write(said, true)
+        await ops.report?.(new Error(said), { tags: { step: 'land: lock' } })
+      }
+      edited.add(lockfile)
+    }
+    if (edited.size) {
+      let paths = [...edited]
       let diff = await git(tree, [
         '--literal-pathspecs',
         'diff',
         '--quiet',
         '--',
-        ...files,
+        ...paths,
       ], false)
       if (diff.code != 0 && diff.code != 1) {
-        must('read formatting changes', diff)
+        must('read landing edits', diff)
       }
       if (diff.code == 1) {
-        await need('stage formatting', tree, [
+        await need('stage landing edits', tree, [
           '--literal-pathspecs',
           'add',
           '--',
-          ...files,
+          ...paths,
         ])
-        await need('commit formatting', tree, [
+        await need('commit landing edits', tree, [
           'commit',
           '--amend',
           '--no-edit',

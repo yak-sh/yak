@@ -8,6 +8,7 @@ let fixture = (answers: Record<string, Answer> = {}) => {
   let calls: { args: string[]; cwd: string }[] = []
   let said: string[] = []
   let formats: { files: string[]; cwd: string }[] = []
+  let locks: string[] = []
   let reports: { error: string; tags?: Record<string, string> }[] = []
   let moved = false
   let values: Record<string, Answer> = {
@@ -30,20 +31,25 @@ let fixture = (answers: Record<string, Answer> = {}) => {
     let code = value.code ?? 0
     return Promise.resolve({ out: '', err: '', ...value, code, ok: code == 0 })
   }
-  let invoke = (allow?: string[], formatted: Answer = {}) =>
+  let ran = (answer: Answer): Promise<Ran> => {
+    let code = answer.code ?? 0
+    return Promise.resolve({ out: '', err: '', ...answer, code, ok: code == 0 })
+  }
+  let invoke = (
+    allow?: string[],
+    formatted: Answer = {},
+    locked: Answer = {},
+  ) =>
     land({
       cwd: '/work',
       run,
       format: (files, cwd) => {
         formats.push({ files, cwd })
-        let code = formatted.code ?? 0
-        return Promise.resolve({
-          out: '',
-          err: '',
-          ...formatted,
-          code,
-          ok: code == 0,
-        })
+        return ran(formatted)
+      },
+      lock: (cwd) => {
+        locks.push(cwd)
+        return ran(locked)
       },
       allow,
       // The lock shows in the calls, where it falls among the git commands.
@@ -61,6 +67,7 @@ let fixture = (answers: Record<string, Answer> = {}) => {
     invoke,
     calls,
     formats,
+    locks,
     said,
     reports,
     commands: () => calls.map((c) => c.args.join(' ')),
@@ -375,7 +382,7 @@ test(
 )
 
 let formatting = {
-  'diff --raw -z --no-renames --diff-filter=ACMT main...HEAD': {
+  'diff --raw -z --no-renames --diff-filter=ACDMT main...HEAD': {
     out: [
       ':100644 100644 old new M',
       'apps/icon.svg',
@@ -444,4 +451,48 @@ test('a formatter error reports its reason and still lands its partial edits', a
   })
   assert(f.commands().includes('commit --amend --no-edit --allow-empty'))
   assert(f.said.join('\n').includes('syntax error'))
+})
+
+let manifests = (tracked = 'pnpm-lock.yaml\n') => ({
+  'diff --raw -z --no-renames --diff-filter=ACDMT main...HEAD': {
+    out: ':100644 100644 old new M\0packages/a/package.json\0',
+  },
+  'ls-files -- pnpm-lock.yaml': { out: tracked },
+  '--literal-pathspecs diff --quiet -- packages/a/package.json pnpm-lock.yaml':
+    { code: 1 },
+})
+
+test('a changed package.json lands with the lockfile pnpm resolves from it', async () => {
+  let f = fixture(manifests())
+  await f.invoke()
+  assertEquals(f.locks, ['/work'])
+  let commands = f.commands()
+  let add = commands.indexOf(
+    '--literal-pathspecs add -- packages/a/package.json pnpm-lock.yaml',
+  )
+  let amend = commands.indexOf('commit --amend --no-edit --allow-empty')
+  assert(add >= 0 && add < amend)
+  assert(amend < commands.indexOf('merge --ff-only work'))
+})
+
+test('a landing that changes no manifest never starts pnpm', async () => {
+  let f = fixture(formatting)
+  await f.invoke()
+  assertEquals(f.locks, [])
+})
+
+test('a checkout without a tracked lockfile never starts pnpm', async () => {
+  let f = fixture(manifests(''))
+  await f.invoke()
+  assertEquals(f.locks, [])
+})
+
+test('a pnpm failure is reported and the landing goes on', async () => {
+  let f = fixture(manifests())
+  assertEquals(
+    await f.invoke(undefined, {}, { code: 1, err: 'ERR_PNPM_FETCH_404' }),
+    { landed: 'sha', root: '/repo', commits: [] },
+  )
+  assertEquals(f.reports.map((r) => r.tags), [{ step: 'land: lock' }])
+  assert(f.said.join('\n').includes('ERR_PNPM_FETCH_404'))
 })

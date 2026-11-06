@@ -462,7 +462,12 @@ Before merging, landing runs `deno fmt` on changed regular files, using the
 checkout's formatting configuration and Deno's supported file types. Formatting
 edits amend the branch's last commit with its message preserved. Deleted files,
 symlinks and submodules are skipped. A formatter error is printed and landing
-continues, keeping any files it formatted successfully.
+continues, keeping any files it formatted successfully. When the branch changes
+a `package.json` or `pnpm-workspace.yaml` in a checkout that tracks
+`pnpm-lock.yaml`, landing runs `pnpm install --lockfile-only` and amends the
+updated lockfile into the same commit, so the base never takes a manifest
+without its lockfile. A pnpm failure is printed and reported, and landing
+continues.
 
 Before the fast-forward, `reverts` detects a rebase that restores earlier base
 content. It finds files changed by `base...HEAD` that no branch commit touched,
