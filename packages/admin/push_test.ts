@@ -21,6 +21,7 @@ let platform = (
   apps: Record<string, Map<string, File>> = {},
   more = '',
   valuesAfter = 0,
+  running = 0,
 ) => {
   let deployed: string[] = []
   let writes: string[][] = []
@@ -51,6 +52,12 @@ let platform = (
     if (!files) return no(`no app ${app}`)
     if (name == 'app_deploy') {
       bases.push(a.base)
+      if (running-- > 0) {
+        return ok('app_deploy is still running', {
+          running: true,
+          asked: '2026-11-06T00:00:00.000Z',
+        })
+      }
       let version = versions.get(app) ?? 0
       if (typeof a.base == 'number' && a.base < version && !a.confirm) {
         return ok('stale base: confirm to deploy', {
@@ -137,6 +144,19 @@ test('a push sends the version it read and remembers its deployed version', asyn
     },
   })
   assertEquals(p.bases, [1])
+  assertEquals(seen, [1, 2])
+})
+
+test('a release still running is asked for again until it says how it ended', async () => {
+  let p = platform({ mail: held('index.html') }, '', 0, 2)
+  let seen: number[] = []
+  await push(p.ask, [file('new.js')], { app: 'mail' }, {
+    remember: (version: number) => {
+      seen.push(version)
+    },
+  })
+  assertEquals(p.bases, [1, 1, 1])
+  assertEquals(p.deployed, ['mail'])
   assertEquals(seen, [1, 2])
 })
 

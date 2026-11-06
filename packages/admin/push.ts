@@ -340,11 +340,13 @@ export let push = async (
       (gone.length ? `, deleted ${gone.join(', ')}` : ''),
   )
   opts.progress?.({ phase: 'deploy', state: 'start' })
-  let deployed = await reply(ask, 'app_deploy', {
-    ...at,
-    base,
-    ...opts.confirm ? { confirm: true } : {},
-  })
+  // A release that outlasts app_deploy's patience answers that it is still
+  // running; the same call again waits for it and answers how it ended.
+  let args = { ...at, base, ...opts.confirm ? { confirm: true } : {} }
+  let deployed = await reply(ask, 'app_deploy', args)
+  while (valueOf(deployed)?.running === true) {
+    deployed = await reply(ask, 'app_deploy', args)
+  }
   let value = valueOf(deployed)
   if (
     typeof value?.deployed != 'boolean' ||
