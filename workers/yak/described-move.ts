@@ -24,9 +24,8 @@ export let describedRule: Rule = {
   stores: 'apps',
   live: 'apps',
   core: ROWS,
-  find: ROWS.map((c) => `(.${c})`).join('|') + '&*',
-  move: (row: Bundle, read) =>
-    row._package && read!(`._lens.package=${row.entity.eid}&.limit=1`).length
-      ? []
-      : [{ entity: { eid: row.entity.eid }, $delete: true }],
+  find:
+    ROWS.map((c) => c == '_package' ? '(._package&!_lens_package)' : `(.${c})`)
+      .join('|') + '&*',
+  move: (row: Bundle) => [{ entity: { eid: row.entity.eid }, $delete: true }],
 }

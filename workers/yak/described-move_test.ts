@@ -4,7 +4,7 @@ import { test } from '@yaks/testing'
 import { assertEquals } from '@std/assert'
 import { docDoc } from '@yaks/doc/vocab'
 import { edgeDoc, edgeKeywords, edges } from '@yaks/edge'
-import { type Bundle, graph, identityEid } from '@yaks/graph'
+import { graph, identityEid } from '@yaks/graph'
 import { ram } from '@yaks/ram'
 import { loadVocab, metaDoc, type VocabDoc } from '@yaks/vocab'
 import { codeDoc } from '../../packages/code/vocab.ts'
@@ -56,19 +56,18 @@ await g.apply([
 
 let held = async () => (await g.read(describedRule.find, { native: true }))
 let sweep = async () => {
-  let read = (line: string) => g.read(line, { native: true }) as Bundle[]
-  let rows = await held()
-  let patch = rows.flatMap((row) => describedRule.move(row, read))
+  let patch = (await held()).flatMap((row) => describedRule.move(row))
   if (patch.length) await g.apply(patch, { trusted: true })
   return patch.length
 }
 
 test('the description rows go, and the person’s rows and the lens package stay', async () => {
-  let before = (await held()).length
-  assertEquals(before > 20, true)
-  assertEquals(await sweep(), before - 1)
-  assertEquals((await held()).map((b) => b.entity.eid), [own])
-  assertEquals(await sweep(), 0)
+  let before = await held()
+  assertEquals(before.length > 20, true)
+  assertEquals(before.some((b) => b.entity.eid == own), false)
+  assertEquals(await sweep(), before.length)
+  assertEquals(await held(), [])
+  assertEquals((await g.get([own], undefined, { native: true })).length, 1)
   assertEquals(
     (await g.read('.doc', { native: true })).map((b) => b.entity.eid),
     ['mine'],

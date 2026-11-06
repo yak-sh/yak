@@ -129,7 +129,10 @@ The parser emits plain scalars; the compiler reads them by the property's type.
   `.task .comments_target>=3` counts the comments on each task. A `!` before
   the child test is the all/none form: `.task
   .comments_target!.created.by!=<person>` is the tasks with no comment by
-  anyone else.
+  anyone else. `!comments` alone is the none form with no child test. A
+  plural already taken (a component that ends in `s` is its own plural) names
+  the property too: `._package !_lens_package` is the packages no `_lens`
+  names.
 
 ## Walks
 

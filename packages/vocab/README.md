@@ -265,11 +265,13 @@ declares `entity`.
 A **reverse association** is a reference seen from its target, represented by
 `Assoc` as `{ comp, prop }`. `review.book` gives the name `reviews`; multiple
 references on one component use the property name, as in `loans_book`. Forward
-component names win. Plurals are derived mechanically: `y` becomes `ies`, a
-final `s` stays, and every other name gains `s`. A path walked forward can turn
-back: `turn` finds where a reverse association stands in place of a hop's
-component, as in `.grant.app.members_space.member.person`. The name after a
-component is always its property, even one spelled like an association.
+component names win, and a plural already taken names the property too:
+`_lens.package`, whose plural is `_lens` itself, gives `_lens_package`. Plurals
+are derived mechanically: `y` becomes `ies`, a final `s` stays, and every other
+name gains `s`. A path walked forward can turn back: `turn` finds where a
+reverse association stands in place of a hop's component, as in
+`.grant.app.members_space.member.person`. The name after a component is always
+its property, even one spelled like an association.
 
 ```ts
 import { loadVocab, Unknown } from '@yaks/vocab'

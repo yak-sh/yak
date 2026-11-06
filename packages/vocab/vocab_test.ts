@@ -265,6 +265,19 @@ test('an association names the property when a comp has several refs', () => {
   assertEquals(w.assoc('loans_book'), { comp: 'loan', prop: 'book' })
   assertEquals(w.assoc('loans_member'), { comp: 'loan', prop: 'member' })
   assertEquals(w.assoc('loans'), undefined)
+  // a plural already taken names the property: `bus` is its own plural
+  let x = loadVocab({
+    $defs: {
+      route: { component: true, type: 'object', properties: {} },
+      bus: {
+        component: true,
+        type: 'object',
+        properties: { route: { type: 'string', ref: 'route' } },
+      },
+    },
+  })
+  assertEquals(x.assoc('bus'), undefined)
+  assertEquals(x.assoc('bus_route'), { comp: 'bus', prop: 'route' })
   // A path turns back only where a hop's component would stand.
   assertEquals(w.turn(['loan', 'book', 'reviews', 'review', 'stars']), 2)
   assertEquals(w.turn(['review', 'reviews']), -1)

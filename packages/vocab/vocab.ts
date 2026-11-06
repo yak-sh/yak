@@ -882,17 +882,20 @@ let composed = (docs: VocabDoc[], keywords: Keywords[]): Vocab => {
   // hand listed, so a new reference property earns its reverse name for free. A
   // component with one reference is named by its plural (`review.book` →
   // `.reviews`); several references disambiguate with the property
-  // (`loan.book`, `loan.member` → `.loans_book`, `.loans_member`). A
-  // component's name is left alone — the forward name always wins — and where
-  // two components pluralize alike the alphabetically first keeps it.
+  // (`loan.book`, `loan.member` → `.loans_book`, `.loans_member`). A forward
+  // name always wins, so a plural already taken (`_lens.package`, whose plural
+  // is its own name, or a second component pluralizing alike) names the
+  // property too: `._package !_lens_package` is the packages no `_lens` names.
   let assocs = new Map<string, Assoc>()
+  let taken = (name: string) => routes.has(name) || assocs.has(name)
   for (let comp of names) {
     let refs = Object.keys(props(comp))
       .filter((p) => propFor(comp, p)!.category == 'ref')
     for (let prop of refs) {
-      let name = refs.length == 1 ? plural(comp) : `${plural(comp)}_${prop}`
-      if (routes.has(name) || assocs.has(name)) continue
-      assocs.set(name, { comp, prop })
+      let name = [plural(comp), `${plural(comp)}_${prop}`]
+        .slice(refs.length == 1 ? 0 : 1)
+        .find((n) => !taken(n))
+      if (name) assocs.set(name, { comp, prop })
     }
   }
 

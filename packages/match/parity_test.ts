@@ -121,6 +121,36 @@ test('epoch millisecond properties resolve the same time bounds in both evaluato
   }
 })
 
+// A component whose plural is its own name (`_lens` names a `_package`) gets
+// its association by the property, so "a package no lens names" is a line.
+test('an association whose plural is taken is named by its property', () => {
+  let v = loadVocab({
+    $defs: {
+      pkg: { component: true, type: 'object', properties: {} },
+      lens: {
+        component: true,
+        type: 'object',
+        properties: { pkg: { type: 'string', ref: 'pkg', death: 'cascade' } },
+      },
+    },
+  })
+  let bs: Bundle[] = [
+    { entity: { eid: 'named' }, pkg: {} },
+    { entity: { eid: 'loose' }, pkg: {} },
+    { entity: { eid: 'l1' }, lens: { pkg: 'named' } },
+  ]
+  let s = loaded(v, bs)
+  for (
+    let [q, want] of [
+      ['.pkg !lens_pkg', ['loose']],
+      ['.pkg .lens_pkg', ['named']],
+    ] as [string, string[]][]
+  ) {
+    assertEquals(eids(matcher(q, v, { now: NOW })(bs)).sort(), want, q)
+    assertEquals(eids(fromSql(s, q)).sort(), want, q)
+  }
+})
+
 test('a window cuts the whole alternation, on both sides', () => {
   let s = sql()
   let sides = [
