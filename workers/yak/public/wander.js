@@ -16,6 +16,10 @@
 //
 // Every strip of frames is decoded before he first moves, and each one is a
 // layer of its own, shown or hidden whole, so no frame waits on a picture.
+// A browser may refuse to decode ahead a strip that loads fine (Chrome does
+// when a request is superseded), so a refusal only counts once the strip
+// itself fails to load; then he stays the logo, untouched, and the rejection names the
+// strip for the page's reporter (report.js).
 {
   let slot = document.querySelector('[data-wander]')
   let still = slot?.querySelector('img')
@@ -80,6 +84,18 @@
     return Math.max(0, left)
   }
 
+  // `img` decoded, or at least loaded; rejects only when it cannot load
+  let ready = (img, name) =>
+    img.decode().catch(() =>
+      new Promise((ok, no) => {
+        let failed = () =>
+          no(new Error(`The wandering yak's ${name} strip did not load`))
+        if (img.complete) return img.naturalWidth ? ok() : failed()
+        img.addEventListener('load', ok, { once: true })
+        img.addEventListener('error', failed, { once: true })
+      })
+    )
+
   let start = async () => {
     let yak = document.createElement('div')
     yak.className = 'Wander'
@@ -89,15 +105,18 @@
       span.className = 'Wander_Strip'
       let img = document.createElement('img')
       let file = (d) => new URL(`mascot/wander-${name}-128${d}.webp`, base).href
-      img.src = file('')
       img.srcset = `${file('-1x')} 1x, ${file('')} 2x, ${file('-3x')} 3x`
+      img.src = file('')
       img.alt = ''
       span.append(img)
       return [name, span]
     }))
+    // the page is left as it is until every strip is in
+    await Promise.all(
+      Object.entries(strips).map(([name, s]) => ready(s.firstChild, name)),
+    )
     yak.append(still, ...Object.values(strips))
     slot.append(yak)
-    await Promise.all(Object.values(strips).map((s) => s.firstChild.decode()))
 
     // His lane in the margin: his size, and the x that keeps his figure
     // clear of the words; size 0 when there is no room.

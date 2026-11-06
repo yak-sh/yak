@@ -3,7 +3,7 @@
 // column does; the hero's yak sits at the top of the page. Out of the hero
 // his place is on the page, so a scroll alone never moves him.
 import { test } from '@yaks/testing'
-import { assert, assertEquals } from '@std/assert'
+import { assert, assertEquals, assertRejects } from '@std/assert'
 import { parseHTML } from 'linkedom'
 import { page as home } from './site/mod.ts'
 
@@ -11,7 +11,8 @@ let at = (path: string) => new URL(path, import.meta.url)
 let html = home('index.html')
 let code = await Deno.readTextFile(at('./public/wander.js'))
 
-let page = async (column = 144) => {
+// `decode` is what the browser makes of decoding a strip ahead
+let page = async (column = 144, decode = () => Promise.resolve()) => {
   let { document, window, Event, CustomEvent } = parseHTML(html)
   let env = {
     scrollY: 0,
@@ -20,6 +21,7 @@ let page = async (column = 144) => {
     now: 0,
     frames: [] as ((t: number) => void)[],
     on: {} as Record<string, () => void>,
+    started: undefined as Promise<void> | undefined,
   }
   let slot = document.querySelector('[data-wander]')!
   Object.defineProperty(slot, 'offsetWidth', { value: 128 })
@@ -32,12 +34,18 @@ let page = async (column = 144) => {
     }) as DOMRect
   window.HTMLElement.prototype.getBoundingClientRect = () =>
     ({ width: 0 }) as DOMRect
-  window.HTMLImageElement.prototype.decode = () => Promise.resolve()
+  window.HTMLImageElement.prototype.decode = decode
   Object.defineProperty(document, 'currentScript', {
     value: { src: 'https://yaks.app/wander.js' },
   })
   Object.assign(document, {
-    fonts: { ready: Promise.resolve() },
+    // he starts once the fonts are in; `started` is how that went
+    fonts: {
+      ready: {
+        then: (f: () => Promise<void>) =>
+          env.started = Promise.resolve().then(f),
+      },
+    },
     createRange: () => ({
       selectNodeContents() {},
       getClientRects:
@@ -88,8 +96,10 @@ let page = async (column = 144) => {
     y: number,
   ) => (env.scrollY = y, env.on.scroll?.(), await step(16))
   let yak = () => document.querySelector('.Wander') as HTMLElement
-  // where he is: in the hero, or his place in the window and what he shows
+  // where he is: in the hero, or his place in the window and what he shows;
+  // 'logo' when the page was never handed to him
   let where = () => {
+    if (!yak()) return 'logo'
     let on = yak().querySelector('[data-on]')
     let showing = on?.matches('[data-idle]')
       ? 'sitting'
@@ -107,7 +117,7 @@ let page = async (column = 144) => {
     (e) => asked.push((e as CustomEvent).detail),
   )
   let click = () => yak().dispatchEvent(new Event('click'))
-  return { step, scroll, where, click, asked }
+  return { step, scroll, where, click, asked, started: env.started! }
 }
 
 test('the home page draws the yak as its logo, and loads what moves him', async () => {
@@ -177,4 +187,34 @@ test('a click while he sits asks for his nose lick', async () => {
   let p = await page()
   p.click()
   assertEquals(p.asked, ['lick'])
+})
+
+let refused = () =>
+  Promise.reject(new Error('The source image cannot be decoded.'))
+let loaded = (width: number) =>
+  function (this: HTMLImageElement) {
+    Object.defineProperties(this, {
+      complete: { value: true },
+      naturalWidth: { value: width },
+    })
+    return refused()
+  }
+
+test('a strip the browser will not decode ahead, but loads, still moves him', async () => {
+  let p = await page(144, loaded(768))
+  await p.scroll(1500)
+  await p.step(8000)
+  assert(!p.where().startsWith('home'))
+})
+
+test('a strip that cannot load leaves him the logo, and says which', async () => {
+  let p = await page(144, loaded(0))
+  await assertRejects(
+    () => p.started,
+    Error,
+    "The wandering yak's down strip did not load",
+  )
+  await p.scroll(1500)
+  await p.step(3000)
+  assertEquals(p.where(), 'logo')
 })
