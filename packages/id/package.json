@@ -1,6 +1,6 @@
 {
   "name": "@yaks/id",
-  "version": "0.2.18",
+  "version": "0.2.23",
   "type": "module",
   "exports": {
     ".": "./mod.ts",
@@ -10,12 +10,12 @@
   "license": "Apache-2.0",
   "description": "Formatting and resolution of human ids with opt-in entity numbers and vocabulary-declared prefixes.",
   "dependencies": {
-    "@yaks/vocab": "0.2.18"
+    "@yaks/vocab": "0.2.23"
   },
   "devDependencies": {
     "@std/assert": "npm:@jsr/std__assert@^1.0.0",
-    "@yaks/graph": "0.2.18",
-    "@yaks/ram": "0.2.18",
+    "@yaks/graph": "0.2.23",
+    "@yaks/ram": "0.2.23",
     "@yaks/testing": "0.2.17"
   }
 }

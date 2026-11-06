@@ -1,6 +1,6 @@
 {
   "name": "@yaks/render",
-  "version": "0.2.18",
+  "version": "0.2.23",
   "type": "module",
   "exports": {
     ".": "./mod.ts",
@@ -9,17 +9,17 @@
   "license": "Apache-2.0",
   "description": "Selects views, editors, and actions for entity bundles through a query-matched registry independent of the rendering host.",
   "dependencies": {
-    "@yaks/graph": "0.2.18",
-    "@yaks/match": "0.2.18",
-    "@yaks/query": "0.2.18",
-    "@yaks/vocab": "0.2.18"
+    "@yaks/graph": "0.2.23",
+    "@yaks/match": "0.2.23",
+    "@yaks/query": "0.2.23",
+    "@yaks/vocab": "0.2.23"
   },
   "devDependencies": {
     "@std/assert": "npm:@jsr/std__assert@^1.0.0",
-    "@yaks/doc": "0.2.18",
-    "@yaks/kernel": "0.2.22",
-    "@yaks/task": "0.2.22",
+    "@yaks/doc": "0.2.23",
+    "@yaks/kernel": "0.2.23",
+    "@yaks/task": "0.2.23",
     "@yaks/testing": "0.2.17",
-    "@yaks/text": "0.2.18"
+    "@yaks/text": "0.2.23"
   }
 }

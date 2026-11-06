@@ -1,21 +1,21 @@
 {
   "name": "@yaks/ram",
-  "version": "0.2.18",
+  "version": "0.2.23",
   "type": "module",
   "exports": "./mod.ts",
   "license": "Apache-2.0",
   "description": "Synchronous in-memory graph storage over a Map of bundles, with queries evaluated by @yaks/match.",
   "dependencies": {
-    "@yaks/fp": "0.2.18",
-    "@yaks/graph": "0.2.18",
-    "@yaks/match": "0.2.18",
-    "@yaks/vocab": "0.2.18"
+    "@yaks/fp": "0.2.23",
+    "@yaks/graph": "0.2.23",
+    "@yaks/match": "0.2.23",
+    "@yaks/vocab": "0.2.23"
   },
   "devDependencies": {
     "@std/assert": "npm:@jsr/std__assert@^1.0.0",
-    "@yaks/query": "0.2.18",
-    "@yaks/sql": "0.2.18",
-    "@yaks/sqlite": "0.2.22",
+    "@yaks/query": "0.2.23",
+    "@yaks/sql": "0.2.23",
+    "@yaks/sqlite": "0.2.23",
     "@yaks/testing": "0.2.17"
   }
 }

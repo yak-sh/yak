@@ -1,6 +1,6 @@
 {
   "name": "@yaks/notify",
-  "version": "0.2.18",
+  "version": "0.2.23",
   "type": "module",
   "exports": {
     ".": "./mod.ts",
@@ -10,12 +10,12 @@
   "license": "Apache-2.0",
   "description": "How somebody is notified: a knock aimed at an entity, what they watch or mute, and an open conversation.",
   "dependencies": {
-    "@yaks/graph": "0.2.18",
-    "@yaks/vocab": "0.2.18"
+    "@yaks/graph": "0.2.23",
+    "@yaks/vocab": "0.2.23"
   },
   "devDependencies": {
-    "@yaks/kernel": "0.2.22",
-    "@yaks/ram": "0.2.18",
+    "@yaks/kernel": "0.2.23",
+    "@yaks/ram": "0.2.23",
     "@yaks/testing": "0.2.17"
   }
 }

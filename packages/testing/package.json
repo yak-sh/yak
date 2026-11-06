@@ -17,9 +17,9 @@
   "dependencies": {
     "@std/assert": "npm:@jsr/std__assert@^1.0.0",
     "@yaks/benchmark": "0.2.17",
-    "@yaks/file": "0.2.22",
-    "@yaks/fp": "0.2.18",
-    "@yaks/process": "0.2.22"
+    "@yaks/file": "0.2.23",
+    "@yaks/fp": "0.2.23",
+    "@yaks/process": "0.2.23"
   },
   "devDependencies": {}
 }

@@ -1,6 +1,6 @@
 {
   "name": "@yaks/edge",
-  "version": "0.2.18",
+  "version": "0.2.23",
   "type": "module",
   "exports": {
     ".": "./mod.ts",
@@ -10,16 +10,16 @@
   "license": "Apache-2.0",
   "description": "Creates directed links as graph entities with content-derived eids, validates writes, and follows links through storage reads and SQL queries.",
   "dependencies": {
-    "@yaks/fp": "0.2.18",
-    "@yaks/graph": "0.2.18",
-    "@yaks/query": "0.2.18",
-    "@yaks/sql": "0.2.18",
-    "@yaks/vocab": "0.2.18"
+    "@yaks/fp": "0.2.23",
+    "@yaks/graph": "0.2.23",
+    "@yaks/query": "0.2.23",
+    "@yaks/sql": "0.2.23",
+    "@yaks/vocab": "0.2.23"
   },
   "devDependencies": {
     "@std/assert": "npm:@jsr/std__assert@^1.0.0",
-    "@yaks/ram": "0.2.18",
-    "@yaks/sqlite": "0.2.22",
+    "@yaks/ram": "0.2.23",
+    "@yaks/sqlite": "0.2.23",
     "@yaks/testing": "0.2.17"
   }
 }

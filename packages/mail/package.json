@@ -1,6 +1,6 @@
 {
   "name": "@yaks/mail",
-  "version": "0.2.22",
+  "version": "0.2.23",
   "type": "module",
   "exports": {
     ".": "./mod.ts",
@@ -15,27 +15,27 @@
   "license": "Apache-2.0",
   "description": "Represents letters and their delivery outcomes as graph components, sends them through a sender the caller supplies, and converts arrivals to bundles.",
   "dependencies": {
-    "@yaks/api": "0.2.18",
-    "@yaks/cli": "0.2.22",
-    "@yaks/doc": "0.2.18",
-    "@yaks/edge": "0.2.18",
-    "@yaks/effects": "0.2.22",
-    "@yaks/fp": "0.2.18",
-    "@yaks/graph": "0.2.18",
-    "@yaks/hook": "0.2.18",
-    "@yaks/host": "0.2.22",
-    "@yaks/id": "0.2.18",
-    "@yaks/notify": "0.2.18",
-    "@yaks/query": "0.2.18",
-    "@yaks/tools": "0.2.18",
-    "@yaks/vocab": "0.2.18"
+    "@yaks/api": "0.2.23",
+    "@yaks/cli": "0.2.23",
+    "@yaks/doc": "0.2.23",
+    "@yaks/edge": "0.2.23",
+    "@yaks/effects": "0.2.23",
+    "@yaks/fp": "0.2.23",
+    "@yaks/graph": "0.2.23",
+    "@yaks/hook": "0.2.23",
+    "@yaks/host": "0.2.23",
+    "@yaks/id": "0.2.23",
+    "@yaks/notify": "0.2.23",
+    "@yaks/query": "0.2.23",
+    "@yaks/tools": "0.2.23",
+    "@yaks/vocab": "0.2.23"
   },
   "devDependencies": {
     "@std/assert": "npm:@jsr/std__assert@^1.0.0",
-    "@yaks/kernel": "0.2.22",
-    "@yaks/project": "0.2.18",
-    "@yaks/ram": "0.2.18",
-    "@yaks/task": "0.2.22",
+    "@yaks/kernel": "0.2.23",
+    "@yaks/project": "0.2.23",
+    "@yaks/ram": "0.2.23",
+    "@yaks/task": "0.2.23",
     "@yaks/testing": "0.2.17"
   }
 }

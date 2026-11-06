@@ -1,6 +1,6 @@
 {
   "name": "@yaks/model2vec",
-  "version": "0.2.20",
+  "version": "0.2.23",
   "type": "module",
   "exports": {
     ".": "./mod.ts",

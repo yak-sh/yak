@@ -1,6 +1,6 @@
 {
   "name": "@yaks/process",
-  "version": "0.2.22",
+  "version": "0.2.23",
   "type": "module",
   "exports": {
     ".": "./mod.ts",
@@ -21,19 +21,19 @@
   "license": "Apache-2.0",
   "description": "Starts, adopts and supervises operating-system processes, recording each one as a graph entity with its pid and exit code.",
   "dependencies": {
-    "@yaks/fp": "0.2.18",
-    "@yaks/graph": "0.2.18",
-    "@yaks/query": "0.2.18",
-    "@yaks/render": "0.2.18",
-    "@yaks/vocab": "0.2.18",
+    "@yaks/fp": "0.2.23",
+    "@yaks/graph": "0.2.23",
+    "@yaks/query": "0.2.23",
+    "@yaks/render": "0.2.23",
+    "@yaks/vocab": "0.2.23",
     "undici": "^7.28.0"
   },
   "devDependencies": {
     "@std/assert": "npm:@jsr/std__assert@^1.0.0",
-    "@yaks/model": "0.2.22",
-    "@yaks/ram": "0.2.18",
-    "@yaks/session": "0.2.22",
+    "@yaks/model": "0.2.23",
+    "@yaks/ram": "0.2.23",
+    "@yaks/session": "0.2.23",
     "@yaks/testing": "0.2.17",
-    "@yaks/tools": "0.2.18"
+    "@yaks/tools": "0.2.23"
   }
 }

@@ -1,6 +1,6 @@
 {
   "name": "@yaks/ui",
-  "version": "0.2.22",
+  "version": "0.2.23",
   "type": "module",
   "exports": {
     ".": "./mod.ts",
@@ -18,9 +18,9 @@
   "description": "Preact parts with semantic variants, CSS and terminal sheet entries; compose kits with themes and skins, and inspect their specimens in the style guide.",
   "dependencies": {
     "@preact/signals": "2.9.4",
-    "@yaks/api": "0.2.18",
-    "@yaks/render": "0.2.18",
-    "@yaks/tui": "0.2.22",
+    "@yaks/api": "0.2.23",
+    "@yaks/render": "0.2.23",
+    "@yaks/tui": "0.2.23",
     "lucide": "1.31.0",
     "preact": "10.29.7",
     "preact-render-to-string": "6.7.0"

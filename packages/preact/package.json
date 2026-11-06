@@ -1,6 +1,6 @@
 {
   "name": "@yaks/preact",
-  "version": "0.2.22",
+  "version": "0.2.23",
   "type": "module",
   "exports": {
     ".": "./mod.ts",
@@ -9,18 +9,18 @@
   "license": "Apache-2.0",
   "description": "Renders registry-selected views with Preact and binds them to an entity store with subscriptions scoped to mounted components.",
   "dependencies": {
-    "@yaks/file": "0.2.22",
-    "@yaks/process": "0.2.22",
-    "@yaks/query": "0.2.18",
-    "@yaks/render": "0.2.18",
-    "@yaks/vocab": "0.2.18",
+    "@yaks/file": "0.2.23",
+    "@yaks/process": "0.2.23",
+    "@yaks/query": "0.2.23",
+    "@yaks/render": "0.2.23",
+    "@yaks/vocab": "0.2.23",
     "preact": "10.29.7",
     "sucrase": "3.35.1"
   },
   "devDependencies": {
     "@preact/signals": "2.9.4",
     "@std/assert": "npm:@jsr/std__assert@^1.0.0",
-    "@yaks/client": "0.2.20",
+    "@yaks/client": "0.2.23",
     "@yaks/testing": "0.2.17",
     "linkedom": "^0.18.12"
   }

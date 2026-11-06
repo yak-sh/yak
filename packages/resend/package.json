@@ -12,10 +12,10 @@
   "description": "Resend sending, signed webhook receipts and incoming messages at the portable mail boundary.",
   "type": "module",
   "dependencies": {
-    "@yaks/api": "0.2.18",
-    "@yaks/graph": "0.2.18",
-    "@yaks/host": "0.2.22",
-    "@yaks/mail": "0.2.22"
+    "@yaks/api": "0.2.23",
+    "@yaks/graph": "0.2.23",
+    "@yaks/host": "0.2.23",
+    "@yaks/mail": "0.2.23"
   },
   "devDependencies": {
     "@yaks/testing": "0.2.17",
