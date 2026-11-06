@@ -4,7 +4,14 @@
 // so one a reset cuts off holds back no other.
 import { assertEquals } from '@std/assert'
 import { test, until } from '@yaks/testing'
-import { BACKSTOP, waking } from './operator-store.ts'
+import { ram } from '@yaks/ram'
+import {
+  BACKSTOP,
+  drain,
+  operatorGraph,
+  operatorVocab,
+  waking,
+} from './operator-store.ts'
 
 let storage = () => {
   let at: number | null = null
@@ -59,4 +66,29 @@ test('work that fails is reported, and its backstop stays armed to try again', a
   await wake(() => Promise.reject(new Error('no')))
   await until(() => failed.length)
   assertEquals(s.at != null, true)
+})
+
+// A store whose every step owes another (forks forking) is worked a slice per
+// alarm: past `until` nothing more starts, and drain answers now so the next
+// alarm takes it up.
+test('a drain past its slice starts nothing and answers now; the next works on', async () => {
+  let ran: string[] = []
+  let ask = (n: number) => ({
+    entity: { eid: crypto.randomUUID() },
+    operator_request: { channel: String(n) },
+  })
+  let store = operatorGraph(ram(operatorVocab), [])
+  store.fx.handle({
+    operator_receive: async (e) => {
+      let n = Number(e.comp?.channel)
+      ran.push(String(n))
+      if (n < 3) await store.g.apply([ask(n + 1)], { trusted: true })
+    },
+  })
+  await store.g.apply([ask(1)], { trusted: true })
+  let before = Date.now()
+  let next = await drain(store, before - 1)
+  assertEquals([ran, next! >= before && next! <= Date.now()], [[], true])
+  assertEquals(await drain(store), null)
+  assertEquals(ran, ['1', '2', '3'])
 })

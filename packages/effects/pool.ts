@@ -278,6 +278,9 @@ export type Ctx = {
 export type WorkOpts = {
   /** Maximum discovery passes; omitted, drain until nothing is left to start. */
   passes?: number
+  /** The instant (ms, the pool's clock) a drain stops starting runs: what it
+   * started goes on, and what is owed waits for the host's next call. */
+  until?: number
   /** Owe fresh start-up runs and start those fitting the worker's free slots. */
   startup?: boolean
 }
@@ -1143,6 +1146,7 @@ export let pool = (ctx: Ctx, opts: Partial<PoolOpts> = {}): Pool => {
     work: async (g, signal, options = Infinity) => {
       let requested = typeof options == 'number' ? { passes: options } : options
       let passes = requested.passes ?? Infinity
+      let until = requested.until ?? Infinity
       graph = g
       if (!signal || signal.aborted) {
         if (
@@ -1153,7 +1157,7 @@ export let pool = (ctx: Ctx, opts: Partial<PoolOpts> = {}): Pool => {
           return
         }
         let opening = await join(g, requested.startup, passes > 0)
-        for (let n = 0; n < passes; n++) {
+        for (let n = 0; n < passes && clock() < until; n++) {
           let { started, more } = await pass(
             g,
             n ? page : page - opening.length,
@@ -1174,7 +1178,7 @@ export let pool = (ctx: Ctx, opts: Partial<PoolOpts> = {}): Pool => {
             else while (await still(settled, beat, time)) await renew(g)
           }
           // A turn for timers and I/O between passes, never after the last.
-          if (n + 1 < passes) await sleep(0, undefined, time)
+          if (n + 1 < passes && clock() < until) await sleep(0, undefined, time)
         }
         return
       }

@@ -230,6 +230,13 @@ export class Builder {
   #fx?: { running(): unknown[] }
   // The alarm's work (operator-store.ts `waking`), one at a time.
   #wake?: (work: () => Promise<number | null>) => Promise<void>
+  // When the Operator's work stops starting runs (operator-store.ts `SLICE`),
+  // and whether the alarm's drain is working it: beside a drain a write's
+  // work starts only within the drain's slice, so the drain ends; otherwise
+  // it opens a slice of its own, and the alarm it arms takes up what that
+  // leaves.
+  #until = 0
+  #draining = false
   // The browsers people lend the Operator, and the calls asked of them that
   // wait for an answer: in memory, as the step waiting on one is.
   #lent: Browsers
@@ -544,18 +551,22 @@ export class Builder {
 
   #work() {
     return this.#operator ??= (async () => {
-      let { operatorStore } = await import('./operator-store.ts')
+      let { operatorStore, SLICE } = await import('./operator-store.ts')
       let { attachmentTools, handleChannels } = await import(
         './operator-channels.ts'
       )
       let { operating } = await import('./operator.ts')
       let { operatorFrames } = await import('./operator-host.ts')
       // A write that owes work starts it now, beside a step in flight, so a
-      // person's words reach the session they are for at once; the alarm is
-      // there for what this wake leaves.
+      // person's words reach the session they are for at once, within a
+      // slice; the alarm is there for what this wake leaves.
       let nudge = () => {
         this.#arming = this.#ctx.storage.setAlarm(Date.now())
-        store.fx.work(store.g).catch((e) =>
+        if (!this.#draining && Date.now() >= this.#until) {
+          this.#until = Date.now() + SLICE
+        }
+        if (Date.now() >= this.#until) return
+        store.fx.work(store.g, undefined, { until: this.#until }).catch((e) =>
           caught(e, { request: 'operator effects' })
         )
       }
@@ -615,13 +626,20 @@ export class Builder {
   }
 
   async alarm() {
-    let { drain, waking } = await import('./operator-store.ts')
+    let { drain, SLICE, waking } = await import('./operator-store.ts')
     let { store } = await this.#work()
     this.#wake ??= waking(
       this.#ctx.storage,
       (e) => caught(e, { request: 'operator alarm' }),
     )
-    await this.#wake(() => drain(store))
+    await this.#wake(async () => {
+      this.#draining = true
+      try {
+        return await drain(store, this.#until = Date.now() + SLICE)
+      } finally {
+        this.#draining = false
+      }
+    })
   }
 
   /**

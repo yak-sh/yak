@@ -730,6 +730,32 @@ test('finite pool passes leave newly owed work for the next wake', async () => {
   assertEquals(a.oops, [])
 })
 
+test('a drain stops starting runs at its until, and owed work waits for the next call', async () => {
+  let t = 0
+  let a = proc(store(), {
+    max: 1,
+    defer: true,
+    clock: { ...system, now: () => t },
+  })
+  a.fx.handle({
+    post_note: async (event) => {
+      a.ran.push(event.entity.eid)
+      t += 10
+      let n = Number(event.entity.eid.slice(1))
+      if (n < 5) await a.g.apply([post(`p${n + 1}`)])
+    },
+  })
+  await a.g.apply([post('p1')])
+  await a.fx.work(a.g, undefined, { until: 20 })
+  await a.fx.idle()
+  assertEquals(a.ran, ['p1', 'p2'])
+  assertEquals((await run(a.g, 'post_note', 'p3')).state, 'pending')
+  await a.fx.work(a.g)
+  await a.fx.idle()
+  assertEquals(a.ran, ['p1', 'p2', 'p3', 'p4', 'p5'])
+  assertEquals(a.oops, [])
+})
+
 test('a worker settles disabled runs from older writers without calling a handler', async () => {
   let storage = store()
   let writer = proc(storage, { owes: 'declared' })

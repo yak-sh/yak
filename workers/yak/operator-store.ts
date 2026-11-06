@@ -168,14 +168,24 @@ export let waking = (storage: Alarms, report: (e: unknown) => void) => {
 export let RETRY = 60_000
 
 /**
- * Work the store's pool until nothing is due, as the object's alarm does:
- * first each wake-up due fires (@yaks/wake `tick`), then each session step is
- * a run, and its commit owes the next. Answers when the next pending run it
- * handles or the next wake-up is due (ms since the epoch), or null when
- * neither is.
+ * How long one wake starts runs for. An alarm is one invocation, whose CPU
+ * the runtime caps (30 s): a store whose sessions keep owing steps (forks
+ * forking) would otherwise work them all in one alarm until it is killed.
+ * What a slice leaves waits for the next alarm, armed at once.
+ */
+export let SLICE = 10_000
+
+/**
+ * Work the store's pool until nothing is due or `until` passes, as the
+ * object's alarm does: first each wake-up due fires (@yaks/wake `tick`), then
+ * each session step is a run, and its commit owes the next; the steps going
+ * at `until` finish. Answers when the next pending run it handles or the next
+ * wake-up is due (ms since the epoch), now when the slice ended with one due,
+ * or null when neither is.
  */
 export let drain = async (
   { g, fx }: Pick<ReturnType<typeof operatorStore>, 'g' | 'fx'>,
+  until = Date.now() + SLICE,
 ): Promise<number | null> => {
   await phoneTexts(g)
   await channeled(g)
@@ -188,7 +198,7 @@ export let drain = async (
   for (let { wake, error } of refused) {
     caught(error, { request: 'operator wake', wake: wake.entity.eid })
   }
-  let run = await working({ g, fx })
+  let run = await working({ g, fx }, until)
   // One that came due while the pool worked fires on the next alarm; one a
   // tick refused waits RETRY, rather than ringing the alarm at once again.
   let now = Date.now()
@@ -200,13 +210,14 @@ export let drain = async (
 
 let working = async (
   { g, fx }: Pick<ReturnType<typeof operatorStore>, 'g' | 'fx'>,
+  until: number,
 ): Promise<number | null> => {
   // A pending run no handler here takes arms nothing: words declared before
   // their handler was (sessions' were, until the Operator ran on them).
   let handled = fx.slots().filter((s) => s.effect && s.run).map((s) => s.id)
   let seen = ''
   for (;;) {
-    await fx.work(g)
+    await fx.work(g, undefined, { until })
     await fx.idle()
     let [next] = await g.read(
       `.effect.state=pending .effect.handler=${
@@ -216,6 +227,7 @@ let working = async (
     if (!next) return null
     let at = Date.parse(String((next.effect as { next?: string }).next)) ||
       Date.now()
+    if (at <= Date.now() && Date.now() >= until) return Date.now()
     // A due run this pass left as it found it is nobody's to take here.
     let now = JSON.stringify(next)
     if (at > Date.now() || now == seen) return Math.max(at, Date.now() + 1000)

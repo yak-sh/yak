@@ -310,8 +310,10 @@ the effects it handles (`owes: 'handled'`), so a declared effect without a
 handler owes no run there; a process that writes for another to run passes
 `owes: 'declared'` and owes a run for every declared effect. A crash after
 commit cannot lose the recorded run. `work(g)` claims due runs and continues
-until none can start; `work(g, signal)` with a live signal keeps working until
-the signal aborts.
+until none can start; `work(g, undefined, {until})` stops starting them at that
+instant, so a host whose invocation has limits does a bounded slice and calls
+again; `work(g, signal)` with a live signal keeps working until the signal
+aborts.
 
 The first pass and every later pass use the same indexed selection of recorded
 runs. A worker joining or replacing another worker resumes this queue; it does
