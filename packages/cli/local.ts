@@ -101,45 +101,17 @@ let open = async (
     ? readThread(path)
     : undefined
   // A web warms beside its listener: its reader's workers start, so its first
-  // read is as fast as its next, and then it tells of a main thread held so
-  // long that every request waited on it (./stall.ts). The host carries the
-  // warming as `warmed`, made before it is composed: a server taking over a
-  // port waits for it before it listens, and any other listens at once
-  // (@yaks/api `serve`). A warming that fails rejects it, and the server ends.
+  // read is as fast as its next, and then its main thread is watched
+  // ({@link watched}). The host carries the warming as `warmed`, made before
+  // it is composed: a server taking over a port waits for it before it
+  // listens, and any other listens at once (@yaks/api `serve`). A warming that
+  // fails rejects it, and the server ends.
   let warming = Promise.withResolvers<void>()
   warming.promise.catch(() => {})
   let warmed = reader && warming.promise
   let warm = (host: Served): Served => {
     if (!reader) return host
-    let profile: Awaited<ReturnType<typeof sampler>> | undefined
-    let unwatch = () => {}
-    let done = (async () => {
-      await reader.ready()
-      let started = profile = await sampler()
-      // Silent once started: its samples are told only in a stall's report.
-      unwatch = stalls({
-        sample: (ms, held) =>
-          started.take(ms, held)?.catch((error) => {
-            void host.report?.(error, {
-              tags: { step: 'main thread sampling' },
-            })
-            return `stack sampling failed: ${String(error)}`
-          }),
-        report: (error) =>
-          void host.report?.(error, { tags: { step: 'main thread' } }),
-      })
-    })()
-    done.then(warming.resolve, warming.reject)
-    let close = host.close
-    host.close = async (code) => {
-      await done.catch(() => {})
-      unwatch()
-      try {
-        await profile?.close()
-      } finally {
-        await close(code)
-      }
-    }
+    watched(host, reader.ready()).then(warming.resolve, warming.reject)
     return host
   }
   if (
@@ -202,6 +174,45 @@ let open = async (
   return warm(host)
 }
 
+// A process that stays up tells of a main thread held so long that its
+// timers, sockets and requests all waited on it (./stall.ts), with the stacks
+// sampled while it was held (./stall_profile.ts). Watching starts once `ready`
+// settles, and the host's close stops it.
+let watched = (
+  host: Served,
+  ready: Promise<unknown> = Promise.resolve(),
+): Promise<void> => {
+  let profile: Awaited<ReturnType<typeof sampler>> | undefined
+  let unwatch = () => {}
+  let done = (async () => {
+    await ready
+    let started = profile = await sampler()
+    // Silent once started: its samples are told only in a stall's report.
+    unwatch = stalls({
+      sample: (ms, held) =>
+        started.take(ms, held)?.catch((error) => {
+          void host.report?.(error, {
+            tags: { step: 'main thread sampling' },
+          })
+          return `stack sampling failed: ${String(error)}`
+        }),
+      report: (error) =>
+        void host.report?.(error, { tags: { step: 'main thread' } }),
+    })
+  })()
+  let close = host.close
+  host.close = async (code) => {
+    await done.catch(() => {})
+    unwatch()
+    try {
+      await profile?.close()
+    } finally {
+      await close(code)
+    }
+  }
+  return done
+}
+
 /** The graph a config names, open for the roles a command's own thread serves,
  * with duties available to a host that explicitly starts them. `--no-duties`
  * disables inline duties, not external web recovery; config `duties: false`
@@ -247,6 +258,10 @@ export let work = async (
   let opening = compose(config, roles, facet)
   hosts.set(key, opening)
   let host = await opening
+  // A worker's thread is watched as a web's is: a stall says what held it.
+  watched(host).catch((error) =>
+    host.report?.(error, { tags: { step: 'main thread sampling' } })
+  )
   await host.bury()
   let { reconcile } = await import('@yaks/tools')
   let timer = setInterval(() => {
