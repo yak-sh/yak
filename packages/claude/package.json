@@ -10,10 +10,10 @@
   "license": "Apache-2.0",
   "description": "Claude Code print mode as a one-turn model; the graph harness alone executes tools.",
   "dependencies": {
-    "@yaks/file": "0.2.23",
+    "@yaks/file": "0.2.28",
     "@yaks/model": "0.2.26",
-    "@yaks/process": "0.2.26",
-    "@yaks/vocab": "0.2.23"
+    "@yaks/process": "0.2.28",
+    "@yaks/vocab": "0.2.28"
   },
   "devDependencies": {
     "@std/assert": "npm:@jsr/std__assert@^1.0.0",

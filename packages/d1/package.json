@@ -6,12 +6,12 @@
   "license": "Apache-2.0",
   "description": "Adapts Cloudflare D1 to graph storage with asynchronous queries and writes submitted as atomic statement batches.",
   "dependencies": {
-    "@yaks/graph": "0.2.25",
+    "@yaks/graph": "0.2.28",
     "@yaks/match": "0.2.24",
     "@yaks/query": "0.2.23",
-    "@yaks/sql": "0.2.26",
-    "@yaks/sqlite": "0.2.25",
-    "@yaks/vocab": "0.2.23"
+    "@yaks/sql": "0.2.28",
+    "@yaks/sqlite": "0.2.28",
+    "@yaks/vocab": "0.2.28"
   },
   "devDependencies": {
     "@std/assert": "npm:@jsr/std__assert@^1.0.0",
@@ -19,7 +19,7 @@
     "@yaks/fp": "0.2.23",
     "@yaks/member": "0.2.25",
     "@yaks/ram": "0.2.24",
-    "@yaks/secrets": "0.2.23",
+    "@yaks/secrets": "0.2.28",
     "@yaks/testing": "0.2.17"
   }
 }

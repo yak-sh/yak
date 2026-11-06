@@ -10,14 +10,14 @@
   "license": "Apache-2.0",
   "description": "Indexes a graph's text properties with SQLite FTS5 and adds ranked full-text search to queries.",
   "dependencies": {
-    "@yaks/graph": "0.2.25",
+    "@yaks/graph": "0.2.28",
     "@yaks/query": "0.2.23",
-    "@yaks/sql": "0.2.26",
-    "@yaks/vocab": "0.2.23"
+    "@yaks/sql": "0.2.28",
+    "@yaks/vocab": "0.2.28"
   },
   "devDependencies": {
     "@std/assert": "npm:@jsr/std__assert@^1.0.0",
-    "@yaks/sqlite": "0.2.25",
+    "@yaks/sqlite": "0.2.28",
     "@yaks/testing": "0.2.17"
   }
 }

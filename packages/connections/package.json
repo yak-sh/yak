@@ -1,6 +1,6 @@
 {
   "name": "@yaks/connections",
-  "version": "0.2.23",
+  "version": "0.2.28",
   "type": "module",
   "exports": {
     ".": "./mod.ts",
@@ -17,26 +17,26 @@
   "license": "Apache-2.0",
   "description": "Integrations and connections: the outside services a space can reach, the link between a space or a person and one, and the credential behind it, kept as a secret.",
   "dependencies": {
-    "@yaks/cli": "0.2.27",
+    "@yaks/cli": "0.2.28",
     "@yaks/edge": "0.2.24",
     "@yaks/effects": "0.2.25",
     "@yaks/fp": "0.2.23",
-    "@yaks/graph": "0.2.25",
-    "@yaks/hook": "0.2.24",
-    "@yaks/mcp-client": "0.2.24",
+    "@yaks/graph": "0.2.28",
+    "@yaks/hook": "0.2.28",
+    "@yaks/mcp-client": "0.2.28",
     "@yaks/oauth": "0.2.23",
-    "@yaks/process": "0.2.26",
+    "@yaks/process": "0.2.28",
     "@yaks/query": "0.2.23",
     "@yaks/render": "0.2.24",
-    "@yaks/secrets": "0.2.23",
-    "@yaks/tools": "0.2.24",
-    "@yaks/vocab": "0.2.23"
+    "@yaks/secrets": "0.2.28",
+    "@yaks/tools": "0.2.28",
+    "@yaks/vocab": "0.2.28"
   },
   "devDependencies": {
     "@std/assert": "npm:@jsr/std__assert@^1.0.0",
     "@yaks/doc": "0.2.24",
-    "@yaks/kernel": "0.2.24",
-    "@yaks/provenance": "0.2.23",
+    "@yaks/kernel": "0.2.28",
+    "@yaks/provenance": "0.2.28",
     "@yaks/ram": "0.2.24",
     "@yaks/testing": "0.2.17"
   }

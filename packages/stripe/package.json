@@ -14,8 +14,8 @@
   "description": "Stripe's API over fetch, and the plans, shops and signed webhook doors it lends a host as a payment provider.",
   "dependencies": {
     "@yaks/fp": "0.2.23",
-    "@yaks/hook": "0.2.24",
-    "@yaks/host": "0.2.25"
+    "@yaks/hook": "0.2.28",
+    "@yaks/host": "0.2.28"
   },
   "devDependencies": {
     "@std/assert": "npm:@jsr/std__assert@^1.0.0",

@@ -1,6 +1,6 @@
 {
   "name": "@yaks/sql",
-  "version": "0.2.26",
+  "version": "0.2.28",
   "type": "module",
   "exports": {
     ".": "./mod.ts",
@@ -13,14 +13,14 @@
     "@yaks/fp": "0.2.23",
     "@yaks/id": "0.2.23",
     "@yaks/query": "0.2.23",
-    "@yaks/vocab": "0.2.23"
+    "@yaks/vocab": "0.2.28"
   },
   "devDependencies": {
     "@std/assert": "npm:@jsr/std__assert@^1.0.0",
     "@yaks/archetype": "0.2.24",
     "@yaks/fts": "0.2.24",
-    "@yaks/graph": "0.2.25",
-    "@yaks/sqlite": "0.2.25",
+    "@yaks/graph": "0.2.28",
+    "@yaks/sqlite": "0.2.28",
     "@yaks/testing": "0.2.17"
   }
 }

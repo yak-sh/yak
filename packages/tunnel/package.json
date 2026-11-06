@@ -12,8 +12,8 @@
   "description": "Reaches a machine from a hosted space through a Cloudflare Tunnel and a Workers VPC Service: the account calls that make one, the connector that runs it on the machine, and the filter that keeps the tunnel to the paths the machine opened.",
   "dependencies": {
     "@yaks/fp": "0.2.23",
-    "@yaks/process": "0.2.26",
-    "@yaks/vocab": "0.2.23"
+    "@yaks/process": "0.2.28",
+    "@yaks/vocab": "0.2.28"
   },
   "devDependencies": {
     "@std/assert": "npm:@jsr/std__assert@^1.0.0",

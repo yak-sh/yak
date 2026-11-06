@@ -7,7 +7,7 @@
   "description": "Serializes portable renderer trees as Markdown or plain text without a DOM, removing control bytes from text and link destinations.",
   "dependencies": {
     "@yaks/render": "0.2.24",
-    "@yaks/vocab": "0.2.23"
+    "@yaks/vocab": "0.2.28"
   },
   "devDependencies": {
     "@std/assert": "npm:@jsr/std__assert@^1.0.0",
