@@ -8,7 +8,8 @@
 //
 // Its compile is yaks.app's to pay for, never the space's (esbuild.ts
 // `Payer`): the person did not ask for it and gains only our fix. A deploy
-// getting there first is the remake not needed, and a deploy under way leaves
+// getting there first is the remake not needed, and a deploy under way (the
+// app's fence held, before the remake starts or while it waits on it) leaves
 // the release to it; if that release still serves, its next page asks again.
 // Anything else is a failure of ours, which the sweep reports (wake.ts
 // `reporting`).
@@ -55,12 +56,17 @@ export let remade = async (env: Env, job: Remake) => {
     copy: copyOf(env),
     time: env.CLOCK,
   })
+  // Another release's: the app moved on, or a deploy holds its fence.
+  let theirs = (at: Awaited<ReturnType<typeof dir.appAt>>) =>
+    !at || at.app.source != job.source || !!at.app.fence
   let at = await dir.appAt(job.app)
-  if (!at || at.app.source != job.source) return
+  if (theirs(at)) return
   try {
-    await recompileRelease({ env, dir, person: '' }, at.space, at.app)
+    await recompileRelease({ env, dir, person: '' }, at!.space, at!.app)
   } catch (e) {
     if (e instanceof CallError && EXPECTED.includes(e.code)) return
+    // The fence wait's refusal (versions.ts `waiting`): a deploy took it.
+    if (e instanceof CallError && theirs(await dir.appAt(job.app))) return
     throw e
   }
 }

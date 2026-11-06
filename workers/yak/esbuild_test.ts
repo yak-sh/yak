@@ -23,7 +23,9 @@ import { call, type Ctx } from './tools.ts'
 import { handler } from './kernel.ts'
 import { KERNEL, meta } from './meta.ts'
 import { ask, remade, type Remake } from './remake.ts'
-import { addressed, SHA, sha256 } from './versions.ts'
+import { addressed, fenced, SHA, sha256 } from './versions.ts'
+
+let OWNER = { person: null, role: 'owner', administrative: true } as const
 
 let WORKER = 'export default { fetch: () => new Response("compiled") }'
 
@@ -425,6 +427,32 @@ test('a refused remake is asked again, and a fired one woken again', () => {
   assert(asksAgain.asked)
   assert(asksAgain.woken)
   assertEquals(asksAgain.running, undefined)
+})
+
+// A remake that finds a deploy holding the app's fence leaves the release to
+// it, rather than waiting a minute on it and refusing.
+let leftToDeploy = await (async () => {
+  await using s = await scenario(compiles)
+  await s.write({ 'index.html': PAGE, 'main.ts': 'let n: number = 1' })
+  await s.tool('app_deploy')
+  let space = (await s.dir.space('ada'))!
+  let app = (await s.dir.app(space, 'cookbook'))!
+  let release = await s.release()
+  let asks = s.asks.length
+  await fenced(s.dir, app, app.draft ?? null, OWNER)
+  let began = Date.now()
+  await remade(s.env, { app: app.eid, source: app.source! })
+  return {
+    waited: Date.now() - began,
+    asked: s.asks.length - asks,
+    same: await s.release() == release,
+  }
+})()
+
+test('a remake leaves a release under way to its deploy', () => {
+  assert(leftToDeploy.waited < 1000)
+  assertEquals(leftToDeploy.asked, 0)
+  assert(leftToDeploy.same)
 })
 
 let failedCompile = await (async () => {
