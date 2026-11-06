@@ -67,7 +67,7 @@ let fixture = (answers: Record<string, Answer> = {}) => {
   }
 }
 
-test('land fast-forwards and publishes the base while preserving its worktree', async () => {
+test('land publishes the branch and fast-forwards the base while preserving its worktree', async () => {
   let f = fixture()
   assertEquals(await f.invoke(), { landed: 'sha', root: '/repo' })
   assert(
@@ -76,7 +76,7 @@ test('land fast-forwards and publishes the base while preserving its worktree', 
     ),
   )
   assert(f.commands().includes('worktree unlock /work'))
-  assert(f.commands().includes('push --quiet origin main:main'))
+  assert(f.commands().includes('push --quiet origin work:main'))
   assert(!f.calls.some((c) => c.args.includes('remove')))
 })
 
@@ -89,12 +89,13 @@ test('land writes the shared checkout only while it holds its lock', async () =>
     'hold',
     'update-index -q --refresh',
     'read-tree -n -m -u HEAD work',
+    'merge-base --is-ancestor main work',
+    'push --quiet origin work:main',
     'merge --ff-only work',
     'rev-parse HEAD',
     'release',
   ])
   assertEquals(f.calls.find((c) => c.args[0] == 'hold')?.cwd, '/repo/.git')
-  assert(at.indexOf('push --quiet origin main:main') > at.indexOf('release'))
 })
 
 test('land releases the lock when the shared checkout refuses it', async () => {
@@ -191,19 +192,52 @@ test('a base without an upstream lands without a push', async () => {
   assert(!f.calls.some((c) => c.args[0] == 'push'))
 })
 
-test('a refused push leaves the landing in place and reports it once', async () => {
-  let refused = 'remote: fatal error in commit_refs\nerror: failed to push'
-  let f = fixture({
-    'push --quiet origin main:main': { code: 1, err: refused },
+let refused = 'remote: fatal error in commit_refs\nerror: failed to push'
+let refusal = (answers: Record<string, Answer> = {}) =>
+  fixture({
+    'push --quiet origin work:main': { code: 1, err: refused },
+    'rev-parse --verify FETCH_HEAD^{commit}': { out: 'up\n' },
+    ...answers,
   })
-  assertEquals(await f.invoke(), { landed: 'sha', root: '/repo' })
-  assertEquals(f.calls.filter((c) => c.args[0] == 'push').length, 1)
-  assert(f.said.join('\n').includes('landed locally, publish separately'))
-  assertEquals(f.reports, [{
-    error:
-      `Error: land: publish to origin/main failed with exit 1:\n${refused}`,
-    tags: { step: 'land: publish', remote: 'origin' },
-  }])
+
+for (
+  let [why, answers] of [
+    ['an unreachable remote', { 'fetch --quiet origin main': { code: 128 } }],
+    ['a remote that refuses for its own reasons', {}],
+  ] as [string, Record<string, Answer>][]
+) {
+  test(`a push refused by ${why} lands locally and reports it once`, async () => {
+    let f = refusal(answers)
+    assertEquals(await f.invoke(), { landed: 'sha', root: '/repo' })
+    assertEquals(f.calls.filter((c) => c.args[0] == 'push').length, 1)
+    assert(f.said.join('\n').includes('landed locally, publish separately'))
+    assertEquals(f.reports, [{
+      error:
+        `Error: land: publish to origin/main failed with exit 1:\n${refused}`,
+      tags: { step: 'land: publish', remote: 'origin' },
+    }])
+  })
+}
+
+test('a push refused because the upstream moved brings the base up to it and rebases', async () => {
+  let f = refusal({ 'merge-base --is-ancestor up work': { code: 1 } })
+  assertEquals(await f.invoke(), { diverged: true, conflict: false })
+  let at = f.commands()
+  assert(at.indexOf('merge --ff-only up') < at.indexOf('release'))
+  assert(at.indexOf('rebase main') > at.indexOf('release'))
+  assert(!at.includes('merge --ff-only work'))
+  assertEquals(f.reports, [])
+})
+
+test('a base the moved upstream does not contain is a fault, not a rewrite', async () => {
+  let f = refusal({
+    'merge-base --is-ancestor up work': { code: 1 },
+    'merge-base --is-ancestor main up': { code: 1 },
+  })
+  let error = await assertRejects(f.invoke, Error, 'have diverged')
+  assertEquals(error.name, 'Error')
+  assert(!f.calls.some((c) => ['merge', 'rebase'].includes(c.args[0])))
+  assertEquals(f.commands().filter((c) => c == 'release').length, 1)
 })
 
 test('a push that goes through reports nothing', async () => {

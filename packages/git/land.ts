@@ -13,14 +13,15 @@ import { command as processCommand } from '@yaks/process/command'
 // One invocation does at most one thing:
 //   - Fast-forward the current branch into the base. This succeeds exactly
 //     when the base is still an ancestor of the branch — the common case, and
-//     the whole job when it works. A best-effort push follows if the base has
-//     an upstream (config `@{u}`, nothing configured anywhere else).
-//   - If the base moved (it is no longer an ancestor) the fast-forward is
-//     refused: rebase the branch onto the base and return without merging,
-//     printing what happened, a `git diff --stat` of what the base pulled in
-//     (so the caller can judge whether re-running its tests matters — docs-only
-//     versus code it touches), and, on a rebase conflict, Git's conflict output
-//     verbatim. The caller re-runs its tests if needed and lands again, which
+//     the whole job when it works. If the base has an upstream (config `@{u}`,
+//     nothing configured anywhere else), the branch is pushed to it first.
+//   - If the base moved (it is no longer an ancestor), or its upstream moved
+//     (the push was refused and a fetch shows commits the branch lacks, which
+//     the base then fast-forwards to), the fast-forward is refused: rebase
+//     the branch onto the base and return without merging, printing what
+//     happened, a `git diff --stat` of what the base pulled in (so the caller
+//     can judge whether re-running its tests matters — docs-only versus code
+//     it touches), and, on a rebase conflict, Git's conflict output verbatim. The caller re-runs its tests if needed and lands again, which
 //     then fast-forwards cleanly.
 //
 // A landing is also guarded: before the fast-forward, land refuses a branch
@@ -36,8 +37,13 @@ import { command as processCommand } from '@yaks/process/command'
 // holds the lock shared (a runtime snapshot) never meets a landing half done.
 // Landing means landing in the shared checkout — the one that is actually
 // used; pushing to a remote only publishes bytes and is never what makes work
-// take effect, which is why the local fast-forward is the landing and the push
-// is an afterthought.
+// take effect, so a remote that cannot be reached still lands the work
+// locally. But the push runs under the same lock, before the fast-forward, so
+// the remote's own compare-and-swap serializes this checkout's landers with
+// anything else that moved the upstream: a base that took commits the
+// upstream refused would split the two, and every later push would be
+// refused the same way. Landing is the only path that writes the base or
+// pushes it.
 //
 // Running a test suite is the caller's job, not this operation's — before
 // landing, and again after a rebase if the incoming diff could affect it. Land
@@ -507,6 +513,7 @@ export let land = async (ops: LandOps = {}): Promise<Outcome> => {
     // From the refresh to reading the landed commit, every git command here
     // takes the shared checkout's index, so the checkout is this landing's
     // alone until then.
+    let up = await upstream(git, root, base)
     let release = await (ops.hold ?? ((dir) => hold(dir, true)))(gitdir)
     let sha: string | undefined
     try {
@@ -521,13 +528,23 @@ export let land = async (ops: LandOps = {}): Promise<Outcome> => {
           message('land: shared checkout blocks landing', ready),
         )
       }
-      let merged = await git(root, ['merge', '--ff-only', branch])
-      if (merged.code) {
-        if (await ancestry() != 1) {
-          throw new Error(message('git merge', merged))
+      // Under the lock nothing that lands moves the base, so what is pushed
+      // contains it, and the fast-forward after the push follows it.
+      let moved = await ancestry() == 1
+      if (!moved && up) {
+        let to = await publish(git, write, ops.report, root, branch, up)
+        if (to) await catchUp(git, write, root, base, up, to)
+        moved = !!to
+      }
+      if (!moved) {
+        let merged = await git(root, ['merge', '--ff-only', branch])
+        if (merged.code) {
+          if (await ancestry() != 1) {
+            throw new Error(message('git merge', merged))
+          }
+        } else {
+          sha = await need('read landed commit', root, ['rev-parse', 'HEAD'])
         }
-      } else {
-        sha = await need('read landed commit', root, ['rev-parse', 'HEAD'])
       }
     } finally {
       release()
@@ -538,12 +555,8 @@ export let land = async (ops: LandOps = {}): Promise<Outcome> => {
       // under it is refused by the kernel. Unlock it instead — whoever handed the
       // worktree out locked it to mark it as in use, and this is that worker
       // reporting it has finished. The unlock's exit code decides nothing: the
-      // only failure reachable is "not locked". Neither it nor the publish
-      // needs the other, and neither throws.
-      await Promise.all([
-        publish(git, write, ops.report, root, base),
-        git(root, ['worktree', 'unlock', tree], false),
-      ])
+      // only failure reachable is "not locked".
+      await git(root, ['worktree', 'unlock', tree], false)
       return { landed: sha, root }
     }
   }
@@ -575,44 +588,112 @@ export let land = async (ops: LandOps = {}): Promise<Outcome> => {
   return { diverged: true, conflict: false }
 }
 
-// Best-effort push of the base branch to its upstream, if it has one — just
-// `@{u}`, nothing configured anywhere else. Never throws: an unreachable
-// remote, or no upstream at all, leaves the work landed but unpushed, since
-// the merge has already taken effect in the shared checkout. A refused push is
-// still a failure, so it is reported with the remote's whole account, once:
-// land pushes once. The push runs to
-// completion with no deadline: its exit code is the only report of whether
-// the remote has the commit, and a killed push may already have reached it.
-let publish = async (
-  git: (at: string, args: string[], show?: boolean) => Promise<Ran>,
-  write: (text: string, error?: boolean) => void,
-  report: LandOps['report'],
+type Git = (at: string, args: string[], show?: boolean) => Promise<Ran>
+
+/** The base's upstream, split into the remote and its branch. */
+type Upstream = { remote: string; branch: string }
+
+// The base's upstream: just `@{u}`, nothing configured anywhere else.
+let upstream = async (
+  git: Git,
   root: string,
   base: string,
-) => {
+): Promise<Upstream | undefined> => {
   let up = await git(root, ['rev-parse', '--abbrev-ref', `${base}@{u}`], false)
   if (up.code) return
   let ref = up.out.trim()
   let cut = ref.indexOf('/')
-  let remote = ref.slice(0, cut)
-  let branch = ref.slice(cut + 1)
+  return { remote: ref.slice(0, cut), branch: ref.slice(cut + 1) }
+}
+
+// Push the landing branch to the base's upstream, under the land lock and
+// before the base takes it. The remote's fast-forward check is the
+// compare-and-swap: a refusal followed by a fetch that finds commits the
+// branch lacks means the upstream moved, and what it moved to is returned, for
+// the landing to rebase onto rather than merge. Any other failure, an
+// unreachable remote included, leaves the work to land locally: the push only
+// publishes bytes. It is still a failure, so it is reported with the remote's
+// whole account, once. The push runs to completion with no deadline: its exit code is the
+// only report of whether the remote has the commit, and a killed push may
+// already have reached it.
+let publish = async (
+  git: Git,
+  write: (text: string, error?: boolean) => void,
+  report: LandOps['report'],
+  root: string,
+  branch: string,
+  up: Upstream,
+): Promise<string | undefined> => {
   let sent = await git(
     root,
-    ['push', '--quiet', remote, `${base}:${branch}`],
+    ['push', '--quiet', up.remote, `${branch}:${up.branch}`],
     false,
   )
-  if (sent.code) {
-    let label = `land: publish to ${remote}/${branch}`
-    write(
-      `${message(label, sent)} — landed locally, publish separately`,
-      true,
+  if (!sent.code) return
+  // FETCH_HEAD is read once, at once: anything fetching in the shared
+  // checkout rewrites it.
+  let fetched = await git(
+    root,
+    ['fetch', '--quiet', up.remote, up.branch],
+    false,
+  )
+  let to = fetched.code ? undefined : await git(
+    root,
+    ['rev-parse', '--verify', 'FETCH_HEAD^{commit}'],
+    false,
+  )
+  if (to && !to.code) {
+    let sha = to.out.trim()
+    let behind = await git(
+      root,
+      ['merge-base', '--is-ancestor', sha, branch],
+      false,
     )
-    let said = (sent.err || sent.out).trim()
-    await report?.(
-      new Error(
-        `${label} failed with exit ${sent.code}${said ? `:\n${said}` : ''}`,
-      ),
-      { tags: { step: 'land: publish', remote } },
+    if (behind.code == 1) return sha
+  }
+  let label = `land: publish to ${up.remote}/${up.branch}`
+  write(`${message(label, sent)} — landed locally, publish separately`, true)
+  let said = (sent.err || sent.out).trim()
+  await report?.(
+    new Error(
+      `${label} failed with exit ${sent.code}${said ? `:\n${said}` : ''}`,
+    ),
+    { tags: { step: 'land: publish', remote: up.remote } },
+  )
+}
+
+// Bring the base up to `to`, where its upstream moved. Only a fast-forward:
+// every commit the base holds came through a landing that pushed it, so a base
+// the upstream does not contain was written some other way, and rewriting
+// landed commits is a repair for whoever reads the fault, not something a
+// landing does on its own.
+let catchUp = async (
+  git: Git,
+  write: (text: string, error?: boolean) => void,
+  root: string,
+  base: string,
+  up: Upstream,
+  to: string,
+) => {
+  let at = `${up.remote}/${up.branch}`
+  let contained = await git(
+    root,
+    ['merge-base', '--is-ancestor', base, to],
+    false,
+  )
+  if (contained.code == 1) {
+    throw new Error(
+      `land: ${base} and ${at} have diverged: ${base} holds commits ${at} ` +
+        `lacks, so neither can take the other. Rebase ${base} onto ${at} in ` +
+        `the shared checkout while holding its land lock.`,
+    )
+  }
+  if (contained.code) throw new Error(message('read upstream', contained))
+  write(`land: ${at} moved — bringing ${base} up to it.`)
+  let merged = await git(root, ['merge', '--ff-only', to])
+  if (merged.code) {
+    throw new LandError(
+      message('land: shared checkout blocks catching up', merged),
     )
   }
 }

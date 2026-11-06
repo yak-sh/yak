@@ -168,8 +168,12 @@ that pin.
 
 ```sh
 bin/release.ts plan      # what the next patch release would publish, and how many JSR then holds
-bin/release.ts 0.2.18    # write the versions, commit and tag; pushing the tag publishes
+bin/release.ts 0.2.18    # write the versions, commit, land and tag; pushing the tag publishes
 ```
+
+Run it in a linked worktree: it lands its commit the way `yak land` does, so
+main moves and is pushed only under the land lock, and it tags the commit that
+landed. Push only the tag (`git push origin v0.2.18`); never push main by hand.
 
 JSR's scope holds at most 100 packages, and a version can't be unpublished. CI
 publishes under GitHub's identity (.github/workflows/publish.yml), which JSR

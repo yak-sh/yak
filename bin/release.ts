@@ -1,4 +1,4 @@
-#!/usr/bin/env -S deno run --allow-read --allow-write --allow-env --allow-run=git,pnpm --allow-net=api.jsr.io
+#!/usr/bin/env -S deno run --allow-read --allow-write --allow-env --allow-run --allow-net=api.jsr.io
 // bin/release — publish what changed, so a fix in one package ships at once.
 //
 // A release publishes the packages whose published files changed since the
@@ -13,24 +13,27 @@
 //
 //   bin/release.ts plan          # what the next patch release would publish, and why
 //   bin/release.ts plan 0.3.0    # what that release would publish
-//   bin/release.ts 0.2.18        # write the versions, commit and tag
+//   bin/release.ts 0.2.18        # write the versions, commit, land and tag
 //
 // It writes the versions and every package a CLI of the release may load, at
-// the version it loads (`LIST`, which @yaks/cli ships), then commits and tags:
-// it does not push, and it does not publish.
+// the version it loads (`LIST`, which @yaks/cli ships), commits them in the
+// linked worktree it runs in, and lands that commit the way `yak land` does
+// (@yaks/git/land): main moves and is pushed only under the shared checkout's
+// land lock, so a release never races a landing. It tags the commit that
+// landed once origin holds it, and does not publish.
 // It refuses to cut a release while a package it would publish has no page on
 // jsr.io (`unlisted`): CI publishes under GitHub's identity, which JSR accepts
 // only for a package that exists and is linked to this repository, so such a
 // package would stop the publish partway, and a version cannot be unpublished.
-// Pushing the tag is the deliberate act that starts a publish, with main in
-// the same push, so a main that moved refuses both and no tag publishes alone:
+// Pushing the tag is the deliberate act that starts a publish:
 //
-//   git push --atomic origin main v0.2.18
+//   git push origin v0.2.18
 
 import { matchesGlob } from 'node:path'
 import { newest, read, REPO, row } from './jsr.ts'
 import { versioned, versions } from './release-packages.ts'
 import { members } from '@yaks/cli/dependencies'
+import { land } from '@yaks/git/land'
 export { versioned } from './release-packages.ts'
 
 // The first top-level `"version"` line of a manifest. A regex rather than
@@ -373,15 +376,61 @@ export let release = async (version: string, root = '.') => {
         `to ${REPO.owner}/${REPO.name} in its settings, then release.`,
     )
   }
+  let [dir, common] = (await git(
+    root,
+    'rev-parse',
+    '--path-format=absolute',
+    '--git-dir',
+    '--git-common-dir',
+  ) ?? '').trim().split('\n')
+  if (dir == common) {
+    throw new Error(
+      'release from a linked worktree: main moves only by landing',
+    )
+  }
   let at = new Map(all.flatMap((m) => m.held ? [[m.name, m.held]] : []))
   for (let name of picked) at.set(name, version)
   let paths = await versions(root, at)
   await Deno.writeTextFile(`${root}/${LIST}`, list(at))
   await run('-C', root, 'add', ...paths, `${root}/${LIST}`)
   await run('-C', root, 'commit', '-m', `Release v${version}`)
-  await run('-C', root, 'tag', `v${version}`)
-  console.log(`v${version}: ${picked.length} packages, committed and tagged.`)
-  console.log(`push it to publish:  git push --atomic origin main v${version}`)
+  let landed = await landing(root)
+  await run('-C', root, 'tag', `v${version}`, landed)
+  console.log(`v${version}: ${picked.length} packages, landed and tagged.`)
+  console.log(`push the tag to publish:  git push origin v${version}`)
+}
+
+// Land the release commit, rebasing as often as main moves under it: a
+// version bump has no tests to re-run. Returns the sha main holds, once its
+// upstream holds it too, so a tag never names a commit origin lacks.
+let landing = async (root: string) => {
+  for (let attempt = 0; attempt < 3; attempt++) {
+    let outcome = await land({ cwd: root })
+    if ('diverged' in outcome) {
+      if (outcome.conflict) {
+        throw new Error(
+          'the release commit conflicts with main: resolve it, ' +
+            '`git rebase --continue`, then release again',
+        )
+      }
+      continue
+    }
+    let sent = await git(
+      outcome.root,
+      'merge-base',
+      '--is-ancestor',
+      outcome.landed,
+      'HEAD@{u}',
+    )
+    if (sent == null) {
+      throw new Error(
+        `${outcome.landed} landed but did not reach main's upstream: ` +
+          'land again to publish it, then tag it',
+      )
+    }
+    return outcome.landed
+  }
+  throw new Error('main kept moving through three landing attempts')
 }
 
 if (import.meta.main) {
