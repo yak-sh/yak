@@ -295,7 +295,7 @@ about, and the page can draw the thread beside that entity.
 ## Monthly email limits
 
 Email is metered in both directions per calendar month. Apps share their space's
-allowance, and each space has its own, free or on the Plus plan.
+allowance, and each space has its own, free or on a paid plan.
 
 The limits are in the plan table at <https://yaks.app/pricing>. Read them there,
 not from a page that copies them, including this one. `app_list` reports how

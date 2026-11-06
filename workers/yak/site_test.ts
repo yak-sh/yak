@@ -304,10 +304,10 @@ test('the plan pages carry the email allowance the code enforces', () => {
   }
 })
 
-// The plan cards each page shows: the home page prices a space in brief, the
-// free one and the Plus plan, and the pricing page shows every plan.
+// The plan cards each page shows: the home page prices a space in brief and
+// the pricing page in full, and both show every plan.
 let CARDS: Record<string, Tier[]> = {
-  'index.html': ['free', 'plus'],
+  'index.html': [...TIERS],
   'pricing.html': [...TIERS],
 }
 let cardOf = (tier: Tier) =>
@@ -581,6 +581,7 @@ test('every public page hands a stranger sign-in, never /connect', () => {
   assertEquals(doors, [
     '/login',
     '/login',
+    '/login?return=%2Fconnect%23plan',
     '/login?return=%2Fconnect%23plan',
     '/login',
   ], 'a home-page door misses sign-in')

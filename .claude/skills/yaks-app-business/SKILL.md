@@ -127,7 +127,7 @@ pricing.html hold what each one carries:
   chat and yaks.app makes the change, a larger model budget and support.
   Jeff on its name: "just call it the organization plan" (T-139983).
 
-Copy is written for a stranger. "Each space is free or on the Plus plan"
+Copy is written for a stranger. "Each space is free or on a paid plan"
 passes; "Free allowances are yours, not each space's" doesn't. How a marketing
 page is written, for any venture, is `marketing-site`; what follows is how it
 lands on yaks.app's.
@@ -164,7 +164,8 @@ assistants' connector directories for those who already use one.
   webhook are in workers/yak/billing.ts. How metering and refusals work is
   `yaks-app`.
 - **The site.** The home page is workers/yak/public/index.html, which carries a
-  JSON-LD copy of the plans. Next to it are pricing.html, help.html and the
+  JSON-LD copy of the plans and a card for each of the three, as pricing.html
+  has; a plan on sale is a card on both pages, never a note under them. Next to it are pricing.html, help.html and the
   Limits section of docs/technical.md. The link a person pastes into their
   own agent to connect it is /agent, public/agent.md drawn by docs.ts, and the
   home page, /connect and the dashboard offer it. The connector's skills in
