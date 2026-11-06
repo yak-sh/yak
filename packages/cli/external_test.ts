@@ -184,8 +184,13 @@ test('a worker that exits before readiness says what it wrote to stderr', async 
 })
 
 test('tail keeps the end of a stream', async () => {
-  let stream = ReadableStream.from(['ab', 'cd', 'ef\n'])
-    .pipeThrough(new TextEncoderStream())
+  let bytes = new TextEncoder()
+  let stream = new ReadableStream<Uint8Array>({
+    start(c) {
+      for (let s of ['ab', 'cd', 'ef\n']) c.enqueue(bytes.encode(s))
+      c.close()
+    },
+  })
   assertEquals(await tail(stream, 4), 'def')
 })
 
