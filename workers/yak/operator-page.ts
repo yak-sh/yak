@@ -16,7 +16,7 @@ import { directoryOf, type Reach, type Space } from './directory.ts'
 import { reachOf } from './operator-reach.ts'
 import { builderOf, operatorDoor, SPACE } from './build-door.ts'
 import { vouched, type Who } from './session.ts'
-import { esc, type Picked, shell, spaceChoice } from './pages.ts'
+import { choice as spaceChoice, esc, type Picked, shell } from './pages.ts'
 import { spaceHost, url } from './host.ts'
 import { chatPath, logoPath, managePath, manifestPath, SLUG } from './route.ts'
 import { PLATFORM_BACKGROUND } from './apps.ts'
@@ -833,20 +833,17 @@ let side = (
       'div',
       { class: 'Talk_Scroll' },
       // The space selector is the dashboard's own (pages.ts).
-      h('div', {
-        class: 'Talk_Whose',
-        dangerouslySetInnerHTML: {
-          __html: spaceChoice(
-            here,
-            spaces.some((s) => s.slug == space.slug)
-              ? spaces
-              : [here, ...spaces],
-            (s) => chatPath(s.slug),
-            '',
-            (s) => s.operator ?? '',
-          ),
-        },
-      }),
+      h(
+        'div',
+        { class: 'Talk_Whose' },
+        spaceChoice(
+          here,
+          spaces.some((s) => s.slug == space.slug) ? spaces : [here, ...spaces],
+          (s) => chatPath(s.slug),
+          null,
+          (s) => s.operator ?? '',
+        ),
+      ),
       h(
         SideNav,
         { 'aria-label': operator },
@@ -1215,31 +1212,27 @@ export let chatPage = async (
           greeting,
         ),
       landing
-        ? h('div', {
-          class: 'Talk_Needs',
-          'data-needs': '',
-          dangerouslySetInnerHTML: {
-            __html: needs
-              ? needsCard(
-                space,
-                needs,
-                html(h(
-                  'p',
-                  null,
-                  h(
-                    'a',
-                    {
-                      href: `${
-                        managePath('updates', space.slug)
-                      }#u-${needs.eid}`,
-                    },
-                    `Ask ${operator} about it`,
-                  ),
-                )),
-              )
-              : '',
-          },
-        })
+        ? h(
+          'div',
+          { class: 'Talk_Needs', 'data-needs': '' },
+          needs
+            ? needsCard(
+              space,
+              needs,
+              h(
+                'p',
+                null,
+                h(
+                  'a',
+                  {
+                    href: `${managePath('updates', space.slug)}#u-${needs.eid}`,
+                  },
+                  `Ask ${operator} about it`,
+                ),
+              ),
+            )
+            : null,
+        )
         : null,
       fresh || talked.title ? composer(env, at, operator, app) : null,
       fresh && !app
@@ -1284,12 +1277,11 @@ export let updatesPage = async (
     waiting: news.updates.filter((u) => u.needs).length,
     current: ['updates'],
     skip: ['#content', 'Skip to content'],
-    main: h('div', {
-      class: 'Talk_Column Updates',
-      dangerouslySetInnerHTML: {
-        __html: updates(env, space, news, beside.apps, views),
-      },
-    }),
+    main: h(
+      'div',
+      { class: 'Talk_Column Updates' },
+      updates(env, space, news, beside.apps, views),
+    ),
   })
 }
 

@@ -1,10 +1,10 @@
 /**
- * A report: a `Card` that counts something, worn as `Card Report`. Its head
- * names what it counts and says the `Total` (its `Unit` after the number)
- * where a card's actions would sit; under it a `Plot`, a chart of the days
- * with its `Span` (the first day and the last) under it, then the `Tops`,
- * short lists side by side, each a `Column` under its own heading and its
- * `List` of names and counts.
+ * A report: a `Card` that counts something, so it wears both. Its head is
+ * a card's `Card.Head`, naming what it counts and saying the `Total` (its
+ * `Unit` after the number) where a card's actions would sit; under it a
+ * `Plot`, a chart of the days with its `Span` (the first day and the last)
+ * under it, then the `Tops`, short lists side by side, each a `Column` under
+ * its own heading and its `List` of names and counts.
  *
  * @module
  */
@@ -22,7 +22,7 @@ export let Report:
   & Record<
     'Total' | 'Unit' | 'Plot' | 'Span' | 'Tops' | 'Column' | 'List',
     Part
-  > = block('article', 'Report', {
+  > = block(Card, 'Report', {
     Total: 'p',
     Unit: 'span',
     Plot: 'figure',
@@ -68,7 +68,7 @@ export let specimens = (): Specimen[] => [
     'Report, Total, Unit, Plot, Span, Tops, Column, List',
     h(
       Report,
-      { class: 'Card' },
+      {},
       h(
         Card.Head,
         {},

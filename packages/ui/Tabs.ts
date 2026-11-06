@@ -8,7 +8,8 @@
  * `TabSet.Legend` naming the choice and each `TabSet.Item` a radio, its `Tab`
  * (the radio's label) and its `Panel`. The radios own which tab is on, arrow
  * keys and all, so the set works without script; the checked one's panel
- * shows under the row.
+ * shows under the row. A panel holding a card's worth is drawn as one:
+ * `<TabSet.Panel as={Card}>`.
  *
  * @module
  */

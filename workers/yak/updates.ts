@@ -11,7 +11,6 @@ import type { Space } from './directory.ts'
 import type { Who } from './session.ts'
 import { type ComponentChildren, Fragment, h } from 'preact'
 import { Button, Card, Field, State } from '@yaks/ui/parts'
-import { markup, raw } from './html.ts'
 import { operatorDoor } from './build-door.ts'
 import { chatPath, managePath } from './route.ts'
 import { spaceHost } from './host.ts'
@@ -93,9 +92,10 @@ let form = (
 let when = (u: Update) =>
   h('time', { class: 'Update_When', datetime: u.at }, ago(u.at))
 
-// What needs a person, as a tree: the question, its choices, a button for
-// each (the one it recommends first and filled), and `ask` below them.
-let needs = (space: Space, u: Update, ask: ComponentChildren) => {
+/** What needs a person: the Operator's question, its choices, a button for
+ * each (the one it recommends first and filled), and `ask` below them, a way
+ * to ask about it. */
+export let needsCard = (space: Space, u: Update, ask: ComponentChildren) => {
   let choices = [...u.choices ?? []].sort((a, b) =>
     +(b.label == u.recommended) - +(a.label == u.recommended)
   )
@@ -136,16 +136,6 @@ let needs = (space: Space, u: Update, ask: ComponentChildren) => {
   )
 }
 
-/** What needs a person: the Operator's question, a button for each choice
- * (the one it recommends first and filled), and `ask`, markup the chat page
- * draws, a way to ask about it.
- *
- * TODO(T-136253): this and `updates` answer HTML because operator-page.ts,
- * their one consumer, still builds its page from strings; once it draws a
- * tree they return theirs and `ask` is a child. */
-export let needsCard = (space: Space, u: Update, ask = '') =>
-  markup(needs(space, u, raw(ask)))
-
 // A way to send the Operator words about an update, opened in place.
 let replying = (space: Space, u: Update) =>
   h(
@@ -166,7 +156,7 @@ let replying = (space: Space, u: Update) =>
   )
 
 let card = (env: Env, space: Space, u: Update, apps: Apps) => {
-  if (u.needs) return needs(space, u, replying(space, u))
+  if (u.needs) return needsCard(space, u, replying(space, u))
   let lead = leads(env, space, u, apps)
   return h(
     Card,
@@ -256,7 +246,7 @@ export let updates = (
   apps: Apps = [],
   views?: Map<string, number>,
 ) =>
-  markup(h(
+  h(
     Fragment,
     null,
     h(
@@ -283,7 +273,7 @@ export let updates = (
         `When ${space.operator} finishes something, fixes an app, or someone joins, it shows here.`,
       ),
     ),
-  ))
+  )
 
 /** What a person sends from their Updates: a choice, or words about one.
  * Either goes into their conversation with the Operator, and the chat it

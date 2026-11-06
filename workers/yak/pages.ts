@@ -475,8 +475,8 @@ let transcript = (frames: Frame[]) => {
     } else if ('built' in f) {
       rows.push(
         h(
-          'div',
-          { class: 'Chat_Built' },
+          Card,
+          { as: 'div', class: 'Chat_Built' },
           h('p', null, 'It is live.'),
           address(f.built),
         ),
@@ -634,8 +634,7 @@ let copyable = (said: Kids, what = '') =>
     Copy,
     null,
     h(Copy.Text, null, said),
-    h(Button, {
-      class: 'Copy_Go',
+    h(Copy.Go, {
       type: 'button',
       'aria-label': what ? `Copy ${what}` : undefined,
       hidden: true,
@@ -740,7 +739,7 @@ export type Visits = {
 let visits = (v: Visits, site: string) =>
   h(
     Report,
-    { class: 'Card', 'aria-labelledby': `visits-${v.slug}` },
+    { 'aria-labelledby': `visits-${v.slug}` },
     h(
       Card.Head,
       null,
@@ -1058,7 +1057,7 @@ let spaceTile = (s: Picked) =>
 // `make` follows the list, and `about` leads the line under each space's name
 // (the dashboard's side, and the Operator's chat app, which names each
 // space's Operator: operator-page.ts `chatPage`).
-let choice = (
+export let choice = (
   here: Picked,
   all: Picked[],
   to: (s: Picked) => string,
@@ -1120,17 +1119,6 @@ let choice = (
     ),
   )
 }
-
-/** The space selector, as markup, for the Operator's chat app's side
- * (operator-page.ts), which is still written as markup: `make` is markup
- * too. */
-export let spaceChoice = (
-  here: Picked,
-  all: Picked[],
-  to: (s: Picked) => string,
-  make = '',
-  about: (s: Picked) => string = () => '',
-) => markup(choice(here, all, to, make && raw(make), about))
 
 let connectCard = (at: DeskPage, env: Host) =>
   h(
@@ -1429,7 +1417,7 @@ let invitation = (r: Invitation, space: string, env: Host) => {
           h(TabSet.Tab, { for: `way-${w.key}` }, w.tab),
           h(
             TabSet.Panel,
-            { class: 'Card Invite_Way' },
+            { as: Card, class: 'Invite_Way' },
             h('p', { class: 'Invite_Lead' }, 'Scan to sign up for yaks.app'),
             h(
               'a',
@@ -2105,7 +2093,7 @@ let connection = (c: Shown, on: boolean, action: string) => {
       form(
         h(
           More.Body,
-          { class: 'Form' },
+          { as: Form },
           (
             [
               ['title', 'Its name', 'What people call it'],
@@ -4211,7 +4199,7 @@ let doors = (env: Host) =>
         h(TabSet.Tab, { for: `tab-${a.key}` }, a.tab),
         h(
           TabSet.Panel,
-          { mod: a.key, class: 'Card' },
+          { as: Card, mod: a.key },
           h(Card.Title, null, a.title),
           a.intro ? h('p', null, a.intro) : null,
           a.paths

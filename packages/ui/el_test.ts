@@ -31,6 +31,27 @@ test('a part wears its block, its variants and extra classes', () => {
   for (let [node, want] of cases) assertEquals(html(node), want)
 })
 
+test('a part drawn as another wears both, in its own element', () => {
+  let Button = el('button', 'Button')
+  let Panel = el('section', 'Tabs_Panel')
+  let Copy = block('span', 'Copy', { Go: Button })
+  let Report = block(Card, 'Report', { Total: 'p' })
+  let cases: [VNode, string][] = [
+    [
+      h(Panel, { as: Card, mod: 'claude' }, 'x'),
+      '<section class="Card Tabs_Panel Tabs_Panel-claude">x</section>',
+    ],
+    [
+      h(Copy.Go, { type: 'button' }),
+      '<button type="button" class="Button Copy_Go"></button>',
+    ],
+    [h(Report, { id: 'r' }), '<div id="r" class="Card Report"></div>'],
+    [h(Report, { as: 'article' }), '<article class="Card Report"></article>'],
+    [h(Report, { href: '/a' }), '<a href="/a" class="Card Report"></a>'],
+  ]
+  for (let [node, want] of cases) assertEquals(html(node), want)
+})
+
 test('links nest the way HTML allows', () => {
   let Id = el('span', 'Id')
   // An href makes the part the link.
