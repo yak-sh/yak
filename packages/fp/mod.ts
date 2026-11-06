@@ -523,6 +523,55 @@ export let system: Clock = {
   },
 }
 
+/**
+ * A deadline on someone else, counted in time this thread could hear them:
+ * `lapse` runs once `ms` of it has gone by, unless the function returned
+ * cancels it first. A plain timer blames the other side for this thread's own
+ * stalls (a long synchronous call, a starved CPU): the runtime runs a timer
+ * that fell due during one before the answer that arrived beside it. So the
+ * time goes by in beats of `beat` ms, and a beat that comes more than a beat
+ * late counts nothing, which lets what waited behind the stall land first.
+ *
+ * ```ts
+ * import { assert } from '@std/assert'
+ * import { heard } from '@yaks/fp'
+ *
+ * let now = 0, due: [number, () => void][] = [], lapsed = false
+ * let clock = {
+ *   now: () => now,
+ *   after: (ms: number, fn: () => void) => (due.push([now + ms, fn]), () => {}),
+ * }
+ * let run = (to: number) => { now = to; due.splice(0).forEach(([, fn]) => fn()) }
+ * heard(3000, () => lapsed = true, clock)
+ * run(1000), run(60_000) // a minute-long stall counts nothing
+ * run(61_000)
+ * assert(!lapsed)
+ * run(62_000)
+ * assert(lapsed)
+ * ```
+ */
+export let heard = (
+  ms: number,
+  lapse: () => void,
+  clock: Clock = system,
+  beat = 1000,
+): () => void => {
+  let left = ms
+  let cancel = () => {}
+  let wait = () => {
+    let step = Math.min(beat, left)
+    let set = clock.now()
+    cancel = clock.after(step, () => {
+      let late = Math.max(0, clock.now() - set - step)
+      if (late <= beat) left -= step + late
+      if (left > 0) wait()
+      else lapse()
+    })
+  }
+  wait()
+  return () => cancel()
+}
+
 /** A timer cut short by a signal; a cancelled wait resolves without work. */
 export let sleep = (
   ms: number,

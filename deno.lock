@@ -4004,6 +4004,7 @@
             "npm:@yaks/doc@0.2.18",
             "npm:@yaks/edge@0.2.18",
             "npm:@yaks/effects@0.2.22",
+            "npm:@yaks/fp@0.2.18",
             "npm:@yaks/graph@0.2.18",
             "npm:@yaks/harness@0.2.22",
             "npm:@yaks/host@0.2.22",

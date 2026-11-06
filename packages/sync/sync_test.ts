@@ -507,6 +507,11 @@ let drops = () => {
       away = false
       for (let fn of backs) fn()
     },
+    // This thread runs nothing for a while, then its timers due run first.
+    stall: (ms) => {
+      now += ms
+      pass(0)
+    },
     answer: () => tell({ bundles: [] }),
     refuse: () => tell({ refused: { error: 'Refused', message: 'no word' } }),
     pass,
@@ -539,6 +544,11 @@ for (
     ['drop:1006 offline', 0], // a laptop with no network
     ['drop:1006 offline pass:60000 online back answer', 0],
     ['drop:1006 offline pass:60000 online', 1], // back, and the server is not
+    // This thread stalls past `most`: what it was waiting on lands after.
+    ['drop:1001 back stall:40000 answer', 0],
+    ['drop:1001 stall:600000 back answer', 0],
+    ['drop:1001 back stall:40000 pass:30000 answer', 1],
+    ['drop:1006 stall:40000 away:120000', 1],
   ] as const
 ) {
   test(`a wire that does "${script}" is said dropped ${times} times`, () => {

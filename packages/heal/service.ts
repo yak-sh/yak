@@ -10,6 +10,7 @@ import {
   WriteRefused,
 } from '@yaks/client'
 import { sleep } from '@yaks/effects'
+import { type Clock, heard } from '@yaks/fp'
 import type { Bundle, Graph } from '@yaks/graph'
 import type { Host } from '@yaks/host'
 import { kernelDoc, kernelKeywords } from '@yaks/kernel'
@@ -79,7 +80,10 @@ let vocab = loadVocab([
 ], [kernelKeywords])
 
 /** A headless tracker subscription. Closing it releases the whole client. */
-export let track = (url: string, options: ClientOpts = {}): Tracker => {
+export let track = (
+  url: string,
+  { clock, ...options }: ClientOpts & { clock?: Clock } = {},
+): Tracker => {
   let remote = client(vocab, [], {
     ...options,
     url,
@@ -89,31 +93,32 @@ export let track = (url: string, options: ClientOpts = {}): Tracker => {
   // Reads by id still unanswered, each failed when the tracker closes.
   let asking = new Set<(error: Error) => void>()
   // A read by id is a watch the server answers, closed at its first answer.
-  // One the tracker cannot answer within `ASK` fails, and a later pass asks
-  // again.
+  // One the tracker cannot answer within `ASK` of time this thread could hear
+  // it fails, and a later pass asks again.
   let get = (eids: string[]) =>
     new Promise<Bundle[]>((resolve, reject) => {
       let watch = remote.watch(named(eids), { evaluate: 'server' })
       let off = () => {}
       let end = (settle: () => void) => {
         off()
-        clearTimeout(late)
+        late()
         asking.delete(fail)
         watch.close()
         settle()
       }
       let fail = (error: Error) => end(() => reject(error))
-      let heard = () =>
+      let answered = () =>
         watch.refused
           ? fail(new Error(watch.refused))
           : watch.ready && end(() => resolve(watch.value))
-      let late = setTimeout(
-        () => fail(new Error(`${url} did not answer a read by id in time`)),
+      let late = heard(
         ASK,
+        () => fail(new Error(`${url} did not answer a read by id in time`)),
+        clock,
       )
       asking.add(fail)
-      off = watch.subscribe(heard)
-      heard()
+      off = watch.subscribe(answered)
+      answered()
     })
   try {
     let watch = remote.watch(followed, { evaluate: 'server' })

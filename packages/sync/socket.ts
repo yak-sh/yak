@@ -30,6 +30,7 @@
 // it, and when its network comes back the wire reopens at once.
 
 import type { Bundle, Eid } from '@yaks/graph'
+import { heard } from '@yaks/fp'
 import { mask } from '@yaks/query'
 import { decode, stringify, unpack } from '@yaks/vocab/wire'
 import type { Vocab } from '@yaks/vocab'
@@ -290,7 +291,7 @@ export let wire = (opts: WireOpts): Wire => {
   // here `most` later is said (`Dropped`).
   let down: Outage | undefined
   let hearing = new Set<(open: boolean) => void>()
-  let heard = (open: boolean) => {
+  let say = (open: boolean) => {
     for (let fn of hearing) fn(open)
   }
   let n = 0
@@ -316,6 +317,18 @@ export let wire = (opts: WireOpts): Wire => {
     }, ms)
     clockTimers.add(t)
   }
+  // A deadline on the server in time this thread could hear it (@yaks/fp
+  // `heard`), on `set`'s timers, beating only while it is still `owed`.
+  let within = (
+    ms: number,
+    owed: () => boolean,
+    lapse: () => void,
+    set: Timer = timer,
+  ) =>
+    heard(ms, lapse, {
+      now: agreed.read,
+      after: (ms, fn) => (set(() => owed() && fn(), ms), () => {}),
+    })
   // The time, asked of every open socket: its answer calibrates the clock,
   // and a socket that has said nothing `quiet` after it was asked is dead.
   let probe = () => {
@@ -327,9 +340,12 @@ export let wire = (opts: WireOpts): Wire => {
     later(() => {
       if (generation == clockGeneration) probe()
     }, rounds++ < 7 ? 1000 : 30_000)
-    later(() => {
-      if (generation == clockGeneration && words == before) hangUp()
-    }, quiet)
+    within(
+      quiet,
+      () => generation == clockGeneration && words == before,
+      hangUp,
+      later,
+    )
   }
 
   let send = (msg: unknown) => {
@@ -360,15 +376,17 @@ export let wire = (opts: WireOpts): Wire => {
 
   // An outage still under way `most` after it began is a failure, said once,
   // unless this machine has no network: then it is the machine's, and the
-  // network coming back times what follows afresh.
+  // network coming back times what follows afresh. `most` is time this thread
+  // could hear the server in: one that stalls is dropped by the server and
+  // then reopens and reads its answers late, its own doing, not the server's.
   let overdue = (outage: Outage) =>
-    timer(() => {
-      if (down !== outage || closed || !network.online()) return
+    within(most, () => down === outage && !closed, () => {
+      if (!network.online()) return
       let ms = agreed.read() - outage.at
       opts.report(
         new Dropped(wsUrl(opts.url), outage.code, ms, waited(outage)),
       )
-    }, most)
+    })
 
   // What an overdue outage waits on: a socket that never reopened, or the
   // queries a reopened one has not had answered, the first few masked as a
@@ -509,7 +527,7 @@ export let wire = (opts: WireOpts): Wire => {
         )
       }
       resume() // at once, when nothing is asked
-      heard(true)
+      say(true)
     })
     let inbox: Frame[] = []
     let landing = false
@@ -613,7 +631,7 @@ export let wire = (opts: WireOpts): Wire => {
       for (let id of asks.keys()) {
         if (!refused.has(id)) opts.pending?.(id)
       }
-      if (opened !== undefined) heard(false)
+      if (opened !== undefined) say(false)
     }
     s.addEventListener('close', (e) => lost((e as CloseEvent).code))
   }

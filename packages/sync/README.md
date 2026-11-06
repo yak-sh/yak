@@ -389,6 +389,12 @@ outside its subscription queues, so a socket that has said nothing `quiet` after
 being asked (default 10 seconds) is given up as if it had closed, and the next
 one asks every query again.
 
+Both waits, `most` and `quiet`, count only time this thread could hear the
+server in (@yaks/fp `heard`). A thread that stalls (a long synchronous call, a
+starved CPU) runs its overdue timers before the answers that arrived during the
+stall, and a server drops a client that cannot answer its pings; neither is the
+server's failure, so a stall's time counts nothing.
+
 A machine with no network has no server to fail it. While `network` says it is
 offline (by default the browser's `navigator.onLine`), an outage is never said,
 and when the network comes back (the `online` event) the wire reopens at once,

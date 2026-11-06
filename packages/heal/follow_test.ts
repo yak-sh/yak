@@ -2,6 +2,7 @@
 // vocabulary or spawn handlers. Tests observe committed requests, never agents.
 
 import { clock, equal, ok, test, throws } from '@yaks/testing'
+import type { Clock } from '@yaks/fp'
 import {
   type Bundle,
   type Comp,
@@ -528,7 +529,7 @@ test('the follower reuses a task already linked to its tracker bug', async () =>
 })
 
 // The transport uses the graph's API and sync's socket pairs, with no network.
-let remote = async (unstamped = false) => {
+let remote = async (unstamped = false, hearing?: Clock) => {
   let f = await off({}, unstamped)
   let unavailable = false, lose = false, posts = 0
   let time = clock()
@@ -585,6 +586,7 @@ let remote = async (unstamped = false) => {
     time: time.now,
     timer: (fn, ms) => void time.after(ms, fn),
     wait: 1,
+    clock: hearing,
     report: (trouble) => {
       f.errors.push(trouble)
     },
@@ -623,6 +625,13 @@ let remote = async (unstamped = false) => {
     watch,
     ready,
     ask,
+    /** what the tracker said, heard */
+    hear: async () => {
+      for (let i = 0; i < 10; i++) {
+        while (frames.length) frames.shift()!()
+        await Promise.resolve()
+      }
+    },
     posts: () => posts,
     down: (value: boolean) => unavailable = value,
     lose: (value = true) => lose = value,
@@ -672,6 +681,56 @@ test('the headless tracker reconnect replaces stale query membership', () => {
 test('a bug resolved while disconnected is read by id with its mark', () => {
   ok(reconnectResolved.resolved)
 })
+
+// A read by id has 30 s of time this thread could hear the tracker in. A
+// stall (a long synchronous call, a starved CPU) runs its timers before the
+// answer that waited beside them, and counts nothing.
+let hand = () => {
+  let now = 0, due = new Set<[number, () => void]>()
+  let run = (to: number) => {
+    now = to
+    for (let one of [...due].filter(([at]) => at <= to)) {
+      due.delete(one)
+      one[1]()
+    }
+  }
+  let time: Clock = {
+    now: () => now,
+    after: (ms, fn) => {
+      let one: [number, () => void] = [now + ms, fn]
+      due.add(one)
+      return () => due.delete(one)
+    },
+  }
+  return {
+    time,
+    run,
+    beats: (n: number) => {
+      for (let i = 0; i < n; i++) run(now + 1000)
+    },
+  }
+}
+for (
+  let [stall, beats, answered] of [
+    [0, 0, true],
+    [40_000, 0, true], // heard as soon as the thread runs again
+    [600_000, 29, true],
+    [0, 30, false], // the tracker said nothing in 30 s
+    [40_000, 31, false],
+  ] as const
+) {
+  test(`a read by id after a ${stall / 1000} s stall and ${beats} s more is ${answered ? 'answered' : 'failed'}`, async () => {
+    let t = hand()
+    let r = await remote(false, t.time)
+    let got = r.watch.get([bug]).then((rows) => rows.length == 1, () => false)
+    t.run(stall)
+    t.beats(beats)
+    await r.hear()
+    equal(await got, answered)
+    r.watch.close()
+    r.close()
+  })
+}
 
 // Completed work whose bug regressed inside the fixer's cooldown.
 let cooling = async () => {

@@ -2218,6 +2218,9 @@ importers:
       '@yaks/effects':
         specifier: 0.2.22
         version: link:../effects
+      '@yaks/fp':
+        specifier: 0.2.18
+        version: link:../fp
       '@yaks/graph':
         specifier: 0.2.18
         version: link:../graph
