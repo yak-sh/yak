@@ -22,6 +22,7 @@ let ROWS = [
 export let describedRule: Rule = {
   mark: 'yak/store/described/1',
   stores: 'apps',
+  live: 'apps',
   core: ROWS,
   find: ROWS.map((c) => `(.${c})`).join('|') + '&*',
   move: (row: Bundle, read) =>
