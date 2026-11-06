@@ -87,7 +87,13 @@ import {
   type OAuthProviderOptions,
 } from '@cloudflare/workers-oauth-provider'
 import { cookieValue, opened, seal, verify } from './lib/token.ts'
-import { agentsOf, disconnect, replace, servicesOf } from './connected.ts'
+import {
+  agentsOf,
+  disconnect,
+  disconnectAll,
+  replace,
+  servicesOf,
+} from './connected.ts'
 import {
   consented as handoffConsented,
   consenting as handoffConsenting,
@@ -120,7 +126,13 @@ import {
   trashSpace,
   went,
 } from './erase.ts'
-import { CLI_GRANT, GRANT, held, ledger } from './grants.ts'
+import {
+  CLI_GRANT,
+  GRANT,
+  held,
+  ledger,
+  revoke as revokeGrants,
+} from './grants.ts'
 import { instrumentEid } from './instrument.ts'
 import {
   links,
@@ -290,6 +302,18 @@ export let asking = async (
       : null,
     tried,
   }
+}
+
+// Every credential the platform gave a person, taken back: their connectors'
+// and the box's OAuth grants, the CLI's grants and their standing sign-in
+// links. An erased account's token otherwise outlives it (T-144541): a grant
+// never expires, and the next call as it wrote the dead row back.
+export let unheld = async (env: Env, person: string) => {
+  await disconnectAll(api(env), person)
+  let granted = ledger(env.OAUTH_KV)
+  if (granted) await revokeGrants(granted, person, '')
+  let standing = links(env.OAUTH_KV)
+  if (standing) await revoke(standing, person, '')
 }
 
 // The contract every other part reads (mcp.ts swaps its stub for this import):

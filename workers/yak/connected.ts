@@ -169,6 +169,21 @@ export let disconnect = async (
   return gone
 }
 
+/**
+ * Revokes every grant the person holds, whatever it stands for: their account
+ * is ending, so no agent or service of theirs may call as them again. Answers
+ * the grants revoked.
+ */
+export let disconnectAll = async (
+  oauth: Pick<OAuthHelpers, 'listUserGrants' | 'revokeGrant'>,
+  person: string,
+) => {
+  let gone: string[] = []
+  for await (let grant of live(oauth, person, 0)) gone.push(grant.id)
+  await Promise.all(gone.map((id) => oauth.revokeGrant(id, person)))
+  return gone
+}
+
 // A client named by the URL of its metadata document (CIMD) is one id for
 // every account that uses it: every ChatGPT signs in as
 // https://chatgpt.com/oauth/client.json. A registered client's id is its own.

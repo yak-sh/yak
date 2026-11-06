@@ -6,7 +6,8 @@ import { assertEquals } from '@std/assert'
 import { test } from '@yaks/testing'
 import { directoryOf } from './directory.ts'
 import type { Env } from './env.ts'
-import { fresh, signIn } from './probe.ts'
+import { connector, fresh, signIn } from './probe.ts'
+import { ledger, mint } from './grants.ts'
 import { meta } from './meta.ts'
 import { closed } from './erase.ts'
 import { BOT } from './lib/bots.ts'
@@ -16,6 +17,11 @@ let k = await fresh({}, (e) => env = e)
 let dir = directoryOf(env.STORE)
 
 let cy = await signIn(k, `cy-${crypto.randomUUID()}${BOT}`)
+// The box's connection to a test account is a grant, and outlived the account
+// it was for (T-144541).
+let { token } = await mint(k.secret, ledger(env.OAUTH_KV)!, {
+  person: cy.person,
+})
 await closed(env, dir, cy.email, { person: k.owner.person, role: 'owner' })
 let page = await k.at(k.host, '/connect', {
   redirect: 'manual',
@@ -25,6 +31,11 @@ let said = { status: page.status }
 await page.body?.cancel()
 await k.flushReports()
 let reported = k.reported.length
+let called = await connector(k, undefined, token).call('initialize', {
+  protocolVersion: '2025-06-18',
+  capabilities: {},
+  clientInfo: { name: 'probe', version: '1' },
+}).then(() => 'answered', (e: Error) => e.message.slice(0, 7))
 let left = await meta(env).query(`.entity.eid=${cy.person}`)
 
 test('an erased account is not revived by its cookie', () => {
@@ -33,4 +44,8 @@ test('an erased account is not revived by its cookie', () => {
     status: 403,
     reported: 0,
   })
+})
+
+test("an erased account's grant is revoked with it", () => {
+  assertEquals(called, 'mcp 401')
 })

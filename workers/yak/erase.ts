@@ -923,6 +923,9 @@ export let closed = async (
   for (let space of c.spaces) {
     await erase(env, dir, await doomed(dir, space), who)
   }
+  // Its credentials before its row, so none of them can write the row back.
+  let { unheld } = await import('./identity.ts')
+  await unheld(env, c.person)
   await dir.stamp({
     entities: [{ entity: { eid: c.person }, tombstone: {} }],
   }, vouched(who))

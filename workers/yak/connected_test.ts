@@ -7,7 +7,7 @@ import type {
   GrantSummary,
   OAuthHelpers,
 } from '@cloudflare/workers-oauth-provider'
-import { agentsOf, disconnect, servicesOf } from './connected.ts'
+import { agentsOf, disconnect, disconnectAll, servicesOf } from './connected.ts'
 
 let grant = (
   clientId: string,
@@ -219,4 +219,13 @@ test('disconnect revokes the grants of the one entry chosen, and no other', asyn
   assertEquals(await gone('zap'), [])
   assertEquals(await gone('gone'), [])
   assertEquals(await gone(''), [])
+})
+
+test("disconnectAll revokes every grant on every page, a service's too", async () => {
+  let p = provider([
+    [grant('web', { id: 'web', redirectUri: 'https://claude.ai/cb' })],
+    [grant('zap', { id: 'zap', redirectUri: 'https://zapier.com/cb' })],
+  ])
+  assertEquals(await disconnectAll(p.oauth, 'person'), ['web', 'zap'])
+  assertEquals(p.revoked, ['person:web', 'person:zap'])
 })
