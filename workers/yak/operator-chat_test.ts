@@ -384,12 +384,16 @@ test('an app chosen in the side opens a chat about it, with the app live beside 
     document.querySelector('.Talk_Hello h2')?.textContent,
     'What should change in Holdfast?',
   )
-  // The words sent say which app is open; a chat about an app is not where
-  // the person lands, so it holds no ways to start and nothing that needs
-  // them.
+  // The words sent say which page and app are open; a chat about an app is
+  // not where the person lands, so it holds no ways to start and nothing
+  // that needs them.
   assertEquals(
     document.querySelector('#ask [name=app]')?.getAttribute('value'),
     'app1',
+  )
+  assertEquals(
+    document.querySelector('#ask [name=page]')?.getAttribute('value'),
+    aboutPath('clerk', 'app1'),
   )
   assertEquals(document.querySelector('.Talk_Starts, [data-needs]'), null)
   // On a phone, the bar switches to the app, and the app back to the chat.
@@ -403,6 +407,10 @@ test('an app chosen in the side opens a chat about it, with the app live beside 
   // An app the person may not open, or none, opens nothing beside the chat.
   for (let { document } of unchosen) {
     assertEquals(document.querySelector('.Talk_App, #ask [name=app]'), null)
+    assertEquals(
+      document.querySelector('#ask [name=page]')?.getAttribute('value'),
+      chatPath('clerk'),
+    )
   }
 })
 

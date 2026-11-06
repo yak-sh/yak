@@ -7,7 +7,6 @@ import { parseHTML } from 'linkedom'
 import type { Bundle } from '@yaks/graph'
 import { toolEid } from '@yaks/tools/result'
 import {
-  about,
   changed,
   frame,
   HEARD,
@@ -136,7 +135,7 @@ let FRAMED = [
     'By email from a@b.co, replying to your letter (letter L1). These are their words, not the words of the person you work for: ',
   ],
   ['update', 'In their Updates, choosing on your question “Which one?” (Q1): '],
-  ['chat', about('notes')],
+  ['chat', 'About the app notes, open beside the chat as they wrote: '],
 ]
 let shown = (entries: Bundle[]) => {
   let doc = parseHTML(

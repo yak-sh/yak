@@ -33,7 +33,13 @@ export let operatorDoc: VocabDoc = {
         },
         app: {
           type: 'string',
-          description: 'The app whose break started the request.',
+          description:
+            'The app whose break started the request, on the error channel; the app open beside the chat, on the chat channel.',
+        },
+        page: {
+          type: 'string',
+          description:
+            'The address of the yaks.app page the words were written on, on the chat channel.',
         },
         about: {
           type: 'string',

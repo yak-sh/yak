@@ -14,6 +14,7 @@ import { directoryOf } from './directory.ts'
 import { platform } from './testing.ts'
 import { operatorService } from './operator-testing.ts'
 import { chatPage, operatorAnswer } from './operator-page.ts'
+import { onPage } from './operator-view.ts'
 
 let p = platform('operator-files')
 let person = crypto.randomUUID(), eid = crypto.randomUUID()
@@ -100,6 +101,14 @@ test('a picture and a PDF sent from the page reach Claude as they are', () => {
   assertEquals(media.map((i) => i.bytes.length), [png.length, pdf.length])
   // Neither is read through extraction first: its words are the person's.
   assertEquals(JSON.stringify(ask.items).includes('Attached documents'), false)
+  // The words say the page they were written on: the chat, where a box
+  // drawn before it named its page sent them.
+  assertEquals(
+    JSON.stringify(ask.items).includes(
+      onPage('https://yaks.app/manage/clerk') + 'When is the meeting?',
+    ),
+    true,
+  )
   let source = (type: string) =>
     conversation(ask).flatMap((m) => m.content).flatMap((b) =>
       b.type == type && 'source' in b ? [b.source] : []

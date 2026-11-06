@@ -19,7 +19,14 @@ import { vouched, type Who } from './session.ts'
 import { PROTOCOL, protocolled, upgrading } from './protocol.ts'
 import { choice as spaceChoice, esc, type Picked, shell } from './pages.ts'
 import { spaceHost, url } from './host.ts'
-import { chatPath, logoPath, managePath, manifestPath, SLUG } from './route.ts'
+import {
+  chatPath,
+  logoPath,
+  MANAGE,
+  managePath,
+  manifestPath,
+  SLUG,
+} from './route.ts'
 import { PLATFORM_BACKGROUND } from './apps.ts'
 import {
   keepFile,
@@ -558,12 +565,23 @@ export let operatorAnswer = async (
       }
     }
     let request = String(form.get('request') || crypto.randomUUID())
-    // The app open beside the chat, which the words are about.
+    // The app open beside the chat, which the words are about, and the page
+    // of yaks.app they were written on, which its box names (`composer`).
     let app = String(form.get('app') ?? '')
+    let drawn = String(form.get('page') ?? '')
+    let page = new URL(
+      drawn.startsWith(MANAGE + '/') ? drawn : chatPath(space.slug),
+      url,
+    )
     // Whichever page it is sent from, it goes to the person's conversation.
     let received = await operatorDoor(env, space, who, 'receive', {
       say: String(form.get('say') ?? ''),
-      request: { channel: 'chat', files, ...SLUG.test(app) ? { app } : {} },
+      request: {
+        channel: 'chat',
+        files,
+        page: page.href,
+        ...SLUG.test(app) ? { app } : {},
+      },
       options: { id: request },
       ...(form.has('draft')
         ? { draft: JSON.parse(String(form.get('draft'))) }
@@ -1181,7 +1199,8 @@ let hello = (heading: string, said: string) =>
  * Beside it, the app the person chose (`chosen`, the side's `aboutPath`), or
  * else the last app of this space the conversation changed, of those the
  * person may open (T-140509). A new chat about an app asks what should change
- * in it, and the words sent say which app is open (operator-view.ts `about`).
+ * in it, and the words sent say which page and app are open (operator-view.ts
+ * `onPage`).
  */
 export let chatPage = async (
   env: Env,
@@ -1205,6 +1224,11 @@ export let chatPage = async (
   let mine = (slug?: string | null) => beside.apps?.find((a) => a.slug == slug)
   let ours = talked.changed.filter((c) => !c.space || c.space == space.slug)
   let app = mine(chosen) ?? mine(ours.at(-1)?.app)
+  // This page's address, which the words written on it name.
+  let shown = open == root ? 'new' : open
+  let here = app
+    ? aboutPath(space.slug, app.slug, shown)
+    : chatPath(space.slug, shown)
   let operator = space.operator
   let greeting = !fresh
     ? hello(
@@ -1263,7 +1287,7 @@ export let chatPage = async (
             : null,
         )
         : null,
-      fresh || talked.title ? composer(env, at, operator, app) : null,
+      fresh || talked.title ? composer(env, at, here, operator, app) : null,
       fresh && !app
         ? h(
           'div',
@@ -1322,8 +1346,14 @@ export let updatesPage = async (
 // from the conversation, and shows what the Operator is doing (`MOVES`). It
 // asks for a message to the Operator by
 // name, or with an app open beside it, what should change there, and the
-// words say which (`about`).
-let composer = (env: Env, at: string, operator: string, app?: Shown) => {
+// words say the page they were written on and the app (`onPage`).
+let composer = (
+  env: Env,
+  at: string,
+  here: string,
+  operator: string,
+  app?: Shown,
+) => {
   let asked = app
     ? `What should change in ${app.title || app.slug}?`
     : `Message ${operator}`
@@ -1337,6 +1367,7 @@ let composer = (env: Env, at: string, operator: string, app?: Shown) => {
       enctype: 'multipart/form-data',
     },
     h('input', { type: 'hidden', name: 'request', value: crypto.randomUUID() }),
+    h('input', { type: 'hidden', name: 'page', value: here }),
     app ? h('input', { type: 'hidden', name: 'app', value: app.slug }) : null,
     h(
       Drop,

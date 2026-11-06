@@ -24,7 +24,7 @@ import type { Operator } from './operator.ts'
 import { phoneTexts } from './phone-move.ts'
 import type { Declared } from './operator-persona.ts'
 import type { operatorStore } from './operator-store.ts'
-import { about, unsaid } from './operator-view.ts'
+import { onPage, unsaid } from './operator-view.ts'
 
 /** What a person reads when the Operator could not start on their request
  * for a reason that is not theirs to fix. */
@@ -56,8 +56,12 @@ export type Request = {
   task?: string
   files?: File[]
   administrative?: boolean
-  // The app whose break started the request, on the `error` channel.
+  // The app whose break started the request, on the `error` channel; the
+  // app open beside the chat, on the `chat` channel.
   app?: string
+  // The address of the yaks.app page the words were written on, on the
+  // `chat` channel.
+  page?: string
   // Sent to sign up (inbox.ts `signingUp`, operator-texts.ts `arrived`): their
   // first words to yaks.app, unless they had signed up before.
   signup?: boolean
@@ -256,14 +260,14 @@ export let signedFor = (space: Space, name: string) =>
 export let textSigned = (space: Space) => `— ${space.operator}, yaks.app`
 
 // How a person's words came, said before them in their conversation, which
-// every channel shares; words in the chat app need no mark but the app open
-// beside them, when one is (`about`). A reply to a
+// every channel shares: by email, text or phone, in their Updates, or on the
+// page of yaks.app they wrote them on (`onPage`). A reply to a
 // letter the Operator wrote is somebody else's words, and says whose.
 let BY: Record<
   string,
   (request: Request, id: string, subject?: Bundle) => string
 > = {
-  chat: (request) => request.app ? about(request.app) : '',
+  chat: (request) => request.page ? onPage(request.page, request.app) : '',
   email: (request) => request.signup ? 'By email, signing up: ' : 'By email: ',
   text: (request) => request.signup ? 'By text, signing up: ' : 'By text: ',
   rcs: (request) => request.signup ? 'By text, signing up: ' : 'By text: ',

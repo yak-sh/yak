@@ -19,7 +19,7 @@ import {
 } from '@yaks/session'
 import { derivedEid } from '@yaks/graph/identity'
 import { LIMIT } from '@yaks/session/status'
-import { CALLED, channelOf, HEARD } from './operator-view.ts'
+import { CALLED, channelOf, HEARD, paged } from './operator-view.ts'
 import { listing } from '@yaks/mcp'
 import {
   billed,
@@ -880,6 +880,7 @@ export let operating = (
       remembering,
       starting,
       iconic,
+      paged,
     ]).catch((e) => {
       based = undefined
       caught(e, { request: 'operator base persona' })

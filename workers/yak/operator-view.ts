@@ -18,6 +18,7 @@ import { renderToString } from 'preact-render-to-string'
 import { Body, Button, Card, Drop, Icon, Loading, Rows } from '@yaks/ui/parts'
 import { day, moment } from './html.ts'
 import { chatPath } from './route.ts'
+import type { Declared } from './operator-persona.ts'
 import type { Doing } from './mascot.ts'
 import { type IconName, icons } from './icons.ts'
 import { when } from './public/when.js'
@@ -72,11 +73,23 @@ let words = (body: string) => {
   return body
 }
 
-/** How words sent with an app open beside the chat (operator-page.ts
- * `chatPage`) reach the Operator: after the app they are about, which the
- * person's own words on the page leave out. */
-export let about = (app: string) =>
-  `About the app ${app}, open beside the chat as they wrote: `
+/** How words written on a yaks.app page reach the Operator: after the
+ * address of the page they were sent from, and the app open beside the chat
+ * there (operator-page.ts `chatPage`), which the person's own words on the
+ * page leave out. */
+export let onPage = (page: string, app?: string) =>
+  `In the chat on their yaks.app page ${page}${
+    app ? `, with the app ${app} open beside it` : ''
+  }: `
+
+// What that page shows (operator-page.ts `side`, `canvas`), so the Operator
+// knows what "here" is. The base persona contains it (operator-persona.ts).
+export let paged: Declared = {
+  key: 'page',
+  title: 'Where they are',
+  body:
+    'Each message says how it came: by email, by text, by phone, in their Updates, or in the chat on their yaks.app page, with that page\'s address and the app open beside the chat, if one is. Your page is that chat. Down its left side, its sidebar holds the space\'s name, which switches spaces; your name, which opens your conversation with them; Updates from you, with how many wait on them; Your apps, the first few with each one\'s icon beside its name, and All N apps; and Manage at the foot, the settings behind the page (its apps, people, billing and the rest). Beside the sidebar is your conversation and the box they write in, and with an app open, the app runs live in a column beside the chat under its icon, name and address. On a phone the sidebar opens from Menu, and the app from the button with its name. When they write "here" or "this" on the page, they mean what that page shows. By email, text or phone they are not looking at it.',
+}
 
 /** How the caller's words on a call its talking model hears reach the
  * Operator (operator.ts `note`). The model's own words need no framing: the
