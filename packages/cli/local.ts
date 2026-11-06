@@ -227,11 +227,14 @@ export let work = async (
   path: string,
   ready?: string,
   only?: string[],
-  starter?: number,
+  tethered = false,
   process?: string,
 ): Promise<void> => {
   let config = read(path)
-  let lives = await lifetime(dbOf(config), starter)
+  let lives = await lifetime(
+    dbOf(config),
+    tethered ? system.stdin.readable : undefined,
+  )
   let said = await declarations(config)
   let duties = dutyRoles(
     config,

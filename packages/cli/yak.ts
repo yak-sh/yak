@@ -260,9 +260,9 @@ export let own: Command[] = [
           type: 'string',
           description: 'Configured process unit name',
         },
-        starter: {
-          type: 'number',
-          description: 'Exit when this requesting process ends',
+        tethered: {
+          type: 'boolean',
+          description: 'Exit when stdin closes: the requesting process ended',
         },
         roles: {
           type: 'string',
@@ -281,7 +281,7 @@ export let own: Command[] = [
         path,
         ready,
         roles,
-        typeof args.starter == 'number' ? args.starter : undefined,
+        args.tethered === true,
         typeof args.process == 'string' ? args.process : undefined,
       )
       return 0

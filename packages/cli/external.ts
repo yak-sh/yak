@@ -277,6 +277,9 @@ export let ready = async (
   }
 }
 
+// Each worker's open stdin, held for as long as the worker runs.
+let tethers = new Set<WritableStream<Uint8Array>>()
+
 let start = async (
   path: string,
   roles: string[],
@@ -285,9 +288,11 @@ let start = async (
   let dir = await disk.makeTempDir({ prefix: 'yak-work-' })
   let file = `${dir}/ready`
   try {
-    // Null stdio and a detached child keep the worker outside web shutdown's
-    // process group, on macOS too, which ships no setsid(1). Never call `yak`
-    // from PATH: it may name another checkout.
+    // A detached child keeps the worker outside web shutdown's process group,
+    // on macOS too, which ships no setsid(1). Its stdin is the tether: this
+    // web holds the pipe and never writes it, so the worker sees it close when
+    // the web ends, however it ends. Never call `yak` from PATH: it may name
+    // another checkout.
     signal.throwIfAborted()
     // Role names may start with @ (a package service). The CLI expands @file
     // values, so pass the list through a file rather than as a literal path.
@@ -304,18 +309,20 @@ let start = async (
         '--config',
         resolve(path),
         'work',
-        '--starter',
-        String(system.pid),
+        '--tethered',
         '--roles',
         `@${selected}`,
         '--ready',
         file,
       ],
-      stdin: 'null',
+      stdin: 'piped',
       stdout: 'null',
       stderr: 'null',
       detached: true,
     }).spawn()
+    tethers.add(child.stdin)
+    let untie = () => void tethers.delete(child.stdin)
+    child.status.then(untie, untie)
     await ready(
       child,
       async () => {

@@ -1,4 +1,5 @@
-// File removal and replacement end a worker's reason to serve.
+// File removal and replacement, or the starter's end, end a worker's reason
+// to serve.
 import { assertEquals } from '@std/assert'
 import { test } from '@yaks/testing'
 import { lifetime } from './lifetime.ts'
@@ -21,4 +22,17 @@ try {
 }
 test('worker lifetime ends on graph replacement or removal', () => {
   assertEquals(results, [true, false, false])
+})
+
+let tethered = async (end: (w: WritableStream<Uint8Array>) => unknown) => {
+  let { readable, writable } = new TransformStream<Uint8Array>()
+  let lives = await lifetime(':memory:', readable)
+  let before = await lives()
+  await end(writable)
+  await new Promise((done) => setTimeout(done, 0))
+  return [before, await lives()]
+}
+test('worker lifetime ends when its starter closes or drops the tether', async () => {
+  assertEquals(await tethered((w) => w.close()), [true, false])
+  assertEquals(await tethered((w) => w.abort()), [true, false])
 })

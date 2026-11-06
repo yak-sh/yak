@@ -3,26 +3,25 @@ import * as disk from '@yaks/file/io'
 // fallback also belongs to the web that requested it; managed workers do not.
 
 /** Capture the file identity before opening SQLite, so a removed graph cannot
- * be silently recreated, and a replacement at the same path is a new graph. */
-export let lifetime = async (path: string, starter?: number) => {
+ * be silently recreated, and a replacement at the same path is a new graph.
+ * A `tether` is a stream its starter holds open and never writes: its end,
+ * however the starter ended, ends the worker's reason to serve. */
+export let lifetime = async (
+  path: string,
+  tether?: ReadableStream<Uint8Array>,
+) => {
   let original = path == ':memory:' ? undefined : await disk.stat(path)
-  let owner = starter
-    ? await disk.readTextFile(`/proc/${starter}/stat`)
-    : undefined
-  let identity = (stat: string) =>
-    stat.slice(stat.lastIndexOf(')') + 2).split(' ')[19]
+  let cut = false
+  let end = () => void (cut = true)
+  tether?.pipeTo(new WritableStream()).then(end, end)
   return async (): Promise<boolean> => {
+    if (cut) return false
     try {
       if (original) {
         let current = await disk.stat(path)
         if (current.dev != original.dev || current.ino != original.ino) {
           return false
         }
-      }
-      if (starter && owner) {
-        let current = await disk.readTextFile(`/proc/${starter}/stat`)
-        let state = current.slice(current.lastIndexOf(')') + 2).split(' ')[0]
-        if (state == 'Z' || identity(current) != identity(owner)) return false
       }
       return true
     } catch (error) {

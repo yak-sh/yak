@@ -505,18 +505,20 @@ await host.duties(AbortSignal.abort()) // Run one pass, then release leases.
 
 `yak serve` serves web without a duty thread in its process. It checks live
 process roles and starts an independent `yak work --roles <missing>` for any
-missing duties, using the current executable and module with detached, null
-stdio. Service leases remain singleton; duplicate effect workers are allowed. A
+missing duties, using the current executable and module, detached, with null
+output. Service leases remain singleton; duplicate effect workers are allowed. A
 successfully started fallback worker drains when its requesting web process ends
-(`work --starter <pid>`). Explicit `yak work` processes, including managed
-workers, are independent of web shutdown. `yak work` composes the graph and duty
-roles directly; it drains when interrupted or when its database file is removed
-or replaced. It checks file and starter identity every second. Its `--ready`
-file announces that handlers and graph are assembled, not that an old service
-has surrendered its lease. Other command hosts can still use a duty thread
-through [@yaks/threads](../threads/README.md); [`duties.ts`](./duties.ts) only
-opens the box graph for the roles it is handed. The same package works the pool
-and leased services for independent `yak work` processes.
+(`work --tethered`): the web holds the worker's stdin open and never writes it,
+so its close is the web's end on any platform, with no process table read.
+Explicit `yak work` processes, including managed workers, are independent of web
+shutdown. `yak work` composes the graph and duty roles directly; it drains when
+interrupted, when its tether closes, or when its database file is removed or
+replaced. It checks file identity every second. Its `--ready` file announces
+that handlers and graph are assembled, not that an old service has surrendered
+its lease. Other command hosts can still use a duty thread through
+[@yaks/threads](../threads/README.md); [`duties.ts`](./duties.ts) only opens the
+box graph for the roles it is handed. The same package works the pool and leased
+services for independent `yak work` processes.
 
 A web checks coverage, including with `--no-duties`: it reads the unexited
 processes once, then follows the process rows its feed hears, and every second
