@@ -87,7 +87,7 @@ test('a text term requires a search extension', () => {
 
 test('a contains needle rides as a param', () => {
   let { params } = compile(parse('.doc.title~=hi'), v)
-  assert(params.includes('hi'))
+  assert(params.includes('%hi%'), JSON.stringify(params))
 })
 
 test('the derived hook supplies a computed property expression', () => {

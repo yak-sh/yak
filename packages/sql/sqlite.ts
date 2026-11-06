@@ -414,21 +414,25 @@ let ne = (
     { sql: `(coalesce(${inner.sql}, 0) = 0)`, params: inner.params }
 }
 
-// ~= is String(v).toLowerCase().includes(needle). instr() is used so that a
-// wildcard character needs no escaping, and coalesce so that a missing column
-// reads as ''. A non-ASCII search string declines — SQLite's lower() is
-// ASCII-only while JavaScript's is Unicode, so the two case foldings are not
-// the same, and an almost-right answer is refused.
+// ~= is String(v).toLowerCase().includes(needle), and coalesce reads a
+// missing column as ''. A non-ASCII search string declines — SQLite folds
+// only ASCII case while JavaScript's is Unicode, so the two case foldings are
+// not the same, and an almost-right answer is refused. LIKE folds ASCII case
+// as it reads the text in place: lower() copied every text first, 7.8 s over
+// the box's 2.2 GB of contents where LIKE takes 2.8. Its wildcards in the
+// needle are escaped, and a needle past LIKE's longest pattern (50,000 bytes)
+// is found with instr() over the lowered text.
 let ascii = (s: string) => [...s].every((ch) => ch.charCodeAt(0) < 128)
-let contains = (c: string, value: string): Frag | null =>
-  !ascii(value)
-    ? null
-    : value == ''
-    ? { sql: `${c} is not null`, params: [] }
-    : {
-      sql: `instr(lower(coalesce(${asText(c)}, '')), lower(?)) > 0`,
-      params: [value],
-    }
+let LIKE_MAX = 50_000
+let contains = (c: string, value: string): Frag | null => {
+  if (!ascii(value)) return null
+  if (value == '') return { sql: `${c} is not null`, params: [] }
+  let text = `coalesce(${asText(c)}, '')`
+  let pattern = `%${value.replace(/[\\%_]/g, '\\$&')}%`
+  return pattern.length < LIKE_MAX
+    ? { sql: `${text} like ? escape '\\'`, params: [pattern] }
+    : { sql: `instr(lower(${text}), lower(?)) > 0`, params: [value] }
+}
 
 // ---- time phrases (@yaks/query resolves the edges; this lowers them) ----
 let iso = (ms: number) => new Date(ms).toISOString()

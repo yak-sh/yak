@@ -290,6 +290,10 @@ type Ctx = {
   paged?: boolean
   /** A mandatory finite root identity, known before presence is planned. */
   bounded?: boolean
+  /** Which half of a default window this statement reads (`halved`): the
+   * numbered walk the number's index in its order and probe each entity's
+   * tests, the rest are driven from the component they test, newest first. */
+  half?: 'numbered' | 'unnumbered'
   /** A mandatory stored value filter narrows the root rows (`narrowed`). */
   narrowed?: boolean
   screens?: Map<Extension, Screen>
@@ -384,7 +388,8 @@ let owned = (ctx: Ctx, comp: string, where?: string): Cond => {
   // already supply the owners. Probe each owner's key instead of building its
   // entire owning set first: a page's `!references` beside its few links read
   // all 36,600 `references` rows to answer for three.
-  return ctx.correlated || ctx.bounded || ctx.present || ctx.candidates
+  return ctx.correlated || ctx.bounded || ctx.present || ctx.candidates ||
+      ctx.half == 'numbered'
     ? cond({
       sql: `exists (select 1 from ${ctx.d.table(comp)} where ${
         ctx.d.ownerKey(comp)
@@ -3587,6 +3592,80 @@ let limited = (ast: And, ctx: Ctx): Frag | undefined => {
   }))
 }
 
+// A window in the default order is the numbered entities, newest number
+// first, and then the rest, newest first. Read as one ordered statement it
+// sorts every entity its filter admits before it can cut the page, and a test
+// no index answers (`.content.body~=`) is run on each of them: 8 s on the
+// box's 701,918 contents for a page of 25 that the first few hundred hold.
+// Read as its two halves, each is a walk that stops at the page: the numbered
+// walk the number's index, which holds only them, and probe each entity's
+// tests; the rest are read from the component a test needs, in its owners'
+// order. At most twice the page is then put in order.
+let halved = (ast: And, ctx: Ctx): Frag | undefined => {
+  let limit = find<Limit>(ast.clauses, 'limit')
+  let num = ctx.v.prop('entity', 'num')
+  if (
+    !limit || limit.n <= 0 || !Number.isSafeInteger(limit.n) || ctx.half ||
+    ctx.unordered || ctx.storageOrder || ctx.spine || ctx.correlated ||
+    ctx.row || ctx.owner || ctx.eids || ctx.candidates || !ctx.d.owned ||
+    !(ctx.d.scoped || ctx.d.spine == '"entity"') || !num || num.computed ||
+    ctx.derived['entity.num'] || claimed(ctx.ext, ast) ||
+    ast.clauses.some((c) =>
+      ['order', 'after', 'count', 'tally', 'distinct'].includes(c.kind)
+    )
+  ) return
+  let filters = ast.clauses.filter((c) => !directive(c))
+  // An index's seek already bounds the rows the test reads.
+  if (
+    filters.some((c) =>
+      unnumbered(ctx, c) || c.kind == 'pred' && !c.not && indexable(ctx, c)
+    )
+  ) return
+  let scanned = filters.find((c): c is Pred =>
+    c.kind == 'pred' && opOf(c) == '~' && needs('~', c.value) &&
+    !!spun(ctx, c)
+  )
+  if (!scanned) return
+  let page = (half: Ctx['half'], has: Pred): Query => {
+    let q = lower({ kind: 'and', clauses: [...filters, has, limit] }, {
+      ...ctx,
+      half,
+      present: half == 'unnumbered' ? spun(ctx, scanned) : undefined,
+      tables: new Set(),
+    }, [])
+    let arm = render({
+      ...q,
+      cols: [raw(`${ctx.d.ownerKey('entity')} as id`)],
+    })
+    return select({
+      from: from(raw(arm.sql, arm.params, arm.table, arm.origin)),
+    })
+  }
+  let at = (op: '!' | '='): Pred => ({
+    kind: 'pred',
+    path: ['entity', 'num'],
+    op,
+    value: op == '=' ? { kind: 'scalar', raw: '' } : null,
+  })
+  return render(select({
+    from: from({
+      t: 'compound',
+      op: 'union all',
+      parts: [page('numbered', at('!')), page('unnumbered', at('='))],
+    }),
+  }))
+}
+
+// The component a mandatory test of one of its stored properties needs, when
+// its rows can drive a statement.
+let spun = (ctx: Ctx, c: Pred): string | undefined => {
+  let [comp] = implied(ctx, c)
+  return comp && !computed(ctx.v, comp) && (ctx.d.scoped ||
+      source(ctx, comp) == `"${comp}"` && ctx.d.table(comp) == `"${comp}"`)
+    ? comp
+    : undefined
+}
+
 let lower = (
   ast: And,
   ctx: Ctx,
@@ -3613,7 +3692,7 @@ let lower = (
       }
       : s
   let cs = ast.clauses
-  let bounded = limited(ast, ctx)
+  let bounded = limited(ast, ctx) ?? halved(ast, ctx)
   if (bounded) {
     // These ids passed the complete predicate inside this same statement.
     // Only shaping remains; repeating the filter adds joins and lowering
@@ -3661,7 +3740,7 @@ let lower = (
   // already has a keyed driving table. No catalog is needed to discover it.
   if (
     !spine && !ctx.eids && !ctx.correlated && !claims(ctx, 'pred') &&
-    ctx.d.owned &&
+    !ctx.half && ctx.d.owned &&
     find<Limit>(cs, 'limit')
   ) {
     let facets = flattened(filters).map((c) => facetOf(ctx, c))
@@ -3674,7 +3753,7 @@ let lower = (
       ) ctx.present = comp
     }
   }
-  if (!ctx.present && !find<Count>(cs, 'count')) {
+  if (!ctx.present && !ctx.half && !find<Count>(cs, 'count')) {
     ctx.present = presence(ctx, filters)
   }
   ctx.paged = seeksPage(ctx, cs)
@@ -3807,8 +3886,9 @@ let lower = (
   // not be one of the rows. A complete result reads every match whatever its
   // order, and asks nothing.
   let down = !physical && (sort || limit || after) ? ' desc' : ''
-  let counts = numbered && (!limit || !!sort || !!after ||
-    !filters.some((c) => unnumbered(ctx, c)))
+  let counts = numbered && ctx.half != 'unnumbered' &&
+    (!limit || !!sort || !!after ||
+      !filters.some((c) => unnumbered(ctx, c)))
   if (counts && !ordered.includes(`"entity"."num"${down}`)) {
     ordered.push(`"entity"."num"${down}`)
   }
