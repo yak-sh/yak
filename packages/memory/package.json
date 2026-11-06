@@ -1,6 +1,6 @@
 {
   "name": "@yaks/memory",
-  "version": "0.2.23",
+  "version": "0.2.24",
   "type": "module",
   "exports": {
     ".": "./mod.ts",
@@ -13,18 +13,18 @@
   "license": "Apache-2.0",
   "description": "Stores a person's words with context as graph entities and retrieves them for subsequent conversations.",
   "dependencies": {
-    "@yaks/doc": "0.2.23",
-    "@yaks/graph": "0.2.23",
-    "@yaks/host": "0.2.23",
-    "@yaks/inspect": "0.2.23",
+    "@yaks/doc": "0.2.24",
+    "@yaks/graph": "0.2.24",
+    "@yaks/host": "0.2.24",
+    "@yaks/inspect": "0.2.24",
     "@yaks/query": "0.2.23",
-    "@yaks/ui": "0.2.23",
+    "@yaks/ui": "0.2.24",
     "@yaks/vocab": "0.2.23",
     "preact": "10.29.7"
   },
   "devDependencies": {
     "@std/assert": "npm:@jsr/std__assert@^1.0.0",
-    "@yaks/ram": "0.2.23",
+    "@yaks/ram": "0.2.24",
     "@yaks/testing": "0.2.17"
   }
 }

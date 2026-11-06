@@ -9,8 +9,8 @@
   "license": "Apache-2.0",
   "description": "Named workloads, raw samples, JSON runs and explicit baseline ratchets, with process-configured reporters.",
   "dependencies": {
-    "@yaks/file": "0.2.23",
-    "@yaks/process": "0.2.23",
+    "@yaks/file": "0.2.24",
+    "@yaks/process": "0.2.24",
     "@yaks/trace": "0.2.23"
   },
   "devDependencies": {

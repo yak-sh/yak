@@ -1,6 +1,6 @@
 {
   "name": "@yaks/kernel",
-  "version": "0.2.23",
+  "version": "0.2.24",
   "type": "module",
   "exports": {
     ".": "./mod.ts",
@@ -16,23 +16,23 @@
   "license": "Apache-2.0",
   "description": "Shared identity, marks and relationship components for graphs of work, with vocabulary documents, a completion plugin, citation helpers and a comment tool.",
   "dependencies": {
-    "@yaks/draft": "0.2.23",
+    "@yaks/draft": "0.2.24",
     "@yaks/fp": "0.2.23",
-    "@yaks/graph": "0.2.23",
-    "@yaks/preact": "0.2.23",
+    "@yaks/graph": "0.2.24",
+    "@yaks/preact": "0.2.24",
     "@yaks/query": "0.2.23",
-    "@yaks/render": "0.2.23",
-    "@yaks/ui": "0.2.23",
+    "@yaks/render": "0.2.24",
+    "@yaks/ui": "0.2.24",
     "@yaks/vocab": "0.2.23",
     "preact": "10.29.7"
   },
   "devDependencies": {
     "@std/assert": "npm:@jsr/std__assert@^1.0.0",
-    "@yaks/doc": "0.2.23",
-    "@yaks/edge": "0.2.23",
+    "@yaks/doc": "0.2.24",
+    "@yaks/edge": "0.2.24",
     "@yaks/provenance": "0.2.23",
-    "@yaks/ram": "0.2.23",
+    "@yaks/ram": "0.2.24",
     "@yaks/testing": "0.2.17",
-    "@yaks/text": "0.2.23"
+    "@yaks/text": "0.2.24"
   }
 }

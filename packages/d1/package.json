@@ -1,25 +1,25 @@
 {
   "name": "@yaks/d1",
-  "version": "0.2.23",
+  "version": "0.2.24",
   "type": "module",
   "exports": "./mod.ts",
   "license": "Apache-2.0",
   "description": "Adapts Cloudflare D1 to graph storage with asynchronous queries and writes submitted as atomic statement batches.",
   "dependencies": {
-    "@yaks/graph": "0.2.23",
-    "@yaks/match": "0.2.23",
+    "@yaks/graph": "0.2.24",
+    "@yaks/match": "0.2.24",
     "@yaks/query": "0.2.23",
-    "@yaks/sql": "0.2.23",
-    "@yaks/sqlite": "0.2.23",
+    "@yaks/sql": "0.2.24",
+    "@yaks/sqlite": "0.2.24",
     "@yaks/vocab": "0.2.23"
   },
   "devDependencies": {
     "@std/assert": "npm:@jsr/std__assert@^1.0.0",
-    "@yaks/effects": "0.2.23",
+    "@yaks/effects": "0.2.24",
     "@yaks/fp": "0.2.23",
-    "@yaks/member": "0.2.23",
-    "@yaks/ram": "0.2.23",
-    "@yaks/secrets": "0.2.23",
+    "@yaks/member": "0.2.24",
+    "@yaks/ram": "0.2.24",
+    "@yaks/secrets": "0.2.24",
     "@yaks/testing": "0.2.17"
   }
 }

@@ -1,6 +1,6 @@
 {
   "name": "@yaks/page",
-  "version": "0.2.23",
+  "version": "0.2.24",
   "type": "module",
   "exports": {
     ".": "./mod.ts",
@@ -12,19 +12,19 @@
   "license": "Apache-2.0",
   "description": "Records a web page as it was seen: its canonical address becomes its entity id, and its bytes are stored as one self-contained document.",
   "dependencies": {
-    "@yaks/api": "0.2.23",
-    "@yaks/blob": "0.2.23",
-    "@yaks/doc": "0.2.23",
-    "@yaks/effects": "0.2.23",
+    "@yaks/api": "0.2.24",
+    "@yaks/blob": "0.2.24",
+    "@yaks/doc": "0.2.24",
+    "@yaks/effects": "0.2.24",
     "@yaks/fp": "0.2.23",
-    "@yaks/graph": "0.2.23",
-    "@yaks/process": "0.2.23",
+    "@yaks/graph": "0.2.24",
+    "@yaks/process": "0.2.24",
     "@yaks/vocab": "0.2.23",
     "linkedom": "^0.18.12"
   },
   "devDependencies": {
     "@std/assert": "npm:@jsr/std__assert@^1.0.0",
-    "@yaks/cli": "0.2.23",
+    "@yaks/cli": "0.2.24",
     "@yaks/testing": "0.2.17"
   }
 }

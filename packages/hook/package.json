@@ -1,6 +1,6 @@
 {
   "name": "@yaks/hook",
-  "version": "0.2.23",
+  "version": "0.2.24",
   "type": "module",
   "exports": {
     ".": "./mod.ts",
@@ -9,9 +9,9 @@
   "license": "Apache-2.0",
   "description": "An event another system delivered, kept as it arrived: the payload, the route it came in on, and whether it was signed.",
   "dependencies": {
-    "@yaks/doc": "0.2.23",
-    "@yaks/edge": "0.2.23",
-    "@yaks/graph": "0.2.23",
+    "@yaks/doc": "0.2.24",
+    "@yaks/edge": "0.2.24",
+    "@yaks/graph": "0.2.24",
     "@yaks/vocab": "0.2.23"
   },
   "devDependencies": {

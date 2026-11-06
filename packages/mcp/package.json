@@ -1,6 +1,6 @@
 {
   "name": "@yaks/mcp",
-  "version": "0.2.23",
+  "version": "0.2.24",
   "type": "module",
   "exports": {
     ".": "./mod.ts",
@@ -15,14 +15,14 @@
   "dependencies": {
     "@modelcontextprotocol/core": "2.2.0",
     "@modelcontextprotocol/server": "2.2.0",
-    "@yaks/api": "0.2.23",
-    "@yaks/file": "0.2.23",
+    "@yaks/api": "0.2.24",
+    "@yaks/file": "0.2.24",
     "@yaks/fp": "0.2.23",
-    "@yaks/graph": "0.2.23",
-    "@yaks/persona": "0.2.23",
-    "@yaks/process": "0.2.23",
-    "@yaks/session": "0.2.23",
-    "@yaks/tools": "0.2.23",
+    "@yaks/graph": "0.2.24",
+    "@yaks/persona": "0.2.24",
+    "@yaks/process": "0.2.24",
+    "@yaks/session": "0.2.24",
+    "@yaks/tools": "0.2.24",
     "@yaks/vocab": "0.2.23",
     "yaml": "^2.9.1"
   },
@@ -30,8 +30,8 @@
     "@modelcontextprotocol/client": "2.2.0",
     "@modelcontextprotocol/sdk": "^1.29.0",
     "@std/assert": "npm:@jsr/std__assert@^1.0.0",
-    "@yaks/cli": "0.2.23",
-    "@yaks/ram": "0.2.23",
+    "@yaks/cli": "0.2.24",
+    "@yaks/ram": "0.2.24",
     "@yaks/testing": "0.2.17",
     "ajv": "^8.17.1",
     "zod": "3.25.76"

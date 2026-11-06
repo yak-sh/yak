@@ -1,25 +1,25 @@
 {
   "name": "@yaks/durable-object",
-  "version": "0.2.23",
+  "version": "0.2.24",
   "type": "module",
   "exports": "./mod.ts",
   "license": "Apache-2.0",
   "description": "Provides graph storage on a Cloudflare Durable Object's embedded SQLite and connects hibernatable WebSockets to query subscriptions.",
   "dependencies": {
-    "@yaks/api": "0.2.23",
+    "@yaks/api": "0.2.24",
     "@yaks/fp": "0.2.23",
-    "@yaks/graph": "0.2.23",
-    "@yaks/sql": "0.2.23",
-    "@yaks/sqlite": "0.2.23",
+    "@yaks/graph": "0.2.24",
+    "@yaks/sql": "0.2.24",
+    "@yaks/sqlite": "0.2.24",
     "@yaks/trace": "0.2.23",
     "@yaks/vocab": "0.2.23",
     "fflate": "0.8.3"
   },
   "devDependencies": {
     "@std/assert": "npm:@jsr/std__assert@^1.0.0",
-    "@yaks/blob": "0.2.23",
+    "@yaks/blob": "0.2.24",
     "@yaks/query": "0.2.23",
-    "@yaks/ram": "0.2.23",
+    "@yaks/ram": "0.2.24",
     "@yaks/testing": "0.2.17"
   }
 }

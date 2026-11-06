@@ -1,6 +1,6 @@
 {
   "name": "@yaks/threads",
-  "version": "0.2.23",
+  "version": "0.2.24",
   "type": "module",
   "exports": {
     ".": "./mod.ts",
@@ -9,14 +9,14 @@
   "license": "Apache-2.0",
   "description": "Threads serving a graph's roles, by their own connection or over a MessagePort to the graph that owns the data.",
   "dependencies": {
-    "@yaks/effects": "0.2.23",
+    "@yaks/effects": "0.2.24",
     "@yaks/fp": "0.2.23",
-    "@yaks/graph": "0.2.23",
-    "@yaks/sync": "0.2.23",
+    "@yaks/graph": "0.2.24",
+    "@yaks/sync": "0.2.24",
     "@yaks/vocab": "0.2.23"
   },
   "devDependencies": {
-    "@yaks/ram": "0.2.23",
+    "@yaks/ram": "0.2.24",
     "@yaks/testing": "0.2.17"
   }
 }

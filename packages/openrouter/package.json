@@ -1,6 +1,6 @@
 {
   "name": "@yaks/openrouter",
-  "version": "0.2.23",
+  "version": "0.2.24",
   "type": "module",
   "exports": {
     ".": "./mod.ts",
@@ -10,13 +10,13 @@
   "license": "Apache-2.0",
   "description": "Implements the model interface over OpenRouter's streaming Responses API, reusing the portable transport from @yaks/openai without its credentials or native tools.",
   "dependencies": {
-    "@yaks/model": "0.2.23",
-    "@yaks/openai": "0.2.23",
+    "@yaks/model": "0.2.24",
+    "@yaks/openai": "0.2.24",
     "@yaks/vocab": "0.2.23"
   },
   "devDependencies": {
     "@std/assert": "npm:@jsr/std__assert@^1.0.0",
-    "@yaks/blob": "0.2.23",
+    "@yaks/blob": "0.2.24",
     "@yaks/testing": "0.2.17"
   }
 }

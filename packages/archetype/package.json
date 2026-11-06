@@ -1,6 +1,6 @@
 {
   "name": "@yaks/archetype",
-  "version": "0.2.23",
+  "version": "0.2.24",
   "type": "module",
   "exports": {
     ".": "./mod.ts",
@@ -12,12 +12,12 @@
   "description": "Identifies component-table sets by content hash, caches presence matches and transitions, and maintains each graph entity's archetype.",
   "dependencies": {
     "@yaks/fp": "0.2.23",
-    "@yaks/graph": "0.2.23",
+    "@yaks/graph": "0.2.24",
     "@yaks/vocab": "0.2.23"
   },
   "devDependencies": {
     "@std/assert": "npm:@jsr/std__assert@^1.0.0",
-    "@yaks/ram": "0.2.23",
+    "@yaks/ram": "0.2.24",
     "@yaks/testing": "0.2.17"
   }
 }

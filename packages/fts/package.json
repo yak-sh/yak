@@ -1,6 +1,6 @@
 {
   "name": "@yaks/fts",
-  "version": "0.2.23",
+  "version": "0.2.24",
   "type": "module",
   "exports": {
     ".": "./mod.ts",
@@ -10,14 +10,14 @@
   "license": "Apache-2.0",
   "description": "Indexes a graph's text properties with SQLite FTS5 and adds ranked full-text search to queries.",
   "dependencies": {
-    "@yaks/graph": "0.2.23",
+    "@yaks/graph": "0.2.24",
     "@yaks/query": "0.2.23",
-    "@yaks/sql": "0.2.23",
+    "@yaks/sql": "0.2.24",
     "@yaks/vocab": "0.2.23"
   },
   "devDependencies": {
     "@std/assert": "npm:@jsr/std__assert@^1.0.0",
-    "@yaks/sqlite": "0.2.23",
+    "@yaks/sqlite": "0.2.24",
     "@yaks/testing": "0.2.17"
   }
 }
