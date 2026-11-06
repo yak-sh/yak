@@ -9,7 +9,6 @@ import {
 // can land. What a launcher runs is loaded with it (./yak.ts), under the
 // checkout's land lock.
 import { wind } from '@yaks/process/wind'
-import { hold } from '@yaks/git/hold'
 import { installed } from './dependencies.ts'
 import { registerHooks } from 'node:module'
 import { isAbsolute } from 'node:path'
@@ -39,10 +38,16 @@ export let readinessPid = (): number => launcherPid ?? system.pid
 export let runtimeRoot = (): boolean =>
   system.env.get('YAK_RUNTIME_ROOT') == ROOT.href.replace(/\/$/, '')
 
-let run = async (command: string, args: string[], cwd?: string) => {
+let run = async (
+  command: string,
+  args: string[],
+  cwd?: string,
+  env?: Record<string, string>,
+) => {
   let result = await launchCommand(command, {
     args,
     cwd,
+    env,
     stdout: 'piped',
     stderr: 'piped',
   }).output()
@@ -124,27 +129,32 @@ let live = async (cache: string, names: string[]): Promise<Set<string>> => {
 }
 
 // The commit a checkout stands at, its tracked edits as a binary patch, and
-// its untracked files' bytes.
+// its untracked files' bytes. A clean checkout, the common case, costs one
+// status and nothing else.
 let capture = async (root: string) => {
-  let commit = decode(await git(root, 'rev-parse', 'HEAD')).trim()
-  // Status before the diff. Besides naming the untracked files, it refreshes
-  // the index's record of each file's stat and writes it back when it can
-  // take the index's lock; a diff refreshes it only in memory. In a checkout
-  // whose index is no newer than its files (racily clean, as a new
-  // worktree's can be), a diff alone hashed every tracked file again on every
-  // launch.
-  let untracked = decode(
+  // Besides naming the commit and every change, status refreshes the index's
+  // record of each file's stat and writes it back when it can take the
+  // index's lock; a diff refreshes it only in memory. In a checkout whose
+  // index is no newer than its files (racily clean, as a new worktree's can
+  // be), a diff alone hashed every tracked file again on every launch.
+  let lines = decode(
     await git(
       root,
       'status',
-      '--porcelain',
+      '--porcelain=v2',
+      '--branch',
       '-z',
       '--no-renames',
       '--untracked-files=all',
     ),
-  ).split('\0').filter((line) => line.startsWith('?? '))
-    .map((line) => line.slice(3))
-  let patch = await git(root, 'diff', '--binary', commit)
+  ).split('\0')
+  let commit = lines.find((line) => line.startsWith('# branch.oid '))!
+    .slice(13)
+  let untracked = lines.filter((line) => line.startsWith('? '))
+    .map((line) => line.slice(2))
+  let patch = lines.some((line) => /^[12u] /.test(line))
+    ? await git(root, 'diff', '--binary', commit)
+    : new Uint8Array()
   let files = await Promise.all(
     untracked.sort().map(async (name) => ({
       name,
@@ -156,26 +166,26 @@ let capture = async (root: string) => {
 }
 
 /** Capture committed sources plus the worktree's edits into a runtime slot.
- * A slot never changes while a process runs from it. The cache's lock keeps
- * other launchers out until `release`, called once the child is started and
- * names its slot. A child resolves its workspace afresh over this tree; its
- * cwd and graph config still name the caller's data. */
+ * A slot never changes while a process runs from it. `whole` releases the
+ * checkout's land lock, held shared by the caller (./yak.ts), once the
+ * checkout is read: a landing writes it under that lock, held exclusively, so
+ * a launch never captures half a merge, and the capture's own index write
+ * never takes the index from a landing. The cache's lock keeps other
+ * launchers out until `release`, called once the child is started and names
+ * its slot. A child resolves its workspace afresh over this tree; its cwd and
+ * graph config still name the caller's data. */
 export let snapshot = async (
   root: string,
+  whole: () => void = () => {},
 ): Promise<{ root: string; commit: string; release: () => void }> => {
   if (runtimeRoot()) {
+    whole()
     return {
       root,
       commit: system.env.get('YAK_RUNTIME_COMMIT')!,
       release: () => {},
     }
   }
-  // The checkout is read whole: a landing writes it under its land lock,
-  // held exclusively, so a launch never captures half a merge, and the
-  // capture's own index write never takes the index from a landing.
-  let gitdir = decode(await git(root, 'rev-parse', '--absolute-git-dir'))
-    .trim()
-  let whole = await hold(gitdir, false)
   let { commit, patch, files } = await capture(root).finally(whole)
   let hash = await digest(new TextEncoder().encode(JSON.stringify([
     1,
@@ -208,6 +218,10 @@ export let snapshot = async (
         .catch(() => undefined)
       entries.push({ name, hash: mark })
     }
+    // A slot that holds these sources is the whole cost of a warm launch:
+    // which processes are live matters only to a slot about to be written.
+    let hit = entries.find((e) => /^\d+$/.test(e.name) && e.hash == hash)
+    if (hit) return { root: `${cache}/${hit.name}`, commit, release }
     let pick = slot(
       entries,
       await live(cache, entries.map((e) => e.name)),
@@ -217,7 +231,7 @@ export let snapshot = async (
     for (let name of pick.prune) {
       await disk.remove(`${cache}/${name}`, { recursive: true })
     }
-    if (pick.fresh) await build({ root, commit, patch, files, target, hash })
+    await build({ root, commit, patch, files, target, hash })
     return { root: target, commit, release }
   } catch (error) {
     release()
@@ -225,9 +239,17 @@ export let snapshot = async (
   }
 }
 
-/** Write a slot from scratch, its node_modules linked from pnpm's store. Its `.hash` comes last,
- * so a slot cut short while building is never matched and is rewritten by the
- * next launch. */
+let absent = (error: unknown) => {
+  if (!(error instanceof disk.errors.NotFound)) throw error
+}
+
+/** Write a slot, its node_modules linked from pnpm's store. A slot holds its
+ * own Git index (`.index`), and one that held a commit alone (`.base`) moves
+ * to the next as Git moves a checkout, writing only the files that differ,
+ * so the first launch after a landing writes what landed and keeps its
+ * node_modules. Any other slot is written from scratch. Its `.hash` comes
+ * last, so a slot cut short while building is never matched and is rewritten
+ * by the next launch. */
 let build = async ({ root, commit, patch, files, target, hash }: {
   root: string
   commit: string
@@ -236,11 +258,23 @@ let build = async ({ root, commit, patch, files, target, hash }: {
   target: string
   hash: string
 }) => {
-  await disk.remove(target, { recursive: true }).catch((error) => {
-    if (!(error instanceof disk.errors.NotFound)) throw error
-  })
-  await disk.mkdir(target)
-  await feed('tar', ['-x', '-C', target], await git(root, 'archive', commit))
+  let base = await disk.readTextFile(`${target}/.base`).catch(() => undefined)
+  for (let mark of ['.hash', '.base']) {
+    await disk.remove(`${target}/${mark}`).catch(absent)
+  }
+  let tree = (...args: string[]) =>
+    run('git', ['--work-tree', target, 'read-tree', ...args], root, {
+      GIT_INDEX_FILE: `${target}/.index`,
+    })
+  let moved = !!base && await tree('-m', '-u', base, commit).then(
+    () => true,
+    () => false,
+  )
+  if (!moved) {
+    await disk.remove(target, { recursive: true }).catch(absent)
+    await disk.mkdir(target)
+    await tree('--reset', '-u', commit)
+  }
   if (patch.length) await feed('git', ['apply', '--binary', '-'], patch, target)
   for (let { name, bytes, mode } of files) {
     let to = `${target}/${name}`
@@ -248,6 +282,9 @@ let build = async ({ root, commit, patch, files, target, hash }: {
     await disk.writeFile(to, bytes, { mode: mode ?? undefined })
   }
   await installed(target)
+  if (!patch.length && !files.length) {
+    await disk.writeTextFile(`${target}/.base`, commit)
+  }
   await disk.writeTextFile(`${target}/.hash`, hash)
 }
 
@@ -326,14 +363,22 @@ export let inspector = (port: string): string => {
 /** Run a CLI command from immutable sources, forwarding its terminal, its
  * interrupts and resizes, and waiting for the child to drain. JSR releases are
  * already immutable. Independent workers reuse the sources with their own
- * lifetime. */
-export let runtime = async (argv: string[]): Promise<number | undefined> => {
-  if (!ROOT.href.startsWith('file:')) return
+ * lifetime. `whole` releases the checkout's land lock the launcher holds
+ * (./yak.ts) once the checkout is read. */
+export let runtime = async (
+  argv: string[],
+  whole: () => void = () => {},
+): Promise<number | undefined> => {
+  if (!ROOT.href.startsWith('file:')) {
+    whole()
+    return
+  }
   let { fileURLToPath } = await import('node:url')
   let root = fileURLToPath(ROOT).replace(/\/$/, '')
   let here = ROOT.href.replace(/\/$/, '')
   let privateTree = runtimeRoot()
   if (privateTree && system.env.get('YAK_RUNTIME_PINNED') == '1') {
+    whole()
     // Consume the launch token: an independent CLI invocation must own its
     // child, even if it inherits this process's environment and sources.
     system.env.delete('YAK_RUNTIME_PINNED')
@@ -370,7 +415,7 @@ export let runtime = async (argv: string[]): Promise<number | undefined> => {
   system.addSignalListener('SIGWINCH', resize)
   let unlock = () => {}
   try {
-    let { root: dir, commit, release: launched } = await snapshot(root)
+    let { root: dir, commit, release: launched } = await snapshot(root, whole)
     unlock = launched
     if (stopped) return 143
     let url = new URL(`file://${dir}`).href

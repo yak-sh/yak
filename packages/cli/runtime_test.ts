@@ -42,3 +42,68 @@ test('worker inspector launch binds only a local numeric port', async () => {
     equal(error, true)
   }
 })
+
+test('a slot follows its checkout: a landing rewrites only what landed, edits ride on top and leave with it', async () => {
+  let { snapshot } = await import('./runtime.ts')
+  let { command } = await import('@yaks/process/command')
+  let disk = await import('@yaks/file/io')
+  let root = await disk.makeTempDir()
+  let cache = await disk.makeTempDir()
+  let was = Deno.env.get('YAK_RUNTIME_CACHE')
+  Deno.env.set('YAK_RUNTIME_CACHE', cache)
+  let git = (...args: string[]) =>
+    command('git', { args: ['-C', root, ...args], stdout: 'null' }).output()
+  let write = (files: Record<string, string>) =>
+    Promise.all(
+      Object.entries(files).map(([name, text]) =>
+        disk.writeTextFile(`${root}/${name}`, text)
+      ),
+    )
+  let commit = async (files: Record<string, string>, gone: string[] = []) => {
+    await write(files)
+    for (let name of gone) await disk.remove(`${root}/${name}`)
+    await git('add', '-A')
+    await git('-c', 'user.name=t', '-c', 'user.email=t@t', 'commit', '-qm', '.')
+  }
+  // What a slot holds, named by path, apart from its own marks.
+  let tree = async () => {
+    let { root: dir, release } = await snapshot(root)
+    release()
+    let found: Record<string, string> = {}
+    for await (let { name } of disk.readDir(dir)) {
+      if (!name.startsWith('.')) {
+        found[name] = await disk.readTextFile(`${dir}/${name}`)
+      }
+    }
+    return { dir, found }
+  }
+  try {
+    await git('init', '-q')
+    await commit({ 'a.ts': 'a1', 'b.ts': 'b1', 'kept.ts': 'k' })
+    let first = await tree()
+    equal(first.found, { 'a.ts': 'a1', 'b.ts': 'b1', 'kept.ts': 'k' })
+    let kept = (await disk.stat(`${first.dir}/kept.ts`)).mtime
+    await new Promise((r) => setTimeout(r, 20))
+    await commit({ 'a.ts': 'a2', 'c.ts': 'c1' }, ['b.ts'])
+    let landed = await tree()
+    equal(landed.dir, first.dir)
+    equal(landed.found, { 'a.ts': 'a2', 'c.ts': 'c1', 'kept.ts': 'k' })
+    equal((await disk.stat(`${landed.dir}/kept.ts`)).mtime, kept)
+    await write({ 'a.ts': 'edited', 'new.ts': 'n' })
+    equal((await tree()).found, {
+      'a.ts': 'edited',
+      'c.ts': 'c1',
+      'kept.ts': 'k',
+      'new.ts': 'n',
+    })
+    await git('checkout', '-q', '.')
+    await disk.remove(`${root}/new.ts`)
+    await commit({ 'c.ts': 'c2' })
+    equal((await tree()).found, { 'a.ts': 'a2', 'c.ts': 'c2', 'kept.ts': 'k' })
+  } finally {
+    if (was) Deno.env.set('YAK_RUNTIME_CACHE', was)
+    else Deno.env.delete('YAK_RUNTIME_CACHE')
+    await disk.remove(root, { recursive: true })
+    await disk.remove(cache, { recursive: true })
+  }
+})

@@ -7,9 +7,9 @@
 // two commits, one importing a name the other has yet to export. So a command
 // started from a checkout loads only the land lock (@yaks/git/hold, whose one
 // import is @yaks/file/io, which imports Node's alone), waits out a landing,
-// loads the launcher under that lock, held shared, and runs from a snapshot
-// of the checkout (./runtime.ts), a tree nothing rewrites while a process
-// runs from it. A release from JSR, an install without `.git`, and the
+// loads the launcher and reads the checkout under that lock, held shared, and
+// runs from a snapshot of it (./runtime.ts), a tree nothing rewrites while a
+// process runs from it. A release from JSR, an install without `.git`, and the
 // snapshot itself never change, and run here.
 //
 //   yak task list           # a launcher, and the command in its snapshot
@@ -55,10 +55,13 @@ let start = async (argv: string[]) => {
     import('@yaks/process/system'),
     import('@yaks/process/wind'),
     import('./runtime.ts'),
-  ]).finally(release)
+  ]).catch((error) => {
+    release?.()
+    throw error
+  })
   listen()
   if (release || pinned) {
-    let code = await runtime(argv)
+    let code = await runtime(argv, release)
     if (code !== undefined) return system.exit(code)
   }
   let [{ closeAccounts }, held, { main }] = await Promise.all([
