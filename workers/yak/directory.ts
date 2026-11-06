@@ -1343,6 +1343,31 @@ export let appAbout = (r: Row): AppInfo => ({
 type ReadRow = Row & { policy: { revision: number } }
 let appOf = (r: ReadRow): App => ({ ...appAbout(r), policy: r.policy.revision })
 
+/** A published app with the space it stands in. */
+export type OnOffer = { space: Space; app: App }
+
+// The offers among published apps and their spaces, newest first. A trashed
+// app, or any app in a trashed space, offers nothing: the trash writes nothing
+// on the row (erase.ts), so the offer is screened here and a restore puts it
+// back as it was.
+let offering = (rows: ReadRow[]): OnOffer[] => {
+  let spaces = new Map(
+    rows.filter((row) => row.space).map((
+      row,
+    ) => [row.entity.eid, spaceOf(row)]),
+  )
+  return rows.filter((row) => row.app).map(appOf)
+    .filter((app) => app.published && !app.trashed)
+    .sort((a, b) => b.published!.at.localeCompare(a.published!.at))
+    .flatMap((app) => {
+      let space = spaces.get(app.space)
+      return space && !space.trashed ? [{ space, app }] : []
+    })
+}
+
+// An eid a query may name: a word with no query syntax in it.
+let EID = /^[\w-]+$/
+
 let hostOf = (r: Row): Host => ({
   eid: r.entity.eid,
   name: r.hostname!.name,
@@ -2183,27 +2208,26 @@ export let directoryRows = (rows: {
       let row = await one(`.published.name=${name}&.app`)
       return row?.app ? await self.appAt(row.entity.eid) : null
     },
-    // Every offer standing, newest first — what a person's agent browses. A
-    // trashed app, or any app in a trashed space, offers nothing: the trash
-    // writes nothing on the row (erase.ts), so the offer is screened here and
-    // a restore puts it back as it was.
-    offers: async (): Promise<{ space: Space; app: App }[]> => {
-      let rows = await query(
-        `(.published&.app&${ABOUT})|(.space&.apps.published&${SPACE_ABOUT})`,
-      )
-      let spaces = new Map(
-        rows.filter((row) => row.space).map((
-          row,
-        ) => [row.entity.eid, spaceOf(row)]),
-      )
-      return rows.filter((row) => row.app).map(appOf)
-        .filter((app) => app.published && !app.trashed)
-        .sort((a, b) => b.published!.at.localeCompare(a.published!.at))
-        .flatMap((app) => {
-          let space = spaces.get(app.space)
-          return space && !space.trashed ? [{ space, app }] : []
-        })
-    },
+    // Every offer standing, newest first — what a person's agent browses. Its
+    // spaces are found from their published apps, so it reads rows in
+    // proportion to the offers, never to the directory (T-143237).
+    offers: async (): Promise<OnOffer[]> =>
+      offering(
+        await query(
+          `(.published&.app&${ABOUT})|(.space&.apps.published&${SPACE_ABOUT})`,
+        ),
+      ),
+    // One app's offer, or null: the app with the space its `app.space` names,
+    // in the same one round trip, screened as `offers` screens it.
+    offer: async (eid: string): Promise<OnOffer | null> =>
+      EID.test(eid)
+        ? offering(
+          await query(
+            `(.entity.eid=${eid}&.published&.app&${ABOUT})|` +
+              `(.space&.app.space[<=1]<-${eid}&${SPACE_ABOUT})`,
+          ),
+        )[0] ?? null
+        : null,
     // The integration directory (T-132636): every built integration and every
     // custom one its owner listed, which anyone may read, signed in or not
     // (integrations.ts).

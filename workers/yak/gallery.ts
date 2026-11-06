@@ -336,11 +336,11 @@ export let image = async (
   env: Host = {},
 ) => {
   let [eid, sha, extra] = path.slice(IMAGE.length).split('/')
-  let at = !extra &&
-    (await dir.offers()).find((offer) =>
-      offer.app.eid == eid &&
-      (sha == CARD || offer.app.screenshot == sha) && showing(offer)
-    )
+  let offer = extra ? null : await dir.offer(eid)
+  let at = offer && (sha == CARD || offer.app.screenshot == sha) &&
+      showing(offer)
+    ? offer
+    : null
   if (at && sha == CARD) {
     let shot = screenshot(at.space, at.app, env) ||
       await cardOf(objects, at.space, at.app, env)
@@ -806,7 +806,7 @@ export let answer = async (
   // what may be listed. An app that has been unpublished, deleted or thrown
   // away since the letter went is simply not there any more, and the answer
   // says so rather than stamping a row nothing points at.
-  let at = (await dir.offers()).find(({ app }) => app.eid == ok.app)
+  let at = await dir.offer(ok.app)
   if (!at) {
     return done(
       env,

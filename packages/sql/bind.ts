@@ -1435,7 +1435,15 @@ let union = (ctx: Ctx, alts: Clause[]): Cond => {
     }
     return or(...branches.map((b) => b.where))
   }
-  if (branches.every((b) => !b.joins.length)) {
+  // An arm holding an owner selection of its own (a reverse hop's children, a
+  // hit list) is sparse by construction. Tested row by row across a scan of
+  // the spine it is not: `(.published&.app)|(.space&.apps.published)` read
+  // 61,000 directory rows for 22 apps (T-143237). Every arm drives instead.
+  let selective = branches.some(({ where }) =>
+    (where.t == 'op' && where.op == 'and' ? where.parts : [where])
+      .some((part) => selection(ctx, part))
+  )
+  if (branches.every((b) => !b.joins.length) && !selective) {
     // A pure positive presence OR is sparse even on a classified store.
     // Driving the ordered entity spine can scan its history after ANALYZE.
     // Let each arm start at its component's owning keys instead; leave
@@ -1619,12 +1627,14 @@ let COUNT_OPS: Record<string, string> = {
 //
 // Each compiles to a correlated EXISTS (or count) over the child's reference
 // column — one index search per candidate row, rather than a join that widens
-// the result. A filter on the child runs through the same clause compiler over
-// the child row, so anything that declines there declines the whole hop, and
-// exactness holds across the correlation. A child predicate naming a property
-// of the entity table declines outright: inside the subquery, `entity` is the
-// correlation with the outer row, so compiling it there would silently ask a
-// different question.
+// the result — where the row is already in hand. Otherwise a child filter is
+// the parents its matching children name, an owner selection the statement
+// can drive from. A filter on the child runs through the same clause compiler
+// over the child row, so anything that declines there declines the whole hop,
+// and exactness holds across the correlation. A child predicate naming a
+// property of the entity table declines outright: inside the subquery,
+// `entity` is the correlation with the outer row, so compiling it there would
+// silently ask a different question.
 let reverse = (
   ctx: Ctx,
   name: string,
@@ -1684,15 +1694,38 @@ let reverse = (
     )
   }
   if (far) return p.not ? TRUE : FALSE
+  // Parents not yet in hand are found from their children: the child rows the
+  // filter admits, read once, name them. Asked of each parent instead, the
+  // hop reads every parent and every child of each, so `.space&.apps.published`
+  // read the whole directory to find the spaces of 22 published apps.
+  // Archetypes stay with the outer row: a child's presence tests are its
+  // components' own owner sets, which a sparse one drives.
+  let semi = !p.not && !ctx.correlated && !ctx.bounded && !ctx.row &&
+    !ctx.candidates
   let sub: Ctx = {
     ...ctx,
     tables: new Set(),
     owner: ctx.d.ownerKey(a.comp),
     spine: computed(ctx.v, a.comp) ? a.comp : undefined,
+    // The presence spine is the outer row's; the child is a row of its own.
+    present: undefined,
+    ...semi ? { archetypes: undefined } : {},
   }
   let inner = render(
     clause(sub, p.where ?? { ...p, path: rest, not: undefined }),
   )
+  if (semi) {
+    // An owner selection, as an extension's hit list is, so a statement can
+    // drive from it (`selection`).
+    return among(
+      raw(target),
+      select({
+        cols: [as(raw(refKey(ctx, a.comp, a.prop)), 'id')],
+        from: raw(`${child}${joined(joinsOf(sub, a.comp))}`),
+        where: inner.sql == '1' ? undefined : raw(inner.sql, inner.params),
+      }),
+    )
+  }
   return cond({
     sql:
       `${p.not ? 'not ' : ''}exists (select 1 from ${child}${

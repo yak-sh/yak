@@ -108,11 +108,16 @@ test('gallery decisions record the actor and session and clear a declined reques
   })
 })
 
+// A directory standing these offers, asked for one by its app's eid.
+let offering = (offers: { space: Space; app: App }[]) =>
+  ({
+    offer: (eid: string) =>
+      Promise.resolve(offers.find(({ app }) => app.eid == eid) ?? null),
+  }) as unknown as Directory
+
 test('an offered app exposes only its currently selected image, a private one only while listed', async () => {
   let current = app({ access: 'private', gallery: live, screenshot: 'chosen' })
-  let dir = {
-    offers: () => Promise.resolve([{ space: space(), app: current }]),
-  } as unknown as Directory
+  let dir = offering([{ space: space(), app: current }])
   let reads: string[] = []
   let bytes = new Uint8Array([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a])
   let objects = {
@@ -143,10 +148,7 @@ test('an offered app exposes only its currently selected image, a private one on
 test('a private app the home page features shows its image without a listing', async () => {
   let shown = (slug: string, at: string) => {
     let current = app({ access: 'private', slug, screenshot: 'chosen' })
-    let dir = {
-      offers: () =>
-        Promise.resolve([{ space: space({ slug: at }), app: current }]),
-    } as unknown as Directory
+    let dir = offering([{ space: space({ slug: at }), app: current }])
     let bytes = new Uint8Array([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a])
     let objects = { read: () => Promise.resolve(bytes) }
     let path = `${IMAGE}${current.eid}/chosen`

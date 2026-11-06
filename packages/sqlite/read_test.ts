@@ -193,6 +193,18 @@ test('a reverse child property presence tests the child', () => {
   assertEquals(eids(s.read('.reviews.doc.title')), ['p1'])
 })
 
+test('a reverse child presence tests the child beside a presence spine', () => {
+  let s = store()
+  seed(s, [
+    { entity: { eid: 'p1' }, product: { price: 1 }, doc: { title: 'Own' } },
+    { entity: { eid: 'p2' }, product: { price: 2 } },
+    { entity: { eid: 'r1' }, review: { product: 'p1' } },
+    { entity: { eid: 'r2' }, review: { product: 'p2' }, doc: {} },
+  ])
+  assertEquals(eids(s.read('.product&.reviews.doc')), ['p2'])
+  assertEquals(eids(s.read('.product&!reviews.doc')), ['p1'])
+})
+
 test('a bare-word query requires an explicitly registered extension', () => {
   let s = store()
   assertThrows(() => s.read('mug'), Unsupported)
