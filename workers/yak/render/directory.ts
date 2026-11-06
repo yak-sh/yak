@@ -158,15 +158,20 @@ let facts = <N>(h: H<N>, all: [string, Child<N>][]) =>
     ),
   )
 
-let personOf = (b: Record<string, unknown>) => {
-  let email = str((b.email as Comp)?.address)
-  let phone = str((b.phone as Comp)?.number)
-  return {
-    email,
-    phone,
-    name: str((b.doc as Comp)?.title) || email.split('@')[0] || 'Someone',
-  }
-}
+/** What an admin calls a person: the name they gave, else the front of their
+ * address, else their number to text, else the row's own number, which is all
+ * an account that kept no address has to tell it apart. */
+export let personName = (b: Record<string, unknown>) =>
+  str((b.doc as Comp)?.title) ||
+  str((b.email as Comp)?.address).split('@')[0] ||
+  str((b.phone as Comp)?.number) ||
+  `Person #${(b.entity as Comp)?.num ?? '?'}`
+
+let personOf = (b: Record<string, unknown>) => ({
+  email: str((b.email as Comp)?.address),
+  phone: str((b.phone as Comp)?.number),
+  name: personName(b),
+})
 
 let person: Renderer = {
   view: 'Directory.List.Tile',

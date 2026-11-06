@@ -50,6 +50,7 @@ import {
 import { ADMIN } from './lib/bots.ts'
 import { recall, writing } from './lib/hops.ts'
 import { refusal } from '@yaks/api'
+import { CallError } from '@yaks/tools/errors'
 import {
   answered,
   KERNEL,
@@ -2731,6 +2732,13 @@ export let directoryRows = (rows: {
       let marked = mine.find((s) => s.own)
       if (marked) return marked.space
       let row = await one(`.entity.eid=${person}`)
+      // Every way in writes the person before asking for their space
+      // (signin.ts `personOf`, identity.ts `textedIn`), so a credential naming
+      // nobody outlived an account that was erased. Minting for it would bring
+      // the row back as a bare `person{}` (T-144468).
+      if (!row) {
+        throw new CallError('access', 'This account was erased. Sign in again.')
+      }
       // A person with no address (one who signed up by text) has nothing to
       // name their space after, so it is named at random until they rename
       // it: one name for all of them would number its way past every space

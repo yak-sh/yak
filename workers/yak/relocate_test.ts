@@ -1,4 +1,5 @@
 import { equal, test } from '@yaks/testing'
+import { ownedBy } from './directory-fixture.ts'
 import { evicted } from '@yaks/durable-object'
 import { appStore, directory, fetch as directoryFetch } from './directory.ts'
 import { PLATFORM_OBJECT, PLATFORM_STORE, storeOf } from './door.ts'
@@ -31,7 +32,7 @@ let held = (env: Env, name: string, path: string) =>
 
 let seeded = async (p: { env: Env }) => {
   let dir = directory({ fetch: (r) => directoryFetch(r, p.env) })
-  let space = await dir.own('mover', 'moving')
+  let space = await ownedBy(dir, 'mover', 'moving')
   return { dir, space }
 }
 
@@ -65,7 +66,7 @@ test('the directory moves to a new object and every request follows it', async (
   // Reached at the old address, the directory still answers, and its writes
   // land in the new object rather than the rows left behind.
   equal((await dir.space('moving'))?.slug, 'moving')
-  let more = await dir.own('second', 'second')
+  let more = await ownedBy(dir, 'second', 'second')
   equal(more.slug, 'second')
   let there = await held(
     p.env,
@@ -89,7 +90,7 @@ test('a copy that cannot land leaves the directory serving, and it can try again
   equal(r.status, 500, await r.clone().text())
 
   equal((await dir.space('moving'))?.eid, space.eid)
-  equal((await dir.own('after', 'after')).slug, 'after')
+  equal((await ownedBy(dir, 'after', 'after')).slug, 'after')
 
   equal((await leave(p.env, 'yak/ord')).status, 200)
   equal((await dir.space('after'))?.slug, 'after')
@@ -100,7 +101,7 @@ test('what moved after the copy reaches the new object in the hold', async () =>
   let { dir } = await seeded(p)
   equal((await asked(p.env, 'prepare=yak/ord')).status, 200)
   // Nothing has changed hands yet, and nothing boots at the far end.
-  equal((await dir.own('during', 'during')).slug, 'during')
+  equal((await ownedBy(dir, 'during', 'during')).slug, 'during')
   equal(slot(p.states.get(PLATFORM_OBJECT)!, 'name'), PLATFORM_STORE)
   equal(await p.states.get('yak/ord')!.storage.getAlarm(), null)
 
@@ -124,7 +125,7 @@ test('a hold with nothing prepared leaves the directory serving', async () => {
   let left = p.states.get(PLATFORM_OBJECT)!
   equal(await left.storage.get('relocating'), false)
   equal(await left.storage.get('dormant'), false)
-  equal((await dir.own('after', 'after')).slug, 'after')
+  equal((await ownedBy(dir, 'after', 'after')).slug, 'after')
 })
 
 test('the way back returns requests to the old object', async () => {
@@ -133,7 +134,7 @@ test('the way back returns requests to the old object', async () => {
   equal((await leave(p.env, 'yak/ord')).status, 200)
   let r = await asked(p.env, 'back=1')
   equal(r.status, 200)
-  equal((await dir.own('home', 'home')).slug, 'home')
+  equal((await ownedBy(dir, 'home', 'home')).slug, 'home')
   equal(await p.states.get(PLATFORM_OBJECT)!.storage.get('dormant'), false)
 })
 

@@ -74,3 +74,11 @@ export let app = (over: Partial<App> = {}): App => ({
   theme: null,
   ...over,
 })
+
+/** The space {@link Directory.own} answers for a person this test makes now:
+ * every way in writes the person before asking (signin.ts `personOf`), and
+ * `own` takes a person with no row for an erased one. */
+export let ownedBy = async (dir: Directory, person: string, want?: string) => {
+  await dir.stamp({ entities: [{ entity: { eid: person }, person: {} }] })
+  return dir.own(person, want)
+}

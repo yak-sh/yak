@@ -1,4 +1,5 @@
 import { equal, test, until } from '@yaks/testing'
+import { ownedBy } from './directory-fixture.ts'
 import { derivedEid, graph, signed } from '@yaks/graph'
 import { ram } from '@yaks/ram'
 import { loadVocab } from '@yaks/vocab'
@@ -82,7 +83,7 @@ test('directory use survives platform writes and excludes administrative work', 
 let visits = await (async () => {
   await using p = platform('directory use proof')
   let dir = directory({ fetch: (r) => directoryFetch(r, p.env) })
-  let space = await dir.own(VISITOR, 'used-proof')
+  let space = await ownedBy(dir, VISITOR, 'used-proof')
   await dir.apply({
     entities: [{
       entity: { eid: 'use-proof-app' },
@@ -309,7 +310,7 @@ test('background receipt defect delivery does not delay the response', () => {
 let spoken = await (async () => {
   await using p = platform('retired spelling proof')
   let dir = directory({ fetch: (r) => directoryFetch(r, p.env) })
-  let space = await dir.own(VISITOR, 'retired-proof')
+  let space = await ownedBy(dir, VISITOR, 'retired-proof')
   await dir.apply({
     entities: [{
       entity: { eid: 'retired-proof-app' },
@@ -437,7 +438,7 @@ test('a receipt whose answer a deploy cuts off is sent again and reported nowher
 test('a write to an app stamps when its store changed, and an install does not', async () => {
   await using p = platform('changed-proof')
   let dir = directory({ fetch: (r) => directoryFetch(r, p.env) })
-  let space = await dir.own(VISITOR, 'changed-proof')
+  let space = await ownedBy(dir, VISITOR, 'changed-proof')
   await dir.apply({
     entities: [{
       entity: { eid: 'changed-proof-app' },

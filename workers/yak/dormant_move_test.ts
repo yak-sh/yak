@@ -1,4 +1,5 @@
 // Explicit administrative migration is allowed while ordinary app work sleeps.
+import { ownedBy } from './directory-fixture.ts'
 import { equal, test, until } from '@yaks/testing'
 import { type Bundle, token } from '@yaks/graph'
 import { toolEid } from '@yaks/tools'
@@ -20,7 +21,7 @@ import type { Rule } from './mover.ts'
 let fixture = async () => {
   await using p = platform('dormant mover secret')
   let dir = directory({ fetch: (r) => directoryFetch(r, p.env) })
-  let space = await dir.own('dormant-mover-owner', 'asleep')
+  let space = await ownedBy(dir, 'dormant-mover-owner', 'asleep')
   await dir.apply({
     entities: [{ entity: { eid: 'mover-admin' }, person: {} }, {
       entity: { eid: '$app' },

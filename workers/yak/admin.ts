@@ -42,7 +42,7 @@ import { budget, monthOf, starterOf } from './meter.ts'
 import { isTestAddress } from './lib/bots.ts'
 import { sessionAt } from './session.ts'
 import { drawn } from './render/mod.ts'
-import type { Ref, Uses } from './render/directory.ts'
+import { personName, type Ref, type Uses } from './render/directory.ts'
 import { type ComponentChildren, Fragment, h, type VNode } from 'preact'
 import {
   Button,
@@ -102,8 +102,6 @@ let group = (rows: Row[], key: (r: Row) => string) => {
 let seatSpace = (r: Row) => idOf(r.member!.space)
 let seatPerson = (r: Row) => idOf(r.member!.person)
 let appSpace = (r: Row) => idOf(r.app!.space)
-let personName = (r: Row) =>
-  r.doc?.title || (r.email?.address ?? '').split('@')[0] || 'Someone'
 
 // A figure's days, for a row that has kept any.
 let days = (

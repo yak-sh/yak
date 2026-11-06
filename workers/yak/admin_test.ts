@@ -1,5 +1,6 @@
 // The platform admin's directory (admin.ts): what each row uses, counted over
 // the whole directory, and the door that draws it for the admin alone.
+import { ownedBy } from './directory-fixture.ts'
 import { test } from '@yaks/testing'
 import { assertEquals, assertStringIncludes } from '@std/assert'
 import { parseHTML } from 'linkedom'
@@ -241,7 +242,7 @@ let asking = (path: string, person?: string) =>
 test('the census reads which app each release is of and when, never its files, and who invited whom', async () => {
   await using p = platform('census deploys')
   let dir = directory({ fetch: (r) => directoryFetch(r, p.env) })
-  let space = await dir.own('census-owner', 'census-deploys')
+  let space = await ownedBy(dir, 'census-owner', 'census-deploys')
   let invitee = crypto.randomUUID()
   await dir.stamp({
     entities: [{ entity: { eid: invitee }, person: {} }, {
