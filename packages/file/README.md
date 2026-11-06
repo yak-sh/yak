@@ -60,13 +60,22 @@ after it.
 ## What fills a disk
 
 A host that lists `@yaks/file` among its plugins runs its duty
-(`@yaks/file/service`) for the computer it is on. Every hour it reads the
-computer's disks: the filesystems holding its root and the home directory, each
-at its mount, the highest directory still on the same device. It walks each one
-whose day has no look yet, or whose latest look is an hour old, using file APIs
-without starting commands. The walk stays on one device, counts allocated blocks
-and hard links once, and never follows symlinks. Protected or disappearing paths
-remain uncounted. Cancellation keeps partial walks out of the graph.
+(`@yaks/file/service`) for the computer it is on. Every five minutes it reads
+the computer's disks: the filesystems holding its root and the home directory,
+each at its mount, the highest directory still on the same device. It walks each
+one whose day has no look yet, or whose latest look is an hour old, using file
+APIs without starting commands. The walk stays on one device, counts allocated
+blocks and hard links once, and never follows symlinks. Protected or
+disappearing paths remain uncounted. Cancellation keeps partial walks out of the
+graph.
+
+A disk whose free bytes fall below its floor is reported through the host's
+telemetry, once each time it falls: a full disk fails every write on it. The
+`floor` option sets the bytes; the default is a tenth of the disk. The `mirrors`
+option names caches laid out by the absolute paths of the files they were made
+from, such as Deno's emit cache at `~/.cache/deno/gen/file`. Every hour the duty
+removes each of their directories whose own directory is gone, such as a
+worktree's after it was taken back.
 
 The walk lists every directory and file holding at least a thousandth of the
 volume. The day's `occupancy` row keeps those paths beside the filesystem's

@@ -755,23 +755,34 @@ export let lost = async (path: string): Promise<boolean> => {
   return !!named && !await io.stat(named).then(() => true, () => false)
 }
 
-/** How long, in milliseconds, since Git last wrote this linked worktree's own
- * state: its HEAD, index or reflog, which a commit, checkout, rebase or add
- * rewrites. Editing a file writes none of them, but it makes the worktree
- * dirty, and a dirty worktree is kept at any age. Zero for anything that is
- * not a linked worktree. */
+/// moved('a b J <j@x> 1700000000 -0400\tcommit: x\n') -> 1700000000000
+/// moved('') -> 0
+/** When a reflog's last entry moved HEAD, in milliseconds: the time written
+ * in the entry, not the file's. `git gc` expires every worktree's reflog,
+ * rewriting each file whole with the same entries, so its mtime says when
+ * gc last ran. */
+export let moved = (reflog: string): number => {
+  let last = reflog.trimEnd().split('\n').at(-1) ?? ''
+  let at = Number(/ (\d+) [+-]\d{4}\t/.exec(last)?.[1])
+  return Number.isSafeInteger(at) ? at * 1000 : 0
+}
+
+/** How long, in milliseconds, since Git last moved this linked worktree's
+ * HEAD: a commit, checkout, rebase or reset, by its reflog's last entry, or
+ * HEAD's own write. Editing or staging a file moves neither, but it makes the
+ * worktree dirty, and a dirty worktree is kept at any age. Zero for anything
+ * that is not a linked worktree. */
 export let idleFor = async (
   path: string,
   now: number = Date.now(),
 ): Promise<number> => {
   let dir = await gitdirOf(path)
   if (!dir) return 0
-  let times = await Promise.all(
-    ['HEAD', 'index', 'logs/HEAD'].map((f) =>
-      io.stat(dir + '/' + f).then((s) => s.mtime?.getTime() ?? 0, () => 0)
-    ),
-  )
-  return Math.max(0, now - Math.max(...times))
+  let [head, reflog] = await Promise.all([
+    io.stat(dir + '/HEAD').then((s) => s.mtime?.getTime() ?? 0, () => 0),
+    io.readTextFile(dir + '/logs/HEAD').then(moved, () => 0),
+  ])
+  return Math.max(0, now - Math.max(head, reflog))
 }
 
 /** The linked worktrees of the repository whose common Git directory is

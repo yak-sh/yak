@@ -27,13 +27,37 @@ let HOUR = 3_600_000
 export let IDLE = 6 * HOUR
 /** How long the service waits between passes. */
 export let EVERY = HOUR
+/** Where agents cut checkouts of their own: Claude Code's, inside the primary
+ * checkout. */
+export let ROOTS = ['.claude/worktrees']
 
 export type Options = {
   /** milliseconds without Git touching a worktree (default {@link IDLE}) */
   idle?: number
   /** milliseconds between passes (default {@link EVERY}) */
   every?: number
+  /** directories whose checkouts are agents' own, taken back like managed
+   * ones; a relative one is inside the repository's primary checkout
+   * (default {@link ROOTS}) */
+  roots?: string[]
 }
+
+/// within('/r/.claude/worktrees/a', ['/r/.claude/worktrees']) -> true
+/// within('/r/.claude/worktrees', ['/r/.claude/worktrees']) -> false
+/// within('/r/elsewhere', ['/r/.claude/worktrees']) -> false
+/** Whether a checkout lies under one of these directories. */
+export let within = (path: string, roots: string[]): boolean =>
+  roots.some((root) => path.startsWith(root.replace(/\/+$/, '') + '/'))
+
+// The roots, as real paths: a relative one resolved in the primary checkout
+// beside `common`.
+let rooted = (common: string, roots: string[]): Promise<string[]> =>
+  Promise.all(roots.map((root) => {
+    let path = root.startsWith('/')
+      ? root
+      : common.replace(/\/\.git\/?$/, '') + '/' + root
+    return io.realPath(path).catch(() => path)
+  }))
 
 let there = (path: string) => io.stat(path).then(() => true, () => false)
 
@@ -84,8 +108,8 @@ let holding = async (g: Graph, sessions: string[]): Promise<boolean> => {
 }
 
 /** Take back every idle worktree of the repository at `common` that holds
- * nothing, and return the idle ones kept, with why. A `signal` that aborts
- * ends the pass before the next worktree. */
+ * nothing, managed or under one of `roots`, and return the idle ones kept,
+ * with why. A `signal` that aborts ends the pass before the next worktree. */
 export let collect = async (
   g: Graph,
   common: string,
@@ -93,8 +117,10 @@ export let collect = async (
   now: number = Date.now(),
   processes: () => Promise<Set<string>> = processPaths,
   signal?: AbortSignal,
+  roots: string[] = ROOTS,
 ): Promise<Record<string, Held>> => {
   await reconcile(g, common)
+  let own = await rooted(common, roots)
   let kept: Record<string, Held> = {}
   let filesystem = await localFilesystem(g)
   let repository = repositoryEid(common, filesystem.entity.eid)
@@ -105,10 +131,11 @@ export let collect = async (
     if (await idleFor(path, now) < idle) continue
     let real = await io.realPath(path).catch(() => path)
     let [row] = await g.get([worktreeEid(repository, real)])
-    let tree = row?.worktree as Comp | undefined
-    if (!tree?.managed) continue
-    if (tree) await discover(g, path).catch(() => {})
-    if (await retained(g, row.entity.eid)) continue
+    if (!(row?.worktree as Comp | undefined)?.managed && !within(real, own)) {
+      continue
+    }
+    let seen = await discover(g, path).catch(() => row)
+    if (!seen || await retained(g, seen.entity.eid)) continue
     let on = (await (seated ??= seats(g)))
       .filter((s) => inUse(real, s.paths))
       .map((s) => s.session)
@@ -167,6 +194,7 @@ export let service = async (
           Date.now(),
           processes,
           stopping,
+          options.roots,
         )
         : reconcile(host.graph, common).then(() => ({}))).catch(
           async (error) => {

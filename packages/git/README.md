@@ -570,8 +570,9 @@ neither its cleanliness nor its landing can be proved. Without a required
 landing, lost worktrees are deleted outright. `restore(g, row)` creates a
 worktree again at the path, branch and commit its row recorded, so run
 `discover` on it before taking it back. `linked(common)` names a repository's
-linked worktrees, and `idleFor(path)` says how long since Git last wrote one's
-HEAD, index or reflog.
+linked worktrees, and `idleFor(path)` says how long since Git last moved one's
+HEAD, read from its reflog's last entry rather than the file's mtime, which
+`git gc` rewrites in every worktree whenever it expires reflogs.
 
 `processPaths()` reads the working directories and open file paths of this
 user's live Linux processes. An unreadable process path refuses collection, so
@@ -596,11 +597,14 @@ installed helper that still returns only a cwd. `processCwds()` remains
 available for callers needing only directories.
 
 `@yaks/git/service` collects explicitly managed checkouts in the local
-filesystem only. Unmanaged observations, foreign filesystem contexts and unknown
-placement never authorize removal. It checks idle time, dirty files, unlanded
-commits, session homes, launch workspaces and local process paths. A home change
-alone does not remove files. Managed observations remain available to `restore`.
-The `idle` and `every` options set the idle threshold and pass interval.
+filesystem, and unmanaged ones under its `roots`: directories where agents cut
+checkouts of their own, by default Claude Code's `.claude/worktrees` inside the
+primary checkout. A relative root is resolved there. Other unmanaged
+observations, foreign filesystem contexts and unknown placement never authorize
+removal. It checks idle time, dirty files, unlanded commits, session homes,
+launch workspaces and local process paths. A home change alone does not remove
+files. Managed observations remain available to `restore`. The `idle` and
+`every` options set the idle threshold and pass interval.
 
 `locate(cwd)` reads the canonical checkout root, common Git directory and
 worktree Git directory without writing to the graph. It returns no observation

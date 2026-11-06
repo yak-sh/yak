@@ -10,6 +10,9 @@
  * walks again from its first pass; what an earlier walk read is still in the
  * kernel's cache, so the next goes faster.
  *
+ * Each pass also tells the host of a disk newly below its floor, and every
+ * `AGAIN` prunes the configured mirror caches (./upkeep.ts).
+ *
  * @module
  */
 import { disksAt, walk } from './measure.ts'
@@ -18,6 +21,7 @@ import type { Graph } from '@yaks/graph'
 import { sleep } from '@yaks/fp'
 import { volumeOf } from './mod.ts'
 import { here } from './local.ts'
+import { lows, prune } from './upkeep.ts'
 import {
   type Disk,
   due,
@@ -27,8 +31,9 @@ import {
   type Walk,
 } from './occupancy.ts'
 
-/** How long a pass waits for the next, in milliseconds: an hour. */
-export let EVERY = 60 * 60 * 1000
+/** How long a pass waits for the next, in milliseconds: five minutes, so a
+ * disk running low is told within them. A walk still waits for `AGAIN`. */
+export let EVERY = 5 * 60 * 1000
 
 /** How old a volume's latest look is before it is walked again: an hour. */
 export let AGAIN = 60 * 60 * 1000
@@ -95,8 +100,21 @@ export let pass = async (
   }
 }
 
+export type Options = {
+  /** milliseconds between passes (default {@link EVERY}) */
+  every?: number
+  /** the free bytes each disk is kept above; below it the host is told once
+   * a spell (default a tenth of the disk) */
+  floor?: number
+  /** caches laid out by the absolute paths of the files they were made from,
+   * such as Deno's `gen/file`, pruned of directories whose files are gone
+   * every `AGAIN` */
+  mirrors?: string[]
+}
+
 /** Look, then look again every `every`, until the signal aborts. An already
- * aborted signal is one pass. */
+ * aborted signal is one pass. Each pass tells the host of a disk newly below
+ * its floor, as a failure: a full disk fails every write on it. */
 export let service = async (
   host: {
     graph: Graph
@@ -105,21 +123,28 @@ export let service = async (
       context?: { tags?: Record<string, string> },
     ) => unknown
   },
-  options: { every?: number } = {},
+  options: Options = {},
   signal: AbortSignal = AbortSignal.abort(),
 ): Promise<void> => {
+  let report = (e: unknown, step: string) =>
+    (host.report ?? console.error)(e, { tags: { step } })
+  let told = new Set<string>()
+  let pruned = 0
   for (;;) {
-    try {
-      await pass(
-        host.graph,
-        computer,
-        Date.now(),
-        signal.aborted ? undefined : signal,
-      )
-    } catch (e) {
-      // A pass that failed is told, and the next one looks again.
-      ;(host.report ?? console.error)(e, { tags: { step: 'disk look' } })
+    let stopping = signal.aborted ? undefined : signal
+    // Each step that failed is told, and the next pass tries it again.
+    await computer.disks()
+      .then((disks) => lows(disks, told, options.floor))
+      .then((low) => low.forEach((e) => report(e, 'disk space')))
+      .catch((e) => report(e, 'disk space'))
+    if (Date.now() - pruned >= AGAIN) {
+      pruned = Date.now()
+      for (let mirror of options.mirrors ?? []) {
+        await prune(mirror, stopping).catch((e) => report(e, 'cache prune'))
+      }
     }
+    await pass(host.graph, computer, Date.now(), stopping)
+      .catch((e) => report(e, 'disk look'))
     if (signal.aborted) return
     await sleep(options.every ?? EVERY, signal)
     if (signal.aborted) return
