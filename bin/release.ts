@@ -19,9 +19,10 @@
 // jsr.io (`unlisted`): CI publishes under GitHub's identity, which JSR accepts
 // only for a package that exists and is linked to this repository, so such a
 // package would stop the publish partway, and a version cannot be unpublished.
-// Pushing the tag is the deliberate act that starts a publish:
+// Pushing the tag is the deliberate act that starts a publish, with main in
+// the same push, so a main that moved refuses both and no tag publishes alone:
 //
-//   git push origin main v0.2.18
+//   git push --atomic origin main v0.2.18
 
 import { matchesGlob } from 'node:path'
 import { has, read, REPO } from './jsr.ts'
@@ -328,7 +329,7 @@ export let release = async (version: string, root = '.') => {
   await run('-C', root, 'commit', '-m', `Release v${version}`)
   await run('-C', root, 'tag', `v${version}`)
   console.log(`v${version}: ${picked.length} packages, committed and tagged.`)
-  console.log(`push it to publish:  git push origin main v${version}`)
+  console.log(`push it to publish:  git push --atomic origin main v${version}`)
 }
 
 if (import.meta.main) {
