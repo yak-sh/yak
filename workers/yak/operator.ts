@@ -600,7 +600,7 @@ export let origins = (
   let from = entries.findLastIndex((b, i) =>
     i < end && kindOf(b) == 'output' && !!b.content
   )
-  return entries.slice(from + 1, end).filter((b) => kindOf(b) == 'input')
+  return entries.slice(from + 1, end).filter(words)
     .flatMap((b) => {
       let child = comp(b, 'delivery')?.child
       if (!child) return [b]
@@ -682,11 +682,30 @@ export let replyOf = (
   return { text: why + TOLD, fault }
 }
 
-// The entries since the newest words given: the turn being answered.
-let turnOf = (entries: Bundle[]) =>
-  entries.slice(
-    Math.max(0, entries.findLastIndex((b) => kindOf(b) == 'input')),
-  )
+// Words given to a session. A notice the runner writes with prose, as a
+// compaction's checkpoint, is no one's words, so it never starts a turn.
+let words = (b: Bundle) => kindOf(b) == 'input' && !b.notice
+
+/**
+ * The entries since the newest words given: the turn being answered.
+ *
+ * ```ts
+ * import { equal } from '@yaks/testing'
+ * import { replyOf, turnOf } from './operator.ts'
+ * let line = (seq: number, b: object) => ({
+ *   entity: { eid: `e${seq}` }, entry: { session: 's', seq }, ...b,
+ * })
+ * let stopped = turnOf([
+ *   line(1, { content: { body: 'Check the app' } }),
+ *   line(2, { stop: {}, content: { body: 'Stopped by the person watching.' } }),
+ *   line(3, { notice: {}, checkpoint: {}, content: { body: 'Summary' } }),
+ * ])
+ * equal(stopped.length, 3)
+ * equal(replyOf(stopped), { text: 'Stopped by the person watching.' })
+ * ```
+ */
+export let turnOf = (entries: Bundle[]) =>
+  entries.slice(Math.max(0, entries.findLastIndex(words)))
 
 /**
  * The space's Operator: @yaks/harness's runner registered on the store's
@@ -938,7 +957,7 @@ export let operating = (
     }
     // One answer for each time it was given words: the turn ended again
     // (stopped, then a step in flight finishing) says it anew.
-    let mark = entries.findLast((b) => kindOf(b) == 'input')
+    let mark = entries.findLast(words)
     if (!mark) return
     let task = await taskOf(store, session)
     let space = (await workingOf(store, session))?.space
