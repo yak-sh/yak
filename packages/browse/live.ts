@@ -184,10 +184,12 @@ let makeClient = () => {
     // A refusal on a page that outlived a deploy is its old code asking the
     // new server what it no longer answers: the page reloads onto the code
     // now served. A read of an id that names nothing (one in the address, or a
-    // link) is refused for it, and the page draws the Lost face. On a page
-    // running what is served, any other refusal is a bug.
+    // link) is refused for it, and the page draws the Lost face. A line the
+    // person typed is refused for their input, and the page shows why. On a
+    // page running what is served, any other refusal is a bug.
     report: (r) => {
       if (!r.refused) return said(r)
+      if (r.names?.length && r.names.every((n) => typed.has(n))) return
       void unnamed(r.names).then(async (lost) => {
         if (lost) return
         if (await outlived()) location.reload()
@@ -2963,19 +2965,34 @@ export let aggValue = (name: string, value = ''): number | undefined => {
 // members, an entity, a list's rows, a session's entries, an entity's edge
 // rider, an aggregate, a comment badge's tally, or this tab's screen rows.
 export type Hold =
-  | { query: Pred[]; source?: string }
+  | { query: Pred[]; source?: string; typed?: boolean }
   | { board: Ent }
   | { entity: string; fields?: string }
   | { rows: string[] }
   | { entries: string }
   | { edges: string; rider: string }
-  | { agg: string; line: string; once?: boolean }
+  | { agg: string; line: string; once?: boolean; typed?: boolean }
   | { comments: string }
   | { client: string }
 
+// The subscriptions riding a line the person typed (a query page's), counted
+// by the holds that say so: a refusal of one answers their input, which the
+// page shows, and is not reported as a failure of its code.
+let typed = new Map<string, number>()
+let typing = (sub: string, hold: () => () => void): () => void => {
+  typed.set(sub, (typed.get(sub) ?? 0) + 1)
+  let off = hold()
+  return () => {
+    off()
+    let n = typed.get(sub)! - 1
+    if (n) typed.set(sub, n)
+    else typed.delete(sub)
+  }
+}
+
 let holdKey = (h: Hold): string =>
   'query' in h
-    ? `q:${qkey(h.query)}:${h.source?.trim() ?? ''}`
+    ? `q:${qkey(h.query)}:${h.source?.trim() ?? ''}${h.typed ? ':typed' : ''}`
     : 'board' in h
     ? `board:${h.board.eid}`
     : 'entity' in h
@@ -2987,14 +3004,18 @@ let holdKey = (h: Hold): string =>
     : 'edges' in h
     ? `edges:${h.edges}:${h.rider}`
     : 'agg' in h
-    ? `agg:${h.agg}:${h.once ? 'once' : 'live'}:${h.line}`
+    ? `agg:${h.agg}:${h.once ? 'once' : 'live'}:${
+      h.typed ? 'typed:' : ''
+    }${h.line}`
     : 'comments' in h
     ? `comments:${h.comments}`
     : `client:${h.client}`
 
 let open = (h: Hold): () => void =>
   'query' in h
-    ? holdQuery(h.query, h.source)
+    ? h.typed
+      ? typing(`q:${qkey(h.query)}`, () => holdQuery(h.query, h.source))
+      : holdQuery(h.query, h.source)
     : 'board' in h
     ? boardSub(h.board)
     : 'entity' in h
@@ -3006,7 +3027,9 @@ let open = (h: Hold): () => void =>
     : 'edges' in h
     ? edgeSub(h.edges, h.rider)
     : 'agg' in h
-    ? holdAgg(h.agg, h.line, h.once)
+    ? h.typed
+      ? typing(h.agg, () => holdAgg(h.agg, h.line, h.once))
+      : holdAgg(h.agg, h.line, h.once)
     : 'comments' in h
     ? holdCommentCount(h.comments)
     : holdClientRows(h.client)

@@ -115,9 +115,9 @@ let Answered = ({ io, text, ast }: { io: Io; text: string; ast: Query }) => {
   let id = key('query', text)
   let own = windowOf(ast).limit != null || !!orderOf(ast)
   let got = io.ask(
-    own ? { rows: whole(text) } : {
-      rows: whole(paged(io, id, text)),
-      total: { query: conjoin(text, '.count'), once: true },
+    own ? { rows: { query: whole(text), typed: true } } : {
+      rows: { query: whole(paged(io, id, text)), typed: true },
+      total: { query: conjoin(text, '.count'), once: true, typed: true },
     },
   )
   let all = rows(got.rows)
@@ -147,7 +147,7 @@ export let QueryPage = (
   { io, text }: { io: Io; text: string },
 ): JSX.Element => {
   let { ast, agg, error } = read(text)
-  let got = io.ask(agg ? { answer: text } : {})
+  let got = io.ask(agg ? { answer: { query: text, typed: true } } : {})
   let a = got.answer
   return h(
     'div',

@@ -51,23 +51,26 @@ let AGGREGATES = ['count', 'tally', 'distinct']
 type Plan = {
   line: string
   once: boolean
+  typed: boolean
   agg: boolean
   preds?: Pred[]
   error?: string
 }
 let plan = (a: Ask): Plan => {
   let line = typeof a == 'string' ? a : a.query
-  let once = typeof a != 'string' && a.once
+  let once = typeof a != 'string' && !!a.once
+  let typed = typeof a != 'string' && !!a.typed
   try {
     let agg = parse(line).clauses.some((c) => AGGREGATES.includes(c.kind))
     return {
       line,
       once,
+      typed,
       agg,
       preds: agg ? undefined : resolveRefs(parseQuery(line), findEid),
     }
   } catch (e) {
-    return { line, once, agg: false, error: String(e) }
+    return { line, once, typed, agg: false, error: String(e) }
   }
 }
 
@@ -78,8 +81,8 @@ let hold = (p: Plan): Hold | undefined =>
   p.error
     ? undefined
     : p.agg
-    ? { agg: aggName(p), line: p.line, once: p.once }
-    : { query: p.preds!, source: p.line }
+    ? { agg: aggName(p), line: p.line, once: p.once, typed: p.typed }
+    : { query: p.preds!, source: p.line, typed: p.typed }
 
 // What an ask's answer is now: read in the render, so a new answer paints.
 let answer = (p: Plan): Answer => {

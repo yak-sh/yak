@@ -39,9 +39,11 @@ export type Answer = {
 }
 
 /** One query a view asks: a line, answered and kept live while the view is
- * mounted, or `{query, once: true}`, answered once, for an answer that reads
- * too much to be asked again after every commit. */
-export type Ask = string | { query: string; once: true }
+ * mounted, or `{query, …}`: `once`, answered once, for an answer that reads
+ * too much to be asked again after every commit; `typed`, a line the person
+ * typed, whose refusal is the answer to their input (the view shows it), not a
+ * failure of the view's code. */
+export type Ask = string | { query: string; once?: true; typed?: true }
 
 /** The queries a view asks, each by the name its answer is read under. */
 export type Asks = Record<string, Ask>

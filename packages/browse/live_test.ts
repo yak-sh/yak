@@ -2643,6 +2643,37 @@ test('server-resolve: a refused page read of an id that names something is a fai
   }
 })
 
+// A line the person typed is refused for their input (bug c99f1e2e): the page
+// shows the refusal and nothing reports it; the same line held by code is a bug.
+for (let typed of [true, false]) {
+  test(`a refused query ${typed ? 'the person typed is its answer' : 'code holds is a failure'}`, async () => {
+    let wire = host((a) =>
+      a.subscribe.startsWith('.doc.title=nosuch')
+        ? { refused: { error: 'Unknown', message: 'unknown prop: .letter' } }
+        : undefined
+    )
+    let preds = resolveRefs(parseQuery('.doc.title=nosuch'), findEid)
+    let free = () => {}
+    try {
+      let heard = await errorsDuring(async () => {
+        free = owned({ query: preds, source: '.doc.title=nosuch', typed })
+        await until(
+          () => querySubscription(preds)?.state.status == 'failed',
+          { poll: 0 },
+        )
+        await tick()
+      })
+      assertEquals(
+        heard,
+        typed ? [] : ['live client — Unknown: unknown prop: .letter'],
+      )
+    } finally {
+      free()
+      wire.free()
+    }
+  })
+}
+
 test('server-resolve: a hanging server never stalls nav, never storms, and its late answer lands', async () => {
   clearResolved()
   cache.value = {}
