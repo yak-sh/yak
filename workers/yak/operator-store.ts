@@ -114,6 +114,33 @@ export let operatorGraph = (
   return { g, fx, vocab }
 }
 
+/** An object's alarm, as its storage keeps it. */
+export type Alarms = {
+  setAlarm(at: number): Promise<void>
+  getAlarm(): Promise<number | null>
+  deleteAlarm(): Promise<void>
+}
+
+/** How long an object's wake may go unheard before it wakes again. */
+export let BACKSTOP = 15_000
+
+/**
+ * The object's alarm: `work` (a `drain`) under an alarm armed BACKSTOP from
+ * now, so a wake the object dies under (a deploy's reset under a step in
+ * flight) wakes its replacement, which takes the step up again; then armed
+ * for the next run due, or cleared when none is and nothing armed it since.
+ */
+export let woken = async (
+  storage: Alarms,
+  work: () => Promise<number | null>,
+) => {
+  let backstop = Date.now() + BACKSTOP
+  await storage.setAlarm(backstop)
+  let next = await work()
+  if (next) await storage.setAlarm(next)
+  else if (await storage.getAlarm() == backstop) await storage.deleteAlarm()
+}
+
 /**
  * Work the store's pool until nothing is due, as the object's alarm does:
  * each session step is a run, and its commit owes the next. Answers when the

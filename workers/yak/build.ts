@@ -68,6 +68,7 @@ import {
   type Hibernation,
   type Wire,
 } from '@yaks/durable-object'
+import type { Alarms } from './operator-store.ts'
 import { level, writes } from '@yaks/member'
 import {
   col,
@@ -128,8 +129,7 @@ export type State = Hibernation & Restartable & {
     // a deleted space's conversation goes through ({@link Builder.wipe}), the
     // same call the Store makes for the same reason (graph.ts).
     deleteAll(): Promise<void>
-    setAlarm(at: number): Promise<void>
-  }
+  } & Alarms
 }
 
 // Who is at a socket, and whether the page is watching the Operator rather
@@ -600,9 +600,9 @@ export class Builder {
   }
 
   async alarm() {
-    let { drain } = await import('./operator-store.ts')
-    let next = await drain((await this.#work()).store)
-    if (next) await this.#ctx.storage.setAlarm(next)
+    let { drain, woken } = await import('./operator-store.ts')
+    let { store } = await this.#work()
+    await woken(this.#ctx.storage, () => drain(store))
   }
 
   /**
