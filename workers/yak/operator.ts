@@ -83,6 +83,7 @@ import { textSend } from './operator-texts.ts'
 import { phoneSend } from './operator-line.ts'
 import { googleTold, googleTools } from './operator-google.ts'
 import { notification } from './operator-updates.ts'
+import { wakeTools } from './operator-wakes.ts'
 import { type Browsers, browserTools } from './operator-browser.ts'
 import {
   bases,
@@ -988,12 +989,26 @@ export let operating = (
     let fixes = space && task
       ? requests.filter((r) => comp(r, 'operator_request')?.channel == 'error')
       : []
+    // A wake-up that fired is told to whoever set it, in their Updates, as
+    // what came of it: the quick word when the conversation forks, and the
+    // outcome in its place when the fork comes back.
+    let woken = requests.filter((r) =>
+      comp(r, 'operator_request')?.channel == 'wake'
+    )
     await g.apply([
       ...fixes.map((r) =>
         notification({
           to: space!,
           words: reply.text,
           about: task,
+          by: space,
+          id: r.entity.eid,
+        })
+      ),
+      ...woken.map((r) =>
+        notification({
+          to: String(comp(r, 'operator_request')!.person),
+          words: reply.text,
           by: space,
           id: r.entity.eid,
         })
@@ -1063,6 +1078,7 @@ export let operating = (
           textSend(env, ctx, space),
           mailSend(env, ctx, space, store),
           phoneSend(env, ctx, space, store),
+          ...wakeTools(store, space),
           ...google,
           ...options.tools?.(ctx, files) ?? [],
           ...options.browsers

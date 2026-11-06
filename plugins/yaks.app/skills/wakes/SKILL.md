@@ -256,6 +256,18 @@ onto the row it matched has to gate itself (`+!comp` above), and that gate makes
 a rule fire once per entity, so "every five minutes" belongs in the schedule,
 and a rule is for what one firing does to that row.
 
+## The Operator's wake-ups
+
+A person's Operator keeps wake-ups of its own, outside every app, when they ask
+it to come back to something: "remind me at 5", "check this tomorrow", "read my
+mail every morning at 9". Its tools are `wake_set` (words to act on, and `at`, a
+time or a delay such as `10m`, and/or `every`, written as `wake.every` is),
+`wake_list` and `wake_cancel`. Each is a `wake` row in the Operator's own store,
+so it outlasts restarts and deploys. When it fires, its words are a turn in the
+person's conversation, run as that person and paid from the space's budget, and
+the Operator's answer reaches them in their Updates. An app's schedules stay
+`wake` rows in the app, as above.
+
 ## Where a firing runs, and its limits
 
 - **Inside the app's own store**, the same object a page writes through. A

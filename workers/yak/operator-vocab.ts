@@ -40,7 +40,7 @@ export let operatorDoc: VocabDoc = {
           ref: 'entity',
           death: 'keep',
           description:
-            'What in their Updates the words answer: an update, or a question asked of them.',
+            'What the words are about: in their Updates, the update or question they answer; on the wake channel, the wake-up that fired.',
         },
         signup: {
           type: 'boolean',
@@ -191,6 +191,31 @@ export let operatorDoc: VocabDoc = {
         consent: { type: 'string' },
         at: { type: 'string', format: 'date-time' },
       },
+    },
+    // What a row that fires asks the Operator, as the person who set it: a
+    // wake-up (operator-wakes.ts), and any other trigger that becomes a turn
+    // in their conversation (operator-channels.ts `fire`).
+    operator_ask: {
+      component: true,
+      description:
+        "What the space's Operator is asked each time this row fires, as the person who set it.",
+      properties: {
+        space: { type: 'string', ref: 'entity', death: 'keep' },
+        person: { type: 'string', ref: 'person', death: 'keep' },
+        administrative: { type: 'boolean' },
+        say: {
+          type: 'string',
+          description: 'The words given to the Operator when it fires.',
+        },
+      },
+    },
+    operator_fired: {
+      effect: true,
+      created: ['fired'],
+      changed: ['fired'],
+      tries: 3,
+      description:
+        "Give a fired wake's words to the Operator as a request of the person who set it.",
     },
     operator_receive: {
       effect: true,

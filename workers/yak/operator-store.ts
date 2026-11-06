@@ -34,6 +34,9 @@ import { operatorDoc } from './operator-vocab.ts'
 import { draftDoc, drafts } from '@yaks/draft'
 import { memoryDoc } from '@yaks/memory/vocab'
 import { topicDoc } from '@yaks/topic'
+import { wakeDoc } from '@yaks/wake/vocab'
+import { due, soonest, tick, wakes } from '@yaks/wake'
+import { caught } from './defects.ts'
 import { adopt, indexed, search } from '@yaks/fts'
 
 export let operatorVocab = loadVocab([
@@ -72,6 +75,9 @@ export let operatorVocab = loadVocab([
   draftDoc,
   memoryDoc,
   topicDoc,
+  // The wake-ups the Operator sets for the people it works for
+  // (operator-wakes.ts).
+  wakeDoc,
 ], [kernelKeywords, edgeKeywords, blobKeywords])
 
 export let operatorStore = (
@@ -111,7 +117,7 @@ export let operatorGraph = (
   let g = graph({
     storage,
     vocab,
-    plugins: [sessions(), drafts(), ids(vocab), ...plugins, fx],
+    plugins: [sessions(), drafts(), ids(vocab), wakes(), ...plugins, fx],
   })
   return { g, fx, vocab }
 }
@@ -143,17 +149,43 @@ export let woken = async (
   else if (await storage.getAlarm() == backstop) await storage.deleteAlarm()
 }
 
+/** How long a wake-up a tick refused waits before it is tried again. */
+export let RETRY = 60_000
+
 /**
  * Work the store's pool until nothing is due, as the object's alarm does:
- * each session step is a run, and its commit owes the next. Answers when the
- * next pending run it handles is due (ms since the epoch), or null when none
- * is.
+ * first each wake-up due fires (@yaks/wake `tick`), then each session step is
+ * a run, and its commit owes the next. Answers when the next pending run it
+ * handles or the next wake-up is due (ms since the epoch), or null when
+ * neither is.
  */
 export let drain = async (
   { g, fx }: Pick<ReturnType<typeof operatorStore>, 'g' | 'fx'>,
 ): Promise<number | null> => {
   await phoneTexts(g)
   await channeled(g)
+  // A firing is the store's own write, as every other write the Operator
+  // keeps of itself is.
+  let { refused } = await tick({
+    read: (q, o) => g.read(q, o),
+    apply: (b, o) => g.apply(b, { ...o, trusted: true }),
+  }, Date.now())
+  for (let { wake, error } of refused) {
+    caught(error, { request: 'operator wake', wake: wake.entity.eid })
+  }
+  let run = await working({ g, fx })
+  // One that came due while the pool worked fires on the next alarm; one a
+  // tick refused waits RETRY, rather than ringing the alarm at once again.
+  let now = Date.now()
+  let wake = (await due(g, now)).length
+    ? now + (refused.length ? RETRY : 1000)
+    : await soonest(g, now)
+  return run == null ? wake : wake == null ? run : Math.min(run, wake)
+}
+
+let working = async (
+  { g, fx }: Pick<ReturnType<typeof operatorStore>, 'g' | 'fx'>,
+): Promise<number | null> => {
   // A pending run no handler here takes arms nothing: words declared before
   // their handler was (sessions' were, until the Operator ran on them).
   let handled = fx.slots().filter((s) => s.effect && s.run).map((s) => s.id)

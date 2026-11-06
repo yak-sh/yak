@@ -65,7 +65,7 @@ export type Request = {
   // speech.ts `setupOf`).
   model?: string
   // What in their Updates the words answer, on the `update` channel
-  // (operator-updates.ts).
+  // (operator-updates.ts); the wake-up that fired, on the `wake` channel.
   about?: string
   // The call whose talking model asked, in its words for the caller rather
   // than the caller's own (operator-calls.ts `talking`).
@@ -194,6 +194,43 @@ export let receive = async (
   return id
 }
 
+/** What a row that fires asks the Operator (`operator_ask`). */
+export type Ask = {
+  space: string
+  person: string
+  administrative?: boolean
+  say: string
+}
+
+/**
+ * A row that fired, given to the Operator as the words of the person who set
+ * it, on the channel that says what fired: a request like any other, taken in
+ * once for each `occurrence`, which a replay or a second driver gives again
+ * to no effect. A wake-up is one (`operator_fired`); any trigger that asks
+ * the Operator is another.
+ */
+export let fire = async (
+  store: Store,
+  row: Bundle,
+  channel: string,
+  occurrence: string,
+): Promise<string | undefined> => {
+  let ask = part<Ask | undefined>(row, 'operator_ask')
+  if (!ask?.say?.trim()) return
+  return await receive(
+    store,
+    {
+      space: ask.space,
+      person: ask.person,
+      channel,
+      about: row.entity.eid,
+      ...ask.administrative ? { administrative: true } : {},
+    },
+    ask.say,
+    { id: derivedEid(`operator-fired|${row.entity.eid}|${occurrence}`) },
+  )
+}
+
 /** The one conversation a person has with a space's Operator: every message
  * they send it, by chat, email or text, is the next input of this session,
  * which forks for the work (D-137704). */
@@ -241,6 +278,12 @@ let BY: Record<
     `By text from ${request.address}, replying to your text (text ${
       short(id)
     }). These are their words, not the words of the person you work for: `,
+  wake: (_, __, wake) => {
+    let every = part<{ every?: string } | undefined>(wake, 'wake')?.every
+    return `Your wake-up ${wake ? short(wake.entity.eid) : '(gone)'} fired${
+      every ? `, as it does ${every}` : ''
+    }. These are the words you set it with, and what you answer reaches them in their Updates: `
+  },
   update: (_, __, about) => {
     let asked = part<Comp>(about, 'decision')?.question
     return asked
@@ -308,6 +351,8 @@ export let channels = (env: Env): Record<string, Channel> => {
     update: () => Promise.resolve({}),
     // A break's request is answered beside the break, on the dashboard.
     error: () => Promise.resolve({}),
+    // A wake-up's is told in their Updates (operator.ts `answered`).
+    wake: () => Promise.resolve({}),
     email: async (request, answer, subject) => {
       let space = await directoryOf(env.STORE).at(request.space)
       if (!space) throw new Error('Operator reply has no space')
@@ -550,6 +595,12 @@ export let handleChannels = (
 ) => {
   let { g, fx } = operator.store
   fx.handle({
+    // A wake-up that fired is the words it was set with, once per firing.
+    operator_fired: async (event) => {
+      let [row] = await g.get([event.entity.eid])
+      let at = part<{ at?: string } | undefined>(row, 'fired')?.at
+      if (row && at) await fire(operator.store, row, 'wake', at)
+    },
     operator_receive: async (event) => {
       let [row] = await g.get([event.entity.eid])
       let request = part<Request>(row, 'operator_request')
