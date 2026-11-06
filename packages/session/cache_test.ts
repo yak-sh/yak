@@ -94,7 +94,7 @@ test('cache dates bracket before and after the cache header fix exactly once', (
   )
   equal(cacheOf(rows, [], { session: 'different' }).total.requests, 0)
   equal(cacheTime('2026-10-01T22:10:00+02:00'), '2026-10-01T20:10:00.000Z')
-  throws(() => cacheTime('2026-10-01T20:10:00'))
+  throws(() => cacheTime('someday'))
   throws(() => cacheOf([], [], { from: at, until: at }))
 })
 

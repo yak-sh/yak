@@ -86,7 +86,8 @@ with no command. The duty takes the mark off before it tallies the day, so a
 request arriving during the tally marks the day again.
 
 - `yak spend show [since] [--until day] [--top n]` reports a span of days, by
-  default the Claude plan's week.
+  default the Claude plan's week. A day is written in the time grammar
+  (@yaks/vocab `timeSpan`): `2026-10-13`, `yesterday`, `3 days ago`.
 - `yak spend backfill <since>` measures the requests of every transcript,
   managed run and graph session written since a day (@yaks/session and
   @yaks/spawn `recounted`), then tallies each day.

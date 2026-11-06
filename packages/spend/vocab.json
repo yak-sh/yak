@@ -154,11 +154,13 @@
       "input": {
         "since": {
           "type": "string",
-          "description": "the first UTC day, `2026-10-13` (default: the day the Claude plan's week began, else six days ago)"
+          "format": "date",
+          "description": "the first UTC day, `2026-10-13`, `yesterday` or `3 days ago` (default: the day the Claude plan's week began, else six days ago)"
         },
         "until": {
           "type": "string",
-          "description": "the last UTC day (default: today)"
+          "format": "date",
+          "description": "the last UTC day, written as since is (default: today)"
         },
         "top": {
           "type": "integer",
@@ -178,7 +180,8 @@
       "input": {
         "since": {
           "type": "string",
-          "description": "the first UTC day, `2026-10-13`"
+          "format": "date",
+          "description": "the first UTC day, `2026-10-13`, `yesterday` or `3 days ago`"
         }
       },
       "required": ["since"],

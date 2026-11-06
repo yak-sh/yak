@@ -6,6 +6,7 @@
     ".": "./mod.ts",
     "./vocab": "./docs.ts",
     "./tools": "./tools.ts",
+    "./time": "./time.ts",
     "./constraints": "./constraints.ts",
     "./runtime": "./runtime.ts",
     "./wire": "./wire.ts"

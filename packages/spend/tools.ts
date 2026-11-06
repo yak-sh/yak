@@ -22,15 +22,8 @@ let answer = (call: Bundle, body: string): Bundle[] => [{
   output: { source: call.entity.eid },
 }]
 
-let DAY = /^\d{4}-\d{2}-\d{2}$/
-
-let dayArg = (v: unknown, name: string): string | undefined => {
-  if (v == null || v === '') return undefined
-  if (!DAY.test(String(v))) {
-    throw new Refused(`${name} is a UTC day, like 2026-10-13`)
-  }
-  return String(v)
-}
+// A day the door already read (`format: date`), or none.
+let dayArg = (v: unknown): string | undefined => v ? String(v) : undefined
 
 // The tally of a span of days, and the plan limits beside it.
 export let read = async (
@@ -164,14 +157,14 @@ export let runs = (): Runs => ({
     return answer(
       call,
       await report(graph, {
-        since: dayArg(a.since, 'since'),
-        until: dayArg(a.until, 'until'),
+        since: dayArg(a.since),
+        until: dayArg(a.until),
         top: a.top == null ? undefined : Number(a.top),
       }),
     )
   },
   spend_backfill: async (call, graph) => {
-    let since = dayArg(argsOf(call).since, 'since')
+    let since = dayArg(argsOf(call).since)
     if (!since) throw new Refused('say since, the first UTC day to measure')
     return answer(call, await backfill(graph, since))
   },

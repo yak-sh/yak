@@ -507,7 +507,9 @@ equal(parse('.reviews!.review.rating!=5').clauses, [
 
 ## Time literals
 
-A **time literal** is text recognized by `timeSpan()`, such as `today`,
+A **time literal** is text recognized by `timeSpan()` (@yaks/vocab's
+[time grammar](../vocab/README.md#time-phrases), re-exported here, which a
+tool's `date` and `date-time` arguments are read in too), such as `today`,
 `1 hour ago`, `in 5m`, `9am`, or an ISO date or timestamp. A **span** has
 `start` and `end` in epoch milliseconds and an optional `at` for the moment
 named by a relative time literal. Day boundaries use the runtime's local time

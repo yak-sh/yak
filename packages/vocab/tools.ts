@@ -1,6 +1,7 @@
 /** JSON Schema validation for portable tool arguments, and the tool
  * declarations a vocabulary carries. Compiled once per schema. */
 import { type OutputUnit, type Schema, Validator } from '@cfworker/json-schema'
+import { timeInstant } from './time.ts'
 import type { PropSchema, VocabDoc } from './types.ts'
 
 // A schema is interpreted, never compiled to code: a Cloudflare Worker refuses
@@ -99,20 +100,39 @@ const typeOf = (v: unknown) =>
 // as one string is never one name while JSON text is a fair string. One reading
 // at this boundary for every tool, rather than a refusal the caller misreads.
 // Read in place, in the copy `validateToolInput` made.
-const spelled = (schema: unknown, value: unknown): unknown => {
+const spelled = (schema: unknown, value: unknown, now: number): unknown => {
   if (!isNode(schema)) return value
-  if (typeof value == 'string') value = unquoted(admits(schema), value)
+  if (typeof value == 'string') {
+    value = timed(schema.format, unquoted(admits(schema), value), now)
+  }
   if (Array.isArray(value) && isNode(schema.items)) {
-    value.forEach((v, i) => value[i] = spelled(schema.items, v))
+    value.forEach((v, i) => value[i] = spelled(schema.items, v, now))
   } else if (
     isNode(value) && Object.getPrototypeOf(value) == Object.prototype
   ) {
     let props = isNode(schema.properties) ? schema.properties : {}
     for (let [k, v] of Object.entries(value)) {
-      value[k] = spelled(props[k] ?? schema.additionalProperties, v)
+      value[k] = spelled(props[k] ?? schema.additionalProperties, v, now)
     }
   }
   return value
+}
+
+// A `date` or `date-time` argument is written in the grammar a query's time
+// literal is (`timeSpan`): `2026-10-13`, `yesterday`, `3 days ago`. It is read
+// here once into the one form its format names, so a tool is handed a value it
+// never parses: a `date` as the day the phrase falls on, `2026-10-13`, and a
+// `date-time` as the instant, `2026-10-13T04:00:00.000Z`. Text that names no
+// time is left for the check to refuse.
+const timed = (format: unknown, value: unknown, now: number): unknown => {
+  if (typeof value != 'string') return value
+  if (format != 'date' && format != 'date-time') return value
+  let at = timeInstant(value, now)
+  if (at == null) return value
+  let d = new Date(at)
+  if (format == 'date-time') return d.toISOString()
+  let two = (n: number) => String(n).padStart(2, '0')
+  return `${d.getFullYear()}-${two(d.getMonth() + 1)}-${two(d.getDate())}`
 }
 
 const unquoted = (types: string[], text: string): unknown => {
@@ -203,6 +223,11 @@ const fault = (keyword: string, node: unknown, v: unknown) => {
       return missing.length ? `missing ${either(missing)}` : undefined
     case 'false':
       return 'not allowed here'
+    case 'format':
+      return node == 'date' || node == 'date-time'
+        ? `wants a ${node == 'date' ? 'day' : 'time'}, like 2026-10-13, ` +
+          `yesterday or 3 days ago, not ${JSON.stringify(v)}`
+        : undefined
     case 'anyOf':
     case 'oneOf':
       if (names.every(Boolean)) {
@@ -321,14 +346,19 @@ const filled = (schema: unknown, value: unknown): void => {
   }
 }
 
+/** A tool's arguments, read and checked against its input schema: JSON text
+ * read as the value it spells, a `date` or `date-time` argument read in the
+ * time grammar against `now` (`timeSpan`), defaults filled in. A fault
+ * refuses, through `refuse`, in one line saying what each argument wants. */
 export const validateToolInput = (
   tool: { inputSchema?: Record<string, unknown> },
   args: Record<string, unknown>,
   refuse: (message: string) => Error = (message) => new Error(message),
+  now: number = Date.now(),
 ): Record<string, unknown> => {
   if (!tool.inputSchema) return args
   const check = toolCheck(tool.inputSchema)
-  const value = spelled(tool.inputSchema, copied(args)) as Record<
+  const value = spelled(tool.inputSchema, copied(args), now) as Record<
     string,
     unknown
   >

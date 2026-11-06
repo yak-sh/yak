@@ -384,3 +384,41 @@ test('text that is not the JSON it means to be is shown around where it broke', 
     )
   }
 })
+
+test('a date or date-time argument is read in the time grammar into one form', () => {
+  // Local noon, so a day's phrase names the same date in every zone.
+  const now = +new Date(2026, 10, 6, 12)
+  const read = (format: string, value: unknown) =>
+    validateToolInput(
+      {
+        inputSchema: {
+          type: 'object',
+          properties: { at: { type: 'string', format } },
+        },
+      },
+      { at: value },
+      undefined,
+      now,
+    ).at
+  const cases: [string, string, string][] = [
+    ['date', '2026-10-13', '2026-10-13'],
+    ['date', 'today', '2026-11-06'],
+    ['date', 'yesterday', '2026-11-05'],
+    ['date', '3 days ago', '2026-11-03'],
+    ['date', '3-days-ago', '2026-11-03'],
+    ['date', 'last week', '2026-10-26'],
+    ['date-time', '2026-10-01T22:10:00+02:00', '2026-10-01T20:10:00.000Z'],
+    ['date-time', 'now', new Date(now).toISOString()],
+    ['date-time', '3 hours ago', new Date(now - 3 * 3_600_000).toISOString()],
+    ['date-time', 'in 5m', new Date(now + 5 * 60_000).toISOString()],
+  ]
+  for (const [format, said, stored] of cases) {
+    assertEquals(read(format, said), stored, `${format} ${said}`)
+  }
+  assertThrows(
+    () => read('date', 'someday'),
+    Error,
+    'at: wants a day, like 2026-10-13, yesterday or 3 days ago, not "someday"',
+  )
+  assertThrows(() => read('date-time', 'soon'), Error, 'wants a time')
+})

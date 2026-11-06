@@ -4,7 +4,7 @@
 
 import type { Bundle, Comp, Graph } from '@yaks/graph'
 import { Refused } from '@yaks/graph/errors'
-import { and, eq, ge, lt, or, present, want } from '@yaks/query'
+import { and, eq, ge, lt, or, present, timeInstant, want } from '@yaks/query'
 
 export type CacheOpts = {
   from?: string
@@ -55,15 +55,18 @@ let count = (v: unknown): number | null =>
 let ids = (values: string[]) => [...new Set(values.filter(Boolean))]
 let unknown = (v: unknown) => str(v) || 'unknown'
 
-/** UTC instants are explicit; the upper bound is exclusive for adjacent runs. */
+/** A bound as the UTC instant it names, read in the time grammar
+ * (`timeInstant`); the upper bound is exclusive for adjacent runs. */
 export let cacheTime = (value?: string): string | undefined => {
   if (value == null) return undefined
-  if (
-    !/(Z|[+-]\d\d:\d\d)$/i.test(value) || !Number.isFinite(Date.parse(value))
-  ) {
-    throw new Refused('cache dates need an ISO instant with timezone')
+  let at = timeInstant(value)
+  if (at == null) {
+    throw new Refused(
+      `cache dates are times, like 2026-10-01T20:10:00Z or 3 hours ago, ` +
+        `not ${JSON.stringify(value)}`,
+    )
   }
-  return new Date(value).toISOString()
+  return new Date(at).toISOString()
 }
 
 let totals = (rows: CacheRequest[]): CacheTotals => {

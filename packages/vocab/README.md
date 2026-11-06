@@ -70,6 +70,7 @@ edit is a new document.
 | `@yaks/vocab/runtime`     | `loadVocab`, `Vocab`, `pick`, routing errors, keyword and loaded metadata types; excludes document validation and bundle conversion                                                                                                                                                                                                                                                                                                                                                   |
 | `@yaks/vocab/vocab`       | `docs`, containing `metaDoc`, and the package `description`                                                                                                                                                                                                                                                                                                                                                                                                                           |
 | `@yaks/vocab/tools`       | `ToolDefinition`, `Role`, `toolDefinition`, `toolGrammar`, `toolDefinitionSchema`, `toolsSaid`, `toolsIn`, `validateToolInput`, `validateToolOutput`, `toolCheck`, `Check`, `errorsText`, `publicToolSchema`, `legacyOptions`                                                                                                                                                                                                                                                         |
+| `@yaks/vocab/time`        | `timeSpan`, `timeInstant`, `isTimeLiteral`, `unitMs`, `Span`: the time grammar (see [Time phrases](#time-phrases)); @yaks/query re-exports them                                                                                                                                                                                                                                                                                                                                       |
 | `@yaks/vocab/constraints` | `Factor`, `Term`, `Score`, `NumericConstraint`, `numberOf`, `constraintErrors`                                                                                                                                                                                                                                                                                                                                                                                                        |
 
 ## The format
@@ -660,6 +661,17 @@ Examples include [@yaks/id](../id/README.md)'s `prefix`,
 `store`, [@yaks/edge](../edge/README.md)'s `edge` and
 [@yaks/key](../key/README.md)'s `key`.
 
+## Time phrases
+
+`@yaks/vocab/time` is the one grammar a time is written in, wherever it is
+written: a query's time literal and a tool's `date` or `date-time` argument.
+`timeSpan(text, now?)` gives the span a phrase names, or null for text that is
+no time: `today`, `last week`, `1 hour ago` (or `1-hour-ago`), `in 5m`, `9am`,
+`9am tomorrow`, or an ISO date or timestamp. `timeInstant()` takes the moment a
+phrase names, or its start. Day boundaries use the runtime's local time zone.
+What a comparison against a phrase asks of a stamp is @yaks/query's
+([Time literals](../query/README.md#time-literals)), which re-exports these.
+
 ## Tools
 
 Import tool helpers from `@yaks/vocab/tools`. `toolsIn` reads `$defs` entries
@@ -756,10 +768,20 @@ string holding JSON (`"[…]"`, `"true"`, `"20"`) is read as the value it spells
 where the schema does not take a string and admits that value; where the schema
 also takes a string, only an array is read, since a list sent as one string is
 never one name while JSON text is a fair string. Models often send arguments
-that way, and this is the one place every tool reads them. Its optional third
-argument constructs the error for invalid arguments; tool callers supply
-`CallError` and declaration readers use the default `Error`. The refusal says,
-for each argument at fault, what it wants and what it was given:
+that way, and this is the one place every tool reads them. A date or time
+argument is declared `"type": "string"` with `"format": "date"` (a day) or
+`"format": "date-time"` (an instant), and is written in the grammar a query's
+time literal is ([`timeSpan`](#time-phrases)): `2026-10-13`, `yesterday`,
+`3 days ago`, `in 5m`. It is read here once into one form, a `date` as the day
+the phrase falls on (`2026-10-13`) and a `date-time` as the UTC instant
+(`2026-10-13T04:00:00.000Z`), so no tool parses a date. Text that names no time
+is refused:
+`at: wants a day, like 2026-10-13, yesterday or 3 days ago, not
+"someday"`. Its
+optional third argument constructs the error for invalid arguments; tool callers
+supply `CallError` and declaration readers use the default `Error`. The fourth
+is the clock a relative phrase is read against, `Date.now()` unless given. The
+refusal says, for each argument at fault, what it wants and what it was given:
 `Invalid tool arguments: bundles: wants an array,
 not a string`. A string that
 meant to be JSON and is not says why, at which character, with the text around

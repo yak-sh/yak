@@ -847,11 +847,13 @@
       "input": {
         "from": {
           "type": "string",
-          "description": "inclusive ISO instant with timezone, e.g. 2026-10-01T20:10:00Z"
+          "format": "date-time",
+          "description": "inclusive time, e.g. 2026-10-01T20:10:00Z or 3 hours ago"
         },
         "until": {
           "type": "string",
-          "description": "exclusive ISO instant with timezone, e.g. 2026-10-01T20:10:00Z"
+          "format": "date-time",
+          "description": "exclusive time, e.g. 2026-10-01T20:10:00Z or 3 hours ago"
         },
         "session": {
           "type": "string",
