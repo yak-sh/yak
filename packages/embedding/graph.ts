@@ -26,7 +26,7 @@ import { semantic } from './compile.ts'
 import { type Statements, statements, type Stmt } from '@yaks/sql'
 import { schema as tables } from './ddl.ts'
 import { resolved } from './fields.ts'
-import { chosen, type Options, ready, spaceOf } from './options.ts'
+import { chosen, type Lent, type Options, ready, spaceOf } from './options.ts'
 import { type Hit, meaning as search, type MeaningOpts } from './search.ts'
 import { type Host, neighbours } from './neighbours.ts'
 
@@ -56,11 +56,12 @@ export let extend = (
     storage: { statements?: Statements }
     vocab?: Vocab
     derived?: Derived
+    embedders?: Lent
   },
   options: Options = {},
 ): Extension[] => {
   let db = statements(host.storage)
-  let model = spaceOf(options.embedder)
+  let model = spaceOf(options.embedder, host.embedders)
   let text
   try {
     text = host.vocab
@@ -93,6 +94,7 @@ export let meaning = (
     vocab: Vocab
     graph: Pick<Graph, 'get'>
     derived?: Derived
+    embedders?: Lent
   },
   options: Options = {},
 ): (
@@ -107,7 +109,7 @@ export let meaning = (
   }
   return async (words, opts = {}) => {
     let { within, ...rest } = opts
-    let now = await ready(host.vocab, options, host.graph)
+    let now = await ready(host.vocab, options, host.graph, host.embedders)
     return now.embedder
       ? await search(
         db,

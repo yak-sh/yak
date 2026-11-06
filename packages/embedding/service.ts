@@ -33,7 +33,7 @@ import type { Graph } from '@yaks/graph'
 import type { Vocab } from '@yaks/vocab'
 import { type Derived, type Statements, statements } from '@yaks/sql'
 import { resolved } from './fields.ts'
-import { type Options, ready } from './options.ts'
+import { type Lent, type Options, ready } from './options.ts'
 import { drain } from './sweep.ts'
 import { prepare } from './native.ts'
 
@@ -48,6 +48,8 @@ export type Host = {
   storage: { statements?: Statements }
   graph: Pick<Graph, 'get'>
   derived?: Derived
+  /** the embedders lent by name (@yaks/host `embedders`) */
+  embedders?: Lent
 }
 
 /** Settle the queue for as long as `signal` lets it: one pass when it has
@@ -64,7 +66,7 @@ export let service = async (
   let told = new Set<string>()
   for (;;) {
     try {
-      let now = await ready(host.vocab, options, host.graph)
+      let now = await ready(host.vocab, options, host.graph, host.embedders)
       if (now.embedder) {
         let text = resolved(now.text, host.derived)
         let done = await drain(db, text, now.embedder, {

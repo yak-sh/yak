@@ -20,11 +20,12 @@
 // API it speaks, and its `serves` edge to the `model` row says what it calls
 // that model. Nothing here knows Ollama beyond the shape of its API
 // (./remote.ts). The space is the model's own name, whoever serves it, so the
-// same model moved to another provider keeps its vectors. Two providers run
-// in this process and need no row: `hash`, the offline embedder shipped here
+// same model moved to another provider keeps its vectors. A provider that runs
+// in this process needs no row: `hash`, the offline embedder shipped here
 // (instant, deterministic, and no model at all, which is what a development
-// machine and a test want), and `model2vec`, a static model from the Hugging
-// Face hub (@yaks/model2vec), whose `model` is the pinned repo it loads.
+// machine and a test want), or one a plugin beside this one lends its host by
+// name (@yaks/model2vec lends `model2vec`), which this package knows nothing
+// about beyond {@link Lent}.
 //
 // Missing config never prevents startup. A server that composes this plugin
 // and has not been given a key, a provider row or a model yet is a server
@@ -41,7 +42,6 @@ import { identityEid } from '@yaks/graph/identity'
 import { edgeEid } from '@yaks/edge'
 import { MODEL, PROVIDER } from '@yaks/model'
 import type { Vocab } from '@yaks/vocab'
-import { model2vec, space as m2vSpace } from '@yaks/model2vec'
 import type { Embedder } from './embedder.ts'
 import { hashEmbedder } from './embedder.ts'
 import { type Field, fields, searched, unembedded } from './fields.ts'
@@ -49,11 +49,11 @@ import { type Api, type Fetch, remote } from './remote.ts'
 
 /** An embedder, as a config names one: a provider and the model it serves. */
 export type Named = {
-  /** `hash` or `model2vec` in this process, or the name of a `provider` row
-   * reached over HTTP */
+  /** `hash` or an embedder lent by name in this process, or the name of a
+   * `provider` row reached over HTTP */
   provider: string
-  /** the `model` row's name, which names the vector space; for `model2vec`,
-   * the pinned hub repo (`owner/name@revision`); none for `hash` */
+  /** the `model` row's name, which names the vector space; for a lent
+   * embedder, the model it loads; none for `hash` */
   model?: string
   /** keep this many leading coordinates (Matryoshka); a second width of one
    * model is a second space. For `hash`, how many buckets (default 64). */
@@ -111,27 +111,35 @@ export type Ready = {
   waiting?: string
 }
 
-// The two providers this package runs in its own process.
+/** The embedders a host lends by name, each made from the `model` and `dim` a
+ * config names; the embedder's `model` names its space. */
+export type Lent = Readonly<
+  Record<string, (said: { model: string; dim?: number }) => Embedder>
+>
+
+// The provider this package runs in its own process.
 let HASH = 'hash'
-let MODEL2VEC = 'model2vec'
 
 // The APIs ./remote.ts speaks.
 let APIS: Api[] = ['ollama', 'openai']
 
+// The lent embedder a config names, made from its model and width.
+let lentOf = (said: Named, lent?: Lent): Embedder | undefined =>
+  said.model && Object.hasOwn(lent ?? {}, said.provider)
+    ? lent![said.provider]({ model: said.model, dim: said.dim })
+    : undefined
+
 /** The space a config's vectors live in, from the config alone: the model,
  * and its width when it is cut. `undefined` where the config names none. */
-export let spaceOf = (said?: Named): string | undefined =>
+export let spaceOf = (said?: Named, lent?: Lent): string | undefined =>
   !said?.provider
     ? undefined
     : said.provider == HASH
     ? hashEmbedder(said.dim).model
     : !said.model
     ? undefined
-    : said.provider == MODEL2VEC
-    ? m2vSpace({ model: said.model, dim: said.dim })
-    : said.dim
-    ? `${said.model}#${said.dim}`
-    : said.model
+    : lentOf(said, lent)?.model ??
+      (said.dim ? `${said.model}#${said.dim}` : said.model)
 
 let live = (b: Bundle | undefined, comp: string): Comp | undefined =>
   b && !dead(b) ? b[comp] as Comp | undefined : undefined
@@ -174,9 +182,10 @@ let served = async (said: Named, rows: Rows): Promise<Embedder | string> => {
 export let embedderOf = async (
   options: Options,
   rows: Rows,
+  lent?: Lent,
 ): Promise<Ready> => {
   let said = options.embedder
-  let model = spaceOf(said)
+  let model = spaceOf(said, lent)
   if (!said?.provider) {
     return {
       waiting:
@@ -187,12 +196,8 @@ export let embedderOf = async (
     return { waiting: `${said.provider} is named with no \`model\`` }
   }
   if (said.provider == HASH) return { model, embedder: hashEmbedder(said.dim) }
-  if (said.provider == MODEL2VEC) {
-    return {
-      model,
-      embedder: model2vec({ model: said.model!, dim: said.dim }),
-    }
-  }
+  let own = lentOf(said, lent)
+  if (own) return { model, embedder: own }
   // A config that names a key but has no value for it is waiting: the
   // environment does not have one yet, and every request until it does would
   // be a 401 paid for once per entity. A config that names no key never
@@ -247,6 +252,7 @@ export let ready = async (
   vocab: Vocab,
   options: Options,
   rows: Rows,
+  lent?: Lent,
 ): Promise<Ready & { text: Field[] }> => {
   let text: Field[]
   try {
@@ -254,5 +260,5 @@ export let ready = async (
   } catch (error) {
     return { text: [], waiting: (error as Error).message }
   }
-  return { text, ...await embedderOf(options, rows) }
+  return { text, ...await embedderOf(options, rows, lent) }
 }

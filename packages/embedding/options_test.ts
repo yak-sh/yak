@@ -80,8 +80,22 @@ test('two widths of one model are two spaces', () => {
     spaceOf({ ...qwen, dim: 256 }),
     spaceOf({ ...qwen, dim: 384 }),
   )
-  let potion = { provider: 'model2vec', model: 'o/potion@abc' }
-  assertNotEquals(spaceOf({ ...potion, dim: 256 }), spaceOf(potion))
+})
+
+test('a lent embedder is made by name from the model and width named', async () => {
+  let lent = {
+    local: ({ model, dim }: { model: string; dim?: number }) => ({
+      model: `${model}~${dim}`,
+      embed: () => new Float32Array([1]),
+    }),
+  }
+  let embedder = { provider: 'local', model: 'potion', dim: 8 }
+  assertEquals(spaceOf(embedder, lent), 'potion~8')
+  assertEquals((await embedderOf({ embedder }, none, lent)).model, 'potion~8')
+  assertEquals(
+    (await embedderOf({ embedder }, none)).waiting,
+    'no provider called "local"',
+  )
 })
 
 let missing = {

@@ -129,8 +129,9 @@ grouped approximately by function, **not** by dependency order.
 
 - **[@yaks/model2vec](./model2vec)** — Embed text in-process with a Model2Vec
   static model read from the Hugging Face hub: a millisecond a text, no native
-  code, the same vector on a server, in a Worker and in a browser. The embedder
-  `@yaks/embedding` names `provider: "model2vec"`.
+  code, the same vector on a server, in a Worker and in a browser. A plugin that
+  lends its host the embedder `@yaks/embedding` names `provider: "model2vec"`;
+  @yaks/embedding does not import it.
 
 - **[@yaks/match](./match)** — Evaluate supported query AST clauses against
   bundles in memory. Tests compare shared behavior with SQL, but search,

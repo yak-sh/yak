@@ -16,7 +16,6 @@
     "@yaks/effects": "0.2.17",
     "@yaks/graph": "0.2.17",
     "@yaks/model": "0.2.17",
-    "@yaks/model2vec": "0.2.17",
     "@yaks/query": "0.2.17",
     "@yaks/sql": "0.2.17",
     "@yaks/tools": "0.2.17",

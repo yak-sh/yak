@@ -194,6 +194,16 @@ equal(receipt, { id: 'letter-1' })
 equal(sent.map((message) => message.subject), ['Friday'])
 ```
 
+## Embedders
+
+`Host.embedders` lends named in-process embedders the same way:
+`@yaks/embedding` selects one with `embedder: {provider: name, model, dim?}`,
+and a provider plugin lends one from its graph facet's
+`embedders(host, options)`, as `@yaks/model2vec` lends `model2vec`. An
+`Embedding` makes an embedder from the `model` and `dim` a config names; the
+embedder's `model` names its vector space, and nothing loads until its first
+embed. One name has one embedder.
+
 ## Failure reporting
 
 `Host.report(error, context)` hands a failure to the concrete host's reporter.

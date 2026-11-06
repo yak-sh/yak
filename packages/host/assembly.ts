@@ -142,30 +142,31 @@ let doorman = (
     : () => self
 }
 
-// The host's own senders and those the plugins lend, one sender per name: a
-// letter sent through a name two parties answer to would depend on order.
-let lending = (
+// What the host lends by name and what the plugins lend beside it, one party
+// per name: a letter or a vector made through a name two parties answer to
+// would depend on order.
+let lending = <K extends 'senders' | 'embedders'>(
   graphs: Taken<'graph'>,
   host: Host,
-  lent: Host['senders'],
-): Host['senders'] => {
+  kind: K,
+  lent: Host[K],
+): Host[K] => {
+  let what = kind.slice(0, -1)
   let by = new Map(Object.keys(lent ?? {}).map((name) => [name, 'the host']))
-  let senders = { ...lent }
+  let all: Record<string, unknown> = { ...lent }
   for (let [r, options, plugin] of graphs) {
-    for (
-      let [name, sender] of Object.entries(r.senders?.(host, options) ?? {})
-    ) {
+    for (let [name, one] of Object.entries(r[kind]?.(host, options) ?? {})) {
       if (by.has(name)) {
         throw new CallError(
           'config',
-          `the sender ${name} is lent by both ${by.get(name)} and ${plugin}`,
+          `the ${what} ${name} is lent by both ${by.get(name)} and ${plugin}`,
         )
       }
       by.set(name, plugin)
-      senders[name] = sender
+      all[name] = one
     }
   }
-  return by.size ? senders : lent
+  return by.size ? all as Host[K] : lent
 }
 
 // A plugin's `./effects` handling a name no vocabulary declares: code that
@@ -482,8 +483,10 @@ export let assemble = (
         })
       }
       let authenticate = doorman(graphs, host, self ?? null)
-      let senders = lending(graphs, host, lent.senders)
+      let senders = lending(graphs, host, 'senders', lent.senders)
       if (senders) host.senders = senders
+      let embedders = lending(graphs, host, 'embedders', lent.embedders)
+      if (embedders) host.embedders = embedders
       part?.('storage')
       let extend: Extension[] = []
       let history = graphs.map(([r, options]) => r.history?.(options))

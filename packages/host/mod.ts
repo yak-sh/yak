@@ -33,6 +33,14 @@ export type {
 } from './senders.ts'
 export type { Config, Configured, Options, Plug } from './config.ts'
 export type Role = string
+/** An embedder a plugin lends by name, made from what a config names: its
+ * `model` and `dim`. The embedder's `model` names its vector space, and
+ * making one loads nothing until its first embed, so asking for the space is
+ * free. */
+export type Embedding = (said: { model: string; dim?: number }) => {
+  model: string
+  embed: (text: string) => Float32Array | Promise<Float32Array>
+}
 export type Feed = (each: (news: News) => void | Promise<void>) => () => void
 /** Cooperative storage-change observation. The adapter owns any migration. */
 export type MigrationMonitor = {
@@ -92,6 +100,9 @@ export interface Host {
   /** Named mail senders this host lends, selected by @yaks/mail's
    * `sender: {via}`. The host owns credentials, metering and lifetime. */
   senders?: Readonly<Record<string, Sender>>
+  /** Named in-process embedders this host lends, selected by
+   * @yaks/embedding's `embedder: {provider}` (@yaks/model2vec lends one). */
+  embedders?: Readonly<Record<string, Embedding>>
   /** Named texters this host lends, selected by @yaks/phone's
    * `sender: {via}`. The host owns credentials, metering and lifetime. */
   texters?: Readonly<Record<string, Texter>>

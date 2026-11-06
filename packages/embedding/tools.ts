@@ -13,7 +13,7 @@ import {
 } from '@yaks/sql'
 import { TABLE } from './ddl.ts'
 import { state } from './native.ts'
-import { embedderOf, type Options } from './options.ts'
+import { embedderOf, type Lent, type Options } from './options.ts'
 
 export type { Options }
 
@@ -27,7 +27,11 @@ let newest = (db: Statements): string | null =>
 /** The implementation behind the tool ./vocab.json declares, over this
  * server's own database connection — which is why this export is a factory. */
 export let runs = (
-  host: { storage: { statements?: Statements }; graph: Pick<Graph, 'get'> },
+  host: {
+    storage: { statements?: Statements }
+    graph: Pick<Graph, 'get'>
+    embedders?: Lent
+  },
   options: Options = {},
 ): Runs => {
   let db = statements(host.storage)
@@ -38,7 +42,7 @@ export let runs = (
         checked(call.entity.eid, about, [{ level: 'warn', text }])
       // What this server is waiting for, if anything: a sweep that cannot embed
       // is not behind on a build, it has not started at all.
-      let { waiting } = await embedderOf(options, host.graph)
+      let { waiting } = await embedderOf(options, host.graph, host.embedders)
       if (waiting) {
         return warn(
           `nothing is being embedded — ${waiting}. The sweep starts on its ` +

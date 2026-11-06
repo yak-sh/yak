@@ -52,17 +52,23 @@ own `dimensionality` loads one. The narrower table is what is kept in memory.
 
 ## As @yaks/embedding's embedder
 
+`@yaks/model2vec/graph` lends its host the embedder `model2vec` (@yaks/host
+`embedders`). Compose the plugin beside @yaks/embedding and name it there:
+
 ```json
-{
-  "use": "@yaks/embedding",
-  "with": {
-    "embedder": {
-      "provider": "model2vec",
-      "model": "minishlab/potion-retrieval-32M@6fc8051",
-      "dim": 256
+[
+  "@yaks/model2vec",
+  {
+    "use": "@yaks/embedding",
+    "with": {
+      "embedder": {
+        "provider": "model2vec",
+        "model": "minishlab/potion-retrieval-32M@6fc8051",
+        "dim": 256
+      }
     }
   }
-}
+]
 ```
 
 ## Pieces

@@ -7,7 +7,7 @@ import type { Reply } from '@yaks/tools'
 import type { Runs } from '@yaks/graph/tools'
 import type { Contributions } from '@yaks/ui/contributions'
 import type { Keywords, Vocab, VocabDoc } from '@yaks/vocab'
-import type { Feed, Host } from './mod.ts'
+import type { Embedding, Feed, Host } from './mod.ts'
 import type { Sender } from './senders.ts'
 import type { Options } from './config.ts'
 /** `<plugin>/vocab` — what the plugin declares, and nothing that could not
@@ -57,6 +57,8 @@ export type GraphFacet = {
   /** The mail senders this plugin lends, by name ({@link Host.senders}): a
    * provider's, built from its options. One name has one sender. */
   senders?: (host: Host, options: Options) => Record<string, Sender>
+  /** The embedders this plugin lends, by name ({@link Host.embedders}). */
+  embedders?: (host: Host, options: Options) => Record<string, Embedding>
   /** who a request is from, or none where these options name nobody to ask */
   authenticate?: (host: Host, options: Options) => Authenticate | undefined
   /** the commits other hosts make to this store (@yaks/journal's feed) */

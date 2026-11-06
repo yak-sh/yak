@@ -138,8 +138,10 @@ the same model moved to another provider keeps its vectors. A provider that
 wants a token is given one beside it, `"key": { "secret": "NAME" }`. Workers AI
 outside a Worker is such a row as well: `api: "openai"`, its base
 `https://api.cloudflare.com/client/v4/accounts/<account>/ai`, and a token for
-`key`. Two providers run in this process and need no row: `hash`, the offline
-embedder below, and `model2vec`.
+`key`. A provider that runs in this process needs no row: `hash`, the offline
+embedder below, or one another plugin lends the host by name (@yaks/host
+`embedders`), such as `model2vec` from @yaks/model2vec. This package imports no
+embedder provider.
 
 `@yaks/embedding/graph` creates the vector tables through the host's SQL driver.
 Its `extend()` export registers the `.near` compiler; its `meaning()` factory is
@@ -154,14 +156,14 @@ ended leaves its work queued.
 
 Options:
 
-| Option       | Meaning                                                                               |
-| ------------ | ------------------------------------------------------------------------------------- |
-| `embedder`   | `{ provider, model?, dim?, key?, chars? }`: `hash`, `model2vec`, or a provider row    |
-| `text`       | Selected `component.property` names; defaults to the properties marked `search: true` |
-| `neighbours` | Maximum `.near` results, default 8                                                    |
-| `floor`      | Minimum similarity for `.near`, default 0                                             |
-| `after`      | How long an empty queue waits before the next look, in milliseconds, default 3000     |
-| `batch`      | Queued entities one sweep takes, default 64                                           |
+| Option       | Meaning                                                                                |
+| ------------ | -------------------------------------------------------------------------------------- |
+| `embedder`   | `{ provider, model?, dim?, key?, chars? }`: `hash`, a lent embedder, or a provider row |
+| `text`       | Selected `component.property` names; defaults to the properties marked `search: true`  |
+| `neighbours` | Maximum `.near` results, default 8                                                     |
+| `floor`      | Minimum similarity for `.near`, default 0                                              |
+| `after`      | How long an empty queue waits before the next look, in milliseconds, default 3000      |
+| `batch`      | Queued entities one sweep takes, default 64                                            |
 
 The `batch` option bounds one sweep; it does not mean a graph transaction.
 
@@ -237,11 +239,12 @@ holds the model, how many texts and how many tries, and its `cause` is the
 provider's last failure. `retrying(provider, model, ask, waits?)` is that, for
 any `ask`.
 
-`{ provider: 'model2vec', model: 'minishlab/potion-retrieval-32M@6fc8051', dim: 256 }`
-runs a Model2Vec static model in this process ([@yaks/model2vec](../model2vec)):
-about a millisecond for a 500-token text on one core, fast enough to embed every
-prompt. The model is fetched from the Hugging Face hub on the first embed and
-kept in the platform's cache. Its space is the pinned model and its width
+`{ provider: 'model2vec', model: 'minishlab/potion-retrieval-32M@6fc8051', dim: 256 }`,
+with the `@yaks/model2vec` plugin composed beside this one, runs a Model2Vec
+static model in this process ([@yaks/model2vec](../model2vec)): about a
+millisecond for a 500-token text on one core, fast enough to embed every prompt.
+The model is fetched from the Hugging Face hub on the first embed and kept in
+the platform's cache. Its space is the pinned model and its width
 (`minishlab/potion-retrieval-32M@6fc8051#256`).
 
 `workersAi({ model: '@cf/qwen/qwen3-embedding-0.6b', dim: 256, ai })` asks

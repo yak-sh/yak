@@ -36,7 +36,7 @@ import {
 import type { Vocab } from '@yaks/vocab'
 import { type Embedder, hash } from './embedder.ts'
 import { type Field, fields, resolved, searched } from './fields.ts'
-import { type Options, ready } from './options.ts'
+import { type Lent, type Options, ready } from './options.ts'
 import { excerpt } from './search.ts'
 import { put, type Source, sources } from './sweep.ts'
 import { SIMILAR } from './compile.ts'
@@ -62,6 +62,8 @@ export type Host = {
   vocab: Vocab
   graph: Graph
   derived?: Derived
+  /** the embedders lent by name (@yaks/host `embedders`) */
+  embedders?: Lent
 }
 
 let comps = (b: Bundle): Comp[] =>
@@ -175,7 +177,7 @@ export let neighbours = (host: Host, options: Options = {}): Reply => {
       fresh.has(b.entity.eid) && host.vocab.kindOf(b) != 'entity'
     )
     if (!born.length) return []
-    let now = await ready(host.vocab, options, host.graph)
+    let now = await ready(host.vocab, options, host.graph, host.embedders)
     let prose = resolved(now.text, host.derived)
     // The first few that have text: a plan's links come back beside its tasks.
     let made = sources(
