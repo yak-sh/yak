@@ -6,27 +6,36 @@
 import type { TrackerStore } from './core.ts'
 import { capture, type Context, origin } from '@yaks/tracker/report'
 
-/** A door of yaks.app the cron asks each minute. */
-export type Probe = { name: string; url: string }
+/** A door of yaks.app the cron asks each minute, and the status it answers
+ * when it serves. */
+export type Probe = { name: string; url: string; status: number }
 
-// The connector's door answers before any store is asked. An app's `api/me`
-// reads its app row from the directory on every request (workers/yak
-// directory.ts) and wakes no app store, so it fails when the directory
-// stalls, which holds every page and tool waiting with it. The home page is
-// the door a stranger comes to, and it has hung with both of those answering.
+// The connector's door answers before any store is asked, and asks a caller
+// with no session to sign in. An app's `api/me` reads its app row from the
+// directory on every request (workers/yak directory.ts) and wakes no app
+// store, so it fails when the directory stalls, which holds every page and
+// tool waiting with it. Its `api/query` wakes the app's store and reads it in
+// the grammar its pages write. The home page is the door a stranger comes to,
+// and it has hung with the others answering.
 export let PROBES: Probe[] = [
-  { name: 'home', url: 'https://yaks.app/' },
-  { name: 'MCP', url: 'https://yaks.app/mcp' },
-  { name: 'app', url: 'https://yourname.yaks.app/recipes/api/me' },
+  { name: 'home', url: 'https://yaks.app/', status: 200 },
+  { name: 'MCP', url: 'https://yaks.app/mcp', status: 401 },
+  { name: 'app', url: 'https://yourname.yaks.app/recipes/api/me', status: 200 },
+  {
+    name: 'query',
+    url: 'https://yourname.yaks.app/recipes/api/query?.recipe&.limit=1',
+    status: 200,
+  },
 ]
 
 // How long a door may take to answer before it counts as down: a hang sends
 // no bytes and throws nothing, so only a deadline sees it.
 let PATIENCE = 10_000
 
-/** Why one door is down, or '' when it answered. A GET without a session may
- * answer 400 or 405; server errors and missing routes mean it cannot serve. */
-let probe = async (send: typeof fetch, { name, url }: Probe) => {
+/** Why one door is down, or '' when it answered as it does when it serves.
+ * Any other status is a failure: a 4xx says the door refuses what its
+ * callers send, as surely as a 5xx says it cannot serve. */
+let probe = async (send: typeof fetch, { name, url, status }: Probe) => {
   try {
     let response = await send(url, {
       method: 'GET',
@@ -34,7 +43,7 @@ let probe = async (send: typeof fetch, { name, url }: Probe) => {
       redirect: 'manual',
     })
     await response.body?.cancel()
-    return response.status >= 500 || response.status == 404
+    return response.status != status
       ? `${name} probe: ${response.status} from ${url}`
       : ''
   } catch (error) {

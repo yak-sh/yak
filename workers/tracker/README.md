@@ -168,10 +168,12 @@ eviction. Trace setup does not initialize notification mail, arm alarms or
 report errors; ordinary tracker work handles notifications independently.
 
 Platform-only `POST /heartbeat` renews the box heartbeat. Each minute the cron
-probes the MCP endpoint and an app's `api/me` (`PROBES` in monitor.ts), which
-reads the directory on every request, so a stalled directory fails it. A door
-that errors, or sends nothing within 10 s, files a fatal occurrence on that
-door's own bug (`tracker|platform-uptime|MCP`, `…|app`), and an activated box
+probes the home page, the MCP endpoint, an app's `api/me`, which reads the
+directory on every request, so a stalled directory fails it, and that app's
+`api/query?.recipe&.limit=1`, which reads its store (`PROBES` in monitor.ts). A
+door that answers any status but the one it serves with (a 4xx included), or
+sends nothing within 10 s, files a fatal occurrence on that door's own bug
+(`tracker|platform-uptime|MCP`, `…|app`, `…|query`), and an activated box
 heartbeat older than five minutes files one on `tracker|box-heartbeat`. A door
 that answers again resolves nothing: the bug stays open until an agent finds why
 it failed and fixes it, and its last occurrence says when it stopped. Each

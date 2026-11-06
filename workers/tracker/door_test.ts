@@ -5,7 +5,7 @@ import { capture } from '@yaks/tracker/report'
 import { options, platform, store, vocab } from './core.ts'
 import { sign } from './auth.ts'
 import { door } from './door.ts'
-import { monitor } from './monitor.ts'
+import { monitor, PROBES } from './monitor.ts'
 import { delivery } from '@yaks/tracker/remote'
 import type { Comp } from '@yaks/graph'
 
@@ -290,13 +290,16 @@ await monitor(
 )
 await outage.drain()
 let opened = (await outage.unseen()).length
-let healthy = () => Promise.resolve(new Response(null, { status: 405 }))
+let healthy = ((url: string) =>
+  Promise.resolve(
+    new Response(null, { status: PROBES.find((p) => p.url == url)!.status }),
+  )) as typeof fetch
 
 test('uptime and heartbeat failures group, and stay open once healthy, without a yak binding', async () => {
   await monitor(outage, downAt, healthy, downAt)
   equal(
     [opened, (await outage.bugs(undefined, '.bug.status=open')).length],
-    [4, 4],
+    [5, 5],
   )
 })
 
