@@ -493,8 +493,9 @@ export let lifecycleStores = (
   return {
     sockets: pages,
     states,
+    // The object starts again on these bytes, as a restored Durable Object
+    // does: one app_new already stood up (tools.ts) is let go.
     restore: (name: string, physical: Physical) => {
-      if (held.has(name)) throw new Error('cannot restore an open app graph')
       let restored = store(name, physical)
       held.set(name, restored)
       return restored

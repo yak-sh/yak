@@ -543,9 +543,10 @@ let deployRoundTrips = await (async () => {
   // The release's Git commit is the directory's effect, minted after the
   // deploy has answered, so none of its round trips are the deploy's. The
   // release names the shas the draft holds, so it copies no bytes: what it
-  // puts is its index and what its compile made.
+  // puts is its index and what its compile made, and what it reads is the
+  // page it packs into that index (release.ts `packed`).
   assert(deploy.hops <= 21, JSON.stringify(deploy))
-  assertEquals(deploy.r2, 2)
+  assertEquals(deploy.r2, 3)
   assertEquals(
     (await costs('app_files', {
       space: 'ada',
