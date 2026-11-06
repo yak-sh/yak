@@ -358,8 +358,13 @@ export type Store = {
   /** these entities as they stand, carrying the components `comps` names or
    * every one, read in a unit that takes no write lock */
   get: (eids: Eid[], comps?: string[], opts?: BindOpts & ReadOpts) => Bundle[]
-  /** run `body` in a transaction: commit on return, roll back on throw */
-  tx: <R>(body: (tx: Tx) => R, opts?: { admission?: boolean }) => R
+  /** run `body` in a transaction: commit on return, roll back on throw; with
+   * `wait: false` a file another connection holds refuses at once,
+   * `retryable: true`, rather than sleeping the thread (./unit.ts) */
+  tx: <R>(
+    body: (tx: Tx) => R,
+    opts?: { admission?: boolean; wait?: boolean },
+  ) => R
 }
 
 /**
@@ -1221,35 +1226,43 @@ export let storage = (
         { what: gotten(eids) },
       )
     },
-    tx: <R>(body: (tx: Tx) => R, _mode?: { admission?: boolean }): R => {
+    tx: <R>(
+      body: (tx: Tx) => R,
+      { wait }: { admission?: boolean; wait?: boolean } = {},
+    ): R => {
       if (base.mode && 'at' in base.mode) {
         throw new Refused(
           `as of transaction ${base.mode.at} the graph is read only`,
         )
       }
       ensure()
-      return unit(driver, (): R =>
-        within(driver, (clock) => {
-          let cached = (t: Tx): Tx => ({
-            ...t,
-            get: (eids, comps) => kept(t.get, eids, comps),
-            ...base.history ? { clock } : {},
-          })
-          if (!classified) return body(cached(tx))
-          let { tx: t, settle, close } = tracked()
-          let tracing = context()
-          // An async body settles what it owes before the unit closes, as the
-          // unit waits for it (./unit.ts).
-          return lastly(
-            () =>
-              after(body(base.history ? { ...t, clock } : t), (out) => {
-                if (tracing) scope(tracing, settle)
-                else settle()
-                return out
-              }) as R,
-            close,
-          )
-        }))
+      return unit(
+        driver,
+        (): R =>
+          within(driver, (clock) => {
+            let cached = (t: Tx): Tx => ({
+              ...t,
+              get: (eids, comps) => kept(t.get, eids, comps),
+              ...base.history ? { clock } : {},
+            })
+            if (!classified) return body(cached(tx))
+            let { tx: t, settle, close } = tracked()
+            let tracing = context()
+            // An async body settles what it owes before the unit closes, as the
+            // unit waits for it (./unit.ts).
+            return lastly(
+              () =>
+                after(body(base.history ? { ...t, clock } : t), (out) => {
+                  if (tracing) scope(tracing, settle)
+                  else settle()
+                  return out
+                }) as R,
+              close,
+            )
+          }),
+        'write',
+        { wait },
+      )
     },
   }
 }

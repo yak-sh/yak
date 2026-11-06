@@ -1,9 +1,12 @@
 // Two connections on one file. While one holds the write lock, the other's
-// lookups and opens stay prompt: WAL readers do not wait for its writer.
+// lookups and opens stay prompt: WAL readers do not wait for its writer. A
+// graph's write waits for it too, but between tries, never asleep inside one.
 
 import { test } from '@yaks/testing'
 import { assert, assertEquals } from '@std/assert'
 import { archetypeDoc } from '@yaks/archetype'
+import { graph } from '@yaks/graph'
+import { isPromise } from '@yaks/fp'
 import { loadVocab, type Vocab } from '@yaks/vocab'
 import type { Stmt } from '@yaks/sql'
 import { storage } from './mod.ts'
@@ -24,11 +27,14 @@ let beside = (vocab: Vocab = shop) => {
   store.install()
   store.tx((tx) => tx.patch([{ entity: { eid: 'x' }, doc: { title: 'Hi' } }]))
   theirs.query({ t: 'begin', mode: 'immediate' })
+  let held = true
+  let release = () => held && (held = false, theirs.query({ t: 'rollback' }))
   return {
     store,
     mine,
+    release,
     [Symbol.dispose]: () => {
-      theirs.query({ t: 'rollback' })
+      release()
       theirs.close()
       mine.close()
       Deno.removeSync(dir, { recursive: true })
@@ -59,6 +65,18 @@ test('a query answers while another process is writing', () => {
 test('an open beside a writer goes on without it', () => {
   using p = beside()
   prompt(() => storage(p.mine, shop).install())
+})
+
+test('a graph write beside a writer frees the thread and lands after it', async () => {
+  using p = beside()
+  let g = graph({ storage: p.store, vocab: shop })
+  let write = prompt(() =>
+    g.apply([{ entity: { eid: 'x' }, doc: { title: 'Bye' } }])
+  )
+  assert(isPromise(write))
+  p.release()
+  await write
+  assertEquals(p.store.get(['x'])[0].doc, { title: 'Bye' })
 })
 
 // This process's store, holding x titled Hi, whose reads another connection

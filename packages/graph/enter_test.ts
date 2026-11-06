@@ -3,7 +3,7 @@
 
 import { equal, test } from '@yaks/testing'
 import { assertRejects, assertThrows } from '@std/assert'
-import { enter } from './enter.ts'
+import { enter, PATIENCE } from './enter.ts'
 
 let busy = Object.assign(new Error('database is locked'), { retryable: true })
 let pause = () => Promise.resolve()
@@ -72,15 +72,17 @@ test('an uncertain failure is not retried', () => {
   equal(entries, 1)
 })
 
-test('a permanently held lock stops retrying', async () => {
-  let entries = 0
+test('a permanently held lock stops retrying once a minute is spent', async () => {
+  let waited = 0
   await assertRejects(async () =>
     await enter(() => {
-      entries++
       throw busy
-    }, pause)
+    }, (ms) => {
+      waited += ms
+      return Promise.resolve()
+    })
   )
-  equal(entries, 4)
+  equal(waited <= PATIENCE && waited > PATIENCE - 250, true)
 })
 
 test('an uncontended synchronous write stays synchronous', () => {

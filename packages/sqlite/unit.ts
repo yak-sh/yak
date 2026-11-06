@@ -35,10 +35,16 @@ let depth = new WeakMap<Driver, number>()
 // connection nobody else writes (memory, a Durable Object's own storage) a
 // savepoint or a `transactionSync` around it is statements and a call that
 // buy nothing, paid on every lookup a write asks before its own transaction.
+//
+// An outermost write waits out another connection's lock inside SQLite's busy
+// handler, which sleeps the calling thread. A caller that can wait without
+// holding its thread says `wait: false`: a held lock then refuses at once,
+// marked retryable, and the caller waits as it likes (@yaks/graph `enter`).
 export let unit = <R>(
   driver: Driver,
   body: () => R,
   mode: 'write' | 'read' = 'write',
+  { wait = true }: { wait?: boolean } = {},
 ): R => {
   let tracing = context()
   let held = depth.get(driver) ?? 0
@@ -60,12 +66,14 @@ export let unit = <R>(
   }
   let outer = !!driver.file && held == 0
   let name = `yaks_tx_${held}`
-  try {
+  let begin = () =>
     driver.query(
       outer
         ? { t: 'begin', mode: mode == 'read' ? 'deferred' : 'immediate' }
         : { t: 'savepoint', name },
     )
+  try {
+    outer && mode == 'write' && !wait ? unwaiting(driver, begin) : begin()
   } catch (e) {
     // No callback ran and no write landed. Callers may retry this refusal,
     // unlike a failure after the body could have performed external work.

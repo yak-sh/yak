@@ -1237,7 +1237,7 @@ export let graph = (opts: Options): Graph => {
                 storage.tx((tx) => {
                   begun()
                   return transacting(tx)
-                }, { admission: checking }),
+                }, { admission: checking, wait: false }),
               (ms) => sleep(ms, undefined, clock),
             ),
         )

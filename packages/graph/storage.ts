@@ -270,6 +270,10 @@ export type Storage = {
     /** Certified admission rehearses writes in memory. An adapter may reuse
      * coherent authoritative reads; permissions and rules still run afresh. */
     admission?: boolean
+    /** false: a caller that waits for another writer itself, without holding
+     * its thread. An adapter that would otherwise sleep the thread until the
+     * writer is done refuses at once, `retryable: true`. */
+    wait?: boolean
   }) => R | Promise<Awaited<R>>
 }
 
