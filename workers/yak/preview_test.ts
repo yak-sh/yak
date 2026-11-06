@@ -257,7 +257,9 @@ test('the link follows the draft: each write is told to its pages and served on 
 
 test('a page drawn by @yaks/preact/host takes a write of its views module from the link in place: the module the link serves, drawn in the same root over the same page graph', async () => {
   let views = (word: string) =>
-    "import { define } from '@yaks/render'\n" +
+    `import { define } from ${
+      JSON.stringify(import.meta.resolve('@yaks/render'))
+    }\n` +
     "export let views = define([{ view: 'Page', match: true, " +
     `render: (b, h) => h('p', null, '${word} ' + b.entity.eid) }])`
   await write('views.js', views('Soup'))
@@ -278,7 +280,8 @@ test('a page drawn by @yaks/preact/host takes a write of its views module from t
   )
   await front.mutate([{ entity: { eid: 'pot' }, pot: {} }])
   let graph = front.graph
-  // The module as a browser imports it from the link: the bytes it serves.
+  // Import the served bytes in Deno, with the fixture naming its render
+  // dependency by URL: a data: module has no package resolution context.
   let load = async (url: string) => {
     let text = await (await kernel(new Request(url), env)).text()
     return import('data:text/javascript,' + encodeURIComponent(text))
