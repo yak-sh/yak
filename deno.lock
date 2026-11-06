@@ -3,7 +3,6 @@
   "specifiers": {
     "jsr:@db/sqlite@0.13.0": "0.13.0",
     "jsr:@denosaurs/plug@1": "1.1.0",
-    "jsr:@std/collections@^1.1.3": "1.4.0",
     "jsr:@std/encoding@1": "1.0.11",
     "jsr:@std/fmt@1": "1.0.10",
     "jsr:@std/fs@1": "1.0.24",
@@ -11,7 +10,6 @@
     "jsr:@std/path@1": "1.0.9",
     "jsr:@std/path@1.0": "1.0.9",
     "jsr:@std/path@^1.1.5": "1.1.6",
-    "jsr:@std/toml@*": "1.0.11",
     "npm:@anthropic-ai/sdk@1.4.0": "1.4.0_zod@3.25.76",
     "npm:@cfworker/json-schema@4.1.1": "4.1.1",
     "npm:@cloudflare/containers@0.3.7": "0.3.7",
@@ -82,9 +80,6 @@
         "jsr:@std/path@1"
       ]
     },
-    "@std/collections@1.4.0": {
-      "integrity": "bd7f74966e11de11b1f0420b7e8cb7bb381d8af7872b738443b92050db28c9c0"
-    },
     "@std/encoding@1.0.11": {
       "integrity": "e7cef2f0b3153bccc17431e7c864a1de03a4b6d9647389c43e08aaa775d37385"
     },
@@ -108,12 +103,6 @@
       "integrity": "c68485c2a4dfbb5ae3cc74fae4e8c4e5d874cf8a8ed12927917235c758b46cbe",
       "dependencies": [
         "jsr:@std/internal"
-      ]
-    },
-    "@std/toml@1.0.11": {
-      "integrity": "e084988b872ca4bad6aedfb7350f6eeed0e8ba88e9ee5e1590621c5b5bb8f715",
-      "dependencies": [
-        "jsr:@std/collections"
       ]
     }
   },
