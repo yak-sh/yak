@@ -928,6 +928,21 @@ test('the signed-in plan copy derives both tiers from the meter', async () => {
   }
 })
 
+// style.css lays a plan card's parts on four rows the cards share, so the
+// cards' buttons line up: each card is those four parts, in that order.
+test('every plan card is a price, a note, a list and a button', () => {
+  for (let page of Object.keys(CARDS)) {
+    let { document } = parseHTML(read(page))
+    for (let card of document.querySelectorAll('.Plan')) {
+      assertEquals(
+        [...card.children].map((part) => part.className),
+        ['Plan_Price', 'Note Note-small', 'Plan_List', 'Button'],
+        page,
+      )
+    }
+  }
+})
+
 test('pricing cards offer signup and omit build quotas', () => {
   for (let [page, tiers] of Object.entries(CARDS)) {
     let { document } = parseHTML(read(page))

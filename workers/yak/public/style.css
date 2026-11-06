@@ -1041,17 +1041,23 @@
     --rhythm: 3rem;
   }
 
+  /* Plans set side by side, on the home page and the pricing page. A card's
+     four parts, its price, note, list and button, sit on four rows the
+     cards share, so every plan's list starts on one line and every button
+     sits on one line, however long each list runs. */
   .Plans {
     display: grid;
     grid-template-columns: repeat(auto-fit, minmax(min(100%, 15rem), 1fr));
+    grid-auto-rows: auto auto 1fr auto;
     gap: var(--gap);
-    align-items: start;
   }
 
   /* The paid one is drawn in the accent. It is a variant of a section,
      not of the Card component: what is emphasised on this page is this
      page's business. */
   .Plan {
+    grid-row: span 4;
+    grid-template-rows: subgrid;
     text-align: left;
   }
 
