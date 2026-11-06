@@ -575,51 +575,22 @@ export type Held = 'dirty' | 'unlanded' | 'failed'
 // manager or a non-dumpable PAM helper). Ask the user manager for a privileged
 // cwd reader. Its only operation reads this same-user link: no signal to
 // the observed PID and no filesystem mutation. The root-owned helper and sudo
-// permission are installed as described in README.md. Without them collection
-// refuses rather than guessing the hidden cwd.
+// permission are installed as described in README.md.
 let processCwd = async (pid: string): Promise<string> => {
   let path = `/proc/${pid}/cwd`
   try {
     return await io.realPath(path)
   } catch (error) {
     if (!io.isPermissionDenied(error)) throw error
-    let read = await processCommand('systemd-run', {
-      args: [
-        '--user',
-        '--quiet',
-        '--wait',
-        '--pipe',
-        '--collect',
-        '/usr/bin/sudo',
-        '-n',
-        '/usr/local/libexec/yak-process-cwd',
-        pid,
-      ],
-      env: {
-        XDG_RUNTIME_DIR: `/run/user/${system.uid()}`,
-        DBUS_SESSION_BUS_ADDRESS: `unix:path=/run/user/${system.uid()}/bus`,
-      },
-      stdout: 'piped',
-      stderr: 'piped',
-    }).output()
-    let output = new TextDecoder().decode(read.stdout).trimEnd()
-    let cwd = output.startsWith('[') ? JSON.parse(output)[0] : output
-    if (!read.success || !cwd.startsWith('/')) {
-      // A process may have exited while the helper was starting.
-      await io.stat(`/proc/${pid}`)
-      throw new Error(
-        `Worktree collection cannot inspect ${path}: ` +
-          new TextDecoder().decode(read.stderr).trim(),
-        { cause: error },
-      )
-    }
-    return cwd
+    let found = await privileged(pid)
+    if (!found) throw new Error(`Cannot inspect ${path}`, { cause: error })
+    return found[0]
   }
 }
 
 /** Canonical directories occupied by this user's live local processes,
  * including agents outside the graph. Other users' sessions are protected by
- * their graph homes. An unreadable same-user cwd refuses collection. */
+ * their graph homes. A process that cannot be read holds nothing. */
 export let processCwds = async (): Promise<Set<string>> => {
   if (system.os != 'linux') {
     throw new Error(
@@ -639,35 +610,54 @@ let running = async (): Promise<string[]> =>
   (await Array.fromAsync(io.readDir('/proc')))
     .map((entry) => entry.name).filter((name) => /^\d+$/.test(name))
 
-// What `read` finds for each process, asked of them all at once: a hidden one
-// is a privileged reader's process of its own, which nothing else waits on. A
-// process may exit between listing it and reading it, and ESRCH can arrive as
-// a plain Error; every other failure refuses the scan, keeping the worktrees.
+// What `read` finds for each process, asked of them all at once. A process
+// that cannot be read holds nothing: it exited while it was read, turned
+// non-dumpable, or the privileged helper refused it, as it does one whose cwd
+// was deleted.
 let scan = async (
   pids: string[],
   read: (pid: string) => Promise<string[]>,
 ): Promise<string[]> =>
-  (await Promise.all(pids.map((pid) =>
-    read(pid).catch((error) => {
-      if (
-        io.isNotFound(error) ||
-        error instanceof Error && /\(os error [23]\)/.test(error.message)
-      ) return []
-      throw error
-    })
-  ))).flat()
+  (await Promise.all(pids.map((pid) => read(pid).catch(() => [])))).flat()
 
-/// exited('7 (a b) Z 1 7') -> true
-/// exited('7 (sh) S 1 7') -> false
-/** Whether a process's `/proc/<pid>/stat` says it has exited: a zombie, or
- * dead. */
-export let exited = (stat: string): boolean =>
-  /^[ZX]/.test(stat.slice(stat.lastIndexOf(')') + 2))
+// The cwd and absolute open file paths of a same-user process ptrace hides,
+// read by the root-owned helper, or nothing when it cannot answer.
+let privileged = async (pid: string): Promise<string[] | undefined> => {
+  let read = await processCommand('systemd-run', {
+    args: [
+      '--user',
+      '--quiet',
+      '--wait',
+      '--pipe',
+      '--collect',
+      '/usr/bin/sudo',
+      '-n',
+      '/usr/local/libexec/yak-process-cwd',
+      pid,
+    ],
+    env: {
+      XDG_RUNTIME_DIR: `/run/user/${system.uid()}`,
+      DBUS_SESSION_BUS_ADDRESS: `unix:path=/run/user/${system.uid()}/bus`,
+    },
+    stdout: 'piped',
+    stderr: 'piped',
+  }).output()
+  if (!read.success) return
+  let found: unknown
+  try {
+    found = JSON.parse(new TextDecoder().decode(read.stdout))
+  } catch {
+    return
+  }
+  return Array.isArray(found) && found.length &&
+      found.every((path) => typeof path == 'string' && path.startsWith('/'))
+    ? found
+    : undefined
+}
 
 /** Paths occupied by this user's processes: their directories and open files.
  * Procfs links name the canonical file even when it was opened through a
- * symlink. An unreadable descriptor table refuses collection; only a process
- * or descriptor disappearing during the scan is harmless. */
+ * symlink. A process that cannot be read holds nothing. */
 export let processPaths = async (
   pids?: string[],
 ): Promise<Set<string>> => {
@@ -678,64 +668,22 @@ export let processPaths = async (
     await scan(pids ?? await running(), async (pid) => {
       let proc = `/proc/${pid}`
       if ((await io.stat(proc)).uid != system.uid()) return []
-      let paths: string[] = []
       try {
-        paths.push(await io.realPath(proc + '/cwd'))
+        let paths = [await io.realPath(proc + '/cwd')]
         for await (let fd of io.readDir(proc + '/fd')) {
-          try {
-            let path = await io.readLink(proc + '/fd/' + fd.name)
-            if (path.startsWith('/')) {
-              paths.push(path.replace(/ \(deleted\)$/, ''))
-            }
-          } catch (error) {
-            if (!io.isNotFound(error)) throw error
+          let path = await io.readLink(proc + '/fd/' + fd.name)
+            .catch((error) => {
+              if (io.isNotFound(error)) return ''
+              throw error
+            })
+          if (path.startsWith('/')) {
+            paths.push(path.replace(/ \(deleted\)$/, ''))
           }
         }
         return paths
       } catch (error) {
         if (!io.isPermissionDenied(error)) throw error
-        // The helper's JSON response proves both cwd and descriptors were
-        // inspected. An older cwd-only helper cannot prove safe collection.
-        let read = await processCommand('systemd-run', {
-          args: [
-            '--user',
-            '--quiet',
-            '--wait',
-            '--pipe',
-            '--collect',
-            '/usr/bin/sudo',
-            '-n',
-            '/usr/local/libexec/yak-process-cwd',
-            pid,
-          ],
-          env: {
-            XDG_RUNTIME_DIR: `/run/user/${system.uid()}`,
-            DBUS_SESSION_BUS_ADDRESS: `unix:path=/run/user/${system.uid()}/bus`,
-          },
-          stdout: 'piped',
-          stderr: 'piped',
-        }).output()
-        // A process may have changed while it was read: ended (gone, or dead
-        // and not yet reaped), holding no files; or become another user's by
-        // running a setuid program such as sudo, as one that was another
-        // user's from the start is never scanned.
-        if ((await io.stat(proc)).uid != system.uid()) return []
-        if (exited(await io.readTextFile(proc + '/stat'))) return []
-        let found: unknown
-        try {
-          found = JSON.parse(new TextDecoder().decode(read.stdout))
-        } catch { /* refused below */ }
-        if (
-          !read.success || !Array.isArray(found) ||
-          !found.length || !found.every((path) =>
-            typeof path == 'string' && path.startsWith('/')
-          )
-        ) {
-          throw new Error(`Worktree collection cannot inspect ${proc} paths`, {
-            cause: error,
-          })
-        }
-        return found as string[]
+        return await privileged(pid) ?? []
       }
     }),
   )

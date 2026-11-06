@@ -575,8 +575,8 @@ HEAD, read from its reflog's last entry rather than the file's mtime, which
 `git gc` rewrites in every worktree whenever it expires reflogs.
 
 `processPaths()` reads the working directories and open file paths of this
-user's live Linux processes. An unreadable process path refuses collection, so
-agents outside the graph also keep their worktrees. Non-dumpable processes
+user's live Linux processes, so agents outside the graph also keep their
+worktrees. A process that cannot be read holds nothing. Non-dumpable processes
 require a privileged read through a root-owned helper, launched by the systemd
 user manager. The helper returns a JSON array of the cwd and absolute open file
 paths, accepts one positive PID and checks that it belongs to the sudo caller.
@@ -592,9 +592,9 @@ is `collector ALL=(root) NOPASSWD: /usr/local/libexec/yak-process-cwd *`. The
 helper refuses additional arguments, other users' processes and path traversal.
 Enable the user's systemd manager with `loginctl enable-linger
 collector`.
-Collection retains every checkout if the helper or manager fails, including an
-installed helper that still returns only a cwd. `processCwds()` remains
-available for callers needing only directories.
+Without the helper or manager, a non-dumpable process holds nothing, as does one
+the helper refuses (a deleted cwd). `processCwds()` remains available for
+callers needing only directories.
 
 `@yaks/git/service` collects explicitly managed checkouts in the local
 filesystem, and unmanaged ones under its `roots`: directories where agents cut
