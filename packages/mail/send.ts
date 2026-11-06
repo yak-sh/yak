@@ -16,8 +16,8 @@
 //
 // The transport itself is supplied by the caller. This package composes a
 // message and hands it over; whether that is Cloudflare, an SMTP relay, or an
-// array in memory is the caller's business (./cloudflare.ts and ./stash.ts are
-// two implementations).
+// array in memory is the caller's business (a provider plugin lends one through
+// Host.senders; ./stash.ts is the built-in one).
 //
 // A letter is two components: the envelope is `mail` and the words a person
 // reads are @yaks/doc's `doc{title, body}`. So the composition works from the
