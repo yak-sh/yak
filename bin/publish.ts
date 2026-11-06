@@ -1,8 +1,8 @@
 // JSR publication uses the npm workspace's membership and each package's
 // package.json, the one manifest its name, version and exports are written in.
-// `deno publish` reads them from the member's deno.json, so a publish writes
-// them there for its run and puts each deno.json back after: kept in deno.json,
-// they would be a second exports table Deno resolves through.
+// `deno publish` reads them from the member's deno.json, so each invocation
+// projects its own temporary workspace. Source manifests never change while
+// other checks read them, and concurrent publishers share nothing writable.
 //
 // `deno publish` skips a version JSR already has, so a publish is given every
 // member and publishes what the release names (packages/cli/release.json),
@@ -13,7 +13,7 @@
 // (`--dry-run`, the source check) is given every member, so it checks every
 // package's public API as one workspace.
 import { matchesGlob } from 'node:path'
-import config from '../deno.json' with { type: 'json' }
+import { cp } from 'node:fs/promises'
 import pinned from '../packages/cli/release.json' with { type: 'json' }
 import { members } from '@yaks/cli/dependencies'
 import { publishing } from './release.ts'
@@ -93,20 +93,53 @@ export let jsr = (pkg: Record<string, unknown>, config: Config): Config => {
   }
 }
 
-// Write each member's deno.json as `deno publish` reads it, and return how to
-// put every one back.
-let written = async (dirs: string[]) => {
-  let kept = new Map<string, string>()
-  for (let dir of dirs) {
-    let path = `${root}${dir}/deno.json`
-    let text = await Deno.readTextFile(path).catch(() => null)
-    if (text == null) continue
-    kept.set(path, text)
-    let pkg = JSON.parse(await Deno.readTextFile(`${root}${dir}/package.json`))
-    await Deno.writeTextFile(path, JSON.stringify(jsr(pkg, JSON.parse(text))))
+/** Run against an independent publication workspace, removed even if the
+ * publisher fails. Both source files and generated manifests belong to that
+ * invocation, so neither a publisher nor its cleanup can change another run.
+ */
+export let project = async <T>(
+  source: string,
+  dirs: string[],
+  run: (root: string) => Promise<T>,
+): Promise<T> => {
+  let target = await Deno.makeTempDir({ prefix: 'yaks-publish-' })
+  try {
+    let copy = (path: string) =>
+      cp(`${source}/${path}`, `${target}/${path}`, {
+        recursive: true,
+        filter: (path) =>
+          !['node_modules', '.git', '.wrangler'].includes(
+            path.split('/').at(-1)!,
+          ),
+      })
+    await Promise.all(
+      ['package.json', 'deno.lock', '.gitignore', ...dirs].map(copy),
+    )
+    for (let dir of dirs) {
+      let path = `${target}/${dir}/deno.json`
+      let text = await Deno.readTextFile(path).catch((error) => {
+        if (error instanceof Deno.errors.NotFound) return null
+        throw error
+      })
+      if (text == null) continue
+      let pkg = JSON.parse(
+        await Deno.readTextFile(`${target}/${dir}/package.json`),
+      )
+      await Deno.writeTextFile(path, JSON.stringify(jsr(pkg, JSON.parse(text))))
+    }
+    let config = JSON.parse(await Deno.readTextFile(`${source}/deno.json`))
+    await Deno.writeTextFile(
+      `${target}/deno.json`,
+      JSON.stringify({
+        ...config,
+        nodeModulesDir: 'none',
+        workspace: dirs.map((dir) => `./${dir}`),
+      }),
+    )
+    return await run(target)
+  } finally {
+    await Deno.remove(target, { recursive: true })
   }
-  return () =>
-    Promise.all([...kept].map(([path, text]) => Deno.writeTextFile(path, text)))
 }
 
 let member = (dir: string): Member => {
@@ -114,15 +147,6 @@ let member = (dir: string): Member => {
   let deps = ['dependencies', 'devDependencies', 'optionalDependencies']
     .flatMap((group) => Object.keys(pkg[group] ?? {}))
   return { dir, name: pkg.name, deps }
-}
-
-let dirty = async () => {
-  let { stdout } = await new Deno.Command('git', {
-    args: ['status', '--porcelain'],
-    cwd: root,
-    stdout: 'piped',
-  }).output()
-  return stdout.length > 0
 }
 
 if (import.meta.main) {
@@ -133,41 +157,15 @@ if (import.meta.main) {
   )
   let left = Deno.args.includes('--dry-run') ? [] : out(all, held, pinned)
   let dirs = all.filter((m) => !left.includes(m.dir)).map((m) => m.dir)
-  // `deno publish` sees the deno.json files written below as uncommitted, so
-  // the tree is checked here, before they are, and the publish allows them.
-  if (!Deno.args.includes('--allow-dirty') && await dirty()) {
-    throw new Error('uncommitted changes: publish a clean tree')
-  }
-  let restore = await written(dirs)
-  let path = await Deno.makeTempFile({
-    dir: root,
-    prefix: '.publish-',
-    suffix: '.json',
-  })
-  try {
-    await Deno.writeTextFile(
-      path,
-      JSON.stringify({
-        ...config,
-        nodeModulesDir: 'none',
-        workspace: dirs.map((dir) => `./${dir}`),
-      }),
-    )
+  Deno.exitCode = await project(root, dirs, async (target) => {
     let status = await new Deno.Command(Deno.execPath(), {
-      args: [
-        'publish',
-        '--config',
-        path,
-        '--allow-dirty',
-        ...Deno.args.filter((arg) => arg != '--allow-dirty'),
-      ],
+      args: ['publish', '--config', `${target}/deno.json`, ...Deno.args],
+      // Keep the source checkout's Git cleanliness and provenance checks.
+      cwd: root,
       stdin: 'inherit',
       stdout: 'inherit',
       stderr: 'inherit',
     }).spawn().status
-    Deno.exitCode = status.code
-  } finally {
-    await Deno.remove(path)
-    await restore()
-  }
+    return status.code
+  })
 }
