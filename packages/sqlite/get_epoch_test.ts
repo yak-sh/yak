@@ -283,11 +283,9 @@ test('constructor visibility is part of each completed get key', () => {
   equal(baseStates, ['empty', 'settled', 'empty'])
 })
 
-let tag = '1234567890abcdef1234567890abcdef'
 let virtual = fixture(':memory:', {}, {
   backed: {
     record: {
-      tag,
       rows: select({
         cols: [as(lit(7), 'entity'), as(fn('random'), 'title')],
       }),

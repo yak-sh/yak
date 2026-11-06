@@ -242,12 +242,12 @@ for (let mutate of ['spine', 'eids'] as const) {
     let opts: BindOpts = {
       backed: {
         virtual: {
-          tag: '0'.repeat(32),
           rows: select({
             cols: [as(lit(1), 'entity'), as(lit(eid(1)), 'value')],
           }),
         },
       },
+      tags: { virtual: '0'.repeat(32) },
       extend: [{
         name: 'mutating',
         compile: {},

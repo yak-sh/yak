@@ -126,7 +126,6 @@ let backing = storage(
   {
     backed: {
       virtual: {
-        tag: '0'.repeat(32),
         rows: select({ cols: [as(lit(1), 'entity'), as(lit(''), 'value')] }),
       },
     },

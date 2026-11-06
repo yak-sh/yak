@@ -33,6 +33,7 @@ import {
   col,
   compile,
   cross,
+  type Cte,
   type Derived,
   derivedOf,
   type Driver,
@@ -64,6 +65,9 @@ import {
   storedOnly,
   sub,
   table,
+  tagged,
+  tagIn,
+  type Tags,
   val,
   visibleBacked,
   visibleDerived,
@@ -209,22 +213,33 @@ let read1 = (v: Vocab, comp: string, derived: Derived): Prop[] =>
 // `refs`: a set read names every id it found in one statement afterwards
 // (`naming`), rather than joining the entity table once per row for an eid
 // that most rows share.
-type Projection = { sel: Expr[]; joins: Join[]; refs?: string[] }
+//
+// A reference to a backed entity reads the tag its eid ends with from the
+// statement's binding (@yaks/sql `tagIn`), listed in `tagged`: the statement
+// binds those (`tagging`), so one projection serves every store.
+type Projection = {
+  sel: Expr[]
+  joins: Join[]
+  refs?: string[]
+  tagged?: string[]
+}
 let projection = (
   v: Vocab,
   comp: string,
   derived: Derived,
   backed: Backings,
+  tags: Tags,
   named = false,
 ): Projection => {
   let own = (prop: string) => col(prop, comp)
   let sel: Expr[] = []
   let joins: Join[] = []
   let refs: string[] = []
+  let reading = new Set<string>()
   let deps = new Set<string>()
   for (let c of read1(v, comp, derived)) {
     let over = derived[`${comp}.${c.prop}`]
-    let tag = c.ref ? backed[c.ref]?.tag : undefined
+    let tag = c.ref && backed[c.ref] && tags[c.ref] ? c.ref : undefined
     if (over) {
       for (let d of over.deps ?? []) deps.add(d)
       let value = !c.computed && storedOnly(over, v)
@@ -232,7 +247,8 @@ let projection = (
         : over.expr(own('entity'))
       sel.push(as(value, c.prop))
     } else if (tag) {
-      sel.push(as(eidAt(tag, own(field(c.prop))), c.prop))
+      reading.add(tag)
+      sel.push(as(eidAt(tagIn(tag), own(field(c.prop))), c.prop))
     } else if (c.category == 'ref' && named) {
       refs.push(c.prop)
       sel.push(as(own(field(c.prop)), c.prop))
@@ -250,8 +266,17 @@ let projection = (
     if (d == comp) continue
     joins.push(left(table(d), eq(col('entity', d), own('entity'))))
   }
-  return { sel, joins, ...refs.length ? { refs } : {} }
+  return {
+    sel,
+    joins,
+    ...refs.length ? { refs } : {},
+    ...reading.size ? { tagged: [...reading] } : {},
+  }
 }
+
+// The `with` a statement reading `p` binds its tags in.
+let tagging = (p: Projection, tags: Tags = {}): Cte[] =>
+  p.tagged ? tagged(tags, p.tagged) : []
 
 // What `key` holds in `m`, made on first ask.
 let at = <K, V>(
@@ -275,11 +300,13 @@ let kept = new WeakMap<
 >()
 // A status a vocabulary's ladder computes is read like any registered one
 // (@yaks/sql `derivedOf`).
+// The tags are each store's own, so only which components carry one keys it.
 let project = (
   v: Vocab,
   comp: string,
   derived: Derived = NONE,
   backed: Backings = NONE,
+  tags: Tags = NONE,
   named = false,
 ): Projection => {
   let all = derivedOf(v, derived)
@@ -289,8 +316,8 @@ let project = (
       backed,
       () => new Map(),
     ),
-    `${named} ${comp}`,
-    () => projection(v, comp, all, backed, named),
+    `${named} ${comp} ${Object.keys(tags)}`,
+    () => projection(v, comp, all, backed, tags, named),
   )
 }
 
@@ -606,7 +633,14 @@ let readable = (vocab: Vocab) => at(stored, vocab, () => new Set(tables(vocab)))
 // the bind that names them, which holds `ANY` until a read names its own.
 let ANY = '\0'
 type Named = { statement: Raw; at: number }
-type Joined = { one: Named; many: Named; names: string[]; props: string[][] }
+// `tagged` names the components whose tags the statements bind first.
+type Joined = {
+  one: Named
+  many: Named
+  names: string[]
+  props: string[][]
+  tagged: string[]
+}
 let joined = new WeakMap<
   Vocab,
   WeakMap<object, WeakMap<object, Map<string, Joined | null>>>
@@ -678,16 +712,22 @@ let joinedPlan = (
     opts.backed ?? NONE,
     () => new Map(),
   )
-  let key = JSON.stringify(names)
+  let key = JSON.stringify([names, Object.keys(opts.tags ?? {})])
   if (cache.has(key)) return cache.get(key)!
   let base = namedSpine(vocab, [ANY, ANY])
   let columns = [...base.cols!]
   let props: string[][] = []
+  let reading = new Set<string>()
   let width = columns.length
   for (let [i, name] of names.entries()) {
     let alias = `@g${i}`
-    let p = scoped(project(vocab, name, opts.derived, opts.backed), name, alias)
+    let p = scoped(
+      project(vocab, name, opts.derived, opts.backed, opts.tags),
+      name,
+      alias,
+    )
     if (!p) return bounded(cache, key, null, 128)
+    p.tagged?.forEach((c) => reading.add(c))
     let fields = p.sel.map((e) => {
       if (e.t != 'as' && e.t != 'col') {
         throw Error('a projected property needs a name')
@@ -723,10 +763,13 @@ let joinedPlan = (
       `@${i}`,
     ))
   }
+  // Bound first, each store's own tags are the statement's first parameters.
+  let tags = [...reading]
+  let blank = Object.fromEntries(tags.map((c) => [c, '']))
   let named = (eids: string[]): Named => {
     let spine = namedSpine(vocab, eids)
     let statement = render(
-      select({ ...spine, cols: columns }),
+      select({ ...spine, with: tagged(blank, tags), cols: columns }),
     )
     let bind = eids.length == 1 ? eids[0] : JSON.stringify(eids)
     return { statement, at: statement.params.indexOf(bind) }
@@ -737,7 +780,7 @@ let joinedPlan = (
       statement.sql.length > 90_000 || statement.params.length > 100
     )
   ) return bounded(cache, key, null, 128)
-  return bounded(cache, key, { one, many, names, props }, 128)
+  return bounded(cache, key, { one, many, names, props, tagged: tags }, 128)
 }
 
 let joinedGet = (
@@ -753,6 +796,7 @@ let joinedGet = (
   if (!plan) return
   let { statement, at } = eids.length == 1 ? plan.one : plan.many
   let params = [...statement.params]
+  plan.tagged.forEach((c, i) => params[i] = opts.tags![c])
   params[at] = eids.length == 1 ? eids[0] : JSON.stringify(eids)
   let rows: Row[]
   try {
@@ -864,9 +908,8 @@ export let get = (
     let { visibility, ...plain } = opts
     // A backed entity has no entity row: it is seen when its backing, as the
     // scope sees it, holds its row, whatever components are asked about.
-    let backings = Object.values(plain.backed ?? {})
-    let tagged = (eid: string) =>
-      backings.some((b) => b.tag && idOf(b.tag, eid) != null)
+    let tags = Object.values(plain.tags ?? {})
+    let tagged = (eid: string) => tags.some((tag) => idOf(tag, eid) != null)
     let seen = (ids: string[]) =>
       backedGet(
         driver,
@@ -881,7 +924,7 @@ export let get = (
     // is gotten as its tombstone, as without a scope, and a reference names
     // it, as a query's reference operand does (./mod.ts `resolved`).
     let permitted = (all: string[], components: string[] = []): Set<string> => {
-      let backed = backings.length ? all.filter(tagged) : []
+      let backed = tags.length ? all.filter(tagged) : []
       let ids = backed.length ? all.filter((eid) => !tagged(eid)) : all
       let out = new Set(seen(backed))
       if (!ids.length) return out
@@ -1143,16 +1186,19 @@ export let get = (
     // the references every component's rows hold are named once, together.
     let read: [Bundle, string, Row, string[] | undefined][] = []
     for (let [comp, ids] of compOwners) {
-      let { sel, joins, refs } = project(
+      let p = project(
         vocab,
         comp,
         opts.derived,
         opts.backed,
+        opts.tags,
         true,
       )
+      let { sel, joins, refs } = p
       let owners = owning(ids, table(comp), col('entity', comp))
       for (
         let row of driver.query(select({
+          with: tagging(p, opts.tags),
           cols: [as(col('entity', comp), '@id'), ...sel],
           ...owners,
           joins: [...owners.joins, ...joins],
@@ -1192,19 +1238,20 @@ let backedGet = (
   comps?: string[],
 ): Bundle[] =>
   Object.entries(opts.backed ?? {}).flatMap(([comp, b]) => {
-    let tag = b.tag
+    let tag = opts.tags?.[comp]
     let ids = tag
       ? eids.map((e) => idOf(tag, e)).filter((id) => id != null)
       : []
     if (!tag || !ids.length) return []
     let asked = !comps || comps.includes(comp)
-    let { sel, joins } = asked
-      ? project(vocab, comp, opts.derived, opts.backed)
+    let p: Projection = asked
+      ? project(vocab, comp, opts.derived, opts.backed, opts.tags)
       : { sel: [], joins: [] }
     return driver.query(select({
-      cols: [as(col('entity', comp), '@id'), ...sel],
+      with: tagging(p, opts.tags),
+      cols: [as(col('entity', comp), '@id'), ...p.sel],
       from: from(b.rows, comp),
-      joins,
+      joins: p.joins,
       where: oneOf(col('entity', comp), ids),
     })).map(({ '@id': id, ...value }): Bundle => ({
       entity: { eid: eidOf(tag, Number(id)) },

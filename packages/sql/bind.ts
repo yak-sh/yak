@@ -130,6 +130,9 @@ import {
   eidAt,
   idOf,
   ladders,
+  tagged,
+  tagIn,
+  type Tags,
 } from './derived.ts'
 import {
   claimed,
@@ -165,6 +168,9 @@ export type BindOpts = {
   absent?: readonly string[]
   /** the rows each computed component is read from (./derived.ts) */
   backed?: Backings
+  /** what each backed component's eids end with in this store, which a
+   * statement binds rather than spells (./derived.ts `tagIn`) */
+  tags?: Tags
   extend?: Extension[]
   now?: number
   /** Unordered windows use physical owner order, not entity numbers. */
@@ -263,6 +269,10 @@ type Ctx = {
   d: Dialect
   derived: Derived
   backed: Backings
+  tags: Tags
+  /** the backed components whose tags the statement reads, which it binds
+   * first in its `with` (./derived.ts `tagged`) */
+  tagged: Set<string>
   ext: Extension[]
   now: number
   storageOrder?: boolean
@@ -684,7 +694,7 @@ let inSet = (ctx: Ctx, set: Identity): Frag => {
   // A backed spine's eids are its ids written out, so naming one is reading
   // the id back; it has no numbers.
   if (ctx.spine) {
-    let { tag } = backingOf(ctx.backed, ctx.spine)
+    let { tag } = backingOf(ctx.backed, ctx.tags, ctx.spine)
     let ids = set.eids.map((e) => idOf(tag, e)).filter((id) => id != null)
     return ids.length
       ? ctx.d.among(ctx.d.ownerKey('entity'), ids)
@@ -732,7 +742,7 @@ let refEq = (
     return ids.length ? ctx.d.among(key, ids) : { sql: '0', params: [] }
   }
   if (!target || !computed(ctx.v, target)) return ctx.d.refEq(key, eids, false)
-  let { tag } = backingOf(ctx.backed, target)
+  let { tag } = backingOf(ctx.backed, ctx.tags, target)
   let ids = eids.map((e) => idOf(tag, e)).filter((id) => id != null)
   return ids.length ? ctx.d.among(key, ids) : { sql: '0', params: [] }
 }
@@ -1208,7 +1218,9 @@ let leafRead = (ctx: Ctx, leaf: Hop, target: string): Read => {
     }
   }
   if (def?.category == 'ref' && lands(ctx.v, leaf.comp, leaf.prop)) {
-    let { tag } = backingOf(ctx.backed, def.ref!)
+    backingOf(ctx.backed, ctx.tags, def.ref!)
+    ctx.tagged.add(def.ref!)
+    let tag = tagIn(def.ref!)
     return {
       expr: `(select ${inline(eidAt(tag, col(leaf.prop, '__pl')))} from ${
         source(ctx, leaf.comp)
@@ -1828,10 +1840,10 @@ let unnumbered = (ctx: Ctx, c: Clause): boolean => {
 // decides the spine a query reads (./spine.ts). A conjunction wants what any of
 // its parts wants and an alternation what all of them want; `.entity.eid=` naming
 // only one backing's entities wants that backing.
-let wants = (v: Vocab, backed: Backings, c: Clause): string[] => {
-  if (c.kind == 'and') return c.clauses.flatMap((x) => wants(v, backed, x))
+let wants = (v: Vocab, tags: Tags, c: Clause): string[] => {
+  if (c.kind == 'and') return c.clauses.flatMap((x) => wants(v, tags, x))
   if (c.kind == 'or') {
-    let [head = [], ...rest] = c.clauses.map((x) => wants(v, backed, x))
+    let [head = [], ...rest] = c.clauses.map((x) => wants(v, tags, x))
     return head.filter((k) => rest.every((r) => r.includes(k)))
   }
   if (c.kind != 'pred' || c.not || c.where || v.assoc(c.path[0])) return []
@@ -1851,9 +1863,8 @@ let wants = (v: Vocab, backed: Backings, c: Clause): string[] => {
   if (hop.comp == 'entity' && op == '') {
     let set = identity(hop.prop, c.value)
     let eids = set && !set.nums.length ? set.eids : []
-    return Object.keys(backed).filter((k) =>
-      eids.length &&
-      eids.every((e) => backed[k].tag && idOf(backed[k].tag!, e) != null)
+    return Object.keys(tags).filter((k) =>
+      eids.length && eids.every((e) => idOf(tags[k], e) != null)
     )
   }
   if (!computed(v, hop.comp)) return []
@@ -1868,10 +1879,11 @@ let wants = (v: Vocab, backed: Backings, c: Clause): string[] => {
 let spineOf = (
   v: Vocab,
   backed: Backings,
+  tags: Tags,
   cs: Clause[],
 ): string | undefined =>
   hasComputed(v) || Object.keys(backed).length
-    ? cs.flatMap((c) => wants(v, backed, c))[0]
+    ? cs.flatMap((c) => wants(v, tags, c))[0]
     : undefined
 
 // A filter on a ladder's status (@yaks/vocab's `status` keyword), as the
@@ -3351,13 +3363,16 @@ export let prepared = (
   // The spine first (./spine.ts): a query that asks for a computed component's
   // entities reads that backing's rows, which no extension indexes and no
   // archetype describes.
-  let backed = opts.backed ?? {}
-  let spine = spineOf(vocab, backed, ast.clauses)
+  let backed = opts.backed ?? {}, tags = opts.tags ?? {}
+  let spine = spineOf(vocab, backed, tags, ast.clauses)
+  let tagged = new Set<string>()
   let ctx: Ctx = {
     v: vocab,
-    d: backedDialect(d, vocab, backed, spine),
+    d: backedDialect(d, vocab, backed, tags, (c) => tagged.add(c), spine),
     derived: derivedOf(vocab, opts.derived),
     backed,
+    tags,
+    tagged,
     ext: spine ? [] : heard.extend ?? [],
     now: opts.now ?? Date.now(),
     storageOrder: opts.storageOrder,
@@ -3390,6 +3405,7 @@ export let prepared = (
     ...opts.graves ? { graves: true } : {},
     derived: scope?.derived ?? ctx.derived,
     backed: ctx.backed,
+    tags: ctx.tags,
     extend: ctx.ext,
     now: ctx.now,
     storageOrder: ctx.storageOrder,
@@ -3425,9 +3441,16 @@ export let prepared = (
   return {
     opts: captured,
     spine,
-    lower: () => lower(ast, ctx, reads, scope),
+    lower: () => binding(lower(ast, ctx, reads, scope), ctx),
   }
 }
+
+// The statement with the tags it reads bound ahead of everything else it
+// defines (./derived.ts `tagged`).
+let binding = (s: Select, ctx: Ctx): Select =>
+  ctx.tagged.size
+    ? { ...s, with: [...tagged(ctx.tags, ctx.tagged), ...s.with ?? []] }
+    : s
 
 // Whether an index can seek a test: an equality or a comparison of an indexed
 // property, or of an entity's own id.
@@ -5060,7 +5083,7 @@ let past = (sort: Sort, a: Frag, exists: Frag, tie: Frag): Frag => {
 // anchor is that id, and there is no number to page by. An eid that is not
 // one of the spine's names nothing, which is the first page.
 let backedKeyset = (ctx: Ctx, sort: Sort | null, eid: string): Frag => {
-  let id = idOf(backingOf(ctx.backed, ctx.spine!).tag, eid)
+  let id = idOf(backingOf(ctx.backed, ctx.tags, ctx.spine!).tag, eid)
   if (id == null) return { sql: '1', params: [] }
   let key = ctx.d.ownerKey('entity')
   let exists = spliced(

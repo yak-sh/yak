@@ -582,8 +582,8 @@ export let storage = (
   let known = (o: Opts) =>
     Object.keys(o).every((k) => UNREAD.has(k) || k == 'visibility')
   let virtual = (eids: string[], o: Opts) =>
-    Object.values(o.backed ?? {}).some((b) =>
-      b.tag && eids.some((eid) => idOf(b.tag!, eid) != null)
+    Object.values(o.tags ?? {}).some((tag) =>
+      eids.some((eid) => idOf(tag, eid) != null)
     )
   let reused = (
     eids: string[],
@@ -595,7 +595,14 @@ export let storage = (
     if (!policies(o) || virtual(eids, o)) return run()
     // Registries are fixed per store. A per-call replacement is unknown and
     // bypasses reuse; the remaining effective inputs belong in the key.
-    let { derived: _d, backed: _b, extend: _e, archetypes: _a, ...inputs } = o
+    let {
+      derived: _d,
+      backed: _b,
+      tags: _t,
+      extend: _e,
+      archetypes: _a,
+      ...inputs
+    } = o
     return memo.view(keyed(['get', eids, comps, inputs, pending]), run, comps)
   }
   let kept = (

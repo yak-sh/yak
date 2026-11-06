@@ -16,8 +16,8 @@
 
 import { field } from './sqlite.ts'
 import type { Vocab } from '@yaks/vocab'
-import { col, sub } from './ast.ts'
-import { type Backings, eidAt } from './derived.ts'
+import { col, type Select, sub } from './ast.ts'
+import { type Backings, eidAt, tagIn, type Tags } from './derived.ts'
 import { inline, q } from './render.ts'
 import type { Dialect } from './sqlite.ts'
 import { Unsupported } from './unsupported.ts'
@@ -37,40 +37,62 @@ export let hasComputed = (v: Vocab): boolean => {
   return got
 }
 
-/** A backed component's rows, and the tag its eids carry — refused, never
- * guessed at, when the store has not registered them. */
-export let backingOf = (backed: Backings, comp: string) => {
+/** A backed component's rows, and the tag its eids carry in this store —
+ * refused, never guessed at, when the store has not registered them. The rows
+ * are written out when read, once per registry. */
+export let backingOf = (backed: Backings, tags: Tags, comp: string) => {
   let b = backed[comp]
   if (!b) {
     throw new Unsupported('a computed component', `${comp} has no backing`)
   }
-  if (!b.tag) {
+  if (!tags[comp]) {
     throw new Unsupported(
       'a computed component',
       `${comp}: this store has not tagged its entities`,
     )
   }
-  return { rows: inline(sub(b.rows)), tag: b.tag }
+  return {
+    get rows() {
+      return written(b.rows)
+    },
+    tag: tags[comp],
+  }
+}
+let texts = new WeakMap<Select, string>()
+let written = (rows: Select): string => {
+  let text = texts.get(rows)
+  if (text == null) texts.set(rows, text = inline(sub(rows)))
+  return text
 }
 
 /**
- * The dialect a query reads through, given the backings its store registered
- * and, when it reads a backing's rows as its spine, that component.
+ * The dialect a query reads through, given the backings its store registered,
+ * the tags it gives their eids and, when it reads a backing's rows as its
+ * spine, that component. Each tag is read from the statement's own binding
+ * (./derived.ts `tagIn`); `read` hears each component whose tag is, so the
+ * statement binds it (`tagged`).
  */
 export let backedDialect = (
   d: Dialect,
   v: Vocab,
   backed: Backings,
+  tags: Tags,
+  read: (comp: string) => void,
   spine?: string,
 ): Dialect => {
   if (!hasComputed(v)) return d
-  let rows = (comp: string) => backingOf(backed, comp).rows
+  let rows = (comp: string) => backingOf(backed, tags, comp).rows
+  let tag = (comp: string) => {
+    backingOf(backed, tags, comp)
+    read(comp)
+    return tagIn(comp)
+  }
   // A reference column read as the eid it names: through the entity table for
   // an ordinary entity, written out from the id for a backed one.
   let refRead = (comp: string, prop: string): string | null => {
     let target = v.prop(comp, prop)?.ref
     return target && computed(v, target)
-      ? inline(eidAt(backingOf(backed, target).tag, col(field(prop), comp)))
+      ? inline(eidAt(tag(target), col(field(prop), comp)))
       : null
   }
   let base: Dialect = {
@@ -84,9 +106,7 @@ export let backedDialect = (
   }
   if (!spine) return base
   let owner = `${q(spine)}.${q('entity')}`
-  let self = inline(
-    eidAt(backingOf(backed, spine).tag, col('entity', spine)),
-  )
+  let self = inline(eidAt(tag(spine), col('entity', spine)))
   return {
     ...base,
     spine: `${rows(spine)} as ${q(spine)}`,

@@ -28,7 +28,9 @@
 
 import type { Vocab } from '@yaks/vocab'
 import {
+  as,
   col,
+  type Cte,
   eq,
   exists,
   type Expr,
@@ -38,7 +40,9 @@ import {
   op,
   type Select,
   select,
+  sub,
   table,
+  val,
   when,
 } from './ast.ts'
 import { type Tag, tagOf } from './sqlite.ts'
@@ -266,14 +270,13 @@ export let worn =
 // reads (@yaks/id `short`, the first ten) tells two records apart, and the
 // eid has the shape of a content address, which every door takes as an eid.
 
-/** The rows a computed component is read from, and the tag its entities' eids
- * end with. The package that owns the rows supplies `rows`; the store that
- * reads them supplies `tag`. */
+/** The rows a computed component is read from. The package that owns the
+ * rows supplies them; the store that reads them supplies the tag its entities'
+ * eids end with, apart from them ({@link Tags}), so one registry, and every
+ * statement compiled through it, serves each store of a vocabulary. */
 export type Backing = {
   /** one row per entity: its integer id as `entity`, a column per property */
   rows: Select
-  /** what its eids end with ({@link eidOf}): 32 hex characters */
-  tag?: string
   /** The entities each row tells of, so that a scoped read sees only rows
    * about entities it may see: one row per pair, the backed row's id as
    * `entity`, an entity-table id as `about`, and as `component` the name of
@@ -298,6 +301,10 @@ export type Held = { name: string; as: string; ref: boolean }
 
 /** Every computed component a store reads, keyed by component name. */
 export type Backings = Record<string, Backing>
+
+/** What each backed component's eids end with in one store ({@link eidOf}):
+ * 32 hex characters, keyed by component name. */
+export type Tags = Record<string, string>
 
 /** The eid of the backed entity `id` names under `tag`.
  *
@@ -325,5 +332,22 @@ export let idOf = (tag: string, eid: string): number | null => {
 
 /** {@link eidOf} in SQL, over the expression holding the id: null for a null
  * id, as a reference that names nothing reads. */
-export let eidAt = (tag: string, id: Expr): Expr =>
-  when([[notNull(id), op('||', fn('printf', lit('%08x'), id), lit(tag))]])
+export let eidAt = (tag: Expr, id: Expr): Expr =>
+  when([[notNull(id), op('||', fn('printf', lit('%08x'), id), tag)]])
+
+// The relation a statement binds a component's tag in.
+let tagTable = (comp: string) => `__tag_${comp}`
+
+/** A backed component's tag as a statement reads it: from the relation
+ * {@link tagged} binds it in, never written into the text, so the statement
+ * is the same in every store, and is compiled and prepared once for all. */
+export let tagIn = (comp: string): Expr =>
+  sub(select({ cols: [col('tag')], from: table(tagTable(comp)) }))
+
+/** The CTEs binding `comps`' tags, which {@link tagIn} reads: first in a
+ * statement's `with`, so its other CTEs read them too. */
+export let tagged = (tags: Tags, comps: Iterable<string>): Cte[] =>
+  [...comps].map((comp) => ({
+    name: tagTable(comp),
+    q: select({ cols: [as(val(tags[comp]), 'tag')] }),
+  }))

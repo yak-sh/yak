@@ -36,18 +36,18 @@ export let options = <T extends BindOpts>(
       : { lacking: [], absent: [], unindexed: [] }
     let lacks = lacked(vocab, found)
     let missingIndexes = found.unindexed
+    // The registry stays the one every store of the vocabulary shares, so
+    // what is compiled through it is too; only the tags are this store's.
     let e = base.backed && meta(driver).get(EPOCH)
-    let backed = e
+    let tags = e
       ? Object.fromEntries(
-        Object.entries(base.backed!).map((
-          [c, b],
-        ) => [c, { ...b, tag: tagOf(e, c) }]),
+        Object.keys(base.backed!).map((c) => [c, tagOf(e, c)]),
       )
-      : base.backed
+      : base.tags
     schema = current
     return tagged = {
       ...base,
-      backed,
+      ...tags ? { tags } : {},
       derived: found.lacking.length
         ? { ...base.derived, ...lacks }
         : base.derived,

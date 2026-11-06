@@ -171,8 +171,20 @@ let held = (comp: string, props: Held[]): Select => {
 
 /** The rows `_tx` and `_change` are read from: the journal's tables, a value
  * the store keeps in another form read through `derived`, the store's read
- * overrides. `_change` also tells what each entity last held (`held`). */
-export let backed = (vocab: Vocab, derived: Derived = {}): Backings => {
+ * overrides. `_change` also tells what each entity last held (`held`). One
+ * registry per vocabulary and overrides, so every store given them compiles
+ * its reads once (@yaks/sql `Backing`). */
+export let backed = (vocab: Vocab, derived: Derived = NONE): Backings => {
+  let byDerived = registries.get(vocab)
+  if (!byDerived) registries.set(vocab, byDerived = new WeakMap())
+  let got = byDerived.get(derived)
+  if (!got) byDerived.set(derived, got = registry(vocab, derived))
+  return got
+}
+let NONE: Derived = {}
+let registries = new WeakMap<Vocab, WeakMap<Derived, Backings>>()
+
+let registry = (vocab: Vocab, derived: Derived): Backings => {
   let { comp, joins } = described(vocab)
   let value = valueOf(derived)
   return {

@@ -3,7 +3,7 @@
 // grammar as anything else, from the journal's own rows, and are never
 // written.
 
-import { test } from '@yaks/testing'
+import { ok, test } from '@yaks/testing'
 import { assertEquals, assertThrows } from '@std/assert'
 import {
   blobKeywords,
@@ -17,6 +17,7 @@ import { type Bundle, type Comp, graph } from '@yaks/graph'
 import type { Visibility } from '@yaks/graph/storage'
 import { ram } from '@yaks/ram'
 import { loadVocab, metaDoc } from '@yaks/vocab'
+import { type Backings, render } from '@yaks/sql'
 import { mem } from '../sqlite/testing.ts'
 import { storage } from '../sqlite/mod.ts'
 import { backed, ddl, journal, log } from './mod.ts'
@@ -33,10 +34,12 @@ let vocab = loadVocab([...wiki.docs, metaDoc, journalDoc], [
 // makes p2, ada deletes p2. A fourth describes `page` and `entity` as the
 // `_comp` entities a change points at, which the journal keeps no history of,
 // and a fifth makes a note, a component nothing describes.
-let build = () => {
+let build = (
+  derived = blobRead(vocab),
+  registry: Backings = backed(vocab, derived),
+) => {
   let db = mem()
-  let derived = blobRead(vocab)
-  let store = storage(db, vocab, { derived, backed: backed(vocab, derived) })
+  let store = storage(db, vocab, { derived, backed: registry })
   store.install()
   for (let s of [...blobSchema(), ...ddl()]) db.query(s)
   actors(graph({ storage: store, vocab }))
@@ -82,7 +85,7 @@ let build = () => {
       return `${comp} ${c.target} ${JSON.stringify(c.value ?? null)}`
     })
   }
-  return { g, read, rows, apply, said, seen }
+  return { db, g, read, rows, apply, said, seen }
 }
 
 // The wiki as every reading test sees it, built once: they only read. A test
@@ -156,6 +159,57 @@ test('a transaction is found by who wrote it, and through it', () => {
     'page p1 {"title":"Kickoff"}',
     'page p1 {"title":"Retro"}',
   ])
+})
+
+test('every store of a vocabulary reads its history through one statement', () => {
+  // Two stores sharing their registries, as a host's do. Lowering a statement
+  // reads its backings' rows; every statement either store runs is written
+  // down.
+  let derived = blobRead(vocab), lowered = 0
+  let registry = Object.fromEntries(
+    Object.entries(backed(vocab, derived)).map(([comp, b]) => [comp, {
+      ...b,
+      get rows() {
+        lowered++
+        return b.rows
+      },
+    }]),
+  )
+  let [a, b] = [build(derived, registry), build(derived, registry)]
+  let texts = [a, b].map(({ db }) => {
+    let seen = new Set<string>(), query = db.query
+    db.query = (stmt) => (seen.add(render(stmt).sql), query(stmt))
+    return seen
+  })
+  let asks = [
+    '._change.target=p1',
+    '._change.tx._tx.via=cli',
+    '.kind=_tx&._tx.by=ada',
+  ]
+  let ask = (store: typeof a) => {
+    let before = lowered, answer = asks.map((q) => store.read(q))
+    return { answer, lowered: lowered - before }
+  }
+  let first = ask(a)
+  ask(a)
+  let [ours, theirs] = [ask(a), ask(b)]
+  // The other store's first reads lower no more than this one's third.
+  ok(ours.lowered < first.lowered)
+  assertEquals(theirs.lowered, ours.lowered)
+  assertEquals([...texts[1]].filter((t) => !texts[0].has(t)), [])
+  // The same records, each named in its own store and no other.
+  let eids = ({ answer }: typeof ours) => answer.flat().map((x) => x.entity.eid)
+  // Each its own host, too.
+  let ids = ({ answer }: typeof ours) =>
+    JSON.stringify(answer, (k, v) => k == 'host' ? undefined : v)
+      .replaceAll(/"([0-9a-f]{8})[0-9a-f]{32}"/g, '$1')
+  assertEquals(ids(theirs), ids(ours))
+  assertEquals(eids(theirs).filter((e) => eids(ours).includes(e)), [])
+  assertEquals(
+    sync(b.g.get(eids(theirs))).map((x) => x.entity.eid),
+    eids(theirs),
+  )
+  assertEquals(sync(b.g.get(eids(ours))), [])
 })
 
 test('a history pages newest first', () => {

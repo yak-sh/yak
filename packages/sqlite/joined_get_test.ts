@@ -182,12 +182,12 @@ test('a selected identity reads backed rows that have no stored spine', () => {
   let opts = {
     backed: {
       receipt: {
-        tag,
         rows: select({
           cols: [as(lit(1), 'entity'), as(lit('Paid'), 'title')],
         }),
       },
     },
+    tags: { receipt: tag },
   }
   let eid = eidOf(tag, 1)
   assertEquals(get(driver, v, [eid], opts, ['receipt']), [{

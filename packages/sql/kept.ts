@@ -12,7 +12,9 @@
 // answers, and the census's choices of road (./bind.ts `walks`, `crowded`,
 // `numbered`).
 // The values a kept statement binds anew are the clock, the root candidates
-// (`eids`), those ids and numbers, and the integer ids the ids resolve to.
+// (`eids`), those ids and numbers, the integer ids the ids resolve to, and the
+// store's tags (./derived.ts `Tags`), so one statement serves every store of a
+// vocabulary.
 //
 // Where each value lands is proved, never inferred from the binder's code: a
 // shape seen a second time is lowered twice more, at two fixed instants, with
@@ -66,6 +68,8 @@ type Call = {
   roots: string[]
   operands: string[]
   refs: (number | null | undefined)[]
+  /** the store's tags, in its registry's order */
+  tags: string[]
 }
 // A parameter a call supplies.
 type Bind = (call: Call) => Param
@@ -321,6 +325,9 @@ let stand = (id: string, family: number, k: number): string => {
 }
 let marker = (family: number, k: number) =>
   Number.MIN_SAFE_INTEGER + 2 * k + family
+// A stand-in for a tag, of its form, that no eid in a call ends with.
+let standTag = (family: number, k: number): string =>
+  'e'.repeat(21) + family.toString(16) + k.toString(16).padStart(10, '0')
 
 // Two instants a moment phrase is tested at, apart in every unit a phrase can
 // round to: the first in a leap February's overflow, the second mid-May.
@@ -349,8 +356,8 @@ let called = (
     }
     return `\u0000${k}`
   })
-  let tags = Object.values(opts.backed ?? {}).flatMap((b) =>
-    b.tag ? [b.tag] : []
+  let tags = Object.keys(opts.backed ?? {}).flatMap((c) =>
+    opts.tags?.[c] ? [opts.tags[c]] : []
   )
   let virtual = (eid: string) => tags.some((tag) => idOf(tag, eid) != null)
   let roots = o.eids ? [...o.eids] : undefined
@@ -396,6 +403,7 @@ let called = (
     opts.population ?? null,
     identify(opts.derived),
     identify(opts.backed),
+    Object.keys(opts.tags ?? {}).sort(),
     ext.map((e) => [
       e.name,
       Object.keys(e.compile).filter((k) =>
@@ -409,7 +417,7 @@ let called = (
   ])
   return {
     key,
-    call: { now: o.now!, roots: roots ?? [], operands, refs } as Call,
+    call: { now: o.now!, roots: roots ?? [], operands, refs, tags } as Call,
   }
 }
 
@@ -463,6 +471,8 @@ let slot = (
     if (k >= 0 && typeof v == 'string') return (c) => c.roots[k]
     k = firsts(call.refs).get(v) ?? -1
     if (k >= 0 && typeof v == 'number') return (c) => c.refs[k] ?? null
+    k = firsts(call.tags).get(v) ?? -1
+    if (k >= 0 && typeof v == 'string') return (c) => c.tags[k]
   }
   let reads = (v: Param, i: number): string | undefined => {
     let one = input(i)(v)
@@ -534,6 +544,8 @@ let proven = (
     let refs = call.refs.map((r, k) =>
       r === undefined || r === null ? r : marker(family, k)
     )
+    let tags = call.tags.map((_, k) => standTag(family, k))
+    let named = Object.keys(opts.backed ?? {}).filter((c) => opts.tags?.[c])
     let references = opts.references && { ...opts.references }
     if (references) {
       for (let id of asking.operands) delete references[id]
@@ -549,7 +561,13 @@ let proven = (
             vocab,
             (id) => operands[firsts(asking.operands).get(id)!],
           ),
-          { ...opts, now, eids: opts.eids && roots, references },
+          {
+            ...opts,
+            now,
+            eids: opts.eids && roots,
+            references,
+            tags: Object.fromEntries(named.map((c, k) => [c, tags[k]])),
+          },
           {
             archetypes: recorded(opts.archetypes, asked),
             extend: watched(opts.extend, false),
@@ -560,7 +578,7 @@ let proven = (
     if (touched.any || !agree(asked, seen.asked) || out.sql != seen.first.sql) {
       return null
     }
-    probes.push({ out, call: { now, roots, operands, refs } })
+    probes.push({ out, call: { now, roots, operands, refs, tags } })
     params = probes.length > 1 || apart ? located(probes) : undefined
     if (params) break
   }
