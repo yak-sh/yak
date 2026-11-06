@@ -23,8 +23,7 @@
     "@yaks/ux": "0.2.19",
     "@yaks/vocab": "0.2.18",
     "lucide": "1.31.0",
-    "preact": "10.29.7",
-    "@iislove/diskusage": "2.1.1"
+    "preact": "10.29.7"
   },
   "devDependencies": {
     "@yaks/machine": "0.2.19",

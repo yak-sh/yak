@@ -12,6 +12,8 @@ test('a runtime remaps source paths without moving neighboring checkouts or data
   equal(path('file:///src-other/tool.ts'), 'file:///src-other/tool.ts')
   equal(path('file:///data/yak.db'), 'file:///data/yak.db')
   equal(path('@yaks/task'), '@yaks/task')
+  equal(path('/src/node_modules/a/b.node'), '/private/node_modules/a/b.node')
+  equal(path('/data/yak.db'), '/data/yak.db')
   equal(
     runtimeStack(
       'Error\n at file:///private/pkg/a.ts:3:1\n at file:///other/a.ts:2:1',

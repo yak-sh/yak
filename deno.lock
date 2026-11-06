@@ -3826,7 +3826,6 @@
       "packages/file": {
         "packageJson": {
           "dependencies": [
-            "npm:@iislove/diskusage@2.1.1",
             "npm:@yaks/fp@0.2.18",
             "npm:@yaks/graph@0.2.18",
             "npm:@yaks/inspect@0.2.19",

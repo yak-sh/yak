@@ -12,14 +12,14 @@
  *
  * @module
  */
-import { walk } from './measure.ts'
+import { disksAt, walk } from './measure.ts'
+import { homedir } from './io.ts'
 import type { Graph } from '@yaks/graph'
 import { sleep } from '@yaks/fp'
 import { volumeOf } from './mod.ts'
 import { here } from './local.ts'
 import {
   type Disk,
-  disks,
   due,
   listed,
   occupancyIn,
@@ -45,12 +45,10 @@ export type Looking = {
   ) => Promise<Walk | undefined>
 }
 
-/** This computer, measured without platform commands. */
+/** This computer, measured through the file API: the disks holding its root
+ * and the home directory. */
 export let computer: Looking = {
-  disks: async () => {
-    let { default: native } = await import('@iislove/diskusage')
-    return disks(await native.listVolumes())
-  },
+  disks: () => disksAt(['/', homedir()]),
   walk,
 }
 

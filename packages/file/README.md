@@ -61,12 +61,12 @@ after it.
 
 A host that lists `@yaks/file` among its plugins runs its duty
 (`@yaks/file/service`) for the computer it is on. Every hour it reads the
-computer's disks through a native volume API, excluding virtual and network
-filesystems. It walks each one whose day has no look yet, or whose latest look
-is an hour old, using file APIs without starting commands. The walk stays on one
-device, counts allocated blocks and hard links once, and never follows symlinks.
-Protected or disappearing paths remain uncounted. Cancellation keeps partial
-walks out of the graph.
+computer's disks: the filesystems holding its root and the home directory, each
+at its mount, the highest directory still on the same device. It walks each one
+whose day has no look yet, or whose latest look is an hour old, using file APIs
+without starting commands. The walk stays on one device, counts allocated blocks
+and hard links once, and never follows symlinks. Protected or disappearing paths
+remain uncounted. Cancellation keeps partial walks out of the graph.
 
 The walk lists every directory and file holding at least a thousandth of the
 volume. The day's `occupancy` row keeps those paths beside the filesystem's

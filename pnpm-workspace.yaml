@@ -12,7 +12,6 @@ ignoreWorkspaceCycles: true
 publicHoistPattern:
   - '@yaks/*'
 allowBuilds:
-  '@iislove/diskusage': false
   esbuild: true
   sharp: true
   workerd: true

@@ -1,36 +1,6 @@
-import { equal, test, throws } from '@yaks/testing'
+import { equal, test } from '@yaks/testing'
 import type { FileInfo } from './io.ts'
-import { type Filesystem, walk } from './measure.ts'
-import { disks, type Mounted } from './occupancy.ts'
-
-let volume = (mountpoint: string, fs = 'apfs', device = 'disk1'): Mounted => ({
-  mountpoint,
-  fs,
-  device,
-  type: 'fixed',
-  ok: true,
-  usage: { total: 1000, free: 400, available: 300 },
-})
-
-test('local volumes include APFS and HFS, deduplicate devices and preserve reserved space', () => {
-  equal(
-    disks([
-      volume('/bind'),
-      volume('/'),
-      volume('/Volumes/My Data', 'hfs', 'disk2'),
-      volume('/run', 'tmpfs', 'ram'),
-      { ...volume('/network'), type: 'network' },
-    ]),
-    [
-      { mount: '/', size: 1000, used: 600, free: 300 },
-      { mount: '/Volumes/My Data', size: 1000, used: 600, free: 300 },
-    ],
-  )
-  equal(disks('/dev/sda ext4 1000 600 300 /'), [
-    { mount: '/', size: 1000, used: 600, free: 300 },
-  ])
-  throws(() => disks([{ ...volume('/'), ok: false, error: 'unreadable' }]))
-})
+import { disksAt, type Filesystem, walk } from './measure.ts'
 
 let tree: Record<string, Partial<FileInfo> & { children?: string[] }> = {
   '/': { ino: 1, isDirectory: true, blocks: 1, children: ['home', 'other'] },
@@ -46,6 +16,7 @@ let tree: Record<string, Partial<FileInfo> & { children?: string[] }> = {
   '/home/small': { ino: 5, blocks: 1 },
   '/home/private': { ino: 6, blocks: 1, isDirectory: true },
   '/other': { ino: 1, dev: 2, blocks: 100, isDirectory: true },
+  '/other/me': { ino: 2, dev: 2, isDirectory: true },
 }
 let fs: Filesystem = {
   lstat: (path) => {
@@ -63,7 +34,18 @@ let fs: Filesystem = {
       yield { name, isFile: false, isDirectory: false, isSymlink: false }
     }
   },
+  realPath: (path) =>
+    Promise.resolve(path == '/me' ? '/other/me' : String(path)),
+  space: (path) =>
+    Promise.resolve({ size: 1000, used: 600, free: String(path).length }),
 }
+
+test('disks are the filesystems holding the places, each once at its mount', async () => {
+  equal(await disksAt(['/', '/home', '/me', '/other/me'], fs), [
+    { mount: '/', size: 1000, used: 600, free: 1 },
+    { mount: '/other', size: 1000, used: 600, free: 6 },
+  ])
+})
 
 test('walk counts allocated blocks and directories, once per inode on one device', async () => {
   equal(await walk('/', 1000, undefined, fs), {

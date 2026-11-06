@@ -1,7 +1,7 @@
 /**
  * What fills a volume, as a look at it records it:
  * `occupancy{volume, day, at, size, used, free, counted, paths}`, one row a
- * volume a UTC day. Here are selecting local disks and reading a run
+ * volume a UTC day. Here is reading a run
  * of them the way the Disks page does: what a directory holds, what is too
  * small to list, which directories are drawn open, the largest files, the
  * change between two looks, and which file is the graph's own. Pure; looking
@@ -25,7 +25,7 @@ export type Occupancy = {
   paths: Record<string, number>
 }
 
-/** A mounted filesystem on a local disk. */
+/** A filesystem this computer keeps files on, at its mount. */
 export type Disk = { mount: string; size: number; used: number; free: number }
 
 /** What a walk of a volume counted. */
@@ -47,81 +47,6 @@ export let SHARE = 1 / 1000
 /// listed(190e9) -> 190000000
 /** The fewest bytes a path on a volume of `size` bytes holds to be listed. */
 export let listed = (size: number): number => Math.ceil(size * SHARE)
-
-// Filesystems kept on a local disk. One kept in memory, by the kernel, over
-// a network or as a layer of images is not a disk to walk.
-let DISK = new Set([
-  'ext2',
-  'ext3',
-  'ext4',
-  'xfs',
-  'btrfs',
-  'zfs',
-  'f2fs',
-  'bcachefs',
-  'jfs',
-  'reiserfs',
-  'vfat',
-  'exfat',
-  'ntfs',
-  'ntfs3',
-  'fuseblk',
-  'apfs',
-  'hfs',
-  'hfsplus',
-])
-
-/** A mounted volume from the host's disk API. */
-export type Mounted = {
-  mountpoint: string
-  device: string
-  fs: string
-  type: string
-  ok: boolean
-  error?: string
-  usage: { total: number; free: number; available: number } | null
-}
-
-// Retain the table input accepted by published callers.
-let tableVolumes = (table: string): Mounted[] =>
-  table.split('\n').flatMap((line) => {
-    let m = line.trim().match(
-      /^(\S+)\s+(\S+)\s+(\d+)\s+(\d+)\s+(\d+)\s+(\/.*)$/,
-    )
-    if (!m) return []
-    let [, device, fs, size, used, free, mountpoint] = m
-    return [{
-      device,
-      fs,
-      mountpoint,
-      type: 'fixed',
-      ok: true,
-      usage: { total: +size, free: +size - +used, available: +free },
-    }]
-  })
-
-/** Each local disk once, at its shortest mount, excluding virtual and network
- * filesystems. Available space excludes blocks reserved by the filesystem. */
-export let disks = (volumes: Mounted[] | string): Disk[] => {
-  if (typeof volumes == 'string') volumes = tableVolumes(volumes)
-  let seen = new Map<string, Disk>()
-  for (let volume of volumes) {
-    if (volume.type == 'network' || !DISK.has(volume.fs.toLowerCase())) continue
-    if (!volume.ok || !volume.usage) {
-      throw Error(`Cannot measure ${volume.mountpoint}: ${volume.error}`)
-    }
-    let { mountpoint: mount, device, usage } = volume
-    let had = seen.get(device)
-    if (had && had.mount.length <= mount.length) continue
-    seen.set(device, {
-      mount,
-      size: usage.total,
-      used: usage.total - usage.free,
-      free: usage.available,
-    })
-  }
-  return [...seen.values()].toSorted((a, b) => a.mount.localeCompare(b.mount))
-}
 
 /**
  * What `du -0 -B1` printed: each path it listed, with its bytes.

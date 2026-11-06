@@ -9,7 +9,7 @@ import {
 import { wind } from '@yaks/process/wind'
 import { registerHooks } from 'node:module'
 import { isAbsolute } from 'node:path'
-import { pathToFileURL } from 'node:url'
+import { fileURLToPath, pathToFileURL } from 'node:url'
 
 let ROOT = new URL('../../', import.meta.url)
 let decode = (bytes: Uint8Array) => new TextDecoder().decode(bytes)
@@ -235,26 +235,29 @@ let build = async ({ root, commit, patch, files, target, hash }: {
 }
 
 /** A file plugin inside the checkout follows the runtime's private tree too.
- * Paths outside it, including the graph's database, keep their own identity. */
+ * Paths outside it, including the graph's database, keep their own identity.
+ * An absolute path stays a path, since `require` takes no URL. */
 export let runtimePath = (
   spec: string,
   from = runtimeRoot() ? system.env.get('YAK_RUNTIME_FROM') : undefined,
   to = runtimeRoot() ? system.env.get('YAK_RUNTIME_ROOT') : undefined,
-): string =>
-  from && to && spec.startsWith(from + '/')
+): string => {
+  if (isAbsolute(spec)) {
+    let url = pathToFileURL(spec).href
+    let moved = runtimePath(url, from, to)
+    return moved == url ? spec : fileURLToPath(moved)
+  }
+  return from && to && spec.startsWith(from + '/')
     ? to + spec.slice(from.length)
     : spec
+}
 
 // Deferred imports in a pinned runtime keep the same source tree, including
 // absolute file imports from a provider outside that tree.
 if (runtimeRoot()) {
   registerHooks({
-    resolve(specifier, context, next) {
-      let url = isAbsolute(specifier)
-        ? pathToFileURL(specifier).href
-        : specifier
-      return next(runtimePath(url), context)
-    },
+    resolve: (specifier, context, next) =>
+      next(runtimePath(specifier), context),
   })
 }
 

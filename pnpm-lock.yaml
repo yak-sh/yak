@@ -1801,9 +1801,6 @@ importers:
 
   packages/file:
     dependencies:
-      '@iislove/diskusage':
-        specifier: 2.1.1
-        version: 2.1.1
       '@yaks/fp':
         specifier: 0.2.18
         version: link:../fp
@@ -5896,12 +5893,6 @@ packages:
     resolution: {integrity: sha512-Hw7/Pc/y2f8ZYVNXxAvDiLAV0qJT4+e5HMwbMghra/s2RKXuuWYdR/8ohoD4YwQfTL5UzSNlTtP1LJHip7LiEQ==}
     engines: {node: '>=22'}
 
-  '@iislove/diskusage@2.1.1':
-    resolution: {integrity: sha512-RUut+42THe4iJhQ4fVE65CuG4S8HgdKEYJqCF36GTs61hvhAUHYFmieLzsNxxTWYS6PJzng7mhbQhL1cYl+pIg==}
-    engines: {node: '>=14.21.3'}
-    cpu: [x64, arm64]
-    os: [darwin, linux, win32]
-
   '@img/colour@1.1.0':
     resolution: {integrity: sha512-Td76q7j57o/tLVdgS746cYARfSyxk8iEfRxewL9h4OMzYhbW4TAcppl0mT4eyqXddh6L/jwoM75mo7ixa/pCeQ==}
     engines: {node: '>=18'}
@@ -7120,13 +7111,6 @@ packages:
     resolution: {integrity: sha512-eonl3sLUha+S1GzTPxychyhnUzKyeQkZ7jLjKrBagJgPla13F+uQ71HgpFefyHgqrjEbCPkDArxYsjY8/+gLKA==}
     engines: {node: '>= 0.4.0'}
 
-  node-addon-api@6.1.0:
-    resolution: {integrity: sha512-+eawOlIgy680F0kBzPUNFhMZGtJ1YmqM6l4+Crf4IkImjYrO/mqPwRMh352g23uIaQKFItcQ64I7KMaJxHgAVA==}
-
-  node-gyp-build@4.8.4:
-    resolution: {integrity: sha512-LA4ZjwlnUblHVgq0oBF3Jl/6h/Nvs5fzBLwdEF4nuxnFdsfajde4WfxtJr3CaiH+F6ewcIB/q4jQ4UzPyid+CQ==}
-    hasBin: true
-
   nth-check@3.0.1:
     resolution: {integrity: sha512-GX0gsdbGVCgnRgbeGaubfjpBXyYRWOOCVeYh08bSQvDZqxz5ndXs1OTfAt/h36G1xvI94YIspsI0sVFqAV9+RQ==}
     engines: {node: '>=20.19.0'}
@@ -7803,11 +7787,6 @@ snapshots:
   '@huggingface/tokenizers@0.2.0': {}
 
   '@hyzyla/pdfium@3.0.0': {}
-
-  '@iislove/diskusage@2.1.1':
-    dependencies:
-      node-addon-api: 6.1.0
-      node-gyp-build: 4.8.4
 
   '@img/colour@1.1.0': {}
 
@@ -8924,10 +8903,6 @@ snapshots:
       content-type: 2.1.0
 
   netmask@2.1.1: {}
-
-  node-addon-api@6.1.0: {}
-
-  node-gyp-build@4.8.4: {}
 
   nth-check@3.0.1:
     dependencies:

@@ -2,6 +2,7 @@
 import * as fs from 'node:fs'
 import * as fsp from 'node:fs/promises'
 import { tmpdir } from 'node:os'
+export { homedir } from 'node:os'
 import { join, sep } from 'node:path'
 import process from 'node:process'
 export {
@@ -228,6 +229,17 @@ export let readDir = async function* (path: Path): AsyncGenerator<DirEntry> {
 }
 export let readDirSync = (path: Path): Iterable<DirEntry> =>
   fs.readdirSync(reading(path), { withFileTypes: true }).map(entry)
+/** The bytes of the filesystem holding a path: its size, those in use, and
+ * those free to a writer without privilege. */
+export type Space = { size: number; used: number; free: number }
+export let space = async (path: Path): Promise<Space> => {
+  let { bsize, blocks, bfree, bavail } = await fsp.statfs(reading(path))
+  return {
+    size: blocks * bsize,
+    used: (blocks - bfree) * bsize,
+    free: bavail * bsize,
+  }
+}
 export let realPath = (path: Path): Promise<string> =>
   fsp.realpath(reading(path))
 export let realPathSync = (path: Path): string => fs.realpathSync(reading(path))

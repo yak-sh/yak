@@ -1,8 +1,11 @@
 /** Filesystem measurements through the host's file API, without commands. */
 import * as disk from './io.ts'
-import type { Walk } from './occupancy.ts'
+import type { Disk, Walk } from './occupancy.ts'
 
-export type Filesystem = Pick<typeof disk, 'lstat' | 'readDir'>
+export type Filesystem = Pick<
+  typeof disk,
+  'lstat' | 'readDir' | 'realPath' | 'space'
+>
 
 // A path can disappear while measuring; protected directories remain uncounted.
 let readable = (error: unknown): undefined => {
@@ -46,4 +49,24 @@ export let walk = async (
   }
   let counted = await visit(mount, '')
   return signal?.aborted ? undefined : { counted, paths }
+}
+
+/** The filesystems holding `places`, each once, at its mount: the highest
+ * directory above a place that is still on the place's device. */
+export let disksAt = async (
+  places: string[],
+  fs: Filesystem = disk,
+): Promise<Disk[]> => {
+  let found = new Map<number, Disk>()
+  for (let place of places) {
+    let mount = await fs.realPath(place)
+    let { dev } = await fs.lstat(mount)
+    if (found.has(dev)) continue
+    for (let up = disk.dirname(mount); up != mount; up = disk.dirname(up)) {
+      if ((await fs.lstat(up)).dev != dev) break
+      mount = up
+    }
+    found.set(dev, { mount, ...await fs.space(mount) })
+  }
+  return [...found.values()].toSorted((a, b) => a.mount.localeCompare(b.mount))
 }
