@@ -345,3 +345,17 @@ test('a chat with no app beside it opens again to show one it changed, unless th
   assertEquals(page.loads.page, 1)
   page.leave()
 })
+
+test('words typed on one page show on the person’s other open page as its socket brings them', async () => {
+  let here = await load(storage(), false, park),
+    there = await load(storage(), false, park)
+  await Promise.all([here.heard(), there.heard()])
+  here.type('Ask for the south shelter instead')
+  await settle()
+  let { bundles } = await (await serve(`${base}?draft=1`)).json()
+  there.hear({ drafts: bundles })
+  await settle()
+  assertEquals(there.say.value, 'Ask for the south shelter instead')
+  here.leave()
+  there.leave()
+})

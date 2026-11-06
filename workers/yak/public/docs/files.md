@@ -364,14 +364,23 @@ entry, which undoes the last write:
 A restore is **itself a write**, so the bytes it replaces are kept in turn, and
 another restore can undo it. Nothing rewrites the history.
 
+**With no `path`, `op: restore` goes back one write.** Every file the app's
+newest write changed returns to what that write replaced, together, and a file
+the write made is removed. This is what to do when someone says "go back".
+Asking again goes back one more write, rather than putting back the one just
+undone:
+
+    app_files(app, op: 'restore')
+
 The bytes are kept for **30 days**, and always at least the last 20 versions of
 a file, whichever reaches further back. After that a version is deleted, but
 only if nothing else needs it: bytes a kept deploy names are never removed, so
 `app_rollback` keeps working for every version `app_versions` still lists.
 
-File history restores one file. The other restore tools: `app_rollback` restores
-every file of a whole deploy at once, `store_restore` restores everything the
-app has _saved_, and `app_restore` restores an app that was deleted.
+File history restores one file, or one write. The other restore tools:
+`app_rollback` restores every file of a whole deploy at once, `store_restore`
+restores everything the app has _saved_, and `app_restore` restores an app that
+was deleted.
 
 ## Home-screen icon: `icon.svg`
 

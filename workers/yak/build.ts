@@ -216,6 +216,8 @@ export class Builder {
   #sql: Driver
   #env: Env
   #operator?: Promise<import('./operator.ts').Operator>
+  // What the pages watching the Operator are told, once it is at work.
+  #frames?: ReturnType<typeof import('./operator-host.ts').operatorFrames>
   // Whether a build is running in this object right now. In memory on purpose:
   // an object that was evicted has no build running, and a flag in storage
   // would outlive the loop it stands for and lock the space forever.
@@ -272,6 +274,7 @@ export class Builder {
     await this.#ctx.storage.deleteAll()
     this.#sql.query(SAID)
     this.#operator = undefined
+    this.#frames = undefined
   }
 
   // Everyone watching this space, including the socket the frame came in on: a
@@ -513,6 +516,7 @@ export class Builder {
       new URL(request.url).pathname,
       args,
       () => this.#arming,
+      (bundles) => this.#frames?.drafts(held, bundles),
     )
     if (response) return response
     // Its steps run on the pool, as every other Operator session's do: words
@@ -542,7 +546,7 @@ export class Builder {
           )
         },
       })
-      let frames = operatorFrames(
+      let frames = this.#frames = operatorFrames(
         store,
         () => this.#ctx.getWebSockets(),
         (person) => operator.named(person),

@@ -24,7 +24,7 @@
 // on the app row sends a write that crossed a deploy back to read the draft
 // the deploy left.
 import type { Objects } from '@yaks/blob'
-import { lanes } from '@yaks/fp'
+import { groupBy, lanes } from '@yaks/fp'
 import { Stale } from '@yaks/graph/errors'
 import { derivedEid, mint } from '@yaks/graph/identity'
 import { token } from '@yaks/graph/sha256'
@@ -353,6 +353,44 @@ export let restoring = (
     ? then
     : gone.find((w) => w.sha != now)?.sha
   return { then, want }
+}
+
+/**
+ * What "go back" undoes in an app: its newest write that still stands, as the
+ * changes putting each path it wrote back to the sha it replaced (none where
+ * it made the file), and when it was. The rows of one write share its stamp
+ * (`modifying`). A write that exactly reverses the standing write before it
+ * undid that write, so the two cancel and going back again steps further back
+ * rather than putting the undone write back. Undefined where none stands.
+ */
+export let goingBack = (rows: Written[]) => {
+  let writes = groupBy(
+    newest(rows).reverse(),
+    (w) => w.at ? `${w.draft}|${w.at}` : w.eid,
+  ).values()
+  let standing: Written[][] = []
+  for (let write of writes) {
+    let top = standing.at(-1)
+    let undoes = top?.length == write.length &&
+      write.every((w) =>
+        top.some((t) => t.path == w.path && t.sha == w.was && t.was == w.sha)
+      )
+    if (undoes) standing.pop()
+    else standing.push(write)
+  }
+  let last = standing.at(-1)
+  return last && {
+    at: last[0].at,
+    changes: last.map((w): Change =>
+      w.was
+        ? {
+          path: w.path,
+          sha: w.was,
+          size: rows.find((r) => r.sha == w.was)?.size ?? null,
+        }
+        : { path: w.path }
+    ),
+  }
 }
 
 /** What one path has held, newest first: every write to it the app keeps. */

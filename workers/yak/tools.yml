@@ -185,7 +185,9 @@ app_files:
     To undo any write, patch, fetch or delete: op: history with path lists
     them newest first (sha256, size, when, by whom), and op: restore puts
     one back, the newest or the one sha or at names; a restore is itself a
-    write. Documentation: https://yaks.app/docs/files.
+    write. op: restore with no path goes back one write: every file the
+    newest write changed returns to what it replaced, and asking again goes
+    back one more. Documentation: https://yaks.app/docs/files.
 sandbox_shell:
   title: Run a build command
   step:

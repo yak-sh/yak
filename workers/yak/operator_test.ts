@@ -366,6 +366,53 @@ test('words given while the Operator works land in its running session, which an
   )
 })
 
+// Words given while a tool runs: the step after it sees them and does what
+// they say, in the same session, with no run queued behind it.
+let toolSteered = operatorMemory()
+let toolSteering: Request[] = []
+let toolGiven: { task: string; session: string } | undefined
+let painter = operate(toolSteered, roundsPlatform, {
+  ...operatorModel((req) => {
+    toolSteering.push(req)
+    let heard = JSON.stringify(req.items).includes('No, warmer colors.')
+    return Promise.resolve({
+      id: crypto.randomUUID(),
+      model: req.model,
+      items: toolSteering.length == 1 ? calls('paint', { colors: 'cool' }) : [{
+        kind: 'assistant',
+        text: heard ? 'Repainting it warm.' : 'Painted it cool.',
+      }],
+      cost: 0.001,
+    })
+  }),
+  tools: () => [{
+    name: 'paint',
+    title: 'Paint the app',
+    description: 'Paint the app in the colors given.',
+    parameters: { type: 'object', properties: { colors: { type: 'string' } } },
+    run: async () => {
+      await painter.ask(roundsHeld, roundsSpace, {
+        task: toolGiven!.task,
+        say: 'No, warmer colors.',
+      })
+      return 'painted'
+    },
+  }],
+})
+toolGiven = await painter.ask(roundsHeld, roundsSpace, {
+  say: 'Paint the notices app.',
+}, { task: crypto.randomUUID() })
+await drain(toolSteered)
+let toolRead = await readOperator(toolSteered, toolGiven.task)
+test('words given during a tool call change what the running turn does next', () => {
+  assertEquals(toolRead.sessions?.length, 1)
+  assertEquals(toolSteering.length, 2)
+  assertEquals(
+    toolRead.comments?.map((b) => comp(b, 'doc').body).at(-1),
+    'Repainting it warm.',
+  )
+})
+
 // Stopped while the model answers: the step withdrawn, one answer,
 // and new words take the same session up again.
 let halted = operatorMemory()

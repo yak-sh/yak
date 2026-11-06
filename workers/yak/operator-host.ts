@@ -605,17 +605,18 @@ export let operatorFrames = (
 ) => {
   let told = new Map<string, number>()
   let tasks = new Map<string, string>()
+  // The pages one person has open on this Operator.
+  let pagesOf = (owner: Pick<Held, 'person' | 'space'>) =>
+    sockets().filter((ws) => {
+      let held = ws.deserializeAttachment() as
+        | (Held & { operator?: boolean })
+        | null
+      return held?.operator && held.person == owner.person &&
+        held.space == owner.space
+    })
   let watching = async (session: string) => {
     let owner = await ownerOf(store, session)
-    return owner
-      ? sockets().filter((ws) => {
-        let held = ws.deserializeAttachment() as
-          | (Held & { operator?: boolean })
-          | null
-        return held?.operator && held.person == owner.person &&
-          held.space == owner.space
-      })
-      : []
+    return owner ? pagesOf(owner) : []
   }
   let send = (watching: Listener[], frame: unknown) => {
     let sent = JSON.stringify(frame)
@@ -628,6 +629,10 @@ export let operatorFrames = (
     }
   }
   return {
+    /** A person's drafts as they now stand, to every page they have open, so
+     * words typed on one show on the others as they land. */
+    drafts: (owner: Pick<Held, 'person' | 'space'>, bundles: Bundle[]) =>
+      send(pagesOf(owner), { drafts: bundles }),
     tell: async (session: string) => {
       let pages = await watching(session)
       if (!pages.length) return
@@ -733,6 +738,7 @@ export let operatorRequest = async (
   path: string,
   args: Record<string, unknown>,
   armed: () => Promise<void> | undefined,
+  drafted: (bundles: Bundle[]) => void = () => {},
 ): Promise<Response | null> => {
   let { person, space: spaceId } = held
   let { store } = operator
@@ -770,9 +776,9 @@ export let operatorRequest = async (
       }
       await store.g.apply(bundles)
     }
-    return Response.json({
-      bundles: await allowedDrafts(await store.g.read(`.draft.by=${person}`)),
-    })
+    let kept = await allowedDrafts(await store.g.read(`.draft.by=${person}`))
+    if (Array.isArray(args.bundles)) drafted(kept)
+    return Response.json({ bundles: kept })
   }
   // The opt-ins this store kept before the number moved onto the person
   // (operator-texts.ts `handed`): listed for the page to hand to the
@@ -804,6 +810,9 @@ export let operatorRequest = async (
     if (old && !await own(old.entity.eid)) return missing()
     let id = await receive(store, intake, String(args.say ?? ''), options)
     await armed()
+    if (options?.also) {
+      drafted(await allowedDrafts(await store.g.read(`.draft.by=${person}`)))
+    }
     return Response.json({
       request: id,
       ...(options?.also

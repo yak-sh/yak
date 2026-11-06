@@ -18,6 +18,7 @@ import {
   type Drafted,
   drafting,
   followed,
+  goingBack,
   history,
   modifying,
   replaced,
@@ -224,6 +225,11 @@ let made = () => {
     }
     return edit(() => Promise.resolve({ changes: [change], value: null }))
   }
+  let back = async () => {
+    let undo = goingBack(await dir.written(app()))
+    assert(undo)
+    return edit(() => Promise.resolve({ changes: undo.changes, value: null }))
+  }
   let remove = (path: string) =>
     edit((d, _app, attempt) => answer(() => deleting(d, path, attempt)))
   return {
@@ -234,6 +240,7 @@ let made = () => {
     follow: () => followed(dir, SPACE, app(), WHO),
     past,
     restore,
+    back,
     remove,
     draft,
     time,
@@ -414,4 +421,26 @@ test('a separate app starts at its own clock, not another draft’s future stamp
   let other = otherClockedWrites
   await other.write({ 'b.txt': 'three' })
   assertEquals((await other.past('b.txt'))[0].at, first)
+})
+
+test('going back undoes the newest write across its files, and again the one before, down to nothing', async () => {
+  let { write, back, draft, read, time } = made()
+  let files = async () =>
+    Object.fromEntries(
+      await Promise.all(
+        Object.keys((await draft()).files).sort().map(
+          async (path) => [path, await read(path)],
+        ),
+      ),
+    )
+  await write({ 'a.txt': 'one' })
+  await time.advance(1)
+  await write({ 'a.txt': 'two', 'b.txt': 'left' })
+  await time.advance(1)
+  await back()
+  assertEquals(await files(), { 'a.txt': 'one' })
+  await time.advance(1)
+  await back()
+  assertEquals(await files(), {})
+  assertEquals(goingBack((await draft()).rows), undefined)
 })

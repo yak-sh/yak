@@ -246,3 +246,38 @@ test('the chat page and its polling door conceal foreign and unknown ids alike',
   }
   assertEquals((await chatPage(env, at, who(ada), root)).status, 200)
 })
+
+test('a saved draft is told only to its owner’s pages in its space', async () => {
+  let sent = new Map<string, unknown[]>()
+  let page = (name: string, person: string, at = space) => ({
+    send: (data: string) =>
+      void sent.set(name, [...sent.get(name) ?? [], JSON.parse(data)]),
+    deserializeAttachment: () => ({
+      ...who(person),
+      space: at,
+      operator: true,
+    }),
+  })
+  let frames = operatorFrames(store, () => [
+    page('own', ada),
+    page('other', bea),
+    page('elsewhere', ada, unknown),
+  ])
+  let told: Bundle[][] = []
+  let answered = await operatorRequest(
+    operator,
+    who(ada),
+    '/operator/draft',
+    { bundles: [draft(ada, root, 'Words on the way')] },
+    () => undefined,
+    (bundles) => {
+      told.push(bundles)
+      frames.drafts(who(ada), bundles)
+    },
+  )
+  assertEquals(told.length, 1)
+  assertEquals(sent.get('own'), [
+    { drafts: (await answered!.json()).bundles },
+  ])
+  assertEquals([sent.has('other'), sent.has('elsewhere')], [false, false])
+})

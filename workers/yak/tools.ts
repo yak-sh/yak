@@ -294,6 +294,7 @@ import {
   deleting,
   type Draft,
   drafting,
+  goingBack,
   history,
   modifying,
   replaced,
@@ -3209,7 +3210,11 @@ let OURS: Row[] = [
             'list, read, write, patch, fetch, delete, history or restore. Required ' +
             'unless files, content or base64 supplies a write',
         },
-        path: str('path relative to the app root, e.g. index.html'),
+        path: str(
+          'path relative to the app root, e.g. index.html. For restore, ' +
+            'leaving path, sha and at out goes back one write: every file ' +
+            "the app's newest write changed returns to what it replaced",
+        ),
         paths: {
           type: 'array',
           items: { type: 'string' },
@@ -3441,6 +3446,46 @@ let OURS: Row[] = [
       // And putting one back, as a new write naming the sha it held, so what
       // it replaces is kept in turn and a restore can be undone by another.
       // No bytes move: they are already at their address.
+      // Going back, with no path named: every file the app's newest standing
+      // write changed returns to what it replaced, as one write.
+      if (
+        op == 'restore' && args.path == null && args.sha == null &&
+        args.at == null
+      ) {
+        let back = goingBack(await ctx.dir.written(app))
+        if (!back) {
+          throw refuse(
+            'missing',
+            `nothing to go back to in ${space.slug}/${app.slug} — no write ` +
+              'it keeps still stands',
+          )
+        }
+        let gone = (await Promise.all(
+          back.changes.map(async (c) =>
+            c.sha && !await blobs.has(addressed(c.sha)) ? [c.path] : []
+          ),
+        )).flat()
+        if (gone.length) {
+          throw refuse(
+            'missing',
+            `the bytes ${gone.join(', ')} held before ${back.at} are no ` +
+              'longer kept — the history goes back 30 days',
+          )
+        }
+        let { config } = await drafted(ctx.env, space, app, who, back.changes)
+        let where = placing(ctx, space, app, config)
+        return {
+          text: `went back past the write of ${back.at}: ` +
+            back.changes.map((c) =>
+              c.sha
+                ? `${c.path} → ${where(c.path)}, sha256 ${c.sha}`
+                : `${c.path} removed`
+            ).join('; ') +
+            '. This is itself a write; op restore with no path again goes ' +
+            'back one more. Staged for app_deploy.',
+          space,
+        }
+      }
       if (op == 'restore') {
         let path = named(text(args.path, 'path'))
         let [d, all] = await Promise.all([draft(), history(ctx.dir, app, path)])

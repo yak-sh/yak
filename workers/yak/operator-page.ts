@@ -1043,17 +1043,22 @@ let draftClient = {
     if (!response.ok) throw new Error('Your draft could not sync. A recovery copy is kept on this device.')
     return response.json()
   },
+  // Read once, then heard on the page's socket as each change lands, and read
+  // again whenever the socket opens, for what landed while it was closed.
   subscribe: (_q, hear) => {
-    let stopped = false
-    let timer
-    let read = async () => {
-      try { let response = await fetch(draftAt); if (response.ok && !stopped) hear((await response.json()).bundles) }
-      catch (e) { status.textContent = 'Your draft is kept on this device until syncing returns.' }
-      if (!stopped) timer = setTimeout(read, 2000)
-    }
-    read()
-    return () => { stopped = true; clearTimeout(timer) }
+    hearing.add(hear)
+    readDrafts([hear])
+    return () => hearing.delete(hear)
   }
+}
+let hearing = new Set()
+let readDrafts = async (hears = hearing) => {
+  try {
+    let response = await fetch(draftAt)
+    if (!response.ok) throw new Error(String(response.status))
+    let { bundles } = await response.json()
+    for (let hear of hears) if (hearing.has(hear)) hear(bundles)
+  } catch (e) { status.textContent = 'Your draft is kept on this device until syncing returns.' }
 }
 let drafts = browserDrafts(draftClient, '${space.eid}:operator', { by: '${who.person}', report: (e) => { status.textContent = e.message } })
 // Each conversation keeps its own draft, and the box is ready to type in.
@@ -1131,6 +1136,7 @@ let read = async () => {
 // just taken up) reads the page again, and another one's step is not this page's.
 let live = false
 let hear = (frame) => {
+  if (frame.drafts) for (let heard of hearing) heard(frame.drafts)
   let o = frame.operator
   if (!o) return
   changing(o)
@@ -1172,7 +1178,7 @@ let hear = (frame) => {
 }
 let listen = () => {
   let socket = new WebSocket(location.origin.replace(/^http/, 'ws') + '${at}?live=1')
-  socket.onopen = () => { live = true; read().catch(said) }
+  socket.onopen = () => { live = true; readDrafts(); read().catch(said) }
   socket.onmessage = (e) => { try { hear(JSON.parse(e.data)) } catch (error) { said(error) } }
   socket.onclose = () => { live = false; poll(); setTimeout(listen, 3000) }
 }
