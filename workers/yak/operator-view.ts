@@ -13,12 +13,13 @@ import type { Step } from '@yaks/tools/title'
 import { toolEid } from '@yaks/tools/result'
 import { blocks, parse } from '@yaks/markdown/structural'
 import { PART } from '@yaks/persona'
-import { h } from 'preact'
+import { type ComponentChildren as Node, Fragment, h } from 'preact'
 import { renderToString } from 'preact-render-to-string'
-import { day, esc } from './html.ts'
+import { Body, Card, Drop, Icon, Loading, Rows } from '@yaks/ui'
+import { day } from './html.ts'
 import { chatPath } from './route.ts'
-import { poseOf, yak } from './mascot.ts'
-import { icon, type IconName } from './icons.ts'
+import { poseOf, Yak } from './mascot.ts'
+import { type IconName, icons } from './icons.ts'
 import { when } from './public/when.js'
 
 let comp = (b: Bundle | undefined, name: string) =>
@@ -26,6 +27,12 @@ let comp = (b: Bundle | undefined, name: string) =>
 
 /** A drawn line of a transcript: what it shows, under the id it is put by. */
 export type Row = { id: string; html: string }
+// A line before it is drawn: its parts, under the id it is put by.
+type Line = { id: string; node: Node }
+let drawn = ({ id, node }: Line): Row => ({
+  id,
+  html: renderToString(h(Fragment, null, node)),
+})
 /** How a call reads to the person, by its tool's eid (`call.to`) and its
  * arguments: what it is doing while it runs and what it did once it answered
  * (@yaks/tools `stepOf`). */
@@ -99,10 +106,12 @@ let VIA: Record<string, [IconName, string]> = {
 let via = (b: Bundle) => {
   let [name, label] = VIA[String(comp(b, 'operator_channel')?.channel)] ?? []
   return name
-    ? `<span class="Talk_Via" title="${label}" aria-label="${label}">${
-      icon(name)
-    }</span>`
-    : ''
+    ? h(
+      'span',
+      { class: 'Talk_Via', title: label, 'aria-label': label },
+      h(Icon, { of: icons[name] }),
+    )
+    : null
 }
 
 // What the person said: their words without the framing the model read, and
@@ -116,16 +125,14 @@ let spoken = (b: Bundle, body: string) => {
 }
 
 let yours = (b: Bundle, text: string) =>
-  `<p class="Talk_You">${via(b)}${esc(text)}</p>`
+  h('p', { class: 'Talk_You' }, via(b), text)
 
 // When a line was sent, small under it (public/when.js), the page saying it
 // again in the person's own time.
 let stamp = (b: Bundle) => {
   let at = String(comp(b, 'created')?.at ?? '')
   let said = when(at)
-  return said
-    ? `<time class="Talk_When" datetime="${esc(at)}">${said}</time>`
-    : ''
+  return said ? h('time', { class: 'Talk_When', datetime: at }, said) : null
 }
 
 type Sent = { name: string; mime?: string }
@@ -142,45 +149,56 @@ export let PICTURES = ['image/png', 'image/jpeg', 'image/gif', 'image/webp']
  * original (operator-page.ts `?attachment=`, answered on either page). */
 export let attached = (request: string, files: Sent[]) =>
   files.length
-    ? `<div class="Talk_Files">${
+    ? h(
+      'div',
+      { class: 'Talk_Files' },
       files.map((f, i) => {
-        let href = `?attachment=${esc(request)}&amp;file=${i}`
+        let href = `?attachment=${request}&file=${i}`
         return PICTURES.includes(f.mime ?? '')
-          ? `<a class="Talk_Picture" href="${href}" target="_blank"><img src="${href}" alt="${
-            esc(f.name)
-          }" loading="lazy"></a>`
-          : `<a class="Talk_File" href="${href}"><span class="Drop_Kind">${
-            esc(
+          ? h(
+            'a',
+            { class: 'Talk_Picture', href, target: '_blank' },
+            h('img', { src: href, alt: f.name, loading: 'lazy' }),
+          )
+          : h(
+            'a',
+            { class: 'Talk_File', href },
+            h(
+              Drop.Kind,
+              null,
               f.name.match(/\.([a-z0-9]{1,5})$/i)?.[1].toUpperCase() ?? 'File',
-            )
-          }</span><span class="Drop_Name">${esc(f.name)}</span></a>`
-      }).join('')
-    }</div>`
-    : ''
+            ),
+            h(Drop.Name, null, f.name),
+          )
+      }),
+    )
+    : null
 
 // A person's input: their words, and the files that came with them.
 let input = (b: Bundle, body: string) => {
   let sent = comp(b, 'operator_files')
   let files = (sent?.files ?? []) as Sent[]
   let said = spoken(b, body)
-  return `${said && said != unsaid(files) ? yours(b, said) : ''}${
-    sent ? attached(String(sent.request), files) : ''
-  }`
+  return h(
+    Fragment,
+    null,
+    said && said != unsaid(files) ? yours(b, said) : null,
+    sent ? attached(String(sent.request), files) : null,
+  )
 }
 
 // Markdown drawn as formatted text, the kit's Body: markup in it stays words
 // (@yaks/markdown).
-let markdown = (text: string) =>
-  renderToString(h('div', { class: 'Body' }, ...blocks(parse(text), h)))
+let markdown = (text: string) => h(Body, null, ...blocks(parse(text), h))
 
 /** A reply as the Operator wrote it, in Markdown. */
 export let reply = (text: string) =>
-  `<div class="Talk_Reply">${markdown(text)}</div>`
+  h('div', { class: 'Talk_Reply' }, markdown(text))
 
 // A value a tool was given or gave back, the way a person reads it: a list
 // of what it holds under names in words, never its JSON. Bounded in depth,
 // length and count, since a tool can answer with a whole file.
-let readable = (value: unknown, depth = 0): string => {
+let readable = (value: unknown, depth = 0): Node => {
   if (typeof value == 'string' && /^\s*[[{]/.test(value)) {
     try {
       return readable(JSON.parse(value), depth)
@@ -188,27 +206,35 @@ let readable = (value: unknown, depth = 0): string => {
       // Words that happen to start with a bracket.
     }
   }
-  if (value == null || value === '') return '<span>Nothing</span>'
+  if (value == null || value === '') return h('span', null, 'Nothing')
   if (typeof value != 'object') {
-    return `<span>${esc(cut(String(value), 600))}</span>`
+    return h('span', null, cut(String(value), 600))
   }
-  if (depth > 2) return '<span>…</span>'
+  if (depth > 2) return h('span', null, '…')
   let list = Array.isArray(value)
     ? value.map((v, i) => [String(i + 1), v] as const)
     : Object.entries(value)
-  if (!list.length) return '<span>Nothing</span>'
+  if (!list.length) return h('span', null, 'Nothing')
   let more = list.length - 12
-  return `<dl class="Talk_Facts">${
+  return h(
+    'dl',
+    { class: 'Talk_Facts' },
     list.slice(0, 12).map(([k, v]) =>
-      `<div><dt>${
-        esc(
+      h(
+        'div',
+        null,
+        h(
+          'dt',
+          null,
           Array.isArray(value)
             ? k
             : k.replace(/[_-]+/g, ' ').replace(/^./, (c) => c.toUpperCase()),
-        )
-      }</dt><dd>${readable(v, depth + 1)}</dd></div>`
-    ).join('')
-  }${more > 0 ? `<div><dd>and ${more} more</dd></div>` : ''}</dl>`
+        ),
+        h('dd', null, readable(v, depth + 1)),
+      )
+    ),
+    more > 0 ? h('div', null, h('dd', null, `and ${more} more`)) : null,
+  )
 }
 
 // An error's own words, laid out to read: JSON indented, after the status a
@@ -227,16 +253,30 @@ let laid = (detail: unknown) => {
 /** The one way the chat draws an error: what happened and what to do, in
  * words, with what the error said only inside a closed "Details". */
 export let trouble = (said: string, detail?: unknown) =>
-  `<div class="Talk_Trouble"><p class="Talk_Note Talk_Note-no">${
-    esc(said)
-  }</p>${
+  h(
+    'div',
+    { class: 'Talk_Trouble' },
+    h('p', { class: 'Talk_Note Talk_Note-no' }, said),
     detail == null || detail === '' ||
       (typeof detail == 'object' && !Object.keys(detail).length)
-      ? ''
-      : `<details><summary>Details</summary><pre>${
-        esc(laid(detail))
-      }</pre></details>`
-  }</div>`
+      ? null
+      : h(
+        'details',
+        null,
+        h('summary', null, 'Details'),
+        h('pre', null, laid(detail)),
+      ),
+  )
+
+// A step, by what it did, opening on what it holds: `on` while it runs,
+// `no` once it did not work.
+let step = (name: string, mod: '' | 'on' | 'no', ...inside: Node[]) =>
+  h(
+    'details',
+    { class: mod ? `Talk_Step Talk_Step-${mod}` : 'Talk_Step' },
+    h('summary', null, name),
+    h('div', { class: 'Talk_Detail' }, ...inside),
+  )
 
 // A step that did not work: "Tried texting Jeff".
 let tried = (doing: string) =>
@@ -244,30 +284,32 @@ let tried = (doing: string) =>
 
 // A tool call and, once it came back, its answer: one row, under the call's
 // id, so the answer takes the call's place on the page.
-let tool = (call: Bundle, names: Names, result?: Bundle, told = '') => {
+let tool = (
+  call: Bundle,
+  names: Names,
+  result?: Bundle,
+  told: Node[] = [],
+) => {
   let c = comp(call, 'call')!
-  let step = names(String(c.to), c.args as Record<string, unknown>)
+  let said = names(String(c.to), c.args as Record<string, unknown>)
   let ok = result ? !comp(result, 'refusal') && !result.exception : null
-  let name = ok == null ? step.doing : ok ? step.done : tried(step.doing)
-  return `<details class="Talk_Step${
-    ok == null ? ' Talk_Step-on' : ok ? '' : ' Talk_Step-no'
-  }"><summary>${
-    esc(name)
-  }</summary><div class="Talk_Detail"><p>What it asked for</p>${
-    readable(c.args ?? {})
-  }${told}${
-    ok == null
-      ? ''
-      : ok
-      ? `<p>What came back</p>${
-        readable(String(comp(result, 'content')?.body ?? ''))
-      }`
+  return step(
+    ok == null ? said.doing : ok ? said.done : tried(said.doing),
+    ok == null ? 'on' : ok ? '' : 'no',
+    h('p', null, 'What it asked for'),
+    readable(c.args ?? {}),
+    ...told,
+    ok == null ? null : ok
+      ? [
+        h('p', null, 'What came back'),
+        readable(String(comp(result, 'content')?.body ?? '')),
+      ]
       : trouble(
         'This step did not work, so the Operator went on without it.',
         comp(result, 'content')?.body ?? result!.exception ??
           comp(result, 'refusal'),
-      )
-  }</div></details>`
+      ),
+  )
 }
 
 // A helper session's end, told to the Operator (@yaks/session `deliverChild`):
@@ -280,43 +322,55 @@ let helper = (b: Bundle, body: string) => {
   let outcome = comp(b, 'delivery')?.outcome ?? body.match(LEGACY)?.[1]
   let said = body.replace(/^.*\n/, '')
   return outcome == 'settled'
-    ? `<details class="Talk_Step"><summary>Heard back from a helper</summary><div class="Talk_Detail"><p>What came back</p>${
-      readable(said)
-    }</div></details>`
-    : `<details class="Talk_Step Talk_Step-no"><summary>A helper could not finish</summary><div class="Talk_Detail">${
+    ? step(
+      'Heard back from a helper',
+      '',
+      h('p', null, 'What came back'),
+      readable(said),
+    )
+    : step(
+      'A helper could not finish',
+      'no',
       trouble(
         'A helper the Operator started could not finish, so the Operator went on without it.',
         said,
-      )
-    }</div></details>`
+      ),
+    )
 }
 
-/** What a model was told before anything was said to it, closed until
- * opened, and drawn apart from the words, the replies and the errors. */
-export let instructed = (said: string, inside: string) =>
-  `<details class="Talk_Told"><summary>${
-    esc(said)
-  }</summary>${inside}</details>`
+// What a model was told before anything was said to it, closed until
+// opened, and drawn apart from the words, the replies and the errors.
+let instructed = (said: string, ...inside: Node[]) =>
+  h('details', { class: 'Talk_Told' }, h('summary', null, said), ...inside)
 
 // What a model was told is Markdown, drawn the way a reply is.
 let written = (body: string) =>
-  `<div class="Talk_Written">${markdown(body)}</div>`
+  h('div', { class: 'Talk_Written' }, markdown(body))
 
 // Each tool as the model was offered it: its name, opening on its
 // description and the arguments it takes.
 let offered = (tools: Tool[]) =>
   tools.map((t) =>
-    `<details><summary>${esc(t.name)}</summary>${written(t.description)}<pre>${
-      esc(JSON.stringify(t.parameters, null, 2))
-    }</pre></details>`
-  ).join('')
+    h(
+      'details',
+      null,
+      h('summary', null, t.name),
+      written(t.description),
+      h('pre', null, JSON.stringify(t.parameters, null, 2)),
+    )
+  )
 
 /** The tool offers asks name (`sending{offer}`), by their sha. */
 export type Offers = Map<string, Tool[]>
 
 /** A layer of what a model was told: its name, what it holds drawn, and what
  * tells a later ask's from it (`key`, its text). */
-type Layer = { name: string; key: string; inside: string; text: string }
+type Layer = {
+  name: string
+  key: string
+  inside: Node | Node[]
+  text: string
+}
 
 // What a part a persona voiced is called: its heading, without the id before
 // its title (@yaks/persona `voice`).
@@ -369,7 +423,7 @@ let context = (who: string, layers: Layer[], was?: Map<string, string>) =>
           : ''),
         l.inside,
       )
-    ).join(''),
+    ),
   )
 
 /** What a transcript's model was told, from the record: at its first ask, one
@@ -377,14 +431,14 @@ let context = (who: string, layers: Layer[], was?: Map<string, string>) =>
  * each prompt entry before it (a fork's note, a helper's guidance) and the
  * tools it was offered (`sending{offer}`); and again at a later ask whose
  * context differs from the ask before it. */
-export let briefed = (
+let briefed = (
   entries: Bundle[],
   who: string,
   offers: Offers = new Map(),
-): Row[] => {
+): Line[] => {
   let last = new Map<string, Map<string, string>>()
   let notes: (Layer & { id: string })[] = []
-  let rows = entries.flatMap((b): Row[] => {
+  let rows = entries.flatMap((b): Line[] => {
     let id = b.entity.eid
     if (b.prompt) {
       let text = String(comp(b, 'content')?.body ?? '')
@@ -419,12 +473,12 @@ export let briefed = (
     let same = was?.size == now.size &&
       [...now].every(([key, text]) => was!.get(key) == text)
     return layers.length && !same
-      ? [{ id, html: context(who, layers, was) }]
+      ? [{ id, node: context(who, layers, was) }]
       : []
   })
   // Notes no ask has sent yet.
   return notes.length
-    ? [...rows, { id: notes[0].id, html: context(who, notes) }]
+    ? [...rows, { id: notes[0].id, node: context(who, notes) }]
     : rows
 }
 
@@ -442,11 +496,14 @@ let helped = (h: Helper, offers?: Offers) =>
 
 /** Every line of a transcript worth showing, in order, what each helper was
  * told inside the step that started it. */
-export let rows = (
+export let rows = (entries: Bundle[], names: Names, seen: Seen = {}): Row[] =>
+  lines(entries, names, seen).map(drawn)
+
+let lines = (
   entries: Bundle[],
   names: Names,
   { helpers = [], offers, called = 'the Operator' }: Seen = {},
-): Row[] => {
+): Line[] => {
   let results = new Map(
     entries.filter((b) => b.result).map((b) => [
       String(comp(b, 'result')!.call),
@@ -458,15 +515,15 @@ export let rows = (
   )
   let under = (call: string) =>
     helpers.filter((h) => h.call == call)
-      .flatMap((h) => helped(h, offers)).map((r) => r.html).join('')
+      .flatMap((h) => helped(h, offers)).map((r) => r.node)
   let calls = new Set(entries.map((b) => b.entity.eid))
   return [
-    ...entries.flatMap((b): Row[] => {
+    ...entries.flatMap((b): Line[] => {
       let id = b.entity.eid
       let body = String(comp(b, 'content')?.body ?? '')
       if (prompts.has(id)) return [prompts.get(id)!]
       if (b.call) {
-        return [{ id, html: tool(b, names, results.get(id), under(id)) }]
+        return [{ id, node: tool(b, names, results.get(id), under(id)) }]
       }
       return line(b, id, body)
     }),
@@ -478,46 +535,38 @@ export let rows = (
 
 // Any other line: a refusal, a reply, a helper's end, a failure, a stop, or a
 // person's words.
-let line = (b: Bundle, id: string, body: string): Row[] => {
+let line = (b: Bundle, id: string, body: string): Line[] => {
+  let is = (node: Node) => [{ id, node }]
   // A provider's refusal (its own response kept beside it) is said in plain
   // words; its error waits in Details.
   if (b.refusal && !b.result && (b.response || !b.output)) {
-    return [{
-      id,
-      html: trouble(
-        'The Operator could not get an answer from its model, so it stopped before replying. Send your message again to try once more.',
-        body || comp(b, 'response')?.body || comp(b, 'refusal'),
-      ),
-    }]
+    return is(trouble(
+      'The Operator could not get an answer from its model, so it stopped before replying. Send your message again to try once more.',
+      body || comp(b, 'response')?.body || comp(b, 'refusal'),
+    ))
   }
-  if (b.output && body) return [{ id, html: reply(body) + stamp(b) }]
+  if (b.output && body) return is(said(b, reply(body)))
   // A line of a call its talking model answered itself: theirs, or its own.
   let called = comp(b, 'operator_call')
   if (called && body) {
-    return [{
-      id,
-      html: (called.said ? reply(spoken(b, body)) : input(b, body)) +
-        stamp(b),
-    }]
+    return is(said(b, called.said ? reply(spoken(b, body)) : input(b, body)))
   }
-  if (told(b, body)) return [{ id, html: helper(b, body) }]
+  if (told(b, body)) return is(helper(b, body))
   if (b.failed || b.exception) {
-    return [{
-      id,
-      html: trouble(
-        'Something went wrong, and the Operator stopped before it finished. Send your message again to try once more.',
-        body || b.exception || b.failed,
-      ),
-    }]
+    return is(trouble(
+      'Something went wrong, and the Operator stopped before it finished. Send your message again to try once more.',
+      body || b.exception || b.failed,
+    ))
   }
   if (b.stop || b.interrupted || b.cancel) {
-    return [{ id, html: '<p class="Talk_Note">Stopped.</p>' }]
+    return is(h('p', { class: 'Talk_Note' }, 'Stopped.'))
   }
-  if (body && !NOT_INPUT.some((c) => b[c])) {
-    return [{ id, html: input(b, body) + stamp(b) }]
-  }
+  if (body && !NOT_INPUT.some((c) => b[c])) return is(said(b, input(b, body)))
   return []
 }
+
+// Words someone sent, and under them when.
+let said = (b: Bundle, words: Node) => h(Fragment, null, words, stamp(b))
 
 /** The line a step changed: a new line, or the call a new answer belongs to. */
 export let touched = (
@@ -634,7 +683,7 @@ export let helperFrame = (
       rows: told.length && call
         ? rows(entries, names, { ...seen, helpers: [helper] })
           .filter((r) => r.id == helper.call)
-        : told,
+        : told.map(drawn),
       changed: changed(helper.entries, from),
       ...doingNow(entries, names),
     },
@@ -653,29 +702,44 @@ export let talk = (
 ) => {
   let working = now(entries, names)
   // Files drawn under the words they came with are not listed again.
-  let drawn = new Set(
+  let sent = new Set(
     entries.map((b) => comp(b, 'operator_files')?.request).filter(Boolean),
   )
-  let rest = files.filter((f) => !drawn.has(f.request))
-  return `<div class="Talk_Thread" data-task="${esc(task.entity.eid)}"${
-    working ? ' data-pending' : ''
-  }><div class="Talk_Said" data-rows>${
-    rows(entries, names, seen).map((r) =>
-      `<div id="row-${esc(r.id)}">${r.html}</div>`
-    ).join('')
-  }</div><p class="Loading Talk_Now" role="status">${
-    yak(poseOf(working))
-  }<span data-now>${esc(working)}</span></p>${
+  let rest = files.filter((f) => !sent.has(f.request))
+  return renderToString(h(
+    'div',
+    {
+      class: 'Talk_Thread',
+      'data-task': task.entity.eid,
+      'data-pending': working ? '' : undefined,
+    },
+    h(
+      'div',
+      { class: 'Talk_Said', 'data-rows': '' },
+      lines(entries, names, seen).map((r) =>
+        h('div', { id: `row-${r.id}` }, r.node)
+      ),
+    ),
+    h(
+      Loading,
+      { class: 'Talk_Now' },
+      h(Yak, { pose: poseOf(working) }),
+      h('span', { 'data-now': '' }, working),
+    ),
     rest.length
-      ? `<p class="Talk_Files">${
+      ? h(
+        'p',
+        { class: 'Talk_Files' },
         rest.map((f) =>
-          `<a href="${esc(at)}?attachment=${esc(f.request)}&file=${f.index}">${
-            esc(f.name)
-          }</a>`
-        ).join('')
-      }</p>`
-      : ''
-  }</div>`
+          h(
+            'a',
+            { href: `${at}?attachment=${f.request}&file=${f.index}` },
+            f.name,
+          )
+        ),
+      )
+      : null,
+  ))
 }
 
 /** A piece of the Operator's work as its lists show it, in plain words. */
@@ -698,37 +762,56 @@ export let stateOf = (entries: Bundle[], done: boolean) => {
 }
 
 let meta = (w: Worked) =>
-  `${esc(w.state)}${day(w.at, 'short') ? ` · ${esc(day(w.at, 'short'))}` : ''}`
+  `${w.state}${day(w.at, 'short') ? ` · ${day(w.at, 'short')}` : ''}`
 
 /** The Operator's conversations as rows, newest first, each a link to the
  * page `href` gives it. */
 export let listed = (items: Worked[], href: (open: string) => string) =>
-  `<ul class="Rows">${
+  renderToString(h(
+    Rows,
+    null,
     items.map((w) =>
-      `<li class="Rows_Item"${
-        w.busy ? ' data-pending' : ''
-      }><div class="Rows_Main"><a class="Rows_Name" href="${
-        esc(href(w.open))
-      }">${esc(w.title)}</a><span class="Rows_Meta">${
-        meta(w)
-      }</span></div></li>`
-    ).join('')
-  }</ul>`
+      h(
+        Rows.Item,
+        { 'data-pending': w.busy ? '' : undefined },
+        h(
+          Rows.Main,
+          null,
+          h(Rows.Name, { href: href(w.open) }, w.title),
+          h(Rows.Meta, null, meta(w)),
+        ),
+      )
+    ),
+  ))
 
 /** The Operator's conversations in its settings, newest first: the person's
  * one conversation, and the chats from before it, each opening in the chat
  * app (T-141349). */
 export let talks = (space: string, items: Worked[]) =>
-  `<section class="Card"><header class="Card_Head"><h2 class="Card_Title">Conversations</h2></header>${
+  h(
+    Card,
+    null,
+    h(Card.Head, null, h(Card.Title, null, 'Conversations')),
     items.length
-      ? `<ul class="Talk_List">${
+      ? h(
+        'ul',
+        { class: 'Talk_List' },
         items.map((w) =>
-          `<li><a class="Talk_Item" href="${esc(chatPath(space, w.open))}"${
-            w.busy ? ' data-pending' : ''
-          }><span class="Talk_Title">${
-            esc(w.title)
-          }</span><span class="Talk_Meta">${meta(w)}</span></a></li>`
-        ).join('')
-      }</ul>`
-      : '<p class="Talk_None">Your conversations appear here.</p>'
-  }</section>`
+          h(
+            'li',
+            null,
+            h(
+              'a',
+              {
+                class: 'Talk_Item',
+                href: chatPath(space, w.open),
+                'data-pending': w.busy ? '' : undefined,
+              },
+              h('span', { class: 'Talk_Title' }, w.title),
+              h('span', { class: 'Talk_Meta' }, meta(w)),
+            ),
+          )
+        ),
+      )
+      : h('p', { class: 'Talk_None' }, 'Your conversations appear here.'),
+  )

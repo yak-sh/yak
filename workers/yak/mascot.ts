@@ -13,6 +13,10 @@
 // rest frame is public/mascot/idle-rest-128.webp and each loop
 // idle-<loop>-128.webp, at 128, 256 and 384 px. public/idle.js plays them.
 
+import { h } from 'preact'
+import { renderToString } from 'preact-render-to-string'
+import { Loading } from '@yaks/ui'
+
 /** What the yak can be seen doing. */
 export type Pose =
   | 'typing'
@@ -27,14 +31,33 @@ let srcset = (name: string, base: string) =>
     .map(([file, density]) => `${base}/mascot/${name}${file}.webp ${density}`)
     .join(', ')
 
-/** The yak doing `pose`, its files under `base` (the apex's address on a page
+/** The yak doing `pose`, the kit's mark of something at work (@yaks/ui
+ * `Loading.Mark`), its files under `base` (the apex's address on a page
  * served from another host, '' on the apex). */
+export let Yak = ({ pose, base = '' }: { pose: Pose; base?: string }) =>
+  h(
+    Loading.Mark,
+    { 'data-pose': pose },
+    h(
+      'picture',
+      null,
+      h('source', {
+        media: '(prefers-reduced-motion: reduce)',
+        srcset: srcset(`${pose}-still`, base),
+      }),
+      h('img', {
+        src: `${base}/mascot/${pose}.webp`,
+        srcset: srcset(pose, base),
+        width: 40,
+        height: 40,
+        alt: '',
+      }),
+    ),
+  )
+
+/** The yak doing `pose`, as markup. */
 export let yak = (pose: Pose, base = '') =>
-  `<picture class="Loading_Mark" data-pose="${pose}"><source media="(prefers-reduced-motion: reduce)" srcset="${
-    srcset(`${pose}-still`, base)
-  }"><img src="${base}/mascot/${pose}.webp" srcset="${
-    srcset(pose, base)
-  }" width="40" height="40" alt=""></picture>`
+  renderToString(h(Yak, { pose, base }))
 
 /** What the yak does now and then while he waits, each loop this many ms,
  * starting and ending on his rest frame so one follows another seamlessly. */
@@ -49,12 +72,24 @@ export let IDLE: Record<string, number> = {
 
 /** The yak waiting, 128 px across, with `className`: at rest, and with
  * public/idle.js every several seconds one of his loops (`IDLE`). */
+export let Idle = ({ class: className, base = '' }: {
+  class: string
+  base?: string
+}) =>
+  h('img', {
+    class: className,
+    src: `${base}/mascot/idle-rest-128.webp`,
+    srcset: srcset('idle-rest-128', base),
+    width: 128,
+    height: 128,
+    alt: '',
+    'data-idle': Object.entries(IDLE).map(([loop, ms]) => `${loop}:${ms}`)
+      .join(' '),
+  })
+
+/** The yak waiting, as markup. */
 export let idle = (className: string, base = '') =>
-  `<img class="${className}" src="${base}/mascot/idle-rest-128.webp" srcset="${
-    srcset('idle-rest-128', base)
-  }" width="128" height="128" alt="" data-idle="${
-    Object.entries(IDLE).map(([loop, ms]) => `${loop}:${ms}`).join(' ')
-  }">`
+  renderToString(h(Idle, { class: className, base }))
 
 // What a step's first word shows the yak doing (@yaks/tools `stepOf`: "Checking
 // cookbook for errors…"). Any other work is the yak at its keyboard.

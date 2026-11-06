@@ -1,11 +1,13 @@
 import type { Bundle } from '@yaks/graph'
+import { type ComponentChildren as Node, Fragment, h } from 'preact'
+import { renderToString } from 'preact-render-to-string'
+import { Button, Card, Check, Drop, Field, Form, Icon, SideNav } from '@yaks/ui'
 import type { Env } from './env.ts'
 import { directoryOf, type Reach, type Space } from './directory.ts'
 import { reachOf } from './operator-reach.ts'
 import { builderOf, operatorDoor, SPACE } from './build-door.ts'
 import { vouched, type Who } from './session.ts'
 import { esc, type Picked, shell, spaceChoice } from './pages.ts'
-import { sideLink } from './html.ts'
 import { spaceHost, url } from './host.ts'
 import { chatPath, logoPath, managePath, manifestPath, SLUG } from './route.ts'
 import { PLATFORM_BACKGROUND } from './apps.ts'
@@ -18,7 +20,7 @@ import { mailFrom } from './post.ts'
 import { parts } from './form.ts'
 import { gathered } from './bytes.ts'
 import { refuse } from './tool.ts'
-import { idle } from './mascot.ts'
+import { Idle } from './mascot.ts'
 import {
   CONSENT,
   handed,
@@ -50,8 +52,11 @@ import {
 } from './operator-view.ts'
 import { DOCUMENTS } from './documents.ts'
 import { phoneAt } from './phones.ts'
-import { icon } from './icons.ts'
+import { icons } from './icons.ts'
 import { needing, needsCard, updates, updatesOf, visitsOf } from './updates.ts'
+
+// What this page draws, as markup: the edge where its parts become text.
+let html = (node: Node) => renderToString(h(Fragment, null, node))
 
 // What the message box takes: up to COUNT files at a time, each up to SIZE
 // (keepFile's ceiling), and the kinds the Operator reads (operator-channels.ts
@@ -64,6 +69,72 @@ let READ = ['image/*', 'text/*', ...DOCUMENTS.map((d) => '.' + d)].join(',')
 let shown = (number: string) =>
   number.replace(/^\+1(\d{3})(\d{3})(\d{4})$/, '$1-$2-$3')
 
+// One of the Operator's settings, the way the dashboard draws one (pages.ts):
+// a form around its card, the card's head naming it, and under the card
+// Save, with what saving said beside it (`settingsScript`). `id` names the
+// form and the answer it posts to (`operatorAnswer`).
+let setting = (at: string, id: string, title: string, ...inside: Node[]) =>
+  h(
+    Form,
+    { id, method: 'post', action: `${at}?${id}=1` },
+    h(Card, null, h(Card.Head, null, h(Card.Title, null, title)), ...inside),
+    h(
+      Form.Actions,
+      null,
+      h(Button, { mod: 'go', type: 'submit' }, 'Save'),
+      h('p', { role: 'status', 'data-status': '' }),
+    ),
+  )
+
+// A field under its label.
+let field = (id: string, label: string, control: Node) =>
+  h(Form.Field, null, h(Form.Label, { for: id }, label), control)
+
+// One of a few to pick, as a radio: its name in bold, what it means beside
+// it, `also` on its input.
+type Offer = { id: string; name: string; about: string; checked: boolean }
+let choice = (
+  name: string,
+  o: Offer,
+  also: Record<string, unknown> = {},
+  more = '',
+) =>
+  h(
+    Check,
+    null,
+    h('input', {
+      type: 'radio',
+      name,
+      value: o.id,
+      ...also,
+      checked: o.checked,
+    }),
+    h(
+      'span',
+      null,
+      h('b', null, o.name),
+      more,
+      ' ',
+      h('span', { class: 'Note Note-small' }, o.about),
+    ),
+  )
+
+// A field of few to pick one from, its label over them.
+let choices = (id: string, label: string, name: string, offers: Offer[]) =>
+  h(
+    Form.Field,
+    { role: 'radiogroup', 'aria-labelledby': id },
+    h(Form.Label, { id }, label),
+    offers.map((o) => choice(name, o)),
+  )
+
+// The texts' terms, their addresses links to yaks.app's own pages.
+let TERMS = /https:\/\/yaks\.app\/(terms|privacy)/g
+let terms = (said: string) =>
+  said.split(TERMS).map((part, i) =>
+    i % 2 ? h('a', { href: `/${part}` }, `yaks.app/${part}`) : part
+  )
+
 // Where a person agrees to texts from the operator, or stops them. `from` is
 // the number the Operator texts from (its phone's `transport().number`),
 // read from configuration, so the card names it with no call to the provider.
@@ -72,45 +143,79 @@ export let textsCard = (
   consent: Texting | null,
   from?: string,
 ) =>
-  `<form class="Card Form" id="texts" method="post" action="${at}?texts=1">
-<h2 class="Card_Title">Text messages</h2>
-<p>Text your Operator about anything, and it answers by text. It also texts you when it finishes a change, needs an answer from you, or something about your space needs you, and apps you build can text you reminders. You can still use chat and email.</p>${
+  setting(
+    at,
+    'texts',
+    'Text messages',
+    h(
+      'p',
+      null,
+      'Text your Operator about anything, and it answers by text. It also texts you when it finishes a change, needs an answer from you, or something about your space needs you, and apps you build can text you reminders. You can still use chat and email.',
+    ),
     consent
-      ? `<p>Texts go to <b>${
-        esc(shown(consent.number))
-      }</b>; to text your Operator, ${
+      ? h(
+        'p',
+        null,
+        'Texts go to ',
+        h('b', null, shown(consent.number)),
+        '; to text your Operator, ',
         from
-          ? `text <a href="sms:${esc(from)}">${esc(shown(from))}</a>`
-          : 'reply to the number your welcome text came from'
-      }. You agreed on ${
-        esc(new Date(consent.at).toLocaleDateString('en-US', {
-          dateStyle: 'long',
-          timeZone: 'UTC',
-        }))
-      }. <button class="Button" type="submit" name="stop" value="1">Stop texts</button></p>`
-      : ''
-  }
-<label class="Form_Field">${
-    consent ? 'Change your mobile number' : 'Mobile number'
-  }<input class="Field" type="tel" name="number" autocomplete="tel" inputmode="tel" placeholder="269-555-0142"></label>
-<label class="Check" style="align-items:flex-start"><input type="checkbox" name="agreed" value="yes"><span>${
-    esc(CONSENT).replace(
-      /https:\/\/yaks\.app\/(terms|privacy)/g,
-      '<a href="/$1">yaks.app/$1</a>',
-    )
-  }</span></label>
-<p>Agreeing is not required to use yaks.app.</p>
-<button class="Button Button-go" type="submit">Save</button><p role="status" data-status></p></form>`
+          ? ['text ', h('a', { href: `sms:${from}` }, shown(from))]
+          : 'reply to the number your welcome text came from',
+        `. You agreed on ${
+          new Date(consent.at).toLocaleDateString('en-US', {
+            dateStyle: 'long',
+            timeZone: 'UTC',
+          })
+        }. `,
+        h(Button, { type: 'submit', name: 'stop', value: '1' }, 'Stop texts'),
+      )
+      : null,
+    field(
+      'texts-number',
+      consent ? 'Change your mobile number' : 'Mobile number',
+      h(Field, {
+        id: 'texts-number',
+        type: 'tel',
+        name: 'number',
+        autocomplete: 'tel',
+        inputmode: 'tel',
+        placeholder: '269-555-0142',
+      }),
+    ),
+    h(
+      Check,
+      { style: 'align-items:flex-start' },
+      h('input', { type: 'checkbox', name: 'agreed', value: 'yes' }),
+      h('span', null, terms(CONSENT)),
+    ),
+    h('p', null, 'Agreeing is not required to use yaks.app.'),
+  )
 
 // Where a space's people change what its Operator is called.
 export let nameCard = (at: string, name: string) =>
-  `<form class="Card Form" id="name" method="post" action="${at}?name=1">
-<h2 class="Card_Title">Name</h2>
-<p>What this Operator goes by. It introduces itself by this name and signs its letters with it.</p>
-<label class="Form_Field">Name<input class="Field" name="name" value="${
-    esc(name)
-  }" maxlength="40" required autocomplete="off"></label>
-<button class="Button Button-go" type="submit">Save</button><p role="status" data-status></p></form>`
+  setting(
+    at,
+    'name',
+    'Name',
+    h(
+      'p',
+      null,
+      'What this Operator goes by. It introduces itself by this name and signs its letters with it.',
+    ),
+    field(
+      'operator-name',
+      'Name',
+      h(Field, {
+        id: 'operator-name',
+        name: 'name',
+        value: name,
+        maxlength: 40,
+        required: true,
+        autocomplete: 'off',
+      }),
+    ),
+  )
 
 // Where a space's people hear a few voices its Operator may speak in on a
 // call, pick one, how fast it speaks, and how its calls are answered, each
@@ -122,44 +227,57 @@ export let voiceCard = (
   space: Pick<Space, 'operator'>,
   { setup, voices, ways, paces }: ReturnType<typeof offered>,
 ) =>
-  `<form class="Card Form" id="voice" method="post" action="${at}?voice=1">
-<h2 class="Card_Title">Voice</h2>
-<p>How ${
-    esc(space.operator)
-  } sounds and answers when you call. Play a few voices, pick one, and save.</p>
-<div class="Voices">${
-    voices.map((v) =>
-      `<div class="Voices_Row"><label class="Check"><input type="radio" name="voice" value="${v.id}" data-ways="${
-        ways.filter((w) => speaks(w.model, v.id)).map((w) => w.model).join(' ')
-      }"${v.id == setup.voice ? ' checked' : ''}><span><b>${esc(v.name)}</b>${
-        BUTLERS.includes(v.id) ? ' (like a butler)' : ''
-      } <span class="Note Note-small">${
-        esc(v.about)
-      }</span></span></label><button class="Button" type="button" data-sample="${at}?sample=${v.id}" aria-label="Play ${
-        esc(v.name)
-      }">Play</button></div>`
-    ).join('\n')
-  }</div>
-<fieldset class="Form_Field"><legend>Speed</legend>${
-    paces.map((p) =>
-      `<label class="Check"><input type="radio" name="voice_speed" value="${p.id}"${
-        p.id == setup.pace ? ' checked' : ''
-      }><span><b>${esc(p.name)}</b> <span class="Note Note-small">${
-        esc(p.about)
-      }</span></span></label>`
-    ).join('\n')
-  }</fieldset>
-<fieldset class="Form_Field"><legend>Answers</legend>${
-    ways.map((w) =>
-      `<label class="Check"><input type="radio" name="voice_model" value="${w.model}"${
-        w.model == setup.model ? ' checked' : ''
-      }><span><b>${esc(w.name)}</b> <span class="Note Note-small">${
-        esc(w.about)
-      }</span></span></label>`
-    ).join('\n')
-  }</fieldset>
-<button class="Button Button-go" type="submit">Save</button><p role="status" data-status></p></form>`
-
+  setting(
+    at,
+    'voice',
+    'Voice',
+    h(
+      'p',
+      null,
+      `How ${space.operator} sounds and answers when you call. Play a few voices, pick one, and save.`,
+    ),
+    h(
+      'div',
+      { class: 'Voices' },
+      voices.map((v) =>
+        h(
+          'div',
+          { class: 'Voices_Row' },
+          choice(
+            'voice',
+            { ...v, checked: v.id == setup.voice },
+            {
+              'data-ways': ways.filter((w) => speaks(w.model, v.id))
+                .map((w) => w.model).join(' '),
+            },
+            BUTLERS.includes(v.id) ? ' (like a butler)' : '',
+          ),
+          h(Button, {
+            type: 'button',
+            'data-sample': `${at}?sample=${v.id}`,
+            'aria-label': `Play ${v.name}`,
+          }, 'Play'),
+        )
+      ),
+    ),
+    choices(
+      'voice-speed',
+      'Speed',
+      'voice_speed',
+      paces.map((p) => ({ ...p, checked: p.id == setup.pace })),
+    ),
+    choices(
+      'voice-answers',
+      'Answers',
+      'voice_model',
+      ways.map((w) => ({
+        id: w.model,
+        name: w.name,
+        about: w.about,
+        checked: w.model == setup.model,
+      })),
+    ),
+  )
 // What a person agreed to be texted at. Any opt-in this space's operator
 // store still keeps from before the number moved onto the person is handed to
 // the directory first, unless the directory already holds a newer one
@@ -185,32 +303,46 @@ let textingOf = async (env: Env, space: Space, who: Who) => {
  * was asked with the files sent with it, and what became of it in plain
  * words, never the error. */
 export let conversation = (rows: Bundle[]) =>
-  rows.map((row) => {
+  html(rows.map((row) => {
     let request = row.operator_request as Intake
     let doc = row.doc as { title?: string; body?: string }
     let answer = row.operator_answer as { text?: string } | undefined
     let failed = row.failed ?? row.bounced
     let files = request.files ?? []
-    return `<div class="Talk_Thread"${
-      answer || failed ? '' : ' data-pending'
-    }><div class="Talk_Said"><div>${
-      doc.body ? `<p class="Talk_You">${esc(doc.body)}</p>` : ''
-    }${attached(row.entity.eid, files)}</div>${
-      answer?.text ? reply(answer.text) : failed
-        ? trouble(
-          'Your request is kept, but the Operator could not finish it. Send it again to try once more.',
-          failed,
-        )
-        : '<p class="Talk_Note">Your request is saved. The Operator will start on it soon.</p>'
-    }${
-      failed && answer
-        ? trouble(
-          'The answer could not be sent to you. It is kept here.',
-          failed,
-        )
-        : ''
-    }</div></div>`
-  }).join('')
+    return h(
+      'div',
+      {
+        class: 'Talk_Thread',
+        'data-pending': answer || failed ? undefined : '',
+      },
+      h(
+        'div',
+        { class: 'Talk_Said' },
+        h(
+          'div',
+          null,
+          doc.body ? h('p', { class: 'Talk_You' }, doc.body) : null,
+          attached(row.entity.eid, files),
+        ),
+        answer?.text ? reply(answer.text) : failed
+          ? trouble(
+            'Your request is kept, but the Operator could not finish it. Send it again to try once more.',
+            failed,
+          )
+          : h(
+            'p',
+            { class: 'Talk_Note' },
+            'Your request is saved. The Operator will start on it soon.',
+          ),
+        failed && answer
+          ? trouble(
+            'The answer could not be sent to you. It is kept here.',
+            failed,
+          )
+          : null,
+      ),
+    )
+  }))
 
 // What the Operator's requests are answered: an attachment, a texts choice,
 // a draft, Stop, a request sent, and its conversations read again. A plain
@@ -504,25 +636,37 @@ export let operatorBody = async (env: Env, space: Space, who: Who) => {
   ])
   let from = phone?.transport().number
   let address = mailFrom(space.slug, null, env)
-  return `
-<section class="Card"><p>${esc(space.operator)} is this space’s Operator. Ask ${
-    esc(space.operator)
-  } for a change in your apps, or send a PDF or a photo. Your space's plan covers its work.</p>${
-    pa
-      ? '<p>This is your own space, so its Operator can also work in your other spaces, with your role in each.</p>'
-      : ''
-  }${elsewhere(beyond, pa)}<p>You can also email ${
-    esc(space.operator)
-  } from any mail app: write to <a href="mailto:${esc(address)}">${
-    esc(address)
-  }</a> with what you want changed, and attach a PDF or a photo if you have one. Send it from the email address you sign in with; ${
-    esc(space.operator)
-  } answers by email.</p></section>
-${talks(space.slug, items)}
-${nameCard(at, space.operator)}
-${voiceCard(at, space, offered(env, space))}
-${textsCard(at, consent, from)}
-${settingsScript}`
+  let operator = space.operator
+  return html([
+    h(
+      Card,
+      null,
+      h(
+        'p',
+        null,
+        `${operator} is this space’s Operator. Ask ${operator} for a change in your apps, or send a PDF or a photo. Your space's plan covers its work.`,
+      ),
+      pa
+        ? h(
+          'p',
+          null,
+          'This is your own space, so its Operator can also work in your other spaces, with your role in each.',
+        )
+        : null,
+      elsewhere(beyond, pa),
+      h(
+        'p',
+        null,
+        `You can also email ${operator} from any mail app: write to `,
+        h('a', { href: `mailto:${address}` }, address),
+        ` with what you want changed, and attach a PDF or a photo if you have one. Send it from the email address you sign in with; ${operator} answers by email.`,
+      ),
+    ),
+    talks(space.slug, items),
+    nameCard(at, operator),
+    voiceCard(at, space, offered(env, space)),
+    textsCard(at, consent, from),
+  ]) + settingsScript
 }
 
 // Where else the Operator works and what it may do there, one sentence for
@@ -530,25 +674,34 @@ ${settingsScript}`
 // Each space's owner sets that on its People page (pages.ts `operating`); on
 // a person's own space it follows their role in each.
 export let elsewhere = (beyond: Reach[], pa: boolean) => {
-  if (!beyond.length) return ''
+  if (!beyond.length) return null
   let named = (rs: Reach[]) =>
-    LIST.format(
-      rs.map((r) =>
-        `<a href="${chatPath(r.space.slug)}">${
-          esc(r.space.title || r.space.slug)
-        }</a>`
-      ),
-    )
+    rs.length
+      ? LIST.formatToParts(rs.map((_, i) => String(i))).map((part) => {
+        let { space } = rs[Number(part.value)] ?? {}
+        return part.type == 'element' && space
+          ? h('a', { href: chatPath(space.slug) }, space.title || space.slug)
+          : part.value
+      })
+      : null
   let changes = named(beyond.filter((r) => r.role != 'viewer'))
   let looks = named(beyond.filter((r) => r.role == 'viewer'))
-  let said = changes && looks
-    ? `It can also change things in ${changes}, and look at ${looks} without changing anything.`
-    : changes
-    ? `It can also work in ${changes}, and change things there.`
-    : `It can also look at ${looks}, but not change anything there.`
-  return `<p>${said}${
-    pa ? '' : ' Each space’s owner chooses this on its People page.'
-  }</p>`
+  return h(
+    'p',
+    null,
+    ...changes && looks
+      ? [
+        'It can also change things in ',
+        changes,
+        ', and look at ',
+        looks,
+        ' without changing anything.',
+      ]
+      : changes
+      ? ['It can also work in ', changes, ', and change things there.']
+      : ['It can also look at ', looks, ', but not change anything there.'],
+    pa ? null : ' Each space’s owner chooses this on its People page.',
+  )
 }
 
 let LIST = new Intl.ListFormat('en', { type: 'conjunction' })
@@ -646,75 +799,116 @@ let side = (
   let spaces = beside.spaces ?? []
   let apps = beside.apps ?? []
   let host = `https://${spaceHost(env, space.slug)}`
-  let operator = esc(space.operator)
+  let operator = space.operator
   let open = at.current.find((c) => c && c != 'updates') ?? 'new'
-  return `<aside class="Talk_Side" id="menu" aria-label="Menu">
-<div class="Talk_Top"><a class="Talk_Brand" href="${
-    chatPath(space.slug)
-  }"><img src="${
-    url(env, '/yak.webp')
-  }" width="28" height="28" alt="">yaks.app</a><a class="Button Talk_Close" href="#">✕ Close</a></div>
-<div class="Talk_Scroll">
-<div class="Talk_Whose">${
-    spaceChoice(
-      here,
-      spaces.some((s) => s.slug == space.slug) ? spaces : [here, ...spaces],
-      (s) => chatPath(s.slug),
-      '',
-      (s) => s.operator ?? '',
-    )
-  }</div>
-<nav class="SideNav" aria-label="${operator}">${
-    sideLink(
-      chatPath(space.slug),
-      `${icon('message-circle')}${operator}`,
-      !at.app && !at.current.includes('updates'),
-    )
-  }${
-    sideLink(
-      managePath('updates', space.slug),
-      `${icon('bell')}Updates from ${operator}${
-        at.waiting ? `<span class="Talk_Count">${at.waiting}</span>` : ''
-      }`,
-      at.current.includes('updates'),
-    )
-  }</nav>
-<h2 class="Talk_Group" id="side-apps">Your apps</h2>
-${
-    apps.length
-      ? `<nav class="SideNav" aria-labelledby="side-apps">${
-        apps.slice(0, APPS).map((a) =>
-          sideLink(
-            esc(aboutPath(space.slug, a.slug, open)),
-            `<img class="Talk_Icon" src="${host}/${
-              esc(a.slug)
-            }/icon.png" width="24" height="24" alt="" loading="lazy">${
-              esc(a.title || a.slug)
-            }`,
-            a.slug == at.app,
-          )
-        ).join('')
-      }${
-        owner && apps.length > APPS
-          ? sideLink(
-            managePath('apps', space.slug),
-            `All ${apps.length} apps`,
-            false,
-            'Talk_All',
-          )
-          : ''
-      }</nav>`
-      : `<p class="Talk_None">None yet. Ask ${operator} to make one.</p>`
-  }
-</div>
-<nav class="SideNav Talk_Foot" aria-label="Settings">${
-    sideLink(
-      managePath(owner ? 'apps' : 'operator', space.slug),
-      `${icon('sliders-horizontal')}Manage`,
-    )
-  }</nav>
-</aside>`
+  return h(
+    'aside',
+    { class: 'Talk_Side', id: 'menu', 'aria-label': 'Menu' },
+    h(
+      'div',
+      { class: 'Talk_Top' },
+      h(
+        'a',
+        { class: 'Talk_Brand', href: chatPath(space.slug) },
+        h('img', {
+          src: url(env, '/yak.webp'),
+          width: 28,
+          height: 28,
+          alt: '',
+        }),
+        'yaks.app',
+      ),
+      h(Button, { href: '#', class: 'Talk_Close' }, '✕ Close'),
+    ),
+    h(
+      'div',
+      { class: 'Talk_Scroll' },
+      // The space selector is the dashboard's own (pages.ts).
+      h('div', {
+        class: 'Talk_Whose',
+        dangerouslySetInnerHTML: {
+          __html: spaceChoice(
+            here,
+            spaces.some((s) => s.slug == space.slug)
+              ? spaces
+              : [here, ...spaces],
+            (s) => chatPath(s.slug),
+            '',
+            (s) => s.operator ?? '',
+          ),
+        },
+      }),
+      h(
+        SideNav,
+        { 'aria-label': operator },
+        link(
+          chatPath(space.slug),
+          !at.app && !at.current.includes('updates'),
+          h(Icon, { of: icons['message-circle'] }),
+          operator,
+        ),
+        link(
+          managePath('updates', space.slug),
+          at.current.includes('updates'),
+          h(Icon, { of: icons.bell }),
+          `Updates from ${operator}`,
+          at.waiting ? h('span', { class: 'Talk_Count' }, at.waiting) : null,
+        ),
+      ),
+      h('h2', { class: 'Talk_Group', id: 'side-apps' }, 'Your apps'),
+      apps.length
+        ? h(
+          SideNav,
+          { 'aria-labelledby': 'side-apps' },
+          apps.slice(0, APPS).map((a) =>
+            link(
+              aboutPath(space.slug, a.slug, open),
+              a.slug == at.app,
+              h('img', {
+                class: 'Talk_Icon',
+                src: `${host}/${a.slug}/icon.png`,
+                width: 24,
+                height: 24,
+                alt: '',
+                loading: 'lazy',
+              }),
+              a.title || a.slug,
+            )
+          ),
+          owner && apps.length > APPS
+            ? h(
+              SideNav.Link,
+              { href: managePath('apps', space.slug), class: 'Talk_All' },
+              `All ${apps.length} apps`,
+            )
+            : null,
+        )
+        : h(
+          'p',
+          { class: 'Talk_None' },
+          `None yet. Ask ${operator} to make one.`,
+        ),
+    ),
+    h(
+      SideNav,
+      { class: 'Talk_Foot', 'aria-label': 'Settings' },
+      link(
+        managePath(owner ? 'apps' : 'operator', space.slug),
+        false,
+        h(Icon, { of: icons['sliders-horizontal'] }),
+        'Manage',
+      ),
+    ),
+  )
 }
+
+// A link of the side, the page on screen lit and said to be current.
+let link = (href: string, on: boolean, ...face: Node[]) =>
+  h(
+    SideNav.Link,
+    { href, mod: on && 'on', 'aria-current': on ? 'page' : undefined },
+    ...face,
+  )
 
 /** A conversation, or a new chat, with one of the space's apps beside it. */
 export let aboutPath = (space: string, app: string, open = 'new') =>
@@ -730,16 +924,46 @@ type Shown = { slug: string; title: string }
 // takes the screen in the chat's place while chosen (`#app`), and Chat goes
 // back.
 let canvas = (env: Env, space: Space, app: Shown) => {
-  let host = esc(`${spaceHost(env, space.slug)}/${app.slug}`)
-  let title = esc(app.title || app.slug)
-  return `<section class="Talk_App" id="app" aria-label="${title}" data-app="${
-    esc(app.slug)
-  }">
-<header class="Talk_AppHead"><a class="Button Talk_Back" href="#">← Chat</a><img class="Talk_Icon" src="https://${host}/icon.png" width="24" height="24" alt=""><span class="Talk_AppName"><b>${title}</b><small>${host}</small></span><a class="Button" href="https://${host}/" target="_blank" rel="noopener">${
-    icon('external-link')
-  }Open</a></header>
-<div class="Talk_Stage"><iframe class="Talk_Frame" src="https://${host}/" title="${title}" data-frame></iframe></div>
-</section>`
+  let host = `${spaceHost(env, space.slug)}/${app.slug}`
+  let title = app.title || app.slug
+  return h(
+    'section',
+    { class: 'Talk_App', id: 'app', 'aria-label': title, 'data-app': app.slug },
+    h(
+      'header',
+      { class: 'Talk_AppHead' },
+      h(Button, { href: '#', class: 'Talk_Back' }, '← Chat'),
+      h('img', {
+        class: 'Talk_Icon',
+        src: `https://${host}/icon.png`,
+        width: 24,
+        height: 24,
+        alt: '',
+      }),
+      h(
+        'span',
+        { class: 'Talk_AppName' },
+        h('b', null, title),
+        h('small', null, host),
+      ),
+      h(
+        Button,
+        { href: `https://${host}/`, target: '_blank', rel: 'noopener' },
+        h(Icon, { of: icons['external-link'] }),
+        'Open',
+      ),
+    ),
+    h(
+      'div',
+      { class: 'Talk_Stage' },
+      h('iframe', {
+        class: 'Talk_Frame',
+        src: `https://${host}/`,
+        title,
+        'data-frame': '',
+      }),
+    ),
+  )
 }
 
 // The Operator page installs to a home screen as a web app (D-136811): each
@@ -754,16 +978,31 @@ let NIGHT = '#2b231f'
 let whoseOf = (space: Space) =>
   `${space.operator}, ${space.title || space.slug}’s Operator`
 let installable = (space: Space) =>
-  `<link rel="manifest" href="${
-    manifestPath(space.slug)
-  }" crossorigin="use-credentials">
-<link rel="apple-touch-icon" href="${ICON}">
-<meta name="theme-color" content="${PLATFORM_BACKGROUND}" media="(prefers-color-scheme: light)">
-<meta name="theme-color" content="${NIGHT}" media="(prefers-color-scheme: dark)">
-<meta name="mobile-web-app-capable" content="yes">
-<meta name="apple-mobile-web-app-capable" content="yes">
-<meta name="apple-mobile-web-app-status-bar-style" content="default">
-<meta name="apple-mobile-web-app-title" content="${esc(space.operator)}">`
+  html([
+    h('link', {
+      rel: 'manifest',
+      href: manifestPath(space.slug),
+      crossorigin: 'use-credentials',
+    }),
+    h('link', { rel: 'apple-touch-icon', href: ICON }),
+    h('meta', {
+      name: 'theme-color',
+      content: PLATFORM_BACKGROUND,
+      media: '(prefers-color-scheme: light)',
+    }),
+    h('meta', {
+      name: 'theme-color',
+      content: NIGHT,
+      media: '(prefers-color-scheme: dark)',
+    }),
+    h('meta', { name: 'mobile-web-app-capable', content: 'yes' }),
+    h('meta', { name: 'apple-mobile-web-app-capable', content: 'yes' }),
+    h('meta', {
+      name: 'apple-mobile-web-app-status-bar-style',
+      content: 'default',
+    }),
+    h('meta', { name: 'apple-mobile-web-app-title', content: space.operator }),
+  ])
 
 /** A space's Operator page as a web app: what a phone installs from. */
 export let installing = (space: Space) => {
@@ -799,7 +1038,7 @@ let talkPage = (
     // how many Updates wait on the person (updates.ts `updatesOf`)
     waiting: number
     current: string[]
-    main: string
+    main: Node
     // the main's own modifier, beside `Talk_Main`
     kind?: string
     // where the skip link goes, and what it says
@@ -807,42 +1046,59 @@ let talkPage = (
     script?: string
     app?: Shown
   },
-) => {
-  let whose = whoseOf(space)
-  return shell(
+) =>
+  shell(
     env,
     `${esc(page.title)} · ${esc(space.operator)}`,
     null,
     page.status,
-    `<a class="Desk_Skip" href="${page.skip[0]}">${page.skip[1]}</a>
-<div class="Talk${page.app ? ' Talk-app' : ''}">
-${
-      side(env, space, who, beside, {
-        waiting: page.waiting,
-        current: page.current,
-        app: page.app?.slug,
-      })
-    }
-<div class="Talk_Main${page.kind ? ` ${page.kind}` : ''}" id="content">
-<header class="Talk_Bar"><a class="Button Talk_Menu" href="#menu" aria-label="Menu">☰</a><div class="Talk_Heads"><h1 class="Talk_Head" data-title>${
-      esc(page.title)
-    }</h1><p class="Talk_Who">${esc(whose)}</p></div>${
-      page.app
-        ? `<a class="Button Talk_Show" href="#app">${
-          esc(page.app.title || page.app.slug)
-        }</a>`
-        : ''
-    }</header>
-${page.main}
-</div>
-${page.app ? canvas(env, space, page.app) : ''}
-</div>
-${page.script ?? ''}`,
+    html([
+      h('a', { class: 'Desk_Skip', href: page.skip[0] }, page.skip[1]),
+      h(
+        'div',
+        { class: page.app ? 'Talk Talk-app' : 'Talk' },
+        side(env, space, who, beside, {
+          waiting: page.waiting,
+          current: page.current,
+          app: page.app?.slug,
+        }),
+        h(
+          'div',
+          {
+            class: page.kind ? `Talk_Main ${page.kind}` : 'Talk_Main',
+            id: 'content',
+          },
+          h(
+            'header',
+            { class: 'Talk_Bar' },
+            h(Button, {
+              href: '#menu',
+              class: 'Talk_Menu',
+              'aria-label': 'Menu',
+            }, '☰'),
+            h(
+              'div',
+              { class: 'Talk_Heads' },
+              h('h1', { class: 'Talk_Head', 'data-title': '' }, page.title),
+              h('p', { class: 'Talk_Who' }, whoseOf(space)),
+            ),
+            page.app
+              ? h(
+                Button,
+                { href: '#app', class: 'Talk_Show' },
+                page.app.title || page.app.slug,
+              )
+              : null,
+          ),
+          page.main,
+        ),
+        page.app ? canvas(env, space, page.app) : null,
+      ),
+    ]) + (page.script ?? ''),
     { 'cache-control': 'private, no-store', 'x-robots-tag': 'noindex' },
     'Talk_Page',
     installable(space),
   )
-}
 
 // What a new chat offers to start with, each a few words the box is filled
 // with for the person to finish: an app made, one of theirs changed, a
@@ -856,11 +1112,12 @@ let starts = (operator: string, apps: Beside['apps'] = []) =>
     ]),
     ['Something isn’t working', 'Something isn’t working: '],
     [`What can ${operator} do?`, 'What can you do for me?'],
-  ].map(([label, say]) =>
-    `<button class="Button" type="button" data-say="${esc(say)}">${
-      esc(label)
-    }</button>`
-  ).join('')
+  ].map(([label, say]) => h(Button, { type: 'button', 'data-say': say }, label))
+
+// What a chat says before anything is in it: what it is for, in a heading
+// and a line.
+let hello = (heading: string, said: string) =>
+  h('div', { class: 'Talk_Hello' }, h('h2', null, heading), h('p', null, said))
 
 /**
  * One conversation with the Operator in its chat app, a page of its own
@@ -898,16 +1155,21 @@ export let chatPage = async (
   let mine = (slug?: string | null) => beside.apps?.find((a) => a.slug == slug)
   let ours = talked.changed.filter((c) => !c.space || c.space == space.slug)
   let app = mine(chosen) ?? mine(ours.at(-1)?.app)
-  let operator = esc(space.operator)
-  let hello = !fresh
-    ? '<div class="Talk_Hello"><h2>This chat is not here</h2><p>It may have been removed. Your older chats are listed in Manage, with ${esc(space.operator)}’s settings.</p></div>'
+  let operator = space.operator
+  let greeting = !fresh
+    ? hello(
+      'This chat is not here',
+      `It may have been removed. Your older chats are listed in Manage, with ${operator}’s settings.`,
+    )
     : app
-    ? `<div class="Talk_Hello"><h2>What should change in ${
-      esc(app.title || app.slug)
-    }?</h2><p>Tell ${operator}, and watch it change beside this chat.</p></div>`
-    : `<div class="Talk_Hello"><h2>What can I do for you${
-      first ? `, ${esc(first)}` : ''
-    }?</h2><p>Ask ${operator} to make an app, change one, or find something out. You can send a photo or a document too.</p></div>`
+    ? hello(
+      `What should change in ${app.title || app.slug}?`,
+      `Tell ${operator}, and watch it change beside this chat.`,
+    )
+    : hello(
+      `What can I do for you${first ? `, ${first}` : ''}?`,
+      `Ask ${operator} to make an app, change one, or find something out. You can send a photo or a document too.`,
+    )
   // The person's one conversation, or a new chat until they have one, with
   // no app beside it is where they land: what needs them waits over the box,
   // and a new chat offers ways to start.
@@ -915,7 +1177,7 @@ export let chatPage = async (
   let needs = landing ? needing(news) : undefined
   return talkPage(env, space, who, beside, {
     title: fresh
-      ? app ? app.title || app.slug : `Message ${space.operator}`
+      ? app ? app.title || app.slug : `Message ${operator}`
       : talked.title || 'Not here',
     status: fresh || talked.title ? 200 : 404,
     waiting: news.waiting,
@@ -924,32 +1186,65 @@ export let chatPage = async (
     skip: fresh || talked.title
       ? ['#ask', 'Skip to the message box']
       : ['#content', 'Skip to content'],
-    main: `<div class="Talk_Column" data-conversation aria-live="polite">${
-      talked.html || hello
-    }</div>
-${
+    main: [
+      // The conversation is drawn by the Builder object (operator-view.ts
+      // `talk`), and what needs the person by Updates (updates.ts).
+      talked.html
+        ? h('div', {
+          class: 'Talk_Column',
+          'data-conversation': '',
+          'aria-live': 'polite',
+          dangerouslySetInnerHTML: { __html: talked.html },
+        })
+        : h(
+          'div',
+          {
+            class: 'Talk_Column',
+            'data-conversation': '',
+            'aria-live': 'polite',
+          },
+          greeting,
+        ),
       landing
-        ? `<div class="Talk_Needs" data-needs>${
-          needs
-            ? needsCard(
-              space,
-              needs,
-              `<p><a href="${managePath('updates', space.slug)}#u-${
-                esc(needs.eid)
-              }">Ask ${esc(space.operator)} about it</a></p>`,
-            )
-            : ''
-        }</div>`
-        : ''
-    }
-${fresh || talked.title ? composer(env, at, space.operator, app) : ''}
-${
+        ? h('div', {
+          class: 'Talk_Needs',
+          'data-needs': '',
+          dangerouslySetInnerHTML: {
+            __html: needs
+              ? needsCard(
+                space,
+                needs,
+                html(h(
+                  'p',
+                  null,
+                  h(
+                    'a',
+                    {
+                      href: `${
+                        managePath('updates', space.slug)
+                      }#u-${needs.eid}`,
+                    },
+                    `Ask ${operator} about it`,
+                  ),
+                )),
+              )
+              : '',
+          },
+        })
+        : null,
+      fresh || talked.title ? composer(env, at, operator, app) : null,
       fresh && !app
-        ? `<div class="Talk_Starts" role="group" aria-label="Ways to start">${
-          starts(space.operator, beside.apps)
-        }</div>`
-        : ''
-    }`,
+        ? h(
+          'div',
+          {
+            class: 'Talk_Starts',
+            role: 'group',
+            'aria-label': 'Ways to start',
+          },
+          starts(operator, beside.apps),
+        )
+        : null,
+    ],
     script: chatScript(
       at,
       who,
@@ -980,9 +1275,12 @@ export let updatesPage = async (
     waiting: news.updates.filter((u) => u.needs).length,
     current: ['updates'],
     skip: ['#content', 'Skip to content'],
-    main: `<div class="Talk_Column Updates">${
-      updates(env, space, news, beside.apps, views)
-    }</div>`,
+    main: h('div', {
+      class: 'Talk_Column Updates',
+      dangerouslySetInnerHTML: {
+        __html: updates(env, space, news, beside.apps, views),
+      },
+    }),
   })
 }
 
@@ -990,20 +1288,69 @@ export let updatesPage = async (
 // the files going with them along its top (a gathering drop part,
 // public/drop.js: picked, pasted or dropped anywhere on the box, each a
 // preview or a chip to take back), Send, and Stop while the Operator works.
-// The yak waits to its left (mascot.ts `idle`), and steps aside while he is
-// at work above it (`Talk_Now`). It asks for a message to the Operator by name, or with an app open beside
-// it, what should change there, and the words say which (`about`).
+// The yak waits to its left (mascot.ts `Idle`), and steps aside while he is
+// at work above it (`Talk_Now`). It asks for a message to the Operator by
+// name, or with an app open beside it, what should change there, and the
+// words say which (`about`).
 let composer = (env: Env, at: string, operator: string, app?: Shown) => {
   let asked = app
-    ? `What should change in ${esc(app.title || app.slug)}?`
-    : `Message ${esc(operator)}`
-  return `<form class="Talk_Box" id="ask" method="post" action="${at}" enctype="multipart/form-data">
-<input type="hidden" name="request" value="${crypto.randomUUID()}">${
-    app ? `<input type="hidden" name="app" value="${esc(app.slug)}">` : ''
-  }${idle('Talk_Yak', url(env))}
-<div class="Talk_Write Drop Drop-gather"><ul class="Drop_Chosen" aria-label="Files to send" aria-live="polite"></ul><textarea class="Field Talk_Field" name="say" placeholder="${asked}" aria-label="${asked}"></textarea>
-<div class="Talk_Tools"><label class="Talk_Attach" title="Add images or documents, or paste or drop them here">＋ Add files<input class="Drop_File" type="file" name="file" multiple data-count="${COUNT}" data-size="${SIZE}" data-reads="${READ}" data-unread="The Operator can't read this kind of file. It is kept with your message."></label><p class="Drop_Said" role="status"></p><button class="Button Talk_Stop" type="button" data-stop>Stop</button><button class="Button Button-go Talk_Send" type="submit">Send</button></div></div>
-<p class="Talk_Status" role="status" data-send-status></p></form>`
+    ? `What should change in ${app.title || app.slug}?`
+    : `Message ${operator}`
+  return h(
+    'form',
+    {
+      class: 'Talk_Box',
+      id: 'ask',
+      method: 'post',
+      action: at,
+      enctype: 'multipart/form-data',
+    },
+    h('input', { type: 'hidden', name: 'request', value: crypto.randomUUID() }),
+    app ? h('input', { type: 'hidden', name: 'app', value: app.slug }) : null,
+    h(Idle, { class: 'Talk_Yak', base: url(env) }),
+    h(
+      Drop,
+      { mod: 'gather', class: 'Talk_Write' },
+      h(Drop.Chosen, { 'aria-label': 'Files to send', 'aria-live': 'polite' }),
+      h(Field, {
+        lines: true,
+        class: 'Talk_Field',
+        name: 'say',
+        placeholder: asked,
+        'aria-label': asked,
+      }),
+      h(
+        'div',
+        { class: 'Talk_Tools' },
+        h(
+          'label',
+          {
+            class: 'Talk_Attach',
+            title: 'Add images or documents, or paste or drop them here',
+          },
+          '＋ Add files',
+          h(Drop.File, {
+            type: 'file',
+            name: 'file',
+            multiple: true,
+            'data-count': COUNT,
+            'data-size': SIZE,
+            'data-reads': READ,
+            'data-unread':
+              "The Operator can't read this kind of file. It is kept with your message.",
+          }),
+        ),
+        h(Drop.Said, { role: 'status' }),
+        h(
+          Button,
+          { class: 'Talk_Stop', type: 'button', 'data-stop': '' },
+          'Stop',
+        ),
+        h(Button, { mod: 'go', class: 'Talk_Send', type: 'submit' }, 'Send'),
+      ),
+    ),
+    h('p', { class: 'Talk_Status', role: 'status', 'data-send-status': '' }),
+  )
 }
 
 // The chat app's script: the durable draft and sending, Stop, and the

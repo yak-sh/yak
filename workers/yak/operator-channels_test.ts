@@ -1,6 +1,7 @@
 import { test } from '@yaks/testing'
 import { assertEquals, assertStringIncludes } from '@std/assert'
 import { parseHTML } from 'linkedom'
+import { renderToString } from 'preact-render-to-string'
 import type { Item, Model, Request } from '@yaks/model'
 import {
   type Directory,
@@ -276,15 +277,20 @@ test("the operator page on a person's own space says it works in their other spa
   assertStringIncludes(ownHtml, 'your other spaces')
 })
 test('the operator page says once where else it works and what it may do there', () => {
-  let said = (...roles: Role[]) =>
-    parseHTML(elsewhere(
+  let said = (...roles: Role[]) => {
+    let line = elsewhere(
       roles.map((role, i) => ({
         eid: `r${i}`,
         role,
         space: { slug: `s${i}`, title: `S${i}` } as Space,
       })),
       true,
-    )).document.querySelector('p')?.textContent ?? null
+    )
+    return line
+      ? parseHTML(renderToString(line)).document.querySelector('p')
+        ?.textContent ?? null
+      : null
+  }
   assertEquals(said(), null)
   assertEquals(
     said('editor', 'editor', 'owner'),

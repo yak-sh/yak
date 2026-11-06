@@ -2,6 +2,7 @@ import { test } from '@yaks/testing'
 import { assert, assertEquals, assertStringIncludes } from '@std/assert'
 import { type Item, type Model, ModelError, type Request } from '@yaks/model'
 import { parseHTML } from 'linkedom'
+import { renderToString } from 'preact-render-to-string'
 import { platform } from './directory-probe.ts'
 import { directoryOf } from './directory.ts'
 import { operatorMemory } from './operator-testing.ts'
@@ -118,7 +119,8 @@ test('the conversation shows the context the Operator and each helper were given
     [...at.children].find((c) => c.classList.contains('Talk_Written'))!
       .innerHTML
   let drawn = (md: string) =>
-    parseHTML(reply(md)).document.querySelector('.Talk_Reply')!.innerHTML
+    parseHTML(renderToString(reply(md))).document.querySelector('.Talk_Reply')!
+      .innerHTML
   for (let [d, m] of [[operator, SONNET], [helper, OPUS]] as const) {
     let all = layers(d)
     assertEquals(
