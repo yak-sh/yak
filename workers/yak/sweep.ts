@@ -26,7 +26,7 @@ import { GIT_STORE, PLATFORM_STORE, storeOf } from './door.ts'
 import { bound, type Env } from './env.ts'
 import { KERNEL } from './meta.ts'
 import { adminWho } from './identity.ts'
-import type { Who } from './session.ts'
+import { vouched, type Who } from './session.ts'
 import { LEAVE, WHERE } from './relocate.ts'
 import { visits } from './visit.ts'
 
@@ -107,13 +107,20 @@ let account = async (
   }, { headers: { 'cache-control': 'private, no-store' } })
 }
 
-// The directory's move to a new object (relocate.ts): `?where=<name>&colo=ORD`
-// reaches the object of that name from a Worker in that colo, which is what
-// places an object that has never been reached, and says where it stands.
-// `?prepare=<name>` copies the directory there while it serves, `?to=<name>`
+// A store's move to a new object (relocate.ts), the directory's unless
+// `store=<handle>` names an app's: `?where=<name>&colo=ORD` reaches the object
+// of that name from a Worker in that colo and says where it stands.
+// `?prepare=<name>` copies the store there while it serves, `?to=<name>`
 // finishes the copy in a short hold and hands every request on, and `?back=1`
-// returns them, for a new object that can't serve.
-let relocating = async (req: Request, env: Env): Promise<Response> => {
+// returns them, for a new object that can't serve. An app's store, once handed
+// on, is named by its new object in the directory (`app.store`), so callers go
+// straight there, and the old object forgets its rows.
+let relocating = async (
+  req: Request,
+  env: Env,
+  dir: ReturnType<typeof dirOf>,
+  who: Who,
+): Promise<Response> => {
   let url = new URL(req.url)
   let where = url.searchParams.get('where')
   let colo = (req as { cf?: { colo?: string } }).cf?.colo ??
@@ -131,11 +138,37 @@ let relocating = async (req: Request, env: Env): Promise<Response> => {
     k == 'to' || k == 'prepare' || k == 'back'
   )
   if (!asked.length) return json(400, 'arguments', 'name where, prepare or to')
-  return await storeOf(env.STORE, PLATFORM_STORE)(
-    `${LEAVE}?${new URLSearchParams(asked)}`,
-    { method: 'POST' },
-    KERNEL,
+  let store = url.searchParams.get('store') ?? PLATFORM_STORE
+  let app = store == PLATFORM_STORE ? null : await appAt(dir, store)
+  if (store != PLATFORM_STORE && !app) {
+    return json(404, 'no_store', `no app's store is ${store}`)
+  }
+  let leave = (query: [string, string][]) =>
+    storeOf(env.STORE, store)(
+      `${LEAVE}?${new URLSearchParams(query)}`,
+      { method: 'POST' },
+      KERNEL,
+    )
+  let r = await leave(asked)
+  if (!app || !r.ok || !url.searchParams.has('to')) return r
+  let { to } = await r.clone().json() as { to: string }
+  await dir.stamp(
+    { entities: [{ entity: { eid: app.eid }, app: { store: to } }] },
+    vouched(who),
   )
+  let forgot = await leave([['forget', '1']])
+  if (!forgot.ok) return forgot
+  return Response.json({ ...await r.json(), app: app.eid, forgot: true })
+}
+
+// The app whose own store this handle names.
+let appAt = async (dir: ReturnType<typeof dirOf>, store: string) => {
+  let spaces = await dir.all()
+  let of = new Map(spaces.map((s) => [s.eid, s]))
+  return (await dir.apps(spaces)).find((app) => {
+    let space = of.get(app.space)
+    return space && storeName(space, app) == store
+  }) ?? null
 }
 
 export let fetch = async (req: Request, env: Env): Promise<Response> => {
@@ -165,7 +198,9 @@ export let fetch = async (req: Request, env: Env): Promise<Response> => {
       { headers: { 'cache-control': 'private, no-store' } },
     )
   }
-  if (new URL(req.url).pathname == RELOCATE_PATH) return relocating(req, env)
+  if (new URL(req.url).pathname == RELOCATE_PATH) {
+    return relocating(req, env, dir, who)
+  }
   let all = await stores(env)
   if (req.method == 'GET') return Response.json(all)
   if (req.method != 'POST') {

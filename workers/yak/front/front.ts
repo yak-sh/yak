@@ -4,7 +4,7 @@
 // not, and a hit through a service binding runs no code of the Worker behind it,
 // so the gateway's first question lives here, in an upload of its own.
 //
-// Everything else goes on to the kernel with the maker’s region, including every
+// Everything else goes on to the kernel unchanged, and that includes every
 // failure of this Worker: a visitor never gets an error from it. It holds no
 // secret and opens no store. What it can't decide from the request alone (a
 // signature, who someone is, whether a custom domain is anybody's) is the
@@ -13,7 +13,6 @@
 import { caught, origin, queue, type Sink } from '@yaks/tracker/report'
 import type { Fetcher } from '../env.ts'
 import { sealed } from '../cache.ts'
-import { located } from '../location.ts'
 import { apex, type Host } from '../host.ts'
 import {
   asked,
@@ -187,7 +186,7 @@ export let serve = async (req: Request, env: FrontEnv, ctx: Lent) => {
   } catch (error) {
     report(error, env, ctx, 'front fetch', req)
   }
-  let res = await env.KERNEL.fetch(located(req))
+  let res = await env.KERNEL.fetch(req)
   let mount = res.headers.get(UNKEPT_AT)
   if (!mount) return res
   // An app whose pages are never kept pays the hop to Site once in a while,

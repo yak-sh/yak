@@ -329,6 +329,7 @@ import {
   GIT_STORE,
   IDEMPOTENCY,
   type Namespace,
+  placed,
   PLATFORM_STORE,
   STATIC_QUERY,
   USES,
@@ -3601,13 +3602,13 @@ export class Store {
   // boots, so an object being copied out or into runs nothing of a store's.
   #relocation = relocation({
     storage: () => this.#ctx.storage as unknown as Relocating,
-    object: (name) => this.#bind.STORE!.get(this.#bind.STORE!.idFromName(name)),
+    object: (name) => placed(this.#bind.STORE!, name),
     leave: async () => {
       await this.#sleep()
       // Made durable first: a restart drops what is still being written. The
       // words are ones a caller's door sends again (@yaks/durable-object `evicted`).
       await this.#ctx.storage.sync?.()
-      this.#ctx.abort?.('Durable Object reset because the directory is moving')
+      this.#ctx.abort?.('Durable Object reset because the store is moving')
     },
     resume: () => {
       this.#dormant = null

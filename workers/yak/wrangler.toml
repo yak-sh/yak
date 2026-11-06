@@ -54,8 +54,9 @@ binding = "LOADER"
 # a quiet edge starts one. `mode = "smart"` cut cold waits from 37% to 7% too, but
 # followed the tracker's minute probe to SEA and doubled every directory read.
 # Only the fetch handler moves: Site and Files run nearest the visitor, and no
-# existing Durable Object moves. A new store is created near the code that asks
-# for it, so a new app's store starts in the US whoever makes it.
+# existing Durable Object moves. Every new object is hinted to this side of the
+# continent (door.ts `STORES_AT`), and an older one placed far away moves through
+# relocate.ts.
 [placement]
 region = "aws:us-east-2"
 

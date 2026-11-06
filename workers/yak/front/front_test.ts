@@ -1,13 +1,5 @@
 // yak-front: what it answers itself from Site's cache, and that everything else
-// and every failure of its own reach the kernel with the maker’s region.
-import {
-  GIT_STORE,
-  locating,
-  PLATFORM_OBJECT,
-  PLATFORM_STORE,
-  storeOf,
-} from '../door.ts'
-import { LOCATION } from '../location.ts'
+// and every failure of its own reach the kernel unchanged.
 import { test } from '@yaks/testing'
 import { assertEquals, assertStringIncludes } from '@std/assert'
 import { type FrontEnv, serve, settled } from './front.ts'
@@ -270,59 +262,4 @@ test("an app the kernel says is never kept isn't asked about again", async () =>
   assertEquals(f.asked.length, 1)
   await f.go('https://ada.yaks.app/cookbook/b')
   assertEquals(f.asked.length, 1)
-})
-
-test('the maker region reaches new stores through the front and kernel', async () => {
-  let seen: [unknown, unknown][] = []
-  let store = {
-    idFromName: (name: string) => name,
-    get: (id: unknown, options?: unknown) => {
-      seen.push([id, options])
-      return { fetch: () => Promise.resolve(new Response('store')) }
-    },
-  }
-  let app = storeOf(store, 'ada/new-app')
-  let directory = storeOf(store, PLATFORM_STORE)
-  let git = storeOf(store, GIT_STORE)
-  let f = front(() => page())
-  f.env.KERNEL.fetch = (req: Request) =>
-    locating(req, async () => {
-      await Promise.resolve()
-      await directory('/query')
-      await git('/query')
-      return app('/deploy', { method: 'POST', body: 'declaration' })
-    })
-  let make = (cf?: object) =>
-    Object.assign(
-      new Request('https://yaks.app/mcp', {
-        method: 'POST',
-        body: 'make an app',
-        headers: { [LOCATION]: 'wnam' },
-      }),
-      { cf },
-    )
-  await Promise.all([
-    serve(make({ continent: 'EU', longitude: '2' }), f.env, {
-      waitUntil: () => {},
-    }),
-    serve(make({ continent: 'AS', longitude: '139' }), f.env, {
-      waitUntil: () => {},
-    }),
-  ])
-  assertEquals(seen.filter(([id]) => id == 'ada/new-app'), [
-    ['ada/new-app', { locationHint: 'weur' }],
-    ['ada/new-app', { locationHint: 'apac' }],
-  ])
-  assertEquals(seen.filter(([id]) => id != 'ada/new-app'), [
-    [PLATFORM_OBJECT, undefined],
-    [PLATFORM_OBJECT, undefined],
-    [GIT_STORE, undefined],
-    [GIT_STORE, undefined],
-  ])
-  seen.length = 0
-  await serve(make(), f.env, { waitUntil: () => {} })
-  assertEquals(seen, [[PLATFORM_OBJECT, undefined], [GIT_STORE, undefined], [
-    'ada/new-app',
-    undefined,
-  ]])
 })

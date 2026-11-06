@@ -2,7 +2,15 @@
 // anything else it throws through untouched.
 import { test } from '@yaks/testing'
 import { assertEquals, assertRejects } from '@std/assert'
-import { ACCEPTED, doorOf, type Namespace, storeOf as door } from './door.ts'
+import {
+  ACCEPTED,
+  doorOf,
+  type Namespace,
+  PLATFORM_OBJECT,
+  PLATFORM_STORE,
+  storeOf as door,
+  STORES_AT,
+} from './door.ts'
 import { backoff } from '@yaks/durable-object'
 import { retry as retryWrite } from './write-log.ts'
 import { counts, tallying } from './lib/hops.ts'
@@ -31,6 +39,21 @@ test('a request sums statement counts from each store response', async () => {
   })
   assertEquals(tally.get('stmts'), 6)
   assertEquals(counts(tally).hops, 4)
+})
+
+test('every object is created beside the kernel, whoever asks first', async () => {
+  let got: [unknown, unknown][] = []
+  let n: Namespace = {
+    idFromName: (name) => name,
+    get: (id, options) => {
+      got.push([id, options])
+      return { fetch: () => Promise.resolve(new Response('ok')) }
+    },
+  }
+  await storeOf(n, 'ada/cookbook.1f7c3e')('/query')
+  await storeOf(n, PLATFORM_STORE)('/query')
+  let hint = { locationHint: STORES_AT }
+  assertEquals(got, [['ada/cookbook.1f7c3e', hint], [PLATFORM_OBJECT, hint]])
 })
 
 let ns = (

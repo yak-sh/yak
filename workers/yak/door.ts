@@ -11,8 +11,6 @@
 // graph.ts replaced: living beside that class dragged src/db.ts into the
 // object's graph and failed that check. That class is gone (T-33807).
 import type { Caller } from '@yaks/egress'
-import { AsyncLocalStorage } from 'node:async_hooks'
-import { type Location, locationOf } from './location.ts'
 import { elapsed, heard, hop, WAITS, writing } from './lib/hops.ts'
 import { defect } from './defects.ts'
 import { stamp } from './running.ts'
@@ -102,23 +100,20 @@ export let GIT_STORE = 'yak/git'
 export type Stub = { fetch(req: Request): Promise<Response> }
 export type Namespace = {
   idFromName(name: string): unknown
-  get(id: unknown, options?: { locationHint: Location }): Stub
+  get(id: unknown, options?: { locationHint: string }): Stub
 }
 
-// The front's region belongs to this invocation, including concurrent requests
-// and doors memoized across them. Cloudflare uses a hint only at an object's
-// first get; names and existing placements never change.
-let location = new AsyncLocalStorage<Location | undefined>()
-export let locating = <T>(req: Request, work: () => T): T =>
-  location.run(locationOf(req), work)
+/** Where an object is created: beside the kernel, whose fetch handler runs in
+ * aws:us-east-2 (wrangler.toml `[placement]`) and makes every call a store
+ * answers, and beside the directory in ORD. Cloudflare uses a hint only at an
+ * object's first get and never moves an object, so one created near a person
+ * elsewhere answers every call from an ocean away, for good: a store in VIE
+ * answers the kernel about 95 ms later than one in ATL. */
+export let STORES_AT = 'enam'
 
-let placed = (ns: Namespace, name: string) => {
-  let hint = location.getStore()
-  let options = hint && name != PLATFORM_STORE && name != GIT_STORE
-    ? { locationHint: hint }
-    : undefined
-  return ns.get(ns.idFromName(objectOf(name)), options)
-}
+/** The object a store's name stands in, created where `STORES_AT` says. */
+export let placed = (ns: Namespace, name: string): Stub =>
+  ns.get(ns.idFromName(objectOf(name)), { locationHint: STORES_AT })
 
 // The kernel's door to one store: a caller on the object named for the app
 // (directory.ts storeName — the address it was born at, which a rename never

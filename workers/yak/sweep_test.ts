@@ -3,7 +3,8 @@
 // else does, and a name the directory does not hold wakes nothing.
 import { test } from '@yaks/testing'
 import { assertEquals } from '@std/assert'
-import { directory, stamp } from './directory.ts'
+import { appStore, directory, stamp } from './directory.ts'
+import { KERNEL, metaOf } from './meta.ts'
 import * as dirPart from './directory.ts'
 import { sign } from './lib/token.ts'
 import * as sweep from './sweep.ts'
@@ -14,6 +15,8 @@ let ADA = 'a0000000-0000-4000-8000-0000000000ad'
 let JEFF = 'a0000000-0000-4000-8000-00000000000f'
 
 // Ada owns `ada`, which holds one app; Jeff owns `yak`, the platform's own.
+let AS_ADA = { ...KERNEL, 'x-yak-person': ADA, 'x-yak-role': 'owner' }
+
 let spaces = async () => {
   let scenario = platform(SECRET)
   let { env } = scenario
@@ -47,13 +50,18 @@ let spaces = async () => {
       },
     }],
   })
-  let door = async (who: string, query = '', method = 'GET') => {
+  let door = async (
+    who: string,
+    query = '',
+    method = 'GET',
+    path = sweep.PATH,
+  ) => {
     let cookie = `yak_session=${await sign(
       { person: who, space: null, exp: Date.now() + 60_000 },
       SECRET,
     )}`
     let r = await sweep.fetch(
-      new Request(`https://yaks.app${sweep.PATH}${query}`, {
+      new Request(`https://yaks.app${path}${query}`, {
         method,
         headers: { cookie },
       }),
@@ -61,7 +69,7 @@ let spaces = async () => {
     )
     return { status: r.status, body: await r.json() }
   }
-  return { scenario, door }
+  return { scenario, door, dir }
 }
 
 test('the platform’s owner sweeps every store, one at a time', async () => {
@@ -199,4 +207,65 @@ test('only the admin, or the account itself, erases it; never a person or fixtur
   }
   assertEquals(await dir.emailAt(ADA), 'ada@example.com')
   assertEquals((await ask(PROBE, 'probe@bot.yak.sh')).body.erased, true)
+})
+
+test('an app’s store moves to a new object, and the directory names it there', async () => {
+  let { scenario, door, dir } = await spaces()
+  await using _ = scenario
+  let { env, states } = scenario
+  let space = (await dir.space('ada'))!
+  let notes = async () =>
+    metaOf(
+      appStore(env.STORE, space, (await dir.app(space, 'notes'))!),
+      AS_ADA,
+    )
+  let titles = async () =>
+    (await (await notes()).query('.doc')).map((b) =>
+      String((b.doc as { title?: string })?.title)
+    ).sort()
+  let move = (query: string) =>
+    door(JEFF, `?store=ada/notes.abc123&${query}`, 'POST', sweep.RELOCATE_PATH)
+  await (await notes()).apply([{
+    entity: { eid: '$a' },
+    doc: { title: 'before' },
+  }], KERNEL)
+  assertEquals(await titles(), ['before'])
+  assertEquals((await move('prepare=ada/notes.near')).status, 200)
+  await (await notes()).apply([{
+    entity: { eid: '$b' },
+    doc: { title: 'during' },
+  }], KERNEL)
+  let moved = await move('to=ada/notes.near')
+  assertEquals(moved.status, 200, JSON.stringify(moved.body))
+  assertEquals([moved.body.to, moved.body.forgot], ['ada/notes.near', true])
+
+  assertEquals((await dir.app(space, 'notes'))!.store, 'ada/notes.near')
+  assertEquals(await titles(), ['before', 'during'])
+  // A caller still holding the old handle is handed on to the new object, and
+  // the old one keeps none of what was written.
+  let old = metaOf(
+    appStore(env.STORE, space, {
+      ...(await dir.app(space, 'notes'))!,
+      store: 'ada/notes.abc123',
+    }),
+    KERNEL,
+  )
+  await old.apply([{ entity: { eid: '$c' }, doc: { title: 'late' } }], KERNEL)
+  assertEquals(await titles(), ['before', 'during', 'late'])
+  assertEquals(
+    await states.get('ada/notes.abc123')!.storage.get('relocated'),
+    'ada/notes.near',
+  )
+  assertEquals(
+    await states.get('ada/notes.abc123')!.storage.get('name'),
+    undefined,
+  )
+
+  // The old handle is no app's store any more, so nothing moves it again.
+  assertEquals((await move('to=ada/notes.near')).status, 404)
+  assertEquals(
+    (await door(ADA, '?store=ada/notes.near&to=x', 'POST', sweep.RELOCATE_PATH))
+      .status,
+    403,
+  )
 })

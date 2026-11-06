@@ -51,7 +51,7 @@ test('the directory moves to a new object and every request follows it', async (
   Object.assign(left, {
     abort: (reason: string) => {
       equal(durable, true)
-      equal(synced, { to: 'yak/ord', tries: 0 })
+      equal(synced, { to: 'yak/ord', tries: 0, store: PLATFORM_STORE })
       equal(evicted(new Error(reason)), true)
     },
   })

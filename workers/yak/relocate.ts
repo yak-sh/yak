@@ -1,6 +1,9 @@
 // An object's move to a new address. Cloudflare keeps a Durable Object where it
-// was first reached and never moves it (T-134094), so moving the directory
-// nearer is a new object holding the old one's file. It takes two steps.
+// was first reached and never moves it (T-134094), so moving a store nearer is
+// a new object holding the old one's file. Any store moves this way: the
+// directory, whose new object its constant names (door.ts `PLATFORM_OBJECT`),
+// and an app's, whose new object the directory's `app.store` then names
+// (sweep.ts `relocating`). It takes two steps.
 //
 // `prepare` copies every table across while this object goes on serving, as long
 // as that takes, and builds the far end's indexes. Nothing ever boots there.
@@ -45,7 +48,6 @@ import {
   stale,
 } from '@yaks/durable-object'
 import { col, eq, select, table, val } from '@yaks/sql'
-import { PLATFORM_STORE } from './door.ts'
 
 export let LEAVE = '/relocate'
 export let ARRIVE = '/relocate/arrive'
@@ -62,7 +64,7 @@ export type Relocating = DurableStorage & {
   setAlarm(at: number): Promise<void>
 }
 
-type Leaving = { to: string; tries: number }
+type Leaving = { to: string; tries: number; store: string }
 type Page = { table: Plan['tables'][number]; rows: Cell[][] }
 type Told =
   | { op: 'begin'; plan: Plan }
@@ -313,7 +315,7 @@ export let relocation = (o: {
         })
         return await hold(leaving.to)
       } catch (e) {
-        o.report(e, PLATFORM_STORE)
+        o.report(e, leaving.store)
         await storage.put('relocating', false)
         await storage.put('dormant', false)
         await storage.setAlarm(Date.now() + SOON)
@@ -324,7 +326,7 @@ export let relocation = (o: {
       }
     })()
 
-  let look = () =>
+  let look = (store: string) =>
     looked ??= (async () => {
       let storage = o.storage()
       moved = await storage.get<string | false>?.('relocated') || null
@@ -335,7 +337,7 @@ export let relocation = (o: {
       else {
         o.report(
           new Error(`relocating to ${leaving.to} gave up`),
-          PLATFORM_STORE,
+          store,
         )
         await storage.put('relocating', false)
         await storage.put('dormant', false)
@@ -360,14 +362,13 @@ export let relocation = (o: {
         return Response.json({ error: String(e) }, { status: 500 })
       })
     }
-    if (store != PLATFORM_STORE) return null
-    await look()
+    await look(store)
     if (kernel && path == LEAVE && request.method == 'POST') {
       let asked = new URL(request.url).searchParams
       let preparing = asked.get('prepare')
       if (preparing) {
         return await prepare(preparing).catch((e) => {
-          o.report(e, PLATFORM_STORE)
+          o.report(e, store)
           return Response.json({ error: String(e) }, { status: 500 })
         })
       }
@@ -382,11 +383,21 @@ export let relocation = (o: {
         o.resume()
         return Response.json({ back: true })
       }
+      // Once every caller names the new object, the rows left here are a
+      // second copy of what people wrote, which an erasure would never reach:
+      // only the mark that hands requests on stays.
+      if (asked.get('forget') && moved) {
+        let storage = o.storage()
+        await storage.deleteAll()
+        await storage.put('relocated', moved)
+        await storage.put('dormant', true)
+        return Response.json({ to: moved, forgot: true })
+      }
       if (moved) return Response.json({ to: moved })
       let to = asked.get('to')
       if (!to) return Response.json({ error: 'to' }, { status: 400 })
       if (!copying) {
-        let leaving = { to, tries: 0 }
+        let leaving = { to, tries: 0, store }
         await o.storage().put('relocating', leaving)
         await o.leave()
         return (await begin(leaving)).clone()
