@@ -93,6 +93,7 @@ import {
 import {
   oracleContext,
   oracleMap,
+  oracleTopic,
   oracular,
   TOPIC,
   topicOf,
@@ -1030,7 +1031,7 @@ export let operating = (
         if (!o) return {}
         if (!args.topic) return { operator_session: o }
         let { ctx } = await working(env, store, parent, options.directory)
-        let topic = String(args.topic)
+        let topic = await oracleTopic(ctx, g, String(args.topic))
         await oracleContext(ctx, g, topic)
         return {
           operator_session: o,

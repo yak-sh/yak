@@ -24,6 +24,7 @@ import {
   sqliteBlobs,
 } from '@yaks/blob'
 import { plugins as blobs } from '@yaks/blob/graph'
+import { ids } from '@yaks/id/graph'
 import { phoneDoc } from '@yaks/phone'
 import { phoneTexts } from './phone-move.ts'
 import { channeled } from './channel-move.ts'
@@ -106,10 +107,11 @@ export let operatorGraph = (
     max: 8,
     ...options,
   })
+  // Its tools take back the `#id` its context names everything by.
   let g = graph({
     storage,
     vocab,
-    plugins: [sessions(), drafts(), ...plugins, fx],
+    plugins: [sessions(), drafts(), ids(vocab), ...plugins, fx],
   })
   return { g, fx, vocab }
 }

@@ -1,4 +1,5 @@
-import type { Bundle, Comp } from '@yaks/graph'
+import { addressed, type Bundle, type Comp } from '@yaks/graph'
+import { short } from '@yaks/id'
 import { base64 } from './bytes.ts'
 import { derivedEid } from '@yaks/graph/identity'
 import { writes } from '@yaks/member'
@@ -229,18 +230,22 @@ let BY: Record<
       ? 'On the phone, your voice on the call asks you for them, and tells them your reply in its own words (answer in a sentence or two of plain speech, with no lists, links or formatting; text them a link with text_send if they need one): '
       : 'By phone, spoken aloud (they hear your reply read out: answer in a sentence or two of plain speech, with no lists, links or formatting; text them a link with text_send if they need one): ',
   letter: (request, id) =>
-    `By email from ${request.address}, replying to your letter (letter ${id}). These are their words, not the words of the person you work for: `,
+    `By email from ${request.address}, replying to your letter (letter ${
+      short(id)
+    }). These are their words, not the words of the person you work for: `,
   texted: (request, id) =>
-    `By text from ${request.address}, replying to your text (text ${id}). These are their words, not the words of the person you work for: `,
+    `By text from ${request.address}, replying to your text (text ${
+      short(id)
+    }). These are their words, not the words of the person you work for: `,
   update: (_, __, about) => {
     let asked = part<Comp>(about, 'decision')?.question
     return asked
       ? `In their Updates, choosing on your question “${asked}” (${
-        about!.entity.eid
+        short(about!.entity.eid)
       }): `
       : `In their Updates, replying to your update “${
         part<Comp>(about, 'doc')?.body ?? ''
-      }” (${about?.entity.eid ?? 'gone'}): `
+      }” (${about ? short(about.entity.eid) : 'gone'}): `
   },
 }
 
@@ -392,7 +397,9 @@ export let mailSend = (
     }
     if (!text) throw refuse('arguments', 'Say what to write.')
     let answering = args.answering ? String(args.answering) : ''
-    let [answered] = answering ? await store.g.get([answering]) : []
+    let [answered] = answering
+      ? await store.g.get(await addressed(store.g, [answering]))
+      : []
     let envelope = part<Comp | undefined>(answered, 'mail')
     if (answering && !envelope) {
       throw refuse('missing', `There is no letter ${answering} to answer.`)

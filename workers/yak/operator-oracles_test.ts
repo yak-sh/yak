@@ -3,7 +3,7 @@ import { assertEquals, assertRejects, assertStringIncludes } from '@std/assert'
 import type { Comp } from '@yaks/graph'
 import type { Item, Request } from '@yaks/model'
 import { ORACLE } from '@yaks/topic'
-import { human } from '@yaks/id'
+import { human, short } from '@yaks/id'
 import { platform } from './directory-rows-probe.ts'
 import { declared } from './directory-fixture.ts'
 import { directoryOf, stamp } from './directory.ts'
@@ -100,7 +100,7 @@ let script = (req: Request): Item[] => {
       ? call('graph_apply', {
         self: true,
         bundles: [{
-          entity: { eid: app.eid },
+          entity: { eid: short(app.eid) },
           content: {
             body:
               'Recipes use grams; repeat ingredient amounts in instructions.',
@@ -111,7 +111,7 @@ let script = (req: Request): Item[] => {
   }
   if (fork && outcome.includes('Find how amounts')) {
     return call('spawn', {
-      topic: app.eid,
+      topic: short(app.eid),
       prompt: 'How should recipe amounts be written?',
     })
   }
@@ -156,7 +156,7 @@ let drawn = await conversationOf(store, '/at', started.session)
 test('a conversation stays small while its fork obtains an answer from the app oracle', () => {
   assertStringIncludes(
     String(rootAsk.instructions),
-    `${app.eid} app home/recipes: Recipe box`,
+    `${short(app.eid)} app home/recipes: Recipe box`,
   )
   assertEquals(String(rootAsk.instructions).includes('Use grams.'), false)
   assertEquals(rootAsk.instructions, forkAsk.instructions)
@@ -228,7 +228,18 @@ test('the system prompt saved beside the conversation is the one the model recei
   let sending = kept.find((b) => b.ask)?.sending as Comp
   assertStringIncludes(
     String(sending.instructions),
-    `${app.eid} app home/recipes`,
+    `${short(app.eid)} app home/recipes`,
   )
   assertEquals(String(sending.instructions).includes('connector guide'), false)
+})
+
+// Every entity the context names is named by its short id, which the tools
+// take back (T-145034).
+let UUID = /[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/i
+test('the context names entities by short id, never a full uuid', () => {
+  let said = [rootAsk, forkAsk, oracleAsk].flatMap((r) => [
+    ...String(r.instructions).split('\n'),
+    ...r.items.map((i) => JSON.stringify(i)),
+  ])
+  assertEquals(said.filter((l) => UUID.test(l)), [])
 })

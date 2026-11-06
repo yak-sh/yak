@@ -1,3 +1,4 @@
+import { short } from '@yaks/id'
 import { test } from '@yaks/testing'
 import type { Binding } from '@yaks/cloudflare-mail'
 import { assertEquals, assertStringIncludes } from '@std/assert'
@@ -140,7 +141,8 @@ await mailSend(env, ctx, space, store).run({
   to: 'alvarez@clinic.example',
   name: 'Dr Alvarez',
   text: 'Thank you; Tuesday at 3 it is.',
-  answering: request,
+  // As its framing names it: `(letter #abc123)`.
+  answering: short(request),
 })
 let followed = letters.at(-1)!
 
