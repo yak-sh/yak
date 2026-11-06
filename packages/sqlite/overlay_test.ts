@@ -110,6 +110,10 @@ test('the overlay costs the batch, never the database', () => {
     ]
     let statements = 0
     let counted = spy(driver, () => void statements++)
+    // What the file holds (./raise.ts) is read once per connection, not per
+    // batch.
+    overlay(counted, shop, bundles)
+    statements = 0
     let over = overlay(counted, shop, bundles)
     assertEquals(seen(counted, over, '.product.price>=100000').length, 21)
     return statements

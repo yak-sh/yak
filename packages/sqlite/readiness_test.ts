@@ -16,8 +16,9 @@ let schemaReads = (said: string[]) =>
   said.filter((sql) => /\b(?:sqlite_schema|sqlite_master)\b/.test(sql))
 
 test('a fresh single-owner store uses host schema readiness without inspecting schema', () => {
-  let d = mem()
-  storage(d, shop).install()
+  let d = mem(), installed = storage(d, shop)
+  installed.install()
+  installed.raise()
   let said: string[] = [], asked = 0
   let s = storage(
     spy(d, (sql) => void said.push(sql)),
@@ -99,8 +100,9 @@ test('an unready schema falls back to installation and vocabulary growth', () =>
 })
 
 test('explicit install validates even when a host asserts schema readiness', () => {
-  let d = mem()
-  storage(d, shop).install()
+  let d = mem(), installed = storage(d, shop)
+  installed.install()
+  installed.raise()
   d.query({ t: 'drop', kind: 'index', name: 'shelf_aisle_height' })
   let asked = 0
   let s = storage(
@@ -131,6 +133,7 @@ test('file operations never install or mend external schema edits', () => {
     })
     let s = storage(first, shop, opts)
     s.install()
+    s.raise()
     s.tx((tx) => tx.patch([{ entity: { eid: 'a' }, doc: { title: 'A' } }]))
     let drop = () => second.query({ t: 'drop', kind: 'table', name: 'shelf' })
     let exists = (d: Driver) =>
@@ -141,7 +144,11 @@ test('file operations never install or mend external schema edits', () => {
     assertEquals(exists(first), false)
     assertEquals(s.get(['a'], ['doc'])[0].doc, { title: 'A' })
     assertEquals(exists(first), false)
+    // An install finds the table gone and records its component unwritten:
+    // the next write that names it makes it again.
     s.install()
+    assertEquals(exists(first), false)
+    assertEquals(s.raise(['shelf']), ['shelf'])
     assertEquals(exists(first), true)
     drop()
     let reopened = storage(second, shop, opts)
@@ -150,6 +157,7 @@ test('file operations never install or mend external schema edits', () => {
     })
     assertEquals(exists(second), false)
     reopened.install()
+    assertEquals(reopened.raise(['shelf']), ['shelf'])
     assertEquals(exists(second), true)
     assertEquals(asked, 0)
   } finally {

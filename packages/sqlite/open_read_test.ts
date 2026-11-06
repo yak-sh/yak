@@ -82,6 +82,7 @@ test('file reads leave external schema edits alone; explicit installation repair
   let db = f.open(), peer = f.open()
   let store = storage(db, shop)
   store.install()
+  store.raise()
   store.tx((tx) => tx.patch([{ entity: { eid: 'one' }, doc: { title: 'A' } }]))
   // Establish a reader before the external edit, and another after it.
   assertEquals(store.get(['one'], ['doc'])[0].doc, { title: 'A' })

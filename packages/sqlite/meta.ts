@@ -153,10 +153,31 @@ export let requires = (driver: Driver, plugins: readonly string[]): void => {
 // A key's value, read without assuming the table is there yet. The table is
 // asked after by name (`table_info`, empty for one that is not there) rather
 // than found in the whole catalogue, which a store reads on every wake.
-let kept = (driver: Driver, k: string): string | undefined =>
-  driver.query({ t: 'pragma', name: 'table_info', arg: META }).length
-    ? meta(driver).get(k)
-    : undefined
+// The drivers whose file has the table: once it has, it keeps it, so a value
+// read again is one statement.
+let standing = new WeakSet<Driver>()
+let kept = (driver: Driver, k: string): string | undefined => {
+  if (!standing.has(driver)) {
+    if (!driver.query({ t: 'pragma', name: 'table_info', arg: META }).length) {
+      return
+    }
+    standing.add(driver)
+  }
+  return meta(driver).get(k)
+}
+
+/** The key the component tables the file holds are kept under, as their
+ * names: what its install found, and each a write raised since (./raise.ts),
+ * so a reader knows which tables a store holds from one row rather than a
+ * look at its schema. */
+export let TABLES = 'tables'
+
+/** The component tables the file holds, as its install and its writes
+ * recorded them; undefined for a file no install of this code recorded. */
+export let tablesAt = (driver: Driver): string[] | undefined => {
+  let v = kept(driver, TABLES)
+  return v == null ? undefined : v ? v.split(' ') : []
+}
 
 /** The store's epoch where one was minted, read without minting it: what a
  * read asks, where {@link epoch} writes. */

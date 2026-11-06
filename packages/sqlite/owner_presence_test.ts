@@ -103,6 +103,8 @@ test('projected owner selections leave computed session status unread', () => {
   ok(control > 0)
 })
 
+// `scoped` compiles past the store, so every table it names must stand.
+s.raise()
 let scoped = (
   visibility?: NonNullable<Parameters<typeof compile>[2]>['visibility'],
 ) => {

@@ -14,6 +14,7 @@
 
 import type { Eid } from '@yaks/graph'
 import {
+  absentFrom,
   and,
   as,
   at,
@@ -566,6 +567,15 @@ let exactly = (
   })
 }
 
+/** What {@link find} is asked beside its words: {@link SearchOpts} less the
+ * screens and sources it reads off the file itself. */
+export type FindOpts = Omit<SearchOpts, 'screens' | 'content'> & {
+  // the reader's scope (@yaks/graph `scope`) and the vocabulary it is read
+  // in: only text that reader may see is ranked (`screens`)
+  scope?: BindOpts
+  vocab?: Vocab
+}
+
 // The hits for a search, closest first. Returns [] for text containing no word
 // and for a vocabulary with nothing indexed — a search that cannot be run finds
 // nothing, rather than everything.
@@ -573,17 +583,26 @@ export let find = (
   db: Driver,
   fields: Field[],
   text: string,
-  opts: SearchOpts = {},
+  { scope, vocab, ...opts }: FindOpts = {},
 ): Hit[] => {
-  let content = Object.fromEntries(
-    catalogue(db).filter((o) => o.type == 'table').flatMap((o) => {
-      let source = /content='([^']*)'/.exec(o.sql ?? '')?.[1]
-      return source ? [[o.name.replace(/_fts$/, ''), source]] : []
-    }),
-  )
-  let stmt = hits(fields, text, {
+  if (scope && !vocab) throw new Error('a scoped search requires a vocabulary')
+  let tables = catalogue(db).filter((o) => o.type == 'table')
+  let content = Object.fromEntries(tables.flatMap((o) => {
+    let source = /content='([^']*)'/.exec(o.sql ?? '')?.[1]
+    return source ? [[o.name.replace(/_fts$/, ''), source]] : []
+  }))
+  // An index stands once its component's first write made it, and a scope
+  // reads a component no table stands for as worn by nobody (@yaks/sqlite).
+  let live = fields.filter((f) => (f.on ?? f.comp) in content)
+  let stmt = hits(live, text, {
     plan: db.file ? 'sort' : 'index',
     content,
+    ...scope && {
+      screens: screens(live, vocab!, {
+        ...scope,
+        absent: absentFrom(vocab!, new Set(tables.map((o) => o.name))),
+      }),
+    },
     ...opts,
   })
   if (!stmt) return []

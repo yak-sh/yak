@@ -52,7 +52,7 @@ let rank = (words: string) =>
 // beside the fixture's search indexes, so each case times only its search.
 ids('privateword')
 rank('privateword')
-find(db, text, 'privateword', { screens: sources })
+find(db, text, 'privateword', { vocab: shop, scope: opts })
 
 test('private indexed text cannot select a public entity', () =>
   assertEquals(ids('privateword'), []))
@@ -67,15 +67,15 @@ test('private indexed text cannot affect count', () =>
 test('search ranking excludes hidden entities and private matching arms', () =>
   assertEquals(rank('privateword'), []))
 test('standalone search excludes private matching sources', () =>
-  assertEquals(find(db, text, 'privateword', { screens: sources }), []))
+  assertEquals(find(db, text, 'privateword', { vocab: shop, scope: opts }), []))
 test('snippets come from a permitted matching source on a public entity', () => {
-  let mixed = find(db, text, 'dragon', { screens: sources })
+  let mixed = find(db, text, 'dragon', { vocab: shop, scope: opts })
     .find((hit) => hit.entity == 'mixed')!
   assertEquals(mixed.snippet.includes('privateword'), false)
 })
 test('standalone ranking excludes a hidden owner', () =>
   assertEquals(
-    find(db, text, 'dragon', { screens: sources })
+    find(db, text, 'dragon', { vocab: shop, scope: opts })
       .some((hit) => hit.entity == 'book-2'),
     false,
   ))

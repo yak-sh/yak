@@ -4,12 +4,13 @@
 import { test } from '@yaks/testing'
 import { assert, assertEquals, assertThrows } from '@std/assert'
 import { graph, identityEid } from '@yaks/graph'
-import { loadVocab } from '@yaks/vocab'
+import { loadVocab, type Vocab } from '@yaks/vocab'
 import { parse } from '@yaks/query'
 import {
   by,
   col,
   compile,
+  type Driver,
   eq,
   type Expr,
   fn,
@@ -25,12 +26,27 @@ import {
 import memberDoc from '../member/vocab.json' with { type: 'json' }
 import { schema, tables } from './ddl.ts'
 import { open } from './db.ts'
-import { analyzed, columns as cols, objects, storage } from './mod.ts'
+import {
+  analyzed,
+  columns as cols,
+  objects,
+  storage,
+  type Store,
+} from './mod.ts'
 import { mem, shop, spy } from './testing.ts'
 import { work } from './owe.ts'
 
 let text = (stmts: Stmt[]) => stmts.map((s) => render(s).sql)
 let all = text(schema(shop)).join('\n')
+
+// A store holding every table, as one whose every word was written does: a
+// component's table is otherwise made by its first write (./raise.ts).
+let whole = (d: Driver, vocab: Vocab): Store => {
+  let s = storage(d, vocab)
+  s.install()
+  s.raise()
+  return s
+}
 
 test('editing a returned table list leaves stored component reads intact', () => {
   let vocab = loadVocab({
@@ -324,7 +340,7 @@ test('a store reopened with other read overrides raises its view again', () => {
   let d = mem()
   let view = () =>
     String(objects(d, { type: 'view', name: 'doc_value' })[0].sql)
-  storage(d, shop).install()
+  whole(d, shop)
   assert(!view().includes('upper'), view())
   let loud = (stored: Expr) => fn('upper', stored)
   let derived = { 'doc.body': { tag: 'text', expr: loud, text: loud } } as const
@@ -406,7 +422,7 @@ test('a property a component grew is added to the live table', () => {
       },
     },
   })
-  storage(d, was).install()
+  whole(d, was)
   assertEquals(cols(d, 'book'), ['entity', 'title'])
   // The grown vocabulary over the same database: the two new columns arrive,
   // the reference carrying its foreign key, and nothing already there moves.
@@ -427,6 +443,7 @@ test('reference indexes are installed on new and existing member stores', () => 
     let d = mem()
     let s = storage(d, vocab)
     s.install()
+    s.raise()
     if (existing) {
       // A database created before references were indexed by default.
       for (
@@ -533,7 +550,7 @@ let strict = loadVocab({
 
 test('the engine holds what the vocabulary said', () => {
   let d = mem()
-  storage(d, strict).install()
+  whole(d, strict)
   d.query(insert('entity', { id: 1, eid: 'a' }, { id: 2, eid: 'b' }, {
     id: 3,
     eid: 'c',
@@ -584,7 +601,7 @@ test('a grown column keeps a literal default, takes the clock only ahead', () =>
       },
     },
   })
-  storage(d, was).install()
+  whole(d, was)
   d.query(insert('entity', { id: 1, eid: 'a' }))
   d.query(insert('repo', { entity: 1 }))
   d.query(insert('created', { entity: 1 }))
@@ -610,7 +627,7 @@ test('a grown column keeps a literal default, takes the clock only ahead', () =>
 
 test('refitting preserves undeclared columns, empty or populated', () => {
   let d = mem()
-  storage(d, shop).install()
+  whole(d, shop)
   d.query(insert('entity', { id: 1, eid: 'm' }, { id: 2, eid: 'p' }))
   d.query(insert('product', { entity: 2, maker: 1 }))
   d.query({
@@ -668,7 +685,7 @@ test('a property no longer required clears without automatic column deletion', (
 
 test('a required column its vocabulary forgot while full can be cleared', () => {
   let d = mem()
-  storage(d, pets(['name', 'sound'])).install()
+  whole(d, pets(['name', 'sound']))
   d.query(insert('entity', { id: 1, eid: 'rex' }))
   d.query(insert('pet', { entity: 1, name: 'Rex', sound: 'woof' }))
   storage(d, pets(['name'])).install()
@@ -678,7 +695,7 @@ test('a required column its vocabulary forgot while full can be cleared', () => 
 
 test('a death word that moved rebuilds its table without the key', () => {
   let d = mem()
-  storage(d, shop).install()
+  whole(d, shop)
   d.query(insert('entity', { id: 1, eid: 'm' }, { id: 2, eid: 'p' }))
   d.query(insert('product', { entity: 2, maker: 1 }))
   // A column the vocabulary has since forgotten still holds its rows.
@@ -796,7 +813,7 @@ test('a file owes the sizes its planner reads it by, and its upkeep finds them',
   let path = Deno.makeTempFileSync({ suffix: '.sqlite' })
   let d = open(path)
   try {
-    storage(d, shop).install()
+    whole(d, shop)
     d.query(insert('entity', { id: 1, eid: 'a' }, { id: 2, eid: 'b' }, {
       id: 3,
       eid: 'c',
@@ -934,6 +951,7 @@ test('a read never repairs an index, even after a writer releases its lock', () 
   try {
     let s = storage(a, shop)
     s.install()
+    s.raise()
     a.query({ t: 'pragma', name: 'busy_timeout', value: 0 })
     s.get(['x'])
     b.query({ t: 'drop', kind: 'index', name: 'product_sku' })

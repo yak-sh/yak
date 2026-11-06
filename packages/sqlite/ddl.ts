@@ -882,6 +882,29 @@ let joined = (owed: string[] = [], more: string[]) => [
   ...new Set([...owed, ...more]),
 ]
 
+// Whether a table of the catalogue's list is one statistics are kept for:
+// the file's own, not the engine's.
+let kept = (r: Row) =>
+  r.schema == 'main' &&
+  (r.type == 'table' || r.type == 'shadow') &&
+  !/^sqlite_|^_+cf_/i.test(String(r.name))
+
+/** The tables planner statistics are kept for ({@link analyzed}). */
+export let analyzable = (driver: Driver): string[] =>
+  driver.query({ t: 'pragma', name: 'table_list' }).filter(kept)
+    .map((r) => String(r.name))
+
+/** `statistics`, remembering as empty each of `made`, tables made since it
+ * was taken: one a first write makes (./raise.ts) is made empty, and is owed
+ * an analysis once it holds rows, as one an install made would be. */
+export let emptied = (
+  statistics: Statistics,
+  made: readonly string[],
+): Statistics => ({
+  ...statistics,
+  empty: [...new Set([...statistics.empty, ...made])],
+})
+
 /**
  * The planner statistics a full-analysis engine owes, as the receipt keeps
  * them (./meta.ts `Statistics`), or undefined where nothing new is owed or
@@ -909,11 +932,7 @@ let owing = (
     }
   }
   let tables = driver.query({ t: 'pragma', name: 'table_list' })
-  let names = tables.filter((r) =>
-    r.schema == 'main' &&
-    (r.type == 'table' || r.type == 'shadow') &&
-    !/^sqlite_|^_+cf_/i.test(String(r.name))
-  )
+  let names = tables.filter(kept)
   let stats = tables.some((r) => r.name == 'sqlite_stat1')
     ? scan(driver, 'sqlite_stat1', undefined, ['tbl', 'idx'])
     : []

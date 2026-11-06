@@ -48,7 +48,7 @@ import {
 } from '@yaks/sql'
 import type { Statements } from '@yaks/sql'
 import type { Bundle } from '@yaks/graph'
-import { type Field, wearers } from './fields.ts'
+import { type Field, present, wearers } from './fields.ts'
 import { OWED, TABLE } from './ddl.ts'
 
 // Queue the entities `q` selects, or bump the count of those already queued.
@@ -253,8 +253,9 @@ export let moves = (have: Standing[], want: CreateTrigger[]): Moves => {
  * missed ({@link moves}). Returns whether it changed anything. A second call
  * with the same fields and schema reads and writes nothing.
  */
-export let watch = (db: Statements, fields: Field[]): boolean => {
+export let watch = (db: Statements, wanted: Field[]): boolean => {
   let version = db.revision('schema')
+  let fields = present(db, wanted)
   let definitions = triggers(fields)
   let key = JSON.stringify(definitions)
   let kept = watched.get(db)
@@ -284,9 +285,10 @@ export let watch = (db: Statements, fields: Field[]): boolean => {
  * given `tables`, only those with a row in one of them. */
 export let owe = (
   db: Statements,
-  fields: Field[],
+  wanted: Field[],
   tables?: Set<string>,
 ): void => {
+  let fields = present(db, wanted)
   // Start at the moved tables: a new exclusion can be empty, and removing one
   // can reveal text without a vector. All fields are checked for those owners.
   let candidates = tables

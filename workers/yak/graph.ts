@@ -213,7 +213,7 @@ import {
 } from '@yaks/durable-object'
 import { type Effects, effects } from '@yaks/effects'
 import { settling } from '@yaks/effects/tools'
-import { type Field, fields, find, screens, search, sources } from '@yaks/fts'
+import { type Field, fields, find, search, sources } from '@yaks/fts'
 import { lexemes } from '@yaks/fts/lexicon'
 import { fieldsSaid, lexiconOf, LIMIT } from './lexicon.ts'
 import { admitSchema } from '@yaks/graph/schema'
@@ -843,7 +843,7 @@ export class Store {
   #lexis: {
     searchable: Field[]
     fields: string
-    sources: Stmt[]
+    sources: () => Stmt[]
     told: Set<string>
   } | null = null
   #vectorAgain = false
@@ -1210,7 +1210,9 @@ export class Store {
       ? {
         searchable,
         fields: said,
-        sources: sources(searchable, blobRead(vocab)),
+        // Only the indexes standing: a component's is made by its first
+        // write (@yaks/sqlite).
+        sources: () => sources(searchable, blobRead(vocab), this.#sql),
         told: this.#lexis?.fields == said ? this.#lexis.told : new Set(),
       }
       : null
@@ -1389,6 +1391,9 @@ export class Store {
             counts: 'lazy',
             schemaReady: () =>
               this.#stood(shape) || printed(drive, shape.print),
+            // A component's search index and queue triggers are made with its
+            // table, by the write that first names it.
+            over: () => shape.over,
             extend,
             // A body is stored as its address (@yaks/blob `store: "blob"`), so the
             // reads and the `doc_value` view resolve it as prose. The FTS schema
@@ -3456,7 +3461,7 @@ export class Store {
     let store = this.#name() ?? ''
     try {
       let words = new Set<string>()
-      read: for (let s of lexis.sources) {
+      read: for (let s of lexis.sources()) {
         for (let row of this.#sql.query(s)) {
           for (let v of Object.values(row)) {
             if (typeof v == 'string') { for (let w of lexemes(v)) words.add(w) }
@@ -4937,7 +4942,8 @@ export class Store {
     let searchable = fields(this.#vocab)
     return find(this.#sql, searchable, text, {
       ...opts,
-      screens: screens(searchable, this.#vocab, this.#graph.scope(readOpts)),
+      vocab: this.#vocab,
+      scope: this.#graph.scope(readOpts),
     })
   }
 
@@ -4998,6 +5004,10 @@ export class Store {
       clear: () => this.#ctx.storage.deleteAll(),
       plant: (name) => {
         this.#kv.clear()
+        // A driver's caches (the tables its file holds, server_meta among
+        // them) hold for what passed through it, and `deleteAll` did not: the
+        // emptied file is planted through a new one.
+        this.#sql = driver(this.#ctx.storage, undefined, this.#measure)
         this.#sql.query(KV)
         raise(this.#sql)
         if (name) this.#put('name', name)

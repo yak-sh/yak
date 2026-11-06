@@ -1,6 +1,9 @@
 // Stored words and schema fitting, independent of a Durable Object host.
 import { blobRead, blobSchema } from '@yaks/blob'
-import { schema as vectorSchema } from '@yaks/embedding'
+import {
+  schema as vectorSchema,
+  triggers as queueTriggers,
+} from '@yaks/embedding'
 import { type Field, fields, schema as ftsSchema } from '@yaks/fts'
 import { sha256 } from '@yaks/graph/sha256'
 import { ddl as journalDdl } from '@yaks/journal'
@@ -28,6 +31,7 @@ import {
   unworded,
 } from './migrate.ts'
 import { appDerived, appWords, storeWords } from './vocab.ts'
+import { texts } from './embedding-read.ts'
 
 let storeKind = (name: string) =>
   name == PLATFORM_STORE ? 'directory' : name == GIT_STORE ? 'git' : 'app'
@@ -49,6 +53,10 @@ export type Shape = {
   readonly print: string
   readonly stamp: string
   readonly ddl: Stmt[]
+  /** what the store keeps over its component tables beside its own schema
+   * (the search indexes and the embedding queue's triggers), made with a
+   * component's table by its first write (@yaks/sqlite `over`) */
+  readonly over: Stmt[]
   readonly key: string
 }
 
@@ -98,6 +106,7 @@ export let shapeOf = (name: string, declared: string | null): Shape => {
   // same schema in the shape an older release kept, for a rollback to find.
   let print: string | undefined, stamp: string | undefined
   let ddl: Stmt[] | undefined, named: string | undefined
+  let over: Stmt[] | undefined
   let shape: Shape = {
     words,
     vocab,
@@ -112,6 +121,12 @@ export let shapeOf = (name: string, declared: string | null): Shape => {
     },
     get ddl() {
       return ddl ??= [...blobSchema(), ...schema(vocab, derived), ...after()]
+    },
+    get over() {
+      return over ??= [
+        ...ftsSchema(searchable, read),
+        ...queueTriggers(texts(vocab, read)),
+      ]
     },
     get stamp() {
       return stamp ??= sha256(

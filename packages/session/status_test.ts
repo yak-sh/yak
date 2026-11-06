@@ -1225,6 +1225,9 @@ test('session status seeks its own turn without reading unrelated asks', () => {
     let d = driver(db)
     let s = storage(d, vocab, { derived: sessionDerived(vocab) })
     s.install()
+    // The status is read as its whole expression, past the store, so every
+    // table it names stands.
+    s.raise()
     let g = graph({ storage: s, vocab })
     g.apply([
       { entity: { eid: S }, session: { id: 'long' } },

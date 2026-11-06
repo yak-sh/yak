@@ -2,7 +2,7 @@
 // blob substitution, personal scope and FTS are the same package interfaces
 // the Store composes; the query door is its production appRead seam.
 import { blobRead, blobs, blobSchema, sqliteBlobs } from '@yaks/blob'
-import { fields, find, schema as ftsSchema, screens, search } from '@yaks/fts'
+import { fields, find, schema as ftsSchema, search } from '@yaks/fts'
 import { type Graph, graph, type ReadOpts } from '@yaks/graph'
 import { personal } from '@yaks/member'
 import { aliases } from '@yaks/alias'
@@ -57,16 +57,13 @@ export let sqliteApp = (
   ) => {
     let held = shapeOf(vocab)
     let { derived, searchable, extra } = held
-    let driver = previous && drivers.get(previous)
+    // An adopted driver comes first: a store emptied under its previous one
+    // is planted through a new one, whose caches have seen nothing.
+    let driver = initial ?? (previous && drivers.get(previous))
+    initial = undefined
     if (!driver) {
-      if (initial) {
-        driver = initial
-        initial = undefined
-      } else {
-        driver = open(held.snapshot())
-        let owned = driver
-        using(() => owned[Symbol.dispose]())
-      }
+      let owned = driver = open(held.snapshot())
+      using(() => owned[Symbol.dispose]())
     }
     prepare?.(driver)
     let rows = storage(driver, vocab, {
@@ -95,7 +92,8 @@ export let sqliteApp = (
     let { searchable } = shapeOf(g.vocab)
     return find(drivers.get(g)!, searchable, text, {
       limit,
-      screens: screens(searchable, g.vocab, g.scope(opts)),
+      vocab: g.vocab,
+      scope: g.scope(opts),
     })
   }
   let atomic = <T>(g: Graph, run: () => T) => g.storage.tx(() => run())

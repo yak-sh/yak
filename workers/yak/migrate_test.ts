@@ -10,7 +10,12 @@ import type { Wire } from '@yaks/durable-object'
 import { durable } from '../../packages/durable-object/testing.ts'
 import { at, by, col, fn, insert, lit, scan, type Stmt } from '@yaks/sql'
 import { DIRTY, OWED, TABLE } from '@yaks/embedding'
-import { columns, objects as catalogue, reclassify } from '@yaks/sqlite'
+import {
+  columns,
+  objects as catalogue,
+  reclassify,
+  storage,
+} from '@yaks/sqlite'
 import { mem } from '../../packages/sqlite/testing.ts'
 import { ddl as journalDdl } from '@yaks/journal'
 import { Store } from './graph.ts'
@@ -91,7 +96,20 @@ test('an app deploy turns stored player eids into queryable look references', as
 
 test('a Store retires an old build identity index on its next schema wake', async () => {
   let ctx = state(), app = newer(ctx, 'ada/vale')
-  await app.query('.build&*', APP)
+  let builder = 'b0000000-0000-4000-8000-000000000001'
+  let build = (name: string) => ({
+    entity: { eid: crypto.randomUUID() },
+    build: { builder, match: `["${name}"]`, variant: 'main' },
+  })
+  // `build`'s table is made by the first write naming it.
+  assertEquals(
+    (await app.apply(
+      [{ entity: { eid: builder }, builder: {} }, build('a')],
+      APP,
+    ))
+      .status,
+    200,
+  )
   run(ctx, {
     t: 'create index',
     name: 'build_builder_variant',
@@ -105,24 +123,7 @@ test('a Store retires an old build identity index on its next schema wake', asyn
   await moved.query('.build&*', APP)
   let indexes = catalogue(db(ctx), { type: 'index' }).map((i) => i.name)
   assert(!indexes.includes('build_builder_variant'))
-  let builder = 'b0000000-0000-4000-8000-000000000001'
-  assertEquals(
-    (await moved.apply([{
-      entity: { eid: builder },
-      builder: {},
-    }], APP)).status,
-    200,
-  )
-  assertEquals(
-    (await moved.apply(
-      ['a', 'b'].map((name) => ({
-        entity: { eid: crypto.randomUUID() },
-        build: { builder, match: `["${name}"]`, variant: 'main' },
-      })),
-      APP,
-    )).status,
-    200,
-  )
+  assertEquals((await moved.apply([build('b')], APP)).status, 200)
   assertEquals((await moved.query('.build&*', APP)).length, 2)
 })
 
@@ -708,8 +709,20 @@ test('a unique index survives dropping another column on its table', async () =>
   assertEquals((await now.query('.ability_design', APP)).length, 1)
 })
 
-test('a raw index creation failure still refuses an empty store', async () => {
+test('a raw index creation failure still refuses a store', async () => {
   let ctx = state()
+  // `space_slug` is made with `space`'s table, by the first write naming it;
+  // a store holding the table without it makes it at its next schema wake.
+  let before = newer(ctx, PLATFORM_STORE)
+  assertEquals(
+    (await before.apply([{
+      entity: { eid: ONE },
+      space: { slug: 'ann', store: 'ann' },
+    }])).status,
+    200,
+  )
+  run(ctx, { t: 'drop', kind: 'index', name: 'space_slug' })
+  keep(ctx, 'schema', 'older schema')
   let exec = ctx.storage.sql.exec.bind(ctx.storage.sql)
   ctx.storage.sql.exec = (query, ...params) => {
     if (query.startsWith('create unique index if not exists "space_slug"')) {
@@ -734,7 +747,13 @@ let remainingWords = loadVocab({
     kept: { component: true, properties: { name: { type: 'string' } } },
   },
 })
-install(departed, removedWords)
+// An install, and the tables the store over the file would make by the first
+// write naming them, for rows written past it.
+let installed = (d: typeof departed, words: typeof removedWords) => {
+  install(d, words)
+  storage(d, words, { schemaReady: () => true }).raise()
+}
+installed(departed, removedWords)
 departed.query(insert('entity', { eid: 'departed' }))
 departed.query(insert('lapsed', { entity: 1, agent: 'browser' }))
 departed.query(insert('kept', { entity: 1, name: 'survives' }))
@@ -790,7 +809,7 @@ test('a platform wake removes departed aspects and repairs their archetypes', ()
 // A pre-print/older writer can leave the declaration smaller than the physical
 // store. Neither an ordinary install nor its wake may infer a contract.
 let appOmission = mem()
-install(appOmission, removedWords)
+installed(appOmission, removedWords)
 appOmission.query(insert('entity', { eid: 'app-data' }))
 appOmission.query(insert('lapsed', { entity: 1, agent: 'precious' }))
 let omission = install(appOmission, remainingWords)

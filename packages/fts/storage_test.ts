@@ -29,12 +29,15 @@ test('storage composes FTS explicitly for document and non-document prose', () =
   let db = open(':memory:')
   using _close = { [Symbol.dispose]: () => db.close() }
   let text = fields(vocab)
-  let store = storage(db, vocab, { extend: [search(text)] })
+  let indexes = schema(text)
+  let store = storage(db, vocab, {
+    extend: [search(text)],
+    over: () => indexes,
+  })
   store.install()
   let fts = () => objects(db).filter((o) => /fts/i.test(String(o.name)))
+  // An index is made with its table, by the write that first names it.
   assertEquals(fts(), [])
-  for (let stmt of schema(text)) db.query(stmt)
-  // Installing storage again must neither replace nor duplicate FTS objects.
   store.install()
   store.tx((tx) =>
     tx.patch([
@@ -75,9 +78,12 @@ test('.order=search puts the closest match first', () => {
   let db = open(':memory:')
   using _close = { [Symbol.dispose]: () => db.close() }
   let text = fields(vocab)
-  let store = storage(db, vocab, { extend: [search(text, db)] })
+  let indexes = schema(text)
+  let store = storage(db, vocab, {
+    extend: [search(text, db)],
+    over: () => indexes,
+  })
   store.install()
-  for (let stmt of schema(text)) db.query(stmt)
   store.tx((tx) =>
     tx.patch([
       {

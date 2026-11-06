@@ -9,6 +9,7 @@ import { render } from '@yaks/sql/core'
 import type { Vocab } from '@yaks/vocab'
 import { digest, sha256 } from '@yaks/graph/sha256'
 import { FIT, indexed, tabled } from './ddl.ts'
+import { RAISED, rests } from './raise.ts'
 
 // What `install()` runs, known once per vocabulary and read overrides: the
 // fingerprint of its statements, the statements that create an object where
@@ -20,7 +21,13 @@ type Make = Extract<
   Stmt,
   { t: 'create table' | 'create index' | 'create view' | 'create trigger' }
 >
-export type Plan = { print: string; raised: Make[]; made: string[] }
+export type Plan = {
+  print: string
+  raised: Make[]
+  made: string[]
+  /** the component tables each of `raised` rests on (./raise.ts) */
+  on: string[][]
+}
 let makes = (s: Stmt): s is Make =>
   s.t == 'create table' || s.t == 'create index' || s.t == 'create view' ||
   s.t == 'create trigger'
@@ -42,14 +49,19 @@ let shelf = (vocab: Vocab, file: boolean) => {
 let draft = (vocab: Vocab, derived: Derived, file: boolean) => {
   let stmts = [...tabled(vocab, derived, file), ...indexed(vocab)]
   let raised = stmts.filter(makes)
+  // What every install makes: a component's own objects are made by its
+  // first write (./raise.ts), and are no part of what an install answers for.
+  let on = rests(vocab, stmts)
   return {
     // The fitting's revision rides beside them (ddl.ts `FIT`): what fitting
     // changes is read off the file, so a fitting that learns something new
-    // installs again over a file whose statements are as they were.
-    text: [FIT, POPULATION_VERSION, ...stmts.map((s) => render(s).sql)]
+    // installs again over a file whose statements are as they were. So does
+    // when a component's objects are made (./raise.ts `RAISED`).
+    text: [FIT, POPULATION_VERSION, RAISED, ...stmts.map((s) => render(s).sql)]
       .join(';\n'),
     raised,
-    made: raised.map((s) => s.name),
+    made: stmts.flatMap((s, i) => makes(s) && !on[i].length ? [s.name] : []),
+    on: stmts.flatMap((s, i) => makes(s) ? [on[i]] : []),
   }
 }
 
@@ -61,8 +73,8 @@ export let plan = (
   let by = shelf(vocab, file)
   let known = by.get(derived)
   if (known) return known
-  let { text, raised, made } = draft(vocab, derived, file)
-  let fresh = { print: sha256(text), raised, made }
+  let { text, ...rest } = draft(vocab, derived, file)
+  let fresh = { print: sha256(text), ...rest }
   by.set(derived, fresh)
   return fresh
 }
@@ -80,9 +92,9 @@ export let planned = async (
   let by = shelf(vocab, file)
   let known = by.get(derived)
   if (known) return known
-  let { text, raised, made } = draft(vocab, derived, file)
+  let { text, ...rest } = draft(vocab, derived, file)
   let print = await digest(text)
   // One `plan` made while the digest ran is the same plan, and stays.
-  if (!by.has(derived)) by.set(derived, { print, raised, made })
+  if (!by.has(derived)) by.set(derived, { print, ...rest })
   return by.get(derived)!
 }

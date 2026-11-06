@@ -31,12 +31,15 @@ export let visibleVectors = (
   vocab: Vocab,
   fields: Field[],
   visibility?: BindOpts['visibility'],
+  absent?: BindOpts['absent'],
 ): Raw | undefined => {
   if (
     !visibility ||
     !visibility.entity && !Object.keys(visibility.components ?? {}).length
   ) return undefined
-  let opts = { visibility }
+  // A policy naming a component no table stands for reads it as worn by
+  // nobody (@yaks/sql `absent`).
+  let opts = { visibility, absent }
   let entity = sourceScreen(vocab, opts)
   let restricted = fields.filter((f) =>
     visibility.components?.[f.comp] ||
@@ -51,6 +54,7 @@ export let visibleVectors = (
         key,
         sourceScreen(vocab, {
           visibility: { components: visibility.components },
+          absent,
         }, comps),
       )
     }

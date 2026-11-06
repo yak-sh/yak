@@ -26,6 +26,7 @@ let db = new Database(':memory:')
 let d = driver(db)
 let store = storage(d, vocab, { derived: sessionDerived(vocab) })
 store.install()
+store.raise()
 let write = (name: string, row: Record<string, string | number>) => {
   let q = render(insert(name, row))
   db.exec(q.sql, ...q.params)

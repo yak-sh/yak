@@ -6,6 +6,9 @@ import { harness } from './testing.ts'
 test('blob-backed graph remains writable after SQL failure and rolls back the whole batch', async () => {
   let h = await harness()
   try {
+    // `doc`'s table is made by the first write naming it.
+    await h.g.apply([{ entity: { eid: 'raised' }, doc: { title: 'gone' } }])
+    await h.g.apply([{ entity: { eid: 'raised' }, doc: null }])
     h.sql.query({
       t: 'create trigger',
       name: 'refuse_doc',

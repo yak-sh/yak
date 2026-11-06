@@ -27,6 +27,7 @@ for (let size of [100, 1000]) {
   let { driver: d, steps } = stepping()
   let s = storage(d, vocab, { derived: sessionDerived(vocab) })
   s.install()
+  s.raise()
   let shape = (id: number, names: string[]) => {
     d.query(insert('entity', { id, eid: `shape-${id}` }))
     d.query(insert('archetype', {

@@ -79,7 +79,9 @@ for (let sparse of [false, true]) {
   test(`indexed dates seek ${sparse ? 'sparse' : 'empty'} wakes under stale statistics`, () => {
     let db = new Database(':memory:'), d = driver(db)
     try {
-      storage(d, vocab).install()
+      let store = storage(d, vocab)
+      store.install()
+      store.raise()
       let add = (start: number, n: number) => {
         for (let i = start; i < start + n; i += 500) {
           d.query(

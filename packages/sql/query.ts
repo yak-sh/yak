@@ -6,6 +6,7 @@ export * from './core.ts'
 export * from './derived.ts'
 export * from './extend.ts'
 export { walk } from './walk.ts'
+export { absentDerived, absentFrom } from './absent.ts'
 export {
   bind,
   type BindOpts,

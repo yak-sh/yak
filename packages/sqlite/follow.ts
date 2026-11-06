@@ -30,6 +30,7 @@ import { build } from './owe.ts'
 import { plan, planned } from './plan.ts'
 import { behind, declares, exact } from './ddl.ts'
 import { tables } from './layout.ts'
+import { unraised } from './raise.ts'
 
 /** The print of a composed schema: a store's own print (`Store.print`) and
  * every further statement the file needs, rendered. */
@@ -160,8 +161,10 @@ export let lacking = (
   physical = false,
 ): { derived: Derived; absent: string[] } => {
   let mark = installed(driver)?.split(' ')[0]
+  // Installed as this vocabulary says, the file lacks no column, and no table
+  // but those of the words nothing has written yet (./raise.ts).
   if (!physical && mark == plan(vocab, derived, !!driver.file).print) {
-    return { derived: {}, absent: [] }
+    return { derived: {}, absent: unraised(driver, vocab) }
   }
   // Only a table declared otherwise than the vocabulary does can lack a
   // column, so only those are asked about, two statements each, rather than

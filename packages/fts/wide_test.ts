@@ -6,22 +6,29 @@ import { assertEquals } from '@std/assert'
 import { loadVocab } from '@yaks/vocab'
 import { storage } from '@yaks/sqlite'
 import { bounded } from '../sqlite/testing.ts'
-import { fields, find, schema, screens, search } from './mod.ts'
+import { fields, find, schema, search } from './mod.ts'
 
 let kinds = ['a', 'b', 'c', 'd', 'e', 'f', 'g']
 let vocab = loadVocab({
-  $defs: Object.fromEntries(kinds.map((k) => [k, {
-    component: true,
-    type: 'object',
-    properties: { prose: { type: 'string', search: true } },
-  }])),
+  $defs: {
+    ...Object.fromEntries(kinds.map((k) => [k, {
+      component: true,
+      type: 'object',
+      properties: { prose: { type: 'string', search: true } },
+    }])),
+    // A word nobody writes, so no table stands for it.
+    hidden: { component: true, type: 'object' },
+  },
 })
 
 let db = bounded({ compoundSelect: 5, variableNumber: 100 })
 let text = fields(vocab)
-let store = storage(db, vocab, { extend: [search(text, db)] })
+let indexes = schema(text)
+let store = storage(db, vocab, {
+  extend: [search(text, db)],
+  over: () => indexes,
+})
 store.install()
-for (let stmt of schema(text)) db.query(stmt)
 store.tx((tx) =>
   tx.patch(kinds.flatMap((k, i) => [
     {
@@ -50,8 +57,16 @@ let scope = {
 }
 test('ranked excerpts share admission scopes within the bound parameter allowance', () => {
   assertEquals(
-    find(db, text, 'ceramic', { screens: screens(text, vocab, scope) })
+    find(db, text, 'ceramic', { vocab, scope })
       .map((hit) => hit.entity),
     mugs.slice(1),
+  )
+})
+
+test('a scope naming a word no table stands for reads it as worn by nobody', () => {
+  let scope = { visibility: { entity: '!hidden' } }
+  assertEquals(
+    find(db, text, 'ceramic', { vocab, scope }).map((hit) => hit.entity).sort(),
+    mugs,
   )
 })

@@ -38,7 +38,9 @@ for (let size of [100, 1000]) {
       let db = new Database(':memory:')
       let d = driver(db)
       let derived = sessionDerived(vocab)
-      storage(d, vocab, { derived }).install()
+      let store = storage(d, vocab, { derived })
+      store.install()
+      store.raise()
       let write = (name: string, row: Record<string, string | number>) => {
         let q = render(insert(name, row))
         db.exec(q.sql, ...q.params)

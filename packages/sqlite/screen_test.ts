@@ -32,7 +32,9 @@ let vocab = loadVocab([archetypeDoc, {
 
 let seeded = (archetypes: number) => {
   let db = new Database(':memory:'), d = driver(db)
-  storage(d, vocab, {}).install()
+  let s = storage(d, vocab, {})
+  s.install()
+  s.raise()
   let ids: string[] = []
   let put = (id: number, eid: string, names: string[]) => {
     d.query(insert('entity', { id, eid }))

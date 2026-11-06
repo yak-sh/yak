@@ -3,7 +3,7 @@ import { assertEquals, assertRejects, assertThrows } from '@std/assert'
 import { graph } from '@yaks/graph'
 import { open } from '@yaks/sqlite/db'
 import { statements, storage } from '@yaks/sqlite'
-import { adopt, fields, find, search } from '@yaks/fts'
+import { fields, find, schema as ftsSchema, search } from '@yaks/fts'
 import { hashEmbedder, meaning, schema, sweep } from '@yaks/embedding'
 import { storeWords } from './vocab.ts'
 import {
@@ -16,11 +16,14 @@ import { documentPages } from './document-graph.ts'
 import { cited, type Hit, hits, type PageHit } from './document-search.ts'
 
 let vocab = storeWords('app').vocab
+let indexes = ftsSchema(fields(vocab))
 let fixture = async () => {
   let db = open(':memory:')
-  let st = storage(db, vocab, { extend: [search(fields(vocab), db)] })
+  let st = storage(db, vocab, {
+    extend: [search(fields(vocab), db)],
+    over: () => indexes,
+  })
   st.install()
-  adopt(db, fields(vocab))
   for (let sql of schema()) db.query(sql)
   let g = graph({ vocab, storage: st, plugins: [documentPages()] })
   let document = crypto.randomUUID(), blob = 'a'.repeat(64)

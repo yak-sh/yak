@@ -34,7 +34,9 @@ let vocab = loadVocab([archetypeDoc, {
   },
 }])
 let db = new Database(':memory:'), d = driver(db)
-storage(d, vocab).install()
+let store = storage(d, vocab)
+store.install()
+store.raise()
 d.query(
   insert('entity', { id: 1, eid: 'session' }, { id: 2, eid: 'shape' }, {
     id: 2000,

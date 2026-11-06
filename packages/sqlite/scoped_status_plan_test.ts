@@ -35,6 +35,9 @@ for (let typed of [false, true]) {
   let derived = sessionDerived(vocab)
   let s = storage(d, vocab, { derived })
   s.install()
+  // The statements below are compiled past the store: every table they name
+  // must stand.
+  s.raise()
   let g = graph({ storage: s, vocab })
   let rows: Bundle[] = [
     { entity: { eid: 'model' }, model: {} },

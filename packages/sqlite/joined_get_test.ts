@@ -200,6 +200,7 @@ test('a selected identity reads backed rows that have no stored spine', () => {
 test('an empty shape guess sees a later classified or unclassified birth', () => {
   let driver = mem(), s = storage(driver, vocab)
   s.install()
+  s.raise(['doc'])
   let g = graph({ storage: s, vocab, plugins: [archetypes()] })
   let ids = ['classified', 'raw']
   assertEquals(get(driver, vocab, ids), [])

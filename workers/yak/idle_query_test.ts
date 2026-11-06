@@ -17,6 +17,8 @@ test('platform boot sweeps and single session reads never scan entity', async ()
   let derived = appDerived(v)
   let s = storage(d, v, { derived })
   s.install()
+  // The plans are read off compile, past the store, so every table stands.
+  s.raise()
   let g = graph({ storage: s, vocab: v, plugins: [archetypes()] })
   g.apply([{
     entity: { eid: 'village' },
@@ -51,6 +53,9 @@ test('guest attribution seeks nullable reference keys without scanning stamp ind
   let d = mem(), v = appVocab(), derived = appDerived(v)
   let s = storage(d, v, { derived })
   s.install()
+  // The plan is read off compile, past the store, so the tables it names
+  // stand.
+  s.raise(['created', 'updated'])
   let g = graph({ storage: s, vocab: v, plugins: [archetypes()] })
   g.apply([{
     entity: { eid: 'guest-write' },

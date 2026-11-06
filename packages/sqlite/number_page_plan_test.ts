@@ -29,7 +29,9 @@ let vocab = loadVocab([edgeDoc, {
 }])
 let fixture = (n: number, recent: boolean) => {
   let db = new Database(':memory:'), d = driver(db)
-  storage(d, vocab).install()
+  let store = storage(d, vocab)
+  store.install()
+  store.raise()
   // The highest numbers were imported first: numbering is not insertion order.
   d.query(insert(
     'entity',

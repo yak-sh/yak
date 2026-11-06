@@ -42,8 +42,9 @@ test('a single-owner install keeps rows and removes peer tracking cost', () => {
 // Another schema left tokens on tables this one does not version, the way an
 // unlanded checkout's CLI does to the file it opens. The next pass retires
 // them; a write that a leftover trigger would hear proves it gone.
-let strayed = mem()
-storage({ ...strayed, file: true }, shop).install()
+let strayed = mem(), straying = storage({ ...strayed, file: true }, shop)
+straying.install()
+straying.raise(['doc'])
 for (let s of versioned('doc')) strayed.query(s)
 let healed = storage({ ...strayed, file: true }, vocab)
 healed.install()

@@ -70,7 +70,9 @@ import { after, isPromise } from '@yaks/fp'
 import { context, scope } from '@yaks/trace'
 import type { Query } from './read.ts'
 import {
+  analyzable,
   analyzed,
+  emptied,
   fit,
   grown,
   indexed,
@@ -120,7 +122,10 @@ import { basis, local, memoized, rooted, simple } from './memo.ts'
 import { revision } from '@yaks/sql'
 import { watch } from './watch.ts'
 import { gotten, metered, named } from './budget.ts'
-import { dead } from '@yaks/graph/bundle'
+import { comps, dead } from '@yaks/graph/bundle'
+import { holds, raise, raisedIn, recorded, units, unraised } from './raise.ts'
+import { tables } from './layout.ts'
+import { raisedSurvey, surveyed } from './survey.ts'
 import { Refused } from '@yaks/graph/errors'
 import {
   type History,
@@ -189,6 +194,16 @@ export {
 export { GONE, OVER, type Overlay, overlay } from './overlay.ts'
 export { bindings, matched } from './rules.ts'
 export * from './bundle.ts'
+export {
+  holds,
+  lazy,
+  raise,
+  RAISED,
+  recorded,
+  rests,
+  stood,
+  unraised,
+} from './raise.ts'
 export {
   analyzed,
   FIT,
@@ -335,6 +350,11 @@ export type Store = {
    * also reported: a table whose rows do not fit its new shape, and a unique
    * index those rows break (./owe.ts `build`) */
   install: (beside?: Stmt[]) => Error[]
+  /** make the tables of `comps` (every component of the vocabulary, left
+   * out), with all that rests on them, as a first write naming them would
+   * (./raise.ts): for a writer that fills a table in raw SQL rather than
+   * through a patch. Answers the components it made a table for. */
+  raise: (comps?: readonly string[]) => string[]
   /** analyze up to `tables` of the tables whose planner statistics
    * {@link install} owes (./ddl.ts `analyzed`), each in its own unit, and
    * answer how many stay owed: a full-analysis engine's install decides what
@@ -415,6 +435,12 @@ export type Opts = BindOpts & {
   /** How many bytes of the entities it read the store keeps in memory
    * (./memo.ts): 4 MiB unless its opener can spare more. */
   memory?: number
+  /** The statements a host keeps beside the store's own over its component
+   * tables (search indexes and their triggers, an embedding queue's): each is
+   * made with the last table it rests on, by the write that first names that
+   * component (./raise.ts). Asked when a write first names one, so a host
+   * that composes them after binding the store can still give them. */
+  over?: () => readonly Stmt[]
 }
 
 // The read options a statement is the same under (@yaks/graph `ReadOpts`).
@@ -483,7 +509,8 @@ let versioned = (driver: Driver, vocab: Vocab): Error[] => {
     return found ? String(found.type ?? '') : undefined
   }
   let left = add(driver, historySchema(vocab, typed))
-  for (let s of seeds(vocab, (name) => !had.has(name))) driver.query(s)
+  let seed = seeds(vocab, (name) => !had.has(name))
+  for (let s of holds(driver, vocab, seed)) driver.query(s)
   return left
 }
 
@@ -509,6 +536,72 @@ export let storage = (
   let owing = () => [
     ...new Set((ledgers.get(driver) ?? []).flatMap((u) => u.ledger.owed())),
   ]
+  // What an install answers for, as its receipt marks it: the print, and the
+  // count and length of what it makes, of what rests on the tables first
+  // writes raised (./raise.ts), and of the `strays` beside them.
+  let marked = (strays: string[]) => {
+    let { made, raised, on } = plan(vocab, base.derived, !!driver.file)
+    let stand = raisedIn(driver, vocab)
+    let answers = [
+      ...made,
+      ...raised.flatMap((s, i) =>
+        on[i].length && on[i].every((c) => stand.has(c)) ? [s.name] : []
+      ),
+    ]
+    return [printed(), shape(driver, [...answers, ...strays]), ...strays]
+      .join(' ')
+  }
+  // Everything a component's first write may make (./raise.ts): the store's
+  // own schema, and what its host keeps beside it over component tables.
+  let makes = () => units(vocab, base.derived, !!driver.file, base.over?.())
+  // Raise the tables of `given` the file lacks, keeping the survey and an
+  // install receipt that stood before standing after.
+  let raising = (given: Iterable<string>): string[] => {
+    let before = surveyed(driver, vocab, base.derived)
+    let receipt = installation(driver)
+    let strays = receipt?.schema.split(' ').slice(2) ?? []
+    let current = receipt?.schema == marked(strays)
+    let stats = receipt?.statistics
+    let had = stats && new Set(analyzable(driver))
+    let made = raise(driver, vocab, given, makes())
+    raisedSurvey(driver, vocab, base.derived, before, made)
+    if (!made.length) return made
+    // An install receipt that stood before stands after: what a first write
+    // makes is no change an install answers for. Its statistics remember the
+    // tables made as empty, as they were when an install made them.
+    let schema = current ? marked(strays) : receipt?.schema
+    if (stats && schema) {
+      let fresh = analyzable(driver).filter((t) => !had!.has(t))
+      analyzedAt(driver, schema, emptied(stats, fresh))
+    } else if (current) meta(driver).set(SCHEMA, schema!)
+    return made
+  }
+  // The bundles a write names, ready to be written: each component one gives
+  // a value whose table waits for its first write is raised first, in the
+  // write's transaction (./raise.ts); a component one takes away that has no
+  // table is left out, since no entity wears it.
+  let readied = (bundles: Bundle[]): Bundle[] => {
+    let given = new Set<string>(), taken = false
+    for (let b of bundles) {
+      for (let [name, c] of comps(b)) {
+        if (c == null) taken = true
+        else given.add(name)
+      }
+    }
+    if (given.size && unraised(driver, vocab).some((c) => given.has(c))) {
+      raising(given)
+    }
+    if (!taken) return bundles
+    let missing = new Set(unraised(driver, vocab))
+    if (!missing.size) return bundles
+    return bundles.map((b) => {
+      let gone = comps(b).filter(([n, c]) => c == null && missing.has(n))
+      if (!gone.length) return b
+      let kept = { ...b }
+      for (let [n] of gone) delete kept[n]
+      return kept
+    })
+  }
   let identity = (eids: string[], comps?: string[]) =>
     get(driver, vocab, eids, opts(), comps, owing())
   let report = base.report ?? logged
@@ -861,8 +954,9 @@ export let storage = (
     },
     bindings: (matches, bundles, covers) =>
       bindings(driver, vocab, matches, bundles, covers, base),
-    patch: (bundles) =>
-      memo.patch(
+    patch: (given) => {
+      let bundles = readied(given)
+      return memo.patch(
         bundles,
         (known) =>
           patch(
@@ -873,7 +967,8 @@ export let storage = (
             undefined,
             known,
           ),
-      ),
+      )
+    },
     remove: (entities) => {
       let at = new Date().toISOString()
       memo.removes(
@@ -999,7 +1094,8 @@ export let storage = (
               fetched(o, getting, owed),
             ), { what: named(query) })
         },
-        patch: (bundles) => {
+        patch: (given) => {
+          let bundles = readied(given)
           let minted = memo.patch(
             bundles,
             (known) =>
@@ -1047,10 +1143,8 @@ export let storage = (
   let ready = false
   let install = (beside: Stmt[] = []): Error[] => {
     let left: Error[] = []
-    let { made } = plan(vocab, base.derived, !!driver.file)
+    let mark = marked
     let print = printed()
-    let mark = (strays: string[]) =>
-      [print, shape(driver, [...made, ...strays]), ...strays].join(' ')
     let receipt: ReturnType<typeof installation>
     let matches = () => {
       receipt = installation(driver)
@@ -1069,9 +1163,15 @@ export let storage = (
       let clean = false
       let seal = () => {
         epoch(driver)
+        recorded(driver)
         if (classified) backfill(driver, numbered)
         receipt = {
-          schema: mark(componentTables(driver, made)),
+          schema: mark(
+            componentTables(
+              driver,
+              plan(vocab, base.derived, !!driver.file).made,
+            ),
+          ),
           statistics: receipt?.statistics,
         }
         meta(driver).set(SCHEMA, receipt.schema)
@@ -1083,7 +1183,12 @@ export let storage = (
           for (let stmt of base.partial ? [] : retired(driver, vocab)) {
             driver.query(stmt)
           }
-          let tables = retabled(driver, vocab, base.derived)
+          // A component's own objects wait for its first write (./raise.ts).
+          let tables = holds(
+            driver,
+            vocab,
+            retabled(driver, vocab, base.derived),
+          )
           erect(driver, tables)
           let after = (comp: string) =>
             [...tables, ...indexed(vocab), ...beside].filter((s) =>
@@ -1098,7 +1203,7 @@ export let storage = (
           forgo(driver, kept)
           left = [
             ...unfit,
-            ...build(driver, indexed(vocab), base.sizes),
+            ...build(driver, holds(driver, vocab, indexed(vocab)), base.sizes),
             ...besides.length ? versioned(driver, vocab) : [],
           ]
           left.forEach(report)
@@ -1125,10 +1230,16 @@ export let storage = (
       if (!driver.file) {
         unit(driver, () => {
           epoch(driver)
+          recorded(driver)
           if (classified) backfill(driver, numbered)
           if (fresh || clean) {
             receipt = {
-              schema: mark(componentTables(driver, made)),
+              schema: mark(
+                componentTables(
+                  driver,
+                  plan(vocab, base.derived, !!driver.file).made,
+                ),
+              ),
               statistics: receipt?.statistics,
             }
             meta(driver).set(SCHEMA, receipt.schema)
@@ -1198,6 +1309,10 @@ export let storage = (
     grown: () => grown(vocab, standing(driver, vocab)),
     print: printed,
     install,
+    raise: (comps = tables(vocab)) => {
+      ensure()
+      return unit(driver, () => raising(comps))
+    },
     analyze: (tables = Infinity) => {
       let left = installation(driver)?.statistics?.owed?.length ?? 0
       for (let n = 0; n < tables && left; n++) left = analyze(driver) ?? 0

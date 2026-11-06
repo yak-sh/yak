@@ -72,6 +72,7 @@ import {
 } from '@yaks/sql'
 import { isJsonb, jsonIn, jsonOut } from './jsonb.ts'
 import { spines } from './write.ts'
+import { unraised } from './raise.ts'
 
 /** What an overlaid component's CTE is called. */
 export let OVER = '_over_'
@@ -213,6 +214,9 @@ export let overlay = (
 
   let parts: Cte[] = []
   let covers: string[] = []
+  // A component nothing has written has no table yet (./raise.ts): nothing
+  // of it is committed.
+  let unwritten = new Set(unraised(driver, vocab))
   // One component's arm: the committed rows it did not touch, then its own.
   let arm = (
     comp: string,
@@ -224,9 +228,11 @@ export let overlay = (
   ) => {
     let names = [key, ...cols.map(field)]
     let q: Query = select({
-      cols: names.map((c) => col(c)),
-      from: table(from),
-      where: out.length ? not(oneOf(col(key), out)) : undefined,
+      cols: names.map((c) => unwritten.has(from) ? as(lit(null), c) : col(c)),
+      ...unwritten.has(from) ? { where: lit(0) } : {
+        from: table(from),
+        where: out.length ? not(oneOf(col(key), out)) : undefined,
+      },
     })
     if (rows.length) {
       q = unionAll(
@@ -248,7 +254,7 @@ export let overlay = (
     let owners = [...rows.keys()].map((e) => ids.get(e)!).filter((id) => id > 0)
     // The committed row a patch folds into, read once per component.
     let held = new Map<number, Record<string, unknown>>()
-    if (owners.length) {
+    if (owners.length && !unwritten.has(comp)) {
       // A JSON value is read as its text, to ride in the rows' JSON array.
       let read = cols.map((c) =>
         isJsonb(vocab, comp, c)
@@ -312,6 +318,13 @@ export let overlay = (
     took.add(comp)
   }
 
+  // A component the rules read that has no table, and the batch did not
+  // touch, reads as one nobody wears.
+  for (let comp of only ?? []) {
+    if (unwritten.has(comp) && !touched.has(comp)) {
+      arm(comp, stored(vocab, comp), 'entity', comp, [], [])
+    }
+  }
   let over = new Set(covers)
   return {
     with: parts,

@@ -81,6 +81,11 @@ export let get = (
   opts: BindOpts = {},
 ): Bundle[] => {
   let found = new Map<string, Bundle>()
+  let standing = new Set(
+    driver.query({ t: 'pragma', name: 'table_list' }).map((r) =>
+      String(r.name)
+    ),
+  )
   // Bound parameter count and SQL-cache size; gather a COMPONENT per set,
   // never every component per entity (a 1,000-entry transcript is otherwise
   // tens of thousands of queries). A JSON array uses one bind and one stable
@@ -137,7 +142,8 @@ export let get = (
     // census that could miss a newly populated table on this or another handle.
     // One owner already costs only one lookup; it needs no extra table probe.
     // Every membership probe uses the same bound owner set.
-    let names = vocab.all.filter((c) => c != 'entity')
+    // A component nobody wrote has no table (../raise.ts): no entity wears it.
+    let names = vocab.all.filter((c) => c != 'entity' && standing.has(c))
     let present: string[] = []
     // Stay below SQLite's compound-select limit even for very wide vocabularies.
     for (let j = 0; j < names.length; j += 400) {

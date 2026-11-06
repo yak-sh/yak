@@ -41,6 +41,7 @@ let store = (bundles: Bundle[]) => {
   native.symbols.sqlite3_limit(db.unsafeHandle, 4, 5)
   let s = storage(sql, vocab)
   s.install()
+  s.raise()
   graph({ storage: s, vocab, plugins: [archetypes()] }).apply(bundles)
   cleanup(() => db.close())
   return (q: string, visibility?: BindOpts['visibility']) => {

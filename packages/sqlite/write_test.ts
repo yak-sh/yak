@@ -181,6 +181,8 @@ test('a patch asks once about identity, whatever the batch is', () => {
   let driver = spy(mem(), (sql) => void seen.push(sql))
   let s = storage(driver, shop)
   s.install()
+  // What a first write makes (./raise.ts) is no question about identity.
+  s.raise()
   let asked = () => {
     let n = seen.filter((q) => q.trimStart().startsWith('select')).length
     seen.length = 0
@@ -270,6 +272,7 @@ test('a patch asks about numbering exceptions only where they decide a number', 
   })
   let s = storage(driver, shop, { number: { except: ['shelf'] } })
   s.install()
+  s.raise()
   write(s, [
     { entity: { eid: 's' }, shelf: { aisle: 'A', slot: 1 } },
     { entity: { eid: 'p' }, product: { price: 1 } },
@@ -320,6 +323,7 @@ test('number:false reports explicit unnumbered births without consuming numbers'
 test('partial updates and bare tags respect required columns and SQL defaults', () => {
   let d = mem(), s = storage(d, shop)
   s.install()
+  s.raise(['doc'])
   d.query({ t: 'drop', kind: 'table', name: 'doc' })
   d.query({
     t: 'create table',
@@ -360,6 +364,7 @@ test('a table is asked what it requires once while its schema stands', () => {
   })
   let s = storage(d, shop)
   s.install()
+  s.raise()
   let cost = (bundles: Bundle[]) => {
     asked = 0
     write(s, bundles)

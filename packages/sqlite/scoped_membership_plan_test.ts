@@ -50,7 +50,9 @@ let vocab = loadVocab({
     apply_receipt: { component: true, type: 'object' },
   },
 })
-storage(d, vocab).install()
+let s = storage(d, vocab)
+s.install()
+s.raise()
 d.query(insert('entity', { id: 1, eid: 'target' }, { id: 2, eid: 'other' }))
 let seed = (start: number, count: number, owner: number) => {
   let rows = Array.from({ length: count }, (_, n) => start + n)

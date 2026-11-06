@@ -45,7 +45,7 @@ let file = (classified = true) => {
     vocab,
     plugins: classified ? [archetypes()] : [],
   })
-  return { sql, g, host: { storage: { checks: checks(sql) } } }
+  return { sql, store, g, host: { storage: { checks: checks(sql) } } }
 }
 
 let checkup = async (
@@ -93,9 +93,10 @@ test('a connection with the key off says so before anything else', async () => {
 })
 
 test('a row landed past the graph drifts its pointer', async () => {
-  let { sql, g, host } = file()
+  let { sql, store, g, host } = file()
   await g.apply([{ entity: { eid: 'a' }, doc: { title: 'A' } }])
   // A raw writer: the entity wears `task` now, and nothing reclassified it.
+  store.raise(['task'])
   sql.query({
     t: 'insert',
     into: 'task',

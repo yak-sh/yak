@@ -99,7 +99,10 @@ The pieces can be used independently:
 - `fields(vocab, pick?)` selects properties.
 - `schema(fields, reads?)` returns SQL statements to create the indexes and
   triggers. It does not populate indexes from existing rows; call `heal()` or
-  use `adopt()` for an existing database.
+  use `adopt()` for an existing database. A @yaks/sqlite store makes a
+  component's table on its first write; given them as its `over`, it makes each
+  index with its table. `adopt()`, `heal()` and `find()` pass over an index
+  whose table no write has made yet, and a text clause matches nothing there.
 - `search(fields, db?)` compiles text clauses into FTS5 membership conditions.
   Pass it through the adapter's `extend` option to enable text clauses in
   ordinary storage reads. Given the database's driver it also orders by
@@ -113,7 +116,9 @@ The pieces can be used independently:
 - `find(db, fields, text, options?)` executes a ranked search. `hits()` returns
   the same `{ sql, params }` statement without executing it, for use with an
   asynchronous database. It returns `null` when there are no search terms or
-  indexes; `find()` returns `[]` in those cases.
+  indexes; `find()` returns `[]` in those cases. Given a reader's `scope` and
+  its `vocab`, `find()` ranks only text that reader may see, reading a component
+  no table stands for as worn by nobody.
 
 ## Matching and ranking
 

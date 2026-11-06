@@ -29,8 +29,9 @@ let vocab = loadVocab([{
 // raw statements, with the eids each of a's reads went to storage for.
 let file = (unlogged: string[] = []) => {
   let path = `${Deno.makeTempDirSync()}/graph.db`
-  let a = open(path), b = open(path)
-  storage(a, vocab).install()
+  let a = open(path), b = open(path), store = storage(a, vocab)
+  store.install()
+  store.raise()
   for (let name of unlogged) {
     for (let event of ['insert', 'update', 'delete']) {
       a.query({ t: 'drop', kind: 'trigger', name: `written_${name}_${event}` })

@@ -42,7 +42,9 @@ let text = (i: number) =>
     i == 6 ? ' at 50% off' : i == 7 ? ' at 500' : ''
   }`
 let db = new Database(':memory:'), d = driver(db)
-storage(d, vocab).install()
+let store = storage(d, vocab)
+store.install()
+store.raise()
 for (let i = 0; i < N; i += 500) {
   let page = notes.slice(i, i + 500)
   d.query(insert(

@@ -95,13 +95,17 @@ export let lifecycleStores = (
     let hydrated = !!restored
     let slotCache = new Map<string, string | null>()
     let raw: ReturnType<typeof slotsOf> | undefined
-    if (restored) {
-      let owned = physical = restored
+    // A driver over storage this store holds, for the app's graph to use next.
+    let drive = (owned: Physical) => {
       sql = Object.assign(driver(owned, undefined, measure), {
         [Symbol.dispose]: () => owned[Symbol.dispose](),
       })
-      states.set(name, { storage: owned })
       backend.adopt!(sql)
+    }
+    if (restored) {
+      let owned = physical = restored
+      states.set(name, { storage: owned })
+      drive(owned)
       raw = slotsOf(() => sql!, slotCache)
       reshapeSlots(raw.read, raw.write)
     }
@@ -268,6 +272,9 @@ export let lifecycleStores = (
           hydrated = false
           unselectable.clear()
           deployed = false
+          // `deleteAll` passed by the driver, whose caches still hold the
+          // tables it saw: the emptied storage is planted through a new one.
+          if (physical) drive(physical)
           bind(true)
           return json({ ok: true })
         },
