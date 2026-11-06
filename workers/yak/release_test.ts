@@ -4,6 +4,10 @@ import { test } from '@yaks/testing'
 import { assertEquals, assertRejects } from '@std/assert'
 import type { Objects } from '@yaks/blob'
 import { filesAt, releaseFiles, staged } from './release.ts'
+import { fileBytes } from './files.ts'
+import { bucket } from './binding-probe.ts'
+import type { Env } from './env.ts'
+import { r2RawObjects } from './lib/objects.ts'
 import { holding } from './written.ts'
 import type { App, Directory } from './directory.ts'
 import { addressed, sha256 } from './versions.ts'
@@ -115,3 +119,58 @@ test('an erasure asked again counts a release it already swept as empty', async 
   assertEquals(await holding(swept, dir, app), [])
   await assertRejects(() => filesAt(swept, source), Error, 'has no index')
 })
+
+// An idle app's first view comes to an isolate holding no index of its
+// release. A page is one trip to the bucket, its text in the index, where it
+// was the index and then the page (T-143062), and so is a page served from the
+// folder the app's wrangler config names. Any other file is the index and
+// then its bytes, as is a page that is not UTF-8, served as it was stored.
+type Body = string | Uint8Array
+let made = 0
+let first = async (written: Record<string, Body>, path: string) => {
+  let b = bucket()
+  // Each its own release, as every deploy's is: what a release's config says
+  // is kept by its name (files.ts `configOf`).
+  let source = `ada/.releases/app/${made++}`
+  // The deploy's isolate, holding the index it wrote; the view's holds none.
+  let deploy = { ...b.r2 } as unknown as Env['BLOBS']
+  let stage = staged(r2RawObjects(deploy), {}, source)
+  for (let [at, body] of Object.entries(written)) {
+    let put = typeof body == 'string' ? bytes(body) : body
+    await stage.files.put(`${source}/${at}`, put)
+  }
+  await stage.finish()
+  let env = { BLOBS: b.r2 } as unknown as Env
+  let r = await fileBytes(env, 'eid', source, path, source)
+  let timing = r.headers.get('server-timing') ?? ''
+  return [
+    r.status,
+    [...new Uint8Array(await r.arrayBuffer())],
+    Number(/(?:^|, *)file_r2;dur=(\d+)/.exec(timing)?.[1]),
+  ]
+}
+let site = {
+  'index.html': 'home',
+  'about.html': 'about',
+  '404.html': 'lost',
+  'style.css': 'body {}',
+}
+let built = {
+  'wrangler.jsonc': '{"assets":{"directory":"dist"}}',
+  'dist/index.html': 'built home',
+}
+let raw = new Uint8Array([0x3c, 0xff, 0x3e])
+let views: [string, Record<string, Body>, string, number, Body, number][] = [
+  ['the front page', site, '/', 200, 'home', 1],
+  ['a page by its address', site, '/about', 200, 'about', 1],
+  ["the app's 404", site, '/nowhere', 404, 'lost', 1],
+  ['a stylesheet', site, '/style.css', 200, 'body {}', 2],
+  ['a built folder', built, '/', 200, 'built home', 1],
+  ['bytes that are not UTF-8', { 'index.html': raw }, '/', 200, raw, 2],
+]
+for (let [what, files, path, status, body, trips] of views) {
+  test(`a cold first view of ${what} asks the bucket ${trips}×`, async () => {
+    let expected = typeof body == 'string' ? bytes(body) : body
+    assertEquals(await first(files, path), [status, [...expected], trips])
+  })
+}
