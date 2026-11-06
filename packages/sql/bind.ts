@@ -4055,6 +4055,36 @@ let lower = (
   })
 }
 
+// One scope's screen begun: the ids `ast` admits, lowered correlated so every
+// relation the screened statement reads is the same scoped one.
+export let screening = (
+  ast: And,
+  vocab: Vocab,
+  opts: BindOpts,
+  d: Dialect,
+  heard: Heard = opts,
+): Prepared => {
+  let p = prepared(ast, vocab, opts, d, [], { correlated: true }, heard)
+  return {
+    ...p,
+    lower: () => ({
+      ...p.lower(),
+      cols: [raw('"entity"."id" as "id"')],
+      order: [],
+    }),
+  }
+}
+
+/** How a screen's statement is rendered from its scopes' clauses, the options
+ * it lowers under, and the dialect: the live one or, for `ghost`, the one that
+ * reads the deleted. ./kept.ts keeps it by shape. */
+export type Screener = (
+  ast: And,
+  opts: BindOpts,
+  d: Dialect,
+  ghost: boolean,
+) => Raw
+
 // Visibility is a relation, not a predicate appended to the outer selection:
 // every dereference, association, backlink and walk reads the same scoped
 // tables. CTE values remain bound parameters, including owner identities.
@@ -4062,6 +4092,7 @@ export let sourceScreen = (
   vocab: Vocab,
   opts: BindOpts,
   components: string[] = [],
+  lower: Screener = (ast, o, d) => render(screening(ast, vocab, o, d).lower()),
 ): Raw | null => {
   let scopes = [
     opts.visibility?.entity,
@@ -4077,10 +4108,9 @@ export let sourceScreen = (
     owned: undefined,
     archetype: undefined,
   }
-  let screened = (dialect: Dialect) => {
-    let out = bound(
+  let screened = (dialect: Dialect, ghost = false) =>
+    lower(
       { kind: 'and', clauses },
-      vocab,
       {
         ...opts,
         exactIds: true,
@@ -4091,16 +4121,13 @@ export let sourceScreen = (
         graves: undefined,
       },
       dialect,
-      [],
-      { correlated: true },
+      ghost,
     )
-    return render({ ...out, cols: [raw('"entity"."id" as "id"')], order: [] })
-  }
   let alive = screened(d)
   // With `graves`, the deleted the scopes would have seen as they last were.
   let ghost = opts.graves ? ghostly(d, vocab, opts.backed ?? {}) : undefined
   if (!ghost) return { ...alive, closed: true }
-  let dead = screened(ghost)
+  let dead = screened(ghost, true)
   return {
     ...raw(
       `select "id" from (${alive.sql}) union all ` +

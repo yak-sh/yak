@@ -49,6 +49,8 @@ import {
   type Heard,
   type Prepared,
   prepared,
+  screening,
+  sourceScreen as unkept,
   walks,
 } from './bind.ts'
 import type { ArchetypeSet } from './archetype.ts'
@@ -86,6 +88,9 @@ type Seen = { first: Raw; call: Call; asked: Asked[] }
 // A shape that is lowered on every call.
 type Lowered = null
 type Shelf = Map<string, Kept | Seen | Lowered>
+// A statement begun from its AST and options, hearing the catalog, the census
+// and the extensions as `heard` relays them: a query, or a scope's screen.
+type Begin = (ast: And, opts: BindOpts, heard: Heard) => Prepared
 
 let SHELF = 512
 let shelves = new WeakMap<Vocab, Shelf>()
@@ -327,7 +332,13 @@ let PROBES = [
 // The call this is, and the shape it has; undefined for a call whose ids the
 // lowering reads as more than opaque (a computed row's id). An id `generated`
 // matches is never a human one (`T-12`, `12`), which is a prefix and digits.
-let called = (ast: And, vocab: Vocab, opts: BindOpts, p: Prepared) => {
+let called = (
+  kind: string,
+  ast: And,
+  vocab: Vocab,
+  opts: BindOpts,
+  p: Prepared,
+) => {
   let o = p.opts
   let place = new Map<string, number>(), operands: string[] = []
   let shape = renamed(ast, vocab, (id) => {
@@ -369,6 +380,7 @@ let called = (ast: And, vocab: Vocab, opts: BindOpts, p: Prepared) => {
   spelled.sort(([a], [b]) => a < b ? -1 : 1)
   let ext = opts.extend ?? []
   let key = JSON.stringify([
+    kind,
     shape,
     forms.join(' '),
     roots?.map((r) => firsts(roots!).get(r)) ?? null,
@@ -491,6 +503,7 @@ let same = (a: Raw, b: Raw) =>
 // whose ids may differ from the seen call's: the stand-ins replace its own ids
 // at their places, which the shape makes the seen call's places too.
 let proven = (
+  begin: Begin,
   ast: And,
   vocab: Vocab,
   opts: BindOpts,
@@ -530,17 +543,13 @@ let proven = (
     }
     let out = within(touched, () =>
       render(
-        prepared(
+        begin(
           renamed(
             ast,
             vocab,
             (id) => operands[firsts(asking.operands).get(id)!],
           ),
-          vocab,
           { ...opts, now, eids: opts.eids && roots, references },
-          undefined,
-          undefined,
-          undefined,
           {
             archetypes: recorded(opts.archetypes, asked),
             extend: watched(opts.extend, false),
@@ -609,18 +618,60 @@ export let compile = (
   if (!opts.unordered && !opts.storageOrder) {
     ast = ranking(opts.extend ?? [], ast)
   }
+  return kept(
+    'query',
+    ast,
+    vocab,
+    opts,
+    (ast, opts, heard) =>
+      prepared(ast, vocab, opts, undefined, undefined, undefined, heard),
+  )
+}
+
+/** The statement selecting the ids a store's visibility admits (./bind.ts
+ * `sourceScreen`), kept by shape as a query is: a scoped read asks for its
+ * screen on every check, with only its clock and its ids changed. */
+export let sourceScreen = (
+  vocab: Vocab,
+  opts: BindOpts,
+  components: string[] = [],
+): Raw | null =>
+  unkept(
+    vocab,
+    opts,
+    components,
+    (ast, o, d, ghost) =>
+      kept(
+        ghost ? 'ghost' : 'screen',
+        ast,
+        vocab,
+        o,
+        (ast, o, heard) => screening(ast, vocab, o, d, heard),
+      ),
+  )
+
+// The statement `begin` lowers for this call, from the shelf while its shape's
+// proof and every answer it heard stand. `kind` names how it begins, so two
+// lowerings of one AST keep apart.
+let kept = (
+  kind: string,
+  ast: And,
+  vocab: Vocab,
+  opts: BindOpts,
+  begin: Begin,
+): Raw => {
   let asked: Asked[] = [], touched = { any: false }
   let p = within(
     touched,
     () =>
-      prepared(ast, vocab, opts, undefined, undefined, undefined, {
+      begin(ast, opts, {
         archetypes: recorded(opts.archetypes, asked),
         extend: watched(opts.extend, true),
         ...choosing(opts.census, asked),
       }),
   )
   let lowered = () => within(touched, () => render(p.lower()))
-  let shaped = called(ast, vocab, opts, p)
+  let shaped = called(kind, ast, vocab, opts, p)
   if (!shaped) return lowered()
   let { key, call } = shaped
   let s = shelf(vocab), held = s.get(key)
@@ -631,9 +682,9 @@ export let compile = (
   }
   // Seen once, under a catalog that still answers as it did: prove it.
   if (held && 'first' in held && stands(held.asked, opts)) {
-    let kept = proven(ast, vocab, opts, held, call)
-    put(s, key, kept)
-    return kept ? bound(kept, call) : lowered()
+    let proof = proven(begin, ast, vocab, opts, held, call)
+    put(s, key, proof)
+    return proof ? bound(proof, call) : lowered()
   }
   let first = lowered()
   put(s, key, touched.any ? null : { first, call, asked })

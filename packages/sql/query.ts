@@ -13,7 +13,6 @@ export {
   crowded,
   type Numbered,
   screen,
-  sourceScreen,
   tallied,
   visibleBacked,
   visibleDerived,
@@ -26,4 +25,4 @@ export type Compiled = Raw & {
   answer?: Row[]
 }
 
-export { compile } from './kept.ts'
+export { compile, sourceScreen } from './kept.ts'

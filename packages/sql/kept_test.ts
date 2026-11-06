@@ -15,7 +15,7 @@ import {
   time,
 } from '@yaks/query'
 import { loadVocab } from '@yaks/vocab'
-import { bind, type BindOpts } from './bind.ts'
+import { bind, type BindOpts, sourceScreen as unkept } from './bind.ts'
 import {
   as,
   compile,
@@ -24,6 +24,7 @@ import {
   lit,
   type Screen,
   select,
+  sourceScreen,
   val,
 } from './mod.ts'
 import { render } from './render.ts'
@@ -487,4 +488,32 @@ test('a kept statement takes the road its census chooses now', () => {
     roads.add(same(q, { census }).sql)
   }
   equal(roads.size, 2)
+})
+
+// A scope's screen is kept as a query is: each is the screen bind.ts lowers
+// for the same call, at any moment, for any owner, under any census.
+let screenSame = (entity: ReturnType<typeof and>, opts: BindOpts = {}) => {
+  let o = { ...opts, visibility: { entity } }
+  let actual = sourceScreen(timed, o)!, expected = unkept(timed, o)!
+  equal([actual.sql, actual.params], [expected.sql, expected.params])
+  return actual
+}
+for (let phrase of ['now', '1 hour ago', 'today', '1 month ago']) {
+  test(`a kept screen follows the clock: ${phrase}`, () => {
+    let scope = and(le('run.next', time(phrase)), eq('mark.owner', eid(1)))
+    for (let now of [...moments, ...moments]) screenSame(scope, { now })
+  })
+}
+
+test('a kept screen binds each owner', () => {
+  for (let n of [1, 2, 3, 3]) screenSame(and(eq('mark.owner', eid(n))))
+})
+
+test('a kept screen answers as the census counts now', () => {
+  let held = 1_000
+  let census = { held: () => held, largest: () => 3.2e6 }
+  for (let next of [1_000, 1_000, 1_000, 3, 3]) {
+    held = next
+    screenSame(and(present('one'), eq('link.left', eid(1))), { census })
+  }
 })
