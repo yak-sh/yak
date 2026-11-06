@@ -1,3 +1,4 @@
+/** @jsxImportSource preact */
 import { QueryList } from './components/views/List.tsx'
 import { clock, test } from '@yaks/testing'
 import { tick, until } from './testing.ts'

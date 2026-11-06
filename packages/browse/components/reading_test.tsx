@@ -1,3 +1,4 @@
+/** @jsxImportSource preact */
 import { assertEquals } from '@std/assert'
 import { test, tick } from '../testing.ts'
 import { h, options } from 'preact'

@@ -1,3 +1,4 @@
+/** @jsxImportSource preact */
 // A line said to a session asks it for a turn by carrying a using
 // (@yaks/session `session_run`), so one sent with no model chosen carries the
 // using in force, as `yak session send` does.

@@ -1,3 +1,4 @@
+/** @jsxImportSource preact */
 // Render the configured doc Body and the raw Markdown tab with their shipped
 // stylesheet. The source-tab declarations must not match the reading view.
 import { test } from '@yaks/testing'

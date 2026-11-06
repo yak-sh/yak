@@ -1,3 +1,4 @@
+/** @jsxImportSource preact */
 // The media view serves an artifact at its own address, including when an
 // attachment points to it.
 import { test } from '@yaks/testing'

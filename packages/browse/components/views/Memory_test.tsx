@@ -1,3 +1,4 @@
+/** @jsxImportSource preact */
 // The memory's list face: registry specificity and the three facts a row
 // promises.
 import { test } from '@yaks/testing'

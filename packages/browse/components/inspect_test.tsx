@@ -1,3 +1,4 @@
+/** @jsxImportSource preact */
 import { test, until } from '@yaks/testing'
 import '../testing.ts'
 import { h } from 'preact'
