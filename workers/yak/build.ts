@@ -543,19 +543,20 @@ export class Builder {
       )
       let { operating } = await import('./operator.ts')
       let { operatorFrames } = await import('./operator-host.ts')
+      // A write that owes work starts it now, beside a step in flight, so a
+      // person's words reach the session they are for at once; the alarm is
+      // there for what this wake leaves.
+      let nudge = () => {
+        this.#arming = this.#ctx.storage.setAlarm(Date.now())
+        store.fx.work(store.g).catch((e) =>
+          caught(e, { request: 'operator effects' })
+        )
+      }
       let store = operatorStore(this.#ctx.storage, {
         version: this.#env.CF_VERSION_METADATA?.id,
         report: (e, where) =>
           caught(e, { request: 'operator effects', handler: where.handler }),
-        // A write that owes work starts it now, beside a step in flight, so a
-        // person's words reach the session they are for at once; the alarm
-        // is there for what this wake leaves.
-        nudge: () => {
-          this.#arming = this.#ctx.storage.setAlarm(Date.now())
-          store.fx.work(store.g).catch((e) =>
-            caught(e, { request: 'operator effects' })
-          )
-        },
+        nudge,
       })
       let frames = this.#frames = operatorFrames(
         store,
@@ -586,7 +587,9 @@ export class Builder {
       // An incarnation takes up what the one before it left: a step a deploy
       // reset under its reply runs again at once, on the first request (a page
       // reconnecting) rather than whenever the person next says something.
-      this.#arming = this.#ctx.storage.setAlarm(Date.now())
+      // Worked here, not only armed: an alarm the reset cut off can hold the
+      // next one back for minutes.
+      nudge()
       return operator
     })()
   }

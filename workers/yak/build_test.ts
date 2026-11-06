@@ -325,7 +325,7 @@ test('the door refuses a stranger before it reaches the object', async () => {
   assertEquals(said.error.message, NOBODY)
 })
 
-test('an object arms its alarm as it first serves its Operator, so a step a deploy reset runs again at once', async () => {
+test('an object works its Operator as it first serves it, so a step a deploy reset runs again at once', async () => {
   let o = await seeded()
   let before = await o.ctx.storage.getAlarm()
   let read = await o.object.fetch(
