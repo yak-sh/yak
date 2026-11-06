@@ -28,16 +28,20 @@ namespace's outbound Worker), `yak-esbuild` (`esbuild/`, the compiler
 `app_deploy` asks for an app's TypeScript and npm imports, @yaks/esbuild),
 `yak-raster` (`raster/`, which draws an app's `icon.svg` as its `icon.png` with
 resvg's WebAssembly, kept out of the kernel so no Store's isolate compiles it)
-and `yak-browser` (`browser/`, which renders a draft for `app_preview` with
+`yak-browser` (`browser/`, which renders a draft for `app_preview` with
 puppeteer and checks it with axe-core, kept out of the kernel for the same
-reason). `yak-esbuild` is a Worker in front of a container running native
-esbuild; its image is `esbuild/Dockerfile` over `packages/esbuild`, and its
-deploy builds and pushes the image like the kernel's sandbox. The siblings do
-not call one another, so their deploys run concurrently with the kernel bundle.
-All must finish successfully before the kernel upload begins; a failure waits
-for the other work and refuses the kernel upload. The pinned Wrangler bundles
-once, including node compatibility code and source maps; the upload reads those
-generated modules without bundling again.
+reason) and `yak-sandbox` (`sandbox/`, the Sandbox Durable Object and its
+container behind the kernel's `SANDBOX` binding, kept out for the same reason; a
+container's calls to the platform come back to the kernel's `SandboxOutbound`,
+which holds the secret its placeholder is swapped with). `yak-esbuild` is a
+Worker in front of a container running native esbuild; its image is
+`esbuild/Dockerfile` over `packages/esbuild`, and its deploy builds and pushes
+the image when its inputs change. The siblings do not call one another, so their
+deploys run concurrently with the kernel bundle. All must finish successfully
+before the kernel upload begins; a failure waits for the other work and refuses
+the kernel upload. The pinned Wrangler bundles once, including node
+compatibility code and source maps; the upload reads those generated modules
+without bundling again.
 
 Hosted model execution has its own [executor release](../model/README.md),
 independently deployed by Workers Builds. A production kernel build adds its
@@ -60,14 +64,14 @@ runs only the providers its own config composes; any other runs in the store.
 `serving` provider that has one (@yaks/model `Native`, Workers AI's binding),
 each call held to the space's budget (meter.ts `metered`).
 
-The kernel deploys once, using a stable sandbox toolchain image by registry
-reference. The live Worker's assets carry the CLI workspace, compressed and
-addressed by its source hash. A sandbox's `yak` fetches the live launcher and
-workspace descriptor; a changed workspace is verified and installed atomically
-before running the existing CLI. Each command uses its own immutable source
-directory. Commands share Deno's module cache across CLI releases. The CLI
-retains its lockfile and uses npm lazy caching, so a cold command downloads only
-the dependencies it imports. The first `yak` call pays for the workspace
+The kernel deploys once; `yak-sandbox` names a stable sandbox toolchain image by
+registry reference. The live Worker's assets carry the CLI workspace, compressed
+and addressed by its source hash. A sandbox's `yak` fetches the live launcher
+and workspace descriptor; a changed workspace is verified and installed
+atomically before running the existing CLI. Each command uses its own immutable
+source directory. Commands share Deno's module cache across CLI releases. The
+CLI retains its lockfile and uses npm lazy caching, so a cold command downloads
+only the dependencies it imports. The first `yak` call pays for the workspace
 download and cold dependencies; later calls fetch only the launcher and
 descriptor until the sources change. Measured first-call and deploy timings are
 retained in

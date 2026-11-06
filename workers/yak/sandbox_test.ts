@@ -14,8 +14,7 @@
 // and `wrangler deploy --dry-run` build the image, which needs a container
 // engine, and a box may have the Docker CLI and no daemon —
 // `--containers-rollout=none` is what gets a dry run past it. So the last test
-// here reads the deploy's own config instead (see the gate note in
-// wrangler.toml).
+// here reads the deploy's own config instead (sandbox/wrangler.toml).
 import { test } from '@yaks/testing'
 import {
   assert,
@@ -622,15 +621,18 @@ test('a build that ships pays for both in one write', async () => {
 // version are two halves of one release, and the SDK warns at startup rather
 // than failing when they disagree.
 test('the deploy names the container, and the image is the SDK version', () => {
-  let conf = parse(at('wrangler.toml')) as {
+  let conf = parse(at('sandbox/wrangler.toml')) as {
     containers: {
       class_name: string
       image: string
       image_build_context: string
       instance_type: string
     }[]
-    durable_objects: { bindings: { name: string; class_name: string }[] }
+    durable_objects: {
+      bindings: { name: string; class_name: string; script_name?: string }[]
+    }
     migrations: { tag: string; new_sqlite_classes?: string[] }[]
+    name: string
   }
 
   assertEquals(conf.containers.length, 1)
@@ -641,16 +643,19 @@ test('the deploy names the container, and the image is the SDK version', () => {
   // and the image does not fit in `lite`'s disk.
   assertEquals(box.instance_type, 'standard-2')
 
-  // The binding the tools reach it through, and the migration that creates it.
-  assert(
-    conf.durable_objects.bindings.some((b) =>
-      b.name == 'SANDBOX' && b.class_name == 'Sandbox'
-    ),
-    'SANDBOX is bound to the Sandbox class',
-  )
+  // The migration that creates it, and the kernel's binding the tools reach
+  // it through.
   assert(
     conf.migrations.some((m) => m.new_sqlite_classes?.includes('Sandbox')),
     'a migration declares the Sandbox object',
+  )
+  let kernel = parse(at('wrangler.toml')) as typeof conf
+  assert(
+    kernel.durable_objects.bindings.some((b) =>
+      b.name == 'SANDBOX' && b.class_name == 'Sandbox' &&
+      b.script_name == conf.name
+    ),
+    "SANDBOX is bound to yak-sandbox's Sandbox class",
   )
 
   let pinned = JSON.parse(at('package.json')) as {
@@ -667,7 +672,7 @@ test('the deploy names the container, and the image is the SDK version', () => {
 // The image builds FROM the toolchain base (base.ts, T-38057), and the tag it
 // names is the base Dockerfile's own hash: edit the base and this names the
 // FROM line to write.
-let baseImage = from(at('wrangler.toml'))!
+let baseImage = from(at('sandbox/wrangler.toml'))!
 
 // The base's pin is checked above; its image door controls Docker operations.
 test('a deploy builds and pushes the base only when it is missing', async () => {

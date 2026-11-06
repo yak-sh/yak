@@ -103,6 +103,12 @@ and setup; this is the map and the feel.
   draft for app_preview with puppeteer and checks it with axe-core
   (`browser.ts` asks it; `browser/capture.ts` renders). Its own Worker for the
   same reason as yak-raster.
+- **Sandboxes**: yak-sandbox (`sandbox/`) holds the Sandbox Durable Object and
+  its container, which the kernel's SANDBOX binding names, so the Sandbox SDK
+  is compiled only by isolates that run one. A container's HTTPS to the
+  platform comes back to the kernel's `SandboxOutbound`, which swaps its
+  placeholder for its grant (`sandbox.ts` `swapped`), since only the kernel
+  holds the secret.
 - **Keys**: a key a space or app uses is a connection, kept in the directory's
   vault; an app is handed only a sentinel, swapped for the key on the way out
   (`outbound.ts`). That whole corner is `secrets-and-connections`.

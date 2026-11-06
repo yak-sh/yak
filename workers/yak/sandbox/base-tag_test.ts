@@ -5,7 +5,7 @@ let dockerfile = Deno.readTextFileSync(
   new URL('./base/Dockerfile', import.meta.url),
 )
 let configuration = Deno.readTextFileSync(
-  new URL('../wrangler.toml', import.meta.url),
+  new URL('./wrangler.toml', import.meta.url),
 )
 let image = pinned(configuration)!
 test('the sandbox names the base its Dockerfile hashes to', () => {

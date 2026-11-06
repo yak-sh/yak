@@ -23,8 +23,8 @@
 // kernel is (env.ts). @cloudflare/sandbox is a Worker package: it imports
 // `cloudflare:workers`, which Deno cannot load, so a value import here would
 // take every test that reaches a tool down with it. The one place its name
-// appears as a value is index.ts, where the deploy needs the Durable Object
-// class and no test ever looks. What that costs is the two lines of
+// appears as a value is yak-sandbox's entry (sandbox/index.ts), the Worker
+// that holds the Durable Object class and its container, where no test looks. What that costs is the two lines of
 // `getSandbox` we actually use — the object per name and the idle timeout —
 // written out below beside the SDK function each mirrors.
 //
@@ -49,7 +49,8 @@
 // already acts as them, sandbox or not. So a list of hosts it may reach
 // protected nothing, and stopped it cloning from GitHub. Only HTTP to this
 // platform and its spaces' addresses passes through the kernel on its way out
-// (index.ts `Sandbox`); the rest leaves the container directly.
+// (sandbox/index.ts, index.ts `SandboxOutbound`); the rest leaves the container
+// directly.
 //
 // It is signed in as the caller (T-34387) without holding the caller's token.
 // Every command runs with `YAKS_HOST` and `YAKS_TOKEN` in its environment, and
@@ -127,7 +128,7 @@ export let sandboxHost = (env: Host = {}) => url(env)
 export let HOST = sandboxHost()
 
 /** A container by its Durable Object's id: what its calls out are said to
- * come from (index.ts `Sandbox`), and so what the ledger knows it by. */
+ * come from (sandbox/index.ts), and so what the ledger knows it by. */
 export let idOf = (sandboxes: Sandboxes, name: string) =>
   String(sandboxes.idFromName(name))
 
@@ -359,7 +360,7 @@ export let lent = async (env: Keys, container: string) => {
 }
 
 /**
- * A request a container sends, on its way out (index.ts `Sandbox`): to this
+ * A request a container sends, on its way out (index.ts `SandboxOutbound`): to this
  * platform or its space's address, with the container's placeholder swapped
  * for its grant's token; anywhere else, another space's address included, as
  * it came, placeholder and all. Toward this platform, a placeholder the

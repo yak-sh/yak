@@ -279,10 +279,10 @@ export type Env = {
   ANTHROPIC_API_KEY?: string
   OPERATOR_DELEGATE?: string
   // The builder's workbench (sandbox.ts, T-34264): the Cloudflare Container
-  // one build compiles in, bound as a Durable Object namespace
-  // (wrangler.toml `[[containers]]`). Absent in a test run and the
-  // workerd probes, where the sandbox tools say so rather than half-running —
-  // and absent under `wrangler dev` on a machine with no container engine.
+  // one build compiles in, bound as yak-sandbox's Durable Object namespace
+  // (sandbox/wrangler.toml). Absent in a test run and the
+  // workerd probes, where the sandbox tools say so rather than half-running,
+  // and unanswered under `wrangler dev`, where yak-sandbox is not running.
   SANDBOX?: Sandboxes
   // yak-browser, which renders a draft for app_preview in Cloudflare's
   // browser (browser.ts), including under local dev. Absent in a test run and

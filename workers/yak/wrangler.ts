@@ -357,7 +357,8 @@ let logTail = (path: string) => {
 // an app with at deploy (@yaks/esbuild), in a container of its own;
 // yak-raster (raster/) is what the RASTER binding draws an app's icon.svg
 // with; yak-browser (browser/) is what the BROWSER binding renders a draft
-// with for app_preview; and yak-front (front/) is what answers the cached
+// with for app_preview; yak-sandbox (sandbox/) holds the Sandbox object and
+// container the SANDBOX binding names; and yak-front (front/) is what answers the cached
 // pages in front of this Worker. Each exists before this Worker's bindings
 // name it, except yak-front, whose bindings name this Worker: a missing
 // entrypoint there only fails its use receipts until this deploy finishes,
@@ -367,6 +368,7 @@ export let SIBLINGS = [
   'esbuild/wrangler.toml',
   'raster/wrangler.toml',
   'browser/wrangler.toml',
+  'sandbox/wrangler.toml',
   'front/wrangler.toml',
 ]
 

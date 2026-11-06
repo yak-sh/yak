@@ -5,7 +5,7 @@ import {
 } from './serving-copy.ts'
 // The kernel Worker's entry: the router (kernel.ts) as the runtime loads it.
 // What is here is what only the runtime can load — the Durable Object classes
-// each binding names, the Sandbox container, the Files, Site and Outbound
+// each binding names, the Files, Site, Outbound and SandboxOutbound
 // entrypoints, and the tracker around all of them — and nothing that decides where
 // a request goes. The Store Durable Object (graph.ts) is its own module: a DO
 // may live in a different Worker from the one that binds it, and so are the
@@ -30,6 +30,7 @@ import type { Env, Inbound } from './env.ts'
 import { handler, type Lent } from './kernel.ts'
 export { WorkspaceStore as Workspaces } from './workspaces.ts'
 import { outbound } from './outbound.ts'
+import { swapped } from './sandbox.ts'
 import * as sitePart from './site.ts'
 import { type Purged, purger } from './purge.ts'
 import { outlast } from './outlast-object.ts'
@@ -68,10 +69,6 @@ export class Builder extends instrument(Built) {
     super(ctx, agentEnv(env))
   }
 }
-
-// Stable runtime class names and bindings; the SDK loads with a Sandbox
-// incarnation or an outbound proxy fetch, never with a page request.
-export { ContainerProxy, Sandbox } from './sandbox-entry.ts'
 
 // The kernel's cached file entrypoint (cache.ts, wrangler.toml
 // `[exports.Files]`). The default entrypoint below is
@@ -229,6 +226,22 @@ export class Outbound extends WorkerEntrypoint {
       this.env,
       'Outbound send',
       () => outbound(req, this.env, caller),
+      req,
+    )
+  }
+}
+
+// A sandbox container's calls to this platform and its spaces, handed here by
+// yak-sandbox (sandbox/index.ts), which holds the container but not the secret
+// its placeholder is swapped with (sandbox.ts `swapped`). No route reaches it.
+export class SandboxOutbound extends WorkerEntrypoint {
+  declare env: Env
+
+  send(req: Request, container: string): Promise<Response> {
+    return entry(
+      this.env,
+      'SandboxOutbound send',
+      () => swapped(this.env, container, req),
       req,
     )
   }

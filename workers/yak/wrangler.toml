@@ -18,11 +18,7 @@ compatibility_date = "2025-05-08"
 # OAuth provider requires it before it will fetch a Client ID Metadata
 # Document (identity.ts), because a client_id is a URL a stranger chose and
 # same-zone routing would make that URL an SSRF into our own origin.
-#
-# enable_ctx_exports is what the sandbox's token swap rides (index.ts
-# `Sandbox`): the container's requests to this platform are handed to
-# `ContainerProxy` through `ctx.exports`, which this compatibility date
-# predates.
+
 # enable_nodejs_process_v2 supplies the native process object to the module
 # build, alongside the runtime's node: modules, without JS polyfills.
 # durable_object_io_tasks_prevent_eviction keeps an object up while it waits
@@ -31,7 +27,6 @@ compatibility_date = "2025-05-08"
 compatibility_flags = [
   "nodejs_compat",
   "global_fetch_strictly_public",
-  "enable_ctx_exports",
   "enable_nodejs_process_v2",
   "durable_object_io_tasks_prevent_eviction",
 ]
@@ -41,6 +36,13 @@ compatibility_flags = [
 # Function names and composed source maps survive both build passes.
 minify = true
 upload_source_maps = true
+
+# No container of its own: the sandbox's is yak-sandbox's (sandbox/). Empty
+# rather than absent, because the pinned wrangler uploads a Worker that names
+# containers through the script PUT, the one that carries
+# `code_update_strategy` (`[unsafe.metadata.code_update_strategy]` below);
+# absent, it creates the deployment through the versions API, which drops it.
+containers = []
 
 [[worker_loaders]]
 binding = "LOADER"
@@ -223,10 +225,14 @@ class_name = "Builder"
 
 # The builder's workbench (sandbox.ts, T-34264): one Cloudflare Container per
 # build session, holding a Rust toolchain and the wasm target, so the agent can
-# compile the things a browser cannot and ship the artifact into the app.
+# compile the things a browser cannot and ship the artifact into the app. The
+# object and its container are yak-sandbox's (sandbox/), so @cloudflare/sandbox
+# is compiled by the isolates that run one and never by the kernel's. This
+# Worker's deploy deploys it first.
 [[durable_objects.bindings]]
 name = "SANDBOX"
 class_name = "Sandbox"
+script_name = "yak-sandbox"
 
 [[durable_objects.bindings]]
 name = "WORKSPACES"
@@ -268,9 +274,10 @@ class_name = "Lexicon"
 # its caller retries (running.ts `skewed`).
 #
 # The pinned wrangler (4.111.0) predates `[durable_objects]
-# code_update_strategy` (4.150.0). With containers it uploads through the
+# code_update_strategy` (4.150.0). With `containers` it uploads through the
 # script PUT, which takes `unsafe.metadata` as upload metadata, the field
-# 4.150.0 writes there itself; move it there once the pin passes 4.150.0.
+# 4.150.0 writes there itself; move it there, and drop `containers = []`,
+# once the pin passes 4.150.0.
 [unsafe.metadata.code_update_strategy]
 mode = "immediate"
 
@@ -310,32 +317,11 @@ new_sqlite_classes = ["Outlast"]
 tag = "v9"
 new_sqlite_classes = ["Lexicon"]
 
-# The container uses a prebuilt registry image. Its tag is the toolchain
-# Dockerfile's hash; sandbox_test.ts checks its SDK against package.json.
-# A Worker deploy builds no sandbox image.
-#
-# `standard-2` — 1 vCPU, 6 GiB, 12 GB of disk — is chosen for rustc: `lite`'s
-# sixteenth of a core would spend the whole ten-minute budget (sandbox.ts
-# BUDGET) on one crate, and the image plus a `target/` directory does not fit
-# in `lite`'s 2 GB (an image may be as large as the instance's disk). At
-# Cloudflare's rates that is about $0.000035 a second, so a build that spends
-# its whole budget costs about two cents.
-#
-# `max_instances` bounds what can be running at once — one sandbox per space,
-# so five spaces building simultaneously, and one person holds at most one of
-# them on the free tier and two on the Plus plan (sandbox.ts `AWAKE`). Nothing
-# here is a fleet yet; raising it is one number. Outbound network is the
-# whole internet; requests to this platform's hosts pass through the kernel,
-# which swaps the container's placeholder for its grant (sandbox.ts
-# `swapped`, index.ts).
-#
-# The toolchain image is stable. The live Worker's assets supply the CLI
-# workspace on first yak use; a package change builds no sandbox image.
-[[containers]]
-class_name = "Sandbox"
-image = "registry.cloudflare.com/0f9613dfd3f0451df0bd0f12a1372ea3/yak-sandbox:base-ee6d899f43d821b1"
-instance_type = "standard-2"
-max_instances = 5
+# The Sandbox object moved to yak-sandbox (sandbox/wrangler.toml). What it kept
+# here was the SDK's own bookkeeping for containers a build destroys anyway.
+[[migrations]]
+tag = "v10"
+deleted_classes = ["Sandbox"]
 
 # Outbound mail as a binding rather than the REST API (T-33684): Cloudflare
 # Email Sending, authorized by this deploy instead of by a token, so nothing
@@ -616,6 +602,7 @@ database_id = "88b2e161-99bf-4777-ab6d-b18fcf66ca95"
 name = "yak-staging"
 workers_dev = false
 preview_urls = false
+containers = []
 
 [[env.staging.worker_loaders]]
 binding = "LOADER"
@@ -686,6 +673,7 @@ class_name = "Builder"
 [[env.staging.durable_objects.bindings]]
 name = "SANDBOX"
 class_name = "Sandbox"
+script_name = "yak-sandbox-staging"
 
 [[env.staging.durable_objects.bindings]]
 name = "WORKSPACES"
@@ -747,11 +735,9 @@ new_sqlite_classes = ["Outlast"]
 tag = "v9"
 new_sqlite_classes = ["Lexicon"]
 
-[[env.staging.containers]]
-class_name = "Sandbox"
-image = "registry.cloudflare.com/0f9613dfd3f0451df0bd0f12a1372ea3/yak-sandbox:base-ee6d899f43d821b1"
-instance_type = "standard-2"
-max_instances = 5
+[[env.staging.migrations]]
+tag = "v10"
+deleted_classes = ["Sandbox"]
 
 [[env.staging.send_email]]
 name = "MAIL"

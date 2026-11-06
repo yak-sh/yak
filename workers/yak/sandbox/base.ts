@@ -94,10 +94,10 @@ export let based = async (
   },
 ) => {
   let want = tag(await io.readTextFile(here('base/Dockerfile')))
-  let from = pinned(await io.readTextFile(here('../wrangler.toml')))
+  let from = pinned(await io.readTextFile(here('wrangler.toml')))
   if (!from?.endsWith(':' + want)) {
     throw new Error(
-      `wrangler.toml names ${from}, but base/Dockerfile is ${want}`,
+      `sandbox/wrangler.toml names ${from}, but base/Dockerfile is ${want}`,
     )
   }
   return await imaged({

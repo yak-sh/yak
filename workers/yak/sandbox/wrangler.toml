@@ -1,0 +1,98 @@
+# yak-sandbox holds the builder's workbench (../sandbox.ts): the Sandbox
+# Durable Object, @cloudflare/sandbox's, and the Cloudflare Container behind
+# it (index.ts). Its own Worker because the SDK is code compiled when an
+# isolate starts: in the kernel that would be every isolate, a Store waking
+# for one query included. Here it is only the isolates that run a sandbox.
+#
+# No routes and no secrets. The kernel's SANDBOX binding names this script's
+# Sandbox class and is the one way in. A container's HTTPS to this platform and
+# its spaces goes to the kernel's `SandboxOutbound` over KERNEL, where its
+# placeholder is swapped for its grant (../sandbox.ts `swapped`); the rest of
+# its network is the whole internet. The kernel's deploy deploys it first, to
+# the same environment (../wrangler.ts `siblings`).
+#
+# enable_ctx_exports is what that swap rides: the SDK hands the container's
+# requests to `ContainerProxy` through `ctx.exports`.
+name = "yak-sandbox"
+main = "index.ts"
+account_id = "0f9613dfd3f0451df0bd0f12a1372ea3"
+compatibility_date = "2025-05-08"
+compatibility_flags = ["nodejs_compat", "enable_ctx_exports"]
+workers_dev = false
+preview_urls = false
+minify = true
+
+[vars]
+APEX = "yaks.app"
+
+[observability.logs]
+enabled = true
+invocation_logs = true
+
+[[services]]
+binding = "KERNEL"
+service = "yak"
+entrypoint = "SandboxOutbound"
+
+[[durable_objects.bindings]]
+name = "SANDBOX"
+class_name = "Sandbox"
+
+[[migrations]]
+tag = "v1"
+new_sqlite_classes = ["Sandbox"]
+
+# The container uses a prebuilt registry image. Its tag is the toolchain
+# Dockerfile's hash (base.ts); ../sandbox_test.ts checks its SDK against
+# ../package.json. A Worker deploy builds no sandbox image.
+#
+# `standard-2` — 1 vCPU, 6 GiB, 12 GB of disk — is chosen for rustc: `lite`'s
+# sixteenth of a core would spend the whole ten-minute budget (../sandbox.ts
+# BUDGET) on one crate, and the image plus a `target/` directory does not fit
+# in `lite`'s 2 GB (an image may be as large as the instance's disk). At
+# Cloudflare's rates that is about $0.000035 a second, so a build that spends
+# its whole budget costs about two cents.
+#
+# `max_instances` bounds what can be running at once — one sandbox per space,
+# so five spaces building simultaneously, and one person holds at most one of
+# them on the free tier and two on the Plus plan (../sandbox.ts `AWAKE`).
+# Raising it is one number.
+#
+# The toolchain image is stable. The kernel's assets supply the CLI workspace
+# on first yak use; a package change builds no sandbox image.
+[[containers]]
+class_name = "Sandbox"
+image = "registry.cloudflare.com/0f9613dfd3f0451df0bd0f12a1372ea3/yak-sandbox:base-ee6d899f43d821b1"
+instance_type = "standard-2"
+max_instances = 5
+
+[env.staging]
+name = "yak-sandbox-staging"
+workers_dev = false
+preview_urls = false
+
+[env.staging.vars]
+APEX = "yaks.fyi"
+
+[env.staging.observability.logs]
+enabled = true
+invocation_logs = true
+
+[[env.staging.services]]
+binding = "KERNEL"
+service = "yak-staging"
+entrypoint = "SandboxOutbound"
+
+[[env.staging.durable_objects.bindings]]
+name = "SANDBOX"
+class_name = "Sandbox"
+
+[[env.staging.migrations]]
+tag = "v1"
+new_sqlite_classes = ["Sandbox"]
+
+[[env.staging.containers]]
+class_name = "Sandbox"
+image = "registry.cloudflare.com/0f9613dfd3f0451df0bd0f12a1372ea3/yak-sandbox:base-ee6d899f43d821b1"
+instance_type = "standard-2"
+max_instances = 5

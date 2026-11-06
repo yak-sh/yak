@@ -12,7 +12,6 @@ let staging = (config.env as Record<string, Record<string, unknown>>).staging
 test('staging repeats the kernel bindings without production resources', () => {
   for (
     let key of [
-      'durable_objects',
       'migrations',
       'containers',
       'ai',
@@ -23,6 +22,19 @@ test('staging repeats the kernel bindings without production resources', () => {
       'exports',
     ]
   ) assertEquals(staging[key], config[key], `${key} must exist on staging`)
+
+  // The same objects, each in staging's own Worker when another holds it.
+  type Objects = { bindings: { name: string; script_name?: string }[] }
+  let objects = (o: unknown) => (o as Objects).bindings
+  let live = objects(config.durable_objects)
+  assertEquals(
+    objects(staging.durable_objects).map(({ script_name: _, ...b }) => b),
+    live.map(({ script_name: _, ...b }) => b),
+  )
+  for (let row of objects(staging.durable_objects)) {
+    let script = live.find((b) => b.name == row.name)!.script_name
+    if (script) assertEquals(row.script_name, `${script}-staging`)
+  }
 
   // The same logs and traces, kept in Cloudflare. Export destinations are
   // staging names no export destinations.
