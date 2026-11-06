@@ -11,11 +11,8 @@
 //   deno task jsr                    # dry run: every page, what would move
 //   deno task jsr @yaks/graph        # one package
 //   deno task jsr --apply            # write it
-//   deno task jsr --apply --create @yaks/x   # and mint the pages named
-//
-// A page takes one of the scope's places (100 at most), so --create mints only
-// the packages it is given: the new ones `bin/release.ts plan` says a release
-// publishes.
+//   deno task jsr --apply --create   # and mint the pages JSR lacks
+//   deno task jsr --apply --create @yaks/x   # mint only the pages named
 //
 // Reading is anonymous. Writing needs a JSR personal access token in
 // JSR_TOKEN, minted at https://jsr.io/account/tokens.
@@ -24,7 +21,7 @@
 // oneOf (https://api.jsr.io/.well-known/openapi) — so an edit here is a field
 // and a value, and a package with three stale fields is three requests.
 import { cmp } from '@yaks/fp'
-import { configs, manifest } from './release.ts'
+import { manifest, publishing } from './release.ts'
 
 export let API = 'https://api.jsr.io'
 export let TOKENS = 'https://jsr.io/account/tokens'
@@ -189,14 +186,13 @@ export let lines = ({ name, have, edits }: Plan) => {
   ]
 }
 
-// Every workspace member that is a JSR package. bin/release.ts already knows
-// which members carry a deno.json; a member without a `name` (workers/yak is
-// an npm-only member) has no package page.
+// Every workspace member `deno publish` publishes (bin/release.ts
+// `publishing`): one with `"publish": false`, such as @yaks/admin or the
+// yaks.app Worker, has no package page.
 export let packages = async (root = '.'): Promise<Pkg[]> => {
   let out: Pkg[] = []
-  for (let path of await configs(root)) {
+  for (let { config: path } of await publishing(root)) {
     let config = await manifest(path)
-    if (!config.name) continue
     let dir = path.slice(0, path.lastIndexOf('/'))
     out.push({
       name: config.name,
@@ -284,13 +280,6 @@ export let main = async (args = Deno.args, get = fetch, root = '.') => {
   let create = args.includes('--create')
   let named = args.filter((arg) => !arg.startsWith('-'))
   let token = Deno.env.get('JSR_TOKEN')
-  if (create && !named.length) {
-    console.error(
-      'name the packages to mint: --create takes a place in the scope for ' +
-        'each (bin/release.ts plan lists the new ones a release publishes)',
-    )
-    return 1
-  }
   if (apply && !token) {
     console.error(`JSR_TOKEN is not set. Mint one at ${TOKENS}.`)
     return 1
@@ -316,9 +305,7 @@ export let main = async (args = Deno.args, get = fetch, root = '.') => {
   if (!apply) {
     console.log(
       `dry run — pass --apply to write${
-        fresh.length && !create
-          ? ', --create <names> to mint missing pages'
-          : ''
+        fresh.length && !create ? ', --create to mint missing pages' : ''
       }`,
     )
     return 0

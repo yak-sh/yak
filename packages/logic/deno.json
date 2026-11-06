@@ -1,3 +1,7 @@
 {
-  "publish": false
+  "publish": {
+    "exclude": [
+      "browser.json"
+    ]
+  }
 }

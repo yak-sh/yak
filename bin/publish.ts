@@ -7,8 +7,8 @@
 // `deno publish` skips a version JSR already has, so a publish is given every
 // member and publishes what the release names (packages/cli/release.json),
 // whether it moved or not. A package JSR does not have and the release does
-// not name stays out, or it would take a place in the scope nothing asked
-// for, and so does any member that publishes nothing and names one of those:
+// not name stays out, or the publish would stop at a package with no page,
+// and so does any member that publishes nothing and names one of those:
 // Deno resolves every dependency a member's package.json names. A dry run
 // (`--dry-run`, the source check) is given every member, so it checks every
 // package's public API as one workspace.

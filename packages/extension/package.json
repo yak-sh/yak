@@ -9,7 +9,7 @@
     "./build": "./build.ts"
   },
   "license": "Apache-2.0",
-  "description": "A browser extension that lends the tab a person is on to their agent: reading and acting on the page, the tools and frames between host and browser, per-site consent, the person's Do it before a step that sends, buys, posts or deletes, and an unpacked Chrome extension built from a configuration.",
+  "description": "A browser extension that lends a person's tab to their agent: reading and acting on the page with per-site consent, a Do it before any step that sends, buys, posts or deletes, and an unpacked Chrome extension built from a configuration.",
   "dependencies": {
     "@yaks/fp": "0.2.23",
     "@yaks/oauth": "0.2.23",

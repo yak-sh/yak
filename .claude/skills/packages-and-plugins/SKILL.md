@@ -175,17 +175,17 @@ Run it in a linked worktree: it lands its commit the way `yak land` does, so
 main moves and is pushed only under the land lock, and it tags the commit that
 landed. Push only the tag (`git push origin v0.2.18`); never push main by hand.
 
-JSR's scope holds at most 100 packages, and a version can't be unpublished. CI
+A version can't be unpublished. CI
 publishes under GitHub's identity (.github/workflows/publish.yml), which JSR
 accepts only for a package that already has a page, so bin/release.ts refuses
 while a package it would publish has none. A provider a person may not use is a
 plugin their config names, not an import of a published package: an import puts
 it in every release that publishes the importer. bin/jsr.ts writes the pages
-from the repo, and mints only the pages it is given:
+from the repo, and mints the pages JSR lacks:
 
 ```sh
 deno task jsr                              # dry run: what would change on every page
-deno task jsr --apply --create @yaks/new   # write them, and mint the pages named
+deno task jsr --apply --create             # write them, and mint the missing pages
 ```
 
 Writing needs a `JSR_TOKEN`, so it's often the owner's to run.
