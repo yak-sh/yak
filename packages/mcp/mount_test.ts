@@ -735,7 +735,7 @@ test('a pinned modern HTTP client discovers awaited facets and records malformed
       authenticated++
       return ada
     },
-    roster: () => 'Current tool roster',
+    roster: () => ({ line: 'Current tool roster' }),
     extend: async (built) => {
       await Promise.resolve()
       extensions++

@@ -37,7 +37,7 @@ let expected = {
 let options = {
   tools: [tool],
   core: false,
-  roster: () => 'Tool list changed.',
+  roster: () => ({ line: 'Tool list changed.' }),
 }
 let client = await connect(options)
 let entityClient = await connect({

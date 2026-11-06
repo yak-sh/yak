@@ -276,10 +276,13 @@ Clients may cache tool lists. `roster(opts)` returns the names a server lists;
 removed tools, or `undefined` when the names are unchanged.
 
 Pass a `roster` callback to append a notice as a separate text block after a
-tool result. The application must track each client's previous list and update
-it when a notice is sent; this stateless HTTP handler does not maintain
-sessions. A release change without a tool-name change changes the version but
-produces no notice.
+tool result. It is asked as each call starts, beside the tool, and the result
+never waits for it: a `Notice` (`{ line, said }`) that has arrived by the time
+the tool answers is appended, and its `said` is then called. The application
+must track each client's previous list and update it in `said`, so a notice that
+a quick tool outran is still held for a later result; this stateless HTTP
+handler does not maintain sessions. A release change without a tool-name change
+changes the version but produces no notice.
 
 A renamed argument keeps answering under its former name: every call is put
 through `translated(tool, args)` before it is recorded or checked, so a client

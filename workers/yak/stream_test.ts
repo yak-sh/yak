@@ -46,10 +46,15 @@ test('a retained owner notice survives eviction and rides one reply after reconn
     }),
   )
   wire = new Wire({ storage }, {})
-  let ask = (init = false) =>
-    wire.roster({ session: 'fresh', version: 'same', names: [], init })
+  let held = { session: 'fresh', version: 'same', names: [] }
+  let ask = (init = false) => wire.roster({ ...held, init })
   assertEquals(await ask(true), {})
-  assertEquals(await ask(), { line: 'rolled back' })
+  let heard = { line: 'rolled back', notices: ['rolled back'] }
+  // A reply that left before the answer came carried nothing, so the notice
+  // waits for the one that does.
+  assertEquals(await ask(), heard)
+  assertEquals(await ask(), heard)
+  await wire.said({ ...held, notices: heard.notices })
   assertEquals(await ask(), {})
 })
 
@@ -140,15 +145,18 @@ test('a session is told which tools moved, once per changed set', async () => {
   )
   // The same list is no news.
   assertEquals(await wire.roster(listed(['about', 'vocab'])), {})
-  let { line } = await wire.roster(listed(['about', 'mail_list', 'mail_send']))
+  let moved = listed(['about', 'mail_list', 'mail_send'])
+  let line = 'The tool list changed since you connected ' +
+    '(new: mail_list, mail_send; gone: vocab). Reconnect to see them, or ask `about`.'
+  assertEquals(await wire.roster(moved), { line })
+  // Until a reply has carried it, asking again still has it to say.
+  assertEquals(await wire.roster(moved), { line })
+  // Once said: the roster it was told about is the one it is holding now.
+  await wire.said(moved)
+  assertEquals(await wire.roster(moved), {})
+  // A release that moved the version and no name has nothing to tell.
   assertEquals(
-    line,
-    'The tool list changed since you connected (new: mail_list, mail_send; ' +
-      'gone: vocab). Reconnect to see them, or ask `about`.',
-  )
-  // Once: the roster it was told about is the one it is holding now.
-  assertEquals(
-    await wire.roster(listed(['about', 'mail_list', 'mail_send'])),
+    await wire.roster({ ...moved, version: 'again' }),
     {},
   )
   // A session nobody recorded just listed, or cannot be told from any other

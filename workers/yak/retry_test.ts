@@ -15,7 +15,7 @@ import {
   type Sandboxes,
 } from '@yaks/sandbox/cloudflare'
 import { backoff, evicted, retried } from '@yaks/durable-object'
-import { listen, rostered, told } from './stream.ts'
+import { listen, rostered, said, told } from './stream.ts'
 
 let space: Space = spaceOf({
   eid: 'space-eid',
@@ -133,13 +133,21 @@ let callers: Array<{
     headers: {},
     run: async (env) =>
       assertEquals(
-        await rostered(env, who.person, {
+        (await rostered(env, who.person, {
           session: 'session',
           version: 'v1',
           names: ['tool'],
-        }),
+        })).line,
         'changed',
       ),
+  },
+  {
+    path: 'http://wire/said',
+    binding: 'WIRE',
+    body: JSON.stringify({ session: 'session', version: 'v1', names: [] }),
+    headers: {},
+    run: (env) =>
+      said(env, who.person, { session: 'session', version: 'v1', names: [] }),
   },
   {
     path: 'http://wire/tell',

@@ -169,14 +169,17 @@ export type Options = {
    * the same `graph_apply` this server does, out of one list — passes false,
    * so the tier is listed once and is the same tool object either way. */
   core?: boolean
-  /** extra text to append to a tool result, given the tool names this server
-   * is listing right now: the staleness sentence for a client whose cached
-   * tool list has changed under it (roster.ts). Called once per tool result,
-   * and what it returns is sent as a trailing content block, so a JSON result
-   * stays valid JSON. */
+  /** news for a tool result, given the tool names this server is listing
+   * right now: the staleness sentence for a client whose cached tool list has
+   * changed under it (roster.ts), or whatever else the host keeps for the
+   * caller. Asked as each call starts, beside the tool, and never waited for:
+   * a {@link Notice} that has arrived by the time the tool answers is sent as
+   * a trailing content block, so a JSON result stays valid JSON, and is then
+   * told it was `said`. News a quick tool outran is never said, so the host
+   * still holds it for a later result. */
   roster?: (
     names: string[],
-  ) => string | undefined | Promise<string | undefined>
+  ) => Notice | undefined | Promise<Notice | undefined>
 
   /** a calling program with more than tools to serve — resources, prompts,
    * capabilities of its own — registers them on the same server here, after
@@ -188,6 +191,11 @@ export type Options = {
   /** Skills attach to the same server, awaited before either era discovers it. */
   skills?: (server: McpServer, exchange?: Exchange) => void | Promise<void>
 }
+
+/** What {@link Options.roster} has to say on one result: the line, and what
+ * the host does once the line has gone out on it — forget it, so it is said
+ * once. */
+export type Notice = { line: string; said?: () => void }
 
 /** One HTTP exchange; a connection-serving factory leaves this undefined. */
 export type Exchange = { method: string }
@@ -492,6 +500,15 @@ export let server = (
     if (!admitted || !t || t.name != name || !offered('mcp')(t)) {
       throw new ProtocolError(-32602, `Tool ${name} not found`)
     }
+    // The news is asked for beside the tool, not after it, and the answer
+    // never waits for it (Options.roster). A refusal carries it too: an agent
+    // holding a stale tool list is likelier to be refused than served, so
+    // that is exactly the reply worth attaching it to. A notice that failed
+    // cannot undo the tool's outcome, so its failure is reported on its own.
+    let notice: Notice | undefined
+    ;(async () => {
+      notice = await opts.roster?.(names)
+    })().catch((err) => report(err, asked, t.name))
     try {
       asked.call = {
         to: toolEid(name),
@@ -511,18 +528,8 @@ export let server = (
     }
     let unfit = misfit(t, out)
     if (unfit) await report(unfit, asked, t.name)
-    // A refusal carries the roster sentence too: an agent holding a stale
-    // tool list is likelier to be refused than served, so that is exactly
-    // the reply worth attaching it to.
-    let notice: string | undefined
-    try {
-      notice = await opts.roster?.(names)
-    } catch (err) {
-      // A notice cannot undo the tool's outcome. Report its own failure and
-      // keep the answer, so a caller never repeats a committed action for it.
-      await report(err, asked, t.name)
-    }
-    return noting(out, notice)
+    notice?.said?.()
+    return noting(out, notice?.line)
   }
   for (let t of tools()) {
     let meta = metaOf(t, opts.security)

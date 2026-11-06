@@ -64,7 +64,13 @@ import { copyOf } from './directory-copy.ts'
 // existing connectors. All three addresses share one resource and OAuth flow.
 import { fromJsonSchema, type McpServer } from '@modelcontextprotocol/server'
 import { CfWorkerJsonSchemaValidator } from '@modelcontextprotocol/server/validators/cf-worker'
-import { type Exchange, mcp, roster, rosterVersion } from '@yaks/mcp'
+import {
+  type Exchange,
+  mcp,
+  type Notice,
+  roster,
+  rosterVersion,
+} from '@yaks/mcp'
 import { coded } from './agent-code.ts'
 import { translated } from '@yaks/mcp/tools'
 import { connected, named, reaching, ROWS, searching } from './agent.ts'
@@ -86,9 +92,9 @@ import { says } from './route.ts'
 import { connector, VERSION } from './seo.ts'
 import { prompted, type Standing, standing } from './standing.ts'
 import { type Ctx, VIEW_MIME } from './tools.ts'
-import { listen, rostered } from './stream.ts'
+import { type Asked, listen, rostered, said } from './stream.ts'
 import { type Clock, clock, timed } from './timing.ts'
-import { caught, reporter } from './defects.ts'
+import { background, caught, reporter } from './defects.ts'
 import { isTestAddress } from './lib/bots.ts'
 import { refuse } from './tool.ts'
 import { url as hostUrl } from './host.ts'
@@ -472,9 +478,36 @@ let door = async (ctx: Ctx, session: string, rpc: Rpc) => {
     // client holding a stream, put where a client without one will read it.
     handle: mcp({
       ...shared,
-      roster: () => rostered(ctx.env, ctx.person, { session, ...listed }),
+      roster: () => noticed(ctx, { session, ...listed }, c),
     }),
   }
+}
+
+// What the person's Wire has for this reply, asked beside the tool and never
+// waited for (@yaks/mcp `Options.roster`, T-143066). On `Server-Timing` as
+// `roster` when it came back before the reply left. The ask outlives a reply
+// it was too slow for, and the Wire forgets a line only once a reply carried
+// it, after that reply, so a line is never lost to a quick tool.
+let noticed = (
+  ctx: Ctx,
+  asked: Asked,
+  c: Clock,
+): Promise<Notice | undefined> => {
+  let heard = c.time('roster', () => rostered(ctx.env, ctx.person, asked))
+  background(heard.then(() => {}, () => {}))
+  return heard.then(({ line, notices }) =>
+    line
+      ? {
+        line,
+        said: () =>
+          background(
+            said(ctx.env, ctx.person, { ...asked, notices }).catch((e) =>
+              caught(e, { request: 'POST /mcp roster said' })
+            ),
+          ),
+      }
+      : undefined
+  )
 }
 
 // A tool's own refusal, returned to a caller turned away before the protocol
@@ -816,8 +849,13 @@ let answered = async (
   if (rpc.method == 'tools/call' && auth.person) scheduleUse(env, auth.person)
   if (rpc.method != 'initialize') return out
   // The list this client is about to cache, remembered for the session it is
-  // caching it under: every later reply is compared against this.
-  await rostered(env, auth.person, { session, ...built.listed, init: true })
+  // caching it under: every later reply is compared against this. Nothing
+  // here waits for it — a call that overtakes it finds the session unrecorded,
+  // which the Wire records silently against the same list.
+  background(
+    rostered(env, auth.person, { session, ...built.listed, init: true })
+      .then(() => {}, (e) => caught(e, { request: 'POST /mcp roster' })),
+  )
   let named = new Response(out.body, out)
   named.headers.set('mcp-session-id', session)
   return named

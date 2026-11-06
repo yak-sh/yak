@@ -78,7 +78,11 @@ type Told = { method: string; params?: unknown; reply?: string }
 // things the fixed roster already carries (declared.ts) — so a session is
 // told its list is stale only when the names actually moved under it.
 export type Roster = { version: string; names: string[] }
-type Asked = Roster & { session: string; init?: boolean }
+export type Asked = Roster & { session: string; init?: boolean }
+// The line one reply would carry, and the owner notices in it, which the
+// reply that carried them hands back (`said`).
+export type Heard = { line?: string; notices?: string[] }
+export type Said = Asked & { notices?: string[] }
 
 type Held = {
   session: string
@@ -232,43 +236,58 @@ export class Wire {
     await this.state.storage.put('spoke', spoke)
   }
 
-  // What one session is holding, against what this door lists now (T-34277).
-  // `init` is the client caching the list at connect: recorded, never
-  // compared. Otherwise the version is compared and the line said once per
-  // changed set — the new roster is recorded with it, so a client that never
-  // reconnects is told about the next move and not about this one again.
+  // What one session is holding, against what this door lists now (T-34277),
+  // and the owner notices waiting for a reply — an owner who was offline may
+  // reconnect without the cursor that replays news (T-62797): the line the
+  // next reply carries, once per changed set. Asking forgets nothing
+  // (T-143066). A reply leaves without waiting for this answer, so the reply
+  // that did carry the line says so (`said` below), and news a quick reply
+  // outran waits here for the next. Two replies in flight at once may both
+  // carry it: said twice beats never said.
   //
-  // A session never recorded here is recorded silently: it either just
-  // listed, or it is a client that sends no session id at all, and those
-  // cannot be told apart from each other.
-  async roster(said: Asked): Promise<{ line?: string }> {
-    // Important owner notices also wait for a tool reply. An owner who was
-    // offline may reconnect without the event cursor needed to replay news.
-    let pending = said.init
-      ? []
-      : await this.state.storage.get<string[]>('pending') ?? []
-    if (pending.length) await this.state.storage.put('pending', [])
-    let answer = (line?: string) => {
-      let text = [...pending, ...line ? [line] : []].join('\n')
-      return text ? { line: text } : {}
+  // `init` is the client caching the list at connect: recorded, never
+  // compared. A session never recorded here is recorded silently: it either
+  // just listed, or it is a client that sends no session id at all, and those
+  // cannot be told apart from each other. So is a release that moved the
+  // version and no name, which leaves nothing to tell.
+  async roster(asked: Asked): Promise<Heard> {
+    let all = await this.listed()
+    let was = all[asked.session]
+    let line = was && !asked.init ? stale(was, asked) : undefined
+    if (asked.init || !line && was?.version != asked.version) {
+      await this.keep(all, asked)
     }
-    let all = await this.state.storage.get<Record<string, Roster>>('listed') ??
-      {}
-    let was = all[said.session]
-    let keep = async () => {
-      delete all[said.session]
-      all[said.session] = { version: said.version, names: said.names }
-      for (let old of Object.keys(all).slice(0, -KEPT)) delete all[old]
-      await this.state.storage.put('listed', all)
+    if (asked.init) return {}
+    let notices = await this.state.storage.get<string[]>('pending') ?? []
+    let text = [...notices, ...line ? [line] : []].join('\n')
+    return text ? { line: text, ...notices.length ? { notices } : {} } : {}
+  }
+
+  // A reply carried the line: the notices on it are forgotten, and the roster
+  // it told the session about is the one the session holds now, so a client
+  // that never reconnects is told about the next move and not this one again.
+  async said(said: Said): Promise<void> {
+    if (said.notices?.length) {
+      let pending = await this.state.storage.get<string[]>('pending') ?? []
+      await this.state.storage.put(
+        'pending',
+        pending.filter((n) => !said.notices!.includes(n)),
+      )
     }
-    if (said.init || !was) {
-      await keep()
-      return answer()
-    }
-    if (was.version == said.version) return answer()
-    let line = stale(was, said)
-    await keep()
-    return answer(line)
+    let all = await this.listed()
+    if (all[said.session]?.version != said.version) await this.keep(all, said)
+  }
+
+  async listed(): Promise<Record<string, Roster>> {
+    return await this.state.storage.get<Record<string, Roster>>('listed') ?? {}
+  }
+
+  // One session's roster, recorded as the newest of the KEPT.
+  async keep(all: Record<string, Roster>, held: Asked) {
+    delete all[held.session]
+    all[held.session] = { version: held.version, names: held.names }
+    for (let old of Object.keys(all).slice(0, -KEPT)) delete all[old]
+    await this.state.storage.put('listed', all)
   }
 
   // A client attaching its stream: what it missed, then the line stays open.
@@ -356,6 +375,10 @@ export class Wire {
     if (path == '/roster') {
       return Response.json(await this.roster(await req.json() as Asked))
     }
+    if (path == '/said') {
+      await this.said(await req.json() as Said)
+      return new Response(null, { status: 204 })
+    }
     return new Response('not found', { status: 404 })
   }
 }
@@ -425,8 +448,25 @@ export let listen = async (env: Env, person: string, req: Request) => {
   return new Response(resumable(held.body, lost), held)
 }
 
-// The roster a session is holding, against the one this door lists now: the
-// line to say on this reply, or nothing. `init` records what a client just
+// One JSON body to the person's object, at one of its doors.
+let posted = (env: Env, person: string, door: string, body: unknown) =>
+  wireOf(env, person)(
+    () =>
+      new Request(`http://wire/${door}`, {
+        method: 'POST',
+        body: JSON.stringify(body),
+      }),
+  )
+
+// And one whose answer is nothing but that it arrived.
+let sent = async (env: Env, person: string, door: string, body: unknown) => {
+  let r = await posted(env, person, door, body)
+  await r.body?.cancel()
+}
+
+// The roster a session is holding, against the one this door lists now, and
+// the owner notices waiting: the line a reply would carry, which the reply
+// that does carry it hands back (`said`). `init` records what a client just
 // cached instead of comparing. It lives on the same object as the stream
 // because a session's durable state is one thing, and because a session that
 // hears the notification on its stream and one that hears the line on a reply
@@ -434,32 +474,18 @@ export let listen = async (env: Env, person: string, req: Request) => {
 export let rostered = async (
   env: Env,
   person: string,
-  said: Asked,
-): Promise<string | undefined> => {
-  let r = await wireOf(env, person)(
-    () =>
-      new Request('http://wire/roster', {
-        method: 'POST',
-        body: JSON.stringify(said),
-      }),
-  )
-  return ((await r.json()) as { line?: string }).line
-}
+  asked: Asked,
+): Promise<Heard> => await (await posted(env, person, 'roster', asked)).json()
+
+// What a reply carried, for the object to forget.
+export let said = (env: Env, person: string, said: Said): Promise<void> =>
+  sent(env, person, 'said', said)
 
 // News for one person, whether or not they are listening this second.
-export let told = async (
+export let told = (
   env: Env,
   person: string,
   method: string,
   params?: unknown,
   reply?: string,
-) => {
-  let r = await wireOf(env, person)(
-    () =>
-      new Request('http://wire/tell', {
-        method: 'POST',
-        body: JSON.stringify({ method, params, reply }),
-      }),
-  )
-  await r.body?.cancel()
-}
+): Promise<void> => sent(env, person, 'tell', { method, params, reply })

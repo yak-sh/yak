@@ -624,11 +624,15 @@ test('a session that connected against another roster is told, once', async () =
     search: () => [],
     roster: (names) => {
       let line = rosterLine(was, names)
-      if (line) {
-        told++
-        was = names // once per changed set, not once per call
-      }
       return line
+        ? {
+          line,
+          said: () => {
+            told++
+            was = names // once per changed set, not once per call
+          },
+        }
+        : undefined
     },
   })
   let out = await called(client, 'graph_query', { q: '.book.price' })
@@ -645,6 +649,31 @@ test('a session that connected against another roster is told, once', async () =
   let quiet = await called(client, 'graph_query', { q: '.book.price' })
   assertEquals((quiet.content as { text: string }[]).length, 1)
   assertEquals(told, 1)
+  await client.close()
+})
+
+// The roster is a host's round trip (T-143066): the answer leaves without it,
+// and news the tool outran is not lost but rides a later result.
+test('a tool answers without waiting on the roster, and its news rides the next result', async () => {
+  let held = ['Tool list changed.']
+  // The host's round trip: one that never comes back, then prompt ones.
+  let trip = new Promise<void>(() => {})
+  let client = await connect({
+    roster: async () => {
+      await trip
+      return held.length
+        ? { line: held[0], said: () => held.shift() }
+        : undefined
+    },
+  })
+  let lines = async () =>
+    ((await called(client, 'graph_query', { q: '.book' })).content as {
+      text: string
+    }[]).slice(1).map((b) => b.text)
+  assertEquals(await lines(), [])
+  trip = Promise.resolve()
+  assertEquals(await lines(), ['Tool list changed.'])
+  assertEquals(await lines(), [])
   await client.close()
 })
 

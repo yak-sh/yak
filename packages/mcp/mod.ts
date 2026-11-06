@@ -87,6 +87,7 @@ export {
   type Exchange,
   instructed,
   listing,
+  type Notice,
   type Options,
   roster,
   type Security,
