@@ -259,7 +259,7 @@ const g = graph({ storage: ram(vocab), vocab })
 g.install()
 const events = new EventTarget()
 const messages: unknown[] = []
-const timers: (() => void)[] = []
+const timers: { ms: number; fn: () => void }[] = []
 const socket = {
   readyState: 0,
   send: (data: string) => messages.push(JSON.parse(data)),
@@ -269,7 +269,7 @@ const socket = {
 const link = sync(g, {
   url: 'https://books.example',
   connect: () => socket,
-  timer: (fn) => timers.push(fn),
+  timer: (fn, ms) => timers.push({ ms, fn }),
   fetch: () => {
     throw new Error('peer writes must use the socket')
   },
@@ -279,9 +279,11 @@ socket.readyState = 1
 events.dispatchEvent(new Event('open'))
 await g.apply([{ entity: { eid: 'b1' }, cursor: { x: 1 } }])
 await g.apply([{ entity: { eid: 'b1' }, cursor: { x: 2 } }])
-equal(messages, [{ relay: [{ entity: { eid: 'b1' }, cursor: { x: 1 } }] }])
-timers.shift()!()
-equal(messages[1], { relay: [{ entity: { eid: 'b1' }, cursor: { x: 2 } }] })
+// The socket was asked the time as it opened; then the first move goes at once.
+const relays = () => messages.filter((m) => !('clock' in (m as object)))
+equal(relays(), [{ relay: [{ entity: { eid: 'b1' }, cursor: { x: 1 } }] }])
+timers.find((t) => t.ms <= 100)!.fn() // the cursor's pace
+equal(relays()[1], { relay: [{ entity: { eid: 'b1' }, cursor: { x: 2 } }] })
 await hear(g, {
   id: 'books',
   relay: [{ entity: { eid: 'b1' }, cursor: { x: 3 } }],
@@ -336,7 +338,8 @@ const id = link.subscribe(true, 'all')
 equal(link.ready(id), false)
 socket.readyState = 1
 events.dispatchEvent(new Event('open'))
-equal(messages[0], { subscribe: true, id: 'all', acks: true, frames: true })
+equal(Object.keys(messages[0] as object), ['clock']) // asked the time on open
+equal(messages[1], { subscribe: true, id: 'all', acks: true, frames: true })
 events.dispatchEvent(
   new MessageEvent('message', { data: JSON.stringify({ id, bundles: [] }) }),
 )
@@ -375,9 +378,16 @@ takes the connection and never answers, is a failure: `report` receives a
 `Dropped` error naming the close code and how long it has been down, once per
 outage, while it lasts. Its `cause` says what the wire was waiting on: a socket
 that has not reopened, and how many attempts it made, or the queries a reopened
-one has not had answered, masked as a trace keeps them. It reaches the server
-whenever only the socket fails; a server that is away is seen by its own
-reporting.
+one has not had answered, masked as a trace keeps them, and how long ago the
+server last said anything. It reaches the server whenever only the socket fails;
+a server that is away is seen by its own reporting.
+
+A connection can die without closing: a laptop that sleeps or loses its network
+leaves a socket that reads as open and never hears another word. Every open
+socket is asked the time (see the store's clock below), which the server answers
+outside its subscription queues, so a socket that has said nothing `quiet` after
+being asked (default 10 seconds) is given up as if it had closed, and the next
+one asks every query again.
 
 A machine with no network has no server to fail it. While `network` says it is
 offline (by default the browser's `navigator.onLine`), an outage is never said,
@@ -387,7 +397,7 @@ from the first delay, and times what follows afresh.
 ### The store's clock
 
 `link.now()` returns epoch milliseconds on the store's clock. First use opens
-its existing socket (even without a subscription) and starts calibration;
+its socket (even without a subscription); every open socket calibrates, and
 subsequent calls are cheap local reads. With `@yaks/client`, use
 `client.wire.now()` on a client configured with a server URL.
 
@@ -404,9 +414,9 @@ subtracts server processing time from the round trip, estimates the offset
 NTP-style, and uses the least-delayed of the last eight trips. It samples each
 second initially, then every 30 seconds while connected. Its local epoch is
 anchored to `performance.now()`, so changing the page's wall clock does not
-corrupt measurements. Closing the Sync stops calibration; apps which never call
-`now()` send no clock probes. The box's `@yaks/api` server and yaks.app app
-stores implement the same exchange.
+corrupt measurements. Closing the Sync stops calibration. The same probes tell
+the wire its socket is alive (see the drops above). The box's `@yaks/api` server
+and yaks.app app stores implement the same exchange.
 
 Like NTP, this estimates rather than guarantees simultaneity: asymmetric network
 delay contributes error. It is not an HTTP `Date` header's second-granularity

@@ -320,6 +320,57 @@ test('a connection that held is reopened at once, one that did not backs off', a
   c.wire.close()
 })
 
+// A handover whose replacement socket opens and then carries nothing, as one
+// does when the laptop under it loses its network, is given up once it has
+// said nothing `quiet` after being asked the time; the next socket answers
+// every query again, and the page stays live.
+test('a reopened socket that never answers is replaced, and every query is answered again', async () => {
+  let srv = server()
+  srv.graph.apply([dal('r1'), { ...dal('r2'), recipe: { serves: 2 } }])
+  let silent = false
+  let c = client({
+    ...srv,
+    offer: (half) => {
+      if (!silent) srv.offer(half)
+    },
+    handler: (request) => {
+      if (!silent || new URL(request.url).pathname != '/ws') {
+        return srv.handler(request)
+      }
+      silent = false
+      return new Response(null, { status: 101 })
+    },
+  })
+  let asks = [
+    '.recipe',
+    '.recipe.serves>=3',
+    '.doc.title=Dal',
+    '.recipe&.count',
+  ]
+  let ids = asks.map((q) => c.wire.subscribe(q))
+  await c.idle()
+  c.pass(1000)
+  let ready = () => ids.map((id) => c.wire.ready(id))
+  assertEquals(ready(), ids.map(() => true))
+  silent = true
+  srv.sockets[0].close(1001) // its server hands over to a replacement
+  await c.idle()
+  assertEquals(ready(), ids.map(() => false))
+  c.pass(10_000)
+  await c.idle()
+  assertEquals(srv.sockets.length, 2)
+  assertEquals(ready(), ids.map(() => true))
+  let cook = client(srv)
+  cook.graph.apply([{ ...dal('r3'), recipe: { serves: 6 } }])
+  await cook.idle()
+  await c.idle()
+  assertEquals(comp(at(c.graph, 'r3'), 'recipe').serves, 6)
+  c.pass(60_000)
+  assertEquals(c.trouble, [])
+  c.wire.close()
+  cook.wire.close()
+})
+
 test('a write answered as moved opens a new socket at once', async () => {
   let srv = server()
   let sent = srv.handler
@@ -378,8 +429,9 @@ test('a subscription refused by the server is reported, not applied', async () =
 })
 
 // A wire over sockets driven by hand, so its server can stay away, or take a
-// connection and never answer on it, and its machine can lose its network.
-// It holds one query, answered and held a second before each script begins.
+// connection and never answer its query, and its machine can lose its
+// network. Its server tells the time, as a live one does. It holds one query,
+// answered and held a second before each script begins.
 let drops = () => {
   let now = 0
   let due: { at: number; fn: () => void }[] = []
@@ -390,7 +442,17 @@ let drops = () => {
   let said: unknown[] = []
   wire({
     url: 'http://drop.test',
-    connect: () => sockets[sockets.push(pair()) - 1].client,
+    connect: () => {
+      let p = pair()
+      sockets.push(p)
+      p.server.addEventListener('message', (e) => {
+        let { clock } = JSON.parse(String(e.data))
+        if (clock !== undefined) {
+          p.server.send(JSON.stringify({ clock, received: now, sent: now }))
+        }
+      })
+      return p.client
+    },
     time: () => now,
     timer: (fn, ms) => {
       due.push({ at: now + ms, fn })
@@ -431,6 +493,7 @@ let drops = () => {
     },
     back: () => {
       while (last().client.readyState != 0) fire()
+      last().server.emit('open')
       last().client.emit('open')
     },
     // No network: every attempt fails, as the server being away does.
@@ -494,7 +557,7 @@ for (
     ],
     [
       'drop:1001 back',
-      'it reopened after 0.0 s, and 1 of 1 queries are not answered again: .recipe',
+      'it reopened after 0.0 s, and 1 of 1 queries are not answered again: .recipe; the server last spoke 23.0 s ago',
     ],
   ] as const
 ) {

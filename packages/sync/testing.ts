@@ -129,8 +129,10 @@ export let boxGraph = (adopt = false): Graph =>
  * state, so a frame sent before `emit('open')` waits exactly as it would on a
  * WebSocket. */
 export type Fake = Socket & {
-  /** every message this side sent, parsed */
+  /** every message this side sent, parsed, but its clock probes */
   sent: unknown[]
+  /** the time each clock probe this side sent asked about */
+  asked: number[]
   /** fire an event at the listeners registered on this side; a close's data
    * is its close code */
   emit: (type: string, data?: unknown) => void
@@ -141,8 +143,12 @@ let fake = (): Fake => {
   let f: Fake = {
     readyState: 0,
     sent: [],
+    asked: [],
     send: (data) => {
-      f.sent.push(JSON.parse(data))
+      let m = JSON.parse(data)
+      if (typeof m?.clock == 'number' && Object.keys(m).length == 1) {
+        f.asked.push(m.clock)
+      } else f.sent.push(m)
     },
     close: (code) => {
       if (f.readyState == 3) return

@@ -53,7 +53,7 @@ test('socket clock calibrates, refines, holds through reconnect, and stops on cl
   })
   equal(w.now(), 1000) // opens without a subscription
   sockets[0].client.emit('open')
-  equal(sockets[0].client.sent, [{ clock: 1000 }])
+  equal(sockets[0].client.asked, [1000])
   time = 1060
   sockets[0].server.send(
     JSON.stringify({ clock: 1000, received: 1110, sent: 1150 }),
@@ -80,7 +80,7 @@ test('socket clock calibrates, refines, holds through reconnect, and stops on cl
   )
   equal(w.now(), 1990)
   w.close()
-  let sent = sockets[1].client.sent.length
+  let asked = sockets[1].client.asked.length
   for (let fn of due) fn()
-  equal(sockets[1].client.sent.length, sent)
+  equal(sockets[1].client.asked.length, asked)
 })

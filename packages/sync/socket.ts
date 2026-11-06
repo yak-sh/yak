@@ -16,6 +16,12 @@
 // this side is saying are said again first, since the server held them under
 // the connection that closed.
 //
+// A connection can also die without closing: a laptop that sleeps or loses
+// its network leaves a socket that reads as open and never hears another
+// word. So every open socket is asked the time (its clock probe, which the
+// server answers outside its frame queue), and one that has said nothing for
+// `quiet` after being asked is given up and replaced, as if it had closed.
+//
 // So a drop the wire comes back from is recovered, not lost: once the socket
 // is open again and every subscription has been answered again (the set as it
 // now stands, or a refusal, which is said on its own), nothing was missed.
@@ -137,6 +143,9 @@ export type WireOpts = {
   /** the longest reconnect delay in ms, and how long an outage may go
    * unresumed before it is reported (default: 30_000) */
   most?: number
+  /** how long in ms an open socket may say nothing after its clock probe
+   * before it is given up as dead and replaced (default: 10_000) */
+  quiet?: number
   /** whether this machine has a network (default: the browser's say, where
    * there is one) */
   network?: Network
@@ -168,8 +177,9 @@ export type Wire = {
    * the next connection is told what is being said as it stands (`again`).
    */
   relay: (bundles: Bundle[]) => void
-  /** Store epoch milliseconds; first use opens the socket and starts calibration.
-   * Until the first reply this is the local epoch; across outages it holds the offset. */
+  /** Store epoch milliseconds; first use opens the socket. Every open socket
+   * calibrates; until the first reply this is the local epoch, and across
+   * outages it holds the offset. */
   now: () => number
   /** whether the socket is open right now */
   connected: () => boolean
@@ -260,6 +270,7 @@ export let wire = (opts: WireOpts): Wire => {
   let timer = opts.timer ?? ((fn, ms) => setTimeout(fn, ms))
   let first = opts.wait ?? 250
   let most = opts.most ?? 30_000
+  let quiet = opts.quiet ?? 10_000
   let network = opts.network ?? browser()
 
   let asks = new Map<string, Ask>() // what each subscription asked for
@@ -267,6 +278,9 @@ export let wire = (opts: WireOpts): Wire => {
   let members = new Map<string, Set<Eid>>() // who is in each set
   let resetting = new Set<string>() // ids whose next frame is a reset
   let socket: Socket | null = null
+  let spoke = 0 // when the open socket last said anything
+  let words = 0 // how many messages it has said
+  let hangUp = () => {} // give the open socket up as dead
   let wait = first
   let retrying = false // the one timer — never a second
   let turn = 0 // the timer that is live; a network coming back retires it
@@ -287,24 +301,35 @@ export let wire = (opts: WireOpts): Wire => {
   let trip: number | undefined
   let rounds = 0
   let clockGeneration = 0
-  let clockTimer: ReturnType<typeof setTimeout> | undefined
+  let clockTimers = new Set<ReturnType<typeof setTimeout>>()
   let stopClock = () => {
     clockGeneration++
-    if (clockTimer !== undefined) clearTimeout(clockTimer)
-    clockTimer = undefined
+    for (let t of clockTimers) clearTimeout(t)
+    clockTimers.clear()
     trip = undefined
   }
+  let later = (fn: () => void, ms: number) => {
+    if (opts.timer) return opts.timer(fn, ms)
+    let t = setTimeout(() => {
+      clockTimers.delete(t)
+      fn()
+    }, ms)
+    clockTimers.add(t)
+  }
+  // The time, asked of every open socket: its answer calibrates the clock,
+  // and a socket that has said nothing `quiet` after it was asked is dead.
   let probe = () => {
-    if (!timing || closed || socket?.readyState != OPEN) return
+    if (closed || socket?.readyState != OPEN) return
+    let before = words
     trip = agreed.read()
     send({ clock: trip })
     let generation = clockGeneration
-    let next = () => {
+    later(() => {
       if (generation == clockGeneration) probe()
-    }
-    let ms = rounds++ < 7 ? 1000 : 30_000
-    if (opts.timer) opts.timer(next, ms)
-    else clockTimer = setTimeout(next, ms)
+    }, rounds++ < 7 ? 1000 : 30_000)
+    later(() => {
+      if (generation == clockGeneration && words == before) hangUp()
+    }, quiet)
   }
 
   let send = (msg: unknown) => {
@@ -364,7 +389,9 @@ export let wire = (opts: WireOpts): Wire => {
       secs(outage.opened - outage.at)
     }, and ${unanswered.length} of ${held.length} queries are not answered again: ${
       some.join(', ')
-    }${unanswered.length > some.length ? ', …' : ''}`
+    }${unanswered.length > some.length ? ', …' : ''}; the server last spoke ${
+      secs(agreed.read() - spoke)
+    } ago`
   }
 
   // Open, and every query answered since, with the set as it now stands or a
@@ -462,6 +489,12 @@ export let wire = (opts: WireOpts): Wire => {
       if (down) down.opened = opened
       waiting = []
       wait = first // the server is reachable: retry promptly after the next drop
+      spoke = opened
+      hangUp = () => {
+        if (socket != s) return
+        lost()
+        s.close()
+      }
       agreed.reset()
       rounds = 0
       probe()
@@ -546,6 +579,7 @@ export let wire = (opts: WireOpts): Wire => {
     }
     let pending: Promise<void> | undefined
     s.addEventListener('message', (e) => {
+      if (socket == s) spoke = agreed.read(), words++
       if (e.data instanceof Blob || pending) {
         let data = e.data
         pending = (pending ?? Promise.resolve()).then(async () => {
@@ -556,14 +590,15 @@ export let wire = (opts: WireOpts): Wire => {
         let next = pending
       } else message(e.data)
     })
-    s.addEventListener('close', (e) => {
+    // The socket is gone: it closed, or it stopped answering and was given up.
+    let lost = (code?: number) => {
       if (socket != s) return
       socket = null
       // An open socket closing begins an outage, and so does a failed
       // attempt, which is its first.
       let outage: Outage = down ?? {
         at: agreed.read(),
-        code: (e as CloseEvent).code,
+        code,
         tries: opened === undefined ? 1 : 0,
       }
       let begun = outage !== down
@@ -579,7 +614,8 @@ export let wire = (opts: WireOpts): Wire => {
         if (!refused.has(id)) opts.pending?.(id)
       }
       if (opened !== undefined) heard(false)
-    })
+    }
+    s.addEventListener('close', (e) => lost((e as CloseEvent).code))
   }
 
   return {
@@ -613,7 +649,6 @@ export let wire = (opts: WireOpts): Wire => {
       if (!closed && !timing) {
         timing = true
         open()
-        probe()
       }
       return agreed.now()
     },

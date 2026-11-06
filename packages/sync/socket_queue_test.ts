@@ -8,11 +8,11 @@ import { type Frame, wire } from './socket.ts'
 
 test('waiting relay patches replace older motion and preserve clears', () => {
   let socket = pair().client
-  let due: (() => void)[] = []
+  let due: { ms: number; fn: () => void }[] = []
   let w = wire({
     url: 'http://box.test',
     connect: () => socket,
-    timer: (fn) => due.push(fn),
+    timer: (fn, ms) => due.push({ ms, fn }),
     land: () => {},
     report: (err) => {
       throw err
@@ -27,10 +27,11 @@ test('waiting relay patches replace older motion and preserve clears', () => {
   w.relay([{ entity: { eid: 'a' }, pointing: null }])
   w.relay([{ entity: { eid: 'a' }, pointing: { x: 5 } }])
   assertEquals(socket.sent, [])
-  assertEquals(due.length, 1)
+  let flushes = due.filter((t) => t.ms == 16)
+  assertEquals(flushes.length, 1)
 
   socket.bufferedAmount = 0
-  due.shift()!()
+  flushes[0].fn()
   assertEquals(socket.sent, [{
     relay: [
       { entity: { eid: 'a' }, pointing: null },
