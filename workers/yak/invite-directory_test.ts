@@ -404,20 +404,33 @@ let resending = () => {
   return { press, sent, wrote }
 }
 let resent = resending()
+let marked = resending()
 let goneSince = resending()
+let elsewhere = resending()
 let mailedLink = await acceptLink(SECRET, { invite: 'inv-cy', to: 'sp' }, {})
-test('Send again mails a standing invitation again, and nothing for one gone', async () => {
-  let { press, sent, wrote } = resent
+test('Send again mails a standing invitation again', async () => {
+  let { press, sent } = resent
   assertEquals(await press('inv-cy'), null)
   assertEquals(sent.map((l) => [l.to, l.subject]), [[cy, SUBJECT]])
   assertStringIncludes(sent[0].body, mailedLink)
+})
+
+test('Send again records that the standing invitation was mailed', async () => {
+  let { press, wrote } = marked
+  await press('inv-cy')
   assert(wrote.some((b) => b.entity.eid == 'inv-cy' && b.invite))
 })
 
-test('Send again sends nothing for an invitation gone or in another space', async () => {
+test('Send again sends nothing for an invitation gone', async () => {
   let { press, sent } = goneSince
   let gone = { say: 'That invitation is no longer waiting.', no: true }
   assertEquals(await press('inv-gone'), gone)
+  assertEquals(sent.length, 0)
+})
+
+test('Send again sends nothing for an invitation in another space', async () => {
+  let { press, sent } = elsewhere
+  let gone = { say: 'That invitation is no longer waiting.', no: true }
   assertEquals(await press('inv-far'), gone)
   assertEquals(sent.length, 0)
 })
