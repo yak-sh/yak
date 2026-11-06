@@ -2087,9 +2087,13 @@ let conjuncts = (ctx: Ctx, clauses: Clause[]): Cond[] => {
     let x = rungs(ctx, c)
     return x?.kind == 'and' ? x.clauses : [x ?? c]
   })
+  // A component the reader sees only some rows of is tested row by row: its
+  // stored shape says what is held, not what this reader may see. The rest
+  // still select their owners by shape.
+  let masked = (comp: string) => !!ctx.archetypes?.masked?.has(comp)
   for (let c of cs) {
     let f = facetOf(ctx, c)
-    if (!f) rest.push(c)
+    if (!f || masked(f.comp)) rest.push(c)
     else (f.present ? all : none).push(f.comp)
   }
   // The archetypes a shape names are only those wearing what a value test
@@ -2186,7 +2190,8 @@ let conjuncts = (ctx: Ctx, clauses: Clause[]): Cond[] => {
       ...absent ? [absent] : [],
       ...cs.filter((c) => {
         let f = facetOf(ctx, c)
-        return !f || (f.present ? !required.has(f.comp) : !absent)
+        return !f || masked(f.comp) ||
+          (f.present ? !required.has(f.comp) : !absent)
       }).map((c) => conditions.get(c) ?? clause(ctx, c)),
     ]
   }
@@ -2337,6 +2342,22 @@ let clause = (ctx: Ctx, c: Clause): Cond => {
 let UNREACHED = new Set(['near', 'edges'])
 let find = <T extends Clause>(cs: Clause[], kind: string): T | undefined =>
   cs.find((c) => c.kind == kind) as T | undefined
+
+// The direction a select orders its owners by their key in, when that is its
+// whole order: the order shape candidates can be read in themselves.
+let ownerOrder = (
+  order: Cond[] | undefined,
+  ctx: Ctx,
+): 'asc' | 'desc' | undefined => {
+  if (order?.length != 1 || order[0].t != 'raw') return
+  let { sql } = order[0]
+  let key = ctx.d.ownerKey('entity')
+  return sql == key || sql == `${key} asc`
+    ? 'asc'
+    : sql == `${key} desc`
+    ? 'desc'
+    : undefined
+}
 
 // Whether one value of a mandatory equality seeks an index whose next column
 // is the statement's order, and the statement keeps a page: that seek reads
@@ -2872,6 +2893,8 @@ let indexedRelation = (
     let drives = (j: Join) =>
       ctx.shapeCandidates && ctx.present &&
       j.src.t == 'raw' && j.src.sql == joining(ctx, ctx.present)
+    let alias = ctx.candidates.whole ? 'entity' : '__candidates'
+    let ordered = ctx.shapeCandidates && ownerOrder(s.order, ctx)
     return {
       ...s,
       // A planned presence spine elided its own predicate while binding.
@@ -2882,12 +2905,18 @@ let indexedRelation = (
           ? [probed(ctx, ctx.present)]
           : [],
       ),
+      // Owners in the answer's order sort their keys alone, read from the
+      // shape's covering index. The joined rows then follow that order, so a
+      // limit stops the visibility and value tests at the page; sorted after
+      // the join, every candidate pays them first. `limit -1` keeps SQLite
+      // from flattening the subquery, which would drop its order.
       from: raw(
-        `(${ctx.candidates.sql}) as "${
-          ctx.candidates.whole ? 'entity' : '__candidates'
-        }"`,
+        `(${ctx.candidates.sql}${
+          ordered ? ` order by "entity"."id" ${ordered} limit -1` : ''
+        }) as "${alias}"`,
         ctx.candidates.params,
       ),
+      order: ordered ? [raw(`"${alias}"."id" ${ordered}`)] : s.order,
       joins: [
         ...ctx.candidates.whole ? [] : [{
           how: 'cross',
@@ -4647,7 +4676,15 @@ let visible = (
       visibility.components?.[comp]
         ? `${source(comp)} as ${quoted(comp)}`
         : base.owned?.(comp) ?? base.table(comp),
-    archetypeSource: masked ? undefined : base.archetypeSource,
+    // A shape names unmasked components only (the catalog declines the rest),
+    // so the stored archetype answers it exactly. The candidates it seeks
+    // still join the scoped spine, which keeps the reader's visibility.
+    archetypeSource: masked && base.archetypeSource
+      ? (v) =>
+        `(select "id", "archetype" as "__stored_archetype" from ${
+          base.archetypeSource!(v)
+        }) as "entity"`
+      : base.archetypeSource,
     archetype: masked
       ? (owner) =>
         owner == null
@@ -4675,19 +4712,20 @@ let visible = (
   )
   if (tally) return { opts, lower: () => tally }
   let catalog = heard.archetypes
+  let hidden = new Set(Object.keys(visibility.components ?? {}))
   let archetypes: ArchetypeSet | undefined = catalog
-    ? Object.defineProperty(
+    ? Object.defineProperties(
       (p: Presence) =>
-        [...p.all ?? [], ...p.none ?? []].some((name) =>
-            visibility.components?.[name]
-          )
+        [...p.all ?? [], ...p.none ?? []].some((name) => hidden.has(name))
           ? undefined
           : catalog(p),
-      'held',
-      { get: () => catalog.held },
+      {
+        held: { get: () => catalog.held },
+        masked: { value: hidden },
+      },
     )
     : undefined
-  let scope = { masked: Object.keys(visibility.components ?? {}) }
+  let scope = { masked: [...hidden] }
   let inner = prepared(
     ast,
     vocab,

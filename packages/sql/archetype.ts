@@ -5,13 +5,16 @@ import type { Presence } from '@yaks/vocab'
  * their rows in the entity table have. Returning undefined declines, because
  * the catalog is incomplete; returning [] means no archetype matches. `held`
  * says the snapshot is in memory, so asking reads no descriptor rows: a plan
- * that can do without the catalog asks it only then.
+ * that can do without the catalog asks it only then. `masked` names the
+ * components a reader's visibility hides some rows of: a stored shape cannot
+ * settle their presence, so a test naming one declines, and a plan keeps
+ * those tests as row conditions beside the shape of the rest.
  */
 export type ArchetypeSet =
   & ((
     predicate: Presence,
   ) => readonly number[] | undefined)
-  & { held?: boolean }
+  & { held?: boolean; masked?: ReadonlySet<string> }
 
 /** Anything that can report which archetype eids satisfy a presence test — the
  * one thing this binding needs, so the compiler never has to import the cache's
