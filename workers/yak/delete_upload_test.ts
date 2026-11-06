@@ -89,7 +89,6 @@ let cookbook = graph({ vocab, storage: rows, plugins: [guard] })
 await kernel.apply([{ entity: { eid: app.eid }, access: { mode: 'open' } }], {
   trusted: true,
 })
-let read = (q: string) => Promise.resolve(rows.read(q))
 let as = (who: string) => ({
   upload: async (text: string) => {
     let sha = sha256(text)
@@ -126,6 +125,10 @@ await kernel.apply([{ entity: { eid: bun.sha }, $delete: true }], {
 let held = (...uploads: { sha: string }[]) =>
   rows.get(uploads.map((upload) => upload.sha), ['blob'])
     .filter((row) => row.blob).map((row) => row.entity.eid)
+let serveRows: Bundle[]
+let serving = new Map<string, ReturnType<typeof matcher>>()
+let read = (q: string) =>
+  Promise.resolve((serving.get(q) ?? matcher(q, vocab))(serveRows))
 let served = async (upload: { sha: string; eid: string }, of = app) =>
   (await servable(read, of, upload.sha, upload.eid))?.address ?? null
 
@@ -168,3 +171,10 @@ await returned.again()
 test('the same bytes sent again are served again', async () => {
   assertEquals(await served(returned), returned.sha)
 })
+
+// The serving door reads a stable snapshot, independent of the guard's writes.
+serveRows = rows.read('.entity')
+for (let upload of [bread, bun, returned]) {
+  let q = `.entity.eid=${upload.eid} .representation|${naming(upload.sha)}`
+  serving.set(q, matcher(q, vocab))
+}

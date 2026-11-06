@@ -3,10 +3,8 @@
 import { test } from '@yaks/testing'
 import { assertEquals } from '@std/assert'
 import type { App, Space } from './directory.ts'
-import type { Env } from './env.ts'
-import { USES } from './door.ts'
-import { queried, vocabularyAnswer } from './page-graph.ts'
-import type { Who } from './session.ts'
+import { type Door, USES } from './door.ts'
+import { queryFrom, vocabularyAnswer } from './page-graph.ts'
 
 let space = { slug: 'page-words' } as Space
 let app = {
@@ -17,16 +15,47 @@ let app = {
   store: null,
   version: 1,
 } as App
-let who = { person: null, role: null } as Who
-
-// A store namespace whose every request is answered by `answer`.
-let stub = (answer: (req: Request) => Response) =>
-  ({
-    STORE: {
-      idFromName: (name: string) => name,
-      get: () => ({ fetch: (req: Request) => Promise.resolve(answer(req)) }),
+// The store's consume boundary supplies decoded rows without a runtime body
+// stream. Every request, including a fallback, still passes through this door.
+let door = (answers: Response[]) => {
+  let asked: string[] = []
+  let store: Door = Object.assign(
+    () => {
+      throw new Error('a response must be consumed')
     },
-  }) as unknown as Env
+    {
+      consume: async <T>(
+        path: string,
+        read: (response: Response) => T | Promise<T>,
+      ) => {
+        asked.push(path)
+        return await read(answers.shift()!)
+      },
+    },
+  )
+  return { store, asked }
+}
+let answer = (rows: unknown, uses?: string, status = 200) => {
+  let cancelled = false
+  return {
+    response: {
+      ok: status >= 200 && status < 300,
+      status,
+      headers: new Headers(uses === undefined ? {} : { [USES]: uses }),
+      body: {
+        cancel: () => {
+          cancelled = true
+          return Promise.resolve()
+        },
+      },
+      json: () => Promise.resolve(rows),
+    } as unknown as Response,
+    cancelled: () => cancelled,
+  }
+}
+let unexpectedHome = () => {
+  throw new Error('own words have no home to read')
+}
 
 let titles = (rows: unknown) =>
   (rows as { doc: { title: string } }[]).map((r) => r.doc.title)
@@ -44,37 +73,42 @@ test('page vocabulary preserves a Store refusal', async () => {
   assertEquals(await response.json(), failed)
 })
 
-let ownAsked: string[] = []
-let ownAnswer = Response.json(
-  [{ entity: { eid: 'n' }, doc: { title: 'Hi' } }],
-  {
-    headers: { [USES]: '{}' },
-  },
-)
-let ownEnv = stub((req) => {
-  ownAsked.push(new URL(req.url).pathname)
-  return ownAnswer
-})
+let rows = [{ entity: { eid: 'n' }, doc: { title: 'Hi' } }]
+let own = door([answer(rows, '{}').response])
 test('a page query of its own words reaches its store once', async () => {
-  assertEquals(titles(await queried(ownEnv, space, app, who, '.doc')), ['Hi'])
-  assertEquals(ownAsked, ['/query'])
-})
-
-// A store still on the code before it says which words it uses only at
-// `/uses`, and is asked the way it was then.
-let legacyAsked: string[] = []
-let legacyAnswers = [
-  Response.json([{ entity: { eid: 'n' }, doc: { title: 'Hi' } }]),
-  Response.json({}),
-  Response.json([{ entity: { eid: 'n' }, doc: { title: 'Hi' } }]),
-]
-let legacyEnv = stub((req) => {
-  legacyAsked.push(new URL(req.url).pathname)
-  return legacyAnswers.shift()!
-})
-test('a page query answers from a store that does not say its uses', async () => {
-  assertEquals(titles(await queried(legacyEnv, space, app, who, '.doc')), [
+  assertEquals(titles(await queryFrom(own.store, '.doc', unexpectedHome)), [
     'Hi',
   ])
-  assertEquals(legacyAsked, ['/query', '/uses', '/query'])
+  assertEquals(own.asked, ['/query?q=.doc&listing=1&uses=1'])
+})
+
+// An older store says which words it uses only at `/uses`.
+let unmarked = answer(rows)
+let legacy = door([
+  unmarked.response,
+  answer({}).response,
+  answer(rows).response,
+])
+test('a page query answers from a store that does not say its uses', async () => {
+  assertEquals(titles(await queryFrom(legacy.store, '.doc', unexpectedHome)), [
+    'Hi',
+  ])
+  assertEquals(legacy.asked, [
+    '/query?q=.doc&listing=1&uses=1',
+    '/uses',
+    '/query?q=.doc&listing=1',
+  ])
+  assertEquals(unmarked.cancelled(), true)
+})
+
+let homed = door([answer(null, '{"recipe":"cookbook"}', 204).response])
+test('a page query of borrowed words follows the homes its store names', async () => {
+  let named: Record<string, string> | undefined
+  let result = await queryFrom(homed.store, '.recipe', (uses) => {
+    named = uses
+    return Promise.resolve(rows)
+  })
+  assertEquals(result, rows)
+  assertEquals(named, { recipe: 'cookbook' })
+  assertEquals(homed.asked, ['/query?q=.recipe&listing=1&uses=1'])
 })

@@ -89,13 +89,17 @@ let shellCall = {
   name: 'shell',
   args: JSON.stringify({ command: 'yak app_list' }),
 }
+let shellOutput = await shell.run({ command: 'yak app_list' })
 let shellRuns = new Map([[
   shell.name,
-  async (args: Record<string, unknown>) => [{
-    entity: { eid: '$said' },
-    output: { source: shellCall.id },
-    content: { body: await shell.run(args) },
-  }],
+  (args: Record<string, unknown>) => {
+    assertEquals(args, { command: 'yak app_list' })
+    return Promise.resolve([{
+      entity: { eid: '$said' },
+      output: { source: shellCall.id },
+      content: { body: shellOutput },
+    }])
+  },
 ]])
 test('the container holds a placeholder, never the token, and neither reaches the transcript', async () => {
   let box = transcript.box

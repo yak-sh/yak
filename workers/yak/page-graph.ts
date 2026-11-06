@@ -5,7 +5,7 @@ import { listed, type Row } from './listing.ts'
 import { type App, appStore, directory, type Space } from './directory.ts'
 import * as dirPart from './directory.ts'
 import { copyOf } from './directory-copy.ts'
-import { USES } from './door.ts'
+import { type Door, USES } from './door.ts'
 import { bound, type Env } from './env.ts'
 import { sandboxed } from './installed.ts'
 import { answered, answeredBody, metaOf } from './meta.ts'
@@ -17,17 +17,19 @@ import { mode, reads } from '@yaks/member'
 
 export let local = (app: App) => app.scope == 'store' || sandboxed(app)
 
+let usesAnswer = async (r: Response) => {
+  if (!r.ok) {
+    await r.body?.cancel()
+    return {} as Record<string, string>
+  }
+  return await r.json() as Record<string, string>
+}
+
 export let usesOf = (env: Env, space: Space, app: App) => {
   if (local(app)) {
     return Promise.resolve({} as Record<string, string>)
   }
-  return appStore(env.STORE, space, app).consume('/uses', async (r) => {
-    if (!r.ok) {
-      await r.body?.cancel()
-      return {} as Record<string, string>
-    }
-    return await r.json() as Record<string, string>
-  })
+  return appStore(env.STORE, space, app).consume('/uses', usesAnswer)
 }
 
 let appsAt = async (env: Env, space: Space, slugs: string[]) => {
@@ -105,17 +107,17 @@ export let reading = async (
 // (graph.ts `#paged`), so a line naming one comes back unanswered and is
 // composed from the store and those homes. A store still on the code before
 // that says nothing, and is asked the way it was then.
-export let queried = async (
-  env: Env,
-  space: Space,
-  app: App,
-  who: Who,
+export let queryFrom = async (
+  store: Door,
   line: string,
-  live = false,
-  headers: Record<string, string> = {},
+  borrowed: (uses: Record<string, string>) => Promise<unknown>,
+  { local = false, live = false, headers = {} }: {
+    local?: boolean
+    live?: boolean
+    headers?: Record<string, string>
+  } = {},
 ) => {
-  let store = appStore(env.STORE, space, app, env)
-  let heard = local(app) ? null : await store.consume(
+  let heard = local ? null : await store.consume(
     `/query?q=${encodeURIComponent(line)}${
       live ? '&live=1' : ''
     }&listing=1&uses=1`,
@@ -129,14 +131,43 @@ export let queried = async (
       return { rows: await r.json() as unknown }
     },
     {},
-    { ...vouched(who), ...headers },
+    headers,
   )
   if (heard && 'rows' in heard) return shown(heard.rows, line)
-  let graph = heard
-    ? await homed(env, space, app, who, heard.uses)
-    : await sources(env, space, app, who)
-  return reading(env, graph, line, live, headers)
+  let uses = heard
+    ? heard.uses
+    : local
+    ? {}
+    : await store.consume('/uses', usesAnswer)
+  if (borrows(line, uses)) return borrowed(uses)
+  return shown(
+    await metaOf(store, headers).query(line, { live, listing: true }),
+    line,
+  )
 }
+
+export let queried = (
+  env: Env,
+  space: Space,
+  app: App,
+  who: Who,
+  line: string,
+  live = false,
+  headers: Record<string, string> = {},
+) =>
+  queryFrom(
+    appStore(env.STORE, space, app, env),
+    line,
+    async (uses) =>
+      reading(
+        env,
+        await homed(env, space, app, who, uses),
+        line,
+        live,
+        headers,
+      ),
+    { local: local(app), live, headers: { ...vouched(who), ...headers } },
+  )
 
 export let vocabularyAnswer = async (
   response: Response,
