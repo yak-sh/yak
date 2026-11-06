@@ -3004,11 +3004,13 @@ export class Store {
   #moves = (): Rule[] =>
     [
       ...this.#rules,
-      ...(!ownStore(this.#get('name') ?? '') ? [sessionMove()] : []),
+      sessionMove(),
       ...(this.#lensMove ? [this.#lensMove] : []),
     ]
       .filter((r) =>
-        (!r.stores || r.stores.includes(this.#get('name') ?? '')) &&
+        (r.stores == 'apps'
+          ? !ownStore(this.#get('name') ?? '')
+          : !r.stores || r.stores.includes(this.#get('name') ?? '')) &&
         !r.core?.some((comp) =>
           meant(this.#get('vocab')).$defs?.[comp]?.component === true
         )

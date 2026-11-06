@@ -52,6 +52,7 @@ import { holdEmptyRule } from './hold-move.ts'
 import { phoneRule } from './phone-move.ts'
 import { operatorNameRule } from './operator-name.ts'
 import { sellerRule } from './seller-move.ts'
+import { describedRule } from './described-move.ts'
 /** A rule's name: where its stamp is kept in a store's memory, and the
  * `BOUNDARIES` entry its live release adds. */
 export type Mark = `yak/store/${string}`
@@ -60,8 +61,9 @@ export type MoveContext = { store: string; app?: string; space?: string }
 
 export type Rule = {
   mark: Mark
-  /** Only these stores owe or rehearse this rule; absent means every store. */
-  stores?: string[]
+  /** Only these stores owe or rehearse this rule, or only the app stores;
+   * absent means every store. */
+  stores?: string[] | 'apps'
   /** These components must belong to the platform, never this app's declaration. */
   core?: string[]
   /** The rows still in the old shape, naming what `move` reads. */
@@ -182,6 +184,7 @@ export let RULES: Rule[] = [
   operatorNameRule,
   phoneRule,
   sellerRule,
+  describedRule,
 ]
 
 /** How far one rule got in one store. `after` is the last row it moved past;

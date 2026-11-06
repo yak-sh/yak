@@ -37,6 +37,7 @@ export let sessionBridge = () => compile(sessionRows(), { [sessionPackage]: 0 })
 export let sessionMove = (): import('./mover.ts').Rule => ({
   mark: 'yak/store/session-sending/2' as import('./mover.ts').Mark,
   live: 'apps',
+  stores: 'apps',
   source: sessionSource,
   drop: ['input', 'instructions', 'window', 'tools'].map((p) => `using.${p}`),
   find: sessionBridge().find(),
