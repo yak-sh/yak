@@ -560,9 +560,15 @@ let compaction = async (o: {
   let { sizes, results } = await weigh(o.said)
   // Text estimates scaled to the provider's count where there is one.
   let scale = counted && sum(sizes) > 0 ? (weight - o.fixed) / sum(sizes) : 1
-  let keep = o.force
-    ? Math.max(0, most / 2 - o.fixed - 4096)
-    : Math.max(most / 2, weight - o.fixed - limit(o.reads, 0.75))
+  // What the kept lines may weigh: half the limit less what every request
+  // carries, so a heavy fixed part cuts deeper rather than keeping every line
+  // but the oldest; and at least enough that the cut fits the summarizer's
+  // own window.
+  let room = most / 2 - o.fixed - (o.force ? 4096 : 0)
+  let keep = Math.max(
+    0,
+    o.force ? room : Math.max(room, weight - o.fixed - limit(o.reads, 0.75)),
+  )
   let chunk = prefix(o.said, sizes.map((n) => n * scale), keep)
   return { chunk, results }
 }

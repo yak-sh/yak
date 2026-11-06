@@ -695,6 +695,44 @@ test('a transcript compacts at half its model’s window, not before', async () 
   assertEquals(summarizer.asked.length, 1)
 })
 
+test('a heavy fixed part makes a cut summarize the newest asks, not only the oldest line', async () => {
+  let g = world()
+  await windowed(g, 100_000)
+  // About 35k tokens of tools every request carries, beside 20k of lines:
+  // over half the window, though the lines alone fit half its limit.
+  await g.apply([{
+    entity: { eid: toolEid('manual') },
+    tool: { name: 'manual', description: 'm'.repeat(140_000) },
+  }])
+  let manual = {
+    name: 'manual',
+    description: 'm'.repeat(140_000),
+    parameters: { type: 'object', properties: {} },
+    run: () => 'read',
+  }
+  await appendEntry(g, ids.s, 'Just checking that you are still connected.')
+  await appendEntry(
+    g,
+    ids.s,
+    'Add a logo to the wedding app. ' + 'w'.repeat(80_000),
+  )
+  let summarizer = counting(() => says('sum', 'Adding a logo.'))
+  assertEquals(
+    await rest(g, ids.s, {
+      model: counting(() => says('r', 'ok')).model,
+      tools: [manual],
+      mint,
+      compactModel: { model: summarizer.model, name: 'fake-1' },
+    }),
+    'settled',
+  )
+  assertEquals(summarizer.asked.length, 1)
+  assertEquals(
+    JSON.stringify(summarizer.asked[0].items).includes('Add a logo'),
+    true,
+  )
+})
+
 test('a transcript of huge tool results is not compacted again on the next steps', async () => {
   let g = world()
   let window = 40_000
