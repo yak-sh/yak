@@ -36,4 +36,4 @@ fi
 pnpm --version
 
 echo "Build commit: $(git rev-parse HEAD)"
-deno run -A packages/cli/dependencies.ts
+bin/workspace-dependencies

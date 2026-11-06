@@ -35,6 +35,6 @@ jobs:
         run: sw_vers; ls -l /usr/bin/perl /bin/sh /bin/kill; perl -MPOSIX=setsid -e 1
       - uses: pnpm/action-setup@v4
       - name: workspace dependencies
-        run: deno run -A packages/cli/dependencies.ts
+        run: bin/workspace-dependencies
       - name: '@yaks/process tests'
         run: deno run -A packages/testing/main.ts --all --verbose packages/process
