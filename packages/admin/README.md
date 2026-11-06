@@ -73,6 +73,19 @@ yak auth yaks.app --as reviewer@bot.yak.sh
 yak admin query reviewer/notes '.doc' --as reviewer
 ```
 
+## Moving a far store
+
+`relocate` says the colo each store's object stands in and marks one outside
+eastern North America far, since the kernel makes every call a store answers.
+`--move` moves each far app's store to a new object beside the kernel
+(workers/yak/relocate.ts), and reads every entity it held again through the new
+one.
+
+```sh
+yak admin relocate --as admin@bot.yak.sh
+yak admin relocate ada --move --as admin@bot.yak.sh
+```
+
 ## Erasing a test account
 
 `erase` removes a test account from yaks.app for good: the spaces where it is an

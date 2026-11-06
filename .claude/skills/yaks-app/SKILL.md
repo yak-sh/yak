@@ -50,7 +50,7 @@ and setup; this is the map and the feel.
   far from it (`/api/relocate?where=<handle>&colo=IAD` says where one stands) moves
   to a new object through relocate.ts: `?store=<handle>&prepare=<new>`, then
   `&to=<new>`, which hands every request on and names the new object in
-  `app.store`.
+  `app.store`. `yak admin relocate [--move]` does it for every far app.
 - **The directory**: the store named `yak/platform` on the platform's own
   vocabulary (`directory.ts`, `meta.ts`): spaces, apps, members, deploys. Its
   file stands in the object `PLATFORM_OBJECT` (`door.ts`), near Chicago; an

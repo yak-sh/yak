@@ -30,12 +30,14 @@ import {
   feeNow,
   linkFor,
   moveIn,
+  relocateIn,
   renewing,
   rpc,
   saidBy,
   setBudget,
   setFee,
   setTunnel,
+  standing,
   storeApply,
   storeQuery,
   storesNow,
@@ -46,6 +48,7 @@ import {
 } from './api.ts'
 import { deploys, rollback, table } from './deploys.ts'
 import { select, sweep } from './move.ts'
+import { relocate } from './relocate.ts'
 import { push, type PushProgress, read, versions } from './push.ts'
 import { errors, tail } from './logs.ts'
 import { revert } from './revert.ts'
@@ -481,6 +484,34 @@ export let runs = (
             stores,
             ask: (store) => moveIn(at.bearer, store, rehearse),
             pace,
+            out,
+            stopping: host.stopping,
+          }),
+        ),
+      ]
+    }),
+
+    // Where every store stands, and with --move each app's store far from
+    // the kernel moved beside it (./relocate.ts). The platform's act, with
+    // authorization checked by the server.
+    admin_relocate: verb(async (call) => {
+      let a = argsOf(call)
+      let at = await acting(a)
+      let stores = select(await storesNow(at.bearer), word(a, 'where'))
+      let eids = async (where: string) =>
+        (await storeQuery(at.bearer, where, ['.entity']) as Bundle[])
+          .map((b) => String((b.entity as Comp).eid))
+      return [
+        said(
+          call,
+          await relocate({
+            stores,
+            standing: (store) => standing(at.bearer, store),
+            eids,
+            prepare: (store, to) =>
+              relocateIn(at.bearer, store, { prepare: to }),
+            hand: (store, to) => relocateIn(at.bearer, store, { to }),
+            move: a.move === true,
             out,
             stopping: host.stopping,
           }),

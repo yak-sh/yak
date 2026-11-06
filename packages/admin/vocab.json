@@ -187,6 +187,31 @@
         "where"
       ]
     },
+    "admin_relocate": {
+      "tool": true,
+      "noun": "admin",
+      "verb": "relocate",
+      "title": "Say where every yaks.app store stands, and move an app's far store beside the kernel",
+      "description": "Cloudflare never moves a Durable Object, and the kernel makes every call a store answers, so a store far from it waits on each. This wakes every store in turn and prints the colo its object stands in, marking one outside eastern North America far. --move moves each far app's store to a new object beside the kernel: copied while it serves, handed on in a short hold, the directory then naming the new object, and every entity it held read again through the new one; a missing entity stops the sweep. A space or space/app narrows it. The platform’s act, so the selected account must have the platform role.\n\n  yak admin relocate --as admin@bot.yak.sh\n  yak admin relocate ada --move --as admin@bot.yak.sh",
+      "input": {
+        "where": {
+          "type": "string",
+          "description": "only this space, or space/app"
+        },
+        "move": {
+          "type": "boolean",
+          "description": "move each far app's store beside the kernel"
+        },
+        "as": {
+          "type": "string",
+          "description": "the owner’s yaks.app connection, matched by whole address or the part before @; list the owner’s connections with connection_list(owner), or yak connection list <owner> (owner id or name), and use a yaks.app entry’s account. Default is your own email, else the oldest connection"
+        }
+      },
+      "openWorld": true,
+      "positional": [
+        "where"
+      ]
+    },
     "admin_erase": {
       "tool": true,
       "noun": "admin",

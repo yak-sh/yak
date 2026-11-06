@@ -295,6 +295,43 @@ export let moveIn = (
     { method: 'POST' },
   ))
 
+/** A store's move to a new object (workers/yak/sweep.ts `relocating`): where
+ * an object stands, an app's store copied to a new one while it serves, and
+ * every request then handed on, the directory naming the new object. */
+export let RELOCATE = '/api/relocate'
+
+// The door answers where an object stands only from a Worker in the colo the
+// caller names, which is how it places one nobody has reached; a Worker in
+// another colo says which it is, and that colo is named again.
+let colo = 'IAD'
+
+/** The colo the object `store` names stands in, waking it if it sleeps. */
+export let standing = async (session: string, store: string) => {
+  for (let tries = 0;; tries++) {
+    let r = await sent(
+      apex(`${RELOCATE}?${new URLSearchParams({ where: store, colo })}`),
+      session,
+    )
+    let worker = r.headers.get('cf-ray')?.split('-')[1]
+    if (r.status != 409 || !worker || tries == 3) {
+      return (await said<{ object: string }>(Promise.resolve(r))).object
+    }
+    await r.body?.cancel()
+    colo = worker
+  }
+}
+
+export let relocateIn = (
+  session: string,
+  store: string,
+  step: { prepare: string } | { to: string },
+) =>
+  said<Record<string, unknown>>(sent(
+    apex(`${RELOCATE}?${new URLSearchParams({ store, ...step })}`),
+    session,
+    { method: 'POST' },
+  ))
+
 /** A test account's end (workers/yak/sweep.ts): what it would take, or it gone. */
 export type Closed = {
   address: string
