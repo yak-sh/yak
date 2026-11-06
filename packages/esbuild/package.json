@@ -1,6 +1,6 @@
 {
   "name": "@yaks/esbuild",
-  "version": "0.2.23",
+  "version": "0.2.27",
   "type": "module",
   "exports": {
     ".": "./mod.ts",

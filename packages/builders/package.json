@@ -32,7 +32,7 @@
   "devDependencies": {
     "@std/assert": "npm:@jsr/std__assert@^1.0.0",
     "@yaks/blob": "0.2.23",
-    "@yaks/cli": "0.2.26",
+    "@yaks/cli": "0.2.27",
     "@yaks/doc": "0.2.24",
     "@yaks/model": "0.2.26",
     "@yaks/ram": "0.2.24",

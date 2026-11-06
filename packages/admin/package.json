@@ -12,11 +12,11 @@
   "description": "Platform operations on yaks.app as a selected connection: sign-in links, fee, stores, deploys, logs, rollback and revert. Unpublished: installed into the box's own yak.",
   "dependencies": {
     "@yaks/api": "0.2.24",
-    "@yaks/cli": "0.2.26",
+    "@yaks/cli": "0.2.27",
     "@yaks/connections": "0.2.23",
     "@yaks/file": "0.2.23",
     "@yaks/fp": "0.2.23",
-    "@yaks/git": "0.2.26",
+    "@yaks/git": "0.2.27",
     "@yaks/graph": "0.2.25",
     "@yaks/host": "0.2.25",
     "@yaks/id": "0.2.23",
@@ -24,7 +24,7 @@
     "@yaks/process": "0.2.26",
     "@yaks/secrets": "0.2.23",
     "@yaks/tools": "0.2.24",
-    "@yaks/tracker": "0.2.23",
+    "@yaks/tracker": "0.2.27",
     "@yaks/vocab": "0.2.23"
   },
   "devDependencies": {

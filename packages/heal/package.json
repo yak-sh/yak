@@ -1,6 +1,6 @@
 {
   "name": "@yaks/heal",
-  "version": "0.2.25",
+  "version": "0.2.27",
   "type": "module",
   "exports": {
     ".": "./mod.ts",
@@ -27,7 +27,7 @@
     "@yaks/provenance": "0.2.23",
     "@yaks/query": "0.2.23",
     "@yaks/tools": "0.2.24",
-    "@yaks/tracker": "0.2.23",
+    "@yaks/tracker": "0.2.27",
     "@yaks/ui": "0.2.24",
     "@yaks/vocab": "0.2.23",
     "preact": "10.29.7"

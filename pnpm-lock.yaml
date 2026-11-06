@@ -405,7 +405,7 @@ importers:
         specifier: 0.2.24
         version: link:../api
       '@yaks/cli':
-        specifier: 0.2.26
+        specifier: 0.2.27
         version: link:../cli
       '@yaks/connections':
         specifier: 0.2.23
@@ -417,7 +417,7 @@ importers:
         specifier: 0.2.23
         version: link:../fp
       '@yaks/git':
-        specifier: 0.2.26
+        specifier: 0.2.27
         version: link:../git
       '@yaks/graph':
         specifier: 0.2.25
@@ -441,7 +441,7 @@ importers:
         specifier: 0.2.24
         version: link:../tools
       '@yaks/tracker':
-        specifier: 0.2.23
+        specifier: 0.2.27
         version: link:../tracker
       '@yaks/vocab':
         specifier: 0.2.23
@@ -667,7 +667,7 @@ importers:
         specifier: 0.2.24
         version: link:../canvas
       '@yaks/cli':
-        specifier: 0.2.26
+        specifier: 0.2.27
         version: link:../cli
       '@yaks/client':
         specifier: 0.2.24
@@ -815,7 +815,7 @@ importers:
         specifier: 0.2.25
         version: link:../embedding
       '@yaks/git':
-        specifier: 0.2.26
+        specifier: 0.2.27
         version: link:../git
       '@yaks/goal':
         specifier: 0.2.23
@@ -924,7 +924,7 @@ importers:
         specifier: 0.2.23
         version: link:../blob
       '@yaks/cli':
-        specifier: 0.2.26
+        specifier: 0.2.27
         version: link:../cli
       '@yaks/doc':
         specifier: 0.2.24
@@ -1019,7 +1019,7 @@ importers:
         specifier: 0.2.24
         version: link:../fts
       '@yaks/git':
-        specifier: 0.2.26
+        specifier: 0.2.27
         version: link:../git
       '@yaks/graph':
         specifier: 0.2.25
@@ -1070,7 +1070,7 @@ importers:
         specifier: 0.2.23
         version: link:../trace
       '@yaks/tracker':
-        specifier: 0.2.23
+        specifier: 0.2.27
         version: link:../tracker
       '@yaks/tui':
         specifier: 0.2.24
@@ -1110,7 +1110,7 @@ importers:
         specifier: 0.2.24
         version: link:../kernel
       '@yaks/mcp':
-        specifier: 0.2.23
+        specifier: 0.2.27
         version: link:../mcp
       '@yaks/persona':
         specifier: 0.2.23
@@ -1214,7 +1214,7 @@ importers:
         specifier: 0.2.23
         version: link:../file
       '@yaks/git':
-        specifier: 0.2.26
+        specifier: 0.2.27
         version: link:../git
       '@yaks/graph':
         specifier: 0.2.25
@@ -1275,7 +1275,7 @@ importers:
   packages/connections:
     dependencies:
       '@yaks/cli':
-        specifier: 0.2.26
+        specifier: 0.2.27
         version: link:../cli
       '@yaks/edge':
         specifier: 0.2.24
@@ -1744,7 +1744,7 @@ importers:
         specifier: 0.2.24
         version: link:../archetype
       '@yaks/cli':
-        specifier: 0.2.26
+        specifier: 0.2.27
         version: link:../cli
       '@yaks/ram':
         specifier: 0.2.24
@@ -2056,7 +2056,7 @@ importers:
         specifier: 0.2.23
         version: link:../blob
       '@yaks/cli':
-        specifier: 0.2.26
+        specifier: 0.2.27
         version: link:../cli
       '@yaks/client':
         specifier: 0.2.24
@@ -2080,7 +2080,7 @@ importers:
         specifier: 0.2.23
         version: link:../fp
       '@yaks/git':
-        specifier: 0.2.26
+        specifier: 0.2.27
         version: link:../git
       '@yaks/graph':
         specifier: 0.2.25
@@ -2104,7 +2104,7 @@ importers:
         specifier: 0.2.24
         version: link:../markdown
       '@yaks/mcp':
-        specifier: 0.2.23
+        specifier: 0.2.27
         version: link:../mcp
       '@yaks/mcp-client':
         specifier: 0.2.24
@@ -2189,7 +2189,7 @@ importers:
         specifier: 0.2.17
         version: link:../testing
       '@yaks/tracker':
-        specifier: 0.2.23
+        specifier: 0.2.27
         version: link:../tracker
 
   packages/heal:
@@ -2240,7 +2240,7 @@ importers:
         specifier: 0.2.24
         version: link:../tools
       '@yaks/tracker':
-        specifier: 0.2.23
+        specifier: 0.2.27
         version: link:../tracker
       '@yaks/ui':
         specifier: 0.2.24
@@ -2335,7 +2335,7 @@ importers:
         specifier: 0.2.24
         version: link:../fts
       '@yaks/git':
-        specifier: 0.2.26
+        specifier: 0.2.27
         version: link:../git
       '@yaks/graph':
         specifier: 0.2.25
@@ -2362,7 +2362,7 @@ importers:
         specifier: 0.2.24
         version: link:../tools
       '@yaks/tracker':
-        specifier: 0.2.23
+        specifier: 0.2.27
         version: link:../tracker
       '@yaks/ui':
         specifier: 0.2.24
@@ -2492,7 +2492,7 @@ importers:
         specifier: 0.2.24
         version: link:../api
       '@yaks/cli':
-        specifier: 0.2.26
+        specifier: 0.2.27
         version: link:../cli
       '@yaks/doc':
         specifier: 0.2.24
@@ -2810,7 +2810,7 @@ importers:
         specifier: 0.2.24
         version: link:../api
       '@yaks/cli':
-        specifier: 0.2.26
+        specifier: 0.2.27
         version: link:../cli
       '@yaks/doc':
         specifier: 0.2.24
@@ -2979,7 +2979,7 @@ importers:
         specifier: npm:@jsr/std__assert@^1.0.0
         version: '@jsr/std__assert@1.0.19'
       '@yaks/cli':
-        specifier: 0.2.26
+        specifier: 0.2.27
         version: link:../cli
       '@yaks/ram':
         specifier: 0.2.24
@@ -3010,7 +3010,7 @@ importers:
         specifier: npm:@jsr/std__assert@^1.0.0
         version: '@jsr/std__assert@1.0.19'
       '@yaks/cli':
-        specifier: 0.2.26
+        specifier: 0.2.27
         version: link:../cli
       '@yaks/testing':
         specifier: 0.2.17
@@ -3093,7 +3093,7 @@ importers:
         specifier: 0.2.23
         version: link:../file
       '@yaks/git':
-        specifier: 0.2.26
+        specifier: 0.2.27
         version: link:../git
     devDependencies:
       '@std/assert':
@@ -3276,7 +3276,7 @@ importers:
         specifier: npm:@jsr/std__assert@^1.0.0
         version: '@jsr/std__assert@1.0.19'
       '@yaks/cli':
-        specifier: 0.2.26
+        specifier: 0.2.27
         version: link:../cli
       '@yaks/testing':
         specifier: 0.2.17
@@ -3300,7 +3300,7 @@ importers:
         specifier: 0.2.23
         version: link:../fp
       '@yaks/git':
-        specifier: 0.2.26
+        specifier: 0.2.27
         version: link:../git
       '@yaks/graph':
         specifier: 0.2.25
@@ -3327,7 +3327,7 @@ importers:
         specifier: 0.2.24
         version: link:../text
       '@yaks/tracker':
-        specifier: 0.2.23
+        specifier: 0.2.27
         version: link:../tracker
       '@yaks/ui':
         specifier: 0.2.24
@@ -3888,7 +3888,7 @@ importers:
         specifier: 0.2.24
         version: link:../archetype
       '@yaks/cli':
-        specifier: 0.2.26
+        specifier: 0.2.27
         version: link:../cli
       '@yaks/context':
         specifier: 0.2.23
@@ -3942,7 +3942,7 @@ importers:
         specifier: 0.2.23
         version: link:../file
       '@yaks/git':
-        specifier: 0.2.26
+        specifier: 0.2.27
         version: link:../git
       '@yaks/graph':
         specifier: 0.2.25
@@ -4076,7 +4076,7 @@ importers:
         version: 10.29.7(preact-render-to-string@6.7.0)
     devDependencies:
       '@yaks/cli':
-        specifier: 0.2.26
+        specifier: 0.2.27
         version: link:../cli
       '@yaks/testing':
         specifier: 0.2.17
@@ -4507,7 +4507,7 @@ importers:
         specifier: 0.2.24
         version: link:../tools
       '@yaks/tracker':
-        specifier: 0.2.23
+        specifier: 0.2.27
         version: link:../tracker
       preact-render-to-string:
         specifier: 6.7.0
@@ -4708,7 +4708,7 @@ importers:
         specifier: 0.2.23
         version: link:../fp
       '@yaks/git':
-        specifier: 0.2.26
+        specifier: 0.2.27
         version: link:../git
       '@yaks/graph':
         specifier: 0.2.25
@@ -4929,7 +4929,7 @@ importers:
         specifier: 0.2.24
         version: link:../api
       '@yaks/cli':
-        specifier: 0.2.26
+        specifier: 0.2.27
         version: link:../cli
       '@yaks/client':
         specifier: 0.2.24
@@ -5075,7 +5075,7 @@ importers:
         specifier: 0.2.24
         version: link:../api
       '@yaks/cli':
-        specifier: 0.2.26
+        specifier: 0.2.27
         version: link:../cli
       '@yaks/connections':
         specifier: 0.2.23
@@ -5102,7 +5102,7 @@ importers:
         specifier: 0.2.23
         version: link:../secrets
       '@yaks/tracker':
-        specifier: 0.2.23
+        specifier: 0.2.27
         version: link:../tracker
       '@yaks/ui':
         specifier: 0.2.24
@@ -5268,7 +5268,7 @@ importers:
         specifier: 0.2.23
         version: link:../../packages/claude
       '@yaks/cli':
-        specifier: 0.2.26
+        specifier: 0.2.27
         version: link:../../packages/cli
       '@yaks/cloudflare-mail':
         specifier: 0.2.17
@@ -5277,7 +5277,7 @@ importers:
         specifier: 0.2.23
         version: link:../../packages/code
       '@yaks/code-mode':
-        specifier: 0.2.24
+        specifier: 0.2.27
         version: link:../../packages/code-mode
       '@yaks/connections':
         specifier: 0.2.23
@@ -5316,7 +5316,7 @@ importers:
         specifier: 0.2.25
         version: link:../../packages/embedding
       '@yaks/esbuild':
-        specifier: 0.2.23
+        specifier: 0.2.27
         version: link:../../packages/esbuild
       '@yaks/file':
         specifier: 0.2.23
@@ -5334,7 +5334,7 @@ importers:
         specifier: 0.2.23
         version: link:../../packages/game
       '@yaks/git':
-        specifier: 0.2.26
+        specifier: 0.2.27
         version: link:../../packages/git
       '@yaks/goal':
         specifier: 0.2.23
@@ -5346,7 +5346,7 @@ importers:
         specifier: 0.2.25
         version: link:../../packages/harness
       '@yaks/heal':
-        specifier: 0.2.25
+        specifier: 0.2.27
         version: link:../../packages/heal
       '@yaks/hook':
         specifier: 0.2.24
@@ -5388,7 +5388,7 @@ importers:
         specifier: 0.2.24
         version: link:../../packages/match
       '@yaks/mcp':
-        specifier: 0.2.23
+        specifier: 0.2.27
         version: link:../../packages/mcp
       '@yaks/mcp-client':
         specifier: 0.2.24
@@ -5511,7 +5511,7 @@ importers:
         specifier: 0.2.23
         version: link:../../packages/trace
       '@yaks/tracker':
-        specifier: 0.2.23
+        specifier: 0.2.27
         version: link:../../packages/tracker
       '@yaks/tunnel':
         specifier: 0.2.24

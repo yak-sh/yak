@@ -1,6 +1,6 @@
 {
   "name": "@yaks/mcp",
-  "version": "0.2.23",
+  "version": "0.2.27",
   "type": "module",
   "exports": {
     ".": "./mod.ts",
@@ -30,7 +30,7 @@
     "@modelcontextprotocol/client": "2.2.0",
     "@modelcontextprotocol/sdk": "^1.29.0",
     "@std/assert": "npm:@jsr/std__assert@^1.0.0",
-    "@yaks/cli": "0.2.26",
+    "@yaks/cli": "0.2.27",
     "@yaks/ram": "0.2.24",
     "@yaks/testing": "0.2.17",
     "ajv": "^8.17.1",

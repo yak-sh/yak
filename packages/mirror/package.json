@@ -7,7 +7,7 @@
   "description": "Syncs files and a graph through bindings, each direction optional, reporting a path changed on both sides as a conflict instead of overwriting it.",
   "dependencies": {
     "@yaks/file": "0.2.23",
-    "@yaks/git": "0.2.26"
+    "@yaks/git": "0.2.27"
   },
   "devDependencies": {
     "@std/assert": "npm:@jsr/std__assert@^1.0.0",

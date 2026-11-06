@@ -20,7 +20,7 @@
     "@preact/signals": "2.9.4",
     "@yaks/api": "0.2.24",
     "@yaks/blob": "0.2.23",
-    "@yaks/cli": "0.2.26",
+    "@yaks/cli": "0.2.27",
     "@yaks/client": "0.2.24",
     "@yaks/connections": "0.2.23",
     "@yaks/context": "0.2.23",
@@ -28,7 +28,7 @@
     "@yaks/effects": "0.2.25",
     "@yaks/file": "0.2.23",
     "@yaks/fp": "0.2.23",
-    "@yaks/git": "0.2.26",
+    "@yaks/git": "0.2.27",
     "@yaks/graph": "0.2.25",
     "@yaks/host": "0.2.25",
     "@yaks/id": "0.2.23",
@@ -36,7 +36,7 @@
     "@yaks/kernel": "0.2.24",
     "@yaks/machine": "0.2.24",
     "@yaks/markdown": "0.2.24",
-    "@yaks/mcp": "0.2.23",
+    "@yaks/mcp": "0.2.27",
     "@yaks/mcp-client": "0.2.24",
     "@yaks/model": "0.2.26",
     "@yaks/persona": "0.2.23",
@@ -66,6 +66,6 @@
     "@yaks/sandbox": "0.2.23",
     "@yaks/sql": "0.2.26",
     "@yaks/testing": "0.2.17",
-    "@yaks/tracker": "0.2.23"
+    "@yaks/tracker": "0.2.27"
   }
 }
