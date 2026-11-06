@@ -4,7 +4,8 @@
 // committed (./registry.ts) — and it is what separates effects from writers:
 //
 //   effect{handler, target, comp, kind, touched, before, state, attempts, at,
-//          generation, error, next, lease_owner, lease_token, lease_expiry}
+//          generation, error, next, version, lease_owner, lease_token,
+//          lease_expiry}
 //
 // A commit writes one row for each run it owes, inside its own transaction,
 // whichever process wrote it: a crash after the commit cannot lose a run,
@@ -45,10 +46,15 @@
 //
 //   It was interrupted. The worker died mid-run, or its claim expired: nothing
 //   records how far it got. A claimed row with no `next` is one of these, and
-//   it is run again as the same attempt, since nothing failed — unless its
-//   declaration says `idempotent: false`, where a second run could duplicate
-//   something that already reached an external system, and it is left failed
-//   instead.
+//   it is run again — unless its declaration says `idempotent: false`, where a
+//   second run could duplicate something that already reached an external
+//   system, and it is left failed instead. A run records the code version its
+//   attempt started on ({@link PoolOpts.version}). Resumed under another, a
+//   deploy cut it off, and it runs again as the same attempt, since nothing
+//   failed. Resumed under the same one, or where the host names none, its
+//   process crashed under it, perhaps because of the run itself, and that
+//   spends an attempt like a reported failure, so a crash loop stops at the
+//   attempt limit.
 //
 // How many attempts a run gets is the declaration's (`tries`), never a
 // handler's, so no effect carries retry code of its own. A run that spent them
@@ -220,6 +226,11 @@ export type PoolOpts = {
   /** Positive integer maximum candidates examined per pass, including fresh
    * start-up admission (default: 32). */
   page?: number
+  /** The code version this process runs (a Worker version's id): what a run
+   * records as its attempt starts, so one cut off by a deploy runs again as
+   * the same attempt while one whose process crashed under the same code
+   * spends one. Without it, every interruption spends an attempt. */
+  version?: string
   /** Leave committed runs for work() instead of starting them on the writer. */
   defer?: boolean
   /** how long a claim holds, in milliseconds (default: 60_000) */
@@ -405,12 +416,16 @@ export let pool = (ctx: Ctx, opts: Partial<PoolOpts> = {}): Pool => {
   let ends = seconds()
   let loop: { done: Promise<void>; signal: AbortSignal } | undefined
 
-  let claim = () =>
-    opts.singleOwner ? {} : ({
+  // What an attempt records as it starts: the code it runs, and, on a shared
+  // store, the claim.
+  let claim = () => ({
+    ...opts.version ? { version: opts.version } : {},
+    ...opts.singleOwner ? {} : {
       lease_owner: me,
       lease_token: mint(),
       lease_expiry: stamp(clock() + hold),
-    })
+    },
+  })
   // Shared workers release their claims on every ending. A single-owner
   // store never writes claim fields, even when draining a legacy row.
   let free = opts.singleOwner
@@ -704,18 +719,31 @@ export let pool = (ctx: Ctx, opts: Partial<PoolOpts> = {}): Pool => {
       if (row.next && Date.parse(String(row.next)) > now) return
       let attempts = Number(row.attempts ?? 0)
       // Claimed and no `next`: interrupted, not reported, so how far it got
-      // is unknown — and a second run is not the same as a first.
+      // is unknown — and a second run is not the same as a first. Started
+      // under other code, a deploy cut it off; under this code, it crashed.
       let interrupted = attempts > 0 && !row.next
-      if (interrupted && !safe(s)) {
-        let error = `interrupted, and ${row.handler} is not idempotent`
-        await swap(g, eid, row, { state: 'failed', error, ...free })
-        return
+      let cut = interrupted && !!opts.version && row.version != opts.version
+      // An interruption left failed is a failure no handler threw, so the
+      // pool reports it itself.
+      let abandon = async (error: string) => {
+        let patch = { state: 'failed', error, next: null, ...free }
+        if (!await swap(g, eid, row, patch)) return
+        ctx.report(new Error(`${row.handler}: ${error}`), {
+          handler: String(row.handler),
+          event: { kind: 'created', entity: { eid }, name: EFFECT },
+          slot: s,
+        })
       }
-      // Every attempt spent: left failed, with the last error beside it. An
-      // interruption spent none: a deploy cut the attempt off, and it runs
-      // again as the same attempt rather than leaving the run failed by
-      // however many deploys it met.
-      if (!interrupted && attempts >= limit(s)) {
+      if (interrupted && !safe(s)) {
+        return abandon(`interrupted, and ${row.handler} is not idempotent`)
+      }
+      // Every attempt spent: left failed, with the last error beside it. A
+      // deploy's cut spent none: it runs again as the same attempt rather
+      // than leaving the run failed by however many deploys it met.
+      if (!cut && attempts >= limit(s)) {
+        if (interrupted) {
+          return abandon(`its process ended under it in attempt ${attempts}`)
+        }
         await swap(g, eid, row, { state: 'failed', next: null, ...free })
         return
       }
@@ -723,7 +751,7 @@ export let pool = (ctx: Ctx, opts: Partial<PoolOpts> = {}): Pool => {
       // Reserve against the current admission count, not the scan's earlier one.
       if (!member || running.size + admitting >= max) return
       let mine = {
-        attempts: interrupted ? attempts : attempts + 1,
+        attempts: cut ? attempts : attempts + 1,
         next: null,
         ...claim(),
       }

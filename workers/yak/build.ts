@@ -529,6 +529,7 @@ export class Builder {
       let { operating } = await import('./operator.ts')
       let { operatorFrames } = await import('./operator-host.ts')
       let store = operatorStore(this.#ctx.storage, {
+        version: this.#env.CF_VERSION_METADATA?.id,
         report: (e, where) =>
           caught(e, { request: 'operator effects', handler: where.handler }),
         // A write that owes work starts it now, beside a step in flight, so a

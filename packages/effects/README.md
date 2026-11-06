@@ -610,8 +610,13 @@ await fx.stop()
 
 An interrupted run is tried again unless its declaration says
 `idempotent: false`; then it is left failed because replay could repeat an
-external action. A pooled run rebuilds its event from the target's current
-state, so a handler needing a historical value must store it itself.
+external action. Each attempt records the code `version` the host names
+(`PoolOpts.version`, a Worker version's id on yaks.app). A run resumed under
+another version was cut off by a deploy and runs again as the same attempt; one
+resumed under the same version, or where the host names none, crashed its
+process and spends an attempt, so a crash loop stops at the attempt limit and is
+reported. A pooled run rebuilds its event from the target's current state, so a
+handler needing a historical value must store it itself.
 
 ### Startup and active effects
 

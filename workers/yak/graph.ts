@@ -1261,6 +1261,9 @@ export class Store {
       clock: clockOf(this.#time),
       singleOwner: true,
       startup: 'manual',
+      // A run cut off by a deploy runs again free; one this version's store
+      // crashed under spends an attempt.
+      version: this.#version() ?? undefined,
       // A builder output (2) starts a downstream builder call (3). The
       // registered tool then opens its ordinary session through the runner.
       // Keep the chain bounded, but let that owed call run.

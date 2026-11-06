@@ -111,6 +111,11 @@
           "stamped": true,
           "description": "when the run next becomes eligible after failure backoff or deferred readiness; absent means a run nobody has started or one in progress"
         },
+        "version": {
+          "type": "string",
+          "stamped": true,
+          "description": "the code version its latest attempt started on, where the host names one: resumed under another, a deploy cut the attempt off and it runs again as the same attempt; under the same one, its process crashed and that spends an attempt"
+        },
         "lease_owner": {
           "type": "string",
           "stamped": true,

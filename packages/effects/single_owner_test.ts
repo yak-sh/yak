@@ -190,23 +190,46 @@ for (let legacy of [false, true]) {
   })
 }
 
-test('a run interrupted in its last attempt runs that attempt again', async () => {
-  let a = proc()
-  await a.g.apply([{ entity: { eid: 'p1' } }])
-  await a.g.apply([{
-    entity: { eid: 'cut' },
-    effect: {
-      handler: 'post_note',
-      target: 'p1',
-      comp: 'post',
-      kind: 'created',
-      state: 'pending',
-      attempts: 3,
-    },
-  }], { trusted: true })
+// A run cut off in its last attempt: by a deploy where it started under other
+// code, which runs that attempt again; by a crash under this code, or where
+// the host names none, which spends it and is reported.
+for (
+  let [started, now, again] of [
+    ['v1', 'v2', true],
+    ['v2', 'v2', false],
+    [undefined, undefined, false],
+  ] as const
+) {
+  test(`a run cut off in its last attempt, started under ${started} and resumed under ${now}`, async () => {
+    let a = proc(store(), { version: now })
+    await a.g.apply([{ entity: { eid: 'p1' } }])
+    await a.g.apply([{
+      entity: { eid: 'cut' },
+      effect: {
+        handler: 'post_note',
+        target: 'p1',
+        comp: 'post',
+        kind: 'created',
+        state: 'pending',
+        attempts: 3,
+        ...started ? { version: started } : {},
+      },
+    }], { trusted: true })
+    await a.fx.work(a.g)
+    let run = (await runs(a)).find((r) => r.handler == 'post_note')
+    equal(a.ran, again ? ['p1'] : [])
+    equal(run?.state, again ? undefined : 'failed')
+    equal(a.errors.length, again ? 0 : 1)
+  })
+}
+
+test('an attempt records the code version it started on', async () => {
+  let a = proc(store(), { version: 'v1', report: () => {} })
+  a.fx.handle({ post_note: () => Promise.reject(new Error('no')) })
+  await a.g.apply([post('p1')])
   await a.fx.work(a.g)
-  equal(a.ran, ['p1'])
-  equal((await runs(a)).find((r) => r.handler == 'post_note'), undefined)
+  let run = (await runs(a)).find((r) => r.handler == 'post_note')
+  equal([run?.attempts, run?.version], [1, 'v1'])
 })
 
 for (let singleOwner of [true, false]) {
