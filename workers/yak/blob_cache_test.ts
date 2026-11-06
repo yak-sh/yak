@@ -143,6 +143,8 @@ test('an anonymous blob read revives a removed immutable representation', async 
   let bare = await apps.fetch(visit(`/cookbook/api/blob/${file.sha}`), env)
   assertEquals(bare.status, 302)
   assertEquals(new URL(bare.headers.get('location')!).pathname, file.url)
+  // A repeat load follows the kept redirect without asking.
+  assertEquals(bare.headers.get('cache-control'), 'private, max-age=604800')
   let served = await apps.fetch(visit(file.url), env)
   assertEquals(served.status, 200)
   assertEquals(new Uint8Array(await served.arrayBuffer()), body)

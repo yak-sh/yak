@@ -121,12 +121,9 @@ fetches them all in parallel with the page:
 **Images.** Give each `<img>` its `width` and `height`, which `upload` returns
 and the image's `image` row keeps ([Files and Uploads](./files.md)), so the
 layout does not shift as each image arrives. Add `loading="lazy"` to images
-below the first screen. Every `./api/blob/<eid>` is a redirect that the browser
-requests again on each page load before it fetches the bytes, so with lazy
-loading a page of fifty images with six in view makes six of those requests, not
-fifty. On a `public` or `open` app the browser caches the bytes; on a `private`
-app it fetches the bytes again too. Downscale a photo before it is uploaded: a
-phone's photos are several megabytes.
+below the first screen. Every `./api/blob/<eid>` is a redirect to the bytes; the
+browser keeps both, so a repeat load of an image costs no request. Downscale a
+photo before it is uploaded: a phone's photos are several megabytes.
 
 **Work done on every change.** A subscription passes its whole result set to its
 callback on every change, from any tab, phone or agent, so the callback runs

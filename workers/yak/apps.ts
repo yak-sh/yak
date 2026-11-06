@@ -1559,7 +1559,11 @@ export let apiAllowed = (
 
 // The bare hash is the current attachment; the second path segment names an
 // immutable representation. Only the bare address reads mutable metadata.
-// The reader's browser keeps what it was given.
+// The reader's browser keeps what it was given, the redirect for a week: every
+// representation of one sha is the same bytes, so a kept redirect at worst
+// names a file by an older name, and a removed file's representation is gone
+// as its bare address is.
+let REDIRECT = 'private, max-age=604800'
 let gave = async (
   req: Request,
   env: Env,
@@ -1646,10 +1650,7 @@ let gave = async (
     to.pathname += `/${rep.eid}`
     return new Response(null, {
       status: 302,
-      headers: {
-        location: to.href,
-        'cache-control': 'private, no-cache',
-      },
+      headers: { location: to.href, 'cache-control': REDIRECT },
     })
   }
   let rep
