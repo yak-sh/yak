@@ -228,6 +228,8 @@ export class Builder {
   #arming?: Promise<void>
   // The Operator's pool, once this incarnation has made it (`#work`).
   #fx?: { running(): unknown[] }
+  // The alarm's work (operator-store.ts `waking`), one at a time.
+  #wake?: (work: () => Promise<number | null>) => Promise<void>
   // The browsers people lend the Operator, and the calls asked of them that
   // wait for an answer: in memory, as the step waiting on one is.
   #lent: Browsers
@@ -613,9 +615,13 @@ export class Builder {
   }
 
   async alarm() {
-    let { drain, woken } = await import('./operator-store.ts')
+    let { drain, waking } = await import('./operator-store.ts')
     let { store } = await this.#work()
-    await woken(this.#ctx.storage, () => drain(store))
+    this.#wake ??= waking(
+      this.#ctx.storage,
+      (e) => caught(e, { request: 'operator alarm' }),
+    )
+    await this.#wake(() => drain(store))
   }
 
   /**

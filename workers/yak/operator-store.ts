@@ -137,16 +137,31 @@ export let BACKSTOP = 15_000
  * now, so a wake the object dies under (a deploy's reset under a step in
  * flight) wakes its replacement, which takes the step up again; then armed
  * for the next run due, or cleared when none is and nothing armed it since.
+ *
+ * The alarm answers once its work is under way, and one that rings while the
+ * work goes arms the backstop again and starts no second: an alarm still
+ * open when its object is reset holds back every alarm after it until
+ * Cloudflare gives up on it, fourteen minutes for Jeff's (T-145428), the
+ * backstop that would take the step up included. Work that fails is
+ * reported, and the backstop it leaves armed tries it again.
  */
-export let woken = async (
-  storage: Alarms,
-  work: () => Promise<number | null>,
-) => {
-  let backstop = Date.now() + BACKSTOP
-  await storage.setAlarm(backstop)
-  let next = await work()
-  if (next) await storage.setAlarm(next)
-  else if (await storage.getAlarm() == backstop) await storage.deleteAlarm()
+export let waking = (storage: Alarms, report: (e: unknown) => void) => {
+  let armed = 0, going: Promise<void> | undefined
+  return async (work: () => Promise<number | null>) => {
+    armed = Date.now() + BACKSTOP
+    await storage.setAlarm(armed)
+    going ??= (async () => {
+      try {
+        let next = await work()
+        if (next) await storage.setAlarm(next)
+        else if (await storage.getAlarm() == armed) await storage.deleteAlarm()
+      } catch (e) {
+        report(e)
+      } finally {
+        going = undefined
+      }
+    })()
+  }
 }
 
 /** How long a wake-up a tick refused waits before it is tried again. */
