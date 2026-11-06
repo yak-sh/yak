@@ -13,6 +13,7 @@ import {
   aheadOf,
   bundled,
   command,
+  executor,
   guard,
   images,
   modelBound,
@@ -363,18 +364,22 @@ for (
   test(`a ${name} executor deployment ${available ? 'enables' : 'leaves absent'} the kernel binding`, () =>
     withModelConfig(async (kernel) => {
       let args = ['deploy', '--message', 'commit']
-      let bound = await modelBound(args, (query) => {
-        assertEquals(query, [
-          'deployments',
-          'list',
-          '-c',
-          '../model/wrangler.toml',
-          '--json',
-        ])
-        return result instanceof Error
-          ? Promise.reject(result)
-          : Promise.resolve(result)
-      }, kernel)
+      let bound = modelBound(
+        args,
+        await executor(args, (query) => {
+          assertEquals(query, [
+            'deployments',
+            'list',
+            '-c',
+            '../model/wrangler.toml',
+            '--json',
+          ])
+          return result instanceof Error
+            ? Promise.reject(result)
+            : Promise.resolve(result)
+        }, kernel),
+        kernel,
+      )
       try {
         let config = parse(Deno.readTextFileSync(
           join(
@@ -401,10 +406,14 @@ test('executor activation preserves the prepared upload and removes its disposab
       'main="entry.js"\nno_bundle=true\nbase_dir="bundle"',
     )
     let args = ['deploy', '--message', 'commit', '-c', source]
-    let bound = await modelBound(args, () =>
-      Promise.resolve(
-        modelOutput(modelDeployment([{ version_id: 'v1', percentage: 100 }])),
-      ), kernel)
+    let bound = modelBound(
+      args,
+      await executor(args, () =>
+        Promise.resolve(
+          modelOutput(modelDeployment([{ version_id: 'v1', percentage: 100 }])),
+        ), kernel),
+      kernel,
+    )
     try {
       let config = parse(
         Deno.readTextFileSync(join(kernel, bound.args.at(-1)!)),
@@ -428,11 +437,14 @@ test('local and staging commands leave executor activation to production builds'
       'staging',
     ]]
   ) {
-    let bound = await modelBound(args, () => {
-      throw Error('local and staging must not inspect the production executor')
-    })
-    assertEquals(bound.args, args)
-    bound.remove()
+    assertEquals(
+      await executor(args, () => {
+        throw Error(
+          'local and staging must not inspect the production executor',
+        )
+      }),
+      undefined,
+    )
   }
 })
 

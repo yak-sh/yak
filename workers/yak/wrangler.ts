@@ -633,7 +633,11 @@ type Bundle = { entry: string; output: string }
 // The executor has an independent Builds connection. Naming it before that
 // project publishes its first release would prevent kernel deployment, so
 // only a fully serving release grants the kernel its service binding.
-export let modelBound = async (
+
+/** The executor's release name when these arguments are a production deploy
+ * and it fully serves; nothing otherwise. Reads no bundle, so it runs while
+ * the kernel bundles. */
+export let executor = async (
   args: string[],
   read = (args: string[]) =>
     spawnCommand('env', {
@@ -643,12 +647,11 @@ export let modelBound = async (
       stderr: 'piped',
     }).output(),
   root = dir,
-) => {
-  let unchanged = { args, remove: () => {} }
+): Promise<string | undefined> => {
   if (
     command(args) != 'deploy' || envs(args).length ||
     args.some((arg) => /^--dry-run(=|$)/.test(arg))
-  ) return unchanged
+  ) return
   let model = '../model/wrangler.toml'
   let name = parse(io.readTextFileSync(join(root, model))).name
   if (typeof name != 'string') {
@@ -663,14 +666,25 @@ export let modelBound = async (
       console.log(
         `${name}: no fully serving executor release; hosted calls remain inline`,
       )
-      return unchanged
+      return
     }
   } catch {
     console.log(
       `${name}: executor deployment unreadable; hosted calls remain inline`,
     )
-    return unchanged
+    return
   }
+  return name
+}
+
+/** These arguments with the serving executor {@link executor} named bound as
+ * MODEL, through a disposable config beside theirs; unchanged without one. */
+export let modelBound = (
+  args: string[],
+  name: string | undefined,
+  root = dir,
+) => {
+  if (!name) return { args, remove: () => {} }
   let at = args.indexOf('-c')
   let path = resolve(root, at >= 0 ? args[at + 1] : 'wrangler.toml')
   let parsed = parse(io.readTextFileSync(path))
@@ -1470,29 +1484,30 @@ if (import.meta.main) {
     () => Promise.all([readied, made.catalog]),
     () => inspected,
     async () => {
-      let bundle = await bundled(
-        argv,
-        (output, meta) =>
-          timed(
-            'Kernel modules',
-            () =>
-              generated('Kernel modules', [
-                join(dir, 'bundle.ts'),
-                output,
-                meta,
-              ]),
-          ),
-      )
+      let named = argv.some((a) => /^(-c|--config)(=|$)/.test(a))
+        ? Promise.resolve(undefined)
+        : executor(argv)
+      let [built, served] = await Promise.allSettled([
+        bundled(
+          argv,
+          (output, meta) =>
+            timed(
+              'Kernel modules',
+              () =>
+                generated('Kernel modules', [
+                  join(dir, 'bundle.ts'),
+                  output,
+                  meta,
+                ]),
+            ),
+        ),
+        named,
+      ])
+      if (built.status == 'rejected') throw built.reason
+      let bundle = built.value
       try {
-        let bound = argv.some((a) => /^(-c|--config)(=|$)/.test(a))
-          ? { args: bundle.args, remove: () => {} }
-          : await modelBound(bundle.args, (args) =>
-            spawnCommand('env', {
-              args: [...PINNED.flatMap((v) => ['-u', v]), ...wrangler, ...args],
-              cwd: dir,
-              stdout: 'piped',
-              stderr: 'piped',
-            }).output())
+        if (served.status == 'rejected') throw served.reason
+        let bound = modelBound(bundle.args, served.value)
         return {
           args: bound.args,
           remove: () => {
