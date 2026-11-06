@@ -14,6 +14,7 @@ import { edits, mode, writes } from '@yaks/member'
 import {
   billed,
   confirmed,
+  type Lent,
   type Listed,
   type MediaReceipt,
   mediaReceipts,
@@ -23,15 +24,12 @@ import {
 } from '@yaks/model'
 import { records } from '@yaks/secrets'
 
+import type { Plug } from '@yaks/host/config'
 import type { VocabDoc } from '@yaks/vocab'
 import { said, unfit, workersAi } from '@yaks/workers-ai'
-import { objectBlobs } from '@yaks/blob'
+import { type ArtifactStore, objectBlobs } from '@yaks/blob'
 import { artifactStore } from '@yaks/blob/identify'
-import { KEY, resolve } from '@yaks/connections'
-import { gateway as openai } from '@yaks/openai'
-import { responses as openrouter } from '@yaks/openrouter'
 import { appStore, type Directory, directoryOf } from './directory.ts'
-import { ctxOf } from './connections.ts'
 import { vaultOf } from './vault.ts'
 import { KERNEL, meta, metaOf } from './meta.ts'
 import { storeOf } from './door.ts'
@@ -43,22 +41,23 @@ import { caught } from './defects.ts'
 import type { Answer, Asked } from './apps.ts'
 import type { Stored } from './graph.ts'
 import { lending } from './inference.ts'
+import { connection, credentials, names, served } from './providers.ts'
+import { serving } from './config.ts'
 
 export let guess = (sent: unknown) =>
   Math.ceil(JSON.stringify(sent ?? '').length / 4)
 
 export let PROVIDER = 'workers-ai'
-let OPENROUTER = 'openrouter'
 
 // Only providers are installed. Model rows stay as history and are never retired
 // because a newer release or a code list stopped naming them.
 export let planting = async (
   read: Stored['graph']['read'],
-  at: Pick<Stored, 'meta' | 'app'>,
+  at: Pick<Stored, 'meta' | 'app' | 'env'>,
 ): Promise<Bundle[]> => {
   if (at.meta || !at.app) return []
   let held = await read('.provider&*')
-  return [PROVIDER, OPENROUTER, 'openai'].flatMap((name): Bundle[] =>
+  return [PROVIDER, ...names(at.env, serving)].flatMap((name): Bundle[] =>
     held.some((b) => (b.provider as Comp).name == name) ? [] : [{
       entity: { eid: identityEid('provider', [name]) },
       provider: { name, transport: 'http', offered: true },
@@ -110,19 +109,19 @@ export let tooled = (at: Stored): Tool[] =>
 let payer = (app: string) => async (dir: Directory) =>
   (await dir.appAt(app))?.space ?? null
 
-let mediaStore = (at: Stored): import('@yaks/openai').MediaStore => ({
-  store: async (bytes, mediaType) => {
-    let found = at.context ??
-      (at.env.STORE ? await directoryOf(at.env.STORE).appAt(at.app!) : null)
-    if (!found || !at.env.BLOBS) {
-      throw new ModelError('media_storage', 'This app has no blob store')
-    }
-    return artifactStore(objectBlobs(
-      at.env.BLOBS,
-      blobPrefix(found.space, found.app),
-    ))(bytes, mediaType)
-  },
-})
+// Where the media an app's models generate is kept: its own blobs.
+let artifacts = (at: Stored): ArtifactStore => async (bytes, mediaType) => {
+  let found = at.context ??
+    (at.env.STORE ? await directoryOf(at.env.STORE).appAt(at.app!) : null)
+  if (!found || !at.env.BLOBS) {
+    throw new ModelError('media_storage', 'This app has no blob store')
+  }
+  return artifactStore(objectBlobs(
+    at.env.BLOBS,
+    blobPrefix(found.space, found.app),
+  ))(bytes, mediaType)
+}
+let mediaStore = (at: Stored) => ({ store: artifacts(at) })
 
 // The vault holds small app-scoped pointers; private object storage holds media.
 let receiptsFor = (at: Stored) =>
@@ -170,18 +169,14 @@ export let recovering = async (at: Stored, call: string) => {
   }
   let receipts = receiptsFor(at)
   let receipt = await receipts?.read(call)
-  let providers: Record<string, () => Model> = {
-    [PROVIDER]: () =>
-      workersAi(at.env.AI!, {
-        media: mediaStore(at),
-        fetch: at.env.MODEL_FETCH,
-        receipts,
-      }),
-    [OPENROUTER]: () => connected(at),
-    openai: () => gateway(at),
-  }
   let provider = receipt?.provider ?? PROVIDER
-  let model = providers[provider]?.()
+  let model = provider == PROVIDER
+    ? workersAi(at.env.AI!, {
+      media: mediaStore(at),
+      fetch: at.env.MODEL_FETCH,
+      receipts,
+    })
+    : provided(at)[provider]
   if (!model?.recover) {
     throw new ModelError(
       'media_provider',
@@ -261,28 +256,14 @@ export let recovery: Answer = async (
   )
 }
 
-// A model calls out as the app whose store is running it. The sentinel comes
-// from that app's connected integration, and egress exchanges it only for the
-// integration's declared hosts. Nothing here reads or records the key.
-let connected = (at: Stored) =>
-  openrouter({
-    key: async () => {
-      if (!at.env.STORE) {
-        throw new ModelError('unbound', 'This app has no integration store')
-      }
-      let link = await resolve(
-        ctxOf({ ...at.env, STORE: at.env.STORE }),
-        at.app!,
-        OPENROUTER,
-      )
-      if (!link) {
-        throw new ModelError(
-          'connection',
-          'Connect OpenRouter to this app before asking its models',
-        )
-      }
-      return link.sentinels[KEY.name]
-    },
+// What an app's store lends each provider config.ts `serving` names: its
+// egress, which exchanges the sentinel of a connection the app uses for its
+// key on the way to the integration's hosts (nothing here reads or records
+// the key), the app's own connection to the integration a provider asks for
+// where the platform does not pay for it, and its media store and receipts.
+let lent = (at: Stored) => (plug: Plug): Lent => {
+  let paid = credentials(at.env, plug).length > 0
+  return {
     fetch: (input, init) => {
       if (!at.env.STORE) {
         throw new ModelError('unbound', 'This app has no integration store')
@@ -293,21 +274,21 @@ let connected = (at: Stored) =>
         { app: at.app!, level: 'owner', person: null },
       )
     },
-    media: mediaStore(at),
+    key: (integration) =>
+      paid
+        ? Promise.resolve(undefined)
+        : connection(at.env, at.app!, integration),
+    refresh: () => Promise.resolve(undefined),
+    store: artifacts(at),
+    env: () => undefined,
     receipts: receiptsFor(at),
-  })
+  }
+}
 
-let gateway = (at: Stored) =>
-  openai({
-    base: at.env.OPENAI_API,
-    gateway: at.env.AI_GATEWAY,
-    account: at.env.CF_ACCOUNT,
-    ai: at.env.AI,
-    key: at.env.OPENAI_API_KEY,
-    token: at.env.AI_GATEWAY_TOKEN,
-    fetch: at.env.MODEL_FETCH,
-    receipts: receiptsFor(at),
-  })
+/** The models an app's store is lent, by the provider name each serves
+ * under. */
+export let provided = (at: Stored): Record<string, Model> =>
+  served(at.env, lent(at), serving)
 
 let modelRows = (graph: {
   read(query: string): Bundle[] | Promise<Bundle[]>
@@ -334,7 +315,7 @@ let modelRows = (graph: {
  */
 export let asking = (at: Stored): Handlers => {
   if (at.meta || !at.app) return {}
-  let served = accounted(
+  let metered = accounted(
     at.env,
     payer(at.app),
     workersAi(at.env.AI!, {
@@ -344,13 +325,13 @@ export let asking = (at: Stored): Handlers => {
       receipts: receiptsFor(at),
     }),
   )
-  let lent = {
-    [PROVIDER]: served,
-    [OPENROUTER]: accounted(at.env, payer(at.app), connected(at)),
-    openai: accounted(at.env, payer(at.app), gateway(at), async (name) => {
-      let [row] = await at.graph.get([identityEid('model', [name])])
-      return row?.price as Price | undefined
-    }),
+  let price = async (name: string) => {
+    let [row] = await at.graph.get([identityEid('model', [name])])
+    return row?.price as Price | undefined
+  }
+  let lent: Record<string, Model> = { [PROVIDER]: metered }
+  for (let [name, model] of Object.entries(provided(at))) {
+    lent[name] = accounted(at.env, payer(at.app), model, price)
   }
   let resolveModel = providerResolver(
     at.graph,
@@ -360,7 +341,7 @@ export let asking = (at: Stored): Handlers => {
   )
   let run = running(at.graph, {
     holder: at.app,
-    model: served,
+    model: metered,
     resolveModel: async (using, model) => {
       // A turn may precede the app's first deploy. Provider identities are
       // needed to dispatch it; only a successful answer creates an offering.
@@ -381,7 +362,7 @@ export let asking = (at: Stored): Handlers => {
                 new ModelError(
                   'provider',
                   `No provider found for ${name}; set using.provider to ` +
-                    'workers-ai, openrouter or openai',
+                    `one of ${Object.keys(lent).join(', ')}`,
                 ),
               ),
           }

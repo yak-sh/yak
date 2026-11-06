@@ -5,7 +5,9 @@ import { assertEquals, assertRejects } from '@std/assert'
 import { test } from '@yaks/testing'
 import { anthropicDoc } from '@yaks/anthropic/vocab'
 import { READS } from '@yaks/anthropic/reads'
-import { provided } from './providers.ts'
+import { frozen, granted, provided } from './providers.ts'
+import type { D1Like } from '@yaks/d1'
+import { d1 } from '../../packages/d1/testing.ts'
 import type { Env } from './env.ts'
 
 test('a configured provider records replies before a request, and says what it reads', () => {
@@ -54,4 +56,45 @@ test('a configured provider keeps its transport and uses the current key after a
     ['https://api.anthropic.com/v1/models/claude-test', 'Bearer first'],
     ['https://api.anthropic.com/v1/models', 'Bearer second'],
   ])
+})
+
+// OpenAI as config.ts `serving` names it, paid for by the platform's key.
+let paying = () =>
+  ({
+    VAULT: d1() as unknown as D1Like,
+    VAULT_KEY: btoa(String.fromCharCode(...new Uint8Array(32).fill(4))),
+    OPENAI_API_KEY: 'platform-key',
+    CF_ACCOUNT: 'acct',
+    AI_GATEWAY: 'gw',
+  }) as unknown as Env
+
+test("a hosted call carries the platform's credential as a sentinel, granted only to its provider's hosts", async () => {
+  let env = paying()
+  let { name, key, with: options } = await frozen(env, 'app', 'openai')
+  let sent = JSON.stringify(options)
+  assertEquals([name, key, sent.includes('platform-key')], [
+    'openai',
+    '',
+    false,
+  ])
+  assertEquals(options.gateway, { account: 'acct', id: 'gw' })
+  assertEquals(await granted(env, 'openai'), [{
+    sentinel: options.key as string,
+    value: 'platform-key',
+    hosts: ['gateway.ai.cloudflare.com'],
+  }])
+  assertEquals(await granted(env, 'openrouter'), [])
+})
+
+test("a provider the platform doesn't pay for is refused where the app has no connection", async () => {
+  await assertRejects(
+    () => frozen({} as Env, 'app', 'openrouter'),
+    Error,
+    'This app has no integration store',
+  )
+  await assertRejects(
+    () => frozen({} as Env, 'app', 'nobody'),
+    Error,
+    'serves no nobody',
+  )
 })

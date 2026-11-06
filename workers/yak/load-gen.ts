@@ -30,7 +30,8 @@ export let imports = (configs: Config[], manifests: Manifest[]): string[] => {
 }
 
 /** The `./provider` facet of each plugin a provider config names
- * (config.ts `providing`): one it names that serves no models is refused. */
+ * (config.ts `providing`, `serving`): one it names that serves no models is
+ * refused. */
 export let providers = (config: Config, manifests: Manifest[]): string[] =>
   [...new Set((config.plugins ?? []).map(used))].sort().map((plugin) => {
     let exported = manifests.find((m) => m.name == plugin)?.exports
@@ -72,7 +73,7 @@ export let loader = (
     'export let vocabFacets: Record<string, VocabFacet> = {',
     ...vocabs.map((s, i) => `${JSON.stringify(s.slice(0, -6))}: vocab${i},`),
     '}',
-    '/** The providers config.ts `providing` names, by plugin. */',
+    '/** The providers config.ts `providing` and `serving` name, by plugin. */',
     'export let providerFacets: Record<string, ProviderFacet> = {',
     ...served.map((s, i) => `${JSON.stringify(s.slice(0, -9))}: provider${i},`),
     '}',

@@ -7,7 +7,13 @@ import { assertEquals, assertRejects, assertThrows } from '@std/assert'
 import { Refused } from '@yaks/graph/errors'
 import type { Lent } from '@yaks/model'
 import { CODEX, OPENAI } from './credential.ts'
-import { configuredImages, providers, signedIn } from './provider.ts'
+import {
+  configuredImages,
+  hosts,
+  type Options,
+  providers,
+  signedIn,
+} from './provider.ts'
 
 let token = (account: string) =>
   'header.' + btoa(JSON.stringify({
@@ -52,6 +58,10 @@ test('OpenAI credential uses its grant, refreshes it, or selects an explicit API
     env: (name) => name == 'OPENAI_API_KEY' ? 'key' : undefined,
   }))
   assertEquals(await key.credential(), { token: 'key', base: OPENAI })
+  assertEquals(await signedIn(lent(), 'own').credential(), {
+    token: 'own',
+    base: OPENAI,
+  })
 })
 
 test('missing OpenAI sign-ins are refusals', async () => {
@@ -82,8 +92,8 @@ test('image configuration defaults to enabled with explicit disable and override
   providers(lent({ env: setting }), { images: false })
 })
 
-test('a configured endpoint is opened by the lent key, or by nothing, with its headers', async () => {
-  let sent = async (key: string | undefined) => {
+test('a configured endpoint is opened by its own key, the lent key, or by nothing, with its headers', async () => {
+  let sent = async (key: string | undefined, options: Options = {}) => {
     let seen: Request[] = []
     let model = providers(
       lent({
@@ -98,6 +108,7 @@ test('a configured endpoint is opened by the lent key, or by nothing, with its h
         headers: { 'cf-aig-authorization': 'Bearer aig' },
         images: false,
         web: false,
+        ...options,
       },
     ).openai
     await assertRejects(() =>
@@ -116,4 +127,23 @@ test('a configured endpoint is opened by the lent key, or by nothing, with its h
   let at = 'https://gateway.test/openai/responses'
   assertEquals(await sent('sentinel'), [[at, 'Bearer sentinel', 'Bearer aig']])
   assertEquals(await sent(undefined), [[at, null, 'Bearer aig']])
+  assertEquals(await sent('lent', { key: 'own' }), [[
+    at,
+    'Bearer own',
+    'Bearer aig',
+  ]])
+  let gateway = { account: 'acct', id: 'gw', token: 'stored' }
+  assertEquals(await sent(undefined, { base: undefined, gateway }), [[
+    'https://gateway.ai.cloudflare.com/v1/acct/gw/openai/responses',
+    null,
+    'Bearer stored',
+  ]])
+})
+
+test('a credential lent the provider goes only to the endpoint it aims at', () => {
+  assertEquals(hosts(), ['api.openai.com'])
+  assertEquals(hosts({ base: 'https://gateway.test/openai' }), ['gateway.test'])
+  assertEquals(hosts({ gateway: { account: 'a', id: 'g' } }), [
+    'gateway.ai.cloudflare.com',
+  ])
 })

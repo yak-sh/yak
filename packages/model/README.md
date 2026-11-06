@@ -49,7 +49,9 @@ keyed by the `provider.name` each serves under, built over what the host lends
 (`Lent`: the shared `fetch`, the person's sign-in `key` and `refresh` by
 integration, the artifact `store`, the host's `env` and, where the host keeps
 them, the `receipts` an interrupted call is delivered from) and the plugin's
-options from the config. A host running conversations
+options from the config. `hosts(options)`, where a plugin offers it, names the
+hosts those models call, so a host that puts a credential of its own in their
+calls sends it nowhere else. A host running conversations
 ([@yaks/harness](../harness/README.md), the hosted model executor in
 workers/model) asks every plugin its config names, so a config serves exactly
 the providers it lists, and the host depends on none of them.

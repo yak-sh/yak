@@ -29,12 +29,15 @@ application.
   401. Catalog error messages never repeat the provider's response body.
 - `openaiDoc` and `OPENAI_COMP` describe the `openai{response_id}` component.
 - `./provider` is the plugin a config names (@yaks/model `ProviderFacet`): it
-  serves `openai`, signed in with `OPENAI_API_KEY` or the person's ChatGPT
-  grant. Its options turn `images` and `web` off, or aim it at another
-  OpenAI-compatible endpoint (`base`, with `headers` on every request), opened
-  by the API key or the lent `openai` key, or left to authenticate the call
-  itself as an AI Gateway with a stored key does. `@yaks/openai/vocab` exports
-  `openaiDoc` and `docs` for schema loading.
+  serves `openai`, signed in with its own `key`, `OPENAI_API_KEY` or the
+  person's ChatGPT grant. Its options turn `images` and `web` off, or aim it at
+  another OpenAI-compatible endpoint (`base`, with `headers` on every request)
+  or at OpenAI through a Cloudflare AI Gateway (`gateway`: its `account` and
+  `id`, and the `token` of a gateway that keeps OpenAI's key itself). An
+  endpoint is opened by the key, the lent `openai` key, or by nothing, which
+  leaves the gateway to authenticate the call. `hosts(options)` says where those
+  models call, so a host sends a credential it lends them nowhere else.
+  `@yaks/openai/vocab` exports `openaiDoc` and `docs` for schema loading.
 
 ## Install
 

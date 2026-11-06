@@ -45,6 +45,14 @@ and local probes run inline. `MODEL_RECEIPTS` reads the executor's private
 request and receipt bucket. Kernel builds never deploy or replace an executor
 release.
 
+An app's store is lent the model providers config.ts `serving` names
+(providers.ts), each a plugin's `./provider` facet asked by the name it serves
+under; models.ts and inference.ts import none. A provider whose options carry a
+credential the Worker holds (`{"secret": NAME}`) is the platform's to pay for;
+any other is called on the app's own connection, through its egress. A call the
+executor runs carries each such credential as a sentinel, which the kernel's
+`grants` exchange only on the way to the hosts the provider says it calls.
+
 The kernel deploys once, using a stable sandbox toolchain image by registry
 reference. The live Worker's assets carry the CLI workspace, compressed and
 addressed by its source hash. A sandbox's `yak` fetches the live launcher and

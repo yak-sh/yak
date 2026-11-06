@@ -329,6 +329,38 @@ export let providing: Config = {
   ],
 }
 
+/** The model providers an app's store is lent (models.ts), the same way: by
+ * the provider name each serves under. A `{"secret": NAME}` in a provider's
+ * options is a credential, and one the Worker holds makes the provider the
+ * platform's to pay for; any other provider is called on the app's own
+ * connection to the integration named as it serves, and refused where the
+ * app has none. A call the hosted executor makes (inference.ts) carries each
+ * credential as a sentinel, exchanged on the way to the provider's `hosts`,
+ * and each `{"binding": NAME}`, what the Worker holds that is no credential
+ * (a setting), as it is. */
+export let serving: Config = {
+  plugins: [
+    '@yaks/openrouter',
+    // OpenAI through the account's AI Gateway, on the platform's key or the
+    // gateway's own token. Both are unset on purpose (wrangler.toml), which
+    // leaves OpenAI to an app's own connection.
+    {
+      use: '@yaks/openai',
+      with: {
+        key: { secret: 'OPENAI_API_KEY' },
+        base: { binding: 'OPENAI_API' },
+        gateway: {
+          account: { binding: 'CF_ACCOUNT' },
+          id: { binding: 'AI_GATEWAY' },
+          token: { secret: 'AI_GATEWAY_TOKEN' },
+        },
+        web: false,
+        images: false,
+      },
+    },
+  ],
+}
+
 export let configs = {
   app: appConfig,
   directory: directoryConfig,

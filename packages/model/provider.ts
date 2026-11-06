@@ -33,4 +33,7 @@ export type ProviderFacet = {
     lent: Lent,
     options: Record<string, unknown>,
   ) => Record<string, Model>
+  /** the hosts those models call with these options: where a host may send a
+   * credential it puts in their calls, and nowhere else */
+  hosts?: (options: Record<string, unknown>) => string[]
 }

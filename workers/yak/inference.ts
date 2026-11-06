@@ -2,7 +2,6 @@
 // the original ask. Private inputs contain app identity and credential sentinels.
 import { type Bucket, objectBlobs } from '@yaks/blob'
 import { artifactStore } from '@yaks/blob/identify'
-import { KEY, resolve } from '@yaks/connections'
 import { type Grant, grants as authorized } from '@yaks/egress'
 import type { Comp } from '@yaks/graph'
 import { derivedEid } from '@yaks/graph/identity'
@@ -22,12 +21,9 @@ import {
   requestBound,
   submitCall,
 } from '@yaks/model'
-import { endpoint } from '@yaks/openai'
-import { sentinel } from '@yaks/secrets'
 import { capture } from '@yaks/tracker/report'
 import type { FrozenRequest, Kernel } from '../model/worker.ts'
 import { blobPrefix } from './blob-key.ts'
-import { ctxOf } from './connections.ts'
 import { egressOf } from './outbound.ts'
 import { appStore, directoryOf } from './directory.ts'
 import type { Env } from './env.ts'
@@ -35,7 +31,8 @@ import type { Stored } from './graph.ts'
 import { countedMedia, monthOf } from './meter.ts'
 import { reservation, reserved } from './model-spend.ts'
 import { KERNEL, metaOf } from './meta.ts'
-import { vaultOf } from './vault.ts'
+import { frozen as freeze, granted, names } from './providers.ts'
+import { serving } from './config.ts'
 
 export let RELEASE = 'yak-model-v1'
 type PrivateRequest = FrozenRequest & {
@@ -125,51 +122,6 @@ let completed = async (env: Bindings, job: Inference) => {
 }
 let budgetRefusal = (failure?: InferenceReceipt['failure']) =>
   failure?.code === 'limit' && !failure.interrupted
-let platformSentinel = async (env: Bindings, name: string) =>
-  sentinel(await vaultOf(env).salt(), 'hosted-inference:' + name)
-let providerAt = async (
-  at: Stored,
-  provider: string,
-): Promise<FrozenRequest['provider']> => {
-  if (provider === 'openrouter') {
-    if (!at.env.STORE) throw new ModelError('unbound')
-    let link = await resolve(
-      ctxOf({ ...at.env, STORE: at.env.STORE }),
-      at.app!,
-      provider,
-    )
-    if (!link) {
-      throw new ModelError(
-        'connection',
-        'Connect OpenRouter to this app before asking its models',
-      )
-    }
-    return { name: provider, key: link.sentinels[KEY.name] }
-  }
-  return {
-    name: 'openai',
-    key: at.env.OPENAI_API_KEY ? await platformSentinel(at.env, 'openai') : '',
-    with: {
-      base: await endpoint({
-        base: at.env.OPENAI_API,
-        gateway: at.env.AI_GATEWAY,
-        account: at.env.CF_ACCOUNT,
-        ai: at.env.AI,
-      }),
-      ...at.env.AI_GATEWAY_TOKEN
-        ? {
-          headers: {
-            'cf-aig-authorization': 'Bearer ' +
-              await platformSentinel(at.env, 'gateway'),
-          },
-        }
-        : {},
-      web: false,
-      images: false,
-    },
-  }
-}
-
 let quoted = (
   req:
     & Parameters<typeof requestBound>[0]
@@ -208,7 +160,7 @@ export let lending = async (
 ): Promise<Executor | undefined> => {
   if (
     at.context?.app.scope == 'store' ||
-    !['openai', 'openrouter'].includes(provider) || !at.app ||
+    !names(at.env, serving).includes(provider) || !at.app ||
     !at.env.MODEL_RECEIPTS
   ) return
   let live = await at.env.MODEL?.version().catch(() => undefined)
@@ -233,7 +185,7 @@ export let lending = async (
           let context = (model?.model as Comp | undefined)?.context as
             | number
             | undefined
-          let providerInfo = await providerAt(at, provider)
+          let providerInfo = await freeze(at.env, at.app!, provider)
           let prior = await reservation({ STORE: at.env.STORE! }, call)
           let quote = prior
             ? quoted(
@@ -390,25 +342,15 @@ export let hosting = (env: Bindings): Kernel => ({
   },
   grants: async (job): Promise<Grant[]> => {
     let { frozen } = await authenticated(env, job)
-    if (frozen.provider.name === 'openrouter') {
-      return authorized(egressOf({ ...env, STORE: env.STORE! }, frozen.app), {
+    let { name, key } = frozen.provider
+    let own = key
+      ? await authorized(egressOf({ ...env, STORE: env.STORE! }, frozen.app), {
         app: frozen.app,
         person: null,
         level: 'owner',
-      }, [frozen.provider.key])
-    }
-    let hosts = [new URL(String(frozen.provider.with?.base)).host]
-    let values = [
-      { name: 'openai', value: env.OPENAI_API_KEY },
-      { name: 'gateway', value: env.AI_GATEWAY_TOKEN },
-    ]
-    return Promise.all(
-      values.filter((v) => v.value).map(async (v) => ({
-        sentinel: await platformSentinel(env, v.name),
-        value: v.value!,
-        hosts,
-      })),
-    )
+      }, [key])
+      : []
+    return [...own, ...await granted(env, name)]
   },
   delivered: async (job) => {
     let { frozen, found, graph, ask, receipt } = await completed(env, job)

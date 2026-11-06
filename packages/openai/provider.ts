@@ -2,8 +2,9 @@
 // `openai`, signed in with an API key from the host's settings or the ChatGPT
 // grant in the person's OpenAI connection, generating images into the host's
 // artifact store and searching the web. A config may aim it at another
-// OpenAI-compatible endpoint instead (`base`, such as an AI Gateway's). Its
-// transport loads on the first ask.
+// OpenAI-compatible endpoint instead (`base`), or reach OpenAI through a
+// Cloudflare AI Gateway (`gateway`), and pay with a key of its own (`key`).
+// Its transport loads on the first ask.
 
 import { Refused } from '@yaks/graph/errors'
 import {
@@ -12,7 +13,13 @@ import {
   type Model,
   prefixCacheMark,
 } from '@yaks/model'
-import { CODEX, type Credential, fromChatGPT, fromEnv } from './credential.ts'
+import {
+  CODEX,
+  type Credential,
+  fromChatGPT,
+  fromEnv,
+  OPENAI,
+} from './credential.ts'
 import type { ImageGeneration, Images } from './images.ts'
 import type { TransportCredential } from './transport.ts'
 import { openaiDoc } from './vocab.ts'
@@ -27,9 +34,12 @@ export type SignedIn = {
  * refreshed through their connection when the Codex backend refuses it. */
 export let signedIn = (
   lent: Pick<Lent, 'env' | 'key' | 'refresh'>,
+  own?: string,
 ): SignedIn => {
+  let keyed = (): Credential | undefined =>
+    own ? { token: own, base: OPENAI } : fromEnv(lent.env)
   let credential = async (): Promise<Credential> => {
-    let key = fromEnv(lent.env)
+    let key = keyed()
     if (key) return key
     let token = await lent.key('openai')
     if (!token) {
@@ -42,7 +52,7 @@ export let signedIn = (
   return {
     credential,
     refresh: async (stale) => {
-      let key = fromEnv(lent.env)
+      let key = keyed()
       if (key || stale.base != CODEX) return key ?? await credential()
       let token = await lent.refresh('openai', stale.token)
       if (!token) {
@@ -53,13 +63,14 @@ export let signedIn = (
   }
 }
 
-// How a configured endpoint is opened (Options `base`).
+// How a configured endpoint is opened (Options `base`, `gateway`).
 let opened = (
   lent: Pick<Lent, 'env' | 'key'>,
   base: string,
+  own?: string,
 ): Pick<SignedIn, 'credential'> => ({
   credential: async () => ({
-    token: fromEnv(lent.env)?.token ?? await lent.key('openai') ?? '',
+    token: own ?? fromEnv(lent.env)?.token ?? await lent.key('openai') ?? '',
     base: base.replace(/\/+$/, ''),
   }),
 })
@@ -77,9 +88,30 @@ export type Options = {
    * by `OPENAI_API_KEY`, else the lent `openai` key, else by nothing, which
    * leaves the endpoint to authenticate the call (an AI Gateway's own key) */
   base?: string
-  /** headers every request carries (an AI Gateway's `cf-aig-authorization`) */
+  /** headers every request carries */
   headers?: Record<string, string>
+  /** a Cloudflare AI Gateway to reach OpenAI through, where no `base` is
+   * given: its account and its id, and the token of a gateway that keeps
+   * OpenAI's key itself (sent as `cf-aig-authorization`) */
+  gateway?: { account?: string; id?: string; token?: string }
+  /** the API key to call with, before `OPENAI_API_KEY` and the lent key */
+  key?: string
 }
+
+// The endpoint options aim at, or none for OpenAI's own.
+let aimed = (options: Options): string | undefined => {
+  let { account, id } = options.gateway ?? {}
+  return options.base ||
+    (account && id
+      ? `https://gateway.ai.cloudflare.com/v1/${account}/${id}/openai`
+      : undefined)
+}
+
+/** Where the models `providers` makes with `options` call, so a host may
+ * send a credential it lends them there and nowhere else. */
+export let hosts = (options: Options = {}): string[] => [
+  new URL(aimed(options) ?? OPENAI).host,
+]
 
 /** Explicit options override the setting; otherwise images are on. */
 export let configuredImages = (
@@ -106,15 +138,22 @@ export let providers = (
     options.images,
     lent.env('HARNESS_IMAGES'),
   )
+  let base = aimed(options), token = options.gateway?.token
   return {
     openai: deferredModel(
       () =>
         import('./responses.ts').then(({ responses }) =>
           responses({
-            ...options.base
-              ? { ...opened(lent, options.base), authentication: 'optional' }
-              : signedIn(lent),
-            headers: options.headers,
+            ...base
+              ? {
+                ...opened(lent, base, options.key),
+                authentication: 'optional',
+              }
+              : signedIn(lent, options.key),
+            headers: {
+              ...options.headers,
+              ...token ? { 'cf-aig-authorization': `Bearer ${token}` } : {},
+            },
             fetch: lent.fetch,
             redact: true,
             images,

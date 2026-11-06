@@ -78,6 +78,8 @@ import * as vocab73 from './facets/meter-vocab.ts'
 import * as vocab74 from './facets/models-vocab.ts'
 import * as vocab75 from './facets/trash-vocab.ts'
 import * as provider0 from '@yaks/anthropic/provider'
+import * as provider1 from '@yaks/openai/provider'
+import * as provider2 from '@yaks/openrouter/provider'
 export let vocabFacets: Record<string, VocabFacet> = {
   '@yaks/admin': vocab0,
   '@yaks/alias': vocab1,
@@ -156,9 +158,11 @@ export let vocabFacets: Record<string, VocabFacet> = {
   'yak/models': vocab74,
   'yak/trash': vocab75,
 }
-/** The providers config.ts `providing` names, by plugin. */
+/** The providers config.ts `providing` and `serving` name, by plugin. */
 export let providerFacets: Record<string, ProviderFacet> = {
   '@yaks/anthropic': provider0,
+  '@yaks/openai': provider1,
+  '@yaks/openrouter': provider2,
 }
 let facets: Record<string, () => Promise<unknown>> = {
   '@yaks/alias/graph': () => import('@yaks/alias/graph'),

@@ -35,7 +35,14 @@ import { front, read } from '@yaks/yaml'
 import { contentIdentity } from './content-identity.ts'
 import { fileURLToPath } from 'node:url'
 import { members } from '@yaks/cli/dependencies'
-import { configs, domains, phoneConfig, posts, providing } from './config.ts'
+import {
+  configs,
+  domains,
+  phoneConfig,
+  posts,
+  providing,
+  serving,
+} from './config.ts'
 import {
   imports,
   loader,
@@ -381,6 +388,7 @@ let loaded = await formatted(
         ),
         ...vocabs(manifests),
         ...providers(providing, manifests),
+        ...providers(serving, manifests),
       ]),
     ],
     local,
