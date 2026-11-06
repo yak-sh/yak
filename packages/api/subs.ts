@@ -222,6 +222,8 @@ type Sub = {
   /** the entities currently in the set */
   members: Set<Eid>
   fields: Map<Eid, Set<string>>
+  /** the entities each member's sent row references */
+  targets: Map<Eid, Eid[]>
   /** true when the registry's network decides membership, false when this
    * subscription runs its query again instead */
   routed: boolean
@@ -574,17 +576,27 @@ export let subscriptions = (graph: Graph, opts: {
       )
     )
   }
+  // Whether an answer can show a reference to `eid`: one its sent rows hold,
+  // or any while its rows are still being read or are read from more than
+  // its members (a view, a projection's peers, relayed values).
+  let shows = (sub: Sub, eid: Eid) =>
+    sub.loading || !!sub.view || !!sub.plan?.reaches.length || sub.peer ||
+    [...sub.targets.values()].some((to) => to.includes(eid))
   // Reference values depend on their targets' visibility, even when the
-  // unchanged referring entity remains in a routed or retained answer.
+  // unchanged referring entity remains in a routed or retained answer. A
+  // deleted target can only hide the references to it, so it moves only an
+  // answer that shows one; a write to what the policy reads may also reveal
+  // a reference the answer hides.
   let policyMoved = (sub: Sub, applied: Bundle[]) =>
     sub.policyRefs && sub.policy !== undefined &&
     (!sub.policy ||
       applied.some((b) =>
-        dead(b) ||
-        comps(b).some(([name]) =>
-          sub.policy!.near.has(name) || sub.policy!.far.has(name) ||
-          sub.policy!.via.has(name)
-        )
+        dead(b)
+          ? shows(sub, b.entity.eid)
+          : comps(b).some(([name]) =>
+            sub.policy!.near.has(name) || sub.policy!.far.has(name) ||
+            sub.policy!.via.has(name)
+          )
       ))
   // Policies read dependencies without changing what the caller selected or
   // requiring their private components on otherwise public members.
@@ -946,7 +958,17 @@ export let subscriptions = (graph: Graph, opts: {
   }
 
   const rememberFields = (sub: Sub, bundles: Bundle[]) => {
+    let vocab = sub.view?.vocab ?? graph.vocab
     for (const b of bundles) {
+      let to = comps(b).flatMap(([comp, value]) =>
+        Object.entries(value ?? {}).flatMap(([prop, v]) =>
+          vocab.prop(comp, prop)?.category != 'ref'
+            ? []
+            : [v].flat().filter((e): e is Eid => typeof e == 'string')
+        )
+      )
+      if (to.length) sub.targets.set(b.entity.eid, to)
+      else sub.targets.delete(b.entity.eid)
       sub.fields.set(
         b.entity.eid,
         new Set(
@@ -1140,6 +1162,7 @@ export let subscriptions = (graph: Graph, opts: {
       send: delivery(sink, id, readOpts, query === true),
       members: new Set(),
       fields: new Map(),
+      targets: new Map(),
       routed: false,
       peer: false,
       cut: whole,
@@ -1336,7 +1359,10 @@ export let subscriptions = (graph: Graph, opts: {
     }
     if (sub.kept) return
     rememberFields(sub, bundles)
-    for (const eid of gone) sub.fields.delete(eid)
+    for (const eid of gone) {
+      sub.fields.delete(eid)
+      sub.targets.delete(eid)
+    }
     if (bundles.length || gone.length) {
       return sub.send({
         id: sub.id,
@@ -1398,7 +1424,10 @@ export let subscriptions = (graph: Graph, opts: {
         ? set.filter((b) => joined.includes(b.entity.eid))
         : set
       rememberFields(sub, changed)
-      for (let e of gone) sub.fields.delete(e)
+      for (let e of gone) {
+        sub.fields.delete(e)
+        sub.targets.delete(e)
+      }
       let frame = framed(sub, changed, answer)
       if (changed.length || gone.length || frame.peerGone) {
         return sub.send({ id: sub.id, ...frame, gone, ...hail(sub, joined) })
@@ -1464,6 +1493,7 @@ export let subscriptions = (graph: Graph, opts: {
       let gone = [...s.members].filter((id) => !ids.has(id))
       let joined = [...ids].filter((id) => !s.members.has(id))
       s.members = ids
+      for (let e of gone) s.targets.delete(e)
       if (
         reset && routable(s)
       ) s.routed = network(s).add(s, queryOf(s), ids)
@@ -2051,6 +2081,7 @@ export let subscriptions = (graph: Graph, opts: {
       opts: { ...readOpts, native: nested || readOpts.native },
       members: new Set(),
       fields: new Map(),
+      targets: new Map(),
       routed: false,
       peer: true,
       durable: plan.durable,

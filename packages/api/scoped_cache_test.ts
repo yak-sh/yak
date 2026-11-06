@@ -254,3 +254,27 @@ test('a retained reference query loses membership when its target becomes privat
   subs.open(next.sink, 'link', '.link.to=target&*', { person: 'bob' })
   equal(next.take()[0].bundles, [])
 })
+
+// Two watches over alice, whose link names the target: each counts the times
+// it is answered again.
+let naming = fixture('alice', true), namingEar = naming.ear()
+for (let q of ['.entity.eid=alice&*', '.link.to=target&.limit=50']) {
+  naming.subs.open(namingEar.sink, q, q, { person: 'bob' })
+}
+namingEar.take()
+let answered = () => namingEar.take().map((f) => f.id).sort()
+naming.g.apply([{ entity: { eid: 'other' }, label: { text: 'x' } }], {
+  trusted: true,
+})
+naming.g.apply([{ entity: { eid: 'other' }, $delete: true }], {
+  trusted: true,
+})
+let unrelated = answered()
+naming.g.apply([{ entity: { eid: 'target' }, $delete: true }], {
+  trusted: true,
+})
+let targeted = answered()
+test('a scoped watch is answered again for a deleted target it shows, not any deletion', () => {
+  equal(unrelated, [])
+  equal(targeted, ['.entity.eid=alice&*', '.link.to=target&.limit=50'])
+})
