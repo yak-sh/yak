@@ -43,7 +43,7 @@ import { cli, type Command, type Ctx, helpTool, type Opts } from './run.ts'
 import { listed } from './platform.ts'
 import { closeAccounts, personal } from './accounts.ts'
 import { configPath, names, ownConfig, read } from './config.ts'
-import { naming, personOf, starter } from './init.ts'
+import { naming, personOf, refreshed, starter } from './init.ts'
 import { command as launchCommand } from '@yaks/process/command'
 import * as held from './held.ts'
 import { restorable } from './restore.ts'
@@ -167,25 +167,58 @@ export let YAK: Opts = {
 // It asks for nothing: the person is named from git's `user.name`, or else the
 // login user, and confirming that name is the graph's first task, filed to
 // them, which any agent that connects finds and asks them about. It never
-// replaces a config: one already there is somebody's graph.
-let init = async (_: Record<string, unknown>, c: Ctx): Promise<number> => {
+// replaces a config unless forced: one already there is somebody's graph. A
+// forced one is rewritten at this release with its graph and person kept, the
+// old file saved beside it.
+let init = async (
+  args: Record<string, unknown>,
+  c: Ctx,
+): Promise<number> => {
   let path = c.config ?? system.env.get('YAK_CONFIG') ?? ownConfig()
   if (!path) {
     throw new Usage('no $HOME to keep a config in — name one with --config')
   }
+  let dir = path.includes('/') ? path.slice(0, path.lastIndexOf('/')) : '.'
+  let graph = (db: string) => db.startsWith('/') ? db : `${dir}/${db}`
+  let old: Record<string, unknown> | undefined
+  try {
+    old = JSON.parse(disk.readTextFileSync(path))
+  } catch (error) {
+    if (!(error instanceof disk.errors.NotFound)) throw error
+  }
+  if (old && !args.force) {
+    c.note(
+      `${path} already exists, and yak init never replaces a config. ` +
+        'yak init --force rewrites it for this release, keeping your graph.',
+    )
+    return 1
+  }
+  // A forced init never loses the config it replaces.
+  let saved = old && `${path}.${new Date().toISOString().replaceAll(':', '-')}`
+  if (saved) disk.copyFileSync(path, saved)
+  if (old?.person) {
+    let { config, replaced } = refreshed(old)
+    disk.writeTextFileSync(path, JSON.stringify(config, null, 2) + '\n')
+    c.out(
+      `Rewrote ${path} for yak ${pinned['@yaks/cli']}. ` +
+        `Your graph (${graph(config.db!)}) and your person are kept.`,
+    )
+    for (let line of replaced) c.out(`Replaced ${line}`)
+    c.out(`The old config is at ${saved}.`)
+    return 0
+  }
   let person = crypto.randomUUID()
   let name = await whose()
-  let dir = path.includes('/') ? path.slice(0, path.lastIndexOf('/')) : '.'
   disk.mkdirSync(dir, { recursive: true })
   try {
     disk.writeTextFileSync(
       path,
       JSON.stringify(starter(person), null, 2) + '\n',
-      { createNew: true },
+      { createNew: !old },
     )
   } catch (error) {
     if (!(error instanceof disk.errors.AlreadyExists)) throw error
-    c.note(`a config is already at ${path} — yak init never replaces one`)
+    c.note(`${path} already exists, and yak init never replaces a config.`)
     return 1
   }
   try {
@@ -201,13 +234,14 @@ let init = async (_: Record<string, unknown>, c: Ctx): Promise<number> => {
     disk.removeSync(path)
     throw error
   }
-  c.out(`wrote ${path}, a graph worked at by ${name ?? 'you'}`)
+  c.out(`Wrote ${path}. Your graph is ${graph(starter(person).db!)}.`)
   c.out(
     name
-      ? `not ${name}? yak name "Your Name"`
-      : 'no name found for you: yak name "Your Name"',
+      ? `You are ${name}. If that is wrong, run: yak name "Your Name"`
+      : 'No name was found for you. Run: yak name "Your Name"',
   )
-  c.out('next: yak task list, then yak serve')
+  if (saved) c.out(`The old config is at ${saved}.`)
+  c.out('Next: yak task list, then yak serve')
   return 0
 }
 
@@ -228,7 +262,7 @@ let whose = async (): Promise<string | undefined> => {
   return system.env.get('USER') || system.env.get('USERNAME') || undefined
 }
 
-// `name` renames the person this machine's graph is worked at by: their
+// `name` renames the person who works in this machine's graph: their
 // `doc.title`, which is how what they type is signed.
 let rename = async (args: Record<string, unknown>, c: Ctx): Promise<number> => {
   let path = configPath(c.config)
@@ -358,13 +392,23 @@ export let own: Command[] = [
     description:
       "start this machine's own graph: write its config and make you its person",
     offered: (c) => !c.config,
-    inputSchema: { type: 'object', additionalProperties: false },
+    inputSchema: {
+      type: 'object',
+      additionalProperties: false,
+      properties: {
+        force: {
+          type: 'boolean',
+          description:
+            'rewrite an existing config for this release, keeping its graph and person',
+        },
+      },
+    },
     run: init,
   },
   {
     name: 'name',
     description:
-      "rename yourself, the person this machine's graph is worked at by",
+      "rename yourself, the person who works in this machine's graph",
     offered: (c) => !!configPath(c.config),
     inputSchema: {
       type: 'object',

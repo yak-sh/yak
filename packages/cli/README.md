@@ -11,7 +11,7 @@ transaction.
 ```sh
 deno run -A jsr:@yaks/cli/install
 
-yak init                        # Start this machine's own graph, worked at by you.
+yak init                        # Start this machine's own graph, with you as its person.
 yak task new 'Add the sign-up page' # Open that graph, run a tool, and exit.
 yak task list
 yak serve                       # Run the graph's serve tool: HTTP.

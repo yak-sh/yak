@@ -22,7 +22,7 @@ Codex have cost you, [docs/SPEND.md](docs/SPEND.md) is the short version.
 ```sh
 deno run -A jsr:@yaks/cli/install
 # to update, or take a release from today: deno run -A --minimum-dependency-age=0 --reload=jsr:@yaks/cli jsr:@yaks/cli/install
-yak init            # ~/.yak/yak.json and its graph, worked at by you
+yak init            # writes ~/.yak/yak.json and starts your graph; --force rewrites it for this release
 yak task new 'Add the sign-up page'
 yak task list
 yak serve           # the canvas, /mcp and /query on http://127.0.0.1:8787
@@ -41,11 +41,13 @@ below it: `--minimum-dependency-age=0` takes a release published today, and
 found last. They are Deno's flags, so they go before the package.
 
 `yak init` writes the config (`db`, the plugins, and who you are) and never
-replaces one. It asks for no name: it takes git's `user.name`, or else your
-login, and the graph's first task, filed to you, is for an agent to ask you
-whether that is right. `yak name` renames you. `yak serve` listens on this
-machine alone, on port 8787 unless the config sets `port`; a config's `hostname`
-offers it to a network, and it has no authentication of its own.
+replaces one. `yak init --force` rewrites it for the release you are running,
+keeping your graph and your person, and saves the old file beside it. It asks
+for no name: it takes git's `user.name`, or else your login, and the graph's
+first task, filed to you, is for an agent to ask you whether that is right.
+`yak name` renames you. `yak serve` listens on this machine alone, on port 8787
+unless the config sets `port`; a config's `hostname` offers it to a network, and
+it has no authentication of its own.
 
 Agents join the same graph:
 

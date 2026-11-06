@@ -102,14 +102,60 @@ export let UNNUMBERED = [
   'volume',
 ]
 
-/** The config a new graph starts from, its database beside it on disk, worked
- * at by `person`. */
+/** The config a new graph starts from, its database beside it on disk, and
+ * `person` the one who works in it. */
 export let starter = (person: string): Config => ({
   db: 'yak.db',
   plugins: [...STARTER],
   numbers: { except: [...UNNUMBERED] },
   person,
 })
+
+/** `yak init --force`'s config: the starter at this release, keeping `old`'s
+ * graph (`db`) and person, with a line for each other value of `old` it
+ * replaces or drops.
+ *
+ * ```ts
+ * import { assertEquals } from '@std/assert'
+ * let old = { db: 'g.db', person: 'p', plugins: ['@yaks/kernel', '@yaks/old'], port: 9 }
+ * let { config, replaced } = refreshed(old)
+ * assertEquals([config.db, config.person], ['g.db', 'p'])
+ * assertEquals(replaced[0].startsWith('plugins: dropped @yaks/old; added '), true)
+ * assertEquals(replaced[1], 'port: dropped 9')
+ * ```
+ */
+export let refreshed = (
+  old: Record<string, unknown>,
+): { config: Config; replaced: string[] } => {
+  let config = {
+    ...starter(String(old.person)),
+    ...(old.db ? { db: old.db as string } : {}),
+  }
+  let fresh = config as Record<string, unknown>
+  let replaced = Object.entries(old).flatMap(([key, was]) => {
+    let now = fresh[key]
+    if (JSON.stringify(was) == JSON.stringify(now)) return []
+    if (key == 'plugins' && Array.isArray(was)) {
+      let named = (list: unknown[]) =>
+        new Set(list.map((p) => typeof p == 'string' ? p : JSON.stringify(p)))
+      let before = named(was)
+      let after = named(now as unknown[])
+      let dropped = [...before].filter((p) => !after.has(p))
+      let added = [...after].filter((p) => !before.has(p))
+      let parts = [
+        dropped.length && `dropped ${dropped.join(', ')}`,
+        added.length && `added ${added.join(', ')}`,
+      ].filter(Boolean)
+      return parts.length ? [`plugins: ${parts.join('; ')}`] : []
+    }
+    return [
+      now === undefined
+        ? `${key}: dropped ${JSON.stringify(was)}`
+        : `${key}: was ${JSON.stringify(was)}`,
+    ]
+  })
+  return { config, replaced }
+}
 
 /** The person `yak init` makes, under the name it found for them, or none. */
 export let personOf = (eid: string, name?: string) => ({
@@ -135,8 +181,8 @@ export let naming = (person: string, name?: string) => ({
   filed: { assignee: person },
   doc: {
     title: name
-      ? `Confirm that ${name} is the name of the person this graph is worked at by`
-      : 'Name the person this graph is worked at by',
+      ? `Confirm that ${name} is the name of the person who works in this graph`
+      : 'Ask the person who works in this graph for their name',
     body: 'The person this task is filed to is who everything typed here is ' +
       'signed by. ' +
       (name

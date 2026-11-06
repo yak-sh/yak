@@ -87,17 +87,19 @@ test('a dry run is the tool’s check, and nothing else moves', async () => {
 // `init` starts a graph where there was none: a config that opens, naming a
 // person the graph holds, whose name is the first task, T-1, filed to them to
 // confirm, and `name` renames. A second `init` on the same path is refused and
-// leaves the first alone.
+// leaves the first alone; `init --force` rewrites it, keeping graph and person
+// and saving the old one beside it.
 test('init writes a config whose graph knows its person', async () => {
   let dir = Deno.makeTempDirSync()
   let path = `${dir}/yak.json`
+  let said: string[] = []
   let line = (argv: string[]) =>
     cli(own, {
       ...YAK,
       argv: [...argv, '--config', path],
       env: () => undefined,
       reads: { file: () => '', stdin: () => '' },
-      out: () => {},
+      out: (line: string) => void said.push(line),
       note: () => {},
     })
   try {
@@ -113,6 +115,19 @@ test('init writes a config whose graph knows its person', async () => {
     await close(0)
     assertEquals(await line(['init']), 1)
     assertEquals(Deno.readTextFileSync(path), first)
+    let older = { ...JSON.parse(first), db: 'mine.db', port: 9 }
+    Deno.writeTextFileSync(path, JSON.stringify(older))
+    said.length = 0
+    assertEquals(await line(['init', '--force']), 0)
+    let now = JSON.parse(Deno.readTextFileSync(path))
+    assertEquals([now.person, now.db, now.port], [person, 'mine.db', undefined])
+    assertEquals(said.includes('Replaced port: dropped 9'), true)
+    let [saved] = [...Deno.readDirSync(dir)]
+      .filter((e) => e.name.startsWith('yak.json.'))
+    assertEquals(
+      JSON.parse(Deno.readTextFileSync(`${dir}/${saved.name}`)),
+      older,
+    )
   } finally {
     Deno.removeSync(dir, { recursive: true })
   }
