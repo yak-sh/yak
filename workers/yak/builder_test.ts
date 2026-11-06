@@ -21,8 +21,6 @@ import {
   idOf,
   modelOf,
   NO_AI,
-  NO_KEY,
-  openai,
   roster,
 } from './builder.ts'
 import { directory, type Space } from './directory.ts'
@@ -328,21 +326,20 @@ test('no model is bound here, and either tier says so', async () => {
   for (let tier of [null, 'plus' as const]) {
     let out = await build(env, owner, { ...space, tier }, asked('go'))
     assertEquals(out.refused, NO_AI)
-    assertStringIncludes(out.text, 'AI binding')
+    assertStringIncludes(out.text, 'No model is bound here')
   }
 })
 
-test('an OpenAI model with no gateway to reach it says so', async () => {
+test('an OpenAI model the platform holds no key or gateway for says so', async () => {
   let { env, space } = await seeded()
   let out = await build(env, owner, { ...space, tier: 'plus' }, asked('go'), {
     model: terra(env),
   })
 
-  assertEquals(out.refused, NO_KEY)
-  assertStringIncludes(out.text, 'AI_GATEWAY')
+  assertStringIncludes(String(out.refused), 'credential unavailable')
 })
 
-test('the tier picks the model, and the id picks the provider', async () => {
+test('the tier picks the model, and the config its provider', async () => {
   let { env, space } = await seeded()
   env.BUILDER_MODEL_FREE = '@cf/test/free'
   env.BUILDER_MODEL_PAID = '@cf/test/paid'
@@ -352,12 +349,11 @@ test('the tier picks the model, and the id picks the provider', async () => {
   assertStringIncludes(idOf(env, { ...space, tier: 'plus' }), '@cf/')
   assert(idOf(env, free(space)) != idOf(env, { ...space, tier: 'plus' }))
 
-  // Config overrides both, and a `@cf/` id is Workers AI whoever set it.
+  // Config overrides both, whatever the id says.
   let said = { ...env, BUILDER_MODEL_FREE: '@cf/openai/gpt-oss-120b' }
   assertEquals(idOf(said, free(space)), '@cf/openai/gpt-oss-120b')
   assertEquals(modelOf(env, '@cf/x/y').id, '@cf/x/y')
-  // And an id that is not `@cf/…` is the other provider.
-  assertEquals(modelOf(env, 'gpt-5.6-terra').id, 'gpt-5.6-terra')
+  assertEquals(modelOf(env, 'gpt-5.6-terra', 'openai').id, 'gpt-5.6-terra')
 })
 
 test('the roster is the platform table, whole', async () => {
@@ -379,12 +375,14 @@ test('the roster is the platform table, whole', async () => {
 // An OpenAI model, priced here because the catalogue prices none of them: the
 // builder asks no model it cannot weigh.
 let terra = (env: Env) => ({
-  ...openai(env, 'gpt-5.6-terra'),
+  ...modelOf(env, 'gpt-5.6-terra', 'openai'),
+  info: undefined,
   price: { input: 1, output: 1 },
   context: 100000,
 })
 
-// OpenAI Responses requests and responses stay inside this process.
+// OpenAI Responses requests and responses stay inside this process, the
+// response streamed as the Responses API streams one.
 let openaiStub = (
   answer: (n: number) => { status?: number; body?: unknown },
 ) => {
@@ -395,7 +393,23 @@ let openaiStub = (
       body: await req.json(),
     })
     let { status = 200, body = {} } = answer(heard.length)
-    return Response.json(body, { status })
+    if (status != 200) return Response.json(body, { status })
+    let { output = [], usage } = body as { output?: unknown[]; usage?: unknown }
+    return new Response(
+      [
+        ...output.map((item) => ({ type: 'response.output_item.done', item })),
+        {
+          type: 'response.completed',
+          response: {
+            id: 'r',
+            model: 'gpt-5.6-terra',
+            status: 'completed',
+            usage,
+          },
+        },
+      ].map((event) => 'data: ' + JSON.stringify(event) + '\n\n').join(''),
+      { headers: { 'content-type': 'text/event-stream' } },
+    )
   })
   return {
     heard,
@@ -419,7 +433,10 @@ test('the paid build reaches the gateway with no key of ours', async () => {
     },
   }))
   try {
-    let { env, space } = await seeded({ OPENAI_API: said.url })
+    let { env, space } = await seeded({
+      OPENAI_API: said.url,
+      MODEL_FETCH: (input, init) => fetch(input, init),
+    })
     let out = await build(env, owner, { ...space, tier: 'plus' }, asked('hi'), {
       model: terra(env),
     })
@@ -461,18 +478,16 @@ test('the paid build reaches the gateway with no key of ours', async () => {
 })
 
 test('a busy model is a wait, not a failure', async () => {
-  let said = openaiStub(() => ({ status: 429, body: { error: 'slow down' } }))
-  try {
-    let { env, space } = await seeded({ OPENAI_API: said.url })
-    let out = await build(env, owner, { ...space, tier: 'plus' }, asked('hi'), {
-      model: terra(env),
-    })
+  let { env, space } = await seeded({
+    AI: embeds({
+      run: () =>
+        Promise.reject(new Error('3040: Capacity temporarily exceeded')),
+    }),
+  })
+  let out = await build(env, owner, { ...space, tier: 'plus' }, asked('hi'))
 
-    assertEquals(out.refused, BUSY)
-    assertEquals(out.rounds, 0)
-  } finally {
-    await said.stop()
-  }
+  assertEquals(out.refused, BUSY)
+  assertEquals(out.rounds, 0)
 })
 
 test('builder affinity and tools survive followups; missing usage stays unknown', async () => {

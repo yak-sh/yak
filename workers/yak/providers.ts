@@ -19,7 +19,13 @@ import {
 } from '@yaks/host/config'
 import { KEY, known, resolve } from '@yaks/connections'
 import type { Grant } from '@yaks/egress'
-import { type Lent, type Model, ModelError } from '@yaks/model'
+import {
+  type Lent,
+  type Model,
+  ModelError,
+  type Native,
+  type Spending,
+} from '@yaks/model'
 import { sentinel } from '@yaks/secrets'
 import { providing, serving } from './config.ts'
 import type { VocabDoc } from '@yaks/vocab'
@@ -41,9 +47,22 @@ export let providerDocs: VocabDoc[] = (providing.plugins ?? []).flatMap(
 
 /** What the platform lends a provider for its own agents (the Operator, the
  * builder): the transport it holds as it lends and its settings. Nobody is
- * signed in, and it keeps no generated media for them. */
+ * signed in, and it keeps no generated media for them. One lending per env,
+ * so a provider that keeps what it read by transport (a catalogue) reads it
+ * once. */
 export let platform = (env: Env): Lent => {
+  let held = platforms.get(env)
+  if (held && held.transport == env.MODEL_FETCH) return held.lent
   let send = env.MODEL_FETCH ?? ((input, init) => fetch(input, init))
+  let lent = lending(env, send)
+  platforms.set(env, { transport: env.MODEL_FETCH, lent })
+  return lent
+}
+let platforms = new WeakMap<
+  Env,
+  { transport: Env['MODEL_FETCH']; lent: Lent }
+>()
+let lending = (env: Env, send: typeof fetch): Lent => {
   return {
     fetch: send,
     key: () => Promise.resolve(undefined),
@@ -55,15 +74,6 @@ export let platform = (env: Env): Lent => {
     env: (name) => setting(env, name),
   }
 }
-
-/** Which provider serves a model name: Workers AI's are `@cf/…`,
- * Anthropic's `claude-…`, and any other is OpenAI's. */
-export let providerOf = (name: string): string =>
-  name.startsWith('@cf/')
-    ? 'workers-ai'
-    : name.startsWith('claude-')
-    ? 'anthropic'
-    : 'openai'
 
 // A Lent for asking a plugin which names it serves: making a model calls
 // nothing it lends.
@@ -89,9 +99,31 @@ let plugged = (env: object, config: Config) =>
     }
   })
 
-/** The provider names `config`'s plugins serve. */
+/** The provider names `config`'s plugins serve, in its order: the first is
+ * the one a model no row names a provider for is asked of. */
 export let names = (env: object, config: Config): string[] =>
   plugged(env, config).flatMap((p) => p.names)
+
+/** Whether the Worker holds every credential of the platform's that the
+ * plugin serving `provider` in `config` names. */
+export let ready = (env: object, provider: string, config: Config): boolean => {
+  let found = plugged(env, config).find((p) => p.names.includes(provider))
+  return !!found &&
+    named(found.plug, 'secret').every((name) => setting(env, name))
+}
+
+/** The own door of the first provider `config` names that has one (@yaks/model
+ * `Native`), lent `lent` and held to `spending`, or none. */
+export let native = (
+  env: object,
+  lent: Lent,
+  spending: Spending,
+  config: Config = serving,
+): (Native & { provider: string }) | undefined => {
+  let found = plugged(env, config).find((p) => p.facet?.native)
+  let door = found?.facet?.native?.(lent, found.options, spending)
+  return door && { ...door, provider: found!.names[0] }
+}
 
 /** Every model `config`'s providers serve, by the name each serves under,
  * each plugin lent what `lend` makes for it. Two plugins serving one name are
@@ -134,10 +166,15 @@ let named = (plug: Plug, kind: keyof Reveal): string[] => {
 }
 
 /** The credentials of the platform's a plugin's options carry: each
- * `{"secret": NAME}` among them the Worker holds. A provider given one is the
- * platform's to pay for (config.ts `serving`). */
+ * `{"secret": NAME}` among them the Worker holds. */
 export let credentials = (env: object, plug: Plug): string[] =>
   named(plug, 'secret').filter((name) => setting(env, name))
+
+/** Whether a plugin is named bare, its options naming nothing the Worker
+ * holds: the app's own provider, called on the app's connection (config.ts
+ * `serving`), where any other is the platform's. */
+export let bare = (plug: Plug): boolean =>
+  !named(plug, 'secret').length && !named(plug, 'binding').length
 
 /** The sentinel of the app's connection to `integration`, which egress
  * exchanges for its key on the way to the integration's hosts, refused where
@@ -177,8 +214,10 @@ let standing = async (env: Partial<Env>, name: string) =>
 
 /** An app's provider as the hosted executor is handed it (workers/model
  * `FrozenRequest`): its options with each credential of the platform's a
- * sentinel and each setting as it is, and the app's connection sentinel
- * where the platform does not pay. Plain data, kept in the private request. */
+ * sentinel and each setting as it is, and for the app's own provider its
+ * connection's sentinel. Plain data, kept in the private request. A
+ * platform's provider named with credentials and given none is refused
+ * before anything is bought. */
 export let frozen = async (
   env: Partial<Env>,
   app: string,
@@ -187,6 +226,9 @@ export let frozen = async (
 ): Promise<{ name: string; key: string; with: Options }> => {
   let { plug } = serves(env, name, config)
   let paid = credentials(env, plug)
+  if (!bare(plug) && named(plug, 'secret').length && !paid.length) {
+    throw new ModelError('unbound', `yaks.app holds no key for ${name}`)
+  }
   let sentinels = new Map(
     await Promise.all(
       paid.map(async (s) => [s, await standing(env, s)] as const),
@@ -198,7 +240,7 @@ export let frozen = async (
   })
   return {
     name,
-    key: paid.length ? '' : await connection(env, app, name),
+    key: bare(plug) ? await connection(env, app, name) : '',
     with: JSON.parse(JSON.stringify(options)),
   }
 }

@@ -275,16 +275,16 @@ export type Env = {
   // first app. Both tiers run on Workers AI — `AI` is the binding
   // (wrangler.toml `[ai]`), no key of ours and nothing bought, absent under
   // the workerd probes where the loop says so rather than half-running.
-  // The four beside it are the other provider, which nobody has switched on:
-  // point BUILDER_MODEL_PAID at an OpenAI model and the loop reaches it
-  // through the AI Gateway named by AI_GATEWAY, paid for by OPENAI_API_KEY or
-  // by the gateway's own stored key (AI_GATEWAY_TOKEN). OPENAI_API is a
-  // probe's door to somewhere other than the gateway. BUILDER_MODEL_FREE and
+  // The four beside it are OpenAI's (config.ts `openai`), which nobody has
+  // switched on: the AI Gateway named by AI_GATEWAY, paid for by
+  // OPENAI_API_KEY or by the gateway's own stored key (AI_GATEWAY_TOKEN), and
+  // OPENAI_API, a probe's door to somewhere other than the gateway. Which
+  // provider the builder runs on is config.ts `agents`. BUILDER_MODEL_FREE and
   // BUILDER_MODEL_PAID are the model ids, so changing either is a `wrangler
   // secret put` and no deploy of new code.
   AI?: {
     run(model: string, input: unknown, opts?: unknown): Promise<unknown>
-    gateway(id: string): { getUrl(provider?: string): Promise<string> }
+    gateway?(id: string): { getUrl(provider?: string): Promise<string> }
     toMarkdown?: import('./documents.ts').Markdown
   }
   AI_GATEWAY?: string

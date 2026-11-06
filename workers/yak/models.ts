@@ -26,7 +26,6 @@ import { records } from '@yaks/secrets'
 
 import type { Plug } from '@yaks/host/config'
 import type { VocabDoc } from '@yaks/vocab'
-import { said, unfit, workersAi } from '@yaks/workers-ai'
 import { type ArtifactStore, objectBlobs } from '@yaks/blob'
 import { artifactStore } from '@yaks/blob/identify'
 import { appStore, type Directory, directoryOf } from './directory.ts'
@@ -41,13 +40,11 @@ import { caught } from './defects.ts'
 import type { Answer, Asked } from './apps.ts'
 import type { Stored } from './graph.ts'
 import { lending } from './inference.ts'
-import { connection, credentials, names, served } from './providers.ts'
+import { bare, connection, names, served } from './providers.ts'
 import { serving } from './config.ts'
 
 export let guess = (sent: unknown) =>
   Math.ceil(JSON.stringify(sent ?? '').length / 4)
-
-export let PROVIDER = 'workers-ai'
 
 // Only providers are installed. Model rows stay as history and are never retired
 // because a newer release or a code list stopped naming them.
@@ -57,7 +54,7 @@ export let planting = async (
 ): Promise<Bundle[]> => {
   if (at.meta || !at.app) return []
   let held = await read('.provider&*')
-  return [PROVIDER, ...names(at.env, serving)].flatMap((name): Bundle[] =>
+  return names(at.env, serving).flatMap((name): Bundle[] =>
     held.some((b) => (b.provider as Comp).name == name) ? [] : [{
       entity: { eid: identityEid('provider', [name]) },
       provider: { name, transport: 'http', offered: true },
@@ -121,7 +118,6 @@ let artifacts = (at: Stored): ArtifactStore => async (bytes, mediaType) => {
     blobPrefix(found.space, found.app),
   ))(bytes, mediaType)
 }
-let mediaStore = (at: Stored) => ({ store: artifacts(at) })
 
 // The vault holds small app-scoped pointers; private object storage holds media.
 let receiptsFor = (at: Stored) =>
@@ -169,14 +165,10 @@ export let recovering = async (at: Stored, call: string) => {
   }
   let receipts = receiptsFor(at)
   let receipt = await receipts?.read(call)
-  let provider = receipt?.provider ?? PROVIDER
-  let model = provider == PROVIDER
-    ? workersAi(at.env.AI!, {
-      media: mediaStore(at),
-      fetch: at.env.MODEL_FETCH,
-      receipts,
-    })
-    : provided(at)[provider]
+  // A receipt that names no provider is from before receipts named one, when
+  // only the first could make media.
+  let provider = receipt?.provider ?? names(at.env, serving)[0]
+  let model = provided(at)[provider]
   if (!model?.recover) {
     throw new ModelError(
       'media_provider',
@@ -256,28 +248,47 @@ export let recovery: Answer = async (
   )
 }
 
-// What an app's store lends each provider config.ts `serving` names: its
-// egress, which exchanges the sentinel of a connection the app uses for its
-// key on the way to the integration's hosts (nothing here reads or records
-// the key), the app's own connection to the integration a provider asks for
-// where the platform does not pay for it, and its media store and receipts.
-let lent = (at: Stored) => (plug: Plug): Lent => {
-  let paid = credentials(at.env, plug).length > 0
-  return {
-    fetch: (input, init) => {
-      if (!at.env.STORE) {
+// How an app's model calls leave: those of the app's own providers through
+// its egress, which exchanges the sentinel of a connection the app uses for
+// its key on the way to the integration's hosts (nothing here reads or
+// records the key), and those of the platform's over its model transport.
+// One transport each per app, so what a provider keeps by transport (a
+// catalogue) is read once.
+let leaving = (env: Stored['env'], app: string, own: boolean): typeof fetch => {
+  let apps = transports.get(env) ?? new Map<string, typeof fetch>()
+  transports.set(env, apps)
+  let key = (own ? 'app:' : 'platform:') + app
+  let send = apps.get(key)
+  if (send) return send
+  send = own
+    ? (input, init) => {
+      if (!env.STORE) {
         throw new ModelError('unbound', 'This app has no integration store')
       }
-      return outbound(
-        new Request(input, init),
-        { ...at.env, STORE: at.env.STORE },
-        { app: at.app!, level: 'owner', person: null },
-      )
-    },
+      return outbound(new Request(input, init), { ...env, STORE: env.STORE }, {
+        app,
+        level: 'owner',
+        person: null,
+      })
+    }
+    : (input, init) => (env.MODEL_FETCH ?? fetch)(input, init)
+  apps.set(key, send)
+  return send
+}
+let transports = new WeakMap<object, Map<string, typeof fetch>>()
+
+// What an app's store lends each provider config.ts `serving` names: one
+// named bare is the app's own, called on the app's connection to the
+// integration it asks for, through its egress; any other is the platform's.
+// Both are lent the app's media store and receipts.
+let lent = (at: Stored) => (plug: Plug): Lent => {
+  let own = bare(plug)
+  return {
+    fetch: leaving(at.env, at.app!, own),
     key: (integration) =>
-      paid
-        ? Promise.resolve(undefined)
-        : connection(at.env, at.app!, integration),
+      own
+        ? connection(at.env, at.app!, integration)
+        : Promise.resolve(undefined),
     refresh: () => Promise.resolve(undefined),
     store: artifacts(at),
     env: () => undefined,
@@ -300,39 +311,30 @@ let modelRows = (graph: {
     )
     return row?.price as Price | undefined
   },
-  answered: async (name: string, info: Listed) => {
+  answered: async (provider: string, name: string, info: Listed) => {
     await graph.apply(
-      confirmed(identityEid('provider', [PROVIDER]), name, info),
+      confirmed(identityEid('provider', [provider]), name, info),
     )
   },
 })
 
 /**
  * The store's transcript runner, registered on its registry: `session_run`
- * run here, lent Workers AI through the metered binding and the app's marked
- * commands. The store's effect pool keeps each run while the write that asked
+ * run here, lent the providers config.ts `serving` names, each metered
+ * against the app's space, and the app's marked commands. The store's effect pool keeps each run while the write that asked
  * for it answers immediately; the result arrives through the subscription.
  */
 export let asking = (at: Stored): Handlers => {
   if (at.meta || !at.app) return {}
-  let metered = accounted(
-    at.env,
-    payer(at.app),
-    workersAi(at.env.AI!, {
-      media: mediaStore(at),
-      fetch: at.env.MODEL_FETCH,
-      gateway: at.env.AI_GATEWAY,
-      receipts: receiptsFor(at),
-    }),
-  )
   let price = async (name: string) => {
     let [row] = await at.graph.get([identityEid('model', [name])])
     return row?.price as Price | undefined
   }
-  let lent: Record<string, Model> = { [PROVIDER]: metered }
+  let lent: Record<string, Model> = {}
   for (let [name, model] of Object.entries(provided(at))) {
     lent[name] = accounted(at.env, payer(at.app), model, price)
   }
+  let first = names(at.env, serving)[0]
   let resolveModel = providerResolver(
     at.graph,
     lent,
@@ -341,33 +343,17 @@ export let asking = (at: Stored): Handlers => {
   )
   let run = running(at.graph, {
     holder: at.app,
-    model: metered,
+    model: lent[first],
     resolveModel: async (using, model) => {
       // A turn may precede the app's first deploy. Provider identities are
       // needed to dispatch it; only a successful answer creates an offering.
       let rows = await planting(at.graph.read, at)
       if (rows.length) await at.graph.apply(rows, { trusted: true })
+      // A model no row says the provider of is asked of the first.
       if (
         !using?.provider &&
         !(await offers(at.graph, model.entity.eid, lent)).length
-      ) {
-        let name = String((model.model as Comp).name)
-        if (name.startsWith('@cf/') || name == 'typesafe/jev') {
-          using = { ...using, provider: identityEid('provider', [PROVIDER]) }
-        } else {
-          return {
-            name,
-            model: () =>
-              Promise.reject(
-                new ModelError(
-                  'provider',
-                  `No provider found for ${name}; set using.provider to ` +
-                    `one of ${Object.keys(lent).join(', ')}`,
-                ),
-              ),
-          }
-        }
-      }
+      ) using = { ...using, provider: identityEid('provider', [first]) }
       return resolveModel(using, model)
     },
     // This store owns every model turn in its app. There is no other host
@@ -385,17 +371,18 @@ export let asking = (at: Stored): Handlers => {
 
 // How each way a model call fails is answered at the door: the allowance
 // spent, the model busy, a model not offered here (no model by that name, or
-// its license unaccepted, @yaks/workers-ai `failure`), and a host with no
-// Workers AI to lend.
+// its license unaccepted), an input the model refuses, which is the caller's
+// to correct, and a host with no provider to lend.
 let STATUS: Record<string, number> = {
   limit: 429,
   busy: 503,
   model: 400,
+  bad_request: 400,
   unbound: 503,
 }
 
-// What the door is posted: the model's name and its input, as Workers AI
-// takes them.
+// What the door is posted: the model's name and its input, as its provider's
+// own door takes them.
 let posted = (
   body: string,
 ): { model: string; input: object; session_id?: string } | null => {
@@ -416,31 +403,20 @@ let posted = (
 /** How `./api/ai/run` answers a call that threw: the status, code and message
  * for a refusal that is the caller's or the account's to hear, or nothing for
  * a failure that is ours (a break, answered 502). An input the model refuses
- * (@yaks/workers-ai `unfit`) is 400, theirs to correct. */
-export let refusal = (
-  e: unknown,
-  model: string,
-): [number, string, string] | null => {
-  if (e instanceof ModelError) {
-    return [STATUS[e.code] ?? 502, e.code, e.message]
-  }
-  if (unfit(e)) {
-    let why = e instanceof Error ? e.message : String(e)
-    return [400, 'bad_request', `${model} refused this input: ${why}`]
-  }
-  return null
-}
+ * (`bad_request`) is 400, theirs to correct. */
+export let refusal = (e: unknown): [number, string, string] | null =>
+  e instanceof ModelError ? [STATUS[e.code] ?? 502, e.code, e.message] : null
 
 /**
- * `./api/ai/run`: one call to a model, answered with what the model said, as
- * Workers AI says it, out of any envelope AI Gateway put it in (@yaks/workers-ai
- * `said`) — what a page or the app's own worker asks when it wants
- * an answer back rather than a transcript (the worker's `ai` binding posts
- * here, dispatch.ts `shim`). Asked by whoever may ask the app's models for a
+ * `./api/ai/run`: one call to a model through its provider's own door
+ * (meter.ts `metered`, Workers AI's binding as config.ts `serving` names it),
+ * answered with what the model said — what a page or the app's own worker asks
+ * when it wants an answer back rather than a transcript (the worker's `ai`
+ * binding posts here, dispatch.ts `shim`). Asked by whoever may ask the app's models for a
  * turn: its members, or, where its manifest says `"models": "open"`, anyone
  * who may write it. Metered like every call.
- * The input is the caller's, passed whole, so one the model refuses
- * (@yaks/workers-ai `unfit`) is answered 400 as theirs to correct.
+ * The input is the caller's, passed whole, so one the model refuses is
+ * answered 400 as theirs to correct.
  */
 export let modelAccess = async (
   { env, app, space, who, refuse, json }: Asked,
@@ -488,32 +464,30 @@ export let modelRun: Answer = async (
       400,
       'bad_request',
       'post {"model": "<name>", "input": {…}}: the model, and what it is ' +
-        'asked as Workers AI takes it',
+        'asked as its provider takes it',
     )
   }
   let conversation = req.headers.get('x-session-affinity') || asked.session_id
   let graph = metaOf(appStore(env.STORE, space, app, env), KERNEL)
   try {
     return Response.json(
-      said(
-        await metered(
-          env,
-          payer(app.eid),
-          modelRows({
-            read: (query) => graph.query(query, { trusted: true }),
-            apply: graph.apply,
-          }),
-        ).run(
-          asked.model,
-          asked.input,
-          conversation
-            ? { extraHeaders: { 'x-session-affinity': conversation } }
-            : undefined,
-        ),
+      await metered(
+        env,
+        payer(app.eid),
+        modelRows({
+          read: (query) => graph.query(query, { trusted: true }),
+          apply: graph.apply,
+        }),
+      ).run(
+        asked.model,
+        asked.input,
+        conversation
+          ? { extraHeaders: { 'x-session-affinity': conversation } }
+          : undefined,
       ),
     )
   } catch (e) {
-    let no = refusal(e, asked.model)
+    let no = refusal(e)
     if (no) return json(...no)
     let why = e instanceof Error ? e.message : String(e)
     caught(e, {

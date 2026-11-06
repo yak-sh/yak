@@ -5,7 +5,8 @@
 // never says where it runs, and the host never names a provider.
 
 import type { ArtifactStore } from '@yaks/blob'
-import type { MediaReceipts, Model } from './mod.ts'
+import type { Affordable } from './afford.ts'
+import type { Listed, MediaReceipts, Model } from './mod.ts'
 
 /** What a host lends the providers it composes. */
 export type Lent = {
@@ -25,6 +26,33 @@ export type Lent = {
   receipts?: MediaReceipts
 }
 
+/** What a host holds a provider's own calls to ({@link Native}): each is
+ * quoted before it is made, held to what the quote affords of what remains,
+ * and settled at what it cost. */
+export type Spending = {
+  /** the most `quote` affords of what remains, held until settled; refused
+   * (a `ModelError` coded `limit`) where nothing fits */
+  hold: (quote: (remaining: number) => Affordable | null) => Promise<{
+    value: Affordable
+    settle: (dollars: number, reported: boolean) => Promise<unknown>
+  }>
+  /** a model answered, as its provider lists it */
+  answered?: (name: string, info: Listed) => Promise<void>
+  /** a failure that is the host's to hear rather than the caller's, such as
+   * the account's own credit spent */
+  report?: (error: unknown, model: string) => void
+}
+
+/** A provider's own door: one call to a model, as the provider's API takes
+ * it, answered with what the model said. */
+export type Native = {
+  run: (
+    model: string,
+    input: unknown,
+    options?: { extraHeaders?: Record<string, string> },
+  ) => Promise<unknown>
+}
+
 /** A `./provider` facet: the models a plugin serves, keyed by the
  * `provider.name` each serves under, given what the host lends and the
  * plugin's own options from the config. */
@@ -36,4 +64,11 @@ export type ProviderFacet = {
   /** the hosts those models call with these options: where a host may send a
    * credential it puts in their calls, and nowhere else */
   hosts?: (options: Record<string, unknown>) => string[]
+  /** its own door, each call held to what `spending` affords, for a host
+   * that passes a caller's input to the provider as it is */
+  native?: (
+    lent: Lent,
+    options: Record<string, unknown>,
+    spending: Spending,
+  ) => Native
 }

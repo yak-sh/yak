@@ -21,9 +21,15 @@ import { derivedEid } from '@yaks/graph/identity'
 import { LIMIT } from '@yaks/session/status'
 import { channelOf, HEARD, SAID } from './operator-view.ts'
 import { listing } from '@yaks/mcp'
-import { billed, type Item, type Model, type Price } from '@yaks/model'
-import { workersAi } from '@yaks/workers-ai'
-import { provided, providerOf } from './providers.ts'
+import {
+  billed,
+  type Item,
+  type Listed,
+  type Model,
+  type Price,
+} from '@yaks/model'
+import { provided, ready } from './providers.ts'
+import { agents, providing } from './config.ts'
 import { inputSchemaOf } from '@yaks/tools/schema'
 import { CallError, invoke } from '@yaks/tools'
 import { loadTools, textSearch } from '@yaks/graph/tools'
@@ -401,18 +407,20 @@ export let platformBug = (ctx: Ctx, space: Space): Tool => ({
   },
 })
 
-// The Operator's own model, by default and with the key: Sonnet, which hands
-// coding and tricky work to Opus. Without the key it stays on GLM.
-let SONNET = 'claude-sonnet-5-5'
-let OPUS = 'claude-opus-5-5'
-let GLM = '@cf/zai-org/glm-5.3'
-
-/** What serves the Operator's models: Workers AI through the binding, or a
- * provider the config names on the platform's key (providers.ts). */
-export let operatorModel = (env: Env, provider: string): Model =>
-  provider == 'workers-ai'
-    ? workersAi(env.AI!, { fetch: env.MODEL_FETCH, gateway: env.AI_GATEWAY })
-    : provided(env, provider)
+/** What the Operator runs on (config.ts `agents`): the first choice whose
+ * provider the Worker holds every credential of, by default Sonnet on the
+ * platform's Anthropic key, handing coding and tricky work to Opus, and
+ * without the key GLM on Workers AI. `OPERATOR_MODEL` and
+ * `OPERATOR_DELEGATE` name other models of the provider chosen. */
+export let operatorChoice = (env: Env) => {
+  let chosen = agents.operator.find((c) => ready(env, c.provider, providing)) ??
+    agents.operator.at(-1)!
+  return {
+    provider: chosen.provider,
+    name: env.OPERATOR_MODEL ?? chosen.model,
+    delegate: chosen.delegate && (env.OPERATOR_DELEGATE ?? chosen.delegate),
+  }
+}
 
 export let readOperator = async (
   { g }: Store,
@@ -671,14 +679,12 @@ export let operating = (
 ): Operator => {
   let { g, fx, vocab } = store
   let dir = () => options.directory?.() ?? directoryOf(env.STORE)
-  let name = options.name ?? env.OPERATOR_MODEL ??
-    (env.ANTHROPIC_API_KEY ? SONNET : env.BUILDER_MODEL_PAID ?? GLM)
-  let provider = providerOf(name)
+  let choice = operatorChoice(env)
+  let name = options.name ?? choice.name
+  let provider = choice.provider
   // Coding and tricky work go to a stronger model of the same provider, in a
   // child session (`spawn`) whose answer comes back to the one that asked.
-  let delegate = provider == 'anthropic'
-    ? env.OPERATOR_DELEGATE ?? OPUS
-    : undefined
+  let delegate = choice.delegate
   let spawn = sessionTools(g, { childProperties: { topic: TOPIC } })
     .find((t) => t.name == 'spawn')!
   let delegated: Tool = {
@@ -689,14 +695,13 @@ export let operating = (
         ? ` For writing or fixing code, or work that needs careful reasoning, use spawn with model ${delegate} and a prompt that carries everything it needs; its answer comes back to you.`
         : ''),
   }
-  // The model an input asks for: one its provider serves, else the
-  // Operator's own.
+  // The model an input asks for, once its provider lists it (`chosen`).
   let usingOf = (model = name) => ({
     provider: identityEid('provider', [provider]),
-    model: identityEid('model', [providerOf(model) == provider ? model : name]),
+    model: identityEid('model', [model]),
   })
   let using = usingOf()
-  let base = options.model ?? operatorModel(env, provider)
+  let base = options.model ?? provided(env, provider)
   let reads = base.reads ?? {}
   // A file's key is the digest of its bytes, so the bytes the last step
   // showed are kept for the next, which shows them again: a wake reads each
@@ -761,15 +766,24 @@ export let operating = (
     return out
   }
   // A model's price, from what its provider lists, asked once per name.
-  let prices = new Map<string, Promise<Price | undefined>>()
-  let priced = (model: string) => {
-    if (options.price) return Promise.resolve(options.price)
-    let held = prices.get(model) ??
-      Promise.resolve(base.info?.(model)).then((info) => info?.price)
-    prices.set(model, held)
-    held.catch(() => prices.delete(model))
+  let infos = new Map<string, Promise<Listed | undefined>>()
+  let listed = (model: string) => {
+    let held = infos.get(model) ?? Promise.resolve(base.info?.(model))
+    infos.set(model, held)
+    held.catch(() => infos.delete(model))
     return held
   }
+  let priced = (model: string) =>
+    options.price
+      ? Promise.resolve(options.price)
+      : listed(model).then((info) => info?.price)
+  // The model an input asks for where its provider lists it, else the
+  // Operator's own.
+  let chosen = async (model?: string) =>
+    model && model != name &&
+      await listed(model).then((info) => !!info, () => false)
+      ? model
+      : name
   // Each ask is charged to the space of the session asking, at the price of
   // the model it asks.
   let model: Model = Object.assign(async (req: Parameters<Model>[0]) => {
@@ -857,9 +871,9 @@ export let operating = (
     held.catch(() => seeded.delete(m))
     return held
   }
-  let seeding = (model?: string) =>
+  let seeding = (model: string) =>
     Promise.all(
-      [name, delegate, model && providerOf(model) == provider ? model : null]
+      [...new Set([name, delegate, model])]
         .filter((m): m is string => !!m)
         .map(seedOf),
     )
@@ -1101,12 +1115,14 @@ export let operating = (
 
   // What any words given need first: the model and persona rows, the space
   // and the person.
-  let readying = async (held: Asker, space: Space, model?: string) => {
+  let readying = async (held: Asker, space: Space, asked?: string) => {
+    let model = await chosen(asked)
     await Promise.all([seeding(model), basing()])
     await g.apply([
       ...await spaced(g.storage, space),
       { entity: { eid: held.person }, person: {} },
     ], { trusted: true })
+    return model
   }
 
   let ask: Operator['ask'] = async (held, space, args, o = {}) => {
@@ -1117,7 +1133,7 @@ export let operating = (
     let input = o.request
       ? derivedEid('operator-input|' + o.request)
       : crypto.randomUUID()
-    await readying(held, space, o.model)
+    o = { ...o, model: await readying(held, space, o.model) }
     // A person's words with no task are the next input of their one
     // conversation with the Operator.
     if (!named) {

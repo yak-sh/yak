@@ -144,3 +144,21 @@ On yaks.app an editor posts `{"call":"<original ask eid>"}` to
 `./api/ai/recover`. This also accounts an already attached recording, without
 reading its private receipt or downloading again. Original-call accounting and
 the account debit commit atomically once, so repeats never spend twice.
+
+## As a plugin
+
+`@yaks/workers-ai/provider` is the plugin a config names (@yaks/model
+`ProviderFacet`). It serves `workers-ai` over the binding its options are lent,
+`ai` (written `{"binding": "AI"}` in a Worker's config), routing partner models
+through `gateway`; the host lends its transport, artifact store and receipts.
+Without a binding every call is refused (`ModelError` `unbound`). A model's
+`quote(request, remaining)` prices a track of music before it is made
+(`musicQuote`), and is undefined for a request its tokens price.
+
+`native(lent, options, spending)` is the binding's own door, for a host that
+passes a caller's input through whole: a call is priced from the catalogue, held
+to what the host's `Spending` affords (its output tokens cut to fit), refused
+before anything is spent where its price has no bound, and settled at its
+usage's cost. The account's spent credit is reported through `spending.report`;
+an input the model refuses (`unfit`) is refunded and refused as `bad_request`.
+It answers what the model said, out of AI Gateway's envelope.

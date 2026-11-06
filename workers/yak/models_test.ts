@@ -762,23 +762,28 @@ test('a model name without a provider gets its first turn before deployment', ()
   assertEquals((firstTurns.first.session.session as Comp).status, 'settled')
 })
 
-test('a providerless model resolves an existing offering or a Workers AI partner', () => {
-  assertEquals(firstTurns.known.rows.filter((b) => b.output).map(said), [
-    'Welcome, traveller.',
+test('a providerless model resolves an existing offering, else the first provider configured', () => {
+  for (let turn of [firstTurns.known, firstTurns.unknown]) {
+    assertEquals(turn.rows.filter((b) => b.output).map(said), [
+      'Welcome, traveller.',
+    ])
+  }
+  assertEquals(firstTurns.asked.map((a) => a.model), [
+    FLASH,
+    FLASH,
+    JEV,
+    'unknown-model',
   ])
-  assertEquals(firstTurns.asked.map((a) => a.model), [FLASH, FLASH, JEV])
 })
 
-for (let name of ['unknown', 'ambiguous'] as const) {
-  test(`an ${name} model selection receives a provider refusal`, () => {
-    let turn = firstTurns[name]
-    assertEquals(turn.status, 200)
-    let [no] = turn.rows.filter((b) => b.refusal)
-    assertEquals((no.refusal as Comp).code, 'provider')
-    assert(said(no))
-    assertEquals((turn.session.session as Comp).status, 'failed')
-  })
-}
+test('an ambiguous model selection receives a provider refusal', () => {
+  let turn = firstTurns.ambiguous
+  assertEquals(turn.status, 200)
+  let [no] = turn.rows.filter((b) => b.refusal)
+  assertEquals((no.refusal as Comp).code, 'provider')
+  assert(said(no))
+  assertEquals((turn.session.session as Comp).status, 'failed')
+})
 
 test('an unknown provider reference is refused by the write with its reason', () => {
   assertEquals(firstTurns.unsupported.status, 400)
@@ -1206,10 +1211,12 @@ test('./api/ai/run reports an unpriced model once and never purchases inference'
 
 test('./api/ai/run answers an input the model refuses as the caller’s, 400', () => {
   let schema = "5006: Error: oneOf at '/' not met, 0 matches"
-  let [status, code, message] = refusal(new Error(schema), FLASH)!
+  let [status, code, message] = refusal(
+    new ModelError('bad_request', `${FLASH} refused this input: ${schema}`),
+  )!
   assertEquals([status, code], [400, 'bad_request'])
   assert(message.includes(schema))
-  assertEquals(refusal(new Error('upstream down'), FLASH), null)
+  assertEquals(refusal(new Error('upstream down')), null)
 })
 
 test('./api/ai/run answers a visitor only where the app opens its models', async () => {

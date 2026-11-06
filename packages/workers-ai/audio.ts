@@ -129,6 +129,21 @@ export let audioPrice = (
   return seconds * 0.0025
 }
 
+/** What a track of `model` costs before it is made, where `remaining`
+ * dollars afford it: MiniMax bills per track, while ElevenLabs is priced from
+ * its encoded output seconds, which a requested duration does not bound, so
+ * no budget affords it in advance. */
+export let musicQuote = (
+  model: string,
+  input: unknown,
+  remaining: number,
+): { dollars: number; tokens: number } | null => {
+  let dollars = model == 'minimax/music-2.6'
+    ? audioPrice(model, input, 0)
+    : Infinity
+  return dollars <= remaining ? { dollars, tokens: 0 } : null
+}
+
 /** Fetch the provider URL once, with no credential and a bounded body. */
 export let pricedAudio = async (
   model: string,

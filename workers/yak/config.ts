@@ -319,46 +319,75 @@ export let phoneConfig: Config = {
   ],
 }
 
+// Workers AI over the Worker's `AI` binding, which is its authorization.
+let workersAi: Plug = {
+  use: '@yaks/workers-ai',
+  with: { ai: { binding: 'AI' }, gateway: { binding: 'AI_GATEWAY' } },
+}
+
+// OpenAI through the account's AI Gateway, on the platform's key or the
+// gateway's own token. Both are unset on purpose (wrangler.toml), so asking
+// OpenAI is refused.
+let openai: Plug = {
+  use: '@yaks/openai',
+  with: {
+    key: { secret: 'OPENAI_API_KEY' },
+    base: { binding: 'OPENAI_API' },
+    gateway: {
+      account: { binding: 'CF_ACCOUNT' },
+      id: { binding: 'AI_GATEWAY' },
+      token: { secret: 'AI_GATEWAY_TOKEN' },
+    },
+    web: false,
+    images: false,
+  },
+}
+
 /** The model providers the platform's own layers are lent (providers.ts):
  * each a plugin exporting `./provider` (@yaks/model `ProviderFacet`), with
  * the options it is given. No layer imports one; it asks for a model by the
  * provider name it serves under. */
 export let providing: Config = {
   plugins: [
+    workersAi,
     { use: '@yaks/anthropic', with: { key: { secret: 'ANTHROPIC_API_KEY' } } },
+    openai,
+  ],
+}
+
+/** What the platform's own agents run on, each a model of a provider
+ * `providing` names: the builder's provider, whose models `BUILDER_MODEL_FREE`
+ * and `BUILDER_MODEL_PAID` name, and the Operator's choices, the first taken
+ * whose provider the Worker holds every credential of, with the stronger
+ * model it hands coding to. `OPERATOR_MODEL` and `OPERATOR_DELEGATE` name
+ * other models of that provider. */
+export let agents: {
+  builder: string
+  operator: { provider: string; model: string; delegate?: string }[]
+} = {
+  builder: 'workers-ai',
+  operator: [
+    {
+      provider: 'anthropic',
+      model: 'claude-sonnet-5-5',
+      delegate: 'claude-opus-5-5',
+    },
+    { provider: 'workers-ai', model: '@cf/zai-org/glm-5.3' },
   ],
 }
 
 /** The model providers an app's store is lent (models.ts), the same way: by
- * the provider name each serves under. A `{"secret": NAME}` in a provider's
- * options is a credential, and one the Worker holds makes the provider the
- * platform's to pay for; any other provider is called on the app's own
- * connection to the integration named as it serves, and refused where the
- * app has none. A call the hosted executor makes (inference.ts) carries each
- * credential as a sentinel, exchanged on the way to the provider's `hosts`,
- * and each `{"binding": NAME}`, what the Worker holds that is no credential
- * (a setting), as it is. */
+ * the provider name each serves under, the first serving a model no row says
+ * the provider of. A provider named bare is the app's own, called on the
+ * app's connection to the integration named as it serves and refused where
+ * the app has none; one given options of the Worker's is the platform's,
+ * which pays. A `{"secret": NAME}` among them is a credential, which a call
+ * the hosted executor makes (inference.ts) carries as a sentinel, exchanged
+ * on the way to the provider's `hosts`; a `{"binding": NAME}` is what the
+ * Worker holds that is no credential (a setting, a binding), carried as it
+ * is. */
 export let serving: Config = {
-  plugins: [
-    '@yaks/openrouter',
-    // OpenAI through the account's AI Gateway, on the platform's key or the
-    // gateway's own token. Both are unset on purpose (wrangler.toml), which
-    // leaves OpenAI to an app's own connection.
-    {
-      use: '@yaks/openai',
-      with: {
-        key: { secret: 'OPENAI_API_KEY' },
-        base: { binding: 'OPENAI_API' },
-        gateway: {
-          account: { binding: 'CF_ACCOUNT' },
-          id: { binding: 'AI_GATEWAY' },
-          token: { secret: 'AI_GATEWAY_TOKEN' },
-        },
-        web: false,
-        images: false,
-      },
-    },
-  ],
+  plugins: [workersAi, '@yaks/openrouter', openai],
 }
 
 export let configs = {

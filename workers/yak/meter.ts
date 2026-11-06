@@ -28,24 +28,13 @@ import {
   type Listed,
   type Model,
   ModelError,
+  type Native,
   type Price,
-  promptBound,
   requestBound,
 } from '@yaks/model'
-import { LIMIT } from '@yaks/session/status'
-import {
-  type Binding,
-  failure,
-  music,
-  pricedAudio,
-  routing,
-  said,
-  unfit,
-  usageOf,
-} from '@yaks/workers-ai'
-import { modelInfo } from '@yaks/workers-ai'
 import { defect } from './defects.ts'
 import { reserved, settled } from './model-spend.ts'
+import { native, platform } from './providers.ts'
 import { mint } from '@yaks/graph'
 import { derivedEid } from '@yaks/graph/identity'
 import { Stale } from '@yaks/graph/errors'
@@ -950,155 +939,56 @@ export let metering = (
 // read before the call and the call weighed after it, by its model's price in
 // the catalogue (models.ts). Each call reserves its bounded maximum first.
 
-let unpriced = new WeakMap<typeof fetch, Set<string>>()
-let missingPrice = (model: string, fetcher: typeof fetch = fetch) => {
-  let error = new ModelError(
-    'model',
-    `No published price for ${model}; ask another model`,
-  )
-  let reported = unpriced.get(fetcher) ?? new Set<string>()
-  unpriced.set(fetcher, reported)
-  if (!reported.has(model)) {
-    defect(error, { request: 'model price', model }, {
-      fault: `model-price:${model}`,
-    })
-    reported.add(model)
-  }
-  return error
-}
-
 /**
- * The AI binding an app reaches Workers AI through, and the only one: the
- * store's runner is lent it (models.ts), and so is `./api/ai/run`. A model the
- * catalogue does not offer is refused before anything is spent, and so is a
- * call that could not be counted — no namespace to count it in, no space to
- * count it against — since nothing reaches the account's AI unmetered.
+ * The door an app reaches its models' own API through: the own door of the
+ * first provider config.ts `serving` names that has one (providers.ts
+ * `native`), as Workers AI's binding is, and the only one: `./api/ai/run`,
+ * documents and embeddings are lent it. A call that could not be counted, with
+ * no namespace to count it in or no space to count it against, is refused
+ * before anything is spent, since nothing reaches a provider unmetered.
  *
- * Over the budget it throws a `ModelError` coded `limit` carrying the
- * ceiling's sentence, which a transcript comes to rest on (@yaks/session
- * `LIMIT`) and the direct door answers 429 with. The account's own credits
- * spent are a ceiling too (@yaks/workers-ai `failure`), refused the same way,
- * and reported: the account met no budget of its own, and only the platform
- * can buy more.
+ * Each call holds what its provider quotes against the space's budget
+ * (model-spend.ts) and settles at its cost. Over the budget it throws a
+ * `ModelError` coded `limit` carrying the ceiling's sentence, which a
+ * transcript comes to rest on (@yaks/session `LIMIT`) and the direct door
+ * answers 429 with. What the provider says is the platform's to hear (the
+ * account's own credit spent, a model it prices nothing for) is reported.
  */
-export let musicQuote = (
-  model: string,
-  input: Record<string, unknown>,
-  remaining: number,
-) => {
-  // MiniMax bills per track. ElevenLabs is priced from encoded output
-  // seconds; a requested duration does not bound MP3 padding or plan output.
-  let dollars = model == 'minimax/music-2.6'
-    ? 0.15 + (input.lyrics_optimizer == true ? 0.01 : 0)
-    : Infinity
-  return dollars <= remaining ? { dollars, tokens: 0 } : null
-}
-
 export let metered = (
-  bind: {
-    AI?: Binding
-    STORE?: Namespace
-    MODEL_FETCH?: typeof fetch
-    AI_GATEWAY?: string
-  } & Host,
+  bind: Partial<Env> & { STORE?: Namespace } & Host,
   spaceOf: (dir: Directory) => Promise<Space | null>,
   rows?: {
     price(name: string): Promise<Price | undefined>
-    answered(name: string, info: Listed): Promise<void>
+    answered(provider: string, name: string, info: Listed): Promise<void>
   },
-): Binding => ({
+): Native => ({
   run: async (model, input, options) => {
     let ns = bind.STORE
     let dir = ns ? directoryOf(ns) : null
     let space = dir ? await spaceOf(dir) : null
-    if (!bind.AI || !ns || !dir || !space) {
+    let provider = ''
+    let door = ns && space
+      ? native(bind, platform(bind as Env), {
+        hold: (quote) => reserved({ STORE: ns }, space, quote),
+        answered: (name, info) =>
+          rows?.answered(provider, name, info) ?? Promise.resolve(),
+        report: (e, model) =>
+          e instanceof ModelError && e.code == 'model'
+            ? defect(e, { request: 'model price', model }, {
+              fault: `model-price:${model}`,
+            })
+            : defect(e, { request: `model ${model}`, space: space.slug }),
+      })
+      : undefined
+    if (!door) {
       throw new ModelError(
         'unbound',
-        'No model can be asked here: nothing binds this store to Workers AI ' +
+        'No model can be asked here: nothing binds this store to a provider ' +
           'and to the space that pays for it',
       )
     }
-    let info = music(model)
-      ? { name: model }
-      : await modelInfo(model, bind.MODEL_FETCH)
-    let price = info.price
-    if (!music(model) && !price) throw missingPrice(model, bind.MODEL_FETCH)
-    let sent = input && typeof input == 'object'
-      ? input as Record<string, unknown>
-      : {}
-    let structured = 'questions' in sent
-    let choices = Number(sent.n ?? 1)
-    if (
-      'requests' in sent ||
-      Array.isArray(sent.tools) &&
-        sent.tools.some((t) =>
-          !t || typeof t != 'object' || Reflect.get(t, 'type') != 'function'
-        ) ||
-      !Number.isSafeInteger(choices) || choices < 1 ||
-      Array.isArray(sent.modalities) && sent.modalities.some((m) => m != 'text')
-    ) {
-      throw new ModelError(
-        'limit',
-        'This request has no bounded text-generation price',
-      )
-    }
-    let desired = price?.output == 0
-      ? 0
-      : structured
-      ? Number(info.context)
-      : Number(
-        sent.max_completion_tokens ?? sent.max_tokens ?? 4096,
-      )
-    let hold = await reserved({ STORE: ns }, space, (remaining) => {
-      if (music(model)) return musicQuote(model, sent, remaining)
-      if (info.context == null) return null
-      // Every choice bills the prompt again; each embedded text fills at
-      // most its own context window.
-      let texts = price!.output == 0 && Array.isArray(sent.text)
-        ? sent.text.length
-        : 1
-      let quote = affordable(
-        { ...price!, output: price!.output * choices },
-        choices * promptBound(sent, info.context * texts),
-        remaining,
-        desired,
-      )
-      return structured && quote?.tokens != desired ? null : quote
-    })
-    if (!music(model) && !structured && price!.output) {
-      input = {
-        ...sent,
-        max_tokens: hold.value.tokens,
-        ...'max_completion_tokens' in sent
-          ? { max_completion_tokens: hold.value.tokens }
-          : {},
-      }
-    }
-    let answer = await bind.AI.run(
-      model,
-      input,
-      routing(model, options, bind.AI_GATEWAY),
-    ).catch(async (e) => {
-      let said = failure(e)
-      if (
-        unfit(e) ||
-        said instanceof ModelError &&
-          ['busy', 'model', LIMIT].includes(said.code)
-      ) {
-        await hold.settle(0, false)
-      }
-      if (said instanceof ModelError && said.code == LIMIT) {
-        defect(e, { request: `model ${model}`, space: space.slug })
-      }
-      throw said
-    })
-    await rows?.answered(model, info)
-    let n = usageOf(answer)
-    let cost = music(model)
-      ? (await pricedAudio(model, input, said(answer))).cost
-      : charged({ usage: n }, price, hold.value.dollars).dollars
-    await hold.settle(cost, false)
-    return answer
+    provider = door.provider
+    return await door.run(model, input, options)
   },
 })
 
@@ -1121,16 +1011,16 @@ export let accounted = (
           'No account is bound to this model call',
         )
       }
-      let info = music(req.model) ? undefined : await model.info?.(req.model)
+      // A request priced by the call is quoted by its model alone.
+      let own = model.quote?.(req, 0) !== undefined
+      let info = own ? undefined : await model.info?.(req.model)
       let tariff = reached(
         'priced',
         info?.price ?? await price?.(req.model),
       )
       let call = req.call ?? mint()
       let hold = await reserved({ STORE: ns }, space, (remaining) => {
-        if (music(req.model)) {
-          return musicQuote(req.model, req.input ?? {}, remaining)
-        }
+        if (own) return model.quote!(req, remaining) ?? null
         if (
           req.modalities?.some((m) => m != 'text')
         ) return null

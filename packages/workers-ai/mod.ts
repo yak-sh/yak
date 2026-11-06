@@ -46,8 +46,20 @@ import {
   type Usage,
 } from '@yaks/model'
 import { generatedBytes, type MediaStore } from '@yaks/openai'
-import { audioPrice, music, musicInput, pricedAudio } from './audio.ts'
-export { audioPrice, audioSeconds, music, pricedAudio } from './audio.ts'
+import {
+  audioPrice,
+  music,
+  musicInput,
+  musicQuote,
+  pricedAudio,
+} from './audio.ts'
+export {
+  audioPrice,
+  audioSeconds,
+  music,
+  musicQuote,
+  pricedAudio,
+} from './audio.ts'
 
 /** The part of the `AI` binding this package calls. */
 export type Binding = {
@@ -676,5 +688,9 @@ export let workersAi = (
     recover: (call: string) => recoveredMedia(call, options.receipts, deliver),
     list: () => listing(ai),
     info: (name: string) => modelInfo(name, options.fetch),
+    quote: (req: Request, remaining: number) =>
+      music(req.model)
+        ? musicQuote(req.model, req.input ?? {}, remaining)
+        : undefined,
   })
 }

@@ -50,7 +50,8 @@ let model: Model = Object.assign(
 )
 
 let owner = crypto.randomUUID()
-let { env } = platform('operator-claude')
+// The platform holds Anthropic's key, so the Operator is on Claude.
+let { env } = platform('operator-claude', { ANTHROPIC_API_KEY: 'probe' })
 let dir = directoryOf(env.STORE)
 let id = await dir.mint(owner, 'claude', 'Claude', {
   'x-yak-person': owner,

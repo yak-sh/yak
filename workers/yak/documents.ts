@@ -9,7 +9,6 @@ import type { Stored } from './graph.ts'
 import { directoryOf } from './directory.ts'
 import { blobPrefix } from './blob-key.ts'
 import { metered } from './meter.ts'
-import { said } from '@yaks/workers-ai'
 
 export let VISION = '@cf/google/gemma-4-26b-a4b-it'
 export let ANSWER = '@cf/google/gemma-4-26b-a4b-it'
@@ -42,11 +41,13 @@ type Said = {
   response?: string
   choices?: { message?: { content?: string }; finish_reason?: string }[]
 }
+// What the model said is as its provider's own door answers it (meter.ts
+// `metered`), a chat completion in either of Workers AI's shapes.
 let cut = (answer: unknown) =>
-  !!(said(answer) as Said).choices?.some((c) => c.finish_reason == 'length')
+  !!(answer as Said).choices?.some((c) => c.finish_reason == 'length')
 
 export let speech = (answer: unknown): string => {
-  let a = said(answer) as Said
+  let a = answer as Said
   if (cut(answer)) throw new Error('Document model answer was truncated')
   let text = a.response ?? a.choices?.[0]?.message?.content
   if (typeof text != 'string') {

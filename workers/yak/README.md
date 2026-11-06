@@ -47,11 +47,16 @@ release.
 
 An app's store is lent the model providers config.ts `serving` names
 (providers.ts), each a plugin's `./provider` facet asked by the name it serves
-under; models.ts and inference.ts import none. A provider whose options carry a
-credential the Worker holds (`{"secret": NAME}`) is the platform's to pay for;
-any other is called on the app's own connection, through its egress. A call the
-executor runs carries each such credential as a sentinel, which the kernel's
-`grants` exchange only on the way to the hosts the provider says it calls.
+under, the first for a model no row names a provider for; no layer imports one.
+A provider named bare (`'@yaks/openrouter'`) is the app's own, called on the
+app's connection through its egress; one given options of the Worker's is the
+platform's, which pays. A call the executor runs carries each of the platform's
+credentials (`{"secret": NAME}`) as a sentinel, which the kernel's `grants`
+exchange only on the way to the hosts the provider says it calls. The executor
+runs only the providers its own config composes; any other runs in the store.
+`./api/ai/run`, documents and embeddings reach the own door of the first
+`serving` provider that has one (@yaks/model `Native`, Workers AI's binding),
+each call held to the space's budget (meter.ts `metered`).
 
 The kernel deploys once, using a stable sandbox toolchain image by registry
 reference. The live Worker's assets carry the CLI workspace, compressed and
@@ -889,20 +894,22 @@ recent tasks. Continue with `operator_run({space, task, say})`. A settled model
 turn may be a question: the operator explicitly completes a task through
 `task_update` after finishing it.
 
-The Operator runs on `claude-sonnet-5-5` when `ANTHROPIC_API_KEY` is set, and
-otherwise on `BUILDER_MODEL_PAID` (`@cf/zai-org/glm-5.3`); `OPERATOR_MODEL`
-overrides either. A `@cf/…` model runs on the Workers AI binding and a
-`claude-…` model on Anthropic's API (providers.ts `providerOf`), served by the
-@yaks/anthropic plugin config.ts `providing` names and lent the platform's key
-(providers.ts); no layer imports a provider. The model must have a price, from
-the Workers AI catalogue or @yaks/model's list. On Anthropic a conversation and
-its forks have `spawn`, whose description sends writing or fixing code and tasks
-that need careful reasoning to `OPERATOR_DELEGATE` (`claude-opus-5-5`) in a
-child session working for the same space and charged to it; the child's answer
-comes back to the session that asked, and the child is offered no `spawn` of its
-own. This entry accepts text. Picture attachments and the email, chat and SMS
-interfaces are separate work. Interrupted requests remain in the graph and can
-be continued explicitly; they do not resume automatically.
+The Operator runs on the first of config.ts `agents.operator` whose provider the
+Worker holds every credential of: `claude-sonnet-5-5` on Anthropic when
+`ANTHROPIC_API_KEY` is set, and otherwise `@cf/zai-org/glm-5.3` on Workers AI;
+`OPERATOR_MODEL` names another model of the provider chosen. Each is served by a
+plugin config.ts `providing` names, lent the platform's transport and keys
+(providers.ts); no layer imports a provider. An input asking another model gets
+it where the Operator's provider lists it, and the Operator's own otherwise. The
+model must have a price, from its provider's list or @yaks/model's. With a
+delegate (Anthropic's), a conversation and its forks have `spawn`, whose
+description sends writing or fixing code and tasks that need careful reasoning
+to `OPERATOR_DELEGATE` (`claude-opus-5-5`) in a child session working for the
+same space and charged to it; the child's answer comes back to the session that
+asked, and the child is offered no `spawn` of its own. This entry accepts text.
+Picture attachments and the email, chat and SMS interfaces are separate work.
+Interrupted requests remain in the graph and can be continued explicitly; they
+do not resume automatically.
 
 What the Operator is told is two personas, worn through @yaks/persona
 (operator-persona.ts). The yaks.app Operator persona is kept in the directory:

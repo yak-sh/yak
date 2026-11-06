@@ -136,6 +136,23 @@ export let submit = async (env: Env, job: Inference): Promise<void> => {
   }
 }
 
+// A Lent for asking a plugin which names it serves: making a model calls
+// nothing it lends.
+let idle: Lent = {
+  fetch: () => Promise.reject(new Error('idle')),
+  key: () => Promise.resolve(undefined),
+  refresh: () => Promise.resolve(undefined),
+  store: () => Promise.reject(new Error('idle')),
+  env: () => undefined,
+}
+
+/** The provider names `plugins` serve: the calls the executor composed of
+ * them can make, which the kernel freezes for it and runs no other. */
+export let serves = (plugins: readonly Plugin[]): string[] =>
+  plugins.flatMap((p) =>
+    Object.keys(p.facet.providers?.(idle, p.with ?? {}) ?? {})
+  )
+
 // The model a frozen call names, from the first plugin serving it, lent this
 // call's grants, receipts and artifact store.
 let served = (

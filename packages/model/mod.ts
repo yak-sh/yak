@@ -63,7 +63,7 @@ import type { MediaReceipt } from './media.ts'
 import { listPrice } from './prices.ts'
 export { listPrice } from './prices.ts'
 export { deferredModel } from './deferred.ts'
-export type { Lent, ProviderFacet } from './provider.ts'
+export type { Lent, Native, ProviderFacet, Spending } from './provider.ts'
 export {
   type Executor,
   type FrozenModelRequest,
@@ -117,6 +117,7 @@ export { cachedPrefixExpires, cacheExpiry, prefixCacheMark } from './cache.ts'
 export { acknowledged, began, submitCall, submitted } from './submission.ts'
 export type { CacheContext } from './cache.ts'
 import type { CacheContext } from './cache.ts'
+import type { Affordable } from './afford.ts'
 
 /** The row holding a provider's latest reading of one plan-limit window
  * (`rate_limit`), named by its provider entity and the window in minutes. */
@@ -313,6 +314,10 @@ export type Model = ((req: Request) => Promise<Reply>) & {
   /** The media types it reads as they are, beside text, each with the most
    * bytes of one file it takes. Without it, a file is read as its text. */
   reads?: Record<string, number>
+  /** What a request priced by the call rather than by its tokens (a track of
+   * music) would cost within `remaining` dollars, null where it would not
+   * fit; undefined for a request its tokens price. */
+  quote?: (req: Request, remaining: number) => Affordable | null | undefined
 }
 
 /** What a provider answered a failed request with, as it arrived: the body of

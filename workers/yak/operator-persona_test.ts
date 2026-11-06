@@ -15,7 +15,8 @@ import { link } from '@yaks/edge'
 import { KERNEL, meta } from './meta.ts'
 
 let owner = crypto.randomUUID()
-let { env } = platform('operator-persona')
+// The platform holds Anthropic's key, so the Operator is on Claude.
+let { env } = platform('operator-persona', { ANTHROPIC_API_KEY: 'probe' })
 let dir = directoryOf(env.STORE)
 let id = await dir.mint(owner, 'home', 'Home', {
   'x-yak-person': owner,

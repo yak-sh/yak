@@ -51,10 +51,14 @@ integration, the artifact `store`, the host's `env` and, where the host keeps
 them, the `receipts` an interrupted call is delivered from) and the plugin's
 options from the config. `hosts(options)`, where a plugin offers it, names the
 hosts those models call, so a host that puts a credential of its own in their
-calls sends it nowhere else. A host running conversations
-([@yaks/harness](../harness/README.md), the hosted model executor in
-workers/model) asks every plugin its config names, so a config serves exactly
-the providers it lists, and the host depends on none of them.
+calls sends it nowhere else. `native(lent, options, spending)`, where a plugin
+offers it, is the provider's own door (`Native`): one call as its API takes it,
+held to what the host's `Spending` affords and settled at what it cost, for a
+host that passes a caller's input through whole. A model priced by the call
+rather than by its tokens quotes such a request itself (`Model.quote`). A host
+running conversations ([@yaks/harness](../harness/README.md), the hosted model
+executor in workers/model) asks every plugin its config names, so a config
+serves exactly the providers it lists, and the host depends on none of them.
 [@yaks/openai](../openai/README.md),
 [@yaks/openrouter](../openrouter/README.md),
 [@yaks/anthropic](../anthropic/README.md) and

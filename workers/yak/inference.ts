@@ -22,7 +22,8 @@ import {
   submitCall,
 } from '@yaks/model'
 import { capture } from '@yaks/tracker/report'
-import type { FrozenRequest, Kernel } from '../model/worker.ts'
+import { type FrozenRequest, type Kernel, serves } from '../model/worker.ts'
+import { plugins } from '../model/config.ts'
 import { blobPrefix } from './blob-key.ts'
 import { egressOf } from './outbound.ts'
 import { appStore, directoryOf } from './directory.ts'
@@ -152,6 +153,10 @@ let matching = (
   return hold
 }
 
+// The providers the hosted executor composes (workers/model/config.ts): an
+// app's call to any other runs in its store.
+let hosted = serves(plugins)
+
 /** Missing or not-yet-live bindings preserve inline dispatch. Accepted asks
  * resume from their pinned receipt even while new dispatch is unavailable. */
 export let lending = async (
@@ -160,7 +165,8 @@ export let lending = async (
 ): Promise<Executor | undefined> => {
   if (
     at.context?.app.scope == 'store' ||
-    !names(at.env, serving).includes(provider) || !at.app ||
+    !names(at.env, serving).includes(provider) ||
+    !hosted.includes(provider) || !at.app ||
     !at.env.MODEL_RECEIPTS
   ) return
   let live = await at.env.MODEL?.version().catch(() => undefined)

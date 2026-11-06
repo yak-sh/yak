@@ -80,6 +80,7 @@ import * as vocab75 from './facets/trash-vocab.ts'
 import * as provider0 from '@yaks/anthropic/provider'
 import * as provider1 from '@yaks/openai/provider'
 import * as provider2 from '@yaks/openrouter/provider'
+import * as provider3 from '@yaks/workers-ai/provider'
 export let vocabFacets: Record<string, VocabFacet> = {
   '@yaks/admin': vocab0,
   '@yaks/alias': vocab1,
@@ -163,6 +164,7 @@ export let providerFacets: Record<string, ProviderFacet> = {
   '@yaks/anthropic': provider0,
   '@yaks/openai': provider1,
   '@yaks/openrouter': provider2,
+  '@yaks/workers-ai': provider3,
 }
 let facets: Record<string, () => Promise<unknown>> = {
   '@yaks/alias/graph': () => import('@yaks/alias/graph'),
