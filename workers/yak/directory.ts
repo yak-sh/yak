@@ -1,6 +1,5 @@
 import type { ByDay } from '@yaks/ui/chart'
 import { calledOf, christened, pick } from './operator-name.ts'
-import { fromStripe } from './seller-move.ts'
 import {
   EPOCH,
   MEND,
@@ -663,11 +662,6 @@ export type Row = {
     ready?: boolean | null
     submitted?: boolean | null
   }
-  stripe?: {
-    account?: string | null
-    charges_enabled?: boolean | null
-    details_submitted?: boolean | null
-  }
   meter?: Partial<Meter>
   trend?: { requests?: ByDay; spend?: ByDay }
   notified?: Record<string, unknown> | null
@@ -1024,7 +1018,6 @@ export let SPACE_PARTS = [
   'notified',
   'trashed',
   'seller',
-  'stripe',
   'fee',
   'budget',
   'starter',
@@ -1098,8 +1091,7 @@ let referralOf = (r: Row): Referral[] =>
 // The seller's row, or null where nothing has ever connected. An account with
 // neither answer yet — minted a second ago, the webhook not in — reads false
 // on both, which is the truth: nothing may be sold through it until its
-// provider says so. A row the store mover has not reached yet still says it
-// in its old word (seller-move.ts).
+// provider says so.
 let sellerOf = (r: Row): Seller | null =>
   r.seller?.account
     ? {
@@ -1108,7 +1100,7 @@ let sellerOf = (r: Row): Seller | null =>
       ready: !!r.seller.ready,
       submitted: !!r.seller.submitted,
     }
-    : fromStripe(r.stripe)
+    : null
 
 // The tunnel, or null where no machine is: a row missing either id names
 // nothing a worker could bind to.
@@ -2009,16 +2001,12 @@ export let directoryRows = (rows: {
     // connected account names its id and nothing of ours, so this is what
     // turns it back into a space. One account per space, so the answer is one
     // space or nobody — and nobody is an event about somebody else's
-    // platform, or one for a space that has since disconnected. A row the
-    // store mover has not reached yet is found by its old word
-    // (seller-move.ts).
+    // platform, or one for a space that has since disconnected.
     seller: async (via: string, account: string) => {
       let row = await one(
-        `.seller.via=${via}&.seller.account=${account}&.space&${SPACE_ABOUT}|` +
-          `.stripe.account=${account}&.space&${SPACE_ABOUT}`,
+        `.seller.via=${via}&.seller.account=${account}&.space&${SPACE_ABOUT}`,
       )
-      let found = row?.space ? spaceOf(row) : null
-      return found?.seller?.via == via ? found : null
+      return row?.space ? spaceOf(row) : null
     },
     // A space by eid, which is how an app names the space it belongs to.
     at: async (eid: string) => {

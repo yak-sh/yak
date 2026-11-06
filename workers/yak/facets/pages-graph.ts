@@ -31,7 +31,6 @@ let UNSEEN = [
   'screenshot',
   'notified',
   'seller',
-  'stripe',
   'fee',
   'budget',
   'starter',

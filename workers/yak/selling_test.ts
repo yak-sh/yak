@@ -283,25 +283,18 @@ test('with no connect secret the door says so, and nothing else breaks', async (
 })
 
 // The one button a space can press without a Stripe key set is Stop, and it
-// needs no Stripe call at all: forgetting an account is a write of ours. A
-// space the store mover has not reached yet, still holding the old `stripe`
-// word (seller-move.ts), is the same seller to every reader and to Stripe's
-// events.
-test('a seller on the old word is read, updated and stopped like any', async () => {
+// needs no Stripe call at all: forgetting an account is a write of ours.
+test('a seller is updated by its events and stopped by its button', async () => {
   await using scenario = platform({ STRIPE_CONNECT_WEBHOOK_SECRET: WHSEC })
   let { env } = scenario
   let { space } = await seeded(env, 'public', scenario.dir)
+  let seller = { via: 'stripe', account: 'acct_probe', submitted: true }
   await stamp(env, {
     entities: [{
       entity: { eid: space.eid },
-      stripe: {
-        account: 'acct_probe',
-        charges_enabled: false,
-        details_submitted: true,
-      },
+      seller: { ...seller, ready: false },
     }],
   })
-  let seller = { via: 'stripe', account: 'acct_probe', submitted: true }
   assertEquals(await sold(env), { ...seller, ready: false })
   let updated = (charges_enabled: boolean) =>
     sell.apply(env, {

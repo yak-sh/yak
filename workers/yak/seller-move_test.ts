@@ -9,7 +9,7 @@ import { kernelDoc } from '@yaks/kernel'
 import { directoryDoc } from './facets/directory-vocab.ts'
 import { sellerRule } from './seller-move.ts'
 
-let vocab = loadVocab([kernelDoc, directoryDoc])
+let vocab = loadVocab([kernelDoc, directoryDoc, sellerRule.source!])
 let store = async (stripe: Record<string, unknown>[]) => {
   let g = graph({ vocab, storage: ram(vocab) })
   await g.apply(

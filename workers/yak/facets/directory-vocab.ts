@@ -373,18 +373,6 @@ export let directoryDoc: VocabDoc = {
         submitted: owned(bool),
       },
     },
-    // What `seller` was called before it named its provider. Read as `seller`
-    // and moved into it by the store mover (seller-move.ts); nothing writes
-    // it but to clear it, and it goes once the directory holds none.
-    stripe: {
-      component: true,
-      type: 'object',
-      properties: {
-        account: owned(text),
-        charges_enabled: owned(bool),
-        details_submitted: owned(bool),
-      },
-    },
     // What the platform takes from one sale, in basis points (sell.ts `fee`),
     // on the platform's own space row — `yak`, the one row in this directory
     // that is the platform rather than a customer. Unset reads as 0, which is

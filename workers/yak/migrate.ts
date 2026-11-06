@@ -352,6 +352,8 @@ export let BOUNDARIES = [
   // No space keeps an empty plan, comped, budget or starter a hold gave it
   // (T-141144).
   'yak/store/hold-empty/1',
+  // Every space's connected account is `seller`, not `stripe` (T-142134).
+  'yak/store/seller/1',
 ]
 
 /** A column dropped from a table. */

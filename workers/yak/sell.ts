@@ -267,12 +267,9 @@ let dirOf = (env: Env) => directory(bound(env.DIRECTORY, dirPart.fetch, env))
 
 /** The space's `seller` row, written whole through the kernel's own door —
  * every property of it is server-owned (vocab.ts), so this is the only
- * writer. It clears the row's old word too (seller-move.ts), so a row it
- * writes is moved. */
+ * writer. */
 let wrote = (env: Env, space: Space, seller: Seller | null) =>
-  stamp(env, {
-    entities: [{ entity: { eid: space.eid }, seller, stripe: null }],
-  })
+  stamp(env, { entities: [{ entity: { eid: space.eid }, seller }] })
 
 /**
  * Connect this space to a Stripe account, and answer the link that finishes it.
