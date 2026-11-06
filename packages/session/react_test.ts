@@ -38,7 +38,7 @@ import { type Deps, react, recent, ToolError, transcript } from './react.ts'
 import { running, runningAt, settle } from './run.ts'
 import { took } from './timing.ts'
 import { GAP } from './compact.ts'
-import { PENDING } from './project.ts'
+import { PENDING, TURN } from './project.ts'
 
 // What the fake provider keeps about an ask: its own comp, the way @yaks/openai
 // keeps `openai{response_id}`.
@@ -2217,11 +2217,18 @@ test('an anchored continuation includes a tool final committed during its preced
   let { asked } = asyncAnchorContinuation
   assertEquals(asked.length, 1)
   assertEquals(asked[0].anchor, 'held-anchor')
-  assertEquals(asked[0].items, [{
-    kind: 'user',
-    text: 'The pending echo call async-c1 {"text":"hi"} finished:\n' +
-      'FINAL_DURING_ANCHORED_ASK',
-  }, { kind: 'assistant', text: 'held reply' }])
+  assertEquals(asked[0].items, [
+    {
+      kind: 'user',
+      text: 'The pending echo call async-c1 {"text":"hi"} finished:\n' +
+        'FINAL_DURING_ANCHORED_ASK',
+    },
+    { kind: 'assistant', text: 'held reply' },
+    {
+      kind: 'instruction',
+      text: TURN,
+    },
+  ])
 })
 
 // An async call's Pending travels only where an earlier request sent it: that

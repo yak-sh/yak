@@ -6,6 +6,7 @@ import { line } from '@yaks/telnyx'
 import { consentEid } from '@yaks/phone'
 import { OPENAI, type Socket, talk, type Talked, type Told } from '@yaks/speech'
 import type { Request } from '@yaks/model'
+import { conversation } from '@yaks/anthropic'
 import type { Bundle } from '@yaks/graph'
 import { platform } from './directory-rows-probe.ts'
 import { stamp } from './directory.ts'
@@ -810,6 +811,61 @@ test("a recorded call is the caller's conversation: their words theirs, its voic
     'assistant: Mossvale has one open error.',
     'assistant: You have one open error in Mossvale.',
   ])
+})
+
+test("a call whose voice spoke after the caller's last words asks the Operator with every line, ending on a user's message", async () => {
+  let { env } = platform('call-voice-last')
+  let person = crypto.randomUUID()
+  let dir = directoryOf(env.STORE)
+  let space = (await dir.at(
+    await dir.mint(person, 'home', 'Home', {
+      'x-yak-person': person,
+      'x-yak-role': 'owner',
+    }),
+  ))!
+  let store = operatorMemory()
+  let asked: Request[] = []
+  let operator = operating(
+    store,
+    env,
+    operatorModel((req) => {
+      asked.push(req)
+      return Promise.resolve({
+        id: crypto.randomUUID(),
+        model: req.model,
+        items: [{ kind: 'assistant', text: 'Added Garlic Butter Chicken.' }],
+        cost: 0,
+      })
+    }),
+  )
+  handleChannels(operator, env, { voice: () => Promise.resolve({}) })
+  let note = (text: string, o: { said?: boolean; began?: boolean } = {}) =>
+    operator.note({ person }, space, text, { call: 'c1', ...o })
+  // As on Jeff's call of 2026-11-06: the voice asked, and the caller and the
+  // voice spoke again before the Operator's turn began.
+  await note('', { began: true })
+  await operator.ask({ person }, space, { say: 'Add a random recipe.' }, {
+    channel: 'voice',
+    call: 'c1',
+  })
+  await note('Okay.')
+  await note('The request is still in progress, so I can’t', { said: true })
+  await drain(store)
+  let said = conversation(asked[0]).flatMap((m) =>
+    m.content.flatMap((c) =>
+      c.type == 'text'
+        ? [`${m.role}: ${c.text.replace(/^\[[^\]]*\]\s*/, '')}`]
+        : []
+    )
+  )
+  equal(said.slice(0, -1), [
+    'user: They called you, and your voice on the call answered.',
+    'user: Add a random recipe.',
+    'user: By phone: Okay.',
+    'assistant: The request is still in progress, so I can’t',
+  ])
+  // The Operator is asked for its turn, never to finish its voice's words.
+  equal(said.at(-1)!.startsWith('user: '), true)
 })
 
 test("a call's turns answered together, and the helper they start, are each said once", async () => {

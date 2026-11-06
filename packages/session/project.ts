@@ -21,6 +21,25 @@ let comp = (b: Bundle | undefined, name: string) =>
  * later, naming its call ({@link project}). */
 export let PENDING = 'Pending; its result will follow.'
 
+/** What closes a request whose conversation ends on the agent's own words,
+ * such as a voice's on a call said outside a model turn (`notice.own`):
+ * asked to go on from its own words, a model would finish them, and some
+ * refuse to (Anthropic's "must end with a user message"). */
+export let TURN = 'Nothing has been said since your words above; this is ' +
+  'your turn.'
+
+/// let said = { kind: 'assistant' as const, text: 'One moment.' }
+/// let asked = { kind: 'user' as const, text: 'Add a recipe.' }
+/// closed([asked, said]) -> [asked, said, { kind: 'instruction', text: TURN }]
+/// closed([said, asked]) -> [said, asked]
+/** A request's items as a turn the model takes: ending on its own words, they
+ * are closed by {@link TURN}, so every line stays where it was said and the
+ * model answers rather than continues. */
+export let closed = (items: Item[]): Item[] =>
+  items.at(-1)?.kind == 'assistant'
+    ? [...items, { kind: 'instruction', text: TURN }]
+    : items
+
 // The call an entry answers: a final's or a Pending's.
 let answers = (b: Bundle) =>
   comp(b, RESULT)?.call ?? comp(b, 'tool_progress')?.call

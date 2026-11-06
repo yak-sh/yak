@@ -145,7 +145,7 @@ let unless = <T>(signal: AbortSignal | undefined, work: Promise<T>) =>
  * `refusal{code}`. */
 export { UnknownSession } from './unknown.ts'
 import { UnknownSession } from './unknown.ts'
-import { PENDING, project } from './project.ts'
+import { closed, PENDING, project } from './project.ts'
 export { PENDING, project } from './project.ts'
 import {
   contextParts,
@@ -1471,7 +1471,8 @@ export let react = async (
         : sending?.instructions == null
         ? deps.instructions
         : String(sending.instructions)),
-    items: [
+    // A turn: what the model answers, never words of its own to finish.
+    items: closed([
       ...dynamic,
       ...project(
         entries,
@@ -1485,7 +1486,7 @@ export let react = async (
           resultUpdatesAsUser: !providerModel.lateResults,
         },
       ),
-    ],
+    ]),
     tools: tools.map(({ name, description, parameters }) => ({
       name,
       description,
