@@ -6,7 +6,11 @@
  * is the same for a platform endpoint and a Connect one; only the secret
  * differs. @yaks/hook's `refusal('stripe', …)` verifies it.
  */
-export let signed = async (secret: string, raw: string, at: number) => {
+export let signed = async (
+  secret: string,
+  raw: string,
+  at: number,
+): Promise<string> => {
   let key = await crypto.subtle.importKey(
     'raw',
     new TextEncoder().encode(secret),

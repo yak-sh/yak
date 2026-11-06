@@ -69,7 +69,7 @@ export let ask = async (
   fields?: Record<string, unknown>,
   on?: string,
   method = fields ? 'POST' : 'GET',
-) => {
+): Promise<Record<string, unknown>> => {
   if (!at.key) throw new Error('stripe: no key was lent')
   let body = fields ? new URLSearchParams(form(fields)).toString() : undefined
   let headers = {
