@@ -149,7 +149,7 @@ test('a stream sends what it heard once open, tells turns, and prices its second
   })
   equal(s.opened, [{
     url:
-      'wss://api.deepgram.com/v2/listen?model=flux-general-en&encoding=mulaw&sample_rate=8000',
+      'wss://api.deepgram.com/v2/listen?model=flux-general-en&encoding=mulaw&sample_rate=8000&eot_threshold=0.5',
     protocols: ['token', 'k1'],
   }])
   stream.send(new Uint8Array(4000))
