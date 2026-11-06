@@ -4,7 +4,8 @@
   "type": "module",
   "exports": {
     ".": "./mod.ts",
-    "./fields": "./fields.ts"
+    "./fields": "./fields.ts",
+    "./lexicon": "./lexicon.ts"
   },
   "license": "Apache-2.0",
   "description": "Indexes a graph's text properties with SQLite FTS5 and adds ranked full-text search to queries.",
