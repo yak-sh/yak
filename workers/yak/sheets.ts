@@ -13,12 +13,16 @@ let FONT = 'nunito-latin.woff2'
 
 /** The head's links for one of the site's sheets, after the reporter
  * (page-report.ts), which runs before any of the page's own scripts so a
- * break in them reaches the tracker. */
+ * break in them reaches the tracker, and the site's favicon, which every page
+ * wears from here so none goes without it. */
 export let links = (env: Host, sheet: string, names = NAMES) => {
   let at = (name: string) => url(env, `/${names[name] ?? name}`)
   return `<script src="${at('report.js')}" data-yak-at="${
     url(env, '/')
   }"></script>
+<link rel="icon" href="${
+    url(env, '/favicon-32.png')
+  }" type="image/png" sizes="32x32">
 <link rel="preload" href="${at(FONT)}" as="font" type="font/woff2" crossorigin>
 <link rel="stylesheet" href="${at(sheet)}">`
 }

@@ -63,7 +63,7 @@ test('sheets: a head names one sheet, on this site, with the font preloaded', ()
   ])
 })
 
-test('sheets: a static page, the home page and a kernel page wait on no other site', async () => {
+test('sheets: a static page, the home page and a kernel page wait on no other site, and wear the favicon', async () => {
   let k = await kernel()
   let pages = [
     await (await k.at('yaks.app', '/')).text(),
@@ -76,6 +76,8 @@ test('sheets: a static page, the home page and a kernel page wait on no other si
     assertEquals(page.includes('fonts.g'), false)
     assertEquals(blocking(page).length, 1)
     assertStringIncludes(page, 'rel="preload"')
+    assertEquals(page.match(/rel="icon"/g)?.length, 1)
+    assertStringIncludes(page, 'favicon-32.png')
   }
 })
 

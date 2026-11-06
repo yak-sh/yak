@@ -57,7 +57,6 @@ let Head = (
     <meta name='twitter:description' content={description} />
     <meta name='twitter:image' content={`${SITE}/og.png`} />
     <meta name='twitter:image:alt' content={ALT} />
-    <link rel='icon' href='favicon-32.png' type='image/png' sizes='32x32' />
     <link rel='apple-touch-icon' href='apple-touch-icon.png' />
     <link rel='stylesheet' href='style.css' />
     <script src='idle.js' defer />

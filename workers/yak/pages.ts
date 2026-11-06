@@ -185,7 +185,13 @@ let documented = (
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="color-scheme" content="light dark">
 <title>${title} · yaks.app</title>
-${links(env, 'pages.css')}${head ? `\n${head}` : ''}
+${links(env, 'pages.css')}${
+      head.includes('rel="apple-touch-icon"')
+        ? ''
+        : `\n<link rel="apple-touch-icon" href="${
+          url(env, '/apple-touch-icon.png')
+        }">`
+    }${head ? `\n${head}` : ''}
 </head>
 <body${layout ? ` class="${layout}"` : ''}><main>${main}</main>${
       main.includes('data-chart')

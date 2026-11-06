@@ -116,11 +116,11 @@ test('every page wears the raster yak', () => {
   for (let page of branded) {
     let html = read(page)
     let document = parsed(page)
-    // A page in a subdirectory names the site's own files from the root.
+    // The favicon comes with the sheet's links, as the page leaves.
     assert(
-      document.querySelector(
+      parseHTML(sheeted(html, {})).document.querySelector(
         'link[rel="icon"][type="image/png"][sizes="32x32"]',
-      )?.getAttribute('href')?.match(/^\/?favicon-32\.png$/),
+      )?.getAttribute('href')?.match(/\/favicon-32\.png$/),
       `${page} has no PNG favicon`,
     )
     assert(
