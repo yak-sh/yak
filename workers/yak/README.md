@@ -30,7 +30,7 @@ namespace's outbound Worker), `yak-esbuild` (`esbuild/`, the compiler
 resvg's WebAssembly, kept out of the kernel so no Store's isolate compiles it)
 `yak-browser` (`browser/`, which renders a draft for `app_preview` with
 puppeteer and checks it with axe-core, kept out of the kernel for the same
-reason) and `yak-sandbox` (`sandbox/`, the Sandbox Durable Object and its
+reason) and `yak-sandbox` (`sandbox/`, the Workbench Durable Object and its
 container behind the kernel's `SANDBOX` binding, kept out for the same reason; a
 container's calls to the platform come back to the kernel's `SandboxOutbound`,
 which holds the secret its placeholder is swapped with). `yak-esbuild` is a

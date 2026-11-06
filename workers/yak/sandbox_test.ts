@@ -637,7 +637,7 @@ test('the deploy names the container, and the image is the SDK version', () => {
 
   assertEquals(conf.containers.length, 1)
   let [box] = conf.containers
-  assertEquals(box.class_name, 'Sandbox')
+  assertEquals(box.class_name, 'Workbench')
   assert(box.image.startsWith('registry.cloudflare.com/'))
   // rustc on a sixteenth of a core would spend the whole budget on one crate,
   // and the image does not fit in `lite`'s disk.
@@ -646,16 +646,16 @@ test('the deploy names the container, and the image is the SDK version', () => {
   // The migration that creates it, and the kernel's binding the tools reach
   // it through.
   assert(
-    conf.migrations.some((m) => m.new_sqlite_classes?.includes('Sandbox')),
-    'a migration declares the Sandbox object',
+    conf.migrations.some((m) => m.new_sqlite_classes?.includes('Workbench')),
+    'a migration declares the Workbench object',
   )
   let kernel = parse(at('wrangler.toml')) as typeof conf
   assert(
     kernel.durable_objects.bindings.some((b) =>
-      b.name == 'SANDBOX' && b.class_name == 'Sandbox' &&
+      b.name == 'SANDBOX' && b.class_name == 'Workbench' &&
       b.script_name == conf.name
     ),
-    "SANDBOX is bound to yak-sandbox's Sandbox class",
+    "SANDBOX is bound to yak-sandbox's Workbench class",
   )
 
   let pinned = JSON.parse(at('package.json')) as {

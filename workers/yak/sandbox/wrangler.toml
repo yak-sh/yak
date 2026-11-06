@@ -1,11 +1,12 @@
-# yak-sandbox holds the builder's workbench (../sandbox.ts): the Sandbox
-# Durable Object, @cloudflare/sandbox's, and the Cloudflare Container behind
-# it (index.ts). Its own Worker because the SDK is code compiled when an
+# yak-sandbox holds the builder's workbench (../sandbox.ts): the Workbench
+# Durable Object, @cloudflare/sandbox's Sandbox, and the Cloudflare Container
+# behind it (index.ts). Not named Sandbox: the kernel's migration deleting its
+# own Sandbox class is refused while any of its bindings names that class. Its own Worker because the SDK is code compiled when an
 # isolate starts: in the kernel that would be every isolate, a Store waking
 # for one query included. Here it is only the isolates that run a sandbox.
 #
 # No routes and no secrets. The kernel's SANDBOX binding names this script's
-# Sandbox class and is the one way in. A container's HTTPS to this platform and
+# Workbench class and is the one way in. A container's HTTPS to this platform and
 # its spaces goes to the kernel's `SandboxOutbound` over KERNEL, where its
 # placeholder is swapped for its grant (../sandbox.ts `swapped`); the rest of
 # its network is the whole internet. The kernel's deploy deploys it first, to
@@ -36,11 +37,11 @@ entrypoint = "SandboxOutbound"
 
 [[durable_objects.bindings]]
 name = "SANDBOX"
-class_name = "Sandbox"
+class_name = "Workbench"
 
 [[migrations]]
 tag = "v1"
-new_sqlite_classes = ["Sandbox"]
+new_sqlite_classes = ["Workbench"]
 
 # The container uses a prebuilt registry image. Its tag is the toolchain
 # Dockerfile's hash (base.ts); ../sandbox_test.ts checks its SDK against
@@ -61,7 +62,7 @@ new_sqlite_classes = ["Sandbox"]
 # The toolchain image is stable. The kernel's assets supply the CLI workspace
 # on first yak use; a package change builds no sandbox image.
 [[containers]]
-class_name = "Sandbox"
+class_name = "Workbench"
 image = "registry.cloudflare.com/0f9613dfd3f0451df0bd0f12a1372ea3/yak-sandbox:base-ee6d899f43d821b1"
 instance_type = "standard-2"
 max_instances = 5
@@ -85,14 +86,14 @@ entrypoint = "SandboxOutbound"
 
 [[env.staging.durable_objects.bindings]]
 name = "SANDBOX"
-class_name = "Sandbox"
+class_name = "Workbench"
 
 [[env.staging.migrations]]
 tag = "v1"
-new_sqlite_classes = ["Sandbox"]
+new_sqlite_classes = ["Workbench"]
 
 [[env.staging.containers]]
-class_name = "Sandbox"
+class_name = "Workbench"
 image = "registry.cloudflare.com/0f9613dfd3f0451df0bd0f12a1372ea3/yak-sandbox:base-ee6d899f43d821b1"
 instance_type = "standard-2"
 max_instances = 5

@@ -17,7 +17,7 @@ type Env = Host & {
   KERNEL: { send(req: Request, container: string): Promise<Response> }
 }
 
-export class Sandbox extends sdk.Sandbox<Env> {
+export class Workbench extends sdk.Sandbox<Env> {
   override interceptHttps = true
   constructor(...made: ConstructorParameters<typeof sdk.Sandbox<Env>>) {
     super(...made)
@@ -30,7 +30,7 @@ export class Sandbox extends sdk.Sandbox<Env> {
 let platform = (req: Request, env: Env, out: { containerId: string }) =>
   env.KERNEL.send(req, out.containerId)
 let at = apex(env as Env)
-Sandbox.outboundByHost = { [at]: platform, [`*.${at}`]: platform }
+Workbench.outboundByHost = { [at]: platform, [`*.${at}`]: platform }
 
 export let ContainerProxy = sdk.ContainerProxy
 
