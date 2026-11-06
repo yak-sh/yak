@@ -4253,6 +4253,9 @@ importers:
       '@yaks/fp':
         specifier: 0.2.23
         version: link:../fp
+      '@yaks/host':
+        specifier: 0.2.24
+        version: link:../host
     devDependencies:
       '@std/assert':
         specifier: npm:@jsr/std__assert@^1.0.0

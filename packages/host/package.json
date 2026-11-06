@@ -12,7 +12,8 @@
     "./documents": "./documents.ts",
     "./keywords": "./keywords.ts",
     "./anatomy": "./anatomy.ts",
-    "./lending": "./lending.ts"
+    "./lending": "./lending.ts",
+    "./payments": "./payments.ts"
   },
   "license": "Apache-2.0",
   "description": "The portable capabilities a host lends the plugins it composes.",

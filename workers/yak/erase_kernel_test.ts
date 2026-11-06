@@ -211,7 +211,7 @@ test('an erased space gives its domain back', async () => {
 
 // A subscription whose first payment never came ends at Stripe as
 // `incomplete_expired` and bills nobody again, so its space goes like one
-// whose subscription was cancelled (erase.ts `refused`, billing.ts `ending`).
+// whose subscription was cancelled (erase.ts `refused`, the provider's `standing`).
 test('a space whose subscription lapsed unpaid may be erased', async () => {
   let k = await kernel()
   try {

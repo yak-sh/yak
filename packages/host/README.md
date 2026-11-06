@@ -28,6 +28,7 @@ equal(stopped(), true)
 | `@yaks/host/roles`                            | Role and facet selection data without loading the assembly runtime                                                                                                   |
 | `@yaks/host/senders`                          | `Message`, `Receipt`, `Sender`, `Built`, `afresh`, `Unsent`, `Notice`, `Notices`, `Unsigned`, `Arrival`, `Incoming`                                                  |
 | `@yaks/host/lending`                          | `lending`, `Lends`: what plugins lend a host by name                                                                                                                 |
+| `@yaks/host/payments`                         | `Payments`, `Plans`, `Subscription`, `Checkout`, `Heard`, `Standing`, `Per`, `Tags`: a payment provider's contract                                                   |
 | `@yaks/host/words`                            | Vocabulary assembly, `wordsOf`, `taking`, `Words`, `Declared`, `Taken`                                                                                               |
 | `@yaks/host/config`                           | Configuration types, `used`, `given`, `chosen`, `configured`, `revealed`, `holding`, `Reveal`, `meet`, `Unmet`                                                       |
 | `@yaks/host/documents`, `@yaks/host/keywords` | Shared intrinsic declarations and vocabulary keywords                                                                                                                |
@@ -225,6 +226,21 @@ embed. One name has one embedder.
 way: a provider plugin lends one from its graph facet's `texters(host, options)`
 (@yaks/phone/plugin builds it), and a texter that cannot send yet says why
 through `waiting()`.
+
+## Payment providers
+
+A host that takes money itself asks for `payments` the same way: a provider
+plugin lends a `Payments` from its graph facet's `payments(host, options)`, its
+`name` for the sentences people read and its `plans` (`@yaks/host/payments`),
+functions over its own wire that answer in words naming no provider. `plans`
+mints a payer once, says whom it is billed to, opens a hosted checkout for a
+tier by the month or year (with a trial for time already given free) and a
+hosted portal, reads a subscription as
+`{id, payer, tier, status, until,
+ending, tags}`, moves its next charge, and
+reads an event the provider posted. The provider decides which tier a price buys
+and where a status stands (`standing`: `paying`, `owing`, `lapsed` or `ended`);
+the host keeps its own rules over them. @yaks/stripe lends one.
 
 ## Failure reporting
 

@@ -910,7 +910,7 @@ export let attached = async (
 
 /**
  * A subscription object shaped the way the webhook door reads one — the fields
- * billing.ts `planOf` touches, and no more. The door reads the whole
+ * @yaks/stripe plans `read` touches, and no more. The door reads the whole
  * subscription off the event and never asks Stripe back, so this stands in for
  * one Stripe holds wherever a test's subject is what the plan allows or how the
  * door behaves rather than the purchase itself. `over` sets the fields a

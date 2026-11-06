@@ -14,6 +14,7 @@ import { DAILY as TRASH } from '../trash.ts'
 import { DAILY as WRAP, forward, ROW } from '../rewrap.ts'
 import { directoryRows, type Row } from '../directory.ts'
 import { rewarding } from '../reward.ts'
+import { plans } from '../payments.ts'
 
 /** What the directory is born holding: a schedule for each sweep. */
 export let schedules: Wake[] = [{
@@ -60,10 +61,10 @@ export let effects = (_host: unknown, options: Options): Handlers => {
       let [wrap] = await at.graph.read(`.entity.eid=${ROW} ?wake`)
       await at.graph.apply(forward(wrap, now))
     },
-    reward_referral: (event) =>
-      rewarding(
+    reward_referral: async (event) =>
+      await rewarding(
         dir(),
-        at.env,
+        await plans(at.env),
         event.entity.eid,
         new Date(at.env.CLOCK?.now() ?? Date.now()).toISOString(),
       ),

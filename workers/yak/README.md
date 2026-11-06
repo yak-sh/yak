@@ -645,8 +645,9 @@ and `yak admin erase` keep what's named there however long it sits idle, and a
 
 billing.ts is the platform's own plan: Stripe sells to us, and tells us at
 `POST /stripe/webhook`. The handler reads five v1 events and nothing else
-(billing.ts `subjectOf`); the dashboard steps are the Connect ones below with
-these differences:
+(@yaks/stripe plans `heard`, lent through config.ts `payments`, which also names
+the key and price ids above); the dashboard steps are the Connect ones below
+with these differences:
 
 | step | where                                                                                                                                                                                 |
 | ---- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |

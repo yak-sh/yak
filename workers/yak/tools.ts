@@ -2938,7 +2938,7 @@ let OURS: Row[] = [
       let { space, who } = owner(
         await spaceBin(ctx, { ...args, space: slug(args.space, 'space') }),
       )
-      let no = refused(space, ctx.env)
+      let no = await refused(space, ctx.env)
       if (no) throw refuse('access', no)
       let forever = args.forever != null && flag(args.forever, 'forever')
       if (space.trashed && !forever) {

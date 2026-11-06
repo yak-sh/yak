@@ -99,6 +99,7 @@ import {
 } from './handoff.ts'
 export { HANDOFF } from './handoff.ts'
 import { planCard } from './billing.ts'
+import { plans } from './payments.ts'
 import {
   daysLeft,
   directory,
@@ -474,7 +475,7 @@ let closing = async (
   let mine = !!ok && ok.space == space.eid && ok.person == person
   let forever = mine && !!ok?.forever
   let lines = forever ? naming(d, env) : keeping(d, env)
-  let stop = refused(space, env) ||
+  let stop = await refused(space, env) ||
     // Already there, and this visit is not the one that erases it: trashing
     // again would start the thirty days over on a space the person is only
     // looking at, so nothing happens and they are told both ways out.
@@ -552,7 +553,7 @@ let theirs = async (env: Env, req: Request, said?: string, say?: string) => {
       // What they pay, and the two doors that change it (billing.ts, T-33125).
       // `known` is whether Stripe has ever met this space: somebody who
       // cancelled still reaches their own invoices.
-      plan: planCard(env, space),
+      plan: planCard(await plans(env), space),
       paid: new URL(req.url).searchParams.get('paid') == '1',
     },
     say ? 400 : 200,

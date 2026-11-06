@@ -12,6 +12,41 @@ another.
 
 The host lends the key and the clock. Nothing reads the environment.
 
+## Plans
+
+`@yaks/stripe/graph` lends Stripe as a payment provider (`payments`, from
+`@yaks/host/payments`) named `stripe`, with `name: 'Stripe'` and its `plans`,
+built by `plans(options)` (`@yaks/stripe/plans`) from the options a config gives
+it: `key`, `clock`, and `prices`, each tier's price ids by `month` and `year`.
+
+```json
+{
+  "use": "@yaks/stripe",
+  "with": {
+    "key": { "secret": "STRIPE_KEY" },
+    "prices": {
+      "plus": { "month": "price_plus" },
+      "organization": { "month": "price_org", "year": "price_org_year" }
+    }
+  }
+}
+```
+
+A payer is a customer. Checkout is a subscription session under Managed
+Payments, which Stripe sells as merchant of record, so it sends none of the
+parameters Stripe controls there; the tags ride the session's and the
+subscription's `metadata`, the reference its `client_reference_id`, and time
+given free a `trial_end` no sooner than two days away. The portal is a billing
+portal session. A subscription reads its tier off its item's price (the first
+tier listing it, else the first tier), its period end off the item or the
+subscription, whichever the API version sends, and its standing off its status:
+`active` and `trialing` pay, `past_due` owes, `canceled` and
+`incomplete_expired` have ended, and the rest have lapsed. Postponing sets the
+trial to end later, prorating nothing. `heard(event)` reads a verified event: a
+`customer.subscription.*` event carries its subscription, and a checkout session
+or an invoice names one, read on asking; one Stripe does not hold reads as
+`null`.
+
 `@yaks/stripe/testing` has `signed(secret, raw, at)`, the `Stripe-Signature`
 header Stripe puts on a webhook, for a test that delivers one. @yaks/hook's
 `refusal('stripe', …)` verifies it.

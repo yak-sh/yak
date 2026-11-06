@@ -1,12 +1,14 @@
 // What plugins lend a host by name, beside what the host lends itself: mail
 // senders, texters and embedders, which a graph host passes on
-// (Host.senders, Host.texters, Host.embedders), and a provider's notice and arrival readers, which a host
-// that routes mail itself asks for, such as a Worker naming its providers in
-// config. One party per name: a letter or a vector made through a name two
+// (Host.senders, Host.texters, Host.embedders), and a provider's notice and
+// arrival readers and a payment provider (./payments.ts), which a host that
+// routes mail or takes money itself asks for, such as a Worker naming its
+// providers in config. One party per name: a letter or a vector made through a name two
 // parties answer to would depend on order.
 import { CallError } from '@yaks/tools/errors'
 import type { Embedding, Host } from './mod.ts'
 import type { Arrival, Notices, Sender, Texter } from './senders.ts'
+import type { Payments } from './payments.ts'
 import type { Taken } from './words.ts'
 
 /** What each kind of loan is. */
@@ -16,6 +18,7 @@ export type Lends = {
   embedders: Embedding
   notices: Notices
   arrivals: Arrival
+  payments: Payments
 }
 
 /** The loans of one kind the graph facets make, beside the host's own

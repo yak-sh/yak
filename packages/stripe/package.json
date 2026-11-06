@@ -4,12 +4,15 @@
   "type": "module",
   "exports": {
     ".": "./mod.ts",
+    "./graph": "./graph.ts",
+    "./plans": "./plans.ts",
     "./testing": "./testing.ts"
   },
   "license": "Apache-2.0",
-  "description": "Stripe's API over fetch, and the signature its webhooks carry, for a host that lends the key.",
+  "description": "Stripe's API over fetch, the signature its webhooks carry, and the plans it sells as a payment provider a host is lent.",
   "dependencies": {
-    "@yaks/fp": "0.2.23"
+    "@yaks/fp": "0.2.23",
+    "@yaks/host": "0.2.24"
   },
   "devDependencies": {
     "@std/assert": "npm:@jsr/std__assert@^1.0.0",

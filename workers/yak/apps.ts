@@ -66,6 +66,7 @@ import type { Mail } from './mail.ts'
 import type { Beside } from './operator-page.ts'
 import { pageAt, pilled, standing } from './gallery.ts'
 import { billedTo, checkout, planCard, portal, wanted } from './billing.ts'
+import { plans } from './payments.ts'
 import { connecting, connectionsOf, enabled } from './connections.ts'
 import {
   buying,
@@ -2745,6 +2746,7 @@ let desk = async (
     picks,
     operator,
     billed,
+    lent,
   ] = await Promise.all([
     shelved,
     // What is broken in each app (unseen.ts `brokenIn`), read only for the
@@ -2806,11 +2808,12 @@ let desk = async (
     // Whom Stripe bills, for the Billing page (T-131895). A read that fails
     // is reported, and the page says only that Stripe bills it.
     view == 'billing'
-      ? billedTo(env, space).catch((e) => {
+      ? plans(env).then((lent) => billedTo(lent, space)).catch((e) => {
         caught(e, { request: 'read billing customer', space: space.slug })
         return undefined
       })
       : undefined,
+    plans(env),
   ])
   let page = deskPage({
     views,
@@ -2838,7 +2841,7 @@ let desk = async (
     // is worse than no block.
     sell: env.STRIPE_KEY ? selling(space) : undefined,
     paying: paid(space.tier),
-    plan: planCard(env, space),
+    plan: planCard(lent, space),
     paid: q.get('paid') == '1',
     // The space's month against its allowances (meter.ts), as the
     // directory's row holds it.

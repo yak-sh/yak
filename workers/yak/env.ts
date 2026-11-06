@@ -219,15 +219,14 @@ export type Env = {
   HOSTNAMES_API?: string
   // DNS-over-HTTPS JSON endpoint for hostname ownership TXT lookups.
   DNS_API?: string
-  // The paid tier (billing.ts, T-33125). STRIPE_KEY is the restricted API key
-  // checkout, the portal, subscription reads and an invite's month (reward.ts,
-  // Subscriptions write) speak to Stripe with;
-  // STRIPE_WEBHOOK_SECRET is what the events Stripe posts are verified
-  // against. Both are secrets and both are the owner's to set (T-32760);
-  // unset, the doors say the paid tier is not switched on here rather than
-  // half-working. STRIPE_PRICE is the recurring price a subscription is for —
-  // not a secret, it rides wrangler.toml's `[vars]` beside the account tag.
-  // payments.ts lends the key to @yaks/stripe for every call.
+  // The paid tier (billing.ts, T-33125) is the payment provider config.ts
+  // `payments` names, its key and prices the secrets and `[vars]` its entry
+  // reads from this environment by name. What is left here is selling's
+  // (sell.ts): STRIPE_KEY, the same restricted key, until a seller's shop is
+  // lent beside the plans (T-142132), and the two webhook secrets, until the
+  // provider serves its own doors (T-142133). STRIPE_WEBHOOK_SECRET is what
+  // the events Stripe posts are verified against; it is the owner's to set
+  // (T-32760), and unset, the door says the paid tier is not switched on.
   // Texts and calls (phones.ts): the phone provider the platform sends from,
   // by the name its plugin lends it under, and the number it sends from. Each
   // provider's credentials are the secrets its entry in config.ts
@@ -255,12 +254,6 @@ export type Env = {
   TEXT_SIGNUP?: string
   STRIPE_KEY?: string
   STRIPE_WEBHOOK_SECRET?: string
-  STRIPE_PRICE?: string
-  // The Organization plan's two recurring prices (D-134567), by the month and
-  // by the year, `[vars]` like STRIPE_PRICE. Unset, checkout says the plan is
-  // not on sale here and the plan card does not offer it.
-  STRIPE_PRICE_ORGANIZATION?: string
-  STRIPE_PRICE_ORGANIZATION_YEAR?: string
   // Selling (sell.ts, T-34523): what the events from a seller's connected
   // account are verified against. A second secret, not the one above, because
   // Stripe delivers connected-account events to their own endpoint with their

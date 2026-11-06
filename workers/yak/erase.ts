@@ -107,7 +107,7 @@ import { vouched, type Who } from './session.ts'
 import { storeOf } from './door.ts'
 import { cleared } from './sample.ts'
 import { answered } from './meta.ts'
-import { ending } from './billing.ts'
+import { plans } from './payments.ts'
 import { own, type Pinner, versions } from './versions.ts'
 import { holding, pruned } from './written.ts'
 import { refuse } from './tool.ts'
@@ -215,15 +215,17 @@ export let nobodys = async (dir: Directory, d: Doomed) => {
 //   space, app and membership on the platform with it, whoever owns `yak`
 //   (tools.ts app_delete holds the same line for its app);
 //
-//   a space whose Stripe subscription has not ended holds one this door does
-//   not cancel, and a subscription with nothing left to bill for is a charge
-//   every month for a space that is gone. Over is billing.ts `ending`, the
-//   statuses Stripe never moves a subscription out of. Cancelling is the
-//   person's own, at their billing page, and it is one click away.
-export let refused = (space: Space, env: HostEnv = {}) =>
+//   a space whose subscription has not ended holds one this door does not
+//   cancel, and a subscription with nothing left to bill for is a charge
+//   every month for a space that is gone. Over is where the payment provider
+//   says its status stands (payments.ts, `ended`), which it never moves a
+//   subscription out of. Cancelling is the person's own, at their billing
+//   page, and it is one click away.
+export let refused = async (space: Space, env: HostEnv) =>
   space.slug == META.space
     ? `${META.space} is the platform itself`
-    : space.plan?.subscription && !ending(space.plan.status)
+    : space.plan?.subscription &&
+        (await plans(env)).standing(space.plan.status) != 'ended'
     ? `${space.slug} is subscribed to the Plus plan. ` +
       'Cancel the subscription first — ' +
       `https://${apex(env)}/connect, "Manage billing" — and delete it after ` +
@@ -390,7 +392,7 @@ export let erase = async (
   d: Doomed,
   who: Who,
 ) => {
-  let no = refused(d.space)
+  let no = await refused(d.space, env)
   if (no) throw refuse('access', no)
   // Cloudflare before anything else, and only if it can be reached: a domain
   // whose row we buried and whose custom hostname we did not is a billable
@@ -796,7 +798,7 @@ export let collected = async (env: Env, now = new Date()) => {
     ) {
       let d = await doomed(dir, space)
       if (
-        !refused(space, env) && await nobodys(dir, d) &&
+        !await refused(space, env) && await nobodys(dir, d) &&
         !d.apps.some((a) => a.published)
       ) {
         await erase(env, dir, d, {
@@ -941,7 +943,7 @@ export let abandoned = async (env: Env, now = new Date(), only?: string) => {
   let result: string[] = []
   for (let space of await dir.all()) {
     if (only && space.eid != only) continue
-    if (!eligible.has(space.eid) || refused(space, env)) continue
+    if (!eligible.has(space.eid) || await refused(space, env)) continue
     // Directory references carry their creation and use clocks: memory,
     // connections, deploys, space or app hostnames, invitations and reports.
     // Ask generically so a new space-owned record needs no cleanup whitelist.

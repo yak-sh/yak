@@ -39,6 +39,7 @@ import {
   configs,
   domains,
   embedding,
+  payments,
   phoneConfig,
   posts,
   providing,
@@ -385,7 +386,12 @@ let loaded = await formatted(
     [
       ...new Set([
         ...imports(
-          [...Object.values(configs), ...Object.values(posts), phoneConfig],
+          [
+            ...Object.values(configs),
+            ...Object.values(posts),
+            phoneConfig,
+            payments,
+          ],
           manifests,
         ),
         ...vocabs(manifests),

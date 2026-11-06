@@ -319,6 +319,33 @@ export let phoneConfig: Config = {
   ],
 }
 
+/**
+ * The payment provider the platform takes money through (payments.ts): its
+ * plugin lends it under its name, with its key, the clock its calls wait on
+ * and each plan's prices as they are sold here, by the month and the year.
+ * A `{"secret": "NAME"}` is read from the Worker's environment at its use;
+ * the prices are `[vars]` (wrangler.toml), and a plan whose price is unset is
+ * not on sale.
+ */
+export let payments: Config & { via: string } = {
+  via: 'stripe',
+  plugins: [{
+    use: '@yaks/stripe',
+    facets: ['graph'],
+    with: {
+      key: { secret: 'STRIPE_KEY' },
+      clock: { binding: 'CLOCK' },
+      prices: {
+        plus: { month: { secret: 'STRIPE_PRICE' } },
+        organization: {
+          month: { secret: 'STRIPE_PRICE_ORGANIZATION' },
+          year: { secret: 'STRIPE_PRICE_ORGANIZATION_YEAR' },
+        },
+      },
+    },
+  }],
+}
+
 // Workers AI over the Worker's `AI` binding, which is its authorization.
 let workersAi: Plug = {
   use: '@yaks/workers-ai',

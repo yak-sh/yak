@@ -7,7 +7,7 @@
 //
 // The door reads the whole subscription off the event and asks Stripe nothing
 // back, so the subscription each event carries is a fabricated one ({@link
-// fakeSub}), the shape billing.ts `planOf` reads — the subject here is the
+// fakeSub}), the shape @yaks/stripe plans `read` reads — the subject here is the
 // route, the Origin guard and idempotent, out-of-order delivery, none of which
 // is the purchase (roster_test.ts holds that against Stripe). The kernel boots
 // with a webhook secret and no STRIPE_KEY, the shape a deploy has before the

@@ -179,9 +179,12 @@ test('a space in the trash is told what stops, not what is destroyed', () => {
   assertEquals(l.body.includes('It cannot be undone'), false)
 })
 
-test('the platform and a paying space refuse to be deleted', () => {
-  assertEquals(refused(space()), '')
-  assertStringIncludes(refused(space({ slug: 'yak' })), 'the platform itself')
+test('the platform and a paying space refuse to be deleted', async () => {
+  assertEquals(await refused(space(), {}), '')
+  assertStringIncludes(
+    await refused(space({ slug: 'yak' }), {}),
+    'the platform itself',
+  )
   let paying = space({
     plan: {
       tier: 'plus',
@@ -193,10 +196,13 @@ test('the platform and a paying space refuse to be deleted', () => {
       at: '',
     },
   })
-  assertStringIncludes(refused(paying), 'Cancel the subscription first')
+  assertStringIncludes(
+    await refused(paying, {}),
+    'Cancel the subscription first',
+  )
   // Cancelled at Stripe, the row stays and the space may go.
   assertEquals(
-    refused(space({ plan: { ...paying.plan!, status: 'canceled' } })),
+    await refused(space({ plan: { ...paying.plan!, status: 'canceled' } }), {}),
     '',
   )
 })
