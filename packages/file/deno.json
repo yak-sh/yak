@@ -1,17 +1,4 @@
 {
-  "name": "@yaks/file",
-  "version": "0.2.22",
-  "exports": {
-    ".": "./mod.ts",
-    "./vocab": "./vocab.ts",
-    "./local": "./local.ts",
-    "./occupancy": "./occupancy.ts",
-    "./service": "./service.ts",
-    "./views": "./views.ts",
-    "./io": "./io.ts"
-  },
-  "license": "Apache-2.0",
-  "description": "Files as entities: a path read in a root (a repository's tree, or a volume a machine mounts), the lines of a file an entity sits at, and what fills each volume of a machine, day by day.",
   "compilerOptions": {
     "lib": [
       "deno.ns",

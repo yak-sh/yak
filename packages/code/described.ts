@@ -6,7 +6,7 @@
 //
 // The served vocabulary is the one source: every document the host composed,
 // each written with the package that brought it and that package's
-// description, from its deno.json (@yaks/cli `compose`), so a package the
+// description, from its package.json (@yaks/cli `compose`), so a package the
 // checkout holds and the config does not list is not described.
 //
 // The graph's one `_vocab` holds the hash of every row as last described, so

@@ -1,17 +1,3 @@
 {
-  "name": "@yaks/testing",
-  "version": "0.2.17",
-  "exports": {
-    ".": "./mod.ts",
-    "./choose": "./choose.ts",
-    "./deps": "./deps.ts",
-    "./examples": "./examples.ts",
-    "./find": "./find.ts",
-    "./main": "./main.ts",
-    "./own": "./own.ts",
-    "./reads": "./reads.ts"
-  },
-  "license": "Apache-2.0",
-  "description": "Declare tests, check their results, and run test modules and examples in one runtime. The runner skips files whose dependencies have not changed since they passed.",
   "publish": false
 }

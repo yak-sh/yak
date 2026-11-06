@@ -990,7 +990,7 @@ package:
   anything in the public API is documented where it is declared.
 - **The entrypoint has a module doc.** `mod.ts` opens with a module-level doc
   comment (`/** … */` at the top) describing what the package is.
-- **`deno.json` has a `description`.** One clear sentence naming what the
+- **`package.json` has a `description`.** One clear sentence naming what the
   package does.
 - **State runtime support accurately.** Portable libraries should target Deno
   and Node at minimum, but host-specific packages may require Deno, Linux or

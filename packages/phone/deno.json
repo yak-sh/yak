@@ -1,14 +1,4 @@
 {
-  "name": "@yaks/phone",
-  "version": "0.2.17",
-  "exports": {
-    ".": "./mod.ts",
-    "./vocab": "./vocab.ts",
-    "./effects": "./effects.ts",
-    "./plugin": "./plugin.ts"
-  },
-  "license": "Apache-2.0",
-  "description": "Phone numbers, provider selection, consent, texts and delivery outcomes in the graph, through a provider supplied at the transport boundary.",
   "publish": {
     "exclude": [
       "**/*_test.ts"

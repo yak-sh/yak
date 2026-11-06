@@ -40,7 +40,7 @@ let files = async function* (dir: string): AsyncGenerator<string> {
   }
 }
 
-/** One package: its name without the scope, what its deno.json says it is,
+/** One package: its name without the scope, what its package.json says it is,
  * the newest version on jsr.io (null where JSR has none), and the other
  * packages it imports. */
 export type Package = {

@@ -1,12 +1,4 @@
 {
-  "name": "@yaks/threads",
-  "version": "0.2.22",
-  "exports": {
-    ".": "./mod.ts",
-    "./worker": "./worker.ts"
-  },
-  "license": "Apache-2.0",
-  "description": "Threads serving a graph's roles, by their own connection or over a MessagePort to the graph that owns the data.",
   "compilerOptions": {
     "lib": [
       "dom",

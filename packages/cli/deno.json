@@ -1,22 +1,4 @@
 {
-  "name": "@yaks/cli",
-  "version": "0.2.22",
-  "exports": {
-    ".": "./mod.ts",
-    "./yak": "./yak.ts",
-    "./config": "./config.ts",
-    "./host": "./host.ts",
-    "./install": "./install.ts",
-    "./page": "./page.ts",
-    "./memo": "./memo.ts",
-    "./release": "./release.ts",
-    "./grammar": "./grammar.ts",
-    "./answer": "./answer.ts",
-    "./terminal": "./terminal.ts",
-    "./dependencies": "./dependencies.ts"
-  },
-  "license": "Apache-2.0",
-  "description": "The yak command line: it opens the graph a config file names, or connects to an MCP server, and turns every tool it finds there into a subcommand parsed through that tool's own input schema.",
   "compilerOptions": {
     "lib": [
       "deno.ns",

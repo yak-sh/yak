@@ -26,7 +26,7 @@
           "type": "string",
           "ref": "entity",
           "death": "detach",
-          "description": "the module the package was read from: its deno.json"
+          "description": "the module the package was read from: its package.json"
         }
       }
     },

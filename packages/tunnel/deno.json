@@ -1,14 +1,4 @@
 {
-  "name": "@yaks/tunnel",
-  "version": "0.2.22",
-  "exports": {
-    ".": "./mod.ts",
-    "./vocab": "./vocab.ts",
-    "./routes": "./routes.ts",
-    "./service": "./service.ts"
-  },
-  "license": "Apache-2.0",
-  "description": "Reaches a machine from a hosted space through a Cloudflare Tunnel and a Workers VPC Service: the account calls that make one, the connector that runs it on the machine, and the filter that keeps the tunnel to the paths the machine opened.",
   "publish": {
     "exclude": [
       "**/*_test.ts"

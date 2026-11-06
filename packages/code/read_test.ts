@@ -5,6 +5,7 @@ import {
   header,
   type Manifest,
   manifest,
+  manifests,
   markdown,
   owner,
   resolve,
@@ -54,22 +55,34 @@ test('specifiers: statements at the start of a line, never quoted ones', () => {
 })
 
 let git = manifest(
-  'packages/git/deno.json',
+  'packages/git/package.json',
   JSON.stringify({
     name: '@yaks/git',
     exports: { '.': './mod.ts', './cites': './cites.ts' },
   }),
 )!
 let root = manifest(
-  'deno.json',
+  'package.json',
   JSON.stringify({ name: 'tasks', exports: './src/mod.ts' }),
 )!
 
-test('manifest: a named package, and nothing for an unnamed one', () => {
+test('manifest: a named package, and nothing for an unnamed one or a workspace', () => {
   assertEquals(git.dir, 'packages/git')
   assertEquals(root.exports, { '.': './src/mod.ts' })
-  assertEquals(manifest('a/deno.json', '{"tasks": {}}'), undefined)
-  assertEquals(manifest('a/deno.json', 'not json'), undefined)
+  assertEquals(manifest('a/package.json', '{"type": "module"}'), undefined)
+  assertEquals(manifest('a/package.json', 'not json'), undefined)
+  assertEquals(
+    manifest('package.json', '{"name": "w", "workspaces": []}'),
+    undefined,
+  )
+})
+
+test('manifests: a package.json, in any directory', () => {
+  assertEquals(
+    ['package.json', 'a/package.json', 'a/my-package.json', 'a/deno.json']
+      .map(manifests),
+    [true, true, false, false],
+  )
 })
 
 test('resolve and owner: relative paths, workspace names, and the nearest manifest', () => {

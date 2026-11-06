@@ -1,13 +1,4 @@
 {
-  "name": "@yaks/dreaming",
-  "version": "0.2.18",
-  "exports": {
-    ".": "./mod.ts",
-    "./vocab": "./vocab.ts",
-    "./graph": "./graph.ts"
-  },
-  "license": "Apache-2.0",
-  "description": "Standing intentions filed under a project, which @yaks/builders builds on a schedule, a record of how often each memory has been recalled, and the `.order=hot` ranking that record decays along.",
   "publish": {
     "exclude": [
       "**/*_test.ts",

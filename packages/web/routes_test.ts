@@ -11,7 +11,7 @@ import { routes } from './routes.ts'
 let viewed = async () => {
   let names = ['@yaks/browse']
   for await (let dir of io.readDir(new URL('../', import.meta.url))) {
-    let at = new URL(`../${dir.name}/deno.json`, import.meta.url)
+    let at = new URL(`../${dir.name}/package.json`, import.meta.url)
     let json = await io.readTextFile(at).then(JSON.parse, () => null)
     if (json?.exports?.['./views']) names.push(json.name)
   }

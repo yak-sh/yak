@@ -1,11 +1,7 @@
-// The versions a release moves: each member's package.json, its JSR metadata,
-// and the lockfiles that record them.
-import { matchesGlob } from 'node:path'
+// The versions a release moves: each member's package.json and the lockfiles
+// that record them. A member's JSR metadata is its package.json, which publish
+// writes into its deno.json for the run (bin/publish.ts).
 import { members } from '@yaks/cli/dependencies'
-
-let read = async (path: string) => JSON.parse(await Deno.readTextFile(path))
-let write = (path: string, value: unknown) =>
-  Deno.writeTextFile(path, JSON.stringify(value, null, 2) + '\n')
 
 type Manifest = {
   name?: string
@@ -42,33 +38,10 @@ export let versioned = (
   return out
 }
 
-let metadata = (
-  pkg: Record<string, unknown>,
-  config: { publish?: false | { exclude?: string[] }; [key: string]: unknown },
-) => {
-  let next = { ...config }
-  for (let key of ['name', 'version', 'license', 'description']) {
-    next[key] = pkg[key]
-  }
-  let exports = pkg.exports
-  next.exports = typeof exports == 'string' ? exports : Object.fromEntries(
-    Object.entries(exports ?? {}).filter(([, file]) =>
-      !((config.publish || {}).exclude ?? []).some((glob: string) =>
-        matchesGlob(
-          String(file).replace(/^\.\//, ''),
-          glob.replace(/^\.\//, ''),
-        )
-      )
-    ),
-  )
-  return next
-}
-
 /** Write each member at the version `next` gives it, every other member and
  * every internal dependency at the version it names. */
 export let versions = async (root: string, next: Map<string, string>) => {
   let workspaces = members(root)
-  let paths = workspaces.map((dir: string) => `${root}/${dir}/deno.json`)
   let npm = workspaces.map((dir: string) => `${root}/${dir}/package.json`)
   let packages: Manifest[] = await Promise.all(
     npm.map(async (path: string) => JSON.parse(await Deno.readTextFile(path))),
@@ -84,10 +57,6 @@ export let versions = async (root: string, next: Map<string, string>) => {
       path,
       JSON.stringify(versioned(packages[i], all), null, 2) + '\n',
     )
-  }
-  for (let path of paths) {
-    let pkg = await read(path.replace(/deno\.json$/, 'package.json'))
-    await write(path, metadata(pkg, await read(path)))
   }
   // pnpm rewrites the members' specifiers its lockfile records.
   let { code } = await new Deno.Command('pnpm', {
@@ -109,6 +78,5 @@ export let versions = async (root: string, next: Map<string, string>) => {
   }
   deno.workspace = JSON.parse(workspace)
   await Deno.writeTextFile(denoPath, JSON.stringify(deno, null, 2) + '\n')
-  paths.push(...npm, lockPath, denoPath)
-  return paths
+  return [...npm, lockPath, denoPath]
 }

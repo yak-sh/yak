@@ -1,18 +1,4 @@
 {
-  "name": "@yaks/persona",
-  "version": "0.2.22",
-  "exports": {
-    ".": "./mod.ts",
-    "./vocab": "./vocab.ts",
-    "./tools": "./tools.ts",
-    "./effects": "./effects.ts",
-    "./skills": "./skills.ts",
-    "./skill-mirror": "./skill-mirror.ts",
-    "./skill-text": "./skill-text.ts",
-    "./views": "./views.ts"
-  },
-  "license": "Apache-2.0",
-  "description": "Who is acting and with what instructions — the people a graph knows, the personas an agent runs with, the skills it loads on demand, and a persona rendered as one markdown document.",
   "publish": {
     "exclude": [
       "**/*_test.ts",

@@ -1,16 +1,4 @@
 {
-  "name": "@yaks/mcp",
-  "version": "0.2.22",
-  "exports": {
-    ".": "./mod.ts",
-    "./stdio": "./stdio.ts",
-    "./roster": "./roster.ts",
-    "./tools": "./tools.ts",
-    "./routes": "./routes.ts",
-    "./skills": "./skills.ts"
-  },
-  "license": "Apache-2.0",
-  "description": "Exposes a graph through generic MCP tools for writes, queries, entity inspection, schema inspection, and optional search.",
   "compilerOptions": {
     "lib": [
       "deno.ns",

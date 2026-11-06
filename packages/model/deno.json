@@ -1,13 +1,4 @@
 {
-  "name": "@yaks/model",
-  "version": "0.2.22",
-  "exports": {
-    ".": "./mod.ts",
-    "./vocab": "./vocab.ts",
-    "./graph": "./graph.ts"
-  },
-  "license": "Apache-2.0",
-  "description": "Defines provider-neutral model request and reply types, vocabulary for providers and models, and helpers for billing and recovering generated media. Implements no transport.",
   "publish": {
     "exclude": [
       "**/*_test.ts",

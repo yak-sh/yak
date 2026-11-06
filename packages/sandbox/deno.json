@@ -1,20 +1,4 @@
 {
-  "name": "@yaks/sandbox",
-  "version": "0.2.22",
-  "exports": {
-    ".": "./mod.ts",
-    "./vocab": "./vocab.ts",
-    "./docker": "./docker.ts",
-    "./cloudflare": "./cloudflare.ts",
-    "./bubblewrap": "./bubblewrap.ts",
-    "./pve": "./pve.ts",
-    "./effects": "./effects.ts",
-    "./tools": "./tools.ts",
-    "./lifecycle": "./lifecycle.ts",
-    "./configuration": "./configuration.ts"
-  },
-  "license": "Apache-2.0",
-  "description": "Containers and jails recorded separately from computers, with provisioning intentions and confirmed disposal in the graph.",
   "publish": {
     "exclude": [
       "**/*_test.ts",

@@ -1,14 +1,4 @@
 {
-  "name": "@yaks/doc",
-  "version": "0.2.18",
-  "exports": {
-    ".": "./mod.ts",
-    "./vocab": "./vocab.ts",
-    "./graph": "./graph.ts",
-    "./views": "./views.ts"
-  },
-  "license": "Apache-2.0",
-  "description": "A shared doc component for an entity's title and Markdown body, with portable views for displaying both.",
   "publish": {
     "exclude": [
       "**/*_test.ts",

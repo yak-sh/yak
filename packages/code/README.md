@@ -15,7 +15,7 @@ A config that lists `@yaks/code` needs `@yaks/file` (the `file` a module wears),
 ## What it writes
 
 ```
-package{name, version, manifest}   one per deno.json with a name; id from name
+package{name, version, manifest}   one per package.json with a name; id from name
 module{blob, package}              one per file, wearing @yaks/file's
                                    file{path, root}, rooted in the
                                    repository; id from the file
@@ -33,7 +33,7 @@ files: a package the checkout holds and the config does not list is not
 described. The graph's `_vocab` holds the hash of the rows as last described, so
 a graph already describing it is checked by that hash and written nothing;
 otherwise only the difference is written. The `_package` carries its name and
-the description its deno.json gives it (@yaks/cli `compose` writes it on each
+the description its package.json gives it (@yaks/cli `compose` writes it on each
 document), and each row points at the `_package` that declares it, so
 `._prop.package._package.name=@yaks/id` lists every property @yaks/id declares,
 on its own components and on the ones it extends. A row the served vocabulary

@@ -34,6 +34,7 @@ import {
   isMarkdown,
   type Manifest,
   manifest,
+  manifests,
   markdown,
   owner,
   resolve,
@@ -75,7 +76,8 @@ export let checkout = async (
  * and vocabularies, outside any `vendor` directory. */
 export let covered = (path: string): boolean =>
   !/(^|\/)(vendor|node_modules)\//.test(path) &&
-  (isCode(path) || isMarkdown(path) || /(^|\/)(deno|vocab)\.json$/.test(path))
+  (isCode(path) || isMarkdown(path) ||
+    /(^|\/)(deno|package|vocab)\.json$/.test(path))
 
 /**
  * The exports of many modules at once. `deno doc` refuses a whole batch when
@@ -164,7 +166,7 @@ export let codeMirror = async (
     .filter(covered)
   let isTracked = new Set(tracked)
   let text = (path: string) => io.readTextFileSync(`${root}/${path}`)
-  let pkgs = tracked.filter((p) => p.endsWith('deno.json')).flatMap((p) => {
+  let pkgs = tracked.filter(manifests).flatMap((p) => {
     try {
       return [manifest(p, text(p))].filter((m): m is Manifest => !!m)
     } catch {
@@ -196,7 +198,7 @@ export let codeMirror = async (
     // Packages first, so a module's reference to one lands on an entity that
     // exists; and each manifest that moved clears the package it used to be.
     let wasPkgs = await g.read('.package')
-    for (let path of paths.filter((p) => p.endsWith('deno.json'))) {
+    for (let path of paths.filter(manifests)) {
       let m = moduleOf(path)
       let now = pkgs.find((p) => p.path == path && !gone.includes(path))
       for (let old of wasPkgs) {
@@ -281,7 +283,7 @@ export let codeMirror = async (
 
     // A manifest that came or went moves every file under it: re-point the
     // modules nobody read this time.
-    if (paths.some((p) => p.endsWith('deno.json'))) {
+    if (paths.some(manifests)) {
       for (let [path, b] of known) {
         if (mods.has(b.entity.eid)) continue
         let want = pkgOf(path)

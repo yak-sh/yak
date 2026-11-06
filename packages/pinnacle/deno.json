@@ -1,13 +1,4 @@
 {
-  "name": "@yaks/pinnacle",
-  "version": "0.2.17",
-  "exports": {
-    ".": "./mod.ts",
-    "./graph": "./graph.ts",
-    "./routes": "./routes.ts"
-  },
-  "license": "Apache-2.0",
-  "description": "Pinnacle texting transport and authenticated webhook events for @yaks/phone.",
   "publish": {
     "exclude": [
       "**/*_test.ts"

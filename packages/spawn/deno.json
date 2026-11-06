@@ -1,15 +1,4 @@
 {
-  "name": "@yaks/spawn",
-  "version": "0.2.22",
-  "exports": {
-    ".": "./mod.ts",
-    "./vocab": "./vocab.ts",
-    "./tools": "./tools.ts",
-    "./effects": "./effects.ts",
-    "./service": "./service.ts"
-  },
-  "license": "Apache-2.0",
-  "description": "Runs an agent CLI as a detached child process and reads its JSON-lines stdout back into the graph as a session transcript.",
   "publish": {
     "exclude": [
       "**/*_test.ts",

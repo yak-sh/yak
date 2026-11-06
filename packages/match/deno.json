@@ -1,9 +1,4 @@
 {
-  "name": "@yaks/match",
-  "version": "0.2.18",
-  "description": "Evaluates queries over bundles in memory: selections, filters, rows and routing, without SQL or a database.",
-  "exports": "./mod.ts",
-  "license": "Apache-2.0",
   "compilerOptions": {
     "lib": [
       "dom",

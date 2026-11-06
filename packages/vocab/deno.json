@@ -1,16 +1,4 @@
 {
-  "name": "@yaks/vocab",
-  "version": "0.2.18",
-  "description": "Loads and checks component vocabularies expressed as JSON Schema, and reads their property types, references, display ordering, tool declarations, rules and effects.",
-  "exports": {
-    ".": "./mod.ts",
-    "./vocab": "./docs.ts",
-    "./tools": "./tools.ts",
-    "./constraints": "./constraints.ts",
-    "./runtime": "./runtime.ts",
-    "./wire": "./wire.ts"
-  },
-  "license": "Apache-2.0",
   "publish": {
     "exclude": [
       "**/*_test.ts",

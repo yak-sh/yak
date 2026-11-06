@@ -198,7 +198,7 @@ export type VocabDoc = {
    * loads the document (@yaks/cli `compose`), so a reader can say where each
    * component comes from */
   package?: string
-  /** what that package is: the host writes its deno.json's description here
+  /** what that package is: the host writes its package.json's description here
    * beside `package`, since a package says it once, in its manifest */
   description?: string
   /** Whether a host reserves this document's names for its own declarations.

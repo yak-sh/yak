@@ -1,9 +1,4 @@
 {
-  "name": "@yaks/text",
-  "version": "0.2.18",
-  "exports": "./mod.ts",
-  "license": "Apache-2.0",
-  "description": "Serializes portable renderer trees as Markdown or plain text without a DOM, removing control bytes from text and link destinations.",
   "publish": {
     "exclude": [
       "**/*_test.ts"

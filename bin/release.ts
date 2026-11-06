@@ -29,7 +29,7 @@ import { versioned, versions } from './release-packages.ts'
 import { members } from '@yaks/cli/dependencies'
 export { versioned } from './release-packages.ts'
 
-// The first top-level `"version"` line of a deno.json. A regex rather than
+// The first top-level `"version"` line of a manifest. A regex rather than
 // JSON.parse/stringify because a rewrite must move one field and leave every
 // other byte — key order, comments' absence, trailing newline — alone.
 export let VERSION = /^(\s*"version"\s*:\s*")([^"]*)(")/m
@@ -45,7 +45,7 @@ export let bump = (json: string, version: string) =>
 /// semver('0.1') -> false
 export let semver = (v: string) => /^\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?$/.test(v)
 
-// Workspace members with JSR metadata; npm-only members have none.
+// Workspace members with JSR options (a deno.json); npm-only members have none.
 export let configs = async (root = '.') => {
   let out: string[] = []
   for (let member of members(root)) {

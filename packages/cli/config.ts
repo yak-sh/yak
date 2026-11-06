@@ -14,7 +14,7 @@ import { imported as observed, importing } from '@yaks/fp/imports'
 // That is why this is its own module. A command that only needs to know where
 // the graph is must not import host.ts, which pulls in every plugin a config
 // names — a cost `yak login` should not pay. So the config is read here, by a
-// module that opens no graph. This package's deno.json supplies the release a
+// module that opens no graph. This package's package.json supplies the release a
 // plugin named without a map entry is taken from (`located`).
 
 import cli from './package.json' with { type: 'json' }

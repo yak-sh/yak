@@ -78,7 +78,7 @@ export let fits = (description: string) =>
   description.length <= DESC_MAX && !description.includes('\n')
 
 // What the repo proves about a runtime, never what it hopes. A `browser.json`
-// or `workers.json` beside a package's deno.json is the platform program
+// or `workers.json` beside a package's package.json is the platform program
 // bin/check-platform.ts typechecks in CI, so carrying one is a gate rather
 // than a claim, and every package is checked and tested under Deno. Node and
 // Bun stay absent on purpose: nothing here runs them, and JSR reads an absent
@@ -100,7 +100,7 @@ export let compat = (
 })
 
 // A package's page as the repo says it should read. The description is the
-// package's own `description` in deno.json — JSR does not read that field, so
+// package's own `description` in package.json — JSR does not read that field, so
 // carrying it here is the whole point.
 export let want = (
   config: { name: string; description?: string },

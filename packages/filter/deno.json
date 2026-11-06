@@ -1,12 +1,4 @@
 {
-  "name": "@yaks/filter",
-  "version": "0.2.22",
-  "exports": {
-    ".": "./mod.ts",
-    "./vocab": "./vocab.ts"
-  },
-  "license": "Apache-2.0",
-  "description": "The query field: completion wherever a query is typed, in a browser and in a terminal, its state a component in the page's own graph and its parts @yaks/ui's.",
   "publish": {
     "exclude": [
       "**/*_test.ts",

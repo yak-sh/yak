@@ -1,16 +1,4 @@
 {
-  "name": "@yaks/task",
-  "version": "0.2.22",
-  "exports": {
-    ".": "./mod.ts",
-    "./vocab": "./vocab.ts",
-    "./graph": "./graph.ts",
-    "./tools": "./tools.ts",
-    "./form": "./DecisionForm.ts",
-    "./views": "./views.ts"
-  },
-  "license": "Apache-2.0",
-  "description": "Task components for a graph: a status computed from marks instead of stored, dependency counts, and completion attribution.",
   "publish": {
     "exclude": [
       "**/*_test.ts",

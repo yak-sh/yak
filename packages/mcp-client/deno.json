@@ -1,13 +1,4 @@
 {
-  "name": "@yaks/mcp-client",
-  "version": "0.2.18",
-  "exports": {
-    ".": "./mod.ts",
-    "./oauth": "./oauth.ts",
-    "./servers": "./servers.ts",
-    "./vocab": "./vocab.ts"
-  },
-  "license": "Apache-2.0",
   "compilerOptions": {
     "lib": [
       "deno.ns",
@@ -15,7 +6,6 @@
       "esnext"
     ]
   },
-  "description": "Consume remote MCP tools as portable graph Tool definitions over Streamable HTTP.",
   "publish": {
     "exclude": [
       "**/*_test.ts",

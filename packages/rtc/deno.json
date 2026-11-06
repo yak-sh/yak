@@ -1,14 +1,4 @@
 {
-  "name": "@yaks/rtc",
-  "version": "0.2.22",
-  "exports": {
-    ".": "./mod.ts",
-    "./door": "./door.ts",
-    "./effects": "./effects.ts",
-    "./vocab": "./vocab.ts"
-  },
-  "license": "Apache-2.0",
-  "description": "Voice between pages over Cloudflare Realtime: a page joins a session, publishes its microphone and hears the tracks it asks for, and a host answers the door that keeps the secret, the sessions and the meter.",
   "compilerOptions": {
     "lib": [
       "dom",

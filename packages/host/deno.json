@@ -1,20 +1,4 @@
 {
-  "name": "@yaks/host",
-  "version": "0.2.22",
-  "exports": {
-    ".": "./mod.ts",
-    "./assembly": "./assembly.ts",
-    "./roles": "./roles.ts",
-    "./senders": "./senders.ts",
-    "./words": "./words.ts",
-    "./config": "./config.ts",
-    "./documents": "./documents.ts",
-    "./keywords": "./keywords.ts",
-    "./anatomy": "./anatomy.ts",
-    "./lending": "./lending.ts"
-  },
-  "license": "Apache-2.0",
-  "description": "The portable capabilities a host lends the plugins it composes.",
   "publish": {
     "exclude": [
       "**/*_test.ts"

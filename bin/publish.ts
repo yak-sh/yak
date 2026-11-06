@@ -1,5 +1,8 @@
-// JSR publication uses the npm workspace's membership and each package's JSR
-// metadata, without making that metadata the runtime's import resolver.
+// JSR publication uses the npm workspace's membership and each package's
+// package.json, the one manifest its name, version and exports are written in.
+// `deno publish` reads them from the member's deno.json, so a publish writes
+// them there for its run and puts each deno.json back after: kept in deno.json,
+// they would be a second exports table Deno resolves through.
 //
 // `deno publish` skips a version JSR already has, so a publish is given every
 // member and publishes what the release names (packages/cli/release.json),
@@ -9,6 +12,7 @@
 // Deno resolves every dependency a member's package.json names. A dry run
 // (`--dry-run`, the source check) is given every member, so it checks every
 // package's public API as one workspace.
+import { matchesGlob } from 'node:path'
 import config from '../deno.json' with { type: 'json' }
 import pinned from '../packages/cli/release.json' with { type: 'json' }
 import { members } from '@yaks/cli/dependencies'
@@ -51,6 +55,60 @@ export let out = (
   return all.filter((m) => gone.has(m)).map((m) => m.dir)
 }
 
+type Config = {
+  publish?: false | { exclude?: string[] }
+  [key: string]: unknown
+}
+
+/** A member's deno.json as `deno publish` reads it: its JSR options, and its
+ * package.json's name, version, license, description and the exports its
+ * publish does not exclude.
+ *
+ * ```ts
+ * import { assertEquals } from '@std/assert'
+ * let pkg = { name: '@yaks/a', version: '1.0.0', license: 'MIT', description: 'A.', type: 'module', exports: { '.': './mod.ts', './testing': './testing.ts' } }
+ * let publish = { exclude: ['testing.ts'] }
+ * assertEquals(
+ *   jsr(pkg, { publish }),
+ *   { publish, name: '@yaks/a', version: '1.0.0', license: 'MIT', description: 'A.', exports: { '.': './mod.ts' } },
+ * )
+ * ```
+ */
+export let jsr = (pkg: Record<string, unknown>, config: Config): Config => {
+  let exclude = (config.publish || {}).exclude ?? []
+  let shipped = (file: unknown) =>
+    !exclude.some((glob) =>
+      matchesGlob(String(file).replace(/^\.\//, ''), glob.replace(/^\.\//, ''))
+    )
+  let exports = pkg.exports
+  return {
+    ...config,
+    name: pkg.name,
+    version: pkg.version,
+    license: pkg.license,
+    description: pkg.description,
+    exports: typeof exports == 'string' ? exports : Object.fromEntries(
+      Object.entries(exports ?? {}).filter(([, file]) => shipped(file)),
+    ),
+  }
+}
+
+// Write each member's deno.json as `deno publish` reads it, and return how to
+// put every one back.
+let written = async (dirs: string[]) => {
+  let kept = new Map<string, string>()
+  for (let dir of dirs) {
+    let path = `${root}${dir}/deno.json`
+    let text = await Deno.readTextFile(path).catch(() => null)
+    if (text == null) continue
+    kept.set(path, text)
+    let pkg = JSON.parse(await Deno.readTextFile(`${root}${dir}/package.json`))
+    await Deno.writeTextFile(path, JSON.stringify(jsr(pkg, JSON.parse(text))))
+  }
+  return () =>
+    Promise.all([...kept].map(([path, text]) => Deno.writeTextFile(path, text)))
+}
+
 let member = (dir: string): Member => {
   let pkg = JSON.parse(Deno.readTextFileSync(`${root}${dir}/package.json`))
   let deps = ['dependencies', 'devDependencies', 'optionalDependencies']
@@ -65,6 +123,8 @@ if (import.meta.main) {
       .filter((name) => !Object.hasOwn(pinned, name)),
   )
   let left = Deno.args.includes('--dry-run') ? [] : out(all, held, pinned)
+  let dirs = all.filter((m) => !left.includes(m.dir)).map((m) => m.dir)
+  let restore = await written(dirs)
   let path = await Deno.makeTempFile({
     dir: root,
     prefix: '.publish-',
@@ -76,8 +136,7 @@ if (import.meta.main) {
       JSON.stringify({
         ...config,
         nodeModulesDir: 'none',
-        workspace: all.filter((m) => !left.includes(m.dir))
-          .map((m) => `./${m.dir}`),
+        workspace: dirs.map((dir) => `./${dir}`),
       }),
     )
     let status = await new Deno.Command(Deno.execPath(), {
@@ -94,5 +153,6 @@ if (import.meta.main) {
     Deno.exitCode = status.code
   } finally {
     await Deno.remove(path)
+    await restore()
   }
 }

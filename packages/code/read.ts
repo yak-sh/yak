@@ -95,7 +95,12 @@ export type Manifest = {
   exports: Record<string, string>
 }
 
-/** A `deno.json`'s package, or nothing when it publishes no name. */
+/** Whether a path is a package's manifest: a `package.json`. */
+export let manifests = (path: string): boolean =>
+  /(^|\/)package\.json$/.test(path)
+
+/** A `package.json`'s package, or nothing when it has no name or is a
+ * workspace's root rather than a package. */
 export let manifest = (path: string, text: string): Manifest | undefined => {
   let json: Record<string, unknown>
   try {
@@ -104,6 +109,7 @@ export let manifest = (path: string, text: string): Manifest | undefined => {
     return undefined
   }
   if (typeof json.name != 'string' || !json.name) return undefined
+  if (json.workspaces) return undefined
   let dir = path.includes('/') ? path.slice(0, path.lastIndexOf('/')) : ''
   let ex = json.exports
   let exports = typeof ex == 'string'
@@ -152,7 +158,7 @@ let within = (dir: string, file: string) => join(dir, file.replace(/^\.\//, ''))
  * import { assertEquals } from '@std/assert'
  *
  * let git = {
- *   path: 'packages/git/deno.json',
+ *   path: 'packages/git/package.json',
  *   dir: 'packages/git',
  *   name: '@yaks/git',
  *   exports: { './cites': './cites.ts' },

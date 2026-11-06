@@ -1,15 +1,4 @@
 {
-  "name": "@yaks/tui",
-  "version": "0.2.22",
-  "exports": {
-    ".": "./mod.ts",
-    "./print": "./print.ts",
-    "./theme": "./theme.ts",
-    "./history": "./history.ts",
-    "./interaction": "./interaction.ts"
-  },
-  "license": "Apache-2.0",
-  "description": "Renders Preact trees in a terminal through a replaceable backend, with a diffing ANSI painter and scrolling, input, and layout widgets.",
   "tasks": {
     "demo": "deno run -A demo.ts"
   },

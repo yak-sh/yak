@@ -1,17 +1,4 @@
 {
-  "name": "@yaks/journal",
-  "version": "0.2.22",
-  "exports": {
-    ".": "./mod.ts",
-    "./vocab": "./vocab.ts",
-    "./graph": "./graph.ts",
-    "./tools": "./tools.ts",
-    "./service": "./service.ts",
-    "./views": "./views.ts",
-    "./kept": "./kept.ts"
-  },
-  "license": "Apache-2.0",
-  "description": "Records every committed graph transaction, and who wrote it, inside that same transaction: entity history and undo, and a short-lived feed that carries every commit to the other processes on the store.",
   "compilerOptions": {
     "lib": [
       "dom",

@@ -1,13 +1,4 @@
 {
-  "name": "@yaks/canvas",
-  "version": "0.2.18",
-  "exports": {
-    ".": "./mod.ts",
-    "./vocab": "./vocab.ts",
-    "./graph": "./graph.ts"
-  },
-  "license": "Apache-2.0",
-  "description": "Represents canvases, cards, viewports, and split layouts as graph components and supplies geometry functions for rendering them.",
   "publish": {
     "exclude": [
       "**/*_test.ts",

@@ -1,17 +1,4 @@
 {
-  "name": "@yaks/builders",
-  "version": "0.2.22",
-  "exports": {
-    ".": "./mod.ts",
-    "./vocab": "./vocab.ts",
-    "./effects": "./effects.ts",
-    "./model": "./model.ts",
-    "./tools": "./tools.ts",
-    "./cli": "./cli.ts",
-    "./graph": "./graph.ts"
-  },
-  "license": "Apache-2.0",
-  "description": "Build query-selected graph inputs into stable, named output entities.",
   "publish": {
     "exclude": [
       "**/*_test.ts",

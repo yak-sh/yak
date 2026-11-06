@@ -1,15 +1,4 @@
 {
-  "name": "@yaks/page",
-  "version": "0.2.22",
-  "exports": {
-    ".": "./mod.ts",
-    "./vocab": "./vocab.ts",
-    "./graph": "./graph.ts",
-    "./effects": "./effects.ts",
-    "./routes": "./routes.ts"
-  },
-  "license": "Apache-2.0",
-  "description": "Records a web page as it was seen: its canonical address becomes its entity id, and its bytes are stored as one self-contained document.",
   "publish": {
     "exclude": [
       "**/*_test.ts",

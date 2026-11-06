@@ -1,15 +1,4 @@
 {
-  "name": "@yaks/cloudflare-mail",
-  "version": "0.2.17",
-  "exports": {
-    ".": "./mod.ts",
-    "./sender": "./sender.ts",
-    "./receive": "./receive.ts",
-    "./binding": "./binding.ts",
-    "./graph": "./graph.ts"
-  },
-  "license": "Apache-2.0",
-  "description": "Cloudflare Email Sending and Email Routing at the portable mail boundary.",
   "publish": {
     "exclude": [
       "**/*_test.ts",

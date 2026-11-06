@@ -1,24 +1,4 @@
 {
-  "name": "@yaks/sqlite",
-  "version": "0.2.22",
-  "exports": {
-    ".": "./mod.ts",
-    "./vocab": "./vocab.ts",
-    "./tools": "./tools.ts",
-    "./db": "./db.ts",
-    "./reader": "./reader.ts",
-    "./read-db": "./read-db.ts",
-    "./budget": "./budget.ts",
-    "./physical": "./physical.ts",
-    "./migration": "./migration.ts",
-    "./follow": "./follow.ts",
-    "./meta": "./meta.ts",
-    "./owe": "./owe.ts",
-    "./survey": "./survey.ts",
-    "./read-store": "./read-store.ts"
-  },
-  "license": "Apache-2.0",
-  "description": "SQLite storage for a graph: builds a schema from a vocabulary, reads queries as bundles, and applies transactional patches.",
   "publish": {
     "exclude": [
       "**/*_test.ts",

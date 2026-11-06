@@ -1,11 +1,4 @@
 {
-  "name": "@yaks/diagram",
-  "version": "0.2.17",
-  "exports": {
-    ".": "./mod.ts"
-  },
-  "license": "Apache-2.0",
-  "description": "Draws the entities a query selects, and the references between them, as SVG: a pure layout that keeps each entity's place as the graph changes, the markup, and a mount that follows a graph.",
   "publish": {
     "exclude": [
       "**/*_test.ts",

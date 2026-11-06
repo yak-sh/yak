@@ -1,12 +1,4 @@
 {
-  "name": "@yaks/code-mode",
-  "version": "0.2.18",
-  "exports": {
-    ".": "./mod.ts",
-    "./source": "./source.ts"
-  },
-  "license": "Apache-2.0",
-  "description": "Typed tool objects from a scoped registry, bounded short script execution and recorded nested calls through an isolated evaluator.",
   "publish": {
     "exclude": [
       "**/*_test.ts",

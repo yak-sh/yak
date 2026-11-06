@@ -1,19 +1,4 @@
 {
-  "name": "@yaks/harness",
-  "version": "0.2.22",
-  "exports": {
-    ".": "./mod.ts",
-    "./default": "./default.ts",
-    "./local": "./local.ts",
-    "./tui": "./view.ts",
-    "./vocab": "./vocab.ts",
-    "./machine": "./machine.ts",
-    "./tools": "./runs.ts",
-    "./cli": "./cli.ts",
-    "./effects": "./effects.ts"
-  },
-  "license": "Apache-2.0",
-  "description": "Runs an agent on this machine over a yak graph: the machine the session runner is lent, the machine and graph tools, and the terminal app.",
   "publish": {
     "exclude": [
       "**/*_test.ts"

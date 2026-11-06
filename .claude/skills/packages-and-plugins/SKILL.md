@@ -66,11 +66,15 @@ What the walls are made of:
 
 packages/draft is a good small one to copy:
 
-- **package.json**: `name`, the family's current `version`, `type: module`,
-  `exports` and `dependencies`. pnpm installs the root workspace, and Deno and
-  esbuild resolve the same package exports and dependencies. Add an import and
-  its package dependency where it is used; the kernel needs no matching alias.
-- **deno.json** keeps JSR publishing metadata and Deno compiler settings.
+- **package.json**: `name`, the family's current `version`, `description`,
+  `license`, `type: module`, `exports` and `dependencies`, the one manifest
+  these are written in. pnpm installs the root workspace, and Deno and esbuild
+  resolve the same package exports and dependencies. Add an import and its
+  package dependency where it is used; the kernel needs no matching alias.
+- **deno.json** keeps only `publish.exclude` and Deno compiler settings. It
+  carries no `name` or `exports`: Deno would resolve through those too, so an
+  export missing from package.json would pass locally and fail the Workers
+  Build. `deno task publish` writes them in from package.json for its run.
 - **Workspace membership** comes from its place: `packages/*` in the root
   package.json's `workspaces` and pnpm-workspace.yaml takes in every directory
   there with a package.json. Run `pnpm install` after adding one, and commit

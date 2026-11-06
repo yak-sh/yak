@@ -1,15 +1,4 @@
 {
-  "name": "@yaks/resend",
-  "version": "0.2.17",
-  "exports": {
-    ".": "./mod.ts",
-    "./sender": "./sender.ts",
-    "./receive": "./receive.ts",
-    "./graph": "./graph.ts",
-    "./routes": "./routes.ts"
-  },
-  "license": "Apache-2.0",
-  "description": "Resend sending, signed webhook receipts and incoming messages at the portable mail boundary.",
   "publish": {
     "exclude": [
       "**/*_test.ts",

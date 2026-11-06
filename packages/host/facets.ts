@@ -14,7 +14,7 @@ import type { Options } from './config.ts'
  * run in a browser tab: a page importing this must never reach SQL, a database
  * driver or a server runtime. */
 export type VocabFacet = {
-  /** what the plugin is: its package's own description, from its deno.json,
+  /** what the plugin is: its package's own description, from its package.json,
    * written on each of its documents beside its name */
   description?: string
   /** the components and tools this plugin declares */

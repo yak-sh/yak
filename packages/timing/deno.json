@@ -1,15 +1,4 @@
 {
-  "name": "@yaks/timing",
-  "version": "0.2.22",
-  "exports": {
-    ".": "./mod.ts",
-    "./cap": "./cap.ts",
-    "./request": "./request.ts",
-    "./vocab": "./vocab.ts",
-    "./views": "./views.ts"
-  },
-  "license": "Apache-2.0",
-  "description": "Timing summaries, stored span-entity traces and trace views for insight into request time and rows in tracker stores.",
   "publish": {
     "exclude": [
       "**/*_test.ts",

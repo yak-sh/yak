@@ -1,9 +1,4 @@
 {
-  "name": "@yaks/ram",
-  "version": "0.2.18",
-  "exports": "./mod.ts",
-  "license": "Apache-2.0",
-  "description": "Synchronous in-memory graph storage over a Map of bundles, with queries evaluated by @yaks/match.",
   "compilerOptions": {
     "lib": [
       "dom",

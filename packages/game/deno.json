@@ -1,16 +1,4 @@
 {
-  "name": "@yaks/game",
-  "version": "0.2.22",
-  "exports": {
-    ".": "./mod.ts",
-    "./rules": "./mod.ts",
-    "./controls": "./controls.ts",
-    "./hud": "./hud.ts",
-    "./vocab": "./vocab.ts",
-    "./ui": "./ui.ts"
-  },
-  "license": "Apache-2.0",
-  "description": "Game rules, browser controls and HUD parts over values, without a graph or a game world.",
   "publish": {
     "exclude": [
       "browser.json"

@@ -1,25 +1,4 @@
 {
-  "name": "@yaks/session",
-  "version": "0.2.22",
-  "exports": {
-    ".": "./mod.ts",
-    "./vocab": "./vocab.ts",
-    "./graph": "./graph.ts",
-    "./tools": "./tools.ts",
-    "./views": "./views.ts",
-    "./service": "./service.ts",
-    "./routes": "./routes.ts",
-    "./parts": "./parts.ts",
-    "./files": "./files.ts",
-    "./tail": "./tail.ts",
-    "./status": "./status.ts",
-    "./wait": "./wait.ts",
-    "./admission": "./admission.ts",
-    "./cli": "./cli.ts",
-    "./ended": "./ended.ts"
-  },
-  "license": "Apache-2.0",
-  "description": "Represents sessions as graph transcripts, derives status from their entries, manages claims, and runs a transcript wherever its effects are worked.",
   "publish": {
     "exclude": [
       "**/*_test.ts",

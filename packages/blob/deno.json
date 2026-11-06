@@ -1,19 +1,4 @@
 {
-  "name": "@yaks/blob",
-  "version": "0.2.22",
-  "exports": {
-    ".": "./mod.ts",
-    "./identify": "./identify.ts",
-    "./backend": "./backend.ts",
-    "./store": "./store.ts",
-    "./file": "./file.ts",
-    "./sqlite": "./sqlite.ts",
-    "./vocab": "./vocab.ts",
-    "./graph": "./graph.ts",
-    "./routes": "./routes.ts"
-  },
-  "license": "Apache-2.0",
-  "description": "Stores text and binary content under SHA-256 addresses, with transparent graph text reads and writes, verified artifacts and HTTP responses.",
   "publish": {
     "exclude": [
       "**/*_test.ts",

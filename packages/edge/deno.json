@@ -1,13 +1,4 @@
 {
-  "name": "@yaks/edge",
-  "version": "0.2.18",
-  "exports": {
-    ".": "./mod.ts",
-    "./vocab": "./vocab.ts",
-    "./graph": "./graph.ts"
-  },
-  "license": "Apache-2.0",
-  "description": "Creates directed links as graph entities with content-derived eids, validates writes, and follows links through storage reads and SQL queries.",
   "publish": {
     "exclude": [
       "**/*_test.ts",

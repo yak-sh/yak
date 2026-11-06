@@ -1,17 +1,4 @@
 {
-  "name": "@yaks/api",
-  "version": "0.2.18",
-  "exports": {
-    ".": "./mod.ts",
-    "./vocab": "./vocab.ts",
-    "./tools": "./tools.ts",
-    "./routes": "./routes.ts",
-    "./timing": "./timing.ts",
-    "./refuse": "./refuse.ts",
-    "./graph": "./graph.ts"
-  },
-  "license": "Apache-2.0",
-  "description": "Serves graph writes, queries, and live query subscriptions through an HTTP and WebSocket request handler.",
   "compilerOptions": {
     "lib": [
       "dom",

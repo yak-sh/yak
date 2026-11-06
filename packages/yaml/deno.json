@@ -1,9 +1,4 @@
 {
-  "name": "@yaks/yaml",
-  "version": "0.2.18",
-  "exports": "./mod.ts",
-  "license": "Apache-2.0",
-  "description": "Parses YAML and JSON declarations and extracts Markdown frontmatter as graph bundles.",
   "publish": {
     "exclude": [
       "**/*_test.ts"

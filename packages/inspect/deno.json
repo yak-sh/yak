@@ -1,13 +1,4 @@
 {
-  "name": "@yaks/inspect",
-  "version": "0.2.22",
-  "exports": {
-    ".": "./mod.ts",
-    "./views": "./views.ts",
-    "./front": "./front.ts"
-  },
-  "license": "Apache-2.0",
-  "description": "Inspect views: graph entities, vocabulary components, packages, properties, query rows and the map, drawn through the host’s shared renderer registry.",
   "publish": {
     "exclude": [
       "**/*_test.ts",

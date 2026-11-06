@@ -1,22 +1,4 @@
 {
-  "name": "@yaks/visualize",
-  "version": "0.2.22",
-  "exports": {
-    ".": "./mod.ts",
-    "./snapshot": "./snapshot.ts",
-    "./activity": "./activity.ts",
-    "./capture": "./capture.ts",
-    "./http": "./http.ts",
-    "./front": "./front.ts",
-    "./model": "./model.ts",
-    "./routes": "./routes.ts",
-    "./cli": "./cli.ts",
-    "./tools": "./tools.ts",
-    "./vocab": "./vocab.ts",
-    "./main": "./main.ts"
-  },
-  "license": "Apache-2.0",
-  "description": "A value-free atlas of a composed platform and its subscriber-owned live causal activity, on /visualize and through agent doors.",
   "publish": {
     "exclude": [
       "**/*_test.ts",

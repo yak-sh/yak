@@ -1,15 +1,4 @@
 {
-  "name": "@yaks/heal",
-  "version": "0.2.22",
-  "exports": {
-    ".": "./mod.ts",
-    "./vocab": "./vocab.ts",
-    "./service": "./service.ts",
-    "./routes": "./routes.ts",
-    "./views": "./views.ts"
-  },
-  "license": "Apache-2.0",
-  "description": "Follows tracker bugs to file tasks and request fixers.",
   "publish": {
     "exclude": [
       "**/*_test.ts",

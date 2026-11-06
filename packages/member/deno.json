@@ -1,13 +1,4 @@
 {
-  "name": "@yaks/member",
-  "version": "0.2.22",
-  "exports": {
-    ".": "./mod.ts",
-    "./vocab": "./vocab.ts",
-    "./graph": "./graph.ts"
-  },
-  "license": "Apache-2.0",
-  "description": "Access control for a graph: space membership, per-app permission grants, and access modes, with the checks that enforce them on reads and writes.",
   "publish": {
     "exclude": [
       "**/*_test.ts",

@@ -142,8 +142,8 @@ Which files a package carries is `packages-and-plugins`; how its README reads
 is here. A README grows from what a stranger needs first:
 
 1. **A summary**: what the package is and what it's for, in a short paragraph.
-   It agrees with the `description` in the package's deno.json, which is what
-   jsr shows.
+   It agrees with the `description` in the package's package.json, which is
+   what jsr shows.
 2. **The terms** the rest of the README builds on.
 3. **A complete example** of the common use, early, runnable as written.
 4. **Each thing it offers**: its exports (the table the packages already
