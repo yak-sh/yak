@@ -1,6 +1,11 @@
 // A private HTTP connection pool: each owner can retire broken connections
-// without changing other callers' pools.
-import { Agent, type Dispatcher, fetch as request } from 'undici'
+// without changing other callers' pools. undici is loaded by the first request,
+// not by importing this module: it is about 100 CommonJS files, and most
+// processes that import a module that can fetch never do.
+import type { Dispatcher } from 'undici'
+
+let undici: Promise<typeof import('undici')> | undefined
+let loaded = () => undici ??= import('undici')
 
 type Client = {
   fetch: typeof fetch
@@ -29,11 +34,13 @@ let answer = (body: BodyInit | null, source: Answer): Response => {
   return response
 }
 
-/** A fetch pool with an explicit lifetime, shared by Node and Deno callers. */
-export let httpClient = (
-  dispatcher: Dispatcher = new Agent(),
-): Client => {
+/** A fetch pool with an explicit lifetime, shared by Node and Deno callers.
+ * Without a dispatcher, its own pool opens with its first request. */
+export let httpClient = (given?: Dispatcher): Client => {
+  let dispatcher = given
   let send: typeof fetch = async (input, init) => {
+    let { Agent, fetch: request } = await loaded()
+    dispatcher ??= new Agent()
     let source = input instanceof Request ? input : undefined
     let options = source
       ? {
@@ -64,8 +71,8 @@ export let httpClient = (
   }
   return {
     fetch: send,
-    close: () => dispatcher.close(),
-    destroy: () => dispatcher.destroy(),
+    close: () => dispatcher?.close(),
+    destroy: () => dispatcher?.destroy(),
   }
 }
 
