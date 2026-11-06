@@ -279,10 +279,10 @@ export type Space = {
   // The voice its Operator speaks in on a call (speech.ts `VOICES`), or none
   // for the provider's own.
   voice?: string | null
-  // How fast its Operator speaks (speech.ts `PACES`), or none for Brisk.
+  // How fast its Operator speaks (speech.ts `PACES`), or none for Normal.
   voice_speed?: string | null
   // The model that answers its calls (speech.ts `setupOf`), or none for the
-  // platform's.
+  // quickest on here.
   voice_model?: string | null
   // How long, in seconds, its Operator's conversations ask the model's
   // provider to keep their cached prefix, or none for the provider's default.

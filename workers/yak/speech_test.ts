@@ -166,18 +166,44 @@ test('text spoken in a voice of another provider goes to it, with its own key', 
 })
 
 test('an Operator’s setup: its voice names the provider, its pace how fast it speaks, and its model whether that provider talks', () => {
-  let of = (voice?: string, voice_model?: string, voice_speed?: string) => {
-    let { provider, ...rest } = setupOf({ voice, voice_model, voice_speed })
+  let on = { DEEPGRAM_API_KEY: 'a', OPENAI_VOICE_KEY: 'b' } as never
+  let of = (
+    voice?: string,
+    voice_model?: string,
+    voice_speed?: string,
+    env = on,
+  ) => {
+    let { provider, ...rest } = setupOf(env, {
+      voice,
+      voice_model,
+      voice_speed,
+    })
     return { provider: provider.name, ...rest }
   }
+  // Nothing picked is Normal and the quickest way, in its own voice.
   equal(of(), {
-    provider: 'deepgram',
-    voice: 'aura-2-draco-en',
-    pace: 'brisk',
-    speed: 1.3,
-    model: 'claude-haiku-5-5',
-    talks: false,
+    provider: 'openai',
+    voice: 'cedar',
+    pace: 'normal',
+    speed: 1.15,
+    model: 'gpt-realtime-2.1-mini',
+    talks: true,
   })
+  // Where its provider is off, the next way, in a butler's voice.
+  equal(
+    of(undefined, undefined, undefined, { DEEPGRAM_API_KEY: 'a' } as never),
+    {
+      provider: 'deepgram',
+      voice: 'aura-2-draco-en',
+      pace: 'normal',
+      speed: 1.15,
+      model: 'claude-haiku-5-5',
+      talks: false,
+    },
+  )
+  // A voice the quickest way can't speak keeps its voice, answered the next.
+  equal(of('aura-2-draco-en').model, 'claude-haiku-5-5')
+  equal(of('marin').model, 'gpt-realtime-2.1-mini')
   equal(of('cedar', 'gpt-realtime-2.1-mini', 'relaxed'), {
     provider: 'openai',
     voice: 'cedar',
@@ -186,7 +212,8 @@ test('an Operator’s setup: its voice names the provider, its pace how fast it 
     model: 'gpt-realtime-2.1-mini',
     talks: true,
   })
-  equal(of(undefined, undefined, 'gone').pace, 'brisk')
+  equal(of('aura-2-draco-en', 'claude-sonnet-5-5', 'brisk').pace, 'brisk')
+  equal(of(undefined, undefined, 'gone').pace, 'normal')
   equal(of('fable', 'claude-sonnet-5-5').talks, false)
   equal(of('fable', 'gpt-realtime-2.1').voice, 'cedar')
 })

@@ -68,7 +68,11 @@ test('the voice card offers a few voices, the butler-like first, with the pick c
     'Ash',
     'Coral',
   ])
-  equal(picked(card(), 'voice'), 'aura-2-draco-en')
+  equal(picked(card(), 'voice'), 'cedar')
+  equal(
+    picked(card(undefined, undefined, { DEEPGRAM_API_KEY: 'a' }), 'voice'),
+    'aura-2-draco-en',
+  )
   equal(
     card().querySelector('[value="aura-2-draco-en"]')?.getAttribute(
       'data-ways',
@@ -92,16 +96,17 @@ test('the voice card says each way of answering plainly, the realtime one only w
       'Thorough',
     ],
   )
-  equal(picked(card(), 'voice_model'), 'claude-haiku-5-5')
+  equal(picked(card(), 'voice_model'), 'gpt-realtime-2.1-mini')
+  equal(picked(card('aura-2-draco-en'), 'voice_model'), 'claude-haiku-5-5')
   equal(
     names(card('cedar', 'gpt-realtime-2.1'), 'voice_model').at(-1),
     'As set before',
   )
 })
 
-test('the voice card offers a few speeds, Brisk until another is picked', () => {
+test('the voice card offers a few speeds, Normal until another is picked', () => {
   equal(names(card(), 'voice_speed'), ['Relaxed', 'Normal', 'Brisk'])
-  equal(picked(card(), 'voice_speed'), 'brisk')
+  equal(picked(card(), 'voice_speed'), 'normal')
   equal(
     picked(card(undefined, undefined, on, 'relaxed'), 'voice_speed'),
     'relaxed',

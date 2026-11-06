@@ -111,7 +111,7 @@ let reached = async (env: Env, ring: Ring) => {
     dir.nameAt(person),
     dir.texting(person).then((t) => spaceFor(env, person, t?.space)),
   ])
-  if (!space || await paused(env, setupOf(space).provider)) return null
+  if (!space || await paused(env, setupOf(env, space).provider)) return null
   return { person, space, first: name?.trim().split(/\s+/)[0] || undefined }
 }
 
@@ -790,7 +790,7 @@ export let answering = async (
   armed: () => Promise<void> | undefined,
 ): Promise<Response> => {
   let phone = await phoneAt(env, { via: ticket.via })
-  let setup = setupOf(space)
+  let setup = setupOf(env, space)
   let speech = speechOf(env, setup.provider)
   if (!phone?.line || !phone.caller || !speech) {
     defect(

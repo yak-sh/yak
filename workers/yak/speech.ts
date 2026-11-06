@@ -37,8 +37,7 @@ export let SECRETS = new Map<Provider, keyof Env>([
   [OPENAI, 'OPENAI_VOICE_KEY'],
 ])
 
-/** The provider every app's ./api/speech/ door speaks through, and an
- * Operator speaks in when nobody picked its voice. */
+/** The provider every app's ./api/speech/ door speaks through. */
 export let PROVIDER = DEEPGRAM
 
 /** A voice an Operator may speak in, with the provider it is one of. */
@@ -51,7 +50,8 @@ export let VOICES: Voiced[] = [...SECRETS.keys()].flatMap((provider) =>
 
 /** The voices like a butler's: British, cool and professional. The picker
  * lists them first, and an Operator nobody has picked a voice for speaks in
- * the first. */
+ * the first when the way it answers is not a talking model, which speaks in
+ * its provider's own voice. */
 export let BUTLERS = ['aura-2-draco-en', 'aura-2-pandora-en']
 
 /** The models that answer an Operator's calls besides a provider's own
@@ -64,7 +64,8 @@ export let CALL_MODELS = ['claude-haiku-5-5', 'claude-sonnet-5-5']
 export type Way = { model: string; name: string; about: string }
 
 // The ways the settings page offers, the quickest first. A model a provider
-// talks with is offered only where that provider is on.
+// talks with is offered only where that provider is on. The quickest on here
+// is what nobody picked (`setupOf`).
 let WAYS: Way[] = [
   {
     model: 'gpt-realtime-2.1-mini',
@@ -87,7 +88,7 @@ let WAYS: Way[] = [
 
 /** How fast an Operator speaks on a call, in the settings page's words: a
  * multiple of each provider's own pace, which each holds within the speeds
- * it has (@yaks/speech `paced`). Brisk is what nobody picked. */
+ * it has (@yaks/speech `paced`). Normal is what nobody picked. */
 export type Pace = { id: string; name: string; about: string; speed: number }
 
 export let PACES: Pace[] = [
@@ -132,17 +133,14 @@ export let offered = (
   env: Speaking,
   space: Pick<Space, 'voice' | 'voice_model' | 'voice_speed'>,
 ) => {
-  let setup = setupOf(space)
+  let setup = setupOf(env, space)
   let on = (v: Voiced) => speechOf(env, v.provider)
   let voices = VOICES.filter((v) =>
     on(v) && (OFFERED.includes(v.id) || v.id == setup.voice)
   ).toSorted((a, b) =>
     (OFFERED.indexOf(a.id) + 1 || 99) - (OFFERED.indexOf(b.id) + 1 || 99)
   )
-  let ways = WAYS.filter((w) =>
-    CALL_MODELS.includes(w.model) ||
-    VOICES.some((v) => on(v) && talks(v.provider, w.model))
-  )
+  let ways = WAYS.filter((w) => answers(env, w.model))
   if (!ways.some((w) => w.model == setup.model)) {
     ways.push({
       model: setup.model,
@@ -153,16 +151,18 @@ export let offered = (
   return { setup, voices, ways, paces: PACES }
 }
 
-/** The voice `space`'s Operator speaks in on a call. */
-export let operatorVoice = (space: Pick<Space, 'voice'>) =>
-  space.voice ?? BUTLERS[0]
-
 /** The voice named `id`, refused when no provider has one by that id. */
 export let voiceOf = (id: string) => {
   let voice = VOICES.find((v) => v.id == id)
   if (!voice) throw new CallError('arguments', 'Pick one of the voices listed.')
   return voice
 }
+
+/** Whether `model` answers calls on here: the Operator's own always, a
+ * talking model where its provider is on. */
+let answers = (env: Speaking, model: string) =>
+  CALL_MODELS.includes(model) ||
+  VOICES.some((v) => !!speechOf(env, v.provider) && talks(v.provider, model))
 
 /** Whether `model` is one `provider` hears and speaks with itself. */
 export let talks = (provider: Provider, model: string) =>
@@ -182,16 +182,23 @@ export let modelOf = (id: string, voice: string) => {
   )
 }
 
-/** How `space`'s Operator is on a call: the provider it speaks through, its
- * voice, how fast it speaks, and the model that answers, which hears and
- * speaks itself when it is one of the provider's own (`talks`). */
+/** How `space`'s Operator is on a call on here: the provider it speaks
+ * through, its voice, how fast it speaks, and the model that answers, which
+ * hears and speaks itself when it is one of the provider's own (`talks`).
+ * Nothing picked is Normal, answered the quickest way on here that speaks
+ * the voice picked, in its own voice when none was. */
 export let setupOf = (
+  env: Speaking,
   space: Pick<Space, 'voice' | 'voice_model' | 'voice_speed'>,
 ) => {
-  let pace = PACES.find((p) => p.id == space.voice_speed) ?? PACES.at(-1)!
-  let voice = VOICES.find((v) => v.id == operatorVoice(space)) ??
+  let pace = PACES.find((p) => p.id == space.voice_speed) ?? paceOf('normal')
+  let model = space.voice_model ??
+    WAYS.find((w) =>
+      answers(env, w.model) && (!space.voice || speaks(w.model, space.voice))
+    )!.model
+  let own = VOICES.find((v) => talks(v.provider, model))?.provider.talk?.voice
+  let voice = VOICES.find((v) => v.id == (space.voice ?? own ?? BUTLERS[0])) ??
     voiceOf(BUTLERS[0])
-  let model = space.voice_model ?? CALL_MODELS[0]
   let talk = talks(voice.provider, model) ? voice.provider.talk : undefined
   return {
     provider: voice.provider,
