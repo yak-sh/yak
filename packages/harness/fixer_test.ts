@@ -1,6 +1,6 @@
 import { Refused } from '@yaks/graph/errors'
 // A heal request is routed by its provider, not by whether a CLI launched it.
-import { equal, ok, test, throws } from '@yaks/testing'
+import { equal, ok, test } from '@yaks/testing'
 import { compose } from '@yaks/cli/host'
 import { type Comp, identityEid } from '@yaks/graph'
 import { effects } from './effects.ts'
@@ -74,13 +74,12 @@ let http = await (async () => {
     for (let i = 0; i < 2; i++) {
       // No default model is installed, so preparation is tested without a
       // paid ask. The integration probe exercises the complete runner.
-      await throws(() =>
-        handlers.session_run(
-          { entity: { eid: 'input' } } as never,
-          f.host.graph,
-          {} as never,
-          {} as never,
-        ), 'Choose a model')
+      await handlers.session_run(
+        { entity: { eid: 'input' } } as never,
+        f.host.graph,
+        {} as never,
+        {} as never,
+      )
     }
     let [session] = await f.host.graph.get(['fixer'])
     return {
@@ -193,8 +192,7 @@ let workspaceFixers = await (async () => {
             {} as never,
             {} as never,
           )
-        if (available === true) await throws(run, 'Choose a model')
-        else await run()
+        await run()
       }
       results.push({
         available,
@@ -214,7 +212,13 @@ test('workspace fixer admits instructions through the host binding once', () => 
   equal((result.session.home as Comp).workspace, 'checkout')
   equal(result.prompts.length, 1)
   equal((result.prompts[0].content as Comp).body, 'Preserve the task claim.\n')
-  equal(result.refusals.length, 0)
+  // Prepared, it stops at the ask: no default model is installed.
+  equal(result.refusals.length, 1)
+  ok(
+    String((result.refusals[0].content as Comp).body).startsWith(
+      'Choose a model',
+    ),
+  )
 })
 
 test('unavailable workspace binding ends the fixer once across worker restart', () => {
