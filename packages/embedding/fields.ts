@@ -32,7 +32,6 @@ import {
   oneOf,
   type Query,
   select,
-  type Statements,
   table,
   union,
   unionAll,
@@ -110,47 +109,6 @@ export let fields = (vocab: Vocab, pick: Pick = textual): Field[] => [
 export let unembedded = (vocab: Vocab): { not?: string[] } => {
   let not = vocab.all.filter((comp) => vocab.comp(comp)?.embed === false)
   return not.length ? { not } : {}
-}
-
-// The tables a store holds, per schema revision.
-let held = new WeakMap<Statements, { at: number; names: Set<string> }>()
-
-/** The tables a store holds: a store makes a component's table the first
- * time a write names it (@yaks/sqlite), and until then no entity wears it. */
-export let tablesIn = (db: Statements): Set<string> => {
-  let at = db.revision('schema')
-  let k = held.get(db)
-  if (k?.at !== at) {
-    let names = new Set(
-      db.query({ t: 'pragma', name: 'table_list' })
-        .filter((r) => r.type == 'table').map((r) => String(r.name)),
-    )
-    held.set(db, k = { at, names })
-  }
-  return k.names
-}
-
-/** `f`, excluding only the components among `names`: one no table stands
- * for excludes no entity. */
-export let trimmed = (f: Field, names: Set<string>): Field =>
-  (f.not ?? []).every((n) => names.has(n))
-    ? f
-    : { ...f, not: f.not!.filter((n) => names.has(n)) }
-
-/** The fields whose text a store holds a table for, each excluding only the
- * components it holds a table for (`trim`, by default): there is no text to
- * read or watch in a table nothing has written, and nothing to be excluded
- * by. */
-export let present = (
-  db: Statements,
-  fields: Field[],
-  trim = true,
-): Field[] => {
-  let names = tablesIn(db)
-  let stands = (f: Field) => names.has(f.comp) && (!f.on || names.has(f.on))
-  let kept = fields.every(stands) ? fields : fields.filter(stands)
-  if (!trim || kept.every((f) => trimmed(f, names) == f)) return kept
-  return kept.map((f) => trimmed(f, names))
 }
 
 // SQLite's trim() strips spaces only, so the whitespace that makes a text

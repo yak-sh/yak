@@ -36,9 +36,7 @@ let fixture = (n: number, mode: string) => {
   let old = structuredClone(effectDoc)
   old.$defs!.effect.index = [['handler', 'state']]
   delete old.$defs!.effect.properties!.lease_owner.index
-  let s = storage(sql, loadVocab(old))
-  s.install()
-  s.raise(['effect'])
+  storage(sql, loadVocab(old)).install()
   // Unrelated entities must never replace the selected eligible work.
   sql.query(insert('entity', { id: 0, eid: 'bare' }))
   for (let first = 1; first <= n; first += 256) {

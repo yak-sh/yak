@@ -392,6 +392,7 @@ export let cardinality = (
   let accepts = visible(vocab, opts)
   if (
     !vocab.comp('archetype') || !accepts || opts.eids ||
+    opts.absent?.length ||
     opts.extend?.some((e) => cs.some((c) => e.compile[c.kind]))
   ) return
   let tally = cs.length == 1 && cs[0].kind == 'tally' &&
@@ -404,7 +405,6 @@ export let cardinality = (
     ? f.path[0]
     : undefined
   let plain = count && (!filters.length || !!comp)
-  // A component with no table is worn by nobody, and so by no bucket.
   if (
     !(tally || plain) || comp && (!vocab.comp(comp) || opts.backed?.[comp] ||
         vocab.comp(comp)?.computed || derivedOf(vocab, opts.derived)[comp])

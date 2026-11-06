@@ -20,12 +20,10 @@ import {
 // `rows()` returns and reads back every component each entity has.
 // `screened()` is the statement alone, for a search beside the graph to run.
 
-import { unraised } from './raise.ts'
 import { field } from '@yaks/sql/query'
 import { type And, map, parse } from '@yaks/query/core'
 import type { Prop, Vocab } from '@yaks/vocab'
 import {
-  absentDerived,
   among,
   and,
   array,
@@ -906,17 +904,6 @@ export let get = (
   cache?: ReadCache,
 ): Bundle[] => {
   if (!eids.length) return []
-  // The tables this read may touch: every component's, or the named ones',
-  // less any the file does not hold yet, which no entity can wear: those a
-  // reader was told of, else the ones no write has raised (./raise.ts). A
-  // caller's own read overrides read those as worn by nobody too.
-  let gone = new Set(opts.absent ?? unraised(driver, vocab))
-  if (gone.size) {
-    opts = {
-      ...opts,
-      derived: absentDerived(vocab, derivedOf(vocab, opts.derived), [...gone]),
-    }
-  }
   if (opts.visibility) {
     let { visibility, ...plain } = opts
     // A backed entity has no entity row: it is seen when its backing, as the
@@ -1059,6 +1046,9 @@ export let get = (
     })
   }
   let pending = new Set(unclassified)
+  // The tables this read may touch: every component's, or the named ones',
+  // less any the file does not hold yet, which no entity can wear.
+  let gone = new Set(opts.absent)
   let names =
     (comps
       ? [...new Set(comps)].filter((c) => readable(vocab).has(c))

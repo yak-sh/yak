@@ -35,7 +35,6 @@ test('indexed disjunction arms seek referents despite shared history', () => {
     }])
     let store = storage(d, vocab)
     store.install()
-    store.raise()
     d.query(insert('entity', { id: 1, eid: 'author' }))
     d.query(insert('person', { entity: 1 }))
     let add = (start: number, n: number) => {
@@ -105,7 +104,6 @@ test('a disjunction reads its candidates once', () => {
     }])
     let store = storage(d, vocab)
     store.install()
-    store.raise()
     let g = graph({ storage: store, vocab, plugins: [archetypes()] })
     for (let i = 0; i < 2000; i += 500) {
       g.apply(Array.from({ length: 500 }, (_, j) => ({
@@ -155,7 +153,6 @@ let crowded = (() => {
   }])
   let store = storage(d, vocab)
   store.install()
-  store.raise()
   for (let i = 0; i < 5000; i += 500) {
     store.tx((tx) =>
       tx.patch(Array.from({ length: 500 }, (_, j) => ({

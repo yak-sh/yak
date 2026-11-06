@@ -424,9 +424,7 @@ let beside: Stmt[] = [{ ...index('creature'), name: 'creature_x' }, {
 // hens, with what `beside` puts on their table and a view over it. Then the
 // vocabulary drops hens, and the table's rebuild is owed.
 let [owing] = stage((db) => {
-  let s = storage(db, hens, { sizes: tiny })
-  s.install()
-  s.raise()
+  storage(db, hens, { sizes: tiny }).install()
   rows(db, 'entity', 5, fn('printf', lit('c%d'), col('i')))
   rows(db, 'creature', 5, lit('fox'))
   erect(db, [

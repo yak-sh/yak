@@ -39,9 +39,6 @@ test('a session request lookup reads its entries instead of unrelated requests',
     }])
     let s = storage(d, vocab)
     s.install()
-    // The reads below are compiled past the store: every table they name
-    // must stand.
-    s.raise()
     let g = graph({ storage: s, vocab, plugins: [archetypes()] })
     g.apply([
       { entity: { eid: 'target' }, session: {} },

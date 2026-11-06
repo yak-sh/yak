@@ -46,7 +46,6 @@ import { field, revision } from '@yaks/sql'
 import type { Vocab } from '@yaks/vocab'
 import type { Bundle, Comp, Entity } from '@yaks/graph'
 import { comps, TOMBSTONE } from '@yaks/graph/bundle'
-import { stood } from './raise.ts'
 import { Refused } from '@yaks/graph/errors'
 import { renumbering } from '@yaks/graph/storage'
 import {
@@ -450,11 +449,7 @@ export let unburySql = (eid: string): Delete => dropSql(eid, TOMBSTONE)
  * an identity row is erased only once nothing keys to it; the final NOT NULL
  * assertion then rolls the batch back, tombstones included, when the guard
  * kept an identity, instead of reporting a repair that did not happen. */
-export let pruneSql = (
-  vocab: Vocab,
-  eids: string[],
-  held: readonly string[] = tables(vocab),
-): Write[] => {
+export let pruneSql = (vocab: Vocab, eids: string[]): Write[] => {
   if (!eids.length) return []
   let listed = array(eids)
   let named = among(col('eid'), listed)
@@ -464,12 +459,10 @@ export let pruneSql = (
       from: table(name, '__r'),
       where: eq(col(prop, '__r'), col('id', 'entity')),
     }))
-  let stands = new Set(held)
   let empty = and(
-    ...held.filter((c) => c != 'entity' && c != TOMBSTONE)
+    ...tables(vocab).filter((c) => c != 'entity' && c != TOMBSTONE)
       .map((c) => not(holds(c, 'entity'))),
-    ...vocab.refProps()
-      .filter(([c, p]) => stands.has(c) && !vocab.prop(c, p)?.computed)
+    ...vocab.refProps().filter(([c, p]) => !vocab.prop(c, p)?.computed)
       .map(([c, p]) => not(holds(c, field(p)))),
     not(holds('entity', 'archetype')),
   )
@@ -494,7 +487,7 @@ export let pruneSql = (
 
 /** Run an orphan repair's guarded physical erasure. */
 export let prune = (driver: Driver, vocab: Vocab, eids: string[]): void => {
-  for (let s of pruneSql(vocab, eids, stood(driver, vocab))) effect(driver, s)
+  for (let s of pruneSql(vocab, eids)) effect(driver, s)
 }
 
 /**
@@ -696,7 +689,6 @@ export let patch = (
     // A component no plugin here declares is worn by nothing: a config names
     // its exceptions once, for every graph it opens.
     let tables = [...new Set(number.except.filter((n) => vocab.comp(n)))]
-    let standing = new Set(stood(driver, vocab))
     for (let name of tables) {
       for (let b of alive) if (b[name] != null) excluded.add(b.entity.eid)
     }
@@ -714,8 +706,7 @@ export let patch = (
       if (wears) excluded.add(eid)
       return !wears && held.some((h) => h === undefined)
     })
-    let worn = tables.filter((name) => standing.has(name))
-    for (let eid of wears(driver, worn, asked)) excluded.add(eid)
+    for (let eid of wears(driver, tables, asked)) excluded.add(eid)
     // Exclusions govern allocation, not addresses already given out. A number
     // in a comment, transcript or URL keeps resolving after policy changes.
   }
@@ -940,13 +931,13 @@ export let revive = (driver: Driver, eids: string[], moved?: Moved): void => {
  * @yaks/graph decided which they are. `held` is the tables they hold rows in,
  * where the caller knows (a store that keeps archetypes reads them off the
  * entities' pointers, ./archetype.ts `heldBy`); left out, it is every table the
- * vocabulary declares that the file holds.
+ * vocabulary declares.
  */
 export let remove = (
   driver: Driver,
   vocab: Vocab,
   entities: Entity[],
-  held: string[] = stood(driver, vocab),
+  held: string[] = tables(vocab),
   at: string = new Date().toISOString(),
 ): void => {
   for (let s of removeSql(held, entities, at)) write(driver, s)

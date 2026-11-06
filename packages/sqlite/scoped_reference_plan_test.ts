@@ -34,9 +34,7 @@ let visibility = { entity: '!draft&!page.doc.draft' }
 test('a scoped read of a reference steps alike in a large store and a small one', () => {
   let db = new Database(':memory:'), d = driver(db)
   try {
-    let s = storage(d, vocab)
-    s.install()
-    s.raise()
+    storage(d, vocab).install()
     d.query(insert('entity', { id: 1, eid: 'target' }, { id: 2, eid: 'from' }))
     d.query(insert('link', { entity: 2, to: 1 }))
     // Every VM step of every statement one read runs, counted on a copy of it.

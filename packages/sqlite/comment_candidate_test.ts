@@ -51,7 +51,6 @@ for (let numbered of [false, true]) {
     let db = new Database(':memory:'), d = driver(db)
     let s = storage(d, vocab, { number: numbered })
     s.install()
-    s.raise()
     let ids: string[] = []
     let put = (
       id: number,

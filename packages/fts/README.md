@@ -99,10 +99,7 @@ The pieces can be used independently:
 - `fields(vocab, pick?)` selects properties.
 - `schema(fields, reads?)` returns SQL statements to create the indexes and
   triggers. It does not populate indexes from existing rows; call `heal()` or
-  use `adopt()` for an existing database. A @yaks/sqlite store makes a
-  component's table on its first write; given them as its `over`, it makes each
-  index with its table. `adopt()`, `heal()` and `find()` pass over an index
-  whose table no write has made yet, and a text clause matches nothing there.
+  use `adopt()` for an existing database.
 - `search(fields, db?)` compiles text clauses into FTS5 membership conditions.
   Pass it through the adapter's `extend` option to enable text clauses in
   ordinary storage reads. Given the database's driver it also orders by

@@ -19,12 +19,9 @@ let vocab = loadVocab({
 
 let db = bounded({ compoundSelect: 5, variableNumber: 100 })
 let text = fields(vocab)
-let indexes = schema(text)
-let store = storage(db, vocab, {
-  extend: [search(text, db)],
-  over: () => indexes,
-})
+let store = storage(db, vocab, { extend: [search(text, db)] })
 store.install()
+for (let stmt of schema(text)) db.query(stmt)
 store.tx((tx) =>
   tx.patch(kinds.flatMap((k, i) => [
     {

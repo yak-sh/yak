@@ -39,9 +39,7 @@ let vocab = loadVocab([{
 }])
 let fixture = (n: number) => {
   let db = new Database(':memory:'), d = driver(db)
-  let store = storage(d, vocab)
-  store.install()
-  store.raise()
+  storage(d, vocab).install()
   for (let i = 0; i < n; i += 500) {
     let rows = Array.from(
       { length: Math.min(500, n - i) },

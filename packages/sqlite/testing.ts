@@ -112,9 +112,6 @@ export let snapshot = (
       let d = driver(db)
       let s = storage(d, vocab, base)
       s.install()
-      // A fixture holds every table, as a store whose every word was
-      // written does: its tests fill them in raw SQL.
-      s.raise()
       for (let stmt of extra) d.query(stmt)
       meta(d).del(EPOCH)
       kept = { [image]: serialize(db) }

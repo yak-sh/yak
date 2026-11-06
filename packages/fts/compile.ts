@@ -43,7 +43,6 @@ import {
   type Raw,
   type Screen,
   select,
-  type Site,
   type Source,
   table,
   Unsupported,
@@ -118,18 +117,9 @@ export let search = (fields: Field[], db?: Driver): Extension => {
   // it reaches (`reach`), and whether the ranking is being read.
   let page: number | null = null
   let ranking = false
-  // The fields whose index stands: one over a component no table stands for
-  // yet (@yaks/sql `Site.absent`) holds nothing, and has no index to ask.
-  let live = fields
-  let seen = (site: Site) => {
-    let gone = new Set(site.absent)
-    live = gone.size
-      ? fields.filter((f) => !gone.has(f.comp) && !(f.on && gone.has(f.on)))
-      : fields
-  }
   let rank = (): number[] => {
     if (held) return held
-    let stmt = ranked(live, words.join(' '), {
+    let stmt = ranked(fields, words.join(' '), {
       screen: asked?.() ?? undefined,
       screens: sources,
       limit: page ?? RANKED,
@@ -168,21 +158,17 @@ export let search = (fields: Field[], db?: Driver): Extension => {
       text: (clause, site) => {
         if (clause.kind != 'text') return null
         let t = term(clause.value)
-        seen(site)
         // A search containing no word matches nothing. Compiling it to a
         // constant false keeps the query away from the index rather than
-        // widening the result set. Nor does one with no index to search.
-        if (!t || !live.length) return FALSE
+        // widening the result set.
+        if (!t) return FALSE
         // A first page of a search is its best rows and no others, so when the
         // ranking fills it, its words select just those, ranked once among
         // what the rest of the query admits, rather than every match. A page
         // the ranking leaves short reads every match: words found in different
         // indexes match where no one index ranks them, and follow the ranked.
         if (page != null && !ranking) {
-          sources = screens(live, site.vocab, {
-            visibility: site.visibility,
-            absent: site.absent,
-          })
+          sources = screens(fields, site.vocab, { visibility: site.visibility })
           let ids = rank()
           if (ids.length == page) {
             return among(site.owner, ids.map((id) => lit(id)))
@@ -193,10 +179,7 @@ export let search = (fields: Field[], db?: Driver): Extension => {
           words.push(t)
           said.push(clause.value)
         }
-        sources = screens(live, site.vocab, {
-          visibility: site.visibility,
-          absent: site.absent,
-        })
+        sources = screens(fields, site.vocab, { visibility: site.visibility })
         let screen = site.screen
         let allowed: Source | undefined
         if (screen?.maximum != null && screen.maximum <= FEW) {
@@ -208,7 +191,7 @@ export let search = (fields: Field[], db?: Driver): Extension => {
           }
         }
         return or(
-          ...indexes(live).map(({ name }) => {
+          ...indexes(fields).map(({ name }) => {
             let fts = indexName(name)
             return among(
               site.owner,
@@ -236,7 +219,6 @@ export let search = (fields: Field[], db?: Driver): Extension => {
     ranks: (q) => db && wordsIn(q).some((w) => !!term(w)) ? SEARCH : null,
     order: (value, site) => {
       if (value != SEARCH) return null
-      seen(site)
       if (!words.length || !db) {
         throw new Unsupported(
           `.order=${SEARCH}`,

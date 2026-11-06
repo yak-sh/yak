@@ -32,8 +32,6 @@ let vocab = loadVocab([{
 let fixture = (d = mem()) => {
   let s = storage(d, vocab)
   s.install()
-  // What these measure is memory, not a first write's tables (./raise.ts).
-  s.raise()
   s.tx((tx) =>
     tx.patch([{ entity: { eid: 'hero' }, player: { active: true } }])
   )
@@ -773,7 +771,6 @@ let wide = loadVocab([{
 test('a component whose values memory cannot say is still known to be held', () => {
   let d = mem(), s = storage(d, vocab)
   s.install()
-  s.raise()
   let moved = s.tx((tx) => {
     // A number into a boolean column is storage's to say.
     tx.patch([{ entity: { eid: 'a' }, player: { active: 1 } }])

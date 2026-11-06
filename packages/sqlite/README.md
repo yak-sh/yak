@@ -339,36 +339,18 @@ store does not see whole (raw SQL) moves the counts alone.
 
 `storage(driver, vocab, base?)` returns a synchronous `Store`:
 
-| Method                       | Result                                                                   |
-| ---------------------------- | ------------------------------------------------------------------------ |
-| `worn(comp, prop)`           | Whether a property value implies component presence                      |
-| `ddl()`                      | Schema statements derived from the vocabulary                            |
-| `grown()`                    | Statements adding columns missing from existing tables                   |
-| `install()`                  | Creates/updates schema, indexes, metadata, and archetype classification  |
-| `raise(comps?)`              | Makes components' tables as their first write would, for raw SQL writers |
-| `read(query, opts?, comps?)` | Matching bundles, read as one snapshot without taking the write lock     |
-| `rows(query, opts?)`         | Raw result rows                                                          |
-| `screen(query, opts?)`       | A statement selecting the ids a query admits, compiled as reads are      |
-| `get(eids, comps?)`          | Those entities as stored, read without taking the write lock             |
-| `tx(body)`                   | Runs the callback in a transaction and returns its result                |
-| `watch(comp, heard)`         | Hears each new `comp` row another connection adds; answers a stop        |
-
-A component's table is made by the first write that names it, not by
-`install()`: an empty store holds the spine, the graves, the archetype
-descriptors and what its host keeps of its own, and a table only for each word
-written to it (./raise.ts). The write makes the table, its indexes, the
-`doc_value` view for `doc`, the log's triggers in a file, and each statement
-`base.over` gives that rests on it, in its own transaction and before its rows,
-so a trigger sees them. A statement **rests on** the component tables it is on,
-reads or writes, and on whatever the objects it names rest on (a search index on
-the text view it reads), and is made once every one of them stands. A read of a
-component with no table answers as one worn by no entity, through the dialect
-and through every derived expression that names its table (@yaks/sql
-`absentDialect`, `absentDerived`). The `server_meta` row `tables` lists the
-component tables the file holds, recorded by each install and kept by each write
-that makes one, so a reader knows from one row; a file no install of this code
-recorded holds every table, as the install that made it did. A writer that fills
-a table in raw SQL makes it first with `store.raise(comps)`.
+| Method                       | Result                                                                  |
+| ---------------------------- | ----------------------------------------------------------------------- |
+| `worn(comp, prop)`           | Whether a property value implies component presence                     |
+| `ddl()`                      | Schema statements derived from the vocabulary                           |
+| `grown()`                    | Statements adding columns missing from existing tables                  |
+| `install()`                  | Creates/updates schema, indexes, metadata, and archetype classification |
+| `read(query, opts?, comps?)` | Matching bundles, read as one snapshot without taking the write lock    |
+| `rows(query, opts?)`         | Raw result rows                                                         |
+| `screen(query, opts?)`       | A statement selecting the ids a query admits, compiled as reads are     |
+| `get(eids, comps?)`          | Those entities as stored, read without taking the write lock            |
+| `tx(body)`                   | Runs the callback in a transaction and returns its result               |
+| `watch(comp, heard)`         | Hears each new `comp` row another connection adds; answers a stop       |
 
 `install()` preserves existing data, adds missing columns, and rebuilds a table
 whose foreign keys or checks (a reference's death word, an enum) no longer match
@@ -740,16 +722,14 @@ records the next survey.
 - `entity`: integer `id`, public `eid`, optional `num`, and
   [archetype](../archetype/README.md) pointer.
 - `tombstone`: deletion records excluded from normal queries.
-- One table per stored component, keyed by integer `entity`, made by the first
-  write naming the component, and none for a computed one. References store
-  integer target ids; ordinary references have foreign keys, while `keep`
-  references can preserve historical ids. A component without properties is
-  represented by the existence of its row.
+- One table per stored component, keyed by integer `entity`, and none for a
+  computed one. References store integer target ids; ordinary references have
+  foreign keys, while `keep` references can preserve historical ids. A component
+  without properties is represented by the existence of its row.
 - Indexes from vocabulary `unique`/`index` declarations. SQLite enforces unique
   constraints, including competing inserts.
 - `doc_value`: a read view when the vocabulary declares `doc`.
-- `server_meta`: database metadata, separate from graph entities, among it
-  `tables`, the component tables the file holds.
+- `server_meta`: database metadata, separate from graph entities.
 - `entity_sequence` and triggers: the human-number high-water mark.
 - `entity_written` and triggers, in a file: which entity each write named, in
   commit order, for the other connections' memory (under Read).

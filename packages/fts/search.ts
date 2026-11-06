@@ -581,8 +581,7 @@ export let find = (
       return source ? [[o.name.replace(/_fts$/, ''), source]] : []
     }),
   )
-  // An index stands once its component's first write made it (@yaks/sqlite).
-  let stmt = hits(fields.filter((f) => (f.on ?? f.comp) in content), text, {
+  let stmt = hits(fields, text, {
     plan: db.file ? 'sort' : 'index',
     content,
     ...opts,

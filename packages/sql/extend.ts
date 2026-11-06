@@ -79,10 +79,6 @@ export type Site = {
   vocab: Vocab
   // the caller's relation restrictions, retained for standalone rankers
   visibility?: BindOpts['visibility']
-  // the components no table stands for in this file, each worn by no entity
-  // (./absent.ts): an extension reading a table of its own over one reads
-  // nothing there
-  absent?: readonly string[]
   // the moment a relative time phrase resolves against
   now: number
   // this row's integer id in the entity table

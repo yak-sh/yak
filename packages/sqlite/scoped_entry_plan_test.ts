@@ -34,9 +34,7 @@ test('finite entry window identities do not sort their unbounded session', () =>
         hidden: { component: true, type: 'object' },
       },
     })
-    let s = storage(d, v)
-    s.install()
-    s.raise()
+    storage(d, v).install()
     d.query(insert('entity', { id: 1, eid: 'session' }))
     for (let n = 2; n < 20002; n++) {
       d.query(insert('entity', { id: n, eid: `e${n}` }))

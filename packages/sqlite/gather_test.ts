@@ -162,7 +162,6 @@ test('whole reads scale with worn components across one or 100 hits', () => {
   )
   let s = storage(driver, vocab, { number: false })
   s.install()
-  s.raise()
   let ids = Array.from({ length: 100 }, (_, i) => `owner-${i}`)
   driver.query(insert(
     'entity',

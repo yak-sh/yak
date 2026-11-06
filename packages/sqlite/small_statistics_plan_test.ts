@@ -80,7 +80,6 @@ let fixture = (() => {
   }
   let s = storage(d, vocab)
   s.install()
-  s.raise()
   for (let stmt of ftsSchema(fields(vocab))) d.query(stmt)
   d.query(insert('entity', ...ids.slice(0, 21).map((eid) => ({ eid }))))
   d.query(

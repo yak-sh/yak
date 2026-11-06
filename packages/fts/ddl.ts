@@ -260,35 +260,15 @@ export let schema = (fields: Field[], derived: Derived = {}): Stmt[] => {
 /**
  * The text every index reads, one select per index: its properties off the
  * table or view it is kept from, the way its triggers read them. What a
- * whole-store pass over the indexed text reads (./lexicon.ts). Given the
- * file, only the indexes whose tables it holds.
+ * whole-store pass over the indexed text reads (./lexicon.ts).
  */
-export let sources = (
-  fields: Field[],
-  derived: Derived = {},
-  db?: Driver,
-): Stmt[] =>
-  (db ? standing(db, fields) : indexes(fields)).map((ix) =>
+export let sources = (fields: Field[], derived: Derived = {}): Stmt[] =>
+  indexes(fields).map((ix) =>
     select({
       cols: ix.props.map((p) => col(p)),
       from: table(sourceOf(ix, derived)),
     })
   )
-
-// The indexes of `fields` whose tables the file holds. A store makes a
-// component's table the first time a write names it (@yaks/sqlite), and an
-// index with it; until then there is nothing to index, adopt or heal.
-// `made` also counts an index that stands without its tables, which is not
-// one waiting for a write but one whose table something else dropped.
-let standing = (db: Driver, fields: Field[], made = false): Index[] => {
-  let tables = new Set(
-    catalogue(db).filter((o) => o.type == 'table').map((o) => o.name),
-  )
-  return indexes(fields).filter((ix) =>
-    tables.has(ix.comp) && (!ix.on || tables.has(ix.on)) ||
-    made && tables.has(indexName(ix.name))
-  )
-}
 
 // Is this index still consistent with its table? Two checks, the cheap one
 // first: does it hold one row per row of the component table, and does FTS5's
@@ -361,7 +341,7 @@ export let heal = (
   let deep = opts.deep ?? false
   let derived = opts.derived ?? {}
   let healed: string[] = []
-  for (let ix of standing(db, fields, true)) {
+  for (let ix of indexes(fields)) {
     let fts = indexName(ix.name)
     if (opts.fill?.pending(fts)) continue
     let before = fault(db, ix, deep)
@@ -538,7 +518,7 @@ export let adopt = (
   }
   let planned: { ix: Index; mine: Stmt[]; rebuild: boolean; cursor?: Expr }[] =
     []
-  for (let ix of standing(db, fields)) {
+  for (let ix of indexes(fields)) {
     let fts = indexName(ix.name)
     let have = declared(db, fts)
     let same = have.length == ix.props.length &&

@@ -37,9 +37,7 @@ import {
   fit,
   follow,
   forget,
-  holds,
   indexed,
-  recorded,
   retabled,
   retired,
   statements,
@@ -477,13 +475,11 @@ export let install = (
   derived: Derived = {},
   own = false,
 ): Error[] => {
-  // Retired first: a component may take a name an index held. A component's
-  // own table, indexes and search are made by its first write
-  // (@yaks/sqlite `raise`), so only what stands is raised here.
+  // Retired first: a component may take a name an index held.
   for (let stmt of retired(d, vocab)) d.query(stmt)
-  erect(d, holds(d, vocab, retabled(d, vocab, derived)))
+  erect(d, retabled(d, vocab, derived))
   let unfit = fit(d, vocab)
-  unfit.push(...build(d, holds(d, vocab, indexed(vocab))))
+  unfit.push(...build(d, indexed(vocab)))
   // Search is app composition, after all indexed columns have been raised:
   // the full-text indexes, and the table the vectors are kept in beside the
   // triggers that note which of them changed (@yaks/embedding). The triggers
@@ -503,8 +499,6 @@ export let install = (
   if (vocab.comp('archetype')) {
     backfill(d, false)
   }
-  // Which component tables stand, for every reader to know from one row.
-  recorded(d)
   // The physical schema stamp establishes the adapter's readiness. Mint
   // lineage on installation only; later reads can trust the stamp without
   // asking the adapter to inspect signatures or write missing metadata.
@@ -576,11 +570,9 @@ export let unjournaled = (d: Driver, vocab: Vocab): Error[] =>
     })
 
 // Installation semantics participate in the Store print even when its words
-// did not change (for example, a component removed by an earlier release, the
-// journal an app store no longer keeps, or a component's table made by its
-// first write rather than here, @yaks/sqlite `raise`, which code that made
-// every table here must find a store still owes it).
-export let INSTALL = 5
+// did not change (for example, a component removed by an earlier release, or
+// the journal an app store no longer keeps).
+export let INSTALL = 4
 
 /** One wake's schema pass, for the print a vocabulary renders to and the
  * stamp an older release kept. The stamp decides when the pass (`raise`) runs

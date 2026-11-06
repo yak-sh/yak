@@ -584,7 +584,6 @@ test('a descriptor a write mints joins the catalog held, unless it rolls back', 
   let ran: string[] = []
   let s = storage(spy(mem(), (sql) => void ran.push(sql)), vocab)
   s.install()
-  s.raise()
   let g = graph({ storage: s, vocab, plugins: [archetypes()] })
   g.apply([{ entity: { eid: 'a' }, doc: {} }])
   // Each asks a limit of its own, so no answer kept in memory serves it.

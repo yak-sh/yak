@@ -44,19 +44,13 @@ let loaded = (
   let db = open(':memory:')
   // Match the in-memory evaluator's doc-only text policy explicitly.
   let text = fields(v).filter((f) => f.comp == 'doc')
-  let indexes = ftsSchema(text)
   let s = storage(
     db,
     v,
-    {
-      now: NOW,
-      number: true,
-      derived,
-      extend: [...extend, search(text)],
-      over: () => indexes,
-    },
+    { now: NOW, number: true, derived, extend: [...extend, search(text)] },
   )
   s.install()
+  for (let stmt of ftsSchema(text)) db.query(stmt)
   s.tx((tx) => tx.patch(rows))
   return s
 }

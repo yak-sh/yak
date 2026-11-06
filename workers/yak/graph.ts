@@ -843,7 +843,7 @@ export class Store {
   #lexis: {
     searchable: Field[]
     fields: string
-    sources: () => Stmt[]
+    sources: Stmt[]
     told: Set<string>
   } | null = null
   #vectorAgain = false
@@ -1210,9 +1210,7 @@ export class Store {
       ? {
         searchable,
         fields: said,
-        // Only the indexes standing: a component's is made by its first
-        // write (@yaks/sqlite).
-        sources: () => sources(searchable, blobRead(vocab), this.#sql),
+        sources: sources(searchable, blobRead(vocab)),
         told: this.#lexis?.fields == said ? this.#lexis.told : new Set(),
       }
       : null
@@ -1391,9 +1389,6 @@ export class Store {
             counts: 'lazy',
             schemaReady: () =>
               this.#stood(shape) || printed(drive, shape.print),
-            // A component's search index and queue triggers are made with its
-            // table, by the write that first names it.
-            over: () => shape.over,
             extend,
             // A body is stored as its address (@yaks/blob `store: "blob"`), so the
             // reads and the `doc_value` view resolve it as prose. The FTS schema
@@ -3461,7 +3456,7 @@ export class Store {
     let store = this.#name() ?? ''
     try {
       let words = new Set<string>()
-      read: for (let s of lexis.sources()) {
+      read: for (let s of lexis.sources) {
         for (let row of this.#sql.query(s)) {
           for (let v of Object.values(row)) {
             if (typeof v == 'string') { for (let w of lexemes(v)) words.add(w) }
