@@ -11,15 +11,20 @@ import { serve } from './unseen.ts'
 // it knocks on.
 let writeCost = (() => {
   let knocked: string[] = []
-  let door = (name: string, answer?: unknown) => ({
-    fetch: () => {
-      knocked.push(name)
-      return Promise.resolve(Response.json(answer))
-    },
-  })
+  let door = (name: string, answer: unknown = null) => {
+    let response = Response.json(answer)
+    return {
+      response,
+      fetch: () => {
+        knocked.push(name)
+        return Promise.resolve(response)
+      },
+    }
+  }
+  let tracker = door('tracker', [])
   let env = {
     TRACKER_SECRET: 'secret',
-    TRACKER: door('tracker', []),
+    TRACKER: tracker,
     DIRECTORY: door('directory'),
     STORE: {
       idFromName: () => (knocked.push('store'), {}),
@@ -27,8 +32,19 @@ let writeCost = (() => {
     },
   } as unknown as Env
   let space = { eid: 'sp', slug: 'sp', trashed: null } as unknown as Space
-  return { env, space, knocked }
+  return { env, space, knocked, tracker }
 })()
+let trackerRequest = new Request('https://tracker.internal/query')
+let trackerRows = await writeCost.tracker.response.clone().json() as unknown[]
+assertEquals(trackerRows, [])
+let noBreaks = new Map<string, never[]>()
+let readTracker = async (env: Env) => {
+  // Ticket cryptography belongs to tracker/ticket's tests. This reply still
+  // reaches the tracker door, and no directory or app store.
+  await env.TRACKER!.fetch(trackerRequest)
+  return noBreaks
+}
+
 test('a write costs the same however many apps its space holds', async () => {
   let { env, space, knocked } = writeCost
   assertEquals(
@@ -38,16 +54,7 @@ test('a write costs the same however many apps its space holds', async () => {
       { person: 'ada', role: 'owner' },
       undefined,
       false,
-      async (env) => {
-        // Ticket cryptography belongs to tracker/ticket's tests. This reply still
-        // reaches the tracker door, and no directory or app store.
-        let response = await env.TRACKER!.fetch(
-          new Request('https://tracker.internal/query'),
-        )
-        let rows = await response.json() as unknown[]
-        assertEquals(rows, [])
-        return new Map<string, never[]>()
-      },
+      readTracker,
     ),
     [],
   )
