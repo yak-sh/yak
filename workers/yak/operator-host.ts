@@ -1,5 +1,7 @@
 import { updating } from './operator-updates.ts'
-import type { Bundle, Graph } from '@yaks/graph'
+import { addressed, type Bundle, type Graph } from '@yaks/graph'
+import { refuse } from './tool.ts'
+import { remove } from './operator-remove.ts'
 import { draftEid } from '@yaks/draft'
 import { enqueue } from '@yaks/effects'
 import { derivedEid } from '@yaks/graph/identity'
@@ -946,6 +948,17 @@ export let operatorRequest = async (
         typeof args.opens == 'string' ? args.opens : undefined,
       ),
     )
+  }
+  if (path == '/operator/remove') {
+    // A person removes their own; the platform's admin anyone's.
+    let ids = await addressed(
+      store.g,
+      Array.isArray(args.ids) ? args.ids.map(String) : [],
+    )
+    if (!ids.length) throw refuse('arguments', 'Name what to remove in ids.')
+    let mine = await Promise.all(ids.map(own))
+    if (!access.administrative && mine.some((m) => !m)) return missing()
+    return Response.json({ removed: await remove(store, ids) })
   }
   if (path == '/operator/read') {
     // The platform's admin reads every person's, as on the admin page.

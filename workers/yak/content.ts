@@ -794,6 +794,11 @@ export let WORDS: Record<string, Words> = {
     'description':
       "Read this space's private operator tasks, conversations, replies and native session entries. Pass task (a task, or a conversation's session) for its lines, a conversation's newest 64, or omit it for the twenty latest tasks and conversations. Model instruction snapshots are omitted unless context is true.",
   },
+  'operator_remove': {
+    'title': "Remove your operator's work",
+    'description':
+      "Remove rows from this space's private operator work, each with what exists only because of it: a task with its comments, sessions and their lines, a conversation's session with its own lines, a line, or a wake-up or subscription with the turns it fired and what they told in Updates. You remove your own; the platform's admin anyone's. Answers the eids removed.",
+  },
   'library_add': {
     'title': "Add documents to an app's library",
     'step': {

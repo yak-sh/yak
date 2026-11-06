@@ -65,6 +65,24 @@ export let operatorTools: Omit<Tool, 'title' | 'description'>[] = [
     run: (ctx, args) => ask(ctx, args, '/operator/read'),
   },
   {
+    name: 'operator_remove',
+    destructive: true,
+    input: {
+      type: 'object',
+      properties: {
+        space: SPACE,
+        ids: {
+          type: 'array',
+          items: { type: 'string' },
+          description:
+            "The tasks, conversations' sessions, lines, wake-ups or subscriptions to remove, by eid or short id.",
+        },
+      },
+      required: ['ids'],
+    },
+    run: (ctx, args) => ask(ctx, args, '/operator/remove'),
+  },
+  {
     name: 'operator_retry',
     destructive: false,
     input: {
