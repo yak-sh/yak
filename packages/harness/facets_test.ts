@@ -21,6 +21,7 @@ import { toolDefinition } from '@yaks/vocab/tools'
 import { inputSchemaOf } from '@yaks/mcp/tools'
 import { connect } from '../mcp/testing.ts'
 import { answers, textOf, transcript } from '@yaks/session'
+import { changes } from '@yaks/session/wait'
 import { selectedUsing } from './model_selection.ts'
 import { runs } from './runs.ts'
 import { HARNESS } from './default.ts'
@@ -245,7 +246,10 @@ let finished = async () => {
     serves: { name },
   })
   await h.g.apply([
-    { entity: { eid: claude }, provider: { name: 'claude' } },
+    {
+      entity: { eid: claude },
+      provider: { name: 'claude', transport: 'process' },
+    },
     { entity: { eid: opus }, model: { name: 'opus' } },
     serves(claude, 'opus'),
     serves(openai, 'opus'),
@@ -281,6 +285,29 @@ test('a follow-up to a finished spawned session goes on with its provider and mo
     assertEquals(await send({}), kept)
     assertEquals(await send({ provider: 'claude' }), kept)
     assertEquals(await send({ model: 'opus' }), kept)
+  } finally {
+    await h.close()
+  }
+})
+
+test('a follow-up to a finished spawned session answers once its run has started', async () => {
+  let { h, s } = await finished()
+  try {
+    let sent = runs().session_send!({
+      entity: { eid: mint() },
+      call: { args: { session: s, text: 'go on' } },
+    }, h.g)
+    let asked = `.entry.session=${s}&.content.body="go on"`
+    for await (let _ of changes(h.g)) if ((await h.g.read(asked)).length) break
+    // Launched as @yaks/spawn leaves it: the run's reply is minutes away.
+    await h.g.apply([{
+      entity: { eid: s },
+      process: { pid: 2, command: 'claude' },
+      exit: null,
+    }])
+    let [row] = await sent
+    assertEquals(row.entity.eid, s)
+    assertEquals((row.process as Comp).pid, 2)
   } finally {
     await h.close()
   }

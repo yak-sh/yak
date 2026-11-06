@@ -111,7 +111,7 @@
       "verb": "send",
       "applied": true,
       "title": "Say more to a session here",
-      "description": "Send a session more input. A session running outside the graph (a spawned agent, a Claude Code session) hears it at its next tool call, and the call returns at once with the knock that carries it; for any other, waits for the reply unless wait:false.",
+      "description": "Send a session more input. A session running outside the graph (a spawned agent, a Claude Code session) hears it at its next tool call, and the call returns at once with the knock that carries it; one whose run has ended runs again, and the call returns the session once that run has started; for any other, waits for the reply unless wait:false.",
       "input": {
         "wait": {
           "type": "boolean",

@@ -7,7 +7,8 @@
 // turn, and wait for the reply: the entry the transcript settles on. Neither
 // runs the transcript. A session whose run goes on outside the graph gives no
 // reply until that run ends, so a send to it knocks instead, and it hears the
-// knock at its next tool call (@yaks/session's bus). The runner does, wherever the host's effects are
+// knock at its next tool call (@yaks/session's bus); a send that starts such a
+// run again answers once it has started. The runner does, wherever the host's effects are
 // worked (./effects.ts): a box's `yak serve`, or another process explicitly
 // serving the effects role. Drawing the reply is the caller's: a line
 // on a command line, the harness itself under `--tui` (./view.ts).
@@ -133,6 +134,36 @@ let settled = async (
   throw new Error('wait ended without a final read')
 }
 
+// Wait for the run a send asked a command to start: once its process is
+// launched (@yaks/spawn stamps a pid and clears the last run's exit), the
+// session as it stands, for that run gives no reply until it ends; one that
+// failed to launch answers where it settled.
+let begun = async (
+  graph: Graph,
+  s: Eid,
+  stopping?: AbortSignal,
+): Promise<Bundle[]> => {
+  let comps = ['process', 'exit', 'session'].filter((c) => graph.vocab.comp(c))
+  for await (let done of changes(graph, { signal: stopping })) {
+    let [row] = await graph.get([s], comps)
+    let status = (row?.session as Comp | undefined)?.status
+    if ((row?.process as Comp | undefined)?.pid != null && !row?.exit) {
+      return await graph.get([s])
+    }
+    if (!WORKING.includes(String(status)) || done) {
+      return (await transcript(graph, s)).slice(-1)
+    }
+  }
+  throw new Error('wait ended without a final read')
+}
+
+// Whether a provider is a command its runs are processes of (@yaks/spawn).
+let commanded = async (graph: Graph, using?: Comp): Promise<boolean> => {
+  if (!using?.provider) return false
+  let [p] = await graph.get([String(using.provider)], [PROVIDER])
+  return (p?.[PROVIDER] as Comp | undefined)?.transport == 'process'
+}
+
 // A transcript's statuses once its run is over.
 let OVER = ['stopped', 'failed']
 
@@ -152,11 +183,7 @@ let outside = async (
     !row || row.native || row.exit || self?.ended == true ||
     OVER.includes(String(self?.status))
   ) return false
-  let [provider] = using?.provider
-    ? await graph.get([String(using.provider)], [PROVIDER])
-    : []
-  return !!row.process || !!self?.transcript ||
-    (provider?.[PROVIDER] as Comp | undefined)?.transport == 'process'
+  return !!row.process || !!self?.transcript || await commanded(graph, using)
 }
 
 // Who called: what they asked a session is theirs (@yaks/tools signs the call
@@ -322,8 +349,9 @@ export let runs = (host?: Host): Runs => ({
       ...using ? { using } : {},
       $actor: through(s, caller(call)),
     }])
-    return args.wait === false
-      ? await graph.get([s])
+    if (args.wait === false) return await graph.get([s])
+    return await commanded(graph, using)
+      ? await begun(graph, s, host?.stopping)
       : await settled(graph, s, host?.stopping)
   },
   model_list: async (call, graph) => {
