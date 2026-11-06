@@ -48,7 +48,10 @@ space_set:
     (25 until set), to bound what visitors to its apps may spend together
     each month on models and voices their manifests open to them
     ("models": "open", "rtc": "open"); past it, those apps tell visitors
-    they answer again on the 1st, and members are not held to it. Returns
+    they answer again on the 1st, and members are not held to it. Pass
+    visitor_calls (50 until set) to bound the model calls one visitor may
+    ask its apps for in a day (UTC); past it, the apps tell that visitor
+    they answer again tomorrow. Returns
     the current address and a summary of the changes. Documentation:
     https://yaks.app/docs/home.
 space_delete:

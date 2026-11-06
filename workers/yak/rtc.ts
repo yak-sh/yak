@@ -26,7 +26,7 @@ import { KERNEL, metaOf } from './meta.ts'
 import { refusedSpend } from './meter.ts'
 import { reserved } from './model-spend.ts'
 import type { Answer } from './apps.ts'
-import { source, within } from './rate.ts'
+import { source, visitorKey, within } from './rate.ts'
 import { defect } from './defects.ts'
 
 /** Realtime's egress price, in dollars a byte. */
@@ -114,7 +114,10 @@ export let voice: Answer = async (asked) => {
             space,
             (remaining) => dollars <= remaining ? { dollars } : null,
             mint(),
-            { what: 'realtime', visitor: !writes(who.role) },
+            {
+              what: 'realtime',
+              visitor: writes(who.role) ? undefined : visitorKey(who, req),
+            },
           )
         } catch (error) {
           if (error instanceof ModelError && error.code == 'limit') {

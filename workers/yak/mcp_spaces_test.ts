@@ -886,6 +886,11 @@ test("a space's owner sets what its apps' visitors may spend", async () => {
       await agent.tool('space_set', { space: 'welcome', visitors: 40 }),
       'visitors may spend 40% of its model',
     )
+    assertStringIncludes(
+      await agent.tool('space_set', { space: 'welcome', visitor_calls: 10 }),
+      'visitors may spend 40% of its model and voice budget each month, ' +
+        'and one visitor 10 model calls a day',
+    )
     let no = await assertRejects(
       () => agent.tool('space_set', { space: 'welcome', visitors: 101 }),
       Error,

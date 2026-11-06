@@ -318,6 +318,10 @@ export type Space = {
   // The percent of that budget its apps' visitors may spend together, where
   // its owner set one (meter.ts `visiting`); none is meter.ts `VISITORS`.
   visitors?: number | null
+  // The model calls one visitor may ask its apps for in a day, where its
+  // owner set a number (meter.ts `visitorCalls`); none is meter.ts
+  // `VISITOR_CALLS`.
+  visitorCalls?: number | null
   meter: Meter | null
   // Whether the agent has already been told where this space stands against
   // its ceilings (unseen.ts `ceiling`). The mark is `notified`, the same one
@@ -718,7 +722,7 @@ export type Row = {
     cache_retention?: number | null
   }
   starter?: { dollars?: number | null }
-  visitor_share?: { percent?: number | null }
+  visitor_share?: { percent?: number | null; calls?: number | null }
   started?: { space?: Id | null }
   created?: { at?: string }
   member?: { space: Id; person: Id; role: Role; own?: boolean }
@@ -1256,6 +1260,7 @@ export let spaceOf = (r: Row): Space => ({
   budget: r.budget?.dollars ?? null,
   starter: r.starter?.dollars ?? null,
   visitors: r.visitor_share?.percent ?? null,
+  visitorCalls: r.visitor_share?.calls ?? null,
   meter: meterOf(r),
   told: r.notified != null,
   trashed: trashedOf(r),
@@ -2044,17 +2049,23 @@ export let directoryRows = (rows: {
       }, headers)
       return (await self.at(space.eid))!
     },
-    // The space whose apps' visitors may spend `share` percent of its month
-    // budget, or the default where it is null (meter.ts `visiting`).
+    // The space whose apps' visitors may spend `percent` of its month budget
+    // together (meter.ts `visiting`) and one of them `calls` model calls a
+    // day (meter.ts `visitorCalls`); what is not given stays as it was.
     welcome: async (
       space: Space,
-      share: number | null,
+      share: { percent?: number | null; calls?: number | null },
       headers: Record<string, string>,
     ): Promise<Space> => {
+      let percent = share.percent ?? space.visitors
+      let calls = share.calls ?? space.visitorCalls
       await self.apply({
         entities: [{
           entity: { eid: space.eid },
-          visitor_share: share == null ? null : { percent: share },
+          visitor_share: {
+            ...percent == null ? {} : { percent },
+            ...calls == null ? {} : { calls },
+          },
         }],
       }, headers)
       return (await self.at(space.eid))!

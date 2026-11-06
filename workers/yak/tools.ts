@@ -267,6 +267,7 @@ import {
   SPACES,
   standingOf,
   tooManySpaces,
+  VISITOR_CALLS,
   VISITORS,
 } from './meter.ts'
 import { type Held, holding } from './held.ts'
@@ -2884,6 +2885,13 @@ let OURS: Row[] = [
             "the percent of the space's monthly model and voice budget its " +
             `apps' visitors may spend together, ${VISITORS} where never set`,
         },
+        visitor_calls: {
+          type: 'integer',
+          minimum: 0,
+          description:
+            'the model calls one visitor may ask its apps for in a day (UTC), ' +
+            `${VISITOR_CALLS} where never set`,
+        },
       },
     },
     run: async (ctx, args) => {
@@ -2892,10 +2900,13 @@ let OURS: Row[] = [
       let title = args.title == null ? null : titled(args.title)
       let drop = args.forget == null ? null : slug(args.forget, 'forget')
       let share = args.visitors == null ? null : Number(args.visitors)
-      if (to == null && title == null && drop == null && share == null) {
+      let calls = args.visitor_calls == null ? null : Number(args.visitor_calls)
+      let welcoming = share != null || calls != null
+      if (to == null && title == null && drop == null && !welcoming) {
         throw refuse(
           'arguments',
-          'nothing to change: pass slug, title, forget, or visitors',
+          'nothing to change: pass slug, title, forget, visitors, or ' +
+            'visitor_calls',
         )
       }
       let moving = to != null && to != space.slug
@@ -2927,7 +2938,13 @@ let OURS: Row[] = [
           { slug: to, title, forget: drop },
           vouched(who),
         )
-      if (share != null) now = await ctx.dir.welcome(now, share, vouched(who))
+      if (welcoming) {
+        now = await ctx.dir.welcome(
+          now,
+          { percent: share, calls },
+          vouched(who),
+        )
+      }
       return {
         text: `space ${now.slug}${title == null ? '' : ` "${title}"`}: ` +
           `https://${spaceHost(ctx.env, now.slug)}/` +
@@ -2940,10 +2957,12 @@ let OURS: Row[] = [
               'with the space'
             : '') +
           (drop == null ? '' : ` — ${lost(`${spaceHost(ctx.env, drop)}`)}`) +
-          (share == null
-            ? ''
-            : ` — its apps' visitors may spend ${now.visitors}% of its model and ` +
-              'voice budget each month'),
+          (welcoming
+            ? ` — its apps' visitors may spend ` +
+              `${now.visitors ?? VISITORS}% of its model and voice budget ` +
+              `each month, and one visitor ` +
+              `${now.visitorCalls ?? VISITOR_CALLS} model calls a day`
+            : ''),
         space: now,
       }
     },

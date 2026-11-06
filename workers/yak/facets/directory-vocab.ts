@@ -428,13 +428,14 @@ export let directoryDoc: VocabDoc = {
       properties: { dollars: owned(num) },
     },
     // The percent of a space's month budget for models and voice that its
-    // apps' visitors may spend together (meter.ts `visiting`), where its
-    // owner set one with space_set; none is meter.ts `VISITORS`. The owner's
-    // to write, so it is not stamped.
+    // apps' visitors may spend together (meter.ts `visiting`), and the model
+    // calls one visitor may ask for in a day (meter.ts `visitorCalls`), where
+    // its owner set them with space_set; none is meter.ts `VISITORS` and
+    // `VISITOR_CALLS`. The owner's to write, so it is not stamped.
     visitor_share: {
       component: true,
       type: 'object',
-      properties: { percent: num },
+      properties: { percent: num, calls: num },
     },
     // The space a person's starter went to (directory.ts `mint`): worn from
     // their first space on, and kept once that space is gone, so the starter

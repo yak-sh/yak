@@ -14,6 +14,18 @@ export let docs: VocabDoc[] = [{
         visitor: { type: 'boolean' },
       },
     },
+    // The model calls one visitor has asked a space's apps for on `day`
+    // (model-spend.ts `reserved`), against meter.ts `visitorCalls`.
+    visitor_calls: {
+      component: true,
+      wire: false,
+      type: 'object',
+      properties: {
+        space: { type: 'string', ref: 'space', death: 'cascade' },
+        day: { type: 'string' },
+        calls: { type: 'number' },
+      },
+    },
     account_usage: {
       component: true,
       wire: false,

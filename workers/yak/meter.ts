@@ -298,6 +298,23 @@ export let budget = (space: Space, now = new Date()): Budget => ({
 // (`space_set visitors`): a share of that budget, never a second one. What
 // they spend is counted on the month's meter (`visitors`) beside the source
 // counters, so a stranger can spend the share and never the owner's month.
+// One visitor may ask for a number of model calls a day as well
+// (`space_set visitor_calls`), counted in the directory as each is held
+// (model-spend.ts `reserved`), so no one of them spends the whole share.
+
+/** The model calls one visitor may ask a space's apps for in a day (UTC)
+ * where its owner has set none. */
+export let VISITOR_CALLS = 50
+
+/** The model calls one visitor may ask a space's apps for today. */
+export let visitorCalls = (space: Space) => space.visitorCalls ?? VISITOR_CALLS
+
+/** What tells a visitor who has asked for `calls` model calls today that the
+ * app answers them again tomorrow, or null while they have more. */
+export let tooManyCalls = (space: Space, calls: number) =>
+  calls < visitorCalls(space) ? null : `You have asked this app for as many ` +
+    `answers today as its owner lets one visitor, so it cannot answer you ` +
+    `now. It answers you again tomorrow`
 
 /** The percent of a space's month budget its visitors may spend where its
  * owner has set none. */
@@ -993,7 +1010,8 @@ export let metering = (
  * transcript comes to rest on (@yaks/session `LIMIT`) and the direct door
  * answers 429 with. What the provider says is the platform's to hear (the
  * account's own credit spent, a model it prices nothing for) is reported.
- * A `visitor`'s calls are held to their share of the budget as well.
+ * A `visitor`'s calls, named by who they are, are held to their share of
+ * the budget and to the calls one visitor may ask for in a day as well.
  */
 export let metered = (
   bind: Partial<Env> & { STORE?: Namespace } & Host,
@@ -1002,7 +1020,7 @@ export let metered = (
     price(name: string): Promise<Price | undefined>
     answered(provider: string, name: string, info: Listed): Promise<void>
   },
-  visitor = false,
+  visitor?: string,
 ): Native => ({
   run: async (model, input, options) => {
     let ns = bind.STORE
@@ -1037,13 +1055,14 @@ export let metered = (
 
 /** A hosted provider spends from the same space budget as every other door.
  * Costs are supplied by the adapter, never guessed from media JSON. A call
- * `visiting` says a visitor asked for is held to their share as well. */
+ * `visiting` names a visitor for is held to their share as well, and counted
+ * among their calls of the day. */
 export let accounted = (
   bind: Host & Partial<Pick<Env, 'STORE'>>,
   spaceOf: (dir: Directory) => Promise<Space | null>,
   model: Model,
   price?: (name: string) => Promise<Price | undefined>,
-  visiting?: (req: Parameters<Model>[0]) => Promise<boolean>,
+  visiting?: (req: Parameters<Model>[0]) => Promise<string | undefined>,
 ): Model =>
   Object.assign(
     async (req: Parameters<Model>[0]) => {
@@ -1064,7 +1083,7 @@ export let accounted = (
         info?.price ?? await price?.(req.model),
       )
       let call = req.call ?? mint()
-      let visitor = await visiting?.(req) ?? false
+      let visitor = await visiting?.(req)
       let hold = await reserved(
         { STORE: ns },
         space,

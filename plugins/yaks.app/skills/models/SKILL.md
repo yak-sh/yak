@@ -347,7 +347,9 @@ the link, and every turn they ask for spends the space's budget. Visitors
 together may spend 25% of the space's monthly budget; past that, the app tells
 them it answers visitors again on the 1st, while its members go on as before.
 The space's owner sets the share with `space_set` and `visitors`, a percent from
-0 to 100.
+0 to 100. One visitor may ask for 50 model calls a day (UTC), so no one stranger
+spends the whole share; past it, the app tells them it answers them again
+tomorrow. The owner sets the number with `space_set` and `visitor_calls`.
 
 Since every line after a `using` asks for a turn, a visitor to an `open` app
 writes entries only in transcripts they started; a line in a member's transcript

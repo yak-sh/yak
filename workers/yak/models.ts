@@ -43,6 +43,7 @@ import { lending } from './inference.ts'
 import { bare, connection, names, served } from './providers.ts'
 import { serving } from './config.ts'
 import { grantEid } from './app-writes.ts'
+import { visitorKey } from './rate.ts'
 
 export let guess = (sent: unknown) =>
   Math.ceil(JSON.stringify(sent ?? '').length / 4)
@@ -107,22 +108,26 @@ export let tooled = (at: Stored): Tool[] =>
 let payer = (app: string) => async (dir: Directory) =>
   (await dir.appAt(app))?.space ?? null
 
-// Whether a model call's turn is a visitor's, and so spends the visitors'
-// share of the space's budget (meter.ts `visiting`). Only an app whose
-// manifest opens its models has visitor turns: elsewhere `using` is an
-// editor's to write (app-authority.ts `FLOORS`). There, the turn is the
-// transcript's starter's, since a visitor writes lines only in transcripts
-// they started (`WITHIN`): a visitor unless it is the app itself or someone
-// whose vouched level here writes (app-writes.ts `vouching` keeps it), and
-// nobody signed in is a visitor.
+// The visitor whose turn a model call is, if it is one, who spends the
+// visitors' share of the space's budget (meter.ts `visiting`) and their own
+// calls of the day (meter.ts `visitorCalls`). Only an app whose manifest opens
+// its models has visitor turns: elsewhere `using` is an editor's to write
+// (app-authority.ts `FLOORS`). There, the turn is the transcript's starter's,
+// since a visitor writes lines only in transcripts they started (`WITHIN`): a
+// visitor unless it is the app itself or someone whose vouched level here
+// writes (app-writes.ts `vouching` keeps it). One signed in is named by their
+// person; nobody signed in is a visitor too, named by the transcript, since
+// the store never learns their address.
 let visitorOf = (at: Stored) => async (req: { conversation?: string }) => {
-  if (at.manifest().models != 'open' || !req.conversation) return false
+  if (at.manifest().models != 'open' || !req.conversation) return undefined
   let [session] = await at.graph.get([req.conversation])
   let by = (session?.created as Comp | undefined)?.by
-  if (typeof by != 'string') return true
-  if (by == at.app) return false
+  if (typeof by != 'string') return req.conversation
+  if (by == at.app) return undefined
   let [grant] = await at.graph.get([grantEid(at.app!, by)])
-  return !writes((grant?.grant as Comp | undefined)?.access as Level)
+  return writes((grant?.grant as Comp | undefined)?.access as Level)
+    ? undefined
+    : by
 }
 
 // Where the media an app's models generate is kept: its own blobs.
@@ -503,7 +508,7 @@ export let modelRun: Answer = async (
           read: (query) => graph.query(query, { trusted: true }),
           apply: graph.apply,
         }),
-        !writes(who.role),
+        writes(who.role) ? undefined : visitorKey(who, req),
       ).run(
         asked.model,
         asked.input,

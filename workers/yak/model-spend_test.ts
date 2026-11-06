@@ -41,6 +41,10 @@ let rollover = await fixture()
 let free = await fixture(0.20023140)
 let visited = await fixture()
 let welcoming = await fixture(0, { visitor_share: { percent: 50 } })
+let counted = await fixture(0, {
+  budget: { dollars: 100 },
+  visitor_share: { percent: 100, calls: 2 },
+})
 let price = { input: 0.15, output: 0.5 }
 
 test('the pilot last answered call fits the remaining space budget', async () => {
@@ -148,7 +152,9 @@ test('a zero-dollar call cannot worsen an older over-budget reading', async () =
 // another: past it a visitor is told plainly, and a member is not held to it.
 test("visitors spend only their share of the space's budget", async () => {
   let spend = (space = visited.space, visitor = true, dollars = 0.03) =>
-    reserved(p.env, space, () => ({ dollars }), mint(), { visitor })
+    reserved(p.env, space, () => ({ dollars }), mint(), {
+      visitor: visitor ? mint() : undefined,
+    })
   let first = await spend()
   await first.settle(0.01)
   await (await spend()).settle(0.03)
@@ -161,4 +167,24 @@ test("visitors spend only their share of the space's budget", async () => {
   assertAlmostEquals(fresh.meter!.visitors!, 0.04)
   await (await spend(welcoming.space, true, 0.09)).settle(0.09)
   await assertRejects(() => spend(welcoming.space, true, 0.02), ModelError)
+})
+
+// T-144939: one visitor asks for as many model calls a day as the owner lets
+// them, so no one stranger spends the visitors' whole share; others, and
+// members, go on, and tomorrow they are answered again.
+test('one visitor asks for only so many model calls a day', async () => {
+  let today = new Date('2026-11-06T12:00:00Z')
+  let spend = (visitor?: string, now = today, what?: 'realtime') =>
+    reserved(p.env, counted.space, () => ({ dollars: 0.01 }), mint(), {
+      visitor,
+      now,
+      what,
+    })
+  await Promise.all([spend('ada'), spend('ada')])
+  let no = await assertRejects(() => spend('ada'), ModelError)
+  assertStringIncludes(no.message, 'answers you again tomorrow')
+  await spend('bo')
+  await spend()
+  await spend('ada', today, 'realtime')
+  await spend('ada', new Date('2026-11-07T00:00:00Z'))
 })

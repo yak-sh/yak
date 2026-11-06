@@ -752,11 +752,13 @@ let unfenced = (bundles: Bundle[], words = UNFENCED): boolean =>
 // (meter-graph.ts `spend`), so no refusal to spend reads a copied balance. It
 // commits the `meter` and `trend` that rule writes, and the receipt's own
 // `created` and `updated`; a copy that has not heard of them shows a slightly
-// older balance, never a spend past the budget.
+// older balance, never a spend past the budget. A visitor's hold counts their
+// call of the day too (`visitor_calls`), guarded on its own reading.
 let HOLD = -3
 let HOLDING = new Set([
   ...UNFENCED,
   'model_reservation',
+  'visitor_calls',
   'spend',
   'meter',
   'trend',
@@ -769,6 +771,7 @@ let hold = (bundles: Bundle[]): boolean =>
     !deleted(b) &&
     comps(b).every(([name]) =>
       UNFENCED.has(name) || name == 'model_reservation' ||
+      name == 'visitor_calls' ||
       name == 'spend' && (b.spend as { held?: unknown }).held === true
     )
   )

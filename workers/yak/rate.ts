@@ -31,6 +31,11 @@ export type Limiter = {
 /** The address a request came from, or '' when it came from inside. */
 export let source = (req: Request) => req.headers.get('cf-connecting-ip') ?? ''
 
+/** Who a visitor at a door is: their person, else the address they came
+ * from, else (a request from inside) one stranger. */
+export let visitorKey = (who: { person: string | null }, req: Request) =>
+  who.person ?? (source(req) || 'stranger')
+
 /** May this source go on through this door? */
 export let within = async (lim: Limiter | undefined, key: string) => {
   if (!lim || !key) return true

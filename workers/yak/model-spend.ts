@@ -4,7 +4,7 @@ import { type Bundle, type Comp, mint, token } from '@yaks/graph'
 import { Stale } from '@yaks/graph/errors'
 import { derivedEid } from '@yaks/graph/identity'
 import { ModelError } from '@yaks/model'
-import { left, monthOf, unaffordable } from './meter.ts'
+import { left, monthOf, tooManyCalls, unaffordable } from './meter.ts'
 import { type Row, type Space, spaceOf, stamp } from './directory.ts'
 import type { Namespace } from './door.ts'
 import { meta } from './meta.ts'
@@ -19,8 +19,10 @@ export type Hold = {
   /** a visitor's call, held against their share of the budget as well */
   visitor?: boolean
 }
-/** Who a hold is spent for: what it buys, and whether a visitor asked. */
-export type Paying = { what?: Kind; visitor?: boolean; now?: Date }
+/** Who a hold is spent for: what it buys, and the visitor who asked, named by
+ * who they are (their person, else their address or transcript); none is a
+ * member's. */
+export type Paying = { what?: Kind; visitor?: string; now?: Date }
 
 export let receiptEid = (call: string) =>
   derivedEid('generated-media-spend|' + call)
@@ -31,6 +33,28 @@ let guard = (row: Bundle | undefined, comp: string, props: string[]) => ({
     props.map((p) => [p, token((row?.[comp] as Comp)?.[p] ?? null)]),
   ),
 })
+// The row counting one visitor's model calls in a space by the day.
+let tallyEid = (space: string, visitor: string) =>
+  derivedEid('visitor-calls|' + space + '|' + visitor)
+let dayOf = (now: Date) => now.toISOString().slice(0, 10)
+// The calls a visitor has asked for today, and the write that counts one more,
+// guarded on that reading so two at once never count as one.
+let tallied = async (env: Env, space: string, visitor: string, now: Date) => {
+  let eid = tallyEid(space, visitor)
+  let row = await read(env, eid)
+  let had = row?.visitor_calls as Comp | undefined
+  let day = dayOf(now)
+  let calls = had?.day == day ? Number(had.calls ?? 0) : 0
+  return {
+    eid,
+    calls,
+    more: {
+      entity: { eid },
+      $was: guard(row, 'visitor_calls', ['day', 'calls']),
+      visitor_calls: { space, day, calls: calls + 1 },
+    },
+  }
+}
 let held = (row: Bundle | undefined) =>
   row?.model_reservation as Hold | undefined
 
@@ -103,14 +127,16 @@ export let settled = async (
  * fit what is left (meter-graph.ts `spend`), so holds made at once neither
  * spend past the budget nor wait on one another. Every model consumer and
  * voice lease shares the same remaining dollars; a visitor's is held to
- * what is left of their share too (meter.ts `left`). Only a refusal reads
- * the space again, to quote on what is left and ask once more. */
+ * what is left of their share too (meter.ts `left`), and a visitor's model
+ * call is counted against the calls one visitor may ask for in a day
+ * (meter.ts `visitorCalls`). Only a refusal reads the space again, to quote
+ * on what is left and ask once more. */
 export let reserved = async <T extends { dollars: number }>(
   env: Env,
   space: Space,
   quote: (remaining: number) => T | null,
   call = mint(),
-  { what = 'models', visitor = false, now = new Date() }: Paying = {},
+  { what = 'models', visitor, now = new Date() }: Paying = {},
 ): Promise<
   { value: T; settle(dollars: number, reported?: boolean): Promise<boolean> }
 > => {
@@ -118,14 +144,19 @@ export let reserved = async <T extends { dollars: number }>(
   let month = monthOf(now)
   let reading = space
   for (let attempt = 0;; attempt++) {
-    let value = quote(left(reading, now, visitor))
+    let tally = visitor && what == 'models'
+      ? await tallied(env, space.eid, visitor, now)
+      : null
+    let many = tally && tooManyCalls(reading, tally.calls)
+    if (many) throw new ModelError('limit', many)
+    let value = quote(left(reading, now, !!visitor))
     let fits = !!value && Number.isFinite(value.dollars) && value.dollars >= 0
     let no = unaffordable(
       reading,
       what,
       fits ? value!.dollars : Infinity,
       now,
-      visitor,
+      !!visitor,
     )
     if (no) {
       // The caller's reading may be older than a settlement that freed
@@ -138,28 +169,32 @@ export let reserved = async <T extends { dollars: number }>(
     }
     try {
       await stamp(env, {
-        entities: [{
-          entity: { eid },
-          $was: {
-            ...guard(undefined, 'model_reservation', ['dollars']),
-            ...guard(undefined, 'cost', ['dollars']),
+        entities: [
+          {
+            entity: { eid },
+            $was: {
+              ...guard(undefined, 'model_reservation', ['dollars']),
+              ...guard(undefined, 'cost', ['dollars']),
+            },
+            model_reservation: {
+              space: space.eid,
+              month,
+              dollars: value!.dollars,
+              what,
+              ...visitor ? { visitor: true } : {},
+            },
           },
-          model_reservation: {
-            space: space.eid,
-            month,
-            dollars: value!.dollars,
-            what,
-            ...visitor ? { visitor } : {},
+          ...tally ? [tally.more] : [],
+          {
+            entity: { eid: space.eid },
+            spend: {
+              month,
+              [what]: value!.dollars,
+              ...visitor ? { visitors: value!.dollars } : {},
+              held: true,
+            },
           },
-        }, {
-          entity: { eid: space.eid },
-          spend: {
-            month,
-            [what]: value!.dollars,
-            ...visitor ? { visitors: value!.dollars } : {},
-            held: true,
-          },
-        }],
+        ],
       })
       return {
         value: value!,
@@ -172,6 +207,8 @@ export let reserved = async <T extends { dollars: number }>(
           'This model call already holds its budget',
         )
       }
+      // The visitor asked for another call meanwhile: count again.
+      if (error instanceof Stale && error.eid == tally?.eid) continue
       if (!overBudget(error)) throw error
       // Others spent meanwhile: quote again on what is left, a few times.
       if (attempt >= HOLDS) {
