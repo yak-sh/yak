@@ -8,7 +8,9 @@
 // browser chose for the rest frame, and shown through its own object URL each
 // time so it starts from its first frame. A loop that cannot be fetched
 // rejects, which the page's reporter files (report.js), and he goes on
-// waiting.
+// waiting. A browser may refuse to decode ahead a loop that loads fine
+// (Safari's "Loading error." on an animated picture), so a refusal only
+// counts once the loop itself fails to load.
 {
   let still = matchMedia('(prefers-reduced-motion: reduce)')
   // `names` in a random order that does not begin with `last`
@@ -21,6 +23,17 @@
     if (a[0] == last) a.push(a.shift())
     return a
   }
+  // `img` decoded, or at least loaded; rejects only when it cannot load
+  let ready = (img, name) =>
+    img.decode().catch(() =>
+      new Promise((ok, no) => {
+        let failed = () =>
+          no(new Error(`The waiting yak's ${name} loop did not load`))
+        if (img.complete) return img.naturalWidth ? ok() : failed()
+        img.addEventListener('load', ok, { once: true })
+        img.addEventListener('error', failed, { once: true })
+      })
+    )
   for (let img of document.querySelectorAll('img[data-idle]')) {
     let loops = new Map(img.dataset.idle.split(' ').map((l) => l.split(':')))
     let rest = {
@@ -78,7 +91,7 @@
         url = URL.createObjectURL(await fetched(name))
         let shown = new Image()
         shown.src = url
-        await shown.decode()
+        await ready(shown, name)
       } catch (e) {
         blobs.delete(name)
         playing = false

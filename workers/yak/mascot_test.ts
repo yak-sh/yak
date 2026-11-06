@@ -101,7 +101,8 @@ test('the waiting yak is drawn at the size it shows, at every density', async ()
 })
 
 // public/idle.js run over the waiting yak, its timers stepped by hand.
-let waiting = (still = false) => {
+// `decoding` is how each loop's picture answers decode()
+let waiting = (still = false, decoding = () => Promise.resolve()) => {
   let { document, Event, CustomEvent } = parseHTML(
     `<main>${idle('Talk_Yak')}</main>`,
   )
@@ -131,7 +132,9 @@ let waiting = (still = false) => {
       revokeObjectURL: () => {},
     },
     class {
-      decode = () => Promise.resolve()
+      decode = decoding
+      complete = true
+      naturalWidth = 128
     },
     (fn: () => void, ms: number) => (timers.set(++ids, [fn, ms]), ids),
     (id: number) => timers.delete(id),
@@ -180,6 +183,13 @@ test('asked for a loop, he plays it at once, then waits again', async () => {
   assertEquals(yak.shown(), yak.rest)
   let rested = await yak.step()
   assert(rested >= 5000 && rested <= 9000, `${rested}`)
+})
+
+test('a loop the browser will not decode ahead still plays once it loads', async () => {
+  let yak = waiting(false, () => Promise.reject(new Error('Loading error.')))
+  yak.ask('lick')
+  await new Promise((r) => setTimeout(r, 0))
+  assertEquals(yak.shown(), ['blob:/mascot/idle-lick-128.webp', null])
 })
 
 test('with less motion asked for, he stays at rest', async () => {
