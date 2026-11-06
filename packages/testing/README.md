@@ -282,6 +282,14 @@ remembered as passed, with its proof in the pass record (`forget` from
 `@yaks/testing/deps` takes one back), and how many tests it skipped and files it
 left out as unchanged.
 
+Process CPU measures work during the case's interval, including runtime work
+queued earlier. Concurrent V8 compilation can be queued during a module's load
+and run during later cases; their `cpu` includes that work even when their
+bodies use less CPU. A sample above the budget therefore needs attribution
+before changing the case. Compare thread CPU clocks with native compilation and
+GC traces around the unchanged runner boundaries. Keep the reported process CPU
+whole: thread readings are diagnostics, and tracing itself perturbs timings.
+
 A file whose tests all passed is skipped while its dependencies are unchanged.
 Its **key** holds what it depends on before it runs: its module dependencies
 resolved by `deno info`, files named with a literal
