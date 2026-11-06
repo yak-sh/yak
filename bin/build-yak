@@ -51,7 +51,7 @@ esac
 
 # Verbose: a build's log is read whole.
 echo "--- deno task check"
-deno task check --verbose
+deno task check --all --verbose
 
 echo "--- deno task test --all --tag=deno workers"
 deno task test --all --tag=deno --verbose workers

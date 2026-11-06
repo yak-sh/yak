@@ -4,13 +4,13 @@
 // checks what the branch and working changes reach: each changed module, the
 // rest of its package that imports one, and each module importing one
 // (`types`), as `deno task test` does on every run with no paths. The
-// consumers past those are main's CI's: `deno task check` runs `--all`, every
-// module, after the push. Raycast is a Node/React host
+// consumers past those are main's CI's: `deno task check --all` runs `--all`,
+// every module, after the push. Raycast is a Node/React host
 // with its own tsconfig, checked by check:raycast, so it is not among DIRS.
-// The full CI run also checks the release's public types through Deno's
-// publisher: package-local compiler options and the public-type transform
-// cannot be checked by the source program alone. Selected local runs keep
-// using the source program; publication checking runs after the push.
+// The release's public types as Deno's publisher reads them are checked where
+// a release is published (.github/workflows/publish.yml): Deno's publisher
+// type-checks every package at once with its own compiler, about a minute,
+// and `deno task check:publish` checks the rest of what it reads.
 //
 // Two platforms, two programs, checked at once. Deno's holds the modules with
 // Deno's globals. The Workers program holds each `conform.ts` a `workers.json`
@@ -743,15 +743,5 @@ if (import.meta.main) {
       spawn,
     )
     : await types(await changes())
-  if (all) {
-    let published = await spawn([
-      'run',
-      '-A',
-      'bin/publish.ts',
-      '--dry-run',
-      '--allow-dirty',
-    ])
-    ok = ok && published
-  }
   if (!ok) Deno.exit(1)
 }

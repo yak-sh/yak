@@ -1,4 +1,4 @@
-// `deno task check [--verbose]`: the checks `check:run` depends on in
+// `deno task check [--all] [--verbose]`: the checks `check:run` depends on in
 // deno.json (fmt, lint, bytes, types, …), run at once. Each says one line as
 // it ends, `ok check:fmt (1.2s)`, and one that failed says what it printed
 // after that line, cut short (`cut`): an agent reads a run on every later
@@ -7,10 +7,22 @@
 // verdict even when a failure that ended early scrolled away. `--verbose` says
 // every check's output as it comes, each line led by its task's name, and
 // still runs every check to its end.
+//
+// Types are checked as `deno task test` checks them: what the branch and
+// working changes reach (`check:types`). `--all` checks every module
+// (`check:types:all`), as main's CI does after the push: a change to a
+// package's exports has the compiler check most of the repository again,
+// close to a minute on the box.
 import config from '../deno.json' with { type: 'json' }
 
 /** The checks, by their task names. */
 export let CHECKS: string[] = config.tasks['check:run'].dependencies
+
+/// checks(['check:fmt', 'check:types'], false) -> ['check:fmt', 'check:types']
+/// checks(['check:fmt', 'check:types'], true) -> ['check:fmt', 'check:types:all']
+/** The checks a run runs: with `all`, every module's types. */
+export let checks = (names: string[], all: boolean) =>
+  names.map((c) => all && c == 'check:types' ? 'check:types:all' : c)
 
 /// cut('Check file:///a.ts\nerror: no\nfound 1', 'check:types') -> 'error: no\nfound 1'
 /// cut('1\n2\n3\n4\n5', 'check:lint', 1, 2) -> '1\n… 2 more lines; `deno task check:lint` says them all\n4\n5'
@@ -97,9 +109,10 @@ let check = async (task: string, verbose = false) => {
 
 if (import.meta.main) {
   let verbose = Deno.args.includes('--verbose')
+  let run = checks(CHECKS, Deno.args.includes('--all'))
   let start = performance.now()
-  let passed = await Promise.all(CHECKS.map((c) => check(c, verbose)))
-  let failed = CHECKS.filter((_, i) => !passed[i])
-  console.log(closing(failed, CHECKS.length, performance.now() - start))
+  let passed = await Promise.all(run.map((c) => check(c, verbose)))
+  let failed = run.filter((_, i) => !passed[i])
+  console.log(closing(failed, run.length, performance.now() - start))
   Deno.exit(failed.length ? 1 : 0)
 }

@@ -71,7 +71,7 @@
         "check:fmt",
         "check:lint",
         "check:bytes",
-        "check:types:all",
+        "check:types",
         "check:raycast",
         "check:browser",
         "check:content",

@@ -181,7 +181,9 @@ if (import.meta.main) {
     Deno.args[0],
   )
   // A separate config keeps platform globals independent, beside package.json
-  // so its workspace and npm dependencies still resolve normally.
+  // so its workspace and npm dependencies still resolve normally. Deno checks
+  // it with TypeScript's native compiler (tsgo), which checks the program in
+  // a third of the time its own compiler takes.
   let scratch = await Deno.makeTempFile({
     dir: new URL('../', import.meta.url).pathname,
     prefix: '.platform-',
@@ -191,7 +193,14 @@ if (import.meta.main) {
     let path = scratch
     await Deno.writeTextFile(path, JSON.stringify(config))
     let status = await new Deno.Command('deno', {
-      args: ['check', '--no-lock', '--config', path, ...entries],
+      args: [
+        'check',
+        '--unstable-tsgo',
+        '--no-lock',
+        '--config',
+        path,
+        ...entries,
+      ],
       stdin: 'inherit',
       stdout: 'inherit',
       stderr: 'inherit',

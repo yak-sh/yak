@@ -75,7 +75,7 @@ jobs:
       - name: deno task check
         env:
           SUITE_STEP: deno task check
-        run: deno task check --verbose
+        run: deno task check --all --verbose
 
       # In-process logic and UI tests; timing is reported beside the budget.
       - name: tests
