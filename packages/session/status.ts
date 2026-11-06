@@ -1259,18 +1259,32 @@ export let sessionStatus = {
         })),
         lit('empty'),
       )
+    // A process of its own runs it while its row wears a `process` with no
+    // `exit` (./state.ts `Marks`): what the entries leave owing is that
+    // process's to answer, never the runner's.
+    let wearing = (name: string) =>
+      exists(select({
+        cols: [lit(1)],
+        from: table(name, 'm'),
+        where: eq(col('entity', 'm'), owner),
+      }))
+    let process = declared('process') && declared('exit')
+      ? and(wearing('process'), not(wearing('exit')))
+      : lit(false)
     // The mark ends only what its entries leave unfinished. The limit keeps the
     // status one column here, or flattening would work it out once per mention.
     let whole = sub(select({
       cols: [
-        iff(
-          and(
-            fn('coalesce', col('ended', 'r'), lit(false)),
-            among(col('v', 'r'), UNFINISHED.map(lit)),
-          ),
-          lit('stopped'),
-          col('v', 'r'),
-        ),
+        when([
+          [
+            and(
+              fn('coalesce', col('ended', 'r'), lit(false)),
+              among(col('v', 'r'), UNFINISHED.map(lit)),
+            ),
+            lit('stopped'),
+          ],
+          [and(process, eq(col('v', 'r'), lit('pending'))), lit('running')],
+        ], col('v', 'r')),
       ],
       from: from(
         select({

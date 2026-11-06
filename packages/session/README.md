@@ -156,6 +156,12 @@ completed ask, three consecutive errors, or one error coded `limit` (`LIMIT`, a
 request refused at a ceiling, which asking again would meet too) means `failed`.
 No entries means `empty`. There is no separate `input` component.
 
+Besides `session.ended`, one mark on the session's row bears on it: a session a
+process of its own runs (@yaks/process `process` with no `exit` yet, as a
+spawned CLI run wears) reads `running` where its entries say `pending`, since
+that process owes the answer, not the runner. `marksOf(row)` reads both for
+`statusOf(entries, marks)`.
+
 A request's `cost{dollars, reported}` (@yaks/model) is written beside its
 `usage`: the provider's own dollars where it reports them, and otherwise, in the
 same transaction, the usage weighed at the `price` on the row of the model that

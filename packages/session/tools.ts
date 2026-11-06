@@ -59,7 +59,7 @@ import type { Vocab } from '@yaks/vocab'
 import { CLAIM, SESSION } from './comp.ts'
 import { sessionFor, spawning } from './who.ts'
 import { ENTRY } from './native.ts'
-import { ordered, statusOf } from './state.ts'
+import { marksOf, ordered, statusOf } from './state.ts'
 import { promptContext, promptHook } from './prompt.ts'
 import type { Options as Reading } from './service.ts'
 import { listen } from './listen.ts'
@@ -401,8 +401,9 @@ export let runs = (
     )
     let over = new Map<string, string>()
     for (let eid of held.keys()) {
-      let mark = comp(held.get(eid), SESSION).ended == true
-      let state = statusOf(await transcript(graph, eid), mark)
+      let marks = marksOf(held.get(eid))
+      let mark = marks.ended
+      let state = statusOf(await transcript(graph, eid), marks)
       if (ENDED.includes(state)) over.set(eid, state)
       else if (mark) over.set(eid, 'ended')
     }
@@ -458,7 +459,7 @@ export let runs = (
     }
     let found = sessions.flatMap((s): Finding[] => {
       let entries = lines.get(s.entity.eid) ?? []
-      let state = statusOf(entries, comp(s, SESSION).ended == true)
+      let state = statusOf(entries, marksOf(s))
       if (state != 'pending' && state != 'running') return []
       let newest = ordered(entries).at(-1)
       let at = newest ? writtenAt(newest) : NaN

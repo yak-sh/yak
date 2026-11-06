@@ -342,10 +342,12 @@ let readied = async (
   deps: Deps,
 ): Promise<{ read: Reading; status: TranscriptStatus }> => {
   let read = await reading(g, session, deps)
-  if (await cancelled(g, session, statusOf(read.entries, read.ended))) {
+  if (
+    await cancelled(g, session, statusOf(read.entries, { ended: read.ended }))
+  ) {
     read = await reading(g, session, deps)
   }
-  return { read, status: statusOf(read.entries, read.ended) }
+  return { read, status: statusOf(read.entries, { ended: read.ended }) }
 }
 
 // The steps a held transcript takes: until one does nothing, or it ends.

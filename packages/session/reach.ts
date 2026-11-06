@@ -55,6 +55,7 @@ import { ASK, CALL, CONTENT, ENTRY, OUTPUT, RESULT, USING } from './native.ts'
 import {
   attemptState,
   kindOf,
+  marksOf,
   ordered,
   RETRIES,
   sendingBefore,
@@ -483,18 +484,24 @@ const STATUS = [
 /** What a transcript is doing, read off the entries a status looks at. The
  * adapter's derived `session.status` is this rule too, but it computes it over
  * every entry each time it is asked, so the cost of asking grows with the
- * transcript; this reads the newest part. A stop the caller observed from
- * outside (`session.ended`) is the only thing besides entries that ends one. */
+ * transcript; this reads the newest part. Besides entries, only the marks its
+ * row wears ({@link Marks}) bear on it: a stop observed from outside
+ * (`session.ended`), and a process of its own still running it. */
 export let entryStatus = async (
   g: Graph,
   session: Eid,
 ): Promise<TranscriptStatus> => {
-  let [row] = await g.rows(`.entity.eid=${session}&.fields=session.ended`)
+  // The session component itself is never read whole: it wears the status.
+  let run = ['process', 'exit'].filter((name) => g.vocab.comp(name))
+  let [[row], [ran]] = await Promise.all([
+    g.rows(`.entity.eid=${session}&.fields=session.ended`),
+    run.length ? g.get([session], run) : [],
+  ])
   return statusOf(
     await reach(g, session, {
       comps: STATUS.filter((name) => g.vocab.comp(name)),
     }),
-    row?.['session.ended'] === true,
+    { ...marksOf(ran), ended: row?.['session.ended'] === true },
   )
 }
 

@@ -203,8 +203,9 @@ let codexUsage = (raw: unknown): Comps => {
 
 // The API request a reply answers. Claude Code writes each block of a reply on
 // a line of its own, every one naming the request and its final usage; the
-// importer keeps the first. It follows the line's blocks, so they keep the
-// places an import from before requests were read gave them.
+// importer keeps the first, and enters it before the blocks it returned
+// (./tail.ts `imported`). It follows them here, so they keep the places, and
+// the names, an import from before requests were read gave them.
 let requested = (e: Event): Comps[] => {
   let m = obj(e.message)
   let model = str(m.model)

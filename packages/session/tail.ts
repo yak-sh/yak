@@ -192,7 +192,16 @@ export let imported = (
     let was = out.get(b.entity.eid)
     out.set(b.entity.eid, was ? merge(was, b) : b)
   }
-  said.entries.forEach((c, i) => {
+  // A request comes before what it returned, wherever its reader put it, so
+  // the reply ending a turn is its newest entry. Each entry keeps the name
+  // its place in the line gives it.
+  let asked = (c: Comps) => c.ask?.id != null
+  let order = said.entries.map((c, i) => [c, i] as const)
+  order = [
+    ...order.filter(([c]) => asked(c)),
+    ...order.filter(([c]) => !asked(c)),
+  ]
+  order.forEach(([c, i]) => {
     if (o.prose && !retained(c)) return
     let { call, result, execution, output, using, ask, ...rest } = c
     let row = (name: string, value: unknown) => {

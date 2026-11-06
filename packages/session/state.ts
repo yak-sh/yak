@@ -192,10 +192,28 @@ export let live =
  * a transcript that settled, failed or never began keeps reading that way. */
 export let UNFINISHED = ['pending', 'running', 'queued']
 
-/** The status of a transcript, from its entries in any order. */
-export let statusOf = (entries: Bundle[], ended = false): TranscriptStatus => {
+/** What a session's own row says beside its entries: `ended`, its
+ * `session.ended` mark, and `process`, a process of its own running it (a
+ * @yaks/process `process` with no `exit` yet, as a spawned CLI run wears). */
+export type Marks = { ended?: boolean; process?: boolean }
+
+/** The {@link Marks} a session row wears. */
+export let marksOf = (row: Bundle | undefined): Marks => ({
+  ended: (row?.session as Comp | undefined)?.ended == true,
+  process: !!row?.process && row.exit == null,
+})
+
+/** The status of a transcript, from its entries in any order and the marks
+ * its row wears. A process of its own owes whatever the entries leave owing,
+ * so it reads `running` where they say `pending`, never the runner's to
+ * answer; once it exits, its ending (@yaks/spawn) is an entry like any. */
+export let statusOf = (
+  entries: Bundle[],
+  { ended = false, process = false }: Marks = {},
+): TranscriptStatus => {
   let status = entriesSay(entries)
-  return ended && UNFINISHED.includes(status) ? 'stopped' : status
+  if (ended && UNFINISHED.includes(status)) return 'stopped'
+  return process && status == 'pending' ? 'running' : status
 }
 
 let entriesSay = (entries: Bundle[]): TranscriptStatus => {
@@ -284,7 +302,7 @@ export let statusComputed: Computed = {
       among.list.filter((b) =>
         (b.entry as Comp | undefined)?.session == s.entity.eid
       ),
-      (s.session as Comp | undefined)?.ended == true,
+      marksOf(s),
     ),
 }
 

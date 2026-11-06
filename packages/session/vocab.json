@@ -531,9 +531,11 @@
             "session.ended",
             "dispatch",
             "admitted",
-            "waiting"
+            "waiting",
+            "process",
+            "exit"
           ],
-          "description": "what the newest entry implies: pending is waiting on the model, running is waiting on an answer, settled has nothing to do"
+          "description": "what the newest entry implies: pending is waiting on the model, running is waiting on an answer, settled has nothing to do. A session a process of its own runs (`process` with no `exit`) reads running where its entries say pending"
         },
         "cost": {
           "type": "number",

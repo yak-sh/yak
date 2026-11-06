@@ -649,7 +649,7 @@ export let react = async (
   let { entries, bodies, ended } = stands
     ? read!
     : await reading(g, session, deps)
-  let status = statusOf(entries, ended)
+  let status = statusOf(entries, { ended })
   let nothing: Step = { did: 'nothing', status, added: [] }
   // What the request this step sends carries (./parts.ts): the fixed part
   // (tools, instructions, the skills it lists) and the conversation, whole

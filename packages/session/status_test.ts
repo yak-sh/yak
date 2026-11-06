@@ -30,6 +30,7 @@ import { fileDoc } from '@yaks/file/vocab'
 import { fileOf } from '@yaks/file'
 import { toolsDoc } from '@yaks/tools/vocab'
 import { toolEid } from '@yaks/tools'
+import { processDoc } from '@yaks/process/vocab'
 import { sessionDoc } from './comp.ts'
 import { subagent } from './readers.ts'
 import { imported } from './tail.ts'
@@ -45,7 +46,7 @@ import {
 } from './status.ts'
 
 let vocab = loadVocab(
-  [sessionDoc, toolsDoc, modelDoc, fileDoc, kernelDoc, effectDoc],
+  [sessionDoc, toolsDoc, modelDoc, fileDoc, kernelDoc, effectDoc, processDoc],
   [kernelKeywords],
 )
 let M = identityEid('model', ['fake'])
@@ -1089,11 +1090,13 @@ test('passive notices do not change settled, stopped or empty status', () => {
 })
 
 test('the ended mark stops what its entries leave unfinished, and nothing else', () => {
-  assertEquals(statusOf([input(1)], true), 'stopped')
-  assertEquals(statusOf([input(1), said(2, S)], true), 'settled')
-  assertEquals(statusOf([], true), 'empty')
+  assertEquals(statusOf([input(1)], { ended: true }), 'stopped')
+  assertEquals(statusOf([input(1), said(2, S)], { ended: true }), 'settled')
+  assertEquals(statusOf([], { ended: true }), 'empty')
   assertEquals(
-    statusOf([entry(1, { exception: {}, content: { body: 'x' } })], true),
+    statusOf([entry(1, { exception: {}, content: { body: 'x' } })], {
+      ended: true,
+    }),
     'failed',
   )
 })
@@ -1109,7 +1112,7 @@ test('the SQL rule reads the ended mark as the rule over bundles does', () => {
     let g = store()
     g.apply([{ entity: { eid: S }, session: { ended: true } }])
     if (entries.length) g.apply(entries, { trusted: true })
-    assertEquals(statusOf(entries, true), status)
+    assertEquals(statusOf(entries, { ended: true }), status)
     assertEquals(((g.get([S]) as Bundle[])[0].session as Comp).status, status)
     for (let word of ['stopped', 'failed', 'settled', 'empty', 'running']) {
       let eids = (q: string) => (g.read(q) as Bundle[]).map((b) => b.entity.eid)
@@ -1124,11 +1127,55 @@ test('the SQL rule reads the ended mark as the rule over bundles does', () => {
   }
 })
 
+test('a process of its own owes what its entries leave owing, until it exits', () => {
+  let process = { process: true }
+  assertEquals(statusOf([request(1)]), 'pending')
+  assertEquals(statusOf([request(1)], process), 'running')
+  assertEquals(statusOf([request(1), said(2, S)], process), 'settled')
+  assertEquals(statusOf([request(1)], { ...process, ended: true }), 'stopped')
+  let g = store()
+  g.apply([request(1)], { trusted: true })
+  let now = () => ((g.get([S]) as Bundle[])[0].session as Comp).status
+  let found = (word: string) =>
+    (g.read(`.session.status=${word}`) as Bundle[]).map((b) => b.entity.eid)
+  assertEquals([now(), found('pending')], ['pending', [S]])
+  g.apply([{ entity: { eid: S }, process: { pid: 7 } }])
+  assertEquals([now(), found('running'), found('pending')], [
+    'running',
+    [S],
+    [],
+  ])
+  g.apply([{ entity: { eid: S }, exit: { code: 0 } }])
+  assertEquals([now(), found('pending')], ['pending', [S]])
+})
+
+test('a reply read from a harness ends its turn after the request it answers', () => {
+  let line = imported(
+    subagent({
+      type: 'assistant',
+      isSidechain: true,
+      message: {
+        id: 'r2',
+        model: 'fake',
+        content: [{ type: 'text', text: 'done' }],
+        usage: { input_tokens: 1, output_tokens: 1 },
+      },
+    }),
+    { session: S, file: child, path: 'child.jsonl', line: 5 },
+  ).filter((b) => b.entry)
+  assertEquals(line.map((b) => kindOf(b)), ['ask', 'output'])
+  let turn = line.map((b, i) => ({
+    ...b,
+    entry: { session: S, seq: 5 + i },
+  }))
+  assertEquals(statusOf([...subagentRun.slice(0, 4), ...turn]), 'settled')
+})
+
 test('a harness ending stays ended while its importer catches up, then clears on resume', () => {
   let g = store()
   g.apply([{ entity: { eid: S }, session: { ended: true } }])
   g.apply([input(1)], { trusted: true })
-  assertEquals(statusOf([input(1)], true), 'stopped')
+  assertEquals(statusOf([input(1)], { ended: true }), 'stopped')
   assertEquals((g.read('.session.status=stopped') as Bundle[]).length, 1)
   g.apply([{ entity: { eid: S }, session: { ended: null } }])
   g.apply([input(3)], { trusted: true })
