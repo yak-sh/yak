@@ -168,6 +168,22 @@ test('a memo whose sources kept their stats is reused without reading them', asy
   equal(f.runs(), 1)
 })
 
+test('a miss reads no source module whose stat kept still', async () => {
+  let f = copy(plain.f)
+  f.files.set('/source/words.json', '{"title":"two"}')
+  let read = await f.sourcesRead(() => f.get())
+  equal(f.runs(), 2)
+  equal(read.filter((p) => p.endsWith('.ts')), [])
+  f.files.set('/source/words.ts', 'import "./other.json"')
+  f.files.set('/source/other.json', '{}')
+  read = await f.sourcesRead(() => f.get())
+  equal([...new Set(read.filter((p) => p.endsWith('.ts')))], [
+    '/source/words.ts',
+  ])
+  f.files.set('/source/other.json', '{"title":"three"}')
+  equal((await f.get()).run, 4)
+})
+
 test('a touched source whose contents agree keeps the memo', async () => {
   let f = copy(plain.f)
   f.touched.set('/source/words.json', 1)

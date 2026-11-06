@@ -49,11 +49,14 @@ type Record<T> = {
    * change without moving it */
   stats: string[]
   absent?: { [path: string]: readonly [directory: string, stat: string] }
-  source: string
+  /** each file's path and contents (or absence), digested */
+  sums: string[]
+  /** each source module's dependencies, as written in it */
+  lexed: { [path: string]: string[] }
   value: T
 }
 
-let VERSION = 7
+let VERSION = 8
 let HOUR = 3_600_000
 let DAY = 24 * HOUR
 let FILES = ['deno.json', 'deno.jsonc']
@@ -291,10 +294,22 @@ export let remember = async <T>(
     }
     return proved
   }
-  let fingerprint = (files: Iterable<[string, string | null]>) =>
-    digest(Array.from(files, ([path, text]) => framed(path, text)).join(''))
-  let snapshot = (files: string[]) =>
-    fingerprint(files.map((path) => [path, read(path)]))
+  let sum = async (path: string, text = read(path)) =>
+    await digest(framed(path, text))
+  // Whether each file still holds what its digest says, reading only those
+  // whose stat is not the one it had when it was digested.
+  let agree = async (
+    files: string[],
+    now: string[],
+    was: string[],
+    sums: string[],
+  ) => {
+    for (let [i, path] of files.entries()) {
+      if (now[i] && now[i] == was[i]) continue
+      if (await sum(path) != sums[i]) return false
+    }
+    return true
+  }
   let keep = (record: Record<T>) => {
     let draft = `${file}.${crypto.randomUUID()}`
     try {
@@ -337,13 +352,28 @@ export let remember = async <T>(
       }
     } catch { /* Sweeping is optional. */ }
   }
+  // The record a miss scans from: a source whose stat has not moved since
+  // keeps its digest and its dependencies there, and is not read again.
+  let prior = new Map<string, { stat: string; sum: string; lexed?: string[] }>()
   try {
     let known: Record<T> = JSON.parse(read(file) ?? 'null')
-    if (
-      known?.version == VERSION && 'value' in known &&
+    let current = known?.version == VERSION &&
       JSON.stringify(known.roots) == JSON.stringify(identities) &&
-      Array.isArray(known.files) &&
-      Array.isArray(known.stats) && known.stats.length == known.files.length &&
+      Array.isArray(known.files) && Array.isArray(known.stats) &&
+      Array.isArray(known.sums) &&
+      known.stats.length == known.files.length &&
+      known.sums.length == known.files.length
+    if (current) {
+      for (let [i, path] of known.files.entries()) {
+        prior.set(path, {
+          stat: known.stats[i],
+          sum: known.sums[i],
+          lexed: known.lexed?.[path],
+        })
+      }
+    }
+    if (
+      current && 'value' in known &&
       (!opts.valid || await opts.valid(known.value))
     ) {
       // A witness whose directory moved proves nothing, and its leaf is
@@ -367,7 +397,7 @@ export let remember = async <T>(
       }
       // A stat moved without saying whether its contents did (a checkout, a
       // touch): contents that still agree keep the memo, under the new stats.
-      if (known.source == await snapshot(known.files)) {
+      if (await agree(known.files, stats, known.stats, known.sums)) {
         keep({
           ...known,
           stats,
@@ -400,6 +430,8 @@ export let remember = async <T>(
 
   let sources = new Map<string, string | null>()
   let stats = new Map<string, string>()
+  let sums = new Map<string, string>()
+  let lexed = new Map<string, string[]>()
   type Imports = { [key: string]: string }
   type Manifest = {
     imports?: Imports
@@ -409,13 +441,24 @@ export let remember = async <T>(
   let locks = new Map<string, { [specifier: string]: string }>()
   let scanned = new Set<string>()
   // Its stat before its contents: a write after the read moves the stat kept.
-  // A file the stat found absent is absent, and is not asked again.
-  let watch = (path: string) => {
-    if (!sources.has(path)) {
+  // A file the stat found absent is absent, and is not asked again. One whose
+  // stat is the prior record's keeps that record's digest and dependencies,
+  // and is read only where its contents are asked for.
+  let note = (path: string) => {
+    if (!stats.has(path)) {
       let at = stat(path)
       stats.set(path, at)
-      sources.set(path, at == 'absent' ? null : read(path))
+      let was = prior.get(path)
+      if (at && at == was?.stat) {
+        sums.set(path, was.sum)
+        if (was.lexed) lexed.set(path, was.lexed)
+      }
+      if (at == 'absent') sources.set(path, null)
     }
+  }
+  let watch = (path: string): string | null => {
+    note(path)
+    if (!sources.has(path)) sources.set(path, read(path))
     return sources.get(path)!
   }
   // A configuration file, with the lock and import map it names watched too.
@@ -512,12 +555,18 @@ export let remember = async <T>(
     }
     ancestry(specifier)
     let path = pathOf(specifier)
-    let text = watch(path)
-    if (text === null || !/\.[cm]?[jt]sx?$/.test(specifier)) return
+    note(path)
+    if (stats.get(path) == 'absent' || !/\.[cm]?[jt]sx?$/.test(specifier)) {
+      return
+    }
     let imports = opts.imports ??
       ((source: string, name?: string) =>
         importsOf(source, name, callbacks.get(specifier)))
-    for (let dependency of await imports(text, specifier)) {
+    let dependencies = lexed.get(path)
+    if (!dependencies) {
+      lexed.set(path, dependencies = await imports(watch(path)!, specifier))
+    }
+    for (let dependency of dependencies) {
       await visit(relative(dependency, specifier))
     }
   }
@@ -530,28 +579,31 @@ export let remember = async <T>(
     // carry their versions, are the whole proof.
     proved = true
   } catch { /* A source we cannot prove is derived normally. */ }
-  let sourceHash: string | undefined
+  let digested = false
   try {
-    if (proved) sourceHash = await fingerprint(sources)
+    for (let path of stats.keys()) {
+      if (!sums.has(path)) sums.set(path, await sum(path, watch(path)))
+    }
+    digested = proved
   } catch { /* A failed digest still leaves ordinary derivation usable. */ }
 
   // Derivation errors always reach the caller, regardless of cache failures.
   let value = await make()
-  if (sourceHash !== undefined) {
+  if (digested) {
     try {
       // A source changed while derivation ran: the next call must derive too.
-      let dependencies = [...sources.keys()]
-      if (sourceHash == await snapshot(dependencies)) {
+      let files = [...stats.keys()]
+      let was = files.map((path) => stats.get(path)!)
+      let digests = files.map((path) => sums.get(path)!)
+      if (await agree(files, files.map(stat), was, digests)) {
         keep({
           version: VERSION,
           roots: identities,
-          files: dependencies,
-          stats: dependencies.map((path) => stats.get(path)!),
-          absent: absent(
-            dependencies,
-            dependencies.map((path) => stats.get(path)!),
-          ),
-          source: sourceHash,
+          files,
+          stats: was,
+          absent: absent(files, was),
+          sums: digests,
+          lexed: Object.fromEntries(lexed),
           value,
         })
         sweep()
