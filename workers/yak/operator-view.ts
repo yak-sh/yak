@@ -15,7 +15,7 @@ import { blocks, parse } from '@yaks/markdown/structural'
 import { PART } from '@yaks/persona'
 import { type ComponentChildren as Node, Fragment, h } from 'preact'
 import { renderToString } from 'preact-render-to-string'
-import { Body, Card, Drop, Icon, Loading, Rows } from '@yaks/ui/parts'
+import { Body, Button, Card, Drop, Icon, Loading, Rows } from '@yaks/ui/parts'
 import { day, moment } from './html.ts'
 import { chatPath } from './route.ts'
 import { poseOf, Yak } from './mascot.ts'
@@ -790,34 +790,17 @@ export let listed = <W extends Listed>(items: W[], href: (w: W) => string) =>
     ),
   ))
 
-/** The Operator's conversations in its settings, newest first: the person's
- * one conversation, and the chats from before it, each opening in the chat
- * app (T-141349). */
-export let talks = (space: string, items: Worked[]) =>
+/** Where the Operator's settings send a person for its conversations: the
+ * chat app, which holds them. Settings list none (T-144779). */
+export let talks = (space: string) =>
   h(
     Card,
     null,
     h(Card.Head, null, h(Card.Title, null, 'Conversations')),
-    items.length
-      ? h(
-        'ul',
-        { class: 'Talk_List' },
-        items.map((w) =>
-          h(
-            'li',
-            null,
-            h(
-              'a',
-              {
-                class: 'Talk_Item',
-                href: chatPath(space, w.open),
-                'data-pending': w.busy ? '' : undefined,
-              },
-              h('span', { class: 'Talk_Title' }, w.title),
-              h('span', { class: 'Talk_Meta' }, meta(w)),
-            ),
-          )
-        ),
-      )
-      : h('p', { class: 'Talk_None' }, 'Your conversations appear here.'),
+    h(
+      'p',
+      null,
+      'Your conversations with the Operator are in its chat. ',
+      h(Button, { mod: 'go', href: chatPath(space) }, 'Open the chat'),
+    ),
   )

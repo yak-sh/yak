@@ -57,7 +57,6 @@ import {
   reply,
   talks,
   trouble,
-  type Worked,
 } from './operator-view.ts'
 import { DOCUMENTS } from './documents.ts'
 import { phoneAt } from './phones.ts'
@@ -595,10 +594,6 @@ let watching = (env: Env, space: Space, req: globalThis.Request, who: Who) =>
     return out
   })
 
-/** The Operator's work, newest first. */
-export let workOf = async (env: Env, space: Space, who: Who) =>
-  await operatorDoor(env, space, who, 'work', {}) as Worked[]
-
 /** One conversation, opened by its task or a request: its sessions as they
  * ran (operator-view.ts `talk`), or the request alone while no session has
  * taken it. `everyone` reads any person's, for the platform's admin, each
@@ -635,14 +630,13 @@ export let conversationOf = async (
 }
 
 // The Operator's settings, which the dashboard draws beside its side like
-// every other page (pages.ts `desk`): what it does and where, its
-// conversations, each opening in the chat app (`chatPage`), and the texts it may send.
+// every other page (pages.ts `desk`): what it does and where, a link to its
+// conversations in the chat app (`chatPage`), and the texts it may send.
 export let operatorBody = async (env: Env, space: Space, who: Who) => {
   let at = managePath('operator', space.slug)
-  let [consent, { pa, beyond }, items, phone] = await Promise.all([
+  let [consent, { pa, beyond }, phone] = await Promise.all([
     textingOf(env, space, who),
     reachOf(directoryOf(env.STORE), space, who.person ?? ''),
-    workOf(env, space, who),
     phoneAt(env, space.sender),
   ])
   let from = phone?.transport().number
@@ -673,7 +667,7 @@ export let operatorBody = async (env: Env, space: Space, who: Who) => {
         ` with what you want changed, and attach a PDF or a photo if you have one. Send it from the email address you sign in with; ${operator} answers by email.`,
       ),
     ),
-    talks(space.slug, items),
+    talks(space.slug),
     nameCard(at, operator),
     voiceCard(at, space, offered(env, space)),
     textsCard(at, consent, from),

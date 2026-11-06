@@ -508,14 +508,13 @@ test("the chat app says whose Operator it is, and opens another space's", () => 
 })
 
 let settings = parseHTML(await operatorBody(p.env, space, who)).document
-test("the settings page lists the Operator's conversations, each opening in the chat app", () => {
-  assertEquals(
-    [...settings.querySelectorAll('.Talk_Item')].map((a) => [
-      a.querySelector('.Talk_Title')?.textContent,
-      a.getAttribute('href'),
-    ]),
-    [[CONVERSATION, chatPath('clerk', task)]],
+test("the settings page lists no conversations, only one link to the Operator's chat", () => {
+  assertEquals(settings.body.textContent?.includes(CONVERSATION), false)
+  let hrefs = [...settings.querySelectorAll('a')].map((a) =>
+    a.getAttribute('href')
   )
+  assertEquals(hrefs.filter((h) => h == chatPath('clerk')).length, 1)
+  assertEquals(hrefs.includes(chatPath('clerk', task)), false)
   assertEquals(settings.querySelector('.Rows_Name'), null)
   assertEquals(settings.querySelector('[data-task]'), null)
   assertEquals(settings.querySelector('[name=say]'), null)

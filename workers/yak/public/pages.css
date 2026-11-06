@@ -1221,37 +1221,9 @@
   .Talk_None {
     margin: 0 .6rem;
   }
-  .Talk_List {
-    display: grid;
-    gap: .15rem;
-    margin: 0;
-    padding: 0;
-    list-style: none;
-  }
-  .Talk_Item {
-    display: grid;
-    gap: .1rem;
-    padding: .5rem .6rem;
-    border-radius: var(--radius);
-    color: var(--text);
-    text-decoration: none;
-    line-height: 1.3;
-  }
-  .Talk_Item:hover {
-    background: var(--surface);
-  }
-  .Talk_Title {
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-  }
-  .Talk_Meta,
   .Talk_None {
     color: var(--muted);
     font-size: var(--fine);
-  }
-  .Talk_Item[data-pending] .Talk_Meta {
-    color: var(--accent);
   }
   .Talk_Side .Talk_Foot {
     padding-top: .5rem;
