@@ -6,7 +6,7 @@
 // The other half is what is asked of the SQL API (T-34497): every count is
 // `sum(_sample_interval)` rather than `count()`, or a busy app under-reports
 // by exactly the factor that made it busy — so the queries are pinned too.
-import { clock, test } from '@yaks/testing'
+import { clock, test, until } from '@yaks/testing'
 import {
   assert,
   assertEquals,
@@ -544,6 +544,31 @@ test("one app's counts are kept at Site, so an isolate's first ask waits on none
       'analytics 400',
     )
     assertEquals(site.held.size, 1)
+  } finally {
+    api.done()
+  }
+})
+
+test('an answer Site has not kept yet is counted here as well, and kept behind it', async () => {
+  let app = crypto.randomUUID()
+  let api = sql((q) => ({
+    body: JSON.stringify({
+      data: asks(q) == 'day'
+        ? [{ app, day: new Date().toISOString().slice(0, 10), views: 2 }]
+        : [],
+    }),
+  }))
+  try {
+    let missed = Promise.withResolvers<void>()
+    let site = edge(async (req) => {
+      await missed.promise
+      return siteFetch(req, on)
+    })
+    let on = env({ SITE: site as unknown as Env['SITE'] })
+    assertEquals((await statsOf(on, app, 7))?.total, 2)
+    assertEquals(site.held.size, 0)
+    missed.resolve()
+    await until(() => site.held.size == 1)
   } finally {
     api.done()
   }

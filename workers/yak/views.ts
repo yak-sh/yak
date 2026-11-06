@@ -38,7 +38,7 @@ import { api } from './analytics.ts'
 import type { Answer } from './apps.ts'
 import { APP, inApp, type Row, SPACE as SPACE_ARG, worded } from './tool.ts'
 import { url as appUrl } from './directory.ts'
-import { caught } from './defects.ts'
+import { background, caught } from './defects.ts'
 import { elapsed } from './lib/hops.ts'
 import { failure, resent } from './workers_api.ts'
 import { isView, pointOf, type Visited } from './view-point.ts'
@@ -248,7 +248,8 @@ let timeout: After = (ms, fn) => {
 }
 
 /**
- * `ask`, and once more if it has not answered in `wait` ms: whichever answer
+ * `ask`, and once more if it has not answered in `wait` ms (`second`, where
+ * the second asking is another way to the same answer): whichever answer
  * comes first is the answer. A failure before the second asking is the
  * answer at once; one after it waits on the second.
  */
@@ -256,11 +257,12 @@ export let hedged = <T>(
   ask: () => Promise<T>,
   wait: number,
   after: After = timeout,
+  second: () => Promise<T> = ask,
 ): Promise<T> =>
   new Promise((resolve, reject) => {
     let again: Promise<T> | undefined
     let cancel = after(wait, () => {
-      again = ask()
+      again = second()
       again.then(resolve, () => {})
     })
     ask().then(resolve, (e) => again ? again.then(resolve, reject) : reject(e))
@@ -455,6 +457,14 @@ export let lastDay = (
 // for a day. An answer that old says when it was counted (`ago`). Only
 // an app's people are told it (the doors below ask first), and Site is
 // reachable only through the gateway's binding; the key is the app's eid.
+//
+// A kept answer comes back in a few ms. One Site has not kept yet is counted
+// in a colo of the cache's choosing and costs twice the SQL API's time, so
+// past HIT it is counted here as well, and Site's counting goes on behind the
+// answer to keep it for the next asker.
+
+/** Longer than Site takes to answer what it keeps. */
+export let HIT = 60
 
 /** Where Site keeps one app's answer. */
 export let COUNTED = '/stats/'
@@ -499,11 +509,10 @@ export let statsOf = (
   now = Date.now(),
 ): Promise<Stats> | null => {
   if (!statsOn(env)) return null
+  let here = () => statsFor(env, [app], days, now)!.then((all) => all.get(app)!)
   let site = env.SITE
-  if (!site) {
-    return statsFor(env, [app], days, now)!.then((all) => all.get(app)!)
-  }
-  return elapsed('analytics_wait', async () => {
+  if (!site) return here()
+  let kept = (async () => {
     let res = await site.fetch(new Request(statsAt(app, days)))
     if (!res.ok) {
       throw failure(
@@ -512,7 +521,11 @@ export let statsOf = (
       )
     }
     return await res.json() as Stats
-  })
+  })()
+  background(
+    kept.then(() => {}, (e) => caught(e, { request: 'views keep', app })),
+  )
+  return elapsed('analytics_wait', () => hedged(() => kept, HIT, timeout, here))
 }
 
 /** How long ago an answer was counted, said once it is older than FRESH. */
