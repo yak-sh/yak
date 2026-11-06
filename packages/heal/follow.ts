@@ -124,7 +124,15 @@ export let follow = (
 ) => Promise<(bug: Bundle) => Promise<void>> => {
   let decide = fixing(g, options)
   // What a decision reads off a task, never its computed components.
-  let parts = ['task', 'doc', 'filed', 'claim', 'completed', 'cancelled']
+  let parts = [
+    'task',
+    'doc',
+    'filed',
+    'claim',
+    'started',
+    'completed',
+    'cancelled',
+  ]
     .filter((name) => g.vocab.comp(name))
   // A tracker graph has a page per bug. The platform's Worker answers only
   // signed reads, so its bugs open on a tracker web's side for them, and
@@ -231,7 +239,9 @@ export let follow = (
         if (task) {
           let close = bug.archived && !task.cancelled
             ? 'cancelled'
-            : bug.resolved && !task.completed && !task.cancelled
+            : bug.resolved && !task.completed && !task.cancelled &&
+                !(moment(comp(task, 'started')?.at) >
+                  moment(comp(bug, 'resolved')?.at))
             ? 'completed'
             : undefined
           if (close) {
@@ -242,6 +252,7 @@ export let follow = (
               [close]: { at: comp(bug, source)?.at },
               ...(close == 'cancelled' ? { completed: null } : {}),
               $was: {
+                started: { at: token(comp(task, 'started')?.at) },
                 completed: { at: token(comp(task, 'completed')?.at) },
                 cancelled: { at: token(comp(task, 'cancelled')?.at) },
               },

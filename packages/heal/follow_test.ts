@@ -68,7 +68,7 @@ let vocab = loadVocab([
   pick(provenanceDoc, 'created'),
   edgeDoc,
   pick(docDoc, 'doc'),
-  pick(taskDoc, 'task', 'cancelled'),
+  pick(taskDoc, 'task', 'cancelled', 'started'),
   pick(projectDoc, 'project', 'filed'),
   pick(sessionDoc, 'session', 'entry', 'claim', 'using', 'native', 'stop'),
   pick(toolsDoc, 'content', 'output', 'exception'),
@@ -828,6 +828,35 @@ for (
     empty.close()
   })
 }
+
+let resumed = await fixture()
+await resumed.replay()
+await put(resumed.tracker, [{
+  entity: { eid: bug },
+  resolved: { at: '2026-10-02T00:00:02Z' },
+}])
+await resumed.replay()
+await put(resumed.g, [{
+  entity: { eid: taskEid(bug) },
+  completed: null,
+  started: { at: '2026-10-02T00:00:03Z' },
+}])
+test('work resumed after a resolution stays open until a later resolution', async () => {
+  await resumed.replay()
+  await resumed.replay()
+  ok(!(await resumed.g.get([taskEid(bug)]))[0].completed)
+  await put(resumed.tracker, [{
+    entity: { eid: bug },
+    resolved: { at: '2026-10-02T00:00:04Z' },
+  }])
+  await resumed.replay()
+  equal(
+    comp((await resumed.g.get([taskEid(bug)]))[0], 'completed').at,
+    '2026-10-02T00:00:04Z',
+  )
+  equal(await count(resumed.g, 'fixer'), 1)
+  resumed.close()
+})
 
 let archiveDone = await off()
 let linkedTask = identityEid('task', ['linked completed work'])
