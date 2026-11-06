@@ -369,9 +369,11 @@ let owned = (ctx: Ctx, comp: string, where?: string): Cond => {
       params: [],
     })
   }
-  // A presence spine or known outer identities already supply the owners.
-  // Probe each owner's key instead of building its entire owning set first.
-  return ctx.correlated || ctx.bounded || ctx.present
+  // A presence spine, known outer identities or a disjunction's candidates
+  // already supply the owners. Probe each owner's key instead of building its
+  // entire owning set first: a page's `!references` beside its few links read
+  // all 36,600 `references` rows to answer for three.
+  return ctx.correlated || ctx.bounded || ctx.present || ctx.candidates
     ? cond({
       sql: `exists (select 1 from ${ctx.d.table(comp)} where ${
         ctx.d.ownerKey(comp)
