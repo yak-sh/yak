@@ -7,6 +7,7 @@ import {
 // A long-lived command pins its source tree. Deno's resolver is fixed when a
 // process starts, so deferred imports must never read a checkout that can land.
 import { wind } from '@yaks/process/wind'
+import { hold } from '@yaks/git/land'
 import { registerHooks } from 'node:module'
 import { isAbsolute } from 'node:path'
 import { fileURLToPath, pathToFileURL } from 'node:url'
@@ -119,21 +120,9 @@ let live = async (cache: string, names: string[]): Promise<Set<string>> => {
   }
 }
 
-/** Capture committed sources plus the worktree's edits into a runtime slot.
- * A slot never changes while a process runs from it. The cache's lock keeps
- * other launchers out until `release`, called once the child is started and
- * names its slot. A child resolves its workspace afresh over this tree; its
- * cwd and graph config still name the caller's data. */
-export let snapshot = async (
-  root: string,
-): Promise<{ root: string; commit: string; release: () => void }> => {
-  if (runtimeRoot()) {
-    return {
-      root,
-      commit: system.env.get('YAK_RUNTIME_COMMIT')!,
-      release: () => {},
-    }
-  }
+// The commit a checkout stands at, its tracked edits as a binary patch, and
+// its untracked files' bytes.
+let capture = async (root: string) => {
   let commit = decode(await git(root, 'rev-parse', 'HEAD')).trim()
   // Status before the diff. Besides naming the untracked files, it refreshes
   // the index's record of each file's stat and writes it back when it can
@@ -160,6 +149,31 @@ export let snapshot = async (
       mode: (await disk.stat(`${root}/${name}`)).mode,
     })),
   )
+  return { commit, patch, files }
+}
+
+/** Capture committed sources plus the worktree's edits into a runtime slot.
+ * A slot never changes while a process runs from it. The cache's lock keeps
+ * other launchers out until `release`, called once the child is started and
+ * names its slot. A child resolves its workspace afresh over this tree; its
+ * cwd and graph config still name the caller's data. */
+export let snapshot = async (
+  root: string,
+): Promise<{ root: string; commit: string; release: () => void }> => {
+  if (runtimeRoot()) {
+    return {
+      root,
+      commit: system.env.get('YAK_RUNTIME_COMMIT')!,
+      release: () => {},
+    }
+  }
+  // The checkout is read whole: a landing writes it under its land lock,
+  // held exclusively, so a launch never captures half a merge, and the
+  // capture's own index write never takes the index from a landing.
+  let gitdir = decode(await git(root, 'rev-parse', '--absolute-git-dir'))
+    .trim()
+  let whole = await hold(gitdir, false)
+  let { commit, patch, files } = await capture(root).finally(whole)
   let hash = await digest(new TextEncoder().encode(JSON.stringify([
     1,
     root,

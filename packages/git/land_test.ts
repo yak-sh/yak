@@ -17,6 +17,7 @@ let fixture = (answers: Record<string, Answer> = {}) => {
       out:
         'worktree /repo\nbranch refs/heads/main\n\nworktree /work\nbranch refs/heads/work\n',
     },
+    'rev-parse --path-format=absolute --git-common-dir': { out: '/repo/.git' },
     'rev-parse HEAD': { out: 'sha' },
     'rev-parse --abbrev-ref main@{u}': { out: 'origin/main' },
     ...answers,
@@ -45,6 +46,13 @@ let fixture = (answers: Record<string, Answer> = {}) => {
         })
       },
       allow,
+      // The lock shows in the calls, where it falls among the git commands.
+      hold: (gitdir) => {
+        calls.push({ args: ['hold'], cwd: gitdir })
+        return Promise.resolve(() => {
+          calls.push({ args: ['release'], cwd: gitdir })
+        })
+      },
       write: (text) => said.push(text),
       report: (error, context) =>
         reports.push({ error: String(error), tags: context?.tags }),
@@ -70,6 +78,29 @@ test('land fast-forwards and publishes the base while preserving its worktree', 
   assert(f.commands().includes('worktree unlock /work'))
   assert(f.commands().includes('push --quiet origin main:main'))
   assert(!f.calls.some((c) => c.args.includes('remove')))
+})
+
+test('land writes the shared checkout only while it holds its lock', async () => {
+  let f = fixture()
+  await f.invoke()
+  let at = f.commands()
+  let held = at.slice(at.indexOf('hold'), at.indexOf('release') + 1)
+  assertEquals(held, [
+    'hold',
+    'update-index -q --refresh',
+    'read-tree -n -m -u HEAD work',
+    'merge --ff-only work',
+    'rev-parse HEAD',
+    'release',
+  ])
+  assertEquals(f.calls.find((c) => c.args[0] == 'hold')?.cwd, '/repo/.git')
+  assert(at.indexOf('push --quiet origin main:main') > at.indexOf('release'))
+})
+
+test('land releases the lock when the shared checkout refuses it', async () => {
+  let f = fixture({ 'read-tree -n -m -u HEAD work': { code: 1 } })
+  await assertRejects(() => f.invoke(), LandError)
+  assertEquals(f.commands().filter((c) => c == 'release').length, 1)
 })
 
 for (

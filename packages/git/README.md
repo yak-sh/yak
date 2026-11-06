@@ -448,8 +448,12 @@ base. One invocation does at most one of two things: fast-forward the branch
 into the base and push if the base has an upstream; or, if the base moved,
 rebase onto it and return without merging, printing the incorporated diff so the
 caller can rerun tests and land again. The `--ff-only` merge is the
-compare-and-swap that serializes concurrent landers. No test suite is run here,
-and this operation knows of none.
+compare-and-swap that serializes concurrent landers. Everything landing writes
+in the shared checkout happens while it holds that checkout's `land.lock` (in
+its Git directory) exclusively, since Git refuses a second writer of the index
+rather than waiting for it; `hold(gitdir, exclusive)` takes the lock, and a
+reader that needs the checkout whole, such as the CLI's runtime snapshot, holds
+it shared. No test suite is run here, and this operation knows of none.
 
 Before merging, landing runs `deno fmt` on changed regular files, using the
 checkout's formatting configuration and Deno's supported file types. Formatting

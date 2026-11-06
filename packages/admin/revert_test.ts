@@ -27,6 +27,8 @@ let recovering = (
     if (text == 'rev-parse --verify origin/main') return result('base')
     if (args[0] == 'rev-parse') {
       if (args.includes('--show-toplevel')) return result(cwd)
+      // The shared checkout's land lock is a file in this temporary root.
+      if (args.includes('--git-common-dir')) return result(root)
       if (args.includes('--verify')) return result('target')
       return result(args[1] == 'HEAD' ? 'correction' : 'base')
     }

@@ -433,7 +433,9 @@ absent; an exported facet that fails still fails the load.
 
 A **runtime snapshot** is an immutable source tree used by a long-lived CLI
 command. From a Git checkout, `yak serve` and `yak work` run in a runtime
-snapshot containing the commit, tracked edits and untracked files. Deno resolves
+snapshot containing the commit, tracked edits and untracked files, read while
+holding the checkout's land lock shared (`@yaks/git/land`), so a launch never
+captures a landing half done and never takes the index from one. Deno resolves
 the workspace against that tree, and deferred tool imports read it too. A
 landing can add an export, change a tool or remove a dependency while the
 running command keeps its own code. The next launch uses the checkout's current

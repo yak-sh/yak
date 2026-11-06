@@ -295,7 +295,13 @@ test("a push the remote refuses reaches the host's report through the land tool"
   let tools = loadTools(gitDoc, {
     ...runs(),
     land: landing(
-      (ops) => land({ ...ops, run: refusing, format: refusing }),
+      (ops) =>
+        land({
+          ...ops,
+          run: refusing,
+          format: refusing,
+          hold: () => Promise.resolve(() => {}),
+        }),
       (error) => void reported.push(String(error)),
     ),
   })

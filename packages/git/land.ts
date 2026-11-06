@@ -1,4 +1,5 @@
 import * as system from '@yaks/process/system'
+import * as io from '@yaks/file/io'
 import { command as processCommand } from '@yaks/process/command'
 // Landing a branch: the plain Git operation, and the guard that keeps a rebase
 // from quietly reverting the base. It reads nothing from a graph — the
@@ -29,6 +30,10 @@ import { command as processCommand } from '@yaks/process/command'
 //
 // The `--ff-only` merge is the compare-and-swap that serializes concurrent
 // landers: a lander whose base moved is refused, rebases, and comes back.
+// Everything land writes in the shared checkout (its index, its files, the
+// base) happens under that checkout's land lock ({@link hold}), held
+// exclusively, so two landers never take its index at once and a reader that
+// holds the lock shared (a runtime snapshot) never meets a landing half done.
 // Landing means landing in the shared checkout — the one that is actually
 // used; pushing to a remote only publishes bytes and is never what makes work
 // take effect, which is why the local fast-forward is the landing and the push
@@ -112,6 +117,23 @@ export let run: Run = (args, cwd) => execute('git', args, cwd)
 let format: Run = (files, cwd) =>
   execute(system.execPath(), ['fmt', '--permit-no-files', ...files], cwd)
 
+/** Hold the land lock of the checkout whose Git directory is `gitdir` until
+ * the returned release: exclusive for the landing that writes the checkout,
+ * shared for a reader that needs it whole. Git's own `index.lock` refuses a
+ * second writer instead of waiting for it, so whatever writes the shared
+ * checkout's index waits here first. */
+export let hold = async (
+  gitdir: string,
+  exclusive: boolean,
+): Promise<() => void> => {
+  let file = await io.open(`${gitdir}/land.lock`, {
+    create: true,
+    write: true,
+  })
+  await file.lock(exclusive)
+  return () => file.close()
+}
+
 /** Landed carries the merged commit sha and the shared checkout's path, so
  * the caller can clean up whatever the merge left behind. */
 export type Landed = { landed: string; root: string }
@@ -133,6 +155,9 @@ export type LandOps = {
   write?: (text: string, error?: boolean) => void
   /** files whose rewind is deliberate: warned about, then landed */
   allow?: string[]
+  /** wait for the shared checkout to be this landing's alone, given its Git
+   * directory; the release ends that. {@link hold}, exclusive, by default */
+  hold?: (gitdir: string) => Promise<() => void>
   /** where a failure land catches and carries on past is reported: a push
    * the remote refused. The host's telemetry (@yaks/host `report`). */
   report?: (
@@ -359,10 +384,17 @@ export let land = async (ops: LandOps = {}): Promise<Outcome> => {
   let top = await git(cwd, ['rev-parse', '--show-toplevel'], false)
   if (top.code) throw new LandError(message('land: find worktree', top))
   let tree = top.out.trim()
-  let [on, listed, status] = await Promise.all([
+  // The common Git directory is the shared checkout's own, where its lock
+  // lives.
+  let [on, listed, status, common] = await Promise.all([
     git(tree, ['symbolic-ref', '-q', '--short', 'HEAD'], false),
     git(tree, ['worktree', 'list', '--porcelain'], false),
     git(tree, ['status', '--porcelain=v1', '--untracked-files=all'], false),
+    git(
+      tree,
+      ['rev-parse', '--path-format=absolute', '--git-common-dir'],
+      false,
+    ),
   ])
   if (on.code == 1) throw new LandError('land: the worktree is detached')
   if (on.code) throw new Error(message('read branch', on))
@@ -390,6 +422,7 @@ export let land = async (ops: LandOps = {}): Promise<Outcome> => {
   // worktree is refused: what you land must be what you tested.
   let dirty = must('git status', status)
   if (dirty) throw new LandError(`land: worktree is dirty:\n${dirty}`)
+  let gitdir = must('find the shared checkout', common)
 
   // Ancestry decides which of the two things this invocation does, and it is
   // asked before the merge because the guard's refusal has to come before the
@@ -464,28 +497,42 @@ export let land = async (ops: LandOps = {}): Promise<Outcome> => {
     // The shared checkout need not be spotless: Git leaves unrelated edits
     // alone. `read-tree` runs the same two-tree/worktree safety check as the
     // fast-forward, without changing the index or files. A refusal here is the
-    // checkout's state. A merge can still lose to another landing after this
-    // check; ancestry distinguishes that contention from a Git fault. The
+    // checkout's state. Another landing can still move the base while this one
+    // waits for the lock; then the merge is refused, and ancestry distinguishes
+    // that contention from a Git fault. The
     // fast-forward refreshes the index before its check and `read-tree` does
     // not, so the refresh comes first: a file touched but not changed is not
     // in the way. Its exit code only says some file differs, which the check
     // reads for itself.
-    await git(root, ['update-index', '-q', '--refresh'], false)
-    let ready = await git(
-      root,
-      ['read-tree', '-n', '-m', '-u', 'HEAD', branch],
-      false,
-    )
-    if (ready.code) {
-      throw new LandError(
-        message('land: shared checkout blocks landing', ready),
+    // From the refresh to reading the landed commit, every git command here
+    // takes the shared checkout's index, so the checkout is this landing's
+    // alone until then.
+    let release = await (ops.hold ?? ((dir) => hold(dir, true)))(gitdir)
+    let sha: string | undefined
+    try {
+      await git(root, ['update-index', '-q', '--refresh'], false)
+      let ready = await git(
+        root,
+        ['read-tree', '-n', '-m', '-u', 'HEAD', branch],
+        false,
       )
+      if (ready.code) {
+        throw new LandError(
+          message('land: shared checkout blocks landing', ready),
+        )
+      }
+      let merged = await git(root, ['merge', '--ff-only', branch])
+      if (merged.code) {
+        if (await ancestry() != 1) {
+          throw new Error(message('git merge', merged))
+        }
+      } else {
+        sha = await need('read landed commit', root, ['rev-parse', 'HEAD'])
+      }
+    } finally {
+      release()
     }
-    let merged = await git(root, ['merge', '--ff-only', branch])
-    if (merged.code) {
-      if (await ancestry() != 1) throw new Error(message('git merge', merged))
-    } else {
-      let sha = await need('read landed commit', root, ['rev-parse', 'HEAD'])
+    if (sha) {
       // The worktree and its branch survive landing: the caller does its own
       // cleanup afterwards, and a command whose working directory was unlinked
       // under it is refused by the kernel. Unlock it instead — whoever handed the
