@@ -7,6 +7,7 @@ import { test } from '@yaks/testing'
 import { assert, assertEquals, assertStringIncludes } from '@std/assert'
 import { headings, parse } from '@yaks/markdown'
 import { front } from '@yaks/yaml'
+import { parseHTML } from 'linkedom'
 import { AGENT, answer, CONTENTS, DOCS, PATH, pathOf } from './docs.ts'
 import { claudeAdd } from './pages.ts'
 import type { Env } from './env.ts'
@@ -99,20 +100,24 @@ test('every guide page draws under its own heading', async () => {
 // The sidebar is the whole documentation, on every page of it, with the page
 // being read marked — a list that goes stale the day a page is added is the
 // thing this asserts against CONTENTS itself.
-let sidebar = (html: string) =>
-  html.split('<nav class="Page_Side')[1].split('</nav>')[0]
+// The side's links, and the one marked as the page being read: read from
+// what stands before the document, since a whole page is slow to parse.
+let sidebar = (html: string) => {
+  let side = html.slice(html.indexOf('<main'), html.indexOf('<article'))
+  let nav = parseHTML(side).document.querySelector(
+    'nav.Page_Side[aria-label="Documentation"]',
+  )
+  let hrefs = (q: string) =>
+    [...nav?.querySelectorAll(q) ?? []].map((a) => a.getAttribute('href'))
+  return { links: hrefs('a'), current: hrefs('a[aria-current="page"]') }
+}
 
 test('every page of the documentation carries the whole list beside it', async () => {
   for (let at of [PATH, ...CONTENTS.map((p) => pathOf(p.slug))]) {
     let nav = sidebar(await read(at))
-    assertEquals(
-      [...nav.matchAll(/href="([^"]+)"/g)].map((m) => m[1]),
-      [PATH, ...CONTENTS.map((p) => pathOf(p.slug))],
-      at,
-    )
+    assertEquals(nav.links, [PATH, ...CONTENTS.map((p) => pathOf(p.slug))], at)
     // Exactly one entry is the page being read, and it is this one.
-    let current = [...nav.matchAll(/href="([^"]+)" aria-current="page"/g)]
-    assertEquals(current.map((m) => m[1]), [at], at)
+    assertEquals(nav.current, [at], at)
   }
 })
 
@@ -154,10 +159,7 @@ test('the technical page is markdown drawn like the rest', async () => {
   )
   let html = await read(pathOf('technical'))
   assertStringIncludes(html, '<title>Technical Details · yaks.app</title>')
-  assertStringIncludes(
-    html,
-    `href="${pathOf('technical')}" aria-current="page"`,
-  )
+  assertEquals(sidebar(html).current, [pathOf('technical')])
   // The frame's width is asked for on the body, and the document is the
   // article inside it (T-37785).
   assertStringIncludes(html, '<body class="Docs">')

@@ -3,6 +3,7 @@
 // site_test.ts's, read from disk.
 
 import { test } from '@yaks/testing'
+import { parseHTML } from 'linkedom'
 import { assert, assertEquals, assertStringIncludes } from '@std/assert'
 import { PAGES, uriOf, WHOLE } from './guide.ts'
 import { kernel } from './probe.ts'
@@ -83,17 +84,17 @@ test('the apex answers the crawler and the model', async () => {
     // Every page of the documentation reads beside the list of them, and a
     // drawn page also beside its own sections, linked by the ids the renderer
     // put on those headings (T-37774).
-    assertStringIncludes(one, '<nav class="Page_Side SideNav Docs_Nav"')
+    let nav = (html: string) =>
+      parseHTML(html).document.querySelector('nav.Page_Side.SideNav')
+    assert(nav(one), 'the documentation beside the page')
     assertStringIncludes(one, '<nav class="Page_Aside Docs_Contents"')
     let jump = /<a href="#([^"]+)">/.exec(one)![1]
     assertStringIncludes(one, ` id="${jump}">`)
     let tech = await (await k.at('yaks.app', '/docs/technical')).text()
     assertStringIncludes(tech, '<h1 id="technical-details">Technical Details')
-    assertStringIncludes(tech, '<nav class="Page_Side SideNav Docs_Nav"')
-    assertStringIncludes(
-      tech,
-      '<a class="SideNav_Link SideNav_Link-on" href="/docs/technical" aria-current="page">Technical Details</a>',
-    )
+    let here = nav(tech)?.querySelector('[aria-current="page"]')
+    assertEquals(here?.getAttribute('href'), '/docs/technical')
+    assertEquals(here?.textContent, 'Technical Details')
 
     let publicPages: [string, Response][] = [
       ['/robots.txt', robots],

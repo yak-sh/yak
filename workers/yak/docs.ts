@@ -26,14 +26,13 @@
 // already in the world and the resource list a connector cached.
 import type { Token } from '@yaks/markdown'
 import { front } from '@yaks/yaml'
-import { h } from 'preact'
-import { renderToString } from 'preact-render-to-string'
+import { Body, SideNav } from '@yaks/ui'
+import { type ComponentChildren, h } from 'preact'
 import type { Env } from './env.ts'
 import { type Page, PAGES } from './guide.ts'
-import { esc, sideLink } from './html.ts'
 import { type Host, hosted, url } from './host.ts'
 import { publicPage } from './public-cache.ts'
-import { foot, head, html, top } from './shell.ts'
+import { drawn, head } from './shell.ts'
 
 export let PATH = '/docs'
 
@@ -129,31 +128,46 @@ let titled = (tokens: Token[]) => {
 let marked = () => import('@yaks/markdown')
 type Md = Awaited<ReturnType<typeof marked>>
 
-let markup = (md: Md, tokens: Token[]) =>
-  tokens.length
-    ? renderToString(h('div', { class: 'Body' }, ...md.blocks(tokens, h)))
-    : ''
+let said = (md: Md, tokens: Token[]) =>
+  tokens.length ? h(Body, {}, ...md.blocks(tokens, h)) : null
 
 // The contents: every subject with the phrase it is offered by, and the one
 // rule at the foot of it, since a reader who wants the file rather than the
 // page is the reader this whole guide was written for.
 let contents = () =>
-  `<nav class="Docs_Pages" aria-label="Contents">
-<h2>The pages</h2>
-<ul>
-${
-    CONTENTS.map((p) =>
-      `<li><a href="${pathOf(p.slug)}">${esc(p.title)}</a> — ${
-        esc(p.brief)
-      }</li>`
-    ).join('\n')
-  }
-</ul>
-<p class="Note Note-small">Add <code>.md</code> to any page's address for the
-markdown an assistant reads: <a href="${PATH}.md">${PATH}.md</a>.</p>
-</nav>`
+  h(
+    'nav',
+    { class: 'Docs_Pages', 'aria-label': 'Contents' },
+    h('h2', null, 'The pages'),
+    h(
+      'ul',
+      null,
+      CONTENTS.map((p) =>
+        h(
+          'li',
+          { key: p.slug },
+          h('a', { href: pathOf(p.slug) }, p.title),
+          ' — ',
+          p.brief,
+        )
+      ),
+    ),
+    h(
+      'p',
+      { class: 'Note Note-small' },
+      'Add ',
+      h('code', null, '.md'),
+      " to any page's address for the markdown an assistant reads: ",
+      h('a', { href: `${PATH}.md` }, `${PATH}.md`),
+      '.',
+    ),
+  )
 
-let back = `<p class="Docs_Back"><a href="${PATH}">← Documentation</a></p>`
+let back = h(
+  'p',
+  { class: 'Docs_Back' },
+  h('a', { href: PATH }, '← Documentation'),
+)
 
 // The sidebar every page of the documentation wears: the whole list, in the
 // order CONTENTS gives it, with the page being read marked. It is the SideNav
@@ -161,15 +175,22 @@ let back = `<p class="Docs_Back"><a href="${PATH}">← Documentation</a></p>`
 // learned to move through their own pages already knows how to move through
 // these. The map itself is the first entry — a reader on a subject page needs
 // the way back more than they need a row that says nothing.
-let side = (slug: string) =>
-  `<nav class="Page_Side SideNav Docs_Nav" aria-label="Documentation">
-${sideLink(PATH, 'Overview', slug == '')}
-<hr class="SideNav_Rule">
-${
-    CONTENTS.map((p) => sideLink(pathOf(p.slug), esc(p.title), p.slug == slug))
-      .join('\n')
-  }
-</nav>`
+let side = (slug: string) => {
+  let link = (href: string, face: string, on: boolean) =>
+    h(SideNav.Link, {
+      key: href,
+      href,
+      mod: on && 'on',
+      'aria-current': on ? 'page' : undefined,
+    }, face)
+  return h(
+    SideNav,
+    { class: 'Page_Side Docs_Nav', 'aria-label': 'Documentation' },
+    link(PATH, 'Overview', slug == ''),
+    h(SideNav.Rule, {}),
+    CONTENTS.map((p) => link(pathOf(p.slug), p.title, p.slug == slug)),
+  )
+}
 
 // What is on THIS page: its own sections, so a long subject can be crossed
 // without scrolling it. The ids are the renderer's (@yaks/markdown
@@ -177,20 +198,25 @@ ${
 // page with one section is a page that needs no contents list.
 let onPage = (md: Md, tokens: Token[]) => {
   let rows = md.headings(tokens).filter((v) => v.depth == 2 || v.depth == 3)
-  return rows.length < 2
-    ? ''
-    : `<nav class="Page_Aside Docs_Contents" aria-label="On this page">
-<p class="Docs_Label">On this page</p>
-<ul>
-${
+  return rows.length < 2 ? null : h(
+    'nav',
+    { class: 'Page_Aside Docs_Contents', 'aria-label': 'On this page' },
+    h('p', { class: 'Docs_Label' }, 'On this page'),
+    h(
+      'ul',
+      null,
       rows.map((v) =>
-        `<li class="Docs_Jump${
-          v.depth == 3 ? ' Docs_Jump-sub' : ''
-        }"><a href="#${esc(v.id)}">${esc(v.text)}</a></li>`
-      ).join('\n')
-    }
-</ul>
-</nav>`
+        h(
+          'li',
+          {
+            key: v.id,
+            class: v.depth == 3 ? 'Docs_Jump Docs_Jump-sub' : 'Docs_Jump',
+          },
+          h('a', { href: `#${v.id}` }, v.text),
+        )
+      ),
+    ),
+  )
 }
 
 // One documentation page, drawn. `lead` is the document's own heading, kept
@@ -204,28 +230,26 @@ let page = (
   title: string,
   description: string,
   tokens: Token[],
-  under = '',
+  under: ComponentChildren = null,
   slug?: string,
 ) => {
   let lead = tokens.findIndex((t) => t.type == 'heading' && t.depth == 1)
-  let opening = tokens.slice(0, lead + 1)
-  return html(
-    `${head(env, title, description, at)}
-</head>
-<body class="Docs">
-${top}
-<main class="Page">
-${slug == null ? '' : side(slug)}
-${onPage(md, tokens)}
-<article class="Page_Body Prose">
-${markup(md, opening)}
-${under}
-${markup(md, tokens.slice(lead + 1))}
-</article>
-</main>
-${foot}
-</body>
-</html>`,
+  return drawn(
+    head(env, title, description, at),
+    h(
+      'main',
+      { class: 'Page' },
+      slug == null ? null : side(slug),
+      onPage(md, tokens),
+      h(
+        'article',
+        { class: 'Page_Body Prose' },
+        said(md, tokens.slice(0, lead + 1)),
+        under,
+        said(md, tokens.slice(lead + 1)),
+      ),
+    ),
+    { body: 'Docs' },
   )
 }
 
