@@ -59,6 +59,7 @@ export {
   KEY,
   keyed,
   known,
+  knownIn,
   LISTED,
   type Listed,
   listing,

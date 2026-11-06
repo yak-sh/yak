@@ -53,6 +53,7 @@ import {
   integrationEid,
   keyed,
   known,
+  knownIn,
   lend,
   list,
   LISTED,
@@ -530,7 +531,7 @@ export let connectionsOf = async (
   let shown = await Promise.all(
     all.filter((b) => b[CONNECTION]).map(async (b): Promise<Shown> => {
       let c = comp(b, CONNECTION)
-      let i = await known(read, String(c.integration))
+      let i = knownIn(all, String(c.integration))
       let failed = !b[PROVISIONAL] && (b.failed || b.exception)
       let to = links.filter((l) => comp(l, 'edge').to == b.entity.eid)
       return {
@@ -602,7 +603,7 @@ export let connectionsOf = async (
         let b = loans.find((b) => b.entity.eid == eid)
         let c = comp(b, CONNECTION)
         let integration = String(c.integration)
-        let i = await known(read, integration)
+        let i = knownIn(loans, integration)
         return {
           eid,
           integration,

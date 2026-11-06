@@ -40,6 +40,7 @@ import { desk } from './pages.ts'
 import { minted, type Who } from './session.ts'
 import { vaultOf } from './vault.ts'
 import { within } from './defects.ts'
+import { tallying } from './lib/hops.ts'
 import type { Env } from './env.ts'
 
 let KEY = btoa(String.fromCharCode(...new Uint8Array(32).fill(7)))
@@ -922,3 +923,30 @@ test(
     assertEquals(await ctxOf(s.p.env).graph.read('.connection'), [])
   },
 )
+
+test('connection_list reads the directory as often for one connection as for four', async () => {
+  let s = await setup()
+  let ctx = { env: s.p.env, dir: s.dir, person: s.person }
+  let hops = async () => {
+    let tally = new Map<string, number>()
+    let listed = await tallying(
+      tally,
+      () =>
+        PUBLISHED.find((t) => t.name == 'connection_list')!.run(ctx, {
+          space: 'ada',
+        }),
+    )
+    return [listed.text.match(/^\S+(?= \()/gm), tally.get('hops')]
+  }
+  let add = (n: number) =>
+    s.post({
+      do: 'add',
+      integration: `W${n}`,
+      hosts: `api.w${n}.test`,
+      key: 'sk-0123456789',
+    })
+  await add(0)
+  let [, one] = await hops()
+  for (let n of [1, 2, 3]) await add(n)
+  assertEquals(await hops(), [['W0', 'W1', 'W2', 'W3'], one])
+})

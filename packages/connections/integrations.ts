@@ -130,6 +130,15 @@ export let known = async (
   return b?.[INTEGRATION] as Integration | undefined
 }
 
+/** An integration by name, among rows already read: what `list` and
+ * `borrowed` return beside their connections. */
+export let knownIn = (
+  rows: Bundle[],
+  name: string,
+): Integration | undefined =>
+  rows.find((b) => b[INTEGRATION] && b.entity.eid == integrationEid(name))
+    ?.[INTEGRATION] as Integration | undefined
+
 /** The built integrations a graph holds. */
 export let installed = async (read: Read): Promise<Integration[]> =>
   (await read(`.${INTEGRATION}.built`)).map((b) =>

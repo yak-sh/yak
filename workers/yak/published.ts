@@ -18,8 +18,8 @@ import {
   CONNECTION,
   disconnect,
   INTEGRATION,
-  integrationEid,
   known,
+  knownIn,
   need,
   type Read,
   used,
@@ -551,14 +551,12 @@ let CONNECTIONS: Row[] = [
                 ? `; lends to installed copies at ${u.lends} calls a month each`
                 : '')
           })
-        let i = all.find((i) =>
-          i[INTEGRATION] &&
-          i.entity.eid == integrationEid(String(c.integration))
-        )
         return `${c.integration} (${b.entity.eid}): ${c.status}${
           c.account ? ` as ${c.account}` : ''
         }${uses.length ? `; ${uses.join('; ')}` : ''}${
-          c.status == 'connected' ? '' : howTo(comp(i, INTEGRATION))
+          c.status == 'connected'
+            ? ''
+            : howTo(knownIn(all, String(c.integration)))
         }`
       })
       for (let loan of view.borrowed) {
