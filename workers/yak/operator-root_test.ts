@@ -1,5 +1,6 @@
 import { test } from '@yaks/testing'
 import { assertEquals, assertStringIncludes } from '@std/assert'
+import { parseHTML } from 'linkedom'
 import type { Item, Request } from '@yaks/model'
 import { platform } from './directory-rows-probe.ts'
 import { directoryOf } from './directory.ts'
@@ -39,8 +40,8 @@ let operator = operating(
       ? reply('Added: dentist, Tuesday at 3.')
       : last?.kind == 'user' && /Added: dentist/.test(last.text)
       ? reply('Your dentist reminder is in, Tuesday at 3.')
-      : last?.kind == 'user' && /Wednesday/.test(last.text)
-      ? reply('Moving the dentist to Wednesday.')
+      : last?.kind == 'user' && /(Wednesday|Thursday|Friday)/.test(last.text)
+      ? reply(`Moving the dentist to ${RegExp.$1}.`)
       : last?.kind == 'result'
       ? reply('On it: adding a dentist reminder.')
       : [{
@@ -62,7 +63,12 @@ let channel = (name: string) => (request: Intake, answer: { text: string }) => {
   sent.push({ channel: name, text: answer.text, to: request.address })
   return Promise.resolve({})
 }
-handleChannels(operator, env, { text: channel('text'), chat: channel('chat') })
+handleChannels(operator, env, {
+  text: channel('text'),
+  chat: channel('chat'),
+  email: channel('email'),
+  voice: channel('voice'),
+})
 
 let first = await receive(store, {
   space: space.eid,
@@ -89,6 +95,29 @@ let tasks = await store.g.read('.task')
 let listed = await workOf(store, space.eid, owner)
 let byRequest = await conversationOf(store, '/at', first)
 let ofFork = await conversationOf(store, '/at', fork.entity.eid)
+
+// Then by email, and on a call: the Operator reads each with all that came
+// before, and the page shows the four as one conversation.
+let chatted = sent.splice(0)
+for (let [channel, say] of [['email', 'Or Thursday'], ['voice', 'Friday']]) {
+  await receive(store, {
+    space: space.eid,
+    person: owner,
+    channel,
+    address: channel == 'email' ? 'jo@example.com' : '+12695550142',
+  }, say)
+  await drain(store)
+}
+let atCall = asked.at(-1)!
+let replied = sent.splice(0)
+let page = parseHTML(
+  `<main>${(await conversationOf(store, '/at', root)).html}</main>`,
+).document
+let lines = [...page.querySelectorAll('.Talk_You')].map((p) => ({
+  via: p.querySelector('.Talk_Via')?.getAttribute('title'),
+  said: p.textContent,
+  at: !!p.parentElement?.querySelector('.Talk_When'),
+}))
 
 test("a person's text forks, and is answered at once and again when the fork comes back, by text", () => {
   assertEquals(texted, [
@@ -125,7 +154,7 @@ test('the next message, by any channel, is the same conversation, and files no t
   )
   assertEquals(tasks.length, 0)
   assertStringIncludes(JSON.stringify(later.items), 'dentist reminder is in')
-  assertEquals(sent, [{
+  assertEquals(chatted, [{
     channel: 'chat',
     text: 'Moving the dentist to Wednesday.',
     to: undefined,
@@ -144,4 +173,24 @@ test('the chat app lists the conversation first and the work it started, and ope
   // A piece of work shows what it did, not the conversation it came from.
   assertEquals(ofFork.html.includes('Remind me about the dentist'), false)
   assertStringIncludes(ofFork.html, 'Added: dentist, Tuesday at 3.')
+})
+
+test('texts, chat, email and calls are one conversation, read whole by the Operator and shown in order, each with its icon and time', () => {
+  let items = JSON.stringify(atCall.items)
+  for (
+    let said of ['dentist Tuesday at 3', 'Make it Wednesday', 'Or Thursday']
+  ) {
+    assertStringIncludes(items, said)
+  }
+  assertEquals(replied.map((r) => r.channel), ['email', 'voice'])
+  assertEquals(lines, [
+    {
+      via: 'By text',
+      said: 'Remind me about the dentist Tuesday at 3',
+      at: true,
+    },
+    { via: 'In the chat', said: 'Make it Wednesday', at: true },
+    { via: 'By email', said: 'Or Thursday', at: true },
+    { via: 'By phone', said: 'Friday', at: true },
+  ])
 })

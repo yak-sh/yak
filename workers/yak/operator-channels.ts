@@ -51,7 +51,7 @@ export type Request = {
   reply_to?: string
   via?: string
   // The task a request carried on, before every person's words went to
-  // their one conversation (operator.ts `rootOf`); kept on old rows.
+  // their one conversation (`rootOf`); kept on old rows.
   task?: string
   files?: File[]
   administrative?: boolean
