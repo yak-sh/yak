@@ -59,8 +59,10 @@
     height: auto;
   }
 
+  /* The seated yak's frame has air around him, so the small mark is wider
+     than his figure (mascot.ts `Idle`). */
   .Yak-small {
-    width: 2.75rem;
+    width: 3.25rem;
   }
 
   .Foot .Yak {

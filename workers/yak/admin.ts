@@ -455,7 +455,7 @@ let desk = (
         h(
           'a',
           { class: 'Desk_Brand', href: url(d.env, '/') },
-          h(Idle, { base: url(d.env), size: 40 }),
+          h(Idle, { base: url(d.env), size: 44 }),
           'yaks.app',
         ),
         h(SideNav, { 'aria-label': 'Directory' }, nav),

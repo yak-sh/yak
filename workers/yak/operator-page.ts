@@ -819,7 +819,7 @@ let side = (
       h(
         'a',
         { class: 'Talk_Brand', href: chatPath(space.slug) },
-        h(Idle, { base: url(env), size: 32 }),
+        h(Idle, { base: url(env), size: 36 }),
         'yaks.app',
       ),
       h(Button, { href: '#', class: 'Talk_Close' }, '✕ Close'),
