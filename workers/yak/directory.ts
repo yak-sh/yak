@@ -483,6 +483,12 @@ export type Offer = {
   at: string
   about: string
 }
+
+/** Whether anyone may have the app's release files: a published app's,
+ * which installing hands to whoever asks, private or not. Any release's, not
+ * only the one on offer: each is named by an id only its own pages carry
+ * (asset_url.ts). The app's data stays its own people's. */
+export let offered = (app: { published?: Offer | null }) => !!app.published
 // Where an installed app came from, and the version it took (T-32889). The
 // pin is what makes `app_update` a deliberate act. `of` is null once the app
 // it came from is gone, and the copy is still a copy. `sandboxed` is when its

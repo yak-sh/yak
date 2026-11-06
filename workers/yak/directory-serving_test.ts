@@ -62,7 +62,10 @@ let watching = (work: Promise<Response>) => {
   }
 }
 
-let fixture = (access: 'public' | 'open' | 'private' = 'public') => {
+let fixture = (
+  access: 'public' | 'open' | 'private' = 'public',
+  more: Pick<Row, 'published'> & { source?: string } = {},
+) => {
   let time = clock()
   let f = copyFixture()
   let rows: Row[] = [
@@ -74,9 +77,10 @@ let fixture = (access: 'public' | 'open' | 'private' = 'public') => {
         space: 's',
         access,
         version: 1,
-        source: 'one',
+        source: more.source ?? 'one',
         worker: '',
       },
+      ...more.published ? { published: more.published } : {},
     },
   ]
   let stalled = false
@@ -117,6 +121,7 @@ let fixture = (access: 'public' | 'open' | 'private' = 'public') => {
         )
       },
     },
+    ASSETS: { fetch: () => Promise.resolve(new Response('platform module')) },
   } as unknown as Env
   return {
     ...f,
@@ -137,8 +142,8 @@ let fixture = (access: 'public' | 'open' | 'private' = 'public') => {
       await continuations()
     },
     page: () => edged(visit('/cookbook/'), env),
-    site: () =>
-      siteFetch(new Request(pageAt('ada.yaks.app', '/cookbook/', null)), env),
+    site: (path = '/cookbook/') =>
+      siteFetch(new Request(pageAt('ada.yaks.app', path, null)), env),
   }
 }
 
@@ -281,6 +286,45 @@ let privatePage = await (async () => {
 })()
 test('directory serving: private and credentialed gateway access waits for authority', () => {
   equal(privatePage, { first: 204, pass: 204, pending: true, files: 0 })
+})
+
+// A published app's release files are anyone's: installing it hands them out
+// (directory.ts `offered`). So Site keeps them even for a private app, whose
+// pages and data it never keeps, and an unpublished private app's stay behind
+// its access check.
+let RELEASE = 'fdcc9a38-0b6b-4f8c-bcbd-15bad97cee69'
+let kept = async (published?: Row['published']) => {
+  let f = fixture('private', {
+    source: `ada/.releases/a/${RELEASE}`,
+    published,
+  })
+  let answers = []
+  for (
+    let path of [
+      `/cookbook/api/assets/${RELEASE}/style.css`,
+      '/cookbook/api/client.js',
+      '/cookbook/',
+      '/cookbook/api/me',
+    ]
+  ) {
+    let answer = await f.site(path)
+    await answer.body?.cancel()
+    answers.push([answer.status, answer.headers.get('cache-tag')])
+  }
+  return answers
+}
+let offer = { name: 'cookbook', version: 1, at: '', about: '' }
+let [published, unpublished] = [await kept(offer), await kept()]
+test("directory serving: Site keeps a published private app's release files, never its pages", () => {
+  equal(published, [
+    [200, 'app:a,space:s'],
+    [200, 'app:a,space:s'],
+    [204, null],
+    [204, null],
+  ])
+})
+test("directory serving: an unpublished private app's release files pass to the gateway", () => {
+  equal(unpublished, [[204, null], [204, null], [204, null], [204, null]])
 })
 
 let mutationCopy = copyFixture()

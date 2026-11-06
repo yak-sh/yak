@@ -1671,8 +1671,8 @@ let released = async (
   // The app's pages leave the edge as the release begins, beside its work
   // rather than after it: Site keeps none of a fenced app's pages
   // (page-cache.ts `keep`), so the commit purges nothing of the app's
-  // (facets/pages-graph.ts), and the answer waits only on this. An app whose
-  // pages Site never keeps has none to purge. Before its first release an app
+  // (facets/pages-graph.ts), and the answer waits only on this. An app Site
+  // keeps nothing of has none to purge. Before its first release an app
   // answered nothing, and nothing written to it was purged, so the space's
   // 404s kept at its address go now, whoever may read it.
   let tags = reviewing ? [] : [

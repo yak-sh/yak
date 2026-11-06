@@ -51,6 +51,7 @@ import {
   daysLeft,
   directory,
   META,
+  offered,
   paid,
   type Role,
   type Seat,
@@ -1920,7 +1921,9 @@ export let api = async (
     // serves to someone who may not read the app was woven these addresses,
     // and its files are the worker's to give or refuse at their own path, as
     // that page would have asked before its addresses were the release's.
-    if (!mayRead) {
+    // A published app's release files are anyone's, as installing it hands
+    // them out (`offered`), so Site can keep them (page-cache.ts `keepable`).
+    if (!mayRead && !offered(app)) {
       let url = new URL(req.url)
       url.pathname = url.pathname.slice(0, -`/api${path}`.length) +
         versioned.path
@@ -3663,17 +3666,16 @@ let served = async (
     viewed(env, req, page, seen(space, app))
     return page
   }
-  // Site keeps the own files of an app anyone may read (public or open) and
-  // nothing else: a private app's pages are its members', a sandboxed page
-  // carries its visitor's token, and an app's worker may answer each visitor
-  // differently. Nor does the gateway ask Site about such an app's other
-  // addresses for a while.
+  // Site keeps what is the same for everyone (page-cache.ts `keepable`): the
+  // own files of an app anyone may read (public or open), and the release
+  // files of one anyone may install. Nor does the gateway ask Site about the
+  // addresses of an app it keeps nothing of for a while.
   if (edge && dir.stale && app.access != 'public') {
     return passed()
   }
-  if (!keepable(app)) {
+  if (!keepable(app, path)) {
     if (edge) return passed()
-    unkept(req, env, bare, c)
+    if (!keepable(app)) unkept(req, env, bare, c)
   }
   let paper = tokenOf(path)
   if (paper) {

@@ -12,14 +12,17 @@
 // anonymous visitor would be served it (apps.ts `edged`), and keeps it only
 // when it is the same answer for everyone: the own file or 404 of an app
 // anyone may read (public or open), with no worker of its own, no sandbox, no
-// router claiming the path and no cookie, or a space's 404 where no app
-// answers. Anything else is a pass, kept as briefly as a page.
+// router claiming the path and no cookie, the release files of a private one
+// anyone may install (`keepable`), or a space's 404 where no app answers.
+// Anything else is a pass, kept as briefly as a page.
 //
 // The gateway remembers, as briefly, every address Site passed and every app
-// it served itself whose pages are never kept (`unkept`: a private app's, a
-// worker's), and does not ask about them again: such a page pays the hop to
-// Site once in a while, not on every view, and a stranger walking an app's
-// addresses one by one pays it once.
+// it served itself of which nothing is ever kept (`unkept`: an unpublished
+// private app's, a worker's), and does not ask about them again: such a page
+// pays the hop to Site once in a while, not on every view, and a stranger
+// walking an app's addresses one by one pays it once. A published private
+// app's pages are remembered one address at a time, since its release files
+// are still Site's to answer.
 //
 // A kept page is the page as sent: woven, its base, its home-screen tags, its
 // release's addresses, the reporter and the free plan's badge. It is tagged
@@ -33,12 +36,13 @@
 // from what the kept page says it was, gives the browser the app's own cache
 // rule, and answers a revalidation with a 304.
 import { mode } from '@yaks/member'
-import type { App } from './directory.ts'
+import { type App, offered } from './directory.ts'
 import type { Env } from './env.ts'
 import { sandboxed } from './installed.ts'
 import {
   asked as askedOf,
   BROWSER,
+  fixed,
   KEEP,
   KEPT,
   NOW,
@@ -87,21 +91,39 @@ export let keep = (
   return new Response(page.body, { status: page.status, headers })
 }
 
-/** Whether Site may keep an app's pages: the own files of an app anyone may
- * read (public or open) and nothing else. A private app's pages are its
- * members', a sandboxed page carries its visitor's token, and an app's worker
- * may answer each visitor differently. */
+/** Whether Site may keep an app's answer at `path`, or with no path, at any
+ * of its addresses: every own file of an app anyone may read (public or
+ * open), and the `fixed` bytes of one anyone may install (directory.ts
+ * `offered`), which its pages load first. A private app's pages and data are
+ * its members', a sandboxed page carries its visitor's token, and an app's
+ * worker may answer each visitor differently.
+ *
+ * ```ts
+ * import { keepable } from './page-cache.ts'
+ * import { assert } from '@std/assert'
+ * let css = '/api/assets/fdcc9a38-0b6b-4f8c-bcbd-15bad97cee69/style.css'
+ * let published = { name: 'notes', version: 2, at: '', about: '' }
+ * let app = { access: 'private', worker: '', published } as const
+ * assert(keepable(app, css) && keepable(app, '/api/client.js'))
+ * assert(keepable(app) && !keepable(app, '/') && !keepable(app, '/api/me'))
+ * assert(!keepable({ ...app, published: null }))
+ * ```
+ */
 export let keepable = (
-  app: Pick<App, 'access' | 'worker'> & Partial<Pick<App, 'installed'>>,
+  app:
+    & Pick<App, 'access' | 'worker'>
+    & Partial<Pick<App, 'installed' | 'published'>>,
+  path?: string,
 ) =>
-  !sandboxed(app as App) && mode(app.access) != 'private' &&
-  app.worker === ''
+  !sandboxed(app as App) && app.worker === '' &&
+  (mode(app.access) != 'private' ||
+    offered(app) && (path == null || fixed(path)))
 
 // The mounts this request's answer owes yak-front word of (`told`), by the
 // request's clock, which is the one thing every rung of it holds.
 let owed = new WeakMap<object, string>()
 
-/** That the gateway served an app whose pages are never kept, mounted at
+/** That the gateway served an app nothing of which is ever kept, mounted at
  * `at`: it asks Site about none of the app's addresses for a while, and tells
  * yak-front to do the same. */
 export let unkept = (req: Request, env: Env, at: string, c: Clock) => {
