@@ -5,9 +5,9 @@ import { assertEquals, assertStringIncludes } from '@std/assert'
 import { readTextFileSync } from '@yaks/file/io'
 import { audit, type Axe, report } from './accessibility.ts'
 
-// The asset a deployment serves to app_preview's check.
+// The bundle yak-browser runs for app_preview's check.
 let shipped = JSON.parse(
-  readTextFileSync(new URL('./public/_preview/axe.json', import.meta.url)),
+  readTextFileSync(new URL('./browser/axe.json', import.meta.url)),
 ) as Axe
 
 let violation = (id: string, elements: string[]) => ({

@@ -1,13 +1,16 @@
 import { clock, test } from '@yaks/testing'
 import { assertEquals, assertRejects, assertStringIncludes } from '@std/assert'
+import type { Clock } from '@yaks/fp'
 import {
+  answer,
   type Browser,
   type Browsing,
   capture,
   type Message,
   type Page,
   type Session,
-} from './browser.ts'
+} from './browser/capture.ts'
+import { render } from './browser.ts'
 import { type Audit, report } from './accessibility.ts'
 import { within } from './defects.ts'
 import type { Bundle } from '@yaks/graph'
@@ -105,7 +108,7 @@ let page = (
   }
   let browsing: Browsing = {
     open: () => Promise.resolve(browser),
-    axe: () => Promise.resolve({ source: '', version: 'test' }),
+    axe: { source: '', version: 'test' },
   }
   return {
     p,
@@ -115,6 +118,20 @@ let page = (
     viewport: () => viewport,
     closed: () => closed,
   }
+}
+
+// The kernel's BROWSER binding, answered by yak-browser over these fakes.
+let bound = (browsing: Browsing, time?: Clock) => ({
+  BROWSER: { fetch: answer(browsing, time) },
+  CLOCK: time,
+})
+let reported = <T>(run: () => Promise<T>) => {
+  let reports: Bundle[] = []
+  return within(
+    { ERRORS: { send: (rows) => (reports.push(...rows), Promise.resolve()) } },
+    { request: 'app_preview' },
+    async () => ({ result: await run(), reports: JSON.stringify(reports) }),
+  )
 }
 
 test('draft rendering captures loading diagnostics at the requested viewport and closes', async () => {
@@ -150,24 +167,29 @@ test('a page that extends Object.prototype still gets its accessibility audit', 
   assertEquals((result.accessibility as Audit).problems[0].rule, 'image-alt')
 })
 
-test('a check that throws keeps the preview and reports its failure', async () => {
+test('a check that throws keeps the preview and the kernel reports its failure', async () => {
   let p = page({
     world: () => {
       throw new RangeError('axe gave up')
     },
   })
-  let reports: Bundle[] = []
-  let result = await within(
-    { ERRORS: { send: (rows) => (reports.push(...rows), Promise.resolve()) } },
-    { request: 'app_preview' },
-    () => capture(p.browsing, 'https://x.invalid/', view),
+  let { result, reports } = await reported(() =>
+    render(bound(p.browsing), 'https://x.invalid/', view)
   )
   assertEquals(result.image, 'png-bytes')
   assertEquals(result.console, [{ type: 'log', text: 'page ready' }])
   assertStringIncludes(result.errors[0], 'page exception')
   assertStringIncludes(report(result.accessibility), 'RangeError: axe gave up')
-  assertStringIncludes(JSON.stringify(reports), 'axe gave up')
+  assertStringIncludes(reports, 'axe gave up')
   assertEquals(p.closed(), true)
+})
+
+test('a check that passes reports nothing', async () => {
+  let { result, reports } = await reported(() =>
+    render(bound(page().browsing), 'https://x.invalid/', view)
+  )
+  assertEquals((result.accessibility as Audit).problems[0].rule, 'image-alt')
+  assertEquals(reports, '[]')
 })
 
 test('the audit runs the script it is given in its own world', async () => {
@@ -178,34 +200,13 @@ test('the audit runs the script it is given in its own world', async () => {
   let result = await capture(
     {
       ...p.browsing,
-      axe: () => Promise.resolve({ source: 'S', version: '9' }),
+      axe: { source: 'S', version: '9' },
     },
     'https://x.invalid/',
     view,
   )
   assertEquals(ran[0], 'S')
   assertEquals((result.accessibility as Audit).engine, 'axe-core 9')
-})
-
-test('a script that cannot be read keeps the preview and reports its failure', async () => {
-  let p = page()
-  let reports: Bundle[] = []
-  let result = await within(
-    { ERRORS: { send: (rows) => (reports.push(...rows), Promise.resolve()) } },
-    { request: 'app_preview' },
-    () =>
-      capture(
-        {
-          ...p.browsing,
-          axe: () => Promise.reject(new Error('axe-core asset 404')),
-        },
-        'https://x.invalid/',
-        view,
-      ),
-  )
-  assertEquals(result.image, 'png-bytes')
-  assertStringIncludes(report(result.accessibility), 'axe-core asset 404')
-  assertStringIncludes(JSON.stringify(reports), 'axe-core asset 404')
 })
 
 test('a check that stalls keeps the preview and fails at the deadline', async () => {
@@ -243,36 +244,52 @@ test('a failed page load still returns the screenshot and its error', async () =
   assertEquals(p.closed(), true)
 })
 
-test('a screenshot failure closes its browser and accounts for its time', async () => {
+test('a screenshot failure closes its browser and the kernel charges its time', async () => {
   let p = page({ screenshot: new Error('browser unavailable') })
   let time = clock()
   let duration = 0
   p.browser.close = async () => {
     await time.advance(200)
   }
+  let browsing = {
+    ...p.browsing,
+    open: async () => {
+      await time.advance(100)
+      return p.browser
+    },
+  }
   await assertRejects(
     () =>
-      capture(
-        {
-          ...p.browsing,
-          open: async () => {
-            await time.advance(100)
-            return p.browser
-          },
-        },
-        'https://private.invalid/',
-        view,
-        (ms) => {
-          duration = ms
-          return Promise.resolve()
-        },
-        time,
-      ),
+      render(bound(browsing, time), 'https://private.invalid/', view, (ms) => {
+        duration = ms
+        return Promise.resolve()
+      }),
     Error,
     'browser unavailable',
   )
   assertEquals(duration, 300)
   assertEquals(time.pending(), 0)
+})
+
+test('a yak-browser that cannot say is charged the time the kernel waited', async () => {
+  let time = clock()
+  let duration = 0
+  let BROWSER = {
+    fetch: async () => {
+      await time.advance(700)
+      return new Response('worker exceeded its CPU', { status: 503 })
+    },
+  }
+  await assertRejects(
+    () =>
+      render({ BROWSER, CLOCK: time }, 'https://x.invalid/', view, (ms) => {
+        duration = ms
+        return Promise.resolve()
+      }),
+    Error,
+    'yak-browser 503',
+  )
+  assertEquals(duration, 700)
 })
 
 test('draft diagnostics are bounded while collecting messages during load', async () => {

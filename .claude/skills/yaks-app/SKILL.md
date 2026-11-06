@@ -93,6 +93,10 @@ and setup; this is the map and the feel.
   icon.svg as the icon.png a home screen reads (`raster.ts`). It is its own
   Worker because resvg is 2.4 MB of WebAssembly, which every isolate of the
   kernel, each waking Store included, would compile on start.
+- **Previews**: yak-browser (`browser/`), the Worker behind BROWSER, renders a
+  draft for app_preview with puppeteer and checks it with axe-core
+  (`browser.ts` asks it; `browser/capture.ts` renders). Its own Worker for the
+  same reason as yak-raster.
 - **Keys**: a key a space or app uses is a connection, kept in the directory's
   vault; an app is handed only a sentinel, swapped for the key on the way out
   (`outbound.ts`). That whole corner is `secrets-and-connections`.

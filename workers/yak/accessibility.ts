@@ -1,7 +1,7 @@
 // The vendored axe-core browser bundle checks WCAG 2.1 A and AA in the
 // rendered document. Findings remain diagnostics, never a deploy restriction.
-// It runs in the page, never in this Worker, so it is one of the version's
-// static assets (public/_preview/axe.json) that browser.ts reads for a check.
+// It runs in the page, never in the kernel, so it is yak-browser's alone
+// (browser/axe.json), imported into the script that renders.
 
 /** axe-core's browser bundle and the version it reports. */
 export type Axe = { source: string; version: string }

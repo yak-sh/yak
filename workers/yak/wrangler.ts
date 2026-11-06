@@ -316,17 +316,20 @@ let logTail = (path: string) => {
 // commit and to the same environment, so no Worker is ever deployed by hand:
 // yak-out (outbound/) is this Worker's dispatch namespace's outbound Worker,
 // handing every fetch an app makes back to this Worker's `Outbound`
-// entrypoint, yak-esbuild (esbuild/) is what the ESBUILD binding compiles
-// an app with at deploy (@yaks/esbuild), in a container of its own, and
+// entrypoint; yak-esbuild (esbuild/) is what the ESBUILD binding compiles
+// an app with at deploy (@yaks/esbuild), in a container of its own;
 // yak-raster (raster/) is what the RASTER binding draws an app's icon.svg
-// with, and yak-front (front/) is what answers the cached pages in front of
-// this Worker. Each exists before this Worker's bindings name it, except
-// yak-front, whose bindings name this Worker: a missing entrypoint there only
-// fails its use receipts until this deploy finishes, seconds later.
+// with; yak-browser (browser/) is what the BROWSER binding renders a draft
+// with for app_preview; and yak-front (front/) is what answers the cached
+// pages in front of this Worker. Each exists before this Worker's bindings
+// name it, except yak-front, whose bindings name this Worker: a missing
+// entrypoint there only fails its use receipts until this deploy finishes,
+// seconds later.
 export let SIBLINGS = [
   'outbound/wrangler.toml',
   'esbuild/wrangler.toml',
   'raster/wrangler.toml',
+  'browser/wrangler.toml',
   'front/wrangler.toml',
 ]
 

@@ -25,16 +25,18 @@ Worker.
 A deploy of the kernel deploys its sibling Workers first, from the same commit
 and to the same environment: `yak-front`, `yak-out` (`outbound/`, the dispatch
 namespace's outbound Worker), `yak-esbuild` (`esbuild/`, the compiler
-`app_deploy` asks for an app's TypeScript and npm imports, @yaks/esbuild) and
+`app_deploy` asks for an app's TypeScript and npm imports, @yaks/esbuild),
 `yak-raster` (`raster/`, which draws an app's `icon.svg` as its `icon.png` with
-resvg's WebAssembly, kept out of the kernel so no Store's isolate compiles it).
-`yak-esbuild` is a Worker in front of a container running native esbuild; its
-image is `esbuild/Dockerfile` over `packages/esbuild`, and its deploy builds and
-pushes the image like the kernel's sandbox. The siblings do not call one
-another, so their deploys run concurrently with the kernel bundle. All must
-finish successfully before the kernel upload begins; a failure waits for the
-other work and refuses the kernel upload. The pinned Wrangler bundles once,
-including node compatibility code and source maps; the upload reads those
+resvg's WebAssembly, kept out of the kernel so no Store's isolate compiles it)
+and `yak-browser` (`browser/`, which renders a draft for `app_preview` with
+puppeteer and checks it with axe-core, kept out of the kernel for the same
+reason). `yak-esbuild` is a Worker in front of a container running native
+esbuild; its image is `esbuild/Dockerfile` over `packages/esbuild`, and its
+deploy builds and pushes the image like the kernel's sandbox. The siblings do
+not call one another, so their deploys run concurrently with the kernel bundle.
+All must finish successfully before the kernel upload begins; a failure waits
+for the other work and refuses the kernel upload. The pinned Wrangler bundles
+once, including node compatibility code and source maps; the upload reads those
 generated modules without bundling again.
 
 Hosted model execution has its own [executor release](../model/README.md),
@@ -520,8 +522,9 @@ vocabulary and seed rows are set up again only when a write changed them. Each
 write, and each deploy, is told to the link's pages over that Store's socket
 (`{"draft":…}`), and public/release.js swaps a stylesheet in place or reloads.
 The Store's expiry alarm, thirty days after the draft's last change, removes its
-test data and script. Browser screenshots use the `BROWSER` binding, configured
-in production and staging; no Browser Run REST token or local browser is needed.
+test data and script. Browser screenshots are `yak-browser`'s, the sibling
+behind the `BROWSER` service binding, which holds Cloudflare's browser in
+production and staging; no Browser Run REST token or local browser is needed.
 Browser time spends the account's existing budget at $0.09/hour, including
 failed captures. See
 [Cloudflare Browser Run](https://developers.cloudflare.com/browser-run/).

@@ -1,211 +1,57 @@
-// Browser control runs on Cloudflare. The small session interface lets the
-// load, diagnostics and cleanup run in process without a local browser.
-import { type Clock, sleep, system } from '@yaks/fp'
+// A draft rendered for app_preview. The rendering is yak-browser's (browser/),
+// the Worker behind the BROWSER binding, so puppeteer and axe-core are never
+// in this Worker's script: every isolate compiles that, a page view's included.
+import { system } from '@yaks/fp'
 import type { Env } from './env.ts'
-import { audit, type Axe, type Checked } from './accessibility.ts'
 import { caught } from './defects.ts'
-import { url as at } from './host.ts'
+import type { Failed, Rendered, View } from './browser/capture.ts'
 
-export type View = { width: number; height: number; wait: number }
-export type Message = { type(): string; text(): string }
-type Events = { console: Message; pageerror: unknown; error: Error }
-export type Page = {
-  on<Event extends keyof Events>(
-    event: Event,
-    hear: (value: Events[Event]) => void,
-  ): unknown
-  setViewport(view: { width: number; height: number }): Promise<void>
-  goto(url: string, options: {
-    waitUntil: 'domcontentloaded'
-    timeout: number
-  }): Promise<{ status(): number } | null>
-  createCDPSession(): Promise<Session>
-  screenshot(options: { type: 'png'; encoding: 'base64' }): Promise<string>
-}
-export type Session = {
-  // deno-lint-ignore no-explicit-any
-  send(method: any, params?: Record<string, unknown>): Promise<any>
-}
-/** A browser to open and the audit's script to run in its page. */
-export type Browsing = {
-  open: () => Promise<Browser>
-  axe: () => Promise<Axe>
-}
-export type Browser = {
-  newPage(): Promise<Page>
-  close(): Promise<void>
+// A failure yak-browser answered, raised here with the stack it had there.
+let relayed = ({ failed, stack }: Failed) =>
+  Object.assign(new Error(failed), stack ? { stack } : {})
+
+// yak-browser's answer: a render, or a failure it reports as a 500.
+let answered = async (r: Response) => {
+  let said = await r.json().catch(() => null) as Rendered | Failed | null
+  if (said && (r.ok || 'failed' in said)) return said
+  throw new Error(`yak-browser ${r.status}`)
 }
 
-let message = (error: unknown) =>
-  (error instanceof Error ? error.stack ?? error.message : String(error)).slice(
-    0,
-    2000,
-  )
-
-// The audit runs in its own JavaScript world over the page's DOM, so what a
-// page adds to its globals and prototypes never reaches axe-core.
-let isolated = async (page: Page) => {
-  let cdp = await page.createCDPSession()
-  let { frameTree } = await cdp.send('Page.getFrameTree')
-  let { executionContextId } = await cdp.send('Page.createIsolatedWorld', {
-    frameId: frameTree.frame.id,
-    worldName: 'audit',
-  })
-  return {
-    evaluate: async (expression: string) => {
-      let { result, exceptionDetails } = await cdp.send('Runtime.evaluate', {
-        expression,
-        contextId: executionContextId,
-        awaitPromise: true,
-        returnByValue: true,
-      })
-      if (exceptionDetails) {
-        throw new Error(
-          exceptionDetails.exception?.description ?? exceptionDetails.text,
-        )
-      }
-      return result.value
-    },
-  }
-}
-
-// One deadline bounds the whole preview, its accessibility check included.
-let deadline = (time: Clock) => {
-  let cancel = () => {}
-  let timeout = new Promise<never>((_, reject) => {
-    cancel = time.after(
-      15_000,
-      () => reject(new Error('Browser preview timed out')),
-    )
-  })
-  timeout.catch(() => {})
-  return {
-    bounded: <T>(work: Promise<T>) => Promise.race([work, timeout]),
-    cancel,
-  }
-}
-
-// A check that fails is its own result: the preview keeps its screenshot,
-// console and errors, and the failure is ours, so the tracker hears of it.
-let checked = async (
-  page: Page,
-  axe: Browsing['axe'],
-  bounded: <T>(work: Promise<T>) => Promise<T>,
-): Promise<Checked> => {
-  try {
-    return await bounded(
-      Promise.all([isolated(page), axe()]).then(([world, script]) =>
-        audit(world, script)
-      ),
-    )
-  } catch (e) {
-    caught(e, { request: 'app_preview accessibility' })
-    return { failed: message(e) }
-  }
-}
-
-export let capture = async (
-  { open, axe }: Browsing,
+/**
+ * What yak-browser rendered of `url`, charged through `used` the browser time
+ * it held, failing or not; the time this waited when it could not say. A check
+ * that failed stays the preview's own result and is reported here, for the
+ * tracker to hear.
+ */
+export let render = async (
+  env: Pick<Env, 'BROWSER' | 'CLOCK'>,
   url: string,
   view: View,
   used: (duration: number) => Promise<void> = () => Promise.resolve(),
-  time: Clock = system,
-) => {
-  let start = time.now()
-  let browser = await open()
-  let duration = 0
-  let { bounded, cancel } = deadline(time)
-  let result: {
-    image: string
-    console: { type: string; text: string }[]
-    errors: string[]
-    status: number
-    accessibility: Checked
-  }
-  try {
-    let loaded = await bounded((async () => {
-      let page = await browser.newPage()
-      let console: { type: string; text: string }[] = []
-      let errors: string[] = []
-      let error = (e: unknown) => {
-        if (errors.length < 100) errors.push(message(e))
-      }
-      page.on('console', (m) => {
-        if (console.length < 100) {
-          console.push({ type: m.type(), text: m.text().slice(0, 2000) })
-        }
-      })
-      page.on('pageerror', error)
-      page.on('error', error)
-      await page.setViewport({ width: view.width, height: view.height })
-      let status = 0
-      try {
-        status = (await page.goto(url, {
-          waitUntil: 'domcontentloaded',
-          timeout: 10_000,
-        }))?.status() ?? 0
-      } catch (e) {
-        error(e)
-      }
-      if (view.wait) await sleep(view.wait, undefined, time)
-      let image = await page.screenshot({ type: 'png', encoding: 'base64' })
-      return { page, image, console, errors, status }
-    })())
-    let { page, ...rest } = loaded
-    result = { ...rest, accessibility: await checked(page, axe, bounded) }
-  } finally {
-    cancel()
-    try {
-      await browser.close()
-    } finally {
-      duration = Math.max(0, time.now() - start)
-      await used(duration)
-    }
-  }
-  return { ...result, duration }
-}
-
-// Read once per assets binding, the isolate's one in a deployment, the way
-// esbuild.ts reads the compiler's catalog. In the script it was 650 KB that
-// every isolate compiled, a page view's included (T-133988).
-let scripts = new WeakMap<Env['ASSETS'], Promise<Axe>>()
-let axe = (env: Pick<Env, 'ASSETS' | 'APEX' | 'LOCAL_DEV'>) => {
-  let script = scripts.get(env.ASSETS)
-  if (script) return script
-  // A failed read is forgotten, so the next check reads again.
-  script = env.ASSETS.fetch(new Request(at(env, '/_preview/axe.json'))).then(
-    async (r) => {
-      if (!r.ok) throw new Error(`axe-core asset ${r.status}`)
-      return await r.json() as Axe
-    },
-  )
-  script.catch(() => scripts.delete(env.ASSETS))
-  scripts.set(env.ASSETS, script)
-  return script
-}
-
-export let render = async (
-  env: Pick<Env, 'BROWSER' | 'CLOCK' | 'ASSETS' | 'APEX' | 'LOCAL_DEV'>,
-  url: string,
-  view: View,
-  used?: (duration: number) => Promise<void>,
-) => {
-  let puppeteer = (await import('@cloudflare/puppeteer')).default
+): Promise<Rendered> => {
   if (!env.BROWSER) {
     throw new Error('Cloudflare Browser Rendering is not configured')
   }
-  let binding = env.BROWSER
-  return capture(
-    {
-      open: () =>
-        puppeteer.launch({
-          fetch: (input, init) => binding.fetch(new Request(input, init)),
+  let time = env.CLOCK ?? system
+  let start = time.now()
+  let said: Rendered | Failed | undefined
+  try {
+    said = await answered(
+      await env.BROWSER.fetch(
+        new Request('https://browser.invalid/', {
+          method: 'POST',
+          body: JSON.stringify({ url, view }),
         }),
-      axe: () => axe(env),
-    },
-    url,
-    view,
-    used,
-    env.CLOCK,
-  )
+      ),
+    )
+  } finally {
+    await used(said?.duration ?? Math.max(0, time.now() - start))
+  }
+  if ('failed' in said) throw relayed(said)
+  if ('failed' in said.accessibility) {
+    caught(new Error(said.accessibility.failed), {
+      request: 'app_preview accessibility',
+    })
+  }
+  return said
 }

@@ -202,11 +202,6 @@ directory = "./public"
 binding = "ASSETS"
 run_worker_first = true
 
-# Draft previews render on Cloudflare, never in a browser on this machine.
-[browser]
-binding = "BROWSER"
-remote = true
-
 [[durable_objects.bindings]]
 name = "STORE"
 class_name = "Store"
@@ -540,6 +535,16 @@ service = "yak-esbuild"
 binding = "RASTER"
 service = "yak-raster"
 
+# What renders a draft for app_preview (browser.ts): yak-browser (browser/), a
+# Worker of its own holding Cloudflare's browser, so puppeteer and axe-core are
+# compiled by the isolates that render and never by the kernel's. This Worker's
+# deploy deploys it first. Remote under `wrangler dev`, as drafts render on
+# Cloudflare, never in a browser on this machine.
+[[services]]
+binding = "BROWSER"
+service = "yak-browser"
+remote = true
+
 # The OAuth provider's own store (identity.ts): registered clients, grants,
 # and tokens. `wrangler dev` simulates it and ignores the id.
 [[kv_namespaces]]
@@ -662,10 +667,6 @@ namespace = "yak-apps-staging"
 directory = "./public"
 binding = "ASSETS"
 run_worker_first = true
-
-[env.staging.browser]
-binding = "BROWSER"
-remote = true
 
 [[env.staging.durable_objects.bindings]]
 name = "STORE"
@@ -847,6 +848,11 @@ service = "yak-esbuild-staging"
 [[env.staging.services]]
 binding = "RASTER"
 service = "yak-raster-staging"
+
+[[env.staging.services]]
+binding = "BROWSER"
+service = "yak-browser-staging"
+remote = true
 
 [[env.staging.kv_namespaces]]
 binding = "OAUTH_KV"
