@@ -8,6 +8,7 @@
     "./deps": "./deps.ts",
     "./examples": "./examples.ts",
     "./find": "./find.ts",
+    "./kept": "./kept.ts",
     "./main": "./main.ts",
     "./own": "./own.ts",
     "./reads": "./reads.ts"

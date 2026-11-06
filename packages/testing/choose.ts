@@ -164,7 +164,7 @@ export let choose = async (
         await key(s, common.get(kind(f))!, plans.get(f) ?? f, f, true),
       )
     }
-    let before = all ? {} : passed()
+    let before = all ? new Set<string>() : passed()
     let run: string[] = []
     let reached: string[] = []
     for (let f of files) {
@@ -190,7 +190,7 @@ export let choose = async (
           true,
         )
       ) continue
-      if (!(await proof(s, keys.get(f)!, reads(f), true) in before)) {
+      if (!before.has(await proof(s, keys.get(f)!, reads(f), true))) {
         run.push(f)
       }
     }

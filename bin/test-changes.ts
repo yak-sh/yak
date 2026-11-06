@@ -32,7 +32,7 @@ export let changes = async (run: Run = git): Promise<string[]> => {
   return [...new Set((tracked + added).split('\0').filter(Boolean))]
 }
 
-let workspace = members()
+let workspace = new Set(members())
 // Selection asks of each module many times.
 let owners = new Map<string, string | undefined>()
 
@@ -41,7 +41,11 @@ let owners = new Map<string, string | undefined>()
 /** The workspace package a path belongs to. */
 export let member = (path: string): string | undefined => {
   if (!owners.has(path)) {
-    owners.set(path, workspace.find((w) => path.startsWith(`${w}/`)))
+    let dirs = path.split('/').slice(0, -1)
+    let at = dirs.findIndex((_, i) =>
+      workspace.has(dirs.slice(0, i + 1).join('/'))
+    )
+    owners.set(path, at < 0 ? undefined : dirs.slice(0, at + 1).join('/'))
   }
   return owners.get(path)
 }

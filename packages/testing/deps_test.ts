@@ -156,14 +156,16 @@ test('a survey keeping what files held reads a file again only once its status c
   let status = [s.ino, s.size, s.mtime.getTime(), s.ctime.getTime()]
   Deno.writeTextFileSync(
     store,
-    JSON.stringify({ [at('k/a.json')]: [...status, 'kept', []] }),
+    JSON.stringify({
+      [at('k/a.json')]: [...status, { digest: 'kept', names: [], imports: '' }],
+    }),
   )
   equal(await of(), 'kept')
   write('k/a.json', 'three')
   equal(await of(), await alone.of(at('k/a.json')))
 })
 
-test('a remembered graph asks deno again only of the modules changed since', async () => {
+test('a remembered graph asks deno again only of the modules whose imports changed since', async () => {
   let table = { 'g/x_test.ts': ['g/y.ts'], 'g/y.ts': [] }
   for (let m of Object.keys(table)) write(m, m)
   let asked: string[][] = []
@@ -177,9 +179,12 @@ test('a remembered graph asks deno again only of the modules changed since', asy
   equal(whole, [`file://${at('g/x_test.ts')}`, `file://${at('g/y.ts')}`])
   equal(await names(), whole)
   equal(asked, [[at('g/x_test.ts')]])
-  write('g/y.ts', 'changed')
+  write('g/y.ts', "import 'changed'")
   equal(await names(), whole)
   equal(asked.at(-1), [at('g/y.ts')])
+  write('g/y.ts', "import 'changed'\nlet body = 'changed too'")
+  equal(await names(), whole)
+  equal(asked.length, 2)
 })
 
 test('a remembered resolver retains compiler metadata and returns only the requested module closure', async () => {
@@ -232,7 +237,7 @@ test('a remembered resolver retains compiler metadata and returns only the reque
   equal(found.redirects, info.redirects)
 })
 
-let store = `${dir}/passed.json`
+let store = `${dir}/passed.log`
 let reads = `${dir}/read.json`
 remember(['a', 'b', 'c'], store)
 forget(['a', 'c', 'never'], store)
@@ -240,7 +245,18 @@ note({ 'a_test.ts': ['x.json'], 'b_test.ts': [], 'c_test.ts': ['y'] }, reads)
 note({ 'c_test.ts': [] }, reads)
 
 test('a pass forgotten is no longer kept, and the others stay', () => {
-  equal(Object.keys(passed(store)), ['b'])
+  equal([...passed(store)], ['b'])
+})
+
+test('passes added at once are all kept, and a store grown past twice what it keeps holds the newest', () => {
+  let kept = `${dir}/kept.log`
+  let hex = (n: number) => n.toString(16).padStart(64, '0')
+  remember([hex(1), hex(2)], kept, 2)
+  remember([hex(3)], kept, 2)
+  remember([hex(1)], kept, 2)
+  equal([...passed(kept)], [hex(1), hex(2), hex(3)])
+  remember([hex(4)], kept, 2)
+  equal([...passed(kept)], [hex(1), hex(4)])
 })
 
 test('what a file read is kept by its name, reading nothing included', () => {
@@ -422,7 +438,7 @@ test('concurrent cached lookups share a refresh and retain their own requested c
   let saved = at('refresh/graph.json')
   let roots = [at('refresh/a.ts')]
   await remembered(resolve, saved)(roots)
-  write('refresh/shared.ts', 'changed')
+  write('refresh/shared.ts', "import 'changed'")
   let first = remembered(resolve, saved)(roots)
   await began.promise
   let second = remembered(resolve, saved)([at('refresh/shared.ts')])
@@ -462,7 +478,7 @@ test('a failed refresh releases queued lookups and new roots and file changes ar
   ])
   await remembered(resolve, saved)([at('retry/a.ts')])
   write('retry/next.ts', 'next')
-  write('retry/b.ts', 'imports next')
+  write('retry/b.ts', "import './next.ts'")
   table['retry/next.ts'] = []
   table['retry/b.ts'] = ['retry/next.ts']
   let updated = await remembered(resolve, saved)([at('retry/b.ts')])

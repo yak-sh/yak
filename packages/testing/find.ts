@@ -4,6 +4,7 @@ import * as io from '@yaks/file/io'
 // another project's code (`node_modules`, `vendor`, a build's scratch) or a
 // hidden one.
 import { type Examples, module, scan } from './examples.ts'
+import { byStatus, stores } from './kept.ts'
 
 let SKIP = ['vendor', 'node_modules', '.wrangler']
 
@@ -64,18 +65,31 @@ export type Found = {
   parsed?: ReadonlyMap<string, Examples>
 }
 
-/** Test modules, example pages and their parsed inputs for one command. */
+/** Where what each page of a checkout held, as last scanned, is kept by its
+ * status (`discover`). */
+export let PAGES: string = `${stores()}/pages.json`
+
+/** Test modules, example pages and their parsed inputs for one command.
+ * Given a `store`, what each page holds is kept there by the page's status
+ * (./kept.ts `byStatus`), and a page unchanged since is not read again. */
 export let discover = async (
   paths: string[],
+  store?: string,
 ): Promise<Found> => {
   let files = await walk(paths)
+  let known = byStatus<Examples | 0>(store)
   let parsed = new Map<string, Examples>()
   for (let file of files.filter(paged)) {
-    let examples = scan(io.readTextFileSync(file), file)
-    if (examples.fenced.length || examples.lines.length) {
-      parsed.set(file, examples)
-    }
+    let examples = known.of(file, io.statSync(file), () => {
+      let found = scan(io.readTextFileSync(file), file)
+      return found.fenced.length || found.lines.length ? found : 0
+    })
+    if (examples) parsed.set(file, examples)
   }
+  let roots = paths.map((p) => p.replace(/^\.\//, '').replace(/\/+$/, ''))
+  known.save((file) =>
+    !roots.some((r) => file == r || file.startsWith(`${r}/`))
+  )
   return { tests: files.filter(tested), pages: [...parsed.keys()], parsed }
 }
 

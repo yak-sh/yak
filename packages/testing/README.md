@@ -297,21 +297,24 @@ tests, or supply statically imported modules at an injected loading boundary. A
 pass is kept by its **proof**: the key and what each observed path holds.
 Observation retains unique paths in memory; it produces no permission audit and
 never observes FFI calls. The pass record is
-`$XDG_CACHE_HOME/yak/tests-passed.json`, or `~/.cache/yak/tests-passed.json`
-when `XDG_CACHE_HOME` is unset, shared by checkouts on the machine, and what
-each file read as it last passed is kept beside it in `tests-reads.json`,
-reading nothing included. Each checkout keeps its own stores under
-`yak/checkouts/` (`stores`), since checkouts differ: what deno says each module
-imports, in `graph.json` by the module's bytes and the configs and lock that
-resolve it (`remembered`), so a survey asks `deno info` only of modules changed
-since, a new checkout starting from the one any checkout wrote last
-(`tests-graph-v2.json`); and what each file surveyed held, in `facts.json` by
-the file's inode, size and times (`survey`'s `store`), so a file unchanged is
-not read again. What each file took to load and run in `tests-took.json`
-(`took`, `tally`), which a caller can hand `choose` as a file's `cost`. `--all`
-bypasses the record; a run filtered by tag records no passes. `--keys` names a
-JSON file holding the key of each file given, from a caller that chose them
-already (`choose` from `@yaks/testing/choose`): every file given runs.
+`$XDG_CACHE_HOME/yak/tests-passed.log`, or `~/.cache/yak/tests-passed.log` when
+`XDG_CACHE_HOME` is unset, a proof a line, shared by checkouts on the machine: a
+run appends its own passes, so runs at once keep each other's. What each file
+read as it last passed is kept beside it in `tests-reads.json`, reading nothing
+included. Each checkout keeps its own stores under `yak/checkouts/` (`stores`
+from `@yaks/testing/kept`), since checkouts differ: what deno says each module
+imports, in `graph.json` by the module's import lines (`importing`) and the
+configs and lock that resolve it (`remembered`), so a survey asks `deno info`
+only of modules whose imports changed since, a new checkout starting from the
+one any checkout wrote last (`tests-graph-v3.json`); what each file surveyed
+held, in `facts-v2.json`, and what each page's examples are, in `pages.json`
+(`discover`'s `store`), each by the file's inode, size and times (`byStatus`),
+so a file unchanged is not read again. What each file took to load and run in
+`tests-took.json` (`took`, `tally`), which a caller can hand `choose` as a
+file's `cost`. `--all` bypasses the record; a run filtered by tag records no
+passes. `--keys` names a JSON file holding the key of each file given, from a
+caller that chose them already (`choose` from `@yaks/testing/choose`): every
+file given runs.
 
 `choose` given a `budget` and what each file is expected to `cost` keeps a
 narrowed run to it. A file the change edits always runs, whatever it costs, and

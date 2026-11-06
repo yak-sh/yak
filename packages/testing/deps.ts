@@ -21,6 +21,7 @@ import { command as processCommand } from '@yaks/process/command'
 // beside it.
 import { createHash } from 'node:crypto'
 import { written } from './find.ts'
+import { append, byStatus, cache, load, put, stores, write } from './kept.ts'
 
 /** A module graph, as `deno info --json` says one. */
 export type Info = {
@@ -78,8 +79,6 @@ export let location = (cwd = system.cwd()) => {
   }
 }
 let code = (path: string) => /\.[mc]?[jt]sx?$/.test(path)
-let cache = system.env.get('XDG_CACHE_HOME') ??
-  `${system.env.get('HOME')}/.cache`
 
 /** The module graph reached from `roots`, or undefined when deno cannot
  * say. Deno resolves it by the checkout's lock, and writes what it resolved
@@ -112,51 +111,51 @@ export let graph = async (roots: string[]): Promise<Info | undefined> => {
 /** What a graph's caller can say of a path: what it holds now (`digest`). */
 export type Bytes = (path: string) => Promise<string>
 
-/** Where a checkout's own stores lie, by its path. Checkouts differ: one
- * store they all shared would hold whichever checkout wrote it last, and each
- * run would ask deno again of every module another checkout had changed. */
-export let stores = (cwd = system.cwd()): string =>
-  `${cache}/yak/checkouts/${hex(cwd).slice(0, 16)}`
+// The tokens that can bring a module a dependency: a static, dynamic or
+// CommonJS import, a re-export, and the compiler's pragmas.
+let IMPORTING = /^.*(?:\b(?:import|from|require)\b|<reference|@ts-|@jsx).*$/gm
+let SPECIFIER = /\b(?:import|from|require)\s*\(?\s*(['"`])[^'"`]*\1/g
 
-/** Where what deno said each module imports is kept, by the module's bytes. */
+/// importing("import a from './a.ts'\nlet x = 1") == importing("import a from './a.ts'\nlet x = 2") -> true
+/// importing("import a from './a.ts'") == importing("import a from './b.ts'") -> false
+/// importing("await import(\n  './a.ts',\n)") == importing("await import(\n  './b.ts',\n)") -> false
+/// importing("import {\n  a,\n} from './a.ts'") == importing("import {\n  a,\n  b,\n} from './a.ts'") -> true
+/** What in a module's source decides what deno says it imports: each line
+ * holding an import, a re-export, a `require` or a compiler pragma, and each
+ * specifier one of those names, however the lines around it break. Two
+ * versions of a module alike in these resolve alike. */
+export let importing = (source: string): string =>
+  [
+    ...source.match(IMPORTING) ?? [],
+    '',
+    ...source.match(SPECIFIER)?.map((m) => m.replace(/\s+/g, '')) ?? [],
+  ].join('\n')
+
+/** What decides what deno says `path` imports, now: a module's
+ * `importing`, any other file's bytes. */
+export let said: Bytes = (path) =>
+  Promise.try(() => {
+    if (!code(path)) return digest(path)
+    try {
+      return hex(importing(io.readTextFileSync(path)))
+    } catch {
+      return 'absent'
+    }
+  })
+
+/** Where what deno said each module imports is kept, by what decides it. */
 export let GRAPH: string = `${stores()}/graph.json`
 
 /** What a checkout's graph starts from: the one any checkout wrote last. */
-export let SEED: string = `${cache}/yak/tests-graph-v2.json`
+export let SEED: string = `${cache}/yak/tests-graph-v3.json`
 
 /** Where what each file of the checkout held, as last read, is kept by the
  * file's status (`survey`). */
-export let FACTS: string = `${stores()}/facts.json`
-
-// A checkout's stores, made with its first: the stores of checkouts since
-// removed go then. Each names its checkout beside them.
-let room = (store: string) => {
-  let dir = store.slice(0, store.lastIndexOf('/'))
-  if (gone(dir)) {
-    io.mkdirSync(dir, { recursive: true })
-    if (dir == stores()) {
-      io.writeTextFileSync(`${dir}/checkout`, system.cwd())
-      let all = dir.slice(0, dir.lastIndexOf('/'))
-      for (let e of io.readDirSync(all)) {
-        let checkout = `${all}/${e.name}/checkout`
-        if (!gone(checkout) && gone(io.readTextFileSync(checkout))) {
-          io.removeSync(`${all}/${e.name}`, { recursive: true })
-        }
-      }
-    }
-  }
-}
-let gone = (path: string) => {
-  try {
-    io.statSync(path)
-    return false
-  } catch {
-    return true
-  }
-}
+export let FACTS: string = `${stores()}/facts-v2.json`
 
 // What the store keeps of a module: what `Info` reads, without the source
-// spans and sizes deno says beside it.
+// spans and sizes deno says beside it, by what decides its imports (`said`).
+let VERSION = 2
 type Module = Info['modules'][number]
 type Kept = {
   version: number
@@ -224,19 +223,21 @@ let refresh = async <T>(key: string, read: () => Promise<T>): Promise<T> => {
 
 /**
  * `info` (`deno info`), asked only of what changed: each module deno said
- * before is kept by its bytes (`bytes`), and while those and what resolves
- * them (`resolution`) hold, what it imports is what deno said then. A module
- * changed or never seen is asked again, with what it reaches. The store
- * names a checkout's files from the checkout, and the examples a process
- * writes beside a page (./load.ts `beside`) without its pid, so every
- * checkout and run shares it.
+ * before is kept by what decides what it imports (`said`: its import lines,
+ * not the rest of its bytes), and while those and the configs and lock
+ * resolving it hold, what it imports is what deno said then. A module whose
+ * imports changed, or never seen, is asked again, with what it reaches. The
+ * store names a checkout's files from the checkout, and the examples a
+ * process writes beside a page (./load.ts `beside`) without its pid, so
+ * every checkout and run shares it; the checkout's store is written once,
+ * and the seed is the same file.
  */
 export let remembered = (
   info: (roots: string[]) => Promise<Info | undefined> = graph,
   store = GRAPH,
   seed?: string,
 ) =>
-async (roots: string[], bytes: Bytes = digest): Promise<Info | undefined> => {
+async (roots: string[], bytes: Bytes = said): Promise<Info | undefined> => {
   let { cwd, base, url, rel } = location()
   return await refresh(`${base} ${url(store)}`, async () => {
     let here = `${cwd}/`, pid = `.${system.pid}.example.`
@@ -266,7 +267,7 @@ async (roots: string[], bytes: Bytes = digest): Promise<Info | undefined> => {
     let held = await Promise.all(
       Object.entries(kept.configs).map(async ([c, d]) => await bytes(c) == d),
     )
-    let whole = kept.version != 1 || kept.deno != system.runtimeVersion ||
+    let whole = kept.version != VERSION || kept.deno != system.runtimeVersion ||
       !held.every(Boolean)
     let at = (s: string) => kept.redirects[s] ?? s
     // Walked a wave at a time, each wave's bytes read together.
@@ -296,7 +297,7 @@ async (roots: string[], bytes: Bytes = digest): Promise<Info | undefined> => {
     }
     if (whole) {
       kept = {
-        version: 1,
+        version: VERSION,
         deno: system.runtimeVersion,
         configs: {},
         modules: {},
@@ -323,7 +324,7 @@ async (roots: string[], bytes: Bytes = digest): Promise<Info | undefined> => {
       for (let [i, c] of unseen.entries()) kept.configs[c] = found[i]
       let text = JSON.stringify(kept).replaceAll(here, '<checkout>/')
         .replaceAll(pid, '.<pid>.example.')
-      for (let to of seed ? [store, seed] : [store]) put(text, to)
+      put(text, store, seed)
     }
     let modules = new Map<string, Module>()
     let visit = roots.map((r) => at(url(r)))
@@ -477,6 +478,9 @@ export type Survey = {
   // What a path holds as the survey read it (`digest`), read now if it
   // never did.
   bytes: Bytes
+  // What decides what deno says a path imports (`said`), as the survey read
+  // it.
+  said: Bytes
   of: (path: string, runtime?: boolean) => Promise<string>
   loads: (path: string) => Promise<string>
   next: (path: string, runtime?: boolean) => string[]
@@ -498,16 +502,14 @@ export type Survey = {
  * path does not make them relevant to the change. */
 export const WIDE = 200
 
-// A file's status as `survey` keeps it beside what the file held: its inode,
-// size, and modified and changed times, and then its digest and the files it
-// names.
-type Held = [number, number, number, number, string, string[]]
+// What `survey` keeps of a file: its digest, the files it names, and what
+// decides its imports (`said`).
+type Fact = { digest: string; names: string[]; imports: string }
 
 /** The survey of `paths`, their modules' graph from `info` (`deno info`), or
  * undefined when it cannot say what they import. Given a `store`, what each
- * file among them and their modules held is kept there by the file's status,
- * and a file whose status still matches is not read again. A file changed within the second before it was
- * read could change again within its times' grain, so it is not kept. */
+ * file among them and their modules held is kept there by the file's status
+ * (./kept.ts `byStatus`). */
 export let survey = async (
   paths: string[],
   info: (roots: string[], bytes: Bytes) => Promise<Info | undefined> =
@@ -515,38 +517,31 @@ export let survey = async (
   store?: string,
 ): Promise<Survey | undefined> => {
   let where = location(), { url, rel } = where
-  let before: Record<string, Held> = store ? load(store) : {}
-  let after: Record<string, Held> = {}
-  let fresh = false
-  let look = (path: string): Promise<{ digest: string; names: string[] }> => {
+  let known = byStatus<Fact>(store)
+  let look = (path: string): Promise<Fact> => {
     let s
     try {
       s = io.statSync(path)
     } catch {
-      return Promise.resolve({ digest: 'absent', names: [] })
+      return Promise.resolve({ digest: 'absent', names: [], imports: 'absent' })
     }
-    if (!s.isFile) return Promise.resolve({ digest: 'place', names: [] })
-    let status = [s.ino, s.size, s.mtime.getTime(), s.ctime.getTime()]
-    let was = before[path]
-    if (was && status.every((n, i) => was[i] == n)) {
-      after[path] = was
-      return Promise.resolve({ digest: was[4], names: was[5] })
+    if (!s.isFile) {
+      return Promise.resolve({ digest: 'place', names: [], imports: 'place' })
     }
-    let bytes = io.readFileSync(path)
-    let read = {
-      digest: hex(bytes),
-      names: code(path)
-        ? named(new TextDecoder().decode(bytes), path, where)
-        : [],
-    }
-    if (status[3] < Date.now() - 1000) {
-      after[path] = [...status, read.digest, read.names] as Held
-      fresh = true
-    }
-    return Promise.resolve(read)
+    return Promise.resolve(known.of(path, s, () => {
+      let bytes = io.readFileSync(path)
+      let digest = hex(bytes)
+      if (!code(path)) return { digest, names: [], imports: digest }
+      let text = new TextDecoder().decode(bytes)
+      return {
+        digest,
+        names: named(text, path, where),
+        imports: hex(importing(text)),
+      }
+    }))
   }
   // What each file is and names: read once for the lot.
-  let facts = new Map<string, Promise<{ digest: string; names: string[] }>>()
+  let facts = new Map<string, Promise<Fact>>()
   let fact = (path: string) => {
     if (!facts.has(path)) facts.set(path, look(path))
     return facts.get(path)!
@@ -554,7 +549,7 @@ export let survey = async (
   let named0 = (await Promise.all(paths.map(fact))).flatMap((f) => f.names)
   let roots = [...new Set([...paths, ...named0].filter(code))]
   let found = roots.length
-    ? await info(roots, async (p) => (await fact(p)).digest)
+    ? await info(roots, async (p) => (await fact(p)).imports)
     : { modules: [], redirects: {} }
   if (!found) return undefined
   let { redirects } = found
@@ -608,10 +603,7 @@ export let survey = async (
   for (let targets of [...next.values()]) {
     for (let t of targets) if (!next.has(t)) next.set(t, [])
   }
-  if (
-    store &&
-    (fresh || Object.keys(after).length != Object.keys(before).length)
-  ) write(after, store)
+  known.save()
   let mine = (n: string) => own.get(n) ?? n
   let seals = seal(next, mine)
   let executed = seal(
@@ -687,6 +679,8 @@ export let survey = async (
     },
     bytes: (path) =>
       fact(path).then((f) => f.digest == 'place' ? digest(path) : f.digest),
+    said: (path) =>
+      fact(path).then((f) => f.digest == 'place' ? digest(path) : f.imports),
     of: (path, run = false) => {
       let key = `${run} ${path}`
       if (!held.has(key)) {
@@ -836,34 +830,42 @@ export let proof = async (
     )
     : key
 
-/** Where passes are kept, by proof, for every checkout on this machine. */
-export let STORE: string = `${cache}/yak/tests-passed.json`
+/** Where passes are kept, by proof, for every checkout on this machine: a
+ * proof a line, the newest last. */
+export let STORE: string = `${cache}/yak/tests-passed.log`
 
 /** Where what each file read as it last passed is kept, beside them. */
 export let READS: string = `${cache}/yak/tests-reads.json`
 
 // Enough passes for every file of many checkouts; the oldest go first.
 let KEEP = 100_000
+// A proof's line: a digest in hex, and its end.
+let LINE = 65
 
-let load = <T>(store: string): Record<string, T> => {
+let proofs = (store: string): string[] => {
   try {
-    return JSON.parse(io.readTextFileSync(store))
+    return io.readTextFileSync(store).split('\n').filter(Boolean)
   } catch {
-    return {}
+    return []
   }
 }
 
-/** The passes kept, each with when. */
-export let passed = (store = STORE): Record<string, number> => load(store)
+/** The passes kept. */
+export let passed = (store = STORE): Set<string> => new Set(proofs(store))
 
-/** Adds passes made now to what the store holds. */
-export let remember = (proofs: string[], store = STORE): void => {
-  if (!proofs.length) return
-  let now = Date.now()
-  save(
-    { ...passed(store), ...Object.fromEntries(proofs.map((k) => [k, now])) },
-    store,
-  )
+/** Adds passes made now to what the store holds. A run appends only its
+ * own, so runs adding at once keep each other's; a store grown past twice
+ * `keep` lines is cut to the newest `keep`. */
+export let remember = (
+  made: string[],
+  store = STORE,
+  keep = KEEP,
+): void => {
+  if (!made.length) return
+  append(made.map((k) => `${k}\n`).join(''), store)
+  if (io.statSync(store).size > 2 * keep * LINE) {
+    save([...new Set(proofs(store).reverse())].slice(0, keep).reverse(), store)
+  }
 }
 
 // The reads store names each path once, and each file's reads by their
@@ -910,28 +912,12 @@ export let tally = (times: Record<string, number>, store = TOOK): void => {
 
 /** Takes passes back out of what the store holds: those that a caller
  * holding the run to more than passing (bin/test-budget.ts) does not grant. */
-export let forget = (proofs: string[], store = STORE): void => {
-  if (!proofs.length) return
-  let all = passed(store)
-  for (let k of proofs) delete all[k]
-  save(all, store)
+export let forget = (taken: string[], store = STORE): void => {
+  if (!taken.length) return
+  let gone = new Set(taken)
+  save(proofs(store).filter((k) => !gone.has(k)), store)
 }
 
-// The store holding `all`, the newest kept, written whole.
-let save = (all: Record<string, number>, store: string) =>
-  write(
-    Object.fromEntries(
-      Object.entries(all).sort((a, b) => b[1] - a[1]).slice(0, KEEP),
-    ),
-    store,
-  )
-
-let write = (all: unknown, store: string) => put(JSON.stringify(all), store)
-
-// A store written whole, through a rename, so a reader never reads half.
-let put = (text: string, store: string) => {
-  room(store)
-  let draft = `${store}.${system.pid}`
-  io.writeTextFileSync(draft, text)
-  io.renameSync(draft, store)
-}
+// The store holding `all`, oldest first, written whole.
+let save = (all: string[], store: string) =>
+  put(all.map((k) => `${k}\n`).join(''), store)

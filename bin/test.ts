@@ -42,7 +42,7 @@ let { check, format } = await import('./test-checks.ts')
 let { excluded, MADE: GENERATORS, sourceSurvey } = await import(
   './check-types.ts'
 )
-let { discover, tested } = await import('@yaks/testing/find')
+let { discover, PAGES, tested } = await import('@yaks/testing/find')
 let { FACTS, survey, took } = await import('@yaks/testing/deps')
 let { own } = await import('@yaks/testing/own')
 let { runTestCommands } = await import('./phases.ts')
@@ -404,7 +404,7 @@ export let prepare = async (
   effects = {
     changes,
     format,
-    find: discover,
+    find: (paths: string[]) => discover(paths, PAGES),
     chosen,
     check: (
       changed: string[],

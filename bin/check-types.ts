@@ -37,6 +37,7 @@
 import { dirname } from 'node:path'
 import config from '../deno.json' with { type: 'json' }
 import { createHash } from 'node:crypto'
+import { once } from '@yaks/fp'
 import {
   digest,
   FACTS,
@@ -44,10 +45,10 @@ import {
   remember,
   remembered,
   seal,
-  stores,
   type Survey,
   survey,
 } from '@yaks/testing/deps'
+import { stores } from '@yaks/testing/kept'
 import { exported, fences, typed } from '@yaks/testing/examples'
 import { changes, git, member } from './test-changes.ts'
 import { type Info, type Project, project, relative } from './tsconfig.ts'
@@ -89,7 +90,7 @@ let CACHE = `${
 
 /** Where the roots that passed are kept, by proof (`proofs`), for every
  * checkout on this machine. */
-export let TYPED = `${CACHE}/types-passed.json`
+export let TYPED = `${CACHE}/types-passed.log`
 
 let hex = (text: string) => createHash('sha256').update(text).digest('hex')
 
@@ -193,10 +194,12 @@ export let checked = (path: string) =>
   /\.[mc]?[jt]sx?$/.test(path) &&
   DIRS.some((d) => path.startsWith(`${d}/`)) && !excluded(path)
 
-/** Every module the check checks. */
-let every = async () =>
+/** Every module the check checks, listed once a process: a run's survey and
+ * its check share the listing. */
+let every = once(async () =>
   (await git(['ls-files', '-co', '--exclude-standard', ...DIRS]))
     .split('\n').filter(checked)
+)
 
 /** Where every checkout of this repository shares a platform's pool of build
  * info (./check-incremental.ts); outside one, the project's own. */
@@ -246,8 +249,9 @@ let deno = (): Platform => {
 }
 
 /** The Workers program, and the modules it checks: its globals arrive by
- * each entry's `/// <reference types>`. */
-let workers = async () => {
+ * each entry's `/// <reference types>`. Made once a process: a run's survey,
+ * its scope and its check share it. */
+let workers = once(async () => {
   let { config, entries } = await platformConfig(
     new URL(`file://${CHECKOUT}/`),
     'workers',
@@ -267,7 +271,7 @@ let workers = async () => {
     platform,
     entries: entries.map((e) => e.slice(`file://${CHECKOUT}/`.length)),
   }
-}
+})
 
 /** One command's resolution snapshot, including source roots and hosted entries. */
 export let sourceSurvey = async (
@@ -542,13 +546,13 @@ let program = async (on: Platform, roots: string[], snapshot?: Survey) => {
       }.json`
     let [found, globals] = await Promise.all([
       own
-        ? remembered(resolve, own)(roots, snapshot?.bytes)
+        ? remembered(resolve, own)(roots, snapshot?.said)
         : (async () =>
           await snapshot?.info(
             [...roots, ...docs],
             Object.values(MADE).flat(),
           ) ??
-            await remembered(resolve)([...roots, ...docs], snapshot?.bytes))(),
+            await remembered(resolve)([...roots, ...docs], snapshot?.said))(),
       on.globals(),
     ])
     if (!found) throw new Error('Cannot resolve source types')
@@ -572,7 +576,7 @@ let program = async (on: Platform, roots: string[], snapshot?: Survey) => {
     // build info for one program spares little of another's: dropping a root
     // can have the compiler check every file again. So it checks them all,
     // whose unchanged files its build info spares.
-    if (roots.every((r) => proven.get(r)! in kept)) return true
+    if (roots.every((r) => kept.has(proven.get(r)!))) return true
     let manifests = Object.fromEntries(
       [...new Set(graphed.modules.flatMap((m) => m.npmPackage ?? []))]
         .map((id) => [id, manifest(graphed.npmPackages[id].localPath)]),

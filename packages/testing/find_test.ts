@@ -59,3 +59,28 @@ test('discovery retains the same runnable pages and shares their parsed examples
     ],
   })
 })
+
+test('a page keeps what it was scanned for until its status changes, and a store keeps pages a run did not walk', async () => {
+  let store = `${dir}/.pages.json`
+  let page = `${dir}/guide.md`
+  let s = Deno.statSync(page)
+  let status = [s.ino, s.size, s.mtime!.getTime(), s.ctime!.getTime()]
+  let kept = { fenced: [], lines: [{ line: 1, skip: false, code: 'kept()' }] }
+  Deno.writeTextFileSync(
+    store,
+    JSON.stringify({
+      [page]: [...status, kept],
+      'elsewhere/a.ts': [0, 0, 0, 0, 0],
+    }),
+  )
+  equal((await discover([dir], store)).parsed!.get(page), kept)
+  equal(Object.keys(JSON.parse(Deno.readTextFileSync(store))).sort(), [
+    page,
+    'elsewhere/a.ts',
+  ])
+  Deno.writeTextFileSync(page, '```ts\nchanged()\n```')
+  equal(
+    (await discover([dir], store)).parsed!.get(page)!.fenced[0].code,
+    'changed()',
+  )
+})
