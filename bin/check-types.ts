@@ -195,11 +195,16 @@ export let checked = (path: string) =>
   DIRS.some((d) => path.startsWith(`${d}/`)) && !excluded(path)
 
 /** Every module the check checks, listed once a process: a run's survey and
- * its check share the listing. */
-let every = once(async () =>
-  (await git(['ls-files', '-co', '--exclude-standard', ...DIRS]))
-    .split('\n').filter(checked)
-)
+ * its check share the listing. Git's index still names a file deleted from
+ * the working tree, which is no module to check. */
+let every = once(async () => {
+  let [listed, deleted] = await Promise.all([
+    git(['ls-files', '-co', '--exclude-standard', ...DIRS]),
+    git(['ls-files', '-d', ...DIRS]),
+  ])
+  let gone = new Set(deleted.split('\n'))
+  return listed.split('\n').filter((p) => checked(p) && !gone.has(p))
+})
 
 /** Where every checkout of this repository shares a platform's pool of build
  * info (./check-incremental.ts); outside one, the project's own. */
