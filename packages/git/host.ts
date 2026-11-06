@@ -715,8 +715,11 @@ export let processPaths = async (
           stdout: 'piped',
           stderr: 'piped',
         }).output()
-        // A process that ended while it was read is gone, or dead and not
-        // yet reaped: its cwd no longer resolves, and it holds no files.
+        // A process may have changed while it was read: ended (gone, or dead
+        // and not yet reaped), holding no files; or become another user's by
+        // running a setuid program such as sudo, as one that was another
+        // user's from the start is never scanned.
+        if ((await io.stat(proc)).uid != system.uid()) return []
         if (exited(await io.readTextFile(proc + '/stat'))) return []
         let found: unknown
         try {
