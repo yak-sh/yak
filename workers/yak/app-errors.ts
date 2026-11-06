@@ -7,6 +7,9 @@ import type { Env } from './env.ts'
 import type { Who } from './session.ts'
 import { recall, writing } from './lib/hops.ts'
 
+/** One decoded tracker request. The transport owns credentials, HTTP and its deadline. */
+export type Send = (path: string, init: RequestInit) => Promise<unknown>
+
 // The space's tracker is a store like any other to the request's tally
 // (hops.ts): a read asked twice is asked once, until this request writes
 // there, so a read begun early (unseen.ts `foresee`) answers a later one.
@@ -16,12 +19,11 @@ let request = (
   who: Who,
   path: string,
   init: RequestInit = {},
+  send: Send = (path, init) => sent(env, space, who, path, init),
 ) => {
   let store = `tracker ${space.eid}`
-  let send = () => sent(env, space, who, path, init)
-  return init.method == 'POST'
-    ? writing(store, send)
-    : recall(store, path, send)
+  let run = () => send(path, init)
+  return init.method == 'POST' ? writing(store, run) : recall(store, path, run)
 }
 
 // A ticket to a space's tracker lives a minute. One is signed for each caller
@@ -92,6 +94,7 @@ let opened = async (
   who: Who,
   filter: string,
   all: boolean,
+  send?: Send,
 ): Promise<Bundle[]> => {
   let rows: Bundle[] = [], after = ''
   for (;;) {
@@ -104,6 +107,8 @@ let opened = async (
       space,
       who,
       `/query?q=${encodeURIComponent(query)}`,
+      undefined,
+      send,
     ) as Bundle[]
     rows.push(...page)
     if (page.length < 100) return rows
@@ -115,13 +120,19 @@ let opened = async (
 
 /** Every app's open occurrences in a space, in one read of the space's
  * tracker: what a listing or a reply needs without waking any app's store. */
-export let errorsIn = (env: Env, space: Space, who: Who) => ({
-  read: (all: boolean) => opened(env, space, who, '.during.app', all),
+export let errorsIn = (env: Env, space: Space, who: Who, send?: Send) => ({
+  read: (all: boolean) => opened(env, space, who, '.during.app', all, send),
 })
 
-export let errorsAt = (env: Env, space: Space, app: App, who: Who) => ({
+export let errorsAt = (
+  env: Env,
+  space: Space,
+  app: App,
+  who: Who,
+  send?: Send,
+) => ({
   read: (all: boolean) =>
-    opened(env, space, who, `.during.app=${app.eid}`, all),
+    opened(env, space, who, `.during.app=${app.eid}`, all, send),
   mark: async (rows: Bundle[], mark: 'notified' | 'archived') => {
     for (let at = 0; at < rows.length; at += 100) {
       await request(env, space, who, '/app-errors', {
@@ -131,7 +142,7 @@ export let errorsAt = (env: Env, space: Space, app: App, who: Who) => ({
           eids: rows.slice(at, at + 100).map((row) => row.entity.eid),
           mark,
         }),
-      })
+      }, send)
     }
   },
 })

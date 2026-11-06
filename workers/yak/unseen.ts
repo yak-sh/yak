@@ -36,7 +36,7 @@ import {
   origin,
   queue,
 } from '@yaks/tracker/report'
-import { errorsAt, errorsIn } from './app-errors.ts'
+import { errorsAt, errorsIn, type Send } from './app-errors.ts'
 import { refuse } from './tool.ts'
 import { isTestAddress } from './lib/bots.ts'
 import { flood } from './lib/flood.ts'
@@ -588,7 +588,7 @@ let appsOf = (env: Env, space: Space) =>
 
 // One app's store in the graph's own wire, with this caller vouched: what a
 // mark is written through, and what an open item is read out of.
-let graphAt = (env: Env, space: Space, app: App, who: Who) => {
+let graphAt = (env: Env, space: Space, app: App, who: Who, send?: Send) => {
   let store = appStore(env.STORE, space, app, env)
   return {
     query: (line: string) =>
@@ -610,7 +610,7 @@ let graphAt = (env: Env, space: Space, app: App, who: Who) => {
           : [],
         ...tracked.length
           ? [
-            errorsAt(env, space, app, who).mark(
+            errorsAt(env, space, app, who, send).mark(
               tracked as unknown as Bundle[],
               mark,
             ),
@@ -629,11 +629,12 @@ export let openIn = async (
   app: App,
   who: Who,
   all = false,
+  send?: Send,
 ) => {
   // A trashed store is dormant; its errors return with the app on restore.
   if (app.trashed || space.trashed) return []
   let seen = all ? '' : '&!notified'
-  let at = graphAt(env, space, app, who)
+  let at = graphAt(env, space, app, who, send)
   try {
     let found = await Promise.all([
       // Published ids still name pre-tracker rows in their original app store.
@@ -642,7 +643,7 @@ export let openIn = async (
         (await at.query(`.${facet}&?doc&?content&!archived${seen}`))
           .map((b) => ({ kind: facet, ...b }) as unknown as Hit)
       ),
-      errorsAt(env, space, app, who).read(all).then((rows) =>
+      errorsAt(env, space, app, who, send).read(all).then((rows) =>
         rows.map(trackedHit)
       ),
     ])
@@ -686,10 +687,11 @@ export let trackedIn = async (
   space: Space,
   who: Who,
   all = false,
+  send?: Send,
 ) => {
   let by = new Map<string, Hit[]>()
   if (space.trashed) return by
-  for (let row of await errorsIn(env, space, who).read(all)) {
+  for (let row of await errorsIn(env, space, who, send).read(all)) {
     let app = String((row.during as { app?: unknown }).app)
     by.set(app, [...by.get(app) ?? [], trackedHit(row)])
   }
@@ -706,18 +708,23 @@ export let brokenIn = async (
   who: Who,
   apps: App[],
   readFixings = fixings,
+  send?: Send,
 ) => {
-  let open = await trackedIn(env, space, who, true)
+  let open = await trackedIn(env, space, who, true, send)
   let broken = apps.filter((a) => open.has(a.eid)).map((app) =>
-    [app.eid, folds(open.get(app.eid)!.map((hit) => ({ app, hit })))] as const
+    [
+      app.eid,
+      folds(open.get(app.eid)!.map((hit) => ({ app, hit })))
+        .map((fold) => ({ seen: fold[0], plain: plain(fold) })),
+    ] as const
   )
-  let all = broken.flatMap(([, f]) => f.map(([s]) => s))
+  let all = broken.flatMap(([, f]) => f)
   // A dashboard without the Operator's word still shows what broke.
   let fixed = await readFixings(
     env,
     space,
     who,
-    all.map((s) => fixOf(s.app, s.hit)),
+    all.map((s) => s.plain.fix),
   )
     .catch((e) => {
       caught(e, { request: "read the Operator's fixes", space: space.slug })
@@ -726,12 +733,12 @@ export let brokenIn = async (
   // A break the Operator never heard of (one from before it was told of
   // breaks, or whose telling failed) it is told of now, as its owner sees it.
   let started = new Set<string>()
-  let unheard = fixed ? all.filter((s) => !fixed.has(fixOf(s.app, s.hit))) : []
+  let unheard = fixed ? all.filter((s) => !fixed.has(s.plain.fix)) : []
   if (unheard.length && await ownedBy(env, space) != 'test') {
     await Promise.all(
       unheard.map((s) =>
-        fix(env, space, s.app, s.hit).then(
-          () => started.add(fixOf(s.app, s.hit)),
+        fix(env, space, s.seen.app, s.seen.hit).then(
+          () => started.add(s.plain.fix),
           (e) => caught(e, { request: 'start a fix', space: space.slug }),
         )
       ),
@@ -740,7 +747,7 @@ export let brokenIn = async (
   return new Map(
     broken.map(([app, f]) => [
       app,
-      f.map(plain).map((p) => {
+      f.map(({ plain: p }) => {
         let operator = fixed?.get(p.fix) ?? (started.has(p.fix) ? {} : null)
         return operator ? { ...p, operator } : p
       }),
@@ -775,8 +782,8 @@ export let past = (app: { version?: number | null }, h: Hit) => {
  * there goes on: serve asks again and is handed this reading, unless the
  * request wrote to the space's tracker in between (app-errors.ts, hops.ts
  * `recall`). A failure here is serve's to meet when it asks. */
-export let foresee = (env: Env, space: Space, who: Who) =>
-  void trackedIn(env, space, who).catch(() => {})
+export let foresee = (env: Env, space: Space, who: Who, send?: Send) =>
+  void trackedIn(env, space, who, false, send).catch(() => {})
 
 export let serve = async (
   env: Env,
@@ -786,6 +793,7 @@ export let serve = async (
   all = false,
   read = trackedIn,
   apps = appsOf,
+  send?: Send,
 ) => {
   if (app) {
     return offered(
@@ -793,15 +801,16 @@ export let serve = async (
       space,
       who,
       app,
-      await openIn(env, space, app, who, all),
+      await openIn(env, space, app, who, all, send),
       all,
+      send,
     )
   }
-  let open = await read(env, space, who, all)
+  let open = await read(env, space, who, all, send)
   if (!open.size) return []
   let each = await Promise.all(
     (await apps(env, space)).filter((a) => !a.trashed && open.has(a.eid))
-      .map((a) => offered(env, space, who, a, open.get(a.eid)!, all)),
+      .map((a) => offered(env, space, who, a, open.get(a.eid)!, all, send)),
   )
   return each.flat()
 }
@@ -813,9 +822,12 @@ let offered = async (
   app: App,
   hits: Hit[],
   all: boolean,
+  send?: Send,
 ): Promise<Seen[]> => {
   let fresh = hits.filter((h) => !('notified' in h))
-  if (fresh.length) await graphAt(env, space, app, who).mark(fresh, 'notified')
+  if (fresh.length) {
+    await graphAt(env, space, app, who, send).mark(fresh, 'notified')
+  }
   let said = all ? hits : hits.filter((h) => !past(app, h))
   return said.map((hit) => ({ app, hit }))
 }

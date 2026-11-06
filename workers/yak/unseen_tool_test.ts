@@ -21,7 +21,7 @@ import {
 } from './unseen.ts'
 import type { Who } from './session.ts'
 import { tallying } from './lib/hops.ts'
-import { ticket } from './app-errors.ts'
+import type { Send } from './app-errors.ts'
 
 test('app_errors lists a break whose stored stack is null', async () => {
   await using p = platform('unseen-secret')
@@ -113,26 +113,17 @@ let row = (
 // The space's tracker, answering every query with `rows`, and keeping what it
 // was asked.
 let tracker = (rows: unknown[] = []) => {
-  let asked: Request[] = []
-  let env = {
-    TRACKER_SECRET: 'secret',
-    TRACKER: {
-      fetch: (r: Request) => {
-        asked.push(r)
-        return Promise.resolve(Response.json(r.method == 'POST' ? {} : rows))
-      },
-    },
-  } as unknown as Env
-  return { env, asked }
+  let asked: { path: string; init: RequestInit }[] = []
+  let send: Send = (path, init) => {
+    asked.push({ path, init })
+    return Promise.resolve(init.method == 'POST' ? {} : rows)
+  }
+  return { env: {} as Env, asked, send }
 }
 
 let space = { eid: 'space-1', slug: 'ada' } as Space
 let cook = { eid: 'app-1', slug: 'cookbook', version: 1 } as App
 let ada: Who = { person: ADA, role: 'owner' }
-// The kernel carries a space's tracker ticket for half its minute: signed
-// here, as an isolate's earlier request in the space signs it, so the case
-// times its reads and not WebCrypto's thread pool.
-await ticket(tracker().env, space, ada)
 
 let foldedHits = [1, 2, 3].map((n) => ({
   kind: 'error',
@@ -180,10 +171,10 @@ test('app_errors shows a session error from its content', async () => {
 // write knows its space (mcp.ts `ahead`), and the answer is handed that
 // reading: the space's breaks are asked for once (T-124082).
 test("a write's answer reads its space's breaks once", async () => {
-  let { env, asked } = tracker()
+  let { env, asked, send } = tracker()
   await tallying(new Map(), async () => {
-    foresee(env, space, ada)
-    await serve(env, space, ada)
+    foresee(env, space, ada, send)
+    await serve(env, space, ada, undefined, false, undefined, undefined, send)
   })
   assertEquals(asked.length, 1)
 })
@@ -191,10 +182,10 @@ test("a write's answer reads its space's breaks once", async () => {
 let arrived = tracker([row('fresh-break', cook, 'boom', 'page /cookbook/')])
 
 test("a write's prefetched break remains in its one cached tracker read", async () => {
-  let { env, asked } = arrived
+  let { env, asked, send } = arrived
   let open = await tallying(new Map(), async () => {
-    foresee(env, space, ada)
-    return await trackedIn(env, space, ada)
+    foresee(env, space, ada, send)
+    return await trackedIn(env, space, ada, false, send)
   })
   assertEquals(open.get(cook.eid)?.[0].error?.message, 'boom')
   assertEquals(asked.length, 1)
@@ -208,10 +199,9 @@ let freshBreak = {
   error: { message: 'boom', request: 'page /cookbook/', version: 1 },
 }
 let freshBreaks = new Map([[cook.eid, [freshBreak]]])
-await ticket(announced.env, space, ada, true)
 
 test("a write's reply carries its fresh break and marks it told", async () => {
-  let { env, asked } = announced
+  let { env, asked, send } = announced
   let offered = await serve(
     env,
     space,
@@ -220,12 +210,13 @@ test("a write's reply carries its fresh break and marks it told", async () => {
     false,
     () => Promise.resolve(freshBreaks),
     () => Promise.resolve([cook]),
+    send,
   )
   assertEquals(offered.length, 1)
   assertStringIncludes(line(offered), 'page /cookbook/ — boom')
   assertEquals(asked.length, 1)
-  assertEquals(asked[0].method, 'POST')
-  assertEquals(await asked[0].json(), {
+  assertEquals(asked[0].init.method, 'POST')
+  assertEquals(JSON.parse(String(asked[0].init.body)), {
     app: cook.eid,
     eids: ['fresh-break'],
     mark: 'notified',
@@ -240,7 +231,7 @@ let dashboard = tracker([
 ])
 
 test('brokenIn says each break plainly and leaves it news', async () => {
-  let { env, asked } = dashboard
+  let { env, asked, send } = dashboard
   let said = (await brokenIn(
     env,
     space,
@@ -248,6 +239,7 @@ test('brokenIn says each break plainly and leaves it news', async () => {
     [cook],
     (_env, _space, _who, ids) =>
       Promise.resolve(new Map(ids.map((id) => [id, {}]))),
+    send,
   )).get(cook.eid)!
   assertEquals(
     said.map(({ said, where, times }) => ({ said, where, times })),
@@ -257,5 +249,5 @@ test('brokenIn says each break plainly and leaves it news', async () => {
     ],
   )
   // Nothing was marked: the assistant still hears of both.
-  assertEquals(asked.filter((r) => r.method == 'POST'), [])
+  assertEquals(asked.filter((r) => r.init.method == 'POST'), [])
 })
