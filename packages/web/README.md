@@ -26,9 +26,11 @@ List web and browse beside the graph and API plugins in a `yak serve` config:
 ```
 
 The routes facet answers `/` and entity addresses such as `/T-9` with the page.
-`/web/app.js` bundles browse's browser entry. `/web/styles.css` serves
-@yaks/ui's stylesheet followed by browse's styles. The manifest and icons live
-beside the page.
+`/web/app.js` is the canvas (`./canvas`): browse's browser entry bundled with
+the configured plugins' views. A release ships the canvas of a fresh `yak init`
+already made, so a host composed that way answers with it instead of bundling
+from JSR on the person's machine. `/web/styles.css` serves @yaks/ui's stylesheet
+followed by browse's styles. The manifest and icons live beside the page.
 
 The page carries @yaks/tracker's page reporter inline, ahead of the app. It
 posts what it catches to `POST /api/report`, which reads the body with
@@ -58,6 +60,7 @@ more-specific routes.
 | ------------ | ------------------------------------------------------ |
 | `.`          | `routes`, `letters` and the host's `Hosting` interface |
 | `./routes`   | routes facet composed by the browser host              |
+| `./canvas`   | the canvas a composition serves, and `prepare`         |
 | `./outlived` | whether a page outlived the bundle it runs             |
 
 `assets.ts` builds the same module, page, stylesheet and icons into a static
@@ -128,7 +131,10 @@ const app = {
   entry: new URL('file:///example/main.ts'),
   mount: new URL('file:///example/mount.ts'),
 }
-equal(await application(['example'], undefined, async () => ({ app })), app)
+equal(
+  await application(['example'], undefined, async () => ({ app })),
+  { ...app, plugin: 'example' },
+)
 ```
 
 The door loads the configured plugins' `/views` facets and passes them, with its

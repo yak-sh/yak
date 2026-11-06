@@ -11,12 +11,15 @@ test('configured web facets select one app, skipping plugins without it', async 
     asked.push(p)
     return Promise.resolve(p == 'app' ? { app: one } : null)
   }
-  equal(await application(['data', 'app'], undefined, load), one)
+  equal(await application(['data', 'app'], undefined, load), {
+    ...one,
+    plugin: 'app',
+  })
   equal(asked, ['data', 'app'])
 })
 test('explicit application selector resolves competing facets', async () => {
   let load = (_p: string) => Promise.resolve({ app: one })
-  equal(await application(['a', 'b'], 'b', load), one)
+  equal(await application(['a', 'b'], 'b', load), { ...one, plugin: 'b' })
   await throws(() => application(['a', 'b'], undefined, load), /one configured/)
   await throws(() => application(['a'], 'missing', load), /found 0/)
 })

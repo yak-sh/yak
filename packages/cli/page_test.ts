@@ -1,6 +1,14 @@
 import { test, tick } from '@yaks/testing'
 import { assertEquals } from '@std/assert'
-import { type Body, type Build, bundle, compiled, kept } from './page.ts'
+import {
+  ahead,
+  type Body,
+  type Build,
+  bundle,
+  compiled,
+  keep,
+  kept,
+} from './page.ts'
 import { close } from './held.ts'
 
 let get = (handle: (r: Request) => Promise<Response>) =>
@@ -166,5 +174,16 @@ test('a bundled page compiles its JSX against Preact', async () => {
     assertEquals(code.includes('hi'), true)
   } finally {
     await Deno.remove(path)
+  }
+})
+
+test('a body made ahead is found under its key, and only there', async () => {
+  let dir = new URL(`file://${await Deno.makeTempDir()}/made/`)
+  try {
+    await keep(dir, 'canvas', 'made')
+    assertEquals(await ahead('canvas', dir), 'made')
+    assertEquals(await ahead('other', dir), undefined)
+  } finally {
+    await Deno.remove(new URL('../', dir), { recursive: true })
   }
 })

@@ -13,18 +13,27 @@
  * anybody restarting the host. A make still going when its host closes is
  * aborted too, so nothing it spawned outlives the host.
  *
+ * A release makes some bodies ahead: what a fresh install serves, made from
+ * the release's own checkout as it publishes (bin/publish.ts) and shipped in
+ * `./made/`, each under the hash of a key naming what it was made of. `ahead`
+ * finds one, so a host composed the same way answers with it instead of making
+ * it on the person's machine. A checkout ships none, and makes every body.
+ *
  * @module
  */
 
 import { fault } from '@yaks/api/refuse'
+import * as disk from '@yaks/file/io'
 import { fileURLToPath } from 'node:url'
 import { settling } from './held.ts'
 
 /** A body a page loads. */
 export type Body = string | Uint8Array<ArrayBuffer>
 
-/** How long a body may take to make before it is given up on. A bundle takes
- * a few seconds; a hung one never finishes (T-38240). */
+/** How long a body may take to make before it is given up on. A bundle from a
+ * checkout takes a few seconds, one from JSR far longer (./remote-page.ts),
+ * which is why a release makes a fresh install's ahead; a hung one never
+ * finishes (T-38240). */
 export let LIMIT = 60_000
 
 let sha = async (body: Body) =>
@@ -37,6 +46,37 @@ let sha = async (body: Body) =>
     ),
   ]
     .map((b) => b.toString(16).padStart(2, '0')).join('').slice(0, 32)
+
+/** Where a release keeps the bodies it made ahead. */
+export let MADE: URL = new URL('./made/', import.meta.url)
+
+let made = async (key: string, at: URL) => new URL(`${await sha(key)}.json`, at)
+
+/** The body made ahead for `key`, or undefined where none was. */
+export let ahead = async (
+  key: string,
+  at: URL = MADE,
+): Promise<string | undefined> => {
+  try {
+    let { default: { body } } = await import((await made(key, at)).href, {
+      with: { type: 'json' },
+    })
+    return body
+  } catch (e) {
+    if ((e as { code?: string }).code == 'ERR_MODULE_NOT_FOUND') return
+    throw e
+  }
+}
+
+/** Keep `body` in `dir` (a release's `./made/`) where `ahead(key)` finds it. */
+export let keep = async (
+  dir: URL,
+  key: string,
+  body: string,
+): Promise<void> => {
+  await disk.mkdir(dir, { recursive: true })
+  await disk.writeTextFile(await made(key, dir), JSON.stringify({ body }))
+}
 
 // A body the browser may keep, revalidated on each load by its hash.
 type Made = { body: Body; tag: string }

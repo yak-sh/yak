@@ -86,6 +86,9 @@ export let publishing = async (
 // day-long wait (packages/cli/release.ts).
 export let LIST = 'packages/cli/release.json'
 
+/** The package that ships `LIST`. */
+export let CARRIER = '@yaks/cli'
+
 /// list(new Map([['@yaks/web', '0.2.18'], ['@yaks/cli', '0.2.18']])) -> '{\n  "@yaks/cli": "0.2.18",\n  "@yaks/web": "0.2.18"\n}\n'
 export let list = (at: Map<string, string>) =>
   JSON.stringify(
@@ -150,9 +153,10 @@ export let following = (versions: string[]) => {
 }
 
 /** The packages a release at `version` publishes: the published ones that
- * changed, a published one importing a package it moves past the range that
- * import was published with, and an unpublished one only once a package it
- * publishes imports it.
+ * changed, `carrier` with them (it ships the release's list and the pages a
+ * fresh install serves, which every release rewrites), a published one
+ * importing a package it moves past the range that import was published with,
+ * and an unpublished one only once a package it publishes imports it.
  *
  * ```ts
  * import { assertEquals } from '@std/assert'
@@ -166,16 +170,23 @@ export let following = (versions: string[]) => {
  * ]
  * assertEquals(pick(all, '0.1.1'), ['sqlite'])
  * assertEquals(pick(all, '0.2.0'), ['cli', 'sqlite'])
+ * assertEquals(pick(all, '0.1.1', 'fp'), ['fp', 'sqlite'])
+ * assertEquals(pick([m('fp', [])], '0.1.1', 'fp'), [])
  * assertEquals(pick([
  *   m('mail', ['resend'], true),
  *   m('resend', [], true, false),
  * ], '0.1.1'), ['mail', 'resend'])
  * ```
  */
-export let pick = (all: Member[], version: string): string[] => {
+export let pick = (
+  all: Member[],
+  version: string,
+  carrier = CARRIER,
+): string[] => {
   let out = new Set(
     all.filter((m) => m.published && m.changed).map((m) => m.name),
   )
+  if (out.size && all.some((m) => m.name == carrier)) out.add(carrier)
   let held = new Map(all.map((m) => [m.name, m.held]))
   let past = (dep: string) => {
     let at = held.get(dep)

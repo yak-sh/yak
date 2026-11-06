@@ -12,8 +12,7 @@ import { type Application, application } from './app.ts'
 // @yaks/api lets the route naming a path most closely answer it, so `/query`,
 // `/ws` and every other plugin's route stay theirs.
 //
-// `/web/*` is what that page loads: the app bundled from main.tsx (@yaks/cli
-// `bundle`), its stylesheet (@yaks/ui's in its default theme and skin, then this
+// `/web/*` is what that page loads: the canvas (./canvas.ts), its stylesheet (@yaks/ui's in its default theme and skin, then this
 // package's own), icons and manifest. The vocabulary is @yaks/api's `/vocab`.
 //
 // The page carries the tracker's page reporter (@yaks/tracker/page) inline,
@@ -29,12 +28,12 @@ import { Refused } from '@yaks/graph/errors'
 import { addressId } from '@yaks/id'
 import { composition, stylesheet } from '@yaks/ui'
 import type { Vocab } from '@yaks/vocab'
-import { type Body, bundle, kept } from '@yaks/cli/page'
+import { type Body, kept } from '@yaks/cli/page'
+import { made } from './canvas.ts'
 import { preload } from './preload.ts'
 import { person } from '@yaks/cli/host'
-import { type Config, located, subpaths, used } from '@yaks/cli/config'
+import { type Config, located } from '@yaks/cli/config'
 import { broken, type Context } from '@yaks/tracker/report'
-import type { Registry } from '@yaks/render'
 import type { Vault } from '@yaks/secrets'
 import { authorization } from './authorize.ts'
 
@@ -252,41 +251,7 @@ export let routes = (host: Hosting, options: Options = {}): Route[] => {
       handle: kept(
         '/web/app.js',
         'text/javascript; charset=utf-8',
-        async (signal) => {
-          let specs: string[] = []
-          let plugins = (host.config?.plugins ?? []).map(used)
-          let facets = await subpaths(plugins.map((p) => [p, 'views'])) as ({
-            views?: Registry
-            inspectViews?: unknown[]
-            destinations?: unknown[]
-            home?: unknown
-            tabs?: unknown[]
-          } | null)[]
-          for (let [i, plugin] of plugins.entries()) {
-            let facet = facets[i]
-            if (
-              facet?.views || facet?.inspectViews || facet?.destinations ||
-              facet?.home || facet?.tabs
-            ) {
-              specs.push(import.meta.resolve(located(`${plugin}/views`)))
-            }
-          }
-          let chosen = await app()
-          let main = chosen.mount
-          let code = [
-            `import ${
-              JSON.stringify(new URL('./browser.ts', import.meta.url).href)
-            }`,
-            `import { mount } from ${JSON.stringify(main.href)}`,
-            ...specs.map((s, i) =>
-              `import * as f${i} from ${JSON.stringify(s)}`
-            ),
-            `await mount([${specs.map((_, i) => `f${i}`).join(',')}], ${
-              JSON.stringify(options.home) ?? 'undefined'
-            })`,
-          ].join('\n')
-          return bundle({ code, at: chosen.entry }, signal)
-        },
+        (signal) => made(host.config?.plugins ?? [], options, signal),
         { early: true, closing: host.stopping },
       ),
     },

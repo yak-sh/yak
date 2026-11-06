@@ -12,6 +12,11 @@
 // Deno resolves every dependency a member's package.json names. A dry run
 // (`--dry-run`, the source check) is given every member, so it checks every
 // package's public API as one workspace.
+//
+// A publish ships, in @yaks/cli's `made/`, the canvas a fresh `yak init`
+// serves (@yaks/web/canvas `prepare`), made here from the release's own
+// checkout, so a person's first `yak serve` answers with it instead of
+// bundling the canvas from JSR (@yaks/cli/page `ahead`).
 import { matchesGlob } from 'node:path'
 import { cp } from 'node:fs/promises'
 import pinned from '../packages/cli/release.json' with { type: 'json' }
@@ -151,13 +156,21 @@ let member = (dir: string): Member => {
 
 if (import.meta.main) {
   let all = members().map(member)
+  let dry = Deno.args.includes('--dry-run')
   let held = new Set(
     (await publishing(root)).map((p) => p.name)
       .filter((name) => !Object.hasOwn(pinned, name)),
   )
-  let left = Deno.args.includes('--dry-run') ? [] : out(all, held, pinned)
+  let left = dry ? [] : out(all, held, pinned)
   let dirs = all.filter((m) => !left.includes(m.dir)).map((m) => m.dir)
   Deno.exitCode = await project(root, dirs, async (target) => {
+    if (!dry && dirs.includes('packages/cli')) {
+      let [{ prepare }, { STARTER }] = await Promise.all([
+        import('@yaks/web/canvas'),
+        import('../packages/cli/init.ts'),
+      ])
+      await prepare(new URL(`file://${target}/packages/cli/made/`), STARTER)
+    }
     let status = await new Deno.Command(Deno.execPath(), {
       args: ['publish', '--config', `${target}/deno.json`, ...Deno.args],
       // Keep the source checkout's Git cleanliness and provenance checks.

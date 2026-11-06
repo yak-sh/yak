@@ -5,13 +5,15 @@ import { type Plug, subpath, used } from '@yaks/cli/config'
 /** Source assets an application contributes to the browser door. */
 export type Application = { entry: URL; mount: URL; styles?: URL }
 export type WebFacet = { app: Application }
+/** The application a config chose, and the plugin contributing it. */
+export type Chosen = Application & { plugin: string }
 
 /** The configured application. A selector resolves multiple contributions. */
 export let application = async (
   plugins: Plug[],
   selected?: string,
   load: (plugin: string) => Promise<WebFacet | null> = (p) => subpath(p, 'web'),
-): Promise<Application> => {
+): Promise<Chosen> => {
   let found = (await Promise.all(plugins.map(async (p) => {
     let name = used(p)
     let facet = await load(name)
@@ -25,5 +27,5 @@ export let application = async (
       }; found ${choices.length}`,
     )
   }
-  return choices[0].app
+  return { ...choices[0].app, plugin: choices[0].name }
 }
