@@ -178,3 +178,35 @@ test('a read-only opener never creates a missing file', () => {
     Deno.removeSync(dir, { recursive: true })
   }
 })
+
+// A library without sqlite3_load_extension, as Deno binds one: a missing
+// symbol marked optional is null, and any other missing symbol refuses the
+// whole library. Apple's system libsqlite3 is such a library. A fresh module
+// instance binds it, so this process's own binding stays as it was.
+test('a library that cannot load extensions opens, with no extension to load', async () => {
+  let real = Deno.dlopen
+  let lacking = ((path, symbols) => {
+    let { sqlite3_load_extension: absent, ...rest } = symbols as Record<
+      string,
+      Deno.ForeignFunction & { optional?: boolean }
+    >
+    if (absent && !absent.optional) {
+      throw new Error('Failed to register symbol sqlite3_load_extension')
+    }
+    let lib = real(path, rest)
+    return absent
+      ? { ...lib, symbols: { ...lib.symbols, sqlite3_load_extension: null } }
+      : lib
+  }) as typeof Deno.dlopen
+  Deno.dlopen = lacking
+  try {
+    let bare: typeof import('./read-db.ts') = await import('./read-db.ts?bare')
+    let db = bare.open(':memory:')
+    assertEquals(bare.loadable(), false)
+    assertEquals(db.extension, undefined)
+    assertEquals(db.query(select({ cols: [as(val(7), 'v')] })), [{ v: 7 }])
+    db.close()
+  } finally {
+    Deno.dlopen = real
+  }
+})

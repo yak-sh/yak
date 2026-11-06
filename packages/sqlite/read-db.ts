@@ -22,9 +22,11 @@ let bind = () =>
         result: 'i32',
       },
       sqlite3_busy_timeout: { parameters: ['pointer', 'i32'], result: 'i32' },
+      // Optional: Apple's system libsqlite3 is built without it.
       sqlite3_load_extension: {
         parameters: ['pointer', 'buffer', 'pointer', 'pointer'],
         result: 'i32',
+        optional: true,
       },
       sqlite3_errmsg: { parameters: ['pointer'], result: 'pointer' },
       sqlite3_prepare_v2: {
@@ -79,6 +81,12 @@ let bind = () =>
   )
 
 let api: ReturnType<typeof bind> | undefined
+let library = () => (api ??= bind()).symbols
+
+/** Whether this process's SQLite library can load extensions. A connection
+ * offers `extension` only where it can, so storage on a library without it
+ * (macOS's own) has no vector facility rather than failing to open. */
+export let loadable = (): boolean => !!library().sqlite3_load_extension
 let encoder = new TextEncoder(), decoder = new TextDecoder()
 let cstring = (s: string) => encoder.encode(s + '\0')
 let pointer = (p: BigUint64Array) =>
@@ -94,7 +102,7 @@ let empty = new Uint8Array(1)
  * use the same SQL AST, snapshots and tracing as the writable driver, and every
  * row decoded counts against the read running (./budget.ts). */
 export let open = (path: string): Opened => {
-  let c = (api ??= bind()).symbols
+  let c = library()
   let handle = new BigUint64Array(1)
   let rc = c.sqlite3_open_v2(cstring(path), handle, 1, null) // SQLITE_OPEN_READONLY
   let db = pointer(handle)
@@ -252,15 +260,17 @@ export let open = (path: string): Opened => {
         before: checkOpen,
       }),
       {
-        extension: (file: string) => {
-          checkOpen()
-          // Enable only the C loading API, never SQL's load_extension().
-          check(c.sqlite3_db_config(db, 1005, 1, null)) // ENABLE_LOAD_EXTENSION
-          try {
-            check(c.sqlite3_load_extension(db, cstring(file), null, null))
-          } finally {
-            check(c.sqlite3_db_config(db, 1005, 0, null))
-          }
+        ...c.sqlite3_load_extension && {
+          extension: (file: string) => {
+            checkOpen()
+            // Enable only the C loading API, never SQL's load_extension().
+            check(c.sqlite3_db_config(db, 1005, 1, null)) // ENABLE_LOAD_EXTENSION
+            try {
+              check(c.sqlite3_load_extension!(db, cstring(file), null, null))
+            } finally {
+              check(c.sqlite3_db_config(db, 1005, 0, null))
+            }
+          },
         },
         close,
       },

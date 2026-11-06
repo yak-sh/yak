@@ -137,18 +137,18 @@ if (system.main(import.meta.url)) {
     let { code } = await deno(install(cli.version, config), dir)
     if (code == 0) {
       console.log('fetching the plugins a first command needs…')
-      let warm = true
+      // A warm-up is a first command: one that fails is a `yak` that does not
+      // run, whatever `deno install` said.
+      let failed: string | undefined
       for (let args of warming(dir)) {
         let warmed = await deno(run(cli.version, config, args), dir, true)
-        // A warm-up that failed costs the first command its wait, and says
-        // why; the install itself stands.
         if (!warmed.success) {
           console.error(new TextDecoder().decode(warmed.stderr).trim())
-          warm = false
+          failed = `yak ${args.slice(2).join(' ')}`
           break
         }
       }
-      if (warm) {
+      if (!failed) {
         let port = free()
         let server = launchCommand(system.execPath(), {
           args: run(cli.version, config, serving(dir, port)),
@@ -162,16 +162,24 @@ if (system.main(import.meta.url)) {
             await answered(`http://127.0.0.1:${port}${path}`, by)
           }
         } catch (error) {
-          console.error(`yak serve could not be warmed: ${error}`)
+          console.error(String(error))
+          failed = 'yak serve'
         } finally {
           server.kill('SIGINT')
           await server.status
         }
       }
-      console.log(
-        `yak ${cli.version} is installed. Next: yak init, ` +
-          'which starts a graph on this machine',
-      )
+      if (failed) {
+        console.error(
+          `yak ${cli.version} is installed but does not run: \`${failed}\` failed (above)`,
+        )
+        code = 1
+      } else {
+        console.log(
+          `yak ${cli.version} is installed. Next: yak init, ` +
+            'which starts a graph on this machine',
+        )
+      }
     }
     system.setExitCode(code)
   } finally {

@@ -16,7 +16,7 @@ import { Database } from './legacy.ts'
 import { type Driver, render } from '@yaks/sql'
 import { configure, driver } from './native.ts'
 
-import { open as reader } from './read-db.ts'
+import { loadable, open as reader } from './read-db.ts'
 
 /** A database this process opened: its {@link Driver}, and the way to close
  * it. */
@@ -27,7 +27,8 @@ export type Opened = Driver & { close: () => void }
  * when missing, or `:memory:` — as a {@link Driver} to bind `storage()` to.
  * This is the one place a connection's settings are made. `readOnly: true`
  * requires an existing file and changes no journal settings. Extensions can
- * read installed indexes; the read-only handle refuses metadata writes.
+ * read installed indexes; the read-only handle refuses metadata writes. A
+ * library that cannot load them (macOS's own) opens with no `extension`.
  *
  * Every connection runs with foreign keys on. A file is one other processes
  * may have open too, so it also runs in WAL mode, with WAL's crash-safe pairing
@@ -83,13 +84,15 @@ export let open = (path: string, opts: { readOnly?: boolean } = {}): Opened => {
     configure(db, 'SQLITE_DBCONFIG_NO_CKPT_ON_CLOSE', true)
   }
   return Object.assign(d, {
-    extension: (file: string) => {
-      db.enableLoadExtension = true
-      try {
-        db.loadExtension(file)
-      } finally {
-        db.enableLoadExtension = false
-      }
+    ...loadable() && {
+      extension: (file: string) => {
+        db.enableLoadExtension = true
+        try {
+          db.loadExtension(file)
+        } finally {
+          db.enableLoadExtension = false
+        }
+      },
     },
     close: () => db.close(),
   })
