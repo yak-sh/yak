@@ -59,6 +59,10 @@ node_modules
 # The browser client as one module, generated from public/client.js.
 /workers/yak/public/_client.js
 
+# The kit's share of yaks.app's stylesheets, composed from @yaks/ui
+# (workers/yak/sheet-assets.ts).
+/workers/yak/public/_ui.css
+
 # Browser draft helper, generated from @yaks/draft.
 /workers/yak/public/_draft.js
 

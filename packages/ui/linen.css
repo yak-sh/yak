@@ -1,0 +1,64 @@
+/* Linen: yaks.app's colours. Light is a warm sheet of linen under cream
+   cards, written in coffee, never black, with meadow green for what is lit
+   and brick for a fault. Dark is the same room at night: a night-brown
+   ground, cocoa cards, oat ink, moss for what is lit and rose for a fault.
+   linen.ts holds the dark colours for a terminal.
+
+   Its paints are named for what they look like (linen, cream, coffee,
+   clay, taupe, shell, bark, cocoa, night, meadow, moss, brick, rose, dusk,
+   sky, ember, blush, forest, oat), and a theme has more roles than a
+   palette has hues, so roles share them: meadow is what is
+   lit, what went well and who; brick a fault and the language's words;
+   dusk something to know and a moment. yaks.app's own pages wear this
+   theme (workers/yak/public). */
+:root {
+  color-scheme: light dark;
+  --gap: 1rem;
+  --radius: 4px;
+  --measure: 38rem;
+  --shadow: 0 12px 32px -16px light-dark(#5238283d, #1d1714b3);
+
+  --font: 'Nunito', system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+  --mono: ui-monospace, SFMono-Regular, Menlo, monospace;
+  --size: 1.0625rem;
+  --small: 0.9375rem;
+
+  --bg: light-dark(#fdf7ee, #2b231f); /* linen; night */
+  --surface: light-dark(#f7efe3, #392d27); /* a sheet behind the one in front */
+  --card: light-dark(#fffbf5, #372c26); /* cream; cocoa */
+  --border: light-dark(#efe3d2, #4d3d34); /* shell; bark */
+  --border2: light-dark(#c9b7a6, #756255); /* the hairline, gone toward clay */
+
+  --text: light-dark(#523828, #f1e6d8); /* coffee; oat */
+  --muted: light-dark(#785b47, #c9b19c); /* clay; taupe */
+  --dim: light-dark(#c9b19c, #785b47); /* taupe; clay */
+
+  --accent: light-dark(#4c773e, #a7c080); /* meadow; moss */
+  --link: light-dark(#4c773e, #a7c080);
+  --heading: light-dark(#523828, #f1e6d8); /* the text's own ink */
+
+  --info: light-dark(#34404a, #e5eef5); /* dusk; sky */
+  --active: light-dark(#785b47, #f8e0c8); /* clay; blush */
+  --positive: light-dark(#4c773e, #a7c080); /* meadow; moss */
+  --negative: light-dark(#a8503f, #e67e80); /* brick; rose */
+  --caution: light-dark(#a8503f, #e67e80); /* brick; rose */
+  --special: light-dark(#785b47, #c9b19c); /* clay; taupe */
+
+  --number: light-dark(#4e3b32, #f8e0c8); /* ember; blush */
+  --literal: light-dark(#a8503f, #e67e80); /* brick; rose */
+  --time: light-dark(#34404a, #e5eef5); /* dusk; sky */
+  --who: light-dark(#4c773e, #a7c080); /* meadow; moss */
+
+  --keyword: light-dark(#a8503f, #e67e80); /* brick; rose */
+  --string: light-dark(#4c773e, #a7c080); /* meadow; moss */
+  --fn: light-dark(#34404a, #fffbf5); /* dusk; cream */
+  --type: light-dark(#4e3b32, #f8e0c8); /* ember; blush */
+  --attr: light-dark(#785b47, #c9b19c); /* clay; taupe */
+
+  --hue-0: light-dark(#4c773e, #a7c080); /* meadow; moss */
+  --hue-1: light-dark(#4e3b32, #f8e0c8); /* ember; blush */
+  --hue-2: light-dark(#34404a, #e5eef5); /* dusk; sky */
+  --hue-3: light-dark(#a8503f, #e67e80); /* brick; rose */
+  --hue-4: light-dark(#785b47, #c9b19c); /* clay; taupe */
+  --hue-5: light-dark(#33493c, #f1e6d8); /* forest; oat */
+}

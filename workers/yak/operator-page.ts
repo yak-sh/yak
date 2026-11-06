@@ -732,8 +732,8 @@ let canvas = (env: Env, space: Space, app: Shown) => {
 // space's own manifest (`installing`), named for its Operator and opening its
 // chat, and the tags a phone reads beside it. The icon is the Operator's own
 // tile, the connector's, which is opaque, so iOS paints no black behind it.
-// The window wears the page's ground, light or dark (public/tokens.css
-// `--linen`, `--night`), so the status bar reads as part of the page. Its
+// The window wears the page's ground, light or dark (@yaks/ui's linen theme,
+// `--bg`), so the status bar reads as part of the page. Its
 // scope is the whole origin, so signing in stays in the window.
 let ICON = '/connector-512.png'
 let NIGHT = '#2b231f'

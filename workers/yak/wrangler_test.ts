@@ -1305,9 +1305,11 @@ let checkSiblingPreparation = async () => {
       digest = Buffer.from(message.split('\n')[0].slice(7), 'base64url')
         .toString('hex')
       let finish = Promise.withResolvers<number>()
+      let uploading = Promise.withResolvers<void>()
       let artifact = ''
       let sent = uploadSibling(prepared, (argv, unpinned) => {
         called = true
+        uploading.resolve()
         assert(unpinned)
         artifact = argv[argv.indexOf('-c') + 1]
         assertEquals(
@@ -1334,6 +1336,7 @@ let checkSiblingPreparation = async () => {
         )
         return finish.promise
       }).then((code) => ({ code }), (error) => ({ error }))
+      await Promise.race([uploading.promise, sent])
       try {
         assert(
           Deno.statSync(artifact).isFile,

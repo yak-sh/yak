@@ -777,11 +777,15 @@ export let direct = (
 
 // Keep relative bindings, assets and image paths beside their original config.
 // These modules already contain the pin's transforms and source maps.
-let unbundled = (from: string, { entry, output }: Bundle, root: string) => {
+let unbundled = async (
+  from: string,
+  { entry, output }: Bundle,
+  root: string,
+) => {
   let path = join(root, from)
   let parsed = parse(io.readTextFileSync(path))
   if (parsed.assets) {
-    direct(parsed, plan(sources(join(dirname(path), 'public'))).names)
+    direct(parsed, plan(await sources(join(dirname(path), 'public'))).names)
   }
   Object.assign(parsed, {
     main: entry,
@@ -852,7 +856,7 @@ export let bundled = async (
     let upload = args.filter((_, i) =>
       metaAt < 0 || i != metaAt && (!next || i != metaAt + 1)
     )
-    config = unbundled('wrangler.toml', {
+    config = await unbundled('wrangler.toml', {
       entry: join(output, 'index.js'),
       output,
     }, root)
@@ -1021,7 +1025,7 @@ export let uploadSibling = async (
   let result: number
   let artifact: string | undefined
   try {
-    if (bundle) artifact = unbundled(image.config, bundle, root)
+    if (bundle) artifact = await unbundled(image.config, bundle, root)
     annotated[annotated.indexOf('-c') + 1] = artifact ?? image.config
     result = await run(annotated, true)
   } finally {

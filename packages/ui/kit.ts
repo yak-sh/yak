@@ -55,6 +55,7 @@ import * as value from './Value.ts'
 import { everforest } from './everforest.ts'
 import { gouache } from './gouache.ts'
 import { ledger } from './ledger.ts'
+import { linen } from './linen.ts'
 import { paper } from './paper.ts'
 import { rosepine } from './rosepine.ts'
 import { Fragment } from 'preact'
@@ -133,7 +134,12 @@ export let groups: Record<string, Kit> = Object.fromEntries(
 export let kit: Kit = Object.assign({}, ...Object.values(groups))
 export let kits: Record<string, Kit> = { base: kit }
 /** Gouache and paper, yak.sh's design, are the default: the first of each. */
-export let themes: Record<string, Theme> = { gouache, everforest, rosepine }
+export let themes: Record<string, Theme> = {
+  gouache,
+  everforest,
+  rosepine,
+  linen,
+}
 export let skins: NonNullable<Contributions['skins']> = { paper, ledger }
 export let composition: Composition = { kits, theme: gouache, skin: paper }
 

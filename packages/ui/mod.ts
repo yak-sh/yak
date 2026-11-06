@@ -17,9 +17,9 @@
  *   browser's form of the popover primitive a UX component (@yaks/ux) is
  *   handed.
  * - `relative`: a moment in words, what a `Stamp` says.
- * - `themes`: every theme by name, `gouache` (the default), `everforest` and
- *   `rosepine`; `skins`, `paper` (the default) and `ledger`; `composition`,
- *   the kits in the defaults; `stylesheet(composition)` dresses a browser,
+ * - `themes`: every theme by name, `gouache` (the default), `everforest`,
+ *   `rosepine` and `linen`, yaks.app's; `skins`, `paper` (the default) and
+ *   `ledger`; `composition`, the kits in the defaults; `stylesheet(composition)` dresses a browser,
  *   `sheet(composition)` a terminal (kit.ts).
  * - `Guide`: every part in every variant, the guide `./routes` serves at `/ui`
  *   and `./cli` paints as `yak ui`; `Specimens`, one part's entry in it.
@@ -79,6 +79,7 @@ export { Columns, Sparkline } from './Chart.ts'
 export { Metrics } from './Metrics.ts'
 export { everforest } from './everforest.ts'
 export { gouache } from './gouache.ts'
+export { linen } from './linen.ts'
 export { rosepine } from './rosepine.ts'
 export {
   composition,

@@ -13,10 +13,10 @@
 
   body {
     margin: 0;
-    background: var(--ground);
-    color: var(--ink);
+    background: var(--bg);
+    color: var(--text);
     font-family: var(--font);
-    font-size: var(--body);
+    font-size: var(--size);
     line-height: 1.6;
     -webkit-font-smoothing: antialiased;
   }
@@ -101,7 +101,7 @@
 
   /* The quiet line next to the loud one: a lead, an aside, a caption. */
   .Note {
-    color: var(--soft-ink);
+    color: var(--muted);
     font-size: var(--note-size, inherit);
     text-wrap: pretty;
   }
@@ -140,7 +140,7 @@
   }
 
   .Chat_Who {
-    color: var(--soft-ink);
+    color: var(--muted);
     font-size: var(--small);
     font-weight: 700;
     text-align: var(--who-side, start);
@@ -151,7 +151,7 @@
   }
 
   .Chat_Bubble {
-    --fill: var(--ground);
+    --fill: var(--bg);
     position: relative;
     width: fit-content;
     max-width: 88%;
@@ -197,7 +197,7 @@
   .Said {
     padding: 0.1rem 0.4rem;
     background: var(--mine);
-    color: var(--ink);
+    color: var(--text);
     -webkit-box-decoration-break: clone;
     box-decoration-break: clone;
   }
@@ -212,8 +212,8 @@
   .Window {
     position: relative;
     border: 1px solid transparent;
-    border-radius: var(--corner);
-    background: var(--paper);
+    border-radius: var(--radius);
+    background: var(--card);
   }
 
   .Window::after {
@@ -221,7 +221,7 @@
     position: absolute;
     inset: -1px;
     border: var(--stroke) solid var(--graphite);
-    border-radius: var(--corner);
+    border-radius: var(--radius);
     filter: url(pencil.svg#line);
     pointer-events: none;
   }
@@ -260,7 +260,7 @@
 
   .Window_List li {
     padding: 0.5rem 0.875rem;
-    background: var(--ground);
+    background: var(--bg);
   }
 
   .Window_On {
@@ -309,7 +309,7 @@
   }
 
   .Prose_When {
-    color: var(--soft-ink);
+    color: var(--muted);
     font-size: var(--small);
   }
 
@@ -326,7 +326,7 @@
 
   .Prose p,
   .Prose li {
-    color: var(--soft-ink);
+    color: var(--muted);
     text-wrap: pretty;
   }
 
@@ -343,12 +343,12 @@
 
   .Prose address {
     font-style: normal;
-    color: var(--soft-ink);
+    color: var(--muted);
   }
 
   .Prose code {
     padding: 0.1rem 0.4rem;
-    background: var(--paper);
+    background: var(--card);
     font-family: var(--mono);
     font-size: var(--small);
   }
@@ -396,7 +396,7 @@
     display: inline-flex;
     align-items: center;
     gap: var(--half-gap);
-    color: var(--ink);
+    color: var(--text);
     font-weight: 800;
     font-size: var(--lead);
     text-decoration: none;
@@ -415,13 +415,13 @@
   }
 
   .Nav a {
-    color: var(--soft-ink);
+    color: var(--muted);
     text-decoration: none;
   }
 
   .Nav a:hover,
   .Nav a[aria-current='page'] {
-    color: var(--ink);
+    color: var(--text);
   }
 
   /* A person signed in reads "Open yaks.app" where "Sign in" is (signed.ts sets
@@ -489,7 +489,7 @@
     grid-row: 1;
     align-self: start;
     padding-inline-start: var(--wide-gap);
-    color: var(--soft-ink);
+    color: var(--muted);
     font-size: var(--small);
   }
 
@@ -670,7 +670,7 @@
   }
 
   .Demo_Title {
-    font-size: var(--body);
+    font-size: var(--size);
     font-weight: 700;
   }
 
@@ -891,7 +891,7 @@
     display: block;
     aspect-ratio: 1200 / 630;
     overflow: hidden;
-    background: var(--ground);
+    background: var(--bg);
   }
 
   /* On a card, the picture runs to the card's edges, so it is as large as
@@ -902,7 +902,7 @@
 
   .Card > .Make_Shot:last-child {
     margin-bottom: calc(-1 * var(--pad-block));
-    border-radius: 0 0 var(--corner) var(--corner);
+    border-radius: 0 0 var(--radius) var(--radius);
   }
 
   .Make_Shot img {
@@ -1003,7 +1003,7 @@
 
   .Yours_List dd {
     margin: var(--quarter-gap) 0 0;
-    color: var(--soft-ink);
+    color: var(--muted);
     text-wrap: pretty;
   }
 
@@ -1067,15 +1067,15 @@
   }
 
   .Plan_Price {
-    color: var(--ink);
+    color: var(--text);
     font-size: 2rem;
     font-weight: 800;
     line-height: 1.1;
   }
 
   .Plan_Per {
-    color: var(--soft-ink);
-    font-size: var(--body);
+    color: var(--muted);
+    font-size: var(--size);
     font-weight: 400;
   }
 
@@ -1084,7 +1084,7 @@
     gap: 0.5rem;
     margin: 0;
     padding-inline-start: 1.25rem;
-    color: var(--soft-ink);
+    color: var(--muted);
     list-style: '–  ';
     text-wrap: pretty;
   }
@@ -1113,7 +1113,7 @@
 
   .Limits :is(th, td) {
     padding: var(--half-gap);
-    border-bottom: 1px solid var(--line);
+    border-bottom: 1px solid var(--border);
     text-align: left;
     vertical-align: top;
   }
@@ -1129,7 +1129,7 @@
   .Limits small {
     display: block;
     margin-top: var(--quarter-gap);
-    color: var(--soft-ink);
+    color: var(--muted);
     font-size: var(--fine);
     font-weight: 400;
     text-wrap: pretty;
@@ -1144,7 +1144,7 @@
     display: grid;
     gap: 0.75rem;
     padding-block: var(--wide-gap) 3rem;
-    color: var(--soft-ink);
+    color: var(--muted);
     font-size: var(--small);
     text-align: center;
     text-wrap: pretty;
@@ -1158,7 +1158,7 @@
   }
 
   .Foot_Links a {
-    color: var(--soft-ink);
+    color: var(--muted);
   }
 
   /* The documentation (docs.ts): the guide's markdown drawn as a page. The
@@ -1192,7 +1192,7 @@
   }
 
   .Docs_Label {
-    color: var(--ink);
+    color: var(--text);
     font-weight: 800;
   }
 
@@ -1205,12 +1205,12 @@
   }
 
   .Docs_Jump a {
-    color: var(--soft-ink);
+    color: var(--muted);
     text-decoration: none;
   }
 
   .Docs_Jump a:hover {
-    color: var(--ink);
+    color: var(--text);
     text-decoration: underline;
   }
 
@@ -1252,7 +1252,7 @@
   .Docs pre {
     margin: 0;
     padding: var(--half-gap) 0.75rem;
-    background: var(--paper);
+    background: var(--card);
     overflow-x: auto;
   }
 
@@ -1265,15 +1265,15 @@
   .Docs blockquote {
     margin: 0;
     padding-inline-start: 0.75rem;
-    border-inline-start: 2px solid var(--line);
-    color: var(--soft-ink);
+    border-inline-start: 2px solid var(--border);
+    color: var(--muted);
   }
 
   .Docs_Pages {
     display: grid;
     gap: 0.75rem;
     padding: var(--gap);
-    background: var(--paper);
+    background: var(--card);
   }
 
   .Docs_Pages ul {
@@ -1285,11 +1285,11 @@
   }
 
   .Docs_Pages li {
-    color: var(--soft-ink);
+    color: var(--muted);
   }
 
   .Docs_Back {
-    color: var(--soft-ink);
+    color: var(--muted);
     font-size: var(--small);
   }
 
@@ -1309,7 +1309,7 @@
     display: grid;
     gap: 0.75rem;
     padding-inline-start: 1.25rem;
-    color: var(--soft-ink);
+    color: var(--muted);
     list-style: disc;
     text-wrap: pretty;
   }
@@ -1317,7 +1317,7 @@
   .Guide_SideNav {
     display: grid;
     grid-template-columns: 10rem minmax(0, 1fr);
-    background: var(--paper);
+    background: var(--card);
   }
   .Guide_SideNav .SideNav {
     align-self: start;
@@ -1340,7 +1340,7 @@
   /* A specimen's frame: a card in a light dashed line, so what it holds
      reads as the thing shown. */
   .Guide_Demo {
-    --pencil: var(--line);
+    --pencil: var(--border);
     --pencil-style: dashed;
     display: grid;
     gap: 0.75rem;
@@ -1349,7 +1349,7 @@
   }
 
   .Guide_Name {
-    color: var(--soft-ink);
+    color: var(--muted);
     font-family: var(--mono);
     font-size: var(--small);
     font-weight: 400;
@@ -1372,12 +1372,12 @@
     grid-row: span 2;
     width: 2.5rem;
     height: 2.5rem;
-    border: 1px solid var(--line);
+    border: 1px solid var(--border);
     background: var(--swatch);
   }
 
   .Guide_Value {
-    color: var(--soft-ink);
+    color: var(--muted);
     font-family: var(--mono);
     font-size: 0.8125rem;
   }
@@ -1397,7 +1397,7 @@
 
   .Guide_Bar {
     height: 0.75rem;
-    width: var(--size);
+    width: var(--bar);
     background: var(--accent);
   }
 }

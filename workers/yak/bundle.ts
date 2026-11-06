@@ -35,6 +35,7 @@ export let bundle = async (root: string, output: string, meta: string) => {
     prefix: '.modules-',
   })
   try {
+    let names = plan(await from(join(root, 'public'))).names
     let built = await build({
       absWorkingDir: root,
       entryPoints: ['index.ts'],
@@ -69,7 +70,7 @@ export let bundle = async (root: string, output: string, meta: string) => {
       metafile: true,
       define: {
         'process.env.NODE_ENV': '"production"',
-        YAK_SHEETS: JSON.stringify(plan(from(join(root, 'public'))).names),
+        YAK_SHEETS: JSON.stringify(names),
       },
     })
     let source = built.metafile!

@@ -258,8 +258,9 @@ equal(html.includes('class="Table_Cell Table_Cell-num">412'), true)
 A **theme** supplies a CSS URL defining custom properties and the same colors as
 values for terminal sheets (`Theme`). `Colors` names color roles: background,
 ink, links, headings, states, stored values and code syntax; `hues` holds six
-colors for `Chip`. `themes` names `gouache`, `everforest` and `rosepine`;
-`gouache`, the colours of yak.sh's painted yak, is the default. Browser themes
+colors for `Chip`. `themes` names `gouache`, `everforest`, `rosepine` and
+`linen`; `gouache`, the colours of yak.sh's painted yak, is the default, and
+`linen`, warm linen and cream written in coffee, is yaks.app's. Browser themes
 offer light and dark schemes selected by `color-scheme`; terminal colors use the
 dark scheme. Gouache's light scheme is yak.sh's paper and ink, its dark scheme
 yak.sh's terminal windows, so a page that sets `color-scheme: dark` on one

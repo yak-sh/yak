@@ -1,7 +1,8 @@
 /* Shared interactive controls and surfaces. Both the public site and account
    pages load these components; /style-guide contains working examples. */
 @layer tokens, base, components, sections;
-@import url('tokens.css');
+@import url('_ui.css');
+@import url('site.css');
 
 @layer base {
   [hidden] {
@@ -55,7 +56,7 @@
     line-height: 1.25;
     vertical-align: middle;
   }
-  /* What is drawn (tokens.css, Pencil and paper) wears its outline on
+  /* What is drawn (site.css, Pencil and paper) wears its outline on
      ::after, in --pencil where a part asks for another colour and dashed
      where --pencil-style says so. Each part starts from a solid graphite
      line, so none takes the line of a box it sits in. A page's own surface
@@ -78,7 +79,7 @@
     inset: -1px;
     border: var(--stroke) var(--pencil-style, solid)
       var(--pencil, var(--graphite));
-    border-radius: var(--corner);
+    border-radius: var(--radius);
     filter: url(pencil.svg#line);
     pointer-events: none;
   }
@@ -93,9 +94,9 @@
     justify-content: center;
     gap: .35rem;
     border: 1px solid transparent;
-    border-radius: var(--corner);
+    border-radius: var(--radius);
     background: var(--button-fill, var(--accent));
-    color: var(--button-ink, var(--on-accent));
+    color: var(--button-ink, var(--bg));
     font-weight: 800;
     text-align: center;
     text-decoration: none;
@@ -106,7 +107,7 @@
     position: absolute;
     inset: calc(var(--lift) - 1px) calc(-1px - var(--lift))
       calc(-1px - var(--lift)) calc(var(--lift) - 1px);
-    border-radius: var(--corner);
+    border-radius: var(--radius);
     background: var(--hatch);
     clip-path: polygon(calc(100% - var(--lift)) 0, 100% 0, 100% 100%, 0 100%,
       0 calc(100% - var(--lift)), calc(100% - var(--lift))
@@ -130,8 +131,8 @@
     cursor: not-allowed;
   }
   .Button-quiet {
-    --button-fill: var(--paper);
-    --button-ink: var(--ink);
+    --button-fill: var(--card);
+    --button-ink: var(--text);
   }
   /* A button that steps back beside another: it reads as a link, with no
      fill, outline or hatch. */
@@ -157,10 +158,10 @@
     min-width: 0;
     max-width: 100%;
     border: var(--stroke) solid var(--graphite);
-    border-radius: var(--corner);
+    border-radius: var(--radius);
     background: var(--well);
     box-shadow: var(--hollow);
-    color: var(--ink);
+    color: var(--text);
     filter: url(pencil.svg#line);
   }
   .Field:focus-visible {
@@ -200,10 +201,10 @@
   .Pill {
     display: inline-block;
     padding: var(--pill-pad, .3rem .75rem);
-    border: var(--pill-edge, 1px solid var(--line));
-    border-radius: var(--corner);
-    background: var(--pill-fill, var(--paper));
-    color: var(--pill-ink, var(--ink));
+    border: var(--pill-edge, 1px solid var(--border));
+    border-radius: var(--radius);
+    background: var(--pill-fill, var(--card));
+    color: var(--pill-ink, var(--text));
     font-family: var(--pill-font, inherit);
     font-size: var(--pill-size, var(--small));
     font-weight: var(--pill-weight, 600);
@@ -222,7 +223,7 @@
   }
   a.Pill:hover {
     --pencil: var(--accent);
-    --pill-fill: color-mix(in srgb, var(--accent) 7%, var(--paper));
+    --pill-fill: color-mix(in srgb, var(--accent) 7%, var(--card));
   }
   a.Pill:active {
     transform: translate(1px, 1px);
@@ -233,15 +234,15 @@
   }
   .Pill_Tag {
     margin-left: .5rem;
-    color: var(--soft-ink);
+    color: var(--muted);
     font-weight: 400;
     font-size: .85em;
   }
 
   /* A quiet label, such as the address in a window bar. */
   .Pill-quiet {
-    --pill-fill: var(--ground);
-    --pill-ink: var(--soft-ink);
+    --pill-fill: var(--bg);
+    --pill-ink: var(--muted);
     --pill-edge: 0;
     --pill-pad: 0.2rem 0.9rem;
     --pill-size: var(--small);
@@ -251,18 +252,18 @@
   /* A URL somebody has to copy. */
   .Pill-code {
     --pill-pad: .2rem .5rem;
-    --pill-fill: var(--ground);
+    --pill-fill: var(--bg);
     --pill-edge: 0;
     --pill-font: var(--mono);
     --pill-size: var(--small);
   }
 
   .Address {
-    color: var(--soft-ink);
+    color: var(--muted);
     font-weight: 400;
   }
   .Address_Name {
-    color: var(--ink);
+    color: var(--text);
     font-weight: 800;
   }
 
@@ -281,8 +282,8 @@
     min-width: 0;
     padding: var(--pad-block) var(--pad-inline);
     border: 1px solid transparent;
-    border-radius: var(--corner);
-    background: var(--paper);
+    border-radius: var(--radius);
+    background: var(--card);
     overflow-wrap: break-word;
   }
   .Card > * {
@@ -325,7 +326,7 @@
   }
   .Card_Title {
     margin: 0;
-    color: var(--ink);
+    color: var(--text);
     font-size: 1rem;
     font-weight: 800;
     line-height: 1.3;
@@ -359,7 +360,7 @@
 
   /* What the card is, in a line, under its head. */
   .Card_Sub {
-    color: var(--soft-ink);
+    color: var(--muted);
     font-size: var(--small);
   }
 
@@ -369,7 +370,7 @@
     display: inline-flex;
     align-items: center;
     gap: .35rem;
-    color: var(--status, var(--soft-ink));
+    color: var(--status, var(--muted));
     font-size: var(--fine);
     font-weight: 700;
     line-height: 1.3;
@@ -386,7 +387,7 @@
     --status: var(--accent);
   }
   .Status-warn {
-    --status: var(--warn);
+    --status: var(--negative);
   }
 
   /* Like things in rows, hairlines between them: each row its name and what
@@ -406,7 +407,7 @@
     align-items: center;
     gap: .5rem 1rem;
     padding: .75rem 0;
-    border-top: 1px solid var(--line);
+    border-top: 1px solid var(--border);
   }
   .Rows_Item:first-child {
     padding-top: 0;
@@ -430,11 +431,11 @@
     overflow-wrap: anywhere;
   }
   .Rows_Name {
-    color: var(--ink);
+    color: var(--text);
     font-weight: 700;
   }
   .Rows_Meta {
-    color: var(--soft-ink);
+    color: var(--muted);
     font-size: var(--fine);
   }
   .Rows_Actions {
@@ -454,7 +455,7 @@
   /* A heading over a run of cards that belong together. */
   .Group {
     margin: var(--gap) 0 0;
-    color: var(--soft-ink);
+    color: var(--muted);
     font-size: var(--small);
     font-weight: 700;
   }
@@ -478,12 +479,12 @@
   }
   .Form_Label {
     margin: 0;
-    color: var(--ink);
+    color: var(--text);
     font-size: var(--small);
     font-weight: 700;
   }
   .Form_Optional {
-    color: var(--soft-ink);
+    color: var(--muted);
     font-weight: 400;
   }
   .Form_Field > .Field {
@@ -491,7 +492,7 @@
   }
   .Form_Hint {
     margin: 0;
-    color: var(--soft-ink);
+    color: var(--muted);
     font-size: var(--fine);
   }
   /* One field and the button that sends it, on one line while they fit. */
@@ -526,7 +527,7 @@
   }
   .At > span {
     flex: none;
-    color: var(--soft-ink);
+    color: var(--muted);
   }
 
   /* A drop zone: a dashed place to drop files on, which a press also opens
@@ -541,7 +542,7 @@
     min-width: 0;
   }
   .Drop_Zone {
-    --pencil: var(--edge);
+    --pencil: var(--border2);
     --pencil-style: dashed;
     position: relative;
     display: grid;
@@ -549,8 +550,8 @@
     gap: .25rem;
     min-height: 6rem;
     padding: 1.25rem 1rem;
-    border-radius: var(--corner);
-    background: var(--ground);
+    border-radius: var(--radius);
+    background: var(--bg);
     text-align: center;
     cursor: pointer;
   }
@@ -565,7 +566,7 @@
   .Drop_Zone-over {
     --pencil: var(--accent);
     --pencil-style: solid;
-    background: var(--paper);
+    background: var(--card);
   }
   .Drop_Zone:has(.Drop_File:disabled) {
     opacity: .55;
@@ -579,7 +580,7 @@
     pointer-events: none;
   }
   .Drop_Say {
-    color: var(--ink);
+    color: var(--text);
   }
   .Drop_Choose {
     color: var(--accent);
@@ -588,7 +589,7 @@
     text-underline-offset: .2em;
   }
   .Drop_Hint {
-    color: var(--soft-ink);
+    color: var(--muted);
     font-size: var(--fine);
   }
   .Drop_Chosen {
@@ -609,28 +610,28 @@
     gap: .75rem;
     min-width: 0;
     padding: .35rem .5rem;
-    border-radius: var(--corner);
+    border-radius: var(--radius);
     background: var(--well);
   }
   .Drop_Picture {
     flex: none;
     width: 2.5rem;
     height: 2.5rem;
-    border-radius: var(--corner);
+    border-radius: var(--radius);
     object-fit: cover;
   }
   .Drop_Name {
     flex: 1 1 auto;
     min-width: 0;
     overflow: hidden;
-    color: var(--ink);
+    color: var(--text);
     font-weight: 700;
     text-overflow: ellipsis;
     white-space: nowrap;
   }
   .Drop_Size {
     flex: none;
-    color: var(--soft-ink);
+    color: var(--muted);
     font-size: var(--fine);
   }
   .Drop_Item > .Button {
@@ -640,7 +641,7 @@
   /* What was left out, past the input's ceilings. */
   .Drop_Said {
     margin: 0;
-    color: var(--soft-ink);
+    color: var(--muted);
     font-size: var(--fine);
   }
   .Drop_Said:empty {
@@ -649,7 +650,7 @@
   /* A file of a kind that is not read, with a line that says so. */
   .Drop_Note {
     flex-basis: 100%;
-    color: var(--soft-ink);
+    color: var(--muted);
     font-size: var(--fine);
   }
   .Drop_Item-unread {
@@ -698,9 +699,9 @@
     min-width: 2.5rem;
     height: 2.5rem;
     padding-inline: .3rem;
-    border-radius: var(--corner);
-    background: var(--paper);
-    color: var(--soft-ink);
+    border-radius: var(--radius);
+    background: var(--card);
+    color: var(--muted);
     font-size: var(--fine);
     font-weight: 700;
   }
@@ -767,7 +768,7 @@
   }
   .More_Body > .Markdown pre {
     padding: .6rem .8rem;
-    background: var(--paper);
+    background: var(--card);
     white-space: pre-wrap;
     overflow-wrap: anywhere;
   }
@@ -775,14 +776,14 @@
   /* A line the page says back: what a press did, or why it did not. */
   .Say {
     margin: 0;
-    color: var(--soft-ink);
+    color: var(--muted);
     font-size: var(--small);
   }
   .Say:empty {
     display: none;
   }
   .Say-no {
-    color: var(--warn);
+    color: var(--negative);
   }
 
   /* Something at work: the yak doing it (mascot.ts `yak`), then the words
@@ -813,13 +814,13 @@
     min-width: 0;
     min-height: var(--control-height);
     padding: .4rem .75rem;
-    background: var(--ground);
-    color: var(--ink);
+    background: var(--bg);
+    color: var(--text);
     overflow-wrap: anywhere;
     user-select: all;
   }
   .Copy_Go {
-    --button-fill: var(--paper);
+    --button-fill: var(--card);
     --button-ink: var(--accent);
     flex: none;
     font-size: var(--fine);
@@ -828,7 +829,7 @@
   /* Nothing here yet: what will be, and how to start. Its pencil line is
      dashed and light, a place for something rather than a thing. */
   .Empty {
-    --pencil: var(--edge);
+    --pencil: var(--border2);
     --pencil-style: dashed;
     position: relative;
     display: grid;
@@ -836,8 +837,8 @@
     gap: .5rem;
     padding: 2rem 1.25rem;
     border: 1px solid transparent;
-    border-radius: var(--corner);
-    color: var(--soft-ink);
+    border-radius: var(--radius);
+    color: var(--muted);
     text-align: center;
   }
   .Empty > * {
@@ -845,7 +846,7 @@
     margin: 0;
   }
   .Empty h2 {
-    color: var(--ink);
+    color: var(--text);
     font-size: 1.05rem;
     font-weight: 800;
   }
@@ -859,14 +860,14 @@
   .Stats_Total {
     flex: none;
     margin: 0 0 0 auto;
-    color: var(--ink);
+    color: var(--text);
     font-size: 1.25rem;
     font-weight: 800;
     font-variant-numeric: tabular-nums;
     line-height: 1.2;
   }
   .Stats_Unit {
-    color: var(--soft-ink);
+    color: var(--muted);
     font-size: var(--fine);
     font-weight: 400;
   }
@@ -895,7 +896,7 @@
     bottom: 0;
     left: var(--at);
     width: 1px;
-    background: var(--soft-ink);
+    background: var(--muted);
     pointer-events: none;
   }
   .Chart-line {
@@ -912,7 +913,7 @@
   .Chart-bars {
     display: block;
     height: 5rem;
-    border-bottom: 1px solid var(--line);
+    border-bottom: 1px solid var(--border);
   }
   .Chart-bars .Chart_Plot {
     display: block;
@@ -934,9 +935,9 @@
     position: fixed;
     z-index: var(--float);
     padding: .15rem .5rem;
-    border-radius: var(--corner);
-    background: var(--ink);
-    color: var(--paper);
+    border-radius: var(--radius);
+    background: var(--text);
+    color: var(--card);
     font-size: var(--fine);
     white-space: nowrap;
     pointer-events: none;
@@ -944,7 +945,7 @@
   .Stats_Span {
     display: flex;
     justify-content: space-between;
-    color: var(--soft-ink);
+    color: var(--muted);
     font-size: var(--fine);
   }
   .Stats_Tops {
@@ -954,7 +955,7 @@
   }
   .Stats_Column h3 {
     margin: 0 0 .5rem;
-    color: var(--soft-ink);
+    color: var(--muted);
     font-size: var(--fine);
     font-weight: 700;
   }
@@ -1010,7 +1011,7 @@
   .Tabs_Legend {
     margin-bottom: 1rem;
     padding: 0;
-    color: var(--ink);
+    color: var(--text);
     font-weight: 800;
     text-align: left;
   }
@@ -1037,9 +1038,9 @@
     padding: .55rem .45rem;
     border: 1px solid transparent;
     border-bottom: 0;
-    border-radius: var(--corner) var(--corner) 0 0;
-    background: var(--behind);
-    color: var(--soft-ink);
+    border-radius: var(--radius) var(--radius) 0 0;
+    background: var(--surface);
+    color: var(--muted);
     font-size: .85rem;
     font-weight: 700;
     line-height: 1.25;
@@ -1052,7 +1053,7 @@
     inset: -1px -1px 0;
     border: var(--stroke) solid var(--graphite);
     border-bottom: 0;
-    border-radius: var(--corner) var(--corner) 0 0;
+    border-radius: var(--radius) var(--radius) 0 0;
     filter: url(pencil.svg#line);
     pointer-events: none;
   }
@@ -1063,7 +1064,7 @@
     }
   }
   .Tabs_Tab:hover {
-    color: var(--ink);
+    color: var(--text);
   }
   .Tabs_Panel {
     order: 1;
@@ -1078,8 +1079,8 @@
   .Tabs_Item > input:checked ~ .Tabs_Tab {
     margin-top: 0;
     padding-top: .9rem;
-    background: var(--paper);
-    color: var(--ink);
+    background: var(--card);
+    color: var(--text);
     z-index: 2;
   }
   /* The gap the selected tab opens in the panel's line. It stops short of the
@@ -1090,7 +1091,7 @@
     position: absolute;
     inset: auto 2px calc(-1.5 * var(--room));
     height: calc(3 * var(--room));
-    background: var(--paper);
+    background: var(--card);
   }
   .Tabs_Item > input:checked ~ .Tabs_Panel {
     display: grid;
@@ -1132,7 +1133,7 @@
      graphite to close the tab's open side, so its current link is a pencil
      box (.Docs_Nav, and every nav on a phone). */
   .SideNav {
-    --nav-panel: var(--paper);
+    --nav-panel: var(--card);
     --nav-edge: var(--graphite);
     --nav-shut: transparent;
     position: relative;
@@ -1156,17 +1157,17 @@
     gap: .65rem;
     padding: .6rem .8rem;
     border: 1px solid transparent;
-    border-radius: var(--corner);
-    color: var(--soft-ink);
+    border-radius: var(--radius);
+    color: var(--muted);
     font-size: .95rem;
     text-decoration: none;
   }
   .SideNav a:hover {
-    color: var(--ink);
+    color: var(--text);
   }
   .SideNav a[aria-current='page'] {
     background: var(--nav-panel);
-    color: var(--ink);
+    color: var(--text);
     font-weight: 800;
     z-index: 1;
   }
@@ -1176,7 +1177,7 @@
     inset: -1px 0 -1px -1px;
     border: var(--stroke) solid var(--graphite);
     border-right-color: var(--nav-shut);
-    border-radius: var(--corner);
+    border-radius: var(--radius);
     filter: url(pencil.svg#line);
     pointer-events: none;
   }
@@ -1224,7 +1225,7 @@
     flex: none;
     margin: 0;
     border: var(--stroke) solid var(--graphite);
-    background: var(--paper);
+    background: var(--card);
     cursor: inherit;
   }
   .Choice input[type='radio'] {
@@ -1240,13 +1241,13 @@
     width: .3rem;
     height: .6rem;
     margin-top: -.15rem;
-    border: solid var(--on-accent);
+    border: solid var(--bg);
     border-width: 0 2px 2px 0;
     transform: rotate(45deg) scale(0);
   }
   .Choice input[type='radio']::before {
     border-radius: 50%;
-    background: var(--on-accent);
+    background: var(--bg);
   }
   .Choice input:checked {
     background: var(--accent);
@@ -1290,6 +1291,6 @@
 
   /* An invitation not yet taken, in a person's row (render/held.ts). */
   .People_Waiting {
-    color: var(--warn);
+    color: var(--negative);
   }
 }

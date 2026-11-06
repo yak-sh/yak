@@ -9,7 +9,7 @@ import { links, named, sheeted } from './sheets.ts'
 import { direct } from './wrangler.ts'
 
 let PUBLIC = new URL('./public/', import.meta.url).pathname
-let { files, names } = plan(from(PUBLIC))
+let { files, names } = plan(await from(PUBLIC))
 let sheet = (root: string) => new TextDecoder().decode(files.get(names[root])!)
 
 // Every sheet a head blocks on.

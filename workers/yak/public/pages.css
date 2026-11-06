@@ -13,9 +13,9 @@
     min-height: 100vh;
     display: grid;
     place-items: center;
-    background: var(--ground);
-    color: var(--ink);
-    font: 400 var(--body)/1.6 var(--font);
+    background: var(--bg);
+    color: var(--text);
+    font: 400 var(--size)/1.6 var(--font);
     -webkit-font-smoothing: antialiased;
   }
   main {
@@ -36,7 +36,7 @@
     line-height: 1.3;
   }
   p {
-    color: var(--soft-ink);
+    color: var(--muted);
     margin: 0 0 1rem;
   }
   a {
@@ -62,7 +62,7 @@
   code {
     font-family: var(--mono);
     font-size: .875em;
-    background: var(--ground);
+    background: var(--bg);
     padding: .1rem .35rem;
     overflow-wrap: anywhere;
   }
@@ -83,7 +83,7 @@
   .Url code {
     display: inline-block;
     padding: .5rem 1rem;
-    background: var(--paper);
+    background: var(--card);
     font-size: var(--small);
   }
   main > .Card,
@@ -100,7 +100,7 @@
     gap: .4rem;
     margin: 0;
     padding-left: 1.2rem;
-    color: var(--soft-ink);
+    color: var(--muted);
     font-size: var(--small);
   }
   .Card li::marker {
@@ -111,7 +111,7 @@
     margin: 0;
     white-space: pre-wrap;
     font: inherit;
-    color: var(--soft-ink);
+    color: var(--muted);
     text-align: left;
   }
   .Card form {
@@ -133,7 +133,7 @@
     gap: .3rem;
     margin: 0;
     padding-left: 1.2rem;
-    color: var(--soft-ink);
+    color: var(--muted);
     font-size: var(--small);
   }
   /* Each entry wraps within the column at any width: a grid track keeps no
@@ -153,15 +153,15 @@
     max-width: 90%;
     margin: 0;
     padding: .55rem .9rem;
-    background: var(--ground);
-    color: var(--ink);
+    background: var(--bg);
+    color: var(--text);
     white-space: pre-wrap;
     overflow-wrap: anywhere;
   }
   .Chat_Bubble-you {
     justify-self: end;
     background: var(--accent);
-    color: var(--ground);
+    color: var(--bg);
   }
   .Chat_Bubble a {
     color: inherit;
@@ -172,11 +172,11 @@
     align-items: baseline;
     margin: 0;
     padding: 0 .3rem;
-    color: var(--soft-ink);
+    color: var(--muted);
     font-size: var(--fine);
   }
   .Chat_Tool-no {
-    color: var(--warn);
+    color: var(--negative);
   }
   .Chat_Name {
     font-weight: 700;
@@ -190,13 +190,13 @@
     white-space: nowrap;
   }
   .Chat_Note-no {
-    color: var(--warn);
+    color: var(--negative);
   }
   .Chat_Built {
     --pencil: var(--accent);
     margin: .4rem 0;
     padding: 1rem;
-    background: var(--ground);
+    background: var(--bg);
     text-align: center;
   }
   .Chat_Built p {
@@ -204,7 +204,7 @@
   }
   .Chat_Note {
     margin: 0;
-    color: var(--soft-ink);
+    color: var(--muted);
     font-size: var(--fine);
   }
   .Chat_Ask {
@@ -236,7 +236,7 @@
     }
   }
   .Fields dt {
-    color: var(--ink);
+    color: var(--text);
     font-size: var(--small);
     font-weight: 700;
   }
@@ -253,7 +253,7 @@
     display: block;
     width: 56px;
     height: 56px;
-    border: 1px solid var(--line);
+    border: 1px solid var(--border);
   }
   .Connect_Setup {
     margin: 0 0 1.5rem;
@@ -268,11 +268,11 @@
     display: grid;
     gap: .5rem;
     padding-top: .75rem;
-    border-top: 1px solid var(--line);
+    border-top: 1px solid var(--border);
   }
   .Connect_Next p {
     margin: 0;
-    color: var(--ink);
+    color: var(--text);
     font-weight: 800;
   }
 
@@ -284,7 +284,7 @@
   }
   .Invite_Lead {
     margin: 0 0 .75rem;
-    color: var(--ink);
+    color: var(--text);
     font-size: 1.2rem;
     font-weight: 800;
   }
@@ -297,12 +297,12 @@
     display: block;
     width: 100%;
     height: auto;
-    border-radius: var(--corner);
+    border-radius: var(--radius);
   }
   .Invite_Words {
     margin: 0 auto .75rem;
     max-width: 22rem;
-    color: var(--ink);
+    color: var(--text);
     font-weight: 700;
   }
   .Invite_Way .Note {
@@ -352,7 +352,7 @@
     display: flex;
     align-items: center;
     gap: .65rem;
-    color: var(--ink);
+    color: var(--text);
     font-size: 1.25rem;
     font-weight: 800;
     text-decoration: none;
@@ -387,7 +387,7 @@
   }
   .Desk_Group {
     margin: 0 .8rem;
-    color: var(--soft-ink);
+    color: var(--muted);
     font-size: var(--fine);
     font-weight: 700;
   }
@@ -399,8 +399,8 @@
     gap: .6rem;
     margin-right: -1.25rem;
     padding: .6rem 0 .6rem .5rem;
-    border-radius: var(--corner) 0 0 var(--corner);
-    background: var(--behind);
+    border-radius: var(--radius) 0 0 var(--radius);
+    background: var(--surface);
   }
   .Desk_Here > .Desk_Space,
   .Desk_Here > .Desk_Pick,
@@ -424,8 +424,8 @@
   }
   .Desk_Pick > summary {
     position: relative;
-    border-radius: var(--corner);
-    background: var(--paper);
+    border-radius: var(--radius);
+    background: var(--card);
     cursor: pointer;
   }
   .Desk_Pick > summary::before {
@@ -433,7 +433,7 @@
     position: absolute;
     inset: calc(var(--lift) - 1px) calc(-1px - var(--lift))
       calc(-1px - var(--lift)) calc(var(--lift) - 1px);
-    border-radius: var(--corner);
+    border-radius: var(--radius);
     background: var(--hatch);
     clip-path: polygon(calc(100% - var(--lift)) 0, 100% 0, 100% 100%, 0 100%,
       0 calc(100% - var(--lift)), calc(100% - var(--lift))
@@ -445,7 +445,7 @@
     position: absolute;
     inset: -1px;
     border: var(--stroke) solid var(--graphite);
-    border-radius: var(--corner);
+    border-radius: var(--radius);
     filter: url(pencil.svg#line);
     pointer-events: none;
   }
@@ -468,9 +468,9 @@
     place-items: center;
     width: 2rem;
     height: 2rem;
-    border-radius: var(--corner);
+    border-radius: var(--radius);
     background: var(--accent);
-    color: var(--on-accent);
+    color: var(--bg);
     font-weight: 800;
   }
   img.Desk_Tile {
@@ -501,7 +501,7 @@
     overflow-wrap: anywhere;
   }
   .Desk_Name small {
-    color: var(--soft-ink);
+    color: var(--muted);
     font-size: var(--fine);
   }
   .Desk_Change {
@@ -514,7 +514,7 @@
     font-weight: 700;
   }
   .Desk_Pick[open] .Desk_Change {
-    color: var(--soft-ink);
+    color: var(--muted);
   }
   .Desk_Menu {
     --lift: 6px;
@@ -530,7 +530,7 @@
     position: absolute;
     inset: var(--lift) calc(-1 * var(--lift)) calc(-1 * var(--lift))
       var(--lift);
-    border-radius: var(--corner);
+    border-radius: var(--radius);
     background: var(--hatch);
     clip-path: polygon(calc(100% - var(--lift)) 0, 100% 0, 100% 100%, 0 100%,
       0 calc(100% - var(--lift)), calc(100% - var(--lift))
@@ -543,7 +543,7 @@
     position: absolute;
     inset: -1px;
     border: var(--stroke) solid var(--graphite);
-    border-radius: var(--corner);
+    border-radius: var(--radius);
     filter: url(pencil.svg#line);
     pointer-events: none;
   }
@@ -552,14 +552,14 @@
     display: grid;
     max-height: min(34rem, 70vh);
     padding: .35rem 0;
-    border-radius: var(--corner);
-    background: var(--paper);
+    border-radius: var(--radius);
+    background: var(--card);
     overflow-y: auto;
   }
   .Desk_Ask {
     margin: 0;
     padding: .5rem 1rem .6rem;
-    color: var(--soft-ink);
+    color: var(--muted);
     font-size: var(--fine);
   }
   .Desk_Row {
@@ -569,15 +569,15 @@
     gap: .75rem;
     margin: 0 .35rem;
     padding: .55rem .65rem;
-    border-radius: var(--corner);
-    color: var(--ink);
+    border-radius: var(--radius);
+    color: var(--text);
     text-decoration: none;
   }
   .Desk_Row:hover {
     background: var(--well);
   }
   .Desk_Row[aria-current] {
-    background: color-mix(in srgb, var(--paper), var(--accent) 12%);
+    background: color-mix(in srgb, var(--card), var(--accent) 12%);
   }
   .Desk_Tick {
     color: var(--accent);
@@ -608,7 +608,7 @@
      account". */
   .Desk_Whose {
     margin: 0;
-    color: var(--soft-ink);
+    color: var(--muted);
     font-size: var(--fine);
   }
   .Desk_Out {
@@ -622,7 +622,7 @@
     cursor: pointer;
   }
   .Desk_Danger .Card_Title {
-    color: var(--warn);
+    color: var(--negative);
   }
   .Desk_Count {
     margin-left: auto;
@@ -655,7 +655,7 @@
     isolation: isolate;
     min-width: 0;
     min-height: 100vh;
-    background: var(--paper);
+    background: var(--card);
     padding: 2rem clamp(1.25rem, 4vw, 3rem) 3rem;
   }
   .Desk_Head {
@@ -679,7 +679,7 @@
   .Desk_Address {
     font-size: var(--fine);
     text-decoration: none;
-    color: var(--soft-ink);
+    color: var(--muted);
   }
   .Desk_Head .Button {
     flex: none;
@@ -719,7 +719,7 @@
     min-width: 0;
     min-height: 10.5rem;
     padding: 1rem 1.1rem;
-    color: var(--ink);
+    color: var(--text);
     overflow-wrap: anywhere;
   }
   .Apps_Item:hover {
@@ -751,7 +751,7 @@
     outline-offset: 3px;
   }
   .Apps_Path {
-    color: var(--soft-ink);
+    color: var(--muted);
     font-size: var(--fine);
   }
   .Apps_Tags {
@@ -760,13 +760,13 @@
     gap: .4rem;
     margin-top: auto;
     padding-top: .5rem;
-    color: var(--soft-ink);
+    color: var(--muted);
     font-size: var(--fine);
     line-height: 1.4;
   }
   .Apps_Tag {
     padding: .05rem .45rem;
-    background: var(--ground);
+    background: var(--bg);
   }
   .Apps.Apps-one {
     grid-template-columns: minmax(0, 18rem);
@@ -782,14 +782,14 @@
   }
   .Apps_Tag-warn {
     position: relative;
-    background: color-mix(in srgb, var(--warn) 12%, var(--paper));
-    color: var(--warn);
+    background: color-mix(in srgb, var(--negative) 12%, var(--card));
+    color: var(--negative);
     font-weight: 700;
     text-decoration: none;
   }
   .Apps_Tag-link {
     position: relative;
-    color: var(--ink);
+    color: var(--text);
   }
   .Data main {
     max-width: 44rem;
@@ -806,7 +806,7 @@
     max-height: 6rem;
   }
   .Fix_Said {
-    color: var(--ink);
+    color: var(--text);
     font-family: var(--mono);
     font-size: var(--fine);
     overflow-wrap: anywhere;
@@ -832,7 +832,7 @@
     top: -5rem;
     left: 1rem;
     padding: .6rem 1rem;
-    background: var(--paper);
+    background: var(--card);
     z-index: 1;
   }
   .Desk_Skip:focus {
@@ -851,8 +851,8 @@
       align-items: center;
       gap: .75rem;
       padding: .6rem 1rem;
-      background: var(--ground);
-      border-bottom: 1px solid var(--edge);
+      background: var(--bg);
+      border-bottom: 1px solid var(--border2);
     }
     .Desk_Where {
       display: grid;
@@ -860,7 +860,7 @@
       line-height: 1.2;
     }
     .Desk_Where small {
-      color: var(--soft-ink);
+      color: var(--muted);
       font-size: var(--fine);
       overflow-wrap: anywhere;
     }
@@ -877,7 +877,7 @@
       min-height: 0;
       padding: 1rem;
       overflow-y: auto;
-      background: var(--ground);
+      background: var(--bg);
     }
     .Desk_Side::after {
       display: none;
@@ -913,7 +913,7 @@
     .Desk_Here {
       margin-right: 0;
       padding: .6rem .5rem;
-      border-radius: var(--corner);
+      border-radius: var(--radius);
     }
     .Desk_Here > .Desk_Space,
     .Desk_Here > .Desk_Pick,
@@ -974,15 +974,15 @@
     list-style: none;
   }
   .Directory > li + li {
-    border-top: 1px solid var(--line);
+    border-top: 1px solid var(--border);
   }
   .Directory > li:first-child > .Directory_Row {
-    border-top-left-radius: var(--corner);
-    border-top-right-radius: var(--corner);
+    border-top-left-radius: var(--radius);
+    border-top-right-radius: var(--radius);
   }
   .Directory > li:last-child > .Directory_Row {
-    border-bottom-left-radius: var(--corner);
-    border-bottom-right-radius: var(--corner);
+    border-bottom-left-radius: var(--radius);
+    border-bottom-right-radius: var(--radius);
   }
   .Directory_Row {
     position: relative;
@@ -993,7 +993,7 @@
     padding: .85rem 1.25rem;
   }
   .Directory_Row:hover {
-    background: color-mix(in srgb, var(--ground), var(--paper) 55%);
+    background: color-mix(in srgb, var(--bg), var(--card) 55%);
   }
   .Directory_Who {
     display: grid;
@@ -1005,7 +1005,7 @@
     padding: 0;
   }
   .Directory_Open {
-    color: var(--ink);
+    color: var(--text);
     text-decoration: none;
     overflow-wrap: anywhere;
   }
@@ -1022,7 +1022,7 @@
     outline-offset: 3px;
   }
   .Directory_Sub {
-    color: var(--soft-ink);
+    color: var(--muted);
     font-size: .85rem;
     overflow-wrap: anywhere;
   }
@@ -1033,7 +1033,7 @@
     margin: 0;
   }
   .Directory_Uses dt {
-    color: var(--soft-ink);
+    color: var(--muted);
     font-size: .8rem;
   }
   .Directory_Uses dd {
@@ -1045,7 +1045,7 @@
   }
   .Directory_Facts dt {
     font-weight: 700;
-    color: var(--soft-ink);
+    color: var(--muted);
   }
   .Directory_Content .Group {
     margin-top: 2rem;
@@ -1087,7 +1087,7 @@
     gap: .75rem;
     height: 100dvh;
     padding: 1rem .75rem;
-    background: var(--behind);
+    background: var(--surface);
   }
   /* The edge between the side and the conversation, drawn inside the side so
      the current tab, which is clipped where the side scrolls, still covers
@@ -1116,7 +1116,7 @@
      current one opens into the page beside it. */
   .Talk_Side .SideNav {
     --nav-edge: transparent;
-    --nav-panel: var(--ground);
+    --nav-panel: var(--bg);
     flex: none;
     margin-right: -.75rem;
     gap: .15rem;
@@ -1132,7 +1132,7 @@
     display: flex;
     align-items: center;
     gap: .55rem;
-    color: var(--ink);
+    color: var(--text);
     font-weight: 800;
     text-decoration: none;
   }
@@ -1158,7 +1158,7 @@
     object-fit: cover;
   }
   .Talk_Side .SideNav a.Talk_All {
-    color: var(--soft-ink);
+    color: var(--muted);
     font-size: var(--fine);
   }
   .Talk_Count {
@@ -1166,8 +1166,8 @@
     margin-left: auto;
     padding: 0 .35rem;
     border-radius: 99px;
-    background: var(--warn);
-    color: var(--paper);
+    background: var(--negative);
+    color: var(--card);
     font-size: var(--fine);
     font-weight: 800;
     text-align: center;
@@ -1175,7 +1175,7 @@
   /* What each part of the side holds, said small over it. */
   .Talk_Group {
     margin: .25rem .6rem -.5rem;
-    color: var(--soft-ink);
+    color: var(--muted);
     font-size: var(--fine);
     font-weight: 800;
   }
@@ -1193,13 +1193,13 @@
     display: grid;
     gap: .1rem;
     padding: .5rem .6rem;
-    border-radius: var(--corner);
-    color: var(--ink);
+    border-radius: var(--radius);
+    color: var(--text);
     text-decoration: none;
     line-height: 1.3;
   }
   .Talk_Item:hover {
-    background: var(--behind);
+    background: var(--surface);
   }
   .Talk_Title {
     overflow: hidden;
@@ -1208,7 +1208,7 @@
   }
   .Talk_Meta,
   .Talk_None {
-    color: var(--soft-ink);
+    color: var(--muted);
     font-size: var(--fine);
   }
   .Talk_Item[data-pending] .Talk_Meta {
@@ -1216,7 +1216,7 @@
   }
   .Talk_Side .Talk_Foot {
     padding-top: .5rem;
-    border-top: 1px solid var(--edge);
+    border-top: 1px solid var(--border2);
   }
   .Talk_Close,
   .Talk_Menu,
@@ -1238,8 +1238,8 @@
     align-items: center;
     gap: .75rem;
     padding: .75rem 1.25rem;
-    background: var(--ground);
-    border-bottom: 1px solid var(--edge);
+    background: var(--bg);
+    border-bottom: 1px solid var(--border2);
   }
   .Talk_Heads {
     display: grid;
@@ -1247,7 +1247,7 @@
   }
   .Talk_Who {
     margin: 0;
-    color: var(--soft-ink);
+    color: var(--muted);
     font-size: var(--fine);
   }
   .Talk_Head {
@@ -1336,7 +1336,7 @@
   .Update_Meta,
   .Update_When,
   .Update_Choices {
-    color: var(--soft-ink);
+    color: var(--muted);
     font-size: var(--fine);
   }
   .Update-needs .Update_When {
@@ -1346,7 +1346,7 @@
     padding-left: 1.25rem;
   }
   .Update_Reply > summary {
-    color: var(--soft-ink);
+    color: var(--muted);
     font-size: var(--fine);
     cursor: pointer;
   }
@@ -1379,8 +1379,8 @@
     display: grid;
     grid-template-rows: auto minmax(0, 1fr);
     height: 100dvh;
-    border-left: 1px solid var(--edge);
-    background: var(--behind);
+    border-left: 1px solid var(--border2);
+    background: var(--surface);
   }
   .Talk_AppHead {
     display: flex;
@@ -1402,7 +1402,7 @@
     white-space: nowrap;
   }
   .Talk_AppName small {
-    color: var(--soft-ink);
+    color: var(--muted);
     font-size: var(--fine);
   }
   .Talk_Stage {
@@ -1415,8 +1415,8 @@
     height: 100%;
     border: 0;
     border-radius: .75rem;
-    background: var(--paper);
-    box-shadow: 0 0 0 1px var(--edge);
+    background: var(--card);
+    box-shadow: 0 0 0 1px var(--border2);
   }
   .Talk_Thread,
   .Talk_Said {
@@ -1436,14 +1436,14 @@
     padding: .6rem 1rem;
     border-radius: 1.1rem;
     background: var(--mine);
-    color: var(--ink);
+    color: var(--text);
     white-space: pre-wrap;
     overflow-wrap: anywhere;
   }
   /* The channel the words came by, a small mark before them. */
   .Talk_Via {
     margin-right: .4em;
-    color: var(--soft-ink);
+    color: var(--muted);
   }
   .Talk_Via .Icon {
     width: .95em;
@@ -1457,7 +1457,7 @@
   .Talk_When {
     display: block;
     margin-top: .25rem;
-    color: var(--soft-ink);
+    color: var(--muted);
     font-size: var(--fine);
   }
   .Talk_Said > div:has(> .Talk_You, > .Talk_Files) > .Talk_When {
@@ -1465,7 +1465,7 @@
   }
   .Talk_Reply {
     margin: 0;
-    color: var(--ink);
+    color: var(--text);
     overflow-wrap: anywhere;
   }
   .Talk_Reply p,
@@ -1483,7 +1483,7 @@
   .Talk_Reply pre,
   .Talk_Written pre {
     padding: .6rem .8rem;
-    background: var(--paper);
+    background: var(--card);
     white-space: pre-wrap;
     overflow-wrap: anywhere;
   }
@@ -1498,7 +1498,7 @@
     display: inline-flex;
     gap: .4rem;
     align-items: baseline;
-    color: var(--soft-ink);
+    color: var(--muted);
     font-size: var(--small);
     cursor: pointer;
     list-style: none;
@@ -1517,12 +1517,12 @@
     color: var(--accent);
   }
   .Talk_Step-no > summary {
-    color: var(--warn);
+    color: var(--negative);
   }
   .Talk_Detail {
     margin: .4rem 0 0;
     padding: .6rem .8rem;
-    border-left: 2px solid var(--edge);
+    border-left: 2px solid var(--border2);
     font-size: var(--small);
   }
   .Talk_Detail > p {
@@ -1548,7 +1548,7 @@
     gap: .6rem;
   }
   .Talk_Facts dt {
-    color: var(--soft-ink);
+    color: var(--muted);
   }
   .Talk_Facts dd {
     margin: 0;
@@ -1562,22 +1562,22 @@
   .Talk_Note,
   .Talk_Now {
     margin: 0;
-    color: var(--soft-ink);
+    color: var(--muted);
     font-size: var(--small);
   }
   .Talk_Note-no {
-    color: var(--warn);
+    color: var(--negative);
   }
   /* An error: a sentence in words, and what it said only when opened. */
   .Talk_Trouble > details > summary {
-    color: var(--soft-ink);
+    color: var(--muted);
     font-size: var(--small);
     cursor: pointer;
   }
   .Talk_Trouble pre {
     margin: .4rem 0 0;
     padding: .6rem .8rem;
-    background: var(--paper);
+    background: var(--card);
     font-size: var(--small);
     white-space: pre-wrap;
     overflow-wrap: anywhere;
@@ -1586,12 +1586,12 @@
      frame, closed until opened. */
   .Talk_Told {
     padding: .4rem .8rem;
-    border: 1px dashed var(--edge);
+    border: 1px dashed var(--border2);
     border-radius: .6rem;
     font-size: var(--small);
   }
   .Talk_Told > summary {
-    color: var(--soft-ink);
+    color: var(--muted);
     cursor: pointer;
   }
   .Talk_Written {
@@ -1653,7 +1653,7 @@
     padding: .35rem .75rem .35rem .35rem;
     border-radius: .75rem;
     background: var(--mine);
-    color: var(--ink);
+    color: var(--text);
     text-decoration: none;
   }
   /* The box to write in, held at the foot of the window. */
@@ -1663,15 +1663,15 @@
     z-index: 1;
     margin-top: 0;
     padding-block: .5rem 1rem;
-    background: linear-gradient(transparent, var(--ground) 1rem);
+    background: linear-gradient(transparent, var(--bg) 1rem);
   }
   .Talk_Write {
     display: grid;
     gap: .5rem;
     padding: .5rem;
-    border: 1px solid var(--edge);
+    border: 1px solid var(--border2);
     border-radius: 1rem;
-    background: var(--paper);
+    background: var(--card);
   }
   .Talk_Field {
     width: 100%;
@@ -1687,12 +1687,12 @@
   }
   .Talk_Attach {
     position: relative;
-    color: var(--soft-ink);
+    color: var(--muted);
     font-size: var(--small);
     cursor: pointer;
   }
   .Talk_Attach:hover {
-    color: var(--ink);
+    color: var(--text);
   }
   .Talk_Attach input {
     position: absolute;
@@ -1724,7 +1724,7 @@
   }
   .Talk_Status {
     margin: .3rem 0 0;
-    color: var(--soft-ink);
+    color: var(--muted);
     font-size: var(--fine);
   }
   .Talk_Status:empty {

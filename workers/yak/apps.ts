@@ -625,7 +625,7 @@ let declares = (page: string, tag: string, attr: string, value: string) =>
     'i',
   ).test(page)
 
-// The platform's own palette (public/tokens.css `--meadow`/`--linen`), for an
+// The platform's own palette (@yaks/ui's linen theme: `--accent`, `--bg`), for an
 // app that never set its own (T-33055): the one look a generated manifest and
 // the tags beside it can give honestly, since the browser's grey chrome and
 // blank splash read as broken while a borrowed brand at least reads as

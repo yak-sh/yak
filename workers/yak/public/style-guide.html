@@ -73,8 +73,8 @@
             <li><a class="Pill" href="#how-to">Using the system</a></li>
             <li><a class="Pill" href="#voice">Layout and voice</a></li>
             <li><a class="Pill" href="#language">One design language</a></li>
-            <li><a class="Pill" href="#paints">Paints</a></li>
-            <li><a class="Pill" href="#roles">Roles</a></li>
+            <li><a class="Pill" href="#theme-roles">The theme</a></li>
+            <li><a class="Pill" href="#page-paints">Page paints</a></li>
             <li><a class="Pill" href="#type">Type</a></li>
             <li><a class="Pill" href="#space">Space and shape</a></li>
             <li><a class="Pill" href="#components">Components</a></li>
@@ -88,7 +88,10 @@
         <p class="Note">
           No build step, four declared layers — tokens, base, components, and
           sections. Later layers take precedence.
-          <code class="Pill Pill-code">tokens.css</code> defines the tokens;
+          The theme comes from the @yaks/ui kit
+          (<code class="Pill Pill-code">_ui.css</code>, composed as the site
+          deploys), <code class="Pill Pill-code">site.css</code> adds the
+          face and what only these pages paint, and
           <code class="Pill Pill-code">controls.css</code> supplies the shared
           controls. Both the management pages and the site's
           <code class="Pill Pill-code">style.css</code> load them. Follow these
@@ -102,10 +105,11 @@
             below, and the rules they follow are under One design language.
           </li>
           <li>
-            <b>Use colour roles outside the tokens layer.</b> Write
-            <code class="Pill Pill-code">var(--ink)</code>, never
-            <code class="Pill Pill-code">var(--coffee)</code>. Themes change
-            role values; a direct paint reference will not follow the theme.
+            <b>Use colour roles, never a colour.</b> Write
+            <code class="Pill Pill-code">var(--text)</code>, never
+            <code class="Pill Pill-code">#523828</code>. The theme gives each
+            role a light and a dark paint; a colour written down follows
+            neither.
           </li>
           <li>
             <b>Implement variants with custom properties.</b>
@@ -205,7 +209,7 @@
             <code class="Pill Pill-code">--small</code> or the body size; and
             what describes it (a hint, a status, a count, a date) at
             <code class="Pill Pill-code">--fine</code> in
-            <code class="Pill Pill-code">--soft-ink</code>. The mono face is
+            <code class="Pill Pill-code">--muted</code>. The mono face is
             only for what a person copies or types.
           </li>
           <li>
@@ -241,131 +245,53 @@
         </ul>
       </section>
 
-      <section class="Guide_Part" aria-labelledby="paints">
-        <h2 id="paints" class="Title">Paints</h2>
+      <section class="Guide_Part" aria-labelledby="theme-roles">
+        <h2 id="theme-roles" class="Title">The theme</h2>
         <p class="Note">
-          Every colour value is declared here. Code outside the tokens layer
-          uses a role instead. Values reflect the selected theme.
+          yaks.app wears <code class="Pill Pill-code">linen</code>, a theme of
+          the @yaks/ui kit: every colour a part reads is one of its roles, and
+          each role is a light and a dark paint. Values reflect the selected
+          theme.
         </p>
         <ul class="Guide_Swatches">
-          <li class="Guide_Swatch" data-token="--cream">
-            <span class="Guide_Chip" style="--swatch: var(--cream)"></span>
-            <code class="Guide_Name">--cream</code>
+          <li class="Guide_Swatch" data-token="--bg">
+            <span class="Guide_Chip" style="--swatch: var(--bg)"></span>
+            <code class="Guide_Name">--bg</code>
             <span class="Guide_Value"></span>
           </li>
-          <li class="Guide_Swatch" data-token="--linen">
-            <span class="Guide_Chip" style="--swatch: var(--linen)"></span>
-            <code class="Guide_Name">--linen</code>
+          <li class="Guide_Swatch" data-token="--surface">
+            <span class="Guide_Chip" style="--swatch: var(--surface)"></span>
+            <code class="Guide_Name">--surface</code>
             <span class="Guide_Value"></span>
           </li>
-          <li class="Guide_Swatch" data-token="--oat">
-            <span class="Guide_Chip" style="--swatch: var(--oat)"></span>
-            <code class="Guide_Name">--oat</code>
+          <li class="Guide_Swatch" data-token="--card">
+            <span class="Guide_Chip" style="--swatch: var(--card)"></span>
+            <code class="Guide_Name">--card</code>
             <span class="Guide_Value"></span>
           </li>
-          <li class="Guide_Swatch" data-token="--shell">
-            <span class="Guide_Chip" style="--swatch: var(--shell)"></span>
-            <code class="Guide_Name">--shell</code>
+          <li class="Guide_Swatch" data-token="--border">
+            <span class="Guide_Chip" style="--swatch: var(--border)"></span>
+            <code class="Guide_Name">--border</code>
             <span class="Guide_Value"></span>
           </li>
-          <li class="Guide_Swatch" data-token="--taupe">
-            <span class="Guide_Chip" style="--swatch: var(--taupe)"></span>
-            <code class="Guide_Name">--taupe</code>
+          <li class="Guide_Swatch" data-token="--border2">
+            <span class="Guide_Chip" style="--swatch: var(--border2)"></span>
+            <code class="Guide_Name">--border2</code>
             <span class="Guide_Value"></span>
           </li>
-          <li class="Guide_Swatch" data-token="--clay">
-            <span class="Guide_Chip" style="--swatch: var(--clay)"></span>
-            <code class="Guide_Name">--clay</code>
+          <li class="Guide_Swatch" data-token="--text">
+            <span class="Guide_Chip" style="--swatch: var(--text)"></span>
+            <code class="Guide_Name">--text</code>
             <span class="Guide_Value"></span>
           </li>
-          <li class="Guide_Swatch" data-token="--coffee">
-            <span class="Guide_Chip" style="--swatch: var(--coffee)"></span>
-            <code class="Guide_Name">--coffee</code>
+          <li class="Guide_Swatch" data-token="--muted">
+            <span class="Guide_Chip" style="--swatch: var(--muted)"></span>
+            <code class="Guide_Name">--muted</code>
             <span class="Guide_Value"></span>
           </li>
-          <li class="Guide_Swatch" data-token="--bark">
-            <span class="Guide_Chip" style="--swatch: var(--bark)"></span>
-            <code class="Guide_Name">--bark</code>
-            <span class="Guide_Value"></span>
-          </li>
-          <li class="Guide_Swatch" data-token="--cocoa">
-            <span class="Guide_Chip" style="--swatch: var(--cocoa)"></span>
-            <code class="Guide_Name">--cocoa</code>
-            <span class="Guide_Value"></span>
-          </li>
-          <li class="Guide_Swatch" data-token="--night">
-            <span class="Guide_Chip" style="--swatch: var(--night)"></span>
-            <code class="Guide_Name">--night</code>
-            <span class="Guide_Value"></span>
-          </li>
-          <li class="Guide_Swatch" data-token="--forest">
-            <span class="Guide_Chip" style="--swatch: var(--forest)"></span>
-            <code class="Guide_Name">--forest</code>
-            <span class="Guide_Value"></span>
-          </li>
-          <li class="Guide_Swatch" data-token="--meadow">
-            <span class="Guide_Chip" style="--swatch: var(--meadow)"></span>
-            <code class="Guide_Name">--meadow</code>
-            <span class="Guide_Value"></span>
-          </li>
-          <li class="Guide_Swatch" data-token="--moss">
-            <span class="Guide_Chip" style="--swatch: var(--moss)"></span>
-            <code class="Guide_Name">--moss</code>
-            <span class="Guide_Value"></span>
-          </li>
-          <li class="Guide_Swatch" data-token="--blush">
-            <span class="Guide_Chip" style="--swatch: var(--blush)"></span>
-            <code class="Guide_Name">--blush</code>
-            <span class="Guide_Value"></span>
-          </li>
-          <li class="Guide_Swatch" data-token="--ember">
-            <span class="Guide_Chip" style="--swatch: var(--ember)"></span>
-            <code class="Guide_Name">--ember</code>
-            <span class="Guide_Value"></span>
-          </li>
-          <li class="Guide_Swatch" data-token="--sky">
-            <span class="Guide_Chip" style="--swatch: var(--sky)"></span>
-            <code class="Guide_Name">--sky</code>
-            <span class="Guide_Value"></span>
-          </li>
-          <li class="Guide_Swatch" data-token="--dusk">
-            <span class="Guide_Chip" style="--swatch: var(--dusk)"></span>
-            <code class="Guide_Name">--dusk</code>
-            <span class="Guide_Value"></span>
-          </li>
-        </ul>
-      </section>
-
-      <section class="Guide_Part" aria-labelledby="roles">
-        <h2 id="roles" class="Title">Roles</h2>
-        <p class="Note">
-          Components use these semantic colour names. The light and dark
-          themes assign different paints to them.
-        </p>
-        <ul class="Guide_Swatches">
-          <li class="Guide_Swatch" data-token="--ground">
-            <span class="Guide_Chip" style="--swatch: var(--ground)"></span>
-            <code class="Guide_Name">--ground</code>
-            <span class="Guide_Value"></span>
-          </li>
-          <li class="Guide_Swatch" data-token="--paper">
-            <span class="Guide_Chip" style="--swatch: var(--paper)"></span>
-            <code class="Guide_Name">--paper</code>
-            <span class="Guide_Value"></span>
-          </li>
-          <li class="Guide_Swatch" data-token="--ink">
-            <span class="Guide_Chip" style="--swatch: var(--ink)"></span>
-            <code class="Guide_Name">--ink</code>
-            <span class="Guide_Value"></span>
-          </li>
-          <li class="Guide_Swatch" data-token="--soft-ink">
-            <span class="Guide_Chip" style="--swatch: var(--soft-ink)"></span>
-            <code class="Guide_Name">--soft-ink</code>
-            <span class="Guide_Value"></span>
-          </li>
-          <li class="Guide_Swatch" data-token="--line">
-            <span class="Guide_Chip" style="--swatch: var(--line)"></span>
-            <code class="Guide_Name">--line</code>
+          <li class="Guide_Swatch" data-token="--dim">
+            <span class="Guide_Chip" style="--swatch: var(--dim)"></span>
+            <code class="Guide_Name">--dim</code>
             <span class="Guide_Value"></span>
           </li>
           <li class="Guide_Swatch" data-token="--accent">
@@ -373,11 +299,59 @@
             <code class="Guide_Name">--accent</code>
             <span class="Guide_Value"></span>
           </li>
-          <li class="Guide_Swatch" data-token="--on-accent">
-            <span class="Guide_Chip" style="--swatch: var(--on-accent)"></span>
-            <code class="Guide_Name">--on-accent</code>
+          <li class="Guide_Swatch" data-token="--link">
+            <span class="Guide_Chip" style="--swatch: var(--link)"></span>
+            <code class="Guide_Name">--link</code>
             <span class="Guide_Value"></span>
           </li>
+          <li class="Guide_Swatch" data-token="--heading">
+            <span class="Guide_Chip" style="--swatch: var(--heading)"></span>
+            <code class="Guide_Name">--heading</code>
+            <span class="Guide_Value"></span>
+          </li>
+          <li class="Guide_Swatch" data-token="--info">
+            <span class="Guide_Chip" style="--swatch: var(--info)"></span>
+            <code class="Guide_Name">--info</code>
+            <span class="Guide_Value"></span>
+          </li>
+          <li class="Guide_Swatch" data-token="--active">
+            <span class="Guide_Chip" style="--swatch: var(--active)"></span>
+            <code class="Guide_Name">--active</code>
+            <span class="Guide_Value"></span>
+          </li>
+          <li class="Guide_Swatch" data-token="--positive">
+            <span class="Guide_Chip" style="--swatch: var(--positive)"></span>
+            <code class="Guide_Name">--positive</code>
+            <span class="Guide_Value"></span>
+          </li>
+          <li class="Guide_Swatch" data-token="--negative">
+            <span class="Guide_Chip" style="--swatch: var(--negative)"></span>
+            <code class="Guide_Name">--negative</code>
+            <span class="Guide_Value"></span>
+          </li>
+          <li class="Guide_Swatch" data-token="--caution">
+            <span class="Guide_Chip" style="--swatch: var(--caution)"></span>
+            <code class="Guide_Name">--caution</code>
+            <span class="Guide_Value"></span>
+          </li>
+          <li class="Guide_Swatch" data-token="--special">
+            <span class="Guide_Chip" style="--swatch: var(--special)"></span>
+            <code class="Guide_Name">--special</code>
+            <span class="Guide_Value"></span>
+          </li>
+        </ul>
+      </section>
+
+      <section class="Guide_Part" aria-labelledby="page-paints">
+        <h2 id="page-paints" class="Title">Page paints</h2>
+        <p class="Note">
+          What only yaks.app's pages paint, and no theme names:
+          the person's bubble, the assistant's, an embedded app's ground and
+          a field's well. They are declared in
+          <code class="Pill Pill-code">site.css</code>, from the theme's roles
+          where they can be.
+        </p>
+        <ul class="Guide_Swatches">
           <li class="Guide_Swatch" data-token="--mine">
             <span class="Guide_Chip" style="--swatch: var(--mine)"></span>
             <code class="Guide_Name">--mine</code>
@@ -391,6 +365,11 @@
           <li class="Guide_Swatch" data-token="--preview">
             <span class="Guide_Chip" style="--swatch: var(--preview)"></span>
             <code class="Guide_Name">--preview</code>
+            <span class="Guide_Value"></span>
+          </li>
+          <li class="Guide_Swatch" data-token="--well">
+            <span class="Guide_Chip" style="--swatch: var(--well)"></span>
+            <code class="Guide_Name">--well</code>
             <span class="Guide_Value"></span>
           </li>
         </ul>
@@ -407,8 +386,8 @@
             <span class="Guide_Name">--mono</span>
             <span class="Guide_Value"></span>
           </p>
-          <p data-token="--body" style="font-size: var(--body)">
-            <span class="Guide_Name">--body</span>
+          <p data-token="--size" style="font-size: var(--size)">
+            <span class="Guide_Name">--size</span>
             <span class="Guide_Value"></span> — body text.
           </p>
           <p data-token="--lead" style="font-size: var(--lead)">
@@ -437,22 +416,22 @@
           <li class="Guide_Size" data-token="--quarter-gap">
             <span><code class="Guide_Name">--quarter-gap</code>
               <span class="Guide_Value"></span></span>
-            <span class="Guide_Bar" style="--size: var(--quarter-gap)"></span>
+            <span class="Guide_Bar" style="--bar: var(--quarter-gap)"></span>
           </li>
           <li class="Guide_Size" data-token="--half-gap">
             <span><code class="Guide_Name">--half-gap</code>
               <span class="Guide_Value"></span></span>
-            <span class="Guide_Bar" style="--size: var(--half-gap)"></span>
+            <span class="Guide_Bar" style="--bar: var(--half-gap)"></span>
           </li>
           <li class="Guide_Size" data-token="--gap">
             <span><code class="Guide_Name">--gap</code>
               <span class="Guide_Value"></span></span>
-            <span class="Guide_Bar" style="--size: var(--gap)"></span>
+            <span class="Guide_Bar" style="--bar: var(--gap)"></span>
           </li>
           <li class="Guide_Size" data-token="--wide-gap">
             <span><code class="Guide_Name">--wide-gap</code>
               <span class="Guide_Value"></span></span>
-            <span class="Guide_Bar" style="--size: var(--wide-gap)"></span>
+            <span class="Guide_Bar" style="--bar: var(--wide-gap)"></span>
           </li>
         </ul>
         <p class="Note Note-small" data-token="--measure">
@@ -485,14 +464,14 @@
           </li>
           <li class="Guide_Swatch" data-token="--stroke">
             <span class="Guide_Chip"
-              style="--swatch: var(--paper); border: var(--stroke) solid var(--graphite)"></span>
+              style="--swatch: var(--card); border: var(--stroke) solid var(--graphite)"></span>
             <code class="Guide_Name">--stroke</code>
             <span class="Guide_Value"></span>
           </li>
-          <li class="Guide_Swatch" data-token="--corner">
+          <li class="Guide_Swatch" data-token="--radius">
             <span class="Guide_Chip Card"
-              style="--swatch: var(--paper); border-color: transparent"></span>
-            <code class="Guide_Name">--corner</code>
+              style="--swatch: var(--card); border-color: transparent"></span>
+            <code class="Guide_Name">--radius</code>
             <span class="Guide_Value"></span>
           </li>
           <li class="Guide_Swatch" data-token="--lift">
@@ -1202,7 +1181,7 @@
                 class keep their component styles.
               </p>
               <ul>
-                <li>Plain paragraphs go quiet, in --soft-ink.</li>
+                <li>Plain paragraphs go quiet, in --muted.</li>
                 <li>A <a href="#components">link</a> takes the accent.</li>
               </ul>
               <address>Yak Shaving LLC</address>
@@ -1293,16 +1272,20 @@
       for (let el of document.querySelectorAll('[data-token]')) {
         let slot = el.querySelector('.Guide_Value')
         let bar = el.querySelector('.Guide_Bar')
+        let chip = el.querySelector('.Guide_Chip:not([style*="border"])')
         if (!slot) continue
+        // A role is a light and a dark paint; the chip shows the one the
+        // page is in.
         slot.textContent = bar
           ? Math.round(bar.getBoundingClientRect().width) + 'px'
+          : chip
+          ? getComputedStyle(chip).backgroundColor
           : getComputedStyle(el).getPropertyValue(el.dataset.token).trim()
       }
     }
 
     let choose = () => {
-      if (theme.value == 'system') delete root.dataset.theme
-      else root.dataset.theme = theme.value
+      root.style.colorScheme = theme.value == 'system' ? '' : theme.value
       values()
     }
 
