@@ -11,6 +11,7 @@ import type { Bundle } from '@yaks/graph'
 import type { Load } from '@yaks/host'
 import type { Env, Vars } from './env.ts'
 import type { Purgers } from './purge.ts'
+import type { Builder } from './build.ts'
 import { type Directory, directoryOf, spaceHandle } from './directory.ts'
 import { valueIn } from '@yaks/tools/value'
 import { parse } from 'smol-toml'
@@ -91,6 +92,9 @@ export type Kernel = Door & {
   // effects a write owed, run by the store's pool.
   settled: () => Promise<void>
   deliveries: () => Promise<void>
+  // A space's Builder object, by the space's eid: a socket's frames are
+  // delivered to it the way the runtime delivers them (`webSocketMessage`).
+  builder: (space: string) => Builder
 }
 
 /** What reading a letter needs: the log, and what to wait on when there is one. */
@@ -237,6 +241,7 @@ let boot = async (
       reported,
       flushReports: () => reportClock.advance(10_000),
       settled,
+      builder: p.builder,
       deliveries: async () => {
         while (held.size) await Promise.allSettled([...held])
       },

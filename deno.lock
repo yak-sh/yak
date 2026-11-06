@@ -3306,6 +3306,19 @@
           ]
         }
       },
+      "packages/extension": {
+        "packageJson": {
+          "dependencies": [
+            "npm:@jsr/std__assert@1",
+            "npm:@types/chrome@~0.3.7",
+            "npm:@yaks/fp@0.2.23",
+            "npm:@yaks/oauth@0.2.23",
+            "npm:@yaks/testing@0.2.17",
+            "npm:esbuild@0.28.1",
+            "npm:linkedom@~0.18.12"
+          ]
+        }
+      },
       "packages/file": {
         "packageJson": {
           "dependencies": [
@@ -4875,6 +4888,7 @@
             "npm:@yaks/egress@0.2.23",
             "npm:@yaks/embedding@0.2.25",
             "npm:@yaks/esbuild@0.2.27",
+            "npm:@yaks/extension@0.2.23",
             "npm:@yaks/file@0.2.28",
             "npm:@yaks/filter@0.2.23",
             "npm:@yaks/fp@0.2.23",

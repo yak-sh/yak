@@ -1784,6 +1784,31 @@ importers:
         specifier: 0.2.17
         version: link:../testing
 
+  packages/extension:
+    dependencies:
+      '@yaks/fp':
+        specifier: 0.2.23
+        version: link:../fp
+      '@yaks/oauth':
+        specifier: 0.2.23
+        version: link:../oauth
+      esbuild:
+        specifier: 0.28.1
+        version: 0.28.1
+    devDependencies:
+      '@std/assert':
+        specifier: npm:@jsr/std__assert@^1.0.0
+        version: '@jsr/std__assert@1.0.19'
+      '@types/chrome':
+        specifier: ^0.3.7
+        version: 0.3.7
+      '@yaks/testing':
+        specifier: 0.2.17
+        version: link:../testing
+      linkedom:
+        specifier: ^0.18.12
+        version: 0.18.15
+
   packages/file:
     dependencies:
       '@yaks/fp':
@@ -5297,6 +5322,9 @@ importers:
       '@yaks/esbuild':
         specifier: 0.2.27
         version: link:../../packages/esbuild
+      '@yaks/extension':
+        specifier: 0.2.23
+        version: link:../../packages/extension
       '@yaks/file':
         specifier: 0.2.28
         version: link:../../packages/file
@@ -6407,8 +6435,14 @@ packages:
   '@tweenjs/tween.js@23.1.3':
     resolution: {integrity: sha512-vJmvvwFxYuGnF2axRtPYocag6Clbb5YS7kLL+SO/TeVFzHqDIWrNKYtcsPMibjDx9O+bu+psAy9NKfWklassUA==}
 
+  '@types/chrome@0.3.7':
+    resolution: {integrity: sha512-jWZgbHqWbTL1a5+PoyN0OJutNyejWgyZ5MdcvKo6iJE1TNRtXR3FxsC4WzNl52yZWPidfWC8NV/VUNZf+OFKcA==}
+
   '@types/estree@1.0.9':
     resolution: {integrity: sha512-GhdPgy1el4/ImP05X05Uw4cw2/M93BCUmnEvWZNStlCzEKME4Fkk+YpoA5OiHNQmoS7Cafb8Xa3Pya8m1Qrzeg==}
+
+  '@types/har-format@1.2.16':
+    resolution: {integrity: sha512-fluxdy7ryD3MV6h8pTfTYpy/xQzCFC7m89nOH9y94cNqJ1mDIDPut7MnRHI3F6qRmh/cT2fUjG1MLdCNb4hE9A==}
 
   '@types/jsdom@21.1.7':
     resolution: {integrity: sha512-yOriVnggzrnQ3a9OKOCxaVuSug3w3/SbOj5i7VwXWZEyUNl3bLF9V3MfxGbZKuwqJOQyRfqXyROBB1CoZLFWzA==}
@@ -8147,7 +8181,13 @@ snapshots:
 
   '@tweenjs/tween.js@23.1.3': {}
 
+  '@types/chrome@0.3.7':
+    dependencies:
+      '@types/har-format': 1.2.16
+
   '@types/estree@1.0.9': {}
+
+  '@types/har-format@1.2.16': {}
 
   '@types/jsdom@21.1.7':
     dependencies:

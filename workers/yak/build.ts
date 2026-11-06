@@ -84,6 +84,8 @@ import * as dirPart from './directory.ts'
 import type { Env } from './env.ts'
 import type { Who } from './session.ts'
 import { caught, refusing } from './defects.ts'
+import { type Browsers, browsers, type Lent } from './operator-browser.ts'
+import { PROTOCOL, protocolled } from './protocol.ts'
 import {
   type Frame,
   type Held,
@@ -130,8 +132,9 @@ export type State = Hibernation & Restartable & {
 }
 
 // Who is at a socket, and whether the page is watching the Operator rather
-// than a build.
+// than a build, or is a browser lent to the Operator (operator-browser.ts).
 type Watching = Held & { operator?: boolean }
+type Socket = Watching | Lent
 
 // One line about a tool, for somebody watching rather than reading: the first
 // line of it, and not much of that. A tool answers a paragraph; a page draws a
@@ -222,12 +225,16 @@ export class Builder {
   // would outlive the loop it stands for and lock the space forever.
   #building = false
   #arming?: Promise<void>
+  // The browsers people lend the Operator, and the calls asked of them that
+  // wait for an answer: in memory, as the step waiting on one is.
+  #lent: Browsers
 
   constructor(ctx: State, env: Env) {
     this.#ctx = ctx
     this.#sql = driver(ctx.storage)
     this.#env = env
     this.#sql.query(SAID)
+    this.#lent = browsers(() => ctx.getWebSockets(), env.CLOCK)
   }
 
   /** The conversation so far, whole. */
@@ -479,6 +486,9 @@ export class Builder {
     )
     let role = access.administrative ? 'owner' as const : access.role ?? null
     if (!writes(role)) return no(403, NOT_A_WRITER)
+    if (new URL(request.url).pathname == '/operator/browser') {
+      return this.#accept({ browser: true, person, space: spaceId }, request)
+    }
     let operator = await this.#work()
     if (new URL(request.url).pathname == '/operator/call') {
       let { answering } = await import('./operator-calls.ts')
@@ -552,6 +562,7 @@ export class Builder {
       )
       let operator = operating(store, this.#env, {
         tools: attachmentTools(this.#env),
+        browsers: this.#lent,
         tell: (session) =>
           void frames.tell(session).catch((e) =>
             caught(e, { request: 'operator socket' })
@@ -575,12 +586,15 @@ export class Builder {
   }
 
   // The sockets of pages watching a build (pages.ts `chat`), not the
-  // Operator's: a page watching the Operator is cut by a restart and joins
-  // again, and never holds this object on old code.
+  // Operator's: a page watching the Operator, or a browser lent to it, is cut
+  // by a restart and joins again, and never holds this object on old code.
   #builds() {
-    return this.#ctx.getWebSockets().filter((ws) =>
-      !(ws.deserializeAttachment() as Watching | null)?.operator
-    )
+    return this.#ctx.getWebSockets().filter((ws) => {
+      let held = ws.deserializeAttachment() as
+        | { operator?: boolean; browser?: boolean }
+        | null
+      return !held?.operator && !held?.browser
+    })
   }
 
   async alarm() {
@@ -604,24 +618,33 @@ export class Builder {
   }
 
   // The 101, and the socket handed to the runtime so it outlives this object.
-  #accept(held: Watching): Response {
+  // A browser's socket speaks the platform's subprotocol, which the 101 names
+  // as a browser requires (identity.ts `PROTOCOL`).
+  #accept(held: Socket, request?: Request): Response {
     let pair = new WebSocketPair()
     this.#ctx.acceptWebSocket(pair[1])
-    if (held.operator) {
+    if ('browser' in held) pair[1].serializeAttachment(held)
+    else if (held.operator) {
       pair[1].serializeAttachment(held)
       pair[1].send(JSON.stringify({ ready: true }))
     } else this.joined(pair[1], held)
     return new Response(
       null,
-      { status: 101, webSocket: pair[0] } as ResponseInit & {
-        webSocket: unknown
-      },
+      {
+        status: 101,
+        webSocket: pair[0],
+        headers: request && protocolled(request)
+          ? { 'sec-websocket-protocol': PROTOCOL }
+          : {},
+      } as ResponseInit & { webSocket: unknown },
     )
   }
 
   /** A frame from a page. The only one it may send is `{say}`. */
   webSocketMessage(ws: Wire, data: string | ArrayBuffer): void {
-    let held = ws.deserializeAttachment() as Watching | null
+    let held = ws.deserializeAttachment() as Socket | null
+    // A lent browser answers the calls asked of it (operator-browser.ts).
+    if (held && 'browser' in held) return this.#lent.heard(held, data)
     // A page watching the Operator says nothing on its socket.
     if (held?.operator) return
     if (!held?.person) return void ws.send(JSON.stringify({ done: NOBODY }))

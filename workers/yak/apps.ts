@@ -150,7 +150,8 @@ import {
   type Who,
   whoIs,
 } from './session.ts'
-import { asking } from './identity.ts'
+import { asking, bearerIn } from './identity.ts'
+import { upgrading } from './protocol.ts'
 import { nameOf } from './signin.ts'
 import { written } from './reach.ts'
 import {
@@ -2472,12 +2473,22 @@ let manage = async (req: Request, env: Env): Promise<Response> => {
     copy: copyOf(env),
     time: env.CLOCK,
   })
-  let { person, until } = await whoIs(
-    req,
-    env.SESSION_SECRET,
-    () => Promise.resolve(null),
-  )
+  // A browser's socket the person lends their Operator comes from an
+  // extension, which holds no cookie of ours: it bears the token it signed in
+  // for (identity.ts `bearerIn`), and is refused rather than sent to sign in.
+  let socket = upgrading(req) && !!bearerIn(req)
+  let caller = socket ? (await asking(env, req)).who : undefined
+  let { person, until } = caller
+    ? { person: caller.person, until: caller.until }
+    : socket
+    ? { person: null, until: undefined }
+    : await whoIs(req, env.SESSION_SECRET, () => Promise.resolve(null))
+  if (!person && socket) return json(401, 'signed_out', 'Sign in again.')
   if (!person) return redirect(signInAt(sentFrom(req, env).href, env), 303)
+  // A token narrowed to one space reaches that space alone.
+  if (caller?.space && 'space' in at && caller.space != at.space) {
+    return json(403, 'not_a_member', 'That token is for another space.')
+  }
   let asked = url.searchParams.get('space')
   if (asked && !SLUG.test(asked)) return nothingHere(env)
   // `/manage` opens a new chat in the space the person opens first, and an

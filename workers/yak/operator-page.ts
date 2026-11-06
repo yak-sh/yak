@@ -16,6 +16,7 @@ import { directoryOf, type Reach, type Space } from './directory.ts'
 import { reachOf } from './operator-reach.ts'
 import { builderOf, operatorDoor, SPACE } from './build-door.ts'
 import { vouched, type Who } from './session.ts'
+import { PROTOCOL, protocolled, upgrading } from './protocol.ts'
 import { choice as spaceChoice, esc, type Picked, shell } from './pages.ts'
 import { spaceHost, url } from './host.ts'
 import { chatPath, logoPath, managePath, manifestPath, SLUG } from './route.ts'
@@ -557,12 +558,22 @@ export let operatorAnswer = async (
     })
   }
   if (q.has('live')) {
-    if ((req.headers.get('upgrade') ?? '').toLowerCase() != 'websocket') {
+    if (!upgrading(req)) {
       return new Response("This is the Operator page's WebSocket.", {
         status: 426,
       })
     }
-    return watching(env, space, req, who)
+    return socketTo(env, space, req, who, '/operator/ws')
+  }
+  // A browser lent to the Operator (operator-browser.ts), signed in by the
+  // token it bears (apps.ts `manage`).
+  if (q.has('browser')) {
+    if (!upgrading(req)) {
+      return new Response("This is the Operator's browser WebSocket.", {
+        status: 426,
+      })
+    }
+    return socketTo(env, space, req, who, '/operator/browser')
   }
   // One conversation read again.
   if (q.has('talk')) {
@@ -581,14 +592,24 @@ export let operatorAnswer = async (
   }
 }
 
-// The page's socket, carried to the Builder object with the kernel's vouch
-// on it and nothing of the client's (build.ts `joining`, the same way).
-let watching = (env: Env, space: Space, req: globalThis.Request, who: Who) =>
+// A socket, carried to the Builder object with the kernel's vouch on it and
+// nothing of the client's (build.ts `joining`, the same way): no header of
+// ours, and of its subprotocols only the platform's, never the token it bore.
+let socketTo = (
+  env: Env,
+  space: Space,
+  req: globalThis.Request,
+  who: Who,
+  path: string,
+) =>
   builderOf(env, space.eid)(() => {
-    let out = new Request('https://builder/operator/ws', req)
+    let out = new Request(`https://builder${path}`, req)
     for (let [h] of [...out.headers]) {
       if (h.startsWith('x-yak-')) out.headers.delete(h)
     }
+    out.headers.delete('authorization')
+    if (protocolled(req)) out.headers.set('sec-websocket-protocol', PROTOCOL)
+    else out.headers.delete('sec-websocket-protocol')
     out.headers.set(SPACE, space.eid)
     for (let [h, v] of Object.entries(vouched(who))) out.headers.set(h, v)
     return out

@@ -18,6 +18,10 @@ export let base64 = (bytes: Uint8Array) => {
   return btoa(parts.join(''))
 }
 
+/// new TextDecoder().decode(unbase64('SGVsbG8=')) -> 'Hello'
+export let unbase64 = (text: string): Bytes =>
+  Uint8Array.from(atob(text), (c) => c.charCodeAt(0))
+
 export type Reader = {
   /** The bytes held, at least `n` of them unless the stream ends first. */
   peek: (n: number) => Promise<Bytes>

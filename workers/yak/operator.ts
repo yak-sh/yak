@@ -82,6 +82,7 @@ import { textSend } from './operator-texts.ts'
 import { phoneSend } from './operator-line.ts'
 import { googleTold, googleTools } from './operator-google.ts'
 import { notification } from './operator-updates.ts'
+import { type Browsers, browserTools } from './operator-browser.ts'
 import {
   bases,
   declare,
@@ -112,6 +113,9 @@ export type Options = {
   // Told when a model's step ends, its words written (before a tool call it
   // asked for, or its answer).
   stepped?: (session: string) => void
+  // The browsers people lend this Operator (operator-browser.ts): while a
+  // person has one connected, their sessions are offered its tools.
+  browsers?: Browsers
 }
 let comp = (b: Bundle | undefined, name: string) =>
   b?.[name] as Comp | undefined
@@ -1035,6 +1039,9 @@ export let operating = (
           phoneSend(env, ctx, space, store),
           ...google,
           ...options.tools?.(ctx, files) ?? [],
+          ...options.browsers
+            ? browserTools(env, space, ctx.person, options.browsers)
+            : [],
         ]
       },
       // The conversation and its work forks share a short topic map. Only a

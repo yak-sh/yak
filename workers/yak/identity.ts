@@ -216,6 +216,7 @@ import * as ads from './ads.ts'
 import { sha256 } from '@yaks/graph/sha256'
 import { consentEid, shown } from '@yaks/phone'
 import { credit } from './referral.ts'
+import { carried } from './protocol.ts'
 
 // What a grant carries and a token gives back: the person, nothing else.
 // Membership is read from the directory at request time, never a claim.
@@ -230,6 +231,13 @@ export type { Caller }
 // naming a client, writing a grant, unwrapping a token. `opts` is the same
 // configuration `fetch` runs, so the two never disagree.
 let api = (env: Env) => getOAuthApi<Env>(opts(env), env)
+
+/** The token a request bears: its `Authorization: Bearer`, else on a
+ * WebSocket upgrade its `bearer.` subprotocol. A door that takes a token on
+ * one route only asks whether there is one here before it asks `asking`. */
+export let bearerIn = (req: Request): string | null =>
+  /^Bearer\s+(\S+)$/i.exec(req.headers.get('authorization') ?? '')?.[1] ??
+    (carried(req) || null)
 
 // Who is asking, and whether anybody tried: `who` is the caller — by session
 // cookie or by bearer token — and `tried` says a credential was presented at
@@ -247,16 +255,16 @@ export let asking = async (
   let cookied = cookieValue(req.headers.get('cookie'))
   // An `Authorization` header we cannot even parse is still a credential
   // offered: a caller speaking a scheme this door does not take is refused,
-  // not mistaken for nobody.
-  let tried = !!said || !!cookied
-  let bearer = /^Bearer\s+(\S+)$/i.exec(said)
-  if (bearer) {
+  // not mistaken for nobody. So is a subprotocol bearer that does not decode.
+  let tried = !!said || !!cookied || carried(req) != null
+  let token = bearerIn(req)
+  if (token) {
     // A grant says so in its first characters (grants.ts): the provider has
     // never heard of it, so it is opened here, under the session secret and
     // against the ledger row that is what makes it revocable.
-    if (bearer[1].startsWith(GRANT)) {
+    if (token.startsWith(GRANT)) {
       let g = env.SESSION_SECRET
-        ? await held(bearer[1], env.SESSION_SECRET, ledger(env.OAUTH_KV))
+        ? await held(token, env.SESSION_SECRET, ledger(env.OAUTH_KV))
         : null
       return {
         who: g
@@ -272,15 +280,15 @@ export let asking = async (
         tried,
       }
     }
-    let token = await api(env).unwrapToken<Props>(bearer[1])
-    let person = token?.grant.props?.person
+    let unwrapped = await api(env).unwrapToken<Props>(token)
+    let person = unwrapped?.grant.props?.person
     return {
       who: person
         ? {
           person,
           via: 'oauth',
-          until: token?.expiresAt,
-          instrument: instrumentEid(`oauth:${sha256(bearer[1])}`),
+          until: unwrapped?.expiresAt,
+          instrument: instrumentEid(`oauth:${sha256(token)}`),
         }
         : null,
       tried,
