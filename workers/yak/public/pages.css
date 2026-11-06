@@ -428,18 +428,18 @@
      another to go to, a button on its hatch, so it reads as something to
      press and not as the page you are on. Change opens the list over the
      page, wider than the side, drawn in pencil on a hatch the way a button
-     sits on its. Change sits under the name, so a long name has the
-     side's width and nothing draws over it. */
+     sits on its. Change sits right of the name, which wraps rather than
+     running under it. */
   .Desk_Space {
     display: grid;
     grid-template-columns: 2rem minmax(0, 1fr);
     align-items: center;
     column-gap: .6rem;
-    row-gap: .15rem;
     padding: .55rem .7rem;
     list-style: none;
   }
   .Desk_Pick > summary {
+    grid-template-columns: 2rem minmax(0, 1fr) auto;
     position: relative;
     border-radius: var(--radius);
     background: var(--card);
@@ -473,9 +473,6 @@
   .Desk_Pick[open] > summary {
     --lift: 1.5px;
     transform: translate(2.5px, 2.5px);
-  }
-  .Desk_Pick > summary > .Desk_Tile {
-    grid-row: span 2;
   }
   .Desk_Pick > summary::-webkit-details-marker {
     display: none;
@@ -522,7 +519,6 @@
     font-size: var(--fine);
   }
   .Desk_Change {
-    grid-column: 2;
     display: inline-flex;
     align-items: center;
     gap: .15rem;
@@ -893,7 +889,7 @@
       gap: 1.25rem;
       min-height: 0;
       padding: 1rem;
-      overflow-y: auto;
+      overflow: hidden auto;
       background: var(--bg);
     }
     .Desk_Side::after {
@@ -1145,15 +1141,20 @@
     filter: var(--drawn);
     pointer-events: none;
   }
+  /* The region scrolls down only. Its padding is the room the selector's
+     hatch and lift take on hover, so the clip at its edge never cuts them;
+     the current tab still reaches over the side's edge and is cut there. */
   .Talk_Scroll {
+    --reach: calc(var(--stroke) + 6px);
     display: flex;
     flex: 1;
     flex-direction: column;
     gap: .75rem;
     min-height: 0;
-    margin-right: -.75rem;
-    padding-right: .75rem;
-    overflow-y: auto;
+    margin: calc(-1 * var(--reach)) -.75rem calc(-1 * var(--reach))
+      calc(-1 * var(--reach));
+    padding: var(--reach) .75rem var(--reach) var(--reach);
+    overflow: hidden auto;
   }
   /* The side's places are the settings' tabs (pages.ts `navigation`): the
      current one opens into the page beside it. */
