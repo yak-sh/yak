@@ -698,6 +698,10 @@ class_name = "PublicDirectory"
 name = "OUTLAST"
 class_name = "Outlast"
 
+[[env.staging.durable_objects.bindings]]
+name = "LEXICON"
+class_name = "Lexicon"
+
 # As above: every object takes up a deploy at once.
 [env.staging.unsafe.metadata.code_update_strategy]
 mode = "immediate"
@@ -733,6 +737,10 @@ new_sqlite_classes = ["PublicDirectory"]
 [[env.staging.migrations]]
 tag = "v8"
 new_sqlite_classes = ["Outlast"]
+
+[[env.staging.migrations]]
+tag = "v9"
+new_sqlite_classes = ["Lexicon"]
 
 [[env.staging.containers]]
 class_name = "Sandbox"
