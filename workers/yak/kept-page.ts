@@ -201,6 +201,15 @@ export let asked = async (
 /** The apex's pages Site keeps; the review and identity doors stay uncached. */
 export let LISTINGS = ['/', '/gallery', '/integrations']
 
+/** Where the gallery serves an app's chosen screenshot by its sha (gallery.ts
+ * `image`). Site keeps each beside the listings that show it, and a listing
+ * change purges both. */
+export let PICTURES = '/gallery/image/'
+
+/** Whether Site keeps this apex path: a listing, or a picture one shows. */
+export let isListing = (path: string) =>
+  LISTINGS.includes(path) || path.startsWith(PICTURES)
+
 /** Where Site keeps one of them. The hostname is a placeholder for a service
  * binding; the apex is in the path because Workers Caching keys by path and
  * entrypoint, not the request hostname. */

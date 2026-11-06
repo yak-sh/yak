@@ -105,7 +105,7 @@ import * as docs from './docs.ts'
 import * as gallery from './gallery.ts'
 import * as appPage from './app-page.ts'
 import { call } from './tools.ts'
-import { INTEGRATIONS } from './integrations.ts'
+import { isListing } from './kept-page.ts'
 import { HANDOFF } from './handoff.ts'
 import { apex, hosted, url } from './host.ts'
 import { named } from './sheets.ts'
@@ -294,10 +294,7 @@ let serve = async (req: Request, env: Env, r: Route) => {
   if (said) return said
   // The apex's public pages are cached behind a separate entrypoint; only
   // these paths reach it, without credentials or unbounded query strings.
-  if (
-    (req.method == 'GET' || req.method == 'HEAD') &&
-    (path == '/' || path == gallery.PATH || path == INTEGRATIONS.path)
-  ) {
+  if ((req.method == 'GET' || req.method == 'HEAD') && isListing(path)) {
     let page = await site.forward(req, env, path)
     if (isHome(req, path, page)) funnel.step(env, 'home', req)
     return page
@@ -313,7 +310,7 @@ let serve = async (req: Request, env: Env, r: Route) => {
   if (path.startsWith(gallery.PAGE)) {
     return appPage.answer(req, env, path, dir)
   }
-  if (path == gallery.REVIEW || path.startsWith(gallery.IMAGE)) {
+  if (path == gallery.REVIEW) {
     let shown = await gallery.answer(req, env, path, dir, call)
     if (shown) return shown
   }

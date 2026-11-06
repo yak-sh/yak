@@ -4,7 +4,9 @@ import { clock, equal, ok, test } from '@yaks/testing'
 import { anonymousPage, type ServingCopyDoor, STALL } from './directory-copy.ts'
 import { directory } from './directory.ts'
 import * as dirPart from './directory.ts'
-import { DEMOS, LIST } from './gallery.ts'
+import { DEMOS, IMAGE, LIST } from './gallery.ts'
+import { blobPrefix } from './blob-key.ts'
+import { SITE_TAG } from './purge.ts'
 import { seal, verify } from './lib/token.ts'
 import { browserOf } from './session.ts'
 import { KEPT } from './page-cache.ts'
@@ -209,6 +211,32 @@ for (let path of ['/', '/gallery']) {
     }
   })
 }
+
+test('directory listings: an offered app picture is kept like the gallery and revalidates by its sha', async () => {
+  let f = await fixture()
+  try {
+    let dir = directory({ fetch: (req) => dirPart.fetch(req, f.env) })
+    let at = (await dir.offers()).find(({ app }) => app.slug == 'cookbook')!
+    let png = new Uint8Array([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a])
+    await f.env.BLOBS.put(blobPrefix(at.space, at.app) + 'cookbook-shot', png)
+    let path = `${IMAGE}${at.app.eid}/cookbook-shot`
+    let first = await f.request(path)
+    equal(
+      ['cache-control', 'cache-tag', 'etag', 'content-type']
+        .map((name) => first.headers.get(name)),
+      [KEPT, SITE_TAG, '"cookbook-shot"', 'image/png'],
+    )
+    equal(new Uint8Array(await first.arrayBuffer()), png)
+    equal((await f.request(path, '"cookbook-shot"')).status, 304)
+    let other = await f.request(`${IMAGE}${at.app.eid}/other`)
+    equal(
+      [other.status, other.headers.get('cache-control')],
+      [404, 'private, no-store'],
+    )
+  } finally {
+    await f.close()
+  }
+})
 
 // These are genuine, valid seals, not malformed cookie stand-ins. The browser
 // cookie carries an instrument but no person; a session must take authority.

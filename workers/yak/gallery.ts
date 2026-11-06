@@ -78,6 +78,7 @@ import { browserOf } from './session.ts'
 import { caught } from './defects.ts'
 import { staff } from './admin.ts'
 import { DEMO } from './gallery-demo.ts'
+import { PICTURES } from './kept-page.ts'
 import { opens } from './sample.ts'
 import type { Args, Ctx, Out } from './tool.ts'
 
@@ -87,7 +88,7 @@ import type { Args, Ctx, Out } from './tool.ts'
 // one of the site's pages, and the list it belongs to is kept in one place.
 export let PATH = GALLERY.path
 export let REVIEW = `${PATH}/review`
-export let IMAGE = `${PATH}/image/`
+export let IMAGE = PICTURES
 // Where each published app's own page lives (app-page.ts): one address per
 // platform-wide name, listed or not.
 export let PAGE = '/apps/'
@@ -296,20 +297,17 @@ export let searched = async (
 
 // ---- the picture -------------------------------------------------------
 
-// A chosen screenshot is an app upload, addressed by its bytes. Build its URL
-// from the app's current address so an app move keeps the card working.
-export let screenshot = (space: Space, app: App, env: Host = {}) =>
-  !app.screenshot
-    ? ''
-    : app.access == 'private'
-    ? siteUrl(env, `${IMAGE}${app.eid}/${app.screenshot}`)
-    : `${url(space, app, env)}api/blob/${app.screenshot}`
+// A chosen screenshot is an app upload, addressed by its bytes. The site serves
+// it from the bucket by the app's eid and the sha, so a card's picture waits on
+// no app's store and Site keeps it at the edge beside the listing (site.ts).
+export let screenshot = (_space: Space, app: App, env: Host = {}) =>
+  app.screenshot ? siteUrl(env, `${IMAGE}${app.eid}/${app.screenshot}`) : ''
 
-/** A private app's selected gallery image is public with its listing, or while
- * the home page features it. Every request checks the current offer and
+/** An offered app's selected image: a public app's whenever it is offered, as
+ * its own `/api/blob` serves it to anyone; a private app's with its listing, or
+ * while the home page features it. Every render checks the current offer and
  * selection before reaching the bucket. */
 export let image = async (
-  req: Request,
   dir: Directory,
   objects: Pick<Objects, 'read'>,
   path: string,
@@ -318,7 +316,8 @@ export let image = async (
   let at = !extra &&
     (await dir.offers()).find(({ space, app }) =>
       app.eid == eid && app.screenshot == sha &&
-      (app.gallery?.listedAt || featured(space, app))
+      (app.access != 'private' || app.gallery?.listedAt ||
+        featured(space, app))
     )
   let bytes = at ? await objects.read(blobPrefix(at.space, at.app) + sha) : null
   let mime = bytes && mediaTypeOf(bytes)
@@ -328,10 +327,10 @@ export let image = async (
       headers: { 'cache-control': 'no-store' },
     })
   }
-  return new Response(req.method == 'HEAD' ? null : bytes, {
+  return new Response(bytes, {
     headers: {
       'content-type': mime,
-      'cache-control': 'no-store',
+      'etag': `"${sha}"`,
       'x-content-type-options': 'nosniff',
     },
   })
@@ -726,8 +725,9 @@ export let owned = async (dir: Directory, space: Space) => {
   return ''
 }
 
-// The review address this file answers at the apex. The public listing is
-// drawn behind the Site entrypoint (site.ts), outside the review ticket door.
+// The review address this file answers at the apex. The public listing and
+// its pictures are drawn behind the Site entrypoint (site.ts), outside the
+// review ticket door.
 export let answer = async (
   req: Request,
   env: Env,
@@ -735,9 +735,6 @@ export let answer = async (
   dir: Directory,
   run: (ctx: Ctx, name: string, args: Args) => Promise<Out>,
 ): Promise<Response | null> => {
-  if (path.startsWith(IMAGE) && ['GET', 'HEAD'].includes(req.method)) {
-    return image(req, dir, r2Objects(env.BLOBS), path)
-  }
   if (path != REVIEW) return null
   let asked = new URL(req.url)
   let form = req.method == 'POST'

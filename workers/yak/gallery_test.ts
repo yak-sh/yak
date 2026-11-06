@@ -108,7 +108,7 @@ test('gallery decisions record the actor and session and clear a declined reques
   })
 })
 
-test('a private gallery app exposes only its currently selected listing image', async () => {
+test('an offered app exposes only its currently selected image, a private one only while listed', async () => {
   let current = app({ access: 'private', gallery: live, screenshot: 'chosen' })
   let dir = {
     offers: () => Promise.resolve([{ space: space(), app: current }]),
@@ -123,19 +123,21 @@ test('a private gallery app exposes only its currently selected listing image', 
   }
   let path = `${IMAGE}${current.eid}/chosen`
   assertEquals(screenshot(space(), current), `https://yaks.app${path}`)
-  let req = new Request(`https://yaks.app${path}`)
-  let shown = await image(req, dir, objects, path)
+  let shown = await image(dir, objects, path)
   assertEquals(shown.status, 200)
   assertEquals(shown.headers.get('content-type'), 'image/png')
-  assertEquals(shown.headers.get('cache-control'), 'no-store')
+  assertEquals(shown.headers.get('etag'), '"chosen"')
   assertEquals(new Uint8Array(await shown.arrayBuffer()), bytes)
   assertEquals(reads, ['jeff/recipes/blobs/chosen'])
   for (let hidden of [`${IMAGE}${current.eid}/other`, `${path}/extra`]) {
-    assertEquals((await image(req, dir, objects, hidden)).status, 404)
+    assertEquals((await image(dir, objects, hidden)).status, 404)
   }
   current.gallery = asked
-  assertEquals((await image(req, dir, objects, path)).status, 404)
-  assertEquals(reads.length, 1)
+  assertEquals((await image(dir, objects, path)).status, 404)
+  // A public app's picture is public while it is offered, listed or not.
+  current.access = 'public'
+  assertEquals((await image(dir, objects, path)).status, 200)
+  assertEquals(reads.length, 2)
 })
 
 test('a private app the home page features shows its image without a listing', async () => {
@@ -148,8 +150,7 @@ test('a private app the home page features shows its image without a listing', a
     let bytes = new Uint8Array([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a])
     let objects = { read: () => Promise.resolve(bytes) }
     let path = `${IMAGE}${current.eid}/chosen`
-    return image(new Request(`https://yaks.app${path}`), dir, objects, path)
-      .then((r) => r.status)
+    return image(dir, objects, path).then((r) => r.status)
   }
   assertEquals(await shown('housebook', 'yourname'), 200)
   assertEquals(await shown('housebook', 'jeff'), 404)
@@ -370,10 +371,10 @@ test('the homepage paints every chosen screenshot', async () => {
   let file = new Response(`${LIST}<li>fallback</li></ul>`)
   let html = await (await made({} as Env, dir, file)).text()
   assertEquals(cards(html), DEMOS.length)
-  for (let slug of DEMOS) {
+  for (let a of apps) {
     assertStringIncludes(
       html,
-      `https://yourname.yaks.app/${slug}/api/blob/${slug}-image`,
+      `https://yaks.app${IMAGE}${a.eid}/${a.slug}-image`,
     )
   }
 })

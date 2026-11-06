@@ -2,12 +2,21 @@ import { copyOf } from './directory-copy.ts'
 // The pages the Site entrypoint keeps in Cloudflare's cache (wrangler.toml):
 // the apex's pages drawn from directory listings (the gallery and the
 // integration directory and the home page fresh for thirty seconds, then
-// answered stale while they render again), and every public page an
+// answered stale while they render again), the app pictures those listings
+// show (gallery.ts `image`), and every public page an
 // app serves (page-cache.ts), keyed by the address it answers. The uncached gateway sends only canonical,
 // uncredentialed requests here.
 import { edged } from './apps.ts'
-import { KEPT, listing, listingAt, shareable, visitor } from './kept-page.ts'
+import {
+  isListing,
+  KEPT,
+  listing,
+  listingAt,
+  shareable,
+  visitor,
+} from './kept-page.ts'
 import { kept } from './page-cache.ts'
+import { r2Objects } from './lib/objects.ts'
 import { directory } from './directory.ts'
 import * as dirPart from './directory.ts'
 import { bound, type Env } from './env.ts'
@@ -63,8 +72,7 @@ export let fetch = async (req: Request, env: Env): Promise<Response> => {
   let root = `/${encodeURIComponent(apex(env))}`
   let path = new URL(req.url).pathname
   if (
-    req.method != 'GET' ||
-    !['/', '/gallery', INTEGRATIONS.path].includes(path.slice(root.length)) ||
+    req.method != 'GET' || !isListing(path.slice(root.length)) ||
     !path.startsWith(`${root}/`)
   ) return uncached(lost(env))
   path = path.slice(root.length)
@@ -78,7 +86,12 @@ export let fetch = async (req: Request, env: Env): Promise<Response> => {
     },
   )
   let page: Response
-  if (path == '/gallery') {
+  if (path.startsWith(gallery.IMAGE)) {
+    page = await c.time(
+      'image',
+      () => gallery.image(dir, r2Objects(env.BLOBS), path),
+    )
+  } else if (path == '/gallery') {
     page = gallery.page(
       await gallery.pictures(env, await gallery.listed(dir, env)),
       env,
@@ -104,7 +117,21 @@ export let fetch = async (req: Request, env: Env): Promise<Response> => {
     c.include('copied;dur=1')
     return timed(uncached(page), c, 'site_')
   }
+  if (path.startsWith(gallery.IMAGE)) {
+    return timed(pictured(req, page), c, 'site_')
+  }
   return timed(await validated(req, page, env, path), c, 'site_')
+}
+
+// A picture's bytes are its sha's, so its etag is the sha: kept like the
+// listing that shows it, and purged with it.
+let pictured = (req: Request, page: Response) => {
+  let headers = new Headers(page.headers)
+  headers.set('cache-control', KEPT)
+  headers.set('cache-tag', SITE_TAG)
+  return matches(req.headers.get('if-none-match'), headers.get('etag') ?? '')
+    ? new Response(null, { status: 304, headers })
+    : new Response(page.body, { headers })
 }
 
 // Validators include the deployment even when two releases render equal bytes.

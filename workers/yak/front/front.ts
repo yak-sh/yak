@@ -16,8 +16,8 @@ import { sealed } from '../cache.ts'
 import { apex, type Host } from '../host.ts'
 import {
   asked,
+  isListing,
   listing,
-  LISTINGS,
   remember,
   scope,
   type Timer,
@@ -131,7 +131,7 @@ export let kept = (
     platform(host, path, env) || !settled(req)
   ) return null
   if (host == apex(env)) {
-    if (!LISTINGS.includes(path)) return null
+    if (!isListing(path)) return null
     return listing(req, env.SITE, apex(env), path).then((page) => {
       if (page.status >= 500) return null
       // A visit to the home page is the funnel's first step (funnel.ts).
