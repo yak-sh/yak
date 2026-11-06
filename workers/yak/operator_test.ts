@@ -173,8 +173,14 @@ let out = await operator.run(f.held, f.space, {
 })
 
 let history = await readOperator(f.store, out.task)
+let listing = await readOperator(f.store)
+let talked = await readOperator(f.store, out.session)
 let drawn = await conversationOf(f.store, '/manage/clerk/operator', out.task)
 let work = await workOf(f.store, f.space.eid, f.held.person)
+test('operator_read lists the conversations and reads one by its session, as its task reads it', () => {
+  assertEquals(listing.conversations?.map((b) => b.entity.eid), [out.session])
+  assertEquals(talked.entries, history.entries)
+})
 test('the Operator page lists its work in plain words, each opening on a page of its own', () => {
   assertEquals(work.map((w) => [w.open, w.state, w.busy]), [
     [out.task, 'Done', false],

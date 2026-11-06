@@ -917,9 +917,15 @@ export let operatorRequest = async (
   if (path == '/operator/read') {
     if (typeof args.task == 'string' && !await own(args.task)) return missing()
     if (!args.task) {
-      let { tasks = [] } = await readOperator(store)
-      let allowed = await Promise.all(tasks.map((t) => own(t.entity.eid)))
-      return Response.json({ tasks: tasks.filter((_, i) => allowed[i]) })
+      let { tasks = [], conversations = [] } = await readOperator(store)
+      let mine = async (rows: Bundle[]) => {
+        let allowed = await Promise.all(rows.map((r) => own(r.entity.eid)))
+        return rows.filter((_, i) => allowed[i])
+      }
+      return Response.json({
+        tasks: await mine(tasks),
+        conversations: await mine(conversations),
+      })
     }
     return Response.json(
       await readOperator(

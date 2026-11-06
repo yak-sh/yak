@@ -52,7 +52,9 @@ export let operatorTools: Omit<Tool, 'title' | 'description'>[] = [
       type: 'object',
       properties: {
         space: SPACE,
-        task: str('The operator task id. Omit to list the most recent tasks.'),
+        task: str(
+          "The operator task id, or a conversation's session id. Omit to list the most recent tasks and conversations.",
+        ),
         context: {
           type: 'boolean',
           description:

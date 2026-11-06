@@ -432,9 +432,19 @@ export let readOperator = async (
   context = false,
 ) => {
   if (!task) {
-    return { tasks: await g.read('.task ?doc .order=-created.at .limit=20') }
+    return {
+      tasks: await g.read('.task ?doc .order=-created.at .limit=20'),
+      conversations: await g.read(
+        '.operator_session ?session ?updated .order=-updated.at .limit=20',
+      ),
+    }
   }
   let [row] = await g.get([task])
+  // A conversation is its session: its newest lines, as a task's are read.
+  if (row?.operator_session) {
+    let entries = (await transcript(g, task)).slice(-LINES)
+    return { sessions: [row], entries: sent(entries, context) }
+  }
   if (!row?.task) throw refuse('missing', `no operator task ${task}`)
   let comments = await g.read(`.comment.target=${task} ?doc .order=created.at`)
   let links = await g.read(`.contains .edge.from=${task}`)
@@ -445,11 +455,15 @@ export let readOperator = async (
     task: row,
     comments,
     sessions,
-    entries: context
-      ? entries
-      : entries.map(({ sending: _sending, ...entry }) => entry),
+    entries: sent(entries, context),
   }
 }
+
+// How many of a conversation's newest lines a read answers.
+let LINES = 64
+// Lines as read: without the model instruction snapshots unless asked.
+let sent = (entries: Bundle[], context: boolean) =>
+  context ? entries : entries.map(({ sending: _sending, ...entry }) => entry)
 
 // What an Operator session works with, kept on it (`operator_session`) so
 // every step, in whichever wake of the object, reads it again: the space, and
