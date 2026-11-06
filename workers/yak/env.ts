@@ -219,14 +219,13 @@ export type Env = {
   HOSTNAMES_API?: string
   // DNS-over-HTTPS JSON endpoint for hostname ownership TXT lookups.
   DNS_API?: string
-  // The paid tier (billing.ts, T-33125) is the payment provider config.ts
-  // `payments` names, its key and prices the secrets and `[vars]` its entry
-  // reads from this environment by name. What is left here is selling's
-  // (sell.ts): STRIPE_KEY, the same restricted key, until a seller's shop is
-  // lent beside the plans (T-142132), and the two webhook secrets, until the
-  // provider serves its own doors (T-142133). STRIPE_WEBHOOK_SECRET is what
-  // the events Stripe posts are verified against; it is the owner's to set
-  // (T-32760), and unset, the door says the paid tier is not switched on.
+  // The paid tier (billing.ts, T-33125) and selling (sell.ts) are the payment
+  // provider config.ts `payments` names, its key and prices the secrets and
+  // `[vars]` its entry reads from this environment by name. What is left here
+  // is the two webhook secrets, until the provider serves its own doors
+  // (T-142133). STRIPE_WEBHOOK_SECRET is what the events Stripe posts are
+  // verified against; it is the owner's to set (T-32760), and unset, the door
+  // says the paid tier is not switched on.
   // Texts and calls (phones.ts): the phone provider the platform sends from,
   // by the name its plugin lends it under, and the number it sends from. Each
   // provider's credentials are the secrets its entry in config.ts
@@ -252,7 +251,6 @@ export type Env = {
   // Off until the toll-free verification covers it (T-138775). Read per text,
   // so it is one `wrangler secret put` and no deploy, as CIMD is.
   TEXT_SIGNUP?: string
-  STRIPE_KEY?: string
   STRIPE_WEBHOOK_SECRET?: string
   // Selling (sell.ts, T-34523): what the events from a seller's connected
   // account are verified against. A second secret, not the one above, because
@@ -261,8 +259,8 @@ export type Env = {
   // `https://yaks.app/stripe/connect` (README.md's settings table has the
   // steps). Unset, that door answers 503 in one sentence and the rest of
   // selling still works: what is missing is only what an event would have told
-  // us. The platform key above is the same one for both — a direct charge is
-  // our key acting on the merchant's account, never a key of theirs.
+  // us. The provider's key is the same one for both — a direct charge is our
+  // key acting on the merchant's account, never a key of theirs.
   STRIPE_CONNECT_WEBHOOK_SECRET?: string
   // The builder (builder.ts, T-34239): the model that makes somebody their
   // first app. Both tiers run on Workers AI — `AI` is the binding

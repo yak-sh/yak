@@ -1,13 +1,7 @@
-// Selling, at its seams (sell.ts, T-34523): the account we ask Stripe for, the
-// fee arithmetic, the seller row derived off an account object, and the one
-// word the page, the tool and the checkout door all read.
-//
-// The controller properties are pinned here in full, and that is the point of
-// this file. They are four sentences about who is responsible for what — who
-// pays Stripe's fee, who carries a lost dispute, who gets a dashboard, who
-// collects the identity documents — and every one of them is a promise made to
-// a seller on the terms page and a liability decision for the platform. A diff
-// that moves one is a diff that has to say so out loud.
+// Selling, at its seams (sell.ts, T-34523): the fee arithmetic, the seller
+// row a provider's account makes, the one word the page, the tool and the
+// checkout door all read, and the cart priced and filed as an order. What the
+// provider puts on its own wire is its package's (@yaks/stripe shops_test.ts).
 import { test } from '@yaks/testing'
 import {
   assert,
@@ -18,12 +12,11 @@ import {
 } from '@std/assert'
 import { moved } from './billing.ts'
 import {
-  account,
   backAt,
+  backTo,
   cart,
   fee,
   feeOf,
-  link,
   MARK,
   META,
   orderEid,
@@ -34,11 +27,12 @@ import {
   quoted,
   rate,
   receipt,
+  sale,
   sellerOf,
   selling,
-  session,
   unpacked,
 } from './sell.ts'
+import type { Paid } from '@yaks/host/payments'
 import type { Space } from './directory.ts'
 import { space as spaceOf } from './directory-fixture.ts'
 
@@ -52,51 +46,8 @@ let space = (over: Partial<Space> = {}): Space =>
     ...over,
   })
 
-test('the account is the charge-merchants-directly model, in full', () => {
-  assertEquals(account(space(), 'ada@example.com'), {
-    controller: {
-      // The merchant pays Stripe's processing fee out of their own charge.
-      fees: { payer: 'account' },
-      // Stripe carries a lost dispute, not this platform.
-      losses: { payments: 'stripe' },
-      // The merchant reads their money in their own Stripe dashboard —
-      // `full`, not `express`: Stripe refuses the cut-down one beside a
-      // merchant who pays their own fees.
-      stripe_dashboard: { type: 'full' },
-      // Stripe collects the identity requirements. We never see one.
-      requirement_collection: 'stripe',
-    },
-    email: 'ada@example.com',
-    metadata: { space: 'e-space', slug: 'ada' },
-  })
-})
-
-// Neither word is sent, and both absences are decisions. `capabilities` is
-// required only for an account with no Stripe-hosted dashboard; ours have one,
-// so Stripe requests the payment capabilities itself — and `transfers` is a
-// destination charge's capability, which a direct charge never uses. `type` is
-// the deprecated form of the four properties above, and the two ways of
-// saying one thing are not both passed.
-test('the account asks for no capabilities and names no type', () => {
-  let made = account(space(), '') as Record<string, unknown>
-  assertEquals('capabilities' in made, false)
-  assertEquals('type' in made, false)
-})
-
-// An address we do not have is left out rather than sent empty: an empty
-// `email` is not the same ask as no email at all, and Stripe's form asks for
-// one either way.
-test('an account with no address for the seller sends none', () => {
-  assertEquals('email' in account(space(), ''), false)
-})
-
-test('the onboarding link comes back to the space page, both ways', () => {
-  assertEquals(link(space(), 'acct_1'), {
-    account: 'acct_1',
-    type: 'account_onboarding',
-    return_url: 'https://yaks.app/manage/ada/selling',
-    refresh_url: 'https://yaks.app/manage/ada/selling',
-  })
+test('onboarding comes back to the space page', () => {
+  assertEquals(backTo(space()), 'https://yaks.app/manage/ada/selling')
 })
 
 test('the fee is basis points, rounded down, and never the whole sale', () => {
@@ -158,24 +109,15 @@ test('the pricing page is quoted the rate that is set', () => {
 })
 
 let seller = (ready: boolean, submitted: boolean) =>
-  sellerOf({
-    id: 'acct_1',
-    charges_enabled: ready,
-    details_submitted: submitted,
-  })
+  sellerOf({ account: 'acct_1', ready, submitted })
 
-test('the seller row is the account object, flags and all', () => {
+test('the seller row names the provider config.ts lends', () => {
   assertEquals(seller(true, true), {
     via: 'stripe',
     account: 'acct_1',
     ready: true,
     submitted: true,
   })
-  // A flag Stripe did not send is false, not "unchanged": the account object
-  // arrives whole on every `account.updated`, so an absent capability is an
-  // absent capability — and a reader that guessed otherwise would leave a
-  // seller marked ready after Stripe stopped them.
-  assertEquals(sellerOf({ id: 'acct_1' }), seller(false, false))
 })
 
 test('a redelivered account.updated moves no property at all', () => {
@@ -240,25 +182,10 @@ test('the cart is priced off the store, never off the wire', () => {
     { product: TEE, qty: 2, options: 'M' },
     { product: MUG, qty: 1 },
   ])
-  // Stripe's inline `price_data`, and the variant appended to the name the
-  // buyer reads on Stripe's own page.
+  // The variant appended to the name the buyer reads on the checkout page.
   assertEquals(out.lines, [
-    {
-      price_data: {
-        currency: 'usd',
-        product_data: { name: 'Everyday Tee (M)' },
-        unit_amount: 2800,
-      },
-      quantity: 2,
-    },
-    {
-      price_data: {
-        currency: 'usd',
-        product_data: { name: 'Mug' },
-        unit_amount: 1250,
-      },
-      quantity: 1,
-    },
+    { name: 'Everyday Tee (M)', cents: 2800, qty: 2 },
+    { name: 'Mug', cents: 1250, qty: 1 },
   ])
   assertEquals(out.total, 2800 * 2 + 1250)
 })
@@ -330,8 +257,7 @@ test('success and cancel resolve inside the app, and never outside it', () => {
 let asked = {
   space: 'e-space',
   app: 'shop',
-  root: 'https://ada.yaks.app/shop/',
-  lines: [{ price_data: {}, quantity: 1 }],
+  lines: [{ name: 'Tee', cents: 10_000, qty: 1 }],
   total: 10_000,
   packed: '[{"p":"x","q":1}]',
   bps: 0,
@@ -339,56 +265,43 @@ let asked = {
   cancel: 'https://ada.yaks.app/shop/',
 }
 
-test('the session is a payment, with the cart in numbered line items', () => {
-  let made = session({ ...asked, email: 'ana@example.com' })
-  assertEquals(made.mode, 'payment')
-  // Stripe's form encoding numbers a list by its keys, and billing.ts `form`
-  // walks an object — so the lines go out as `line_items[0][…]`.
-  assertEquals(made.line_items, { 0: asked.lines[0] })
-  assertEquals(made.customer_email, 'ana@example.com')
-  assertEquals(made.success_url, asked.success)
-  assertEquals(made.cancel_url, asked.cancel)
-  // The two words the webhook routes by, and the cart.
-  assertEquals(made.metadata, {
-    space: 'e-space',
-    app: 'shop',
-    items: asked.packed,
-    // And the rate this sale was charged at, so the order the webhook files
-    // minutes later says what was taken rather than what is set by then.
-    fee: '0',
+test('a sale carries the cart, the fee and the rate it was charged at', () => {
+  let made = sale({ ...asked, email: 'ana@example.com' })
+  assertEquals(made, {
+    lines: asked.lines,
+    currency: 'usd',
+    fee: 0,
+    email: 'ana@example.com',
+    done: asked.success,
+    cancel: asked.cancel,
+    // The two words the webhook routes by, the cart, and the rate this sale
+    // was charged at, so the order the webhook files minutes later says what
+    // was taken rather than what is set by then.
+    tags: { space: 'e-space', app: 'shop', items: asked.packed, fee: '0' },
   })
-  // The same metadata on the PaymentIntent, and that is not a duplicate: a
-  // refund arrives as a charge, which inherits the intent's metadata and knows
-  // nothing of the session — so without this a refund could not be attributed.
-  assertEquals(made.payment_intent_data.metadata, made.metadata)
-  // No address given is no `customer_email` at all, so Stripe asks for one.
-  assertEquals('customer_email' in session(asked), false)
+  // No address given is none at all, so the checkout asks for one.
+  assertEquals('email' in sale(asked), false)
+  let charged = sale({ ...asked, bps: 250 })
+  assertEquals([charged.fee, charged.tags.fee], [250, '250'])
 })
 
-// With no rate set the platform takes nothing — and Stripe requires a positive
-// application fee, so a fee of nothing has to be no fee rather than a zero.
-test('the fee rides payment_intent_data, and is absent when it is zero', () => {
-  assertEquals(
-    'application_fee_amount' in session(asked).payment_intent_data,
-    false,
-  )
-  // What it looks like once the owner sets a number. There is no top-level
-  // form of this parameter on a Checkout Session, so under
-  // `payment_intent_data` is not a choice.
-  let made = session({ ...asked, bps: 250 })
-  assertEquals(made.payment_intent_data.application_fee_amount, 250)
-  assertEquals(made.metadata.fee, '250')
-})
+// A completed checkout, as the provider reads one.
+let sess: Paid = {
+  paid: true,
+  status: 'paid',
+  checkout: 'cs_test_1',
+  payment: 'pi_1',
+  total: 6850,
+  email: 'ana@example.com',
+  tags: { space: 'e-space', app: 'shop', items: '[{"p":"x","q":1}]' },
+}
 
 // The rate is a setting (T-34554), so it can move between the checkout and the
 // event that files the order. What the order records is what was taken, which
 // is the rate the session carries and never the rate in force now.
 test('an order is charged the rate its session carried', () => {
-  let paid = (fee: Record<string, string>) =>
-    orderOf(
-      { id: 'cs_1', amount_total: 10_000, metadata: fee },
-      'acct_1',
-    ).fee_cents
+  let paid = (tags: Record<string, string>) =>
+    orderOf({ ...sess, total: 10_000, tags }, 'acct_1').fee_cents
   assertEquals(paid({ fee: '250' }), 250)
   assertEquals(paid({ fee: '0' }), 0)
   // A session made before the rate was a property carries none, and those sales
@@ -430,18 +343,7 @@ test('the cart survives the round trip through Stripe metadata', () => {
   }
 })
 
-let sess = {
-  id: 'cs_test_1',
-  payment_intent: 'pi_1',
-  payment_status: 'paid',
-  amount_total: 6850,
-  currency: 'usd',
-  customer_email: 'prefilled@example.com',
-  customer_details: { email: 'ana@example.com' },
-  metadata: { space: 'e-space', app: 'shop', items: '[{"p":"x","q":1}]' },
-}
-
-test('the order row is what one completed session says', () => {
+test('the order row is what one completed checkout says', () => {
   assertEquals(orderOf(sess, 'acct_seller'), {
     session: 'cs_test_1',
     intent: 'pi_1',
@@ -449,22 +351,9 @@ test('the order row is what one completed session says', () => {
     items: '[{"p":"x","q":1}]',
     total_cents: 6850,
     fee_cents: 0,
-    // What they typed on Stripe's page, not the prefill the door sent: the
-    // receipt has to go where they said, and `customer_email` is only what we
-    // suggested.
     email: 'ana@example.com',
     status: 'paid',
   })
-  // No details at all, and the prefill is the fallback rather than nothing.
-  assertEquals(
-    orderOf({ ...sess, customer_details: {} }, 'acct_seller').email,
-    'prefilled@example.com',
-  )
-  // An expanded PaymentIntent reads the same as a bare id.
-  assertEquals(
-    orderOf({ ...sess, payment_intent: { id: 'pi_1' } }, 'a').intent,
-    'pi_1',
-  )
 })
 
 // A redelivery derives the identical row, so `moved` finds nothing and the

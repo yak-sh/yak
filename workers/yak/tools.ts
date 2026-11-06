@@ -219,6 +219,7 @@ import {
   refusedSell,
   selling,
 } from './sell.ts'
+import { shops } from './payments.ts'
 import { mailFrom } from './post.ts'
 import {
   apex as platformHost,
@@ -3081,7 +3082,7 @@ let OURS: Row[] = [
           space,
         }
       }
-      if (!ctx.env.STRIPE_KEY) {
+      if (!(await shops(ctx.env)).on()) {
         throw refuse('unavailable', 'selling is not switched on here')
       }
       let no = refusedSell(space, ctx.env)

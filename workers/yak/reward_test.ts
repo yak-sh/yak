@@ -13,7 +13,8 @@ import { monthOn } from './reward.ts'
 
 let NOW = Date.now()
 let now = new Date(NOW).toISOString()
-let env: Partial<Env> = { STRIPE_KEY: 'sk_test_fake', CLOCK: clock(NOW) }
+// The key config.ts `payments` reads from the environment by name.
+let env = { STRIPE_KEY: 'sk_test_fake', CLOCK: clock(NOW) } as Partial<Env>
 let { dir } = rows(
   env,
   (graph) =>

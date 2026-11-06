@@ -2,10 +2,9 @@
 // `payments` names, lent under its name (lent.ts) with the options its entry
 // gives it, every secret among them read from the Worker's environment at
 // its use. Nothing here names a provider: billing.ts sells a space its plan
-// and reward.ts moves an invite's month through the plans it lends.
-import type { Payments, Plans } from '@yaks/host/payments'
-import { ask as call } from '@yaks/stripe'
-import type { Clock } from '@yaks/fp'
+// and reward.ts moves an invite's month through the plans it lends, and
+// sell.ts connects a seller and opens their checkouts through its shops.
+import type { Payments, Plans, Shops } from '@yaks/host/payments'
 import { payments as config } from './config.ts'
 import { lent } from './lent.ts'
 
@@ -35,14 +34,9 @@ export let payments = (env: object): Promise<Payments> => {
 export let plans = async (env: object): Promise<Plans> =>
   (await payments(env)).plans
 
-// TODO(T-142132): selling still calls Stripe here with the Worker's own key,
-// until a seller's shop is lent beside the plans and sell.ts speaks it.
+/** The shops a space sells through on an account of its own. */
+export let shops = async (env: object): Promise<Shops> =>
+  (await payments(env)).shops
 
-/** One call to Stripe with the Worker's key, for sell.ts alone: a GET
- * without `fields`, a POST otherwise, `on` a seller's connected account. */
-export let ask = (
-  env: { STRIPE_KEY?: string; CLOCK?: Clock },
-  path: string,
-  fields?: Record<string, unknown>,
-  on?: string,
-) => call({ key: env.STRIPE_KEY, clock: env.CLOCK }, path, fields, on)
+/** The name a seller's row gives its provider (`seller{via}`). */
+export let via = config.via

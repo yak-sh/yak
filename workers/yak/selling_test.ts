@@ -3,6 +3,7 @@
 // signed webhook refusals, account removal and the platform fee.
 import { assert, assertEquals, assertStringIncludes } from '@std/assert'
 import { test } from '@yaks/testing'
+import { stub } from '@std/testing/mock'
 import { graph } from '@yaks/graph'
 import { aliases } from '@yaks/alias'
 import { keys } from '@yaks/key'
@@ -269,7 +270,7 @@ test('the connect door refuses what Stripe did not sign', async () => {
 // in one sentence — and every other half of selling still works, which is the
 // whole reason it is a 503 rather than a boot failure.
 test('with no connect secret the door says so, and nothing else breaks', async () => {
-  let env = { STRIPE_KEY: 'sk_probe' } as Env
+  let env = {} as Env
   let res = await sell.fetch(
     new Request('https://yaks.app/stripe/connect', {
       method: 'POST',
@@ -310,6 +311,70 @@ test('a seller is updated by its events and stopped by its button', async () => 
   assertEquals((await pressed(env, 'stop')).status, 303)
   assertEquals(await sold(env), null)
   assertEquals(await updated(true), 'no space sells through that account')
+})
+
+// A buyer pays, the seller refunds part of it, and the buyer disputes the
+// rest: each is one event from the seller's account, and each lands on the
+// order the first one wrote in the app's own store. The dispute carries no
+// metadata, so its charge is read back from Stripe on the seller's account.
+test('a sale is filed, refunded, disputed and restored on its order', async () => {
+  await using k = await shopping()
+  await k.deploy()
+  let [shirt] = await k.shirts()
+  await stamp(k.env, {
+    entities: [{
+      entity: { eid: k.space.eid },
+      seller: { via: 'stripe', account: 'acct_shop', ready: true },
+    }],
+  })
+  let tags = { space: k.space.eid, app: 'shop' }
+  let heard = (type: string, object: Record<string, unknown>) =>
+    sell.apply(
+      { ...k.env, STRIPE_KEY: 'sk_probe' } as Env,
+      { type, account: 'acct_shop', data: { object } },
+    )
+  assertEquals(
+    await heard('checkout.session.completed', {
+      id: 'cs_shop',
+      payment_intent: 'pi_shop',
+      payment_status: 'paid',
+      amount_total: 2800,
+      customer_details: { email: 'ana@example.com' },
+      metadata: {
+        ...tags,
+        items: sell.packed([{ product: shirt.entity.eid, qty: 1 }]),
+      },
+    }),
+    'shop: paid 2800',
+  )
+  let charge = { payment_intent: 'pi_shop', metadata: tags }
+  assertEquals(
+    await heard('charge.refunded', charge),
+    'shop: partially_refunded',
+  )
+  let real = globalThis.fetch
+  let asked: string[] = []
+  using _ = stub(globalThis, 'fetch', (url, init) => {
+    if (!String(url).startsWith('https://api.stripe.com/')) {
+      return real(url, init)
+    }
+    asked.push(new URL(String(url)).pathname)
+    return Promise.resolve(Response.json(charge))
+  })
+  assertEquals(
+    await heard('charge.dispute.created', { charge: 'ch_shop' }),
+    'shop: disputed',
+  )
+  assertEquals(asked, ['/v1/charges/ch_shop'])
+  assertEquals(
+    await heard('charge.dispute.closed', { charge: 'ch_shop', status: 'won' }),
+    'shop: paid',
+  )
+  // Decided again, it undoes nothing: the order is no longer disputed.
+  assertEquals(
+    await heard('charge.dispute.closed', { charge: 'ch_shop', status: 'lost' }),
+    'unchanged',
+  )
 })
 
 // ---- the fee (T-34554) -----------------------------------------------------

@@ -28,7 +28,7 @@ equal(stopped(), true)
 | `@yaks/host/roles`                            | Role and facet selection data without loading the assembly runtime                                                                                                   |
 | `@yaks/host/senders`                          | `Message`, `Receipt`, `Sender`, `Built`, `afresh`, `Unsent`, `Notice`, `Notices`, `Unsigned`, `Arrival`, `Incoming`                                                  |
 | `@yaks/host/lending`                          | `lending`, `Lends`: what plugins lend a host by name                                                                                                                 |
-| `@yaks/host/payments`                         | `Payments`, `Plans`, `Subscription`, `Checkout`, `Heard`, `Standing`, `Per`, `Tags`: a payment provider's contract                                                   |
+| `@yaks/host/payments`                         | `Payments`, `Plans`, `Shops`, `Subscription`, `Checkout`, `Heard`, `Sale`, `Paid`, `Shopped`, …: a payment provider's contract                                       |
 | `@yaks/host/words`                            | Vocabulary assembly, `wordsOf`, `taking`, `Words`, `Declared`, `Taken`                                                                                               |
 | `@yaks/host/config`                           | Configuration types, `used`, `given`, `chosen`, `configured`, `revealed`, `holding`, `Reveal`, `meet`, `Unmet`                                                       |
 | `@yaks/host/documents`, `@yaks/host/keywords` | Shared intrinsic declarations and vocabulary keywords                                                                                                                |
@@ -231,16 +231,26 @@ through `waiting()`.
 
 A host that takes money itself asks for `payments` the same way: a provider
 plugin lends a `Payments` from its graph facet's `payments(host, options)`, its
-`name` for the sentences people read and its `plans` (`@yaks/host/payments`),
-functions over its own wire that answer in words naming no provider. `plans`
-mints a payer once, says whom it is billed to, opens a hosted checkout for a
-tier by the month or year (with a trial for time already given free) and a
-hosted portal, reads a subscription as
+`name` for the sentences people read, its `plans` and its `shops`
+(`@yaks/host/payments`), functions over its own wire that answer in words naming
+no provider. `plans` mints a payer once, says whom it is billed to, opens a
+hosted checkout for a tier by the month or year (with a trial for time already
+given free) and a hosted portal, reads a subscription as
 `{id, payer, tier, status, until,
 ending, tags}`, moves its next charge, and
 reads an event the provider posted. The provider decides which tier a price buys
 and where a status stands (`standing`: `paying`, `owing`, `lapsed` or `ended`);
-the host keeps its own rules over them. @yaks/stripe lends one.
+the host keeps its own rules over them.
+
+`shops` is a party selling on an account of its own: it opens the account once
+(`{account, ready, submitted}`, ready only once the provider lets it take
+payments), answers the address of the provider's onboarding for it, opens a
+hosted checkout on it for a sale (its lines, currency, the host's fee and the
+tags that ride the checkout and its payment), and reads an event the provider
+posted about the account: the seller changed, the seller revoked the host, a
+checkout completed (`Paid`), or a payment was refunded, disputed, lost or
+restored, its payment and tags read on asking. The host keeps the fee, the cart
+and the order. @yaks/stripe lends one.
 
 ## Failure reporting
 

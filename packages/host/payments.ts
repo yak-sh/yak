@@ -1,6 +1,7 @@
 /** What a payment provider lends a host that takes money through it (the
  * lending kind `payments`, ./lending.ts): its name, for the sentences people
- * read, and the plans it sells a party. Each is functions over the provider's
+ * read, the plans it sells a party, and the shops a party sells through on an
+ * account of its own. Each is functions over the provider's
  * own wire, answering in words that name no provider, so a host's billing
  * keeps its rules and refusals and a second provider has one contract to
  * meet. */
@@ -105,10 +106,105 @@ export type Plans = {
   heard: (event: unknown) => Heard
 }
 
+/** A seller's account as its provider reads it: its id, whether it may take
+ * payments now, and whether its owner finished the provider's form, which
+ * alone does not make it ready. */
+export type Seller = { account: string; ready: boolean; submitted: boolean }
+
+/** One line of a sale: what the buyer reads it as, its price in the
+ * currency's smallest unit, and how many. */
+export type Line = { name: string; cents: number; qty: number }
+
+/** A hosted checkout on a seller's account. */
+export type Sale = {
+  lines: Line[]
+  currency: string
+  /** what the host takes of it, in the same unit; none when 0 */
+  fee: number
+  /** the buyer's address to start the page with, if one is known */
+  email?: string
+  /** where the provider hands the buyer back when they paid, and when they
+   * did not */
+  done: string
+  cancel: string
+  /** carried on the checkout and the payment it makes, so every event about
+   * either says whose sale it is */
+  tags: Tags
+}
+
+/** A completed checkout, as its provider reads it. */
+export type Paid = {
+  /** whether the money is there: a checkout can complete with its payment
+   * still processing */
+  paid: boolean
+  /** the provider's own word for where the payment stands, for a sentence */
+  status: string
+  /** the checkout's id, and the payment it made, which every later word
+   * about the sale names */
+  checkout: string
+  payment: string
+  /** what was paid, in the currency's smallest unit */
+  total: number
+  /** the address the buyer gave, else the one the checkout started with */
+  email: string
+  /** what the checkout carried ({@link Sale.tags}) */
+  tags: Tags
+}
+
+/** Where an order's payment moved: `refunded` in whole or `partially_refunded`
+ * in part, `disputed` by the buyer, then `lost` to them or `restored` to the
+ * seller. */
+export type Settled =
+  | 'refunded'
+  | 'partially_refunded'
+  | 'disputed'
+  | 'lost'
+  | 'restored'
+
+/** One verified event a seller's account posted, read, with the account it
+ * happened on ('' where it names none): the seller's account changed, or it
+ * revoked the host's permission to act on it, or a checkout completed, or a
+ * payment moved, or something the host has no word for. */
+export type Shopped =
+  & { account: string }
+  & (
+    | { about: 'seller'; seller: Seller }
+    | { about: 'revoked' }
+    | { about: 'sale'; sale: Paid }
+    | {
+      about: 'payment'
+      to: Settled
+      /** the payment it moved and what it carried, read on asking; null
+       * where the event names none */
+      payment: () => Promise<{ id: string; tags: Tags } | null>
+    }
+    | { about: 'other' }
+  )
+
+/** What a provider lends a party selling on an account of its own: the
+ * account opened once and finished through the provider's onboarding, and
+ * hosted checkouts on it, which the host takes a fee from. */
+export type Shops = {
+  /** whether it can be asked anything here: its credentials are set */
+  on: () => boolean
+  /** a new account for a seller, started with their address if one is known
+   * and carrying `tags` */
+  open: (who: { email?: string; tags: Tags }) => Promise<Seller>
+  /** the address of the provider's onboarding for an account, handing them
+   * back to `back` when they finish or the address goes stale */
+  onboarding: (account: string, back: string) => Promise<string>
+  /** the address of a hosted checkout on a seller's account */
+  checkout: (account: string, sale: Sale) => Promise<string>
+  /** one event the provider posted about a seller's account, already
+   * verified, read */
+  heard: (event: unknown) => Shopped
+}
+
 /** A payment provider as it is lent. */
 export type Payments = {
   /** its name, as people read it: the account they open, the page they pay
    * on */
   name: string
   plans: Plans
+  shops: Shops
 }

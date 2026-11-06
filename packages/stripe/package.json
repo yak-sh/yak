@@ -6,10 +6,11 @@
     ".": "./mod.ts",
     "./graph": "./graph.ts",
     "./plans": "./plans.ts",
-    "./testing": "./testing.ts"
+    "./testing": "./testing.ts",
+    "./shops": "./shops.ts"
   },
   "license": "Apache-2.0",
-  "description": "Stripe's API over fetch, the signature its webhooks carry, and the plans it sells as a payment provider a host is lent.",
+  "description": "Stripe's API over fetch, the signature its webhooks carry, and the plans and shops it sells as a payment provider a host is lent.",
   "dependencies": {
     "@yaks/fp": "0.2.23",
     "@yaks/host": "0.2.24"

@@ -4,10 +4,11 @@
 // use, so a key set after start-up is used by the next call.
 import type { Payments } from '@yaks/host/payments'
 import { type Options, plans } from './plans.ts'
+import { shops } from './shops.ts'
 
 export let payments = (
   _host: unknown,
   options: Options,
 ): Record<string, Payments> => ({
-  stripe: { name: 'Stripe', plans: plans(options) },
+  stripe: { name: 'Stripe', plans: plans(options), shops: shops(options) },
 })

@@ -445,8 +445,9 @@ grouped approximately by function, **not** by dependency order.
 - **[@yaks/stripe](./stripe)** — Stripe's API over fetch with retries under one
   idempotency key, acting on a connected account when asked, and the signature
   its webhooks carry; its graph facet lends Stripe as a payment provider whose
-  plans are customers, Checkout, the portal and subscriptions. The host lends
-  the key.
+  plans are customers, Checkout, the portal and subscriptions, and whose shops
+  are Connect accounts and Checkout on them with an application fee. The host
+  lends the key.
 - **[@yaks/telnyx](./telnyx)** — Telnyx texting transport, signed webhook
   events, and Call Control with its media stream.
 - **[@yaks/voipms](./voipms)** — voip.ms texting transport, numbers and
