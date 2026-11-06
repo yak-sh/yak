@@ -63,3 +63,30 @@ test('concurrent compilations read private snapshots and publish complete build 
     Deno.removeSync(dir, { recursive: true })
   }
 })
+
+test('a checkout with no build info starts from the shared one, and every compilation shares its next', async () => {
+  let dir = Deno.makeTempDirSync()
+  let saved = `${dir}/a/build.tsbuildinfo`
+  let shared = `${dir}/shared/deno.tsbuildinfo`
+  let compile = (seen: string, next: string) =>
+    incremental(saved, async (info) => {
+      equal(await Deno.readTextFile(info).catch(() => 'none'), seen)
+      await Deno.writeTextFile(info, next)
+      return { success: true }
+    }, shared)
+  try {
+    await compile('none', 'first')
+    equal(await Deno.readTextFile(shared), 'first')
+    Deno.removeSync(saved)
+    await compile('first', 'second')
+    Deno.writeTextFileSync(shared, 'other checkout')
+    await compile('second', 'third')
+    equal(await Deno.readTextFile(saved), 'third')
+    equal(await Deno.readTextFile(shared), 'third')
+    equal([...Deno.readDirSync(`${dir}/shared`)].map((e) => e.name), [
+      'deno.tsbuildinfo',
+    ])
+  } finally {
+    Deno.removeSync(dir, { recursive: true })
+  }
+})

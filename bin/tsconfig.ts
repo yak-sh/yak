@@ -242,7 +242,11 @@ export let project = (
   ) {
     let remote = /^https?:/.test(m.specifier)
     if (remote && m.local) links[within(m.specifier)] = m.local
-    if (m.kind == 'external' && !hosted) external.add(m.specifier)
+    // A file Deno leaves unloaded (in node_modules) tsc reads itself; naming
+    // its path in the global externals would make every checkout's differ.
+    if (m.kind == 'external' && !hosted && !m.specifier.startsWith('file:')) {
+      external.add(m.specifier)
+    }
     let script = /^(TypeScript|JavaScript|TSX|JSX)$/.test(m.mediaType ?? '') &&
       m.specifier.startsWith(base) && !/\.[mc]?[jt]sx?$/.test(m.specifier)
     if (script) {

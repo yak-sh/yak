@@ -23,7 +23,10 @@
 // Deno's caches there are shared. Each platform keeps incremental build info:
 // the compiler reuses unchanged work and validates source versions, options
 // and resolutions itself. Checks hold no lock and compile against private
-// copies, publishing their next build info atomically.
+// copies, publishing their next build info atomically, and a fresh worktree
+// starts from the build info its repository's checkouts last shared. The
+// project names no path of its checkout in a file every module sees, so that
+// shared work stays valid there.
 import { dirname } from 'node:path'
 import config from '../deno.json' with { type: 'json' }
 import { remembered, type Survey, survey } from '@yaks/testing/deps'
@@ -94,11 +97,30 @@ let every = async () =>
   (await git(['ls-files', '-co', '--exclude-standard', ...DIRS]))
     .split('\n').filter(checked)
 
-/** A platform's program: where its project lies, the Deno configuration
- * resolving it (the checkout's when none), its compiler options, its globals
- * by file name, whether its types declare the modules Deno leaves to the host,
- * and whether its roots' doc comment examples are checked. */
+/** Where every checkout of this repository shares a platform's last build
+ * info (./check-incremental.ts), or nowhere outside one. */
+let shared = async (name: string) => {
+  try {
+    let common = await git([
+      '-C',
+      CHECKOUT,
+      'rev-parse',
+      '--path-format=absolute',
+      '--git-common-dir',
+    ])
+    return `${common.trim()}/types/${name}.tsbuildinfo`
+  } catch {
+    return undefined
+  }
+}
+
+/** A platform's program: its name, where its project lies, the Deno
+ * configuration resolving it (the checkout's when none), its compiler
+ * options, its globals by file name, whether its types declare the modules
+ * Deno leaves to the host, and whether its roots' doc comment examples are
+ * checked. */
 type Platform = {
+  name: string
   dir: string
   config?: string
   options: Record<string, unknown>
@@ -110,6 +132,7 @@ type Platform = {
 let deno = (): Platform => {
   let { lib, ...options } = config.compilerOptions
   return {
+    name: 'deno',
     dir: DIR,
     options: {
       ...options,
@@ -131,6 +154,7 @@ let workers = async () => {
   let dir = `${DIR}/workers`
   put(`${dir}/config.json`, JSON.stringify(config))
   let platform: Platform = {
+    name: 'workers',
     dir,
     config: `${dir}/config.json`,
     options: config.compilerOptions,
@@ -408,6 +432,7 @@ let program = async (on: Platform, roots: string[], snapshot?: Survey) => {
           '--tsBuildInfoFile',
           info,
         ]),
+      await shared(on.name),
     )
     let errors = reported(tsc.out)
     if (errors.length) console.error(errors.join('\n'))

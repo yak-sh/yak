@@ -59,3 +59,24 @@ test('one source project resolves two directly imported versions of an npm packa
   ])
   assertNotEquals(paths['lexer1/js'], paths['lexer2/js'])
 })
+
+test('externals declare the modules Deno leaves to its host, never a file the checkout holds', () => {
+  let { files } = project(
+    {
+      redirects: {},
+      npmPackages: {},
+      modules: [
+        { specifier: 'cloudflare:workers', kind: 'external' },
+        { specifier: 'file:///app/node_modules/x/i.d.ts', kind: 'external' },
+      ],
+    },
+    '/app',
+    '/app/.types',
+    [],
+    {},
+  )
+  assertEquals(
+    files['externals.d.ts'],
+    'declare module "cloudflare:workers"\n',
+  )
+})
