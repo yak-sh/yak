@@ -571,57 +571,27 @@ export let keepSpare = async (
  * else, or a removal that did not succeed. */
 export type Held = 'dirty' | 'unlanded' | 'failed'
 
+/** What the scan reads of this host's processes, each read failing as procfs
+ * does: `procfs` reads Linux's, and a test hands the scan its own. */
+export type Procs = {
+  /** Every process listed, by pid. */
+  pids: () => Promise<string[]>
+  /** The uid that owns a process. */
+  owner: (pid: string) => Promise<number>
+  /** A process's canonical working directory. */
+  cwd: (pid: string) => Promise<string>
+  /** Where a process's open descriptors point; one that closed reads `''`. */
+  links: (pid: string) => Promise<string[]>
+  /** The cwd and absolute open file paths of a same-user process ptrace
+   * hides, or nothing when they cannot be read. */
+  privileged: (pid: string) => Promise<string[] | undefined>
+}
+
 // Linux's ptrace checks can hide even a same-user cwd (a capability-bearing
 // manager or a non-dumpable PAM helper). Ask the user manager for a privileged
 // cwd reader. Its only operation reads this same-user link: no signal to
 // the observed PID and no filesystem mutation. The root-owned helper and sudo
 // permission are installed as described in README.md.
-let processCwd = async (pid: string): Promise<string> => {
-  let path = `/proc/${pid}/cwd`
-  try {
-    return await io.realPath(path)
-  } catch (error) {
-    if (!io.isPermissionDenied(error)) throw error
-    let found = await privileged(pid)
-    if (!found) throw new Error(`Cannot inspect ${path}`, { cause: error })
-    return found[0]
-  }
-}
-
-/** Canonical directories occupied by this user's live local processes,
- * including agents outside the graph. Other users' sessions are protected by
- * their graph homes. A process that cannot be read holds nothing. */
-export let processCwds = async (): Promise<Set<string>> => {
-  if (system.os != 'linux') {
-    throw new Error(
-      'Worktree collection requires a local process directory scan',
-    )
-  }
-  let cwds = await scan(await running(), async (pid) => {
-    // Linux restricts other users' cwd links even when procfs is readable.
-    if ((await io.stat(`/proc/${pid}`)).uid != system.uid()) return []
-    return [await processCwd(pid)]
-  })
-  return new Set([await io.realPath(system.cwd()), ...cwds])
-}
-
-// Every process listed in procfs, by pid.
-let running = async (): Promise<string[]> =>
-  (await Array.fromAsync(io.readDir('/proc')))
-    .map((entry) => entry.name).filter((name) => /^\d+$/.test(name))
-
-// What `read` finds for each process, asked of them all at once. A process
-// that cannot be read holds nothing: it exited while it was read, turned
-// non-dumpable, or the privileged helper refused it, as it does one whose cwd
-// was deleted.
-let scan = async (
-  pids: string[],
-  read: (pid: string) => Promise<string[]>,
-): Promise<string[]> =>
-  (await Promise.all(pids.map((pid) => read(pid).catch(() => [])))).flat()
-
-// The cwd and absolute open file paths of a same-user process ptrace hides,
-// read by the root-owned helper, or nothing when it cannot answer.
 let privileged = async (pid: string): Promise<string[] | undefined> => {
   let read = await processCommand('systemd-run', {
     args: [
@@ -655,39 +625,79 @@ let privileged = async (pid: string): Promise<string[] | undefined> => {
     : undefined
 }
 
+/** This Linux host's processes, read from `/proc`. */
+export let procfs: Procs = {
+  pids: async () => {
+    if (system.os != 'linux') {
+      throw new Error('Worktree collection requires a local process scan')
+    }
+    return (await Array.fromAsync(io.readDir('/proc')))
+      .map((entry) => entry.name).filter((name) => /^\d+$/.test(name))
+  },
+  owner: async (pid) => (await io.stat(`/proc/${pid}`)).uid,
+  cwd: (pid) => io.realPath(`/proc/${pid}/cwd`),
+  links: async (pid) => {
+    let fd = `/proc/${pid}/fd`
+    return await Promise.all(
+      (await Array.fromAsync(io.readDir(fd))).map((entry) =>
+        io.readLink(`${fd}/${entry.name}`).catch((error) => {
+          if (io.isNotFound(error)) return ''
+          throw error
+        })
+      ),
+    )
+  },
+  privileged,
+}
+
+// What `read` finds for each of this user's processes, asked of them all at
+// once, and what `hidden` keeps of a privileged read of one ptrace hides. A process that cannot be read holds nothing: it exited while it was
+// read, turned non-dumpable, or the privileged helper refused it, as it does
+// one whose cwd was deleted. Linux restricts other users' links even when
+// procfs is readable; their sessions are protected by their graph homes.
+let scan = async (
+  procs: Procs,
+  read: (pid: string) => Promise<string[]>,
+  hidden = (paths: string[]) => paths,
+): Promise<string[]> =>
+  (await Promise.all((await procs.pids()).map(async (pid) => {
+    try {
+      if (await procs.owner(pid) != system.uid()) return []
+      try {
+        return await read(pid)
+      } catch (error) {
+        if (!io.isPermissionDenied(error)) throw error
+        return hidden(await procs.privileged(pid) ?? [])
+      }
+    } catch {
+      return []
+    }
+  }))).flat()
+
+/** Canonical directories occupied by this user's live local processes,
+ * including agents outside the graph. A process that cannot be read holds
+ * nothing. */
+export let processCwds = async (procs = procfs): Promise<Set<string>> =>
+  new Set([
+    await io.realPath(system.cwd()),
+    ...await scan(
+      procs,
+      async (pid) => [await procs.cwd(pid)],
+      (paths) => paths.slice(0, 1),
+    ),
+  ])
+
 /** Paths occupied by this user's processes: their directories and open files.
  * Procfs links name the canonical file even when it was opened through a
  * symlink. A process that cannot be read holds nothing. */
-export let processPaths = async (
-  pids?: string[],
-): Promise<Set<string>> => {
-  if (system.os != 'linux') {
-    throw new Error('Worktree collection requires a local process path scan')
-  }
-  return new Set(
-    await scan(pids ?? await running(), async (pid) => {
-      let proc = `/proc/${pid}`
-      if ((await io.stat(proc)).uid != system.uid()) return []
-      try {
-        let paths = [await io.realPath(proc + '/cwd')]
-        for await (let fd of io.readDir(proc + '/fd')) {
-          let path = await io.readLink(proc + '/fd/' + fd.name)
-            .catch((error) => {
-              if (io.isNotFound(error)) return ''
-              throw error
-            })
-          if (path.startsWith('/')) {
-            paths.push(path.replace(/ \(deleted\)$/, ''))
-          }
-        }
-        return paths
-      } catch (error) {
-        if (!io.isPermissionDenied(error)) throw error
-        return await privileged(pid) ?? []
-      }
-    }),
+export let processPaths = async (procs = procfs): Promise<Set<string>> =>
+  new Set(
+    await scan(procs, async (pid) => [
+      await procs.cwd(pid),
+      ...(await procs.links(pid)).filter((path) => path.startsWith('/'))
+        .map((path) => path.replace(/ \(deleted\)$/, '')),
+    ]),
   )
-}
 
 /** A process using any path inside a worktree keeps the whole checkout. */
 export let inUse = (path: string, cwds: Set<string>): boolean =>

@@ -576,11 +576,12 @@ HEAD, read from its reflog's last entry rather than the file's mtime, which
 
 `processPaths()` reads the working directories and open file paths of this
 user's live Linux processes, so agents outside the graph also keep their
-worktrees. A process that cannot be read holds nothing. Non-dumpable processes
-require a privileged read through a root-owned helper, launched by the systemd
-user manager. The helper returns a JSON array of the cwd and absolute open file
-paths, accepts one positive PID and checks that it belongs to the sudo caller.
-Install it from this package as root:
+worktrees. A process that cannot be read holds nothing. It reads them through
+`Procs`, `procfs` by default, so a test hands it processes as data. Non-dumpable
+processes require a privileged read through a root-owned helper, launched by the
+systemd user manager. The helper returns a JSON array of the cwd and absolute
+open file paths, accepts one positive PID and checks that it belongs to the sudo
+caller. Install it from this package as root:
 
 ```sh
 install -D -o root -g root -m 0755 packages/git/process-cwd.py /usr/local/libexec/yak-process-cwd
