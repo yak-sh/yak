@@ -45,6 +45,11 @@ export type Inbound = {
   setReject(reason: string): void | Promise<void>
 }
 
+/** What a test hands a kernel as its environment: any of Env's bindings, and
+ * the secrets a config names, which are read by name (config.ts
+ * `phoneConfig`). */
+export type Vars = Partial<Env> & Record<string, unknown>
+
 export type Env = {
   LOADER?: import('./code-runtime.ts').Loader
   CODE_MODE?: import('@yaks/code-mode').Evaluate
@@ -224,21 +229,11 @@ export type Env = {
   // not a secret, it rides wrangler.toml's `[vars]` beside the account tag.
   // There is no base-URL seam beside them: under test Stripe is still Stripe,
   // reached with a sandbox key (probe.ts `stripeKey`).
-  // Texts (operator-texts.ts, T-135147). TELNYX_API_KEY is the secret the
-  // Worker sends with; TELNYX_PUBLIC_KEY is Telnyx's webhook signing key,
-  // public, a `[vars]` line; unset, the webhook door answers 404. TELNYX_API
-  // aims the sender somewhere other than Telnyx, for a test.
-  PHONE_SENDER?: import('@yaks/phone').Transport
-  PINNACLE_API_KEY?: string
-  PINNACLE_SIGNING_SECRET?: string
-  PINNACLE_NUMBER?: string
-  PINNACLE_API?: string
-  VOIPMS_USERNAME?: string
-  VOIPMS_API_PASSWORD?: string
-  VOIPMS_NUMBER?: string
-  TELNYX_API_KEY?: string
-  TELNYX_PUBLIC_KEY?: string
-  TELNYX_API?: string
+  // Texts and calls (phones.ts): the phone provider the platform sends from,
+  // by the name its plugin lends it under, and the number it sends from. Each
+  // provider's credentials are the secrets its entry in config.ts
+  // `phoneConfig` names, read from this environment by name.
+  PHONE_SENDER?: { via: string; number?: string }
   // Speech (speech.ts, T-140123): each provider's key is a secret of its own,
   // DEEPGRAM_API_KEY for Deepgram and OPENAI_VOICE_KEY for OpenAI (its
   // "yaks.app voice" project, held to $10 a month while it is a pilot,

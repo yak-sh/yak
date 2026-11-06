@@ -139,11 +139,12 @@ CF_ZONE = "3b2518c3647029d687bb4f40bebf0f77"
 # Existing subscriptions stay on their old price unless migrated in Stripe.
 STRIPE_PRICE = "price_1UEDP0ITlUS6lUlggbJ9klVH"
 
-# Telnyx's webhook signing key (operator-texts.ts, T-135147): public, so a
-# var. Staging has none, so its webhook door answers 404.
+# Telnyx's webhook signing key, which config.ts `phoneConfig` names for its
+# door (T-135147): public, so a var. Staging has none, so its webhook door
+# answers 404.
 TELNYX_PUBLIC_KEY = "RA8+wmOD4ivICcJNznDMWuA8DoM+StbPtYr0srTKaKI="
 
-# The platform's texting number (phone-providers.ts): every text yaks.app sends
+# The platform's phone and number (phones.ts): every text yaks.app sends
 # goes from it, and only a text to it signs anyone up. +18557292688 takes over
 # once its toll-free verification is approved (T-138775); the yaks.app profile
 # holds both, so the number is named rather than picked.

@@ -10,7 +10,7 @@ import type { Bundle } from '@yaks/graph'
 import { platform } from './directory-rows-probe.ts'
 import { stamp } from './directory.ts'
 import { endpoints } from './endpoints.ts'
-import { telnyxDoor } from './operator-texts.ts'
+import { textDoor } from './operator-texts.ts'
 import { within } from './defects.ts'
 import {
   type Around,
@@ -122,7 +122,7 @@ let fixture = async (calls?: string) => {
     )
     acted.length = 0
     equal(
-      (await telnyxDoor(
+      (await textDoor(
         new Request('https://yaks.app/telnyx/webhook', {
           method: 'POST',
           headers: {
@@ -132,6 +132,7 @@ let fixture = async (calls?: string) => {
           body,
         }),
         p.env,
+        'telnyx',
       )).status,
       200,
     )

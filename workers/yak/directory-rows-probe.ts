@@ -22,7 +22,7 @@ import { assertEquals } from '@std/assert'
 import { useUntil } from './used.ts'
 import { doorOf, PLATFORM_OBJECT, PLATFORM_STORE } from './door.ts'
 import { EPOCH, fenced, READS, type ServingCopyDoor } from './directory-copy.ts'
-import type { Env } from './env.ts'
+import type { Env, Vars } from './env.ts'
 import { vouchOf } from './app-authority.ts'
 import { directoryOf, directoryRows, part, type Row } from './directory.ts'
 import { type Meta, metaOf } from './meta.ts'
@@ -211,6 +211,6 @@ export let hosting = <T extends { env: Env }>(
 /** Runtime bindings with a RAM directory. */
 export let platform = (
   secret: string,
-  vars: Partial<Env> = {},
+  vars: Vars = {},
   composition: Composition = {},
 ) => hosting(bindings(secret, vars), composition)

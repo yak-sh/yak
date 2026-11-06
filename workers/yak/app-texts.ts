@@ -29,7 +29,7 @@ import { KERNEL, metaOf } from './meta.ts'
 import { countedTexts } from './meter.ts'
 import { onHold } from './model-spend.ts'
 import { ModelError } from '@yaks/model'
-import { texter } from './operator-texts.ts'
+import { phoneOf } from './phones.ts'
 import { refuse } from './tool.ts'
 
 /** Dollars a segment of a text costs: Telnyx's US rate, $0.004 a segment
@@ -98,7 +98,7 @@ export let appTexter = (
     // `onHold`).
     let cost = segments(text.text) * PER_SEGMENT
     let receipt = await onHold(env, at, cost, 'texts', async (spent) => {
-      let sent = await texter(env, at.sender).send({
+      let sent = await (await phoneOf(env, at.sender)).send({
         to: text.to,
         text: text.text,
         ...(from ? { from } : {}),
@@ -141,12 +141,13 @@ export let appArrived = async (
   // The answer a carrier requires goes whatever the budget says, and is
   // counted all the same.
   try {
-    let { id } = await texter(
+    let phone = await phoneOf(
       env,
       arrival.via
         ? { ...line.space.sender, via: arrival.via }
         : line.space.sender,
-    ).send({
+    )
+    let { id } = await phone.send({
       to: arrival.from,
       text: said,
       from: arrival.to,

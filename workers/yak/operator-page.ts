@@ -48,7 +48,7 @@ import {
   type Worked,
 } from './operator-view.ts'
 import { DOCUMENTS } from './documents.ts'
-import { settings } from './phone-providers.ts'
+import { phoneAt } from './phones.ts'
 import { icon } from './icons.ts'
 import { needing, needsCard, updates, updatesOf, visitsOf } from './updates.ts'
 
@@ -64,7 +64,7 @@ let shown = (number: string) =>
   number.replace(/^\+1(\d{3})(\d{3})(\d{4})$/, '$1-$2-$3')
 
 // Where a person agrees to texts from the operator, or stops them. `from` is
-// the number the Operator texts from (`settings(env, space.sender).number`),
+// the number the Operator texts from (its phone's `transport().number`),
 // read from configuration, so the card names it with no call to the provider.
 export let textsCard = (
   at: string,
@@ -495,11 +495,13 @@ let conversationOf = async (
 // conversations, each opening in the chat app (`chatPage`), and the texts it may send.
 export let operatorBody = async (env: Env, space: Space, who: Who) => {
   let at = managePath('operator', space.slug)
-  let [consent, { pa, beyond }, items] = await Promise.all([
+  let [consent, { pa, beyond }, items, phone] = await Promise.all([
     textingOf(env, space, who),
     reachOf(directoryOf(env.STORE), space, who.person ?? ''),
     workOf(env, space, who),
+    phoneAt(env, space.sender),
   ])
+  let from = phone?.transport().number
   let address = mailFrom(space.slug, null, env)
   return `
 <section class="Card"><p>${esc(space.operator)} is this space’s Operator. Ask ${
@@ -518,7 +520,7 @@ export let operatorBody = async (env: Env, space: Space, who: Who) => {
 ${talks(space.slug, items)}
 ${nameCard(at, space.operator)}
 ${voiceCard(at, space, offered(env, space))}
-${textsCard(at, consent, settings(env, space.sender).number)}
+${textsCard(at, consent, from)}
 ${settingsScript}`
 }
 

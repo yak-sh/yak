@@ -1,4 +1,4 @@
-// The `@yaks/telnyx/graph` facet: the texter this plugin lends its host,
+// The `@yaks/telnyx/graph` facet: the phone this plugin lends its host,
 // named `telnyx`, which @yaks/phone selects with `sender: {"via": "telnyx"}`.
 // The config passes this plugin its credentials (@yaks/phone/plugin `Lent`).
 import { type Texters, texters as lending } from '@yaks/phone/plugin'

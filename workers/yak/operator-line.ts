@@ -21,7 +21,7 @@ import {
 } from '@yaks/connections'
 import { Blocked, Denied, mobile } from '@yaks/phone'
 import { type Account, called, VOIPMS, voipms } from '@yaks/voipms'
-import { texter } from './phone-providers.ts'
+import { phoneOf } from './phones.ts'
 import type { Tool } from '@yaks/session'
 import type { Env } from './env.ts'
 import type { Space } from './directory.ts'
@@ -195,7 +195,7 @@ export let phoneSend = (
     let from = space.sender?.number ??
       String(comp(line, CONNECTION).account ?? '')
     let account = space.sender
-      ? texter(env, space.sender)
+      ? await phoneOf(env, space.sender)
       : await accountOf(ctxOf(env), line!.entity.eid, from || undefined)
     if (!account) {
       throw refuse('connection', 'Their voip.ms key is not one that opens it.')

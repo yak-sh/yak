@@ -208,7 +208,11 @@ let telnyx = endpoints(globalThis).open(async (req) => {
   return Response.json({ data: { id: `msg-${texts.length}` } })
 })
 cleanup(() => telnyx.stop())
-Object.assign(env, { TELNYX_API: telnyx.url, TELNYX_API_KEY: 'a-key' })
+Object.assign(env, {
+  PHONE_SENDER: { via: 'telnyx' },
+  TELNYX_API: telnyx.url,
+  TELNYX_API_KEY: 'a-key',
+})
 let SAY = 'Hi yaks.app, sign me up! (invite from Jeff, k7q2)'
 let texting = async (
   from: string,
@@ -224,6 +228,7 @@ let texting = async (
     at: '2026-11-05T15:00:00Z',
     rcs: false,
     media: [],
+    via: 'telnyx',
   })
   await drained()
 }

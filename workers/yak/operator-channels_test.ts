@@ -53,7 +53,7 @@ import { operatorDoor } from './build-door.ts'
 import { arrived, Refused } from './inbox.ts'
 import type { Inbound } from './env.ts'
 import { endpoints } from './endpoints.ts'
-import { REPLIES, telnyxDoor, textSend } from './operator-texts.ts'
+import { REPLIES, textDoor, textSend } from './operator-texts.ts'
 import { textSigned } from './operator-channels.ts'
 import type { Bundle } from '@yaks/graph'
 import type { Binding } from '@yaks/cloudflare-mail'
@@ -399,6 +399,7 @@ let signer = await crypto.subtle.generateKey('Ed25519', true, [
 ]) as CryptoKeyPair
 let b64 = (b: ArrayBuffer) => btoa(String.fromCharCode(...new Uint8Array(b)))
 Object.assign(f.env, {
+  PHONE_SENDER: { via: 'telnyx' },
   TELNYX_API: telnyxApi.url,
   TELNYX_API_KEY: 'a-key',
   TELNYX_PUBLIC_KEY: b64(
@@ -426,7 +427,7 @@ let texting = async (id: string, text: string, sign = true) => {
       new TextEncoder().encode(`${t}|${body}`),
     ),
   )
-  let answer = await telnyxDoor(
+  let answer = await textDoor(
     new Request('https://yaks.app/telnyx/webhook', {
       method: 'POST',
       headers: sign
@@ -435,6 +436,7 @@ let texting = async (id: string, text: string, sign = true) => {
       body,
     }),
     f.env,
+    'telnyx',
   )
   await f.drain()
   return answer.status
@@ -909,7 +911,7 @@ Object.assign(pf.env, {
   PINNACLE_API: pinnacleApi.url,
   PINNACLE_SIGNING_SECRET: 'pss_test',
 })
-let { textDoor, texts } = await import('./operator-texts.ts')
+let { texts } = await import('./operator-texts.ts')
 await pf.dir.apply({
   entities: texts(pf.person, ANA, true, undefined, pf.space.eid),
 }, {

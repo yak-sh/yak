@@ -13,7 +13,7 @@ import {
 import { door as trackerDoor } from '../tracker/door.ts'
 import { batch as trackerBatch } from '../tracker/queue.ts'
 import { scopeOf } from '../tracker/worker.ts'
-import type { Env, Inbound } from './env.ts'
+import type { Env, Inbound, Vars } from './env.ts'
 import { Wire as Wired } from './stream.ts'
 import type { Limiter } from './rate.ts'
 import { sha256 } from './versions.ts'
@@ -379,7 +379,7 @@ export let limiter = (limit: number, period: number): Limiter => {
 
 /** Worker bindings independent of Store and Builder hosts. Namespaces are
  * supplied by the scenario that owns their behavior. */
-export let bindings = (secret: string, vars: Partial<Env> = {}) => {
+export let bindings = (secret: string, vars: Vars = {}) => {
   // A person's stream (stream.ts), one object per person, made on demand and
   // kept like a store: what a session was told, and the roster it holds.
   let wires = new Map<string, Wired>()

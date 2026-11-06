@@ -184,7 +184,7 @@ import {
   texted,
   visitor,
 } from './signin.ts'
-import { textable } from './phone-providers.ts'
+import { textable } from './phones.ts'
 import { RETRY, source, within } from './rate.ts'
 import {
   type Caller,
@@ -826,8 +826,8 @@ let phoneAt = async (env: Env, person: string) => {
 }
 
 // The sign-in card, saying whether a number works on it here (`textable`).
-let signCard = (env: Env, at: Parameters<typeof askEmail>[0] = {}) =>
-  askEmail({ ...at, texts: textable(env) }, env)
+let signCard = async (env: Env, at: Parameters<typeof askEmail>[0] = {}) =>
+  askEmail({ ...at, texts: await textable(env) }, env)
 
 // A letter's one click, spent: the very code the form would have spent
 // (signin.ts), so following the link is single use, dies with the code, and
@@ -1114,7 +1114,7 @@ let ours = async (req: Request, env: Env): Promise<Response> => {
     let address = canon(field('address') || field('email'))
     let q = field('q') || null
     let back = field('return') || null
-    let texts = textable(env)
+    let texts = await textable(env)
     let text = texts && texted(address)
     if (!text && !address.includes('@')) {
       return signCard(env, {

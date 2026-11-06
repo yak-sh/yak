@@ -13,6 +13,6 @@ and `fetch` are supplied by the host. Nothing reads the environment.
 
 ## As a plugin
 
-`@yaks/voipms/graph` lends its host the texter `voipms`, which @yaks/phone
-selects with `sender: {"via": "voipms"}`. The config passes this plugin the
-sender's options and credentials.
+`@yaks/voipms/graph` lends its host the phone `voipms` (@yaks/phone/plugin
+`Phone`), a texter which @yaks/phone selects with `sender: {"via": "voipms"}`.
+The config passes this plugin the sender's options and credentials.

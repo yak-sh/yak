@@ -3,7 +3,7 @@
 import { equal, ok, test } from '@yaks/testing'
 import { parseHTML } from 'linkedom'
 import { rows } from './directory-rows-probe.ts'
-import type { Env } from './env.ts'
+import type { Env, Vars } from './env.ts'
 import { desk } from './pages.ts'
 import { codeIn, codeOf, invitation } from './referral.ts'
 
@@ -25,7 +25,7 @@ let texting = {
   PHONE_SENDER: { via: 'pinnacle', number: NUMBER },
   PINNACLE_API_KEY: 'test-only',
   TEXT_SIGNUP: 'on',
-} as Env
+} as Vars as Env
 let jeff = await person('Jeff')
 let first = await invitation(texting, dir, jeff)
 let again = await invitation(texting, dir, jeff)

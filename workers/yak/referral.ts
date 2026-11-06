@@ -13,7 +13,7 @@ import type { Directory } from './directory.ts'
 import type { Env } from './env.ts'
 import { esc } from './html.ts'
 import { signupAddress } from './host.ts'
-import { textable, texter } from './phone-providers.ts'
+import { phoneOf, textable } from './phones.ts'
 
 // Letters and digits a person can read off a screen without mistaking one
 // for another: no 0 or o, no 1, i or l.
@@ -129,9 +129,9 @@ export let codeOf = async (
  * say just now is reported, and the invite offers the letter alone.
  */
 export let numberOf = async (env: Env): Promise<string | null> => {
-  if (!textable(env)) return null
+  if (!await textable(env)) return null
   try {
-    return await texter(env).from?.() ?? null
+    return await (await phoneOf(env)).from() ?? null
   } catch (e) {
     caught(e, { request: 'invite number' })
     return null

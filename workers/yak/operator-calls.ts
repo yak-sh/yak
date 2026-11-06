@@ -40,7 +40,7 @@ import { bound, defect } from './defects.ts'
 import { opened, seal } from './lib/token.ts'
 import { apex } from './host.ts'
 import { countedSpend } from './meter.ts'
-import { PROVIDERS, settings } from './phone-providers.ts'
+import { phoneAt } from './phones.ts'
 import {
   CALL_MODELS,
   passed,
@@ -151,11 +151,11 @@ export let opening = (
  * Operator's, and is left to ring.
  */
 export let rang = async (env: Env, via: string, ring: Ring) => {
-  let options = settings(env)
-  let provider = PROVIDERS[via]
-  if (options.via != via || !provider?.caller) return
+  let phone = await phoneAt(env)
+  let options = phone?.transport()
+  if (options?.via != via || !phone?.caller) return
   if (!options.number || ring.to != options.number) return
-  let caller = provider.caller(options)
+  let caller = phone.caller()
   let who = await reached(env, ring)
   if (!who) return await caller.reject(ring.id)
   let ticket: Ticket = {
@@ -722,17 +722,17 @@ declare let WebSocketPair: { new (): { 0: unknown; 1: Upgraded } }
  * `/operator/call` in the space's object: the provider's stream accepted,
  * and the conversation run on it until the call ends.
  */
-export let answering = (
+export let answering = async (
   env: Env,
   operator: Operator,
   space: Space,
   ticket: Ticket,
   armed: () => Promise<void> | undefined,
-): Response => {
-  let provider = PROVIDERS[ticket.via]
+): Promise<Response> => {
+  let phone = await phoneAt(env, { via: ticket.via })
   let setup = setupOf(space)
   let speech = speechOf(env, setup.provider)
-  if (!provider?.line || !provider.caller || !speech) {
+  if (!phone?.line || !phone.caller || !speech) {
     defect(
       new Error(
         `A call's stream was refused: ${
@@ -743,7 +743,8 @@ export let answering = (
     )
     return new Response(null, { status: 404 })
   }
-  let line = provider.line
+  let line = phone.line
+  let caller = phone.caller
   // The ring was let through at `ticket.at`, its speech not paused: the
   // greeting goes ahead on that while this object reads the balance itself.
   passed(ticket.at, setup.provider)
@@ -792,7 +793,7 @@ export let answering = (
       }))
       return Promise.resolve()
     },
-    hangup: () => provider.caller!(settings(env)).hangup(ticket.call),
+    hangup: () => caller().hangup(ticket.call),
   }
   // What a talking model said and heard on its own, kept in order.
   let noted = Promise.resolve()

@@ -1,7 +1,7 @@
 import { test } from '@yaks/testing'
 import { assertEquals } from '@std/assert'
 import { platform } from './directory-rows-probe.ts'
-import { texter } from './phone-providers.ts'
+import { phoneOf } from './phones.ts'
 import { endpoints } from './endpoints.ts'
 
 let p = platform('phone-settings')
@@ -34,11 +34,11 @@ await p.dir.apply({
 })
 let space = (await p.dir.at(eid))!
 let found = await p.dir.textSpace(number)
-let platformReceipt = await texter(p.env).send({
+let platformReceipt = await (await phoneOf(p.env)).send({
   to: '+12695550142',
   text: 'Platform',
 })
-let spaceReceipt = await texter(p.env, space.sender).send({
+let spaceReceipt = await (await phoneOf(p.env, space.sender)).send({
   to: '+12695550142',
   text: 'Space',
 })

@@ -9,10 +9,8 @@ import {
   Blocked,
   consentEid,
   keyword,
-  listens,
   mobile,
   type Text,
-  verified,
 } from '@yaks/phone'
 import { writes } from '@yaks/member'
 import { type Ctx, refuse } from './tool.ts'
@@ -119,13 +117,12 @@ export let handed = (
   },
 ]
 
-export { texter } from './phone-providers.ts'
-import { PROVIDERS, signingKey, texter } from './phone-providers.ts'
+import { phoneOf, phones } from './phones.ts'
 /** Send a platform text that nothing waits on: a carrier's block is
  * expected until the campaign is approved, and anything else is reported. */
 export let tell = async (env: Env, text: Text, why: string, via?: string) => {
   try {
-    await texter(env, via ? { via } : undefined).send(text)
+    await (await phoneOf(env, via ? { via } : undefined)).send(text)
   } catch (error) {
     if (!(error instanceof Blocked)) caught(error, { request: why })
   }
@@ -185,7 +182,7 @@ let signedUp = async (env: Env, arrival: Arrival) => {
   let number = mobile(arrival.from)
   if (env.TEXT_SIGNUP != 'on' || arrival.rcs || !number) return null
   if (!arrival.text.trim()) return null
-  if (arrival.to != await texter(env).from?.()) return null
+  if (arrival.to != await (await phoneOf(env)).from()) return null
   let { textedIn } = await import('./identity.ts')
   return (await textedIn(env, number, arrival.text.trim(), arrival.at)).person
 }
@@ -199,7 +196,10 @@ let signedUp = async (env: Env, arrival: Arrival) => {
  * nobody wears signs its sender up when that is switched on (`signedUp`),
  * and is not read otherwise.
  */
-export let arrived = async (env: Env, arrival: Arrival) => {
+export let arrived = async (
+  env: Env,
+  arrival: Arrival & { via: string },
+) => {
   let dir = directoryOf(env.STORE)
   let line = arrival.rcs ? null : await dir.lined(arrival.to)
   if (line) {
@@ -268,12 +268,12 @@ export let arrived = async (env: Env, arrival: Arrival) => {
           channel: arrival.rcs ? 'rcs' : 'text',
           address: arrival.from,
           reply_to: arrival.to,
-          ...(arrival.via ? { via: arrival.via } : {}),
+          via: arrival.via,
           files,
           ...(signup ? { signup: true } : {}),
         },
         options: {
-          id: requestId(space.eid, `${arrival.via ?? 'telnyx'}:${arrival.id}`),
+          id: requestId(space.eid, `${arrival.via}:${arrival.id}`),
         },
       }),
     })
@@ -284,8 +284,8 @@ export let arrived = async (env: Env, arrival: Arrival) => {
 }
 
 /**
- * `POST /<via>/webhook`: the selected provider's event, authenticated by its
- * verification scheme. A missing or stale signature is refused quietly; one that is
+ * `POST /<via>/webhook`: the event of the provider lent as `via`
+ * (phones.ts), authenticated by its verification scheme. A missing or stale signature is refused quietly; one that is
  * complete and does not match, which is what a wrong key looks like, is
  * refused and reported. A text that failed to arrive is reported unless a
  * carrier blocked it, which is expected until the campaign is approved.
@@ -295,13 +295,11 @@ export let textDoor = async (
   env: Env,
   via: string,
 ): Promise<Response> => {
-  let transport = PROVIDERS[via]
-  let key = signingKey(env, via)
-  if (!key || !listens(transport)) {
+  if (req.method != 'POST') return new Response(null, { status: 405 })
+  let said = await (await phones(env))[via]?.hear(req)
+  if (!said) {
     return new Response('Texts are not switched on here.', { status: 404 })
   }
-  if (req.method != 'POST') return new Response(null, { status: 405 })
-  let said = await verified(transport, key, req)
   if ('refused' in said) {
     let message = said.refused
     if (said.ours) await fault(env, `POST /${via}/webhook`, new Error(message))
@@ -322,8 +320,6 @@ export let textDoor = async (
   if (arrival) await arrived(env, { ...arrival, via })
   return Response.json({})
 }
-
-export let telnyxDoor = (req: Request, env: Env) => textDoor(req, env, 'telnyx')
 
 /**
  * The Operator's `text_send`: a text to the person it works for, at the
@@ -353,7 +349,7 @@ export let textSend = (env: Env, ctx: Ctx, space: Space): Tool => ({
     }
     let { textSigned } = await import('./operator-channels.ts')
     try {
-      let { id } = await texter(env, space.sender).send({
+      let { id } = await (await phoneOf(env, space.sender)).send({
         to: texting.number,
         text: `${text}\n\n${textSigned(space)}`,
       })

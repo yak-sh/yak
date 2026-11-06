@@ -50,7 +50,9 @@
 //     /stripe/webhook         billing.ts: what Stripe says happened
 //     /api/billing/*          billing.ts: checkout and the customer portal
 //     /stripe/connect         sell.ts: what a seller's account says happened
-//     /telnyx/webhook         operator-texts.ts: texts to the Operator
+//     /<via>/webhook          operator-texts.ts: texts and calls to the
+//                             Operator, for each phone phones.ts lends
+//     /<via>/stream           operator-calls.ts: a call's audio
 //     /mcp, /api/*            mcp.ts (T-32329; a JSON 404 until then)
 //     /robots.txt, /sitemap.xml, /llms.txt, /llms-full.txt,
 //     /.well-known/security.txt
@@ -228,15 +230,18 @@ let serve = async (req: Request, env: Env, r: Route) => {
   // this one nothing: Stripe posts server to server with no Origin at all, and
   // an absent Origin is allowed (route.ts `sameOrigin`).
   if (path == '/stripe/connect') return sell.fetch(req, env)
-  // Texts and their outcomes, as Telnyx posts them (operator-texts.ts).
-  // A call's audio, streamed to the Operator it reached (operator-calls.ts).
-  if (path == '/telnyx/stream') {
-    let { streamDoor } = await import('./operator-calls.ts')
-    return streamDoor(req, env)
-  }
-  if (path == '/telnyx/webhook' || path == '/pinnacle/webhook') {
+  // A phone's doors, for any provider the kernel's config lends as `via`
+  // (phones.ts): its texts, their outcomes and its calls ringing, as it
+  // posts them (operator-texts.ts), and a call's audio, streamed to the
+  // Operator it reached (operator-calls.ts).
+  let [, via, door] = /^\/([^/]+)\/(webhook|stream)$/.exec(path) ?? []
+  if (via && await import('./phones.ts').then((p) => p.lends(env, via))) {
+    if (door == 'stream') {
+      let { streamDoor } = await import('./operator-calls.ts')
+      return streamDoor(req, env)
+    }
     let { textDoor } = await import('./operator-texts.ts')
-    return textDoor(req, env, path.split('/')[1])
+    return textDoor(req, env, via)
   }
   // Texts to a person's own number, as voip.ms's callback sends them
   // (operator-line.ts).

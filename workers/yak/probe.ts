@@ -9,7 +9,7 @@ import type { Custom } from './domains.ts'
 import type { Command } from './declared.ts'
 import type { Bundle } from '@yaks/graph'
 import type { Load } from '@yaks/host'
-import type { Env } from './env.ts'
+import type { Env, Vars } from './env.ts'
 import { type Directory, directoryOf, spaceHandle } from './directory.ts'
 import { valueIn } from '@yaks/tools/value'
 import { parse } from 'smol-toml'
@@ -135,7 +135,7 @@ let toml = () =>
 
 // The kernel's handler and graph bindings share the caller's process.
 let boot = async (
-  bindings: Partial<Env> = {},
+  bindings: Vars = {},
   prepare?: (env: Env) => void,
   load?: Load,
 ) => {
@@ -252,7 +252,7 @@ export let kernel = async (): Promise<Kernel> => {
  * store's first wake.
  */
 export let fresh = async (
-  bindings: Partial<Env> = {},
+  bindings: Vars = {},
   prepare?: (env: Env) => void,
   load?: Load,
 ): Promise<Kernel> => {

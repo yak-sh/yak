@@ -22,7 +22,8 @@
 // which `.agents/plugins/marketplace.json` offers — because a plugin is a
 // directory of files on somebody else's disk: the guide has to travel as bytes
 // there too, one skill per page, and the icon with it. Same deal, same refusal.
-// It also projects the three store configs and package exports into load.ts:
+// It also projects the three store configs, the kernel's own and the
+// packages' exports into load.ts:
 // literal facet imports that esbuild can bundle without runtime discovery,
 // and every package's `./vocab`, which an app may name as a dependency. And it
 // prints the reserved words (vocab.ts `reserved`) into the components page,
@@ -34,7 +35,7 @@ import { front, read } from '@yaks/yaml'
 import { contentIdentity } from './content-identity.ts'
 import { fileURLToPath } from 'node:url'
 import { members } from '@yaks/cli/dependencies'
-import { configs, domains, posts } from './config.ts'
+import { configs, domains, phoneConfig, posts } from './config.ts'
 import { imports, loader, type Manifest, vocabs } from './load-gen.ts'
 
 let HERE = new URL('.', import.meta.url)
@@ -369,7 +370,7 @@ let loaded = await formatted(
     [
       ...new Set([
         ...imports(
-          [...Object.values(configs), ...Object.values(posts)],
+          [...Object.values(configs), ...Object.values(posts), phoneConfig],
           manifests,
         ),
         ...vocabs(manifests),

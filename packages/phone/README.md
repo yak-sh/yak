@@ -64,10 +64,14 @@ to receipts. Provider HTTP fields never become graph components.
 
 Each provider package is also a plugin a config names, built from
 `@yaks/phone/plugin`: `texters(via, provider)` is its graph facet, lending the
-host a texter under its name (`host.texters`), and `routes(via, provider)` its
-routes facet, the webhook door. `lent(via, provider, options)` is that texter:
-built from its options at every text, and `waiting()` until they carry what the
-provider `needs`.
+host a phone under its name (`host.texters`), and `routes(via, provider)` its
+routes facet, the webhook door. `lent(via, provider, options)` is that `Phone`:
+a texter built from its options at every text, and `waiting()` until they carry
+what the provider `needs`. Beside sending it offers what a host that is no graph
+asks of the provider: `transport()`, its options now; `from()`, the number it
+texts from; `over(more)`, the same phone with more settings laid on its options,
+such as a number of its own; `hear(request)`, its webhook verified with its
+door's key; and, for a provider that takes calls, `caller()` and `line`.
 
 `stash()` keeps texts in `sent` with `last()`, and answers receipts `stash-1`,
 `stash-2`, …; `stash({ block })` and `stash({ refuse })` reject every text.
@@ -111,11 +115,12 @@ Telnyx uses a base64 public key and Ed25519. Pinnacle authenticates its
 `PINNACLE-SIGNING-SECRET` header against the configured webhook secret; it does
 not sign the body. voip.ms callbacks use a host-authenticated URL.
 
-On yaks.app, `PHONE_SENDER` selects the platform's transport. A directory
-space's `sender{via}` beside `phone{number}` overrides it. The provider's
-credentials stay with the host, and apps keep `phone{number}` for their own
-registered line. Text rows, conversation links, delivery outcomes and opt-outs
-have the same shape for every provider.
+On yaks.app, the kernel's config names each provider plugin with its credentials
+(workers/yak/config.ts `phoneConfig`), and `PHONE_SENDER` selects the platform's
+phone by name. A directory space's `sender{via}` beside `phone{number}`
+overrides it. The provider's credentials stay with the host, and apps keep
+`phone{number}` for their own registered line. Text rows, conversation links,
+delivery outcomes and opt-outs have the same shape for every provider.
 
 ## Calls
 
