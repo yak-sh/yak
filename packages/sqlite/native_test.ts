@@ -48,12 +48,14 @@ test('a plain SQL schema is copied without store metadata', () => {
 // Stores in memory past the first are copies of the schema it made: each has
 // every object a store made by its statements has, and only its own rows.
 test('a store in memory made from a template has the whole schema and only its own rows', () => {
-  let names = (d: Driver) =>
-    scan(d, 'sqlite_schema', undefined, ['name']).map((o) => o.name)
   let made = mem()
   for (let s of storage(made, shop).ddl()) made.query(s)
   let [a, b] = [mem(), mem()]
-  for (let d of [a, b]) storage(d, shop).install()
+  for (let d of [a, b]) {
+    let s = storage(d, shop)
+    s.install()
+    s.raise()
+  }
   for (let name of names(made)) assertEquals(names(b).includes(name), true)
   storage(a, shop).tx((tx) =>
     tx.patch([{ entity: { eid: 'mine' }, doc: { title: 'a' } }])
@@ -87,7 +89,11 @@ let lent = (body: (d: Driver) => void) => {
     d.close()
   }
 }
-let titles = (d: Driver) => scan(d, 'doc', undefined, ['title'])
+let names = (d: Driver) =>
+  scan(d, 'sqlite_schema', undefined, ['name']).map((o) => o.name)
+// A store that never wrote a doc has no table for it (./raise.ts).
+let titles = (d: Driver) =>
+  names(d).includes('doc') ? scan(d, 'doc', undefined, ['title']) : []
 let write = (d: Driver, title: string) =>
   storage(d, shop).tx((tx) =>
     tx.patch([{ entity: { eid: title }, doc: { title } }])

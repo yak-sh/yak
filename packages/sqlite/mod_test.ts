@@ -143,6 +143,8 @@ test('a component and a kind are read from their rows, not a scan of entities', 
   assertEquals(eids(`.${last}`), ['only', 'both'])
   assertEquals(eids(`!${last}`), ['other', 'bare'])
   assertEquals(eids(`.kind=${last}`), ['only'])
+  // A statement bound beside the store names every kind's table.
+  s.raise()
   for (let q of [`.${last}`, `.kind=${last}`]) {
     let plan = driver.query({
       t: 'explain query plan',
@@ -252,8 +254,12 @@ let reopened = (times: number, beside: (d: Driver) => void) => {
         let version = () =>
           d.query({ t: 'pragma', name: 'schema_version' })[0].schema_version
         let was = version()
-        storage(d, shop).install()
+        let s = storage(d, shop)
+        s.install()
         let moved = version() != was
+        // What stands beside the store rests on its tables, as on a store
+        // whose every word was written.
+        s.raise()
         beside(d)
         return moved
       } finally {

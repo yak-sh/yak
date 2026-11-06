@@ -69,6 +69,7 @@ test('archetype gather golden: wide sparse sets, chunks and a smaller reader voc
   }])
   let s = storage(driver, wide)
   s.install()
+  s.raise(['facet404', 'doc'])
   let ids = Array.from({ length: 4101 }, (_, i) => `owner-${i + 1}`)
   driver.query(
     insert('entity', ...ids.map((eid, i) => ({ eid, num: 101 + i }))),
@@ -99,6 +100,7 @@ test('classified gathers select only present tables and only their owners', () =
   )
   let s = storage(driver, vocab)
   s.install()
+  s.raise()
   let g = graph({ storage: s, vocab, plugins: [archetypes()] })
   g.apply([
     { entity: { eid: 'a' }, doc: {} },

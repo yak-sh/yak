@@ -145,7 +145,7 @@ import { type Identity, identity, literals } from './ident.ts'
 import { walk as walked } from './walk.ts'
 import { Unsupported, whole } from './unsupported.ts'
 import { backedDialect, backingOf, computed, hasComputed } from './spine.ts'
-import { absentDialect } from './absent.ts'
+import { absentDerived, absentDialect } from './absent.ts'
 import type { ArchetypeSet } from './archetype.ts'
 
 export type BindOpts = {
@@ -268,6 +268,8 @@ type Ctx = {
   v: Vocab
   d: Dialect
   derived: Derived
+  /** the components the file holds no table for (./absent.ts) */
+  absent?: readonly string[]
   backed: Backings
   tags: Tags
   /** the backed components whose tags the statement reads, which it binds
@@ -422,6 +424,7 @@ let claims = (ctx: Ctx, kind: Clause['kind']): boolean =>
 let site = (ctx: Ctx, owner = ctx.owner ?? ctx.d.ownerKey('entity')): Site => ({
   vocab: ctx.v,
   visibility: ctx.visibility,
+  absent: ctx.absent,
   now: ctx.now,
   owner: raw(owner),
   join: (comp) => {
@@ -781,7 +784,10 @@ let single = (ctx: Ctx, hop: Hop, p: Pred): Cond => {
     // vocabulary's own, so the CLI, the HTTP endpoint and the MCP server all
     // report it identically.
     if (!ctx.v.comp(hop.comp)) throw new Unknown(hop.comp)
-    if (!worn(ctx, hop.comp)) return unworn(op, null, '')
+    // Nor can it wear one the file holds no table for (./absent.ts).
+    if (!worn(ctx, hop.comp) || ctx.absent?.includes(hop.comp)) {
+      return unworn(op, null, '')
+    }
     let present = op == '~' || op == EXISTS
     if (present && hop.comp == ctx.present) return TRUE
     if (
@@ -3369,7 +3375,10 @@ export let prepared = (
   let ctx: Ctx = {
     v: vocab,
     d: backedDialect(d, vocab, backed, tags, (c) => tagged.add(c), spine),
-    derived: derivedOf(vocab, opts.derived),
+    // A property computed from a component's rows reads one with no table
+    // as worn by nobody, as the dialect does.
+    derived: absentDerived(vocab, derivedOf(vocab, opts.derived), opts.absent),
+    absent: opts.absent,
     backed,
     tags,
     tagged,

@@ -64,6 +64,7 @@ import type { Vocab } from '@yaks/vocab'
 import { EXIT, PROCESS } from '@yaks/process/vocab'
 import { ended, selfEid, started } from '@yaks/process/self'
 import type { History, Store } from '@yaks/sqlite'
+import type { Stmt } from '@yaks/sql'
 import { migrations, migrationSchema } from '@yaks/sqlite/migration'
 import { add, follow, printing, printOf } from '@yaks/sqlite/follow'
 import { requirements, requires } from '@yaks/sqlite/meta'
@@ -545,6 +546,11 @@ let composed = async (
     let artifacts = selected.store
     if (!artifacts) throw new Error(`@yaks/blob: ${selected.waiting}`)
     let store: Store | undefined
+    // What the file keeps beside the store's own schema over its component
+    // tables, the search indexes among them, made with a component's table by
+    // its first write (@yaks/sqlite `over`). Composed once the plugins say
+    // theirs, after the store is bound.
+    let over: Stmt[] = []
     // Search is a property of the declaration: a property marked `search: true`
     // is indexed, whoever declared it, so wiring @yaks/fts here rather than in
     // a plugin is what takes the vocabulary at its word. Two things follow
@@ -675,6 +681,7 @@ let composed = async (
           // A model turn reads its window again each step, a thousand lines
           // of a long transcript: more than a Durable Object's 4 MiB keeps.
           memory: 32 << 20,
+          over: () => over,
         }
         store = opening(o)
         return store
@@ -692,6 +699,7 @@ let composed = async (
       schema: opts.readOnly || mode ? undefined : (_built, stmts) => {
         let beside = [...migrationSchema(), ...blobSchema(), ...stmts]
         let indexes = textSchema(text, derived)
+        over = [...beside, ...indexes]
         let print = printOf(store!.print(), [...beside, ...indexes])
         let told = (error: unknown) =>
           void report(error, {

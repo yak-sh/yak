@@ -489,6 +489,8 @@ test('archetype: stamps join the final set and value-only writes do not assign a
   })
   let s = storage(d, v)
   s.install()
+  // What it counts is pointer writes, not a first write's tables (./raise.ts).
+  s.raise()
   let g = graph({ storage: s, vocab: v, plugins: [archetypes()] })
   seedIdentities(g, 'b')
   g.apply([{ entity: { eid: 'a' }, doc: { title: 'A' }, task: {} }])
@@ -722,7 +724,8 @@ test('one-archetype paged reads use the compound ordering index', async () => {
 })
 
 test('archetype: reclassify classifies rows written past the graph, no triggers', () => {
-  let { driver, g, get } = setup()
+  let { driver, store, g, get } = setup()
+  store.raise(['task'])
   g.apply([{ entity: { eid: 'a' }, doc: { title: 'A' } }])
   assertEquals(get('a').entity.archetype, eidOf(['doc']))
   let id = idOf(driver, 'a')
@@ -790,6 +793,8 @@ test('archetype: drift finds the pointer a raw writer left behind', () => {
 
 test('archetype: patches and deletes discover no unchanged physical schema', () => {
   let { driver, store: s, g } = setup()
+  // A first write's tables move the schema; these writes are later ones.
+  s.raise()
   s.tx((tx) =>
     tx.patch([{ entity: { eid: 'same' }, doc: { title: 'before' } }])
   )

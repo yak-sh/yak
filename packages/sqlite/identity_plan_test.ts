@@ -94,7 +94,9 @@ for (let name of ['session', 'call']) {
   test(`${name} identity gathers seek a few rows despite stale small-table statistics`, () => {
     let db = new Database(':memory:'), d = driver(db)
     try {
-      storage(d, vocab).install()
+      let store = storage(d, vocab)
+      store.install()
+      store.raise()
       let add = (start: number, count: number, facets: boolean) => {
         for (let offset = 0; offset < count; offset += 500) {
           let ids = Array.from(

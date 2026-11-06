@@ -26,6 +26,7 @@ let vocab = loadVocab([archetypeDoc, {
 let { driver, steps } = stepping()
 let s = storage(driver, vocab)
 s.install()
+s.raise()
 s.tx((tx) =>
   tx.patch([
     { entity: { eid: 'person' } },

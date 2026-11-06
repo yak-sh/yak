@@ -5,7 +5,7 @@ import type { Eid } from '@yaks/graph'
 import type { BindOpts, Screen, Statements } from '@yaks/sql'
 import type { Vocab } from '@yaks/vocab'
 import type { Embedder } from './embedder.ts'
-import type { Field } from './fields.ts'
+import { type Field, present, tablesIn } from './fields.ts'
 import { nearest } from './near.ts'
 import { sources } from './sweep.ts'
 import { screened, visibleVectors } from './visibility.ts'
@@ -61,8 +61,14 @@ export let meaning = async (
   if (opts.visibility && !opts.vocab) {
     throw new Error('meaning search with visibility requires a vocabulary')
   }
-  let visible = opts.vocab
-    ? visibleVectors(opts.vocab, fields, opts.visibility)
+  // A component no table stands for yet is worn by nobody (@yaks/sqlite
+  // makes one on its first write).
+  let names = tablesIn(db), v = opts.vocab
+  let absent = v?.all.filter((c) =>
+    c != 'entity' && !v.comp(c)?.computed && !names.has(c)
+  )
+  let visible = v
+    ? visibleVectors(v, present(db, fields), opts.visibility, absent)
     : undefined
   let vector = await embedder.embed(words)
   let found = nearest(db, vector, {

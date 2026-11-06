@@ -300,6 +300,7 @@ test('wide sparse gathers cross owner and vocabulary chunks without stale occupa
   })
   let s = storage(driver, vocab)
   s.install()
+  s.raise()
   // Raw setup keeps this test about reads, not 4101 write pipelines. Most
   // tables stay empty, one has a row beyond the first 4096-owner chunk.
   let ids = Array.from({ length: 4101 }, (_, i) => `owner-${i + 1}`)
@@ -344,6 +345,7 @@ test('numeric gather ownership stays internal; present is an ordinary property',
   })
   let s = storage(driver, vocab)
   s.install()
+  s.raise()
   driver.query(insert('entity', { id: 47, eid: 'not-a-storage-id', num: 9 }))
   driver.query(insert('sample', { entity: 47, present: 'stored' }))
   driver.query(insert('marker', { entity: 47 }))
@@ -373,6 +375,7 @@ test('a store with no number in its vocabulary shows none it has', () => {
   })
   let s = storage(driver, vocab)
   s.install()
+  s.raise()
   driver.query(insert('entity', { id: 47, eid: 'was-numbered', num: 9 }))
   driver.query(insert('sample', { entity: 47, present: 'stored' }))
   assertEquals(s.read('.sample'), [{

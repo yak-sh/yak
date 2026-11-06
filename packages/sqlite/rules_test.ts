@@ -11,11 +11,13 @@ import { matched } from './rules.ts'
 import { render, rule } from '@yaks/sql'
 import { reads } from '@yaks/graph'
 
-// A shop with a maker, two of their products, and one review.
+// A shop with a maker, two of their products, and one review. Its tables all
+// stand, since `matched` runs a rule past the store.
 let floor = () => {
   let driver = mem()
   let s = storage(driver, shop)
   s.install()
+  s.raise()
   s.tx((tx) =>
     tx.patch([
       { entity: { eid: 'm1' }, doc: { title: 'Herbert' } },

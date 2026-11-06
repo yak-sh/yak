@@ -50,6 +50,7 @@ export let storage = (
     buried: (before, page) => unit(driver, () => graves(before, page), 'read'),
     measure: (signal) => measure(driver, signal),
     install: refuse,
+    raise: refuse,
     analyze: refuse,
     tx: refuse,
   }

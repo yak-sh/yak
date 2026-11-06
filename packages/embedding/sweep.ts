@@ -35,7 +35,7 @@ import {
   val,
 } from '@yaks/sql'
 import { type Embedder, hash, Refused } from './embedder.ts'
-import { allowed, type Field } from './fields.ts'
+import { allowed, type Field, present, tablesIn, trimmed } from './fields.ts'
 import { TABLE } from './ddl.ts'
 import { type Due, due, left, owe, paid, watch } from './owed.ts'
 import { pack, unit } from './vector.ts'
@@ -81,9 +81,14 @@ let assemble = (
  */
 export let sources = (
   db: Statements,
-  fields: Field[],
+  wanted: Field[],
   owners?: number[],
 ): Source[] => {
+  // The fields a table stands for. Their exclusions stay whole for the
+  // descriptor, which names what an entity wears without reading a table; a
+  // read of the tables themselves reads only those that stand.
+  let fields = present(db, wanted, false)
+  let names = tablesIn(db)
   let o = at('o'), e = at('e')
   // Shared exclusions are one property of the owner. Its descriptor answers
   // all of them in one seek, rather than seeking every excluded table for
@@ -100,7 +105,10 @@ export let sources = (
           eq(fn('instr', a('tables'), val(JSON.stringify(name))), lit(0))
         ),
       ),
-      and(isNull(a('entity')), ...allowed(fields[0], col('entity', 'c'))),
+      and(
+        isNull(a('entity')),
+        ...allowed(trimmed(fields[0], names), col('entity', 'c')),
+      ),
     )
     : undefined
   // One row supplies every field of a component. Resolving a body can seek
@@ -176,7 +184,9 @@ export let sources = (
         },
       ],
       where: and(
-        ...eligibility ? [eligibility] : allowed(field, c('entity')),
+        ...eligibility
+          ? [eligibility]
+          : allowed(trimmed(field, names), c('entity')),
         not(exists(select({
           cols: [lit(1)],
           from: table('tombstone', 't'),

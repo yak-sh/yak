@@ -25,6 +25,7 @@ import {
   among,
   and,
   array,
+  catalogue,
   col,
   type Derived,
   type Driver,
@@ -157,7 +158,14 @@ export let sqliteBlobs = (driver: Driver, layout: Layout = {}): Blobs => {
       })
     },
     drop: (shas, held) => {
-      if (shas.length) driver.query(dropSql(shas, held, layout))
+      if (!shas.length) return
+      // A component a store holds no table for yet (@yaks/sqlite raises one
+      // on its first write) names no object.
+      let tables = new Set(
+        catalogue(driver).filter((o) => o.type == 'table').map((o) => o.name),
+      )
+      let named = held.filter(({ comp }) => tables.has(comp))
+      driver.query(dropSql(shas, named, layout))
     },
   }
 }

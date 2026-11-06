@@ -36,6 +36,8 @@ test('doc predicates, paths, projections and bundles resolve the same blob', () 
   let driver = mem()
   let store = storage(driver, vocab, { derived: blobRead(vocab) })
   store.install()
+  // Its rows are written in raw SQL, so its tables stand first.
+  store.raise()
   driver.query({ t: 'drop', kind: 'view', name: 'doc_value', ifExists: true })
   for (let s of blobSchema()) driver.query(s)
   for (
@@ -137,6 +139,8 @@ test('immutable admission content observes blob commits by another file connecti
   try {
     let s = storage(a, blog, { derived: blobRead(blog) })
     s.install()
+    // A store whose words were written: the schema stands still under it.
+    s.raise()
     for (let stmt of blobSchema()) a.query(stmt)
     let g = graph({
       storage: s,

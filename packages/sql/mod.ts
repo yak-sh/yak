@@ -45,6 +45,7 @@
 // nearest-neighbour search unless a vector package claims it).
 
 export * from './query.ts'
+export { absentDerived } from './absent.ts'
 export * from './cascade.ts'
 export { type At, type Gone, type On, type Plan, rule } from './match.ts'
 export {

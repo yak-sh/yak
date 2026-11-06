@@ -100,11 +100,25 @@ export let semantic = (
     ((query, limit, within) =>
       nearest(db, query, { model: space.model, limit, within }))
 
+  // The fields over components a table stands for (@yaks/sql `Site.absent`):
+  // one nothing has written yet holds no text, and excludes no entity.
+  let live = (site: Site): Field[] => {
+    let all = opts.fields ?? fields(site.vocab, searched)
+    let gone = new Set(site.absent)
+    if (!gone.size) return all
+    return all.filter((f) => !gone.has(f.comp) && !(f.on && gone.has(f.on)))
+      .map((f) =>
+        f.not?.some((n) => gone.has(n))
+          ? { ...f, not: f.not.filter((n) => !gone.has(n)) }
+          : f
+      )
+  }
   let near = (anchor: string, site: Site): Expr => {
     let visible = visibleVectors(
       site.vocab,
-      opts.fields ?? fields(site.vocab, searched),
+      live(site),
       site.visibility,
+      site.absent,
     )
     let vec = vectorOf(db, anchor, space.model, visible)
     if (!vec) {
@@ -119,8 +133,9 @@ export let semantic = (
     let sources = scope && site.visibility
       ? visibleVectors(
         site.vocab,
-        opts.fields ?? fields(site.vocab, searched),
+        live(site),
         { ...site.visibility, entity: undefined },
+        site.absent,
       )
       : visible
     let within = screened(scope, sources)

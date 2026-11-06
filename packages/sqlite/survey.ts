@@ -154,3 +154,26 @@ export let survey = (
     hold(driver, print, found)
   })
 }
+
+/** Keep the survey the file holds standing across the tables a write just
+ * raised (./raise.ts): `before`, read before they were made, with `raised`
+ * no longer absent. A table raised is made whole, its indexes and the log's
+ * triggers with it, so nothing else the survey says moves. Nothing where
+ * there was no survey to keep. */
+export let raisedSurvey = (
+  driver: Driver,
+  vocab: Vocab,
+  derived: Derived | undefined,
+  before: Survey | undefined,
+  raised: readonly string[],
+): void => {
+  if (!driver.file || !before || !raised.length) return
+  let gone = new Set(raised)
+  let found = { ...before, absent: before.absent.filter((c) => !gone.has(c)) }
+  let print = plan(vocab, derived, true).print
+  meta(driver).set(
+    SURVEYED + print,
+    JSON.stringify({ at: version(driver), ...found }),
+  )
+  hold(driver, print, found)
+}

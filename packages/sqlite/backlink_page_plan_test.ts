@@ -40,7 +40,9 @@ let id = (i: number) => i + 3
 let numbered = (i: number) => i % 3 == 0
 let referrers = Array.from({ length: N }, (_, n) => n + 1)
 let db = new Database(':memory:'), d = driver(db)
-storage(d, vocab).install()
+let store = storage(d, vocab)
+store.install()
+store.raise()
 d.query(insert(
   'entity',
   ...['t', 'u', 'few'].map((eid, i) => ({

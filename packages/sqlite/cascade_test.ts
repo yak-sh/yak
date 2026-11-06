@@ -283,6 +283,7 @@ test('an engine that carries every term is asked the whole cascade at once', () 
     if (arms) driver.arms = arms
     let s = storage(driver, wide)
     s.install()
+    s.raise()
     s.tx((tx) => {
       counting = true
       tx.doom(['k'])
