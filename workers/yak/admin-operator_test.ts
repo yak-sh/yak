@@ -132,7 +132,7 @@ test('an id that is no conversation says so, and nobody but the admin reads one'
 })
 
 // A request no session has taken yet, listed beside the conversation.
-await receive(
+let calendar = await receive(
   service.store,
   { space: eid, person: jeff, channel: 'chat' },
   'Add a calendar.',
@@ -166,4 +166,34 @@ test("the sessions page lists every space's Operator conversations, each by its 
     ['clerk · Waiting to start · when', 'clerk · Answered · when'],
   )
   assertEquals(notYours.status, 404)
+})
+
+// operator_read, asked by the admin, finds each conversation as the admin
+// page does: the person's conversation, and a request no session has taken.
+let read = async (task: string) => {
+  let out = await service.binding.get(eid).fetch(
+    new Request('https://builder/operator/read', {
+      method: 'POST',
+      headers: {
+        'x-space-eid': eid,
+        'x-yak-person': root,
+        'x-yak-administrative': '1',
+      },
+      body: JSON.stringify({ task }),
+    }),
+  )
+  return { status: out.status, value: await out.json() }
+}
+let talked = await read(rootOf(eid, jeff))
+let waits = await read(calendar)
+let nothing = await read(crypto.randomUUID())
+test("operator_read reads any person's conversation for the admin, a request no session has taken included", () => {
+  assertEquals(talked.status, 200)
+  assertEquals(talked.value.entries.length > 0, true)
+  assertEquals(waits.status, 200)
+  assertEquals(
+    waits.value.waiting.map((r: { doc: { body: string } }) => r.doc.body),
+    ['Add a calendar.'],
+  )
+  assertEquals(nothing.status, 404)
 })

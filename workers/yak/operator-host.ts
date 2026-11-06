@@ -401,6 +401,30 @@ let filesOf = (asked: Bundle[]) =>
   )
 
 /**
+ * What an id opens, found one way for the chat app, the admin page and
+ * operator_read: a conversation's session (a request's, when a session took
+ * it up), the task a request or task is worked under, or the request alone
+ * (`answering`) while no session has taken it.
+ */
+export let openedOf = async (
+  store: Store,
+  open: string,
+): Promise<{ session?: Bundle; task?: Bundle; waiting?: Bundle[] }> => {
+  let [row] = await store.g.get([open])
+  if (row?.session) return { session: row }
+  let waiting = row?.operator_request ? await answering(store, [row]) : []
+  let task = row?.task
+    ? open
+    : waiting.length
+    ? await taskOf(store, waiting[0])
+    : ''
+  let [held] = task && task != open ? await store.g.get([task]) : [row]
+  if (held?.session) return { session: held }
+  if (held?.task) return { task: held }
+  return waiting.length ? { waiting } : {}
+}
+
+/**
  * One conversation in the Operator's chat app, opened by a person's
  * conversation, a piece of work it started, a task, or a request: its title
  * and its lines drawn (operator-view.ts `talk`), or the request alone while
@@ -428,28 +452,30 @@ export let conversationOf = async (
   // the apps its lines and its helpers' changed, oldest first
   changed: Changed[]
 }> => {
-  let [row] = await store.g.get([open])
-  if (row?.session) {
+  let found = await openedOf(store, open)
+  if (found.session) {
+    let row = found.session
+    let eid = row.entity.eid
     let helper = !!row.spawned
-    let entries = await linesOf(store, open, SHOWN)
+    let entries = await linesOf(store, eid, SHOWN)
     let asked = helper ? [] : await requested(
       store,
-      `.operator_request.session=${open} ?doc .order=created.at .limit=100`,
+      `.operator_request.session=${eid} ?doc .order=created.at .limit=100`,
     )
     let calls = new Set(
       entries.flatMap((b) => b.call ? [b.entity.eid] : []),
     )
     let seen = { ...await seenOf(store, [row], entries, calls), called, opens }
     return {
-      task: open,
+      task: eid,
       begun: open,
       title: helper
-        ? askedOf(await openingOf(store, open))
+        ? askedOf(await openingOf(store, eid))
         : everyone
         ? await whose(row, everyone)
         : CONVERSATION,
       html: talk(
-        { entity: { eid: open } } as Bundle,
+        { entity: { eid } } as Bundle,
         entries,
         await namesOf(store, entries, named),
         filesOf(asked),
@@ -460,41 +486,28 @@ export let conversationOf = async (
       changed: changedIn(entries, seen),
     }
   }
-  let task = row?.task
-    ? open
-    : row?.operator_request
-    ? await taskOf(store, (await answering(store, [row]))[0])
-    : ''
-  if (task && task != open) {
-    let [held] = await store.g.get([task])
-    if (held?.session) {
-      return {
-        ...await conversationOf(
-          store,
-          at,
-          task,
-          named,
-          undefined,
-          called,
-          opens,
-        ),
-        begun: open,
-      }
+  if (found.waiting) {
+    return {
+      task: '',
+      begun: open,
+      title: firstLine(found.waiting[0]),
+      html: '',
+      waiting: found.waiting,
+      changed: [],
     }
   }
-  let [held] = task ? await store.g.get([task]) : []
-  if (!held?.task) {
-    return row?.operator_request
-      ? {
-        task: '',
-        begun: open,
-        title: firstLine(row),
-        html: '',
-        waiting: await answering(store, [row]),
-        changed: [],
-      }
-      : { task: '', begun: '', title: '', html: '', waiting: [], changed: [] }
+  let held = found.task
+  if (!held) {
+    return {
+      task: '',
+      begun: '',
+      title: '',
+      html: '',
+      waiting: [],
+      changed: [],
+    }
   }
+  let task = held.entity.eid
   let requests = await requested(store)
   let sessions = await sessionsOf(store, task)
   let ids = new Set(sessions.map((b) => b.entity.eid))
@@ -935,11 +948,14 @@ export let operatorRequest = async (
     )
   }
   if (path == '/operator/read') {
-    if (typeof args.task == 'string' && !await own(args.task)) return missing()
-    if (!args.task) {
+    // The platform's admin reads every person's, as on the admin page.
+    let readable = (id: string) => access.administrative === true || own(id)
+    let open = typeof args.task == 'string' ? args.task : ''
+    if (open && !await readable(open)) return missing()
+    if (!open) {
       let { tasks = [], conversations = [] } = await readOperator(store)
       let mine = async (rows: Bundle[]) => {
-        let allowed = await Promise.all(rows.map((r) => own(r.entity.eid)))
+        let allowed = await Promise.all(rows.map((r) => readable(r.entity.eid)))
         return rows.filter((_, i) => allowed[i])
       }
       return Response.json({
@@ -947,12 +963,17 @@ export let operatorRequest = async (
         conversations: await mine(conversations),
       })
     }
+    // Found as the chat app finds it; a request no session has taken is
+    // read alone, as it waits.
+    let found = await openedOf(store, open)
+    let read = found.session ?? found.task
+    if (!read) {
+      return found.waiting
+        ? Response.json({ waiting: found.waiting })
+        : missing()
+    }
     return Response.json(
-      await readOperator(
-        store,
-        typeof args.task == 'string' ? args.task : undefined,
-        args.context === true,
-      ),
+      await readOperator(store, read.entity.eid, args.context === true),
     )
   }
   return null

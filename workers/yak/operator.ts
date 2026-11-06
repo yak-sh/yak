@@ -441,7 +441,7 @@ export let readOperator = async (
   }
   let [row] = await g.get([task])
   // A conversation is its session: its newest lines, as a task's are read.
-  if (row?.operator_session) {
+  if (row?.session) {
     let entries = (await transcript(g, task)).slice(-LINES)
     return { sessions: [row], entries: sent(entries, context) }
   }
