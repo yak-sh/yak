@@ -1,6 +1,6 @@
 {
   "name": "@yaks/platform",
-  "version": "0.2.17",
+  "version": "0.2.18",
   "type": "module",
   "exports": {
     ".": "./mod.ts",
@@ -9,7 +9,7 @@
   "license": "Apache-2.0",
   "description": "What a hosting platform keeps about the apps it serves — spaces, apps, deploys, hostnames, plans and meters.",
   "dependencies": {
-    "@yaks/vocab": "0.2.17"
+    "@yaks/vocab": "0.2.18"
   },
   "devDependencies": {
     "@std/assert": "npm:@jsr/std__assert@^1.0.0",

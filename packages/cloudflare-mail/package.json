@@ -12,7 +12,7 @@
   "description": "Cloudflare Email Sending and Email Routing at the portable mail boundary.",
   "type": "module",
   "dependencies": {
-    "@yaks/host": "0.2.17",
+    "@yaks/host": "0.2.18",
     "postal-mime": "3.0.0"
   },
   "devDependencies": {

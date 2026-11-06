@@ -1,6 +1,6 @@
 {
   "name": "@yaks/file",
-  "version": "0.2.17",
+  "version": "0.2.18",
   "type": "module",
   "exports": {
     ".": "./mod.ts",
@@ -14,20 +14,20 @@
   "license": "Apache-2.0",
   "description": "Files as entities: a path read in a root (a repository's tree, or a volume a machine mounts), the lines of a file an entity sits at, and what fills each volume of a machine, day by day.",
   "dependencies": {
-    "@yaks/fp": "0.2.17",
-    "@yaks/graph": "0.2.17",
-    "@yaks/inspect": "0.2.17",
-    "@yaks/process": "0.2.17",
-    "@yaks/query": "0.2.17",
-    "@yaks/ui": "0.2.17",
-    "@yaks/ux": "0.2.17",
-    "@yaks/vocab": "0.2.17",
+    "@yaks/fp": "0.2.18",
+    "@yaks/graph": "0.2.18",
+    "@yaks/inspect": "0.2.18",
+    "@yaks/process": "0.2.18",
+    "@yaks/query": "0.2.18",
+    "@yaks/ui": "0.2.18",
+    "@yaks/ux": "0.2.18",
+    "@yaks/vocab": "0.2.18",
     "lucide": "1.31.0",
     "preact": "10.29.7"
   },
   "devDependencies": {
-    "@yaks/machine": "0.2.17",
-    "@yaks/ram": "0.2.17",
+    "@yaks/machine": "0.2.18",
+    "@yaks/ram": "0.2.18",
     "@yaks/testing": "0.2.17"
   }
 }

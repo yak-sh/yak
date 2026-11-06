@@ -405,74 +405,74 @@ importers:
   packages/admin:
     dependencies:
       '@yaks/api':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../api
       '@yaks/cli':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../cli
       '@yaks/connections':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../connections
       '@yaks/file':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../file
       '@yaks/fp':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../fp
       '@yaks/git':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../git
       '@yaks/graph':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../graph
       '@yaks/host':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../host
       '@yaks/id':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../id
       '@yaks/mail':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../mail
       '@yaks/process':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../process
       '@yaks/secrets':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../secrets
       '@yaks/tools':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../tools
       '@yaks/tracker':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../tracker
       '@yaks/vocab':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../vocab
     devDependencies:
       '@std/assert':
         specifier: npm:@jsr/std__assert@^1.0.0
         version: '@jsr/std__assert@1.0.19'
       '@yaks/doc':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../doc
       '@yaks/effects':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../effects
       '@yaks/kernel':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../kernel
       '@yaks/persona':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../persona
       '@yaks/provenance':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../provenance
       '@yaks/query':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../query
       '@yaks/ram':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../ram
       '@yaks/testing':
         specifier: 0.2.17
@@ -481,23 +481,23 @@ importers:
   packages/alias:
     dependencies:
       '@yaks/fp':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../fp
       '@yaks/graph':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../graph
       '@yaks/key':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../key
       '@yaks/vocab':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../vocab
     devDependencies:
       '@std/assert':
         specifier: npm:@jsr/std__assert@^1.0.0
         version: '@jsr/std__assert@1.0.19'
       '@yaks/ram':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../ram
       '@yaks/testing':
         specifier: 0.2.17
@@ -509,10 +509,10 @@ importers:
         specifier: 1.4.0
         version: 1.4.0(zod@3.25.76)
       '@yaks/model':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../model
       '@yaks/vocab':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../vocab
     devDependencies:
       '@yaks/testing':
@@ -522,25 +522,25 @@ importers:
   packages/api:
     dependencies:
       '@yaks/fp':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../fp
       '@yaks/graph':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../graph
       '@yaks/match':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../match
       '@yaks/query':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../query
       '@yaks/tools':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../tools
       '@yaks/trace':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../trace
       '@yaks/vocab':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../vocab
     devDependencies:
       '@std/assert':
@@ -550,22 +550,22 @@ importers:
         specifier: npm:@jsr/std__testing@^1.0.0
         version: '@jsr/std__testing@1.0.21'
       '@yaks/edge':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../edge
       '@yaks/journal':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../journal
       '@yaks/member':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../member
       '@yaks/ram':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../ram
       '@yaks/sql':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../sql
       '@yaks/sqlite':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../sqlite
       '@yaks/testing':
         specifier: 0.2.17
@@ -574,20 +574,20 @@ importers:
   packages/archetype:
     dependencies:
       '@yaks/fp':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../fp
       '@yaks/graph':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../graph
       '@yaks/vocab':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../vocab
     devDependencies:
       '@std/assert':
         specifier: npm:@jsr/std__assert@^1.0.0
         version: '@jsr/std__assert@1.0.19'
       '@yaks/ram':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../ram
       '@yaks/testing':
         specifier: 0.2.17
@@ -596,13 +596,13 @@ importers:
   packages/benchmark:
     dependencies:
       '@yaks/file':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../file
       '@yaks/process':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../process
       '@yaks/trace':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../trace
     devDependencies:
       '@std/assert':
@@ -615,25 +615,25 @@ importers:
   packages/blob:
     dependencies:
       '@yaks/api':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../api
       '@yaks/file':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../file
       '@yaks/fp':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../fp
       '@yaks/graph':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../graph
       '@yaks/sql':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../sql
       '@yaks/tools':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../tools
       '@yaks/vocab':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../vocab
       file-type:
         specifier: 21.3.4
@@ -643,13 +643,13 @@ importers:
         specifier: npm:@jsr/std__assert@^1.0.0
         version: '@jsr/std__assert@1.0.19'
       '@yaks/fts':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../fts
       '@yaks/ram':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../ram
       '@yaks/sqlite':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../sqlite
       '@yaks/testing':
         specifier: 0.2.17
@@ -661,118 +661,118 @@ importers:
         specifier: 2.9.4
         version: 2.9.4(preact@10.29.7)
       '@yaks/api':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../api
       '@yaks/archetype':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../archetype
       '@yaks/blob':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../blob
       '@yaks/canvas':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../canvas
       '@yaks/cli':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../cli
       '@yaks/client':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../client
       '@yaks/connections':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../connections
       '@yaks/draft':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../draft
       '@yaks/edge':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../edge
       '@yaks/file':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../file
       '@yaks/filter':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../filter
       '@yaks/fp':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../fp
       '@yaks/fts':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../fts
       '@yaks/graph':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../graph
       '@yaks/harness':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../harness
       '@yaks/id':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../id
       '@yaks/inspect':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../inspect
       '@yaks/kernel':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../kernel
       '@yaks/key':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../key
       '@yaks/match':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../match
       '@yaks/memory':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../memory
       '@yaks/names':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../names
       '@yaks/preact':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../preact
       '@yaks/process':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../process
       '@yaks/query':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../query
       '@yaks/render':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../render
       '@yaks/secrets':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../secrets
       '@yaks/session':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../session
       '@yaks/sql':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../sql
       '@yaks/sync':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../sync
       '@yaks/task':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../task
       '@yaks/tools':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../tools
       '@yaks/topic':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../topic
       '@yaks/tui':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../tui
       '@yaks/ui':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../ui
       '@yaks/ux':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../ux
       '@yaks/vocab':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../vocab
       '@yaks/web':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../web
       highlight.js:
         specifier: 11.11.1
@@ -797,155 +797,155 @@ importers:
         specifier: 0.2.17
         version: link:../admin
       '@yaks/alias':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../alias
       '@yaks/code':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../code
       '@yaks/context':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../context
       '@yaks/design':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../design
       '@yaks/doc':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../doc
       '@yaks/dreaming':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../dreaming
       '@yaks/effects':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../effects
       '@yaks/embedding':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../embedding
       '@yaks/git':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../git
       '@yaks/goal':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../goal
       '@yaks/hook':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../hook
       '@yaks/inbox':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../inbox
       '@yaks/journal':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../journal
       '@yaks/mail':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../mail
       '@yaks/member':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../member
       '@yaks/model':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../model
       '@yaks/notify':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../notify
       '@yaks/openai':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../openai
       '@yaks/page':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../page
       '@yaks/persona':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../persona
       '@yaks/platform':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../platform
       '@yaks/project':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../project
       '@yaks/provenance':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../provenance
       '@yaks/ram':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../ram
       '@yaks/spawn':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../spawn
       '@yaks/testing':
         specifier: 0.2.17
         version: link:../testing
       '@yaks/tmux':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../tmux
       '@yaks/wake':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../wake
 
   packages/builders:
     dependencies:
       '@yaks/edge':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../edge
       '@yaks/effects':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../effects
       '@yaks/fp':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../fp
       '@yaks/graph':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../graph
       '@yaks/host':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../host
       '@yaks/id':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../id
       '@yaks/kernel':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../kernel
       '@yaks/key':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../key
       '@yaks/query':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../query
       '@yaks/session':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../session
       '@yaks/sql':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../sql
       '@yaks/tools':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../tools
       '@yaks/vocab':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../vocab
       '@yaks/wake':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../wake
     devDependencies:
       '@std/assert':
         specifier: npm:@jsr/std__assert@^1.0.0
         version: '@jsr/std__assert@1.0.19'
       '@yaks/blob':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../blob
       '@yaks/cli':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../cli
       '@yaks/doc':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../doc
       '@yaks/model':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../model
       '@yaks/ram':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../ram
       '@yaks/sqlite':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../sqlite
       '@yaks/testing':
         specifier: 0.2.17
@@ -954,23 +954,23 @@ importers:
   packages/canvas:
     dependencies:
       '@yaks/graph':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../graph
       '@yaks/query':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../query
       '@yaks/vocab':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../vocab
     devDependencies:
       '@std/assert':
         specifier: npm:@jsr/std__assert@^1.0.0
         version: '@jsr/std__assert@1.0.19'
       '@yaks/id':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../id
       '@yaks/names':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../names
       '@yaks/testing':
         specifier: 0.2.17
@@ -979,16 +979,16 @@ importers:
   packages/claude:
     dependencies:
       '@yaks/file':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../file
       '@yaks/model':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../model
       '@yaks/process':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../process
       '@yaks/vocab':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../vocab
     devDependencies:
       '@std/assert':
@@ -1004,91 +1004,91 @@ importers:
         specifier: npm:@jsr/luca__esbuild-deno-loader@0.11.1
         version: '@jsr/luca__esbuild-deno-loader@0.11.1'
       '@yaks/api':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../api
       '@yaks/blob':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../blob
       '@yaks/code':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../code
       '@yaks/edge':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../edge
       '@yaks/effects':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../effects
       '@yaks/file':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../file
       '@yaks/fp':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../fp
       '@yaks/fts':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../fts
       '@yaks/git':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../git
       '@yaks/graph':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../graph
       '@yaks/host':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../host
       '@yaks/id':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../id
       '@yaks/machine':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../machine
       '@yaks/preact':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../preact
       '@yaks/process':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../process
       '@yaks/query':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../query
       '@yaks/render':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../render
       '@yaks/sandbox':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../sandbox
       '@yaks/secrets':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../secrets
       '@yaks/sqlite':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../sqlite
       '@yaks/text':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../text
       '@yaks/threads':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../threads
       '@yaks/timing':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../timing
       '@yaks/tools':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../tools
       '@yaks/trace':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../trace
       '@yaks/tracker':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../tracker
       '@yaks/tui':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../tui
       '@yaks/ui':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../ui
       '@yaks/vocab':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../vocab
       es-module-lexer:
         specifier: 2.3.2
@@ -1107,40 +1107,40 @@ importers:
         specifier: npm:@jsr/std__assert@^1.0.0
         version: '@jsr/std__assert@1.0.19'
       '@yaks/connections':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../connections
       '@yaks/doc':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../doc
       '@yaks/harness':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../harness
       '@yaks/kernel':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../kernel
       '@yaks/mcp':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../mcp
       '@yaks/persona':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../persona
       '@yaks/provenance':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../provenance
       '@yaks/ram':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../ram
       '@yaks/session':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../session
       '@yaks/spawn':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../spawn
       '@yaks/sql':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../sql
       '@yaks/task':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../task
       '@yaks/testing':
         specifier: 0.2.17
@@ -1152,28 +1152,28 @@ importers:
   packages/client:
     dependencies:
       '@yaks/alias':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../alias
       '@yaks/fp':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../fp
       '@yaks/graph':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../graph
       '@yaks/match':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../match
       '@yaks/query':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../query
       '@yaks/ram':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../ram
       '@yaks/sync':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../sync
       '@yaks/vocab':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../vocab
     devDependencies:
       '@std/assert':
@@ -1183,10 +1183,10 @@ importers:
         specifier: 0.2.17
         version: link:../benchmark
       '@yaks/id':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../id
       '@yaks/key':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../key
       '@yaks/testing':
         specifier: 0.2.17
@@ -1198,7 +1198,7 @@ importers:
   packages/cloudflare-mail:
     dependencies:
       '@yaks/host':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../host
       postal-mime:
         specifier: 3.0.0
@@ -1214,56 +1214,56 @@ importers:
   packages/code:
     dependencies:
       '@yaks/edge':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../edge
       '@yaks/effects':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../effects
       '@yaks/file':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../file
       '@yaks/git':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../git
       '@yaks/graph':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../graph
       '@yaks/mirror':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../mirror
       '@yaks/process':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../process
       '@yaks/query':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../query
       '@yaks/tools':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../tools
       '@yaks/vocab':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../vocab
       '@yaks/yaml':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../yaml
     devDependencies:
       '@std/assert':
         specifier: npm:@jsr/std__assert@^1.0.0
         version: '@jsr/std__assert@1.0.19'
       '@yaks/api':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../api
       '@yaks/doc':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../doc
       '@yaks/kernel':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../kernel
       '@yaks/machine':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../machine
       '@yaks/ram':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../ram
       '@yaks/testing':
         specifier: 0.2.17
@@ -1272,13 +1272,13 @@ importers:
   packages/code-mode:
     dependencies:
       '@yaks/fp':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../fp
       '@yaks/graph':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../graph
       '@yaks/tools':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../tools
       sucrase:
         specifier: 3.35.1
@@ -1287,62 +1287,62 @@ importers:
   packages/connections:
     dependencies:
       '@yaks/cli':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../cli
       '@yaks/edge':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../edge
       '@yaks/effects':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../effects
       '@yaks/fp':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../fp
       '@yaks/graph':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../graph
       '@yaks/hook':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../hook
       '@yaks/mcp-client':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../mcp-client
       '@yaks/oauth':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../oauth
       '@yaks/process':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../process
       '@yaks/query':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../query
       '@yaks/render':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../render
       '@yaks/secrets':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../secrets
       '@yaks/tools':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../tools
       '@yaks/vocab':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../vocab
     devDependencies:
       '@std/assert':
         specifier: npm:@jsr/std__assert@^1.0.0
         version: '@jsr/std__assert@1.0.19'
       '@yaks/doc':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../doc
       '@yaks/kernel':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../kernel
       '@yaks/provenance':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../provenance
       '@yaks/ram':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../ram
       '@yaks/testing':
         specifier: 0.2.17
@@ -1351,23 +1351,23 @@ importers:
   packages/context:
     dependencies:
       '@yaks/file':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../file
       '@yaks/graph':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../graph
       '@yaks/process':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../process
       '@yaks/vocab':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../vocab
     devDependencies:
       '@std/assert':
         specifier: npm:@jsr/std__assert@^1.0.0
         version: '@jsr/std__assert@1.0.19'
       '@yaks/ram':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../ram
       '@yaks/testing':
         specifier: 0.2.17
@@ -1376,41 +1376,41 @@ importers:
   packages/d1:
     dependencies:
       '@yaks/graph':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../graph
       '@yaks/match':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../match
       '@yaks/query':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../query
       '@yaks/sql':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../sql
       '@yaks/sqlite':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../sqlite
       '@yaks/vocab':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../vocab
     devDependencies:
       '@std/assert':
         specifier: npm:@jsr/std__assert@^1.0.0
         version: '@jsr/std__assert@1.0.19'
       '@yaks/effects':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../effects
       '@yaks/fp':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../fp
       '@yaks/member':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../member
       '@yaks/ram':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../ram
       '@yaks/secrets':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../secrets
       '@yaks/testing':
         specifier: 0.2.17
@@ -1419,10 +1419,10 @@ importers:
   packages/design:
     dependencies:
       '@yaks/graph':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../graph
       '@yaks/vocab':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../vocab
     devDependencies:
       '@std/assert':
@@ -1435,23 +1435,23 @@ importers:
   packages/diagram:
     dependencies:
       '@yaks/graph':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../graph
       '@yaks/id':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../id
     devDependencies:
       '@std/assert':
         specifier: npm:@jsr/std__assert@^1.0.0
         version: '@jsr/std__assert@1.0.19'
       '@yaks/ram':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../ram
       '@yaks/testing':
         specifier: 0.2.17
         version: link:../testing
       '@yaks/vocab':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../vocab
       linkedom:
         specifier: ^0.18.12
@@ -1460,29 +1460,29 @@ importers:
   packages/doc:
     dependencies:
       '@yaks/graph':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../graph
       '@yaks/markdown':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../markdown
       '@yaks/query':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../query
       '@yaks/render':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../render
       '@yaks/vocab':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../vocab
     devDependencies:
       '@std/assert':
         specifier: npm:@jsr/std__assert@^1.0.0
         version: '@jsr/std__assert@1.0.19'
       '@yaks/blob':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../blob
       '@yaks/ram':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../ram
       '@yaks/testing':
         specifier: 0.2.17
@@ -1494,13 +1494,13 @@ importers:
         specifier: 2.9.4
         version: 2.9.4(preact@10.29.7)
       '@yaks/fp':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../fp
       '@yaks/graph':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../graph
       '@yaks/vocab':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../vocab
       preact:
         specifier: 10.29.7
@@ -1510,13 +1510,13 @@ importers:
         specifier: npm:@jsr/std__assert@^1.0.0
         version: '@jsr/std__assert@1.0.19'
       '@yaks/client':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../client
       '@yaks/doc':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../doc
       '@yaks/ram':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../ram
       '@yaks/testing':
         specifier: 0.2.17
@@ -1525,20 +1525,20 @@ importers:
   packages/dreaming:
     dependencies:
       '@yaks/sql':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../sql
       '@yaks/vocab':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../vocab
     devDependencies:
       '@std/assert':
         specifier: npm:@jsr/std__assert@^1.0.0
         version: '@jsr/std__assert@1.0.19'
       '@yaks/graph':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../graph
       '@yaks/sqlite':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../sqlite
       '@yaks/testing':
         specifier: 0.2.17
@@ -1547,25 +1547,25 @@ importers:
   packages/durable-object:
     dependencies:
       '@yaks/api':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../api
       '@yaks/fp':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../fp
       '@yaks/graph':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../graph
       '@yaks/sql':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../sql
       '@yaks/sqlite':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../sqlite
       '@yaks/trace':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../trace
       '@yaks/vocab':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../vocab
       fflate:
         specifier: 0.8.3
@@ -1575,13 +1575,13 @@ importers:
         specifier: npm:@jsr/std__assert@^1.0.0
         version: '@jsr/std__assert@1.0.19'
       '@yaks/blob':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../blob
       '@yaks/query':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../query
       '@yaks/ram':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../ram
       '@yaks/testing':
         specifier: 0.2.17
@@ -1590,29 +1590,29 @@ importers:
   packages/edge:
     dependencies:
       '@yaks/fp':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../fp
       '@yaks/graph':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../graph
       '@yaks/query':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../query
       '@yaks/sql':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../sql
       '@yaks/vocab':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../vocab
     devDependencies:
       '@std/assert':
         specifier: npm:@jsr/std__assert@^1.0.0
         version: '@jsr/std__assert@1.0.19'
       '@yaks/ram':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../ram
       '@yaks/sqlite':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../sqlite
       '@yaks/testing':
         specifier: 0.2.17
@@ -1621,34 +1621,34 @@ importers:
   packages/effects:
     dependencies:
       '@yaks/fp':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../fp
       '@yaks/graph':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../graph
       '@yaks/id':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../id
       '@yaks/inspect':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../inspect
       '@yaks/match':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../match
       '@yaks/query':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../query
       '@yaks/tools':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../tools
       '@yaks/trace':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../trace
       '@yaks/ui':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../ui
       '@yaks/vocab':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../vocab
       lucide:
         specifier: 1.31.0
@@ -1661,16 +1661,16 @@ importers:
         specifier: npm:@jsr/std__assert@^1.0.0
         version: '@jsr/std__assert@1.0.19'
       '@yaks/journal':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../journal
       '@yaks/ram':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../ram
       '@yaks/sql':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../sql
       '@yaks/sqlite':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../sqlite
       '@yaks/testing':
         specifier: 0.2.17
@@ -1685,35 +1685,35 @@ importers:
   packages/egress:
     dependencies:
       '@yaks/connections':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../connections
       '@yaks/graph':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../graph
       '@yaks/member':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../member
       '@yaks/secrets':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../secrets
       '@yaks/vocab':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../vocab
     devDependencies:
       '@std/assert':
         specifier: npm:@jsr/std__assert@^1.0.0
         version: '@jsr/std__assert@1.0.19'
       '@yaks/edge':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../edge
       '@yaks/effects':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../effects
       '@yaks/query':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../query
       '@yaks/ram':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../ram
       '@yaks/testing':
         specifier: 0.2.17
@@ -1722,47 +1722,47 @@ importers:
   packages/embedding:
     dependencies:
       '@yaks/edge':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../edge
       '@yaks/effects':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../effects
       '@yaks/graph':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../graph
       '@yaks/model':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../model
       '@yaks/query':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../query
       '@yaks/sql':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../sql
       '@yaks/tools':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../tools
       '@yaks/vocab':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../vocab
     devDependencies:
       '@std/assert':
         specifier: npm:@jsr/std__assert@^1.0.0
         version: '@jsr/std__assert@1.0.19'
       '@yaks/api':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../api
       '@yaks/archetype':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../archetype
       '@yaks/cli':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../cli
       '@yaks/ram':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../ram
       '@yaks/sqlite':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../sqlite
       '@yaks/testing':
         specifier: 0.2.17
@@ -1805,28 +1805,28 @@ importers:
   packages/file:
     dependencies:
       '@yaks/fp':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../fp
       '@yaks/graph':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../graph
       '@yaks/inspect':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../inspect
       '@yaks/process':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../process
       '@yaks/query':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../query
       '@yaks/ui':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../ui
       '@yaks/ux':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../ux
       '@yaks/vocab':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../vocab
       lucide:
         specifier: 1.31.0
@@ -1836,10 +1836,10 @@ importers:
         version: 10.29.7(preact-render-to-string@6.7.0)
     devDependencies:
       '@yaks/machine':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../machine
       '@yaks/ram':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../ram
       '@yaks/testing':
         specifier: 0.2.17
@@ -1848,13 +1848,13 @@ importers:
   packages/filter:
     dependencies:
       '@yaks/query':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../query
       '@yaks/ux':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../ux
       '@yaks/vocab':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../vocab
     devDependencies:
       '@preact/signals':
@@ -1864,19 +1864,19 @@ importers:
         specifier: npm:@jsr/std__assert@^1.0.0
         version: '@jsr/std__assert@1.0.19'
       '@yaks/client':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../client
       '@yaks/draft':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../draft
       '@yaks/graph':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../graph
       '@yaks/testing':
         specifier: 0.2.17
         version: link:../testing
       '@yaks/tui':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../tui
       linkedom:
         specifier: ^0.18.12
@@ -1890,23 +1890,23 @@ importers:
   packages/fts:
     dependencies:
       '@yaks/graph':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../graph
       '@yaks/query':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../query
       '@yaks/sql':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../sql
       '@yaks/vocab':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../vocab
     devDependencies:
       '@std/assert':
         specifier: npm:@jsr/std__assert@^1.0.0
         version: '@jsr/std__assert@1.0.19'
       '@yaks/sqlite':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../sqlite
       '@yaks/testing':
         specifier: 0.2.17
@@ -1915,13 +1915,13 @@ importers:
   packages/game:
     dependencies:
       '@yaks/tui':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../tui
       '@yaks/ui':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../ui
       '@yaks/vocab':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../vocab
       preact:
         specifier: 10.29.7
@@ -1931,7 +1931,7 @@ importers:
         specifier: npm:@jsr/std__assert@^1.0.0
         version: '@jsr/std__assert@1.0.19'
       '@yaks/client':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../client
       '@yaks/testing':
         specifier: 0.2.17
@@ -1946,59 +1946,59 @@ importers:
   packages/git:
     dependencies:
       '@yaks/blob':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../blob
       '@yaks/edge':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../edge
       '@yaks/effects':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../effects
       '@yaks/file':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../file
       '@yaks/fp':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../fp
       '@yaks/graph':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../graph
       '@yaks/id':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../id
       '@yaks/kernel':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../kernel
       '@yaks/key':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../key
       '@yaks/machine':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../machine
       '@yaks/process':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../process
       '@yaks/query':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../query
       '@yaks/tools':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../tools
       '@yaks/vocab':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../vocab
     devDependencies:
       '@std/assert':
         specifier: npm:@jsr/std__assert@^1.0.0
         version: '@jsr/std__assert@1.0.19'
       '@yaks/doc':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../doc
       '@yaks/ram':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../ram
       '@yaks/sqlite':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../sqlite
       '@yaks/testing':
         specifier: 0.2.17
@@ -2007,28 +2007,28 @@ importers:
   packages/goal:
     dependencies:
       '@yaks/vocab':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../vocab
 
   packages/graph:
     dependencies:
       '@yaks/fp':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../fp
       '@yaks/id':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../id
       '@yaks/match':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../match
       '@yaks/query':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../query
       '@yaks/trace':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../trace
       '@yaks/vocab':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../vocab
     devDependencies:
       '@std/assert':
@@ -2038,19 +2038,19 @@ importers:
         specifier: npm:@jsr/std__testing@^1.0.0
         version: '@jsr/std__testing@1.0.21'
       '@yaks/archetype':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../archetype
       '@yaks/benchmark':
         specifier: 0.2.17
         version: link:../benchmark
       '@yaks/ram':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../ram
       '@yaks/testing':
         specifier: 0.2.17
         version: link:../testing
       '@yaks/tools':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../tools
 
   packages/harness:
@@ -2062,115 +2062,115 @@ importers:
         specifier: 2.9.4
         version: 2.9.4(preact@10.29.7)
       '@yaks/api':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../api
       '@yaks/blob':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../blob
       '@yaks/cli':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../cli
       '@yaks/client':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../client
       '@yaks/connections':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../connections
       '@yaks/context':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../context
       '@yaks/edge':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../edge
       '@yaks/effects':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../effects
       '@yaks/file':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../file
       '@yaks/fp':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../fp
       '@yaks/git':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../git
       '@yaks/graph':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../graph
       '@yaks/host':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../host
       '@yaks/id':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../id
       '@yaks/inbox':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../inbox
       '@yaks/kernel':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../kernel
       '@yaks/machine':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../machine
       '@yaks/markdown':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../markdown
       '@yaks/mcp':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../mcp
       '@yaks/mcp-client':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../mcp-client
       '@yaks/model':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../model
       '@yaks/persona':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../persona
       '@yaks/preact':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../preact
       '@yaks/process':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../process
       '@yaks/project':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../project
       '@yaks/query':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../query
       '@yaks/render':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../render
       '@yaks/secrets':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../secrets
       '@yaks/session':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../session
       '@yaks/sqlite':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../sqlite
       '@yaks/sync':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../sync
       '@yaks/text':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../text
       '@yaks/tools':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../tools
       '@yaks/topic':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../topic
       '@yaks/tui':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../tui
       '@yaks/ui':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../ui
       '@yaks/vocab':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../vocab
       preact:
         specifier: 10.29.7
@@ -2183,79 +2183,79 @@ importers:
         specifier: 0.2.17
         version: link:../benchmark
       '@yaks/openai':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../openai
       '@yaks/openrouter':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../openrouter
       '@yaks/ram':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../ram
       '@yaks/sandbox':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../sandbox
       '@yaks/sql':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../sql
       '@yaks/testing':
         specifier: 0.2.17
         version: link:../testing
       '@yaks/tracker':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../tracker
 
   packages/heal:
     dependencies:
       '@yaks/api':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../api
       '@yaks/client':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../client
       '@yaks/doc':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../doc
       '@yaks/edge':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../edge
       '@yaks/effects':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../effects
       '@yaks/graph':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../graph
       '@yaks/harness':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../harness
       '@yaks/host':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../host
       '@yaks/id':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../id
       '@yaks/inspect':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../inspect
       '@yaks/kernel':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../kernel
       '@yaks/provenance':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../provenance
       '@yaks/query':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../query
       '@yaks/tools':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../tools
       '@yaks/tracker':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../tracker
       '@yaks/ui':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../ui
       '@yaks/vocab':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../vocab
       preact:
         specifier: 10.29.7
@@ -2268,28 +2268,28 @@ importers:
         specifier: npm:@jsr/std__assert@^1.0.0
         version: '@jsr/std__assert@1.0.19'
       '@yaks/mail':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../mail
       '@yaks/model':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../model
       '@yaks/notify':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../notify
       '@yaks/process':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../process
       '@yaks/project':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../project
       '@yaks/ram':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../ram
       '@yaks/session':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../session
       '@yaks/task':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../task
       '@yaks/testing':
         specifier: 0.2.17
@@ -2298,16 +2298,16 @@ importers:
   packages/hook:
     dependencies:
       '@yaks/doc':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../doc
       '@yaks/edge':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../edge
       '@yaks/graph':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../graph
       '@yaks/vocab':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../vocab
     devDependencies:
       '@std/assert':
@@ -2320,68 +2320,68 @@ importers:
   packages/host:
     dependencies:
       '@yaks/api':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../api
       '@yaks/blob':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../blob
       '@yaks/code':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../code
       '@yaks/edge':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../edge
       '@yaks/effects':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../effects
       '@yaks/file':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../file
       '@yaks/fp':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../fp
       '@yaks/fts':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../fts
       '@yaks/git':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../git
       '@yaks/graph':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../graph
       '@yaks/id':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../id
       '@yaks/machine':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../machine
       '@yaks/names':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../names
       '@yaks/sandbox':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../sandbox
       '@yaks/secrets':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../secrets
       '@yaks/sql':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../sql
       '@yaks/tools':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../tools
       '@yaks/tracker':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../tracker
       '@yaks/ui':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../ui
       '@yaks/vocab':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../vocab
     devDependencies:
       '@yaks/ram':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../ram
       '@yaks/testing':
         specifier: 0.2.17
@@ -2393,13 +2393,13 @@ importers:
   packages/html:
     dependencies:
       '@yaks/preact':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../preact
       '@yaks/render':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../render
       '@yaks/vocab':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../vocab
       preact-render-to-string:
         specifier: 6.7.0
@@ -2409,7 +2409,7 @@ importers:
         specifier: npm:@jsr/std__assert@^1.0.0
         version: '@jsr/std__assert@1.0.19'
       '@yaks/query':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../query
       '@yaks/testing':
         specifier: 0.2.17
@@ -2424,17 +2424,17 @@ importers:
   packages/id:
     dependencies:
       '@yaks/vocab':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../vocab
     devDependencies:
       '@std/assert':
         specifier: npm:@jsr/std__assert@^1.0.0
         version: '@jsr/std__assert@1.0.19'
       '@yaks/graph':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../graph
       '@yaks/ram':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../ram
       '@yaks/testing':
         specifier: 0.2.17
@@ -2446,46 +2446,46 @@ importers:
         specifier: 2.9.4
         version: 2.9.4(preact@10.29.7)
       '@yaks/archetype':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../archetype
       '@yaks/client':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../client
       '@yaks/draft':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../draft
       '@yaks/fp':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../fp
       '@yaks/graph':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../graph
       '@yaks/inspect':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../inspect
       '@yaks/kernel':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../kernel
       '@yaks/mail':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../mail
       '@yaks/notify':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../notify
       '@yaks/query':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../query
       '@yaks/task':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../task
       '@yaks/tools':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../tools
       '@yaks/ui':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../ui
       '@yaks/vocab':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../vocab
       lucide:
         specifier: 1.31.0
@@ -2498,40 +2498,40 @@ importers:
         specifier: npm:@jsr/std__assert@^1.0.0
         version: '@jsr/std__assert@1.0.19'
       '@yaks/api':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../api
       '@yaks/cli':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../cli
       '@yaks/doc':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../doc
       '@yaks/edge':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../edge
       '@yaks/persona':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../persona
       '@yaks/project':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../project
       '@yaks/provenance':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../provenance
       '@yaks/ram':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../ram
       '@yaks/render':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../render
       '@yaks/session':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../session
       '@yaks/sql':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../sql
       '@yaks/sqlite':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../sqlite
       '@yaks/testing':
         specifier: 0.2.17
@@ -2546,34 +2546,34 @@ importers:
         specifier: 2.9.4
         version: 2.9.4(preact@10.29.7)
       '@yaks/edge':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../edge
       '@yaks/fp':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../fp
       '@yaks/graph':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../graph
       '@yaks/markdown':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../markdown
       '@yaks/query':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../query
       '@yaks/render':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../render
       '@yaks/tui':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../tui
       '@yaks/ui':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../ui
       '@yaks/ux':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../ux
       '@yaks/vocab':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../vocab
       preact:
         specifier: 10.29.7
@@ -2583,19 +2583,19 @@ importers:
         specifier: npm:@jsr/std__assert@^1.0.0
         version: '@jsr/std__assert@1.0.19'
       '@yaks/client':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../client
       '@yaks/draft':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../draft
       '@yaks/filter':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../filter
       '@yaks/match':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../match
       '@yaks/ram':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../ram
       '@yaks/testing':
         specifier: 0.2.17
@@ -2610,34 +2610,34 @@ importers:
   packages/journal:
     dependencies:
       '@yaks/file':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../file
       '@yaks/fp':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../fp
       '@yaks/graph':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../graph
       '@yaks/inspect':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../inspect
       '@yaks/query':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../query
       '@yaks/render':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../render
       '@yaks/sql':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../sql
       '@yaks/tools':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../tools
       '@yaks/ui':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../ui
       '@yaks/vocab':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../vocab
       lucide:
         specifier: 1.31.0
@@ -2650,55 +2650,55 @@ importers:
         specifier: npm:@jsr/std__assert@^1.0.0
         version: '@jsr/std__assert@1.0.19'
       '@yaks/blob':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../blob
       '@yaks/edge':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../edge
       '@yaks/effects':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../effects
       '@yaks/process':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../process
       '@yaks/ram':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../ram
       '@yaks/sqlite':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../sqlite
       '@yaks/testing':
         specifier: 0.2.17
         version: link:../testing
       '@yaks/text':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../text
 
   packages/kernel:
     dependencies:
       '@yaks/draft':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../draft
       '@yaks/fp':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../fp
       '@yaks/graph':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../graph
       '@yaks/preact':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../preact
       '@yaks/query':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../query
       '@yaks/render':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../render
       '@yaks/ui':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../ui
       '@yaks/vocab':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../vocab
       preact:
         specifier: 10.29.7
@@ -2708,41 +2708,41 @@ importers:
         specifier: npm:@jsr/std__assert@^1.0.0
         version: '@jsr/std__assert@1.0.19'
       '@yaks/doc':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../doc
       '@yaks/edge':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../edge
       '@yaks/provenance':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../provenance
       '@yaks/ram':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../ram
       '@yaks/testing':
         specifier: 0.2.17
         version: link:../testing
       '@yaks/text':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../text
 
   packages/key:
     dependencies:
       '@yaks/fp':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../fp
       '@yaks/graph':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../graph
       '@yaks/vocab':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../vocab
     devDependencies:
       '@std/assert':
         specifier: npm:@jsr/std__assert@^1.0.0
         version: '@jsr/std__assert@1.0.19'
       '@yaks/ram':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../ram
       '@yaks/testing':
         specifier: 0.2.17
@@ -2751,23 +2751,23 @@ importers:
   packages/lens:
     dependencies:
       '@yaks/fp':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../fp
       '@yaks/graph':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../graph
       '@yaks/match':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../match
       '@yaks/query':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../query
       '@yaks/vocab':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../vocab
     devDependencies:
       '@yaks/ram':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../ram
       '@yaks/testing':
         specifier: 0.2.17
@@ -2776,38 +2776,38 @@ importers:
   packages/logic:
     dependencies:
       '@yaks/fp':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../fp
 
   packages/machine:
     dependencies:
       '@yaks/fp':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../fp
       '@yaks/graph':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../graph
       '@yaks/process':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../process
       '@yaks/tools':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../tools
       '@yaks/vocab':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../vocab
     devDependencies:
       '@yaks/harness':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../harness
       '@yaks/kernel':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../kernel
       '@yaks/ram':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../ram
       '@yaks/session':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../session
       '@yaks/testing':
         specifier: 0.2.17
@@ -2816,62 +2816,62 @@ importers:
   packages/mail:
     dependencies:
       '@yaks/api':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../api
       '@yaks/cli':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../cli
       '@yaks/doc':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../doc
       '@yaks/edge':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../edge
       '@yaks/effects':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../effects
       '@yaks/fp':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../fp
       '@yaks/graph':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../graph
       '@yaks/hook':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../hook
       '@yaks/host':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../host
       '@yaks/id':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../id
       '@yaks/notify':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../notify
       '@yaks/query':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../query
       '@yaks/tools':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../tools
       '@yaks/vocab':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../vocab
     devDependencies:
       '@std/assert':
         specifier: npm:@jsr/std__assert@^1.0.0
         version: '@jsr/std__assert@1.0.19'
       '@yaks/kernel':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../kernel
       '@yaks/project':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../project
       '@yaks/ram':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../ram
       '@yaks/task':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../task
       '@yaks/testing':
         specifier: 0.2.17
@@ -2880,7 +2880,7 @@ importers:
   packages/markdown:
     dependencies:
       '@yaks/render':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../render
       marked:
         specifier: 18.0.6
@@ -2899,41 +2899,41 @@ importers:
   packages/match:
     dependencies:
       '@yaks/fp':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../fp
       '@yaks/query':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../query
       '@yaks/sql':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../sql
       '@yaks/vocab':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../vocab
     devDependencies:
       '@std/assert':
         specifier: npm:@jsr/std__assert@^1.0.0
         version: '@jsr/std__assert@1.0.19'
       '@yaks/archetype':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../archetype
       '@yaks/edge':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../edge
       '@yaks/fts':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../fts
       '@yaks/kernel':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../kernel
       '@yaks/project':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../project
       '@yaks/sqlite':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../sqlite
       '@yaks/task':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../task
       '@yaks/testing':
         specifier: 0.2.17
@@ -2948,31 +2948,31 @@ importers:
         specifier: 2.2.0
         version: 2.2.0
       '@yaks/api':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../api
       '@yaks/file':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../file
       '@yaks/fp':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../fp
       '@yaks/graph':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../graph
       '@yaks/persona':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../persona
       '@yaks/process':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../process
       '@yaks/session':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../session
       '@yaks/tools':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../tools
       '@yaks/vocab':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../vocab
       yaml:
         specifier: ^2.9.1
@@ -2988,10 +2988,10 @@ importers:
         specifier: npm:@jsr/std__assert@^1.0.0
         version: '@jsr/std__assert@1.0.19'
       '@yaks/cli':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../cli
       '@yaks/ram':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../ram
       '@yaks/testing':
         specifier: 0.2.17
@@ -3009,17 +3009,17 @@ importers:
         specifier: ^1.29.0
         version: 1.32.2(@cfworker/json-schema@4.1.1)(supports-color@10.2.2)(zod@3.25.76)
       '@yaks/graph':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../graph
       '@yaks/vocab':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../vocab
     devDependencies:
       '@std/assert':
         specifier: npm:@jsr/std__assert@^1.0.0
         version: '@jsr/std__assert@1.0.19'
       '@yaks/cli':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../cli
       '@yaks/testing':
         specifier: 0.2.17
@@ -3028,32 +3028,32 @@ importers:
   packages/member:
     dependencies:
       '@yaks/fp':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../fp
       '@yaks/graph':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../graph
       '@yaks/host':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../host
       '@yaks/query':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../query
       '@yaks/vocab':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../vocab
     devDependencies:
       '@std/assert':
         specifier: npm:@jsr/std__assert@^1.0.0
         version: '@jsr/std__assert@1.0.19'
       '@yaks/journal':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../journal
       '@yaks/ram':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../ram
       '@yaks/sqlite':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../sqlite
       '@yaks/testing':
         specifier: 0.2.17
@@ -3062,25 +3062,25 @@ importers:
   packages/memory:
     dependencies:
       '@yaks/doc':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../doc
       '@yaks/graph':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../graph
       '@yaks/host':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../host
       '@yaks/inspect':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../inspect
       '@yaks/query':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../query
       '@yaks/ui':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../ui
       '@yaks/vocab':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../vocab
       preact:
         specifier: 10.29.7
@@ -3090,7 +3090,7 @@ importers:
         specifier: npm:@jsr/std__assert@^1.0.0
         version: '@jsr/std__assert@1.0.19'
       '@yaks/ram':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../ram
       '@yaks/testing':
         specifier: 0.2.17
@@ -3099,10 +3099,10 @@ importers:
   packages/mirror:
     dependencies:
       '@yaks/file':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../file
       '@yaks/git':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../git
     devDependencies:
       '@std/assert':
@@ -3115,32 +3115,32 @@ importers:
   packages/model:
     dependencies:
       '@yaks/blob':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../blob
       '@yaks/edge':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../edge
       '@yaks/fp':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../fp
       '@yaks/graph':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../graph
       '@yaks/vocab':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../vocab
     devDependencies:
       '@std/assert':
         specifier: npm:@jsr/std__assert@^1.0.0
         version: '@jsr/std__assert@1.0.19'
       '@yaks/kernel':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../kernel
       '@yaks/names':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../names
       '@yaks/ram':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../ram
       '@yaks/testing':
         specifier: 0.2.17
@@ -3162,7 +3162,7 @@ importers:
   packages/names:
     dependencies:
       '@yaks/vocab':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../vocab
     devDependencies:
       '@std/assert':
@@ -3175,17 +3175,17 @@ importers:
   packages/notify:
     dependencies:
       '@yaks/graph':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../graph
       '@yaks/vocab':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../vocab
     devDependencies:
       '@yaks/kernel':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../kernel
       '@yaks/ram':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../ram
       '@yaks/testing':
         specifier: 0.2.17
@@ -3194,7 +3194,7 @@ importers:
   packages/oauth:
     dependencies:
       '@yaks/fp':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../fp
     devDependencies:
       '@std/assert':
@@ -3207,19 +3207,19 @@ importers:
   packages/openai:
     dependencies:
       '@yaks/blob':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../blob
       '@yaks/fp':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../fp
       '@yaks/graph':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../graph
       '@yaks/model':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../model
       '@yaks/vocab':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../vocab
     devDependencies:
       '@std/assert':
@@ -3232,20 +3232,20 @@ importers:
   packages/openrouter:
     dependencies:
       '@yaks/model':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../model
       '@yaks/openai':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../openai
       '@yaks/vocab':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../vocab
     devDependencies:
       '@std/assert':
         specifier: npm:@jsr/std__assert@^1.0.0
         version: '@jsr/std__assert@1.0.19'
       '@yaks/blob':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../blob
       '@yaks/testing':
         specifier: 0.2.17
@@ -3254,28 +3254,28 @@ importers:
   packages/page:
     dependencies:
       '@yaks/api':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../api
       '@yaks/blob':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../blob
       '@yaks/doc':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../doc
       '@yaks/effects':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../effects
       '@yaks/fp':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../fp
       '@yaks/graph':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../graph
       '@yaks/process':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../process
       '@yaks/vocab':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../vocab
       linkedom:
         specifier: ^0.18.12
@@ -3285,7 +3285,7 @@ importers:
         specifier: npm:@jsr/std__assert@^1.0.0
         version: '@jsr/std__assert@1.0.19'
       '@yaks/cli':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../cli
       '@yaks/testing':
         specifier: 0.2.17
@@ -3294,58 +3294,58 @@ importers:
   packages/persona:
     dependencies:
       '@yaks/doc':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../doc
       '@yaks/edge':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../edge
       '@yaks/effects':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../effects
       '@yaks/file':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../file
       '@yaks/fp':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../fp
       '@yaks/git':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../git
       '@yaks/graph':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../graph
       '@yaks/id':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../id
       '@yaks/inspect':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../inspect
       '@yaks/mirror':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../mirror
       '@yaks/process':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../process
       '@yaks/project':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../project
       '@yaks/query':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../query
       '@yaks/text':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../text
       '@yaks/tracker':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../tracker
       '@yaks/ui':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../ui
       '@yaks/ux':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../ux
       '@yaks/vocab':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../vocab
       lucide:
         specifier: 1.31.0
@@ -3361,34 +3361,34 @@ importers:
         specifier: npm:@jsr/std__assert@^1.0.0
         version: '@jsr/std__assert@1.0.19'
       '@yaks/client':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../client
       '@yaks/kernel':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../kernel
       '@yaks/machine':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../machine
       '@yaks/memory':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../memory
       '@yaks/provenance':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../provenance
       '@yaks/ram':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../ram
       '@yaks/render':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../render
       '@yaks/task':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../task
       '@yaks/testing':
         specifier: 0.2.17
         version: link:../testing
       '@yaks/tools':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../tools
       linkedom:
         specifier: ^0.18.12
@@ -3400,38 +3400,38 @@ importers:
   packages/phone:
     dependencies:
       '@yaks/api':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../api
       '@yaks/effects':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../effects
       '@yaks/graph':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../graph
       '@yaks/hook':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../hook
       '@yaks/host':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../host
       '@yaks/vocab':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../vocab
     devDependencies:
       '@std/assert':
         specifier: npm:@jsr/std__assert@^1.0.0
         version: '@jsr/std__assert@1.0.19'
       '@yaks/doc':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../doc
       '@yaks/mail':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../mail
       '@yaks/pinnacle':
         specifier: 0.2.17
         version: link:../pinnacle
       '@yaks/ram':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../ram
       '@yaks/telnyx':
         specifier: 0.2.17
@@ -3443,10 +3443,10 @@ importers:
   packages/pinnacle:
     dependencies:
       '@yaks/hook':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../hook
       '@yaks/host':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../host
       '@yaks/phone':
         specifier: 0.2.17
@@ -3462,7 +3462,7 @@ importers:
   packages/platform:
     dependencies:
       '@yaks/vocab':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../vocab
     devDependencies:
       '@std/assert':
@@ -3475,19 +3475,19 @@ importers:
   packages/preact:
     dependencies:
       '@yaks/file':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../file
       '@yaks/process':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../process
       '@yaks/query':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../query
       '@yaks/render':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../render
       '@yaks/vocab':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../vocab
       preact:
         specifier: 10.29.7
@@ -3503,7 +3503,7 @@ importers:
         specifier: npm:@jsr/std__assert@^1.0.0
         version: '@jsr/std__assert@1.0.19'
       '@yaks/client':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../client
       '@yaks/testing':
         specifier: 0.2.17
@@ -3515,19 +3515,19 @@ importers:
   packages/process:
     dependencies:
       '@yaks/fp':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../fp
       '@yaks/graph':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../graph
       '@yaks/query':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../query
       '@yaks/render':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../render
       '@yaks/vocab':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../vocab
       undici:
         specifier: ^7.28.0
@@ -3537,59 +3537,59 @@ importers:
         specifier: npm:@jsr/std__assert@^1.0.0
         version: '@jsr/std__assert@1.0.19'
       '@yaks/model':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../model
       '@yaks/ram':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../ram
       '@yaks/session':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../session
       '@yaks/testing':
         specifier: 0.2.17
         version: link:../testing
       '@yaks/tools':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../tools
 
   packages/project:
     dependencies:
       '@yaks/fp':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../fp
       '@yaks/graph':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../graph
       '@yaks/id':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../id
       '@yaks/query':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../query
       '@yaks/tools':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../tools
       '@yaks/vocab':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../vocab
     devDependencies:
       '@std/assert':
         specifier: npm:@jsr/std__assert@^1.0.0
         version: '@jsr/std__assert@1.0.19'
       '@yaks/doc':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../doc
       '@yaks/edge':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../edge
       '@yaks/kernel':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../kernel
       '@yaks/ram':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../ram
       '@yaks/task':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../task
       '@yaks/testing':
         specifier: 0.2.17
@@ -3598,16 +3598,16 @@ importers:
   packages/provenance:
     dependencies:
       '@yaks/vocab':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../vocab
 
   packages/query:
     dependencies:
       '@yaks/fp':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../fp
       '@yaks/vocab':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../vocab
     devDependencies:
       '@std/assert':
@@ -3620,29 +3620,29 @@ importers:
   packages/ram:
     dependencies:
       '@yaks/fp':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../fp
       '@yaks/graph':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../graph
       '@yaks/match':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../match
       '@yaks/vocab':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../vocab
     devDependencies:
       '@std/assert':
         specifier: npm:@jsr/std__assert@^1.0.0
         version: '@jsr/std__assert@1.0.19'
       '@yaks/query':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../query
       '@yaks/sql':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../sql
       '@yaks/sqlite':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../sqlite
       '@yaks/testing':
         specifier: 0.2.17
@@ -3651,50 +3651,50 @@ importers:
   packages/render:
     dependencies:
       '@yaks/graph':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../graph
       '@yaks/match':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../match
       '@yaks/query':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../query
       '@yaks/vocab':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../vocab
     devDependencies:
       '@std/assert':
         specifier: npm:@jsr/std__assert@^1.0.0
         version: '@jsr/std__assert@1.0.19'
       '@yaks/doc':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../doc
       '@yaks/kernel':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../kernel
       '@yaks/task':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../task
       '@yaks/testing':
         specifier: 0.2.17
         version: link:../testing
       '@yaks/text':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../text
 
   packages/resend:
     dependencies:
       '@yaks/api':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../api
       '@yaks/graph':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../graph
       '@yaks/host':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../host
       '@yaks/mail':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../mail
     devDependencies:
       '@std/assert':
@@ -3707,63 +3707,63 @@ importers:
   packages/rtc:
     dependencies:
       '@yaks/effects':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../effects
       '@yaks/graph':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../graph
       '@yaks/vocab':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../vocab
     devDependencies:
       '@std/assert':
         specifier: npm:@jsr/std__assert@^1.0.0
         version: '@jsr/std__assert@1.0.19'
       '@yaks/ram':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../ram
       '@yaks/testing':
         specifier: 0.2.17
         version: link:../testing
       '@yaks/wake':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../wake
 
   packages/sandbox:
     dependencies:
       '@yaks/effects':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../effects
       '@yaks/file':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../file
       '@yaks/fp':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../fp
       '@yaks/graph':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../graph
       '@yaks/machine':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../machine
       '@yaks/process':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../process
       '@yaks/tools':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../tools
       '@yaks/vocab':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../vocab
     devDependencies:
       '@yaks/harness':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../harness
       '@yaks/kernel':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../kernel
       '@yaks/ram':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../ram
       '@yaks/testing':
         specifier: 0.2.17
@@ -3772,125 +3772,125 @@ importers:
   packages/secrets:
     dependencies:
       '@yaks/effects':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../effects
       '@yaks/file':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../file
       '@yaks/fp':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../fp
       '@yaks/graph':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../graph
       '@yaks/process':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../process
       '@yaks/query':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../query
       '@yaks/render':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../render
       '@yaks/vocab':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../vocab
     devDependencies:
       '@std/assert':
         specifier: npm:@jsr/std__assert@^1.0.0
         version: '@jsr/std__assert@1.0.19'
       '@yaks/doc':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../doc
       '@yaks/kernel':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../kernel
       '@yaks/ram':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../ram
       '@yaks/testing':
         specifier: 0.2.17
         version: link:../testing
       '@yaks/text':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../text
       '@yaks/tools':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../tools
 
   packages/session:
     dependencies:
       '@yaks/api':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../api
       '@yaks/blob':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../blob
       '@yaks/edge':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../edge
       '@yaks/effects':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../effects
       '@yaks/file':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../file
       '@yaks/fp':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../fp
       '@yaks/graph':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../graph
       '@yaks/host':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../host
       '@yaks/id':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../id
       '@yaks/inspect':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../inspect
       '@yaks/markdown':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../markdown
       '@yaks/match':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../match
       '@yaks/memory':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../memory
       '@yaks/model':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../model
       '@yaks/persona':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../persona
       '@yaks/process':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../process
       '@yaks/query':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../query
       '@yaks/render':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../render
       '@yaks/sql':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../sql
       '@yaks/task':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../task
       '@yaks/text':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../text
       '@yaks/tools':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../tools
       '@yaks/ui':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../ui
       '@yaks/vocab':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../vocab
       preact:
         specifier: 10.29.7
@@ -3900,43 +3900,43 @@ importers:
         specifier: npm:@jsr/std__assert@^1.0.0
         version: '@jsr/std__assert@1.0.19'
       '@yaks/archetype':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../archetype
       '@yaks/cli':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../cli
       '@yaks/context':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../context
       '@yaks/doc':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../doc
       '@yaks/durable-object':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../durable-object
       '@yaks/kernel':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../kernel
       '@yaks/machine':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../machine
       '@yaks/mail':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../mail
       '@yaks/notify':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../notify
       '@yaks/project':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../project
       '@yaks/provenance':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../provenance
       '@yaks/ram':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../ram
       '@yaks/sqlite':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../sqlite
       '@yaks/testing':
         specifier: 0.2.17
@@ -3945,83 +3945,83 @@ importers:
   packages/spawn:
     dependencies:
       '@yaks/context':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../context
       '@yaks/edge':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../edge
       '@yaks/effects':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../effects
       '@yaks/file':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../file
       '@yaks/git':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../git
       '@yaks/graph':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../graph
       '@yaks/id':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../id
       '@yaks/persona':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../persona
       '@yaks/process':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../process
       '@yaks/session':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../session
       '@yaks/text':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../text
       '@yaks/tools':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../tools
       '@yaks/vocab':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../vocab
     devDependencies:
       '@std/assert':
         specifier: npm:@jsr/std__assert@^1.0.0
         version: '@jsr/std__assert@1.0.19'
       '@yaks/doc':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../doc
       '@yaks/kernel':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../kernel
       '@yaks/machine':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../machine
       '@yaks/mail':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../mail
       '@yaks/model':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../model
       '@yaks/names':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../names
       '@yaks/notify':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../notify
       '@yaks/project':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../project
       '@yaks/provenance':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../provenance
       '@yaks/ram':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../ram
       '@yaks/sqlite':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../sqlite
       '@yaks/task':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../task
       '@yaks/testing':
         specifier: 0.2.17
@@ -4042,46 +4042,46 @@ importers:
   packages/spend:
     dependencies:
       '@yaks/api':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../api
       '@yaks/file':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../file
       '@yaks/fp':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../fp
       '@yaks/graph':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../graph
       '@yaks/id':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../id
       '@yaks/inspect':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../inspect
       '@yaks/model':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../model
       '@yaks/process':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../process
       '@yaks/query':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../query
       '@yaks/render':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../render
       '@yaks/session':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../session
       '@yaks/spawn':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../spawn
       '@yaks/ui':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../ui
       '@yaks/vocab':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../vocab
       lucide:
         specifier: 1.31.0
@@ -4091,7 +4091,7 @@ importers:
         version: 10.29.7(preact-render-to-string@6.7.0)
     devDependencies:
       '@yaks/cli':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../cli
       '@yaks/testing':
         specifier: 0.2.17
@@ -4100,32 +4100,32 @@ importers:
   packages/sql:
     dependencies:
       '@yaks/fp':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../fp
       '@yaks/id':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../id
       '@yaks/query':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../query
       '@yaks/vocab':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../vocab
     devDependencies:
       '@std/assert':
         specifier: npm:@jsr/std__assert@^1.0.0
         version: '@jsr/std__assert@1.0.19'
       '@yaks/archetype':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../archetype
       '@yaks/fts':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../fts
       '@yaks/graph':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../graph
       '@yaks/sqlite':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../sqlite
       '@yaks/testing':
         specifier: 0.2.17
@@ -4140,86 +4140,86 @@ importers:
         specifier: npm:@jsr/std__path@1.1.2
         version: '@jsr/std__path@1.1.2'
       '@yaks/archetype':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../archetype
       '@yaks/effects':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../effects
       '@yaks/file':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../file
       '@yaks/fp':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../fp
       '@yaks/fts':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../fts
       '@yaks/graph':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../graph
       '@yaks/match':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../match
       '@yaks/process':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../process
       '@yaks/query':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../query
       '@yaks/sql':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../sql
       '@yaks/testing':
         specifier: 0.2.17
         version: link:../testing
       '@yaks/tools':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../tools
       '@yaks/trace':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../trace
       '@yaks/vocab':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../vocab
     devDependencies:
       '@std/testing':
         specifier: npm:@jsr/std__testing@^1.0.0
         version: '@jsr/std__testing@1.0.21'
       '@yaks/api':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../api
       '@yaks/doc':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../doc
       '@yaks/edge':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../edge
       '@yaks/id':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../id
       '@yaks/journal':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../journal
       '@yaks/kernel':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../kernel
       '@yaks/member':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../member
       '@yaks/model':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../model
       '@yaks/provenance':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../provenance
       '@yaks/ram':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../ram
       '@yaks/session':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../session
       '@yaks/task':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../task
     optionalDependencies:
       '@sqliteai/sqlite-vector-darwin-arm64':
@@ -4257,26 +4257,26 @@ importers:
   packages/sync:
     dependencies:
       '@yaks/fp':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../fp
       '@yaks/graph':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../graph
       '@yaks/query':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../query
       '@yaks/vocab':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../vocab
     devDependencies:
       '@std/assert':
         specifier: npm:@jsr/std__assert@^1.0.0
         version: '@jsr/std__assert@1.0.19'
       '@yaks/api':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../api
       '@yaks/ram':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../ram
       '@yaks/testing':
         specifier: 0.2.17
@@ -4285,37 +4285,37 @@ importers:
   packages/task:
     dependencies:
       '@yaks/draft':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../draft
       '@yaks/edge':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../edge
       '@yaks/fp':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../fp
       '@yaks/graph':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../graph
       '@yaks/inspect':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../inspect
       '@yaks/markdown':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../markdown
       '@yaks/match':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../match
       '@yaks/query':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../query
       '@yaks/render':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../render
       '@yaks/ui':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../ui
       '@yaks/vocab':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../vocab
       preact:
         specifier: 10.29.7
@@ -4328,25 +4328,25 @@ importers:
         specifier: npm:@jsr/std__assert@^1.0.0
         version: '@jsr/std__assert@1.0.19'
       '@yaks/doc':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../doc
       '@yaks/kernel':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../kernel
       '@yaks/project':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../project
       '@yaks/provenance':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../provenance
       '@yaks/ram':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../ram
       '@yaks/testing':
         specifier: 0.2.17
         version: link:../testing
       '@yaks/tools':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../tools
       linkedom:
         specifier: ^0.18.12
@@ -4355,10 +4355,10 @@ importers:
   packages/telnyx:
     dependencies:
       '@yaks/hook':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../hook
       '@yaks/host':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../host
       '@yaks/phone':
         specifier: 0.2.17
@@ -4380,32 +4380,32 @@ importers:
         specifier: 0.2.17
         version: link:../benchmark
       '@yaks/file':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../file
       '@yaks/fp':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../fp
       '@yaks/process':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../process
 
   packages/text:
     dependencies:
       '@yaks/render':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../render
       '@yaks/vocab':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../vocab
     devDependencies:
       '@std/assert':
         specifier: npm:@jsr/std__assert@^1.0.0
         version: '@jsr/std__assert@1.0.19'
       '@yaks/preact':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../preact
       '@yaks/query':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../query
       '@yaks/testing':
         specifier: 0.2.17
@@ -4423,23 +4423,23 @@ importers:
   packages/threads:
     dependencies:
       '@yaks/effects':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../effects
       '@yaks/fp':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../fp
       '@yaks/graph':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../graph
       '@yaks/sync':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../sync
       '@yaks/vocab':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../vocab
     devDependencies:
       '@yaks/ram':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../ram
       '@yaks/testing':
         specifier: 0.2.17
@@ -4448,59 +4448,59 @@ importers:
   packages/timing:
     dependencies:
       '@yaks/graph':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../graph
       '@yaks/inspect':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../inspect
       '@yaks/match':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../match
       '@yaks/query':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../query
       '@yaks/render':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../render
       '@yaks/trace':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../trace
       '@yaks/ui':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../ui
       '@yaks/ux':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../ux
       '@yaks/vocab':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../vocab
       preact:
         specifier: 10.29.7
         version: 10.29.7(preact-render-to-string@6.7.0)
     devDependencies:
       '@yaks/doc':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../doc
       '@yaks/kernel':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../kernel
       '@yaks/preact':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../preact
       '@yaks/ram':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../ram
       '@yaks/testing':
         specifier: 0.2.17
         version: link:../testing
       '@yaks/text':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../text
       '@yaks/tools':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../tools
       '@yaks/tracker':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../tracker
       preact-render-to-string:
         specifier: 6.7.0
@@ -4509,7 +4509,7 @@ importers:
   packages/tmux:
     dependencies:
       '@yaks/vocab':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../vocab
     devDependencies:
       '@std/assert':
@@ -4522,31 +4522,31 @@ importers:
   packages/tools:
     dependencies:
       '@yaks/fp':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../fp
       '@yaks/graph':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../graph
       '@yaks/markdown':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../markdown
       '@yaks/match':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../match
       '@yaks/query':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../query
       '@yaks/render':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../render
       '@yaks/sql':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../sql
       '@yaks/text':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../text
       '@yaks/vocab':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../vocab
       zod:
         specifier: 3.25.76
@@ -4559,34 +4559,34 @@ importers:
         specifier: npm:@jsr/std__assert@^1.0.0
         version: '@jsr/std__assert@1.0.19'
       '@yaks/alias':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../alias
       '@yaks/doc':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../doc
       '@yaks/effects':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../effects
       '@yaks/id':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../id
       '@yaks/kernel':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../kernel
       '@yaks/key':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../key
       '@yaks/provenance':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../provenance
       '@yaks/ram':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../ram
       '@yaks/session':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../session
       '@yaks/sqlite':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../sqlite
       '@yaks/testing':
         specifier: 0.2.17
@@ -4595,37 +4595,37 @@ importers:
   packages/topic:
     dependencies:
       '@yaks/edge':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../edge
       '@yaks/graph':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../graph
       '@yaks/id':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../id
       '@yaks/inspect':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../inspect
       '@yaks/markdown':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../markdown
       '@yaks/match':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../match
       '@yaks/query':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../query
       '@yaks/text':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../text
       '@yaks/ui':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../ui
       '@yaks/ux':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../ux
       '@yaks/vocab':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../vocab
       lucide:
         specifier: 1.31.0
@@ -4641,34 +4641,34 @@ importers:
         specifier: npm:@jsr/std__assert@^1.0.0
         version: '@jsr/std__assert@1.0.19'
       '@yaks/doc':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../doc
       '@yaks/kernel':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../kernel
       '@yaks/memory':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../memory
       '@yaks/project':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../project
       '@yaks/provenance':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../provenance
       '@yaks/ram':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../ram
       '@yaks/render':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../render
       '@yaks/task':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../task
       '@yaks/testing':
         specifier: 0.2.17
         version: link:../testing
       '@yaks/tools':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../tools
       linkedom:
         specifier: ^0.18.12
@@ -4686,98 +4686,98 @@ importers:
   packages/tracker:
     dependencies:
       '@yaks/api':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../api
       '@yaks/code':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../code
       '@yaks/effects':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../effects
       '@yaks/file':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../file
       '@yaks/fp':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../fp
       '@yaks/git':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../git
       '@yaks/graph':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../graph
       '@yaks/id':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../id
       '@yaks/inspect':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../inspect
       '@yaks/match':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../match
       '@yaks/process':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../process
       '@yaks/query':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../query
       '@yaks/render':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../render
       '@yaks/secrets':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../secrets
       '@yaks/sql':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../sql
       '@yaks/tools':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../tools
       '@yaks/ui':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../ui
       '@yaks/ux':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../ux
       '@yaks/vocab':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../vocab
       preact:
         specifier: 10.29.7
         version: 10.29.7(preact-render-to-string@6.7.0)
     devDependencies:
       '@yaks/doc':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../doc
       '@yaks/kernel':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../kernel
       '@yaks/mail':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../mail
       '@yaks/preact':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../preact
       '@yaks/provenance':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../provenance
       '@yaks/ram':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../ram
       '@yaks/sqlite':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../sqlite
       '@yaks/testing':
         specifier: 0.2.17
         version: link:../testing
       '@yaks/text':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../text
       '@yaks/timing':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../timing
       '@yaks/wake':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../wake
       preact-render-to-string:
         specifier: 6.7.0
@@ -4789,13 +4789,13 @@ importers:
         specifier: 2.9.4
         version: 2.9.4(preact@10.29.7)
       '@yaks/fp':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../fp
       '@yaks/process':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../process
       '@yaks/text':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../text
       preact:
         specifier: 10.29.7
@@ -4805,7 +4805,7 @@ importers:
         specifier: npm:@jsr/std__assert@^1.0.0
         version: '@jsr/std__assert@1.0.19'
       '@yaks/markdown':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../markdown
       '@yaks/testing':
         specifier: 0.2.17
@@ -4814,13 +4814,13 @@ importers:
   packages/tunnel:
     dependencies:
       '@yaks/fp':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../fp
       '@yaks/process':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../process
       '@yaks/vocab':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../vocab
     devDependencies:
       '@std/assert':
@@ -4836,13 +4836,13 @@ importers:
         specifier: 2.9.4
         version: 2.9.4(preact@10.29.7)
       '@yaks/api':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../api
       '@yaks/render':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../render
       '@yaks/tui':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../tui
       lucide:
         specifier: 1.31.0
@@ -4867,31 +4867,31 @@ importers:
         specifier: 2.9.4
         version: 2.9.4(preact@10.29.7)
       '@yaks/client':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../client
       '@yaks/fp':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../fp
       '@yaks/graph':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../graph
       '@yaks/id':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../id
       '@yaks/preact':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../preact
       '@yaks/query':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../query
       '@yaks/render':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../render
       '@yaks/ui':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../ui
       '@yaks/vocab':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../vocab
       preact:
         specifier: 10.29.7
@@ -4901,13 +4901,13 @@ importers:
         specifier: npm:@jsr/std__assert@^1.0.0
         version: '@jsr/std__assert@1.0.19'
       '@yaks/draft':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../draft
       '@yaks/testing':
         specifier: 0.2.17
         version: link:../testing
       '@yaks/tui':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../tui
       linkedom:
         specifier: ^0.18.12
@@ -4919,40 +4919,40 @@ importers:
         specifier: 2.9.4
         version: 2.9.4(preact@10.29.7)
       '@yaks/api':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../api
       '@yaks/cli':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../cli
       '@yaks/client':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../client
       '@yaks/code':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../code
       '@yaks/draft':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../draft
       '@yaks/fp':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../fp
       '@yaks/graph':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../graph
       '@yaks/host':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../host
       '@yaks/tools':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../tools
       '@yaks/trace':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../trace
       '@yaks/ui':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../ui
       '@yaks/vocab':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../vocab
       preact:
         specifier: 10.29.7
@@ -4962,7 +4962,7 @@ importers:
         specifier: npm:@jsr/std__assert@^1.0.0
         version: '@jsr/std__assert@1.0.19'
       '@yaks/connections':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../connections
       '@yaks/testing':
         specifier: 0.2.17
@@ -4974,23 +4974,23 @@ importers:
         specifier: 4.1.1
         version: 4.1.1
       '@yaks/fp':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../fp
     devDependencies:
       '@std/assert':
         specifier: npm:@jsr/std__assert@^1.0.0
         version: '@jsr/std__assert@1.0.19'
       '@yaks/doc':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../doc
       '@yaks/edge':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../edge
       '@yaks/graph':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../graph
       '@yaks/ram':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../ram
       '@yaks/testing':
         specifier: 0.2.17
@@ -5002,10 +5002,10 @@ importers:
   packages/voipms:
     dependencies:
       '@yaks/hook':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../hook
       '@yaks/host':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../host
       '@yaks/phone':
         specifier: 0.2.17
@@ -5037,16 +5037,16 @@ importers:
   packages/wake:
     dependencies:
       '@yaks/fp':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../fp
       '@yaks/graph':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../graph
       '@yaks/query':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../query
       '@yaks/vocab':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../vocab
       croner:
         specifier: 10.0.1
@@ -5056,7 +5056,7 @@ importers:
         specifier: npm:@jsr/std__assert@^1.0.0
         version: '@jsr/std__assert@1.0.19'
       '@yaks/ram':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../ram
       '@yaks/testing':
         specifier: 0.2.17
@@ -5065,62 +5065,62 @@ importers:
   packages/web:
     dependencies:
       '@yaks/api':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../api
       '@yaks/cli':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../cli
       '@yaks/connections':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../connections
       '@yaks/file':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../file
       '@yaks/graph':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../graph
       '@yaks/id':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../id
       '@yaks/process':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../process
       '@yaks/query':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../query
       '@yaks/render':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../render
       '@yaks/secrets':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../secrets
       '@yaks/tracker':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../tracker
       '@yaks/ui':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../ui
       '@yaks/vocab':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../vocab
     devDependencies:
       '@std/assert':
         specifier: npm:@jsr/std__assert@^1.0.0
         version: '@jsr/std__assert@1.0.19'
       '@yaks/doc':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../doc
       '@yaks/edge':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../edge
       '@yaks/effects':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../effects
       '@yaks/kernel':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../kernel
       '@yaks/ram':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../ram
       '@yaks/testing':
         specifier: 0.2.17
@@ -5129,69 +5129,69 @@ importers:
   packages/workerd:
     dependencies:
       '@yaks/api':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../api
       '@yaks/graph':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../graph
     devDependencies:
       '@std/assert':
         specifier: npm:@jsr/std__assert@^1.0.0
         version: '@jsr/std__assert@1.0.19'
       '@yaks/ram':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../ram
       '@yaks/testing':
         specifier: 0.2.17
         version: link:../testing
       '@yaks/vocab':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../vocab
 
   packages/workers-ai:
     dependencies:
       '@yaks/blob':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../blob
       '@yaks/fp':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../fp
       '@yaks/model':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../model
       '@yaks/openai':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../openai
     devDependencies:
       '@std/assert':
         specifier: npm:@jsr/std__assert@^1.0.0
         version: '@jsr/std__assert@1.0.19'
       '@yaks/effects':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../effects
       '@yaks/graph':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../graph
       '@yaks/ram':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../ram
       '@yaks/secrets':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../secrets
       '@yaks/testing':
         specifier: 0.2.17
         version: link:../testing
       '@yaks/tools':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../tools
       '@yaks/vocab':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../vocab
 
   packages/yaml:
     dependencies:
       '@yaks/graph':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../graph
       yaml:
         specifier: ^2.9.1
@@ -5234,181 +5234,181 @@ importers:
         specifier: 0.2.17
         version: link:../../packages/admin
       '@yaks/alias':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../../packages/alias
       '@yaks/anthropic':
         specifier: 0.2.17
         version: link:../../packages/anthropic
       '@yaks/api':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../../packages/api
       '@yaks/archetype':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../../packages/archetype
       '@yaks/blob':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../../packages/blob
       '@yaks/builders':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../../packages/builders
       '@yaks/canvas':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../../packages/canvas
       '@yaks/claude':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../../packages/claude
       '@yaks/cli':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../../packages/cli
       '@yaks/cloudflare-mail':
         specifier: 0.2.17
         version: link:../../packages/cloudflare-mail
       '@yaks/code':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../../packages/code
       '@yaks/code-mode':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../../packages/code-mode
       '@yaks/connections':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../../packages/connections
       '@yaks/context':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../../packages/context
       '@yaks/d1':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../../packages/d1
       '@yaks/design':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../../packages/design
       '@yaks/doc':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../../packages/doc
       '@yaks/draft':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../../packages/draft
       '@yaks/dreaming':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../../packages/dreaming
       '@yaks/durable-object':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../../packages/durable-object
       '@yaks/edge':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../../packages/edge
       '@yaks/effects':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../../packages/effects
       '@yaks/egress':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../../packages/egress
       '@yaks/embedding':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../../packages/embedding
       '@yaks/esbuild':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../../packages/esbuild
       '@yaks/file':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../../packages/file
       '@yaks/filter':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../../packages/filter
       '@yaks/fp':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../../packages/fp
       '@yaks/fts':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../../packages/fts
       '@yaks/game':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../../packages/game
       '@yaks/git':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../../packages/git
       '@yaks/goal':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../../packages/goal
       '@yaks/graph':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../../packages/graph
       '@yaks/harness':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../../packages/harness
       '@yaks/heal':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../../packages/heal
       '@yaks/hook':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../../packages/hook
       '@yaks/host':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../../packages/host
       '@yaks/html':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../../packages/html
       '@yaks/id':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../../packages/id
       '@yaks/inbox':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../../packages/inbox
       '@yaks/journal':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../../packages/journal
       '@yaks/kernel':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../../packages/kernel
       '@yaks/key':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../../packages/key
       '@yaks/lens':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../../packages/lens
       '@yaks/machine':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../../packages/machine
       '@yaks/mail':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../../packages/mail
       '@yaks/markdown':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../../packages/markdown
       '@yaks/match':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../../packages/match
       '@yaks/mcp':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../../packages/mcp
       '@yaks/mcp-client':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../../packages/mcp-client
       '@yaks/member':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../../packages/member
       '@yaks/memory':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../../packages/memory
       '@yaks/model':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../../packages/model
       '@yaks/notify':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../../packages/notify
       '@yaks/oauth':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../../packages/oauth
       '@yaks/openai':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../../packages/openai
       '@yaks/openrouter':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../../packages/openrouter
       '@yaks/page':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../../packages/page
       '@yaks/persona':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../../packages/persona
       '@yaks/phone':
         specifier: 0.2.17
@@ -5417,61 +5417,61 @@ importers:
         specifier: 0.2.17
         version: link:../../packages/pinnacle
       '@yaks/platform':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../../packages/platform
       '@yaks/process':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../../packages/process
       '@yaks/project':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../../packages/project
       '@yaks/provenance':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../../packages/provenance
       '@yaks/query':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../../packages/query
       '@yaks/ram':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../../packages/ram
       '@yaks/render':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../../packages/render
       '@yaks/resend':
         specifier: 0.2.17
         version: link:../../packages/resend
       '@yaks/rtc':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../../packages/rtc
       '@yaks/sandbox':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../../packages/sandbox
       '@yaks/secrets':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../../packages/secrets
       '@yaks/session':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../../packages/session
       '@yaks/spawn':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../../packages/spawn
       '@yaks/speech':
         specifier: 0.2.17
         version: link:../../packages/speech
       '@yaks/spend':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../../packages/spend
       '@yaks/sql':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../../packages/sql
       '@yaks/sqlite':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../../packages/sqlite
       '@yaks/sync':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../../packages/sync
       '@yaks/task':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../../packages/task
       '@yaks/telnyx':
         specifier: 0.2.17
@@ -5480,55 +5480,55 @@ importers:
         specifier: 0.2.17
         version: link:../../packages/testing
       '@yaks/text':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../../packages/text
       '@yaks/timing':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../../packages/timing
       '@yaks/tmux':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../../packages/tmux
       '@yaks/tools':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../../packages/tools
       '@yaks/topic':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../../packages/topic
       '@yaks/trace':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../../packages/trace
       '@yaks/tracker':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../../packages/tracker
       '@yaks/tunnel':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../../packages/tunnel
       '@yaks/ui':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../../packages/ui
       '@yaks/ux':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../../packages/ux
       '@yaks/visualize':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../../packages/visualize
       '@yaks/vocab':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../../packages/vocab
       '@yaks/voipms':
         specifier: 0.2.17
         version: link:../../packages/voipms
       '@yaks/wake':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../../packages/wake
       '@yaks/workerd':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../../packages/workerd
       '@yaks/workers-ai':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../../packages/workers-ai
       '@yaks/yaml':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../../packages/yaml
       ajv:
         specifier: ^8.17.1
@@ -5583,10 +5583,10 @@ importers:
         specifier: npm:@jsr/std__testing@^1.0.0
         version: '@jsr/std__testing@1.0.21'
       '@yaks/client':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../../packages/client
       '@yaks/preact':
-        specifier: 0.2.17
+        specifier: 0.2.18
         version: link:../../packages/preact
       es-module-lexer:
         specifier: 2.3.2

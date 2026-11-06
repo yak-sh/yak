@@ -1,1 +1,8 @@
-{ "publish": false }
+{
+  "publish": false,
+  "name": "@yaks/kernel-worker",
+  "version": "0.2.17",
+  "license": "FSL-1.1-ALv2",
+  "description": "The yaks.app kernel Worker and its build tooling.",
+  "exports": {}
+}

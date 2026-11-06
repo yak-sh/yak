@@ -1,6 +1,6 @@
 {
   "name": "@yaks/mcp-client",
-  "version": "0.2.17",
+  "version": "0.2.18",
   "type": "module",
   "exports": {
     ".": "./mod.ts",
@@ -12,12 +12,12 @@
   "description": "Consume remote MCP tools as portable graph Tool definitions over Streamable HTTP.",
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.29.0",
-    "@yaks/graph": "0.2.17",
-    "@yaks/vocab": "0.2.17"
+    "@yaks/graph": "0.2.18",
+    "@yaks/vocab": "0.2.18"
   },
   "devDependencies": {
     "@std/assert": "npm:@jsr/std__assert@^1.0.0",
-    "@yaks/cli": "0.2.17",
+    "@yaks/cli": "0.2.18",
     "@yaks/testing": "0.2.17"
   }
 }

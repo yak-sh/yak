@@ -11,18 +11,18 @@
   "license": "Apache-2.0",
   "description": "Phone numbers, provider selection, consent, texts and delivery outcomes in the graph, through a provider supplied at the transport boundary.",
   "dependencies": {
-    "@yaks/api": "0.2.17",
-    "@yaks/effects": "0.2.17",
-    "@yaks/graph": "0.2.17",
-    "@yaks/hook": "0.2.17",
-    "@yaks/host": "0.2.17",
-    "@yaks/vocab": "0.2.17"
+    "@yaks/api": "0.2.18",
+    "@yaks/effects": "0.2.18",
+    "@yaks/graph": "0.2.18",
+    "@yaks/hook": "0.2.18",
+    "@yaks/host": "0.2.18",
+    "@yaks/vocab": "0.2.18"
   },
   "devDependencies": {
     "@std/assert": "npm:@jsr/std__assert@^1.0.0",
-    "@yaks/doc": "0.2.17",
-    "@yaks/mail": "0.2.17",
-    "@yaks/ram": "0.2.17",
+    "@yaks/doc": "0.2.18",
+    "@yaks/mail": "0.2.18",
+    "@yaks/ram": "0.2.18",
     "@yaks/testing": "0.2.17",
     "@yaks/telnyx": "0.2.17",
     "@yaks/pinnacle": "0.2.17"

@@ -1,6 +1,6 @@
 {
   "name": "@yaks/timing",
-  "version": "0.2.17",
+  "version": "0.2.18",
   "type": "module",
   "exports": {
     ".": "./mod.ts",
@@ -12,26 +12,26 @@
   "license": "Apache-2.0",
   "description": "Timing summaries, stored span-entity traces and trace views for insight into request time and rows in tracker stores.",
   "dependencies": {
-    "@yaks/graph": "0.2.17",
-    "@yaks/inspect": "0.2.17",
-    "@yaks/match": "0.2.17",
-    "@yaks/query": "0.2.17",
-    "@yaks/render": "0.2.17",
-    "@yaks/trace": "0.2.17",
-    "@yaks/ui": "0.2.17",
-    "@yaks/ux": "0.2.17",
-    "@yaks/vocab": "0.2.17",
+    "@yaks/graph": "0.2.18",
+    "@yaks/inspect": "0.2.18",
+    "@yaks/match": "0.2.18",
+    "@yaks/query": "0.2.18",
+    "@yaks/render": "0.2.18",
+    "@yaks/trace": "0.2.18",
+    "@yaks/ui": "0.2.18",
+    "@yaks/ux": "0.2.18",
+    "@yaks/vocab": "0.2.18",
     "preact": "10.29.7"
   },
   "devDependencies": {
-    "@yaks/doc": "0.2.17",
-    "@yaks/kernel": "0.2.17",
-    "@yaks/preact": "0.2.17",
-    "@yaks/ram": "0.2.17",
+    "@yaks/doc": "0.2.18",
+    "@yaks/kernel": "0.2.18",
+    "@yaks/preact": "0.2.18",
+    "@yaks/ram": "0.2.18",
     "@yaks/testing": "0.2.17",
-    "@yaks/text": "0.2.17",
-    "@yaks/tools": "0.2.17",
-    "@yaks/tracker": "0.2.17",
+    "@yaks/text": "0.2.18",
+    "@yaks/tools": "0.2.18",
+    "@yaks/tracker": "0.2.18",
     "preact-render-to-string": "6.7.0"
   }
 }
