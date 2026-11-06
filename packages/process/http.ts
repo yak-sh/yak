@@ -2,7 +2,13 @@
 // without changing other callers' pools.
 import { Agent, type Dispatcher, fetch as request } from 'undici'
 
-type Client = { fetch: typeof fetch; close: () => void | Promise<void> }
+type Client = {
+  fetch: typeof fetch
+  /** ends the pool once its requests finish */
+  close: () => void | Promise<void>
+  /** ends the pool and its connections now */
+  destroy?: () => void | Promise<void>
+}
 type Answer = {
   status: number
   statusText: string
@@ -56,18 +62,42 @@ export let httpClient = (
     )
     return answer(received.body as ReadableStream<Uint8Array> | null, received)
   }
-  return { fetch: send, close: () => dispatcher.close() }
+  return {
+    fetch: send,
+    close: () => dispatcher.close(),
+    destroy: () => dispatcher.destroy(),
+  }
+}
+
+// A body read that ends with `signal`: undici's body under Deno reads on past
+// an abort once its headers have arrived, so a stalled body would never end.
+let collect = (response: Response, signal?: AbortSignal | null) => {
+  if (!signal) return response.arrayBuffer()
+  signal.throwIfAborted()
+  return new Promise<ArrayBuffer>((resolve, reject) => {
+    let stop = () => reject(signal.reason)
+    signal.addEventListener('abort', stop, { once: true })
+    response.arrayBuffer().then(resolve, reject).finally(() =>
+      signal.removeEventListener('abort', stop)
+    )
+  })
 }
 
 /** Collect each answer before closing its request's private connection pool. */
 export let freshFetch =
   (create: () => Client = httpClient): typeof fetch => async (input, init) => {
     let client = create()
+    let signal = init?.signal ??
+      (input instanceof Request ? input.signal : undefined)
     try {
       let response = await client.fetch(input, init)
-      let body = response.body ? await response.arrayBuffer() : null
+      let body = response.body ? await collect(response, signal) : null
       return answer(body, response)
     } finally {
-      await client.close()
+      // A request the signal cut short may still hold its connection, which a
+      // graceful close waits on.
+      await (signal?.aborted && client.destroy
+        ? client.destroy()
+        : client.close())
     }
   }

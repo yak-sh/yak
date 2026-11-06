@@ -79,3 +79,31 @@ test('fresh fetch closes its pool when the response body fails', async () => {
   equal(await throws(() => fetch('https://provider.test')), failure)
   equal(closed, 1)
 })
+
+test('fresh fetch ends with its signal when the body stalls', async () => {
+  // The answer's head arrives, then its body stalls; the abort comes after.
+  let server = Deno.listen({ hostname: '127.0.0.1', port: 0 })
+  let stop = new AbortController(), held: Deno.Conn[] = []
+  ;(async () => {
+    for await (let conn of server) {
+      held.push(conn)
+      await conn.write(
+        new TextEncoder().encode(
+          'HTTP/1.1 200 OK\r\ncontent-length: 10\r\n\r\nabc',
+        ),
+      )
+      setTimeout(() => stop.abort(), 50)
+    }
+  })()
+  try {
+    let fetch = freshFetch()
+    let url = `http://127.0.0.1:${server.addr.port}/`
+    equal(
+      await throws(() => fetch(url, { signal: stop.signal })),
+      stop.signal.reason,
+    )
+  } finally {
+    server.close()
+    for (let conn of held) conn.close()
+  }
+})
