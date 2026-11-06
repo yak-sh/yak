@@ -227,3 +227,33 @@ test("a call's turn draws the caller's words and what they heard, the request an
   // The answer coming back redraws the fold, under its request's id.
   assertEquals(touched(turn, names, 5).map((r) => r.id), ['r', 's', 'next'])
 })
+
+test("words the platform wrote read as the system's in one closed line, never as the person's", () => {
+  let recovery = 'System recovery: the previous response was interrupted.'
+  let doc = parseHTML(
+    `<main>${
+      rows([
+        entry('in', 1, { content: { body: 'Make it blue' } }),
+        entry('re', 2, { content: { body: recovery }, system: {} }),
+        entry('fix', 3, {
+          content: {
+            body: 'Fix this error in recipes: x is undefined\n\nIt happened.',
+          },
+          system: {},
+          operator_channel: { channel: 'error' },
+        }),
+      ], () => ({ doing: '', done: '' })).map((r) => r.html).join('')
+    }</main>`,
+  ).document
+  assertEquals(
+    [...doc.querySelectorAll('.Talk_You')].map((p) => p.textContent),
+    ['Make it blue'],
+  )
+  let system = [...doc.querySelectorAll('.Talk_System')]
+  assertEquals(system.map((d) => d.hasAttribute('open')), [false, false])
+  assertEquals(system.map((d) => d.querySelector('summary')!.textContent), [
+    'From the system: ' + recovery,
+    'From an error: Fix this error in recipes: x is undefined',
+  ])
+  assertStringIncludes(system[1].textContent!, 'It happened.')
+})

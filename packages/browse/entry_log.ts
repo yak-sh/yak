@@ -127,10 +127,12 @@ let shown = (
     return { kind: 'say', role: 'agent', text: body }
   }
   if (kind == 'input') {
-    // Instructions admitted into the transcript (@yaks/context `prompt`) and
-    // passive context (`notice`) are the harness's, not something said.
+    // Instructions admitted into the transcript (@yaks/context `prompt`),
+    // passive context (`notice`) and words the platform wrote (`system`) are
+    // the harness's, not something said.
     if (c.prompt) return { kind: 'sys', tag: 'instructions', text: clip(body) }
     if (c.notice) return { kind: 'sys', tag: 'notice', text: clip(body) }
+    if (c.system) return { kind: 'sys', tag: 'system', text: clip(body) }
     return { kind: 'say', role: 'user', text: body }
   }
   return undefined

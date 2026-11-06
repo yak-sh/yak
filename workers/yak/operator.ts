@@ -1133,6 +1133,9 @@ export let operating = (
       : {},
     ...o.channel ? { operator_channel: channelOf(o.channel, o.framing) } : {},
     ...o.call ? { operator_call: { call: o.call, asked: true } } : {},
+    // An error the platform asks the Operator to fix is its own words, not
+    // the person's it is said for (unseen.ts).
+    ...o.channel == 'error' ? { system: {} } : {},
     using: usingOf(o.model),
     $actor: { by, via: session },
   })

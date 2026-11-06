@@ -1008,7 +1008,7 @@ export let react = async (
       [
         deps.streaming
           ? line(
-            {},
+            { system: {} },
             'System recovery: the previous response was interrupted. ' +
               'Continue from the transcript. ' +
               'Inspect the state before repeating any action that may have completed.',

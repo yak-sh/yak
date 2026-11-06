@@ -411,6 +411,12 @@
       },
       "description": "a file that holds a session's transcript, as the harness that ran it wrote it, and how far the importer has read it into the session. It sits on the file (@yaks/file), and each entry read from it wears the line it came from as `lines{file, start}`"
     },
+    "system": {
+      "component": true,
+      "type": "object",
+      "properties": {},
+      "description": "on an input: words the platform wrote into the transcript, such as a recovery after an interrupted response or an error to fix, never a person's. The model reads it as any input; a conversation draws it as the system's"
+    },
     "notice": {
       "component": true,
       "journal": false,

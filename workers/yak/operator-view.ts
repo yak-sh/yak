@@ -679,11 +679,29 @@ let line = (b: Bundle, id: string, body: string): Line[] => {
       body || b.exception || b.failed,
     ))
   }
+  if (b.system && body) return is(system(b, body))
   if (b.stop || b.interrupted || b.cancel) {
     return is(h('p', { class: 'Talk_Note' }, 'Stopped.'))
   }
   if (theirs(b)) return is(said(b, input(b, body)))
   return []
+}
+
+// Words the platform wrote into the conversation (`system`): a recovery, an
+// error to fix. Never the person's: one quiet line, its words when opened.
+let system = (b: Bundle, body: string) => {
+  let [, label] = VIA[String(comp(b, 'operator_channel')?.channel)] ?? []
+  return h(
+    'details',
+    { class: 'Talk_Told Talk_System' },
+    h(
+      'summary',
+      null,
+      `${label ?? 'From the system'}: `,
+      cut(body.split('\n')[0], 80),
+    ),
+    written(body),
+  )
 }
 
 // Words someone sent, and under them when.
