@@ -171,6 +171,12 @@ the output when diagnosing a failure. Piping a run eats its exit code: read
 bin/test-budget.ts and bench/test-budget.json; avoid copying its implementation
 into a test or adding a timing assertion beside it.
 
+To catch a flake, run the test again and again through `deno task test
+<file>`, one or two at a time. A bare `deno test` type-checks its whole module
+graph first, about half a gigabyte for one sqlite test, so dozens at once take
+the box's memory: 48 of them reached 15 GB. A session has 6 GB (bin/limits),
+and past that its largest process is killed.
+
 Tests run in Deno, in process. The deno and terminal document environments
 keep page globals separate from the terminal document. There is no browser,
 workerd or slow platform tier, locally or in CI. Page behavior mounts on a
