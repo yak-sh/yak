@@ -1,21 +1,18 @@
 // A directory as an app: `yak admin push apps/mail` makes the app hold exactly
 // the files in that directory, through the connector's own tools (app_new,
 // app_files, app_deploy), the ones any assistant calls. Git is the app's only
-// source, so a file the directory no longer has is deleted from the app too,
-// and an app pushed from here is never edited on the platform.
+// source of code, so a file the directory no longer has is deleted from the
+// app too, and an app pushed from here is never edited on the platform.
 //
 // A file is sent as text when its bytes are UTF-8 and as base64 when they are
 // not (an icon, a .wasm). Dotfiles are left out: nothing the platform serves
 // starts with a dot, and `.DS_Store` is not part of an app.
 //
-// An app's pictures, fonts and sounds are not released and not in git: a
-// push publishes each through the app's `/api/public` door (workers/yak
-// public-files.ts) at the path it has in the directory, so a page names it
-// as it always did, and apps/.gitignore keeps the bytes out of history. A
-// published file is part of no release, so a later push from a checkout
-// without the bytes leaves it as it is. The exception is the app's own
-// `icon.png`: an installed copy carries only the release, and the platform
-// reads the icon there.
+// An app's pictures, fonts and sounds are released like its code, so an
+// installed copy carries them, but git does not keep their bytes
+// (apps/.gitignore). A checkout that lacks one leaves the copy the app already
+// holds, so the next release takes it again; only a checkout that has the
+// bytes changes it. The app's own `icon.png` is kept in git like code.
 //
 // The one file the app holds that git need not is the package-lock.json the
 // compile writes beside a package.json (workers/yak esbuild.ts): it pins what
@@ -46,7 +43,6 @@ export type PushProgress =
   | { phase: 'list'; state: 'start' }
   | { phase: 'list'; state: 'done'; count: number }
   | { phase: 'create' | 'deploy'; state: 'start' | 'done'; deployed?: boolean }
-  | { phase: 'publish'; state: 'start' | 'done'; done: number; total: number }
   | { phase: 'hash'; state: 'start'; count: number }
   | {
     phase: 'hash'
@@ -70,18 +66,9 @@ export type PushProgress =
     path: string
   }
 
-/** An app's `/api/public` door: the sha published at each path, and a path
- * to publish bytes at. */
-export type Publisher = {
-  list: () => Promise<Map<string, string>>
-  put: (path: string, bytes: Uint8Array) => Promise<void>
-}
-
-/** A push's base version, confirmation and progress, its bounded wait for
- * the connector's file data contract, and the door its assets publish
- * through. */
+/** A push's base version, confirmation and progress, and its bounded wait
+ * for the connector's file data contract. */
 export type PushOptions = {
-  publish?: Publisher
   base?: number
   confirm?: boolean
   remember?: (version: number) => void | Promise<void>
@@ -151,14 +138,14 @@ let shaOf = async (file: File) => {
 let ASSET =
   /\.(png|jpe?g|gif|webp|avif|ico|ttf|otf|woff2?|mp3|wav|ogg|m4a|mp4|webm)$/i
 
-/// published('yaks-stamp.png') -> true
-/// published('fonts/EBGaramond.woff2') -> true
-/// published('icon.png') -> false
-/// published('art/icon.png') -> true
-/// published('main.css') -> false
-/** Whether a push publishes the file at `path` rather than releasing it: a
- * picture, font or sound, other than the app's icon. */
-export let published = (path: string) => ASSET.test(path) && path != 'icon.png'
+/// asset('yaks-stamp.png') -> true
+/// asset('fonts/EBGaramond.woff2') -> true
+/// asset('icon.png') -> false
+/// asset('art/icon.png') -> true
+/// asset('main.css') -> false
+/** Whether the file at `path` is a picture, font or sound whose bytes git does
+ * not keep (apps/.gitignore): every one but the app's icon. */
+export let asset = (path: string) => ASSET.test(path) && path != 'icon.png'
 
 /** Every file under `dir`, paths relative to it, dotfiles left out, sorted.
  * A link to a file is that file's bytes, so an app can serve a file kept in a
@@ -263,8 +250,8 @@ let listed = async (
 }
 
 /**
- * Make the app hold exactly `local`, its pictures, fonts and sounds published
- * and the rest released as a version. An app
+ * Make the app hold exactly `local`, released as a version, along with each
+ * picture, font or sound it holds that `local` lacks. An app
  * that does not exist yet is created first: its file list is asked for, and a
  * list the platform refuses is answered by `app_new`, whose own refusal says
  * why when that fails too. A list that answers without its files is a broken
@@ -277,11 +264,6 @@ export let push = async (
   opts: PushOptions = {},
 ): Promise<string[]> => {
   if (!local.length) throw new CallError('dir', 'no files to push')
-  let assets = local.filter((f) => published(f.path))
-  let files = local.filter((f) => !published(f.path))
-  if (assets.length && !opts.publish) {
-    throw new Error(`${assets[0].path} is published, and no door was given`)
-  }
   let at = { app: to.app, ...to.space ? { space: to.space } : {} }
   let said: string[] = []
   let held: { held: Map<string, string>; unreleased: boolean; version: number }
@@ -322,37 +304,17 @@ export let push = async (
     ? opts.base
     : held.version
   if (base != opts.base) await opts.remember?.(base)
-  // Published first, so a page that loses a released copy of an asset
-  // already has the published one at the same address.
-  if (assets.length) {
-    let have = await opts.publish!.list()
-    let fresh = (await Promise.all(
-      assets.map(async (f) => have.get(f.path) == await shaOf(f) ? null : f),
-    )).filter((f) => f != null)
-    let total = fresh.length
-    for (let [done, f] of fresh.entries()) {
-      opts.progress?.({ phase: 'publish', state: 'start', done, total })
-      await opts.publish!.put(f.path, bytesOf(f))
-      opts.progress?.({
-        phase: 'publish',
-        state: 'done',
-        done: done + 1,
-        total,
-      })
-    }
-    if (total) said.push(`published ${total} file${total == 1 ? '' : 's'}`)
-  }
-  opts.progress?.({ phase: 'hash', state: 'start', count: files.length })
-  let hashes = await Promise.all(files.map(shaOf))
-  let changed = files.filter((f, i) => held.held.get(f.path) != hashes[i])
-  let keep = new Set(files.map((f) => f.path))
+  opts.progress?.({ phase: 'hash', state: 'start', count: local.length })
+  let hashes = await Promise.all(local.map(shaOf))
+  let changed = local.filter((f, i) => held.held.get(f.path) != hashes[i])
+  let keep = new Set(local.map((f) => f.path))
   let gone = [...held.held.keys()].filter((p) =>
-    !keep.has(p) && !pinned(p, keep)
+    !keep.has(p) && !pinned(p, keep) && !asset(p)
   )
   opts.progress?.({
     phase: 'hash',
     state: 'done',
-    count: files.length,
+    count: local.length,
     changed: changed.length,
     removed: gone.length,
   })

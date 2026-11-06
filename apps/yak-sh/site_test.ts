@@ -126,7 +126,7 @@ test('a visitor types into the same prompt: help, a refusal, a write the page se
   equal(t.stage(), LIVE + 2)
 })
 
-// The painted yak and the preview are published, not kept in git
+// The painted yak and the preview are released, not kept in git
 // (apps/.gitignore), so a checkout holds the rest.
 let kept = (n: string) => n == 'icon.png' || !/\.(jpg|webp)$/.test(n)
 

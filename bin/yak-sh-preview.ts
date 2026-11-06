@@ -8,7 +8,7 @@
 // page's grain is left off: it cannot be seen at the size a preview is shown.
 // The preview is a JPEG because the painted mark makes a PNG of it half a
 // megabyte. Run it after the mark (yak.webp) or the page's headline changes,
-// then push the app, which publishes og.jpg on yaks.app (git keeps neither the
+// then push the app, which releases og.jpg on yaks.app (git keeps neither the
 // mark nor the preview, apps/.gitignore):
 //
 //   deno run -A bin/yak-sh-preview.ts
@@ -130,7 +130,7 @@ if (import.meta.main) {
   )
   let text = (selector: string) =>
     document.querySelector(selector)?.textContent?.trim() ?? ''
-  // The mark is published, not in git: a checkout without it draws the one
+  // The mark is released, not in git: a checkout without it draws the one
   // yak.sh serves.
   let painted = await Deno.readFile(new URL('yak.webp', app)).catch(
     async () =>

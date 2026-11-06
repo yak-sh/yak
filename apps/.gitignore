@@ -1,6 +1,6 @@
-# An app's pictures, fonts and sounds are published to yaks.app by
-# `yak admin push` (packages/admin/push.ts), not kept in git. The app's own
-# icon.png is released with its code, so a copy carries it; keep it small.
+# An app's pictures, fonts and sounds are released by `yak admin push`
+# (packages/admin/push.ts) but not kept in git: a push from a checkout without
+# one keeps the copy the app holds. The app's own icon.png is kept; keep it small.
 *.png
 *.jpg
 *.jpeg

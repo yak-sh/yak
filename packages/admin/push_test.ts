@@ -573,51 +573,25 @@ test('fileOf keeps UTF-8 as text', () => {
   })
 })
 
-// An app's `/api/public` door, held in memory: the sha at each path.
-let door = (have: Record<string, File> = {}) => {
-  let shas = new Map<string, string>()
-  let puts: string[] = []
-  let publish = {
-    list: async () => {
-      for (let [path, f] of Object.entries(have)) shas.set(path, await hash(f))
-      return new Map(shas)
-    },
-    put: async (path: string, bytes: Uint8Array) => {
-      puts.push(path)
-      shas.set(
-        path,
-        await digest({ path, base64: btoa(String.fromCharCode(...bytes)) }),
-      )
-    },
-  }
-  return { publish, puts }
-}
-
-test('pictures, fonts and sounds are published once, never released; the icon is released', async () => {
-  let p = platform({ mail: held('index.html', 'stamp.png') })
-  let d = door({ 'fonts/serif.ttf': file('fonts/serif.ttf') })
-  let local = [
-    'index.html',
+test('pictures, fonts and sounds are released; a checkout without one keeps the held copy', async () => {
+  let p = platform({ mail: held('index.html', 'stamp.png', 'old.js') })
+  let said = await push(
+    p.ask,
+    ['index.html', 'icon.png', 'fonts/serif.woff2'].map(file),
+    { app: 'mail' },
+  )
+  assertEquals(p.held('mail'), [
+    'fonts/serif.woff2',
     'icon.png',
+    'index.html',
     'stamp.png',
-    'fonts/serif.ttf',
-    'tap.mp3',
-  ]
-    .map(file)
-  let said = await push(p.ask, local, { app: 'mail' }, { publish: d.publish })
-  assertEquals(d.puts, ['stamp.png', 'tap.mp3'])
-  assertEquals(p.held('mail'), ['icon.png', 'index.html'])
-  assert(said.includes('published 2 files'))
-  await push(p.ask, local, { app: 'mail' }, { publish: d.publish })
-  assertEquals(d.puts, ['stamp.png', 'tap.mp3'])
+  ])
+  assertEquals(p.writes, [['icon.png', 'fonts/serif.woff2']])
+  assertEquals(said[0], 'wrote 2 files, deleted old.js')
 })
 
-test('a checkout without an asset leaves it published', async () => {
-  let p = platform({ mail: held('index.html') })
-  let d = door({ 'stamp.png': file('stamp.png') })
-  await push(p.ask, [file('index.html')], { app: 'mail' }, {
-    publish: d.publish,
-  })
-  assertEquals(d.puts, [])
-  assertEquals((await d.publish.list()).has('stamp.png'), true)
+test('a checkout without the icon deletes it', async () => {
+  let p = platform({ mail: held('index.html', 'icon.png') })
+  await push(p.ask, [file('index.html')], { app: 'mail' })
+  assertEquals(p.held('mail'), ['index.html'])
 })

@@ -19,11 +19,9 @@ names another, and `--space` picks the space when the account has several.
 An app kept here is never edited on the platform: the next push would undo the
 edit.
 
-Git holds an app's code, not its pictures, fonts or sounds. A push publishes
-each of those at its own path (the app's `/api/public`), so a page names
-`fonts/serif.woff2` or `stamp.png` as it would a released file, and
-`apps/.gitignore` keeps the bytes out of history. A published file is part of no
-release: a push from a checkout that lacks it leaves it as it is, and changing
-one is putting the new bytes at its path and pushing again. The app's `icon.png`
-is the exception: it is released, so an installed copy carries it. Keep it
-small.
+Git holds an app's code, not its pictures, fonts or sounds: `apps/.gitignore`
+keeps their bytes out of history. They are released with the code all the same,
+so an installed copy carries them. A push from a checkout that lacks one leaves
+the copy the app holds, and the release takes it again; changing one is putting
+the new bytes at its path and pushing, and removing one is an `app_files`
+delete. The app's `icon.png` is kept in git like code. Keep it small.
