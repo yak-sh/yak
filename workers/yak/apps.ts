@@ -3481,9 +3481,8 @@ let served = async (
       : nothingAt(url.pathname, env)
   }
   // A page any visitor could be sent is answered from Site's cache, with no
-  // wait on the directory. The space is read meanwhile, from this isolate's
-  // memory when it is warm: a page Site passes needs it next, and so pays
-  // the longer of the two rather than both.
+  // wait on the directory. Only a pass needs a directory read here: Site
+  // already resolved the address of every page it answers, including a 404.
   let direct = bound(env.DIRECTORY, dirPart.fetch, env)
   let dir = directory(direct, {
     copy: copyOf(env),
@@ -3508,19 +3507,16 @@ let served = async (
       : null,
   ])
   let person = authenticated?.who?.person ?? cookied
+  if (!edge) {
+    let page = await asked(visitor, env, c)
+    if (page) return page
+  }
   let routing = c.time('route', () => dir.page(r.space!, r.app, person))
   let reading = routing.then((route) => route.space)
   // A seat, from that read for the person it asked about, else the directory.
   let seatOf = async (p: string) => {
     let { role } = await routing
     return p == person && role !== undefined ? role : dir.role(space!, p)
-  }
-  if (!edge) {
-    let page = await asked(visitor, env, c)
-    if (page) {
-      reading.catch(() => {})
-      return page
-    }
   }
   let space = await reading
   // Not a space here — but it may be where one used to be (T-34658): a rename
@@ -3530,12 +3526,14 @@ let served = async (
   // and every one of them should heal itself.
   if (!space) {
     let was = await c.time('moved', () => dir.formerly(r.space!))
-    return was
-      ? moved(
+    if (was) {
+      return moved(
         req,
         `https://${was.slug}.${apex(env)}${url.pathname}${url.search}`,
       )
-      : nothingAt(url.pathname, env)
+    }
+    let none = nothingAt(url.pathname, env)
+    return edge ? keep(none, null, null) : none
   }
   if (kernels(space, r.app)) return nothingAt(url.pathname, env)
   // The whole space in the trash, before any rung of the order below: every

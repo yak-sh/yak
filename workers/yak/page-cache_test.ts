@@ -189,6 +189,28 @@ test("a space's 404 is kept until an app takes the address", async () => {
   )
 })
 
+test('a missing space is kept until a space is created or renamed', async () => {
+  let g = gateway(() => keep(page('none', 404), null, null), true)
+  let first = (await g.get())!
+  assertEquals(first.status, 404)
+  assertEquals(g.views.points.length, 0)
+  assertEquals(
+    g.site.held.values().next().value!.headers.get('cache-tag'),
+    'site',
+  )
+  assertEquals((await g.get())!.status, 404)
+  assertEquals(g.site.held.size, 1)
+  for (let space of [{ slug: 'ada', store: 'ada' }, { slug: 'ada' }]) {
+    let tags = await owes({ entity: { eid: 's' }, space })
+    assert(tags.includes('site'))
+    for (let [key, page] of g.site.held) {
+      if (tags.includes(page.headers.get('cache-tag')!)) g.site.held.delete(key)
+    }
+    assertEquals(g.site.held.size, 0)
+    await g.get()
+  }
+})
+
 test('two spaces at one path keep two pages', async () => {
   let g = gateway((who) => keep(page(new URL(who.url).hostname), space, app))
   let ada = (await g.get('https://ada.yaks.app/cookbook/'))!

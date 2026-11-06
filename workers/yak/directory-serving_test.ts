@@ -196,6 +196,46 @@ test('directory serving: Site does not cache a page rendered from the copy', () 
   ok(sitePage.cache?.includes('no-store'))
 })
 
+let cachedPage = await (async () => {
+  let f = fixture()
+  let page = await f.site()
+  let before = f.reads()
+  f.env.SITE = { fetch: () => Promise.resolve(page.clone()) }
+  let answer = await appFetch(visit('/cookbook/'), f.env)
+  await answer.body?.cancel()
+  await continuations()
+  return { status: answer.status, reads: f.reads() - before }
+})()
+test('directory serving: a Site answer starts no redundant directory read', () => {
+  equal(cachedPage, { status: 200, reads: 0 })
+})
+
+let absentPage = await (async () => {
+  let f = fixture()
+  f.env.DIRECTORY = {
+    fetch: () =>
+      Promise.resolve(Response.json([], { headers: { [EPOCH]: '0' } })),
+  }
+  let page = await f.site()
+  if (page.status != 404) {
+    return { status: page.status, reads: 0, tag: page.headers.get('cache-tag') }
+  }
+  f.env.SITE = { fetch: () => Promise.resolve(page.clone()) }
+  let reads = 0
+  f.env.DIRECTORY = {
+    fetch: () => {
+      reads++
+      return Promise.resolve(Response.json([]))
+    },
+  }
+  let answer = await appFetch(visit('/cookbook/'), f.env)
+  await answer.body?.cancel()
+  return { status: answer.status, reads, tag: page.headers.get('cache-tag') }
+})()
+test('directory serving: Site answers a missing space without repeating the lookup', () => {
+  equal(absentPage, { status: 404, reads: 0, tag: 'site' })
+})
+
 let unavailable = []
 for (let known of [false, true]) {
   let f = fixture()

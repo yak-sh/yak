@@ -48,7 +48,7 @@ import {
   UNKEPT,
   UNKEPT_AT,
 } from './kept-page.ts'
-import { appTag, spaceTag } from './purge.ts'
+import { appTag, SITE_TAG, spaceTag } from './purge.ts'
 import { hostOf, MOUNT } from './route.ts'
 import type { Clock } from './timing.ts'
 import { scheduleUse } from './used.ts'
@@ -57,7 +57,8 @@ import { seen, viewed } from './views.ts'
 export { KEPT, pageAt, shareable, visitor } from './kept-page.ts'
 
 /** An answer Site may keep: which app it was a page of (none, for a space's
- * own 404), for the gateway's count, and the tags its purge names. A page or
+ * own 404), for the gateway's count, and the tags its purge names. A missing
+ * space uses the site tag, purged when a space is created or renamed. A page or
  * a 404, unless the caller names other `statuses` the same for everyone. An
  * app mid-release (its fence up, versions.ts `fenced`) had its pages purged
  * as the release began (tools.ts `released`), and its commit purges nothing
@@ -65,7 +66,7 @@ export { KEPT, pageAt, shareable, visitor } from './kept-page.ts'
  * release: it passes, and only for now. */
 export let keep = (
   page: Response,
-  space: { eid: string; slug: string },
+  space: { eid: string; slug: string } | null,
   app: { eid: string; slug: string; fence?: string | null } | null,
   statuses = [200, 404],
 ) => {
@@ -76,11 +77,12 @@ export let keep = (
   let headers = new Headers(page.headers)
   headers.set(
     KEEP,
-    [...app ? [appTag(app.eid)] : [], spaceTag(space.eid)].join(','),
+    [...app ? [appTag(app.eid)] : [], space ? spaceTag(space.eid) : SITE_TAG]
+      .join(','),
   )
   headers.set(
     SEEN,
-    JSON.stringify(app ? seen(space, app) : { space: space.slug }),
+    JSON.stringify(space ? app ? seen(space, app) : { space: space.slug } : {}),
   )
   return new Response(page.body, { status: page.status, headers })
 }
