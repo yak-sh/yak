@@ -23,7 +23,6 @@
         "workers/**/*",
         "!**/node_modules/**",
         "!**/.wrangler/**",
-        "!workers/yak/.content.gen.ts",
         "!**/.dev.vars*",
         "!**/.env*"
       ]
@@ -47,8 +46,7 @@
         "workers/**/*.json",
         "workers/**/*.jsonc",
         "!**/node_modules/**",
-        "!**/.wrangler/**",
-        "!workers/yak/.content.gen.ts"
+        "!**/.wrangler/**"
       ]
     },
     "check:content": "deno task content --check",
@@ -100,7 +98,6 @@
     ".worktrees",
     "AGENTS.md",
     "CLAUDE.md",
-    "workers/yak/.content.gen.ts",
     "plugins/.gen",
     "**/.*.example.ts",
     "**/.*.example.tsx",

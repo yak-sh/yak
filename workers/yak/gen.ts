@@ -229,20 +229,25 @@ let body = () =>
   ].join('\n')
 
 // The emitted text as it will be committed — deno fmt is the last word on it,
-// so the stale check compares like with like. The temp file lives inside the
-// project, where the fmt subprocess resolves this repo's config.
+// so the stale check compares like with like. It formats through stdin from
+// inside the project, where it resolves this repo's config, and so never
+// writes a file into the tree another check may be reading.
 let formatted = async (text: string) => {
-  let tmp = new URL('.content.gen.ts', HERE)
-  await io.writeTextFile(tmp, text)
-  let p = await spawnCommand('deno', {
-    args: ['fmt', '-q', `--ignore=!${fileURLToPath(tmp)}`, fileURLToPath(tmp)],
-  }).output()
+  let child = spawnCommand('deno', {
+    args: ['fmt', '-q', '--ext=ts', '-'],
+    cwd: HERE,
+    stdin: 'piped',
+    stdout: 'piped',
+    stderr: 'piped',
+  }).spawn()
+  let writer = child.stdin.getWriter()
+  await writer.write(new TextEncoder().encode(text))
+  await writer.close()
+  let p = await child.output()
   if (!p.success) {
     refuse(`deno fmt failed: ${new TextDecoder().decode(p.stderr)}`)
   }
-  let out = await io.readTextFile(tmp)
-  await io.remove(tmp)
-  return out
+  return new TextDecoder().decode(p.stdout)
 }
 
 // ---- the plugin package (T-34666) ----------------------------------------
@@ -267,7 +272,7 @@ let bytes = new TextEncoder()
 // stale check has to compare what fmt would leave behind rather than what this
 // file happened to emit. One subprocess for the whole tree; the temp directory
 // lives inside the project, where the fmt subprocess resolves this repo's
-// config, the same deal `formatted` above makes for content.ts.
+// config.
 let formattedMd = async (held: Record<string, string>) => {
   let tmp = new URL('../../plugins/.gen/', HERE)
   await io.remove(tmp, { recursive: true }).catch(() => {})
