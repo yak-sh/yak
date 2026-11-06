@@ -1,6 +1,8 @@
 import { updating } from './operator-updates.ts'
 import type { Bundle, Graph } from '@yaks/graph'
 import { draftEid } from '@yaks/draft'
+import { enqueue } from '@yaks/effects'
+import { derivedEid } from '@yaks/graph/identity'
 import { ownerOf, owns } from './operator-access.ts'
 import type { Held } from './build-door.ts'
 import { type Operator, readOperator } from './operator.ts'
@@ -827,6 +829,32 @@ export let operatorRequest = async (
     }, {
       status: old?.operator_request ? 200 : 202,
     })
+  }
+  // A request that could not finish, taken in again as itself once its cause
+  // is fixed, so the person need not send it again: its failure, the answer
+  // that told of it and what was read of its files are dropped, and its
+  // intake runs anew (operator-channels.ts `operator_receive`).
+  if (path == '/operator/retry') {
+    let id = String(args.request ?? '')
+    let [row] = await store.g.get([id])
+    if (!row?.operator_request || !(access.administrative || await own(id))) {
+      return Response.json({ message: 'That request is missing.' }, {
+        status: 404,
+      })
+    }
+    if (!row.failed) {
+      return Response.json({ message: 'That request did not fail.' }, {
+        status: 409,
+      })
+    }
+    let [told] = await store.g.get([derivedEid('operator-answer|' + id)])
+    await store.g.apply([
+      { entity: row.entity, failed: null, content: null },
+      ...told ? [{ entity: told.entity, $delete: true as const }] : [],
+    ], { trusted: true })
+    await enqueue(store.g, 'operator_receive', id)
+    await armed()
+    return Response.json({ request: id, text: `retrying request ${id}` })
   }
   if (path == '/operator/request') {
     let [row] = await store.g.get([String(args.id ?? '')])

@@ -5,7 +5,7 @@ import { writes } from '@yaks/member'
 import { vouched } from './session.ts'
 
 let ask = async (ctx: Ctx, args: Args, path: string) => {
-  let { space, who } = await inSpace(ctx, args, path == '/operator/run', true)
+  let { space, who } = await inSpace(ctx, args, path != '/operator/read', true)
   if (!writes(who.role)) {
     throw refuse('access', 'only a member who writes can read operator work')
   }
@@ -61,5 +61,18 @@ export let operatorTools: Omit<Tool, 'title' | 'description'>[] = [
       },
     },
     run: (ctx, args) => ask(ctx, args, '/operator/read'),
+  },
+  {
+    name: 'operator_retry',
+    destructive: false,
+    input: {
+      type: 'object',
+      properties: {
+        space: SPACE,
+        request: str('The id of the operator request that could not finish.'),
+      },
+      required: ['request'],
+    },
+    run: (ctx, args) => ask(ctx, args, '/operator/retry'),
   },
 ]

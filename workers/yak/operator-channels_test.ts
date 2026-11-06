@@ -945,6 +945,68 @@ test('a picture nothing can read is never sent to the model, and the person is t
   )
 })
 
+// A HEIC photo whose conversion failed failed its request; once Images
+// answers, the request is retried as itself and goes through.
+let stuck = operatorMemory()
+let images = f.env.IMAGES
+f.env.IMAGES = {
+  input: () => ({ output: () => Promise.reject(new Error('Images is down')) }),
+}
+f.env.AI!.run = () =>
+  Promise.resolve({
+    response: 'The church sign reads Sunday 10am.',
+    usage: { input_tokens: 10, output_tokens: 5 },
+  })
+let stuckAsks: Request[] = []
+let stuckOperator = operatorOf(stuck, f.env, (req) => {
+  stuckAsks.push(req)
+  return Promise.resolve({
+    id: crypto.randomUUID(),
+    model: req.model,
+    items: [{ kind: 'assistant', text: 'Built the church app.' }],
+    cost: 0,
+  })
+}, f.dir)
+handleChannels(stuckOperator, f.env)
+let stuckId = await receive(stuck, {
+  space: f.space.eid,
+  person: f.person,
+  channel: 'chat',
+  files: [heic],
+}, 'Make our church an app from these photos.')
+await drain(stuck)
+let before = await answerOf(stuck, stuckId)
+let retry = (held: Parameters<typeof operatorRequest>[1]) =>
+  operatorRequest(stuckOperator, held, '/operator/retry', {
+    request: stuckId,
+  }, () => undefined)
+let stranger = await retry({ ...f.held, person: crypto.randomUUID() })
+let early = await retry({
+  ...f.held,
+  person: crypto.randomUUID(),
+  administrative: true,
+})
+f.env.IMAGES = images
+await drain(stuck)
+let again = await answerOf(stuck, stuckId)
+let twice = await retry(f.held)
+test('a request that could not finish is retried as itself once its cause is fixed, and goes through', () => {
+  assertEquals(!!before.failed, true)
+  assertEquals(stranger!.status, 404)
+  assertEquals(early!.status, 200)
+  assertEquals(again.failed, undefined)
+  assertEquals(stuckAsks.length, 1)
+  assertStringIncludes(
+    JSON.stringify(stuckAsks[0].items),
+    'The church sign reads Sunday 10am.',
+  )
+  assertEquals(
+    (again.operator_answer as { text: string }).text,
+    'Built the church app.',
+  )
+  assertEquals(twice!.status, 409)
+})
+
 // The same Operator conversation over Pinnacle's documented webhook and HTTP
 // contracts. No provider payload is retained in the request or its reply.
 let pf = await fixture()

@@ -906,6 +906,10 @@ recent tasks. Continue with `operator_run({space, task, say})`. A settled model
 turn may be a question: the operator explicitly completes a task through
 `task_update` after finishing it.
 
+`operator_retry({space, request})` runs a request that could not finish again,
+as itself, once its cause is fixed: its failure and the answer that told of it
+are dropped, and its intake runs anew.
+
 The Operator runs on the first of config.ts `agents.operator` whose provider the
 Worker holds every credential of: `claude-sonnet-5-5` on Anthropic when
 `ANTHROPIC_API_KEY` is set, and otherwise `@cf/zai-org/glm-5.3` on Workers AI;

@@ -1157,3 +1157,11 @@ operator_read:
     Read this space's private operator tasks, replies and native session entries.
     Pass task for its conversation, or omit it for the twenty latest tasks.
     Model instruction snapshots are omitted unless context is true.
+operator_retry:
+  title: Retry an operator request
+  description: >-
+    Run an operator request that could not finish again, as the same request,
+    once what failed it is fixed: its failure and the answer that told of it
+    are dropped, its files are read again, and the operator takes it up in the
+    person's conversation. The space's people who write may retry their own
+    requests; the platform admin may retry anyone's.
