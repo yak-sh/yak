@@ -6,13 +6,16 @@ import axe from './axe.json' with { type: 'json' }
 import type { Fetcher } from '../door.ts'
 import { answer } from './capture.ts'
 
+let endpoint = (env: { BROWSER: Fetcher }) => ({
+  fetch: (input: RequestInfo | URL, init?: RequestInit) =>
+    env.BROWSER.fetch(new Request(input, init)),
+})
+
 export default {
   fetch: (req: Request, env: { BROWSER: Fetcher }): Promise<Response> =>
     answer({
-      open: () =>
-        puppeteer.launch({
-          fetch: (input, init) => env.BROWSER.fetch(new Request(input, init)),
-        }),
+      acquire: async () => (await puppeteer.acquire(endpoint(env))).sessionId,
+      connect: (session) => puppeteer.connect(endpoint(env), session),
       axe,
     })(req),
 }

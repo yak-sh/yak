@@ -107,7 +107,8 @@ let page = (
     },
   }
   let browsing: Browsing = {
-    open: () => Promise.resolve(browser),
+    acquire: () => Promise.resolve('session'),
+    connect: () => Promise.resolve(browser),
     axe: { source: '', version: 'test' },
   }
   return {
@@ -253,7 +254,7 @@ test('a screenshot failure closes its browser and the kernel charges its time', 
   }
   let browsing = {
     ...p.browsing,
-    open: async () => {
+    connect: async () => {
       await time.advance(100)
       return p.browser
     },
@@ -269,6 +270,47 @@ test('a screenshot failure closes its browser and the kernel charges its time', 
   )
   assertEquals(duration, 300)
   assertEquals(time.pending(), 0)
+})
+
+// A connect that fails `misses` times, then opens the page's browser.
+let flaky = (misses: number) => {
+  let p = page()
+  let sessions: string[] = []
+  let browsing: Browsing = {
+    ...p.browsing,
+    acquire: () => Promise.resolve(`session ${sessions.length}`),
+    connect: (session) => {
+      sessions.push(session)
+      return sessions.length > misses
+        ? Promise.resolve(p.browser)
+        : Promise.reject(new TypeError("reading 'accept' of null"))
+    },
+  }
+  return { p, browsing, sessions }
+}
+// Each pause between connects, one turn of the clock apiece.
+let paused = async (time: ReturnType<typeof clock>) => {
+  for (let pause of [250, 500, 1000]) await time.advance(pause)
+}
+
+test('a session not ready yet is connected to again', async () => {
+  let { p, browsing, sessions } = flaky(2)
+  let time = clock()
+  let rendering = capture(browsing, 'https://x.invalid/', view, undefined, time)
+  await paused(time)
+  assertEquals((await rendering).image, 'png-bytes')
+  assertEquals(sessions, ['session 0', 'session 0', 'session 0'])
+  assertEquals(p.closed(), true)
+})
+
+test('a session that never takes a connection fails the preview', async () => {
+  let { browsing, sessions } = flaky(Infinity)
+  let time = clock()
+  let rendering = capture(browsing, 'https://x.invalid/', view, undefined, time)
+  rendering.catch(() => {})
+  await paused(time)
+  await assertRejects(() => rendering, Error, "reading 'accept' of null")
+  assertEquals(sessions.length, 4)
 })
 
 test('a yak-browser that cannot say is charged the time the kernel waited', async () => {

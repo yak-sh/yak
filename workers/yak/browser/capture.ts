@@ -26,9 +26,13 @@ export type Session = {
   // deno-lint-ignore no-explicit-any
   send(method: any, params?: Record<string, unknown>): Promise<any>
 }
-/** A browser to open and the audit's script to run in its page. */
+/**
+ * A browser to open, acquired as a session and then connected to, and the
+ * audit's script to run in its page.
+ */
 export type Browsing = {
-  open: () => Promise<Browser>
+  acquire: () => Promise<string>
+  connect: (session: string) => Promise<Browser>
   axe: Axe
 }
 export type Browser = {
@@ -81,6 +85,25 @@ let isolated = async (page: Page) => {
   }
 }
 
+// A session Cloudflare just acquired may not take a connection yet: its
+// websocket upgrade answers without a socket. The connect is retried on the
+// same session, with growing pauses, before the preview fails.
+let pauses = [250, 500, 1000]
+let open = async (
+  { acquire, connect }: Browsing,
+  time: Clock,
+): Promise<Browser> => {
+  let session = await acquire()
+  for (let pause of pauses) {
+    try {
+      return await connect(session)
+    } catch {
+      await sleep(pause, undefined, time)
+    }
+  }
+  return connect(session)
+}
+
 // One deadline bounds the whole preview, its accessibility check included.
 let deadline = (time: Clock) => {
   let cancel = () => {}
@@ -112,14 +135,14 @@ let checked = async (
 }
 
 export let capture = async (
-  { open, axe }: Browsing,
+  browsing: Browsing,
   url: string,
   view: View,
   used: (duration: number) => Promise<void> = () => Promise.resolve(),
   time: Clock = system,
 ): Promise<Rendered> => {
   let start = time.now()
-  let browser = await open()
+  let browser = await open(browsing, time)
   let duration = 0
   let { bounded, cancel } = deadline(time)
   let result: Omit<Rendered, 'duration'>
@@ -153,7 +176,10 @@ export let capture = async (
       return { page, image, console, errors, status }
     })())
     let { page, ...rest } = loaded
-    result = { ...rest, accessibility: await checked(page, axe, bounded) }
+    result = {
+      ...rest,
+      accessibility: await checked(page, browsing.axe, bounded),
+    }
   } finally {
     cancel()
     try {
