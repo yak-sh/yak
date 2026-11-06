@@ -711,6 +711,17 @@ let answered = async (
   }
   let rpc = body as Rpc
   if (rpc.id == null) return new Response(null, { status: 202 }) // a notification
+  // A body with an id and no method — a response posted back, say — is not a
+  // request, and is refused as JSON-RPC's own invalid one.
+  if (typeof rpc.method != 'string') {
+    return auth
+      ? json(400, {
+        jsonrpc: '2.0',
+        id: null,
+        error: { code: -32600, message: 'not a JSON-RPC request' },
+      })
+      : unauthorized(req, env)
+  }
   // A prompt picked with nothing filled in is a prompt with no arguments, not
   // a malformed call: every one of them still reads correctly that way
   // (prompts.ts `or`), while the schema behind it requires the `arguments`
