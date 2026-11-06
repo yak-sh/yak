@@ -28,7 +28,13 @@ import { divided, gauged, level } from './meter.ts'
 import { holding } from './held.ts'
 import { caught, defect } from './defects.ts'
 import { scheduleMark } from './used.ts'
-import { type Break, capture, origin, queue } from '@yaks/tracker/report'
+import {
+  type Break,
+  capture,
+  faultOf,
+  origin,
+  queue,
+} from '@yaks/tracker/report'
 import { errorsAt, errorsIn } from './app-errors.ts'
 import { refuse } from './tool.ts'
 import { isTestAddress } from './lib/bots.ts'
@@ -199,6 +205,27 @@ let seenByPlatform = (
   })
 }
 
+/** The occurrence in a space's tracker a word names (its handle as its line
+ * says it, or its eid), and the fault its platform copy ({@link
+ * seenByPlatform}) groups by there: what a report about the same failure
+ * files under to join that bug. Undefined where the word names nothing. */
+export let platformFault = async (
+  env: Env,
+  space: Space,
+  who: Who,
+  word: string,
+): Promise<{ occurrence: string; fault: string } | undefined> => {
+  let rows = await errorsIn(env, space, who).read(true)
+  let row = rows.find((r) => names(word, trackedHit(r)))
+  if (!row) return undefined
+  let tags = (row.error as { tags?: Record<string, string> }).tags ?? {}
+  let { message } = broke(trackedHit(row))
+  return {
+    occurrence: row.entity.eid,
+    fault: missFault(message ?? '', tags) ?? faultOf(row),
+  }
+}
+
 /** Workers Builds keeps its retry receipt in the directory's store. Ordinary
  * platform and app failures enter the tracker rather than this receipt log. */
 export let metaBreaks = (env: Env): Breaks => (bundles) =>
@@ -278,7 +305,8 @@ export let noted = async (
   if (account != 'test') {
     await fix(at.env, at.space, at.app, {
       kind: 'exception',
-      entity: { eid: '' },
+      tracked: true,
+      entity: { eid: owned[0].entity.eid },
       exception: {
         message: broke.message,
         stack: broke.stack,
@@ -484,7 +512,8 @@ let fix = async (env: Env, space: Space, app: App, hit: Hit) => {
           `Find its cause in ${space.slug}/${app.slug}. ` +
           `If the app's own files are wrong, fix them, deploy, and say in a ` +
           `line or two what you changed. If yaks.app itself is at fault, ` +
-          `report it with platform_bug and leave the app as it is.`,
+          `report it with platform_bug, giving error ${idOf(hit)}, and ` +
+          `leave the app as it is.`,
         request: { channel: 'error', app: app.eid },
         options: { id },
       }),

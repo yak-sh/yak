@@ -49,7 +49,8 @@ import { inReach } from './declared.ts'
 import { connected, reaching } from './agent.ts'
 import { coded } from './agent-code.ts'
 import { ledger } from './ledger.ts'
-import { type Args, type Ctx, refuse } from './tool.ts'
+import { type Args, type Ctx, inSpace, refuse } from './tool.ts'
+import { platformFault } from './unseen.ts'
 import { bound, type Env } from './env.ts'
 import type { Held } from './build-door.ts'
 import { accounted } from './meter.ts'
@@ -345,8 +346,12 @@ export let operatorRoster = async (
 
 // What the Operator does when yaks.app, not the app, is at fault: it tells
 // the platform's tracker (M-37965), where its people fix it, and changes
-// nothing in the app to get around it.
-let platformBug = (space: Space): Tool => ({
+// nothing in the app to get around it. A report about a break the tracker
+// already has files under that break's fault, so it joins the break's bug
+// as its newest occurrence; only a failure no break records is a bug of its
+// own. The report is the Operator's words, never a stack of its own: where it
+// was written says nothing of where the fault is.
+export let platformBug = (ctx: Ctx, space: Space): Tool => ({
   name: 'platform_bug',
   title: 'Report a yaks.app fault',
   step: {
@@ -354,24 +359,45 @@ let platformBug = (space: Space): Tool => ({
     done: 'Told the yaks.app team about a fault',
   },
   description:
-    "Report that yaks.app itself is at fault, not the app's own files: a tool that answered wrongly, a refusal the guide says should pass, a deploy that lost what was sent. Say what you did, what yaks.app answered, and why the app is not the cause. It reaches the people who run yaks.app; leave the app as it is.",
+    "Report that yaks.app itself is at fault, not the app's own files: a tool that answered wrongly, a refusal the guide says should pass, a deploy that lost what was sent. Say what you did, what yaks.app answered, and why the app is not the cause. When it is about an app's error, give that error's id, as app_errors lists it, and the report joins what yaks.app already knows of it. It reaches the people who run yaks.app; leave the app as it is.",
   parameters: {
     type: 'object',
     properties: {
       text: { type: 'string', description: 'What is wrong in yaks.app.' },
       app: { type: 'string', description: 'The app it happened in.' },
+      error: {
+        type: 'string',
+        description:
+          'The id of the app error this is about, as app_errors lists it (#13dea90f50).',
+      },
     },
     required: ['text'],
   },
-  run: (args) => {
+  run: async (args) => {
     let text = String(args.text ?? '').trim()
     if (!text) throw refuse('arguments', 'say what is wrong in yaks.app')
-    defect(Error(text), {
+    let word = typeof args.error == 'string' ? args.error.trim() : ''
+    let about = word
+      ? await platformFault(
+        ctx.env,
+        space,
+        (await inSpace(ctx, { space: space.slug })).who,
+        word,
+      )
+      : undefined
+    if (word && !about) {
+      throw refuse(
+        'missing',
+        `no error ${word} in ${space.slug}; give an id app_errors lists, or none`,
+      )
+    }
+    defect(text, {
       request: 'operator found a platform fault',
       space: space.slug,
       ...typeof args.app == 'string' ? { app: args.app } : {},
-    })
-    return Promise.resolve('Reported to the people who run yaks.app.')
+      ...about ? { scope: space.eid, occurrence: about.occurrence } : {},
+    }, about ? { fault: about.fault } : {})
+    return 'Reported to the people who run yaks.app.'
   },
 })
 
@@ -999,7 +1025,7 @@ export let operating = (
           // to the stronger model in a fresh helper, which starts no other.
           ...!(row?.spawned && !row.fork && !topicOf(row)) ? [delegated] : [],
           ...roster,
-          platformBug(space),
+          platformBug(ctx, space),
           textSend(env, ctx, space),
           mailSend(env, ctx, space, store),
           phoneSend(env, ctx, space, store),
