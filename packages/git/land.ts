@@ -48,6 +48,7 @@ import { command as processCommand } from '@yaks/process/command'
 // landing, and again after a rebase if the incoming diff could affect it. Land
 // neither runs tests nor knows of any. It runs `git` as a subprocess, so like
 // ./host.ts it is kept out of this package's portable entry point (./mod.ts).
+import { backoff, type Clock, sleep } from '@yaks/fp'
 import { CallError } from '@yaks/tools/errors'
 import { hold } from './hold.ts'
 
@@ -179,6 +180,8 @@ export type LandOps = {
     error: unknown,
     context?: { tags?: Record<string, string> },
   ) => unknown
+  /** the time a push waits before it tries again; the runtime's by default */
+  clock?: Clock
 }
 
 let defaultWrite = (text: string, error = false) => {
@@ -583,7 +586,7 @@ export let land = async (ops: LandOps = {}): Promise<Outcome> => {
       // contains it, and the fast-forward after the push follows it.
       let moved = await ancestry() == 1
       if (!moved && up) {
-        let to = await publish(git, write, ops.report, root, branch, up)
+        let to = await publish(git, write, ops, root, branch, up)
         if (to) await catchUp(git, write, root, base, up, to)
         moved = !!to
       }
@@ -661,25 +664,29 @@ let upstream = async (
 // before the base takes it. The remote's fast-forward check is the
 // compare-and-swap: a refusal followed by a fetch that finds commits the
 // branch lacks means the upstream moved, and what it moved to is returned, for
-// the landing to rebase onto rather than merge. Any other failure, an
-// unreachable remote included, leaves the work to land locally: the push only
-// publishes bytes. It is still a failure, so it is reported with the remote's
-// whole account, once. The push runs to completion with no deadline: its exit code is the
-// only report of whether the remote has the commit, and a killed push may
-// already have reached it.
+// the landing to rebase onto rather than merge. A push the remote answers with
+// a 5xx, or whose connection drops, is tried again after a backoff, up to
+// {@link tries} times: a retry of a push that did reach the remote finds it
+// up to date. Any other failure, an unreachable remote included, leaves the
+// work to land locally: the push only publishes bytes. It is still a failure,
+// so it is reported with the remote's whole account, once. The push runs to
+// completion with no deadline: its exit code is the only report of whether the
+// remote has the commit, and a killed push may already have reached it.
 let publish = async (
   git: Git,
   write: (text: string, error?: boolean) => void,
-  report: LandOps['report'],
+  ops: LandOps,
   root: string,
   branch: string,
   up: Upstream,
 ): Promise<string | undefined> => {
-  let sent = await git(
-    root,
-    ['push', '--quiet', up.remote, `${branch}:${up.branch}`],
-    false,
-  )
+  let push = () =>
+    git(root, ['push', '--quiet', up.remote, `${branch}:${up.branch}`], false)
+  let sent = await push()
+  for (let n = 1; sent.code && n < tries && transient(sent); n++) {
+    await sleep(backoff(n), undefined, ops.clock)
+    sent = await push()
+  }
   if (!sent.code) return
   // FETCH_HEAD is read once, at once: anything fetching in the shared
   // checkout rewrites it.
@@ -705,13 +712,23 @@ let publish = async (
   let label = `land: publish to ${up.remote}/${up.branch}`
   write(`${message(label, sent)} — landed locally, publish separately`, true)
   let said = (sent.err || sent.out).trim()
-  await report?.(
+  await ops.report?.(
     new Error(
       `${label} failed with exit ${sent.code}${said ? `:\n${said}` : ''}`,
     ),
     { tags: { step: 'land: publish', remote: up.remote } },
   )
 }
+
+// How many times a push is tried while the remote's answers are transient.
+let tries = 4
+
+// A refusal that says nothing about the push itself: the remote's server
+// failed (a 5xx) or the connection dropped. Git exits 1 or 128 for these and
+// for refusals that mean something, so only its words tell them apart.
+let transient = (r: Ran) =>
+  /(error|HTTP)[: ]+5\d\d\b|internal server error|bad gateway|service unavailable|gateway time-?out|the remote end hung up|early eof|connection (reset|timed out|refused)|RPC failed/i
+    .test(r.err + r.out)
 
 // Bring the base up to `to`, where its upstream moved. Only a fast-forward:
 // every commit the base holds came through a landing that pushed it, so a base

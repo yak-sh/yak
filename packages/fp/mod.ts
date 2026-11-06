@@ -579,12 +579,14 @@ export let sleep = (
   clock: Clock = system,
 ): Promise<void> =>
   new Promise((wake) => {
+    // A clock may call back before `after` returns.
+    let cancel = () => {}
     let done = () => {
       cancel()
       signal?.removeEventListener('abort', done)
       wake()
     }
-    let cancel = clock.after(ms, done)
+    cancel = clock.after(ms, done)
     signal?.addEventListener('abort', done, { once: true })
     if (signal?.aborted) done()
   })

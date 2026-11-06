@@ -4,14 +4,17 @@ import { assert, assertEquals, assertRejects } from '@std/assert'
 import { land, LandError, type Ran, reverts, type Run } from './land.ts'
 
 type Answer = Partial<Ran>
-let fixture = (answers: Record<string, Answer> = {}) => {
+// A command answered with a list answers each run with the next, the last
+// for good.
+let fixture = (answers: Record<string, Answer | Answer[]> = {}) => {
   let calls: { args: string[]; cwd: string }[] = []
   let said: string[] = []
   let formats: { files: string[]; cwd: string }[] = []
   let locks: string[] = []
   let reports: { error: string; tags?: Record<string, string> }[] = []
+  let waits: number[] = []
   let moved = false
-  let values: Record<string, Answer> = {
+  let values: Record<string, Answer | Answer[]> = {
     'rev-parse --show-toplevel': { out: '/work' },
     'symbolic-ref -q --short HEAD': { out: 'work' },
     'worktree list --porcelain': {
@@ -25,7 +28,10 @@ let fixture = (answers: Record<string, Answer> = {}) => {
   }
   let run: Run = (args, cwd) => {
     calls.push({ args, cwd })
-    let value = values[args.join(' ')] ?? {}
+    let given = values[args.join(' ')] ?? {}
+    let value = Array.isArray(given)
+      ? given.length > 1 ? given.shift()! : given[0]
+      : given
     if (args[0] == 'merge' && value.code) moved = true
     if (args[0] == 'merge-base' && moved && values.raced) value = { code: 1 }
     let code = value.code ?? 0
@@ -62,6 +68,10 @@ let fixture = (answers: Record<string, Answer> = {}) => {
       write: (text) => said.push(text),
       report: (error, context) =>
         reports.push({ error: String(error), tags: context?.tags }),
+      clock: {
+        now: () => 0,
+        after: (ms, callback) => (waits.push(ms), callback(), () => {}),
+      },
     })
   return {
     invoke,
@@ -70,6 +80,7 @@ let fixture = (answers: Record<string, Answer> = {}) => {
     locks,
     said,
     reports,
+    waits,
     commands: () => calls.map((c) => c.args.join(' ')),
   }
 }
@@ -201,7 +212,7 @@ test('a base without an upstream lands without a push', async () => {
 })
 
 let refused = 'remote: fatal error in commit_refs\nerror: failed to push'
-let refusal = (answers: Record<string, Answer> = {}) =>
+let refusal = (answers: Record<string, Answer | Answer[]> = {}) =>
   fixture({
     'push --quiet origin work:main': { code: 1, err: refused },
     'rev-parse --verify FETCH_HEAD^{commit}': { out: 'up\n' },
@@ -250,6 +261,56 @@ test('a base the moved upstream does not contain is a fault, not a rewrite', asy
   assertEquals(error.name, 'Error')
   assert(!f.calls.some((c) => ['merge', 'rebase'].includes(c.args[0])))
   assertEquals(f.commands().filter((c) => c == 'release').length, 1)
+})
+
+let failed = 'remote: Internal Server Error\n' +
+  ' ! [remote rejected] work -> main (Internal Server Error)'
+let pushes = (f: ReturnType<typeof fixture>) =>
+  f.calls.filter((c) => c.args[0] == 'push').length
+
+for (
+  let said of [
+    failed,
+    'error: RPC failed; HTTP 502 curl 22 The requested URL returned error: 502',
+    'fatal: the remote end hung up unexpectedly',
+  ]
+) {
+  test(`a push answered "${said.split('\n')[0]}" is tried again and lands`, async () => {
+    let f = fixture({
+      'push --quiet origin work:main': [{ code: 1, err: said }, {}],
+    })
+    assertEquals(await f.invoke(), {
+      landed: 'sha',
+      root: '/repo',
+      commits: [],
+    })
+    assertEquals(pushes(f), 2)
+    assertEquals(f.waits, [1000])
+    assertEquals(f.reports, [])
+  })
+}
+
+test('a push the remote keeps failing is tried four times, then reported once', async () => {
+  let f = refusal({ 'push --quiet origin work:main': { code: 1, err: failed } })
+  assertEquals(await f.invoke(), { landed: 'sha', root: '/repo', commits: [] })
+  assertEquals(pushes(f), 4)
+  assertEquals(f.waits, [1000, 2000, 4000])
+  assertEquals(f.reports.map((r) => r.error), [
+    `Error: land: publish to origin/main failed with exit 1:\n${failed}`,
+  ])
+})
+
+test('a retried push that finds the upstream moved rebases onto it, reporting nothing', async () => {
+  let f = refusal({
+    'push --quiet origin work:main': [{ code: 1, err: failed }, {
+      code: 1,
+      err: ' ! [rejected] work -> main (fetch first)',
+    }],
+    'merge-base --is-ancestor up work': { code: 1 },
+  })
+  assertEquals(await f.invoke(), { diverged: true, conflict: false })
+  assertEquals(pushes(f), 2)
+  assertEquals(f.reports, [])
 })
 
 test('a push that goes through reports nothing', async () => {
