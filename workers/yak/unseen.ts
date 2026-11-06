@@ -925,12 +925,18 @@ export let unseenBlock = (seen: Seen[]) =>
 // Near a stored one, it also says what each app holds of it (held.ts), since
 // what to delete is the agent's next question. An app in the trash counts
 // against no app ceiling (tools.ts `app_new`), but its data and files count
-// until it is erased.
-export let ceiling = async (env: Env, space: Space) => {
-  let apps = await appsOf(env, space)
+// until it is erased. The space's apps are read unless the caller has them
+// (agent.ts `answered`), and not at all once it has been told.
+export let ceiling = async (
+  env: Env,
+  space: Space,
+  roster?: Promise<App[]>,
+) => {
+  if (space.told) return ''
+  let apps = await (roster ?? appsOf(env, space))
   let alive = apps.filter((a) => !a.trashed).length
   let now = new Date()
-  if (space.told || level(space, alive, now) == 'ok') return ''
+  if (level(space, alive, now) == 'ok') return ''
   await stamp(env, { entities: [{ entity: { eid: space.eid }, notified: {} }] })
   return [
     `\n\n## ceiling\n${space.slug}: ${gauged(space, alive, now, env)}`,

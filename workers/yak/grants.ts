@@ -280,8 +280,8 @@ export let narrowed = (
       let space = await dir.space(want)
       return space && (matches(space) || past(space)) ? space : null
     },
-    page: async (want, app, person) => {
-      let got = await dir.page(want, app, person, over)
+    page: async (want, app, person, _over, every) => {
+      let got = await dir.page(want, app, person, over, every)
       let here = !!got.space && matches(got.space)
       return {
         ...got,

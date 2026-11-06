@@ -64,18 +64,25 @@ test('hosted provider, model and native input override keeps supplied main outpu
   let mainId = String((mainOutput.built as Comp).build)
   let before = await g.get([builder, mainId, output])
   let sent: Record<string, unknown> = {}
-  let app = () =>
-    Promise.resolve({
-      eid: 'app',
-      space: 'space',
-      slug: 'music',
-      access: 'private',
-    })
+  let music = {
+    eid: 'app',
+    space: 'space',
+    slug: 'music',
+    access: 'private',
+  }
+  let app = () => Promise.resolve(music)
   let ctx = {
     person,
     source,
     dir: {
       space: () => Promise.resolve({ eid: 'space', slug: 'fixture' }),
+      page: () =>
+        Promise.resolve({
+          space: { eid: 'space', slug: 'fixture' },
+          app: music,
+          role: 'owner',
+          roster: [music],
+        }),
       role: () => Promise.resolve('owner'),
       nameAt: () => Promise.resolve('Ada'),
       app,

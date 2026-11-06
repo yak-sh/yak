@@ -1,6 +1,5 @@
-import type { Who } from './session.ts'
 import { applyOptions } from '@yaks/graph'
-import { inRead, reacquire } from './tool.ts'
+import { reacquire } from './tool.ts'
 // The agent door's two halves (T-33812), so mcp.ts is a mount and nothing
 // else: the caller's reach as one `Graph`, and the platform's own tools as a
 // `Plugin` on it.
@@ -57,7 +56,8 @@ import { PUBLISHED, sending } from './published.ts'
 import { composed, type Reach, read, vocabAt, written } from './reach.ts'
 import { narrowed } from './lexicon.ts'
 import { queried } from './page-graph.ts'
-import { META } from './directory.ts'
+import { META, META_STORE } from './directory.ts'
+import { wrote } from './lib/hops.ts'
 import { titling } from './session.ts'
 import {
   type Ctx,
@@ -128,8 +128,19 @@ export let answered = async (
   // on the other, so they are asked together, each a stage on the call's
   // `Server-Timing` (timing.ts).
   let space = out.space
-  let currentWho: Who | undefined
-  if (space && ctx.person && !readOnly && ctx.reopen) {
+  // Where the call was admitted still stands while the request has written
+  // nothing to the directory since (hops.ts `wrote`), and its snapshot read
+  // the space's apps beside it (tool.ts `entered`). An admin let in over a
+  // space they hold no seat in is not one of those it tells.
+  let held = ctx.entered
+  let kept = space && held && held.space.eid == space.eid &&
+      !held.who.administrative && held.wrote != null &&
+      held.wrote == wrote(META_STORE)
+    ? held
+    : undefined
+  let currentWho = kept?.who
+  if (kept) space = kept.space
+  else if (space && ctx.person && !readOnly && ctx.reopen) {
     // Output metadata is not standing. The tool may have committed a change
     // (including removing its own seat); only a fresh seat gets private news.
     try {
@@ -140,6 +151,7 @@ export let answered = async (
       space = undefined
     }
   }
+  let roster = kept?.apps ? Promise.resolve(kept.apps) : undefined
   let c = ctx.clock ?? clock()
   // The news rides on an answer the tool already earned. A door it is read
   // from that fails (the space's tracker, the directory) is reported and the
@@ -156,9 +168,19 @@ export let answered = async (
       riding('breaks', async () => {
         let who = currentWho ??
           { person: ctx.person, role: await ctx.dir.role(space, ctx.person) }
-        return unseenBlock(await serve(ctx.env, space, who))
+        return unseenBlock(
+          await serve(
+            ctx.env,
+            space,
+            who,
+            undefined,
+            false,
+            undefined,
+            roster ? () => roster : undefined,
+          ),
+        )
       }),
-      riding('ceiling', () => ceiling(ctx.env, space)),
+      riding('ceiling', () => ceiling(ctx.env, space, roster)),
     ])).join('')
   // A call to say it came from, where there is one: the builder runs these
   // same tools in its own loop (builder.ts), with nothing to point at.
@@ -327,7 +349,7 @@ export let named = async (
     if (found.length == 1) return found[0]
   }
   let args = two ? { space: one, app: two } : { app: one }
-  return write ? inApp(ctx, args, true, true) : inRead(ctx, args)
+  return inApp(ctx, args, write, true)
 }
 
 // The identity operand list, wherever it appears on a line: `.entity.eid=a,b` — which

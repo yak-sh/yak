@@ -121,6 +121,42 @@ test('the reads answer rows that fit the schema their tools are listed with', as
   }
 })
 
+// A tool naming one app is admitted from one directory snapshot, and what its
+// answer says about the space stands on it too (tool.ts `entered`, agent.ts
+// `answered`). Beside it, app_files reads the app's deploys and app_errors
+// the app's own store.
+test('a tool that names one app reads the directory once', async () => {
+  let k = await kernel()
+  try {
+    let { cookie } = await signIn(k)
+    let made = await connector(k, cookie).tool('app_new', {
+      slug: 'once',
+      title: 'Once',
+    })
+    let space = /https:\/\/([a-z0-9-]+)\.yaks\.app/.exec(made)![1]
+    let hops = async (name: string, args: Record<string, unknown>) => {
+      let r = await k.at('yaks.app', '/mcp', {
+        method: 'POST',
+        headers: { cookie, 'content-type': 'application/json' },
+        body: JSON.stringify({
+          jsonrpc: '2.0',
+          id: 1,
+          method: 'tools/call',
+          params: { name, arguments: { space, app: 'once', ...args } },
+        }),
+      })
+      assertEquals((await r.json()).result.isError, undefined, name)
+      return /hops;dur=(\d+)/.exec(r.headers.get('server-timing')!)?.[1]
+    }
+    assertEquals(
+      [await hops('app_files', { op: 'list' }), await hops('app_errors', {})],
+      ['2', '3'],
+    )
+  } finally {
+    await k.stop()
+  }
+})
+
 test(
   'a platform secret alias derives before the reach hands it to the store',
   async () => {

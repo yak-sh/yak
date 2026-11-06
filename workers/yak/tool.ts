@@ -25,6 +25,7 @@ import {
   daysLeft,
   type Directory,
   META,
+  META_STORE,
   type Role,
   type Space,
 } from './directory.ts'
@@ -34,6 +35,7 @@ import * as directoryPart from './directory.ts'
 import type { Spend } from './sandbox.ts'
 import type { Caller, Who } from './session.ts'
 import type { Clock } from './timing.ts'
+import { wrote } from './lib/hops.ts'
 
 export type Ctx = {
   env: Env
@@ -75,6 +77,12 @@ export type Ctx = {
   // (agent.ts `answered`), so that reading can begin beside the write
   // (unseen.ts `foresee`).
   ahead?: (space: Space, who: Who) => void
+  // Where the call was admitted (`inSpace`, `inApp`): the space, the caller's
+  // standing in it and its apps, as one snapshot read them, and how many
+  // directory writes this request had made then (hops.ts `wrote`). What the
+  // answer says about the space (agent.ts `answered`) stands on it while the
+  // request has written nothing since.
+  entered?: Entered
   // The request's stopwatch (timing.ts), when the door keeps one: a write
   // names each round trip it waits on, and mcp.ts puts the marks on the
   // answer as `Server-Timing`, so a slow deploy says which hop was slow.
@@ -83,6 +91,14 @@ export type Ctx = {
   // (mcp.ts): a tool that `outlasts` runs in an object that finishes it after
   // this call has answered (outlast.ts).
   outlast?: true
+}
+
+/** Where a call was admitted, as {@link Ctx} `entered` keeps it. */
+export type Entered = {
+  space: Space
+  who: Who
+  apps: App[] | null
+  wrote: number | undefined
 }
 
 /** Discard only the directory view, never carry its role or app into the next
@@ -327,15 +343,16 @@ let spaceOf = async (ctx: Ctx, args: Args) => {
   return space
 }
 
-// The space a call names with the caller's seat in it, its apps and, where
-// the door says `over`, whether the caller is the platform's admin: one
-// snapshot of the directory (directory.ts `page`), so a door admits a call in
-// one trip. A space it means without naming, or one found only at an address
-// it has left, is read as `spaceOf` reads it, and the caller's seat after.
-let entered = async (ctx: Ctx, args: Args, over: boolean) => {
+// The space a call names with the caller's seat in it, its apps (the one it
+// names among them) and, where the door says `over`, whether the caller is
+// the platform's admin: one snapshot of the directory (directory.ts `page`),
+// so a door admits a call in one trip. A space it means without naming, or
+// one found only at an address it has left, is read as `spaceOf` reads it,
+// and the caller's seat after.
+let entered = async (ctx: Ctx, args: Args, over: boolean, app?: string) => {
   if (args.space == null) return { space: await spaceOf(ctx, args) }
   let slug = text(args.space, 'space')
-  let page = await ctx.dir.page(slug, null, ctx.person, over)
+  let page = await ctx.dir.page(slug, app ?? null, ctx.person, over, true)
   return page.space
     ? { space: page.space, page }
     : { space: await named(ctx, slug) }
@@ -439,6 +456,7 @@ let seated = async (
       )
       if (write && !trash) awake(space)
       ctx.dir = scope.dir
+      admitted(ctx, space, who, page?.roster)
       if (write) ctx.ahead?.(space, who)
       return { space, who }
     } catch (error) {
@@ -488,6 +506,11 @@ export let reacquire = async (
   }
 }
 
+// Noted on the call (`Ctx.entered`), for its answer to stand on.
+let admitted = (ctx: Ctx, space: Space, who: Who, apps?: App[] | null) => {
+  ctx.entered = { space, who, apps: apps ?? null, wrote: wrote(META_STORE) }
+}
+
 // The caller in the space a call names. A write into a space in the trash is
 // refused; reading one still answers (app_list says what is in it).
 export let inSpace = (ctx: Ctx, args: Args, write = false, over = false) =>
@@ -534,19 +557,27 @@ let reached = async (
   for (let attempt = 0;; attempt++) {
     let scope = { ...ctx, dir: ctx.reopen?.() ?? ctx.dir }
     try {
-      let space = selectedSpace
-        ? await scope.dir.at(selectedSpace.eid)
-        : await spaceOf(scope, args)
+      let { space, page } = selectedSpace
+        ? { space: await scope.dir.at(selectedSpace.eid), page: undefined }
+        : await entered(scope, args, over, slug)
       if (!space) throw refuse('missing', 'the selected space no longer exists')
       selectedSpace = space
       // Bind identities as soon as a target has been observed. A failed
       // provisional admission never reselects an already observed entity.
       let app = selectedApp
         ? (await scope.dir.appAt(selectedApp.eid))?.app
-        : await (trash ? scope.dir.binned : scope.dir.app)(space, slug)
+        : page?.app ??
+          await (trash ? scope.dir.binned : scope.dir.app)(space, slug)
       if (app) selectedApp = app
       // A stranger learns no target existence from a failed admission.
-      let who = await callerIn(scope, space, write, over)
+      let who = await callerIn(
+        scope,
+        space,
+        write,
+        over,
+        page?.role,
+        page?.administrative,
+      )
       if (!app || app.space != space.eid) {
         throw refuse(
           'missing',
@@ -556,6 +587,7 @@ let reached = async (
       }
       awake(space, trash ? undefined : app)
       ctx.dir = scope.dir
+      admitted(ctx, space, who, page?.roster)
       if (write) ctx.ahead?.(space, who)
       return {
         space,
@@ -567,34 +599,4 @@ let reached = async (
       if (!ctx.reopen || attempt >= 2 || !unavailable(error)) throw error
     }
   }
-}
-
-// A named read asks the same snapshot as an app page, including the admin's
-// seat when it may open an app outside its ordinary reach.
-export let inRead = async (ctx: Ctx, args: Args) => {
-  if (typeof args.space != 'string') return inApp(ctx, args, false, true)
-  let scope = { ...ctx, dir: ctx.dir }
-  let page = await scope.dir.page(
-    args.space,
-    text(args.app, 'app'),
-    ctx.person,
-    true,
-  )
-  let space = page.space
-  if (!space) {
-    await named(scope, args.space)
-    throw refuse('missing', `no space ${args.space}`)
-  }
-  let who = await callerIn(
-    scope,
-    space,
-    false,
-    true,
-    page.role,
-    page.administrative,
-  )
-  let app = page.app
-  if (!app) throw refuse('missing', `no app ${args.app} in ${space.slug}`)
-  awake(space, app)
-  return { space, app, who }
 }

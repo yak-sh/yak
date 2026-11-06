@@ -1818,15 +1818,18 @@ export let directoryRows = (rows: {
     // when a person was asked about: their role, or null for no seat. With no
     // app named it is the space's bare address, where the front page or else
     // the listing of every app answers, so the read is every app (`roster`,
-    // oldest first, as `apps` says) and the listing asks nothing more.
+    // oldest first, as `apps` says) and the listing asks nothing more. A door
+    // admitting a call that names an app asks for `every` app too, for what
+    // its answer says about the space (agent.ts `answered`).
     page: async (
       slug: string,
       app?: string | null,
       person?: string | null,
       over = false,
+      every = !app,
     ) => {
       let at = `.app.space.space.slug=${slug}`
-      let which = app ? `((${at}&.app.slug=${app})|(${at}&.home))` : at
+      let which = every ? at : `((${at}&.app.slug=${app})|(${at}&.home))`
       let seat = person
         ? `|(.member.space.space.slug=${slug}&.member.person=${person})` +
           `|(.grant.app.app.space.space.slug=${slug}&.grant.person=${person})` +
@@ -1839,6 +1842,10 @@ export let directoryRows = (rows: {
       )
       let space = rows.find((row) => row.space)
       let apps = rows.filter((row) => row.app).map(appOf)
+      // The app living at the address, as `app` asks: not one that left it
+      // (an app's slug falls back to the address it left, `appAbout`), and a
+      // live one before one in the trash that kept it.
+      let here = rows.filter((row) => app && row.app?.slug == app).map(appOf)
       let member = space &&
         rows.find((row) =>
           row.member && idOf(row.member.person) == person &&
@@ -1846,9 +1853,9 @@ export let directoryRows = (rows: {
         )?.member
       return {
         space: space ? spaceOf(space) : null,
-        app: apps.find((one) => one.slug == app) ?? null,
+        app: here.find((one) => !one.trashed) ?? here.at(0) ?? null,
         home: apps.find((one) => one.home && !one.trashed) ?? null,
-        roster: app ? null : apps,
+        roster: every ? apps : null,
         ...person
           ? {
             role: member?.role ?? null,

@@ -128,6 +128,29 @@ let fixture = () => {
           : null,
       app: appIn,
       binned: appIn,
+      // One snapshot, as directory.ts `page` reads it.
+      page: async (
+        slug: string,
+        named?: string | null,
+        _person?: string | null,
+        over = false,
+      ) => {
+        let [where, now, role, admin] = await Promise.all([
+          read<Space>('space'),
+          read<App | null>('app'),
+          read<Role | null>('role'),
+          over ? read<boolean>('admin') : false,
+        ])
+        let apps = now ? [{ ...now, policy: core.revision }] : []
+        return {
+          space: where.slug == slug ? where : null,
+          app: apps.find((a) => a.slug == named) ?? null,
+          home: null,
+          role,
+          ...over ? { administrative: admin } : {},
+          roster: apps,
+        }
+      },
       role: async (where: Space) =>
         where.eid == 'meta' ? 'owner' : await read<Role | null>('role'),
       target: async (eid: string, _person: string, held?: string | null) => {
@@ -147,7 +170,7 @@ let fixture = () => {
     }
     let checked: Pick<
       Directory,
-      'at' | 'appAt' | 'space' | 'app' | 'binned' | 'role' | 'target'
+      'at' | 'appAt' | 'space' | 'app' | 'binned' | 'role' | 'target' | 'page'
     > = { ...dir, binned: dir.app }
     return checked as unknown as Directory
   }

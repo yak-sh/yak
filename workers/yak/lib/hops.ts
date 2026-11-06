@@ -99,6 +99,15 @@ export let writing = <T>(store: string, send: () => Promise<T>): Promise<T> => {
 // How many times this request has marked a write to `store` (`writing`).
 let written = (store: string, tally: Tally) => tally.get(`wrote:${store}`) ?? 0
 
+/** Where the request now stands in its writes to `store`: equal at two
+ * moments when it wrote nothing there between them, so what it read at the
+ * first still answers at the second. Nothing outside a request, where no
+ * write is counted and nothing can be said. */
+export let wrote = (store: string): number | undefined => {
+  let tally = here.getStore()
+  return tally && reads.has(tally) ? written(store, tally) : undefined
+}
+
 /** A read of `store`, made once per request: asking the same `key` again is
  * answered from the first asking, until this request writes to that store
  * ({@link writing}), and then it is read again. A `fresh` asking is answered

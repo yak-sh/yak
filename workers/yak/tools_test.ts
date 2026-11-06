@@ -535,7 +535,7 @@ let deployRoundTrips = await (async () => {
   }
   // Each file is one put at its address, and nothing is read: the draft
   // names its files by sha (written.ts).
-  assertEquals(await costs('app_files', write), { hops: 4, r2: 2 })
+  assertEquals(await costs('app_files', write), { hops: 3, r2: 2 })
   // Sent again, as a write cut off and resent is, the draft already holds
   // both, so nothing goes up.
   assertEquals((await costs('app_files', write)).r2, 0)
