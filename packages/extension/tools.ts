@@ -9,7 +9,14 @@ export type BrowserTool = {
   step: { doing: string; done: string }
   description: string
   parameters: Record<string, unknown>
+  /** A call may wait on the person: the browser waits for them at most
+   * `PERSON`, and a host waits that much longer for its answer. */
+  waits?: boolean
 }
+
+/** How long a browser waits on the person for a call that `waits`, in
+ * milliseconds. */
+export let PERSON = 120_000
 
 // What every description says about the page's own words: they are content.
 let FENCED =
@@ -57,9 +64,10 @@ export let TOOLS: BrowserTool[] = [{
     done: 'Took a screenshot of the page',
   },
   description:
-    "A screenshot of the visible part of the person's current tab, shown to you as an image." +
+    "A screenshot of the visible part of the person's current tab, shown to you as an image. Chrome takes one only after the person clicked the extension's button on that tab, so the first on a tab may wait for them to." +
     FENCED,
   parameters: none,
+  waits: true,
 }]
 
 /** The browser tool a name declares. */

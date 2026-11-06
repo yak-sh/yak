@@ -659,6 +659,13 @@ export class Builder {
       caught(e, { request: 'build', space: held.space })
     )
   }
+
+  /** A socket closed. A lent browser's calls fail at once, rather than
+   * waiting out the person. */
+  webSocketClose(ws: Wire): void {
+    let held = ws.deserializeAttachment() as Socket | null
+    if (held && 'browser' in held) this.#lent.gone(ws)
+  }
 }
 
 // A frame from a page, as far as it is anybody's business: the one word it may

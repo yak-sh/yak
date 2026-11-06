@@ -15,7 +15,7 @@ import {
 } from './consent.ts'
 import { type Config, spaceOf } from './connect.ts'
 import { screen } from './screen.ts'
-import { badge, keep, said, stored } from './chrome.ts'
+import { keep, said, stored } from './chrome.ts'
 
 let send = (does: string) => chrome.runtime.sendMessage({ do: does })
 
@@ -31,6 +31,7 @@ export let popup = (config: Config): void => {
       space: s.space,
       link: s.link,
       consent: s.consent ?? NONE,
+      lend: s.lend,
       error: s.error,
     })
   }
@@ -46,9 +47,8 @@ export let popup = (config: Config): void => {
         return
       }
       await consent(allow(site))
-      await badge(false)
     },
-    dismiss: () => consent(dismiss).then(() => badge(false)),
+    dismiss: () => consent(dismiss),
     revoke: (site) =>
       chrome.permissions.remove({ origins: [pattern(site)] }).catch(() => {})
         .then(() => consent(revoke(site))),
@@ -73,5 +73,8 @@ export let popup = (config: Config): void => {
     ).then(() => space && send('connect'))
   })
   chrome.storage.onChanged.addListener(draw)
-  draw()
+  // Opening the popup is a click on the extension's button, which lets
+  // Chrome take a screenshot of this tab: a screenshot waiting on it is
+  // taken again.
+  stored().then((s) => s.lend ? keep({ lend: undefined }) : draw())
 }

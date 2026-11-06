@@ -1,5 +1,5 @@
 import { equal, match, test } from '@yaks/testing'
-import { answering, asks, type Seen } from './answer.ts'
+import { answering, asks, lends, type Seen } from './answer.ts'
 
 let URL = 'https://example.com/post'
 let page = { url: URL, title: 'Post', text: 'Hello ``` world', selection: '' }
@@ -81,5 +81,20 @@ test('a call on a site not allowed asks about that site, and only then', () => {
   equal(
     asks(call('browser_text'), { url: 'chrome://newtab/', allowed: false }),
     null,
+  )
+})
+
+// What Chrome says when it captures a tab nobody clicked the extension on.
+let UNLENT = "Either the '<all_urls>' or 'activeTab' permission is required."
+
+test('a screenshot Chrome refuses until the person clicks says what to ask them', () => {
+  let call = (tool: string) => ({ id: 'c', tool, args: {} })
+  let seen = { ...allowed, failed: UNLENT }
+  equal(lends(call('browser_screenshot'), seen), 'https://example.com')
+  equal(lends(call('browser_screenshot'), { ...allowed, failed: 'gone' }), null)
+  equal(lends(call('browser_text'), seen), null)
+  match(
+    refused('browser_screenshot', seen),
+    /clicks the extension's button .* Ask them to click it on example\.com, then try again/,
   )
 })

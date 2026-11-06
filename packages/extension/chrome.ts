@@ -16,6 +16,8 @@ export type Stored = {
   grant?: Tokens
   space?: string
   consent?: Consent
+  /** The site of a tab a screenshot waits on the person's click on. */
+  lend?: string
   link?: Link
   error?: string
 }
@@ -33,6 +35,28 @@ export let keep = async (patch: Stored): Promise<void> => {
     Object.fromEntries(all.filter(([, v]) => v != null)),
   )
 }
+
+/** What `found` finds in what is kept, as soon as it finds anything, or
+ * undefined once `ms` pass: how the background waits on the person, whose
+ * answers the popup keeps. */
+export let until = <T>(
+  found: (s: Stored) => T | undefined,
+  ms: number,
+): Promise<T | undefined> =>
+  new Promise((ok) => {
+    let done = (v?: T) => {
+      clearTimeout(timer)
+      chrome.storage.onChanged.removeListener(look)
+      ok(v)
+    }
+    let look = async () => {
+      let v = found(await stored())
+      if (v !== undefined) done(v)
+    }
+    let timer = setTimeout(done, ms)
+    chrome.storage.onChanged.addListener(look)
+    look()
+  })
 
 /** Storage as an area for the grant store (./signin.ts `kept`). */
 export let local: Area = {

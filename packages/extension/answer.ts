@@ -19,6 +19,14 @@ export type Seen = {
   failed?: string
 }
 
+/// unlent("Either the '<all_urls>' or 'activeTab' permission is required.") -> true
+/// unlent('frame gone') -> false
+/** Whether a screenshot failed because Chrome wants the person's click: it
+ * captures a tab only under `activeTab`, which a click on the extension's
+ * button grants for that tab, or under every site's permission, which a
+ * site allowed on its own is not (Chromium's `CanCaptureVisiblePage`). */
+export let unlent = (failed = ''): boolean => /'activeTab'/.test(failed)
+
 /** What a tool needs from the tab beyond its address and title. */
 export type Need = 'page' | 'shot'
 
@@ -98,6 +106,10 @@ let refusal = (tool: string, s: Seen): string | undefined => {
     ? `The person has not allowed you to read ${
       host(on)
     } yet. The extension is asking them now; try again once they allow it.`
+    : need == 'shot' && unlent(s.failed)
+    ? `Chrome lets the extension take a screenshot of a tab only after the person clicks the extension's button in their browser's toolbar while on that tab, and they have not yet. Ask them to click it on ${
+      host(on)
+    }, then try again; it then works on that site in that tab until the tab leaves it. browser_text reads the page without it.`
     : s.failed
     ? `The browser could not read ${s.url}: ${s.failed}`
     : need && !s[need]
@@ -114,6 +126,14 @@ export let answering = (call: Call['call'], seen: Seen): Answer => {
       ...(refused ? { error: refused } : TOLD[call.tool].says(seen)),
     },
   }
+}
+
+/** Whether a screenshot waits on the person's click on the extension's
+ * button, on the site it names: the glue keeps it for the popup, and takes it
+ * again once the popup opens. */
+export let lends = (call: Call['call'], seen: Seen): string | null => {
+  let on = site(seen.url)
+  return needs(call.tool) == 'shot' && on && unlent(seen.failed) ? on : null
 }
 
 /** Whether a call waits on the person's consent for the tab's site: the glue

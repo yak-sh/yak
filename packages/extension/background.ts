@@ -7,12 +7,14 @@
 import { backoff } from '@yaks/fp'
 import { client as oauth, OAuthError } from '@yaks/oauth'
 import { answer, type Call, callOf, PING } from './wire.ts'
-import { answering, asks, needs, type Seen } from './answer.ts'
+import { answering, asks, lends, needs, type Seen } from './answer.ts'
 import { allowed, ask, NONE, site } from './consent.ts'
 import { type Config, socket } from './connect.ts'
 import { read } from './read.ts'
 import { kept, provider, register } from './signin.ts'
-import { badge, keep, local, said, stored } from './chrome.ts'
+import { asked } from './screen.ts'
+import { PERSON } from './tools.ts'
+import { badge, keep, local, said, stored, until } from './chrome.ts'
 
 // Often enough that neither the socket nor the service worker goes idle.
 let BEAT = 20_000
@@ -35,8 +37,13 @@ let GIVE: Record<string, (tab: Tab) => Promise<Partial<Seen>>> = {
   }),
 }
 
-/** What the tab the person is on gives for a call, on a site they allowed. */
-let look = async (call: Call['call']): Promise<Seen> => {
+/** What the tab the person is on gives for a call, on a site they allowed. A
+ * screenshot Chrome refuses until the person clicks the extension's button
+ * waits for that click, which opening the popup is, until `by`. */
+let look = async (
+  call: Call['call'],
+  by = Date.now() + PERSON,
+): Promise<Seen> => {
   let [tab] = await chrome.tabs.query({ active: true, lastFocusedWindow: true })
   let { consent = NONE } = await stored()
   let on = site(tab?.url ?? '')
@@ -51,9 +58,13 @@ let look = async (call: Call['call']): Promise<Seen> => {
     Object.assign(seen, await given.catch((e) => ({ failed: said(e) })))
   }
   let asked = asks(call, seen)
-  if (asked) {
-    await Promise.all([keep({ consent: ask(asked)(consent) }), badge(true)])
-  }
+  if (asked) await keep({ consent: ask(asked)(consent) })
+  let lend = lends(call, seen)
+  if (!lend || Date.now() >= by) return seen
+  await keep({ lend })
+  let clicked = await until((s) => s.lend ? undefined : true, by - Date.now())
+  if (clicked) return look(call, by)
+  await keep({ lend: undefined })
   return seen
 }
 
@@ -159,6 +170,11 @@ export let start = (config: Config): void => {
       .catch((e) => keep({ error: said(e) }))
       .finally(() => reply({}))
     return true
+  })
+  // The badge says whether anything waits on the person.
+  chrome.storage.onChanged.addListener(async () => {
+    let { consent = NONE, lend } = await stored()
+    await badge(asked({ consent, lend }))
   })
   // A service worker sleeps when idle, and this wakes it to reconnect.
   chrome.alarms.create('wake', { periodInMinutes: 1 })

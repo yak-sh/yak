@@ -52,3 +52,11 @@ test('a site waiting on the person is asked about, and allowed sites can be remo
     'signout',
   ])
 })
+
+let LENDING = shown({ space: 'jeff', lend: 'https://b.com' }).text
+
+test('a screenshot waiting on the person says where to click', () => {
+  let text = LENDING
+  equal(text.includes('Your agent wants a screenshot of b.com'), true)
+  equal(text.includes('click the button there'), true)
+})

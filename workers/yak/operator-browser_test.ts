@@ -16,6 +16,7 @@ import { asking } from './identity.ts'
 import { ledger, mint } from './grants.ts'
 import {
   browsers,
+  GONE,
   type Lent,
   NONE,
   type Socket,
@@ -106,6 +107,22 @@ test('no browser is a refusal, and a browser that never answers an error', async
   await time.advance(WAIT)
   let late = await assertRejects(() => quiet)
   assertEquals(late instanceof CallError, false)
+})
+
+test('a call that waits on the person outlasts a read, and a browser gone fails it', async () => {
+  let ws = socket(lent)
+  open.splice(0, open.length, ws)
+  let shot = tab.ask(ADA, 'browser_screenshot', {})
+  let settled = false
+  shot.catch(() => {}).finally(() => settled = true)
+  await time.advance(WAIT)
+  assertEquals(settled, false)
+  tab.gone(ws)
+  let gone = await assertRejects(() => shot)
+  assertEquals([gone instanceof CallError, (gone as Error).message], [
+    true,
+    GONE,
+  ])
 })
 
 // ── Through the kernel ──────────────────────────────────────────────────

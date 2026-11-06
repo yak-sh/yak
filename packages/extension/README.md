@@ -50,26 +50,28 @@ equal(refused.error?.startsWith('The person has not allowed you'), true)
 
 ## Exports
 
-| Import                  | What it offers                                                                                         |
-| ----------------------- | ------------------------------------------------------------------------------------------------------ |
-| `@yaks/extension`       | everything below except the build                                                                      |
-| `@yaks/extension/wire`  | `call`, `answer`, `callOf`, `answerOf`, `PING`, and `protocols` and `bearerOf` for the socket's bearer |
-| `@yaks/extension/tools` | `TOOLS` and `toolOf`: the browser tools a host declares to its model                                   |
-| `@yaks/extension/build` | `build(config, dir)`: the unpacked extension                                                           |
+| Import                  | What it offers                                                                                                                       |
+| ----------------------- | ------------------------------------------------------------------------------------------------------------------------------------ |
+| `@yaks/extension`       | everything below except the build                                                                                                    |
+| `@yaks/extension/wire`  | `call`, `answer`, `callOf`, `answerOf`, `PING`, and `protocols` and `bearerOf` for the socket's bearer                               |
+| `@yaks/extension/tools` | `TOOLS`, `toolOf` and `PERSON`: the browser tools a host declares to its model, and how long one that `waits` may wait on the person |
+| `@yaks/extension/build` | `build(config, dir)`: the unpacked extension                                                                                         |
 
 From `@yaks/extension`:
 
 - `read(doc?, selected?, limit?)` is the `Page` a document shows:
   `{url, title, text, selection}`.
-- `answering(call, seen)`, `needs(tool)` and `asks(call, seen)` decide an answer
-  from what the tab gave.
+- `answering(call, seen)`, `needs(tool)`, `asks(call, seen)`,
+  `lends(call, seen)` and `unlent(failed)` decide an answer from what the tab
+  gave.
 - `site`, `allow`, `revoke`, `allowed`, `ask`, `dismiss` and `pattern` are
   consent.
 - `configOf`, `socket`, `spaceOf` and `spaceHost` are the connection.
 - `registration`, `register`, `provider` and `kept` are signing in.
-- `manifest(config)` is the extension's `manifest.json`, and
+- `manifest(config)` is the extension's `manifest.json`,
   `screen(config,
-  state)` the popup's HTML.
+  state)` the popup's HTML, and `asked(state)` whether its
+  badge shows.
 
 ## The host's side
 
@@ -140,6 +142,19 @@ example.com?**, because the browser grants a site's permission only during a
 click (`chrome.permissions.request` with `pattern(site)`). Allowed sites are
 listed in the popup, each with a button to remove it.
 
+## Screenshots
+
+Chrome's `chrome.tabs.captureVisibleTab` captures a tab only under `activeTab`
+or the permission for every site (`<all_urls>`); a site's own permission is not
+enough. `activeTab` is what the person grants a tab by clicking the extension's
+button on it, and it lasts while that tab stays on the same site. So a
+screenshot keeps per-site consent: when Chrome refuses one (`unlent`), the
+extension waits for the person's click, at most `PERSON` (two minutes), with its
+badge raised and the popup saying where to click. Opening the popup is the
+click, and the screenshot is taken then. A person who does not click is an
+answer telling the agent to ask them to. `browser_screenshot` is declared with
+`waits`, so a host waits that much longer for its answer.
+
 ```ts
 import { equal } from '@yaks/testing'
 import { allow, allowed, ask, NONE, revoke } from '@yaks/extension'
@@ -187,8 +202,6 @@ time.
 - Chrome only: the glue (`background.ts`, `popup.ts`) uses `chrome.*`.
 - It reads the top frame of the active tab in the last focused window; frames
   inside the page, shadow roots and form fields are not read.
-- Chrome captures a screenshot only with `activeTab` or every site's permission.
-  On a site allowed one at a time, a screenshot works on a tab after the person
-  opened the extension's popup there, until the tab navigates; otherwise the
-  answer is the browser's error.
+- A screenshot of a tab needs the person's click on the extension's button on
+  it, once per tab and site (see Screenshots).
 - It reads; it does not click, type or navigate.

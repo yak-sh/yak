@@ -16,6 +16,9 @@ export type State = {
   space?: string
   link?: Link
   consent: Consent
+  /** The site of a tab the agent wants a screenshot of, waiting on the
+   * person's click on the extension's button there. */
+  lend?: string
   /** The last thing that went wrong, said to the person. */
   error?: string
 }
@@ -63,6 +66,12 @@ let asking = (site: string) =>
   `<p>Your agent asked to see this site. It reads a page only when it asks.</p>` +
   `${button('allow', 'Allow', site)}${button('dismiss', 'Not now')}</section>`
 
+let lending = (site: string) =>
+  `<section class="ask"><strong>Your agent wants a screenshot of ${
+    esc(host(site))
+  }</strong>` +
+  `<p>Chrome lets it take one only after you click this extension's button on that tab. Go to the tab and click the button there.</p></section>`
+
 let sites = (c: Consent) =>
   c.sites.length
     ? `<section><h2>Sites it can read</h2><ul>${
@@ -81,7 +90,14 @@ export let screen = (config: Config, s: State): string =>
     : !s.space
     ? choose(config)
     : linked(config, s.space, s.link ?? 'connecting') +
-      (s.consent.asking ? asking(s.consent.asking) : '') + sites(s.consent) +
+      (s.consent.asking ? asking(s.consent.asking) : '') +
+      (s.lend ? lending(s.lend) : '') + sites(s.consent) +
       `<footer>${button('change', 'Change space')}${
         button('signout', 'Sign out')
       }</footer>`)
+
+/// asked({ consent: { sites: [], asking: 'https://a.com' } }) -> true
+/// asked({ consent: { sites: [] } }) -> false
+/** Whether anything waits on the person, which the badge shows. */
+export let asked = (s: Pick<State, 'consent' | 'lend'>): boolean =>
+  !!(s.consent.asking || s.lend)

@@ -6,7 +6,7 @@
 // call's result, and a screenshot an image the model is shown beside it
 // (operator.ts `shown`).
 import { type Answer, answerOf, call } from '@yaks/extension/wire'
-import { TOOLS } from '@yaks/extension/tools'
+import { PERSON, toolOf, TOOLS } from '@yaks/extension/tools'
 import { type Clock, system } from '@yaks/fp'
 import type { Told, Tool } from '@yaks/session'
 import { unbase64 } from './bytes.ts'
@@ -26,16 +26,22 @@ export type Socket = {
 /** What a browser answered a call. */
 export type Said = Answer['answer']
 
-/** How long a call waits for the browser to answer, in milliseconds. */
+/** How long a call waits for the browser to answer, in milliseconds. A call
+ * to a tool that waits on the person waits `PERSON` longer. */
 export let WAIT = 20_000
 
 /** What the model reads when nobody's browser is there to ask. */
 export let NONE =
   'No browser is connected for you now. Ask the person to open the yaks.app extension and connect it to this space.'
 
+/** What the model reads when the browser a call was asked of went away. */
+export let GONE =
+  "The person's browser disconnected before it answered. Ask them to check the yaks.app extension is connected to this space."
+
 /** The browsers lent to one space's Operator: whether a person has one
- * connected, a call asked of their newest, and an answer a socket brought
- * back, which settles the call it names when it came from that person. */
+ * connected, a call asked of their newest, an answer a socket brought back,
+ * which settles the call it names when it came from that person, and a
+ * socket gone, which fails the calls asked of it. */
 export type Browsers = ReturnType<typeof browsers>
 
 export let browsers = (
@@ -43,7 +49,8 @@ export let browsers = (
   clock: Clock = system,
   wait = WAIT,
 ) => {
-  let pending = new Map<string, { person: string; done: (a: Said) => void }>()
+  type Asked = { person: string; ws: Socket; fail: (e: Error) => void }
+  let pending = new Map<string, Asked & { done: (a: Said) => void }>()
   let lentBy = (person: string) =>
     sockets().filter((ws) => {
       let held = ws.deserializeAttachment() as Partial<Lent> | null
@@ -55,11 +62,17 @@ export let browsers = (
       if (!ws) return no(refuse('browser', NONE))
       let id = crypto.randomUUID()
       let end = () => (cancel(), pending.delete(id))
-      let cancel = clock.after(wait, () => {
+      let ms = wait + (toolOf(tool)?.waits ? PERSON : 0)
+      let cancel = clock.after(ms, () => {
         end()
-        no(new Error(`The browser did not answer ${tool} in ${wait} ms.`))
+        no(new Error(`The browser did not answer ${tool} in ${ms} ms.`))
       })
-      pending.set(id, { person, done: (a) => (end(), ok(a)) })
+      pending.set(id, {
+        person,
+        ws,
+        done: (a) => (end(), ok(a)),
+        fail: (e) => (end(), no(e)),
+      })
       try {
         ws.send(call(id, tool, args))
       } catch {
@@ -73,10 +86,16 @@ export let browsers = (
     let waiting = a && pending.get(a.id)
     if (waiting && waiting.person == held.person) waiting.done(a!)
   }
+  let gone = (ws: Socket) => {
+    for (let p of [...pending.values()]) {
+      if (p.ws == ws) p.fail(refuse('browser', GONE))
+    }
+  }
   return {
     connected: (person: string) => lentBy(person).length > 0,
     ask,
     heard,
+    gone,
   }
 }
 
@@ -129,6 +148,7 @@ export let browserTools = (
       step: t.step,
       description: t.description,
       parameters: t.parameters,
+      waits: t.waits,
       run: async (args) =>
         told(env, space, await lent.ask(person, t.name, args)),
     }))
