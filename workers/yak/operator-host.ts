@@ -788,9 +788,11 @@ export let operatorRequest = async (
   let everyone = args.everyone === true && access.administrative
     ? operator.named
     : undefined
+  // The platform's admin may stop anyone's, as it may retry anyone's.
+  let stopping = path == '/operator/stop' && access.administrative
   if (
     (path == '/operator/stop' || path == '/operator/run') && args.task &&
-    !await own(String(args.task))
+    !stopping && !await own(String(args.task))
   ) return missing()
   if (path == '/operator/stop') {
     return Response.json(await operator.stop(String(args.task ?? ''), person))

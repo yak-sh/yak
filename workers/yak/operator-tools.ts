@@ -83,6 +83,19 @@ export let operatorTools: Omit<Tool, 'title' | 'description'>[] = [
     run: (ctx, args) => ask(ctx, args, '/operator/remove'),
   },
   {
+    name: 'operator_stop',
+    destructive: false,
+    input: {
+      type: 'object',
+      properties: {
+        space: SPACE,
+        task: str("The operator task, or a conversation's session, to stop."),
+      },
+      required: ['task'],
+    },
+    run: (ctx, args) => ask(ctx, args, '/operator/stop'),
+  },
+  {
     name: 'operator_retry',
     destructive: false,
     input: {

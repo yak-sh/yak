@@ -563,3 +563,37 @@ test('words given with a model are answered by it, and the next words by the Ope
   assertEquals(models, ['claude-haiku-5-5', 'claude-sonnet-5-5'])
   assertEquals(steps, [byCall.session, byCall.session])
 })
+
+// Helpers forking helpers: Stop on the conversation reaches every one of
+// them, however deep.
+let deep = operatorMemory()
+let deeper = operate(
+  deep,
+  roundsPlatform,
+  operatorModel(() => Promise.reject(new Error('no model here'))),
+)
+let line = (session: string) => ({
+  entity: { eid: crypto.randomUUID() },
+  entry: { session },
+  content: { body: 'Check the draft.' },
+})
+let [top, child, grandchild] = [0, 1, 2].map(() => crypto.randomUUID())
+await deep.g.apply([
+  { entity: { eid: top }, session: { id: top } },
+  { entity: { eid: child }, session: { id: child }, spawned: { parent: top } },
+  {
+    entity: { eid: grandchild },
+    session: { id: grandchild },
+    spawned: { parent: child },
+  },
+  ...[top, child, grandchild].map(line),
+], { trusted: true })
+let deepStop = await deeper.stop(top, roundsHeld.person)
+let stops = await deep.g.read('.stop&.entry')
+test('Stop reaches a helper a helper started', () => {
+  assertEquals(deepStop.stopped, true)
+  assertEquals(
+    new Set(stops.map((b) => comp(b, 'entry').session)),
+    new Set([top, child, grandchild]),
+  )
+})

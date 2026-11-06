@@ -1355,9 +1355,14 @@ export let operating = (
       ).at(-1)
     if (!newest) throw refuse('missing', `no operator conversation ${open}`)
     let session = newest.entity.eid
-    let helpers = row?.session
-      ? (await g.read(`.spawned.parent=${session}`)).map((b) => b.entity.eid)
-      : []
+    // Every helper under it, however deep: a helper a helper started works
+    // for the same conversation.
+    let helpers: string[] = []
+    for (let parents = row?.session ? [session] : []; parents.length;) {
+      parents = (await g.read(`.spawned.parent=${parents.join(',')}`))
+        .map((b) => b.entity.eid)
+      helpers.push(...parents)
+    }
     let busy = []
     for (let s of [session, ...helpers]) {
       let status = statusOf(await transcript(g, s))

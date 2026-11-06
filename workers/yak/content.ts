@@ -835,6 +835,11 @@ export let WORDS: Record<string, Words> = {
     'description':
       "Remove documents from an app's library by their eids, from library_list: each one's file, its row and its extracted text are deleted, so search and answers no longer cite it. To replace a document with a newer copy, library_add with replaces instead.",
   },
+  'operator_stop': {
+    'title': 'Stop an operator conversation',
+    'description':
+      "Stop an operator conversation or task and every helper working under it, however deep: the step each is in is withdrawn and no step goes on past it, until new words reopen the conversation. What it already did and wrote stays. You stop your own; the platform's admin anyone's.",
+  },
   'operator_retry': {
     'title': 'Retry an operator request',
     'description':
