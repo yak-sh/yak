@@ -2769,14 +2769,15 @@ let desk = async (
     // page that shows it; on the person's own space (`member.own`), what they
     // connected for themselves and the services holding a grant from them.
     view == 'connections'
-      ? dir.seats(owner, 'owner').then(async (seats) => {
+      ? dir.seats(owner, 'owner').then((seats) => {
         let own = seats.some((s) => s.own && s.space.eid == space.eid)
         return connectionsOf(env, space, owner, {
           dir,
           own,
+          // Asked beside the directory's reads, never ahead of them.
           services: own
-            ? await identity().then((part) => part.services(env, owner))
-            : [],
+            ? identity().then((part) => part.services(env, owner))
+            : undefined,
           enable: enabled(req),
           add: q.get('add') ?? undefined,
         })

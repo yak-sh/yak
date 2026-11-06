@@ -395,6 +395,14 @@ test('a dashboard page reads the directory in two trips at most', async () => {
   for (let view of ['profile', 'shared'] as const) {
     assertEquals(await trips(managePath(view)), '1', view)
   }
+  // Their own space's connections also say which outside services hold a
+  // grant from them, asked beside the directory's reads.
+  let own = await k.at('yaks.app', managePath('connections'), {
+    headers: { cookie },
+  })
+  await own.body?.cancel()
+  let at = new URL(own.headers.get('location')!, 'https://yaks.app')
+  assertEquals(await trips(at.pathname), '2')
 })
 
 // A space with no front page answers its bare address with its listing, from

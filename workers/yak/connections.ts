@@ -480,7 +480,8 @@ export let connectionsOf = async (
   person: string,
   at: {
     own?: boolean
-    services?: Service[]
+    /** asked by the caller, and awaited only once the rest is read */
+    services?: Promise<Service[]>
     enable?: string[]
     add?: string
     /** the request's directory, so these reads travel with what it asks */
@@ -625,7 +626,7 @@ export let connectionsOf = async (
   return {
     on: vaulted(env),
     list: shown.sort((a, b) => a.integration.localeCompare(b.integration)),
-    services: own ? at.services ?? [] : [],
+    services: own ? await at.services ?? [] : [],
     borrowed: await Promise.all(
       loans.filter((l) => l[USES]).map(async (l): Promise<Borrowed> => {
         let eid = String(comp(l, 'edge').to)
