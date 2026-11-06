@@ -65,7 +65,10 @@ Account Link returning and refreshing to the same address. A checkout is a
 payment-mode session on the account (`Stripe-Account`), its lines inline
 `price_data`, the fee `payment_intent_data[application_fee_amount]` (none when
 0), and the tags on both the session and its PaymentIntent, so a refund's charge
-carries them. `shopped(options)(event)` reads `account.updated`,
+carries them; a tag carries 500 characters (`tag`), as a metadata value does.
+Its return addresses get their braces back, which `URL` percent-encodes, so
+Stripe still finds its `{CHECKOUT_SESSION_ID}` in them.
+`shopped(options)(event)` reads `account.updated`,
 `account.application.deauthorized`, `checkout.session.completed`,
 `charge.refunded` and `charge.dispute.created` or `.closed`; a dispute's charge
 is read back on the account, since a dispute carries no metadata.

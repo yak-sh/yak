@@ -79,7 +79,7 @@ import { caught, refusing } from './defects.ts'
  * to somebody's customer, is worse than no fee at all.
  *
  * The most anybody may set is the whole sale, `MOST` — a rate above 100% is a
- * typo every time, and Stripe would refuse the charge it made.
+ * typo every time, and the provider would refuse the charge it made.
  */
 export let MOST = 10_000
 
@@ -157,8 +157,9 @@ export let sellerOf = (shop: Shop): Seller => ({ via, ...shop })
 export let selling = (space: Space): 'none' | 'setup' | 'ready' =>
   !space.seller?.account ? 'none' : space.seller.ready ? 'ready' : 'setup'
 
-// New payments require a paid plan. Existing orders and Stripe events still
-// settle after a downgrade, and the seller can always disconnect their account.
+// New payments require a paid plan. Existing orders and the provider's events
+// still settle after a downgrade, and the seller can always disconnect their
+// account.
 export let refusedSell = (space: Space, env: Host = {}) =>
   paid(space.tier)
     ? null
@@ -209,14 +210,14 @@ export let connect = async (env: Env, space: Space, email: string) => {
 }
 
 /**
- * Stop selling: the platform forgets the account, and Stripe keeps it.
+ * Stop selling: the platform forgets the account, and the provider keeps it.
  *
  * Deliberately not a delete. The account is the merchant's own — their money,
- * their payouts, their records of every sale they have made, and Stripe's own
- * rules about what may be closed and when. Ours to forget, never ours to
- * destroy. What this does is take the row off the space, so no app here can
- * create another charge on it; the seller's dashboard, balance and history are
- * exactly where they were, and connecting again is one call.
+ * their payouts, their records of every sale they have made, and the
+ * provider's own rules about what may be closed and when. Ours to forget,
+ * never ours to destroy. What this does is take the row off the space, so no
+ * app here can create another charge on it; the seller's dashboard, balance
+ * and history are exactly where they were, and connecting again is one call.
  */
 export let disconnect = (env: Env, space: Space) => wrote(env, space, null)
 
@@ -271,19 +272,12 @@ export type Product = {
   product?: { price_cents?: number | null }
 }
 
-/**
- * A tag takes 500 characters (Stripe's metadata values do), and the order's
- * items ride one of them — so this is how many lines fit in an order, and the
- * door refuses a bigger cart by name rather than sending something the
- * provider will truncate.
- * A uuid with its dashes off is 32 characters and a line is about 45, so it
- * lands near ten.
- */
-export let META = 500
-
 /** The items as they ride the checkout and come back on the event: the product,
  * how many, and the variant, in the shortest form that survives a round
- * trip. Dashes come off the uuid to buy back four characters a line. */
+ * trip. They ride one tag, so its length is what decides how many lines fit
+ * in an order ({@link priced}). Dashes come off the uuid to buy back four
+ * characters a line: a uuid without them is 32 characters and a line about
+ * 45. */
 export let packed = (items: Item[]) =>
   JSON.stringify(
     items.map((i) => ({
@@ -295,14 +289,16 @@ export let packed = (items: Item[]) =>
 
 /**
  * The cart priced against the store's own rows: the sale's lines, the total
- * in cents, and the items packed for the metadata.
+ * in cents, and the items packed for one tag, which takes `tag` characters at
+ * most (the lent shops' `tag`).
  *
  * Every refusal here happens before the provider is asked, and each says which line
  * is wrong: a product this store does not have (an eid off another app, or one
- * somebody made up), and a product with no price, which is a seller's row that
- * is not finished rather than a free shirt.
+ * somebody made up), a product with no price, which is a seller's row that
+ * is not finished rather than a free shirt, and a cart too big for its tag,
+ * refused by name rather than sent for the provider to cut short.
  */
-export let priced = (rows: Product[], items: Item[]) => {
+export let priced = (rows: Product[], items: Item[], tag: number) => {
   let by = new Map(rows.map((r) => [r.entity.eid, r]))
   let total = 0
   let lines = items.map((one): Line => {
@@ -323,20 +319,20 @@ export let priced = (rows: Product[], items: Item[]) => {
     }
   })
   let meta = packed(items)
-  if (meta.length > META) {
+  if (meta.length > tag) {
     throw refuse(
       'limit',
       `that is too many different things in one order — about ` +
-        `${Math.floor(items.length * META / meta.length)} lines fit`,
+        `${Math.floor(items.length * tag / meta.length)} lines fit`,
     )
   }
   return { lines, total, packed: meta }
 }
 
 /**
- * Where Stripe sends the buyer, from what the caller asked for. Relative to the
- * app's own root, always — so nothing in a page writes the app's name and an
- * installed copy sends its buyers back to itself.
+ * Where the provider sends the buyer, from what the caller asked for.
+ * Relative to the app's own root, always — so nothing in a page writes the
+ * app's name and an installed copy sends its buyers back to itself.
  *
  * And it may not leave that root. This door is callable by a guest on an open
  * app, so an absolute URL from the wire would let a stranger have yaks.app's
@@ -345,12 +341,10 @@ export let priced = (rows: Product[], items: Item[]) => {
  * is the answer rather than the input — a filter over the input would be a list
  * of the escapes somebody thought of.
  *
- * The braces come back afterwards, and only those two characters.
- * `{CHECKOUT_SESSION_ID}` is a literal Stripe substitutes the session id for on
- * the way back, `new URL` percent-encodes braces in a query, and
- * `%7BCHECKOUT_SESSION_ID%7D` is a string Stripe does not recognise — so the
- * buyer would land on a page that never learns which order it is about. Undone
- * after the check, so nothing about where this points has been decided by it.
+ * The answer is the address as `URL` writes it. A placeholder the provider
+ * fills in on the way back is percent-encoded in it, and the provider writes
+ * that back itself ({@link Sale.done}), after this check, so nothing about
+ * where this points is decided by it.
  */
 export let backAt = (root: string, asked: unknown) => {
   let at = String(asked ?? '').trim()
@@ -367,7 +361,7 @@ export let backAt = (root: string, asked: unknown) => {
       `success and cancel stay inside this app (${root})`,
     )
   }
-  return out.href.replaceAll('%7B', '{').replaceAll('%7D', '}')
+  return out.href
 }
 
 /**
@@ -460,6 +454,7 @@ export let buying = async (
     priceless = priced(
       await rows(`.entity.eid=${items.map((i) => i.product).join(',')}`),
       items,
+      lent.tag,
     )
     let asked = body as {
       success?: unknown
@@ -513,12 +508,12 @@ export let buying = async (
  * rather than minted.
  *
  * This is the idempotence, and it is stronger than remembering event ids would
- * be. At-least-once delivery means `checkout.session.completed` arrives twice
- * for one sale; a minted eid would make two orders and a remembered-event list
- * would be a second thing to keep correct. Deriving it means the second
- * delivery addresses the row the first one wrote, derives the same properties,
- * and moves nothing — the same rule `moved` keeps for a seller's row, one level
- * up.
+ * be. At-least-once delivery means the provider's word that a checkout
+ * completed arrives twice for one sale; a minted eid would make two orders and
+ * a remembered-event list would be a second thing to keep correct. Deriving it
+ * means the second delivery addresses the row the first one wrote, derives the
+ * same properties, and moves nothing — the same rule `moved` keeps for a
+ * seller's row, one level up.
  *
  * Shaped as a uuid because that is what a store's eids are (src/edge.ts
  * `edgeEid` derives one the same way, off a sentence rather than a session).
@@ -532,7 +527,7 @@ export let orderEid = (session: string): string => {
   }-${s.slice(20)}`
 }
 
-/** The cart read back out of a session's metadata — {@link packed}, undone.
+/** The cart read back out of a checkout's tags — {@link packed}, undone.
  * Junk answers an empty list rather than throwing: an order whose items cannot
  * be read is still an order somebody paid for, and losing the money over the
  * label would be the worse mistake. */
@@ -629,7 +624,7 @@ export let apply = async (env: Env, heard: Shopped): Promise<string> => {
   // An account we have no space for: a seller who disconnected, or another
   // platform's event at our door. Nothing to retry — a second delivery finds
   // the same nothing — so it is not filed and the door answers 200 rather than
-  // making the provider repeat an unanswerable question for three days.
+  // making the provider repeat an unanswerable question for days.
   if (!space) return 'no space sells through that account'
   if (heard.about == 'seller') {
     // The id comes from the row we already hold, never from the payload: the
@@ -754,14 +749,14 @@ let sold = async (env: Env, space: Space, account: string, o: Paid) => {
  * A refund that finds no order is not a break: a merchant refunds charges they
  * made outside this platform too, on the same account.
  *
- * TODO, and it cannot bite while the fee is 0: Stripe does not refund an
- * application fee when a charge is refunded, so the day the owner sets a rate,
- * a seller who refunds from their own dashboard is out of pocket by our fee.
- * The fix is ours to make: the seller has already made the refund by the time
- * we hear about it, so it is the fee refunded in proportion, which the shops
- * contract would lend (`POST /v1/application_fees/<id>/refund` at Stripe). Left
- * unbuilt rather than built untested: there is no fee to give back today, and
- * the first sale with a rate on it is what should drive the shape.
+ * TODO, and it cannot bite while the fee is 0: the provider need not give our
+ * fee back when a charge is refunded, so the day the owner sets a rate, a
+ * seller who refunds from their own dashboard is out of pocket by our fee. The
+ * fix is ours to make: the seller has already made the refund by the time we
+ * hear about it, so it is the fee refunded in proportion, which the shops
+ * contract would lend. Left unbuilt rather than built untested: there is no
+ * fee to give back today, and the first sale with a rate on it is what should
+ * drive the shape.
  */
 let settled = async (
   env: Env,

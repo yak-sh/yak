@@ -18,7 +18,6 @@ import {
   fee,
   feeOf,
   MARK,
-  META,
   orderEid,
   orderOf,
   packed,
@@ -157,6 +156,10 @@ let shelf: Product[] = [
   },
   { entity: { eid: FREE }, doc: { title: 'Sticker' }, product: {} },
 ]
+// The cart priced off the shelf, for a provider whose tags take 500
+// characters, as Stripe's metadata values do.
+let TAG = 500
+let price = (items: Parameters<typeof priced>[1]) => priced(shelf, items, TAG)
 
 test('a cart is read off the wire, or refused in words', () => {
   assertEquals(cart({ items: [{ product: TEE, qty: '2', options: ' M ' }] }), [
@@ -178,7 +181,7 @@ test('a cart is read off the wire, or refused in words', () => {
 })
 
 test('the cart is priced off the store, never off the wire', () => {
-  let out = priced(shelf, [
+  let out = price([
     { product: TEE, qty: 2, options: 'M' },
     { product: MUG, qty: 1 },
   ])
@@ -193,29 +196,29 @@ test('the cart is priced off the store, never off the wire', () => {
 test('a product this app has not got, or has not priced, is refused', () => {
   // An eid off another app, or one somebody made up.
   assertThrows(
-    () => priced(shelf, [{ product: MUG.replace('2', '9'), qty: 1 }]),
+    () => price([{ product: MUG.replace('2', '9'), qty: 1 }]),
     Error,
     'no product',
   )
   // A row the seller has not finished. Free is not a price.
   assertThrows(
-    () => priced(shelf, [{ product: FREE, qty: 1 }]),
+    () => price([{ product: FREE, qty: 1 }]),
     Error,
     'Sticker has no price',
   )
 })
 
-// Stripe takes 500 characters per metadata value and the items ride one, so the
-// door says how many lines fit rather than handing Stripe something it will cut
-// in half.
+// The items ride one tag and the provider's tags take so many characters, so
+// the door says how many lines fit rather than handing the provider something
+// it will cut in half.
 test('a cart too big for one metadata value is refused by size', () => {
   let many = Array.from({ length: 40 }, () => ({ product: TEE, qty: 1 }))
-  assert(packed(many).length > META)
-  assertThrows(() => priced(shelf, many), Error, 'too many different things')
+  assert(packed(many).length > TAG)
+  assertThrows(() => price(many), Error, 'too many different things')
   // And a cart that fits is not.
   let few = Array.from({ length: 5 }, () => ({ product: TEE, qty: 1 }))
-  assert(packed(few).length <= META)
-  assertEquals(priced(shelf, few).lines.length, 5)
+  assert(packed(few).length <= TAG)
+  assertEquals(price(few).lines.length, 5)
 })
 
 test('the packed items keep the product, the count and the variant', () => {
@@ -233,12 +236,9 @@ test('success and cancel resolve inside the app, and never outside it', () => {
   let root = 'https://ada.yaks.app/shop/'
   assertEquals(backAt(root, undefined), root)
   assertEquals(backAt(root, ''), root)
-  // The braces survive: Stripe substitutes the session id for that exact
-  // literal, and a percent-encoded one is a string it does not recognise —
-  // which would land the buyer on a page that never learns which order it is.
   assertEquals(
-    backAt(root, '?ordered={CHECKOUT_SESSION_ID}'),
-    'https://ada.yaks.app/shop/?ordered={CHECKOUT_SESSION_ID}',
+    backAt(root, '?ordered=1'),
+    'https://ada.yaks.app/shop/?ordered=1',
   )
   assertEquals(backAt(root, 'thanks'), 'https://ada.yaks.app/shop/thanks')
   for (

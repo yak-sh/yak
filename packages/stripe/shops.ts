@@ -153,6 +153,19 @@ export let sellerOf = (a: Account): Seller => ({
   submitted: !!a.details_submitted,
 })
 
+/** The longest metadata value Stripe keeps, in characters: the most one
+ * tag carries ({@link Shops.tag}). */
+export let TAG = 500
+
+/** A return address as Stripe reads it. `{CHECKOUT_SESSION_ID}` is a literal
+ * Stripe substitutes the session id for on the way back, and the host hands
+ * over an address `URL` wrote, which percent-encodes braces in a query:
+ * `%7BCHECKOUT_SESSION_ID%7D` is a string Stripe does not recognise, so the
+ * buyer would land on a page that never learns which order it is about. The
+ * braces come back, and only those two characters. */
+export let back = (url: string) =>
+  url.replaceAll('%7B', '{').replaceAll('%7D', '}')
+
 /**
  * The Checkout Session, as the form fields of `POST /v1/checkout/sessions`,
  * made on the seller's account (the `Stripe-Account` header `checkout` adds).
@@ -162,6 +175,13 @@ export let sellerOf = (a: Account): Seller => ({
  * top-level parameter. It is left out entirely when it is zero, since Stripe
  * requires a positive amount, so a fee of nothing has to be no fee rather than
  * a fee of 0.
+ *
+ * Stripe does not give an application fee back when the charge it came out
+ * of is refunded, so a seller who refunds from their own dashboard is out of
+ * pocket by the platform's fee. Giving it back in proportion is
+ * `POST /v1/application_fees/<id>/refund` (in part with `amount`), which these
+ * shops would lend the day the host's TODO about it (sell.ts `settled`) is
+ * built.
  *
  * The tags ride `metadata`, and are copied onto `payment_intent_data[metadata]`
  * as well, which is not redundancy: a refund arrives as a `charge.refunded`,
@@ -180,8 +200,8 @@ export let session = (sale: Sale) => ({
     },
     quantity: l.qty,
   }])),
-  success_url: sale.done,
-  cancel_url: sale.cancel,
+  success_url: back(sale.done),
+  cancel_url: back(sale.cancel),
   ...(sale.email ? { customer_email: sale.email } : {}),
   metadata: sale.tags,
   payment_intent_data: {
@@ -243,6 +263,7 @@ export let shops = (options: Keyed): Shops => {
   }
   return {
     on: () => !!options.key,
+    tag: TAG,
     open: async (who) => {
       let a = await ask(options, '/v1/accounts', account(who)) as Account
       if (!a.id) throw new Error('stripe made an account with no id')

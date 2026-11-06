@@ -124,11 +124,13 @@ export type Sale = {
   /** the buyer's address to start the page with, if one is known */
   email?: string
   /** where the provider hands the buyer back when they paid, and when they
-   * did not */
+   * did not: addresses the host checked as `URL` writes them, so a
+   * placeholder the provider fills in on the way back arrives
+   * percent-encoded, and the provider writes it back as it reads it */
   done: string
   cancel: string
   /** carried on the checkout and the payment it makes, so every event about
-   * either says whose sale it is */
+   * either says whose sale it is, each no longer than {@link Shops.tag} */
   tags: Tags
 }
 
@@ -187,6 +189,9 @@ export type Shopped =
 export type Shops = {
   /** whether it can be asked anything here: its credentials are set */
   on: () => boolean
+  /** the most characters one tag's value carries ({@link Sale.tags}): a
+   * longer one the provider refuses or cuts short */
+  tag: number
   /** a new account for a seller, started with their address if one is known
    * and carrying `tags` */
   open: (who: { email?: string; tags: Tags }) => Promise<Seller>

@@ -124,6 +124,21 @@ test('a checkout is a payment on the seller’s account, its tags on the payment
   equal('customer_email' in s.asked[1].body, false)
 })
 
+// Stripe substitutes the session id for that exact literal, and the host hands
+// over an address `URL` wrote, braces percent-encoded: a string Stripe does
+// not recognise, which would land the buyer on a page that never learns which
+// order it is.
+test('a checkout hands the buyer back with the session id filled in', async () => {
+  using s = stripe(() => ({ url: 'https://checkout.stripe.com/c' }))
+  let back = new URL('?ordered={CHECKOUT_SESSION_ID}', sale.done).href
+  await lent.checkout('acct_1', { ...sale, done: back, cancel: back })
+  let { success_url, cancel_url } = s.asked[0].body
+  equal(
+    [success_url, cancel_url],
+    Array(2).fill('https://ada.yaks.app/shop/?ordered={CHECKOUT_SESSION_ID}'),
+  )
+})
+
 let event = (type: string, object: Record<string, unknown>) =>
   heard({ type, account: 'acct_1', data: { object } })
 
