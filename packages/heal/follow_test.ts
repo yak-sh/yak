@@ -531,7 +531,7 @@ test('the follower reuses a task already linked to its tracker bug', async () =>
 let remote = async (unstamped = false) => {
   let f = await off({}, unstamped)
   let unavailable = false, lose = false, posts = 0
-  let due: (() => void)[] = []
+  let time = clock()
   let pending: Fake[] = []
   let socket: Fake
   let next = pair()
@@ -541,6 +541,7 @@ let remote = async (unstamped = false) => {
   let response = new Response(null, { status: 101 })
   let opened = Promise.resolve()
   let frames: (() => void)[] = []
+  let wake = () => {}
   let handler = api({
     graph: f.tracker,
     subs: subscriptions(f.tracker),
@@ -553,7 +554,10 @@ let remote = async (unstamped = false) => {
   let prepare = () => {
     let halves = next
     let send = halves.server.send
-    halves.server.send = (data) => frames.push(() => send(data))
+    halves.server.send = (data) => {
+      frames.push(() => send(data))
+      wake()
+    }
     pending.push(halves.server)
     let upgraded = Promise.resolve(handler(request))
     return { halves, upgraded }
@@ -578,28 +582,39 @@ let remote = async (unstamped = false) => {
       })
       return socket
     },
-    timer: (fn) => due.push(fn),
+    time: time.now,
+    timer: (fn, ms) => void time.after(ms, fn),
+    wait: 1,
     report: (trouble) => {
       f.errors.push(trouble)
     },
   })
+  let drain = async (done: () => boolean) => {
+    let stop = watch.subscribe(() => wake())
+    try {
+      while (true) {
+        let moved = new Promise<void>((resolve) => wake = resolve)
+        while (frames.length) frames.shift()!()
+        if (done()) return
+        await moved
+      }
+    } finally {
+      stop()
+      wake = () => {}
+    }
+  }
   let ready = async () => {
     await opened
-    // No wall-clock timer: let the API and replica's already-queued work land.
-    for (let i = 0; (!watch.ready || frames.length) && i < 100; i++) {
-      while (frames.length) frames.shift()!()
-      await Promise.resolve()
-    }
-    ok(watch.ready)
+    await drain(() => watch.ready)
   }
   // A read by id through the API, its frames delivered as they come.
   let ask = async (eids: string[]) => {
     let done = false
-    let answer = watch.get(eids).finally(() => done = true)
-    for (let i = 0; !done && i < 100; i++) {
-      while (frames.length) frames.shift()!()
-      await Promise.resolve()
-    }
+    let answer = watch.get(eids).finally(() => {
+      done = true
+      wake()
+    })
+    await drain(() => done)
     return answer
   }
   await ready()
@@ -616,7 +631,7 @@ let remote = async (unstamped = false) => {
       next = pair()
       prepared = prepare()
     },
-    reconnect: () => due.shift()?.(),
+    reconnect: () => time.advance(1),
   }
 }
 
@@ -645,7 +660,7 @@ await put(reconnected.tracker, [
 let reconnectMembers = await reconnected.tracker.read(
   '.bug.status=open ?doc ?regressed',
 )
-reconnected.reconnect()
+await reconnected.reconnect()
 await reconnected.ready()
 let [reconnectResolved] = await reconnected.ask([bug])
 reconnected.watch.close()
