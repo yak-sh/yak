@@ -164,10 +164,8 @@ export let hook = (keys: readonly string[], run: Hook): Hook =>
 export type WriteHook = Hook & { independent?: boolean }
 
 /**
- * A schema for a tool's arguments or its result. What counts as a schema is
- * the transport's business — {@link https://jsr.io/@yaks/mcp | @yaks/mcp}
- * takes Zod schemas, because the MCP SDK does — so the core leaves this type
- * opaque rather than depending on a validation library.
+ * A JSON Schema for one of a tool's arguments. The core leaves it opaque
+ * rather than depending on a validation library; @yaks/tools checks it.
  */
 export type Schema = object
 
@@ -211,8 +209,7 @@ export type Tool<R = Bundle[]> = {
   /** The operation performed on the noun. Must be supplied together with a
    * noun. */
   verb?: string
-  /** JSON Schema object for the complete argument object. Preferred over
-   * `input`. */
+  /** JSON Schema object for the complete argument object. */
   inputSchema?: Record<string, unknown>
   /** Optional CLI presentation; ordinary long options use the property names
    * from the schema. */
@@ -233,8 +230,6 @@ export type Tool<R = Bundle[]> = {
   description: string
   /** Implementation revision included in a builder's input key. */
   revision?: string
-  /** one schema per named argument */
-  input?: Record<string, Schema>
   /** this tool only reads — a client may call it without asking the user
    * first */
   readOnly?: boolean

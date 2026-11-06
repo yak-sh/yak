@@ -37,9 +37,8 @@ export type Hosting = {
   reply?: Reply
 }
 
-// The handler, made by the first request to `/mcp`: the MCP SDK and the Zod
-// it brings are over a hundred modules, and a server listens before any agent
-// has asked.
+// The handler, made by the first request to `/mcp`: a server listens before
+// any agent has asked.
 let mounted = async (host: Hosting): Promise<Handler> => {
   let [{ mcp }, { attachSkills }] = await Promise.all([
     import('./mount.ts'),

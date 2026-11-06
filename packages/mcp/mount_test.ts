@@ -115,7 +115,6 @@ test('a slow tool answers with its committed outcome', async () => {
     tools: [{
       name: 'shelve',
       description: 'put a book on the shelf',
-      input: {},
       run: async () => {
         started.resolve()
         await finish.promise
@@ -217,7 +216,7 @@ test('the door refuses what it does not serve', async () => {
   assertEquals((await door(broken)).status, 400)
 })
 
-test('the SDK body limit holds on both protocol legs', async () => {
+test('the body limit holds in both protocol eras', async () => {
   let door = emptyDoor
   for (let modern of [false, true]) {
     let headers: Record<string, string> = {
@@ -234,9 +233,10 @@ test('the SDK body limit holds on both protocol legs', async () => {
   }
 })
 
-// A body that is not JSON is the door's to refuse; one that cannot be read at
-// all is the SDK's when the request claims the modern protocol.
-test('the door refuses a body it cannot parse, and leaves an unreadable modern one to the SDK', async () => {
+// A body that is not JSON is refused in the door's words; one that cannot be
+// read at all is a JSON-RPC parse error when the request claims the modern
+// protocol.
+test('the door refuses a body it cannot parse, and an unreadable modern one as a parse error', async () => {
   let door = emptyDoor
   let malformed = await door(
     new Request('http://shop.test/mcp', {
@@ -258,12 +258,12 @@ test('the door refuses a body it cannot parse, and leaves an unreadable modern o
   let refused = await door(broken())
   assertEquals(refused.status, 400)
   assertEquals((await refused.json()).message, 'the body is not JSON')
-  let sdk = await door(broken({
+  let unread = await door(broken({
     'content-type': 'application/json',
     'MCP-Protocol-Version': '2026-07-28',
   }))
-  assertEquals(sdk.status, 400)
-  assertEquals((await sdk.json()).error.code, -32700)
+  assertEquals(unread.status, 400)
+  assertEquals((await unread.json()).error.code, -32700)
 })
 
 test('a notification is answered with nothing at all', async () => {
@@ -739,14 +739,14 @@ test('a pinned modern HTTP client discovers awaited facets and records malformed
     extend: async (built) => {
       await Promise.resolve()
       extensions++
-      built.registerResource('shelf', 'shop://shelf', {}, () => ({
+      built.resource('shelf', 'shop://shelf', {}, () => ({
         contents: [{ uri: 'shop://shelf', text: 'A shelf' }],
       }))
     },
     skills: async (built) => {
       await Promise.resolve()
       skills++
-      built.registerPrompt(
+      built.prompt(
         'review',
         { description: 'Review this shelf' },
         () => ({
@@ -829,7 +829,7 @@ test('a pinned modern HTTP client discovers awaited facets and records malformed
   }
 })
 
-test('modern header without its envelope is refused by the SDK after authentication', async () => {
+test('a modern header without its envelope is refused after authentication', async () => {
   let authenticated = 0
   let door = mcp({
     graph: shopGraph(),
@@ -909,75 +909,11 @@ test('a modern request without its standard headers is answered from its body', 
   assertEquals(reported, [broke])
 })
 
-test('stdio selects modern or legacy using the same attributed tool factory', async () => {
-  let { Client: ModernClient, InMemoryTransport: ModernPair } = await import(
-    '@modelcontextprotocol/client'
-  )
-  let { Client: LegacyClient } = await import(
-    '@modelcontextprotocol/sdk/client/index.js'
-  )
-  let { InMemoryTransport: LegacyPair } = await import(
-    '@modelcontextprotocol/sdk/inMemory.js'
-  )
-  let { stdio } = await import('./stdio.ts')
-  // Each connection is a pair of linked ends: the client holds one and the
-  // stdio entry the other, as it would hold the process's own streams.
-  let graph = shopGraph()
-  let serve = (wire: Parameters<typeof stdio>[1]) =>
-    stdio({
-      graph,
-      actor: ada,
-      skills: async (built) => {
-        await Promise.resolve()
-        built.registerResource('shelf', 'shop://shelf', {}, () => ({
-          contents: [{ uri: 'shop://shelf', text: 'Awaited shelf' }],
-        }))
-      },
-    }, wire)
-  let [modernEnd, modernWire] = ModernPair.createLinkedPair()
-  let [legacyEnd, legacyWire] = LegacyPair.createLinkedPair()
-  let served = [serve(modernWire), serve(legacyWire)]
-  let modern = new ModernClient({ name: 'modern-stdio', version: '0' }, pinned)
-  let legacy = new LegacyClient({ name: 'legacy-stdio', version: '0' })
-  try {
-    await modern.connect(modernEnd)
-    assertEquals(modern.getProtocolEra(), 'modern')
-    assertEquals(modern.getNegotiatedProtocolVersion(), '2026-07-28')
-    assertEquals(
-      (await modern.listResources()).resources[0].uri,
-      'shop://shelf',
-    )
-    let wrote = await modern.callTool({
-      name: 'graph_apply',
-      arguments: { bundles: [{ entity: { eid: 'b1' }, book: { price: 12 } }] },
-    })
-    assertEquals(wrote.isError, undefined)
-    await legacy.connect(legacyEnd)
-    assertEquals(
-      (await legacy.listResources()).resources[0].uri,
-      'shop://shelf',
-    )
-    let old = await legacy.callTool({
-      name: 'graph_query',
-      arguments: { q: '.book.price=12' },
-    })
-    assertEquals(
-      (old.structuredContent as { result: Bundle[] }).result
-        .map((b) => b.entity.eid),
-      ['b1'],
-    )
-    assertEquals(comp((await graph.get(['b1']))[0], 'created').by, MEMBER)
-  } finally {
-    await Promise.all([modern.close(), legacy.close()])
-    await Promise.all(served.map((s) => s.close()))
-  }
-})
-
-test('modern resource streaming remains open until result or client cancellation', async () => {
+test('a modern resource read is answered in JSON, refused in its own words, and ends when the client cancels', async () => {
   let { Client, StreamableHTTPClientTransport } = await import(
     '@modelcontextprotocol/client'
   )
-  let { ProtocolError } = await import('@modelcontextprotocol/server')
+  let { ProtocolError } = await import('./protocol.ts')
   let entered: () => void = () => {}
   let started = new Promise<void>((resolve) => entered = resolve)
   let aborted: () => void = () => {}
@@ -985,31 +921,24 @@ test('modern resource streaming remains open until result or client cancellation
   let door = mcp({
     graph: shopGraph(),
     extend: (built) => {
-      built.registerResource('slow', 'shop://slow', {}, async (_uri, ctx) => {
-        await ctx.mcpReq.notify({
-          method: 'notifications/progress',
-          params: {
-            progressToken: ctx.mcpReq._meta?.progressToken ?? 'stream',
-            progress: 1,
-          },
-        })
+      built.resource('slow', 'shop://slow', {}, async (_uri, ctx) => {
         entered()
         await new Promise<void>((resolve) => {
-          if (ctx.mcpReq.signal.aborted) resolve()
-          else {ctx.mcpReq.signal.addEventListener('abort', () => resolve(), {
+          if (ctx.signal.aborted) resolve()
+          else {ctx.signal.addEventListener('abort', () => resolve(), {
               once: true,
             })}
         })
         aborted()
         return { contents: [{ uri: 'shop://slow', text: 'Cancelled' }] }
       })
-      built.registerResource('error', 'shop://error', {}, () => {
+      built.resource('error', 'shop://error', {}, () => {
         throw new ProtocolError(-32602, 'Unknown shelf')
       })
     },
   })
   let client = new Client({ name: 'stream-test', version: '0' }, pinned)
-  let streams = 0
+  let types: string[] = []
   try {
     await client.connect(
       new StreamableHTTPClientTransport(new URL('http://shop.test/mcp'), {
@@ -1017,9 +946,7 @@ test('modern resource streaming remains open until result or client cancellation
           let response = await door(
             input instanceof Request ? input : new Request(input, init),
           )
-          if (
-            response.headers.get('content-type')?.includes('text/event-stream')
-          ) streams++
+          types.push(response.headers.get('content-type') ?? '')
           return response
         },
       }),
@@ -1032,18 +959,16 @@ test('modern resource streaming remains open until result or client cancellation
     let controller = new AbortController()
     let pending = client.readResource({ uri: 'shop://slow' }, {
       signal: controller.signal,
-      onprogress: () => {},
     })
     // Attach rejection before cancellation: no detached rejected request.
     let refused = assertRejects(() => pending)
-    await until(() => streams >= 1)
     await started
     controller.abort()
     await refused
     await cancelled
-    assert(streams >= 1)
     // Cancellation leaves the mounted handler usable for another exchange.
     assert((await client.listTools()).tools.length >= 4)
+    assert(types.every((t) => t.includes('application/json')), String(types))
   } finally {
     await client.close()
   }

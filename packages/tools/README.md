@@ -41,12 +41,12 @@ admitted call retains its implementation. `ensure()` advertises the current
 catalog declaration at the same tool identity. Direct reads keep no call
 history; recorded calls use the ordinary runner.
 
-`@yaks/tools/schema` owns `inputSchemaOf`, `shapeOf`, `answerSchema` and
-`answerWith`. `inputSchemaOf(tool)` returns its public JSON Schema or converts
-its Zod input; `shapeOf(tool)` returns the Zod argument map. `answerSchema`
-describes the default structured bundle answer, and `answerWith(words)` the same
-answer for rows that carry words of their own beside their components, each word
-with its schema. `@yaks/mcp/tools` re-exports these helpers.
+`@yaks/tools/schema` owns `inputSchemaOf`, `answerSchema` and `answerWith`.
+`inputSchemaOf(tool)` returns its public JSON Schema, or one taking no arguments
+for a tool that declares none. `answerSchema` describes the default structured
+bundle answer, and `answerWith(words)` the same answer for rows that carry words
+of their own beside their components, each word with its schema.
+`@yaks/mcp/tools` re-exports these helpers.
 
 ## Calls and answers
 

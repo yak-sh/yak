@@ -15,7 +15,6 @@
 // The answer is the generic tier's shape: whole bundles, under the generic
 // bundle output schema (@yaks/mcp `answerSchema`), so a letter reads back the
 // way every other row does.
-import { z } from 'zod'
 import type { Bundle, Tool } from '@yaks/graph'
 import { argsOf } from '@yaks/graph/call'
 import { mailbox } from './directory.ts'
@@ -90,13 +89,20 @@ let listing = (ctx: Ctx): Tool => ({
     `direction selects received, sent, or all (the default, including ` +
     `drafts). Returns up to limit records (20 by default), with the returned ` +
     `records sorted newest first. Documentation: https://yaks.app/docs/mail.`,
-  input: {
-    app: z.string().describe(address(ctx.env)),
-    space: z.string().optional().describe(SPACE),
-    direction: z.enum(['received', 'sent', 'all']).optional().describe(
-      'which side of the mailbox (default: all)',
-    ),
-    limit: z.number().optional().describe('at most this many (default: 20)'),
+  inputSchema: {
+    type: 'object',
+    required: ['app'],
+    properties: {
+      app: { type: 'string', description: address(ctx.env) },
+      space: { type: 'string', description: SPACE },
+      direction: {
+        type: 'string',
+        enum: ['received', 'sent', 'all'],
+        description: 'which side of the mailbox (default: all)',
+      },
+      limit: { type: 'number', description: 'at most this many (default: 20)' },
+    },
+    additionalProperties: false,
   },
   run: async (call) => {
     let args = argsOf(call)

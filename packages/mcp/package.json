@@ -4,7 +4,6 @@
   "type": "module",
   "exports": {
     ".": "./mod.ts",
-    "./stdio": "./stdio.ts",
     "./roster": "./roster.ts",
     "./tools": "./tools.ts",
     "./routes": "./routes.ts",
@@ -13,8 +12,6 @@
   "license": "Apache-2.0",
   "description": "Exposes a graph through generic MCP tools for writes, queries, entity inspection, schema inspection, and optional search.",
   "dependencies": {
-    "@modelcontextprotocol/core": "2.2.0",
-    "@modelcontextprotocol/server": "2.2.0",
     "@yaks/api": "0.2.24",
     "@yaks/file": "0.2.23",
     "@yaks/fp": "0.2.23",
@@ -28,12 +25,12 @@
   },
   "devDependencies": {
     "@modelcontextprotocol/client": "2.2.0",
+    "@modelcontextprotocol/core": "2.2.0",
     "@modelcontextprotocol/sdk": "^1.29.0",
     "@std/assert": "npm:@jsr/std__assert@^1.0.0",
     "@yaks/cli": "0.2.27",
     "@yaks/ram": "0.2.24",
     "@yaks/testing": "0.2.17",
-    "ajv": "^8.17.1",
-    "zod": "3.25.76"
+    "ajv": "^8.17.1"
   }
 }

@@ -315,14 +315,11 @@ const filled = (schema: unknown, value: unknown): void => {
 }
 
 export const validateToolInput = (
-  tool: { inputSchema?: Record<string, unknown>; input?: object },
+  tool: { inputSchema?: Record<string, unknown> },
   args: Record<string, unknown>,
   refuse: (message: string) => Error = (message) => new Error(message),
 ): Record<string, unknown> => {
   if (!tool.inputSchema) return args
-  if (tool.input) {
-    throw new Error('Tool cannot declare both input and inputSchema')
-  }
   const check = toolCheck(tool.inputSchema)
   const value = spelled(tool.inputSchema, copied(args)) as Record<
     string,

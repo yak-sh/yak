@@ -12,8 +12,8 @@ import { toolsDoc } from '@yaks/tools'
 import { ram } from '@yaks/ram'
 import { comp, connect, result, shop, shopGraph, text } from './testing.ts'
 import { roster } from './server.ts'
-import { core, shapeOf, translated } from './tools.ts'
-import { z } from 'zod'
+import { core, inputSchemaOf, translated } from './tools.ts'
+import { toolCheck } from '@yaks/vocab/tools'
 import { rosterLine, rosterVersion } from './roster.ts'
 
 let MEMBER = derivedEid('fixture:m1')
@@ -204,9 +204,9 @@ test('a client listed before an argument was renamed is still answered', async (
 
 test('query patches and bundles both pass the published write schema', () => {
   let apply = core({ vocab: shop }).find((t) => t.name == 'graph_apply')!
-  let schema = z.object(shapeOf(apply))
-  assert(schema.safeParse({ q: 'b1 .book.price=20' }).success)
-  assert(schema.safeParse({ bundles: [spring] }).success)
+  let check = toolCheck(inputSchemaOf(apply))
+  assertEquals(check({ q: 'b1 .book.price=20' }), [])
+  assertEquals(check({ bundles: [spring] }), [])
 })
 
 test('a checked batch says what would land and keeps none of it', async () => {
@@ -319,7 +319,6 @@ test('a tool runs as whoever called it', async () => {
     tools: [{
       name: 'shelve',
       description: 'put a book on the shelf',
-      input: {},
       run: (call) => {
         seen = who(call)?.by ?? null
         return [{ entity: { eid: 'b1' }, book: { status: 'shelved' } }]
@@ -514,7 +513,6 @@ test('a plugin contributes tools the way it contributes components', async () =>
     tools: [{
       name: 'shelve',
       description: 'put a book on the shelf',
-      input: {},
       run: () => [{ entity: { eid: 'b1' }, book: { status: 'shelved' } }],
     }],
   })
@@ -680,7 +678,7 @@ test('a tool answers without waiting on the roster, and its news rides the next 
 test('a host with more than tools registers them on the same server', async () => {
   let client = await connect({
     extend: (server) =>
-      void server.registerResource('shelf', 'shop://shelf', {
+      void server.resource('shelf', 'shop://shelf', {
         title: 'The shelf',
         mimeType: 'text/plain',
       }, () => ({
@@ -721,7 +719,6 @@ test('every tool says how a client signs in for it', async () => {
     tools: [{
       name: 'about',
       description: 'what this shop is',
-      input: {},
       meta: { securitySchemes: [{ type: 'noauth' }] },
       run: (call) => [{
         entity: { eid: '$said' },
@@ -731,7 +728,6 @@ test('every tool says how a client signs in for it', async () => {
     }, {
       name: 'shelve',
       description: 'put a book on the shelf',
-      input: {},
       meta: { ui: { resourceUri: 'ui://shelf' } },
       run: (call) => [{
         entity: { eid: '$said' },
@@ -777,13 +773,11 @@ test('a tool lists its title in its annotations as well', async () => {
         name: 'shelve',
         title: 'Shelve a book',
         description: 'put a book on the shelf',
-        input: {},
         ...(schema ? { inputSchema: schema } : {}),
         run: () => [],
       }, {
         name: 'dust',
         description: 'dust the shelf',
-        input: {},
         run: () => [],
       }],
     })

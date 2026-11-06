@@ -87,9 +87,9 @@ both versions carry the same commit.
 
 Never `wrangler deploy` by hand. Both tasks go through `wrangler.ts`, which runs
 `pnpm install` when `node_modules` is behind `pnpm-lock.yaml` — wrangler bundles
-`zod` and the MCP SDK as files out of that directory, and it is gitignored, so a
-fresh worktree has none and a bare `wrangler deploy` dies at `mcp.ts`
-`import { z } from 'zod'`.
+the Worker's npm dependencies as files out of that directory, and it is
+gitignored, so a fresh worktree has none and a bare `wrangler deploy` dies at
+the first of them.
 
 Correct a deployed regression with `yak admin revert <sha>`: main is always
 deployed. `yak admin rollback [version]` is for a broken build path and refuses

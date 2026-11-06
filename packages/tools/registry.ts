@@ -75,7 +75,7 @@ export let registry = (providers: readonly Provider[] = []): Registry => {
   let describe = (id: string): Description | undefined => {
     let tool = get(id)
     if (!tool) return undefined
-    let { run: _, input: _input, inputSchema: _schema, ...rest } = tool
+    let { run: _, inputSchema: _schema, ...rest } = tool
     return {
       ...rest,
       provider: index.names.get(tool.name)!.provider,

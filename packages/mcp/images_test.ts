@@ -12,7 +12,6 @@ let tool: Tool = {
   name: 'preview',
   description: 'Read a preview',
   readOnly: true,
-  input: {},
   outputSchema: {
     type: 'object',
     properties: { width: { type: 'number' } },

@@ -43,12 +43,13 @@
  * and a server whose graph should not record them writes the call and its
  * result into a separate graph ({@link Options.calls}).
  *
- * ## Two transports, one server
+ * ## One transport, two eras
  * {@link mcp} is Streamable HTTP as a portable `Request` → `Response` handler,
  * mountable beside {@link https://jsr.io/@yaks/api | @yaks/api} on Deno, Node
- * or a Cloudflare Worker. `@yaks/mcp/stdio` is the same server on the
- * process's own stdin and stdout, kept in its own module so importing this one
- * never pulls a runtime dependency in with it.
+ * or a Cloudflare Worker. It answers a client of either protocol era: one that
+ * opened with `initialize`, and one whose every request carries its own
+ * envelope. The protocol itself is {@link protocol}, a dispatch table with no
+ * transport and no dependency beyond this package's own.
  *
  * ## Trust
  * This server decides who is writing. {@link mcp} builds a server per HTTP
@@ -70,10 +71,10 @@
  * the schema describes, the server decides.
  *
  * ## When a host serves more than tools
- * {@link Options.extend} is handed the SDK's own server object once the tools
- * are registered on it, so resources, prompts and the host's own capabilities
- * are registered on the same server rather than a second one beside it. A tool
- * may also carry `meta`, which the client is handed verbatim as `_meta`.
+ * {@link Options.extend} is handed the {@link Server} once the tools are
+ * registered on it, so resources, prompts and the host's own capabilities are
+ * registered on the same server rather than a second one beside it. A tool may
+ * also carry `meta`, which the client is handed verbatim as `_meta`.
  *
  * @module
  */
@@ -95,12 +96,15 @@ export {
 } from './server.ts'
 export { rosterLine, rosterVersion } from './roster.ts'
 export {
-  core,
-  type CoreOpts,
-  inputSchemaOf,
-  type Search,
-  shapeOf,
-} from './tools.ts'
+  type Context,
+  type Era,
+  type Handler as RequestHandler,
+  type Implementation,
+  protocol,
+  ProtocolError,
+  type Server,
+} from './protocol.ts'
+export { core, type CoreOpts, inputSchemaOf, type Search } from './tools.ts'
 // The vocabulary described belongs to @yaks/graph — `graph_schema` builds its
 // answer there — and a server that passes `guide` imports its type from the
 // same place.

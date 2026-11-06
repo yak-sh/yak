@@ -1,19 +1,13 @@
 // One immutable, explicitly scoped skill snapshot per MCP server. Resource
 // reads discover bytes; only an explicit prompt retrieval loads instructions.
-import {
-  fromJsonSchema,
-  type JsonSchemaType,
-  type McpServer,
-  ProtocolError,
-  ResourceTemplate,
-} from '@modelcontextprotocol/server'
+import { errorsText, toolCheck } from '@yaks/vocab/tools'
 import type { Bundle, Graph } from '@yaks/graph'
 import { Refused } from '@yaks/graph/errors'
 import { repoSkills, skillFiles } from '@yaks/persona/skills'
 import { renderSkill } from '@yaks/persona/skill-text'
 import { parse, YamlSyntaxError } from '@yaks/yaml'
-import { validator } from './validator.ts'
 import type { Exchange } from './server.ts'
+import { type Handler, ProtocolError, type Server } from './protocol.ts'
 
 /** A scoped collection of repository-relative skill file bytes. */
 export type SkillFiles = { scope: string; files: Map<string, Uint8Array> }
@@ -29,33 +23,27 @@ type Manifest = {
 type Snapshot = { skills: Manifest[]; files: Map<string, File> }
 let encoder = new TextEncoder()
 let decoder = new TextDecoder('utf-8', { fatal: true })
-let unknownResource = new ResourceTemplate(
-  'skill://skills/{+path}',
-  { list: undefined },
-)
 let cache = { ttlMs: 0, cacheScope: 'private' as const }
-let schema = (
-  properties: JsonSchemaType['properties'],
-  required: string[] = [],
-) =>
-  fromJsonSchema<Record<string, unknown>>({
+// A method of the extension's own, its parameters checked before it runs.
+let checked = (
+  method: string,
+  properties: Record<string, unknown>,
+  required: string[],
+  handler: Handler,
+): Handler => {
+  let check = toolCheck({
     type: 'object',
     properties,
     required,
     additionalProperties: true,
-  }, validator)
-let listSchema = {
-  params: schema({ cursor: { type: 'string' }, _meta: { type: 'object' } }),
-  result: schema({
-    skills: { type: 'array' },
-    nextCursor: { type: 'string' },
-  }, ['skills']),
-}
-let getSchema = {
-  params: schema({ uri: { type: 'string' }, _meta: { type: 'object' } }, [
-    'uri',
-  ]),
-  result: schema({ skill: { type: 'object' } }, ['skill']),
+  })
+  return (params, ctx) => {
+    let errors = check(params)
+    if (errors.length) {
+      invalid(`Invalid params for ${method}: ${errorsText(errors)}`)
+    }
+    return handler(params, ctx)
+  }
 }
 let invalid = (message: string): never => {
   throw new ProtocolError(-32602, message)
@@ -229,7 +217,7 @@ let snapshot = async (options: SkillOptions): Promise<Snapshot> => {
  * Tool-only exchanges do not consume skills; connection factories attach the
  * complete immutable snapshot for their lifetime. */
 export let attachSkills = async (
-  built: McpServer,
+  built: Server,
   options: SkillOptions,
   exchange?: Exchange,
 ): Promise<void> => {
@@ -237,38 +225,60 @@ export let attachSkills = async (
     return
   }
   let view = await snapshot(options)
-  built.server.registerCapabilities({
+  built.capable({
     resources: {},
     extensions: { 'io.modelcontextprotocol/skills': {} },
   })
-  built.server.setRequestHandler('skills/list', listSchema, (params) => {
-    let cursor = params.cursor
-    if (
-      cursor != undefined &&
-      (typeof cursor != 'string' || !/^\d+$/.test(cursor))
-    ) {
-      invalid('Invalid skill cursor')
-    }
-    let offset = cursor == undefined ? 0 : Number(cursor)
-    if (!Number.isSafeInteger(offset) || offset > view.skills.length) {
-      invalid('Invalid skill cursor')
-    }
-    let next = offset + 100
-    return {
-      skills: view.skills.slice(offset, next),
-      ...(next < view.skills.length ? { nextCursor: String(next) } : {}),
-      ...cache,
-    }
-  })
-  built.server.setRequestHandler('skills/get', getSchema, (params) => {
-    let skill = view.skills.find((s) => s.uri == params.uri)
-    if (!skill) invalid('Unknown skill URI')
-    return { skill, ...cache }
-  })
+  built.handle(
+    'skills/list',
+    checked(
+      'skills/list',
+      {
+        cursor: { type: 'string' },
+        _meta: { type: 'object' },
+      },
+      [],
+      (params) => {
+        let cursor = params.cursor
+        if (
+          cursor != undefined &&
+          (typeof cursor != 'string' || !/^\d+$/.test(cursor))
+        ) {
+          invalid('Invalid skill cursor')
+        }
+        let offset = cursor == undefined ? 0 : Number(cursor)
+        if (!Number.isSafeInteger(offset) || offset > view.skills.length) {
+          invalid('Invalid skill cursor')
+        }
+        let next = offset + 100
+        return {
+          skills: view.skills.slice(offset, next),
+          ...(next < view.skills.length ? { nextCursor: String(next) } : {}),
+          ...cache,
+        }
+      },
+    ),
+  )
+  built.handle(
+    'skills/get',
+    checked(
+      'skills/get',
+      {
+        uri: { type: 'string' },
+        _meta: { type: 'object' },
+      },
+      ['uri'],
+      (params) => {
+        let skill = view.skills.find((s) => s.uri == params.uri)
+        if (!skill) invalid('Unknown skill URI')
+        return { skill, ...cache }
+      },
+    ),
+  )
   for (let file of view.files.values()) {
-    built.registerResource(file.uri, file.uri, {
+    built.resource(file.uri, file.uri, {
       mimeType: file.mimeType,
-      cacheHint: cache,
+      cache,
     }, () => ({
       contents: [{
         uri: file.uri,
@@ -282,9 +292,9 @@ export let attachSkills = async (
   }
   // Unknown skill resources must be InvalidParams, without replacing resources
   // an extension already registered under another scheme/namespace.
-  built.registerResource(
+  built.template(
     'unknown-skill-resource',
-    unknownResource,
+    'skill://skills/{+path}',
     {},
     () => invalid('Unknown skill resource URI'),
   )
@@ -295,7 +305,7 @@ export let attachSkills = async (
       ['false', 'no', 'off', '0'].includes(String(invoke).toLowerCase())
     ) continue
     let file = view.files.get(skill.uri)!
-    built.registerPrompt(
+    built.prompt(
       `skill:${
         new URL(skill.uri).pathname.split('/').slice(2, -1).map(
           decodeURIComponent,

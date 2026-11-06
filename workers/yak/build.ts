@@ -15,9 +15,8 @@
 // sockets, state sync) is the obvious fit and was tried first; four things
 // sent it back, each checked against agents@0.22.0 rather than the docs:
 //
-//   1. its peers are this Worker's pins, moved — `zod ^4` where the MCP SDK
-//      pins us to 3, `@modelcontextprotocol/sdk 1.30.0` exactly where we are
-//      on 1.29.0 — so it installs only with --legacy-peer-deps;
+//   1. its peers are pins of its own — `zod ^4`, `@modelcontextprotocol/sdk
+//      1.30.0` exactly — so it installs only with --legacy-peer-deps;
 //   2. `AIChatAgent`, the half that holds a transcript, has left the package
 //      (`agents/ai-chat-agent` throws at import) for `@cloudflare/ai-chat`,
 //      whose own peers are `ai ^6||^7` and `@ai-sdk/react`;
@@ -335,8 +334,8 @@ export class Builder {
       this.#keep([asked])
       this.#tell([{ said: 'person', text }])
       let end: Frame = { done: '' }
-      // The loop and its tools (zod among them) load with the first build,
-      // not with every isolate that wakes this object (T-37977).
+      // The loop and its tools load with the first build, not with every
+      // isolate that wakes this object (T-37977).
       let { build } = await import('./builder.ts')
       let out = await build(this.#env, who, space, [...was, asked], {
         on: (b) => {

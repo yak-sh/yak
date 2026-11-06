@@ -1,12 +1,10 @@
 import type { NamedTool } from '@yaks/graph'
 import { mint } from '@yaks/graph/identity'
 import { offered, toolName } from '@yaks/graph/call'
-import { legacyOptions } from '@yaks/vocab/tools'
-import { fromJsonSchema, ProtocolError } from '@modelcontextprotocol/server'
-// The server: a graph, its tools, and the MCP protocol implementation that
-// lists and calls them. Everything transport-specific lives in ./mount.ts and
-// ./stdio.ts; this file only knows how a @yaks/graph `Tool` becomes an MCP
-// tool.
+import { errorsText, legacyOptions, toolCheck } from '@yaks/vocab/tools'
+// The server: a graph, its tools, and the protocol (./protocol.ts) that lists
+// and calls them. Everything transport-specific lives in ./mount.ts; this file
+// only knows how a @yaks/graph `Tool` becomes an MCP tool.
 //
 // An MCP `tools/call` reaches the tool function through @yaks/tools' runner,
 // and the runner records the call as it goes: a `call{to, args}` entity signed
@@ -20,11 +18,6 @@ import { fromJsonSchema, ProtocolError } from '@modelcontextprotocol/server'
 // as a JSON-RPC protocol error: a bad argument or a rejected write is
 // something the agent reads and corrects, not a broken connection.
 
-import { McpServer } from '@modelcontextprotocol/server'
-import type {
-  CallToolResult,
-  JsonSchemaType,
-} from '@modelcontextprotocol/server'
 import type { Actor, Bundle, Graph, Tool } from '@yaks/graph'
 import { status } from '@yaks/graph/errors'
 import { toolsOf } from '@yaks/graph'
@@ -50,9 +43,19 @@ import {
   translated,
 } from './tools.ts'
 import type { Guide } from '@yaks/graph'
-import { validator } from './validator.ts'
 import { fileArgs, FILES, fileSchema, type ReadFile } from './files.ts'
 import { inputSchema } from './schema.ts'
+import { protocol, ProtocolError, type Server } from './protocol.ts'
+
+// A tool's answer, as MCP sends it.
+type CallToolResult = {
+  content: (
+    | { type: 'text'; text: string }
+    | { type: 'image'; data: string; mimeType: string }
+  )[]
+  structuredContent?: unknown
+  isError?: boolean
+}
 
 /**
  * How a client signs in to call a tool: `noauth` means anybody may call it,
@@ -87,7 +90,7 @@ export type Options = {
    * `graph`. */
   calls?: Graph
   /** where a defect goes (default: the console): a tool's, with the call and
-   * the tool's name, and an SDK error on the modern leg, with neither.
+   * the tool's name, and a protocol handler's, with neither.
    * The classifier's input rejections and tool refusals (`CallError`) are
    * answered without reporting a defect. */
   report?: (err: unknown, call?: Bundle, tool?: string) => unknown
@@ -183,13 +186,12 @@ export type Options = {
 
   /** a calling program with more than tools to serve — resources, prompts,
    * capabilities of its own — registers them on the same server here, after
-   * its tools are registered. It is handed the SDK's own server object and the
-   * one exchange the server answers (undefined where it serves a whole
-   * connection), so it can leave out what that exchange never reads, and it
-   * is awaited. */
-  extend?: (server: McpServer, exchange?: Exchange) => void | Promise<void>
+   * its tools are registered. It is handed the server and the one exchange
+   * the server answers (undefined where it serves a whole connection), so it
+   * can leave out what that exchange never reads, and it is awaited. */
+  extend?: (server: Server, exchange?: Exchange) => void | Promise<void>
   /** Skills attach to the same server, awaited before either era discovers it. */
-  skills?: (server: McpServer, exchange?: Exchange) => void | Promise<void>
+  skills?: (server: Server, exchange?: Exchange) => void | Promise<void>
 }
 
 /** What {@link Options.roster} has to say on one result: the line, and what
@@ -202,10 +204,10 @@ export type Exchange = { method: string }
 
 /** Await contributed facets on each server before its exchange is served. */
 export let prepared = async (
-  built: McpServer,
+  built: Server,
   opts: Pick<Options, 'extend' | 'skills'>,
   exchange?: Exchange,
-): Promise<McpServer> => {
+): Promise<Server> => {
   await opts.extend?.(built, exchange)
   await opts.skills?.(built, exchange)
   return built
@@ -419,35 +421,14 @@ export let annotated = (
  *
  * ```ts ignore
  * let s = server({ graph, actor: { by: 'm1' } })
- * await s.connect(transport)
+ * await s.answer({ jsonrpc: '2.0', id: 1, method: 'tools/list' }, 'legacy')
  * ```
  */
 export let server = (
   opts: Options & { instructions?: string },
-): McpServer => {
+): Server => {
   let { graph } = opts
   let actor = opts.actor ?? null
-  let mcp = new McpServer({
-    name: opts.name ?? 'yaks',
-    version: opts.version ?? '0.0.0',
-    // How the server presents itself, when the caller supplied any of it:
-    // what `initialize` reports beside the server's name, so a client reading
-    // `serverInfo` needs nothing pasted into a form. Each field is omitted
-    // when unset rather than sent empty — an absent field means the server
-    // said nothing, an empty one means the server said its title is the empty
-    // string.
-    ...(opts.title ? { title: opts.title } : {}),
-    ...(opts.description ? { description: opts.description } : {}),
-    ...(opts.websiteUrl ? { websiteUrl: opts.websiteUrl } : {}),
-    ...(opts.icons?.length ? { icons: opts.icons } : {}),
-  }, {
-    capabilities: { tools: {} },
-    ...(opts.instructions ? { instructions: opts.instructions } : {}),
-    // One validator for every server this process builds: the SDK makes an
-    // Ajv instance per server otherwise, and a server is built per request.
-    jsonSchemaValidator: validator,
-  })
-
   let catalog = opts.runner?.registry ?? opts.registry ??
     registry([{ name: 'local', tools: listing(opts) }])
   let tools = () => catalog.list().filter(offered('mcp'))
@@ -457,6 +438,25 @@ export let server = (
   // because a question was asked). The tools still read and write `graph`.
   let calls = opts.calls ?? graph
   let report = opts.report ?? logged
+  let mcp = protocol({
+    info: {
+      name: opts.name ?? 'yaks',
+      version: opts.version ?? '0.0.0',
+      // How the server presents itself, when the caller supplied any of it:
+      // what `initialize` reports beside the server's name, so a client
+      // reading `serverInfo` needs nothing pasted into a form. Each field is
+      // omitted when unset rather than sent empty — an absent field means the
+      // server said nothing, an empty one means the server said its title is
+      // the empty string.
+      ...(opts.title ? { title: opts.title } : {}),
+      ...(opts.description ? { description: opts.description } : {}),
+      ...(opts.websiteUrl ? { websiteUrl: opts.websiteUrl } : {}),
+      ...(opts.icons?.length ? { icons: opts.icons } : {}),
+    },
+    capabilities: { tools: tools().length ? { listChanged: true } : {} },
+    ...(opts.instructions ? { instructions: opts.instructions } : {}),
+    report,
+  })
   let run = opts.runner ?? runner(calls, {
     tools: catalog,
     host: graph,
@@ -474,12 +474,14 @@ export let server = (
   let misfit = (t: NamedTool, out: CallToolResult): unknown => {
     if (out.structuredContent === undefined) return undefined
     try {
-      let held = validator.getValidator(schemaOf(t) as JsonSchemaType)(
-        out.structuredContent,
-      )
-      return held.valid ? undefined : new Error(
-        `${t.name}'s answer does not fit its output schema: ${held.errorMessage}`,
-      )
+      let errors = toolCheck(schemaOf(t))(out.structuredContent)
+      return errors.length
+        ? new Error(
+          `${t.name}'s answer does not fit its output schema: ${
+            errorsText(errors)
+          }`,
+        )
+        : undefined
     } catch (err) {
       return err
     }
@@ -531,31 +533,11 @@ export let server = (
     notice?.said?.()
     return noting(out, notice?.line)
   }
-  for (let t of tools()) {
-    let meta = metaOf(t, opts.security)
-    let config = {
-      ...(t.title ? { title: t.title } : {}),
-      description: t.description,
-      inputSchema: fromJsonSchema(
-        inputSchema(t.name, fileSchema(inputSchemaOf(t), opts.readFile)),
-        validator,
-      ),
-      outputSchema: fromJsonSchema(schemaOf(t), validator),
-      annotations: annotated(t),
-      ...(meta ? { _meta: meta } : {}),
-    }
-    mcp.registerTool(
-      t.name,
-      config,
-      (args) => call(t.name, args as Record<string, unknown>),
-    )
-  }
-  // The listing is this server's own, not the SDK's: a tool that declared its
-  // input as JSON Schema is sent that declaration unchanged. The direct
-  // tools/call dispatch below leaves argument validation to the runner, and
-  // every tool is listed with the one answer schema, since every tool answers
-  // bundles, unless it declared its own.
-  mcp.server.setRequestHandler('tools/list', () => ({
+  // A tool that declared its input as JSON Schema is sent that declaration
+  // unchanged, and every tool is listed with the one answer schema, since
+  // every tool answers bundles, unless it declared its own. A call's
+  // arguments are the runner's to check, and it records every graph call.
+  mcp.handle('tools/list', () => ({
     tools: tools().map((t) => ({
       name: t.name,
       ...(t.title ? { title: t.title } : {}),
@@ -569,10 +551,10 @@ export let server = (
       ...(metaOf(t, opts.security) ? { _meta: metaOf(t, opts.security) } : {}),
     })),
   }))
-  // Exact authoring schemas provide header metadata, not domain validation.
-  // The runner owns malformed-argument refusals and records every graph call.
-  mcp.server.setRequestHandler('tools/call', async (request) => {
-    return await call(request.params.name, request.params.arguments ?? {})
-  })
+  mcp.handle('tools/call', (params) =>
+    call(
+      params.name as string,
+      (params.arguments ?? {}) as Record<string, unknown>,
+    ))
   return mcp
 }

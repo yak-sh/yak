@@ -17,6 +17,7 @@ import { type Bundle, type Graph, graph } from '@yaks/graph'
 import { ram } from '@yaks/ram'
 import { toolsDoc } from '@yaks/tools'
 import { instructed, type Options, server } from './server.ts'
+import type { Request as Rpc } from './protocol.ts'
 
 let doc: VocabDoc = {
   $defs: {
@@ -121,11 +122,19 @@ export let connect = async (
     instructions: await instructed(opts),
   })
   await opts.extend?.(mcp)
+  // The server's side of the pair answers each request as it arrives, in the
+  // era an `initialize` opens; a notification expects nothing back.
   let [here, there] = InMemoryTransport.createLinkedPair()
+  there.onmessage = async (message: object) => {
+    if (!('method' in message) || !('id' in message)) return
+    let { reply } = await mcp.answer(message as Rpc, 'legacy')
+    await there.send(reply as Parameters<typeof there.send>[0])
+  }
+  await there.start()
   let client = new Client({ name: 'shop-test', version: '0.0.0' }, {
     jsonSchemaValidator: validator,
   })
-  await Promise.all([client.connect(here), mcp.connect(there)])
+  await client.connect(here)
   return client
 }
 

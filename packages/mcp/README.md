@@ -2,8 +2,9 @@
 
 Expose a [@yaks/graph](../graph/README.md) graph as a Model Context Protocol
 (MCP) server. Agents can query and change graph data through generic tools and
-tools provided by graph plugins. Use `mcp()` for an HTTP request handler or
-`@yaks/mcp/stdio` for a server launched as a local process.
+tools provided by graph plugins. Use `mcp()` for an HTTP request handler. The
+protocol is implemented here (`protocol()`), with no MCP SDK and no validation
+library beyond the JSON Schema checks @yaks/vocab already makes.
 
 A **bundle** is one entity's components as a JSON object, identified by
 `entity.eid`. A **batch** is a list of bundles applied in one transaction. MCP
@@ -127,9 +128,10 @@ in the MCP `initialize` response. Other plugins can add instructions beside
 their own component declarations.
 
 `instructions` may also be a function returning the text. It is called only for
-the exchange that sends it, `initialize` (or for a stdio connection), so a host
-whose instructions cost reads pays them once per connection, not on every call.
-`instructed(opts, exchange)` answers what a server for that exchange sends:
+the exchange that sends it, `initialize` (or a server serving a whole
+connection), so a host whose instructions cost reads pays them once per
+connection, not on every call. `instructed(opts, exchange)` answers what a
+server for that exchange sends:
 
 ```ts
 import { instructed } from '@yaks/mcp'
@@ -144,16 +146,16 @@ equal(asked, 1)
 
 ## Exports
 
-| Import             | Exports and purpose                                                                                                                                 |
-| ------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `@yaks/mcp`        | `mcp`, `MountOptions`, `Handler`: HTTP handler and its types                                                                                        |
-| `@yaks/mcp`        | `server`, `Options`, `instructed`: SDK server for a caller-supplied transport, and the instructions an exchange sends                               |
-| `@yaks/mcp`        | `core`, `CoreOpts`, `Search`, `Guide`: generic tool construction and callbacks                                                                      |
-| `@yaks/mcp`        | `listing`, `roster`, `rosterVersion`, `rosterLine`: tool definitions, names, and change notices                                                     |
-| `@yaks/mcp`        | `shapeOf`, `inputSchemaOf`, `annotated`, `COMMAND`, `Security`: argument schemas, MCP annotations, command metadata key, and security metadata type |
-| `@yaks/mcp/tools`  | `core`, `shapeOf`, `inputSchemaOf`, `translated`: the generic tier, argument schemas and former argument names without the MCP SDK                  |
-| `@yaks/mcp/skills` | `attachSkills`: scoped prompts, resources and complete Skills manifests                                                                             |
-| `@yaks/mcp/stdio`  | `stdio`: connect the server to process stdin and stdout                                                                                             |
+| Import             | Exports and purpose                                                                                                                      |
+| ------------------ | ---------------------------------------------------------------------------------------------------------------------------------------- |
+| `@yaks/mcp`        | `mcp`, `MountOptions`, `Handler`: HTTP handler and its types                                                                             |
+| `@yaks/mcp`        | `server`, `Options`, `instructed`: the server answering one request at a time, and the instructions an exchange sends                    |
+| `@yaks/mcp`        | `protocol`, `ProtocolError`, `Server`, `Era`: the protocol's dispatch table, without tools or a transport                                |
+| `@yaks/mcp`        | `core`, `CoreOpts`, `Search`, `Guide`: generic tool construction and callbacks                                                           |
+| `@yaks/mcp`        | `listing`, `roster`, `rosterVersion`, `rosterLine`: tool definitions, names, and change notices                                          |
+| `@yaks/mcp`        | `inputSchemaOf`, `annotated`, `COMMAND`, `Security`: argument schemas, MCP annotations, command metadata key, and security metadata type |
+| `@yaks/mcp/tools`  | `core`, `inputSchemaOf`, `translated`: the generic tier, argument schemas and former argument names without the protocol                 |
+| `@yaks/mcp/skills` | `attachSkills`: scoped prompts, resources and complete Skills manifests                                                                  |
 
 The schema helpers are owned by `@yaks/tools/schema`; MCP re-exports them for
 callers using these imports. `Options.registry` supplies a shared provider
@@ -314,10 +316,11 @@ remove plugin or explicitly supplied tools, prevent them from writing, or
 disable call recording. Review those tools when configuring a read-only
 endpoint.
 
-`scope` adds Zod arguments to generic read tools, for example a tenant name. The
-generic implementations ignore these arguments. Application routing must inspect
-and validate them and select the graph before passing the request to this
-handler. `scope` alone does not implement tenant selection or isolation.
+`scope` adds arguments to generic read tools, each a JSON Schema, for example a
+tenant name. The generic implementations ignore these arguments. Application
+routing must inspect and validate them and select the graph before passing the
+request to this handler. `scope` alone does not implement tenant selection or
+isolation.
 
 ## Plugins bring tools
 
@@ -329,14 +332,17 @@ listed nor callable here.
 
 ```ts ignore
 import { argsOf, type Plugin } from '@yaks/graph'
-import { z } from 'zod'
 
 let shelf: Plugin = {
   name: 'shelf',
   tools: [{
     name: 'shelve',
     description: 'Set a book status to shelved.',
-    input: { book: z.string().describe('Book entity ID') },
+    inputSchema: {
+      type: 'object',
+      required: ['book'],
+      properties: { book: { type: 'string', description: 'Book entity ID' } },
+    },
     run: (call) => [{
       entity: { eid: String(argsOf(call).book) },
       book: { status: 'shelved' },
@@ -362,17 +368,19 @@ it.
 
 ## When a server offers more than tools
 
-The HTTP and stdio entrypoints await `extend(server, exchange)` and then
-`skills(server, exchange)` after registering tools. HTTP passes the method of
-that one exchange; stdio leaves it undefined for the connection. A host can
-leave out what that exchange never reads: a `tools/call` lists no resource or
-prompt. Use it to register SDK resources or prompts:
+The HTTP entrypoint awaits `extend(server, exchange)` and then
+`skills(server, exchange)` after registering tools, passing the method of that
+one exchange. A host can leave out what that exchange never reads: a
+`tools/call` lists no resource or prompt. Use it to register resources
+(`server.resource`, or `server.template` for a URI template), prompts
+(`server.prompt`), capabilities (`server.capable`) and methods of the host's own
+(`server.handle`):
 
 ```ts ignore
 mcp({
   graph,
   extend: (server) => {
-    server.registerResource('guide', 'shop://guide', {
+    server.resource('guide', 'shop://guide', {
       mimeType: 'text/markdown',
     }, () => ({
       contents: [{
@@ -385,7 +393,7 @@ mcp({
 ```
 
 When calling the lower-level `server(opts)` directly, invoke `opts.extend`
-yourself before connecting the transport; `server()` does not call it.
+yourself before answering with it; `server()` does not call it.
 
 ## Refusals
 
@@ -395,16 +403,15 @@ malformed JSON or anything other than one JSON-RPC request or notification, 401
 for `Unauthorized`, and 202 for notifications. Request arrays are rejected.
 Other thrown errors use [@yaks/api](../api/README.md#refusals)'s status mapping:
 a refusal is answered with its status, and a failure (500) is thrown on to the
-host, whose watch answers and reports it (@yaks/api `served`). On the modern leg
-the SDK classifier’s invalid-input rejections are answered without a defect.
-Other SDK errors go to the `report` option with no call.
+host, whose watch answers and reports it (@yaks/api `served`). A modern request
+whose envelope or standard headers are wrong is answered without a defect; a
+protocol handler's own failure goes to the `report` option with no call.
 
 The legacy transport has no SSE stream. It waits for each call's outcome by
 default. A host can set `timeout` to limit how long it waits for a legacy reply;
 timing out does not cancel a tool already running. `clock` (an @yaks/fp `Clock`,
-by default the runtime's) keeps that timeout and the handler's runner's time.
-Modern traffic uses the SDK HTTP entry and its protocol validation and
-streaming.
+by default the runtime's) keeps that timeout and the handler's runner's time. A
+modern request is answered in JSON, and stops when its caller hangs up.
 
 ## Repository skills
 
@@ -451,69 +458,16 @@ have not verified automatic description-based activation in Claude over MCP.
 
 ## Protocol revisions
 
-The SDK v2 factory entry serves modern `2026-07-28` traffic. Requests without a
-modern envelope retain the existing legacy HTTP mount and graph-session
-semantics. Both legs authenticate through the host before building a server;
-modern traffic creates no MCP graph session or client-info identity. The host's
-security filters still surround the route; the SDK is not token authorization or
-Origin/Host validation.
+A request whose `_meta` carries the modern envelope (`2026-07-28`) is served
+statelessly: `server/discover` in place of the handshake, every result marked
+complete, cacheable and signed with `serverInfo`, and `subscriptions/listen`
+answered with a stream. Requests without one keep the legacy HTTP mount and
+graph-session semantics. Both eras authenticate through the host before building
+a server; modern traffic creates no MCP graph session or client-info identity.
+The host's security filters still surround the route; this package is not token
+authorization or Origin/Host validation.
 
 Tool schemas remain exact advertisements. Calls still go through the shared
 graph runner, including malformed arguments, so validation refusals,
 attribution, call records, roster notices and structured results remain
-runner-owned. Connecting a lower-level SDK server directly is legacy-only; use
-`mcp()` for modern HTTP and `stdio()` for era-selecting process streams.
-
-## stdio
-
-For an agent that launches the server as a local process:
-
-```ts ignore
-// deno run -A serve.ts
-import { stdio } from '@yaks/mcp/stdio'
-import { graph } from './shop.ts'
-
-stdio({ graph, actor: { by: 'm1' } })
-```
-
-It serves until the client closes the stream, or until `close()` on the handle
-it returns. The caller supplies the actor because there is no HTTP request to
-authenticate. A second argument, a transport, serves that connection instead of
-the process's own streams. The module uses process streams and is kept separate
-from the portable HTTP entrypoint.
-
-## JSON Schema tool declarations
-
-Tools may declare `noun`/`verb` and a complete `inputSchema` instead of a name
-and a per-argument Zod `input` object. A noun/verb pair becomes an MCP name such
-as `session_list`; a single noun or verb retains that word. JSON Schema
-arguments are validated through `@yaks/vocab/tools` before `run`. Zod
-declarations use Zod validation. Security callbacks receive normalized tool
-names.
-
-When any tool supplies JSON Schema, the adapter provides its own `tools/list`
-response to preserve that schema. The response captures the initial tool
-registry; adding, disabling, or modifying SDK tools after server construction is
-not supported in this mode. Resources and prompts can still be added with
-`extend`.
-
-## Compatibility
-
-The main module supports fetch-style HTTP handling in Deno, Node, Bun, and
-Cloudflare Workers. `@yaks/mcp/stdio` requires process streams, so it is
-intended for Deno, Node, and Bun. Dependencies include sibling graph, API,
-vocabulary, and tool-runner packages, the MCP SDK, Zod, and
-`zod-to-json-schema`.
-
-## The family
-
-[@yaks/graph](../graph/README.md) defines graph operations and generic tools;
-[@yaks/tools](../tools/README.md) executes and records calls;
-[@yaks/vocab](../vocab/README.md) describes components; and
-[@yaks/api](../api/README.md) provides direct HTTP and WebSocket access.
-[@yaks/fts](../fts/README.md) adds text matching to graph queries when composed
-with storage; ranked `search` still requires a callback.
-
-## License
-
-Apache-2.0
+runner-owned.

@@ -2,13 +2,15 @@
 // handler, so the same server runs on Deno, on Node, and in a Cloudflare
 // Worker.
 //
-// Legacy traffic gets one JSON-RPC request in and one JSON reply out. Modern
-// traffic uses the SDK factory entry, including envelope validation and SSE.
-// When a caller supplies a
-// session graph, the MCP session id names a persisted transcript; a restart
-// preserves it, and two isolates share its identity. There is no SSE stream
-// here, so a `GET` is answered 405, as MCP specifies for a server without a
-// stream. The handler mounts beside @yaks/api's routes without runtime code.
+// Every POST is one JSON-RPC request in and one JSON reply out, in whichever
+// era its body speaks (./protocol.ts): a legacy request may name a connection
+// in `Mcp-Session-Id`, a modern one carries its own envelope and the standard
+// headers mirroring it, and `subscriptions/listen` is the one modern request
+// answered with a stream. When a caller supplies a session graph, the MCP
+// session id names a persisted transcript; a restart preserves it, and two
+// isolates share its identity. Any other `GET` is answered 405, as MCP
+// specifies for a server without a stream. The handler mounts beside
+// @yaks/api's routes without runtime code.
 //
 // The route is not decided here either. This handler answers every HTTP
 // request it is given, so the calling program mounts it on whatever path it
@@ -22,18 +24,6 @@
 // is no moment at which a tool holds a graph together with an identity that
 // did not come from this handler.
 
-import {
-  classifyInboundRequest,
-  createMcpHandler,
-  InMemoryTransport,
-  PROTOCOL_VERSION_META_KEY,
-  readRequestBody,
-} from '@modelcontextprotocol/server'
-import {
-  JSONRPCNotificationSchema,
-  JSONRPCRequestSchema,
-} from '@modelcontextprotocol/core'
-import type { JSONRPCMessage } from '@modelcontextprotocol/server'
 import { type Authenticate, type Handler, json, refuse } from '@yaks/api'
 import type { Actor, Bundle, Graph } from '@yaks/graph'
 import { status } from '@yaks/graph/errors'
@@ -49,6 +39,16 @@ import {
   prepared,
   server,
 } from './server.ts'
+import {
+  CAPABILITIES,
+  CLIENT,
+  isModern,
+  MODERN,
+  type Request as Rpc,
+  SERVER,
+  SUBSCRIPTION,
+  VERSION,
+} from './protocol.ts'
 
 /** How the HTTP handler is built: everything {@link Options} takes except the
  * actor, which is decided per HTTP request. */
@@ -140,11 +140,243 @@ let connected = async (
   return { session, id: fresh }
 }
 
-// The modern protocol's standard headers (SEP-2243) mirror what the body
-// already says: its protocol version (in `_meta`), its method, and the name it
-// acts on. The SDK refuses a request missing a mirror, and ChatGPT sends the
-// body alone, so a missing mirror is filled from the body. A header the client
-// sent is kept, so one that disagrees with its body is still refused.
+let object = (v: unknown): v is Record<string, unknown> =>
+  v !== null && typeof v == 'object' && !Array.isArray(v)
+
+// A JSON-RPC request, and a notification: what each must be to be one.
+let isId = (v: unknown) =>
+  typeof v == 'string' || (typeof v == 'number' && Number.isInteger(v))
+let isRequest = (v: unknown): v is Rpc =>
+  object(v) && v.jsonrpc == '2.0' && isId(v.id) &&
+  typeof v.method == 'string' && (v.params === undefined || object(v.params))
+let isNotification = (v: unknown) =>
+  object(v) && v.jsonrpc == '2.0' && !('id' in v) &&
+  typeof v.method == 'string' && (v.params === undefined || object(v.params))
+let isResponse = (v: unknown) =>
+  object(v) && v.jsonrpc == '2.0' && isId(v.id) &&
+  ('result' in v || 'error' in v) && !('method' in v)
+
+// The id a refusal may echo: a request's, when its body named one.
+let echoed = (body: unknown) =>
+  object(body) && typeof body.method == 'string' && isId(body.id)
+    ? body.id
+    : null
+
+// A refusal of the modern door, the way its errors have always been laid out.
+let rejected = (
+  httpStatus: number,
+  code: number,
+  message: string,
+  data?: unknown,
+  id: unknown = null,
+) =>
+  Response.json({
+    jsonrpc: '2.0',
+    error: { code, message, ...(data === undefined ? {} : { data }) },
+    id,
+  }, { status: httpStatus })
+
+// The statuses a refusal before any handler runs answers with.
+let EARLY: Record<number, number> = {
+  [-32700]: 400,
+  [-32600]: 400,
+  [-32601]: 404,
+  [-32022]: 400,
+  [-32021]: 400,
+  [-32020]: 400,
+}
+
+// ---- which era a body speaks -----------------------------------------------
+//
+// A body names its era: an envelope in `_meta` is modern, anything else is
+// legacy. The headers only mirror the body, so a header that disagrees with
+// it, or a modern header over a body without its envelope, is refused rather
+// than believed.
+
+type Route =
+  | { kind: 'legacy' }
+  | { kind: 'modern'; message: Record<string, unknown>; revision: string }
+  | {
+    kind: 'reject'
+    status: number
+    code: number
+    message: string
+    data?: unknown
+  }
+
+let reject = (
+  code: number,
+  message: string,
+  data?: unknown,
+  httpStatus = 400,
+): Route => ({ kind: 'reject', status: httpStatus, code, message, data })
+let mismatch = (header: string, body: string) =>
+  reject(
+    -32020,
+    `Bad Request: the request headers and body disagree: ${body}`,
+    { mismatch: { header, body } },
+  )
+
+let metaOf = (params: unknown) =>
+  object(params) && object(params._meta) ? params._meta : undefined
+
+// What is wrong with an envelope, first problem first: a required key
+// missing, or one of the wrong kind.
+let issues = (meta: Record<string, unknown>) => {
+  let found: { key: string; problem: string }[] = []
+  for (let key of [VERSION, CAPABILITIES]) {
+    if (!(key in meta)) found.push({ key, problem: 'missing' })
+  }
+  let want = (key: string, kind: string, ok: (v: unknown) => boolean) => {
+    if (!(key in meta) || ok(meta[key])) return
+    let v = meta[key]
+    let got = v === null ? 'null' : Array.isArray(v) ? 'array' : typeof v
+    found.push({
+      key,
+      problem: `Invalid input: expected ${kind}, received ${got}`,
+    })
+  }
+  want(VERSION, 'string', (v) => typeof v == 'string')
+  want(CAPABILITIES, 'object', object)
+  want(CLIENT, 'object', object)
+  let client = meta[CLIENT]
+  if (object(client)) {
+    for (let key of ['name', 'version']) {
+      let v = client[key]
+      if (typeof v != 'string') {
+        let got = v === null ? 'null' : Array.isArray(v) ? 'array' : typeof v
+        found.push({
+          key: `${CLIENT}.${key}`,
+          problem: `Invalid input: expected string, received ${got}`,
+        })
+      }
+    }
+  }
+  return found
+}
+let invalid = (issue: { key: string; problem: string }) =>
+  reject(
+    -32602,
+    `Invalid _meta envelope for protocol revision ${
+      MODERN[0]
+    }: ${issue.key}: ${issue.problem}`,
+    { envelope: issue },
+  )
+
+let classify = (
+  method: string,
+  headers: { version?: string; method?: string },
+  body: unknown,
+): Route => {
+  if (method != 'POST') return { kind: 'legacy' }
+  if (Array.isArray(body)) {
+    if (!body.length) {
+      return reject(-32600, 'Bad Request: empty JSON-RPC batch')
+    }
+    if (
+      body.some((m) =>
+        metaOf(object(m) ? m.params : undefined)?.[VERSION] !== undefined
+      )
+    ) {
+      return reject(
+        -32600,
+        `Bad Request: JSON-RPC batches may not contain requests for protocol revision ${
+          MODERN[0]
+        } or later`,
+      )
+    }
+    return { kind: 'legacy' }
+  }
+  if (isResponse(body)) return { kind: 'legacy' }
+  let request = isRequest(body)
+  if (!request && !isNotification(body)) {
+    return reject(
+      -32600,
+      'Bad Request: the request body is not a valid JSON-RPC message',
+    )
+  }
+  let message = body as Record<string, unknown>
+  let meta = metaOf(message.params)
+  let claim = meta && VERSION in meta
+  let claimed = typeof meta?.[VERSION] == 'string'
+    ? meta[VERSION] as string
+    : undefined
+  let modernHeader = headers.version !== undefined && isModern(headers.version)
+  let methodDiffers = headers.method !== undefined &&
+    headers.method != message.method
+  if (!request) {
+    if (claim) {
+      if (claimed === undefined) {
+        return invalid(
+          issues(meta!).find((i) => i.key == VERSION) ??
+            { key: VERSION, problem: 'expected a protocol version string' },
+        )
+      }
+      if (headers.version !== undefined && headers.version != claimed) {
+        return mismatch(
+          headers.version,
+          `the notification envelope names protocol version ${claimed} but the MCP-Protocol-Version header names ${headers.version}`,
+        )
+      }
+      if (!isModern(claimed)) return { kind: 'legacy' }
+    } else if (!modernHeader) return { kind: 'legacy' }
+    if (methodDiffers) {
+      return mismatch(
+        headers.method!,
+        `the notification body names method ${message.method} but the Mcp-Method header names ${headers.method}`,
+      )
+    }
+    return { kind: 'modern', message, revision: claimed ?? headers.version! }
+  }
+  let sound = claim && claimed !== undefined && isModern(claimed) &&
+    !issues(meta!).length
+  if (message.method == 'initialize' && !sound) {
+    if (modernHeader) {
+      return mismatch(
+        headers.version!,
+        'an initialize request (legacy handshake) was sent with a modern MCP-Protocol-Version header',
+      )
+    }
+    return { kind: 'legacy' }
+  }
+  if (claim) {
+    let first = issues(meta!)[0]
+    if (first) return invalid(first)
+    if (headers.version !== undefined && headers.version != claimed) {
+      return mismatch(
+        headers.version,
+        `the body envelope names protocol version ${claimed} but the MCP-Protocol-Version header names ${headers.version}`,
+      )
+    }
+    if (methodDiffers) {
+      return mismatch(
+        headers.method!,
+        `the body names method ${message.method} but the Mcp-Method header names ${headers.method}`,
+      )
+    }
+    return { kind: 'modern', message, revision: claimed! }
+  }
+  if (modernHeader) {
+    let missing = !meta
+      ? ['_meta']
+      : issues(meta).filter((i) => i.problem == 'missing').map((i) => i.key)
+    let named = missing.length ? missing : [VERSION]
+    return reject(
+      -32602,
+      `Invalid params: the MCP-Protocol-Version header names protocol revision ${headers.version}, but the request is missing the required per-request envelope key(s): ${
+        named.join(', ')
+      }`,
+      { envelope: { missing: named } },
+    )
+  }
+  return { kind: 'legacy' }
+}
+
+// RFC 9110's optional whitespace, around a header's value.
+let ows = (v: string | null) =>
+  v == null ? undefined : v.replace(/^[ \t]+|[ \t]+$/g, '')
+
+// The body field the `Mcp-Name` header mirrors, by method (SEP-2243).
 let NAMED: Record<string, string> = {
   'tools/call': 'name',
   'prompts/get': 'name',
@@ -154,68 +386,211 @@ let NAMED: Record<string, string> = {
   'tasks/cancel': 'taskId',
 }
 
-// A value a header carries as it is, or else in the SDK's Base64 sentinel.
-let PLAIN = /^[\x21-\x7e]([\x20-\x7e]*[\x21-\x7e])?$/
-let headed = (value: string) =>
-  PLAIN.test(value) && !value.startsWith('=?base64?')
-    ? value
-    : `=?base64?${
-      btoa(String.fromCharCode(...new TextEncoder().encode(value)))
-    }?=`
-
-let mirrors = (body: unknown): [string, unknown][] => {
-  if (!body || typeof body != 'object' || !('method' in body)) return []
-  let { method, params } = body as { method: unknown; params?: unknown }
-  let p = params && typeof params == 'object'
-    ? params as Record<string, unknown>
-    : {}
-  let meta = p._meta && typeof p._meta == 'object'
-    ? p._meta as Record<string, unknown>
-    : {}
-  let named = typeof method == 'string' ? NAMED[method] : undefined
-  return [
-    ['mcp-protocol-version', meta[PROTOCOL_VERSION_META_KEY]],
-    ['mcp-method', method],
-    ['mcp-name', named ? p[named] : undefined],
-  ]
-}
-
-let mirrored = (request: Request, body: unknown): Request => {
-  let missing = mirrors(body).filter(([name, value]) =>
-    typeof value == 'string' && !request.headers.has(name)
-  )
-  if (!missing.length) return request
-  let headers = new Headers(request.headers)
-  for (let [name, value] of missing) headers.set(name, headed(value as string))
-  return new Request(request, { headers })
-}
-
-// One JSON-RPC request, answered by an MCP server object of its own. The
-// linked pair is the SDK's own in-process transport, so the protocol is
-// exercised exactly as it would be over a socket, without opening one.
-let ask = async (
-  mcp: ReturnType<typeof server>,
-  request: JSONRPCMessage,
-  ms: number | undefined,
-  clock: Clock,
-): Promise<unknown> => {
-  let [mine, theirs] = InMemoryTransport.createLinkedPair()
-  let cancel = () => {}
-  try {
-    await mcp.connect(theirs)
-    let reply = new Promise<unknown>((ok, no) => {
-      mine.onmessage = ok
-      if (ms != null) {
-        cancel = clock.after(ms, () => no(new Error('mcp timeout')))
-      }
-    })
-    await mine.start()
-    await mine.send(request)
-    return await reply
-  } finally {
-    cancel()
-    await mcp.close()
+// A header's value as it was meant: as it is, or out of the Base64 sentinel
+// `=?base64?…?=` that carries what a header cannot (undefined when the
+// sentinel holds no canonical Base64 of UTF-8).
+let decoded = (value: string): string | undefined => {
+  if (!value.startsWith('=?base64?') || !value.endsWith('?=')) return value
+  let b64 = value.slice(9, -2)
+  if (
+    !/^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?$/.test(
+      b64,
+    )
+  ) {
+    return undefined
   }
+  try {
+    let bytes = Uint8Array.from(atob(b64), (c) => c.charCodeAt(0))
+    return new TextDecoder('utf-8', { fatal: true }).decode(bytes)
+  } catch {
+    return undefined
+  }
+}
+
+// The `Mcp-Name` header against the body it mirrors. ChatGPT sends the body
+// alone, so a missing header is read off the body; one that was sent and
+// disagrees is refused.
+let named = (request: Request, message: Record<string, unknown>) => {
+  let field = Object.hasOwn(NAMED, message.method as string)
+    ? NAMED[message.method as string]
+    : undefined
+  let header = ows(request.headers.get('mcp-name'))
+  if (!field || header === undefined) return undefined
+  let params = object(message.params) ? message.params : {}
+  let value = typeof params[field] == 'string' ? params[field] : undefined
+  let said = decoded(header)
+  if (said === undefined) {
+    return mismatch(
+      header,
+      'the Mcp-Name header carries an invalid Base64 sentinel value',
+    )
+  }
+  if (value !== undefined && said != value) {
+    return mismatch(
+      header,
+      `the body carries params.${field}="${value}" but the Mcp-Name header names "${said}"`,
+    )
+  }
+}
+
+let isJson = (type: string | null) =>
+  type == 'application/json' ||
+  (type ?? '').split(';', 1)[0].trim().toLowerCase() == 'application/json'
+
+// A body read once, and no further than the protocol's limit.
+let MAX = 4 * 1024 * 1024
+let bounded = async (request: Request) => {
+  let length = Number(request.headers.get('content-length'))
+  if (length > MAX) return { tooLarge: true as const }
+  let reader = request.body?.getReader()
+  let parts: Uint8Array[] = []
+  let size = 0
+  for (;;) {
+    if (!reader) break
+    let { done, value } = await reader.read()
+    if (done || !value) break
+    size += value.byteLength
+    if (size > MAX) {
+      await reader.cancel()
+      return { tooLarge: true as const }
+    }
+    parts.push(value)
+  }
+  let bytes = new Uint8Array(size)
+  let at = 0
+  for (let part of parts) bytes.set(part, at), at += part.byteLength
+  return { text: new TextDecoder().decode(bytes) }
+}
+
+// ---- subscriptions/listen --------------------------------------------------
+//
+// The one modern request answered with a stream: the subscription
+// acknowledged, then held open with a comment every 15 seconds until the
+// caller hangs up. What it may hear is what the server says it announces;
+// nothing is published on it here, since a host with news has a stream of
+// its own (the yaks.app kernel's GET /mcp).
+
+let KEEPALIVE = 15_000
+let LIMIT = 1024
+
+let honored = (
+  asked: Record<string, unknown>,
+  caps: Record<string, unknown>,
+) => {
+  let has = (kind: string, bit: string) =>
+    (caps[kind] as Record<string, unknown> | undefined)?.[bit] === true
+  let out: Record<string, unknown> = {}
+  if (asked.toolsListChanged === true && has('tools', 'listChanged')) {
+    out.toolsListChanged = true
+  }
+  if (asked.promptsListChanged === true && has('prompts', 'listChanged')) {
+    out.promptsListChanged = true
+  }
+  if (asked.resourcesListChanged === true && has('resources', 'listChanged')) {
+    out.resourcesListChanged = true
+  }
+  let uris = asked.resourceSubscriptions
+  if (Array.isArray(uris) && uris.length && has('resources', 'subscribe')) {
+    out.resourceSubscriptions = [...uris]
+  }
+  return out
+}
+
+let filter = (params: unknown) => {
+  let asked = object(params) ? params.notifications : undefined
+  if (!object(asked)) return undefined
+  for (
+    let key of [
+      'toolsListChanged',
+      'promptsListChanged',
+      'resourcesListChanged',
+    ]
+  ) {
+    if (asked[key] !== undefined && typeof asked[key] != 'boolean') {
+      return undefined
+    }
+  }
+  let uris = asked.resourceSubscriptions
+  if (
+    uris !== undefined &&
+    (!Array.isArray(uris) || uris.some((u) => typeof u != 'string'))
+  ) {
+    return undefined
+  }
+  return asked
+}
+
+let listening = (open: Set<() => void>) =>
+(
+  message: Record<string, unknown>,
+  signal: AbortSignal,
+  caps: Record<string, unknown>,
+  info: unknown,
+): Response => {
+  let id = message.id
+  let say = (code: number, text: string) =>
+    Response.json({ jsonrpc: '2.0', error: { code, message: text }, id })
+  if (open.size >= LIMIT) return say(-32603, 'Subscription limit reached')
+  let asked = filter(message.params)
+  if (!asked) {
+    return say(
+      -32602,
+      "Invalid params: 'notifications' is required and must be a valid SubscriptionFilter",
+    )
+  }
+  let notifications = honored(asked, caps)
+  let bytes = new TextEncoder()
+  let frame = (data: unknown) =>
+    bytes.encode(`event: message\ndata: ${JSON.stringify(data)}\n\n`)
+  let stop = () => {}
+  let body = new ReadableStream<Uint8Array>({
+    start(out) {
+      out.enqueue(frame({
+        jsonrpc: '2.0',
+        method: 'notifications/subscriptions/acknowledged',
+        params: { notifications, _meta: { [SUBSCRIPTION]: id } },
+      }))
+      if (!Object.keys(notifications).length) {
+        out.enqueue(frame({
+          jsonrpc: '2.0',
+          id,
+          result: {
+            resultType: 'complete',
+            _meta: { [SUBSCRIPTION]: id, [SERVER]: info },
+          },
+        }))
+        out.close()
+        return
+      }
+      let beat = setInterval(
+        () => out.enqueue(bytes.encode(': keepalive\n\n')),
+        KEEPALIVE,
+      )
+      let ended = false
+      stop = () => {
+        if (ended) return
+        ended = true
+        clearInterval(beat)
+        open.delete(stop)
+        signal.removeEventListener('abort', stop)
+        try {
+          out.close()
+        } catch { /* already closed */ }
+      }
+      open.add(stop)
+      if (signal.aborted) stop()
+      else signal.addEventListener('abort', stop, { once: true })
+    },
+    cancel: () => stop(),
+  })
+  return new Response(body, {
+    headers: {
+      'Content-Type': 'text/event-stream',
+      'Cache-Control': 'no-cache, no-transform',
+      Connection: 'keep-alive',
+      'X-Accel-Buffering': 'no',
+    },
+  })
 }
 
 /**
@@ -234,6 +609,7 @@ export let mcp = (opts: MountOptions): Handler => {
   }
   let ms = opts.timeout
   let clock = opts.clock ?? system
+  let report = opts.report ?? logged
   // One runner for the whole handler, not one per HTTP request: the `tool`
   // rows a call references are written once for the process, and a call still
   // running is one run however many requests ask about it.
@@ -242,32 +618,23 @@ export let mcp = (opts: MountOptions): Handler => {
     runs ??= runner(opts.calls ?? opts.graph, {
       tools: opts.registry ?? listing(opts),
       host: opts.graph,
-      report: opts.report ?? logged,
+      report,
       ...opts.reply ? { reply: opts.reply } : {},
       ...opts.clock ? { clock: opts.clock } : {},
     })
-  let callers = new WeakMap<
-    Request,
-    { actor: Actor | null; exchange?: Exchange }
-  >()
-  let modern = createMcpHandler(async (context) => {
-    let caller = context.requestInfo
-      ? callers.get(context.requestInfo)
-      : undefined
-    let built = server({
-      ...opts,
-      instructions: await instructed(opts, caller?.exchange),
-      actor: caller?.actor ?? null,
-      runner: running(),
-    })
-    return await prepared(built, opts, caller?.exchange)
-  }, {
-    legacy: 'reject',
-    // The SDK answers what it refuses or fails on itself and throws nothing
-    // on to the host's watch, so it is told here or nowhere.
-    onerror: (err) =>
-      void Promise.resolve((opts.report ?? logged)(err)).catch(logged),
-  })
+  let built = async (actor: Actor | null, exchange?: Exchange) =>
+    await prepared(
+      server({
+        ...opts,
+        instructions: await instructed(opts, exchange),
+        actor,
+        runner: running(),
+      }),
+      opts,
+      exchange,
+    )
+  let listen = listening(new Set())
+
   let legacy = async (
     request: Request,
     actor: Actor | null,
@@ -281,11 +648,10 @@ export let mcp = (opts: MountOptions): Handler => {
     }
     try {
       if (Array.isArray(body)) return refused('one request at a time', 400)
-      let rpc = JSONRPCRequestSchema.safeParse(body)
-      if (!rpc.success) {
+      if (!isRequest(body)) {
         // A JSON-RPC notification expects no answer at all; anything else that
         // is not a request is a client bug, reported in JSON-RPC's own terms.
-        return JSONRPCNotificationSchema.safeParse(body).success
+        return isNotification(body)
           ? new Response(null, { status: 202 })
           : refused('not a JSON-RPC request', 400)
       }
@@ -306,54 +672,116 @@ export let mcp = (opts: MountOptions): Handler => {
       let caller = conn
         ? writer(await speaking(opts.sessions!, conn.session), actor)
         : unnamed(actor)
-      let exchange = { method: rpc.data.method }
-      let built = server({
-        ...opts,
-        instructions: await instructed(opts, exchange),
-        actor: caller,
-        runner: running(),
-      })
       // Whatever else the calling program serves — resources, prompts — is
       // registered before the request is answered, so `resources/list` sees
       // them on the very first call rather than the second.
-      await prepared(built, opts, exchange)
-      let answer = json(await ask(built, rpc.data, ms, clock))
-      if (conn) answer.headers.set(ID, conn.id)
-      return answer
+      let mcp = await built(caller, { method: body.method })
+      let cancel = () => {}
+      let asked = mcp.answer(body, 'legacy', request.signal)
+      let late = ms == null ? undefined : new Promise<never>((_, no) => {
+        cancel = clock.after(ms, () => no(new Error('mcp timeout')))
+      })
+      try {
+        let { reply } = await (late ? Promise.race([asked, late]) : asked)
+        let answer = json(reply)
+        if (conn) answer.headers.set(ID, conn.id)
+        return answer
+      } finally {
+        cancel()
+      }
     } catch (err) {
       return refusing(err, request)
     }
   }
+
+  let modern = async (
+    request: Request,
+    route: Extract<Route, { kind: 'modern' }>,
+    actor: Actor | null,
+    body: unknown,
+  ): Promise<Response> => {
+    let { message } = route
+    if (!MODERN.includes(route.revision)) {
+      return rejected(
+        400,
+        -32022,
+        `Unsupported protocol version: ${route.revision}`,
+        { supported: [...MODERN], requested: route.revision },
+        echoed(message),
+      )
+    }
+    let asking = isRequest(message) ? message : undefined
+    if (asking) {
+      let off = named(request, asking)
+      if (off?.kind == 'reject') {
+        return rejected(off.status, off.code, off.message, off.data, message.id)
+      }
+    }
+    let mcp
+    try {
+      mcp = await built(unnamed(actor), { method: message.method as string })
+    } catch (err) {
+      await report(err)
+      return rejected(
+        500,
+        -32603,
+        'Internal server error',
+        undefined,
+        echoed(body),
+      )
+    }
+    if (!asking) return new Response(null, { status: 202 })
+    if (asking.method == 'subscriptions/listen') {
+      return listen(asking, request.signal, mcp.capabilities(), mcp.info)
+    }
+    let { reply, early } = await mcp.answer(asking, 'modern', request.signal)
+    let code = (reply.error as { code?: number } | undefined)?.code
+    return Response.json(reply, {
+      status: early && code !== undefined ? EARLY[code] ?? 200 : 200,
+      headers: { 'Content-Type': 'application/json' },
+    })
+  }
+
   return async (request) => {
     try {
-      // The SDK validates neither tokens nor Host/Origin. The host's existing
-      // authentication/security boundary runs before both protocol legs, once
-      // per request, and is handed the message where it was read: a harness
-      // names the run behind a call in the call's `_meta`.
+      // The host's authentication and security boundary runs before either
+      // era, once per request, and is handed the message where it was read: a
+      // harness names the run behind a call in the call's `_meta`.
       let who = async (message?: unknown) =>
         (await opts.authenticate?.(request, message)) ?? null
-      // Classify and serve from one bounded read. The SDK's predicate and
-      // modern handler accept the same parsed body, keeping the protocol's
-      // size limit without making more streams just to read the bytes again.
-      // A body too large, or one that claims the modern protocol and cannot
-      // be read, is the SDK's to answer.
       let modernClaim = request.headers.has('MCP-Protocol-Version')
+      let typed = isJson(request.headers.get('content-type'))
+      let unsupported = () =>
+        rejected(
+          415,
+          -32000,
+          'Unsupported Media Type: Content-Type must be application/json',
+        )
       let body: unknown
       if (request.method == 'POST') {
         let read
         try {
-          // TODO: DOM/Workers declaration merging leaves clone's Cf parameters
-          // unbound. Remove this annotation when clone preserves Request's
-          // metadata type; the SDK reader uses only its body and headers.
-          read = await readRequestBody(request.clone() as Request)
+          read = await bounded(request)
         } catch {
           if (!modernClaim) return refused('the body is not JSON', 400)
           await who()
-          return await modern.fetch(request)
+          return typed
+            ? rejected(
+              400,
+              -32700,
+              'Parse error: the request body could not be read',
+            )
+            : unsupported()
         }
         if (read.tooLarge) {
           await who()
-          return await modern.fetch(request)
+          return typed
+            ? rejected(
+              413,
+              -32000,
+              `Payload Too Large: Request body must not exceed ${MAX} bytes`,
+            )
+            : unsupported()
         }
         try {
           body = JSON.parse(read.text)
@@ -362,56 +790,31 @@ export let mcp = (opts: MountOptions): Handler => {
         }
       }
       let actor = await who(body)
-      let route = classifyInboundRequest({
-        httpMethod: request.method,
-        protocolVersionHeader: request.headers.get('mcp-protocol-version') ??
-          undefined,
-        mcpMethodHeader: request.headers.get('mcp-method') ?? undefined,
-        mcpNameHeader: request.headers.get('mcp-name') ?? undefined,
-        body,
-      })
-      if (route.kind == 'legacy') {
+      let route = classify(request.method, {
+        version: ows(request.headers.get('mcp-protocol-version')),
+        method: ows(request.headers.get('mcp-method')),
+      }, body)
+      if (route.kind == 'legacy') return await legacy(request, actor, body)
+      // Preserve the pre-envelope door's 400 for bodies that cannot be a
+      // request at all. An explicit modern header always belongs to the
+      // modern door.
+      if (!modernClaim && !object(body)) {
         return await legacy(request, actor, body)
       }
-      // Preserve the pre-envelope door's 400 for bodies that cannot be a
-      // request at all. An explicit modern header/claim always belongs to SDK.
-      if (!modernClaim) {
-        if (!body || typeof body != 'object' || Array.isArray(body)) {
-          return await legacy(request, actor, body)
-        }
-      }
-      // The SDK's classifier distinguishes the caller's invalid input from
-      // failures. Answer its typed rejection here; its onerror callback mixes
-      // both together as plain Errors and cannot make that distinction.
+      if (!typed) return unsupported()
+      // A refusal of the caller's own input is answered, never reported.
       if (route.kind == 'reject') {
-        let id = body && typeof body == 'object' && 'id' in body &&
-            (typeof body.id == 'string' || typeof body.id == 'number')
-          ? body.id
-          : null
         return json({
           jsonrpc: '2.0',
-          id,
+          id: echoed(body),
           error: {
             code: route.code,
             message: route.message,
             ...route.data === undefined ? {} : { data: route.data },
           },
-        }, route.httpStatus)
+        }, route.status)
       }
-      // No connection transcript or clientInfo-derived principal in this era.
-      let exchange = body && typeof body == 'object' && 'method' in body &&
-          typeof body.method == 'string'
-        ? { method: body.method }
-        : undefined
-      let sent = mirrored(request, body)
-      callers.set(sent, { actor: unnamed(actor), exchange })
-      try {
-        // The SDK owns the exchange lifetime, including SSE and cancellation.
-        // Closing here would truncate a response whose stream is still active.
-        return await modern.fetch(sent, { parsedBody: body })
-      } finally {
-        callers.delete(sent)
-      }
+      return await modern(request, route, actor, body)
     } catch (err) {
       return refusing(err, request)
     }

@@ -13,15 +13,14 @@ import { test } from '@yaks/testing'
 import { assertEquals, assertRejects, assertThrows } from '@std/assert'
 import { AjvJsonSchemaValidator } from '@modelcontextprotocol/sdk/validation/ajv'
 import { Ajv2020 } from 'ajv/dist/2020.js'
-import { z } from 'zod'
 import { argsOf } from '@yaks/graph'
 import { CallError } from '@yaks/tools'
 import {
   Client,
   StreamableHTTPClientTransport,
 } from '@modelcontextprotocol/client'
-import { createMcpHandler } from '@modelcontextprotocol/server'
-import { type Options, server } from './server.ts'
+import { mcp } from './mount.ts'
+import type { Options } from './server.ts'
 import { answerWith, core, inputSchemaOf } from './tools.ts'
 import { connect, pinned, shop, shopGraph } from './testing.ts'
 import { inputSchema } from './schema.ts'
@@ -110,7 +109,10 @@ test('every tool publishes its answer, and its answers fit it', async () => {
     tools: [{
       name: 'shelve',
       description: 'Shelve a book',
-      input: { where: z.string() },
+      inputSchema: {
+        type: 'object',
+        properties: { where: { type: 'string' } },
+      },
       run: () => {
         throw new CallError('shelf', 'no such shelf')
       },
@@ -200,7 +202,6 @@ let shelf = async (reported: string[], answer?: Options['answer']) => {
     tools: [{
       name: 'shelf',
       description: 'The books on a shelf',
-      input: {},
       readOnly: true,
       run: () => [{ entity: { eid: 'b1' }, kind: 'book', book: { price: 9 } }],
     }],
@@ -287,23 +288,21 @@ test('a JSON Schema input declaration reaches the listing unchanged', async () =
 
 test('a non-object declared schema is not replaced in the neutral tool listing', async () => {
   let schema = { type: 'array', items: { type: 'string' } }
-  let handler = createMcpHandler(() =>
-    server({
-      graph: shopGraph(),
-      tools: [{
-        name: 'declared_array',
-        description: 'An externally declared root',
-        input: {},
-        outputSchema: schema,
-        run: () => [],
-      }],
-    }), { legacy: 'reject' })
+  let door = mcp({
+    graph: shopGraph(),
+    tools: [{
+      name: 'declared_array',
+      description: 'An externally declared root',
+      outputSchema: schema,
+      run: () => [],
+    }],
+  })
   let client = new Client({ name: 'schema-test', version: '0' }, pinned)
   try {
     await client.connect(
       new StreamableHTTPClientTransport(new URL('http://shop.test/mcp'), {
-        fetch: (input, init) =>
-          handler.fetch(
+        fetch: async (input, init) =>
+          await door(
             input instanceof Request ? input : new Request(input, init),
           ),
       }),
@@ -314,66 +313,5 @@ test('a non-object declared schema is not replaced in the neutral tool listing',
     assertEquals(found?.outputSchema, schema)
   } finally {
     await client.close()
-    await handler.close()
-  }
-})
-
-test('modern custom parameter headers use the exact registered input schema before dispatch', async () => {
-  let ran = 0
-  let g = shopGraph()
-  let handler = createMcpHandler(() =>
-    server({
-      graph: g,
-      tools: [{
-        name: 'header_shelf',
-        description: 'Select a shelf',
-        inputSchema: {
-          type: 'object',
-          required: ['shelf'],
-          properties: {
-            shelf: { type: 'string', 'x-mcp-header': 'Shelf' },
-          },
-        },
-        run: () => {
-          ran++
-          return []
-        },
-      }],
-    }), { legacy: 'reject' })
-  let client = new Client({ name: 'header-test', version: '0' }, pinned)
-  let mismatch = false
-  try {
-    await client.connect(
-      new StreamableHTTPClientTransport(new URL('http://shop.test/mcp'), {
-        fetch: (input, init) => {
-          let request = input instanceof Request
-            ? input
-            : new Request(input, init)
-          if (mismatch) request.headers.set('Mcp-Param-Shelf', 'different')
-          return handler.fetch(request)
-        },
-      }),
-    )
-    await client.callTool({
-      name: 'header_shelf',
-      arguments: { shelf: 'poetry' },
-    })
-    assertEquals(ran, 1)
-    mismatch = true
-    let code: unknown
-    try {
-      await client.callTool({
-        name: 'header_shelf',
-        arguments: { shelf: 'poetry' },
-      })
-    } catch (error) {
-      code = (error as { code?: unknown }).code
-    }
-    assertEquals(code, -32020)
-    assertEquals(ran, 1)
-    assertEquals((await g.read('.call')).length, 1)
-  } finally {
-    await client.close()
-    await handler.close()
   }
 })

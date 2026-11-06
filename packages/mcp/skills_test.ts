@@ -2,21 +2,19 @@
 import { test } from '@yaks/testing'
 import { assert, assertEquals, assertRejects } from '@std/assert'
 import {
-  createMcpHandler,
-  fromJsonSchema,
-  McpServer,
-  ProtocolError,
-} from '@modelcontextprotocol/server'
-import {
   Client,
+  fromJsonSchema,
+  ProtocolError,
   StreamableHTTPClientTransport,
 } from '@modelcontextprotocol/client'
 import { type Bundle, derivedEid, Refused } from '@yaks/graph'
 import { fileOf } from '@yaks/file'
 import { world } from '../persona/testing.ts'
-import { pinned } from './testing.ts'
+import { pinned, shopGraph } from './testing.ts'
 import { attachSkills, type SkillOptions } from './skills.ts'
 import { prepared } from './server.ts'
+import { mcp } from './mount.ts'
+import { protocol, type Server } from './protocol.ts'
 
 let values = fromJsonSchema<Record<string, unknown>>({
   type: 'object',
@@ -58,28 +56,28 @@ let seed = (repository = 'repo', title = 'testing'): Bundle[] => {
 }
 let client = async (
   options: SkillOptions,
-  extend?: (built: McpServer) => void,
+  extend?: (built: Server) => void,
 ) => {
   let requests: string[] = []
-  let handler = createMcpHandler(async (ctx) => {
-    assertEquals(ctx.era, 'modern')
-    let built = new McpServer({ name: 'skills-test', version: '1' })
-    extend?.(built)
-    await attachSkills(built, options)
-    return built
-  }, { legacy: 'reject' })
+  let door = mcp({
+    graph: shopGraph(),
+    name: 'skills-test',
+    version: '1',
+    extend,
+    skills: (built, exchange) => attachSkills(built, options, exchange),
+  })
   let c = new Client({ name: 'skills-client', version: '1' }, pinned)
   let transport = new StreamableHTTPClientTransport(
     new URL('http://skills.test/mcp'),
     {
-      fetch: (url: string | URL | Request, init?: RequestInit) => {
+      fetch: async (url: string | URL | Request, init?: RequestInit) => {
         requests.push(String(init?.body))
-        return handler.fetch(new Request(url, init))
+        return await door(new Request(url, init))
       },
     },
   )
   await c.connect(transport)
-  return { c, handler, requests }
+  return { c, requests }
 }
 let list = async (c: Client, cursor?: string) =>
   await c.request({
@@ -159,13 +157,13 @@ test('no scope is empty; fresh request snapshots see graph edits and preserve ex
     await empty.c.close()
   }
   let { c } = await client({ graph: g, repository: 'repo' }, (built) => {
-    built.registerResource(
+    built.resource(
       'other',
       'example://other',
       {},
       () => ({ contents: [{ uri: 'example://other', text: 'Unrelated' }] }),
     )
-    built.registerPrompt(
+    built.prompt(
       'other',
       {},
       () => ({
@@ -197,24 +195,21 @@ test('no scope is empty; fresh request snapshots see graph edits and preserve ex
   }
 })
 
-// The registration boundary records the same contributed resources/prompts
-// both HTTP factories prepare, without constructing a transport or a graph.
-let catalogue = () => {
-  let resources = new Map<string, unknown>()
-  let prompts = new Map<string, { description?: string }>()
-  let capabilities: Record<string, unknown> = {}
-  let built = {
-    server: {
-      registerCapabilities: (value: Record<string, unknown>) => {
-        Object.assign(capabilities, value)
-      },
-      setRequestHandler: () => {},
-    },
-    registerResource: (_name: string, uri: string) => resources.set(uri, {}),
-    registerPrompt: (name: string, config: { description?: string }) =>
-      prompts.set(name, config),
-  } as unknown as McpServer
-  return { built, resources, prompts, capabilities }
+// The registration boundary: what each HTTP exchange's server is prepared
+// with, read back through the server's own lists without a transport.
+let catalogue = async (built: Server) => {
+  let asked = async (method: string) =>
+    (await built.answer({ jsonrpc: '2.0', id: 1, method }, 'legacy')).reply
+      .result as Record<string, { uri?: string; name?: string }[]>
+  let { resources } = await asked('resources/list')
+  let { prompts } = await asked('prompts/list')
+  return {
+    capabilities: built.capabilities(),
+    resources: new Set(resources.map((r) => r.uri)),
+    prompts: new Map(
+      prompts.map((p) => [p.name, p as { description?: string }]),
+    ),
+  }
 }
 
 let httpSkills = (() => {
@@ -227,20 +222,19 @@ let httpSkills = (() => {
     return { scope: 'repo', files }
   }
   let options = {
-    skills: (built: McpServer, exchange?: { method: string }) =>
+    skills: (built: Server, exchange?: { method: string }) =>
       attachSkills(built, source, exchange),
-    extend: (built: McpServer) => {
-      built.registerResource('other', 'example://other', {}, () => ({
+    extend: (built: Server) => {
+      built.resource('other', 'example://other', {}, () => ({
         contents: [{ uri: 'example://other', text: 'Other' }],
       }))
-      built.registerPrompt('other', {}, () => ({ messages: [] }))
+      built.prompt('other', {}, () => ({ messages: [] }))
     },
   }
-  let views = Array.from({ length: 10 }, catalogue)
   let request = async (method: string) => {
-    let view = views.shift()!
-    await prepared(view.built, options, { method })
-    return view
+    let built = protocol({ info: { name: 'skills-test', version: '1' } })
+    await prepared(built, options, { method })
+    return await catalogue(built)
   }
   return { files, request, reads: () => reads, path, encoder }
 })()

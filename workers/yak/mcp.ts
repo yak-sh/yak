@@ -62,14 +62,13 @@ import { copyOf } from './directory-copy.ts'
 // roster keeps each tool's securitySchemes, so clients can offer sign-in at
 // the first protected call. `?auth=required` remains the default's alias for
 // existing connectors. All three addresses share one resource and OAuth flow.
-import { fromJsonSchema, type McpServer } from '@modelcontextprotocol/server'
-import { CfWorkerJsonSchemaValidator } from '@modelcontextprotocol/server/validators/cf-worker'
 import {
   type Exchange,
   mcp,
   type Notice,
   roster,
   rosterVersion,
+  type Server,
 } from '@yaks/mcp'
 import { coded } from './agent-code.ts'
 import { translated } from '@yaks/mcp/tools'
@@ -155,16 +154,15 @@ let refused = (req: Request, id: unknown, env: Env) => {
 // `prompts/` one. A server is built for every call, and a `tools/call` lists
 // neither, so it reads no app for them (T-35479). A server serving a whole
 // connection has no one exchange, and is given everything.
-let promptValidator = new CfWorkerJsonSchemaValidator()
 let reads = (exchange: Exchange | undefined, kind: string) =>
   !exchange || exchange.method.startsWith(`${kind}/`)
 let extend = (ctx: Ctx, stood: Standing) =>
 async (
-  server: McpServer,
+  server: Server,
   exchange?: Exchange,
 ) => {
   for (let doc of docs(ctx.env)) {
-    server.registerResource(doc.name, doc.uri, {
+    server.resource(doc.name, doc.uri, {
       title: doc.title,
       description: doc.description,
       mimeType: doc.mimeType,
@@ -177,7 +175,7 @@ async (
     }))
   }
   for (let view of reads(exchange, 'resources') ? await listViews(ctx) : []) {
-    server.registerResource(view.name, view.uri, {
+    server.resource(view.name, view.uri, {
       title: view.title,
       description: view.description,
       mimeType: view.mimeType,
@@ -198,19 +196,15 @@ async (
       url: url(e.space, e.app, ctx.env),
     }))
   for (let p of PROMPTS) {
-    server.registerPrompt(p.name, {
+    server.prompt(p.name, {
       title: p.title,
       description: p.description,
-      argsSchema: fromJsonSchema<Record<string, string | undefined>>({
-        type: 'object',
-        properties: Object.fromEntries(p.arguments.map((a) => [
-          a.name,
-          { type: 'string', description: a.description },
-        ])),
-        required: p.arguments.filter((a) => a.required).map((a) => a.name),
-        additionalProperties: true,
-      }, promptValidator),
-    }, async (args: Record<string, string | undefined>) => ({
+      arguments: p.arguments.map((a) => ({
+        name: a.name,
+        description: a.description,
+        required: !!a.required,
+      })),
+    }, async (args) => ({
       description: p.description,
       messages: [{
         role: 'user' as const,
@@ -236,7 +230,7 @@ async (
   // since the four above registered it.
   let apps = reads(exchange, 'prompts') ? await stood.apps() : []
   for (let p of prompted(apps, PROMPTS.map((one) => one.name))) {
-    server.registerPrompt(p.name, {
+    server.prompt(p.name, {
       title: p.title,
       description: p.description,
     }, () => ({
@@ -251,8 +245,8 @@ async (
   // than refused. There is nothing to set: the one thing this connector ever
   // logs is a break, at `error`, and nothing quieter is ever sent (unseen.ts
   // `noted`).
-  server.server.registerCapabilities({ logging: {} })
-  server.server.setRequestHandler('logging/setLevel', () => ({}))
+  server.capable({ logging: {} })
+  server.handle('logging/setLevel', () => ({}))
 }
 
 // An old caller is answered, never corrected (C-32607 item 2). A connector
@@ -454,7 +448,7 @@ let door = async (ctx: Ctx, session: string, rpc: Rpc) => {
     // below, where they read one named app rather than the whole of somebody's
     // reach.
     security: SIGNIN,
-    extend: (server: McpServer, exchange?: Exchange) =>
+    extend: (server: Server, exchange?: Exchange) =>
       c.time('extend', () => extend(ctx, stood)(server, exchange)),
   }
   let shared = coded(opts, ctx)

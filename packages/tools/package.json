@@ -33,9 +33,7 @@
     "@yaks/render": "0.2.24",
     "@yaks/sql": "0.2.26",
     "@yaks/text": "0.2.24",
-    "@yaks/vocab": "0.2.23",
-    "zod": "3.25.76",
-    "zod-to-json-schema": "3.25.2"
+    "@yaks/vocab": "0.2.23"
   },
   "devDependencies": {
     "@std/assert": "npm:@jsr/std__assert@^1.0.0",

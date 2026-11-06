@@ -382,8 +382,8 @@ bundles from graph-backed interfaces. To embed the app, mount `App` with
   query that graph-wide list.
 - **Tools use the session's graph.** `harnessTools()` combines machine,
   delegation, artifact, text-inspection, and generic graph tools (`graph_apply`,
-  `graph_query`, `graph_show`, `graph_schema`). Existing JSON Schemas are
-  retained; Zod arguments are converted to JSON Schema for the model.
+  `graph_query`, `graph_show`, `graph_schema`). Their JSON Schemas are sent to
+  the model as declared.
 - **Restart recovery.** @yaks/session's service releases execution leases whose
   holders are absent from the graph; a worker joining the effects pool sweeps up
   the runs a restart left owed, and `resume()` delivers what ended children left

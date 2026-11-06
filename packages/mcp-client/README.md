@@ -67,8 +67,8 @@ namespace and `label` to change descriptions. `meta.server` and
 `meta.remoteName` preserve connection identity and the protocol name.
 
 Remote schemas and annotations are preserved. The client does not infer CLI
-nouns or verbs, convert schemas to Zod, or validate call arguments. The remote
-server remains responsible for runtime argument validation.
+nouns or verbs, convert schemas, or validate call arguments. The remote server
+remains responsible for runtime argument validation.
 
 `clients(servers, options)` combines several connections. Server names and
 normalized namespaces must be unique. A server's optional `allow` array limits
