@@ -13,6 +13,12 @@
 // the release to it; if that release still serves, its next page asks again.
 // Anything else is a failure of ours, which the sweep reports (wake.ts
 // `reporting`).
+//
+// A deploy restarts the directory, and the remake under way in its alarm dies
+// holding the release's fence, which would hold the person's edits and the
+// remake's own next run until it is five minutes old (versions.ts `waiting`).
+// So a run draws its fence and keeps it on the row before taking it, and the
+// run the restart fires again (wake.ts `resumed`) lifts exactly that one.
 import { derivedEid } from '@yaks/graph/identity'
 import { CallError } from '@yaks/tools/errors'
 import { copyOf } from './directory-copy.ts'
@@ -21,9 +27,13 @@ import * as dirPart from './directory.ts'
 import { bound, type Env } from './env.ts'
 import { KERNEL, meta } from './meta.ts'
 import { recompileRelease } from './tools.ts'
+import { drawn } from './versions.ts'
 
-/** What a remake remakes: an app, and the release of it to make again. */
-export type Remake = { app: string; source: string }
+/** What a remake remakes: an app, and the release of it to make again; and
+ * the fence its last run took. */
+export type Remake = { app: string; source: string; fence?: string | null }
+
+let rowOf = (job: Remake) => derivedEid(`remake ${job.source}`)
 
 let EXPECTED = ['stale', 'conflict']
 
@@ -32,7 +42,7 @@ let EXPECTED = ['stale', 'conflict']
  * and left the release serving (a deploy held its fence, or the remake
  * failed) is woken again. */
 export let ask = async (env: Env, job: Remake) => {
-  let eid = derivedEid(`remake ${job.source}`)
+  let eid = rowOf(job)
   let graph = meta(env)
   let [held] = await graph.query(`.entity.eid=${eid}&?wake&?sweep`) as {
     wake?: { at?: string | null }
@@ -56,13 +66,23 @@ export let remade = async (env: Env, job: Remake) => {
     copy: copyOf(env),
     time: env.CLOCK,
   })
-  // Another release's: the app moved on, or a deploy holds its fence.
+  let fence = drawn()
+  // Another release's: the app moved on, or a deploy holds its fence. A fence
+  // this run or its dead last run drew is the remake's own.
   let theirs = (at: Awaited<ReturnType<typeof dir.appAt>>) =>
-    !at || at.app.source != job.source || !!at.app.fence
+    !at || at.app.source != job.source ||
+    (!!at.app.fence && at.app.fence != job.fence && at.app.fence != fence)
   let at = await dir.appAt(job.app)
   if (theirs(at)) return
+  await meta(env).apply([{
+    entity: { eid: rowOf(job) },
+    release_remake: { fence },
+  }], KERNEL)
   try {
-    await recompileRelease({ env, dir, person: '' }, at!.space, at!.app)
+    await recompileRelease({ env, dir, person: '' }, at!.space, at!.app, {
+      left: job.fence,
+      take: fence,
+    })
   } catch (e) {
     if (e instanceof CallError && EXPECTED.includes(e.code)) return
     // The fence wait's refusal (versions.ts `waiting`): a deploy took it.

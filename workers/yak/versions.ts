@@ -122,14 +122,20 @@ export let waiting = async (
   }
 }
 
+/** A fence not yet taken: when it was drawn, which `waiting` reads its age
+ * from, and a name no other fence shares. A job that can die holding one
+ * draws it first and keeps it, so its next run lifts exactly that fence
+ * (remake.ts `remade`). */
+export let drawn = () => `${Date.now()}:${crypto.randomUUID()}`
+
 /** Hold new edits while one release copies its selected draft. */
 export let fenced = async (
   dir: Directory,
   app: App,
   draft: string | null,
   who: Who,
+  fence = drawn(),
 ) => {
-  let fence = `${Date.now()}:${crypto.randomUUID()}`
   await dir.stamp({
     entities: [{
       entity: { eid: app.eid },

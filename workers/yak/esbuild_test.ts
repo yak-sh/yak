@@ -23,7 +23,7 @@ import { call, type Ctx } from './tools.ts'
 import { handler } from './kernel.ts'
 import { KERNEL, meta } from './meta.ts'
 import { ask, remade, type Remake } from './remake.ts'
-import { addressed, fenced, SHA, sha256 } from './versions.ts'
+import { addressed, drawn, fenced, SHA, sha256 } from './versions.ts'
 
 let OWNER = { person: null, role: 'owner', administrative: true } as const
 
@@ -453,6 +453,37 @@ test('a remake leaves a release under way to its deploy', () => {
   assert(leftToDeploy.waited < 1000)
   assertEquals(leftToDeploy.asked, 0)
   assert(leftToDeploy.same)
+})
+
+// A deploy kills the remake under way in the directory's alarm, holding the
+// release's fence. The run the restart fires again lifts exactly that fence,
+// kept on its row before it took it, rather than wait it out or leave it.
+let lifted = await (async () => {
+  await using s = await scenario(compiles)
+  await s.write({ 'index.html': PAGE, 'main.ts': 'let n: number = 1' })
+  await s.tool('app_deploy')
+  let space = (await s.dir.space('ada'))!
+  let app = (await s.dir.app(space, 'cookbook'))!
+  let release = await s.release()
+  let left = drawn()
+  await ask(s.env, { app: app.eid, source: app.source! })
+  let [row] = await meta(s.env).query('.release_remake')
+  await meta(s.env).apply([{
+    entity: row.entity,
+    release_remake: { fence: left },
+  }], KERNEL)
+  await fenced(s.dir, app, app.draft ?? null, OWNER, left)
+  ;[row] = await meta(s.env).query('.release_remake')
+  await remade(s.env, row.release_remake as Remake)
+  return {
+    fence: (await s.dir.app(space, 'cookbook'))!.fence,
+    remade: await s.release() != release,
+  }
+})()
+
+test('a remake lifts the fence its dead run left, and makes the release', () => {
+  assertEquals(lifted.fence, null)
+  assert(lifted.remade)
 })
 
 let failedCompile = await (async () => {

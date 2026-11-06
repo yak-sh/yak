@@ -1606,6 +1606,7 @@ let released = async (
     confirm = false,
     expectedVersion,
     recompile = false,
+    fence: drew,
   }: {
     target?: Version
     reload?: Reload
@@ -1617,6 +1618,9 @@ let released = async (
     /** `target` made again from its files, compiled by today's toolkit,
      * rather than its kept release put back. */
     recompile?: boolean
+    /** The fence to take, drawn and kept by a caller that can die holding
+     * it (versions.ts `drawn`). */
+    fence?: string
   } = {},
 ): Promise<
   { version: number; said: string; serves?: string; review?: DeployReview }
@@ -1644,7 +1648,10 @@ let released = async (
   let release = kept?.source ?? releaseOf(space, standing)
   let draft = standing.draft ?? null
   let reviewing = base != null && base < (standing.version ?? 0) && !confirm
-  let fence = await c.time('fence', () => fenced(ctx.dir, standing, draft, who))
+  let fence = await c.time(
+    'fence',
+    () => fenced(ctx.dir, standing, draft, who, drew),
+  )
   // The fence is a directory commit. Acquire a new app and caller together;
   // none of the standing from before that commit authorizes the next phase.
   if (ctx.reopen) {
@@ -1790,11 +1797,24 @@ export let recoverRelease = async (
 /** Make an app's live version again as itself, its pages and worker compiled
  * by the toolkit that serves it now, where the toolkit it was compiled with
  * has moved on (toolkit.ts): how a fix in a shared package reaches an app
- * that has not deployed since. Its files and its draft are as they were. */
-export let recompileRelease = async (ctx: Ctx, space: Space, app: App) => {
+ * that has not deployed since. Its files and its draft are as they were.
+ *
+ * It takes the fence `take`, and `left` is the one its last run took (both
+ * remake.ts `remade`'s). That run died holding it, so it is lifted here
+ * rather than waited out, and the person's edits it held go on. */
+export let recompileRelease = async (
+  ctx: Ctx,
+  space: Space,
+  app: App,
+  { left, take }: { left?: string | null; take?: string } = {},
+) => {
   let current = await ctx.dir.app(space, app.slug)
   if (!current || current.eid != app.eid || current.source != app.source) {
     return
+  }
+  let who: Who = { person: null, role: 'owner', administrative: true }
+  if (left && current.fence == left) {
+    await unfenced(ctx.dir, current, left, who)
   }
   let live = (await versions(ctx.dir, current))
     .find((v) => v.version == current.version)
@@ -1804,14 +1824,18 @@ export let recompileRelease = async (ctx: Ctx, space: Space, app: App) => {
         'has no retained release to make again',
     )
   }
-  let who: Who = { person: null, role: 'owner', administrative: true }
   await released(
     ctx,
     space,
     current,
     who,
     appStore(ctx.env.STORE, space, current, ctx.env),
-    { target: live, expectedVersion: live.version, recompile: true },
+    {
+      target: live,
+      expectedVersion: live.version,
+      recompile: true,
+      fence: take,
+    },
   )
 }
 

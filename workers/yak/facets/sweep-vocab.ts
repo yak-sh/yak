@@ -15,6 +15,12 @@ export let sweepDoc: VocabDoc = {
           description:
             'the release it serves that its toolkit has moved on from',
         },
+        fence: {
+          type: 'string',
+          description:
+            'the release fence the last run drew, kept before it took it; ' +
+            'the next run lifts it if that run died holding it',
+        },
       },
     },
     sweep: {
