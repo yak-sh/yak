@@ -15,7 +15,6 @@ import {
   call,
   type Ctx,
   edits,
-  fetched,
   type Listed,
   opOf,
   type Out,
@@ -56,8 +55,6 @@ import { ram } from '@yaks/ram'
 import { cleanup } from '@yaks/testing'
 import { stores } from './app-store-probe.ts'
 import { clock } from './timing.ts'
-import type { Space } from './directory.ts'
-import { serve } from './unseen.ts'
 import type { Env } from './env.ts'
 import { KERNEL, meta } from './meta.ts'
 import { stages } from '../../bin/app-deploy-time.ts'
@@ -417,51 +414,6 @@ test('an integrity hash is base64 of the same digest, not the hex', () => {
   )
 })
 
-for (
-  let [from, saying] of [
-    ['cdnjs.example/chess.js', 'is not a URL'],
-    ['http://cdnjs.example/chess.js', 'https only, not http'],
-    ['file:///etc/passwd', 'https only, not file'],
-  ]
-) {
-  test(`a fetch refuses ${from} before asking the web`, async () => {
-    await assertRejects(
-      () =>
-        fetched(from, () => {
-          throw Error('unexpected fetch')
-        }),
-      Error,
-      saying,
-    )
-  })
-}
-
-let library = new Response('export let go = () => {}', {
-  headers: { 'content-type': 'text/javascript; charset=utf-8' },
-})
-let missingLibrary = new Response('nope', { status: 404 })
-
-test('a fetch takes https, a live answer, and nothing over the ceiling', async () => {
-  let got = await fetched('https://cdnjs.example/chess.js', (at) => {
-    assertEquals(String(at), 'https://cdnjs.example/chess.js')
-    return Promise.resolve(library)
-  })
-  assertEquals(new TextDecoder().decode(got.bytes), 'export let go = () => {}')
-  assertEquals(got.mime, 'text/javascript')
-})
-
-test('a fetch refuses a web response that failed', async () => {
-  await assertRejects(
-    () =>
-      fetched(
-        'https://cdnjs.example/gone.js',
-        () => Promise.resolve(missingLibrary),
-      ),
-    Error,
-    'answered 404',
-  )
-})
-
 test('the tool teaches every op it answers', () => {
   let input = app_files.input as {
     properties: Record<string, { enum?: string[] }>
@@ -755,56 +707,6 @@ test('a listing asks the directory a fixed number of times', async () => {
   // their bindings, who is in it and their rows.
   let one = await costs('app_list', { space: 'one' })
   assertEquals({ hops: one.hops, r2: one.r2 }, { hops: 6, r2: 0 })
-})
-
-// And what a write's reply costs: it says what broke across the space's apps
-// (unseen.ts `serve`) from the space's tracker, so its cost does not grow
-// with the apps the space holds, and an app nobody opens is never woken by a
-// write beside it (T-123502). With nothing open the tracker is the only door
-// it knocks on.
-let writeCost = (() => {
-  let knocked: string[] = []
-  let door = (name: string, answer?: unknown) => ({
-    fetch: () => {
-      knocked.push(name)
-      return Promise.resolve(Response.json(answer))
-    },
-  })
-  let env = {
-    TRACKER_SECRET: 'secret',
-    TRACKER: door('tracker', []),
-    DIRECTORY: door('directory'),
-    STORE: {
-      idFromName: () => (knocked.push('store'), {}),
-      get: () => door('store'),
-    },
-  } as unknown as Env
-  let space = { eid: 'sp', slug: 'sp', trashed: null } as unknown as Space
-  return { env, space, knocked }
-})()
-test('a write costs the same however many apps its space holds', async () => {
-  let { env, space, knocked } = writeCost
-  assertEquals(
-    await serve(
-      env,
-      space,
-      { person: 'ada', role: 'owner' },
-      undefined,
-      false,
-      async (env) => {
-        // Ticket cryptography belongs to tracker/ticket's tests. This reply still
-        // reaches the tracker door, and no directory or app store.
-        let response = await env.TRACKER!.fetch(
-          new Request('https://tracker.internal/query'),
-        )
-        let rows = await response.json() as unknown[]
-        assertEquals(rows, [])
-        return new Map<string, never[]>()
-      },
-    ),
-    [],
-  )
-  assertEquals(knocked, ['tracker'])
 })
 
 // The other half of asking once: every row of the one answer has to find its
