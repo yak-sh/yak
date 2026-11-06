@@ -40,7 +40,6 @@
 import { once } from '@yaks/fp'
 import { clock } from './timing.ts'
 import { r2Objects, r2RawObjects } from './lib/objects.ts'
-import { prefixOf } from './files.ts'
 import {
   type App,
   META_STORE,
@@ -120,23 +119,29 @@ let keep = <T>(all: Map<string, T>, key: string, value: T) => {
   return value
 }
 
-/** One app's notes, or '' where it has none. */
-export let notesOf = (env: Env, space: Space, app: App): Promise<string> => {
+/**
+ * One app's notes, or '' where it has none. The notes are the released ones:
+ * a draft's NOTES.md is handed over once it is deployed, like the rest of the
+ * draft, so an app no release names has none and costs no read. Its files
+ * live only in its draft's rows (written.ts, T-124791); the key its files were
+ * once written in place under holds nothing any more, and reading it was a
+ * miss on every `initialize` and `about` for every undeployed app in reach
+ * (T-143068).
+ */
+export let notesOf = (env: Env, app: App): Promise<string> => {
   let source = app.source
-  if (!source) return notesAt(env, space, app)
+  if (!source) return Promise.resolve('')
   let held = heldNotes.get(source)
   if (held) return held
-  let read = notesAt(env, space, app)
+  let read = notesAt(env, source)
   read.catch(() => heldNotes.get(source) == read && heldNotes.delete(source))
   return keep(heldNotes, source, read)
 }
 
-let notesAt = async (env: Env, space: Space, app: App) => {
+let notesAt = async (env: Env, source: string) => {
   // `read` rather than has-then-get: most apps have no notes, so a second
   // round trip would land on the common case.
-  let bytes = await r2Objects(env.BLOBS).read(
-    `${prefixOf(space, app)}/${NOTES}`,
-  )
+  let bytes = await r2Objects(env.BLOBS).read(`${source}/${NOTES}`)
   if (!bytes) return ''
   // The write refuses anything over CAP, so this slice only ever catches a
   // file written before the ceiling existed.
@@ -153,7 +158,7 @@ let kindsOf = async (ctx: Ctx, space: Space, app: App): Promise<string[]> =>
 // at once (T-34986).
 let lineOf = async (ctx: Ctx, space: Space, app: App): Promise<Line> => {
   let [said, kinds, commands] = await Promise.all([
-    notesOf(ctx.env, space, app),
+    notesOf(ctx.env, app),
     kindsOf(ctx, space, app),
     toolsOf(ctx.env, space, app).then(Object.keys),
   ])
@@ -164,9 +169,10 @@ let lineOf = async (ctx: Ctx, space: Space, app: App): Promise<Line> => {
 // holding the words and the commands. Both are written once under names
 // nothing else writes (declaration.ts), so a line is right for as long as the
 // row names the same two; a deploy, a rollback or a borrowed word names new
-// ones, and the line is read again. An app with no release keeps its notes in
-// files written in place, and the platform's store speaks the platform's own
-// words, so neither has a name to keep a line under.
+// ones, and the line is read again. An app with no release has no notes, and
+// what it declares is read once per isolate (declaration.ts), so its line
+// costs no read to say again and needs no name; the platform's store speaks
+// the platform's own words, so it has none either.
 let named = (space: Space, app: App) =>
   app.source && at({ space, app }) != META_STORE
     ? `${app.eid} ${app.source} ${releaseOf(app)}`
@@ -236,7 +242,7 @@ export let entries = async (
   await Promise.all(
     (await apps).map(async (e) => ({
       ...e,
-      said: e.noted ? await notesOf(ctx.env, e.space, e.app) : '',
+      said: e.noted ? await notesOf(ctx.env, e.app) : '',
     })),
   )
 

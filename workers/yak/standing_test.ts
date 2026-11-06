@@ -10,11 +10,14 @@ import {
   CAP,
   type Entry,
   HAS_NOTES,
+  listed,
   passage,
   prompted,
   tooLong,
 } from './standing.ts'
 import { stale } from './stream.ts'
+import { app as fixture, bucket, space as home } from './testing.ts'
+import type { Ctx } from './tools.ts'
 
 let space = (slug: string) =>
   ({
@@ -79,6 +82,19 @@ test('the roster names every app and what it holds', () => {
   assert(said.includes('holds chores, weeks'), said)
   assert(!said.includes('Commands: .'), said)
   assert(passage([entry('notes')]).includes('holds docs'), 'no fallback')
+})
+
+test('an app never deployed is listed with nothing read', async () => {
+  // Its files are its draft's alone (written.ts), so it has no notes and no
+  // words to read; a read for them was a bucket miss on every initialize.
+  let blobs = bucket()
+  let ctx = { env: { BLOBS: blobs.r2 }, person: 'ada' } as unknown as Ctx
+  let reach = [{ space: home(), app: fixture({ version: null, source: null }) }]
+  for (let n = 0; n < 2; n++) {
+    let [line] = await listed(ctx, reach)
+    assertEquals([line.kinds, line.commands, line.noted], [[], [], false])
+  }
+  assertEquals(blobs.gets, [])
 })
 
 test('a plural is close enough to read as a sentence', () => {
