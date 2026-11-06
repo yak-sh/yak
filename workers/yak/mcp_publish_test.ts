@@ -514,10 +514,10 @@ test('an app reaches the gallery only when yaks.app says yes', async () => {
       )).message,
       'withdraw the gallery listing',
     )
-    // Gallery approval does not replace the six chosen demos on the home page.
+    // Gallery approval does not replace the chosen demos on the home page.
     let home = await k.at('yaks.app', '/').then((r) => r.text())
     assertStringIncludes(home, 'A recipe box')
-    assertStringIncludes(home, 'A garden diary')
+    assertStringIncludes(home, 'Garden Diary')
 
     // A stranger finds it: no cookie, no bearer, the same answer with the
     // install line on it.

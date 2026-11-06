@@ -778,8 +778,7 @@
 
   .For,
   .How,
-  .Path,
-  .Made {
+  .Path {
     display: grid;
     gap: 1.5rem;
   }
