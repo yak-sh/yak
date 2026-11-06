@@ -515,6 +515,12 @@ grouped approximately by function, **not** by dependency order.
   scrubbing helpers are optional operations; the graph stores the resulting
   metadata.
 
+- **[@yaks/extension](./extension)** — a browser extension that lends the tab a
+  person is on to their agent: the browser tools a host declares, the call and
+  answer frames between host and browser, reading a page's visible text,
+  per-site consent, and `./build`, which makes an unpacked Chrome extension from
+  a configuration (a host's name and origin, as data).
+
 - **[@yaks/tmux](./tmux)** — a terminal somebody can watch: `tmux{of, pane}`,
   what is running in it, and the target string tmux itself accepts. Components
   only — the session is the transcript, the process is the pid, and the terminal

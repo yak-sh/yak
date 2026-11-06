@@ -1,0 +1,24 @@
+{
+  "name": "@yaks/extension",
+  "version": "0.2.23",
+  "type": "module",
+  "exports": {
+    ".": "./mod.ts",
+    "./wire": "./wire.ts",
+    "./tools": "./tools.ts",
+    "./build": "./build.ts"
+  },
+  "license": "Apache-2.0",
+  "description": "A browser extension that lends the tab a person is on to their agent: reading the page, the tools and frames between host and browser, per-site consent, and an unpacked Chrome extension built from a configuration.",
+  "dependencies": {
+    "@yaks/fp": "0.2.23",
+    "@yaks/oauth": "0.2.23",
+    "esbuild": "0.28.1"
+  },
+  "devDependencies": {
+    "@std/assert": "npm:@jsr/std__assert@^1.0.0",
+    "@types/chrome": "^0.3.7",
+    "@yaks/testing": "0.2.17",
+    "linkedom": "^0.18.12"
+  }
+}

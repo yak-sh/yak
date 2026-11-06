@@ -1,0 +1,113 @@
+/* The popup: one column, the browser's own font, Everforest's colours. */
+:root {
+  --bg: #fdf6e3;
+  --fg: #5c6a72;
+  --line: #e6e2cc;
+  --green: #8da101;
+  --red: #f85552;
+  --button: #2d353b;
+  color-scheme: light dark;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #2d353b;
+    --fg: #d3c6aa;
+    --line: #475258;
+    --green: #a7c080;
+    --red: #e67e80;
+    --button: #a7c080;
+  }
+}
+body {
+  margin: 0;
+  width: 300px;
+  background: var(--bg);
+  color: var(--fg);
+  font: 14px/1.4 system-ui, sans-serif;
+}
+main {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 16px;
+}
+h1 {
+  margin: 0;
+  font-size: 16px;
+}
+h2 {
+  margin: 0 0 4px;
+  font-size: 13px;
+}
+p {
+  margin: 0;
+}
+button {
+  padding: 6px 12px;
+  border: 0;
+  border-radius: 6px;
+  background: var(--button);
+  color: var(--bg);
+  font: inherit;
+  cursor: pointer;
+}
+form,
+label {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.space {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+}
+input {
+  flex: 1;
+  min-width: 0;
+  padding: 6px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+}
+.connected {
+  color: var(--green);
+}
+.error,
+.offline {
+  color: var(--red);
+}
+.ask {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  padding: 12px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+}
+.ask p {
+  flex-basis: 100%;
+}
+ul {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+li {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 4px 0;
+}
+li button,
+footer button {
+  background: transparent;
+  color: inherit;
+  border: 1px solid var(--line);
+}
+footer {
+  display: flex;
+  gap: 8px;
+}

@@ -1,0 +1,6 @@
+{
+  "name": "yaks.app",
+  "origin": "https://yaks.app",
+  "socket": "wss://yaks.app/manage/{space}/operator?browser=1",
+  "description": "Lets your yaks.app Operator see the page you're on."
+}
