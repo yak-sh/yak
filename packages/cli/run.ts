@@ -579,9 +579,13 @@ export let cli = async (
         : await opts.stray?.(rest[0], rest.slice(1), c)
       if (stray) found = { verb: stray, args: rest.slice(1) }
       else if (onward && opts.more) {
+        let more = opts.more
         let theirs: Command[]
+        let ask = async (fresh: boolean) => [...await more(far, { fresh })]
         try {
-          theirs = [...await opts.more(far, {})]
+          // The host's list is a cache too: a word it lacks is asked again.
+          theirs = await ask(false)
+          if (!commandFor(theirs, rest)) theirs = await ask(true)
         } catch (e) {
           // Most often a typo, and the host only a second place to look: say
           // where the commands are listed, then what asking the host needs.

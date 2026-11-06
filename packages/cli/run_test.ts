@@ -426,6 +426,19 @@ test('a word the graph found at home lacks is the host’s, run as the host’s'
   assertEquals(aimedAt.includes(undefined), false)
 })
 
+test('a word the host’s cached list lacks is asked of the host again', async () => {
+  // The host's cache predates a tool its release added; the fresh list has it.
+  let more: Opts['more'] = (c, o) =>
+    c.config ? [] : [{
+      name: o?.fresh ? 'added' : 'old',
+      description: '',
+      run: () => (printed.push('ran added'), 0),
+    }]
+  let home = (name: string) => name == 'YAK_CONFIG' ? 'home.json' : undefined
+  assertEquals(await ran([], ['added'], { more, env: home }), 0)
+  assertEquals(printed, ['ran added'])
+})
+
 test('a word nothing here has says where commands are listed, and how to sign in to the host', async () => {
   let home = (name: string) => name == 'YAK_CONFIG' ? 'home.json' : undefined
   let more = (failure: Error): Opts['more'] => (c) => {
