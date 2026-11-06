@@ -154,6 +154,11 @@ export let ACCEPTED = 'x-yak-accepted'
 /** The words an app uses from other homes (its `/uses`), said beside the
  * answer to a page's query (graph.ts `#paged`, page-graph.ts `queried`). */
 export let USES = 'x-yak-uses'
+/** The store path that only starts its object (graph.ts): the runtime makes
+ * it and its plugins load, and nothing it holds is read or written, so an
+ * object nobody goes on to use keeps nothing. A birth sends it while the
+ * directory writes the app's row (tools.ts `warmed`, T-143307). */
+export let WARM = '/warm'
 /** Typed directory reads depend on stored data, never the clock or caller code. */
 export let STATIC_QUERY = 'x-yak-static-query'
 

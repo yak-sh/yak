@@ -333,6 +333,7 @@ import {
   PLATFORM_STORE,
   STATIC_QUERY,
   USES,
+  WARM,
 } from './door.ts'
 import { borrows } from './reach.ts'
 import { behind, ran, skewed } from './running.ts'
@@ -3620,6 +3621,15 @@ export class Store {
   async #fetch(request: Request): Promise<Response> {
     // Authorization may refresh the kernel's headers after a directory write.
     request = new Request(request)
+    // Started and nothing more (door.ts `WARM`): answered before anything
+    // reads storage, so the app this object is made for may yet not exist.
+    if (
+      new URL(request.url).pathname == WARM &&
+      request.headers.get('x-yak-kernel') == '1'
+    ) {
+      await this.#prepare(request.headers.get('x-store') ?? '')
+      return new Response(null, { status: 204 })
+    }
     let relocated = await this.#relocation(request)
     if (relocated) return relocated
     // The request that wakes this object waits for it to start, and says how

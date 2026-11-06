@@ -236,7 +236,7 @@ import { sampled, unsampled } from './sample.ts'
 import { titling, vouched, type Who } from './session.ts'
 import { type Clock, clock } from './timing.ts'
 import { addressee, canon, nameOf } from './signin.ts'
-import { ACCEPTED, type Door } from './door.ts'
+import { ACCEPTED, type Door, storeOf, WARM } from './door.ts'
 import {
   asked,
   loaded,
@@ -2016,6 +2016,23 @@ let born = (
 }
 
 /**
+ * Start the object a born row names while the directory writes the row
+ * (T-143307). A new object took about 340 ms to start, and a write sent the
+ * moment app_new answered waited on it, since the store app_new asks for
+ * behind its answer was still starting. The start touches nothing the object
+ * holds (door.ts `WARM`), so a birth the directory refuses leaves nothing.
+ */
+let warmed = (env: Env, row: Bundle) => {
+  let { store } = row.app as { store: string }
+  background(
+    storeOf(env.STORE, store)(WARM, {}, KERNEL).then(
+      (r) => r.body?.cancel(),
+      (e) => caught(e, { request: 'store warm', store }),
+    ),
+  )
+}
+
+/**
  * The manifest an app declares, as the bytes it is stored in, whichever
  * format it was written in: the `.yml` first — YAML is the warm path
  * (M-34605), and every parser here reads it through the same door as the
@@ -3159,13 +3176,12 @@ let OURS: Row[] = [
         throw refuse('limit', atCeiling(space, 'apps', ctx.env))
       }
       let claims = await taking(ctx, space, s, who)
-      let entities: Bundle[] = [
-        ...claims,
-        born(space, s, {
-          title: titled(args.title),
-          access: args.access == null ? 'public' : access(args.access),
-        }),
-      ]
+      let row = born(space, s, {
+        title: titled(args.title),
+        access: args.access == null ? 'public' : access(args.access),
+      })
+      warmed(ctx.env, row)
+      let entities: Bundle[] = [...claims, row]
       let applied = await ctx.dir.apply({ entities }, vouched(who))
       let eid = applied.find((row) => row.app)?.entity.eid
       if (!eid) throw new Error('app creation returned no identity')
@@ -3181,9 +3197,9 @@ let OURS: Row[] = [
         who = current.who
         app = current.app!
       }
-      // Its store is made now, behind the answer (T-143070). A new object
-      // and its first schema took most of a second, and the person's first
-      // write or deploy waited on them.
+      // Its schema is laid now, behind the answer (T-143070), in the object
+      // started beside the directory's write: the person's first write or
+      // deploy waited most of a second on both.
       background(
         appStore(ctx.env.STORE, space, app, ctx.env)('/graph').then(
           (r) => r.body?.cancel(),
@@ -5735,6 +5751,7 @@ let OURS: Row[] = [
           }
           : {},
       }
+      warmed(ctx.env, row)
       // What the copy asks this space for: a needed connection for each one
       // the app uses, read before anything is written and written with the
       // row, so no copy is ever without them.
