@@ -137,6 +137,41 @@ test('a run that stopped talking is still over, and says so once', async () => {
   }
 })
 
+test('a run handed to another watcher is finished by it alone', async () => {
+  let { g, dir, close } = await logged([{ type: 'result' }])
+  try {
+    let p = crypto.randomUUID()
+    await g.apply([
+      { entity: { eid: p }, process: { pid: Deno.pid, roles: ['effects'] } },
+      { entity: { eid: 'S1' }, process: { watcher: p } },
+    ])
+    await follow(g, 'S1', claude.read, { dir })
+    assertEquals((await entries(g)).some((e) => e.stop), false)
+  } finally {
+    close()
+  }
+})
+
+test('a checkout whose removal was cut off is finished, not read as one', async () => {
+  let { g, dir, close } = await logged([{ type: 'result' }])
+  let worktrees = Deno.makeTempDirSync({ prefix: 'spawn-trees-' })
+  try {
+    // Git, killed while it removed the checkout, left its .git gone.
+    Deno.mkdirSync(`${worktrees}/S1/node_modules/x`, { recursive: true })
+    let told: unknown[] = []
+    await follow(g, 'S1', claude.read, {
+      dir,
+      worktrees,
+      report: (e) => told.push(e),
+    })
+    assertEquals(told, [])
+    assertEquals(await Deno.stat(`${worktrees}/S1`).catch(() => null), null)
+  } finally {
+    close()
+    Deno.removeSync(worktrees, { recursive: true })
+  }
+})
+
 // How a run that ended `code`, having printed `err` on stderr, reads at its
 // end, and the failures told of it; `asked` when somebody stopped it.
 let ending = async (code: number, err: string, asked = false) => {

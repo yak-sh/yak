@@ -247,9 +247,11 @@ export let discover = async (g: Graph, cwd: string): Promise<Bundle> => {
     git(cwd, [
       'for-each-ref',
       '--format=%(refname)%09%(objectname)%09%(symref)',
-    ]),
+    ]).catch((error: Error) => error),
   ])
+  // Outside a checkout every command fails; that it is not one is the answer.
   if (!dirs) throw new Error('not a checkout: ' + cwd)
+  if (refs instanceof Error) throw refs
   let { path, common, gitdir } = dirs
   let filesystem = await localFilesystem(g)
   let repository = repositoryEid(common, filesystem.entity.eid)

@@ -83,7 +83,13 @@ import {
   watch,
 } from '@yaks/process'
 import { retained } from '@yaks/git/workspace'
-import { createWorktree, discover, keepSpare, reclaim } from '@yaks/git/host'
+import {
+  createWorktree,
+  discover,
+  keepSpare,
+  locate,
+  reclaim,
+} from '@yaks/git/host'
 import { owed } from '@yaks/persona'
 import { promptEntry, snapshot } from '@yaks/context'
 import { type Adapter, adapters as known, type Job } from './adapters.ts'
@@ -356,6 +362,11 @@ export let follow = async (
         let now = await ran(g, session)
         let pid = (b?: Bundle) => comp(b, PROCESS)?.pid
         if (comp(now, EXIT) == null || pid(now) != pid(row)) return
+        // A run handed to another process (this one leaving, at a restart) is
+        // finished by its new watcher alone: two taking its checkout back at
+        // once each pull files from under the other.
+        let watcher = proc(now)?.watcher
+        if (watcher != null && watcher != selfEid()) return
         let well = await finish(g, session, o, run.through)
         if (well != null) {
           await onward(g, session, o, well).catch(told(o))
@@ -896,6 +907,10 @@ let taken = async (g: Graph, path: string): Promise<void> => {
   } catch {
     return
   }
+  // A directory without its checkout is a removal cut off part way, its
+  // process killed: Git removes only a clean checkout, so what is left is
+  // files nothing tracks, and the removal is finished.
+  if (!await locate(path)) return await disk.remove(path, { recursive: true })
   let tree = await discover(g, path)
   if (comp(tree, 'worktree')?.managed && !await retained(g, tree.entity.eid)) {
     let base = comp(tree, 'checkout')?.base
