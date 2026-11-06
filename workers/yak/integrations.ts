@@ -19,7 +19,7 @@
 import type { Listed } from '@yaks/connections'
 import { keyed } from '@yaks/connections'
 import { type ComponentChildren, h } from 'preact'
-import { Button, Card, More } from '@yaks/ui'
+import { Button, Card, More } from '@yaks/ui/parts'
 import { raw } from './html.ts'
 import { type Host, url } from './host.ts'
 import { managePath } from './route.ts'

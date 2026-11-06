@@ -8,6 +8,7 @@
     "./cli": "./cli.ts",
     "./ui": "./ui.ts",
     "./chart": "./chart-marks.ts",
+    "./parts": "./parts.ts",
     "./contributions": "./contributions.ts",
     "./guide": "./guide.ts",
     "./history": "./history.ts",

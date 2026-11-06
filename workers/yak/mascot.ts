@@ -15,7 +15,7 @@
 
 import { h } from 'preact'
 import { renderToString } from 'preact-render-to-string'
-import { Loading } from '@yaks/ui'
+import { Loading } from '@yaks/ui/parts'
 
 /** What the yak can be seen doing. */
 export type Pose =

@@ -43,7 +43,15 @@ import { sessionAt } from './session.ts'
 import { drawn } from './render/mod.ts'
 import type { Ref, Uses } from './render/directory.ts'
 import { type ComponentChildren, Fragment, h, type VNode } from 'preact'
-import { Button, Card, Empty, Field, Group, Icon, SideNav } from '@yaks/ui'
+import {
+  Button,
+  Card,
+  Empty,
+  Field,
+  Group,
+  Icon,
+  SideNav,
+} from '@yaks/ui/parts'
 import { esc, markup, raw } from './html.ts'
 import { lost, shell } from './pages.ts'
 import { type IconName, icons } from './icons.ts'

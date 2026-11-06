@@ -26,7 +26,7 @@
 // already in the world and the resource list a connector cached.
 import type { Token } from '@yaks/markdown'
 import { front } from '@yaks/yaml'
-import { Body, SideNav } from '@yaks/ui'
+import { Body, SideNav } from '@yaks/ui/parts'
 import { type ComponentChildren, h } from 'preact'
 import type { Env } from './env.ts'
 import { type Page, PAGES } from './guide.ts'

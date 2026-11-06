@@ -1,7 +1,16 @@
 import type { Bundle } from '@yaks/graph'
 import { type ComponentChildren as Node, Fragment, h } from 'preact'
 import { renderToString } from 'preact-render-to-string'
-import { Button, Card, Check, Drop, Field, Form, Icon, SideNav } from '@yaks/ui'
+import {
+  Button,
+  Card,
+  Check,
+  Drop,
+  Field,
+  Form,
+  Icon,
+  SideNav,
+} from '@yaks/ui/parts'
 import type { Env } from './env.ts'
 import { directoryOf, type Reach, type Space } from './directory.ts'
 import { reachOf } from './operator-reach.ts'
