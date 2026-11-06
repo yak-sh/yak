@@ -497,6 +497,7 @@ import {
   idOf,
   select,
   table,
+  type Tags,
 } from '@yaks/sql'
 import { parse } from '@yaks/query'
 import { equal } from '@yaks/testing'
@@ -518,22 +519,28 @@ let backed: Backings = {
       cols: [as(col('id'), 'entity'), col('value')],
       from: table('events'),
     }),
-    tag,
   },
 }
-equal(compile(parse('.event.value>=2'), vocab, { backed }).params, [2])
+let tags: Tags = { event: tag }
+equal(compile(parse('.event.value>=2'), vocab, { backed, tags }).params, [
+  tag,
+  2,
+])
 equal(eidOf(tag, 42), '0000002a' + tag)
 equal(idOf(tag, eidOf(tag, 42)), 42)
 equal(idOf(tag, 'unrelated'), null)
 ```
 
-The store supplies `tag`, a 32-character hex suffix identifying the store and
-component. `eidOf` prefixes the integer id in at least eight hex digits; `idOf`
-reads it back and `eidAt` builds that read as an expression. Reference paths
-into backings follow their integer ids. A backed spine has no numbers,
-archetypes or tombstones; its entities carry only its computed component. Other
-components' predicates are answered without joining across the two id spaces.
-Missing backings or tags are refused.
+The store gives `tags` beside the backings (`Tags`): per component, a
+32-character hex suffix identifying the store and component. A statement binds
+each tag it reads rather than writing it into its text (`tagged`, `tagIn`), so
+every store of a vocabulary shares one registry and one statement. `eidOf`
+prefixes the integer id in at least eight hex digits; `idOf` reads it back and
+`eidAt` builds that read as an expression. Reference paths into backings follow
+their integer ids. A backed spine has no numbers, archetypes or tombstones; its
+entities carry only its computed component. Other components' predicates are
+answered without joining across the two id spaces. Missing backings or tags are
+refused.
 
 A backing's entities have no row a visibility policy can test, so a backing says
 what each row tells of: `about` is a select of `entity` (the row's id), `about`
