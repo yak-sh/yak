@@ -26,7 +26,7 @@ import { INTEGRATIONS, page as integrations } from './integrations.ts'
 import { apex, type Host, url } from './host.ts'
 import { lost } from './pages.ts'
 import { matches } from './public-cache.ts'
-import { SITE_TAG } from './purge.ts'
+import { cardTag, SITE_TAG } from './purge.ts'
 import { sheeted } from './sheets.ts'
 import { type Clock, clock, timed } from './timing.ts'
 import { COUNTED, counted } from './views.ts'
@@ -132,17 +132,22 @@ let rendered = async (
     return timed(uncached(page), c, 'site_')
   }
   if (path.startsWith(gallery.IMAGE)) {
-    return timed(pictured(req, page), c, 'site_')
+    return timed(pictured(req, page, path), c, 'site_')
   }
   return timed(await validated(req, page, env, path), c, 'site_')
 }
 
 // A picture's bytes are its sha's, so its etag is the sha: kept like the
-// listing that shows it, and purged with it. So is a card's redirect.
-let pictured = (req: Request, page: Response) => {
+// listing that shows it, and purged with it. So is a card's redirect, which a
+// release of its app purges too, since its files say where it points.
+let pictured = (req: Request, page: Response, path: string) => {
   let headers = new Headers(page.headers)
+  let [eid, sha] = path.slice(gallery.IMAGE.length).split('/')
   headers.set('cache-control', KEPT)
-  headers.set('cache-tag', SITE_TAG)
+  headers.set(
+    'cache-tag',
+    [SITE_TAG, ...sha == gallery.CARD ? [cardTag(eid)] : []].join(','),
+  )
   return matches(req.headers.get('if-none-match'), headers.get('etag') ?? '')
     ? new Response(null, { status: 304, headers })
     : new Response(page.body, { status: page.status, headers })

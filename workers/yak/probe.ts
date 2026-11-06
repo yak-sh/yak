@@ -10,6 +10,7 @@ import type { Command } from './declared.ts'
 import type { Bundle } from '@yaks/graph'
 import type { Load } from '@yaks/host'
 import type { Env, Vars } from './env.ts'
+import type { Purgers } from './purge.ts'
 import { type Directory, directoryOf, spaceHandle } from './directory.ts'
 import { valueIn } from '@yaks/tools/value'
 import { parse } from 'smol-toml'
@@ -236,6 +237,19 @@ let boot = async (
     await close()
     throw e
   }
+}
+
+/** A Purger that writes down each tag it is asked to purge (`purged`), and
+ * purges nothing: the edge is Cloudflare's. */
+export let recording = () => {
+  let purged: string[] = []
+  let PURGER: Purgers = {
+    idFromName: () => 'purger',
+    get: () => ({
+      purge: (tags) => Promise.resolve(void purged.push(...tags)),
+    }),
+  }
+  return { purged, PURGER }
 }
 
 // This process's kernel, started by the first test that asks for one.

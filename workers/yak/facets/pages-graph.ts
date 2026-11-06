@@ -24,10 +24,15 @@
 // takes those pages out before it serves anything. A file it published is
 // shown, so an app with one, or a write to what it publishes, owes as any
 // other does.
+//
+// The listings (home and /gallery, site.ts) are the site's, and a write to a
+// published app owes them only when it changes what they show of it
+// (`LISTING`, T-143236): a purge empties them in every colo, and agents
+// release published examples many times an hour.
 import type { Bundle, Hook, Plugin, Tx } from '@yaks/graph'
 import type { Options } from './store.ts'
 import { APP_PARTS, idOf, publishingOf, SPACE_PARTS } from '../directory.ts'
-import { appTag, purge, SITE_TAG, spaceTag } from '../purge.ts'
+import { appTag, cardTag, purge, SITE_TAG, spaceTag } from '../purge.ts'
 
 // What a row is made of (directory.ts) is what its pages can show, except
 // these: an app's draft, its counters and its gallery listing, and a space's
@@ -47,6 +52,12 @@ let DRAFT = ['draft', 'fence', 'followed']
 // A space's routing: which app answers which path, and whether any does.
 let ROUTING = ['home', 'trashed', 'former']
 let LISTED = ['gallery', 'screenshot', 'integration', 'listed']
+// What home and /gallery show of a published app beside its listing
+// (gallery.ts `shown`): its offer, its title, where it answers, and who may
+// open it. A release changes none of these, so it leaves them in the cache.
+let LISTING = ['published', 'doc', 'installed', 'demo', ...ROUTING]
+let lists = (b: Bundle) =>
+  has(b, LISTING) || sets(b.app, ['slug', 'space', 'access'])
 let PARTS = [...new Set(['app', 'space', ...APP_PARTS, ...SPACE_PARTS])]
 let SHOWN = PARTS.filter((part) => !UNSEEN.includes(part))
 
@@ -62,6 +73,9 @@ let lowers = (b: Bundle) =>
 let unshown = (b: Bundle, row: Bundle) =>
   !(row.app as { version?: number | null }).version && !('publishing' in b) &&
   !publishingOf(row.publishing as { paths?: string | null }).length
+// Whether an app's row has a chosen screenshot.
+let shot = (row: Bundle) =>
+  !!(row.screenshot as { blob?: string | null } | undefined)?.blob
 // Whether a patch writes something a page could show.
 let shows = (b: Bundle) =>
   SHOWN.some((part) =>
@@ -121,6 +135,20 @@ let shows = (b: Bundle) =>
  *   await owed([{ entity: { eid: 'y' }, publishing: { paths: '["p"]' } }], unreleased),
  *   ['app:y'],
  * )
+ * // A published app's release moves its card, and nothing the listings say;
+ * // retitling it changes them.
+ * let offered = async (eids: string[]) =>
+ *   eids.map((eid) => ({
+ *     entity: { eid },
+ *     app: { slug: 'a', space: 's', version: 2 },
+ *     published: { name: 'a' },
+ *   }))
+ * let release = { entity: { eid: 'x' }, app: { version: 2, source: 'r', fence: null } }
+ * assertEquals(await owed([release], offered), ['card:x'])
+ * assertEquals(
+ *   await owed([{ entity: { eid: 'x' }, doc: { title: 'b' } }], offered),
+ *   ['site', 'app:x'],
+ * )
  * ```
  */
 export let owed = async (
@@ -142,7 +170,12 @@ export let owed = async (
   for (let b of touched) {
     let row = now.get(b.entity.eid)
     if (row?.app) {
-      if (row.published || 'published' in b) tags.add(SITE_TAG)
+      if ((row.published || 'published' in b) && lists(b)) tags.add(SITE_TAG)
+      // A card with no screenshot points where its files say (gallery.ts
+      // `CARD`), so a release of a published app moves it.
+      if (row.published && sets(b.app, ['source']) && !shot(row)) {
+        tags.add(cardTag(b.entity.eid))
+      }
       if (unshown(b, row)) continue
       let app = row.app as { space: string | { eid: string } }
       if (has(b, ROUTING) || sets(b.app, ['slug', 'space'])) {

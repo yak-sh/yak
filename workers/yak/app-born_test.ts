@@ -4,19 +4,13 @@
 // write or deploy finds it standing.
 import { test } from '@yaks/testing'
 import { assertEquals } from '@std/assert'
-import { connector, fresh, signIn } from './probe.ts'
-import type { Purgers } from './purge.ts'
+import { connector, fresh, recording, signIn } from './probe.ts'
 
 test('a new app purges nothing, stands its store up, and its first release purges its space', async () => {
-  let purged: string[] = []
+  let { purged, PURGER } = recording()
   let reached: string[] = []
   let k = await fresh({}, (env) => {
-    env.PURGER = {
-      idFromName: () => 'purger',
-      get: () => ({
-        purge: (tags) => Promise.resolve(void purged.push(...tags)),
-      }),
-    } satisfies Purgers
+    env.PURGER = PURGER
     let stores = env.STORE
     env.STORE = {
       ...stores,

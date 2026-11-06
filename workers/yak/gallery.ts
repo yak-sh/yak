@@ -307,7 +307,7 @@ export let screenshot = (_space: Space, app: App, env: Host = {}) =>
 // og:image (`cardOf`), which only reading its files can tell. A listing names
 // this address rather than reading them as it renders, and Site answers it with
 // a redirect it keeps like a screenshot. A release of a published app purges
-// it with the listings (facets/pages-graph.ts), so it follows the app's card.
+// it alone (facets/pages-graph.ts), so it follows the app's card.
 export let CARD = 'card'
 
 /** The address of the picture a listing shows for an app, from its row

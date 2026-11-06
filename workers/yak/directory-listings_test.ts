@@ -7,7 +7,7 @@ import * as dirPart from './directory.ts'
 import { keyed, prefixOf } from './files.ts'
 import { CARD, DEMOS, IMAGE, LIST } from './gallery.ts'
 import { blobPrefix } from './blob-key.ts'
-import { SITE_TAG } from './purge.ts'
+import { cardTag, SITE_TAG } from './purge.ts'
 import { seal, verify } from './lib/token.ts'
 import { browserOf } from './session.ts'
 import { KEPT } from './page-cache.ts'
@@ -263,7 +263,11 @@ test('directory listings: the gallery reads no app file, and a card with no scre
     equal(
       ['location', 'cache-control', 'cache-tag']
         .map((name) => shot.headers.get(name)),
-      [`${url(at.space, at.app, f.env)}card.png`, KEPT, SITE_TAG],
+      [
+        `${url(at.space, at.app, f.env)}card.png`,
+        KEPT,
+        `${SITE_TAG},${cardTag(at.app.eid)}`,
+      ],
     )
     equal(shot.status, 302)
     ok(r2(shot) > 0, 'the card reads the app files the listing did not')
