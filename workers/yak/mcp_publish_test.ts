@@ -497,10 +497,11 @@ test('an app reaches the gallery only when yaks.app says yes', async () => {
       screenshot: image,
     })
     page = await k.at('yaks.app', '/gallery').then((r) => r.text())
-    assertStringIncludes(
-      page,
-      `https://${mine}.yaks.app/recipes/api/blob/${image}`,
-    )
+    let shot = page.match(/https:\/\/yaks\.app(\/gallery\/image\/[^"]+)"/)?.[1]
+    assertEquals(shot?.endsWith(`/${image}`), true)
+    let served = await k.at('yaks.app', shot!)
+    assertEquals(served.status, 200)
+    await served.body?.cancel()
     assertEquals(page.includes('/recipes/card.png'), false)
     assertStringIncludes(
       (await assertRejects(

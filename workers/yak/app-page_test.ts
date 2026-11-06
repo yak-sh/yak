@@ -6,7 +6,7 @@ import { assert, assertEquals, assertStringIncludes } from '@std/assert'
 import { answer } from './app-page.ts'
 import type { App, Directory, Space } from './directory.ts'
 import type { Env } from './env.ts'
-import { pageAt } from './gallery.ts'
+import { pageAt, screenshot } from './gallery.ts'
 import { app, space } from './testing.ts'
 
 let live = {
@@ -40,7 +40,7 @@ test('a published app has a page that opens it first and offers a copy second', 
   assertStringIncludes(html, '<h1 id="app" class="Title">Recipe box</h1>')
   assertStringIncludes(html, 'Somewhere to keep recipes')
   assertStringIncludes(html, 'Made at jeff.yaks.app')
-  assertStringIncludes(html, 'https://jeff.yaks.app/recipes/api/blob/shot')
+  assertStringIncludes(html, screenshot(space(), app({ screenshot: 'shot' })))
   let open = html.indexOf(
     '<a class="Button" href="https://jeff.yaks.app/recipes/">Open the app</a>',
   )
