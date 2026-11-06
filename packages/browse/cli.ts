@@ -1,7 +1,31 @@
-/** Browse's terminal commands load no server duties: the configured server
- * supplies the vocabulary and subscriptions; configured domains supply views. */
-import type { CliCommand } from '@yaks/cli/host'
+/** Browse's terminal commands serve `web` in their own process: the graph
+ * they open answers the terminal's HTTP and subscriptions on a loopback port
+ * of its own, so no `yak serve` need run first, and other processes' commits
+ * still arrive through the host's feed. `--app` browses a yaks.app store
+ * instead; configured domains supply views. */
+import type { CliCommand, Host } from '@yaks/cli/host'
 import { subpath, used } from '@yaks/cli/config'
+
+// This process's own web, on a port nobody else asked for.
+let listen = async (host: Host) => {
+  if (!host.handler) {
+    throw new Error('browse has no handler — compose @yaks/api')
+  }
+  let { denoListen } = await import('@yaks/api')
+  let at = Promise.withResolvers<string>()
+  let server = denoListen({
+    port: 0,
+    hostname: '127.0.0.1',
+    onListen: ({ hostname, port }) => at.resolve(`http://${hostname}:${port}`),
+  }, host.handler)
+  return {
+    url: await at.promise,
+    close: async () => {
+      await server.shutdown()
+      await server.finished
+    },
+  }
+}
 
 export let commands: CliCommand[] = ['browse', 'inspect'].map((name) => ({
   name,
@@ -17,9 +41,10 @@ export let commands: CliCommand[] = ['browse', 'inspect'].map((name) => ({
     },
   },
   positional: ['what'],
+  roles: ['web'],
   run: async (args, host, context) => {
+    let own: Awaited<ReturnType<typeof listen>> | undefined
     try {
-      let url = (await import('@yaks/api/tools')).served(host.config)
       let connection = typeof args.app == 'string'
         ? await (await import('./remote.ts')).remote(
           args.app,
@@ -28,7 +53,7 @@ export let commands: CliCommand[] = ['browse', 'inspect'].map((name) => ({
           undefined,
           { config: context.config, as: context.as },
         )
-        : { url, wire: {} }
+        : { url: (own = await listen(host)).url, wire: {} }
       let { open } = await import('./terminal.ts')
       let { onFailure } = await import('./failure.ts')
       let restore = onFailure((error, place) => {
@@ -63,6 +88,8 @@ export let commands: CliCommand[] = ['browse', 'inspect'].map((name) => ({
         error instanceof Error ? error.stack ?? error.message : String(error),
       )
       return 1
+    } finally {
+      await own?.close()
     }
   },
 }))

@@ -115,7 +115,9 @@ Tab/Shift+Tab focus every control in turn; typing changes a focused field, Enter
 submits and Shift+Enter adds a line. Escape leaves a field without spending its
 draft. `f` focuses the sidebar query. Ctrl-O goes back, Ctrl-F forward, and q,
 with nothing in front to close, quits. `TASKS_TUI_STATE` names the terminal
-history file; the configured server supplies the graph, never a guessed host.
+history file. The terminal opens the config's graph in its own process and
+answers its own requests on a loopback port, so no `yak serve` need run; `--app`
+browses a yaks.app store instead.
 
 ```sh
 yak browse --config /path/to/yak.json
@@ -304,6 +306,10 @@ let inspectViews = [desk]
 let home = { name: 'Desk', icon: 'lamp', view: 'Desk' }
 let tabs = [{ view: 'Desk', icon: 'lamp', waiting: () => 3 }]
 let icons = { lamp: [['circle', { cx: '12', cy: '12', r: '4' }]] }
-equal([home.view, tabs[0].view, inspectViews[0].view], ['Desk', 'Desk', 'Desk'])
+equal([home.view, tabs[0].view, inspectViews[0].view], [
+  'Desk',
+  'Desk',
+  'Desk',
+])
 equal(Object.keys(icons), ['lamp'])
 ```
