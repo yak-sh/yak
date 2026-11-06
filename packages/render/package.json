@@ -9,7 +9,7 @@
   "license": "Apache-2.0",
   "description": "Selects views, editors, and actions for entity bundles through a query-matched registry independent of the rendering host.",
   "dependencies": {
-    "@yaks/graph": "0.2.30",
+    "@yaks/graph": "0.2.33",
     "@yaks/match": "0.2.30",
     "@yaks/query": "0.2.32",
     "@yaks/vocab": "0.2.32"

@@ -16,7 +16,7 @@
     "@yaks/draft": "0.2.24",
     "@yaks/edge": "0.2.24",
     "@yaks/fp": "0.2.23",
-    "@yaks/graph": "0.2.30",
+    "@yaks/graph": "0.2.33",
     "@yaks/inspect": "0.2.30",
     "@yaks/markdown": "0.2.30",
     "@yaks/match": "0.2.30",

@@ -16,7 +16,7 @@
     "@preact/signals": "2.9.4",
     "@yaks/client": "0.2.24",
     "@yaks/fp": "0.2.23",
-    "@yaks/graph": "0.2.30",
+    "@yaks/graph": "0.2.33",
     "@yaks/id": "0.2.23",
     "@yaks/preact": "0.2.24",
     "@yaks/query": "0.2.32",

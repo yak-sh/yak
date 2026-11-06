@@ -13,7 +13,7 @@
   "description": "A portfolio: the projects work is filed under, the boards that are saved filters over it, the ventures being built, and where a project lands its source.",
   "dependencies": {
     "@yaks/fp": "0.2.23",
-    "@yaks/graph": "0.2.30",
+    "@yaks/graph": "0.2.33",
     "@yaks/id": "0.2.23",
     "@yaks/query": "0.2.32",
     "@yaks/tools": "0.2.30",

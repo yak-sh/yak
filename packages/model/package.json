@@ -14,7 +14,7 @@
     "@yaks/blob": "0.2.30",
     "@yaks/edge": "0.2.24",
     "@yaks/fp": "0.2.23",
-    "@yaks/graph": "0.2.30",
+    "@yaks/graph": "0.2.33",
     "@yaks/vocab": "0.2.32"
   },
   "devDependencies": {

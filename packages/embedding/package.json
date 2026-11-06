@@ -13,8 +13,8 @@
   "description": "Maintains text embeddings for graph entities and adds nearest-neighbor ranking to queries through an injected embedder.",
   "dependencies": {
     "@yaks/edge": "0.2.24",
-    "@yaks/effects": "0.2.25",
-    "@yaks/graph": "0.2.30",
+    "@yaks/effects": "0.2.33",
+    "@yaks/graph": "0.2.33",
     "@yaks/model": "0.2.32",
     "@yaks/query": "0.2.32",
     "@yaks/sql": "0.2.30",
@@ -25,7 +25,7 @@
     "@std/assert": "npm:@jsr/std__assert@^1.0.0",
     "@yaks/api": "0.2.29",
     "@yaks/archetype": "0.2.24",
-    "@yaks/cli": "0.2.32",
+    "@yaks/cli": "0.2.33",
     "@yaks/ram": "0.2.24",
     "@yaks/sqlite": "0.2.30",
     "@yaks/testing": "0.2.30"

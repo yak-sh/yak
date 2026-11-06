@@ -19,7 +19,7 @@
     "@std/assert": "npm:@jsr/std__assert@^1.0.0",
     "@yaks/archetype": "0.2.24",
     "@yaks/fts": "0.2.30",
-    "@yaks/graph": "0.2.30",
+    "@yaks/graph": "0.2.33",
     "@yaks/sqlite": "0.2.30",
     "@yaks/testing": "0.2.30"
   }

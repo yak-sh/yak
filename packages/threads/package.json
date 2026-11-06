@@ -9,9 +9,9 @@
   "license": "Apache-2.0",
   "description": "Threads serving a graph's roles, by their own connection or over a MessagePort to the graph that owns the data.",
   "dependencies": {
-    "@yaks/effects": "0.2.25",
+    "@yaks/effects": "0.2.33",
     "@yaks/fp": "0.2.23",
-    "@yaks/graph": "0.2.30",
+    "@yaks/graph": "0.2.33",
     "@yaks/sync": "0.2.24",
     "@yaks/vocab": "0.2.32"
   },

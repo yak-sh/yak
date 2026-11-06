@@ -25,11 +25,11 @@
     "@std/assert": "npm:@jsr/std__assert@^1.0.0",
     "@std/path": "npm:@jsr/std__path@1.1.2",
     "@yaks/archetype": "0.2.24",
-    "@yaks/effects": "0.2.25",
+    "@yaks/effects": "0.2.33",
     "@yaks/file": "0.2.28",
     "@yaks/fp": "0.2.23",
     "@yaks/fts": "0.2.30",
-    "@yaks/graph": "0.2.30",
+    "@yaks/graph": "0.2.33",
     "@yaks/match": "0.2.30",
     "@yaks/process": "0.2.28",
     "@yaks/query": "0.2.32",
@@ -51,7 +51,7 @@
     "@yaks/model": "0.2.32",
     "@yaks/provenance": "0.2.28",
     "@yaks/ram": "0.2.24",
-    "@yaks/session": "0.2.32",
+    "@yaks/session": "0.2.33",
     "@yaks/task": "0.2.23"
   },
   "optionalDependencies": {

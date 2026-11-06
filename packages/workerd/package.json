@@ -7,7 +7,7 @@
   "description": "Serves the graph API from Cloudflare Workers with WebSocket upgrades, request authentication, and forwarding to Durable Objects.",
   "dependencies": {
     "@yaks/api": "0.2.29",
-    "@yaks/graph": "0.2.30"
+    "@yaks/graph": "0.2.33"
   },
   "devDependencies": {
     "@std/assert": "npm:@jsr/std__assert@^1.0.0",

@@ -10,7 +10,7 @@
   "license": "Apache-2.0",
   "description": "A proposal, the review it gets, and the architecture that stands once it is decided.",
   "dependencies": {
-    "@yaks/graph": "0.2.30",
+    "@yaks/graph": "0.2.33",
     "@yaks/vocab": "0.2.32"
   },
   "devDependencies": {

@@ -12,12 +12,12 @@
   "description": "Consume remote MCP tools as portable graph Tool definitions over Streamable HTTP.",
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.29.0",
-    "@yaks/graph": "0.2.30",
+    "@yaks/graph": "0.2.33",
     "@yaks/vocab": "0.2.32"
   },
   "devDependencies": {
     "@std/assert": "npm:@jsr/std__assert@^1.0.0",
-    "@yaks/cli": "0.2.32",
+    "@yaks/cli": "0.2.33",
     "@yaks/testing": "0.2.30"
   }
 }

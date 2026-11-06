@@ -8,7 +8,7 @@
   "dependencies": {
     "@yaks/api": "0.2.29",
     "@yaks/fp": "0.2.23",
-    "@yaks/graph": "0.2.30",
+    "@yaks/graph": "0.2.33",
     "@yaks/sql": "0.2.30",
     "@yaks/sqlite": "0.2.30",
     "@yaks/trace": "0.2.23",

@@ -26,7 +26,7 @@
   "description": "Provides a shared tool registry and schemas, executes recorded graph tool calls, and keeps their answers, duration, and execution state; parses app-declared commands and provides their HTTP route and answer rendering.",
   "dependencies": {
     "@yaks/fp": "0.2.23",
-    "@yaks/graph": "0.2.30",
+    "@yaks/graph": "0.2.33",
     "@yaks/markdown": "0.2.30",
     "@yaks/match": "0.2.30",
     "@yaks/query": "0.2.32",
@@ -39,13 +39,13 @@
     "@std/assert": "npm:@jsr/std__assert@^1.0.0",
     "@yaks/alias": "0.2.24",
     "@yaks/doc": "0.2.24",
-    "@yaks/effects": "0.2.25",
+    "@yaks/effects": "0.2.33",
     "@yaks/id": "0.2.23",
     "@yaks/kernel": "0.2.28",
     "@yaks/key": "0.2.24",
     "@yaks/provenance": "0.2.28",
     "@yaks/ram": "0.2.24",
-    "@yaks/session": "0.2.32",
+    "@yaks/session": "0.2.33",
     "@yaks/sqlite": "0.2.30",
     "@yaks/testing": "0.2.30"
   }

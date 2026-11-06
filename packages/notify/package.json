@@ -10,7 +10,7 @@
   "license": "Apache-2.0",
   "description": "How somebody is notified: a knock aimed at an entity, what they watch or mute, and an open conversation.",
   "dependencies": {
-    "@yaks/graph": "0.2.30",
+    "@yaks/graph": "0.2.33",
     "@yaks/vocab": "0.2.32"
   },
   "devDependencies": {

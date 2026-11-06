@@ -14,7 +14,7 @@
   "description": "Stores one-shot and recurring schedules as graph components, marking due wakes as fired and advancing their next scheduled times.",
   "dependencies": {
     "@yaks/fp": "0.2.23",
-    "@yaks/graph": "0.2.30",
+    "@yaks/graph": "0.2.33",
     "@yaks/query": "0.2.32",
     "@yaks/vocab": "0.2.32",
     "croner": "10.0.1"

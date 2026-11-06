@@ -12,7 +12,7 @@
   "license": "Apache-2.0",
   "description": "Timing summaries, stored span-entity traces and trace views for insight into request time and rows in tracker stores.",
   "dependencies": {
-    "@yaks/graph": "0.2.30",
+    "@yaks/graph": "0.2.33",
     "@yaks/inspect": "0.2.30",
     "@yaks/match": "0.2.30",
     "@yaks/query": "0.2.32",
@@ -31,7 +31,7 @@
     "@yaks/testing": "0.2.30",
     "@yaks/text": "0.2.24",
     "@yaks/tools": "0.2.30",
-    "@yaks/tracker": "0.2.30",
+    "@yaks/tracker": "0.2.33",
     "preact-render-to-string": "6.7.0"
   }
 }

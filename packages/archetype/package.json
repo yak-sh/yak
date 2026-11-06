@@ -12,7 +12,7 @@
   "description": "Identifies component-table sets by content hash, caches presence matches and transitions, and maintains each graph entity's archetype.",
   "dependencies": {
     "@yaks/fp": "0.2.23",
-    "@yaks/graph": "0.2.30",
+    "@yaks/graph": "0.2.33",
     "@yaks/vocab": "0.2.32"
   },
   "devDependencies": {

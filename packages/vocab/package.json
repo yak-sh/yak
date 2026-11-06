@@ -21,7 +21,7 @@
     "@std/assert": "npm:@jsr/std__assert@^1.0.0",
     "@yaks/doc": "0.2.24",
     "@yaks/edge": "0.2.24",
-    "@yaks/graph": "0.2.30",
+    "@yaks/graph": "0.2.33",
     "@yaks/ram": "0.2.24",
     "@yaks/testing": "0.2.30",
     "ajv": "^8.17.1"

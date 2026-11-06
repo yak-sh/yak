@@ -18,7 +18,7 @@
     "@std/assert": "npm:@jsr/std__assert@^1.0.0",
     "@yaks/client": "0.2.24",
     "@yaks/draft": "0.2.24",
-    "@yaks/graph": "0.2.30",
+    "@yaks/graph": "0.2.33",
     "@yaks/testing": "0.2.30",
     "@yaks/tui": "0.2.24",
     "linkedom": "^0.18.12",

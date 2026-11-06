@@ -13,7 +13,7 @@
     "@preact/signals": "2.9.4",
     "@yaks/edge": "0.2.24",
     "@yaks/fp": "0.2.23",
-    "@yaks/graph": "0.2.30",
+    "@yaks/graph": "0.2.33",
     "@yaks/markdown": "0.2.30",
     "@yaks/query": "0.2.32",
     "@yaks/render": "0.2.24",

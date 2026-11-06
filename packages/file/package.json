@@ -15,7 +15,7 @@
   "description": "Files as entities: a path read in a root (a repository's tree, or a volume a machine mounts), the lines of a file an entity sits at, and what fills each volume of a machine, day by day.",
   "dependencies": {
     "@yaks/fp": "0.2.23",
-    "@yaks/graph": "0.2.30",
+    "@yaks/graph": "0.2.33",
     "@yaks/inspect": "0.2.30",
     "@yaks/process": "0.2.28",
     "@yaks/query": "0.2.32",

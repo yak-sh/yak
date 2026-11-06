@@ -15,7 +15,7 @@
   "description": "Serves graph writes, queries, and live query subscriptions through an HTTP and WebSocket request handler.",
   "dependencies": {
     "@yaks/fp": "0.2.23",
-    "@yaks/graph": "0.2.30",
+    "@yaks/graph": "0.2.33",
     "@yaks/match": "0.2.30",
     "@yaks/query": "0.2.32",
     "@yaks/tools": "0.2.30",

@@ -8,7 +8,7 @@
   "license": "Apache-2.0",
   "description": "Draws the entities a query selects, and the references between them, as SVG: a pure layout that keeps each entity's place as the graph changes, the markup, and a mount that follows a graph.",
   "dependencies": {
-    "@yaks/graph": "0.2.30",
+    "@yaks/graph": "0.2.33",
     "@yaks/id": "0.2.23"
   },
   "devDependencies": {

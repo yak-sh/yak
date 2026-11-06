@@ -13,7 +13,7 @@
   "type": "module",
   "dependencies": {
     "@yaks/api": "0.2.29",
-    "@yaks/graph": "0.2.30",
+    "@yaks/graph": "0.2.33",
     "@yaks/host": "0.2.29",
     "@yaks/mail": "0.2.23"
   },

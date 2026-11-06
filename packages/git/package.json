@@ -19,10 +19,10 @@
   "dependencies": {
     "@yaks/blob": "0.2.30",
     "@yaks/edge": "0.2.24",
-    "@yaks/effects": "0.2.25",
+    "@yaks/effects": "0.2.33",
     "@yaks/file": "0.2.28",
     "@yaks/fp": "0.2.23",
-    "@yaks/graph": "0.2.30",
+    "@yaks/graph": "0.2.33",
     "@yaks/id": "0.2.23",
     "@yaks/kernel": "0.2.28",
     "@yaks/key": "0.2.24",

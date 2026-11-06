@@ -11,7 +11,7 @@
   "license": "Apache-2.0",
   "description": "A shared doc component for an entity's title and Markdown body, with portable views for displaying both.",
   "dependencies": {
-    "@yaks/graph": "0.2.30",
+    "@yaks/graph": "0.2.33",
     "@yaks/markdown": "0.2.30",
     "@yaks/query": "0.2.32",
     "@yaks/render": "0.2.24",

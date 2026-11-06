@@ -1,6 +1,6 @@
 {
   "name": "@yaks/graph",
-  "version": "0.2.30",
+  "version": "0.2.33",
   "type": "module",
   "exports": {
     ".": "./mod.ts",
