@@ -1,10 +1,12 @@
 // The tab a person lends their Operator (D-144641). Their browser, signed in
 // by the extension (@yaks/extension), holds a socket to the space's Builder,
 // the object the Operator runs in (build.ts `/operator/browser`). While one is
-// connected the Operator is offered the browser tools, and each call is sent
-// down the person's newest socket and answered up it: words become the
-// call's result, and a screenshot an image the model is shown beside it
-// (operator.ts `shown`).
+// connected the Operator is offered the browser tools, which read the tab and
+// act in it, and each call is sent down the person's newest socket and
+// answered up it: words become the call's result, and a screenshot an image
+// the model is shown beside it (operator.ts `shown`). A call may wait on the
+// person (a site to allow, a Do it to press), so the Operator waits for it,
+// and a browser that goes away fails it at once.
 import { type Answer, answerOf, call } from '@yaks/extension/wire'
 import { PERSON, toolOf, TOOLS } from '@yaks/extension/tools'
 import { type Clock, system } from '@yaks/fp'

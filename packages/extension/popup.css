@@ -90,6 +90,10 @@ input {
 .ask p {
   flex-basis: 100%;
 }
+.ask .doing {
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
 ul {
   margin: 0;
   padding: 0;

@@ -22,6 +22,12 @@ let send = (does: string) => chrome.runtime.sendMessage({ do: does })
 let consent = async (change: (c: Consent) => Consent) =>
   keep({ consent: change((await stored()).consent ?? NONE) })
 
+// The person's answer to the step waiting on their Do it.
+let decide = async (yes: boolean) => {
+  let { confirm } = await stored()
+  if (confirm) await keep({ confirm: { ...confirm, yes } })
+}
+
 export let popup = (config: Config): void => {
   let main = document.querySelector('main')!
   let draw = async () => {
@@ -32,6 +38,7 @@ export let popup = (config: Config): void => {
       link: s.link,
       consent: s.consent ?? NONE,
       lend: s.lend,
+      confirm: s.confirm?.yes == null ? s.confirm : undefined,
       error: s.error,
     })
   }
@@ -49,6 +56,8 @@ export let popup = (config: Config): void => {
       await consent(allow(site))
     },
     dismiss: () => consent(dismiss),
+    yes: () => decide(true),
+    no: () => decide(false),
     revoke: (site) =>
       chrome.permissions.remove({ origins: [pattern(site)] }).catch(() => {})
         .then(() => consent(revoke(site))),

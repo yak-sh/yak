@@ -60,3 +60,14 @@ test('a screenshot waiting on the person says where to click', () => {
   equal(text.includes('Your agent wants a screenshot of b.com'), true)
   equal(text.includes('click the button there'), true)
 })
+
+let CONFIRMING = shown({
+  space: 'jeff',
+  confirm: { site: 'https://shop.com', doing: 'Click the button “<Pay>”' },
+})
+
+test('a step waiting on the person asks Do it, in words it can’t mark up', () => {
+  equal(CONFIRMING.text.includes('Do this on shop.com?'), true)
+  equal(CONFIRMING.text.includes('Click the button “<Pay>”'), true)
+  equal(CONFIRMING.does.slice(0, 2), ['yes', 'no'])
+})

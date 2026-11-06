@@ -10,6 +10,9 @@ import { type Consent, host } from './consent.ts'
 /** How the socket to the space is. */
 export type Link = 'connecting' | 'connected' | 'offline'
 
+/** A step the agent asks the person to let it do. */
+export type Asked = { site: string; doing: string }
+
 /** What the popup shows. */
 export type State = {
   signed: boolean
@@ -19,6 +22,9 @@ export type State = {
   /** The site of a tab the agent wants a screenshot of, waiting on the
    * person's click on the extension's button there. */
   lend?: string
+  /** A step waiting on the person's Do it: the site it is on, and what it
+   * does, in words that may be the page's. */
+  confirm?: Asked
   /** The last thing that went wrong, said to the person. */
   error?: string
 }
@@ -63,7 +69,7 @@ let linked = (config: Config, space: string, link: Link) =>
 
 let asking = (site: string) =>
   `<section class="ask"><strong>Allow on ${esc(host(site))}?</strong>` +
-  `<p>Your agent asked to see this site. It reads a page only when it asks.</p>` +
+  `<p>Your agent asked to use this site. It reads or does something on a page only when it asks.</p>` +
   `${button('allow', 'Allow', site)}${button('dismiss', 'Not now')}</section>`
 
 let lending = (site: string) =>
@@ -71,6 +77,12 @@ let lending = (site: string) =>
     esc(host(site))
   }</strong>` +
   `<p>Chrome lets it take one only after you click this extension's button on that tab. Go to the tab and click the button there.</p></section>`
+
+let confirming = (c: Asked) =>
+  `<section class="ask"><strong>Do this on ${esc(host(c.site))}?</strong>` +
+  `<p class="doing">${esc(c.doing)}</p>` +
+  `<p>Your agent waits for you, and does nothing unless you press Do it.</p>` +
+  `${button('yes', 'Do it')}${button('no', "Don't")}</section>`
 
 let sites = (c: Consent) =>
   c.sites.length
@@ -90,6 +102,7 @@ export let screen = (config: Config, s: State): string =>
     : !s.space
     ? choose(config)
     : linked(config, s.space, s.link ?? 'connecting') +
+      (s.confirm ? confirming(s.confirm) : '') +
       (s.consent.asking ? asking(s.consent.asking) : '') +
       (s.lend ? lending(s.lend) : '') + sites(s.consent) +
       `<footer>${button('change', 'Change space')}${
@@ -99,5 +112,6 @@ export let screen = (config: Config, s: State): string =>
 /// asked({ consent: { sites: [], asking: 'https://a.com' } }) -> true
 /// asked({ consent: { sites: [] } }) -> false
 /** Whether anything waits on the person, which the badge shows. */
-export let asked = (s: Pick<State, 'consent' | 'lend'>): boolean =>
-  !!(s.consent.asking || s.lend)
+export let asked = (
+  s: Pick<State, 'consent' | 'lend' | 'confirm'>,
+): boolean => !!(s.consent.asking || s.lend || s.confirm)

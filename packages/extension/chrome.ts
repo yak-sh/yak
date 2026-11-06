@@ -6,7 +6,7 @@
 
 import type { Tokens } from '@yaks/oauth'
 import type { Consent } from './consent.ts'
-import type { Link } from './screen.ts'
+import type { Asked, Link } from './screen.ts'
 import type { Area } from './signin.ts'
 
 /** Everything the extension keeps, by key. */
@@ -18,6 +18,9 @@ export type Stored = {
   consent?: Consent
   /** The site of a tab a screenshot waits on the person's click on. */
   lend?: string
+  /** A step waiting on the person's Do it, by its call's id, and their
+   * answer once the popup keeps it. */
+  confirm?: Asked & { id: string; yes?: boolean }
   link?: Link
   error?: string
 }

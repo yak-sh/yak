@@ -10,7 +10,8 @@ import { answer, type Call, callOf, PING } from './wire.ts'
 import { answering, asks, lends, needs, type Seen } from './answer.ts'
 import { allowed, ask, NONE, site } from './consent.ts'
 import { type Config, socket } from './connect.ts'
-import { read } from './read.ts'
+import { aims } from './act.ts'
+import { GIVE, pop } from './give.ts'
 import { kept, provider, register } from './signin.ts'
 import { asked } from './screen.ts'
 import { PERSON } from './tools.ts'
@@ -22,43 +23,49 @@ let BEAT = 20_000
 let SIGNED_OUT = (config: Config) =>
   `${config.name} no longer accepts this sign-in. Sign in again.`
 
-type Tab = { id: number; windowId: number }
-
-// What each need asks of the tab.
-let GIVE: Record<string, (tab: Tab) => Promise<Partial<Seen>>> = {
-  page: async (tab) => ({
-    page: (await chrome.scripting.executeScript({
-      target: { tabId: tab.id },
-      func: read,
-    }))[0]?.result,
-  }),
-  shot: async (tab) => ({
-    shot: await chrome.tabs.captureVisibleTab(tab.windowId, { format: 'png' }),
-  }),
-}
-
-/** What the tab the person is on gives for a call, on a site they allowed. A
+/** What the tab the person is on gives for a call, on a site they allowed,
+ * waiting on the person until `by`: a site not allowed is asked about, and a
  * screenshot Chrome refuses until the person clicks the extension's button
- * waits for that click, which opening the popup is, until `by`. */
+ * waits for that click, which opening the popup is. */
 let look = async (
   call: Call['call'],
   by = Date.now() + PERSON,
 ): Promise<Seen> => {
   let [tab] = await chrome.tabs.query({ active: true, lastFocusedWindow: true })
   let { consent = NONE } = await stored()
-  let on = site(tab?.url ?? '')
+  let url = tab?.url ?? ''
+  let on = site(aims(call, url))
   let seen: Seen = {
-    url: tab?.url ?? '',
+    url,
     title: tab?.title,
     allowed: !!on && allowed(on)(consent),
   }
+  let asking = asks(call, seen)
+  if (asking) {
+    await keep({ consent: ask(asking)(consent) })
+    pop()
+    let yes = await until(
+      ({ consent = NONE }) =>
+        allowed(asking)(consent)
+          ? true
+          : consent.asking != asking
+          ? false
+          : undefined,
+      by - Date.now(),
+    )
+    return yes
+      ? look(call, by)
+      : { ...seen, answered: yes == false ? 'no' : 'none' }
+  }
   let need = needs(call.tool)
   if (seen.allowed && need && tab?.id != null) {
-    let given = GIVE[need]({ id: tab.id, windowId: tab.windowId })
+    let given = GIVE[need](
+      call,
+      { id: tab.id, windowId: tab.windowId, url },
+      by,
+    )
     Object.assign(seen, await given.catch((e) => ({ failed: said(e) })))
   }
-  let asked = asks(call, seen)
-  if (asked) await keep({ consent: ask(asked)(consent) })
   let lend = lends(call, seen)
   if (!lend || Date.now() >= by) return seen
   await keep({ lend })
@@ -173,8 +180,8 @@ export let start = (config: Config): void => {
   })
   // The badge says whether anything waits on the person.
   chrome.storage.onChanged.addListener(async () => {
-    let { consent = NONE, lend } = await stored()
-    await badge(asked({ consent, lend }))
+    let { consent = NONE, lend, confirm } = await stored()
+    await badge(asked({ consent, lend, confirm }))
   })
   // A service worker sleeps when idle, and this wakes it to reconnect.
   chrome.alarms.create('wake', { periodInMinutes: 1 })
