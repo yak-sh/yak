@@ -1,11 +1,23 @@
 // Local source checks cover the change: its lint, its raw bytes, the
-// Worker's generated content when it touches a source of it, and the types of
-// what it reaches. Runtime tests follow consumers. Main CI checks every
+// Worker's generated content when it touches a source of it and what the
+// generator read and loaded as it last passed changed since (`kept`), and the
+// types of what it reaches. Runtime tests follow consumers. Main CI checks every
 // module's types, and the workspace's public API as the publisher reads it,
 // after the push.
 
-import type { Survey } from '@yaks/testing/deps'
+import { createHash } from 'node:crypto'
+import {
+  note,
+  passed,
+  READS,
+  recall,
+  remember,
+  STORE,
+  type Survey,
+} from '@yaks/testing/deps'
 import { type Prepared, types } from './check-types.ts'
+import { cache } from '@yaks/testing/kept'
+import { OBSERVED } from './test-observe.ts'
 
 let code = (path: string) => /\.[mc]?[jt]sx?$/.test(path)
 // What workers/yak/gen.ts reads or writes: the Worker's words and config, the
@@ -17,7 +29,16 @@ let generated = (path: string) =>
 let formatted = (path: string) =>
   /\.(?:[mc]?[jt]sx?|jsonc?|md|markdown|ya?ml|css|scss|html)$/.test(path)
 
-export type Check = { name: string; args: string[] }
+/** A check: its name, deno's arguments, and what it adds to the
+ * environment. One that `keeps` a script, whose verdict follows from what the
+ * script reads and loads, is run again only once one of those changed
+ * (`kept`). */
+export type Check = {
+  name: string
+  args: string[]
+  env?: Record<string, string>
+  keeps?: string
+}
 
 /** Format, lint and byte-check existing changed files. A change to what
  * workers/yak/content.ts, load.ts or plugins/yaks.app is generated from checks
@@ -51,15 +72,19 @@ export let checks = (changed: string[]): Check[] => {
           'workers/yak/gen.ts',
           '--check',
         ],
+        keeps: 'workers/yak/gen.ts',
       }]
       : [],
   ]
 }
 
 /** A check's effect boundary. Tests supply this with controlled results. */
-export let command = async ({ name, args }: Check): Promise<boolean> => {
+export let command = async (
+  { name, args, env }: Check,
+): Promise<boolean> => {
   let result = await new Deno.Command(Deno.execPath(), {
     args,
+    env,
     stdout: 'piped',
     stderr: 'piped',
   }).output()
@@ -86,6 +111,64 @@ export let format = async (
   return files
 }
 
+let OBSERVER = new URL('./test-observe.ts', import.meta.url).pathname
+
+/** What a kept check's verdict follows from, as the survey read it: the
+ * runtime, the config and locks, and each path it read or loaded. */
+let inputs = async (s: Survey, read: string[]) =>
+  createHash('sha256').update(
+    [
+      Deno.version.deno,
+      ...await Promise.all(
+        ['deno.json', 'deno.lock', 'pnpm-lock.yaml', ...read].map(async (p) =>
+          `${p} ${await s.bytes(p)}`
+        ),
+      ),
+    ].join('\n'),
+  ).digest('hex')
+
+/**
+ * Runs a check that `keeps` a script only when what it read and loaded as it
+ * last passed (./test-observe.ts) holds something else now, by the survey
+ * `snapshot`; one that passes is kept by what it read this time. Its pass
+ * and reads are kept with the tests' (@yaks/testing's `remember` and
+ * `note`), under the script and its arguments.
+ */
+export let kept = async (
+  c: Check,
+  run = command,
+  snapshot?: Promise<Survey | undefined>,
+  stores = { passes: STORE, reads: READS },
+): Promise<boolean> => {
+  let s = c.keeps && await snapshot
+  if (!c.keeps || !s) return await run(c)
+  let name = c.args.slice(c.args.indexOf(c.keeps)).join(' ')
+  let before = recall(stores.reads)[name]
+  if (before && passed(stores.passes).has(await inputs(s, before))) return true
+  // Beside the stores: a check may write only outside `/dev`, where a run's
+  // scratch directory lies.
+  let out = await Deno.makeTempFile({
+    dir: `${cache}/yak`,
+    prefix: 'observed-',
+  })
+  try {
+    let ok = await run({
+      ...c,
+      args: ['run', '--preload', OBSERVER, ...c.args.slice(1)],
+      env: { ...c.env, [OBSERVED]: out },
+    })
+    let read = ok && await Deno.readTextFile(out).then(JSON.parse, () => {})
+    if (read) {
+      read = [...new Set([c.keeps, ...read])].sort()
+      remember([await inputs(s, read)], stores.passes)
+      note({ [name]: read }, stores.reads)
+    }
+    return ok
+  } finally {
+    await Deno.remove(out).catch(() => {})
+  }
+}
+
 /** Lint the change and check the types of what it reaches, after
  * formatting. */
 export let check = async (
@@ -101,6 +184,7 @@ export let check = async (
   snapshot?: Promise<Survey | undefined>,
 ) =>
   (await Promise.all([
-    ...checks(changed).filter((c) => c.name != 'format').map(run),
+    ...checks(changed).filter((c) => c.name != 'format')
+      .map((c) => kept(c, run, snapshot)),
     typed(changed, prepared, snapshot),
   ])).every(Boolean)
