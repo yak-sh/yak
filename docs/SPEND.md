@@ -59,7 +59,7 @@ the newest release a day old; running it unchanged keeps the release Deno found
 before. `--minimum-dependency-age=0` takes a release published today.
 
 ```sh
-deno run -A --reload=jsr:@yaks/cli --minimum-dependency-age=0 jsr:@yaks/cli/install
+deno run -A --minimum-dependency-age=0 --reload=jsr:@yaks/cli jsr:@yaks/cli/install
 ```
 
 Restart `yak serve` if it is running.

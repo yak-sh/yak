@@ -95,6 +95,10 @@ let reply = (subject: string, words: string) =>
 let session = (persona: string) => '```session\n' + persona + '\n```'
 
 export let INSTALL = 'deno run -A jsr:@yaks/cli/install'
+/** The install line again, asking jsr.io for the newest release, even one
+ * published today: Deno otherwise keeps the release it found before. */
+export let UPDATE =
+  'deno run -A --minimum-dependency-age=0 --reload=jsr:@yaks/cli jsr:@yaks/cli/install'
 
 /** The question the rules band's agent asks you, which is also its letter's
  * subject. */
@@ -340,6 +344,8 @@ export let SECTIONS: Section[] = [
       'The installer runs on [Deno](https://deno.com) and puts `yak` on your PATH, at one release with every package it loads.',
       '### Install yak',
       sh(INSTALL),
+      'It installs the newest release at least a day old, since Deno waits a day for a new one. To update to the newest, even one published today:',
+      sh(UPDATE),
       '### Start your graph',
       sh('yak init'),
       "It writes `~/.yak/yak.json`, with the graph's SQLite file beside it, and never replaces a config that is already there.",

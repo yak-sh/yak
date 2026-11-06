@@ -104,18 +104,25 @@ let free = () => {
   return port
 }
 
-// The answer to `url`, once something listens there, or an error at `by`.
+// The answer to `url`, once something listens there and makes it, or an
+// error at `by`. A page that fails is asked for again, since serve makes it
+// again on the next request (./page.ts `kept`): on a cold cache the canvas's
+// first make can outrun serve's limit while it downloads, and what it fetched
+// stays for the next.
 let answered = async (url: string, by: number) => {
   for (;;) {
+    let failure: unknown
     try {
       let res = await fetch(url)
-      await res.body?.cancel()
+      let body = await res.text()
       if (res.ok) return
-      throw new Error(`${url} answered ${res.status}`)
+      failure = new Error(`${url} answered ${res.status}: ${body}`)
     } catch (error) {
-      if (!(error instanceof TypeError) || Date.now() > by) throw error
-      await new Promise((r) => setTimeout(r, 100))
+      if (!(error instanceof TypeError)) throw error
+      failure = error
     }
+    if (Date.now() > by) throw failure
+    await new Promise((r) => setTimeout(r, 100))
   }
 }
 
@@ -157,7 +164,7 @@ if (import.meta.main) {
           stderr: 'null',
         }).spawn()
         try {
-          let by = Date.now() + 120_000
+          let by = Date.now() + 300_000
           for (let path of CANVAS) {
             await answered(`http://127.0.0.1:${port}${path}`, by)
           }
