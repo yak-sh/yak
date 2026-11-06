@@ -22,14 +22,11 @@ import { transcript } from '@yaks/session'
 import { stepOf } from '@yaks/tools/title'
 import type { Tool } from '@yaks/model'
 import {
-  type Changed,
-  changed,
   frame,
   type Helper,
   helperFrame,
   type Names,
   type Offers,
-  type Seen,
   stateOf,
   talk,
   type Worked,
@@ -170,10 +167,6 @@ let seenOf = async (
     ]),
   }
 }
-
-// The apps a conversation changed: in its own lines and its helpers'.
-let changedIn = (entries: Bundle[], seen: Seen) =>
-  changed([...entries, ...(seen.helpers ?? []).flatMap((h) => h.entries)])
 
 // The task holding a session, by the link a task keeps to it.
 let holding = async (store: Store, session: string) => {
@@ -451,8 +444,6 @@ export let conversationOf = async (
   title: string
   html: string
   waiting: Bundle[]
-  // the apps its lines and its helpers' changed, oldest first
-  changed: Changed[]
 }> => {
   let found = await openedOf(store, open)
   if (found.session) {
@@ -485,7 +476,6 @@ export let conversationOf = async (
         seen,
       ),
       waiting: [],
-      changed: changedIn(entries, seen),
     }
   }
   if (found.waiting) {
@@ -495,7 +485,6 @@ export let conversationOf = async (
       title: firstLine(found.waiting[0]),
       html: '',
       waiting: found.waiting,
-      changed: [],
     }
   }
   let held = found.task
@@ -506,7 +495,6 @@ export let conversationOf = async (
       title: '',
       html: '',
       waiting: [],
-      changed: [],
     }
   }
   let task = held.entity.eid
@@ -537,7 +525,6 @@ export let conversationOf = async (
       seen,
     ),
     waiting: [],
-    changed: changedIn(entries, seen),
   }
 }
 

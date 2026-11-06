@@ -695,7 +695,7 @@ test('the Voice card shows back the voice, speed and model each save picked', as
 })
 
 // Last, since it adds to the conversation every test above reads.
-test('a chat in which the Operator changed an app shows that app beside it', async () => {
+test('a chat in which the Operator changed an app opens with no app beside it', async () => {
   let call = crypto.randomUUID()
   await service.store.g.apply([{
     entity: { eid: call },
@@ -708,13 +708,6 @@ test('a chat in which the Operator changed an app shows that app beside it', asy
     content: { body: '{"version":2}' },
   }], { trusted: true })
   let { document } = await sided('owner')
-  assertEquals(
-    document.querySelector('.Talk_App')?.getAttribute('data-app'),
-    'app2',
-  )
-  // Words sent from it say which app is open.
-  assertEquals(
-    document.querySelector('#ask [name=app]')?.getAttribute('value'),
-    'app2',
-  )
+  assertEquals(document.querySelector('.Talk_App'), null)
+  assertEquals(document.querySelector('#ask [name=app]'), null)
 })

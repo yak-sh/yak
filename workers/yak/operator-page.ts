@@ -58,14 +58,7 @@ import {
 } from './speech.ts'
 import { ModelError } from '@yaks/model'
 import { CallError } from '@yaks/tools/errors'
-import {
-  attached,
-  type Changed,
-  PICTURES,
-  reply,
-  talks,
-  trouble,
-} from './operator-view.ts'
+import { attached, PICTURES, reply, talks, trouble } from './operator-view.ts'
 import { DOCUMENTS } from './documents.ts'
 import { phoneAt } from './phones.ts'
 import { icons } from './icons.ts'
@@ -665,10 +658,9 @@ export let conversationOf = async (
   everyone = false,
   opens?: string,
 ) => {
-  let none = { task: '', begun: '', title: '', html: '', changed: [] }
+  let none = { task: '', begun: '', title: '', html: '' }
   if (open == 'new') return none
-  // A Builder object still on the deploy before T-140509 names no changes.
-  let { task, begun, title, html, waiting, changed = [] } = await operatorDoor(
+  let { task, begun, title, html, waiting } = await operatorDoor(
     env,
     space,
     who,
@@ -683,9 +675,8 @@ export let conversationOf = async (
     title: string
     html: string
     waiting: Bundle[]
-    changed?: Changed[]
   }
-  return { task, begun, title, html: html + conversation(waiting), changed }
+  return { task, begun, title, html: html + conversation(waiting) }
 }
 
 // The Operator's settings, which the dashboard draws beside its side like
@@ -1196,9 +1187,9 @@ let hello = (heading: string, said: string) =>
  * greets the person by name, holds over the box what needs them
  * (`data-needs`, T-140508), and under it a few ways to start.
  *
- * Beside it, the app the person chose (`chosen`, the side's `aboutPath`), or
- * else the last app of this space the conversation changed, of those the
- * person may open (T-140509). A new chat about an app asks what should change
+ * Beside it, the app the address names (`chosen`, the side's `aboutPath`),
+ * of those the person may open, and no other: an app the conversation
+ * changed opens only when they choose it. A new chat about an app asks what should change
  * in it, and the words sent say which page and app are open (operator-view.ts
  * `onPage`).
  */
@@ -1221,9 +1212,7 @@ export let chatPage = async (
   if (open == 'new' && talked.title) open = root
   let fresh = open == 'new'
   let first = beside.name?.trim().split(/\s+/)[0]
-  let mine = (slug?: string | null) => beside.apps?.find((a) => a.slug == slug)
-  let ours = talked.changed.filter((c) => !c.space || c.space == space.slug)
-  let app = mine(chosen) ?? mine(ours.at(-1)?.app)
+  let app = beside.apps?.find((a) => a.slug == chosen)
   // This page's address, which the words written on it name.
   let shown = open == root ? 'new' : open
   let here = app
@@ -1306,7 +1295,6 @@ export let chatPage = async (
       space,
       open,
       talked.begun || open,
-      (beside.apps ?? []).map((a) => a.slug),
     ),
     app,
   })
@@ -1424,8 +1412,6 @@ let chatScript = (
   space: Space,
   open: string,
   talk: string,
-  // the apps of this space the person may open
-  apps: string[],
 ) =>
   `<script type="module">
 import { browserDrafts } from '/_draft.js'
@@ -1438,18 +1424,12 @@ let box = document.querySelector('[data-conversation]')
 let heading = document.querySelector('[data-title]')
 let form = document.querySelector('#ask')
 // The app open beside the chat (T-140509) is loaded again when the Operator
-// changes it. With none open, a change this chat makes to an app of this
-// space the person may open opens the page again to show it, unless they
-// are writing.
+// changes it.
 let here = ${JSON.stringify(space.slug)}
-let theirs = ${JSON.stringify(apps)}
 let app = document.querySelector('[data-app]')
 let shown = app?.querySelector('[data-frame]')
-let changes = (o) => (o.changed ?? []).filter((c) => (!c.space || c.space == here) && theirs.includes(c.app))
 let changing = (o) => {
-  let apps = changes(o)
-  if (shown && apps.some((c) => c.app == app.dataset.app)) shown.src = shown.getAttribute('src')
-  else if (!app && apps.length && thread()?.dataset.task == o.task && !form?.elements.say.value.trim()) location.reload()
+  if (shown && (o.changed ?? []).some((c) => (!c.space || c.space == here) && c.app == app.dataset.app)) shown.src = shown.getAttribute('src')
 }
 let status = document.querySelector('[data-send-status]') ?? document.createElement('p')
 let draftAt = '${at}?draft=1'

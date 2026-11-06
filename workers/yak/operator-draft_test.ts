@@ -329,20 +329,13 @@ test('the app beside the chat loads again when the Operator changes it, and only
   page.leave()
 })
 
-test('a chat with no app beside it opens again to show one it changed, unless the person is writing', async () => {
+test('a chat with no app beside it stays as it is when the Operator changes one', async () => {
   let page = await load(storage(), false, road, apps)
   let task = page.document.querySelector('[data-task]')!.getAttribute(
     'data-task',
   )!
-  // Another chat's change, or one to an app they may not open, opens nothing.
-  page.hear(changing(crypto.randomUUID(), { space: '', app: 'club' }))
-  page.hear(changing(task, { space: '', app: 'secret' }))
-  assertEquals(page.loads.page, 0)
   page.hear(changing(task, { space: '', app: 'club' }))
-  assertEquals(page.loads.page, 1)
-  page.type('Make the header')
-  page.hear(changing(task, { space: '', app: 'club' }))
-  assertEquals(page.loads.page, 1)
+  assertEquals(page.loads, { app: 0, page: 0 })
   page.leave()
 })
 
