@@ -11,7 +11,7 @@ export let cache: string = system.env.get('XDG_CACHE_HOME') ??
 /** Where a checkout's own stores lie, by its path. Checkouts differ: one
  * store they all shared would hold whichever checkout wrote it last, and each
  * run would ask deno again of every module another checkout had changed. */
-export let stores = (cwd = system.cwd()): string =>
+export let stores = (cwd: string = system.cwd()): string =>
   `${cache}/yak/checkouts/${
     createHash('sha256').update(cwd).digest('hex').slice(0, 16)
   }`
@@ -89,7 +89,10 @@ type Status = [number, number, number, number]
  * file read anew, or one it held and no longer does. A file not asked of
  * stays held when it lies `beyond` what the caller looked at.
  */
-export let byStatus = <T>(store?: string) => {
+export let byStatus = <T>(store?: string): {
+  of: (path: string, s: io.FileInfo, read: () => T) => T
+  save: (beyond?: (path: string) => boolean) => void
+} => {
   let before: Record<string, [...Status, T]> = store ? load(store) : {}
   let after: Record<string, [...Status, T]> = {}
   let fresh = false

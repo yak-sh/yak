@@ -49,9 +49,18 @@ export type Info = {
 let hex = (data: string | Uint8Array): string =>
   createHash('sha256').update(data).digest('hex')
 
+/** A checkout's paths: its directory, its `file://` base, a path's URL and a
+ * specifier's checkout path. */
+export type Location = {
+  cwd: string
+  base: string
+  url: (path: string) => string
+  rel: (specifier: string) => string
+}
+
 // A lookup uses one checkout context; later lookups can use another. Paths
 // recur throughout selection and source planning, so normalize each once.
-export let location = (cwd = system.cwd()) => {
+export let location = (cwd: string = system.cwd()): Location => {
   let base = `file://${cwd}/`
   let urls = new Map<string, string>(), paths = new Map<string, string>()
   return {
@@ -362,7 +371,7 @@ async (roots: string[], bytes: Bytes = said): Promise<Info | undefined> => {
 export let named = (
   source: string,
   path: string,
-  { url, rel } = location(),
+  { url, rel }: Location = location(),
 ): string[] =>
   [
     ...source.replace(/^\s*(\/\/|\/\*|\*).*$/gm, '').matchAll(
