@@ -18,10 +18,8 @@
 
 import {
   as,
-  col,
   type Driver,
   fn,
-  inlined,
   type Param,
   render,
   type Row,
@@ -29,10 +27,8 @@ import {
   shape,
   statement,
   type Stmt,
-  table,
   writing,
 } from '@yaks/sql'
-import { EPOCH, epochAt, meta } from '@yaks/sqlite'
 import { during, measure as traced, peek } from '@yaks/trace'
 
 /** A value the engine will bind: everything else is converted first. */
@@ -128,57 +124,6 @@ let unbind = (row: Row): Row => {
   return row
 }
 
-// What one object's `make` wrote (Driver.template), kept for the next object
-// this isolate makes the same way: by its key and the objects that stood
-// before it. An object's schema is hundreds of statements, each a call into
-// the engine and most a page of the file; the same schema run again as a
-// script is a few calls. A few kinds of store make one each.
-let templates = new Map<string, string[]>()
-let TEMPLATES = 16
-// The statements a template is being made of, by the storage they run on:
-// every driver over one object's storage writes the same file.
-let making = new WeakMap<DurableStorage, string[]>()
-// workerd refuses a statement longer than 100,000 characters; a script is
-// cut before that.
-let SCRIPT = 90_000
-
-// The pragmas that only ask: the rest (`optimize`, a setting) may change the
-// file, and a template keeps them.
-let ASKING = new Set([
-  'data_version',
-  'database_list',
-  'foreign_key_list',
-  'foreign_keys',
-  'freelist_count',
-  'index_info',
-  'index_list',
-  'index_xinfo',
-  'page_count',
-  'page_size',
-  'table_info',
-  'table_list',
-  'table_xinfo',
-])
-
-// A statement that leaves the file as it found it, which a template need not
-// run again: a read, and a pragma that asks.
-let asks = (s: Stmt): boolean =>
-  s.t == 'raw'
-    ? s.origin ? asks(s.origin) : /^\s*select\b/i.test(s.sql)
-    : s.t == 'select' || s.t == 'compound' || s.t == 'values' ||
-      s.t == 'each' || s.t == 'explain query plan' ||
-      s.t == 'pragma' && s.value == null && ASKING.has(s.name)
-
-// Statements as scripts, each short of the engine's limit.
-let scripts = (texts: string[]): string[] =>
-  texts.reduce<string[]>((out, text) => {
-    let last = out.length - 1
-    if (last >= 0 && out[last].length + text.length + 2 <= SCRIPT) {
-      out[last] += ';\n' + text
-    } else out.push(text)
-    return out
-  }, [])
-
 /**
  * A {@link https://jsr.io/@yaks/sql | @yaks/sql} `Driver` over a Durable
  * Object's storage. It converts the values the engine will not take, hands the
@@ -199,11 +144,7 @@ export let driver = (
   // The cursor is lazy: draining it is what runs the statement.
   let execute = (s: Stmt): Row[] => {
     let rendered = render(s)
-    let rows = exec(rendered.sql, rendered.params, () => shape(rendered))
-    if (!asks(s)) making.get(durable)?.push(inlined(rendered))
-    return rows
-  }
-  let exec = (sql: string, params: Param[], said: () => string): Row[] => {
+    let { sql, params } = rendered
     let cursor: SqlCursor<Row> | undefined
     try {
       cursor = durable.sql.exec(sql, ...params.map(bind))
@@ -211,7 +152,7 @@ export let driver = (
       if (observe && cursor.rowsRead != null && cursor.rowsWritten != null) {
         try {
           observe({
-            shape: said(),
+            shape: shape(rendered),
             rowsRead: cursor.rowsRead,
             rowsWritten: cursor.rowsWritten,
           })
@@ -258,7 +199,7 @@ export let driver = (
     )
   }
   query({ t: 'pragma', name: 'foreign_keys', value: 'on' })
-  let d: Driver = {
+  return {
     query,
     run: (s) => {
       query(s)
@@ -269,52 +210,11 @@ export let driver = (
         ? Number(query(select({ cols: [as(fn('changes'), 'n')] }))[0].n)
         : 0
     },
-    // What a body rolled back is no part of a template being made.
-    tx: (body) => {
-      let wrote = making.get(durable), at = wrote?.length ?? 0
-      try {
-        return durable.transactionSync(body)
-      } catch (e) {
-        wrote?.splice(at)
-        throw e
-      }
-    },
+    tx: (body) => durable.transactionSync(body),
     statistics: durable.sql.databaseSize == null
       ? undefined
       : { bytes: () => durable.sql.databaseSize! },
     // Every driver over one object's storage is one connection.
     connection: durable,
-    template: (key, make) => {
-      let at = key + '\n' + JSON.stringify(query(select({
-        cols: [col('type'), col('name'), col('sql')],
-        from: table('sqlite_schema'),
-        order: [col('name')],
-      })))
-      let kept = templates.get(at)
-      if (kept) {
-        for (let script of kept) exec(script, [], () => 'template')
-        // A copy is a store of its own: it never takes the lineage identity
-        // of the one its template was made in (@yaks/sqlite `epoch`).
-        if (epochAt(d)) meta(d).set(EPOCH, crypto.randomUUID())
-        return
-      }
-      // A template asked for inside another's make is part of that one.
-      if (making.has(durable)) return void make()
-      let wrote: string[] = []
-      making.set(durable, wrote)
-      let made: boolean | void
-      try {
-        made = make()
-      } finally {
-        making.delete(durable)
-      }
-      if (made === false) return
-      templates.delete(at)
-      templates.set(at, scripts(wrote))
-      if (templates.size > TEMPLATES) {
-        templates.delete(templates.keys().next().value!)
-      }
-    },
   }
-  return d
 }

@@ -598,12 +598,7 @@ export let passed = (
   if (held && held != stamp) forget(d, print)
   follow(d, print, () => {
     if (held == stamp) return
-    // A store no pass has run on holds no row the pass reads, so its schema
-    // can be what the same pass made of another (@yaks/sql `template`): a new
-    // app's store is hundreds of statements, and as a copy a few (T-143307).
-    let make = () => !(left = raise(d, vocab, own)).length
-    if (!held && d.template) d.template(`${own} ${stamp} ${print}`, make)
-    else make()
+    left = raise(d, vocab, own)
     if (left.length) return false
     ran = true
   })

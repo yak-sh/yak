@@ -74,18 +74,13 @@ export type Driver = {
   /**
    * Make a schema from a template. Where another database of this process
    * already ran `make` for the same `key`, holding the same objects this one
-   * holds, this one is given what that one made, and `make` does not run;
-   * otherwise it runs, and what it made is kept as the template for the next,
-   * unless it answers false: what it left undone stands for no other. The
-   * caller's `key` names whatever else `make` depends on, and a caller asks
-   * only where no row `make` reads could change what it does. For an engine
-   * where copying a schema costs far less than making one: an embedded
-   * database in memory, which a test suite opens thousands of, copies its
-   * pages (and so asks that no table hold a row); a Durable Object runs what
-   * the other one's `make` wrote as one script. A driver that leaves it out
-   * makes every schema itself.
+   * holds and no rows, this one becomes a copy of what that one made, and
+   * `make` does not run; otherwise it runs, and what it made is kept as the
+   * template for the next. For an engine where copying a schema costs far less
+   * than making one: an embedded database in memory, which a test suite opens
+   * thousands of. A driver that leaves it out makes every schema itself.
    */
-  template?: (key: string, make: () => boolean | void) => void
+  template?: (key: string, make: () => void) => void
   /**
    * The connection this driver speaks through, where other drivers may speak
    * through it too: a Durable Object's storage, which each driver bound to it

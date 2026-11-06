@@ -87,7 +87,6 @@ export {
 } from './ast.ts'
 export {
   excerpt,
-  inlined,
   render,
   renderStable,
   shape,

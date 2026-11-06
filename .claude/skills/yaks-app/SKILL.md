@@ -182,7 +182,13 @@ A query that works on the box can be refused in a store.
   values, an expression 100 deep, a compound select of 5 arms. Only
   `transactionSync` makes a transaction.
 - **No clock while code runs.** Time advances only across I/O, so a time budget
-  reads 0 ms. Work is bounded by rows or batches (`mover.ts`).
+  reads 0 ms. Work is bounded by rows or batches (`mover.ts`). The same holds
+  for traces: every SQL span reads 0 ms, so a stretch of synchronous work is
+  timed by the I/O on either side of it.
+- **A new object rarely shares an isolate with the last new one.** Six app
+  stores made 20 s apart each found no earlier new store in its isolate
+  (T-143307), so a cache kept in module scope did not serve one new store's
+  first request. Prove a cache hits live before counting on it.
 - **128 MB per isolate**, shared by every object in it (`HELD` in
   packages/embedding/held.ts caps vector copies at 48 MB; the vectors are
   `search-and-embeddings`). The kernel Worker has the same 128 MB, so a body
@@ -218,12 +224,6 @@ A query that works on the box can be refused in a store.
   while the store keeps serving the shape it holds. `admin_move` with rehearse
   true runs every rule in a transaction the store rolls back and says what it
   found. Moving rows people already have is `data-migration`'s ground.
-- **A new store's schema is a copy.** An empty app store holds a table,
-  indexes and triggers for every core word: about 290 objects and 1.1 MB. Its
-  first schema pass (migrate.ts `passed`, no stamp held) asks the driver for a
-  template (@yaks/durable-object `template`): the first new store of a shape
-  in an isolate records what its pass wrote, and the next runs that as a
-  script of a few statements. A store that already ran a pass never takes one.
 
 ## Asleep is the normal state
 

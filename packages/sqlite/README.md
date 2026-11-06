@@ -369,9 +369,7 @@ bounded `PRAGMA optimize` for file-backed drivers, so the planner can use table
 statistics. A database in memory that nothing has installed into is made from a
 template: the first one a process makes for a vocabulary is kept, and each later
 one is a copy of it, since copying a schema is a page copy and making one is
-hundreds of statements (@yaks/sql `Driver.template`). A Durable Object's driver
-keeps one too, as the script its first object's install wrote
-(@yaks/durable-object).
+hundreds of statements (@yaks/sql `Driver.template`).
 
 A file-backed store reads and writes only the schema already installed. Bind it
 with `storage()` to query an existing graph; call `install()` explicitly when

@@ -327,7 +327,7 @@ export let driver = (db: Database): Driver => {
     // one is a page copy where making it is hundreds of statements. One on
     // disk is made in place: another process may have it open.
     ...file ? { watch } : {
-      template: (key: string, make: () => boolean | void) => {
+      template: (key: string, make: () => void) => {
         let before = holding(query)
         if (!before.empty || db.inTransaction) return make()
         let at = key + '\n' + before.objects
@@ -339,7 +339,7 @@ export let driver = (db: Database): Driver => {
           if (epochAt(d)) meta(d).set(EPOCH, crypto.randomUUID())
           return
         }
-        if (make() === false) return
+        make()
         let copy = new Database(':memory:')
         db.backup(copy)
         templates.set(at, copy)

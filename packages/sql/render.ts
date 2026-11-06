@@ -568,22 +568,6 @@ let quoted = (sql: string, i: number, q: number): number => {
   return i
 }
 
-/** A rendered statement with each of its parameters written in as a literal:
- * text that runs alone, beside other statements in one script.
- *
- * ```ts
- * import { col, eq, inlined, render, select, table, val } from '@yaks/sql'
- *
- * inlined(render(select({
- *   cols: [col('v')],
- *   from: table('meta'),
- *   where: eq(col('k'), val("ada's")),
- * })))
- * // `select "v" from "meta" where "k" = 'ada''s'`
- * ```
- */
-export let inlined = (rendered: Raw): string => literals(rendered)
-
 // A compiled fragment is still a value when it is embedded in an inline
 // expression. Substitute its parameters outside quoted strings and names.
 let literals = ({ sql, params }: Raw): string => {
