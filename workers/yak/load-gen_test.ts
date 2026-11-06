@@ -1,6 +1,6 @@
 // A config imports only the store facets its packages export, once per facet.
 import { equal, test, throws } from '@yaks/testing'
-import { imports, loader, providers } from './load-gen.ts'
+import { imports, lenders, loader, providers } from './load-gen.ts'
 
 test('store import generation resolves options and deduplicates configs', async () => {
   equal(
@@ -92,4 +92,23 @@ test('provider generation imports each named provider eagerly and refuses one se
     [...loader(['p/provider']).matchAll(eager)].map((m) => JSON.parse(m[1])),
     ['p/provider'],
   )
+})
+
+test('lender generation imports each named graph facet eagerly', async () => {
+  let manifests = [{ name: 'e', exports: { './graph': './graph.ts' } }]
+  equal(lenders({ plugins: [{ use: 'e', with: { ai: 1 } }] }, manifests), [
+    'e/graph',
+  ])
+  await throws(
+    () => lenders({ plugins: ['e'] }, [{ name: 'e', exports: './mod.ts' }]),
+    'e exports no ./graph',
+  )
+  let source = loader([], {}, ['e/graph'])
+  equal(
+    [...source.matchAll(/import \* as lender\d+ from ("[^"\n]+")/g)].map((m) =>
+      JSON.parse(m[1])
+    ),
+    ['e/graph'],
+  )
+  equal(source.includes('"e": lender0'), true)
 })

@@ -5163,6 +5163,9 @@ importers:
       '@yaks/blob':
         specifier: 0.2.24
         version: link:../blob
+      '@yaks/embedding':
+        specifier: 0.2.24
+        version: link:../embedding
       '@yaks/fp':
         specifier: 0.2.23
         version: link:../fp

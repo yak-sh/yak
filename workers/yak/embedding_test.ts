@@ -27,7 +27,7 @@ import { preparedDriver, snapshot } from '../../packages/sqlite/testing.ts'
 import { Store } from './graph.ts'
 import { KERNEL, metaOf } from './meta.ts'
 import { state } from './testing.ts'
-import { DIM, embedder, ranking, SPACE, texts } from './embedding.ts'
+import { DIM, embedder, ranking, SPACE, texts, withheld } from './embedding.ts'
 
 // Workers AI, stood in for by word buckets: texts sharing words are near.
 let words = hashEmbedder(DIM)
@@ -178,12 +178,12 @@ test('deployment of vectors in another space re-embeds them all', async () => {
 test("a space's spent budget withholds its vectors, asked once", async () => {
   let asked = 0
   let spent = embedder({
-    AI: {
+    AI: withheld({
       run: () => {
         asked++
         return Promise.reject(new ModelError('limit', 'the budget is spent'))
       },
-    },
+    }),
   })!
   let error = await Promise.resolve().then(() => spent.embed('a text'))
     .catch((e: Error) => e)

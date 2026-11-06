@@ -1,41 +1,42 @@
-// An embedder over Cloudflare Workers AI, through the `AI` binding a Worker is
-// given. The binding is the credential: there is no key, no endpoint and
-// nothing to sign in to, so a Worker makes this embedder from its own binding
-// and hands it to what embeds (./sweep.ts `drain`, ./search.ts `meaning`).
-// Anywhere else Workers AI is an OpenAI-compatible endpoint (./remote.ts).
+// Workers AI as an embedder (@yaks/embedding `Batched`), through the `AI`
+// binding a Worker is given. The binding is the credential: there is no key,
+// no endpoint and nothing to sign in to, so a Worker lends this plugin its
+// binding (./graph.ts) and hands what it makes to what embeds (@yaks/embedding
+// `drain`, `meaning`). Anywhere else Workers AI is an OpenAI-compatible
+// endpoint (@yaks/embedding `remote`).
 //
 // One call embeds many texts: `run(model, {text: [...]})` answers
 // `{data: [[…], …], shape}`, a vector per text in order, which is the batching
-// every provider here shares (./remote.ts `batched`). A model trained for it
+// every provider shares (@yaks/embedding `batched`). A model trained for it
 // (Qwen3-Embedding, EmbeddingGemma) is kept narrower with `dim`, cut and
 // renormalized here, since the binding answers its full width.
 //
 // A text the model will not take is `Refused`, as a 4xx is over HTTP: a batch
-// it rode in is asked again a text at a time (./sweep.ts), a text alone is
-// asked again as its opening half (./remote.ts `halving`), and one refused
-// even then is dropped while the sweep carries on. Anything else the binding
-// throws (Workers AI failing on its side, a rate limit, an outage) is asked
-// again after each pause of ./remote.ts `retries`; one that outlasts
-// them is thrown once as `Unanswered`, and the work stays owed.
+// it rode in is asked again a text at a time, a text alone is asked again as
+// its opening half (@yaks/embedding `halving`), and one refused even then is
+// dropped while the sweep carries on. Anything else the binding throws
+// (Workers AI failing on its side, a rate limit, an outage) is asked again
+// after each pause of @yaks/embedding `retries`; one that outlasts them is
+// thrown once as `Unanswered`, and the work stays owed.
 
-import { Refused } from './embedder.ts'
 import {
   answered,
   type Batched,
   batched,
   halving,
   type Load,
+  Refused,
   retrying,
   space,
-} from './remote.ts'
+} from '@yaks/embedding'
 
-/** The slice of a Worker's `AI` binding this file calls. */
+/** The slice of a Worker's `AI` binding the embedder calls. */
 export type Ai = {
   run: (model: string, input: unknown) => Promise<unknown>
 }
 
 /** Which Workers AI model, at what width, over which binding. */
-export type WorkersAi = {
+export type Embeds = {
   /** the model's Workers AI name (`@cf/qwen/qwen3-embedding-0.6b`) */
   model: string
   /** Matryoshka width: keep this many leading coordinates (./remote.ts `cut`) */
@@ -53,7 +54,7 @@ let unfit = (e: unknown) =>
 
 /** A {@link Batched} embedder that asks Workers AI for every vector,
  * batching the calls made together. */
-export let workersAi = (said: WorkersAi): Batched =>
+export let embedder = (said: Embeds): Batched =>
   batched(
     space(said),
     halving(retrying('workers-ai', said.model, async (input) => {
@@ -62,7 +63,7 @@ export let workersAi = (said: WorkersAi): Batched =>
         got = await said.ai.run(said.model, { text: input })
       } catch (e) {
         if (!unfit(e)) throw e
-        throw new Refused(`@yaks/embedding: workers-ai refused — ${e}`)
+        throw new Refused(`@yaks/workers-ai: refused — ${e}`)
       }
       return answered(
         'workers-ai',

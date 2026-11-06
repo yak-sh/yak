@@ -247,14 +247,13 @@ The model is fetched from the Hugging Face hub on the first embed and kept in
 the platform's cache. Its space is the pinned model and its width
 (`minishlab/potion-retrieval-32M@6fc8051#256`).
 
-`workersAi({ model: '@cf/qwen/qwen3-embedding-0.6b', dim: 256, ai })` asks
-Cloudflare Workers AI through a Worker's `AI` binding: the binding is the
-credential, so a Worker makes this embedder itself. Texts asked together ride
-one `run(model, { text })`, as over HTTP, and a failure on Workers AI's side
-(`3048: Unknown internal error`) is asked again the same way. Outside a Worker,
-Workers AI is an OpenAI-compatible endpoint for `remote`.
-`batched(model, ask, load?)` is the batching both share, for any provider that
-answers many texts at once.
+`{ provider: 'workers-ai', model: '@cf/qwen/qwen3-embedding-0.6b', dim: 256 }`,
+with the `@yaks/workers-ai` plugin composed beside this one and lent a Worker's
+`AI` binding, asks Cloudflare Workers AI through it
+([@yaks/workers-ai](../workers-ai)). Outside a Worker, Workers AI is an
+OpenAI-compatible endpoint for `remote`. `batched(model, ask, load?)` is the
+batching such a provider shares with `remote`, for any that answers many texts
+at once.
 
 ## The sweep
 
@@ -477,11 +476,11 @@ not owe an index rebuild.
 ## Exports
 
 The root exports field selection, `Embedder`, `hashEmbedder`, `remote`,
-`workersAi`, `batched`, vector math/packing helpers, the schema, sweep
-operations, native scans (`installNative`, `prepare`, `state`), the vectors held
-in memory (`absorb`, `HELD`, `RESCORE`), `vectorOf`, `nearest`, `meaning`,
-`semantic` and supporting types such as `Rank`. The `Statements` capability it
-runs on is `@yaks/sql`'s.
+`batched`, `retrying`, `halving`, `answered`, vector math/packing helpers, the
+schema, sweep operations, native scans (`installNative`, `prepare`, `state`),
+the vectors held in memory (`absorb`, `HELD`, `RESCORE`), `vectorOf`, `nearest`,
+`meaning`, `semantic` and supporting types such as `Rank`. The `Statements`
+capability it runs on is `@yaks/sql`'s.
 
 | Sub-module export         | Purpose                                                                                                                                                                                        |
 | ------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |

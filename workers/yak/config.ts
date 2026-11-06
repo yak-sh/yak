@@ -390,6 +390,18 @@ export let serving: Config = {
   plugins: [workersAi, '@yaks/openrouter', openai],
 }
 
+/** The embedders a store's vectors may be made by (embedding.ts): each a
+ * plugin whose graph facet lends one by name (@yaks/host `Host.embedders`),
+ * given the store's `AI` binding, which the store holds to its space's
+ * budget. embedding.json says which one makes them, and with what model. */
+export let embedding: Config = {
+  plugins: [{
+    use: '@yaks/workers-ai',
+    facets: ['graph'],
+    with: { ai: { binding: 'AI' } },
+  }],
+}
+
 export let configs = {
   app: appConfig,
   directory: directoryConfig,

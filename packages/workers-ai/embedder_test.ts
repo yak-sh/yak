@@ -2,9 +2,8 @@
 
 import { test } from '@yaks/testing'
 import { assertEquals, assertRejects } from '@std/assert'
-import { Refused, Unanswered } from './embedder.ts'
-import { retries } from './remote.ts'
-import { workersAi } from './workers-ai.ts'
+import { Refused, retries, Unanswered } from '@yaks/embedding'
+import { embedder as workersAi } from './embedder.ts'
 
 retries.waits = [0, 0]
 

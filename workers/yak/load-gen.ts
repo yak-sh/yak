@@ -29,17 +29,27 @@ export let imports = (configs: Config[], manifests: Manifest[]): string[] => {
   })
 }
 
+// The `facet` of each plugin `config` names, refused for one exporting none.
+let each = (config: Config, manifests: Manifest[], facet: string) =>
+  [...new Set((config.plugins ?? []).map(used))].sort().map((plugin) => {
+    let exported = manifests.find((m) => m.name == plugin)?.exports
+    if (typeof exported != 'object' || !Object.hasOwn(exported, `./${facet}`)) {
+      throw new Error(`${plugin} exports no ./${facet}`)
+    }
+    return `${plugin}/${facet}`
+  })
+
 /** The `./provider` facet of each plugin a provider config names
  * (config.ts `providing`, `serving`): one it names that serves no models is
  * refused. */
 export let providers = (config: Config, manifests: Manifest[]): string[] =>
-  [...new Set((config.plugins ?? []).map(used))].sort().map((plugin) => {
-    let exported = manifests.find((m) => m.name == plugin)?.exports
-    if (typeof exported != 'object' || !Object.hasOwn(exported, './provider')) {
-      throw new Error(`${plugin} exports no ./provider`)
-    }
-    return `${plugin}/provider`
-  })
+  each(config, manifests, 'provider')
+
+/** The `./graph` facet of each plugin a lending config names (config.ts
+ * `embedding`), which `loader` imports with the Worker so a store is lent what
+ * they make as it opens: one exporting none is refused. */
+export let lenders = (config: Config, manifests: Manifest[]): string[] =>
+  each(config, manifests, 'graph')
 
 /** Every package's `./vocab`, configured or not: an app names any of them as a
  * `"platform"` dependency, and its store speaks their words (vocab.ts
@@ -53,6 +63,7 @@ export let vocabs = (manifests: Manifest[]): string[] =>
 export let loader = (
   specifiers: string[],
   local: Record<string, string> = {},
+  lending: string[] = [],
 ): string => {
   let eager = (suffix: string) =>
     specifiers.filter((s) => s.endsWith(suffix)).sort()
@@ -70,12 +81,19 @@ export let loader = (
     ...served.map((s, i) =>
       `import * as provider${i} from ${JSON.stringify(local[s] ?? s)}`
     ),
+    ...lending.map((s, i) =>
+      `import * as lender${i} from ${JSON.stringify(local[s] ?? s)}`
+    ),
     'export let vocabFacets: Record<string, VocabFacet> = {',
     ...vocabs.map((s, i) => `${JSON.stringify(s.slice(0, -6))}: vocab${i},`),
     '}',
     '/** The providers config.ts `providing` and `serving` name, by plugin. */',
     'export let providerFacets: Record<string, ProviderFacet> = {',
     ...served.map((s, i) => `${JSON.stringify(s.slice(0, -9))}: provider${i},`),
+    '}',
+    '/** The graph facets config.ts `embedding` names, by plugin. */',
+    "export let lenderFacets: Record<string, Facets['graph']> = {",
+    ...lending.map((s, i) => `${JSON.stringify(s.slice(0, -6))}: lender${i},`),
     '}',
     'let facets: Record<string, () => Promise<unknown>> = {',
     ...other.map((s) =>

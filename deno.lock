@@ -5332,6 +5332,7 @@
             "npm:@jsr/std__assert@1",
             "npm:@yaks/blob@0.2.24",
             "npm:@yaks/effects@0.2.24",
+            "npm:@yaks/embedding@0.2.24",
             "npm:@yaks/fp@0.2.23",
             "npm:@yaks/graph@0.2.24",
             "npm:@yaks/model@0.2.24",

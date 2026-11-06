@@ -362,7 +362,7 @@ import {
   step,
 } from './mover.ts'
 import { weighed } from './meter.ts'
-import { embedder, ranking, SPACE, texts } from './embedding.ts'
+import { embedder, ranking, SPACE, texts, withheld } from './embedding.ts'
 import { directory, fetch as directoryFetch } from './directory.ts'
 import {
   isRetired,
@@ -3262,16 +3262,19 @@ export class Store {
     this.#ctx.waitUntil?.(this.#effectWork)
   }
 
+  // The store lends its embedder its `AI` binding held to its space's budget.
   #embedder = () => {
     let app = this.#get('app'), bind = this.#bind
     return embedder({
       ...bind,
-      AI: bind.AI && bind.STORE && app
-        ? meteredModel(
-          bind,
-          async (dir) => (await dir.appAt(app))?.space ?? null,
-        )
-        : bind.AI,
+      AI: bind.AI && withheld(
+        bind.STORE && app
+          ? meteredModel(
+            bind,
+            async (dir) => (await dir.appAt(app))?.space ?? null,
+          )
+          : bind.AI,
+      ),
     })
   }
 

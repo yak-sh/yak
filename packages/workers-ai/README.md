@@ -162,3 +162,16 @@ before anything is spent where its price has no bound, and settled at its
 usage's cost. The account's spent credit is reported through `spending.report`;
 an input the model refuses (`unfit`) is refunded and refused as `bad_request`.
 It answers what the model said, out of AI Gateway's envelope.
+
+## Embedding
+
+`@yaks/workers-ai/graph` lends the host an embedder named `workers-ai`
+(@yaks/host `Host.embedders`), over the binding its options are lent (`ai`),
+which @yaks/embedding selects with
+`embedder: {"provider": "workers-ai", "model": …, "dim": …}`. Texts asked
+together ride one `run(model, {text: [...]})`, and a model trained for it is cut
+to `dim` and renormalized. An input the model will not take is `Refused`, so
+@yaks/embedding asks a batch again a text at a time; any other failure on
+Workers AI's side (`3048: Unknown internal error`) is asked again after its
+pauses. Where no binding is lent, it lends nothing. `embedder(options)` makes
+one directly.

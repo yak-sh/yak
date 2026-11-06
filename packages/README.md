@@ -407,7 +407,9 @@ grouped approximately by function, **not** by dependency order.
   authorization. The application supplies credentials or a private store.
 - **[@yaks/workers-ai](./workers-ai)** — Implement the model interface over
   Cloudflare Workers AI through the `AI` binding a Worker is given, with no key:
-  chat messages out, either of the catalog's answer shapes back.
+  chat messages out, either of the catalog's answer shapes back. As a plugin it
+  serves `workers-ai` and the binding's own metered door (`./provider`) and
+  lends a `workers-ai` embedder (`./graph`).
 - **[@yaks/kernel](./kernel)** — Shared identity and metadata schemas: `entity`,
   `decided`, `quarantined`, `comment`, `image`, `favorite` and relationship
   tags, and the lifecycle marks a status is read from (`completed`, `failed`,

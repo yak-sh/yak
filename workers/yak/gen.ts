@@ -38,6 +38,7 @@ import { members } from '@yaks/cli/dependencies'
 import {
   configs,
   domains,
+  embedding,
   phoneConfig,
   posts,
   providing,
@@ -45,6 +46,7 @@ import {
 } from './config.ts'
 import {
   imports,
+  lenders,
   loader,
   type Manifest,
   providers,
@@ -392,6 +394,7 @@ let loaded = await formatted(
       ]),
     ],
     local,
+    lenders(embedding, manifests),
   ),
 )
 let checking = system.args.includes('--check')
