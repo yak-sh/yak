@@ -19,11 +19,11 @@ test('the texts card names the numbers to text and call, to anyone', () => {
   }
   let says = (at: Document) => at.querySelector('#texts')!.textContent!
   let both = card(consent, N, N)
-  equal(link(both, 'sms'), [`sms:${N}`, '866-314-1594'])
+  equal(link(both, 'sms'), [`sms:${N}`, 'Text'])
   equal(link(both, 'tel'), [`tel:${N}`, '866-314-1594'])
   equal(
     says(both).includes(
-      'Text 866-314-1594 or call 866-314-1594 to reach your Operator.',
+      'Text or call 866-314-1594 to reach your Operator.',
     ),
     true,
   )
@@ -31,6 +31,7 @@ test('the texts card names the numbers to text and call, to anyone', () => {
   equal(link(stranger, 'tel'), [`tel:${N}`, '866-314-1594'])
   equal(says(stranger).includes('from the mobile number you agree'), true)
   equal(link(card(consent, N), 'tel'), null)
+  equal(says(card(consent, N)).includes('Text 866-314-1594 to reach'), true)
   let none = card(consent)
   equal(link(none, 'sms'), null)
   equal(

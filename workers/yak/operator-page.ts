@@ -168,8 +168,12 @@ export let textsCard = (
       ? h(
         'p',
         null,
-        from ? ['Text ', h('a', { href: `sms:${from}` }, shown(from))] : null,
-        from && call ? ' or call ' : call ? 'Call ' : null,
+        from === call
+          ? [h('a', { href: `sms:${from}` }, 'Text'), ' or call ']
+          : from
+          ? ['Text ', h('a', { href: `sms:${from}` }, shown(from))]
+          : null,
+        from && call && from !== call ? ' or call ' : !from ? 'Call ' : null,
         call ? h('a', { href: `tel:${call}` }, shown(call)) : null,
         consent
           ? ' to reach your Operator.'
