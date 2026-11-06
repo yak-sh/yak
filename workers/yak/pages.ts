@@ -881,7 +881,7 @@ let connectCard = (at: DeskPage, env: Host) =>
 let SHOWN = 5
 // What the space's Operator made of one break, with the way to its
 // conversation in the Operator's chat app.
-let operated = (e: Plain, space: string) => {
+export let operated = (e: Plain, space: string) => {
   let o = e.operator
   if (!o) return ''
   let said = o.failed != null
@@ -893,7 +893,7 @@ let operated = (e: Plain, space: string) => {
     esc(chatPath(space, e.fix))
   }">See what it did</a></span>`
 }
-let fixing = (a: DeskPage['apps'][number], space: string) => {
+export let fixing = (a: DeskPage['apps'][number], space: string) => {
   let errors = a.errors ?? []
   let n = errors.length
   let title = a.title || a.slug

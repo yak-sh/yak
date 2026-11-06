@@ -209,7 +209,7 @@ type Reading = {
   tests: boolean
 }
 
-let read = (env: Host, census: Census, tests: boolean): Reading => ({
+export let read = (env: Host, census: Census, tests: boolean): Reading => ({
   env,
   census,
   uses: uses(census),
@@ -408,7 +408,7 @@ let desk = (
 }
 
 // One list, searched: a word finds every row that says it anywhere.
-let list = (d: Reading, key: List, q: string) => {
+export let listing = (d: Reading, key: List, q: string) => {
   let all = shown(d, lists(d.census)[key])
   let found = q ? all.filter((r) => said(d, r).includes(q.toLowerCase())) : all
   let hidden = lists(d.census)[key].length - all.length
@@ -422,49 +422,51 @@ let list = (d: Reading, key: List, q: string) => {
       q ? `&q=${encodeURIComponent(q)}` : ''
     }">Show ${hidden} more from test accounts</a>`
     : ''
-  return desk(
-    d,
-    LISTS[key].title,
-    key,
-    `<div class="Directory_Bar"><form class="Directory_Find" method="get" action="${PATH}/${key}" role="search"><input class="Field" type="search" name="q" value="${
-      esc(q)
-    }" placeholder="Search ${what}" aria-label="Search ${what}">${
-      d.tests ? '<input type="hidden" name="tests" value="1">' : ''
-    }<button class="Button Button-quiet" type="submit">Search</button></form>${toggle}</div>${
-      found.length
-        ? rows(d, found)
-        : `<section class="Empty"><h2>${
-          q ? `Nothing here says “${esc(q)}”` : `No ${what} yet`
-        }</h2></section>`
-    }`,
+  return `<div class="Directory_Bar"><form class="Directory_Find" method="get" action="${PATH}/${key}" role="search"><input class="Field" type="search" name="q" value="${
+    esc(q)
+  }" placeholder="Search ${what}" aria-label="Search ${what}">${
+    d.tests ? '<input type="hidden" name="tests" value="1">' : ''
+  }<button class="Button Button-quiet" type="submit">Search</button></form>${toggle}</div>${
+    found.length
+      ? rows(d, found)
+      : `<section class="Empty"><h2>${
+        q ? `Nothing here says “${esc(q)}”` : `No ${what} yet`
+      }</h2></section>`
+  }`
+}
+
+export let list = (d: Reading, key: List, q: string) =>
+  desk(d, LISTS[key].title, key, listing(d, key, q))
+
+export let possessions = (d: Reading, r: Row) => {
+  let c = d.census
+  let byId = (eid: string) =>
+    [...c.people, ...c.spaces, ...c.apps].find((x) => x.entity.eid == eid)
+  let seats = c.seats.filter((s) => seatPerson(s) == r.entity.eid)
+  let held = (role: string) =>
+    seats.filter((s) => s.member!.role == role)
+      .flatMap((s) => byId(seatSpace(s)) ?? [])
+  let owns = new Set(held('owner').map((s) => s.entity.eid))
+  let brought = invited(d).filter((i) =>
+    idOf(i.referral!.inviter) == r.entity.eid
   )
+  return grouped(d, 'Owner of', held('owner')) +
+    grouped(d, 'Editor of', held('editor')) +
+    grouped(d, 'Viewer of', held('viewer')) +
+    grouped(d, 'Apps', c.apps.filter((a) => owns.has(appSpace(a)))) +
+    (brought.length
+      ? `<h2 class="Group">Invited</h2>${referrals(d, brought)}`
+      : '')
 }
 
 // One row's page: its own facts, drawn by its renderer, then what it holds.
-let page = async (d: Reading, dir: Directory, r: Row, env: Env) => {
+export let page = async (d: Reading, dir: Directory, r: Row, env: Env) => {
   let c = d.census
   let byId = (eid: string) =>
     [...c.people, ...c.spaces, ...c.apps].find((x) => x.entity.eid == eid)
   let ctx: Record<string, unknown> = around(d, r)
-  let more = ''
+  let more = r.person ? possessions(d, r) : ''
   let key: List = r.person ? 'people' : r.space ? 'spaces' : 'apps'
-  if (r.person) {
-    let seats = c.seats.filter((s) => seatPerson(s) == r.entity.eid)
-    let held = (role: string) =>
-      seats.filter((s) => s.member!.role == role)
-        .flatMap((s) => byId(seatSpace(s)) ?? [])
-    let owns = new Set(held('owner').map((s) => s.entity.eid))
-    let brought = invited(d).filter((i) =>
-      idOf(i.referral!.inviter) == r.entity.eid
-    )
-    more = grouped(d, 'Owner of', held('owner')) +
-      grouped(d, 'Editor of', held('editor')) +
-      grouped(d, 'Viewer of', held('viewer')) +
-      grouped(d, 'Apps', c.apps.filter((a) => owns.has(appSpace(a)))) +
-      (brought.length
-        ? `<h2 class="Group">Invited</h2>${referrals(d, brought)}`
-        : '')
-  }
   if (r.space) {
     let seats = c.seats.filter((s) => seatSpace(s) == r.entity.eid)
     let held = (role: string) =>

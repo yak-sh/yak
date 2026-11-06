@@ -23,6 +23,7 @@ import type { operatorStore } from './operator-store.ts'
 import type { Env } from './env.ts'
 import type { Space } from './directory.ts'
 import { caught } from './defects.ts'
+import { builderOf, SPACE } from './build-door.ts'
 
 type Store = ReturnType<typeof operatorStore>
 let comp = (b: Bundle | undefined, name: string) =>
@@ -218,7 +219,6 @@ export let updating = async (
  * A failure is reported, and never fails what it tells of. */
 export let tell = async (env: Env, space: Space, telling: Telling) => {
   try {
-    let { builderOf, SPACE } = await import('./build.ts')
     let response = await builderOf(env, space.eid)(() =>
       new Request('https://builder/operator/tell', {
         method: 'POST',

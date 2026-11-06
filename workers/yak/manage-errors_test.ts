@@ -6,7 +6,7 @@ import {
   assertStringIncludes,
 } from '@std/assert'
 import type { App } from './directory.ts'
-import { library } from './pages.ts'
+import { fixing, library, operated } from './pages.ts'
 import { chatPath } from './route.ts'
 import { folds, type Plain, plain, type Seen } from './unseen.ts'
 
@@ -46,7 +46,15 @@ test('an app that throws is marked on the dashboard, with what to ask', () => {
     html,
     /<strong>chores<\/strong>.*?<a class="Apps_Tag Apps_Tag-warn" href="#fix-chores">1 error<\/a>/s,
   )
-  let fix = html.slice(html.indexOf('id="fix-chores"'))
+})
+
+test('a dashboard error names the break, its recurrence and what to ask', () => {
+  let fix = fixing({
+    eid: chores.eid,
+    slug: chores.slug,
+    title: chores.slug,
+    errors,
+  }, 'fixme')
   assertStringIncludes(fix, 'chores is not a function')
   assertStringIncludes(fix, '2 times')
   assertStringIncludes(fix, 'Fix the errors in my chores app on yaks.app')
@@ -60,8 +68,7 @@ test('a fixed app has no dashboard error mark or repair request', () => {
 // working, its answer, or why it could not finish, with the way to its work.
 let [broke] = errors
 let shown = (operator?: Plain['operator']) => {
-  let html = page([{ ...broke, operator }])
-  return html.slice(html.indexOf('id="fix-chores"'))
+  return operated({ ...broke, operator }, 'fixme')
 }
 test("a break says what the space's Operator made of it", () => {
   assert(!shown().includes('The Operator'), 'a break it never heard of')

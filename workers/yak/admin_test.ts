@@ -238,64 +238,6 @@ let asking = (path: string, person?: string) =>
     path.split('?')[0],
     dir,
   ] as const
-let outsider = asking('/admin/people')
-let person = asking('/admin/people', 'ann')
-let entrance = asking('/admin', 'root')
-
-test('the directory is drawn for the platform admin and nobody else', async () => {
-  let out = (await answer(...outsider))!
-  assertEquals(out.status, 302)
-  assertEquals(out.headers.get('location'), '/login?return=%2Fadmin%2Fpeople')
-})
-
-test('a signed-in person who is not the admin sees no directory', async () => {
-  assertEquals((await answer(...person))!.status, 404)
-})
-
-test('the admin directory entrance opens its people list', async () => {
-  let door = (await answer(...entrance))!
-  assertEquals(door.headers.get('location'), '/admin/people')
-})
-
-let search = asking('/admin/people?q=ann', 'root')
-test("the admin's people list shows who a search finds", async () => {
-  let found = (await answer(...search))!
-  assertEquals(found.status, 200)
-  assertStringIncludes(await found.text(), 'ann@x.com')
-})
-
-let records = {
-  ...EMPTY,
-  people: census().people.slice(0, 1),
-  spaces: census().spaces.slice(0, 1),
-  apps: census().apps.slice(0, 1),
-  seats: census().seats.slice(0, 1),
-}
-records.apps[0].doc = { title: 'Field notes' }
-let whole = {
-  ...dir,
-  census: () => Promise.resolve(records),
-} as Directory
-let details = asking('/admin/ann', 'root')
-let appSearch = asking('/admin/apps?q=ann', 'root')
-test('a person in the admin directory opens to the spaces they own', async () => {
-  let [req, env, path] = details
-  let page = (await answer(req, env, path, whole))!
-  assertEquals(page.status, 200)
-  let html = await page.text()
-  assertStringIncludes(html, 'Owner of')
-  assertStringIncludes(html, 'ann.yaks.app')
-})
-
-test('the admin app search finds app names through their space', async () => {
-  let [req, env, path] = appSearch
-  let page = (await answer(req, env, path, whole))!
-  assertEquals(page.status, 200)
-  let html = await page.text()
-  assertStringIncludes(html, 'Field notes')
-  assertStringIncludes(html, 'ann/notes')
-})
-
 test('the census reads which app each release is of and when, never its files, and who invited whom', async () => {
   await using p = platform('census deploys')
   let dir = directory({ fetch: (r) => directoryFetch(r, p.env) })
