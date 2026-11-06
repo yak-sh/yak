@@ -40,17 +40,34 @@ export let tagged = (
  */
 export let outliving = (
   tag: () => Promise<string | null>,
+  loaded: Promise<string | null> = tag(),
 ): () => Promise<boolean> => {
-  let loaded = tag()
   return async () => {
     let [was, now] = [await loaded, await tag()]
     return !!was && !!now && was != now
   }
 }
 
+let page = typeof location != 'undefined' && typeof fetch != 'undefined'
+let loaded = page ? tagged()() : Promise.resolve(null)
+let known: string | null = null
+void loaded.then((tag) => known = tag)
+
 /** This page's: asked once as it loads, and again whenever it is asked. A
  * process with no page (a test, a terminal) never outlives anything. */
-export let outlived: () => Promise<boolean> =
-  typeof location != 'undefined' && typeof fetch != 'undefined'
-    ? outliving(tagged())
-    : () => Promise.resolve(false)
+export let outlived: () => Promise<boolean> = page
+  ? outliving(tagged(), loaded)
+  : () => Promise.resolve(false)
+
+/** The parameter a page's socket names the tag of its bundle by, so the
+ * server can refuse the socket of a page running older code (./routes.ts
+ * `filter`): its refusal reloads the page. Empty where the tag is not known
+ * yet. A page that names none predates the parameter. */
+export let RUNS = 'runs'
+
+/** `url` naming the tag this page loaded with, for its socket. */
+export let running = (url: string): string => {
+  let at = new URL(url)
+  at.searchParams.set(RUNS, known ?? '')
+  return at.href
+}

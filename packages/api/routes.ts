@@ -26,6 +26,13 @@ import { type Report, served } from './request.ts'
 import { subscriptions } from './subs.ts'
 import type { Timer } from './relay.ts'
 import { fault } from './refuse.ts'
+import { refusing, type Upgrade } from './socket.ts'
+import { denoUpgrade } from './deno.ts'
+import { Refused } from '@yaks/graph/errors'
+
+let socketing = (request: Request) =>
+  new URL(request.url).pathname == '/ws' &&
+  (request.headers.get('upgrade') ?? '').toLowerCase() == 'websocket'
 
 /** What this facet reads off the host it is composing into: the graph its
  * endpoints answer over, who that host says is calling, every route the
@@ -55,9 +62,11 @@ let reach = (r: Route) => exact(r) ? Infinity : r.path.length
 /**
  * The host's one request handler: each plugin's route, and this package's
  * three endpoints, behind every plugin's filter. A filter that throws answers
- * the request with that refusal, and nothing past it runs. An answer at 500 or
- * over, from a route, a filter or a door, goes to `host.report` with a `request`
- * bundle named by its route (./request.ts `served`).
+ * the request with that refusal, and nothing past it runs: a `/ws` upgrade it
+ * refuses (a `Refused`) opens, and answers each subscription with it. An
+ * answer at 500 or over, from a route, a filter or a door, goes to
+ * `host.report` with a `request` bundle named by its route (./request.ts
+ * `served`).
  *
  * The route that names the path most closely wins, whichever plugin listed it:
  * an exact path over a prefix, a longer prefix over a shorter, and plugin order
@@ -70,7 +79,10 @@ export let handler = (host: Hosting, options: {
   every?: number
   /** Schedule a revision check and return its cancellation function. */
   timer?: Timer
+  /** How a `/ws` request becomes a socket (default: Deno's). */
+  upgrade?: Upgrade
 } = {}): Handler => {
+  let upgrade = options.upgrade ?? denoUpgrade
   let routes = host.routes
   let graph = host.graph
   // One registry, fed twice: its own graph's `effect` phase for what this host
@@ -121,6 +133,7 @@ export let handler = (host: Hosting, options: {
     authenticate: host.who,
     subs,
     report,
+    upgrade,
   })
   let claimed = (request: Request): Route | undefined => {
     let path = new URL(request.url).pathname
@@ -133,7 +146,15 @@ export let handler = (host: Hosting, options: {
   }
   let filters = host.filters ?? []
   return served(async (request) => {
-    for (let f of filters) await f(request)
+    try {
+      for (let f of filters) await f(request)
+    } catch (error) {
+      // A socket hears its refusal on the socket, where its client reads it.
+      if (!(error instanceof Refused) || !socketing(request)) throw error
+      let { socket, response } = upgrade(request)
+      refusing(socket, error)
+      return response
+    }
     let route = claimed(request)
     if (!route) return door(request)
     let answer = await route.handle(request)

@@ -72,7 +72,7 @@ import {
 import { type MemoryResolver, memoryResolver } from './resolver.ts'
 import { type LiveClient, liveClient, quiet } from './live_client.ts'
 import { said } from '@yaks/client/named'
-import { outlived } from '@yaks/web/outlived'
+import { outlived, running } from '@yaks/web/outlived'
 import type { Socket } from '@yaks/sync'
 import { type Clock, system } from '@yaks/fp'
 import type { Bundle, Entity } from '@yaks/graph'
@@ -190,17 +190,21 @@ let makeClient = () => {
     // page running what is served, any other refusal is a bug. So is a frame
     // the page's own graph refuses, unless the page outlived a deploy: its
     // vocabulary is then the old one, which can refuse a row the new
-    // vocabulary names (a new identity property), and it reloads too.
+    // vocabulary names (a new identity property), and it reloads too. The
+    // server refuses the socket of a page whose bundle is older than the one
+    // it serves (@yaks/web routes.ts `filter`), so such a page reloads before
+    // it hears a row it would refuse. A page reloads once: one that still
+    // meets it moments after reloading reports it.
     report: (r) => {
       if (r.error instanceof Refused) {
-        void outlived().then((old) => old ? location.reload() : said(r))
+        void outlived().then((old) => old ? reload(r) : said(r))
         return
       }
       if (!r.refused) return said(r)
       if (r.names?.length && r.names.every((n) => typed.has(n))) return
       void unnamed(r.names).then(async (lost) => {
         if (lost) return
-        if (await outlived()) location.reload()
+        if (await outlived()) reload(r)
         else said(r)
       })
     },
@@ -1597,7 +1601,7 @@ export type Sub = {
 // test) has a socket that sends through the route seam and hears nothing: its
 // frames arrive through landSub.
 let socketFor = (url: string): Socket =>
-  config.host ? new WebSocket(url) as unknown as Socket : {
+  config.host ? new WebSocket(running(url)) as unknown as Socket : {
     ...quiet(),
     send: (text: string) => route(JSON.parse(text)),
   }
@@ -2526,6 +2530,16 @@ let named = new Map<string, Named | null>() // token OR eid -> naming (null = go
 let buried = new Set<string>()
 let resolvingIds = new Map<string, Promise<Named | null>>() // token -> in flight
 export let resolveGen = signal(0) // bumped when a resolve settles, to re-render
+
+// Onto the code served now, once: the moment it last reloaded for it is kept
+// for the tab, and a page that reloaded within the minute says the trouble.
+let RELOADED = 'tasks-reloaded'
+let reload = (r: Parameters<typeof said>[0]) => {
+  let last = Number(sessionStorage.getItem(storageKey(RELOADED)) ?? 0)
+  if (time.now() - last < 60_000) return said(r)
+  sessionStorage.setItem(storageKey(RELOADED), String(time.now()))
+  location.reload()
+}
 
 // Whether a refused line was refused for a token that names nothing: every
 // name holding it reads a token (its resolve, `resolve:T-998`, or a page's own

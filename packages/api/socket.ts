@@ -383,6 +383,24 @@ let dispatch = (
 }
 
 /**
+ * A socket whose request was refused: every subscription it opens is answered
+ * with that refusal, which is where a socket's client reads why. An HTTP
+ * answer to its upgrade would reach no WebSocket client.
+ */
+export let refusing = (socket: Socket, error: unknown): void => {
+  socket.addEventListener('message', (e) => {
+    let input = decode(e.data)
+    let msg = 'value' in input && input.value && typeof input.value == 'object'
+      ? input.value as Record<string, unknown>
+      : undefined
+    if (clockReply(socket, msg, Date.now())) return
+    if (typeof msg?.id == 'string' && msg.subscribe != null) {
+      socket.send(stringify({ id: msg.id, refused: refusal(error) }))
+    }
+  })
+}
+
+/**
  * Connect a socket to a subscription registry: its messages become
  * subscriptions, and closing it drops them all. Returns the sink its frames
  * go to, which is also the key its subscriptions are held under. Without a

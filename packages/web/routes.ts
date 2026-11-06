@@ -27,7 +27,8 @@ import type { Graph, ReadOpts } from '@yaks/graph'
 import { Refused } from '@yaks/graph/errors'
 import { addressId } from '@yaks/id'
 import type { Vocab } from '@yaks/vocab'
-import { type Body, kept } from '@yaks/cli/page'
+import { type Body, type Kept, kept } from '@yaks/cli/page'
+import { RUNS } from './outlived.ts'
 import { made } from './canvas.ts'
 import { page as html } from './page.ts'
 import { preload } from './preload.ts'
@@ -115,6 +116,63 @@ let names = async (
     return false
   }
 }
+
+// The page's bundle, one per host, which its routes serve and its filter
+// compares a page's against. Made as the host warms, once it listens, so the
+// first page load finds it built and the listening waits on none of the views.
+let bundles = new WeakMap<Hosting, Kept>()
+let bundle = (host: Hosting, options: Options): Kept => {
+  let built = bundles.get(host) ?? kept(
+    '/web/app.js',
+    'text/javascript; charset=utf-8',
+    (signal) => made(host.config?.plugins ?? [], options, signal),
+    { early: host.early, closing: host.stopping },
+  )
+  bundles.set(host, built)
+  return built
+}
+
+/**
+ * Whether `request` is the socket of a page running older code than the
+ * bundle tagged `now`. A page names the tag it loaded with (./outlived.ts
+ * `running`); one that names none is a page from before it did, told by its
+ * browser's `origin`, which a terminal or extension never sends as http(s).
+ * Never before the bundle is made, nor for a page that cannot tell its tag.
+ *
+ * ```ts
+ * import { behind } from '@yaks/web/routes'
+ * import { equal } from '@yaks/testing'
+ *
+ * let ws = (query: string, origin?: string) =>
+ *   new Request(`https://box.example/ws${query}`, {
+ *     headers: origin ? { origin } : {},
+ *   })
+ * let page = 'https://box.example'
+ * equal(behind(ws('?runs="a"'), '"b"'), true)
+ * equal(behind(ws('?runs="b"'), '"b"'), false)
+ * equal(behind(ws('?runs='), '"b"'), false)
+ * equal(behind(ws('', page), '"b"'), true)
+ * equal(behind(ws(''), '"b"'), false)
+ * equal(behind(ws('', 'chrome-extension://abc'), '"b"'), false)
+ * equal(behind(ws('?runs="a"'), undefined), false)
+ * ```
+ */
+export let behind = (request: Request, now: string | undefined): boolean => {
+  let url = new URL(request.url)
+  if (url.pathname != '/ws' || !now) return false
+  let runs = url.searchParams.get(RUNS)
+  if (runs != null) return !!runs && runs != now
+  return /^https?:/.test(request.headers.get('origin') ?? '')
+}
+
+/** Refuses the socket of a page running older code than the bundle served
+ * now ({@link behind}): the page reloads on that refusal (@yaks/browse
+ * live.ts), onto the code that reads what the server now sends. */
+export let filter =
+  (host: Hosting, options: Options = {}) => (request: Request): void => {
+    if (!behind(request, bundle(host, options).tag())) return
+    throw new Refused('this page runs older code than the server: reload it')
+  }
 
 /** The page at every entity's address, and `/web/*`. */
 export type Options = { home?: { title: string; query: string }; app?: string }
@@ -233,21 +291,7 @@ export let routes = (host: Hosting, options: Options = {}): Route[] => {
       { method: 'GET', path: `/${l}-*`, handle: page },
       { method: 'GET', path: `/${l}`, handle: page },
     ]),
-    {
-      method: 'GET',
-      path: '/web/app.js',
-      // Made as the host warms, once it listens, so the first page load
-      // finds it built and the listening waits on none of the views.
-      handle: kept(
-        '/web/app.js',
-        'text/javascript; charset=utf-8',
-        (signal) => made(host.config?.plugins ?? [], options, signal),
-        {
-          early: host.early,
-          closing: host.stopping,
-        },
-      ),
-    },
+    { method: 'GET', path: '/web/app.js', handle: bundle(host, options) },
     {
       method: 'GET',
       path: '/web/styles.css',

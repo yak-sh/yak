@@ -121,7 +121,8 @@ export let within = <T>(
 /** The handler that answers `where` with the body `make` makes. `early` is
  * handed its making, to start ahead of the first request (@yaks/host
  * `Host.early`), which then finds it made; `closing` is the host's own signal,
- * which ends a make still going. */
+ * which ends a make still going. Its `tag()` is the etag of the body made,
+ * undefined until one is. */
 export let kept = (
   where: string,
   type: string,
@@ -131,12 +132,14 @@ export let kept = (
     limit?: number
     closing?: AbortSignal
   } = {},
-): (request: Request) => Promise<Response> => {
+): Kept => {
   let made: Promise<Made> | undefined
+  let tag: string | undefined
   let attempt = () => {
     let now = within(limit, make, closing).then(async (value) => {
       let body = typeof value == 'string' ? value : new Uint8Array(value)
-      return { body, tag: `"${await sha(body)}"` }
+      tag = `"${await sha(body)}"`
+      return { body, tag }
     })
     made = now
     now.catch((e) => {
@@ -146,13 +149,19 @@ export let kept = (
     return now
   }
   early?.(() => made ?? attempt())
-  return async (request: Request) => {
+  let handle = async (request: Request) => {
     try {
       return await tagged(request, await (made ?? attempt()), type)
     } catch (e) {
       return new Response(String((e as Error).message ?? e), { status: 500 })
     }
   }
+  return Object.assign(handle, { tag: () => tag })
+}
+
+/** What {@link kept} answers with: the handler, and the tag of what it made. */
+export type Kept = ((request: Request) => Promise<Response>) & {
+  tag: () => string | undefined
 }
 
 /** An entry written where it is bundled rather than read from a file: its

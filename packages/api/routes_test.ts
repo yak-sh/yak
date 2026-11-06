@@ -4,13 +4,16 @@ import { assertEquals } from '@std/assert'
 import type { Bundle } from '@yaks/graph'
 import type { Filter } from './route.ts'
 import { handler } from './routes.ts'
-import { req, shopGraph } from './testing.ts'
+import { fake, req, shopGraph } from './testing.ts'
+import { Refused } from '@yaks/graph/errors'
 
 class Denied extends Error {
   override name = 'Denied'
 }
 
-// A host with one route at `/hello`, behind `filters`.
+// A host with one route at `/hello`, behind `filters`, whose sockets are
+// `sockets`.
+let sockets: ReturnType<typeof fake>[] = []
 let host = (filters: Filter[]) =>
   handler({
     graph: shopGraph(),
@@ -21,6 +24,12 @@ let host = (filters: Filter[]) =>
       handle: () => new Response('hi'),
     }],
     filters,
+  }, {
+    upgrade: () => {
+      let socket = fake()
+      sockets.push(socket)
+      return { socket, response: new Response(null, { status: 101 }) }
+    },
   })
 
 let status = async (h: ReturnType<typeof host>, path: string) =>
@@ -39,6 +48,32 @@ test('a filter that throws answers the request, and nothing behind it runs', asy
   assertEquals((await res.json()).message, 'not you')
   assertEquals(await status(h, '/query?q=.book.price'), 200)
   assertEquals(asked, ['/hello', '/query'])
+})
+
+test('a socket a filter refuses opens, and answers each subscription with the refusal', async () => {
+  let h = host([(r) => {
+    if (new URL(r.url).pathname == '/ws') throw new Refused('reload it')
+  }])
+  let res = await h(
+    new Request('http://box.test/ws', { headers: { upgrade: 'websocket' } }),
+  )
+  assertEquals(res.status, 101)
+  let socket = sockets.at(-1)!
+  socket.emit('message', JSON.stringify({ subscribe: '.book', id: 's1' }))
+  assertEquals(socket.taken(), [{
+    id: 's1',
+    refused: { error: 'Refused', message: 'reload it' },
+  }])
+})
+
+test('a socket a filter denies is answered as any request is', async () => {
+  let h = host([() => {
+    throw new Denied('not you')
+  }])
+  let res = await h(
+    new Request('http://box.test/ws', { headers: { upgrade: 'websocket' } }),
+  )
+  assertEquals(res.status, 403)
 })
 
 test('with no filter, every route and door answers as before', async () => {
