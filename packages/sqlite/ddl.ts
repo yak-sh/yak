@@ -68,7 +68,6 @@ import {
 } from '@yaks/sql'
 import { checks, objects, type Stood, stood } from './physical.ts'
 import { unit } from './unit.ts'
-import { busy } from './error.ts'
 import { clocked, versioned } from './versions.ts'
 import { writtenDdl } from './written.ts'
 
@@ -816,12 +815,13 @@ export let SAMPLE = 400
  * thousand `call` rows — which is how opening an imported graph came to read
  * the archive end to end six times before answering (T-37734).
  *
- * File drivers sample through optimize. Full-analysis engines (a Durable
- * Object's, which refuses `analysis_limit`) provide their stored bytes without
- * scanning rows and analyze a table at a time: this answers which tables are
- * owed ({@link owing}), and {@link analyzing} works them off a few at a time,
- * never inside the install that owed them, since one `ANALYZE` of a whole
- * file reads every row of every index. An unchanged store below
+ * Installation analyzes nothing: it answers the receipt of which tables are
+ * owed an analysis ({@link owing}), and {@link analyzing} works them off a
+ * table at a time, away from the install that owed them (./owe.ts `work` on a
+ * file, a Durable Object's alarm), since one `ANALYZE` holds the write lock
+ * while it reads its table. A file's analysis is sampled ({@link SAMPLE});
+ * a full-analysis engine (a Durable Object's, which refuses `analysis_limit`)
+ * provides its stored bytes without scanning rows. An unchanged store below
  * tenfold byte growth bills no rows for statistics, including after a
  * connection restart. A table empty at its last analysis that holds rows now
  * is owed, and so, after a schema change, is a populated table or index
@@ -829,19 +829,11 @@ export let SAMPLE = 400
  * installations predating receipts; empty tables are remembered and checked
  * with zero-billed counts.
  *
- * Optimize is not itself a durable gate: empty indexed tables get no stat1
- * row, so it analyzes them repeatedly, scanning existing stat1/stat4 entries
- * to delete records for each empty table. Its outer cursor omits this nested
- * work. So what is owed is kept in a receipt, and analyzed explicitly.
- * Ordinary reads never analyze. Scratch memory stores keep no statistics.
- *
- * Analyzing writes, so it needs the write lock, and every process that opens
- * the file runs it: `optimize` names every empty table on every open, since an
- * empty table gets no statistics row to say it was seen. It never waits for
- * that lock. With another process writing, the numbers stay as they are until
- * an open finds the lock free, and the open goes on at once; waiting out the
- * busy timeout here would stall the open behind a writer, and failing it would
- * refuse a command over an optimization.
+ * Optimize decides none of it: empty tables get no stat1 row, so it names
+ * them on every run, and it names as often a table whose row count it guesses
+ * wrong from one page, such as one of variable-sized rows, which `ANALYZE`
+ * then counts end to end under the write lock. Only a database in memory,
+ * which nobody else writes, still optimizes at once.
  */
 export let analyzed = (
   driver: Driver,
@@ -852,19 +844,23 @@ export let analyzed = (
   if (typeof driver.statistics == 'object') {
     return owing(driver, driver.statistics.bytes(), previous, unchanged)
   }
-  let optimize = () => {
-    if (driver.statistics == 'sampled') {
-      driver.query({ t: 'pragma', name: 'analysis_limit', value: SAMPLE })
-    }
-    driver.query({ t: 'pragma', name: 'optimize', value: 0x10002 })
+  if (driver.file) return owing(driver, size(driver), previous, unchanged)
+  sample(driver)
+  driver.query({ t: 'pragma', name: 'optimize', value: 0x10002 })
+}
+
+// The bytes a file stores, as its pages say, reading no rows.
+let size = (driver: Driver) => {
+  let first = (name: string) =>
+    Number(Object.values(driver.query({ t: 'pragma', name })[0] ?? {})[0] ?? 0)
+  return first('page_count') * first('page_size')
+}
+
+// A sampled analysis reads a bounded share of each index.
+let sample = (driver: Driver) => {
+  if (driver.statistics == 'sampled') {
+    driver.query({ t: 'pragma', name: 'analysis_limit', value: SAMPLE })
   }
-  if (!driver.file) {
-    optimize()
-    return
-  }
-  atOnce(driver, () => {
-    optimize()
-  })
 }
 
 // A table remembered as empty may have filled since installation. Probe only
@@ -928,7 +924,7 @@ let owing = (
   // analyzed, and one with none that is not owed already is counted for rows
   // at no billed cost while it holds none.
   if (
-    previous ? bytes < previous.bytes * 10 : unchanged && taken.has('entity')
+    previous ? bytes < previous.bytes * 10 : taken.has('entity')
   ) {
     let missing = names.map((r) => String(r.name))
       .filter((name) => !taken.has(name) && !owed.includes(name))
@@ -974,28 +970,11 @@ export let analyzing = (
   let owed = statistics.owed ?? []
   let taken = owed.slice(0, n)
   let empty = statistics.empty.filter((name) => !taken.includes(name))
+  if (taken.length) sample(driver)
   for (let name of taken) {
     if (!extant(driver, name)) continue
     driver.query({ t: 'analyze', table: name })
     if (!holds(driver, name)) empty.push(name)
   }
   return { bytes: statistics.bytes, empty, owed: owed.slice(taken.length) }
-}
-
-/** `body` now or not at all: run with no busy timeout, so where another
- * connection holds the lock it needs, it answers `undefined` at once instead
- * of waiting the timeout out. For work that can as well happen on a later
- * call, which a caller should not wait a minute behind a writer for. */
-export let atOnce = <R>(driver: Driver, body: () => R): R | undefined => {
-  let wait = driver.query({ t: 'pragma', name: 'busy_timeout' })[0]?.timeout
-  let set = (value: number) =>
-    driver.query({ t: 'pragma', name: 'busy_timeout', value })
-  set(0)
-  try {
-    return body()
-  } catch (e) {
-    if (!busy(e)) throw e
-  } finally {
-    set(Number(wait ?? 0))
-  }
 }

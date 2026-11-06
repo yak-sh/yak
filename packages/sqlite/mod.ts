@@ -77,7 +77,6 @@ import { context, scope } from '@yaks/trace'
 import type { Query } from './read.ts'
 import {
   analyzed,
-  analyzing,
   fit,
   grown,
   indexed,
@@ -108,7 +107,7 @@ import {
   ledger,
 } from './archetype.ts'
 import { componentTables, objects, shape } from './physical.ts'
-import { build, forgo, reshape, type Sizes } from './owe.ts'
+import { analyze, build, forgo, reshape, type Sizes } from './owe.ts'
 import { plan } from './plan.ts'
 import { births, patch, prune, remove, revive, spines } from './write.ts'
 import { burying } from './buried.ts'
@@ -1118,12 +1117,11 @@ export let storage = (
     if (classified && base.counts == 'eager') {
       unit(driver, () => population(driver))
     }
-    let analyze = () => {
+    let owe = () => {
       let statistics = analyzed(driver, receipt?.statistics, unchanged)
       if (statistics && receipt) analyzedAt(driver, receipt.schema, statistics)
     }
-    if (typeof driver.statistics == 'object') unit(driver, analyze)
-    else analyze()
+    if (driver.statistics) unit(driver, owe)
     ready = true
     return left
   }
@@ -1168,16 +1166,7 @@ export let storage = (
     install,
     analyze: (tables = Infinity) => {
       let left = installation(driver)?.statistics?.owed?.length ?? 0
-      for (let n = 0; n < tables && left; n++) {
-        left = unit(driver, () => {
-          let receipt = installation(driver)
-          let statistics = receipt?.statistics
-          if (!receipt || !statistics?.owed?.length) return 0
-          let next = analyzing(driver, statistics, 1)
-          analyzedAt(driver, receipt.schema, next)
-          return next.owed?.length ?? 0
-        })
-      }
+      for (let n = 0; n < tables && left; n++) left = analyze(driver) ?? 0
       return left
     },
     read: (query, o, comps) => {

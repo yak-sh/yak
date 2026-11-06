@@ -14,8 +14,8 @@
 // the index it will have. A window that fails is reported and tried again an
 // hour later, and nothing refuses an open on its account.
 //
-// The same process does a file's upkeep ({@link Daily}): planner statistics
-// once a day and as soon as an index or a rebuilt table is in place, and
+// The same process does a file's upkeep ({@link Daily}): the planner
+// statistics an install or the day owes, a table a window, and
 // whatever a host adds, such as the box's check of its text indexes. It also
 // gives back the pages a bulk delete freed ({@link reclaim}), so the file
 // shrinks without a VACUUM. Opening does none of it.
@@ -52,9 +52,9 @@ import {
   val,
 } from '@yaks/sql/core'
 import type { Filler } from '@yaks/fts'
-import { analyzed, carried, type Refitting } from './ddl.ts'
+import { analyzed, analyzing, carried, type Refitting } from './ddl.ts'
 import { META } from './layout.ts'
-import { meta } from './meta.ts'
+import { analyzedAt, installation, meta } from './meta.ts'
 import { unit } from './unit.ts'
 
 /** The prefix of an owed piece of work's `server_meta` key. */
@@ -242,18 +242,59 @@ export type Daily = { name: string; run: (driver: Driver) => void }
 
 let DAILY = 'daily:'
 
-/** Planner statistics, sampled (./ddl.ts `analyzed`): due once a day, and as
- * soon as an index or a rebuilt table is in place. */
+/** Planner statistics (./ddl.ts `analyzed`): due once a day, and as soon as
+ * an index or a rebuilt table is in place, when the tables that lack them, or
+ * all that hold rows once the file has grown tenfold, are owed an analysis,
+ * which {@link work} does a table a window. */
 export let statistics: Daily = {
   name: 'statistics',
-  run: (driver) => void analyzed(driver),
+  run: (driver) => {
+    let receipt = installation(driver)
+    let owed = analyzed(driver, receipt?.statistics)
+    if (owed && receipt) analyzedAt(driver, receipt.schema, owed)
+  },
+}
+
+/** The `server_meta` key of {@link analyze}: when it is next tried, after a
+ * window that failed. */
+export let ANALYZING = 'analyze'
+
+/** Analyze the first table the receipt owes an analysis, in its own unit, and
+ * answer how many stay owed; undefined when none is. */
+export let analyze = (driver: Driver): number | undefined =>
+  unit(driver, () => {
+    let receipt = installation(driver)
+    let statistics = receipt?.statistics
+    if (!receipt || !statistics?.owed?.length) return
+    let next = analyzing(driver, statistics, 1)
+    analyzedAt(driver, receipt.schema, next)
+    return next.owed?.length ?? 0
+  })
+
+// One window of the planner statistics the receipt owes; one that throws is
+// put off an hour.
+let analysis = (driver: Driver, now: number): Worked | undefined => {
+  if (!installation(driver)?.statistics?.owed?.length) return
+  let at = meta(driver).get(ANALYZING)
+  if (at && Date.parse(at) > now) return
+  try {
+    let left = analyze(driver)
+    return left == null ? undefined : { name: ANALYZING, done: !left }
+  } catch (error) {
+    unit(
+      driver,
+      () => meta(driver).set(ANALYZING, new Date(now + RETRY).toISOString()),
+    )
+    return { name: ANALYZING, error }
+  }
 }
 
 /**
  * Do one window, in one unit: of the first owed work that is due, else of
- * giving free pages back ({@link reclaim}), else of the first of `daily` that
- * is due. Undefined when nothing is. A window that throws leaves its work as
- * it was, marked to be tried again in an hour, and says why.
+ * the first table owed an analysis ({@link analyze}), else of giving free
+ * pages back ({@link reclaim}), else of the first of `daily` that is due.
+ * Undefined when nothing is. A window that throws leaves its work as it was,
+ * marked to be tried again in an hour, and says why.
  */
 export let work = (
   driver: Driver,
@@ -263,7 +304,8 @@ export let work = (
 ): Worked | undefined => {
   let due = owed(driver).find((w) => !w.next || Date.parse(w.next) <= now)
   if (!due) {
-    return reclaim(driver, now, sizes) ?? upkeep(driver, daily, now)
+    return analysis(driver, now) ?? reclaim(driver, now, sizes) ??
+      upkeep(driver, daily, now)
   }
   try {
     return unit(

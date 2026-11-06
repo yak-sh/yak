@@ -27,6 +27,7 @@ import { schema, tables } from './ddl.ts'
 import { open } from './db.ts'
 import { analyzed, columns as cols, objects, storage } from './mod.ts'
 import { mem, shop, spy } from './testing.ts'
+import { work } from './owe.ts'
 
 let text = (stmts: Stmt[]) => stmts.map((s) => render(s).sql)
 let all = text(schema(shop)).join('\n')
@@ -791,7 +792,7 @@ test('a table kept for its rows fits on the open after they move', () => {
   assertThrows(() => s.tx((tx) => tx.patch(owl)), Error, 'CHECK')
 })
 
-test('a store over a file installs the sizes its planner reads it by', () => {
+test('a file owes the sizes its planner reads it by, and its upkeep finds them', () => {
   let path = Deno.makeTempFileSync({ suffix: '.sqlite' })
   let d = open(path)
   try {
@@ -801,9 +802,11 @@ test('a store over a file installs the sizes its planner reads it by', () => {
       eid: 'c',
     }))
     d.query(insert('product', { entity: 1, sku: 'x' }))
-    // Explicit installation records sizes for the planner; a read never
-    // analyzes tables to discover them.
+    // Installation owes the analysis, holding the write lock for none of it;
+    // a read never analyzes tables to discover them.
     storage(d, shop).install()
+    assertEquals(objects(d, { name: 'sqlite_stat1' }), [])
+    while (work(d));
     // The first word of a `stat` is the table's row count, whether the row is
     // an index's or the table's own.
     let rows = (t: string) =>

@@ -606,22 +606,22 @@ vocab)` reads existing tables;
 executes growth and rebuilds, returning errors for tables whose existing values
 cannot fit. `Store.install()` also maintains indexes, metadata, and archetypes.
 Drivers with `statistics` enabled keep planner statistics at installation:
-`sampled` permits bounded analysis; a full-analysis engine supplies a `bytes`
-getter without a row scan and analyzes a table at a time. Its installation
-analyzes nothing: it writes the tables owed an analysis into its receipt beside
-the schema fingerprint, and `analyze(tables?)` works off up to that many, each
-in its own unit, answering how many stay owed. A host calls it away from the
-request that installed (a Durable Object, from its alarm), since one table's
-analysis reads every row of its indexes. A table is owed when it held no rows at
-its last analysis and holds some now, when a schema change leaves a populated
-table or index without statistics, and every table holding rows is owed when
-stored bytes grow tenfold. Empty tables are remembered; their bounded presence
-probes cost zero billed rows while they stay empty. This measures byte growth,
-not row density. An unchanged store with complete existing statistics adopts
-them once without reanalysis. Reads and writes do not refresh statistics; a host
-calls `install()` at deployment. Optimize alone cannot gate full analysis: empty
-tables retain no statistics row and repeatedly scan existing statistics during
-analysis.
+`sampled` (a file's) permits bounded analysis; a full-analysis engine supplies a
+`bytes` getter without a row scan. Installation analyzes nothing, since one
+table's analysis holds the write lock while it reads that table: it writes the
+tables owed an analysis into its receipt beside the schema fingerprint, and
+`analyze(tables?)` works off up to that many, each in its own unit, answering
+how many stay owed. A host calls it away from the request that installed (a
+Durable Object, from its alarm); on a file, `work` does a table a window. A
+table is owed when it held no rows at its last analysis and holds some now, when
+a schema change leaves a populated table or index without statistics, and every
+table holding rows is owed when stored bytes grow tenfold. Empty tables are
+remembered; their bounded presence probes cost zero billed rows while they stay
+empty. This measures byte growth, not row density. A store with existing
+statistics adopts them once without reanalysis. Reads and writes do not refresh
+statistics; a host calls `install()` at deployment. Optimize decides none of it:
+empty tables retain no statistics row, and a table whose size it guesses wrong
+from one page is named on every run and counted end to end.
 
 ```ts
 import { open } from '@yaks/sqlite/db'
@@ -1142,21 +1142,24 @@ thousands.
 Owed work sits in `server_meta` as `owed:<kind>:<name>`, its statements as data,
 so any process can finish it. `work(driver, now?, daily?)` does one window of
 the first that is due (indexes, then fills, then refits, then clearing); a
-window that throws is kept with its error and tried again an hour later.
+window that throws is kept with its error and tried again an hour later. With
+none due, a window analyzes the first table the receipt owes (`analyze`); one
+that throws waits an hour, kept in `server_meta` as `analyze`.
 
-With nothing owed, `work` **reclaims**: on a file in incremental mode whose free
-pages pass `SLACK` (16,384, 64 MiB of 4 KiB pages), one window gives back up to
-`RECLAIM` (1,000) of the rest with `pragma incremental_vacuum(n)`, and the next
-checkpoint shortens the file. So a bulk delete, such as the daily expiration's,
-gives its space back within minutes, without a `VACUUM`. A window that throws
-waits an hour, kept in `server_meta` as `reclaim`.
+With nothing owed or to analyze, `work` **reclaims**: on a file in incremental
+mode whose free pages pass `SLACK` (16,384, 64 MiB of 4 KiB pages), one window
+gives back up to `RECLAIM` (1,000) of the rest with
+`pragma incremental_vacuum(n)`, and the next checkpoint shortens the file. So a
+bulk delete, such as the daily expiration's, gives its space back within
+minutes, without a `VACUUM`. A window that throws waits an hour, kept in
+`server_meta` as `reclaim`.
 
 With nothing owed or to reclaim, `work` does the first **upkeep** (`Daily`,
 `{name, run}`) in `daily` that is due: each runs in one unit once a day, and one
 that throws is tried again an hour later; `server_meta` keeps when each is next
-due as `daily:<name>`. `statistics` (sampled planner statistics) is one, and is
-due again as soon as an owed index or a rebuilt table is in place. Opening a
-file whose print is recorded does neither.
+due as `daily:<name>`. `statistics` is one: it owes the analyses the tables
+lack, and is due again as soon as an owed index or a rebuilt table is in place.
+Opening a file whose print is recorded does neither.
 
 `tend(driver, {signal, daily?})` works windows and the statistics, with the
 host's `daily` beside them, until the signal aborts; on the box the process
