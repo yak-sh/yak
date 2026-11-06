@@ -20,13 +20,13 @@
 // `any`. Those types are globals, so they never share a program with Deno's.
 //
 // Each run's project lies in `.types/` with its process id; the links into
-// Deno's caches there are shared. Each platform keeps incremental build info:
-// the compiler reuses unchanged work and validates source versions, options
-// and resolutions itself. Checks hold no lock and compile against private
-// copies, publishing their next build info atomically, and a fresh worktree
-// starts from the build info its repository's checkouts last shared. The
-// project names no path of its checkout in a file every module sees, so that
-// shared work stays valid there.
+// Deno's caches there are shared. Each platform keeps a pool of incremental
+// build info, shared by the repository's checkouts: the compiler reuses
+// unchanged work and validates source versions, options and resolutions
+// itself. Checks hold no lock and compile against a private copy of the build
+// info naming most of their program's files, publishing their next
+// atomically (./check-incremental.ts). The project names no path of its
+// checkout in a file every module sees, so that shared work stays valid there.
 //
 // A root that passed is not checked again while it, everything it and its
 // examples reach, the compiler, its options and its globals hold what they
@@ -185,9 +185,9 @@ let every = async () =>
   (await git(['ls-files', '-co', '--exclude-standard', ...DIRS]))
     .split('\n').filter(checked)
 
-/** Where every checkout of this repository shares a platform's last build
- * info (./check-incremental.ts), or nowhere outside one. */
-let shared = async (name: string) => {
+/** Where every checkout of this repository shares a platform's pool of build
+ * info (./check-incremental.ts); outside one, the project's own. */
+let pool = async (on: Platform) => {
   try {
     let common = await git([
       '-C',
@@ -196,9 +196,9 @@ let shared = async (name: string) => {
       '--path-format=absolute',
       '--git-common-dir',
     ])
-    return `${common.trim()}/types/${name}.tsbuildinfo`
+    return `${common.trim()}/types/${on.name}`
   } catch {
-    return undefined
+    return `${on.dir}/builds`
   }
 }
 
@@ -527,7 +527,8 @@ let program = async (on: Platform, roots: string[], snapshot?: Survey) => {
     }
     put(tsconfig, JSON.stringify(p.config, null, 1))
     let tsc = await incremental(
-      `${on.dir}/build.tsbuildinfo`,
+      on.dir,
+      await pool(on),
       (info) =>
         compile([
           'run',
@@ -541,7 +542,13 @@ let program = async (on: Platform, roots: string[], snapshot?: Survey) => {
           '--tsBuildInfoFile',
           info,
         ]),
-      await shared(on.name),
+      graphed.modules.flatMap((m) =>
+        m.specifier.startsWith(`file://${CHECKOUT}/`)
+          ? [
+            relative(on.dir, decodeURIComponent(new URL(m.specifier).pathname)),
+          ]
+          : []
+      ),
     )
     let errors = reported(tsc.out)
     if (errors.length) console.error(errors.join('\n'))

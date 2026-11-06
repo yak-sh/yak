@@ -1,92 +1,79 @@
 import { equal, test, throws } from '@yaks/testing'
 import { incremental } from './check-incremental.ts'
 
-test('a completed compilation publishes build info and an interrupted one leaves it alone', async () => {
-  let dir = Deno.makeTempDirSync()
-  let saved = `${dir}/build.tsbuildinfo`
-  try {
-    await incremental(saved, async (info) => {
-      await throws(() => Deno.readTextFileSync(info), /No such file/)
-      await Deno.writeTextFile(info, 'first')
+// A build info naming `files`, as the compiler writes one.
+let info = (...files: string[]) => JSON.stringify({ fileNames: files })
+
+// A pool beside a project directory, and what each compile there saw and
+// left; `pooled` lists the pool's build infos by the files they name.
+let rig = () => {
+  let root = Deno.makeTempDirSync()
+  let dir = `${root}/project`, pool = `${root}/pool`
+  let compile = (files: string[], next?: string, seen: string[] = []) =>
+    incremental(dir, pool, async (path) => {
+      seen.push(await Deno.readTextFile(path).catch(() => 'none'))
+      if (next === undefined) throw new Error('interrupted')
+      await Deno.writeTextFile(path, next)
       return { success: true }
-    })
-    let result = await incremental(saved, async (info) => {
-      equal(await Deno.readTextFile(info), 'first')
-      await Deno.writeTextFile(info, 'diagnostics')
-      return { success: false }
-    })
-    equal(result.success, false)
-    await throws(() =>
-      incremental(saved, async (info) => {
-        equal(await Deno.readTextFile(info), 'diagnostics')
-        await Deno.writeTextFile(info, 'failed')
-        throw new Error('interrupted')
-      }), 'interrupted')
-    equal(await Deno.readTextFile(saved), 'diagnostics')
-    equal([...Deno.readDirSync(dir)].map((e) => e.name), ['build.tsbuildinfo'])
+    }, files)
+  let pooled = () =>
+    [...Deno.readDirSync(pool)].map((e) =>
+      JSON.parse(Deno.readTextFileSync(`${pool}/${e.name}`)).fileNames.join()
+    ).sort()
+  let clean = () => Deno.removeSync(root, { recursive: true })
+  return { dir, compile, pooled, clean }
+}
+
+test('a compile starts from the build info naming most of its files, and adds what it grew', async () => {
+  let { compile, pooled, clean } = rig()
+  try {
+    let seen: string[] = []
+    await compile(['a', 'b'], info('a', 'b'), seen)
+    await compile(['x', 'y'], info('x', 'y'), seen)
+    await compile(['a', 'b', 'c'], info('a', 'b', 'c'), seen)
+    equal(seen, ['none', 'none', info('a', 'b')])
+    equal(pooled(), ['a,b,c', 'x,y'])
   } finally {
-    Deno.removeSync(dir, { recursive: true })
+    clean()
   }
 })
 
-test('concurrent compilations read private snapshots and publish complete build info', async () => {
-  let dir = Deno.makeTempDirSync()
-  let saved = `${dir}/build.tsbuildinfo`
-  Deno.writeTextFileSync(saved, 'prior')
-  let first = Promise.withResolvers<void>()
-  let second = Promise.withResolvers<void>()
-  let started = Promise.withResolvers<void>()
-  let paths: string[] = []
-  let compile = (done: Promise<void>, next: string) =>
-    incremental(saved, async (info) => {
-      paths.push(info)
-      equal(await Deno.readTextFile(info), 'prior')
-      if (paths.length == 2) started.resolve()
-      await done
-      await Deno.writeTextFile(info, next)
-      return { success: true }
-    })
+test('a smaller program of the same files leaves the pool as it was', async () => {
+  let { compile, pooled, clean } = rig()
   try {
-    let a = compile(first.promise, 'first')
-    let b = compile(second.promise, 'second')
-    await started.promise
-    equal(new Set(paths).size, 2)
-    equal(paths.map((p) => p.slice(0, p.lastIndexOf('/'))), [dir, dir])
-    first.resolve()
-    await a
-    equal(await Deno.readTextFile(saved), 'first')
-    second.resolve()
-    await b
-    equal(await Deno.readTextFile(saved), 'second')
-    equal([...Deno.readDirSync(dir)].map((e) => e.name), ['build.tsbuildinfo'])
+    await compile(['a', 'b', 'c'], info('a', 'b', 'c'))
+    await compile(['a'], info('a'))
+    equal(pooled(), ['a,b,c'])
   } finally {
-    Deno.removeSync(dir, { recursive: true })
+    clean()
   }
 })
 
-test('a checkout with no build info starts from the shared one, and every compilation shares its next', async () => {
-  let dir = Deno.makeTempDirSync()
-  let saved = `${dir}/a/build.tsbuildinfo`
-  let shared = `${dir}/shared/deno.tsbuildinfo`
-  let compile = (seen: string, next: string) =>
-    incremental(saved, async (info) => {
-      equal(await Deno.readTextFile(info).catch(() => 'none'), seen)
-      await Deno.writeTextFile(info, next)
-      return { success: true }
-    }, shared)
+test('the pool keeps eight build infos, the newest among them, and an interrupted compile adds none', async () => {
+  let { dir, compile, pooled, clean } = rig()
   try {
-    await compile('none', 'first')
-    equal(await Deno.readTextFile(shared), 'first')
-    Deno.removeSync(saved)
-    await compile('first', 'second')
-    Deno.writeTextFileSync(shared, 'other checkout')
-    await compile('second', 'third')
-    equal(await Deno.readTextFile(saved), 'third')
-    equal(await Deno.readTextFile(shared), 'third')
-    equal([...Deno.readDirSync(`${dir}/shared`)].map((e) => e.name), [
-      'deno.tsbuildinfo',
+    for (let i = 0; i < 10; i++) await compile([`f${i}`], info(`f${i}`))
+    await throws(() => compile(['z'], undefined), /interrupted/)
+    equal([pooled().length, pooled().includes('f9')], [8, true])
+    equal([...Deno.readDirSync(dir)], [])
+  } finally {
+    clean()
+  }
+})
+
+test('concurrent compiles read private copies and each publishes whole', async () => {
+  let { compile, pooled, clean } = rig()
+  try {
+    await compile(['a'], info('a'))
+    let seen: string[] = []
+    await Promise.all([
+      compile(['a', 'b'], info('a', 'b'), seen),
+      compile(['a', 'c'], info('a', 'c'), seen),
     ])
+    equal(seen, [info('a'), info('a')])
+    equal(pooled().length, 1)
+    equal(['a,b', 'a,c'].includes(pooled()[0]), true)
   } finally {
-    Deno.removeSync(dir, { recursive: true })
+    clean()
   }
 })
