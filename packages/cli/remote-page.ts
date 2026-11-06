@@ -1,6 +1,10 @@
 // Published JSR plugins have remote module graphs until the npm release
 // migration completes (D-135458 step 6). Keep that compatibility resolver at
 // this boundary; local workspace bundles use esbuild's package resolution.
+// ./page.ts imports this only when it makes a body, so a host that makes none
+// never downloads esbuild or the loader.
+import { context, type Plugin, type PluginBuild } from 'esbuild'
+import { denoPlugins, urlToEsbuildResolution } from '@luca/esbuild-deno-loader'
 import * as disk from '@yaks/file/io'
 import { released } from './release.ts'
 import { compiled, type Written } from './page.ts'
@@ -9,11 +13,6 @@ export let bundle = async (
   entry: URL | Written,
   signal?: AbortSignal,
 ): Promise<string> => {
-  let [{ context }, { denoPlugins, urlToEsbuildResolution }] = await Promise
-    .all([
-      import('esbuild'),
-      import('@luca/esbuild-deno-loader'),
-    ])
   let at = entry instanceof URL ? entry : entry.at
   let dir = await disk.makeTempDir({ prefix: 'yaks-page-' })
   let from = entry instanceof URL ? entry : new URL('./.yak-page.ts', at)
@@ -38,7 +37,7 @@ export let bundle = async (
       plugins: [
         ...entry instanceof URL ? [] : [{
           name: 'written',
-          setup(build: import('esbuild').PluginBuild) {
+          setup(build: PluginBuild) {
             build.onResolve(
               { filter: /.*/ },
               (args) =>
@@ -58,7 +57,7 @@ export let bundle = async (
         // The loader carries esbuild 0.20 types; its plugin API is unchanged.
         ...denoPlugins(
           { configPath },
-        ) as import('esbuild').Plugin[],
+        ) as Plugin[],
       ],
     })
     return await compiled(build, signal)

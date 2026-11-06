@@ -24,7 +24,6 @@
 
 import { fault } from '@yaks/api/refuse'
 import * as disk from '@yaks/file/io'
-import { fileURLToPath } from 'node:url'
 import { settling } from './held.ts'
 
 /** A body a page loads. */
@@ -186,46 +185,26 @@ export let compiled = async (
   }
 }
 
-/** One browser module, resolved through the npm workspace. Every build owns
- * its cancellation and cleanup, so concurrent builds stay independent. */
+// Deno fetches every import it can read in a module's source with the module
+// graph, a dynamic one that never runs included, so the bundlers are imported
+// by a computed address: a host serving only bodies made ahead downloads no
+// esbuild.
+let bundlers = {
+  local: new URL('./local-page.ts', import.meta.url),
+  remote: new URL('./remote-page.ts', import.meta.url),
+}
+
+/** One browser module: from a checkout, resolved through the npm workspace
+ * (./local-page.ts); from JSR, through Deno's resolver (./remote-page.ts).
+ * Every build owns its cancellation and cleanup, so concurrent builds stay
+ * independent. */
 export let bundle = async (
   entry: URL | Written,
   signal?: AbortSignal,
 ): Promise<string> => {
   if (signal?.aborted) throw new Error('browser bundle was stopped')
   let at = entry instanceof URL ? entry : entry.at
-  if (at.protocol != 'file:') {
-    return (await import('./remote-page.ts')).bundle(entry, signal)
-  }
-  let { context } = await import('esbuild')
-  let build = await context({
-    absWorkingDir: fileURLToPath(new URL('./', at)),
-    ...entry instanceof URL ? { entryPoints: [fileURLToPath(entry)] } : {
-      stdin: {
-        contents: entry.code,
-        sourcefile: fileURLToPath(at),
-        resolveDir: fileURLToPath(new URL('./', at)),
-        loader: 'ts',
-      },
-    },
-    plugins: [{
-      name: 'file-urls',
-      setup(build) {
-        build.onResolve(
-          { filter: /^file:/ },
-          ({ path }) => ({ path: fileURLToPath(path) }),
-        )
-      },
-    }],
-    bundle: true,
-    format: 'esm',
-    platform: 'browser',
-    target: 'esnext',
-    jsx: 'automatic',
-    jsxImportSource: 'preact',
-    minify: true,
-    write: false,
-    logLevel: 'silent',
-  })
-  return compiled(build, signal)
+  let from = at.protocol == 'file:' ? bundlers.local : bundlers.remote
+  let bundler: { bundle: typeof bundle } = await import(from.href)
+  return bundler.bundle(entry, signal)
 }
