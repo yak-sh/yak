@@ -1,9 +1,10 @@
 // The clock settles the initial lens mover, then leaves a schedule-free app
 // asleep across alarms and evictions. No live object or store is contacted.
-import { assertEquals } from '@std/assert'
+import { assert, assertEquals } from '@std/assert'
 import { test, tick, until } from '@yaks/testing'
 import { Store } from './graph.ts'
-import { state } from './testing.ts'
+import { bucket, state } from './testing.ts'
+import type { Env } from './env.ts'
 import words from '../../apps/vale/vocab.json' with { type: 'json' }
 
 const headers = {
@@ -148,4 +149,79 @@ test('a handled pending effect arms the app alarm for its next attempt', async (
   assertEquals(wrote.status, 200)
   await alarm(store)
   await until(async () => await ctx.storage.getAlarm() == next)
+})
+
+// An instance a deploy cut off spent its alarm without arming the next one.
+let effect = (next: number) => ({
+  entity: { eid: crypto.randomUUID() },
+  effect: {
+    handler: 'call_ready',
+    kind: 'matched',
+    comp: 'call',
+    state: 'pending',
+    next: new Date(next).toISOString(),
+  },
+})
+
+let kernel = (store: Store, body: unknown) =>
+  store.fetch(
+    new Request('http://store/apply', {
+      method: 'POST',
+      headers: { ...headers, 'x-yak-kernel': '1' },
+      body: JSON.stringify(body),
+    }),
+  )
+
+test('a new incarnation re-arms the alarm its pending effects owe', async () => {
+  let ctx = state()
+  using _db = ctx.storage
+  let { store } = await idle(ctx)
+  let next = Date.now() + 120_000
+  assertEquals((await kernel(store, [effect(next)])).status, 200)
+  await ctx.storage.deleteAlarm()
+  store = new Store(ctx)
+  let read = await store.fetch(
+    new Request('http://store/query?q=.effect.state=pending', { headers }),
+  )
+  assertEquals((await read.json()).length, 1)
+  assertEquals(await ctx.storage.getAlarm(), next)
+})
+
+test('a run holds the alarm a minute out while it is in flight', async () => {
+  let ctx = state()
+  using _db = ctx.storage
+  // An upload's deletion asks the directory where the app lives, and the
+  // directory answers once the test lets it.
+  let asked = false, answer = () => {}
+  let held = new Promise<void>((r) => answer = r)
+  let STORE = {
+    idFromName: (name: string) => name,
+    get: () => ({
+      fetch: async () => {
+        asked = true
+        await held
+        return Response.json(null)
+      },
+    }),
+  }
+  let bind = { STORE, BLOBS: bucket().r2 } as unknown as Env
+  let store = new Store(ctx, bind, [])
+  let sha = '1'.repeat(64)
+  assertEquals(
+    (await kernel(store, [{ entity: { eid: sha }, blob: { bytes: 3 } }]))
+      .status,
+    200,
+  )
+  let before = Date.now()
+  await ctx.storage.deleteAlarm()
+  assertEquals(
+    (await kernel(store, [{ entity: { eid: sha }, $delete: true }])).status,
+    200,
+  )
+  await until(() => asked)
+  assert((await ctx.storage.getAlarm() ?? 0) >= before + 60_000)
+  await ctx.storage.deleteAlarm()
+  await alarm(store)
+  assert((await ctx.storage.getAlarm() ?? 0) >= before + 60_000)
+  answer()
 })

@@ -646,6 +646,23 @@ let STORED = 1024 * 1024
 // and only growth or a store's first statistics owe every table holding rows.
 let ANALYSES = 50
 
+/// due([], 0) -> null
+/// due([{ entity: { eid: 'a' }, effect: { next: '1970-01-01T00:00:05.000Z' } }], 0) -> 5000
+/// due([{ entity: { eid: 'a' }, effect: { next: '1970-01-01T00:00:00.000Z' } }], 9000) -> 10000
+/// due([{ entity: { eid: 'a' }, effect: {} }], 0) -> 60000
+/** When the earliest of these pending runs is due: its `next`, or a minute on
+ * for a run with none, and never sooner than a second from `now`. */
+export let due = (pending: Bundle[], now: number): number | null =>
+  pending.length
+    ? Math.max(
+      now + 1000,
+      Math.min(...pending.map((b) => {
+        let next = (b.effect as Comp).next
+        return next ? Date.parse(String(next)) : now + 60_000
+      })),
+    )
+    : null
+
 // A query tree sent where text goes arrives as `[object Object]`, which reads
 // as two words that match nothing. The sender's bug, never a question.
 let FORMATTED = /\[object [A-Z]\w*\]/
@@ -1044,6 +1061,9 @@ export class Store {
       // Join this incarnation without discovering or starting work. Its own
       // writes can then persist attempts in the transaction that owes them.
       await this.#effects.work(this.#stored(this.#graph).graph, undefined, 0)
+      // An alarm this object owes may have been spent by an instance that
+      // died before arming the next (`#holding`).
+      await this.#owed(this.#now())
       // A lexicon not yet read is the alarm's to read, never this request's.
       if (this.#unread()) await this.#arming(this.#soon(), 'lexicon')
     }
@@ -1256,6 +1276,7 @@ export class Store {
         Object.entries(handlers).map(([name, run]) => [
           name,
           async (...args: Parameters<typeof run>) => {
+            await this.#holding()
             try {
               if ('maintenance' in run && run.maintenance === true) {
                 return await this.#maintenance(() => run(...args))
@@ -2540,14 +2561,44 @@ export class Store {
   }
 
   // The next instant this object owes, off its own rows: what a tick arms
-  // after it has fired, and what a request re-arms when the runtime lost the
-  // alarm. `soonest` reads the earliest wake still ahead; a planting that
-  // is recovered from recorded rows, never re-derived on an incarnation.
+  // after it has fired, and what a new incarnation re-arms when the runtime
+  // lost the alarm. `soonest` reads the earliest wake still ahead, and
+  // `#effectsDue` the earliest pending run; a planting is recovered from
+  // recorded rows, never re-derived on an incarnation.
   #owed = async (now: number, floor = Infinity): Promise<void> => {
     let next = await soonest(this.#graph, now)
-    let at = Math.min(next ?? Infinity, floor)
+    let run = due(await this.#pendingEffects(), now)
+    let at = Math.min(next ?? Infinity, run ?? Infinity, floor)
     if (Number.isFinite(at)) await this.#arming(new Date(at).toISOString())
   }
+
+  // The pending runs this object has the code for.
+  #pendingEffects = async (): Promise<Bundle[]> => {
+    if (!this.#effectsReady || !this.#vocab.comp('effect')) return []
+    let handlers = [
+      ...new Set(
+        this.#effects.slots().filter((s) => s.effect && s.run).map((s) => s.id),
+      ),
+    ]
+    return handlers.length
+      ? await this.#graph.read(and(
+        equals('effect.state', 'pending'),
+        equals('effect.handler', list(...handlers)),
+        project('effect.handler', 'effect.next'),
+      ))
+      : []
+  }
+
+  // A run outlives the alarm or request that began it, and the runtime spends
+  // an alarm once it is answered. So while a run is in flight the object holds
+  // an alarm a minute out, which every firing moves on: an instance a deploy
+  // or eviction cuts off mid-run is woken again for the runs it lost, which
+  // nothing else would do until somebody wrote here.
+  #holding = (): Promise<unknown> =>
+    this.#arming(
+      new Date(this.#now() + Store.RETRY).toISOString(),
+      'effects running',
+    )
 
   // Only completed, selected requests leave the object. Queue delivery is
   // deliberately outside the recording and its SQL counts. No routing lookup
@@ -2744,6 +2795,9 @@ export class Store {
         }
         await this.#tick(this.#now())
         this.#workingEffects()
+        if (this.#effectsReady && this.#effects.running().length) {
+          await this.#holding()
+        }
         this.#embedding()
         await this.#moving()
         await this.#lexing()
@@ -3171,43 +3225,20 @@ export class Store {
         await this.#effects.work(this.#stored(this.#graph).graph)
       } while (this.#effectAgain && !this.#dormant)
       if (this.#dormant) return
-      let handlers = [
-        ...new Set(
-          this.#effects.slots().filter((s) => s.effect && s.run).map((s) =>
-            s.id
-          ),
-        ),
-      ]
-      let pending = handlers.length
-        ? await this.#graph.read(and(
-          equals('effect.state', 'pending'),
-          equals('effect.handler', list(...handlers)),
-          project('effect.handler', 'effect.next'),
-        ))
-        : []
-      if (pending.length) {
-        let now = this.#now()
-        let next = Math.min(...pending.map((b) => {
-          let e = b.effect as Comp
-          return Date.parse(String(e.next ?? '')) ||
-            now + 60_000
-        }))
-        if (this.#profile) {
-          let handlers: Record<string, number> = {}
-          for (let b of pending) {
-            let handler = String((b.effect as Comp).handler)
-            handlers[handler] = (handlers[handler] ?? 0) + 1
-          }
-          console.log(
-            'yak store pending',
-            JSON.stringify({ store: this.#name(), handlers }),
-          )
+      let now = this.#now(), pending = await this.#pendingEffects()
+      if (!pending.length) return
+      if (this.#profile) {
+        let handlers: Record<string, number> = {}
+        for (let b of pending) {
+          let handler = String((b.effect as Comp).handler)
+          handlers[handler] = (handlers[handler] ?? 0) + 1
         }
-        await this.#arming(
-          new Date(Math.max(now + 1000, next)).toISOString(),
-          'effects',
+        console.log(
+          'yak store pending',
+          JSON.stringify({ store: this.#name(), handlers }),
         )
       }
+      await this.#arming(new Date(due(pending, now)!).toISOString(), 'effects')
     }).catch(async (error) => {
       defect(error, { request: 'effect pool', store: this.#name() })
       await this.#arming(
