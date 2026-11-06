@@ -152,14 +152,13 @@
       "noun": "model",
       "verb": "list",
       "title": "List the models this machine can reach",
-      "description": "List the models a provider this config names offers, signed in as the harness signs in to it. The credential itself is never shown.",
+      "description": "List the models a provider this config names offers, signed in as the harness signs in to it, and give each listed model's row the context window the catalog says where the row has none. The credential itself is never shown.",
       "input": {
         "provider": {
           "type": "string",
           "description": "The provider whose models to list, by name (default: the default model's provider)"
         }
-      },
-      "readOnly": true
+      }
     },
     "conversation_projects": {
       "tool": true,
