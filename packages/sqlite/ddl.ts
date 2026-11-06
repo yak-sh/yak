@@ -45,6 +45,7 @@ import {
   as,
   col,
   type Column,
+  count,
   type CreateIndex,
   type CreateTable,
   type CreateView,
@@ -53,6 +54,8 @@ import {
   eq,
   type Expr,
   fn,
+  from,
+  gt,
   isNull,
   left,
   lit,
@@ -65,13 +68,14 @@ import {
   type Stmt,
   sub,
   table,
+  val,
 } from '@yaks/sql'
 import { checks, objects, type Stood, stood } from './physical.ts'
 import { unit } from './unit.ts'
 import { clocked, versioned } from './versions.ts'
 import { writtenDdl } from './written.ts'
 
-import type { Statistics } from './meta.ts'
+import type { Counting, Statistics } from './meta.ts'
 import { META, tables } from './layout.ts'
 export { META, tables } from './layout.ts'
 
@@ -800,7 +804,10 @@ export let unfit = (comp: string, e: unknown): Error =>
  * planner needs are orders of magnitude — `call` holds fifty thousand rows and
  * `entity` a million — and a sample of four hundred says that as well as a
  * whole scan does. On a 1 GB graph the bounded pass costs ~110 ms where the
- * unbounded one costs 5.4 s.
+ * unbounded one costs 5.4 s. The sample does not bound the count: `ANALYZE`
+ * still reads every page of an index, or of a table with none, to count its
+ * rows, so a table with no index is counted in windows instead
+ * ({@link counted}).
  */
 export let SAMPLE = 400
 
@@ -819,7 +826,9 @@ export let SAMPLE = 400
  * owed an analysis ({@link owing}), and {@link analyzing} works them off a
  * table at a time, away from the install that owed them (./owe.ts `work` on a
  * file, a Durable Object's alarm), since one `ANALYZE` holds the write lock
- * while it reads its table. A file's analysis is sampled ({@link SAMPLE});
+ * while it reads its table. A file's analysis is sampled ({@link SAMPLE}),
+ * and a table of its with no index is counted a window at a time in a
+ * snapshot, holding no lock ({@link counted});
  * a full-analysis engine (a Durable Object's, which refuses `analysis_limit`)
  * provides its stored bytes without scanning rows. An unchanged store below
  * tenfold byte growth bills no rows for statistics, including after a
@@ -996,4 +1005,108 @@ export let analyzing = (
     if (!holds(driver, name)) empty.push(name)
   }
   return { bytes: statistics.bytes, empty, owed: owed.slice(taken.length) }
+}
+
+/**
+ * Whether a file's statistics for `name` are taken by counting its rows
+ * ({@link tally}) instead of by `ANALYZE`: a rowid table with no index, whose
+ * only statistic is its row count. `ANALYZE` counts such a table by reading
+ * every page of it under the write lock, whatever `analysis_limit` says, so on
+ * the box's 10 GB file one table held it 20 s (bug bace8585). Every component
+ * table is one, and so is a text index's data.
+ */
+export let counted = (driver: Driver, name: string): boolean =>
+  driver.statistics == 'sampled' && extant(driver, name) &&
+  !driver.query({ t: 'pragma', name: 'index_list', arg: name }).length
+
+/** One window of counting a table ({@link tally}): how far the count has got,
+ * the rowid the window started past, and whether it read the last row. */
+export type Tallied = Counting & { since?: number; done: boolean }
+
+/**
+ * One window of counting the first table `statistics` owes ({@link counted}):
+ * up to `n` of its rows past where `statistics.counting` stopped, read by
+ * rowid alone, in the caller's snapshot. A row written behind the count is
+ * missed and one deleted is counted; the planner needs only the order of
+ * magnitude.
+ */
+export let tally = (
+  driver: Driver,
+  statistics: Statistics,
+  n: number,
+): Tallied => {
+  let name = statistics.owed![0]
+  let at = statistics.counting?.table == name
+    ? statistics.counting
+    : { table: name, rows: 0 }
+  let [r] = driver.query(select({
+    cols: [as(count(), 'n'), as(fn('max', col('id')), 'last')],
+    from: from(
+      select({
+        cols: [as(col('rowid'), 'id')],
+        from: table(name),
+        where: at.after == null ? undefined : gt(col('rowid'), val(at.after)),
+        order: [col('rowid')],
+        limit: val(n),
+      }),
+      'r',
+    ),
+  }))
+  let read = Number(r?.n ?? 0)
+  return {
+    table: name,
+    rows: at.rows + read,
+    after: read ? Number(r.last) : at.after,
+    since: at.after,
+    done: read < n,
+  }
+}
+
+/**
+ * The receipt that follows a window of counting ({@link tally}), in the unit
+ * that writes it: the count so far, or once it is `done`, the table's
+ * statistics written as `ANALYZE` writes a table with no index's (its count,
+ * or no row for an empty table, remembered as empty), and the table no longer
+ * owed. A receipt that moved since the window read it is answered as it
+ * stands, and the next window reads again.
+ */
+export let tallied = (
+  driver: Driver,
+  statistics: Statistics,
+  { since, done, ...counting }: Tallied,
+): Statistics => {
+  let [name, ...rest] = statistics.owed ?? []
+  let standing = statistics.counting?.table == name
+    ? statistics.counting
+    : undefined
+  if (name != counting.table || standing?.after != since) return statistics
+  if (!done) return { ...statistics, counting }
+  let empty = statistics.empty.filter((e) => e != name)
+  if (extant(driver, name)) {
+    stated(driver, name, counting.rows)
+    if (!counting.rows) empty.push(name)
+  }
+  return { bytes: statistics.bytes, empty, owed: rest }
+}
+
+// Write `rows` as the statistics of `name`, a table with no index, and have
+// the planner read them again: `ANALYZE sqlite_schema` reads no table, and
+// makes `sqlite_stat1` where none stands.
+let stated = (driver: Driver, name: string, rows: number) => {
+  let reload = () => driver.query({ t: 'analyze', table: 'sqlite_schema' })
+  if (!extant(driver, 'sqlite_stat1')) reload()
+  driver.query({
+    t: 'delete',
+    from: 'sqlite_stat1',
+    where: eq(col('tbl'), val(name)),
+  })
+  if (rows) {
+    driver.query({
+      t: 'insert',
+      into: 'sqlite_stat1',
+      cols: ['tbl', 'idx', 'stat'],
+      rows: [[val(name), val(null), val(String(rows))]],
+    })
+  }
+  reload()
 }

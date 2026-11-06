@@ -54,7 +54,15 @@ import {
   val,
 } from '@yaks/sql/core'
 import type { Filler } from '@yaks/fts'
-import { analyzed, analyzing, carried, type Refitting } from './ddl.ts'
+import {
+  analyzed,
+  analyzing,
+  carried,
+  counted,
+  type Refitting,
+  tallied,
+  tally,
+} from './ddl.ts'
 import { META } from './layout.ts'
 import { analyzedAt, installation, meta } from './meta.ts'
 import { unit } from './unit.ts'
@@ -82,6 +90,12 @@ export let COPY = 20_000
 /** The rows one window deletes from a rebuilt table's old rows: about 65 ms
  * on the box's copy. */
 export let CLEAR = 10_000
+/** The rows one window counts of a table whose statistics are its row count
+ * (./ddl.ts `counted`): one leaf page a row at worst, so 2 MB of the box's
+ * 4 KiB pages. On its 10 GB file under a load of 25, a window over a text
+ * index's data took 0.1 to 0.9 s, where `ANALYZE` read a whole table in one
+ * window and held the write lock 20.4 s (bug bace8585). */
+export let COUNT = 500
 /** The free pages a file keeps for its next writes to reuse; past these,
  * {@link reclaim} gives the rest back. 64 MiB of the box's 4 KiB pages. */
 export let SLACK = 16_384
@@ -99,6 +113,7 @@ export type Sizes = {
   clear: number
   slack: number
   reclaim: number
+  count: number
 }
 export let SIZES: Sizes = {
   big: BIG,
@@ -108,6 +123,7 @@ export let SIZES: Sizes = {
   clear: CLEAR,
   slack: SLACK,
   reclaim: RECLAIM,
+  count: COUNT,
 }
 /** How long a window that failed waits before it is tried again. */
 export let RETRY = 3_600_000
@@ -268,26 +284,49 @@ export let statistics: Daily = {
  * window that failed. */
 export let ANALYZING = 'analyze'
 
-/** Analyze the first table the receipt owes an analysis, in its own unit, and
- * answer how many stay owed; undefined when none is. */
-export let analyze = (driver: Driver): number | undefined =>
-  unit(driver, () => {
+/**
+ * Take one window of the statistics of the first table the receipt owes them,
+ * and answer how many stay owed; undefined when none is. A table that is
+ * counted (./ddl.ts `counted`) has `count` rows read in a snapshot, holding
+ * no lock, and the receipt written after in a unit of its own; any other is
+ * analyzed in its own unit.
+ */
+export let analyze = (
+  driver: Driver,
+  count: number = COUNT,
+): number | undefined => {
+  let window = unit(driver, () => {
+    let statistics = installation(driver)?.statistics
+    let first = statistics?.owed?.[0]
+    if (first == null || !counted(driver, first)) return
+    return tally(driver, statistics!, count)
+  }, 'read')
+  return unit(driver, () => {
     let receipt = installation(driver)
     let statistics = receipt?.statistics
     if (!receipt || !statistics?.owed?.length) return
-    let next = analyzing(driver, statistics, 1)
-    analyzedAt(driver, receipt.schema, next)
+    let next = !counted(driver, statistics.owed[0])
+      ? analyzing(driver, statistics, 1)
+      : window
+      ? tallied(driver, statistics, window)
+      : statistics
+    if (next != statistics) analyzedAt(driver, receipt.schema, next)
     return next.owed?.length ?? 0
   })
+}
 
 // One window of the planner statistics the receipt owes; one that throws is
 // put off an hour.
-let analysis = (driver: Driver, now: number): Worked | undefined => {
+let analysis = (
+  driver: Driver,
+  now: number,
+  sizes: Sizes,
+): Worked | undefined => {
   if (!installation(driver)?.statistics?.owed?.length) return
   let at = meta(driver).get(ANALYZING)
   if (at && Date.parse(at) > now) return
   try {
-    let left = analyze(driver)
+    let left = analyze(driver, sizes.count)
     return left == null ? undefined : { name: ANALYZING, done: !left }
   } catch (error) {
     unit(
@@ -313,7 +352,7 @@ export let work = (
 ): Worked | undefined => {
   let due = owed(driver).find((w) => !w.next || Date.parse(w.next) <= now)
   if (!due) {
-    return analysis(driver, now) ?? reclaim(driver, now, sizes) ??
+    return analysis(driver, now, sizes) ?? reclaim(driver, now, sizes) ??
       upkeep(driver, daily, now)
   }
   try {

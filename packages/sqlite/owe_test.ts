@@ -15,6 +15,7 @@ import {
   lit,
   lt,
   op,
+  scan,
   select,
   type Stmt,
   table,
@@ -23,6 +24,7 @@ import {
 import { loadVocab } from '@yaks/vocab'
 import { imaged, preparedDriver, type Snapshot } from './testing.ts'
 import { META } from './layout.ts'
+import { analyzedAt, installation } from './meta.ts'
 import { storage } from './mod.ts'
 import {
   build as buildAt,
@@ -80,6 +82,7 @@ let tiny: Sizes = {
   clear: 3,
   slack: 4,
   reclaim: 10,
+  count: 2,
 }
 let build = (db: Driver, stmts: Stmt[]) => buildAt(db, stmts, tiny)
 let filler = (db: Driver) => fillerAt(db, tiny)
@@ -396,6 +399,41 @@ test('statistics are due as soon as an index is built', () => {
   assertEquals([counting, recounting], [
     ['daily:statistics'],
     ['owed:index:big_x', 'daily:statistics'],
+  ])
+})
+
+// A file that counts its tables' rows (./ddl.ts `counted`), whose receipt
+// owes `big`, `small` (remembered empty) and a dropped table their statistics:
+// the receipt after each window, and the statistics written.
+let [, tallying] = stage((db) => {
+  let file = Object.assign(db, { statistics: 'sampled' as const })
+  analyzedAt(file, 'print', {
+    bytes: 1,
+    empty: ['small'],
+    owed: ['big', 'small', 'gone'],
+  })
+  let seen = []
+  while (work(file)) seen.push(installation(file)?.statistics)
+  return [seen, scan(file, 'sqlite_stat1', undefined, ['tbl', 'idx', 'stat'])]
+}, files)
+
+test('a table with no index is counted a window at a time, its count its statistics', () => {
+  assertEquals(tallying, [
+    [
+      {
+        bytes: 1,
+        empty: ['small'],
+        owed: ['big', 'small', 'gone'],
+        counting: { table: 'big', rows: 2, after: 2 },
+      },
+      { bytes: 1, empty: ['small'], owed: ['small', 'gone'] },
+      { bytes: 1, empty: [], owed: ['gone'] },
+      { bytes: 1, empty: [], owed: [] },
+    ],
+    [
+      { tbl: 'big', idx: null, stat: '3' },
+      { tbl: 'small', idx: null, stat: '1' },
+    ],
   ])
 })
 

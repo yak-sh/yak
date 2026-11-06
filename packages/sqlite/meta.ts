@@ -67,8 +67,18 @@ export let SCHEMA = 'schema'
 /** What a full-analysis engine's planner statistics stand at (./ddl.ts
  * `analyzed`): the stored bytes growth is measured from, the tables that held
  * no rows when last looked at (no SQLite statistics row remembers them), and
- * the tables owed an analysis, in the order they are worked off. */
-export type Statistics = { bytes: number; empty: string[]; owed?: string[] }
+ * the tables owed an analysis, in the order they are worked off, and how far
+ * the count of the first has got where it is counted (./ddl.ts `counted`). */
+export type Statistics = {
+  bytes: number
+  empty: string[]
+  owed?: string[]
+  counting?: Counting
+}
+
+/** How far a table's count has got: the rows read, and the last rowid read
+ * (none before the first window). */
+export type Counting = { table: string; rows: number; after?: number }
 
 /** The fingerprint of the schema this file last had installed, or undefined
  * for a file no install has finished in — one that may not have this table
