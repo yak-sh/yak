@@ -546,6 +546,38 @@ test("each entity is its own bundle's writer's, and the rest the batch's", () =>
   assertEquals(at(out, 'b2', 'sold').by, till)
 })
 
+test("each entity is stamped at its own bundle's moment, and the rest at the batch's", () => {
+  let one = g()
+  let [monday, tuesday, today] = ['01', '02', '03'].map((d) =>
+    `2026-01-${d}T00:00:00.000Z`
+  )
+  sync(one.apply([{ entity: { eid: 'b4' }, doc: { title: 'Ulysses' } }]))
+  let out = sync(one.apply([
+    {
+      entity: { eid: 'b1' },
+      doc: { title: 'Dune' },
+      $at: monday,
+      $actor: { by: ada },
+    },
+    { entity: { eid: 'b2' }, sold: {}, $at: tuesday },
+    { entity: { eid: 'b3' }, doc: { title: 'Emma' } },
+    { entity: { eid: 'b4' }, doc: { title: 'Ulysses II' }, $at: tuesday },
+  ], { trusted: true, now: today }))
+  assertEquals(at(out, 'b1', 'created'), { at: monday, by: ada })
+  assertEquals(
+    [at(out, 'b2', 'created').at, at(out, 'b2', 'sold').at],
+    [tuesday, tuesday],
+  )
+  assertEquals(at(out, 'b3', 'created').at, today)
+  assertEquals(at(out, 'b4', 'updated').at, tuesday)
+  // Only trusted code may say when it wrote.
+  assertThrows(
+    () => one.apply([{ entity: { eid: 'b5' }, doc: {}, $at: monday }]),
+    Refused,
+    'only a trusted write may date itself',
+  )
+})
+
 test('a mark is signed where it lands, and the first telling stands', () => {
   let one = g()
   let out = sync(one.apply([{

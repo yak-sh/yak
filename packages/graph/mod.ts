@@ -28,8 +28,9 @@
  * A few reserved keys sit beside the components and look like components, but
  * `apply()` acts on them rather than storing them as properties: `$delete`
  * (delete the entity, which can also be written as a `tombstone` component),
- * `$was` (a per-property precondition — see {@link Was}), and `$actor` (who is
- * writing — see {@link Actor}). A plugin declares requests of its own the same
+ * `$was` (a per-property precondition — see {@link Was}), `$actor` (who is
+ * writing — see {@link Actor}), and `$at` (when, for a trusted batch carrying
+ * many moments' work). A plugin declares requests of its own the same
  * way it declares components, and a `$` key nothing declared is refused (see
  * {@link requested}). They belong to the write pipeline and stop there: what
  * `apply()` returns is the transaction as applied, {@link composed} into one

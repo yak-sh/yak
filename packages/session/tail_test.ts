@@ -1,8 +1,11 @@
 import { test } from '@yaks/testing'
 import { assertEquals } from '@std/assert'
-import type { Bundle, Comp, Graph } from '@yaks/graph'
+import { type Bundle, type Comp, type Graph, graph } from '@yaks/graph'
+import type { Plugin } from '@yaks/graph/plugin'
+import { Refused } from '@yaks/graph/errors'
 import { toolEid } from '@yaks/tools'
 import { ids, locked, pages, store, transcriptGraph } from './testing.ts'
+import { sessions } from './plugin.ts'
 import { claude } from './readers.ts'
 import { callOf, pull, tail } from './tail.ts'
 
@@ -127,6 +130,47 @@ test('a transcript file becomes the session it names, at full depth', () =>
     let [tool] = await g.get([toolEid('Bash')])
     assertEquals(c(tool, 'tool')?.name, 'Bash')
   }))
+
+test('lines read in one write are each dated by their own line, and a refused one is left out', async () => {
+  let refusing: Plugin = {
+    name: 'refusing',
+    hooks: {
+      precondition: (bundles) => {
+        if (bundles.some((b) => c(b, 'content')?.body == 'refuse me')) {
+          throw new Refused('not this line')
+        }
+        return bundles
+      },
+    },
+  }
+  let g = graph({
+    storage: store(),
+    vocab: pages,
+    plugins: [sessions(), refusing],
+  })
+  let { log, path, free } = fixture(g)
+  let refused: unknown[] = []
+  try {
+    let days = ['01', '02', '03', '04'].map((d) => `2026-09-${d}T00:00:00.000Z`)
+    log(
+      ...['one', 'refuse me', 'three', 'four'].map((m, i) => typed(m, days[i])),
+    )
+    let t = await tail(g, path, { session: ids.run1 })
+    assertEquals(
+      await pull(g, t, claude, { report: (e) => refused.push(e) }),
+      4,
+    )
+    let rows = await g.read(`.entry.session=${ids.run1}&.order=entry.seq&*`)
+    assertEquals(
+      rows.map((b) => [c(b, 'content')?.body, c(b, 'created')?.at]),
+      [['one', days[0]], ['three', days[2]], ['four', days[3]]],
+    )
+    assertEquals(refused.length, 1)
+    assertEquals((await tail(g, path, { session: ids.run1 })).line, 4)
+  } finally {
+    free()
+  }
+})
 
 test('human text preserves automatic openings across import and resume', async () => {
   for (

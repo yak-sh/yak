@@ -97,6 +97,10 @@ export let writers = (bundles: Bundle[]): (eid: Eid) => Actor => {
 // (rules.ts `fire` keeps it on the entity it hands a rule), else the batch's.
 let writer = (b: Bound): Actor => b.$actor ?? b.Actor
 
+// The moment a rule stamps an entity with: the one its own bundles named
+// (`$at`, a trusted batch landing many moments' work), else the batch's.
+let moment = (b: Bound): string => b.$at ?? b.Now.at
+
 // The stamp for one entity, narrowed to the properties this vocabulary declares
 // on that component — `at`, and whichever of `by`/`via` the entity's writer
 // supplied. An empty result means there is nothing to write.
@@ -148,7 +152,7 @@ export let stamps: Rule[] = [
     name: 'created',
     phase: 'stamp',
     match: '.entity, +!created, *created, #Vocab, #Actor, #Now',
-    run: (b) => wear('created', b.Vocab, b.Now.at, writer(b)),
+    run: (b) => wear('created', b.Vocab, moment(b), writer(b)),
   },
   {
     name: 'updated',
@@ -156,7 +160,7 @@ export let stamps: Rule[] = [
     match: '.entity, .created, #Edits, #Vocab, #Actor, #Now',
     run: (b) =>
       b.Edits.has(b.entity.eid)
-        ? wear('updated', b.Vocab, b.Now.at, writer(b))
+        ? wear('updated', b.Vocab, moment(b), writer(b))
         : undefined,
   },
 ]
@@ -185,7 +189,7 @@ export let provenance = (policy?: StampPolicy | false): Rule[] => {
         run: (b: Bound) => {
           let choice = policy(b)
           if (!choice) return
-          return wear(choice.kind, b.Vocab, b.Now.at, writer(b), choice)
+          return wear(choice.kind, b.Vocab, moment(b), writer(b), choice)
         },
       }],
     )
@@ -254,7 +258,7 @@ let marker = (comp: string): Rule => {
         phase: 'stamp',
         match: `.${comp}, !${comp}.at, *${comp}, #Vocab, #Actor, #Now`,
         run: (b: Bound) =>
-          wear(comp, b.Vocab, b.Now.at, writer(b), undefined, b[comp] as Comp),
+          wear(comp, b.Vocab, moment(b), writer(b), undefined, b[comp] as Comp),
       },
     )
   }

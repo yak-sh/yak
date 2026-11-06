@@ -273,34 +273,72 @@ export let imported = (
   return [...out.values()]
 }
 
-// The rows a line only touches. A tool's row is written where it is missing,
-// since writing it again moves its stamp for nothing, and so is a request,
-// which every line of its reply names again; an answer's state only where its
-// call is there, or the patch alone would make an entity; a plan-limit
-// reading only over an older one.
-let settled = async (g: Graph, bundles: Bundle[]): Promise<Bundle[]> => {
-  let touched = bundles.filter((b) =>
-    (!b.entry && (b.tool || b.provider || b.model || b.execution)) ||
-    (b.entry && b.ask) || b.rate_limit
-  )
-  if (!touched.length) return bundles
-  let rows = await g.get(touched.map((b) => b.entity.eid))
-  let stored = new Map(
-    rows.filter((r) => r && r[TOMBSTONE] == null).map((r) => [
-      r!.entity.eid,
-      r!,
-    ]),
-  )
-  let newer = (b: Bundle) =>
-    String(comp(b, 'rate_limit')?.at ?? '') >=
-      String(comp(stored.get(b.entity.eid), 'rate_limit')?.at ?? '')
-  return bundles.filter((b) =>
-    !touched.includes(b) ||
-    (b.rate_limit
-      ? newer(b)
-      : b.tool || b.provider || b.model || b.ask
-      ? !stored.has(b.entity.eid)
-      : stored.has(b.entity.eid))
+// One line's rows, and when the harness wrote it.
+type Line = { bundles: Bundle[]; at?: string }
+
+// How many lines one transaction writes at most, and how much text: a line
+// to a transaction rewrites the same index pages once per line, which is
+// most of what reading a long log in costs.
+let RUN = 500
+let RUN_TEXT = 4 * 1024 * 1024
+
+// Each line of a run, without the rows it only touches where the graph or a
+// line before it in the run has settled them: a tool's row is written where it
+// is missing, since writing it again moves its stamp for nothing, and so is a
+// request, which every line of its reply names again; an answer's state only
+// where its call is there, or the patch alone would make an entity; a
+// plan-limit reading only over an older one. A line `worth` refuses is left
+// out of what the lines after it see. Answers the eids the graph held too.
+let settled = async (
+  g: Graph,
+  run: Line[],
+  worth: (bundles: Bundle[], i: number) => boolean = () => true,
+): Promise<{ lines: Bundle[][]; held: Set<Eid> }> => {
+  let eids = new Set(run.flatMap((l) => l.bundles.map((b) => b.entity.eid)))
+  let read = new Map<Eid, string>()
+  let held = new Set<Eid>()
+  for (let r of eids.size ? await g.get([...eids]) : []) {
+    if (!r || r[TOMBSTONE] != null) continue
+    held.add(r.entity.eid)
+    read.set(r.entity.eid, String(comp(r, 'rate_limit')?.at ?? ''))
+  }
+  let there = new Set(held)
+  let lines = run.map(({ bundles }, i) => {
+    let kept = bundles.filter((b) => {
+      let eid = b.entity.eid
+      if (b.rate_limit) {
+        return String(comp(b, 'rate_limit')?.at ?? '') >= (read.get(eid) ?? '')
+      }
+      if (b.entry ? b.ask : b.tool || b.provider || b.model) {
+        return !there.has(eid)
+      }
+      return b.entry || !b.execution || there.has(eid)
+    })
+    if (!worth(kept, i)) return []
+    for (let b of kept) {
+      there.add(b.entity.eid)
+      if (b.rate_limit) {
+        read.set(b.entity.eid, String(comp(b, 'rate_limit')?.at ?? ''))
+      }
+    }
+    return kept
+  })
+  return { lines, held }
+}
+
+// A run's lines as one batch, each entity dated as a transaction per line
+// would date it (@yaks/graph `$at`): one the graph held, when the last line
+// that writes it was written; a new one, when the first was.
+let joined = (run: Line[], held: Set<Eid>): Bundle[] => {
+  let at = new Map<Eid, string>()
+  for (let { bundles, at: when } of run) {
+    if (!when) continue
+    for (let { entity: { eid } } of bundles) {
+      if (held.has(eid) || !at.has(eid)) at.set(eid, when)
+    }
+  }
+  return fold([], run.flatMap((l) => l.bundles)).map((b) =>
+    at.has(b.entity.eid) ? { ...b, $at: at.get(b.entity.eid) } : b
   )
 }
 
@@ -536,11 +574,14 @@ let marks = (t: Tail, line: number, typed = false): Bundle[] => {
 }
 
 // Bundles for entities a list already names folded into those.
-let fold = (list: Bundle[], more: Bundle[]): Bundle[] =>
-  more.reduce((out, b) => {
-    let i = out.findIndex((a) => a.entity.eid == b.entity.eid)
-    return i < 0 ? [...out, b] : out.with(i, merge(out[i], b))
-  }, list)
+let fold = (list: Bundle[], more: Bundle[]): Bundle[] => {
+  let out = new Map(list.map((b) => [b.entity.eid, b]))
+  for (let b of more) {
+    let was = out.get(b.entity.eid)
+    out.set(b.entity.eid, was ? merge(was, b) : b)
+  }
+  return [...out.values()]
+}
 
 // A file's first write learns again whether it is its session's first:
 // another file of the session may have been written first since the tail was
@@ -598,10 +639,11 @@ let follow = async (t: Tail, read: Reader, o: Pull) => {
 }
 
 /**
- * Read what the log holds past the tail into its session, one transaction per
- * line, each dated when the harness wrote it where the line says. A line the
- * reader does not recognize, or one that is not JSON at all, becomes nothing:
- * the file keeps it. Answers how many lines were read.
+ * Read what the log holds past the tail into its session, a run of lines to a
+ * transaction, each entity dated when the harness wrote the line that wrote it
+ * where the line says. A line the reader does not recognize, or one that is not
+ * JSON at all, becomes nothing: the file keeps it. Answers how many lines were
+ * read.
  *
  * ```ts
  * import { claude } from '@yaks/session'
@@ -623,7 +665,47 @@ export let pull = async (
   let breath = performance.now()
   let all = await lines(t, o.final)
   if (all.length && !o.prose) await follow(t, read, o)
-  for (let [i, text] of all.entries()) {
+  let run: (Line & { line: number; person: boolean })[] = []
+  let text = 0
+  // What a run of lines writes, in one transaction. Trusted: `transcript` is
+  // server-owned, and this is the server reading a file on its own machine. A
+  // run the graph refuses is written again a line at a time, so only the line
+  // it refuses is left out: reported, and left in the file, since it would be
+  // refused again. Any other failure ends the read, past lines this tail has
+  // already taken, so the caller opens a new tail where the transcript stands.
+  let write = async (lines: typeof run) => {
+    let { lines: kept, held } = await settled(g, lines)
+    let last = lines.at(-1)!
+    let person = lines.some((l) => l.person)
+    await g.apply(
+      fold(
+        joined(lines.map((l, i) => ({ ...l, bundles: kept[i] })), held),
+        marks(t, last.line, person),
+      ),
+      { trusted: true },
+    )
+    marked = last.line
+    t.known = true
+    if (person && t.operator == null) t.operator = true
+    t.operatorStored = t.operator
+  }
+  // A run written, or, when the graph refuses it, each of its lines alone.
+  let land = async (lines: typeof run): Promise<void> => {
+    try {
+      await write(lines)
+    } catch (e) {
+      if (status(e) >= 500) throw e
+      if (lines.length == 1) return void (o.report ?? console.error)(e)
+      for (let l of lines) await land([l])
+    }
+  }
+  let flush = async () => {
+    let lines = run
+    run = []
+    text = 0
+    if (lines.length) await land(lines)
+  }
+  for (let [i, raw] of all.entries()) {
     if (o.signal?.aborted || i && performance.now() > (o.until ?? Infinity)) {
       t.rest = [...all.slice(i), t.rest].join('\n')
       break
@@ -635,15 +717,15 @@ export let pull = async (
       breath = performance.now()
     }
     let line = ++t.line
-    let event = parsed(text)
+    let event = parsed(raw)
     if (!event) continue
     let said = read(event)
     if (t.walk) { for (let f of said.fixed ?? []) fix(t.walk, f) }
     let kept = o.prose ? said.entries.filter(retained) : said.entries
     if (!kept.length && !said.about && !said.limits?.length) continue
     t.session ??= await created(g, t)
-    await settle(g, t)
-    let person = kept.some(typed)
+    // A run is one write, so one reading of `own` holds for all its lines.
+    if (!run.length) await settle(g, t)
     let made = imported(said, {
       ...o,
       session: t.session,
@@ -652,29 +734,21 @@ export let pull = async (
       line,
       own: t.own,
     })
-    let bundles = fold(
-      fold(made, t.walk ? walked(t.walk, made) : []),
-      marks(t, line, person),
-    )
-    // Trusted: `transcript` is server-owned, and this is the server reading a
-    // file on its own machine. A line the graph refuses would be refused
-    // again: it is reported and left in the file. Any other failure ends the
-    // read, past lines this tail has already taken, so the caller opens a new
-    // tail where the transcript stands.
-    try {
-      await g.apply(await settled(g, bundles), {
-        trusted: true,
-        ...(said.at ? { now: said.at } : {}),
-      })
-      marked = line
-      t.known = true
-      if (person && t.operator == null) t.operator = true
-      t.operatorStored = t.operator
-    } catch (e) {
-      if (status(e) >= 500) throw e
-      ;(o.report ?? console.error)(e)
-    }
+    let signed = made.some((b) => b.$actor)
+    // A line a person signed is a transaction of its own: in a batch, an
+    // entity nobody signs is written by the first writer the batch names
+    // (@yaks/graph `writers`), and nothing else in the run is theirs.
+    if (signed) await flush()
+    run.push({
+      bundles: fold(made, t.walk ? walked(t.walk, made) : []),
+      at: said.at,
+      line,
+      person: kept.some(typed),
+    })
+    text += raw.length
+    if (signed || run.length >= RUN || text >= RUN_TEXT) await flush()
   }
+  await flush()
   // Lines past the last that made an entry, or refused ones: read all the
   // same, so a resume starts after them.
   if (t.line > marked) {
@@ -695,16 +769,15 @@ export let pull = async (
 // What an earlier reading of a line put on an entry that a request now
 // carries on its own entry: a run's whole usage on its ending, Codex's usage
 // on an entry of its own. The usage comes off, with the cost, request and
-// context beside it, and an entry left with nothing of its own goes.
-let unspent = async (
-  g: Graph,
+// context beside it, and an entry left with nothing of its own goes. `rows`
+// holds what the graph holds at the line's entries (`placesOf`).
+let unspent = (
+  rows: Map<Eid, Bundle>,
   key: string,
   line: number,
   said: Said,
   made: Bundle[],
-): Promise<Bundle[]> => {
-  let eids = said.entries.map((_, i) => derivedEid(`${key} ${line} ${i}`))
-  if (!eids.length) return []
+): Bundle[] => {
   let now = new Map(made.map((b) => [b.entity.eid, b]))
   let plumbing = [
     'entry',
@@ -716,9 +789,9 @@ let unspent = async (
     'created',
     'updated',
   ]
-  return (await g.get(eids)).flatMap((r): Bundle[] => {
+  return placesOf(key, line, said).flatMap((eid): Bundle[] => {
+    let r = rows.get(eid)
     if (!r || r[TOMBSTONE] != null || !r.usage) return []
-    let eid = r.entity.eid
     if (now.get(eid)?.usage) return []
     let own = Object.keys(r).some((k) =>
       k != 'entity' && !k.startsWith('$') && !plumbing.includes(k)
@@ -737,6 +810,10 @@ let unspent = async (
   })
 }
 
+// The entries a line's place in the file names.
+let placesOf = (key: string, line: number, said: Said): Eid[] =>
+  said.entries.map((_, i) => derivedEid(`${key} ${line} ${i}`))
+
 /**
  * Read a log already imported again from its start, for its model requests
  * alone: each request's entry (`ask`, `usage`, `context_parts`) where the
@@ -745,8 +822,8 @@ let unspent = async (
  * line's other entries, or as the whole run's usage on its ending) comes off,
  * so each request is counted once. The log can be a copy of the session's
  * own, such as the transcript a provider keeps of a managed run. The
- * transcript's other entries are followed, never written. Answers how many
- * requests it wrote.
+ * transcript's other entries are followed, never written. A run of lines is
+ * read and written at once. Answers how many requests it wrote.
  *
  * ```ts
  * import { claude } from '@yaks/session'
@@ -772,6 +849,38 @@ export let recount = async (
   let key = own ? o.session : `${o.session} ${path}`
   let w = walker()
   let line = 0, wrote = 0, placed = false
+  let run: (Line & { line: number; said: Said; made: Bundle[] })[] = []
+  let size = 0
+  let flush = async () => {
+    let lines = run
+    run = []
+    size = 0
+    if (!lines.length) return
+    let places = lines.flatMap((l) => placesOf(key, l.line, l.said))
+    let rows = new Map<Eid, Bundle>()
+    for (let r of places.length ? await g.get(places) : []) {
+      if (r) rows.set(r.entity.eid, r)
+    }
+    let gone = lines.map((l) => unspent(rows, key, l.line, l.said, l.made))
+    let { lines: kept, held } = await settled(
+      g,
+      lines,
+      // A line with nothing of its own to write is not written.
+      (bundles, i) =>
+        !!gone[i].length ||
+        bundles.some((b) => b.entry || b.rate_limit || b.fixed),
+    )
+    let all = joined(
+      lines.map((l, i) => ({ ...l, bundles: [...kept[i], ...gone[i]] })),
+      new Set([...held, ...rows.keys()]),
+    )
+    if (!all.length) return
+    // The entries it writes sit at lines of the file: the first write makes
+    // the file an entity too.
+    await g.apply([...placed ? [] : [file], ...all], { trusted: true })
+    placed = true
+    wrote += kept.flat().filter((b) => b.entry).length
+  }
   for (let raw of text.split('\n')) {
     if (o.signal?.aborted) break
     line++
@@ -790,23 +899,11 @@ export let recount = async (
     let asked = made.filter((b) =>
       b.entry ? b.ask && b.usage : b.provider || b.model || b.rate_limit
     )
-    let gone = await unspent(g, key, line, said, made)
-    let bundles = await settled(g, fold(asked, owed))
-    let fresh = bundles.filter((b) => b.entry).length
-    if (
-      !fresh && !gone.length && !bundles.some((b) => b.rate_limit || b.fixed)
-    ) {
-      continue
-    }
-    // The entries it writes sit at lines of the file: the first write makes
-    // the file an entity too.
-    await g.apply([...placed ? [] : [file], ...bundles, ...gone], {
-      trusted: true,
-      ...(said.at ? { now: said.at } : {}),
-    })
-    placed = true
-    wrote += fresh
+    run.push({ bundles: fold(asked, owed), at: said.at, line, said, made })
+    size += raw.length
+    if (run.length >= RUN || size >= RUN_TEXT) await flush()
   }
+  await flush()
   let over = await ended(g, o.session)
   if (over.length) await g.apply(over, { trusted: true })
   return wrote

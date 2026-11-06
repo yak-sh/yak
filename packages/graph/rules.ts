@@ -178,7 +178,8 @@ export let registry = (
  * `({ trashed, Actor, Now })`.
  *
  * The bundle keeps the `$actor` the entity's own bundles named, where one did:
- * the writer of this entity when the batch carries more than one's work.
+ * the writer of this entity when the batch carries more than one's work; and
+ * likewise their `$at`, the moment it was written.
  */
 export type Bound = Bundle & {
   /** `#Vocab` — the component vocabulary this graph uses */
@@ -492,6 +493,7 @@ export let fire = (
     let b = bundles[0]
     let view = merged(tick.of?.(b.entity.eid) ?? null, b)
     if (b.$actor && !view.$actor) view = { ...view, $actor: b.$actor }
+    if (b.$at && !view.$at) view = { ...view, $at: b.$at }
     views = [view]
     written?.set(b.entity.eid, new Set(Object.keys(b)))
   } else {
@@ -502,6 +504,8 @@ export let fire = (
       // The writer the entity's own bundles named, where one did: a batch can
       // carry more than one writer's work (./stamp.ts `writers`).
       if (b.$actor && !view.$actor) view = { ...view, $actor: b.$actor }
+      // And the moment they named (./stamp.ts `moment`).
+      if (b.$at && !view.$at) view = { ...view, $at: b.$at }
       seen.set(eid, view)
       if (written) {
         let names = written.get(eid) ?? new Set<string>()

@@ -2,7 +2,9 @@
 // stored on its entry, beside its `usage`: the dollars the provider reported
 // wherever it reports them (OpenRouter's usage, Claude Code's closing line),
 // and otherwise the usage weighed at the `price` on the row of the model that
-// answered it, in the transaction that writes the usage. A model with no price
+// answered it, in the transaction that writes the usage: the price that
+// transaction gives it, as a model's first request does, or else the one it
+// has (@yaks/model `requesting`). A model with no price
 // leaves its requests unweighed, since absent beats zero.
 //
 // A session's `cost` is the sum of its entries' and is never stored: a second
@@ -33,9 +35,10 @@ let served = (b: Bundle | undefined): string | undefined => {
 /**
  * The precondition that weighs a request its provider named no price for: a
  * bundle carrying `usage` and no `cost` gains `cost{dollars, reported: false}`
- * when the model that answered it has a `price`. The model and the counts are
- * the bundle's over the entry as stored, so a patch that only adds the usage
- * is weighed whole; a cost the entry already records stands.
+ * when the model that answered it has a `price`, the batch's or else the
+ * stored one. The model and the counts are the bundle's over the entry as
+ * stored, so a patch that only adds the usage is weighed whole; a cost the
+ * entry already records stands.
  */
 export let weighing: Hook = (bundles, tx) => {
   let owed = bundles.filter((b) => b[USAGE] && !(COST in b))
@@ -49,7 +52,10 @@ export let weighing: Hook = (bundles, tx) => {
     let models = [...new Set(fresh.map(model).filter((m) => m != null))]
     return after(models.length ? tx.get(models, [PRICE]) : [], (rows) => {
       let price = new Map(
-        rows.filter((r) => r[PRICE]).map((r) => [r.entity.eid, r[PRICE]]),
+        [...rows, ...bundles].filter((r) => r[PRICE]).map((r) => [
+          r.entity.eid,
+          r[PRICE],
+        ]),
       )
       return bundles.map((b) => {
         let at = fresh.includes(b) && price.get(model(b) ?? '')

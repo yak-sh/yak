@@ -78,6 +78,21 @@ test('a request is weighed at its model price unless its provider said', () => {
   assertEquals(costOf(g, later.entity.eid)?.dollars, 2.25)
 })
 
+test('a model met for the first time is weighed at the price its batch gives it', () => {
+  let g = shop()
+  let NEW = identityEid('model', ['new'])
+  let first = asked(NEW, { usage })
+  g.apply([
+    {
+      entity: { eid: NEW },
+      model: { name: 'new' },
+      price: { input: 2, cached: 0.5, output: 10 },
+    },
+    first,
+  ])
+  assertEquals(costOf(g, first.entity.eid)?.dollars, 2.25)
+})
+
 test("a session's cost is its entries' sum, and absent where none cost", () => {
   let g = shop()
   g.apply([

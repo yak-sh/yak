@@ -61,16 +61,21 @@ served over plain HTTP generates ids too — and `minted(id)` says whether an id
 was generated rather than chosen by a person.
 
 A **request** is a `$` key on a bundle that asks the write pipeline to act, such
-as `$delete: true`. `$delete`, `$was` and `$actor` are the core's own; a plugin
-declares its own in `requests`, and a request no plugin answers is refused at
-admission rather than ignored, so asking a graph for something it cannot do is
-an error you can read.
+as `$delete: true`. `$delete`, `$was`, `$actor` and `$at` are the core's own; a
+plugin declares its own in `requests`, and a request no plugin answers is
+refused at admission rather than ignored, so asking a graph for something it
+cannot do is an error you can read.
 
 An **actor** identifies who writes (`by`) and the instrument the write came
 through (`via`), carried as `$actor` (`Actor`). Each entity uses the first actor
 its bundles name, or the first actor in the batch. `signed(bundles, actor)`
 replaces all incoming actors. `graph({ actor })` supplies an actor for unsigned
 bundles. The calling program decides which actors it trusts.
+
+A batch is stamped at one moment, `now` (default the graph's clock). A trusted
+batch that lands many moments' work, such as a log read back in a run of lines
+at once, gives an entity its own with `$at`: its `created`, `updated` and marks
+are dated then.
 
 ## Install
 

@@ -65,7 +65,7 @@ export type Actor = { by?: Eid; via?: Eid }
 /**
  * A patch for one entity. Its identity is under the `entity` key; every other
  * key names a component and maps to its properties, or to `null` to remove that
- * component. The reserved keys `$delete`, `$was` and `$actor` look like
+ * component. The reserved keys `$delete`, `$was`, `$actor` and `$at` look like
  * components but `apply()` acts on them rather than writing them as properties,
  * and a plugin may declare requests of its own.
  */
@@ -83,6 +83,11 @@ export type Bundle =
     /** who is writing this entity: an entity whose bundles name nobody is
      * written by the batch's writer, the first one it names */
     $actor?: Actor
+    /** when this entity's write was made, ISO-8601: its stamps and marks are
+     * dated then rather than at the batch's moment, so one trusted batch can
+     * land many moments' work, as a log read back in does. Refused unless the
+     * caller is trusted */
+    $at?: string
     /** the `$name` alias this bundle was referred to by, when the graph picked
      * its id */
     $alias?: Eid
@@ -378,6 +383,7 @@ export let REQUESTS: string[] = [
   '$prune',
   '$was',
   '$actor',
+  '$at',
   '$alias',
   '$quiet',
 ]

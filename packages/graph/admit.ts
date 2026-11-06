@@ -33,7 +33,7 @@ import { cast, unknownComps, unknownProps, type Vocab } from '@yaks/vocab'
 import type { Bundle, Comp } from './bundle.ts'
 import { comps, dead, formed as shaped, reserved } from './bundle.ts'
 
-import { Misfit, type Where } from './errors.ts'
+import { Misfit, Refused, type Where } from './errors.ts'
 import { prunable } from './prune.ts'
 export { Misfit, misfit, Refused } from './errors.ts'
 
@@ -54,6 +54,11 @@ let named = (b: Bundle) => b.$alias ?? b.entity.eid
  * the read identity sent back whole, and {@link admit} drops it. */
 export let unstamped = (bundles: Bundle[], vocab: Vocab): Bundle[] => {
   for (let b of bundles) {
+    if (b.$at !== undefined) {
+      throw new Refused(
+        `${named(b)}: only a trusted write may date itself ($at)`,
+      )
+    }
     for (let [name, patch] of comps(b)) {
       for (let k of Object.keys(patch ?? {})) {
         if (vocab.prop(name, k)?.stamped) {
