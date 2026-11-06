@@ -12,8 +12,10 @@
 // where a pass becomes a session, at the same `landed` a spent code reaches.
 // The two passes die differently, and that difference is the design:
 //
-//   Once      the link every code letter carries. It seals the address and the
-//             code, so it is that code said another way — spending the link
+//   Once      the link every code letter carries, and every link to our zone
+//             in the Operator's texts (operator-texts.ts `signingIn`). It
+//             seals the address and the code, so it is that code said another
+//             way — spending the link
 //             spends the code (signin.ts `spend`), which makes it single use,
 //             ten minutes old and counted against the same ceilings without a
 //             ledger of its own. A person is not minted for it either, so
@@ -41,7 +43,8 @@
 // defend a 256-bit mac.
 import { opened, seal } from './lib/token.ts'
 import { type Row, shelf } from './grants.ts'
-import { LINK, PLATFORM } from './route.ts'
+import { LINK, onZone, PLATFORM } from './route.ts'
+import type { Host } from './host.ts'
 import { refuse } from './tool.ts'
 
 // A standing link's life: what a minter gets by asking for nothing, and the
@@ -79,6 +82,41 @@ export let linkTo = (t: string, at = PLATFORM) =>
 /** The one-click link for a code just minted, for the letter to carry. */
 export let onceLink = async (secret: string, once: Once, at = PLATFORM) =>
   linkTo(await seal('link', { once } satisfies Pass, secret), at)
+
+// A link as it sits in prose: `https://` up to a space or a quote, less the
+// punctuation that ends the sentence around it.
+let HREF = /https:\/\/[^\s<>"']*[^\s<>"'.,!?;:)\]]/g
+
+/**
+ * `text` with each of its links on our zone (route.ts `onZone`) said as what
+ * `to` makes of it, or as written where `to` makes nothing. Each link is asked
+ * about once, in order.
+ *
+ * ```ts
+ * import { assertEquals } from '@std/assert'
+ * import { relink } from './link.ts'
+ * assertEquals(
+ *   await relink(
+ *     'See https://yaks.app/manage/ada. Or https://example.com/x, https://ada.yaks.app/',
+ *     {},
+ *     async (href) => `<${href}>`,
+ *   ),
+ *   'See <https://yaks.app/manage/ada>. Or https://example.com/x, <https://ada.yaks.app/>',
+ * )
+ * ```
+ */
+export let relink = async (
+  text: string,
+  env: Host,
+  to: (href: string) => Promise<string | null>,
+) => {
+  let said = new Map<string, string>()
+  for (let href of new Set(text.match(HREF) ?? [])) {
+    let as = onZone(href, env) && await to(href)
+    if (as) said.set(href, as)
+  }
+  return text.replace(HREF, (href) => said.get(href) ?? href)
+}
 
 /**
  * A standing link, and the row that lets it be taken back. `days` is refused

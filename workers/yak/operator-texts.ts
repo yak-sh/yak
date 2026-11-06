@@ -19,6 +19,10 @@ import type { Env } from './env.ts'
 import { directoryOf, type Space } from './directory.ts'
 import { caught } from './defects.ts'
 import { fault } from './unseen.ts'
+import { mint } from './signin.ts'
+import { meta } from './meta.ts'
+import { onceLink, relink } from './link.ts'
+import { apex } from './host.ts'
 
 /** The consent box's words, kept with each person who agreed to them. */
 export let CONSENT =
@@ -118,6 +122,27 @@ export let handed = (
 ]
 
 import { phoneNamed, phoneOf } from './phones.ts'
+
+/**
+ * The Operator's words to the person wearing `number`, each link to our zone
+ * in them said as a one-click sign-in landing where it pointed (link.ts
+ * `Once`), so someone who has only ever texted opens their Operator page, or
+ * an app it built, already signed in. The links share one code, minted for
+ * the number as a code the sign-in card texts would be (signin.ts `mint`):
+ * single use, ten minutes long, and signing in no one but whoever wears the
+ * number. Past the number's codes for the hour the words go as written, and
+ * the page asks for a code as it would anyway.
+ */
+export let signingIn = (env: Env, number: string, text: string) => {
+  let at = mobile(number), secret = env.SESSION_SECRET
+  if (!at || !secret) return Promise.resolve(text)
+  let code: Promise<string | null> | undefined
+  return relink(text, env, async (back) => {
+    let once = await (code ??= mint(meta(env), secret, at))
+    return once && onceLink(secret, { email: at, code: once, back }, apex(env))
+  })
+}
+
 /** Send a platform text that nothing waits on: a carrier's block is
  * expected until the campaign is approved, and anything else is reported. */
 export let tell = async (env: Env, text: Text, why: string, via?: string) => {
@@ -351,7 +376,9 @@ export let textSend = (env: Env, ctx: Ctx, space: Space): Tool => ({
     try {
       let { id } = await (await phoneOf(env, space.sender)).send({
         to: texting.number,
-        text: `${text}\n\n${textSigned(space)}`,
+        text: `${await signingIn(env, texting.number, text)}\n\n${
+          textSigned(space)
+        }`,
       })
       return JSON.stringify({ texted: texting.number, id: id ?? null })
     } catch (error) {

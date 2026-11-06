@@ -840,7 +840,7 @@ let signCard = async (env: Env, at: Parameters<typeof askEmail>[0] = {}) =>
 // keeps asking for a code from writing a person for every address anyone types.
 let spent = async (env: Env, once: Once) =>
   await spend(meta(env), secret(env), once.email, once.code)
-    ? await personOf(meta(env), once.email, nameOf(null, once.email))
+    ? await personOf(meta(env), once.email, called(once.email))
     : null
 
 // The same answer, saying nothing about where it came from: the address

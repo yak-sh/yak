@@ -260,7 +260,7 @@ export let channels = (env: Env): Record<string, Channel> => {
   ) => {
     let space = await directoryOf(env.STORE).at(request.space)
     if (!space) throw new Error('Operator reply has no space')
-    let { DISCLOSURE } = await import('./operator-texts.ts')
+    let { DISCLOSURE, signingIn } = await import('./operator-texts.ts')
     let { phoneOf } = await import('./phones.ts')
     let end = textSigned(space) + (request.signup ? `\n${DISCLOSURE}` : '')
     let phone = await phoneOf(
@@ -269,7 +269,7 @@ export let channels = (env: Env): Record<string, Channel> => {
     )
     return phone.send({
       to: request.address!,
-      text: `${answer.text}\n\n${end}`,
+      text: `${await signingIn(env, request.address!, answer.text)}\n\n${end}`,
       ...(back.from ? { from: back.from } : {}),
       ...(back.agent ? { agent: back.agent } : {}),
     })

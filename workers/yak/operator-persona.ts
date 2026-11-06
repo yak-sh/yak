@@ -22,6 +22,8 @@ import { stringify } from '@yaks/query'
 import type { Space } from './directory.ts'
 import type { Env } from './env.ts'
 import { KERNEL, meta } from './meta.ts'
+import { url } from './host.ts'
+import { chatPath } from './route.ts'
 
 /** The persona every Operator is worn on, kept in the directory. */
 export let BASE = derivedEid('operator-persona|base')
@@ -95,10 +97,13 @@ export let declare = async (
   if (writes.length) await meta(env).apply(writes, KERNEL)
 }
 
-/** Who a space's Operator is, as its instructions say: its name and whose it
- * is. */
+/** Who a space's Operator is, as its instructions say: its name, whose it
+ * is, and its page, whose link in a text signs the reader in
+ * (operator-texts.ts `signingIn`). */
 export let introduced = (space: Space) =>
-  `You are ${space.operator}, the Operator of ${space.slug}, and answer to that name. You work for the owner of ${space.slug}. Don't sign your replies; a letter or a text is signed for you.`
+  `You are ${space.operator}, the Operator of ${space.slug}, and answer to that name. You work for the owner of ${space.slug}. Don't sign your replies; a letter or a text is signed for you. Your page, where they can read your whole conversation, is ${
+    url({}, chatPath(space.slug))
+  }; a yaks.app link you text them signs them in when they follow it.`
 
 /**
  * The space's own persona, worn on the base: what a store whose entities `g`

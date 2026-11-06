@@ -12,6 +12,9 @@ import { endpoints } from './endpoints.ts'
 import { CODE_NOTE, codeText, VISITS } from './signin.ts'
 import { NOT_EMAIL } from './identity.ts'
 import type { Env } from './env.ts'
+import { channels } from './operator-channels.ts'
+import { onceLink, type Pass } from './link.ts'
+import { cookieValue, opened, verify } from './lib/token.ts'
 
 let FREE = '+18885550100'
 let texts: { from: string; to: string; text: string }[] = []
@@ -64,6 +67,44 @@ let agreed = await k.dir.texting(person)
 let known = await k.dir.known(person)
 let spaces = await k.dir.seats(person, 'owner')
 
+// The Operator texts them a link to its page (T-136825), and a link to
+// somewhere else. A copy of its pass bound to another number is followed
+// first, then the link twice.
+let mine = spaces[0].space
+let PAGE = `https://yaks.app/manage/${mine.slug}`
+await channels(env).text(
+  {
+    space: mine.eid,
+    person,
+    channel: 'text',
+    address: NUMBER,
+    reply_to: FREE,
+  },
+  { text: `Your page: ${PAGE}. Mine: https://example.com/x` },
+  '',
+)
+let [told] = texts.splice(0)
+let link =
+  /https:\/\/yaks\.app\/login\/link\?t=[\w-]+\.[\w-]+/.exec(told.text)![0]
+let go = (href: string) =>
+  k.at('yaks.app', href.slice('https://yaks.app'.length), {
+    redirect: 'manual',
+  })
+let pass = (await opened<Pass>(
+  'link',
+  new URL(link).searchParams.get('t')!,
+  env.SESSION_SECRET!,
+))!
+let elsewhere = await go(
+  await onceLink(env.SESSION_SECRET!, { ...pass.once!, email: '+12695550199' }),
+)
+let followed = await go(link)
+let session = await verify(
+  cookieValue(followed.headers.get('set-cookie'))!,
+  env.SESSION_SECRET!,
+)
+let twice = await go(link)
+
 test('until the platform texts strangers, the card asks for an email and a number is refused', () => {
   assert(offCard.querySelector('input[name="address"][type="email"]'))
   assertEquals(offCard.querySelector('#by-text'), null)
@@ -113,4 +154,17 @@ test('one visitor gets five texted codes an hour, whichever numbers they type', 
   assertEquals(statuses, [...Array(VISITS).fill(200), 429])
   await until(() => texts.length >= VISITS)
   assertEquals(texts.splice(0).length, VISITS)
+})
+
+test("a link in the Operator's text signs its person in, once, onto the page it named", () => {
+  assert(
+    told.text.startsWith(`Your page: ${link}. Mine: https://example.com/x`),
+  )
+  assertEquals(pass.once!.email, NUMBER)
+  assertEquals(pass.once!.back, PAGE)
+  assertEquals(elsewhere.status, 400, 'bound to the number')
+  assertEquals(followed.status, 303)
+  assertEquals(followed.headers.get('location'), PAGE)
+  assertEquals(session?.person, person)
+  assertEquals(twice.status, 400, 'single use')
 })
