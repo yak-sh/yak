@@ -1,0 +1,11 @@
+/* A report drawn yaks.app's way: its total a little larger and heavier, and
+   what describes it a step under the small type. */
+.Report_Total {
+  font-size: 1.25rem;
+  font-weight: 800;
+}
+.Report_Unit,
+.Report_Span,
+.Report_Column h3 {
+  font-size: var(--fine, var(--small));
+}

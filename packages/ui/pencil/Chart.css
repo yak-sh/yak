@@ -1,0 +1,31 @@
+/* A chart in pencil: a graphite line through the pencil, ending in a dot on
+   today, or a column a day over a hairline. A pointer over it is a
+   crosshair, and the tip floats over every raised part of the page. */
+.Chart {
+  z-index: 1;
+  cursor: crosshair;
+}
+.Chart:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+.Chart-line {
+  margin-left: 0.5rem;
+  padding: 0.25rem 0;
+  line-height: 0;
+}
+.Chart-line .Chart_Plot {
+  filter: var(--drawn);
+  overflow: visible;
+}
+.Chart-bars {
+  border-bottom: 1px solid var(--border);
+}
+.Chart_Line {
+  stroke: var(--graphite);
+  stroke-width: var(--stroke);
+}
+.Chart_Tip {
+  z-index: var(--float, 200);
+  font-size: var(--fine, var(--small));
+}

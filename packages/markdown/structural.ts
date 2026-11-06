@@ -70,10 +70,12 @@ export let safeHref = (href: string): string | undefined => {
 }
 
 /** The same semantic elements can be used outside a Markdown document. */
-/** Render the parsed tree through any @yaks/render host (including Preact).
- * HTML tokens remain text. Images are descriptive links, never remote fetches.
+/** The parsed tree's blocks through any @yaks/render host (including
+ * Preact), for a caller that holds them in an element of its own, such as a
+ * page's `Body`. HTML tokens remain text. Images are descriptive links, never
+ * remote fetches.
  */
-export let render = <Node>(tokens: Token[], host: H<Node>): Node => {
+export let blocks = <Node>(tokens: Token[], host: H<Node>): Child<Node>[] => {
   let name = slugs()
   let children = (items: Token[]): Child<Node>[] => items.flatMap(token)
   let token = (t: Token): Child<Node>[] => {
@@ -221,5 +223,10 @@ export let render = <Node>(tokens: Token[], host: H<Node>): Node => {
         return [t.raw]
     }
   }
-  return host('div', { class: 'Markdown', wrap: '1' }, ...children(tokens))
+  return children(tokens)
 }
+
+/** Render the parsed tree through any @yaks/render host: its blocks, in the
+ * document's own element. */
+export let render = <Node>(tokens: Token[], host: H<Node>): Node =>
+  host('div', { class: 'Markdown', wrap: '1' }, ...blocks(tokens, host))

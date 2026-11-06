@@ -1,0 +1,26 @@
+/* Pencil's words to copy, yaks.app's: a strip of the floor a control tall,
+   the words in the face around them, and the button beside it a paper press
+   inked in the accent, a size down (pages.ts `copyable`). */
+.Copy {
+  display: flex;
+  align-items: center;
+  gap: .5rem;
+  min-width: 0;
+}
+.Copy_Text {
+  flex: 1;
+  min-width: 0;
+  min-height: var(--control-height);
+  padding: .4rem .75rem;
+  background: var(--bg);
+  color: var(--text);
+  overflow-wrap: anywhere;
+  user-select: all;
+}
+/* In its Copy, so it outranks the press it wears, whichever sheet comes
+   first. */
+.Copy .Copy_Go {
+  --button-ink: var(--accent);
+  flex: none;
+  font-size: var(--fine, var(--small));
+}

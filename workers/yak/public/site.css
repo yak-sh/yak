@@ -1,6 +1,7 @@
-/* What every yaks.app page shares beside its theme (linen, @yaks/ui, in
-   _ui.css): its face, Nunito, and the paints and measures its pages keep
-   that are not a theme's roles. */
+/* What every yaks.app page shares beside the kit (@yaks/ui, in _ui.css: the
+   linen theme and the pencil skin, whose tokens draw yaks.app's lines): its
+   face, Nunito, and the paints and measures its pages keep that are no
+   theme's roles. */
 
 /* Nunito, served from here so a first paint waits on no other site. One
    variable file per subset, and a page only fetches the subsets its text uses. */
@@ -55,31 +56,6 @@
     --mine: light-dark(#f8e0c8, #4e3b32); /* blush; ember */
     --theirs: light-dark(#e5eef5, #34404a); /* sky; dusk */
     --preview: #33493c; /* forest */
-    --well: light-dark(
-      color-mix(in srgb, var(--card), var(--border) 45%),
-      color-mix(in srgb, var(--card), var(--bg) 65%)
-    ); /* a field */
-    --shade: light-dark(
-      color-mix(in srgb, #523828 24%, transparent),
-      color-mix(in srgb, #1d1714 70%, transparent)
-    ); /* coffee; soot */
-
-    /* Pencil and paper. A part worth outlining is drawn: a graphite line
-       around it with slightly rounded corners (--radius), given the paper's
-       tooth by pencil.svg. What can be pressed sits on a hatch it slides
-       onto. What is typed into is a well pressed into the paper. A surface
-       is flat. */
-    --graphite: color-mix(in srgb, var(--text) 88%, transparent);
-    --stroke: 1.5px; /* the weight of a drawn line */
-    --lift: 4px; /* how far what can be pressed sits off its hatch */
-    --hollow: inset 0 2px 4px var(--shade); /* how deep a well sits */
-    --hatch: repeating-linear-gradient(-45deg, var(--graphite) 0 1px,
-      transparent 1px 3px);
-    /* A drawn rule is a line through the middle of a box --room taller on
-       each side, so the pencil's wander stays inside what it draws. */
-    --room: 4px;
-    --rule: linear-gradient(var(--graphite) 0 0) center / 100% var(--stroke)
-      no-repeat;
 
     /* Type, beside the theme's --size and --small. */
     --lead: 1.125rem;
@@ -94,7 +70,6 @@
     --side: 0px; /* a sidebar before the reading column */
     --aside: 0px; /* a gutter after it */
     --rhythm: 2rem; /* how far apart what fills the column sits */
-    --control-height: 2.25rem;
     --quarter-gap: calc(var(--gap) / 4);
     --half-gap: calc(var(--gap) / 2);
     --wide-gap: calc(var(--gap) * 1.5);

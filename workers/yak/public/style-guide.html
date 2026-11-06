@@ -69,16 +69,16 @@
           </select>
         </p>
         <nav aria-label="On this page">
-          <ul class="Pills">
-            <li><a class="Pill" href="#how-to">Using the system</a></li>
-            <li><a class="Pill" href="#voice">Layout and voice</a></li>
-            <li><a class="Pill" href="#language">One design language</a></li>
-            <li><a class="Pill" href="#theme-roles">The theme</a></li>
-            <li><a class="Pill" href="#page-paints">Page paints</a></li>
-            <li><a class="Pill" href="#type">Type</a></li>
-            <li><a class="Pill" href="#space">Space and shape</a></li>
-            <li><a class="Pill" href="#components">Components</a></li>
-            <li><a class="Pill" href="#sections">Sections</a></li>
+          <ul class="Chips">
+            <li><a class="Chip" href="#how-to">Using the system</a></li>
+            <li><a class="Chip" href="#voice">Layout and voice</a></li>
+            <li><a class="Chip" href="#language">One design language</a></li>
+            <li><a class="Chip" href="#theme-roles">The theme</a></li>
+            <li><a class="Chip" href="#page-paints">Page paints</a></li>
+            <li><a class="Chip" href="#type">Type</a></li>
+            <li><a class="Chip" href="#space">Space and shape</a></li>
+            <li><a class="Chip" href="#components">Components</a></li>
+            <li><a class="Chip" href="#sections">Sections</a></li>
           </ul>
         </nav>
       </div>
@@ -86,35 +86,39 @@
       <section class="Guide_Part" aria-labelledby="how-to">
         <h2 id="how-to" class="Title">Using the system</h2>
         <p class="Note">
-          No build step, four declared layers — tokens, base, components, and
-          sections. Later layers take precedence.
-          The theme comes from the @yaks/ui kit
-          (<code class="Pill Pill-code">_ui.css</code>, composed as the site
-          deploys), <code class="Pill Pill-code">site.css</code> adds the
-          face and what only these pages paint, and
-          <code class="Pill Pill-code">controls.css</code> supplies the shared
-          controls. Both the management pages and the site's
-          <code class="Pill Pill-code">style.css</code> load them. Follow these
-          rules when adding a page or component:
+          No build step of ours, four declared layers — tokens, base,
+          components, and sections. Later layers take precedence. Every
+          part below is one of the @yaks/ui kit's, in its
+          <code class="Chip Chip-code">linen</code> theme and drawn by its
+          <code class="Chip Chip-code">pencil</code> skin: the deploy
+          composes them as <code class="Chip Chip-code">_ui.css</code>
+          (sheet-assets.ts names the parts the pages wear).
+          <code class="Chip Chip-code">site.css</code> adds the face and what
+          only these pages paint. The management pages'
+          <code class="Chip Chip-code">pages.css</code> and the site's
+          <code class="Chip Chip-code">style.css</code> load both and lay out
+          their pages. Follow these rules when adding a page or component:
         </p>
         <ul class="Guide_Rules">
           <li>
-            <b>Use an existing component before writing new CSS.</b> The
-            available titles, notes, pills, buttons, fields, tabs, sidebars,
+            <b>Use an existing part before writing new CSS.</b> A part a
+            page lacks goes into the kit, drawn by pencil, with an example
+            here. The
+            available titles, notes, chips, buttons, fields, tabs, sidebars,
             bubbles, windows, cards, rows, forms, and prose styles are shown
             below, and the rules they follow are under One design language.
           </li>
           <li>
             <b>Use colour roles, never a colour.</b> Write
-            <code class="Pill Pill-code">var(--text)</code>, never
-            <code class="Pill Pill-code">#523828</code>. The theme gives each
+            <code class="Chip Chip-code">var(--text)</code>, never
+            <code class="Chip Chip-code">#523828</code>. The theme gives each
             role a light and a dark paint; a colour written down follows
             neither.
           </li>
           <li>
             <b>Implement variants with custom properties.</b>
-            <code class="Pill Pill-code">.Pill-quiet</code> sets
-            <code class="Pill Pill-code">--pill-fill</code> instead of
+            <code class="Chip Chip-code">.Chip-quiet</code> sets
+            <code class="Chip Chip-code">--chip-fill</code> instead of
             repeating the component's padding and border.
           </li>
           <li>
@@ -150,8 +154,8 @@
           </li>
           <li>
             <b>Keep prose narrow.</b> Articles, help, and legal pages use
-            <code class="Pill Pill-code">--measure</code>. Use
-            <code class="Pill Pill-code">--wide-measure</code> only when a
+            <code class="Chip Chip-code">--measure</code>. Use
+            <code class="Chip Chip-code">--wide-measure</code> only when a
             grid, preview, or comparison needs the extra width.
           </li>
           <li>
@@ -192,9 +196,9 @@
           <li>
             <b>A card holds one thing.</b> A connection, a plan, the people
             in a space, one app's visits: each is one
-            <code class="Pill Pill-code">.Card</code>. Cards stack one gap
+            <code class="Chip Chip-code">.Card</code>. Cards stack one gap
             apart, and a run of cards that belong together sits under a
-            <code class="Pill Pill-code">.Group</code> heading.
+            <code class="Chip Chip-code">.Group</code> heading.
           </li>
           <li>
             <b>A card's head says what it is and holds what acts on it.</b>
@@ -206,28 +210,28 @@
           <li>
             <b>Hierarchy is four steps of type.</b> The page title; a card's
             title at 1rem; what a thing says at
-            <code class="Pill Pill-code">--small</code> or the body size; and
+            <code class="Chip Chip-code">--small</code> or the body size; and
             what describes it (a hint, a status, a count, a date) at
-            <code class="Pill Pill-code">--fine</code> in
-            <code class="Pill Pill-code">--muted</code>. The mono face is
+            <code class="Chip Chip-code">--fine</code> in
+            <code class="Chip Chip-code">--muted</code>. The mono face is
             only for what a person copies or types.
           </li>
           <li>
             <b>Like things are rows.</b> The apps using a connection, the
             people in a space, the agents connected, the apps in the trash:
-            <code class="Pill Pill-code">.Rows</code> in a card, hairlines
+            <code class="Chip Chip-code">.Rows</code> in a card, hairlines
             between them, each row's actions at its right.
           </li>
           <li>
             <b>A field sits under its label, never at the end of a
             sentence.</b> Every field
-            (<code class="Pill Pill-code">.Form_Field</code>) is its label,
+            (<code class="Chip Chip-code">.Form_Field</code>) is its label,
             its control and its hint, on one left edge and at most 34rem
             wide, in a form or alone in a card. One field and its button
             share a line
-            (<code class="Pill Pill-code">.Form_Line</code>); a longer form
+            (<code class="Chip Chip-code">.Form_Line</code>); a longer form
             ends with its button. What only a few people change folds under
-            <b>Advanced options</b> (<code class="Pill Pill-code">.More</code>)
+            <b>Advanced options</b> (<code class="Chip Chip-code">.More</code>)
             with a sensible default already in place.
           </li>
           <li>
@@ -248,7 +252,7 @@
       <section class="Guide_Part" aria-labelledby="theme-roles">
         <h2 id="theme-roles" class="Title">The theme</h2>
         <p class="Note">
-          yaks.app wears <code class="Pill Pill-code">linen</code>, a theme of
+          yaks.app wears <code class="Chip Chip-code">linen</code>, a theme of
           the @yaks/ui kit: every colour a part reads is one of its roles, and
           each role is a light and a dark paint. Values reflect the selected
           theme.
@@ -348,7 +352,7 @@
           What only yaks.app's pages paint, and no theme names:
           the person's bubble, the assistant's, an embedded app's ground and
           a field's well. They are declared in
-          <code class="Pill Pill-code">site.css</code>, from the theme's roles
+          <code class="Chip Chip-code">site.css</code>, from the theme's roles
           where they can be.
         </p>
         <ul class="Guide_Swatches">
@@ -410,7 +414,7 @@
       <section class="Guide_Part" aria-labelledby="space">
         <h2 id="space" class="Title">Space and shape</h2>
         <p class="Note">
-          Spacing tokens derive from <code class="Pill Pill-code">--gap</code>.
+          Spacing tokens derive from <code class="Chip Chip-code">--gap</code>.
         </p>
         <ul class="Guide_Sizes">
           <li class="Guide_Size" data-token="--quarter-gap">
@@ -448,7 +452,7 @@
           reading column and a gutter after it, and
           <code class="Guide_Name">--rhythm</code> says how far apart the
           page's sections sit. A page kind sets all four on its
-          <code class="Pill Pill-code">body</code>, and the header, the page
+          <code class="Chip Chip-code">body</code>, and the header, the page
           and the footer are framed by the sum.
         </p>
         <p class="Note Note-small">
@@ -475,7 +479,7 @@
             <span class="Guide_Value"></span>
           </li>
           <li class="Guide_Swatch" data-token="--lift">
-            <span class="Guide_Chip Button"
+            <span class="Guide_Chip Button Button-go"
               style="--swatch: var(--accent); border-color: transparent"></span>
             <code class="Guide_Name">--lift</code>
             <span class="Guide_Value"></span>
@@ -507,17 +511,33 @@
         </div>
 
         <div class="Card Guide_Demo">
-          <p class="Guide_Name">.Pills · .Pill · .Pill-quiet · .Pill-code</p>
-          <ul class="Pills">
-            <li class="Pill">a recipe box</li>
-            <li class="Pill">a garden diary</li>
-            <li class="Pill">a chore chart</li>
+          <p class="Guide_Name">.Chips · .Chip · .Chip-quiet · .Chip-code</p>
+          <ul class="Chips">
+            <li class="Chip">a recipe box</li>
+            <li class="Chip">a garden diary</li>
+            <li class="Chip">a chore chart</li>
           </ul>
-          <p><a class="Pill" href="#components">Recipe box<span class="Pill_Tag">Public</span></a></p>
+          <p><a class="Chip" href="#components">Recipe box<span class="Chip_Tag">Public</span></a></p>
           <p
-            class="Note Note-small">Linked pills have an underlined label and are drawn in pencil. Plain pills label content.</p>
-          <p><span class="Pill Pill-quiet"><span class="Address"><strong class="Address_Name">yourname</strong>.yaks.app/recipes</span></span></p>
-          <p><code class="Pill Pill-code">https://yaks.app/mcp</code></p>
+            class="Note Note-small">Linked chips have an underlined label and are drawn in pencil. Plain chips label content.</p>
+          <p><span class="Chip Chip-quiet"><span class="Address"><strong class="Address_Name">yourname</strong>.yaks.app/recipes</span></span></p>
+          <p><code class="Chip Chip-code">https://yaks.app/mcp</code></p>
+        </div>
+
+        <div class="Card Guide_Demo">
+          <p
+            class="Guide_Name">The kit's marks, as pencil draws them: .Chip-0 … .Chip-5 · .Chip-ghost · .Dot and its shapes and tones · .State in every tone</p>
+          <p><span class="Chip Chip-0">doc</span> <span class="Chip Chip-1">task</span> <span class="Chip Chip-2">filed</span> <span class="Chip Chip-3">claim</span> <span class="Chip Chip-4">created</span> <span class="Chip Chip-5">updated</span> <span class="Chip Chip-ghost">+ memory</span></p>
+          <p><span class="Dot"></span> <span class="Dot Dot-ring"></span> <span class="Dot Dot-dashed"></span> <span class="Dot Dot-half"></span> <span class="Dot Dot-pulse"></span> <span class="Dot Dot-check"></span> <span class="Dot Dot-cross"></span> <span class="Dot Dot-alert"></span> </p>
+          <p><span class="Dot Dot-info"></span> <span class="Dot Dot-active"></span> <span class="Dot Dot-positive"></span> <span class="Dot Dot-negative"></span> <span class="Dot Dot-caution"></span> <span class="Dot Dot-accent"></span> <span class="Dot Dot-special"></span> </p>
+          <p><span class="State State-info"><span class="Dot Dot-info"></span>info</span> <span class="State State-active"><span class="Dot Dot-active"></span>active</span> <span class="State State-positive"><span class="Dot Dot-positive"></span>positive</span> <span class="State State-negative"><span class="Dot Dot-negative"></span>negative</span> <span class="State State-caution"><span class="Dot Dot-caution"></span>caution</span> <span class="State State-accent"><span class="Dot Dot-accent"></span>accent</span> <span class="State State-special"><span class="Dot Dot-special"></span>special</span> </p>
+          <p
+            class="Guide_Name">.Tabs with buttons · .Tabs_Tab-on · .Tabs_Tab-hover · .Tabs_Badge · .SideNav_Link-hover · .Field-bare</p>
+          <div
+            class="Tabs"><button class="Tabs_Tab Tabs_Tab-on" type="button">Board</button><button class="Tabs_Tab Tabs_Tab-hover" type="button">List</button><button class="Tabs_Tab" type="button">Inbox <span class="Tabs_Badge">3</span></button></div>
+          <nav
+            class="SideNav"><a class="SideNav_Link SideNav_Link-hover" href="#components">Under the pointer</a></nav>
+          <p><input class="Field Field-bare" value="A bare field, inside a framed part"></p>
         </div>
 
         <div class="Card Guide_Demo">
@@ -526,8 +546,26 @@
         </div>
 
         <div class="Card Guide_Demo">
+          <p
+            class="Guide_Name">.Button · .Button-go · .Button-quiet · .Button-danger · .Button-add</p>
+          <p>
+            <button class="Button Button-go" type="button">Save</button>
+            <button class="Button" type="button">Preview</button>
+            <button class="Button Button-quiet" type="button">Later</button>
+          </p>
+          <p>
+            <button class="Button Button-danger"
+              type="button">Delete app</button>
+            <button class="Button Button-add"
+              type="button">+ Add a person</button>
+          </p>
+          <p
+            class="Note Note-small">The one to press is the accent; a plain button is paper; a quiet one steps back beside another and reads as a link. One that destroys says so in the negative, and one that adds what is not there yet is dashed.</p>
+        </div>
+
+        <div class="Card Guide_Demo">
           <p class="Guide_Name">.Button · .Field · select.Field</p>
-          <p><a class="Button" href="#components">Sign in</a></p>
+          <p><a class="Button Button-go" href="#components">Sign in</a></p>
           <form onsubmit="return false">
             <label for="demo-field" class="Note Note-small">Your email</label>
             <p>
@@ -537,7 +575,8 @@
                 type="email"
                 placeholder="you@example.com"
               />
-              <button class="Button" type="submit">Send me a code</button>
+              <button class="Button Button-go"
+                type="submit">Send me a code</button>
             </p>
             <p>
               <input
@@ -559,35 +598,36 @@
           <p
             class="Note Note-small">Fields and select menus are pencilled wells; focus draws the edge in the accent, and a select keeps its native arrow.</p>
           <p>
-            <button class="Button" type="button" aria-pressed="true">
+            <button class="Button Button-go" type="button" aria-pressed="true">
               Pin app
             </button>
-            <button class="Button" type="button" disabled>Unavailable</button>
+            <button class="Button Button-go" type="button"
+              disabled>Unavailable</button>
           </p>
           <p class="Note Note-small">
             Buttons and single-line fields share
-            <code class="Pill Pill-code">--control-height</code> (2.25rem).
+            <code class="Chip Chip-code">--control-height</code> (2.25rem).
             A textarea grows with what is typed in it. Adjust horizontal
-            padding with <code class="Pill Pill-code">--control-pad-inline</code>.
+            padding with <code class="Chip Chip-code">--control-pad-inline</code>.
             Press “Pin app” to toggle its state. Use a native button for an
             action, an anchor for navigation, and
-            <code class="Pill Pill-code">aria-pressed</code> for a toggle.
+            <code class="Chip Chip-code">aria-pressed</code> for a toggle.
           </p>
         </div>
 
         <div class="Card Guide_Demo">
-          <p class="Guide_Name">.Choice · checkbox · radio</p>
-          <p><label class="Choice"><input type="checkbox" checked>Show completed apps</label></p>
-          <p><label class="Choice"><input type="checkbox">Send reminders</label></p>
-          <p><label class="Choice"><input type="checkbox" checked disabled>Unavailable option</label></p>
+          <p class="Guide_Name">.Check · checkbox · radio</p>
+          <p><label class="Check"><input type="checkbox" checked>Show completed apps</label></p>
+          <p><label class="Check"><input type="checkbox">Send reminders</label></p>
+          <p><label class="Check"><input type="checkbox" checked disabled>Unavailable option</label></p>
           <fieldset class="Card Guide_Choices">
             <legend>App visibility</legend>
             <label
-              class="Choice"><input type="radio" name="demo-visibility" value="private" checked>Only me</label>
+              class="Check"><input type="radio" name="demo-visibility" value="private" checked>Only me</label>
             <label
-              class="Choice"><input type="radio" name="demo-visibility" value="public">Everyone</label>
+              class="Check"><input type="radio" name="demo-visibility" value="public">Everyone</label>
             <label
-              class="Choice"><input type="radio" name="demo-visibility" value="team" disabled>Team</label>
+              class="Check"><input type="radio" name="demo-visibility" value="team" disabled>Team</label>
           </fieldset>
           <p
             class="Note Note-small">Native inputs keep their keyboard controls and form values. The whole label is clickable.</p>
@@ -597,12 +637,12 @@
           <p class="Guide_Name">.Voices · .Voices_Row</p>
           <div class="Voices">
             <div
-              class="Voices_Row"><label class="Choice"><input type="radio" name="demo-voice" checked><span><b>Draco</b> <span
-                    class="Note Note-small">Calm and measured</span></span></label><button class="Button Button-quiet"
+              class="Voices_Row"><label class="Check"><input type="radio" name="demo-voice" checked><span><b>Draco</b> <span
+                    class="Note Note-small">Calm and measured</span></span></label><button class="Button"
                 type="button">Play</button></div>
             <div
-              class="Voices_Row"><label class="Choice"><input type="radio" name="demo-voice"><span><b>Thalia</b> <span
-                    class="Note Note-small">Bright and quick</span></span></label><button class="Button Button-quiet"
+              class="Voices_Row"><label class="Check"><input type="radio" name="demo-voice"><span><b>Thalia</b> <span
+                    class="Note Note-small">Bright and quick</span></span></label><button class="Button"
                 type="button">Play</button></div>
           </div>
           <p
@@ -626,12 +666,19 @@
         </div>
 
         <div class="Card Guide_Demo">
-          <p class="Guide_Name">.SideNav · [aria-current="page"]</p>
+          <p class="Guide_Name">
+            .SideNav · .SideNav_Link · .SideNav_Link-on · .SideNav_Rule
+          </p>
           <div class="Guide_SideNav">
             <nav class="SideNav" aria-label="Example site navigation">
-              <a href="/style-guide" aria-current="page">Style guide</a>
-              <a href="/help">Help</a>
-              <a href="/pricing">Pricing</a>
+              <a
+                class="SideNav_Link SideNav_Link-on"
+                href="/style-guide"
+                aria-current="page"
+              >Style guide</a>
+              <a class="SideNav_Link" href="/help">Help</a>
+              <hr class="SideNav_Rule">
+              <a class="SideNav_Link" href="/pricing">Pricing</a>
             </nav>
             <div class="Guide_SidePanel">
               <h3 class="Title">Style guide</h3>
@@ -691,18 +738,6 @@
         </div>
 
         <div class="Card Guide_Demo">
-          <p class="Guide_Name">.Agents-links · .Agents_Open</p>
-          <h3 class="Title">Ask your agent for a new yaks.app</h3>
-          <ul class="Agents Agents-links"
-            aria-label="Connected agents">
-            <li><a class="Agents_Open" href="https://chatgpt.com/" target="_blank" rel="noopener noreferrer">Open ChatGPT <svg class="Icon" aria-hidden="true"><use href="/icons.svg#external-link"></use></svg></a></li>
-            <li><a class="Agents_Open" href="https://claude.ai/new" target="_blank" rel="noopener noreferrer">Open Claude <svg class="Icon" aria-hidden="true"><use href="/icons.svg#external-link"></use></svg></a></li>
-          </ul>
-          <p
-            class="Note Note-small">Use compact links when opening an agent is the action. Use status rows to manage agents.</p>
-        </div>
-
-        <div class="Card Guide_Demo">
           <p class="Guide_Name">
             .Chat · .Chat_Who · .Chat_Who-you · .Chat_Bubble ·
             .Chat_Bubble-you · .Chat_Bubble-them
@@ -725,7 +760,7 @@
         <div class="Card Guide_Demo">
           <p class="Guide_Name">.Said</p>
           <p class="Note">
-            Use <code class="Pill Pill-code">&lt;q&gt;</code> for words a person
+            Use <code class="Chip Chip-code">&lt;q&gt;</code> for words a person
             says to an assistant. The element remains a quotation without CSS,
             and the background continues across line breaks:
             <q class="Said">invite ana@example.com to the recipe box, say it's
@@ -745,7 +780,7 @@
           <div class="Window">
             <div class="Window_Bar">
               <span
-                class="Pill Pill-quiet"><span class="Address"><strong class="Address_Name">yourname</strong>.yaks.app/recipes</span></span>
+                class="Chip Chip-quiet"><span class="Address"><strong class="Address_Name">yourname</strong>.yaks.app/recipes</span></span>
             </div>
             <div class="Window_Body">
               <p class="Window_Heading">Our recipe box</p>
@@ -762,7 +797,7 @@
           <div class="Window">
             <div class="Window_Bar">
               <span
-                class="Pill Pill-quiet"><span class="Address"><strong class="Address_Name">yourname</strong>.yaks.app/preview</span></span>
+                class="Chip Chip-quiet"><span class="Address"><strong class="Address_Name">yourname</strong>.yaks.app/preview</span></span>
             </div>
             <div class="Window_Body Window_Body-frame">
               <iframe
@@ -787,40 +822,42 @@
 
         <div class="Card Guide_Demo">
           <p class="Guide_Name">
-            .Card_Head · .Card_Mark · .Card_Title · .Status · .Status-good ·
-            .Status-warn · .Card_Actions · .Button-link · .Card_Sub · .Markdown
+            .Card_Head · .Card_Mark · .Card_Title · .State · .State-positive ·
+            .State-negative · .Card_Actions · .Button-quiet · .Card_Sub · .Body
           </p>
           <section class="Card">
             <header class="Card_Head">
               <img class="Card_Mark" src="connector.svg" alt="" width="24"
                 height="24" />
               <h3 class="Card_Title">Weather API</h3>
-              <span class="Status Status-good">Connected</span>
+              <span
+                class="State State-positive"><span class="Dot Dot-positive"></span>Connected</span>
               <div class="Card_Actions">
-                <button class="Button Button-quiet"
+                <button class="Button"
                   type="button">Disconnect</button>
               </div>
             </header>
             <p class="Card_Sub">Forecasts for any place on Earth.</p>
             <p class="Note Note-small">
               Its key is only ever sent to
-              <code class="Pill Pill-code">api.weather.test</code>.
+              <code class="Chip Chip-code">api.weather.test</code>.
             </p>
           </section>
           <section class="Card">
             <header class="Card_Head">
               <h3 class="Card_Title">Calendar</h3>
-              <span class="Status Status-warn">Needs connecting</span>
+              <span
+                class="State State-negative"><span class="Dot Dot-negative"></span>Needs connecting</span>
               <div class="Card_Actions">
-                <button class="Button Button-link" type="button">Later</button>
-                <button class="Button" type="button">Connect</button>
+                <button class="Button Button-quiet" type="button">Later</button>
+                <button class="Button Button-go" type="button">Connect</button>
               </div>
             </header>
             <p class="Card_Sub">Events from your own calendar.</p>
             <details class="More" open>
               <summary>How to get the key</summary>
               <div class="More_Body">
-                <div class="Markdown">
+                <div class="Body">
                   <p>Sign in at <code>calendar.test</code>, open
                     <b>Settings</b>, and allow yaks.app.</p>
                 </div>
@@ -853,11 +890,10 @@
                 <div class="Rows_Main">
                   <strong class="Rows_Name">sam</strong>
                   <span class="Rows_Meta">sam@example.com · viewer ·
-                    <span class="People_Waiting">invited 13 October 2026,
-                      not accepted yet</span></span>
+                    invited 13 October 2026, not accepted yet</span>
                 </div>
                 <div class="Rows_Actions">
-                  <button class="Button Button-quiet" type="button">Send
+                  <button class="Button" type="button">Send
                     again</button>
                 </div>
               </li>
@@ -872,7 +908,7 @@
         <div class="Card Guide_Demo">
           <p class="Guide_Name">
             .Form · .Form_Field · .Form_Label · .Form_Hint · .Form_Line ·
-            .Form_Actions · .At · .More · .More_Body
+            .Form_Actions · .At · .At_End · .More · .More_Body
           </p>
           <section class="Card">
             <header class="Card_Head">
@@ -884,8 +920,8 @@
                   address</label>
                 <div class="Form_Line">
                   <span class="At"><input class="Field" id="demo-address"
-                      value="dana" /><span>.yaks.app</span></span>
-                  <button class="Button" type="submit">Save</button>
+                      value="dana" /><span class="At_End">.yaks.app</span></span>
+                  <button class="Button Button-go" type="submit">Save</button>
                 </div>
                 <p class="Form_Hint">Every app moves with it.</p>
               </div>
@@ -928,7 +964,7 @@
                 </div>
               </details>
               <div class="Form_Actions">
-                <button class="Button" type="submit">Save key</button>
+                <button class="Button Button-go" type="submit">Save key</button>
               </div>
             </form>
           </section>
@@ -960,12 +996,12 @@
                   <li
                     class="Drop_Item"><span class="Drop_Name">lease.pdf</span><span
                       class="Drop_Size">412 KB</span><button
-                      class="Button Button-quiet" type="button">Remove</button></li>
+                      class="Button" type="button">Remove</button></li>
                   <li class="Drop_Item"><img class="Drop_Picture"
                       src="yak.webp" alt="" /><span
                       class="Drop_Name">yak.webp</span><span
                       class="Drop_Size">38 KB</span><button
-                      class="Button Button-quiet" type="button">Remove</button></li>
+                      class="Button" type="button">Remove</button></li>
                 </ul>
               </div>
             </div>
@@ -992,19 +1028,19 @@
               <li class="Drop_Item"><img class="Drop_Picture" src="yak.webp"
                   alt="" /><span class="Drop_Name">yak.webp</span><span
                   class="Drop_Size">38 KB</span><button
-                  class="Button Button-quiet" type="button"
+                  class="Button" type="button"
                   aria-label="Remove yak.webp">✕</button></li>
               <li class="Drop_Item"><span class="Drop_Kind">PDF</span><span
                   class="Drop_Name">lease.pdf</span><span
                   class="Drop_Size">412 KB</span><button
-                  class="Button Button-quiet" type="button"
+                  class="Button" type="button"
                   aria-label="Remove lease.pdf">✕</button></li>
               <li class="Drop_Item Drop_Item-unread"><span
                   class="Drop_Kind">ZIP</span><span
                   class="Drop_Name">site.zip</span><span
                   class="Drop_Size">2.1 MB</span><span class="Drop_Note">The
                   Operator can't read this kind of file. It is kept with
-                  your message.</span><button class="Button Button-quiet"
+                  your message.</span><button class="Button"
                   type="button" aria-label="Remove site.zip">✕</button></li>
             </ul>
             <p class="Drop_Said" role="status">scan.tiff is larger than 16 MB,
@@ -1028,18 +1064,20 @@
         </div>
 
         <div class="Card Guide_Demo">
-          <p class="Guide_Name">.Copy · .Pick · .Copy_Go · .Say · .Say-no</p>
-          <span class="Copy"><span class="Pick">Any yaks.app ideas you
+          <p
+            class="Guide_Name">.Copy · .Copy_Text · .Copy_Go · .Notice · .Notice-negative</p>
+          <span class="Copy"><span class="Copy_Text">Any yaks.app ideas you
               think I'd like?</span><button class="Button Copy_Go"
               type="button">Copy</button></span>
-          <p class="Say" role="status">Saved. Your apps live at
+          <p class="Notice" role="status">Saved. Your apps live at
             dana.yaks.app.</p>
-          <p class="Say Say-no" role="status">That name is taken.</p>
+          <p class="Notice Notice-negative"
+            role="status">That name is taken.</p>
         </div>
 
         <div class="Card Guide_Demo">
-          <p class="Guide_Name">.Working · .Working_Yak</p>
-          <p class="Working" role="status"><picture class="Working_Yak"
+          <p class="Guide_Name">.Loading · .Loading_Mark</p>
+          <p class="Loading" role="status"><picture class="Loading_Mark"
               data-pose="typing"><source
                 media="(prefers-reduced-motion: reduce)"
                 srcset="/mascot/typing-still-1x.webp 1x, /mascot/typing-still.webp 2x, /mascot/typing-still-3x.webp 3x"><img
@@ -1047,7 +1085,7 @@
                 srcset="/mascot/typing-1x.webp 1x, /mascot/typing.webp 2x, /mascot/typing-3x.webp 3x"
                 width="40" height="40"
                 alt=""></picture><span>Typing…</span></p>
-          <p class="Working" role="status"><picture class="Working_Yak"
+          <p class="Loading" role="status"><picture class="Loading_Mark"
               data-pose="checking"><source
                 media="(prefers-reduced-motion: reduce)"
                 srcset="/mascot/checking-still-1x.webp 1x, /mascot/checking-still.webp 2x, /mascot/checking-still-3x.webp 3x"><img
@@ -1084,16 +1122,16 @@
 
         <div class="Card Guide_Demo">
           <p class="Guide_Name">
-            .Stats · .Stats_Total · .Stats_Unit · .Stats_Plot · .Stats_Span · .Stats_Tops · .Stats_Column ·
-            .Stats_List
+            .Report · .Report_Total · .Report_Unit · .Report_Plot · .Report_Span · .Report_Tops · .Report_Column ·
+            .Report_List
           </p>
-          <article class="Card Stats" aria-labelledby="stats-demo-title">
+          <article class="Card Report" aria-labelledby="stats-demo-title">
             <header class="Card_Head">
               <h2 class="Card_Title" id="stats-demo-title">Recipe Box</h2>
               <p
-                class="Stats_Total">42 <span class="Stats_Unit">visits</span></p>
+                class="Report_Total">42 <span class="Report_Unit">visits</span></p>
             </header>
-            <figure class="Stats_Plot">
+            <figure class="Report_Plot">
               <div class="Chart Chart-bars" role="img" tabindex="0"
                 aria-label="42 visits over 7 days, 9 on the last day"
                 data-chart="bars" data-from="2026-09-01"
@@ -1117,24 +1155,24 @@
                 </svg>
               </div>
               <figcaption
-                class="Stats_Span"><span>1 Sept</span><span>7 Sept</span></figcaption>
+                class="Report_Span"><span>1 Sept</span><span>7 Sept</span></figcaption>
             </figure>
-            <div class="Stats_Tops">
-              <div class="Stats_Column">
+            <div class="Report_Tops">
+              <div class="Report_Column">
                 <h3>Pages</h3>
-                <ul class="Stats_List">
+                <ul class="Report_List">
                   <li><span>/recipes/</span><b>42</b></li>
                 </ul>
               </div>
-              <div class="Stats_Column">
+              <div class="Report_Column">
                 <h3>Came from</h3>
-                <ul class="Stats_List">
+                <ul class="Report_List">
                   <li><span>example.com</span><b>8</b></li>
                 </ul>
               </div>
-              <div class="Stats_Column">
+              <div class="Report_Column">
                 <h3>Countries</h3>
-                <ul class="Stats_List">
+                <ul class="Report_List">
                   <li><span>US</span><b>42</b></li>
                 </ul>
               </div>
@@ -1160,7 +1198,7 @@
           />
           <p class="Note Note-small">
             One transparent drawing, in
-            <code class="Pill Pill-code">yak.webp</code>, serves both sizes.
+            <code class="Chip Chip-code">yak.webp</code>, serves both sizes.
             Square exports provide the favicon, home-screen icon, and future
             app-icon sizes.
           </p>
@@ -1205,18 +1243,18 @@
           </li>
           <li>
             <b>.Page</b> — the centred reading column and the two slots
-            beside it. A page kind on the <code class="Pill Pill-code">body</code>
+            beside it. A page kind on the <code class="Chip Chip-code">body</code>
             says how wide it all is, by re-pointing
-            <code class="Pill Pill-code">--measure</code>,
-            <code class="Pill Pill-code">--side</code> and
-            <code class="Pill Pill-code">--aside</code>, and how far apart its
-            sections sit, with <code class="Pill Pill-code">--rhythm</code>.
+            <code class="Chip Chip-code">--measure</code>,
+            <code class="Chip Chip-code">--side</code> and
+            <code class="Chip Chip-code">--aside</code>, and how far apart its
+            sections sit, with <code class="Chip Chip-code">--rhythm</code>.
             Pages that contain grids or previews may use
-            <code class="Pill Pill-code">--wide-measure</code>.
+            <code class="Chip Chip-code">--wide-measure</code>.
           </li>
           <li>
             <b>.Home</b> — the home page's frame, asked for on its
-            <code class="Pill Pill-code">body</code>.
+            <code class="Chip Chip-code">body</code>.
           </li>
           <li>
             <b>.Hello</b>, <b>.Hello_Copy</b>, <b>.Hello_Yak</b>,
@@ -1231,7 +1269,7 @@
             <b>.Join</b>, <b>.Join_Doors</b> — home page sections and their
             layout elements. Pricing also uses <b>.Hello</b>, <b>.Yours</b>,
             and <b>.Join</b>; homepage-specific overrides stay under
-            <code class="Pill Pill-code">.Home</code>.
+            <code class="Chip Chip-code">.Home</code>.
           </li>
           <li><b>.Foot</b>, <b>.Foot_Links</b> — the shared site footer.</li>
           <li>

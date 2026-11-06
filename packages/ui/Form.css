@@ -1,0 +1,46 @@
+/* A form: every field its label over its control over its hint, on one left
+   edge and one width at most the measure, and what sends it at the end. One
+   field and its button share a line while they fit. */
+.Form {
+  display: grid;
+  gap: var(--gap);
+  margin: 0;
+}
+.Form_Field {
+  display: grid;
+  gap: calc(var(--half-gap) / 2);
+  min-width: 0;
+  max-width: var(--measure);
+}
+.Form_Label {
+  margin: 0;
+  color: var(--text);
+  font-size: var(--small);
+  font-weight: 700;
+}
+.Form_Optional {
+  color: var(--muted);
+  font-weight: 400;
+}
+.Form_Field > .Field {
+  box-sizing: border-box;
+  width: 100%;
+}
+.Form_Hint {
+  margin: 0;
+  color: var(--muted);
+  font-size: var(--small);
+}
+.Form_Line,
+.Form_Actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--half-gap);
+  min-width: 0;
+  margin: 0;
+}
+.Form_Line > .Field,
+.Form_Line > .At {
+  flex: 1 1 12rem;
+}

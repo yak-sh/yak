@@ -1,0 +1,98 @@
+/* Pencil's press, yaks.app's: a flat fill on a hatch, the hatch what an
+   offset copy of it would show past its right and bottom edges, and its
+   outline drawn in pencil on ::after (--pencil, --pencil-style: each part
+   starts from a solid graphite line, so none takes the line of a box it sits
+   in). A hover lifts the button off the hatch and a press slides it onto it;
+   the hatch stays put. It stands --control-height tall, as a field does,
+   padded by --control-pad-inline, which a part that holds a row of them
+   re-points.
+
+   Plain is paper; -go, the one to press, the accent; -quiet steps back
+   beside another and reads as a link, with no fill, outline or hatch.
+   -danger says its word in the negative, and -add, which offers what is not
+   there yet, is muted and its line dashed. The fill and the ink ride
+   --button-fill and --button-ink, so a part can re-point them. */
+.Button {
+  box-sizing: border-box;
+  height: var(--control-height);
+  padding: 0 var(--control-pad-inline, .75rem);
+  font: inherit;
+  line-height: 1.25;
+  vertical-align: middle;
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: .35rem;
+  border: 1px solid transparent;
+  border-radius: var(--radius);
+  background: var(--button-fill, var(--card));
+  color: var(--button-ink, var(--text));
+  font-weight: 800;
+  text-align: center;
+  text-decoration: none;
+  cursor: pointer;
+}
+.Button::before {
+  content: '';
+  position: absolute;
+  inset: calc(var(--lift) - 1px) calc(-1px - var(--lift))
+    calc(-1px - var(--lift)) calc(var(--lift) - 1px);
+  border-radius: var(--radius);
+  background: var(--hatch);
+  clip-path: polygon(calc(100% - var(--lift)) 0, 100% 0, 100% 100%, 0 100%,
+    0 calc(100% - var(--lift)), calc(100% - var(--lift))
+    calc(100% - var(--lift)));
+  pointer-events: none;
+}
+.Button:hover:not(:disabled, [aria-pressed='true']) {
+  --lift: 5px;
+  transform: translate(-1px, -1px);
+  background: color-mix(in srgb, var(--button-fill, var(--card)),
+    white 10%);
+}
+.Button:active:not(:disabled),
+.Button[aria-pressed='true'] {
+  --lift: 1.5px;
+  transform: translate(2.5px, 2.5px);
+}
+.Button:disabled {
+  --lift: 0px;
+  opacity: .55;
+  cursor: not-allowed;
+}
+.Button-go {
+  --button-fill: var(--accent);
+  --button-ink: var(--bg);
+}
+.Button-quiet {
+  --button-ink: var(--accent);
+}
+.Button-quiet,
+.Button-quiet:hover:not(:disabled, [aria-pressed='true']),
+.Button-quiet:active:not(:disabled) {
+  --lift: 0px;
+  padding: 0;
+  background: none;
+  font-weight: inherit;
+  text-decoration: underline;
+  transform: none;
+}
+.Button-quiet::before,
+.Button-quiet::after {
+  content: none;
+}
+.Button-add {
+  --pencil-style: dashed;
+  --button-ink: var(--muted);
+}
+.Button-add:hover {
+  --button-ink: var(--text);
+}
+.Button-danger {
+  --button-ink: var(--negative);
+}
+.Button-go.Button-danger {
+  --button-fill: var(--negative);
+  --button-ink: var(--bg);
+}

@@ -1,0 +1,63 @@
+/**
+ * A check box or a radio and the words it answers to, the label around
+ * both, so pressing the words presses the box:
+ * `<Check><input type="checkbox" />Send reminders</Check>`. Which are
+ * checked, and what checking one does, are the caller's.
+ *
+ * @module
+ */
+
+import type { Sheet } from '@yaks/tui/theme'
+import { h } from 'preact'
+import { el, type Part } from './el.ts'
+import type { Colors, Specimen } from './theme.ts'
+
+/** A box or a radio and its words. */
+export let Check: Part = el('label', 'Check')
+
+/** What it is, in a line. */
+export let description = 'A check box or a radio, and its words.'
+
+/** Its box and its words stay apart, as in a browser. */
+export let sheet = (_c: Colors): Sheet => ({
+  Check: { spaced: true },
+})
+
+let check = (
+  words: string,
+  { type = 'checkbox', checked = false, disabled = false, name = '' } = {},
+) =>
+  h(
+    'p',
+    {},
+    h(
+      Check,
+      {},
+      h('input', { type, checked, disabled, name: name || undefined }),
+      words,
+    ),
+  )
+
+/** Boxes and radios, checked, not, and not to be pressed. */
+export let specimens = (): Specimen[] => [
+  [
+    'Check, checkbox',
+    h(
+      'div',
+      {},
+      check('Show completed apps', { checked: true }),
+      check('Send reminders'),
+      check('Unavailable option', { checked: true, disabled: true }),
+    ),
+  ],
+  [
+    'Check, radio',
+    h(
+      'div',
+      {},
+      check('Only me', { type: 'radio', name: 'check-who', checked: true }),
+      check('Everyone', { type: 'radio', name: 'check-who' }),
+      check('Team', { type: 'radio', name: 'check-who', disabled: true }),
+    ),
+  ],
+]

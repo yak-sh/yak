@@ -1,0 +1,9 @@
+/* An address: muted, the name in it the text's own ink and weighted. */
+.Address {
+  color: var(--muted);
+  font-weight: normal;
+}
+.Address_Name {
+  color: var(--text);
+  font-weight: 600;
+}

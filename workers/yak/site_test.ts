@@ -29,6 +29,8 @@ import {
 } from './meter.ts'
 import { AWAKE } from './sandbox.ts'
 import { sheeted } from './sheets.ts'
+import { WORN } from './sheet-assets.ts'
+import { kit, pencil } from '@yaks/ui'
 import { CAP } from './invite.ts'
 import type { Tier } from './directory.ts'
 import { quoted, rate } from './sell.ts'
@@ -204,14 +206,30 @@ test('every jump names a section on its own page', () => {
   }
 })
 
-test('the style guide demonstrates every shared component', () => {
-  let layer = (file: string) =>
-    read(file).replace(/\/\*[\s\S]*?\*\//g, '')
-      .split('@layer components {')[1].split('@layer sections {')[0]
-  let css = layer('style.css') + layer('controls.css')
-  let components = new Set(
-    [...css.matchAll(/\.([A-Z][\w-]*)/g)].map((m) => m[1]),
+// Every part the pages wear (sheet-assets.ts WORN) has an example in the
+// style guide, in every element and variant the pencil skin draws it in (the
+// kit's own where pencil leaves it alone), and so has every component of the
+// site's own stylesheet.
+let drawn = async (name: string) => {
+  let { css, over } = pencil[name] ?? { css: kit[name].css }
+  let urls = [css, ...[over ?? []].flat()].filter((url) => !!url) as URL[]
+  let sheets = await Promise.all(
+    urls.map(async (url) => (await fetch(url)).text()),
   )
+  return [...sheets.join('\n').matchAll(/\.([A-Z][\w-]*)/g)]
+    .map((m) => m[1])
+    .filter((c) =>
+      c == name || c.startsWith(`${name}_`) || c.startsWith(`${name}-`)
+    )
+}
+
+test('the style guide demonstrates every shared component', async () => {
+  let own = read('style.css').replace(/\/\*[\s\S]*?\*\//g, '')
+    .split('@layer components {')[1].split('@layer sections {')[0]
+  let components = new Set([
+    ...[...own.matchAll(/\.([A-Z][\w-]*)/g)].map((m) => m[1]),
+    ...(await Promise.all(WORN.filter((n) => n != 'base').map(drawn))).flat(),
+  ])
   let examples = new Set(
     [...read('style-guide.html').matchAll(/class="([^"]+)"/g)]
       .flatMap((m) => m[1].split(/\s+/)),
@@ -576,7 +594,9 @@ test('every public page hands a stranger sign-in, never /connect', () => {
     assert(!body.includes('href="/connect"'), `${page} points at /connect`)
   }
   let html = read('index.html')
-  let doors = [...html.matchAll(/<a class="Button"\s+href="([^"]+)"/g)]
+  let doors = [
+    ...html.matchAll(/<a class="Button Button-go"\s+href="([^"]+)"/g),
+  ]
     .map((m) => m[1])
   assertEquals(doors, [
     '/login',
@@ -936,7 +956,7 @@ test('every plan card is a price, a note, a list and a button', () => {
     for (let card of document.querySelectorAll('.Plan')) {
       assertEquals(
         [...card.children].map((part) => part.className),
-        ['Plan_Price', 'Note Note-small', 'Plan_List', 'Button'],
+        ['Plan_Price', 'Note Note-small', 'Plan_List', 'Button Button-go'],
         page,
       )
     }

@@ -1,0 +1,10 @@
+/* Pencil's body of text takes the page's measure and type, as yaks.app's
+   rendered markdown always has: the kit's measure, line and ink give way to
+   whatever holds it, a page's prose or a reply. */
+.Body {
+  min-width: auto;
+  max-width: none;
+  color: inherit;
+  line-height: inherit;
+  overflow-wrap: inherit;
+}

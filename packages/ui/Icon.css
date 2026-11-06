@@ -1,0 +1,14 @@
+/* A glyph in lines: the words' height and a little more, sat on their
+   baseline, stroked in their colour. */
+.Icon {
+  display: inline-block;
+  width: 1.1em;
+  height: 1.1em;
+  flex: none;
+  vertical-align: -.15em;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}

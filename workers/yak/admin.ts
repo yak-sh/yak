@@ -42,7 +42,7 @@ import { isTestAddress } from './lib/bots.ts'
 import { sessionAt } from './session.ts'
 import { drawn } from './render/mod.ts'
 import type { Ref, Uses } from './render/directory.ts'
-import { esc } from './html.ts'
+import { esc, sideLink } from './html.ts'
 import { lost, shell } from './pages.ts'
 import { icon, type IconName } from './icons.ts'
 import { type Host, spaceHost, url } from './host.ts'
@@ -374,20 +374,28 @@ let desk = (
   status = 200,
 ) => {
   let all = lists(d.census)
-  let at = (key: string) => current == key ? ' aria-current="page"' : ''
+  let link = (key: string, href: string, face: string) =>
+    sideLink(href, face, current == key)
   let counted = (n: number) => `<span class="Desk_Count">${n}</span>`
-  let nav =
-    KEYS.map((key) =>
-      `<a href="${PATH}/${key}${tested(d)}"${at(key)}>${icon(LISTS[key].icon)}${
-        LISTS[key].title
-      }${counted(shown(d, all[key]).length)}</a>`
-    ).join('') +
-    `<a href="${PATH}/funnel"${at('funnel')}>${
-      icon('chart-no-axes-column-increasing')
-    }Funnel</a>` +
-    `<a href="${PATH}/invites${tested(d)}"${at('invites')}>${
-      icon('qr-code')
-    }Invites${counted(invited(d).length)}</a>`
+  let nav = KEYS.map((key) =>
+    link(
+      key,
+      `${PATH}/${key}${tested(d)}`,
+      `${icon(LISTS[key].icon)}${LISTS[key].title}${
+        counted(shown(d, all[key]).length)
+      }`,
+    )
+  ).join('') +
+    link(
+      'funnel',
+      `${PATH}/funnel`,
+      `${icon('chart-no-axes-column-increasing')}Funnel`,
+    ) +
+    link(
+      'invites',
+      `${PATH}/invites${tested(d)}`,
+      `${icon('qr-code')}Invites${counted(invited(d).length)}`,
+    )
   return shell(
     d.env,
     esc(title),
@@ -426,7 +434,7 @@ export let listing = (d: Reading, key: List, q: string) => {
     esc(q)
   }" placeholder="Search ${what}" aria-label="Search ${what}">${
     d.tests ? '<input type="hidden" name="tests" value="1">' : ''
-  }<button class="Button Button-quiet" type="submit">Search</button></form>${toggle}</div>${
+  }<button class="Button" type="submit">Search</button></form>${toggle}</div>${
     found.length
       ? rows(d, found)
       : `<section class="Empty"><h2>${

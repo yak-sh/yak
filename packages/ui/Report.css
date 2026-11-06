@@ -1,0 +1,76 @@
+/* A report: a card whose head says the total where its actions would sit,
+   then a chart of the days, its first and last day under it, and short
+   lists side by side, each name cut short before it would push its count
+   out of its column. */
+.Report {
+  gap: 1.25rem;
+}
+.Report_Total {
+  flex: none;
+  margin: 0 0 0 auto;
+  color: var(--text);
+  font-size: var(--h3);
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  line-height: 1.2;
+}
+.Report_Unit {
+  color: var(--muted);
+  font-size: var(--small);
+  font-weight: 400;
+}
+.Report_Plot {
+  display: grid;
+  gap: 0.35rem;
+  margin: 0;
+}
+.Report_Span {
+  display: flex;
+  justify-content: space-between;
+  color: var(--muted);
+  font-size: var(--small);
+}
+.Report_Tops {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 1.5rem;
+}
+.Report_Column h3 {
+  margin: 0 0 0.5rem;
+  color: var(--muted);
+  font-size: var(--small);
+  font-weight: 700;
+}
+/* One column as wide as the list's own, so a long name is cut short with
+   an ellipsis rather than widening the row past its column and over the
+   next one; the count beside it keeps its whole width and one line. */
+.Report_List {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 0.4rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  font-size: var(--small);
+}
+.Report_List li {
+  display: flex;
+  justify-content: space-between;
+  gap: 0.75rem;
+}
+.Report_List span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.Report_List b {
+  flex: none;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+@media (max-width: 600px) {
+  .Report_Tops {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 1rem;
+  }
+}

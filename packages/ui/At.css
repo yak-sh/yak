@@ -1,0 +1,16 @@
+/* A field with a fixed ending beside it: the field takes the room, the
+   ending keeps its width. */
+.At {
+  display: flex;
+  align-items: center;
+  gap: calc(var(--half-gap) / 2);
+  min-width: 0;
+}
+.At > .Field {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+.At_End {
+  flex: none;
+  color: var(--muted);
+}

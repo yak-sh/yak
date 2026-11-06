@@ -1,8 +1,9 @@
 /* The kernel's own pages (pages.ts `shell`): the centred column a sign-in,
    a notice or a drop is drawn in, and the dashboard's frame. Everything a
-   page holds is the style guide's (controls.css, /style-guide); this is only
-   what no other page draws. */
-@import url('controls.css');
+   page holds is a part of @yaks/ui's kit, drawn by its pencil skin (_ui.css,
+   shown at /style-guide); this is only what no other page draws. */
+@import url('_ui.css');
+@import url('site.css');
 
 @layer base {
   * {
@@ -66,6 +67,12 @@
     padding: .1rem .35rem;
     overflow-wrap: anywhere;
   }
+  /* The space selector and its rows are pressed, as a control is, not read. */
+  .Desk_Space,
+  .Desk_Row {
+    -webkit-user-select: none;
+    user-select: none;
+  }
 }
 
 @layer sections {
@@ -124,7 +131,7 @@
   .Card > .Note {
     margin: 0;
   }
-  .Pills {
+  .Chips {
     justify-content: center;
     margin: 0 0 1.25rem;
   }
@@ -312,7 +319,7 @@
 
   /* The dashboard's frame: the side with the brand and the tabs, and the body
      the current tab leans into. What fills the body is the style guide's cards,
-     rows and forms (public/controls.css); only what no other page draws is here.
+     rows and forms (@yaks/ui, _ui.css); only what no other page draws is here.
      The frame fills the window, as the chat app's does, so the body's paper
      runs to the window's right edge; its content keeps its own width. */
   .Desk {
@@ -345,7 +352,7 @@
     width: calc(var(--stroke) + 2 * var(--room));
     background: linear-gradient(var(--graphite) 0 0) center / var(--stroke)
       100% no-repeat;
-    filter: url(pencil.svg#line);
+    filter: var(--drawn);
     pointer-events: none;
   }
   .Desk_Brand {
@@ -407,6 +414,16 @@
   .Desk_Here > .Desk_New {
     margin-right: 1.75rem;
   }
+  /* A menu (`<details data-menu>`, public/menu.js) lies over the page while
+     open. The menu itself is the layer, not its list: the list is positioned
+     inside it, so whatever box the menu sits in, it paints at --float within
+     that box's stacking context and over every raised sibling after it. */
+  [data-menu] {
+    position: relative;
+  }
+  [data-menu][open] {
+    z-index: var(--float);
+  }
   /* The space selector (pages.ts `chooser`): the space's name, and with
      another to go to, a button on its hatch, so it reads as something to
      press and not as the page you are on. Change opens the list over the
@@ -446,7 +463,7 @@
     inset: -1px;
     border: var(--stroke) solid var(--graphite);
     border-radius: var(--radius);
-    filter: url(pencil.svg#line);
+    filter: var(--drawn);
     pointer-events: none;
   }
   .Desk_Pick > summary:hover {
@@ -535,7 +552,7 @@
     clip-path: polygon(calc(100% - var(--lift)) 0, 100% 0, 100% 100%, 0 100%,
       0 calc(100% - var(--lift)), calc(100% - var(--lift))
       calc(100% - var(--lift)));
-    filter: url(pencil.svg#line);
+    filter: var(--drawn);
     pointer-events: none;
   }
   .Desk_Menu::after {
@@ -544,7 +561,7 @@
     inset: -1px;
     border: var(--stroke) solid var(--graphite);
     border-radius: var(--radius);
-    filter: url(pencil.svg#line);
+    filter: var(--drawn);
     pointer-events: none;
   }
   .Desk_List {
@@ -602,7 +619,7 @@
     inset: calc(-1 * var(--room)) 0 auto;
     height: calc(var(--stroke) + 2 * var(--room));
     background: var(--rule);
-    filter: url(pencil.svg#line);
+    filter: var(--drawn);
   }
   /* The line over a page's title, naming the space it changes or "Your
      account". */
@@ -642,8 +659,8 @@
     gap: .15rem;
   }
   /* The links you are not on sit close; the current one keeps its room. */
-  .Desk .SideNav a:not([aria-current='page']),
-  .Talk_Side .SideNav a:not([aria-current='page']) {
+  .Desk .SideNav_Link:not(.SideNav_Link-on),
+  .Talk_Side .SideNav_Link:not(.SideNav_Link-on) {
     padding-block: .4rem;
   }
   .Desk .Desk_Here .SideNav {
@@ -907,7 +924,7 @@
       margin-right: 0;
       gap: .4rem;
     }
-    .Desk .SideNav a:not([aria-current='page']) {
+    .Desk .SideNav_Link:not(.SideNav_Link-on) {
       padding-block: .6rem;
     }
     .Desk_Here {
@@ -938,6 +955,32 @@
       min-height: 10rem;
       padding: .9rem;
     }
+  }
+
+  /* The agents a person connected, as rows (connected_ui.ts), or the ones
+     with a web home as a line of links to open them. */
+  .Agents-links {
+    display: flex;
+    flex-wrap: wrap;
+    gap: .5rem 1.5rem;
+    margin: 0;
+    padding: 0;
+    list-style: none;
+  }
+  .Agents_Open {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--quarter-gap);
+    color: var(--accent);
+    font-size: var(--small);
+    font-weight: 700;
+    text-underline-offset: .18em;
+    white-space: nowrap;
+  }
+
+  /* An invitation not yet taken, in a person's row (render/held.ts). */
+  .People_Waiting {
+    color: var(--negative);
   }
 
   /* The admin's directory (admin.ts): a search bar, and one card of rows with
@@ -1091,7 +1134,7 @@
   }
   /* The edge between the side and the conversation, drawn inside the side so
      the current tab, which is clipped where the side scrolls, still covers
-     it and opens into the page (controls.css `.SideNav`). */
+     it and opens into the page (@yaks/ui `SideNav`). */
   .Talk_Side::after {
     content: '';
     position: absolute;
@@ -1099,7 +1142,7 @@
     width: calc(var(--stroke) + 2 * var(--room));
     background: linear-gradient(var(--graphite) 0 0) center / var(--stroke)
       100% no-repeat;
-    filter: url(pencil.svg#line);
+    filter: var(--drawn);
     pointer-events: none;
   }
   .Talk_Scroll {
@@ -1157,7 +1200,7 @@
     border-radius: .35rem;
     object-fit: cover;
   }
-  .Talk_Side .SideNav a.Talk_All {
+  .Talk_Side .SideNav_Link.Talk_All {
     color: var(--muted);
     font-size: var(--fine);
   }
@@ -1476,7 +1519,7 @@
     color: inherit;
   }
   .Talk_Reply > :last-child,
-  .Talk_Reply .Markdown > :last-child,
+  .Talk_Reply .Body > :last-child,
   .Talk_Written > :last-child {
     margin-bottom: 0;
   }
@@ -1610,7 +1653,7 @@
   /* What the Operator is doing now, and the yak doing it while its thread is
      pending; "Stopped." stands alone. */
   .Talk_Now:has([data-now]:empty),
-  .Talk_Thread:not([data-pending]) > .Talk_Now > .Working_Yak {
+  .Talk_Thread:not([data-pending]) > .Talk_Now > .Loading_Mark {
     display: none;
   }
   [data-pending] > .Talk_Now {
@@ -1770,7 +1813,7 @@
       margin-right: 0;
       gap: .4rem;
     }
-    .Talk_Side .SideNav a:not([aria-current='page']) {
+    .Talk_Side .SideNav_Link:not(.SideNav_Link-on) {
       padding-block: .6rem;
     }
     .Talk_Close {

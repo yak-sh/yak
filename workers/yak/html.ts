@@ -27,7 +27,18 @@ export let day = (iso: string, month: 'long' | 'short' = 'long') => {
   return Number.isNaN(at.getTime()) ? '' : days[month].format(at)
 }
 
-// A file input as a drop zone (controls.css `.Drop`, public/drop.js): the
+// A link in a side navigation (@yaks/ui `SideNav`): `face` is what it shows,
+// as HTML, and `href` an address already fit for an attribute. The page you
+// are on is lit, and says so; `also` is a page's own class for it.
+/// sideLink('/a', 'A') -> '<a class="SideNav_Link" href="/a">A</a>'
+/// sideLink('/a', 'A', true) -> '<a class="SideNav_Link SideNav_Link-on" href="/a" aria-current="page">A</a>'
+/// sideLink('/a', 'A', false, 'Talk_All') -> '<a class="SideNav_Link Talk_All" href="/a">A</a>'
+export let sideLink = (href: string, face: string, on = false, also = '') =>
+  `<a class="${
+    ['SideNav_Link', on && 'SideNav_Link-on', also].filter(Boolean).join(' ')
+  }" href="${href}"${on ? ' aria-current="page"' : ''}>${face}</a>`
+
+// A file input as a drop zone (@yaks/ui `Drop`, public/drop.js): the
 // form's own input inside a place to press or drop on, and the list of what
 // is chosen under it. `label` names the input; `hint` says what it takes,
 // `accept` which kinds the chooser offers, and `size` the most bytes of one

@@ -5,6 +5,7 @@ import { reachOf } from './operator-reach.ts'
 import { builderOf, operatorDoor, SPACE } from './build-door.ts'
 import { vouched, type Who } from './session.ts'
 import { esc, type Picked, shell, spaceChoice } from './pages.ts'
+import { sideLink } from './html.ts'
 import { spaceHost, url } from './host.ts'
 import { chatPath, logoPath, managePath, manifestPath, SLUG } from './route.ts'
 import { PLATFORM_BACKGROUND } from './apps.ts'
@@ -86,20 +87,20 @@ export let textsCard = (
           dateStyle: 'long',
           timeZone: 'UTC',
         }))
-      }. <button class="Button Button-quiet" type="submit" name="stop" value="1">Stop texts</button></p>`
+      }. <button class="Button" type="submit" name="stop" value="1">Stop texts</button></p>`
       : ''
   }
 <label class="Form_Field">${
     consent ? 'Change your mobile number' : 'Mobile number'
   }<input class="Field" type="tel" name="number" autocomplete="tel" inputmode="tel" placeholder="269-555-0142"></label>
-<label class="Choice" style="align-items:flex-start"><input type="checkbox" name="agreed" value="yes"><span>${
+<label class="Check" style="align-items:flex-start"><input type="checkbox" name="agreed" value="yes"><span>${
     esc(CONSENT).replace(
       /https:\/\/yaks\.app\/(terms|privacy)/g,
       '<a href="/$1">yaks.app/$1</a>',
     )
   }</span></label>
 <p>Agreeing is not required to use yaks.app.</p>
-<button class="Button" type="submit">Save</button><p role="status" data-status></p></form>`
+<button class="Button Button-go" type="submit">Save</button><p role="status" data-status></p></form>`
 
 // Where a space's people change what its Operator is called.
 export let nameCard = (at: string, name: string) =>
@@ -109,7 +110,7 @@ export let nameCard = (at: string, name: string) =>
 <label class="Form_Field">Name<input class="Field" name="name" value="${
     esc(name)
   }" maxlength="40" required autocomplete="off"></label>
-<button class="Button" type="submit">Save</button><p role="status" data-status></p></form>`
+<button class="Button Button-go" type="submit">Save</button><p role="status" data-status></p></form>`
 
 // Where a space's people hear a few voices its Operator may speak in on a
 // call, pick one, how fast it speaks, and how its calls are answered, each
@@ -128,20 +129,20 @@ export let voiceCard = (
   } sounds and answers when you call. Play a few voices, pick one, and save.</p>
 <div class="Voices">${
     voices.map((v) =>
-      `<div class="Voices_Row"><label class="Choice"><input type="radio" name="voice" value="${v.id}" data-ways="${
+      `<div class="Voices_Row"><label class="Check"><input type="radio" name="voice" value="${v.id}" data-ways="${
         ways.filter((w) => speaks(w.model, v.id)).map((w) => w.model).join(' ')
       }"${v.id == setup.voice ? ' checked' : ''}><span><b>${esc(v.name)}</b>${
         BUTLERS.includes(v.id) ? ' (like a butler)' : ''
       } <span class="Note Note-small">${
         esc(v.about)
-      }</span></span></label><button class="Button Button-quiet" type="button" data-sample="${at}?sample=${v.id}" aria-label="Play ${
+      }</span></span></label><button class="Button" type="button" data-sample="${at}?sample=${v.id}" aria-label="Play ${
         esc(v.name)
       }">Play</button></div>`
     ).join('\n')
   }</div>
 <fieldset class="Form_Field"><legend>Speed</legend>${
     paces.map((p) =>
-      `<label class="Choice"><input type="radio" name="voice_speed" value="${p.id}"${
+      `<label class="Check"><input type="radio" name="voice_speed" value="${p.id}"${
         p.id == setup.pace ? ' checked' : ''
       }><span><b>${esc(p.name)}</b> <span class="Note Note-small">${
         esc(p.about)
@@ -150,14 +151,14 @@ export let voiceCard = (
   }</fieldset>
 <fieldset class="Form_Field"><legend>Answers</legend>${
     ways.map((w) =>
-      `<label class="Choice"><input type="radio" name="voice_model" value="${w.model}"${
+      `<label class="Check"><input type="radio" name="voice_model" value="${w.model}"${
         w.model == setup.model ? ' checked' : ''
       }><span><b>${esc(w.name)}</b> <span class="Note Note-small">${
         esc(w.about)
       }</span></span></label>`
     ).join('\n')
   }</fieldset>
-<button class="Button" type="submit">Save</button><p role="status" data-status></p></form>`
+<button class="Button Button-go" type="submit">Save</button><p role="status" data-status></p></form>`
 
 // What a person agreed to be texted at. Any opt-in this space's operator
 // store still keeps from before the number moved onto the person is handed to
@@ -647,13 +648,12 @@ let side = (
   let host = `https://${spaceHost(env, space.slug)}`
   let operator = esc(space.operator)
   let open = at.current.find((c) => c && c != 'updates') ?? 'new'
-  let current = (on: boolean) => on ? ' aria-current="page"' : ''
   return `<aside class="Talk_Side" id="menu" aria-label="Menu">
 <div class="Talk_Top"><a class="Talk_Brand" href="${
     chatPath(space.slug)
   }"><img src="${
     url(env, '/yak.webp')
-  }" width="28" height="28" alt="">yaks.app</a><a class="Button Button-quiet Talk_Close" href="#">✕ Close</a></div>
+  }" width="28" height="28" alt="">yaks.app</a><a class="Button Talk_Close" href="#">✕ Close</a></div>
 <div class="Talk_Scroll">
 <div class="Talk_Whose">${
     spaceChoice(
@@ -664,41 +664,55 @@ let side = (
       (s) => s.operator ?? '',
     )
   }</div>
-<nav class="SideNav" aria-label="${operator}"><a href="${
-    chatPath(space.slug)
-  }"${current(!at.app && !at.current.includes('updates'))}>${
-    icon('message-circle')
-  }${operator}</a><a href="${managePath('updates', space.slug)}"${
-    current(at.current.includes('updates'))
-  }>${icon('bell')}Updates from ${operator}${
-    at.waiting ? `<span class="Talk_Count">${at.waiting}</span>` : ''
-  }</a></nav>
+<nav class="SideNav" aria-label="${operator}">${
+    sideLink(
+      chatPath(space.slug),
+      `${icon('message-circle')}${operator}`,
+      !at.app && !at.current.includes('updates'),
+    )
+  }${
+    sideLink(
+      managePath('updates', space.slug),
+      `${icon('bell')}Updates from ${operator}${
+        at.waiting ? `<span class="Talk_Count">${at.waiting}</span>` : ''
+      }`,
+      at.current.includes('updates'),
+    )
+  }</nav>
 <h2 class="Talk_Group" id="side-apps">Your apps</h2>
 ${
     apps.length
       ? `<nav class="SideNav" aria-labelledby="side-apps">${
         apps.slice(0, APPS).map((a) =>
-          `<a href="${esc(aboutPath(space.slug, a.slug, open))}"${
-            current(a.slug == at.app)
-          }><img class="Talk_Icon" src="${host}/${
-            esc(a.slug)
-          }/icon.png" width="24" height="24" alt="" loading="lazy">${
-            esc(a.title || a.slug)
-          }</a>`
+          sideLink(
+            esc(aboutPath(space.slug, a.slug, open)),
+            `<img class="Talk_Icon" src="${host}/${
+              esc(a.slug)
+            }/icon.png" width="24" height="24" alt="" loading="lazy">${
+              esc(a.title || a.slug)
+            }`,
+            a.slug == at.app,
+          )
         ).join('')
       }${
         owner && apps.length > APPS
-          ? `<a class="Talk_All" href="${
-            managePath('apps', space.slug)
-          }">All ${apps.length} apps</a>`
+          ? sideLink(
+            managePath('apps', space.slug),
+            `All ${apps.length} apps`,
+            false,
+            'Talk_All',
+          )
           : ''
       }</nav>`
       : `<p class="Talk_None">None yet. Ask ${operator} to make one.</p>`
   }
 </div>
-<nav class="SideNav Talk_Foot" aria-label="Settings"><a href="${
-    managePath(owner ? 'apps' : 'operator', space.slug)
-  }">${icon('sliders-horizontal')}Manage</a></nav>
+<nav class="SideNav Talk_Foot" aria-label="Settings">${
+    sideLink(
+      managePath(owner ? 'apps' : 'operator', space.slug),
+      `${icon('sliders-horizontal')}Manage`,
+    )
+  }</nav>
 </aside>`
 }
 
@@ -721,7 +735,7 @@ let canvas = (env: Env, space: Space, app: Shown) => {
   return `<section class="Talk_App" id="app" aria-label="${title}" data-app="${
     esc(app.slug)
   }">
-<header class="Talk_AppHead"><a class="Button Button-quiet Talk_Back" href="#">← Chat</a><img class="Talk_Icon" src="https://${host}/icon.png" width="24" height="24" alt=""><span class="Talk_AppName"><b>${title}</b><small>${host}</small></span><a class="Button Button-quiet" href="https://${host}/" target="_blank" rel="noopener">${
+<header class="Talk_AppHead"><a class="Button Talk_Back" href="#">← Chat</a><img class="Talk_Icon" src="https://${host}/icon.png" width="24" height="24" alt=""><span class="Talk_AppName"><b>${title}</b><small>${host}</small></span><a class="Button" href="https://${host}/" target="_blank" rel="noopener">${
     icon('external-link')
   }Open</a></header>
 <div class="Talk_Stage"><iframe class="Talk_Frame" src="https://${host}/" title="${title}" data-frame></iframe></div>
@@ -810,11 +824,11 @@ ${
       })
     }
 <div class="Talk_Main${page.kind ? ` ${page.kind}` : ''}" id="content">
-<header class="Talk_Bar"><a class="Button Button-quiet Talk_Menu" href="#menu" aria-label="Menu">☰</a><div class="Talk_Heads"><h1 class="Talk_Head" data-title>${
+<header class="Talk_Bar"><a class="Button Talk_Menu" href="#menu" aria-label="Menu">☰</a><div class="Talk_Heads"><h1 class="Talk_Head" data-title>${
       esc(page.title)
     }</h1><p class="Talk_Who">${esc(whose)}</p></div>${
       page.app
-        ? `<a class="Button Button-quiet Talk_Show" href="#app">${
+        ? `<a class="Button Talk_Show" href="#app">${
           esc(page.app.title || page.app.slug)
         }</a>`
         : ''
@@ -843,7 +857,7 @@ let starts = (operator: string, apps: Beside['apps'] = []) =>
     ['Something isn’t working', 'Something isn’t working: '],
     [`What can ${operator} do?`, 'What can you do for me?'],
   ].map(([label, say]) =>
-    `<button class="Button Button-quiet" type="button" data-say="${esc(say)}">${
+    `<button class="Button" type="button" data-say="${esc(say)}">${
       esc(label)
     }</button>`
   ).join('')
@@ -988,7 +1002,7 @@ let composer = (env: Env, at: string, operator: string, app?: Shown) => {
     app ? `<input type="hidden" name="app" value="${esc(app.slug)}">` : ''
   }${idle('Talk_Yak', url(env))}
 <div class="Talk_Write Drop Drop-gather"><ul class="Drop_Chosen" aria-label="Files to send" aria-live="polite"></ul><textarea class="Field Talk_Field" name="say" placeholder="${asked}" aria-label="${asked}"></textarea>
-<div class="Talk_Tools"><label class="Talk_Attach" title="Add images or documents, or paste or drop them here">＋ Add files<input class="Drop_File" type="file" name="file" multiple data-count="${COUNT}" data-size="${SIZE}" data-reads="${READ}" data-unread="The Operator can't read this kind of file. It is kept with your message."></label><p class="Drop_Said" role="status"></p><button class="Button Button-quiet Talk_Stop" type="button" data-stop>Stop</button><button class="Button Talk_Send" type="submit">Send</button></div></div>
+<div class="Talk_Tools"><label class="Talk_Attach" title="Add images or documents, or paste or drop them here">＋ Add files<input class="Drop_File" type="file" name="file" multiple data-count="${COUNT}" data-size="${SIZE}" data-reads="${READ}" data-unread="The Operator can't read this kind of file. It is kept with your message."></label><p class="Drop_Said" role="status"></p><button class="Button Talk_Stop" type="button" data-stop>Stop</button><button class="Button Button-go Talk_Send" type="submit">Send</button></div></div>
 <p class="Talk_Status" role="status" data-send-status></p></form>`
 }
 

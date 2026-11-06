@@ -1,0 +1,34 @@
+/* How something stands, as a word in its role's colour beside a dot of the
+   same: -positive when it works, -negative when it needs the person. What
+   works is said in the accent, the colour of what is lit. */
+.State {
+  gap: 0.35rem;
+  color: var(--state, var(--muted));
+  font-size: var(--fine, var(--small));
+  font-weight: 700;
+}
+.State > .Dot {
+  width: 0.5rem;
+  height: 0.5rem;
+  border: 0;
+  background: currentColor;
+}
+.State-positive,
+.State-accent {
+  --state: var(--accent);
+}
+.State-negative {
+  --state: var(--negative);
+}
+.State-info {
+  --state: var(--info);
+}
+.State-active {
+  --state: var(--active);
+}
+.State-caution {
+  --state: var(--caution);
+}
+.State-special {
+  --state: var(--special);
+}

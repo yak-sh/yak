@@ -83,7 +83,7 @@ export let needsCard = (space: Space, u: Update, ask = '') => {
     +(b.label == u.recommended) - +(a.label == u.recommended)
   )
   return `<section class="Card Update Update-needs" id="u-${esc(u.eid)}">
-<header class="Card_Head"><span class="Status Status-warn">Needs you</span><time class="Update_When" datetime="${
+<header class="Card_Head"><span class="State State-negative"><span class="Dot Dot-negative"></span>Needs you</span><time class="Update_When" datetime="${
     esc(u.at)
   }">${ago(u.at)}</time></header>
 <p class="Update_Words">${esc(u.words)}</p>
@@ -100,7 +100,7 @@ ${
           `<div class="Card_Actions">${
             choices.map((c, i) =>
               `<button class="Button${
-                i ? ' Button-quiet' : ''
+                i ? '' : ' Button-go'
               }" name="choice" value="${esc(c.label)}">${esc(c.label)}</button>`
             ).join('')
           }</div>`,
@@ -120,7 +120,7 @@ let replying = (space: Space, u: Update) =>
       [['reply', u.eid]],
       `<textarea class="Field" name="say" rows="2" required aria-label="Your words to ${
         esc(space.operator)
-      }"></textarea><button class="Button" type="submit">Send</button>`,
+      }"></textarea><button class="Button Button-go" type="submit">Send</button>`,
     )
   }</details>`
 
@@ -134,7 +134,9 @@ let card = (env: Env, space: Space, u: Update, apps: Apps) => {
 <p class="Update_Meta"><time class="Update_When" datetime="${esc(u.at)}">${
     ago(u.at)
   }</time>${lead ? ` · ${lead}` : ''}${
-    u.unread ? ' · <span class="Status Status-good">New</span>' : ''
+    u.unread
+      ? ' · <span class="State State-positive"><span class="Dot Dot-positive"></span>New</span>'
+      : ''
   }</p>
 ${replying(space, u)}</section>`
 }

@@ -1,0 +1,43 @@
+/* Like things in rows, hairlines between them: each row its name and what
+   describes it on the left, what acts on it on the right, its controls a
+   size down. The kit's rows sit a pixel apart; these meet at the hairline.
+   In a card the rows run to its edges (pencil/Card.css). */
+.Rows {
+  gap: 0;
+  min-width: auto;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.Rows_Item {
+  --control-height: 2rem;
+  --control-pad-inline: 0.7rem;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem 1rem;
+  min-width: auto;
+  padding: 0.75rem 0;
+  border-top: 1px solid var(--border);
+}
+.Rows_Item:first-child {
+  padding-top: 0;
+  border-top: 0;
+}
+.Rows_Item:last-child {
+  padding-bottom: 0;
+}
+.Rows_Main {
+  gap: 0.15rem;
+  line-height: 1.45;
+}
+.Rows_Meta {
+  font-size: var(--fine, var(--small));
+}
+.Rows_Actions {
+  gap: 0.5rem;
+  margin: 0 0 0 auto;
+}
+.Rows_Actions .Button {
+  font-size: var(--fine, var(--small));
+}

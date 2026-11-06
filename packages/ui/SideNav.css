@@ -1,0 +1,42 @@
+/* A side navigation: links one to a line, quiet until under the pointer,
+   the page you are on lit as a tab is. A rule parts groups of links. With
+   no room beside the page the column becomes a row that wraps. */
+.SideNav {
+  display: grid;
+  align-content: start;
+  gap: 2px;
+}
+.SideNav_Link {
+  display: flex;
+  align-items: center;
+  gap: var(--half-gap);
+  min-height: var(--tap);
+  padding: var(--half-gap) var(--gap);
+  border: 1px solid transparent;
+  border-radius: var(--radius);
+  color: var(--muted);
+  text-decoration: none;
+  -webkit-user-select: none; /* pressed, not read */
+  user-select: none;
+}
+.SideNav_Link:hover,
+.SideNav_Link-hover {
+  color: var(--text); /* the words alone answer the pointer */
+}
+.SideNav_Link-on {
+  color: var(--text);
+  background: var(--soft);
+  border-color: var(--border2);
+  font-weight: 600;
+}
+.SideNav_Rule {
+  margin: var(--half-gap) var(--gap);
+  border: 0;
+  border-top: 1px solid var(--border);
+}
+@media (max-width: 700px) {
+  .SideNav {
+    display: flex;
+    flex-wrap: wrap;
+  }
+}

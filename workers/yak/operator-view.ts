@@ -11,7 +11,7 @@ import type { Tool } from '@yaks/model'
 import { statusOf } from '@yaks/session'
 import type { Step } from '@yaks/tools/title'
 import { toolEid } from '@yaks/tools/result'
-import { parse, render } from '@yaks/markdown/structural'
+import { blocks, parse } from '@yaks/markdown/structural'
 import { PART } from '@yaks/persona'
 import { h } from 'preact'
 import { renderToString } from 'preact-render-to-string'
@@ -168,8 +168,10 @@ let input = (b: Bundle, body: string) => {
   }`
 }
 
-// Markdown drawn as formatted text: markup in it stays words (@yaks/markdown).
-let markdown = (text: string) => renderToString(render(parse(text), h))
+// Markdown drawn as formatted text, the kit's Body: markup in it stays words
+// (@yaks/markdown).
+let markdown = (text: string) =>
+  renderToString(h('div', { class: 'Body' }, ...blocks(parse(text), h)))
 
 /** A reply as the Operator wrote it, in Markdown. */
 export let reply = (text: string) =>
@@ -661,7 +663,7 @@ export let talk = (
     rows(entries, names, seen).map((r) =>
       `<div id="row-${esc(r.id)}">${r.html}</div>`
     ).join('')
-  }</div><p class="Working Talk_Now" role="status">${
+  }</div><p class="Loading Talk_Now" role="status">${
     yak(poseOf(working))
   }<span data-now>${esc(working)}</span></p>${
     rest.length

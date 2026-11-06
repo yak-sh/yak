@@ -1,0 +1,66 @@
+/* Pencil's fold: yaks.app's spacing, and markdown someone wrote in it (a
+   Body, theirs.ts in yaks.app), such as how to get a key, set close and
+   ending where the body does. */
+.More > summary {
+  display: inline-flex;
+  align-items: center;
+  gap: .45rem;
+  color: var(--accent);
+  font-size: var(--small);
+  font-weight: 700;
+  cursor: pointer;
+  list-style: none;
+}
+.More > summary::-webkit-details-marker {
+  display: none;
+}
+.More > summary::before {
+  content: '';
+  flex: none;
+  width: .4rem;
+  height: .4rem;
+  border: solid currentColor;
+  border-width: 0 2px 2px 0;
+  transform: rotate(-45deg);
+  transition: transform .15s;
+}
+.More[open] > summary::before {
+  transform: rotate(45deg);
+}
+.More_Body {
+  display: grid;
+  gap: .875rem;
+  margin-top: .75rem;
+}
+.More_Body > *,
+.More_Body > .Body > :last-child {
+  margin: 0;
+}
+.More_Body > .Body {
+  display: grid;
+  gap: .625rem;
+}
+.More_Body > .Body :is(p, ol, ul, pre) {
+  margin: 0;
+}
+.More_Body > .Body :is(ol, ul) {
+  display: grid;
+  gap: .375rem;
+  padding-inline-start: 1.4rem;
+}
+.More_Body > .Body li {
+  display: grid;
+  gap: .375rem;
+}
+.More_Body > .Body ol {
+  list-style: decimal;
+}
+.More_Body > .Body ul {
+  list-style: disc;
+}
+.More_Body > .Body pre {
+  padding: .6rem .8rem;
+  background: var(--card);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}

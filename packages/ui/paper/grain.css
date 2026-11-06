@@ -1,0 +1,18 @@
+/* The grain: one tile of paper, speckled in ink and cream, over the whole
+   page and scrolling with it. It is drawn above everything, faint enough to
+   read through, and never takes a press. The tile is --grain, at
+   --grain-opacity: each skin that lays this names its own (paper/base.css,
+   pencil/base.css). */
+:where(html) {
+  position: relative;
+  min-height: 100%;
+}
+:where(html)::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: 2147483647;
+  background: var(--grain) 0 0 / 256px;
+  opacity: var(--grain-opacity);
+  pointer-events: none;
+}

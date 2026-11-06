@@ -1,0 +1,10 @@
+/* A row of chips, wrapping, a half gap apart; a list of them loses its
+   markers and its indent. */
+.Chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--half-gap);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}

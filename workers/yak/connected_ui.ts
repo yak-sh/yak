@@ -16,7 +16,7 @@ let disconnect = (agent: Agent | undefined, back: string) =>
   `<form method="post" action="/oauth/agents/disconnect">
 <input type="hidden" name="agent" data-agent-id value="${esc(agent?.id ?? '')}">
 <input type="hidden" name="return" value="${esc(back)}">
-<button class="Button Button-quiet" type="submit" data-agent-disconnect aria-label="Disconnect ${
+<button class="Button" type="submit" data-agent-disconnect aria-label="Disconnect ${
     esc(agent?.name ?? '')
   }">Disconnect</button></form>`
 
@@ -35,7 +35,7 @@ let row = (agent?: Agent, links = false, back = '') => {
 <div class="Rows_Main"><strong class="Rows_Name" data-agent-name>${
     esc(agent?.name ?? '')
   }</strong>
-<span class="Status Status-good">Connected</span></div>
+<span class="State State-positive"><span class="Dot Dot-positive"></span>Connected</span></div>
 <div class="Rows_Actions">${open}${disconnect(agent, back)}</div></li>`
 }
 

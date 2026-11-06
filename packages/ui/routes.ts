@@ -25,30 +25,49 @@ let tabs = (all: string[], on: string, href: (pick: string) => string) =>
     ),
   )
 
-/** The guide's page, using contributions gathered by the page's host. */
-export let page = async (
+/** What a query names: a theme and a skin among those installed, the
+ * defaults where it names none. */
+let dressed = (
   theme: string = Object.keys(themes)[0],
-  scheme = 'system',
   skin: string = Object.keys(skins)[0],
   contributed: Contributions = base,
-): Promise<string> => {
+) => {
   let available = {
     kits: { ...kits, ...contributed.kits },
     themes: { ...themes, ...contributed.themes },
     skins: { ...skins, ...contributed.skins },
     ux: contributed.ux,
   }
-  let allThemes = available.themes ?? themes
-  let allSkins = available.skins ?? skins
-  let t = allThemes[theme] ? theme : Object.keys(allThemes)[0]
-  let s = schemes.includes(scheme) ? scheme : 'system'
-  let k = allSkins[skin] ? skin : 'base'
+  let t = available.themes[theme] ? theme : Object.keys(available.themes)[0]
+  let k = available.skins[skin] ? skin : 'base'
   let c: Composition = {
-    kits: available.kits ?? kits,
+    kits: available.kits,
     ux: available.ux,
-    theme: allThemes[t],
-    skin: allSkins[k],
+    theme: available.themes[t],
+    skin: available.skins[k],
   }
+  return { c, t, k, allThemes: available.themes, allSkins: available.skins }
+}
+
+// A file a sheet points at (a skin's pencil, its grain), which stylesheet()
+// names by its whole address: the page asks the guide for it beside itself.
+let FILED = /url\("(file:\/\/[^"#]+)(#[^"]*)?"\)/g
+let TYPES: Record<string, string> = {
+  svg: 'image/svg+xml',
+  webp: 'image/webp',
+  png: 'image/png',
+  woff2: 'font/woff2',
+}
+
+/** The guide's page, using contributions gathered by the page's host. */
+export let page = async (
+  theme?: string,
+  scheme = 'system',
+  skin?: string,
+  contributed: Contributions = base,
+): Promise<string> => {
+  let { c, t, k, allThemes, allSkins } = dressed(theme, skin, contributed)
+  let s = schemes.includes(scheme) ? scheme : 'system'
   let at = (theme: string, scheme: string, skin: string) =>
     `?${new URLSearchParams({
       theme,
@@ -96,10 +115,36 @@ export let page = async (
     ),
   )
   let forced = s == 'system' ? '' : ` style="color-scheme: ${s}"`
+  let css = (await stylesheet(c)).replace(
+    FILED,
+    (_, at, fragment = '') =>
+      `url("ui/file?${new URLSearchParams({
+        theme: t,
+        skin: k,
+        at,
+      })}${fragment}")`,
+  )
   return `<!doctype html><html${forced}><head><meta charset="utf-8">` +
     '<meta name="viewport" content="width=device-width, initial-scale=1">' +
-    `<title>${title}</title><style>${await stylesheet(c)}</style></head>` +
+    `<title>${title}</title><style>${css}</style></head>` +
     `<body>${renderToString(shell)}</body></html>`
+}
+
+/** A file the page's sheet points at, and only such a file. */
+let file = async (q: URLSearchParams, contributed?: Contributions) => {
+  let at = q.get('at') ?? ''
+  let { c } = dressed(
+    q.get('theme') ?? undefined,
+    q.get('skin') ?? undefined,
+    contributed,
+  )
+  if (!at || !(await stylesheet(c)).includes(`url("${at}`)) {
+    return new Response('not a file of this guide', { status: 404 })
+  }
+  let type = TYPES[at.split('.').pop()!] ?? 'application/octet-stream'
+  return new Response((await fetch(at)).body, {
+    headers: { 'content-type': type },
+  })
 }
 
 /** A host passes its gathered facets; a standalone guide shows the base. */
@@ -118,4 +163,8 @@ export let routes = (host?: { ui: Contributions }): Route[] => [{
       { headers: { 'content-type': 'text/html; charset=utf-8' } },
     )
   },
+}, {
+  method: 'GET',
+  path: '/ui/file',
+  handle: (req) => file(new URL(req.url).searchParams, host?.ui),
 }]

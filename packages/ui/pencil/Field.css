@@ -1,0 +1,57 @@
+/* Pencil's field is a well: darker than the paper, a little hollow, its edge
+   drawn in pencil, as tall as a press beside it (--control-height). The
+   pencil keeps what lies inside the edge as it is, so what is typed stays
+   crisp. Focus draws the edge in the accent. */
+.Field {
+  box-sizing: border-box;
+  height: var(--control-height);
+  min-width: 0;
+  max-width: 100%;
+  padding: 0 var(--control-pad-inline, .75rem);
+  border: var(--stroke) solid var(--graphite);
+  border-radius: var(--radius);
+  background: var(--well);
+  box-shadow: var(--hollow);
+  color: var(--text);
+  font: inherit;
+  line-height: 1.25;
+  vertical-align: middle;
+  filter: var(--drawn);
+}
+.Field:focus-visible {
+  outline: 0;
+  border-color: var(--accent);
+  box-shadow: inset 0 0 0 1px var(--accent), var(--hollow);
+}
+select.Field {
+  cursor: pointer;
+}
+select.Field:not(:disabled):hover {
+  border-color: var(--accent);
+}
+/* A textarea is as tall as what is typed in it, from two controls' height
+   up to most of the window, where it starts to scroll. */
+textarea.Field {
+  field-sizing: content;
+  height: auto;
+  min-height: calc(var(--control-height) * 2);
+  max-height: 60vh;
+  padding-block: .5rem;
+  vertical-align: top;
+}
+.Field:disabled {
+  opacity: .55;
+  cursor: not-allowed;
+}
+/* A bare field belongs inside a part already drawn: no well, no edge. */
+.Field-bare,
+.Field-bare:focus-visible {
+  height: auto;
+  min-height: 0;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: none;
+  box-shadow: none;
+  filter: none;
+}

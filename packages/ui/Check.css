@@ -1,0 +1,19 @@
+/* A box or a radio and its words, a little apart on one line, the box in
+   the accent once checked. Pressing the words presses the box. */
+.Check {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--half-gap);
+  min-height: var(--tap);
+  cursor: pointer;
+}
+.Check input {
+  flex: none;
+  margin: 0;
+  accent-color: var(--accent);
+  cursor: inherit;
+}
+.Check:has(input:disabled) {
+  opacity: .55;
+  cursor: not-allowed;
+}

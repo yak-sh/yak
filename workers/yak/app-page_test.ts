@@ -42,10 +42,10 @@ test('a published app has a page that opens it first and offers a copy second', 
   assertStringIncludes(html, 'Made at jeff.yaks.app')
   assertStringIncludes(html, screenshot(space(), app({ screenshot: 'shot' })))
   let open = html.indexOf(
-    '<a class="Button" href="https://jeff.yaks.app/recipes/">Open the app</a>',
+    '<a class="Button Button-go" href="https://jeff.yaks.app/recipes/">Open the app</a>',
   )
   let copy = html.indexOf(
-    '<form method="post" action="/install?name=recipes"><button class="Button Button-quiet" type="submit">Make your own copy</button>',
+    '<form method="post" action="/install?name=recipes"><button class="Button" type="submit">Make your own copy</button>',
   )
   assert(open > 0 && copy > open, 'opening comes before the quiet copy')
   assertStringIncludes(

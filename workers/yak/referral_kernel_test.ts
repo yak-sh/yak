@@ -21,7 +21,7 @@ let side = await open(managePath('profile'))
 let codeOf = (d: Document) =>
   codeIn(d.querySelector('.Invite_Words')?.textContent ?? '')
 let [code, kept] = [codeOf(page), codeOf(again)]
-let linked = side.querySelector(`.SideNav a[href="${invite}"]`)
+let linked = side.querySelector(`.SideNav_Link[href="${invite}"]`)
 let mail = page.querySelector('.Invite_Code[href^="mailto:"]')
 
 test("the dashboard links a person's invite, which carries their own code on every visit", () => {

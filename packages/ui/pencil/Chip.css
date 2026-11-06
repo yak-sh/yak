@@ -1,0 +1,91 @@
+/* Pencil's chip, yaks.app's: a word on a card, edged in a hairline. A link
+   chip is underlined in the accent and drawn in pencil (on ::after, from a
+   solid graphite line, as a press is), and a hover washes it in the accent;
+   pressed, not read, its words never select. -quiet is a label on the floor
+   (the address in a window bar), -code words to copy, in the mono face. A
+   hue (-0 … -5) inks and washes it in its colour, a link too; a ghost is
+   dim, its edge dashed. What a variant changes rides a --chip-* property. */
+.Chip {
+  display: inline-block;
+  padding: var(--chip-pad, .3rem .75rem);
+  border: var(--chip-edge, 1px solid var(--border));
+  border-radius: var(--radius);
+  background: var(--chip-fill, var(--card));
+  color: var(--chip-ink, var(--chip-hue, var(--text)));
+  font-family: var(--chip-font, inherit);
+  font-size: var(--chip-size, var(--small));
+  font-weight: var(--chip-weight, 600);
+  line-height: 1.4;
+  vertical-align: middle;
+  text-decoration: none;
+}
+a.Chip {
+  --chip-ink: var(--chip-hue, var(--accent));
+  --chip-edge: 1px solid transparent;
+  --chip-weight: 700;
+  position: relative;
+  text-decoration: underline;
+  text-underline-offset: .18em;
+}
+:where(a.Chip) {
+  -webkit-user-select: none;
+  user-select: none;
+}
+a.Chip:hover {
+  --pencil: var(--accent);
+  --chip-fill: color-mix(in srgb, var(--accent) 7%, var(--card));
+}
+a.Chip:active {
+  transform: translate(1px, 1px);
+}
+a.Chip:focus-visible {
+  outline: 3px solid var(--accent);
+  outline-offset: 3px;
+}
+.Chip_Tag {
+  margin-left: .5rem;
+  color: var(--muted);
+  font-weight: 400;
+  font-size: .85em;
+}
+.Chip-quiet {
+  --chip-fill: var(--bg);
+  --chip-ink: var(--muted);
+  --chip-edge: 0;
+  --chip-pad: 0.2rem 0.9rem;
+  --chip-size: var(--small);
+  --chip-weight: 600;
+}
+.Chip-code {
+  --chip-pad: .2rem .5rem;
+  --chip-fill: var(--bg);
+  --chip-edge: 0;
+  --chip-font: var(--mono);
+  --chip-size: var(--small);
+}
+.Chip-0 {
+  --chip-hue: var(--hue-0);
+}
+.Chip-1 {
+  --chip-hue: var(--hue-1);
+}
+.Chip-2 {
+  --chip-hue: var(--hue-2);
+}
+.Chip-3 {
+  --chip-hue: var(--hue-3);
+}
+.Chip-4 {
+  --chip-hue: var(--hue-4);
+}
+.Chip-5 {
+  --chip-hue: var(--hue-5);
+}
+:is(.Chip-0, .Chip-1, .Chip-2, .Chip-3, .Chip-4, .Chip-5) {
+  --chip-fill: color-mix(in srgb, var(--chip-hue) 12%, var(--card));
+}
+.Chip-ghost {
+  --chip-ink: var(--dim);
+  --chip-fill: none;
+  --chip-edge: 1px dashed var(--border2);
+}

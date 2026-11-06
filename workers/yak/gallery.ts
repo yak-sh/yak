@@ -421,7 +421,7 @@ export let card = (a: Shown) =>
     esc(a.title)
   }</a></h3><div class="Card_Actions"><form method="post" action="/install?name=${
     encodeURIComponent(a.name)
-  }"><button class="Button Button-link" type="submit">Get a copy</button></form><a class="Button" href="${
+  }"><button class="Button Button-quiet" type="submit">Get a copy</button></form><a class="Button Button-go" href="${
     esc(a.at)
   }">Try it <span aria-hidden="true">↗</span></a></div></header>
 <a class="Make_Shot" href="${esc(a.at)}" tabindex="-1" aria-hidden="true">${
@@ -486,7 +486,7 @@ ${
 <section class="Join Card" aria-labelledby="yours">
 <h2 id="yours" class="Title">Make one of your own</h2>
 <p class="Note">Describe what you need. Your assistant builds it, and we keep it online.</p>
-<p class="Join_Doors"><a class="Button" href="/login">Start free</a></p>
+<p class="Join_Doors"><a class="Button Button-go" href="/login">Start free</a></p>
 </section>
 </main>
 ${foot}
@@ -616,7 +616,7 @@ ${top}
 <main class="Page">
 <section class="Join Card">
 <h1 class="Title">${at.list ? 'List this app?' : 'Decline this app?'}</h1>
-${at.why ? `<p class="Note Say-no">${esc(at.why)}</p>` : ''}
+${at.why ? `<p class="Note Notice-negative">${esc(at.why)}</p>` : ''}
 <p class="Note"><b>${esc(at.title)}</b><br>${esc(at.url)}<br>${
       esc(at.about || '(no description)')
     }<br>by ${esc(at.owner)}</p>
@@ -647,7 +647,7 @@ ${top}
 <section class="Join Card">
 <h1 class="Title">${esc(title)}</h1>
 <p class="Note">${esc(lead)}</p>
-<p class="Join_Doors"><a class="Button" href="${PATH}">The gallery</a></p>
+<p class="Join_Doors"><a class="Button Button-go" href="${PATH}">The gallery</a></p>
 </section>
 </main>
 ${foot}

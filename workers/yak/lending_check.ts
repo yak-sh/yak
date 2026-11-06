@@ -483,7 +483,7 @@ test('the connections page lends, shows the loan on both sides, and replaces and
         },
         body: body.toString(),
       })
-      return parseHTML(await r.text()).document.querySelector('.Say')
+      return parseHTML(await r.text()).document.querySelector('.Notice')
         ?.textContent ?? ''
     }
     let card = (doc: Document, title: string) =>
@@ -581,10 +581,10 @@ test('the connections page lends, shows the loan on both sides, and replaces and
         },
         body: new URLSearchParams(fields as Record<string, string>).toString(),
       })
-      let said = parseHTML(await r.text()).document.querySelector('.Say')
+      let said = parseHTML(await r.text()).document.querySelector('.Notice')
       return {
         say: text(said),
-        no: !!said?.getAttribute('class')?.includes('Say-no'),
+        no: !!said?.getAttribute('class')?.includes('Notice-negative'),
       }
     }
     let went = async (

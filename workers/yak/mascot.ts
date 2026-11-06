@@ -30,7 +30,7 @@ let srcset = (name: string, base: string) =>
 /** The yak doing `pose`, its files under `base` (the apex's address on a page
  * served from another host, '' on the apex). */
 export let yak = (pose: Pose, base = '') =>
-  `<picture class="Working_Yak" data-pose="${pose}"><source media="(prefers-reduced-motion: reduce)" srcset="${
+  `<picture class="Loading_Mark" data-pose="${pose}"><source media="(prefers-reduced-motion: reduce)" srcset="${
     srcset(`${pose}-still`, base)
   }"><img src="${base}/mascot/${pose}.webp" srcset="${
     srcset(pose, base)

@@ -1,0 +1,133 @@
+/* Pencil's tabs: physical tabs on one sheet. Each tab is drawn in pencil on
+   its top and sides; the panel's own top line is every tab's foot, and the
+   lit tab covers it, so tab and panel are one sheet. In a set (`TabSet`)
+   native radios own selection, arrow keys too, so it works without script:
+   the checked radio's tab is the lit one. */
+.Tabs {
+  display: flex;
+  flex-wrap: wrap;
+  column-gap: .3rem;
+  position: relative;
+  min-width: 0;
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+.Tabs_Legend {
+  margin-bottom: 1rem;
+  padding: 0;
+  color: var(--text);
+  font-weight: 800;
+  text-align: left;
+}
+.Tabs_Item {
+  display: contents;
+}
+.Tabs_Item > input {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  opacity: 0;
+  pointer-events: none;
+}
+.Tabs_Tab {
+  flex: 1 1 auto;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  position: relative;
+  min-width: 0;
+  min-height: 3rem;
+  overflow-wrap: normal;
+  margin: .35rem 0 0;
+  padding: .55rem .45rem;
+  border: 1px solid transparent;
+  border-bottom: 0;
+  border-radius: var(--radius) var(--radius) 0 0;
+  background: var(--surface);
+  color: var(--muted);
+  font: inherit; /* a button's, as a label's is */
+  font-size: .85rem;
+  font-weight: 700;
+  line-height: 1.25;
+  text-align: center;
+  text-decoration: none; /* a tab that links reads as a tab */
+  cursor: pointer;
+  -webkit-user-select: none;
+  user-select: none;
+}
+.Tabs_Tab::after {
+  content: '';
+  position: absolute;
+  inset: -1px -1px 0;
+  border: var(--stroke) solid var(--graphite);
+  border-bottom: 0;
+  border-radius: var(--radius) var(--radius) 0 0;
+  filter: var(--drawn);
+  pointer-events: none;
+}
+@media (max-width: 480px) {
+  .Tabs_Tab {
+    padding-inline: .3rem;
+    font-size: .8rem;
+  }
+}
+.Tabs_Tab:hover,
+.Tabs_Tab-hover {
+  color: var(--text);
+}
+.Tabs_Panel {
+  order: 1;
+  flex: 1 1 100%;
+  min-width: 0;
+  position: relative;
+  margin: 0;
+  text-align: left;
+  z-index: 1;
+}
+.Tabs_Tab-on,
+.Tabs_Item > input:checked ~ .Tabs_Tab {
+  margin-top: 0;
+  padding-top: .9rem;
+  background: var(--card);
+  color: var(--text);
+  z-index: 2;
+}
+/* The gap the lit tab opens in the panel's line. It stops short of the
+   tab's sides, so they meet the line, and the first tab's meets the panel's
+   corner. */
+.Tabs_Tab-on::before,
+.Tabs_Item > input:checked ~ .Tabs_Tab::before {
+  content: '';
+  position: absolute;
+  inset: auto 2px calc(-1.5 * var(--room));
+  height: calc(3 * var(--room));
+  background: var(--card);
+}
+/* Only the checked radio's panel shows. Hiding the rest outranks a card's
+   own display, wherever the card's rule comes. */
+.Tabs_Item > input:not(:checked) ~ .Tabs_Panel {
+  display: none;
+}
+.Tabs_Item > input:checked ~ .Tabs_Panel {
+  display: grid;
+}
+.Tabs_Item > input:focus-visible ~ .Tabs_Tab {
+  outline: 3px solid var(--accent);
+  outline-offset: -5px;
+}
+/* Raised like a superscript; the shift is paint only, so the line keeps
+   its height. */
+.Tabs_Badge {
+  position: relative;
+  top: -0.5em;
+  min-width: 1.1em;
+  padding: 0 0.25em;
+  border-radius: 1em;
+  background: var(--accent);
+  color: var(--bg);
+  font-size: 0.65em;
+  line-height: 1.5;
+  font-variant-numeric: tabular-nums;
+  text-align: center;
+}

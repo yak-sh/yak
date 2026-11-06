@@ -1,0 +1,63 @@
+/* Pencil's box and radio are drawn, not the browser's: a graphite edge on
+   the card, filled with the accent once checked, a tick or a dot in the
+   paper's colour, as tall as a press beside it (--control-height). */
+.Check {
+  display: inline-flex;
+  align-items: center;
+  gap: .5rem;
+  min-height: var(--control-height);
+  line-height: 1.4;
+  cursor: pointer;
+}
+.Check input {
+  appearance: none;
+  display: grid;
+  place-content: center;
+  box-sizing: border-box;
+  width: 1.125rem;
+  height: 1.125rem;
+  flex: none;
+  margin: 0;
+  border: var(--stroke) solid var(--graphite);
+  background: var(--card);
+  cursor: inherit;
+}
+.Check input[type='radio'] {
+  border-radius: 50%;
+}
+.Check input::before {
+  content: '';
+  width: .45rem;
+  height: .45rem;
+  transform: scale(0);
+}
+.Check input[type='checkbox']::before {
+  width: .3rem;
+  height: .6rem;
+  margin-top: -.15rem;
+  border: solid var(--bg);
+  border-width: 0 2px 2px 0;
+  transform: rotate(45deg) scale(0);
+}
+.Check input[type='radio']::before {
+  border-radius: 50%;
+  background: var(--bg);
+}
+.Check input:checked {
+  background: var(--accent);
+  border-color: var(--accent);
+}
+.Check input:checked::before {
+  transform: scale(1);
+}
+.Check input[type='checkbox']:checked::before {
+  transform: rotate(45deg) scale(1);
+}
+.Check:has(input:disabled) {
+  opacity: .55;
+  cursor: not-allowed;
+}
+.Check input:focus-visible {
+  outline: 3px solid var(--accent);
+  outline-offset: 3px;
+}

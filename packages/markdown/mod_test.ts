@@ -2,7 +2,7 @@ import { test } from '@yaks/testing'
 import { h } from 'preact'
 import { mount } from '../preact/testing.ts'
 import { assert, assertEquals } from '@std/assert'
-import { headings, Markdown, parse, render, safeHref } from './mod.ts'
+import { blocks, headings, Markdown, parse, render, safeHref } from './mod.ts'
 import type { H } from '@yaks/render'
 
 type Tree = {
@@ -62,6 +62,16 @@ test('untrusted markup and URLs never become executable nodes', () => {
     ]
   ) assertEquals(safeHref(url), undefined)
   assertEquals(safeHref('https://example.com'), 'https://example.com')
+})
+
+test('a document is its blocks in an element of its own', () => {
+  let tokens = parse('# Title\n\nwords')
+  assertEquals(render(tokens, tree), {
+    tag: 'div',
+    props: { class: 'Markdown', wrap: '1' },
+    children: blocks(tokens, tree),
+  })
+  assertEquals(blocks(tokens, tree).map((b) => (b as Tree).tag), ['h1', 'p'])
 })
 
 test('Preact component produces ordinary web-compatible elements', () => {

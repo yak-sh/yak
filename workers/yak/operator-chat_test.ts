@@ -129,7 +129,7 @@ let sided = async (
   )
   let lines = [
     ...document.querySelectorAll(
-      '.Talk_Side :is(.Talk_Brand, .Desk_Space b, .SideNav a, .Talk_Group)',
+      '.Talk_Side :is(.Talk_Brand, .Desk_Space b, .SideNav_Link, .Talk_Group)',
     ),
   ]
   return {
@@ -433,7 +433,7 @@ test("an app opens beside the person's one conversation, its words on screen fro
   // Updates shows no conversation, so its apps open at the space's address,
   // which is that conversation.
   assertEquals(
-    [...updates.querySelectorAll('.SideNav a')]
+    [...updates.querySelectorAll('.SideNav_Link')]
       .find((a) => a.textContent == 'Holdfast')?.getAttribute('href'),
     aboutPath('clerk', 'app1'),
   )

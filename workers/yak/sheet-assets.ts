@@ -6,13 +6,15 @@
 // addresses.
 //
 // One source is made, not kept: `_ui.css`, the kit's share of the look
-// (@yaks/ui's linen theme), composed here and written beside the rest by
-// `written`, gitignored as `_client.js` is. The plan composes it in memory, so
-// a plan never waits on a build having run.
+// (@yaks/ui's linen theme and pencil skin, and the parts the pages wear),
+// composed here and written beside the rest by `written`, gitignored as
+// `_client.js` is, with what it points at under `_ui/`. The plan composes it
+// in memory, so a plan never waits on a build having run.
 import * as io from '@yaks/file/io'
-import { type Composition, linen, stylesheet } from '@yaks/ui'
+import { type Composition, kit, linen, pencil, sheets } from '@yaks/ui'
 import { createHash } from 'node:crypto'
-import { join } from 'node:path'
+import { dirname, join, relative } from 'node:path'
+import { fileURLToPath } from 'node:url'
 
 let ROOTS = ['style.css', 'pages.css']
 let DIR = '_yak'
@@ -20,14 +22,76 @@ let DIR = '_yak'
 /** The kit's sheet among the sources. */
 export let UI = '_ui.css'
 
-/** What yaks.app wears of the kit. */
-let WORN: Composition = { kits: {}, theme: linen }
+/** The kit's parts yaks.app's pages wear, in the order their sheets go,
+ * which settles a tie, the order controls.css had them in: rows before the
+ * card holding them (a card's child shrinks), a card before what rides one
+ * or sits in one (a report's gap, a group's margin). */
+export let WORN = [
+  'base',
+  'Button',
+  'Field',
+  'Chip',
+  'Chips',
+  'Address',
+  'Rows',
+  'Card',
+  'Dot',
+  'State',
+  'Group',
+  'Form',
+  'At',
+  'Drop',
+  'More',
+  'Body',
+  'Notice',
+  'Loading',
+  'Copy',
+  'Empty',
+  'Report',
+  'Chart',
+  'Tabs',
+  'Icon',
+  'SideNav',
+  'Check',
+]
 
-/** The kit's sheet in yaks.app's cascade layers, the theme its tokens, so
- * nothing of the kit's outranks a rule of the site's. */
+/** What yaks.app wears of the kit. */
+let worn: Composition = {
+  kits: { base: Object.fromEntries(WORN.map((name) => [name, kit[name]])) },
+  theme: linen,
+  skin: pencil,
+}
+
+/** The layer of yaks.app's each piece of the kit's sheet sits in: the theme
+ * its tokens, the document its base, every part a component. */
+let layer = (piece: string) =>
+  piece == 'theme' ? 'tokens' : piece == 'base' ? 'base' : 'components'
+
+// A file the kit's sheet points at, which stylesheet() names by its whole
+// address: it is served as `_ui/` and its path in the repository.
+let REPO = fileURLToPath(new URL('../../', import.meta.url))
+let FILED = /url\("(file:\/\/[^"#]+)(#[^"]*)?"\)/g
+
+/** The kit's sheet in yaks.app's cascade layers, so nothing of the kit's
+ * outranks a rule of the site's, and the files it points at, by address. */
 export let ui = async () => {
-  let css = await stylesheet(WORN)
-  return `@layer tokens, base, components, sections;\n@layer tokens {\n${css}\n}\n`
+  let files = new Map<string, Uint8Array>()
+  let pieces = (await sheets(worn)).map(([piece, css]) =>
+    `@layer ${layer(piece)} {\n${css}\n}`
+  )
+  let css = pieces.join('\n').replace(FILED, (_, file, fragment = '') => {
+    let path = fileURLToPath(file)
+    let at = `_ui/${relative(REPO, path)}`
+    files.set(at, io.readFileSync(path))
+    return `url("${at}${fragment}")`
+  })
+  files.set(
+    UI,
+    new TextEncoder().encode(
+      `@layer tokens, base, components, sections;\n${css}\n`,
+    ),
+  )
+  return files
 }
 
 // A url() naming a file of ours: not a data: or another site's, fragment apart.
@@ -66,25 +130,27 @@ export let plan = (read: Read) => {
   return { files, names }
 }
 
-/** Reading the sources from a directory, the kit's sheet composed. */
-export let from = async (dir: string): Promise<Read> => {
-  let kit = new TextEncoder().encode(await ui())
-  return (name) => name == UI ? kit : io.readFileSync(join(dir, name))
-}
+let reading = (dir: string, made: Map<string, Uint8Array>): Read => (name) =>
+  made.get(name) ?? io.readFileSync(join(dir, name))
+
+/** Reading the sources from a directory, the kit's sheet and what it points
+ * at composed. */
+export let from = async (dir: string): Promise<Read> => reading(dir, await ui())
 
 /** Write the plan into public/, leaving no earlier deploy's names behind. */
 export let written = async (
   to = new URL('./public/', import.meta.url).pathname,
 ) => {
-  await io.remove(join(to, DIR), { recursive: true }).catch((error) => {
-    if (!(error instanceof io.errors.NotFound)) throw error
-  })
-  await io.mkdir(join(to, DIR), { recursive: true })
-  let read = await from(to)
-  await io.writeFile(join(to, UI), read(UI))
+  for (let made of [DIR, '_ui']) {
+    await io.remove(join(to, made), { recursive: true }).catch((error) => {
+      if (!(error instanceof io.errors.NotFound)) throw error
+    })
+  }
+  let made = await ui()
   await Promise.all(
-    [...plan(read).files].map(([at, bytes]) =>
-      io.writeFile(join(to, at), bytes)
-    ),
+    [...made, ...plan(reading(to, made)).files].map(async ([at, bytes]) => {
+      await io.mkdir(dirname(join(to, at)), { recursive: true })
+      await io.writeFile(join(to, at), bytes)
+    }),
   )
 }

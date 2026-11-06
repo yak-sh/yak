@@ -1,4 +1,4 @@
-// The drop zone (controls.css `.Drop`): a file input a person presses to
+// The drop zone (@yaks/ui `Drop`): a file input a person presses to
 // choose from, or drags files onto, and the list of what is chosen. Every
 // page's shell loads it once, and it listens on the document, so a zone a
 // script draws later (public/data.js) works the same as one in the page.
@@ -103,7 +103,7 @@
     }
     let remove = document.createElement('button')
     remove.type = 'button'
-    remove.className = 'Button Button-quiet'
+    remove.className = 'Button'
     remove.textContent = gather ? '✕' : 'Remove'
     remove.setAttribute('aria-label', `Remove ${file.name}`)
     remove.onclick = () => {

@@ -87,7 +87,7 @@ look in both hosts.
 
 A textarea is as tall as what is typed in it: `field-sizing: content`, set once
 for every textarea in packages/ui/base.css and for yaks.app's `textarea.Field`
-in controls.css, under a ceiling past which it scrolls. Never size one with
+in packages/ui/pencil/Field.css, under a ceiling past which it scrolls. Never size one with
 `rows` or grow it from script; a part sets a floor where an empty one would be
 a sliver, and only a textarea sized on purpose, like an editor that fills its
 pane, sets its own height. Jeff, 2026-10-30: "can all typical textareas be made
@@ -102,12 +102,14 @@ has no green and two pinks, so a hue posing as a role shows at once.
 
 - A **theme** is custom properties only: a CSS file of `--` names and the same
   colors for the terminal (packages/ui/gouache.css and .ts, the default and
-  yak.sh's own; everforest and rosepine beside it; `themes` in kit.ts).
+  yak.sh's own; linen, yaks.app's; everforest and rosepine beside them;
+  `themes` in kit.ts).
 - A **skin** replaces (`css`) or lays CSS over (`over`) the parts it names, with
   optional terminal entries; the rest fall back to their kit.
   packages/ui/paper.ts, the default, lays yak.sh's grain over `base`;
   packages/ui/ledger.ts replaces four parts, deliberately partial so the guide
-  shows both.
+  shows both; packages/ui/pencil.ts is yaks.app's pencil on paper, drawing
+  every part its pages wear.
 - A tool or app that has no look of its own wears `composition` (the defaults),
   never a theme by name; naming one pins it.
 - A **kit** is a set of parts. A plugin contributes kits, themes, skins and UX
@@ -221,17 +223,22 @@ synced everywhere, so it's never lost (M-59093).
 ## yaks.app's own pages
 
 The pages workers/yak serves (the dashboard at /manage, sign-in, the gallery,
-integrations, pricing) are HTML strings rather than this Preact tree, and their
-kit is yaks.app's style guide: workers/yak/public/controls.css, shown at
-yaks.app/style-guide, whose "One design language" section every one of them
-follows. Jeff, 2026-10-27 (T-132742): "the style-guide should decide on one
-design language and stick to it". A card is flat with a hairline, and its head
-(`heading()` in pages.ts) names it, says how it stands and holds its actions at
-the right; like things are `.Rows`; a field sits under its label (`labeled()`),
+integrations, pricing) are HTML strings rather than this Preact tree, but
+their parts are this kit's: they wear the `linen` theme and the `pencil`
+skin, composed for them at deploy into public/_ui.css (workers/yak/
+sheet-assets.ts, `WORN` names the parts they wear), and write the kit's
+class names (`Button Button-go`, `Card_Head`, `Rows_Item`, `Chip`). Their own
+CSS (style.css, pages.css) is page layout, with site.css for the face and
+the paints no theme names. yaks.app/style-guide shows every part they wear
+and its "One design language" section is the rule every page follows. Jeff,
+2026-10-27 (T-132742): "the style-guide should decide on one design language
+and stick to it". A card is flat with a hairline, and its head (`heading()`
+in pages.ts) names it, says how it stands and holds its actions at the
+right; like things are `Rows`; a field sits under its label (`labeled()`),
 never at the end of a sentence; what few people change folds under Advanced
-options with its default in place. A part a page lacks goes into controls.css
-with an example in the style guide (site_test checks that every one has one),
-not into one page's stylesheet.
+options with its default in place. A part a page lacks goes into the kit,
+drawn by pencil, with an example in the style guide (site_test checks every
+worn part has one), not into one page's stylesheet.
 
 What a person does to their own account (invite someone, take someone off,
 choose the homepage, connect an agent) is a control on its dashboard page that
@@ -256,7 +263,7 @@ slow platform tier; checks start no server, workerd or child process.
   Fill it with rows copied from the live graph, long titles and old data
   included; a specimen's tidy sample hides what the owner's rows do to a screen.
 - **How it looks:** the style guide,
-  `/ui?theme=gouache|everforest|rosepine&scheme=light|dark&skin=paper|ledger|base`, and
+  `/ui?theme=gouache|linen|everforest|rosepine&scheme=light|dark&skin=paper|pencil|ledger|base`, and
   `yak ui` in a terminal (`t` cycles the theme, `s` the skin, `j`/`k` walk),
   seen on the live box once the change lands. Both themes, light and dark, phone
   width and the terminal: each one catches what the others hide, and faint text

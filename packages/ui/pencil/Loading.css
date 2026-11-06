@@ -1,0 +1,14 @@
+/* Something at work: the yak doing it (yaks.app's mascot), then the words
+   that say what it is, in the ink of wherever it sits. */
+.Loading {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+.Loading_Mark,
+.Loading_Mark img {
+  display: block;
+  flex: none;
+  width: 40px;
+  height: 40px;
+}

@@ -12,6 +12,10 @@
   cursor: text;
   user-select: text;
 }
+/* A field picked in is pressed, not typed in. */
+select.Field {
+  cursor: pointer;
+}
 .Field::placeholder {
   color: var(--muted);
 }

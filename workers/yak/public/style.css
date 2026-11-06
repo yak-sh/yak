@@ -4,7 +4,8 @@
 
 @layer tokens, base, components, sections;
 
-@import url('controls.css');
+@import url('_ui.css');
+@import url('site.css');
 
 @layer base {
   * {
@@ -222,7 +223,7 @@
     inset: -1px;
     border: var(--stroke) solid var(--graphite);
     border-radius: var(--radius);
-    filter: url(pencil.svg#line);
+    filter: var(--drawn);
     pointer-events: none;
   }
 
@@ -239,7 +240,7 @@
     inset: auto -1px calc(-1 * var(--room));
     height: calc(var(--stroke) + 2 * var(--room));
     background: var(--rule);
-    filter: url(pencil.svg#line);
+    filter: var(--drawn);
   }
 
   .Window_Body {
@@ -983,7 +984,7 @@
     inset: calc(-1 * var(--room)) 0 auto;
     height: calc(var(--stroke) + 2 * var(--room));
     background: var(--rule);
-    filter: url(pencil.svg#line);
+    filter: var(--drawn);
   }
 
   .Yours::after {
@@ -1229,7 +1230,7 @@
     }
   }
 
-  .Docs .Markdown {
+  .Docs .Body {
     display: grid;
     gap: 0.75rem;
   }

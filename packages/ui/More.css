@@ -1,0 +1,36 @@
+/* A fold: its line in the accent, a chevron before it that turns as it
+   opens, and what it holds a gap under it. */
+.More > summary {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--half-gap);
+  color: var(--accent);
+  font-size: var(--small);
+  font-weight: 700;
+  cursor: pointer;
+  list-style: none;
+}
+.More > summary::-webkit-details-marker {
+  display: none;
+}
+.More > summary::before {
+  content: '';
+  flex: none;
+  width: .4em;
+  height: .4em;
+  border: solid currentColor;
+  border-width: 0 2px 2px 0;
+  transform: rotate(-45deg);
+  transition: transform .15s;
+}
+.More[open] > summary::before {
+  transform: rotate(45deg);
+}
+.More_Body {
+  display: grid;
+  gap: var(--half-gap);
+  margin-top: var(--half-gap);
+}
+.More_Body > * {
+  margin: 0;
+}

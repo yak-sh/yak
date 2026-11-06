@@ -429,7 +429,7 @@ test('who visited: a bar per day and three lists, no script', async () => {
   let theirs = await face({
     apps: [{ eid: 'recipes', slug: 'recipes', title: 'Recipes' }],
   })
-  assert(!parseHTML(theirs).document.querySelector('.Stats'))
+  assert(!parseHTML(theirs).document.querySelector('.Report'))
 })
 
 test('who visited: no token is one sentence, no chart', async () => {
@@ -463,7 +463,7 @@ test('who visited: an app nobody opened says so', async () => {
     }],
   })
   let { document } = parseHTML(page)
-  assertEquals(document.querySelector('.Stats_Total')?.textContent, '0 visits')
+  assertEquals(document.querySelector('.Report_Total')?.textContent, '0 visits')
   assert(!page.includes('class="Chart Chart-bars"'), page)
 })
 

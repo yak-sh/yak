@@ -6,11 +6,15 @@
  * @yaks/tui alike.
  *
  * - `el`, `block`: the builders every part is made from (el.ts).
- * - `Dot`, `Id`, `Stamp`, `Tabs`, `Menu`, `Tip`, `Field`, `Choices`, `Button`,
+ * - `Dot`, `Id`, `Stamp`, `Tabs`, `Menu`, `Tip`, `Field`, `At`, `Check`,
+ *   `Form`, `Drop`, `Notice`, `More`, `Choices`, `Button`,
  *   `Chip`, `Match`, `Value`, `Pairs`, `Tile`, `Rows`, `Section`, `Timeline`,
  *   `Turns`, `Passage`, `Body`, `Doc`, `Quote`, `Edit`, `Prop`, `Overlay`, `Peek`, `Table`, `Pager`, `Shell`,
  *   `Panes`, `Head`, `Metrics`, `Spark`, `Notes`,
- *   `Say`, `Index`, `Catalog`, `Gallery`: the parts; `groups`, the parts by
+ *   `Chips`, `Address`, `Icon`, `Copy`, `Card`, `Report`, `Group`, `Empty`,
+ *   `State`, `Loading`, `Sparkline`, `Columns`,
+ *   `Say`, `Index`, `SideNav`, `Catalog`, `Gallery`: the parts (`TabSet`
+ *   is `Tabs` holding their panels); `groups`, the parts by
  *   what they are for, and `kit`, all of them (kit.ts).
  * - `Float`, `place`, `placeAt`, `usePlaceAt`, `tips`: what floats above a
  *   browser's page, clear of every clipping container (float.ts), the
@@ -18,9 +22,11 @@
  *   handed.
  * - `relative`: a moment in words, what a `Stamp` says.
  * - `themes`: every theme by name, `gouache` (the default), `everforest`,
- *   `rosepine` and `linen`, yaks.app's; `skins`, `paper` (the default) and
- *   `ledger`; `composition`, the kits in the defaults; `stylesheet(composition)` dresses a browser,
- *   `sheet(composition)` a terminal (kit.ts).
+ *   `rosepine` and `linen`, yaks.app's; `skins`, `paper` (the default),
+ *   `ledger` and `pencil`, yaks.app's; `composition`, the kits in the
+ *   defaults; `stylesheet(composition)` dresses a browser (`sheets`, the
+ *   same sheet by what each piece dresses), `sheet(composition)` a terminal
+ *   (kit.ts).
  * - `Guide`: every part in every variant, the guide `./routes` serves at `/ui`
  *   and `./cli` paints as `yak ui`; `Specimens`, one part's entry in it.
  *
@@ -32,18 +38,32 @@ export { Dot, shapes, tones } from './Dot.ts'
 export { Id } from './Id.ts'
 export { Menu } from './Menu.ts'
 export { Stamp } from './Stamp.ts'
+export { State } from './State.ts'
 export { relative } from './relative.ts'
-export { Tabs } from './Tabs.ts'
+export { Tabs, TabSet } from './Tabs.ts'
 export { Tip } from './Tip.ts'
 export { Field, type FieldProps } from './Field.ts'
+export { At } from './At.ts'
+export { Check } from './Check.ts'
+export { Drop } from './Drop.ts'
+export { Form } from './Form.ts'
+export { More } from './More.ts'
+export { Notice } from './Notice.ts'
 export { Choices } from './Choices.ts'
 export { Body } from './Body.ts'
 export { Doc } from './Doc.ts'
 export { Button } from './Button.ts'
+export { Card } from './Card.ts'
 export { Catalog } from './Catalog.ts'
 export { Chip, hues } from './Chip.ts'
+export { Chips } from './Chips.ts'
+export { Copy } from './Copy.ts'
+export { Address } from './Address.ts'
+export { Icon, type IconProps } from './Icon.ts'
 export { Edit } from './Edit.ts'
+export { Empty } from './Empty.ts'
 export { Gallery } from './Gallery.ts'
+export { Group } from './Group.ts'
 export { Head } from './Head.ts'
 export { Index } from './Index.ts'
 export { Inbox } from './Inbox.ts'
@@ -62,6 +82,7 @@ export { Pager } from './Pager.ts'
 export { Panes } from './Panes.ts'
 export { Prop } from './Prop.ts'
 export { Quote } from './Quote.ts'
+export { Report } from './Report.ts'
 export { Say } from './Say.ts'
 export { type Col, Table, type TableProps } from './Table.ts'
 export { Pairs } from './Pairs.ts'
@@ -69,6 +90,7 @@ export { Passage } from './Passage.ts'
 export { Rows } from './Rows.ts'
 export { Section } from './Section.ts'
 export { Shell } from './Shell.ts'
+export { SideNav } from './SideNav.ts'
 export { Tile } from './Tile.ts'
 export { Timeline } from './Timeline.ts'
 export { Turns } from './Turns.ts'
@@ -89,6 +111,7 @@ export {
   kits,
   parts,
   sheet,
+  sheets,
   skins,
   stylesheet,
   themes,
@@ -108,6 +131,7 @@ export type {
 
 export { ledger } from './ledger.ts'
 export { paper } from './paper.ts'
+export { pencil } from './pencil.ts'
 export { installViewport, Viewport, type ViewportProps } from './viewport.ts'
 
 export { Loading } from './Loading.ts'

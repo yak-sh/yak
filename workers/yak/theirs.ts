@@ -3,7 +3,8 @@
 // @yaks/markdown draws it, keeping HTML as text, leaving out a link to any
 // scheme but http, https and mailto, and loading no image. Every link is marked
 // rel="nofollow ugc", since what it points at is the writer's to vouch for, not
-// ours. The renderer loads when a page first draws some (docs.ts `marked`).
+// ours. It is the kit's Body. The renderer loads when a page first draws some
+// (docs.ts `marked`).
 import { type ComponentChildren, h } from 'preact'
 import { renderToString } from 'preact-render-to-string'
 
@@ -23,5 +24,8 @@ let theirs = ((
 export let drawn = async (source = ''): Promise<string> => {
   if (!source.trim()) return ''
   let md = await import('@yaks/markdown')
-  return renderToString(md.render(md.parse(source, { breaks: false }), theirs))
+  let tokens = md.parse(source, { breaks: false })
+  return renderToString(
+    theirs('div', { class: 'Body' }, ...md.blocks(tokens, theirs)),
+  )
 }

@@ -40,3 +40,19 @@ a.Chip:hover,
   outline: 1px dashed var(--border2);
   outline-offset: -1px;
 }
+/* a label that steps back, in the words around it */
+.Chip-quiet {
+  --hue: var(--muted);
+  font-family: inherit;
+  background: none;
+}
+/* words to copy */
+.Chip-code {
+  --hue: var(--text);
+}
+/* what the name is a kind of, after it */
+.Chip_Tag {
+  margin-left: var(--half-gap);
+  color: var(--muted);
+  font-size: 0.85em;
+}

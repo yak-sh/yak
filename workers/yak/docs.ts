@@ -30,7 +30,7 @@ import { h } from 'preact'
 import { renderToString } from 'preact-render-to-string'
 import type { Env } from './env.ts'
 import { type Page, PAGES } from './guide.ts'
-import { esc } from './html.ts'
+import { esc, sideLink } from './html.ts'
 import { type Host, hosted, url } from './host.ts'
 import { publicPage } from './public-cache.ts'
 import { foot, head, html, top } from './shell.ts'
@@ -130,7 +130,9 @@ let marked = () => import('@yaks/markdown')
 type Md = Awaited<ReturnType<typeof marked>>
 
 let markup = (md: Md, tokens: Token[]) =>
-  tokens.length ? renderToString(md.render(tokens, h)) : ''
+  tokens.length
+    ? renderToString(h('div', { class: 'Body' }, ...md.blocks(tokens, h)))
+    : ''
 
 // The contents: every subject with the phrase it is offered by, and the one
 // rule at the foot of it, since a reader who wants the file rather than the
@@ -155,22 +157,19 @@ let back = `<p class="Docs_Back"><a href="${PATH}">← Documentation</a></p>`
 
 // The sidebar every page of the documentation wears: the whole list, in the
 // order CONTENTS gives it, with the page being read marked. It is the SideNav
-// control the management portal wears (controls.css), because a reader who has
+// the management portal wears (@yaks/ui `SideNav`), because a reader who has
 // learned to move through their own pages already knows how to move through
 // these. The map itself is the first entry — a reader on a subject page needs
 // the way back more than they need a row that says nothing.
-let side = (slug: string) => {
-  let here = (s: string) => s == slug ? ' aria-current="page"' : ''
-  return `<nav class="Page_Side SideNav Docs_Nav" aria-label="Documentation">
-<a href="${PATH}"${here('')}>Overview</a>
-<hr>
+let side = (slug: string) =>
+  `<nav class="Page_Side SideNav Docs_Nav" aria-label="Documentation">
+${sideLink(PATH, 'Overview', slug == '')}
+<hr class="SideNav_Rule">
 ${
-    CONTENTS.map((p) =>
-      `<a href="${pathOf(p.slug)}"${here(p.slug)}>${esc(p.title)}</a>`
-    ).join('\n')
+    CONTENTS.map((p) => sideLink(pathOf(p.slug), esc(p.title), p.slug == slug))
+      .join('\n')
   }
 </nav>`
-}
 
 // What is on THIS page: its own sections, so a long subject can be crossed
 // without scrolling it. The ids are the renderer's (@yaks/markdown

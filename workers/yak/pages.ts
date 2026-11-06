@@ -1,8 +1,9 @@
 // The kernel's own pages, in the home page's voice (workers/yak/public): what
 // a person sees when there is nothing at an address, when an app broke, and
 // where they sign in. One shell, three sentences, and an optional card of
-// markup under them. Shared controls and tokens come from public/controls.css,
-// and the column and the dashboard's frame from public/pages.css.
+// markup under them. Its parts are @yaks/ui's, drawn by the pencil skin
+// (public/_ui.css), and the column and the dashboard's frame are
+// public/pages.css.
 // Errors are for the person's assistant to fix (D-32318 §Errors); the
 // dashboard marks the app they broke in and says what to ask it.
 //
@@ -23,7 +24,7 @@ import type {
 import { INTEGRATIONS } from './integrations.ts'
 import { agentList, agentLive } from './connected_ui.ts'
 import { icon, type IconName } from './icons.ts'
-import { day, esc, fileDrop } from './html.ts'
+import { day, esc, fileDrop, sideLink } from './html.ts'
 import { holder, tile } from './render/mod.ts'
 import type { People, Person } from './people.ts'
 import type { Plain } from './unseen.ts'
@@ -79,7 +80,7 @@ let billButton = (
   want?: Want,
 ) =>
   `<button type="button" class="Button Bill_Go${
-    door == 'portal' ? ' Button-quiet' : ''
+    door == 'portal' ? '' : ' Button-go'
   }" data-door="${esc(door)}"${target ? ` data-target="${esc(target)}"` : ''}${
     want ? ` data-plan="${want.tier}" data-per="${want.per}"` : ''
   }>${esc(label)}</button>`
@@ -100,8 +101,12 @@ let heading = (
   }</header>`
 
 /** How something stands, in its role's colour. */
-let status = (word: string, tone?: 'good' | 'warn') =>
-  `<span class="Status${tone ? ` Status-${tone}` : ''}">${word}</span>`
+let status = (word: string, tone?: 'positive' | 'negative') => {
+  let mod = (base: string) => tone ? `${base} ${base}-${tone}` : base
+  return `<span class="${mod('State')}"><span class="${
+    mod('Dot')
+  }"></span>${word}</span>`
+}
 
 /** A field: its label, its control, and what explains it under both. */
 let labeled = (id: string, label: string, control: string, hint = '') =>
@@ -192,7 +197,7 @@ export let binned = (
       at.days == 1 ? 'day' : 'days'
     }, then erased for good.`,
     404,
-    `<p><a class="Button" href="${
+    `<p><a class="Button Button-go" href="${
       url(env, managePath('trash', at.space))
     }">Restore it from your apps</a></p>`,
   )
@@ -221,7 +226,7 @@ export let spaceBinned = (at: {
     404,
     `<form method="post" action="/">
 <input type="hidden" name="restore-space" value="${esc(at.slug)}">
-<button class="Button" type="submit">Restore ${
+<button class="Button Button-go" type="submit">Restore ${
       esc(spaceHost(env, at.slug))
     }</button>
 </form>
@@ -258,7 +263,7 @@ ${
         `autocomplete="off" spellcheck="false" placeholder="Name for your website" ` +
         `aria-label="Website name">`
   }
-<button class="Button" type="submit">${
+<button class="Button Button-go" type="submit">${
     slug ? 'Update app' : 'Upload website'
   }</button>
 </form>`
@@ -366,10 +371,10 @@ let transcript = (frames: Frame[]) => {
 let chatAsk = (env: Host, to = '/api/build') =>
   `<form class="Chat_Ask" method="post" action="${esc(to)}">
 <p><textarea class="Field" name="say" rows="3" required placeholder="A recipe box I can share with my sister" aria-label="What do you want to build?"></textarea></p>
-<p class="Working Chat_Note" role="status" data-wait hidden>${
+<p class="Loading Chat_Note" role="status" data-wait hidden>${
     yak('typing', url(env))
   }<span>Building…</span></p>
-<button class="Button" type="submit">Build it</button>
+<button class="Button Button-go" type="submit">Build it</button>
 </form>`
 
 // The optional built-in builder, reached from New app: the dashboard's page
@@ -468,7 +473,7 @@ ${dropping}`,
   )
 
 // One thing to say, and a button that puts it on the clipboard (T-34420). The
-// words are selectable on their own (`.Pick` is `user-select: all`), so a
+// words are selectable on their own (`.Copy_Text` is `user-select: all`), so a
 // browser that ran no script still takes them in one gesture — the button is
 // all the script below adds, and it stays hidden until that script un-hides
 // it, because a button that does nothing is worse than no button.
@@ -476,7 +481,7 @@ ${dropping}`,
 // One control, everywhere something is meant to be pasted: the three things to
 // say below, and each of the three a connector form asks for (T-34412).
 let copyable = (said: string, what = '') =>
-  `<span class="Copy"><span class="Pick">${
+  `<span class="Copy"><span class="Copy_Text">${
     esc(said)
   }</span><button class="Button Copy_Go" type="button"${
     what ? ` aria-label="Copy ${esc(what)}"` : ''
@@ -525,7 +530,7 @@ let axisDay = (iso: string) => {
 }
 
 let chart = (days: { day: string; views: number }[]) =>
-  `<figure class="Stats_Plot">${
+  `<figure class="Report_Plot">${
     renderToString(
       columns(h as never, {
         from: days[0]?.day ?? '',
@@ -534,7 +539,7 @@ let chart = (days: { day: string; views: number }[]) =>
       }) as VNode,
     )
   }
-<figcaption class="Stats_Span"><span>${
+<figcaption class="Report_Span"><span>${
     esc(axisDay(days[0]?.day ?? ''))
   }</span><span>${
     esc(axisDay(days[days.length - 1]?.day ?? ''))
@@ -542,8 +547,8 @@ let chart = (days: { day: string; views: number }[]) =>
 
 let column = (head: string, rows: { name: string; views: number }[]) =>
   rows.length
-    ? `<div class="Stats_Column"><h3>${head}</h3>
-<ul class="Stats_List">${
+    ? `<div class="Report_Column"><h3>${head}</h3>
+<ul class="Report_List">${
       rows.map((r) =>
         `<li><span title="${esc(r.name)}">${esc(r.name)}</span><b>${
           count(r.views)
@@ -567,19 +572,19 @@ export type Visits = {
 }
 
 let visits = (v: Visits, site: string) =>
-  `<article class="Card Stats" aria-labelledby="visits-${
+  `<article class="Card Report" aria-labelledby="visits-${
     esc(v.slug)
   }"><header class="Card_Head"><h2 class="Card_Title" id="visits-${
     esc(v.slug)
   }"><a href="${site}/${
     encodeURIComponent(v.slug)
   }/" target="_blank" rel="noopener">${esc(v.title || v.slug)}</a></h2>
-<p class="Stats_Total">${count(v.stats.total)} <span class="Stats_Unit">${
+<p class="Report_Total">${count(v.stats.total)} <span class="Report_Unit">${
     v.stats.total == 1 ? 'visit' : 'visits'
   }</span></p></header>${
     v.stats.total
       ? chart(v.stats.daily) +
-        `<div class="Stats_Tops">${
+        `<div class="Report_Tops">${
           column('Pages', v.stats.pages) + column('Came from', v.stats.from) +
           column('Countries', v.stats.countries)
         }</div>`
@@ -734,25 +739,24 @@ let navigation = (at: DeskPage, view: ManageView, env: Host) => {
     label: string,
     to = managePath(key, at.space),
   ) =>
-    `<a href="${to}"${
-      view == key || (view == 'new' && key == 'apps')
-        ? ' aria-current="page"'
-        : ''
-    }>
-${icon(navIcons[key])}${label}${
-      key == 'trash' && at.trash?.length
-        ? `<span class="Desk_Count">${at.trash.length}</span>`
-        : ''
-    }</a>`
+    sideLink(
+      to,
+      `${icon(navIcons[key])}${label}${
+        key == 'trash' && at.trash?.length
+          ? `<span class="Desk_Count">${at.trash.length}</span>`
+          : ''
+      }`,
+      view == key || (view == 'new' && key == 'apps'),
+    )
   let { title, back } = yourOperator(at)
   let operator = link('operator', title)
   return `<a class="Desk_Skip" href="#content">Skip to content</a>
 <aside class="Desk_Side" id="menu" aria-label="Manage">
-<div class="Desk_Top"><a class="Button Desk_Back" href="${
+<div class="Desk_Top"><a class="Button Button-go Desk_Back" href="${
     chatPath(at.space)
   }">${
     icon('chevron-left')
-  }Back to ${back}</a><a class="Button Button-quiet Desk_Close" href="#">✕ Close</a></div>
+  }Back to ${back}</a><a class="Button Desk_Close" href="#">✕ Close</a></div>
 <h2 class="Desk_Title">Manage</h2>
 <div class="Desk_Section"><h3 class="Desk_Group" id="side-space">This space</h3>
 <div class="Desk_Here">${chooser(at, view)}
@@ -868,7 +872,7 @@ let pasteLink = (env: Host) =>
 
 let connectCard = (at: DeskPage, env: Host) =>
   `<section class="Card Desk_Connect" ${state(false, !at.agents?.length)}>
-<header class="Card_Head"><h2 class="Card_Title">Connect your agent</h2><div class="Card_Actions"><a class="Button" href="${
+<header class="Card_Head"><h2 class="Card_Title">Connect your agent</h2><div class="Card_Actions"><a class="Button Button-go" href="${
     managePath('agents')
   }">Connect agent</a></div></header>
 <p class="Card_Sub">Build and improve your apps in the conversations you already have with Claude or ChatGPT.</p>${
@@ -901,7 +905,7 @@ export let fixing = (a: DeskPage['apps'][number], space: string) => {
     esc(a.slug)
   }"><header class="Card_Head"><h2 class="Card_Title">${
     esc(title)
-  }</h2><span class="Status Status-warn">${
+  }</h2><span class="State State-negative"><span class="Dot Dot-negative"></span>${
     n == 1 ? '1 error' : `${n} errors`
   }</span></header><ul class="Rows">${
     errors.slice(0, SHOWN).map((e) =>
@@ -1004,7 +1008,7 @@ let profile = (at: DeskPage, env: Host) => {
       )
       : ''
   }</div></section>
-<div class="Form_Actions"><button class="Button" type="submit">Save</button></div></form>`
+<div class="Form_Actions"><button class="Button Button-go" type="submit">Save</button></div></form>`
 }
 
 // Invite (Your account, T-138777): the person's own QR code, shown to a
@@ -1092,10 +1096,10 @@ let newSpace = (at: DeskPage, env: Host) =>
       'Address',
       `<span class="At"><input class="Field" id="space-slug" name="slug" maxlength="63" autocomplete="off" spellcheck="false" required value="${
         esc(at.made?.slug ?? '')
-      }"><span>.${apex(env)}</span></span>`,
+      }"><span class="At_End">.${apex(env)}</span></span>`,
     )
   }</div></section>
-<div class="Form_Actions"><button class="Button" type="submit">Create space</button></div></form>`
+<div class="Form_Actions"><button class="Button Button-go" type="submit">Create space</button></div></form>`
 
 // A space's Settings: its name, its address and what it opens, one form and
 // one Save,
@@ -1130,9 +1134,9 @@ let logoCard = (at: DeskPage) => {
       required: true,
       sends: true,
     })
-  }<noscript><button class="Button" type="submit">Upload</button></noscript></form>${
+  }<noscript><button class="Button Button-go" type="submit">Upload</button></noscript></form>${
     here.logo
-      ? `<form method="post" action="${action}"><button class="Button Button-quiet" type="submit" name="unlogo" value="1">Remove logo</button></form>`
+      ? `<form method="post" action="${action}"><button class="Button" type="submit" name="unlogo" value="1">Remove logo</button></form>`
       : ''
   }</section>`
 }
@@ -1158,7 +1162,7 @@ let preferences = (at: DeskPage, env: Host) => {
       'Address',
       `<span class="At"><input class="Field" id="your-address" name="space" maxlength="63" autocomplete="off" spellcheck="false" value="${
         esc(was.space)
-      }"><span>.${apex(env)}</span></span>`,
+      }"><span class="At_End">.${apex(env)}</span></span>`,
       MOVES,
     )
   }${
@@ -1176,10 +1180,10 @@ let preferences = (at: DeskPage, env: Host) => {
       )
       : `<p>${host} opens its app library.</p>`
   }</div></section>
-<div class="Form_Actions"><button class="Button" type="submit">Save</button></div></form>
+<div class="Form_Actions"><button class="Button Button-go" type="submit">Save</button></div></form>
 <section class="Card Desk_Danger">${
     heading('Delete this space', {
-      actions: `<a class="Button Button-quiet" href="${
+      actions: `<a class="Button" href="${
         url(env, `/space/${encodeURIComponent(at.space)}/delete`)
       }">Delete space…</a>`,
     })
@@ -1197,7 +1201,7 @@ let selling = (at: DeskPage, env: Host) => {
       managePath('selling', at.space)
     }"><input type="hidden" name="sell" value="${
       stop ? 'stop' : 'start'
-    }"><button type="submit" class="Button${stop ? ' Button-quiet' : ''}">${
+    }"><button type="submit" class="Button${stop ? '' : ' Button-go'}">${
       stop
         ? `Disconnect ${by}`
         : at.sell == 'setup'
@@ -1219,9 +1223,9 @@ let selling = (at: DeskPage, env: Host) => {
         : 'Take payments in your apps',
       {
         status: ready
-          ? status('Connected', 'good')
+          ? status('Connected', 'positive')
           : at.sell == 'setup'
-          ? status('Setup unfinished', 'warn')
+          ? status('Setup unfinished', 'negative')
           : '',
         actions: subscribe + account,
       },
@@ -1250,7 +1254,7 @@ let selling = (at: DeskPage, env: Host) => {
             esc(at.fee)
           } per sale, plus ${by} processing fees.</p>`
           : ''
-      }<p class="Say Bill_Say" role="status"></p>`
+      }<p class="Notice Bill_Say" role="status"></p>`
   }</section>${at.paying ? '' : billing}`
 }
 
@@ -1268,7 +1272,7 @@ let trash = (at: DeskPage) =>
           managePath('trash', at.space)
         }"><input type="hidden" name="restore" value="${
           esc(a.eid)
-        }"><button type="submit" class="Button Button-quiet">Restore</button></form></li>`
+        }"><button type="submit" class="Button">Restore</button></form></li>`
       ).join('')
     }</ul></section>`
     : '<section class="Empty"><h2>Trash is empty</h2><p>A deleted app waits here for 30 days.</p></section>'
@@ -1368,7 +1372,7 @@ let keyBox = (
 // next step.
 let press = (value: string, label: string, quiet = true) =>
   `<button class="Button${
-    quiet ? ' Button-quiet' : ''
+    quiet ? '' : ' Button-go'
   }" type="submit" name="do" value="${value}">${label}</button>`
 
 let callsOf = (n: number) => `${n} ${n == 1 ? 'call' : 'calls'}`
@@ -1419,12 +1423,14 @@ let connection = (c: Shown, on: boolean, action: string) => {
     ))
   let stands = ask ? status('Each person connects their own') : status(
     `${STATUS[c.status]}${c.account ? ` as ${esc(c.account)}` : ''}`,
-    c.status == 'connected' ? 'good' : 'warn',
+    c.status == 'connected' ? 'positive' : 'negative',
   )
   let said = c.failed
-    ? `<p class="Say Say-no" role="status">${esc(sentence(c.failed))}</p>`
+    ? `<p class="Notice Notice-negative" role="status">${
+      esc(sentence(c.failed))
+    }</p>`
     : c.saving
-    ? `<p class="Say" role="status">${esc(sentence(c.saving))}</p>`
+    ? `<p class="Notice" role="status">${esc(sentence(c.saving))}</p>`
     : ''
   let paste = keying && open
     ? form(
@@ -1615,7 +1621,7 @@ let connection = (c: Shown, on: boolean, action: string) => {
         }" required>${press('lend', a.lends == null ? 'Lend' : 'Save')}${
           a.lends == null
             ? ''
-            : `<button class="Button Button-quiet" type="submit" form="${stop}" name="do" value="lend">Stop lending</button>`
+            : `<button class="Button" type="submit" form="${stop}" name="do" value="lend">Stop lending</button>`
         }</div>`,
         'The calls a month each copy someone installs may make through it. A copy keeps its own data, never sees the key, and can connect its own instead.',
       ),
@@ -1679,7 +1685,7 @@ let borrowing = (
   return `<section class="Card" data-borrowed="${esc(b.eid)}">${
     heading(esc(b.face.title), {
       mark: logo(b.face),
-      status: status(`Borrowed from ${esc(b.lender)}`, 'good'),
+      status: status(`Borrowed from ${esc(b.lender)}`, 'positive'),
       actions,
     })
   }${about(b.face)}<p class="Card_Sub">${esc(b.app.title)} calls out with ${
@@ -1771,7 +1777,7 @@ let connections = (at: DeskPage, env: Host) => {
     .map((one) => connection(one, c.on, action)).join('') +
     c.services.map((s) =>
       `<section class="Card">${
-        heading(esc(s.name), { status: status('Connected', 'good') })
+        heading(esc(s.name), { status: status('Connected', 'positive') })
       }<p class="Card_Sub">Signed in with your yaks.app account on ${
         esc(day(new Date(s.connectedAt * 1000).toISOString()))
       }.</p></section>`
@@ -1851,7 +1857,7 @@ let inviting = (at: DeskPage) => {
         esc(was.note)
       }</textarea>`,
     )
-  }<div class="Form_Actions"><button class="Button" type="submit">Send invitation</button></div></form></section>`
+  }<div class="Form_Actions"><button class="Button Button-go" type="submit">Send invitation</button></div></form></section>`
 }
 
 // The Operators of other spaces working here (operator-reach.ts, T-136179):
@@ -1869,7 +1875,7 @@ let operating = (at: DeskPage) => {
       managePath('people', at.space)
     }"><input type="hidden" name="unreach" value="${
       esc(o.eid)
-    }"><button class="Button Button-quiet" type="submit" aria-label="Remove ${
+    }"><button class="Button" type="submit" aria-label="Remove ${
       esc(named(o))
     }'s Operator">Remove</button></form></div></li>`
   ).join('')
@@ -1893,7 +1899,7 @@ let operating = (at: DeskPage) => {
           option('editor', 'Change things', true)
         }${option('viewer', 'Only look', false)}</select>`,
       )
-    }<div class="Form_Actions"><button class="Button" type="submit">Let it in</button></div></form>`
+    }<div class="Form_Actions"><button class="Button Button-go" type="submit">Let it in</button></div></form>`
     : ''
   return rows || form
     ? `<section class="Card">${heading('Operators from other spaces')}${
@@ -1916,7 +1922,7 @@ export let people = (at: DeskPage) => {
   let press = (fields: string, label: string, aria: string) =>
     `<form method="post" action="${
       managePath('people', at.space)
-    }">${fields}<button class="Button Button-quiet" type="submit" aria-label="${aria}">${label}</button></form>`
+    }">${fields}<button class="Button" type="submit" aria-label="${aria}">${label}</button></form>`
   let actions = (p: Person, app?: string) => {
     let them = esc(p.email ?? p.name)
     let waits = p.held == 'invite'
@@ -2041,7 +2047,7 @@ export let desk = (at: DeskPage, env: Host = {}) => {
     `${titles[view]} · ${esc(whose)}`,
     null,
     at.no ? 400 : 200,
-    `<header class="Desk_Bar"><a class="Button Button-quiet" href="#menu">☰ Menu</a><span class="Desk_Where"><b>${
+    `<header class="Desk_Bar"><a class="Button" href="#menu">☰ Menu</a><span class="Desk_Where"><b>${
       titles[view]
     }</b><small>${esc(whose)}</small></span></header>${
       navigation(at, view, env)
@@ -2052,13 +2058,13 @@ export let desk = (at: DeskPage, env: Host = {}) => {
         : ''
     }</div>${
       view == 'apps'
-        ? `<a class="Button" href="${
+        ? `<a class="Button Button-go" href="${
           managePath('new', at.space)
         }">+ New app</a>`
         : ''
     }</header><div class="Desk_Content" id="content" tabindex="-1">${
       at.say
-        ? `<p class="Say${at.no ? ' Say-no' : ''}" role="status">${
+        ? `<p class="Notice${at.no ? ' Notice-negative' : ''}" role="status">${
           esc(at.say)
         }</p>`
         : ''
@@ -2084,7 +2090,7 @@ export let editor = (
     `<header class="Desk_Head"><div><a class="Desk_Address" href="${
       esc(at.at)
     }/">${esc(at.app)} ↗</a><h1>Data</h1></div></header>
-<div id="data"><noscript><p class="Say Say-no">This page needs JavaScript.</p></noscript></div>
+<div id="data"><noscript><p class="Notice Notice-negative">This page needs JavaScript.</p></noscript></div>
 <script type="module">
 import { open } from ${script(`${at.at}/_web/data.js?v=${at.version}`)}
 import * as client from ${script(`${at.at}/api/client.js`)}
@@ -2102,10 +2108,10 @@ await open({
 
 export let spaceIndex = (at: SpacePage, env: Host = {}) => {
   let mine = at.apps.length
-    ? `<nav class="Pills" aria-label="Apps here">${
+    ? `<nav class="Chips" aria-label="Apps here">${
       at.apps.map((a) =>
-        `<a class="Pill" href="/${esc(a.slug)}/">${esc(a.title || a.slug)}${
-          a.gallery ? `<span class="Pill_Tag">${esc(a.gallery)}</span>` : ''
+        `<a class="Chip" href="/${esc(a.slug)}/">${esc(a.title || a.slug)}${
+          a.gallery ? `<span class="Chip_Tag">${esc(a.gallery)}</span>` : ''
         }</a>`
       ).join('')
     }</nav>`
@@ -2116,10 +2122,12 @@ export let spaceIndex = (at: SpacePage, env: Host = {}) => {
     } private. Ask whoever runs this space to let you in.</p>`
     : ''
   let pitch = at.manage
-    ? `<p><a class="Button" href="${esc(at.manage)}">Manage your apps</a></p>`
+    ? `<p><a class="Button Button-go" href="${
+      esc(at.manage)
+    }">Manage your apps</a></p>`
     : at.person
     ? home(env)
-    : `<p><a class="Button" href="${esc(at.signIn)}">Sign in</a></p>
+    : `<p><a class="Button Button-go" href="${esc(at.signIn)}">Sign in</a></p>
 <section class="Card">${
       heading('What is yaks.app?')
     }<p class="Card_Sub">Ask an assistant like Claude or ChatGPT for an app, and it builds one here — a page of your own you can send to anyone.</p><p><a href="${
@@ -2264,7 +2272,7 @@ ${
 <script>{let n=document.currentScript.previousElementSibling,f=n.previousElementSibling,s=()=>n.hidden=f.value.includes('@');f.addEventListener('input',s);s()}</script>`
         : '<input class="Field" name="address" type="email" required autofocus autocomplete="email" placeholder="you@example.com" aria-label="Your email">'
     }
-<button class="Button" type="submit">Send me a code</button>
+<button class="Button Button-go" type="submit">Send me a code</button>
 </form>${home(env)}`,
   )
 
@@ -2307,10 +2315,10 @@ export let askCode = (at: {
     }</p>
 <input type="hidden" name="address" value="${esc(address)}">
 <input class="Field Code" name="code" inputmode="numeric" pattern="[0-9]{6}" maxlength="6" required autofocus autocomplete="one-time-code" aria-label="Your six-digit code">
-<button class="Button" type="submit">Sign in</button>
+<button class="Button Button-go" type="submit">Sign in</button>
 </form><form class="Again" method="post" action="/login">${carried(q, back)}
 <input type="hidden" name="address" value="${esc(address)}">
-<button class="Button Button-quiet" type="submit">Send a new code</button>
+<button class="Button" type="submit">Send a new code</button>
 </form>${home(env)}`,
   )
 }
@@ -2388,7 +2396,7 @@ ${
             }</b> to confirm</label>
 <input class="Field" id="confirm" name="confirm" autocomplete="off" spellcheck="false" autofocus>`
         }
-<button class="Button" type="submit">${
+<button class="Button Button-go" type="submit">${
           at.forever
             ? `Delete ${esc(spaceHost(env, at.slug))} forever`
             : `Put ${esc(spaceHost(env, at.slug))} in the trash`
@@ -2464,7 +2472,7 @@ export let invited = (o: Offer, env: Host = {}) => {
       held('return', o.back)
     }
 <p>It was sent to ${esc(o.email)}. Sign in with that address to accept it.</p>
-<button class="Button" type="submit">Email me a sign-in code</button>
+<button class="Button Button-go" type="submit">Email me a sign-in code</button>
 </form>${home(env)}`,
   )
 }
@@ -2522,17 +2530,17 @@ export let askConnect = (at: {
         status: at.status == 'needed'
           ? ''
           : at.status == 'broken'
-          ? status('Yours needs reconnecting', 'warn')
-          : status('Yours is connected', 'good'),
+          ? status('Yours needs reconnecting', 'negative')
+          : status('Yours is connected', 'positive'),
         actions: at.on && !at.keyed
-          ? `<form method="post"><button class="Button" type="submit">${
+          ? `<form method="post"><button class="Button Button-go" type="submit">${
             at.status == 'needed' ? 'Connect' : 'Connect again'
           }</button></form>`
           : '',
       })
     }${about(at.face)}${howTo(at.face, at.status != 'connected')}${
       at.say
-        ? `<p class="Say${at.no ? ' Say-no' : ''}" role="status">${
+        ? `<p class="Notice${at.no ? ' Notice-negative' : ''}" role="status">${
           esc(at.say)
         }</p>`
         : ''
@@ -2544,7 +2552,7 @@ export let askConnect = (at: {
           keyBox(
             'key',
             'Paste your key',
-            '<button class="Button" type="submit">Save key</button>',
+            '<button class="Button Button-go" type="submit">Save key</button>',
             '',
             at.face.fields,
           )
@@ -2566,7 +2574,7 @@ export let askLink = (t: string, env: Host = {}) =>
     'This link signs you in once, for ten minutes.',
     200,
     `<form method="post" action="/login/link">${held('t', t)}
-<button class="Button" type="submit">Sign in</button>
+<button class="Button Button-go" type="submit">Sign in</button>
 </form>${home(env)}`,
     { 'cache-control': 'private, no-store', 'referrer-policy': 'no-referrer' },
   )
@@ -2586,7 +2594,7 @@ export let askHandoff = (
     `<form method="post" action="/login/handoff">${held('return', back)}${
       held('consent', consent)
     }
-<button class="Button" type="submit">Continue to ${esc(host)}</button>
+<button class="Button Button-go" type="submit">Continue to ${esc(host)}</button>
 </form>${home(env)}`,
     { 'cache-control': 'private, no-store', 'referrer-policy': 'no-referrer' },
   )
@@ -2608,7 +2616,7 @@ export let askAllow = (
     `<form method="post" action="/oauth/allow">${carried(q)}${
       held('consent', consent)
     }
-<button class="Button" type="submit">Allow</button>
+<button class="Button Button-go" type="submit">Allow</button>
 </form>${home(env)}`,
   )
 
@@ -2658,13 +2666,15 @@ let mine = (y: Yours, env: Host) =>
       'Your address',
       `<div class="Form_Line"><span class="At"><input class="Field" id="your-space" name="space" maxlength="63" autocomplete="off" spellcheck="false" value="${
         esc(y.said ?? y.slug)
-      }"><span>.${
+      }"><span class="At_End">.${
         apex(env)
-      }</span></span><button class="Button" type="submit">Save</button></div>`,
+      }</span></span><button class="Button Button-go" type="submit">Save</button></div>`,
       MOVES,
     )
   }
-<p class="Say${y.no ? ' Say-no' : ''}" role="status">${esc(y.say ?? '')}</p>
+<p class="Notice${y.no ? ' Notice-negative' : ''}" role="status">${
+    esc(y.say ?? '')
+  }</p>
 </form>
 </section>`
 
@@ -2751,18 +2761,18 @@ let plan = (
     heading('Plan', {
       status: tier == 'free'
         ? status('Free')
-        : status(tier == 'plus' ? 'Plus' : 'Organization', 'good'),
+        : status(tier == 'plus' ? 'Plus' : 'Organization', 'positive'),
       actions: doors,
     })
   }
 ${head}${billedLine(y.plan, y.payer, y.provider)}${ask}
 ${
     y.paid
-      ? '<p class="Say">Thanks — that went through. Your space moves to its ' +
+      ? '<p class="Notice">Thanks — that went through. Your space moves to its ' +
         'new plan in a moment.</p>'
       : ''
   }
-<p class="Say Bill_Say" role="status"></p>
+<p class="Notice Bill_Say" role="status"></p>
 </section>`
 }
 
@@ -2813,9 +2823,9 @@ let gaugeRow = (name: string, figure: string, hint: string, share: number) =>
     hint ? ` · ${hint}` : ''
   }</span></div>${
     share >= 1
-      ? status('At the limit', 'warn')
+      ? status('At the limit', 'negative')
       : share >= WARN
-      ? status('Near the limit', 'warn')
+      ? status('Near the limit', 'negative')
       : ''
   }</li>`
 
@@ -3020,7 +3030,7 @@ let clients = (env: Host) => [
     tab: 'Claude Code',
     title: 'Claude Code',
     steps: [
-      `In your terminal: <code class="Pick">claude mcp add --transport http yaks ${
+      `In your terminal: <code class="Copy_Text">claude mcp add --transport http yaks ${
         url(env, '/mcp')
       }</code>`,
       'Start Claude Code, run <code>/mcp</code>, pick <b>yaks</b> and choose ' +
@@ -3037,7 +3047,7 @@ let clients = (env: Host) => [
     steps: [
       'Open <b>Cursor Settings</b> → <b>Tools &amp; Integrations</b> and ' +
       'press <b>New MCP Server</b>. It opens <code>~/.cursor/mcp.json</code>.',
-      'Add the server, with the URL as its one field: <code class="Pick">' +
+      'Add the server, with the URL as its one field: <code class="Copy_Text">' +
       '{ "mcpServers": { "yaks": { "url": "' + url(env, '/mcp') +
       '" } } }</code>',
       'Back in <b>Tools &amp; Integrations</b>, click <b>yaks</b> and sign in.',
@@ -3162,11 +3172,11 @@ let inline = `<script>
 let f = document.querySelector('.Addr')
 if (f) f.addEventListener('submit', async (e) => {
   e.preventDefault()
-  let say = f.querySelector('.Say')
+  let say = f.querySelector('.Notice')
   let go = f.querySelector('button')
   let now = document.querySelector('.Now b')
   go.disabled = true
-  say.className = 'Say'
+  say.className = 'Notice'
   say.textContent = 'Saving…'
   try {
     let r = await fetch('/connect', {
@@ -3180,11 +3190,11 @@ if (f) f.addEventListener('submit', async (e) => {
       f.querySelector('input').value = out.slug
       say.textContent = 'Saved. Your apps live at ' + out.address + '.'
     } else {
-      say.className = 'Say Say-no'
+      say.className = 'Notice Notice-negative'
       say.textContent = out.error
     }
   } catch (_) {
-    say.className = 'Say Say-no'
+    say.className = 'Notice Notice-negative'
     say.textContent = "That didn't go through. Try again?"
   }
   go.disabled = false
@@ -3199,7 +3209,7 @@ for (let b of document.querySelectorAll('.Bill_Go')) {
   b.addEventListener('click', async () => {
     let say = b.closest('.Bill').querySelector('.Bill_Say')
     b.disabled = true
-    say.className = 'Say Bill_Say Working'
+    say.className = 'Notice Bill_Say Loading'
     say.innerHTML = ${
   JSON.stringify(yak('calculating') + '<span>One moment…</span>')
 }
@@ -3213,10 +3223,10 @@ for (let b of document.querySelectorAll('.Bill_Go')) {
       })
       let out = await r.json()
       if (out.url) { location = out.url; return }
-      say.className = 'Say Bill_Say Say-no'
+      say.className = 'Notice Bill_Say Notice-negative'
       say.textContent = out.error ? out.error.message : 'That did not go through.'
     } catch (_) {
-      say.className = 'Say Bill_Say Say-no'
+      say.className = 'Notice Bill_Say Notice-negative'
       say.textContent = "That didn't go through. Try again?"
     }
     b.disabled = false

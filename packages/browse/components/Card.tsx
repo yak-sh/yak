@@ -66,7 +66,7 @@ export let TabFace = ({ view, eid }: { view: string; eid: string }) => {
 let Pin = ui.el('div', 'Pin')
 let Handle = ui.el('div', 'Handle')
 
-let Frame = ui.block('section', 'Card', {
+let Frame = ui.block('section', 'Window', {
   Tabs: 'header',
   Min: 'button',
   X: 'button',
@@ -140,7 +140,7 @@ export let Card = (
     ) {
       return // an editing title owns its clicks — place the cursor, no drag
     }
-    if (!e.target.closest('.Card_Tabs')) return
+    if (!e.target.closest('.Window_Tabs')) return
     let el = e.currentTarget
     let from = { x: p.x, y: p.y }
     moveEl(
@@ -169,7 +169,7 @@ export let Card = (
     toFront(p.eid) // so the grab raises the card here — same as any touch
     if (e.button != 0) return
     let grip = e.currentTarget
-    let card = grip.parentElement!.querySelector('.Card') as HTMLElement
+    let card = grip.parentElement!.querySelector('.Window') as HTMLElement
     let base = {
       x: p.x,
       y: p.y,

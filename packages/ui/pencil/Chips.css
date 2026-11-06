@@ -1,0 +1,6 @@
+/* Pencil's row of chips, yaks.app's: a handful of notes, wrapping. */
+.Chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.625rem;
+}

@@ -23,7 +23,7 @@ for (let root of ['style.css', 'pages.css']) {
     assert(!css.includes('@import'))
     assertStringIncludes(css, '--font:')
     assertStringIncludes(css, "font-family: 'Nunito'")
-    let order = ['@layer tokens, base', '--font:', 'html::after']
+    let order = ['@layer tokens, base', '--font:', ':where(html)::after']
       .map((text) => css.indexOf(text))
     assertEquals(order, order.toSorted((a, b) => a - b))
   })

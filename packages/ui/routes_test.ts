@@ -103,3 +103,19 @@ test('/ui keeps the base beside installed kits, skins and UX specimens', async (
     ),
   )
 })
+
+test('/ui serves the files a skin points at beside itself, and no others', async () => {
+  let page = await get('?theme=linen&skin=pencil')
+  let [, href] = page.match(/url\("(ui\/file\?[^"#]+)#line"\)/) ?? []
+  assert(href, "pencil's line asks the guide for pencil.svg")
+  let file = routes()[1]
+  let svg = await file.handle(new Request(`http://box/${href}`))
+  assertEquals(svg.headers.get('content-type'), 'image/svg+xml')
+  assert((await svg.text()).includes('<filter'))
+  let elsewhere = new URLSearchParams({ skin: 'pencil', at: import.meta.url })
+  let refused = await file.handle(
+    new Request(`http://box/ui/file?${elsewhere}`),
+  )
+  assertEquals(refused.status, 404)
+  await refused.body?.cancel()
+})

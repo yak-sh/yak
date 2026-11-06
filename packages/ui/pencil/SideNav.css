@@ -1,0 +1,85 @@
+/* Pencil's side navigation: a column of links beside an edge, the edge
+   between this nav and the panel it leans against. The current link is a
+   tab drawn in pencil and filled with the panel, and it covers the edge, so
+   it opens into the panel, which is what makes it read as the page you are
+   on. A nav with no panel beside it points --nav-edge and --nav-panel at
+   nothing, and --nav-shut at graphite to close the tab's open side, so its
+   current link is a pencil box (every nav on a phone, and any page's that
+   says so). */
+.SideNav {
+  --nav-panel: var(--card);
+  --nav-edge: var(--graphite);
+  --nav-shut: transparent;
+  position: relative;
+  display: grid;
+  gap: .4rem;
+}
+.SideNav::after {
+  content: '';
+  position: absolute;
+  inset: 0 calc(-1 * var(--room)) 0 auto;
+  width: calc(var(--stroke) + 2 * var(--room));
+  background: linear-gradient(var(--nav-edge) 0 0) center / var(--stroke)
+    100% no-repeat;
+  filter: var(--drawn);
+  pointer-events: none;
+}
+.SideNav_Link {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: .65rem;
+  padding: .6rem .8rem;
+  border: 1px solid transparent;
+  border-radius: var(--radius);
+  color: var(--muted);
+  font-size: .95rem;
+  text-decoration: none;
+  -webkit-user-select: none;
+  user-select: none;
+}
+.SideNav_Link:hover,
+.SideNav_Link-hover {
+  color: var(--text);
+}
+.SideNav_Link-on {
+  background: var(--nav-panel);
+  color: var(--text);
+  font-weight: 800;
+  z-index: 1;
+}
+.SideNav_Link-on::after {
+  content: '';
+  position: absolute;
+  inset: -1px 0 -1px -1px;
+  border: var(--stroke) solid var(--graphite);
+  border-right-color: var(--nav-shut);
+  border-radius: var(--radius);
+  filter: var(--drawn);
+  pointer-events: none;
+}
+/* The gap the current tab opens in the edge. */
+.SideNav_Link-on::before {
+  content: '';
+  position: absolute;
+  inset: 2px calc(-1.5 * var(--room)) 2px auto;
+  width: calc(3 * var(--room));
+  background: var(--nav-panel);
+}
+/* A rule between groups of links, stopping short of the edge. */
+.SideNav_Rule {
+  height: calc(var(--stroke) + 2 * var(--room));
+  margin: calc(1rem - var(--room)) .8rem;
+  border: 0;
+  background: var(--rule);
+  filter: var(--drawn);
+}
+@media (max-width: 700px) {
+  .SideNav {
+    --nav-panel: transparent;
+    --nav-edge: transparent;
+    --nav-shut: var(--graphite);
+    display: flex;
+    flex-wrap: wrap;
+  }
+}

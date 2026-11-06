@@ -6,7 +6,7 @@ import { createHash } from 'node:crypto'
 import { pathToFileURL } from 'node:url'
 import { Buffer } from 'node:buffer'
 import { join } from 'node:path'
-import { from, plan, UI } from './sheet-assets.ts'
+import { from, plan, ui } from './sheet-assets.ts'
 
 let hash = (bytes: Uint8Array) =>
   createHash('sha256').update(bytes).digest('hex')
@@ -96,7 +96,7 @@ let outputs = async (root: string) => {
       '_cli/current.json',
       '_cli/launch.ts',
       url,
-      UI,
+      ...(await ui()).keys(),
       ...Object.values(plan(await from(publicDir)).names),
     ]
       .map((name) => join(publicDir, name)),

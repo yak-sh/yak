@@ -8,6 +8,8 @@
 }
 .Tabs_Tab {
   font: inherit;
+  -webkit-user-select: none; /* pressed, not read, even where it links */
+  user-select: none;
   color: var(--muted);
   text-decoration: none; /* a tab that links reads as a tab */
   background: none;
@@ -26,7 +28,8 @@
 .Tabs_Tab-hover {
   color: var(--text); /* the face alone answers the pointer: no fill */
 }
-.Tabs_Tab-on {
+.Tabs_Tab-on,
+.Tabs_Item > input:checked ~ .Tabs_Tab {
   color: var(--text);
   background: var(--soft);
   border-color: var(--border2);
@@ -45,4 +48,46 @@
   line-height: 1.5;
   font-variant-numeric: tabular-nums;
   text-align: center;
+}
+
+/* A set (`TabSet`): the fieldset's own frame gone, its legend over the row,
+   each item's radio unseen but kept, so the keyboard and a form still have
+   it, and its focus ringed on its tab. Every panel wraps to a line of its
+   own under the tabs, and only the checked one's shows: a panel keeps its
+   own display, so a card stays a card. */
+.Tabs:has(> .Tabs_Item) {
+  flex-wrap: wrap;
+  position: relative;
+  min-width: 0;
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+.Tabs_Legend {
+  margin-bottom: var(--half-gap);
+  padding: 0;
+  color: var(--text);
+  font-weight: 600;
+}
+.Tabs_Item {
+  display: contents;
+}
+.Tabs_Item > input {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  opacity: 0;
+  pointer-events: none;
+}
+.Tabs_Item > input:focus-visible ~ .Tabs_Tab {
+  outline: 2px solid var(--accent);
+  outline-offset: -2px;
+}
+.Tabs_Panel {
+  order: 1;
+  flex: 1 1 100%;
+  min-width: 0;
+}
+.Tabs_Item > input:not(:checked) ~ .Tabs_Panel {
+  display: none;
 }

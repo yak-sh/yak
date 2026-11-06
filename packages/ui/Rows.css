@@ -101,3 +101,37 @@
   border-left: 1px solid var(--border2);
   min-width: 0;
 }
+
+/* A row of like things: a thing's name over what describes it, and what
+   acts on it at the far side, under it where there is no room beside. */
+.Rows_Item:where(:has(> .Rows_Main)) {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--half-gap) var(--gap);
+}
+.Rows_Main {
+  display: grid;
+  flex: 1 1 12rem;
+  gap: 2px;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.Rows_Name {
+  color: var(--text);
+  font-weight: 700;
+}
+.Rows_Meta {
+  color: var(--muted);
+  font-size: var(--small);
+}
+.Rows_Actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--half-gap);
+  margin-left: auto;
+}
+.Rows_Actions form {
+  display: contents;
+}

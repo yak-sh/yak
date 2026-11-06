@@ -1,0 +1,23 @@
+/* Words to copy, in the mono face on a faint wash, selected whole at a
+   press, and the button beside them, its own width. */
+.Copy {
+  display: flex;
+  align-items: center;
+  gap: var(--half-gap);
+  min-width: 0;
+}
+.Copy_Text {
+  flex: 1;
+  min-width: 0;
+  padding: 2px var(--half-gap);
+  border-radius: var(--radius);
+  background: var(--soft);
+  color: var(--text);
+  font-family: var(--mono);
+  font-size: var(--small);
+  overflow-wrap: anywhere;
+  user-select: all;
+}
+.Copy_Go {
+  flex: none;
+}

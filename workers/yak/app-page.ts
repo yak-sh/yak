@@ -33,7 +33,7 @@ export let page = (a: Shown, env: Host = {}) => {
   let shot = a.shot && (a.app.access != 'private' || listed) ? a.shot : ''
   let copy = `<form method="post" action="${
     esc(installAt(a.name))
-  }"><button class="Button Button-quiet" type="submit">Make your own copy</button></form>`
+  }"><button class="Button" type="submit">Make your own copy</button></form>`
   return html(
     `${
       head(
@@ -65,7 +65,9 @@ ${
     }
 <div class="Listing_Doors">${
       opened
-        ? `<a class="Button" href="${esc(a.at)}">Open the app</a>${copy}`
+        ? `<a class="Button Button-go" href="${
+          esc(a.at)
+        }">Open the app</a>${copy}`
         : copy
     }</div>
 <p class="Note Note-small">Your copy is yours: its own address, its own data, and the people you choose.</p>

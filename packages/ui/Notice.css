@@ -1,0 +1,13 @@
+/* A line said back, small and muted; a refusal in the negative. Empty, it
+   takes no room. */
+.Notice {
+  margin: 0;
+  color: var(--muted);
+  font-size: var(--small);
+}
+.Notice:empty {
+  display: none;
+}
+.Notice-negative {
+  color: var(--negative);
+}

@@ -12,7 +12,7 @@ export let ledger: Skin = {
     sheet: (c) => ({ ...buttons(c), Button: { fg: c.accent, bold: true } }),
   },
   Tabs: {
-    css: new URL('./ledger/Tabs.css', import.meta.url),
+    over: new URL('./ledger/Tabs.css', import.meta.url),
     sheet: (c) => ({
       ...tabs(c),
       'Tabs_Tab-on': { fg: c.accent, bold: true, underline: true },

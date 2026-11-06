@@ -2,3 +2,12 @@
   color: var(--muted);
   padding: var(--half-gap);
 }
+/* What is at work, before the words that say it, on their line. */
+.Loading_Mark {
+  display: inline-block;
+  margin-inline-end: var(--half-gap);
+  vertical-align: middle;
+}
+.Loading_Mark img {
+  display: block;
+}

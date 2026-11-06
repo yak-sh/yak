@@ -17,6 +17,8 @@ test('terminal guide switches skins and themes without losing its place', async 
     assert(guide.sheet().Button.fg != color)
     assertEquals(guide.sheet().Button.bold, true)
     await app.send('s')
+    assert(app.text().includes('s skin (pencil)'))
+    await app.send('s')
     assert(app.text().includes('s skin (base)'))
     assertEquals(guide.sheet().Button.bold, undefined)
   } finally {

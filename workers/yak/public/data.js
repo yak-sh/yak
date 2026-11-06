@@ -3,7 +3,7 @@
 // declares, through the same `./api/*` doors its own pages use. Nothing here
 // knows an app: `kinds` and `fields` read a declaration into data, `valued` and
 // `patch` turn a row and a form into a bundle, and `open` draws them with
-// yaks.app's controls (controls.css).
+// yaks.app's controls (@yaks/ui's parts, drawn by the pencil skin).
 
 // What is not a row a person keeps: a link between rows, what lives only in a
 // page or a moment, and what each person holds privately.
@@ -213,7 +213,11 @@ export let open = ({ root, client, words, view, files }) => {
   let accepts = words.blob?.contentMediaType
 
   let say = (text, no = false) =>
-    h('p', { class: `Say${no ? ' Say-no' : ''}`, role: 'status' }, text)
+    h(
+      'p',
+      { class: `Notice${no ? ' Notice-negative' : ''}`, role: 'status' },
+      text,
+    )
   let paint = (...kids) => root.replaceChildren(...kids)
   let failed = (e) => {
     paint(say(e.message, true))
@@ -316,7 +320,7 @@ export let open = ({ root, client, words, view, files }) => {
               { class: 'Card_Actions' },
               h(
                 'a',
-                { class: 'Button', href: `#${kind.name}/new` },
+                { class: 'Button Button-go', href: `#${kind.name}/new` },
                 'Add',
               ),
             )
@@ -379,7 +383,7 @@ export let open = ({ root, client, words, view, files }) => {
             ),
             writes
               ? h('button', {
-                class: 'Button Button-quiet',
+                class: 'Button',
                 type: 'button',
                 onclick: () => set(''),
               }, 'Remove')
@@ -393,7 +397,7 @@ export let open = ({ root, client, words, view, files }) => {
       changed()
       return show(sha)
     }
-    // The drop zone (controls.css `.Drop`, public/drop.js); what is kept
+    // The drop zone (@yaks/ui `Drop`, public/drop.js); what is kept
     // shows above it, so it lists nothing chosen of its own.
     let pick = h('input', {
       class: 'Drop_File',
@@ -404,14 +408,14 @@ export let open = ({ root, client, words, view, files }) => {
         let file = e.target.files?.[0]
         if (!file) return
         said.textContent = `Uploading ${file.name}…`
-        said.className = 'Say'
+        said.className = 'Notice'
         try {
           await set((await client.upload(file)).eid)
           said.textContent = ''
           e.target.value = ''
         } catch (err) {
           said.textContent = err.message
-          said.className = 'Say Say-no'
+          said.className = 'Notice Notice-negative'
         }
       },
     })
@@ -455,7 +459,7 @@ export let open = ({ root, client, words, view, files }) => {
     if (f.control == 'bool') {
       return h(
         'label',
-        { class: 'Choice' },
+        { class: 'Check' },
         h('input', {
           ...attrs,
           class: null,
@@ -511,7 +515,7 @@ export let open = ({ root, client, words, view, files }) => {
     let note = say('')
     let telling = (text, no = false) => {
       note.textContent = text
-      note.className = `Say${no ? ' Say-no' : ''}`
+      note.className = `Notice${no ? ' Notice-negative' : ''}`
     }
     // What the form says now, beside what the row holds.
     let saying = () =>
@@ -603,17 +607,17 @@ export let open = ({ root, client, words, view, files }) => {
         ? h(
           'div',
           { class: 'Form_Actions' },
-          h('button', { class: 'Button', type: 'submit' }, 'Save'),
+          h('button', { class: 'Button Button-go', type: 'submit' }, 'Save'),
           Object.keys(typed).length
             ? h('button', {
-              class: 'Button Button-quiet',
+              class: 'Button',
               type: 'button',
               onclick: discard,
             }, 'Discard changes')
             : null,
           eid
             ? h('button', {
-              class: 'Button Button-quiet',
+              class: 'Button',
               type: 'button',
               onclick: remove,
             }, 'Delete')

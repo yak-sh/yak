@@ -4,6 +4,19 @@
   position: relative;
   touch-action: pan-y;
 }
+/* The point a pointer, a finger or an arrow key is on (the page's listener
+   sets data-on and --at), and the tip that says it, floating clear of
+   whatever clips the chart. */
+.Chart[data-on]::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: var(--at);
+  width: 1px;
+  background: var(--muted);
+  pointer-events: none;
+}
 .Chart-line {
   display: inline-block;
   vertical-align: middle;
@@ -28,4 +41,15 @@
 .Chart_End,
 .Chart_Bar {
   fill: var(--accent);
+}
+.Chart_Tip {
+  position: fixed;
+  z-index: 200;
+  padding: 0.15rem 0.5rem;
+  border-radius: var(--radius);
+  background: var(--text);
+  color: var(--card);
+  font-size: var(--small);
+  white-space: nowrap;
+  pointer-events: none;
 }

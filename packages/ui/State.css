@@ -1,0 +1,10 @@
+/* How something stands: a word beside a dot. The word describes, so it is
+   small and muted; the dot's tone says the state. */
+.State {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35em;
+  color: var(--muted);
+  font-size: var(--small);
+  line-height: 1.3;
+}

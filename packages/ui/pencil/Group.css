@@ -1,0 +1,8 @@
+/* A heading over a run of cards that belong together, a gap after the run
+   before it. */
+.Group {
+  margin: var(--gap) 0 0;
+}
+.Group:first-child {
+  margin-top: 0;
+}

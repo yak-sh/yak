@@ -1,0 +1,50 @@
+/* Pencil's form: yaks.app's spacing, its fields at most 34rem wide and their
+   hints a step under the small type (--fine, yaks.app's). */
+.Form {
+  display: grid;
+  gap: .875rem;
+  margin: 0;
+}
+.Form_Field {
+  display: grid;
+  gap: .35rem;
+  min-width: 0;
+  max-width: 34rem;
+}
+.Form_Label {
+  margin: 0;
+  color: var(--text);
+  font-size: var(--small);
+  font-weight: 700;
+}
+.Form_Optional {
+  color: var(--muted);
+  font-weight: 400;
+}
+.Form_Field > .Field {
+  width: 100%;
+}
+.Form_Hint {
+  margin: 0;
+  color: var(--muted);
+  font-size: var(--fine, var(--small));
+}
+/* One field and the button that sends it, on one line while they fit. */
+.Form_Line {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: .5rem;
+  min-width: 0;
+  margin: 0;
+}
+.Form_Line > .Field,
+.Form_Line > .At {
+  flex: 1 1 12rem;
+}
+.Form_Actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: .5rem;
+}

@@ -1,0 +1,21 @@
+/* Nothing here yet: a dashed edge around what will be and how to start, its
+   heading in the text's ink and the rest muted, centred. */
+.Empty {
+  display: grid;
+  justify-items: center;
+  gap: var(--half-gap);
+  padding: calc(2 * var(--gap)) var(--gap);
+  border: 1px dashed var(--border2);
+  border-radius: var(--radius);
+  color: var(--muted);
+  text-align: center;
+}
+.Empty > * {
+  max-width: var(--measure);
+  margin: 0;
+}
+.Empty h2 {
+  color: var(--text);
+  font-size: var(--h3);
+  font-weight: 700;
+}

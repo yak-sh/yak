@@ -393,10 +393,10 @@ test("a card's button opens the app, and the copy steps back", () => {
   assertStringIncludes(html, 'method="post" action="/install?name=recipes"')
   assertStringIncludes(
     html,
-    '<button class="Button Button-link" type="submit">Get a copy</button>',
+    '<button class="Button Button-quiet" type="submit">Get a copy</button>',
   )
   assertStringIncludes(
     html,
-    '<a class="Button" href="https://jeff.yaks.app/recipes/">Try it',
+    '<a class="Button Button-go" href="https://jeff.yaks.app/recipes/">Try it',
   )
 })

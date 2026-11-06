@@ -1,0 +1,14 @@
+/* Pencil's field with a fixed ending: yaks.app's spacing. */
+.At {
+  display: flex;
+  align-items: center;
+  gap: .35rem;
+  min-width: 0;
+}
+.At > .Field {
+  flex: 1 1 auto;
+}
+.At_End {
+  flex: none;
+  color: var(--muted);
+}

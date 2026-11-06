@@ -65,7 +65,7 @@ let card = async (i: Listed, env: Host) => {
   return `<li class="Card" id="${esc(encodeURIComponent(i.name))}">
 <header class="Card_Head">${logo(i)}<h2 class="Card_Title">${
     esc(title)
-  }</h2><div class="Card_Actions"><a class="Button" href="${
+  }</h2><div class="Card_Actions"><a class="Button Button-go" href="${
     esc(addAt(env, i.name))
   }">Add to a space</a></div></header>
 ${i.tagline ? `<p class="Card_Sub">${esc(i.tagline)}</p>` : ''}
@@ -115,7 +115,7 @@ ${
 <section class="Join Card" aria-labelledby="yours">
 <h2 id="yours" class="Title">Share a service of your own</h2>
 <p class="Note">On your space's Linked accounts page, add a key for any service, write how to get one, and list it here. Anyone can then add it to a space of theirs, with their own key.</p>
-<p class="Join_Doors"><a class="Button" href="${
+<p class="Join_Doors"><a class="Button Button-go" href="${
       esc(url(env, managePath('connections')))
     }">Your connections</a></p>
 </section>

@@ -92,7 +92,7 @@ html {
    eats its right padding — and a trailing margin doesn't count as
    scrollable overflow either. A spacer ITEM does: the row gap before it
    becomes the board's right padding at full scroll. (Card-hosted boards
-   overflow their Card_Scroll the same way.) */
+   overflow their Window_Scroll the same way.) */
 .Board::after {
   content: '';
   flex: 0 0 1px;
@@ -215,7 +215,7 @@ html {
   min-width: 340px;
   max-width: 640px;
 }
-.Pin-sized .Card {
+.Pin-sized .Window {
   max-height: none; /* an explicit height beats the auto cap */
 }
 
@@ -289,8 +289,10 @@ html {
 }
 
 /* A card frames one entity through one lens: chrome header (the tab row),
-   then one scroller that owns the padding — the scrollbar rides the border. */
-.Card {
+   then one scroller that owns the padding — the scrollbar rides the border.
+   Its class is Window, as it is one pinned on the canvas: the kit's Card is
+   a surface on a page, which a card's view may draw inside it. */
+.Window {
   flex: 1;
   min-width: 0; /* the PIN sizes the card — wide content scrolls inside
   (flex min-width:auto would push the card past its pin,
@@ -304,7 +306,7 @@ html {
   border-radius: var(--radius);
   box-shadow: 0 2px 10px rgb(0 0 0 / 0.25);
 }
-.Card_Tabs {
+.Window_Tabs {
   display: flex;
   align-items: center;
   gap: var(--gap);
@@ -344,8 +346,8 @@ html {
 }
 /* The card's remove button — deletes the card entity, not its target.
    Padded well past the glyph: a close button earns its hit area. */
-.Card_X,
-.Card_Min {
+.Window_X,
+.Window_Min {
   font: 14px/1 var(--mono);
   color: var(--muted);
   background: none;
@@ -359,10 +361,10 @@ html {
   display: grid;
   place-items: center;
 }
-.Card_Min:hover {
+.Window_Min:hover {
   color: var(--accent);
 }
-.Card_X:hover {
+.Window_X:hover {
   color: var(--negative);
 }
 
@@ -377,7 +379,7 @@ html {
    textarea is the rail's last row: borderless until it's spoken to. */
 
 /* The one scrolling element — padding scrolls away WITH the content. */
-.Card_Scroll {
+.Window_Scroll {
   flex: 1;
   min-height: 0;
   overflow: auto;
@@ -387,16 +389,16 @@ html {
 
 /* A board is a well: the hosting card drops to the chrome surface so the
    task cards on it sit raised at the normal card color. */
-.Card:has(> .Card_Scroll > .Board) {
+.Window:has(> .Window_Scroll > .Board) {
   background: var(--bg); /* app-bg well — reads almost transparent */
 }
 /* An embedded board scrolls exactly like fullscreen: its host owns x + snap,
    each COLUMN owns its own y. */
-.Card_Scroll:has(> .Board) {
+.Window_Scroll:has(> .Board) {
   display: flex;
   overflow-y: hidden;
 }
-.Card_Scroll > .Board {
+.Window_Scroll > .Board {
   flex: 1;
   min-width: 0;
 }
@@ -434,7 +436,7 @@ html {
    snap-align defines no snap areas, so every other page scrolls exactly as
    before. */
 .Shell_Body,
-.Card_Scroll,
+.Window_Scroll,
 .Split_Left {
   scroll-snap-type: x mandatory;
   scroll-padding-inline: calc(var(--gap) + env(safe-area-inset-left, 0px))
@@ -1712,13 +1714,13 @@ html {
   border: 0;
   background: #fff;
 }
-.Card_Scroll:has(> .Web) {
+.Window_Scroll:has(> .Web) {
   padding: 0;
   overflow: hidden;
   display: flex;
   flex-direction: column;
 }
-.Card_Scroll > .Web {
+.Window_Scroll > .Web {
   /* the basis holds unsized cards at the old floor; a shorter sized pin
      shrinks the frame to fit instead of clipping it */
   flex: 1 1 420px;
@@ -1802,14 +1804,14 @@ a[data-ref]:hover {
    the frame that hosts it (its own page, a card, a chat's box) or the page it
    sits in scrolls it, and its bar and composer stick to that scroller's edges
    while it is in view. Wide hosts place references beside the transcript. */
-.Card_Scroll:has(> .Session) {
+.Window_Scroll:has(> .Session) {
   padding: 0;
 }
 /* Every host of a session is its width container: the responsive grid
    below keys off the room the session actually has, not the viewport —
    so a session carded narrow on a wide screen still pages. */
 .Shell_Body:has(> .Session),
-.Card_Scroll:has(> .Session) {
+.Window_Scroll:has(> .Session) {
   container-type: inline-size;
 }
 /* On its own page it fills the floor, so a short transcript keeps the
@@ -1992,7 +1994,7 @@ a[data-ref]:hover {
    room it actually has, not the viewport, so a Split carded narrow on a wide
    screen still pages (an element can't query its OWN container). */
 .Shell_Body:has(> .Split),
-.Card_Scroll:has(> .Split) {
+.Window_Scroll:has(> .Split) {
   container-type: inline-size;
 }
 .Split {

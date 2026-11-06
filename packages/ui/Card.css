@@ -1,0 +1,76 @@
+/* A card: one surface holding related things, flat on the page on a
+   hairline. What it holds stacks a gap apart, never by margins of its own,
+   and its head, when it has one, runs edge to edge across the top, ruled
+   off under it: what it is on the left, its actions on the right. */
+.Card {
+  --card-pad: var(--gap);
+  display: grid;
+  align-content: start;
+  gap: var(--half-gap);
+  min-width: 0;
+  padding: var(--card-pad);
+  border: 1px solid var(--border2);
+  border-radius: var(--radius);
+  background: var(--card);
+  overflow-wrap: break-word;
+}
+.Card > * {
+  min-width: 0;
+  margin: 0;
+}
+.Card_Head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--half-gap);
+  margin: calc(-1 * var(--card-pad)) calc(-1 * var(--card-pad)) 0;
+  padding: var(--half-gap) var(--card-pad);
+  border-bottom: 1px solid var(--border2);
+}
+.Card_Head:last-child {
+  margin-bottom: calc(-1 * var(--card-pad));
+  border-bottom: 0;
+}
+.Card_Title {
+  margin: 0;
+  color: var(--heading);
+  font-size: var(--size);
+  font-weight: 700;
+  line-height: 1.3;
+}
+.Card_Title a {
+  color: inherit;
+  text-decoration: none;
+}
+.Card_Title a:hover {
+  color: var(--link);
+  text-decoration: underline;
+}
+.Card_Mark {
+  flex: none;
+  width: 1.5em;
+  height: 1.5em;
+  text-align: center;
+}
+.Card_Actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--half-gap);
+  margin-left: auto;
+}
+.Card_Actions form {
+  display: contents;
+}
+.Card_Sub {
+  color: var(--muted);
+  font-size: var(--small);
+}
+
+/* Rows in a card run to its edges. */
+.Card > .Rows {
+  margin-inline: calc(-1 * var(--card-pad));
+}
+.Card > .Rows > .Rows_Item {
+  padding-inline: var(--card-pad);
+}

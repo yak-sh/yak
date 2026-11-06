@@ -38,7 +38,7 @@ let page = (
 ${top}
 <main class="Page">
 <h1 class="Title">${esc(title)}</h1>
-${why ? `<p class="Say Say-no" role="alert">${esc(why)}</p>` : ''}
+${why ? `<p class="Notice Notice-negative" role="alert">${esc(why)}</p>` : ''}
 ${
       name
         ? `<form class="Card" method="post" action="${esc(installAt(name))}">
@@ -56,8 +56,8 @@ ${
                   s.slug == selected ? ' selected' : ''
                 }>${esc(s.title)} (${esc(s.slug)})</option>`
               ).join('')
-            }</select><button class="Button" type="submit">Install app</button></div></div>`
-            : '<div class="Form_Actions"><button class="Button" type="submit">Install app</button></div>'
+            }</select><button class="Button Button-go" type="submit">Install app</button></div></div>`
+            : '<div class="Form_Actions"><button class="Button Button-go" type="submit">Install app</button></div>'
         }
 </form>`
         : ''

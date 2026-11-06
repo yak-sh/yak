@@ -1,0 +1,152 @@
+/* A drop zone: a dashed place to drop files on or press, centred words in
+   it, and under it what is chosen, one file a line on a well. The input is
+   unseen, so the zone wears its focus. A gathering part holds its files as
+   chips along its top, each taken back by the press in its corner. */
+.Drop {
+  display: grid;
+  gap: var(--half-gap);
+  min-width: 0;
+}
+.Drop_Zone {
+  position: relative;
+  display: grid;
+  place-items: center;
+  gap: calc(var(--half-gap) / 2);
+  min-height: 6rem;
+  padding: var(--gap);
+  border: 1px dashed var(--border2);
+  border-radius: var(--radius);
+  background: var(--bg);
+  text-align: center;
+  cursor: pointer;
+}
+.Drop_Zone:hover,
+.Drop_Zone:has(.Drop_File:focus-visible) {
+  border-color: var(--accent);
+}
+.Drop_Zone:has(.Drop_File:focus-visible) {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+.Drop_Zone-over {
+  border-style: solid;
+  border-color: var(--accent);
+  background: var(--card);
+}
+.Drop_Zone:has(.Drop_File:disabled) {
+  opacity: .55;
+  cursor: not-allowed;
+}
+.Drop_File {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  opacity: 0;
+  pointer-events: none;
+}
+.Drop_Say {
+  color: var(--text);
+}
+.Drop_Choose {
+  color: var(--accent);
+  font-weight: 700;
+  text-decoration: underline;
+  text-underline-offset: .2em;
+}
+.Drop_Hint,
+.Drop_Size,
+.Drop_Said,
+.Drop_Note {
+  color: var(--muted);
+  font-size: var(--small);
+}
+.Drop_Chosen {
+  display: grid;
+  gap: calc(var(--half-gap) / 2);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.Drop_Item {
+  display: flex;
+  align-items: center;
+  gap: var(--half-gap);
+  min-width: 0;
+  padding: 4px var(--half-gap);
+  border-radius: var(--radius);
+  background: var(--surface);
+}
+.Drop_Picture {
+  flex: none;
+  width: 2.5rem;
+  height: 2.5rem;
+  border-radius: var(--radius);
+  object-fit: cover;
+}
+.Drop_Name {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  color: var(--text);
+  font-weight: 700;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.Drop_Size,
+.Drop_Item > .Button {
+  flex: none;
+}
+.Drop_Said {
+  margin: 0;
+}
+.Drop_Note {
+  flex-basis: 100%;
+}
+.Drop_Item-unread {
+  flex-wrap: wrap;
+}
+.Drop_Kind {
+  flex: none;
+  display: grid;
+  place-items: center;
+  min-width: 2.5rem;
+  height: 2.5rem;
+  padding-inline: 4px;
+  border-radius: var(--radius);
+  background: var(--card);
+  color: var(--muted);
+  font-size: var(--small);
+  font-weight: 700;
+}
+.Drop-gather {
+  position: relative;
+}
+.Drop-over {
+  outline: 2px dashed var(--accent);
+  outline-offset: 2px;
+}
+.Drop-gather .Drop_Chosen {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--half-gap);
+}
+.Drop-gather .Drop_Item {
+  position: relative;
+  max-width: 16rem;
+  padding: 4px 2rem 4px 4px;
+}
+.Drop-gather .Drop_Picture {
+  width: 3.5rem;
+  height: 3.5rem;
+}
+.Drop-gather .Drop_Item > .Button {
+  position: absolute;
+  top: 2px;
+  right: 2px;
+}
+/* What is empty takes no room, chips or not. */
+.Drop_Chosen:empty,
+.Drop_Said:empty,
+.Drop-gather .Drop_Chosen:empty {
+  display: none;
+}

@@ -33,9 +33,9 @@ let srcset = (el: Element) => {
 
 // Each yak on a page: its pose, its words, and the files it names.
 let yaks = (html: string) =>
-  [...parseHTML(`<main>${html}</main>`).document.querySelectorAll('.Working')]
+  [...parseHTML(`<main>${html}</main>`).document.querySelectorAll('.Loading')]
     .map((p) => {
-      let pic = p.querySelector('.Working_Yak')!
+      let pic = p.querySelector('.Loading_Mark')!
       let img = pic.querySelector('img')!
       let still = pic.querySelector('source')!
       assertEquals(img.getAttribute('alt'), '')

@@ -8,28 +8,41 @@
  */
 
 import type { Sheet } from '@yaks/tui/theme'
+import * as address from './Address.ts'
+import * as at from './At.ts'
 import * as base from './base.ts'
 import * as body from './Body.ts'
 import * as button from './Button.ts'
+import * as card from './Card.ts'
 import * as catalog from './Catalog.ts'
 import * as chart from './Chart.ts'
+import * as check from './Check.ts'
 import * as chip from './Chip.ts'
+import * as chips from './Chips.ts'
 import * as choices from './Choices.ts'
+import * as copy from './Copy.ts'
 import * as doc from './Doc.ts'
 import * as dot from './Dot.ts'
+import * as drop from './Drop.ts'
 import * as edit from './Edit.ts'
+import * as empty from './Empty.ts'
 import * as field from './Field.ts'
+import * as form from './Form.ts'
 import * as gallery from './Gallery.ts'
+import * as group from './Group.ts'
 import * as head from './Head.ts'
+import * as icon from './Icon.ts'
 import * as id from './Id.ts'
 import * as index from './Index.ts'
 import * as inbox from './Inbox.ts'
 import * as menu from './Menu.ts'
 import * as meter from './Meter.ts'
 import * as metrics from './Metrics.ts'
+import * as more from './More.ts'
 import * as loading from './Loading.ts'
 import * as match from './Match.ts'
 import * as notes from './Notes.ts'
+import * as notice from './Notice.ts'
 import * as palette from './Palette.ts'
 import * as overlay from './Overlay.ts'
 import * as pager from './Pager.ts'
@@ -39,12 +52,15 @@ import * as peek from './Peek.ts'
 import * as panes from './Panes.ts'
 import * as prop from './Prop.ts'
 import * as quote from './Quote.ts'
+import * as report from './Report.ts'
 import * as rows from './Rows.ts'
 import * as say from './Say.ts'
 import * as section from './Section.ts'
 import * as shell from './Shell.ts'
+import * as sideNav from './SideNav.ts'
 import * as spark from './Spark.ts'
 import * as stamp from './Stamp.ts'
+import * as state from './State.ts'
 import * as table from './Table.ts'
 import * as tabs from './Tabs.ts'
 import * as tile from './Tile.ts'
@@ -57,6 +73,7 @@ import { gouache } from './gouache.ts'
 import { ledger } from './ledger.ts'
 import { linen } from './linen.ts'
 import { paper } from './paper.ts'
+import { pencil } from './pencil.ts'
 import { rosepine } from './rosepine.ts'
 import { Fragment } from 'preact'
 import type { Composition, Contributions, Kit, Piece, Theme } from './theme.ts'
@@ -69,9 +86,13 @@ let modules = {
   Prose: { base, Body: body, Doc: doc, Quote: quote },
   Marks: {
     Dot: dot,
+    State: state,
     Id: id,
     Stamp: stamp,
     Chip: chip,
+    Chips: chips,
+    Address: address,
+    Icon: icon,
     Match: match,
     Value: value,
     Meter: meter,
@@ -81,14 +102,20 @@ let modules = {
   },
   Controls: {
     Button: button,
+    Copy: copy,
     Field: field,
+    At: at,
+    Check: check,
+    Form: form,
+    Drop: drop,
+    Notice: notice,
     Choices: choices,
     Edit: edit,
     Say: say,
     Menu: menu,
     Prop: prop,
   },
-  Navigation: { Tabs: tabs, Index: index, Pager: pager },
+  Navigation: { Tabs: tabs, SideNav: sideNav, Index: index, Pager: pager },
   Lists: {
     Tile: tile,
     Rows: rows,
@@ -102,10 +129,15 @@ let modules = {
   },
   Page: {
     Loading: loading,
+    Empty: empty,
     Shell: shell,
     Head: head,
     Metrics: metrics,
     Section: section,
+    More: more,
+    Card: card,
+    Report: report,
+    Group: group,
     Panes: panes,
     Overlay: overlay,
     Peek: peek,
@@ -140,7 +172,11 @@ export let themes: Record<string, Theme> = {
   rosepine,
   linen,
 }
-export let skins: NonNullable<Contributions['skins']> = { paper, ledger }
+export let skins: NonNullable<Contributions['skins']> = {
+  paper,
+  ledger,
+  pencil,
+}
 export let composition: Composition = { kits, theme: gouache, skin: paper }
 
 export { gather } from './contributions.ts'
@@ -189,13 +225,30 @@ let read = async (url: URL) => {
     )
 }
 
-/** Theme first, then one rendering per part: the skin's where it replaces
- * one, the kit's otherwise, and whatever the skin lays over it. */
-export let stylesheet = async (c: Composition): Promise<string> =>
-  (await Promise.all([
-    c.theme.css,
-    ...Object.entries(parts(c)).flatMap(([name, part]) => {
-      let { css = part.css, over } = c.skin?.[name] ?? {}
-      return over ? [css, over] : [css]
+/** What every theme derives the same way, dressed after the theme whatever
+ * the parts: the half gap, the faint wash, the touch floor, the type scale. */
+let DERIVED = new URL('./derived.css', import.meta.url)
+
+/** Each sheet a browser gets, by what it dresses: `theme` first (the theme,
+ * and what every theme derives), then one rendering per part, the skin's
+ * where it replaces one, the kit's otherwise, and whatever the skin lays over
+ * it. A host that layers its own CSS reads them apart. */
+export let sheets = async (c: Composition): Promise<[string, string][]> => {
+  let each = (urls: URL[]) => Promise.all(urls.map(read))
+  return await Promise.all([
+    each([c.theme.css, DERIVED]).then((css): [string, string] => [
+      'theme',
+      css.join('\n'),
+    ]),
+    ...Object.entries(parts(c)).map(([name, part]) => {
+      let { css = part.css, over = [] } = c.skin?.[name] ?? {}
+      return each([css, ...[over].flat()]).then((
+        css,
+      ): [string, string] => [name, css.join('\n')])
     }),
-  ].map(read))).join('\n')
+  ])
+}
+
+/** Every sheet a browser gets, in order, as one. */
+export let stylesheet = async (c: Composition): Promise<string> =>
+  (await sheets(c)).map(([, css]) => css).join('\n')

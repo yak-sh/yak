@@ -1,6 +1,8 @@
 /**
  * A list of rows, one `Rows.Item` each, and a `Rows.More` saying what was
- * left out. A list of things to pick from holds its `Tile`s directly, each
+ * left out. A row of like things is a `Rows.Main`, a thing's `Rows.Name`
+ * over the `Rows.Meta` that describes it, then the `Rows.Actions` that act
+ * on it, at the far side. A list of things to pick from holds its `Tile`s directly, each
  * pressed to pick it, the one picked `on`. `Rows-nested` hangs the list off
  * what it belongs to, indented under a rule. `Rows-quiet` is a list of what
  * is kept but no longer live (archived), muted, its links too.
@@ -21,12 +23,23 @@ import { block, type Part } from './el.ts'
 import type { Colors, Specimen } from './theme.ts'
 import { Dot } from './Dot.ts'
 import { Tile } from './Tile.ts'
+import { Button } from './Button.ts'
 
 /** A list of rows. */
 export let Rows:
   & Part
   & Record<
-    'Item' | 'More' | 'Kind' | 'Link' | 'Line' | 'Toggle' | 'Detail',
+    | 'Item'
+    | 'More'
+    | 'Kind'
+    | 'Link'
+    | 'Line'
+    | 'Toggle'
+    | 'Detail'
+    | 'Main'
+    | 'Name'
+    | 'Meta'
+    | 'Actions',
     Part
   > = block(
     'div',
@@ -39,6 +52,10 @@ export let Rows:
       Line: 'div',
       Toggle: 'button',
       Detail: 'div',
+      Main: 'div',
+      Name: 'strong',
+      Meta: 'span',
+      Actions: 'div',
     },
   )
 
@@ -55,6 +72,9 @@ export let sheet = (c: Colors): Sheet => ({
   Rows_Line: { row: true },
   Rows_Toggle: { fg: c.muted, width: 2 },
   Rows_Detail: { indent: 2 },
+  Rows_Main: { spaced: true },
+  Rows_Meta: { fg: c.muted },
+  Rows_Actions: { spaced: true },
 })
 
 let { Item, More } = Rows
@@ -82,7 +102,20 @@ let choice = (title: string, sub: string, mod?: string, tone = 'positive') =>
     h(Tile.End, {}, h(Tile.Count, {}, '3')),
   )
 
-/** A list, one nested under it, and tiles to pick from. */
+let person = (name: string, meta: string, ...actions: string[]) =>
+  h(
+    Item,
+    { key: name },
+    h(Rows.Main, {}, h(Rows.Name, {}, name), h(Rows.Meta, {}, meta)),
+    actions.length > 0 &&
+      h(
+        Rows.Actions,
+        {},
+        actions.map((a) => h(Button, { key: a, type: 'button' }, a)),
+      ),
+  )
+
+/** A list, one of people, one nested under it, and tiles to pick from. */
 export let specimens = (): Specimen[] => [
   [
     'Rows, Item, More',
@@ -92,6 +125,15 @@ export let specimens = (): Specimen[] => [
       row('T-1', 'first'),
       row('T-2', 'second'),
       h(More, {}, '48 more'),
+    ),
+  ],
+  [
+    'Rows, Item, Main, Name, Meta, Actions',
+    h(
+      Rows,
+      {},
+      person('Dana', 'dana@example.com · editor'),
+      person('sam', 'sam@example.com · viewer', 'Resend', 'Take off'),
     ),
   ],
   [

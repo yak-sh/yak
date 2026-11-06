@@ -92,7 +92,7 @@ test('the apex answers the crawler and the model', async () => {
     assertStringIncludes(tech, '<nav class="Page_Side SideNav Docs_Nav"')
     assertStringIncludes(
       tech,
-      '<a href="/docs/technical" aria-current="page">Technical Details</a>',
+      '<a class="SideNav_Link SideNav_Link-on" href="/docs/technical" aria-current="page">Technical Details</a>',
     )
 
     let publicPages: [string, Response][] = [
