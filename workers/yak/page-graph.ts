@@ -8,7 +8,7 @@ import { copyOf } from './directory-copy.ts'
 import { USES } from './door.ts'
 import { bound, type Env } from './env.ts'
 import { sandboxed } from './installed.ts'
-import { answered, metaOf } from './meta.ts'
+import { answered, answeredBody, metaOf } from './meta.ts'
 import { borrows, type Reach, read, vocabAt } from './reach.ts'
 import { vouched, type Who } from './session.ts'
 import { caught } from './defects.ts'
@@ -31,6 +31,7 @@ export let usesOf = (env: Env, space: Space, app: App) => {
 }
 
 let appsAt = async (env: Env, space: Space, slugs: string[]) => {
+  if (!slugs.length) return []
   let dir = directory(bound(env.DIRECTORY, dirPart.fetch, env), {
     copy: copyOf(env),
     time: env.CLOCK,
@@ -137,6 +138,16 @@ export let queried = async (
   return reading(env, graph, line, live, headers)
 }
 
+export let vocabularyAnswer = async (
+  response: Response,
+  tags: Record<string, string>,
+) => {
+  if (response.ok) return { docs: await response.json() as VocabDoc[] }
+  let body = await response.text()
+  caught(answeredBody(response.status, body), tags)
+  return { failed: new Response(body, response) }
+}
+
 // The local graph uses the store's core documents plus only the borrowed
 // words declared by this app. A home may speak other words; those are not
 // implicitly part of the borrower's vocabulary.
@@ -151,17 +162,12 @@ export let vocabulary = async (
   let store = appStore(env.STORE, space, app, env)
   let result = await store.consume(
     '/vocab.json',
-    async (response) => {
-      if (response.ok) return { docs: await response.json() as VocabDoc[] }
-      let body = await response.text()
-      let failed = new Response(body, response)
-      caught(await answered(failed.clone()), {
+    (response) =>
+      vocabularyAnswer(response, {
         request: 'GET /api/vocab.json',
         space: space.slug,
         app: app.slug,
-      })
-      return { failed }
-    },
+      }),
     {},
     { ...vouched(who), ...headers },
   )

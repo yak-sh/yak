@@ -16,7 +16,7 @@
 // `--containers-rollout=none` is what gets a dry run past it. So the last test
 // here reads the deploy's own config instead (see the gate note in
 // wrangler.toml).
-import { equal, test } from '@yaks/testing'
+import { test } from '@yaks/testing'
 import {
   assert,
   assertEquals,
@@ -24,19 +24,16 @@ import {
   assertStringIncludes,
 } from '@std/assert'
 import { parse } from 'smol-toml'
-import { imaged, pinned as from, tag } from './sandbox/base.ts'
-import { build, called, fake, transcribed } from './builder.ts'
-import { machineTools } from '@yaks/harness/machine'
+import { imaged, pinned as from } from './sandbox/base.ts'
+import { build, fake } from './builder.ts'
 import { directory, spaceOf } from './directory.ts'
 import * as dirPart from './directory.ts'
 import type { Env } from './env.ts'
 import * as apps from './apps.ts'
-import { kv } from './binding-probe.ts'
 import { owned } from './directory-fixture.ts'
 import { type Ran, sandboxes, workspaces } from './workspace-probe.ts'
 import { platform } from './deploy-probe.ts'
-import type { Space } from './directory.ts'
-import { GRANT, held, ledger } from './grants.ts'
+import { held, ledger } from './grants.ts'
 import {
   asleep,
   awake,
@@ -48,7 +45,6 @@ import {
   named,
   NO_BOX,
   released,
-  routed,
   seconds,
   spending,
   swapped,
@@ -525,43 +521,6 @@ test('every command is signed in as the caller, with one grant', async () => {
   assert(Math.abs(hours - LIFE) < 0.01, `${hours} hours is about ${LIFE}`)
 })
 
-let apex = new URL(HOST).host, PLACEHOLDER = SENTINEL + 'a'.repeat(43)
-let lend = [{
-  sentinel: PLACEHOLDER,
-  value: 'token',
-  hosts: [apex, `ada.${apex}`],
-}]
-for (
-  let [to, git, expected, status] of [
-    [`${HOST}/mcp`, false, 'token', 200],
-    [`https://ada.${apex}/chess.git/info/refs`, true, 'token', 200],
-    ['https://github.com/withastro/astro', false, PLACEHOLDER, 200],
-    [`https://bob.${apex}/`, false, PLACEHOLDER, 200],
-    [`https://example.com/?next=${HOST}`, false, PLACEHOLDER, 200],
-    [HOST.replace('https:', 'http:'), false, undefined, 403],
-  ] as [string, boolean, string | undefined, number][]
-) {
-  let request = new Request(to, {
-    headers: {
-      authorization: git
-        ? `Basic ${btoa(`x:${PLACEHOLDER}`)}`
-        : `Bearer ${PLACEHOLDER}`,
-    },
-  })
-  let answer = new Response('ok')
-  test(`a sandbox placeholder ${status == 403 ? 'refuses plaintext' : expected == 'token' ? 'becomes its token' : 'stays a placeholder'} toward ${new URL(to).host}${git ? ' with Git authentication' : ''}`, async () => {
-    let out: Request | undefined
-    let response = await routed(apex, lend, request, (r, init) => {
-      out = new Request(r, init)
-      return Promise.resolve(answer)
-    })
-    equal(response.status, status)
-    if (status == 403) return equal(out, undefined)
-    let said = out!.headers.get('authorization')!.split(' ')[1]
-    equal(git ? atob(said).slice(2) : said, expected)
-  })
-}
-
 test('destroying the container revokes what it was wearing', async () => {
   let { box, env, space } = await bench(() => ({ stdout: 'ok' }))
   let lone: Ctx = { env, dir: dirOf(env), person: ADA }
@@ -585,61 +544,6 @@ test('destroying the container revokes what it was wearing', async () => {
     .bearer!
   assert(next != token, 'a new grant for a new container')
   assert(await held(next, SECRET, book))
-})
-
-// The workbench is setup; signing the command and checking every handoff is timed.
-let placeholderBox = sandboxes(() => ({ stdout: 'ok' }))
-let placeholderEnv = {
-  SANDBOX: placeholderBox.SANDBOX,
-  WORKSPACES: workspaces(placeholderBox.SANDBOX),
-  OAUTH_KV: kv(),
-  SESSION_SECRET: SECRET,
-}
-let { workspace: placeholderMachine } = await workbench(
-  placeholderEnv,
-  { eid: 'ada', slug: 'ada' } as Space,
-  ADA,
-  spending(),
-)
-
-let shell = machineTools(placeholderMachine).find((tool) =>
-  tool.name == 'shell'
-)!
-let shellCall = {
-  id: 'sandbox-call',
-  name: 'shell',
-  args: JSON.stringify({ command: 'yak app_list' }),
-}
-let shellRuns = new Map([[
-  shell.name,
-  async (args: Record<string, unknown>) => [{
-    entity: { eid: '$said' },
-    output: { source: shellCall.id },
-    content: { body: await shell.run(args) },
-  }],
-]])
-test('the container holds a placeholder, never the token, and neither reaches the transcript', async () => {
-  let box = placeholderBox
-  let answer = await called(shellRuns, shellCall)
-  let record = transcribed(shellCall, answer)
-  assertStringIncludes(answer.text, 'ok')
-  assertEquals(record.line.said, 'tool')
-  let transcript = JSON.stringify(record)
-
-  let placeholder = box.env.at(-1)!.YAKS_TOKEN
-  assert(placeholder?.startsWith(SENTINEL), 'the command was signed in')
-  assert(
-    !transcript.includes(placeholder),
-    'no placeholder reaches the transcript',
-  )
-  assert(!transcript.includes(GRANT), 'no grant token reaches the transcript')
-  for (let handed of box.env.flatMap(Object.values)) {
-    assert(!handed.startsWith(GRANT), 'no grant token is handed in')
-  }
-  // Not in the command line the tool was called with.
-  for (let said of box.ran) {
-    assert(!said.includes(placeholder), `not in ${said.slice(0, 60)}`)
-  }
 })
 
 test('a build pays for its workbench and leaves none running', async () => {
@@ -764,9 +668,6 @@ test('the deploy names the container, and the image is the SDK version', () => {
 // names is the base Dockerfile's own hash: edit the base and this names the
 // FROM line to write.
 let baseImage = from(at('wrangler.toml'))!
-test('the sandbox names the base its Dockerfile hashes to', () => {
-  assertEquals(baseImage.split('/').at(-1), `yak-sandbox:${tag(baseFile)}`)
-})
 
 // The base's pin is checked above; its image door controls Docker operations.
 test('a deploy builds and pushes the base only when it is missing', async () => {

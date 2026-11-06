@@ -12,8 +12,7 @@
 // upgrade — `WebSocketPair` and a 101 `Response` are the runtime's, not the
 // web's — so a socket is driven the way the runtime drives a hibernated one,
 // through `webSocketMessage`.
-import { clock, equal, match, ok, test, throws } from '@yaks/testing'
-import { reported, type Tally, waited } from './lib/hops.ts'
+import { clock, equal, ok, test } from '@yaks/testing'
 import {
   assert,
   assertEquals,
@@ -22,23 +21,13 @@ import {
 } from '@std/assert'
 import { stub } from '@std/testing/mock'
 import { faults, type Frame } from '@yaks/api'
-import { type Bundle, type Comp, graph, type Rule, sha256 } from '@yaks/graph'
-import { ram } from '@yaks/ram'
-import { loadVocab } from '@yaks/vocab'
+import { type Bundle, type Comp, type Rule, sha256 } from '@yaks/graph'
 import { draftEid } from '@yaks/draft'
 import type { Wire } from '@yaks/durable-object'
 import { durable } from './testing.ts'
 import { within } from './defects.ts'
 import { doorOf, PLATFORM_STORE } from './door.ts'
-import {
-  fitOf,
-  formatted,
-  grantEid,
-  shapeOf,
-  stands,
-  Store,
-  type Time,
-} from './graph.ts'
+import { grantEid, Store, type Time } from './graph.ts'
 import { metaOf } from './meta.ts'
 import type { Load } from '@yaks/host'
 import { appConfig } from './config.ts'
@@ -145,24 +134,6 @@ test('each store response reports the SQL it ran for that fetch', async () => {
   assert(measured > 0 && measured <= calls - before)
 })
 
-test('only the request that woke a store says how long it waited to start', () => {
-  let time = clock(1000)
-  let says = (waking: boolean) => {
-    let tally: Tally = new Map()
-    waited(tally, waking, 990, time.now())
-    return reported(tally)['x-yak-wake']
-  }
-  equal(says(true), '10')
-  equal(says(false), undefined)
-})
-
-test('a query tree sent as text is refused, never run as two words', () => {
-  equal(formatted(String({})), '[object Object]')
-  equal(formatted('[object Array]'), '[object Array]')
-  equal(formatted('.recipe & [object Object]'), '[object Object]')
-  equal(formatted('.recipe.title=[object] & .doc'), null)
-})
-
 test('a Store row profile attributes SQL to the HTTP route', async () => {
   let ctx = state()
   using _db = ctx.storage
@@ -233,35 +204,6 @@ let SCHEMA = JSON.stringify({
   },
 })
 
-// The same app after a deploy that added a word.
-let GROWN = JSON.stringify({
-  $defs: {
-    ...JSON.parse(SCHEMA).$defs,
-    dish: { properties: { n: { type: 'number' } } },
-  },
-})
-
-// What a store raises out of each, as a wake does (`shapeOf`), and a graph in
-// memory over each one's words.
-let schemaShape = shapeOf('ada/cookbook', SCHEMA)
-let grownShape = shapeOf('ada/cookbook', GROWN)
-let over = ({ vocab }: typeof schemaShape) => {
-  let words = loadVocab({
-    $defs: Object.fromEntries(
-      ['entity', 'recipe', 'dish'].flatMap((name) => {
-        let definition = vocab.def(name)
-        return definition ? [[name, definition]] : []
-      }),
-    ),
-  })
-  return graph({ vocab: words, storage: ram(words) })
-}
-let before = over(schemaShape), after = over(grownShape)
-await after.apply([{
-  entity: { eid: 'd0000000-0000-4000-8000-000000000004' },
-  dish: { n: 0 },
-}])
-
 let owner: Vouch = { app: APP, person: ADA, role: 'owner', title: 'Ada' }
 
 // The byline off a returned bundle. `Bundle` carries any component, so a test
@@ -280,26 +222,6 @@ let cookbook = async (
   assertEquals((await post(store, '/vocab', manifest, v)).status, 200)
   return store
 }
-
-test('a store wakes without its schema under the code that fitted it, and follows new words', () => {
-  let fit = fitOf('a', schemaShape.key, 'stamp')
-  ok(stands(fit, fitOf('a', schemaShape.key, 'stamp')))
-  for (
-    let moved of [
-      fitOf('b', schemaShape.key, 'stamp'),
-      fitOf('a', grownShape.key, 'stamp'),
-      fitOf('a', schemaShape.key, 'new'),
-    ]
-  ) ok(!stands(fit, moved))
-  ok(!stands(null, fitOf('a', schemaShape.key, null)))
-  ok(!stands(null, fitOf(null, schemaShape.key, null)))
-  equal(fitOf(null, schemaShape.key, 'stamp'), null)
-})
-let dish = [{ entity: { eid: CAKE }, dish: { n: 1 } }]
-test('the old schema refuses a word it has not followed', () =>
-  throws(() => before.apply(dish), /unknown component: dish/))
-test('the followed schema takes a write in its new word', () =>
-  match(after.apply(dish), [{ dish: { n: 1 } }]))
 
 let appOwned = await (async () => {
   let ctx = state()

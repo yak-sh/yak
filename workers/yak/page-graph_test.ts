@@ -5,7 +5,7 @@ import { assertEquals } from '@std/assert'
 import type { App, Space } from './directory.ts'
 import type { Env } from './env.ts'
 import { USES } from './door.ts'
-import { queried, vocabulary } from './page-graph.ts'
+import { queried, vocabularyAnswer } from './page-graph.ts'
 import type { Who } from './session.ts'
 
 let space = { slug: 'page-words' } as Space
@@ -31,41 +31,50 @@ let stub = (answer: (req: Request) => Response) =>
 let titles = (rows: unknown) =>
   (rows as { doc: { title: string } }[]).map((r) => r.doc.title)
 
+let failed = { error: 'Refused', message: 'schema held' }
+let refusedVocabulary = Response.json(failed, { status: 503 })
 test('page vocabulary preserves a Store refusal', async () => {
-  let failed = { error: 'Refused', message: 'schema held' }
-  let env = stub((req) =>
-    new URL(req.url).pathname == '/uses'
-      ? Response.json({})
-      : Response.json(failed, { status: 503 })
-  )
-  let response = await vocabulary(env, space, app, who)
+  let { failed: response } = await vocabularyAnswer(refusedVocabulary, {
+    request: 'GET /api/vocab.json',
+    space: space.slug,
+    app: app.slug,
+  })
+  if (!response) throw new Error('the refusal became vocabulary')
   assertEquals(response.status, 503)
   assertEquals(await response.json(), failed)
 })
 
+let ownAsked: string[] = []
+let ownAnswer = Response.json(
+  [{ entity: { eid: 'n' }, doc: { title: 'Hi' } }],
+  {
+    headers: { [USES]: '{}' },
+  },
+)
+let ownEnv = stub((req) => {
+  ownAsked.push(new URL(req.url).pathname)
+  return ownAnswer
+})
 test('a page query of its own words reaches its store once', async () => {
-  let asked: string[] = []
-  let env = stub((req) => {
-    asked.push(new URL(req.url).pathname)
-    return Response.json([{ entity: { eid: 'n' }, doc: { title: 'Hi' } }], {
-      headers: { [USES]: '{}' },
-    })
-  })
-  assertEquals(titles(await queried(env, space, app, who, '.doc')), ['Hi'])
-  assertEquals(asked, ['/query'])
+  assertEquals(titles(await queried(ownEnv, space, app, who, '.doc')), ['Hi'])
+  assertEquals(ownAsked, ['/query'])
 })
 
 // A store still on the code before it says which words it uses only at
 // `/uses`, and is asked the way it was then.
+let legacyAsked: string[] = []
+let legacyAnswers = [
+  Response.json([{ entity: { eid: 'n' }, doc: { title: 'Hi' } }]),
+  Response.json({}),
+  Response.json([{ entity: { eid: 'n' }, doc: { title: 'Hi' } }]),
+]
+let legacyEnv = stub((req) => {
+  legacyAsked.push(new URL(req.url).pathname)
+  return legacyAnswers.shift()!
+})
 test('a page query answers from a store that does not say its uses', async () => {
-  let asked: string[] = []
-  let env = stub((req) => {
-    let url = new URL(req.url)
-    asked.push(url.pathname)
-    return url.pathname == '/uses'
-      ? Response.json({})
-      : Response.json([{ entity: { eid: 'n' }, doc: { title: 'Hi' } }])
-  })
-  assertEquals(titles(await queried(env, space, app, who, '.doc')), ['Hi'])
-  assertEquals(asked, ['/query', '/uses', '/query'])
+  assertEquals(titles(await queried(legacyEnv, space, app, who, '.doc')), [
+    'Hi',
+  ])
+  assertEquals(legacyAsked, ['/query', '/uses', '/query'])
 })

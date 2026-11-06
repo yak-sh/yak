@@ -56,16 +56,18 @@ export let KERNEL: Record<string, string> = { 'x-yak-kernel': '1' }
 // answers a JSON client can return the door's refusal intact, and so do the
 // fields the refusal carried: a write that did not fit the store's vocabulary
 // still says `misfit` (@yaks/graph `misfit`).
-export let answered = async (r: Response) => {
-  let text = await r.text()
+export let answeredBody = (status: number, text: string) => {
   let { error, message, ...carried } = refusal(text)
   return Object.assign(new Error(typeof message == 'string' ? message : text), {
     ...carried,
-    status: r.status,
+    status,
     body: text,
     ...(typeof error == 'string' ? { name: error } : {}),
   })
 }
+
+export let answered = async (r: Response) =>
+  answeredBody(r.status, await r.text())
 
 // A store's `{error, message, …}`, or nothing when the body is not one.
 let refusal = (text: string): Record<string, unknown> => {

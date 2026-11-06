@@ -1,3 +1,5 @@
+import { formatted } from './query-text.ts'
+export { formatted } from './query-text.ts'
 import { servingAuthority } from './app-serving-authority.ts'
 import {
   fitOf,
@@ -661,12 +663,6 @@ export let due = (pending: Bundle[], now: number): number | null =>
       })),
     )
     : null
-
-// A query tree sent where text goes arrives as `[object Object]`, which reads
-// as two words that match nothing. The sender's bug, never a question.
-let FORMATTED = /\[object [A-Z]\w*\]/
-export let formatted = (line: string): string | null =>
-  line.match(FORMATTED)?.[0] ?? null
 
 // A hibernatable socket the runtime will also close for us.
 type Closable = Wire & { close?(code: number, reason: string): void }
