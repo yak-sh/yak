@@ -7,9 +7,12 @@
 // site's own paper and washes, drawn by resvg with the site's two fonts. The
 // page's grain is left off: it cannot be seen at the size a preview is shown.
 // The preview is a JPEG because the painted mark makes a PNG of it half a
-// megabyte. Run it after the mark (yak.webp) or the page's headline changes:
+// megabyte. Run it after the mark (yak.webp) or the page's headline changes,
+// then push the app, which publishes og.jpg on yaks.app (git keeps neither the
+// mark nor the preview, apps/.gitignore):
 //
 //   deno run -A bin/yak-sh-preview.ts
+//   yak admin push apps/yak-sh --as admin
 //
 // The drawings are pure: `og` and `icon` take a mark and return SVG, so the
 // mockups of a new mark draw their previews with them too. Only running the
@@ -127,7 +130,15 @@ if (import.meta.main) {
   )
   let text = (selector: string) =>
     document.querySelector(selector)?.textContent?.trim() ?? ''
-  let yak = await encode(await Deno.readFile(new URL('yak.webp', app)), 'png')
+  // The mark is published, not in git: a checkout without it draws the one
+  // yak.sh serves.
+  let painted = await Deno.readFile(new URL('yak.webp', app)).catch(
+    async () =>
+      new Uint8Array(
+        await (await fetch('https://yak.sh/yak.webp')).arrayBuffer(),
+      ),
+  )
+  let yak = await encode(painted, 'png')
   let mark = {
     box: [0, 0, 512, 512],
     body: `<image width="512" height="512" href="data:image/png;base64,${

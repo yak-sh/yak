@@ -628,6 +628,59 @@ export let storeUpload = (
     body: new Uint8Array(bytes),
   }))
 
+// An app's published files (workers/yak public-files.ts): the sha at each
+// path it publishes at, and the door that publishes bytes at one. The path
+// gives the type, so the bytes are sent untyped.
+let publicUrl = (at: string, path = '') =>
+  storeUrl(
+    at,
+    `/public${path && '/' + path.split('/').map(encodeURIComponent).join('/')}`,
+  )
+
+/** The sha of each file the app `space/app` publishes, by path. */
+export let publicFiles = async (session: string, at: string) =>
+  new Map(
+    (await said<{ path: string; sha: string }[]>(
+      sent(publicUrl(at), session),
+    )).map((f) => [f.path, f.sha]),
+  )
+
+/** Publish `bytes` at `path` of the app `space/app`, or replace what is there. */
+export let publishFile = async (
+  session: string,
+  at: string,
+  path: string,
+  bytes: Uint8Array,
+) => {
+  await said(sent(publicUrl(at, path), session, {
+    method: 'PUT',
+    headers: { 'content-type': 'application/octet-stream' },
+    body: new Uint8Array(bytes),
+  }))
+}
+
+/** The slug of the one space this account reaches that holds the app `app`. */
+export let spaceOf = async (session: string, app: string) => {
+  let value = valueOf(
+    await rpc(session)('tools/call', {
+      name: 'app_list',
+      arguments: { app },
+    }) as Reply,
+  )
+  let spaces = (value?.spaces as {
+    slug: string
+    apps?: { slug: string }[]
+  }[] ?? []).filter((s) => s.apps?.some((a) => a.slug == app))
+  if (spaces.length != 1) {
+    throw new CallError(
+      'space',
+      `${spaces.length ? 'several spaces hold' : 'no space holds'} ${app}; ` +
+        'name one with --space',
+    )
+  }
+  return spaces[0].slug
+}
+
 // Keep an OAuth client in the platform store, sealed (@yaks/connections
 // `registration`): its id and secret go to the platform's vault, and the store
 // holds the handle. The graph tier is the door, as for a query of it; it keeps

@@ -572,3 +572,52 @@ test('fileOf keeps UTF-8 as text', () => {
     content: '\ufeffa',
   })
 })
+
+// An app's `/api/public` door, held in memory: the sha at each path.
+let door = (have: Record<string, File> = {}) => {
+  let shas = new Map<string, string>()
+  let puts: string[] = []
+  let publish = {
+    list: async () => {
+      for (let [path, f] of Object.entries(have)) shas.set(path, await hash(f))
+      return new Map(shas)
+    },
+    put: async (path: string, bytes: Uint8Array) => {
+      puts.push(path)
+      shas.set(
+        path,
+        await digest({ path, base64: btoa(String.fromCharCode(...bytes)) }),
+      )
+    },
+  }
+  return { publish, puts }
+}
+
+test('pictures, fonts and sounds are published once, never released; the icon is released', async () => {
+  let p = platform({ mail: held('index.html', 'stamp.png') })
+  let d = door({ 'fonts/serif.ttf': file('fonts/serif.ttf') })
+  let local = [
+    'index.html',
+    'icon.png',
+    'stamp.png',
+    'fonts/serif.ttf',
+    'tap.mp3',
+  ]
+    .map(file)
+  let said = await push(p.ask, local, { app: 'mail' }, { publish: d.publish })
+  assertEquals(d.puts, ['stamp.png', 'tap.mp3'])
+  assertEquals(p.held('mail'), ['icon.png', 'index.html'])
+  assert(said.includes('published 2 files'))
+  await push(p.ask, local, { app: 'mail' }, { publish: d.publish })
+  assertEquals(d.puts, ['stamp.png', 'tap.mp3'])
+})
+
+test('a checkout without an asset leaves it published', async () => {
+  let p = platform({ mail: held('index.html') })
+  let d = door({ 'stamp.png': file('stamp.png') })
+  await push(p.ask, [file('index.html')], { app: 'mail' }, {
+    publish: d.publish,
+  })
+  assertEquals(d.puts, [])
+  assertEquals((await d.publish.list()).has('stamp.png'), true)
+})

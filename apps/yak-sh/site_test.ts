@@ -126,13 +126,18 @@ test('a visitor types into the same prompt: help, a refusal, a write the page se
   equal(t.stage(), LIVE + 2)
 })
 
+// The painted yak and the preview are published, not kept in git
+// (apps/.gitignore), so a checkout holds the rest.
+let kept = (n: string) => n == 'icon.png' || !/\.(jpg|webp)$/.test(n)
+
 test('every file the app serves is a file read in the site, text with its contents', async () => {
   let dir = new URL('./', import.meta.url)
   let served = [...Deno.readDirSync(dir)].map((e) => e.name)
     .filter((n) =>
-      !n.endsWith('_test.ts') && !['package.json', 'worker.ts'].includes(n)
+      kept(n) && !n.endsWith('_test.ts') &&
+      !['package.json', 'worker.ts'].includes(n)
     ).sort()
-  equal([...FILES].sort(), served)
+  equal(FILES.filter(kept).sort(), served)
   let asked: string[] = []
   let read = await files((path) => {
     asked.push(path)

@@ -30,6 +30,8 @@ import {
   feeNow,
   linkFor,
   moveIn,
+  publicFiles,
+  publishFile,
   relocateIn,
   renewing,
   rpc,
@@ -37,6 +39,7 @@ import {
   setBudget,
   setFee,
   setTunnel,
+  spaceOf,
   standing,
   storeApply,
   storeQuery,
@@ -86,6 +89,12 @@ let pushNote = (p: PushProgress) => {
       p.state == 'start'
         ? `uploading files ${p.done + 1}–${p.done + p.batch}/${p.total}…`
         : `uploaded ${p.done}/${p.total} files`,
+    )
+  } else if (p.phase == 'publish') {
+    note(
+      p.state == 'start'
+        ? `publishing file ${p.done + 1}/${p.total}…`
+        : `published ${p.done}/${p.total} files`,
     )
   } else if (p.phase == 'delete') {
     note(
@@ -452,8 +461,20 @@ export let runs = (
           to.app,
         ]),
       )
+      // The space is the app's own address for its `/api/public` door; the
+      // connector finds it from the slug where --space names none.
+      let space: Promise<string> | undefined
+      let app = async () =>
+        `${await (space ??= to.space
+          ? Promise.resolve(to.space)
+          : spaceOf(at.bearer, to.app))}/${to.app}`
       let lines = await push(rpc(at.bearer), files, to, {
         ...known,
+        publish: {
+          list: async () => publicFiles(at.bearer, await app()),
+          put: async (path, bytes) =>
+            publishFile(at.bearer, await app(), path, bytes),
+        },
         confirm: a.confirm === true,
         progress: pushNote,
       })

@@ -147,6 +147,12 @@ A base version ahead of the live version means live went back since this
 checkout deployed (a rollback through another door). The push then writes
 nothing; `--confirm` deploys the directory over what is live.
 
+Pictures, fonts and sounds are not released. A push publishes each at its path
+through the app's `/api/public` door, only when its bytes changed, and leaves a
+published file the directory lacks as it is, so a checkout without the bytes
+(apps/.gitignore keeps them out of git) pushes the rest. The app's `icon.png` is
+released like any other file, since an installed copy carries only the release.
+
 ```sh
 yak admin push apps/mail --space reviewer --as reviewer
 yak admin push apps/mail --space reviewer --as reviewer --confirm
