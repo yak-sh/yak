@@ -257,7 +257,8 @@ let merged = (base: Json, more: Json): Json => {
 
 // A URI template's matcher, for the two forms a template here uses: `{x}`, one
 // path segment, and `{+x}`, the rest of the address.
-let matcher = (template: string) => {
+type Match = (uri: string) => Record<string, string> | undefined
+let matcher = (template: string): Match => {
   let names: string[] = []
   let pattern = template.split(/(\{\+?\w+\})/).map((part) => {
     let m = /^\{(\+?)(\w+)\}$/.exec(part)
@@ -266,7 +267,7 @@ let matcher = (template: string) => {
     return m[1] ? '(.+)' : '([^/]+)'
   }).join('')
   let re = new RegExp(`^${pattern}$`)
-  return (uri: string): Record<string, string> | undefined => {
+  return (uri) => {
     let m = re.exec(uri)
     return m
       ? Object.fromEntries(names.map((n, i) => [n, m[i + 1]]))
@@ -279,7 +280,7 @@ type Resource = { name: string; meta: ResourceMeta; read: Read }
 type Template = {
   name: string
   template: string
-  match: ReturnType<typeof matcher>
+  match: Match
   meta: ResourceMeta
   read: (uri: URL, vars: Record<string, string>, ctx: Context) => unknown
 }
