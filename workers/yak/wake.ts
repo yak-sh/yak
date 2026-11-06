@@ -177,7 +177,7 @@ export let STUCK = 15 * 60_000
 
 /** The jobs an object died in the middle of: a run marked begun before this
  * incarnation was `born`, which only a dead one could have left. Each is
- * fired again, unless its wake was paused, and reported once no run has
+ * fired again, unless its recurrence was paused, and reported once no run has
  * finished for `STUCK`; a run this incarnation began is still going and is
  * left alone. */
 export let resumed = async (
@@ -200,7 +200,10 @@ export let resumed = async (
         ),
       )
     }
-    let paused = (row.wake as { at?: string | null } | undefined)?.at == null
+    // A recurrence without an instant is paused. A one-shot's own firing
+    // cleared its `at` (@yaks/wake `ring`), so the run it died in is owed.
+    let wake = row.wake as Partial<Schedule> | undefined
+    let paused = !!(wake?.every || wake?.while?.length) && wake.at == null
     await graph.apply([{
       entity: row.entity,
       sweep: { began: null, since },

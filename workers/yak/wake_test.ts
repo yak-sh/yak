@@ -263,7 +263,7 @@ test('a job whose R2 retries ran out reports a lasting outage once with its caus
 let BORN = at('06:00')
 let died = async (
   sweep: { began: string; since?: string | null },
-  wake: { at: string | null } = { at: iso('05:00') },
+  wake: { at: string | null; every?: string } = { at: iso('05:00') },
 ) => {
   let row: Bundle = {
     entity: { eid: 'yak-meter' },
@@ -300,7 +300,11 @@ test('a job its instance died in runs again at the next alarm, reported once stu
   assertEquals(stuck.writes[0].sweep, { began: null, since })
   // A run this incarnation began is still going, and a paused job stays so.
   assertEquals((await died({ began: iso('06:01') })).writes, [])
-  assertEquals((await died({ began }, { at: null })).writes[0].wake, undefined)
+  let paused = await died({ began }, { at: null, every: 'daily' })
+  assertEquals(paused.writes[0].wake, undefined)
+  // A one-shot wake's firing cleared its `at`; the run it died in fires again.
+  let once = await died({ began }, { at: null })
+  assert((once.writes[0].wake as { at: string }).at)
 })
 
 test('the meter wake runs its job at the supplied hour', async () => {
