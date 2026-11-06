@@ -24,7 +24,7 @@ try {
   let vault = vaultOf(`${data}/yak.db`)
   let pair = ['YAK_BACKUP_R2_ACCESS_KEY_ID', 'YAK_BACKUP_R2_SECRET_ACCESS_KEY']
   for (let name of pair) {
-    let value = await reveal(vault, name)
+    let value = await reveal(vault, name, { env: (key) => Deno.env.get(key) })
     if (value) env[name] = value
   }
   let child = new Deno.Command(restoring ? script : 'timeout', {
