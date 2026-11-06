@@ -283,7 +283,7 @@ export type Env = {
   // (sandbox/wrangler.toml). Absent in a test run and the
   // workerd probes, where the sandbox tools say so rather than half-running,
   // and unanswered under `wrangler dev`, where yak-sandbox is not running.
-  SANDBOX?: Sandboxes
+  WORKBENCH?: Sandboxes
   // yak-browser, which renders a draft for app_preview in Cloudflare's
   // browser (browser.ts), including under local dev. Absent in a test run and
   // the workerd probes.

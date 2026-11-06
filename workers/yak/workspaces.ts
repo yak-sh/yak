@@ -43,7 +43,7 @@ export class WorkspaceStore extends DurableObject<Env> {
     this.#storage = ctx.storage
     this.#bucket = env.BLOBS
     this.#prefix = `workspaces/${ctx.id.toString()}/`
-    let provider = cloudflareProvider(env.SANDBOX!, {
+    let provider = cloudflareProvider(env.WORKBENCH!, {
       legacyRecreation: true,
       retry: retried,
     })

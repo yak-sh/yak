@@ -97,7 +97,7 @@ let seeded = async (vars: Partial<Env> = {}) => {
 // A workbench needs its container binding and space data alone.
 let bare = (answer?: (cmd: string) => Ran | void) => {
   let box = sandboxes(answer)
-  let env = { SANDBOX: box.SANDBOX, WORKSPACES: workspaces(box.SANDBOX) }
+  let env = { WORKBENCH: box.WORKBENCH, WORKSPACES: workspaces(box.WORKBENCH) }
   let space = spaceOf({
     entity: { eid: ADA },
     space: { slug: 'ada', store: 'ada' },
@@ -140,7 +140,7 @@ let pinned = () =>
 // The whole workbench, wired: a space, an app, and a scripted container.
 let bench = async (answer: (cmd: string) => Ran | void = () => {}) => {
   let box = sandboxes((cmd) => cmd.startsWith('chmod ') ? {} : answer(cmd))
-  let scenario = await seeded({ SANDBOX: box.SANDBOX } as Partial<Env>)
+  let scenario = await seeded({ WORKBENCH: box.WORKBENCH } as Partial<Env>)
   let { env } = scenario
   let ctx = ctxOf(env)
   await tool('app_new').run(ctx, { slug: 'chess', title: 'Chess' })
@@ -323,7 +323,7 @@ test('a command that outlives its call is a process wait and stop reach', async 
 
 test('a member who cannot write is not given the workbench', async () => {
   let box = sandboxes()
-  let { env } = await seeded({ SANDBOX: box.SANDBOX } as Partial<Env>)
+  let { env } = await seeded({ WORKBENCH: box.WORKBENCH } as Partial<Env>)
   let BOB = 'b0000000-0000-4000-8000-0000000000b0'
   await dirOf(env).apply({
     entities: [
@@ -547,7 +547,9 @@ test('destroying the container revokes what it was wearing', async () => {
 
 test('a build pays for its workbench and leaves none running', async () => {
   let box = sandboxes(() => ({ stdout: 'ok' }))
-  let { env, space } = await seeded({ SANDBOX: box.SANDBOX } as Partial<Env>)
+  let { env, space } = await seeded(
+    { WORKBENCH: box.WORKBENCH } as Partial<Env>,
+  )
   let model = fake([
     {
       calls: [{
@@ -580,7 +582,9 @@ test('a build pays for its workbench and leaves none running', async () => {
 
 test('a build that ships pays for both in one write', async () => {
   let box = sandboxes(() => ({ stdout: 'ok' }))
-  let { env, space } = await seeded({ SANDBOX: box.SANDBOX } as Partial<Env>)
+  let { env, space } = await seeded(
+    { WORKBENCH: box.WORKBENCH } as Partial<Env>,
+  )
   let call = (id: string, name: string, args: unknown) => ({
     id,
     name,
@@ -652,10 +656,10 @@ test('the deploy names the container, and the image is the SDK version', () => {
   let kernel = parse(at('wrangler.toml')) as typeof conf
   assert(
     kernel.durable_objects.bindings.some((b) =>
-      b.name == 'SANDBOX' && b.class_name == 'Workbench' &&
+      b.name == 'WORKBENCH' && b.class_name == 'Workbench' &&
       b.script_name == conf.name
     ),
-    "SANDBOX is bound to yak-sandbox's Workbench class",
+    "WORKBENCH is bound to yak-sandbox's Workbench class",
   )
 
   let pinned = JSON.parse(at('package.json')) as {
@@ -773,7 +777,7 @@ test('the guide and the limits page say the same image', () => {
 // This connector case owns a seeded platform, separate from the two-space case.
 let loneConnector = await (async () => {
   let box = sandboxes(() => ({ stdout: 'ok' }))
-  let seed = await seeded({ SANDBOX: box.SANDBOX } as Partial<Env>)
+  let seed = await seeded({ WORKBENCH: box.WORKBENCH } as Partial<Env>)
   return { ...seed, box }
 })()
 
@@ -800,7 +804,7 @@ test('a lone connector call pays for itself and leaves the container', async () 
 let BOB = 'b0000000-0000-4000-8000-00000000000b'
 let twoSpaces = await (async () => {
   let box = sandboxes()
-  let seed = await seeded({ SANDBOX: box.SANDBOX } as Partial<Env>)
+  let seed = await seeded({ WORKBENCH: box.WORKBENCH } as Partial<Env>)
   let dir = dirOf(seed.env)
   await owned({ dir, person: ADA }, 'ada2', 'Two')
   let other = (await dir.space('ada2'))!

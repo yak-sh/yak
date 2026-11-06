@@ -154,7 +154,7 @@ export let sandboxes = (answer: (cmd: string) => Ran | void = () => {}) => {
     alive,
     // `getSandbox` addresses one by name off the namespace; nothing here
     // needs an id object, so the name is the id.
-    SANDBOX: {
+    WORKBENCH: {
       idFromName: (n: string) => n,
       getByName: (n: string) => box(n),
       get: (n: unknown) => box(String(n)),
@@ -163,14 +163,14 @@ export let sandboxes = (answer: (cmd: string) => Ran | void = () => {}) => {
 }
 
 // The test namespace's coordinator records filesystem copies independently
-// of command invocations, as WORKSPACES does beside SANDBOX in production.
+// of command invocations, as WORKSPACES does beside WORKBENCH in production.
 export let workspaces = (
-  ns: NonNullable<Env['SANDBOX']>,
+  ns: NonNullable<Env['WORKBENCH']>,
 ): NonNullable<Env['WORKSPACES']> => ({
   idFromName: (name) => name,
   get: (id) => {
     let source = ns.get(ns.idFromName(String(id))) as ReturnType<
-      ReturnType<typeof sandboxes>['SANDBOX']['get']
+      ReturnType<typeof sandboxes>['WORKBENCH']['get']
     >
     return {
       fork: (_name, target) => source.fork(target),

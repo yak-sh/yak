@@ -3,7 +3,7 @@
 // compiled when an isolate starts, so it lives in this Worker's upload, where
 // only the isolates that run a sandbox compile it, and not in the kernel's.
 //
-// The kernel reaches the object through its SANDBOX binding, a Durable Object
+// The kernel reaches the object through its WORKBENCH binding, a Durable Object
 // namespace naming this script (../wrangler.toml). A container's HTTPS to this
 // platform and its spaces comes back to the kernel's `SandboxOutbound`
 // (../index.ts), which swaps the container's placeholder for its grant's token

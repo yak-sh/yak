@@ -443,7 +443,7 @@ test('a deleted space takes its conversation and its workbench', async () => {
   let { env } = directoryPlatform('a probe secret', {
     BUILDER: namespace,
     AI: ai([{ text: 'Making it now.' }]) as Env['AI'],
-    SANDBOX: box.SANDBOX as Env['SANDBOX'],
+    WORKBENCH: box.WORKBENCH as Env['WORKBENCH'],
   })
   let { dir, space } = await owned(env)
   let who: Who = { person: ADA, role: 'owner' }

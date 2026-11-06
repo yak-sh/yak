@@ -228,10 +228,11 @@ class_name = "Builder"
 # compile the things a browser cannot and ship the artifact into the app. The
 # object and its container are yak-sandbox's (sandbox/), so @cloudflare/sandbox
 # is compiled by the isolates that run one and never by the kernel's. This
-# Worker's deploy deploys it first. Its class is Workbench, since migration v10
-# below is refused while a binding names the Sandbox class it deletes.
+# Worker's deploy deploys it first. Not named SANDBOX: Cloudflare refuses
+# migration v10, which deletes this Worker's old Sandbox class, while a binding
+# of the name that held it remains, wherever that binding now points.
 [[durable_objects.bindings]]
-name = "SANDBOX"
+name = "WORKBENCH"
 class_name = "Workbench"
 script_name = "yak-sandbox"
 
@@ -672,7 +673,7 @@ name = "BUILDER"
 class_name = "Builder"
 
 [[env.staging.durable_objects.bindings]]
-name = "SANDBOX"
+name = "WORKBENCH"
 class_name = "Workbench"
 script_name = "yak-sandbox-staging"
 

@@ -453,7 +453,7 @@ export let bindings = (secret: string, vars: Vars = {}) => {
     },
     ...vars,
     WORKSPACES: vars.WORKSPACES ??
-      (vars.SANDBOX ? workspaces(vars.SANDBOX) : undefined),
+      (vars.WORKBENCH ? workspaces(vars.WORKBENCH) : undefined),
   } as unknown as Env
   // These bindings finish their work inside each request; no background
   // work remains for their holder to drain. Store hosts add their own drain.

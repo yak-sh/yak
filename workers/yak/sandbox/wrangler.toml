@@ -1,15 +1,14 @@
 # yak-sandbox holds the builder's workbench (../sandbox.ts): the Workbench
 # Durable Object, @cloudflare/sandbox's Sandbox, and the Cloudflare Container
-# behind it (index.ts). Not named Sandbox: the kernel's migration deleting its
-# own Sandbox class is refused while any of its bindings names that class. Its own Worker because the SDK is code compiled when an
-# isolate starts: in the kernel that would be every isolate, a Store waking
+# behind it (index.ts). Its own Worker because the SDK is code compiled when
+# an isolate starts: in the kernel that would be every isolate, a Store waking
 # for one query included. Here it is only the isolates that run a sandbox.
 #
-# No routes and no secrets. The kernel's SANDBOX binding names this script's
-# Workbench class and is the one way in. A container's HTTPS to this platform and
-# its spaces goes to the kernel's `SandboxOutbound` over KERNEL, where its
-# placeholder is swapped for its grant (../sandbox.ts `swapped`); the rest of
-# its network is the whole internet. The kernel's deploy deploys it first, to
+# No routes and no secrets. The kernel's WORKBENCH binding names this
+# script's Workbench class and is the one way in. A container's HTTPS to this
+# platform and its spaces goes to the kernel's `SandboxOutbound` over KERNEL,
+# where its placeholder is swapped for its grant (../sandbox.ts `swapped`);
+# the rest of its network is the whole internet. The kernel's deploy deploys it first, to
 # the same environment (../wrangler.ts `siblings`).
 #
 # enable_ctx_exports is what that swap rides: the SDK hands the container's
@@ -36,7 +35,7 @@ service = "yak"
 entrypoint = "SandboxOutbound"
 
 [[durable_objects.bindings]]
-name = "SANDBOX"
+name = "WORKBENCH"
 class_name = "Workbench"
 
 [[migrations]]
@@ -85,7 +84,7 @@ service = "yak-staging"
 entrypoint = "SandboxOutbound"
 
 [[env.staging.durable_objects.bindings]]
-name = "SANDBOX"
+name = "WORKBENCH"
 class_name = "Workbench"
 
 [[env.staging.migrations]]

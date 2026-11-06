@@ -31,8 +31,8 @@ resvg's WebAssembly, kept out of the kernel so no Store's isolate compiles it)
 `yak-browser` (`browser/`, which renders a draft for `app_preview` with
 puppeteer and checks it with axe-core, kept out of the kernel for the same
 reason) and `yak-sandbox` (`sandbox/`, the Workbench Durable Object and its
-container behind the kernel's `SANDBOX` binding, kept out for the same reason; a
-container's calls to the platform come back to the kernel's `SandboxOutbound`,
+container behind the kernel's `WORKBENCH` binding, kept out for the same reason;
+a container's calls to the platform come back to the kernel's `SandboxOutbound`,
 which holds the secret its placeholder is swapped with). `yak-esbuild` is a
 Worker in front of a container running native esbuild; its image is
 `esbuild/Dockerfile` over `packages/esbuild`, and its deploy builds and pushes

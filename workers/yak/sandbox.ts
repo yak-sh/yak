@@ -207,13 +207,13 @@ export let tooAwake = (space: Space, awake: number, env: Host = {}) =>
  * one write a second per key, and a build calls the tools faster than that.
  */
 export let awake = async (
-  env: { SANDBOX?: Sandboxes; OAUTH_KV?: unknown } & Host,
+  env: { WORKBENCH?: Sandboxes; OAUTH_KV?: unknown } & Host,
   space: Space,
   person: string,
   now = Date.now(),
 ) => {
   let kv = env.OAUTH_KV as Kv | undefined
-  if (!env.SANDBOX || !kv?.get) return
+  if (!env.WORKBENCH || !kv?.get) return
   let t = Math.floor(now / 1000)
   let rows = await held(kv, space, t)
   let others = Object.keys(rows).filter((p) => p != person).length
@@ -281,7 +281,7 @@ export let shared = (space: Space) => `build-${space.eid}`
  * the ledger it is written in (grants.ts). */
 type Keys = Host & { SESSION_SECRET?: string; OAUTH_KV?: unknown }
 type Bound = Keys & {
-  SANDBOX?: Sandboxes
+  WORKBENCH?: Sandboxes
   WORKSPACES?: Workspaces
   CLOCK?: Clock
 }
@@ -429,7 +429,7 @@ export let workbench = async (
   spend: Spend,
   now = Date.now,
 ) => {
-  let ns = env.SANDBOX
+  let ns = env.WORKBENCH
   if (!ns) throw new Error(NO_BOX)
   let spent = seconds(spend, now())
   if (spent >= BUDGET) throw refuse('limit', overBudget(spent))
@@ -515,9 +515,9 @@ export let destroyed = async (
   space: Space,
   person: string,
 ) => {
-  if (!env.SANDBOX) return false
+  if (!env.WORKBENCH) return false
   try {
-    await cloudflareProvider(env.SANDBOX, {
+    await cloudflareProvider(env.WORKBENCH, {
       legacyRecreation: true,
       retry: retrying(env),
     }).dispose({
@@ -530,7 +530,7 @@ export let destroyed = async (
   // container is a bearer nobody is holding. It is read off the ledger rather
   // than passed in, so erasing a space (erase.ts) revokes the grant a build
   // minted in some other request just as a build's own end does.
-  await bared(env, space, idOf(env.SANDBOX, named(space, person)))
+  await bared(env, space, idOf(env.WORKBENCH, named(space, person)))
   return true
 }
 
@@ -539,7 +539,7 @@ export let destroyedAll = async (
   env: Bound,
   space: Space,
 ) => {
-  let ns = env.SANDBOX
+  let ns = env.WORKBENCH
   if (!ns) return false
   let provider = cloudflareProvider(ns, {
     legacyRecreation: true,

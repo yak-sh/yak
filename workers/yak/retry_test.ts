@@ -325,7 +325,7 @@ test('sandbox cleanup and initial sleep also retry evictions', async () => {
   let ns: Sandboxes = {
     idFromName: (name) => name,
     get: () => ({
-      ...box.SANDBOX.get(space.eid),
+      ...box.WORKBENCH.get(space.eid),
       setSleepAfter: () =>
         ++sleep == 1 ? Promise.reject(flagged()) : Promise.resolve(),
       destroy: () =>
@@ -333,13 +333,15 @@ test('sandbox cleanup and initial sleep also retry evictions', async () => {
     }),
   }
   await settled(workbench(
-    { SANDBOX: ns, WORKSPACES: workspaces(ns), CLOCK: time },
+    { WORKBENCH: ns, WORKSPACES: workspaces(ns), CLOCK: time },
     space,
     who.person,
     { since: null },
   ))
   assertEquals(
-    await settled(destroyed({ SANDBOX: ns, CLOCK: time }, space, who.person!)),
+    await settled(
+      destroyed({ WORKBENCH: ns, CLOCK: time }, space, who.person!),
+    ),
     true,
   )
   assertEquals(sleep, 2)

@@ -53,8 +53,8 @@ for (
 let placeholder = async () => {
   let box = sandboxes(() => ({ stdout: 'ok' }))
   let env = {
-    SANDBOX: box.SANDBOX,
-    WORKSPACES: workspaces(box.SANDBOX),
+    WORKBENCH: box.WORKBENCH,
+    WORKSPACES: workspaces(box.WORKBENCH),
     OAUTH_KV: kv(),
     SESSION_SECRET: SECRET,
   }

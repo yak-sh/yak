@@ -358,7 +358,7 @@ let logTail = (path: string) => {
 // yak-raster (raster/) is what the RASTER binding draws an app's icon.svg
 // with; yak-browser (browser/) is what the BROWSER binding renders a draft
 // with for app_preview; yak-sandbox (sandbox/) holds the Sandbox object and
-// container the SANDBOX binding names; and yak-front (front/) is what answers the cached
+// container the WORKBENCH binding names; and yak-front (front/) is what answers the cached
 // pages in front of this Worker. Each exists before this Worker's bindings
 // name it, except yak-front, whose bindings name this Worker: a missing
 // entrypoint there only fails its use receipts until this deploy finishes,

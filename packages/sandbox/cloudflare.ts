@@ -41,7 +41,7 @@ export type Box = {
   setSleepAfter?(after: string): unknown
 }
 
-/** The `SANDBOX` binding: a Durable Object namespace handing out one by name. */
+/** The sandboxes binding: a Durable Object namespace handing out one by name. */
 export type Sandboxes = {
   idFromName(name: string): unknown
   get(id: unknown): Box

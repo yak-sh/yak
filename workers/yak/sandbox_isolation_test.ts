@@ -25,12 +25,12 @@ let containers = () => {
     box,
     tokens,
     calls,
-    SANDBOX: {
+    WORKBENCH: {
       idFromName: (name: string) => name,
       get: (id: unknown) => {
         let name = String(id)
         calls.push(name)
-        let stub = box.SANDBOX.get(name)
+        let stub = box.WORKBENCH.get(name)
         return {
           ...stub,
           startProcess: (
@@ -63,9 +63,13 @@ let isolated = async () => {
     space: space.slug,
   })
   let box = containers()
-  let env = { SANDBOX: box.SANDBOX, OAUTH_KV: oauth, SESSION_SECRET: secret }
+  let env = {
+    WORKBENCH: box.WORKBENCH,
+    OAUTH_KV: oauth,
+    SESSION_SECRET: secret,
+  }
   let [theirs, mine] = [named(space, 'editor'), named(space, 'owner')]
-  let provider = cloudflareProvider(box.SANDBOX, { legacyRecreation: true })
+  let provider = cloudflareProvider(box.WORKBENCH, { legacyRecreation: true })
   let editor = await provider.connect({ id: theirs })
   let leftover = await editor.workspace.start('leftover-process')
   let owner = await provider.connect({ id: mine })
@@ -102,7 +106,7 @@ test('ending a build leaves another member’s running work alone', async () => 
 
 test('a personal sandbox keeps its files and process across calls and a space rename', async () => {
   let box = containers()
-  let env = { SANDBOX: box.SANDBOX, WORKSPACES: workspaces(box.SANDBOX) }
+  let env = { WORKBENCH: box.WORKBENCH, WORKSPACES: workspaces(box.WORKBENCH) }
   let first = await workbench(env, space, 'owner', spending())
   await first.workspace.write('/workspace/artifact', 'compiled')
   let process = await first.workspace.start('leftover-process')
@@ -120,12 +124,12 @@ test('a personal sandbox keeps its files and process across calls and a space re
 let legacyFixture = async () => {
   let box = containers()
   let env = {
-    SANDBOX: box.SANDBOX,
-    WORKSPACES: workspaces(box.SANDBOX),
+    WORKBENCH: box.WORKBENCH,
+    WORKSPACES: workspaces(box.WORKBENCH),
     OAUTH_KV: kv(),
     SESSION_SECRET: secret,
   }
-  let old = cloudflareProvider(box.SANDBOX, { legacyRecreation: true })
+  let old = cloudflareProvider(box.WORKBENCH, { legacyRecreation: true })
   let ref = { id: shared(space) }
   let sharedBox = await old.connect(ref)
   await sharedBox.workspace.write('/workspace/artifact', 'compiled')
