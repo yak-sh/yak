@@ -1,8 +1,8 @@
 import { test } from '@yaks/testing'
 import { assertEquals, assertRejects } from '@std/assert'
-import { cloudflare, type Fetch, payload } from './cloudflare.ts'
-import { Unsent } from '@yaks/host/senders'
-import type { Message } from './send.ts'
+import { cloudflare, type Fetch, payload } from './sender.ts'
+import { senders } from './graph.ts'
+import { type Message, Unsent } from '@yaks/host/senders'
 
 let m: Message = {
   from: 'hello@books.example',
@@ -124,4 +124,19 @@ test('a subject-only letter has an empty visible HTML body accepted by the build
     await sender.send({ ...m, subject: 'yak mail test', text: '', html: '' }),
     { id: 'empty@x' },
   )
+})
+
+test('the lent sender waits for its account and token, read at every letter', async () => {
+  let options: { account?: string; token?: string; fetch?: Fetch } = {}
+  let { cloudflare: lent } = senders(null, options)
+  assertEquals(
+    lent.waiting?.(),
+    'waiting for credentials: a cloudflare sender needs `account` and `token`',
+  )
+  assertEquals((await lent.send(m).catch((e) => e)) instanceof Unsent, true)
+  let [call, seen] = answers('{"success":true,"result":{"message_id":"<b>"}}')
+  Object.assign(options, { account: 'acct', token: 'tok', fetch: call })
+  assertEquals(lent.waiting?.(), undefined)
+  assertEquals(await lent.send(m), { id: 'b' })
+  assertEquals(seen.length, 2)
 })

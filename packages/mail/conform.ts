@@ -13,9 +13,7 @@
 // repo type-checks against the web platform.
 
 import type { Head, Received } from './inbound.ts'
-import type { Binding } from './binding.ts'
-import type { Fetch } from './cloudflare.ts'
-import { author, cloudflare, inbound, messageId } from './mod.ts'
+import { author, inbound, messageId } from './mod.ts'
 
 // The inbound types: a message an Email Worker is handed is a `Received`, and
 // its headers are a `Head`.
@@ -28,17 +26,3 @@ let _author: string = author(message)
 let _id: string = messageId(message)
 let _bundles = inbound(message, { text: 'hello' })
 let _eid: string = _bundles[0].entity.eid
-
-// The outbound type: a Worker's own `fetch` is the one the sender calls
-// through, so a Worker can pass it in (or leave it to the global).
-let _fetch: Fetch = fetch
-let _sender = cloudflare({ account: 'a', token: 't', fetch: _fetch })
-let _send: (m: {
-  from: string
-  to: string
-  subject: string
-  text: string
-  html: string
-}) => Promise<{ id?: string }> = _sender.send
-
-let _binding: Binding = null as unknown as SendEmail

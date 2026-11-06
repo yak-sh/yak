@@ -67,7 +67,7 @@ message with `tried` and no outcome, which is never handed over again. A sender
 that knows the message never left rejects with `Unsent` (`@yaks/host/senders`):
 the handler gives the claim back, writes the reason to `deliver.waiting` and
 fails the run, so the pool hands it over again after `retry.after` (six tries).
-The Cloudflare sender rejects that way for a failed connection and a 429. Each
+The provider senders reject that way for a failed connection and a 429. Each
 write owes its delivery in the durable effect pool, so a worker can pick it up
 after an outage without rediscovering messages. Exhausted transport failures
 remain failed until explicitly retried with `effect retry`.
@@ -133,68 +133,62 @@ addresses and missing sender addresses also produce `bounced`.
 ```ts
 import type { Message, Receipt } from '@yaks/mail'
 
-type Sender = { send: (message: Message) => Promise<Receipt> }
+type Sender = {
+  send: (message: Message) => Promise<Receipt>
+  waiting?: () => string | undefined
+}
 ```
 
-`cloudflare({ account, token })` implements this interface using Cloudflare
-Email Sending and `fetch`. Credentials are arguments, not read from environment
-variables by the sender. `deliver({ account, token })` is the one request
-underneath it, for a caller that builds its own `Payload` (several recipients, a
-display name, a Reply-To of its own); it rejects the same way, `Unsent` for a
-letter that never left. Its optional `base` and `fetch` arguments support tests
-and alternate endpoints. `stash()` retains messages in `sent`, provides
-`last()`, and returns receipts named `stash-1`, `stash-2`, and so on.
-`stash({ refuse: 'reason' })` simulates delivery failure.
+Credentials, endpoints and HTTP belong to the sender, never to this package.
+`stash()` retains messages in `sent`, provides `last()`, and returns receipts
+named `stash-1`, `stash-2`, and so on. `stash({ refuse: 'reason' })` simulates
+delivery failure. A sender may also say why it cannot send yet, such as a
+credential not set, with `waiting()`: a letter then waits instead of being
+handed over.
 
 ### Named transports
 
-`post(sender, host)` selects a sender from `host.senders`, then the built-in
-`cloudflare`, `resend` or `stash` transports. Hosts supply credentials and may
-lend metered senders through the same interface.
+`post(sender, host)` selects a sender by name from `host.senders`, or the
+built-in `stash`. A provider's sender is lent by its own plugin, listed in the
+config beside this one with the credentials it needs:
+[@yaks/resend](../resend/README.md) lends `resend` and
+[@yaks/cloudflare-mail](../cloudflare-mail/README.md) lends `cloudflare`. A host
+may lend its own, such as a metered sender, through the same interface.
 
 ```ts
 import { post } from '@yaks/mail'
 import { equal } from '@yaks/testing'
 
-let configured = post({ via: 'resend' })
-equal(configured.sender, undefined)
-equal(
-  configured.waiting,
-  'waiting for credentials: a resend sender needs `token`',
-)
+equal(post({ via: 'resend' }), { waiting: 'no sender called "resend"' })
+let sender = { send: () => Promise.resolve({}), waiting: () => 'no token yet' }
+equal(post({ via: 'resend' }, { senders: { resend: sender } }), {
+  waiting: 'no token yet',
+})
 ```
 
-The configuration form is
-`sender: {"via": "resend", "token": {"secret":
-"RESEND_TOKEN"}}`. Use a separate
-Resend `sending_access` key for each service, restricted to its sending domain
-when the service sends from only one domain. `resend({token, base?, fetch?})`
-also implements `Sender` directly. Credentials are arguments; the transport
-reads no environment or vault.
+So the configuration names the sender's plugin and selects it:
 
-A host can keep credentials under `sender.providers`, for example
-`sender: {via: "resend", providers: {resend: {token: {secret: "RESEND_TOKEN"}},
-cloudflare: {account: "account-id", token: {secret: "CF_EMAIL_TOKEN"}}}}`.
-Changing only `sender.via` selects the matching provider's credentials. Inline
-options remain supported.
+```json
+{
+  "plugins": [
+    {
+      "use": "@yaks/resend",
+      "with": { "token": { "secret": "RESEND_TOKEN" } }
+    },
+    { "use": "@yaks/mail", "with": { "sender": { "via": "resend" } } }
+  ]
+}
+```
 
 A message's `to` accepts an address or a list, and `replyAddress` chooses where
-replies arrive. `replyTo` remains the RFC Message-ID being answered. Both HTTP
-transports preserve those fields and `cc`. `bound(binding)` adapts Cloudflare's
-Workers Email Sending binding to the same interface.
+replies arrive. `replyTo` remains the RFC Message-ID being answered. A sender
+preserves those fields and `cc`.
 
-Resend's send response contains an API email id, not the RFC Message-ID. The
-sender returns an empty receipt, rather than storing that API id as
-`mail.message_id`. For a graph, configure
-`receipts: {via: "resend", secret: {secret:
-"RESEND_WEBHOOK_SECRET"}, tags: {yak_host: "box"}}`
-beside `sender`, and `sender.tags: {yak_host: "box"}`. `@yaks/mail/routes` then
-answers `POST /mail/resend`, verifies the endpoint signature, and fills
-`mail.message_id` on the same letter. A receipt arriving before its letter is
-retried rather than discarded. No provider API id enters the letter. The
-sending-only key cannot retrieve sent or received mail. Receiving requires
-Resend MX records, an authenticated webhook, and retrieval of message bodies and
-attachments; the webhook's metadata alone is not a received letter.
+A provider whose send response carries no RFC Message-ID, as Resend's does not,
+returns an empty receipt rather than an API id as `mail.message_id`. Its plugin
+can take the provider's signed delivery receipt on a route of its own and fill
+`mail.message_id` on the same letter with `receipted(graph, {letter, id})`. A
+receipt arriving before its letter is retried rather than discarded.
 
 Selecting another transport retains the same durable delivery requests. Owed
 letters use the selected sender; `delivered`, `bounced` and `deliver.tried` keep
@@ -326,7 +320,9 @@ is absent, this route performs no token check itself; enclosing server
 authentication, if any, still applies. `door.path` changes the path, and the
 top-level `triage` sets the fallback recipient entity.
 
-A plugin entry in a `yak serve` configuration can be:
+A plugin entry in a `yak serve` configuration can be, beside
+`{"use": "@yaks/cloudflare-mail", "with": {"account": "a1b2", "token": {"secret": "CF_EMAIL_TOKEN"}}}`,
+which lends the `cloudflare` sender:
 
 ```json
 {
@@ -335,11 +331,7 @@ A plugin entry in a `yak serve` configuration can be:
     "domain": "books.example",
     "local": true,
     "triage": "triage",
-    "sender": {
-      "via": "cloudflare",
-      "account": "a1b2",
-      "token": { "secret": "CF_EMAIL_TOKEN" }
-    },
+    "sender": { "via": "cloudflare" },
     "door": {
       "path": "/mail/inbound",
       "secret": { "secret": "MAIL_DOOR_SECRET" }
@@ -351,17 +343,17 @@ A plugin entry in a `yak serve` configuration can be:
 The CLI host resolves `{ "secret": "NAME" }` through
 [@yaks/secrets](../secrets); direct TypeScript calls receive strings.
 `sender: { "via": "platform" }` selects a sender named `platform` in
-[`Host.senders`](../host/README.md#mail-senders). A host's named sender takes
-precedence over the built-in Cloudflare, Resend and stash senders. No sender
-configuration leaves outbound requests waiting too. Missing Cloudflare
-credentials or an unsupported transport writes `deliver.waiting` on every owed
-letter without marking it tried. In the pool, that same run remains pending and
-checks again after a minute without spending failed attempts. Direct calls
-without a pool throw the configuration error. The sender is read on each
-attempt, so repaired configuration is used without rebuilding the handler.
-Successful delivery clears the waiting reason. A transport rejection records
-`bounced.reason` and is also reported, without sending that letter twice.
-`mail check` reports configuration problems too.
+[`Host.senders`](../host/README.md#mail-senders). A sender lent under the name
+`stash` takes precedence over the built-in one. No sender configuration leaves
+outbound requests waiting too. A sender still waiting for its credentials, or a
+name nothing lends, writes `deliver.waiting` on every owed letter without
+marking it tried. In the pool, that same run remains pending and checks again
+after a minute without spending failed attempts. Direct calls without a pool
+throw the configuration error. The sender is read on each attempt, so repaired
+configuration is used without rebuilding the handler. Successful delivery clears
+the waiting reason. A transport rejection records `bounced.reason` and is also
+reported, without sending that letter twice. `mail check` reports configuration
+problems too.
 
 ## A letter to a project is work
 
@@ -550,7 +542,7 @@ The root import `@yaks/mail` provides:
 | `mailDoc`, `MAIL`, `EMAIL`, `DELIVER`, `DELIVERED`, `BOUNCED`, `NOTIFIED`                            | Vocabulary and component names.                                            |
 | `mailbox`, `Mailbox`                                                                                 | Graph plugin and its options.                                              |
 | `sending`, `message`, `addressOf`, `Post`, `Sender`, `Message`, `Receipt`, `Unsent`                  | Sending handler, message composition, address lookup, and transport types. |
-| `cloudflare`, `deliver`, `payload`, `Account`, `Payload`, `Fetch`                                    | Cloudflare transport and request construction.                             |
+| `post`, `receipted`                                                                                  | Sender selection by name, and a provider's delivery receipt.               |
 | `stash`, `Stash`, `Kept`                                                                             | In-memory transport.                                                       |
 | `inbound`, `author`, `messageId`, `verdict`, `Received`, `Arrival`, `Head`                           | Incoming-message conversion and header interpretation.                     |
 | `arrived`, `wearer`, `named`, `routed`, `known`, `Arrivals`, `Book`                                  | Graph lookups used when receiving.                                         |
@@ -589,8 +581,8 @@ creation. The graph's storage adapter and optional journal retain the data.
 ## Compatibility
 
 The core uses standard JavaScript and Web APIs and runs on Deno, Node, browsers,
-and Cloudflare Workers. The Cloudflare sender uses `fetch`; its message types
-are checked against `@cloudflare/workers-types` in `conform.ts`.
+and Cloudflare Workers. Its inbound message types are checked against
+`@cloudflare/workers-types` in `conform.ts`.
 
 ## What else a letter means
 

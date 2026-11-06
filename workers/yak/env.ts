@@ -120,7 +120,7 @@ export type Env = {
   RESEND_TOKEN?: string
   RESEND_PLATFORM_TOKEN?: string
   RESEND_API?: string
-  MAIL_FETCH?: import('@yaks/mail').Fetch
+  MAIL_FETCH?: import('@yaks/cloudflare-mail').Fetch
   MAIL_TOKEN?: string
   MAIL_ACCOUNT?: string
   MAIL_API?: string

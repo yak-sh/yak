@@ -28,9 +28,7 @@
     "@yaks/notify": "0.2.17",
     "@yaks/query": "0.2.17",
     "@yaks/tools": "0.2.17",
-    "@yaks/vocab": "0.2.17",
-    "@yaks/resend": "0.2.17",
-    "@yaks/cloudflare-mail": "0.2.17"
+    "@yaks/vocab": "0.2.17"
   },
   "devDependencies": {
     "@std/assert": "npm:@jsr/std__assert@^1.0.0",

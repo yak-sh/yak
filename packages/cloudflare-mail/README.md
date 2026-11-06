@@ -12,6 +12,21 @@ portable message. Only an HTTP 429 or a connection known never to have reached
 the API permits another send. `bound` makes the same distinction for the
 binding's rate-limit error. Both senders return RFC Message-IDs for threading.
 
+Listed in a config, the package lends its host the sender named `cloudflare`
+(`./graph`), which `@yaks/mail` selects with `sender: {"via": "cloudflare"}`.
+Its options are `account` and `token`, and `base` and `fetch`; the sender reads
+them at every letter, and until both are set a letter waits.
+
+```json
+{
+  "use": "@yaks/cloudflare-mail",
+  "with": {
+    "account": { "secret": "CF_ACCOUNT_ID" },
+    "token": { "secret": "CF_EMAIL_TOKEN" }
+  }
+}
+```
+
 ```ts
 import { payload } from '@yaks/cloudflare-mail'
 import { equal } from '@yaks/testing'

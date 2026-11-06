@@ -12,7 +12,7 @@
 // in these tests is the directory — the same class, woken on the platform's own
 // vocabulary because of the name it is given — so a letter counted against a
 // space is counted through the wire that counts it in life.
-import { cloudflare } from '@yaks/mail'
+import { cloudflare } from '@yaks/cloudflare-mail'
 import { test, until } from '@yaks/testing'
 import { assert, assertEquals } from '@std/assert'
 import type { Frame } from '@yaks/api'

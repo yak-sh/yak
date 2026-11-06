@@ -35,7 +35,6 @@ import type { Eid, Graph } from '@yaks/graph'
 import { hooked, type Request } from '@yaks/hook'
 import { type Arrivals, arrived, routed } from './arrive.ts'
 import type { Arrival, Received } from './inbound.ts'
-import type { Fetch } from './cloudflare.ts'
 import type { Pull } from './options.ts'
 
 /** Where a failure is told: the host's telemetry, else the console. */
@@ -112,7 +111,7 @@ export class Unavailable extends Error {}
 /** The edge's HTTP API, with the bearer token it asks for. */
 export let edge = (
   { url, token }: Pull,
-  go: Fetch = fetch,
+  go: (url: string, init: RequestInit) => Promise<Response> = fetch,
   stop?: AbortSignal,
   wait = WAIT,
 ): Edge => {

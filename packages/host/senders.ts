@@ -36,7 +36,43 @@ export type Receipt = {
  * {@link Unsent}: then the letter is tried again. */
 export type Sender = {
   send: (message: Message) => Promise<Receipt>
+  /** Why it cannot send yet, such as a credential not set; asked before each
+   * letter, so the letter waits instead. Absent or empty, it can send. */
+  waiting?: () => string | undefined
 }
+
+/** A sender, or why one cannot be built from its options yet. */
+export type Built = { sender?: Sender; waiting?: string }
+
+/** A {@link Sender} built again from `build` at every use, so options read
+ * then, such as a secret set after start-up, take effect at once. Until it
+ * builds, it is {@link Sender.waiting} and a letter handed to it is
+ * {@link Unsent}.
+ *
+ * ```ts
+ * import { afresh } from '@yaks/host/senders'
+ * import { equal } from '@yaks/testing'
+ *
+ * let options: { token?: string } = {}
+ * let sender = afresh(() =>
+ *   options.token
+ *     ? { sender: { send: () => Promise.resolve({ id: options.token }) } }
+ *     : { waiting: 'waiting for a token' }
+ * )
+ * equal(sender.waiting?.(), 'waiting for a token')
+ * options.token = 't'
+ * equal(sender.waiting?.(), undefined)
+ * ```
+ */
+export let afresh = (build: () => Built): Sender => ({
+  send: (message) => {
+    let { sender, waiting } = build()
+    return sender
+      ? sender.send(message)
+      : Promise.reject(new Unsent(waiting ?? 'waiting for a sender', 60_000))
+  },
+  waiting: () => build().waiting,
+})
 
 /** One text message, composed and ready to leave: the portable texter
  * capability, which @yaks/phone sends through. */

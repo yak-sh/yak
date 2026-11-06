@@ -15,7 +15,6 @@ import {
   type Edge,
   mailDoc,
   message,
-  payload,
   pull,
   sending,
   stash,
@@ -230,7 +229,7 @@ test('sending an inbox rendering threads it by its predecessor and never creates
   let [second] = planned(next, [first], inbox, at(8))
   assertEquals(comp(second, 'mail').reply_to, first.entity.eid)
   let sent = message(second, 'ana@books.example', 'out@box')
-  assertEquals(payload(sent).headers?.['In-Reply-To'], '<out@box>')
+  assertEquals(sent.replyTo, 'out@box')
 })
 
 test('a sent inbox rendering never creates more inbox activity', () => {

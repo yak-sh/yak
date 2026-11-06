@@ -24,7 +24,16 @@ import { type Sender, sending } from './send.ts'
 import { stash } from './stash.ts'
 import type { Host } from '@yaks/host'
 
-let unarmed = { via: 'cloudflare', account: 'a' } as Transport
+// A sender lent before its credentials are set.
+let unarmed: Transport = { via: 'unarmed' }
+let unready: Pick<Host, 'senders'> = {
+  senders: {
+    unarmed: {
+      send: () => Promise.reject(new Error('sent before it was armed')),
+      waiting: () => 'waiting for credentials',
+    },
+  },
+}
 
 // The club with a pool, so what one process writes another can run.
 let pooled = loadVocab([...club.docs, effectDoc])
@@ -110,16 +119,14 @@ test('a host sender delivers once and records its receipt', async () => {
   assertEquals(box.sent.length, 1)
 })
 
-test('host sender names take precedence over built-in senders', async () => {
-  for (let via of ['cloudflare', 'stash']) {
-    let box = stash()
-    let sent = await handOver(
-      effects({ senders: { [via]: box } }, { sender: { via } }),
-      `lent-${via}`,
-    )
-    assert(sent.delivered)
-    assertEquals(box.sent.length, 1)
-  }
+test('a host sender’s name takes precedence over the built-in stash', async () => {
+  let box = stash()
+  let sent = await handOver(
+    effects({ senders: { stash: box } }, { sender: { via: 'stash' } }),
+    'lent-stash',
+  )
+  assert(sent.delivered)
+  assertEquals(box.sent.length, 1)
 })
 
 test('the built-in stash retains receipts across delivery attempts', async () => {
@@ -201,7 +208,7 @@ test('adding a recipient to a saved letter sends it once', () => {
   assertEquals(lateRecipient.reports, [])
 })
 
-let missing = await rig(effects(null, { sender: unarmed }))
+let missing = await rig(effects(unready, { sender: unarmed }))
 await missing.apply([ana, {
   entity: { eid: 'e-in' },
   mail: { from: 'bea@out.example', to: 'hello@books.example' },
@@ -243,7 +250,7 @@ test('no configured sender leaves an outbound letter waiting rather than silentl
   assertEquals(g.reports, [])
 })
 
-let repaired = await rig(effects(null, { sender: unarmed }))
+let repaired = await rig(effects(unready, { sender: unarmed }))
 await repaired.apply([ana, letter('e-one')])
 await repaired.fx.idle()
 let repairedBox = stash()
@@ -260,7 +267,7 @@ test('pending delivery survives reopening and sends once after configuration rep
 
 test('one running handler re-reads its sender after configuration arrives', async () => {
   let options: { sender: Transport } = { sender: unarmed }
-  let code = effects(null, options)
+  let code = effects(unready, options)
   let g = await rig(code)
   await g.apply([ana, letter('e-one')])
   await g.fx.idle()
@@ -412,23 +419,22 @@ test('concurrent delivery handlers hand one letter to the sender once', () => {
 // A transport switch consumes the same durable request. It neither regenerates
 // letters nor resets attempted or completed handovers from the old transport.
 test('switching a sender sends pending letters once and leaves prior outcomes alone', async () => {
-  let selected = {
-    sender: { via: 'resend', token: undefined as string | undefined },
-  }
+  let token: string | undefined
   let deliveries: string[] = []
-  let code = effects(null, selected)
+  let code = effects({
+    senders: {
+      later: {
+        waiting: () => token ? undefined : 'waiting for credentials',
+        send: (m) => (deliveries.push(m.subject), Promise.resolve({})),
+      },
+    },
+  }, { sender: { via: 'later' } })
   let pending = await handOver(code, 'resend-pending').catch(async () =>
     (await lent.tx.get(['resend-pending']))[0]
   )
   assert((pending.deliver as Comp).waiting)
   assertEquals((pending.deliver as Comp).tried, undefined)
-  selected.sender.token = 'sending-only'
-  Object.assign(selected.sender, {
-    fetch: (_url: string, init: RequestInit) => {
-      deliveries.push(JSON.parse(String(init.body)).subject)
-      return Promise.resolve(Response.json({ id: 'provider-id' }))
-    },
-  })
+  token = 'sending-only'
   let sent = await handOver(code, 'resend-pending')
   assert(sent.delivered)
   assertEquals((sent.mail as Comp).message_id, undefined)

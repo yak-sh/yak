@@ -87,6 +87,7 @@
     "packages/blob/conform.ts",
     "packages/d1/conform.ts",
     "packages/mail/conform.ts",
+    "packages/cloudflare-mail/conform.ts",
     "workers/yak/conform.ts",
     "workers/model/conform.ts",
     "workers/model/index.ts",

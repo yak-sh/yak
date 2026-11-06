@@ -386,9 +386,18 @@ test('a letter nobody received is not the check’s business', async () => {
 test('a sender this host cannot build is what the check says out loud', async () => {
   // Missing config never stops the boot (./effects.ts), so the check is where
   // a graph whose letters are going nowhere finds out.
-  let said = await checkup(await posted({ to: 'ana@books.example' }), {
-    sender: { via: 'cloudflare', account: 'a', token: undefined as never },
-  })
+  let said = await checkup(
+    await posted({ to: 'ana@books.example' }),
+    { sender: { via: 'unarmed' } },
+    {
+      senders: {
+        unarmed: {
+          send: () => Promise.reject(new Error('sent before it was armed')),
+          waiting: () => 'waiting for credentials',
+        },
+      },
+    },
+  )
   assertEquals(said.level, 'warn')
   assert(said.body.includes('waiting for credentials'), said.body)
   // one that can be built is nothing to report

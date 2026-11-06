@@ -2830,9 +2830,6 @@ importers:
       '@yaks/cli':
         specifier: 0.2.17
         version: link:../cli
-      '@yaks/cloudflare-mail':
-        specifier: 0.2.17
-        version: link:../cloudflare-mail
       '@yaks/doc':
         specifier: 0.2.17
         version: link:../doc
@@ -2863,9 +2860,6 @@ importers:
       '@yaks/query':
         specifier: 0.2.17
         version: link:../query
-      '@yaks/resend':
-        specifier: 0.2.17
-        version: link:../resend
       '@yaks/tools':
         specifier: 0.2.17
         version: link:../tools
@@ -3696,9 +3690,18 @@ importers:
 
   packages/resend:
     dependencies:
+      '@yaks/api':
+        specifier: 0.2.17
+        version: link:../api
+      '@yaks/graph':
+        specifier: 0.2.17
+        version: link:../graph
       '@yaks/host':
         specifier: 0.2.17
         version: link:../host
+      '@yaks/mail':
+        specifier: 0.2.17
+        version: link:../mail
     devDependencies:
       '@std/assert':
         specifier: npm:@jsr/std__assert@^1.0.0

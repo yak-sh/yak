@@ -39,9 +39,9 @@
  * `delivered{at}` or `bounced{at, reason}`. So the write cannot fail
  * because a mail server is down, and "what became of that letter?" is a query.
  *
- * Senders include {@link cloudflare}, {@link resend}, {@link bound} for a
- * Workers binding, and {@link stash} for tests and development. {@link post}
- * selects a host capability or built-in sender by name.
+ * {@link post} selects a sender by name from those the host lends: a
+ * provider's, lent by its own plugin (@yaks/resend, @yaks/cloudflare-mail),
+ * or the host's own. {@link stash} is built in, for tests and development.
  *
  * ## Receiving is a pure function {@link inbound} turns a message as an Email
  * Worker receives it into the bundles that record it. It queries the graph for
@@ -88,7 +88,7 @@
  *
  * The core — the vocabulary, {@link canon}, {@link inbound}, {@link sending} —
  * imports no platform API, so it runs on a server, in a Worker, and in a
- * browser tab. The Cloudflare sender is one file away in `./cloudflare.ts`.
+ * browser tab. No mail provider lives here.
  *
  * @module
  */
@@ -98,9 +98,6 @@ export * from './addr.ts'
 export * from './md.ts'
 export * from './send.ts'
 export * from './stash.ts'
-export * from './cloudflare.ts'
-export * from './binding.ts'
-export * from './resend.ts'
 export * from './transport.ts'
 export * from './inbound.ts'
 export * from './arrive.ts'

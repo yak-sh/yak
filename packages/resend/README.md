@@ -15,10 +15,32 @@ verified custom domain. There is no fixed platform domain.
 `Message.id` is the caller's letter UUID. It travels as the `yak_letter` tag;
 `event(request, webhookSecret)` verifies Resend's signed, fresh webhook, and
 `receipt(event)` returns that UUID and the RFC Message-ID. The send response's
-API email id is never returned as a thread id. `@yaks/mail/routes` offers a
-receipt endpoint for a graph; a host can route the same verified receipt into
-its own graph door. Receipt writes are idempotent and retry when their letter
-has not yet committed.
+API email id is never returned as a thread id. A host can route the same
+verified receipt into its own graph door. Receipt writes are idempotent and
+retry when their letter has not yet committed.
+
+## As a plugin
+
+Listed in a config, the package lends its host the sender named `resend`
+(`./graph`), which `@yaks/mail` selects with `sender: {"via": "resend"}`. Its
+options are the sender's: `token`, and `base`, `fetch` and `tags`. The sender
+reads them at every letter, so a token set after start-up is used for the next
+one, and until there is a token a letter waits. With `receipts`, it also answers
+the webhook Resend posts delivery receipts to (`./routes`, default
+`POST /mail/resend`), verifies the endpoint's signature, and fills
+`mail.message_id` on the letter it names. A receipt counts only where it carries
+every one of the sender's `tags`, so several hosts can share one Resend account.
+
+```json
+{
+  "use": "@yaks/resend",
+  "with": {
+    "token": { "secret": "RESEND_TOKEN" },
+    "tags": { "yak_host": "box" },
+    "receipts": { "secret": { "secret": "RESEND_WEBHOOK_SECRET" } }
+  }
+}
+```
 
 `received({token, base?, fetch?}, emailId)` retrieves incoming message content
 and attachments, and returns one neutral `Incoming` per recipient. Download URLs

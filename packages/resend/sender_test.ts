@@ -1,9 +1,8 @@
 // Provider requests and the distinction between an API receipt and a thread id.
 import { equal, test, throws } from '@yaks/testing'
-import { Unsent } from '@yaks/host/senders'
-import { resend } from './resend.ts'
-import { post } from './transport.ts'
-import type { Message } from './send.ts'
+import { type Message, Unsent } from '@yaks/host/senders'
+import { resend } from './sender.ts'
+import { senders } from './graph.ts'
 
 let message: Message = {
   from: 'hello@books.example',
@@ -113,38 +112,21 @@ test('an invalid acceptance is an ambiguous failure, never a retry', async () =>
     }).send(message), 'Resend accepted no email id')
 })
 
-test('missing Resend credentials keep the selected transport waiting', () => {
-  equal(post({ via: 'resend' }), {
-    waiting: 'waiting for credentials: a resend sender needs `token`',
-  })
-})
-
-test('changing only the selected provider changes credentials and preserves the letter', async () => {
+test('the lent sender waits for its token, read at every letter', async () => {
+  let options: { token?: string; fetch?: typeof fetch } = {}
+  let { resend: lent } = senders(null, options)
+  equal(
+    lent.waiting?.(),
+    'waiting for credentials: a resend sender needs `token`',
+  )
+  equal((await lent.send(message).catch((e) => e)) instanceof Unsent, true)
   let seen: string[] = []
-  let selection = {
-    via: 'cloudflare',
-    providers: {
-      cloudflare: { account: 'account', token: 'cf-token' },
-      resend: { token: 'resend-token' },
-    },
-    fetch: (url: string, init: RequestInit) => {
-      seen.push(
-        `${new URL(url).hostname} ${
-          new Headers(init.headers).get('authorization')
-        }`,
-      )
-      return Promise.resolve(
-        Response.json(
-          url.includes('/accounts/') ? { success: true } : { id: 'api-id' },
-        ),
-      )
-    },
+  options.token = 'set-later'
+  options.fetch = (_url, init) => {
+    seen.push(new Headers(init?.headers).get('authorization')!)
+    return Promise.resolve(Response.json({ id: 'api-id' }))
   }
-  await post(selection).sender!.send(message)
-  selection.via = 'resend'
-  await post(selection).sender!.send(message)
-  equal(seen, [
-    'api.cloudflare.com Bearer cf-token',
-    'api.resend.com Bearer resend-token',
-  ])
+  equal(lent.waiting?.(), undefined)
+  equal(await lent.send(message), {})
+  equal(seen, ['Bearer set-later'])
 })

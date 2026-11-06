@@ -151,7 +151,7 @@ export let deliver = (
  * message's {@link payload}.
  *
  * ```ts
- * import { cloudflare } from '@yaks/mail'
+ * import { cloudflare } from '@yaks/cloudflare-mail'
  * // in a Worker: cloudflare({ account: env.CF_ACCOUNT, token: env.CF_EMAIL_TOKEN })
  * ```
  */

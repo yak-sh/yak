@@ -18,14 +18,10 @@
 // same sentence. A slug carries no dot (route.ts `SLUG`), so the single dot in
 // a local part is unambiguously the seam between the space and the app.
 import { toBase64url } from '@yaks/fp'
-import {
-  type Binding,
-  bound,
-  parts,
-  post,
-  type Sender,
-  Unsent,
-} from '@yaks/mail'
+import { parts, post, type Sender, Unsent } from '@yaks/mail'
+import { type Binding, bound } from '@yaks/cloudflare-mail/binding'
+import { configured as cloudflare } from '@yaks/cloudflare-mail/sender'
+import { configured as resend } from '@yaks/resend/sender'
 import { SLUG } from './route.ts'
 import { apex, type Host } from './host.ts'
 import type { Env } from './env.ts'
@@ -83,7 +79,7 @@ export let mailedTo = (address: string, env: Host = {}): Mailbox | null => {
   return { space, app: app ?? null }
 }
 
-export type { Address, Binding } from '@yaks/mail'
+export type { Address, Binding } from '@yaks/cloudflare-mail/binding'
 
 /** Keep the staging sink at the sender boundary, for every provider. */
 export let posting = (
@@ -100,26 +96,34 @@ let diverted = (sender: Sender, env: Pick<Env, 'MAIL_SINK'>): Sender => ({
     }),
 })
 
-/** The host's named sender, or a built-in selected by configuration. Native
- * platform letters default to the REST sender; apps default to the binding.
- * A migration explicitly selects Resend only after its address passed a pilot. */
+/** The sender this deploy's configuration selects, built from its env, or
+ * why it cannot send yet. Native platform letters default to the REST sender;
+ * apps default to the binding. A migration explicitly selects Resend only
+ * after its address passed a pilot. */
 export let transport = (
   env: Delivery,
   fallback = 'binding',
   tags: Record<string, string> = {},
-) =>
-  post({
-    via: env.MAIL_VIA ?? fallback,
-    tags,
-    account: env.MAIL_ACCOUNT || env.CF_ACCOUNT,
-    token: env.MAIL_VIA == 'resend'
-      ? (fallback == 'cloudflare'
+) => {
+  let via = env.MAIL_VIA ?? fallback
+  return via == 'cloudflare'
+    ? cloudflare({
+      account: env.MAIL_ACCOUNT || env.CF_ACCOUNT,
+      token: env.MAIL_TOKEN,
+      base: env.MAIL_API,
+      fetch: env.MAIL_FETCH ?? resent,
+    })
+    : via == 'resend'
+    ? resend({
+      token: fallback == 'cloudflare'
         ? env.RESEND_PLATFORM_TOKEN
-        : env.RESEND_TOKEN)
-      : env.MAIL_TOKEN,
-    base: env.MAIL_VIA == 'resend' ? env.RESEND_API : env.MAIL_API,
-    fetch: env.MAIL_FETCH ?? (env.MAIL_VIA == 'resend' ? undefined : resent),
-  }, { senders: { binding: bound(env.MAIL) } })
+        : env.RESEND_TOKEN,
+      base: env.RESEND_API,
+      fetch: env.MAIL_FETCH,
+      tags,
+    })
+    : post({ via }, { senders: { binding: bound(env.MAIL) } })
+}
 
 export type Delivery = Pick<
   Env,

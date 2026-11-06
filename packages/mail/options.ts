@@ -8,13 +8,15 @@
 // { "use": "@yaks/mail",
 //   "with": { "domain": "books.example",
 //             "triage": "…",
-//             "sender": { "via": "cloudflare",
-//                         "account": "…",
-//                         "token": { "secret": "CF_EMAIL_TOKEN" } },
+//             "sender": { "via": "cloudflare" },
 //             "door": { "secret": { "secret": "MAIL_DOOR_SECRET" } },
 //             "pull": { "url": "https://edge.books.example",
 //                       "token": { "secret": "EDGE_TOKEN" } } } }
 // ```
+//
+// The sender is lent by the plugin listed beside it, which holds its
+// credentials: `{ "use": "@yaks/cloudflare-mail", "with": { "account": "…",
+// "token": { "secret": "CF_EMAIL_TOKEN" } } }`.
 //
 // Nothing here holds a secret: `{"secret": "NAME"}` anywhere in the object is
 // that secret's value at the moment it is read (@yaks/cli, @yaks/secrets), so
@@ -39,33 +41,17 @@ export type Options = {
   sender?: Transport
   /** where letters arrive, and who may post one to this graph */
   door?: Door
-  /** signed asynchronous provider receipts for this graph */
-  receipts?: import('./receipts.ts').Options
   /** the edge this graph pulls arrivals from, where the edge cannot reach the
    * graph to post them; with none, nothing is pulled */
   pull?: Pull
 }
 
-/** A sender selected by name: a host capability, Cloudflare, Resend or stash. */
-export type Provider = {
-  /** correlation metadata owned by the host, never stored on the letter */
-  tags?: Record<string, string>
-  /** the Cloudflare account id, for the built-in cloudflare sender */
-  account?: string
-  /** an API token that may send mail — `{"secret": "…"}` in the config */
-  token?: string
-  /** the selected provider's API root, to point a test at a stub */
-  base?: string
-  /** the HTTP boundary, supplied by a host or test */
-  fetch?: import('./cloudflare.ts').Fetch
-}
-
-/** Select a provider without changing its credential configuration. */
-export type Transport = Provider & {
-  /** a name in Host.senders or the provider registry */
+/** The sender outbound letters go through, by the name the host lends it
+ * under: a provider plugin's (`resend`, `cloudflare`), the host's own, or the
+ * built-in `stash`. */
+export type Transport = {
+  /** a name in Host.senders, or `stash` */
   via: string
-  /** provider-specific options; old inline options remain supported */
-  providers?: Record<string, Provider>
 }
 
 /** The arrival endpoint: where a mail edge posts a letter, and what it must

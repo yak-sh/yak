@@ -686,6 +686,43 @@ test('a host carries a feed only when a plugin offers one', async () => {
   equal(heard, [[{ entity: { eid: 'x' } }]])
 })
 
+test('plugins lend senders beside the host’s, one sender per name', async () => {
+  let sender = (id: string) => ({ send: () => Promise.resolve({ id }) })
+  let lending = (names: string[]): Load => (plugin, name) =>
+    Promise.resolve(
+      name == 'graph'
+        ? { senders: () => ({ [names.shift()!]: sender(plugin) }) }
+        : null,
+    )
+  let lent = binding()
+  lent.host.senders = { platform: sender('host') }
+  let bound = async (names: string[], plugins = ['resend', 'cloudflare']) =>
+    (await assembly({ plugins }, ['graph'], lending(names))).bind(lent).host
+  let { senders } = await bound(['resend', 'cloudflare'])
+  equal(
+    await Promise.all(
+      ['platform', 'resend', 'cloudflare'].map((n) =>
+        senders![n].send({
+          from: 'a',
+          to: 'b',
+          subject: '',
+          text: '',
+          html: '',
+        })
+      ),
+    ),
+    [{ id: 'host' }, { id: 'resend' }, { id: 'cloudflare' }],
+  )
+  await throws(
+    () => bound(['twice', 'twice']),
+    'the sender twice is lent by both resend and cloudflare',
+  )
+  await throws(
+    () => bound(['platform'], ['resend']),
+    'the sender platform is lent by both the host and resend',
+  )
+})
+
 // Safari lacks AsyncDisposableStack, and a host's assembly ships to browsers.
 test('the assembly built for a browser names no AsyncDisposableStack', async () => {
   let out = await esbuild.build({

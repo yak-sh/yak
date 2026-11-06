@@ -1,28 +1,24 @@
-// One name selects one sender. Providers own their configuration; mail owns
-// the selection and leaves unavailable senders' durable letters waiting.
+// One name selects one sender. The host lends its senders by name, a provider
+// among them by naming its plugin in the config (@yaks/resend,
+// @yaks/cloudflare-mail); mail owns the selection and leaves a letter waiting
+// while its sender cannot send.
 import type { Host } from '@yaks/host'
+import type { Built } from '@yaks/host/senders'
 import type { Transport } from './options.ts'
-import type { Sender } from './send.ts'
-import { configured as cloudflare } from '@yaks/cloudflare-mail/sender'
-import { configured as resend } from '@yaks/resend/sender'
 import { stash } from './stash.ts'
 
-type Selected = { sender?: Sender; waiting?: string }
-let providers: Record<string, (options: Transport) => Selected> = {
-  cloudflare,
-  resend,
-  stash: () => ({ sender: stash() }),
-}
-
-/** A selected host capability or provider, or why it cannot be built yet. */
+/** The sender a name selects from the host's, or why it cannot send yet.
+ * `stash` is the built-in one that keeps letters in memory. */
 export let post = (
   said: Transport,
   host?: Pick<Host, 'senders'> | null,
-): Selected => {
+): Built => {
   if (host?.senders && Object.hasOwn(host.senders, said.via)) {
-    return { sender: host.senders[said.via] }
+    let sender = host.senders[said.via]
+    let waiting = sender.waiting?.()
+    return waiting ? { waiting } : { sender }
   }
-  return Object.hasOwn(providers, said.via)
-    ? providers[said.via]({ ...said, ...said.providers?.[said.via] })
+  return said.via == 'stash'
+    ? { sender: stash() }
     : { waiting: `no sender called ${JSON.stringify(said.via)}` }
 }

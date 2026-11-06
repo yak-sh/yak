@@ -1,0 +1,10 @@
+{
+  "_": "Worker entrypoints checked with Cloudflare globals by deno task check:types. Resolution comes from the npm workspace.",
+  "compilerOptions": {
+    "lib": [
+      "esnext",
+      "dom"
+    ],
+    "strict": true
+  }
+}

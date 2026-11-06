@@ -8,8 +8,9 @@ publication through JSR and npm; runtime requirements vary by package.
 Mail providers: [@yaks/resend](resend/README.md) supplies Resend sending, signed
 receipts and receiving; [@yaks/cloudflare-mail](cloudflare-mail/README.md)
 supplies Cloudflare REST and Workers sending and Email Routing receiving. Both
-use the portable mail boundary from @yaks/host; @yaks/mail owns letters and
-their delivery outcomes.
+use the portable mail boundary from @yaks/host, and each is a plugin a config
+names to lend its sender; @yaks/mail owns letters and their delivery outcomes
+and depends on neither.
 
 ## Start here
 

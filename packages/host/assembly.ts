@@ -142,6 +142,32 @@ let doorman = (
     : () => self
 }
 
+// The host's own senders and those the plugins lend, one sender per name: a
+// letter sent through a name two parties answer to would depend on order.
+let lending = (
+  graphs: Taken<'graph'>,
+  host: Host,
+  lent: Host['senders'],
+): Host['senders'] => {
+  let by = new Map(Object.keys(lent ?? {}).map((name) => [name, 'the host']))
+  let senders = { ...lent }
+  for (let [r, options, plugin] of graphs) {
+    for (
+      let [name, sender] of Object.entries(r.senders?.(host, options) ?? {})
+    ) {
+      if (by.has(name)) {
+        throw new CallError(
+          'config',
+          `the sender ${name} is lent by both ${by.get(name)} and ${plugin}`,
+        )
+      }
+      by.set(name, plugin)
+      senders[name] = sender
+    }
+  }
+  return by.size ? senders : lent
+}
+
 // A plugin's `./effects` handling a name no vocabulary declares: code that
 // would never run, since nothing owes it.
 let undeclared = (plugin: string, name: string) =>
@@ -456,6 +482,8 @@ export let assemble = (
         })
       }
       let authenticate = doorman(graphs, host, self ?? null)
+      let senders = lending(graphs, host, lent.senders)
+      if (senders) host.senders = senders
       part?.('storage')
       let extend: Extension[] = []
       let history = graphs.map(([r, options]) => r.history?.(options))

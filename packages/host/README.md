@@ -26,7 +26,7 @@ equal(stopped(), true)
 | `@yaks/host`                                  | `assembly`, facet contracts, `Host`, `Config`, `Configured`, `Options`, `Plug`, `Role`, `Feed`, `MigrationMonitor`, `Message`, `Receipt`, `Sender`, `ROLES`, `every` |
 | `@yaks/host/assembly`                         | `assembly`, `prepare`, `assemble`, `Prepared`, `Assembly`, `AssemblyOpts`, `Binding`, `Meaning`                                                                      |
 | `@yaks/host/roles`                            | Role and facet selection data without loading the assembly runtime                                                                                                   |
-| `@yaks/host/senders`                          | `Message`, `Receipt`, `Sender`, `Unsent`                                                                                                                             |
+| `@yaks/host/senders`                          | `Message`, `Receipt`, `Sender`, `Built`, `afresh`, `Unsent`                                                                                                          |
 | `@yaks/host/words`                            | Vocabulary assembly, `wordsOf`, `taking`, `Words`, `Declared`, `Taken`                                                                                               |
 | `@yaks/host/config`                           | Configuration types, `used`, `given`, `chosen`, `meet`, `Unmet`                                                                                                      |
 | `@yaks/host/documents`, `@yaks/host/keywords` | Shared intrinsic declarations and vocabulary keywords                                                                                                                |
@@ -153,8 +153,12 @@ workspace. Only explicit sandbox disposal destroys a resource. See
 `Host.senders` lends named
 [senders](../mail/README.md#the-transport-is-supplied-by-the-caller).
 `@yaks/mail` selects one with `sender: {via: name}` in its plugin options. The
-host constructs the sender and owns its credentials, metering and lifetime. A
-lent name takes precedence over the configured provider. `Message.id` is the
+host constructs its own and owns their credentials, metering and lifetime. A
+provider plugin lends one too, from its graph facet's `senders(host, options)`,
+built from its own options. One name has one sender: two parties lending a name
+fail composition. `afresh(build)` (`@yaks/host/senders`) makes a sender that
+builds again at every use, and says through `waiting()` why it cannot send yet,
+so a letter waits for a credential instead of bouncing. `Message.id` is the
 caller's letter UUID, for an asynchronous receipt. `Incoming` is a
 provider-neutral letter with headers, text and attachments; a provider supplies
 an authentication verdict separately from the author's headers. The assembly
