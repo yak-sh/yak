@@ -243,6 +243,7 @@ test('a call charges what it used as it goes, so the object restarted under it a
     let cents = 0
     return calling(undefined, {
       every: 10,
+      back: 20,
       charge: (used) => Promise.resolve(void charged.push(used)),
       listen: () => ({
         send: () => void cents++,
@@ -259,18 +260,33 @@ test('a call charges what it used as it goes, so the object restarted under it a
   // Charged before anything ended it.
   await until(() => sum() == 0.03)
   first.frame(audio)
-  // The object restarts: the line it carried drops before the call ended.
+  // The object restarts: the line it carried drops before the call ended,
+  // and the provider opens the stream again.
   first.hangup(1006)
   await first.call.ended
-  equal(lost.map((e) => (e as Error).message), [
-    "A call's line closed with 1006 before it ended",
-  ])
   let again = opening()
   for (let i = 0; i < 2; i++) again.frame(audio)
   again.frame({ event: 'stop' })
   await again.call.ended
   equal(sum().toFixed(2), '0.06')
-  equal(lost.length, 1)
+  await new Promise((r) => setTimeout(r, 40))
+  equal(lost, [])
+})
+
+test('a line that drops is reported lost once its stream has not opened again', async () => {
+  for (let code of [1006, 1011]) {
+    let lost: unknown[] = []
+    let c = calling(undefined, { back: 10, report: (e) => void lost.push(e) })
+    c.hangup(code)
+    await c.call.ended
+    equal(c.done[0].ended, `close ${code}`)
+    equal(lost, [])
+    await until(() => lost.length == 1)
+    equal(
+      (lost[0] as Error).message,
+      `A call's line closed with ${code} before it ended`,
+    )
+  }
 })
 
 test('a line closed cleanly ends the call quietly, with or without the provider saying it stopped', async () => {
@@ -323,6 +339,7 @@ let calling = (
   let asked: string[] = [], said: string[] = []
   let done: Parameters<Around['done']>[0][] = []
   let call = converse({
+    call: 'v3:c',
     wire,
     line,
     listen: (t) => {
@@ -519,6 +536,7 @@ let talkingCall = (real = false) => {
   let stream: Record<string, ((e: { data?: unknown }) => void)[]> = {}
   let streamed: Record<string, unknown>[] = []
   let call = talking({
+    call: 'v3:t',
     wire,
     line,
     talk: (t) => {

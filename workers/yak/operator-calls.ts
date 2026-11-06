@@ -58,8 +58,20 @@ import { SPACE } from './build.ts'
 export let MINUTES = 10
 
 // A stream opened this long after the ring is the call's own, opened again
-// when its object restarted mid-call.
+// when its object restarted mid-call; a line that dropped is lost once its
+// stream has not opened again for this long.
 let RESUMED = 15_000
+
+// A line back within this many milliseconds was gone too briefly for the
+// caller to notice, and the call goes on without a word about it.
+let NOTICED = 3000
+
+// The calls whose line dropped in this object before they ended, and when:
+// each reported as lost unless its stream opens again first.
+let away = new Map<
+  string,
+  { at: number; timer: ReturnType<typeof setTimeout> }
+>()
 
 /** How often a call charges its line and what it heard since it last did, in
  * milliseconds. */
@@ -119,9 +131,11 @@ export let greeting = (operator: string, first?: string) =>
 /**
  * One opening of a call's stream at `now`: what is said as it opens, the
  * minutes the call has left of the MINUTES it lasts from its ring, and the
- * name of its `n`th turn. The provider opens the stream again when the
- * object carrying it restarts, as a deploy restarts it: that stream says it
- * is back rather than hello, and its turns are named anew.
+ * name of its `n`th turn. The provider opens the stream again when its line
+ * drops, as it does when a deploy restarts the object carrying it: that
+ * stream says hello no more, and its turns are named anew. It says it is
+ * back only when the line was gone long enough to notice, which only an
+ * object that saw it drop at `dropped` knows; a restart is too brief.
  *
  * ```ts
  * import { equal } from '@yaks/testing'
@@ -130,16 +144,23 @@ export let greeting = (operator: string, first?: string) =>
  * let first = opening(ticket, 'Elihu', 1000)
  * equal(first.hello, 'Hi Jeff, Elihu here. How can I help?')
  * let again = opening(ticket, 'Elihu', 120_000)
- * equal([again.hello, again.minutes], [BACK, 8])
+ * equal([again.hello, again.minutes], ['', 8])
  * equal(again.turn(1) == first.turn(1), false)
+ * equal(opening(ticket, 'Elihu', 120_000, 119_000).hello, '')
+ * equal(opening(ticket, 'Elihu', 120_000, 110_000).hello, BACK)
  * ```
  */
 export let opening = (
   ticket: Pick<Ticket, 'call' | 'via' | 'at' | 'first'>,
   operator: string,
   now = Date.now(),
+  dropped?: number,
 ) => ({
-  hello: now - ticket.at > RESUMED ? BACK : greeting(operator, ticket.first),
+  hello: now - ticket.at <= RESUMED
+    ? greeting(operator, ticket.first)
+    : dropped != undefined && now - dropped > NOTICED
+    ? BACK
+    : '',
   minutes: MINUTES - (now - ticket.at) / 60_000,
   turn: (n: number) => `${ticket.via}:${ticket.call}:${now}:${n}`,
 })
@@ -249,6 +270,8 @@ export type Timed = { first?: number; answer?: number; asked?: true }
 
 /** What every call needs from the world around it. */
 export type Around = {
+  /** the call, as the provider names it */
+  call: string
   /** the provider's side of the call */
   wire: Socket
   line: Line
@@ -268,6 +291,9 @@ export type Around = {
   minutes?: number
   /** how often it charges, in milliseconds: CHARGED */
   every?: number
+  /** how long a dropped line waits for its stream to open again before the
+   * call is reported lost, in milliseconds: RESUMED */
+  back?: number
   report?: (error: unknown) => void
 }
 
@@ -346,8 +372,12 @@ let held = (socket: Socket): Socket => ({
 // limit, what it used charged as it goes (`heard` answers what hearing has
 // cost so far), and the call ended once (`close`). The provider says a call
 // stopped when it ends, but not that it says so before it closes the line,
-// so a line closed cleanly ends the call quietly; one that fails, or closes
-// any other way before the call ended, is a stream the call lost.
+// so a line closed cleanly ends the call quietly. One that fails, or closes
+// any other way before the call ended, is a stream the call lost, unless the
+// provider opens it again: it does when the object carrying it restarts, as
+// every deploy restarts it, and the call says it is back. A restarted
+// object's wait dies with it; a stream it cannot open again is refused at
+// the door, which reports it.
 let carry = (
   o: Around,
   hear: (audio: Uint8Array) => void,
@@ -356,6 +386,16 @@ let carry = (
 ) => {
   let report = reporter(o)
   let wire = held(o.wire)
+  clearTimeout(away.get(o.call)?.timer)
+  away.delete(o.call)
+  let lost = (error: Error) =>
+    away.set(o.call, {
+      at: Date.now(),
+      timer: setTimeout(() => {
+        away.delete(o.call)
+        report(error)
+      }, o.back ?? RESUMED),
+    })
   let started = Date.now(), over = false
   let timers: ReturnType<typeof setTimeout>[] = []
   let later = (ms: number, f: () => void) => timers.push(setTimeout(f, ms))
@@ -398,12 +438,12 @@ let carry = (
   })
   wire.addEventListener('close', ({ code }) => {
     if (!over && !CLEAN.includes(code ?? 1005)) {
-      report(new Error(`A call's line closed with ${code} before it ended`))
+      lost(new Error(`A call's line closed with ${code} before it ended`))
     }
     finish(`close ${code ?? 1005}`)
   })
   wire.addEventListener('error', () => {
-    if (!over) report(new Error(`A call's line failed before it ended`))
+    if (!over) lost(new Error(`A call's line failed before it ended`))
     finish('error')
   })
   return {
@@ -656,7 +696,7 @@ export let talking = (o: Talking): Call => {
     },
   })
   c.limit(() => talker?.say(GOODBYE))
-  talker.say(o.hello)
+  if (o.hello) talker.say(o.hello)
   return {
     typed: () => {},
     paused: () => {},
@@ -778,7 +818,12 @@ export let answering = async (
   passed(ticket.at, setup.provider)
   let pair = new WebSocketPair()
   pair[1].accept()
-  let opens = opening(ticket, space.operator ?? 'your Operator')
+  let opens = opening(
+    ticket,
+    space.operator ?? 'your Operator',
+    Date.now(),
+    away.get(ticket.call)?.at,
+  )
   let turn = 0
   let key = keyOf(space.eid, ticket.person)
   // The caller's words, to their conversation, answered by `model`.
@@ -800,6 +845,7 @@ export let answering = async (
     await armed()
   }
   let around = {
+    call: ticket.call,
     wire: pair[1],
     line,
     hello: opens.hello,
