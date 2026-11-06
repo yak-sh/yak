@@ -29,11 +29,6 @@ if (import.meta.main && Deno.args[0] !== '--bulk') {
   }
 }
 
-if (import.meta.main) {
-  let { installed } = await import('@yaks/cli/dependencies')
-  await installed()
-}
-
 let { relative } = await import('node:path')
 let { fileURLToPath } = await import('node:url')
 let { choose } = await import('@yaks/testing/choose')

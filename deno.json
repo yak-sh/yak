@@ -4,8 +4,8 @@
     "check:fmt": "deno fmt --check",
     "check:lint": "deno lint",
     "check:bytes": "deno run --allow-read --allow-run=git bin/check-bytes.ts",
-    "check:types": "deno run -A bin/check-types.ts",
-    "check:types:all": "deno run -A bin/check-types.ts --all",
+    "check:types": "deno run -A bin/workspace-dependencies.ts && deno run -A bin/check-types.ts",
+    "check:types:all": "deno run -A bin/workspace-dependencies.ts && deno run -A bin/check-types.ts --all",
     "check:raycast": {
       "command": "npm --prefix raycast ci --ignore-scripts --no-audit --no-fund && npm --prefix raycast run typecheck && npm --prefix raycast test",
       "files": [
@@ -64,7 +64,7 @@
     "install": "bin/install",
     "app-grep": "deno run --allow-net=api.cloudflare.com --allow-read --allow-write --allow-env=HOME,XDG_CACHE_HOME --allow-run=op,rg bin/app-grep.ts",
     "jsr": "deno run --allow-read --allow-net=api.jsr.io --allow-env=JSR_TOKEN bin/jsr.ts",
-    "test": "DB_PATH=:memory: TASKS_SYNC=off TASKS_EMBED=0 TASKS_BACKOFF= deno run -A bin/scratch.ts deno run -A --node-modules-dir=manual bin/test.ts",
+    "test": "deno run -A bin/workspace-dependencies.ts && DB_PATH=:memory: TASKS_SYNC=off TASKS_EMBED=0 TASKS_BACKOFF= deno run -A bin/scratch.ts deno run -A --node-modules-dir=manual bin/test.ts",
     "bench": "deno run -A bench/run.ts run",
     "bench:check": "deno run -A bench/run.ts check",
     "bench:ratchet": "deno run -A bench/run.ts accept",

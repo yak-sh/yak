@@ -8,13 +8,9 @@ import * as platform from '@yaks/process/system'
 import { command as spawnCommand } from '@yaks/process/command'
 import { fileURLToPath } from 'node:url'
 import { existsSync } from 'node:fs'
+import { current, differs, wanted } from './lockfile.ts'
 
 let dir = (): string => fileURLToPath(new URL('../../', import.meta.url))
-let wanted = (root: string) => `${root}/pnpm-lock.yaml`
-// pnpm's copy of the lockfile it last installed, without the document that
-// pins pnpm itself.
-let current = (root: string) => `${root}/node_modules/.pnpm/lock.yaml`
-let packages = (lock?: string) => lock?.split(/^---\n/m).at(-1)
 
 let read = (path: string) => {
   try {
@@ -46,7 +42,7 @@ export let members = (root: string = dir()): string[] => {
 
 /** Whether root's node_modules was installed from another lockfile. */
 export let stale = (root: string = dir()): boolean =>
-  packages(read(wanted(root))) !== read(current(root))
+  differs(read(wanted(root)), read(current(root)))
 
 /** Install a stale checkout. Installers take turns by locking the lockfile,
  * which a frozen install only reads. */

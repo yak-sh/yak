@@ -182,9 +182,11 @@ let slim = (m: Module): Module => ({
   },
 })
 
-/** What may resolve the modules at `paths`: the lock, and each config
- * (`deno.json`, `deno.jsonc`, `package.json`) in their directories and those
- * above them, up to the checkout's, whether there or not. */
+/** What may resolve the modules at `paths`: the lock, the npm tree's (what
+ * pnpm last installed, or absent before it has: a workspace package then
+ * resolves outside the checkout), and each config (`deno.json`, `deno.jsonc`,
+ * `package.json`) in their directories and those above them, up to the
+ * checkout's, whether there or not. */
 let configs = (paths: string[]) => {
   let dirs = new Set<string>(['.'])
   for (let p of paths) {
@@ -196,6 +198,7 @@ let configs = (paths: string[]) => {
   }
   return [
     'deno.lock',
+    'node_modules/.pnpm/lock.yaml',
     ...[...dirs].flatMap((d) =>
       ['deno.json', 'deno.jsonc', 'package.json'].map((f) =>
         d == '.' ? f : `${d}/${f}`
