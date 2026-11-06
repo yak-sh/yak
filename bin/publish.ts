@@ -16,7 +16,10 @@
 // A publish ships, in @yaks/cli's `made/`, the canvas a fresh `yak init`
 // serves (@yaks/web/canvas `prepare`), made here from the release's own
 // checkout, so a person's first `yak serve` answers with it instead of
-// bundling the canvas from JSR (@yaks/cli/page `ahead`).
+// bundling the canvas from JSR (@yaks/cli/page `ahead`). It ships, in
+// @yaks/cli's `exports.json`, the subpaths every member publishes, so a CLI
+// from JSR loads a config's facets as one module graph (@yaks/cli/release
+// `shipped`).
 import { matchesGlob } from 'node:path'
 import { cp } from 'node:fs/promises'
 import pinned from '../packages/cli/release.json' with { type: 'json' }
@@ -147,6 +150,27 @@ export let project = async <T>(
   }
 }
 
+/** The subpaths each member of a publication workspace at `root` publishes,
+ * by name, read from the deno.json `project` wrote: what @yaks/cli's
+ * exports.json ships (packages/cli/release.ts `shipped`). */
+export let shipping = async (
+  root: string,
+  dirs: string[],
+): Promise<Record<string, string[]>> => {
+  let configs = await Promise.all(
+    dirs.map((dir) =>
+      Deno.readTextFile(`${root}/${dir}/deno.json`).then(JSON.parse, () => null)
+    ),
+  )
+  return Object.fromEntries(
+    configs.filter((c) => c?.name).toSorted((a, b) => a.name < b.name ? -1 : 1)
+      .map((c) => [
+        c.name,
+        typeof c.exports == 'string' ? ['.'] : Object.keys(c.exports ?? {}),
+      ]),
+  )
+}
+
 let member = (dir: string): Member => {
   let pkg = JSON.parse(Deno.readTextFileSync(`${root}${dir}/package.json`))
   let deps = ['dependencies', 'devDependencies', 'optionalDependencies']
@@ -170,6 +194,10 @@ if (import.meta.main) {
         import('../packages/cli/init.ts'),
       ])
       await prepare(new URL(`file://${target}/packages/cli/made/`), STARTER)
+      await Deno.writeTextFile(
+        `${target}/packages/cli/exports.json`,
+        JSON.stringify(await shipping(target, dirs), null, 2) + '\n',
+      )
     }
     let status = await new Deno.Command(Deno.execPath(), {
       args: ['publish', '--config', `${target}/deno.json`, ...Deno.args],

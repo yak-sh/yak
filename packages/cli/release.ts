@@ -18,6 +18,7 @@ import * as disk from '@yaks/file/io'
 
 import { fileURLToPath } from 'node:url'
 import at from './release.json' with { type: 'json' }
+import subpaths from './exports.json' with { type: 'json' }
 
 /** The part of a Deno config that says which versions it will resolve. */
 export type Resolving = {
@@ -46,6 +47,12 @@ export let exempt = (names: string[]): Resolving => ({
 
 /** The version of each @yaks package this release is made of. */
 export let pinned: Readonly<Record<string, string>> = at
+
+/** The subpaths each package of this release exports (`.`, `./vocab`, …),
+ * which bin/publish.ts writes into ./exports.json as it publishes: a module
+ * from JSR resolves any subpath of a package and finds one missing only by
+ * loading it. A checkout's is empty, since its import map knows. */
+export let shipped: Readonly<Record<string, readonly string[]>> = subpaths
 
 /** The unstable features a release runs with: this repository's deno.json's.
  * `lazy-dynamic-imports` is the one a person waits on: without it Deno loads

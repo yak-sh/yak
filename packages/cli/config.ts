@@ -19,7 +19,7 @@ import { imported as observed, importing } from '@yaks/fp/imports'
 
 import cli from './package.json' with { type: 'json' }
 import { runtimePath } from './runtime.ts'
-import { pinned } from './release.ts'
+import { pinned, shipped } from './release.ts'
 
 export type { Config, Options, Plug } from '@yaks/host'
 import type { Config, Plug } from '@yaks/host'
@@ -116,12 +116,37 @@ export let unexported = (error: unknown, spec: string): boolean => {
  * that would only find the facet missing. A plugin named by a path answers
  * yes, since only importing it can tell. */
 export let exported = (plugin: string, name: string): boolean => {
+  let key = `${plugin}/${name}`
   try {
-    import.meta.resolve(located(`${plugin}/${name}`))
-    return true
+    let spec = import.meta.resolve(located(key))
+    return spec.startsWith('file:') || (ships(key) ?? true)
   } catch {
     return false
   }
+}
+
+/** Whether the release this CLI came from says the package `key` names
+ * exports its subpath, or undefined where it does not name the package: a
+ * checkout, or a plugin named by path (./release.ts `shipped`).
+ *
+ * ```ts
+ * import { assertEquals } from '@std/assert'
+ * let at = { '@yaks/doc': ['.', './vocab'] }
+ * assertEquals(ships('@yaks/doc/vocab', at), true)
+ * assertEquals(ships('@yaks/doc/routes', at), false)
+ * assertEquals(ships('@yaks/tools/vocab', at), undefined)
+ * assertEquals(ships('./plugins/mail/vocab', at), undefined)
+ * ```
+ */
+export let ships = (
+  key: string,
+  release: Readonly<Record<string, readonly string[]>> = shipped,
+): boolean | undefined => {
+  let [scope, name, ...rest] = key.split('/')
+  let said = Object.hasOwn(release, `${scope}/${name}`)
+    ? release[`${scope}/${name}`]
+    : undefined
+  return said?.includes(rest.length ? `./${rest.join('/')}` : '.')
 }
 
 /** Where a bare `@yaks/…` name is imported from. Inside a workspace the
@@ -188,13 +213,14 @@ export let pluginViews: Views = Object.assign(
 /** Each plugin's `./tui`, what a held answer draws with first. */
 export let pluginTui: Tui = (plugin) => subpath<{ views?: Held }>(plugin, 'tui')
 
-/** Load selected subpaths and required modules as one module graph where the
- * resolver already knows their exports. Deno otherwise builds a separate
+/** Load selected subpaths and required modules as one module graph where
+ * their exports are known: by the resolver for a file, by the release
+ * (`ships`) for a package from JSR. Deno otherwise builds a separate
  * dependency graph per concurrent dynamic import, rediscovering shared
  * dependencies for each. Module answers follow the subpath answers; only
- * subpaths can be absent. Unmapped JSR packages still use the ordinary loader,
- * which alone can say whether their optional export exists. Nothing is written
- * to disk. */
+ * subpaths can be absent. A JSR package the release does not name still uses
+ * the ordinary loader, which alone can say whether its optional export
+ * exists. Nothing is written to disk. */
 export let subpaths = async (
   requests: readonly (readonly [plugin: string, name: string])[],
   modules: readonly string[] = [],
@@ -204,15 +230,26 @@ export let subpaths = async (
     let key = `${plugin}/${name}`
     observed(dependencies.get(key) ?? [])
     if (imported.has(key) || pending.some((p) => p.key == key)) continue
+    let spec: string | undefined
     try {
-      let spec = import.meta.resolve(key)
-      if (!spec.startsWith('file:') || !/\.[cm]?[jt]sx?$/.test(spec)) continue
-      dependencies.set(key, [spec])
-      pending.push({ key, spec, slot: `m${pending.length}` })
+      spec = import.meta.resolve(key)
     } catch (error) {
-      if (unexported(error, key)) imported.set(key, Promise.resolve(null))
-      // An unmapped package is resolved by located() in subpath(), not here.
+      if (unexported(error, key)) {
+        imported.set(key, Promise.resolve(null))
+        continue
+      }
     }
+    if (spec?.startsWith('file:')) {
+      if (!/\.[cm]?[jt]sx?$/.test(spec)) continue
+    } else {
+      // From JSR: mapped (spec) or not (located), as the release says.
+      let said = ships(key)
+      if (said === false) imported.set(key, Promise.resolve(null))
+      if (!said) continue
+      spec = import.meta.resolve(located(key))
+    }
+    dependencies.set(key, [spec])
+    pending.push({ key, spec, slot: `m${pending.length}` })
   }
   let roots = modules.map((spec, index) => ({
     spec: import.meta.resolve(located(spec)),
@@ -260,6 +297,7 @@ let optional = async <M>(key: string): Promise<M | null> => {
     // whose declaring package is an absolute path in a remote vocabulary.
     spec = import.meta.resolve(spec)
     resolved = true
+    if (!spec.startsWith('file:') && ships(key) === false) return null
     dependencies.set(key, [spec])
     return await importing(spec)
   } catch (error) {

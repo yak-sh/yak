@@ -1,8 +1,8 @@
 // Publication owns its generated files. Parallel checks and a failed publisher
 // must leave the checkout, including edits made during publication, untouched.
 import { assertEquals, assertRejects } from '@std/assert'
-import { test } from '@yaks/testing'
-import { project } from './publish.ts'
+import { equal, test } from '@yaks/testing'
+import { project, shipping } from './publish.ts'
 
 let fixture = async () => {
   let root = await Deno.makeTempDir()
@@ -89,4 +89,12 @@ test('failed publication removes its workspace and leaves source manifests untou
   )
   assertEquals(await exists(path), false)
   assertEquals(await read(failing, 'packages/a/deno.json'), original)
+})
+
+test('a publication ships the subpaths each member publishes', async () => {
+  let root = await fixture()
+  equal(
+    await project(root, ['packages/a'], (at) => shipping(at, ['packages/a'])),
+    { '@yaks/a': ['.'] },
+  )
 })
