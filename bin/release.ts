@@ -99,8 +99,9 @@ export let unlisted = async (
   return names.filter((_, i) => pages[i] == null)
 }
 
-/** A member as a release weighs it: whether JSR has its version, whether it
- * changed since, and the members it imports. */
+/** A member as a release weighs it: whether JSR has a page for it, whether it
+ * changed since the version JSR holds (a version JSR lacks, as after a publish
+ * that stopped partway, counts as changed), and the members it imports. */
 export type Member = {
   name: string
   version: string
@@ -254,12 +255,15 @@ export let weigh = async (
     all.flat().map(async ({ dir, config }) => {
       let name = config.name as string
       let version = config.version as string
-      let published = await has(get, name, version)
+      let [page, held] = await Promise.all([
+        read(get, name),
+        has(get, name, version),
+      ])
       return {
         name,
         version,
-        published,
-        changed: !published ||
+        published: page != null,
+        changed: !held ||
           await moved(
             root,
             dir,
