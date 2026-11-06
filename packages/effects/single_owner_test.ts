@@ -190,6 +190,25 @@ for (let legacy of [false, true]) {
   })
 }
 
+test('a run interrupted in its last attempt runs that attempt again', async () => {
+  let a = proc()
+  await a.g.apply([{ entity: { eid: 'p1' } }])
+  await a.g.apply([{
+    entity: { eid: 'cut' },
+    effect: {
+      handler: 'post_note',
+      target: 'p1',
+      comp: 'post',
+      kind: 'created',
+      state: 'pending',
+      attempts: 3,
+    },
+  }], { trusted: true })
+  await a.fx.work(a.g)
+  equal(a.ran, ['p1'])
+  equal((await runs(a)).find((r) => r.handler == 'post_note'), undefined)
+})
+
 for (let singleOwner of [true, false]) {
   test(`pool capacity and overlapping drains run each owed handler once (${singleOwner})`, async () => {
     let a = proc(store(), { singleOwner, max: 2 })

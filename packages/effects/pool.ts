@@ -45,9 +45,10 @@
 //
 //   It was interrupted. The worker died mid-run, or its claim expired: nothing
 //   records how far it got. A claimed row with no `next` is one of these, and
-//   it is run again too — unless its declaration says `idempotent: false`,
-//   where a second run could duplicate something that already reached an
-//   external system, and it is left failed instead.
+//   it is run again as the same attempt, since nothing failed — unless its
+//   declaration says `idempotent: false`, where a second run could duplicate
+//   something that already reached an external system, and it is left failed
+//   instead.
 //
 // How many attempts a run gets is the declaration's (`tries`), never a
 // handler's, so no effect carries retry code of its own. A run that spent them
@@ -702,22 +703,30 @@ export let pool = (ctx: Ctx, opts: Partial<PoolOpts> = {}): Pool => {
       ) return
       if (row.next && Date.parse(String(row.next)) > now) return
       let attempts = Number(row.attempts ?? 0)
-      // Every attempt spent: left failed, with the last error beside it.
-      if (attempts >= limit(s)) {
-        await swap(g, eid, row, { state: 'failed', next: null, ...free })
-        return
-      }
       // Claimed and no `next`: interrupted, not reported, so how far it got
       // is unknown — and a second run is not the same as a first.
-      if (attempts && !row.next && !safe(s)) {
+      let interrupted = attempts > 0 && !row.next
+      if (interrupted && !safe(s)) {
         let error = `interrupted, and ${row.handler} is not idempotent`
         await swap(g, eid, row, { state: 'failed', error, ...free })
+        return
+      }
+      // Every attempt spent: left failed, with the last error beside it. An
+      // interruption spent none: a deploy cut the attempt off, and it runs
+      // again as the same attempt rather than leaving the run failed by
+      // however many deploys it met.
+      if (!interrupted && attempts >= limit(s)) {
+        await swap(g, eid, row, { state: 'failed', next: null, ...free })
         return
       }
       // Reads and owner checks can yield to a writer that fills a slot.
       // Reserve against the current admission count, not the scan's earlier one.
       if (!member || running.size + admitting >= max) return
-      let mine = { attempts: attempts + 1, next: null, ...claim() }
+      let mine = {
+        attempts: interrupted ? attempts : attempts + 1,
+        next: null,
+        ...claim(),
+      }
       claims.push({ eid, row, mine })
       admitting++
       reserved++
