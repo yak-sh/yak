@@ -210,6 +210,7 @@ import {
   type Wire,
 } from '@yaks/durable-object'
 import { type Effects, effects } from '@yaks/effects'
+import { settling } from '@yaks/effects/tools'
 import { type Field, fields, find, screens, search, sources } from '@yaks/fts'
 import { lexemes } from '@yaks/fts/lexicon'
 import { fieldsSaid, lexiconOf, LIMIT } from './lexicon.ts'
@@ -709,6 +710,7 @@ let routes = new Set([
   '/graph',
   '/restore',
   '/writes',
+  '/effects',
   '/alarm',
   '/expires',
   '/move',
@@ -4518,6 +4520,24 @@ export class Store {
       this.#stuck = false
       await this.#drain()
       return Response.json({ seq, writes: writes(this.#sql, seq) })
+    }
+    // Failed effect runs back to pending with a fresh allowance, for
+    // tools.ts store_effect_retry once their cause is fixed: the write
+    // @yaks/effects' own effect_retry applies, then the pool works them.
+    // Kernel only, like the kept writes: a run's state is the server's.
+    if (path == '/effects') {
+      if (!kernel) return json({ error: 'NotFound', message: 'no route' }, 404)
+      let of = new URL(request.url).searchParams.get('of') ?? ''
+      if (request.method != 'POST' || !of) {
+        return refuse(new Refused('/effects retry needs of'))
+      }
+      let bundles = await settling(this.#graph, this.#vocab, 'retry', of)
+      if (!bundles.length) {
+        return refuse(new Refused(`${of} names no failed effect run`))
+      }
+      await this.#trust(bundles, null)
+      this.#workingEffects()
+      return Response.json({ retried: bundles.length })
     }
     // The app this store held is gone (tools.ts app_delete, erase.ts
     // `emptied`): everything in it, at once. Kernel only, like the trusted

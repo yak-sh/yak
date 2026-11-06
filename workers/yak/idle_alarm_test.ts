@@ -225,3 +225,31 @@ test('a run holds the alarm a minute out while it is in flight', async () => {
   assert((await ctx.storage.getAlarm() ?? 0) >= before + 60_000)
   answer()
 })
+
+test('a failed effect run the kernel retries is worked again', async () => {
+  let ctx = state()
+  using _db = ctx.storage
+  let { store } = await idle(ctx)
+  let failed = effect(Date.now())
+  failed.effect.state = 'failed'
+  assertEquals((await kernel(store, [failed])).status, 200)
+  let retry = (kernel: boolean) =>
+    store.fetch(
+      new Request('http://store/effects?of=call_ready', {
+        method: 'POST',
+        headers: kernel ? { ...headers, 'x-yak-kernel': '1' } : headers,
+      }),
+    )
+  assertEquals((await retry(false)).status, 404)
+  assertEquals(await (await retry(true)).json(), { retried: 1 })
+  await until(async () => {
+    let read = await store.fetch(
+      new Request(
+        `http://store/query?q=.entity.eid=${failed.entity.eid}&.fields=effect.attempts`,
+        { headers },
+      ),
+    )
+    let [row] = await read.json()
+    return row?.effect?.attempts == 1
+  })
+})

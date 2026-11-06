@@ -1,5 +1,6 @@
-// The kernel-only door onto a Store's kept writes. A reset can leave an
-// interrupted write to inspect and explicitly retry after its cause is fixed.
+// The kernel-only doors onto a Store's kept writes and its effect runs. A
+// reset can leave an interrupted write to inspect and explicitly retry after
+// its cause is fixed, and a run can be left failed the same way.
 import type { Door } from './door.ts'
 import { KERNEL } from './meta.ts'
 import { rejected } from './tool.ts'
@@ -60,6 +61,16 @@ export let retry = async (store: Door, seq: number): Promise<Write[]> =>
   (await asked(store, `/writes?seq=${seq}`, 'POST', false) as {
     writes: Write[]
   }).writes
+
+/** Put the failed effect runs `of` names (a handler, or one run's id) back to
+ * pending with a fresh allowance, and say how many. */
+export let retryEffects = async (store: Door, of: string): Promise<number> =>
+  (await asked(
+    store,
+    `/effects?${new URLSearchParams({ of })}`,
+    'POST',
+    false,
+  ) as unknown as { retried: number }).retried
 
 /**
  * Kept writes as store_writes and store_retry say them, one line each, with

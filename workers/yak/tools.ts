@@ -127,6 +127,7 @@ import { mark, moment, oldest, putBack, recorded } from './recover.ts'
 import {
   inspect as inspectWrites,
   retry as retryWrite,
+  retryEffects,
   said as writesSaid,
 } from './write-log.ts'
 import { KERNEL } from './meta.ts'
@@ -4254,6 +4255,34 @@ let OURS: Row[] = [
           ? `in ${space.slug}/${app.slug}, write ${writesSaid(rows, true)}`
           : `write ${seq} applied in ${space.slug}/${app.slug}`,
         value: { writes: rows },
+        space,
+      }
+    },
+  },
+  {
+    name: 'store_effect_retry',
+    destructive: false,
+    input: {
+      type: 'object',
+      properties: {
+        space: SPACE,
+        app: APP,
+        of: {
+          type: 'string',
+          minLength: 1,
+          description: "a handler name (all its failed runs) or one run's id",
+        },
+      },
+      required: ['app', 'of'],
+    },
+    run: async (ctx, args) => {
+      let { space, app, store } = await ownsApp(ctx, args)
+      let of = String(args.of)
+      let retried = await retryEffects(store, of)
+      return {
+        text:
+          `retried ${retried} failed run(s) of ${of} in ${space.slug}/${app.slug}`,
+        value: { retried },
         space,
       }
     },

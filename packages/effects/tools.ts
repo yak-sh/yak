@@ -76,7 +76,11 @@ let dead = (vocab: Vocab) => {
 }
 
 // The runs a handler name or a single run's id points at, among those `owed`.
-let named = async (graph: Graph, of: string, owed: (b: Bundle) => boolean) => {
+let named = async (
+  graph: Pick<Graph, 'read' | 'get' | 'address'>,
+  of: string,
+  owed: (b: Bundle) => boolean,
+) => {
   // Done runs are left out by the query: a handler's history can be long.
   let byHandler = (await graph.read(and(
     eq(`${EFFECT}.handler`, of),
@@ -88,32 +92,56 @@ let named = async (graph: Graph, of: string, owed: (b: Bundle) => boolean) => {
   return row && owed(row) ? [row] : []
 }
 
-// Change each run named by the call, guarded by the state read, and say how
-// many. `patch` null deletes.
+// Pending with a full allowance, as a run no one has started: the pool claims
+// it, counts attempts and backs off exactly as it does a new one.
+let RETRIED: Comp = {
+  state: 'pending',
+  attempts: 0,
+  next: null,
+  error: null,
+  lease_owner: null,
+  lease_token: null,
+  lease_expiry: null,
+}
+
+/**
+ * The write that retries (failed runs back to pending with a fresh allowance)
+ * or drops (failed runs, and pending ones no handler is declared for, deleted)
+ * the runs `of` names: a handler, or one run's id. Each change is guarded by
+ * the state read, so a run a worker has since touched is left alone. Empty
+ * when `of` names none. What `effect_retry` and `effect_drop` apply, and what
+ * a host without those tools applies the same way (yaks.app's
+ * `store_effect_retry`).
+ */
+export let settling = async (
+  graph: Pick<Graph, 'read' | 'get' | 'address'>,
+  vocab: Vocab,
+  act: 'retry' | 'drop',
+  of: string,
+): Promise<Bundle[]> => {
+  let patch = act == 'retry' ? RETRIED : null
+  let rows = await named(graph, of, dead(vocab)[act])
+  return rows.map((b) => ({
+    entity: { eid: b.entity.eid },
+    ...(patch ? { [EFFECT]: patch } : { $delete: true }),
+    $was: { [EFFECT]: { state: token(String(comp(b)?.state)) } },
+  }))
+}
+
+// Settle the runs named by the call, and say how many.
 let settle = (
-  verb: string,
+  host: { vocab: Vocab },
+  act: 'retry' | 'drop',
   done: string,
-  owed: (b: Bundle) => boolean,
-  patch: Comp | null,
 ): Runs[string] =>
 async (call, graph) => {
   let of = String(argsOf(call).of)
-  let rows = await named(graph, of, owed)
-  if (!rows.length) {
-    throw new CallError('refused', `${of} names no effect run to ${verb}`)
+  let bundles = await settling(graph, host.vocab, act, of)
+  if (!bundles.length) {
+    throw new CallError('refused', `${of} names no effect run to ${act}`)
   }
-  await graph.apply(
-    signed(
-      rows.map((b) => ({
-        entity: { eid: b.entity.eid },
-        ...(patch ? { [EFFECT]: patch } : { $delete: true }),
-        $was: { [EFFECT]: { state: token(String(comp(b)?.state)) } },
-      })),
-      who(call),
-    ),
-    { trusted: true },
-  )
-  return [said(call, `${done} ${rows.length} run(s) of ${of}`)]
+  await graph.apply(signed(bundles, who(call)), { trusted: true })
+  return [said(call, `${done} ${bundles.length} run(s) of ${of}`)]
 }
 
 /** The implementation behind the tool ./vocab.json declares. */
@@ -123,18 +151,8 @@ export let runs = (
 ): Runs => {
   let settles = dead(host.vocab)
   return {
-    // Pending with a full allowance, as a run no one has started: the pool claims
-    // it, counts attempts and backs off exactly as it does a new one.
-    effect_retry: settle('retry', 'retried', settles.retry, {
-      state: 'pending',
-      attempts: 0,
-      next: null,
-      error: null,
-      lease_owner: null,
-      lease_token: null,
-      lease_expiry: null,
-    }),
-    effect_drop: settle('drop', 'dropped', settles.drop, null),
+    effect_retry: settle(host, 'retry', 'retried'),
+    effect_drop: settle(host, 'drop', 'dropped'),
     effect_check: async (call, graph) => {
       let about = 'every effect run reached an end somebody would hear about'
       if (!host.vocab.comp(EFFECT)) {

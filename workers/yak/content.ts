@@ -470,6 +470,11 @@ export let WORDS: Record<string, Words> = {
     'description':
       'Explicitly retry one interrupted or unreviewed write by its seq, after inspecting its body and fixing the cause of interruption. Only the space owner can retry. The store keeps the original body, idempotency key, and full final outcome together with the graph batch. A reset may interrupt it again.',
   },
+  'store_effect_retry': {
+    'title': "Retry an app store's failed effect runs",
+    'description':
+      "Put an app store's failed effect runs back to pending with a fresh attempt allowance, after fixing what failed them, so the store works them again: a document's extraction, an upload's deletion, a builder's install. Takes a handler name, such as document_extract, for all its failed runs, or one run's id. Only the space owner can retry. A run that fails again is left failed again.",
+  },
   'builder_choose': {
     'title': 'Choose an output take',
     'description':
