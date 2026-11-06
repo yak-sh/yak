@@ -38,14 +38,16 @@ export let supported = (name: string, mime: string) =>
 export let isPdf = (name: string, mime: string) =>
   mime == 'application/pdf' || /\.pdf$/i.test(name)
 
+type Said = {
+  response?: string
+  choices?: { message?: { content?: string }; finish_reason?: string }[]
+}
+let cut = (answer: unknown) =>
+  !!(said(answer) as Said).choices?.some((c) => c.finish_reason == 'length')
+
 export let speech = (answer: unknown): string => {
-  let a = said(answer) as {
-    response?: string
-    choices?: { message?: { content?: string }; finish_reason?: string }[]
-  }
-  if (a.choices?.some((c) => c.finish_reason == 'length')) {
-    throw new Error('Document model answer was truncated')
-  }
+  let a = said(answer) as Said
+  if (cut(answer)) throw new Error('Document model answer was truncated')
   let text = a.response ?? a.choices?.[0]?.message?.content
   if (typeof text != 'string') {
     throw new Error('Document model returned no text')
@@ -53,7 +55,11 @@ export let speech = (answer: unknown): string => {
   return text
 }
 
-export let transcription = (image: string, mime = 'image/png') => ({
+export let transcription = (
+  image: string,
+  mime = 'image/png',
+  penalty?: number,
+) => ({
   messages: [{
     role: 'user',
     content: [
@@ -71,7 +77,27 @@ export let transcription = (image: string, mime = 'image/png') => ({
   chat_template_kwargs: { enable_thinking: false },
   max_tokens: 8192,
   temperature: 0,
+  ...penalty ? { frequency_penalty: penalty } : {},
 })
+
+// At temperature 0 a page drawn as a grid, such as a map's labels, can be read
+// as a table whose empty row the model repeats until its tokens run out. A
+// frequency penalty breaks the repetition, but it also changes the repeated
+// figures of a table that was read whole, so only a cut-off page is read again
+// with it.
+let LOOPING = 0.3
+
+/** A page's transcription, read again with a penalty once it is cut off. */
+export let transcribe = async (
+  run: (input: ReturnType<typeof transcription>) => Promise<unknown>,
+  image: string,
+  mime?: string,
+) => {
+  let answer = await run(transcription(image, mime))
+  return speech(
+    cut(answer) ? await run(transcription(image, mime, LOOPING)) : answer,
+  )
+}
 
 export type Extractor = {
   pdf(page?: number): Promise<PdfPage>
@@ -176,12 +202,11 @@ export let extractor = (
       if (!res.ok) throw new Error('PDF extraction failed: ' + await res.text())
       return res.json()
     },
-    ocr: async (image) =>
-      speech(
-        await ai.run(
-          VISION,
-          transcription(image, mime?.startsWith('image/') ? mime : undefined),
-        ),
+    ocr: (image) =>
+      transcribe(
+        (input) => ai.run(VISION, input),
+        image,
+        mime?.startsWith('image/') ? mime : undefined,
       ),
     markdown: async () => {
       if (!env.AI?.toMarkdown) throw new Error('No document converter bound')

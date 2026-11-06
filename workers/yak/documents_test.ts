@@ -6,7 +6,12 @@ import { statements, storage } from '@yaks/sqlite'
 import { adopt, fields, find, search } from '@yaks/fts'
 import { hashEmbedder, meaning, schema, sweep } from '@yaks/embedding'
 import { storeWords } from './vocab.ts'
-import { type Extractor, indexDocument, pageBundle } from './documents.ts'
+import {
+  type Extractor,
+  indexDocument,
+  pageBundle,
+  transcribe,
+} from './documents.ts'
 import { documentPages } from './document-graph.ts'
 import { cited, type Hit, hits, type PageHit } from './document-search.ts'
 
@@ -183,5 +188,33 @@ test('a row matches beside document pages, and an answer cites it by title', asy
     )
       .citations,
     [{ eid: meeting, title: 'Board meeting', components: ['doc'] }],
+  )
+})
+
+let reply = (content: string, finish_reason = 'stop') => ({
+  choices: [{ message: { content }, finish_reason }],
+})
+let reads = async (...answers: ReturnType<typeof reply>[]) => {
+  let asked: { frequency_penalty?: number }[] = []
+  let text = await transcribe((input) => {
+    asked.push(input)
+    return Promise.resolve(answers[asked.length - 1])
+  }, 'scan')
+  return { text, penalties: asked.map((i) => i.frequency_penalty) }
+}
+
+test('a page cut off by a repeating answer is read again with a penalty', async () => {
+  assertEquals(await reads(reply('Minutes')), {
+    text: 'Minutes',
+    penalties: [undefined],
+  })
+  assertEquals(
+    await reads(reply('| | |\n'.repeat(9), 'length'), reply('Map 1-2')),
+    { text: 'Map 1-2', penalties: [undefined, 0.3] },
+  )
+  await assertRejects(
+    () => reads(reply('a', 'length'), reply('b', 'length')),
+    Error,
+    'truncated',
   )
 })
