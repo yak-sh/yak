@@ -111,8 +111,6 @@ export let buildUrl = (env: Env, b: Broke) =>
       `/production/builds/${encodeURIComponent(b.uuid)}`
     : undefined
 
-let buildToken = (env: Env) => env.BUILD_LOG_TOKEN || env.CF_WORKERS_TOKEN
-
 /** The failure as the build of `commit`. */
 let named = (b: Broke, commit: string): Broke => ({
   ...b,
@@ -274,10 +272,13 @@ export let deployed = (step: string) =>
 /// deployed('deno task check') -> 'production did not deploy'
 
 /** Read every log page so the failing step at the end is visible. A broken
- * logs API leaves the build report intact and says why details are absent. */
+ * logs API leaves the build report intact and says why details are absent.
+ * Only `BUILD_LOG_TOKEN` is sent: the Builds API takes a user-owned token and
+ * refuses the Worker's account-owned ones with a 401 that would hide that the
+ * secret is missing. */
 export let logsOf = async (env: Env, uuid?: string) => {
   if (!uuid || !env.CF_ACCOUNT) return 'build UUID or account unavailable'
-  if (!buildToken(env)) return 'BUILD_LOG_TOKEN unavailable'
+  if (!env.BUILD_LOG_TOKEN) return 'BUILD_LOG_TOKEN unavailable'
   let lines: string[] = []
   let seen = new Set<string>()
   let cursor: string | undefined
@@ -291,7 +292,7 @@ export let logsOf = async (env: Env, uuid?: string) => {
       let at = new URL(url)
       if (cursor) at.searchParams.set('cursor', cursor)
       let res = await resent(at.href, {
-        headers: { authorization: `Bearer ${buildToken(env)}` },
+        headers: { authorization: `Bearer ${env.BUILD_LOG_TOKEN}` },
         signal,
       })
       if (!res.ok) return `build logs returned HTTP ${res.status}`

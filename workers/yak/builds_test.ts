@@ -471,7 +471,7 @@ let reported = async (readable: boolean) => {
   let rows: Bundle[] = []
   let env = {
     CF_ACCOUNT: 'account',
-    CF_WORKERS_TOKEN: 'worker-token',
+    BUILD_LOG_TOKEN: 'build-token',
     WORKERS_API: 'https://cloudflare.test',
     BUILD_HOOK: 'https://hook.test/main',
     META: receipts(),
