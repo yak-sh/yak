@@ -54,6 +54,7 @@ export let plugins = (_host: unknown, options: Options): Plugin[] => [{
           what,
           Number(said[what] ?? 0),
           new Date(Now.at),
+          !!said.visitors,
         )
         if (no) {
           throw new Refused(no, {

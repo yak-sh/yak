@@ -17,7 +17,7 @@ let p = platform('model spending')
 let dir = directoryOf(p.env.STORE)
 // A space held to a 20-cent month, with no starter, so each case counts
 // against figures it states.
-let fixture = async (models = 0) => {
+let fixture = async (models = 0, more: Record<string, unknown> = {}) => {
   let eid = mint()
   await stamp(p.env, {
     entities: [{
@@ -26,6 +26,7 @@ let fixture = async (models = 0) => {
       budget: { dollars: 0.2 },
       starter: { dollars: 0 },
       meter: { month: monthOf(new Date()), models },
+      ...more,
     }],
   })
   let space = (await dir.at(eid))!
@@ -38,6 +39,8 @@ let released = await fixture()
 let uncertain = await fixture()
 let rollover = await fixture()
 let free = await fixture(0.20023140)
+let visited = await fixture()
+let welcoming = await fixture(0, { visitor_share: { percent: 50 } })
 let price = { input: 0.15, output: 0.5 }
 
 test('the pilot last answered call fits the remaining space budget', async () => {
@@ -66,7 +69,7 @@ test('model and realtime calls cannot reserve the same remaining dollars', async
   let quote = (left: number) => left >= 0.1 ? { dollars: 0.1 } : null
   let calls = await Promise.allSettled([
     reserved(p.env, concurrent.space, quote),
-    reserved(p.env, concurrent.space, quote, mint(), 'realtime'),
+    reserved(p.env, concurrent.space, quote, mint(), { what: 'realtime' }),
   ])
   assertEquals(calls.filter((r) => r.status == 'fulfilled').length, 1)
   let fresh = (await dir.at(concurrent.space.eid))!
@@ -122,8 +125,7 @@ test('settling an older reservation does not reset or refund this month', async 
     rollover.space,
     () => ({ dollars: 0.2 }),
     mint(),
-    'models',
-    new Date('2026-10-01'),
+    { now: new Date('2026-10-01') },
   )
   await stamp(p.env, {
     entities: [{
@@ -140,4 +142,23 @@ test('a zero-dollar call cannot worsen an older over-budget reading', async () =
   let hold = await reserved(p.env, free.space, () => ({ dollars: 0 }))
   await hold.settle(0)
   assertAlmostEquals(await free.used(), 0.20023140)
+})
+
+// Visitors together spend a share of the month, 25% unless the owner set
+// another: past it a visitor is told plainly, and a member is not held to it.
+test("visitors spend only their share of the space's budget", async () => {
+  let spend = (space = visited.space, visitor = true, dollars = 0.03) =>
+    reserved(p.env, space, () => ({ dollars }), mint(), { visitor })
+  let first = await spend()
+  await first.settle(0.01)
+  await (await spend()).settle(0.03)
+  let no = await assertRejects(() => spend(), ModelError)
+  assertStringIncludes(no.message, 'answers visitors again on the 1st')
+  assertEquals(/plan|\$\d/.test(no.message), false, no.message)
+  await (await spend(visited.space, false, 0.1)).settle(0.1)
+  let fresh = (await dir.at(visited.space.eid))!
+  assertAlmostEquals(fresh.meter!.models, 0.14)
+  assertAlmostEquals(fresh.meter!.visitors!, 0.04)
+  await (await spend(welcoming.space, true, 0.09)).settle(0.09)
+  await assertRejects(() => spend(welcoming.space, true, 0.02), ModelError)
 })

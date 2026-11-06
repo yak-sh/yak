@@ -10,7 +10,7 @@ import {
   type ToolContext,
 } from '@yaks/session'
 import { worded } from '@yaks/tools/result'
-import { edits, mode, writes } from '@yaks/member'
+import { edits, type Level, mode, writes } from '@yaks/member'
 import {
   billed,
   confirmed,
@@ -42,6 +42,7 @@ import type { Stored } from './graph.ts'
 import { lending } from './inference.ts'
 import { bare, connection, names, served } from './providers.ts'
 import { serving } from './config.ts'
+import { grantEid } from './app-writes.ts'
 
 export let guess = (sent: unknown) =>
   Math.ceil(JSON.stringify(sent ?? '').length / 4)
@@ -105,6 +106,24 @@ export let tooled = (at: Stored): Tool[] =>
 // asked (meter.ts `metered`).
 let payer = (app: string) => async (dir: Directory) =>
   (await dir.appAt(app))?.space ?? null
+
+// Whether a model call's turn is a visitor's, and so spends the visitors'
+// share of the space's budget (meter.ts `visiting`). Only an app whose
+// manifest opens its models has visitor turns: elsewhere `using` is an
+// editor's to write (app-authority.ts `FLOORS`). There, the turn is the
+// transcript's starter's, since a visitor writes lines only in transcripts
+// they started (`WITHIN`): a visitor unless it is the app itself or someone
+// whose vouched level here writes (app-writes.ts `vouching` keeps it), and
+// nobody signed in is a visitor.
+let visitorOf = (at: Stored) => async (req: { conversation?: string }) => {
+  if (at.manifest().models != 'open' || !req.conversation) return false
+  let [session] = await at.graph.get([req.conversation])
+  let by = (session?.created as Comp | undefined)?.by
+  if (typeof by != 'string') return true
+  if (by == at.app) return false
+  let [grant] = await at.graph.get([grantEid(at.app!, by)])
+  return !writes((grant?.grant as Comp | undefined)?.access as Level)
+}
 
 // Where the media an app's models generate is kept: its own blobs.
 let artifacts = (at: Stored): ArtifactStore => async (bytes, mediaType) => {
@@ -332,7 +351,13 @@ export let asking = (at: Stored): Handlers => {
   }
   let lent: Record<string, Model> = {}
   for (let [name, model] of Object.entries(provided(at))) {
-    lent[name] = accounted(at.env, payer(at.app), model, price)
+    lent[name] = accounted(
+      at.env,
+      payer(at.app),
+      model,
+      price,
+      visitorOf(at),
+    )
   }
   let first = names(at.env, serving)[0]
   let resolveModel = providerResolver(
@@ -478,6 +503,7 @@ export let modelRun: Answer = async (
           read: (query) => graph.query(query, { trusted: true }),
           apply: graph.apply,
         }),
+        !writes(who.role),
       ).run(
         asked.model,
         asked.input,

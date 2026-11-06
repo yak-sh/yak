@@ -293,6 +293,10 @@
         "texts": {
           "type": "number",
           "description": "dollars spent on its apps' text messages this month"
+        },
+        "visitors": {
+          "type": "number",
+          "description": "dollars of models, voice and texts this month spent for its apps' visitors, already counted in each"
         }
       },
       "description": "what a space used in one month"

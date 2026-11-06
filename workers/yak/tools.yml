@@ -29,9 +29,11 @@ space_new:
     entity id and URL. Other tools infer the space when only one fits;
     specify space when more than one could match.
 space_set:
-  title: Rename or move a space
+  title: Rename, move or set what visitors may spend
   description: >-
-    Change a space's name or move it to another address, at any time. The
+    Change a space's name or move it to another address, at any time, or
+    set how much of its monthly model and voice budget its apps' visitors
+    may spend. The
     title is its name; the slug is its address, so changing the slug moves
     the space to <new>.yaks.app. Every app in it moves with it, files and
     data included, and each app keeps its own path under the new address.
@@ -42,8 +44,13 @@ space_set:
     from then on its links and email reach that space instead. Only the
     space owner may rename or move it. Pass forget with a slug the space has
     already left to stop its redirect now: every link and every email still
-    aimed there finds nothing. Returns the current address and a summary of
-    the changes. Documentation: https://yaks.app/docs/home.
+    aimed there finds nothing. Pass visitors, a percent from 0 to 100
+    (25 until set), to bound what visitors to its apps may spend together
+    each month on models and voices their manifests open to them
+    ("models": "open", "rtc": "open"); past it, those apps tell visitors
+    they answer again on the 1st, and members are not held to it. Returns
+    the current address and a summary of the changes. Documentation:
+    https://yaks.app/docs/home.
 space_delete:
   title: Delete a space
   description: >-

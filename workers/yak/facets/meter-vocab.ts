@@ -11,6 +11,7 @@ export let docs: VocabDoc[] = [{
         month: { type: 'string' },
         dollars: { type: 'number' },
         what: { type: 'string', enum: ['models', 'realtime', 'texts'] },
+        visitor: { type: 'boolean' },
       },
     },
     account_usage: {

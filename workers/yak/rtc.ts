@@ -114,7 +114,7 @@ export let voice: Answer = async (asked) => {
             space,
             (remaining) => dollars <= remaining ? { dollars } : null,
             mint(),
-            'realtime',
+            { what: 'realtime', visitor: !writes(who.role) },
           )
         } catch (error) {
           if (error instanceof ModelError && error.code == 'limit') {

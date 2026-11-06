@@ -47,6 +47,7 @@ let UNSEEN = [
   'fee',
   'budget',
   'starter',
+  'visitor_share',
 ]
 let DRAFT = ['draft', 'fence', 'followed']
 // A space's routing: which app answers which path, and whether any does.

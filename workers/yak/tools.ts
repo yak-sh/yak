@@ -267,6 +267,7 @@ import {
   SPACES,
   standingOf,
   tooManySpaces,
+  VISITORS,
 } from './meter.ts'
 import { type Held, holding } from './held.ts'
 import { an, invitedWords, room, send } from './invite.ts'
@@ -2875,6 +2876,14 @@ let OURS: Row[] = [
         slug: str('the new hostname label, to move the space'),
         title: str('the new name'),
         forget: FORGET,
+        visitors: {
+          type: 'integer',
+          minimum: 0,
+          maximum: 100,
+          description:
+            "the percent of the space's monthly model and voice budget its " +
+            `apps' visitors may spend together, ${VISITORS} where never set`,
+        },
       },
     },
     run: async (ctx, args) => {
@@ -2882,10 +2891,11 @@ let OURS: Row[] = [
       let to = args.slug == null ? null : fresh(args.slug, 'slug')
       let title = args.title == null ? null : titled(args.title)
       let drop = args.forget == null ? null : slug(args.forget, 'forget')
-      if (to == null && title == null && drop == null) {
+      let share = args.visitors == null ? null : Number(args.visitors)
+      if (to == null && title == null && drop == null && share == null) {
         throw refuse(
           'arguments',
-          'nothing to change: pass slug, title, or forget',
+          'nothing to change: pass slug, title, forget, or visitors',
         )
       }
       let moving = to != null && to != space.slug
@@ -2910,11 +2920,14 @@ let OURS: Row[] = [
       // arrive (inbox.ts `opened`), and hooks and clones aimed there are
       // served — until another space takes the name, which is anyone's to
       // take, or the owner forgets it.
-      let now = await ctx.dir.rename(
-        space,
-        { slug: to, title, forget: drop },
-        vouched(who),
-      )
+      let now = to == null && title == null && drop == null
+        ? space
+        : await ctx.dir.rename(
+          space,
+          { slug: to, title, forget: drop },
+          vouched(who),
+        )
+      if (share != null) now = await ctx.dir.welcome(now, share, vouched(who))
       return {
         text: `space ${now.slug}${title == null ? '' : ` "${title}"`}: ` +
           `https://${spaceHost(ctx.env, now.slug)}/` +
@@ -2926,7 +2939,11 @@ let OURS: Row[] = [
               'for anyone now. Give people the new address; every app moved ' +
               'with the space'
             : '') +
-          (drop == null ? '' : ` — ${lost(`${spaceHost(ctx.env, drop)}`)}`),
+          (drop == null ? '' : ` — ${lost(`${spaceHost(ctx.env, drop)}`)}`) +
+          (share == null
+            ? ''
+            : ` — its apps' visitors may spend ${now.visitors}% of its model and ` +
+              'voice budget each month'),
         space: now,
       }
     },

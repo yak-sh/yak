@@ -250,6 +250,9 @@ let SPENDS: Spend[] = [
   'seconds',
 ]
 let LIMITED = Object.keys(ALLOWANCE) as Limited[]
+// What a spend adds to: each source, and the visitors' share of the dollars,
+// which is already counted in its source.
+let COUNTERS = [...SPENDS, 'visitors']
 
 /** What a reading has spent: model, voice and text dollars together. */
 let used = (m: Meter, what: Spend) =>
@@ -287,20 +290,56 @@ export let budget = (space: Space, now = new Date()): Budget => ({
   limit: limitOf(space, now),
 })
 
+// ---- the visitors (T-144737) ------------------------------------------------
+//
+// Anyone who may write an app whose manifest opens its models or voices to
+// them (`"models": "open"`, `"rtc": "open"`) spends the space's one budget,
+// and its owner says how much of it visitors as a whole may spend a month
+// (`space_set visitors`): a share of that budget, never a second one. What
+// they spend is counted on the month's meter (`visitors`) beside the source
+// counters, so a stranger can spend the share and never the owner's month.
+
+/** The percent of a space's month budget its visitors may spend where its
+ * owner has set none. */
+export let VISITORS = 25
+
+/** What a space's visitors spent this month, against the share of its
+ * budget its owner lets them. */
+export let visiting = (space: Space, now = new Date()): Budget => ({
+  spent: spent(space, now).visitors ?? 0,
+  limit: limitOf(space, now) * (space.visitors ?? VISITORS) / 100,
+})
+
+/** The dollars a call may hold now: what is left of the space's month, and,
+ * for a visitor's, no more than is left of their share. */
+export let left = (space: Space, now = new Date(), visitor = false) => {
+  let room = (b: Budget) => Math.max(0, b.limit - b.spent)
+  let all = room(budget(space, now))
+  return visitor ? Math.min(all, room(visiting(space, now))) : all
+}
+
 /** What refuses holding `dollars` of a space's model and voice budget this
  * month, or null when it fits: the space at its ceiling, or too little left
- * for this call. The directory refuses a held spend with it (meter-graph.ts
- * `spend`), and a caller quoting a call says it before asking. */
+ * for this call, or for a visitor's, their share spent. The directory refuses
+ * a held spend with it (meter-graph.ts `spend`), and a caller quoting a call
+ * says it before asking. A visitor is told plainly when the app answers them
+ * again, and never of plans that are not theirs to buy. */
 export let unaffordable = (
   space: Space,
   what: 'models' | 'realtime' | 'texts',
   dollars: number,
   now = new Date(),
+  visitor = false,
 ) => {
-  let { spent, limit } = budget(space, now)
   // A quote fitted to exactly what is left is a sum of floats, so a hold may
   // overshoot it by a rounding.
-  if (dollars <= Math.max(0, limit - spent) + 1e-9) return null
+  if (dollars <= left(space, now, visitor) + 1e-9) return null
+  if (visitor) {
+    return `This app's visitors have spent what its owner sets aside for ` +
+      `them this month, so it cannot answer you now. It answers visitors ` +
+      `again on the 1st`
+  }
+  let { spent, limit } = budget(space, now)
   return spent >= limit
     ? atCeiling(space, what)
     : `What is left of ${space.slug}'s model and voice budget this month is ` +
@@ -333,6 +372,7 @@ let empty = (month: string, built = 0): Omit<Meter, 'bytes'> => ({
   realtime: 0,
   texts: 0,
   seconds: 0,
+  visitors: 0,
   built,
   at: '',
 })
@@ -376,7 +416,7 @@ export let added = (
   let out: Record<string, unknown> = held
     ? { month }
     : empty(month, n(meter?.built))
-  for (let k of SPENDS) if (n(spend[k])) out[k] = n(held?.[k]) + n(spend[k])
+  for (let k of COUNTERS) if (n(spend[k])) out[k] = n(held?.[k]) + n(spend[k])
   if (n(spend.builds)) out.built = n(meter?.built) + n(spend.builds)
   let cost = DOLLARS.reduce((sum, k) => sum + n(spend[k]), 0)
   if (cost) out.drawn = n(meter?.drawn) + cost
@@ -953,6 +993,7 @@ export let metering = (
  * transcript comes to rest on (@yaks/session `LIMIT`) and the direct door
  * answers 429 with. What the provider says is the platform's to hear (the
  * account's own credit spent, a model it prices nothing for) is reported.
+ * A `visitor`'s calls are held to their share of the budget as well.
  */
 export let metered = (
   bind: Partial<Env> & { STORE?: Namespace } & Host,
@@ -961,6 +1002,7 @@ export let metered = (
     price(name: string): Promise<Price | undefined>
     answered(provider: string, name: string, info: Listed): Promise<void>
   },
+  visitor = false,
 ): Native => ({
   run: async (model, input, options) => {
     let ns = bind.STORE
@@ -969,7 +1011,8 @@ export let metered = (
     let provider = ''
     let door = ns && space
       ? native(bind, platform(bind as Env), {
-        hold: (quote) => reserved({ STORE: ns }, space, quote),
+        hold: (quote) =>
+          reserved({ STORE: ns }, space, quote, undefined, { visitor }),
         answered: (name, info) =>
           rows?.answered(provider, name, info) ?? Promise.resolve(),
         report: (e, model) =>
@@ -993,12 +1036,14 @@ export let metered = (
 })
 
 /** A hosted provider spends from the same space budget as every other door.
- * Costs are supplied by the adapter, never guessed from media JSON. */
+ * Costs are supplied by the adapter, never guessed from media JSON. A call
+ * `visiting` says a visitor asked for is held to their share as well. */
 export let accounted = (
   bind: Host & Partial<Pick<Env, 'STORE'>>,
   spaceOf: (dir: Directory) => Promise<Space | null>,
   model: Model,
   price?: (name: string) => Promise<Price | undefined>,
+  visiting?: (req: Parameters<Model>[0]) => Promise<boolean>,
 ): Model =>
   Object.assign(
     async (req: Parameters<Model>[0]) => {
@@ -1019,19 +1064,28 @@ export let accounted = (
         info?.price ?? await price?.(req.model),
       )
       let call = req.call ?? mint()
-      let hold = await reserved({ STORE: ns }, space, (remaining) => {
-        if (own) return model.quote!(req, remaining) ?? null
-        if (
-          req.modalities?.some((m) => m != 'text')
-        ) return null
-        let window = info?.context ??
-          (tariff && Object.values(tariff).every((p) => p == 0) ? 0 : undefined)
-        let output = req.questions ? window : req.tokens
-        let quote = tariff && window != null
-          ? affordable(tariff, requestBound(req, window), remaining, output)
-          : null
-        return req.questions && quote?.tokens != output ? null : quote
-      }, call)
+      let visitor = await visiting?.(req) ?? false
+      let hold = await reserved(
+        { STORE: ns },
+        space,
+        (remaining) => {
+          if (own) return model.quote!(req, remaining) ?? null
+          if (
+            req.modalities?.some((m) => m != 'text')
+          ) return null
+          let window = info?.context ??
+            (tariff && Object.values(tariff).every((p) => p == 0)
+              ? 0
+              : undefined)
+          let output = req.questions ? window : req.tokens
+          let quote = tariff && window != null
+            ? affordable(tariff, requestBound(req, window), remaining, output)
+            : null
+          return req.questions && quote?.tokens != output ? null : quote
+        },
+        call,
+        { visitor },
+      )
       reached('reserved', hold)
       let submitted = false
       let reply: Awaited<ReturnType<Model>>

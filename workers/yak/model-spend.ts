@@ -4,14 +4,23 @@ import { type Bundle, type Comp, mint, token } from '@yaks/graph'
 import { Stale } from '@yaks/graph/errors'
 import { derivedEid } from '@yaks/graph/identity'
 import { ModelError } from '@yaks/model'
-import { budget, monthOf, unaffordable } from './meter.ts'
+import { left, monthOf, unaffordable } from './meter.ts'
 import { type Row, type Space, spaceOf, stamp } from './directory.ts'
 import type { Namespace } from './door.ts'
 import { meta } from './meta.ts'
 
 type Env = { STORE: Namespace }
 export type Kind = 'models' | 'realtime' | 'texts'
-export type Hold = { space: string; month: string; dollars: number; what: Kind }
+export type Hold = {
+  space: string
+  month: string
+  dollars: number
+  what: Kind
+  /** a visitor's call, held against their share of the budget as well */
+  visitor?: boolean
+}
+/** Who a hold is spent for: what it buys, and whether a visitor asked. */
+export type Paying = { what?: Kind; visitor?: boolean; now?: Date }
 
 export let receiptEid = (call: string) =>
   derivedEid('generated-media-spend|' + call)
@@ -65,7 +74,11 @@ export let settled = async (
       ? [{
         entity: { eid: hold.space },
         $was: guard(space, 'meter', ['month']),
-        spend: { month: hold.month, [hold.what]: delta },
+        spend: {
+          month: hold.month,
+          [hold.what]: delta,
+          ...hold.visitor ? { visitors: delta } : {},
+        },
       }]
       : []
     try {
@@ -89,15 +102,15 @@ export let settled = async (
  * directory refuses the hold in the write's own transaction when it does not
  * fit what is left (meter-graph.ts `spend`), so holds made at once neither
  * spend past the budget nor wait on one another. Every model consumer and
- * voice lease shares the same remaining dollars. Only a refusal reads the
- * space again, to quote on what is left and ask once more. */
+ * voice lease shares the same remaining dollars; a visitor's is held to
+ * what is left of their share too (meter.ts `left`). Only a refusal reads
+ * the space again, to quote on what is left and ask once more. */
 export let reserved = async <T extends { dollars: number }>(
   env: Env,
   space: Space,
   quote: (remaining: number) => T | null,
   call = mint(),
-  what: Kind = 'models',
-  now = new Date(),
+  { what = 'models', visitor = false, now = new Date() }: Paying = {},
 ): Promise<
   { value: T; settle(dollars: number, reported?: boolean): Promise<boolean> }
 > => {
@@ -105,10 +118,15 @@ export let reserved = async <T extends { dollars: number }>(
   let month = monthOf(now)
   let reading = space
   for (let attempt = 0;; attempt++) {
-    let { spent, limit } = budget(reading, now)
-    let value = quote(Math.max(0, limit - spent))
+    let value = quote(left(reading, now, visitor))
     let fits = !!value && Number.isFinite(value.dollars) && value.dollars >= 0
-    let no = unaffordable(reading, what, fits ? value!.dollars : Infinity, now)
+    let no = unaffordable(
+      reading,
+      what,
+      fits ? value!.dollars : Infinity,
+      now,
+      visitor,
+    )
     if (no) {
       // The caller's reading may be older than a settlement that freed
       // dollars; a fresh one decides.
@@ -131,10 +149,16 @@ export let reserved = async <T extends { dollars: number }>(
             month,
             dollars: value!.dollars,
             what,
+            ...visitor ? { visitor } : {},
           },
         }, {
           entity: { eid: space.eid },
-          spend: { month, [what]: value!.dollars, held: true },
+          spend: {
+            month,
+            [what]: value!.dollars,
+            ...visitor ? { visitors: value!.dollars } : {},
+            held: true,
+          },
         }],
       })
       return {
@@ -174,7 +198,7 @@ export let onHold = async <T>(
     space,
     (left) => most <= left ? { dollars: most } : null,
     mint(),
-    what,
+    { what },
   )
   let cost = 0
   try {

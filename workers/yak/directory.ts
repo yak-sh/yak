@@ -187,6 +187,9 @@ export type Meter = {
   // Every dollar models, voice and texts have spent here, all months
   // together: what the starter is drawn against (meter.ts `starterOf`).
   drawn?: number
+  // The dollars of models, voice and texts this month that were spent for
+  // the space's apps' visitors, already counted in each source's own.
+  visitors?: number
   at: string
 }
 export type Tier = 'free' | 'plus' | 'organization'
@@ -312,6 +315,9 @@ export type Space = {
   // holds other than meter.ts `STARTER`: none for a person's later spaces
   // (`mint`). Absent on almost every space.
   starter?: number | null
+  // The percent of that budget its apps' visitors may spend together, where
+  // its owner set one (meter.ts `visiting`); none is meter.ts `VISITORS`.
+  visitors?: number | null
   meter: Meter | null
   // Whether the agent has already been told where this space stands against
   // its ceilings (unseen.ts `ceiling`). The mark is `notified`, the same one
@@ -712,6 +718,7 @@ export type Row = {
     cache_retention?: number | null
   }
   starter?: { dollars?: number | null }
+  visitor_share?: { percent?: number | null }
   started?: { space?: Id | null }
   created?: { at?: string }
   member?: { space: Id; person: Id; role: Role; own?: boolean }
@@ -801,6 +808,7 @@ let meterOf = (r: Row): Meter | null =>
       seconds: r.meter.seconds ?? 0,
       built: r.meter.built ?? 0,
       drawn: r.meter.drawn ?? 0,
+      visitors: r.meter.visitors ?? 0,
       at: r.meter.at ?? '',
     }
     : null
@@ -1129,6 +1137,7 @@ export let SPACE_PARTS = [
   'fee',
   'budget',
   'starter',
+  'visitor_share',
   'former',
   'tunnel',
   'operator',
@@ -1246,6 +1255,7 @@ export let spaceOf = (r: Row): Space => ({
   fee: r.fee?.bps ?? 0,
   budget: r.budget?.dollars ?? null,
   starter: r.starter?.dollars ?? null,
+  visitors: r.visitor_share?.percent ?? null,
   meter: meterOf(r),
   told: r.notified != null,
   trashed: trashedOf(r),
@@ -2031,6 +2041,21 @@ export let directoryRows = (rows: {
           ...(moving ? { space: { slug: to } } : {}),
           ...(had ? { former: addresses(had.filter((s) => s != to)) } : {}),
         }, ...claims],
+      }, headers)
+      return (await self.at(space.eid))!
+    },
+    // The space whose apps' visitors may spend `share` percent of its month
+    // budget, or the default where it is null (meter.ts `visiting`).
+    welcome: async (
+      space: Space,
+      share: number | null,
+      headers: Record<string, string>,
+    ): Promise<Space> => {
+      await self.apply({
+        entities: [{
+          entity: { eid: space.eid },
+          visitor_share: share == null ? null : { percent: share },
+        }],
       }, headers)
       return (await self.at(space.eid))!
     },

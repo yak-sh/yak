@@ -876,6 +876,26 @@ test('deleting a reviewer space waits on its letter', async () => {
   }
 })
 
+test("a space's owner sets what its apps' visitors may spend", async () => {
+  let k = await kernel()
+  try {
+    let them = await signIn(k, `welcome@${k.host}`)
+    let agent = connector(k, them.cookie)
+    // The share the reply names is the one read back from the directory.
+    assertStringIncludes(
+      await agent.tool('space_set', { space: 'welcome', visitors: 40 }),
+      'visitors may spend 40% of its model',
+    )
+    let no = await assertRejects(
+      () => agent.tool('space_set', { space: 'welcome', visitors: 101 }),
+      Error,
+    )
+    assertStringIncludes(no.message, 'visitors: 101 is greater than 100')
+  } finally {
+    await k.stop()
+  }
+})
+
 test('an address that reads as the platform is refused', async () => {
   let k = await kernel()
   let app = unique('recipes')

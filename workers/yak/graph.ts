@@ -565,6 +565,8 @@ export type Stored = {
   /** the app's own commands, as its manifest declares them now
    * (@yaks/tools/declared) */
   commands: () => Tools
+  /** the app's manifest, its `vocab.json`, as deployed now */
+  manifest: () => VocabDoc
   /** a failure noted in the app's break log and reported, never thrown */
   broke: (what: string, error: unknown) => void
 }
@@ -2272,6 +2274,7 @@ export class Store {
       return applied
     },
     commands: () => readTools(this.#get('tools') || '{}'),
+    manifest: () => meant(this.#get('vocab')),
     broke: (what, error) => void this.#broke(what, error),
   })
 

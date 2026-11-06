@@ -957,6 +957,49 @@ test('a visitor asks an app for a turn only where it opens its models', async ()
   assertEquals((await sent(line(ada))).status, 403)
 })
 
+// T-144737: what visitors spend together is a share of the space's month,
+// which its owner sets; past it a visitor is told plainly, on both doors, and
+// a member goes on.
+test("visitors spend only the owner's share of the space's budget", async () => {
+  let v = await vale(() => ({
+    response: 'hello',
+    usage: { prompt_tokens: 1_000, completion_tokens: 100 },
+  }), { access: 'open', manifest: { models: 'open' } })
+  let share = async (n: number) =>
+    v.dir.stamp({
+      entities: [{
+        entity: { eid: (await v.spent()).eid },
+        visitor_share: { percent: n },
+      }],
+    })
+  await share(0)
+  let plain = "This app's visitors have spent what its owner sets aside"
+  let guest = crypto.randomUUID(), s = crypto.randomUUID()
+  assertEquals(
+    (await v.send('/apply', asking(s, FLASH), null, guest)).status,
+    200,
+  )
+  let [stopped] = await v.landed(`.entry.session=${s}&.refusal&*`)
+  assertEquals((stopped.refusal as Comp).code, 'limit')
+  assert(String(said(stopped)).startsWith(plain), String(said(stopped)))
+  let { status, said: no } = await v.run({ model: FLASH, input: {} }, null)
+  assertEquals(status, 429)
+  assert(no.error.message.startsWith(plain), no.error.message)
+  assertEquals(v.asked.length, 0)
+  // A member is not held to it.
+  let ada = crypto.randomUUID()
+  await v.send('/apply', asking(ada, FLASH))
+  await v.landed(`.entry.session=${ada}&.output&*`)
+  assertEquals((await v.run({ model: FLASH, input: {} })).status, 200)
+  assertEquals((await v.spent()).meter!.visitors ?? 0, 0)
+  // Given a share, the visitor is answered, and counted in it.
+  await share(50)
+  let { status: ok } = await v.run({ model: FLASH, input: {} }, null)
+  assertEquals(ok, 200)
+  let meter = (await v.spent()).meter!
+  assert(meter.visitors! > 0 && meter.visitors! < meter.models)
+})
+
 test('a space past its budget is told so, and the transcript rests', async () => {
   let v = await vale(() => ({ response: 'never' }), { models: MONTH })
   let s = crypto.randomUUID()
