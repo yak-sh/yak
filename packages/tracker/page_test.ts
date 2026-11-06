@@ -21,6 +21,7 @@ let globals = [
   'removeEventListener',
   'setTimeout',
   'clearTimeout',
+  'Array',
 ] as const
 let reporter = new Function(...globals, code)
 
@@ -30,7 +31,11 @@ type El = { tagName: string; href?: string; src?: string; type?: string }
 // or drops the connection for any other.
 type Script = { src: string; type?: string; crossOrigin?: string }
 
-let page = (files: Record<string, number>, scripts: Script[] = []) => {
+let page = (
+  files: Record<string, number>,
+  scripts: Script[] = [],
+  builtins: { Array: unknown } = { Array },
+) => {
   let asked: string[] = []
   let sent: Blob[] = []
   let heard = new Map<string, (e: unknown) => unknown>()
@@ -90,6 +95,7 @@ let page = (files: Record<string, number>, scripts: Script[] = []) => {
     // advance: the soft state's wait is left undrawn.
     setTimeout: (f: () => void, ms = 0) => time.after(ms, f),
     clearTimeout: (cancel?: () => void) => cancel?.(),
+    ...builtins,
   }
   reporter(...globals.map((name) => scope[name]))
   let bodies = () =>
@@ -135,6 +141,14 @@ test("the page's own script failing past its first line is filed", async () =>
 
 test("a script file of the page's failing on its first line is filed", async () =>
   equal(await threw(`${at}app.js`, 1), ["Can't find variable: __firefox__"]))
+
+test('a browser older than pages support files nothing', async () => {
+  // Chrome before 110 and Safari before 16 have no Array's toSorted.
+  let p = page({}, [], { Array: { prototype: {} } })
+  let error = new TypeError('Object.hasOwn is not a function')
+  await p.heard.get('error')!({ target: p.win, error, filename: at, lineno: 9 })
+  equal(await p.said(), [])
+})
 
 test('a failure the browser raises with no error is filed by its message', async () => {
   let p = page({})

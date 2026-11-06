@@ -18,9 +18,16 @@
   addEventListener('popstate', () => crumb('navigation', location.pathname))
   addEventListener('hashchange', () => crumb('navigation', location.pathname))
 
+  // Pages are written in ES2023, the language of the oldest browsers they
+  // support, Safari 16 and Chrome 110 (check-platform.ts `LIBS`), and
+  // `toSorted` is among its newest built-ins. In a browser without it, a page
+  // breaking on a built-in it lacks is expected, not news: nothing is filed,
+  // and the soft state asks the person to update the browser.
+  let dated = !Array.prototype.toSorted
+
   let send = (body) => {
     // A render loop that throws every frame must not become a write loop.
-    if (sent++ >= 20) return
+    if (dated || sent++ >= 20) return
     try {
       let blob = new Blob([
         // The page it happened on, beside `url`, which names where: the
@@ -356,6 +363,7 @@
   // cocoa in the dark, never black. Set through CSSOM rather than a <style>
   // element, so an app with its own strict CSP still shows it.
   let SORRY = 'Something went wrong. Try reloading the page.'
+  let DATED = 'This browser is too old for this page. Update it and reload.'
 
   let dark = () =>
     globalThis.matchMedia &&
@@ -372,7 +380,7 @@
         let box = document.createElement('div')
         box.id = 'yak-sorry'
         box.setAttribute('role', 'status')
-        box.textContent = SORRY
+        box.textContent = dated ? DATED : SORRY
         box.style.cssText = 'position:fixed;inset:0;z-index:2147483647;' +
           'display:flex;align-items:center;justify-content:center;' +
           'margin:0;padding:2rem;text-align:center;' +
