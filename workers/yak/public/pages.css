@@ -1594,6 +1594,29 @@
     white-space: pre-wrap;
     overflow-wrap: anywhere;
   }
+  /* What a call's talking model asked the Operator, behind a small mark
+     between what the caller said and what they heard. */
+  .Talk_Asked > summary {
+    display: inline-flex;
+    color: var(--muted);
+    cursor: pointer;
+    list-style: none;
+  }
+  .Talk_Asked > summary::-webkit-details-marker {
+    display: none;
+  }
+  .Talk_Asked > summary .Icon {
+    width: 1em;
+    height: 1em;
+  }
+  .Talk_Inner {
+    display: flex;
+    flex-direction: column;
+    gap: .6rem;
+    margin: .4rem 0 0;
+    padding: .6rem .8rem;
+    border-left: 2px solid var(--border2);
+  }
   /* What a model was told (a system prompt, a persona), set apart in a dashed
      frame, closed until opened. */
   .Talk_Told {

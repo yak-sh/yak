@@ -14,8 +14,9 @@
 // at a time as it is written (`typed`). With a model that hears and speaks
 // itself (`talking`), the call's audio goes to that model, which answers
 // small talk itself and asks the Operator, through the same conversation,
-// for anything it does or knows; what it heard and said without asking is
-// kept in that conversation too, starting no turn (operator.ts `note`).
+// for anything it does or knows. Every line said on it is kept in that
+// conversation too, starting no turn (operator.ts `note`): the caller's as
+// theirs, and the model's as the Operator's own words.
 //
 // Everyone the platform knows by number is answered. A call lasts at most MINUTES, and what it costs (the line, what was heard
 // and what was said) is charged to the space as it goes: what is said as it
@@ -157,6 +158,8 @@ export let opening = (
     ? BACK
     : '',
   minutes: MINUTES - (now - ticket.at) / 60_000,
+  /** whether the call begins with this stream, rather than opens again */
+  began: now - ticket.at <= RESUMED,
   turn: (n: number) => `${ticket.via}:${ticket.call}:${now}:${n}`,
 })
 
@@ -308,9 +311,9 @@ export type Talk = Around & {
 /** A call a model hears and speaks itself, asking the Operator. */
 export type Talking = Around & {
   talk: (told: Talked) => Talker
-  /** words said on the call that asked the Operator nothing, the caller's
-   * or (`said`) the model's, for their conversation */
-  note: (text: string, said: boolean) => void
+  /** each line said on the call, the caller's or (`said`) the model's, for
+   * their conversation, settled once it is kept there */
+  note: (text: string, said: boolean) => Promise<void>
 }
 
 // The least audio sent to the line at once: a tenth of a second at 8 kHz.
@@ -634,22 +637,22 @@ export let instructed = (name: string) =>
 export let talking = (o: Talking): Call => {
   let pending: ((text: string) => void)[] = []
   let talker: Talker | undefined
-  // What the response under way heard and said, kept in the conversation
-  // once it ends, unless it is one of the next `dropping`: one that asked
-  // the Operator, whose request and answer are in the conversation already,
-  // or one that says such an answer.
+  // What the response under way heard and said, kept in the conversation in
+  // the order it was said: once the response ends, or before what it asks
+  // the Operator, so the caller's words come before the request made of
+  // them. What it says of an answer is what the caller heard of it.
   let lines: { text: string; said: boolean }[] = []
-  let dropping = 0
-  let kept = () => {
-    for (let l of lines) o.note(l.text, l.said)
-    lines = []
+  let kept = Promise.resolve()
+  let keep = () => {
+    for (let l of lines.splice(0)) kept = o.note(l.text, l.said)
+    return kept
   }
   let c = carry(
     o,
     (audio) => talker?.send(audio),
     () => talker?.spent().dollars ?? 0,
     () => {
-      if (!dropping) kept()
+      keep()
       talker?.close()
     },
   )
@@ -659,23 +662,18 @@ export let talking = (o: Talking): Call => {
     stopped: () => c.stopped(),
     heard: (text) => void lines.push({ text, said: false }),
     said: (text) => void lines.push({ text, said: true }),
-    done: () => {
-      if (!dropping) return kept()
-      dropping--
-      lines = []
-    },
+    done: () => void keep(),
     audio: (bytes) => c.play(bytes, !asking),
     call: async (name, args) => {
       if (name != ASK.name) return `There is no tool called ${name}.`
       let { request } = JSON.parse(args) as { request?: string }
       c.acked()
       asking = true
-      // This response and the one that says the answer.
-      dropping = 2
       let answer!: (text: string) => void
       let answered = new Promise<string>((resolve) => answer = resolve)
       pending.push(answer)
       try {
+        await keep()
         await o.ask(String(request ?? ''))
       } catch (error) {
         pending.splice(pending.indexOf(answer), 1)
@@ -699,8 +697,7 @@ export let talking = (o: Talking): Call => {
       let next = pending.shift()
       asking = pending.length > 0
       if (next) return next(plain(text))
-      // Said as it comes, and in the conversation already.
-      dropping++
+      // Said as it comes.
       talker?.say(plain(text))
     },
     waiting: () => pending.length > 0,
@@ -821,8 +818,9 @@ export let answering = async (
   )
   let turn = 0
   let key = keyOf(space.eid, ticket.person)
-  // The caller's words, to their conversation, answered by `model`.
-  let asking = (model: string) => async (text: string) => {
+  // The caller's words, or a talking model's request made of them (`call`),
+  // to their conversation, answered by `model`.
+  let asking = (model: string, call?: string) => async (text: string) => {
     await receive(
       operator.store,
       {
@@ -833,6 +831,7 @@ export let answering = async (
         reply_to: ticket.to,
         via: ticket.via,
         model,
+        ...call ? { call } : {},
       },
       text,
       { id: requestId(space.eid, opens.turn(++turn)) },
@@ -864,21 +863,23 @@ export let answering = async (
     },
     hangup: () => caller().hangup(ticket.call),
   }
-  // What a talking model said and heard on its own, kept in order.
+  // A talking model's call, line by line, kept in order: where it began,
+  // then what was said on it.
   let noted = Promise.resolve()
+  let note = (text: string, o: { said?: boolean; began?: boolean }) =>
+    noted = noted.then(() =>
+      operator.note({ person: ticket.person }, space, text, {
+        call: ticket.call,
+        ...o,
+      })
+    ).catch((e) => defect(e, CALL))
+  if (setup.talks && opens.began) note('', { began: true })
   let call: Call = setup.talks
     ? talking({
       ...around,
       // Behind a talking model the Operator answers with the fastest model.
-      ask: asking(CALL_MODELS[0]),
-      note: (text, said) => {
-        noted = noted.then(() =>
-          operator.note({ person: ticket.person }, space, text, {
-            call: ticket.call,
-            said,
-          })
-        ).catch((e) => defect(e, CALL))
-      },
+      ask: asking(CALL_MODELS[0], ticket.call),
+      note: (text, said) => note(text, { said }),
       talk: (told) =>
         talk({
           ...speech,

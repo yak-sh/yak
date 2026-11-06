@@ -267,6 +267,8 @@ export let project = (
         )
       }
       out.push({ kind: 'instruction', text: textOf(b) })
+    } else if (kind == 'input' && comp(b, 'notice')?.own) {
+      out.push({ kind: 'assistant', text: textOf(b) })
     } else if (kind == 'input') {
       out.push({
         kind: 'user',

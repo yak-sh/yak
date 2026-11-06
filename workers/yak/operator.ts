@@ -19,7 +19,7 @@ import {
 } from '@yaks/session'
 import { derivedEid } from '@yaks/graph/identity'
 import { LIMIT } from '@yaks/session/status'
-import { channelOf, HEARD, SAID } from './operator-view.ts'
+import { CALLED, channelOf, HEARD } from './operator-view.ts'
 import { listing } from '@yaks/mcp'
 import {
   billed,
@@ -906,7 +906,9 @@ export let operating = (
   let answered = async (session: string) => {
     let [row] = await g.get([session])
     if (row?.spawned) return
+    // A call's lines are context, never a turn's words or its reply.
     let entries = ordered(await transcript(g, session))
+      .filter((b) => !(b.notice && b.operator_call))
     let reply = replyOf(turnOf(entries))
     // One answer for each time it was given words: the turn ended again
     // (stopped, then a step in flight finishing) says it anew.
@@ -1122,6 +1124,7 @@ export let operating = (
       ? { operator_files: { request: o.request, files: o.files } }
       : {},
     ...o.channel ? { operator_channel: channelOf(o.channel, o.framing) } : {},
+    ...o.call ? { operator_call: { call: o.call, asked: true } } : {},
     using: usingOf(o.model),
     $actor: { by, via: session },
   })
@@ -1225,10 +1228,11 @@ export let operating = (
     return { task, session, input }
   }
 
-  // What was said on a call its talking model answered itself goes to the
-  // person's conversation as passive context: the Operator reads it the next
-  // time it is asked, and no turn of its own model starts for it. Its words
-  // say who spoke, as a notice is read as the person's side.
+  // A call its talking model hears and speaks goes to the person's
+  // conversation as passive context, starting no turn of the Operator's own
+  // model: where it began, then each line as it was said, the caller's as
+  // their words by phone and the talking model's as the Operator's own
+  // (`notice.own`), so its next turn reads what it said as said by itself.
   let note: Operator['note'] = async (held, space, text, o) => {
     let session = rootOf(space.eid, held.person)
     let fresh = !(await g.get([session]))[0]?.session
@@ -1236,15 +1240,22 @@ export let operating = (
       await readying(held, space)
       await started(session, held.person, space)
     }
+    let line = o.said ? { content: { body: text }, notice: { own: true } } : {
+      content: { body: o.began ? CALLED : HEARD + text },
+      notice: {},
+      operator_channel: channelOf('voice', o.began ? '' : HEARD),
+    }
     await g.apply([
       ...fresh ? [await carrying(session, held, space, {})] : [],
       {
         entity: { eid: crypto.randomUUID() },
         entry: { session },
-        content: { body: (o.said ? SAID : HEARD) + text },
-        notice: {},
-        operator_channel: channelOf('voice', o.said ? SAID : HEARD),
-        operator_call: { call: o.call, ...o.said ? { said: true } : {} },
+        ...line,
+        operator_call: {
+          call: o.call,
+          ...o.said ? { said: true } : {},
+          ...o.began ? { began: true } : {},
+        },
         $actor: { by: o.said ? space.eid : held.person, via: session },
       },
     ], { trusted: true })
@@ -1348,6 +1359,8 @@ export type Asking = {
   // leaves out of the person's words.
   channel?: string
   framing?: string
+  // The call whose talking model asked in these words, for the caller.
+  call?: string
   // The model that answers these words, where not the Operator's own (a
   // call's, speech.ts `setupOf`); one its provider does not serve is
   // answered by the Operator's own.
@@ -1367,14 +1380,14 @@ export type Operator = {
     args: Args,
     o?: Asking,
   ) => Promise<{ task: string; session: string; input: string }>
-  /** Words said on a call that asked the Operator nothing, the caller's or
-   * (`said`) its talking model's: kept in the person's conversation as
-   * passive context, starting no turn. */
+  /** A line of a call its talking model hears and speaks: the caller's
+   * words, its talking model's (`said`), or that the call began (`began`),
+   * kept in the person's conversation as passive context, starting no turn. */
   note: (
     held: Asker,
     space: Space,
     text: string,
-    o: { call: string; said?: boolean },
+    o: { call: string; said?: boolean; began?: boolean },
   ) => Promise<void>
   /** Stop a conversation (with its helpers) or a task's running session at
    * once, the step in flight included: nothing more is done until new words

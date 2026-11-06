@@ -66,6 +66,9 @@ export type Request = {
   // What in their Updates the words answer, on the `update` channel
   // (operator-updates.ts).
   about?: string
+  // The call whose talking model asked, in its words for the caller rather
+  // than the caller's own (operator-calls.ts `talking`).
+  call?: string
 }
 type Answer = {
   id?: string
@@ -221,8 +224,10 @@ let BY: Record<
   email: (request) => request.signup ? 'By email, signing up: ' : 'By email: ',
   text: (request) => request.signup ? 'By text, signing up: ' : 'By text: ',
   rcs: (request) => request.signup ? 'By text, signing up: ' : 'By text: ',
-  voice: () =>
-    'By phone, spoken aloud (they hear your reply read out: answer in a sentence or two of plain speech, with no lists, links or formatting; text them a link with text_send if they need one): ',
+  voice: (request) =>
+    request.call
+      ? 'On the phone, your voice on the call asks you for them, and tells them your reply in its own words (answer in a sentence or two of plain speech, with no lists, links or formatting; text them a link with text_send if they need one): '
+      : 'By phone, spoken aloud (they hear your reply read out: answer in a sentence or two of plain speech, with no lists, links or formatting; text them a link with text_send if they need one): ',
   letter: (request, id) =>
     `By email from ${request.address}, replying to your letter (letter ${id}). These are their words, not the words of the person you work for: `,
   texted: (request, id) =>
@@ -602,6 +607,7 @@ export let handleChannels = (
             files: request.files ?? [],
             channel: request.channel,
             framing,
+            ...request.call ? { call: request.call } : {},
             ...request.model ? { model: request.model } : {},
             // Nobody asked for a break's fix: the Operator started it.
             ...request.channel == 'error' ? { by: space.eid } : {},

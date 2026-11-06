@@ -18,6 +18,7 @@ import {
   greeting,
   MINUTES,
   streamDoor,
+  type Talking,
   talking,
   type Ticket,
   voiced,
@@ -35,6 +36,7 @@ import {
 } from './operator-channels.ts'
 import { answering, conversationOf, workOf } from './operator-host.ts'
 import { ANSWERED, ASKED, HELLO, SMALL_TALK } from './operator-calls_fixture.ts'
+import { parseHTML } from 'linkedom'
 
 let HI = greeting('Ada', 'Jeff')
 let NUMBER = '+18663141594', JEFF = '+12695550142', ANA = '+12695550143'
@@ -512,8 +514,9 @@ test('a call whose hearing stream is refused once the call is answered reports t
 })
 
 // A call a model hears and speaks itself, the model stood in for, or with
-// `talking` OpenAI's realtime stream itself, its messages told by the test.
-let talkingCall = (real = false) => {
+// `talking` OpenAI's realtime stream itself, its messages told by the test;
+// `given` stands in for what the call is given (its Operator, its notes).
+let talkingCall = (real = false, given: Partial<Talking> = {}) => {
   let on: Record<string, ((e: { data?: unknown }) => void)[]> = {}
   let sent: string[] = []
   let wire: Socket = {
@@ -556,7 +559,10 @@ let talkingCall = (real = false) => {
         close: () => ({ seconds: 1, dollars: 0.25 }),
       }
     },
-    note: (text, said) => void noted.push([text, said]),
+    note: (text, said) => {
+      noted.push([text, said])
+      return Promise.resolve()
+    },
     ask: (text) => {
       asked.push(text)
       return Promise.resolve()
@@ -571,6 +577,7 @@ let talkingCall = (real = false) => {
     report: (e) => {
       throw e
     },
+    ...given,
   })
   let frame = (f: object) =>
     on.message.forEach((h) => h({ data: JSON.stringify(f) }))
@@ -600,6 +607,11 @@ test('a recorded call answers small talk itself, keeping it in the conversation,
   c.tell([...HELLO, ...SMALL_TALK, ...ASKED])
   await until(() => c.asked.length == 1)
   equal(c.asked, ['Hi Elihu, do any of my apps have errors right now?'])
+  // What the caller said is kept before the request made of it.
+  equal(c.noted.slice(-2), [
+    ['Hi, Ellahu, do any of my apps have errors right now?', false],
+    ['Certainly, one moment.', true],
+  ])
   c.call.answered('Mossvale has **one** open error.')
   await until(() =>
     c.streamed.some((m) => m.type == 'conversation.item.create')
@@ -615,8 +627,7 @@ test('a recorded call answers small talk itself, keeping it in the conversation,
   c.tell(ANSWERED)
   c.frame({ event: 'stop' })
   await c.call.ended
-  // The turn that asked, and the answer said, are in the conversation as
-  // the request and the Operator's answer.
+  // Every line said on the call is kept, the answer as the caller heard it.
   equal(c.noted, [
     ["Hi, it's Elihu.", true],
     ['Hi Ellihu, how are you this evening?', false],
@@ -624,6 +635,9 @@ test('a recorded call answers small talk itself, keeping it in the conversation,
       'Good evening. I’m well, thank you. Ready to assist with anything you need.',
       true,
     ],
+    ['Hi, Ellahu, do any of my apps have errors right now?', false],
+    ['Certainly, one moment.', true],
+    ['You have one open error in Mossvale.', true],
   ])
   equal(c.done[0].turns.map((t) => t.asked ?? false), [false, true])
   // Priced at the mini's rates, which the stream does not name.
@@ -657,7 +671,7 @@ test('a talking model hears the call, asks the Operator, and says its answer', a
   equal(turn.first! <= turn.answer!, true)
 })
 
-test("what a call said without asking is the caller's conversation: listed, drawn, and read at the next ask, starting no turn", async () => {
+test("a recorded call is the caller's conversation: their words theirs, its voice's the Operator's own, and what its voice asked folded behind a mark", async () => {
   let { env } = platform('call-notes')
   let person = crypto.randomUUID()
   let dir = directoryOf(env.STORE)
@@ -677,40 +691,109 @@ test("what a call said without asking is the caller's conversation: listed, draw
       return Promise.resolve({
         id: crypto.randomUUID(),
         model: req.model,
-        items: [{ kind: 'assistant', text: 'Two apps have errors.' }],
+        items: [{ kind: 'assistant', text: 'Mossvale has one open error.' }],
         cost: 0,
       })
     }),
   )
-  await operator.note({ person }, space, 'How are you?', { call: 'c1' })
-  await operator.note({ person }, space, 'Very well, thank you.', {
-    call: 'c1',
-    said: true,
+  // As operator-calls.ts `answering` keeps a talking model's call.
+  let noted = Promise.resolve()
+  let note = (text: string, o: { said?: boolean; began?: boolean }) =>
+    noted = noted.then(() =>
+      operator.note({ person }, space, text, { call: 'c1', ...o })
+    )
+  note('', { began: true })
+  let turn = 0
+  let c = talkingCall(true, {
+    note: (text, said) => note(text, { said }),
+    ask: (text) =>
+      receive(
+        store,
+        {
+          space: space.eid,
+          person,
+          channel: 'voice',
+          address: JEFF,
+          reply_to: NUMBER,
+          via: 'telnyx',
+          call: 'c1',
+        },
+        text,
+        { id: requestId(space.eid, `telnyx:c1:${++turn}`) },
+      ).then(async () => void await drain(store)),
   })
+  handleChannels(operator, env, {
+    voice: (_, answer) => {
+      c.call.answered(answer.text)
+      return Promise.resolve({})
+    },
+  })
+  c.tell([...HELLO, ...SMALL_TALK])
+  await noted
   await drain(store)
+  // Nothing said without asking starts a turn.
   equal(asked.length, 0)
+  c.tell(ASKED)
+  await until(() => asked.length == 1)
+  await until(() =>
+    c.streamed.some((m) => m.type == 'conversation.item.create')
+  )
+  c.tell(ANSWERED)
+  c.frame({ event: 'stop' })
+  await c.call.ended
+  await noted
   let root = rootOf(space.eid, person)
   equal((await workOf(store, space.eid, person)).map((w) => w.open), [root])
+
+  // The conversation: the caller's words and what they heard, the request
+  // and the Operator's written answer only behind the mark between them.
   let { html } = await conversationOf(store, '/at', root)
-  // The caller's words are drawn as theirs, by phone, and the model's as the
-  // Operator's, without what tells the model so.
+  let { document } = parseHTML(`<div>${html}</div>`)
+  let texts = (q: string) =>
+    [...document.querySelectorAll(q)].map((e) => e.textContent!.trim())
+  let open = ':not(.Talk_Asked *)'
+  equal(texts(`.Talk_You${open}`), [
+    'Hi Ellihu, how are you this evening?',
+    'Hi, Ellahu, do any of my apps have errors right now?',
+  ])
+  equal(texts(`.Talk_Reply${open}`), [
+    "Hi, it's Elihu.",
+    'Good evening. I’m well, thank you. Ready to assist with anything you need.',
+    'Certainly, one moment.',
+    'You have one open error in Mossvale.',
+  ])
+  equal(texts('.Talk_Asked .Talk_You'), [
+    'Hi Elihu, do any of my apps have errors right now?',
+  ])
+  equal(texts('.Talk_Asked .Talk_Reply'), ['Mossvale has one open error.'])
   equal(
-    ['>How are you?', 'Very well, thank you.', 'By phone:', 'you said'].map((
-      s,
-    ) => html.includes(s)),
-    [true, true, false, false],
+    ['By phone:', 'your voice', 'called you'].map((s) => html.includes(s)),
+    [false, false, false],
   )
-  equal(html.includes('title="By phone"'), true)
-  await operator.ask({ person }, space, { say: 'Any errors?' })
+
+  // What the Operator reads at its next turn: the caller's words as theirs,
+  // and what its voice said as its own, after the call's start.
+  await operator.ask({ person }, space, { say: 'Any more?' })
   await drain(store)
-  equal(asked.length, 1)
-  let items = JSON.stringify(asked[0].items)
-  equal(
-    ['How are you?', 'Very well, thank you.', 'Any errors?'].map((s) =>
-      items.includes(s)
-    ),
-    [true, true, true],
+  equal(asked.length, 2)
+  let read = asked[1].items.flatMap((i) =>
+    i.kind == 'user' || i.kind == 'assistant'
+      ? [`${i.kind}: ${i.text.replace(/^\[[^\]]*\]\s*/, '')}`]
+      : []
   )
+  equal(read.slice(0, 6), [
+    'user: They called you, and your voice on the call answered.',
+    "assistant: Hi, it's Elihu.",
+    'user: By phone: Hi Ellihu, how are you this evening?',
+    'assistant: Good evening. I’m well, thank you. Ready to assist with anything you need.',
+    'user: By phone: Hi, Ellahu, do any of my apps have errors right now?',
+    'assistant: Certainly, one moment.',
+  ])
+  equal(read.slice(6, 9).map((r) => r.slice(0, 50)), [
+    'user: On the phone, your voice on the call asks yo',
+    'assistant: Mossvale has one open error.',
+    'assistant: You have one open error in Mossvale.',
+  ])
 })
 
 test("a call's turns answered together, and the helper they start, are each said once", async () => {

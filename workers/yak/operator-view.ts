@@ -27,8 +27,9 @@ let comp = (b: Bundle | undefined, name: string) =>
 
 /** A drawn line of a transcript: what it shows, under the id it is put by. */
 export type Row = { id: string; html: string }
-// A line before it is drawn: its parts, under the id it is put by.
-type Line = { id: string; node: Node }
+// A line before it is drawn: its parts, under the id it is put by, and the
+// entries it draws when it draws more than its own.
+type Line = { id: string; node: Node; of?: string[] }
 let drawn = ({ id, node }: Line): Row => ({
   id,
   html: renderToString(h(Fragment, null, node)),
@@ -77,11 +78,14 @@ let words = (body: string) => {
 export let about = (app: string) =>
   `About the app ${app}, open beside the chat as they wrote: `
 
-/** How a line said on a call its talking model answered itself reaches the
- * Operator (operator.ts `note`): the caller's words, or (`SAID`) the talking
- * model's, which the conversation draws as the Operator's own. */
+/** How the caller's words on a call its talking model hears reach the
+ * Operator (operator.ts `note`). The model's own words need no framing: the
+ * Operator reads them as its own. */
 export let HEARD = 'By phone: '
-export let SAID = 'On the phone, you said: '
+
+/** What the Operator reads where such a call began, before anything said on
+ * it, which the conversation leaves out. */
+export let CALLED = 'They called you, and your voice on the call answered.'
 
 /** How words came (`operator_channel`): their channel, and the framing the
  * model reads before them, which the conversation leaves out. */
@@ -537,21 +541,77 @@ let lines = (
       ...helped(one, offers).map((r) => r.node),
     ])
   let calls = new Set(entries.map((b) => b.entity.eid))
+  let inside = asked(entries)
+  let folds = new Map<string, { of: string[]; nodes: Node[] }>()
   return [
     ...entries.flatMap((b): Line[] => {
       let id = b.entity.eid
       let body = String(comp(b, 'content')?.body ?? '')
-      if (prompts.has(id)) return [prompts.get(id)!]
-      if (b.call) {
-        return [{ id, node: tool(b, names, results.get(id), under(id)) }]
+      let drawn: Line[] = prompts.has(id)
+        ? [prompts.get(id)!]
+        : b.call
+        ? [{ id, node: tool(b, names, results.get(id), under(id)) }]
+        : line(b, id, body)
+      let at = inside.get(id)
+      if (!at) return drawn
+      let fold = folds.get(at)
+      if (fold) {
+        fold.of.push(id)
+        fold.nodes.push(...drawn.map((l) => l.node))
+        return []
       }
-      return line(b, id, body)
+      fold = { of: [id], nodes: drawn.map((l) => l.node) }
+      folds.set(at, fold)
+      return [{ id, of: fold.of, node: h(Asked, fold) }]
     }),
     // A helper no step of these started (one given a task) closes the list.
     ...helpers.filter((h) => !h.call || !calls.has(h.call))
       .flatMap((h) => helped(h, offers)),
   ]
 }
+
+// A person's own words: an input that is none of the other kinds.
+let theirs = (b: Bundle) =>
+  !!comp(b, 'content')?.body && !NOT_INPUT.some((c) => b[c])
+
+// What a call's talking model asked the Operator (`operator_call.asked`)
+// through the Operator's written answer, by the request each entry belongs
+// to: the exchange inside a turn of the call. The lines said aloud on it are
+// not part of it, and the next words given end it, answered or not.
+let asked = (entries: Bundle[]) => {
+  let inside = new Map<string, string>()
+  let open: string | undefined
+  for (let b of entries) {
+    let id = b.entity.eid
+    if (comp(b, 'operator_call')?.asked) {
+      open = id
+    } else if (!open || b.notice && b.operator_call) continue
+    else if (theirs(b)) {
+      open = undefined
+      continue
+    }
+    inside.set(id, open)
+    if (b.output && !b.notice && comp(b, 'content')?.body) open = undefined
+  }
+  return inside
+}
+
+// The exchange folded behind a small mark between what the caller said and
+// what they heard: their request and the Operator's work and answer.
+let Asked = ({ nodes }: { nodes: Node[] }) =>
+  h(
+    'details',
+    { class: 'Talk_Asked' },
+    h(
+      'summary',
+      {
+        title: 'What was asked of the Operator',
+        'aria-label': 'What was asked of the Operator',
+      },
+      h(Icon, { of: icons['message-circle'] }),
+    ),
+    h('div', { class: 'Talk_Inner' }, ...nodes),
+  )
 
 // Any other line: a refusal, a reply, a helper's end, a failure, a stop, or a
 // person's words.
@@ -566,9 +626,12 @@ let line = (b: Bundle, id: string, body: string): Line[] => {
     ))
   }
   if (b.output && body) return is(said(b, reply(body)))
-  // A line of a call its talking model answered itself: theirs, or its own.
+  // A line of a call its talking model hears and speaks: theirs, or its own
+  // (old rows, before its own were outputs). Where the call began is the
+  // model's to read.
   let called = comp(b, 'operator_call')
-  if (called && body) {
+  if (called?.began) return []
+  if (called && b.notice && body) {
     return is(said(b, called.said ? reply(spoken(b, body)) : input(b, body)))
   }
   if (told(b, body)) return is(helper(b, body))
@@ -581,7 +644,7 @@ let line = (b: Bundle, id: string, body: string): Line[] => {
   if (b.stop || b.interrupted || b.cancel) {
     return is(h('p', { class: 'Talk_Note' }, 'Stopped.'))
   }
-  if (body && !NOT_INPUT.some((c) => b[c])) return is(said(b, input(b, body)))
+  if (theirs(b)) return is(said(b, input(b, body)))
   return []
 }
 
@@ -599,7 +662,8 @@ export let touched = (
     entries.filter((b) => Number(comp(b, 'entry')?.seq ?? 0) > from)
       .map((b) => b.result ? String(comp(b, 'result')!.call) : b.entity.eid),
   )
-  return rows(entries, names, seen).filter((r) => ids.has(r.id))
+  return lines(entries, names, seen)
+    .filter((l) => (l.of ?? [l.id]).some((id) => ids.has(id))).map(drawn)
 }
 
 /** What the session is doing now, in a line; nothing once it ended, however

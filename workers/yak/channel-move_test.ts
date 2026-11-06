@@ -50,3 +50,35 @@ test('words stored with their framing are given the channel it names, once', asy
     ],
   )
 })
+
+test("a talking model's old line, framed as the person's words, is made the Operator's own", async () => {
+  let { g } = operatorMemory()
+  await g.apply([{ entity: { eid: session }, session: {} }], {
+    trusted: true,
+  })
+  let framing = 'On the phone, you said: '
+  await g.apply([
+    said(0, framing + 'Hi Jeffrey, Elihu here. How can I help?', {
+      notice: {},
+      operator_call: { call: 'c1', said: true },
+      operator_channel: { channel: 'voice', framing },
+    }),
+    // Older still: before its channel, given one first.
+    said(1, framing + 'Certainly.', {
+      notice: {},
+      operator_call: { call: 'c1', said: true },
+    }),
+  ], { trusted: true })
+  await channeled(g)
+  assertEquals(
+    (await g.get(ids.slice(0, 2))).map((b) => [
+      (b.content as Comp).body,
+      b.notice,
+      b.operator_channel,
+    ]),
+    [
+      ['Hi Jeffrey, Elihu here. How can I help?', { own: true }, undefined],
+      ['Certainly.', { own: true }, undefined],
+    ],
+  )
+})

@@ -13,6 +13,7 @@ import {
   HEARD,
   helperFrame,
   rows,
+  touched,
 } from './operator-view.ts'
 import { channelMove } from './channel-move.ts'
 
@@ -182,4 +183,47 @@ test('a person sees only their words, marked with the channel they came by, unle
     channelMove(entry('m', 10, { content: { body: 'Send it By email: now' } })),
     [],
   )
+})
+
+test("a call's turn draws the caller's words and what they heard, the request and its answer folded behind a mark, redrawn as the answer comes", () => {
+  let turn = [
+    entry('h', 1, {
+      content: { body: `${HEARD}Any errors?` },
+      notice: {},
+      operator_call: { call: 'c' },
+      operator_channel: { channel: 'voice', framing: HEARD },
+    }),
+    entry('r', 2, {
+      content: { body: 'User asks: any errors?' },
+      operator_call: { call: 'c', asked: true },
+    }),
+    entry('ask', 3, { ask: { to: 'm', through: 'r' } }),
+    entry('call', 4, { call: { to: 'tool', args: {} } }),
+    entry('back', 5, { content: { body: '[]' }, result: { call: 'call' } }),
+    entry('a', 6, { content: { body: 'None.' }, output: { source: 'ask' } }),
+    entry('s', 7, {
+      content: { body: 'No errors at all.' },
+      notice: { own: true },
+      operator_call: { call: 'c', said: true },
+    }),
+    entry('next', 8, { content: { body: 'Thanks' } }),
+  ]
+  let { document } = parseHTML(
+    `<main>${rows(turn, names).map((r) => r.html).join('')}</main>`,
+  )
+  let texts = (q: string) =>
+    [...document.querySelectorAll(q)].map((e) => e.textContent!.trim())
+  assertEquals(texts('main > p.Talk_You, main > .Talk_You'), [
+    'Any errors?',
+    'Thanks',
+  ])
+  assertEquals(texts('.Talk_Asked .Talk_You'), ['User asks: any errors?'])
+  assertEquals(texts('.Talk_Asked .Talk_Reply'), ['None.'])
+  assertEquals(texts('.Talk_Asked .Talk_Step > summary'), ['Did tool'])
+  assertEquals(
+    texts('.Talk_Reply:not(.Talk_Asked *)'),
+    ['No errors at all.'],
+  )
+  // The answer coming back redraws the fold, under its request's id.
+  assertEquals(touched(turn, names, 5).map((r) => r.id), ['r', 's', 'next'])
 })

@@ -47,6 +47,11 @@ export let operatorDoc: VocabDoc = {
           description:
             "Sent to yaks.app's sign-up address or number: the sender's first words, unless they had signed up before.",
         },
+        call: {
+          type: 'string',
+          description:
+            "The call whose talking model asked it, in that model's words for the caller rather than the caller's own.",
+        },
       },
     },
     operator_session: {
@@ -88,12 +93,23 @@ export let operatorDoc: VocabDoc = {
     operator_call: {
       component: true,
       description:
-        "A line said on a phone call that its talking model answered without asking the Operator, kept in the person's conversation as a notice.",
+        "A line of a phone call its talking model hears and speaks, in the person's conversation: the caller's words or the model's, kept as a notice, or what the model asked the Operator.",
       properties: {
         call: { type: 'string', description: "The line's id for the call." },
         said: {
           type: 'boolean',
-          description: "The talking model's words, rather than the caller's.",
+          description:
+            "The talking model's words, which the Operator reads as its own, rather than the caller's.",
+        },
+        began: {
+          type: 'boolean',
+          description:
+            'That the call began here, rather than words said on it.',
+        },
+        asked: {
+          type: 'boolean',
+          description:
+            'What the talking model asked the Operator for the caller (operator_request.call), rather than what either said aloud.',
         },
       },
     },

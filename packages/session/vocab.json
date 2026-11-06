@@ -425,6 +425,10 @@
         "task": {
           "type": "string",
           "description": "the task that prompted this notice"
+        },
+        "own": {
+          "type": "boolean",
+          "description": "the agent's own words, said outside a model turn (by a voice on a call), which the model reads as its own reply"
         }
       }
     },
