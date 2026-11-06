@@ -1,4 +1,5 @@
 import { sessionPackage } from './session-lens.ts'
+import { describedRule } from './described-move.ts'
 import { test } from '@yaks/testing'
 import { assert, assertEquals, assertRejects } from '@std/assert'
 import type { Frame } from '@yaks/api'
@@ -136,9 +137,15 @@ test('the app lens mover rehearses, consumes its source, and is idempotent', asy
   let rule = lensRule(name, next)!
   let lens = rehearsal.rules.find((r: { mark: string }) => r.mark == rule.mark)
   assertEquals([lens.rows, lens.moved], [1, 1])
+  // The described rule finds the two packages a `_lens` names, this app's and
+  // the session lens's, and keeps them; no query word says "named by a _lens".
+  let kept = rehearsal.rules.find((r: { mark: string }) =>
+    r.mark == describedRule.mark
+  )
+  assertEquals([kept.rows, kept.moved], [2, 2])
   for (
     let other of rehearsal.rules.filter((r: { mark: string }) =>
-      r.mark != rule.mark
+      r.mark != rule.mark && r.mark != describedRule.mark
     )
   ) {
     assertEquals([other.rows, other.moved], [0, 0])
