@@ -1,17 +1,14 @@
 import * as io from '@yaks/file/io'
-// The embedded driver itself — @db/sqlite, opened against a library that
-// works. This module is its one door, and it hands out none of it: a caller
-// gets `open(path)`, a {@link Driver} over the database there (./native.ts),
-// and never the driver's own objects. So ./sqlitepath.ts has always named the
-// system library by the time the FFI initializes (importing @db/sqlite first
-// segfaults on Linux with nothing on stderr; ./sqlitepath_test.ts), and a
-// different driver is a change to this package alone.
+// The embedded driver itself — @db/sqlite's (./ffi), opened against the
+// library ./sqlitepath.ts names. This module is its one door, and it hands out
+// none of it: a caller gets `open(path)`, a {@link Driver} over the database
+// there (./native.ts), and never the driver's own objects, so a different
+// driver is a change to this package alone.
 //
 // ./mod.ts stays free of it on purpose: the adapter there works against any
 // `Driver`, and only an application that wants an in-process database needs
 // this.
 
-import './sqlitepath.ts'
 import { Database } from './legacy.ts'
 import { type Driver, render } from '@yaks/sql'
 import { configure, driver } from './native.ts'

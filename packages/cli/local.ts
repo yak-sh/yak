@@ -106,68 +106,39 @@ let open = async (
   readOnly = false,
 ): Promise<Served> => {
   let config = read(path)
-  let reader = roles.includes('web') ? lend(path, config) : undefined
-  // A web warms beside its listener: its reader's workers start, so its first
-  // read is as fast as its next, and then its main thread is watched
-  // ({@link watched}). The host carries the warming as `warmed`, made before
-  // it is composed: a server taking over a port waits for it before it
-  // listens, and any other listens at once (@yaks/api `serve`). A warming that
-  // fails rejects it, and the server ends.
-  let warming = Promise.withResolvers<void>()
-  warming.promise.catch(() => {})
-  let warmed = reader && warming.promise
-  let warm = (host: Served): Served => {
-    if (!reader) return host
-    watched(host, reader.ready()).then(warming.resolve, warming.reject)
-    return host
-  }
+  let web = roles.includes('web')
+  let reader = web ? lend(path, config) : undefined
+  // A web listens first and warms after, when its server asks (@yaks/api
+  // `serve`): its reader's workers start, so a read is as fast as the next,
+  // its main thread is watched ({@link watched}), and then workers start for
+  // the duty roles nothing covers. Until then its reads run on the graph's
+  // own connection, and the CPU goes to answering. A warming that fails
+  // rejects, and the server ends.
+  let host: Served | undefined
+  let cover = (): void => {}
+  let warming: Promise<void> | undefined
+  let warm = web
+    ? () =>
+      warming ??= (reader ? watched(host!, reader.ready()) : Promise.resolve())
+        .then(() => cover())
+    : undefined
   if (
-    readOnly || config.duties === false || (!duties && !roles.includes('web'))
+    readOnly || config.duties === false || (!duties && !web)
   ) {
-    return warm(
-      await compose({ ...config, duties: false }, roles, facet, {
-        reader,
-        warmed,
-        readOnly,
-      }),
-    )
+    return host = await compose({ ...config, duties: false }, roles, facet, {
+      reader,
+      warm,
+      readOnly,
+    })
   }
-  if (roles.includes('web')) {
-    let host = await compose(config, roles, facet, { reader, warmed })
-    try {
-      // Only a web host starts workers for its duties, so only it loads how.
-      let { external } = await import('./external.ts')
-      let coverage = external(
-        host.graph,
-        path,
-        dutiesOf(host.vocab, config, roles),
-        {
-          signal: host.stopping,
-          report: (error, role) =>
-            host.report?.(error, {
-              tags: { step: 'duty coverage', ...role ? { role } : {} },
-            }),
-          feed: host.feed,
-        },
-      )
-      let close = host.close
-      host.close = async (code) => {
-        await coverage.close()
-        await close(code)
-      }
-      // Not awaited: the duty workers it starts come up beside the web, which
-      // listens without waiting for them, and what fails is reported.
-      void coverage.checked
-    } catch (error) {
-      await host.close()
-      await reader?.close()
-      throw error
-    }
-    return warm(host)
+  if (web) {
+    let served = host = await compose(config, roles, facet, { reader, warm })
+    cover = () => void covered(served, path, config, roles)
+    return served
   }
   let aside = thread<string>(new URL('./duties.ts', import.meta.url))
   asides.add(aside)
-  let host = await compose(config, roles, facet, {
+  host = await compose(config, roles, facet, {
     thread: aside,
     reader,
   })
@@ -178,7 +149,43 @@ let open = async (
     await reader?.close()
     throw error
   }
-  return warm(host)
+  return host
+}
+
+// Workers for the duty roles of a web's graph that no live process serves,
+// started and watched for as long as the web is up. Only a web host starts
+// them, so only it loads how. What fails is reported, and the web stays up.
+let covered = async (
+  host: Served,
+  path: string,
+  config: Config,
+  roles: Role[],
+): Promise<void> => {
+  try {
+    let { external } = await import('./external.ts')
+    if (host.stopping.aborted) return
+    let coverage = external(
+      host.graph,
+      path,
+      dutiesOf(host.vocab, config, roles),
+      {
+        signal: host.stopping,
+        report: (error, role) =>
+          host.report?.(error, {
+            tags: { step: 'duty coverage', ...role ? { role } : {} },
+          }),
+        feed: host.feed,
+      },
+    )
+    let close = host.close
+    host.close = async (code) => {
+      await coverage.close()
+      await close(code)
+    }
+    await coverage.checked
+  } catch (error) {
+    await host.report?.(error, { tags: { step: 'duty coverage' } })
+  }
 }
 
 // A process that stays up tells of a main thread held so long that its

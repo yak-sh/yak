@@ -14,6 +14,7 @@ export let prepare = async (
 ): Promise<typeof import('./local.ts')> => {
   let said = await declarations(config, true)
   let roles = rolesOf(command, said.pooled)
+  let web = roles.includes('web')
   let owner = command.name && said.owners[command.name]
   selected ??= owner ? [owner, 'tools'] : undefined
   let factories = new Set(
@@ -31,7 +32,9 @@ export let prepare = async (
       } else if (role == plugin) names.push('service')
     }
     if (selected?.[0] == plugin) names.push(selected[1])
-    if (draw && selected?.[1] != 'cli') names.push('views')
+    // A web draws its answer only once it stops: its views load then, and
+    // not before it listens.
+    if (draw && !web && selected?.[1] != 'cli') names.push('views')
     return [...new Set(names)].filter((name) =>
       said.facets[plugin].includes(name)
     ).map((name) => [plugin, name] as const)

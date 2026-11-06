@@ -131,12 +131,15 @@ export interface Host {
     search?: Search
     meaning?: Meaning
   }
-  /** Settles once a web host has warmed: its first read answers as fast as
-   * its next, and its main thread is watched. A server taking over a port
-   * waits for it before it listens; any other listens at once (@yaks/api
-   * `serve`). It rejects with what kept the host from warming. Absent where
-   * there is nothing to warm. */
-  warmed?: Promise<void>
+  /** Warm a web host, once however often it is called, and settle when it is
+   * warm: its reads answer as fast as the next, its main thread is watched,
+   * and its duty roles are covered. A server taking over a port warms before
+   * it listens; any other listens first (@yaks/api `serve`). It rejects with
+   * what kept the host from warming. Absent where there is nothing to warm. */
+  warm?: () => Promise<void>
+  /** Settles as a web host starts warming: work a route does ahead of its
+   * first request starts then, and not before the server listens. */
+  warming?: Promise<void>
   /** the post-commit registry: what a commit owes, written down by every
    * process (@yaks/effects), and the observers a plugin registers while one of
    * its tools runs */

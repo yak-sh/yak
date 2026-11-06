@@ -257,8 +257,8 @@ export type ComposeOpts = {
     /** where the reader tells of a read that runs on */
     overrun?: (tell: (error: Error) => void) => void
   }
-  /** what the host carries as {@link Host.warmed} */
-  warmed?: Promise<void>
+  /** what the host carries as {@link Host.warm} */
+  warm?: () => Promise<void>
   /** a reader beside a host records no process of its own */
   process?: boolean
   /** Open the graph as of a transaction, or on a branch, where its store
@@ -582,6 +582,13 @@ let composed = async (
     // The store's print, digested by the platform before the store is bound,
     // so the schema below finds it made.
     if (!opts.readOnly && !mode) await printing(vocab, derived, !!sql.file)
+    // A web host warms when its server asks (@yaks/api `serve`), and what
+    // its routes make ahead of a first request waits for that.
+    let warming = opts.warm && Promise.withResolvers<void>()
+    let warm = opts.warm && (() => {
+      warming!.resolve()
+      return opts.warm!()
+    })
     let built = plan.bind({
       tools: { package: '@yaks/cli', offer: operations },
       host: {
@@ -590,7 +597,8 @@ let composed = async (
         blobs: sqliteBlobs(sql),
         artifacts,
         reader: opts.reader,
-        warmed: opts.warmed,
+        warm,
+        warming: warming?.promise,
         me: selfEid(),
         stopping: stopping.signal,
         report: (error, context = {}) =>

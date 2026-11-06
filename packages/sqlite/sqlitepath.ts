@@ -1,22 +1,16 @@
 import * as system from '@yaks/process/system'
-// Which SQLite library the FFI driver opens, set before the driver loads.
+// Which SQLite library the FFI driver opens (./ffi/ffi.ts): the one the
+// environment names, else the system's.
 //
-// @db/sqlite reaches a native library through FFI, and when nothing names one
-// it downloads a prebuilt. On Linux x86_64 that prebuilt kills the process the
-// moment it initializes: `sqlite3_initialize` calls through a null pointer
+// Never upstream @db/sqlite's prebuilt. On Linux x86_64 it kills the process
+// the moment it initializes: `sqlite3_initialize` calls through a null pointer
 // inside `sqlite3MallocInit` under Deno 2.9 — a SIGSEGV with an empty stderr,
 // before a line of ours runs. A library linked without -Bsymbolic crashes the
 // same way under a Deno that links the system's libsqlite3 (Homebrew's does):
 // that library's API is in the process first, and the second library's calls
-// to its own functions bind to it. Every platform's system library is fine, so
-// name that instead. This repository's tests name one SQLite built
-// one way, wherever they run (bin/sqlite.ts).
-//
-// This is its own module because ES evaluation runs a module's dependencies
-// before its body, in declaration order: ./db.ts imports this first, then
-// '@db/sqlite', so the environment variable is already set when the driver
-// initializes. Import `Database` from ./db.ts and this ordering is not
-// something a caller has to know.
+// to its own functions bind to it. Every platform's system library is fine.
+// This repository's tests name one SQLite built one way, wherever they run
+// (bin/sqlite.ts).
 
 let paths: Record<string, string> = {
   linux: 'libsqlite3.so.0',
@@ -24,7 +18,7 @@ let paths: Record<string, string> = {
   windows: 'sqlite3.dll',
 }
 
-/** The library @db/sqlite will open: what the environment already names, else
+/** The library the driver opens: what the environment already names, else
  * this platform's system SQLite. */
 export let sqlitePath: string = system.env.get('DENO_SQLITE_PATH') ??
   paths[system.os]
@@ -32,4 +26,3 @@ export let sqlitePath: string = system.env.get('DENO_SQLITE_PATH') ??
 if (!sqlitePath) {
   throw new Error(`No system SQLite library for ${system.os}`)
 }
-system.env.set('DENO_SQLITE_PATH', sqlitePath)

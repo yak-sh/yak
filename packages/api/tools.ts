@@ -101,11 +101,10 @@ export type Serving = {
    * (@yaks/cli host.ts `bury`); a host that tracks no processes has none */
   bury?: () => Promise<unknown>
   stopping: AbortSignal
-  /** settles once the host answers its first read as fast as its next
-   * (@yaks/host `Host.warmed`): a server taking over a port (`share`) waits
-   * for it before it listens, every server before it says it is ready, and
-   * one that fails ends the server */
-  warmed?: Promise<void>
+  /** warm the host (@yaks/host `Host.warm`): a server taking over a port
+   * (`share`) warms before it listens, any other once it listens, and every
+   * server before it says it is ready; one that fails ends the server */
+  warm?: () => Promise<void>
 }
 
 let seconds = (ms: number): string => `${Math.round(ms / 1000)}s`
@@ -161,8 +160,8 @@ export let runs = (host: Serving): Runs => ({
     await host.bury?.()
     // A server sharing a port takes requests from the one it replaces as soon
     // as it listens, so it listens warm. One starting alone listens at once,
-    // since nothing answers there until it does, and warms as it listens.
-    if (args.share === true) await host.warmed
+    // since nothing answers there until it does, and warms once it listens.
+    if (args.share === true) await host.warm?.()
     let at = ''
     let began = Date.now()
     let active = requests(handler)
@@ -206,7 +205,7 @@ export let runs = (host: Serving): Runs => ({
     })
     let unready: (() => Promise<void>) | undefined
     try {
-      await host.warmed
+      await host.warm?.()
       if (typeof args.ready == 'string') unready = await denoReady(args.ready)
       // And the duties in their long-lived form: the effect pool, where this
       // process serves `effects`, and the plugins' services, each under its

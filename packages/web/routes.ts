@@ -26,7 +26,6 @@ import { type Authenticate, type Route, write } from '@yaks/api'
 import type { Graph, ReadOpts } from '@yaks/graph'
 import { Refused } from '@yaks/graph/errors'
 import { addressId } from '@yaks/id'
-import { composition, stylesheet } from '@yaks/ui'
 import type { Vocab } from '@yaks/vocab'
 import { type Body, kept } from '@yaks/cli/page'
 import { made } from './canvas.ts'
@@ -47,6 +46,9 @@ export type Hosting = {
   vault?: Vault
   /** aborts as the host closes, ending the app's build if it is still going */
   stopping?: AbortSignal
+  /** settles as the host starts warming (@yaks/host `Host.warming`), when the
+   * app's build starts */
+  warming?: Promise<void>
   /** the host's telemetry, where what a page reports is sent */
   report?: (error: unknown, context?: Partial<Context>) => unknown
 }
@@ -81,9 +83,11 @@ let html = async () => {
   return page.replace('<head>', `<head>${script}`)
 }
 
+// @yaks/ui's stylesheet carries every component's CSS, so it loads when the
+// stylesheet is first asked for, not before the server listens.
 let styles = async (app: Application) =>
   (await Promise.all([
-    stylesheet(composition),
+    import('@yaks/ui').then((ui) => ui.stylesheet(ui.composition)),
     app.styles ? fetch(app.styles).then((r) => r.text()) : '',
   ]))
     .join('\n')
@@ -247,12 +251,16 @@ export let routes = (host: Hosting, options: Options = {}): Route[] => {
     {
       method: 'GET',
       path: '/web/app.js',
-      // Started with the host, so the first page load finds it built.
+      // Started as the host warms, once it listens, so the first page load
+      // finds it built and the listening waits on none of the views.
       handle: kept(
         '/web/app.js',
         'text/javascript; charset=utf-8',
         (signal) => made(host.config?.plugins ?? [], options, signal),
-        { early: true, closing: host.stopping },
+        {
+          early: host.warming ?? Promise.resolve(),
+          closing: host.stopping,
+        },
       ),
     },
     {
