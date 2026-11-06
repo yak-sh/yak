@@ -10,6 +10,7 @@
   },
   "entries": [
     "./grammar",
-    "./answer"
+    "./answer",
+    "./terminal"
   ]
 }

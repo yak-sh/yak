@@ -467,6 +467,60 @@ export let external = (urls: Shared['urls']): Options['external'] => (spec) => {
   }
 }
 
+/// unexported('import{a,b as c}from"https://o/__packages/h/e.js"', { '__packages/h/e.js': 'let a,x;export{a,x as b}' }, 'https://o') -> []
+/// unexported('import{show}from"https://o/__packages/h/e.js"', { '__packages/h/e.js': 'export*from"./c.js"', '__packages/h/c.js': 'export let a' }, 'https://o', { '@yaks/cli/answer': 'https://o/__packages/h/e.js' }) -> ['imports show from @yaks/cli/answer, which does not export it']
+/** The names a compiled page imports from shared modules that those modules
+ * do not export, each as an error line. esbuild leaves a shared import
+ * external and never checks it, and a browser refuses to link a page naming
+ * one, so the whole page's script stops; the compile refuses it instead, and
+ * the last release keeps serving. A namespace or dynamic import names
+ * nothing to check. */
+export let unexported = (
+  code: string,
+  files: Shared['files'],
+  origin: string,
+  urls: Shared['urls'] = {},
+): string[] => {
+  let specs = new Map(Object.entries(urls).map(([spec, url]) => [url, spec]))
+  let pathOf = (url: string) =>
+    url.startsWith(`${origin}/`) ? url.slice(origin.length + 1) : ''
+  // What a shared module exports, through its `export*from`s.
+  let exportsOf = (url: string, seen = new Set<string>()): Set<string> => {
+    let text = files[pathOf(url)]
+    let names = new Set<string>()
+    if (text == null || seen.has(url)) return names
+    seen.add(url)
+    let [imports, exports] = parse(text)
+    for (let e of exports) names.add(e.n)
+    for (let i of imports) {
+      if (i.d != -1 || !i.n) continue
+      if (!/^export\s*\*\s*from/.test(text.slice(i.ss, i.se))) continue
+      for (let n of exportsOf(new URL(i.n, url).href, seen)) {
+        if (n != 'default') names.add(n)
+      }
+    }
+    return names
+  }
+  return parse(code)[0].flatMap((i) => {
+    let url = i.n
+    if (i.d != -1 || !url || files[pathOf(url)] == null) return []
+    let clause = code.slice(i.ss, i.se).replace(/\s*from\s*["'][^]*$/, '')
+      .replace(/^(import|export)\s*/, '')
+    if (/^["']|\*/.test(clause)) return []
+    let names = [
+      ...(/^[\w$]+/.test(clause) ? ['default'] : []),
+      ...(/\{([^}]*)\}/.exec(clause)?.[1].split(',') ?? [])
+        .map((n) => n.trim().split(/\s+as\s+/)[0])
+        .filter(Boolean),
+    ]
+    let has = exportsOf(url)
+    return names.filter((n) => !has.has(n))
+      .map((n) =>
+        `imports ${n} from ${specs.get(url) ?? url}, which does not export it`
+      )
+  })
+}
+
 /// flat('import"https://o/__packages/a/e.js"', { '__packages/a/e.js': 'import"./c.js"', '__packages/a/c.js': '' }, 'https://o') -> 'import"https://o/__packages/a/e.js"\nimport"https://o/__packages/a/c.js";'
 /// flat('let n = 1', {}, 'https://o') -> 'let n = 1'
 /** A page entry that also imports every shared module its own imports reach.

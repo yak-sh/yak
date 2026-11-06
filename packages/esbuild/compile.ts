@@ -21,7 +21,7 @@ import { lockfile, type Pins, pins, reached, split, wanted } from './lock.ts'
 import * as npm from './npm.ts'
 import { type Answer, type Ask, dependencies } from './plan.ts'
 import { said } from './said.ts'
-import { external, flat, shared } from './shared.ts'
+import { external, flat, shared, unexported } from './shared.ts'
 import { header, phase, type Report, type Timing } from './timing.ts'
 import { homes } from './home.ts'
 import { type Catalog, located, type Seed, seed } from './platform.ts'
@@ -276,9 +276,11 @@ export let compile = async (
         // What a package written for bundlers asks of its environment.
         define: { 'process.env.NODE_ENV': '"production"' },
       }, unfetched(ask, entry))
-      if (code != null) {
-        answer.pages[entry] = flat(code, answer.shared ?? {}, origin)
-      }
+      if (code == null) continue
+      let missing = unexported(code, answer.shared ?? {}, origin, urls)
+      if (missing.length) {
+        answer.errors.push(...missing.map((line) => `${entry}: ${line}`))
+      } else answer.pages[entry] = flat(code, answer.shared ?? {}, origin)
     }
     Object.assign(tarballs, home.tarballs)
   } finally {
