@@ -17,6 +17,7 @@ import {
   onPlus,
   owned,
   signedIn,
+  signIn,
   txt,
   unique,
   vocabFile,
@@ -1506,7 +1507,7 @@ test(
 
       // A stranger belongs to no space of ours: every tool refuses him by
       // name, and he may make his own.
-      let stranger = connector(k, await signedIn(k, crypto.randomUUID()))
+      let stranger = connector(k, (await signIn(k)).cookie)
       // Even someone who has never had a space gets one the moment they
       // need it, rather than being asked to invent a name.
       let made = await stranger.tool('app_new', {

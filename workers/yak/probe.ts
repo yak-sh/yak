@@ -312,7 +312,9 @@ export let browser = (k: Kernel, host: string, cookie?: string) => {
   return { origin: service.url, stop: service.stop }
 }
 
-// A signed-in person's Cookie header, an hour long.
+// A signed-in person's Cookie header, an hour long. It names a person whose
+// row the caller wrote: a cookie for nobody is an erased account's, refused
+// (directory.ts `own`); `signIn` makes the person too.
 export let signedIn = async (k: Kernel, person: string) =>
   `${COOKIE}=${await sign(
     { person, space: null, exp: Math.floor(Date.now() / 1000) + 3600 },
