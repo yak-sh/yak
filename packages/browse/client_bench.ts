@@ -1,4 +1,3 @@
-import * as system from '@yaks/process/system'
 // Read-path baselines: the pure half that runs on every ws message.
 import { rows } from './client.ts'
 import { matchQuery, parseQuery } from './query.ts'
@@ -12,7 +11,7 @@ import { docs as project } from '@yaks/project/vocab'
 import { docs as session } from '@yaks/session/vocab'
 import { standaloneMain } from '../../bench/standalone-main.ts'
 
-if (system.main(import.meta.url)) {
+if (import.meta.main) {
   await standaloneMain('web-client')
 } else {
   // The words a page learns from its server's /vocab before it reads a query.

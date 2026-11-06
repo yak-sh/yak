@@ -127,7 +127,7 @@ let deno = (args: string[], cwd: string, quiet = false) =>
     stderr: quiet ? 'piped' : 'inherit',
   }).output()
 
-if (system.main(import.meta.url)) {
+if (import.meta.main) {
   let dir = await disk.makeTempDir({ prefix: 'yak-install-' })
   try {
     let config = `${dir}/deno.json`

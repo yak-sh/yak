@@ -1,7 +1,6 @@
 /** Isolated synthetic comparison; not a live provider benchmark.
  * deno run -A packages/harness/streaming_bench.ts */
 
-import * as systemProcess from '@yaks/process/system'
 import { graph, transient } from '@yaks/graph'
 import { ram } from '@yaks/ram'
 import { loadVocab } from '@yaks/vocab'
@@ -72,6 +71,6 @@ export async function measure(
   return results
 }
 
-if (systemProcess.main(import.meta.url)) {
+if (import.meta.main) {
   await standaloneMain('harness-streaming')
 }

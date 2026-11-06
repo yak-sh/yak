@@ -5,7 +5,6 @@
 // written beside it, for the bundle to read and for a page that loaded the
 // client before it was one.
 import * as io from '@yaks/file/io'
-import * as system from '@yaks/process/system'
 import { bundle } from '@yaks/cli/page'
 import { written } from './sheet-assets.ts'
 
@@ -29,4 +28,4 @@ export let assets = async (to = new URL('./public/', import.meta.url)) => {
     await bundle(new URL('client.js', to)),
   )
 }
-if (system.main(import.meta.url)) await Promise.all([assets(), written()])
+if (import.meta.main) await Promise.all([assets(), written()])

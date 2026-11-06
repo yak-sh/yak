@@ -1,7 +1,6 @@
 // The cost of reading one transcript's computed status while another holds a
 // large history of calls. Both doors are used by a Store reading call rows.
 
-import * as systemProcess from '@yaks/process/system'
 import { type Bundle, graph } from '@yaks/graph'
 import { loadVocab } from '@yaks/vocab'
 import { storage } from '@yaks/sqlite'
@@ -12,7 +11,7 @@ import { sessionDoc } from './comp.ts'
 import { sessionDerived } from './status.ts'
 import { standaloneMain } from '../../bench/standalone-main.ts'
 
-if (systemProcess.main(import.meta.url)) {
+if (import.meta.main) {
   await standaloneMain('session-status')
 } else {
   let vocab = loadVocab([sessionDoc, toolsDoc, modelDoc])

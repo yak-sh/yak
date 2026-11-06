@@ -1,7 +1,6 @@
 /** Isolated session-switch benchmark. No default database is opened. */
 
 import * as fs from '@yaks/file/io'
-import * as systemProcess from '@yaks/process/system'
 import { remote } from './remote.ts'
 import type { Bundle } from '@yaks/graph'
 import { h as node } from 'preact'
@@ -95,4 +94,4 @@ export async function measure(
   }
 }
 
-if (systemProcess.main(import.meta.url)) await standaloneMain('harness-switch')
+if (import.meta.main) await standaloneMain('harness-switch')

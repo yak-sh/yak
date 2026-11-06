@@ -1,5 +1,4 @@
 import * as io from '@yaks/file/io'
-import { main } from '@yaks/process/system'
 // This example server strips TypeScript per file, as the application does, so
 // the page uses plain ESM without a bundle step. Only this worktree's selected
 // packages are served, on a loopback listener; Preact comes from esm.sh.
@@ -59,6 +58,6 @@ export let serve = async (request: Request): Promise<Response> => {
   }
 }
 
-if (main(import.meta.url)) {
+if (import.meta.main) {
   Deno.serve({ hostname: '127.0.0.1', port: 8000 }, serve)
 }

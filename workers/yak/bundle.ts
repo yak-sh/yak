@@ -130,7 +130,7 @@ export let bundle = async (root: string, output: string, meta: string) => {
   }
 }
 
-if (system.main(import.meta.url)) {
+if (import.meta.main) {
   let root = dirname(fileURLToPath(import.meta.url))
   let [output, meta] = system.args.map((arg) => resolve(arg))
   await bundle(root, output, meta)

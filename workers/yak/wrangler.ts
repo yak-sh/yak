@@ -1323,7 +1323,7 @@ let releases = async (head: string, env: string[], wrangler = WRANGLER) =>
     ),
   )
 
-if (system.main(import.meta.url)) {
+if (import.meta.main) {
   let began = new Date()
   let started = performance.now()
   let argv = [...system.args]

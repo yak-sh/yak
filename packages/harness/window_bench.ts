@@ -4,7 +4,6 @@
  */
 
 import * as fs from '@yaks/file/io'
-import * as systemProcess from '@yaks/process/system'
 import { remote } from './remote.ts'
 import type { Bundle } from '@yaks/graph'
 import { at, harness } from './testing.ts'
@@ -112,4 +111,4 @@ export async function measure(
   return samples
 }
 
-if (systemProcess.main(import.meta.url)) await standaloneMain('harness-window')
+if (import.meta.main) await standaloneMain('harness-window')

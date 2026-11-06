@@ -33,7 +33,6 @@ export let execPath = (): string => process.execPath
 let deno = (globalThis as { Deno?: { mainModule: string } }).Deno
 export let mainModule: string = deno?.mainModule ??
   (process.argv[1] ? pathToFileURL(process.argv[1]).href : '')
-export let main = (url: string): boolean => url == mainModule
 export let version = { ...process.versions }
 export let runtimeName = process.versions.deno ? 'deno' : 'node'
 export let runtimeVersion = process.versions.deno ?? process.versions.node

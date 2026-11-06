@@ -3,7 +3,6 @@
  */
 
 import * as fs from '@yaks/file/io'
-import * as systemProcess from '@yaks/process/system'
 import { local } from './local.ts'
 import { remote } from './remote.ts'
 import { at, harness } from './testing.ts'
@@ -70,4 +69,4 @@ export async function measure(
   }
 }
 
-if (systemProcess.main(import.meta.url)) await standaloneMain('harness-worker')
+if (import.meta.main) await standaloneMain('harness-worker')

@@ -94,7 +94,7 @@ export let assets = async (
   return { ...release, files: paths.length, bytes: compressed.byteLength }
 }
 
-if (system.main(import.meta.url)) {
+if (import.meta.main) {
   let started = performance.now()
   let root = system.args[0] ??
     fileURLToPath(new URL('../../../', import.meta.url))

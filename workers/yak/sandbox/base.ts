@@ -183,7 +183,7 @@ export let imaged = async (
   throw new Error(`docker push ${from} failed three times`)
 }
 
-if (system.main(import.meta.url)) {
+if (import.meta.main) {
   let { WRANGLER } = await import('../wrangler.ts')
   console.log(
     await based({ wrangler: WRANGLER, dry: system.args.includes('--dry-run') }),

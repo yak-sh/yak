@@ -72,4 +72,4 @@ export let installed = async (root: string = dir()): Promise<boolean> => {
   return true
 }
 
-if (platform.main(import.meta.url)) await installed(platform.args[0])
+if (import.meta.main) await installed(platform.args[0])

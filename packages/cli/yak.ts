@@ -422,7 +422,7 @@ export let main = async (
     return code = await cli([...extra, ...TOOLS], {
       ...YAK,
       argv,
-      invoke: system.main(import.meta.url)
+      invoke: import.meta.main
         ? async (command, c) =>
           c.config &&
             (command.name == 'work' || command.roles?.includes('web'))
@@ -448,7 +448,7 @@ export let main = async (
 // that takes. A command with nothing open has nothing to finish, and ends at
 // once. A second interrupt ends its duty threads where they stand (./held.ts
 // `cut`), closes with the interrupt's code, and exits.
-if (system.main(import.meta.url)) {
+if (import.meta.main) {
   listen()
   let ran = main(system.args)
   wind.hold({

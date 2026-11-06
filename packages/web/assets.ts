@@ -34,7 +34,7 @@ export let assets = async (to: string, app: Application) => {
     ].map((name) => io.copyFile(new URL(name, here), `${to}/${name}`)),
   ])
 }
-if (system.main(import.meta.url)) {
+if (import.meta.main) {
   if (!system.args[1]) {
     throw new Error('assets needs an application ./web module')
   }

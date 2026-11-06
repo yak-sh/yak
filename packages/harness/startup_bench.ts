@@ -1,7 +1,6 @@
 /** Isolated startup benchmark. Does not open the configured harness database. */
 
 import * as fs from '@yaks/file/io'
-import * as systemProcess from '@yaks/process/system'
 import { local } from './local.ts'
 import { remote } from './remote.ts'
 import type { Bundle } from '@yaks/graph'
@@ -138,4 +137,4 @@ export async function measure(
   return samples
 }
 
-if (systemProcess.main(import.meta.url)) await standaloneMain('harness-startup')
+if (import.meta.main) await standaloneMain('harness-startup')
