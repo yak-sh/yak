@@ -3,6 +3,7 @@ import { test } from '@yaks/testing'
 import { assert, assertEquals } from '@std/assert'
 import { type Bundle, type Comp, derivedEid, graph } from '@yaks/graph'
 import { ram } from '@yaks/ram'
+import { wordsOf } from '@yaks/session'
 import { skillItems, skillTools } from './skills.ts'
 import { harness } from './testing.ts'
 
@@ -43,11 +44,13 @@ let fixture = async () => {
   let load = async (skill = 'checking') => {
     let call = calls.shift()!
 
-    let result = await tools[0].run({ skill }, {
-      session: 'session',
-      call,
-      entries: [call],
-    })
+    let result = wordsOf(
+      await tools[0].run({ skill }, {
+        session: 'session',
+        call,
+        entries: [call],
+      }),
+    )
     return { call, result }
   }
   // The tool catalogue is installed before a running session makes requests.

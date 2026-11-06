@@ -5,6 +5,7 @@ import { mcpTools } from './mcp.ts'
 import { signins } from '@yaks/connections'
 import type { Remote } from './mcp_auth.ts'
 import { toolEid } from '@yaks/tools'
+import { wordsOf } from '@yaks/session'
 import { harness } from './testing.ts'
 
 let connected = (
@@ -66,7 +67,7 @@ test('remote images use external artifacts while large text retains bounded cont
       call: { entity: { eid: 'call' } },
       entries: [],
     }
-    let text = await tool.run({}, context)
+    let text = wordsOf(await tool.run({}, context))
     assert(!text.includes(image))
     assert(text.includes('Artifact:'))
     let artifacts = await h.g.read('.artifact&*')
