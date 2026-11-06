@@ -219,7 +219,7 @@ import {
   refusedSell,
   selling,
 } from './sell.ts'
-import { shops } from './payments.ts'
+import { payments } from './payments.ts'
 import { mailFrom } from './post.ts'
 import {
   apex as platformHost,
@@ -3059,59 +3059,60 @@ let OURS: Row[] = [
         disconnect: {
           type: 'boolean',
           description:
-            'true to stop selling through this space: the Stripe account is ' +
-            'left untouched, and no app here can charge on it any more. ' +
-            'Connecting again is one call',
+            'true to stop selling through this space: the account at the ' +
+            'payment provider is left untouched, and no app here can charge ' +
+            'on it any more. Connecting again is one call',
         },
       },
     },
     run: async (ctx, args) => {
       let { space } = await owns(ctx, args)
+      let { name, shops } = await payments(ctx.env)
       if (args.disconnect != null && flag(args.disconnect, 'disconnect')) {
         if (!space.seller?.account) {
           throw refuse(
             'conflict',
-            `${space.slug} is not selling through Stripe`,
+            `${space.slug} is not selling through ${name}`,
           )
         }
         await disconnect(ctx.env, space)
         return {
-          text: `${space.slug} has stopped selling. Their Stripe account is ` +
+          text: `${space.slug} has stopped selling. Their ${name} account is ` +
             'untouched — their money, their records, their dashboard, all ' +
             'exactly where they were — and nothing here can charge on it now.',
           space,
         }
       }
-      if (!(await shops(ctx.env)).on()) {
+      if (!shops.on()) {
         throw refuse('unavailable', 'selling is not switched on here')
       }
       let no = refusedSell(space, ctx.env)
       if (no) throw refuse('limit', no)
       if (selling(space) == 'ready') {
         return {
-          text: `${space.slug} is already selling: Stripe has them ready to ` +
+          text: `${space.slug} is already selling: ${name} has them ready to ` +
             `take payments, and every app here can charge through POST ` +
             `/api/pay/checkout. We take ${rate(await feeOf(ctx.dir))} of ` +
             `each sale.`,
           space,
         }
       }
-      // The address the platform already has for them, so Stripe's form opens
-      // with it filled in. Never one the agent named — the account is minted
-      // against the person who is signed in, and an address an agent chose
-      // would be an account onboarded to somebody else.
+      // The address the platform already has for them, so the provider's form
+      // opens with it filled in. Never one the agent named — the account is
+      // minted against the person who is signed in, and an address an agent
+      // chose would be an account onboarded to somebody else.
       let email = await ctx.dir.emailAt(ctx.person) ?? ''
       let made = await connect(ctx.env, space, email)
       return {
         text:
-          `Send them this link to finish setting up with Stripe — it is theirs ` +
+          `Send them this link to finish setting up with ${name} — it is theirs ` +
           `alone, it is good once, and it expires:\n\n${made.url}\n\nNothing ` +
           `can be sold in ${space.slug} until they have been through it. They ` +
           `are the merchant: their charge, their money, their name on the ` +
           `statement, and refunds and disputes are theirs. We take ` +
           `${rate(await feeOf(ctx.dir))} ` +
           `of each sale. Call space_sell again for a fresh link — it opens the ` +
-          `same Stripe account, never a second one.`,
+          `same ${name} account, never a second one.`,
         space,
       }
     },

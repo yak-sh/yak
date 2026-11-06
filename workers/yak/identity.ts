@@ -100,7 +100,7 @@ import {
 } from './handoff.ts'
 export { HANDOFF } from './handoff.ts'
 import { planCard } from './billing.ts'
-import { plans } from './payments.ts'
+import { payments } from './payments.ts'
 import {
   daysLeft,
   directory,
@@ -544,6 +544,7 @@ let theirs = async (env: Env, req: Request, said?: string, say?: string) => {
   if (!who) return redirect('/login?return=%2Fconnect', undefined, 303)
   let dir = dirOf(env)
   let space = await dir.own(who.person)
+  let provider = await payments(env)
   return connect(
     {
       slug: space.slug,
@@ -552,9 +553,10 @@ let theirs = async (env: Env, req: Request, said?: string, say?: string) => {
       say,
       no: !!say,
       // What they pay, and the two doors that change it (billing.ts, T-33125).
-      // `known` is whether Stripe has ever met this space: somebody who
-      // cancelled still reaches their own invoices.
-      plan: planCard(await plans(env), space),
+      // `known` is whether the payment provider has ever met this space:
+      // somebody who cancelled still reaches their own invoices.
+      plan: planCard(provider.plans, space),
+      provider: provider.name,
       paid: new URL(req.url).searchParams.get('paid') == '1',
     },
     say ? 400 : 200,

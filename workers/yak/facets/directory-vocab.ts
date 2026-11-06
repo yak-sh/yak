@@ -575,8 +575,8 @@ export let referralDoc: VocabDoc = {
     // The month of the Plus plan a referral gave its inviter once the
     // invitee built their first app (referral.ts `rewarding`): when, to which
     // space, the day that space's free time now runs through, and, for a
-    // space already paying, the Stripe subscription whose next charge moved a
-    // month later. A mark, written once.
+    // space already paying, the provider's subscription whose next charge
+    // moved a month later. A mark, written once.
     rewarded: {
       description:
         "The free month of the Plus plan a referral gave its inviter's space when the invitee built their first app.",
@@ -589,12 +589,12 @@ export let referralDoc: VocabDoc = {
         subscription: owned(text),
       },
     },
-    // The Plus plan given to a space free, through `until`, where Stripe
-    // bills it nothing (directory.ts `tierOf`): each reward adds a month
+    // The Plus plan given to a space free, through `until`, where the payment
+    // provider bills it nothing (directory.ts `tierOf`): each reward adds a month
     // after the later of now and the free time it already had.
     comped: {
       description:
-        'The Plus plan given to a space free, through `until`, outside of Stripe.',
+        'The Plus plan given to a space free, through `until`, with nothing billed for it.',
       component: true,
       type: 'object',
       properties: { until: owned(time) },

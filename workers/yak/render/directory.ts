@@ -258,8 +258,8 @@ let stamp = (b: Record<string, unknown>, comp: string) =>
 
 // Somebody who signed up through an invite (referral.ts), drawn on the
 // admin's Invites page: who invited them and when, and the month their first
-// app gave (reward.ts), to which space and through when, a space Stripe bills
-// having had its next charge moved. The row opens the person invited.
+// app gave (reward.ts), to which space and through when, a space the payment
+// provider bills having had its next charge moved. The row opens the person invited.
 let referral: Renderer = {
   view: 'Directory.List.Tile',
   match: parse('.referral'),

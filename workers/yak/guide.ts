@@ -126,7 +126,7 @@ notice. Call guide with page files for the rules and a custom-notice example
 
 Some things are the person's to do, and a tool returns what they need for
 it rather than doing it: space_delete emails the owner a confirmation link,
-space_sell returns the Stripe onboarding link, domain_attach returns the DNS
+space_sell returns the payment provider's onboarding link, domain_attach returns the DNS
 record to add at their registrar, app_set and space_set return the new
 address, grant returns the one line to paste. Hand those over as they come
 back. Erasing with forever, forgetting an old address, submitting an app to
@@ -370,10 +370,10 @@ not, and naming an app or its address is what makes it this one. Call guide with
 page mail for the whole thing (${url(env, '/docs/mail.md')}).
 
 A store on Plus can take payments without keys or code. The seller connects
-a Stripe account of their own to their space once (space_sell, or the button on
-their space page), and after that any app in it posts a cart to
-./api/pay/checkout — items: [{product: eid, qty, options}] — and is answered
-{url}, the Stripe payment page to send the buyer to. That endpoint reads
+an account of their own at the payment provider to their space once
+(space_sell, or the button on their space page), and after that any app in it
+posts a cart to ./api/pay/checkout — items: [{product: eid, qty, options}] —
+and is answered {url}, the provider's payment page to send the buyer to. That endpoint reads
 price_cents and the title off each product row in the app's own store, so a page
 never posts a price: a price sent from the page could be edited by the buyer. When
 the money moves an order {session, account, items, total_cents, fee_cents,
@@ -381,7 +381,7 @@ email, status} row lands in that app's store — order is a component the platfo
 declares, so no vocab.json declares it — and the buyer gets a confirmation from
 the app's own address. The charge is on the seller's account and the money is
 theirs, less a small platform fee; no card number ever reaches this platform or
-your app, and refunds are made in their own Stripe dashboard. Call guide with
+your app, and refunds are made in their own dashboard at the provider. Call guide with
 page selling for the whole thing (${url(env, '/docs/selling.md')}).
 
 An app is a plugin. app_publish offers one to every other space here by

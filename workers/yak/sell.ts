@@ -33,7 +33,7 @@
 import { sha256 } from '@yaks/graph/sha256'
 import { derivedEid } from '@yaks/graph/identity'
 import { moved } from './billing.ts'
-import { shops, via } from './payments.ts'
+import { payments, shops, via } from './payments.ts'
 import { ours, refusal } from '@yaks/hook'
 import type {
   Line,
@@ -418,7 +418,7 @@ export let sale = (at: {
  *
  * A space that is not ready is refused by name with the way out, because that
  * refusal is the one a page will actually meet: a seller deploys their shop
- * before they finish Stripe's form nearly every time.
+ * before they finish the provider's form nearly every time.
  */
 export let buying = async (
   env: Env,
@@ -428,7 +428,7 @@ export let buying = async (
 ) => {
   let no = (status: number, code: string, message: string) =>
     Response.json({ error: { code, message } }, { status })
-  let lent = await shops(env)
+  let { name, shops: lent } = await payments(env)
   if (!lent.on()) {
     return no(503, 'no_selling', 'selling is not switched on here')
   }
@@ -440,11 +440,11 @@ export let buying = async (
       409,
       'not_selling',
       where == 'none'
-        ? `${at.space.slug} has not connected a Stripe account — ask whoever ` +
-          'runs this space to start selling, and nothing here can charge ' +
-          'anybody until they have'
-        : `${at.space.slug} has connected Stripe but has not finished ` +
-          'setting up — Stripe has not said they may take payments yet',
+        ? `${at.space.slug} has not connected a ${name} account — ask ` +
+          'whoever runs this space to start selling, and nothing here can ' +
+          'charge anybody until they have'
+        : `${at.space.slug} has connected ${name} but has not finished ` +
+          `setting up — ${name} has not said they may take payments yet`,
     )
   }
   let items: Item[]

@@ -192,18 +192,18 @@ export let SECONDS: Record<Tier, number> = {
 
 // What a tier costs a month, in whole dollars (D-32751). The number is
 // tax-inclusive: $9 is what a customer pays anywhere, so this is the whole
-// price rather than a subtotal something is added to. Stripe holds the same
-// number as a price id (wrangler.toml STRIPE_PRICE, and STRIPE_PRICE_ORGANIZATION
-// for the Organization plan) and that is what a card is charged against; this is the number the site says out loud — the pricing
-// copy, and the `Offer`s in the home page's JSON-LD, which is what a search
+// price rather than a subtotal something is added to. The payment provider
+// holds the same number as the price config.ts `payments` sells the tier at,
+// and that is what a card is charged against; this is the number the site
+// says out loud — the pricing copy, and the `Offer`s in the home page's JSON-LD, which is what a search
 // engine shows beside the result. A price change also updates the static HTML
 // in public/index.html and public/pricing.html, billing_kernel_test.ts, and
 // bin/verify-deploy{,_test}.ts. site_test.ts holds the pages to this number.
 export let PRICE: Record<Tier, number> = { free: 0, plus: 9, organization: 49 }
 
 // What a year costs, for a plan sold by the year as well (D-134567: an
-// organization budgets by the year). Stripe holds it as
-// STRIPE_PRICE_ORGANIZATION_YEAR.
+// organization budgets by the year). The payment provider holds it as the
+// tier's yearly price in config.ts `payments`.
 export let YEARLY: Partial<Record<Tier, number>> = { organization: 490 }
 
 export let CURRENCY = 'USD'

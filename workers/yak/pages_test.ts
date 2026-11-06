@@ -618,6 +618,7 @@ test('billing shows each allowance and whom it bills', async () => {
       ...page,
       spaces: [{ slug: 'ada', title: 'Ada’s kitchen', owner: true, own: true }],
       view: 'billing',
+      provider: 'Paybox',
       plan: { tier: known ? 'plus' : 'free', ends: '', known },
       bill: {
         limits,
@@ -650,10 +651,27 @@ test('billing shows each allowance and whom it bills', async () => {
   }, true)
   assertStringIncludes(
     paying,
-    'Billed to <b>ada@x.test</b> (Ada) through Stripe',
+    'Billed to <b>ada@x.test</b> (Ada) through Paybox',
   )
   assertStringIncludes(
     await billing({ payer: undefined }, true),
-    'Billed through Stripe.',
+    'Billed through Paybox.',
+  )
+})
+
+// The selling card names the payment provider it was lent, at every stage.
+test('selling names the provider it sells through', async () => {
+  let selling = (at: Partial<DeskPage>) =>
+    desk({ ...page, view: 'selling', provider: 'Paybox', ...at }, env).text()
+  for (
+    let [at, text] of [
+      [{ paying: true }, 'Connect your Paybox account'],
+      [{ paying: true, sell: 'ready' }, 'Disconnect Paybox'],
+      [{ paying: false, fee: '1%' }, 'plus Paybox processing fees'],
+    ] as const
+  ) assertStringIncludes(await selling(at), text)
+  assertStringIncludes(
+    await selling({ provider: undefined }),
+    'Selling is not available here yet.',
   )
 })

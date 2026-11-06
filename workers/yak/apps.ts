@@ -2785,8 +2785,8 @@ let desk = async (
         part.operatorBody(env, space, who)
       )
       : undefined,
-    // Whom Stripe bills, for the Billing page (T-131895). A read that fails
-    // is reported, and the page says only that Stripe bills it.
+    // Whom the payment provider bills, for the Billing page (T-131895). A
+    // read that fails is reported, and the page says only that it bills.
     view == 'billing'
       ? plans(env).then((lent) => billedTo(lent, space)).catch((e) => {
         caught(e, { request: 'read billing customer', space: space.slug })
@@ -2820,6 +2820,7 @@ let desk = async (
     // the platform's payment provider can be asked at all, since a button
     // that cannot work is worse than no block.
     sell: provider.shops.on() ? selling(space) : undefined,
+    provider: provider.name,
     paying: paid(space.tier),
     plan: planCard(provider.plans, space),
     paid: q.get('paid') == '1',
@@ -3193,9 +3194,9 @@ let saved = async (
   }
   // The selling block's button (sell.ts, T-34524). Its own form and its own
   // POST, like the restore button above — and `start` answers a redirect to
-  // Stripe's own hosted onboarding, which is the one thing on this page that
-  // leaves the site. A Stripe call that fails is filed and the page comes back
-  // saying so, rather than a 502 on somebody's own front door.
+  // the payment provider's own hosted onboarding, which is the one thing on
+  // this page that leaves the site. A call to it that fails is filed and the
+  // page comes back saying so, rather than a 502 on somebody's own front door.
   let till = String(form.get('sell') ?? '').trim()
   if (till == 'stop') {
     if (space.seller?.account) await disconnect(env, space)
@@ -3211,8 +3212,9 @@ let saved = async (
       return redirect(made.url, 303)
     } catch (e) {
       await fault(env, 'POST /manage/selling', e)
+      let { name } = await payments(env)
       return desk(req, env, dir, space, who, 'selling', {
-        say: "we couldn't reach Stripe just now — try again in a minute",
+        say: `we couldn't reach ${name} just now — try again in a minute`,
         no: true,
       })
     }

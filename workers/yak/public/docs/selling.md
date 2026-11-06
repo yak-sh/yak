@@ -15,11 +15,12 @@ guide:
 
 # Payments
 
-Apps on the Plus plan can accept payments. The seller connects their own Stripe
-account to their space, once. After that any app in that space can post a cart
-to `./api/pay/checkout`, and that endpoint returns the URL of a Stripe payment
-page to send the buyer to. When the payment completes, an `order` row is written
-to that app's store and the buyer receives an email from the app's own address.
+Apps on the Plus plan can accept payments through Stripe, the **payment
+provider** yaks.app uses. The seller connects their own Stripe account to their
+space, once. After that any app in that space can post a cart to
+`./api/pay/checkout`, and that endpoint returns the URL of a Stripe payment page
+to send the buyer to. When the payment completes, an `order` row is written to
+that app's store and the buyer receives an email from the app's own address.
 
 The app sets no API key, receives no webhook and needs no `worker.js`. The
 charge is made _on_ the seller's Stripe account, in the seller's name: the

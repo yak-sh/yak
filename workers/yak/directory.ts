@@ -130,7 +130,8 @@ export let paid = (tier: Tier | null | undefined) =>
 // that has to hold for a comp too: comping is a deploy, reviewable in the
 // diff, rather than a request anybody can make. T-33164 asks for the operator
 // door that would make this a decision instead of a list — a comp, a support
-// credit and a demo all want one, and Stripe owns only the paying case.
+// credit and a demo all want one, and the payment provider owns only the
+// paying case.
 export let COMPED = ['yourname', 'yak']
 
 // Paid features and mail/build allowances: `plus` also applies to comps.
@@ -149,10 +150,11 @@ export let tierOf = (
     ? 'plus'
     : tier
 
-// What a space pays and what Stripe knows about it (platform.rs `Plan`,
-// billing.ts derives and writes it). The whole row, because the webhook reads
-// every property of it to decide whether an event is news: `at` is the moment
-// of the Stripe event that last wrote this, `status` is Stripe's own word, and
+// What a space pays and what the payment provider knows about it (platform.rs
+// `Plan`, billing.ts derives and writes it). The whole row, because the webhook
+// reads every property of it to decide whether an event is news: `at` is the
+// moment of the provider's event that last wrote this, `status` is the
+// provider's own word, and
 // `ending` is set only when the subscription will not renew.
 export type Plan = {
   tier: Tier
@@ -1986,7 +1988,8 @@ export let directoryRows = (rows: {
       return (await query(`.app.space=${eids.join(',')}&${ABOUT}`))
         .map(appOf)
     },
-    // The space that pays as this Stripe customer (billing.ts). It is how a
+    // The space that pays as this customer of the payment provider
+    // (billing.ts). It is how a
     // subscription event is attributed when its metadata does not say — a
     // space keeps one customer for its whole life, so the answer is one space
     // or nobody.

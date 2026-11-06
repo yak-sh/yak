@@ -336,7 +336,7 @@ export let measured = async (
       meter,
       ...daysOf ? { trend: { requests: summed(days) } } : {},
       ...(moved(meter) ? { notified: null } : {}),
-      // Every space is on the free tier until Stripe says otherwise
+      // Every space is on the free tier until its payment provider says so
       // (D-32751); one that already carries a plan keeps it.
       ...(space.tier ? {} : { plan: { tier: 'free' } }),
     })

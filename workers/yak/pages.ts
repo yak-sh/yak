@@ -644,11 +644,15 @@ export type DeskPage = {
   viewDays?: number
   viewsOff?: string
   sell?: 'none' | 'setup' | 'ready'
+  /** the name of the payment provider the space pays and sells through
+   * (payments.ts), as the selling and billing cards say it */
+  provider?: string
   plan?: Yours['plan']
   paid?: boolean
   /** the Billing page's month: each allowance the space answers to and how
    * much of it is used, its model budget, when the hourly sweep last read
-   * them, and whom Stripe bills (`undefined` when it couldn't be asked) */
+   * them, and whom the payment provider bills (`undefined` when it couldn't
+   * be asked) */
   bill?: {
     limits: Partial<Record<Ceiling, Gauge>>
     budget: Budget
@@ -1183,21 +1187,22 @@ let preferences = (at: DeskPage, env: Host) => {
 }
 
 let selling = (at: DeskPage, env: Host) => {
-  if (!at.sell) return '<p>Selling is not available here yet.</p>'
+  let by = at.provider && esc(at.provider)
+  if (!at.sell || !by) return '<p>Selling is not available here yet.</p>'
   let ready = at.sell == 'ready'
   let connected = at.sell != 'none'
   let stop = ready || (!at.paying && connected)
-  let stripe = at.paying || connected
+  let account = at.paying || connected
     ? `<form method="post" action="${
       managePath('selling', at.space)
     }"><input type="hidden" name="sell" value="${
       stop ? 'stop' : 'start'
     }"><button type="submit" class="Button${stop ? ' Button-quiet' : ''}">${
       stop
-        ? 'Disconnect Stripe'
+        ? `Disconnect ${by}`
         : at.sell == 'setup'
         ? 'Continue setup'
-        : 'Connect Stripe'
+        : `Connect ${by}`
     }</button></form>`
     : ''
   let subscribe = at.paying ? '' : billButton(
@@ -1218,20 +1223,20 @@ let selling = (at: DeskPage, env: Host) => {
           : at.sell == 'setup'
           ? status('Setup unfinished', 'warn')
           : '',
-        actions: subscribe + stripe,
+        actions: subscribe + account,
       },
     )
   }
 <p>${
     !at.paying
       ? connected
-        ? 'Your Stripe account is connected. Upgrade to Plus to accept new payments.'
-        : 'Connect Stripe and accept payments from your customers on Plus.'
+        ? `Your ${by} account is connected. Upgrade to Plus to accept new payments.`
+        : `Connect ${by} and accept payments from your customers on Plus.`
       : ready
-      ? 'Payments go to your Stripe account. You manage refunds and disputes there.'
+      ? `Payments go to your ${by} account. You manage refunds and disputes there.`
       : at.sell == 'setup'
-      ? 'Finish connecting your Stripe account to start accepting payments.'
-      : 'Connect your Stripe account to accept payments from your customers.'
+      ? `Finish connecting your ${by} account to start accepting payments.`
+      : `Connect your ${by} account to accept payments from your customers.`
   }</p>${
     at.paying
       ? `<p class="Form_Hint">yaks.app takes ${
@@ -1243,7 +1248,7 @@ let selling = (at: DeskPage, env: Host) => {
         at.fee
           ? `<p class="Form_Hint">${
             esc(at.fee)
-          } per sale, plus Stripe processing fees.</p>`
+          } per sale, plus ${by} processing fees.</p>`
           : ''
       }<p class="Say Bill_Say" role="status"></p>`
   }</section>${at.paying ? '' : billing}`
@@ -2020,6 +2025,7 @@ export let desk = (at: DeskPage, env: Host = {}) => {
         title: named(picked(at)),
         plan: at.plan ?? { tier: 'free', ends: '', known: false },
         paid: at.paid,
+        provider: at.provider,
         payer: at.bill?.payer,
       },
       env,
@@ -2615,7 +2621,10 @@ export type Yours = {
   // that starts a purchase, and it is signed-in web only: the agent surface
   // may name the pricing page and nothing else (C-33033).
   plan: Card
-  // `?paid=1` on the way back from Stripe. The webhook is what actually moves
+  // The name of the payment provider that bills it (payments.ts), as the
+  // plan card says it.
+  provider?: string
+  // `?paid=1` on the way back from the provider's checkout. The webhook is what actually moves
   // the tier and it may not have landed yet, so the line says "in a moment"
   // rather than claiming something this request cannot see.
   paid?: boolean
@@ -2652,14 +2661,14 @@ let MOVES = 'You can change it at any time. Every app moves with it, and ' +
 
 // The plan card, for a person who is signed in (T-33125). One card: the paid
 // plans when they are free, manage-billing when they are paying. Each button
-// POSTs to billing.ts and follows the URL Stripe answers, so no Stripe address
-// is written into this page and nothing here knows a key. The Organization
+// POSTs to billing.ts and follows the URL the payment provider answers, so no
+// provider's address is written into this page and nothing here knows a key. The Organization
 // plan (D-134567) is offered only where its prices exist (billing.ts `Card`).
 //
 // A day, not a timestamp: "runs until 14 October 2026" is what somebody wants
 // to know, and the hour is noise on a monthly bill.
 let plan = (
-  y: Pick<Yours, 'slug' | 'plan' | 'paid'> & {
+  y: Pick<Yours, 'slug' | 'plan' | 'paid' | 'provider'> & {
     title?: string
     payer?: Payer | null
   },
@@ -2701,7 +2710,7 @@ let plan = (
       target,
       want,
     )
-  // Someone Stripe has met can always reach their own billing, whatever plan
+  // Someone the provider has met can always reach their own billing, whatever plan
   // they are on today: an invoice from a month they paid for is theirs to
   // read after they cancel.
   let doors = [
@@ -2730,7 +2739,7 @@ let plan = (
       actions: doors,
     })
   }
-${head}${billedLine(y.plan, y.payer)}${ask}
+${head}${billedLine(y.plan, y.payer, y.provider)}${ask}
 ${
     y.paid
       ? '<p class="Say">Thanks — that went through. Your space moves to its ' +
@@ -2741,17 +2750,23 @@ ${
 </section>`
 }
 
-// Whom the plan is billed to, where Stripe has met the space: the address its
-// receipts go to, or, when Stripe couldn't be asked just now (`undefined`),
-// only that Stripe bills it. A space Stripe never met is billed to nobody.
-let billedLine = (card: Card, payer?: Payer | null) =>
-  !card.known
-    ? card.tier == 'free' ? '<p class="Form_Hint">Nothing is billed.</p>' : ''
-    : payer?.email
+// Whom the plan is billed to, where the payment provider has met the space:
+// the address its receipts go to, or, when the provider couldn't be asked just
+// now (`undefined`), only that it bills the space. A space the provider never
+// met is billed to nobody. A page not told the provider's name leaves it out.
+let billedLine = (card: Card, payer?: Payer | null, provider?: string) => {
+  if (!card.known) {
+    return card.tier == 'free'
+      ? '<p class="Form_Hint">Nothing is billed.</p>'
+      : ''
+  }
+  let through = provider ? ` through ${esc(provider)}` : ''
+  return payer?.email
     ? `<p>Billed to <b>${esc(payer.email)}</b>${
       payer.name ? ` (${esc(payer.name)})` : ''
-    } through Stripe. Manage billing changes the card, the address and who receives the receipts.</p>`
-    : '<p>Billed through Stripe. Manage billing shows the card and the receipts.</p>'
+    }${through}. Manage billing changes the card, the address and who receives the receipts.</p>`
+    : `<p>Billed${through}. Manage billing shows the card and the receipts.</p>`
+}
 
 // Each allowance as the Billing page names it, how its figures read, and what
 // a person needs to know about counting it.
@@ -3160,7 +3175,8 @@ if (f) f.addEventListener('submit', async (e) => {
 })
 </script>`
 
-// The billing buttons: ask our own door for a Stripe URL and follow it. The
+// The billing buttons: ask our own door for the payment provider's URL and
+// follow it. The
 // URL is minted per person and expires, so it is never written into the page.
 let billing = `<script>
 for (let b of document.querySelectorAll('.Bill_Go')) {
