@@ -6,6 +6,7 @@ import { ram } from '@yaks/ram'
 import { ramVault } from '@yaks/secrets'
 import { equal, test, throws } from '@yaks/testing'
 import type { VocabDoc } from '@yaks/vocab'
+import * as esbuild from 'esbuild'
 import { toolEid } from '@yaks/tools'
 import { assemble, assembly, type Binding, prepare } from './assembly.ts'
 import { compositionAnatomy } from './anatomy.ts'
@@ -683,4 +684,23 @@ test('a host carries a feed only when a plugin offers one', async () => {
   let fed = (await assembly(config, ['graph'], offering)).bind(binding())
   fed.host.feed?.(({ applied }) => void heard.push(...applied))
   equal(heard, [[{ entity: { eid: 'x' } }]])
+})
+
+// Safari lacks AsyncDisposableStack, and a host's assembly ships to browsers.
+test('the assembly built for a browser names no AsyncDisposableStack', async () => {
+  let out = await esbuild.build({
+    entryPoints: [new URL('./assembly.ts', import.meta.url).pathname],
+    bundle: true,
+    write: false,
+    format: 'esm',
+    platform: 'browser',
+    logLevel: 'silent',
+    plugins: [{
+      name: 'packages',
+      setup: (build) =>
+        build.onResolve({ filter: /^[^./]/ }, () => ({ external: true })),
+    }],
+  })
+  await esbuild.stop()
+  equal(out.outputFiles[0].text.includes('AsyncDisposableStack'), false)
 })

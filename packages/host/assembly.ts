@@ -151,6 +151,22 @@ let undeclared = (plugin: string, name: string) =>
 let twice = (name: string, plugins: string[]) =>
   new CallError('config', `${name} is handled by both ${plugins.join(' and ')}`)
 
+// Each release a host deferred, last first, every one run though an earlier
+// throws; one failure is thrown as itself, several together. Safari lacks
+// AsyncDisposableStack, and a host is shipped to browsers.
+let released = async (releases: (() => void | Promise<void>)[]) => {
+  let failed: unknown[] = []
+  for (let release of releases.toReversed()) {
+    try {
+      await release()
+    } catch (e) {
+      failed.push(e)
+    }
+  }
+  if (failed.length == 1) throw failed[0]
+  if (failed.length) throw new AggregateError(failed, 'releases failed')
+}
+
 /** The role-selected modules, loaded before a host opens its transaction. */
 export type Prepared = {
   vocab: Taken<'vocab'>
@@ -303,7 +319,7 @@ export let assemble = (
     words,
     required,
     bind: (binding) => {
-      let resources = new AsyncDisposableStack()
+      let releases: (() => void | Promise<void>)[] = []
       let closing: Promise<void> | undefined
       let observed = binding.observed ?? opts.observed ?? compositionAnatomy(
         plugins.map(([name, , , facets]) => ({ name, facets })),
@@ -365,7 +381,7 @@ export let assemble = (
       let toolPart = part
       let host: Host = {
         ...lent,
-        defer: (release) => resources.defer(release),
+        defer: (release) => void releases.push(release),
         config,
         roles,
         vocab,
@@ -694,7 +710,7 @@ export let assemble = (
         host,
         services: duties,
         interrupt: async (why) => await calls?.interrupt(why) ?? [],
-        close: () => closing ??= resources.disposeAsync(),
+        close: () => closing ??= released(releases),
       }
     },
   }
