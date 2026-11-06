@@ -96,10 +96,14 @@ Every commit on main deploys the yak worker through Workers Builds and runs CI
 asynchronously. Work is done when its affected tests pass and it lands; no agent
 waits for those background runs. `admin_deploys` as admin says what is live,
 `admin_errors` what broke, and a new failure reaches the tracker when it happens
-(M-37965). A probe of the platform runs as a test account: `yak admin throwaway
-'<command>'` runs that command as one and signs out (listing accounts is
-`secrets-and-connections`). Acting as the owner is his to grant
-(M-31958). The box's own server runs main after `yak restart`. The platform
+(M-37965). A live check of the platform runs in the agents' own space,
+`checks` (checks.yaks.app), as its owner `checks@bot.yak.sh`: `--as checks` on
+any `yak` command, its Operator through `yak operator_run --space checks --as
+checks`. It is kept from the idle sweep, so it outlasts any check. Never check
+in the owner's `jeff` space or any person's: a test row there lands in his
+conversation, Updates and task list. A check that needs a clean account runs
+`yak admin throwaway '<command>'` (listing accounts is
+`secrets-and-connections`). Acting as the owner is his to grant (M-31958). The box's own server runs main after `yak restart`. The platform
 itself is `yaks-app`.
 
 ## Seeing a live page at a width

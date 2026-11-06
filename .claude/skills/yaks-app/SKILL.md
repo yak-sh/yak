@@ -414,7 +414,11 @@ configured person's own account, which on this box is the owner's. A write is
 stamped with the account that made it, and his name belongs only on an act he
 asked for (M-31958), so platform work goes `--as admin@bot.yak.sh`: the
 platform's admin, an owner of `yak`, which stands as an owner in every space
-through the connector's graph tier (tool.ts `roleIn`).
+through the connector's graph tier (tool.ts `roleIn`). A live check (an app, a
+subscription, the Operator) runs in `checks`, the agents' own space, `--as
+checks`; `operator_run --space checks` reaches its Operator. `checks` is in
+idle-spaces.ts `PROTECTED`, so the sweep never takes it. Nothing an agent tests
+runs in `jeff` or another person's space.
 
 - `yak admin query <space>/<app> <query>` reads a store, and
   `yak admin apply <space>/<app> <bundles>` patches, adds or deletes its rows

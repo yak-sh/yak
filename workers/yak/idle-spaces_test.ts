@@ -73,6 +73,7 @@ test('platform and reviewer spaces survive whatever their members', () => {
   for (
     let slug of [
       'yak',
+      'checks',
       'admin',
       'yourname',
       'claude-review',

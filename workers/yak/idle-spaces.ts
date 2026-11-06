@@ -3,8 +3,11 @@
 // Creation gives a new record its grace period, and used survives bookkeeping.
 import { isTestAddress } from './lib/bots.ts'
 
+// `checks` is the agents' own space for live checks, its Operator included
+// (checks@bot.yak.sh): a check runs there, never in a person's space.
 export let PROTECTED = new Set([
   'yak',
+  'checks',
   'admin',
   'yourname',
   'claude-review',
