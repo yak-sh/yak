@@ -17,7 +17,7 @@
     "@yaks/fp": "0.2.23",
     "@yaks/graph": "0.2.25",
     "@yaks/inspect": "0.2.23",
-    "@yaks/process": "0.2.24",
+    "@yaks/process": "0.2.26",
     "@yaks/query": "0.2.23",
     "@yaks/ui": "0.2.24",
     "@yaks/ux": "0.2.23",

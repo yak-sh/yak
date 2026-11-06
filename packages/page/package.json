@@ -18,13 +18,13 @@
     "@yaks/effects": "0.2.25",
     "@yaks/fp": "0.2.23",
     "@yaks/graph": "0.2.25",
-    "@yaks/process": "0.2.24",
+    "@yaks/process": "0.2.26",
     "@yaks/vocab": "0.2.23",
     "linkedom": "^0.18.12"
   },
   "devDependencies": {
     "@std/assert": "npm:@jsr/std__assert@^1.0.0",
-    "@yaks/cli": "0.2.25",
+    "@yaks/cli": "0.2.26",
     "@yaks/testing": "0.2.17"
   }
 }

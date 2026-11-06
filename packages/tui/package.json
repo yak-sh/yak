@@ -14,7 +14,7 @@
   "dependencies": {
     "@preact/signals": "2.9.4",
     "@yaks/fp": "0.2.23",
-    "@yaks/process": "0.2.24",
+    "@yaks/process": "0.2.26",
     "@yaks/text": "0.2.24",
     "preact": "10.29.7"
   },

@@ -14,7 +14,7 @@
   "devDependencies": {
     "@std/assert": "npm:@jsr/std__assert@^1.0.0",
     "@yaks/query": "0.2.23",
-    "@yaks/sql": "0.2.25",
+    "@yaks/sql": "0.2.26",
     "@yaks/sqlite": "0.2.25",
     "@yaks/testing": "0.2.17"
   }

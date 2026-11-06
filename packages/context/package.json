@@ -12,7 +12,7 @@
   "dependencies": {
     "@yaks/file": "0.2.23",
     "@yaks/graph": "0.2.25",
-    "@yaks/process": "0.2.24",
+    "@yaks/process": "0.2.26",
     "@yaks/vocab": "0.2.23"
   },
   "devDependencies": {

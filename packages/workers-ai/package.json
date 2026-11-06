@@ -13,8 +13,8 @@
     "@yaks/blob": "0.2.23",
     "@yaks/embedding": "0.2.25",
     "@yaks/fp": "0.2.23",
-    "@yaks/model": "0.2.25",
-    "@yaks/openai": "0.2.25"
+    "@yaks/model": "0.2.26",
+    "@yaks/openai": "0.2.26"
   },
   "devDependencies": {
     "@std/assert": "npm:@jsr/std__assert@^1.0.0",

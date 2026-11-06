@@ -8,7 +8,7 @@
   "dependencies": {
     "@yaks/fp": "0.2.23",
     "@yaks/query": "0.2.23",
-    "@yaks/sql": "0.2.25",
+    "@yaks/sql": "0.2.26",
     "@yaks/vocab": "0.2.23"
   },
   "devDependencies": {

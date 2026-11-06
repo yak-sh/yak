@@ -22,7 +22,7 @@
     "@yaks/fp": "0.2.23",
     "@yaks/graph": "0.2.25",
     "@yaks/machine": "0.2.24",
-    "@yaks/process": "0.2.24",
+    "@yaks/process": "0.2.26",
     "@yaks/tools": "0.2.24",
     "@yaks/vocab": "0.2.23"
   },

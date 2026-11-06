@@ -29,7 +29,7 @@
     "@yaks/journal": "0.2.23",
     "@yaks/member": "0.2.25",
     "@yaks/ram": "0.2.24",
-    "@yaks/sql": "0.2.25",
+    "@yaks/sql": "0.2.26",
     "@yaks/sqlite": "0.2.25",
     "@yaks/testing": "0.2.17"
   }

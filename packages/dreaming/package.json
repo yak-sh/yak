@@ -10,7 +10,7 @@
   "license": "Apache-2.0",
   "description": "Standing intentions filed under a project, which @yaks/builders builds on a schedule, a record of how often each memory has been recalled, and the `.order=hot` ranking that record decays along.",
   "dependencies": {
-    "@yaks/sql": "0.2.25",
+    "@yaks/sql": "0.2.26",
     "@yaks/vocab": "0.2.23"
   },
   "devDependencies": {

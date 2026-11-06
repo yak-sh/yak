@@ -11,8 +11,8 @@
   "description": "Claude Code print mode as a one-turn model; the graph harness alone executes tools.",
   "dependencies": {
     "@yaks/file": "0.2.23",
-    "@yaks/model": "0.2.25",
-    "@yaks/process": "0.2.24",
+    "@yaks/model": "0.2.26",
+    "@yaks/process": "0.2.26",
     "@yaks/vocab": "0.2.23"
   },
   "devDependencies": {

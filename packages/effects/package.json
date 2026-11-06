@@ -29,7 +29,7 @@
     "@std/assert": "npm:@jsr/std__assert@^1.0.0",
     "@yaks/journal": "0.2.23",
     "@yaks/ram": "0.2.24",
-    "@yaks/sql": "0.2.25",
+    "@yaks/sql": "0.2.26",
     "@yaks/sqlite": "0.2.25",
     "@yaks/testing": "0.2.17",
     "linkedom": "^0.18.12",

@@ -16,7 +16,7 @@
   "description": "Represents letters and their delivery outcomes as graph components, sends them through a sender the caller supplies, and converts arrivals to bundles.",
   "dependencies": {
     "@yaks/api": "0.2.24",
-    "@yaks/cli": "0.2.25",
+    "@yaks/cli": "0.2.26",
     "@yaks/doc": "0.2.24",
     "@yaks/edge": "0.2.24",
     "@yaks/effects": "0.2.25",

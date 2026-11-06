@@ -1,6 +1,6 @@
 {
   "name": "@yaks/git",
-  "version": "0.2.23",
+  "version": "0.2.26",
   "type": "module",
   "exports": {
     ".": "./mod.ts",
@@ -26,7 +26,7 @@
     "@yaks/kernel": "0.2.24",
     "@yaks/key": "0.2.24",
     "@yaks/machine": "0.2.24",
-    "@yaks/process": "0.2.24",
+    "@yaks/process": "0.2.26",
     "@yaks/query": "0.2.23",
     "@yaks/tools": "0.2.24",
     "@yaks/vocab": "0.2.23"

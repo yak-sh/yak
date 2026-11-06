@@ -1,6 +1,6 @@
 {
   "name": "@yaks/process",
-  "version": "0.2.24",
+  "version": "0.2.26",
   "type": "module",
   "exports": {
     ".": "./mod.ts",
@@ -30,7 +30,7 @@
   },
   "devDependencies": {
     "@std/assert": "npm:@jsr/std__assert@^1.0.0",
-    "@yaks/model": "0.2.25",
+    "@yaks/model": "0.2.26",
     "@yaks/ram": "0.2.24",
     "@yaks/session": "0.2.25",
     "@yaks/testing": "0.2.17",

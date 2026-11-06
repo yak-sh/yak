@@ -20,19 +20,19 @@
     "@yaks/graph": "0.2.25",
     "@yaks/id": "0.2.23",
     "@yaks/inspect": "0.2.23",
-    "@yaks/model": "0.2.25",
-    "@yaks/process": "0.2.24",
+    "@yaks/model": "0.2.26",
+    "@yaks/process": "0.2.26",
     "@yaks/query": "0.2.23",
     "@yaks/render": "0.2.24",
     "@yaks/session": "0.2.25",
-    "@yaks/spawn": "0.2.25",
+    "@yaks/spawn": "0.2.26",
     "@yaks/ui": "0.2.24",
     "@yaks/vocab": "0.2.23",
     "lucide": "1.31.0",
     "preact": "10.29.7"
   },
   "devDependencies": {
-    "@yaks/cli": "0.2.25",
+    "@yaks/cli": "0.2.26",
     "@yaks/testing": "0.2.17"
   }
 }

@@ -20,7 +20,7 @@
     "@yaks/benchmark": "0.2.17",
     "@yaks/file": "0.2.23",
     "@yaks/fp": "0.2.23",
-    "@yaks/process": "0.2.24"
+    "@yaks/process": "0.2.26"
   },
   "devDependencies": {}
 }

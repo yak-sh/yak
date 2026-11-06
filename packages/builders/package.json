@@ -24,7 +24,7 @@
     "@yaks/key": "0.2.24",
     "@yaks/query": "0.2.23",
     "@yaks/session": "0.2.25",
-    "@yaks/sql": "0.2.25",
+    "@yaks/sql": "0.2.26",
     "@yaks/tools": "0.2.24",
     "@yaks/vocab": "0.2.23",
     "@yaks/wake": "0.2.24"
@@ -32,9 +32,9 @@
   "devDependencies": {
     "@std/assert": "npm:@jsr/std__assert@^1.0.0",
     "@yaks/blob": "0.2.23",
-    "@yaks/cli": "0.2.25",
+    "@yaks/cli": "0.2.26",
     "@yaks/doc": "0.2.24",
-    "@yaks/model": "0.2.25",
+    "@yaks/model": "0.2.26",
     "@yaks/ram": "0.2.24",
     "@yaks/sqlite": "0.2.25",
     "@yaks/testing": "0.2.17"

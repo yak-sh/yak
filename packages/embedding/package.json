@@ -15,9 +15,9 @@
     "@yaks/edge": "0.2.24",
     "@yaks/effects": "0.2.25",
     "@yaks/graph": "0.2.25",
-    "@yaks/model": "0.2.25",
+    "@yaks/model": "0.2.26",
     "@yaks/query": "0.2.23",
-    "@yaks/sql": "0.2.25",
+    "@yaks/sql": "0.2.26",
     "@yaks/tools": "0.2.24",
     "@yaks/vocab": "0.2.23"
   },
@@ -25,7 +25,7 @@
     "@std/assert": "npm:@jsr/std__assert@^1.0.0",
     "@yaks/api": "0.2.24",
     "@yaks/archetype": "0.2.24",
-    "@yaks/cli": "0.2.25",
+    "@yaks/cli": "0.2.26",
     "@yaks/ram": "0.2.24",
     "@yaks/sqlite": "0.2.25",
     "@yaks/testing": "0.2.17"

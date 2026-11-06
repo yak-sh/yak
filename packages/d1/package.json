@@ -9,7 +9,7 @@
     "@yaks/graph": "0.2.25",
     "@yaks/match": "0.2.24",
     "@yaks/query": "0.2.23",
-    "@yaks/sql": "0.2.25",
+    "@yaks/sql": "0.2.26",
     "@yaks/sqlite": "0.2.25",
     "@yaks/vocab": "0.2.23"
   },
