@@ -1117,10 +1117,11 @@ let path = (ctx: Ctx, hops: Hop[], p: Pred): Cond => {
   // component? Found, it was reached from a row of the root's, the narrowing
   // a rooted path keeps below: without it the root's join is a LEFT JOIN that
   // SQLite cannot see through the lookup to drop, and it reads every entity.
+  // A scalar root joins no table of its own; its lookup is the narrowing.
   if (!leaf.prop) {
     let present = op == '~' || op == EXISTS
     let rooted = (c: Cond) =>
-      present && root.comp != 'entity'
+      present && root.comp != 'entity' && !scalarRoot
         ? and(cond(ctx.d.presence(root.comp)), c)
         : c
     let shape = leaf.comp == 'entity' ? null : byArchetype(

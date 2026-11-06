@@ -39,7 +39,14 @@ export let signed = async (
 export let fakeSub = (
   metadata: Record<string, string>,
   over: Record<string, unknown> = {},
-) => {
+): {
+  [field: string]: unknown
+  id: string
+  customer: string
+  status: string
+  metadata: Record<string, string>
+  current_period_end: number
+} => {
   let id = crypto.randomUUID().replaceAll('-', '')
   return {
     id: `sub_probe${id}`,

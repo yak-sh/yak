@@ -163,7 +163,7 @@ export let TAG = 500
  * `%7BCHECKOUT_SESSION_ID%7D` is a string Stripe does not recognise, so the
  * buyer would land on a page that never learns which order it is about. The
  * braces come back, and only those two characters. */
-export let back = (url: string) =>
+export let back = (url: string): string =>
   url.replaceAll('%7B', '{').replaceAll('%7D', '}')
 
 /**
@@ -190,7 +190,7 @@ export let back = (url: string) =>
  * was. Lines go out as inline `price_data`, numbered as Stripe's form encoding
  * numbers a list.
  */
-export let session = (sale: Sale) => ({
+export let session = (sale: Sale): Record<string, unknown> => ({
   mode: 'payment',
   line_items: Object.fromEntries(sale.lines.map((l, i) => [i, {
     price_data: {
