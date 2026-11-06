@@ -25,11 +25,15 @@ compatibility_date = "2025-05-08"
 # predates.
 # enable_nodejs_process_v2 supplies the native process object to the module
 # build, alongside the runtime's node: modules, without JS polyfills.
+# durable_object_io_tasks_prevent_eviction keeps an object up while it waits
+# on I/O nobody connected is waiting for: a call finishing in `Outlast` after
+# its caller was answered (outlast.ts). It is the default from 2026-10-01.
 compatibility_flags = [
   "nodejs_compat",
   "global_fetch_strictly_public",
   "enable_ctx_exports",
   "enable_nodejs_process_v2",
+  "durable_object_io_tasks_prevent_eviction",
 ]
 
 # Modules ship minified. bundle.ts keeps optional doors as dynamic imports
@@ -237,6 +241,13 @@ class_name = "Workspaces"
 name = "PURGER"
 class_name = "Purger"
 
+# One object per caller, tool and target, finishing a call that outlasts the
+# minute a client waits for it (index.ts `Outlast`, outlast.ts). Pending I/O
+# keeps it up until the call ends (durable_object_io_tasks_prevent_eviction).
+[[durable_objects.bindings]]
+name = "OUTLAST"
+class_name = "Outlast"
+
 # Every object takes up a deploy at once (T-140262). Since 2026-10-30
 # Cloudflare defers a Durable Object's code update until it hibernates, or
 # for at most 300 s, and an object restarted in that time starts again on the
@@ -278,6 +289,10 @@ new_sqlite_classes = ["Workspaces"]
 [[migrations]]
 tag = "v6"
 new_sqlite_classes = ["Purger"]
+
+[[migrations]]
+tag = "v7"
+new_sqlite_classes = ["Outlast"]
 
 # The container uses a prebuilt registry image. Its tag is the toolchain
 # Dockerfile's hash; sandbox_test.ts checks its SDK against package.json.
@@ -655,6 +670,10 @@ class_name = "Workspaces"
 name = "PURGER"
 class_name = "Purger"
 
+[[env.staging.durable_objects.bindings]]
+name = "OUTLAST"
+class_name = "Outlast"
+
 # As above: every object takes up a deploy at once.
 [env.staging.unsafe.metadata.code_update_strategy]
 mode = "immediate"
@@ -682,6 +701,10 @@ new_sqlite_classes = ["Workspaces"]
 [[env.staging.migrations]]
 tag = "v6"
 new_sqlite_classes = ["Purger"]
+
+[[env.staging.migrations]]
+tag = "v7"
+new_sqlite_classes = ["Outlast"]
 
 [[env.staging.containers]]
 class_name = "Sandbox"

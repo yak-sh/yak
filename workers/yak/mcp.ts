@@ -780,6 +780,8 @@ let answered = async (
     // `answered`), and this request counts its reads (hops.ts), so that
     // reading begins as soon as the write knows its space.
     ahead: (space, who) => foresee(env, space, who),
+    // A connector gives a call about a minute; a release may take longer.
+    outlast: true,
   }
   // The session id, per the transport: minted at `initialize` and sent back by
   // the client on every later request. It names which of this person's streams

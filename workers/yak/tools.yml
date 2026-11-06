@@ -360,7 +360,10 @@ app_deploy:
     app_publish, and this tool says when it falls behind. Every deploy is
     kept. To undo: app_rollback, which moves the live pointer to a kept
     version. Returns the new version, URL, and any schema, seed, command or
-    worker details. Documentation: https://yaks.app/docs.
+    worker details. A release still going after 40 seconds answers that it
+    is still running and goes on; app_deploy again with the same arguments
+    waits for it and answers how it ended, in place of releasing again.
+    Documentation: https://yaks.app/docs.
 store_load:
   title: Load a data file into the store
   description: >-

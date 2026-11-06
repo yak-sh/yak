@@ -32,6 +32,8 @@ export { WorkspaceStore as Workspaces } from './workspaces.ts'
 import { outbound } from './outbound.ts'
 import * as sitePart from './site.ts'
 import { type Purged, purger } from './purge.ts'
+import { outlast } from './outlast-object.ts'
+import type { Asked, Heard } from './outlast.ts'
 import { hosting } from './inference.ts'
 import { scheduleUse } from './used.ts'
 import type { Inference, InferenceReceipt, Mark } from '@yaks/model'
@@ -154,6 +156,19 @@ export class Purger extends DurableObject<Env> {
 
   purge(tags: string[]): Promise<void> {
     return this.#purge(tags)
+  }
+}
+
+// A call that outlasts its caller (outlast.ts, outlast-object.ts): one object per
+// caller, tool and target, which finishes the call after the door answered
+// that it is still running.
+export class Outlast extends DurableObject<Env> {
+  declare env: Env
+  #call?: ReturnType<typeof outlast>
+
+  call(asked: Asked): Promise<Heard> {
+    this.#call ??= outlast(this.ctx.storage, this.env)
+    return entry(this.env, 'Outlast call', () => this.#call!(asked))
   }
 }
 

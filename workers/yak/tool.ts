@@ -79,6 +79,10 @@ export type Ctx = {
   // names each round trip it waits on, and mcp.ts puts the marks on the
   // answer as `Server-Timing`, so a slow deploy says which hop was slow.
   clock?: Clock
+  // Set by a door whose callers give up on a call after about a minute
+  // (mcp.ts): a tool that `outlasts` runs in an object that finishes it after
+  // this call has answered (outlast.ts).
+  outlast?: true
 }
 
 /** Discard only the directory view, never carry its role or app into the next
@@ -143,6 +147,11 @@ export type Tool = {
   // call says `noauth` (preauth.ts NOAUTH, mcp.ts signin).
   security?: Security[]
   input: Shape
+  // A tool that may take longer than a client waits for a call names what a
+  // call is about (`space/app` for a release): a door that lets calls outlast
+  // it (Ctx `outlast`) runs this one in the object for that key, one per
+  // caller (outlast.ts).
+  outlasts?: (args: Args) => string
   run: (ctx: Ctx, args: Args) => Promise<Out>
 }
 

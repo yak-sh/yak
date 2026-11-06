@@ -3695,6 +3695,9 @@ let OURS: Row[] = [
   },
   {
     name: 'app_deploy',
+    // A compile in a cold container, or again under a compiler rollout, can
+    // take longer than a client waits (outlast.ts, T-141686).
+    outlasts: (args) => `${args.space ?? ''}/${args.app}`,
     // The two examples the code owns, said in its words (tools.yml
     // `app_deploy`): a vocab.json's component and its tool, so the sentence
     // follows the example rather than keeping a copy of it.

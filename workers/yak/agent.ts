@@ -73,6 +73,7 @@ import { refuse, unavailable } from './tool.ts'
 import { inReach } from './declared.ts'
 import { NARROW, pageFor, UNDO } from './guide.ts'
 import { caught } from './defects.ts'
+import { outlasted } from './outlast.ts'
 
 // Keep the declared JSON Schema whole; converting through a partial Zod
 // vocabulary lost unions, integer types and constraints before tools/list.
@@ -182,6 +183,19 @@ export let answered = async (
 export let running =
   (ctx: Ctx, t: Sugar) => (args: Record<string, unknown>, call?: Eid) => {
     let invocation = { ...ctx, ...(call ? { call } : {}) }
+    if (t.outlasts && ctx.outlast && ctx.env.OUTLAST) {
+      return outlasted(
+        ctx.env.OUTLAST,
+        `${ctx.person}|${t.name}|${t.outlasts(args)}`,
+        {
+          tool: t.name,
+          args,
+          person: ctx.person,
+          ...(call ? { call } : {}),
+          ...(ctx.who ? { who: ctx.who } : {}),
+        },
+      )
+    }
     return t.run(invocation, args).then((out) =>
       answered(invocation, out, call, t.readOnly)
     )
