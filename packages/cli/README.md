@@ -835,9 +835,9 @@ Every box host records request, effect and apply span trees in memory. HTTP
 `/query`, `/apply`, the web UI's applies, socket messages (`ws subscribe`,
 `ws unsubscribe`, `ws relay`, `ws message`) and subscription refreshes
 (`ws
-refresh`) retain phase, plugin and SQL ancestry. A web reader thread
-returns its query/SQL tree and counts to the requesting server; it does not send
-a duplicate trace. A streamed import has an independent `http stream apply` root
+refresh`) retain phase, plugin and SQL ancestry. A reader thread returns
+its query/SQL tree and counts to the requesting server; it does not send a
+duplicate trace. A streamed import has an independent `http stream apply` root
 lasting through the whole import rather than only the HTTP response head.
 
 Only selected completed roots go to `tracker.spool`: work strictly over 10,000

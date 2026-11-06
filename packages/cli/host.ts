@@ -248,7 +248,8 @@ export type ComposeOpts = {
   readOnly?: boolean
   /** the thread running the duties this host hands off */
   thread?: Thread
-  /** The web read door; this host closes an owned reader before telemetry. */
+  /** The read door of a web or worker; this host closes an owned reader
+   * before telemetry. */
   reader?: Lent & {
     search?: Search
     meaning?: Meaning

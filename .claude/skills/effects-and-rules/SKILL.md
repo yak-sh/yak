@@ -178,6 +178,24 @@ roles; only over a graph that keeps no pool does it run effects where they
 were committed (`rolesOf` in packages/cli/local.ts). Each process records its
 roles in `process{roles}`, so `.process.roles` shows who serves what.
 
+### Where reads run
+
+A process that stays up (`yak serve`, `yak work`) answers its graph's committed
+reads in a read thread beside it: `readThread` in packages/cli/read_thread.ts,
+lent to the graph as @yaks/graph `Lent` (`lend` in packages/cli/local.ts). Its
+two read-only workers each hold a WAL connection of their own. A slow read,
+whether a tool call, a sweep or a duty sent it, holds one worker's lane, so the
+main thread keeps running every duty, lease, timer and socket. A read past 10 s
+is reported as `SlowRead`, with its masked query.
+
+A write, and the reads it makes inside its own transaction (rules, `$was`),
+still run on the main thread's connection, in order. A write commits before
+`apply` returns, and a read sent after that opens a new snapshot that sees it,
+so read-your-writes holds across the two connections. Until the workers answer,
+reads run on the main thread's connection, so nothing waits on them starting. A
+passing `yak` command opens no reader. A slow query still deserves a better
+plan, but it is never the main thread's to wait on.
+
 `yak restart` is the agent's restart door: a replacement for every worker and
 web is ready first, then the old units' stops are enqueued. It doesn't wait in
 a shell for shutdown. A web's replacement shares its port, so the handover

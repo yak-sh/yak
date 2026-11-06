@@ -86,6 +86,15 @@ export let dutiesOf = (
   has: (plugin: string, facet: string) => boolean = exported,
 ): Role[] => dutyRoles(config, !!vocab.comp(EFFECT), mine, has)
 
+// A process that stays up answers its committed reads in a read thread beside
+// it (./read_thread.ts), lent to its graph (@yaks/graph `Lent`): a slow read,
+// whoever asked it, holds a worker's lane and never the thread its requests,
+// duties, leases and sockets run on. A write, and the reads in its own
+// transaction, still run here, and a read sent after a write commits sees it.
+// A passing command opens none; it would wait on the workers starting.
+let lend = (path: string, config: Config) =>
+  dbOf(config) != ':memory:' ? readThread(path) : undefined
+
 // The graph a command opens: composed for its own roles, with its duty roles
 // external for web, otherwise planned in a thread beside it. Only a host
 // explicitly serving duties starts that thread. Every commit still records the effects it owes for a worker to
@@ -97,9 +106,7 @@ let open = async (
   readOnly = false,
 ): Promise<Served> => {
   let config = read(path)
-  let reader = roles.includes('web') && dbOf(config) != ':memory:'
-    ? readThread(path)
-    : undefined
+  let reader = roles.includes('web') ? lend(path, config) : undefined
   // A web warms beside its listener: its reader's workers start, so its first
   // read is as fast as its next, and then its main thread is watched
   // ({@link watched}). The host carries the warming as `warmed`, made before
@@ -255,11 +262,22 @@ export let work = async (
   )
   let roles = workerRoles(config, duties, only, process)
   let key = JSON.stringify([path, roles])
-  let opening = compose(config, roles, facet)
+  let reader = lend(path, config)
+  let opening = compose(config, roles, facet, { reader }).catch(
+    async (error) => {
+      await reader?.close()
+      throw error
+    },
+  )
   hosts.set(key, opening)
   let host = await opening
-  // A worker's thread is watched as a web's is: a stall says what held it.
-  watched(host).catch((error) =>
+  // A worker's thread is watched as a web's is, once its reader has started:
+  // a stall says what held it. A reader that cannot start is reported, and
+  // its reads stay here.
+  let started = reader?.ready().catch((error) =>
+    host.report?.(error, { tags: { step: 'read' } })
+  )
+  watched(host, started).catch((error) =>
     host.report?.(error, { tags: { step: 'main thread sampling' } })
   )
   await host.bury()

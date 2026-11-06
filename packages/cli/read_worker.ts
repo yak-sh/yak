@@ -1,7 +1,8 @@
 /// <reference no-default-lib="true" />
 /// <reference lib="deno.worker" />
-// The read side of one file-backed web host. It composes the same graph over
-// another SQLite WAL connection so a long query cannot hold the HTTP thread.
+// The read side of one file-backed web or worker host. It composes the same
+// graph over another SQLite WAL connection so a long query cannot hold the
+// thread its requests and duties run on.
 import { read } from './config.ts'
 import { record } from '@yaks/trace'
 import { compose, facet, type Served } from './host.ts'

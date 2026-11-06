@@ -284,11 +284,11 @@ export type Options = {
    * part of the graph (@yaks/client). */
   runs?: (rule: Ready, o: ApplyOpts) => boolean
   /** where this graph's committed reads are answered (default: here). A web
-   * host's reads run beside its HTTP thread (@yaks/cli `readThread`), so no
-   * read holds the thread; a write, and the reads it makes in its own
-   * transaction, still run here. One with `answering` takes them only once it
-   * says it answers, and they are answered here until then: a web's read
-   * workers start beside it, and nothing waits on them. */
+   * or worker host's reads run beside the thread its requests and duties run
+   * on (@yaks/cli `readThread`), so no read holds it; a write, and the reads
+   * it makes in its own transaction, still run here. One with `answering`
+   * takes them only once it says it answers, and they are answered here until
+   * then: the read workers start beside the host, and nothing waits on them. */
   reader?: Lent
 }
 

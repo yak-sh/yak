@@ -1,6 +1,6 @@
 import * as disk from '@yaks/file/io'
-// A web host reads through a bounded pool of read-only workers, each started
-// once and kept. A worker is never ended to cancel a read: Deno keeps part of
+// A web or worker host reads through a bounded pool of read-only workers, each
+// started once and kept. A worker is never ended to cancel a read: Deno keeps part of
 // every worker that ends (7 to 14 MB of the modules it loaded, measured on
 // Deno 2.9), so a web that ended one per cancelled read grew by gigabytes a
 // day as tabs navigated (T-130803). A cancelled read is answered at once, and
