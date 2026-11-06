@@ -230,11 +230,13 @@ async (request: Request): Promise<Response> => {
       return json({ error: 'body must be JSON naming the bug' }, 400)
     }
     // A fixer's mark names its task, a short name; a resolution says why, a
-    // few sentences each. Neither is a body of text.
+    // few sentences each, and an archival its reason. Neither is a body of text.
     let said: Record<string, number> = name == 'taken'
       ? { task: 100 }
       : name == 'resolved'
       ? { broke: 2000, cause: 2000, since: 64, fix: 64, recur: 2000 }
+      : name == 'archived'
+      ? { reason: 2000 }
       : {}
     let wrong = refusal(body, said)
     if (wrong) return json({ error: wrong }, 400)

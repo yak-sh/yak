@@ -165,7 +165,7 @@ export let bug = async (
   }
 }
 // What a mark writes on its bug: a resolution with its explanation, an
-// archival, or a reopening, which takes the resolution back.
+// archival with its reason, or a reopening, which takes the resolution back.
 let written = (
   name: 'resolved' | 'archived' | 'reopened',
   said: Record<string, string>,
@@ -228,8 +228,13 @@ export let runs = (
         fields('entity.eid'),
       ))
       if (!remote && !bug) throw new CallError('bug', `not a bug: ${eid}`)
-      // A resolution carries its explanation to each store it marks.
-      let said = name == 'resolved' ? await full(explanation(args)) : {}
+      // A resolution carries its explanation to each store it marks, and an
+      // archival its reason.
+      let said: Record<string, string> = name == 'resolved'
+        ? await full(explanation(args)) as Record<string, string>
+        : name == 'archived' && args.reason != null
+        ? { reason: String(args.reason) }
+        : {}
       if (remote || options.remote) {
         try {
           let held = await upstream(options.remote ?? {}, eid, name, go, said)

@@ -1,7 +1,7 @@
 // Bug reads cross the signed Worker door while remote entities stay outside
 // the box graph. The declared tools exercise the same arguments as CLI/MCP.
 import { equal, ok, test, throws } from '@yaks/testing'
-import { type Bundle, graph } from '@yaks/graph'
+import { type Bundle, type Comp, graph } from '@yaks/graph'
 import { loadTools } from '@yaks/graph/tools'
 import { ids as addresses } from '@yaks/id/graph'
 import { idDoc } from '@yaks/id/vocab'
@@ -234,10 +234,15 @@ let marking = async (
   return {
     box: graphOnBox,
     worker: worker.graph,
-    // A resolution is explained unless a test says otherwise.
+    // A resolution is explained, and an archival says why, unless a test says
+    // otherwise.
     call: async (name: string, args: Record<string, unknown>) => {
       let tool = tools.find((t) => t.name == name)!
-      let said = name == 'bug_resolve' ? why : {}
+      let said = name == 'bug_resolve'
+        ? why
+        : name == 'bug_archive'
+        ? { reason: 'set aside' }
+        : {}
       let patches = await tool.run({
         entity: { eid: ids[4] },
         call: { args: validateToolInput(tool, { ...said, ...args }) },
@@ -258,7 +263,9 @@ for (let [verb, name] of [['resolve', 'resolved'], ['archive', 'archived']]) {
     let answer = marked
     ok(answer.some((b) => b[name]))
     ok((await shared.box.get([ids[0]], [name]))[0][name])
-    ok((await shared.worker.get([ids[0]], [name]))[0][name])
+    let [held] = await shared.worker.get([ids[0]], [name])
+    ok(held[name])
+    if (name == 'archived') equal((held[name] as Comp).reason, 'set aside')
     equal((await shared.worker.read('.bug.status=open')).length, 0)
   })
   if (verb == 'resolve') {

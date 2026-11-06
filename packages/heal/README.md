@@ -13,10 +13,10 @@ deno add jsr:@yaks/heal
   the box graph. Its eid derives from the tracker bug's global eid. An
   `about{}` + `edge{from, to}` links the task to that bug; its body links to the
   tracker page. A platform bug's body adds that a failure in a person's app
-  (`source: app`) is fixed in yaks.app only when yaks.app caused it, and its
-  task is cancelled when the app's own code did, which archives the platform's
-  record and leaves the owner's. The count and stack belong to the tracker
-  alone.
+  (`source: app`) is fixed in yaks.app only when yaks.app caused it, and its bug
+  is archived with `bug_archive` and its reason when the app's own code did,
+  which archives the platform's record and leaves the owner's. The count and
+  stack belong to the tracker alone.
 - `fixer{bug}` sits on a requested fixer session. `bug` is the tracker bug's
   global eid, kept across stores and deletion. Legacy fixers may still name
   their box bug tasks.
@@ -115,24 +115,24 @@ the same session on the next pass. A newer tracker regression still requests a
 fresh fixer rather than resuming the previous opening's session. Cancelled tasks
 remain cancelled.
 
-A cancelled task archives its bug. A completed task resolves nothing: a
-resolution needs its explanation, which only the resolver can give, so its bug
-stays open until someone resolves it explained. A tracker resolution completes
-its task; archival cancels it. Cancelling work after completion archives its bug
-while the bug is open; a resolved one is archived if it regresses. Only open
-bugs file tasks or request fixers. A running fixer that holds a bug's task marks
-the bug `taken{task}` in its tracker, as soon as heal starts it and again on a
-replay that finds no mark for the bug's current opening, so the bug's letter
-thread hears a fixer started. Terminal native sessions do not mark bugs taken.
-[Tracker](../tracker/README.md) owns these marks: resolution allows a later
-regression to reopen the bug; archival stops its notifications. A regression
-newer than completion reopens its task immediately, even while fixer starts are
-paused. Each new bug and each reopening writes one `knock{target}` for the home
-project, in the write that files or reopens the task. The task is its receipt,
-so a replay, a restart, a second tracker holding the same bug or a moved stamp
-sends no second knock; a regression after the next completion sends a new one. A
-reopening's knock names the hit that reopened it, from
-`regressed{message,
+A task's state never marks its bug: cancelling, reopening or completing a task
+leaves the bug as it was. A completed task resolves nothing: a resolution needs
+its explanation, which only the resolver can give, so its bug stays open until
+someone resolves it explained. Archiving a bug is likewise an act on the bug,
+with its reason (`bug_archive`). A tracker resolution completes its task;
+archival cancels it, carrying its reason. Only open bugs file tasks or request
+fixers. A running fixer that holds a bug's task marks the bug `taken{task}` in
+its tracker, as soon as heal starts it and again on a replay that finds no mark
+for the bug's current opening, so the bug's letter thread hears a fixer started.
+Terminal native sessions do not mark bugs taken. [Tracker](../tracker/README.md)
+owns these marks: resolution allows a later regression to reopen the bug;
+archival stops its notifications. A regression newer than completion reopens its
+task immediately, even while fixer starts are paused. Each new bug and each
+reopening writes one `knock{target}` for the home project, in the write that
+files or reopens the task. The task is its receipt, so a replay, a restart, a
+second tracker holding the same bug or a moved stamp sends no second knock; a
+regression after the next completion sends a new one. A reopening's knock names
+the hit that reopened it, from `regressed{message,
 commit}`.
 
 The follower writes each mark through the same client's `/apply` door, with

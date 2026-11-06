@@ -13,10 +13,11 @@ import { remoteBug, reopened } from '@yaks/tracker'
 import { active, fixing, type Options } from './fix.ts'
 
 // Only the platform's tracker records failures in people's apps (tagged
-// `source: app`); cancelling the task archives the platform's record alone.
+// `source: app`); archiving the bug there leaves the owner's record alone.
 let APP = ' If its occurrences are tagged `source: app`, it broke in a ' +
   "person's yaks app: fix yaks.app if yaks.app caused it, never change the " +
-  "app, and if the app's own code did, cancel this task saying why."
+  "app, and if the app's own code did, archive the bug with `bug_archive`, " +
+  'its reason saying why.'
 
 /** One tracker bug always names the same work item. */
 export let taskEid = (bug: string): string => identityEid('heal_task', [bug])
@@ -249,7 +250,12 @@ export let follow = (
             closed = true
             await g.apply([{
               entity: task.entity,
-              [close]: { at: comp(bug, source)?.at },
+              [close]: {
+                at: comp(bug, source)?.at,
+                ...close == 'cancelled' && comp(bug, 'archived')?.reason
+                  ? { reason: comp(bug, 'archived')?.reason }
+                  : {},
+              },
               ...(close == 'cancelled' ? { completed: null } : {}),
               $was: {
                 started: { at: token(comp(task, 'started')?.at) },
@@ -263,25 +269,9 @@ export let follow = (
           let reopen = !!task.completed &&
             moment(comp(bug, 'regressed')?.at) >
               moment(comp(task, 'completed')?.at)
-          // Cancelled work archives its bug. Completed work resolves nothing:
-          // a resolution needs its explanation, which the resolver writes on
-          // the bug itself, and that resolution completes the task above.
-          if (task.cancelled) {
-            await mark(mutate, [{
-              entity: { eid: bug.entity.eid },
-              archived: {},
-              // A new regression or someone else's mark invalidates this answer.
-              $was: {
-                bug: { fault: token(comp(bug, 'bug')?.fault) },
-                resolved: { at: token(comp(bug, 'resolved')?.at) },
-                archived: { at: token(comp(bug, 'archived')?.at) },
-                regressed: {
-                  at: token(comp(bug, 'regressed')?.at),
-                  error: token(comp(bug, 'regressed')?.error),
-                },
-              },
-            }])
-          }
+          // A task's state never marks its bug: a cancelled or completed
+          // task leaves it as it was. Only an act on the bug resolves or
+          // archives it, and that act closes the task above.
           if (task.cancelled || bug.resolved) return
           return {
             task,

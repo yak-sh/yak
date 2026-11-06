@@ -43,8 +43,8 @@ export class Tracker extends DurableObject<Env> implements Stub {
   resolve(ticket: string, bug: string, said: Explanation) {
     return this.tracker.resolve(ticket, bug, said)
   }
-  archive(ticket: string, bug: string) {
-    return this.tracker.archive(ticket, bug)
+  archive(ticket: string, bug: string, reason: string) {
+    return this.tracker.archive(ticket, bug, reason)
   }
   unseen(ticket: string, app: string) {
     return this.tracker.unseen(ticket, app)

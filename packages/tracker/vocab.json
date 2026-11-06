@@ -292,6 +292,18 @@
         }
       }
     },
+    "archived": {
+      "component": true,
+      "extends": true,
+      "type": "object",
+      "description": "A bug set aside without a fix, by whoever archived it. Nothing archives a bug on its own: a task's state never does.",
+      "properties": {
+        "reason": {
+          "type": "string",
+          "description": "Why it was archived, such as the person's own app code having broken."
+        }
+      }
+    },
     "resolved": {
       "component": true,
       "extends": true,
@@ -499,11 +511,15 @@
       "noun": "bug",
       "verb": "archive",
       "title": "Archive bugs",
-      "description": "Hide a bug without discarding occurrences. Box marks reach the configured remote tracker before the local mark; yaks.app marks only the platform tracker.",
+      "description": "Hide a bug without discarding occurrences, saying why: an archived bug is one someone set aside, never fixed. Archiving closes its task; a task's own state never marks its bug. Box marks reach the configured remote tracker before the local mark; yaks.app marks only the platform tracker.",
       "input": {
         "bug": {
           "type": "string",
           "description": "Box bug id or title; for yaks.app, the bug’s global eid or the hex it starts with (4fde03f7)."
+        },
+        "reason": {
+          "type": "string",
+          "description": "Why it is archived, in a sentence for the owner, such as which app's own code broke and how."
         },
         "source": {
           "type": "string",
@@ -516,7 +532,8 @@
       },
       "idempotent": true,
       "required": [
-        "bug"
+        "bug",
+        "reason"
       ],
       "positional": [
         "bug"

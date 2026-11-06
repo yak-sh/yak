@@ -234,12 +234,13 @@ export let store = (storage: Storage, config: Config) => {
         limit(Math.min(Math.max(count, 1), 100)),
       ),
     )
-  // What a mark says beside the bug: a resolution's explanation, or the task
-  // a fixer took it for. A reopening says nothing: it takes a resolution back.
+  // What a mark says beside the bug: a resolution's explanation, an archival's
+  // reason, or the task a fixer took it for. A reopening says nothing: it takes
+  // a resolution back.
   let mark = async (
     bug: string,
     name: 'resolved' | 'archived' | 'taken' | 'reopened',
-    said: Partial<Explanation> & { task?: string } = {},
+    said: Partial<Explanation> & { task?: string; reason?: string } = {},
   ): Promise<void> => {
     // A fixer's mark has no tool: only heal writes it, through this door.
     if (name == 'taken') {

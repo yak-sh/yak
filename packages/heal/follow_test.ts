@@ -83,7 +83,16 @@ let trackerVocab = loadVocab([
   pick(kernelDoc, 'entity', 'resolved', 'archived'),
   pick(provenanceDoc, 'created'),
   pick(docDoc, 'doc'),
-  pick(trackerDoc, 'bug', 'error', 'during', 'regressed', 'taken', 'resolved'),
+  pick(
+    trackerDoc,
+    'bug',
+    'error',
+    'during',
+    'regressed',
+    'taken',
+    'resolved',
+    'archived',
+  ),
   pick(mailDoc, 'notified'),
 ], [kernelKeywords])
 let bareTrackerVocab = loadVocab(
@@ -801,9 +810,10 @@ for (
 ) {
   let f = await fixture()
   await f.replay()
+  let reason = bugMark == 'archived' ? { reason: "the app's own code" } : {}
   await put(f.tracker, [{
     entity: { eid: bug },
-    [bugMark]: { at: '2026-10-02T00:00:02Z' },
+    [bugMark]: { at: '2026-10-02T00:00:02Z', ...reason },
   }])
   f.commits.length = 0
   f.trackerCommits.length = 0
@@ -812,6 +822,7 @@ for (
     await f.replay()
     let [task] = await f.g.get([taskEid(bug)])
     equal(comp(task, taskMark).at, '2026-10-02T00:00:02Z')
+    equal(comp(task, taskMark).reason, reason.reason)
     equal(f.commits.length, 1)
     equal(f.trackerCommits, [])
     equal(await count(f.g, 'fixer'), 1)
@@ -935,12 +946,12 @@ let finished = async (mark: string) => {
   return f
 }
 
+// A task's state never marks its bug: only an act on the bug archives it.
 let cancelledWork = await finished('cancelled')
-test("the follower marks a cancelled task's tracker bug archived", async () => {
+test('a cancelled task leaves its tracker bug open', async () => {
   await cancelledWork.run()
-  equal(cancelledWork.trackerCommits.length, 1)
-  let [saved] = await cancelledWork.tracker.get([bug])
-  equal(comp(saved, 'bug').status, 'archived')
+  equal(cancelledWork.trackerCommits, [])
+  equal(comp((await cancelledWork.tracker.get([bug]))[0], 'bug').status, 'open')
   equal(cancelledWork.commits, [])
   cancelledWork.close()
 })
@@ -955,51 +966,19 @@ test("a completed task leaves its tracker bug open for the fixer's explained res
   completedWork.close()
 })
 
-let markReplay = await finished('cancelled')
-await markReplay.run()
-markReplay.trackerCommits.length = 0
-test('replaying an archived task writes neither store', async () => {
-  await markReplay.run()
-  equal(markReplay.trackerCommits, [])
-  equal(markReplay.commits, [])
-  markReplay.close()
-})
-
-let down = await finished('cancelled')
-down.breakTracker(true)
-test('a tracker down at its owed mark reports the failure and writes nothing', async () => {
-  await down.run()
-  equal(down.errors.length, 1)
-  equal(down.trackerCommits, [])
-  ok(!(await down.tracker.get([bug]))[0].archived)
-  down.close()
-})
-
-let markRetry = await finished('cancelled')
-markRetry.breakTracker(true)
-await markRetry.run()
-markRetry.breakTracker(false)
-test('an owed tracker mark survives downtime and a follower restart', async () => {
-  await markRetry.run()
-  equal(markRetry.trackerCommits.length, 1)
-  ok((await markRetry.tracker.get([bug]))[0].archived)
-  markRetry.close()
-})
-
-let archivedLater = await finished('completed')
-await archivedLater.run()
-await put(archivedLater.g, [{
+let cancelledLater = await finished('completed')
+await cancelledLater.run()
+await put(cancelledLater.g, [{
   entity: { eid: taskEid(bug) },
   completed: null,
   cancelled: {},
 }])
-archivedLater.trackerCommits.length = 0
-test('cancelling completed work archives its bug once', async () => {
-  await archivedLater.run()
-  await archivedLater.run()
-  equal(archivedLater.trackerCommits.length, 1)
-  ok((await archivedLater.tracker.get([bug]))[0].archived)
-  archivedLater.close()
+cancelledLater.trackerCommits.length = 0
+test('cancelling completed work leaves its bug open', async () => {
+  await cancelledLater.run()
+  equal(cancelledLater.trackerCommits, [])
+  ok(!(await cancelledLater.tracker.get([bug]))[0].archived)
+  cancelledLater.close()
 })
 
 // A bug resolved after its work was filed: between two passes of one
@@ -1046,110 +1025,6 @@ test('a fixer gate reopens regressed work and announces its bug', async () => {
   ok(!(await heldRegression.g.get([taskEid(bug)]))[0].completed)
   equal(await count(heldRegression.g, 'knock'), 2)
   heldRegression.close()
-})
-
-let elsewhere = await finished('cancelled')
-let emptyTracker = trackerGraph()
-let emptySeen = watches(emptyTracker)
-test('the follower marks the bug only in the tracker that holds its eid', async () => {
-  await service(elsewhere.host, {
-    ...elsewhere.config,
-    trackers: ['http://empty.test', url],
-    open: (address) =>
-      address == url ? elsewhere.config.open!(address) : {
-        ...door(emptyTracker, emptySeen),
-        mutate: () => {
-          throw new Error('no bug lives here')
-        },
-      },
-  })
-  equal(elsewhere.trackerCommits.length, 1)
-  equal(elsewhere.errors, [])
-  equal(await emptyTracker.get([bug]), [])
-  elsewhere.close()
-  emptySeen.close()
-})
-
-let transport = await remote(true)
-await transport.run()
-await put(transport.g, [{
-  entity: { eid: taskEid(bug) },
-  cancelled: { at: '2026-10-02T00:00:02Z' },
-}])
-let transportBug = transport.watch.value[0]
-let markKeys: (string | undefined)[] = []
-let sendMark = () =>
-  alone(transport.g)(transportBug, url, (rows, opts) => {
-    markKeys.push(opts?.key)
-    return transport.watch.mutate(rows, opts)
-  })
-transport.down(true)
-await throws(sendMark, 'tracker is down')
-transport.down(false)
-// Replay through the real tracker API before checking its receipt. Capture
-// the pre-send state too, so retry acceptance cannot hide an early archive.
-let retryBefore = !!transport.watch.value[0].archived
-await sendMark()
-let retriedMark = {
-  before: retryBefore,
-  keys: [...markKeys],
-  archived: !!(await transport.tracker.get([bug]))[0].archived,
-  posts: transport.posts(),
-}
-transport.watch.close()
-transport.close()
-test('the headless client admits a retried mark through the tracker API', () => {
-  ok(!retriedMark.before)
-  ok(retriedMark.keys[0])
-  equal(retriedMark.keys[1], retriedMark.keys[0])
-  ok(retriedMark.archived)
-  equal(retriedMark.posts, 1)
-})
-
-let lost = await remote()
-await lost.run()
-await put(lost.g, [{
-  entity: { eid: taskEid(bug) },
-  cancelled: { at: '2026-10-02T00:00:02Z' },
-}])
-let lostBug = lost.watch.value[0]
-lost.lose()
-await throws(
-  () => alone(lost.g)(lostBug, url, lost.watch.mutate),
-  'acknowledgement lost',
-)
-await lost.ready()
-lost.trackerCommits.length = 0
-lost.lose(false)
-await alone(lost.g)(lostBug, url, lost.watch.mutate)
-test('a lost tracker acknowledgement replays without another write', async () => {
-  ok((await lost.tracker.get([bug]))[0].archived)
-  equal(lost.posts(), 2)
-  equal(lost.trackerCommits, [])
-  lost.watch.close()
-  lost.close()
-})
-
-let raced = await finished('cancelled')
-test('a tracker regression during mark admission rejects the stale answer', async () => {
-  let [before] = await raced.tracker.get([bug])
-  await put(raced.tracker, [{
-    entity: before.entity,
-    regressed: { at: '2026-10-02T00:00:03Z' },
-  }])
-  raced.trackerCommits.length = 0
-  await throws(
-    () =>
-      alone(raced.g)(
-        before,
-        url,
-        (rows) => raced.tracker.apply(rows, { trusted: true }),
-      ),
-    'regressed.at',
-  )
-  equal(raced.trackerCommits, [])
-  ok(!(await raced.tracker.get([bug]))[0].archived)
-  raced.close()
 })
 
 let ordered = await off()

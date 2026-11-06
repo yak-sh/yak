@@ -502,7 +502,7 @@ yak bug list '.bug.status=resolved' --source yaks.app
 yak bug show <global-bug-eid> --source yaks.app
 yak bug resolve <global-bug-eid> --source yaks.app --broke '…' --cause '…' --fix <sha> --recur '…'
 yak bug show B-7 --source box
-yak bug archive <box-bug-id> --source box
+yak bug archive <box-bug-id> --source box --reason '…'
 yak bug reopen <global-bug-eid> --source yaks.app
 ```
 
