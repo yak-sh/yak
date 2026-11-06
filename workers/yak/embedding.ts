@@ -24,24 +24,12 @@ import configured from './embedding.json' with { type: 'json' }
 
 import { configured as plugged, holding } from '@yaks/host/config'
 import { lending } from '@yaks/host/lending'
-import {
-  type Embedder,
-  type Field,
-  fields,
-  meaning,
-  resolved,
-  searched,
-  space,
-  Withheld,
-} from '@yaks/embedding'
+import { type Embedder, space, Withheld } from '@yaks/embedding'
 import { ModelError } from '@yaks/model'
 import type { Taken } from '@yaks/host/words'
 import { embedding } from './config.ts'
 import { lenderFacets } from './load.ts'
 import { LIMIT } from '@yaks/session/status'
-import type { Meaning } from '@yaks/host'
-import type { Derived, Raw, Statements } from '@yaks/sql'
-import type { Vocab } from '@yaks/vocab'
 
 /** The model every store's vectors are made by. Changing it, or cutting its
  * width, is a new vector space, and each store's sweep re-embeds its text
@@ -81,30 +69,4 @@ type Runs = {
   run(model: string, input: unknown, options?: unknown): Promise<unknown>
 }
 
-/** The text a store embeds: every property its vocabulary marks searched,
- * read through its derived columns, so a body kept by address is its prose. */
-export let texts = (vocab: Vocab, derived: Derived): Field[] =>
-  resolved(fields(vocab, searched), derived)
-
-/** Words ranked by meaning among what a filter line selects (@yaks/host
- * `meaning`), what a memory recall asks (@yaks/memory): the words embedded by
- * the model `model` answers, none ranking nothing, and the vectors in `held`
- * scanned. Both are read at each call, since a store's texts stand up after it
- * does. */
-export let ranking = (
-  model: () => Embedder | null,
-  held: {
-    statements: Statements
-    fields: Field[]
-    screen: (line: string) => Raw | null
-  },
-): Meaning =>
-async (words, { limit, within } = {}) => {
-  let embeds = model()
-  if (!embeds) return []
-  let { statements, fields, screen } = held
-  return await meaning(statements, fields, embeds, words, {
-    limit,
-    screen: within ? () => screen(within) : undefined,
-  })
-}
+export { ranking, texts } from './embedding-read.ts'

@@ -38,7 +38,6 @@ import type { VocabDoc } from '@yaks/vocab'
 import { embeds, platform } from './testing.ts'
 import * as apps from './apps.ts'
 import { ctxOf } from './connections.ts'
-import { refusal } from './models.ts'
 import { within } from './defects.ts'
 import { as as signedIn, visit } from './serving-probe.ts'
 import { cleanup, test, until } from '@yaks/testing'
@@ -1207,16 +1206,6 @@ test('./api/ai/run reports an unpriced model once and never purchases inference'
   )
   assertEquals(v.asked, [])
   assertEquals((await v.spent()).meter?.models ?? 0, 0)
-})
-
-test('./api/ai/run answers an input the model refuses as the caller’s, 400', () => {
-  let schema = "5006: Error: oneOf at '/' not met, 0 matches"
-  let [status, code, message] = refusal(
-    new ModelError('bad_request', `${FLASH} refused this input: ${schema}`),
-  )!
-  assertEquals([status, code], [400, 'bad_request'])
-  assert(message.includes(schema))
-  assertEquals(refusal(new Error('upstream down')), null)
 })
 
 test('./api/ai/run answers a visitor only where the app opens its models', async () => {

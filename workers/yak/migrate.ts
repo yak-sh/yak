@@ -15,7 +15,7 @@ import {
   schema as vectorSchema,
   watch as watchEmbedding,
 } from '@yaks/embedding'
-import { texts } from './embedding.ts'
+import { texts } from './embedding-read.ts'
 import { reserved } from '@yaks/durable-object'
 import {
   catalogue,

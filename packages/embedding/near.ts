@@ -33,7 +33,8 @@ import {
 import { TABLE } from './ddl.ts'
 import { hold, ranked } from './held.ts'
 import { admitted, candidates } from './native.ts'
-import { cosine, floats, unpack } from './vector.ts'
+import { floats, unpack } from './vector.ts'
+import { scored, type Vector } from './score.ts'
 
 /**
  * One semantic neighbour: the entity, the integer id its rows key on, and how
@@ -89,6 +90,14 @@ let vectors = (
     ),
   }))
 
+let vectorRows = function* (
+  rows: ReturnType<typeof vectors>,
+): Generator<Vector> {
+  for (let row of rows) {
+    yield { owner: Number(row.owner), vector: floats(row.vec as Uint8Array) }
+  }
+}
+
 /**
  * The vector stored for an entity under a model, or null when it has none —
  * because it holds no text, because the sweep has not reached it, or because
@@ -127,40 +136,6 @@ export type NearOpts = {
   within?: Screen
 }
 
-// Keep only the best `limit` scores. The root is the worst retained score;
-// for equal scores, the higher owner id is worse, so a tie resolves the same
-// way whichever vectors were read and in whatever order.
-type Hit = { owner: number; similarity: number }
-let worse = (a: Hit, b: Hit) =>
-  a.similarity < b.similarity ||
-  (a.similarity == b.similarity && a.owner > b.owner)
-
-let push = (heap: Hit[], hit: Hit) => {
-  let i = heap.length
-  heap.push(hit)
-  while (i) {
-    let p = (i - 1) >> 1
-    if (!worse(hit, heap[p])) break
-    heap[i] = heap[p]
-    i = p
-  }
-  heap[i] = hit
-}
-
-let replace = (heap: Hit[], hit: Hit) => {
-  let i = 0
-  while (2 * i + 1 < heap.length) {
-    let child = 2 * i + 1
-    if (child + 1 < heap.length && worse(heap[child + 1], heap[child])) {
-      child++
-    }
-    if (!worse(heap[child], hit)) break
-    heap[i] = heap[child]
-    i = child
-  }
-  heap[i] = hit
-}
-
 /** The entities nearest a query vector, most similar first. */
 export let nearest = (
   db: Statements,
@@ -190,16 +165,16 @@ export let nearest = (
       within: opts.within,
     })
   }
-  let heap: Hit[] = []
-  for (let row of vectors(db, opts.model, opts.within, pool)) {
-    if (row.owner == without) continue
-    let vec = floats(row.vec as Uint8Array)
-    let hit = { owner: Number(row.owner), similarity: cosine(query, vec) }
-    if (!(hit.similarity >= floor)) continue
-    if (heap.length < limit) push(heap, hit)
-    else if (worse(heap[0], hit)) replace(heap, hit)
-  }
-  let owners = heap.map((h) => h.owner)
+  let hits = scored(
+    query,
+    vectorRows(vectors(db, opts.model, opts.within, pool)),
+    {
+      limit,
+      floor,
+      without: without == null ? undefined : Number(without),
+    },
+  )
+  let owners = hits.map((h) => h.owner)
   if (!owners.length) return []
   let eids = new Map(
     db.query(select({
@@ -208,10 +183,9 @@ export let nearest = (
       where: among(col('id'), owners.map((id) => val(id))),
     })).map((r) => [Number(r.id), String(r.eid)]),
   )
-  return heap.sort((a, b) => b.similarity - a.similarity || a.owner - b.owner)
-    .map(({ owner, similarity }) => ({
-      entity: eids.get(owner)!,
-      owner,
-      similarity,
-    }))
+  return hits.map(({ owner, similarity }) => ({
+    entity: eids.get(owner)!,
+    owner,
+    similarity,
+  }))
 }

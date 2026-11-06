@@ -3,31 +3,15 @@
 // meaning it lends its host, which memory recall asks.
 import { test, until } from '@yaks/testing'
 import { assertEquals } from '@std/assert'
-import {
-  type Embedder,
-  hashEmbedder,
-  pack,
-  schema,
-  sweep,
-  TABLE,
-  unit,
-  Withheld,
-} from '@yaks/embedding'
+import { hashEmbedder, pack, TABLE, unit, Withheld } from '@yaks/embedding'
 import { ModelError } from '@yaks/model'
 import { driver } from '@yaks/durable-object'
 import { col, select, table, val } from '@yaks/sql'
 import { doorOf } from './door.ts'
-import { line, memoryDoc, saved } from '@yaks/memory'
-import { graph } from '@yaks/graph'
-import { loadVocab } from '@yaks/vocab'
-import { docDoc } from '@yaks/doc'
-import { storage as sqliteStorage } from '@yaks/sqlite'
-import { blobRead } from '@yaks/blob'
-import { preparedDriver, snapshot } from '../../packages/sqlite/testing.ts'
 import { Store } from './graph.ts'
 import { KERNEL, metaOf } from './meta.ts'
 import { state } from './testing.ts'
-import { DIM, embedder, ranking, SPACE, texts, withheld } from './embedding.ts'
+import { DIM, embedder, SPACE, withheld } from './embedding.ts'
 
 // Workers AI, stood in for by word buckets: texts sharing words are near.
 let words = hashEmbedder(DIM)
@@ -70,84 +54,6 @@ test('a store answers .near from its own vectors, closest first', async () => {
   let { near } = await notes()
   assertEquals(await near('.near=hobbit&.order=similar'), ['flight', 'kitchen'])
   assertEquals(await near('.near=hobbit&.order=similar&.limit=1'), ['flight'])
-})
-
-// A space's memories, as the directory keeps them: rows in a SQLite of their
-// own with a vector beside each text, embedded once. The directory is a store
-// like any other, so what ranks them is the Store's `meaning` (`ranking`) and
-// the memory tools' recall over it.
-// A small space of word buckets keeps the scan small.
-let words64 = hashEmbedder(64)
-let within = line({ space: 'kitchen', limit: 8 })
-let memories = await (async () => {
-  let vocab = loadVocab([docDoc, memoryDoc, {
-    $defs: {
-      entity: {
-        component: true,
-        type: 'object',
-        wire: false,
-        properties: { num: { type: 'number', stamped: true } },
-      },
-      created: {
-        component: true,
-        type: 'object',
-        properties: {
-          at: { type: 'string', format: 'date-time', stamped: true },
-          by: { type: 'string', stamped: true },
-          via: { type: 'string', stamped: true },
-        },
-      },
-    },
-  }])
-  let derived = blobRead(vocab)
-  let drive = preparedDriver(snapshot(vocab, { derived }))
-  for (let stmt of schema()) drive.query(stmt)
-  let store = sqliteStorage(drive, vocab, { derived, schemaReady: () => true })
-  let g = graph({ vocab, storage: store })
-  await g.apply([
-    { entity: { eid: 'kitchen' }, doc: { title: 'a space' } },
-    { entity: { eid: 'elsewhere' }, doc: { title: 'another space' } },
-    ...saved({ eid: 'soft', said: 'keep the pages soft', space: 'kitchen' }),
-    ...saved({ eid: 'grams', said: 'use grams, never cups', space: 'kitchen' }),
-    ...saved({ eid: 'away', said: 'pages pages pages', space: 'elsewhere' }),
-  ])
-  let fields = texts(vocab, derived)
-  await sweep(store.statements, fields, words64)
-  let screen = store.screen(within)
-  let held = {
-    statements: store.statements,
-    fields,
-    screen: (q: string) => q == within ? screen : null,
-  }
-  // A store that has been searched once: the first search loads its vectors.
-  await ranking(() => words64, held)('pages', {
-    within,
-  })
-  return held
-})()
-
-let rank = (model: Embedder | null) => ranking(() => model, memories)
-let phrase = 'pages look friendly'
-let queryVector = await words64.embed(phrase)
-let recalling = {
-  model: words64.model,
-  embed: (text: string) => {
-    assertEquals(text, phrase)
-    return queryVector
-  },
-}
-
-test("a recall ranks a space's memories by meaning", async () => {
-  // No memory holds every word, so only the vectors find them, nearest first,
-  // and only this space's.
-  assertEquals(
-    (await rank(recalling)(phrase, { within })).map((h) => h.entity),
-    ['soft', 'grams'],
-  )
-})
-
-test('a store with no model bound ranks no memories', async () => {
-  assertEquals(await rank(null)('pages', { within }), [])
 })
 
 test('deployment of vectors in another space re-embeds them all', async () => {

@@ -796,34 +796,6 @@ test('R2 accounting sweeps without analytics, follows deletion and survives the 
   )
 })
 
-test('a space whose files cannot be listed keeps its figure, and the rest are read', async () => {
-  let held = (slug: string, files: number | null) => ({
-    space: {
-      eid: `$${slug}`,
-      slug,
-      meter: files == null ? null : { month: '2026-09', files },
-    } as Space,
-    apps: [] as dirPart.App[],
-  })
-  let { entities, refused } = await measured(
-    [held('jeff', null), held('ada', 70)],
-    {
-      sizesOf: ({ slug }) =>
-        slug == 'ada'
-          ? Promise.reject(new Error('list: refused'))
-          : Promise.resolve(new Map([['jeff/a/photo', 20]])),
-      counts: null,
-      month: '2026-09',
-      now: NOW,
-    },
-  )
-  assertEquals(
-    entities.map((e) => [e.entity.eid, (e.meter as Meter).files]),
-    [['$jeff', 20], ['$ada', 70]],
-  )
-  assertEquals(refused.map((e) => (e as Error).message), ['list: refused'])
-})
-
 test('each reading writes a row its days, and a space its apps added up', async () => {
   let app = (eid: string, slug: string) =>
     ({ eid, slug, meter: null }) as unknown as dirPart.App

@@ -107,3 +107,5 @@ export {
 } from './native.ts'
 export * from './search.ts'
 export * from './compile.ts'
+
+export { type Scored, scored, type Vector } from './score.ts'
