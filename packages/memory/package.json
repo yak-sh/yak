@@ -1,6 +1,6 @@
 {
   "name": "@yaks/memory",
-  "version": "0.2.19",
+  "version": "0.2.20",
   "type": "module",
   "exports": {
     ".": "./mod.ts",
@@ -15,8 +15,8 @@
   "dependencies": {
     "@yaks/doc": "0.2.18",
     "@yaks/graph": "0.2.18",
-    "@yaks/host": "0.2.19",
-    "@yaks/inspect": "0.2.19",
+    "@yaks/host": "0.2.20",
+    "@yaks/inspect": "0.2.20",
     "@yaks/query": "0.2.18",
     "@yaks/ui": "0.2.19",
     "@yaks/vocab": "0.2.18",

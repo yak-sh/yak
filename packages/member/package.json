@@ -1,6 +1,6 @@
 {
   "name": "@yaks/member",
-  "version": "0.2.19",
+  "version": "0.2.20",
   "type": "module",
   "exports": {
     ".": "./mod.ts",
@@ -12,15 +12,15 @@
   "dependencies": {
     "@yaks/fp": "0.2.18",
     "@yaks/graph": "0.2.18",
-    "@yaks/host": "0.2.19",
+    "@yaks/host": "0.2.20",
     "@yaks/query": "0.2.18",
     "@yaks/vocab": "0.2.18"
   },
   "devDependencies": {
     "@std/assert": "npm:@jsr/std__assert@^1.0.0",
-    "@yaks/journal": "0.2.19",
+    "@yaks/journal": "0.2.20",
     "@yaks/ram": "0.2.18",
-    "@yaks/sqlite": "0.2.19",
+    "@yaks/sqlite": "0.2.20",
     "@yaks/testing": "0.2.17"
   }
 }

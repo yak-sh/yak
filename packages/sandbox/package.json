@@ -1,6 +1,6 @@
 {
   "name": "@yaks/sandbox",
-  "version": "0.2.19",
+  "version": "0.2.20",
   "type": "module",
   "exports": {
     ".": "./mod.ts",
@@ -17,8 +17,8 @@
   "license": "Apache-2.0",
   "description": "Containers and jails recorded separately from computers, with provisioning intentions and confirmed disposal in the graph.",
   "dependencies": {
-    "@yaks/effects": "0.2.19",
-    "@yaks/file": "0.2.19",
+    "@yaks/effects": "0.2.20",
+    "@yaks/file": "0.2.20",
     "@yaks/fp": "0.2.18",
     "@yaks/graph": "0.2.18",
     "@yaks/machine": "0.2.19",
@@ -27,8 +27,8 @@
     "@yaks/vocab": "0.2.18"
   },
   "devDependencies": {
-    "@yaks/harness": "0.2.19",
-    "@yaks/kernel": "0.2.19",
+    "@yaks/harness": "0.2.20",
+    "@yaks/kernel": "0.2.20",
     "@yaks/ram": "0.2.18",
     "@yaks/testing": "0.2.17"
   }

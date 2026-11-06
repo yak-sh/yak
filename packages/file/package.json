@@ -1,6 +1,6 @@
 {
   "name": "@yaks/file",
-  "version": "0.2.19",
+  "version": "0.2.20",
   "type": "module",
   "exports": {
     ".": "./mod.ts",
@@ -16,11 +16,11 @@
   "dependencies": {
     "@yaks/fp": "0.2.18",
     "@yaks/graph": "0.2.18",
-    "@yaks/inspect": "0.2.19",
+    "@yaks/inspect": "0.2.20",
     "@yaks/process": "0.2.19",
     "@yaks/query": "0.2.18",
     "@yaks/ui": "0.2.19",
-    "@yaks/ux": "0.2.19",
+    "@yaks/ux": "0.2.20",
     "@yaks/vocab": "0.2.18",
     "lucide": "1.31.0",
     "preact": "10.29.7"

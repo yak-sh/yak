@@ -1,13 +1,13 @@
 {
   "name": "@yaks/mirror",
-  "version": "0.2.19",
+  "version": "0.2.20",
   "type": "module",
   "exports": "./mod.ts",
   "license": "Apache-2.0",
   "description": "Syncs files and a graph through bindings, each direction optional, reporting a path changed on both sides as a conflict instead of overwriting it.",
   "dependencies": {
-    "@yaks/file": "0.2.19",
-    "@yaks/git": "0.2.19"
+    "@yaks/file": "0.2.20",
+    "@yaks/git": "0.2.20"
   },
   "devDependencies": {
     "@std/assert": "npm:@jsr/std__assert@^1.0.0",

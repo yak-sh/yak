@@ -1,6 +1,6 @@
 {
   "name": "@yaks/git",
-  "version": "0.2.19",
+  "version": "0.2.20",
   "type": "module",
   "exports": {
     ".": "./mod.ts",
@@ -16,14 +16,14 @@
   "license": "Apache-2.0",
   "description": "Builds Git trees and commits from a file manifest, stores the objects as graph entities, and serves clones over Git's read-only smart HTTP protocol.",
   "dependencies": {
-    "@yaks/blob": "0.2.19",
+    "@yaks/blob": "0.2.20",
     "@yaks/edge": "0.2.18",
-    "@yaks/effects": "0.2.19",
-    "@yaks/file": "0.2.19",
+    "@yaks/effects": "0.2.20",
+    "@yaks/file": "0.2.20",
     "@yaks/fp": "0.2.18",
     "@yaks/graph": "0.2.18",
     "@yaks/id": "0.2.18",
-    "@yaks/kernel": "0.2.19",
+    "@yaks/kernel": "0.2.20",
     "@yaks/key": "0.2.18",
     "@yaks/machine": "0.2.19",
     "@yaks/process": "0.2.19",
@@ -35,7 +35,7 @@
     "@std/assert": "npm:@jsr/std__assert@^1.0.0",
     "@yaks/doc": "0.2.18",
     "@yaks/ram": "0.2.18",
-    "@yaks/sqlite": "0.2.19",
+    "@yaks/sqlite": "0.2.20",
     "@yaks/testing": "0.2.17"
   }
 }

@@ -1,12 +1,12 @@
 {
   "name": "@yaks/html",
-  "version": "0.2.19",
+  "version": "0.2.20",
   "type": "module",
   "exports": "./mod.ts",
   "license": "Apache-2.0",
   "description": "Serializes registry-selected views to server-side HTML through Preact without a DOM.",
   "dependencies": {
-    "@yaks/preact": "0.2.19",
+    "@yaks/preact": "0.2.20",
     "@yaks/render": "0.2.18",
     "@yaks/vocab": "0.2.18",
     "preact-render-to-string": "6.7.0"

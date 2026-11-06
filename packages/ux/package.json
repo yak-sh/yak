@@ -1,6 +1,6 @@
 {
   "name": "@yaks/ux",
-  "version": "0.2.19",
+  "version": "0.2.20",
   "type": "module",
   "exports": {
     ".": "./mod.ts",
@@ -14,11 +14,11 @@
   "description": "Controlled Preact components for editing properties, opening disclosures and completing input. Component state lives in a page graph; drafts and emitted bundles belong to the caller.",
   "dependencies": {
     "@preact/signals": "2.9.4",
-    "@yaks/client": "0.2.18",
+    "@yaks/client": "0.2.20",
     "@yaks/fp": "0.2.18",
     "@yaks/graph": "0.2.18",
     "@yaks/id": "0.2.18",
-    "@yaks/preact": "0.2.19",
+    "@yaks/preact": "0.2.20",
     "@yaks/query": "0.2.18",
     "@yaks/render": "0.2.18",
     "@yaks/ui": "0.2.19",
