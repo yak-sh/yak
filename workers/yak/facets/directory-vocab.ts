@@ -349,18 +349,33 @@ export let directoryDoc: VocabDoc = {
         adopted: owned(text),
       },
     },
-    // The Stripe account this space sells through (sell.ts, T-34524). Direct
-    // charges: the connected account is the merchant, so this is the whole of
-    // what the platform keeps about it — the id every call carries in its
-    // `Stripe-Account` header, and the two words Stripe answers with about
-    // whether it is ready. Everything else about the merchant — their bank,
-    // their business details, their disputes — is Stripe's and stays there.
+    // The connected account this space sells through (sell.ts, T-34524).
+    // Direct charges: the connected account is the merchant, so this is the
+    // whole of what the platform keeps about it — the payment provider it is
+    // held at (`via`, its name: `stripe`), the id every call names it by, and
+    // the provider's two answers about whether it is ready: `submitted`, they
+    // finished its form, and `ready`, it will take money for them. Everything
+    // else about the merchant — their bank, their business details, their
+    // disputes — is the provider's and stays there.
     //
-    // Server-owned, all three, for the reason `plan` is: `charges_enabled` is
-    // what the checkout door reads before it takes anybody's money, and a
-    // property a space could write for itself is a space selling before Stripe
-    // ever said it may. Only the Connect webhook and `space_sell` write them,
+    // Server-owned, all four, for the reason `plan` is: `ready` is what the
+    // checkout door reads before it takes anybody's money, and a property a
+    // space could write for itself is a space selling before its provider ever
+    // said it may. Only the provider's webhook and `space_sell` write them,
     // through the kernel's own door (directory.ts `stamp`).
+    seller: {
+      component: true,
+      type: 'object',
+      properties: {
+        via: owned(text),
+        account: owned(text),
+        ready: owned(bool),
+        submitted: owned(bool),
+      },
+    },
+    // What `seller` was called before it named its provider. Read as `seller`
+    // and moved into it by the store mover (seller-move.ts); nothing writes
+    // it but to clear it, and it goes once the directory holds none.
     stripe: {
       component: true,
       type: 'object',

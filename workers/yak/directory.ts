@@ -1,5 +1,6 @@
 import type { ByDay } from '@yaks/ui/chart'
 import { calledOf, christened, pick } from './operator-name.ts'
+import { fromStripe } from './seller-move.ts'
 import {
   EPOCH,
   MEND,
@@ -164,16 +165,17 @@ export type Plan = {
   at: string
 }
 
-/** A space's connected Stripe account, as the directory holds it (sell.ts).
- * Three properties and no more: the merchant's own books are Stripe's, and the
- * platform keeps only the id every call names them by and the two words that
- * say whether they are ready — `details_submitted` is "they finished the
- * form", `charges_enabled` is "Stripe will take money for them", and the
- * checkout door reads the second one alone. */
-export type Stripe = {
+/** A space's connected account, as the directory holds it (sell.ts). Four
+ * properties and no more: the merchant's own books are their provider's, and
+ * the platform keeps only which provider it is (`via`), the id every call
+ * names them by and the provider's two answers on whether they are ready —
+ * `submitted` is "they finished the form", `ready` is "it will take money for
+ * them", and the checkout door reads the second one alone. */
+export type Seller = {
+  via: string
   account: string
-  chargesEnabled: boolean
-  detailsSubmitted: boolean
+  ready: boolean
+  submitted: boolean
 }
 
 /** The tunnel a space has to a machine (tunnel.ts, @yaks/tunnel): the tunnel
@@ -217,10 +219,10 @@ export type Space = {
   // The day the Plus plan given free runs through (`comped`, reward.ts),
   // past or to come; absent or null where none was ever given.
   comped?: string | null
-  // What this space sells through (sell.ts, T-34524): the connected Stripe
-  // account, and whether Stripe says it may take money yet. Null for a space
+  // What this space sells through (sell.ts, T-34524): the connected account,
+  // and whether its provider says it may take money yet. Null for a space
   // that has never asked to sell, which is almost all of them.
-  stripe: Stripe | null
+  seller: Seller | null
   // What the platform takes from a sale here, in basis points (sell.ts
   // `feeOf`). It is asked of one space — `yak`, the platform's own row — and
   // 0 on every other, where nobody has ever written one.
@@ -655,6 +657,12 @@ export type Row = {
     ending?: string | null
     at?: string | null
   }
+  seller?: {
+    via?: string | null
+    account?: string | null
+    ready?: boolean | null
+    submitted?: boolean | null
+  }
   stripe?: {
     account?: string | null
     charges_enabled?: boolean | null
@@ -1015,6 +1023,7 @@ export let SPACE_PARTS = [
   'meter',
   'notified',
   'trashed',
+  'seller',
   'stripe',
   'fee',
   'budget',
@@ -1087,17 +1096,19 @@ let referralOf = (r: Row): Referral[] =>
     : []
 
 // The seller's row, or null where nothing has ever connected. An account with
-// neither word yet — minted a second ago, the webhook not in — reads false on
-// both, which is the truth: nothing may be sold through it until Stripe says
-// so.
-let stripeOf = (r: Row): Stripe | null =>
-  r.stripe?.account
+// neither answer yet — minted a second ago, the webhook not in — reads false
+// on both, which is the truth: nothing may be sold through it until its
+// provider says so. A row the store mover has not reached yet still says it
+// in its old word (seller-move.ts).
+let sellerOf = (r: Row): Seller | null =>
+  r.seller?.account
     ? {
-      account: r.stripe.account,
-      chargesEnabled: !!r.stripe.charges_enabled,
-      detailsSubmitted: !!r.stripe.details_submitted,
+      via: r.seller.via ?? '',
+      account: r.seller.account,
+      ready: !!r.seller.ready,
+      submitted: !!r.seller.submitted,
     }
-    : null
+    : fromStripe(r.stripe)
 
 // The tunnel, or null where no machine is: a row missing either id names
 // nothing a worker could bind to.
@@ -1131,7 +1142,7 @@ export let spaceOf = (r: Row): Space => ({
   tier: tierOf(r.space!.slug, r.plan?.tier ?? null, r.comped?.until),
   plan: planOf(r),
   comped: r.comped?.until ?? null,
-  stripe: stripeOf(r),
+  seller: sellerOf(r),
   fee: r.fee?.bps ?? 0,
   budget: r.budget?.dollars ?? null,
   starter: r.starter?.dollars ?? null,
@@ -1993,17 +2004,21 @@ export let directoryRows = (rows: {
       )
       return row?.space ? spaceOf(row) : null
     },
-    // The space that sells through this connected Stripe account (sell.ts).
-    // The Connect webhook's only way in: an event from a connected account
-    // names the `acct_…` and nothing of ours, so this is what turns it back
-    // into a space. One account per space, so the answer is one space or
-    // nobody — and nobody is an event about somebody else's platform, or one
-    // for a space that has since disconnected.
-    seller: async (account: string) => {
+    // The space that sells through this connected account at the provider
+    // `via` (sell.ts). The provider's webhook's only way in: an event from a
+    // connected account names its id and nothing of ours, so this is what
+    // turns it back into a space. One account per space, so the answer is one
+    // space or nobody — and nobody is an event about somebody else's
+    // platform, or one for a space that has since disconnected. A row the
+    // store mover has not reached yet is found by its old word
+    // (seller-move.ts).
+    seller: async (via: string, account: string) => {
       let row = await one(
-        `.stripe.account=${account}&.space&${SPACE_ABOUT}`,
+        `.seller.via=${via}&.seller.account=${account}&.space&${SPACE_ABOUT}|` +
+          `.stripe.account=${account}&.space&${SPACE_ABOUT}`,
       )
-      return row?.space ? spaceOf(row) : null
+      let found = row?.space ? spaceOf(row) : null
+      return found?.seller?.via == via ? found : null
     },
     // A space by eid, which is how an app names the space it belongs to.
     at: async (eid: string) => {

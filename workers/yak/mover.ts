@@ -51,6 +51,7 @@ import { integrationOwnerRule } from './integration-move.ts'
 import { holdEmptyRule } from './hold-move.ts'
 import { phoneRule } from './phone-move.ts'
 import { operatorNameRule } from './operator-name.ts'
+import { sellerRule } from './seller-move.ts'
 /** A rule's name: where its stamp is kept in a store's memory, and the
  * `BOUNDARIES` entry its live release adds. */
 export type Mark = `yak/store/${string}`
@@ -180,6 +181,7 @@ export let RULES: Rule[] = [
   holdEmptyRule,
   operatorNameRule,
   phoneRule,
+  sellerRule,
 ]
 
 /** How far one rule got in one store. `after` is the last row it moved past;

@@ -324,7 +324,7 @@ let space = (meter: Partial<Meter> = {}, tier: Tier | null = null): Space => ({
   operator: 'Wren',
   tier,
   plan: null,
-  stripe: null,
+  seller: null,
   fee: 0,
   budget: null,
   // The month alone: a starter is its own test's.

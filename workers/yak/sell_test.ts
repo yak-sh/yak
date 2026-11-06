@@ -23,7 +23,6 @@ import {
   cart,
   fee,
   feeOf,
-  held,
   link,
   MARK,
   META,
@@ -158,74 +157,43 @@ test('the pricing page is quoted the rate that is set', () => {
   )
 })
 
+let seller = (ready: boolean, submitted: boolean) =>
+  sellerOf({
+    id: 'acct_1',
+    charges_enabled: ready,
+    details_submitted: submitted,
+  })
+
 test('the seller row is the account object, flags and all', () => {
-  assertEquals(
-    sellerOf({ id: 'acct_1', charges_enabled: true, details_submitted: true }),
-    { account: 'acct_1', charges_enabled: true, details_submitted: true },
-  )
+  assertEquals(seller(true, true), {
+    via: 'stripe',
+    account: 'acct_1',
+    ready: true,
+    submitted: true,
+  })
   // A flag Stripe did not send is false, not "unchanged": the account object
   // arrives whole on every `account.updated`, so an absent capability is an
   // absent capability — and a reader that guessed otherwise would leave a
   // seller marked ready after Stripe stopped them.
-  assertEquals(sellerOf({ id: 'acct_1' }), {
-    account: 'acct_1',
-    charges_enabled: false,
-    details_submitted: false,
-  })
+  assertEquals(sellerOf({ id: 'acct_1' }), seller(false, false))
 })
 
 test('a redelivered account.updated moves no property at all', () => {
-  let now = held(space({
-    stripe: { account: 'acct_1', chargesEnabled: true, detailsSubmitted: true },
-  }))
-  let next = sellerOf({
-    id: 'acct_1',
-    charges_enabled: true,
-    details_submitted: true,
-  })
-  assertEquals(moved(now, next), {})
-  // And the one that did change is the only property written.
-  assertEquals(moved(now, { ...next, charges_enabled: false }), {
-    charges_enabled: false,
-  })
-  // Nothing held yet: every property is new.
-  assertEquals(moved(held(space()), next), next)
+  let now = space({ seller: seller(true, true) }).seller
+  assertEquals(moved(now, seller(true, true)), {})
+  assertEquals(moved(now, seller(false, true)), { ready: false })
+  assertEquals(moved(space().seller, seller(true, true)), seller(true, true))
 })
 
 test('ready is charges_enabled and nothing else', () => {
-  assertEquals(selling(space()), 'none')
-  assertEquals(
-    selling(space({
-      stripe: {
-        account: 'acct_1',
-        chargesEnabled: false,
-        detailsSubmitted: false,
-      },
-    })),
-    'setup',
-  )
+  let at = (s: ReturnType<typeof seller> | null) =>
+    selling(space({ seller: s }))
+  assertEquals(at(null), 'none')
+  assertEquals(at(seller(false, false)), 'setup')
   // The form is finished and Stripe is still verifying: not ready. Taking a
   // customer's money in that window is a payment that fails at the till.
-  assertEquals(
-    selling(space({
-      stripe: {
-        account: 'acct_1',
-        chargesEnabled: false,
-        detailsSubmitted: true,
-      },
-    })),
-    'setup',
-  )
-  assertEquals(
-    selling(space({
-      stripe: {
-        account: 'acct_1',
-        chargesEnabled: true,
-        detailsSubmitted: true,
-      },
-    })),
-    'ready',
-  )
+  assertEquals(at(seller(false, true)), 'setup')
+  assertEquals(at(seller(true, true)), 'ready')
 })
 
 // ---- the checkout door's seams (T-34525) -----------------------------------

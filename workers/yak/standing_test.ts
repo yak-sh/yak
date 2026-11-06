@@ -23,7 +23,7 @@ let space = (slug: string) =>
     title: slug,
     tier: null,
     plan: null,
-    stripe: null,
+    seller: null,
     meter: null,
     told: false,
   }) as Space

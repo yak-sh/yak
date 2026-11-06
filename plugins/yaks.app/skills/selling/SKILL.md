@@ -56,7 +56,7 @@ The seller connects once per space, not per app: with the `space_sell` tool, or
 the button on the space's own page. Either opens Stripe's own onboarding, where
 the seller enters their business details and bank account, and returns them to
 yaks.app when it is finished. Stripe decides when the account may accept
-charges, and the space records that as `stripe.charges_enabled`.
+charges, and the space records that as `seller.ready`.
 
 Until then the checkout endpoint refuses with `409` and the code `not_selling`,
 so a page can show "this shop is not open yet" instead of failing when somebody

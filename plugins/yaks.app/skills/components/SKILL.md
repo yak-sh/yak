@@ -663,8 +663,8 @@ The complete list of reserved names:
     project provider provisional public_file published quarantined questions
     reads recalled ref referenced refusal register_writes release_remake
     report repository representation requires restored result retired
-    revision rtc rtc_lapse satisfies screenshot secret seeded sender sending
-    serves session session_input session_run sfu signed_in signin
+    revision rtc rtc_lapse satisfies screenshot secret seeded seller sender
+    sending serves session session_input session_run sfu signed_in signin
     sms_consent space space_logo spend staged started starter stop stripe
     submitted subscription supersedes supervises sweep switched task text
     text_post theme tool topic trashed tree_entry trend tunnel typed updated

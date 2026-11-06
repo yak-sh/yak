@@ -35,7 +35,7 @@ let space = (over: Partial<Space> = {}): Space => ({
   title: 'shoplab',
   tier: 'free',
   plan: null,
-  stripe: null,
+  seller: null,
   fee: 0,
   budget: null,
   meter: null,

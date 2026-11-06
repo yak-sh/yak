@@ -12,8 +12,8 @@
 // `application_fee_amount` that Stripe moves to us out of the same payment.
 //
 // So the platform holds three facts about a seller and no more (vocab.ts
-// `stripe` on the space row): the `acct_…` id, whether Stripe says charges are
-// enabled, and whether they finished the form. Their bank details, their
+// `seller` on the space row, `via` naming Stripe): the `acct_…` id, whether
+// Stripe says charges are enabled, and whether they finished the form. Their bank details, their
 // balance, their payouts and their disputes live at Stripe, where they belong,
 // and the seller reads them in Stripe's own dashboard. A platform that copied
 // them would be a platform holding money data it does not need and cannot keep
@@ -48,6 +48,7 @@ import {
   type Directory,
   directory,
   paid,
+  type Seller,
   type Space,
   stamp,
 } from './directory.ts'
@@ -188,7 +189,7 @@ export let account = (space: Space, email: string) => ({
  * redirect", and the space page's "Start selling" button is precisely that, so
  * both URLs are that page.
  *
- * It is also the right place for `return_url`: the page reads `stripe` off the
+ * It is also the right place for `return_url`: the page reads `seller` off the
  * space and says not connected, finishing setup, or ready. A landing page of
  * its own would have to say the same three things and could only say them less
  * currently — Stripe returns the browser the moment the form is submitted,
@@ -211,19 +212,25 @@ export let link = (space: Space, id: string, env: Host = {}) => ({
 
 // ---- what the platform writes down about a seller ---------------------------
 
-/** The `stripe` row a Stripe account object makes: the id, and the two words
- * Stripe answers with. Every writer here ends at this — an account just
- * created, an `account.updated` event, a seller who deauthorized us — so there
- * is one derivation of the row and no state machine.
+/** The provider a seller's row names (`seller{via}`): this file speaks for
+ * Stripe. */
+export let VIA = 'stripe'
+
+/** The `seller` row a Stripe account object makes: the id, and the two words
+ * Stripe answers with, `charges_enabled` as `ready` and `details_submitted` as
+ * `submitted`. Every writer here ends at this — an account just created, an
+ * `account.updated` event — so there is one derivation of the row and no
+ * state machine.
  *
  * A missing field reads false rather than "unchanged". Stripe sends the whole
  * account object on every `account.updated`, so an absent flag is an absent
  * capability, and a reader that treated it as unchanged would leave a seller
  * marked ready after Stripe stopped them. */
-export let sellerOf = (a: Account) => ({
+export let sellerOf = (a: Account): Seller => ({
+  via: VIA,
   account: String(a.id ?? ''),
-  charges_enabled: !!a.charges_enabled,
-  details_submitted: !!a.details_submitted,
+  ready: !!a.charges_enabled,
+  submitted: !!a.details_submitted,
 })
 
 /** The slice of a Stripe account this reads. Optional throughout: the shape is
@@ -236,31 +243,14 @@ export type Account = {
   payouts_enabled?: boolean
 }
 
-/** The seller's row as the directory holds it, for billing.ts's `moved` to
- * compare against — the same three properties, under the vocabulary's own
- * names. */
-export let held = (space: Space) =>
-  space.stripe
-    ? {
-      account: space.stripe.account,
-      charges_enabled: space.stripe.chargesEnabled,
-      details_submitted: space.stripe.detailsSubmitted,
-    }
-    : null
-
 /** Where a space stands with selling, as one word — what the page, the tool and
  * the checkout door's refusal all read.
  *
- * `ready` is `charges_enabled` and nothing else. Not `details_submitted`: a
- * seller can finish the form and still be held while Stripe verifies them, and
- * taking somebody's customer's money in that window is a payment that fails at
- * the till. */
+ * `ready` is `ready` and nothing else. Not `submitted`: a seller can finish
+ * the form and still be held while Stripe verifies them, and taking somebody's
+ * customer's money in that window is a payment that fails at the till. */
 export let selling = (space: Space): 'none' | 'setup' | 'ready' =>
-  !space.stripe?.account
-    ? 'none'
-    : space.stripe.chargesEnabled
-    ? 'ready'
-    : 'setup'
+  !space.seller?.account ? 'none' : space.seller.ready ? 'ready' : 'setup'
 
 // New payments require a paid plan. Existing orders and Stripe events still
 // settle after a downgrade, and the seller can always disconnect their account.
@@ -275,10 +265,14 @@ export let refusedSell = (space: Space, env: Host = {}) =>
 
 let dirOf = (env: Env) => directory(bound(env.DIRECTORY, dirPart.fetch, env))
 
-/** The space's `stripe` row, written through the kernel's own door — every
- * property of it is server-owned (vocab.ts), so this is the only writer. */
-let wrote = (env: Env, space: Space, row: Record<string, unknown> | null) =>
-  stamp(env, { entities: [{ entity: { eid: space.eid }, stripe: row }] })
+/** The space's `seller` row, written whole through the kernel's own door —
+ * every property of it is server-owned (vocab.ts), so this is the only
+ * writer. It clears the row's old word too (seller-move.ts), so a row it
+ * writes is moved. */
+let wrote = (env: Env, space: Space, seller: Seller | null) =>
+  stamp(env, {
+    entities: [{ entity: { eid: space.eid }, seller, stripe: null }],
+  })
 
 /**
  * Connect this space to a Stripe account, and answer the link that finishes it.
@@ -295,18 +289,13 @@ let wrote = (env: Env, space: Space, row: Record<string, unknown> | null) =>
 export let connect = async (env: Env, space: Space, email: string) => {
   let no = refusedSell(space, env)
   if (no) throw refuse('limit', no)
-  let id = space.stripe?.account
+  let id = space.seller?.account
   if (!id) {
     let made = await ask(env, '/v1/accounts', account(space, email)) as Account
     id = String(made.id ?? '')
     if (!id) throw new Error('stripe made an account with no id')
-    let row = sellerOf(made)
-    await wrote(env, space, row)
-    space.stripe = {
-      account: row.account,
-      chargesEnabled: row.charges_enabled,
-      detailsSubmitted: row.details_submitted,
-    }
+    space.seller = sellerOf(made)
+    await wrote(env, space, space.seller)
   }
   let made = await ask(env, '/v1/account_links', link(space, id, env))
   let url = String(made.url ?? '')
@@ -618,7 +607,7 @@ export let buying = async (
       }),
       // The seller's account. This one header is the whole of what makes it
       // their charge rather than ours.
-      at.space.stripe!.account,
+      at.space.seller!.account,
     )
     let url = String(made.url ?? '')
     if (!url) throw new Error('stripe made a checkout session with no url')
@@ -792,7 +781,7 @@ export let apply = async (env: Env, event: Event): Promise<string> => {
   let on = event.account ?? ''
   if (!on) return 'not a connected account event'
   let dir = dirOf(env)
-  let space = await dir.seller(on)
+  let space = await dir.seller(VIA, on)
   // An account we have no space for: a seller who disconnected, or another
   // platform's event at our door. Nothing to retry — a second delivery finds
   // the same nothing — so it is not filed and the door answers 200 rather than
@@ -804,10 +793,9 @@ export let apply = async (env: Env, event: Event): Promise<string> => {
     // event was attributed by that id, and an account object that answered a
     // different one would be Stripe telling us the account changed identity.
     next.account = on
-    let changed = moved(held(space), next)
-    if (!Object.keys(changed).length) return 'unchanged'
-    await wrote(env, space, changed)
-    return `${space.slug} ${next.charges_enabled ? 'can' : 'cannot'} sell`
+    if (!Object.keys(moved(space.seller, next)).length) return 'unchanged'
+    await wrote(env, space, next)
+    return `${space.slug} ${next.ready ? 'can' : 'cannot'} sell`
   }
   // The seller revoked us from their own Stripe dashboard. The account still
   // exists and is still theirs; what ended is our permission to act on it, so

@@ -66,7 +66,7 @@ let space: Space = {
   operator: 'Wren',
   tier: null,
   plan: null,
-  stripe: null,
+  seller: null,
   fee: 0,
   budget: null,
   meter: null,

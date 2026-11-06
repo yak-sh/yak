@@ -21,7 +21,7 @@ export let space = (over: Partial<Space> = {}): Space => ({
   operator: 'Wren',
   tier: 'free',
   plan: null,
-  stripe: null,
+  seller: null,
   fee: 0,
   budget: null,
   meter: null,

@@ -30,6 +30,7 @@ let UNSEEN = [
   'gallery',
   'screenshot',
   'notified',
+  'seller',
   'stripe',
   'fee',
   'budget',

@@ -3067,7 +3067,7 @@ let OURS: Row[] = [
     run: async (ctx, args) => {
       let { space } = await owns(ctx, args)
       if (args.disconnect != null && flag(args.disconnect, 'disconnect')) {
-        if (!space.stripe?.account) {
+        if (!space.seller?.account) {
           throw refuse(
             'conflict',
             `${space.slug} is not selling through Stripe`,

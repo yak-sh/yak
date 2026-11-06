@@ -208,7 +208,7 @@ test('a cart off the shop page is an ask the checkout door can price', () => {
 // Where the space stands with selling, read back off the directory.
 let sold = async (env: Env) =>
   (await directory({ fetch: (r: Request) => dirPart.fetch(r, env) })
-    .space('ada'))?.stripe
+    .space('ada'))?.seller
 
 // The button on that page, as its form posts it. The page it is on is drawn in
 // mcp_load_test.ts; the POST is apps.ts `saved` and reaches nothing that needs
@@ -283,8 +283,11 @@ test('with no connect secret the door says so, and nothing else breaks', async (
 })
 
 // The one button a space can press without a Stripe key set is Stop, and it
-// needs no Stripe call at all: forgetting an account is a write of ours.
-test('stopping selling forgets the account and calls nothing', async () => {
+// needs no Stripe call at all: forgetting an account is a write of ours. A
+// space the store mover has not reached yet, still holding the old `stripe`
+// word (seller-move.ts), is the same seller to every reader and to Stripe's
+// events.
+test('a seller on the old word is read, updated and stopped like any', async () => {
   await using scenario = platform({ STRIPE_CONNECT_WEBHOOK_SECRET: WHSEC })
   let { env } = scenario
   let { space } = await seeded(env, 'public', scenario.dir)
@@ -293,14 +296,27 @@ test('stopping selling forgets the account and calls nothing', async () => {
       entity: { eid: space.eid },
       stripe: {
         account: 'acct_probe',
-        charges_enabled: true,
+        charges_enabled: false,
         details_submitted: true,
       },
     }],
   })
-  assertEquals((await sold(env))?.chargesEnabled, true)
+  let seller = { via: 'stripe', account: 'acct_probe', submitted: true }
+  assertEquals(await sold(env), { ...seller, ready: false })
+  let updated = (charges_enabled: boolean) =>
+    sell.apply(env, {
+      type: 'account.updated',
+      account: 'acct_probe',
+      data: {
+        object: { id: 'acct_probe', charges_enabled, details_submitted: true },
+      },
+    })
+  assertEquals(await updated(true), 'ada can sell')
+  assertEquals(await sold(env), { ...seller, ready: true })
+  assertEquals(await updated(true), 'unchanged')
   assertEquals((await pressed(env, 'stop')).status, 303)
   assertEquals(await sold(env), null)
+  assertEquals(await updated(true), 'no space sells through that account')
 })
 
 // ---- the fee (T-34554) -----------------------------------------------------

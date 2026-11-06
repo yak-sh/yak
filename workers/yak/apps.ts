@@ -3215,7 +3215,7 @@ let saved = async (
   // saying so, rather than a 502 on somebody's own front door.
   let till = String(form.get('sell') ?? '').trim()
   if (till == 'stop') {
-    if (space.stripe?.account) await disconnect(env, space)
+    if (space.seller?.account) await disconnect(env, space)
     return redirect(sentFrom(req, env).href, 303)
   }
   if (till == 'start') {
