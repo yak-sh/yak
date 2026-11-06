@@ -25,7 +25,9 @@ List web and browse beside the graph and API plugins in a `yak serve` config:
 }
 ```
 
-The routes facet answers `/` and entity addresses such as `/T-9` with the page.
+The routes facet answers `/` and entity addresses such as `/T-9` with the page
+(`./page`). A release ships the page already made too, so a host from JSR
+answers it from what Deno keeps instead of fetching its files from jsr.io.
 `/web/app.js` is the canvas (`./canvas`): browse's browser entry bundled with
 the configured plugins' views. A release ships the canvas of a fresh `yak init`
 already made, so a host composed that way answers with it instead of bundling
@@ -61,6 +63,7 @@ more-specific routes.
 | `.`          | `routes`, `letters` and the host's `Hosting` interface |
 | `./routes`   | routes facet composed by the browser host              |
 | `./canvas`   | the canvas a composition serves, and `prepare`         |
+| `./page`     | the page every address answers, and `prepare`          |
 | `./outlived` | whether a page outlived the bundle it runs             |
 
 `assets.ts` builds the same module, page, stylesheet and icons into a static

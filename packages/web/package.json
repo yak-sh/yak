@@ -7,7 +7,8 @@
     "./routes": "./routes.ts",
     "./app": "./app.ts",
     "./outlived": "./outlived.ts",
-    "./canvas": "./canvas.ts"
+    "./canvas": "./canvas.ts",
+    "./page": "./page.ts"
   },
   "license": "Apache-2.0",
   "description": "The browser door: serves configured applications contributed through their web facet, with page, bundles, styles and assets over @yaks/api.",

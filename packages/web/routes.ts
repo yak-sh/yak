@@ -15,8 +15,8 @@ import { type Application, application } from './app.ts'
 // `/web/*` is what that page loads: the canvas (./canvas.ts), its stylesheet (@yaks/ui's in its default theme and skin, then this
 // package's own), icons and manifest. The vocabulary is @yaks/api's `/vocab`.
 //
-// The page carries the tracker's page reporter (@yaks/tracker/page) inline,
-// ahead of its own code, as yaks.app weaves it into every app's page
+// The page (./page.ts) carries the tracker's page reporter (@yaks/tracker/page)
+// inline, ahead of its own code, as yaks.app weaves it into every app's page
 // (workers/yak/page-script.ts). What it catches it posts to `/api/report`,
 // which reads the body as yaks.app's door does (@yaks/tracker/report
 // `broken`) and hands each break to the host's own telemetry.
@@ -29,9 +29,10 @@ import { addressId } from '@yaks/id'
 import type { Vocab } from '@yaks/vocab'
 import { type Body, kept } from '@yaks/cli/page'
 import { made } from './canvas.ts'
+import { page as html } from './page.ts'
 import { preload } from './preload.ts'
 import { person } from '@yaks/cli/host'
-import { type Config, located } from '@yaks/cli/config'
+import type { Config } from '@yaks/cli/config'
 import { broken, type Context } from '@yaks/tracker/report'
 import type { Vault } from '@yaks/secrets'
 import { authorization } from './authorize.ts'
@@ -63,25 +64,6 @@ let here = (path: string) => new URL(path, import.meta.url)
 let text = (path: string) => () => fetch(here(path)).then((r) => r.text())
 let bytes = (path: string) => () =>
   fetch(here(path)).then(async (r) => new Uint8Array(await r.arrayBuffer()))
-
-// The page reporter as a script element at the page's root, where its door
-// `api/report` is. `</script` in its text would end the element early; `<\/`
-// is the same string to JavaScript.
-let reporter = async () => {
-  let { script }: typeof import('@yaks/tracker/script') = await import(
-    located('@yaks/tracker/script')
-  )
-  let code = await script()
-  return `<script data-yak-at="/">${
-    code.replace(/<\/(script)/gi, '<\\/$1')
-  }</script>`
-}
-
-/** The page, its reporter first in its head. */
-let html = async () => {
-  let [page, script] = await Promise.all([text('./index.html')(), reporter()])
-  return page.replace('<head>', `<head>${script}`)
-}
 
 // @yaks/ui's stylesheet carries every component's CSS, so it loads when the
 // stylesheet is first asked for, not before the server listens.
@@ -138,7 +120,7 @@ let names = async (
 export type Options = { home?: { title: string; query: string }; app?: string }
 
 export let routes = (host: Hosting, options: Options = {}): Route[] => {
-  // Made as the host warms: from JSR its files are fetched over the network.
+  // Made as the host warms.
   let cached = kept('/', 'text/html; charset=utf-8', html, {
     early: host.early,
   })
