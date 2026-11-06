@@ -46,6 +46,23 @@ export let day = (iso: string, month: 'long' | 'short' = 'long') => {
   return Number.isNaN(at.getTime()) ? '' : days[month].format(at)
 }
 
+let minutes = new Intl.DateTimeFormat('en-GB', {
+  day: 'numeric',
+  month: 'short',
+  year: 'numeric',
+  hour: '2-digit',
+  minute: '2-digit',
+  timeZone: 'UTC',
+})
+
+// A moment to the minute, where when it changed matters more than its day.
+/// moment('2026-10-13T11:37:16.784Z') -> '13 Oct 2026, 11:37 UTC'
+/// moment('soon') -> ''
+export let moment = (iso: string) => {
+  let at = new Date(iso)
+  return Number.isNaN(at.getTime()) ? '' : `${minutes.format(at)} UTC`
+}
+
 // A file input as a drop zone (@yaks/ui `Drop`, public/drop.js): the
 // form's own input inside a place to press or drop on, and the list of what
 // is chosen under it. `label` names the input; `hint` says what it takes,

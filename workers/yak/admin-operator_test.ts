@@ -126,20 +126,39 @@ test('an id that is no conversation says so, and nobody but the admin reads one'
   assertEquals(theirs.status, 404)
 })
 
+// A request no session has taken yet, listed beside the conversation.
+await receive(
+  service.store,
+  { space: eid, person: jeff, channel: 'chat' },
+  'Add a calendar.',
+)
 let sessions = await get('/admin/sessions')
+let opened = await Promise.all(
+  [...sessions.document.querySelectorAll('.Rows_Name')].map((a) =>
+    get(a.getAttribute('href')!)
+  ),
+)
 let notYours = await get('/admin/sessions', jeff)
 test("the sessions page lists every space's Operator conversations, each by its space, opening on its page", () => {
   assertEquals(sessions.status, 200)
   assertEquals(texts(sessions.document, '.Rows_Name'), [
+    'Add a calendar.',
     'Conversation with Jeff',
   ])
   assertEquals(
-    sessions.document.querySelector('.Rows_Name')!.getAttribute('href'),
-    `${at}/${rootOf(eid, jeff)}`,
+    opened.map((o) => [o.status, texts(o.document, '.Desk_Head h1')]),
+    [[200, ['Add a calendar.']], [200, ['Conversation with Jeff']]],
   )
   assertEquals(
-    texts(sessions.document, '.Rows_Meta')[0]!.startsWith('clerk · '),
-    true,
+    sessions.document.querySelectorAll('.Rows_Name')[1]!.getAttribute('href'),
+    `${at}/${rootOf(eid, jeff)}`,
+  )
+  // Each says its space, its state, and when it last changed, to the minute.
+  assertEquals(
+    texts(sessions.document, '.Rows_Meta').map((m) =>
+      m!.replace(/\d+ \w+ \d{4}, \d\d:\d\d UTC$/, 'when')
+    ),
+    ['clerk · Waiting to start · when', 'clerk · Answered · when'],
   )
   assertEquals(notYours.status, 404)
 })

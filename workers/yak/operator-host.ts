@@ -175,7 +175,8 @@ let holding = async (store: Store, session: string) => {
   return String(comp(link, 'edge')?.from ?? '')
 }
 
-let REQUESTS = '.operator_request ?doc ?failed .order=-created.at .limit=100'
+let REQUESTS =
+  '.operator_request ?doc ?failed ?created .order=-created.at .limit=100'
 
 /** Requests with the newest answer each was given, and whether that answer
  * reached them, as one row each: an answer is its own row
@@ -314,13 +315,13 @@ export let workOf = async (
 ): Promise<Worked[]> => {
   let conversations = await conversationsOf(store, space, person, everyone)
   let [tasks, requests, helpers] = await Promise.all([
-    store.g.read('.task ?doc .order=-created.at .limit=50'),
+    store.g.read('.task ?doc ?created ?updated .order=-created.at .limit=50'),
     requested(store),
     conversations.length
       ? store.g.read(
         `.spawned.parent=${
           conversations.map((c) => c.root).join(',')
-        } .order=-created.at .limit=50`,
+        } ?created .order=-created.at .limit=50`,
       )
       : [],
   ])
@@ -347,12 +348,15 @@ export let workOf = async (
   }))
   let work = await Promise.all(helpers.map(async (helper) => {
     let eid = helper.entity.eid
-    let state = stateOf(await linesOf(store, eid, TAIL), true)
+    let lines = await linesOf(store, eid, TAIL)
+    let state = stateOf(lines, true)
     return {
       open: eid,
       title: askedOf(await openingOf(store, eid)),
       state,
-      at: String(comp(helper, 'created')?.at ?? ''),
+      at: String(
+        comp(lines.at(-1), 'created')?.at ?? comp(helper, 'created')?.at ?? '',
+      ),
       busy: busy(state),
     }
   }))

@@ -16,7 +16,7 @@ import { PART } from '@yaks/persona'
 import { type ComponentChildren as Node, Fragment, h } from 'preact'
 import { renderToString } from 'preact-render-to-string'
 import { Body, Card, Drop, Icon, Loading, Rows } from '@yaks/ui/parts'
-import { day } from './html.ts'
+import { day, moment } from './html.ts'
 import { chatPath } from './route.ts'
 import { poseOf, Yak } from './mascot.ts'
 import { type IconName, icons } from './icons.ts'
@@ -765,8 +765,10 @@ export let stateOf = (entries: Bundle[], done: boolean) => {
  * more than one space's. */
 export type Listed = Worked & { where?: string }
 
+// A list across spaces says when each last changed, to the minute.
 let meta = (w: Listed) =>
-  [w.where, w.state, day(w.at, 'short')].filter(Boolean).join(' · ')
+  [w.where, w.state, w.where ? moment(w.at) : day(w.at, 'short')]
+    .filter(Boolean).join(' · ')
 
 /** The Operator's conversations as rows, newest first, each a link to the
  * page `href` gives it. */

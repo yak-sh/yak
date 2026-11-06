@@ -27,6 +27,7 @@
 // vouch. The Sessions page lists them across the most recently active spaces,
 // newest first, each opening on that same page.
 
+import type { Bundle } from '@yaks/graph'
 import type { Env } from './env.ts'
 import { type Held, holding } from './held.ts'
 import {
@@ -63,6 +64,7 @@ import { type ByDay, series, summed } from '@yaks/ui/chart'
 import { caught } from './defects.ts'
 import { operatorDoor } from './build-door.ts'
 import { type Listed, listed, type Worked } from './operator-view.ts'
+import { conversation } from './operator-page.ts'
 import { managePath } from './route.ts'
 import { Idle } from './mascot.ts'
 
@@ -679,8 +681,12 @@ let operatorPage = async (
     at: managePath('operator', space.slug),
     open,
     everyone: true,
-  }) as { title: string; html: string } | Error
-  let found = !(talked instanceof Error) && talked.html
+  }) as { title: string; html: string; waiting: Bundle[] } | Error
+  // A request no session has taken yet is drawn as the chat app draws it.
+  let drawn = talked instanceof Error
+    ? ''
+    : talked.html + conversation(talked.waiting ?? [])
+  let found = !!drawn
   return desk(
     d,
     talked instanceof Error || !talked.title
@@ -690,7 +696,7 @@ let operatorPage = async (
     talked instanceof Error
       ? failed(talked)
       : found
-      ? raw(talked.html)
+      ? raw(drawn)
       : empty('This Operator has no conversation with that id'),
     back(home, `${space.operator}’s conversations`),
     talked instanceof Error || found ? 200 : 404,
