@@ -13,7 +13,7 @@ import { directory, stamp } from './directory.ts'
 import * as dirPart from './directory.ts'
 import type { Env } from './env.ts'
 import { added, asked } from './examples/shop/cart.js'
-import { signed } from './probe.ts'
+import { signed } from '@yaks/stripe/testing'
 import * as sell from './sell.ts'
 import { call, type Ctx } from './tools.ts'
 import {

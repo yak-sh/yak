@@ -14,6 +14,7 @@ import { type Directory, directoryOf, spaceHandle } from './directory.ts'
 import { valueIn } from '@yaks/tools/value'
 import { parse } from 'smol-toml'
 import { endpoints } from './endpoints.ts'
+import { signed } from '@yaks/stripe/testing'
 import { Ajv } from 'ajv'
 
 let logs = new Map<string, string>()
@@ -941,30 +942,6 @@ export let onPlus = (k: Pick<Kernel, 'at'>, space: string) =>
     'customer.subscription.updated',
     fakeSub(space),
   )
-
-/**
- * A `Stripe-Signature` header over exactly these bytes: HMAC-SHA256 of
- * `<timestamp>.<raw body>`, keyed by the endpoint's signing secret. The scheme
- * is Stripe's own and identical for the platform endpoint and the Connect one —
- * only the secret differs — so both doors are driven through this.
- */
-export let signed = async (secret: string, raw: string, at: number) => {
-  let key = await crypto.subtle.importKey(
-    'raw',
-    new TextEncoder().encode(secret),
-    { name: 'HMAC', hash: 'SHA-256' },
-    false,
-    ['sign'],
-  )
-  let mac = await crypto.subtle.sign(
-    'HMAC',
-    key,
-    new TextEncoder().encode(`${at}.${raw}`),
-  )
-  let hex = [...new Uint8Array(mac)]
-    .map((n) => n.toString(16).padStart(2, '0')).join('')
-  return `t=${at},v1=${hex}`
-}
 
 // ---- a zip, as a person would drop one (unzip.ts, drop.ts, T-34230) --------
 //

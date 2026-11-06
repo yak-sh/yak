@@ -1,10 +1,9 @@
-// One call to Stripe, over fetch: the platform's whole Stripe client, which
-// billing.ts (a space's plan) and sell.ts (a seller's shop) both speak through,
-// and so does the probe that sets up the sandbox the tests sell in.
+// One call to Stripe, over fetch: the whole Stripe client. It reads no
+// environment; whoever calls it lends the key, and the clock its retries wait
+// on.
 //
-// No SDK: the whole surface used is a few form-encoded POSTs and GETs, and a
-// package would be a build step (README §no build step) for less code than
-// this.
+// No SDK: the whole surface used is a few form-encoded POSTs and GETs, and an
+// SDK would be a build step for less code than this.
 import { type Clock, sleep } from '@yaks/fp'
 
 let API = 'https://api.stripe.com'
@@ -47,7 +46,7 @@ export class StripeError extends Error {
 // One call. A GET has no body; a POST is form-encoded, which is the only shape
 // Stripe's v1 API takes.
 //
-// `on` is a connected account (sell.ts): the platform key acting on somebody
+// `on` is a connected account: the platform key acting on somebody
 // else's account, which Stripe reads off the `Stripe-Account` header and
 // nothing else — the same key, the same path, a different merchant. It is one
 // header rather than a second client because it is one header: a direct charge
@@ -57,20 +56,24 @@ export class StripeError extends Error {
 // saying another request held the object (`Stripe-Should-Retry: true`) — is
 // asked again, as Stripe's own libraries do, under one `Idempotency-Key`, so a
 // write asked twice is one write. {@link TRIES} times in all, a half second
-// and then a second apart on the kernel's clock (env.ts `CLOCK`): a person is
-// waiting on the answer.
+// and then a second apart on the lent clock: a person is waiting on the
+// answer.
 export let TRIES = 3
+
+/** What a call is made with: the secret key, and the clock retries wait on. */
+export type Keyed = { key?: string; clock?: Clock }
+
 export let ask = async (
-  env: { STRIPE_KEY?: string; CLOCK?: Clock },
+  at: Keyed,
   path: string,
   fields?: Record<string, unknown>,
   on?: string,
   method = fields ? 'POST' : 'GET',
 ) => {
-  if (!env.STRIPE_KEY) throw new Error('STRIPE_KEY is not set')
+  if (!at.key) throw new Error('stripe: no key was lent')
   let body = fields ? new URLSearchParams(form(fields)).toString() : undefined
   let headers = {
-    authorization: `Bearer ${env.STRIPE_KEY}`,
+    authorization: `Bearer ${at.key}`,
     ...(on ? { 'stripe-account': on } : {}),
     ...(method == 'POST' ? { 'idempotency-key': crypto.randomUUID() } : {}),
     ...(body == null
@@ -90,6 +93,6 @@ export let ask = async (
       return out as Record<string, unknown>
     }
     await r?.body?.cancel()
-    await sleep(500 * n, undefined, env.CLOCK)
+    await sleep(500 * n, undefined, at.clock)
   }
 }

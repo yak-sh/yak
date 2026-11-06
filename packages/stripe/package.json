@@ -1,0 +1,19 @@
+{
+  "name": "@yaks/stripe",
+  "version": "0.2.23",
+  "type": "module",
+  "exports": {
+    ".": "./mod.ts",
+    "./testing": "./testing.ts"
+  },
+  "license": "Apache-2.0",
+  "description": "Stripe's API over fetch, and the signature its webhooks carry, for a host that lends the key.",
+  "dependencies": {
+    "@yaks/fp": "0.2.23"
+  },
+  "devDependencies": {
+    "@std/assert": "npm:@jsr/std__assert@^1.0.0",
+    "@std/testing": "npm:@jsr/std__testing@^1.0.0",
+    "@yaks/testing": "0.2.17"
+  }
+}

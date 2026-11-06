@@ -17,10 +17,9 @@
 //
 // Inviting yourself is against the terms, and is watched (the admin's
 // Invites page), never refused here.
-import type { Clock } from '@yaks/fp'
 import { periodEnd, type Sub } from './billing.ts'
 import { type Directory, paid, type Referral, type Space } from './directory.ts'
-import { ask } from './stripe.ts'
+import { ask, type Paying } from './payments.ts'
 
 /// monthOn('2026-11-05T15:00:00.000Z') -> '2026-12-05T15:00:00.000Z'
 /// monthOn('2026-01-31T10:00:00.000Z') -> '2026-02-28T10:00:00.000Z'
@@ -52,15 +51,12 @@ export let billed = (space: Pick<Space, 'plan'>) =>
     ? space.plan.subscription
     : null
 
-/** What Stripe is reached with. */
-export type Billing = { STRIPE_KEY?: string; CLOCK?: Clock }
-
 let path = (subscription: string) =>
   `/v1/subscriptions/${encodeURIComponent(subscription)}`
 
 /** When a subscription next charges: the end of its trial, else of the
  * period paid for; null where Stripe says neither. */
-export let charges = async (env: Billing, subscription: string) => {
+export let charges = async (env: Paying, subscription: string) => {
   let sub = await ask(env, path(subscription)) as Sub & {
     trial_end?: number | null
   }
@@ -71,7 +67,7 @@ export let charges = async (env: Billing, subscription: string) => {
 /** The subscription's next charge moved to `until`, unless it already falls
  * then or later: asked again, it moves nothing twice. */
 export let postpone = async (
-  env: Billing,
+  env: Paying,
   subscription: string,
   until: string,
 ) => {
@@ -96,7 +92,7 @@ type Rewarding = Pick<
  */
 export let reward = async (
   dir: Pick<Rewarding, 'own' | 'stamp'>,
-  env: Billing,
+  env: Paying,
   referral: Referral,
   now = new Date().toISOString(),
 ) => {
@@ -137,7 +133,7 @@ export let reward = async (
  */
 export let rewarding = async (
   dir: Rewarding,
-  env: Billing,
+  env: Paying,
   app: string,
   now = new Date().toISOString(),
 ) => {

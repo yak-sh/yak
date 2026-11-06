@@ -21,10 +21,10 @@ import {
   kernel,
   meta,
   seed,
-  signed,
   unique,
   WEBHOOK_SECRET,
 } from './probe.ts'
+import { signed } from '@yaks/stripe/testing'
 
 test(
   'the webhook flips a plan, once, whatever order it arrives in',

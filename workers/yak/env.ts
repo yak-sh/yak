@@ -227,8 +227,7 @@ export type Env = {
   // unset, the doors say the paid tier is not switched on here rather than
   // half-working. STRIPE_PRICE is the recurring price a subscription is for —
   // not a secret, it rides wrangler.toml's `[vars]` beside the account tag.
-  // There is no base-URL seam beside them: under test Stripe is still Stripe,
-  // reached with a sandbox key (probe.ts `stripeKey`).
+  // payments.ts lends the key to @yaks/stripe for every call.
   // Texts and calls (phones.ts): the phone provider the platform sends from,
   // by the name its plugin lends it under, and the number it sends from. Each
   // provider's credentials are the secrets its entry in config.ts

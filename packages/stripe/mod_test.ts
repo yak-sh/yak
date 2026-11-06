@@ -1,9 +1,9 @@
-// The Stripe client (stripe.ts): what goes on the wire, and a call asked
+// The Stripe client (mod.ts): what goes on the wire, and a call asked
 // again when it did not get through, against a Stripe stood in by `fetch`.
 import { type Clock, clock, test } from '@yaks/testing'
 import { assert, assertEquals, assertRejects } from '@std/assert'
 import { stub } from '@std/testing/mock'
-import { ask, form } from './stripe.ts'
+import { ask, form } from './mod.ts'
 
 // --- what goes on the wire to Stripe -------------------------------------
 
@@ -43,7 +43,7 @@ let stripe = (...answers: (Response | Error)[]) => {
   )
   return { heard, [Symbol.dispose]: () => fetch.restore() }
 }
-let KEY = { STRIPE_KEY: 'sk_test_1' }
+let KEY = { key: 'sk_test_1' }
 let made = () => Response.json({ id: 'cus_1' })
 let held = () =>
   Response.json({ error: { message: 'held' } }, {
@@ -65,7 +65,7 @@ test('a write that did not get through is asked again, as one write', async () =
   for (let first of [lost(), held()]) {
     let time = clock()
     using s = stripe(first, made())
-    let out = ask({ ...KEY, CLOCK: time }, '/v1/customers', {
+    let out = ask({ ...KEY, clock: time }, '/v1/customers', {
       email: 'ana@books.example',
     })
     assertEquals(await settled(time, out), { id: 'cus_1' })
@@ -88,7 +88,7 @@ test('a refusal is said once, and a call never answered fails', async () => {
   let time = clock()
   using _ = stripe(lost(), lost(), lost(), lost())
   await assertRejects(
-    () => settled(time, ask({ ...KEY, CLOCK: time }, '/v1/customers/cus_1')),
+    () => settled(time, ask({ ...KEY, clock: time }, '/v1/customers/cus_1')),
     TypeError,
   )
 })

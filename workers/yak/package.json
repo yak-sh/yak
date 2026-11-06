@@ -91,6 +91,7 @@
     "@yaks/spend": "0.2.23",
     "@yaks/sql": "0.2.23",
     "@yaks/sqlite": "0.2.23",
+    "@yaks/stripe": "0.2.23",
     "@yaks/sync": "0.2.23",
     "@yaks/task": "0.2.23",
     "@yaks/telnyx": "0.2.17",

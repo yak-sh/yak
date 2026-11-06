@@ -57,7 +57,7 @@ import { apex, type Host } from './host.ts'
 import { sessionAt } from './session.ts'
 import { ours, refusal } from '@yaks/hook'
 import { fault } from './unseen.ts'
-import { ask, StripeError } from './stripe.ts'
+import { ask, StripeError } from './payments.ts'
 
 // ---- the signature -------------------------------------------------------
 

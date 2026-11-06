@@ -19,7 +19,7 @@ import {
   unseen,
   wanted,
 } from './billing.ts'
-import { StripeError } from './stripe.ts'
+import { StripeError } from './payments.ts'
 import type { Env } from './env.ts'
 import { type Plan, tierOf } from './directory.ts'
 
