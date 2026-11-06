@@ -1446,8 +1446,7 @@ export let react = async (
           results,
           media,
           inputText: inputs,
-          resultUpdatesAsUser: using?.provider != null &&
-            using.provider != identityEid(PROVIDER, ['openai']),
+          resultUpdatesAsUser: !providerModel.lateResults,
         },
       ),
     ],

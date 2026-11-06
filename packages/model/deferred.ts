@@ -4,7 +4,7 @@ import type { Model } from './mod.ts'
 
 export let deferredModel = (
   load: () => Promise<Model>,
-  meta: Pick<Model, 'mark' | 'vocab' | 'anchor'> & {
+  meta: Pick<Model, 'mark' | 'vocab' | 'anchor' | 'lateResults'> & {
     recover?: true
     info?: true
   },

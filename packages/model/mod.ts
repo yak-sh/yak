@@ -307,6 +307,9 @@ export type Model = ((req: Request) => Promise<Reply>) & {
   mark?: (reply: Reply, cache?: CacheContext) => Mark
   anchor?: (comps: Record<string, unknown>) => string | undefined
   vocab?: VocabDoc
+  /** Takes a later output of a tool call it already has one for. Without it,
+   * a call that finishes after its first output is told as user text. */
+  lateResults?: true
 }
 
 /** What a provider answered a failed request with, as it arrived: the body of

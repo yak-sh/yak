@@ -165,7 +165,8 @@ export let project = (
     /** Each input's prose as the model reads it, rendered for this
      * transcript (react's `Deps.inputText`). */
     inputText?: (entry: Bundle) => string
-    /** Strict routes accept one tool output; append later updates as user text. */
+    /** The model takes one output per tool call (@yaks/model `lateResults`
+     * unset): a later update is told as user text. */
     resultUpdatesAsUser?: boolean
   } = {},
 ): Item[] => {

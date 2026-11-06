@@ -105,6 +105,7 @@ export let providers = (
           openai: { response_id: reply.id, ...prefixCacheMark(reply, cache) },
         }),
         anchor: () => undefined,
+        lateResults: true,
         recover: true,
       },
     ),

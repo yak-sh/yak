@@ -226,6 +226,7 @@ export let items = (done: Frame[]): Item[] => {
  */
 export let responses = (opts: Options): Model =>
   Object.assign(ask(opts), {
+    lateResults: true as const,
     list: async () =>
       listing(await opts.credential(), opts.fetch, opts.refresh, opts.headers),
     vocab: openaiDoc,
