@@ -51,6 +51,8 @@ export type Adapter = {
   read: Reader
   /** the instruction file its provider reads at the root of its checkout */
   file?: string
+  /** variables its provider is run with, over the server's environment */
+  env?: Record<string, string>
 }
 
 let servers = (j: Job) => Object.entries(j.mcp ?? {})
@@ -96,6 +98,10 @@ export let claude: Adapter = {
   ],
   read: readers.claude,
   file: 'CLAUDE.md',
+  // After its last turn, `claude -p` waits on the background agents it
+  // started, but stops them after ten minutes unless this ceiling is 0. A run
+  // that waits on its helpers lives until they report.
+  env: { CLAUDE_CODE_PRINT_BG_WAIT_CEILING_MS: '0' },
 }
 
 // A TOML basic string, which is how `codex -c` reads a value: JSON's string

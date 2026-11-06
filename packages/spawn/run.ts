@@ -433,7 +433,10 @@ export let start = async (
       command: argv[0],
       args: argv.slice(1),
       cwd,
-      env: sessionEnv(session, o.env ?? system.env.toObject()),
+      env: sessionEnv(session, {
+        ...o.env ?? system.env.toObject(),
+        ...adapter.env,
+      }),
     }, {
       ...o,
       eid: session, // one entity: the transcript is the thing running

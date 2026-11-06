@@ -2,10 +2,11 @@
 // started it. The knock is ordinary session-bus delivery, so listen, hooks
 // and native transcripts all hear the same receipt.
 //
-// A provider's subagents run inside its process, so they end when it does:
-// `claude -p` stops its background agents as its turn ends. A run's last words
-// can still say they are at work, so the receipt names each one that never
-// settled, from its own transcript.
+// A provider's subagents run inside its process, so they end when it does. A
+// run waits on its own background agents (./adapters.ts `claude.env`), but one
+// stopped or crashed still takes them down while its last words say they are
+// at work, so the receipt names each one that never settled, from its own
+// transcript.
 import type { Bundle, Comp, Graph } from '@yaks/graph'
 import { derivedEid } from '@yaks/graph/identity'
 import { Stale } from '@yaks/graph/errors'

@@ -181,6 +181,34 @@ test('a run speaks as its own session, never its launcher’s', () => {
   assertEquals(env, { PATH: '/bin', TASKS_SESSION: 'S1' })
 })
 
+test('a claude run waits on its own background agents however long they take', async () => {
+  let { g } = tracked()
+  let where = dir()
+  let env: Record<string, string> | undefined
+  try {
+    await g.apply(asking('S1', 'E1', 'do the thing'))
+    await start(g, 'S1', {
+      cwd: where,
+      dir: where,
+      poll: 5,
+      env: { PATH: '/bin', CLAUDE_CODE_PRINT_BG_WAIT_CEILING_MS: '600000' },
+      adapters: { fake },
+      launch: (g, spec, o) => {
+        env = spec.env
+        return launched(g, spec, o)
+      },
+    })
+    await until(
+      async () => comp((await said(g)).at(-1), 'stop'),
+      'the managed provider to exit',
+    )
+    assertEquals(env?.PATH, '/bin')
+    assertEquals(env?.CLAUDE_CODE_PRINT_BG_WAIT_CEILING_MS, '0')
+  } finally {
+    Deno.removeSync(where, { recursive: true })
+  }
+})
+
 // Compose this stopped-request host once, before its commit is exercised.
 let stopped = tracked()
 let stoppedDir = dir()
