@@ -17,9 +17,7 @@ import type { Reply, Runner } from '@yaks/tools'
 import { generic } from '@yaks/graph/tools'
 import { graphDoc } from '@yaks/graph/vocab'
 import { SESSION } from '@yaks/session'
-import type { Authenticate, Route } from '@yaks/api'
-import { mcp } from './mount.ts'
-import { attachSkills } from './skills.ts'
+import type { Authenticate, Handler, Route } from '@yaks/api'
 import type { Search } from './tools.ts'
 
 /** The path an agent speaks to. */
@@ -39,10 +37,16 @@ export type Hosting = {
   reply?: Reply
 }
 
-/** `/mcp`: one JSON-RPC request in, one reply out. */
-export let routes = (host: Hosting): Route[] => {
+// The handler, made by the first request to `/mcp`: the MCP SDK and the Zod
+// it brings are over a hundred modules, and a server listens before any agent
+// has asked.
+let mounted = async (host: Hosting): Promise<Handler> => {
+  let [{ mcp }, { attachSkills }] = await Promise.all([
+    import('./mount.ts'),
+    import('./skills.ts'),
+  ])
   let tier = new Set(generic)
-  let handle = mcp({
+  return mcp({
     graph: host.graph,
     runner: host.runner,
     sessions: host.graph.vocab.comp(SESSION) ? host.graph : undefined,
@@ -59,10 +63,21 @@ export let routes = (host: Hosting): Route[] => {
     )
       .filter((line): line is string => !!line).join('\n\n'),
   })
+}
+
+/** `/mcp`: one JSON-RPC request in, one reply out. */
+export let routes = (host: Hosting): Route[] => {
+  let made: Promise<Handler> | undefined
+  // A handler that failed to import is imported again by the next request.
+  let handler = () =>
+    made ??= mounted(host).catch((error) => {
+      made = undefined
+      throw error
+    })
   return [{
     method: '*',
     path: PATH,
-    handle,
+    handle: async (request) => (await handler())(request),
     says: "the graph's tools for agents, over MCP",
   }]
 }
