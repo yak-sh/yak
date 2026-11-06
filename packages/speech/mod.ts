@@ -63,8 +63,13 @@ export type Said = {
   call?: { id: string; name: string; args: string }
   /** what the turn just finished cost, in dollars */
   spent?: number
+  /** the model began a response: no other may be asked for until it is done */
+  begun?: true
   /** the model's response ended */
   done?: true
+  /** the response last asked for was refused, one being under way: ask
+   * again once it is done */
+  busy?: true
   error?: string
 }
 
@@ -144,10 +149,10 @@ export type Provider = {
     audio: (bytes: Uint8Array) => string
     /** what one message means, on a stream talking with `model` */
     read: (data: unknown, model: string) => Said[]
-    /** a tool's answer given back, and the model asked to go on */
+    /** a tool's answer given back */
     answer: (call: string, output: string) => string[]
-    /** the model asked to say `text` */
-    say: (text: string) => string[]
+    /** the model asked for a response: to say `text`, or without it to go on */
+    respond: (text?: string) => string
   }
   /** the account's credit left, in dollars, where the provider says */
   balance?: (ask: Ask) => Promise<number>
@@ -520,6 +525,20 @@ export let talk = (
   if (!t) throw new Error(`${o.provider.name} has no model that talks`)
   let model = o.model ?? t.models[0]
   let bytes = 0, dollars = 0
+  // The model answers one response at a time: one asked for while another is
+  // under way waits for it to be done. `last` is the one asked for last, asked
+  // again if it was refused; waiting asks to go on are one.
+  let busy = false, last: string | undefined
+  let waiting: string[] = [], goOn = t.respond()
+  let ask = (m: string) => {
+    if (m != goOn || !waiting.includes(m)) waiting.push(m)
+    next()
+  }
+  let next = () => {
+    if (busy || !waiting.length) return
+    busy = true
+    s.send(last = waiting.shift()!)
+  }
   let s = stream(
     o,
     o.provider.live + t.path(model),
@@ -539,7 +558,13 @@ export let talk = (
         if (said.audio) o.told.audio(said.audio)
         if (said.said) o.told.said?.(said.said)
         if (said.spent) dollars += said.spent
-        if (said.done) o.told.done?.()
+        if (said.begun) busy = true
+        if (said.busy && last) waiting.unshift(last), busy = true
+        if (said.done) {
+          o.told.done?.()
+          busy = false
+          next()
+        }
         if (said.error) o.told.lost?.(said.error)
         let call = said.call
         if (call) {
@@ -547,6 +572,7 @@ export let talk = (
             .catch((error) => `That did not work: ${error?.message ?? error}`)
             .then((output) => {
               for (let m of t.answer(call.id, output)) s.send(m)
+              ask(goOn)
             })
         }
       }
@@ -559,9 +585,7 @@ export let talk = (
       bytes += audio.length
       s.send(t.audio(audio))
     },
-    say: (text) => {
-      for (let m of t.say(text)) s.send(m)
-    },
+    say: (text) => ask(t.respond(text)),
     spent: () => ({ seconds: bytes / perSecond(o.format)!, dollars }),
     close: () => {
       s.close()

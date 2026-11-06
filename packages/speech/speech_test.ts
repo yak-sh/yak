@@ -319,3 +319,38 @@ test('a tool the model asks for is answered with its output, and it goes on', as
     { type: 'response.create' },
   ])
 })
+
+test('a response asked for while one is under way waits for it to be done', async () => {
+  let { s, stream, event } = talking(() => Promise.resolve('Booked.'))
+  s.fire('open')
+  let created = () => s.json().filter((m) => m.type == 'response.create').length
+  event({ type: 'response.created' })
+  for (let id of ['c1', 'c2']) {
+    event({
+      type: 'response.function_call_arguments.done',
+      call_id: id,
+      name: 'ask',
+      arguments: '{}',
+    })
+  }
+  stream.say('One moment.')
+  await until(() => s.sent.length == 3)
+  equal(created(), 0)
+  // Done, it is asked to say its words, and only then once to go on with
+  // both answers.
+  let saying = (m: { response?: { instructions?: string } }) =>
+    m.response?.instructions?.endsWith('One moment.')
+  event({ type: 'response.done' })
+  equal(saying(s.json().at(-1)), true)
+  // Refused as another began first, it is asked again once that one is done.
+  event({
+    type: 'error',
+    error: { code: 'conversation_already_has_active_response', message: 'x' },
+  })
+  event({ type: 'response.done' })
+  equal(saying(s.json().at(-1)), true)
+  event({ type: 'response.done' })
+  equal(s.json().at(-1), { type: 'response.create' })
+  event({ type: 'response.done' })
+  equal(created(), 3)
+})

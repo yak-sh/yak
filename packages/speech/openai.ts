@@ -69,7 +69,7 @@ type Event = {
   name?: string
   arguments?: string
   response?: { usage?: Usage }
-  error?: { message?: string }
+  error?: { message?: string; code?: string }
 }
 
 let parsed = (data: unknown): Event => {
@@ -263,6 +263,9 @@ export let OPENAI: Provider = {
             },
           })
           break
+        case 'response.created':
+          said.push({ begun: true })
+          break
         case 'response.done': {
           let usage = e.response?.usage
           if (usage) said.push({ spent: costOf(modelOf(e) || model, usage) })
@@ -270,7 +273,11 @@ export let OPENAI: Provider = {
           break
         }
         case 'error':
-          said.push({ error: String(e.error?.message) })
+          said.push(
+            e.error?.code == 'conversation_already_has_active_response'
+              ? { busy: true }
+              : { error: String(e.error?.message) },
+          )
       }
       return said
     },
@@ -279,14 +286,16 @@ export let OPENAI: Provider = {
         type: 'conversation.item.create',
         item: { type: 'function_call_output', call_id: call, output },
       }),
-      JSON.stringify({ type: 'response.create' }),
     ],
-    say: (text) => [JSON.stringify({
-      type: 'response.create',
-      response: {
-        instructions: `Say exactly this, and nothing else: ${text}`,
-      },
-    })],
+    respond: (text) =>
+      JSON.stringify({
+        type: 'response.create',
+        ...text == undefined ? {} : {
+          response: {
+            instructions: `Say exactly this, and nothing else: ${text}`,
+          },
+        },
+      }),
   },
 }
 
