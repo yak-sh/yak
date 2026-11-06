@@ -290,10 +290,15 @@ export let discover = async (g: Graph, cwd: string): Promise<Bundle> => {
       },
     })
   }
-  for (let old of await g.read('.ref.app=' + repository)) {
-    if (!found.has(old.entity.eid)) {
+  // Only a ref still marked present can have gone: the repository's absent
+  // ones, every branch a session ever cut, are many times the present.
+  let present = await g.rows(
+    '.ref.app=' + repository + '&.ref.present=true .fields=entity.eid',
+  ) as { eid: string }[]
+  for (let { eid } of present) {
+    if (!found.has(eid)) {
       bundles.push({
-        entity: { eid: old.entity.eid },
+        entity: { eid },
         ref: { present: false, oid: null, target: null },
       })
     }
@@ -316,7 +321,10 @@ export let discover = async (g: Graph, cwd: string): Promise<Bundle> => {
   bundles.push(tree)
   // Write only the rows whose values actually changed, so that discovering an
   // unchanged checkout updates no timestamps and notifies nobody.
-  let previous = await g.get(bundles.map((b) => b.entity.eid))
+  let previous = await g.get(
+    bundles.map((b) => b.entity.eid),
+    ['repository', 'ref', 'worktree', 'workspace'],
+  )
   let byId = new Map(previous.map((b) => [b.entity.eid, b]))
   let changed = bundles.filter((b) =>
     Object.entries(b).some(([k, v]) =>
@@ -334,8 +342,15 @@ export let discover = async (g: Graph, cwd: string): Promise<Bundle> => {
 }
 
 /** Repeating the same base request uses its original commit, even after a
- * branch moves. A different base must still name that pinned commit. */
-export type CheckoutRequest = { path: string; base?: string; branch?: string }
+ * branch moves. A different base must still name that pinned commit. With
+ * `spare`, the checkout is made from the spare beside it ({@link keepSpare}) when
+ * there is one. */
+export type CheckoutRequest = {
+  path: string
+  base?: string
+  branch?: string
+  spare?: boolean
+}
 let resolve = async (source: string, base: string): Promise<string> =>
   (await git(source, [
     'rev-parse',
@@ -367,7 +382,7 @@ let create = async (g: Graph, source: string, request: CheckoutRequest) => {
     )
   }
   if (old?.worktree && intent?.state == 'ready') {
-    await replace(g, path, old.worktree as Comp)
+    await replace(g, path, old.worktree as Comp, request.spare)
     let current = await discover(g, path)
     if ((current.worktree as Comp).repository != repository) {
       throw new Error('worktree repository mismatch')
@@ -404,15 +419,14 @@ let create = async (g: Graph, source: string, request: CheckoutRequest) => {
     }])
     throw error
   }
-  let args = [
-    'worktree',
-    'add',
-    ...(request.branch ? ['-b', request.branch] : ['--detach']),
-    path,
-    base,
-  ]
   try {
-    await git(source, args)
+    await add(
+      source,
+      path,
+      request.branch ? ['-b', request.branch] : ['--detach'],
+      base,
+      request.spare,
+    )
   } catch (failure) {
     // Another process, or a crash after `git worktree add` succeeded, may have
     // already done this; check before reporting a failure.
@@ -461,18 +475,96 @@ export let createWorktree = async (
   request: CheckoutRequest,
 ): Promise<Bundle> => {
   let path = await canonical(request.path)
-  let common = await io.realPath(
+  return locked(
+    await commonOf(source),
+    path,
+    () => create(g, source, { ...request, path }),
+  )
+}
+
+let commonOf = async (source: string): Promise<string> =>
+  io.realPath(
     (await git(source, [
       'rev-parse',
       '--path-format=absolute',
       '--git-common-dir',
     ]))!,
   )
-  return locked(
-    common,
-    path,
-    () => create(g, source, { ...request, path }),
-  )
+
+// The spare beside the checkouts in `path`'s directory.
+let spareBeside = (path: string) =>
+  path.slice(0, path.lastIndexOf('/')) + '/.spare'
+
+// Put a worktree at `path`, as `git worktree add` with these flags (`-b X`,
+// `--detach`, or neither for a branch that stands) and target would: with
+// `spare`, by renaming the spare beside it there and checking it out to the
+// target, which rewrites only the files that differ and, through the
+// repository's post-checkout hook, installs only what its lockfile changed.
+// The rename takes it, so of two requests one has it; with none there, the
+// worktree is cut whole.
+let add = async (
+  source: string,
+  path: string,
+  flags: string[],
+  target: string,
+  spare?: boolean,
+): Promise<void> => {
+  let taken = spare &&
+    await io.rename(spareBeside(path), path).then(() => true, (e) => {
+      if (io.isNotFound(e)) return false
+      throw e
+    })
+  if (!taken) {
+    await git(source, ['worktree', 'add', ...flags, path, target])
+    return
+  }
+  try {
+    await git(source, ['worktree', 'repair', path])
+    await git(path, ['checkout', '--quiet', ...flags, target])
+  } catch (failure) {
+    await quiet(source, ['worktree', 'remove', '--force', path])
+    throw failure
+  }
+}
+
+/**
+ * Cut the spare checkout beside `path` from `base` (a commit or ref of the
+ * repository `source` is a checkout of), unless one is there: a checkout
+ * created in that directory with `spare` is made from it in about a second,
+ * where one cut whole writes every file and installs its dependencies. It is
+ * cut under a name of its own and renamed once whole, so nothing takes it half
+ * made; what a cut that never finished left there is removed first.
+ *
+ * ```ts ignore
+ * import { createWorktree, keepSpare } from '@yaks/git/host'
+ *
+ * let path = '/srv/runs/S-1'
+ * await createWorktree(graph, '/srv/repo', { path, branch: 'b', spare: true })
+ * await keepSpare('/srv/repo', path, 'refs/heads/main') // for the next one
+ * ```
+ */
+export let keepSpare = async (
+  source: string,
+  path: string,
+  base = 'HEAD',
+): Promise<void> => {
+  let common = await commonOf(source)
+  let at = spareBeside(await canonical(path))
+  await locked(common, at, async () => {
+    if (await io.stat(at).then(() => true, () => false)) return
+    let dir = at.slice(0, at.lastIndexOf('/'))
+    for await (let e of io.readDir(dir)) {
+      if (!e.name.startsWith('.spare-')) continue
+      await quiet(source, ['worktree', 'remove', '--force', `${dir}/${e.name}`])
+      await io.remove(`${dir}/${e.name}`, { recursive: true })
+    }
+    let cut = `${at}-${crypto.randomUUID()}`
+    await git(source, ['worktree', 'add', '--detach', cut, base])
+    await io.rename(cut, at)
+    // A request may take it the moment it is renamed; its repair is then the
+    // one that tells Git where it went.
+    await quiet(source, ['worktree', 'repair', at])
+  })
 }
 
 /** Why a worktree was kept: uncommitted files, commits that exist nowhere
@@ -857,7 +949,12 @@ export let restore = async (g: Graph, tree: Bundle): Promise<string> => {
 
 // Called with the checkout path locked by create or restore. A peer may have
 // restored it while this request waited; an existing path is never replaced.
-let replace = async (g: Graph, path: string, w: Comp): Promise<string> => {
+let replace = async (
+  g: Graph,
+  path: string,
+  w: Comp,
+  spare?: boolean,
+): Promise<string> => {
   if (await io.stat(path).then(() => true, () => false)) return path
   let common = ((await row(g, String(w.repository)))?.repository as Comp)
     ?.common
@@ -875,13 +972,13 @@ let replace = async (g: Graph, path: string, w: Comp): Promise<string> => {
   // kept is where that work actually is, not a stale copy of it.
   let standing = !!branch &&
     await quiet(common, ['rev-parse', '--verify', '--quiet', name]) != null
-  await git(common, [
-    'worktree',
-    'add',
-    ...branch ? standing ? [] : ['-b', branch] : ['--detach'],
+  await add(
+    common,
     path,
+    branch ? standing ? [] : ['-b', branch] : ['--detach'],
     standing ? branch : head,
-  ])
+    spare,
+  )
   await discover(g, path)
   return path
 }

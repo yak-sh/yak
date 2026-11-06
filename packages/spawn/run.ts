@@ -83,7 +83,7 @@ import {
   watch,
 } from '@yaks/process'
 import { retained } from '@yaks/git/workspace'
-import { createWorktree, discover, reclaim } from '@yaks/git/host'
+import { createWorktree, discover, keepSpare, reclaim } from '@yaks/git/host'
 import { owed } from '@yaks/persona'
 import { promptEntry, snapshot } from '@yaks/context'
 import { type Adapter, adapters as known, type Job } from './adapters.ts'
@@ -393,6 +393,7 @@ let cut = async (g: Graph, session: string, o: Opts): Promise<string> => {
     path: checkoutOf(session, o.worktrees!),
     branch: `session-${session}`,
     base: 'refs/heads/main',
+    spare: true,
   })
   return String(comp(tree, 'workspace')?.root)
 }
@@ -522,6 +523,16 @@ export let start = async (
   // A stop can land while the wrapper starts, before its process row exists.
   // The stop effect had no pid then; now that launch has stamped one, answer it.
   if ((await ran(g, session))?.stop) down(g, session, o).catch(told(o))
+  // The next run's checkout is made from a spare in about a second, where one
+  // cut whole takes several: one is cut once this run has launched.
+  if (o.worktrees) {
+    keepSpare(
+      o.cwd ?? system.cwd(),
+      checkoutOf(session, o.worktrees),
+      'refs/heads/main',
+    )
+      .catch(told(o))
+  }
   let through = String(job.ask.through)
   follow(g, session, answering(adapter.read, job.ask), o, { through, tail: t })
     .catch(told(o))

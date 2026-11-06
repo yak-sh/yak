@@ -24,15 +24,17 @@ yak session spawn T-123 --provider codex --model gpt-6.1-sol --effort high
 
 `--provider claude` uses Claude Code through the same lifecycle. Spawn takes the
 claim atomically and includes the task body in the request. With `worktrees`
-configured, each run has its own branch off main. Its final report becomes a
-comment on the task and a knock to the spawning session, delivered through the
-session bus that `yak session listen` reads. A provider's subagents run in its
-process and stop when it ends. A claude run waits on its background agents after
-its last turn, with no time limit, so they finish and report; a run stopped or
-crashed still takes them down, so the report names each subagent whose
-transcript never settled, whatever the run's last words said. Dirty or unlanded
-work is kept; landed checkouts and their branches are removed after the run
-ends.
+configured, each run has its own branch off main, in a checkout made from a
+spare cut ahead of time (@yaks/git/host `keepSpare`), so a run starts about a
+second after it is asked rather than after a whole checkout and install; each
+launch cuts the next spare. Its final report becomes a comment on the task and a
+knock to the spawning session, delivered through the session bus that
+`yak session listen` reads. A provider's subagents run in its process and stop
+when it ends. A claude run waits on its background agents after its last turn,
+with no time limit, so they finish and report; a run stopped or crashed still
+takes them down, so the report names each subagent whose transcript never
+settled, whatever the run's last words said. Dirty or unlanded work is kept;
+landed checkouts and their branches are removed after the run ends.
 
 Write a session and its first input in one transaction. A **bundle** is one
 entity's components as a JSON object, and a **batch** is a list of bundles
