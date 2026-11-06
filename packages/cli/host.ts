@@ -582,12 +582,19 @@ let composed = async (
     // The store's print, digested by the platform before the store is bound,
     // so the schema below finds it made.
     if (!opts.readOnly && !mode) await printing(vocab, derived, !!sql.file)
-    // A web host warms when its server asks (@yaks/api `serve`), and what
-    // its routes make ahead of a first request waits for that.
-    let warming = opts.warm && Promise.withResolvers<void>()
-    let warm = opts.warm && (() => {
-      warming!.resolve()
-      return opts.warm!()
+    // A web host warms when its server asks (@yaks/api `serve`): first what
+    // its routes make ahead of a first request, then, once that is made, the
+    // rest (`opts.warm`), so the first page answers before workers start.
+    // A make's failure is its route's to report; here it only settles.
+    let makes: (() => Promise<unknown>)[] = []
+    let warmed: Promise<void> | undefined
+    let warm = opts.warm &&
+      (() =>
+        warmed ??= Promise.allSettled(makes.map((make) => make()))
+          .then(() => opts.warm!()))
+    let early = opts.warm && ((make: () => Promise<unknown>) => {
+      if (warmed) void Promise.allSettled([make()])
+      else makes.push(make)
     })
     let built = plan.bind({
       tools: { package: '@yaks/cli', offer: operations },
@@ -598,7 +605,7 @@ let composed = async (
         artifacts,
         reader: opts.reader,
         warm,
-        warming: warming?.promise,
+        early,
         me: selfEid(),
         stopping: stopping.signal,
         report: (error, context = {}) =>

@@ -41,14 +41,13 @@ test('a body that never comes is given up on, and made again', async () => {
   assertEquals(await (await get(handle)).text(), 'made')
 })
 
-test('a body made early starts once its start settles, and only once', async () => {
+test('a body made early starts when its host starts it, and only once', async () => {
   let { seen, make } = makes('made')
-  let start = Promise.withResolvers<void>()
-  let handle = kept('/x', 'text/plain', make, { early: start.promise })
+  let start: (() => Promise<unknown>) | undefined
+  let handle = kept('/x', 'text/plain', make, { early: (m) => start = m })
   await tick()
   assertEquals(seen.tries, 0)
-  start.resolve()
-  await tick()
+  await start!()
   assertEquals(seen.tries, 1)
   assertEquals(await (await get(handle)).text(), 'made')
   assertEquals(seen.tries, 1)
@@ -56,7 +55,7 @@ test('a body made early starts once its start settles, and only once', async () 
 
 test('a body started early that fails is made again by the first request', async () => {
   let { seen, make } = makes(new Error('no'), 'made')
-  let handle = kept('/x', 'text/plain', make, { early: Promise.resolve() })
+  let handle = kept('/x', 'text/plain', make, { early: (m) => void m() })
   await tick()
   assertEquals(await (await get(handle)).text(), 'made')
   assertEquals(seen.tries, 2)

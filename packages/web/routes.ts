@@ -46,9 +46,9 @@ export type Hosting = {
   vault?: Vault
   /** aborts as the host closes, ending the app's build if it is still going */
   stopping?: AbortSignal
-  /** settles as the host starts warming (@yaks/host `Host.warming`), when the
-   * app's build starts */
-  warming?: Promise<void>
+  /** where the page and the app's build are handed to start ahead of the
+   * first request, as the host warms (@yaks/host `Host.early`) */
+  early?: (make: () => Promise<unknown>) => void
   /** the host's telemetry, where what a page reports is sent */
   report?: (error: unknown, context?: Partial<Context>) => unknown
 }
@@ -138,7 +138,10 @@ let names = async (
 export type Options = { home?: { title: string; query: string }; app?: string }
 
 export let routes = (host: Hosting, options: Options = {}): Route[] => {
-  let cached = kept('/', 'text/html; charset=utf-8', html)
+  // Made as the host warms: from JSR its files are fetched over the network.
+  let cached = kept('/', 'text/html; charset=utf-8', html, {
+    early: host.early,
+  })
   let owner = () =>
     person({
       graph: host.graph,
@@ -251,14 +254,14 @@ export let routes = (host: Hosting, options: Options = {}): Route[] => {
     {
       method: 'GET',
       path: '/web/app.js',
-      // Started as the host warms, once it listens, so the first page load
+      // Made as the host warms, once it listens, so the first page load
       // finds it built and the listening waits on none of the views.
       handle: kept(
         '/web/app.js',
         'text/javascript; charset=utf-8',
         (signal) => made(host.config?.plugins ?? [], options, signal),
         {
-          early: host.warming ?? Promise.resolve(),
+          early: host.early,
           closing: host.stopping,
         },
       ),

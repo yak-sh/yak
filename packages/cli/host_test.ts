@@ -2162,3 +2162,25 @@ test('a spawned run is stamped with its actor from its first MCP call, on either
     await host.close()
   }
 })
+
+test('a host warms what its routes make early first, and the rest once each has settled', async () => {
+  let order: string[] = []
+  let page = Promise.withResolvers<void>()
+  let host = await compose({ db: ':memory:', plugins: [] }, undefined, {
+    warm: () => Promise.resolve(void order.push('workers')),
+  })
+  try {
+    host.early!(() => (order.push('page'), page.promise))
+    host.early!(() => (order.push('script'), Promise.reject(new Error('no'))))
+    let warmed = host.warm!()
+    assertEquals(host.warm!(), warmed)
+    await Promise.resolve()
+    assertEquals(order, ['page', 'script'])
+    page.resolve()
+    await warmed
+    host.early!(() => (order.push('late'), Promise.resolve()))
+    assertEquals(order, ['page', 'script', 'workers', 'late'])
+  } finally {
+    await host.close()
+  }
+})

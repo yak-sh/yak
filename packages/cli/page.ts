@@ -118,15 +118,16 @@ export let within = <T>(
     })
   })
 
-/** The handler that answers `where` with the body `make` makes. `early` starts
- * making it once it settles, so the first request finds it made; `closing` is
- * the host's own signal, which ends a make still going. */
+/** The handler that answers `where` with the body `make` makes. `early` is
+ * handed its making, to start ahead of the first request (@yaks/host
+ * `Host.early`), which then finds it made; `closing` is the host's own signal,
+ * which ends a make still going. */
 export let kept = (
   where: string,
   type: string,
   make: (signal: AbortSignal) => Promise<Body>,
   { early, limit = LIMIT, closing }: {
-    early?: Promise<unknown>
+    early?: (make: () => Promise<unknown>) => void
     limit?: number
     closing?: AbortSignal
   } = {},
@@ -144,9 +145,7 @@ export let kept = (
     })
     return now
   }
-  early?.then(() => {
-    if (!made) attempt()
-  }, () => {})
+  early?.(() => made ?? attempt())
   return async (request: Request) => {
     try {
       return await tagged(request, await (made ?? attempt()), type)
