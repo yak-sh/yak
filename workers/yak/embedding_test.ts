@@ -78,6 +78,7 @@ test('a store answers .near from its own vectors, closest first', async () => {
 // the memory tools' recall over it.
 // A small space of word buckets keeps the scan small.
 let words64 = hashEmbedder(64)
+let within = line({ space: 'kitchen', limit: 8 })
 let memories = await (async () => {
   let vocab = loadVocab([docDoc, memoryDoc, {
     $defs: {
@@ -112,28 +113,40 @@ let memories = await (async () => {
   ])
   let fields = texts(vocab, derived)
   await sweep(store.statements, fields, words64)
+  let screen = store.screen(within)
   let held = {
     statements: store.statements,
     fields,
-    screen: (q: string) => store.screen(q),
+    screen: (q: string) => q == within ? screen : null,
   }
   // A store that has been searched once: the first search loads its vectors.
   await ranking(() => words64, held)('pages', {
-    within: line({ space: 'kitchen', limit: 8 }),
+    within,
   })
   return held
 })()
 
+let rank = (model: Embedder | null) => ranking(() => model, memories)
+let phrase = 'pages look friendly'
+let queryVector = await words64.embed(phrase)
+let recalling = {
+  model: words64.model,
+  embed: (text: string) => {
+    assertEquals(text, phrase)
+    return queryVector
+  },
+}
+
 test("a recall ranks a space's memories by meaning", async () => {
-  let rank = (model: Embedder | null) => ranking(() => model, memories)
-  // What a recall asks the ranking to stay within: this space's memories.
-  let within = line({ space: 'kitchen', limit: 8 })
-  let nearest = async (said: string) =>
-    (await rank(words64)(said, { within })).map((h) => h.entity)
   // No memory holds every word, so only the vectors find them, nearest first,
   // and only this space's.
-  assertEquals(await nearest('pages look friendly'), ['soft', 'grams'])
-  // A store with no model bound ranks nothing.
+  assertEquals(
+    (await rank(recalling)(phrase, { within })).map((h) => h.entity),
+    ['soft', 'grams'],
+  )
+})
+
+test('a store with no model bound ranks no memories', async () => {
   assertEquals(await rank(null)('pages', { within }), [])
 })
 

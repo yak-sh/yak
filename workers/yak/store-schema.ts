@@ -198,10 +198,11 @@ export let reshapeSlots = (read: Read, write: Write) => {
 /** Fit the stored vocabulary over existing SQLite tables and retain its receipt. */
 export let fitSchema = (
   driver: Driver,
-  shape: Shape,
+  shape: Pick<Shape, 'vocab' | 'print' | 'stamp' | 'own' | 'key'>,
   read: Read,
   write: Write,
   version: () => string | null,
+  report?: (error: Error, tags: Record<string, string>) => unknown,
 ): Error[] => {
   let held = read('schema')
   if (!(read('name') || held)) return []
@@ -211,5 +212,10 @@ export let fitSchema = (
   if (stamp) write('schema', stamp)
   let fit = fitted()
   if (!left.length && fit) write('fitted', fit)
+  if (report) {
+    for (let e of left) {
+      report(e, { request: 'schema fit', store: read('name') ?? '' })
+    }
+  }
   return left
 }

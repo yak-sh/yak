@@ -8,10 +8,15 @@ import { assert, assertEquals } from '@std/assert'
 import type { Bundle } from '@yaks/graph'
 import type { Wire } from '@yaks/durable-object'
 import { durable } from '../../packages/durable-object/testing.ts'
-import { at, by, col, erect, fn, insert, lit, scan, type Stmt } from '@yaks/sql'
+import { at, by, col, fn, insert, lit, scan, type Stmt } from '@yaks/sql'
 import { DIRTY, OWED, TABLE } from '@yaks/embedding'
-import { columns, objects as catalogue, reclassify, schema } from '@yaks/sqlite'
-import { mem } from '../../packages/sqlite/testing.ts'
+import {
+  columns,
+  objects as catalogue,
+  reclassify,
+  storage,
+} from '@yaks/sqlite'
+import { mem, preparedDriver, snapshot } from '../../packages/sqlite/testing.ts'
 import { ddl as journalDdl } from '@yaks/journal'
 import { Store } from './graph.ts'
 import { loadVocab } from '@yaks/vocab'
@@ -25,6 +30,7 @@ import {
 } from './migrate.ts'
 import { PLATFORM_STORE } from './door.ts'
 import { db, keep, slot } from './testing.ts'
+import { fitSchema } from './store-schema.ts'
 
 // One object's whole state, kept across incarnations: its storage and the
 // socket list the runtime holds.
@@ -147,33 +153,106 @@ let pass = (left: Error[] = []) => {
 
 // One file stands for every pass: a print is recorded for good, so each test
 // names its own.
-let file = mem()
-erect(file, schema(loadVocab({})))
+let file = preparedDriver(snapshot(loadVocab({})))
 let shape = (print: string) => ({
   vocab: loadVocab({}),
   print,
   stamp: 'stamp',
 })
 
+let older = shape('older'), first = pass(), again = pass(), same = pass()
+let firstStamp = passed(file, older, null, first.raise).stamp
+
 test('a Store an older release opened is brought to its schema again, though its print is recorded', () => {
-  let first = pass(), again = pass(), same = pass(), now = shape('older')
-  equal(passed(file, now, null, first.raise).stamp, 'stamp')
+  equal(firstStamp, 'stamp')
   // The release before prints, a rollback away, kept only its own stamp.
-  equal(passed(file, now, 'older schema', again.raise).stamp, 'stamp')
+  equal(passed(file, older, 'older schema', again.raise).stamp, 'stamp')
   equal([first.asked, again.asked], [1, 1])
-  // Its own stamp and a recorded print leave nothing to raise.
-  equal(passed(file, now, 'stamp', same.raise).stamp, null)
+})
+
+test('its own schema stamp and a recorded print leave nothing to raise', () => {
+  equal(passed(file, older, 'stamp', same.raise).stamp, null)
   equal(same.asked, 0)
 })
 
+let unfit = async () => {
+  let words = (unique: boolean) =>
+    loadVocab({
+      $defs: {
+        space: {
+          component: true,
+          properties: { slug: { type: 'string', unique } },
+        },
+        doc: { component: true, properties: { title: { type: 'string' } } },
+      },
+    })
+  let d = preparedDriver(snapshot(words(false))), vocab = words(true)
+  install(d, words(false))
+  for (let [i, eid] of [ONE, TWO].entries()) {
+    d.query(insert('entity', { id: i + 1, eid }))
+    d.query(insert('space', { entity: i + 1, slug: 'same' }))
+  }
+  let held = new Map([['name', PLATFORM_STORE], ['schema', 'older schema']])
+  let reports: { error: Error; tags: Record<string, string> }[] = []
+  let store = storage(d, vocab, { schemaReady: () => true })
+  let wake = () =>
+    fitSchema(
+      d,
+      {
+        vocab,
+        print: 'unsatisfiable',
+        stamp: 'stamp',
+        own: false,
+        key: 'spaces',
+      },
+      (key) => held.get(key) ?? null,
+      (key, value) => void held.set(key, value),
+      () => 'release',
+      (error, tags) => void reports.push({ error, tags }),
+    )
+  let left = wake()
+  await store.tx((tx) =>
+    tx.patch([{
+      entity: { eid: '30000000-0000-4000-8000-000000000003' },
+      doc: { title: 'Ada' },
+    }])
+  )
+  await store.get(['30000000-0000-4000-8000-000000000003'], ['doc'])
+  return { d, store, held, reports, left }
+}
+let failedFit = await unfit()
+let servingFit = await unfit()
+
 test('a declared index the rows cannot satisfy is reported, and the store serves', () => {
-  let stuck = new Error('space_slug is not built'), now = shape('stuck')
-  let failing = pass([stuck]), healed = pass()
-  let wake = (p: ReturnType<typeof pass>) => passed(file, now, null, p.raise)
-  equal(wake(failing), { left: [stuck], stamp: null })
-  // The print stays unrecorded, so the next wake raises again.
-  equal(wake(healed).stamp, 'stamp')
-  equal(healed.asked, 1)
+  let { d, held, reports, left } = failedFit
+  assertEquals(catalogue(d, { name: 'space_slug' }), [])
+  assertEquals(held.get('schema'), 'older schema')
+  assertEquals(reports.length, 1)
+  assertEquals(reports[0].error, left[0])
+  assertEquals(reports[0].tags, {
+    request: 'schema fit',
+    store: PLATFORM_STORE,
+  })
+  assert(reports[0].error.message.includes('space_slug is not built'))
+})
+
+test('a store whose schema fit left an index undone still accepts edits', async () => {
+  let { store } = servingFit
+  let eid = '30000000-0000-4000-8000-000000000003'
+  await store.tx((tx) => tx.patch([{ entity: { eid }, doc: { title: 'Cy' } }]))
+  assertEquals((await store.get([eid], ['doc']))[0].doc, { title: 'Cy' })
+})
+
+let retry = pass()
+let retryShape = shape('stuck')
+test('a schema pass left undone is retried on its next wake', () => {
+  let stuck = new Error('space_slug is not built')
+  equal(passed(file, retryShape, null, pass([stuck]).raise), {
+    left: [stuck],
+    stamp: null,
+  })
+  equal(passed(file, retryShape, null, retry.raise).stamp, 'stamp')
+  equal(retry.asked, 1)
 })
 
 // A Store over the object, as a new incarnation, driven through its own doors.

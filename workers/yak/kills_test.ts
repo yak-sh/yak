@@ -20,60 +20,60 @@ let kill = (type: string, status: string) => ({
   sum: { requests: 2 },
 })
 
-test('each run reports the kills since the last one, and reads on from there', async () => {
-  let asked: Record<string, string>[] = []
-  let answers = [[
-    kill('alarm', 'exceededCpu'),
-    kill('hibernation', 'exceededMemory'),
-  ]]
-  let fetch = globalThis.fetch
-  globalThis.fetch = (_url, init) => {
-    asked.push(JSON.parse(String(init?.body)).variables)
-    return Promise.resolve(Response.json({
-      data: {
-        viewer: {
-          accounts: [{
-            durableObjectsInvocationsAdaptiveGroups: answers.shift() ?? [],
-          }],
-        },
+let asked: Record<string, string>[] = []
+let answers = [[
+  kill('alarm', 'exceededCpu'),
+  kill('hibernation', 'exceededMemory'),
+]]
+let read: NonNullable<Parameters<typeof swept>[5]> = (
+  _env,
+  _query,
+  variables,
+) => {
+  asked.push(variables)
+  return Promise.resolve({
+    data: {
+      viewer: {
+        accounts: [{
+          durableObjectsInvocationsAdaptiveGroups: answers.shift() ?? [],
+        }],
       },
-    }))
+    },
+  })
+}
+let env = { CF_ANALYTICS_TOKEN: 'test' } as Env
+let reports: unknown[] = []
+let report = (e: unknown, tags: unknown, details: unknown) =>
+  void reports.push([(e as Error).message, tags, details])
+
+test('each run reports the kills since the last one, and reads on from there', async () => {
+  let through: string | null = iso('04:50')
+  for (let time of ['05:00', '05:05']) {
+    through = await swept(env, through, at(time), report, wait, read)
   }
-  try {
-    let env = { CF_ANALYTICS_TOKEN: 'test' } as Env
-    let reports: unknown[] = []
-    let report = (e: unknown, tags: unknown, details: unknown) =>
-      void reports.push([(e as Error).message, tags, details])
-    let through: string | null = iso('04:50')
-    for (let time of ['05:00', '05:05']) {
-      through = await swept(env, through, at(time), report, wait)
-    }
-    equal(through, iso('05:00'))
-    equal(asked.map((v) => [v.script, v.since, v.until]), [
-      ['yak', iso('04:50'), iso('04:55')],
-      ['yak', iso('04:55'), iso('05:00')],
-    ])
-    let tags = (request: string) => ({
-      request,
-      store: 'ada/notes',
-      at: '2026-09-07T04:52:00Z',
-      count: '2',
-    })
-    equal(reports, [
-      [
-        "a Durable Object's alarm was killed: exceededCpu",
-        tags('alarm'),
-        { commit: 'v1' },
-      ],
-      [
-        "a Durable Object's socket message was killed: exceededMemory",
-        tags('hibernation'),
-        { commit: 'v1' },
-      ],
-    ])
-  } finally {
-    globalThis.fetch = fetch
-  }
+  equal(through, iso('05:00'))
+  equal(asked.map((v) => [v.script, v.since, v.until]), [
+    ['yak', iso('04:50'), iso('04:55')],
+    ['yak', iso('04:55'), iso('05:00')],
+  ])
+  let tags = (request: string) => ({
+    request,
+    store: 'ada/notes',
+    at: '2026-09-07T04:52:00Z',
+    count: '2',
+  })
+  equal(reports, [
+    [
+      "a Durable Object's alarm was killed: exceededCpu",
+      tags('alarm'),
+      { commit: 'v1' },
+    ],
+    [
+      "a Durable Object's socket message was killed: exceededMemory",
+      tags('hibernation'),
+      { commit: 'v1' },
+    ],
+  ])
 })
 
 // 2026-10-28T17:48Z: Cloudflare answered the sweep's query 500, "Internal

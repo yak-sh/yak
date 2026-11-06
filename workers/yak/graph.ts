@@ -1155,13 +1155,14 @@ export class Store {
   // version, these words, and the stamp it left. A wake that finds all three
   // as they were renders no schema at all, and one that finds any moved (a
   // deploy, a new vocabulary, a rollback's pass) asks the print again.
-  #schema(shape: Shape): Error[] {
+  #schema(shape: Shape, report?: typeof defect): Error[] {
     return fitSchema(
       this.#sql,
       shape,
       (key) => this.#get(key as Word),
       (key, value) => this.#put(key as Word, value),
       () => this.#version(),
+      report,
     )
   }
 
@@ -1240,9 +1241,7 @@ export class Store {
     // the store kind before boot, so an app's tables never land in a newborn
     // directory or Git store. `#learn` rebuilds when later metadata changes.
     let stood = this.#stood(shape)
-    for (let e of this.#schema(shape)) {
-      defect(e, { request: 'schema fit', store: name })
-    }
+    this.#schema(shape, defect)
     let app = this.#get('app')
     // Each incarnation binds declared effects to its host capabilities.
     // An effect writes back through the kernel's own door — a new batch

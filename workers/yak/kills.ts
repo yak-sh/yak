@@ -125,10 +125,11 @@ export let swept = async (
   now: number,
   report: typeof defect = defect,
   wait: (ms: number) => Promise<void> = sleep,
+  read: typeof ask<Data> = ask,
 ): Promise<string | null> => {
   let window = span(through, now)
   if (!window || !env.CF_ANALYTICS_TOKEN) return null
-  let answer = await ask<Data>(env, QUERY, {
+  let answer = await read(env, QUERY, {
     account: env.CF_ACCOUNT ?? '',
     script: env.WORKER_NAME ?? 'yak',
     ...window,
