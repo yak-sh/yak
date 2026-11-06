@@ -10,7 +10,7 @@ import { composition, installViewport, sheet } from '@yaks/ui'
 import { h } from 'preact'
 import type { Connection } from './remote.ts'
 import { learn } from './types.ts'
-import type { Hosting } from './hosting.ts'
+import { box, type Hosting } from './hosting.ts'
 
 export let open = async (url: string, opts: {
   what?: string
@@ -31,6 +31,7 @@ export let open = async (url: string, opts: {
   learn((await vocab.json()).docs)
   let app = !!at.pathname.replace(/\/$/, '')
   ;(globalThis as { YAK_WEB?: Hosting }).YAK_WEB = {
+    origin: app ? at.origin : box.origin,
     page: '',
     api: at.pathname.replace(/\/$/, ''),
     apply: app ? `${at.pathname}/apply` : '/web/apply',

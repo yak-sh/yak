@@ -11,7 +11,7 @@ import {
   storageKey,
 } from './hosting.ts'
 import { base, config } from './live.ts'
-import { entityId, entityPath } from './url.ts'
+import { entityId, entityPath, entityUrl } from './url.ts'
 
 let host = globalThis as { YAK_WEB?: ReturnType<typeof hosting> }
 test('an app mount keeps page addresses and API transport apart', () => {
@@ -44,6 +44,20 @@ test('the box keeps its existing unmounted doors and public entity links', () =>
   assertEquals(pagePath('/T-1'), '/T-1')
   assertEquals(entityId('https://tasks.yak.sh/T-1'), 'T-1')
   assertEquals(door('freeze'), false)
+})
+
+test('a declared door without a location links entities at its origin', () => {
+  let prior = host.YAK_WEB
+  let at = (origin?: string) => {
+    host.YAK_WEB = { ...hosting(), origin }
+    return entityUrl('T-1')
+  }
+  try {
+    assertEquals(at(), 'https://tasks.yak.sh/T-1')
+    assertEquals(at('https://ada.yaks.app'), 'https://ada.yaks.app/T-1')
+  } finally {
+    host.YAK_WEB = prior
+  }
 })
 
 test('app and person browser intent is isolated without moving box keys', () => {

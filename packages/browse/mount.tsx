@@ -9,7 +9,7 @@ import { restore } from './components/nav.tsx'
 import { App } from './components/App.tsx'
 import { ux } from './components/registry.ts'
 import { contribute, type Facet } from './components/inspect.tsx'
-import type { Hosting } from './hosting.ts'
+import { box, type Hosting } from './hosting.ts'
 import { lone } from '@yaks/draft/input'
 import { Ux } from '@yaks/ux'
 
@@ -19,14 +19,7 @@ export let mount = async (
 ) => {
   if (home) {
     let g = globalThis as { YAK_WEB?: Hosting }
-    g.YAK_WEB = {
-      page: '',
-      api: '',
-      apply: '/web/apply',
-      owner: '/web/owner',
-      ...g.YAK_WEB,
-      home,
-    }
+    g.YAK_WEB = { ...(g.YAK_WEB ?? box), home }
   }
   await contribute(facets)
 

@@ -1,7 +1,10 @@
 // The page host declares its mount and transport. The box needs no declaration;
 // an app's web door names its own address and its store's existing API wire.
+// `origin` is the address handed to a person; a browser page without one
+// hands out its own location.
 export type Hosting = {
   home?: { title: string; query: string }
+  origin?: string
   page: string
   api: string
   apply: string
@@ -9,13 +12,14 @@ export type Hosting = {
   storage?: string
 }
 let declared = () => (globalThis as { YAK_WEB?: Hosting }).YAK_WEB
-export let hosting = (): Hosting =>
-  declared() ?? {
-    page: '',
-    api: '',
-    apply: '/web/apply',
-    owner: '/web/owner',
-  }
+export let box: Hosting = {
+  origin: 'https://tasks.yak.sh',
+  page: '',
+  api: '',
+  apply: '/web/apply',
+  owner: '/web/owner',
+}
+export let hosting = (): Hosting => declared() ?? box
 export let pagePath = (path: string): string => hosting().page + path
 export let localPath = (path: string): string => {
   let mount = hosting().page
@@ -25,7 +29,7 @@ export let localPath = (path: string): string => {
 }
 export let apiPath = (path: string): string => hosting().api + path
 export let webOrigin = (): string =>
-  declared() ? globalThis.location.origin : 'https://tasks.yak.sh'
+  hosting().origin ?? globalThis.location?.origin ?? box.origin!
 /** Host-only operations are never inferred from app data words. */
 export let door = (_name: 'freeze'): boolean => false
 
