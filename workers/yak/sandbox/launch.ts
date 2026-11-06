@@ -136,7 +136,7 @@ export let warmed = (
     lock: locked,
     has: exists,
     fill: async (path) => {
-      let { main } = await import(`file://${path}/packages/cli/yak.ts`)
+      let { main } = await import(`file://${path}/packages/cli/main.ts`)
       if (await main(['--help'])) {
         throw new Error('yak workspace: warm-up failed')
       }

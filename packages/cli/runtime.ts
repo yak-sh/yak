@@ -4,10 +4,13 @@ import {
   type ChildProcess,
   command as launchCommand,
 } from '@yaks/process/command'
-// A long-lived command pins its source tree. Deno's resolver is fixed when a
-// process starts, so deferred imports must never read a checkout that can land.
+// A command from a checkout pins its source tree. Deno's resolver is fixed
+// when a process starts, so deferred imports must never read a checkout that
+// can land. What a launcher runs is loaded with it (./yak.ts), under the
+// checkout's land lock.
 import { wind } from '@yaks/process/wind'
-import { hold } from '@yaks/git/land'
+import { hold } from '@yaks/git/hold'
+import { installed } from './dependencies.ts'
 import { registerHooks } from 'node:module'
 import { isAbsolute } from 'node:path'
 import { fileURLToPath, pathToFileURL } from 'node:url'
@@ -244,7 +247,7 @@ let build = async ({ root, commit, patch, files, target, hash }: {
     await disk.mkdir(to.slice(0, to.lastIndexOf('/')), { recursive: true })
     await disk.writeFile(to, bytes, { mode: mode ?? undefined })
   }
-  await (await import('./dependencies.ts')).installed(target)
+  await installed(target)
   await disk.writeTextFile(`${target}/.hash`, hash)
 }
 
@@ -320,9 +323,10 @@ export let inspector = (port: string): string => {
   return `--inspect=127.0.0.1:${Number(port)}`
 }
 
-/** Run a persistent CLI command from immutable sources, forwarding its terminal
- * and interrupts and waiting for the child to drain. JSR releases are already
- * immutable. Independent workers reuse the sources with their own lifetime. */
+/** Run a CLI command from immutable sources, forwarding its terminal, its
+ * interrupts and resizes, and waiting for the child to drain. JSR releases are
+ * already immutable. Independent workers reuse the sources with their own
+ * lifetime. */
 export let runtime = async (argv: string[]): Promise<number | undefined> => {
   if (!ROOT.href.startsWith('file:')) return
   let { fileURLToPath } = await import('node:url')
@@ -354,6 +358,16 @@ export let runtime = async (argv: string[]): Promise<number | undefined> => {
     return finished.promise
   }
   let release = wind.hold({ drain: stop, force: stop })
+  // A terminal's resize reaches its foreground group alone, which the
+  // detached child is not in: a terminal app redraws on it (@yaks/tui).
+  let resize = () => {
+    try {
+      child?.kill('SIGWINCH')
+    } catch (error) {
+      if (!(error instanceof disk.errors.NotFound)) throw error
+    }
+  }
+  system.addSignalListener('SIGWINCH', resize)
   let unlock = () => {}
   try {
     let { root: dir, commit, release: launched } = await snapshot(root)
@@ -408,5 +422,6 @@ export let runtime = async (argv: string[]): Promise<number | undefined> => {
     unlock()
     finished.resolve()
     release()
+    system.removeSignalListener('SIGWINCH', resize)
   }
 }

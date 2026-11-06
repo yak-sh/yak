@@ -1,5 +1,4 @@
 import * as system from '@yaks/process/system'
-import * as io from '@yaks/file/io'
 import { command as processCommand } from '@yaks/process/command'
 // Landing a branch: the plain Git operation, and the guard that keeps a rebase
 // from quietly reverting the base. It reads nothing from a graph — the
@@ -50,6 +49,7 @@ import { command as processCommand } from '@yaks/process/command'
 // neither runs tests nor knows of any. It runs `git` as a subprocess, so like
 // ./host.ts it is kept out of this package's portable entry point (./mod.ts).
 import { CallError } from '@yaks/tools/errors'
+import { hold } from './hold.ts'
 
 /** One run of git. `out` and `err` are RAW, exactly as Git wrote them — a
  * caller that prints Git's own output must not have it trimmed out from under
@@ -133,23 +133,6 @@ let lock = (cwd: string) =>
   )
 
 let lockfile = 'pnpm-lock.yaml'
-
-/** Hold the land lock of the checkout whose Git directory is `gitdir` until
- * the returned release: exclusive for the landing that writes the checkout,
- * shared for a reader that needs it whole. Git's own `index.lock` refuses a
- * second writer instead of waiting for it, so whatever writes the shared
- * checkout's index waits here first. */
-export let hold = async (
-  gitdir: string,
-  exclusive: boolean,
-): Promise<() => void> => {
-  let file = await io.open(`${gitdir}/land.lock`, {
-    create: true,
-    write: true,
-  })
-  await file.lock(exclusive)
-  return () => file.close()
-}
 
 /** A commit that landed, with its whole message. */
 export type Commit = { sha: string; message: string }

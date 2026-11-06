@@ -6,7 +6,7 @@ import { compose, facet } from './host.ts'
 import { read } from './config.ts'
 import { close } from './held.ts'
 import { cli as line } from './run.ts'
-import { TOOLS, YAK } from './yak.ts'
+import { TOOLS, YAK } from './main.ts'
 import { open } from '@yaks/sqlite/db'
 import { col, select, table } from '@yaks/sql'
 

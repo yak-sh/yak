@@ -7,6 +7,7 @@
     "./cites": "./cites.ts",
     "./host": "./host.ts",
     "./land": "./land.ts",
+    "./hold": "./hold.ts",
     "./tools": "./tools.ts",
     "./vocab": "./vocab.ts",
     "./service": "./service.ts",

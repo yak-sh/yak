@@ -25,7 +25,7 @@ globalThis.fetch = (...args: Parameters<typeof fetch>) => {
   cpuFetched = cputime()!
   return go(...args)
 }
-let yak = await import('../packages/cli/yak.ts')
+let yak = await import('../packages/cli/main.ts')
 let { cli } = await import('../packages/cli/run.ts')
 let { closeAccounts } = await import('../packages/cli/accounts.ts')
 let held = await import('../packages/cli/held.ts')

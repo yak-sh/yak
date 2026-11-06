@@ -22,7 +22,7 @@ let mark = (name: string) => {
   cpus[name] = cputime()!
 }
 
-let yak = await import('../packages/cli/yak.ts')
+let yak = await import('../packages/cli/main.ts')
 let subcommands = await import('../packages/cli/subcommands.ts')
 let held = await import('../packages/cli/held.ts')
 let { cli } = await import('../packages/cli/run.ts')

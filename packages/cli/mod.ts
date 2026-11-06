@@ -17,7 +17,7 @@
  * A program with subcommands of its own passes them in and runs the same
  * program: `exit(await main(args, commands))`, with `args` and `exit` from
  * `@yaks/process/system` and `main` from
- * `@yaks/cli/yak`.
+ * `@yaks/cli/main`.
  *
  * A program that is not `yak` at all calls `cli(commands, opts)` — its
  * subcommands, and the name it goes by. One whose commands run tools on a

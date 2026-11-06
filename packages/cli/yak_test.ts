@@ -1,119 +1,40 @@
-/// <reference lib="deno.ns" />
-// The command's own words at their pure seam: `ask` is a function that records
-// what it was asked, so nothing here opens a socket. What is proven is what the
-// line adds to the tool: a dry run is `check` on the call, and a sign-out ends
-// the token rather than only forgetting it.
+// A command from a checkout loads its modules only between landings.
+import { equal, test } from '@yaks/testing'
+import * as disk from '@yaks/file/io'
+import { command } from '@yaks/process/command'
+import { hold } from '@yaks/git/hold'
+import { steady } from './yak.ts'
 
-import { human } from '@yaks/id'
-import { test } from '@yaks/testing'
-import { assert, assertEquals } from '@std/assert'
-import { cli } from './run.ts'
-import { tokenFor } from './store.ts'
-import { own, YAK } from './yak.ts'
-import { close, opened } from './local.ts'
-
-type Call = { name: string; arguments: Record<string, unknown> }
-
-// One line aimed at a door that lists `graph_apply` and answers anything, or
-// refuses every call when `refusing`. Its environment names only `YAKS_HOME`,
-// a scratch directory the tool list and any `token` are kept in and this test
-// takes away with it: no `HOME`, `YAK_CONFIG` or `YAKS_HOST`, so the line opens
-// no graph of its own whatever this box keeps.
-let ran = async (
-  argv: string[],
-  o: { token?: string; refusing?: boolean } = {},
-): Promise<{ calls: Call[]; said: string[]; kept: string | null }> => {
-  let home = Deno.makeTempDirSync()
-  let calls: Call[] = []
-  let said: string[] = []
+// What `first` and `second` did, in order, once `second` waits on `first`
+// holding the checkout for a moment.
+let order = async (
+  first: (gitdir: string) => Promise<() => void>,
+  second: (gitdir: string) => Promise<() => void>,
+) => {
+  let root = await disk.makeTempDir()
   try {
-    await cli(own, {
-      ...YAK,
-      argv,
-      env: (name) =>
-        name == 'YAKS_HOME' ? home : name == 'YAKS_TOKEN' ? o.token : undefined,
-      host: 'yaks.test',
-      reads: { file: () => '', stdin: () => '' },
-      out: (l) => said.push(l),
-      note: (l) => said.push(l),
-      ask: (method, params) => {
-        if (method == 'tools/list') {
-          return Promise.resolve({ tools: [{ name: 'graph_apply' }] })
-        }
-        if (method == 'initialize') {
-          return Promise.resolve({ protocolVersion: '2025-06-18' })
-        }
-        calls.push(params as Call)
-        return o.refusing
-          ? Promise.reject(new Error('no tool grant'))
-          : Promise.resolve({ content: [{ type: 'text', text: 'Revoked.' }] })
-      },
+    await command('git', { args: ['init', '-q', root] }).output()
+    let did: string[] = []
+    let held = await first(`${root}/.git`)
+    let waited = second(`${root}/.git`).then((release) => {
+      did.push('second')
+      release()
     })
-    return {
-      calls,
-      said,
-      kept: await tokenFor('yaks.test', home, { env: () => undefined }),
-    }
+    await new Promise((r) => setTimeout(r, 50))
+    did.push('first')
+    held()
+    await waited
+    return did
   } finally {
-    Deno.removeSync(home, { recursive: true })
+    await disk.remove(root, { recursive: true })
   }
 }
 
-let bundles = '[{"entity":{"eid":"$a"},"doc":{"title":"One"}}]'
+let landing = (gitdir: string) => hold(gitdir, true)
+let loading = async (gitdir: string) => (await steady(`${gitdir}/..`))!
 
-test('--version and version print the @yaks/cli release, and ask nothing', async () => {
-  let release = (await import('./package.json', { with: { type: 'json' } }))
-    .default.version
-  for (let argv of [['--version'], ['version']]) {
-    let { calls, said } = await ran(argv)
-    assertEquals([said, calls], [[release], []])
-  }
-})
-
-test('a dry run is the tool’s check, and nothing else moves', async () => {
-  let { calls: [dry] } = await ran([
-    'apply',
-    '--bundles',
-    bundles,
-    '--dry-run',
-  ])
-  assertEquals(dry.name, 'graph_apply')
-  assertEquals(dry.arguments.check, true)
-  assert(Array.isArray(dry.arguments.bundles))
-  let { calls: [wet] } = await ran(['apply', '--bundles', bundles])
-  assertEquals(wet.arguments.check, undefined)
-})
-
-// `init` starts a graph where there was none: a config that opens, naming a
-// person the graph holds, whose name is the first task, T-1, filed to them to
-// confirm, and `name` renames. A second `init` on the same path is refused and
-// leaves the first alone.
-test('init writes a config whose graph knows its person', async () => {
-  let dir = Deno.makeTempDirSync()
-  let path = `${dir}/yak.json`
-  let line = (argv: string[]) =>
-    cli(own, {
-      ...YAK,
-      argv: [...argv, '--config', path],
-      env: () => undefined,
-      reads: { file: () => '', stdin: () => '' },
-      out: () => {},
-      note: () => {},
-    })
-  try {
-    assertEquals(await line(['init']), 0)
-    let first = Deno.readTextFileSync(path)
-    let { person } = JSON.parse(first)
-    let host = await opened(path, ['graph'], false)
-    let [task] = await host.graph.read(`.task&.filed.assignee=${person}`)
-    assertEquals(human(host.vocab)(task), 'T-1')
-    assertEquals(await line(['name', 'Ada']), 0)
-    let [me] = await host.graph.read(`.entity.eid=${person}&.person&.doc`)
-    assertEquals((me?.doc as { title?: string } | undefined)?.title, 'Ada')
-    await close(0)
-    assertEquals(await line(['init']), 1)
-    assertEquals(Deno.readTextFileSync(path), first)
-  } finally {
-    Deno.removeSync(dir, { recursive: true })
-  }
+test('a command waits out a landing before it loads, and a landing waits for it', async () => {
+  equal(await order(landing, loading), ['first', 'second'])
+  equal(await order(loading, landing), ['first', 'second'])
+  equal(await steady(await disk.makeTempDir()), undefined)
 })

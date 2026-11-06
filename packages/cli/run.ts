@@ -160,9 +160,6 @@ export type Opts = {
     args: string[],
     c: Ctx,
   ) => Command | undefined | Promise<Command | undefined>
-  /** A host may hand a selected command to another runtime before reading its
-   * inputs. Returning undefined runs it here; a number is its exit code. */
-  invoke?: (command: Command, c: Ctx) => Promise<number | undefined>
   /** How a JSON-RPC request is sent, where a program has a caller of its own
    * — a test passes a function that records what it was asked. */
   ask?: Rpc
@@ -629,8 +626,6 @@ export let cli = async (
       out(helpFor(found.verb, opts))
       return 0
     }
-    let invoked = await opts.invoke?.(found.verb, at)
-    if (invoked !== undefined) return invoked
     try {
       // A held list is trusted for what it holds, never for what it lacks: a
       // line its tool's cached schema refuses (an argument added since) is

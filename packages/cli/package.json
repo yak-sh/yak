@@ -5,6 +5,7 @@
   "exports": {
     ".": "./mod.ts",
     "./yak": "./yak.ts",
+    "./main": "./main.ts",
     "./config": "./config.ts",
     "./host": "./host.ts",
     "./install": "./install.ts",

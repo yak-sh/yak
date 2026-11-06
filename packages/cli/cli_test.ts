@@ -14,7 +14,7 @@ import { saidBy } from './roster.ts'
 import { toolHelp } from './show.ts'
 import { type Listed as Tool, spelling } from './tool.ts'
 import { cli, globals, via } from './run.ts'
-import { YAK } from './yak.ts'
+import { YAK } from './main.ts'
 
 let reads: Reads = { file: () => '', stdin: () => '' }
 

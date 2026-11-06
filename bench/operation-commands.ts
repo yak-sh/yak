@@ -65,7 +65,7 @@ export let inventory = async (
   },
 ) => {
   let said = await declarations(config, true)
-  let { TOOLS } = await import('../packages/cli/yak.ts')
+  let { TOOLS } = await import('../packages/cli/main.ts')
   let toolNames = said.tools.map((tool) => tool.name).sort()
   let measured = new Set(
     OPERATION_FAMILIES.map((f) => f.replaceAll('-', '_')),

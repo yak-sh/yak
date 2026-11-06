@@ -2,7 +2,7 @@
 // cannot be opened. Validation and session-start delegation still apply.
 import { equal, test } from '@yaks/testing'
 import { cli } from './run.ts'
-import { TOOLS, YAK } from './yak.ts'
+import { TOOLS, YAK } from './main.ts'
 
 let dir = Deno.makeTempDirSync({ prefix: 'T-127094-hook-' })
 let config = `${dir}/yak.json`
