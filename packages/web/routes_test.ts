@@ -5,6 +5,7 @@ import { ram } from '@yaks/ram'
 import { loadVocab } from '@yaks/vocab'
 import { equal, test } from '@yaks/testing'
 import { routes } from './routes.ts'
+import { OUTDATED } from './outlived.ts'
 
 // Every workspace package with a views facet, and the app that mounts them:
 // what any configured page can bundle.
@@ -35,4 +36,24 @@ test('the served bundle imports nothing a browser cannot load', async () => {
   } finally {
     stopping.abort()
   }
+})
+
+test('a page telling of its own outdated code is no break; any other is', async () => {
+  let vocab = loadVocab([])
+  let told: string[] = []
+  let report = routes({
+    vocab,
+    graph: graph({ storage: ram(vocab), vocab }),
+    report: (e) => void told.push((e as Error).message),
+  }).find((r) => r.path == '/api/report')!
+  let page = (message: string) =>
+    report.handle(
+      new Request('http://x/api/report', {
+        method: 'POST',
+        body: JSON.stringify({ message, mechanism: 'console' }),
+      }),
+    )
+  await page(`live client — Refused: ${OUTDATED.message}`)
+  await page('live client — Refused: something else')
+  equal(told, ['live client — Refused: something else'])
 })

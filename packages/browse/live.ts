@@ -72,7 +72,7 @@ import {
 import { type MemoryResolver, memoryResolver } from './resolver.ts'
 import { type LiveClient, liveClient, quiet } from './live_client.ts'
 import { said } from '@yaks/client/named'
-import { outlived, running } from '@yaks/web/outlived'
+import { OUTDATED, outlived, running } from '@yaks/web/outlived'
 import type { Socket } from '@yaks/sync'
 import { type Clock, system } from '@yaks/fp'
 import type { Bundle, Entity } from '@yaks/graph'
@@ -196,6 +196,7 @@ let makeClient = () => {
     // it hears a row it would refuse. A page reloads once: one that still
     // meets it moments after reloading reports it.
     report: (r) => {
+      if (r.refused?.error == OUTDATED.name) return reload(r)
       if (r.error instanceof Refused) {
         void outlived().then((old) => old ? reload(r) : said(r))
         return
@@ -2532,9 +2533,13 @@ let resolvingIds = new Map<string, Promise<Named | null>>() // token -> in fligh
 export let resolveGen = signal(0) // bumped when a resolve settles, to re-render
 
 // Onto the code served now, once: the moment it last reloaded for it is kept
-// for the tab, and a page that reloaded within the minute says the trouble.
+// for the tab, and a page that reloaded within the minute says the trouble,
+// once. Every refusal after the first is the same trouble.
 let RELOADED = 'tasks-reloaded'
+let reloading = false
 let reload = (r: Parameters<typeof said>[0]) => {
+  if (reloading) return
+  reloading = true
   let last = Number(sessionStorage.getItem(storageKey(RELOADED)) ?? 0)
   if (time.now() - last < 60_000) return said(r)
   sessionStorage.setItem(storageKey(RELOADED), String(time.now()))

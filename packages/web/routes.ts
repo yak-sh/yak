@@ -28,7 +28,7 @@ import { Refused } from '@yaks/graph/errors'
 import { addressId } from '@yaks/id'
 import type { Vocab } from '@yaks/vocab'
 import { type Body, type Kept, kept } from '@yaks/cli/page'
-import { RUNS } from './outlived.ts'
+import { OUTDATED, RUNS } from './outlived.ts'
 import { made } from './canvas.ts'
 import { page as html } from './page.ts'
 import { preload } from './preload.ts'
@@ -171,7 +171,7 @@ export let behind = (request: Request, now: string | undefined): boolean => {
 export let filter =
   (host: Hosting, options: Options = {}) => (request: Request): void => {
     if (!behind(request, bundle(host, options).tag())) return
-    throw new Refused('this page runs older code than the server: reload it')
+    throw Object.assign(new Refused(OUTDATED.message), { name: OUTDATED.name })
   }
 
 /** The page at every entity's address, and `/web/*`. */
@@ -260,9 +260,11 @@ export let routes = (host: Hosting, options: Options = {}): Route[] => {
       method: 'POST',
       path: '/api/report',
       // Whoever is looking at the page is the configured person, and the
-      // reporter caps what one page load sends.
+      // reporter caps what one page load sends. A page telling of its own
+      // outdated code (./outlived.ts `OUTDATED`) is no break.
       handle: async (request) => {
         let breaks = broken(await request.text())
+          .filter((b) => !b.message.includes(OUTDATED.message))
         let by = breaks.length ? await owner() : undefined
         let agent = request.headers.get('user-agent')
         for (let b of breaks) {

@@ -65,6 +65,15 @@ export let outlived: () => Promise<boolean> = page
  * yet. A page that names none predates the parameter. */
 export let RUNS = 'runs'
 
+/** What the server refuses such a socket with: every subscription it opens is
+ * answered with it, and a page reloads on it. A page whose code cannot tell
+ * it outlived a deploy reports it instead, which is expected, not a failure:
+ * the server drops that report (./routes.ts `/api/report`). */
+export let OUTDATED = {
+  name: 'Outdated',
+  message: 'this page runs older code than the server: reload it',
+}
+
 /** `url` naming the tag this page loaded with, for its socket. */
 export let running = (url: string): string => {
   let at = new URL(url)
