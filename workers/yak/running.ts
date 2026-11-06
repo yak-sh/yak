@@ -8,11 +8,11 @@
 // `doorOf` for a store, `fetchOf` for the Wire and the Builder), and an object
 // that a newer caller reaches restarts itself on the spot (`behind`); the
 // caller's retry of an evicted request (@yaks/durable-object `evicted`) then
-// meets the new code. That holds while the Worker's objects take up a deploy
-// at once (wrangler.toml `code_update_strategy`): one Cloudflare is still
-// deferring starts again on the code it had. A store still behind its caller
-// after its restart answers a refusal as a failure the caller sends again,
-// and reports it (`skewed`, T-140262).
+// meets the new code, unless Cloudflare is still deferring the deploy for it
+// (wrangler.toml `code_update_strategy`, up to five minutes), when it starts
+// again on the code it had. A store still behind its caller after its
+// restart answers a refusal as a failure the caller sends again, and reports
+// it (`skewed`, T-140262).
 //
 // The version is the runtime's own (`CF_VERSION_METADATA`): a fresh id and
 // upload time on every deploy, the same for the Worker and every object it

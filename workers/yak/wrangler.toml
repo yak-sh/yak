@@ -267,16 +267,14 @@ class_name = "Outlast"
 name = "LEXICON"
 class_name = "Lexicon"
 
-# Every object takes up a deploy at once (T-140262). Since 2026-10-30
-# Cloudflare defers a Durable Object's code update until it hibernates, or
-# for at most 300 s, and an object restarted in that time starts again on the
-# code it had. The directory never hibernates, so after 7a5b86f8e it ran the
-# deploy before for four minutes, restarted for the new one (running.ts
-# `behind`) only to come back on the old, and refused the new Worker's writes.
-# Immediate is how every deploy reached the objects before then, and what a
-# Worker-to-store call, its restart and its retry are built on (door.ts
-# `storeOf`). A store still behind its caller answers a refusal as a failure
-# its caller retries (running.ts `skewed`).
+# A busy object finishes what it is doing on the code it has, for up to five
+# minutes, before a deploy resets it: immediate (T-140262) reset every
+# Operator under its reply on each of the day's dozens of deploys, and cut
+# Jeff's off mid-sentence (T-145428). Five minutes covers a turn's replies and
+# the tools they call; a step that outlasts it is reset and taken up again
+# (build.ts `#work`). Meanwhile an object on the code before its caller's
+# answers a refusal its caller retries (running.ts `skewed`), and Worker and
+# object code stay compatible across one deploy.
 #
 # The pinned wrangler (4.111.0) predates `[durable_objects]
 # code_update_strategy` (4.150.0). With `containers` it uploads through the
@@ -284,7 +282,8 @@ class_name = "Lexicon"
 # 4.150.0 writes there itself; move it there, and drop `containers = []`,
 # once the pin passes 4.150.0.
 [unsafe.metadata.code_update_strategy]
-mode = "immediate"
+mode = "deferred"
+max_delay = 300
 
 [[migrations]]
 tag = "v1"
@@ -706,9 +705,10 @@ class_name = "Outlast"
 name = "LEXICON"
 class_name = "Lexicon"
 
-# As above: every object takes up a deploy at once.
+# As above: a busy object finishes on its code for up to five minutes.
 [env.staging.unsafe.metadata.code_update_strategy]
-mode = "immediate"
+mode = "deferred"
+max_delay = 300
 
 [[env.staging.migrations]]
 tag = "v1"

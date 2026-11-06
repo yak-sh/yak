@@ -226,6 +226,8 @@ export class Builder {
   // would outlive the loop it stands for and lock the space forever.
   #building = false
   #arming?: Promise<void>
+  // The Operator's pool, once this incarnation has made it (`#work`).
+  #fx?: { running(): unknown[] }
   // The browsers people lend the Operator, and the calls asked of them that
   // wait for an answer: in memory, as the step waiting on one is.
   #lent: Browsers
@@ -383,9 +385,12 @@ export class Builder {
    */
   async fetch(request: Request): Promise<Response> {
     // A caller on a later deploy restarts this object first, but only an idle
-    // one: a build in flight (a model call can take minutes) or a page's
-    // socket is never cut for it, and keeps the code it started on.
-    if (!this.#building && !this.#builds().length) {
+    // one: a build in flight (a model call can take minutes), an Operator's
+    // step under way or a page's socket is never cut for it, and keeps the
+    // code it started on.
+    if (
+      !this.#building && !this.#builds().length && !this.#fx?.running().length
+    ) {
       await behind(request.headers, this.#env.CF_VERSION_METADATA, this.#ctx)
     }
     let url = new URL(request.url)
@@ -558,6 +563,7 @@ export class Builder {
           caught(e, { request: 'operator effects', handler: where.handler }),
         nudge,
       })
+      this.#fx = store.fx
       let frames = this.#frames = operatorFrames(
         store,
         () => this.#ctx.getWebSockets(),
