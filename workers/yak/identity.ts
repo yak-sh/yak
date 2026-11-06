@@ -82,6 +82,7 @@ import {
   CimdFetchError,
   getOAuthApi,
   type ListOptions,
+  type OAuthHelpers,
   OAuthProvider,
   type OAuthProviderOptions,
 } from '@cloudflare/workers-oauth-provider'
@@ -883,8 +884,12 @@ let asked = async (req: Request, env: Env, q: string) => {
  * exchanges the new grant's code (`tokenExchangeCallback` below, connected.ts
  * `replace`), so a sign-in abandoned at the client leaves the old one working
  * (T-121901). */
-export let consent = (env: Env, ask: AuthRequest, person: string) =>
-  api(env).completeAuthorization({
+export let consent = (
+  oauth: Pick<OAuthHelpers, 'completeAuthorization'>,
+  ask: AuthRequest,
+  person: string,
+) =>
+  oauth.completeAuthorization({
     request: ask,
     userId: person,
     metadata: {},
@@ -904,7 +909,7 @@ let allow = async (
 ) => {
   let ask = await asked(req, env, q)
   if (ask instanceof Response) return ask
-  let { redirectTo } = await consent(env, ask, person)
+  let { redirectTo } = await consent(api(env), ask, person)
   step(env, 'connector_granted', req)
   return redirect(redirectTo, set)
 }

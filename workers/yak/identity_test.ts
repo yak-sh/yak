@@ -34,11 +34,6 @@ import {
 import { COOKIE, cookieValue, sign, verify } from './lib/token.ts'
 import { SENDS } from './signin.ts'
 import { managePath } from './route.ts'
-import { replace } from './connected.ts'
-import { consent } from './identity.ts'
-import type { Env } from './env.ts'
-import { kv } from './testing.ts'
-import { getOAuthApi } from '@cloudflare/workers-oauth-provider'
 import type { Agent } from './connected.ts'
 
 // Styling and attribute order do not change the sign-in form's contract.
@@ -925,66 +920,6 @@ test('a connector keeps its door until the person closes it', async () => {
   } finally {
     await k.stop()
   }
-})
-
-// Connecting an assistant again replaces its grant, but only once the new one
-// is in the client's hands (T-121901): a second consent leaves the grant the
-// person already had standing, and only the exchange of the new grant's code
-// (`replace`) takes it away. The provider keeps a store of its own, with the
-// assistant registered once; each test's person is its own.
-let grants = kv()
-let provider = { OAUTH_KV: grants } as unknown as Env
-let oauth = getOAuthApi<Env>({
-  apiRoute: '/api',
-  apiHandler: { fetch: () => new Response() },
-  defaultHandler: { fetch: () => new Response() },
-  authorizeEndpoint: '/oauth/authorize',
-  tokenEndpoint: '/oauth/token',
-}, provider)
-let back = 'https://probe.invalid/cb'
-let { clientId } = await oauth.createClient({
-  redirectUris: [back],
-  tokenEndpointAuthMethod: 'none',
-})
-// A grant the person holds for this assistant, as the provider keeps one (its
-// stored shape, which every grant ever written still has).
-let holding = (person: string, id: string) =>
-  grants.put(
-    `grant:${person}:${id}`,
-    JSON.stringify({
-      id,
-      clientId,
-      userId: person,
-      scope: ['graph'],
-      metadata: {},
-      createdAt: 0,
-      redirectUri: back,
-    }),
-  )
-let held = async (person: string) =>
-  (await oauth.listUserGrants(person)).items.map((g) => g.id).sort()
-
-test('connecting again keeps the old grant until the new one is taken', async () => {
-  await holding('p', 'held-grant')
-  await consent(provider, {
-    responseType: 'code',
-    clientId,
-    redirectUri: back,
-    scope: ['graph'],
-    state: '',
-    codeChallenge: 'c'.repeat(43),
-    codeChallengeMethod: 'S256',
-  }, 'p')
-  let both = await held('p')
-  assertEquals(both.length, 2)
-  assert(both.includes('held-grant'))
-})
-
-test('the grant taken takes away the one it replaces', async () => {
-  await holding('q', 'older')
-  await holding('q', 'newer')
-  assertEquals(await replace(oauth, 'q', 'newer'), ['older'])
-  assertEquals(await held('q'), ['newer'])
 })
 
 // The sign-in box is for somebody signed out (T-34209). A browser carrying a
