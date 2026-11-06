@@ -60,30 +60,36 @@ pool. Serve that role beside the box's other worker roles, for example
 `yak work --roles effects,@yaks/heal`.
 
 For a bug without a task, one apply writes the task, its `about` edge and, when
-the gates allow it, the fixer request. An existing task linked by an `about`
-edge is reused. A replay or another follower reads the task and its claim and
-writes nothing while its fixer has work outstanding. A pass reads its bugs' work
-together, so its reads do not grow with its bugs: one read finds every bug's
-`about` edges, one reads their tasks, and the first decision that needs fixer
-history reads it for every open bug. The home project and `nofix` are read once
-a pass, and the running fixers once until the pass requests a fixer. A bug whose
-work the pass writes reads its task and fixers again. The request is a
-`session{operator}` with `fixer{bug}`, an `entry{session}` with `content{body}`
-and `using{provider, model, effort}`, and a `claim{session}` on the task. The
-provider and model are the native harness's default (`defaultUsing` from
-`@yaks/harness/default`, the `using` on the harness's package row), read when
-the request is written, so the graph write that changes every native session's
-model changes the fixers' too; the request fails while no default is set. No
-process starts inside the follower; the native harness answers the request. The
-entry names the task and the fixer's last step: once the fix is live, resolve
-the bug with its explanation through `cli`'s `bug resolve`, which the tracker
-requires of every resolution ([tracker](../tracker/README.md#resolving-a-bug)).
-Its instructions name the authoritative tracker and require a `bug show`
-readback there. Both commands remove inherited `YAKS_HOST` defensively for bare
-`yak`, while preserving the configured `cli` and config; an explicit `--config`
-already selects its graph. Only the platform tracker uses `--source yaks.app`;
-resolving the same bug in another tracker does not complete the authoritative
-tracker's work.
+the gates allow it, the fixer request. A bug whose opening names the session
+whose work raised it (`during{session, entity}`,
+[tracker](../tracker/README.md)) goes to that work: its task, reopened, is the
+bug's work unless it was cancelled. While that session is at work (process up or
+turn going on), the task is claimed for it, so no fixer starts beside it, and
+the opening's knock goes to it, carrying the resolve step, instead of to the
+home project. Once it ends, its claim no longer holds the task, and a fixer may
+take the work. An existing task linked by an `about` edge is reused. A replay or
+another follower reads the task and its claim and writes nothing while its fixer
+has work outstanding. A pass reads its bugs' work together, so its reads do not
+grow with its bugs: one read finds every bug's `about` edges, one reads their
+tasks, and the first decision that needs fixer history reads it for every open
+bug. The home project and `nofix` are read once a pass, and the running fixers
+once until the pass requests a fixer. A bug whose work the pass writes reads its
+task and fixers again. The request is a `session{operator}` with `fixer{bug}`,
+an `entry{session}` with `content{body}` and `using{provider, model, effort}`,
+and a `claim{session}` on the task. The provider and model are the native
+harness's default (`defaultUsing` from `@yaks/harness/default`, the `using` on
+the harness's package row), read when the request is written, so the graph write
+that changes every native session's model changes the fixers' too; the request
+fails while no default is set. No process starts inside the follower; the native
+harness answers the request. The entry names the task and the fixer's last step:
+once the fix is live, resolve the bug with its explanation through `cli`'s
+`bug resolve`, which the tracker requires of every resolution
+([tracker](../tracker/README.md#resolving-a-bug)). Its instructions name the
+authoritative tracker and require a `bug show` readback there. Both commands
+remove inherited `YAKS_HOST` defensively for bare `yak`, while preserving the
+configured `cli` and config; an explicit `--config` already selects its graph.
+Only the platform tracker uses `--source yaks.app`; resolving the same bug in
+another tracker does not complete the authoritative tracker's work.
 
 Three gates precede the request; a gate refusing it still leaves the task filed:
 

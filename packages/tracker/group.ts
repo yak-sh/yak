@@ -80,6 +80,16 @@ let placed = (frames: Frame[]): Comp => {
     : {}
 }
 
+// The session whose work opened the bug, and the work it was doing: a new
+// bug's first occurrence, or the occurrence that reopened it. An opening that
+// names no session clears an earlier one's.
+let whose = (during: Comp, before: boolean): Record<string, unknown> =>
+  during.session
+    ? { during: { session: during.session, entity: during.entity ?? null } }
+    : before
+    ? { during: null }
+    : {}
+
 export let grouped = (
   row: Bundle,
   bug: Bundle | undefined,
@@ -147,6 +157,7 @@ export let grouped = (
         ),
       },
       ...marks,
+      ...!bug || back ? whose(context, !!bug) : {},
       ...back
         ? {
           resolved: null,

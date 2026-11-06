@@ -1832,3 +1832,57 @@ test('unmuting reopened regression starts a fresh fixer instead of continuing it
   ok(comp(task, 'claim').session != holder)
   f.close()
 })
+
+// A bug whose opening names the session whose work raised it and that work's
+// task, done: `up` says whether the session is still at work.
+let raised = async (up: boolean) => {
+  let f = await fixture()
+  let session = crypto.randomUUID(), work = crypto.randomUUID()
+  await put(f.g, [
+    {
+      entity: { eid: session },
+      session: up ? {} : { ended: true },
+      ...up ? { process: { pid: 1 } } : {},
+    },
+    {
+      entity: { eid: work },
+      task: {},
+      doc: { title: 'land the lens mover' },
+      completed: { at: '2026-10-02T00:00:00Z' },
+    },
+  ])
+  await put(f.tracker, [{
+    entity: { eid: bug },
+    during: { session, entity: work },
+  }])
+  f.commits.length = 0
+  await f.replay()
+  let [task] = await f.g.get([work])
+  let knocks = await rows(f.g, 'knock')
+  f.close()
+  return {
+    session,
+    task,
+    knocks,
+    fixers: await rows(f.g, 'fixer'),
+    derived: (await f.g.get([taskEid(bug)])).filter((row) => row.task),
+    about: (await f.g.get([edgeEid(work, 'about', bug)]))[0],
+  }
+}
+let atWork = await raised(true), ended = await raised(false)
+test('a bug goes to the session at work that raised it, on its task', () => {
+  let { session, task, knocks, fixers, derived, about } = atWork
+  ok(!task.completed && about && !derived.length)
+  equal(comp(task, 'claim').session, session)
+  equal(fixers, [])
+  equal(knocks.map((k) => comp(k, 'knock').target), [session])
+  let body = String(comp(knocks[0], 'doc').body)
+  ok(body.includes('TypeError: missing row') && body.includes('bug resolve'))
+})
+test('a bug whose session ended starts a fixer on the task it raised', () => {
+  let { task, knocks, fixers, derived, about } = ended
+  ok(!task.completed && about && !derived.length)
+  equal(fixers.length, 1)
+  equal(comp(task, 'claim').session, fixers[0].entity.eid)
+  equal(knocks.map((k) => comp(k, 'knock').target), [project])
+})

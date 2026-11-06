@@ -39,11 +39,11 @@ export type Tracker =
 // A tracker answers its open bugs, carrying what reconciling one reads, so
 // the answer costs what its open bugs cost. A resolved or archived bug is
 // asked for by id while work here is still open about it (`owed`).
-let followed = '.bug.status=open ?doc ?regressed ?taken'
+let followed = '.bug.status=open ?doc ?during ?regressed ?taken'
 let named = (eids: string[]) =>
   `.bug .entity.eid=${
     eids.join(',')
-  } ?doc ?regressed ?resolved ?archived ?taken`
+  } ?doc ?during ?regressed ?resolved ?archived ?taken`
 
 /** How long a tracker may take to answer a read by id, in ms. */
 const ASK = 30_000
@@ -76,7 +76,7 @@ let vocab = loadVocab([
   pick(kernelDoc, 'entity', 'resolved', 'archived'),
   provenanceDoc,
   pick(docDoc, 'doc'),
-  pick(trackerDoc, 'bug', 'regressed', 'taken', 'resolved'),
+  pick(trackerDoc, 'bug', 'during', 'regressed', 'taken', 'resolved'),
 ], [kernelKeywords])
 
 /** A headless tracker subscription. Closing it releases the whole client. */

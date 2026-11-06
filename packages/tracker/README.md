@@ -162,6 +162,11 @@ systemd unit's failure reported from outside the unit, regresses on its time
 alone. Earlier occurrences and occurrences at the resolution timestamp still
 count, but retain `resolved` and `notified` without adding `regressed`.
 
+A bug wears `during{session, entity}` from the occurrence that opened it, first
+or reopening, when that occurrence names a session: the session whose work
+raised it and the work it was doing, so the bug goes to them (@yaks/heal). An
+opening that names none clears it.
+
 ## Browsing
 
 The tracker writes the first error's exception type and value, or its

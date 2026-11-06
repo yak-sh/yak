@@ -96,6 +96,17 @@ export let active = (fixer: Bundle, now = Date.now()): boolean => {
   return !!fixer.process || young(fixer, STARTING, now)
 }
 
+/** Whether a session is still at work: its process is up, or its turn goes
+ * on. The follower takes no claim from one, and sends it the bugs its own
+ * work raised. Only terminal evidence (`exit`, `session.ended`, a stop or a
+ * settled, stopped or failed transcript without a process) says otherwise. */
+export let live = (session: Bundle): boolean =>
+  !session.exit && !comp(session, 'session')?.ended &&
+  (!!session.process || !session.stop &&
+      !['settled', 'stopped', 'failed'].includes(
+        str(comp(session, 'session')?.status),
+      ))
+
 /** What one pass's decisions share, each read once. */
 type Pass = {
   /** the home project */
@@ -187,13 +198,7 @@ export let fixing = (g: Graph, options: Options = {}) => {
     // sessions are held conservatively, including a managed start in flight.
     if (holder && holder != latest?.entity.eid) {
       let owner = await one(g, str(holder))
-      let status = str(comp(owner, 'session')?.status)
-      if (!owner) return []
-      if (
-        !owner.exit && (owner.process || !owner.stop &&
-            !comp(owner, 'session')?.ended &&
-            !['settled', 'stopped', 'failed'].includes(status))
-      ) return []
+      if (!owner || live(owner)) return []
     }
     if (history.some((f) => active(f))) return []
     let continuing = !reopen &&

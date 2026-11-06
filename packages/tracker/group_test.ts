@@ -341,3 +341,24 @@ test('reset groups show their wording and keep the deploy id on the occurrence',
   })
   equal(groups[0], groups[1])
 })
+
+test('a bug wears the session and work of the occurrence that opened it', async () => {
+  let g = fixture()
+  let session = crypto.randomUUID(), task = crypto.randomUUID()
+  let by = (id: string, commit: string, during: object) => {
+    let row = occurrence(id, commit)
+    return { ...row, during: { ...comp(row, 'during'), ...during } }
+  }
+  await put(g, by('1', a, { session, entity: task }))
+  await put(g, by('2', a, { session: crypto.randomUUID() }))
+  equal(comp((await bugs(g))[0], 'during'), { session, entity: task })
+  let [bug] = await bugs(g)
+  await g.apply([{
+    entity: bug.entity,
+    resolved: { at: '2026-10-02T00:00:02Z' },
+  }], {
+    trusted: true,
+  })
+  await put(g, occurrence('3', b))
+  equal((await bugs(g))[0].during, undefined)
+})

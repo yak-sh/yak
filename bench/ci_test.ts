@@ -1,6 +1,6 @@
 // The CI watcher (ci.ts) over runs on main: which red runs it reports.
 import { equal, test } from '@yaks/testing'
-import { predates, type Run, type Seen, watch } from './ci.ts'
+import { predates, reporting, type Run, type Seen, watch } from './ci.ts'
 
 let CONCLUSION: Record<string, string> = {
   ok: 'success',
@@ -28,8 +28,8 @@ let play = async (...ticks: string[][]) => {
       ['gate'],
       seen,
       () => Promise.resolve(all.toReversed()),
-      (error) => {
-        reported.push(Number(error.message.match(/run (\d+)/)![1]))
+      (_, run) => {
+        reported.push(run.databaseId)
         return Promise.resolve()
       },
     )
@@ -69,7 +69,7 @@ test('a success in one workflow does not suppress another workflow failing', asy
     ['gate', 'publish'],
     {},
     (workflow) => Promise.resolve(rows[workflow as keyof typeof rows]),
-    (_, workflow) => {
+    (workflow) => {
       reported.push(workflow)
       return Promise.resolve()
     },
@@ -87,8 +87,8 @@ test('a listing older than the newest run seen reports nothing', async () => {
     headSha: 'abc',
     url: '',
   })
-  let report = (error: Error) => {
-    reported.push(Number(error.message.match(/run (\d+)/)![1]))
+  let report = (_: string, run: Run) => {
+    reported.push(run.databaseId)
     return Promise.resolve()
   }
   let seen = await watch(
@@ -125,11 +125,11 @@ test('a failure on a commit before its resolution’s fix is dropped; one contai
           headSha,
           url: '',
         }))),
-      (_, __, run) => {
+      (_, run) => {
         reported.push(run.headSha)
         return Promise.resolve()
       },
-      predates(() => Promise.resolve(fix), has),
+      (_, run) => predates(() => Promise.resolve(fix), has)('gate', run),
     )
   await poll(['a'], 'b')
   equal(reported, [])
@@ -138,4 +138,67 @@ test('a failure on a commit before its resolution’s fix is dropped; one contai
   reported = []
   await poll(['a'])
   equal(reported, ['a'])
+})
+
+// Main: green at g, then commits a (w/) and b (p/); the gate goes red at b,
+// and again at c, with a test in w/ failing. Commit a was landed by session s
+// for task t.
+let red = await (async () => {
+  let run = (id: number, conclusion: string, headSha: string): Run => ({
+    databaseId: id,
+    conclusion,
+    displayTitle: headSha,
+    headSha,
+    url: `run/${id}`,
+  })
+  let sent: [string, Record<string, unknown>][] = []
+  let logs: number[] = []
+  let { report, explained } = reporting({
+    log: (r) => {
+      logs.push(r.databaseId)
+      return Promise.resolve(
+        'gate\ttests\tT the lens test => ./w/lens_test.ts:3:1\n',
+      )
+    },
+    history: (from, to) =>
+      Promise.resolve(
+        from == 'g' && to == 'b'
+          ? '\0b\tTouch p\n\np/y.ts\n\0a\tTouch w\n\nw/x.ts\n'
+          : '',
+      ),
+    landed: (commit) =>
+      Promise.resolve(commit == 'a' ? { session: 's', task: 't' } : {}),
+    fixOf: () => Promise.resolve(undefined),
+    has: () => Promise.resolve(true),
+    send: (error, context) => {
+      sent.push([error.message, context])
+      return Promise.resolve()
+    },
+  })
+  await watch(
+    ['gate'],
+    {},
+    () =>
+      Promise.resolve([
+        run(3, 'failure', 'c'),
+        run(2, 'failure', 'b'),
+        run(1, 'success', 'g'),
+      ]),
+    report,
+    explained,
+  )
+  return { sent, logs }
+})()
+test('a red run names what failed, and the commit, session and task that broke it', () => {
+  equal(red.sent.map(([message]) => message), [
+    'gate failed on main: the lens test (w/lens_test.ts); since a (Touch w) run/2',
+    'gate failed on main: the lens test (w/lens_test.ts); since a (Touch w) run/3',
+  ])
+  equal(red.sent[1][1], {
+    fault: 'ci failed: gate since a',
+    commit: 'c',
+    during: { kind: 'ci', session: 's', entity: 't' },
+    tags: { job: 'ci', workflow: 'gate', since: 'a' },
+  })
+  equal(red.logs, [2, 3])
 })

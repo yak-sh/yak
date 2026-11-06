@@ -1,9 +1,10 @@
 #!/bin/sh
 # Report a broken CI run on main to the tracker (bench/ci.ts). Cron runs it from
-# the main checkout:
+# the main checkout every minute, so a red gate reaches its session within one;
+# a pass ends before the next starts:
 #
-#   */10 * * * *  bin/ci-monitor >> ~/.tasks-ci.log 2>&1
+#   * * * * *  bin/ci-monitor >> ~/.tasks-ci.log 2>&1
 set -u
 export PATH="$HOME/.deno/bin:/home/linuxbrew/.linuxbrew/bin:/usr/local/bin:/usr/bin:/bin"
 cd "$(dirname "$0")/.." || exit 1
-exec timeout -k 10 300 deno run -A bench/ci.ts "$@"
+exec timeout -k 5 50 deno run -A bench/ci.ts "$@"
