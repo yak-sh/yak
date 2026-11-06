@@ -33,7 +33,7 @@ import { bound, type Env } from './env.ts'
 import { directory } from './directory.ts'
 import * as directoryPart from './directory.ts'
 import type { Spend } from './sandbox.ts'
-import type { Caller, Who } from './session.ts'
+import { type Caller, titling, vouched, type Who } from './session.ts'
 import type { Clock } from './timing.ts'
 import { wrote } from './lib/hops.ts'
 
@@ -253,6 +253,33 @@ export let text = (v: unknown, what: string) => {
   }
   return v
 }
+
+// A file's bytes, from either encoding of them (T-34263): `content` is the
+// text an app is almost always made of, and `base64` is what a file that is
+// not text arrives as — the `.wasm` an app's worker imports, a picture. One
+// of the two; naming neither is the `content` refusal, since text is what a
+// model reaching for this tool means.
+export let bytesOf = (f: Record<string, unknown>, at = '') => {
+  if (f.base64 == null) {
+    return new TextEncoder().encode(text(f.content, `${at}content`))
+  }
+  // Wrapped at some width is still base64: a model that pretty-prints a long
+  // string has not made a mistake, and `atob` would refuse the newlines.
+  let sent = text(f.base64, `${at}base64`).replace(/\s+/g, '')
+  try {
+    return Uint8Array.from(atob(sent), (c) => c.charCodeAt(0))
+  } catch {
+    throw refuse('arguments', `${at}base64: not base64`)
+  }
+}
+
+// The head a write into an app's store wears when the platform makes it for
+// somebody: the caller vouched for, and their name, so the rows carry their
+// byline instead of the platform's (session.ts `titling`).
+export let byCaller = async (ctx: Ctx, who: Who) => ({
+  ...vouched(who),
+  ...await titling(ctx.dir, who.person),
+})
 
 // The space the caller means when they name none: the one that is theirs.
 // Signing in mints it, so this is one lookup and never a question; a person

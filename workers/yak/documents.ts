@@ -20,7 +20,8 @@ export type Markdown = (
   file: { name: string; blob: Blob },
 ) => Promise<Conversion>
 /** The documents read as their text, by extension. A web page is one too: an
- * article a worker fetched and kept is read the way a Word file is. */
+ * article a worker fetched and kept is read the way a Word file is. Plain text
+ * and Markdown are their own text. */
 export let DOCUMENTS = [
   'pdf',
   'docx',
@@ -34,11 +35,15 @@ export let DOCUMENTS = [
   'numbers',
   'html',
   'htm',
+  'txt',
+  'md',
 ]
 let documentName = new RegExp(`\\.(${DOCUMENTS.join('|')})$`, 'i')
 export let supported = (name: string, mime: string) =>
   mime == 'application/pdf' || mime.startsWith('text/html') ||
-  documentName.test(name)
+  plain(mime) || documentName.test(name)
+// What is read as it is, with no conversion.
+let plain = (mime = '') => /^text\/(plain|markdown)\b/.test(mime)
 export let isPdf = (name: string, mime: string) =>
   mime == 'application/pdf' || /\.pdf$/i.test(name)
 
@@ -245,6 +250,9 @@ export let extractor = (
           : undefined,
       ),
     markdown: async () => {
+      if (plain(mime) || /\.(txt|md)$/i.test(name)) {
+        return new TextDecoder().decode(body)
+      }
       if (!env.AI?.toMarkdown) throw new Error('No document converter bound')
       let converted = await env.AI.toMarkdown({
         name: name || 'document',

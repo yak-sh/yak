@@ -1,6 +1,7 @@
 import { groupBy } from '@yaks/fp'
 import { tell } from './operator-updates.ts'
 import { operatorTools } from './operator-tools.ts'
+import { libraryTools } from './library-tools.ts'
 import { numberTools } from './numbers.ts'
 import { ownedPrefix, rootedPrefix } from './file-root.ts'
 // The connector's platform tools (D-32318 §Code, build, deploy): the least
@@ -314,6 +315,8 @@ import {
   APP,
   type Args,
   asCaller,
+  byCaller,
+  bytesOf,
   type Ctx,
   inApp,
   inBin,
@@ -470,25 +473,6 @@ let list = (v: unknown, what: string) =>
 
 let decoder = new TextDecoder()
 let decoded = (bytes?: Uint8Array) => decoder.decode(bytes)
-
-// A file's bytes, from either encoding of them (T-34263): `content` is the
-// text an app is almost always made of, and `base64` is what a file that is
-// not text arrives as — the `.wasm` an app's worker imports, a picture. One
-// of the two; naming neither is the `content` refusal, since text is what a
-// model reaching for this tool means.
-let bytesOf = (f: Record<string, unknown>, at = '') => {
-  if (f.base64 == null) {
-    return new TextEncoder().encode(text(f.content, `${at}content`))
-  }
-  // Wrapped at some width is still base64: a model that pretty-prints a long
-  // string has not made a mistake, and `atob` would refuse the newlines.
-  let sent = text(f.base64, `${at}base64`).replace(/\s+/g, '')
-  try {
-    return Uint8Array.from(atob(sent), (c) => c.charCodeAt(0))
-  } catch {
-    throw refuse('arguments', `${at}base64: not base64`)
-  }
-}
 
 // The many-file form of a write: `files: [{path, content}]`, so an app is one
 // call and not one call per file (C-32624 item 5). Each refusal says which
@@ -915,14 +899,6 @@ let sheetOf = async (
   }
   return { as, props: words[as], map }
 }
-
-// The head a write into an app's store wears when the platform makes it for
-// somebody: the caller vouched for, and their name, so the rows carry their
-// byline instead of the platform's (session.ts `titling`).
-let byCaller = async (ctx: Ctx, who: Who) => ({
-  ...vouched(who),
-  ...await titling(ctx.dir, who.person),
-})
 
 // Whether a manifest can land on this app at all, asked before anything moves
 // (app_update). The same two rules a deploy holds it to, both of which throw
@@ -6694,6 +6670,7 @@ export let TOOLS: Tool[] = [
   ...previewTools,
   ...OURS.map(worded),
   ...operatorTools.map(worded),
+  ...libraryTools.map(worded),
   ...viewsTools,
   ...connectionTools,
   ...numberTools.map(worded),

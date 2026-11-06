@@ -48,7 +48,7 @@ import type { Bundle } from '@yaks/graph'
 import { author, inbound, messageId, verdict } from '@yaks/mail'
 import { automated } from '@yaks/mail/answers'
 import { writes } from '@yaks/member'
-import { acceptsOf, filed, Untaken } from './apps.ts'
+import { acceptsOf, filed, Untaken } from './uploads.ts'
 import * as dirPart from './directory.ts'
 import {
   type App,

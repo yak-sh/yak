@@ -68,6 +68,8 @@ export let kernelDoc: VocabDoc = {
         artifact: ref('keep'),
         call: text,
         revised_prompt: text,
+        // The web address the file was fetched from (library-tools.ts).
+        source: text,
       },
     },
     // Deleting an upload's content row deletes its bytes too (app-effects.ts),

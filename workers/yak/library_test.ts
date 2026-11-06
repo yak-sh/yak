@@ -128,13 +128,13 @@ test('a library app keeps a web article and answers a visitor citing it', async 
       assert(!converted[0].includes(gone), `${gone} was kept`)
     }
     let editor = client(k, host, 'library', who.cookie)
-    let [shelf] = await editor.get('.attachment&?document_text&?source') as {
+    let [shelf] = await editor.get('.attachment&?document_text') as {
       entity: { eid: string }
-      source?: { url: string }
+      attachment: { source?: string }
       document_text?: { pages: number }
     }[]
     assertEquals(shelf.entity.eid, article.eid)
-    assertEquals(shelf.source?.url, ARTICLE)
+    assertEquals(shelf.attachment.source, ARTICLE)
     assertEquals(shelf.document_text?.pages, 1)
 
     // A stranger asks, and the answer cites the article by its title.
@@ -151,13 +151,8 @@ test('a library app keeps a web article and answers a visitor citing it', async 
     assertEquals(cited.document.eid, article.eid)
     assertEquals(cited.document.name, 'Shorter Catechism, Q1')
     assertEquals(cited.location, 'Document')
-
-    // The page's query for a citation's original address.
-    let stranger = client(k, host, 'library')
-    let [from] = await stranger.get('.source&.entity.eid=' + article.eid) as {
-      source?: { url: string }
-    }[]
-    assertEquals(from.source?.url, ARTICLE)
+    // And links to its original address.
+    assertEquals(cited.document.source, ARTICLE)
 
     // A visitor uploads nothing, through the blob door or the worker.
     let upload = await k.at(host, '/library/api/blob', {

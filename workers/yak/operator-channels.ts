@@ -98,6 +98,10 @@ export let authenticated = (header: string | null, from: string) => {
     !!dmarc && aligned?.toLowerCase() == domain
 }
 
+/** The id a file attached to the Operator goes by: the digest its key ends
+ * in, which library_add reads it by (library-tools.ts). */
+export let attachmentId = (file: File) => file.key.split('/').at(-1)!
+
 export let keepFile = async (
   env: Env,
   space: Space,
@@ -518,7 +522,7 @@ export let attachmentTools = (env: Env) => (ctx: Ctx, files: File[]): Tool[] =>
           appStore(env.STORE, space, app, env),
           vouched({ ...who, actor: space.eid, via: context!.session }),
         )
-        let { acceptsOf, filed } = await import('./apps.ts')
+        let { acceptsOf, filed } = await import('./uploads.ts')
         let saved = await filed(
           env,
           space,
@@ -574,9 +578,8 @@ export let handleChannels = (
           )
         }
         let extracted = part<Comp>(row, 'content')?.body
-        let attachments: { name: string; text: string }[] = extracted
-          ? JSON.parse(String(extracted))
-          : []
+        let attachments: { name: string; attachment?: string; text: string }[] =
+          extracted ? JSON.parse(String(extracted)) : []
         // What the model reads as it is goes to it as it is (operator.ts
         // `shown`); the rest is read as its text.
         if (!extracted) {
@@ -584,6 +587,7 @@ export let handleChannels = (
             if (asIs(operator.reads, file)) continue
             attachments.push({
               name: file.name,
+              attachment: attachmentId(file),
               text: await fileText(env, space, file),
             })
           }

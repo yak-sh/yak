@@ -1169,6 +1169,63 @@ operator_read:
     lines, a conversation's newest 64, or omit it for the twenty latest tasks and
     conversations.
     Model instruction snapshots are omitted unless context is true.
+library_add:
+  title: Add documents to an app's library
+  step:
+    doing: 'Adding documents to %{app}…'
+    done: 'Added documents to %{app}'
+  description: >-
+    Add documents to an app's library, its uploaded files whose text is
+    extracted, searched and cited by ./api/documents/search and
+    ./api/documents/ask (https://yaks.app/docs/library). documents: up to 20,
+    each one of url (a PDF, Word, OpenDocument or spreadsheet file, a web
+    page, or plain text, fetched from the web), attachment (the id of a file
+    the person attached in their conversation with you, which their message
+    names as "attachment <id>"), or base64 with name (the file's bytes). A
+    fetched document keeps its address as attachment.source, and a web page
+    is kept as its article alone, without scripts, menus, headers or
+    footers, and named by its title. name sets the name an answer cites;
+    replaces names the eid of a document this one takes the place of, which
+    is removed once this one is added. The upload is the caller's, held to
+    the app's "blob" floor and limits like a page's POST ./api/blob, and a
+    document is at most 32 MB. A site that refuses, whose robots.txt does not
+    let yaks.app read the address, or that asks not to be copied (noarchive)
+    is skipped and said, never worked around; check a site's terms before
+    copying from it. Answers each document added, with its eid, and each
+    skipped, with why. Extraction runs after the call: library_list says when
+    each document is searchable, or why it could not be read.
+library_list:
+  title: List an app's library
+  step:
+    doing: 'Looking through the documents of %{app}…'
+    done: 'Looked through the documents of %{app}'
+  description: >-
+    List the documents in an app's library: each one's eid, name, type, the
+    web address it came from (attachment.source), and its extraction:
+    reading, searchable with its page count, or failed with the reason it
+    could not be read. Documents are the uploads the library reads (PDF,
+    Word, OpenDocument, spreadsheets, CSV, web pages, plain text); other
+    uploads, such as photos, are not listed.
+library_read:
+  title: Read a document from an app's library
+  step:
+    doing: 'Reading a document of %{app}…'
+    done: 'Read a document of %{app}'
+  description: >-
+    Read the text extracted from one document in an app's library, page by
+    page, as search reads it: document is its eid from library_list. Answers
+    up to about 60,000 characters from page (1 if left out), and the page to
+    read on from when there is more.
+library_remove:
+  title: Remove documents from an app's library
+  step:
+    doing: 'Removing documents from %{app}…'
+    done: 'Removed documents from %{app}'
+  description: >-
+    Remove documents from an app's library by their eids, from library_list:
+    each one's file, its row and its extracted text are deleted, so search
+    and answers no longer cite it. To replace a document with a newer copy,
+    library_add with replaces instead.
 operator_retry:
   title: Retry an operator request
   description: >-

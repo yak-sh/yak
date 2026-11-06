@@ -72,6 +72,7 @@ import {
 import { drain, type operatorStore } from './operator-store.ts'
 import {
   asIs,
+  attachmentId,
   type File,
   mailSend,
   rootOf,
@@ -776,7 +777,7 @@ export let operating = (
               kind: i.mime == 'application/pdf' ? 'document' : 'image',
               bytes: read.get(i.key)!,
               mediaType: i.mime,
-              label: 'Attached: ' + i.name,
+              label: `Attached: ${i.name} (attachment ${attachmentId(i)})`,
             }
             : i
         ),

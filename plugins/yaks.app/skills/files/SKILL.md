@@ -445,8 +445,9 @@ the bytes are an image that declares its size; otherwise both keys are absent.
 ## Searching documents
 
 Uploading a PDF, Word `.docx`, spreadsheet (`.xlsx`, `.xls`, `.xlsm`, `.xlsb`,
-`.ods`, `.numbers`), `.odt`, `.csv` or web page (`.html`, `.htm`, or the type
-`text/html`) also extracts its text in the background. Use the same
+`.ods`, `.numbers`), `.odt`, `.csv`, web page (`.html`, `.htm`, or the type
+`text/html`) or plain text (`.txt`, `.md`, or the types `text/plain` and
+`text/markdown`) also extracts its text in the background. Use the same
 `upload(file)` call above. The original stays downloadable; the app does not
 need a conversion service or another search index.
 
@@ -461,9 +462,11 @@ PDFs are read page by page. Pages containing images are rendered in full and
 transcribed, so scanned pages, rotated scans and pages with text over a scan are
 searchable too. The renderer preserves the PDF's page numbers. Office conversion
 produces one searchable document section, labeled `Document`; it does not invent
-printed page numbers for reflowable Word files, sheets or web pages. A web
-article a worker fetched is kept this way: Document Q&A
-(<https://yaks.app/docs/library.md>) has the worker route.
+printed page numbers for reflowable Word files, sheets or web pages. Plain text
+is its own text, read without a conversion. A web article a worker fetched is
+kept this way: Document Q&A (<https://yaks.app/docs/library.md>) has the worker
+route, and the connector's `library_add` adds documents from web addresses, from
+files attached in chat, or from bytes sent along.
 
 Extraction writes `document_page{document, blob, page, location, text}` rows.
 `text` is indexed by the app's existing full-text and meaning search. The

@@ -4,6 +4,7 @@
 import { test } from '@yaks/testing'
 import { assertEquals } from '@std/assert'
 import * as apps from './apps.ts'
+import { filed } from './uploads.ts'
 import * as files from './files.ts'
 import { storage } from '@yaks/durable-object'
 import { Store } from './graph.ts'
@@ -121,7 +122,7 @@ test('an anonymous blob read revives a removed immutable representation', async 
       : get(id)
   let graph = metaOf(store)
   let body = new Uint8Array([73, 68, 51, 4, 0, 0, 0, 0, 0, 0, 1, 2, 3])
-  let file = await apps.filed(
+  let file = await filed(
     env,
     space,
     app,
@@ -160,7 +161,7 @@ test('a dropped representation write never redirects to an absent file', async (
   let { space, app } = await seeded(env, 'open')
   let graph = metaOf(appStore(env.STORE, space, app, env))
   let bytes = new Uint8Array([73, 68, 51, 4, 0, 0, 0, 0, 0, 0, 1, 2, 3])
-  let file = await apps.filed(
+  let file = await filed(
     env,
     space,
     app,

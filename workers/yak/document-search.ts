@@ -15,7 +15,8 @@ import { caught } from './defects.ts'
 
 type Common = { eid: string; text: string; score?: number }
 export type PageHit = Common & {
-  document: { eid: string; name: string; url: string }
+  // `url` is the stored copy; `source`, the web address it was fetched from.
+  document: { eid: string; name: string; url: string; source?: string }
   page: number
   location: string
 }
@@ -110,6 +111,7 @@ export let hits = async (
         name: String(file.name || 'Document'),
         url: './api/blob/' + file.blob +
           (page.location == 'Document' ? '' : '#page=' + page.page),
+        ...file.source ? { source: String(file.source) } : {},
       },
       page: Number(page.page),
       location: String(page.location),
