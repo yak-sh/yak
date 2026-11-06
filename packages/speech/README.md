@@ -18,7 +18,9 @@ argument; nothing here reads the environment.
   it streams (`body`), its media type, and what it cost in `dollars`. `format`
   is `{encoding: 'mp3'}` (the default) or raw samples,
   `{encoding: 'mulaw' | 'linear16', rate}`, which come without a container,
-  ready for a phone call.
+  ready for a phone call. μ-law comes without the silence a provider pads a clip
+  with, but 50 ms at each end (`trimmed`), so sentences said one clip at a time
+  follow each other as closely at any speed.
 - `speed` is a multiple of the provider's own pace (1 by default), held within
   the `speeds` each provider declares for speaking and for talking
   (`paced(speeds, speed)`): Aura-2 0.7 to 1.5, gpt-4o-mini-tts 0.25 to 4, the
@@ -49,7 +51,8 @@ argument; nothing here reads the environment.
   undefined where the provider does not say.
 - `spoken(provider, text)` and `heard(provider, seconds)` price speech before it
   is asked for.
-- `mulawed(from, to)` turns a stream of 16-bit PCM into μ-law at a lower rate;
+- `mulawed(from, to)` turns a stream of 16-bit PCM into μ-law at a lower rate,
+  and `trimmed(rate, keep?)` takes the silence off both ends of a μ-law stream;
   `base64` and `unbase64` carry audio in JSON.
 
 A refusal rejects with `SpeechError`, carrying the provider's HTTP `status` and

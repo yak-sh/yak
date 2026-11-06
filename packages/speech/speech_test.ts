@@ -204,6 +204,27 @@ test('OpenAI speaks PCM made into a call’s μ-law, at its own price', async ()
   equal([audio.length, said.type, said.dollars], [800, 'audio/basic', 0.015])
 })
 
+test('a μ-law clip comes without the silence its provider padded it with', async () => {
+  // OpenAI's 24 kHz PCM: a tenth of a second of silence, a sound with a
+  // pause inside, and a quarter second of silence after.
+  let pcm = new Int16Array([
+    ...Array(2400).fill(0),
+    ...Array(300).fill(8000),
+    ...Array(300).fill(0),
+    ...Array(300).fill(8000),
+    ...Array(6000).fill(0),
+  ])
+  let o = answering(() => new Response(new Uint8Array(pcm.buffer)), OPENAI)
+  let said = await speak({
+    ...o,
+    text: 'Hi.',
+    format: { encoding: 'mulaw', rate: 8000 },
+  })
+  let audio = new Uint8Array(await new Response(said.body).arrayBuffer())
+  // At the call's 8 kHz, 50 ms kept at each end: 400 + 100 + 100 + 100 + 400.
+  equal(audio.length, 1100)
+})
+
 // A talk stream on OpenAI's realtime model, the caller's audio sent and the
 // model's events fired back.
 let talking = (

@@ -6,8 +6,9 @@
 
 export { DEEPGRAM } from './deepgram.ts'
 export { OPENAI } from './openai.ts'
-export { base64, mulawed, mulawOf, unbase64 } from './audio.ts'
+export { base64, mulawed, mulawOf, trimmed, unbase64 } from './audio.ts'
 export { query } from './query.ts'
+import { trimmed } from './audio.ts'
 
 /** How audio is encoded: an MP3, or raw samples at a rate (`mulaw` is the
  * telephone's 8 kHz μ-law; `linear16` is 16-bit PCM). */
@@ -290,8 +291,13 @@ export let speak = async (
     throw new SpeechError(`${o.provider.name} returned no audio`, 502)
   }
   let audio = speak.audio?.(format)
+  let body = audio ? response.body.pipeThrough(audio) : response.body
   return {
-    body: audio ? response.body.pipeThrough(audio) : response.body,
+    // A call's sentences are each a clip: none pauses for the provider's
+    // padding around it (`trimmed`).
+    body: format.encoding == 'mulaw'
+      ? body.pipeThrough(trimmed(format.rate))
+      : body,
     type: MEDIA[format.encoding],
     dollars: spoken(o.provider, o.text),
   }

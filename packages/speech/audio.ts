@@ -1,5 +1,6 @@
 // Raw audio between formats: 16-bit PCM at one rate as μ-law at a lower one,
-// for a provider whose voice speaks PCM to a telephone line.
+// for a provider whose voice speaks PCM to a telephone line, and μ-law with
+// the silence around its sound trimmed.
 // https://www.itu.int/rec/T-REC-G.711
 
 let BIAS = 0x84, CLIP = 32635
@@ -57,6 +58,58 @@ export let mulawed = (
       }
       held = bytes.slice(whole * 2 * step)
       if (whole) out.enqueue(samples)
+    },
+  })
+}
+
+// A μ-law sample this close to silence, below about -48 dBFS: exponent 0.
+let quiet = (b: number) => (b & 0x7f) >= 0x70
+
+/**
+ * A stream of μ-law at `rate` Hz without the silence before its first sound
+ * and after its last, but `keep` seconds of each. A provider pads every
+ * clip it speaks, and speaking faster never shortens the padding, so a call
+ * said a sentence at a time would pause the same between sentences at any
+ * speed. Silence between sounds passes as it was, once the next sound comes.
+ *
+ * ```ts
+ * import { equal } from '@yaks/testing'
+ * import { trimmed } from '@yaks/speech'
+ * let clip = new Uint8Array([0xff, 0xff, 0xff, 0x10, 0xff, 0x10, 0xff, 0xff])
+ * let out = new Uint8Array(
+ *   await new Response(
+ *     new Response(clip).body!.pipeThrough(trimmed(1, 1)),
+ *   ).arrayBuffer(),
+ * )
+ * equal([...out], [0xff, 0x10, 0xff, 0x10, 0xff])
+ * ```
+ */
+export let trimmed = (
+  rate: number,
+  keep = 0.05,
+): TransformStream<Uint8Array, Uint8Array> => {
+  let margin = Math.round(rate * keep)
+  let started = false
+  // The quiet run since the last sound, held until a sound follows it.
+  let held: number[] = []
+  return new TransformStream({
+    transform(chunk, out) {
+      let sent: number[] = []
+      for (let b of chunk) {
+        if (quiet(b)) {
+          held.push(b)
+          continue
+        }
+        sent.push(...(started ? held : held.slice(-margin)), b)
+        held = []
+        started = true
+      }
+      if (sent.length) out.enqueue(new Uint8Array(sent))
+    },
+    flush(out) {
+      if (started && held.length) {
+        out.enqueue(new Uint8Array(held.slice(0, margin)))
+      }
     },
   })
 }
