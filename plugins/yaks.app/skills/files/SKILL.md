@@ -371,7 +371,7 @@ space's apps, the Operator's sidebar) and on a home screen. It is the app's
 `icon.png`, served once the app is deployed. Until the app has one, that address
 serves the platform's default yak.
 
-A logo that is already a PNG is fetched there:
+A PNG on the web is fetched there:
 
     app_files(app, op: 'fetch', path: 'icon.png', url: 'https://example.com/logo.png')
 

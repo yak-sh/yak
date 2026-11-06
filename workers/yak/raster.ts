@@ -21,7 +21,7 @@ export let iconic: Declared = {
   key: 'icon',
   title: "An app's icon",
   body:
-    "Each app's icon is its icon.png: the picture beside its name in the person's list of apps, in the sidebar of your page, and on a home screen. An app with no icon.png and no icon.svg wears the platform's default yak, so a request about an app's logo or icon in yaks.app, or about the default yaks, means this file, not a picture in the app's pages. Set it with app_files: op: fetch with path icon.png and the URL of a PNG, or write an icon.svg (a square viewBox, no <text>), which is drawn as icon.png; a logo that is not a PNG becomes an icon.svg. Then app_deploy: the icon shows once deployed.",
+    "The picture beside an app's name in your page's sidebar, the person's list of apps and a home screen is the app's icon. It is served from the app's icon.png, or drawn from its icon.svg, and an app with neither wears the platform's default yak. To set one, use app_files: op: fetch with path icon.png and the URL of a PNG, or write an icon.svg (a square viewBox, no <text>); then app_deploy, since the icon shows once deployed. A logo can also mean a picture in the app's own pages: work out from the person's words which they mean, and ask when you can't tell.",
 }
 
 // The one size drawn: the manifest names the icon at 512 and 192, and iOS
