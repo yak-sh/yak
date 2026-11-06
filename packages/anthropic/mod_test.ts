@@ -122,6 +122,21 @@ test('a prefix is kept five minutes, or the hour a request asks for', async () =
   }
 })
 
+test('a request of instructions alone says its last one as the turn', async () => {
+  let { sent, fetch } = api(() => sse(reply()))
+  await messages({ key: () => 'k', fetch })(ask({
+    items: [
+      { kind: 'instruction', text: 'You work for ada.' },
+      { kind: 'instruction', text: 'Summary: the yak was found.' },
+    ],
+  }))
+  equal(sent[0].body.system, 'Be brief.\n\nYou work for ada.')
+  equal(sent[0].body.messages, [{
+    role: 'user',
+    content: [{ type: 'text', text: 'Summary: the yak was found.' }],
+  }])
+})
+
 test('a request streams text, returns calls, and counts cache reads as input', async () => {
   let { sent, fetch } = api(() => sse(reply()))
   let deltas: TextDelta[] = []

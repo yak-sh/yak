@@ -903,13 +903,26 @@ export let operating = (
   // channel they came by: a quick word when the conversation forks, and the
   // outcome when the fork comes back. A helper's end is told to the session
   // that started it, not to the person.
+  let unfinished = async (session: string, fault: string, request: string) => {
+    let space = (await workingOf(store, session))?.space
+    defect(Error(`Operator could not finish: ${fault}`), {
+      request,
+      session,
+      space: space ? (await dir().at(space))?.slug : null,
+    })
+  }
   let answered = async (session: string) => {
     let [row] = await g.get([session])
-    if (row?.spawned) return
     // A call's lines are context, never a turn's words or its reply.
     let entries = ordered(await transcript(g, session))
       .filter((b) => !(b.notice && b.operator_call))
     let reply = replyOf(turnOf(entries))
+    // A fork or helper that could not finish reaches the tracker as it ends;
+    // what it ended with goes to the session that started it (M-37965).
+    if (row?.spawned) {
+      if (reply.fault) await unfinished(session, reply.fault, 'operator fork')
+      return
+    }
     // One answer for each time it was given words: the turn ended again
     // (stopped, then a step in flight finishing) says it anew.
     let mark = entries.findLast((b) => kindOf(b) == 'input')
@@ -965,12 +978,7 @@ export let operating = (
     // A conversation that could not finish reaches the tracker once, when
     // its answer is first written (M-37965).
     if (reply.fault && !kept) {
-      let slug = space ? (await dir().at(space))?.slug : null
-      defect(Error(`Operator could not finish: ${reply.fault}`), {
-        request: 'operator conversation',
-        session,
-        space: slug,
-      })
+      await unfinished(session, reply.fault, 'operator conversation')
     }
     if (kept) return
     // A break's fix nobody asked for: what came of it is told to everyone

@@ -71,6 +71,16 @@ let fetch = (input: RequestInfo | URL, init?: RequestInit) => {
     }))
   }
   let body = JSON.parse(String(init?.body))
+  // As the API refuses a request with nothing in its conversation.
+  if (!body.messages?.length) {
+    return Promise.resolve(Response.json({
+      type: 'error',
+      error: {
+        type: 'invalid_request_error',
+        message: 'messages: at least one message is required',
+      },
+    }, { status: 400 }))
+  }
   let at = rooted(body.tools)
   return Promise.resolve(
     at < 0 ? answer(body) : Response.json({
@@ -98,6 +108,11 @@ let operator = operating(operatorMemory(), env, {
     description: 'Zap',
     parameters: { type: 'object', properties: {} },
     run: () => Promise.reject(new Error('zap broke')),
+  }, {
+    name: 'leaflet',
+    description: 'A guide longer than a turn keeps',
+    parameters: { type: 'object', properties: {} },
+    run: () => Promise.resolve('Mail is sent with mail_send. '.repeat(16_000)),
   }],
 })
 // A conversation in a space of its own, each with its month's budget, and
@@ -222,4 +237,56 @@ test("a conversation long enough to compact is summarized at its space's cost, a
     '[]',
   ])
   assertEquals(summaries > 0, true)
+})
+
+test('a read so long that compacting summarizes every line still leaves the model a message, and the work goes on to its answer', async () => {
+  let summaries = 0
+  answer = (body) => {
+    if (
+      JSON.stringify(body.system ?? '').includes('Summarize this transcript')
+    ) {
+      summaries++
+      return text('The mail guide says mail is sent with mail_send.')
+    }
+    let read = JSON.stringify(body.messages).includes('mail_send')
+    return read
+      ? text('Mail goes out with mail_send.')
+      : counted(120_000, 'tool_use', {
+        type: 'tool_use',
+        id: 'tu_' + crypto.randomUUID().slice(0, 8),
+        name: 'leaflet',
+        input: {},
+      })
+  }
+  let out = await ask('How is mail sent?')
+  assertEquals([out.text, out.reports, summaries > 0], [
+    'Mail goes out with mail_send.',
+    '[]',
+    true,
+  ])
+})
+
+test('a fork that cannot finish reaches the tracker', async () => {
+  answer = (body) => {
+    let said = JSON.stringify(body.messages)
+    return said.includes('fork of the parent')
+      ? Response.json({
+        type: 'error',
+        error: { type: 'invalid_request_error', message: 'messages: forked' },
+      }, { status: 400 })
+      : said.includes('tool_result') || said.includes('failed')
+      ? text('The work could not be done.')
+      : reply('tool_use', {
+        type: 'tool_use',
+        id: 'tu_' + crypto.randomUUID().slice(0, 8),
+        name: 'fork',
+        input: { prompt: 'Read the mail guide' },
+      })
+  }
+  let out = await ask('Read the mail guide')
+  assertStringIncludes(out.reports, '"request":"operator fork"')
+  assertStringIncludes(
+    out.reports,
+    'Operator could not finish: request: 400 messages: forked',
+  )
 })

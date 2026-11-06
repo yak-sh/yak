@@ -72,11 +72,18 @@ export type Options = {
 let TOKENS = 64_000
 let EFFORTS = ['low', 'medium', 'high', 'xhigh', 'max']
 
+/** Where the conversation begins: at its first item that is no instruction.
+ * A request of instructions alone (a checkpoint that summarized every line)
+ * begins at its last one, since the API takes no request without a message. */
+let leadOf = (req: Request) => {
+  let lead = req.items.findIndex((i) => i.kind != 'instruction')
+  return lead < 0 ? Math.max(0, req.items.length - 1) : lead
+}
+
 /** Instructions open the system prompt; one met later in the conversation is
  * said as text in the turn it falls in, which every model accepts. */
 export let system = (req: Request): string | undefined => {
-  let lead = req.items.findIndex((i) => i.kind != 'instruction')
-  let said = req.items.slice(0, lead < 0 ? undefined : lead)
+  let said = req.items.slice(0, leadOf(req))
     .map((i) => (i as { text: string }).text)
   let text = [req.instructions, ...said].filter(Boolean).join('\n\n')
   return text || undefined
@@ -126,9 +133,8 @@ let blocks = (i: Item): ['user' | 'assistant', Block[]] | undefined => {
  * message's tool results before anything else in it, so a result placed after
  * an image shown beside an earlier one joins the results ahead of it. */
 export let conversation = (req: Request): Param[] => {
-  let lead = req.items.findIndex((i) => i.kind != 'instruction')
   let out: Param[] = []
-  for (let i of lead < 0 ? [] : req.items.slice(lead)) {
+  for (let i of req.items.slice(leadOf(req))) {
     let b = blocks(i)
     if (!b) continue
     let [role, content] = b
