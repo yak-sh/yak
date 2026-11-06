@@ -60,7 +60,7 @@ import { instructions, whole } from './guide.ts'
 import { type Host, hosted, url } from './host.ts'
 import { countedBuild, countedSpend, refusedSpend } from './meter.ts'
 import { modelInfo } from '@yaks/workers-ai'
-import { claude, providerOf } from './claude.ts'
+import { provided, providerOf } from './providers.ts'
 import { asset } from './preauth.ts'
 import { asleep, released, spending } from './sandbox.ts'
 import type { Who } from './session.ts'
@@ -374,13 +374,16 @@ let binding = (env: Env, id: string): Model => {
   })
 }
 
-/** Claude on the platform's Anthropic key, priced from @yaks/model's list. */
-let anthropic = (env: Env, id: string): Model =>
-  through(id, () => claude(env), async () => {
-    let info = await claude(env).info?.(id)
-    if (!info) throw new Error(`Anthropic lists no model ${id}`)
+/** A model of a provider the config names (providers.ts), on the
+ * platform's key, priced from its own list. */
+let lent = (env: Env, provider: string, id: string): Model => {
+  let model = provided(env, provider)
+  return through(id, () => model, async () => {
+    let info = await model.info?.(id)
+    if (!info) throw new Error(`${provider} lists no model ${id}`)
     return info
   })
+}
 
 // Where OpenAI is reached: the gateway, so every call is logged, cached and
 // rate-limited by the account rather than by us. `OPENAI_API` is the probe's
@@ -498,13 +501,13 @@ export let openai = (env: Env, id: string): Model => ({
 export let idOf = (env: Env, space: Space): string =>
   paid(space.tier) ? env.BUILDER_MODEL_PAID ?? '' : env.BUILDER_MODEL_FREE ?? ''
 
-/** The provider an id names (claude.ts `providerOf`). */
+/** The provider an id names (providers.ts `providerOf`). */
 export let modelOf = (env: Env, id: string): Model => {
   let provider = providerOf(id)
   return provider == 'workers-ai'
     ? binding(env, id)
     : provider == 'anthropic'
-    ? anthropic(env, id)
+    ? lent(env, provider, id)
     : openai(env, id)
 }
 

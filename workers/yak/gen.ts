@@ -35,8 +35,14 @@ import { front, read } from '@yaks/yaml'
 import { contentIdentity } from './content-identity.ts'
 import { fileURLToPath } from 'node:url'
 import { members } from '@yaks/cli/dependencies'
-import { configs, domains, phoneConfig, posts } from './config.ts'
-import { imports, loader, type Manifest, vocabs } from './load-gen.ts'
+import { configs, domains, phoneConfig, posts, providing } from './config.ts'
+import {
+  imports,
+  loader,
+  type Manifest,
+  providers,
+  vocabs,
+} from './load-gen.ts'
 
 let HERE = new URL('.', import.meta.url)
 let TARGET = new URL('content.ts', HERE)
@@ -374,6 +380,7 @@ let loaded = await formatted(
           manifests,
         ),
         ...vocabs(manifests),
+        ...providers(providing, manifests),
       ]),
     ],
     local,

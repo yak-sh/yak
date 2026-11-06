@@ -23,7 +23,7 @@ import { channelOf, HEARD, SAID } from './operator-view.ts'
 import { listing } from '@yaks/mcp'
 import { billed, type Item, type Model, type Price } from '@yaks/model'
 import { workersAi } from '@yaks/workers-ai'
-import { claude, providerOf, readsOf } from './claude.ts'
+import { provided, providerOf } from './providers.ts'
 import { inputSchemaOf } from '@yaks/tools/schema'
 import { CallError, invoke } from '@yaks/tools'
 import { loadTools, textSearch } from '@yaks/graph/tools'
@@ -407,22 +407,12 @@ let SONNET = 'claude-sonnet-5-5'
 let OPUS = 'claude-opus-5-5'
 let GLM = '@cf/zai-org/glm-5.3'
 
-/** What serves the Operator's models: Workers AI through the binding, or
- * Anthropic with the platform's key. */
+/** What serves the Operator's models: Workers AI through the binding, or a
+ * provider the config names on the platform's key (providers.ts). */
 export let operatorModel = (env: Env, provider: string): Model =>
   provider == 'workers-ai'
     ? workersAi(env.AI!, { fetch: env.MODEL_FETCH, gateway: env.AI_GATEWAY })
-    : provider == 'anthropic'
-    ? claude(env)
-    : Object.assign(
-      () =>
-        Promise.reject(
-          new Error(
-            'The operator needs a Workers AI or Anthropic model in OPERATOR_MODEL',
-          ),
-        ),
-      { info: () => Promise.resolve(undefined) },
-    )
+    : provided(env, provider)
 
 export let readOperator = async (
   { g }: Store,
@@ -707,7 +697,7 @@ export let operating = (
   })
   let using = usingOf()
   let base = options.model ?? operatorModel(env, provider)
-  let reads = readsOf(provider)
+  let reads = base.reads ?? {}
   // A file's key is the digest of its bytes, so the bytes the last step
   // showed are kept for the next, which shows them again: a wake reads each
   // file once, and the files of one step all at once.
@@ -1329,7 +1319,7 @@ export type Asking = {
 type Asker = Pick<Held, 'person' | 'administrative'>
 export type Operator = {
   store: Store
-  /** What its model reads as it is, beside text (claude.ts `readsOf`). */
+  /** What its model reads as it is, beside text (@yaks/model `Model.reads`). */
   reads: Record<string, number>
   /** Words given: the next input of the person's conversation, or on a task
    * a new task and session or the next input of the task's newest session.

@@ -38,8 +38,10 @@ equal(reply.model, 'example')
 
 `deferredModel(load, metadata)` constructs a model whose transport loads on its
 first request or discovery call. Concurrent calls share that model; `mark`,
-`vocab` and `anchor` remain available synchronously from `metadata`. Declare
-`info: true` or `recover: true` when the provider supports those operations.
+`vocab`, `anchor`, `lateResults` and `reads` (the media types it reads as they
+are, beside text, each with the most bytes of one file) remain available
+synchronously from `metadata`. Declare `info: true` or `recover: true` when the
+provider supports those operations.
 
 A provider is a plugin. Its package exports a `./provider` facet
 (`ProviderFacet`): `providers(lent, options)` returns the models it serves,

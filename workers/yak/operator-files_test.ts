@@ -8,6 +8,7 @@ import { assertEquals, assertStringIncludes } from '@std/assert'
 import { parseHTML } from 'linkedom'
 import type { Item, Request as Ask } from '@yaks/model'
 import { conversation } from '@yaks/anthropic'
+import { READS } from '@yaks/anthropic/reads'
 import { directoryOf } from './directory.ts'
 import { platform } from './testing.ts'
 import { operatorService } from './operator-testing.ts'
@@ -48,6 +49,7 @@ let service = operatorService(p.env, who, {
     })
   }, {
     info: (name: string) => Promise.resolve({ name, price, context: 200_000 }),
+    reads: READS,
   }),
 })
 p.env.BUILDER = service.binding

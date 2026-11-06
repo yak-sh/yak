@@ -39,7 +39,7 @@ export type File = { name: string; mime: string; key: string; size?: number }
 export let SHOWN = 10 * 1024 * 1024
 
 /** Whether the model is shown a file as it is, rather than the text drawn
- * from it: a kind it reads (`reads`, claude.ts `readsOf`), at a size it and
+ * from it: a kind it reads (`reads`, @yaks/model `Model.reads`), at a size it and
  * {@link SHOWN} take. */
 export let asIs = (reads: Record<string, number>, file: File) =>
   file.size != null && file.size <= Math.min(reads[file.mime] ?? -1, SHOWN)

@@ -1,6 +1,6 @@
 // A config imports only the store facets its packages export, once per facet.
 import { equal, test, throws } from '@yaks/testing'
-import { imports, loader } from './load-gen.ts'
+import { imports, loader, providers } from './load-gen.ts'
 
 test('store import generation resolves options and deduplicates configs', async () => {
   equal(
@@ -69,5 +69,27 @@ test('store import generation takes the union of explicitly selected facets', ()
       })),
     ),
     ['a/vocab', 'a/effects'],
+  )
+})
+
+test('provider generation imports each named provider eagerly and refuses one serving none', async () => {
+  let manifests = [
+    { name: 'p', exports: { './provider': './provider.ts' } },
+    { name: 'q', exports: './mod.ts' },
+  ]
+  equal(
+    providers({ plugins: [{ use: 'p', with: { k: 1 } }, 'p'] }, manifests),
+    [
+      'p/provider',
+    ],
+  )
+  await throws(
+    () => providers({ plugins: ['q'] }, manifests),
+    'q exports no ./provider',
+  )
+  let eager = /import \* as provider\d+ from ("[^"\n]+")/g
+  equal(
+    [...loader(['p/provider']).matchAll(eager)].map((m) => JSON.parse(m[1])),
+    ['p/provider'],
   )
 })

@@ -373,7 +373,7 @@ proved. Existing queued letters and receiving cursors are retained.
 | `MAIL_SINK`                                                                                    | staging    | the owner's address                                                                                                                                                                                                                                                                                               | staging letters go to their intended recipients                                                          |
 | `OPENAI_APPS_CHALLENGE`                                                                        | optional   | the token OpenAI's apps directory issues                                                                                                                                                                                                                                                                          | `/.well-known/openai-apps-challenge` 404s                                                                |
 | `CIMD`                                                                                         | optional   | `on` (default when unset) or `off`                                                                                                                                                                                                                                                                                | nothing; `off` stops claiming Client ID Metadata Documents                                               |
-| `ANTHROPIC_API_KEY`                                                                            | optional   | the platform's Anthropic API key, for product use only (claude.ts)                                                                                                                                                                                                                                                | the Operator runs on `@cf/zai-org/glm-5.3`; a `claude-*` model is refused as a missing key               |
+| `ANTHROPIC_API_KEY`                                                                            | optional   | the platform's Anthropic API key, for product use only (providers.ts)                                                                                                                                                                                                                                             | the Operator runs on `@cf/zai-org/glm-5.3`; a `claude-*` model is refused as a missing key               |
 | `OPERATOR_DELEGATE`                                                                            | optional   | the model the Operator hands coding and tricky work to (default `claude-opus-5-5`)                                                                                                                                                                                                                                | nothing                                                                                                  |
 | `AI_GATEWAY`, `AI_GATEWAY_TOKEN`, `OPENAI_API_KEY`, `BUILDER_MODEL_FREE`, `BUILDER_MODEL_PAID` | optional   | the other builder provider; all unset on purpose (T-34238)                                                                                                                                                                                                                                                        | nothing; both tiers build on Workers AI                                                                  |
 | `MAIL_DEV`                                                                                     | local      | `1`                                                                                                                                                                                                                                                                                                               | never set on a deploy: letters become entities instead of sending                                        |
@@ -884,16 +884,17 @@ turn may be a question: the operator explicitly completes a task through
 The Operator runs on `claude-sonnet-5-5` when `ANTHROPIC_API_KEY` is set, and
 otherwise on `BUILDER_MODEL_PAID` (`@cf/zai-org/glm-5.3`); `OPERATOR_MODEL`
 overrides either. A `@cf/…` model runs on the Workers AI binding and a
-`claude-…` model on Anthropic's API (claude.ts `providerOf`); the model must
-have a price, from the Workers AI catalogue or @yaks/model's list. On Anthropic
-a conversation and its forks have `spawn`, whose description sends writing or
-fixing code and tasks that need careful reasoning to `OPERATOR_DELEGATE`
-(`claude-opus-5-5`) in a child session working for the same space and charged to
-it; the child's answer comes back to the session that asked, and the child is
-offered no `spawn` of its own. This entry accepts text. Picture attachments and
-the email, chat and SMS interfaces are separate work. Interrupted requests
-remain in the graph and can be continued explicitly; they do not resume
-automatically.
+`claude-…` model on Anthropic's API (providers.ts `providerOf`), served by the
+@yaks/anthropic plugin config.ts `providing` names and lent the platform's key
+(providers.ts); no layer imports a provider. The model must have a price, from
+the Workers AI catalogue or @yaks/model's list. On Anthropic a conversation and
+its forks have `spawn`, whose description sends writing or fixing code and tasks
+that need careful reasoning to `OPERATOR_DELEGATE` (`claude-opus-5-5`) in a
+child session working for the same space and charged to it; the child's answer
+comes back to the session that asked, and the child is offered no `spawn` of its
+own. This entry accepts text. Picture attachments and the email, chat and SMS
+interfaces are separate work. Interrupted requests remain in the graph and can
+be continued explicitly; they do not resume automatically.
 
 What the Operator is told is two personas, worn through @yaks/persona
 (operator-persona.ts). The yaks.app Operator persona is kept in the directory:

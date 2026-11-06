@@ -319,6 +319,16 @@ export let phoneConfig: Config = {
   ],
 }
 
+/** The model providers the platform's own layers are lent (providers.ts):
+ * each a plugin exporting `./provider` (@yaks/model `ProviderFacet`), with
+ * the options it is given. No layer imports one; it asks for a model by the
+ * provider name it serves under. */
+export let providing: Config = {
+  plugins: [
+    { use: '@yaks/anthropic', with: { key: { secret: 'ANTHROPIC_API_KEY' } } },
+  ],
+}
+
 export let configs = {
   app: appConfig,
   directory: directoryConfig,

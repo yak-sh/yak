@@ -1,25 +1,31 @@
+// The platform's agents ask a provider the config names by the name it serves
+// under, lent the platform's key for it at each call and the transport held
+// as it was lent.
 import { assertEquals, assertRejects } from '@std/assert'
 import { test } from '@yaks/testing'
-import { ModelError } from '@yaks/model'
 import { anthropicDoc } from '@yaks/anthropic/vocab'
-import { claude } from './claude.ts'
+import { READS } from '@yaks/anthropic/reads'
+import { provided } from './providers.ts'
 import type { Env } from './env.ts'
 
-test('the Claude adapter records replies before a provider request', () => {
-  let model = claude({} as Env)
+test('a configured provider records replies before a request, and says what it reads', () => {
+  let model = provided({} as Env, 'anthropic')
   assertEquals(model.vocab, anthropicDoc)
+  assertEquals(model.reads, READS)
   assertEquals(model.mark?.({ id: 'reply', model: 'claude', items: [] }), {
     anthropic: { response_id: 'reply', cache_expires_at: null },
   })
-  assertEquals(
-    model.anchor?.({
-      anthropic: { response_id: 'reply', cache_expires_at: null },
-    }),
-    undefined,
+})
+
+test('a provider no plugin serves refuses every call', async () => {
+  await assertRejects(
+    () => provided({} as Env, 'nobody')({ model: 'm', items: [], tools: [] }),
+    Error,
+    'serves no nobody models',
   )
 })
 
-test('Claude discovery retains its transport and uses the current key after a missing key', async () => {
+test('a configured provider keeps its transport and uses the current key after a missing one', async () => {
   let sent: [string, string | null][] = []
   let listed = {
     id: 'claude-test',
@@ -37,13 +43,9 @@ test('Claude discovery retains its transport and uses the current key after a mi
       ))
     }) as typeof fetch,
   } as Env
-  let model = claude(env)
+  let model = provided(env, 'anthropic')
   env.MODEL_FETCH = () => Promise.reject(new Error('transport was replaced'))
-  await assertRejects(
-    () => model.info!('claude-test'),
-    ModelError,
-    'yaks.app has no Anthropic key yet',
-  )
+  await assertRejects(() => model.info!('claude-test'), Error, 'not connected')
   env.ANTHROPIC_API_KEY = 'first'
   assertEquals((await model.info!('claude-test'))?.context, 1000)
   env.ANTHROPIC_API_KEY = 'second'

@@ -310,6 +310,9 @@ export type Model = ((req: Request) => Promise<Reply>) & {
   /** Takes a later output of a tool call it already has one for. Without it,
    * a call that finishes after its first output is told as user text. */
   lateResults?: true
+  /** The media types it reads as they are, beside text, each with the most
+   * bytes of one file it takes. Without it, a file is read as its text. */
+  reads?: Record<string, number>
 }
 
 /** What a provider answered a failed request with, as it arrived: the body of
