@@ -7,6 +7,7 @@ import { sqlitePath } from './sqlitepath.ts'
 import { Database, Statement } from './legacy.ts'
 import { driver as connection } from './driver.ts'
 import { meter } from './budget.ts'
+import { EPOCH, meta } from './meta.ts'
 import { scope } from '@yaks/trace'
 import {
   call,
@@ -333,6 +334,10 @@ export let driver = (db: Database): Driver => {
         let kept = templates.get(at)
         if (kept) {
           kept.backup(db)
+          // A copy is a store of its own: it never takes the lineage
+          // identity of the one its template was made in (./meta.ts `epoch`).
+          let m = meta(d)
+          if (m.get(EPOCH)) m.set(EPOCH, crypto.randomUUID())
           return
         }
         make()

@@ -21,6 +21,7 @@ import {
 import { driver, prepared } from './native.ts'
 import { open } from './db.ts'
 import { storage } from './mod.ts'
+import { epoch, epochAt } from './meta.ts'
 import { mem, shop } from './testing.ts'
 
 // Stores in memory past the first are copies of the schema it made: each has
@@ -37,6 +38,21 @@ test('a store in memory made from a template has the whole schema and only its o
     tx.patch([{ entity: { eid: 'mine' }, doc: { title: 'a' } }])
   )
   assertEquals(scan(b, 'doc'), [])
+})
+
+// A copy is a store of its own: the epoch its template's make minted is never
+// another copy's.
+test('each store in memory made from a template mints its own epoch', () => {
+  let made = () => {
+    let d = mem()
+    d.template!('a store with an epoch', () => {
+      for (let s of storage(d, shop).ddl()) d.query(s)
+      epoch(d)
+    })
+    return epochAt(d)
+  }
+  let [a, b] = [made(), made()]
+  assertEquals(!!a && !!b && a != b, true)
 })
 
 // A database that already holds rows is made in place: a copy would lose them.

@@ -718,35 +718,42 @@ let composed = async (
             during: { process: selfEid() },
             tags: { step: 'schema' },
           })
-        try {
-          follow(sql, print, () => {
-            let left = [
-              ...store!.install([...beside, ...indexes]),
-              ...add(sql, beside),
-            ]
-            if (text.length) {
-              adopt(sql, text, derived, { heal: false, fill: filler(sql) })
-            }
-            left.forEach(told)
-            return !left.length
-          })
-        } catch (error) {
-          told(error)
+        let needs = plan.required.filter((p) => !required.includes(p))
+        let pass = () => {
+          try {
+            follow(sql, print, () => {
+              let left = [
+                ...store!.install([...beside, ...indexes]),
+                ...add(sql, beside),
+              ]
+              if (text.length) {
+                adopt(sql, text, derived, { heal: false, fill: filler(sql) })
+              }
+              left.forEach(told)
+              return !left.length
+            })
+          } catch (error) {
+            told(error)
+          }
+          // Before this host writes a row, the store records each plugin
+          // this composition says the rows it writes will need.
+          try {
+            requires(sql, needs)
+          } catch (error) {
+            told(error)
+          }
+          // What a reader's first look at the file finds, kept for every
+          // opener after this one until the schema moves.
+          try {
+            survey(sql, vocab, derived)
+          } catch (error) {
+            told(error)
+          }
         }
-        // Before this host writes a row, the store records each plugin this
-        // composition says the rows it writes will need.
-        try {
-          requires(sql, plan.required.filter((p) => !required.includes(p)))
-        } catch (error) {
-          told(error)
-        }
-        // What a reader's first look at the file finds, kept for every
-        // opener after this one until the schema moves.
-        try {
-          survey(sql, vocab, derived)
-        } catch (error) {
-          told(error)
-        }
+        // A graph in memory this process already made with this print is a
+        // copy of the first: hundreds of statements become a page copy.
+        let key = JSON.stringify([print, needs])
+        sql.template ? sql.template(key, pass) : pass()
       },
       effects: (built, disabled) => {
         return effects(vocab, {
