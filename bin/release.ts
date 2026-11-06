@@ -1,4 +1,4 @@
-#!/usr/bin/env -S deno run --allow-read --allow-write --allow-run=git,pnpm --allow-net=api.jsr.io
+#!/usr/bin/env -S deno run --allow-read --allow-write --allow-env --allow-run=git,pnpm --allow-net=api.jsr.io
 // bin/release — publish what changed, so a fix in one package ships at once.
 //
 // A release publishes the packages that changed since their published version,
