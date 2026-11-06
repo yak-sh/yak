@@ -1,19 +1,30 @@
 #!/bin/sh
-# Keep the servers' reads fast whatever bulk work runs beside them, by capping
-# the disk for everything but the servers (T-133694):
+# Keep the servers answering whatever work runs beside them, by giving them
+# the CPU first and capping the disk for everything but them (T-133694,
+# T-142053):
 #
-#   bin/io-limits
+#   bin/limits
 #
 # Run it once per box, and again to change a number. It needs sudo.
 #
 # Any process an agent or cron starts lands in a scope under app.slice or in
-# cron.service by default, so a copy, restore or download is capped without asking
-# for it. The yak-* servers run in yak.slice, uncapped.
+# cron.service by default, so a session, its tests, a copy, restore or download
+# is weighed and capped without asking for it. The yak-* servers run in
+# yak.slice.
 #
-# Two caps, because one is not enough. The slice's bounds the sum, and so the
-# servers' reads. Each job's is lower, so one job cannot fill the slice: at a shared
-# 40 MB/s, an fsync beside a bulk job took 2.5 s and a 10 s test run 6 minutes. With
-# two bulk jobs at 30 under a slice at 80, that fsync takes 10 ms.
+# The CPU. At equal weights, fifteen sessions running tests (load 23-37 on 4
+# cores) kept a server's main thread runnable and off every CPU for 11 s of
+# 11.3 s, so heal's reads and the sockets to it timed out. yak.slice weighs ten
+# times app.slice, so a server that wants a CPU gets one; the servers use under
+# a core, so sessions keep the rest. Each server is its own CPU group, so one
+# server's child (a wrangler deploy under yak-web) cannot hold another's main
+# thread.
+#
+# The disk. Two caps, because one is not enough. The slice's bounds the sum, and
+# so the servers' reads. Each job's is lower, so one job cannot fill the slice:
+# at a shared 40 MB/s, an fsync beside a bulk job took 2.5 s and a 10 s test run
+# 6 minutes. With two bulk jobs at 30 under a slice at 80, that fsync takes
+# 10 ms.
 #
 # Measured on this box, an LXC volume on LVM thin over a SATA SSD: a cold page read
 # from the servers' slice averages 2 ms through a whole copy beside another bulk
@@ -44,5 +55,7 @@ systemctl --user daemon-reexec
 mkdir -p "$user/app.slice.d" "$user/scope.d" "$user/yak-.service.d"
 printf '[Slice]\n%s\n' "$all" >"$user/app.slice.d/io.conf"
 printf '[Scope]\n%s\n' "$job" >"$user/scope.d/io.conf"
+printf '[Unit]\nDescription=the yak servers\n\n[Slice]\nCPUWeight=1000\n' >"$user/yak.slice"
 printf '[Service]\nSlice=yak.slice\n' >"$user/yak-.service.d/slice.conf"
+printf '[Service]\nCPUWeight=100\n' >"$user/yak-.service.d/cpu.conf"
 systemctl --user daemon-reload

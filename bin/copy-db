@@ -8,7 +8,7 @@
 # times a second.
 #
 # In a scope with its memory capped (bin/capped). Its pace is the box's disk cap
-# (bin/io-limits), so 10 GB takes about 5 minutes alone, and longer beside other
+# (bin/limits), so 10 GB takes about 5 minutes alone, and longer beside other
 # bulk work. Run it in the background.
 set -eu
 [ $# -ge 1 ] || { echo "usage: bin/copy-db <dest> [database]" >&2; exit 2; }
