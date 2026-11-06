@@ -761,12 +761,16 @@ export let stateOf = (entries: Bundle[], done: boolean) => {
   return status == 'empty' ? 'Waiting to start' : 'Working on it'
 }
 
-let meta = (w: Worked) =>
-  `${w.state}${day(w.at, 'short') ? ` · ${day(w.at, 'short')}` : ''}`
+/** A conversation as a list shows it, with where it is when the list holds
+ * more than one space's. */
+export type Listed = Worked & { where?: string }
+
+let meta = (w: Listed) =>
+  [w.where, w.state, day(w.at, 'short')].filter(Boolean).join(' · ')
 
 /** The Operator's conversations as rows, newest first, each a link to the
  * page `href` gives it. */
-export let listed = (items: Worked[], href: (open: string) => string) =>
+export let listed = <W extends Listed>(items: W[], href: (w: W) => string) =>
   renderToString(h(
     Rows,
     null,
@@ -777,7 +781,7 @@ export let listed = (items: Worked[], href: (open: string) => string) =>
         h(
           Rows.Main,
           null,
-          h(Rows.Name, { href: href(w.open) }, w.title),
+          h(Rows.Name, { href: href(w) }, w.title),
           h(Rows.Meta, null, meta(w)),
         ),
       )

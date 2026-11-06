@@ -24,7 +24,8 @@
 // everything its model was told and offered, for inspecting while the
 // Operator's prompts change (T-137672). They are read from the space's
 // Builder object, which lets the admin in by the platform's administrative
-// vouch.
+// vouch. The Sessions page lists them across the most recently active spaces,
+// newest first, each opening on that same page.
 
 import type { Env } from './env.ts'
 import { type Held, holding } from './held.ts'
@@ -61,7 +62,7 @@ import { type Funnel, funnel, STEPS } from './funnel.ts'
 import { type ByDay, series, summed } from '@yaks/ui/chart'
 import { caught } from './defects.ts'
 import { operatorDoor } from './build-door.ts'
-import { listed, type Worked } from './operator-view.ts'
+import { type Listed, listed, type Worked } from './operator-view.ts'
 import { managePath } from './route.ts'
 import { Idle } from './mascot.ts'
 
@@ -384,7 +385,7 @@ let tested = (d: Reading) => d.tests ? '?tests=1' : ''
 let desk = (
   d: Reading,
   title: string,
-  current: List | 'funnel' | 'invites' | null,
+  current: List | 'sessions' | 'funnel' | 'invites' | null,
   body: ComponentChildren,
   kicker: ComponentChildren = null,
   status = 200,
@@ -418,6 +419,12 @@ let desk = (
         LISTS[key].title,
         shown(d, all[key]).length,
       )
+    ),
+    link(
+      'sessions',
+      `${PATH}/sessions${tested(d)}`,
+      'message-square',
+      'Sessions',
     ),
     link(
       'funnel',
@@ -624,6 +631,20 @@ let vouch = (person: string) => ({
   administrative: true,
 })
 
+// A space's Operator, asked as the admin: its answer, or what kept it from one.
+let asking = (
+  env: Env,
+  space: Space,
+  person: string,
+  path: string,
+  args: unknown,
+) =>
+  operatorDoor(env, space, vouch(person), path, args).catch((e) => {
+    caught(e, { request: `admin operator ${path}` })
+    return e instanceof Error ? e : new Error(String(e))
+  })
+let failed = (e: Error) => empty(`The Operator could not be read: ${e.message}`)
+
 // A space's Operator, inspected: every person's conversation with it and the
 // work each started, or, with `open`, one of them drawn as its chat app
 // draws it. Each is read when asked, so a reload shows what has happened.
@@ -639,12 +660,7 @@ let operatorPage = async (
   let back = (to: string, said: string) =>
     h('a', { class: 'Desk_Address', href: `${to}${tested(d)}` }, said)
   let ask = (path: string, args: unknown) =>
-    operatorDoor(env, space, vouch(person), path, args).catch((e) => {
-      caught(e, { request: `admin operator ${path}` })
-      return e instanceof Error ? e : new Error(String(e))
-    })
-  let failed = (e: Error) =>
-    empty(`The Operator could not be read: ${e.message}`)
+    asking(env, space, person, path, args)
   if (!open) {
     let items = await ask('work', { everyone: true }) as Worked[] | Error
     return desk(
@@ -654,7 +670,7 @@ let operatorPage = async (
       items instanceof Error
         ? failed(items)
         : items.length
-        ? h(Card, { as: 'div' }, raw(listed(items, (o) => `${home}/${o}`)))
+        ? h(Card, { as: 'div' }, raw(listed(items, (w) => `${home}/${w.open}`)))
         : empty('Nobody has talked to this Operator yet'),
       back(`${PATH}/${r.entity.eid}`, space.slug),
     )
@@ -678,6 +694,63 @@ let operatorPage = async (
       : empty('This Operator has no conversation with that id'),
     back(home, `${space.operator}’s conversations`),
     talked instanceof Error || found ? 200 : 404,
+  )
+}
+
+// How many spaces the Sessions page asks, and how many sessions it shows.
+let SPACES = 30
+let SESSIONS = 100
+
+// Every person's sessions with the Operator in the most recently active
+// spaces, newest first, each saying its space and opening on its page, then
+// the spaces whose Operator could not be read.
+let sessionsPage = async (d: Reading, env: Env, person: string) => {
+  let spaces = ordered(d, shown(d, d.census.spaces)).slice(0, SPACES)
+  let asked = await Promise.all(spaces.map(async (r) => ({
+    r,
+    items: await asking(env, spaceOf(r), person, 'work', { everyone: true }) as
+      | Worked[]
+      | Error,
+  })))
+  let all = asked
+    .flatMap(({ r, items }) =>
+      items instanceof Error ? [] : items.map((w) => ({
+        ...w,
+        where: r.space!.slug,
+        space: r.entity.eid,
+      }))
+    )
+    .sort((a, b) => b.at.localeCompare(a.at))
+    .slice(0, SESSIONS)
+  let unread = asked.filter((a) => a.items instanceof Error)
+  return desk(
+    d,
+    'Sessions',
+    'sessions',
+    h(
+      Fragment,
+      null,
+      all.length
+        ? h(
+          Card,
+          { as: 'div' },
+          raw(listed<Listed & { space: string }>(
+            all,
+            (w) => `${PATH}/${w.space}/operator/${w.open}`,
+          )),
+        )
+        : empty('Nobody has talked to an Operator yet'),
+      unread.length
+        ? h(
+          Fragment,
+          null,
+          h(Group, null, 'Could not be read'),
+          card(unread.map(({ r, items }) =>
+            esc(`${r.space!.slug}: ${(items as Error).message}`)
+          )),
+        )
+        : null,
+    ),
   )
 }
 
@@ -802,6 +875,7 @@ export let answer = async (
   let d = read(env, await dir.census(), asked.searchParams.has('tests'))
   if (isList(rest)) return list(d, rest, asked.searchParams.get('q') ?? '')
   if (rest == 'invites') return invitesPage(d)
+  if (rest == 'sessions') return await sessionsPage(d, env, who)
   if (rest == 'funnel') {
     let days = Number(asked.searchParams.get('days')) || 7
     let f = await funnel(env, days).catch((e) => {

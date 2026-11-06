@@ -125,3 +125,21 @@ test('an id that is no conversation says so, and nobody but the admin reads one'
   assertEquals(missing.status, 404)
   assertEquals(theirs.status, 404)
 })
+
+let sessions = await get('/admin/sessions')
+let notYours = await get('/admin/sessions', jeff)
+test("the sessions page lists every space's Operator conversations, each by its space, opening on its page", () => {
+  assertEquals(sessions.status, 200)
+  assertEquals(texts(sessions.document, '.Rows_Name'), [
+    'Conversation with Jeff',
+  ])
+  assertEquals(
+    sessions.document.querySelector('.Rows_Name')!.getAttribute('href'),
+    `${at}/${rootOf(eid, jeff)}`,
+  )
+  assertEquals(
+    texts(sessions.document, '.Rows_Meta')[0]!.startsWith('clerk · '),
+    true,
+  )
+  assertEquals(notYours.status, 404)
+})
