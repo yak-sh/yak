@@ -172,6 +172,7 @@ test('a door keeps a refusal, a hung-up caller or relayed answer at its status a
 let GONE =
   'Connection closed: this Durable Object instance is no longer active. Reconnect or retry the request.'
 let CODE = 'Durable Object reset because its code was updated.'
+let LOST = 'Network connection lost.'
 let TIMEOUT =
   'Durable Object storage operation exceeded timeout which caused object to be reset.'
 // An instance's storage. One reset for a deploy refuses writes and still
@@ -186,13 +187,14 @@ let storage = (write = () => {}, read: () => unknown = () => []): Own => ({
 
 test('a moved instance reports none of its resets; a live caller and our own reset do', () => {
   let redoneBy = (instance?: Own) =>
-    [GONE, CODE, TIMEOUT].map((words) =>
+    [GONE, CODE, LOST, TIMEOUT].map((words) =>
       redone(new Error(words), instance && (() => replaced(instance)))
     )
-  equal(redoneBy(storage(refuse(CODE))), [true, true, false])
-  equal(redoneBy(storage(undefined, refuse(GONE))), [true, true, false])
-  equal(redoneBy(storage()), [false, false, false])
-  equal(redoneBy(), [false, false, false])
+  equal(redoneBy(storage(refuse(CODE))), [true, true, true, false])
+  equal(redoneBy(storage(undefined, refuse(GONE))), [true, true, true, false])
+  equal(redoneBy(storage(undefined, refuse(LOST))), [true, true, true, false])
+  equal(redoneBy(storage()), [false, false, false, false])
+  equal(redoneBy(), [false, false, false, false])
 })
 
 test('parallel invocation tags remain isolated and escaping failures reach tracker', async () => {

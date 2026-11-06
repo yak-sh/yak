@@ -61,10 +61,10 @@ export type Own = {
 /**
  * Whether the runtime has moved the object off the instance this storage
  * belongs to. A moved instance refuses its own storage in the words `moved`
- * knows, but not all of it: one reset for a deploy still answers a read and
- * refuses every write (workerd's `ActorSqlite::requireNotBroken`). A
- * transaction counts as a write even when its body only reads, so it asks
- * both; the live instance answers.
+ * knows, or says the connection to it was `lost`, but not all of it: one
+ * reset for a deploy still answers a read and refuses every write (workerd's
+ * `ActorSqlite::requireNotBroken`). A transaction counts as a write even when
+ * its body only reads, so it asks both; the live instance answers.
  *
  * ```ts
  * import { assertEquals } from '@std/assert'
@@ -76,6 +76,10 @@ export type Own = {
  * assertEquals(replaced(live), false)
  * assertEquals(replaced({ sql, transactionSync: reset }), true)
  * assertEquals(replaced({ ...live, sql: { exec: reset } }), true)
+ * let cut = () => {
+ *   throw new Error('Network connection lost.')
+ * }
+ * assertEquals(replaced({ ...live, sql: { exec: cut } }), true)
  * ```
  */
 export let replaced = (storage: Own): boolean => {
@@ -83,7 +87,7 @@ export let replaced = (storage: Own): boolean => {
     storage.transactionSync(() => storage.sql.exec('SELECT 1'))
     return false
   } catch (e) {
-    return moved(e)
+    return moved(e) || lost(e)
   }
 }
 
@@ -149,8 +153,10 @@ export let opaque = (e: unknown): e is Error =>
   e instanceof Error && OPAQUE.test(e.message)
 
 /**
- * The connection to the object dropped under a call. The runtime names it in
- * words alone, with no `retryable` flag to go by, and the call is sent again.
+ * The connection to the object dropped under a call, or, met in its own
+ * storage, the connection to that storage dropped as the runtime moved it. The
+ * runtime names it in words alone, with no `retryable` flag to go by, and the
+ * call is sent again.
  *
  * ```ts
  * import { assertEquals } from '@std/assert'

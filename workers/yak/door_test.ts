@@ -58,13 +58,14 @@ let gone = () =>
     ),
   )
 let flagged = () => Object.assign(new Error('reset'), { retryable: true })
+let dropped = () => new Error('Network connection lost.')
 let storageTimeout = () =>
   new Error(
     'Durable Object storage operation exceeded timeout which caused object to be reset.',
   )
 
 test('an evicted POST is sent again with its body intact', async () => {
-  for (let reset of [gone(), storageTimeout()]) {
+  for (let reset of [gone(), storageTimeout(), dropped()]) {
     let n = ns([reset, 'ok'])
     let res = await storeOf(n, 'jeff')('/apply', {
       method: 'POST',
@@ -120,7 +121,7 @@ test('Store does not retry a streamed init or a Request with a body', async () =
 test('an eviction a store answers is sent again; another 500 is its answer', async () => {
   let said = (message: string) =>
     Response.json({ error: 'Error', message }, { status: 500 })
-  for (let reset of [gone(), storageTimeout()]) {
+  for (let reset of [gone(), storageTimeout(), dropped()]) {
     let n = ns([said(reset.message), 'ok'])
     let res = await storeOf(n, 'jeff')('/apply', {
       method: 'POST',

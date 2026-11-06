@@ -21,7 +21,7 @@ import {
 import type { Env } from './env.ts'
 import { isTestAddress } from './lib/bots.ts'
 import { Pending } from './writes.ts'
-import { moved } from '@yaks/durable-object'
+import { lost, moved } from '@yaks/durable-object'
 import type { Ctx } from './tools.ts'
 
 export type Hit = { id: string; account: 'person' | 'test' }
@@ -216,9 +216,10 @@ export let relayed = async (answer: Response): Promise<Response> => {
 
 /** Whether a failure met by an instance is its replacement's to redo, and so
  * no defect: the runtime moved the instance (`replaced`, absent outside a
- * Durable Object) and the failure says so. */
+ * Durable Object) and the failure says so, or says the instance's storage was
+ * lost as it moved. */
 export let redone = (error: unknown, replaced?: () => boolean): boolean =>
-  moved(error) && !!replaced?.()
+  (moved(error) || lost(error)) && !!replaced?.()
 
 /** Only exception data and explicit tags leave. One thrown object can pass
  * several catches; a later invocation reusing it is another occurrence. An
