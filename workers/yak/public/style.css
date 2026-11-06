@@ -60,7 +60,11 @@
   }
 
   .Yak-small {
-    width: 2.25rem;
+    width: 2.75rem;
+  }
+
+  .Foot .Yak {
+    margin-inline: auto;
   }
 
   .Yak-big {

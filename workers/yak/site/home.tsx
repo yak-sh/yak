@@ -1,6 +1,7 @@
 /** @jsxImportSource preact */
 import { Button, Card } from '@yaks/ui'
 import { Data, Page, Yours } from './frame.tsx'
+import { Idle } from '../mascot.ts'
 
 // What an engine reads of the page.
 let data = {
@@ -142,7 +143,6 @@ export let Home = () => (
     head={
       <>
         <script src='carousel.js' defer />
-        <script src='idle.js' defer />
         <script src='wander.js' defer />
         <Data of={data} />
       </>
@@ -151,14 +151,7 @@ export let Home = () => (
     <section class='Hello' aria-labelledby='hello'>
       <div class='Hello_Copy'>
         <div class='Hello_Yak' data-wander=''>
-          <img
-            src='mascot/idle-rest-128.webp'
-            srcset='mascot/idle-rest-128-1x.webp 1x, mascot/idle-rest-128.webp 2x, mascot/idle-rest-128-3x.webp 3x'
-            width='128'
-            height='128'
-            alt=''
-            data-idle='glance:3370 ears:2070 tail:2380 stretch:2250 lick:2070 doze:3550'
-          />
+          <Idle base='.' />
         </div>
         <p class='Hello_Kicker'>Build, host and share web apps</p>
         <h1 class='Title Title-hero' id='hello'>

@@ -12,6 +12,7 @@ import { esc, markup } from './html.ts'
 import { type Host, url } from './host.ts'
 import { links } from './sheets.ts'
 import { island, signedIn } from './signed.ts'
+import { idle } from './mascot.ts'
 
 // What every drawn page wears in its head, in the shape the file pages wear it
 // (site/frame.tsx, site_test.ts): the title and the line, the canonical, the
@@ -49,7 +50,9 @@ ${links(env, 'style.css')}
 ${island}`
 
 export let top = `<header class="Top">
-<a class="Top_Name" href="/" aria-label="yaks.app, home"><img class="Yak Yak-small" src="/yak.webp" alt="" /><span>yaks.app</span></a>
+<a class="Top_Name" href="/" aria-label="yaks.app, home">${
+  idle('Yak Yak-small')
+}<span>yaks.app</span></a>
 <nav class="Nav" aria-label="Site">
 <a href="/#how">How it works</a>
 <a href="/gallery">Gallery</a>
@@ -61,6 +64,7 @@ ${signedIn}
 </header>`
 
 export let foot = `<footer class="Foot">
+${idle('Yak Yak-small')}
 <p>yaks.app · Yak Shaving LLC</p>
 <ul class="Foot_Links">
 <li><a href="/help">Help</a></li>
@@ -90,6 +94,6 @@ export let drawn = <P>(
   html(
     `${heads}\n</head>\n<body${body ? ` class="${body}"` : ''}>\n${top}\n${
       markup(main)
-    }\n${foot}\n</body>\n</html>`,
+    }\n${foot}\n<script src="/idle.js" defer></script>\n</body>\n</html>`,
     status,
   )

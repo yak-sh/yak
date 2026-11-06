@@ -12,6 +12,10 @@
 // greeting at 128 px and now and then does something small (T-141047): his
 // rest frame is public/mascot/idle-rest-128.webp and each loop
 // idle-<loop>-128.webp, at 128, 256 and 384 px. public/idle.js plays them.
+// Seated at rest, he is yaks.app's mark (T-144354): the header and footer of
+// every page, the dashboard's and the Operator's corner, and, drawn from the
+// same frame, the icons, the link preview (og.svg) and the connector's tile
+// (connector.svg).
 
 import { h } from 'preact'
 import { renderToString } from 'preact-render-to-string'
@@ -70,25 +74,27 @@ export let IDLE: Record<string, number> = {
   doze: 3550,
 }
 
-/** The yak waiting, 128 px across, with `className`: at rest, and with
- * public/idle.js every several seconds one of his loops (`IDLE`). */
-export let Idle = ({ class: className, base = '' }: {
-  class: string
+/** The yak waiting, `size` px across, with `className`: at rest, and with
+ * public/idle.js every several seconds one of his loops (`IDLE`). He is
+ * yaks.app's mark wherever a page shows it (T-144354). */
+export let Idle = ({ class: className, base = '', size = 128 }: {
+  class?: string
   base?: string
+  size?: number
 }) =>
   h('img', {
     class: className,
     src: `${base}/mascot/idle-rest-128.webp`,
     srcset: srcset('idle-rest-128', base),
-    width: 128,
-    height: 128,
+    width: size,
+    height: size,
     alt: '',
     'data-idle': Object.entries(IDLE).map(([loop, ms]) => `${loop}:${ms}`)
       .join(' '),
   })
 
 /** The yak waiting, as markup. */
-export let idle = (className: string, base = '') =>
+export let idle = (className?: string, base = '') =>
   renderToString(h(Idle, { class: className, base }))
 
 // What a step's first word shows the yak doing (@yaks/tools `stepOf`: "Checking

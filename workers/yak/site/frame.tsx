@@ -7,9 +7,11 @@
 // The nav is the same places on every page (site_test.ts); the page a link
 // names marks it with aria-current, and the home page marks the name instead.
 // Signed in, a person reads "Open yaks.app" where "Sign in" is: the page
-// leaves with it (sheets.ts `sheeted`).
+// leaves with it (sheets.ts `sheeted`). The mark in both is the seated yak,
+// idling (mascot.ts `Idle`, idle.js); the home page's hero is its own.
 import type { ComponentChildren } from 'preact'
 import { Address } from '@yaks/ui'
+import { Idle } from '../mascot.ts'
 
 let SITE = 'https://yaks.app'
 let ALT = 'yaks.app: build an app by asking Claude or ChatGPT'
@@ -58,6 +60,7 @@ let Head = (
     <link rel='icon' href='favicon-32.png' type='image/png' sizes='32x32' />
     <link rel='apple-touch-icon' href='apple-touch-icon.png' />
     <link rel='stylesheet' href='style.css' />
+    <script src='idle.js' defer />
     {children}
   </head>
 )
@@ -79,7 +82,7 @@ let Top = ({ path }: { path: string }) => {
         aria-current={home ? 'page' : undefined}
         aria-label='yaks.app, home'
       >
-        {!home && <img class='Yak Yak-small' src='yak.webp' alt='' />}
+        {!home && <Idle class='Yak Yak-small' base='.' />}
         <span>yaks.app</span>
       </a>
       <nav class='Nav' aria-label='Site'>
@@ -106,6 +109,7 @@ let FOOT = [
 
 let Foot = () => (
   <footer class='Foot'>
+    <Idle class='Yak Yak-small' base='.' />
     <p>yaks.app · Yak Shaving LLC</p>
     <ul class='Foot_Links'>
       {FOOT.map(([href, said]) => (

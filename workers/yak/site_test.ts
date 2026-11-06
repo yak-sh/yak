@@ -129,6 +129,22 @@ test('every page wears the raster yak', () => {
       `${page} has no home-screen icon`,
     )
     assert(!html.includes('yak.svg'), `${page} still uses the old drawing`)
+    // The mark in the header (the home page's hero instead) and the footer is
+    // the seated yak, idling (idle.js).
+    let marks = document.querySelectorAll(
+      '.Top_Name img[data-idle], .Hello_Yak img[data-idle], .Foot img[data-idle]',
+    )
+    assertEquals(marks.length, 2, `${page} wears ${marks.length} idling marks`)
+    for (let img of marks) {
+      assertStringIncludes(
+        img.getAttribute('src')!,
+        'mascot/idle-rest-128.webp',
+      )
+    }
+    assert(
+      document.querySelector('script[src="idle.js"]'),
+      `${page} has no idle.js`,
+    )
   }
 })
 
@@ -161,7 +177,7 @@ test('the yak exports have their intended sizes and transparency', () => {
   // The opaque share card is not the yak alone: 1200×630 is what
   // every unfurler crops to, and og.svg beside it is what it is drawn from.
   png('og.png', 1200, 630, false)
-  webp('yak.webp', 352, 454)
+  webp('yak.webp', 384, 384)
   png('favicon-32.png', 32, 32)
   png('apple-touch-icon.png', 180, 180)
   png('icon-192.png', 192, 192)

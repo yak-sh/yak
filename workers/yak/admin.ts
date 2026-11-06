@@ -63,6 +63,7 @@ import { caught } from './defects.ts'
 import { operatorDoor } from './build-door.ts'
 import { listed, type Worked } from './operator-view.ts'
 import { managePath } from './route.ts'
+import { Idle } from './mascot.ts'
 
 export let PATH = '/admin'
 
@@ -447,12 +448,7 @@ let desk = (
         h(
           'a',
           { class: 'Desk_Brand', href: url(d.env, '/') },
-          h('img', {
-            src: url(d.env, '/yak.webp'),
-            width: 36,
-            height: 36,
-            alt: '',
-          }),
+          h(Idle, { base: url(d.env), size: 40 }),
           'yaks.app',
         ),
         h(SideNav, { 'aria-label': 'Directory' }, nav),

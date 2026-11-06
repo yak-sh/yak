@@ -1180,11 +1180,6 @@
     font-weight: 800;
     text-decoration: none;
   }
-  /* The yak is taller than wide; it keeps its shape in the square box. */
-  .Desk_Brand img,
-  .Talk_Brand img {
-    object-fit: contain;
-  }
   /* Whose Operator this is (operator-page.ts `side`): the space, in the
      dashboard's selector, whose list stays inside the side it scrolls in. */
   .Talk_Whose {
