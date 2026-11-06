@@ -415,3 +415,56 @@ Deployed with `7e48a0008` as `43ba65f4` at 08:52 UTC. Cloudflare's own
 (`/home/yaks/bench-T-125212/cloudflare/captures/2026-11-06T08-53-1*-t143191`).
 What is left of the gap to an empty Worker is the rest of the upload, led by the
 Sandbox SDK (~307 KB).
+
+## The sandbox is yak-sandbox's: T-143193
+
+November 6, 2026, `f41211cfc`, `68759d703` and `3587a5ce1`. The SDK's Sandbox
+Durable Object, as `Workbench`, and its container moved to `yak-sandbox`
+(`workers/yak/sandbox/`), and the kernel binds it as `WORKBENCH`.
+`@cloudflare/sandbox`, `@cloudflare/containers` and capnweb left the kernel with
+the lazy facade (`sandbox-entry.ts`) that kept them from running at startup but
+not from being compiled. The token swap stays in the kernel, which alone holds
+the secret: the container's calls to the platform reach `SandboxOutbound` over
+yak-sandbox's `KERNEL` binding.
+
+| Left the kernel's upload                 |  KB |
+| ---------------------------------------- | --: |
+| `@cloudflare/sandbox`                    | 234 |
+| capnweb                                  |  47 |
+| `@cloudflare/containers`                 |  26 |
+| `sandbox-entry.ts`, `sandbox-runtime.ts` |   2 |
+
+`workers/yak/bundle.ts` output, every JS module: 3,713,116 → 3,396,245 bytes
+(gzip 1,282,820 → 1,195,924). Wrangler's upload is 3,316.65 KiB, 1,141.82 KiB
+gzip; yak-sandbox's is 320 KiB.
+
+Two deploys were refused before the third went live. Migration v10 deletes the
+kernel's old Sandbox class, and Cloudflare refuses that (code 10061) while a
+binding keeps the name that held the class, `SANDBOX`, wherever it now points; a
+throwaway pair of Workers showed the same refusal and its acceptance under a new
+name. Renaming the class alone (`68759d703`) did not help.
+
+Local workerd, a fresh process per observation, three runs of 25 alternating
+rounds on a shared host (`/home/yaks/bench-T-143193/pair25{,b,c}.jsonl`):
+
+| Run | Ready median, before → after |   Paired | After faster | Empty Worker |
+| --- | ---------------------------: | -------: | -----------: | -----------: |
+| a   |             515.7 → 546.5 ms | +24.4 ms |     10 of 25 |     105.9 ms |
+| b   |             469.7 → 438.4 ms | −20.1 ms |     15 of 25 |     124.7 ms |
+| c   |             368.5 → 357.7 ms | −11.5 ms |     15 of 25 |      67.4 ms |
+
+None shows a difference the noise does not cover. Cloudflare's own
+`startup_time_ms`, one stored value per version: 100 ms for the parent
+`6b45bbd0`, 53 ms for `bd30ec4b` (live at 100% at 10:23:52 UTC).
+
+The sandbox tool tests (`sandbox_test.ts`, `sandbox_isolation_test.ts`,
+`sandbox-handoff_test.ts`), in-process calls on a scripted container, pass the
+same 39 cases before and after. In production, `sandbox_exec` in `yourname`
+wrote and read a file and reached `$YAKS_HOST/mcp` with its swapped token (200)
+before the move and again on `bd30ec4b`; `app_errors` shows no open errors for
+`yourname/vale` or `yourname/holdfast`.
+
+What is left is a long tail. The largest third-party pieces are `yaml` (~102
+KB), `@cloudflare/workers-oauth-provider` (~80 KB) and `postal-mime` (~75 KB);
+the largest workspace package is `@yaks/session` (~139 KB), measured before
+minification from esbuild's metafile.
