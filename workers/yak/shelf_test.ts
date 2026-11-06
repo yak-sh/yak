@@ -4,7 +4,7 @@ import { rows } from './directory-rows-probe.ts'
 import { listable } from './shelf.ts'
 
 let { graph, dir } = rows()
-await graph.apply([
+let seeded = await graph.apply([
   {
     entity: { eid: '$origin-space' },
     space: { slug: 'original', store: 'original' },
@@ -31,10 +31,12 @@ await graph.apply([
   },
 ], { trusted: true })
 let offers = await dir.offers()
-let original = (await dir.offered('original-box'))!
+let origin = seeded.find((row) => row.$alias == '$origin')!.entity.eid
+let before = await dir.offered('original-box')
 let listed = await listable(offers, () => Promise.resolve(['owner']))
 
 test('an offer hidden by its owner copy still resolves by its install name', async () => {
   assertEquals(listed.map((o) => o.app.published!.name), ['copy-box'])
-  assertEquals((await dir.offered('original-box'))?.app.eid, original.app.eid)
+  assertEquals(before?.app.eid, origin)
+  assertEquals((await dir.offered('original-box'))?.app.eid, origin)
 })
