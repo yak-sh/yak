@@ -440,8 +440,10 @@ Use the same `upload(file)` call above. The original stays downloadable; the app
 does not need a conversion service or another search index.
 
 Automatic extraction supports files up to 16 MiB. A larger file is kept and its
-attachment gets `failed{reason}` explaining the extraction limit. Scanned pages
-render at up to 144 dpi, with their longest edge capped at 2,400 pixels. Tiny or
+attachment gets `failed{reason}` explaining the extraction limit. A file that
+still cannot be read once its retries are spent (the model timing out on a
+scanned page, say) gets `failed{reason}` naming the error. Scanned pages render
+at up to 144 dpi, with their longest edge capped at 2,400 pixels. Tiny or
 unreadable print can still need a clearer original.
 
 PDFs are read page by page. Pages containing images are rendered in full and

@@ -1,6 +1,9 @@
 // Stored documents become ordinary searched rows, one per cited page. The
-// effect's receipt and each completed page survive a retry or object restart.
+// effect's receipt and each completed page survive a retry or object restart;
+// each page read gives the run its tries back, and a run out of tries leaves
+// its error on the document as `failed{reason}`.
 import type { Bundle, Comp, Graph } from '@yaks/graph'
+import type { Attempt } from '@yaks/effects'
 import { derivedEid } from '@yaks/graph/identity'
 import type { Stored } from './graph.ts'
 import { directoryOf } from './directory.ts'
@@ -76,6 +79,12 @@ export type Extractor = {
   markdown(): Promise<string>
 }
 
+// What a document that could not be read carries; extracting its bytes later
+// clears it.
+let UNREAD = 'Document extraction '
+let unread = (why: string) => UNREAD + why + '; the original upload is kept.'
+let message = (e: unknown) => e instanceof Error ? e.message : String(e)
+
 export let pageId = (document: string, blob: string, page: number) =>
   derivedEid('document-page|' + document + '|' + blob + '|' + page)
 export let pageBundle = (
@@ -87,7 +96,28 @@ export let pageBundle = (
   document_page: { document, blob, ...page },
 })
 
-export let extraction = async (at: Stored, document: string) => {
+export let extraction = async (
+  at: Stored,
+  document: string,
+  attempt?: Attempt,
+) => {
+  try {
+    await extract(at, document, attempt)
+  } catch (e) {
+    if (attempt?.last()) {
+      let reason = unread('failed: ' + message(e))
+      await at.graph.apply(
+        [{ entity: { eid: document }, failed: { reason } }],
+        {
+          trusted: true,
+        },
+      )
+    }
+    throw e
+  }
+}
+
+let extract = async (at: Stored, document: string, attempt?: Attempt) => {
   let [row] = await at.graph.get([document])
   let file = row?.attachment as
     | { blob?: string; name?: string; mime?: string }
@@ -105,8 +135,7 @@ export let extraction = async (at: Stored, document: string) => {
   let head = await env.BLOBS.head(key)
   if (!head) throw new Error('Document upload bytes are missing: ' + blob)
   if (head.size > 16 * 1024 * 1024) {
-    let reason =
-      'Document extraction supports files up to 16 MiB; the original upload is kept.'
+    let reason = unread('supports files up to 16 MiB')
     await at.graph.apply([{ entity: { eid: document }, failed: { reason } }], {
       trusted: true,
     })
@@ -117,7 +146,14 @@ export let extraction = async (at: Stored, document: string) => {
   let body = await bytes.arrayBuffer()
   let pdf = isPdf(file.name ?? '', file.mime ?? '')
   let source = extractor(env, found.space, body, file.name ?? '', file.mime)
-  await indexDocument(at.graph, document, blob, pdf, source)
+  await indexDocument(
+    at.graph,
+    document,
+    blob,
+    pdf,
+    source,
+    attempt?.progressed,
+  )
 }
 
 export let extractor = (
@@ -167,6 +203,7 @@ export let indexDocument = async (
   blob: string,
   pdf: boolean,
   source: Extractor,
+  progressed?: () => Promise<void>,
 ) => {
   let [row] = await graph.get([document])
   if ((row?.document_text as Comp | undefined)?.blob == blob) return
@@ -182,6 +219,7 @@ export let indexDocument = async (
     let [current] = await graph.get([document])
     if ((current?.attachment as Comp | undefined)?.blob != blob) return false
     await graph.apply([pageBundle(document, blob, page)], { trusted: true })
+    await progressed?.()
     return true
   }
   if (pdf) {
@@ -209,8 +247,8 @@ export let indexDocument = async (
   await graph.apply([{
     entity: { eid: document },
     document_text: { blob, pages: count },
-    ...((current?.failed as Comp | undefined)?.reason ==
-        'Document extraction supports files up to 16 MiB; the original upload is kept.'
+    ...(String((current?.failed as Comp | undefined)?.reason)
+        .startsWith(UNREAD)
       ? { failed: null }
       : {}),
   }], { trusted: true })

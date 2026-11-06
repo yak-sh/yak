@@ -101,12 +101,14 @@ test('a repeated upload and rename reuse extracted pages; deleting bytes removes
 })
 
 test('an interrupted extraction resumes after its committed pages and source changes hide old text', async () => {
+  let read = 0
   await assertRejects(() =>
-    index(c, true, {
+    indexDocument(c.g, c.document, c.blob, true, {
       ...c.source,
       ocr: () => Promise.reject(Error('provider unavailable')),
-    })
+    }, () => Promise.resolve(void read++))
   )
+  assertEquals(read, 1)
   await index(c)
   assertEquals(c.calls, [1, 2, 2])
   await c.g.apply([{ entity: { eid: 'b'.repeat(64) }, blob: { bytes: 20 } }, {

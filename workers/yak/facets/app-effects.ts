@@ -17,7 +17,9 @@ export let effects = (_host: unknown, options: Options): Handlers => {
     ...(at.graph.vocab.docs.some((doc) => noticeComponents(doc).length)
       ? { notice_post: noticePost(at) }
       : {}),
-    document_extract: maintenance((event) => extraction(at, event.entity.eid)),
+    document_extract: maintenance((event, _tx, _write, attempt) =>
+      extraction(at, event.entity.eid, attempt)
+    ),
     builder_install: maintenance(async () => {
       let writes: Bundle[] = []
       if (at.graph.vocab.comp('builder')) {

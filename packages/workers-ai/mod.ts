@@ -279,9 +279,11 @@ let answers = (out: unknown, model: string): Record<string, Answer> => {
 let message = (e: unknown): string => e instanceof Error ? e.message : String(e)
 
 // How the binding says every model of this kind is busy: in its own words,
-// or as the 429 it was answered.
+// as the 429 it was answered, or as the model timing out on the request
+// (3046), which a later ask may not.
 let busy = (e: unknown) =>
-  /\b429\b|too many requests|rate.?limit|capacity/i.test(message(e))
+  /\b429\b|too many requests|rate.?limit|capacity|^3046:|request timeout/i
+    .test(message(e))
 
 // How the binding says the account's prepaid credits, which a partner model
 // is paid from, are spent: a ceiling, which asking again meets too.
@@ -348,7 +350,8 @@ let detailed = (e: unknown): unknown => {
 
 /**
  * What the binding threw, said the way a model's failure is said here: a rate
- * limit or a capacity refusal (3040) is a {@link ModelError} coded `busy` that
+ * limit, a capacity refusal (3040) or a request the model timed out on (3046)
+ * is a {@link ModelError} coded `busy` that
  * may pass if asked again (`retry`), credits the account has spent
  * one coded `limit`, a model whose license the account has not accepted or a
  * name the binding has no model by one coded `model`, and a `ModelError` the
