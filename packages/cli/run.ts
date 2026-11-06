@@ -139,6 +139,8 @@ export type Opts = {
   name?: string
   /** The line the usage page opens with. */
   about?: string
+  /** The release this program is, which `--version` prints. */
+  version?: string
   /** The notes it closes with. */
   notes?: string
   /** Global flags reserved by the program; tool inputs use name=value. */
@@ -344,6 +346,7 @@ export let globals = (
   json: boolean
   tui: boolean
   help: boolean
+  version: boolean
   timing: boolean
   rest: string[]
 } => {
@@ -352,6 +355,7 @@ export let globals = (
   let tui = false
   let duties = true
   let help = false
+  let version = false
   let config: string | undefined
   // A whole process tree runs as one account with YAK_AS (`yak admin
   // throwaway`); one command asks with the flag.
@@ -366,6 +370,7 @@ export let globals = (
     else if (a == '--tui') tui = true
     else if (a == '--no-duties') duties = false
     else if (a == '--help' || a == '-h') help = true
+    else if (a == '--version') version = true
     else if (a == '--timing') timing = true
     else if (a == '--as') as = argv[++i] ?? as
     else if (a.startsWith('--as=')) as = a.slice(5)
@@ -375,7 +380,7 @@ export let globals = (
     else if (a.startsWith('--config=')) config = a.slice(9)
     else rest.push(a)
   }
-  return { host, config, as, duties, json, tui, help, timing, rest }
+  return { host, config, as, duties, json, tui, help, version, timing, rest }
 }
 
 /**
@@ -483,6 +488,12 @@ export let cli = async (
   let env = opts.env ?? own
   let said = globals(opts.argv ?? system.args, env)
   let { duties, json, tui, help, timing, rest, as } = said
+  // Like the usage page, the version needs no graph, no network and nobody
+  // signed in.
+  if (said.version && opts.version) {
+    out(opts.version)
+    return 0
+  }
   // Where nothing placed this line, the host's refusal is not the answer: the
   // program's own word for a machine with no graph is.
   let lost = (why: string) => why

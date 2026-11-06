@@ -48,6 +48,7 @@ import { command as launchCommand } from '@yaks/process/command'
 import { listen, wind } from '@yaks/process/wind'
 import * as held from './held.ts'
 import { restorable } from './restore.ts'
+import { pinned } from './release.ts'
 import { unitFailureCommand } from './unit_failure.ts'
 
 /** The platform this command talks to when it opens no graph of its own. */
@@ -74,6 +75,7 @@ let TAIL =
   --no-duties     run no inline effects or services; serve still monitors
                   and restores independent workers for uncovered duty roles
   --help         this page, or one subcommand's own
+  --version       the @yaks/cli release this is
 
 An argument value written @path is read from that file, and - is read from
 stdin. $YAKS_TOKEN is the bearer token when set; otherwise the selected
@@ -140,6 +142,7 @@ let table = async (
 export let YAK: Opts = {
   name: 'yak',
   about: HEAD,
+  version: pinned['@yaks/cli'],
   notes: TAIL,
   globalFlags: [
     'as',
@@ -150,6 +153,7 @@ export let YAK: Opts = {
     'tui',
     'no-duties',
     'help',
+    'version',
   ],
   host: HOST,
   nowhere: 'no graph on this machine yet: `yak init` starts one, ' +
@@ -248,6 +252,13 @@ let rename = async (args: Record<string, unknown>, c: Ctx): Promise<number> => {
 export let own: Command[] = [
   unitFailureCommand,
   helpTool(YAK),
+  {
+    name: 'version',
+    description: 'the @yaks/cli release this is',
+    inputSchema: { type: 'object', additionalProperties: false },
+    readOnly: true,
+    run: (_, c) => (c.out(YAK.version!), 0),
+  },
   {
     name: 'work',
     description: 'Run the effects pool and plugin services without the web',

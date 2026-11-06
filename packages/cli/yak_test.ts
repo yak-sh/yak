@@ -61,6 +61,15 @@ let ran = async (
 
 let bundles = '[{"entity":{"eid":"$a"},"doc":{"title":"One"}}]'
 
+test('--version and version print the @yaks/cli release, and ask nothing', async () => {
+  let release = (await import('./package.json', { with: { type: 'json' } }))
+    .default.version
+  for (let argv of [['--version'], ['version']]) {
+    let { calls, said } = await ran(argv)
+    assertEquals([said, calls], [[release], []])
+  }
+})
+
 test('a dry run is the tool’s check, and nothing else moves', async () => {
   let { calls: [dry] } = await ran([
     'apply',
