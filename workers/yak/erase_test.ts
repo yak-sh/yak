@@ -101,9 +101,21 @@ let doomed = (over: Partial<Doomed> = {}): Doomed => ({
   space: space(),
   apps: [app()],
   hosts: [],
+  lines: [],
   members: [{ person: 'p1', name: 'Dana' }],
   ...over,
 })
+
+let line = {
+  eid: 'line-eid',
+  number: '+18335550100',
+  via: 'telnyx',
+  space: 'space-eid',
+  upfront: 1,
+  monthly: 1.5,
+  at: '',
+  verification: null,
+}
 
 let ticketSecret = 'shhh'
 let spaceTicket = await ticket(space(), 'p1', ticketSecret)
@@ -139,12 +151,17 @@ test('what a delete would destroy is named, not counted', () => {
   let lines = naming(doomed({
     apps: [app(), app({ eid: 'b', slug: 'notes', title: 'Notes' })],
     hosts: [host('herbusiness.com')],
+    lines: [line],
     members: [{ person: 'p1', name: 'Dana' }, { person: 'p2', name: 'Sam' }],
   }))
   let said = lines.join('\n')
   assertStringIncludes(said, 'The Shop (https://shoplab.yaks.app/shop/)')
   assertStringIncludes(said, 'Notes (https://shoplab.yaks.app/notes/)')
   assertStringIncludes(said, 'herbusiness.com stops serving')
+  assertStringIncludes(
+    said,
+    '(833) 555-0100 is released and stops costing $1.50 a month',
+  )
   assertStringIncludes(said, '2 people lose their way in: Dana, Sam')
   assertStringIncludes(said, 'shoplab.yaks.app goes back into circulation')
   // One member is the owner reading the letter; there is nobody to warn about.
@@ -162,7 +179,7 @@ test('what a delete would destroy is named, not counted', () => {
 // (T-34431): every line names something that stops, and the last one is the
 // opposite of the last line above — the address is held, never released.
 test('a space in the trash is told what stops, not what is destroyed', () => {
-  let d = doomed({ hosts: [host('herbusiness.com')] })
+  let d = doomed({ hosts: [host('herbusiness.com')], lines: [line] })
   let said = keeping(d).join('\n')
   assertStringIncludes(
     said,
@@ -170,6 +187,7 @@ test('a space in the trash is told what stops, not what is destroyed', () => {
   )
   assertStringIncludes(said, 'everything it has saved are kept')
   assertStringIncludes(said, 'herbusiness.com stops serving until')
+  assertStringIncludes(said, "(833) 555-0100 stays the space's, and costs")
   assertStringIncludes(said, 'shoplab.yaks.app is held for you for 30 days')
   assertEquals(said.includes('back into circulation'), false)
   // And the letter is the act its ticket carries, one list or the other.

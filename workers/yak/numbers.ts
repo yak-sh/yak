@@ -8,10 +8,16 @@
 // verification}` row (facets/directory-vocab.ts). Where it texts from is the
 // space or app row wearing it as `phone{number}`, the field every text path
 // already reads, with the space's `sender{via}` beside it.
+//
+// Each later month a number is held is charged by a wake on its row, on the
+// day of the month it was bought (facets/meter-graph.ts `lines`), and a space
+// that is erased releases every number it holds (erase.ts).
 import { type Numbers, shown, type TollFree } from '@yaks/phone'
 import { ModelError } from '@yaks/model'
+import { next } from '@yaks/wake'
 import type { App, PhoneLine, Space } from './directory.ts'
 import { stamp } from './directory.ts'
+import type { Env } from './env.ts'
 import { onHold } from './model-spend.ts'
 import { phoneAt } from './phones.ts'
 import {
@@ -35,14 +41,23 @@ let NUMBER = str('the number, in E.164 form, such as +18335550100')
 
 let free = (number: string) => /^\+18(00|33|44|55|66|77|88)\d{7}$/.test(number)
 
-let dollars = (n: number) => `$${n.toFixed(2)}`
+export let dollars = (n: number) => `$${n.toFixed(2)}`
 
-// The numbers of the phone a space texts through, and that phone's name.
+/** A number's month, as the wake its row wears recurs: at the minute it was
+ * bought, on that day of each month, or the 28th where a month has no such
+ * day. */
+export let monthly = (at: Date) =>
+  `${at.getUTCMinutes()} ${at.getUTCHours()} ${
+    Math.min(at.getUTCDate(), 28)
+  } * *`
+
+// The numbers of the phone a space texts through, or of the one named, and
+// that phone's name.
 let numbersOf = async (
-  ctx: Ctx,
-  space: Space,
+  env: Env,
+  chosen: Space['sender'],
 ): Promise<{ numbers: Numbers; via: string }> => {
-  let phone = await phoneAt(ctx.env, space.sender)
+  let phone = await phoneAt(env, chosen)
   let numbers = phone?.numbers?.()
   if (!phone || !numbers) {
     throw refuse(
@@ -51,6 +66,13 @@ let numbersOf = async (
     )
   }
   return { numbers, via: phone.transport().via }
+}
+
+/** A number given back to the provider it was bought through, and its row
+ * buried: it costs nothing from then on. */
+export let released = async (env: Env, line: PhoneLine) => {
+  await (await numbersOf(env, { via: line.via })).numbers.release(line.number)
+  await stamp(env, { entities: [{ entity: { eid: line.eid }, tombstone: {} }] })
 }
 
 // A number the space holds, by the number the call names.
@@ -187,7 +209,7 @@ export let numberTools: Row[] = [
     },
     run: async (ctx, args) => {
       let { space } = await inSpace(ctx, args)
-      let offers = await (await numbersOf(ctx, space)).numbers.find({
+      let offers = await (await numbersOf(ctx.env, space.sender)).numbers.find({
         tollFree: args.toll_free !== false,
         ...args.area == null ? {} : { area: text(args.area, 'area') },
         ...args.contains == null
@@ -221,7 +243,7 @@ export let numberTools: Row[] = [
     run: async (ctx, args) => {
       let { space } = await owns(ctx, args)
       let number = text(args.number, 'number')
-      let { numbers, via } = await numbersOf(ctx, space)
+      let { numbers, via } = await numbersOf(ctx.env, space.sender)
       let [offer] = await numbers.find({ number, tollFree: free(number) })
       if (!offer) {
         throw refuse(
@@ -235,6 +257,8 @@ export let numberTools: Row[] = [
       // The row first: its unique number decides who gets it before anything
       // is spent, and a purchase the provider refuses takes it back out.
       let eid = crypto.randomUUID()
+      let now = new Date()
+      let every = monthly(now)
       await stamp(ctx.env, {
         entities: [{
           entity: { eid },
@@ -244,7 +268,12 @@ export let numberTools: Row[] = [
             space: space.eid,
             upfront: offer.upfront,
             monthly: offer.monthly,
-            at: new Date().toISOString(),
+            at: now.toISOString(),
+          },
+          wake: {
+            every,
+            at: next(every, now.getTime()),
+            note: `Charge ${space.slug} a month of ${number}`,
           },
         }],
       })
@@ -332,11 +361,8 @@ export let numberTools: Row[] = [
     run: async (ctx, args) => {
       let { space } = await owns(ctx, args)
       let line = await heldBy(ctx, space, args)
-      await (await numbersOf(ctx, space)).numbers.release(line.number)
+      await released(ctx.env, line)
       await unworn(ctx, line.number)
-      await stamp(ctx.env, {
-        entities: [{ entity: { eid: line.eid }, tombstone: {} }],
-      })
       return {
         text: `Released ${shown(line.number)}: it costs nothing from now on, ` +
           'and texts to it no longer arrive. A released number cannot be ' +
@@ -432,7 +458,7 @@ export let numberTools: Row[] = [
       if (!free(line.number)) {
         throw refuse('arguments', `${line.number} is not toll-free`)
       }
-      let filed = await (await numbersOf(ctx, space)).numbers.verify(
+      let filed = await (await numbersOf(ctx.env, space.sender)).numbers.verify(
         formOf(line.number, args),
       )
       await stamp(ctx.env, {
@@ -474,9 +500,10 @@ export let numberTools: Row[] = [
       for (let line of lines) {
         let state = 'no toll-free verification filed'
         if (line.verification) {
-          let v = await (await numbersOf(ctx, space)).numbers.verification(
-            line.verification,
-          )
+          let v = await (await numbersOf(ctx.env, space.sender)).numbers
+            .verification(
+              line.verification,
+            )
           state = `verification ${v.status} (${v.said})` +
             (v.reason ? `: ${v.reason}` : '')
         }

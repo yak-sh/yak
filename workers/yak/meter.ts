@@ -1,5 +1,6 @@
 // A space's allowances, counted spends and metered model/mail providers.
-// facets/meter-graph.ts owns the transactional spend rule and hourly sweep;
+// facets/meter-graph.ts owns the transactional spend rule, the hourly sweep
+// and each held number's monthly charge;
 // facets/directory-effects.ts seeds the directory's recurring usage schedule.
 import { reached } from './lib/hops.ts'
 import { type ByDay, kept } from '@yaks/ui/chart'

@@ -4,7 +4,8 @@ import type { Options } from './store.ts'
 import type { Env } from '../env.ts'
 import { reporting } from '../wake.ts'
 import { added, trended, unaffordable } from '../meter.ts'
-import { type Row, spaceOf } from '../directory.ts'
+import { idOf, type Row, spaceOf, stamp } from '../directory.ts'
+import { monthOf } from '../meter.ts'
 import { Refused } from '@yaks/graph/errors'
 
 let props = (c: unknown): Record<string, unknown> =>
@@ -28,6 +29,26 @@ export let plugins = (_host: unknown, options: Options): Plugin[] => [{
       return await reporting(env as unknown as Env, row, async () => {
         let { metered } = await import('../usage.ts')
         await metered(env as unknown as Env, new Date(Now.at))
+      })
+    },
+  }, {
+    // Each month after the first that a space holds a number (numbers.ts
+    // `number_buy`), its monthly price spent from the space's budget under
+    // its texts. Never refused: the provider bills the platform for the month
+    // whether or not the budget has room, so the spend counts all the same.
+    name: 'lines',
+    phase: 'effect',
+    match: '.wake, *fired, .phone_line, #MeterEnv, #Now',
+    run: async (row) => {
+      let { MeterEnv: env, Now, phone_line: line } = row
+      if (!env) return
+      let { space, monthly } = props(line)
+      if (!monthly) return
+      await stamp(env as unknown as Env, {
+        entities: [{
+          entity: { eid: idOf(space as string) },
+          spend: { month: monthOf(new Date(Now.at)), texts: Number(monthly) },
+        }],
       })
     },
   }, {

@@ -378,8 +378,10 @@ export let directoryDoc: VocabDoc = {
     // bought at in dollars, `upfront` once and `monthly`, and the toll-free
     // verification filed for it by the provider's id. Whichever space or app
     // row wears it as `phone{number}` is where it texts from; the line says
-    // only who holds it. The space keeps it: a line whose space goes is still
-    // a number somebody pays for until it is released.
+    // only who holds it. The row wears the wake that charges each later
+    // month (meter-graph.ts `lines`). The space keeps it, so erasing the
+    // space releases it at the provider and buries it (erase.ts) rather than
+    // its death taking it.
     //
     // Stamped, all of it, for the reason `seller` is: it is money the
     // platform spends, written only by the number tools (numbers.ts).

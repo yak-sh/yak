@@ -1,12 +1,23 @@
 // A space's own number end to end through the connector (numbers.ts): found
 // at its price, bought from the space's budget, its toll-free verification
-// filed and read back, put on the space and then an app, and given back. The
+// filed and read back, put on the space and then an app, and given back; and
+// a number bought again, charged its next month, and released when its space
+// is erased. The
 // provider is Telnyx in memory: what is on offer, what is held, and every
 // call, so nothing is bought.
-import { test } from '@yaks/testing'
-import { assertEquals, assertRejects, assertStringIncludes } from '@std/assert'
+import { test, until } from '@yaks/testing'
+import {
+  assert,
+  assertEquals,
+  assertRejects,
+  assertStringIncludes,
+} from '@std/assert'
+import { next } from '@yaks/wake'
 import { connector, fresh, seed, unique } from './probe.ts'
 import { endpoints } from './endpoints.ts'
+import { doomed, erase } from './erase.ts'
+import { monthly } from './numbers.ts'
+import type { Env } from './env.ts'
 
 let FREE = '+18335550100'
 let held = new Set<string>()
@@ -89,8 +100,10 @@ let church = {
 }
 
 test('a space finds, buys, verifies, assigns and releases a toll-free number of its own', async () => {
-  let k = await fresh({}, (env) => {
-    Object.assign(env, {
+  let env!: Env
+  let k = await fresh({}, (e) => {
+    env = e
+    Object.assign(e, {
       PHONE_SENDER: { via: 'telnyx' },
       TELNYX_API: telnyx.url,
       TELNYX_API_KEY: 'a-key',
@@ -98,7 +111,7 @@ test('a space finds, buys, verifies, assigns and releases a toll-free number of 
   })
   try {
     let slug = unique('grove')
-    let { cookie, eids } = await seed(k, [{ slug, apps: ['members'] }])
+    let { cookie, eids, person } = await seed(k, [{ slug, apps: ['members'] }])
     let agent = connector(k, cookie)
     let tool = (name: string, args: Record<string, unknown> = {}) =>
       agent.tool(name, { space: slug, ...args })
@@ -161,6 +174,38 @@ test('a space finds, buys, verifies, assigns and releases a toll-free number of 
       'GET /phone_numbers',
       'DELETE /phone_numbers/number-1',
     ])
+
+    // Bought again, its row wakes on that day next month and spends a month.
+    let bought = Date.now()
+    await tool('number_buy', { number: FREE })
+    let [line] = await k.dir.read(`.phone_line.number=${FREE} ?wake`)
+    let wake = line.wake as { every: string; at: string }
+    assertEquals(wake.every, monthly(new Date(bought)))
+    assert(Date.parse(wake.at) - bought > 27 * 86_400_000)
+    await k.dir.stamp({
+      entities: [{
+        entity: line.entity,
+        wake: { at: new Date().toISOString() },
+      }],
+    })
+    await until(async () => (await k.dir.at(eids[slug]))?.meter?.texts == 5, {
+      label: 'the next month spent',
+    })
+    let [after] = await k.dir.read(`.phone_line.number=${FREE} ?wake`)
+    assertEquals(
+      (after.wake as { at: string }).at,
+      next(wake.every, Date.now()),
+    )
+
+    // Erasing the space gives the number back, and its row goes with it.
+    let space = (await k.dir.space(slug))!
+    await erase(env, k.dir, await doomed(k.dir, space), {
+      person,
+      role: 'owner',
+    })
+    assertEquals(held.size, 0)
+    assertEquals(calls.at(-1), 'DELETE /phone_numbers/number-1')
+    assertEquals(await k.dir.read(`.phone_line.number=${FREE}`), [])
   } finally {
     await k.stop()
     await telnyx.stop()

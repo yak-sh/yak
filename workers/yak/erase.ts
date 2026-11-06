@@ -49,8 +49,8 @@ import { ownedPrefix } from './file-root.ts'
 // The thirty days a trashed space holds its name are not a cooling-off period
 // against that: space restoration returns it to its original address.
 //
-// Order: everything outside the directory first — the custom hostnames at
-// Cloudflare, the app scripts in the dispatch namespace, the stores, the
+// Order: everything outside the directory first — the numbers at the phone
+// provider, the custom hostnames at Cloudflare, the app scripts in the dispatch namespace, the stores, the
 // bytes, the builder's conversation and the workbench it ran commands in
 // (T-34371) — and the row that says the space exists last, because that row is
 // the only record we keep that any of it was ours. A delete that dies halfway
@@ -92,6 +92,7 @@ import {
   idOf,
   META,
   overdue,
+  type PhoneLine,
   type Space,
   storeName,
   url,
@@ -111,6 +112,8 @@ import { plans } from './payments.ts'
 import { own, type Pinner, versions } from './versions.ts'
 import { holding, pruned } from './written.ts'
 import { refuse } from './tool.ts'
+import { dollars, released } from './numbers.ts'
+import { shown } from '@yaks/phone'
 import { caught } from './defects.ts'
 
 // An hour to walk over to the inbox and read the letter. Longer than a
@@ -174,6 +177,7 @@ export type Doomed = {
   space: Space
   apps: App[]
   hosts: Host[]
+  lines: PhoneLine[]
   members: { person: string; name: string | null }[]
 }
 
@@ -189,6 +193,7 @@ export let doomed = async (
     space,
     apps: await dir.apps(space),
     hosts: await dir.hosts(space),
+    lines: await dir.lines(space),
     members,
   }
 }
@@ -243,6 +248,11 @@ export let naming = (d: Doomed, env: HostEnv = {}): string[] => [
     'everything it has saved'
   ),
   ...d.hosts.map((h) => `${h.name} stops serving and is given back`),
+  ...d.lines.map((l) =>
+    `${shown(l.number)} is released and stops costing ${
+      dollars(l.monthly)
+    } a month`
+  ),
   ...(d.members.length > 1
     ? [
       `${d.members.length} people lose their way in: ` +
@@ -265,6 +275,11 @@ export let keeping = (d: Doomed, env: HostEnv = {}): string[] => [
     'files and everything it has saved are kept'
   ),
   ...d.hosts.map((h) => `${h.name} stops serving until the space is back`),
+  ...d.lines.map((l) =>
+    `${shown(l.number)} stays the space's, and costs ${
+      dollars(l.monthly)
+    } a month until it is erased`
+  ),
   ...(d.members.length > 1
     ? [
       `${d.members.length} people lose their way in until then: ` +
@@ -399,6 +414,10 @@ export let erase = async (
   // hostname nothing here remembers (T-33038 domain_detach holds the same
   // order for one domain).
   if (d.hosts.length) reachable(env)
+  // Its numbers, each given back at the provider and then its row buried,
+  // which its death would not take (directory-vocab.ts `phone_line`): a
+  // number held past its space is billed every month with nobody to bill.
+  for (let line of d.lines) await released(env, line)
   for (let host of d.hosts) await release(env, host.name)
   let files = 0
   for (let app of d.apps) {
