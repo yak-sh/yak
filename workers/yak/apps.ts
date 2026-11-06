@@ -173,7 +173,8 @@ import { Refused, Stale } from '@yaks/graph/errors'
 import { mistaken } from './mistake.ts'
 import { token } from '@yaks/graph/sha256'
 import { callStored } from './package-tools.ts'
-import { edits, mode, reads, writes } from '@yaks/member'
+import { Denied, edits, mode, reads, stands, writes } from '@yaks/member'
+import { uploadFloor } from './app-authority.ts'
 import { type Door, USES } from './door.ts'
 import { type Clock, clock, timed } from './timing.ts'
 import { asked, keep, keepable, passed, told, unkept } from './page-cache.ts'
@@ -1368,6 +1369,7 @@ let recorded = async (
   }
   return Response.json({
     eid: file.sha,
+    attachment: file.use,
     url: file.url,
     mime: file.mime,
     bytes,
@@ -2268,9 +2270,26 @@ export let api = async (
   // its write rule the upload, its read rule the download. Deleting is the
   // content row's: its bytes follow it out (`delete_upload`), so whoever may
   // delete that row deletes the file, and this door takes no DELETE.
+  // Who may upload (app-authority.ts `uploadFloor`), held here before any
+  // bytes are kept, as the store's guard holds the rows that name them.
+  let unfloored = async () => {
+    let need = uploadFloor((await declarationOf(env, space, app)).vocab)
+    return need && !stands(who.person, who.role, need)
+      ? rejection(
+        new Denied(who.person, app.eid, need, 'write', 'attachment'),
+        {
+          request: 'POST /api/blob',
+          space: space.slug,
+          app: app.slug,
+        },
+      )
+      : null
+  }
   if (path == '/blob') {
     if (req.method != 'POST') return json(405, 'method_not_allowed')
     if (!mayPost) return refused()
+    let below = await unfloored()
+    if (below) return below
     return await took(req, env, space, app, store, {
       ...headers,
       ...(await named(env, who, app)),
@@ -2280,6 +2299,8 @@ export let api = async (
     path.startsWith('/blob/') && (req.method == 'POST' || req.method == 'PUT')
   ) {
     if (!mayPost) return refused()
+    let below = await unfloored()
+    if (below) return below
     return inParts(
       req,
       env,

@@ -3,7 +3,7 @@ doc:
   title: Files and Uploads
 guide:
   slug: files
-  brief: private draft previews, files, releases, uploads, searchable PDFs, scanned documents, document questions and page citations
+  brief: private draft previews, files, releases, uploads, searchable PDFs and web pages, scanned documents, document questions and page citations
   description: >-
     Build and check a private draft with app_preview before app_deploy:
     screenshots at phone and desktop widths, page console and errors,
@@ -448,6 +448,7 @@ a canvas or a `fetch` response. A second argument sets its name:
 It returns one object:
 
     { eid:   '9f2a…',                      // the bytes' own address
+      attachment: '…derived…',             // the row naming them in this app
       url:   '/photos/api/blob/9f2a…',     // where this app serves them
       mime:  'image/jpeg',                 // the type the browser reported
       bytes: 51234,                        // how many there are
@@ -462,9 +463,10 @@ the bytes are an image that declares its size; otherwise both keys are absent.
 ## Searching documents
 
 Uploading a PDF, Word `.docx`, spreadsheet (`.xlsx`, `.xls`, `.xlsm`, `.xlsb`,
-`.ods`, `.numbers`), `.odt` or `.csv` also extracts its text in the background.
-Use the same `upload(file)` call above. The original stays downloadable; the app
-does not need a conversion service or another search index.
+`.ods`, `.numbers`), `.odt`, `.csv` or web page (`.html`, `.htm`, or the type
+`text/html`) also extracts its text in the background. Use the same
+`upload(file)` call above. The original stays downloadable; the app does not
+need a conversion service or another search index.
 
 Automatic extraction supports files up to 16 MiB. A larger file is kept and its
 attachment gets `failed{reason}` explaining the extraction limit. A file that
@@ -477,7 +479,9 @@ PDFs are read page by page. Pages containing images are rendered in full and
 transcribed, so scanned pages, rotated scans and pages with text over a scan are
 searchable too. The renderer preserves the PDF's page numbers. Office conversion
 produces one searchable document section, labeled `Document`; it does not invent
-printed page numbers for reflowable Word files or sheets.
+printed page numbers for reflowable Word files, sheets or web pages. A web
+article a worker fetched is kept this way: Document Q&A
+(<https://yaks.app/docs/library.md>) has the worker route.
 
 Extraction writes `document_page{document, blob, page, location, text}` rows.
 `text` is indexed by the app's existing full-text and meaning search. The
@@ -755,6 +759,18 @@ member who is only a viewer,
 
     try { await upload(file) }
     catch (e) { e.signIn ? location = e.signIn : show(e.message) }
+
+An app can keep uploads to fewer people than its `access` lets write, with a
+`floor` in its `vocab.json`'s `blob`: `person` (anyone signed in), `viewer`,
+`editor` or `owner`, the same levels a component's `floor` takes:
+
+    { "blob": { "floor": "editor" }, "$defs": { … } }
+
+An `open` library that answers anyone's questions keeps its documents to its
+editors this way. An upload from below the floor is refused before any bytes are
+kept, naming `attachment`, the row an upload writes:
+
+    someone signed out may not write attachment in <app> — editor is the least that may
 
 On an `open` app a signed-out guest's upload has no `created.by` at all. If the
 gallery shows who added each photo, ask them for a name and save it in your own

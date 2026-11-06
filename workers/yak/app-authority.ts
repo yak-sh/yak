@@ -5,7 +5,9 @@ import type { Plugin } from '@yaks/graph'
 import { DELIVER } from '@yaks/mail'
 import {
   Denied,
+  type Floor,
   type Floors,
+  isFloor,
   type Level,
   level,
   members,
@@ -143,9 +145,26 @@ export let FLOORS: Floors = {
  */
 let VISITING: Floors = { [DELIVER]: 'owner', using: 'owner', builder: 'owner' }
 
+/** Who may upload into the app, as its manifest's `"blob": {"floor": …}` says:
+ * an `open` library takes its visitors' questions and keeps its shelves to its
+ * editors. Unsaid, anyone who may write the app may.
+ *
+ * ```ts
+ * import { uploadFloor } from './app-authority.ts'
+ * import { assertEquals } from '@std/assert'
+ * assertEquals(uploadFloor({ blob: { floor: 'editor' } }), 'editor')
+ * assertEquals(uploadFloor({ blob: { maxLength: 1024 } }), undefined)
+ * ```
+ */
+export let uploadFloor = (manifest: VocabDoc): Floor | undefined => {
+  let said = (manifest.blob as { floor?: unknown } | undefined)?.floor
+  return isFloor(said) ? said : undefined
+}
+
 /** The floors an app's own manifest leaves standing: every one, less the
  * floor on asking its models where it opens them to anyone who may write;
- * for a visitor, raised to {@link VISITING}.
+ * with its {@link uploadFloor} on an upload's `attachment`, the row naming
+ * the bytes; for a visitor, raised to {@link VISITING}.
  *
  * ```ts
  * import { floorsOf } from './app-authority.ts'
@@ -153,12 +172,14 @@ let VISITING: Floors = { [DELIVER]: 'owner', using: 'owner', builder: 'owner' }
  * assertEquals(floorsOf({}).deliver, 'editor')
  * assertEquals(floorsOf({}, true).deliver, 'owner')
  * assertEquals(floorsOf({ models: 'open' }, true).using, undefined)
+ * assertEquals(floorsOf({ blob: { floor: 'editor' } }).attachment, 'editor')
  * ```
  */
 export let floorsOf = (manifest: VocabDoc, visit = false): Floors =>
   Object.fromEntries(
     Object.entries({
       ...FLOORS,
+      ...(uploadFloor(manifest) ? { attachment: uploadFloor(manifest) } : {}),
       ...(visit ? VISITING : {}),
       ...Object.fromEntries(
         noticeComponents(manifest).map((name) => [name, 'editor']),

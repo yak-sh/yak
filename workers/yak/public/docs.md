@@ -249,6 +249,16 @@ the page the person is on.
 Deeper: <https://yaks.app/docs/clipping.md> — the whole clipper, the
 bookmarklet, and what to do when a site refuses.
 
+## Document Q&A
+
+An app can answer questions from a library of documents: on an `open` app with
+`"models": "open"` and `"blob": {"floor": "editor"}`, its editors upload PDFs,
+Word files and web articles, and anyone with the link asks `./api/documents/ask`
+and gets an answer citing the document and page.
+
+Deeper: <https://yaks.app/docs/library.md> — the manifest, uploading many files,
+keeping web articles with a worker route, and citations.
+
 ## Access, Publishing and Installing
 
 Who may read and write an app is its `access` and its guest list; `member_add`

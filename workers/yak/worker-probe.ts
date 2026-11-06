@@ -3,6 +3,7 @@
 import * as io from '@yaks/file/io'
 import { SHIM } from './dispatch.ts'
 import { fresh, type Kernel } from './probe.ts'
+import type { Vars } from './env.ts'
 
 // The server source a release needs to build a worker at all: a page asks
 // the dispatch namespace only for a release that built one. The namespace
@@ -13,7 +14,12 @@ export let serverSource = {
     'export default { fetch: () => new Response(null, { status: 404 }) }',
 }
 
-export let workerKernel = async (source: URL): Promise<Kernel> => {
+/** A kernel whose apps' workers all run `source`, with `bindings` beside the
+ * kernel's own. */
+export let workerKernel = async (
+  source: URL,
+  bindings: Vars = {},
+): Promise<Kernel> => {
   let dir = io.makeTempDirSync({ prefix: 'yak-worker-probe-' })
   try {
     io.writeTextFileSync(`${dir}/entry.js`, SHIM)
@@ -23,6 +29,7 @@ export let workerKernel = async (source: URL): Promise<Kernel> => {
     )
     let { default: worker } = await import(`file://${dir}/entry.js`)
     let k = await fresh({
+      ...bindings,
       DISPATCH: {
         get: () => ({
           fetch: (req: Request) =>

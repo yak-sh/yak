@@ -527,6 +527,13 @@ the home screen, which is not something to promise a person today. Give them the
 paste box, and say that sharing from the phone's share sheet is coming, rather
 than shipping a button that does nothing on their phone.
 
+## Keeping an article's text
+
+The clipper above keeps what a page says about itself, not its text. To search
+an article and cite it in answers, upload its HTML instead: an upload of a web
+page is extracted and searched like a Word file. Document Q&A
+(<https://yaks.app/docs/library.md>, "Keeping web articles") has the route.
+
 ## Limitations
 
 - **No writing into an app from another site.** No API token, and no endpoint

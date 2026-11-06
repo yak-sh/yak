@@ -20,7 +20,13 @@ import {
 import { acceptsErrors, blobKeywords } from '@yaks/blob'
 import { edgeKeywords } from '@yaks/edge'
 import { keyKeywords } from '@yaks/key'
-import { floored, memberKeywords, permitted, unowned } from '@yaks/member'
+import {
+  floored,
+  isFloor,
+  memberKeywords,
+  permitted,
+  unowned,
+} from '@yaks/member'
 import { idKeywords } from '@yaks/id'
 import { derived as builds } from '@yaks/builders/vocab'
 import { sessionDerived } from '@yaks/session/status'
@@ -499,7 +505,8 @@ export let OPENS: Record<string, string> = {
  * `tools`, which is an object of properties like any other. `models` and `rtc`
  * are each {@link OPENS}: who may spend the space's budget through the
  * app. `blob` is which uploads the app takes (@yaks/blob `Accepts`), checked
- * where bytes come in (apps.ts `took`, `inParts`; inbox.ts). `packages` is
+ * where bytes come in (apps.ts `took`, `inParts`; inbox.ts), and its `floor`
+ * who may upload them (app-authority.ts `floorsOf`). `packages` is
  * the one the person never writes here: a deploy lifts it off package.json's
  * `"platform"` dependencies ({@link stated}), and the store speaks their
  * words ({@link lent}).
@@ -535,7 +542,15 @@ export let appDoc = (source: unknown, file = 'vocab.json'): VocabDoc => {
     }
   }
   if (held.blob !== undefined) {
-    let wrong = acceptsErrors(held.blob)
+    // `floor` is who may upload, a word of the platform's rather than of the
+    // bytes (@yaks/blob), so it is checked here and the rest there.
+    let { floor, ...accepts } = object(held.blob) ? held.blob : {}
+    let wrong = [
+      ...acceptsErrors(object(held.blob) ? accepts : held.blob),
+      ...floor === undefined || isFloor(floor)
+        ? []
+        : ['floor is person, viewer, editor or owner: who may upload'],
+    ]
     if (wrong.length) {
       throw refuse('arguments', `${file}: "blob": ${wrong.join('; ')}`)
     }

@@ -19,7 +19,8 @@ export type Conversion = { format: string; data?: string; error?: string }
 export type Markdown = (
   file: { name: string; blob: Blob },
 ) => Promise<Conversion>
-/** The documents read as their text, by extension. */
+/** The documents read as their text, by extension. A web page is one too: an
+ * article a worker fetched and kept is read the way a Word file is. */
 export let DOCUMENTS = [
   'pdf',
   'docx',
@@ -31,10 +32,13 @@ export let DOCUMENTS = [
   'odt',
   'csv',
   'numbers',
+  'html',
+  'htm',
 ]
 let documentName = new RegExp(`\\.(${DOCUMENTS.join('|')})$`, 'i')
 export let supported = (name: string, mime: string) =>
-  mime == 'application/pdf' || documentName.test(name)
+  mime == 'application/pdf' || mime.startsWith('text/html') ||
+  documentName.test(name)
 export let isPdf = (name: string, mime: string) =>
   mime == 'application/pdf' || /\.pdf$/i.test(name)
 

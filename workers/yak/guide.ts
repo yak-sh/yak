@@ -317,6 +317,14 @@ endpoints accept same-origin requests only, so a script on somebody else's
 page cannot write here. Call guide with page clipping for the whole thing
 (${url(env, '/docs/clipping.md')}).
 
+Asked for an app that answers questions from documents — a catechism, a rule
+book, a firm's policies — make it open with "models": "open" and "blob":
+{"floor": "editor"} in its vocab.json, so anyone with the link asks and only
+editors upload. Uploaded PDFs, Word files and web pages are searched and cited
+by ./api/documents/ask; a web article is kept by a worker route that fetches it
+and uploads its HTML. Call guide with page library for the whole recipe
+(${url(env, '/docs/library.md')}).
+
 Anything that should happen later is a row in the store, not a cron job: put
 wake {at, every, note} on the entity it is about — the reminder, the lease
 that lapses, the digest nobody has sent — and that app's store wakes at that
@@ -479,6 +487,7 @@ export let PAGES: Page[] = [
   'notes',
   'code',
   'clipping',
+  'library',
   'sharing',
   'home',
   'mail',

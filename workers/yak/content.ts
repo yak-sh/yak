@@ -63,7 +63,7 @@ export let PAGES: Record<string, Page> = {
     'description':
       "Build and check a private draft with app_preview before app_deploy: screenshots at phone and desktop widths, page console and errors, isolated test data and a private preview URL, without a local computer. app_deploy's reload levels and the yak-release event, including a custom notice that keeps unsaved input; app_files — what a write returns, the patch and fetch ops, the version history every write keeps and the restore op, page URLs and 404 handling, icon.svg for a home-screen icon — then upload() for a file from an <input> or a drop: the ./api/blob URL the bytes are served from, the attachment and image rows it writes, large files uploaded in parts and resumed, who may upload, deleting an upload and its bytes, the vocab.json size and type limits, downscaling images before upload, a photo gallery without duplicate rows, and publish() for a public file served to anyone at a path of the app's URL, before the app's worker and regardless of its access.",
     'brief':
-      'private draft previews, files, releases, uploads, searchable PDFs, scanned documents, document questions and page citations',
+      'private draft previews, files, releases, uploads, searchable PDFs and web pages, scanned documents, document questions and page citations',
   },
   'games': {
     'slug': 'games',
@@ -80,6 +80,13 @@ export let PAGES: Record<string, Page> = {
       "The front page (homepage) app served at <space>.yaks.app/ and how requests in a space are routed: app_set home, the five-step routing order, the first globs that send another app's paths to the front page's worker, the reserved platform paths, fail-open routing, changing a space's address with space_set, reserved names, and email sent to <space>@yaks.app.",
     'brief':
       "the app at a space's root address, and how a space routes requests",
+  },
+  'library': {
+    'slug': 'library',
+    'title': 'Document Q&A',
+    'description':
+      'Document Q&A, a public app where anyone with the link asks questions and gets answers with citations from a library of documents its owner and editors keep: open access with "models": "open", "blob": {"floor": "editor"} so only editors upload, uploading many PDF and Word files at once, watching their text extraction, keeping web articles with a worker route that fetches the page and uploads it as a document, full-text and semantic search, ./api/documents/ask with its citations, linking a cited article to its original address, and what limits a visitor\'s questions.',
+    'brief': 'a public app that answers questions from a library of documents',
   },
   'mail': {
     'slug': 'mail',

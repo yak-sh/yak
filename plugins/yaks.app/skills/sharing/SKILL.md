@@ -39,7 +39,8 @@ set the same kind of limit: `"floor": "person"` accepts writes only from someone
 signed in, `"floor": "editor"` only from the owner and editors, and
 `"pace": "1s"` accepts one write a second from each writer
 (<https://yaks.app/docs/components.md>, "Write permissions and rate limits:
-`floor` and `pace`").
+`floor` and `pace`"). The same `floor` in the manifest's `blob` says who may
+upload a file (<https://yaks.app/docs/files.md>, "Upload and read permissions").
 
 An `open` app does not record who wrote a visitor's rows. A visitor who never
 signed in has no identity, so their rows carry no `created.by`, and a row
