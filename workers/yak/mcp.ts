@@ -67,14 +67,8 @@ import { CfWorkerJsonSchemaValidator } from '@modelcontextprotocol/server/valida
 import { type Exchange, mcp, roster, rosterVersion } from '@yaks/mcp'
 import { coded } from './agent-code.ts'
 import { translated } from '@yaks/mcp/tools'
-import {
-  connected,
-  named,
-  reaching,
-  ROWS,
-  scope as queryScope,
-  searching,
-} from './agent.ts'
+import { connected, named, reaching, ROWS, searching } from './agent.ts'
+import { scope as queryScope } from './query-line.ts'
 import { anonymous, asked, opened, READS, scope } from './anon.ts'
 import * as dirPart from './directory.ts'
 import { directory, url } from './directory.ts'

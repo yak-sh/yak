@@ -28,7 +28,7 @@ import { sessionRows } from './session-lens.ts'
 // declare — the language a merged bundle is written in, and the one @yaks/match
 // reads an order out of.
 import { listed, names, projects, type Row, STAMPS } from './listing.ts'
-import { bare } from './wire.ts'
+import { bare } from './query-line.ts'
 import { archetypes } from '@yaks/archetype'
 import { edges } from '@yaks/edge'
 import type { Bundle, Entity, Projection } from '@yaks/graph'

@@ -44,7 +44,7 @@ import { aggregate } from '@yaks/graph/read'
 import { argsOf } from '@yaks/graph/call'
 import { composed as perEntity } from '@yaks/graph/bundle'
 import { detached } from '@yaks/graph/storage'
-import { parse, stringify, tokens } from '@yaks/query'
+import { parse, stringify } from '@yaks/query'
 import { addressed, wordish } from '@yaks/alias'
 import { barred, openly } from './anon.ts'
 import type { Search } from '@yaks/mcp'
@@ -68,7 +68,8 @@ import {
 } from './tools.ts'
 import { ceiling, serve, unseenBlock } from './unseen.ts'
 import { appVocab, packagesOf } from './vocab.ts'
-import { bare, joined, lined } from './wire.ts'
+import { lined } from './wire.ts'
+import { scope, unasked } from './query-line.ts'
 import { apex, type Host, hosted } from './host.ts'
 import { refuse, unavailable } from './tool.ts'
 import { inReach } from './declared.ts'
@@ -327,37 +328,6 @@ export let named = async (
   }
   let args = two ? { space: one, app: two } : { app: one }
   return write ? inApp(ctx, args, true, true) : inRead(ctx, args)
-}
-
-// The `.in=` rider: which app a read is scoped to. It is the platform's word,
-// not the query grammar's, so it comes off the line before any store sees it —
-// a store knows about components, and which of several stores to ask is a
-// question only this side of the hop can answer. It is a clause like any
-// other, so whitespace ends it as `&` does.
-/// scope('.doc .in=recipes') -> { said: 'recipes', line: '.doc' }
-/// scope('.in=me/trip&.doc|.task') -> { said: 'me/trip', line: '.doc|.task' }
-export let scope = (line: string) => {
-  let segs = tokens(bare(line))
-  let said = segs.find((s) => /^\.in=/.test(s))?.slice(4)
-  return { said, line: joined(segs.filter((s) => !/^\.in=/.test(s))) }
-}
-
-// `.in=` alone says which app to read and nothing about what: a line with no
-// clause left reads nothing, and an empty answer reads as an empty app. So it
-// is refused with a line that reads what the app keeps.
-export let unasked = (
-  slug: string,
-  said: string,
-  defs: Record<string, { tool?: unknown; rule?: unknown; extends?: unknown }>,
-) => {
-  let kinds = Object.entries(defs)
-    .filter(([, d]) => !d.tool && !d.rule && !d.extends)
-    .map(([name]) => name)
-  let line = kinds.length ? `.${kinds[0]}&?doc` : '.doc'
-  return `'.in=${said}' says which app to read, not what: a row carries ` +
-    `the components its line names. ${slug} keeps ` +
-    `${kinds.length ? kinds.join(', ') : 'doc'}, so ` +
-    `'${line}&.in=${said}' reads ${kinds.length ? 'each with its doc' : 'them'}`
 }
 
 // The identity operand list, wherever it appears on a line: `.entity.eid=a,b` — which

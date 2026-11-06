@@ -26,6 +26,7 @@
 // three of the page's riders lost their leading dot on the way over.
 import type { Bundle } from '@yaks/graph'
 import { tokens } from '@yaks/query'
+import { bare, joined } from './query-line.ts'
 import { minted } from './meta.ts'
 import { refuse } from './tool.ts'
 import { IDEMPOTENCY } from './door.ts'
@@ -79,22 +80,6 @@ let SEGMENT =
   /((?:"(?:\\.|[^"\\])*"|'(?:\\.|[^'\\])*'|[^,.'"]|\.(?!\.))*)(\.\.\.?|,|$)/g
 let members = (value: string) =>
   value.replace(SEGMENT, (_, member, sep) => glued(member) + sep)
-
-/** A line's tokens written back as one line: `&` between clauses, nothing
- * around the `|` that separates two arms. */
-/// joined(['.doc', '.task', '|', '.recipe']) -> '.doc&.task|.recipe'
-export let joined = (segs: string[]) =>
-  segs.reduce(
-    (line, seg, i, all) =>
-      line + (i && seg != '|' && all[i - 1] != '|' ? '&' : '') + seg,
-    '',
-  )
-
-/** A line without the `?` a query string opens with, and any `&` after it. A
- * `?` before a word is the grammar's own (`?doc` asks for a component), so it
- * stays. */
-export let bare = (line: string) =>
-  line.replace(/^\?(?![A-Za-z_])/, '').replace(/^&+/, '')
 
 /**
  * A page's filter line, off the search string it arrived as: the riders

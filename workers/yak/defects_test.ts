@@ -177,25 +177,57 @@ let TIMEOUT =
   'Durable Object storage operation exceeded timeout which caused object to be reset.'
 // An instance's storage. One reset for a deploy refuses writes and still
 // answers reads; one no longer active refuses both.
-let refuse = (words: string) => (): never => {
-  throw new Error(words)
+let refuse = (words: string) => {
+  let error = new Error(words)
+  return (): never => {
+    throw error
+  }
 }
 let storage = (write = () => {}, read: () => unknown = () => []): Own => ({
   sql: { exec: read },
   transactionSync: (body) => (write(), body()),
 })
 
-test('a moved instance reports none of its resets; a live caller and our own reset do', () => {
-  let redoneBy = (instance?: Own) =>
-    [GONE, CODE, LOST, TIMEOUT].map((words) =>
-      redone(new Error(words), instance && (() => replaced(instance)))
+let resets = [GONE, CODE, LOST, TIMEOUT].map((words) => new Error(words))
+let resetCases: [string, Own | undefined, boolean[]][] = [
+  [
+    'a moved instance reports none of its resets; a live caller and our own reset do',
+    storage(refuse(CODE)),
+    [true, true, true, false],
+  ],
+  [
+    'an unreadable moved instance reports none of its resets',
+    storage(undefined, refuse(GONE)),
+    [true, true, true, false],
+  ],
+  [
+    'an instance whose storage connection was lost reports none of its resets',
+    storage(undefined, refuse(LOST)),
+    [true, true, true, false],
+  ],
+  ['a live instance reports each reset', storage(), [
+    false,
+    false,
+    false,
+    false,
+  ]],
+  ['a caller outside an instance reports each reset', undefined, [
+    false,
+    false,
+    false,
+    false,
+  ]],
+]
+for (let [name, instance, expected] of resetCases) {
+  test(name, () => {
+    equal(
+      resets.map((error) =>
+        redone(error, instance && (() => replaced(instance)))
+      ),
+      expected,
     )
-  equal(redoneBy(storage(refuse(CODE))), [true, true, true, false])
-  equal(redoneBy(storage(undefined, refuse(GONE))), [true, true, true, false])
-  equal(redoneBy(storage(undefined, refuse(LOST))), [true, true, true, false])
-  equal(redoneBy(storage()), [false, false, false, false])
-  equal(redoneBy(), [false, false, false, false])
-})
+  })
+}
 
 test('parallel invocation tags remain isolated and escaping failures reach tracker', async () => {
   let { rows, time, env } = recorded()

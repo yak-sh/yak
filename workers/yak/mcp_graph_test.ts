@@ -26,13 +26,8 @@ import {
 import { FREE, monthOf } from './meter.ts'
 import type { Listed } from './tools.ts'
 import { minted } from './mcp-probe.ts'
-import { graph, token } from '@yaks/graph'
-import { loadVocab } from '@yaks/vocab'
-import { ram } from '@yaks/ram'
-import { archetypeDoc, archetypes } from '@yaks/archetype'
+import { token } from '@yaks/graph'
 import { Ajv } from 'ajv'
-import { scope, unasked } from './agent.ts'
-import { asking, screened } from './listing.ts'
 
 // A client holds every answer to the output schema its tool is listed with
 // and refuses the whole answer when one row does not fit. Every row here says
@@ -215,70 +210,6 @@ test('graph_query answers a count and a tally as their value', async () => {
   } finally {
     await k.stop()
   }
-})
-
-// A line naming only its app reads nothing, and an empty answer reads as an
-// empty app; the refusal hands over a line that reads what the app keeps.
-let choresVocab = loadVocab({
-  $defs: {
-    chore: { component: true },
-    doc: { component: true, properties: { title: { type: 'string' } } },
-  },
-})
-let chores = graph({ vocab: choresVocab, storage: ram(choresVocab) })
-chores.apply([{
-  entity: { eid: 'c' },
-  chore: {},
-  doc: { title: 'sweep' },
-}])
-
-test('a read naming only an app says what to read in it', async () => {
-  let refused = unasked('chores', 'chores', {
-    chore: {},
-    sweep: { tool: {} },
-    doc: { extends: 'chore' },
-  })
-  let line = refused.match(/'([^']+&\.in=chores)'/)?.[1]
-  assertEquals(line, '.chore&?doc&.in=chores')
-  let { said, line: asked } = scope(line!)
-  assertEquals(said, 'chores')
-  assertEquals(
-    (await chores.read(asked)).map((b) => (b.doc as { title: string }).title),
-    ['sweep'],
-  )
-})
-
-// A line naming no component reads what the app keeps, and the store's own
-// rows (its archetypes, its effects queue, who may reach it) stay out of the
-// answer unless the line names one.
-let kept = loadVocab([archetypeDoc, {
-  $defs: {
-    item: { component: true, properties: { name: { type: 'string' } } },
-  },
-}])
-let store = graph({
-  vocab: kept,
-  storage: ram(kept),
-  plugins: [archetypes()],
-})
-store.apply([{ entity: { eid: 'milk' }, item: { name: 'milk' } }])
-
-let words = screened((w) => !!kept.comp(w), false)
-let keptIds = async (q: string) =>
-  (await store.read(asking(q, words))).map((b) => b.entity.eid)
-
-test('a read naming no component answers only what the app keeps', async () => {
-  assertEquals(await keptIds('.limit=5'), ['milk'])
-})
-
-for (let q of ['*', '.limit=50']) {
-  test(`a read of ${q} answers only what the app keeps`, async () => {
-    assertEquals(await keptIds(q), ['milk'])
-  })
-}
-
-test('a read naming archetypes includes the store archetypes', async () => {
-  assertEquals((await keptIds('.archetype')).length > 0, true)
 })
 
 // An entity spans apps (T-32699): a read that names no app asks every store
