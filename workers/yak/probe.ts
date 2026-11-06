@@ -101,39 +101,44 @@ let owning = <K extends Door>(k: K, close = () => Promise.resolve()) => ({
   stop: close,
 })
 
-/** The test kernel's in-process service endpoints and signing keys. */
-export let vars = (secret: string, cloudflare: string) => {
-  return {
-    LOCAL_DEV: '1',
-    SESSION_SECRET: secret,
-    MAIL_TOKEN: 'a-token',
-    MAIL_API: cloudflare,
-    RESEND_TOKEN: 'a-token',
-    RESEND_PLATFORM_TOKEN: 'a-token',
-    RESEND_API: `${cloudflare}/resend`,
-    CF_ZONE: 'zone',
-    CF_HOSTNAMES_TOKEN: 'a-token',
-    HOSTNAMES_API: cloudflare,
-    DNS_API: `${cloudflare}/dns-query`,
-    STRIPE_WEBHOOK_SECRET: WEBHOOK_SECRET,
-    STRIPE_CONNECT_WEBHOOK_SECRET: WEBHOOK_SECRET,
-    OPENAI_APPS_CHALLENGE: CHALLENGE,
-    REALTIME_APP: 'app',
-    REALTIME_TOKEN: 'a-token',
-    REALTIME_API: cloudflare,
-    CF_WORKERS_TOKEN: 'a-token',
-    WORKERS_API: cloudflare,
-  }
-}
+/**
+ * The test kernel's settings, its own and never the deploy's `[vars]`: a test
+ * sees what is written here and what it asks for, so changing production's
+ * wrangler.toml can't reach one. Each service is a stand-in in this file, and
+ * each name is one no deploy holds.
+ */
+export let vars = (secret: string, cloudflare: string) => ({
+  LOCAL_DEV: '1',
+  ENVIRONMENT: 'test',
+  SESSION_SECRET: secret,
+  CF_ACCOUNT: 'account',
+  WORKER_NAME: 'yak',
+  DISPATCH_NAMESPACE: 'yak-apps',
+  VIEWS_DATASET: 'yak_views',
+  MAIL_TOKEN: 'a-token',
+  MAIL_API: cloudflare,
+  CF_ZONE: 'zone',
+  CF_HOSTNAMES_TOKEN: 'a-token',
+  HOSTNAMES_API: cloudflare,
+  DNS_API: `${cloudflare}/dns-query`,
+  STRIPE_WEBHOOK_SECRET: WEBHOOK_SECRET,
+  STRIPE_CONNECT_WEBHOOK_SECRET: WEBHOOK_SECRET,
+  OPENAI_APPS_CHALLENGE: CHALLENGE,
+  REALTIME_APP: 'app',
+  REALTIME_TOKEN: 'a-token',
+  REALTIME_API: cloudflare,
+  CF_WORKERS_TOKEN: 'a-token',
+  WORKERS_API: cloudflare,
+})
 
-type Toml = {
-  vars: Record<string, string>
-  ratelimits: { name: string; simple: { limit: number; period: number } }[]
-}
-let toml = () =>
-  parse(
+// The rate limits are bindings rather than settings: the kernel holds every
+// one wrangler.toml declares, each at its declared rate.
+let ratelimits = () =>
+  (parse(
     io.readTextFileSync(new URL('./wrangler.toml', import.meta.url)),
-  ) as Toml
+  ) as {
+    ratelimits: { name: string; simple: { limit: number; period: number } }[]
+  }).ratelimits
 
 // The kernel's handler and graph bindings share the caller's process.
 let boot = async (
@@ -155,9 +160,7 @@ let boot = async (
   let log = crypto.randomUUID()
   logs.set(log, '')
   let cf = cloudflare(log)
-  let { vars: own, ratelimits } = toml()
   let p = lasting(secret, {
-    ...own,
     ...vars(secret, cf.url),
     // What the runtime binds beside the config: this deploy's id, and the
     // `send_email` binding an app's letters leave through.
@@ -169,7 +172,10 @@ let boot = async (
     AI: ai([]) as Env['AI'],
     MODEL_FETCH: () => Promise.resolve(modelPage(0.15, 0.5)),
     ...Object.fromEntries(
-      ratelimits.map((r) => [r.name, limiter(r.simple.limit, r.simple.period)]),
+      ratelimits().map((r) => [
+        r.name,
+        limiter(r.simple.limit, r.simple.period),
+      ]),
     ),
     ...bindings,
   }, load)
@@ -690,8 +696,7 @@ export let seed = async (
 //
 // The conversations a kernel has with Cloudflare, over the API's
 // `{success, errors, result}` envelope. A letter sent through Email Sending,
-// by its API or its binding, or through Resend's API at `/resend`, which the
-// deploy's MAIL_VIA selects, is written to `log` as one `yak-mail` line, which
+// by its API or its binding, is written to `log` as one `yak-mail` line, which
 // is where a test reads its letters back (`letters`). And the three calls a domain makes — list by name,
 // create, delete — go to custom hostnames kept in memory. A hostname is
 // answered active, which is the state a domain reaches once the person's
@@ -816,12 +821,6 @@ export let cloudflare = (log = crypto.randomUUID()) => {
       let { to, subject, text, reply_to } = await req.json()
       wrote(to, subject, text, reply_to)
       return ok({})
-    }
-    // Resend's sending API, which wrangler.toml's MAIL_VIA selects.
-    if (url.pathname == '/resend/emails') {
-      let { to, subject, text, reply_to } = await req.json()
-      wrote(to, subject, text, reply_to)
-      return Response.json({ id: crypto.randomUUID() })
     }
     if (req.method == 'POST') {
       let made = async () => {
