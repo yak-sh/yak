@@ -21,7 +21,7 @@ let rig = () => {
       JSON.parse(Deno.readTextFileSync(`${pool}/${e.name}`)).fileNames.join()
     ).sort()
   let clean = () => Deno.removeSync(root, { recursive: true })
-  return { dir, compile, pooled, clean }
+  return { dir, pool, compile, pooled, clean }
 }
 
 test('a compile starts from the build info naming most of its files, and adds what it grew', async () => {
@@ -55,7 +55,7 @@ test('the pool keeps eight build infos, the newest among them, and an interrupte
     for (let i = 0; i < 10; i++) await compile([`f${i}`], info(`f${i}`))
     await throws(() => compile(['z'], undefined), /interrupted/)
     equal([pooled().length, pooled().includes('f9')], [8, true])
-    equal([...Deno.readDirSync(dir)], [])
+    equal([...Deno.readDirSync(dir)].map((e) => e.name), ['build.tsbuildinfo'])
   } finally {
     clean()
   }
@@ -73,6 +73,21 @@ test('concurrent compiles read private copies and each publishes whole', async (
     equal(seen, [info('a'), info('a')])
     equal(pooled().length, 1)
     equal(['a,b', 'a,c'].includes(pooled()[0]), true)
+  } finally {
+    clean()
+  }
+})
+
+test("a checkout starts from its own last build info over another checkout's naming as much", async () => {
+  let { pool, compile, clean } = rig()
+  try {
+    await compile(['a'], info('a'))
+    for (let e of Deno.readDirSync(pool)) {
+      Deno.writeTextFileSync(`${pool}/${e.name}`, info('a', 'elsewhere'))
+    }
+    let seen: string[] = []
+    await compile(['a'], info('a'), seen)
+    equal(seen, [info('a')])
   } finally {
     clean()
   }

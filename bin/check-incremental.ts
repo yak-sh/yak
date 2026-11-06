@@ -5,7 +5,8 @@
 // would check thousands of files again (20-30 s of CPU). So a platform keeps
 // a pool of them, shared by every checkout of the repository: a compile
 // starts from the one holding most of its files, and adds what it learned
-// where that keeps the most.
+// where that keeps the most. Checkouts on other branches hold other versions
+// of some files, so each also keeps its own last one, preferred on a tie.
 
 /** A build info in the pool, and the files it names, relative to itself. */
 export type Held = { path: string; files: Set<string> }
@@ -75,9 +76,11 @@ let publish = async (from: string, to: string) => {
 }
 
 /**
- * Give a compiler, in `dir`, the build info of `pool` naming most of `files`
- * (relative to `dir`, as build info names them) privately, and add its next
- * one to the pool (`placed`) atomically, keeping the newest `keep`.
+ * Give a compiler, in `dir`, the build info naming most of `files` (relative
+ * to `dir`, as build info names them) privately: the checkout's own last, or
+ * one of `pool`'s. Keep its next as the checkout's own, and add it to the
+ * pool where the pool's nearest says (`placed`), keeping the newest `keep`,
+ * each atomically.
  * Concurrent compiles may finish in either order: the compiler validates the
  * saved versions against the sources and options it reads, and build info
  * names files relative to itself, so another checkout's spares what the two
@@ -106,14 +109,18 @@ export let incremental = async <T>(
   let held = await Promise.all(
     entries.map(async ({ path }) => ({ path, files: await named(path) })),
   )
-  let from = best(held, files)
+  let mine = `${dir}/build.tsbuildinfo`
+  let from = best([{ path: mine, files: await named(mine) }, ...held], files)
   let own = `${dir}/build.${Deno.pid}.${crypto.randomUUID()}.tsbuildinfo`
   try {
     if (from) await Deno.copyFile(from.path, own).catch(absent)
     let result = await compile(own)
-    let where = placed(from, await named(own))
+    let next = await named(own)
+    let near = best(held, [...next])
+    let where = placed(near, next)
     try {
-      if (where == 'over') await publish(own, from!.path)
+      if (next.size) await publish(own, mine)
+      if (where == 'over') await publish(own, near!.path)
       if (where == 'new') {
         await publish(own, `${pool}/${crypto.randomUUID()}.tsbuildinfo`)
         for (let { path } of entries.slice(keep - 1)) {

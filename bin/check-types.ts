@@ -28,10 +28,12 @@
 // atomically (./check-incremental.ts). The project names no path of its
 // checkout in a file every module sees, so that shared work stays valid there.
 //
-// A root that passed is not checked again while it, everything it and its
-// examples reach, the compiler, its options and its globals hold what they
-// held (`proofs`); every checkout on the machine shares those passes (`TYPED`).
-// A program whose roots have all passed starts no compiler.
+// A program starts no compiler when each of its roots passed while it,
+// everything it and its examples reach, the compiler, its options and its
+// globals held what they hold now (`proofs`); every checkout on the machine
+// shares those passes (`TYPED`). The Workers program's resolution is kept as
+// the Deno program's is (@yaks/testing's `remembered`), and the compiler's
+// native binary starts without a Deno process running its launcher.
 import { dirname } from 'node:path'
 import config from '../deno.json' with { type: 'json' }
 import { createHash } from 'node:crypto'
@@ -42,6 +44,7 @@ import {
   remember,
   remembered,
   seal,
+  stores,
   type Survey,
   survey,
 } from '@yaks/testing/deps'
@@ -65,18 +68,28 @@ export const MADE: Record<string, string[]> = {
     .map((name) => `workers/yak/public/${name}`),
 }
 
-/** The compiler, pinned. */
+/** The compiler, pinned, and its build for this machine: the platform
+ * package whose native binary its launcher would start. */
 export const TSC = 'npm:typescript@7.0.2/tsc'
+let NATIVE = `npm:@typescript/typescript-${
+  Deno.build.os == 'windows' ? 'win32' : Deno.build.os
+}-${
+  ({ x86_64: 'x64', aarch64: 'arm64' } as Record<string, string>)[
+    Deno.build.arch
+  ] ?? Deno.build.arch
+}@${TSC.match(/@([^/]+)\//)![1]}`
 
 /** The checkout, and the project directory in it. */
 let CHECKOUT = dirname(dirname(new URL(import.meta.url).pathname))
 let DIR = `${CHECKOUT}/.types`
 
+let CACHE = `${
+  Deno.env.get('XDG_CACHE_HOME') ?? `${Deno.env.get('HOME')}/.cache`
+}/yak`
+
 /** Where the roots that passed are kept, by proof (`proofs`), for every
  * checkout on this machine. */
-export let TYPED = `${
-  Deno.env.get('XDG_CACHE_HOME') ?? `${Deno.env.get('HOME')}/.cache`
-}/yak/types-passed.json`
+export let TYPED = `${CACHE}/types-passed.json`
 
 let hex = (text: string) => createHash('sha256').update(text).digest('hex')
 
@@ -359,9 +372,13 @@ export type Run = (args: string[]) => Promise<boolean>
 let spawn: Run = async (args) =>
   (await new Deno.Command(Deno.execPath(), { args }).spawn().status).success
 
-let output = async (args: string[], env?: Record<string, string>) => {
+let execute = async (
+  command: string,
+  args: string[],
+  env?: Record<string, string>,
+) => {
   let { success, stdout, stderr, signal } = await new Deno.Command(
-    Deno.execPath(),
+    command,
     {
       args,
       env,
@@ -370,12 +387,51 @@ let output = async (args: string[], env?: Record<string, string>) => {
       stderr: 'piped',
     },
   ).output()
-  if (signal) throw new Error(`deno ${args.join(' ')} stopped by ${signal}`)
+  if (signal) {
+    throw new Error(`${command} ${args.join(' ')} stopped by ${signal}`)
+  }
   let text = new TextDecoder()
   return { success, out: text.decode(stdout), err: text.decode(stderr) }
 }
 
-let compile = compiler(output, Deno.env.toObject())
+let output = (args: string[], env?: Record<string, string>) =>
+  execute(Deno.execPath(), args, env)
+
+/** The compiler's native binary, as Deno's npm cache holds it: asked of Deno
+ * once per machine and kept, so a check starts the binary itself rather than
+ * a Deno process running its launcher. None when Deno cannot say. */
+let native = async () => {
+  let kept = `${CACHE}/tsgo-${hex(NATIVE).slice(0, 16)}`
+  try {
+    let path = Deno.readTextFileSync(kept)
+    if (Deno.statSync(path).isFile) return path
+  } catch { /* not kept, or gone */ }
+  let info = await output([
+    'info',
+    '--json',
+    '--no-lock',
+    '--no-config',
+    NATIVE,
+  ])
+  let at = info.success
+    ? Object.values(
+      (JSON.parse(info.out) as Info).npmPackages ?? {},
+    )[0]?.localPath
+    : undefined
+  let path = at && `${at}/lib/tsc${Deno.build.os == 'windows' ? '.exe' : ''}`
+  if (!path || !there(dirname(path))) return undefined
+  put(kept, path)
+  return path
+}
+let tsgo: Promise<string | undefined> | undefined
+
+let compile = compiler(async (args, env) => {
+  tsgo ??= native()
+  let exe = await tsgo
+  return exe
+    ? await execute(exe, args, env)
+    : await output(['run', '-A', TSC, ...args], env)
+}, Deno.env.toObject())
 
 /** Writes each example of `roots` beside its page, and names them. */
 let examples = async (roots: string[]) =>
@@ -478,13 +534,21 @@ let program = async (on: Platform, roots: string[], snapshot?: Survey) => {
       if (!info.success) throw new Error(info.err)
       return JSON.parse(info.out) as Info
     }
+    // What deno said a platform's own configuration resolves is kept by
+    // that configuration, as Deno's is by the checkout's.
+    let own = on.config &&
+      `${stores()}/${on.name}-${
+        hex(Deno.readTextFileSync(on.config)).slice(0, 16)
+      }.json`
     let [found, globals] = await Promise.all([
-      on.config ? resolve() : (async () =>
-        await snapshot?.info(
-          [...roots, ...docs],
-          Object.values(MADE).flat(),
-        ) ??
-          await remembered(resolve)([...roots, ...docs], snapshot?.bytes))(),
+      own
+        ? remembered(resolve, own)(roots, snapshot?.bytes)
+        : (async () =>
+          await snapshot?.info(
+            [...roots, ...docs],
+            Object.values(MADE).flat(),
+          ) ??
+            await remembered(resolve)([...roots, ...docs], snapshot?.bytes))(),
       on.globals(),
     ])
     if (!found) throw new Error('Cannot resolve source types')
@@ -504,9 +568,11 @@ let program = async (on: Platform, roots: string[], snapshot?: Survey) => {
       snapshot?.bytes ?? digest,
     )
     let kept = passed(TYPED)
-    let open = roots.filter((r) => !(proven.get(r)! in kept))
-    if (!open.length) return true
-    let checking = [...open, ...docs.filter((d) => open.includes(paged(d)))]
+    // A program of only the roots left would differ from run to run, and
+    // build info for one program spares little of another's: dropping a root
+    // can have the compiler check every file again. So it checks them all,
+    // whose unchanged files its build info spares.
+    if (roots.every((r) => proven.get(r)! in kept)) return true
     let manifests = Object.fromEntries(
       [...new Set(graphed.modules.flatMap((m) => m.npmPackage ?? []))]
         .map((id) => [id, manifest(graphed.npmPackages[id].localPath)]),
@@ -515,7 +581,7 @@ let program = async (on: Platform, roots: string[], snapshot?: Survey) => {
       graphed,
       CHECKOUT,
       on.dir,
-      checking,
+      [...roots, ...docs],
       manifests,
       on.options,
       Object.keys(globals),
@@ -531,9 +597,6 @@ let program = async (on: Platform, roots: string[], snapshot?: Survey) => {
       await pool(on),
       (info) =>
         compile([
-          'run',
-          '-A',
-          TSC,
           '-p',
           tsconfig,
           '--pretty',
@@ -559,7 +622,7 @@ let program = async (on: Platform, roots: string[], snapshot?: Survey) => {
     let red = failed(errors)
     if (red) {
       remember(
-        open.filter((r) => !red.includes(r)).map((r) => proven.get(r)!),
+        roots.filter((r) => !red.includes(r)).map((r) => proven.get(r)!),
         TYPED,
       )
     }
