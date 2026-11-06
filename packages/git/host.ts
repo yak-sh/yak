@@ -657,6 +657,13 @@ let scan = async (
     })
   ))).flat()
 
+/// exited('7 (a b) Z 1 7') -> true
+/// exited('7 (sh) S 1 7') -> false
+/** Whether a process's `/proc/<pid>/stat` says it has exited: a zombie, or
+ * dead. */
+export let exited = (stat: string): boolean =>
+  /^[ZX]/.test(stat.slice(stat.lastIndexOf(')') + 2))
+
 /** Paths occupied by this user's processes: their directories and open files.
  * Procfs links name the canonical file even when it was opened through a
  * symlink. An unreadable descriptor table refuses collection; only a process
@@ -708,7 +715,9 @@ export let processPaths = async (
           stdout: 'piped',
           stderr: 'piped',
         }).output()
-        await io.stat(proc)
+        // A process that ended while it was read is gone, or dead and not
+        // yet reaped: its cwd no longer resolves, and it holds no files.
+        if (exited(await io.readTextFile(proc + '/stat'))) return []
         let found: unknown
         try {
           found = JSON.parse(new TextDecoder().decode(read.stdout))
