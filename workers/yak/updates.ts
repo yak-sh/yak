@@ -16,6 +16,7 @@ import { chatPath, managePath } from './route.ts'
 import { spaceHost } from './host.ts'
 import type { Update } from './operator-updates.ts'
 import { lastDay } from './views.ts'
+import { markdown } from './operator-view.ts'
 import { caught } from './defects.ts'
 
 /** A person's Updates in a space, and how many wait on them: what needs
@@ -88,6 +89,10 @@ let form = (
     ...inner,
   )
 
+// What an update says, in the Markdown the Operator writes it in.
+let words = (text: string) =>
+  h('div', { class: 'Update_Words' }, markdown(text))
+
 // When it happened, said the human way.
 let when = (u: Update) =>
   h('time', { class: 'Update_When', datetime: u.at }, ago(u.at))
@@ -103,7 +108,7 @@ export let needsCard = (space: Space, u: Update, ask: ComponentChildren) => {
     Card,
     { class: 'Update Update-needs', id: `u-${u.eid}` },
     h(Card.Head, null, h(State, { mod: 'negative' }, 'Needs you'), when(u)),
-    h('p', { class: 'Update_Words' }, u.words),
+    words(u.words),
     choices.length
       ? h(
         Fragment,
@@ -161,7 +166,7 @@ let card = (env: Env, space: Space, u: Update, apps: Apps) => {
   return h(
     Card,
     { class: u.unread ? 'Update Update-new' : 'Update', id: `u-${u.eid}` },
-    h('p', { class: 'Update_Words' }, u.words),
+    words(u.words),
     h(
       'p',
       { class: 'Update_Meta' },

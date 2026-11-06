@@ -6,7 +6,10 @@ import { assertEquals } from '@std/assert'
 import { parseHTML } from 'linkedom'
 import { connector, kernel, seed, signIn, unique } from './probe.ts'
 import { managePath } from './route.ts'
-import { lastDayLine } from './updates.ts'
+import { renderToString } from 'preact-render-to-string'
+import type { Env } from './env.ts'
+import type { Space } from './directory.ts'
+import { lastDayLine, updates } from './updates.ts'
 
 let k = await kernel()
 let slug = unique('told')
@@ -65,4 +68,38 @@ test('the last day in a line: visits, the busiest app, and what needs the person
   // Visits not switched on, or no apps to count: what needs them alone.
   assertEquals(line(undefined, 12), '12 things need you.')
   assertEquals(line([['a0', 5]], 0, []), 'Nothing needs you.')
+})
+
+test('an update’s words, and a question that needs the person, are drawn from their Markdown', () => {
+  let at = new Date().toISOString()
+  let page = parseHTML(renderToString(updates(
+    {} as Env,
+    { slug: 'told', operator: 'Elihu' } as Space,
+    {
+      waiting: 1,
+      updates: [
+        {
+          eid: 'n',
+          needs: false,
+          unread: false,
+          at,
+          words: 'Fixed **Chores**:\n\n- `due` dates',
+        },
+        {
+          eid: 'd',
+          needs: true,
+          unread: false,
+          at,
+          words: 'Keep *both*?',
+          choices: [],
+        },
+      ],
+    },
+  ))).document
+  let drawn = (eid: string, css: string) =>
+    page.querySelector(`#u-${eid} .Update_Words ${css}`)?.textContent
+  assertEquals(drawn('n', 'strong'), 'Chores')
+  assertEquals(drawn('n', 'li code'), 'due')
+  assertEquals(drawn('d', 'em'), 'both')
+  assertEquals(page.querySelector('#u-n')!.textContent!.includes('**'), false)
 })

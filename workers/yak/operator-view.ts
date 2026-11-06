@@ -187,9 +187,9 @@ let input = (b: Bundle, body: string) => {
   )
 }
 
-// Markdown drawn as formatted text, the kit's Body: markup in it stays words
-// (@yaks/markdown).
-let markdown = (text: string) => h(Body, null, ...blocks(parse(text), h))
+/** Markdown drawn as formatted text, the kit's Body: markup in it stays
+ * words (@yaks/markdown). */
+export let markdown = (text: string) => h(Body, null, ...blocks(parse(text), h))
 
 /** A reply as the Operator wrote it, in Markdown. */
 export let reply = (text: string) =>

@@ -1520,6 +1520,7 @@
   }
   .Talk_Reply > :last-child,
   .Talk_Reply .Body > :last-child,
+  .Update_Words .Body > :last-child,
   .Talk_Written > :last-child {
     margin-bottom: 0;
   }
