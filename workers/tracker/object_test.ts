@@ -339,3 +339,48 @@ test('a platform object tells an admin the bundle it runs, before booting', asyn
   })
   equal((await ask(false)).status, 403)
 })
+test('a retry through the door arms the alarm that works the run', async () => {
+  let secret = 'scratch', alarms: number[] = []
+  let { sql, transactionSync } = durable()
+  let object = new Tracker({
+    id: { name: platform },
+    getWebSockets: () => [],
+    acceptWebSocket: () => {},
+    storage: {
+      sql,
+      transactionSync,
+      get: () => Promise.resolve(undefined),
+      put: async () => {},
+      getAlarm: () => Promise.resolve(null),
+      setAlarm: (at) => Promise.resolve(void alarms.push(at)),
+    },
+  }, { TRACKER_SECRET: secret })
+  let tracker = await object.boot()
+  await tracker.graph.apply([{
+    entity: { eid: space },
+    effect: {
+      handler: 'bug_settle',
+      target: space,
+      state: 'failed',
+      attempts: 10,
+      at: '2026-11-06T00:00:00Z',
+    },
+  }], { trusted: true })
+  let answer = await object.fetch(
+    new Request('https://tracker.internal/retry', {
+      method: 'POST',
+      headers: {
+        authorization: `Bearer ${await sign({
+          scope: platform,
+          person: platform,
+          admin: true,
+          mark: true,
+          exp: Date.now() / 1000 + 60,
+        }, secret)}`,
+      },
+      body: JSON.stringify({ of: 'bug_settle' }),
+    }),
+  )
+  equal(await answer.json(), { retried: 1 })
+  equal(alarms.length, 1)
+})

@@ -60,21 +60,26 @@ activation time and letters' delivery outcomes. Threaded tracker letters require
 the [Message-ID receipt bridge](../../packages/mail/README.md#named-transports).
 
 Authenticated endpoints: `/bugs`, `/unseen`, `/traces`, `/trace`, `/query`,
-`/vocab`, `/ws`, and `POST /resolve`, `/archive` and `/reopen` with `{bug}`.
-`/ws?scope=…&ticket=…` accepts subscriptions, unsubscribe and ACK only, never
-relay writes. `/query` returns graph bundles. General `/apply` is absent.
-`POST /resolve`, `/archive` and `/reopen` require a separately signed
-`mark: true` capability and `{bug: <global-bug-eid>}`, a resolution with its
-explanation beside it. Reader and intake tickets cannot mark bugs. Missing bugs
-are refused with 404; malformed marks with 400. Platform-only `POST /errors`
-accepts immutable error captures with a separately signed `ingest: true`
-capability; ordinary read tickets cannot submit captures. Box reporters retain
-their outbox until this intake admits their records. Retrying a capture
-preserves its global eid and counts it once. `POST /app-errors` requires both
-admin and intake capabilities. It accepts `{app, eids, mark}` to add `notified`
-or `archived` to the app's occurrences; `remove: true` removes that mark,
-allowing an incorrectly archived occurrence to reopen without changing its
-report or delivery history.
+`/vocab`, `/ws`, `POST /resolve`, `/archive` and `/reopen` with `{bug}`, and
+`POST /retry` with `{of}`. `/ws?scope=…&ticket=…` accepts subscriptions,
+unsubscribe and ACK only, never relay writes. `/query` returns graph bundles.
+General `/apply` is absent. `POST /resolve`, `/archive` and `/reopen` require a
+separately signed `mark: true` capability and `{bug: <global-bug-eid>}`, a
+resolution with its explanation beside it. Reader and intake tickets cannot mark
+bugs. `POST /retry` takes the same `mark: true` capability and
+`{of: <handler or run eid>}`, and puts the failed effect runs it names back to
+pending with a fresh allowance (@yaks/effects `settling`, the write
+`effect_retry` applies), answering `{retried: n}`; the object arms its alarm
+after every write a door accepts, so the pool works them within seconds. The
+box's `tracker_retry` tool sends it. Missing bugs are refused with 404;
+malformed marks with 400. Platform-only `POST /errors` accepts immutable error
+captures with a separately signed `ingest: true` capability; ordinary read
+tickets cannot submit captures. Box reporters retain their outbox until this
+intake admits their records. Retrying a capture preserves its global eid and
+counts it once. `POST /app-errors` requires both admin and intake capabilities.
+It accepts `{app, eids, mark}` to add `notified` or `archived` to the app's
+occurrences; `remove: true` removes that mark, allowing an incorrectly archived
+occurrence to reopen without changing its report or delivery history.
 
 `GET /bugs?query=<bug-query>&limit=50&app=<global-eid>` returns bug bundles,
 filtered and ordered before its 1–100 limit. Without `query` it includes all bug

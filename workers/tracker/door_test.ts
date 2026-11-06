@@ -432,3 +432,20 @@ test('regroup is a narrow admin mark operation, never a reader write', () => {
   equal(repairDoor.denied, 403)
   equal(repairDoor.allowed, { bugs: 0, merged: 0 })
 })
+for (
+  let [kind, token, body, code] of [
+    ['reader', reader, { of: 'bug_settle' }, 403],
+    ['intake', intakeOnly, { of: 'bug_settle' }, 403],
+    ['other scope', elsewhere, { of: 'bug_settle' }, 403],
+    ['no of', marker, {}, 400],
+    ['a numbered of', marker, { of: 7 }, 400],
+  ] as const
+) {
+  test(`tracker /retry refuses ${kind}`, async () => {
+    equal((await markDoor(request('/retry', token, body))).status, code)
+  })
+}
+test('tracker /retry answers how many failed runs it put back', async () => {
+  let response = await markDoor(request('/retry', marker, { of: 'mail_post' }))
+  equal(await response.json(), { retried: 0 })
+})

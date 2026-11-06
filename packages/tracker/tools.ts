@@ -26,7 +26,7 @@ import { valued } from '@yaks/tools/value'
 import { commitOf } from '@yaks/git/source'
 import { comp, str } from './model.ts'
 import { type Options, read } from './routes.ts'
-import { mark as upstream } from './remote.ts'
+import { mark as upstream, retry } from './remote.ts'
 import { type Explanation, explanation } from './resolution.ts'
 import { survivor } from './merge.ts'
 import { occurring } from './reading.ts'
@@ -291,5 +291,21 @@ export let runs = (
     bug_resolve: mark('resolved'),
     bug_archive: mark('archived'),
     bug_reopen: mark('reopened'),
+    tracker_retry: async (call) => {
+      let of = str(argsOf(call).of)
+      let retried
+      try {
+        retried = await retry(options.remote ?? {}, of, go)
+      } catch (error) {
+        throw new CallError('remote', (error as Error).message)
+      }
+      if (!retried) {
+        throw new CallError(
+          'refused',
+          `${of} names no failed effect run in the platform tracker`,
+        )
+      }
+      return answer(call, { of, retried }, 'yaks.app')
+    },
   }
 }

@@ -15,6 +15,7 @@ import { mailDoc } from '@yaks/mail/vocab'
 import { type Sender, sending } from '@yaks/mail'
 import { tick, wakeDoc } from '@yaks/wake'
 import { effectDoc, effects } from '@yaks/effects'
+import { settling } from '@yaks/effects/tools'
 import { computed, derived, trackerDoc } from '@yaks/tracker/vocab'
 import { effects as handlers, type Options } from '@yaks/tracker/effects'
 import { ingest } from '@yaks/tracker/intake'
@@ -375,6 +376,14 @@ export let store = (storage: Storage, config: Config) => {
       bug(g, eid, size, cursor),
     unseen: (app?: string) => read(app, '.bug.status=open !notified'),
     mark,
+    // Failed runs `of` names (a handler, or one run's id) back to pending with
+    // a fresh allowance, once their cause is fixed: the write @yaks/effects'
+    // effect_retry applies, for the pool's next pass. How many it put back.
+    retry: async (of: string): Promise<number> => {
+      let bundles = await settling(g, vocab, 'retry', of)
+      if (bundles.length) await g.apply(bundles, { trusted: true })
+      return bundles.length
+    },
   }
 }
 export type TrackerStore = ReturnType<typeof store>

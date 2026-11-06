@@ -568,6 +568,26 @@
         "bug"
       ]
     },
+    "tracker_retry": {
+      "tool": true,
+      "destructive": false,
+      "noun": "tracker",
+      "verb": "retry",
+      "title": "Retry the platform tracker's failed runs",
+      "description": "Put the platform tracker's failed effect runs on yaks.app back to pending with a fresh attempt allowance, once the fix for what failed them is live, so the tracker works them again within seconds and the fix is seen to work: a bug's settling (bug_settle), its frames (error_frames), its letters. Takes a handler name for all its failed runs, or one run's id, and says how many it put back. A run that fails again is left failed again. The box tracker's own runs are retried with effect_retry in its graph.\n\n  yak tracker retry bug_settle",
+      "input": {
+        "of": {
+          "type": "string",
+          "description": "a handler name (all its failed runs) or one run's id"
+        }
+      },
+      "required": [
+        "of"
+      ],
+      "positional": [
+        "of"
+      ]
+    },
     "error_frames": {
       "effect": true,
       "description": "Resolve grouped stack frames through the code catalog without recounting occurrences; unavailable catalogs defer the recorded run until they answer.",

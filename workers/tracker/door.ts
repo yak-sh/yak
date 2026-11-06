@@ -212,6 +212,23 @@ async (request: Request): Promise<Response> => {
   if (path == '/unseen') {
     return json(await tracker.unseen(url.searchParams.get('app') ?? undefined))
   }
+  // A failed effect run back to the pool once its fix is live, so the fix is
+  // seen to work: a bug's settling, its frames, its letter. The same
+  // capability as a bug's mark.
+  if (request.method == 'POST' && path == '/retry') {
+    if (access.mark !== true) {
+      return json({ error: 'tracker retry denied' }, 403)
+    }
+    let body = await request.json().catch(() => null)
+    let of = body?.of
+    if (typeof of != 'string' || !of || of.length > 200) {
+      return json(
+        { error: 'body must be JSON naming of: a handler or a run' },
+        400,
+      )
+    }
+    return json({ retried: await tracker.retry(of) })
+  }
   let marks = {
     '/resolve': 'resolved',
     '/archive': 'archived',

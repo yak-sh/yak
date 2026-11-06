@@ -6,21 +6,21 @@ reporter's UUID so a queue or spool resend is the same sample. Grouping runs
 downstream and atomically links it and adds its hits to `bug.hits`. All
 references may name entities in other stores.
 
-| Export         | Owns                                                               |
-| -------------- | ------------------------------------------------------------------ |
-| `.`            | Fault keys, grouping patches, regression and retention             |
-| `./vocab`      | Tracker words, RAM computations and SQL-derived expressions        |
-| `./report`     | Capture, transport, `coalesce` and a page's reports                |
-| `./page`       | Classic browser capture script and twenty breadcrumbs              |
-| `./effects`    | `error_group`, `bug_notify`, `bug_follow`, `error_trim`            |
-| `./views`      | Bug pages, list rows, error frames and the Bugs destination        |
-| `./tools`      | `bug_list`, `bug_show`, `bug_resolve`, `bug_archive`, `bug_reopen` |
-| `./service`    | Spool record admission and acknowledgement                         |
-| `./remote`     | Signed remote reads, bug marks and durable error delivery          |
-| `./poll`       | A polled watch of the platform tracker's bugs, with marks          |
-| `./fixtime`    | Time to fix: first seen (or regressed) to resolved                 |
-| `./graph`      | The precondition refusing an unexplained resolution                |
-| `./resolution` | A resolution's explanation: its check and how it reads             |
+| Export         | Owns                                                                                |
+| -------------- | ----------------------------------------------------------------------------------- |
+| `.`            | Fault keys, grouping patches, regression and retention                              |
+| `./vocab`      | Tracker words, RAM computations and SQL-derived expressions                         |
+| `./report`     | Capture, transport, `coalesce` and a page's reports                                 |
+| `./page`       | Classic browser capture script and twenty breadcrumbs                               |
+| `./effects`    | `error_group`, `bug_notify`, `bug_follow`, `error_trim`                             |
+| `./views`      | Bug pages, list rows, error frames and the Bugs destination                         |
+| `./tools`      | `bug_list`, `bug_show`, `bug_resolve`, `bug_archive`, `bug_reopen`, `tracker_retry` |
+| `./service`    | Spool record admission and acknowledgement                                          |
+| `./remote`     | Signed remote reads, bug marks and durable error delivery                           |
+| `./poll`       | A polled watch of the platform tracker's bugs, with marks                           |
+| `./fixtime`    | Time to fix: first seen (or regressed) to resolved                                  |
+| `./graph`      | The precondition refusing an unexplained resolution                                 |
+| `./resolution` | A resolution's explanation: its check and how it reads                              |
 
 ```ts
 import { normalize } from '@yaks/tracker'

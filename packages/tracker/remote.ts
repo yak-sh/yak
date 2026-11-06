@@ -96,7 +96,7 @@ export let request = async (
     person: 'box-tracker',
     admin: true,
     ...path == 'errors' ? { ingest: true } : {},
-    ...marks.includes(path) ? { mark: true } : {},
+    ...[...marks, 'retry'].includes(path) ? { mark: true } : {},
   }
   let last: unknown
   // Signing is deterministic: attempts within one second carry the same
@@ -217,4 +217,37 @@ export let mark = async (
     )
   }
   return true
+}
+
+/** Put the Worker's failed effect runs `of` names (a handler, or one run's id)
+ * back to pending once their cause is fixed, returning how many it did. */
+export let retry = async (
+  remote: Remote,
+  of: string,
+  go: typeof fetch = fetch,
+): Promise<number> => {
+  let response = await request(
+    remote,
+    'retry',
+    new URLSearchParams({ scope: 'platform' }),
+    {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ of }),
+    },
+    go,
+  )
+  let answer = await response.json().catch(() => null)
+  if (response.status == 404 && answer?.error == 'tracker route not found') {
+    throw Error('Remote tracker has no retry door (404)')
+  }
+  if (!response.ok) {
+    let why = response.status == 400 ? answer?.error : undefined
+    throw Error(
+      `Remote tracker refused the retry (${response.status})${
+        why ? `: ${why}` : ''
+      }`,
+    )
+  }
+  return Number(answer?.retried)
 }

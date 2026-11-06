@@ -451,13 +451,17 @@ export class Tracker {
       }
       let tracker = await this.boot()
       await this.live?.wake()
-      return await door(
+      let answer = await door(
         tracker,
         this.scope,
         this.env.TRACKER_SECRET,
         (request) => this.live!.accept(request),
         this.ingest,
       )(request)
+      // A mark or a retry owes runs the pool works on its alarm, not a
+      // minute later on the monitor's.
+      if (request.method == 'POST' && answer.ok) await this.#arm()
+      return answer
     } catch (error) {
       await this.recover(error, 'Tracker.fetch', request)
       return json({ error: 'tracker temporarily unavailable' }, 503)

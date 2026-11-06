@@ -495,3 +495,43 @@ test('a config naming the box tracker refuses what it does not hold', async () =
   let refused = await use('bug_show', { bug: 'B-999999' }).catch((e) => e)
   equal(refused.message, 'B-999999 names nothing')
 })
+
+// A failed run in the platform tracker goes back to its pool through the
+// Worker's retry door, the same write effect_retry applies in a box graph.
+let rerun = await marking()
+let run = ids[2]
+await rerun.worker.apply([{
+  entity: { eid: run },
+  effect: {
+    handler: 'bug_settle',
+    target: ids[0],
+    state: 'failed',
+    attempts: 10,
+    error: 'The RPC receiver does not implement the method "settle".',
+    at: '2026-11-06T00:00:00Z',
+  },
+}], { trusted: true })
+let rerunAnswer = await rerun.call('tracker_retry', { of: 'bug_settle' })
+test('tracker_retry puts the platform tracker’s failed runs back to pending', async () => {
+  equal(valueIn(rerunAnswer), {
+    source: 'yaks.app',
+    of: 'bug_settle',
+    retried: 1,
+  })
+  let [row] = await rerun.worker.get([run], ['effect'])
+  let { state, attempts, error } = row.effect as Comp
+  equal({ state, attempts, error }, {
+    state: 'pending',
+    attempts: 0,
+    error: undefined,
+  })
+  equal(await rerun.box.read('.effect'), [])
+})
+test('tracker_retry refuses a name with no failed run, by handler or id', async () => {
+  for (let  of of['bug_settle', run, 'error_frames']) {
+    await throws(
+      () => rerun.call('tracker_retry', { of }),
+      'names no failed effect run in the platform tracker',
+    )
+  }
+})
