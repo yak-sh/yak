@@ -1480,8 +1480,10 @@ if (import.meta.main) {
       ),
     ]),
   )
+  // The kernel's modules read only tracked source; the catalog and the other
+  // generated assets are what its upload carries, which waits for them.
   let kernel = preflight(
-    () => Promise.all([readied, made.catalog]),
+    () => readied,
     () => inspected,
     async () => {
       let named = argv.some((a) => /^(-c|--config)(=|$)/.test(a))
