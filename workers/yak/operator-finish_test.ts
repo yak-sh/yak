@@ -276,7 +276,7 @@ test('a read so long that compacting summarizes every line still leaves the mode
 test('a fork that cannot finish reaches the tracker', async () => {
   answer = (body) => {
     let said = JSON.stringify(body.messages)
-    return said.includes('fork of the parent')
+    return said.includes('You are a fork of the conversation')
       ? Response.json({
         type: 'error',
         error: { type: 'invalid_request_error', message: 'messages: forked' },
