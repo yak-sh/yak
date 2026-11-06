@@ -3173,16 +3173,16 @@
         "packageJson": {
           "dependencies": [
             "npm:@jsr/std__assert@1",
-            "npm:@yaks/api@0.2.28",
-            "npm:@yaks/cli@0.2.28",
+            "npm:@yaks/api@0.2.29",
+            "npm:@yaks/cli@0.2.29",
             "npm:@yaks/connections@0.2.28",
             "npm:@yaks/doc@0.2.24",
             "npm:@yaks/effects@0.2.25",
             "npm:@yaks/file@0.2.28",
             "npm:@yaks/fp@0.2.23",
-            "npm:@yaks/git@0.2.28",
+            "npm:@yaks/git@0.2.29",
             "npm:@yaks/graph@0.2.28",
-            "npm:@yaks/host@0.2.28",
+            "npm:@yaks/host@0.2.29",
             "npm:@yaks/id@0.2.23",
             "npm:@yaks/kernel@0.2.28",
             "npm:@yaks/mail@0.2.23",
@@ -3193,9 +3193,9 @@
             "npm:@yaks/ram@0.2.24",
             "npm:@yaks/secrets@0.2.28",
             "npm:@yaks/testing@0.2.17",
-            "npm:@yaks/tools@0.2.28",
-            "npm:@yaks/tracker@0.2.28",
-            "npm:@yaks/vocab@0.2.28"
+            "npm:@yaks/tools@0.2.29",
+            "npm:@yaks/tracker@0.2.29",
+            "npm:@yaks/vocab@0.2.29"
           ]
         }
       },
@@ -3208,7 +3208,7 @@
             "npm:@yaks/key@0.2.24",
             "npm:@yaks/ram@0.2.24",
             "npm:@yaks/testing@0.2.17",
-            "npm:@yaks/vocab@0.2.28"
+            "npm:@yaks/vocab@0.2.29"
           ]
         }
       },
@@ -3217,7 +3217,7 @@
           "dependencies": [
             "npm:@yaks/model@0.2.26",
             "npm:@yaks/testing@0.2.17",
-            "npm:@yaks/vocab@0.2.28"
+            "npm:@yaks/vocab@0.2.29"
           ]
         }
       },
@@ -3237,9 +3237,9 @@
             "npm:@yaks/sql@0.2.28",
             "npm:@yaks/sqlite@0.2.28",
             "npm:@yaks/testing@0.2.17",
-            "npm:@yaks/tools@0.2.28",
+            "npm:@yaks/tools@0.2.29",
             "npm:@yaks/trace@0.2.23",
-            "npm:@yaks/vocab@0.2.28"
+            "npm:@yaks/vocab@0.2.29"
           ]
         }
       },
@@ -3251,7 +3251,7 @@
             "npm:@yaks/graph@0.2.28",
             "npm:@yaks/ram@0.2.24",
             "npm:@yaks/testing@0.2.17",
-            "npm:@yaks/vocab@0.2.28"
+            "npm:@yaks/vocab@0.2.29"
           ]
         }
       },
@@ -3270,7 +3270,7 @@
         "packageJson": {
           "dependencies": [
             "npm:@jsr/std__assert@1",
-            "npm:@yaks/api@0.2.28",
+            "npm:@yaks/api@0.2.29",
             "npm:@yaks/file@0.2.28",
             "npm:@yaks/fp@0.2.23",
             "npm:@yaks/fts@0.2.24",
@@ -3279,8 +3279,8 @@
             "npm:@yaks/sql@0.2.28",
             "npm:@yaks/sqlite@0.2.28",
             "npm:@yaks/testing@0.2.17",
-            "npm:@yaks/tools@0.2.28",
-            "npm:@yaks/vocab@0.2.28",
+            "npm:@yaks/tools@0.2.29",
+            "npm:@yaks/vocab@0.2.29",
             "npm:file-type@21.3.4"
           ]
         }
@@ -3292,11 +3292,11 @@
             "npm:@preact/signals@2.9.4",
             "npm:@yaks/admin@0.2.17",
             "npm:@yaks/alias@0.2.24",
-            "npm:@yaks/api@0.2.28",
+            "npm:@yaks/api@0.2.29",
             "npm:@yaks/archetype@0.2.24",
             "npm:@yaks/blob@0.2.23",
             "npm:@yaks/canvas@0.2.24",
-            "npm:@yaks/cli@0.2.28",
+            "npm:@yaks/cli@0.2.29",
             "npm:@yaks/client@0.2.24",
             "npm:@yaks/code@0.2.23",
             "npm:@yaks/connections@0.2.28",
@@ -3312,7 +3312,7 @@
             "npm:@yaks/filter@0.2.23",
             "npm:@yaks/fp@0.2.23",
             "npm:@yaks/fts@0.2.24",
-            "npm:@yaks/git@0.2.28",
+            "npm:@yaks/git@0.2.29",
             "npm:@yaks/goal@0.2.28",
             "npm:@yaks/graph@0.2.28",
             "npm:@yaks/harness@0.2.28",
@@ -3341,21 +3341,21 @@
             "npm:@yaks/ram@0.2.24",
             "npm:@yaks/render@0.2.24",
             "npm:@yaks/secrets@0.2.28",
-            "npm:@yaks/session@0.2.25",
+            "npm:@yaks/session@0.2.29",
             "npm:@yaks/spawn@0.2.28",
             "npm:@yaks/sql@0.2.28",
             "npm:@yaks/sync@0.2.24",
             "npm:@yaks/task@0.2.23",
             "npm:@yaks/testing@0.2.17",
             "npm:@yaks/tmux@0.2.23",
-            "npm:@yaks/tools@0.2.28",
+            "npm:@yaks/tools@0.2.29",
             "npm:@yaks/topic@0.2.23",
             "npm:@yaks/tui@0.2.24",
             "npm:@yaks/ui@0.2.28",
             "npm:@yaks/ux@0.2.23",
-            "npm:@yaks/vocab@0.2.28",
+            "npm:@yaks/vocab@0.2.29",
             "npm:@yaks/wake@0.2.24",
-            "npm:@yaks/web@0.2.28",
+            "npm:@yaks/web@0.2.29",
             "npm:highlight.js@11.11.1",
             "npm:linkedom@~0.18.12",
             "npm:lucide@1.31.0",
@@ -3369,25 +3369,25 @@
           "dependencies": [
             "npm:@jsr/std__assert@1",
             "npm:@yaks/blob@0.2.23",
-            "npm:@yaks/cli@0.2.28",
+            "npm:@yaks/cli@0.2.29",
             "npm:@yaks/doc@0.2.24",
             "npm:@yaks/edge@0.2.24",
             "npm:@yaks/effects@0.2.25",
             "npm:@yaks/fp@0.2.23",
             "npm:@yaks/graph@0.2.28",
-            "npm:@yaks/host@0.2.28",
+            "npm:@yaks/host@0.2.29",
             "npm:@yaks/id@0.2.23",
             "npm:@yaks/kernel@0.2.28",
             "npm:@yaks/key@0.2.24",
             "npm:@yaks/model@0.2.26",
             "npm:@yaks/query@0.2.23",
             "npm:@yaks/ram@0.2.24",
-            "npm:@yaks/session@0.2.25",
+            "npm:@yaks/session@0.2.29",
             "npm:@yaks/sql@0.2.28",
             "npm:@yaks/sqlite@0.2.28",
             "npm:@yaks/testing@0.2.17",
-            "npm:@yaks/tools@0.2.28",
-            "npm:@yaks/vocab@0.2.28",
+            "npm:@yaks/tools@0.2.29",
+            "npm:@yaks/vocab@0.2.29",
             "npm:@yaks/wake@0.2.24"
           ]
         }
@@ -3401,7 +3401,7 @@
             "npm:@yaks/names@0.2.23",
             "npm:@yaks/query@0.2.23",
             "npm:@yaks/testing@0.2.17",
-            "npm:@yaks/vocab@0.2.28"
+            "npm:@yaks/vocab@0.2.29"
           ]
         }
       },
@@ -3413,7 +3413,7 @@
             "npm:@yaks/model@0.2.26",
             "npm:@yaks/process@0.2.28",
             "npm:@yaks/testing@0.2.17",
-            "npm:@yaks/vocab@0.2.28"
+            "npm:@yaks/vocab@0.2.29"
           ]
         }
       },
@@ -3422,7 +3422,7 @@
           "dependencies": [
             "npm:@jsr/luca__esbuild-deno-loader@0.11.1",
             "npm:@jsr/std__assert@1",
-            "npm:@yaks/api@0.2.28",
+            "npm:@yaks/api@0.2.29",
             "npm:@yaks/blob@0.2.23",
             "npm:@yaks/code@0.2.23",
             "npm:@yaks/connections@0.2.28",
@@ -3432,10 +3432,10 @@
             "npm:@yaks/file@0.2.28",
             "npm:@yaks/fp@0.2.23",
             "npm:@yaks/fts@0.2.24",
-            "npm:@yaks/git@0.2.28",
+            "npm:@yaks/git@0.2.29",
             "npm:@yaks/graph@0.2.28",
             "npm:@yaks/harness@0.2.28",
-            "npm:@yaks/host@0.2.28",
+            "npm:@yaks/host@0.2.29",
             "npm:@yaks/id@0.2.23",
             "npm:@yaks/kernel@0.2.28",
             "npm:@yaks/machine@0.2.24",
@@ -3449,7 +3449,7 @@
             "npm:@yaks/render@0.2.24",
             "npm:@yaks/sandbox@0.2.28",
             "npm:@yaks/secrets@0.2.28",
-            "npm:@yaks/session@0.2.25",
+            "npm:@yaks/session@0.2.29",
             "npm:@yaks/spawn@0.2.28",
             "npm:@yaks/sql@0.2.28",
             "npm:@yaks/sqlite@0.2.28",
@@ -3458,12 +3458,12 @@
             "npm:@yaks/text@0.2.24",
             "npm:@yaks/threads@0.2.23",
             "npm:@yaks/timing@0.2.23",
-            "npm:@yaks/tools@0.2.28",
+            "npm:@yaks/tools@0.2.29",
             "npm:@yaks/trace@0.2.23",
-            "npm:@yaks/tracker@0.2.28",
+            "npm:@yaks/tracker@0.2.29",
             "npm:@yaks/tui@0.2.24",
             "npm:@yaks/ui@0.2.28",
-            "npm:@yaks/vocab@0.2.28",
+            "npm:@yaks/vocab@0.2.29",
             "npm:es-module-lexer@2.3.2",
             "npm:esbuild@0.28.1",
             "npm:preact@10.29.7",
@@ -3487,7 +3487,7 @@
             "npm:@yaks/ram@0.2.24",
             "npm:@yaks/sync@0.2.24",
             "npm:@yaks/testing@0.2.17",
-            "npm:@yaks/vocab@0.2.28",
+            "npm:@yaks/vocab@0.2.29",
             "npm:fake-indexeddb@^6.2.2"
           ]
         }
@@ -3496,7 +3496,7 @@
         "packageJson": {
           "dependencies": [
             "npm:@jsr/std__assert@1",
-            "npm:@yaks/host@0.2.28",
+            "npm:@yaks/host@0.2.29",
             "npm:@yaks/testing@0.2.17",
             "npm:postal-mime@3.0.0"
           ]
@@ -3506,12 +3506,12 @@
         "packageJson": {
           "dependencies": [
             "npm:@jsr/std__assert@1",
-            "npm:@yaks/api@0.2.28",
+            "npm:@yaks/api@0.2.29",
             "npm:@yaks/doc@0.2.24",
             "npm:@yaks/edge@0.2.24",
             "npm:@yaks/effects@0.2.25",
             "npm:@yaks/file@0.2.28",
-            "npm:@yaks/git@0.2.28",
+            "npm:@yaks/git@0.2.29",
             "npm:@yaks/graph@0.2.28",
             "npm:@yaks/kernel@0.2.28",
             "npm:@yaks/machine@0.2.24",
@@ -3520,8 +3520,8 @@
             "npm:@yaks/query@0.2.23",
             "npm:@yaks/ram@0.2.24",
             "npm:@yaks/testing@0.2.17",
-            "npm:@yaks/tools@0.2.28",
-            "npm:@yaks/vocab@0.2.28",
+            "npm:@yaks/tools@0.2.29",
+            "npm:@yaks/vocab@0.2.29",
             "npm:@yaks/yaml@0.2.24"
           ]
         }
@@ -3531,7 +3531,7 @@
           "dependencies": [
             "npm:@yaks/fp@0.2.23",
             "npm:@yaks/graph@0.2.28",
-            "npm:@yaks/tools@0.2.28"
+            "npm:@yaks/tools@0.2.29"
           ]
         }
       },
@@ -3539,7 +3539,7 @@
         "packageJson": {
           "dependencies": [
             "npm:@jsr/std__assert@1",
-            "npm:@yaks/cli@0.2.28",
+            "npm:@yaks/cli@0.2.29",
             "npm:@yaks/doc@0.2.24",
             "npm:@yaks/edge@0.2.24",
             "npm:@yaks/effects@0.2.25",
@@ -3556,8 +3556,8 @@
             "npm:@yaks/render@0.2.24",
             "npm:@yaks/secrets@0.2.28",
             "npm:@yaks/testing@0.2.17",
-            "npm:@yaks/tools@0.2.28",
-            "npm:@yaks/vocab@0.2.28"
+            "npm:@yaks/tools@0.2.29",
+            "npm:@yaks/vocab@0.2.29"
           ]
         }
       },
@@ -3570,7 +3570,7 @@
             "npm:@yaks/process@0.2.28",
             "npm:@yaks/ram@0.2.24",
             "npm:@yaks/testing@0.2.17",
-            "npm:@yaks/vocab@0.2.28"
+            "npm:@yaks/vocab@0.2.29"
           ]
         }
       },
@@ -3589,7 +3589,7 @@
             "npm:@yaks/sql@0.2.28",
             "npm:@yaks/sqlite@0.2.28",
             "npm:@yaks/testing@0.2.17",
-            "npm:@yaks/vocab@0.2.28"
+            "npm:@yaks/vocab@0.2.29"
           ]
         }
       },
@@ -3599,7 +3599,7 @@
             "npm:@jsr/std__assert@1",
             "npm:@yaks/graph@0.2.28",
             "npm:@yaks/testing@0.2.17",
-            "npm:@yaks/vocab@0.2.28"
+            "npm:@yaks/vocab@0.2.29"
           ]
         }
       },
@@ -3611,7 +3611,7 @@
             "npm:@yaks/id@0.2.23",
             "npm:@yaks/ram@0.2.24",
             "npm:@yaks/testing@0.2.17",
-            "npm:@yaks/vocab@0.2.28",
+            "npm:@yaks/vocab@0.2.29",
             "npm:linkedom@~0.18.12"
           ]
         }
@@ -3627,7 +3627,7 @@
             "npm:@yaks/ram@0.2.24",
             "npm:@yaks/render@0.2.24",
             "npm:@yaks/testing@0.2.17",
-            "npm:@yaks/vocab@0.2.28"
+            "npm:@yaks/vocab@0.2.29"
           ]
         }
       },
@@ -3642,7 +3642,7 @@
             "npm:@yaks/graph@0.2.28",
             "npm:@yaks/ram@0.2.24",
             "npm:@yaks/testing@0.2.17",
-            "npm:@yaks/vocab@0.2.28",
+            "npm:@yaks/vocab@0.2.29",
             "npm:preact@10.29.7"
           ]
         }
@@ -3655,7 +3655,7 @@
             "npm:@yaks/sql@0.2.28",
             "npm:@yaks/sqlite@0.2.28",
             "npm:@yaks/testing@0.2.17",
-            "npm:@yaks/vocab@0.2.28"
+            "npm:@yaks/vocab@0.2.29"
           ]
         }
       },
@@ -3663,7 +3663,7 @@
         "packageJson": {
           "dependencies": [
             "npm:@jsr/std__assert@1",
-            "npm:@yaks/api@0.2.28",
+            "npm:@yaks/api@0.2.29",
             "npm:@yaks/blob@0.2.23",
             "npm:@yaks/fp@0.2.23",
             "npm:@yaks/graph@0.2.28",
@@ -3673,7 +3673,7 @@
             "npm:@yaks/sqlite@0.2.28",
             "npm:@yaks/testing@0.2.17",
             "npm:@yaks/trace@0.2.23",
-            "npm:@yaks/vocab@0.2.28",
+            "npm:@yaks/vocab@0.2.29",
             "npm:fflate@0.8.3"
           ]
         }
@@ -3689,7 +3689,7 @@
             "npm:@yaks/sql@0.2.28",
             "npm:@yaks/sqlite@0.2.28",
             "npm:@yaks/testing@0.2.17",
-            "npm:@yaks/vocab@0.2.28"
+            "npm:@yaks/vocab@0.2.29"
           ]
         }
       },
@@ -3708,10 +3708,10 @@
             "npm:@yaks/sql@0.2.28",
             "npm:@yaks/sqlite@0.2.28",
             "npm:@yaks/testing@0.2.17",
-            "npm:@yaks/tools@0.2.28",
+            "npm:@yaks/tools@0.2.29",
             "npm:@yaks/trace@0.2.23",
             "npm:@yaks/ui@0.2.28",
-            "npm:@yaks/vocab@0.2.28",
+            "npm:@yaks/vocab@0.2.29",
             "npm:linkedom@~0.18.12",
             "npm:lucide@1.31.0",
             "npm:preact-render-to-string@6.7.0",
@@ -3732,7 +3732,7 @@
             "npm:@yaks/ram@0.2.24",
             "npm:@yaks/secrets@0.2.28",
             "npm:@yaks/testing@0.2.17",
-            "npm:@yaks/vocab@0.2.28"
+            "npm:@yaks/vocab@0.2.29"
           ]
         }
       },
@@ -3740,9 +3740,9 @@
         "packageJson": {
           "dependencies": [
             "npm:@jsr/std__assert@1",
-            "npm:@yaks/api@0.2.28",
+            "npm:@yaks/api@0.2.29",
             "npm:@yaks/archetype@0.2.24",
-            "npm:@yaks/cli@0.2.28",
+            "npm:@yaks/cli@0.2.29",
             "npm:@yaks/edge@0.2.24",
             "npm:@yaks/effects@0.2.25",
             "npm:@yaks/graph@0.2.28",
@@ -3752,8 +3752,8 @@
             "npm:@yaks/sql@0.2.28",
             "npm:@yaks/sqlite@0.2.28",
             "npm:@yaks/testing@0.2.17",
-            "npm:@yaks/tools@0.2.28",
-            "npm:@yaks/vocab@0.2.28"
+            "npm:@yaks/tools@0.2.29",
+            "npm:@yaks/vocab@0.2.29"
           ]
         }
       },
@@ -3786,7 +3786,7 @@
             "npm:@yaks/testing@0.2.17",
             "npm:@yaks/ui@0.2.28",
             "npm:@yaks/ux@0.2.23",
-            "npm:@yaks/vocab@0.2.28",
+            "npm:@yaks/vocab@0.2.29",
             "npm:lucide@1.31.0",
             "npm:preact@10.29.7"
           ]
@@ -3804,7 +3804,7 @@
             "npm:@yaks/testing@0.2.17",
             "npm:@yaks/tui@0.2.24",
             "npm:@yaks/ux@0.2.23",
-            "npm:@yaks/vocab@0.2.28",
+            "npm:@yaks/vocab@0.2.29",
             "npm:linkedom@~0.18.12",
             "npm:preact@10.29.7"
           ]
@@ -3819,7 +3819,7 @@
             "npm:@yaks/sql@0.2.28",
             "npm:@yaks/sqlite@0.2.28",
             "npm:@yaks/testing@0.2.17",
-            "npm:@yaks/vocab@0.2.28"
+            "npm:@yaks/vocab@0.2.29"
           ]
         }
       },
@@ -3831,7 +3831,7 @@
             "npm:@yaks/testing@0.2.17",
             "npm:@yaks/tui@0.2.24",
             "npm:@yaks/ui@0.2.28",
-            "npm:@yaks/vocab@0.2.28",
+            "npm:@yaks/vocab@0.2.29",
             "npm:linkedom@~0.18.12",
             "npm:preact-render-to-string@6.7.0",
             "npm:preact@10.29.7"
@@ -3858,15 +3858,15 @@
             "npm:@yaks/ram@0.2.24",
             "npm:@yaks/sqlite@0.2.28",
             "npm:@yaks/testing@0.2.17",
-            "npm:@yaks/tools@0.2.28",
-            "npm:@yaks/vocab@0.2.28"
+            "npm:@yaks/tools@0.2.29",
+            "npm:@yaks/vocab@0.2.29"
           ]
         }
       },
       "packages/goal": {
         "packageJson": {
           "dependencies": [
-            "npm:@yaks/vocab@0.2.28"
+            "npm:@yaks/vocab@0.2.29"
           ]
         }
       },
@@ -3883,9 +3883,9 @@
             "npm:@yaks/query@0.2.23",
             "npm:@yaks/ram@0.2.24",
             "npm:@yaks/testing@0.2.17",
-            "npm:@yaks/tools@0.2.28",
+            "npm:@yaks/tools@0.2.29",
             "npm:@yaks/trace@0.2.23",
-            "npm:@yaks/vocab@0.2.28"
+            "npm:@yaks/vocab@0.2.29"
           ]
         }
       },
@@ -3895,10 +3895,10 @@
             "npm:@jsr/std__assert@1",
             "npm:@modelcontextprotocol/sdk@^1.29.0",
             "npm:@preact/signals@2.9.4",
-            "npm:@yaks/api@0.2.28",
+            "npm:@yaks/api@0.2.29",
             "npm:@yaks/benchmark@0.2.17",
             "npm:@yaks/blob@0.2.23",
-            "npm:@yaks/cli@0.2.28",
+            "npm:@yaks/cli@0.2.29",
             "npm:@yaks/client@0.2.24",
             "npm:@yaks/connections@0.2.28",
             "npm:@yaks/context@0.2.23",
@@ -3906,9 +3906,9 @@
             "npm:@yaks/effects@0.2.25",
             "npm:@yaks/file@0.2.28",
             "npm:@yaks/fp@0.2.23",
-            "npm:@yaks/git@0.2.28",
+            "npm:@yaks/git@0.2.29",
             "npm:@yaks/graph@0.2.28",
-            "npm:@yaks/host@0.2.28",
+            "npm:@yaks/host@0.2.29",
             "npm:@yaks/id@0.2.23",
             "npm:@yaks/inbox@0.2.23",
             "npm:@yaks/kernel@0.2.28",
@@ -3928,18 +3928,18 @@
             "npm:@yaks/render@0.2.24",
             "npm:@yaks/sandbox@0.2.28",
             "npm:@yaks/secrets@0.2.28",
-            "npm:@yaks/session@0.2.25",
+            "npm:@yaks/session@0.2.29",
             "npm:@yaks/sql@0.2.28",
             "npm:@yaks/sqlite@0.2.28",
             "npm:@yaks/sync@0.2.24",
             "npm:@yaks/testing@0.2.17",
             "npm:@yaks/text@0.2.24",
-            "npm:@yaks/tools@0.2.28",
+            "npm:@yaks/tools@0.2.29",
             "npm:@yaks/topic@0.2.23",
-            "npm:@yaks/tracker@0.2.28",
+            "npm:@yaks/tracker@0.2.29",
             "npm:@yaks/tui@0.2.24",
             "npm:@yaks/ui@0.2.28",
-            "npm:@yaks/vocab@0.2.28",
+            "npm:@yaks/vocab@0.2.29",
             "npm:preact@10.29.7"
           ]
         }
@@ -3949,7 +3949,7 @@
           "dependencies": [
             "npm:@jsr/std__assert@1",
             "npm:@preact/signals@2.9.4",
-            "npm:@yaks/api@0.2.28",
+            "npm:@yaks/api@0.2.29",
             "npm:@yaks/client@0.2.24",
             "npm:@yaks/doc@0.2.24",
             "npm:@yaks/edge@0.2.24",
@@ -3957,7 +3957,7 @@
             "npm:@yaks/fp@0.2.23",
             "npm:@yaks/graph@0.2.28",
             "npm:@yaks/harness@0.2.28",
-            "npm:@yaks/host@0.2.28",
+            "npm:@yaks/host@0.2.29",
             "npm:@yaks/id@0.2.23",
             "npm:@yaks/inspect@0.2.23",
             "npm:@yaks/kernel@0.2.28",
@@ -3969,13 +3969,13 @@
             "npm:@yaks/provenance@0.2.28",
             "npm:@yaks/query@0.2.23",
             "npm:@yaks/ram@0.2.24",
-            "npm:@yaks/session@0.2.25",
+            "npm:@yaks/session@0.2.29",
             "npm:@yaks/task@0.2.23",
             "npm:@yaks/testing@0.2.17",
-            "npm:@yaks/tools@0.2.28",
-            "npm:@yaks/tracker@0.2.28",
+            "npm:@yaks/tools@0.2.29",
+            "npm:@yaks/tracker@0.2.29",
             "npm:@yaks/ui@0.2.28",
-            "npm:@yaks/vocab@0.2.28",
+            "npm:@yaks/vocab@0.2.29",
             "npm:preact@10.29.7"
           ]
         }
@@ -3988,14 +3988,14 @@
             "npm:@yaks/edge@0.2.24",
             "npm:@yaks/graph@0.2.28",
             "npm:@yaks/testing@0.2.17",
-            "npm:@yaks/vocab@0.2.28"
+            "npm:@yaks/vocab@0.2.29"
           ]
         }
       },
       "packages/host": {
         "packageJson": {
           "dependencies": [
-            "npm:@yaks/api@0.2.28",
+            "npm:@yaks/api@0.2.29",
             "npm:@yaks/blob@0.2.23",
             "npm:@yaks/code@0.2.23",
             "npm:@yaks/edge@0.2.24",
@@ -4003,7 +4003,7 @@
             "npm:@yaks/file@0.2.28",
             "npm:@yaks/fp@0.2.23",
             "npm:@yaks/fts@0.2.24",
-            "npm:@yaks/git@0.2.28",
+            "npm:@yaks/git@0.2.29",
             "npm:@yaks/graph@0.2.28",
             "npm:@yaks/id@0.2.23",
             "npm:@yaks/machine@0.2.24",
@@ -4013,10 +4013,10 @@
             "npm:@yaks/secrets@0.2.28",
             "npm:@yaks/sql@0.2.28",
             "npm:@yaks/testing@0.2.17",
-            "npm:@yaks/tools@0.2.28",
-            "npm:@yaks/tracker@0.2.28",
+            "npm:@yaks/tools@0.2.29",
+            "npm:@yaks/tracker@0.2.29",
             "npm:@yaks/ui@0.2.28",
-            "npm:@yaks/vocab@0.2.28",
+            "npm:@yaks/vocab@0.2.29",
             "npm:esbuild@0.28.1"
           ]
         }
@@ -4029,7 +4029,7 @@
             "npm:@yaks/query@0.2.23",
             "npm:@yaks/render@0.2.24",
             "npm:@yaks/testing@0.2.17",
-            "npm:@yaks/vocab@0.2.28",
+            "npm:@yaks/vocab@0.2.29",
             "npm:linkedom@~0.18.12",
             "npm:preact-render-to-string@6.7.0",
             "npm:preact@10.29.7"
@@ -4043,7 +4043,7 @@
             "npm:@yaks/graph@0.2.28",
             "npm:@yaks/ram@0.2.24",
             "npm:@yaks/testing@0.2.17",
-            "npm:@yaks/vocab@0.2.28"
+            "npm:@yaks/vocab@0.2.29"
           ]
         }
       },
@@ -4052,9 +4052,9 @@
           "dependencies": [
             "npm:@jsr/std__assert@1",
             "npm:@preact/signals@2.9.4",
-            "npm:@yaks/api@0.2.28",
+            "npm:@yaks/api@0.2.29",
             "npm:@yaks/archetype@0.2.24",
-            "npm:@yaks/cli@0.2.28",
+            "npm:@yaks/cli@0.2.29",
             "npm:@yaks/client@0.2.24",
             "npm:@yaks/doc@0.2.24",
             "npm:@yaks/draft@0.2.24",
@@ -4071,14 +4071,14 @@
             "npm:@yaks/query@0.2.23",
             "npm:@yaks/ram@0.2.24",
             "npm:@yaks/render@0.2.24",
-            "npm:@yaks/session@0.2.25",
+            "npm:@yaks/session@0.2.29",
             "npm:@yaks/sql@0.2.28",
             "npm:@yaks/sqlite@0.2.28",
             "npm:@yaks/task@0.2.23",
             "npm:@yaks/testing@0.2.17",
-            "npm:@yaks/tools@0.2.28",
+            "npm:@yaks/tools@0.2.29",
             "npm:@yaks/ui@0.2.28",
-            "npm:@yaks/vocab@0.2.28",
+            "npm:@yaks/vocab@0.2.29",
             "npm:linkedom@~0.18.12",
             "npm:lucide@1.31.0",
             "npm:preact@10.29.7"
@@ -4105,7 +4105,7 @@
             "npm:@yaks/tui@0.2.24",
             "npm:@yaks/ui@0.2.28",
             "npm:@yaks/ux@0.2.23",
-            "npm:@yaks/vocab@0.2.28",
+            "npm:@yaks/vocab@0.2.29",
             "npm:linkedom@~0.18.12",
             "npm:preact-render-to-string@6.7.0",
             "npm:preact@10.29.7"
@@ -4131,9 +4131,9 @@
             "npm:@yaks/sqlite@0.2.28",
             "npm:@yaks/testing@0.2.17",
             "npm:@yaks/text@0.2.24",
-            "npm:@yaks/tools@0.2.28",
+            "npm:@yaks/tools@0.2.29",
             "npm:@yaks/ui@0.2.28",
-            "npm:@yaks/vocab@0.2.28",
+            "npm:@yaks/vocab@0.2.29",
             "npm:lucide@1.31.0",
             "npm:preact@10.29.7"
           ]
@@ -4156,7 +4156,7 @@
             "npm:@yaks/testing@0.2.17",
             "npm:@yaks/text@0.2.24",
             "npm:@yaks/ui@0.2.28",
-            "npm:@yaks/vocab@0.2.28",
+            "npm:@yaks/vocab@0.2.29",
             "npm:preact@10.29.7"
           ]
         }
@@ -4169,7 +4169,7 @@
             "npm:@yaks/graph@0.2.28",
             "npm:@yaks/ram@0.2.24",
             "npm:@yaks/testing@0.2.17",
-            "npm:@yaks/vocab@0.2.28"
+            "npm:@yaks/vocab@0.2.29"
           ]
         }
       },
@@ -4182,7 +4182,7 @@
             "npm:@yaks/query@0.2.23",
             "npm:@yaks/ram@0.2.24",
             "npm:@yaks/testing@0.2.17",
-            "npm:@yaks/vocab@0.2.28"
+            "npm:@yaks/vocab@0.2.29"
           ]
         }
       },
@@ -4202,10 +4202,10 @@
             "npm:@yaks/kernel@0.2.28",
             "npm:@yaks/process@0.2.28",
             "npm:@yaks/ram@0.2.24",
-            "npm:@yaks/session@0.2.25",
+            "npm:@yaks/session@0.2.29",
             "npm:@yaks/testing@0.2.17",
-            "npm:@yaks/tools@0.2.28",
-            "npm:@yaks/vocab@0.2.28"
+            "npm:@yaks/tools@0.2.29",
+            "npm:@yaks/vocab@0.2.29"
           ]
         }
       },
@@ -4213,15 +4213,15 @@
         "packageJson": {
           "dependencies": [
             "npm:@jsr/std__assert@1",
-            "npm:@yaks/api@0.2.28",
-            "npm:@yaks/cli@0.2.28",
+            "npm:@yaks/api@0.2.29",
+            "npm:@yaks/cli@0.2.29",
             "npm:@yaks/doc@0.2.24",
             "npm:@yaks/edge@0.2.24",
             "npm:@yaks/effects@0.2.25",
             "npm:@yaks/fp@0.2.23",
             "npm:@yaks/graph@0.2.28",
             "npm:@yaks/hook@0.2.28",
-            "npm:@yaks/host@0.2.28",
+            "npm:@yaks/host@0.2.29",
             "npm:@yaks/id@0.2.23",
             "npm:@yaks/kernel@0.2.28",
             "npm:@yaks/notify@0.2.28",
@@ -4230,8 +4230,8 @@
             "npm:@yaks/ram@0.2.24",
             "npm:@yaks/task@0.2.23",
             "npm:@yaks/testing@0.2.17",
-            "npm:@yaks/tools@0.2.28",
-            "npm:@yaks/vocab@0.2.28"
+            "npm:@yaks/tools@0.2.29",
+            "npm:@yaks/vocab@0.2.29"
           ]
         }
       },
@@ -4261,7 +4261,7 @@
             "npm:@yaks/sqlite@0.2.28",
             "npm:@yaks/task@0.2.23",
             "npm:@yaks/testing@0.2.17",
-            "npm:@yaks/vocab@0.2.28"
+            "npm:@yaks/vocab@0.2.29"
           ]
         }
       },
@@ -4272,18 +4272,18 @@
             "npm:@modelcontextprotocol/client@2.2.0",
             "npm:@modelcontextprotocol/core@2.2.0",
             "npm:@modelcontextprotocol/sdk@^1.29.0",
-            "npm:@yaks/api@0.2.28",
-            "npm:@yaks/cli@0.2.28",
+            "npm:@yaks/api@0.2.29",
+            "npm:@yaks/cli@0.2.29",
             "npm:@yaks/file@0.2.28",
             "npm:@yaks/fp@0.2.23",
             "npm:@yaks/graph@0.2.28",
             "npm:@yaks/persona@0.2.23",
             "npm:@yaks/process@0.2.28",
             "npm:@yaks/ram@0.2.24",
-            "npm:@yaks/session@0.2.25",
+            "npm:@yaks/session@0.2.29",
             "npm:@yaks/testing@0.2.17",
-            "npm:@yaks/tools@0.2.28",
-            "npm:@yaks/vocab@0.2.28",
+            "npm:@yaks/tools@0.2.29",
+            "npm:@yaks/vocab@0.2.29",
             "npm:ajv@^8.17.1",
             "npm:yaml@^2.9.1"
           ]
@@ -4294,10 +4294,10 @@
           "dependencies": [
             "npm:@jsr/std__assert@1",
             "npm:@modelcontextprotocol/sdk@^1.29.0",
-            "npm:@yaks/cli@0.2.28",
+            "npm:@yaks/cli@0.2.29",
             "npm:@yaks/graph@0.2.28",
             "npm:@yaks/testing@0.2.17",
-            "npm:@yaks/vocab@0.2.28"
+            "npm:@yaks/vocab@0.2.29"
           ]
         }
       },
@@ -4307,13 +4307,13 @@
             "npm:@jsr/std__assert@1",
             "npm:@yaks/fp@0.2.23",
             "npm:@yaks/graph@0.2.28",
-            "npm:@yaks/host@0.2.28",
+            "npm:@yaks/host@0.2.29",
             "npm:@yaks/journal@0.2.23",
             "npm:@yaks/query@0.2.23",
             "npm:@yaks/ram@0.2.24",
             "npm:@yaks/sqlite@0.2.28",
             "npm:@yaks/testing@0.2.17",
-            "npm:@yaks/vocab@0.2.28"
+            "npm:@yaks/vocab@0.2.29"
           ]
         }
       },
@@ -4323,13 +4323,13 @@
             "npm:@jsr/std__assert@1",
             "npm:@yaks/doc@0.2.24",
             "npm:@yaks/graph@0.2.28",
-            "npm:@yaks/host@0.2.28",
+            "npm:@yaks/host@0.2.29",
             "npm:@yaks/inspect@0.2.23",
             "npm:@yaks/query@0.2.23",
             "npm:@yaks/ram@0.2.24",
             "npm:@yaks/testing@0.2.17",
             "npm:@yaks/ui@0.2.28",
-            "npm:@yaks/vocab@0.2.28",
+            "npm:@yaks/vocab@0.2.29",
             "npm:preact@10.29.7"
           ]
         }
@@ -4339,7 +4339,7 @@
           "dependencies": [
             "npm:@jsr/std__assert@1",
             "npm:@yaks/file@0.2.28",
-            "npm:@yaks/git@0.2.28",
+            "npm:@yaks/git@0.2.29",
             "npm:@yaks/testing@0.2.17"
           ]
         }
@@ -4356,7 +4356,7 @@
             "npm:@yaks/names@0.2.23",
             "npm:@yaks/ram@0.2.24",
             "npm:@yaks/testing@0.2.17",
-            "npm:@yaks/vocab@0.2.28"
+            "npm:@yaks/vocab@0.2.29"
           ]
         }
       },
@@ -4374,7 +4374,7 @@
           "dependencies": [
             "npm:@jsr/std__assert@1",
             "npm:@yaks/testing@0.2.17",
-            "npm:@yaks/vocab@0.2.28"
+            "npm:@yaks/vocab@0.2.29"
           ]
         }
       },
@@ -4385,7 +4385,7 @@
             "npm:@yaks/kernel@0.2.28",
             "npm:@yaks/ram@0.2.24",
             "npm:@yaks/testing@0.2.17",
-            "npm:@yaks/vocab@0.2.28"
+            "npm:@yaks/vocab@0.2.29"
           ]
         }
       },
@@ -4407,7 +4407,7 @@
             "npm:@yaks/graph@0.2.28",
             "npm:@yaks/model@0.2.26",
             "npm:@yaks/testing@0.2.17",
-            "npm:@yaks/vocab@0.2.28"
+            "npm:@yaks/vocab@0.2.29"
           ]
         }
       },
@@ -4419,7 +4419,7 @@
             "npm:@yaks/model@0.2.26",
             "npm:@yaks/openai@0.2.26",
             "npm:@yaks/testing@0.2.17",
-            "npm:@yaks/vocab@0.2.28"
+            "npm:@yaks/vocab@0.2.29"
           ]
         }
       },
@@ -4427,16 +4427,16 @@
         "packageJson": {
           "dependencies": [
             "npm:@jsr/std__assert@1",
-            "npm:@yaks/api@0.2.28",
+            "npm:@yaks/api@0.2.29",
             "npm:@yaks/blob@0.2.23",
-            "npm:@yaks/cli@0.2.28",
+            "npm:@yaks/cli@0.2.29",
             "npm:@yaks/doc@0.2.24",
             "npm:@yaks/effects@0.2.25",
             "npm:@yaks/fp@0.2.23",
             "npm:@yaks/graph@0.2.28",
             "npm:@yaks/process@0.2.28",
             "npm:@yaks/testing@0.2.17",
-            "npm:@yaks/vocab@0.2.28",
+            "npm:@yaks/vocab@0.2.29",
             "npm:linkedom@~0.18.12"
           ]
         }
@@ -4451,7 +4451,7 @@
             "npm:@yaks/effects@0.2.25",
             "npm:@yaks/file@0.2.28",
             "npm:@yaks/fp@0.2.23",
-            "npm:@yaks/git@0.2.28",
+            "npm:@yaks/git@0.2.29",
             "npm:@yaks/graph@0.2.28",
             "npm:@yaks/id@0.2.23",
             "npm:@yaks/inspect@0.2.23",
@@ -4468,11 +4468,11 @@
             "npm:@yaks/task@0.2.23",
             "npm:@yaks/testing@0.2.17",
             "npm:@yaks/text@0.2.24",
-            "npm:@yaks/tools@0.2.28",
-            "npm:@yaks/tracker@0.2.28",
+            "npm:@yaks/tools@0.2.29",
+            "npm:@yaks/tracker@0.2.29",
             "npm:@yaks/ui@0.2.28",
             "npm:@yaks/ux@0.2.23",
-            "npm:@yaks/vocab@0.2.28",
+            "npm:@yaks/vocab@0.2.29",
             "npm:linkedom@~0.18.12",
             "npm:lucide@1.31.0",
             "npm:preact-render-to-string@6.7.0",
@@ -4485,16 +4485,16 @@
         "packageJson": {
           "dependencies": [
             "npm:@jsr/std__assert@1",
-            "npm:@yaks/api@0.2.28",
+            "npm:@yaks/api@0.2.29",
             "npm:@yaks/doc@0.2.24",
             "npm:@yaks/effects@0.2.25",
             "npm:@yaks/graph@0.2.28",
             "npm:@yaks/hook@0.2.28",
-            "npm:@yaks/host@0.2.28",
+            "npm:@yaks/host@0.2.29",
             "npm:@yaks/mail@0.2.23",
             "npm:@yaks/ram@0.2.24",
             "npm:@yaks/testing@0.2.17",
-            "npm:@yaks/vocab@0.2.28"
+            "npm:@yaks/vocab@0.2.29"
           ]
         }
       },
@@ -4503,7 +4503,7 @@
           "dependencies": [
             "npm:@jsr/std__assert@1",
             "npm:@yaks/hook@0.2.28",
-            "npm:@yaks/host@0.2.28",
+            "npm:@yaks/host@0.2.29",
             "npm:@yaks/phone@0.2.17",
             "npm:@yaks/testing@0.2.17"
           ]
@@ -4514,7 +4514,7 @@
           "dependencies": [
             "npm:@jsr/std__assert@1",
             "npm:@yaks/testing@0.2.17",
-            "npm:@yaks/vocab@0.2.28"
+            "npm:@yaks/vocab@0.2.29"
           ]
         }
       },
@@ -4529,7 +4529,7 @@
             "npm:@yaks/query@0.2.23",
             "npm:@yaks/render@0.2.24",
             "npm:@yaks/testing@0.2.17",
-            "npm:@yaks/vocab@0.2.28",
+            "npm:@yaks/vocab@0.2.29",
             "npm:linkedom@~0.18.12",
             "npm:preact@10.29.7",
             "npm:sucrase@3.35.1"
@@ -4546,10 +4546,10 @@
             "npm:@yaks/query@0.2.23",
             "npm:@yaks/ram@0.2.24",
             "npm:@yaks/render@0.2.24",
-            "npm:@yaks/session@0.2.25",
+            "npm:@yaks/session@0.2.29",
             "npm:@yaks/testing@0.2.17",
-            "npm:@yaks/tools@0.2.28",
-            "npm:@yaks/vocab@0.2.28",
+            "npm:@yaks/tools@0.2.29",
+            "npm:@yaks/vocab@0.2.29",
             "npm:undici@^7.28.0"
           ]
         }
@@ -4568,15 +4568,15 @@
             "npm:@yaks/ram@0.2.24",
             "npm:@yaks/task@0.2.23",
             "npm:@yaks/testing@0.2.17",
-            "npm:@yaks/tools@0.2.28",
-            "npm:@yaks/vocab@0.2.28"
+            "npm:@yaks/tools@0.2.29",
+            "npm:@yaks/vocab@0.2.29"
           ]
         }
       },
       "packages/provenance": {
         "packageJson": {
           "dependencies": [
-            "npm:@yaks/vocab@0.2.28"
+            "npm:@yaks/vocab@0.2.29"
           ]
         }
       },
@@ -4586,7 +4586,7 @@
             "npm:@jsr/std__assert@1",
             "npm:@yaks/fp@0.2.23",
             "npm:@yaks/testing@0.2.17",
-            "npm:@yaks/vocab@0.2.28"
+            "npm:@yaks/vocab@0.2.29"
           ]
         }
       },
@@ -4601,7 +4601,7 @@
             "npm:@yaks/sql@0.2.28",
             "npm:@yaks/sqlite@0.2.28",
             "npm:@yaks/testing@0.2.17",
-            "npm:@yaks/vocab@0.2.28"
+            "npm:@yaks/vocab@0.2.29"
           ]
         }
       },
@@ -4617,7 +4617,7 @@
             "npm:@yaks/task@0.2.23",
             "npm:@yaks/testing@0.2.17",
             "npm:@yaks/text@0.2.24",
-            "npm:@yaks/vocab@0.2.28"
+            "npm:@yaks/vocab@0.2.29"
           ]
         }
       },
@@ -4625,9 +4625,9 @@
         "packageJson": {
           "dependencies": [
             "npm:@jsr/std__assert@1",
-            "npm:@yaks/api@0.2.28",
+            "npm:@yaks/api@0.2.29",
             "npm:@yaks/graph@0.2.28",
-            "npm:@yaks/host@0.2.28",
+            "npm:@yaks/host@0.2.29",
             "npm:@yaks/mail@0.2.23",
             "npm:@yaks/testing@0.2.17"
           ]
@@ -4641,7 +4641,7 @@
             "npm:@yaks/graph@0.2.28",
             "npm:@yaks/ram@0.2.24",
             "npm:@yaks/testing@0.2.17",
-            "npm:@yaks/vocab@0.2.28",
+            "npm:@yaks/vocab@0.2.29",
             "npm:@yaks/wake@0.2.24"
           ]
         }
@@ -4659,8 +4659,8 @@
             "npm:@yaks/process@0.2.28",
             "npm:@yaks/ram@0.2.24",
             "npm:@yaks/testing@0.2.17",
-            "npm:@yaks/tools@0.2.28",
-            "npm:@yaks/vocab@0.2.28"
+            "npm:@yaks/tools@0.2.29",
+            "npm:@yaks/vocab@0.2.29"
           ]
         }
       },
@@ -4680,8 +4680,8 @@
             "npm:@yaks/render@0.2.24",
             "npm:@yaks/testing@0.2.17",
             "npm:@yaks/text@0.2.24",
-            "npm:@yaks/tools@0.2.28",
-            "npm:@yaks/vocab@0.2.28"
+            "npm:@yaks/tools@0.2.29",
+            "npm:@yaks/vocab@0.2.29"
           ]
         }
       },
@@ -4689,10 +4689,10 @@
         "packageJson": {
           "dependencies": [
             "npm:@jsr/std__assert@1",
-            "npm:@yaks/api@0.2.28",
+            "npm:@yaks/api@0.2.29",
             "npm:@yaks/archetype@0.2.24",
             "npm:@yaks/blob@0.2.23",
-            "npm:@yaks/cli@0.2.28",
+            "npm:@yaks/cli@0.2.29",
             "npm:@yaks/context@0.2.23",
             "npm:@yaks/doc@0.2.24",
             "npm:@yaks/durable-object@0.2.28",
@@ -4701,7 +4701,7 @@
             "npm:@yaks/file@0.2.28",
             "npm:@yaks/fp@0.2.23",
             "npm:@yaks/graph@0.2.28",
-            "npm:@yaks/host@0.2.28",
+            "npm:@yaks/host@0.2.29",
             "npm:@yaks/id@0.2.23",
             "npm:@yaks/inspect@0.2.23",
             "npm:@yaks/kernel@0.2.28",
@@ -4724,9 +4724,9 @@
             "npm:@yaks/task@0.2.23",
             "npm:@yaks/testing@0.2.17",
             "npm:@yaks/text@0.2.24",
-            "npm:@yaks/tools@0.2.28",
+            "npm:@yaks/tools@0.2.29",
             "npm:@yaks/ui@0.2.28",
-            "npm:@yaks/vocab@0.2.28",
+            "npm:@yaks/vocab@0.2.29",
             "npm:preact@10.29.7"
           ]
         }
@@ -4740,7 +4740,7 @@
             "npm:@yaks/edge@0.2.24",
             "npm:@yaks/effects@0.2.25",
             "npm:@yaks/file@0.2.28",
-            "npm:@yaks/git@0.2.28",
+            "npm:@yaks/git@0.2.29",
             "npm:@yaks/graph@0.2.28",
             "npm:@yaks/id@0.2.23",
             "npm:@yaks/kernel@0.2.28",
@@ -4754,13 +4754,13 @@
             "npm:@yaks/project@0.2.28",
             "npm:@yaks/provenance@0.2.28",
             "npm:@yaks/ram@0.2.24",
-            "npm:@yaks/session@0.2.25",
+            "npm:@yaks/session@0.2.29",
             "npm:@yaks/sqlite@0.2.28",
             "npm:@yaks/task@0.2.23",
             "npm:@yaks/testing@0.2.17",
             "npm:@yaks/text@0.2.24",
-            "npm:@yaks/tools@0.2.28",
-            "npm:@yaks/vocab@0.2.28",
+            "npm:@yaks/tools@0.2.29",
+            "npm:@yaks/vocab@0.2.29",
             "npm:smol-toml@^1.9.1"
           ]
         }
@@ -4776,8 +4776,8 @@
       "packages/spend": {
         "packageJson": {
           "dependencies": [
-            "npm:@yaks/api@0.2.28",
-            "npm:@yaks/cli@0.2.28",
+            "npm:@yaks/api@0.2.29",
+            "npm:@yaks/cli@0.2.29",
             "npm:@yaks/file@0.2.28",
             "npm:@yaks/fp@0.2.23",
             "npm:@yaks/graph@0.2.28",
@@ -4787,11 +4787,11 @@
             "npm:@yaks/process@0.2.28",
             "npm:@yaks/query@0.2.23",
             "npm:@yaks/render@0.2.24",
-            "npm:@yaks/session@0.2.25",
+            "npm:@yaks/session@0.2.29",
             "npm:@yaks/spawn@0.2.28",
             "npm:@yaks/testing@0.2.17",
             "npm:@yaks/ui@0.2.28",
-            "npm:@yaks/vocab@0.2.28",
+            "npm:@yaks/vocab@0.2.29",
             "npm:lucide@1.31.0",
             "npm:preact@10.29.7"
           ]
@@ -4809,7 +4809,7 @@
             "npm:@yaks/query@0.2.23",
             "npm:@yaks/sqlite@0.2.28",
             "npm:@yaks/testing@0.2.17",
-            "npm:@yaks/vocab@0.2.28"
+            "npm:@yaks/vocab@0.2.29"
           ]
         }
       },
@@ -4819,7 +4819,7 @@
             "npm:@jsr/std__assert@1",
             "npm:@jsr/std__path@1.1.2",
             "npm:@jsr/std__testing@1",
-            "npm:@yaks/api@0.2.28",
+            "npm:@yaks/api@0.2.29",
             "npm:@yaks/archetype@0.2.24",
             "npm:@yaks/doc@0.2.24",
             "npm:@yaks/edge@0.2.24",
@@ -4838,13 +4838,13 @@
             "npm:@yaks/provenance@0.2.28",
             "npm:@yaks/query@0.2.23",
             "npm:@yaks/ram@0.2.24",
-            "npm:@yaks/session@0.2.25",
+            "npm:@yaks/session@0.2.29",
             "npm:@yaks/sql@0.2.28",
             "npm:@yaks/task@0.2.23",
             "npm:@yaks/testing@0.2.17",
-            "npm:@yaks/tools@0.2.28",
+            "npm:@yaks/tools@0.2.29",
             "npm:@yaks/trace@0.2.23",
-            "npm:@yaks/vocab@0.2.28"
+            "npm:@yaks/vocab@0.2.29"
           ]
         }
       },
@@ -4865,7 +4865,7 @@
             "npm:@jsr/std__testing@1",
             "npm:@yaks/fp@0.2.23",
             "npm:@yaks/hook@0.2.28",
-            "npm:@yaks/host@0.2.28",
+            "npm:@yaks/host@0.2.29",
             "npm:@yaks/testing@0.2.17"
           ]
         }
@@ -4874,13 +4874,13 @@
         "packageJson": {
           "dependencies": [
             "npm:@jsr/std__assert@1",
-            "npm:@yaks/api@0.2.28",
+            "npm:@yaks/api@0.2.29",
             "npm:@yaks/fp@0.2.23",
             "npm:@yaks/graph@0.2.28",
             "npm:@yaks/query@0.2.23",
             "npm:@yaks/ram@0.2.24",
             "npm:@yaks/testing@0.2.17",
-            "npm:@yaks/vocab@0.2.28"
+            "npm:@yaks/vocab@0.2.29"
           ]
         }
       },
@@ -4904,9 +4904,9 @@
             "npm:@yaks/ram@0.2.24",
             "npm:@yaks/render@0.2.24",
             "npm:@yaks/testing@0.2.17",
-            "npm:@yaks/tools@0.2.28",
+            "npm:@yaks/tools@0.2.29",
             "npm:@yaks/ui@0.2.28",
-            "npm:@yaks/vocab@0.2.28",
+            "npm:@yaks/vocab@0.2.29",
             "npm:linkedom@~0.18.12",
             "npm:preact@10.29.7"
           ]
@@ -4917,7 +4917,7 @@
           "dependencies": [
             "npm:@jsr/std__assert@1",
             "npm:@yaks/hook@0.2.28",
-            "npm:@yaks/host@0.2.28",
+            "npm:@yaks/host@0.2.29",
             "npm:@yaks/phone@0.2.17",
             "npm:@yaks/testing@0.2.17"
           ]
@@ -4942,7 +4942,7 @@
             "npm:@yaks/query@0.2.23",
             "npm:@yaks/render@0.2.24",
             "npm:@yaks/testing@0.2.17",
-            "npm:@yaks/vocab@0.2.28",
+            "npm:@yaks/vocab@0.2.29",
             "npm:linkedom@~0.18.12",
             "npm:marked@18.0.6",
             "npm:preact@10.29.7"
@@ -4958,7 +4958,7 @@
             "npm:@yaks/ram@0.2.24",
             "npm:@yaks/sync@0.2.24",
             "npm:@yaks/testing@0.2.17",
-            "npm:@yaks/vocab@0.2.28"
+            "npm:@yaks/vocab@0.2.29"
           ]
         }
       },
@@ -4976,12 +4976,12 @@
             "npm:@yaks/render@0.2.24",
             "npm:@yaks/testing@0.2.17",
             "npm:@yaks/text@0.2.24",
-            "npm:@yaks/tools@0.2.28",
+            "npm:@yaks/tools@0.2.29",
             "npm:@yaks/trace@0.2.23",
-            "npm:@yaks/tracker@0.2.28",
+            "npm:@yaks/tracker@0.2.29",
             "npm:@yaks/ui@0.2.28",
             "npm:@yaks/ux@0.2.23",
-            "npm:@yaks/vocab@0.2.28",
+            "npm:@yaks/vocab@0.2.29",
             "npm:preact-render-to-string@6.7.0",
             "npm:preact@10.29.7"
           ]
@@ -4992,7 +4992,7 @@
           "dependencies": [
             "npm:@jsr/std__assert@1",
             "npm:@yaks/testing@0.2.17",
-            "npm:@yaks/vocab@0.2.28"
+            "npm:@yaks/vocab@0.2.29"
           ]
         }
       },
@@ -5014,12 +5014,12 @@
             "npm:@yaks/query@0.2.23",
             "npm:@yaks/ram@0.2.24",
             "npm:@yaks/render@0.2.24",
-            "npm:@yaks/session@0.2.25",
+            "npm:@yaks/session@0.2.29",
             "npm:@yaks/sql@0.2.28",
             "npm:@yaks/sqlite@0.2.28",
             "npm:@yaks/testing@0.2.17",
             "npm:@yaks/text@0.2.24",
-            "npm:@yaks/vocab@0.2.28"
+            "npm:@yaks/vocab@0.2.29"
           ]
         }
       },
@@ -5044,10 +5044,10 @@
             "npm:@yaks/task@0.2.23",
             "npm:@yaks/testing@0.2.17",
             "npm:@yaks/text@0.2.24",
-            "npm:@yaks/tools@0.2.28",
+            "npm:@yaks/tools@0.2.29",
             "npm:@yaks/ui@0.2.28",
             "npm:@yaks/ux@0.2.23",
-            "npm:@yaks/vocab@0.2.28",
+            "npm:@yaks/vocab@0.2.29",
             "npm:linkedom@~0.18.12",
             "npm:lucide@1.31.0",
             "npm:preact-render-to-string@6.7.0",
@@ -5066,13 +5066,13 @@
       "packages/tracker": {
         "packageJson": {
           "dependencies": [
-            "npm:@yaks/api@0.2.28",
+            "npm:@yaks/api@0.2.29",
             "npm:@yaks/code@0.2.23",
             "npm:@yaks/doc@0.2.24",
             "npm:@yaks/effects@0.2.25",
             "npm:@yaks/file@0.2.28",
             "npm:@yaks/fp@0.2.23",
-            "npm:@yaks/git@0.2.28",
+            "npm:@yaks/git@0.2.29",
             "npm:@yaks/graph@0.2.28",
             "npm:@yaks/id@0.2.23",
             "npm:@yaks/inspect@0.2.23",
@@ -5091,10 +5091,10 @@
             "npm:@yaks/testing@0.2.17",
             "npm:@yaks/text@0.2.24",
             "npm:@yaks/timing@0.2.23",
-            "npm:@yaks/tools@0.2.28",
+            "npm:@yaks/tools@0.2.29",
             "npm:@yaks/ui@0.2.28",
             "npm:@yaks/ux@0.2.23",
-            "npm:@yaks/vocab@0.2.28",
+            "npm:@yaks/vocab@0.2.29",
             "npm:@yaks/wake@0.2.24",
             "npm:preact-render-to-string@6.7.0",
             "npm:preact@10.29.7"
@@ -5122,7 +5122,7 @@
             "npm:@yaks/fp@0.2.23",
             "npm:@yaks/process@0.2.28",
             "npm:@yaks/testing@0.2.17",
-            "npm:@yaks/vocab@0.2.28"
+            "npm:@yaks/vocab@0.2.29"
           ]
         }
       },
@@ -5131,7 +5131,7 @@
           "dependencies": [
             "npm:@jsr/std__assert@1",
             "npm:@preact/signals@2.9.4",
-            "npm:@yaks/api@0.2.28",
+            "npm:@yaks/api@0.2.29",
             "npm:@yaks/render@0.2.24",
             "npm:@yaks/testing@0.2.17",
             "npm:@yaks/tui@0.2.24",
@@ -5157,7 +5157,7 @@
             "npm:@yaks/testing@0.2.17",
             "npm:@yaks/tui@0.2.24",
             "npm:@yaks/ui@0.2.28",
-            "npm:@yaks/vocab@0.2.28",
+            "npm:@yaks/vocab@0.2.29",
             "npm:linkedom@~0.18.12",
             "npm:preact@10.29.7"
           ]
@@ -5168,20 +5168,20 @@
           "dependencies": [
             "npm:@jsr/std__assert@1",
             "npm:@preact/signals@2.9.4",
-            "npm:@yaks/api@0.2.28",
-            "npm:@yaks/cli@0.2.28",
+            "npm:@yaks/api@0.2.29",
+            "npm:@yaks/cli@0.2.29",
             "npm:@yaks/client@0.2.24",
             "npm:@yaks/code@0.2.23",
             "npm:@yaks/connections@0.2.28",
             "npm:@yaks/draft@0.2.24",
             "npm:@yaks/fp@0.2.23",
             "npm:@yaks/graph@0.2.28",
-            "npm:@yaks/host@0.2.28",
+            "npm:@yaks/host@0.2.29",
             "npm:@yaks/testing@0.2.17",
-            "npm:@yaks/tools@0.2.28",
+            "npm:@yaks/tools@0.2.29",
             "npm:@yaks/trace@0.2.23",
             "npm:@yaks/ui@0.2.28",
-            "npm:@yaks/vocab@0.2.28",
+            "npm:@yaks/vocab@0.2.29",
             "npm:preact@10.29.7"
           ]
         }
@@ -5206,7 +5206,7 @@
           "dependencies": [
             "npm:@jsr/std__assert@1",
             "npm:@yaks/hook@0.2.28",
-            "npm:@yaks/host@0.2.28",
+            "npm:@yaks/host@0.2.29",
             "npm:@yaks/phone@0.2.17",
             "npm:@yaks/testing@0.2.17"
           ]
@@ -5231,7 +5231,7 @@
             "npm:@yaks/query@0.2.23",
             "npm:@yaks/ram@0.2.24",
             "npm:@yaks/testing@0.2.17",
-            "npm:@yaks/vocab@0.2.28",
+            "npm:@yaks/vocab@0.2.29",
             "npm:croner@10.0.1"
           ]
         }
@@ -5240,8 +5240,8 @@
         "packageJson": {
           "dependencies": [
             "npm:@jsr/std__assert@1",
-            "npm:@yaks/api@0.2.28",
-            "npm:@yaks/cli@0.2.28",
+            "npm:@yaks/api@0.2.29",
+            "npm:@yaks/cli@0.2.29",
             "npm:@yaks/connections@0.2.28",
             "npm:@yaks/doc@0.2.24",
             "npm:@yaks/edge@0.2.24",
@@ -5256,9 +5256,9 @@
             "npm:@yaks/render@0.2.24",
             "npm:@yaks/secrets@0.2.28",
             "npm:@yaks/testing@0.2.17",
-            "npm:@yaks/tracker@0.2.28",
+            "npm:@yaks/tracker@0.2.29",
             "npm:@yaks/ui@0.2.28",
-            "npm:@yaks/vocab@0.2.28"
+            "npm:@yaks/vocab@0.2.29"
           ]
         }
       },
@@ -5266,11 +5266,11 @@
         "packageJson": {
           "dependencies": [
             "npm:@jsr/std__assert@1",
-            "npm:@yaks/api@0.2.28",
+            "npm:@yaks/api@0.2.29",
             "npm:@yaks/graph@0.2.28",
             "npm:@yaks/ram@0.2.24",
             "npm:@yaks/testing@0.2.17",
-            "npm:@yaks/vocab@0.2.28"
+            "npm:@yaks/vocab@0.2.29"
           ]
         }
       },
@@ -5288,8 +5288,8 @@
             "npm:@yaks/ram@0.2.24",
             "npm:@yaks/secrets@0.2.28",
             "npm:@yaks/testing@0.2.17",
-            "npm:@yaks/tools@0.2.28",
-            "npm:@yaks/vocab@0.2.28"
+            "npm:@yaks/tools@0.2.29",
+            "npm:@yaks/vocab@0.2.29"
           ]
         }
       },
@@ -5318,13 +5318,13 @@
             "npm:@yaks/admin@0.2.17",
             "npm:@yaks/alias@0.2.24",
             "npm:@yaks/anthropic@0.2.17",
-            "npm:@yaks/api@0.2.28",
+            "npm:@yaks/api@0.2.29",
             "npm:@yaks/archetype@0.2.24",
             "npm:@yaks/blob@0.2.23",
             "npm:@yaks/builders@0.2.23",
             "npm:@yaks/canvas@0.2.24",
             "npm:@yaks/claude@0.2.23",
-            "npm:@yaks/cli@0.2.28",
+            "npm:@yaks/cli@0.2.29",
             "npm:@yaks/client@0.2.24",
             "npm:@yaks/cloudflare-mail@0.2.17",
             "npm:@yaks/code-mode@0.2.27",
@@ -5347,13 +5347,13 @@
             "npm:@yaks/fp@0.2.23",
             "npm:@yaks/fts@0.2.24",
             "npm:@yaks/game@0.2.23",
-            "npm:@yaks/git@0.2.28",
+            "npm:@yaks/git@0.2.29",
             "npm:@yaks/goal@0.2.28",
             "npm:@yaks/graph@0.2.28",
             "npm:@yaks/harness@0.2.28",
-            "npm:@yaks/heal@0.2.28",
+            "npm:@yaks/heal@0.2.29",
             "npm:@yaks/hook@0.2.28",
-            "npm:@yaks/host@0.2.28",
+            "npm:@yaks/host@0.2.29",
             "npm:@yaks/html@0.2.24",
             "npm:@yaks/id@0.2.23",
             "npm:@yaks/inbox@0.2.23",
@@ -5390,7 +5390,7 @@
             "npm:@yaks/rtc@0.2.23",
             "npm:@yaks/sandbox@0.2.28",
             "npm:@yaks/secrets@0.2.28",
-            "npm:@yaks/session@0.2.25",
+            "npm:@yaks/session@0.2.29",
             "npm:@yaks/spawn@0.2.28",
             "npm:@yaks/speech@0.2.17",
             "npm:@yaks/spend@0.2.23",
@@ -5404,15 +5404,15 @@
             "npm:@yaks/text@0.2.24",
             "npm:@yaks/timing@0.2.23",
             "npm:@yaks/tmux@0.2.23",
-            "npm:@yaks/tools@0.2.28",
+            "npm:@yaks/tools@0.2.29",
             "npm:@yaks/topic@0.2.23",
             "npm:@yaks/trace@0.2.23",
-            "npm:@yaks/tracker@0.2.28",
+            "npm:@yaks/tracker@0.2.29",
             "npm:@yaks/tunnel@0.2.24",
             "npm:@yaks/ui@0.2.28",
             "npm:@yaks/ux@0.2.23",
             "npm:@yaks/visualize@0.2.23",
-            "npm:@yaks/vocab@0.2.28",
+            "npm:@yaks/vocab@0.2.29",
             "npm:@yaks/voipms@0.2.17",
             "npm:@yaks/wake@0.2.24",
             "npm:@yaks/workerd@0.2.24",

@@ -10,7 +10,7 @@
   "license": "Apache-2.0",
   "description": "Formatting and resolution of human ids with opt-in entity numbers and vocabulary-declared prefixes.",
   "dependencies": {
-    "@yaks/vocab": "0.2.28"
+    "@yaks/vocab": "0.2.29"
   },
   "devDependencies": {
     "@std/assert": "npm:@jsr/std__assert@^1.0.0",

@@ -6,13 +6,13 @@
   "license": "Apache-2.0",
   "description": "Serves the graph API from Cloudflare Workers with WebSocket upgrades, request authentication, and forwarding to Durable Objects.",
   "dependencies": {
-    "@yaks/api": "0.2.28",
+    "@yaks/api": "0.2.29",
     "@yaks/graph": "0.2.28"
   },
   "devDependencies": {
     "@std/assert": "npm:@jsr/std__assert@^1.0.0",
     "@yaks/ram": "0.2.24",
     "@yaks/testing": "0.2.17",
-    "@yaks/vocab": "0.2.28"
+    "@yaks/vocab": "0.2.29"
   }
 }

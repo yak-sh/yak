@@ -14,7 +14,7 @@
     "@yaks/graph": "0.2.28",
     "@yaks/match": "0.2.24",
     "@yaks/query": "0.2.23",
-    "@yaks/vocab": "0.2.28"
+    "@yaks/vocab": "0.2.29"
   },
   "devDependencies": {
     "@yaks/ram": "0.2.24",

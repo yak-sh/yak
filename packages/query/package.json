@@ -10,7 +10,7 @@
   "description": "Parses query strings into a serializable AST, builds the same AST from code, and completes query text against a loaded vocabulary.",
   "dependencies": {
     "@yaks/fp": "0.2.23",
-    "@yaks/vocab": "0.2.28"
+    "@yaks/vocab": "0.2.29"
   },
   "devDependencies": {
     "@std/assert": "npm:@jsr/std__assert@^1.0.0",

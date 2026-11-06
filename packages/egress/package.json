@@ -14,7 +14,7 @@
     "@yaks/graph": "0.2.28",
     "@yaks/member": "0.2.25",
     "@yaks/secrets": "0.2.28",
-    "@yaks/vocab": "0.2.28"
+    "@yaks/vocab": "0.2.29"
   },
   "devDependencies": {
     "@std/assert": "npm:@jsr/std__assert@^1.0.0",

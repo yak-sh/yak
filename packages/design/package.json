@@ -11,7 +11,7 @@
   "description": "A proposal, the review it gets, and the architecture that stands once it is decided.",
   "dependencies": {
     "@yaks/graph": "0.2.28",
-    "@yaks/vocab": "0.2.28"
+    "@yaks/vocab": "0.2.29"
   },
   "devDependencies": {
     "@std/assert": "npm:@jsr/std__assert@^1.0.0",

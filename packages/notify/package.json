@@ -11,7 +11,7 @@
   "description": "How somebody is notified: a knock aimed at an entity, what they watch or mute, and an open conversation.",
   "dependencies": {
     "@yaks/graph": "0.2.28",
-    "@yaks/vocab": "0.2.28"
+    "@yaks/vocab": "0.2.29"
   },
   "devDependencies": {
     "@yaks/kernel": "0.2.28",

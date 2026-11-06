@@ -1,6 +1,6 @@
 {
   "name": "@yaks/git",
-  "version": "0.2.28",
+  "version": "0.2.29",
   "type": "module",
   "exports": {
     ".": "./mod.ts",
@@ -28,8 +28,8 @@
     "@yaks/machine": "0.2.24",
     "@yaks/process": "0.2.28",
     "@yaks/query": "0.2.23",
-    "@yaks/tools": "0.2.28",
-    "@yaks/vocab": "0.2.28"
+    "@yaks/tools": "0.2.29",
+    "@yaks/vocab": "0.2.29"
   },
   "devDependencies": {
     "@std/assert": "npm:@jsr/std__assert@^1.0.0",

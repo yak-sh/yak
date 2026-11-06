@@ -1,6 +1,6 @@
 {
   "name": "@yaks/session",
-  "version": "0.2.25",
+  "version": "0.2.29",
   "type": "module",
   "exports": {
     ".": "./mod.ts",
@@ -22,14 +22,14 @@
   "license": "Apache-2.0",
   "description": "Represents sessions as graph transcripts, derives status from their entries, manages claims, and runs a transcript wherever its effects are worked.",
   "dependencies": {
-    "@yaks/api": "0.2.28",
+    "@yaks/api": "0.2.29",
     "@yaks/blob": "0.2.23",
     "@yaks/edge": "0.2.24",
     "@yaks/effects": "0.2.25",
     "@yaks/file": "0.2.28",
     "@yaks/fp": "0.2.23",
     "@yaks/graph": "0.2.28",
-    "@yaks/host": "0.2.28",
+    "@yaks/host": "0.2.29",
     "@yaks/id": "0.2.23",
     "@yaks/inspect": "0.2.23",
     "@yaks/markdown": "0.2.24",
@@ -43,15 +43,15 @@
     "@yaks/sql": "0.2.28",
     "@yaks/task": "0.2.23",
     "@yaks/text": "0.2.24",
-    "@yaks/tools": "0.2.28",
+    "@yaks/tools": "0.2.29",
     "@yaks/ui": "0.2.28",
-    "@yaks/vocab": "0.2.28",
+    "@yaks/vocab": "0.2.29",
     "preact": "10.29.7"
   },
   "devDependencies": {
     "@std/assert": "npm:@jsr/std__assert@^1.0.0",
     "@yaks/archetype": "0.2.24",
-    "@yaks/cli": "0.2.28",
+    "@yaks/cli": "0.2.29",
     "@yaks/context": "0.2.23",
     "@yaks/doc": "0.2.24",
     "@yaks/durable-object": "0.2.28",

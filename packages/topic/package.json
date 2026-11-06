@@ -21,7 +21,7 @@
     "@yaks/text": "0.2.24",
     "@yaks/ui": "0.2.28",
     "@yaks/ux": "0.2.23",
-    "@yaks/vocab": "0.2.28",
+    "@yaks/vocab": "0.2.29",
     "lucide": "1.31.0",
     "preact": "10.29.7",
     "stemmer": "2.0.1"
@@ -37,7 +37,7 @@
     "@yaks/render": "0.2.24",
     "@yaks/task": "0.2.23",
     "@yaks/testing": "0.2.17",
-    "@yaks/tools": "0.2.28",
+    "@yaks/tools": "0.2.29",
     "linkedom": "^0.18.12",
     "preact-render-to-string": "6.7.0"
   }

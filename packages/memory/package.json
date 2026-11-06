@@ -15,11 +15,11 @@
   "dependencies": {
     "@yaks/doc": "0.2.24",
     "@yaks/graph": "0.2.28",
-    "@yaks/host": "0.2.28",
+    "@yaks/host": "0.2.29",
     "@yaks/inspect": "0.2.23",
     "@yaks/query": "0.2.23",
     "@yaks/ui": "0.2.28",
-    "@yaks/vocab": "0.2.28",
+    "@yaks/vocab": "0.2.29",
     "preact": "10.29.7"
   },
   "devDependencies": {

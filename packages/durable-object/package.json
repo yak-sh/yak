@@ -6,13 +6,13 @@
   "license": "Apache-2.0",
   "description": "Provides graph storage on a Cloudflare Durable Object's embedded SQLite and connects hibernatable WebSockets to query subscriptions.",
   "dependencies": {
-    "@yaks/api": "0.2.28",
+    "@yaks/api": "0.2.29",
     "@yaks/fp": "0.2.23",
     "@yaks/graph": "0.2.28",
     "@yaks/sql": "0.2.28",
     "@yaks/sqlite": "0.2.28",
     "@yaks/trace": "0.2.23",
-    "@yaks/vocab": "0.2.28",
+    "@yaks/vocab": "0.2.29",
     "fflate": "0.8.3"
   },
   "devDependencies": {
