@@ -29,7 +29,7 @@ space_new:
     entity id and URL. Other tools infer the space when only one fits;
     specify space when more than one could match.
 space_set:
-  title: Rename, move or set what visitors may spend
+  title: Rename, move or set visitor spending
   description: >-
     Change a space's name or move it to another address, at any time, or
     set how much of its monthly model and voice budget its apps' visitors

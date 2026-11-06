@@ -90,7 +90,7 @@ test('every guide page draws under its own heading', async () => {
     // article, which is what the sidebar and the contents list sit beside.
     assertStringIncludes(
       html.split('<article')[1].slice(0, 160),
-      `>${name}</h1>`,
+      `>${esc(name)}</h1>`,
     )
     assertStringIncludes(html, '<a href="/docs">← Documentation</a>')
     assertStringIncludes(html, '<nav class="Nav"')
@@ -189,7 +189,7 @@ test('a page and its markdown are one text at two addresses', async () => {
     // And the page is that file's own words, heading and all.
     let html = await read(at)
     let lead = /^# (.+)$/m.exec(text)![1]
-    assertStringIncludes(html, `>${lead}</h1>`, at)
+    assertStringIncludes(html, `>${esc(lead)}</h1>`, at)
   }
 })
 
