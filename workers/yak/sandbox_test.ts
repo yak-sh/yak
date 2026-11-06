@@ -25,7 +25,8 @@ import {
 } from '@std/assert'
 import { parse } from 'smol-toml'
 import { imaged, pinned as from, tag } from './sandbox/base.ts'
-import { build, fake } from './builder.ts'
+import { build, called, fake, transcribed } from './builder.ts'
+import { machineTools } from '@yaks/harness/machine'
 import { directory, spaceOf } from './directory.ts'
 import * as dirPart from './directory.ts'
 import type { Env } from './env.ts'
@@ -524,56 +525,42 @@ test('every command is signed in as the caller, with one grant', async () => {
   assert(Math.abs(hours - LIFE) < 0.01, `${hours} hours is about ${LIFE}`)
 })
 
-test('a placeholder becomes the token toward yaks.app and stays a placeholder toward any other host', async () => {
-  let apex = new URL(HOST).host, PLACEHOLDER = SENTINEL + 'a'.repeat(43)
-  let lend = [{
-    sentinel: PLACEHOLDER,
-    value: 'token',
-    hosts: [apex, `ada.${apex}`],
-  }]
-  let sentTo = async (to: string, git = false) => {
-    let out: Request | undefined
-    let res = await routed(
-      apex,
-      lend,
-      new Request(to, {
-        headers: {
-          authorization: git
-            ? `Basic ${btoa(`x:${PLACEHOLDER}`)}`
-            : `Bearer ${PLACEHOLDER}`,
-        },
-      }),
-      (r, init) => {
-        out = new Request(r, init)
-        return Promise.resolve(new Response('ok'))
-      },
-    )
-    let said = out?.headers.get('authorization')?.split(' ')[1]
-    return {
-      status: res.status,
-      bearer: said && (git ? atob(said).slice(2) : said),
-    }
-  }
-  // To this platform, and to a clone of an app at Ada's own space's address.
-  equal(await sentTo(`${HOST}/mcp`), { status: 200, bearer: 'token' })
-  equal(await sentTo(`https://ada.${apex}/chess.git/info/refs`, true), {
-    status: 200,
-    bearer: 'token',
+let apex = new URL(HOST).host, PLACEHOLDER = SENTINEL + 'a'.repeat(43)
+let lend = [{
+  sentinel: PLACEHOLDER,
+  value: 'token',
+  hosts: [apex, `ada.${apex}`],
+}]
+for (
+  let [to, git, expected, status] of [
+    [`${HOST}/mcp`, false, 'token', 200],
+    [`https://ada.${apex}/chess.git/info/refs`, true, 'token', 200],
+    ['https://github.com/withastro/astro', false, PLACEHOLDER, 200],
+    [`https://bob.${apex}/`, false, PLACEHOLDER, 200],
+    [`https://example.com/?next=${HOST}`, false, PLACEHOLDER, 200],
+    [HOST.replace('https:', 'http:'), false, undefined, 403],
+  ] as [string, boolean, string | undefined, number][]
+) {
+  let request = new Request(to, {
+    headers: {
+      authorization: git
+        ? `Basic ${btoa(`x:${PLACEHOLDER}`)}`
+        : `Bearer ${PLACEHOLDER}`,
+    },
   })
-  // Anywhere else, another space's address included, as it came.
-  for (
-    let to of [
-      'https://github.com/withastro/astro',
-      `https://bob.${apex}/`,
-      `https://example.com/?next=${HOST}`,
-    ]
-  ) {
-    equal(await sentTo(to), { status: 200, bearer: PLACEHOLDER })
-  }
-  // And only over https (another member's container is
-  // sandbox_isolation_test.ts's).
-  equal((await sentTo(HOST.replace('https:', 'http:'))).status, 403)
-})
+  let answer = new Response('ok')
+  test(`a sandbox placeholder ${status == 403 ? 'refuses plaintext' : expected == 'token' ? 'becomes its token' : 'stays a placeholder'} toward ${new URL(to).host}${git ? ' with Git authentication' : ''}`, async () => {
+    let out: Request | undefined
+    let response = await routed(apex, lend, request, (r, init) => {
+      out = new Request(r, init)
+      return Promise.resolve(answer)
+    })
+    equal(response.status, status)
+    if (status == 403) return equal(out, undefined)
+    let said = out!.headers.get('authorization')!.split(' ')[1]
+    equal(git ? atob(said).slice(2) : said, expected)
+  })
+}
 
 test('destroying the container revokes what it was wearing', async () => {
   let { box, env, space } = await bench(() => ({ stdout: 'ok' }))
@@ -615,12 +602,37 @@ let { workspace: placeholderMachine } = await workbench(
   spending(),
 )
 
+let shell = machineTools(placeholderMachine).find((tool) =>
+  tool.name == 'shell'
+)!
+let shellCall = {
+  id: 'sandbox-call',
+  name: 'shell',
+  args: JSON.stringify({ command: 'yak app_list' }),
+}
+let shellRuns = new Map([[
+  shell.name,
+  async (args: Record<string, unknown>) => [{
+    entity: { eid: '$said' },
+    output: { source: shellCall.id },
+    content: { body: await shell.run(args) },
+  }],
+]])
 test('the container holds a placeholder, never the token, and neither reaches the transcript', async () => {
-  let box = placeholderBox, machine = placeholderMachine
-  await machine.start('yak app_list')
+  let box = placeholderBox
+  let answer = await called(shellRuns, shellCall)
+  let record = transcribed(shellCall, answer)
+  assertStringIncludes(answer.text, 'ok')
+  assertEquals(record.line.said, 'tool')
+  let transcript = JSON.stringify(record)
 
   let placeholder = box.env.at(-1)!.YAKS_TOKEN
   assert(placeholder?.startsWith(SENTINEL), 'the command was signed in')
+  assert(
+    !transcript.includes(placeholder),
+    'no placeholder reaches the transcript',
+  )
+  assert(!transcript.includes(GRANT), 'no grant token reaches the transcript')
   for (let handed of box.env.flatMap(Object.values)) {
     assert(!handed.startsWith(GRANT), 'no grant token is handed in')
   }

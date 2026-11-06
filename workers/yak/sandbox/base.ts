@@ -5,7 +5,7 @@
 import * as io from '@yaks/file/io'
 import * as system from '@yaks/process/system'
 import { command as spawnCommand } from '@yaks/process/command'
-import { sha256 } from '@yaks/graph/sha256'
+import { createHash } from 'node:crypto'
 
 export let REGISTRY = 'registry.cloudflare.com'
 
@@ -13,7 +13,7 @@ let here = (name: string) => new URL(`./${name}`, import.meta.url)
 
 /** The tag base/Dockerfile is pushed under: `base-` and 16 hex of its hash. */
 export let tag = (dockerfile: string) =>
-  'base-' + sha256(dockerfile).slice(0, 16)
+  'base-' + createHash('sha256').update(dockerfile).digest('hex').slice(0, 16)
 
 /** The stable sandbox image named by the Worker config. */
 export let pinned = (dockerfile: string) =>

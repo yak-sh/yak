@@ -140,6 +140,18 @@ export type Beat =
   | { beat: 'ran'; call: string; name: string; text: string; ok: boolean }
   | { beat: 'done'; text: string; refused?: string }
 
+/** A tool's public answer, as the live event and retained transcript read it. */
+export let transcribed = (
+  call: Call,
+  answer: { text: string; ok: boolean },
+): { beat: Beat; line: Line } => {
+  let said = { call: call.id, name: call.name, text: answer.text }
+  return {
+    beat: { beat: 'ran', ...said, ok: answer.ok },
+    line: { said: 'tool', ...said },
+  }
+}
+
 /** How far the loop may go before it says so. */
 export type Opts = {
   /** stable across turns of the same conversation */
@@ -244,7 +256,7 @@ let words = worded
 // model, exactly as MCP hands it one (`isError` with the text): a bad
 // argument is something to correct on the next turn, not the end of the
 // conversation.
-let called = async (
+export let called = async (
   by: Map<string, Run>,
   c: Call,
 ): Promise<{ text: string; ok: boolean; deployed?: boolean }> => {
@@ -528,18 +540,13 @@ export let build = async (
     for (let c of answer.calls) {
       on({ beat: 'tool', call: c.id, name: c.name, args: c.args })
       let said = await called(by, c)
-      on({
-        beat: 'ran',
-        call: c.id,
-        name: c.name,
-        text: said.text,
-        ok: said.ok,
-      })
+      let record = transcribed(c, said)
+      on(record.beat)
       // What makes this conversation a build: an app_deploy that went
       // through. A conversation that ships one app costs one build however
       // many turns it took, and one that ships nothing costs none.
       if (c.name == 'app_deploy' && said.deployed) built = true
-      lines.push({ said: 'tool', call: c.id, name: c.name, text: said.text })
+      lines.push(record.line)
     }
   }
 }

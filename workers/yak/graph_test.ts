@@ -24,6 +24,7 @@ import { stub } from '@std/testing/mock'
 import { faults, type Frame } from '@yaks/api'
 import { type Bundle, type Comp, graph, type Rule, sha256 } from '@yaks/graph'
 import { ram } from '@yaks/ram'
+import { loadVocab } from '@yaks/vocab'
 import { draftEid } from '@yaks/draft'
 import type { Wire } from '@yaks/durable-object'
 import { durable } from './testing.ts'
@@ -244,9 +245,22 @@ let GROWN = JSON.stringify({
 // memory over each one's words.
 let schemaShape = shapeOf('ada/cookbook', SCHEMA)
 let grownShape = shapeOf('ada/cookbook', GROWN)
-let over = ({ vocab }: typeof schemaShape) =>
-  graph({ vocab, storage: ram(vocab) })
+let over = ({ vocab }: typeof schemaShape) => {
+  let words = loadVocab({
+    $defs: Object.fromEntries(
+      ['entity', 'recipe', 'dish'].flatMap((name) => {
+        let definition = vocab.def(name)
+        return definition ? [[name, definition]] : []
+      }),
+    ),
+  })
+  return graph({ vocab: words, storage: ram(words) })
+}
 let before = over(schemaShape), after = over(grownShape)
+await after.apply([{
+  entity: { eid: 'd0000000-0000-4000-8000-000000000004' },
+  dish: { n: 0 },
+}])
 
 let owner: Vouch = { app: APP, person: ADA, role: 'owner', title: 'Ada' }
 
@@ -267,7 +281,7 @@ let cookbook = async (
   return store
 }
 
-test('a store wakes without its schema under the code that fitted it, and follows new words', async () => {
+test('a store wakes without its schema under the code that fitted it, and follows new words', () => {
   let fit = fitOf('a', schemaShape.key, 'stamp')
   ok(stands(fit, fitOf('a', schemaShape.key, 'stamp')))
   for (
@@ -280,11 +294,12 @@ test('a store wakes without its schema under the code that fitted it, and follow
   ok(!stands(null, fitOf('a', schemaShape.key, null)))
   ok(!stands(null, fitOf(null, schemaShape.key, null)))
   equal(fitOf(null, schemaShape.key, 'stamp'), null)
-  // The words it followed take a write the words it held refused.
-  let dish = [{ entity: { eid: CAKE }, dish: { n: 1 } }]
-  await throws(() => before.apply(dish), /unknown component: dish/)
-  match(after.apply(dish), [{ dish: { n: 1 } }])
 })
+let dish = [{ entity: { eid: CAKE }, dish: { n: 1 } }]
+test('the old schema refuses a word it has not followed', () =>
+  throws(() => before.apply(dish), /unknown component: dish/))
+test('the followed schema takes a write in its new word', () =>
+  match(after.apply(dish), [{ dish: { n: 1 } }]))
 
 let appOwned = await (async () => {
   let ctx = state()

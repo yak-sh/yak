@@ -17,15 +17,6 @@ import { cloudflareProvider } from '@yaks/sandbox/cloudflare'
 let space = { eid: 'isolation', slug: 'isolation' } as Space
 let secret = 'sandbox isolation probe'
 
-// The owner's grant, minted as a build's first command mints it (sandbox.ts
-// `signed`), which derives the grant key once for the file.
-let oauth = kv()
-let book = ledger(oauth)!
-let { grant: owned } = await mint(secret, book, {
-  person: 'owner',
-  space: space.slug,
-})
-
 let containers = () => {
   let tokens = new Map<string, string>()
   let calls: string[] = []
@@ -65,7 +56,12 @@ let containers = () => {
   }
 }
 
-let memberIsolation = await (async () => {
+let isolated = async () => {
+  let oauth = kv(), book = ledger(oauth)!
+  let { grant: owned } = await mint(secret, book, {
+    person: 'owner',
+    space: space.slug,
+  })
   let box = containers()
   let env = { SANDBOX: box.SANDBOX, OAUTH_KV: oauth, SESSION_SECRET: secret }
   let [theirs, mine] = [named(space, 'editor'), named(space, 'owner')]
@@ -74,11 +70,13 @@ let memberIsolation = await (async () => {
   let leftover = await editor.workspace.start('leftover-process')
   let owner = await provider.connect({ id: mine })
   await book.wear(mine, owned)
-  return { box, env, theirs, mine, editor, leftover, owner }
-})()
+  return { box, env, book, theirs, mine, editor, leftover, owner }
+}
+let memberIsolation = await isolated()
+let endingIsolation = await isolated()
 
 test('a member cannot read another member’s grant through leftover sandbox code', async () => {
-  let { env, theirs, mine, editor, leftover, owner } = memberIsolation
+  let { env, mine, book } = memberIsolation
   // The placeholder the owner's command holds is swapped for the owner's
   // token, as the key it was sealed under reads it, and only in the owner's
   // container.
@@ -87,10 +85,17 @@ test('a member cannot read another member’s grant through leftover sandbox cod
     person: 'owner',
     space: space.slug,
   })
+})
+test('a different member receives no owner grant', async () => {
+  let { env, theirs } = memberIsolation
   equal(await lent(env, theirs), [])
+})
+test('a member’s leftover process is absent from the owner’s sandbox', async () => {
+  let { owner, leftover } = memberIsolation
   equal(await owner.workspace.look(leftover), null)
-
-  // A build ending must leave another member's running work alone.
+})
+test('ending a build leaves another member’s running work alone', async () => {
+  let { env, editor, leftover } = endingIsolation
   await destroyed(env, space, 'owner')
   equal((await editor.workspace.look(leftover))?.exit, undefined)
 })
