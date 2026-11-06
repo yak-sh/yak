@@ -44,6 +44,17 @@ export let setExitCode = (code: number): void => {
 export let kill = (pid: number, signal: Signal | number = 'SIGTERM'): void => {
   process.kill(pid, signal)
 }
+/** The parent's IPC channel closing, including before this listener starts.
+ * The channel is separate from stdin and is not inherited by grandchildren. */
+export let disconnected = (
+  source: {
+    connected?: boolean
+    once: (event: 'disconnect', listener: () => void) => unknown
+  } = process,
+): Promise<void> =>
+  new Promise((resolve) =>
+    source.connected ? source.once('disconnect', resolve) : resolve()
+  )
 export let addSignalListener = (signal: Signal, fn: () => void): void => {
   process.on(signal, fn)
 }

@@ -295,31 +295,6 @@ export let alive = (pid: number): boolean => {
   }
 }
 
-/** The command line that starts a launcher's child: tied to the launcher, so
- * it ends however the launcher ends, and in a session of its own.
- *
- * The tie is Linux's parent-death signal, set by util-linux `setpriv` before
- * the child's program starts: once the launcher is gone, killed outright as
- * surely as any other way, the kernel sends the child SIGKILL. Nothing in the
- * child has to notice, which it cannot while its event loop is busy. So a
- * unit that signals only its main process still cuts the child's drain at its
- * stop timeout, when it kills the launcher. The kernel sends the signal when
- * the thread that spawned the child ends; Deno spawns on its main thread,
- * which lasts as long as the launcher.
- *
- * The session keeps a terminal interrupt from reaching the child twice:
- * directly from the terminal and again through the launcher's wind hold. */
-export let tethered = (argv: string[]): string[] => [
-  'setpriv',
-  '--pdeathsig',
-  'KILL',
-  'setsid',
-  ...argv,
-]
-
-/** Run a persistent CLI command from immutable sources, forwarding its terminal
- * and interrupts and waiting for the child to drain. JSR releases are already
- * immutable. Independent workers reuse the sources with their own lifetime. */
 /** A worker's inspector is local and opt-in at launch, never a live signal. */
 export let inspector = (port: string): string => {
   if (!/^\d+$/.test(port) || Number(port) < 0 || Number(port) > 65535) {
@@ -328,6 +303,9 @@ export let inspector = (port: string): string => {
   return `--inspect=127.0.0.1:${Number(port)}`
 }
 
+/** Run a persistent CLI command from immutable sources, forwarding its terminal
+ * and interrupts and waiting for the child to drain. JSR releases are already
+ * immutable. Independent workers reuse the sources with their own lifetime. */
 export let runtime = async (argv: string[]): Promise<number | undefined> => {
   if (!ROOT.href.startsWith('file:')) return
   let { fileURLToPath } = await import('node:url')
@@ -339,10 +317,11 @@ export let runtime = async (argv: string[]): Promise<number | undefined> => {
     // child, even if it inherits this process's environment and sources.
     system.env.delete('YAK_RUNTIME_PINNED')
     let launcher = Number(system.env.get('YAK_LAUNCH_PID'))
-    if (launcher > 0 && launcher == system.ppid) launcherPid = launcher
-    // The tie holds from when it was made: a launcher gone before then left
-    // this child to the reaper, so it ends now as the tie would have ended it.
-    else if (launcher > 0 && !alive(launcher)) return 137
+    // If the launcher ended before startup, this child belongs to the reaper.
+    if (launcher > 0 && launcher == system.ppid) {
+      launcherPid = launcher
+      system.disconnected().then(() => system.kill(system.pid, 'SIGKILL'))
+    } else if (launcher > 0 && !alive(launcher)) return 137
     return
   }
   let child: ChildProcess | undefined
@@ -364,7 +343,7 @@ export let runtime = async (argv: string[]): Promise<number | undefined> => {
     unlock = launched
     if (stopped) return 143
     let url = new URL(`file://${dir}`).href
-    let [command, ...args] = tethered([
+    let [command, ...args] = [
       system.execPath(),
       'run',
       // Deno's own lines as a fresh tree fetches its modules say nothing to
@@ -381,7 +360,7 @@ export let runtime = async (argv: string[]): Promise<number | undefined> => {
       `${dir}/deno.json`,
       `${dir}/packages/cli/yak.ts`,
       ...argv,
-    ])
+    ]
     child = launchCommand(command, {
       args,
       env: {
@@ -396,6 +375,10 @@ export let runtime = async (argv: string[]): Promise<number | undefined> => {
       stdin: 'inherit',
       stdout: 'inherit',
       stderr: 'inherit',
+      // IPC closes however the launcher ends, without taking terminal stdin.
+      ipc: true,
+      // A terminal interrupt reaches only the launcher, which forwards it.
+      detached: true,
     }).spawn()
     // The child's command line now names its slot, so no launcher rewrites it.
     unlock()

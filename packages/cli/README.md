@@ -448,13 +448,13 @@ the CLI's memo stay valid for every file the landing left alone. Slots no
 process runs from are removed at the next launch, so the cache holds one tree
 per running version. Launchers take the cache's lock until their child has
 started. The launcher forwards interrupts and waits for the command to drain.
-The command never outlives its launcher: Linux's parent-death signal, set by
-util-linux `setpriv`, kills it however the launcher ends, killed outright
-included, so a unit that stops only its main process still cuts the command at
-its stop timeout. A detached duty worker has its own launcher and can outlive
-the web command while reusing its runtime snapshot. The graph config, database
-and working directory retain their caller's paths; file plugins and machine
-providers inside the source checkout follow the runtime snapshot.
+The command watches a dedicated IPC channel and kills itself when that channel
+closes, however the launcher ends. Terminal stdin remains inherited. The child
+runs detached so terminal interrupts reach it through the launcher once. A
+detached duty worker has its own launcher and can outlive the web command while
+reusing its runtime snapshot. The graph config, database and working directory
+retain their caller's paths; file plugins and machine providers inside the
+source checkout follow the runtime snapshot.
 
 `@yaks/cli/memo` exports `remember(inputs, roots, make, options)` for derived
 JSON data. A hit validates the source files before reusing the value; failed

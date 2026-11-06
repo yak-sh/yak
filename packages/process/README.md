@@ -175,6 +175,12 @@ The main module exports:
 Additional entry points are `@yaks/process/vocab`, `@yaks/process/graph` and
 `@yaks/process/wind`.
 
+`@yaks/process/command` launches commands with independent stdin, stdout and
+stderr modes. `ipc: true` adds a parent-child channel separate from those
+streams; `disconnected()` from `@yaks/process/system` settles in the child when
+its parent closes the channel or exits, including an exit before the child
+starts listening. `detached: true` gives the child its own process group.
+
 ## Winding down
 
 `@yaks/process/wind` is how a process ends when it is asked to. An interrupt is

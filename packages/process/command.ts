@@ -19,6 +19,7 @@ export type CommandOptions = {
   stderr?: 'piped' | 'inherit' | 'null'
   signal?: AbortSignal
   detached?: boolean
+  ipc?: boolean
   uid?: number
   gid?: number
   windowsRawArguments?: boolean
@@ -59,10 +60,12 @@ let options = (o: CommandOptions, collect = false) => ({
     stdio(o.stdin ?? 'null'),
     stdio(o.stdout ?? (collect ? 'piped' : 'inherit')),
     stdio(o.stderr ?? (collect ? 'piped' : 'inherit')),
+    ...o.ipc ? ['ipc' as const] : [],
   ] as [
     'pipe' | 'inherit' | 'ignore',
     'pipe' | 'inherit' | 'ignore',
     'pipe' | 'inherit' | 'ignore',
+    'ipc'?,
   ],
   signal: o.signal,
   detached: o.detached,
