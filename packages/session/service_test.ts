@@ -2,7 +2,15 @@ import { test } from '@yaks/testing'
 import { assertEquals } from '@std/assert'
 import { type Comp, type Graph, identityEid } from '@yaks/graph'
 import { ids, locked, lockOn, seed, store } from './testing.ts'
-import { BATCH, look, type Seen, service, stale, strip } from './service.ts'
+import {
+  BATCH,
+  look,
+  recounted,
+  type Seen,
+  service,
+  stale,
+  strip,
+} from './service.ts'
 import { fileOf } from '@yaks/file'
 import { onDisk } from '@yaks/file/local'
 import { callOf } from './tail.ts'
@@ -97,6 +105,24 @@ let read = (
 
 let DAY = 24 * 60 * 60 * 1000
 
+// A prompt and the model's reply to it, which says what its request used.
+let asked = (text: string, id: string) =>
+  [
+    { type: 'user', origin: { kind: 'human' }, message: { content: text } },
+    {
+      type: 'assistant',
+      message: {
+        id,
+        model: 'claude-opus-5-5',
+        content: [{ type: 'thinking', thinking: 'hmm' }, {
+          type: 'text',
+          text: `said ${id}`,
+        }],
+        usage: { input_tokens: 10, output_tokens: 1 },
+      },
+    },
+  ].map((l) => JSON.stringify(l)).join('\n') + '\n'
+
 let reapStore = store()
 seed(reapStore, { entity: { eid: ids.p2 }, claim: { session: ids.gone } })
 let reapGraph = locked(reapStore)
@@ -132,6 +158,29 @@ test('a recent transcript is followed in full; an old one is read in later, its 
       'thought 0',
       'said 0',
     ])
+  }))
+
+test('a backfill reads in what the duty has not read yet, then measures it', () =>
+  projects({
+    fresh: { text: asked('fix it', 'msg_1') },
+    old: { text: asked('long ago', 'msg_2'), ago: 30 * DAY },
+    gone: { text: asked('before since', 'msg_3'), ago: 60 * DAY },
+  }, async (dir) => {
+    let g = locked(store())
+    let since = new Date(Date.now() - 40 * DAY).toISOString().slice(0, 10)
+    let o = { transcripts: dir, codex: '', person: ids.ada }
+    assertEquals(await recounted(g, since, o), 2)
+    assertEquals(await told(g, 'fresh'), [
+      'fix it',
+      '(call)',
+      'hmm',
+      'said msg_1',
+    ])
+    assertEquals(await told(g, 'old'), ['long ago', 'said msg_2', '(call)'])
+    assertEquals(await told(g, 'gone'), undefined)
+    let [typed] = await g.rows('.content.body="fix it" .fields=created.by')
+    assertEquals(typed['created.by'], ids.ada)
+    assertEquals(await recounted(g, since, o), 0)
   }))
 
 test('between listings a look reads on what is live, and the next listing finds a new transcript', () =>

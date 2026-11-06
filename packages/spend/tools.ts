@@ -131,15 +131,18 @@ export let report = async (
   ].join('\n')
 }
 
-/** Measure what was written since `since` again, then tally each day. */
+/** Read in each transcript written since `since` that the graph has not
+ * read to its end, measure what was written since then again, then tally
+ * each day. What `person` typed is signed with them. */
 export let backfill = async (
   g: Graph,
   since: string,
   now: number = Date.now(),
+  person?: Eid,
 ): Promise<string> => {
   let session = await import('@yaks/session/service')
   let spawn = await import('@yaks/spawn')
-  let read = await session.recounted(g, since)
+  let read = await session.recounted(g, since, { person, now })
   let runs = await spawn.recounted(g, since)
   let days = 0
   for (let d = since; d <= dayOf(now); d = after(d)) {
@@ -150,8 +153,9 @@ export let backfill = async (
     `sessions and ${runs} from managed runs; tallied ${days} days from ${since}`
 }
 
-/** The tools this package runs. */
-export let runs = (): Runs => ({
+/** The tools this package runs; a transcript read in is signed with the
+ * config's `person`. */
+export let runs = (host?: { config?: { person?: string } }): Runs => ({
   spend_show: async (call, graph) => {
     let a = argsOf(call)
     return answer(
@@ -166,6 +170,11 @@ export let runs = (): Runs => ({
   spend_backfill: async (call, graph) => {
     let since = dayArg(argsOf(call).since)
     if (!since) throw new Refused('say since, the first UTC day to measure')
-    return answer(call, await backfill(graph, since))
+    let said = host?.config?.person
+    let person = said && ((await graph.address([said])).get(said) ?? said)
+    return answer(
+      call,
+      await backfill(graph, since, Date.now(), person || undefined),
+    )
   },
 })

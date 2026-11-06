@@ -37,6 +37,16 @@ and keeps reading new ones as they appear. Each day on the page fills in as its
 transcripts are read, about thirty a minute, so a long history takes a while to
 appear in full. Stop it with Ctrl-C; the next `yak serve` carries on reading.
 
+To fill your history at once, read every transcript from a day on yourself:
+
+```sh
+yak spend backfill 2026-10-01
+```
+
+It reads each transcript written since that day to its end, measures its
+requests and tallies each day, then says how many requests it measured. Run it
+again any time; what it has already read is not read twice.
+
 The same report is in the terminal: `yak spend show` for this week, or
 `yak spend show 2026-10-01` from a day on.
 

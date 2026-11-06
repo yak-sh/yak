@@ -677,13 +677,52 @@ export let service = async (
   }
 }
 
+// How many model requests a session's entries hold.
+let requests = async (g: Graph, session?: Eid): Promise<number> =>
+  session
+    ? (await g.rows(`.entry.session=${session} .ask .usage .fields=entity.eid`))
+      .length
+    : 0
+
+// A transcript read to its end, as a look reads it but with no budget: at
+// full depth where it was written in the last `full` milliseconds, else its
+// prose. A managed run's is left alone. Answers how many requests it read.
+let through = async (
+  g: Graph,
+  f: Found,
+  o: { person?: Eid; full: number; now: number; signal?: AbortSignal },
+): Promise<number> => {
+  let st = await stat(f.path)
+  if (!st) return 0
+  let prose = o.now - (st.mtime?.getTime() ?? 0) >= o.full
+  let t: Tail | null = null
+  try {
+    t = await opened(g, f, o.signal)
+    if (!t || !pending(t, st.size)) return 0
+    let had = await requests(g, t.session)
+    while (!o.signal?.aborted && pending(t, st.size)) {
+      let at = t.at
+      await pull(g, t, format(f, t), { ...o, prose })
+      if (t.at == at && !behind(t) && !t.stream) break
+    }
+    return await requests(g, t.session) - had
+  } catch (error) {
+    if (!f.path.endsWith('.zst')) throw error
+    console.error(error)
+    return 0
+  } finally {
+    await t?.stream?.close()
+  }
+}
+
 /**
- * Read every transcript written since `since` again for its model requests
- * (./tail.ts `recount`), and walk the graph's own sessions for theirs: what
- * was written before requests were read and measured; and title each
- * subagent read before sessions were titled. A transcript the duty has not
- * read yet is left to it, and a managed run's is @yaks/spawn's (`recounted`
- * there). Answers how many requests it measured.
+ * Read every transcript written since `since` to its end, as the duty would
+ * but at once, then again for its model requests (./tail.ts `recount`), and
+ * walk the graph's own sessions for theirs: what was written before requests
+ * were read and measured; and title each subagent read before sessions were
+ * titled. What `person` typed is signed with them. A managed run's
+ * transcript is @yaks/spawn's (`recounted` there). Answers how many requests
+ * it measured.
  *
  * ```ts
  * import { recounted } from '@yaks/session/service'
@@ -694,17 +733,30 @@ export let service = async (
 export let recounted = async (
   g: Graph,
   since: string,
-  o: Options & { signal?: AbortSignal } = {},
+  o: Options & { person?: Eid; now?: number; signal?: AbortSignal } = {},
 ): Promise<number> => {
   let after = Date.parse(since)
-  let found = [
+  let now = o.now ?? Date.now()
+  let all = [
     ...await transcripts(o.transcripts ?? claudeProjects() ?? ''),
     ...await rollouts(o.codex ?? codexSessions() ?? ''),
-  ].filter((f) => !f.path.endsWith('.zst'))
+  ]
+  let found: Found[] = []
+  for (let f of all) {
+    if (((await stat(f.path))?.mtime?.getTime() ?? 0) >= after) found.push(f)
+  }
   let wrote = 0
   for (let f of found) {
     if (o.signal?.aborted) break
-    if (((await stat(f.path))?.mtime?.getTime() ?? 0) < after) continue
+    wrote += await through(g, f, {
+      person: o.person,
+      full: o.full ?? FULL,
+      now,
+      signal: o.signal,
+    })
+  }
+  for (let f of found.filter((f) => !f.path.endsWith('.zst'))) {
+    if (o.signal?.aborted) break
     let session = (await transcriptOf(g, f.path))?.session
     if (!session) continue
     if (await managed(g, String(session))) continue
