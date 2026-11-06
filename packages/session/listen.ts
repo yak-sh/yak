@@ -614,6 +614,21 @@ export let deliver = async (
   }
 }
 
+/** Take back the mark {@link deliver} set on items whose lines never reached
+ * the session, so they are owed again. */
+export let undeliver = async (
+  graph: Pick<Graph, 'apply'>,
+  actor: Actor | null,
+  items: Bundle[],
+): Promise<void> => {
+  if (items.length) {
+    await graph.apply(signed(
+      items.map((b) => ({ entity: { eid: b.entity.eid }, [NOTIFIED]: null })),
+      actor,
+    ))
+  }
+}
+
 /** One pass: say what is addressed to the session and mark each line said. */
 export let hear = async (
   graph: Pick<Graph, 'vocab' | 'read' | 'get' | 'apply'>,

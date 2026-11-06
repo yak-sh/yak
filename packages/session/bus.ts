@@ -29,6 +29,7 @@ import {
   type News,
   pending,
   replies as replyRoutes,
+  undeliver,
 } from './listen.ts'
 import { sessionFor } from './who.ts'
 
@@ -253,8 +254,18 @@ export type Hook = {
  * session is owed waits for the session. The first event, a subagent's too,
  * marks the session `hooked`, and from then on the bus says nothing in a tool
  * reply to it, which cannot tell the session from its subagents.
+ *
+ * The lines are marked said as they are taken, and `reaches` then asks the
+ * door whether its answer can still reach the harness. A harness that gave up
+ * on the hook while the lines were read and marked gets none of them, and
+ * they stay owed for its next hook or `yak session listen`: a line said twice
+ * beats a line lost.
  */
-export let heard = async (g: Graph, hook: Hook): Promise<object> => {
+export let heard = async (
+  g: Graph,
+  hook: Hook,
+  reaches: () => Promise<boolean> = () => Promise.resolve(true),
+): Promise<object> => {
   if (!g.vocab.comp('notified')) return {}
   let said = typeof hook.session_id == 'string' ? hook.session_id : ''
   let session = said ? await sessionFor(g, said, [`${SESSION}.id`]) : undefined
@@ -262,13 +273,16 @@ export let heard = async (g: Graph, hook: Hook): Promise<object> => {
   let id = session.entity.eid
   if (!await hooked(g, id)) await g.apply([{ entity: { eid: id }, hooked: {} }])
   if (hook.agent_id) return {}
-  let lines = (await owed(g, id)).map(({ line }) => line)
-  return lines.length
-    ? {
-      hookSpecificOutput: {
-        hookEventName: String(hook.hook_event_name ?? 'PostToolUse'),
-        additionalContext: lines.join('\n'),
-      },
-    }
-    : {}
+  let taken = await owed(g, id)
+  if (!taken.length) return {}
+  if (!await reaches()) {
+    await undeliver(g, null, taken.map(({ item }) => item))
+    return {}
+  }
+  return {
+    hookSpecificOutput: {
+      hookEventName: String(hook.hook_event_name ?? 'PostToolUse'),
+      additionalContext: taken.map(({ line }) => line).join('\n'),
+    },
+  }
 }

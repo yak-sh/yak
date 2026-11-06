@@ -24,6 +24,12 @@ import { promptContext } from './prompt.ts'
 /** Where the harness posts its hook events. */
 export let PATH = '/session/hook'
 
+// Whether the harness still waits for this answer. It gives up on a hook after
+// its timeout (2 s, ./hooks.ts), and Deno tells a handler its client hung up
+// only once the event loop turns, so the door lets it turn before asking.
+let open = (request: Request): Promise<boolean> =>
+  new Promise((done) => setTimeout(() => done(!request.signal.aborted)))
+
 /** `POST /session/hook`: one hook event in, the context it adds out. */
 export let routes = (
   host: {
@@ -90,6 +96,8 @@ export let routes = (
     let edge = await lifecycle(host, request, event)
     if (edge) return edge
     if (await hear(host.graph, hook)) return Response.json({})
-    return Response.json(await heard(host.graph, hook as Hook))
+    return Response.json(
+      await heard(host.graph, hook as Hook, () => open(request)),
+    )
   },
 }]

@@ -18,6 +18,7 @@ import { taskDoc } from '@yaks/task/vocab'
 import { loadVocab, type VocabDoc } from '@yaks/vocab'
 import { test, until } from '@yaks/testing'
 import { due, feed, heard, reply } from './bus.ts'
+import { PATH, routes } from './routes.ts'
 import { pending, pendingItems } from './listen.ts'
 import { statusOf } from './state.ts'
 import { sessionDoc } from './comp.ts'
@@ -281,6 +282,49 @@ let hooked = await scene(async () => {
 })
 test('a hooked session hears nothing through a tool reply, only at its hook', () => {
   assertEquals(hooked(), { reply: [], fork: {}, forkSaid: false, told: true })
+})
+
+// The hook door's answer to a PostToolUse event, abandoned by the harness
+// while the door works when `hangUp`.
+let door = async (g: Graph, hangUp = false) => {
+  let gone = new AbortController()
+  let answer = routes({ graph: g }).find((r) => r.path == PATH)!.handle(
+    new Request(`http://door${PATH}`, {
+      method: 'POST',
+      body: JSON.stringify({
+        session_id: 'outside',
+        hook_event_name: 'PostToolUse',
+      }),
+      signal: gone.signal,
+    }),
+  )
+  if (hangUp) gone.abort()
+  return await (await answer).json()
+}
+let abandoned = await scene(async () => {
+  let g = outside(
+    await image([
+      { entity: { eid: 'outside' }, session: { id: 'outside' }, hooked: {} },
+      letter('knock', 'A knock'),
+    ]),
+  )
+  let lost = await door(g, true)
+  let saidLost = await said(g, 'knock')
+  let next = await door(g)
+  return {
+    lost: tells(lost, 'A knock'),
+    saidLost,
+    next: tells(next, 'A knock'),
+    saidNext: await said(g, 'knock'),
+  }
+})
+test('a line the harness gave up on at its hook stays owed for the next', () => {
+  assertEquals(abandoned(), {
+    lost: false,
+    saidLost: false,
+    next: true,
+    saidNext: true,
+  })
 })
 
 test('the session duty delivers without a Claude transcript directory', async () => {
