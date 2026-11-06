@@ -1,6 +1,7 @@
 // Runtime provider snapshots: one catalog and lookup for every tool door.
 import type { NamedTool, Tool } from '@yaks/graph'
 import { namedTool } from '@yaks/graph/call'
+import { minted } from '@yaks/graph/identity'
 import { toolEid } from './result.ts'
 import { answerSchema, inputSchemaOf } from './schema.ts'
 
@@ -33,9 +34,12 @@ let snapshot = ({ name, tools }: Provider) => ({
   tools: tools.map(namedTool),
 })
 
+// A tool is found by its name or by its identity (`toolEid`). No name has the
+// shape of an identity, so the two never collide; each identity is a hash,
+// derived only as a lookup by identity first walks past its tool, since a
+// process looks up a few of the hundreds it lists.
 let indexed = (sources: ReturnType<typeof snapshot>[]) => {
   let names = new Map<string, { provider: string; tool: NamedTool }>()
-  let eids = new Map<string, NamedTool>()
   for (let source of sources) {
     for (let tool of source.tools) {
       let prior = names.get(tool.name)
@@ -44,18 +48,27 @@ let indexed = (sources: ReturnType<typeof snapshot>[]) => {
           `tool ${tool.name} is supplied by both ${prior.provider} and ${source.name}`,
         )
       }
-      let eid = toolEid(tool.name)
-      let shadow = eids.get(tool.name) ?? names.get(eid)?.tool
-      if (shadow) {
+      if (minted(tool.name)) {
         throw new Error(
-          `tool name/identity collision: ${tool.name} and ${shadow.name}`,
+          `tool ${tool.name} from ${source.name} is named like an identity`,
         )
       }
       names.set(tool.name, { provider: source.name, tool })
-      eids.set(eid, tool)
     }
   }
-  return { names, eids }
+  let eids = new Map<string, NamedTool>()
+  let unhashed = names.values()
+  let identified = (eid: string): NamedTool | undefined => {
+    let found = eids.get(eid)
+    for (let next; !found && !(next = unhashed.next()).done;) {
+      let { tool } = next.value
+      let id = toolEid(tool.name)
+      eids.set(id, tool)
+      if (id == eid) found = tool
+    }
+    return found
+  }
+  return { names, identified }
 }
 
 /** Build a registry from runtime adapters. Replacement publishes one complete
@@ -71,7 +84,8 @@ export let registry = (providers: readonly Provider[] = []): Registry => {
   let index = indexed([...sources.values()])
   let listeners = new Set<() => void>()
   let list = () => [...index.names.values()].map(({ tool }) => tool)
-  let get = (id: string) => index.names.get(id)?.tool ?? index.eids.get(id)
+  let get = (id: string) =>
+    index.names.get(id)?.tool ?? (minted(id) ? index.identified(id) : undefined)
   let describe = (id: string): Description | undefined => {
     let tool = get(id)
     if (!tool) return undefined

@@ -155,13 +155,17 @@ export let runs = (host: Serving): Runs => ({
     let port = Number(args.port ?? host.config.port ?? PORT)
     let hostname = String(args.hostname ?? host.config.hostname ?? HOSTNAME)
     let grace = Number(args.grace ?? GRACE) * 1000
-    // Close for dead processes before accepting requests. Running their
-    // unanswered calls belongs to recovery, independently of listening.
-    await host.bury?.()
+    // Closing for dead processes comes before warming, which starts workers
+    // for the duty roles no live process covers, and a dead one would seem
+    // to cover its own. Running their unanswered calls belongs to recovery.
     // A server sharing a port takes requests from the one it replaces as soon
     // as it listens, so it listens warm. One starting alone listens at once,
     // since nothing answers there until it does, and warms once it listens.
-    if (args.share === true) await host.warm?.()
+    let warmed = async () => {
+      await host.bury?.()
+      await host.warm?.()
+    }
+    if (args.share === true) await warmed()
     let at = ''
     let began = Date.now()
     let active = requests(handler)
@@ -205,7 +209,7 @@ export let runs = (host: Serving): Runs => ({
     })
     let unready: (() => Promise<void>) | undefined
     try {
-      await host.warm?.()
+      if (args.share !== true) await warmed()
       if (typeof args.ready == 'string') unready = await denoReady(args.ready)
       // And the duties in their long-lived form: the effect pool, where this
       // process serves `effects`, and the plugins' services, each under its

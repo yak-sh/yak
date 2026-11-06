@@ -32,14 +32,21 @@ export type Check = (value: unknown) => OutputUnit[]
 
 const checks = new WeakMap<object, Check>()
 
-/** The check for a schema, compiled once per schema object. */
+/** The check for a schema, compiled once per schema object, when it first
+ * checks a value: a process lists hundreds of tools and calls a few. */
 export const toolCheck = (schema: Record<string, unknown>): Check => {
   let check = checks.get(schema)
   if (!check) {
-    const validator = new Validator(schema as Schema, dialectOf(schema), false)
+    const dialect = dialectOf(schema)
+    let compiled: Validator | undefined
     // Checked as the JSON it stands for: a property set to `undefined` is one
     // left out, which the validator would otherwise refuse as no JSON type.
     check = (value) => {
+      const validator = compiled ??= new Validator(
+        schema as Schema,
+        dialect,
+        false,
+      )
       const json = value === undefined
         ? value
         : JSON.parse(JSON.stringify(value))
