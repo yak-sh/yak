@@ -10,20 +10,20 @@
   "license": "Apache-2.0",
   "description": "Implements the model interface over Cloudflare Workers AI, through the AI binding a Worker is given: chat messages out, either answer shape back, no key.",
   "dependencies": {
-    "@yaks/blob": "0.2.23",
-    "@yaks/embedding": "0.2.25",
+    "@yaks/blob": "0.2.30",
+    "@yaks/embedding": "0.2.30",
     "@yaks/fp": "0.2.23",
-    "@yaks/model": "0.2.26",
+    "@yaks/model": "0.2.30",
     "@yaks/openai": "0.2.26"
   },
   "devDependencies": {
     "@std/assert": "npm:@jsr/std__assert@^1.0.0",
     "@yaks/effects": "0.2.25",
-    "@yaks/graph": "0.2.28",
+    "@yaks/graph": "0.2.30",
     "@yaks/ram": "0.2.24",
     "@yaks/secrets": "0.2.28",
-    "@yaks/testing": "0.2.17",
-    "@yaks/tools": "0.2.29",
-    "@yaks/vocab": "0.2.29"
+    "@yaks/testing": "0.2.30",
+    "@yaks/tools": "0.2.30",
+    "@yaks/vocab": "0.2.30"
   }
 }

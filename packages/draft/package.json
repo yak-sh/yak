@@ -14,8 +14,8 @@
   "dependencies": {
     "@preact/signals": "2.9.4",
     "@yaks/fp": "0.2.23",
-    "@yaks/graph": "0.2.28",
-    "@yaks/vocab": "0.2.29",
+    "@yaks/graph": "0.2.30",
+    "@yaks/vocab": "0.2.30",
     "preact": "10.29.7"
   },
   "devDependencies": {
@@ -23,6 +23,6 @@
     "@yaks/client": "0.2.24",
     "@yaks/doc": "0.2.24",
     "@yaks/ram": "0.2.24",
-    "@yaks/testing": "0.2.17"
+    "@yaks/testing": "0.2.30"
   }
 }

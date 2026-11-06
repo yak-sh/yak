@@ -6,10 +6,10 @@
   "license": "Apache-2.0",
   "description": "Resolves entity names from the properties a component vocabulary marks for name lookup.",
   "dependencies": {
-    "@yaks/vocab": "0.2.29"
+    "@yaks/vocab": "0.2.30"
   },
   "devDependencies": {
     "@std/assert": "npm:@jsr/std__assert@^1.0.0",
-    "@yaks/testing": "0.2.17"
+    "@yaks/testing": "0.2.30"
   }
 }

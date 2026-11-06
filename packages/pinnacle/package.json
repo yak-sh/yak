@@ -1,6 +1,6 @@
 {
   "name": "@yaks/pinnacle",
-  "version": "0.2.17",
+  "version": "0.2.30",
   "exports": {
     ".": "./mod.ts",
     "./graph": "./graph.ts",
@@ -10,12 +10,12 @@
   "description": "Pinnacle texting transport and authenticated webhook events for @yaks/phone.",
   "type": "module",
   "dependencies": {
-    "@yaks/phone": "0.2.17",
+    "@yaks/phone": "0.2.30",
     "@yaks/host": "0.2.29",
     "@yaks/hook": "0.2.28"
   },
   "devDependencies": {
-    "@yaks/testing": "0.2.17",
+    "@yaks/testing": "0.2.30",
     "@std/assert": "npm:@jsr/std__assert@^1.0.0"
   }
 }

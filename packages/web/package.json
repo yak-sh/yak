@@ -14,18 +14,18 @@
   "description": "The browser door: serves configured applications contributed through their web facet, with page, bundles, styles and assets over @yaks/api.",
   "dependencies": {
     "@yaks/api": "0.2.29",
-    "@yaks/cli": "0.2.29",
+    "@yaks/cli": "0.2.30",
     "@yaks/connections": "0.2.28",
     "@yaks/file": "0.2.28",
-    "@yaks/graph": "0.2.28",
+    "@yaks/graph": "0.2.30",
     "@yaks/id": "0.2.23",
     "@yaks/process": "0.2.28",
     "@yaks/query": "0.2.23",
     "@yaks/render": "0.2.24",
     "@yaks/secrets": "0.2.28",
-    "@yaks/tracker": "0.2.29",
-    "@yaks/ui": "0.2.28",
-    "@yaks/vocab": "0.2.29"
+    "@yaks/tracker": "0.2.30",
+    "@yaks/ui": "0.2.30",
+    "@yaks/vocab": "0.2.30"
   },
   "devDependencies": {
     "@std/assert": "npm:@jsr/std__assert@^1.0.0",
@@ -34,6 +34,6 @@
     "@yaks/effects": "0.2.25",
     "@yaks/kernel": "0.2.28",
     "@yaks/ram": "0.2.24",
-    "@yaks/testing": "0.2.17"
+    "@yaks/testing": "0.2.30"
   }
 }

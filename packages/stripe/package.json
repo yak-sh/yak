@@ -1,6 +1,6 @@
 {
   "name": "@yaks/stripe",
-  "version": "0.2.23",
+  "version": "0.2.30",
   "type": "module",
   "exports": {
     ".": "./mod.ts",
@@ -20,6 +20,6 @@
   "devDependencies": {
     "@std/assert": "npm:@jsr/std__assert@^1.0.0",
     "@std/testing": "npm:@jsr/std__testing@^1.0.0",
-    "@yaks/testing": "0.2.17"
+    "@yaks/testing": "0.2.30"
   }
 }

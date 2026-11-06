@@ -1,6 +1,6 @@
 {
   "name": "@yaks/anthropic",
-  "version": "0.2.17",
+  "version": "0.2.30",
   "type": "module",
   "exports": {
     ".": "./mod.ts",
@@ -12,10 +12,10 @@
   "license": "Apache-2.0",
   "description": "Implements the model interface over Anthropic's Messages API, spoken over fetch: streamed text, tool use, automatic prompt caching and cancellation, with usage that names what the cache read and wrote.",
   "dependencies": {
-    "@yaks/model": "0.2.26",
-    "@yaks/vocab": "0.2.29"
+    "@yaks/model": "0.2.30",
+    "@yaks/vocab": "0.2.30"
   },
   "devDependencies": {
-    "@yaks/testing": "0.2.17"
+    "@yaks/testing": "0.2.30"
   }
 }

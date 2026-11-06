@@ -13,11 +13,11 @@
   "description": "A portfolio: the projects work is filed under, the boards that are saved filters over it, the ventures being built, and where a project lands its source.",
   "dependencies": {
     "@yaks/fp": "0.2.23",
-    "@yaks/graph": "0.2.28",
+    "@yaks/graph": "0.2.30",
     "@yaks/id": "0.2.23",
     "@yaks/query": "0.2.23",
-    "@yaks/tools": "0.2.29",
-    "@yaks/vocab": "0.2.29"
+    "@yaks/tools": "0.2.30",
+    "@yaks/vocab": "0.2.30"
   },
   "devDependencies": {
     "@std/assert": "npm:@jsr/std__assert@^1.0.0",
@@ -26,6 +26,6 @@
     "@yaks/kernel": "0.2.28",
     "@yaks/ram": "0.2.24",
     "@yaks/task": "0.2.23",
-    "@yaks/testing": "0.2.17"
+    "@yaks/testing": "0.2.30"
   }
 }

@@ -9,7 +9,7 @@
   "license": "Apache-2.0",
   "description": "Who made an entity and who last changed it, when, and through what: the created and updated stamps the graph fills in on every write.",
   "dependencies": {
-    "@yaks/vocab": "0.2.29"
+    "@yaks/vocab": "0.2.30"
   },
   "devDependencies": {}
 }

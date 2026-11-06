@@ -21,22 +21,22 @@
   "dependencies": {
     "@preact/signals": "2.9.4",
     "@yaks/api": "0.2.29",
-    "@yaks/cli": "0.2.29",
+    "@yaks/cli": "0.2.30",
     "@yaks/client": "0.2.24",
     "@yaks/code": "0.2.23",
     "@yaks/draft": "0.2.24",
     "@yaks/fp": "0.2.23",
-    "@yaks/graph": "0.2.28",
+    "@yaks/graph": "0.2.30",
     "@yaks/host": "0.2.29",
-    "@yaks/tools": "0.2.29",
+    "@yaks/tools": "0.2.30",
     "@yaks/trace": "0.2.23",
-    "@yaks/ui": "0.2.28",
-    "@yaks/vocab": "0.2.29",
+    "@yaks/ui": "0.2.30",
+    "@yaks/vocab": "0.2.30",
     "preact": "10.29.7"
   },
   "devDependencies": {
     "@std/assert": "npm:@jsr/std__assert@^1.0.0",
     "@yaks/connections": "0.2.28",
-    "@yaks/testing": "0.2.17"
+    "@yaks/testing": "0.2.30"
   }
 }

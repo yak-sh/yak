@@ -18,13 +18,13 @@
     "@yaks/edge": "0.2.24",
     "@yaks/effects": "0.2.25",
     "@yaks/file": "0.2.28",
-    "@yaks/git": "0.2.29",
-    "@yaks/graph": "0.2.28",
+    "@yaks/git": "0.2.30",
+    "@yaks/graph": "0.2.30",
     "@yaks/mirror": "0.2.23",
     "@yaks/process": "0.2.28",
     "@yaks/query": "0.2.23",
-    "@yaks/tools": "0.2.29",
-    "@yaks/vocab": "0.2.29",
+    "@yaks/tools": "0.2.30",
+    "@yaks/vocab": "0.2.30",
     "@yaks/yaml": "0.2.24"
   },
   "devDependencies": {
@@ -34,6 +34,6 @@
     "@yaks/kernel": "0.2.28",
     "@yaks/machine": "0.2.24",
     "@yaks/ram": "0.2.24",
-    "@yaks/testing": "0.2.17"
+    "@yaks/testing": "0.2.30"
   }
 }

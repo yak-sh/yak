@@ -12,13 +12,13 @@
   "description": "Voice between pages over Cloudflare Realtime: a page joins a session, publishes its microphone and hears the tracks it asks for, and a host answers the door that keeps the secret, the sessions and the meter.",
   "dependencies": {
     "@yaks/effects": "0.2.25",
-    "@yaks/graph": "0.2.28",
-    "@yaks/vocab": "0.2.29"
+    "@yaks/graph": "0.2.30",
+    "@yaks/vocab": "0.2.30"
   },
   "devDependencies": {
     "@std/assert": "npm:@jsr/std__assert@^1.0.0",
     "@yaks/ram": "0.2.24",
-    "@yaks/testing": "0.2.17",
+    "@yaks/testing": "0.2.30",
     "@yaks/wake": "0.2.24"
   }
 }

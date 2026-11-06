@@ -1,6 +1,6 @@
 {
   "name": "@yaks/graph",
-  "version": "0.2.28",
+  "version": "0.2.30",
   "type": "module",
   "exports": {
     ".": "./mod.ts",
@@ -26,18 +26,18 @@
   "dependencies": {
     "@yaks/fp": "0.2.23",
     "@yaks/id": "0.2.23",
-    "@yaks/match": "0.2.24",
+    "@yaks/match": "0.2.30",
     "@yaks/query": "0.2.23",
     "@yaks/trace": "0.2.23",
-    "@yaks/vocab": "0.2.29"
+    "@yaks/vocab": "0.2.30"
   },
   "devDependencies": {
     "@std/assert": "npm:@jsr/std__assert@^1.0.0",
     "@std/testing": "npm:@jsr/std__testing@^1.0.0",
     "@yaks/archetype": "0.2.24",
-    "@yaks/benchmark": "0.2.17",
+    "@yaks/benchmark": "0.2.30",
     "@yaks/ram": "0.2.24",
-    "@yaks/testing": "0.2.17",
-    "@yaks/tools": "0.2.29"
+    "@yaks/testing": "0.2.30",
+    "@yaks/tools": "0.2.30"
   }
 }

@@ -22,18 +22,18 @@
   "description": "Starts, adopts and supervises operating-system processes, recording each one as a graph entity with its pid and exit code.",
   "dependencies": {
     "@yaks/fp": "0.2.23",
-    "@yaks/graph": "0.2.28",
+    "@yaks/graph": "0.2.30",
     "@yaks/query": "0.2.23",
     "@yaks/render": "0.2.24",
-    "@yaks/vocab": "0.2.29",
+    "@yaks/vocab": "0.2.30",
     "undici": "^7.28.0"
   },
   "devDependencies": {
     "@std/assert": "npm:@jsr/std__assert@^1.0.0",
-    "@yaks/model": "0.2.26",
+    "@yaks/model": "0.2.30",
     "@yaks/ram": "0.2.24",
-    "@yaks/session": "0.2.29",
-    "@yaks/testing": "0.2.17",
-    "@yaks/tools": "0.2.29"
+    "@yaks/session": "0.2.30",
+    "@yaks/testing": "0.2.30",
+    "@yaks/tools": "0.2.30"
   }
 }
