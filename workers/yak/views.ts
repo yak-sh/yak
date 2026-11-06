@@ -42,6 +42,7 @@ import { caught } from './defects.ts'
 import { elapsed } from './lib/hops.ts'
 import { failure, resent } from './workers_api.ts'
 import { isView, pointOf, type Visited } from './view-point.ts'
+import { appTag } from './purge.ts'
 export { classed, point, referred, type View } from './view-point.ts'
 
 /** How long Cloudflare keeps a data point. Said in one place. */
@@ -272,8 +273,9 @@ export type Day = { day: string; views: number }
 /** One line of a top list. */
 export type Line = { name: string; views: number }
 
-/** What an app's people are shown. */
+/** What an app's people are shown, and when it was counted. */
 export type Stats = {
+  at: string
   days: number
   total: number
   daily: Day[]
@@ -374,7 +376,7 @@ export let statsFor = (
   days = DAYS,
   now = Date.now(),
 ): Promise<Map<string, Stats>> | null => {
-  if (!env.CF_ANALYTICS_TOKEN || !env.CF_ACCOUNT) return null
+  if (!statsOn(env)) return null
   let window = whole(days, KEPT_DAYS)
   let key = (app: string) =>
     `${sqlAt(env)}:${env.VIEWS_DATASET ?? DATASET}:${app}:${window}`
@@ -444,14 +446,83 @@ export let lastDay = (
   return views
 }
 
-/** Who visited one app: {@link statsFor} asked about it alone. */
+// ---- one app's answer, kept at the edge (T-143071) -------------------------
+
+// The SQL API answers in 0.2 s at best, so an answer held in one isolate left
+// every other isolate, and every one past FRESH, waiting on it. One app's
+// answer is kept in Site's cache instead (site.ts), as its pages are: fresh
+// for FRESH, then answered at once while Site counts again behind the asker,
+// for a day. An answer that old says when it was counted (`ago`). Only
+// an app's people are told it (the doors below ask first), and Site is
+// reachable only through the gateway's binding; the key is the app's eid.
+
+/** Where Site keeps one app's answer. */
+export let COUNTED = '/stats/'
+
+/** The key Site keeps an app's answer over `days` under. */
+export let statsAt = (app: string, days = DAYS) =>
+  `https://site.invalid${COUNTED}${eid(app)}/${whole(days, KEPT_DAYS)}`
+
+/** How long Site keeps an answer fresh, and then stale while it counts. */
+export let KEEP = `public, max-age=${FRESH / 1000}, ` +
+  'stale-while-revalidate=86400'
+
+/** Site's half: the answer at a {@link statsAt} key, kept with its app's tag
+ * so the app's erasure purges it. A failure is never kept. */
+export let counted = async (env: Env, path: string): Promise<Response> => {
+  let [app, days] = path.slice(COUNTED.length).split('/')
+  let unkept = (status: number, said: string) =>
+    new Response(said, {
+      status,
+      headers: { 'cache-control': 'private, no-store' },
+    })
+  if (!statsOn(env)) return unkept(404, NOT_ON)
+  try {
+    let window = whole(Number(days), KEPT_DAYS)
+    let all = await asked(env, [eid(app)], window, Date.now())
+    return Response.json(all.get(app), {
+      headers: { 'cache-control': KEEP, 'cache-tag': appTag(app) },
+    })
+  } catch (e) {
+    return unkept(502, e instanceof Error ? e.message : String(e))
+  }
+}
+
+let statsOn = (env: Env) => !!env.CF_ANALYTICS_TOKEN && !!env.CF_ACCOUNT
+
+/** Who visited one app: Site's kept answer where Site is bound, else
+ * {@link statsFor} asked about it alone. */
 export let statsOf = (
   env: Env,
   app: string,
   days = DAYS,
   now = Date.now(),
-): Promise<Stats> | null =>
-  statsFor(env, [app], days, now)?.then((all) => all.get(app)!) ?? null
+): Promise<Stats> | null => {
+  if (!statsOn(env)) return null
+  let site = env.SITE
+  if (!site) {
+    return statsFor(env, [app], days, now)!.then((all) => all.get(app)!)
+  }
+  return elapsed('analytics_wait', async () => {
+    let res = await site.fetch(new Request(statsAt(app, days)))
+    if (!res.ok) {
+      throw failure(
+        res.status,
+        `analytics ${res.status}: ${(await res.text()).slice(0, 200)}`,
+      )
+    }
+    return await res.json() as Stats
+  })
+}
+
+/** How long ago an answer was counted, said once it is older than FRESH. */
+export let ago = (stats: Pick<Stats, 'at'>, now = Date.now()) => {
+  let minutes = Math.floor((now - Date.parse(stats.at)) / 60_000)
+  if (minutes * 60_000 < FRESH) return ''
+  return ` (counted ${
+    minutes < 120 ? `${minutes} minutes` : `${Math.floor(minutes / 60)} hours`
+  } ago)`
+}
 
 // Four questions, four queries, whatever the number of apps: one round
 // trip's worth of waiting, and a second only for an app a list cut short.
@@ -473,6 +544,7 @@ let asked = async (
   return new Map(apps.map((app) => {
     let series = daily(day.get(app)!, days, now)
     return [app, {
+      at: new Date(now).toISOString(),
       days,
       total: series.reduce((n, d) => n + d.views, 0),
       daily: series,
@@ -551,13 +623,13 @@ let STATS: Row[] = [
           `${space.slug}/${app.slug} — ${seen.total} ${
             seen.total == 1 ? 'visit' : 'visits'
           } in ${seen.days} ` +
-          `days (${appUrl(space, app, ctx.env)})`,
+          `days${ago(seen)} (${appUrl(space, app, ctx.env)})`,
           ...list('Pages', seen.pages),
           ...list('Came from', seen.from),
           ...list('Countries', seen.countries),
         ].join('\n')
         : `${space.slug}/${app.slug} — nobody has opened it in ${seen.days} ` +
-          'days'
+          `days${ago(seen)}`
       return { text, space }
     },
   },

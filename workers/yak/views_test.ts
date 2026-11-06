@@ -15,11 +15,15 @@ import {
   assertThrows,
 } from '@std/assert'
 import type { Env } from './env.ts'
+import { fetch as siteFetch } from './site.ts'
 import {
+  ago,
   classed,
   cut,
   daily,
+  FRESH,
   hedged,
+  KEEP,
   lastDay,
   NOT_ON,
   perDay,
@@ -489,4 +493,68 @@ test('the last day’s visits are one query over a day, held for a few minutes',
   } finally {
     api.done()
   }
+})
+
+// Site's cache as Cloudflare keeps it for the entrypoint: by URL, while the
+// answer says public. Answering stale while it counts again is Cloudflare's.
+let edge = (site: (req: Request) => Promise<Response>) => {
+  let held = new Map<string, Response>()
+  return {
+    held,
+    fetch: async (req: Request) => {
+      let hit = held.get(req.url)
+      if (hit) return hit.clone()
+      let got = await site(req)
+      if (got.headers.get('cache-control')?.startsWith('public')) {
+        held.set(req.url, got.clone())
+      }
+      return got
+    },
+  }
+}
+
+test("one app's counts are kept at Site, so an isolate's first ask waits on none", async () => {
+  let app = crypto.randomUUID()
+  let answer = (q: string) => ({
+    body: JSON.stringify({
+      data: asks(q) == 'day'
+        ? [{ app, day: new Date().toISOString().slice(0, 10), views: 4 }]
+        : [],
+    }),
+  })
+  let api = sql(answer)
+  try {
+    let site = edge((req) => siteFetch(req, on))
+    let on = env({ SITE: site as unknown as Env['SITE'] })
+    assertEquals((await statsOf(on, app, 7))?.total, 4)
+    assertEquals(api.asked.length, 4)
+    // Asked again past the few minutes an isolate holds it, Site answers.
+    let later = Date.now() + 2 * FRESH
+    assertEquals((await statsOf(on, app, 7, later))?.total, 4)
+    assertEquals(api.asked.length, 4)
+    let held = [...site.held.values()][0]
+    assertEquals(held.headers.get('cache-control'), KEEP)
+    assertEquals(held.headers.get('cache-tag'), `app:${app}`)
+    // A refusal is said, and never kept.
+    api.done()
+    api = sql(() => ({ status: 400, body: 'syntax error' }))
+    await assertRejects(
+      () => statsOf(on, crypto.randomUUID(), 7)!,
+      Error,
+      'analytics 400',
+    )
+    assertEquals(site.held.size, 1)
+  } finally {
+    api.done()
+  }
+})
+
+test('an answer older than a few minutes says when it was counted', () => {
+  let now = Date.parse('2026-11-06T12:00:00Z')
+  let at = (minutes: number) => ({
+    at: new Date(now - minutes * 60_000).toISOString(),
+  })
+  assertEquals(ago(at(1), now), '')
+  assertEquals(ago(at(42), now), ' (counted 42 minutes ago)')
+  assertEquals(ago(at(300), now), ' (counted 5 hours ago)')
 })

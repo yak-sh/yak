@@ -3,7 +3,8 @@ import { copyOf } from './directory-copy.ts'
 // the apex's pages drawn from directory listings (the gallery and the
 // integration directory and the home page fresh for thirty seconds, then
 // answered stale while they render again), the app pictures those listings
-// show (gallery.ts `image`), and every public page an
+// show (gallery.ts `image`), each app's visitor counts (views.ts `counted`),
+// and every public page an
 // app serves (page-cache.ts), keyed by the address it answers. The uncached gateway sends only canonical,
 // uncredentialed requests here.
 import { edged } from './apps.ts'
@@ -28,6 +29,7 @@ import { matches } from './public-cache.ts'
 import { SITE_TAG } from './purge.ts'
 import { sheeted } from './sheets.ts'
 import { type Clock, clock, timed } from './timing.ts'
+import { COUNTED, counted } from './views.ts'
 
 let uncached = (page: Response) => {
   let headers = new Headers(page.headers)
@@ -71,6 +73,7 @@ export let fetch = async (req: Request, env: Env): Promise<Response> => {
   }
   let root = `/${encodeURIComponent(apex(env))}`
   let path = new URL(req.url).pathname
+  if (req.method == 'GET' && path.startsWith(COUNTED)) return counted(env, path)
   if (
     req.method != 'GET' || !isListing(path.slice(root.length)) ||
     !path.startsWith(`${root}/`)
