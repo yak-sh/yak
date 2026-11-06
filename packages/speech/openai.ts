@@ -218,7 +218,15 @@ export let OPENAI: Provider = {
           input: {
             format: wire(setup.format),
             transcription: { model: 'gpt-live-transcribe', language: 'en' },
-            turn_detection: { ...TURN, create_response: true },
+            // A phone held to the ear. The model, not silence, says when
+            // the caller is done, letting an "um" or a half sentence run on
+            // instead of answering it as a turn of its own.
+            noise_reduction: { type: 'near_field' },
+            turn_detection: {
+              type: 'semantic_vad',
+              eagerness: 'low',
+              create_response: true,
+            },
           },
           output: {
             format: wire(setup.format),
