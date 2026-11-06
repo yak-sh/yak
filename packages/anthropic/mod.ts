@@ -118,7 +118,9 @@ let blocks = (i: Item): ['user' | 'assistant', Block[]] | undefined => {
 }
 
 /** The conversation as messages: consecutive blocks of one role share a
- * message, so a turn's tool results answer together. */
+ * message, so a turn's tool results answer together. The API takes a
+ * message's tool results before anything else in it, so a result placed after
+ * an image shown beside an earlier one joins the results ahead of it. */
 export let conversation = (req: Request): Param[] => {
   let lead = req.items.findIndex((i) => i.kind != 'instruction')
   let out: Param[] = []
@@ -127,8 +129,12 @@ export let conversation = (req: Request): Param[] => {
     if (!b) continue
     let [role, content] = b
     let last = out.at(-1)
-    if (last?.role == role) last.content.push(...content)
-    else out.push({ role, content })
+    if (last?.role != role) out.push({ role, content })
+    else if (i.kind != 'result') last.content.push(...content)
+    else {
+      let at = last.content.findIndex((c) => c.type != 'tool_result')
+      last.content.splice(at < 0 ? last.content.length : at, 0, ...content)
+    }
   }
   return out
 }

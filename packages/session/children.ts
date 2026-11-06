@@ -12,7 +12,13 @@ import { identityEid } from '@yaks/graph/identity'
 import { link } from '@yaks/edge'
 import { parse } from '@yaks/id'
 import { done, statusComps, statusOf as taskStatus } from '@yaks/task'
-import { type Tool, type ToolContext, ToolError, transcript } from './react.ts'
+import {
+  type Tool,
+  type ToolContext,
+  ToolError,
+  transcript,
+  wordsOf,
+} from './react.ts'
 import { entryStatus, newestOf, openOf, usingOf } from './reach.ts'
 import { live, newestAsk, textOf, usingBefore } from './state.ts'
 import { type Clock, system } from '@yaks/fp'
@@ -342,7 +348,7 @@ export let taskEntry = async (
     call: { entity: { eid: task } },
     entries: await transcript(g, session),
   })
-  return { task, child: String(child) }
+  return { task, child: wordsOf(child) }
 }
 
 /** The model-facing tools use the same admission and spawn write as

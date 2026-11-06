@@ -303,6 +303,35 @@ test('an anchored ask can include a late result from an earlier call', async () 
   ])
 })
 
+test('a tool answering words with components puts them on its result entry', async () => {
+  let g = world()
+  let { model, asked } = scripted([calls(['c1', 'hi']), says('r2', 'done')])
+  let shot: Item = {
+    kind: 'image',
+    bytes: new Uint8Array([1]),
+    mediaType: 'image/png',
+    label: 'shot.png',
+  }
+  await rest(g, ids.s, {
+    model,
+    mint,
+    tools: [{
+      ...echo,
+      run: () => ({ text: 'Shown.', with: { doc: { title: 'shot.png' } } }),
+    }],
+    // A host shows what an entry carries beside it, as the Operator does.
+    contextItems: (window) =>
+      Promise.resolve(
+        new Map(window.filter((b) => b.doc).map((b) => [b.entity.eid, [shot]])),
+      ),
+  })
+  let result = (await transcript(g, ids.s)).find((b) => b.result)!
+  assertEquals([result.content, result.doc], [{ body: 'Shown.' }, {
+    title: 'shot.png',
+  }])
+  assertEquals(asked[1].items.map((i) => i.kind), ['result', 'image'])
+})
+
 test('an interrupted tool call gets a result and the model continues without replay', async () => {
   let g = world()
   await g.apply([{

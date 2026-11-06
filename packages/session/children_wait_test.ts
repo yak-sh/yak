@@ -15,6 +15,7 @@ import { modelDoc } from '@yaks/model/vocab'
 import { stepping } from '../sqlite/testing.ts'
 import { sessionDoc } from './comp.ts'
 import { childPlace, sessionTools } from './children.ts'
+import { wordsOf } from './react.ts'
 import { dispatchStatus } from './admission.ts'
 import { sessionDerived } from './status.ts'
 
@@ -187,7 +188,7 @@ let look = (task: string, timeout: number) =>
     session: 'parent',
     call: { entity: { eid: 'wait' } },
     entries: [],
-  }))
+  })).then(wordsOf)
 finish('warm')
 await look('warm', 0)
 

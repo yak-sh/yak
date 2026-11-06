@@ -1,6 +1,6 @@
 import { equal, ok, test } from '@yaks/testing'
 import { ModelError, type Request, type TextDelta } from '@yaks/model'
-import { messages } from './mod.ts'
+import { conversation, messages } from './mod.ts'
 
 // The stream the API sends for one reply: text, then a tool call.
 let reply = (id = 'msg_1') => [
@@ -281,4 +281,34 @@ test('a questions or media request is refused before anything is sent', async ()
     equal((await model(ask(over)).catch((e) => e)).name, 'ModelError')
   }
   equal(sent.length, 0)
+})
+
+test('a turn’s tool results lead its message, an image shown beside one after them', () => {
+  let call = (id: string) => ({
+    kind: 'call' as const,
+    id,
+    name: 't',
+    args: '{}',
+  })
+  let said = conversation(ask({
+    items: [
+      { kind: 'user', text: 'look' },
+      call('a'),
+      call('b'),
+      { kind: 'result', id: 'a', output: 'shown' },
+      {
+        kind: 'image',
+        bytes: new Uint8Array([1]),
+        mediaType: 'image/png',
+        label: 'Shown',
+      },
+      { kind: 'result', id: 'b', output: 'read' },
+    ],
+  }))
+  equal(said[2].content.map((c) => c.type), [
+    'tool_result',
+    'tool_result',
+    'text',
+    'image',
+  ])
 })

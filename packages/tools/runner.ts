@@ -131,11 +131,13 @@ export type Opts = {
   /** Extra bundles a direct caller is owed beside a tool's answer. A plugin
    * may supply them without the tool or its transport knowing about them. */
   reply?: Reply
-  /** record a refusal on the call's result, `refusal{code}` beside
-   * `result{call}` and its words, rather than as an entity of its own: what a
-   * transcript keeps, one entry per answer (@yaks/session). A defect keeps its
+  /** record what a lone answer marks on the call's result, as a transcript
+   * keeps it, one entry per answer (@yaks/session): a refusal is
+   * `refusal{code}` beside `result{call}` and its words rather than an entity
+   * of its own, and a `$said` answer's components beside its words and source
+   * (an image it shows) are the result's ({@link ridden}). A defect keeps its
    * own `exception` entity either way. */
-  refusalOnResult?: boolean
+  onResult?: boolean
 }
 
 /** What a direct caller is owed beside a tool's answer: the call, what the
@@ -207,6 +209,56 @@ export type Runner = {
     why: string,
     answer?: Bundle[],
   ) => Promise<Bundle[]>
+}
+
+/** The result and the answer a transcript keeps (`onResult`), from what a
+ * call `made` and how its result `end`s in those words: a lone refusal rides
+ * on the result and keeps no entity, and a lone `$said` answer's components
+ * beside its words and source move onto the result, where a reader of the
+ * transcript's entries finds them.
+ *
+ * ```ts
+ * import { assertEquals } from '@std/assert'
+ * let end = () => [{ entity: { eid: 'r' }, result: { call: 'c' } }]
+ * let words = {
+ *   entity: { eid: '$said' },
+ *   content: { body: 'shown' },
+ *   output: { source: 'c' },
+ * }
+ * assertEquals(ridden([{ ...words, files: { n: 1 } }], 'done', end), [
+ *   [{ entity: { eid: 'r' }, result: { call: 'c' }, files: { n: 1 } }],
+ *   [words],
+ * ])
+ * ```
+ */
+export let ridden = (
+  made: Bundle[],
+  state: string,
+  end: (said: Bundle[]) => Bundle[],
+): [Bundle[], Bundle[]] => {
+  let [one, ...more] = made
+  if (!one || more.length) return [end(made), made]
+  if (state == 'failed' && one.refusal && !one.exception) {
+    let [result, ...rest] = end(made)
+    return [[{ ...result, refusal: one.refusal }, ...rest], []]
+  }
+  let carried = one.entity.eid == '$said'
+    ? Object.keys(one).filter((k) =>
+      !['entity', 'content', 'output'].includes(k) && !k.startsWith('$')
+    )
+    : []
+  if (!carried.length) return [end(made), made]
+  let words = Object.fromEntries(
+    Object.entries(one).filter(([k]) => !carried.includes(k)),
+  ) as Bundle
+  let [result, ...rest] = end([words])
+  return [
+    [
+      { ...result, ...Object.fromEntries(carried.map((k) => [k, one[k]])) },
+      ...rest,
+    ],
+    [words],
+  ]
 }
 
 /** Whether the runner writes what `tool` answered, ending in `state`, or
@@ -433,15 +485,11 @@ export let runner = (g: Graph, opts: Opts): Runner => {
       keep = keeps(tool, state),
       code?: string,
     ): Promise<Bundle[]> => {
-      let ended = ending(call, started, state, made)
-      let [refused] = made
-      if (
-        opts.refusalOnResult && state == 'failed' && made.length == 1 &&
-        refused.refusal && !refused.exception
-      ) {
-        ended = [{ ...ended[0], refusal: refused.refusal }, ...ended.slice(1)]
-        made = []
-      }
+      let end = (said: Bundle[]) => ending(call, started, state, said)
+      let ended: Bundle[]
+      ;[ended, made] = opts.onResult
+        ? ridden(made, state, end)
+        : [end(made), made]
       if (unrecorded) return [...made, ...ended]
       let bundles = [
         ...(keep ? made : []),
@@ -550,17 +598,15 @@ export let runner = (g: Graph, opts: Opts): Runner => {
       ...(g.vocab.comp('notice') ? { notice: {} } : {}),
     }
     let said = execution && answer ? answer : [fault]
+    let state = execution && answer ? 'done' : 'interrupted'
+    let end = (said: Bundle[]) =>
+      ending(call, undefined, state, said, execution ? 'running' : null)
+    let ended: Bundle[]
+    ;[ended, said] = opts.onResult
+      ? ridden(said, state, end)
+      : [end(said), said]
     try {
-      return await g.apply([
-        ...said,
-        ...ending(
-          call,
-          undefined,
-          execution && answer ? 'done' : 'interrupted',
-          said,
-          execution ? 'running' : null,
-        ),
-      ])
+      return await g.apply([...said, ...ended])
     } catch (error) {
       if (error instanceof Stale) {
         let prior = await recalled(id)

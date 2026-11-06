@@ -909,7 +909,7 @@ test('a refused argument is a refusal code, not an exception', async () => {
 // Run once before the case is timed: the case checks what landed.
 let riding = await (async () => {
   let { g } = world()
-  let r = runner(g, { tools: [echo], report: () => {}, refusalOnResult: true })
+  let r = runner(g, { tools: [echo], report: () => {}, onResult: true })
   await r.ensure()
   let call = called('example_echo')
   let answer = await r.call(call)

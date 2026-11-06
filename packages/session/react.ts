@@ -155,6 +155,28 @@ import {
   toolPart,
 } from './parts.ts'
 
+/** What a tool answers: its words, or its words `with` components its result
+ * entry carries beside them (`operator_files`, an image the host shows the
+ * model beside the result). */
+export type Told = string | { text: string; with: Record<string, Comp> }
+
+// What a tool said, as words and the components beside them.
+let parted = (said: Told) =>
+  typeof said == 'object' && said ? said : { text: String(said), with: {} }
+
+/** The words a tool's answer says. */
+export let wordsOf = (said: Told): string => parted(said).text
+
+/** A tool's answer as the bundle the runner lands: its words, carrying
+ * `output{source}` so the result names the call, and every component it
+ * comes `with`, which the runner puts on the result (@yaks/tools `ridden`). */
+let saidOf = (call: Bundle, said: Told): Bundle => ({
+  entity: { eid: '$said' },
+  [CONTENT]: { body: parted(said).text },
+  [OUTPUT]: { source: call.entity.eid },
+  ...parted(said).with,
+})
+
 /** A tool the model may call: its declaration, and how to run it. */
 export type Tool = Declared & {
   /** What a person reads in place of its name: an imperative phrase
@@ -166,13 +188,13 @@ export type Tool = Declared & {
   run: (
     args: Record<string, unknown>,
     ctx?: ToolContext,
-  ) => Promise<string> | string
+  ) => Promise<Told> | Told
   /** Recover an invocation whose process ended before it recorded a result.
    * Return its known outcome, or nothing when its effects are uncertain. */
   recover?: (
     args: Record<string, unknown>,
     ctx: ToolContext,
-  ) => Promise<string | undefined> | string | undefined
+  ) => Promise<Told | undefined> | Told | undefined
   /** A call to it is the model waiting (on a process, a child, a task): it
    * never outlasts its patience, however long it runs, so only its result or
    * something else new starts the model's next turn ({@link PATIENCE}). */
@@ -1100,24 +1122,19 @@ export let react = async (
             'Invalid JSON tool arguments: ' + textOf(call),
           )
         }
-        return [{
-          entity: { eid: '$said' },
-          [CONTENT]: {
-            body: String(
-              await unless(
-                deps.signal,
-                patient(call, tool, () =>
-                  tool.run(argsOf(call), {
-                    session,
-                    call,
-                    entries,
-                    signal: halting(deps),
-                  })),
-              ),
-            ),
-          },
-          [OUTPUT]: { source: call.entity.eid },
-        }]
+        return [saidOf(
+          call,
+          await unless(
+            deps.signal,
+            patient(call, tool, () =>
+              tool.run(argsOf(call), {
+                session,
+                call,
+                entries,
+                signal: halting(deps),
+              })),
+          ),
+        )]
       },
     })
     // A call naming a tool this session does not serve is answered by a tool
@@ -1138,8 +1155,8 @@ export let react = async (
     const patient = async (
       call: Bundle,
       tool: Tool,
-      work: () => Promise<string> | string,
-    ): Promise<string> => {
+      work: () => Promise<Told> | Told,
+    ): Promise<Told> => {
       if (!call.tool_async || tool.waits) return work()
       let wrote: Promise<unknown> | undefined
       let timer = setTimeout(() => {
@@ -1172,7 +1189,7 @@ export let react = async (
       owner: deps.owner ?? session,
       report: (error) => deps.report?.(error, session, 'tool'),
       // A refusal is the call's answer: one entry, its result.
-      refusalOnResult: true,
+      onResult: true,
     })
     let older = deps.runCall
       ? []
@@ -1262,13 +1279,7 @@ export let react = async (
             entries,
             signal: halting(deps),
           })
-          if (recovered != null) {
-            answer = [{
-              entity: { eid: '$said' },
-              [CONTENT]: { body: recovered },
-              [OUTPUT]: { source: pending.entity.eid },
-            }]
-          }
+          if (recovered != null) answer = [saidOf(pending, recovered)]
         } catch (failure) {
           deps.report?.(failure, session, 'tool-recovery')
         }
