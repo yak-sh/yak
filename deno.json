@@ -76,7 +76,8 @@
         "check:types:all",
         "check:raycast",
         "check:browser",
-        "check:content"
+        "check:content",
+        "check:publish"
       ]
     },
     "publish": "deno run -A bin/publish.ts"

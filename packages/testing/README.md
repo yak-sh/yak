@@ -300,14 +300,18 @@ never observes FFI calls. The pass record is
 `$XDG_CACHE_HOME/yak/tests-passed.json`, or `~/.cache/yak/tests-passed.json`
 when `XDG_CACHE_HOME` is unset, shared by checkouts on the machine, and what
 each file read as it last passed is kept beside it in `tests-reads.json`,
-reading nothing included. What deno says each module imports is kept in
-`tests-graph-v2.json` by the module's bytes and the configs and lock that
+reading nothing included. Each checkout keeps its own stores under
+`yak/checkouts/` (`stores`), since checkouts differ: what deno says each module
+imports, in `graph.json` by the module's bytes and the configs and lock that
 resolve it (`remembered`), so a survey asks `deno info` only of modules changed
-since; and what each file took to load and run in `tests-took.json` (`took`,
-`tally`), which a caller can hand `choose` as a file's `cost`. `--all` bypasses
-the record; a run filtered by tag records no passes. `--keys` names a JSON file
-holding the key of each file given, from a caller that chose them already
-(`choose` from `@yaks/testing/choose`): every file given runs.
+since, a new checkout starting from the one any checkout wrote last
+(`tests-graph-v2.json`); and what each file surveyed held, in `facts.json` by
+the file's inode, size and times (`survey`'s `store`), so a file unchanged is
+not read again. What each file took to load and run in `tests-took.json`
+(`took`, `tally`), which a caller can hand `choose` as a file's `cost`. `--all`
+bypasses the record; a run filtered by tag records no passes. `--keys` names a
+JSON file holding the key of each file given, from a caller that chose them
+already (`choose` from `@yaks/testing/choose`): every file given runs.
 
 `choose` given a `budget` and what each file is expected to `cost` keeps a
 narrowed run to it. A file's rank is its **distance**: imports from a changed

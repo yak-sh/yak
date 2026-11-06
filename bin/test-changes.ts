@@ -33,9 +33,15 @@ export let changes = async (run: Run = git): Promise<string[]> => {
 }
 
 let workspace = members()
+// Selection asks of each module many times.
+let owners = new Map<string, string | undefined>()
 
 /// member('packages/sql/render.ts') -> 'packages/sql'
 /// member('bin/test.ts') -> undefined
 /** The workspace package a path belongs to. */
-export let member = (path: string): string | undefined =>
-  workspace.find((w) => path.startsWith(`${w}/`))
+export let member = (path: string): string | undefined => {
+  if (!owners.has(path)) {
+    owners.set(path, workspace.find((w) => path.startsWith(`${w}/`)))
+  }
+  return owners.get(path)
+}

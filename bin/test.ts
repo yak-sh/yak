@@ -43,7 +43,7 @@ let { excluded, MADE: GENERATORS, sourceSurvey } = await import(
   './check-types.ts'
 )
 let { discover, tested } = await import('@yaks/testing/find')
-let { survey, took } = await import('@yaks/testing/deps')
+let { FACTS, survey, took } = await import('@yaks/testing/deps')
 let { own } = await import('@yaks/testing/own')
 let { runTestCommands } = await import('./phases.ts')
 let { budget, measure, OWN, read, say } = await import('./test-budget.ts')
@@ -410,7 +410,7 @@ export let prepare = async (
       changed: string[],
       prepared: Prepared,
       snapshot?: Promise<Survey | undefined>,
-    ) => check(changed, undefined, undefined, undefined, prepared, snapshot),
+    ) => check(changed, undefined, undefined, prepared, snapshot),
     ready: async (
       quiet: boolean,
       assets: boolean,
@@ -444,7 +444,7 @@ export let prepare = async (
   let inspected = false
   let inspect = (paths: string[]) => {
     inspected = true
-    let work = all ? survey(paths) : resolve(paths)
+    let work = all ? survey(paths, undefined, FACTS) : resolve(paths)
     snapshot.resolve(work)
     return work
   }

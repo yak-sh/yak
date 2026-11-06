@@ -29,7 +29,7 @@
 // shared work stays valid there.
 import { dirname } from 'node:path'
 import config from '../deno.json' with { type: 'json' }
-import { remembered, type Survey, survey } from '@yaks/testing/deps'
+import { FACTS, remembered, type Survey, survey } from '@yaks/testing/deps'
 import { exported, fences, typed } from '@yaks/testing/examples'
 import { changes, git, member } from './test-changes.ts'
 import { type Info, type Project, project, relative } from './tsconfig.ts'
@@ -173,7 +173,7 @@ export let sourceSurvey = async (
   paths: string[],
 ): Promise<Survey | undefined> => {
   let [all, { entries }] = await Promise.all([every(), workers()])
-  return await survey([...paths, ...all, ...entries])
+  return await survey([...paths, ...all, ...entries], undefined, FACTS)
 }
 
 /** Of `all`, the modules whose types `changed` can change: each changed, each
@@ -202,7 +202,9 @@ let reached = async (
   snapshot?: Promise<Survey | undefined>,
 ) => {
   let all = await every()
-  let s = snapshot ? await snapshot : await survey([...all, ...hosted])
+  let s = snapshot
+    ? await snapshot
+    : await survey([...all, ...hosted], undefined, FACTS)
   if (!s) {
     throw new Error(
       'Cannot say what the change reaches: dependency graph unavailable. ' +

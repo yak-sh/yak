@@ -1,3 +1,4 @@
+import { statSync } from 'node:fs'
 import { equal, ok, test, throws } from './mod.ts'
 import { affected, within } from './choose.ts'
 import {
@@ -144,6 +145,22 @@ let amid = (await survey(
 
 test('a file of data holds the same whether or not a module imports it', async () => {
   equal(await amid.of(at('data.json')), await alone.of(at('data.json')))
+})
+
+test('a survey keeping what files held reads a file again only once its status changes', async () => {
+  let store = at('k/facts.json')
+  let of = async () =>
+    await (await survey([at('k/a.json')], info, store))!.of(at('k/a.json'))
+  write('k/a.json', 'one')
+  let s = statSync(at('k/a.json'))
+  let status = [s.ino, s.size, s.mtime.getTime(), s.ctime.getTime()]
+  Deno.writeTextFileSync(
+    store,
+    JSON.stringify({ [at('k/a.json')]: [...status, 'kept', []] }),
+  )
+  equal(await of(), 'kept')
+  write('k/a.json', 'three')
+  equal(await of(), await alone.of(at('k/a.json')))
 })
 
 test('a remembered graph asks deno again only of the modules changed since', async () => {

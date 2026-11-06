@@ -1,10 +1,10 @@
 // Local source checks cover the change: its lint, its raw bytes, the
-// workspace's public APIs when it touches a package, the Worker's generated
-// content when it touches a source of it, and the types of what it reaches. Runtime tests
-// follow consumers. Main CI checks every module's types after the push.
+// Worker's generated content when it touches a source of it, and the types of
+// what it reaches. Runtime tests follow consumers. Main CI checks every
+// module's types, and the workspace's public API as the publisher reads it,
+// after the push.
 
 import type { Survey } from '@yaks/testing/deps'
-import { publishing } from './release.ts'
 import { type Prepared, types } from './check-types.ts'
 
 let code = (path: string) => /\.[mc]?[jt]sx?$/.test(path)
@@ -19,20 +19,12 @@ let formatted = (path: string) =>
 
 export type Check = { name: string; args: string[] }
 
-/** Format, lint and byte-check existing changed files, and, when the change
- * touches a package in `configs`, check every package's public API as one
- * workspace: a package checked alone cannot see the cycle its new import
- * closes with another (`Circular package dependency detected`), which
- * publishing the workspace refuses. A change to what workers/yak/content.ts,
- * load.ts or plugins/yaks.app is generated from checks they are fresh, and
- * fails naming `deno task content`. */
-export let checks = (changed: string[], configs: string[] = []): Check[] => {
+/** Format, lint and byte-check existing changed files. A change to what
+ * workers/yak/content.ts, load.ts or plugins/yaks.app is generated from checks
+ * they are fresh, and fails naming `deno task content`. */
+export let checks = (changed: string[]): Check[] => {
   let fmt = changed.filter(formatted)
   let lint = changed.filter(code)
-  let touched = configs.some((config) => {
-    let dir = config.replace(/^\.\//, '').replace(/deno\.json$/, '')
-    return changed.some((path) => path.startsWith(dir))
-  })
   // The workspace's own config, named: a yaks app's package.json is a config
   // to Deno too, and found beside a file it would replace the workspace's.
   let config = ['--config', 'deno.json', '--permit-no-files']
@@ -58,19 +50,6 @@ export let checks = (changed: string[], configs: string[] = []): Check[] => {
           '--allow-run=deno',
           'workers/yak/gen.ts',
           '--check',
-        ],
-      }]
-      : [],
-    ...touched
-      ? [{
-        name: 'publish',
-        args: [
-          'run',
-          '-A',
-          'bin/publish.ts',
-          '--dry-run',
-          '--allow-dirty',
-          '--no-check',
         ],
       }]
       : [],
@@ -107,12 +86,11 @@ export let format = async (
   return files
 }
 
-/** Lint the change, check its packages' public APIs and the types of what it
- * reaches, after formatting. */
+/** Lint the change and check the types of what it reaches, after
+ * formatting. */
 export let check = async (
   changed: string[],
   run = command,
-  packages = publishing,
   typed = (
     changed: string[],
     prepared: Prepared,
@@ -123,7 +101,6 @@ export let check = async (
   snapshot?: Promise<Survey | undefined>,
 ) =>
   (await Promise.all([
-    ...checks(changed, (await packages()).map((p) => p.config))
-      .filter((c) => c.name != 'format').map(run),
+    ...checks(changed).filter((c) => c.name != 'format').map(run),
     typed(changed, prepared, snapshot),
   ])).every(Boolean)

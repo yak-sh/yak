@@ -18,8 +18,6 @@ import type { Examples } from './examples.ts'
 import { tested } from './find.ts'
 import { plan, sweep } from './load.ts'
 
-let code = (path: string) => /\.[mc]?[jt]sx?$/.test(path)
-
 /** What a run chose: the key of each file it was given, those it runs,
  * whether those import any of `paths` (true when the graph could not say),
  * and what a file read as it last passed, where that is known. */
@@ -123,8 +121,8 @@ export let choose = async (
   let plans = new Map(await plan(pages, parsed))
   try {
     let kinds = [...new Set(files.map(kind))]
-    // What each file read as it last passed: the modules among them, imported
-    // by a computed specifier, are surveyed with the rest.
+    // What each file read as it last passed, surveyed with the rest: the
+    // modules among them were imported by a computed specifier.
     let read = observed ? recall() : {}
     let reads = (f: string) => observed ? read[f] ?? [] : undefined
     let s = await inspect([
@@ -133,7 +131,7 @@ export let choose = async (
       ...kinds.flatMap(also),
       ...runner,
       ...sources,
-      ...new Set(files.flatMap((f) => reads(f) ?? []).filter(code)),
+      ...new Set(files.flatMap((f) => reads(f) ?? [])),
     ])
     if (!s) {
       if (changed) {

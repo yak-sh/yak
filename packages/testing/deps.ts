@@ -112,9 +112,48 @@ export let graph = async (roots: string[]): Promise<Info | undefined> => {
 /** What a graph's caller can say of a path: what it holds now (`digest`). */
 export type Bytes = (path: string) => Promise<string>
 
-/** Where what deno said each module imports is kept, by the module's bytes,
- * for every checkout on the machine. */
-export let GRAPH: string = `${cache}/yak/tests-graph-v2.json`
+/** Where a checkout's own stores lie, by its path. Checkouts differ: one
+ * store they all shared would hold whichever checkout wrote it last, and each
+ * run would ask deno again of every module another checkout had changed. */
+export let stores = (cwd = system.cwd()): string =>
+  `${cache}/yak/checkouts/${hex(cwd).slice(0, 16)}`
+
+/** Where what deno said each module imports is kept, by the module's bytes. */
+export let GRAPH: string = `${stores()}/graph.json`
+
+/** What a checkout's graph starts from: the one any checkout wrote last. */
+export let SEED: string = `${cache}/yak/tests-graph-v2.json`
+
+/** Where what each file of the checkout held, as last read, is kept by the
+ * file's status (`survey`). */
+export let FACTS: string = `${stores()}/facts.json`
+
+// A checkout's stores, made with its first: the stores of checkouts since
+// removed go then. Each names its checkout beside them.
+let room = (store: string) => {
+  let dir = store.slice(0, store.lastIndexOf('/'))
+  if (gone(dir)) {
+    io.mkdirSync(dir, { recursive: true })
+    if (dir == stores()) {
+      io.writeTextFileSync(`${dir}/checkout`, system.cwd())
+      let all = dir.slice(0, dir.lastIndexOf('/'))
+      for (let e of io.readDirSync(all)) {
+        let checkout = `${all}/${e.name}/checkout`
+        if (!gone(checkout) && gone(io.readTextFileSync(checkout))) {
+          io.removeSync(`${all}/${e.name}`, { recursive: true })
+        }
+      }
+    }
+  }
+}
+let gone = (path: string) => {
+  try {
+    io.statSync(path)
+    return false
+  } catch {
+    return true
+  }
+}
 
 // What the store keeps of a module: what `Info` reads, without the source
 // spans and sizes deno says beside it.
@@ -195,6 +234,7 @@ let refresh = async <T>(key: string, read: () => Promise<T>): Promise<T> => {
 export let remembered = (
   info: (roots: string[]) => Promise<Info | undefined> = graph,
   store = GRAPH,
+  seed?: string,
 ) =>
 async (roots: string[], bytes: Bytes = digest): Promise<Info | undefined> => {
   let { cwd, base, url, rel } = location()
@@ -208,15 +248,19 @@ async (roots: string[], bytes: Bytes = digest): Promise<Info | undefined> => {
       redirects: {},
       npmPackages: {},
     }
-    try {
-      kept = {
-        ...kept,
-        ...JSON.parse(
-          io.readTextFileSync(store).replaceAll('<checkout>/', here)
-            .replaceAll('.<pid>.example.', pid),
-        ),
-      }
-    } catch { /* none kept */ }
+    for (let from of [store, seed]) {
+      if (!from) continue
+      try {
+        kept = {
+          ...kept,
+          ...JSON.parse(
+            io.readTextFileSync(from).replaceAll('<checkout>/', here)
+              .replaceAll('.<pid>.example.', pid),
+          ),
+        }
+        break
+      } catch { /* none kept */ }
+    }
     let file = (s: string) => s.startsWith('file:')
     let now = (s: string) => file(s) ? bytes(rel(s)) : Promise.resolve('')
     let held = await Promise.all(
@@ -277,14 +321,9 @@ async (roots: string[], bytes: Bytes = digest): Promise<Info | undefined> => {
       let unseen = configs(local).filter((c) => !(c in kept.configs))
       let found = await Promise.all(unseen.map(bytes))
       for (let [i, c] of unseen.entries()) kept.configs[c] = found[i]
-      io.mkdirSync(store.slice(0, store.lastIndexOf('/')), { recursive: true })
-      let draft = `${store}.${system.pid}`
-      io.writeTextFileSync(
-        draft,
-        JSON.stringify(kept).replaceAll(here, '<checkout>/')
-          .replaceAll(pid, '.<pid>.example.'),
-      )
-      io.renameSync(draft, store)
+      let text = JSON.stringify(kept).replaceAll(here, '<checkout>/')
+        .replaceAll(pid, '.<pid>.example.')
+      for (let to of seed ? [store, seed] : [store]) put(text, to)
     }
     let modules = new Map<string, Module>()
     let visit = roots.map((r) => at(url(r)))
@@ -456,38 +495,60 @@ export type Survey = {
  * path does not make them relevant to the change. */
 export const WIDE = 200
 
+// A file's status as `survey` keeps it beside what the file held: its inode,
+// size, and modified and changed times, and then its digest and the files it
+// names.
+type Held = [number, number, number, number, string, string[]]
+
 /** The survey of `paths`, their modules' graph from `info` (`deno info`), or
- * undefined when it cannot say what they import. */
+ * undefined when it cannot say what they import. Given a `store`, what each
+ * file among them and their modules held is kept there by the file's status,
+ * and a file whose status still matches is not read again. A file changed within the second before it was
+ * read could change again within its times' grain, so it is not kept. */
 export let survey = async (
   paths: string[],
   info: (roots: string[], bytes: Bytes) => Promise<Info | undefined> =
-    remembered(),
+    remembered(graph, GRAPH, SEED),
+  store?: string,
 ): Promise<Survey | undefined> => {
   let where = location(), { url, rel } = where
+  let before: Record<string, Held> = store ? load(store) : {}
+  let after: Record<string, Held> = {}
+  let fresh = false
+  let look = (path: string): Promise<{ digest: string; names: string[] }> => {
+    let s
+    try {
+      s = io.statSync(path)
+    } catch {
+      return Promise.resolve({ digest: 'absent', names: [] })
+    }
+    if (!s.isFile) return Promise.resolve({ digest: 'place', names: [] })
+    let status = [s.ino, s.size, s.mtime.getTime(), s.ctime.getTime()]
+    let was = before[path]
+    if (was && status.every((n, i) => was[i] == n)) {
+      after[path] = was
+      return Promise.resolve({ digest: was[4], names: was[5] })
+    }
+    let bytes = io.readFileSync(path)
+    let read = {
+      digest: hex(bytes),
+      names: code(path)
+        ? named(new TextDecoder().decode(bytes), path, where)
+        : [],
+    }
+    if (status[3] < Date.now() - 1000) {
+      after[path] = [...status, read.digest, read.names] as Held
+      fresh = true
+    }
+    return Promise.resolve(read)
+  }
   // What each file is and names: read once for the lot.
   let facts = new Map<string, Promise<{ digest: string; names: string[] }>>()
   let fact = (path: string) => {
-    if (!facts.has(path)) {
-      let bytes: Uint8Array | undefined
-      try {
-        bytes = io.readFileSync(path)
-      } catch { /* a directory or a missing file */ }
-      facts.set(
-        path,
-        bytes
-          ? Promise.resolve({
-            digest: hex(bytes),
-            names: code(path)
-              ? named(new TextDecoder().decode(bytes), path, where)
-              : [],
-          })
-          : digest(path, true).then((digest) => ({ digest, names: [] })),
-      )
-    }
+    if (!facts.has(path)) facts.set(path, look(path))
     return facts.get(path)!
   }
-  let named0 = (await Promise.all(paths.filter(code).map(fact)))
-    .flatMap((f) => f.names)
+  let named0 = (await Promise.all(paths.map(fact))).flatMap((f) => f.names)
   let roots = [...new Set([...paths, ...named0].filter(code))]
   let found = roots.length
     ? await info(roots, async (p) => (await fact(p)).digest)
@@ -544,6 +605,10 @@ export let survey = async (
   for (let targets of [...next.values()]) {
     for (let t of targets) if (!next.has(t)) next.set(t, [])
   }
+  if (
+    store &&
+    (fresh || Object.keys(after).length != Object.keys(before).length)
+  ) write(after, store)
   let mine = (n: string) => own.get(n) ?? n
   let seals = seal(next, mine)
   let executed = seal(
@@ -621,7 +686,12 @@ export let survey = async (
       let key = `${run} ${path}`
       if (!held.has(key)) {
         let s = code(path) && (run ? executed : seals).get(at(url(path)))
-        held.set(key, s ? Promise.resolve(s) : digest(path))
+        // A file surveyed is as it was read; a directory, its listing now.
+        held.set(
+          key,
+          s ? Promise.resolve(s) : (facts.get(path) ?? Promise.resolve())
+            .then((f) => f && f.digest != 'place' ? f.digest : digest(path)),
+        )
       }
       return held.get(key)!
     },
@@ -851,9 +921,12 @@ let save = (all: Record<string, number>, store: string) =>
     store,
   )
 
-let write = (all: unknown, store: string) => {
-  io.mkdirSync(store.slice(0, store.lastIndexOf('/')), { recursive: true })
+let write = (all: unknown, store: string) => put(JSON.stringify(all), store)
+
+// A store written whole, through a rename, so a reader never reads half.
+let put = (text: string, store: string) => {
+  room(store)
   let draft = `${store}.${system.pid}`
-  io.writeTextFileSync(draft, JSON.stringify(all))
+  io.writeTextFileSync(draft, text)
   io.renameSync(draft, store)
 }
