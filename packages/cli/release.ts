@@ -1,20 +1,23 @@
 import * as disk from '@yaks/file/io'
-// A release of this toolkit on JSR, as Deno resolves it. Every @yaks package
-// publishes together at one version, and Deno 2.9 waits a day before it
-// resolves any version newer than that (its minimum dependency age). On the
-// day a release publishes, a resolver under that default finds none of the
-// release's other packages, so it takes the one before or refuses outright.
-// Whatever resolves a release — the installer (./install.ts), @yaks/web's
-// bundler — does so under `released`, which lifts the wait for the release's
-// own packages alone: every other dependency keeps Deno's window.
+// A release of this toolkit on JSR, as Deno resolves it. A release publishes
+// the @yaks packages that changed, each at the release's version, and keeps
+// every other one at the version JSR already has; ./release.json names them
+// all, at those versions, in the release's own commit (bin/release.ts). A
+// plugin this CLI loads by name is loaded at that version (./config.ts
+// `located`), so a release is one coherent set however few of it moved.
 //
-// Which packages those are is ./release.json, which bin/release.ts writes in
-// the release's own commit. jsr.io's scope listing cannot say it: its CDN
+// Deno 2.9 waits a day before it resolves any version newer than that (its
+// minimum dependency age). On the day a release publishes, a resolver under
+// that default finds none of the release's other packages, so it takes the
+// one before or refuses outright. Whatever resolves a release — the installer
+// (./install.ts), @yaks/web's bundler — does so under `released`, which lifts
+// the wait for the release's own packages alone: every other dependency keeps
+// Deno's window. jsr.io's scope listing cannot say which those are: its CDN
 // serves the listing up to a day old, so a package publishing for the first
 // time is missing from it on exactly the day it has to be exempt.
 
 import { fileURLToPath } from 'node:url'
-import names from './release.json' with { type: 'json' }
+import at from './release.json' with { type: 'json' }
 
 /** The part of a Deno config that says which versions it will resolve. */
 export type Resolving = {
@@ -41,8 +44,11 @@ export let exempt = (names: string[]): Resolving => ({
   },
 })
 
+/** The version of each @yaks package this release is made of. */
+export let pinned: Readonly<Record<string, string>> = at
+
 /** The config a resolver of this release runs under. */
-export let released: Resolving = exempt(names)
+export let released: Resolving = exempt(Object.keys(pinned))
 
 /** The Deno config a `deno` process this CLI starts runs under: a checkout's
  * own deno.json, or, for a CLI served from JSR, `released` written into the

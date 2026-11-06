@@ -19,6 +19,7 @@ import { imported as observed, importing } from '@yaks/fp/imports'
 
 import cli from './package.json' with { type: 'json' }
 import { runtimePath } from './runtime.ts'
+import { pinned } from './release.ts'
 
 export type { Config, Options, Plug } from '@yaks/host'
 import type { Config, Plug } from '@yaks/host'
@@ -127,23 +128,25 @@ export let exported = (plugin: string, name: string): boolean => {
  * import map resolves it; a `yak` installed from JSR has no map entry for a
  * package it does not itself import (a plugin a config names, the views of a
  * component another plugin declared), so the name goes to JSR at the release
- * this CLI came from, which keeps every plugin and view one coherent set.
- * `resolve` is `import.meta.resolve`, which throws for a name nothing maps.
+ * at the version this CLI's release pins it to (./release.ts `pinned`), which
+ * keeps every plugin and view one coherent set. `resolve` is
+ * `import.meta.resolve`, which throws for a name nothing maps.
  *
  * ```ts
  * import { assertEquals } from '@std/assert'
  * let none = (): string => {
  *   throw new TypeError('not a dependency')
  * }
- * assertEquals(located('@yaks/tools/views', none, '1.2.3'), 'jsr:@yaks/tools@1.2.3/views')
- * assertEquals(located('@yaks/tools/views', (s) => s, '1.2.3'), '@yaks/tools/views')
- * assertEquals(located('./plugins/mail/vocab', none, '1.2.3'), './plugins/mail/vocab')
+ * let at = { '@yaks/tools': '1.2.3' }
+ * assertEquals(located('@yaks/tools/views', none, at), 'jsr:@yaks/tools@1.2.3/views')
+ * assertEquals(located('@yaks/tools/views', (s) => s, at), '@yaks/tools/views')
+ * assertEquals(located('./plugins/mail/vocab', none, at), './plugins/mail/vocab')
  * ```
  */
 export let located = (
   spec: string,
   resolve: (spec: string) => string = import.meta.resolve,
-  release: string = cli.version,
+  release: Readonly<Record<string, string>> = pinned,
 ): string => {
   if (!spec.startsWith('@yaks/')) return spec
   try {
@@ -152,7 +155,8 @@ export let located = (
   } catch (error) {
     if (String(error).includes('ERR_PACKAGE_PATH_NOT_EXPORTED')) return spec
     let [scope, name, ...rest] = spec.split('/')
-    return ['jsr:' + scope, `${name}@${release}`, ...rest].join('/')
+    let version = release[`${scope}/${name}`] ?? cli.version
+    return ['jsr:' + scope, `${name}@${version}`, ...rest].join('/')
   }
 }
 

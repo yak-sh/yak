@@ -44,46 +44,31 @@ test('bump: a config with no version is left alone', () => {
   assertEquals(bump(json, '0.1.0'), json)
 })
 
-// Build the workspace once; the assertion still reads which members publish.
-let root = await Deno.makeTempDir()
-let member = async (dir: string, config: Record<string, unknown>) => {
-  await Deno.mkdir(`${root}/${dir}`)
-  await Deno.writeTextFile(`${root}/${dir}/deno.json`, JSON.stringify(config))
-  await Deno.writeTextFile(
-    `${root}/${dir}/package.json`,
-    JSON.stringify(config),
-  )
-}
-await Deno.writeTextFile(
-  `${root}/package.json`,
-  JSON.stringify({ workspaces: ['./new', './old', './kept', './npm'] }),
-)
-await member('new', { name: '@yaks/new' })
-await member('old', { name: '@yaks/old' })
-await member('kept', { name: '@yaks/kept', publish: false })
-await member('npm', {})
 let pages: typeof fetch = (url) =>
   Promise.resolve(
     String(url).endsWith('/packages/old')
       ? Response.json({ description: '', runtimeCompat: {} })
       : new Response(null, { status: 404 }),
   )
-let missing = await unlisted(root, pages)
-await Deno.remove(root, { recursive: true })
-test('unlisted: a package it would publish that jsr.io has no page for', () => {
-  assertEquals(missing, ['@yaks/new'])
+test('unlisted: a package named that jsr.io has no page for', async () => {
+  assertEquals(await unlisted(['@yaks/new', '@yaks/old'], pages), ['@yaks/new'])
 })
 
-test('family versions update internal dependencies without changing external ranges', () => {
+test('versioned: each member and internal dependency at its own version, external ranges kept', () => {
   let before = {
     name: '@yaks/a',
     version: '1.0.0',
-    dependencies: { '@yaks/b': '1.0.0', yaml: '^2' },
+    dependencies: { '@yaks/b': '1.0.0', '@yaks/c': '1.0.0', yaml: '^2' },
   }
-  assertEquals(versioned(before, '1.1.0', new Set(['@yaks/a', '@yaks/b'])), {
+  let next = new Map([['@yaks/a', '1.1.0'], ['@yaks/b', '1.1.0']])
+  assertEquals(versioned(before, next), {
     name: '@yaks/a',
     version: '1.1.0',
-    dependencies: { '@yaks/b': '1.1.0', yaml: '^2' },
+    dependencies: { '@yaks/b': '1.1.0', '@yaks/c': '1.0.0', yaml: '^2' },
+  })
+  assertEquals(versioned({ name: '@yaks/c', version: '1.0.0' }, next), {
+    name: '@yaks/c',
+    version: '1.0.0',
   })
   assertEquals(before.version, '1.0.0')
 })

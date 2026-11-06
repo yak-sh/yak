@@ -150,16 +150,31 @@ changes what every process on the box pays, and that is the owner's call.
 
 ## Publishing
 
-The family is one release. bin/release.ts writes one version into every package,
-commits and tags; pushing the tag publishes (.github/workflows/publish.yml). CI
-publishes under GitHub's identity, which jsr accepts only for a package that
-already has a page, so a new package needs its page first or the publish stops
-partway, and a version can't be unpublished. bin/release.ts refuses to cut a
-release while one is missing. bin/jsr.ts writes the pages from the repo:
+A release publishes what changed, so a fix in one package ships at once.
+bin/release.ts publishes the packages whose published files moved since their
+version's tag, every published package that imports one of them, and a package
+JSR doesn't have yet only once something it publishes imports it. Those move to
+the release's version. The rest keep the version JSR already has, and a
+sibling's import (`jsr:@yaks/x@^<version>`) resolves either way.
+packages/cli/release.json pins every package of the release at its version, and
+an installed CLI loads a plugin a config names at that pin.
 
 ```sh
-deno task jsr                    # dry run: what would change on every page
-deno task jsr --apply --create   # write them, and mint pages for new packages
+bin/release.ts plan      # what a release would publish today, and how many JSR then holds
+bin/release.ts 0.2.18    # write the versions, commit and tag; pushing the tag publishes
+```
+
+JSR's scope holds at most 100 packages, and a version can't be unpublished. CI
+publishes under GitHub's identity (.github/workflows/publish.yml), which JSR
+accepts only for a package that already has a page, so bin/release.ts refuses
+while a package it would publish has none. A provider a person may not use is a
+plugin their config names, not an import of a published package: an import puts
+it in every release that publishes the importer. bin/jsr.ts writes the pages
+from the repo, and mints only the pages it is given:
+
+```sh
+deno task jsr                              # dry run: what would change on every page
+deno task jsr --apply --create @yaks/new   # write them, and mint the pages named
 ```
 
 Writing needs a `JSR_TOKEN`, so it's often the owner's to run.

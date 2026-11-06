@@ -1,4 +1,5 @@
-// Family package manifests, JSR metadata and lockfiles move in one release.
+// The versions a release moves: each member's package.json, its JSR metadata,
+// and the lockfiles that record them.
 import { matchesGlob } from 'node:path'
 import { members } from '@yaks/cli/dependencies'
 
@@ -15,13 +16,14 @@ type Manifest = {
   [key: string]: unknown
 }
 
-/** Move a family version and its internal dependencies together. */
+/** A manifest at the versions `next` gives: its own, and the member versions
+ * its internal dependencies name. */
 export let versioned = (
   pkg: Manifest,
-  version: string,
-  names: Set<string>,
+  next: Map<string, string>,
 ): Manifest => {
-  let next = { ...pkg, ...pkg.version ? { version } : {} }
+  let version = pkg.name && next.get(pkg.name)
+  let out = { ...pkg, ...pkg.version && version ? { version } : {} }
   let groups: ('dependencies' | 'devDependencies' | 'optionalDependencies')[] =
     [
       'dependencies',
@@ -30,14 +32,14 @@ export let versioned = (
     ]
   for (let group of groups) {
     if (pkg[group]) {
-      next[group] = Object.fromEntries(
+      out[group] = Object.fromEntries(
         Object.entries(pkg[group]).map(
-          ([name, range]) => [name, names.has(name) ? version : range],
+          ([name, range]) => [name, next.get(name) ?? range],
         ),
       )
     }
   }
-  return next
+  return out
 }
 
 let metadata = (
@@ -62,18 +64,25 @@ let metadata = (
   return next
 }
 
-export let versions = async (root: string, version: string) => {
+/** Write each member at the version `next` gives it, every other member and
+ * every internal dependency at the version it names. */
+export let versions = async (root: string, next: Map<string, string>) => {
   let workspaces = members(root)
   let paths = workspaces.map((dir: string) => `${root}/${dir}/deno.json`)
   let npm = workspaces.map((dir: string) => `${root}/${dir}/package.json`)
   let packages: Manifest[] = await Promise.all(
     npm.map(async (path: string) => JSON.parse(await Deno.readTextFile(path))),
   )
-  let names = new Set(packages.flatMap((pkg) => pkg.name ?? []))
+  let all = new Map(
+    packages.flatMap((pkg) =>
+      pkg.name && pkg.version ? [[pkg.name, pkg.version]] : []
+    ),
+  )
+  for (let [name, version] of next) all.set(name, version)
   for (let [i, path] of npm.entries()) {
     await Deno.writeTextFile(
       path,
-      JSON.stringify(versioned(packages[i], version, names), null, 2) + '\n',
+      JSON.stringify(versioned(packages[i], all), null, 2) + '\n',
     )
   }
   for (let path of paths) {
@@ -91,6 +100,8 @@ export let versions = async (root: string, version: string) => {
   let deno = JSON.parse(await Deno.readTextFile(denoPath))
   let workspace = JSON.stringify(deno.workspace)
   for (let pkg of packages) {
+    let version = pkg.name && next.get(pkg.name)
+    if (!version) continue
     workspace = workspace.replaceAll(
       JSON.stringify(`npm:${pkg.name}@${pkg.version}`),
       JSON.stringify(`npm:${pkg.name}@${version}`),

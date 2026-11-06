@@ -11,7 +11,11 @@
 //   deno task jsr                    # dry run: every page, what would move
 //   deno task jsr @yaks/graph        # one package
 //   deno task jsr --apply            # write it
-//   deno task jsr --apply --create   # and mint the pages JSR has no row for
+//   deno task jsr --apply --create @yaks/x   # and mint the pages named
+//
+// A page takes one of the scope's places (100 at most), so --create mints only
+// the packages it is given: the new ones `bin/release.ts plan` says a release
+// publishes.
 //
 // Reading is anonymous. Writing needs a JSR personal access token in
 // JSR_TOKEN, minted at https://jsr.io/account/tokens.
@@ -229,6 +233,18 @@ export let read = async (get: Fetch, name: string) => {
   return mine(await res.json())
 }
 
+// Whether JSR holds that version of the package.
+export let has = async (get: Fetch, name: string, version: string) => {
+  let { scope, pkg } = split(name)
+  let res = await get(
+    `${API}/scopes/${scope}/packages/${pkg}/versions/${version}`,
+  )
+  if (res.status == 404) return (await res.body?.cancel(), false)
+  if (!res.ok) await fail(`GET ${name}@${version}`, res)
+  await res.body?.cancel()
+  return true
+}
+
 // One field, one request — UpdatePackageRequest is a oneOf.
 export let write = async (
   get: Fetch,
@@ -265,6 +281,13 @@ export let main = async (args = Deno.args, get = fetch, root = '.') => {
   let create = args.includes('--create')
   let named = args.filter((arg) => !arg.startsWith('-'))
   let token = Deno.env.get('JSR_TOKEN')
+  if (create && !named.length) {
+    console.error(
+      'name the packages to mint: --create takes a place in the scope for ' +
+        'each (bin/release.ts plan lists the new ones a release publishes)',
+    )
+    return 1
+  }
   if (apply && !token) {
     console.error(`JSR_TOKEN is not set. Mint one at ${TOKENS}.`)
     return 1
@@ -290,7 +313,9 @@ export let main = async (args = Deno.args, get = fetch, root = '.') => {
   if (!apply) {
     console.log(
       `dry run — pass --apply to write${
-        fresh.length && !create ? ', --create to mint the missing pages' : ''
+        fresh.length && !create
+          ? ', --create <names> to mint missing pages'
+          : ''
       }`,
     )
     return 0
