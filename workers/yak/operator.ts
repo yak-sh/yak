@@ -80,6 +80,7 @@ import {
   starting,
 } from './operator-channels.ts'
 import { textSend } from './operator-texts.ts'
+import { iconic } from './raster.ts'
 import { phoneSend } from './operator-line.ts'
 import { googleTold, googleTools } from './operator-google.ts'
 import { notification } from './operator-updates.ts'
@@ -878,6 +879,7 @@ export let operating = (
       conversation,
       remembering,
       starting,
+      iconic,
     ]).catch((e) => {
       based = undefined
       caught(e, { request: 'operator base persona' })

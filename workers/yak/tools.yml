@@ -171,9 +171,12 @@ app_files:
     still work in a copy installed elsewhere; a page in a folder reaches the
     client at ../api/client.js. A write returns its byte count and SHA-256,
     and for a .json file whether it parses and where it does not; a picture
-    that does not decode is refused. The app's home-screen icon is an
-    icon.svg written as content (a square viewBox, no <text>), which the
-    platform draws as icon.png. NOTES.md
+    that does not decode is refused. The app's icon, the picture beside its
+    name wherever yaks.app lists it (the space's apps, the Operator's
+    sidebar) and on a home screen, is its icon.png: a PNG fetched there with
+    op: fetch, or else an icon.svg written as content (a square viewBox, no
+    <text>), which the platform draws as icon.png. An app with neither wears
+    the platform's default yak. It shows once deployed. NOTES.md
     beside index.html holds the app's notes in the person's words (up to
     4 KB), returned by the about tool; like vocab.json it is never served on
     the web. op: patch with path, find and replace edits one file in place;

@@ -9,9 +9,20 @@
 // The drawing is yak-raster's (raster/), the Worker behind the RASTER binding.
 import type { Env } from './env.ts'
 import { caught } from './defects.ts'
+import type { Declared } from './operator-persona.ts'
 
 /** The app-relative path an app's icon is drawn from. */
 export let ICON_SVG = 'icon.svg'
+
+// What an app's icon is to the Operator, declared beside the code that draws
+// it (files.ts `icon`) and falls back to the platform's (apps.ts `unwritten`).
+// The base persona contains it (operator-persona.ts).
+export let iconic: Declared = {
+  key: 'icon',
+  title: "An app's icon",
+  body:
+    "Each app's icon is its icon.png: the picture beside its name in the person's list of apps, in the sidebar of your page, and on a home screen. An app with no icon.png and no icon.svg wears the platform's default yak, so a request about an app's logo or icon in yaks.app, or about the default yaks, means this file, not a picture in the app's pages. Set it with app_files: op: fetch with path icon.png and the URL of a PNG, or write an icon.svg (a square viewBox, no <text>), which is drawn as icon.png; a logo that is not a PNG becomes an icon.svg. Then app_deploy: the icon shows once deployed.",
+}
 
 // The one size drawn: the manifest names the icon at 512 and 192, and iOS
 // scales the smallest icon larger than it wants (apps.ts `manifesting`).

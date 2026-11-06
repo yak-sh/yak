@@ -2321,8 +2321,8 @@ export let stored = (path: string, bytes: Uint8Array, sha: string) =>
   `${bytes.byteLength} bytes, sha256 ${sha}` +
   (/\.(json|yml)$/.test(path) ? `, ${parses(path, bytes)}` : '') +
   (path == ICON_SVG
-    ? ', drawn as the 512×512 icon.png a home screen shows, unless the app ' +
-      'has an icon.png of its own'
+    ? ', drawn as the 512×512 icon.png the app wears on yaks.app and a ' +
+      'home screen, unless the app has an icon.png of its own'
     : '')
 
 /**

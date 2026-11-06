@@ -11,7 +11,7 @@ guide:
     app_deploy's reload levels and the yak-release event, including a custom
     notice that keeps unsaved input; app_files — what a write returns, the
     patch and fetch ops, the version history every write keeps and the restore
-    op, page URLs and 404 handling, icon.svg for a home-screen icon — then
+    op, page URLs and 404 handling, icon.png and icon.svg for the app's icon — then
     upload() for a file from an <input> or a drop: the ./api/blob URL the bytes
     are served from, the attachment and image rows it writes, large files
     uploaded in parts and resumed, who may upload, deleting an upload and its
@@ -382,9 +382,18 @@ File history restores one file, or one write. The other restore tools:
 restores everything the app has _saved_, and `app_restore` restores an app that
 was deleted.
 
-## Home-screen icon: `icon.svg`
+## The app's icon: `icon.png` and `icon.svg`
 
-An **`icon.svg` beside `index.html`** is the app's icon everywhere. It is text,
+The app's icon is the picture beside its name wherever yaks.app lists it (the
+space's apps, the Operator's sidebar) and on a home screen. It is the app's
+`icon.png`, served once the app is deployed. Until the app has one, that address
+serves the platform's default yak.
+
+A logo that is already a PNG is fetched there:
+
+    app_files(app, op: 'fetch', path: 'icon.png', url: 'https://example.com/logo.png')
+
+Otherwise an **`icon.svg` beside `index.html`** is the app's icon. It is text,
 so it is written as `content`, like a page:
 
     app_files(app, files: [{path: 'icon.svg', content:
@@ -429,9 +438,6 @@ of the rendered one: a picture fetched with `op: fetch`, or one `sandbox_ship`
 copies in. An image is decoded when it is written, as a browser would decode it,
 and one that does not decode is refused. A PNG's bytes cannot be written out by
 hand, so an icon an assistant makes is an SVG.
-
-Until an app writes an icon, `icon.png` serves the platform's own default tile,
-so an app somebody adds to their phone's home screen never shows a blank square.
 
 ## Uploading a file with `upload`
 
