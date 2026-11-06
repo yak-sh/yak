@@ -265,7 +265,7 @@ let more = [
 let plugins = [...words, ...work, ...more, 'git', 'harness']
   .map((p) => `@yaks/${p}`)
 let host = await compose({ db: ':memory:', plugins }, ['graph'])
-let a = local({
+let a = await local({
   name: 'example-model',
   h: hosted(host, () => host.close()),
   model,
