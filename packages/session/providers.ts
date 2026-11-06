@@ -264,7 +264,9 @@ export let providerResolver = (
  * it names is one this host has an implementation for, or it names none and
  * the model is one a provider this host reaches serves. An `override` answers
  * every provider but a command line (`transport: process`), which is
- * @yaks/spawn's to launch, and a `using` naming nothing at all.
+ * @yaks/spawn's to launch, and a `using` naming nothing at all. A session a
+ * command line runs (it has a `process`) goes on there whatever a follow-up
+ * names, so no host answers it here.
  *
  * ```ts
  * import { answers } from '@yaks/session'
@@ -278,15 +280,15 @@ export let answers = (
   override?: Model,
 ) =>
 async (using: Comp | undefined, session?: Eid): Promise<boolean> => {
+  let comps = ['native', 'process'].filter((c) => g.vocab.comp(c))
+  let [owner] = session ? await g.get([session], comps) : []
+  if (owner?.process && !owner.native) return false
   let provider = using?.provider
   if (provider != null) {
     let [row] = await g.get([String(provider)])
     let named = row?.provider as Comp | undefined
     if (!named) return false
-    if (named.transport == 'process') {
-      let [owner] = session ? await g.get([session], ['native']) : []
-      if (!owner?.native) return false
-    }
+    if (named.transport == 'process' && !owner?.native) return false
     if (override) return named.transport != 'process'
     return typeof named.name == 'string' &&
       Object.hasOwn(implementations, named.name)

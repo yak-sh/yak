@@ -18,6 +18,7 @@ import type { Bundle, Comp, Eid, Graph } from '@yaks/graph'
 import { argsOf, who } from '@yaks/graph/call'
 import { identityEid } from '@yaks/graph/identity'
 import { Refused } from '@yaks/graph/errors'
+import { edgeEid } from '@yaks/edge'
 import { BEST, type Runs } from '@yaks/graph/tools'
 import type { Host } from '@yaks/host'
 
@@ -77,6 +78,35 @@ let named = async (
     provider: identityEid(PROVIDER, [provider]),
     model: identityEid(MODEL, [model]),
   }
+}
+
+// The `using` a follow-up asks with: the one in force, changed only by what
+// the send names. A provider named alone keeps the model in force, and a model
+// named alone keeps the provider in force while it serves that model, so a
+// session spawned on a command line goes on there.
+let following = async (
+  graph: Graph,
+  prior: Comp | undefined,
+  provider?: string,
+  model?: string,
+): Promise<Comp> => {
+  if (!prior) return await named(graph, provider, model)
+  let [p, m] = await graph.get([
+    String(prior.provider ?? ''),
+    String(prior.model ?? ''),
+  ])
+  let held = nameOf(p, PROVIDER)
+  if (!model && (!provider || provider == held)) return prior
+  if (model && !provider && prior.provider) {
+    let edge = edgeEid(
+      String(prior.provider),
+      'serves',
+      identityEid(MODEL, [model]),
+    )
+    let [served] = await graph.get([edge], ['serves'])
+    if (served?.serves) provider = held
+  }
+  return await named(graph, provider, model ?? nameOf(m, MODEL))
 }
 
 // What a session is doing while it is still working: owing a turn, owing a
@@ -279,19 +309,10 @@ export let runs = (host?: Host): Runs => ({
     let provider = word(args, 'provider')
     let model = word(args, 'model')
     let using = prior
-    if (provider || model || !prior?.model) {
-      // A provider named alone keeps the model in force.
-      let [p, m] = await graph.get([
-        String(prior?.provider ?? ''),
-        String(prior?.model ?? ''),
-      ])
+    if (provider || model || !prior) {
       using = {
         ...prior?.effort ? { effort: prior.effort } : {},
-        ...await named(
-          graph,
-          provider ?? (model ? undefined : nameOf(p, PROVIDER)),
-          model ?? nameOf(m, MODEL),
-        ),
+        ...await following(graph, prior, provider, model),
       }
     }
     await graph.apply([{

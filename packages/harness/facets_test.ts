@@ -1,7 +1,8 @@
 import { test } from '@yaks/testing'
 import { assert, assertEquals, assertRejects } from '@std/assert'
 import { identityEid } from '@yaks/graph/identity'
-import { PROVIDER } from '@yaks/model'
+import { MODEL, type Model, PROVIDER } from '@yaks/model'
+import { edgeEid } from '@yaks/edge'
 import { argsFor, cli, commandFor, unique } from '@yaks/cli'
 import { compose } from '@yaks/cli/host'
 import { close as closeCli, opened } from '../cli/local.ts'
@@ -19,9 +20,10 @@ import { BEST, loadTools } from '@yaks/graph/tools'
 import { toolDefinition } from '@yaks/vocab/tools'
 import { inputSchemaOf } from '@yaks/mcp/tools'
 import { connect } from '../mcp/testing.ts'
-import { textOf, transcript } from '@yaks/session'
+import { answers, textOf, transcript } from '@yaks/session'
 import { selectedUsing } from './model_selection.ts'
 import { runs } from './runs.ts'
+import { HARNESS } from './default.ts'
 import { docs } from './vocab.ts'
 import { at, harness, working } from './testing.ts'
 
@@ -223,6 +225,75 @@ test('a send to a session running outside the graph knocks and returns at once',
     assertEquals((knock.doc as { body?: string }).body, 'cache the scripts too')
     // No request: the run going is not asked for another.
     assertEquals(await h.g.read(`.entry.session=${s}&.using`), [])
+  } finally {
+    await h.close()
+  }
+})
+
+// A spawned claude session whose run is over: claude serves opus, and so does
+// a provider this host answers.
+let finished = async () => {
+  let h = await harness()
+  let s = mint()
+  let claude = identityEid(PROVIDER, ['claude'])
+  let opus = identityEid(MODEL, ['opus'])
+  let [held] = await h.g.get([HARNESS], ['using'])
+  let openai = String((held.using as Comp).provider)
+  let serves = (from: string, name: string) => ({
+    entity: { eid: edgeEid(from, 'serves', opus) },
+    edge: { from, to: opus },
+    serves: { name },
+  })
+  await h.g.apply([
+    { entity: { eid: claude }, provider: { name: 'claude' } },
+    { entity: { eid: opus }, model: { name: 'opus' } },
+    serves(claude, 'opus'),
+    serves(openai, 'opus'),
+    {
+      entity: { eid: s },
+      session: { id: s },
+      process: { pid: 1, command: 'claude' },
+      exit: { code: 0 },
+    },
+    {
+      entity: { eid: mint() },
+      entry: { session: s },
+      using: { provider: claude, model: opus, effort: 'high' },
+    },
+  ], { trusted: true })
+  let send = async (args: Record<string, unknown>) => {
+    await runs().session_send!({
+      entity: { eid: mint() },
+      call: { args: { session: s, text: 'go on', wait: false, ...args } },
+    }, h.g)
+    let [input] = await h.g.read(
+      `.entry.session=${s}&.using&.order=-entry.seq&.limit=1`,
+    )
+    return input.using
+  }
+  return { h, s, claude, openai, opus, send }
+}
+
+test('a follow-up to a finished spawned session goes on with its provider and model', async () => {
+  let { h, claude, opus, send } = await finished()
+  try {
+    let kept = { provider: claude, model: opus, effort: 'high' }
+    assertEquals(await send({}), kept)
+    assertEquals(await send({ provider: 'claude' }), kept)
+    assertEquals(await send({ model: 'opus' }), kept)
+  } finally {
+    await h.close()
+  }
+})
+
+test('no runner here answers a session a command line runs, whatever model it names', async () => {
+  let { h, s, openai, opus } = await finished()
+  try {
+    let fake: Model = (req) =>
+      Promise.resolve({ id: 'x', model: req.model, items: [] })
+    let check = answers(h.g, { openai: fake })
+    assertEquals(await check({ model: opus }, s), false)
+    assertEquals(await check({ provider: openai, model: opus }, s), false)
   } finally {
     await h.close()
   }
