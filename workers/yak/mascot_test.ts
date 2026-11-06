@@ -117,8 +117,13 @@ test('the waiting yak is drawn at the size it shows, at every density', async ()
 })
 
 // public/idle.js run over the waiting yak, its timers stepped by hand.
-// `decoding` is how each loop's picture answers decode()
-let waiting = (still = false, decoding = () => Promise.resolve()) => {
+// `decoding` is how each loop's picture answers decode(), and `loads` whether
+// the browser loads the loop at that object URL
+let waiting = (
+  still = false,
+  decoding = () => Promise.resolve(),
+  loads = (_url: string) => true,
+) => {
   let { document, Event, CustomEvent, MutationObserver } = parseHTML(
     `<main>${idle('Talk_Yak')}</main>`,
   )
@@ -149,9 +154,12 @@ let waiting = (still = false, decoding = () => Promise.resolve()) => {
       revokeObjectURL: () => {},
     },
     class {
+      src = ''
       decode = decoding
       complete = true
-      naturalWidth = 128
+      get naturalWidth() {
+        return loads(this.src) ? 128 : 0
+      }
     },
     (fn: () => void, ms: number) => (timers.set(++ids, [fn, ms]), ids),
     (id: number) => timers.delete(id),
@@ -240,6 +248,34 @@ test('a loop the browser will not decode ahead still plays once it loads', async
   yak.ask('lick')
   await yak.step()
   assertEquals(yak.shown(), ['blob:/mascot/idle-lick-128.webp', null])
+})
+
+test('a loop the browser will not load, he leaves out and rests where he would play it', async () => {
+  let yak = waiting(
+    false,
+    () => Promise.reject(new Error('Loading error.')),
+    (url) => !url.includes('-tail-'),
+  )
+  yak.doing('tail')
+  await yak.settled()
+  await yak.step()
+  assertEquals(yak.shown(), yak.rest)
+  let played = new Set<string>()
+  for (let i = 0; i < 12; i++) {
+    let rested = await yak.step()
+    assert(rested >= 5000 && rested <= 9000, `${rested}`)
+    played.add(yak.shown()[0]!)
+  }
+  assertEquals(played, new Set([yak.rest[0]]), 'still, while it is asked for')
+  yak.doing(undefined)
+  await yak.settled()
+  played.clear()
+  for (let i = 0; i < 20; i++) {
+    await yak.step()
+    played.add(yak.shown()[0]!)
+  }
+  assert(!played.has('blob:/mascot/idle-tail-128.webp'))
+  assertEquals(yak.fetched.filter((f) => f.includes('-tail-')).length, 1)
 })
 
 test('with less motion asked for, he stays at rest', async () => {
