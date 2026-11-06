@@ -18,9 +18,9 @@
   "devDependencies": {
     "@std/assert": "npm:@jsr/std__assert@^1.0.0",
     "@yaks/archetype": "0.2.18",
-    "@yaks/fts": "0.2.18",
+    "@yaks/fts": "0.2.21",
     "@yaks/graph": "0.2.18",
-    "@yaks/sqlite": "0.2.20",
+    "@yaks/sqlite": "0.2.21",
     "@yaks/testing": "0.2.17"
   }
 }

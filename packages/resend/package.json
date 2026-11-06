@@ -14,8 +14,8 @@
   "dependencies": {
     "@yaks/api": "0.2.18",
     "@yaks/graph": "0.2.18",
-    "@yaks/host": "0.2.20",
-    "@yaks/mail": "0.2.20"
+    "@yaks/host": "0.2.21",
+    "@yaks/mail": "0.2.21"
   },
   "devDependencies": {
     "@yaks/testing": "0.2.17",

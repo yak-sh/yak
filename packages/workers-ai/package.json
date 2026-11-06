@@ -1,6 +1,6 @@
 {
   "name": "@yaks/workers-ai",
-  "version": "0.2.20",
+  "version": "0.2.21",
   "type": "module",
   "exports": "./mod.ts",
   "license": "Apache-2.0",
@@ -8,8 +8,8 @@
   "dependencies": {
     "@yaks/blob": "0.2.20",
     "@yaks/fp": "0.2.18",
-    "@yaks/model": "0.2.20",
-    "@yaks/openai": "0.2.20"
+    "@yaks/model": "0.2.21",
+    "@yaks/openai": "0.2.21"
   },
   "devDependencies": {
     "@std/assert": "npm:@jsr/std__assert@^1.0.0",

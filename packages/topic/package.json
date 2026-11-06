@@ -29,8 +29,8 @@
   "devDependencies": {
     "@std/assert": "npm:@jsr/std__assert@^1.0.0",
     "@yaks/doc": "0.2.18",
-    "@yaks/kernel": "0.2.20",
-    "@yaks/memory": "0.2.20",
+    "@yaks/kernel": "0.2.21",
+    "@yaks/memory": "0.2.21",
     "@yaks/project": "0.2.18",
     "@yaks/provenance": "0.2.18",
     "@yaks/ram": "0.2.18",

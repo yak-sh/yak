@@ -27,10 +27,10 @@
     "@std/testing": "npm:@jsr/std__testing@^1.0.0",
     "@yaks/edge": "0.2.18",
     "@yaks/journal": "0.2.20",
-    "@yaks/member": "0.2.20",
+    "@yaks/member": "0.2.21",
     "@yaks/ram": "0.2.18",
     "@yaks/sql": "0.2.18",
-    "@yaks/sqlite": "0.2.20",
+    "@yaks/sqlite": "0.2.21",
     "@yaks/testing": "0.2.17"
   }
 }

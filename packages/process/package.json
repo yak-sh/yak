@@ -30,9 +30,9 @@
   },
   "devDependencies": {
     "@std/assert": "npm:@jsr/std__assert@^1.0.0",
-    "@yaks/model": "0.2.20",
+    "@yaks/model": "0.2.21",
     "@yaks/ram": "0.2.18",
-    "@yaks/session": "0.2.20",
+    "@yaks/session": "0.2.21",
     "@yaks/testing": "0.2.17",
     "@yaks/tools": "0.2.18"
   }

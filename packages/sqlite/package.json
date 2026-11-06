@@ -1,6 +1,6 @@
 {
   "name": "@yaks/sqlite",
-  "version": "0.2.20",
+  "version": "0.2.21",
   "type": "module",
   "exports": {
     ".": "./mod.ts",
@@ -28,7 +28,7 @@
     "@yaks/effects": "0.2.20",
     "@yaks/file": "0.2.20",
     "@yaks/fp": "0.2.18",
-    "@yaks/fts": "0.2.18",
+    "@yaks/fts": "0.2.21",
     "@yaks/graph": "0.2.18",
     "@yaks/match": "0.2.18",
     "@yaks/process": "0.2.19",
@@ -46,12 +46,12 @@
     "@yaks/edge": "0.2.18",
     "@yaks/id": "0.2.18",
     "@yaks/journal": "0.2.20",
-    "@yaks/kernel": "0.2.20",
-    "@yaks/member": "0.2.20",
-    "@yaks/model": "0.2.20",
+    "@yaks/kernel": "0.2.21",
+    "@yaks/member": "0.2.21",
+    "@yaks/model": "0.2.21",
     "@yaks/provenance": "0.2.18",
     "@yaks/ram": "0.2.18",
-    "@yaks/session": "0.2.20",
+    "@yaks/session": "0.2.21",
     "@yaks/task": "0.2.20"
   },
   "optionalDependencies": {

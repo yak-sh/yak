@@ -1,6 +1,6 @@
 {
   "name": "@yaks/git",
-  "version": "0.2.20",
+  "version": "0.2.21",
   "type": "module",
   "exports": {
     ".": "./mod.ts",
@@ -23,7 +23,7 @@
     "@yaks/fp": "0.2.18",
     "@yaks/graph": "0.2.18",
     "@yaks/id": "0.2.18",
-    "@yaks/kernel": "0.2.20",
+    "@yaks/kernel": "0.2.21",
     "@yaks/key": "0.2.18",
     "@yaks/machine": "0.2.19",
     "@yaks/process": "0.2.19",
@@ -35,7 +35,7 @@
     "@std/assert": "npm:@jsr/std__assert@^1.0.0",
     "@yaks/doc": "0.2.18",
     "@yaks/ram": "0.2.18",
-    "@yaks/sqlite": "0.2.20",
+    "@yaks/sqlite": "0.2.21",
     "@yaks/testing": "0.2.17"
   }
 }

@@ -30,7 +30,7 @@
     "@yaks/journal": "0.2.20",
     "@yaks/ram": "0.2.18",
     "@yaks/sql": "0.2.18",
-    "@yaks/sqlite": "0.2.20",
+    "@yaks/sqlite": "0.2.21",
     "@yaks/testing": "0.2.17",
     "linkedom": "^0.18.12",
     "preact-render-to-string": "6.7.0"

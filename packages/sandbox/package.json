@@ -27,8 +27,8 @@
     "@yaks/vocab": "0.2.18"
   },
   "devDependencies": {
-    "@yaks/harness": "0.2.20",
-    "@yaks/kernel": "0.2.20",
+    "@yaks/harness": "0.2.21",
+    "@yaks/kernel": "0.2.21",
     "@yaks/ram": "0.2.18",
     "@yaks/testing": "0.2.17"
   }
