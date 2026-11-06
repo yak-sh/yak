@@ -105,9 +105,10 @@ edits automatically guard the stored version, and accept `was` when based on an
 earlier read. `graph_apply`'s `id` and `text` replace a whole `doc.body`; `path`
 selects another text property. A comment's body is `doc.body` too.
 
-A commit attaches through its existing entity, whose id is its SHA. One
-`graph_apply` edit can set `commit.target` to the task and `commit.message` to
-the full commit message:
+`land` records each commit it lands, on the task its first line names. A
+commit landed some other way attaches through its existing entity, whose id is
+its SHA. One `graph_apply` edit can set `commit.target` to the task and
+`commit.message` to the full commit message:
 
 ```json
 {

@@ -133,10 +133,15 @@ let verdict = (
     ? ['warn', 'never checked']
     : ['warn', `no answer: ${got.why}`]
 
-/** Landing with Git supplied at the effect boundary. */
+// The tasks a commit message names (T-12), as the graph addresses them.
+let TASK = /\bT-\d+\b/
+
+/** Landing with Git supplied at the effect boundary. Each commit that landed
+ * is recorded as `commit{target, message}`, its eid the sha, created through
+ * the caller's session; its target is the task its first line names. */
 export let landing =
   (run: typeof land, report?: LandOps['report']) =>
-  async (call: Bundle): Promise<Bundle[]> => {
+  async (call: Bundle, graph?: Graph): Promise<Bundle[]> => {
     let args = argsOf(call)
     let cwd = str(args.cwd)
     // Git's output, exactly as Git wrote it, collected in the order it
@@ -155,11 +160,25 @@ export let landing =
     if (!('landed' in outcome)) {
       throw new CallError('diverged', said.join('\n'))
     }
-    return [{
-      entity: { eid: '$landed' },
-      content: { body: [...said, `landed ${outcome.landed}`].join('\n') },
-      output: { source: call.entity.eid },
-    }]
+    // A graph without commit vocabulary records nothing.
+    let landed = graph?.vocab.comp('commit') ? outcome.commits : []
+    let named = landed.map((c) => c.message.split('\n')[0].match(TASK)?.[0])
+    let ids = [...new Set(named.filter((id): id is string => !!id))]
+    let at = ids.length ? await graph!.address(ids) : new Map<string, string>()
+    return [
+      {
+        entity: { eid: '$landed' },
+        content: { body: [...said, `landed ${outcome.landed}`].join('\n') },
+        output: { source: call.entity.eid },
+      },
+      ...landed.map((c, i) => ({
+        entity: { eid: c.sha },
+        commit: {
+          message: c.message,
+          ...at.get(named[i] ?? '') ? { target: at.get(named[i]!) } : {},
+        },
+      })),
+    ]
   }
 
 /** The implementations of the tools ./vocab.json declares. The host's

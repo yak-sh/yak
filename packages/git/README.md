@@ -147,6 +147,9 @@ commit, identified by both.
 A `commit` stores the whole commit message, not just its first line, and its
 entity id is the commit sha — so recording the same commit twice produces one
 entity, and it carries no `sha` property that could disagree with its own id.
+The `land` tool records each commit it lands this way, created through the
+caller's session, its target the task its first line names (`T-12`), so a
+failure a commit caused can find the session that landed it (bench/ci.ts).
 
 ## Citations
 

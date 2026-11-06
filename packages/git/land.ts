@@ -140,9 +140,22 @@ export let hold = async (
   return () => file.close()
 }
 
-/** Landed carries the merged commit sha and the shared checkout's path, so
- * the caller can clean up whatever the merge left behind. */
-export type Landed = { landed: string; root: string }
+/** A commit that landed, with its whole message. */
+export type Commit = { sha: string; message: string }
+
+/// commits('a\0One\n\nwhy\n\x01\nb\0Two\n\x01')
+///   -> [{ sha: 'a', message: 'One\n\nwhy' }, { sha: 'b', message: 'Two' }]
+/** Commits from `git log --format=%H%x00%B%x01`. */
+export let commits = (log: string): Commit[] =>
+  log.split('\x01').map((c) => c.trim()).filter(Boolean).map((c) => {
+    let at = c.indexOf('\0')
+    return { sha: c.slice(0, at), message: c.slice(at + 1).trim() }
+  })
+
+/** Landed carries the merged commit sha, the commits that landed with it, and
+ * the shared checkout's path, so the caller can clean up whatever the merge
+ * left behind. */
+export type Landed = { landed: string; root: string; commits: Commit[] }
 
 /** Diverged means the base moved: the branch has been rebased and is waiting,
  * and `conflict` reports whether that rebase is sitting unresolved for the
@@ -516,6 +529,7 @@ export let land = async (ops: LandOps = {}): Promise<Outcome> => {
     let up = await upstream(git, root, base)
     let release = await (ops.hold ?? ((dir) => hold(dir, true)))(gitdir)
     let sha: string | undefined
+    let landing: Commit[] = []
     try {
       await git(root, ['update-index', '-q', '--refresh'], false)
       let ready = await git(
@@ -528,6 +542,14 @@ export let land = async (ops: LandOps = {}): Promise<Outcome> => {
           message('land: shared checkout blocks landing', ready),
         )
       }
+      // What lands: the branch's commits the base lacks.
+      landing = commits(
+        await need('list landing commits', root, [
+          'log',
+          '--format=%H%x00%B%x01',
+          `HEAD..${branch}`,
+        ]),
+      )
       // Under the lock nothing that lands moves the base, so what is pushed
       // contains it, and the fast-forward after the push follows it.
       let moved = await ancestry() == 1
@@ -557,7 +579,7 @@ export let land = async (ops: LandOps = {}): Promise<Outcome> => {
       // reporting it has finished. The unlock's exit code decides nothing: the
       // only failure reachable is "not locked".
       await git(root, ['worktree', 'unlock', tree], false)
-      return { landed: sha, root }
+      return { landed: sha, root, commits: landing }
     }
   }
 

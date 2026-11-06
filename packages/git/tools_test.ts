@@ -16,6 +16,7 @@ import { content, kernel, kernelDoc } from '@yaks/kernel'
 import { keyDoc, keyKeywords } from '@yaks/key'
 import { machineDoc } from '@yaks/machine/vocab'
 import { loadVocab } from '@yaks/vocab'
+import { provenanceDoc } from '@yaks/provenance'
 import { gitDoc } from './comp.ts'
 import { landing, runs } from './tools.ts'
 import { land, type Run } from './land.ts'
@@ -245,7 +246,7 @@ test('landing uses the checkout named by the call, even on a shared session', as
       ...runs(),
       land: landing((ops) => {
         seen.push(ops?.cwd ?? '')
-        return Promise.resolve({ landed: 'sha', root: '/repo' })
+        return Promise.resolve({ landed: 'sha', root: '/repo', commits: [] })
       }),
     },
   )
@@ -315,5 +316,52 @@ test("a push the remote refuses reaches the host's report through the land tool"
   assertEquals(reported, [
     'Error: land: publish to origin/main failed with exit 1:\n' +
     'remote: fatal error in commit_refs',
+  ])
+})
+
+test('a landing records each commit it landed, on the task its first line names, through the session', async () => {
+  let task = crypto.randomUUID()
+  let [a, b] = ['a'.repeat(40), 'b'.repeat(40)]
+  let tools = loadTools(gitDoc, {
+    ...runs(),
+    land: landing(() =>
+      Promise.resolve({
+        landed: b,
+        root: '/repo',
+        commits: [
+          { sha: b, message: 'Untasked' },
+          { sha: a, message: 'Fix it (T-7)\n\nWhy it broke.' },
+        ],
+      })
+    ),
+  })
+  let words = loadVocab([kernelDoc, provenanceDoc, docDoc, toolsDoc, gitDoc])
+  let g = graph({
+    vocab: words,
+    storage: ram(words),
+    plugins: [{
+      name: 'numbers',
+      address: (_, ids) =>
+        new Map(ids.filter((id) => id == 'T-7').map((id) => [id, task])),
+    }],
+  })
+  let actor = { by: crypto.randomUUID(), via: crypto.randomUUID() }
+  let asked = {
+    entity: { eid: crypto.randomUUID() },
+    call: { to: toolEid('land'), args: { cwd: '/work' } },
+    $actor: actor,
+  }
+  assertEquals(
+    faulted(await runner(g, { tools }).call(asked), asked.entity.eid),
+    false,
+  )
+  let rows = await g.get([a, b], ['commit', 'created'])
+  assertEquals(rows.map((r) => r.commit), [
+    { message: 'Fix it (T-7)\n\nWhy it broke.', target: task },
+    { message: 'Untasked' },
+  ])
+  assertEquals(rows.map((r) => (r.created as { via?: string }).via), [
+    actor.via,
+    actor.via,
   ])
 })

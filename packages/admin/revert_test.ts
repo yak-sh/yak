@@ -57,6 +57,7 @@ let recovering = (
         'worktree',
         'update-index',
         'read-tree',
+        'log',
         'merge',
         'rebase',
         'branch',

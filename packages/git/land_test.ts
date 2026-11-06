@@ -69,7 +69,7 @@ let fixture = (answers: Record<string, Answer> = {}) => {
 
 test('land publishes the branch and fast-forwards the base while preserving its worktree', async () => {
   let f = fixture()
-  assertEquals(await f.invoke(), { landed: 'sha', root: '/repo' })
+  assertEquals(await f.invoke(), { landed: 'sha', root: '/repo', commits: [] })
   assert(
     f.calls.some((c) =>
       c.cwd == '/repo' && c.args.join(' ') == 'merge --ff-only work'
@@ -89,6 +89,7 @@ test('land writes the shared checkout only while it holds its lock', async () =>
     'hold',
     'update-index -q --refresh',
     'read-tree -n -m -u HEAD work',
+    'log --format=%H%x00%B%x01 HEAD..work',
     'merge-base --is-ancestor main work',
     'push --quiet origin work:main',
     'merge --ff-only work',
@@ -183,12 +184,12 @@ test('a rival landing after the ancestry read causes a rebase', async () => {
 
 test('a touched but unchanged shared file can land after the safety read', async () => {
   let f = fixture({ 'update-index -q --refresh': { code: 1 } })
-  assertEquals(await f.invoke(), { landed: 'sha', root: '/repo' })
+  assertEquals(await f.invoke(), { landed: 'sha', root: '/repo', commits: [] })
 })
 
 test('a base without an upstream lands without a push', async () => {
   let f = fixture({ 'rev-parse --abbrev-ref main@{u}': { code: 1 } })
-  assertEquals(await f.invoke(), { landed: 'sha', root: '/repo' })
+  assertEquals(await f.invoke(), { landed: 'sha', root: '/repo', commits: [] })
   assert(!f.calls.some((c) => c.args[0] == 'push'))
 })
 
@@ -208,7 +209,11 @@ for (
 ) {
   test(`a push refused by ${why} lands locally and reports it once`, async () => {
     let f = refusal(answers)
-    assertEquals(await f.invoke(), { landed: 'sha', root: '/repo' })
+    assertEquals(await f.invoke(), {
+      landed: 'sha',
+      root: '/repo',
+      commits: [],
+    })
     assertEquals(f.calls.filter((c) => c.args[0] == 'push').length, 1)
     assert(f.said.join('\n').includes('landed locally, publish separately'))
     assertEquals(f.reports, [{
@@ -263,7 +268,11 @@ test('a rewound rebase is refused before merging', async () => {
 
 test('an allowed rewind lands with its warning', async () => {
   let f = fixture(rewound)
-  assertEquals(await f.invoke(['base.txt']), { landed: 'sha', root: '/repo' })
+  assertEquals(await f.invoke(['base.txt']), {
+    landed: 'sha',
+    root: '/repo',
+    commits: [],
+  })
   assert(f.said.join('\n').includes('--allow-revert'))
 })
 
@@ -431,6 +440,7 @@ test('a formatter error reports its reason and still lands its partial edits', a
   assertEquals(await f.invoke(undefined, { code: 1, err: 'syntax error' }), {
     landed: 'sha',
     root: '/repo',
+    commits: [],
   })
   assert(f.commands().includes('commit --amend --no-edit --allow-empty'))
   assert(f.said.join('\n').includes('syntax error'))
