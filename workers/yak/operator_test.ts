@@ -565,7 +565,7 @@ test('words given with a model are answered by it, and the next words by the Ope
 })
 
 // Helpers forking helpers: Stop on the conversation reaches every one of
-// them, however deep.
+// them, however deep, and the conversation waiting on them stops too.
 let deep = operatorMemory()
 let deeper = operate(
   deep,
@@ -586,7 +586,7 @@ await deep.g.apply([
     session: { id: grandchild },
     spawned: { parent: child },
   },
-  ...[top, child, grandchild].map(line),
+  ...[child, grandchild].map(line),
 ], { trusted: true })
 let deepStop = await deeper.stop(top, roundsHeld.person)
 let stops = await deep.g.read('.stop&.entry')

@@ -1382,16 +1382,19 @@ export let operating = (
         .map((b) => b.entity.eid)
       helpers.push(...parents)
     }
-    let busy = []
+    let busy = [], idle = []
     for (let s of [session, ...helpers]) {
       let status = statusOf(await transcript(g, s))
       if (['pending', 'running'].includes(status)) busy.push(s)
+      else if (status != 'stopped') idle.push(s)
     }
     if (!busy.length) {
       return { task: open, session, stopped: false }
     }
+    // One waiting on a helper stops too, so the helper's report does not
+    // wake it again (@yaks/session children.ts `deliverChild`).
     await g.apply(
-      busy.map((s) => ({
+      [...busy, ...idle].map((s) => ({
         entity: { eid: crypto.randomUUID() },
         entry: { session: s },
         stop: {},

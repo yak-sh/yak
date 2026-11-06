@@ -154,6 +154,16 @@ let delegation = (
     }
     let eid = derivedEid(`child:${ctx.call.entity.eid}`)
     if (await row(g, eid)) return eid
+    // A fork is offered its parent's tools, so its cached prefix is the
+    // parent's, fork among them; one that forked again forked its task down
+    // a chain, each level saying it was on it (T-145495). Its answer is to do
+    // the task itself.
+    if (fork && !minted && (await row(g, ctx.session))?.fork) {
+      throw new ToolError(
+        'fork',
+        'You are a fork already: do this task here yourself, and give your report as your final reply.',
+      )
+    }
     return admit(g, ctx.session, limits, async () => {
       // A concurrent replay may have waited behind the original admission.
       if (await row(g, eid)) return eid

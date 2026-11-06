@@ -1,7 +1,7 @@
 import { derivedEid } from '@yaks/graph/identity'
 // SQLite/runner integration tests; the fast-tier runner does not collect
 // packages. Deferred fake replies exercise concurrency without network calls.
-import { test } from '@yaks/testing'
+import { test, until } from '@yaks/testing'
 import { assert, assertEquals, assertRejects } from '@std/assert'
 import type { Bundle, Comp } from '@yaks/graph'
 import type { Model, Reply, Request } from '@yaks/model'
@@ -458,5 +458,38 @@ test('a fork reports once, after the helpers its helper started, however deep', 
   await a.idle(parent)
   let told = (await a.transcript(parent)).filter((b) => b.delivery)
   assertEquals(told.map((b) => textOf(b).split('\n').at(-1)), ['fork final'])
+  await a.close()
+})
+
+test('a fork that forks again is told to do the task itself, and starts no child', async () => {
+  let said = (req: Request, text: string) =>
+    req.items.some((i) => i.kind == 'user' && i.text.endsWith(text))
+  let ran = (req: Request, id: string) =>
+    req.items.some((i) => i.kind == 'result' && i.id == id)
+  let model: Model = (req) => {
+    if (said(req, 'fork work')) {
+      return Promise.resolve(
+        ran(req, 'again')
+          ? reply('fork final')
+          : call('fork', { prompt: 'fork work' }, 'again'),
+      )
+    }
+    if (ran(req, 'f')) return Promise.resolve(reply('parent reacted'))
+    return Promise.resolve(call('fork', { prompt: 'fork work' }, 'f'))
+  }
+  let h = await harness()
+  let a = await local({ h, model, tools: sessionTools(h.g) })
+  let parent = await a.start('parent')
+  let [fork] = await until(async () => {
+    let c = await a.children(parent)
+    return c.length ? c : null
+  })
+  await a.idle(fork.entity.eid)
+  await a.idle(parent)
+  assertEquals(await a.children(fork.entity.eid), [])
+  let told = (await a.transcript(fork.entity.eid))
+    .filter((b) => b.result)
+    .map(textOf)
+  assertEquals(told.some((t) => t.includes('You are a fork already')), true)
   await a.close()
 })
