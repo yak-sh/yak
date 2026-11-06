@@ -217,7 +217,11 @@ export let queueing = (
   vocab: Vocab,
   options: Door,
   write: (bundles: Bundle[]) => unknown,
-) => {
+): (
+  moved: Iterable<string>,
+  now?: string,
+  daily?: boolean,
+) => Promise<void> => {
   let reads = held(graph, vocab)
   let owed = true
   let wrote: string[] = []
