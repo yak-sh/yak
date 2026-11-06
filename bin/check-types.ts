@@ -484,7 +484,7 @@ let program = async (on: Platform, roots: string[], snapshot?: Survey) => {
           [...roots, ...docs],
           Object.values(MADE).flat(),
         ) ??
-          await remembered(resolve)([...roots, ...docs]))(),
+          await remembered(resolve)([...roots, ...docs], snapshot?.bytes))(),
       on.globals(),
     ])
     if (!found) throw new Error('Cannot resolve source types')
@@ -501,7 +501,7 @@ let program = async (on: Platform, roots: string[], snapshot?: Survey) => {
       roots,
       docs,
       platform,
-      (path) => snapshot?.of(path) ?? digest(path),
+      snapshot?.bytes ?? digest,
     )
     let kept = passed(TYPED)
     let open = roots.filter((r) => !(proven.get(r)! in kept))

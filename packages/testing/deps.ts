@@ -474,6 +474,9 @@ export type Survey = {
   // Exact resolution metadata from this snapshot. Inputs regenerated after
   // it was taken must still hold; unknown roots need a fresh resolution.
   info: (roots: string[], refreshed?: string[]) => Promise<Info | undefined>
+  // What a path holds as the survey read it (`digest`), read now if it
+  // never did.
+  bytes: Bytes
   of: (path: string, runtime?: boolean) => Promise<string>
   loads: (path: string) => Promise<string>
   next: (path: string, runtime?: boolean) => string[]
@@ -682,6 +685,8 @@ export let survey = async (
         npmPackages: found.npmPackages,
       }
     },
+    bytes: (path) =>
+      fact(path).then((f) => f.digest == 'place' ? digest(path) : f.digest),
     of: (path, run = false) => {
       let key = `${run} ${path}`
       if (!held.has(key)) {
