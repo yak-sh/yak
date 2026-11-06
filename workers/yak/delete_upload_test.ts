@@ -132,12 +132,15 @@ let read = (q: string) =>
 let served = async (upload: { sha: string; eid: string }, of = app) =>
   (await servable(read, of, upload.sha, upload.eid))?.address ?? null
 
-test('a stranger cannot delete someone else’s upload', () => {
-  let patch = signed([{ entity: { eid: cake.sha }, $delete: true } as Bundle], {
+let forbidden = signed(
+  [{ entity: { eid: cake.sha }, $delete: true } as Bundle],
+  {
     by: STRANGER,
-  })
+  },
+)
+test('a stranger cannot delete someone else’s upload', () => {
   assertThrows(
-    () => rows.tx((tx) => guard.hooks!.precondition!(patch, tx)),
+    () => rows.tx((tx) => guard.hooks!.precondition!(forbidden, tx)),
     Denied,
   )
   assertEquals(held(cake), [cake.sha])
