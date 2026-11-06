@@ -84,6 +84,13 @@ export let bundle = async (root: string, output: string, meta: string) => {
       external: native,
       plugins: [{
         name: 'source-maps',
+        // esbuild just wrote every chunk a chunk imports. Rollup's own
+        // resolver reads the chunk's whole directory for each import to check
+        // its case, which was most of this pass.
+        resolveId: (source, importer) =>
+          importer && source.startsWith('.')
+            ? resolve(dirname(importer), source)
+            : null,
         load(id) {
           return {
             code: io.readTextFileSync(id),

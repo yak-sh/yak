@@ -892,7 +892,9 @@ export let prepareSibling = async (
     let digest = siblingDigest(
       JSON.stringify({
         config: io.readTextFileSync(join(root, config)),
-        wrangler: WRANGLER,
+        // The pin, not where this checkout installed it: every worktree's
+        // deploy of the same inputs finds the same upload already serving.
+        wrangler: WRANGLER_VERSION,
         // Flags can override config bindings too; the commit annotation alone
         // changes on every push and is not part of the serving code.
         args: args.filter((arg, i) =>
