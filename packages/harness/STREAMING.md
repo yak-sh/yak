@@ -36,11 +36,12 @@ asks the model to continue from its saved transcript and inspect state before
 repeating an action that may have completed.
 
 Each text item starts with a durable identity and empty body. The body is live
-until a checkpoint or finalization. Checkpoints occur on the next delta after 2
-seconds have elapsed (`agent({checkpointMs})`, zero disables checkpoints). They
-write complete current text through existing blob storage; appends do not create
-blob versions. A crash can lose the tail after the last checkpoint. There is no
-timer-based checkpoint while the provider is silent.
+until a checkpoint or finalization. A checkpoint stores what streamed within 250
+ms of it arriving (`agent({checkpointMs})`), though the provider fall silent;
+zero stores it only at the end. Checkpoints write complete current text through
+existing blob storage; appends do not create blob versions. A host is told each
+piece (`agent({typed})`) only once a checkpoint has stored it, so what a page
+shows of a reply is what a crash or a deploy's reset leaves.
 
 Success patches the original ask to `completed` and updates the same response
 entries; it does not append duplicate final messages. Operational interruption

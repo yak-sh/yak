@@ -1,4 +1,4 @@
-import { test } from '@yaks/testing'
+import { test, until } from '@yaks/testing'
 import { assertEquals, assertStringIncludes } from '@std/assert'
 import type { Item, Model, Request } from '@yaks/model'
 import { comp } from '../../packages/graph/testing.ts'
@@ -461,31 +461,79 @@ test('Stop ends the run at once with one answer, and new words reopen the sessio
   assertEquals(again.text, 'Picked up again.')
 })
 
-// A reply streamed: its host is told each piece, for the page watching.
-let pieces: [string, string][] = []
-let writer = operate(
-  operatorMemory(),
-  roundsPlatform,
-  {
-    ...operatorModel((req) => {
-      for (let text of ['Posting ', 'it now.']) req.onText?.({ index: 0, text })
-      return Promise.resolve({
-        id: crypto.randomUUID(),
-        model: req.model,
-        items: [{ kind: 'assistant', text: 'Posting it now.' }],
-        cost: 0.001,
-      })
-    }),
-    typing: (session, text) => void pieces.push([session, text]),
-  },
-)
+// A reply streamed: its host is told each piece once the transcript keeps it,
+// so what a page shows of a reply is what survives the object.
+let pieces: [string, string][] = [], kept: unknown[] = []
+let streamed = operatorMemory()
+let keeping = async (call?: string) => {
+  let [line] = await streamed.g.read(`.output.source=${call}&*`, {
+    durable: true,
+  })
+  kept.push(comp(line, 'content')?.body)
+}
+let writer = operate(streamed, roundsPlatform, {
+  ...operatorModel(async (req) => {
+    req.onText?.({ index: 0, text: 'Posting ' })
+    await until(() => pieces.length == 1)
+    await keeping(req.call)
+    req.onText?.({ index: 0, text: 'it now.' })
+    await until(() => pieces.length == 2)
+    await keeping(req.call)
+    return {
+      id: crypto.randomUUID(),
+      model: req.model,
+      items: [{ kind: 'assistant', text: 'Posting it now.' }],
+      cost: 0.001,
+    }
+  }),
+  typing: (session, text) => void pieces.push([session, text]),
+})
 let written = await writer.run(roundsHeld, roundsSpace, { say: 'Post it.' })
-test('the Operator tells its host each piece of a reply as the model writes it', () => {
+test('the Operator tells its host each piece of a reply once it is stored', () => {
   assertEquals(pieces, [[written.session, 'Posting '], [
     written.session,
     'it now.',
   ]])
+  assertEquals(kept, ['Posting ', 'Posting it now.'])
   assertEquals(written.text, 'Posting it now.')
+})
+
+// A deploy resets the object under a reply: the next incarnation, over the
+// same rows, keeps what was shown and takes the turn up again.
+let shown: string[] = []
+let resetting = operatorMemory()
+let dying = operate(resetting, roundsPlatform, {
+  ...operatorModel((req) => {
+    req.onText?.({ index: 0, text: 'Got it, ' })
+    // Never answered: the object it was asked from is gone.
+    return new Promise(() => {})
+  }),
+  typing: (_, text) => void shown.push(text),
+})
+let cut = await dying.ask(roundsHeld, roundsSpace, { say: 'Set the icon.' })
+void drain(resetting)
+await until(() => shown.length)
+let incarnation = operatorMemory(resetting.storage)
+operate(
+  incarnation,
+  roundsPlatform,
+  operatorModel((req) =>
+    Promise.resolve({
+      id: crypto.randomUUID(),
+      model: req.model,
+      items: [{ kind: 'assistant', text: 'The icon is set.' }],
+      cost: 0.001,
+    })
+  ),
+)
+await drain(incarnation)
+let resumed = (await incarnation.g.read(`.entry.session=${cut.session}&*`, {
+  durable: true,
+})).map((b) => comp(b, 'content')?.body).filter(Boolean)
+test('a reply a reset cut off keeps the words it showed, and its turn is taken up again', () => {
+  assertEquals(shown, ['Got it, '])
+  assertEquals(resumed.includes('Got it, '), true)
+  assertEquals(resumed.at(-1), 'The icon is set.')
 })
 
 // A call's words ask for the model the Operator answers calls with, and the

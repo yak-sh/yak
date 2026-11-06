@@ -583,6 +583,10 @@ export class Builder {
           ).catch((e) => caught(e, { request: 'operator call' })),
       })
       handleChannels(operator, this.#env)
+      // An incarnation takes up what the one before it left: a step a deploy
+      // reset under its reply runs again at once, on the first request (a page
+      // reconnecting) rather than whenever the person next says something.
+      this.#arming = this.#ctx.storage.setAlarm(Date.now())
       return operator
     })()
   }

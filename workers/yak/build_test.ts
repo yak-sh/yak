@@ -324,3 +324,17 @@ test('the door refuses a stranger before it reaches the object', async () => {
   assertEquals(said.error.code, 'not_a_writer')
   assertEquals(said.error.message, NOBODY)
 })
+
+test('an object arms its alarm as it first serves its Operator, so a step a deploy reset runs again at once', async () => {
+  let o = await seeded()
+  let before = await o.ctx.storage.getAlarm()
+  let read = await o.object.fetch(
+    new Request('https://builder/operator/conversation', {
+      method: 'POST',
+      headers: { 'x-space-eid': o.space.eid, 'x-yak-person': ADA },
+      body: '{}',
+    }),
+  )
+  await read.body?.cancel()
+  assertEquals([before, (await o.ctx.storage.getAlarm()) != null], [null, true])
+})

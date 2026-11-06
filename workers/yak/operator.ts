@@ -113,7 +113,7 @@ export type Options = {
   // Told each time a session moved (a step landed, words were given), so a
   // page watching it hears at once (the Builder object's socket).
   tell?: (session: string) => void
-  // Told each piece of a reply as the model writes it.
+  // Told each piece of a reply as the model writes it, once it is stored.
   typing?: (session: string, text: string) => void
   // Told when a model's step ends, its words written (before a tool call it
   // asked for, or its answer).
@@ -839,7 +839,6 @@ export let operating = (
     // the default (`operator{cache_retention}`).
     let kept = space ? (await dir().at(space))?.cache_retention : undefined
     let session = comp(ask, 'entry')?.session
-    let heard = req.onText
     let reply = await accounted(
       env,
       (dir) => space ? dir.at(space) : Promise.resolve(null),
@@ -856,16 +855,8 @@ export let operating = (
         reached('first_token', null)
         req.onFirst?.()
       },
-      ...heard
-        ? {
-          onText: (delta) => {
-            heard(delta)
-            if (session) options.typing?.(String(session), delta.text)
-          },
-        }
-        : {},
     }).finally(() => asked(session ? String(session) : undefined))
-    if (session && heard) options.stepped?.(String(session))
+    if (session && req.onText) options.stepped?.(String(session))
     let cost = billed(reply, price)
     return { ...reply, cost: cost?.dollars, costReported: cost?.reported }
   }, base)
@@ -1054,8 +1045,10 @@ export let operating = (
       model,
       name,
       provider,
-      // Its text is shown as it is written (@yaks/session run.ts `step`).
+      // Its text is shown as it is written, once it is stored, so a reset
+      // under a reply takes back none of what a person saw.
       streaming: true,
+      typed: options.typing,
       context: shown,
       // The conversation forks for its work.
       tools: sessionTools(g).filter((t) => t.name == 'fork'),

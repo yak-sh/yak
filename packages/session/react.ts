@@ -235,8 +235,12 @@ export type Deps = {
    * ({@link PATIENCE} where absent). */
   patience?: number
   streaming?: boolean
-  /** Minimum interval between durable stream checkpoints; zero disables. */
+  /** How long streamed text may stand unstored ({@link CHECKPOINT} where
+   * absent); zero stores it only when the reply ends. */
   checkpointMs?: number
+  /** Each piece of streamed text, once it is stored: what a page shows of a
+   * reply being written is never more than what survives the process. */
+  typed?: (session: Eid, text: string) => void
   /** The pooled run taking this step (@yaks/effects): a model request the
    * provider failed but may yet answer is recorded and thrown, for the pool to
    * ask again after its backoff, unless this attempt is the run's last. A step
@@ -310,8 +314,15 @@ type Streams = Map<
   {
     entry: Bundle
     writer: Awaited<ReturnType<ReturnType<typeof transient>['begin']>>
+    /** the text streamed so far, and how much of it has been stored */
+    text: string
+    stored: number
   }
 >
+
+/** How long streamed text stands unstored, at most: a process reset under a
+ * reply (a deploy) loses no more than this of it. */
+export let CHECKPOINT = 250
 
 /** What one step did. */
 export type Step = {
@@ -1628,12 +1639,30 @@ export let react = async (
   })
   const stream: Streams = new Map()
   let tail = Promise.resolve(), streamFailure: unknown
-  let accepting = true, checkpointAt = Date.now(), pendingDeltas = 0
-  const checkpointMs = deps.checkpointMs ?? 2000
+  let accepting = true, pendingDeltas = 0
+  let due: ReturnType<typeof setTimeout> | undefined
+  const checkpointMs = deps.checkpointMs ?? CHECKPOINT
   const enqueue = (work: () => Promise<void>) => {
     tail = tail.then(work).catch((e) => {
       streamFailure ??= e
     })
+  }
+  // Streamed text is stored within checkpointMs of arriving, though the
+  // provider fall silent, and only stored text is told: words a person saw
+  // are words the transcript keeps.
+  const store = async () => {
+    due = undefined
+    for (const item of stream.values()) {
+      if (item.stored == item.text.length) continue
+      await item.writer.checkpoint()
+      deps.typed?.(session, item.text.slice(item.stored))
+      item.stored = item.text.length
+    }
+  }
+  const ending = async () => {
+    accepting = false
+    clearTimeout(due)
+    await tail
   }
   // Graceful stop closes admission, not a request already admitted below.
   if (deps.stopping?.aborted) return nothing
@@ -1689,14 +1718,18 @@ export let react = async (
               'body',
               entry.entity.eid,
             ),
+            text: '',
+            stored: 0,
           }
           stream.set(key, active)
         }
         pendingDeltas--
         active.writer.append(text)
-        if (checkpointMs > 0 && Date.now() - checkpointAt >= checkpointMs) {
-          for (const item of stream.values()) await item.writer.checkpoint()
-          checkpointAt = Date.now()
+        active.text += text
+        if (checkpointMs > 0 && !due && accepting) {
+          due = setTimeout(() => {
+            if (accepting) enqueue(store)
+          }, checkpointMs)
         }
       })
     }
@@ -1729,15 +1762,13 @@ export let react = async (
     }
     requestedAt = Date.now()
     reply = await providerModel(req)
-    accepting = false
-    await tail
+    await ending()
     if (streamFailure) throw streamFailure
   } catch (error) {
     if (executor) throw error
     let e = error
     let phase = 'model'
-    accepting = false
-    await tail
+    await ending()
     let text = e instanceof ModelError
       ? e.message + '\n' + (e.response?.body ?? '')
       : ''

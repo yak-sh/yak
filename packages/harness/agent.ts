@@ -192,6 +192,9 @@ export type Opts<H extends Host = Host> = ChildLimits & {
   named?: () => Tool[]
   streaming?: boolean
   checkpointMs?: number
+  /** each piece of a streamed reply, once it is stored (@yaks/session
+   * `Deps.typed`) */
+  typed?: (session: Eid, text: string) => void
   /** The system prompt every ask carries, or what reads each transcript's:
    * read again for every ask, so what it reads (a name, the apps in reach)
    * is current in a transcript that runs for weeks. */
@@ -527,6 +530,7 @@ export let lend = <H extends Host>(opts: Opts<H>): Runner => {
     },
     streaming: opts.streaming,
     checkpointMs: opts.checkpointMs,
+    typed: opts.typed,
     compactAt: opts.compactAt,
     instructions: typeof opts.instructions == 'string'
       ? opts.instructions
