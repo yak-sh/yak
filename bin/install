@@ -23,10 +23,14 @@ sqlite=$(deno run -A "$root/bin/sqlite.ts")
 mkdir -p "$bin"
 # The copied config a `deno install -g` of this CLI left behind.
 rm -rf "$bin/.yak"
+# A command checks node_modules against the lockfile only when the lockfile is
+# newer than pnpm's record of its last install, which the check moves forward
+# when they agree: otherwise every command would start a second Deno first.
 cat >"$bin/yak" <<EOF
 #!/bin/sh
 export DENO_SQLITE_PATH="\${DENO_SQLITE_PATH:-$sqlite}"
-deno run -q -A --config '$root/deno.json' '$root/bin/workspace-dependencies.ts' || exit \$?
+[ '$root/node_modules/.pnpm/lock.yaml' -nt '$root/pnpm-lock.yaml' ] ||
+  deno run -q -A --config '$root/deno.json' '$root/bin/workspace-dependencies.ts' || exit \$?
 exec deno run -q -A --unstable-no-legacy-abort --config '$root/deno.json' '$root/packages/cli/yak.ts' "\$@"
 EOF
 chmod +x "$bin/yak"

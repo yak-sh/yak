@@ -48,7 +48,15 @@ export let imports = (root: URL): Record<string, string> => {
 }
 
 let at = fileURLToPath(root).replace(/\/$/, '')
-if (import.meta.main && differs(text(wanted(at)), text(current(at)))) {
+let installed = import.meta.main ? text(current(at)) : undefined
+let agreed = !import.meta.main || !differs(text(wanted(at)), installed)
+// Agreeing, pnpm's record is made newer than the lockfile, so the `yak` shim
+// (bin/install) skips this check until the lockfile next changes.
+if (import.meta.main && agreed && installed !== undefined) {
+  let now = new Date()
+  Deno.utimeSync(current(at), now, now)
+}
+if (!agreed) {
   let config = await Deno.makeTempFile({ suffix: '.json' })
   try {
     await Deno.writeTextFile(config, JSON.stringify({ imports: imports(root) }))
