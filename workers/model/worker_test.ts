@@ -6,6 +6,7 @@ import {
   type Env,
   type FrozenRequest,
   host,
+  type Plugin,
   RELEASE,
   run,
   submit,
@@ -22,7 +23,7 @@ let fixture = () => {
   let record: FrozenRequest = {
     call: job.call,
     executor: RELEASE,
-    provider: { api: 'openrouter', key: 'sentinel' },
+    provider: { name: 'echo', key: 'sentinel', with: { tone: 'dry' } },
     request: { model: 'example', items: [], tools: [] },
   }
   let objects = new Map([[job.request, JSON.stringify(record)]])
@@ -128,7 +129,7 @@ test('exhausted Workflow recovery delivers and reports a terminal receipt', asyn
       name === 'generation'
         ? Promise.reject(Error('artifact storage unavailable'))
         : callback(),
-  })
+  }, [])
   equal(receipt, job.receipt)
   equal(completed, ['delivered', 'reported'])
   equal(objects.get(mediaKey), '{"complete":true,"id":"provider-result"}')
@@ -154,7 +155,7 @@ test('exhausted delivery reports its failure while retaining the complete answer
           : name === 'delivery'
           ? Promise.reject(Error('kernel unavailable'))
           : callback(),
-    }), 'kernel unavailable')
+    }, []), 'kernel unavailable')
   equal(reported, ['kernel unavailable'])
   equal(JSON.parse(objects.get(job.receipt)!), saved)
 })
@@ -165,7 +166,35 @@ test('the RPC submission result preserves a budget refusal as a local ModelError
     Promise.resolve({
       refused: { code: 'limit', reason: 'Account budget spent' },
     })
-  await throws(() => host(env).claim(job), /Account budget spent/)
+  await throws(() => host(env, []).claim(job), /Account budget spent/)
   env.KERNEL!.claim = () => Promise.resolve({ claimed: false })
-  equal(await host(env).claim(job), false)
+  equal(await host(env, []).claim(job), false)
+})
+
+test('a frozen call is served by the plugin serving its provider, lent its key and options', async () => {
+  let { env } = fixture()
+  env.KERNEL!.grants = () => Promise.resolve([])
+  let lent: unknown[] = []
+  let plugin = (name: string, options = {}): Plugin => ({
+    facet: {
+      providers: (l, given) => ({
+        [name]: Object.assign(async () => {
+          lent.push([name, await l.key(name), given])
+          return { id: 'r', model: 'example', items: [] }
+        }),
+      }),
+    },
+    with: options,
+  })
+  let model = await host(env, [
+    plugin('other'),
+    plugin('echo', { tone: 'wet', loud: true }),
+  ])
+    .model(job)
+  await model({ model: 'example', items: [], tools: [] })
+  equal(lent, [['echo', 'sentinel', { tone: 'dry', loud: true }]])
+  await throws(
+    () => host(env, [plugin('other')]).model(job),
+    'No provider echo',
+  )
 })

@@ -45,11 +45,13 @@ A provider is a plugin. Its package exports a `./provider` facet
 (`ProviderFacet`): `providers(lent, options)` returns the models it serves,
 keyed by the `provider.name` each serves under, built over what the host lends
 (`Lent`: the shared `fetch`, the person's sign-in `key` and `refresh` by
-integration, the artifact `store` and the host's `env`) and the plugin's options
-from the config. A host running conversations
-([@yaks/harness](../harness/README.md)) asks every plugin its config names, so a
-config serves exactly the providers it lists, and the host depends on none of
-them. [@yaks/openai](../openai/README.md),
+integration, the artifact `store`, the host's `env` and, where the host keeps
+them, the `receipts` an interrupted call is delivered from) and the plugin's
+options from the config. A host running conversations
+([@yaks/harness](../harness/README.md), the hosted model executor in
+workers/model) asks every plugin its config names, so a config serves exactly
+the providers it lists, and the host depends on none of them.
+[@yaks/openai](../openai/README.md),
 [@yaks/openrouter](../openrouter/README.md),
 [@yaks/anthropic](../anthropic/README.md) and
 [@yaks/claude](../claude/README.md) each export one.

@@ -48,6 +48,7 @@ import {
   run as infer,
   submit,
 } from '../model/worker.ts'
+import { plugins } from '../model/config.ts'
 import type { Inference } from '@yaks/model'
 
 // The fixture space's month, set by the platform, and no starter: each case
@@ -237,7 +238,12 @@ let hosted = async () => {
         assertEquals(id, params.call)
         dispatched.push(params)
         workflows.push(
-          infer(executorEnv, params, { do: (_name, _config, run) => run() }),
+          infer(
+            executorEnv,
+            params,
+            { do: (_name, _config, run) => run() },
+            plugins,
+          ),
         )
         return Promise.resolve()
       },
@@ -317,7 +323,7 @@ test('an existing OpenRouter receipt delivers audio and settles once without gen
     call: callId,
     executor: job.executor,
     app: v.app.eid,
-    provider: { api: 'openrouter', key: 'existing-credential-sentinel' },
+    provider: { name: 'openrouter', key: 'existing-credential-sentinel' },
     request: { call: callId, model: SEED, items: [], tools: [] },
   }
   let artifact = await artifactStore(

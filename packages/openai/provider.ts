@@ -1,7 +1,9 @@
 // @yaks/openai as a provider a config names (@yaks/model `ProviderFacet`):
 // `openai`, signed in with an API key from the host's settings or the ChatGPT
 // grant in the person's OpenAI connection, generating images into the host's
-// artifact store and searching the web. Its transport loads on the first ask.
+// artifact store and searching the web. A config may aim it at another
+// OpenAI-compatible endpoint instead (`base`, such as an AI Gateway's). Its
+// transport loads on the first ask.
 
 import { Refused } from '@yaks/graph/errors'
 import {
@@ -51,6 +53,17 @@ export let signedIn = (
   }
 }
 
+// How a configured endpoint is opened (Options `base`).
+let opened = (
+  lent: Pick<Lent, 'env' | 'key'>,
+  base: string,
+): Pick<SignedIn, 'credential'> => ({
+  credential: async () => ({
+    token: fromEnv(lent.env)?.token ?? await lent.key('openai') ?? '',
+    base: base.replace(/\/+$/, ''),
+  }),
+})
+
 /** The image tool's settings, or `false` for none. */
 export type ImageOptions = { tool?: ImageGeneration; maxBytes?: number }
 
@@ -60,6 +73,12 @@ export type Options = {
   images?: ImageOptions | false
   /** offer hosted web search (default on, unless `HARNESS_WEB=0`) */
   web?: boolean
+  /** an OpenAI-compatible endpoint to call instead of OpenAI's own, opened
+   * by `OPENAI_API_KEY`, else the lent `openai` key, else by nothing, which
+   * leaves the endpoint to authenticate the call (an AI Gateway's own key) */
+  base?: string
+  /** headers every request carries (an AI Gateway's `cf-aig-authorization`) */
+  headers?: Record<string, string>
 }
 
 /** Explicit options override the setting; otherwise images are on. */
@@ -92,11 +111,15 @@ export let providers = (
       () =>
         import('./responses.ts').then(({ responses }) =>
           responses({
-            ...signedIn(lent),
+            ...options.base
+              ? { ...opened(lent, options.base), authentication: 'optional' }
+              : signedIn(lent),
+            headers: options.headers,
             fetch: lent.fetch,
             redact: true,
             images,
             web: options.web ?? lent.env('HARNESS_WEB') != '0',
+            receipts: lent.receipts,
           })
         ),
       {

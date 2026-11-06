@@ -28,7 +28,13 @@ application.
   validation, and spent quota fail fast. A supplied Codex refresh runs once on
   401. Catalog error messages never repeat the provider's response body.
 - `openaiDoc` and `OPENAI_COMP` describe the `openai{response_id}` component.
-  `@yaks/openai/vocab` exports `openaiDoc` and `docs` for schema loading.
+- `./provider` is the plugin a config names (@yaks/model `ProviderFacet`): it
+  serves `openai`, signed in with `OPENAI_API_KEY` or the person's ChatGPT
+  grant. Its options turn `images` and `web` off, or aim it at another
+  OpenAI-compatible endpoint (`base`, with `headers` on every request), opened
+  by the API key or the lent `openai` key, or left to authenticate the call
+  itself as an AI Gateway with a stored key does. `@yaks/openai/vocab` exports
+  `openaiDoc` and `docs` for schema loading.
 
 ## Install
 

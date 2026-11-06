@@ -18,6 +18,7 @@ export let providers = (lent: Lent): Record<string, Model> => ({
         responses({
           fetch: lent.fetch,
           media: { store: lent.store },
+          receipts: lent.receipts,
           key: async () => {
             let key = await lent.key('openrouter')
             if (!key) {

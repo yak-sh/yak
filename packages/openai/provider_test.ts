@@ -81,3 +81,39 @@ test('image configuration defaults to enabled with explicit disable and override
   assertThrows(() => providers(lent({ env: setting })), Error, 'must be 0')
   providers(lent({ env: setting }), { images: false })
 })
+
+test('a configured endpoint is opened by the lent key, or by nothing, with its headers', async () => {
+  let sent = async (key: string | undefined) => {
+    let seen: Request[] = []
+    let model = providers(
+      lent({
+        key: () => Promise.resolve(key),
+        fetch: (input, init) => {
+          seen.push(new Request(input, init))
+          return Promise.resolve(Response.json({}, { status: 400 }))
+        },
+      }),
+      {
+        base: 'https://gateway.test/openai/',
+        headers: { 'cf-aig-authorization': 'Bearer aig' },
+        images: false,
+        web: false,
+      },
+    ).openai
+    await assertRejects(() =>
+      model({
+        model: 'gpt-x',
+        items: [{ kind: 'user', text: 'hi' }],
+        tools: [],
+      })
+    )
+    return seen.map((r) => [
+      r.url,
+      r.headers.get('authorization'),
+      r.headers.get('cf-aig-authorization'),
+    ])
+  }
+  let at = 'https://gateway.test/openai/responses'
+  assertEquals(await sent('sentinel'), [[at, 'Bearer sentinel', 'Bearer aig']])
+  assertEquals(await sent(undefined), [[at, null, 'Bearer aig']])
+})

@@ -5,7 +5,7 @@
 // never says where it runs, and the host never names a provider.
 
 import type { ArtifactStore } from '@yaks/blob'
-import type { Model } from './mod.ts'
+import type { MediaReceipts, Model } from './mod.ts'
 
 /** What a host lends the providers it composes. */
 export type Lent = {
@@ -19,6 +19,10 @@ export type Lent = {
   store: ArtifactStore
   /** the host's settings, `OPENAI_API_KEY` among them */
   env: (name: string) => string | undefined
+  /** where a call's private provider results are kept, so an interrupted
+   * call is delivered again without being bought again (a host that keeps
+   * none lends none) */
+  receipts?: MediaReceipts
 }
 
 /** A `./provider` facet: the models a plugin serves, keyed by the

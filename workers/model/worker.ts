@@ -1,5 +1,6 @@
-// The executor's service door and Workflow adapter. Providers, storage and
-// account authorization are lent here; generation policy lives in @yaks/model.
+// The executor's service door and Workflow adapter. Storage and account
+// authorization are lent here, and providers are the plugins its config names
+// (config.ts); generation policy lives in @yaks/model.
 import { type Bucket, objectBlobs } from '@yaks/blob'
 import { artifactStore } from '@yaks/blob/identify'
 import { type Grant, granted } from '@yaks/egress'
@@ -9,14 +10,14 @@ import {
   type Inference,
   type InferenceHost,
   type InferenceReceipt,
+  type Lent,
   type Mark,
   type MediaReceipt,
   type Model,
   ModelError,
+  type ProviderFacet,
   thawedRequest,
 } from '@yaks/model'
-import { responses as openai } from '@yaks/openai'
-import { responses as openrouter } from '@yaks/openrouter'
 
 export let RELEASE = 'yak-model-v1'
 
@@ -58,16 +59,21 @@ export type Env = {
   VERSION_METADATA?: { id: string; tag?: string; timestamp?: string }
 }
 
+/** A provider plugin the executor composes: its `./provider` facet and the
+ * options its config gives it. */
+export type Plugin = { facet: ProviderFacet; with?: Record<string, unknown> }
+
 /** Frozen private input contains sentinels, never provider credentials. Image
- * bytes use arrays so JSON preserves them across a Workflow restart. */
+ * bytes use arrays so JSON preserves them across a Workflow restart. The
+ * provider is named as it serves (`provider.name`), lent `key` as its key and
+ * given `with` over its configured options. */
 export type FrozenRequest = {
   call: string
   executor: string
   provider: {
-    api: 'openai' | 'openrouter'
+    name: string
     key: string
-    base?: string
-    headers?: Record<string, string>
+    with?: Record<string, unknown>
   }
   request: FrozenModelRequest
 }
@@ -130,7 +136,24 @@ export let submit = async (env: Env, job: Inference): Promise<void> => {
   }
 }
 
-export let host = (env: Env): InferenceHost => {
+// The model a frozen call names, from the first plugin serving it, lent this
+// call's grants, receipts and artifact store.
+let served = (
+  plugins: readonly Plugin[],
+  provider: FrozenRequest['provider'],
+  lent: Omit<Lent, 'key'>,
+): Model => {
+  for (let plugin of plugins) {
+    let model = plugin.facet.providers?.(
+      { ...lent, key: () => Promise.resolve(provider.key) },
+      { ...plugin.with, ...provider.with },
+    )[provider.name]
+    if (model) return model
+  }
+  throw new ModelError('inference_provider', 'No provider ' + provider.name)
+}
+
+export let host = (env: Env, plugins: readonly Plugin[]): InferenceHost => {
   let mediaKey = (job: Inference) =>
     `inference/${job.executor}/${job.call}/media`
   let media = (job: Inference) => ({
@@ -165,30 +188,12 @@ export let host = (env: Env): InferenceHost => {
           await kernel(env).grants(job),
           new Request(input, init),
         )
-      let options = {
+      return served(plugins, record.provider, {
         fetch: send,
+        refresh: () => Promise.resolve(undefined),
+        store: artifactStore(objectBlobs(env.RECEIPTS, 'artifacts/')),
+        env: () => undefined,
         receipts: media(job),
-        media: {
-          store: artifactStore(objectBlobs(env.RECEIPTS, 'artifacts/')),
-        },
-      }
-      if (record.provider.api === 'openrouter') {
-        return openrouter({ ...options, key: () => record.provider.key })
-      }
-      if (record.provider.api !== 'openai') {
-        throw new ModelError('inference_provider')
-      }
-      return openai({
-        ...options,
-        credential: () =>
-          Promise.resolve({
-            token: record.provider.key,
-            base: record.provider.base ?? 'https://api.openai.com/v1',
-          }),
-        headers: record.provider.headers,
-        authentication: 'optional',
-        store: false,
-        web: false,
       })
     },
   }
@@ -200,6 +205,7 @@ export let run = async (
   env: Env,
   job: Inference,
   step: Steps,
+  plugins: readonly Plugin[],
 ): Promise<string> => {
   validate(job)
   let retry = {
@@ -210,13 +216,13 @@ export let run = async (
     receipt = await step.do(
       'generation',
       { ...retry, timeout: 30 * 60 * 1000 },
-      () => infer(job, host(env)),
+      () => infer(job, host(env, plugins)),
     )
   } catch (error) {
     // Exhausted recovery must wake the original ask with a final outcome.
     // Provider/media evidence stays private and intact for later accounting.
     receipt = await step.do('interrupted receipt', retry, async () => {
-      let h = host(env)
+      let h = host(env, plugins)
       if (!await h.read(job)) {
         await h.save(job, {
           call: job.call,

@@ -80,9 +80,14 @@ For ask `a`, the `Inference` Workflow parameters are:
 ```
 
 The request object is `FrozenRequest` from `worker.ts`: the same `call` and
-`executor`, provider data (`api`, sentinel `key`, optional OpenAI `base` and
-`headers`), and a `frozenRequest` from `@yaks/model`. The kernel never replaces
-that object on retry. `ModelExecutor.submit` creates or finds the Workflow whose
+`executor`, the provider (the `name` it serves under, a sentinel `key` and the
+options `with` it is given for this call, such as OpenAI's `base` and
+`headers`), and a `frozenRequest` from `@yaks/model`. The executor names no
+provider itself: `config.ts` lists the provider plugins it composes, each a
+`./provider` facet (@yaks/model `ProviderFacet`), and the first serving the
+call's `name` makes its model, lent the call's grants as `fetch`, its media
+receipts and the executor's artifact store. The kernel never replaces that
+object on retry. `ModelExecutor.submit` creates or finds the Workflow whose
 instance id is the ask eid. `version` returns its executor release and Worker
 version metadata. The service has no public fetch door.
 

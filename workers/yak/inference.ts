@@ -144,25 +144,29 @@ let providerAt = async (
         'Connect OpenRouter to this app before asking its models',
       )
     }
-    return { api: provider, key: link.sentinels[KEY.name] }
+    return { name: provider, key: link.sentinels[KEY.name] }
   }
   return {
-    api: 'openai',
+    name: 'openai',
     key: at.env.OPENAI_API_KEY ? await platformSentinel(at.env, 'openai') : '',
-    base: await endpoint({
-      base: at.env.OPENAI_API,
-      gateway: at.env.AI_GATEWAY,
-      account: at.env.CF_ACCOUNT,
-      ai: at.env.AI,
-    }),
-    ...at.env.AI_GATEWAY_TOKEN
-      ? {
-        headers: {
-          'cf-aig-authorization': 'Bearer ' +
-            await platformSentinel(at.env, 'gateway'),
-        },
-      }
-      : {},
+    with: {
+      base: await endpoint({
+        base: at.env.OPENAI_API,
+        gateway: at.env.AI_GATEWAY,
+        account: at.env.CF_ACCOUNT,
+        ai: at.env.AI,
+      }),
+      ...at.env.AI_GATEWAY_TOKEN
+        ? {
+          headers: {
+            'cf-aig-authorization': 'Bearer ' +
+              await platformSentinel(at.env, 'gateway'),
+          },
+        }
+        : {},
+      web: false,
+      images: false,
+    },
   }
 }
 
@@ -379,21 +383,21 @@ export let hosting = (env: Bindings): Kernel => ({
   },
   checkpoint: async (job, mark) => {
     let { graph, frozen } = await authenticated(env, job)
-    if (Object.keys(mark).some((name) => name !== frozen.provider.api)) {
+    if (Object.keys(mark).some((name) => name !== frozen.provider.name)) {
       throw new ModelError('inference_mark')
     }
     await graph.apply([{ entity: { eid: job.call }, ...mark }])
   },
   grants: async (job): Promise<Grant[]> => {
     let { frozen } = await authenticated(env, job)
-    if (frozen.provider.api === 'openrouter') {
+    if (frozen.provider.name === 'openrouter') {
       return authorized(egressOf({ ...env, STORE: env.STORE! }, frozen.app), {
         app: frozen.app,
         person: null,
         level: 'owner',
       }, [frozen.provider.key])
     }
-    let hosts = [new URL(frozen.provider.base!).host]
+    let hosts = [new URL(String(frozen.provider.with?.base)).host]
     let values = [
       { name: 'openai', value: env.OPENAI_API_KEY },
       { name: 'gateway', value: env.AI_GATEWAY_TOKEN },

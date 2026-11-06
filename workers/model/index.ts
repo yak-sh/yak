@@ -3,13 +3,14 @@ import { WorkerEntrypoint, WorkflowEntrypoint } from 'cloudflare:workers'
 import type { Inference } from '@yaks/model'
 import { ModelError } from '@yaks/model'
 import { type Env, RELEASE, run, type Steps, submit } from './worker.ts'
+import { plugins } from './config.ts'
 
 export class InferenceWorkflow extends WorkflowEntrypoint<Env, Inference> {
   override run(event: { payload: Inference; instanceId: string }, step: Steps) {
     if (event.instanceId !== event.payload.call) {
       throw new ModelError('inference_identity')
     }
-    return run(this.env, event.payload, step)
+    return run(this.env, event.payload, step, plugins)
   }
 }
 
