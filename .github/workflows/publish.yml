@@ -35,6 +35,13 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      # bin/publish.ts imports workspace packages, which resolve through
+      # node_modules: each member's name and exports live in its package.json.
+      - uses: pnpm/action-setup@v4
+
+      - name: workspace dependencies
+        run: deno run -A packages/cli/dependencies.ts
+
       - name: are the packages linked on jsr.io yet
         id: linked
         run: |
