@@ -830,6 +830,26 @@ export type ReadCache = {
   ) => Row[]
 }
 
+/** The eids, of `eids`, whose entities a scope's `screen` admits. Each
+ * requested row is tested against the screen by its id, so the statement reads
+ * the rows asked about and never lists everything the scope sees: `id in
+ * (screen)` builds that list on every call, at the cost of a scan. */
+export let admitted = (eids: string[], screen: Raw | null): Select =>
+  select({
+    cols: [col('eid', '__requested')],
+    from: table('entity', '__requested'),
+    where: and(
+      oneOf(col('eid', '__requested'), eids),
+      screen
+        ? exists(select({
+          cols: [lit(1)],
+          from: from(screen, '__allowed'),
+          where: eq(col('id', '__allowed'), col('id', '__requested')),
+        }))
+        : lit(true),
+    ),
+  })
+
 export let get = (
   driver: Driver,
   vocab: Vocab,
@@ -872,23 +892,13 @@ export let get = (
         for (let eid of ids) out.add(eid)
         return out
       }
-      let run = () => {
-        let screen = sourceScreen(vocab, { ...opts, graves: true }, components)
-        return driver.query(select({
-          cols: [col('eid', '__requested')],
-          from: table('entity', '__requested'),
-          where: and(
-            oneOf(col('eid', '__requested'), ids),
-            screen
-              ? exists(select({
-                cols: [lit(1)],
-                from: from(screen, '__allowed'),
-                where: eq(col('id', '__allowed'), col('id', '__requested')),
-              }))
-              : lit(true),
+      let run = () =>
+        driver.query(
+          admitted(
+            ids,
+            sourceScreen(vocab, { ...opts, graves: true }, components),
           ),
-        }))
-      }
+        )
       for (
         let r of cache ? cache.permit(ids, components, run, true) : run()
       ) {
@@ -896,17 +906,16 @@ export let get = (
       }
       return out
     }
-    let allowed = permitted(eids)
+    // The payload cache answers first, so only what is there is put to the
+    // scope: an id no entity has (most an address asks about, @yaks/alias)
+    // costs no screen.
+    let held = cache?.fetch(eids, comps)
+    let allowed = permitted(held ? held.map((b) => b.entity.eid) : eids)
     let ids = eids.filter((eid) => allowed.has(eid))
     let scoped = () => ({ ...plain, derived: visibleDerived(vocab, opts) })
-    let found = cache ? cache.fetch(ids, comps) : get(
-      driver,
-      vocab,
-      ids,
-      scoped(),
-      comps,
-      unclassified,
-    )
+    let found = held
+      ? held.filter((b) => allowed.has(b.entity.eid))
+      : get(driver, vocab, ids, scoped(), comps, unclassified)
     if (cache) {
       // The payload cache holds authoritative rows. Every derived component
       // is read again through scoped sources before the payload is exposed.

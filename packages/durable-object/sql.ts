@@ -21,7 +21,7 @@ import {
   type Driver,
   fn,
   type Param,
-  render,
+  renderStable,
   type Row,
   select,
   shape,
@@ -143,7 +143,10 @@ export let driver = (
   let reported = false
   // The cursor is lazy: draining it is what runs the statement.
   let execute = (s: Stmt): Row[] => {
-    let rendered = render(s)
+    // Workerd keeps each prepared statement by its text (SqlStorage's
+    // StatementCache), so every collection binds as one JSON array: a read's
+    // text is the same whatever ids it names, and is prepared once.
+    let rendered = renderStable(s)
     let { sql, params } = rendered
     let cursor: SqlCursor<Row> | undefined
     try {
@@ -211,6 +214,7 @@ export let driver = (
         : 0
     },
     tx: (body) => durable.transactionSync(body),
+    stable: true,
     statistics: durable.sql.databaseSize == null
       ? undefined
       : { bytes: () => durable.sql.databaseSize! },

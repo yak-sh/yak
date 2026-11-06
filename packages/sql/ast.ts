@@ -568,7 +568,8 @@ export let array = (list: readonly Param[]): Query =>
 
 /** A collection as a query with one `value` column, written the way its host
  * reads one cheapest. A bounded collection is literal VALUES, costing a
- * Durable Object no virtual rows, and any other is an {@link array},
+ * host that bills rows read (D1) no virtual rows, and any other is an
+ * {@link array},
  * respecting a host's bound-parameter ceiling. A host that keeps prepared
  * statements by their text renders with `renderStable`, and every collection
  * is an array: written out, each different set of members is a statement to

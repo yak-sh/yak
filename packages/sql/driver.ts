@@ -67,8 +67,10 @@ export type Driver = {
    * collection as one JSON array (`renderStable`): a list in a compiled read
    * binds that way too, so the read's text is the same whatever the list
    * holds, and is prepared once. A driver that leaves it out takes lists
-   * written into the text, which an engine billing each row read (a Durable
-   * Object) tests a row against without reading any (@yaks/sql `spelled`).
+   * written into the text, which an engine billing each row read (D1) tests
+   * a row against without reading any (@yaks/sql `spelled`). A Durable Object
+   * keeps statements by their text too: a cold burst of distinct reads would
+   * prepare one statement each, which costs it more than the rows.
    */
   stable?: boolean
   /**

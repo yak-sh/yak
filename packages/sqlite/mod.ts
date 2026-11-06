@@ -44,21 +44,15 @@ import type { Vocab } from '@yaks/vocab'
 import { type And, bare, type Clause } from '@yaks/query'
 import { type Filter, filter } from '@yaks/match'
 import {
-  among,
-  and,
   type BindOpts,
-  col,
   type Driver,
   erect,
   idOf,
   literals,
-  oneOf,
   type Raw,
   type Row,
-  select,
   sourceScreen,
   type Stmt,
-  table,
   worn,
 } from '@yaks/sql'
 import type {
@@ -94,7 +88,15 @@ import {
   meta,
   SCHEMA,
 } from './meta.ts'
-import { ast, get, read, type ReadCache, rows, screened } from './read.ts'
+import {
+  admitted,
+  ast,
+  get,
+  read,
+  type ReadCache,
+  rows,
+  screened,
+} from './read.ts'
 import { doom } from './doom.ts'
 import { unit, unwaiting } from './unit.ts'
 import { busy } from './error.ts'
@@ -689,17 +691,18 @@ export let storage = (
     let eids = [...operands]
     // A deleted entity the scope sees is admitted too, so its history is
     // asked by its id (@yaks/sql `ghostly`).
-    let allowed = reading(o).permit(eids, [], () => {
-      let screen = sourceScreen(vocab, { ...opts(), ...o, graves: true })!
-      return driver.query(select({
-        cols: [col('eid', '__target')],
-        from: table('entity', '__target'),
-        where: and(
-          oneOf(col('eid', '__target'), eids),
-          among(col('id', '__target'), screen),
+    let allowed = reading(o).permit(
+      eids,
+      [],
+      () =>
+        driver.query(
+          admitted(
+            eids,
+            sourceScreen(vocab, { ...opts(), ...o, graves: true }),
+          ),
         ),
-      }))
-    }, true)
+      true,
+    )
     let ids = spines(driver, allowed.map((r) => String(r.eid)))
     return Object.fromEntries(
       eids.map((eid) => [eid, ids.get(eid)?.id ?? null]),
