@@ -8,7 +8,7 @@ export let endpoints = (host: { fetch: typeof fetch }) => {
   let routed: typeof fetch = (input, init) => {
     let request = new Request(input, init)
     let route = routes.get(new URL(request.url).origin)
-    return route ? Promise.resolve(route(request)) : outside(input, init)
+    return route ? Promise.resolve(route(request)) : outside(request)
   }
   let open = (handler: Handler) => {
     if (!routes.size) {

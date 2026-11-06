@@ -293,6 +293,15 @@ export type Env = {
   // domain (index.ts serves it at /.well-known/openai-apps-challenge). A
   // secret so the open-source repo carries no token; unset, that path 404s.
   OPENAI_APPS_CHALLENGE?: string
+  // Meta's Conversions API (meta-ads.ts): the dataset a page seen and a
+  // sign-up its ad's click brought are sent to, the token for that dataset
+  // alone (a secret), and, while set, the Events Manager test code that files
+  // them as test events. Without the dataset and token Meta is told nothing.
+  META_DATASET?: string
+  META_CONVERSIONS_TOKEN?: string
+  META_TEST_CODE?: string
+  // Where they are sent, when a probe aims them away from Meta.
+  META_API?: string
   // A part split into its own Worker, when it has been; absent, in-process.
   IDENTITY?: Fetcher
   MCP?: Fetcher

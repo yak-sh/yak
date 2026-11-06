@@ -200,6 +200,7 @@ import {
 import { WHO } from './signed.ts'
 import { background, caught, refusing } from './defects.ts'
 import { step } from './funnel.ts'
+import * as ads from './ads.ts'
 import { sha256 } from '@yaks/graph/sha256'
 import { consentEid, shown } from '@yaks/phone'
 import { credit } from './referral.ts'
@@ -777,7 +778,10 @@ let landed = async (
       signed_in: { at: new Date().toISOString(), via },
     }], KERNEL)
     step(env, 'signed_in', req)
-    if (!row?.signed_in) step(env, 'signup', req)
+    if (!row?.signed_in) {
+      step(env, 'signup', req)
+      ads.after(env, 'signup', req)
+    }
   }
   await claimed(req, env, person)
   let set = await minted(req, env, secret(env), person)

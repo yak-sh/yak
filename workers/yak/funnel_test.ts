@@ -13,19 +13,37 @@ let visit = (ua = BROWSER, path = '/') =>
     headers: { 'user-agent': ua, referer: 'https://news.example.com/item?q=1' },
   })
 
-test('a step is written under the platform, saying what a view says and no more', () => {
+test('a step is written under the platform, saying what a view says and its campaign', () => {
   let views = dataset()
   step({ VIEWS: views }, 'code_sent', visit())
   step({ VIEWS: views }, 'returned')
+  step(
+    { VIEWS: views },
+    'home',
+    visit(BROWSER, '/?utm_source=meta&utm_campaign=pilot'),
+  )
   assertEquals(views.points, [
     {
       indexes: [FUNNEL],
-      blobs: ['', 'code_sent', '/', '', 'news.example.com', 'browser'],
+      blobs: ['', 'code_sent', '/', '', 'news.example.com', 'browser', ''],
       doubles: [0],
     },
     {
       indexes: [FUNNEL],
-      blobs: ['', 'returned', '', '', '', ''],
+      blobs: ['', 'returned', '', '', '', '', ''],
+      doubles: [0],
+    },
+    {
+      indexes: [FUNNEL],
+      blobs: [
+        '',
+        'home',
+        '/',
+        '',
+        'news.example.com',
+        'browser',
+        'meta//pilot',
+      ],
       doubles: [0],
     },
   ])
@@ -43,6 +61,11 @@ test('the funnel reads each step, a share of the one it follows, and where visit
   let sql = analytics((q) =>
     q.includes("blob2 = 'home'")
       ? [{ site: 'news.example.com', n: 3 }]
+      : q.includes('blob7')
+      ? [
+        { campaign: 'meta//pilot', step: 'home', n: 9 },
+        { campaign: 'meta//pilot', step: 'signup', n: '2' },
+      ]
       : [{ step: 'home', n: 40 }, { step: 'code_sent', n: '10' }]
   )
   try {
@@ -55,6 +78,7 @@ test('the funnel reads each step, a share of the one it follows, and where visit
     // A share of a step nobody took is no share at all.
     assertEquals(of.signup, { name: 'signup', say: 'First sign-ins', n: 0 })
     assertEquals(f.from, [{ site: 'news.example.com', n: 3 }])
+    assertEquals(f.campaigns, [{ campaign: 'meta//pilot', home: 9, signup: 2 }])
     assertEquals(
       sql.asked.every((q) => q.includes(`index1 = '${FUNNEL}'`)),
       true,

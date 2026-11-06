@@ -55,6 +55,7 @@ export let PATH = 'blob3'
 export let COUNTRY = 'blob4'
 export let FROM = 'blob5'
 export let CLIENT = 'blob6'
+export let CAMPAIGN = 'blob7'
 
 /** One page view's identity: which app it was a page of, and the address it
  * was served under. The eid is the data point's one index, so every query

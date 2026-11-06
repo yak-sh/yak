@@ -744,6 +744,17 @@ let funnelPage = (
           facts(f.from.map((r) => [r.site, String(r.n)])),
         )
         : null,
+      f.campaigns.length
+        ? h(
+          Fragment,
+          null,
+          h(Group, null, 'Came from campaigns'),
+          facts(f.campaigns.map((r) => [
+            r.campaign,
+            `${r.home} visits · ${r.signup} sign-ups`,
+          ])),
+        )
+        : null,
     )
   return desk(
     d,

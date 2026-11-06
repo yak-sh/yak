@@ -4,6 +4,7 @@ import { test } from '@yaks/testing'
 import { assertEquals, assertStringIncludes } from '@std/assert'
 import { type FrontEnv, serve, settled } from './front.ts'
 import { pageAt, SEEN } from '../kept-page.ts'
+import type { Conversion } from '../arrival.ts'
 
 let body = (claims: unknown) => `${btoa(JSON.stringify(claims))}.mac`
 let days = (n: number) => Date.now() / 1000 + n * 24 * 60 * 60
@@ -28,6 +29,7 @@ let page = (headers: Record<string, string> = {}) =>
 let front = (site: (req: Request) => Response | Promise<Response>) => {
   let asked: string[] = [], forwarded: Request[] = [], used: string[] = []
   let points: unknown[] = [], errors: unknown[] = [], retained: unknown[] = []
+  let told: Conversion[] = []
   let env: FrontEnv = {
     APEX: 'yaks.app',
     SITE: {
@@ -48,6 +50,12 @@ let front = (site: (req: Request) => Response | Promise<Response>) => {
         return Promise.resolve()
       },
     },
+    ADS: {
+      told: (c) => {
+        told.push(c)
+        return Promise.resolve()
+      },
+    },
     VIEWS: { writeDataPoint: (point) => points.push(point) },
     ERRORS: {
       send: ((rows: unknown) => {
@@ -60,7 +68,7 @@ let front = (site: (req: Request) => Response | Promise<Response>) => {
     serve(new Request(url, init), env, {
       waitUntil: (work) => retained.push(work),
     })
-  return { go, env, asked, forwarded, used, points, errors, retained }
+  return { go, env, asked, forwarded, used, points, errors, retained, told }
 }
 
 test('a kept page answers from the edge with no kernel, counted once', async () => {
@@ -219,6 +227,28 @@ test("the apex's listings come from Site, with their own lifetime", async () => 
     'public, max-age=30, must-revalidate',
   )
   assertEquals(res.headers.get('server-timing')!.includes('site_old'), false)
+})
+
+test("a listing an ad's click opened keeps its arrival and hands the kernel the view", async () => {
+  let home = () =>
+    new Response('home', { headers: { 'content-type': 'text/html' } })
+  let f = front(home)
+  let ua = { 'user-agent': 'Mozilla/5.0 (Macintosh) AppleWebKit Safari' }
+  let res = await f.go('https://yaks.app/?fbclid=Ab1&utm_source=meta', {
+    headers: ua,
+  })
+  assertEquals(await res.text(), 'home')
+  assertStringIncludes(res.headers.get('set-cookie')!, 'yak_came=fbclid=Ab1')
+  assertEquals(f.told.map((c) => [c.told, c.url]), [[
+    'view',
+    'https://yaks.app/',
+  ]])
+  assertEquals(f.retained.length, 1)
+  // A visit no ad sent keeps nothing and tells nobody.
+  let plain = front(home)
+  let none = await plain.go('https://yaks.app/', { headers: ua })
+  assertEquals(none.headers.get('set-cookie'), null)
+  assertEquals(plain.told, [])
 })
 
 test('a cookie that owes something from the kernel routes there', () => {

@@ -129,6 +129,9 @@ export let vars = (secret: string, cloudflare: string) => ({
   REALTIME_API: cloudflare,
   CF_WORKERS_TOKEN: 'a-token',
   WORKERS_API: cloudflare,
+  META_DATASET: 'dataset',
+  META_CONVERSIONS_TOKEN: 'a-token',
+  META_API: `${cloudflare}/meta`,
 })
 
 // The rate limits are bindings rather than settings: the kernel holds every
@@ -446,6 +449,18 @@ export let letters = (k: Pick<Kernel, 'log'>, to: string): Letter[] =>
     .map((m) => JSON.parse(m[1]) as Letter)
     .filter((l) => [l.to].flat().includes(to))
 
+/** Every event Meta's Conversions API was sent (meta-ads.ts), with the token
+ * it came with. */
+export let toldMeta = (k: Pick<Kernel, 'log'>) =>
+  [...(logs.get(k.log) ?? '').matchAll(/yak-meta (\{.*\})/g)]
+    .flatMap((m) => {
+      let { data, access_token } = JSON.parse(m[1])
+      return (data as Record<string, unknown>[]).map((event) => ({
+        token: access_token as string,
+        event,
+      }))
+    })
+
 // Wait for this delivery, not for every unrelated alarm in the shared kernel.
 // A mover or an in-flight request elsewhere can remain active after this
 // letter was delivered; its lifetime cannot gate reading the receipt.
@@ -761,6 +776,14 @@ export let cloudflare = (log = crypto.randomUUID()) => {
   let service = endpoint(async (req) => {
     let url = new URL(req.url)
     let ok = (result: unknown) => Response.json({ success: true, result })
+    if (url.pathname.startsWith('/meta/')) {
+      logs.set(
+        log,
+        (logs.get(log) ?? '') +
+          `yak-meta ${JSON.stringify(await req.json())}\n`,
+      )
+      return Response.json({ events_received: 1 })
+    }
     if (url.pathname == '/probe/txt') {
       let { name, values } = await req.json()
       dns.set(name, values)

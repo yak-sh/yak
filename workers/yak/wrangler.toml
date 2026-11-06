@@ -124,6 +124,9 @@ APEX = "yaks.app"
 WORKER_NAME = "yak"
 DISPATCH_NAMESPACE = "yak-apps"
 VIEWS_DATASET = "yak_views"
+# The Meta dataset (pixel) "yaks.app — Website" a visit an ad's click brought
+# is told of (meta-ads.ts); its token is the secret META_CONVERSIONS_TOKEN.
+META_DATASET = "2229428124636727"
 # The tracker records the environment beside each captured failure.
 ENVIRONMENT = "production"
 # Letters go out through Resend: platform letters on RESEND_PLATFORM_TOKEN

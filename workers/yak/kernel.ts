@@ -137,7 +137,9 @@ import * as tunnel from './tunnel.ts'
 import { slid } from './session.ts'
 import * as site from './site.ts'
 import * as funnel from './funnel.ts'
-import { isHome } from './view-point.ts'
+import { isHome, isPage } from './view-point.ts'
+import { keep } from './arrival.ts'
+import * as ads from './ads.ts'
 import { fault, refusal } from './unseen.ts'
 
 // Doors loaded when a request first reaches one (T-37977). What they import —
@@ -297,7 +299,7 @@ let serve = async (req: Request, env: Env, r: Route) => {
   if ((req.method == 'GET' || req.method == 'HEAD') && isListing(path)) {
     let page = await site.forward(req, env, path)
     if (isHome(req, path, page)) funnel.step(env, 'home', req)
-    return page
+    return seen(req, env, page)
   }
   // The gallery's ticketed review stays on this uncached gateway.
   let dir = directory(bound(env.DIRECTORY, dirPart.fetch, env), {
@@ -358,8 +360,15 @@ let serve = async (req: Request, env: Env, r: Route) => {
   // Pricing is the other static page with a dynamic splice.
   if (path == '/pricing') page = await sell.priceAt(dir, page)
   return type == 'text/html' && page.status == 200
-    ? await site.worn(req, page, env)
+    ? seen(req, env, await site.worn(req, page, env))
     : page
+}
+
+// A page of the site a person opened: it keeps the arrival its link carried
+// (arrival.ts), and tells the ad network whose click brought it (ads.ts).
+let seen = (req: Request, env: Env, page: Response) => {
+  if (isPage(req, page)) ads.after(env, 'view', req)
+  return keep(req, page)
 }
 
 // A foreign host that has reached the Worker (route.ts origin, T-33036) but

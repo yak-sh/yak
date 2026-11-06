@@ -24,16 +24,26 @@ import {
   UNKEPT_AT,
 } from '../kept-page.ts'
 import { cookieValue } from '../lib/cookie.ts'
-import { isHome, isView, pointOf, stepOf, type Visited } from '../view-point.ts'
+import {
+  isHome,
+  isPage,
+  isView,
+  pointOf,
+  stepOf,
+  type Visited,
+} from '../view-point.ts'
+import { type Conversion, conversionOf, keep } from '../arrival.ts'
 import { foreign, platform, spaceDoor } from '../route.ts'
 
 export type Lent = { waitUntil: (work: Promise<unknown>) => void }
 
 export type FrontEnv = Host & {
-  // The kernel's uncached gateway, its cached Site, and its use receipts.
+  // The kernel's uncached gateway, its cached Site, its use receipts, and the
+  // ad networks it tells (index.ts `Ads`).
   KERNEL: Pick<Fetcher, 'fetch'>
   SITE: Pick<Fetcher, 'fetch'>
   USES: { used(eid: string): Promise<void> | void }
+  ADS?: { told(c: Conversion): Promise<void> }
   VIEWS?: { writeDataPoint(point: unknown): void }
   ERRORS?: { send: (body: never) => Promise<void> }
   WORKER_NAME?: string
@@ -138,7 +148,15 @@ export let kept = (
       if (env.VIEWS && isHome(req, path, page)) {
         env.VIEWS.writeDataPoint(stepOf('home', req as Visited))
       }
-      return page
+      // The ad network whose click brought this visit is the kernel's to tell
+      // (ads.ts), behind this answer; the arrival is kept here (arrival.ts).
+      let c = env.ADS && isPage(req, page) && conversionOf('view', req)
+      if (c) {
+        ctx.waitUntil(
+          env.ADS!.told(c).catch((e) => report(e, env, ctx, 'front ads', req)),
+        )
+      }
+      return keep(req, page)
     })
   }
   // `x.y.yaks.app` is the kernel's to say what it is (route.ts `route`).

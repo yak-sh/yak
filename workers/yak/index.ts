@@ -38,6 +38,8 @@ import type { Asked, Heard } from './outlast.ts'
 import { type Lexicon as Lexical, lexicon } from './lexicon.ts'
 import { hosting } from './inference.ts'
 import { scheduleUse } from './used.ts'
+import * as ads from './ads.ts'
+import type { Conversion } from './arrival.ts'
 import type { Inference, InferenceReceipt, Mark } from '@yaks/model'
 
 // Agent entrypoints share the same isolated code evaluator.
@@ -210,6 +212,16 @@ export class Uses extends WorkerEntrypoint {
 
   used(eid: string): void {
     entry(this.env, 'Uses used', () => scheduleUse(this.env, eid, waitUntil))
+  }
+}
+
+// What yak-front owes an ad network for a page it answered from the edge: the
+// conversion it saw (ads.ts), told behind the response it has already sent.
+export class Ads extends WorkerEntrypoint {
+  declare env: Env
+
+  told(c: Conversion): Promise<void> {
+    return entry(this.env, 'Ads told', () => ads.told(this.env, c))
   }
 }
 

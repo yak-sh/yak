@@ -1,6 +1,8 @@
 // One page view as Analytics Engine keeps it: what views.ts counts and reads
 // back, and what yak-front (front/) writes for a page it answers from the edge.
-// Nothing here imports past this file, so the front Worker can hold it.
+// Nothing here imports past arrival.ts, which imports nothing, so the front
+// Worker can hold it.
+import { arrival, campaign } from './arrival.ts'
 
 // A blob is capped rather than trusted: a path is whatever the visitor typed,
 // and 16 KB is the budget for all six of them together.
@@ -102,12 +104,13 @@ export let FUNNEL = 'yaks.app'
 /**
  * The data point one step of yaks.app's funnel is written as: a view of the
  * platform itself, whose slug is the step. The request, where there is one,
- * says what a view says of it and nothing more; a step taken away from any
- * request (a person coming back) says only the step.
+ * says what a view says of it, and after it the campaign its arrival names
+ * (arrival.ts); a step taken away from any request (a person coming back)
+ * says only the step.
  */
 export let stepOf = (step: string, req?: Visited) => {
   let url = req && new URL(req.url)
-  return point({
+  let p = point({
     app: FUNNEL,
     space: '',
     slug: step,
@@ -117,7 +120,16 @@ export let stepOf = (step: string, req?: Visited) => {
     client: req ? classed(req.headers.get('user-agent')) : '',
     status: 0,
   })
+  p.blobs.push(clipped(req ? campaign(arrival(req)) : ''))
+  return p
 }
+
+/** Whether this answer at the apex is a person opening one of its pages: a
+ * GET answered with a page, or a 304 for a page the browser holds, by a
+ * browser rather than a crawler. */
+export let isPage = (req: Request, res: Response) =>
+  req.method == 'GET' && (res.status == 304 || isView(res)) &&
+  classed(req.headers.get('user-agent')) == 'browser'
 
 /** Whether this answer at the apex is a person visiting the home page: a GET
  * of `/` that was answered, from a browser rather than a crawler. A 304 is a

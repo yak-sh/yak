@@ -9,7 +9,7 @@ export let Privacy = () => (
   >
     <div class='Prose_Head'>
       <h1 class='Title Title-page'>Privacy policy</h1>
-      <p class='Prose_When'>Last updated 2 November 2026</p>
+      <p class='Prose_When'>Last updated 6 November 2026</p>
       <p>
         We collect as little information as we can. This policy lists all of it.
       </p>
@@ -44,10 +44,19 @@ export let Privacy = () => (
         </li>
         <li>
           <strong>A session cookie.</strong>{' '}
-          We set one cookie. It ties anything written without signing in (guest
-          entries) to the browser that wrote it, and keeps you signed in.
-          Signing in puts your name on that browser's guest entries across apps.
-          Visitor counts never use this cookie. The{' '}
+          We set this cookie for everyone. It ties anything written without
+          signing in (guest entries) to the browser that wrote it, and keeps you
+          signed in. Signing in puts your name on that browser's guest entries
+          across apps. Visitor counts never use this cookie. The{' '}
+          <a href='/cookies'>cookies page</a> has the details.
+        </li>
+        <li>
+          <strong>Which campaign brought you.</strong>{' '}
+          If the link you followed to yaks.app carries campaign tags or an ad's
+          click id, we keep them, and when you arrived, in a second cookie for
+          ninety days, so a sign-up can be counted against the campaign that
+          brought it. Our own counts of each step from the home page to signing
+          up keep the campaign's name, never who took the step. The{' '}
           <a href='/cookies'>cookies page</a> has the details.
         </li>
         <li>
@@ -144,23 +153,32 @@ export let Privacy = () => (
     <section>
       <h2>Who we share information with</h2>
       <p>
-        Besides Cloudflare, we share information with two other companies.{' '}
+        Besides Cloudflare, we share information with three other companies.
+        {' '}
         <strong>Stripe</strong>{' '}
         sells the paid plan: we give Stripe your email address so it can bill
         you, and Stripe tells us whether the plan is active.{' '}
         <strong>Telnyx</strong>{' '}
         carries our text messages: when we text you, Telnyx receives your number
-        and the message so it can deliver it, and nothing else.
+        and the message so it can deliver it, and nothing else.{' '}
+        <strong>Meta</strong>{' '}
+        runs our ads on Facebook and Instagram. If you came to yaks.app by
+        clicking one of them, we tell Meta, from our servers, when you open a
+        page of this site and when you sign up: the page's address, the time,
+        the click id Meta put on the link, and your browser's IP address and
+        user agent, which Meta needs to match the event to its ad. We tell Meta
+        nothing about visits its ads didn't bring, and never your name, your
+        email address or anything in your apps.
       </p>
       <p>
         We don't share your mobile number or your agreement to receive texts
         with anyone else, and nobody uses them for marketing, including us.
       </p>
       <p>
-        We don't share information with advertisers, data brokers or analytics
-        companies. Feedback you send us reaches us by email, so it passes
-        through the email providers between you and our inbox, as any email
-        does.
+        Apart from telling Meta about the visits its own ads brought, we don't
+        share information with advertisers, data brokers or analytics companies.
+        Feedback you send us reaches us by email, so it passes through the email
+        providers between you and our inbox, as any email does.
       </p>
     </section>
     <section>
@@ -214,8 +232,11 @@ export let Privacy = () => (
     <section>
       <h2>Analytics</h2>
       <p>
-        We don't run our own analytics or any advertising trackers. Cloudflare
-        gives us the ordinary request counts any host sees.
+        No advertising or analytics code runs on our pages. We count the steps
+        people take from the home page to signing up, with the site and campaign
+        that sent them but not who took them, and Cloudflare gives us the
+        ordinary request counts any host sees. What Meta is told about visits
+        its ads brought is above.
       </p>
     </section>
     <section>

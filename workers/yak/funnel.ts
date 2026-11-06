@@ -10,6 +10,7 @@ import type { Env } from './env.ts'
 import { caught } from './defects.ts'
 import { FUNNEL, stepOf, type Visited } from './view-point.ts'
 import {
+  CAMPAIGN,
   CLIENT,
   COUNT,
   DATASET,
@@ -71,6 +72,13 @@ export let sources = (days: number, dataset = DATASET) =>
   `${SLUG} = 'home' AND ${FROM} != '' AND ${CLIENT} = 'browser' ` +
   `GROUP BY site ORDER BY n DESC LIMIT ${TOP}`
 
+/** The campaigns that brought people to the home page, and how many of them
+ * signed up, busiest first (arrival.ts `campaign`). */
+export let campaigns = (days: number, dataset = DATASET) =>
+  `SELECT ${CAMPAIGN} AS campaign, ${SLUG} AS step, ${COUNT} AS n ` +
+  `${over(days, dataset)} AND ${SLUG} IN ('home', 'signup') AND ` +
+  `${CAMPAIGN} != '' GROUP BY campaign, step ORDER BY n DESC LIMIT ${TOP * 2}`
+
 /** One step's count over the window, and its share of the step it follows. */
 export type Count = { name: Step; say: string; n: number; share?: number }
 
@@ -78,6 +86,7 @@ export type Funnel = {
   days: number
   steps: Count[]
   from: { site: string; n: number }[]
+  campaigns: { campaign: string; home: number; signup: number }[]
 }
 
 /** The funnel over the last `days`, from the counts as the SQL API answers
@@ -86,6 +95,7 @@ export let shaped = (
   days: number,
   rows: Record<string, unknown>[],
   from: Record<string, unknown>[] = [],
+  by: Record<string, unknown>[] = [],
 ): Funnel => {
   let had = new Map(rows.map((r) => [String(r.step), Number(r.n) || 0]))
   let n = (name: string) => had.get(name) ?? 0
@@ -98,6 +108,12 @@ export let shaped = (
       ...'of' in s && n(s.of) ? { share: n(s.name) / n(s.of) } : {},
     })),
     from: from.map((r) => ({ site: String(r.site), n: Number(r.n) || 0 })),
+    campaigns: [...Map.groupBy(by, (r) => String(r.campaign))].map((
+      [campaign, rows],
+    ) => {
+      let n = (step: string) => Number(rows.find((r) => r.step == step)?.n) || 0
+      return { campaign, home: n('home'), signup: n('signup') }
+    }),
   }
 }
 
@@ -107,9 +123,10 @@ export let funnel = async (env: Env, days = 7): Promise<Funnel | null> => {
   if (!env.CF_ANALYTICS_TOKEN || !env.CF_ACCOUNT) return null
   let window = whole(days, KEPT_DAYS)
   let dataset = env.VIEWS_DATASET ?? DATASET
-  let [rows, from] = await Promise.all([
+  let [rows, from, by] = await Promise.all([
     ran(env, counts(window, dataset)),
     ran(env, sources(window, dataset)),
+    ran(env, campaigns(window, dataset)),
   ])
-  return shaped(window, rows, from)
+  return shaped(window, rows, from, by)
 }
