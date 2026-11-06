@@ -189,6 +189,10 @@ A query that works on the box can be refused in a store.
   stores made 20 s apart each found no earlier new store in its isolate
   (T-143307), so a cache kept in module scope did not serve one new store's
   first request. Prove a cache hits live before counting on it.
+- **A new object takes 150 to 500 ms to start** before any code of ours runs
+  in it (T-143307). Start it beside what the request already waits on, with
+  `WARM` (door.ts), which touches no storage, so a start nobody follows up
+  leaves nothing behind.
 - **128 MB per isolate**, shared by every object in it (`HELD` in
   packages/embedding/held.ts caps vector copies at 48 MB; the vectors are
   `search-and-embeddings`). The kernel Worker has the same 128 MB, so a body

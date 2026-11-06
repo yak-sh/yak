@@ -2016,11 +2016,11 @@ let born = (
 }
 
 /**
- * Start the object a born row names while the directory writes the row
- * (T-143307). A new object took about 340 ms to start, and a write sent the
- * moment app_new answered waited on it, since the store app_new asks for
- * behind its answer was still starting. The start touches nothing the object
- * holds (door.ts `WARM`), so a birth the directory refuses leaves nothing.
+ * Start the object a born row names while the birth reads and writes the
+ * directory (T-143307). A new object took 150 to 500 ms to start, and a write
+ * sent the moment app_new answered waited on it, since the store app_new asks
+ * for behind its answer was still starting. The start touches nothing the
+ * object holds (door.ts `WARM`), so a birth refused after it leaves nothing.
  */
 let warmed = (env: Env, row: Bundle) => {
   let { store } = row.app as { store: string }
@@ -3155,6 +3155,12 @@ let OURS: Row[] = [
     run: async (ctx, args) => {
       let { space, who } = await inSpace(ctx, args, true)
       let s = fresh(args.slug, 'slug')
+      // Its object starts first, beside every read and write below.
+      let row = born(space, s, {
+        title: titled(args.title),
+        access: args.access == null ? 'public' : access(args.access),
+      })
+      warmed(ctx.env, row)
       // The plan's app ceiling (T-32758), at the one door that adds one.
       // An app costs money to keep, so this is a refusal and not a warning —
       // the warning came at 80%, on the unseen channel (unseen.ts `ceiling`).
@@ -3176,11 +3182,6 @@ let OURS: Row[] = [
         throw refuse('limit', atCeiling(space, 'apps', ctx.env))
       }
       let claims = await taking(ctx, space, s, who)
-      let row = born(space, s, {
-        title: titled(args.title),
-        access: args.access == null ? 'public' : access(args.access),
-      })
-      warmed(ctx.env, row)
       let entities: Bundle[] = [...claims, row]
       let applied = await ctx.dir.apply({ entities }, vouched(who))
       let eid = applied.find((row) => row.app)?.entity.eid
