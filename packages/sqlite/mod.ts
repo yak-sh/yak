@@ -834,7 +834,16 @@ export let storage = (
         ), { what: named(query) })
     },
     get: identity,
-    doom: (eids) => doom(driver, vocab, eids),
+    // The cascade reads the file as this snapshot's reads do (./reader.ts):
+    // a property read as derived has no column there to point back through.
+    doom: (eids) => {
+      let o = opts()
+      return doom(driver, vocab, eids, {
+        absent: o.absent,
+        lacking: Object.keys(o.derived ?? {}),
+        unindexed: o.missingIndexes,
+      })
+    },
     bindings: (matches, bundles, covers) =>
       bindings(driver, vocab, matches, bundles, covers, base),
     patch: (bundles) =>

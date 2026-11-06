@@ -19,7 +19,14 @@
 
 import { test } from '@yaks/testing'
 import { assert, assertEquals } from '@std/assert'
-import { ARMS, doomSql, looseSql, narrow } from '@yaks/sql'
+import {
+  ARMS,
+  doomSql,
+  indexName,
+  looseSql,
+  narrow,
+  type Stmt,
+} from '@yaks/sql'
 import { loadVocab, type Vocab, type VocabDoc } from '@yaks/vocab'
 import { type Bundle, type Graph, graph } from '@yaks/graph'
 import { ram } from '@yaks/ram'
@@ -324,4 +331,42 @@ test('a grave is not a casualty twice', () => {
   g.apply([{ entity: { eid: 'b' }, $delete: true }], { now: AT })
   // b is already in its grave: deleting a finds nothing to take with it.
   assertEquals(s.tx((tx) => tx.doom(['a'])).gone, [{ eid: 'a', depth: 0 }])
+})
+
+// A file behind its vocabulary, as a process running newer code finds it
+// before the migration lands: a reference whose index, or whose column too, is
+// still to come. The cascade reads what the file holds, as every read does.
+let behind = (drop: Stmt[]): Bundle[] => {
+  let driver = mem()
+  let s = storage(driver, words, { number: true })
+  s.install()
+  let g = graph({ storage: s, vocab: words })
+  g.apply([
+    { entity: { eid: 'a' }, node: { name: 'a' } },
+    { entity: { eid: 'm' }, mark: { at: 'a' } },
+    { entity: { eid: 'l' }, link: { to: 'a' } },
+  ], { now: AT })
+  for (let d of drop) driver.query(d)
+  return g.apply([{ entity: { eid: 'a' }, $delete: true }], {
+    now: AT,
+  }) as Bundle[]
+}
+let unindexed: Stmt = {
+  t: 'drop',
+  kind: 'index',
+  name: indexName(words, 'link', ['to']),
+}
+
+test('a delete reads past a reference index the file lacks', () => {
+  assertEquals(
+    behind([unindexed]).filter((b) => b.link !== undefined),
+    [{ entity: { eid: 'l' }, link: { to: null } }],
+  )
+})
+
+test('a delete reads past a reference column the file lacks', () => {
+  let out = behind([unindexed, { t: 'alter table', table: 'link', drop: 'to' }])
+  assertEquals(dead(out), ['a'])
+  assertEquals(out.find((b) => b.entity.eid == 'm')?.mark, null)
+  assertEquals(out.filter((b) => b.link !== undefined), [])
 })

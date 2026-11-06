@@ -910,7 +910,10 @@ Multi-hop variable bindings are not routed through their full path yet.
 [death declarations](../vocab/README.md#routing-and-references), including the
 seed, with `eid`, `num` and `depth`. `looseSql` selects surviving references
 with `comp`, `prop`, `eid` and `ord` for the graph to detach or release. These
-functions return lists of statements; the graph decides the writes.
+functions return lists of statements; the graph decides the writes. Both take
+the file's **Lacks** (`{absent, lacking, unindexed}`, what a store's survey
+finds it does not hold yet), so a store behind its vocabulary is read for the
+tables, columns and indexes it has.
 
 An **Arm** groups one component table and its reference property names as
 `[comp, props]`. `arms` groups them and `cut` splits them into groups.

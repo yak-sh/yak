@@ -6,6 +6,7 @@ import {
   DEEP,
   doomSql,
   type Driver,
+  type Lacks,
   looseSql,
   narrow,
   type Raw,
@@ -27,9 +28,15 @@ import {
  *
  * Asked inside the transaction, after the batch's patches have gone in, which
  * is what makes the result the one the cascade wants: who points at the dying
- * as the batch leaves the graph.
+ * as the batch leaves the graph. `lacks` is what the file does not hold yet of
+ * the vocabulary's schema (./survey.ts), which the statements do not name.
  */
-export let doom = (driver: Driver, vocab: Vocab, eids: string[]): Doom => {
+export let doom = (
+  driver: Driver,
+  vocab: Vocab,
+  eids: string[],
+  lacks: Lacks = {},
+): Doom => {
   let ask = (s: Raw) => driver.query(s)
   let terms = driver.arms ?? ARMS
   let depth = new Map<string, number>()
@@ -39,7 +46,7 @@ export let doom = (driver: Driver, vocab: Vocab, eids: string[]): Doom => {
   for (;;) {
     let fresh: string[] = []
     let least = DEEP
-    for (let s of doomSql(vocab, seed, terms)) {
+    for (let s of doomSql(vocab, seed, terms, lacks)) {
       for (let r of ask(s)) {
         let eid = String(r.eid)
         if (depth.has(eid)) continue
@@ -56,7 +63,7 @@ export let doom = (driver: Driver, vocab: Vocab, eids: string[]): Doom => {
   }
   return {
     gone,
-    loose: looseSql(vocab, [...depth.keys()], terms).flatMap((s) =>
+    loose: looseSql(vocab, [...depth.keys()], terms, lacks).flatMap((s) =>
       ask(s).map((r) => ({
         eid: String(r.eid),
         comp: String(r.comp),

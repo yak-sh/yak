@@ -81,13 +81,60 @@ let alive = (owner: string): string =>
 export let narrow = (v: Vocab, terms: number = ARMS): boolean =>
   v.deaths('cascade').length <= terms
 
+/** What a look at the file found it lacks of the vocabulary's schema (as
+ * @yaks/sqlite's survey reports it): each component whose table it lacks, each
+ * `comp.prop` whose column it lacks, and each declared index it lacks. A store
+ * whose schema is still catching up to the code reading it lacks some. */
+export type Lacks = {
+  absent?: readonly string[]
+  lacking?: readonly string[]
+  unindexed?: readonly string[]
+}
+
+// What the terms are built over: the references whose column the file holds,
+// and the indexes it holds. A reference the file has no column for points at
+// nothing, and SQLite refuses a statement naming a column or forcing an index
+// it lacks.
+type Held = {
+  v: Vocab
+  deaths: (kind: 'cascade' | 'detach' | 'release') => [string, string][]
+  reference: (comp: string, prop: string) => string
+}
+
 // Each reference has its own seek. An OR over several columns lets stale
 // small-table statistics replace all their indexes with a table scan.
-let reference = (v: Vocab, comp: string, prop: string): string => {
+let seek = (v: Vocab, comp: string, prop: string): string | undefined => {
   let index = v.indexes(comp).find((i) => i.props[0] == prop && !i.present)
-  return index
-    ? sqlite.indexed!(comp, indexName(v, comp, index.props))
-    : sqlite.table(comp)
+  return index && indexName(v, comp, index.props)
+}
+
+let held = (v: Vocab, lacks: Lacks): Held => {
+  let absent = new Set(lacks.absent)
+  let lacking = new Set(lacks.lacking)
+  let unindexed = new Set(lacks.unindexed)
+  return {
+    v,
+    deaths: (kind) =>
+      v.deaths(kind).filter(([c, p]) =>
+        !absent.has(c) && !lacking.has(`${c}.${p}`)
+      ),
+    reference: (comp, prop) => {
+      let index = seek(v, comp, prop)
+      return index && !unindexed.has(index)
+        ? sqlite.indexed!(comp, index)
+        : sqlite.table(comp)
+    },
+  }
+}
+
+// What of `lacks` changes the terms, as a key: the references it leaves out
+// and the seeks it cannot force.
+let lackKey = (v: Vocab, lacks: Lacks): string => {
+  let h = held(v, lacks)
+  let kinds = ['cascade', 'detach', 'release'] as const
+  return kinds.map((k) =>
+    h.deaths(k).map(([c, p]) => `${c}.${p}=${h.reference(c, p)}`).join(',')
+  ).join(';')
 }
 
 let seed = (eids: string[]): string =>
@@ -117,10 +164,10 @@ let seeds = (eids: string[]) =>
 // marked for deletion. `union` both deduplicates and, together with the
 // saturating depth, terminates.
 let closure = (
-  v: Vocab,
   eids: string[],
   group: [string, string][],
   d: Dialect,
+  h: Held,
 ): Frag => {
   let set = seeds(eids)
   return {
@@ -131,7 +178,7 @@ let closure = (
         let hits = `"${comp}"."${field(prop)}" = ${W}."id"`
         return `  union select ${own}, min(${W}."depth" + 1, ${DEEP})` +
           ` from ${W} cross join ${
-            reference(v, comp, prop)
+            h.reference(comp, prop)
           } where (${hits}) and ${alive(own)}\n`
       }).join('') + `)\n`,
     params: set.params,
@@ -150,29 +197,35 @@ let named = (eids: string[]): Frag => {
   }
 }
 
-// The closure and reference terms depend on the vocabulary and engine's
-// allowance, never on the identities seeded into them. Keep their SQL once
-// for a single identity and for a JSON set, including the empty set. Each
-// answer owns its statement and bindings; no caller can change a kept plan.
+// The closure and reference terms depend on the vocabulary, what the file
+// lacks of it and the engine's allowance, never on the identities seeded into
+// them. Keep their SQL once for a single identity and for a JSON set,
+// including the empty set. Each answer owns its statement and bindings; no
+// caller can change a kept plan.
 type Plan = Partial<Record<'doom' | 'loose', Raw[]>>
-let plans = new WeakMap<Vocab, Map<number, [Plan, Plan]>>()
+type Build = (h: Held, eids: string[], terms: number) => Raw[]
+let plans = new WeakMap<Vocab, Map<string, [Plan, Plan]>>()
 let planned = (
   v: Vocab,
   eids: string[],
   terms: number,
+  lacks: Lacks,
   kind: keyof Plan,
-  build: (v: Vocab, eids: string[], terms: number) => Raw[],
+  build: Build,
 ): Raw[] => {
   let cache = plans.get(v)
   if (!cache) plans.set(v, cache = new Map())
-  let forms = cache.get(terms)
-  if (!forms) cache.set(terms, forms = [{}, {}])
+  let whole = !lacks.absent?.length && !lacks.lacking?.length &&
+    !lacks.unindexed?.length
+  let key = `${terms}|${whole ? '' : lackKey(v, lacks)}`
+  let forms = cache.get(key)
+  if (!forms) cache.set(key, forms = [{}, {}])
   let one = eids.length == 1
   let plan = forms[one ? 0 : 1]
-  let held = plan[kind] ??= build(v, one ? [''] : [], terms)
-  if (!held.length) return []
+  let kept = plan[kind] ??= build(held(v, lacks), one ? [''] : [], terms)
+  if (!kept.length) return []
   let value = seed(eids)
-  return held.map((s) => raw(s.sql, [value, ...s.params.slice(1)], s.table))
+  return kept.map((s) => raw(s.sql, [value, ...s.params.slice(1)], s.table))
 }
 
 /**
@@ -184,16 +237,20 @@ let planned = (
  * One statement when the vocabulary is {@link narrow}, and otherwise one per
  * group of terms — each a complete closure over its own tables, to be re-asked
  * with what the others turned up until nothing new comes back.
+ *
+ * The statements read only what the file holds: `lacks` says what of the
+ * vocabulary's schema it does not hold yet.
  */
 export let doomSql = (
   v: Vocab,
   eids: string[],
   terms: number = ARMS,
-): Raw[] => planned(v, eids, terms, 'doom', doom)
+  lacks: Lacks = {},
+): Raw[] => planned(v, eids, terms, lacks, 'doom', doom)
 
-let doom = (v: Vocab, eids: string[], terms: number): Raw[] =>
-  cut(v.deaths('cascade'), terms).map((group) => {
-    let head = closure(v, eids, group, sqlite)
+let doom: Build = (h, eids, terms) =>
+  cut(h.deaths('cascade'), terms).map((group) => {
+    let head = closure(eids, group, sqlite, h)
     return raw(
       head.sql +
         `select ${E}."eid" as eid, ${E}."num" as num,` +
@@ -220,19 +277,21 @@ let doom = (v: Vocab, eids: string[], terms: number): Raw[] =>
  *
  * Deleted entities are excluded on purpose — a deleted entity's own tombstone
  * already covers it, so only a surviving row is told to drop its reference.
+ * `lacks` is as {@link doomSql} takes it.
  */
 export let looseSql = (
   v: Vocab,
   eids: string[],
   terms: number = ARMS,
-): Raw[] => planned(v, eids, terms, 'loose', loose)
+  lacks: Lacks = {},
+): Raw[] => planned(v, eids, terms, lacks, 'loose', loose)
 
-let loose = (v: Vocab, eids: string[], terms: number): Raw[] => {
+let loose: Build = (h, eids, terms) => {
   let d = sqlite
-  let soft = [...v.deaths('release'), ...v.deaths('detach')]
+  let soft = [...h.deaths('release'), ...h.deaths('detach')]
   if (!soft.length) return []
   let head = () =>
-    narrow(v, terms) ? closure(v, eids, v.deaths('cascade'), d) : named(eids)
+    narrow(h.v, terms) ? closure(eids, h.deaths('cascade'), d, h) : named(eids)
   return cut(soft, terms).map((group) => {
     let open = head()
     return raw(
@@ -240,7 +299,7 @@ let loose = (v: Vocab, eids: string[], terms: number): Raw[] => {
         let own = d.ownerKey(comp)
         return `select distinct ? as comp, ? as prop, ${E}."eid" as eid,` +
           ` ${E}."id" as ord` +
-          ` from ${W} cross join ${reference(v, comp, prop)}` +
+          ` from ${W} cross join ${h.reference(comp, prop)}` +
           ` cross join "entity" ${E} on ${E}."id" = ${own}` +
           ` where "${comp}"."${field(prop)}" = ${W}."id"` +
           ` and ${own} not in (select "id" from ${W}) and ${alive(own)}`
