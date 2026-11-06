@@ -1,6 +1,6 @@
 {
   "name": "@yaks/visualize",
-  "version": "0.2.21",
+  "version": "0.2.22",
   "type": "module",
   "exports": {
     ".": "./mod.ts",
@@ -21,22 +21,22 @@
   "dependencies": {
     "@preact/signals": "2.9.4",
     "@yaks/api": "0.2.18",
-    "@yaks/cli": "0.2.21",
+    "@yaks/cli": "0.2.22",
     "@yaks/client": "0.2.20",
-    "@yaks/code": "0.2.21",
+    "@yaks/code": "0.2.22",
     "@yaks/draft": "0.2.18",
     "@yaks/fp": "0.2.18",
     "@yaks/graph": "0.2.18",
-    "@yaks/host": "0.2.21",
+    "@yaks/host": "0.2.22",
     "@yaks/tools": "0.2.18",
     "@yaks/trace": "0.2.18",
-    "@yaks/ui": "0.2.19",
+    "@yaks/ui": "0.2.22",
     "@yaks/vocab": "0.2.18",
     "preact": "10.29.7"
   },
   "devDependencies": {
     "@std/assert": "npm:@jsr/std__assert@^1.0.0",
-    "@yaks/connections": "0.2.21",
+    "@yaks/connections": "0.2.22",
     "@yaks/testing": "0.2.17"
   }
 }

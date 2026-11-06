@@ -1,6 +1,6 @@
 {
   "name": "@yaks/kernel",
-  "version": "0.2.21",
+  "version": "0.2.22",
   "type": "module",
   "exports": {
     ".": "./mod.ts",
@@ -19,10 +19,10 @@
     "@yaks/draft": "0.2.18",
     "@yaks/fp": "0.2.18",
     "@yaks/graph": "0.2.18",
-    "@yaks/preact": "0.2.20",
+    "@yaks/preact": "0.2.22",
     "@yaks/query": "0.2.18",
     "@yaks/render": "0.2.18",
-    "@yaks/ui": "0.2.19",
+    "@yaks/ui": "0.2.22",
     "@yaks/vocab": "0.2.18",
     "preact": "10.29.7"
   },

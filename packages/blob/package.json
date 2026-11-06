@@ -1,6 +1,6 @@
 {
   "name": "@yaks/blob",
-  "version": "0.2.20",
+  "version": "0.2.22",
   "type": "module",
   "exports": {
     ".": "./mod.ts",
@@ -17,7 +17,7 @@
   "description": "Stores text and binary content under SHA-256 addresses, with transparent graph text reads and writes, verified artifacts and HTTP responses.",
   "dependencies": {
     "@yaks/api": "0.2.18",
-    "@yaks/file": "0.2.20",
+    "@yaks/file": "0.2.22",
     "@yaks/fp": "0.2.18",
     "@yaks/graph": "0.2.18",
     "@yaks/sql": "0.2.18",
@@ -27,9 +27,9 @@
   },
   "devDependencies": {
     "@std/assert": "npm:@jsr/std__assert@^1.0.0",
-    "@yaks/fts": "0.2.21",
+    "@yaks/fts": "0.2.22",
     "@yaks/ram": "0.2.18",
-    "@yaks/sqlite": "0.2.21",
+    "@yaks/sqlite": "0.2.22",
     "@yaks/testing": "0.2.17"
   }
 }

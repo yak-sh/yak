@@ -1,6 +1,6 @@
 {
   "name": "@yaks/model",
-  "version": "0.2.21",
+  "version": "0.2.22",
   "type": "module",
   "exports": {
     ".": "./mod.ts",
@@ -10,7 +10,7 @@
   "license": "Apache-2.0",
   "description": "Defines provider-neutral model request and reply types, vocabulary for providers and models, and helpers for billing and recovering generated media. Implements no transport.",
   "dependencies": {
-    "@yaks/blob": "0.2.20",
+    "@yaks/blob": "0.2.22",
     "@yaks/edge": "0.2.18",
     "@yaks/fp": "0.2.18",
     "@yaks/graph": "0.2.18",
@@ -18,7 +18,7 @@
   },
   "devDependencies": {
     "@std/assert": "npm:@jsr/std__assert@^1.0.0",
-    "@yaks/kernel": "0.2.21",
+    "@yaks/kernel": "0.2.22",
     "@yaks/names": "0.2.18",
     "@yaks/ram": "0.2.18",
     "@yaks/testing": "0.2.17"

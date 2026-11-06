@@ -11,7 +11,7 @@
   },
   "devDependencies": {
     "@std/assert": "npm:@jsr/std__assert@^1.0.0",
-    "@yaks/preact": "0.2.20",
+    "@yaks/preact": "0.2.22",
     "@yaks/query": "0.2.18",
     "@yaks/testing": "0.2.17",
     "linkedom": "^0.18.12",

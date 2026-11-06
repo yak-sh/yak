@@ -1,6 +1,6 @@
 {
   "name": "@yaks/tui",
-  "version": "0.2.19",
+  "version": "0.2.22",
   "type": "module",
   "exports": {
     ".": "./mod.ts",
@@ -14,7 +14,7 @@
   "dependencies": {
     "@preact/signals": "2.9.4",
     "@yaks/fp": "0.2.18",
-    "@yaks/process": "0.2.19",
+    "@yaks/process": "0.2.22",
     "@yaks/text": "0.2.18",
     "preact": "10.29.7"
   },

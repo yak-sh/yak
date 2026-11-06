@@ -11,7 +11,7 @@
   "type": "module",
   "dependencies": {
     "@yaks/phone": "0.2.17",
-    "@yaks/host": "0.2.21",
+    "@yaks/host": "0.2.22",
     "@yaks/hook": "0.2.18"
   },
   "devDependencies": {

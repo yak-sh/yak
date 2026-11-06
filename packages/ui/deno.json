@@ -1,6 +1,6 @@
 {
   "name": "@yaks/ui",
-  "version": "0.2.19",
+  "version": "0.2.22",
   "exports": {
     ".": "./mod.ts",
     "./routes": "./routes.ts",

@@ -1,6 +1,6 @@
 {
   "name": "@yaks/durable-object",
-  "version": "0.2.21",
+  "version": "0.2.22",
   "type": "module",
   "exports": "./mod.ts",
   "license": "Apache-2.0",
@@ -10,14 +10,14 @@
     "@yaks/fp": "0.2.18",
     "@yaks/graph": "0.2.18",
     "@yaks/sql": "0.2.18",
-    "@yaks/sqlite": "0.2.21",
+    "@yaks/sqlite": "0.2.22",
     "@yaks/trace": "0.2.18",
     "@yaks/vocab": "0.2.18",
     "fflate": "0.8.3"
   },
   "devDependencies": {
     "@std/assert": "npm:@jsr/std__assert@^1.0.0",
-    "@yaks/blob": "0.2.20",
+    "@yaks/blob": "0.2.22",
     "@yaks/query": "0.2.18",
     "@yaks/ram": "0.2.18",
     "@yaks/testing": "0.2.17"

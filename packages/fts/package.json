@@ -1,6 +1,6 @@
 {
   "name": "@yaks/fts",
-  "version": "0.2.21",
+  "version": "0.2.22",
   "type": "module",
   "exports": {
     ".": "./mod.ts",
@@ -17,7 +17,7 @@
   },
   "devDependencies": {
     "@std/assert": "npm:@jsr/std__assert@^1.0.0",
-    "@yaks/sqlite": "0.2.21",
+    "@yaks/sqlite": "0.2.22",
     "@yaks/testing": "0.2.17"
   }
 }

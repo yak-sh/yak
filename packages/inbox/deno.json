@@ -1,6 +1,6 @@
 {
   "name": "@yaks/inbox",
-  "version": "0.2.21",
+  "version": "0.2.22",
   "exports": {
     ".": "./mod.ts",
     "./queries": "./queries.ts",

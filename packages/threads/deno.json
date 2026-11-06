@@ -1,6 +1,6 @@
 {
   "name": "@yaks/threads",
-  "version": "0.2.20",
+  "version": "0.2.22",
   "exports": {
     ".": "./mod.ts",
     "./worker": "./worker.ts"
