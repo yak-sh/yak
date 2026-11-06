@@ -307,7 +307,7 @@ test('an answer is texted once the call is over, to a caller who agreed to texts
 // One call, its line a socket a test speaks into, its speech and Operator
 // stand-ins that keep what they were given.
 let calling = (
-  ack?: string,
+  ack?: string[],
   more: Partial<Parameters<typeof converse>[0]> = {},
 ) => {
   let on: Record<string, ((e: { data?: unknown; code?: number }) => void)[]> =
@@ -420,26 +420,56 @@ test('a turn the Operator could not take is reported, and said plainly, differen
   equal(c.said.some((s) => /take that|say it again|refused/.test(s)), false)
 })
 
-test('a caller who starts talking stops what is playing, and a turn is acknowledged the moment it ends', async () => {
-  let c = calling('One moment.')
-  // The acknowledgement is made as the call starts, and said only once.
+test('a caller who starts talking stops what is playing, and a turn is acknowledged only once its wait is noticeable, differently each time', async () => {
+  // Each line is as many samples long as it has letters, to tell them apart.
+  let spoken: string[] = []
+  let c = calling(['One moment.', 'Let me see.'], {
+    wait: 20,
+    say: (text) => {
+      spoken.push(text)
+      return Promise.resolve(new Response(new Uint8Array(text.length)).body!)
+    },
+  })
+  let lengths = () =>
+    c.sent.map((s) => JSON.parse(s)).filter((f) => f.event == 'media')
+      .map((f) => atob(f.media.payload).length)
+  // The acknowledgements are made as the call starts.
   await until(() => c.played() == 1)
-  equal(c.said, ['One moment.', HI])
+  equal(spoken, ['One moment.', 'Let me see.', HI])
   c.told().start!()
   equal(JSON.parse(c.sent.at(-1)!), { event: 'clear' })
-  c.told().end('What is on my calendar?')
+  // A quick answer comes with no acknowledgement.
+  c.told().end('Thanks')
+  c.call.answered('You are welcome.')
   await until(() => c.played() == 2)
-  equal(c.said.length, 2)
+  await new Promise((resolve) => setTimeout(resolve, 40))
+  equal(c.played(), 2)
+  // A slow one is acknowledged, and the next slow one in other words.
+  c.told().end('What is on my calendar?')
+  await until(() => c.played() == 3)
   // What the model wrote before its tool is said before the tool runs.
   c.call.typed('Let me look')
   c.call.paused()
-  await until(() => c.said.length == 3)
-  equal(c.said[2], 'Let me look')
+  await until(() => spoken.length == 5)
+  equal(spoken[4], 'Let me look')
   c.call.answered('Let me look. You have choir at 7.')
+  c.told().end('And tomorrow?')
+  await until(() => c.played() == 5)
+  equal(
+    lengths(),
+    [
+      HI,
+      'You are welcome.',
+      'One moment.',
+      'Let me look',
+      'Let me see.',
+    ].map((t) => t.length),
+  )
   c.frame({ event: 'stop' })
   await c.call.ended
-  let [turn] = c.done[0].turns
-  equal(turn.first! <= turn.answer!, true)
+  let [quick, slow] = c.done[0].turns
+  equal(quick.first, quick.answer)
+  equal(slow.first! < slow.answer!, true)
 })
 
 test('a call whose hearing stream is refused once the call is answered reports to the tracker', async () => {

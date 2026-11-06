@@ -277,8 +277,11 @@ export type Talk = Around & {
   listen: (told: Told) => Turns
   /** text spoken as raw samples in the line's format */
   say: (text: string) => Promise<ReadableStream<Uint8Array>>
-  /** what is said the moment a caller's turn ends, made as the call starts */
-  ack?: string
+  /** what is said, one after another, when a caller's turn has had no
+   * answer for `wait` milliseconds, made as the call starts */
+  ack?: string[]
+  /** how long a caller waits in silence before an acknowledgement: WAIT */
+  wait?: number
 }
 
 /** A call a model hears and speaks itself, asking the Operator. */
@@ -293,6 +296,19 @@ export type Talking = Around & {
 let CHUNK = 800
 
 let GOODBYE = 'I have to go now. Call me back any time.'
+
+/** What the Operator says to fill a wait the caller would notice, a
+ * different line each time. */
+export let ACKS = [
+  'One moment.',
+  'Let me see.',
+  'Just a moment, please.',
+  'Bear with me.',
+]
+
+// How long a caller hears nothing after their turn before an
+// acknowledgement fills it: a quick answer comes with none.
+let WAIT = 2000
 
 let CALL = { request: 'operator call' }
 
@@ -433,11 +449,13 @@ let carry = (
  * One call's conversation, heard and spoken around the Operator's own model:
  * the caller's turns given to the Operator, and what it writes spoken back a
  * sentence at a time, what it wrote before a tool said before the tool runs.
- * The moment a turn ends `ack` is played, from audio made as the call
- * starts; a caller who starts talking stops whatever is playing.
+ * A turn with nothing said for `wait` is acknowledged, from audio made as
+ * the call starts; a caller who starts talking stops whatever is playing.
  */
 export let converse = (o: Talk): Call => {
   let asked = false, streamed = false, buffer = '', failed = 0
+  // The caller's turns, and whether anything was said since the last ended.
+  let turn = 0, spoke = false, acks = 0
   // Each barge-in starts a new generation; speech of an older one is dropped.
   let generation = 0
   let chain = Promise.resolve()
@@ -457,6 +475,7 @@ export let converse = (o: Talk): Call => {
   let speak = (text: string, answer = true) => {
     let words = plain(text)
     if (!words || c.over()) return
+    spoke = true
     queue(async (mine) => {
       let reader = (await o.say(words)).getReader()
       let held = new Uint8Array(0)
@@ -480,12 +499,13 @@ export let converse = (o: Talk): Call => {
       send()
     })
   }
-  let ack = o.ack
-    ? o.say(plain(o.ack)).then(async (body) =>
+  let ack = (o.ack ?? []).map((text) => {
+    let audio = o.say(plain(text)).then(async (body) =>
       new Uint8Array(await new Response(body).arrayBuffer())
     )
-    : undefined
-  ack?.catch(c.report)
+    audio.catch(c.report)
+    return audio
+  })
   stream = o.listen({
     start: () => {
       generation++
@@ -497,7 +517,15 @@ export let converse = (o: Talk): Call => {
       asked = true
       streamed = false
       buffer = ''
-      if (ack) queue(async () => c.play(await ack, false))
+      spoke = false
+      let mine = ++turn
+      if (ack.length) {
+        c.later(o.wait ?? WAIT, () => {
+          if (mine != turn || spoke || !asked) return
+          let audio = ack[acks++ % ack.length]
+          queue(async () => c.play(await audio, false))
+        })
+      }
       o.ask(text).catch((error) => {
         c.report(error)
         asked = false
@@ -559,7 +587,7 @@ export let ASK = {
 /** What a talking model is told: who it is, how it sounds, and that the
  * Operator, through `ask`, does the work. */
 export let instructed = (name: string) =>
-  `You are ${name}, a person's Operator on yaks.app, on the phone with them. Speak like a refined British butler: cool, calm, professional, and brisk: a sentence or two, each short, in plain speech. Greetings, thanks, goodbyes and small talk you answer yourself. Everything else goes to the ask tool at once, with their request in their own words: anything they want done, found, remembered or changed, and any question about their apps, messages, accounts, work, what was said before, or what you can do for them. Through it you can do anything they could ask of you in writing, so never say you cannot do something or have no tools: ask. Say only "Certainly, one moment." before it, and never speak of the tool or of anyone else doing the work. Then say what it answers, in your own voice, as briefly as it allows. Never guess what the tool would know.`
+  `You are ${name}, a person's Operator on yaks.app, on the phone with them. Speak like a refined British butler: cool, calm, professional, and brisk: a sentence or two, each short, in plain speech. Greetings, thanks, goodbyes and small talk you answer yourself. Everything else goes to the ask tool at once, with their request in their own words: anything they want done, found, remembered or changed, and any question about their apps, messages, accounts, work, what was said before, or what you can do for them. Through it you can do anything they could ask of you in writing, so never say you cannot do something or have no tools: ask. Call it without a word first when the answer should come quickly. Only when it will plainly take a while, such as building or changing something, say a few words first, never the same ones twice in a row, and never speak of the tool or of anyone else doing the work. Then say what it answers, in your own voice, as briefly as it allows. Never guess what the tool would know.`
 
 /**
  * One call's conversation with a model that hears and speaks itself: the
@@ -835,7 +863,7 @@ export let answering = async (
           voice: setup.voice,
           speed: setup.speed,
         })).body,
-      ack: 'One moment.',
+      ack: ACKS,
     })
   live.set(key, call)
   return new Response(
