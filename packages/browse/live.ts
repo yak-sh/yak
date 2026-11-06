@@ -83,6 +83,7 @@ import { legacyOutbox } from './legacy_outbox.ts'
 import { bundlesOf, changesOf, yakLine } from './wire.ts'
 import { diff, gaps } from './subs.ts'
 import { dead } from '@yaks/graph/bundle'
+import { Refused } from '@yaks/graph/errors'
 
 // A cache row: the spine plus whichever components the entity carries.
 // Derived from EntCore so a new component (types.ts) threads through here —
@@ -186,8 +187,15 @@ let makeClient = () => {
     // now served. A read of an id that names nothing (one in the address, or a
     // link) is refused for it, and the page draws the Lost face. A line the
     // person typed is refused for their input, and the page shows why. On a
-    // page running what is served, any other refusal is a bug.
+    // page running what is served, any other refusal is a bug. So is a frame
+    // the page's own graph refuses, unless the page outlived a deploy: its
+    // vocabulary is then the old one, which can refuse a row the new
+    // vocabulary names (a new identity property), and it reloads too.
     report: (r) => {
+      if (r.error instanceof Refused) {
+        void outlived().then((old) => old ? location.reload() : said(r))
+        return
+      }
       if (!r.refused) return said(r)
       if (r.names?.length && r.names.every((n) => typed.has(n))) return
       void unnamed(r.names).then(async (lost) => {
