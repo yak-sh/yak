@@ -51,6 +51,11 @@ binding = "USES"
 service = "yak"
 entrypoint = "Uses"
 
+[[services]]
+binding = "ADS"
+service = "yak"
+entrypoint = "Ads"
+
 [[queues.producers]]
 binding = "ERRORS"
 queue = "yak-errors"
@@ -110,3 +115,8 @@ entrypoint = "Site"
 binding = "USES"
 service = "yak-staging"
 entrypoint = "Uses"
+
+[[env.staging.services]]
+binding = "ADS"
+service = "yak-staging"
+entrypoint = "Ads"
