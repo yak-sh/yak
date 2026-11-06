@@ -74,10 +74,8 @@ test('a page keeps what it was scanned for until its status changes, and a store
     }),
   )
   equal((await discover([dir], store)).parsed!.get(page), kept)
-  equal(Object.keys(JSON.parse(Deno.readTextFileSync(store))).sort(), [
-    page,
-    'elsewhere/a.ts',
-  ])
+  let held = JSON.parse(Deno.readTextFileSync(store))
+  equal([held[page][4], held['elsewhere/a.ts']], [kept, [0, 0, 0, 0, 0]])
   Deno.writeTextFileSync(page, '```ts\nchanged()\n```')
   equal(
     (await discover([dir], store)).parsed!.get(page)!.fenced[0].code,
