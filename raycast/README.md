@@ -3,8 +3,7 @@
 Talk to your system from a hotkey: ask anything, give direction, make a
 decision, start work, or continue a conversation. A **conversation** is a native
 session started with your words in the selected project's context. This is not a
-notes or capture tool. The browser extension stays in
-[`../extension/`](../extension/).
+notes or capture tool.
 
 ## Install on macOS
 

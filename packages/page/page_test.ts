@@ -1,6 +1,6 @@
-// The package as a host composes it: the words, the canonical identity, both
-// doors, and the capture. `compose` over the real subpaths, so what is checked
-// here is the plugin a config would name.
+// The package as a host composes it: the words, the canonical identity, the
+// archive's door, and the capture. `compose` over the real subpaths, so what is
+// checked here is the plugin a config would name.
 
 import { test } from '@yaks/testing'
 import { assert, assertEquals } from '@std/assert'
@@ -8,7 +8,7 @@ import type { Handler } from '@yaks/api'
 import { compose, type Served } from '@yaks/cli/host'
 import type { Bundle, Comp } from '@yaks/graph'
 import { decode } from '@yaks/blob'
-import { freezing } from './freeze.ts'
+import { freezing, froze } from './freeze.ts'
 import { blobsOf } from './host.ts'
 import { WEB } from './comp.ts'
 import { pageEid } from './url.ts'
@@ -32,70 +32,24 @@ let door = (h: Served): Handler => {
   return h.handler
 }
 
-let witness = (h: Served, body: unknown) =>
-  door(h)(
-    new Request('http://h/page', {
-      method: 'POST',
-      body: JSON.stringify(body),
-    }),
-  )
+// A page recorded with its document, the way a host that already holds the
+// bytes stores one: `froze()`, then one trusted write, since `frozen_at` and
+// `bytes` are server-owned.
+let kept = async (h: Served, url: string, html: string) => {
+  let page = { entity: { eid: pageEid(url) } }
+  let [landed] = await froze(page, html, { blobs: blobsOf(h) })
+  await h.graph.apply([{ ...landed, [WEB]: { url, ...comp(landed, WEB) } }], {
+    trusted: true,
+  })
+}
 
 let TAB = '<title>Weather</title><p>rain</p>' +
   '<img src="https://cdn.example/x.png"><script>fetch("//elsewhere")</script>'
 
-test('POST /page witnesses a page, bytes and all', async () => {
-  let h = await host()
-  try {
-    let said = await witness(h, {
-      url: 'HTTPS://Example.com/w/?utm_source=n#now',
-      title: 'The Weather',
-      html: TAB,
-    })
-    assertEquals(said.status, 200)
-    let eid = pageEid('https://example.com/w')
-    let page = await read(h, eid)
-    let web = comp(page, WEB)!
-    // one canonical address, and the entity its own words name
-    assertEquals(web.url, 'https://example.com/w')
-    assertEquals(page.entity.eid, eid)
-    // the tab's title, not the archive's
-    assertEquals(comp(page, 'doc')?.title, 'The Weather')
-    // and the bytes, stored under their own address
-    assert(/^[0-9a-f]{64}$/.test(String(web.bytes)), String(web.bytes))
-    assert(!isNaN(+new Date(String(web.frozen_at))))
-  } finally {
-    h.close()
-  }
-})
-
-test('witnessing one page twice is one entity', async () => {
-  let h = await host()
-  try {
-    await witness(h, { url: 'https://example.com/w', title: 'One' })
-    await witness(h, { url: 'https://example.com/w/?fbclid=9', title: 'Two' })
-    let pages = await h.graph.read('.web&*')
-    assertEquals(pages.length, 1)
-    // the first title stands: an archive names a page only while nothing does
-    assertEquals(comp(pages[0], 'doc')?.title, 'One')
-  } finally {
-    h.close()
-  }
-})
-
-test('POST /page refuses what is not a page', async () => {
-  let h = await host()
-  try {
-    assertEquals((await witness(h, { url: 'file:///tmp/x' })).status, 400)
-    assertEquals((await witness(h, {})).status, 400)
-  } finally {
-    h.close()
-  }
-})
-
 test('GET /page/<eid> answers the frozen document, fenced and dated', async () => {
   let h = await host()
   try {
-    await witness(h, { url: 'https://example.com/w', html: TAB })
+    await kept(h, 'https://example.com/w', TAB)
     let eid = pageEid('https://example.com/w')
     let got = await door(h)(new Request(`http://h/page/${eid}`))
     assertEquals(got.status, 200)
@@ -175,7 +129,7 @@ test('a page that already has bytes is not fetched again', async () => {
         },
       }),
     )
-    await witness(h, { url: 'https://example.com/w', html: TAB })
+    await kept(h, 'https://example.com/w', TAB)
     assertEquals(asked, [])
   } finally {
     h.close()

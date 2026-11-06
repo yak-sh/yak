@@ -83,7 +83,7 @@ retain their order. These are this package's identity rules; URLs that differ
 only in these ways are treated as one page.
 
 All inputs are trimmed. Invalid and non-HTTP(S) URLs are otherwise left alone by
-`canon()`. Automatic fetching and `POST /page` accept only HTTP(S) addresses.
+`canon()`. Automatic fetching accepts only HTTP(S) addresses.
 
 ## HTML processing
 
@@ -105,31 +105,15 @@ the bundles to apply with `{ trusted: true }`. It derives the blob key from the
 stored HTML's SHA-256, so identical stored documents use the same key. It adds
 the HTML title only if the page has no `doc` component.
 
-## Two ways the bytes arrive
+## How the bytes arrive
 
-With the route module loaded, a browser or extension can post the document it
-already has, including content available only after login or script execution:
-
-```sh
-curl -X POST http://localhost:8000/page \
-  -H 'content-type: application/json' -d '{
-  "url": "https://example.com/article",
-  "title": "An article",
-  "html": "<html><head><title>An article</title></head><body>Saved text</body></html>"
-}'
-```
-
-`url` is required. `title` and `html` are optional. The response is the JSON
-array returned by `graph.apply()`. HTML is scrubbed and stored before its hash
-and a server timestamp are written to the entity. The request cannot set the
-capture timestamp. A supplied title takes precedence over the HTML title when
-the page has no `doc` component; an existing document is preserved.
-
-For URL-only records, the optional `created('web')` effect calls the configured
-archiver after the transaction commits. It skips entities that already have
-`web.bytes` and non-HTTP(S) URLs. A failed capture is reported by the effects
-registry without rolling back the URL record. The effect is awaited, so a slow
-capture can delay the caller even though the transaction has already committed.
+A host that already holds a document stores it with `froze()` and applies the
+result. For URL-only records, the optional `created('web')` effect calls the
+configured archiver after the transaction commits. It skips entities that
+already have `web.bytes` and non-HTTP(S) URLs. A failed capture is reported by
+the effects registry without rolling back the URL record. The effect is awaited,
+so a slow capture can delay the caller even though the transaction has already
+committed.
 
 Both paths use the same HTML processing and blob storage. No archiver is
 configured by default, so URL-only records remain unarchived until an
@@ -144,7 +128,7 @@ and `blobsOf()`, plus the types `Scrubbed`, `Archive`, `Keep`, `Capture`,
 
 A **host** is the process that opened the graph, represented here by an object
 containing the services a function uses. `effects()` and `blobsOf()` need a
-SQLite `sql` driver; `routes()` also needs `graph` and `storage`.
+SQLite `sql` driver; `routes()` also needs `storage`.
 
 The server loader uses these separate sub-module exports:
 
@@ -153,7 +137,7 @@ The server loader uses these separate sub-module exports:
 | `@yaks/page/vocab`   | `pageDoc` and `docs`, the `web` vocabulary document and its one-item array.             |
 | `@yaks/page/graph`   | `plugins()`, returning the graph plugin and its normalization hook.                     |
 | `@yaks/page/effects` | `effects(host, options)`, returning an archive handler when configured; also `Options`. |
-| `@yaks/page/routes`  | `routes(host, options)`, `PREFIX`, and `Filing` for `POST /page` and `GET /page/<eid>`. |
+| `@yaks/page/routes`  | `routes(host, options)` and `PREFIX` for `GET /page/<eid>`.                             |
 
 A plugin entry in a `yak serve` configuration can be:
 

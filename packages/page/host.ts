@@ -14,9 +14,8 @@ import { command as processCommand } from '@yaks/process/command'
 //             "bytes": "/var/lib/yak/frozen" } }
 // ```
 //
-// A server configured with no archiver fetches nothing — which is exactly what
-// a graph fed only by A browser wants, since those bytes arrive over
-// `POST /page` and were never going to be refetched.
+// A server configured with no archiver fetches nothing: its pages arrive with
+// their bytes or stay addresses.
 
 import type { Blobs } from '@yaks/blob'
 import { fileBlobs } from '@yaks/blob/file'

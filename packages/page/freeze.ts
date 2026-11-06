@@ -2,10 +2,9 @@
 // that stores one document, and the effect handler that calls both.
 //
 // A page is archived when it has no bytes yet. That is the whole rule, and it
-// is why both ways in end up here: a browser tab that posts its own DOM already
-// has the bytes (nobody else can get them — a server refetching a page behind a
-// login archives the login), and a page recorded by its address alone is
-// fetched afterwards by whatever archiver the server was configured with.
+// is why both ways in end up here: a host that already holds the document
+// stores it, and a page recorded by its address alone is fetched afterwards by
+// whatever archiver the server was configured with.
 //
 // The fetch runs after the commit, which is the right place for it: the address
 // is durable before anybody reaches for the network, a site that is down cannot

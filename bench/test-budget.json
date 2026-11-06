@@ -2541,11 +2541,8 @@
     },
     "packages/page/page_test.ts": {
       "GET /page/<eid> answers the frozen document, fenced and dated": 6.6,
-      "POST /page refuses what is not a page": 7.4,
-      "POST /page witnesses a page, bytes and all": 5.8,
       "a page that already has bytes is not fetched again": 11.2,
-      "a page witnessed by its address alone is fetched after the commit": 6.9,
-      "witnessing one page twice is one entity": 7.5
+      "a page witnessed by its address alone is fetched after the commit": 6.9
     },
     "packages/page/scrub.ts": {
       "packages/page/scrub.ts: 351d83fe17bd": 4.1

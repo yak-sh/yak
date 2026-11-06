@@ -31,9 +31,9 @@
  * header in front of it.
  *
  * ## Two ways the bytes arrive
- * A browser tab posts its own document to `POST /page` (`./routes`) — the only
- * way to archive a page behind a login. Any other page is fetched afterwards by
- * the {@link Archive} named in the configuration, in a handler that runs after
+ * A host that already holds a page's document stores it with {@link froze}.
+ * Any other page is fetched afterwards by the {@link Archive} named in the
+ * configuration, in a handler that runs after
  * the commit (`./effects`), so a slow capture is not a request somebody is
  * holding open. Both end up the same way ({@link froze}): scrubbed, stored
  * under its own SHA-256 in the server's

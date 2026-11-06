@@ -85,7 +85,6 @@ plugin's service runs in one process at a time.
 | `apps/`            | the yaks apps this repository keeps, pushed with `yak admin push` |
 | `workers/yak`      | yaks.app, the Cloudflare Worker that hosts yaks apps              |
 | `plugins/yaks.app` | the yaks.app agent plugin: skills and assets                      |
-| `extension/`       | the browser extension: file a task about a page                   |
 | `bin/`             | install, backup, and the test runner                              |
 
 ## Develop

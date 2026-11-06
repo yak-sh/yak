@@ -8,9 +8,8 @@
 // configuration names it beside the plugin and ./host.ts builds it.
 //
 // A server configured with no archiver gives it no code, so a recorded address
-// is left as it is — which is what a graph fed only by a browser extension
-// wants, rather than every address queuing up against a command nobody
-// installed.
+// is left as it is, rather than every address queuing up against a command
+// nobody installed.
 
 import type { Blobs } from '@yaks/blob'
 import type { Handlers } from '@yaks/effects'
