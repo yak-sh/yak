@@ -40,6 +40,11 @@ let vocab = loadVocab([archetypeDoc, {
       type: 'object',
       properties: { project: ref('entity') },
     },
+    claim: {
+      component: true,
+      type: 'object',
+      properties: { session: ref('entity') },
+    },
   },
 }])
 
@@ -87,6 +92,14 @@ let tasks = growing('.task .filed.project.filed.project=top !completed', [
   { entity: { eid: 'deep' }, task: {}, filed: { project: 'sub' } },
 ], (eid) => ({ entity: { eid }, task: {}, filed: { project: 'top' } }))
 
+// Claims, one held by a session and one by a task, among a growing number of
+// tasks holding nothing.
+let claims = growing('.claim.session.session', [
+  { entity: { eid: 'run' }, session: {} },
+  { entity: { eid: 'held' }, task: {}, claim: { session: 'run' } },
+  { entity: { eid: 'odd' }, task: {}, claim: { session: 'held' } },
+], (eid) => ({ entity: { eid }, task: {} }))
+
 test('a path equality beside an absence test seeks the path', () => {
   let [small, large] = sessions.map((run) => run())
   equal(small.eids, ['native'])
@@ -104,5 +117,15 @@ test('a path with a broad far end beside a dense spine reads each row once', () 
   ok(
     large.steps < small.steps * 8,
     `${small.steps} then ${large.steps} VM steps for four times the rows`,
+  )
+})
+
+test("a walk to a component's presence reads its root's rows, not every entity", () => {
+  let [small, large] = claims.map((run) => run())
+  equal(small.eids, ['held'])
+  equal(large.eids, ['held'])
+  ok(
+    large.steps < small.steps + 30,
+    `${small.steps} then ${large.steps} VM steps for four times the tasks`,
   )
 })

@@ -1114,20 +1114,28 @@ let path = (ctx: Ctx, hops: Hop[], p: Pred): Cond => {
   let target = chain(ctx, hops, start)
   let leaf = hops[hops.length - 1]
   // A presence test on the leaf: does the entity the path reached have this
-  // component?
+  // component? Found, it was reached from a row of the root's, the narrowing
+  // a rooted path keeps below: without it the root's join is a LEFT JOIN that
+  // SQLite cannot see through the lookup to drop, and it reads every entity.
   if (!leaf.prop) {
     let present = op == '~' || op == EXISTS
+    let rooted = (c: Cond) =>
+      present && root.comp != 'entity'
+        ? and(cond(ctx.d.presence(root.comp)), c)
+        : c
     let shape = leaf.comp == 'entity' ? null : byArchetype(
       ctx,
       present ? { all: [leaf.comp] } : { none: [leaf.comp] },
       target,
       !present,
     )
-    if (shape) return shape
+    if (shape) return rooted(shape)
     let owner = leaf.comp == 'entity' ? `"__pl"."id"` : `"__pl"."entity"`
     let hit = `(select ${owner} from ${source(ctx, leaf.comp)} as "__pl"` +
       ` where ${owner} = ${target})`
-    return cond({ sql: `${hit} is ${present ? 'not ' : ''}null`, params: [] })
+    return rooted(
+      cond({ sql: `${hit} is ${present ? 'not ' : ''}null`, params: [] }),
+    )
   }
   // The leaf property, read from the entity the path reached. Derived reads
   // (status, updated.at) are built on `target` as their owner; a leaf that is
@@ -1342,17 +1350,28 @@ let presence = (ctx: Ctx, cs: Clause[]): string | undefined => {
       needs(opOf(p), p.value)
     )
   )
+  let spined = (comp: string) =>
+    comp != 'entity' && !!ctx.v.comp(comp) && !computed(ctx.v, comp) &&
+    (ctx.d.scoped || source(ctx, comp) == `"${comp}"` &&
+        ctx.d.table(comp) == `"${comp}"`)
   for (let c of [...extra, ...flat]) {
     if (
       c.kind != 'pred' || c.not || c.where || c.path.length != 1 ||
       opOf(c) != EXISTS
     ) continue
-    let comp = c.path[0]
+    if (spined(c.path[0])) return c.path[0]
+  }
+  // A walk that must arrive starts from a row of its root's: `.claim.session
+  // .session` is the claims whose holder is a session, read from the claims.
+  // Joined from the entity instead, the walk is a lookup per entity that no
+  // index can drive, and without statistics SQLite reads every entity.
+  for (let c of flat) {
     if (
-      comp != 'entity' && ctx.v.comp(comp) && !computed(ctx.v, comp) &&
-      (ctx.d.scoped || source(ctx, comp) == `"${comp}"` &&
-          ctx.d.table(comp) == `"${comp}"`)
-    ) return comp
+      c.kind != 'pred' || c.not || c.where || c.path.length < 3 ||
+      !needs(opOf(c), c.value)
+    ) continue
+    let root = aimed(ctx, c)?.[0]
+    if (root?.prop && spined(root.comp)) return root.comp
   }
 }
 
