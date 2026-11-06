@@ -9,7 +9,9 @@
 import type { Env } from './env.ts'
 import type { Space } from './directory.ts'
 import type { Who } from './session.ts'
-import { esc } from './pages.ts'
+import { type ComponentChildren, Fragment, h } from 'preact'
+import { Button, Card, Field, State } from '@yaks/ui'
+import { markup, raw } from './html.ts'
 import { operatorDoor } from './build-door.ts'
 import { chatPath, managePath } from './route.ts'
 import { spaceHost } from './host.ts'
@@ -55,90 +57,130 @@ export type Apps = { eid: string; slug: string; title: string }[]
 // about.
 let leads = (env: Env, space: Space, u: Update, apps: Apps) => {
   if (u.work) {
-    return `<a href="${chatPath(space.slug, u.work)}">See the chat</a>`
+    return h('a', { href: chatPath(space.slug, u.work) }, 'See the chat')
   }
   let app = apps.find((a) => a.eid == u.about)
   return app
-    ? `<a href="https://${spaceHost(env, space.slug)}/${
-      esc(app.slug)
-    }/" target="_blank" rel="noopener">Open ${esc(app.title || app.slug)}</a>`
-    : ''
+    ? h('a', {
+      href: `https://${spaceHost(env, space.slug)}/${app.slug}/`,
+      target: '_blank',
+      rel: 'noopener',
+    }, `Open ${app.title || app.slug}`)
+    : null
 }
 
 // Every form here goes to the Updates page as a new request to the
 // Operator, whose id it carries so sending twice sends once.
-let form = (space: Space, fields: [string, string][], inner: string) =>
-  `<form class="Update_Form" method="post" action="${
-    managePath('updates', space.slug)
-  }">${
+let form = (
+  space: Space,
+  fields: [string, string][],
+  ...inner: ComponentChildren[]
+) =>
+  h(
+    'form',
+    {
+      class: 'Update_Form',
+      method: 'post',
+      action: managePath('updates', space.slug),
+    },
     [...fields, ['id', crypto.randomUUID()]].map(([name, value]) =>
-      `<input type="hidden" name="${name}" value="${esc(value)}">`
-    ).join('')
-  }${inner}</form>`
+      h('input', { type: 'hidden', name, value })
+    ),
+    ...inner,
+  )
 
-/** What needs a person: the Operator's question, a button for each choice
- * (the one it recommends first and filled), and a way to ask about it. */
-export let needsCard = (space: Space, u: Update, ask = '') => {
+// When it happened, said the human way.
+let when = (u: Update) =>
+  h('time', { class: 'Update_When', datetime: u.at }, ago(u.at))
+
+// What needs a person, as a tree: the question, its choices, a button for
+// each (the one it recommends first and filled), and `ask` below them.
+let needs = (space: Space, u: Update, ask: ComponentChildren) => {
   let choices = [...u.choices ?? []].sort((a, b) =>
     +(b.label == u.recommended) - +(a.label == u.recommended)
   )
-  return `<section class="Card Update Update-needs" id="u-${esc(u.eid)}">
-<header class="Card_Head"><span class="State State-negative"><span class="Dot Dot-negative"></span>Needs you</span><time class="Update_When" datetime="${
-    esc(u.at)
-  }">${ago(u.at)}</time></header>
-<p class="Update_Words">${esc(u.words)}</p>
-${
+  return h(
+    Card,
+    { class: 'Update Update-needs', id: `u-${u.eid}` },
+    h(Card.Head, null, h(State, { mod: 'negative' }, 'Needs you'), when(u)),
+    h('p', { class: 'Update_Words' }, u.words),
     choices.length
-      ? `<ul class="Update_Choices">${
-        choices.map((c) =>
-          `<li><b>${esc(c.label)}</b>: ${esc(c.description)}</li>`
-        ).join('')
-      }</ul>${
+      ? h(
+        Fragment,
+        null,
+        h(
+          'ul',
+          { class: 'Update_Choices' },
+          choices.map((c) =>
+            h('li', null, h('b', null, c.label), `: ${c.description}`)
+          ),
+        ),
         form(
           space,
           [['choose', u.eid]],
-          `<div class="Card_Actions">${
+          h(
+            Card.Actions,
+            null,
             choices.map((c, i) =>
-              `<button class="Button${
-                i ? '' : ' Button-go'
-              }" name="choice" value="${esc(c.label)}">${esc(c.label)}</button>`
-            ).join('')
-          }</div>`,
-        )
-      }`
-      : ''
-  }${ask}</section>`
+              h(
+                Button,
+                { mod: !i && 'go', name: 'choice', value: c.label },
+                c.label,
+              )
+            ),
+          ),
+        ),
+      )
+      : null,
+    ask,
+  )
 }
+
+/** What needs a person: the Operator's question, a button for each choice
+ * (the one it recommends first and filled), and `ask`, markup the chat page
+ * draws, a way to ask about it.
+ *
+ * TODO(T-136253): this and `updates` answer HTML because operator-page.ts,
+ * their one consumer, still builds its page from strings; once it draws a
+ * tree they return theirs and `ask` is a child. */
+export let needsCard = (space: Space, u: Update, ask = '') =>
+  markup(needs(space, u, raw(ask)))
 
 // A way to send the Operator words about an update, opened in place.
 let replying = (space: Space, u: Update) =>
-  `<details class="Update_Reply"><summary>Ask ${
-    esc(space.operator)
-  } about it</summary>${
+  h(
+    'details',
+    { class: 'Update_Reply' },
+    h('summary', null, `Ask ${space.operator} about it`),
     form(
       space,
       [['reply', u.eid]],
-      `<textarea class="Field" name="say" rows="2" required aria-label="Your words to ${
-        esc(space.operator)
-      }"></textarea><button class="Button Button-go" type="submit">Send</button>`,
-    )
-  }</details>`
+      h(Field, {
+        lines: true,
+        name: 'say',
+        required: true,
+        'aria-label': `Your words to ${space.operator}`,
+      }),
+      h(Button, { mod: 'go', type: 'submit' }, 'Send'),
+    ),
+  )
 
 let card = (env: Env, space: Space, u: Update, apps: Apps) => {
-  if (u.needs) return needsCard(space, u, replying(space, u))
+  if (u.needs) return needs(space, u, replying(space, u))
   let lead = leads(env, space, u, apps)
-  return `<section class="Card Update${u.unread ? ' Update-new' : ''}" id="u-${
-    esc(u.eid)
-  }">
-<p class="Update_Words">${esc(u.words)}</p>
-<p class="Update_Meta"><time class="Update_When" datetime="${esc(u.at)}">${
-    ago(u.at)
-  }</time>${lead ? ` · ${lead}` : ''}${
-    u.unread
-      ? ' · <span class="State State-positive"><span class="Dot Dot-positive"></span>New</span>'
-      : ''
-  }</p>
-${replying(space, u)}</section>`
+  return h(
+    Card,
+    { class: u.unread ? 'Update Update-new' : 'Update', id: `u-${u.eid}` },
+    h('p', { class: 'Update_Words' }, u.words),
+    h(
+      'p',
+      { class: 'Update_Meta' },
+      when(u),
+      lead ? [' · ', lead] : null,
+      u.unread ? [' · ', h(State, { mod: 'positive' }, 'New')] : null,
+    ),
+    replying(space, u),
+  )
 }
 
 /** How long the Updates page waits on the last day's visits before it is
@@ -214,18 +256,34 @@ export let updates = (
   apps: Apps = [],
   views?: Map<string, number>,
 ) =>
-  `<p class="Note Update_About">${
-    esc(space.operator)
-  } writes here when something happens in your apps, and asks here when something needs you. Ask about any of it, and the chat opens.</p>
-<section class="Card Update Update-day"><p class="Update_Words">${
-    esc(lastDayLine(apps, views, updates.filter((u) => u.needs).length))
-  }</p></section>${
-    updates.length
-      ? updates.map((u) => card(env, space, u, apps)).join('\n')
-      : `<div class="Talk_Hello"><h2>Nothing yet</h2><p>When ${
-        esc(space.operator)
-      } finishes something, fixes an app, or someone joins, it shows here.</p></div>`
-  }`
+  markup(h(
+    Fragment,
+    null,
+    h(
+      'p',
+      { class: 'Note Update_About' },
+      `${space.operator} writes here when something happens in your apps, and asks here when something needs you. Ask about any of it, and the chat opens.`,
+    ),
+    h(
+      Card,
+      { class: 'Update Update-day' },
+      h(
+        'p',
+        { class: 'Update_Words' },
+        lastDayLine(apps, views, updates.filter((u) => u.needs).length),
+      ),
+    ),
+    updates.length ? updates.map((u) => card(env, space, u, apps)) : h(
+      'div',
+      { class: 'Talk_Hello' },
+      h('h2', null, 'Nothing yet'),
+      h(
+        'p',
+        null,
+        `When ${space.operator} finishes something, fixes an app, or someone joins, it shows here.`,
+      ),
+    ),
+  ))
 
 /** What a person sends from their Updates: a choice, or words about one.
  * Either goes into their conversation with the Operator, and the chat it

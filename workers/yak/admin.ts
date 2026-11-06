@@ -42,9 +42,11 @@ import { isTestAddress } from './lib/bots.ts'
 import { sessionAt } from './session.ts'
 import { drawn } from './render/mod.ts'
 import type { Ref, Uses } from './render/directory.ts'
-import { esc, sideLink } from './html.ts'
+import { type ComponentChildren, Fragment, h, type VNode } from 'preact'
+import { Button, Card, Empty, Field, Group, Icon, SideNav } from '@yaks/ui'
+import { esc, markup, raw } from './html.ts'
 import { lost, shell } from './pages.ts'
-import { icon, type IconName } from './icons.ts'
+import { type IconName, icons } from './icons.ts'
 import { type Host, spaceHost, url } from './host.ts'
 import { DAYS, NOT_ON, statsOf } from './views.ts'
 import { type Funnel, funnel, STEPS } from './funnel.ts'
@@ -266,16 +268,24 @@ let ordered = (d: Reading, rows: Row[]) =>
     ) || refOf(d, a).name.localeCompare(refOf(d, b).name)
   )
 
+// A list on one card, each row drawn by the worker's registry.
+let card = (drawings: string[]) =>
+  h(
+    Card,
+    { as: 'ul', class: 'Directory' },
+    drawings.map((html) => h('li', null, raw(html))),
+  )
+// What a page says where it has nothing to show.
+let empty = (said: ComponentChildren) => h(Empty, null, h('h2', null, said))
+
 let rows = (d: Reading, all: Row[]) =>
   all.length
-    ? `<ul class="Card Directory">${
-      ordered(d, all).map((r) =>
-        `<li>${drawn(r, 'Directory.List.Tile', around(d, r))}</li>`
-      ).join('')
-    }</ul>`
-    : ''
+    ? card(
+      ordered(d, all).map((r) => drawn(r, 'Directory.List.Tile', around(d, r))),
+    )
+    : null
 let grouped = (d: Reading, title: string, all: Row[]) =>
-  all.length ? `<h2 class="Group">${esc(title)}</h2>${rows(d, all)}` : ''
+  all.length ? h(Fragment, null, h(Group, null, title), rows(d, all)) : null
 
 // A person a row points at, by name, or said gone once erased.
 let personRef = (d: Reading, eid: string): Ref => {
@@ -296,18 +306,14 @@ let invited = (d: Reading) =>
     (r) => r.created?.at ?? '',
   )
 let referrals = (d: Reading, all: Row[]) =>
-  `<ul class="Card Directory">${
-    all.map((r) =>
-      `<li>${
-        drawn(r, 'Directory.List.Tile', {
-          base: PATH,
-          invitee: personRef(d, idOf(r.referral!.invitee)),
-          inviter: personRef(d, idOf(r.referral!.inviter)),
-          space: r.rewarded ? slugOf(d, idOf(r.rewarded.space)) : '',
-        })
-      }</li>`
-    ).join('')
-  }</ul>`
+  card(all.map((r) =>
+    drawn(r, 'Directory.List.Tile', {
+      base: PATH,
+      invitee: personRef(d, idOf(r.referral!.invitee)),
+      inviter: personRef(d, idOf(r.referral!.inviter)),
+      space: r.rewarded ? slugOf(d, idOf(r.rewarded.space)) : '',
+    })
+  ))
 
 // Everybody given the starter (meter.ts `STARTER`), newest first: when their
 // first space was made, what of it is left and what their spaces spent.
@@ -321,21 +327,17 @@ let starters = (d: Reading) => {
     given,
   )
   return all.length
-    ? `<ul class="Card Directory">${
-      all.map((r) => {
-        let space = d.spaces.get(idOf(r.started!.space!))
-        return `<li>${
-          drawn(r, 'Directory.Starter.Tile', {
-            base: PATH,
-            uses: d.uses.get(r.entity.eid),
-            at: given(r),
-            space: space?.slug ?? '',
-            left: space ? starterOf(space) : 0,
-          })
-        }</li>`
-      }).join('')
-    }</ul>`
-    : '<section class="Empty"><h2>Nobody has been given the starter yet</h2></section>'
+    ? card(all.map((r) => {
+      let space = d.spaces.get(idOf(r.started!.space!))
+      return drawn(r, 'Directory.Starter.Tile', {
+        base: PATH,
+        uses: d.uses.get(r.entity.eid),
+        at: given(r),
+        space: space?.slug ?? '',
+        left: space ? starterOf(space) : 0,
+      })
+    }))
+    : empty('Nobody has been given the starter yet')
 }
 
 // Who invited whom and the month each first app gave, then everybody given
@@ -348,11 +350,16 @@ let invitesPage = (d: Reading) => {
     d,
     'Invites',
     'invites',
-    `<h2 class="Group">Signed up through an invite</h2>${
+    h(
+      Fragment,
+      null,
+      h(Group, null, 'Signed up through an invite'),
       all.length
         ? referrals(d, all)
-        : '<section class="Empty"><h2>Nobody has signed up through an invite yet</h2></section>'
-    }<h2 class="Group">Given the starter</h2>${starters(d)}`,
+        : empty('Nobody has signed up through an invite yet'),
+      h(Group, null, 'Given the starter'),
+      starters(d),
+    ),
   )
 }
 
@@ -369,47 +376,94 @@ let desk = (
   d: Reading,
   title: string,
   current: List | 'funnel' | 'invites' | null,
-  body: string,
-  kicker = '',
+  body: ComponentChildren,
+  kicker: ComponentChildren = null,
   status = 200,
 ) => {
   let all = lists(d.census)
-  let link = (key: string, href: string, face: string) =>
-    sideLink(href, face, current == key)
-  let counted = (n: number) => `<span class="Desk_Count">${n}</span>`
-  let nav = KEYS.map((key) =>
-    link(
-      key,
-      `${PATH}/${key}${tested(d)}`,
-      `${icon(LISTS[key].icon)}${LISTS[key].title}${
-        counted(shown(d, all[key]).length)
-      }`,
+  // A page down the side: its icon, its name, and how many it holds.
+  let link = (
+    key: string,
+    href: string,
+    glyph: IconName,
+    name: string,
+    n?: number,
+  ) =>
+    h(
+      SideNav.Link,
+      {
+        href,
+        mod: current == key && 'on',
+        'aria-current': current == key ? 'page' : undefined,
+      },
+      h(Icon, { of: icons[glyph] }),
+      name,
+      n == null ? null : h('span', { class: 'Desk_Count' }, n),
     )
-  ).join('') +
+  let nav = [
+    ...KEYS.map((key) =>
+      link(
+        key,
+        `${PATH}/${key}${tested(d)}`,
+        LISTS[key].icon,
+        LISTS[key].title,
+        shown(d, all[key]).length,
+      )
+    ),
     link(
       'funnel',
       `${PATH}/funnel`,
-      `${icon('chart-no-axes-column-increasing')}Funnel`,
-    ) +
+      'chart-no-axes-column-increasing',
+      'Funnel',
+    ),
     link(
       'invites',
       `${PATH}/invites${tested(d)}`,
-      `${icon('qr-code')}Invites${counted(invited(d).length)}`,
-    )
+      'qr-code',
+      'Invites',
+      invited(d).length,
+    ),
+  ]
   return shell(
     d.env,
     esc(title),
     null,
     status,
-    `<a class="Desk_Skip" href="#content">Skip to content</a>
-<aside class="Desk_Side">
-<a class="Desk_Brand" href="${url(d.env, '/')}"><img src="${
-      url(d.env, '/yak.webp')
-    }" width="36" height="36" alt="">yaks.app</a>
-<nav class="SideNav" aria-label="Directory">${nav}</nav>
-</aside><div class="Desk_Body"><header class="Desk_Head"><div>${kicker}<h1>${
-      esc(title)
-    }</h1></div></header><div class="Desk_Content Directory_Content" id="content" tabindex="-1">${body}</div></div>`,
+    markup(h(
+      Fragment,
+      null,
+      h('a', { class: 'Desk_Skip', href: '#content' }, 'Skip to content'),
+      h(
+        'aside',
+        { class: 'Desk_Side' },
+        h(
+          'a',
+          { class: 'Desk_Brand', href: url(d.env, '/') },
+          h('img', {
+            src: url(d.env, '/yak.webp'),
+            width: 36,
+            height: 36,
+            alt: '',
+          }),
+          'yaks.app',
+        ),
+        h(SideNav, { 'aria-label': 'Directory' }, nav),
+      ),
+      h(
+        'div',
+        { class: 'Desk_Body' },
+        h(
+          'header',
+          { class: 'Desk_Head' },
+          h('div', null, kicker, h('h1', null, title)),
+        ),
+        h('div', {
+          class: 'Desk_Content Directory_Content',
+          id: 'content',
+          tabindex: -1,
+        }, body),
+      ),
+    )),
     { 'cache-control': 'private, no-store', 'x-robots-tag': 'noindex' },
     'Desk',
   )
@@ -422,25 +476,44 @@ export let listing = (d: Reading, key: List, q: string) => {
   let hidden = lists(d.census)[key].length - all.length
   let what = LISTS[key].title.toLowerCase()
   let toggle = d.tests
-    ? `<a href="${PATH}/${key}${
-      q ? `?q=${encodeURIComponent(q)}` : ''
-    }">Leave out test accounts</a>`
+    ? h('a', {
+      href: `${PATH}/${key}${q ? `?q=${encodeURIComponent(q)}` : ''}`,
+    }, 'Leave out test accounts')
     : hidden
-    ? `<a href="${PATH}/${key}?tests=1${
-      q ? `&q=${encodeURIComponent(q)}` : ''
-    }">Show ${hidden} more from test accounts</a>`
-    : ''
-  return `<div class="Directory_Bar"><form class="Directory_Find" method="get" action="${PATH}/${key}" role="search"><input class="Field" type="search" name="q" value="${
-    esc(q)
-  }" placeholder="Search ${what}" aria-label="Search ${what}">${
-    d.tests ? '<input type="hidden" name="tests" value="1">' : ''
-  }<button class="Button" type="submit">Search</button></form>${toggle}</div>${
+    ? h('a', {
+      href: `${PATH}/${key}?tests=1${q ? `&q=${encodeURIComponent(q)}` : ''}`,
+    }, `Show ${hidden} more from test accounts`)
+    : null
+  return h(
+    Fragment,
+    null,
+    h(
+      'div',
+      { class: 'Directory_Bar' },
+      h(
+        'form',
+        {
+          class: 'Directory_Find',
+          method: 'get',
+          action: `${PATH}/${key}`,
+          role: 'search',
+        },
+        h(Field, {
+          type: 'search',
+          name: 'q',
+          value: q,
+          placeholder: `Search ${what}`,
+          'aria-label': `Search ${what}`,
+        }),
+        d.tests && h('input', { type: 'hidden', name: 'tests', value: '1' }),
+        h(Button, { type: 'submit' }, 'Search'),
+      ),
+      toggle,
+    ),
     found.length
       ? rows(d, found)
-      : `<section class="Empty"><h2>${
-        q ? `Nothing here says “${esc(q)}”` : `No ${what} yet`
-      }</h2></section>`
-  }`
+      : empty(q ? `Nothing here says “${q}”` : `No ${what} yet`),
+  )
 }
 
 export let list = (d: Reading, key: List, q: string) =>
@@ -458,13 +531,17 @@ export let possessions = (d: Reading, r: Row) => {
   let brought = invited(d).filter((i) =>
     idOf(i.referral!.inviter) == r.entity.eid
   )
-  return grouped(d, 'Owner of', held('owner')) +
-    grouped(d, 'Editor of', held('editor')) +
-    grouped(d, 'Viewer of', held('viewer')) +
-    grouped(d, 'Apps', c.apps.filter((a) => owns.has(appSpace(a)))) +
-    (brought.length
-      ? `<h2 class="Group">Invited</h2>${referrals(d, brought)}`
-      : '')
+  return h(
+    Fragment,
+    null,
+    grouped(d, 'Owner of', held('owner')),
+    grouped(d, 'Editor of', held('editor')),
+    grouped(d, 'Viewer of', held('viewer')),
+    grouped(d, 'Apps', c.apps.filter((a) => owns.has(appSpace(a)))),
+    brought.length
+      ? h(Fragment, null, h(Group, null, 'Invited'), referrals(d, brought))
+      : null,
+  )
 }
 
 // One row's page: its own facts, drawn by its renderer, then what it holds.
@@ -473,7 +550,7 @@ export let page = async (d: Reading, dir: Directory, r: Row, env: Env) => {
   let byId = (eid: string) =>
     [...c.people, ...c.spaces, ...c.apps].find((x) => x.entity.eid == eid)
   let ctx: Record<string, unknown> = around(d, r)
-  let more = r.person ? possessions(d, r) : ''
+  let more: VNode | null = r.person ? possessions(d, r) : null
   let key: List = r.person ? 'people' : r.space ? 'spaces' : 'apps'
   if (r.space) {
     let seats = c.seats.filter((s) => seatSpace(s) == r.entity.eid)
@@ -481,14 +558,23 @@ export let page = async (d: Reading, dir: Directory, r: Row, env: Env) => {
       seats.filter((s) => s.member!.role == role)
         .flatMap((s) => byId(seatPerson(s)) ?? [])
     ctx.owners = held('owner').map((p) => refOf(d, p))
-    more =
-      `<p><a href="${PATH}/${r.entity.eid}/operator">${
-        esc(spaceOf(r).operator)
-      }’s conversations, and what its model was told</a></p>` +
-      grouped(d, 'Owners', held('owner')) +
-      grouped(d, 'Editors', held('editor')) +
-      grouped(d, 'Viewers', held('viewer')) +
-      grouped(d, 'Apps', c.apps.filter((a) => appSpace(a) == r.entity.eid))
+    more = h(
+      Fragment,
+      null,
+      h(
+        'p',
+        null,
+        h(
+          'a',
+          { href: `${PATH}/${r.entity.eid}/operator` },
+          `${spaceOf(r).operator}’s conversations, and what its model was told`,
+        ),
+      ),
+      grouped(d, 'Owners', held('owner')),
+      grouped(d, 'Editors', held('editor')),
+      grouped(d, 'Viewers', held('viewer')),
+      grouped(d, 'Apps', c.apps.filter((a) => appSpace(a) == r.entity.eid)),
+    )
   }
   if (r.app) {
     let home = byId(appSpace(r))
@@ -517,10 +603,12 @@ export let page = async (d: Reading, dir: Directory, r: Row, env: Env) => {
     d,
     (r.app && r.doc?.title) || refOf(d, r).name,
     key,
-    drawn(r, 'Directory.Page', ctx) + more,
-    `<a class="Desk_Address" href="${PATH}/${key}${tested(d)}">${
-      LISTS[key].title
-    }</a>`,
+    h(Fragment, null, raw(drawn(r, 'Directory.Page', ctx)), more),
+    h(
+      'a',
+      { class: 'Desk_Address', href: `${PATH}/${key}${tested(d)}` },
+      LISTS[key].title,
+    ),
   )
 }
 
@@ -545,16 +633,14 @@ let operatorPage = async (
   let space = spaceOf(r)
   let home = `${PATH}/${r.entity.eid}/operator`
   let back = (to: string, said: string) =>
-    `<a class="Desk_Address" href="${to}${tested(d)}">${esc(said)}</a>`
+    h('a', { class: 'Desk_Address', href: `${to}${tested(d)}` }, said)
   let ask = (path: string, args: unknown) =>
     operatorDoor(env, space, vouch(person), path, args).catch((e) => {
       caught(e, { request: `admin operator ${path}` })
       return e instanceof Error ? e : new Error(String(e))
     })
   let failed = (e: Error) =>
-    `<section class="Empty"><h2>The Operator could not be read: ${
-      esc(e.message)
-    }</h2></section>`
+    empty(`The Operator could not be read: ${e.message}`)
   if (!open) {
     let items = await ask('work', { everyone: true }) as Worked[] | Error
     return desk(
@@ -564,8 +650,8 @@ let operatorPage = async (
       items instanceof Error
         ? failed(items)
         : items.length
-        ? `<div class="Card">${listed(items, (o) => `${home}/${o}`)}</div>`
-        : '<section class="Empty"><h2>Nobody has talked to this Operator yet</h2></section>',
+        ? h(Card, { as: 'div' }, raw(listed(items, (o) => `${home}/${o}`)))
+        : empty('Nobody has talked to this Operator yet'),
       back(`${PATH}/${r.entity.eid}`, space.slug),
     )
   }
@@ -584,8 +670,8 @@ let operatorPage = async (
     talked instanceof Error
       ? failed(talked)
       : found
-      ? talked.html
-      : '<section class="Empty"><h2>This Operator has no conversation with that id</h2></section>',
+      ? raw(talked.html)
+      : empty('This Operator has no conversation with that id'),
     back(home, `${space.operator}’s conversations`),
     talked instanceof Error || found ? 200 : 404,
   )
@@ -602,43 +688,69 @@ let funnelPage = (
   f: Funnel | null | Error,
   days: number,
 ) => {
-  let windows = WINDOWS.map((n) =>
-    `<a href="${PATH}/funnel?days=${n}"${
-      n == days ? ' aria-current="page"' : ''
-    }>${n == 1 ? '1 day' : `${n} days`}</a>`
-  ).join(' · ')
+  let windows = WINDOWS.flatMap((n, i) => [
+    i ? ' · ' : null,
+    h('a', {
+      href: `${PATH}/funnel?days=${n}`,
+      'aria-current': n == days ? 'page' : undefined,
+    }, n == 1 ? '1 day' : `${n} days`),
+  ])
   let say = (name: string) => STEPS.find((s) => s.name == name)!.say
   let of = (name: string) => {
     let s = STEPS.find((s) => s.name == name)
     return s && 'of' in s ? say(s.of).toLowerCase() : ''
   }
+  // What was counted, a fact a line, on a card.
+  let facts = (all: [string, string][]) =>
+    h(
+      Card,
+      { as: 'div' },
+      h(
+        'dl',
+        { class: 'Fields Directory_Facts' },
+        all.map(([say, n]) =>
+          h('div', null, h('dt', null, say), h('dd', null, n))
+        ),
+      ),
+    )
   let body = f instanceof Error
-    ? `<section class="Empty"><h2>The counts could not be read: ${
-      esc(f.message)
-    }</h2></section>`
+    ? empty(`The counts could not be read: ${f.message}`)
     : !f
-    ? `<section class="Empty"><h2>${esc(NOT_ON)}</h2></section>`
-    : `<div class="Card"><dl class="Fields Directory_Facts">${
-      f.steps.map((s) =>
-        `<div><dt>${esc(s.say)}</dt><dd>${s.n}${
+    ? empty(NOT_ON)
+    : h(
+      Fragment,
+      null,
+      facts(f.steps.map((s) => [
+        s.say,
+        `${s.n}${
           s.share == null
             ? ''
-            : ` · ${Math.round(s.share * 100)}% of ${esc(of(s.name))}`
-        }</dd></div>`
-      ).join('')
-    }</dl></div>${
+            : ` · ${Math.round(s.share * 100)}% of ${of(s.name)}`
+        }`,
+      ])),
       f.from.length
-        ? `<h2 class="Group">Came to the home page from</h2><div class="Card"><dl class="Fields Directory_Facts">${
-          f.from.map((r) => `<div><dt>${esc(r.site)}</dt><dd>${r.n}</dd></div>`)
-            .join('')
-        }</dl></div>`
-        : ''
-    }`
+        ? h(
+          Fragment,
+          null,
+          h(Group, null, 'Came to the home page from'),
+          facts(f.from.map((r) => [r.site, String(r.n)])),
+        )
+        : null,
+    )
   return desk(
     d,
     'Funnel',
     'funnel',
-    `<div class="Directory_Bar"><nav aria-label="Window">${windows}</nav></div>${body}`,
+    h(
+      Fragment,
+      null,
+      h(
+        'div',
+        { class: 'Directory_Bar' },
+        h('nav', { 'aria-label': 'Window' }, windows),
+      ),
+      body,
+    ),
   )
 }
 
@@ -693,8 +805,8 @@ export let answer = async (
       d,
       'Not in the directory',
       null,
-      '<section class="Empty"><h2>Nothing in the directory has that id</h2></section>',
-      '',
+      empty('Nothing in the directory has that id'),
+      null,
       404,
     )
   }

@@ -3,11 +3,12 @@ import { writes } from '@yaks/member'
 import type { Directory, Space } from './directory.ts'
 import type { Env } from './env.ts'
 import { refusing } from './defects.ts'
-import { esc } from './html.ts'
+import { h } from 'preact'
+import { Button, Card, Field, Form, Notice } from '@yaks/ui'
 import { url } from './host.ts'
 import { installAt, signInAt } from './route.ts'
 import { whoIs } from './session.ts'
-import { foot, head, html, top } from './shell.ts'
+import { drawn, head } from './shell.ts'
 import { call } from './tools.ts'
 import { step } from './funnel.ts'
 import { visitOf } from './visit.ts'
@@ -23,51 +24,68 @@ let page = (
   status = 200,
   selected = '',
   kept = false,
-) =>
-  html(
-    `${
-      head(
-        env,
-        title,
-        'Get your own copy of this app.',
-        url(env, installAt(name)),
-        false,
-      )
-    }
-</head><body>
-${top}
-<main class="Page">
-<h1 class="Title">${esc(title)}</h1>
-${why ? `<p class="Notice Notice-negative" role="alert">${esc(why)}</p>` : ''}
-${
+) => {
+  let install = h(Button, { mod: 'go', type: 'submit' }, 'Install app')
+  return drawn(
+    head(
+      env,
+      title,
+      'Get your own copy of this app.',
+      url(env, installAt(name)),
+      false,
+    ),
+    h(
+      'main',
+      { class: 'Page' },
+      h('h1', { class: 'Title' }, title),
+      why ? h(Notice, { mod: 'negative', role: 'alert' }, why) : null,
       name
-        ? `<form class="Card" method="post" action="${esc(installAt(name))}">
-<header class="Card_Head"><h2 class="Card_Title">Get your own copy</h2></header>
-<p class="Card_Sub">${
-          kept
-            ? 'What you made in this browser comes with it, and only you can see it.'
-            : 'Your copy has its own data. You can make it your own.'
-        }</p>
-${
+        ? h(
+          Card,
+          { as: 'form', method: 'post', action: installAt(name) },
+          h(Card.Head, null, h(Card.Title, null, 'Get your own copy')),
+          h(
+            Card.Sub,
+            null,
+            kept
+              ? 'What you made in this browser comes with it, and only you can see it.'
+              : 'Your copy has its own data. You can make it your own.',
+          ),
           spaces.length
-            ? `<div class="Form_Field"><label class="Form_Label" for="install-space">Install in</label><div class="Form_Line"><select class="Field" id="install-space" name="space" required>${
-              spaces.map((s) =>
-                `<option value="${esc(s.slug)}"${
-                  s.slug == selected ? ' selected' : ''
-                }>${esc(s.title)} (${esc(s.slug)})</option>`
-              ).join('')
-            }</select><button class="Button Button-go" type="submit">Install app</button></div></div>`
-            : '<div class="Form_Actions"><button class="Button Button-go" type="submit">Install app</button></div>'
-        }
-</form>`
-        : ''
-    }
-<p><a href="/gallery">Back to the gallery</a></p>
-</main>
-${foot}
-</body></html>`,
-    status,
+            ? h(
+              Form.Field,
+              null,
+              h(Form.Label, { for: 'install-space' }, 'Install in'),
+              h(
+                Form.Line,
+                null,
+                h(
+                  Field,
+                  {
+                    choose: true,
+                    id: 'install-space',
+                    name: 'space',
+                    required: true,
+                  },
+                  spaces.map((s) =>
+                    h(
+                      'option',
+                      { value: s.slug, selected: s.slug == selected },
+                      `${s.title} (${s.slug})`,
+                    )
+                  ),
+                ),
+                install,
+              ),
+            )
+            : h(Form.Actions, null, install),
+        )
+        : null,
+      h('p', null, h('a', { href: '/gallery' }, 'Back to the gallery')),
+    ),
+    { status },
   )
+}
 
 export let answer = async (req: Request, env: Env, dir: Directory) => {
   if (!['GET', 'POST'].includes(req.method)) {

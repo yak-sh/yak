@@ -1,5 +1,20 @@
 // What server-rendered pages say: text escaped for HTML and quoted
 // attributes, and a day the way a person reads it.
+import type { VNode } from 'preact'
+import { jsxTemplate } from 'preact/jsx-runtime'
+import { renderToString } from 'preact-render-to-string'
+
+/** A page's tree as the HTML it sends, rendered once at the page's edge:
+ * every string in it is text, escaped by Preact. */
+export let markup = <P>(node: VNode<P>): string => renderToString(node)
+
+/** Markup we made ourselves (an entity renderer's row, a guide drawn from
+ * Markdown) put into a tree as it is, with no element around it. Never what
+ * a person typed: that is a string child, which Preact escapes. */
+/// import { h } from 'preact'
+/// markup(h('p', null, raw('<b>a</b>'), ' & ', '<b>')) -> '<p><b>a</b> &amp; &lt;b></p>'
+export let raw = (html: string): VNode => jsxTemplate([html])
+
 export let esc = (s: string) =>
   s.replaceAll('&', '&amp;').replaceAll('<', '&lt;').replaceAll('>', '&gt;')
     .replaceAll('"', '&quot;').replaceAll("'", '&#39;')

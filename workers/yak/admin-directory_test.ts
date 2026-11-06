@@ -15,6 +15,7 @@ import type { Env } from './env.ts'
 import { COOKIE, sign, verify } from './lib/token.ts'
 import { drawn } from './render/mod.ts'
 import { lost } from './pages.ts'
+import { markup } from './html.ts'
 
 let root = { eid: 'meta', slug: META.space } as Space
 let env = { SESSION_SECRET: 'secret' } as Env
@@ -113,17 +114,17 @@ test('the admin directory entrance opens its people list', async () => {
 })
 
 test("the admin's people list shows who a search finds", () => {
-  assertStringIncludes(listing(projected, 'people', 'ann'), 'ann@x.com')
+  assertStringIncludes(markup(listing(projected, 'people', 'ann')), 'ann@x.com')
 })
 
 test('a person in the admin directory opens to the spaces they own', () => {
-  let html = possessions(projected, records.people[0])
+  let html = markup(possessions(projected, records.people[0]))
   assertStringIncludes(html, 'Owner of')
   assertStringIncludes(html, 'ann.yaks.app')
 })
 
 test('the admin app search finds app names through their space', () => {
-  let html = listing(projected, 'apps', 'ann')
+  let html = markup(listing(projected, 'apps', 'ann'))
   assertStringIncludes(html, 'Field notes')
   assertStringIncludes(html, 'ann/notes')
 })

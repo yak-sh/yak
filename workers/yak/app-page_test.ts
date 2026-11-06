@@ -8,6 +8,7 @@ import type { App, Directory, Space } from './directory.ts'
 import type { Env } from './env.ts'
 import { pageAt, screenshot } from './gallery.ts'
 import { app, space } from './testing.ts'
+import { parseHTML } from 'linkedom'
 
 let live = {
   askedAt: '2026-09-06T10:00:00.000Z',
@@ -37,17 +38,26 @@ let offer = (over: Partial<App> = {}) => ({
 test('a published app has a page that opens it first and offers a copy second', async () => {
   let { status, html } = await visit([offer()])
   assertEquals(status, 200)
-  assertStringIncludes(html, '<h1 id="app" class="Title">Recipe box</h1>')
+  let { document } = parseHTML(html)
+  assertEquals(document.querySelector('h1')!.textContent, 'Recipe box')
   assertStringIncludes(html, 'Somewhere to keep recipes')
   assertStringIncludes(html, 'Made at jeff.yaks.app')
   assertStringIncludes(html, screenshot(space(), app({ screenshot: 'shot' })))
-  let open = html.indexOf(
-    '<a class="Button Button-go" href="https://jeff.yaks.app/recipes/">Open the app</a>',
+  // Opening is the filled button; the copy is a plain one after it, sent to
+  // the install door.
+  let presses = [...document.querySelectorAll('.Listing_Doors .Button')]
+  assertEquals(
+    presses.map((b) => [b.textContent, b.matches('.Button-go')]),
+    [['Open the app', true], ['Make your own copy', false]],
   )
-  let copy = html.indexOf(
-    '<form method="post" action="/install?name=recipes"><button class="Button" type="submit">Make your own copy</button>',
+  assertEquals(
+    presses[0].getAttribute('href'),
+    'https://jeff.yaks.app/recipes/',
   )
-  assert(open > 0 && copy > open, 'opening comes before the quiet copy')
+  assertEquals(
+    presses[1].closest('form')!.getAttribute('action'),
+    '/install?name=recipes',
+  )
   assertStringIncludes(
     html,
     `<link rel="canonical" href="${pageAt('recipes')}">`,
@@ -74,9 +84,11 @@ test('a private app opens as its demo copy, or offers only the copy', async () =
       published: { ...app().published!, name: 'recipes-demo' },
     }),
   }
-  assertStringIncludes(
-    (await visit([offer(source), demo])).html,
-    'href="https://yourname.yaks.app/recipes/">Open the app',
+  let { document } = parseHTML((await visit([offer(source), demo])).html)
+  assertEquals(
+    [...document.querySelectorAll('a')]
+      .find((a) => a.textContent == 'Open the app')?.getAttribute('href'),
+    'https://yourname.yaks.app/recipes/',
   )
 })
 

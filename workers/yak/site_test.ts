@@ -541,10 +541,16 @@ test('the integration directory is a page of this site, saying what each service
       '<h2 class="Card_Title">ESV API</h2>',
       'Its key is only ever sent to <code>api.esv.org</code>.',
       '<a href="https://api.esv.org" rel="nofollow ugc">api.esv.org</a>',
-      'href="https://yaks.app/manage/connections?add=ESV">Add to a space',
       'Connected by signing in to OpenRouter',
     ]
   ) assertStringIncludes(one, text)
+  // Each card's one button adds its service to a space of the reader's.
+  let esv = parseHTML(directoryPage).document.getElementById('ESV')!
+  let add = esv.querySelector('.Card_Actions .Button')!
+  assertEquals(
+    [add.textContent, add.getAttribute('href')],
+    ['Add to a space', 'https://yaks.app/manage/connections?add=ESV'],
+  )
   assertEquals((one.match(/<h1[\s>]/g) ?? []).length, 1)
   assertEquals(links(one.split('<footer')[1]), FOOT)
   assertStringIncludes(sitemap(null), `<loc>${url}</loc>`)

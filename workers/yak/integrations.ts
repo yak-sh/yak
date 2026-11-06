@@ -18,11 +18,13 @@
 // it ready to paste a key or sign in (connections.ts `connectionsOf`).
 import type { Listed } from '@yaks/connections'
 import { keyed } from '@yaks/connections'
-import { esc } from './html.ts'
+import { type ComponentChildren, h } from 'preact'
+import { Button, Card, More } from '@yaks/ui'
+import { raw } from './html.ts'
 import { type Host, url } from './host.ts'
 import { managePath } from './route.ts'
-import { foot, head, html, top } from './shell.ts'
-import { drawn } from './theirs.ts'
+import { drawn, head } from './shell.ts'
+import { drawn as theirs } from './theirs.ts'
 
 /** The page's own words, read by seo.ts for the sitemap and llms.txt. */
 export let INTEGRATIONS = {
@@ -42,87 +44,127 @@ export let addAt = (env: Host, name: string) =>
 // A site is linked only at https; a custom one is its owner's word, not ours.
 let site = (i: Listed) =>
   i.site && /^https:\/\/\S+$/.test(i.site)
-    ? `<a href="${esc(i.site)}"${i.built ? '' : ' rel="nofollow ugc"'}>${
-      esc(i.site.replace(/^https:\/\//, '').replace(/\/$/, ''))
-    }</a>`
-    : ''
+    ? h(
+      'a',
+      { href: i.site, rel: i.built ? undefined : 'nofollow ugc' },
+      i.site.replace(/^https:\/\//, '').replace(/\/$/, ''),
+    )
+    : null
 
 // Its mark, as an image of its own SVG and never as markup.
 let logo = (i: Listed) =>
   i.logo
-    ? `<img class="Card_Mark" src="data:image/svg+xml,${
-      esc(encodeURIComponent(i.logo))
-    }" alt="" width="24" height="24">`
-    : ''
+    ? h(Card.Mark, {
+      as: 'img',
+      src: `data:image/svg+xml,${encodeURIComponent(i.logo)}`,
+      alt: '',
+      width: 24,
+      height: 24,
+    })
+    : null
+
+let small = (...said: ComponentChildren[]) =>
+  h('p', { class: 'Note Note-small' }, ...said)
+
+// Its hosts, each as code, a comma between.
+let hostsOf = (i: Listed) =>
+  i.hosts.flatMap((at, n) => [n ? ', ' : null, h('code', null, at)])
 
 // One service, as a card: its head the service and the way to add it, then
-// what it is, where its key goes, and how to get one.
+// what it is, where its key goes, and how to get one. How to get its key is
+// its owner's Markdown, drawn as theirs (theirs.ts).
 let card = async (i: Listed, env: Host) => {
   let title = i.title || i.name
-  let how = await drawn(i.instructions)
-  let hosts = i.hosts.map((h) => `<code>${esc(h)}</code>`).join(', ')
+  let how = await theirs(i.instructions)
   let where = site(i)
-  return `<li class="Card" id="${esc(encodeURIComponent(i.name))}">
-<header class="Card_Head">${logo(i)}<h2 class="Card_Title">${
-    esc(title)
-  }</h2><div class="Card_Actions"><a class="Button Button-go" href="${
-    esc(addAt(env, i.name))
-  }">Add to a space</a></div></header>
-${i.tagline ? `<p class="Card_Sub">${esc(i.tagline)}</p>` : ''}
-<p class="Note Note-small">${where}${where && hosts ? ' · ' : ''}${
-    hosts ? `Its key is only ever sent to ${hosts}.` : ''
-  }</p>
-${
+  return h(
+    Card,
+    { as: 'li', id: encodeURIComponent(i.name) },
+    h(
+      Card.Head,
+      null,
+      logo(i),
+      h(Card.Title, null, title),
+      h(
+        Card.Actions,
+        null,
+        h(Button, { mod: 'go', href: addAt(env, i.name) }, 'Add to a space'),
+      ),
+    ),
+    i.tagline ? h(Card.Sub, null, i.tagline) : null,
+    small(
+      where,
+      where && i.hosts.length ? ' · ' : null,
+      i.hosts.length
+        ? ['Its key is only ever sent to ', hostsOf(i), '.']
+        : null,
+    ),
     keyed(i)
       ? how
-        ? `<details class="More"><summary>How to get the key</summary><div class="More_Body">${how}</div></details>`
-        : '<p class="Note Note-small">Connected with a key you paste.</p>'
-      : `<p class="Note Note-small">Connected by signing in to ${
-        esc(title)
-      }: there is no key to copy.</p>`
-  }
-</li>`
+        ? h(
+          More,
+          null,
+          h('summary', null, 'How to get the key'),
+          h(More.Body, null, raw(how)),
+        )
+        : small('Connected with a key you paste.')
+      : small(`Connected by signing in to ${title}: there is no key to copy.`),
+  )
 }
 
 /** The integration directory's page: every entry, then how to add your own. */
 export let page = async (all: Listed[], env: Host = {}) =>
-  html(
-    `${
-      head(
-        env,
-        INTEGRATIONS.title,
-        INTEGRATIONS.description,
-        url(env, INTEGRATIONS.path),
-      )
-    }
-</head>
-<body>
-${top}
-<main class="Page">
-<section class="Services" aria-labelledby="integrations">
-<div class="Services_Intro">
-<h1 id="integrations" class="Title">Integrations</h1>
-<p class="Note">Outside services a yaks app can call. Add one to your space and your apps there can use it. yaks.app keeps the key, sends it only to the service's own address, and never hands it to an app.</p>
-</div>
-${
-      all.length
-        ? `<ul class="Services_List">${
-          (await Promise.all(all.map((i) => card(i, env)))).join('')
-        }</ul>`
-        : '<p class="Note">Nothing is listed yet.</p>'
-    }
-</section>
-<section class="Join Card" aria-labelledby="yours">
-<h2 id="yours" class="Title">Share a service of your own</h2>
-<p class="Note">On your space's Linked accounts page, add a key for any service, write how to get one, and list it here. Anyone can then add it to a space of theirs, with their own key.</p>
-<p class="Join_Doors"><a class="Button Button-go" href="${
-      esc(url(env, managePath('connections')))
-    }">Your connections</a></p>
-</section>
-</main>
-${foot}
-</body>
-</html>`,
+  drawn(
+    head(
+      env,
+      INTEGRATIONS.title,
+      INTEGRATIONS.description,
+      url(env, INTEGRATIONS.path),
+    ),
+    h(
+      'main',
+      { class: 'Page' },
+      h(
+        'section',
+        { class: 'Services', 'aria-labelledby': 'integrations' },
+        h(
+          'div',
+          { class: 'Services_Intro' },
+          h('h1', { id: 'integrations', class: 'Title' }, 'Integrations'),
+          h(
+            'p',
+            { class: 'Note' },
+            "Outside services a yaks app can call. Add one to your space and your apps there can use it. yaks.app keeps the key, sends it only to the service's own address, and never hands it to an app.",
+          ),
+        ),
+        all.length
+          ? h(
+            'ul',
+            { class: 'Services_List' },
+            await Promise.all(all.map((i) => card(i, env))),
+          )
+          : h('p', { class: 'Note' }, 'Nothing is listed yet.'),
+      ),
+      h(
+        Card,
+        { class: 'Join', 'aria-labelledby': 'yours' },
+        h('h2', { id: 'yours', class: 'Title' }, 'Share a service of your own'),
+        h(
+          'p',
+          { class: 'Note' },
+          "On your space's Linked accounts page, add a key for any service, write how to get one, and list it here. Anyone can then add it to a space of theirs, with their own key.",
+        ),
+        h(
+          'p',
+          { class: 'Join_Doors' },
+          h(
+            Button,
+            { mod: 'go', href: url(env, managePath('connections')) },
+            'Your connections',
+          ),
+        ),
+      ),
+    ),
   )
 
 /** What `integration_list` answers: each entry found, with how to get its key

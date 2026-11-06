@@ -7,7 +7,8 @@
 // The nav is the same places on every page of this site or it is not a
 // nav (site_test.ts), and the footer the same seven. A drawn page says them
 // exactly as the files say them.
-import { esc } from './html.ts'
+import type { VNode } from 'preact'
+import { esc, markup } from './html.ts'
 import { type Host, url } from './host.ts'
 import { links } from './sheets.ts'
 import { island, signedIn } from './signed.ts'
@@ -77,3 +78,18 @@ export let html = (body: string, status = 200) =>
     status,
     headers: { 'content-type': 'text/html; charset=utf-8' },
   })
+
+/** A drawn page: its `head` and what the page adds to it, then the site's
+ * header, the page's `main` (a tree, rendered here) and the footer. `body`
+ * is the body's own class, where the page has one. */
+export let drawn = <P>(
+  heads: string,
+  main: VNode<P>,
+  { status = 200, body = '' } = {},
+) =>
+  html(
+    `${heads}\n</head>\n<body${body ? ` class="${body}"` : ''}>\n${top}\n${
+      markup(main)
+    }\n${foot}\n</body>\n</html>`,
+    status,
+  )

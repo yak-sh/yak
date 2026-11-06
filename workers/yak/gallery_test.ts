@@ -38,7 +38,9 @@ import {
   ticketed,
 } from './gallery.ts'
 import type { Env } from './env.ts'
+import { markup } from './html.ts'
 import { app, cards, space } from './testing.ts'
+import { parseHTML } from 'linkedom'
 
 let asked = { askedAt: '2026-09-06T10:00:00.000Z', listedAt: '' }
 let live = { ...asked, listedAt: '2026-09-06T12:00:00.000Z' }
@@ -382,21 +384,27 @@ test('the homepage paints every chosen screenshot', async () => {
 })
 
 test("a card's button opens the app, and the copy steps back", () => {
-  let html = card(shown())
-  assertStringIncludes(html, 'id="recipes"')
-  assertStringIncludes(html, 'href="https://jeff.yaks.app/recipes/"')
+  let html = markup(card(shown()))
+  let { document } = parseHTML(html)
+  let it = document.getElementById('recipes')!
+  let at = 'https://jeff.yaks.app/recipes/'
   // The link carries the address; the card does not print it.
-  assert(!html.includes('>jeff.yaks.app/recipes/<'))
+  assert(!it.textContent!.includes('jeff.yaks.app'))
   // No picture of its own falls back to the platform's mark.
-  assertStringIncludes(html, 'yak.webp')
-  assert(html.indexOf('</h3>') < html.indexOf('<form'))
-  assertStringIncludes(html, 'method="post" action="/install?name=recipes"')
   assertStringIncludes(
-    html,
-    '<button class="Button Button-quiet" type="submit">Get a copy</button>',
+    it.querySelector('img')!.getAttribute('src')!,
+    'yak.webp',
   )
-  assertStringIncludes(
-    html,
-    '<a class="Button Button-go" href="https://jeff.yaks.app/recipes/">Try it',
-  )
+  // Its name opens the app, and so does its one button, filled; the copy is a
+  // quieter press beside it, sent to the install door.
+  assertEquals(it.querySelector('h3 a')!.getAttribute('href'), at)
+  let go = it.querySelector('.Button-go')!
+  assertEquals([go.tagName, go.getAttribute('href')], ['A', at])
+  assertStringIncludes(go.textContent!, 'Try it')
+  let copy = it.querySelector('form')!
+  assertEquals(copy.getAttribute('action'), '/install?name=recipes')
+  assertEquals(copy.getAttribute('method'), 'post')
+  let press = copy.querySelector('button')!
+  assertEquals(press.textContent, 'Get a copy')
+  assert(!press.matches('.Button-go'))
 })

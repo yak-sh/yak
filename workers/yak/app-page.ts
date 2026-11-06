@@ -18,12 +18,13 @@ import { type Directory, url as appUrl } from './directory.ts'
 import type { Env } from './env.ts'
 import { caught } from './defects.ts'
 import { PAGE, pageAt, pictureOf, type Shown, shown } from './gallery.ts'
-import { esc } from './html.ts'
+import { h } from 'preact'
+import { Button, Card } from '@yaks/ui'
 import { type Host, spaceHost } from './host.ts'
 import { at as installAt } from './install.ts'
 import { lost } from './pages.ts'
 import { opens } from './sample.ts'
-import { foot, head, html, top } from './shell.ts'
+import { drawn, head } from './shell.ts'
 
 export let page = (a: Shown, env: Host = {}) => {
   // A private app with no sample and no copy in the demo space opens only for
@@ -31,52 +32,61 @@ export let page = (a: Shown, env: Host = {}) => {
   let opened = opens(a.app) || a.at != appUrl(a.space, a.app, env)
   let listed = !!a.app.gallery?.listedAt
   let shot = a.shot && (a.app.access != 'private' || listed) ? a.shot : ''
-  let copy = `<form method="post" action="${
-    esc(installAt(a.name))
-  }"><button class="Button" type="submit">Make your own copy</button></form>`
-  return html(
-    `${
-      head(
-        env,
-        `${a.title}, made with yaks.app`,
-        a.about || `${a.title}, an app made with yaks.app.`,
-        pageAt(a.name, env),
-        listed,
-      )
-    }
-</head>
-<body>
-${top}
-<main class="Page">
-<article class="Card Listing" aria-labelledby="app">
-<header class="Listing_Head">
-<h1 id="app" class="Title">${esc(a.title)}</h1>
-${a.about ? `<p class="Note Note-lead">${esc(a.about)}</p>` : ''}
-<p class="Note Note-small">Made at ${esc(spaceHost(env, a.space.slug))}</p>
-</header>
-${
-      shot
-        ? `<a class="Make_Shot Listing_Shot" href="${
-          esc(a.at)
-        }" tabindex="-1" aria-hidden="true"><img src="${
-          esc(shot)
-        }" alt="" width="1200" height="630"></a>`
-        : ''
-    }
-<div class="Listing_Doors">${
-      opened
-        ? `<a class="Button Button-go" href="${
-          esc(a.at)
-        }">Open the app</a>${copy}`
-        : copy
-    }</div>
-<p class="Note Note-small">Your copy is yours: its own address, its own data, and the people you choose.</p>
-</article>
-<p class="Note Listing_Made">Made with yaks.app, where you build an app by asking Claude or ChatGPT. <a href="/">See how it works</a></p>
-</main>
-${foot}
-</body>
-</html>`,
+  let small = (said: string) => h('p', { class: 'Note Note-small' }, said)
+  return drawn(
+    head(
+      env,
+      `${a.title}, made with yaks.app`,
+      a.about || `${a.title}, an app made with yaks.app.`,
+      pageAt(a.name, env),
+      listed,
+    ),
+    h(
+      'main',
+      { class: 'Page' },
+      h(
+        Card,
+        { as: 'article', class: 'Listing', 'aria-labelledby': 'app' },
+        h(
+          'header',
+          { class: 'Listing_Head' },
+          h('h1', { id: 'app', class: 'Title' }, a.title),
+          a.about ? h('p', { class: 'Note Note-lead' }, a.about) : null,
+          small(`Made at ${spaceHost(env, a.space.slug)}`),
+        ),
+        shot
+          ? h(
+            'a',
+            {
+              class: 'Make_Shot Listing_Shot',
+              href: a.at,
+              tabindex: -1,
+              'aria-hidden': 'true',
+            },
+            h('img', { src: shot, alt: '', width: 1200, height: 630 }),
+          )
+          : null,
+        h(
+          'div',
+          { class: 'Listing_Doors' },
+          opened ? h(Button, { mod: 'go', href: a.at }, 'Open the app') : null,
+          h(
+            'form',
+            { method: 'post', action: installAt(a.name) },
+            h(Button, { type: 'submit' }, 'Make your own copy'),
+          ),
+        ),
+        small(
+          'Your copy is yours: its own address, its own data, and the people you choose.',
+        ),
+      ),
+      h(
+        'p',
+        { class: 'Note Listing_Made' },
+        'Made with yaks.app, where you build an app by asking Claude or ChatGPT. ',
+        h('a', { href: '/' }, 'See how it works'),
+      ),
+    ),
   )
 }
 

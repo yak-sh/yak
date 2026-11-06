@@ -69,9 +69,11 @@ import type { Env } from './env.ts'
 import { configOf, keyed, prefixOf, rootOf } from './files.ts'
 import type { Letter } from './mail.ts'
 import type { Actor, Bundle } from '@yaks/graph'
-import { esc } from './pages.ts'
+import { type ComponentChildren, h } from 'preact'
+import { Button, Card, Notice } from '@yaks/ui'
+import { markup } from './html.ts'
 import { GALLERY } from './seo.ts'
-import { foot, head, html, top } from './shell.ts'
+import { drawn, head } from './shell.ts'
 import { type Host, hosted, replyTo, url as siteUrl } from './host.ts'
 import { sheeted } from './sheets.ts'
 import { browserOf } from './session.ts'
@@ -416,28 +418,75 @@ export let pictureOf = async (env: Env, space: Space, app: App) =>
 // Trying the app is the card's one button; installing a copy is the quieter
 // link beside it. Its name and its picture open the app too.
 export let card = (a: Shown) =>
-  `<li class="Card Make_Card" id="${esc(a.name)}">
-<header class="Card_Head"><h3 class="Card_Title"><a href="${esc(a.at)}">${
-    esc(a.title)
-  }</a></h3><div class="Card_Actions"><form method="post" action="/install?name=${
-    encodeURIComponent(a.name)
-  }"><button class="Button Button-quiet" type="submit">Get a copy</button></form><a class="Button Button-go" href="${
-    esc(a.at)
-  }">Try it <span aria-hidden="true">↗</span></a></div></header>
-<a class="Make_Shot" href="${esc(a.at)}" tabindex="-1" aria-hidden="true">${
-    a.shot
-      ? `<img src="${
-        esc(a.shot)
-      }" alt="" loading="lazy" width="1200" height="630">`
-      : `<img class="Make_Shot-none" src="/yak.webp" alt="" loading="lazy" width="352" height="454">`
-  }</a>
-${a.about ? `<p class="Card_Sub">${esc(a.about)}</p>` : ''}
-</li>`
+  h(
+    Card,
+    { as: 'li', class: 'Make_Card', id: a.name },
+    h(
+      Card.Head,
+      null,
+      h(Card.Title, { as: 'h3' }, h('a', { href: a.at }, a.title)),
+      h(
+        Card.Actions,
+        null,
+        h(
+          'form',
+          {
+            method: 'post',
+            action: `/install?name=${encodeURIComponent(a.name)}`,
+          },
+          h(Button, { mod: 'quiet', type: 'submit' }, 'Get a copy'),
+        ),
+        h(
+          Button,
+          { mod: 'go', href: a.at },
+          'Try it ',
+          h('span', { 'aria-hidden': 'true' }, '↗'),
+        ),
+      ),
+    ),
+    h(
+      'a',
+      { class: 'Make_Shot', href: a.at, tabindex: -1, 'aria-hidden': 'true' },
+      a.shot
+        ? h('img', {
+          src: a.shot,
+          alt: '',
+          loading: 'lazy',
+          width: 1200,
+          height: 630,
+        })
+        : h('img', {
+          class: 'Make_Shot-none',
+          src: '/yak.webp',
+          alt: '',
+          loading: 'lazy',
+          width: 352,
+          height: 454,
+        }),
+    ),
+    a.about ? h(Card.Sub, null, a.about) : null,
+  )
+
+// The card a gallery page stands on: its heading, what it says, and what
+// follows from it.
+let join = (title: string, ...rest: ComponentChildren[]) =>
+  h(
+    'main',
+    { class: 'Page' },
+    h(Card, { class: 'Join' }, h('h1', { class: 'Title' }, title), ...rest),
+  )
+let note = (...said: ComponentChildren[]) => h('p', { class: 'Note' }, ...said)
+let back = () =>
+  h(
+    'p',
+    { class: 'Join_Doors' },
+    h(Button, { mod: 'go', href: PATH }, 'The gallery'),
+  )
 
 // The gallery itself. The JSON-LD is the same list said for a machine — an
 // ItemList of SoftwareApplications, which is what each of these is.
 export let page = (all: Shown[], env: Host = {}) =>
-  html(
+  drawn(
     `${head(env, GALLERY.title, GALLERY.description, `${siteUrl(env, PATH)}`)}
 <script type="application/ld+json">
 ${
@@ -467,31 +516,41 @@ ${
         },
       })
     }
-</script>
-</head>
-<body class="Gallery">
-${top}
-<main class="Page">
-<section class="Make" aria-labelledby="gallery">
-<div class="Make_Intro">
-<h1 id="gallery" class="Title">The gallery</h1>
-<p class="Note">Explore apps made with yaks.app. Try one out or make it your own.</p>
-</div>
-${
-      all.length
-        ? `<ul class="Make_List">${all.map(card).join('')}</ul>`
-        : `<p class="Note">No apps yet. <a href="/login">Make the first one.</a></p>`
-    }
-</section>
-<section class="Join Card" aria-labelledby="yours">
-<h2 id="yours" class="Title">Make one of your own</h2>
-<p class="Note">Describe what you need. Your assistant builds it, and we keep it online.</p>
-<p class="Join_Doors"><a class="Button Button-go" href="/login">Start free</a></p>
-</section>
-</main>
-${foot}
-</body>
-</html>`,
+</script>`,
+    h(
+      'main',
+      { class: 'Page' },
+      h(
+        'section',
+        { class: 'Make', 'aria-labelledby': 'gallery' },
+        h(
+          'div',
+          { class: 'Make_Intro' },
+          h('h1', { id: 'gallery', class: 'Title' }, 'The gallery'),
+          note(
+            'Explore apps made with yaks.app. Try one out or make it your own.',
+          ),
+        ),
+        all.length ? h('ul', { class: 'Make_List' }, all.map(card)) : note(
+          'No apps yet. ',
+          h('a', { href: '/login' }, 'Make the first one.'),
+        ),
+      ),
+      h(
+        Card,
+        { class: 'Join', 'aria-labelledby': 'yours' },
+        h('h2', { id: 'yours', class: 'Title' }, 'Make one of your own'),
+        note(
+          'Describe what you need. Your assistant builds it, and we keep it online.',
+        ),
+        h(
+          'p',
+          { class: 'Join_Doors' },
+          h(Button, { mod: 'go', href: '/login' }, 'Start free'),
+        ),
+      ),
+    ),
+    { body: 'Gallery' },
   )
 
 // ---- the letter, and the door it points at -----------------------------
@@ -600,60 +659,50 @@ let confirm = (at: {
   why?: string
   status?: number
 }, env: Host) =>
-  html(
-    `${
-      head(
-        env,
-        at.list ? `List ${at.title}?` : `Decline ${at.title}?`,
-        'Review a gallery submission.',
-        `${siteUrl(env, REVIEW)}`,
-        false,
-      )
-    }
-</head>
-<body>
-${top}
-<main class="Page">
-<section class="Join Card">
-<h1 class="Title">${at.list ? 'List this app?' : 'Decline this app?'}</h1>
-${at.why ? `<p class="Note Notice-negative">${esc(at.why)}</p>` : ''}
-<p class="Note"><b>${esc(at.title)}</b><br>${esc(at.url)}<br>${
-      esc(at.about || '(no description)')
-    }<br>by ${esc(at.owner)}</p>
-<p class="Note">${
-      at.list
-        ? 'This app will appear in the public gallery.'
-        : 'The app stays published. Its owner can submit it again.'
-    }</p>
-<form method="post" action="${REVIEW}">
-<input type="hidden" name="t" value="${esc(at.token)}">
-<button type="submit">${at.list ? 'List it' : 'Decline it'}</button>
-</form>
-</section>
-</main>
-${foot}
-</body>
-</html>`,
-    at.status ?? 200,
+  drawn(
+    head(
+      env,
+      at.list ? `List ${at.title}?` : `Decline ${at.title}?`,
+      'Review a gallery submission.',
+      `${siteUrl(env, REVIEW)}`,
+      false,
+    ),
+    join(
+      at.list ? 'List this app?' : 'Decline this app?',
+      at.why ? h(Notice, { mod: 'negative', role: 'alert' }, at.why) : null,
+      note(
+        h('b', null, at.title),
+        h('br', null),
+        at.url,
+        h('br', null),
+        at.about || '(no description)',
+        h('br', null),
+        `by ${at.owner}`,
+      ),
+      note(
+        at.list
+          ? 'This app will appear in the public gallery.'
+          : 'The app stays published. Its owner can submit it again.',
+      ),
+      h(
+        'form',
+        { method: 'post', action: REVIEW },
+        h('input', { type: 'hidden', name: 't', value: at.token }),
+        h(
+          Button,
+          { mod: 'go', type: 'submit' },
+          at.list ? 'List it' : 'Decline it',
+        ),
+      ),
+    ),
+    { status: at.status ?? 200 },
   )
 
 let done = (env: Host, title: string, lead: string, status = 200) =>
-  html(
-    `${head(env, title, lead, `${siteUrl(env, REVIEW)}`, false)}
-</head>
-<body>
-${top}
-<main class="Page">
-<section class="Join Card">
-<h1 class="Title">${esc(title)}</h1>
-<p class="Note">${esc(lead)}</p>
-<p class="Join_Doors"><a class="Button Button-go" href="${PATH}">The gallery</a></p>
-</section>
-</main>
-${foot}
-</body>
-</html>`,
-    status,
+  drawn(
+    head(env, title, lead, `${siteUrl(env, REVIEW)}`, false),
+    join(title, note(lead), back()),
+    { status },
   )
 
 // ---- the stamps --------------------------------------------------------
@@ -889,7 +938,7 @@ export let showcase = (file: string, all: Shown[]) => {
   let to = file.indexOf('</ul>', from)
   if (to < 0) return file
   return file.slice(0, from + LIST.length) +
-    all.map(card).join('') +
+    all.map((a) => markup(card(a))).join('') +
     file.slice(to)
 }
 
