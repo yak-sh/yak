@@ -303,22 +303,52 @@ export let searched = async (
 export let screenshot = (_space: Space, app: App, env: Host = {}) =>
   app.screenshot ? siteUrl(env, `${IMAGE}${app.eid}/${app.screenshot}`) : ''
 
+// Where a card without a chosen screenshot finds its picture: the app's own
+// og:image (`cardOf`), which only reading its files can tell. A listing names
+// this address rather than reading them as it renders, and Site answers it with
+// a redirect it keeps like a screenshot. A release of a published app purges
+// it with the listings (facets/pages-graph.ts), so it follows the app's card.
+export let CARD = 'card'
+
+/** The address of the picture a listing shows for an app, from its row
+ * alone. */
+export let shotOf = (space: Space, app: App, env: Host = {}) =>
+  screenshot(space, app, env) || siteUrl(env, `${IMAGE}${app.eid}/${CARD}`)
+
+/** The listings, each with its picture's address. */
+export let pictures = (all: Shown[], env: Host = {}): Shown[] =>
+  all.map((a) => ({ ...a, shot: shotOf(a.space, a.app, env) }))
+
+// Whom an offered app's picture is for: anyone, for a public app; a private
+// one's only while it is listed or the home page features it.
+let showing = ({ space, app }: { space: Space; app: App }) =>
+  app.access != 'private' || !!app.gallery?.listedAt || featured(space, app)
+
 /** An offered app's selected image: a public app's whenever it is offered, as
  * its own `/api/blob` serves it to anyone; a private app's with its listing, or
  * while the home page features it. Every render checks the current offer and
- * selection before reaching the bucket. */
+ * selection before reaching the bucket. Its `CARD` redirects to its picture,
+ * or to the platform's yak when it has none. */
 export let image = async (
   dir: Directory,
   objects: Pick<Objects, 'read'>,
   path: string,
+  env: Host = {},
 ) => {
   let [eid, sha, extra] = path.slice(IMAGE.length).split('/')
   let at = !extra &&
-    (await dir.offers()).find(({ space, app }) =>
-      app.eid == eid && app.screenshot == sha &&
-      (app.access != 'private' || app.gallery?.listedAt ||
-        featured(space, app))
+    (await dir.offers()).find((offer) =>
+      offer.app.eid == eid &&
+      (sha == CARD || offer.app.screenshot == sha) && showing(offer)
     )
+  if (at && sha == CARD) {
+    let shot = screenshot(at.space, at.app, env) ||
+      await cardOf(objects, at.space, at.app, env)
+    return new Response(null, {
+      status: 302,
+      headers: { location: shot || siteUrl(env, '/yak.webp') },
+    })
+  }
   let bytes = at ? await objects.read(blobPrefix(at.space, at.app) + sha) : null
   let mime = bytes && mediaTypeOf(bytes)
   if (!bytes || !mime) {
@@ -361,10 +391,12 @@ export let pictured = (html: string, at: string) => {
   }
 }
 
-export let pictureOf = async (env: Env, space: Space, app: App) => {
-  let chosen = screenshot(space, app, env)
-  if (chosen) return chosen
-  let blobs = r2Objects(env.BLOBS)
+let cardOf = async (
+  blobs: Pick<Objects, 'read'>,
+  space: Space,
+  app: App,
+  env: Host,
+) => {
   let prefix = prefixOf(space, app)
   let root = rootOf(prefix, await configOf(blobs, prefix))
   let bytes = await blobs.read(keyed(root, '/'))
@@ -373,16 +405,11 @@ export let pictureOf = async (env: Env, space: Space, app: App) => {
     : ''
 }
 
-// A chosen screenshot needs no bucket read. Older apps still use their
-// og:image card, read from index.html, until their owner chooses one.
-export let pictures = async (env: Env, all: Shown[]) =>
-  await Promise.all(all.map(async (a) => ({
-    ...a,
-    shot: await pictureOf(env, a.space, a.app).catch((e) => {
-      caught(e, { request: 'gallery picture' })
-      return ''
-    }),
-  })))
+/** The picture an app's card shows: its chosen screenshot, else the og:image
+ * its files name. Older apps use that card until their owner chooses one. */
+export let pictureOf = async (env: Env, space: Space, app: App) =>
+  screenshot(space, app, env) ||
+  await cardOf(r2Objects(env.BLOBS), space, app, env)
 
 // ---- the page ----------------------------------------------------------
 
@@ -873,7 +900,7 @@ export let made = async (env: Env, dir: Directory, file: Response) => {
   let html = sheeted(hosted(await file.text(), env), env)
   let failed = false
   let shown = await examples(dir, env)
-    .then((demos) => pictures(env, demos))
+    .then((demos) => pictures(demos, env))
     .catch((e) => {
       failed = true
       caught(e, { request: 'home showcase' })

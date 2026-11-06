@@ -482,8 +482,15 @@ test('an app reaches the gallery only when yaks.app says yes', async () => {
     assertEquals(record?.decision, 'approved')
     assertEquals(record?.reason, review.reason)
     // The app's own og:image, read off the bytes we hold and resolved against
-    // its address — never against ours.
-    assertStringIncludes(page, `https://${mine}.yaks.app/recipes/card.png`)
+    // its address — never against ours. The page names the card's address,
+    // which answers where the picture is.
+    let card = /https:\/\/yaks\.app(\/gallery\/image\/[^/"]+\/card)"/
+      .exec(page)![1]
+    let shot = await k.at('yaks.app', card)
+    assertEquals(
+      [shot.status, shot.headers.get('location')],
+      [302, `https://${mine}.yaks.app/recipes/card.png`],
+    )
     let upload = await k.at(`${mine}.yaks.app`, '/recipes/api/blob', {
       method: 'POST',
       headers: { cookie: jeff.cookie, 'content-type': 'image/png' },

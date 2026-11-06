@@ -16,7 +16,8 @@
 // page is.
 import { type Directory, url as appUrl } from './directory.ts'
 import type { Env } from './env.ts'
-import { PAGE, pageAt, pictures, type Shown, shown } from './gallery.ts'
+import { caught } from './defects.ts'
+import { PAGE, pageAt, pictureOf, type Shown, shown } from './gallery.ts'
 import { esc } from './html.ts'
 import { type Host, spaceHost } from './host.ts'
 import { at as installAt } from './install.ts'
@@ -95,6 +96,9 @@ export let answer = async (
     ? (await shown(dir, env)).find((a) => a.name == name)
     : null
   if (!found) return lost(env)
-  let [a] = await pictures(env, [found])
-  return page(a, env)
+  let shot = await pictureOf(env, found.space, found.app).catch((e) => {
+    caught(e, { request: 'app page picture' })
+    return ''
+  })
+  return page({ ...found, shot }, env)
 }

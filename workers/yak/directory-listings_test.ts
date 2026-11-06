@@ -2,9 +2,10 @@
 // copy. Run the integration while loading; the timed cases inspect results.
 import { clock, equal, ok, test } from '@yaks/testing'
 import { anonymousPage, type ServingCopyDoor, STALL } from './directory-copy.ts'
-import { directory } from './directory.ts'
+import { directory, url } from './directory.ts'
 import * as dirPart from './directory.ts'
-import { DEMOS, IMAGE, LIST } from './gallery.ts'
+import { keyed, prefixOf } from './files.ts'
+import { CARD, DEMOS, IMAGE, LIST } from './gallery.ts'
 import { blobPrefix } from './blob-key.ts'
 import { SITE_TAG } from './purge.ts'
 import { seal, verify } from './lib/token.ts'
@@ -233,6 +234,39 @@ test('directory listings: an offered app picture is kept like the gallery and re
       [other.status, other.headers.get('cache-control')],
       [404, 'private, no-store'],
     )
+  } finally {
+    await f.close()
+  }
+})
+
+// What Site's Server-Timing says it did: `site_r2` is the bucket reads.
+let r2 = (res: Response) =>
+  Number(/site_r2;dur=(\d+)/.exec(res.headers.get('server-timing') ?? '')?.[1])
+
+test('directory listings: the gallery reads no app file, and a card with no screenshot redirects to its og:image', async () => {
+  let f = await fixture()
+  try {
+    let dir = directory({ fetch: (req) => dirPart.fetch(req, f.env) })
+    let at = (await dir.offers()).find(({ app }) => app.slug == 'cookbook')!
+    await dir.stamp({
+      entities: [{ entity: { eid: at.app.eid }, screenshot: { blob: null } }],
+    }, ADA_OWNS)
+    await f.env.BLOBS.put(
+      keyed(prefixOf(at.space, at.app), '/'),
+      '<meta property="og:image" content="card.png">',
+    )
+    let card = `${IMAGE}${at.app.eid}/${CARD}`
+    let listing = await f.request('/gallery')
+    ok((await listing.text()).includes(`${card}"`))
+    equal(r2(listing), 0)
+    let shot = await f.request(card)
+    equal(
+      ['location', 'cache-control', 'cache-tag']
+        .map((name) => shot.headers.get(name)),
+      [`${url(at.space, at.app, f.env)}card.png`, KEPT, SITE_TAG],
+    )
+    equal(shot.status, 302)
+    ok(r2(shot) > 0, 'the card reads the app files the listing did not')
   } finally {
     await f.close()
   }

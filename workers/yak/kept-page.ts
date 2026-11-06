@@ -238,7 +238,10 @@ export let listing = async (
     if (value) headers.set(name, value)
   }
   if (uncopied) headers.set('x-yak-no-copy', '1')
-  let shown = await site.fetch(new Request(listingAt(apex, path), { headers }))
+  // A kept redirect (a card's picture) is the visitor's to follow.
+  let shown = await site.fetch(
+    new Request(listingAt(apex, path), { headers, redirect: 'manual' }),
+  )
   // A hit carries the old render's timing, not work done for this view, and
   // the home page's lifetime is its edge's: a browser still revalidates it.
   let hit = HITS.includes(shown.headers.get('cf-cache-status') ?? '')

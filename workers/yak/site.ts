@@ -27,7 +27,7 @@ import { lost } from './pages.ts'
 import { matches } from './public-cache.ts'
 import { SITE_TAG } from './purge.ts'
 import { sheeted } from './sheets.ts'
-import { clock, timed } from './timing.ts'
+import { type Clock, clock, timed } from './timing.ts'
 
 let uncached = (page: Response) => {
   let headers = new Headers(page.headers)
@@ -77,6 +77,17 @@ export let fetch = async (req: Request, env: Env): Promise<Response> => {
   ) return uncached(lost(env))
   path = path.slice(root.length)
   let c = clock()
+  // Every round trip and bucket read it makes lands on its own count, which
+  // Server-Timing reports as `site_hops` and `site_r2`.
+  return c.counting(() => rendered(req, env, path, c))
+}
+
+let rendered = async (
+  req: Request,
+  env: Env,
+  path: string,
+  c: Clock,
+): Promise<Response> => {
   let dir = directory(
     bound(env.DIRECTORY, dirPart.fetch, env),
     {
@@ -89,15 +100,14 @@ export let fetch = async (req: Request, env: Env): Promise<Response> => {
   if (path.startsWith(gallery.IMAGE)) {
     page = await c.time(
       'image',
-      () => gallery.image(dir, r2Objects(env.BLOBS), path),
+      () => gallery.image(dir, r2Objects(env.BLOBS), path, env),
     )
   } else if (path == '/gallery') {
-    page = gallery.page(
-      await gallery.pictures(env, await gallery.listed(dir, env)),
-      env,
-    )
+    let listed = await c.time('listed', () => gallery.listed(dir, env))
+    page = gallery.page(gallery.pictures(listed, env), env)
   } else if (path == INTEGRATIONS.path) {
-    page = await integrations(await dir.integrations(), env)
+    page = await c.time('listed', () => dir.integrations())
+      .then((all) => integrations(all, env))
   } else {
     let file = await c.time(
       'assets',
@@ -107,8 +117,9 @@ export let fetch = async (req: Request, env: Env): Promise<Response> => {
       ? lost(env)
       : await c.time('showcase', () => gallery.made(env, dir, file))
   }
+  // A picture's address may answer where its picture is (gallery.ts `CARD`).
   if (
-    page.status != 200 || page.headers.has('set-cookie') ||
+    ![200, 302].includes(page.status) || page.headers.has('set-cookie') ||
     page.headers.get('cache-control')?.includes('no-store')
   ) {
     return timed(uncached(page), c, 'site_')
@@ -124,14 +135,14 @@ export let fetch = async (req: Request, env: Env): Promise<Response> => {
 }
 
 // A picture's bytes are its sha's, so its etag is the sha: kept like the
-// listing that shows it, and purged with it.
+// listing that shows it, and purged with it. So is a card's redirect.
 let pictured = (req: Request, page: Response) => {
   let headers = new Headers(page.headers)
   headers.set('cache-control', KEPT)
   headers.set('cache-tag', SITE_TAG)
   return matches(req.headers.get('if-none-match'), headers.get('etag') ?? '')
     ? new Response(null, { status: 304, headers })
-    : new Response(page.body, { headers })
+    : new Response(page.body, { status: page.status, headers })
 }
 
 // Validators include the deployment even when two releases render equal bytes.

@@ -119,7 +119,10 @@ let missing = () =>
 let RELEASED = /\/\.releases\/[^/]+\/[^/]+$/
 let KEPT_CONFIGS = 512
 let configs = new Map<string, Promise<Config>>()
-export let configOf = (blobs: Objects, prefix: string): Promise<Config> => {
+export let configOf = (
+  blobs: Pick<Objects, 'read'>,
+  prefix: string,
+): Promise<Config> => {
   let kept = configs.get(prefix)
   if (kept) return kept
   let read = Promise.all([

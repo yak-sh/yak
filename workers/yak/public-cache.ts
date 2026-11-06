@@ -15,11 +15,13 @@ let tag = (env: Deploy, path: string, variant = '') => {
 
 let bare = (value: string) => value.replace(/^W\//, '')
 
+/** Whether `If-None-Match` names `etag`. An answer with no etag matches
+ * nothing, not even an empty header. */
 export let matches = (asked: string | null, etag: string) =>
-  asked?.split(',').some((part) => {
+  !!etag && (asked?.split(',').some((part) => {
     let value = part.trim()
     return value == '*' || bare(value) == bare(etag)
-  }) ?? false
+  }) ?? false)
 
 export let publicPage = async (
   req: Request,
