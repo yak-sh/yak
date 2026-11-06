@@ -15,7 +15,8 @@
 // Seated at rest, he is yaks.app's mark (T-144354): the header and footer of
 // every page, the dashboard's and the Operator's corner, and, drawn from the
 // same frame, the icons, the link preview (og.svg) and the connector's tile
-// (connector.svg).
+// (connector.svg). Beside the Operator's message box he shows what it is
+// doing (T-144829, `MOVES`).
 
 import { h } from 'preact'
 import { renderToString } from 'preact-render-to-string'
@@ -65,18 +66,37 @@ export let yak = (pose: Pose, base = '') =>
 
 /** What the yak does now and then while he waits, each loop this many ms,
  * starting and ending on his rest frame so one follows another seamlessly. */
-export let IDLE: Record<string, number> = {
+export let IDLE = {
   glance: 3370,
   ears: 2070,
   tail: 2380,
   stretch: 2250,
   lick: 2070,
   doze: 3550,
+} satisfies Record<string, number>
+
+/** What the Operator can be doing, as the waiting yak shows it. */
+export type Doing = 'idle' | 'thinking' | 'tool' | 'writing' | 'done' | 'failed'
+
+/** The loop the yak plays for what the Operator is doing: over and over while
+ * it thinks (a glance around), calls a tool (his ears, listening) or writes
+ * (a tail swish), and once as it finishes (a stretch) or fails (his head
+ * droops, dozing). Idle, he waits as anywhere else. */
+export let MOVES: Record<Exclude<Doing, 'idle'>, {
+  loop: keyof typeof IDLE
+  once?: boolean
+}> = {
+  thinking: { loop: 'glance' },
+  tool: { loop: 'ears' },
+  writing: { loop: 'tail' },
+  done: { loop: 'stretch', once: true },
+  failed: { loop: 'doze', once: true },
 }
 
 /** The yak waiting, `size` px across, with `className`: at rest, and with
- * public/idle.js every several seconds one of his loops (`IDLE`). He is
- * yaks.app's mark wherever a page shows it (T-144354). */
+ * public/idle.js every several seconds one of his loops (`IDLE`), or the one
+ * a page names in his `data-doing` over and over. He is yaks.app's mark
+ * wherever a page shows it (T-144354). */
 export let Idle = ({ class: className, base = '', size = 128 }: {
   class?: string
   base?: string
@@ -96,22 +116,3 @@ export let Idle = ({ class: className, base = '', size = 128 }: {
 /** The yak waiting, as markup. */
 export let idle = (className?: string, base = '') =>
   renderToString(h(Idle, { class: className, base }))
-
-// What a step's first word shows the yak doing (@yaks/tools `stepOf`: "Checking
-// cookbook for errors…"). Any other work is the yak at its keyboard.
-let VERBS: Record<string, Pose> = {
-  Thinking: 'thinking',
-  Checking: 'checking',
-  Reading: 'searching',
-  Listing: 'searching',
-  Looking: 'searching',
-  Searching: 'searching',
-  Finding: 'searching',
-  Calculating: 'calculating',
-  Pricing: 'calculating',
-}
-
-/** The pose that matches a step's words while it runs; typing when nothing
- * is said. */
-export let poseOf = (doing: string): Pose =>
-  VERBS[doing.split(' ')[0].replace(/…$/, '')] ?? 'typing'

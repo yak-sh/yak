@@ -18,7 +18,7 @@ import { renderToString } from 'preact-render-to-string'
 import { Body, Button, Card, Drop, Icon, Loading, Rows } from '@yaks/ui/parts'
 import { day, moment } from './html.ts'
 import { chatPath } from './route.ts'
-import { poseOf, Yak } from './mascot.ts'
+import type { Doing } from './mascot.ts'
 import { type IconName, icons } from './icons.ts'
 import { when } from './public/when.js'
 
@@ -722,15 +722,22 @@ export let touched = (
     .filter((l) => (l.of ?? [l.id]).some((id) => ids.has(id))).map(drawn)
 }
 
-/** What the session is doing now, in a line; nothing once it ended, however
- * it ended: its lines say how. */
-export let now = (entries: Bundle[], names: Names) => {
-  let status = statusOf(entries)
-  if (status != 'pending' && status != 'running') return ''
+// The calls a session made that no result answers yet.
+let unanswered = (entries: Bundle[]) => {
   let answered = new Set(
     entries.filter((b) => b.result).map((b) => String(comp(b, 'result')!.call)),
   )
-  let open = entries.filter((b) => b.call && !answered.has(b.entity.eid))
+  return entries.filter((b) => b.call && !answered.has(b.entity.eid))
+}
+
+let atWork = (entries: Bundle[]) =>
+  ['pending', 'running'].includes(statusOf(entries))
+
+/** What the session is doing now, in a line; nothing once it ended, however
+ * it ended: its lines say how. */
+export let now = (entries: Bundle[], names: Names) => {
+  if (!atWork(entries)) return ''
+  let open = unanswered(entries)
   return open.length
     ? open.map((b) => {
       let c = comp(b, 'call')!
@@ -739,11 +746,21 @@ export let now = (entries: Bundle[], names: Names) => {
     : 'Thinking…'
 }
 
-// What it is doing now, in words and as the yak's pose.
-let doingNow = (entries: Bundle[], names: Names) => {
-  let words = now(entries, names)
-  return { now: words, pose: poseOf(words) }
+/** What the session is doing as its yak shows it (mascot.ts `MOVES`):
+ * thinking or using a tool while it works, done or failed as it ends, and
+ * idle once stopped or before it starts. Writing is heard only as it is
+ * written. */
+export let doingOf = (entries: Bundle[]): Doing => {
+  let status = statusOf(entries)
+  if (atWork(entries)) return unanswered(entries).length ? 'tool' : 'thinking'
+  return status == 'settled' ? 'done' : status == 'failed' ? 'failed' : 'idle'
 }
+
+// What it is doing now, in words and as the yak shows it.
+let doingNow = (entries: Bundle[], names: Names) => ({
+  now: now(entries, names),
+  doing: doingOf(entries),
+})
 
 /** An app a step put out a new version of: the space its call named ('' for
  * the Operator's own) and the app's slug. */
@@ -852,6 +869,7 @@ export let talk = (
       class: 'Talk_Thread',
       'data-task': task.entity.eid,
       'data-pending': working ? '' : undefined,
+      'data-doing': working ? doingOf(entries) : undefined,
     },
     h(
       'div',
@@ -860,10 +878,10 @@ export let talk = (
         h('div', { id: `row-${r.id}` }, r.node)
       ),
     ),
+    // the words a screen reader hears; the yak beside the box shows them
     h(
       Loading,
       { class: 'Talk_Now' },
-      h(Yak, { pose: poseOf(working) }),
       h('span', { 'data-now': '' }, working),
     ),
     rest.length

@@ -1,8 +1,10 @@
 // The yak waiting (mascot.ts `idle`): an `<img data-idle="loop:ms …">` sits
 // on his rest frame, and every 5 to 9 seconds plays one of his loops, in a
 // shuffled order that plays each before any comes again. Every loop starts
-// and ends on the rest frame, so going into one and back is seamless. A
-// person who asks for less motion keeps him at rest.
+// and ends on the rest frame, so going into one and back is seamless. While
+// a page names one of his loops in his `data-doing` (the Operator's chat,
+// for what it is doing, T-144829), he plays that one over and over instead.
+// A person who asks for less motion keeps him at rest.
 //
 // Each loop is fetched once, just before it first plays, at the density the
 // browser chose for the rest frame, and shown through its own object URL each
@@ -66,25 +68,31 @@
       }
       return blobs.get(name)
     }
-    let coming = next(), timer, playing = false
-    let wait = () => {
-      timer = setTimeout(play, 5000 + Math.random() * 4000)
-      let name = coming
+    let coming = next(), timer, playing = false, asked
+    let doing = () => {
+      let name = img.getAttribute('data-doing')
+      return loops.has(name) ? name : undefined
+    }
+    // a loop asked for, or the one the page says he is doing, comes at once;
+    // else he rests 5 to 9 seconds
+    let wait = (soon = !still.matches && !!(asked ?? doing())) => {
+      clearTimeout(timer)
+      timer = setTimeout(play, soon ? 0 : 5000 + Math.random() * 4000)
+      let name = asked ?? doing() ?? coming
       // fetched ahead; a failure is fetched and reported again when it plays
       if (!still.matches) fetched(name).catch(() => blobs.delete(name))
     }
-    // `asked` is a loop someone asked for now (an `idle` event's detail);
-    // else the next in the order
-    let play = async (asked) => {
+    let play = async () => {
       if (!img.isConnected) return
-      let name = asked ?? coming
-      if (!asked) coming = next()
+      let name = asked ?? doing()
+      asked = undefined
+      if (!name) name = coming, coming = next()
       // with less motion asked for, or while he is out of sight (wander.js
       // hides him while he walks), he waits at rest
       if (
         still.matches ||
         img.checkVisibility?.({ visibilityProperty: true }) === false
-      ) return wait()
+      ) return wait(false)
       playing = true
       let url
       try {
@@ -95,7 +103,7 @@
       } catch (e) {
         blobs.delete(name)
         playing = false
-        wait()
+        wait(false)
         throw e
       }
       img.removeAttribute('srcset')
@@ -108,14 +116,19 @@
         wait()
       }, +loops.get(name))
     }
-    // a page asks for one of his loops now, as wander.js does on a click
+    // a page asks for one of his loops, as wander.js does on a click: it
+    // plays now, or as the one playing ends
     img.addEventListener('idle', (e) => {
-      if (playing || !loops.has(e.detail)) return
-      clearTimeout(timer)
-      play(e.detail)
+      if (!loops.has(e.detail)) return
+      asked = e.detail
+      if (!playing) wait()
+    })
+    // what he is doing changed: he takes it up as the loop playing ends
+    new MutationObserver(() => playing || wait()).observe(img, {
+      attributeFilter: ['data-doing'],
     })
     // once the rest frame is in, so the loops are fetched at its density
     if (img.complete) wait()
-    else img.addEventListener('load', wait, { once: true })
+    else img.addEventListener('load', () => wait(), { once: true })
   }
 }

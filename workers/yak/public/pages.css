@@ -1292,25 +1292,32 @@
     margin: 0 0 .5rem;
     font-size: 1.5rem;
   }
-  /* The yak waiting to the left of the box (operator-page.ts `composer`),
-     out of the way while he works above it. */
-  .Talk_Box {
-    display: grid;
-    grid-template-columns: auto minmax(0, 1fr);
-    column-gap: .75rem;
-    align-items: end;
+  /* The yak beside the box (operator-page.ts `composer`), taking no room
+     from the conversation: in the margin to its left where the page is wide
+     enough, else sitting on its top edge. */
+  .Talk_Main {
+    container: talk / inline-size;
+  }
+  .Talk_Write {
+    position: relative;
   }
   .Talk_Yak {
-    width: 4rem;
-    height: 4rem;
-    margin-bottom: .25rem;
+    position: absolute;
+    bottom: calc(100% - .2rem);
+    left: .75rem;
+    width: 2.5rem;
+    height: 2.5rem;
     object-fit: contain;
+    pointer-events: none;
   }
-  .Talk_Status {
-    grid-column: 2;
-  }
-  .Talk:has([data-task][data-pending]) .Talk_Yak {
-    visibility: hidden;
+  @container talk (min-width: 54rem) {
+    .Talk_Yak {
+      right: calc(100% + .75rem);
+      bottom: 0;
+      left: auto;
+      width: 4rem;
+      height: 4rem;
+    }
   }
   /* A new chat (operator-page.ts `chatPage`): the greeting, what needs the
      person, the box and the ways to start, held together in the middle of
@@ -1571,8 +1578,7 @@
     grid-template-columns: minmax(0, 1fr);
     gap: 0;
   }
-  .Talk_Note,
-  .Talk_Now {
+  .Talk_Note {
     margin: 0;
     color: var(--muted);
     font-size: var(--small);
@@ -1642,14 +1648,15 @@
     white-space: pre-wrap;
     overflow-wrap: anywhere;
   }
-  /* What the Operator is doing now, and the yak doing it while its thread is
-     pending; "Stopped." stands alone. */
-  .Talk_Now:has([data-now]:empty),
-  .Talk_Thread:not([data-pending]) > .Talk_Now > .Loading_Mark {
-    display: none;
-  }
-  [data-pending] > .Talk_Now {
-    color: var(--accent);
+  /* What the Operator is doing now, in words a screen reader hears; the yak
+     beside the box shows it. */
+  .Talk_Now {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
   }
   /* The files a person sent, under their words at the right: a picture as
      itself, any other file as a chip with its kind and name. */
@@ -1781,10 +1788,6 @@
     }
     .Talk_Hello {
       padding-top: 10vh;
-    }
-    .Talk_Yak {
-      width: 3rem;
-      height: 3rem;
     }
     /* The same side, behind the bar's button: the whole screen while it is
        open. */

@@ -30,7 +30,7 @@ import { mailFrom } from './post.ts'
 import { parts } from './form.ts'
 import { gathered } from './bytes.ts'
 import { refuse } from './tool.ts'
-import { Idle } from './mascot.ts'
+import { Idle, MOVES } from './mascot.ts'
 import {
   CONSENT,
   handed,
@@ -1318,8 +1318,9 @@ export let updatesPage = async (
 // the files going with them along its top (a gathering drop part,
 // public/drop.js: picked, pasted or dropped anywhere on the box, each a
 // preview or a chip to take back), Send, and Stop while the Operator works.
-// The yak waits to its left (mascot.ts `Idle`), and steps aside while he is
-// at work above it (`Talk_Now`). It asks for a message to the Operator by
+// The yak sits in the margin beside it (mascot.ts `Idle`), taking no room
+// from the conversation, and shows what the Operator is doing (`MOVES`). It
+// asks for a message to the Operator by
 // name, or with an app open beside it, what should change there, and the
 // words say which (`about`).
 let composer = (env: Env, at: string, operator: string, app?: Shown) => {
@@ -1337,10 +1338,10 @@ let composer = (env: Env, at: string, operator: string, app?: Shown) => {
     },
     h('input', { type: 'hidden', name: 'request', value: crypto.randomUUID() }),
     app ? h('input', { type: 'hidden', name: 'app', value: app.slug }) : null,
-    h(Idle, { class: 'Talk_Yak', base: url(env) }),
     h(
       Drop,
       { mod: 'gather', class: 'Talk_Write' },
+      h(Idle, { class: 'Talk_Yak', base: url(env) }),
       h(Drop.Chosen, { 'aria-label': 'Files to send', 'aria-live': 'polite' }),
       h(Field, {
         lines: true,
@@ -1458,16 +1459,22 @@ if (form) { drafts.bind(form.elements.say, place); form.elements.say.focus() }
 let said = (e) => { status.textContent = e.message }
 let thread = () => box.querySelector('[data-task]')
 let working = () => !!box.querySelector('[data-pending]')
-// The yak beside what it is doing now takes the pose the words call for
-// (mascot.ts), each of its files swapped for the same pose's.
-let pose = (card, name) => {
-  let yak = card.querySelector('[data-pose]')
-  if (!yak || yak.dataset.pose == name) return
-  for (let [el, at] of [[yak.querySelector('source'), 'srcset'], [yak.querySelector('img'), 'src'], [yak.querySelector('img'), 'srcset']]) {
-    el.setAttribute(at, el.getAttribute(at).replaceAll('/' + yak.dataset.pose, '/' + name))
-  }
-  yak.dataset.pose = name
+// The yak beside the box shows what the Operator is doing (mascot.ts
+// \`MOVES\`): a loop over and over while it lasts, one played once as the
+// work ends, and his waiting otherwise (idle.js).
+let moves = ${JSON.stringify(MOVES)}
+let yak = form?.querySelector('[data-idle]')
+let last = 'idle'
+let doing = (now = 'idle') => {
+  if (!yak || now == last) return
+  last = now
+  let move = moves[now]
+  if (move && !move.once) return void (yak.dataset.doing = move.loop)
+  delete yak.dataset.doing
+  if (move) yak.dispatchEvent(new CustomEvent('idle', { detail: move.loop }))
 }
+let redrawn = () => doing(thread()?.dataset.doing)
+redrawn()
 // The page follows the conversation down as it grows, unless the person has
 // scrolled up to read.
 let near = () => !globalThis.innerHeight || globalThis.innerHeight + globalThis.scrollY >= document.body.scrollHeight - 120
@@ -1494,6 +1501,7 @@ document.addEventListener('click', async (e) => {
   if (!card) return
   card.removeAttribute('data-pending')
   card.querySelector('[data-now]').textContent = 'Stopped.'
+  doing('idle')
   try {
     let response = await fetch('${at}?stop=1', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ task: card.dataset.task }) })
     if (!response.ok) throw new Error('It could not be stopped. Try again.')
@@ -1515,7 +1523,7 @@ let read = async () => {
       if (!response.ok) throw new Error('This page could not be brought up to date. Your conversation is saved; reload to try again.')
       let got = await response.json()
       let was = near()
-      if (got.html) redraw(box, got.html)
+      if (got.html) redraw(box, got.html), redrawn()
       if (got.title) heading.textContent = got.title
       follow(was)
     } while (again)
@@ -1547,7 +1555,7 @@ let hear = (frame) => {
     }
     typing.textContent += o.typing
     card.querySelector('[data-now]').textContent = 'Typing…'
-    pose(card, 'typing')
+    doing('writing')
     return follow(was)
   }
   typing?.remove()
@@ -1563,7 +1571,7 @@ let hear = (frame) => {
     at.dataset.html = row.html
   }
   card.querySelector('[data-now]').textContent = o.now
-  if (o.pose) pose(card, o.pose)
+  doing(o.doing)
   card.toggleAttribute('data-pending', !!o.now)
   follow(was)
 }

@@ -182,8 +182,8 @@ let text = (s: string) =>
 test('a conversation opens in the chat app: its words, each step in plain words, and the reply', () => {
   assertEquals(page.code, 200)
   assertEquals(text('[data-title]'), [CONVERSATION])
-  // the yak waits to the left of the box
-  assert(page.document.querySelector('#ask > img[data-idle]'))
+  // the yak sits beside the box
+  assert(page.document.querySelector('#ask .Talk_Write > img[data-idle]'))
   assertEquals(text('.Talk_You'), [
     'Post a special meeting Thursday at 7 about the road millage.',
   ])
@@ -482,7 +482,7 @@ test("the chat app says whose Operator it is, and opens another space's", () => 
     assertEquals(said('.Talk_Who'), `${at.operator}, ${name}’s Operator`)
     assertStringIncludes(said('.Talk_Hello')!, `Ask ${at.operator}`)
     // the yak waits beside the box, played by its script (mascot.ts `idle`)
-    assert(document.querySelector('#ask > img[data-idle]'))
+    assert(document.querySelector('#ask .Talk_Write > img[data-idle]'))
     assert(document.querySelector('script[src$="/idle.js"]'))
     assertEquals(
       [...document.querySelectorAll('.Talk_Whose .Desk_Row small')].map((a) =>

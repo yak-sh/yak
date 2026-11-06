@@ -6,7 +6,7 @@ import { parseHTML } from 'linkedom'
 import type { Bundle } from '@yaks/graph'
 import { frame, talk } from './operator-view.ts'
 import { desk, shell } from './pages.ts'
-import { IDLE, idle } from './mascot.ts'
+import { IDLE, idle, MOVES } from './mascot.ts'
 
 let env = { APEX: 'yaks.fyi' }
 let entry = (eid: string, seq: number, comps: Record<string, unknown>) =>
@@ -56,21 +56,37 @@ let served = async (path: string) => {
   assert(info.isFile, name)
 }
 
-test('the Operator at work is the yak doing what its words say', async () => {
+test('what the Operator is doing is words a screen reader hears, and the yak beside the box shows it', () => {
   let task = { entity: { eid: 't' } } as Bundle
+  let answered = [...asked, entry('out', 3, { output: { source: 'ask' } })]
+  let crashed = [...asked, entry('x', 3, { exception: { message: 'down' } })]
   for (
-    let [entries, pose, words] of [
+    let [entries, doing, words] of [
       [asked, 'thinking', 'Thinking…'],
-      [calling, 'checking', 'Checking cookbook for errors…'],
+      [calling, 'tool', 'Checking cookbook for errors…'],
+      [answered, 'done', ''],
+      [crashed, 'failed', ''],
     ] as const
   ) {
-    let [shown] = yaks(talk(task, entries, names, [], '/chat', {}))
-    assertEquals(shown.pose, pose)
-    assertEquals(shown.words, words)
-    for (let f of shown.files) await served(f)
+    let thread = parseHTML(
+      `<main>${talk(task, entries, names, [], '/chat')}</main>`,
+    )
+      .document.querySelector('[data-task]')!
+    assertEquals(
+      [
+        thread.getAttribute('data-doing'),
+        thread.querySelector('[data-now]')!.textContent,
+      ],
+      [words ? doing : null, words],
+    )
+    assertEquals(thread.querySelector('img'), null)
     let { operator } = frame('t', entries, names, 0)
-    assertEquals([operator.now, operator.pose], [words, pose])
+    assertEquals([operator.now, operator.doing], [words, doing])
   }
+})
+
+test("each thing the Operator does is one of the waiting yak's loops", () => {
+  for (let { loop } of Object.values(MOVES)) assert(loop in IDLE, loop)
 })
 
 test('the builder waits with the yak at its keyboard', async () => {
@@ -103,7 +119,7 @@ test('the waiting yak is drawn at the size it shows, at every density', async ()
 // public/idle.js run over the waiting yak, its timers stepped by hand.
 // `decoding` is how each loop's picture answers decode()
 let waiting = (still = false, decoding = () => Promise.resolve()) => {
-  let { document, Event, CustomEvent } = parseHTML(
+  let { document, Event, CustomEvent, MutationObserver } = parseHTML(
     `<main>${idle('Talk_Yak')}</main>`,
   )
   let img = document.querySelector('img')!
@@ -119,6 +135,7 @@ let waiting = (still = false, decoding = () => Promise.resolve()) => {
     'Image',
     'setTimeout',
     'clearTimeout',
+    'MutationObserver',
     code,
   )(
     document,
@@ -138,6 +155,7 @@ let waiting = (still = false, decoding = () => Promise.resolve()) => {
     },
     (fn: () => void, ms: number) => (timers.set(++ids, [fn, ms]), ids),
     (id: number) => timers.delete(id),
+    MutationObserver,
   )
   img.dispatchEvent(new Event('load'))
   let step = async () => {
@@ -150,7 +168,13 @@ let waiting = (still = false, decoding = () => Promise.resolve()) => {
   let shown = () => [img.getAttribute('src'), img.getAttribute('srcset')]
   let ask = (loop: string) =>
     img.dispatchEvent(new CustomEvent('idle', { detail: loop }))
-  return { step, shown, fetched, ask, rest: shown() }
+  let doing = (loop?: string) =>
+    loop
+      ? img.setAttribute('data-doing', loop)
+      : img.removeAttribute('data-doing')
+  // a change to what he is doing is heard once the observer runs
+  let settled = () => new Promise((r) => setTimeout(r, 0))
+  return { step, shown, fetched, ask, doing, settled, rest: shown() }
 }
 
 let code = await Deno.readTextFile(new URL('./public/idle.js', import.meta.url))
@@ -162,7 +186,9 @@ test('he sits, then plays each of his loops once before any comes again', async 
     let rested = await yak.step()
     assert(rested >= 5000 && rested <= 9000, `${rested}`)
     let [src, set] = yak.shown()
-    let loop = src!.match(/^blob:\/mascot\/idle-(\w+)-128\.webp$/)![1]
+    let loop = src!.match(
+      /^blob:\/mascot\/idle-(\w+)-128\.webp$/,
+    )![1] as keyof typeof IDLE
     assertEquals(set, null)
     played.push(loop)
     assertEquals(await yak.step(), IDLE[loop])
@@ -173,13 +199,37 @@ test('he sits, then plays each of his loops once before any comes again', async 
   for (let f of yak.fetched) await served(f)
 })
 
-test('asked for a loop, he plays it at once, then waits again', async () => {
+test('asked for a loop, he plays it at once, or as the one playing ends, then waits again', async () => {
   let yak = waiting()
   yak.ask('lick')
-  await new Promise((r) => setTimeout(r, 0))
+  assertEquals(await yak.step(), 0)
   assertEquals(yak.shown(), ['blob:/mascot/idle-lick-128.webp', null])
   yak.ask('doze')
   assertEquals(await yak.step(), IDLE.lick, 'one loop at a time')
+  assertEquals(await yak.step(), 0)
+  assertEquals(yak.shown(), ['blob:/mascot/idle-doze-128.webp', null])
+  assertEquals(await yak.step(), IDLE.doze)
+  assertEquals(yak.shown(), yak.rest)
+  let rested = await yak.step()
+  assert(rested >= 5000 && rested <= 9000, `${rested}`)
+})
+
+test('while a page says what he is doing, he plays that loop over and over, then waits again', async () => {
+  let yak = waiting()
+  yak.doing('glance')
+  await yak.settled()
+  for (let i = 0; i < 3; i++) {
+    assertEquals(await yak.step(), 0)
+    assertEquals(yak.shown(), ['blob:/mascot/idle-glance-128.webp', null])
+    assertEquals(await yak.step(), IDLE.glance)
+  }
+  yak.doing('ears')
+  await yak.settled()
+  assertEquals(await yak.step(), 0)
+  assertEquals(yak.shown(), ['blob:/mascot/idle-ears-128.webp', null])
+  yak.doing(undefined)
+  await yak.settled()
+  assertEquals(await yak.step(), IDLE.ears, 'the loop playing ends first')
   assertEquals(yak.shown(), yak.rest)
   let rested = await yak.step()
   assert(rested >= 5000 && rested <= 9000, `${rested}`)
@@ -188,7 +238,7 @@ test('asked for a loop, he plays it at once, then waits again', async () => {
 test('a loop the browser will not decode ahead still plays once it loads', async () => {
   let yak = waiting(false, () => Promise.reject(new Error('Loading error.')))
   yak.ask('lick')
-  await new Promise((r) => setTimeout(r, 0))
+  await yak.step()
   assertEquals(yak.shown(), ['blob:/mascot/idle-lick-128.webp', null])
 })
 
