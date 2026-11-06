@@ -2542,6 +2542,12 @@ let manage = async (req: Request, env: Env): Promise<Response> => {
     until,
   }
   if (at.logo) return logoOf(env, space, who, at.logo)
+  if (at.manifest) {
+    let open = req.method == 'GET' || req.method == 'HEAD'
+    if (!open || !writes(who.role) || space.trashed) return nothingHere(env)
+    let { installing } = await import('./operator-page.ts')
+    return installing(space)
+  }
   // The Operator is open to every member who may change the space; its own
   // requests are answered by it, its settings page is drawn like every
   // other, and each conversation with it opens in its chat app, which

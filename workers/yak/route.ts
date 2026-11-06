@@ -112,12 +112,23 @@ export let logoPath = (
     ? `${MANAGE}/${encodeURIComponent(space.slug)}/logo/${space.logo.sha}`
     : undefined
 let SHA = /^[0-9a-f]{64}$/
+let MANIFEST = 'manifest.webmanifest'
+/** What a space's Operator page installs from (operator-page.ts
+ * `installing`). */
+export let manifestPath = (space: string) =>
+  `${MANAGE}/${encodeURIComponent(space)}/${MANIFEST}`
 /** What a manage path asks for: an account page, a space's page (a new chat
  * with its Operator when none is named), its logo's bytes, or an address from
  * before T-136122 (`legacy`), to be sent on. Null is no page. */
 export type Managed =
   | { account: AccountView }
-  | { space: string; view: SpaceView; open?: string; logo?: string }
+  | {
+    space: string
+    view: SpaceView
+    open?: string
+    logo?: string
+    manifest?: true
+  }
   | { legacy: ManageView }
   | { first: true }
 export let managed = (path: string): Managed | null => {
@@ -129,6 +140,9 @@ export let managed = (path: string): Managed | null => {
     return OPEN.test(rest[0])
       ? { space: one, view: 'operator', open: rest[0] }
       : null
+  }
+  if (two == MANIFEST && !rest.length && SLUG.test(one)) {
+    return { space: one, view: 'operator', manifest: true }
   }
   if (two == 'logo' && rest.length == 1 && SLUG.test(one)) {
     return SHA.test(rest[0])

@@ -18,12 +18,13 @@ import { toolEid } from '@yaks/tools/result'
 import {
   aboutPath,
   chatPage,
+  installing,
   operatorAnswer,
   operatorBody,
   updatesPage,
 } from './operator-page.ts'
 import { NAMES, pick } from './operator-name.ts'
-import { chatPath, managed, managePath } from './route.ts'
+import { chatPath, managed, managePath, manifestPath } from './route.ts'
 
 let p = platform('operator-chat')
 let person = crypto.randomUUID(), eid = crypto.randomUUID()
@@ -237,6 +238,52 @@ test("the space's address opens the person's one conversation, and a new chat un
     task,
   )
   assertEquals(byRequest.document.querySelector('[name=task]'), null)
+})
+
+let manifest = await installing(space).json()
+test("the chat app installs to a home screen as its Operator's web app", () => {
+  let { document } = fresh
+  let attr = (selector: string, name: string) =>
+    document.querySelector(selector)?.getAttribute(name)
+  assertEquals(attr('link[rel=manifest]', 'href'), manifestPath('clerk'))
+  assertEquals(managed(manifestPath('clerk')), {
+    space: 'clerk',
+    view: 'operator',
+    manifest: true,
+  })
+  assertEquals(attr('link[rel=manifest]', 'crossorigin'), 'use-credentials')
+  assertEquals(attr('link[rel=apple-touch-icon]', 'href'), '/connector-512.png')
+  assertEquals(
+    [...document.querySelectorAll('meta[name=theme-color]')]
+      .map((m) => [m.getAttribute('media'), m.getAttribute('content')]),
+    [
+      ['(prefers-color-scheme: light)', '#fdf7ee'],
+      ['(prefers-color-scheme: dark)', '#2b231f'],
+    ],
+  )
+  assertEquals(
+    attr('meta[name=apple-mobile-web-app-capable]', 'content'),
+    'yes',
+  )
+  assertEquals(
+    attr('meta[name=apple-mobile-web-app-title]', 'content'),
+    space.operator,
+  )
+  assertEquals(
+    installing(space).headers.get('content-type'),
+    'application/manifest+json',
+  )
+  assertEquals(manifest, {
+    id: chatPath('clerk'),
+    name: `${space.operator}, Township’s Operator`,
+    short_name: space.operator,
+    start_url: chatPath('clerk'),
+    scope: '/',
+    display: 'standalone',
+    background_color: '#fdf7ee',
+    theme_color: '#fdf7ee',
+    icons: [{ src: '/connector-512.png', type: 'image/png', sizes: '512x512' }],
+  })
 })
 
 let owner = await sided('owner')

@@ -6,7 +6,8 @@ import { builderOf, operatorDoor, SPACE } from './build-door.ts'
 import { vouched, type Who } from './session.ts'
 import { esc, type Picked, shell, spaceChoice } from './pages.ts'
 import { spaceHost, url } from './host.ts'
-import { chatPath, logoPath, managePath, SLUG } from './route.ts'
+import { chatPath, logoPath, managePath, manifestPath, SLUG } from './route.ts'
+import { PLATFORM_BACKGROUND } from './apps.ts'
 import {
   keepFile,
   type Request as Intake,
@@ -725,6 +726,50 @@ let canvas = (env: Env, space: Space, app: Shown) => {
 </section>`
 }
 
+// The Operator page installs to a home screen as a web app (D-136811): each
+// space's own manifest (`installing`), named for its Operator and opening its
+// chat, and the tags a phone reads beside it. The icon is the Operator's own
+// tile, the connector's, which is opaque, so iOS paints no black behind it.
+// The window wears the page's ground, light or dark (public/tokens.css
+// `--linen`, `--night`), so the status bar reads as part of the page. Its
+// scope is the whole origin, so signing in stays in the window.
+let ICON = '/connector-512.png'
+let NIGHT = '#2b231f'
+let whoseOf = (space: Space) =>
+  `${space.operator}, ${space.title || space.slug}’s Operator`
+let installable = (space: Space) =>
+  `<link rel="manifest" href="${
+    manifestPath(space.slug)
+  }" crossorigin="use-credentials">
+<link rel="apple-touch-icon" href="${ICON}">
+<meta name="theme-color" content="${PLATFORM_BACKGROUND}" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="${NIGHT}" media="(prefers-color-scheme: dark)">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="apple-mobile-web-app-title" content="${esc(space.operator)}">`
+
+/** A space's Operator page as a web app: what a phone installs from. */
+export let installing = (space: Space) => {
+  let at = chatPath(space.slug)
+  return Response.json({
+    id: at,
+    name: whoseOf(space),
+    short_name: space.operator,
+    start_url: at,
+    scope: '/',
+    display: 'standalone',
+    background_color: PLATFORM_BACKGROUND,
+    theme_color: PLATFORM_BACKGROUND,
+    icons: [{ src: ICON, type: 'image/png', sizes: '512x512' }],
+  }, {
+    headers: {
+      'content-type': 'application/manifest+json',
+      'cache-control': 'private, no-cache',
+    },
+  })
+}
+
 // A page of the chat app: the side, and beside it the bar naming the page
 // and whose Operator it is, over `main`, and the app open beside them.
 let talkPage = (
@@ -747,8 +792,7 @@ let talkPage = (
     app?: Shown
   },
 ) => {
-  let named = space.title || space.slug
-  let whose = `${space.operator}, ${named}’s Operator`
+  let whose = whoseOf(space)
   return shell(
     env,
     `${esc(page.title)} · ${esc(space.operator)}`,
@@ -780,6 +824,7 @@ ${page.app ? canvas(env, space, page.app) : ''}
 ${page.script ?? ''}`,
     { 'cache-control': 'private, no-store', 'x-robots-tag': 'noindex' },
     'Talk_Page',
+    installable(space),
   )
 }
 

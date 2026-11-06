@@ -123,6 +123,8 @@ export let shell = (
   // provisioning page below, the admin's no-store on its directory.
   headers: Record<string, string> = {},
   layout = '',
+  // Tags for the head beside the platform's own.
+  head = '',
 ) =>
   new Response(
     `<!doctype html>
@@ -132,7 +134,7 @@ export let shell = (
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="color-scheme" content="light dark">
 <title>${title} · yaks.app</title>
-${links(env, 'pages.css')}
+${links(env, 'pages.css')}${head ? `\n${head}` : ''}
 </head>
 <body${layout ? ` class="${layout}"` : ''}><main>${
       lead == null ? '' : `<h1>${title}</h1><p>${lead}</p>`
