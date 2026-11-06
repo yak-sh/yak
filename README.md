@@ -10,11 +10,14 @@ change is a batch of entity patches, and every list is a query.
 
 ## Start
 
-To see what Claude Code and Codex have cost you, from the transcripts already on
-your machine, follow [docs/SPEND.md](docs/SPEND.md): one install command from
-jsr.io and two more.
+There are two ways to run `yak`; pick one.
 
-`yak` runs on [Deno](https://deno.com) 2.9 or later.
+- **Install the published `yak` from jsr.io**: no clone, no build. Below.
+- **Develop from a clone**: run this repository's own code, the way its
+  maintainers do. See [Develop](#develop).
+
+`yak` runs on [Deno](https://deno.com) 2.9 or later. To see what Claude Code and
+Codex have cost you, [docs/SPEND.md](docs/SPEND.md) is the short version.
 
 ```sh
 deno run -A jsr:@yaks/cli/install
@@ -28,15 +31,19 @@ yak help            # every command
 ```
 
 The installer puts `yak` on your PATH at its own release, so the command and
-every package a config names are one set: the newest release at least a day old,
-since Deno waits a day for a new one. Deno remembers which release it last
-found, so to update, run it with `--reload=jsr:@yaks/cli` too, which asks jsr.io
-again; add `--minimum-dependency-age=0` to take a release published today. From
-a checkout, `deno task install` runs the checkout itself. `yak init` writes the
-config (`db`, the plugins, and who you are) and never replaces one. It asks for
-no name: it takes git's `user.name`, or else your login, and the graph's first
-task, filed to you, is for an agent to ask you whether that is right. `yak name`
-renames you. `yak serve` listens on this machine alone; a config's `hostname`
+every package a config names are one set. Deno refuses any package published
+less than a day ago (its minimum dependency age), so the installer takes the
+newest release at least a day old. If Deno says a version "was newer than the
+specified minimum dependency date", or to update, run it again with
+`--minimum-dependency-age=0 --reload=jsr:@yaks/cli`: the first takes a release
+published today, the second asks jsr.io again instead of reusing the release
+Deno found last.
+
+`yak init` writes the config (`db`, the plugins, and who you are) and never
+replaces one. It asks for no name: it takes git's `user.name`, or else your
+login, and the graph's first task, filed to you, is for an agent to ask you
+whether that is right. `yak name` renames you. `yak serve` listens on this
+machine alone, on port 8787 unless the config sets `port`; a config's `hostname`
 offers it to a network, and it has no authentication of its own.
 
 Agents join the same graph:
@@ -89,12 +96,32 @@ plugin's service runs in one process at a time.
 
 ## Develop
 
+A clone runs its own code: every `@yaks/*` package comes from the checkout, and
+`deno.lock` and `pnpm-lock.yaml` pin everything else, so nothing is fetched from
+jsr.io and the minimum dependency age never applies. You need:
+
+- [Deno](https://deno.com) 2.9 or later
+- [pnpm](https://pnpm.io/installation) 12 (`package.json` names 12.16.1)
+- git, and a C compiler with `make`: the install builds the SQLite every `yak`
+  process opens, once, into `~/.cache/yak` (about a minute)
+
 ```sh
-deno task install  # yak on PATH, running this checkout
+git clone https://github.com/yak-sh/yak.git && cd yak
+pnpm install       # node_modules, from pnpm-lock.yaml
+deno task install  # `yak` on PATH (~/.deno/bin), running this checkout
+yak init           # then yak serve, as in Start
+deno task test     # the tests this branch's changes reach, against main
 deno task check    # fmt, lint, types, and the package checks
-deno task test     # the tests
-deno task tui      # the terminal UI
 ```
+
+`deno task install` writes `~/.deno/bin/yak`, a shim that runs
+`deno run -A --unstable-no-legacy-abort --config deno.json packages/cli/yak.ts`
+in this checkout, so every edit runs at once and nothing needs reinstalling.
+`deno run -A packages/cli/yak.ts serve` from the checkout does the same without
+the shim. Installing from jsr.io writes the same `~/.deno/bin/yak`, so the last
+install wins: a "newer than the specified minimum dependency date" error means
+the published `yak` is the one running, and `deno task install` in the checkout
+puts the checkout's back.
 
 ## License
 
