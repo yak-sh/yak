@@ -1,6 +1,8 @@
 // What server-rendered pages say: text escaped for HTML and quoted
-// attributes, and a day the way a person reads it.
-import type { VNode } from 'preact'
+// attributes, a day the way a person reads it, and the parts more than one
+// page draws.
+import { Drop } from '@yaks/ui/parts'
+import { h, type VNode } from 'preact'
 import { jsxTemplate } from 'preact/jsx-runtime'
 import { renderToString } from 'preact-render-to-string'
 
@@ -68,18 +70,30 @@ export let fileDrop = (o: {
   size?: number
   sends?: boolean
 }) =>
-  `<div class="Drop"><label class="Drop_Zone"><input class="Drop_File" type="file" name="${
-    esc(o.name)
-  }" aria-label="${esc(o.label)}"${o.multiple ? ' multiple' : ''}${
-    o.required ? ' required' : ''
-  }${o.accept ? ` accept="${esc(o.accept)}"` : ''}${
-    o.size ? ` data-size="${o.size}"` : ''
-  }${
-    o.sends ? ' data-sends' : ''
-  }><span class="Drop_Say"><span class="Drop_Choose">Choose ${
-    o.multiple ? 'files' : 'a file'
-  }</span> or drop ${o.multiple ? 'them' : 'it'} here</span>${
-    o.hint ? `<span class="Drop_Hint">${esc(o.hint)}</span>` : ''
-  }</label>${
-    o.size ? '<p class="Drop_Said" role="status"></p>' : ''
-  }<ul class="Drop_Chosen" aria-live="polite"></ul></div>`
+  h(
+    Drop,
+    null,
+    h(
+      Drop.Zone,
+      null,
+      h(Drop.File, {
+        type: 'file',
+        name: o.name,
+        'aria-label': o.label,
+        multiple: o.multiple,
+        required: o.required,
+        accept: o.accept,
+        'data-size': o.size,
+        'data-sends': o.sends ? '' : undefined,
+      }),
+      h(
+        Drop.Say,
+        null,
+        h(Drop.Choose, null, `Choose ${o.multiple ? 'files' : 'a file'}`),
+        ` or drop ${o.multiple ? 'them' : 'it'} here`,
+      ),
+      o.hint ? h(Drop.Hint, null, o.hint) : null,
+    ),
+    o.size ? h(Drop.Said, { role: 'status' }) : null,
+    h(Drop.Chosen, { 'aria-live': 'polite' }),
+  )

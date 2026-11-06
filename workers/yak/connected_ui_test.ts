@@ -5,7 +5,12 @@ import { test } from '@yaks/testing'
 import { assert, assertEquals } from '@std/assert'
 import { parseHTML } from 'linkedom'
 import type { Agent } from './connected.ts'
+import { renderToString } from 'preact-render-to-string'
 import { agentList, agentLive } from './connected_ui.ts'
+
+// The list as the page it is on is sent.
+let html = (...a: Parameters<typeof agentList>) =>
+  renderToString(agentList(...a))
 
 let chatgpt: Agent = {
   id: 'chatgpt',
@@ -19,7 +24,10 @@ let script = new Function(
   'window',
   'document',
   'fetch',
-  agentLive('/oauth/agents').replace(/^<script>|<\/script>$/g, ''),
+  renderToString(agentLive('/oauth/agents')).replace(
+    /^<script>|<\/script>$/g,
+    '',
+  ),
 )
 
 let mount = (
@@ -30,7 +38,7 @@ let mount = (
 <p data-disconnected${initial.length ? ' hidden' : ''}>Connect your agent</p>
 <p data-connected${initial.length ? '' : ' hidden'}>Your agents</p>
 <div><input value="draft"></div>
-${view ? agentList(initial, view, '/manage/connect') : ''}
+${view ? html(initial, view, '/manage/connect') : ''}
 </body></html>`)
   let events: Record<string, () => Promise<void>> = {}
   let listen = (name: string, run: () => Promise<void>) => {
@@ -94,13 +102,17 @@ test('each row disconnects its own agent, and links have no form', () => {
     name: 'Claude',
     connectedAt: 2,
   }
-  let posts = [
-    ...agentList([chatgpt, claude], 'rows', '/manage/connect').split(
-      '<template',
-    )[0].matchAll(
-      /<form [^>]*method="(\w+)" action="([^"]*)">\s*<input [^>]*name="agent"[^>]*value="([^"]*)">\s*<input [^>]*name="return" value="([^"]*)">\s*<button [^>]*aria-label="([^"]*)"/g,
-    ),
-  ].map((m) => m.slice(1))
+  // Each row's form, as a browser would send it.
+  let list = parseHTML(
+    `<body>${html([chatgpt, claude], 'rows', '/manage/connect')}</body>`,
+  ).document.querySelector('.Agents')!
+  let posts = [...list.querySelectorAll('form')].map((f) => [
+    f.getAttribute('method'),
+    f.getAttribute('action'),
+    f.querySelector<HTMLInputElement>('[name=agent]')!.value,
+    f.querySelector<HTMLInputElement>('[name=return]')!.value,
+    f.querySelector('button')!.getAttribute('aria-label'),
+  ])
   assertEquals(posts, [
     [
       'post',
@@ -117,7 +129,11 @@ test('each row disconnects its own agent, and links have no form', () => {
       'Disconnect Claude',
     ],
   ])
-  assert(!agentList([chatgpt], 'links').includes('<form'))
+  assertEquals(
+    parseHTML(`<body>${html([chatgpt], 'links')}</body>`).document
+      .querySelector('form'),
+    null,
+  )
 })
 
 test('compact agents render launch links and refresh without replacing drafts or stable links', async () => {

@@ -3,6 +3,7 @@
 import { test } from '@yaks/testing'
 import { assertEquals } from '@std/assert'
 import { parseHTML } from 'linkedom'
+import { renderToString } from 'preact-render-to-string'
 import { fileDrop } from './html.ts'
 
 let code = await Deno.readTextFile(
@@ -21,7 +22,7 @@ class Held {
 let page = (multiple = true) => {
   let { document, window } = parseHTML(
     `<!doctype html><html><body><form>${
-      fileDrop({ name: 'file', label: 'Files', multiple })
+      renderToString(fileDrop({ name: 'file', label: 'Files', multiple }))
     }</form><p id="away"></p></body></html>`,
   )
   let on: Record<string, (e: unknown) => void> = {}

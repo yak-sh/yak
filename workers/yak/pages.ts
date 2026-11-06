@@ -7,11 +7,30 @@
 // Errors are for the person's assistant to fix (D-32318 §Errors); the
 // dashboard marks the app they broke in and says what to ask it.
 //
-// Template values are escaped by `esc` at the call site; registry views use
-// the HTML host's escaping. A page carries an email address a stranger typed,
-// and web content never speaks HTML (the repo's md.ts rule, one floor down).
+// A page is a tree of the kit's parts, rendered once at its edge (`page`), so
+// what a person typed is escaped by Preact wherever it lands; a page carries
+// an email address a stranger typed, and web content never speaks HTML (the
+// repo's md.ts rule, one floor down). Markup the platform made itself (an
+// icon, the yak, a QR code, markdown theirs.ts drew) goes in whole (`raw`),
+// and so does a page's own script.
 
-import { type Field, KEY } from '@yaks/connections'
+import { type Field as Fielded, KEY } from '@yaks/connections'
+import {
+  At,
+  Button,
+  Card,
+  Copy,
+  Field,
+  Form,
+  Group,
+  Loading,
+  More,
+  Notice,
+  State,
+  TabSet,
+} from '@yaks/ui/parts'
+import { type ComponentChildren, Fragment, h, type VNode } from 'preact'
+import { renderToString } from 'preact-render-to-string'
 import type { Frame } from './build-door.ts'
 import type { Agent } from './connected.ts'
 import type {
@@ -24,7 +43,7 @@ import type {
 import { INTEGRATIONS } from './integrations.ts'
 import { agentList, agentLive } from './connected_ui.ts'
 import { icon, type IconName } from './icons.ts'
-import { day, esc, fileDrop, sideLink } from './html.ts'
+import { day, esc, fileDrop, raw, sideLink } from './html.ts'
 import { holder, tile } from './render/mod.ts'
 import type { People, Person } from './people.ts'
 import type { Plain } from './unseen.ts'
@@ -45,7 +64,7 @@ import {
 import { CONNECTOR } from './seo.ts'
 import { AGENT } from './docs.ts'
 import { apex, type Host, spaceHost, url } from './host.ts'
-import { yak } from './mascot.ts'
+import { Yak, yak } from './mascot.ts'
 import { links } from './sheets.ts'
 import {
   type Budget,
@@ -59,12 +78,21 @@ import {
   WARN,
   YEARLY,
 } from './meter.ts'
-import type { Card, Payer, Want } from './billing.ts'
+import type { Card as Billed, Payer, Want } from './billing.ts'
 import { columns } from '@yaks/ui/chart'
-import { h, type VNode } from 'preact'
-import { renderToString } from 'preact-render-to-string'
 
-let home = (env: Host) => `<a class="Away" href="${url(env, '/')}">yaks.app</a>`
+type Kids = ComponentChildren
+
+// A page's own script: constant code, which says nothing a person typed.
+let run = (code: string) =>
+  h('script', { dangerouslySetInnerHTML: { __html: code } })
+
+// A form's hidden field, only when there is something to carry.
+let held = (name: string, value?: string | null) =>
+  value ? h('input', { type: 'hidden', name, value }) : null
+
+let home = (env: Host) =>
+  h('a', { class: 'Away', href: url(env, '/') }, 'yaks.app')
 
 // The meter's prices are whole US dollars, as on the public pricing page.
 let plusPrice = () => `$${count(PRICE.plus)}`
@@ -79,11 +107,15 @@ let billButton = (
   target?: string,
   want?: Want,
 ) =>
-  `<button type="button" class="Button Bill_Go${
-    door == 'portal' ? '' : ' Button-go'
-  }" data-door="${esc(door)}"${target ? ` data-target="${esc(target)}"` : ''}${
-    want ? ` data-plan="${want.tier}" data-per="${want.per}"` : ''
-  }>${esc(label)}</button>`
+  h(Button, {
+    type: 'button',
+    mod: door != 'portal' && 'go',
+    class: 'Bill_Go',
+    'data-door': door,
+    'data-target': target,
+    'data-plan': want?.tier,
+    'data-per': want?.per,
+  }, label)
 
 // The style guide's parts (public/style-guide.html, One design language),
 // said once: a card's head, a status word, and a field under its label.
@@ -91,44 +123,45 @@ let billButton = (
 /** A card's head: its mark, its title, how it stands, and what acts on the
  * whole card, at the right. */
 let heading = (
-  title: string,
-  at: { mark?: string; status?: string; actions?: string; id?: string } = {},
+  title: Kids,
+  at: { mark?: Kids; status?: Kids; actions?: Kids; id?: string } = {},
 ) =>
-  `<header class="Card_Head">${at.mark ?? ''}<h2 class="Card_Title"${
-    at.id ? ` id="${at.id}"` : ''
-  }>${title}</h2>${at.status ?? ''}${
-    at.actions ? `<div class="Card_Actions">${at.actions}</div>` : ''
-  }</header>`
+  h(
+    Card.Head,
+    null,
+    at.mark,
+    h(Card.Title, { id: at.id }, title),
+    at.status,
+    at.actions ? h(Card.Actions, null, at.actions) : null,
+  )
 
 /** How something stands, in its role's colour. */
-let status = (word: string, tone?: 'positive' | 'negative') => {
-  let mod = (base: string) => tone ? `${base} ${base}-${tone}` : base
-  return `<span class="${mod('State')}"><span class="${
-    mod('Dot')
-  }"></span>${word}</span>`
-}
+let status = (word: Kids, tone?: 'positive' | 'negative') =>
+  h(State, { mod: tone }, word)
 
 /** A field: its label, its control, and what explains it under both. */
-let labeled = (id: string, label: string, control: string, hint = '') =>
-  `<div class="Form_Field"><label class="Form_Label" for="${id}">${label}</label>${control}${
-    hint ? `<p class="Form_Hint">${hint}</p>` : ''
-  }</div>`
+let labeled = (id: string, label: Kids, control: Kids, hint: Kids = '') =>
+  h(
+    Form.Field,
+    null,
+    h(Form.Label, { for: id }, label),
+    control,
+    hint ? h(Form.Hint, null, hint) : null,
+  )
 
 // A value as text a script can hold: JSON, with nothing that could close it.
 let script = (value: unknown) =>
   JSON.stringify(value).replaceAll('<', '\\u003c')
 
-export let shell = (
+// The document every page here is, around the `<main>` it is handed as markup:
+// its head, and the scripts the parts in it call for.
+let documented = (
   env: Host,
   title: string,
-  lead: string | null,
+  main: string,
   status: number,
-  inner = home(env),
-  // Extra response headers, beside content-type — `Retry-After` on the
-  // provisioning page below, the admin's no-store on its directory.
   headers: Record<string, string> = {},
   layout = '',
-  // Tags for the head beside the platform's own.
   head = '',
 ) =>
   new Response(
@@ -141,18 +174,16 @@ export let shell = (
 <title>${title} · yaks.app</title>
 ${links(env, 'pages.css')}${head ? `\n${head}` : ''}
 </head>
-<body${layout ? ` class="${layout}"` : ''}><main>${
-      lead == null ? '' : `<h1>${title}</h1><p>${lead}</p>`
-    }${inner}</main>${
-      inner.includes('data-chart')
+<body${layout ? ` class="${layout}"` : ''}><main>${main}</main>${
+      main.includes('data-chart')
         ? `<script src="${url(env, '/chart.js')}" defer></script>`
         : ''
     }${
-      inner.includes('data-menu')
+      main.includes('data-menu')
         ? `<script src="${url(env, '/menu.js')}" defer></script>`
         : ''
     }${
-      inner.includes('data-idle')
+      main.includes('data-idle')
         ? `<script src="${url(env, '/idle.js')}" defer></script>`
         : ''
     }<script src="${url(env, '/drop.js')}" defer></script></body>
@@ -163,22 +194,80 @@ ${links(env, 'pages.css')}${head ? `\n${head}` : ''}
     },
   )
 
-export let lost = (env: Host = {}) =>
-  shell(
+/** What a page says about itself: its title, the line under it where it
+ * opens with the two, its status, the headers beside its content type (the
+ * provisioning page's `Retry-After`, the dashboard's no-store), the class
+ * its body wears, and tags for its head beside the platform's own. */
+export type Said = {
+  title: string
+  lead?: Kids
+  status?: number
+  headers?: Record<string, string>
+  layout?: string
+  head?: string
+}
+
+/** A page: what it says about itself, and its parts, rendered once. A page
+ * with a `lead` opens with its title as the heading and the lead under it. */
+export let page = (env: Host, at: Said, ...parts: Kids[]) =>
+  documented(
     env,
-    'Page not found',
-    'Check the address, or return to yaks.app.',
-    404,
+    esc(at.title),
+    renderToString(
+      h(
+        Fragment,
+        null,
+        at.lead == null
+          ? null
+          : [h('h1', null, at.title), h('p', null, at.lead)],
+        ...parts,
+      ),
+    ),
+    at.status ?? 200,
+    at.headers,
+    at.layout,
+    at.head,
   )
 
-export let nothingHere = (env: Host = {}) =>
-  shell(
+/** The same page written as markup, for the pages that still are (admin.ts,
+ * operator-page.ts): `title` and `lead` are markup too. */
+export let shell = (
+  env: Host,
+  title: string,
+  lead: string | null,
+  status: number,
+  inner = renderToString(home(env)),
+  headers: Record<string, string> = {},
+  layout = '',
+  head = '',
+) =>
+  documented(
     env,
-    'Nothing here yet.',
-    "There are no apps at this address yet. If it's yours, ask your " +
-      'assistant to build one.',
-    404,
+    title,
+    (lead == null ? '' : `<h1>${title}</h1><p>${lead}</p>`) + inner,
+    status,
+    headers,
+    layout,
+    head,
   )
+
+export let lost = (env: Host = {}) =>
+  page(env, {
+    title: 'Page not found',
+    lead: 'Check the address, or return to yaks.app.',
+    status: 404,
+  }, home(env))
+
+export let nothingHere = (env: Host = {}) =>
+  page(env, {
+    title: 'Nothing here yet.',
+    lead: "There are no apps at this address yet. If it's yours, ask your " +
+      'assistant to build one.',
+    status: 404,
+  }, home(env))
+
+// How long something in the trash is kept: "3 more days".
+let more = (n: number) => `${n} more ${n == 1 ? 'day' : 'days'}`
 
 // An app in the trash, at its own address (erase.ts, T-34430). Everyone else
 // gets `nothingHere` — a deleted app is not a stranger's news — so this is
@@ -190,16 +279,22 @@ export let binned = (
   at: { space: string; title: string; days: number },
   env: Host = {},
 ) =>
-  shell(
+  page(
     env,
-    `${esc(at.title)} is in the trash.`,
-    `Nothing answers at this address until it is restored. It is kept for ${at.days} more ${
-      at.days == 1 ? 'day' : 'days'
-    }, then erased for good.`,
-    404,
-    `<p><a class="Button Button-go" href="${
-      url(env, managePath('trash', at.space))
-    }">Restore it from your apps</a></p>`,
+    {
+      title: `${at.title} is in the trash.`,
+      lead: `Nothing answers at this address until it is restored. It is ` +
+        `kept for ${more(at.days)}, then erased for good.`,
+      status: 404,
+    },
+    h(
+      'p',
+      null,
+      h(Button, {
+        mod: 'go',
+        href: url(env, managePath('trash', at.space)),
+      }, 'Restore it from your apps'),
+    ),
   )
 
 // A space in the trash, at any address of its own (erase.ts, T-34431).
@@ -213,65 +308,77 @@ export let spaceBinned = (at: {
   slug: string
   title: string
   days: number
-}, env: Host = {}) =>
-  shell(
+}, env: Host = {}) => {
+  let host = spaceHost(env, at.slug)
+  return page(
     env,
-    `${esc(at.title)} is in the trash.`,
-    `Nothing answers at ${
-      esc(spaceHost(env, at.slug))
-    } until you restore it — no ` +
-      `app here, and no page. Everything the space had is kept for ${at.days} more ${
-        at.days == 1 ? 'day' : 'days'
-      }, then erased for good.`,
-    404,
-    `<form method="post" action="/">
-<input type="hidden" name="restore-space" value="${esc(at.slug)}">
-<button class="Button Button-go" type="submit">Restore ${
-      esc(spaceHost(env, at.slug))
-    }</button>
-</form>
-<p class="Note">Its apps, their files and everything they saved come back
-exactly as they were.</p>${home(env)}`,
+    {
+      title: `${at.title} is in the trash.`,
+      lead: `Nothing answers at ${host} until you restore it — no app ` +
+        `here, and no page. Everything the space had is kept for ${
+          more(at.days)
+        }, then erased for good.`,
+      status: 404,
+    },
+    h(
+      'form',
+      { method: 'post', action: '/' },
+      held('restore-space', at.slug),
+      h(Button, { mod: 'go', type: 'submit' }, `Restore ${host}`),
+    ),
+    h(
+      'p',
+      { class: 'Note' },
+      'Its apps, their files and everything they saved come back exactly as they were.',
+    ),
+    home(env),
   )
+}
 
 // Deploying by dropping a file (T-34230): the one door on this platform that
-// makes an app with no assistant in the room. A drop zone (html.ts
-// `fileDrop`) and the name the app lives at — one plain form that POSTs to
-// `/deploy` (drop.ts) and needs no script at all. The script below only fills
-// the name in from the file's own; nothing it does is required for the form
-// to work.
+// makes an app with no assistant in the room. A drop zone (`drop`) and the
+// name the app lives at — one plain form that POSTs to `/deploy` (drop.ts)
+// and needs no script at all. The script below only fills the name in from
+// the file's own; nothing it does is required for the form to work.
 //
 // `slug` given is an app's own page, where the name is not a question: the
 // drop goes to that app and nowhere else. `to` is the space's door, whole,
 // on a page that is not at the space's own address (the dashboard's).
 let dropZone = (slug?: string, to = '/deploy') =>
-  `<form class="Deploy" method="post" action="${
-    esc(to)
-  }" enctype="multipart/form-data">
-${
+  h(
+    'form',
+    {
+      class: 'Deploy',
+      method: 'post',
+      action: to,
+      enctype: 'multipart/form-data',
+    },
     fileDrop({
       name: 'file',
       label: 'Website files',
       hint: 'A .zip of your website files, or a single index.html',
       required: true,
-    })
-  }
-${
-    slug
-      ? held('slug', slug)
-      : `<input class="Field" name="slug" maxlength="63" ` +
-        `autocomplete="off" spellcheck="false" placeholder="Name for your website" ` +
-        `aria-label="Website name">`
-  }
-<button class="Button Button-go" type="submit">${
-    slug ? 'Update app' : 'Upload website'
-  }</button>
-</form>`
+    }),
+    slug ? held('slug', slug) : h(Field, {
+      name: 'slug',
+      maxlength: 63,
+      autocomplete: 'off',
+      spellcheck: 'false',
+      placeholder: 'Name for your website',
+      'aria-label': 'Website name',
+    }),
+    h(
+      Button,
+      { mod: 'go', type: 'submit' },
+      slug ? 'Update app' : 'Upload website',
+    ),
+  )
 
 // Constant text, no interpolation, and every write to the page is a field's
 // value — the page never speaks HTML on a person's behalf (`inline` below
 // takes the same line). A drop says `change` too (public/drop.js).
-let dropping = `<script>
+let dropping = () =>
+  run(`
 let deploy = document.querySelector('.Deploy')
 if (deploy) {
   let file = deploy.querySelector('input[type=file]')
@@ -288,7 +395,7 @@ if (deploy) {
       .slice(0, 63)
   })
 }
-</script>`
+`)
 
 // ---- the builder's chat (T-34242) -------------------------------------------
 //
@@ -312,36 +419,43 @@ if (deploy) {
 // sentence it sits in.
 let AT = /https:\/\/[^\s<>"'`]+/g
 let linked = (text: string) => {
-  let out = ''
+  let out: Kids[] = []
   let from = 0
   for (let m of text.matchAll(AT)) {
-    let url = m[0].replace(/[.,;:!?)\]]+$/, '')
-    out += esc(text.slice(from, m.index)) +
-      `<a href="${esc(url)}">${esc(url)}</a>`
-    from = m.index + url.length
+    let to = m[0].replace(/[.,;:!?)\]]+$/, '')
+    out.push(text.slice(from, m.index), h('a', { href: to }, to))
+    from = m.index + to.length
   }
-  return out + esc(text.slice(from))
+  return [...out, text.slice(from)]
 }
 
 // One tool, as one row: its name, the line it said about itself, and where it
 // got to. `null` is a tool still running — the row a `ran` frame replaces.
 let toolRow = (name: string, line: string, ok: boolean | null) =>
-  `<p class="Chat_Tool${ok == false ? ' Chat_Tool-no' : ''}">` +
-  `<span class="Chat_Name">${ok == null ? '…' : ok ? '✓' : '✗'} ${
-    esc(name)
-  }</span><span class="Chat_Of">${esc(line)}</span></p>`
+  h(
+    'p',
+    { class: ok == false ? 'Chat_Tool Chat_Tool-no' : 'Chat_Tool' },
+    h(
+      'span',
+      { class: 'Chat_Name' },
+      `${ok == null ? '…' : ok ? '✓' : '✗'} ${name}`,
+    ),
+    h('span', { class: 'Chat_Of' }, line),
+  )
 
 /** The conversation, as the page draws it. */
 let transcript = (frames: Frame[]) => {
-  let rows: string[] = []
+  let rows: Kids[] = []
   let at = new Map<string, number>()
   for (let f of frames) {
     if ('said' in f) {
       if (!f.text) continue
       rows.push(
-        `<p class="Chat_Bubble Chat_Bubble-${
-          f.said == 'person' ? 'you' : 'them'
-        }">${linked(f.text)}</p>`,
+        h('p', {
+          class: `Chat_Bubble Chat_Bubble-${
+            f.said == 'person' ? 'you' : 'them'
+          }`,
+        }, linked(f.text)),
       )
     } else if ('tool' in f) {
       at.set(f.call, rows.length)
@@ -353,44 +467,80 @@ let transcript = (frames: Frame[]) => {
       else rows[was] = row
     } else if ('built' in f) {
       rows.push(
-        `<div class="Chat_Built"><p>It is live.</p>
-<p class="Url"><a href="${esc(f.built)}"><code>${esc(f.built)}</code></a></p>
-</div>`,
+        h(
+          'div',
+          { class: 'Chat_Built' },
+          h('p', null, 'It is live.'),
+          address(f.built),
+        ),
       )
     } else if ('busy' in f) {
-      rows.push(`<p class="Chat_Note">${esc(f.busy)}</p>`)
+      rows.push(h('p', { class: 'Chat_Note' }, f.busy))
     }
   }
-  return `<div class="Chat_Said">${rows.join('')}</div>`
+  return h('div', { class: 'Chat_Said' }, rows)
 }
+
+// An address something is live at, to open or copy.
+let address = (to: string) =>
+  h('p', { class: 'Url' }, h('a', { href: to }, h('code', null, to)))
 
 // The line a person types. `required` is the browser's own guard; the door
 // keeps the same one, for whoever posts without it. While a build runs, the
 // script shows the yak at its keyboard above the button; its files are the
 // apex's, which a space's page names whole.
 let chatAsk = (env: Host, to = '/api/build') =>
-  `<form class="Chat_Ask" method="post" action="${esc(to)}">
-<p><textarea class="Field" name="say" rows="3" required placeholder="A recipe box I can share with my sister" aria-label="What do you want to build?"></textarea></p>
-<p class="Loading Chat_Note" role="status" data-wait hidden>${
-    yak('typing', url(env))
-  }<span>Building…</span></p>
-<button class="Button Button-go" type="submit">Build it</button>
-</form>`
+  h(
+    'form',
+    { class: 'Chat_Ask', method: 'post', action: to },
+    h(
+      'p',
+      null,
+      h(Field, {
+        lines: true,
+        name: 'say',
+        rows: 3,
+        required: true,
+        placeholder: 'A recipe box I can share with my sister',
+        'aria-label': 'What do you want to build?',
+      }),
+    ),
+    h(
+      Loading,
+      { as: 'p', class: 'Chat_Note', 'data-wait': '', hidden: true },
+      h(Yak, { pose: 'typing', base: url(env) }),
+      h('span', null, 'Building…'),
+    ),
+    h(Button, { mod: 'go', type: 'submit' }, 'Build it'),
+  )
 
 // The optional built-in builder, reached from New app: the dashboard's page
 // is at the apex, so its form names the space's door whole, and the script
 // opens its socket wherever the form points.
 let chat = (env: Host, to: string) =>
-  `<section class="Card Chat">${heading('Build an app here')}
-${transcript([])}${chatAsk(env, to)}
-</section>`
+  h(
+    Card,
+    { class: 'Chat' },
+    heading('Build an app here'),
+    transcript([]),
+    chatAsk(env, to),
+  )
 
 // The live half (public/build.js), served at the address of the page it is
 // on: the builder's own on a space's hostname (apps.ts serves it there), so a
 // space's page needs no asset of the apex, and the public file at the apex.
 // A module, because it is one, and nothing on the page waits for it.
-let chatLive = (src = '/api/build.js') =>
-  `<script type="module" src="${src}"></script>`
+let chatLive = (src = '/api/build.js') => h('script', { type: 'module', src })
+
+let back = (env: Host, space: string) =>
+  h(
+    'p',
+    null,
+    h('a', {
+      class: 'Away',
+      href: url(env, managePath('apps', space)),
+    }, 'Back to your apps'),
+  )
 
 /**
  * What a posted line answers (T-34242), and it is a page for the same reason a
@@ -403,18 +553,16 @@ export let building = (at: {
   frames?: Frame[]
   why?: string
 }, env: Host = {}) =>
-  shell(
+  page(
     env,
-    at.why ? 'That did not go in' : `${esc(spaceHost(env, at.space))}`,
-    at.why ? esc(at.why) : 'Here is what happened. Say the next thing below.',
-    at.why ? 400 : 200,
-    `<section class="Card Chat">
-${transcript(at.frames ?? [])}${chatAsk(env)}
-</section>
-<p><a class="Away" href="${
-      url(env, managePath('apps', at.space))
-    }">Back to your apps</a></p>
-${chatLive()}`,
+    {
+      title: at.why ? 'That did not go in' : spaceHost(env, at.space),
+      lead: at.why ?? 'Here is what happened. Say the next thing below.',
+      status: at.why ? 400 : 200,
+    },
+    h(Card, { class: 'Chat' }, transcript(at.frames ?? []), chatAsk(env)),
+    back(env, at.space),
+    chatLive(),
   )
 
 // What a drop answers, either way it went (T-34230), and it is a page because
@@ -431,45 +579,39 @@ export let dropped = (at: {
   why?: string
   status?: number
 }, env: Host = {}) =>
-  shell(
+  page(
     env,
-    at.why ? 'That did not go in' : `${esc(at.slug ?? at.space)} is live`,
-    at.why
-      ? esc(at.why)
-      : `Version ${at.version} is serving. Here is what went in.`,
-    at.status ?? 200,
-    `${
-      at.url
-        ? `<p class="Url"><a href="${esc(at.url)}"><code>${
-          esc(at.url)
-        }</code></a></p>`
-        : ''
-    }
-${
-      at.files?.length
-        ? `<section class="Card">${
-          heading(
-            `${at.files.length} ${at.files.length == 1 ? 'file' : 'files'}`,
-          )
-        }
-<ol class="Files">${at.files.map((f) => `<li>${esc(f)}</li>`).join('')}</ol>
-</section>`
-        : ''
-    }
-<section class="Card">${heading(at.slug ? 'Update app files' : 'Try again')}
-<p class="Card_Sub">${
-      at.slug
-        ? `Drop another zip — or one index.html — and ${
-          esc(at.slug)
-        } becomes it.`
-        : 'A .zip of the files, or a single index.html.'
-    }</p>
-${dropZone(at.slug)}
-</section>
-<p><a class="Away" href="${
-      url(env, managePath('apps', at.space))
-    }">Back to your apps</a></p>
-${dropping}`,
+    {
+      title: at.why ? 'That did not go in' : `${at.slug ?? at.space} is live`,
+      lead: at.why ?? `Version ${at.version} is serving. Here is what went in.`,
+      status: at.status ?? 200,
+    },
+    at.url ? address(at.url) : null,
+    at.files?.length
+      ? h(
+        Card,
+        null,
+        heading(
+          `${at.files.length} ${at.files.length == 1 ? 'file' : 'files'}`,
+        ),
+        h('ol', { class: 'Files' }, at.files.map((f) => h('li', null, f))),
+      )
+      : null,
+    h(
+      Card,
+      null,
+      heading(at.slug ? 'Update app files' : 'Try again'),
+      h(
+        Card.Sub,
+        null,
+        at.slug
+          ? `Drop another zip — or one index.html — and ${at.slug} becomes it.`
+          : 'A .zip of the files, or a single index.html.',
+      ),
+      dropZone(at.slug),
+    ),
+    back(env, at.space),
+    dropping(),
   )
 
 // One thing to say, and a button that puts it on the clipboard (T-34420). The
@@ -480,12 +622,18 @@ ${dropping}`,
 //
 // One control, everywhere something is meant to be pasted: the three things to
 // say below, and each of the three a connector form asks for (T-34412).
-let copyable = (said: string, what = '') =>
-  `<span class="Copy"><span class="Copy_Text">${
-    esc(said)
-  }</span><button class="Button Copy_Go" type="button"${
-    what ? ` aria-label="Copy ${esc(what)}"` : ''
-  } hidden>Copy</button></span>`
+let copyable = (said: Kids, what = '') =>
+  h(
+    Copy,
+    null,
+    h(Copy.Text, null, said),
+    h(Button, {
+      class: 'Copy_Go',
+      type: 'button',
+      'aria-label': what ? `Copy ${what}` : undefined,
+      hidden: true,
+    }, 'Copy'),
+  )
 
 // The button's half. Constant text, no interpolation, and every write to the
 // page is textContent — the page never speaks HTML on a person's behalf. The
@@ -493,7 +641,8 @@ let copyable = (said: string, what = '') =>
 // there is one copy of them on the page and nothing to keep in step. Where the
 // clipboard is refused — an insecure origin, a browser that asks first — the
 // words are selected instead, so the person's own copy keystroke lands.
-let copying = `<script>
+let copying = () =>
+  run(`
 for (let go of document.querySelectorAll('.Copy_Go')) {
   let said = go.previousElementSibling
   go.hidden = false
@@ -512,7 +661,37 @@ for (let go of document.querySelectorAll('.Copy_Go')) {
     setTimeout(() => { go.textContent = 'Copy' }, 2000)
   })
 }
-</script>`
+`)
+
+// ---- the dashboard, still written as markup ----------------------------------
+//
+// TODO(T-136253): the dashboard below still writes its pages as markup, and
+// these say the parts above as markup for it; they go when it draws the kit's
+// parts too, as the pages above do.
+let html = (node: Kids) => renderToString(h(Fragment, null, node))
+let headingHtml = (
+  title: string,
+  at: { mark?: string; status?: string; actions?: string; id?: string } = {},
+) =>
+  html(heading(raw(title), {
+    mark: at.mark ? raw(at.mark) : null,
+    status: at.status ? raw(at.status) : null,
+    actions: at.actions ? raw(at.actions) : null,
+    id: at.id,
+  }))
+let statusHtml = (word: string, tone?: 'positive' | 'negative') =>
+  html(status(raw(word), tone))
+let labeledHtml = (id: string, label: string, control: string, hint = '') =>
+  html(labeled(id, raw(label), raw(control), hint ? raw(hint) : ''))
+let stateHtml = (connected: boolean, show: boolean) =>
+  `data-${connected ? 'connected' : 'disconnected'}${show ? '' : ' hidden'}`
+let keyBoxHtml = (
+  id: string,
+  label: string,
+  send: string,
+  hint = '',
+  fields: Fielded[] = [KEY],
+) => html(keyBox(id, raw(label), raw(send), hint ? raw(hint) : '', fields))
 
 // Who visited, on the space page (views.ts, T-34497): a block per app, the
 // owner's alone. A bar per day for the window, then the three short lists —
@@ -860,23 +1039,13 @@ export let spaceChoice = (
   }${make}</div></div></details>`
 }
 
-let state = (connected: boolean, show: boolean) =>
-  `data-${connected ? 'connected' : 'disconnected'}${show ? '' : ' hidden'}`
-
-// The one link a person pastes into their own agent, which reads from it how
-// to connect itself (docs.ts `AGENT`, public/agent.md).
-let pasteLink = (env: Host) =>
-  `<div class="Form_Field"><p class="Form_Label">Paste this link into your AI agent</p>${
-    copyable(url(env, AGENT.path), 'the link for your agent')
-  }<span class="Note">Claude, ChatGPT, Claude Code, Cursor or another agent reads from it how to connect to yaks.app, does what it can itself, and tells you the one step that’s yours.</span></div>`
-
 let connectCard = (at: DeskPage, env: Host) =>
-  `<section class="Card Desk_Connect" ${state(false, !at.agents?.length)}>
+  `<section class="Card Desk_Connect" ${stateHtml(false, !at.agents?.length)}>
 <header class="Card_Head"><h2 class="Card_Title">Connect your agent</h2><div class="Card_Actions"><a class="Button Button-go" href="${
     managePath('agents')
   }">Connect agent</a></div></header>
 <p class="Card_Sub">Build and improve your apps in the conversations you already have with Claude or ChatGPT.</p>${
-    pasteLink(env)
+    html(pasteLink(env))
   }</section>`
 
 // What broke in an app, for its owner: each break as its line says it to their
@@ -922,10 +1091,10 @@ export let fixing = (a: DeskPage['apps'][number], space: string) => {
   }<div class="Form_Field"><p class="Form_Label">Ask your assistant to fix ${
     n == 1 ? 'it' : 'them'
   }</p>${
-    copyable(
+    html(copyable(
       `Fix the errors in my ${title} app on yaks.app`,
       `the request to fix ${title}`,
-    )
+    ))
   }</div></section>`
 }
 
@@ -966,15 +1135,17 @@ export let library = (at: DeskPage, env: Host) => {
       }`
       : `<section class="Empty"><h2>Your apps will live here</h2>
 <div ${
-        state(true, !!at.agents?.length)
-      }><p>Ask your agent for your first app. Try this:</p>${firstAsk}</div>
+        stateHtml(true, !!at.agents?.length)
+      }><p>Ask your agent for your first app. Try this:</p>${
+        html(firstAsk())
+      }</div>
 <div ${
-        state(false, !at.agents?.length)
+        stateHtml(false, !at.agents?.length)
       }><p>A recipe box, a book club page, a tool for your day. Start with an idea.</p>
 <a href="${
         managePath('new', at.space)
       }">More ways to make an app</a></div></section>`
-  }${copying}`
+  }${html(copying())}`
 }
 
 // Profile (Your account): the person's name, their email, and the space
@@ -984,8 +1155,8 @@ let profile = (at: DeskPage, env: Host) => {
   let first = mine.find((s) => s.own)?.slug ?? ''
   return `<form class="Form" method="post" action="${
     managePath('profile')
-  }"><section class="Card">${heading('Profile')}<div class="Form">${
-    labeled(
+  }"><section class="Card">${headingHtml('Profile')}<div class="Form">${
+    labeledHtml(
       'your-name',
       'Your name',
       `<input class="Field" id="your-name" name="name" maxlength="60" autocomplete="name" placeholder="Dana" value="${
@@ -997,7 +1168,7 @@ let profile = (at: DeskPage, env: Host) => {
     esc(at.email ?? '')
   }</p></div>${
     mine.length > 1
-      ? labeled(
+      ? labeledHtml(
         'your-first',
         'Open first',
         `<select class="Field" id="your-first" name="first">${
@@ -1063,7 +1234,7 @@ ${
     ).join('')
   }
 </fieldset>
-<section class="Card">${heading('A free month for each friend')}
+<section class="Card">${headingHtml('A free month for each friend')}
 <p>Each friend who signs up and builds their first app gives ${
     esc(space)
   } one more free month of the Plus plan.${
@@ -1081,9 +1252,9 @@ let newSpace = (at: DeskPage, env: Host) =>
   `<form class="Form" method="post" action="${
     managePath('space')
   }"><section class="Card">${
-    heading('New space')
+    headingHtml('New space')
   }<p class="Card_Sub">A space has its own address, apps, people and plan.</p><div class="Form">${
-    labeled(
+    labeledHtml(
       'space-title',
       'Name',
       `<input class="Field" id="space-title" name="title" maxlength="60" placeholder="Book club" value="${
@@ -1091,7 +1262,7 @@ let newSpace = (at: DeskPage, env: Host) =>
       }">`,
     )
   }${
-    labeled(
+    labeledHtml(
       'space-slug',
       'Address',
       `<span class="At"><input class="Field" id="space-slug" name="slug" maxlength="63" autocomplete="off" spellcheck="false" required value="${
@@ -1120,12 +1291,12 @@ let logoCard = (at: DeskPage) => {
   let here = picked(at)
   let action = managePath('settings', at.space)
   return `<section class="Card">${
-    heading('Logo')
+    headingHtml('Logo')
   }<p class="Card_Sub">Shown beside the space’s name. A square picture looks best.</p>
 <form class="Desk_Logo" method="post" action="${action}" enctype="multipart/form-data">${
     spaceTile(here)
   }${
-    fileDrop({
+    html(fileDrop({
       name: 'logo',
       label: 'Logo',
       hint: 'PNG, JPEG, WebP or GIF, up to 1 MB',
@@ -1133,7 +1304,7 @@ let logoCard = (at: DeskPage) => {
       size: LOGO.size,
       required: true,
       sends: true,
-    })
+    }))
   }<noscript><button class="Button Button-go" type="submit">Upload</button></noscript></form>${
     here.logo
       ? `<form method="post" action="${action}"><button class="Button" type="submit" name="unlogo" value="1">Remove logo</button></form>`
@@ -1148,8 +1319,8 @@ let preferences = (at: DeskPage, env: Host) => {
   let host = esc(spaceHost(env, at.space))
   return `${logoCard(at)}<form class="Form" method="post" action="${
     managePath('settings', at.space)
-  }"><section class="Card">${heading('General')}<div class="Form">${
-    labeled(
+  }"><section class="Card">${headingHtml('General')}<div class="Form">${
+    labeledHtml(
       'space-title',
       'Name',
       `<input class="Field" id="space-title" name="title" maxlength="60" value="${
@@ -1157,7 +1328,7 @@ let preferences = (at: DeskPage, env: Host) => {
       }">`,
     )
   }${
-    labeled(
+    labeledHtml(
       'your-address',
       'Address',
       `<span class="At"><input class="Field" id="your-address" name="space" maxlength="63" autocomplete="off" spellcheck="false" value="${
@@ -1167,7 +1338,7 @@ let preferences = (at: DeskPage, env: Host) => {
     )
   }${
     at.apps.length
-      ? labeled(
+      ? labeledHtml(
         'your-home',
         `What ${host} opens`,
         `<select class="Field" id="your-home" name="home">${
@@ -1182,7 +1353,7 @@ let preferences = (at: DeskPage, env: Host) => {
   }</div></section>
 <div class="Form_Actions"><button class="Button Button-go" type="submit">Save</button></div></form>
 <section class="Card Desk_Danger">${
-    heading('Delete this space', {
+    headingHtml('Delete this space', {
       actions: `<a class="Button" href="${
         url(env, `/space/${encodeURIComponent(at.space)}/delete`)
       }">Delete space…</a>`,
@@ -1209,13 +1380,13 @@ let selling = (at: DeskPage, env: Host) => {
         : `Connect ${by}`
     }</button></form>`
     : ''
-  let subscribe = at.paying ? '' : billButton(
+  let subscribe = at.paying ? '' : html(billButton(
     'checkout',
     `Subscribe — ${plusPrice()} a month`,
     managePath('selling', at.space),
-  )
+  ))
   return `<section class="Card Bill">${
-    heading(
+    headingHtml(
       !at.paying
         ? 'Take payments with Plus'
         : ready
@@ -1223,9 +1394,9 @@ let selling = (at: DeskPage, env: Host) => {
         : 'Take payments in your apps',
       {
         status: ready
-          ? status('Connected', 'positive')
+          ? statusHtml('Connected', 'positive')
           : at.sell == 'setup'
-          ? status('Setup unfinished', 'negative')
+          ? statusHtml('Setup unfinished', 'negative')
           : '',
         actions: subscribe + account,
       },
@@ -1255,13 +1426,13 @@ let selling = (at: DeskPage, env: Host) => {
           } per sale, plus ${by} processing fees.</p>`
           : ''
       }<p class="Notice Bill_Say" role="status"></p>`
-  }</section>${at.paying ? '' : billing}`
+  }</section>${at.paying ? '' : html(billing())}`
 }
 
 let trash = (at: DeskPage) =>
   at.trash?.length
     ? `<section class="Card">${
-      heading('Deleted apps')
+      headingHtml('Deleted apps')
     }<p class="Card_Sub">Each is kept for 30 days, then erased for good. Restoring one brings back everything it held, at its old address if free or a numbered address otherwise.</p><ul class="Rows">${
       at.trash.map((a) =>
         `<li class="Rows_Item"><div class="Rows_Main"><span class="Rows_Name">${
@@ -1296,34 +1467,41 @@ let STATUS = {
 // SVG an <img> loads runs no script and fetches nothing.
 let logo = (f: Face) =>
   f.logo
-    ? `<img class="Card_Mark" src="data:image/svg+xml,${
-      esc(encodeURIComponent(f.logo))
-    }" alt="" width="24" height="24">`
-    : ''
+    ? h(Card.Mark, {
+      as: 'img',
+      src: `data:image/svg+xml,${encodeURIComponent(f.logo)}`,
+      alt: '',
+      width: 24,
+      height: 24,
+    })
+    : null
 
 // A line about a service and a link to its site, where it has them. Only an
 // https address is linked, so a site can never be a script.
 let about = (f: Face) => {
   let site = /^https:\/\/\S+$/.test(f.site)
-    ? `<a href="${esc(f.site)}"${f.theirs ? ' rel="nofollow ugc"' : ''}>${
-      esc(f.site.replace(/^https:\/\//, '').replace(/\/$/, ''))
-    }</a>`
-    : ''
+    ? h(
+      'a',
+      { href: f.site, rel: f.theirs ? 'nofollow ugc' : undefined },
+      f.site.replace(/^https:\/\//, '').replace(/\/$/, ''),
+    )
+    : null
   return f.tagline || site
-    ? `<p class="Card_Sub">${esc(f.tagline)}${
-      f.tagline && site ? ' ' : ''
-    }${site}</p>`
-    : ''
+    ? h(Card.Sub, null, f.tagline, f.tagline && site ? ' ' : '', site)
+    : null
 }
 
 // How a person gets a service's key, as its integration says, open while the
-// key is still wanted.
+// key is still wanted. The words are markdown theirs.ts drew.
 let howTo = (f: Face, open: boolean) =>
   f.instructions
-    ? `<details class="More"${
-      open ? ' open' : ''
-    }><summary>How to get the key</summary><div class="More_Body">${f.instructions}</div></details>`
-    : ''
+    ? h(
+      More,
+      { open },
+      h('summary', null, 'How to get the key'),
+      h(More.Body, null, raw(f.instructions)),
+    )
+    : null
 
 // Where a key may be sent, said once beside wherever it is pasted.
 let reach = (hosts: string[]) =>
@@ -1339,33 +1517,39 @@ let reach = (hosts: string[]) =>
 // them. connections.ts `givenOf` reads what was typed.
 let keyBox = (
   id: string,
-  label: string,
-  send: string,
-  hint = '',
-  fields: Field[] = [KEY],
+  label: Kids,
+  send: Kids,
+  hint: Kids = '',
+  fields: Fielded[] = [KEY],
 ) => {
   let box = (at: string, name: string, shown = false) =>
-    `<input class="Field" id="${at}" name="${name}" type="${
-      shown ? 'text' : 'password'
-    }" autocomplete="off" spellcheck="false" required>`
+    h(Field, {
+      id: at,
+      name,
+      type: shown ? 'text' : 'password',
+      autocomplete: 'off',
+      spellcheck: 'false',
+      required: true,
+    })
   if (fields.length == 1) {
     return labeled(
       id,
-      fields[0] == KEY ? label : esc(fields[0].label),
-      `<div class="Form_Line">${box(id, 'key', fields[0].shown)}${send}</div>`,
+      fields[0] == KEY ? label : fields[0].label,
+      h(Form.Line, null, box(id, 'key', fields[0].shown), send),
       hint,
     )
   }
-  return fields.map((f) =>
-    labeled(
-      `${id}-${f.name}`,
-      esc(f.label),
-      box(`${id}-${f.name}`, `key.${f.name}`, f.shown),
-    )
-  ).join('') +
-    `<div class="Form_Actions">${send}</div>${
-      hint ? `<p class="Form_Hint">${hint}</p>` : ''
-    }`
+  return [
+    ...fields.map((f) =>
+      labeled(
+        `${id}-${f.name}`,
+        f.label,
+        box(`${id}-${f.name}`, `key.${f.name}`, f.shown),
+      )
+    ),
+    h(Form.Actions, null, send),
+    hint ? h(Form.Hint, null, hint) : null,
+  ]
 }
 
 // A button a connection's form sends: quiet unless it is the card's one
@@ -1421,7 +1605,7 @@ let connection = (c: Shown, on: boolean, action: string) => {
     (ask || waiting ? '' : form(
       press('disconnect', c.status == 'needed' ? 'Remove' : 'Disconnect'),
     ))
-  let stands = ask ? status('Each person connects their own') : status(
+  let stands = ask ? statusHtml('Each person connects their own') : statusHtml(
     `${STATUS[c.status]}${c.account ? ` as ${esc(c.account)}` : ''}`,
     c.status == 'connected' ? 'positive' : 'negative',
   )
@@ -1434,7 +1618,7 @@ let connection = (c: Shown, on: boolean, action: string) => {
     : ''
   let paste = keying && open
     ? form(
-      keyBox(
+      keyBoxHtml(
         id('key'),
         'Paste the key',
         press('key', 'Save key', false),
@@ -1491,7 +1675,7 @@ let connection = (c: Shown, on: boolean, action: string) => {
   let attaching = c.status == 'connected' && !c.own && c.available.length > 0
   let attach = attaching
     ? form(
-      labeled(
+      labeledHtml(
         id('attach'),
         'Let an app use it',
         `<div class="Form_Line"><select class="Field" id="${
@@ -1507,7 +1691,7 @@ let connection = (c: Shown, on: boolean, action: string) => {
     )
     : ''
   let named = attaching
-    ? labeled(
+    ? labeledHtml(
       id('bind'),
       'Name its code reads it by',
       `<input class="Field" id="${id('bind')}" form="${
@@ -1522,7 +1706,7 @@ let connection = (c: Shown, on: boolean, action: string) => {
     : ''
   let replace = keying && !open
     ? form(
-      keyBox(
+      keyBoxHtml(
         id('key'),
         'Replace the key',
         press('key', 'Save key'),
@@ -1576,7 +1760,7 @@ let connection = (c: Shown, on: boolean, action: string) => {
               ['site', 'Its site', 'https://…'],
             ] as const
           ).map(([k, label, hint]) =>
-            labeled(
+            labeledHtml(
               id(k),
               label,
               `<input class="Field" id="${id(k)}" name="${k}" value="${
@@ -1587,7 +1771,7 @@ let connection = (c: Shown, on: boolean, action: string) => {
             )
           ).join('')
         }${
-          labeled(
+          labeledHtml(
             id('instructions'),
             'How to get the key',
             `<textarea class="Field" id="${
@@ -1613,7 +1797,7 @@ let connection = (c: Shown, on: boolean, action: string) => {
     let stop = `${field}-stop`
     return forApp(
       a,
-      labeled(
+      labeledHtml(
         field,
         `Lend to copies of ${esc(a.title)}`,
         `<div class="Form_Line"><input class="Field" id="${field}" name="cap" type="number" min="1" step="1" inputmode="numeric" value="${
@@ -1632,13 +1816,13 @@ let connection = (c: Shown, on: boolean, action: string) => {
     : ''
   let folded = lent + named + replace + reached + listing + told
   return `<section class="Card" data-connection="${esc(c.eid)}">${
-    heading(esc(c.face.title), {
-      mark: logo(c.face),
+    headingHtml(esc(c.face.title), {
+      mark: html(logo(c.face)),
       status: stands,
       actions,
     })
-  }${about(c.face)}${said}${
-    howTo(c.face, open && !ask)
+  }${html(about(c.face))}${said}${
+    html(howTo(c.face, open && !ask))
   }${paste}${apps}${attach}${
     folded
       ? `<details class="More"><summary>Advanced options</summary><div class="More_Body">${folded}</div></details>`
@@ -1672,7 +1856,7 @@ let borrowing = (
   let own = on && b.keyed && !mine
     ? `<details class="More"><summary>Use your own key</summary><div class="More_Body">${b.face.instructions}${
       form(
-        keyBox(
+        keyBoxHtml(
           id,
           'Paste your key',
           press('own', 'Save key', false),
@@ -1683,12 +1867,14 @@ let borrowing = (
     }</div></details>`
     : ''
   return `<section class="Card" data-borrowed="${esc(b.eid)}">${
-    heading(esc(b.face.title), {
-      mark: logo(b.face),
-      status: status(`Borrowed from ${esc(b.lender)}`, 'positive'),
+    headingHtml(esc(b.face.title), {
+      mark: html(logo(b.face)),
+      status: statusHtml(`Borrowed from ${esc(b.lender)}`, 'positive'),
       actions,
     })
-  }${about(b.face)}<p class="Card_Sub">${esc(b.app.title)} calls out with ${
+  }${html(about(b.face))}<p class="Card_Sub">${
+    esc(b.app.title)
+  } calls out with ${
     esc(b.lender)
   }’s key until you use your own. The key stays hidden, and neither of you sees the other’s data.</p><ul class="Rows"><li class="Rows_Item"><div class="Rows_Main"><strong class="Rows_Name">${
     esc(b.app.title)
@@ -1723,13 +1909,13 @@ let connections = (at: DeskPage, env: Host) => {
     `<form class="Card" method="post" action="${action}"><input type="hidden" name="integration" value="${
       esc(i.name)
     }">${
-      heading(esc(i.face.title), {
-        mark: logo(i.face),
+      headingHtml(esc(i.face.title), {
+        mark: html(logo(i.face)),
         actions: i.keyed ? '' : press('add', 'Connect', false),
       })
-    }${about(i.face)}${howTo(i.face, true)}${
+    }${html(about(i.face))}${html(howTo(i.face, true))}${
       i.keyed
-        ? keyBox(
+        ? keyBoxHtml(
           `add-${esc(i.name)}`,
           'Paste the key',
           press('add', 'Save key', false),
@@ -1739,30 +1925,30 @@ let connections = (at: DeskPage, env: Host) => {
         : ''
     }</form>`
   let add = `<form class="Card" method="post" action="${action}">${
-    heading('Add a key')
+    headingHtml('Add a key')
   }<p class="Card_Sub">For a service your apps call that isn't listed above. Services others have added are in the <a href="${
     esc(url(env, INTEGRATIONS.path))
   }">integration directory</a>.</p><div class="Form">${
-    labeled(
+    labeledHtml(
       'new-name',
       'Service',
       '<input class="Field" id="new-name" name="integration" maxlength="60" placeholder="Weather API" required>',
     )
   }${
-    labeled(
+    labeledHtml(
       'new-hosts',
       'Where it may be sent',
       '<input class="Field" id="new-hosts" name="hosts" autocomplete="off" spellcheck="false" placeholder="api.example.com" required>',
       'yaks.app keeps the key and only ever sends it to these addresses.',
     )
   }${
-    labeled(
+    labeledHtml(
       'new-key',
       'Key',
       '<input class="Field" id="new-key" name="key" type="password" autocomplete="off" spellcheck="false" required>',
     )
   }${
-    labeled(
+    labeledHtml(
       'new-instructions',
       'How to get the key <span class="Form_Optional">(optional)</span>',
       '<textarea class="Field" id="new-instructions" name="instructions" rows="3" placeholder="Where to sign up, which page gives the key, and what to paste"></textarea>',
@@ -1777,7 +1963,9 @@ let connections = (at: DeskPage, env: Host) => {
     .map((one) => connection(one, c.on, action)).join('') +
     c.services.map((s) =>
       `<section class="Card">${
-        heading(esc(s.name), { status: status('Connected', 'positive') })
+        headingHtml(esc(s.name), {
+          status: statusHtml('Connected', 'positive'),
+        })
       }<p class="Card_Sub">Signed in with your yaks.app account on ${
         esc(day(new Date(s.connectedAt * 1000).toISOString()))
       }.</p></section>`
@@ -1798,7 +1986,7 @@ let connections = (at: DeskPage, env: Host) => {
     c.on
       ? ''
       : `<section class="Card">${
-        heading("Keys can't be saved here yet")
+        headingHtml("Keys can't be saved here yet")
       }<p class="Card_Sub">This server has nowhere safe to keep a key, so connecting is switched off.</p></section>`
   }${
     c.list.length || c.services.length || c.borrowed.length
@@ -1819,9 +2007,9 @@ let option = (value: string, label: string, chosen: boolean) =>
 // letter if the owner wants one.
 let inviting = (at: DeskPage) => {
   let was = at.invite ?? { email: '', app: '', role: '', note: '' }
-  return `<section class="Card">${heading('Invite someone')}
+  return `<section class="Card">${headingHtml('Invite someone')}
 <form class="Form" method="post" action="${managePath('people', at.space)}">${
-    labeled(
+    labeledHtml(
       'invite-email',
       'Email address',
       `<input class="Field" id="invite-email" name="invite" type="email" required autocomplete="off" spellcheck="false" placeholder="friend@example.com" value="${
@@ -1829,7 +2017,7 @@ let inviting = (at: DeskPage) => {
       }">`,
     )
   }${
-    labeled(
+    labeledHtml(
       'invite-app',
       'Invite them to',
       `<select class="Field" id="invite-app" name="app">${
@@ -1842,7 +2030,7 @@ let inviting = (at: DeskPage) => {
       'Invited to one app, they can open that app and nothing else here.',
     )
   }${
-    labeled(
+    labeledHtml(
       'invite-role',
       'They can',
       `<select class="Field" id="invite-role" name="role">${
@@ -1850,7 +2038,7 @@ let inviting = (at: DeskPage) => {
       }${option('viewer', 'Only look', was.role == 'viewer')}</select>`,
     )
   }${
-    labeled(
+    labeledHtml(
       'invite-note',
       'A note for the email <span class="Form_Optional">(optional)</span>',
       `<textarea class="Field" id="invite-note" name="note" rows="2" maxlength="500">${
@@ -1883,7 +2071,7 @@ let operating = (at: DeskPage) => {
     ? `<form class="Form" method="post" action="${
       managePath('people', at.space)
     }">${
-      labeled(
+      labeledHtml(
         'operator-space',
         "Let this space's Operator work here",
         `<select class="Field" id="operator-space" name="operator">${
@@ -1892,7 +2080,7 @@ let operating = (at: DeskPage) => {
         'Whoever may ask that Operator can have it work here.',
       )
     }${
-      labeled(
+      labeledHtml(
         'operator-role',
         'It can',
         `<select class="Field" id="operator-role" name="role">${
@@ -1902,7 +2090,7 @@ let operating = (at: DeskPage) => {
     }<div class="Form_Actions"><button class="Button Button-go" type="submit">Let it in</button></div></form>`
     : ''
   return rows || form
-    ? `<section class="Card">${heading('Operators from other spaces')}${
+    ? `<section class="Card">${headingHtml('Operators from other spaces')}${
       rows ? `<ul class="Rows">${rows}</ul>` : ''
     }${form}</section>`
     : ''
@@ -1944,7 +2132,7 @@ export let people = (at: DeskPage) => {
   }
   let list = (title: string, all: Person[], app?: string) =>
     all.length
-      ? `<section class="Card">${heading(esc(title))}<ul class="Rows">${
+      ? `<section class="Card">${headingHtml(esc(title))}<ul class="Rows">${
         all.map((p) =>
           `<li class="Rows_Item">${holder(p)}${actions(p, app)}</li>`
         ).join('')
@@ -2000,22 +2188,22 @@ export let desk = (at: DeskPage, env: Host = {}) => {
   if (view == 'space') body = newSpace(at, env)
   if (view == 'apps') body = library(at, env)
   if (view == 'agents') {
-    body = `${
-      agentSetup(at.agents ?? [], env, managePath('agents'))
-    }${copying}${tabbing}`
+    body = `${html(agentSetup(at.agents ?? [], env, managePath('agents')))}${
+      html(copying())
+    }${html(tabbing())}`
   }
   if (view == 'new') {
     body = `<section class="Card Desk_Start" ${
-      state(true, !!at.agents?.length)
-    }>${heading('Ask your agent for a new yaks app')}${
-      agentList(at.agents ?? [], 'links')
-    }<div class="Form_Field"><p class="Form_Label">Try this</p>${firstAsk}</div></section>${
-      connectCard(at, env)
-    }
-<div class="Desk_Options">${chat(env, `${site}/api/build`)}
-<section class="Card">${heading('Upload your website')}${
-      dropZone(undefined, `${site}/deploy`)
-    }</section></div>${chatLive('/build.js')}${dropping}`
+      stateHtml(true, !!at.agents?.length)
+    }>${headingHtml('Ask your agent for a new yaks app')}${
+      html(agentList(at.agents ?? [], 'links'))
+    }<div class="Form_Field"><p class="Form_Label">Try this</p>${
+      html(firstAsk())
+    }</div></section>${connectCard(at, env)}
+<div class="Desk_Options">${html(chat(env, `${site}/api/build`))}
+<section class="Card">${headingHtml('Upload your website')}${
+      html(dropZone(undefined, `${site}/deploy`))
+    }</section></div>${html(chatLive('/build.js'))}${html(dropping())}`
   }
   if (view == 'visits') {
     body = at.apps.length
@@ -2025,7 +2213,7 @@ export let desk = (at: DeskPage, env: Host = {}) => {
   if (view == 'selling') body = selling(at, env)
   if (view == 'settings') body = preferences(at, env)
   if (view == 'billing') {
-    body = plan(
+    body = html(plan(
       {
         slug: at.space,
         title: named(picked(at)),
@@ -2036,7 +2224,7 @@ export let desk = (at: DeskPage, env: Host = {}) => {
       },
       env,
       managePath('billing', at.space),
-    ) + (at.bill ? allowances(at.bill, env, at.space) : '') + billing
+    )) + (at.bill ? allowances(at.bill, env, at.space) : '') + html(billing())
   }
   if (view == 'trash') body = trash(at)
   if (view == 'connections') body = connections(at, env)
@@ -2068,8 +2256,12 @@ export let desk = (at: DeskPage, env: Host = {}) => {
           esc(at.say)
         }</p>`
         : ''
-    }${body}</div></div>${['apps', 'new'].includes(view) ? copying : ''}${
-      ['apps', 'new', 'agents'].includes(view) ? agentLive('/oauth/agents') : ''
+    }${body}</div></div>${
+      ['apps', 'new'].includes(view) ? html(copying()) : ''
+    }${
+      ['apps', 'new', 'agents'].includes(view)
+        ? html(agentLive('/oauth/agents'))
+        : ''
     }`,
     { 'cache-control': 'private, no-store', 'x-robots-tag': 'noindex' },
     'Desk',
@@ -2126,10 +2318,10 @@ export let spaceIndex = (at: SpacePage, env: Host = {}) => {
       esc(at.manage)
     }">Manage your apps</a></p>`
     : at.person
-    ? home(env)
+    ? html(home(env))
     : `<p><a class="Button Button-go" href="${esc(at.signIn)}">Sign in</a></p>
 <section class="Card">${
-      heading('What is yaks.app?')
+      headingHtml('What is yaks.app?')
     }<p class="Card_Sub">Ask an assistant like Claude or ChatGPT for an app, and it builds one here — a page of your own you can send to anyone.</p><p><a href="${
       url(env, '/')
     }">Make one of your own</a></p></section>`
@@ -2145,15 +2337,14 @@ export let spaceIndex = (at: SpacePage, env: Host = {}) => {
 }
 
 export let oops = (env: Host = {}, requestId?: string) =>
-  shell(
-    env,
-    'Something went wrong.',
-    'Try again shortly. If the problem continues, ask your assistant to check the app.' +
-      (requestId ? ` Request ID: ${esc(requestId)}.` : ''),
-    500,
-    home(env),
-    requestId ? { 'x-request-id': requestId } : {},
-  )
+  page(env, {
+    title: 'Something went wrong.',
+    lead:
+      'Try again shortly. If the problem continues, ask your assistant to check the app.' +
+      (requestId ? ` Request ID: ${requestId}.` : ''),
+    status: 500,
+    headers: requestId ? { 'x-request-id': requestId } : {},
+  }, home(env))
 
 // A custom domain that reached the Worker before there was anything to
 // answer with (index.ts `settling`, T-33036): mid-provisioning, or one
@@ -2170,33 +2361,31 @@ export let provisioning = (
   stage: 'pending' | 'error',
   env: Host = {},
 ) =>
-  shell(
+  page(
     env,
-    stage == 'error' ? 'This domain needs a fix' : 'Setting up this domain',
-    stage == 'error'
-      ? `${esc(host)} needs attention before it can serve — here is what ` +
-        'Cloudflare says.'
-      : `${esc(host)} is being connected to yaks.app. This is usually a ` +
-        'matter of minutes, not hours.',
-    503,
-    `<section class="Card">${heading(esc(host))}<pre>${
-      esc(said)
-    }</pre></section>${home(env)}`,
-    { 'retry-after': '30' },
+    {
+      title: stage == 'error'
+        ? 'This domain needs a fix'
+        : 'Setting up this domain',
+      lead: stage == 'error'
+        ? `${host} needs attention before it can serve — here is what ` +
+          'Cloudflare says.'
+        : `${host} is being connected to yaks.app. This is usually a ` +
+          'matter of minutes, not hours.',
+      status: 503,
+      headers: { 'retry-after': '30' },
+    },
+    h(Card, null, heading(host), h('pre', null, said)),
+    home(env),
   )
 
 // A door a later leaf fills (the connector): plain, not a mystery.
 export let soon = (what: string, env: Host = {}) =>
-  shell(
-    env,
-    `${what} is not available yet.`,
-    'This feature is still being built.',
-    404,
-  )
-
-// A hidden field, only when there is something to carry.
-let held = (name: string, value?: string | null) =>
-  value ? `<input type="hidden" name="${name}" value="${esc(value)}">` : ''
+  page(env, {
+    title: `${what} is not available yet.`,
+    lead: 'This feature is still being built.',
+    status: 404,
+  }, home(env))
 
 // The path of an address, whole or bare; nothing, for one that is neither.
 let pathOf = (href: string) => {
@@ -2212,14 +2401,18 @@ let pathOf = (href: string) => {
 // on before they were asked to sign in, so the code hands them back to it
 // (T-32593). Whether that address is one to follow is the login door's to
 // decide, never this page's.
-let carried = (q: string | null, back?: string | null) =>
-  held('q', q) + held('return', back) +
-  (back &&
-      ['/connect', '/manage/connect', managePath('agents')].includes(
-        pathOf(back),
-      )
-    ? `<script>if (location.hash) document.currentScript.previousElementSibling.value += location.hash</script>`
-    : '')
+let carried = (q: string | null, back?: string | null) => [
+  held('q', q),
+  held('return', back),
+  back &&
+    ['/connect', '/manage/connect', managePath('agents')].includes(
+      pathOf(back),
+    )
+    ? run(
+      'if (location.hash) document.currentScript.previousElementSibling.value += location.hash',
+    )
+    : null,
+]
 
 // The sign-in card's first line. When `back` is a page on a space, it names
 // that address: somebody who tapped "sign in" on a friend's app reads where
@@ -2228,11 +2421,12 @@ let carried = (q: string | null, back?: string | null) =>
 let welcome = (back: string | null, env: Host) => {
   let to = back && URL.canParse(back) ? new URL(back) : null
   return to?.hostname.endsWith(`.${apex(env)}`)
-    ? `Sign in to continue to ${
-      esc(to.hostname + to.pathname.replace(/\/$/, ''))
-    }.`
+    ? `Sign in to continue to ${to.hostname + to.pathname.replace(/\/$/, '')}.`
     : 'Build an app by asking Claude or ChatGPT.'
 }
+
+// One button that sends the form it is in.
+let send = (label: Kids) => h(Button, { mod: 'go', type: 'submit' }, label)
 
 // Ask for an address. `who` names the app asking, when one is (the OAuth
 // consent page is this page — signing in is the consent), and `why` is the
@@ -2252,31 +2446,64 @@ export let askEmail = (at: {
   status?: number
   texts?: boolean
 }, env: Host = {}) =>
-  shell(
+  page(
     env,
-    'Sign in or sign up',
-    at.why ?? welcome(at.back ?? null, env),
-    at.status ?? 200,
-    `<form method="post" action="/login">${carried(at.q ?? null, at.back)}
-<p>${at.who ? `${esc(at.who)} would like to use your apps. ` : ''}Enter your ${
-      at.texts ? 'email or mobile number' : 'email'
-    } to get a sign-in code.</p>
-${
+    {
+      title: 'Sign in or sign up',
+      lead: at.why ?? welcome(at.back ?? null, env),
+      status: at.status ?? 200,
+    },
+    h(
+      'form',
+      { method: 'post', action: '/login' },
+      carried(at.q ?? null, at.back),
+      h(
+        'p',
+        null,
+        at.who ? `${at.who} would like to use your apps. ` : '',
+        `Enter your ${
+          at.texts ? 'email or mobile number' : 'email'
+        } to get a sign-in code.`,
+      ),
       at.texts
-        ? `<input class="Field" name="address" type="text" required autofocus autocomplete="email" autocapitalize="off" spellcheck="false" placeholder="you@example.com or 269-555-0142" aria-label="Your email or mobile number" aria-describedby="by-text">
-<p class="Note" id="by-text">${TEXTED} Terms: <a href="${
-          url(env, '/terms')
-        }">yaks.app/terms</a> Privacy: <a href="${
-          url(env, '/privacy')
-        }">yaks.app/privacy</a></p>
-<script>{let n=document.currentScript.previousElementSibling,f=n.previousElementSibling,s=()=>n.hidden=f.value.includes('@');f.addEventListener('input',s);s()}</script>`
-        : '<input class="Field" name="address" type="email" required autofocus autocomplete="email" placeholder="you@example.com" aria-label="Your email">'
-    }
-<button class="Button Button-go" type="submit">Send me a code</button>
-</form>${home(env)}`,
+        ? [
+          h(Field, {
+            name: 'address',
+            type: 'text',
+            required: true,
+            autofocus: true,
+            autocomplete: 'email',
+            autocapitalize: 'off',
+            spellcheck: 'false',
+            placeholder: 'you@example.com or 269-555-0142',
+            'aria-label': 'Your email or mobile number',
+            'aria-describedby': 'by-text',
+          }),
+          h(
+            'p',
+            { class: 'Note', id: 'by-text' },
+            `${CODE_NOTE} Terms: `,
+            h('a', { href: url(env, '/terms') }, 'yaks.app/terms'),
+            ' Privacy: ',
+            h('a', { href: url(env, '/privacy') }, 'yaks.app/privacy'),
+          ),
+          run(
+            "{let n=document.currentScript.previousElementSibling,f=n.previousElementSibling,s=()=>n.hidden=f.value.includes('@');f.addEventListener('input',s);s()}",
+          ),
+        ]
+        : h(Field, {
+          name: 'address',
+          type: 'email',
+          required: true,
+          autofocus: true,
+          autocomplete: 'email',
+          placeholder: 'you@example.com',
+          'aria-label': 'Your email',
+        }),
+      send('Send me a code'),
+    ),
+    home(env),
   )
-
-let TEXTED = esc(CODE_NOTE)
 
 // Ask for the code just sent, and nothing else (T-34236). Signing up is two
 // steps and both are the address: give it, then prove it. What a person is
@@ -2297,29 +2524,51 @@ export let askCode = (at: {
   let { address } = at
   let q = at.q ?? null, back = at.back ?? null
   let text = texted(address)
-  return shell(
+  return page(
     env,
-    text ? 'Check your texts' : 'Check your email',
-    at.why ??
-      `We ${text ? 'texted' : 'sent'} a six-digit code to ${
-        esc(text ? shown(address) : address)
-      }. It lasts ten minutes.`,
-    at.status ?? 200,
-    `<form method="post" action="/login/code">${carried(q, back)}
-<p>${
-      q
-        ? 'Enter it to finish connecting your assistant.'
-        : back
-        ? 'Enter it to sign in and continue.'
-        : 'Enter it to land on your own space.'
-    }</p>
-<input type="hidden" name="address" value="${esc(address)}">
-<input class="Field Code" name="code" inputmode="numeric" pattern="[0-9]{6}" maxlength="6" required autofocus autocomplete="one-time-code" aria-label="Your six-digit code">
-<button class="Button Button-go" type="submit">Sign in</button>
-</form><form class="Again" method="post" action="/login">${carried(q, back)}
-<input type="hidden" name="address" value="${esc(address)}">
-<button class="Button" type="submit">Send a new code</button>
-</form>${home(env)}`,
+    {
+      title: text ? 'Check your texts' : 'Check your email',
+      lead: at.why ??
+        `We ${text ? 'texted' : 'sent'} a six-digit code to ${
+          text ? shown(address) : address
+        }. It lasts ten minutes.`,
+      status: at.status ?? 200,
+    },
+    h(
+      'form',
+      { method: 'post', action: '/login/code' },
+      carried(q, back),
+      h(
+        'p',
+        null,
+        q
+          ? 'Enter it to finish connecting your assistant.'
+          : back
+          ? 'Enter it to sign in and continue.'
+          : 'Enter it to land on your own space.',
+      ),
+      held('address', address),
+      h(Field, {
+        class: 'Code',
+        name: 'code',
+        inputmode: 'numeric',
+        pattern: '[0-9]{6}',
+        maxlength: 6,
+        required: true,
+        autofocus: true,
+        autocomplete: 'one-time-code',
+        'aria-label': 'Your six-digit code',
+      }),
+      send('Sign in'),
+    ),
+    h(
+      'form',
+      { class: 'Again', method: 'post', action: '/login' },
+      carried(q, back),
+      held('address', address),
+      h(Button, { type: 'submit' }, 'Send a new code'),
+    ),
+    home(env),
   )
 }
 
@@ -2358,72 +2607,82 @@ export let askDelete = (at: {
   stop?: string
   why?: string
   status?: number
-}, env: Host = {}) =>
-  shell(
+}, env: Host = {}) => {
+  let host = spaceHost(env, at.slug)
+  return page(
     env,
-    `Delete ${esc(spaceHost(env, at.slug))}?`,
-    esc(
-      at.stop ?? at.why ??
+    {
+      title: `Delete ${host}?`,
+      lead: at.stop ?? at.why ??
         (at.forever
           ? 'This cannot be undone, and nothing is kept.'
           : 'It goes to the trash for 30 days. Nothing is erased, and you ' +
             'can bring it back any time before then.'),
-    ),
-    at.status ?? 200,
-    `${
-      at.lines.length
-        ? `<section class="Card">${
-          heading(
-            at.forever
-              ? 'What goes, for good'
-              : 'What stops until you restore it',
-          )
-        }
-<ol>${at.lines.map((l) => `<li>${esc(l)}</li>`).join('')}</ol>
-</section>`
-        : ''
-    }
-${
-      at.stop
-        ? ''
-        : `<form method="post" action="/space/${esc(at.slug)}/delete">
-${held('t', at.token)}
-${
-          at.token
-            ? ''
-            : `<label class="Form_Label" for="confirm">Type <b>${
-              esc(at.slug)
-            }</b> to confirm</label>
-<input class="Field" id="confirm" name="confirm" autocomplete="off" spellcheck="false" autofocus>`
-        }
-<button class="Button Button-go" type="submit">${
+      status: at.status ?? 200,
+    },
+    at.lines.length
+      ? h(
+        Card,
+        null,
+        heading(
           at.forever
-            ? `Delete ${esc(spaceHost(env, at.slug))} forever`
-            : `Put ${esc(spaceHost(env, at.slug))} in the trash`
-        }</button>
-</form>
-<p class="Note">Changed your mind? Close this page — nothing has happened.</p>`
-    }
-${home(env)}`,
+            ? 'What goes, for good'
+            : 'What stops until you restore it',
+        ),
+        h('ol', null, at.lines.map((l) => h('li', null, l))),
+      )
+      : null,
+    at.stop ? null : [
+      h(
+        'form',
+        { method: 'post', action: `/space/${at.slug}/delete` },
+        held('t', at.token),
+        at.token ? null : [
+          h(
+            Form.Label,
+            { for: 'confirm' },
+            'Type ',
+            h('b', null, at.slug),
+            ' to confirm',
+          ),
+          h(Field, {
+            id: 'confirm',
+            name: 'confirm',
+            autocomplete: 'off',
+            spellcheck: 'false',
+            autofocus: true,
+          }),
+        ],
+        send(
+          at.forever ? `Delete ${host} forever` : `Put ${host} in the trash`,
+        ),
+      ),
+      h(
+        'p',
+        { class: 'Note' },
+        'Changed your mind? Close this page — nothing has happened.',
+      ),
+    ],
+    home(env),
   )
+}
 
 // And after: what went, and the one thing worth knowing next — the address
 // belongs to nobody now, theirs to take again or somebody else's to take
 // later. A space that went to the trash has the opposite next thing: the
 // address is still theirs, and so is everything under it.
 export let deleted = (said: string, forever = true, env: Host = {}) =>
-  shell(
+  page(
     env,
-    "That's done.",
-    esc(said),
-    200,
-    `<p class="Note">${
+    { title: "That's done.", lead: said },
+    h(
+      'p',
+      { class: 'Note' },
       forever
-        ? `The address is free again. Ask your assistant for a new
-space whenever you want one.`
-        : `Nothing was erased. The address is held for you, and restoring it
-puts everything back exactly as it was.`
-    }</p>${home(env)}`,
+        ? 'The address is free again. Ask your assistant for a new space whenever you want one.'
+        : 'Nothing was erased. The address is held for you, and restoring it puts everything back exactly as it was.',
+    ),
+    home(env),
   )
 
 /** An invitation as its link may tell it to somebody not yet in: what the
@@ -2448,32 +2707,39 @@ export type Offer = {
 // address a code and brings them back to accept it.
 export let invited = (o: Offer, env: Host = {}) => {
   let host = spaceHost(env, o.space.slug)
-  let what = o.app
-    ? esc(o.app.title || o.app.slug)
-    : `${esc(o.space.title)} at ${esc(host)}`
-  return shell(
+  let what = o.app ? o.app.title || o.app.slug : `${o.space.title} at ${host}`
+  return page(
     env,
-    'You have an invitation',
-    `${o.by ? esc(o.by) : 'Someone'} invited you to ${
-      o.see ? 'see' : 'use'
-    } ${what}.`,
-    200,
-    `${
-      o.app
-        ? `<div class="Apps Apps-one">${
-          tile(o.app, {
-            at: `https://${host}`,
-            host,
-            icon: o.app.open ? undefined : url(env, '/connector-512.png'),
-          })
-        }</div>`
-        : ''
-    }<form method="post" action="/login">${held('address', o.email)}${
-      held('return', o.back)
-    }
-<p>It was sent to ${esc(o.email)}. Sign in with that address to accept it.</p>
-<button class="Button Button-go" type="submit">Email me a sign-in code</button>
-</form>${home(env)}`,
+    {
+      title: 'You have an invitation',
+      lead: `${o.by || 'Someone'} invited you to ${
+        o.see ? 'see' : 'use'
+      } ${what}.`,
+    },
+    o.app
+      ? h(
+        'div',
+        { class: 'Apps Apps-one' },
+        raw(tile(o.app, {
+          at: `https://${host}`,
+          host,
+          icon: o.app.open ? undefined : url(env, '/connector-512.png'),
+        })),
+      )
+      : null,
+    h(
+      'form',
+      { method: 'post', action: '/login' },
+      held('address', o.email),
+      held('return', o.back),
+      h(
+        'p',
+        null,
+        `It was sent to ${o.email}. Sign in with that address to accept it.`,
+      ),
+      send('Email me a sign-in code'),
+    ),
+    home(env),
   )
 }
 
@@ -2481,24 +2747,21 @@ export let invited = (o: Offer, env: Host = {}) => {
 // click in the letter is what is left, and no page of the app may make it for
 // them (invite.ts). Its title is theirs to read; the letter named it.
 export let invitedTo = (title: string, env: Host = {}) =>
-  shell(
-    env,
-    'Your invitation is waiting',
-    `Accept the invitation to ${
-      esc(title)
-    } from the letter yaks.app sent you, then open this link again.`,
-    403,
-  )
+  page(env, {
+    title: 'Your invitation is waiting',
+    lead:
+      `Accept the invitation to ${title} from the letter yaks.app sent you, then open this link again.`,
+    status: 403,
+  }, home(env))
 
 // An invitation that is no longer open: withdrawn, or for a space or an app
 // that is gone. Which one is nobody's business but the inviter's.
 export let closed = (env: Host = {}) =>
-  shell(
-    env,
-    'This invitation is no longer open.',
-    'Ask whoever invited you to send a new one.',
-    410,
-  )
+  page(env, {
+    title: 'This invitation is no longer open.',
+    lead: 'Ask whoever invited you to send a new one.',
+    status: 410,
+  }, home(env))
 
 // The Connect button an app that asks each person to connect their own
 // account is given (connections.ts `own`): which app, which service and how it
@@ -2517,66 +2780,71 @@ export let askConnect = (at: {
   say?: string
   no?: boolean
 }, env: Host = {}) =>
-  shell(
+  page(
     env,
-    `Connect ${esc(at.face.title)}`,
-    `${esc(at.app)} asks each person who uses it to connect their own ${
-      esc(at.face.title)
-    } account. Yours is used only when you use the app, and you can disconnect it from your own connections page.`,
-    200,
-    `<section class="Card">${
-      heading(esc(at.face.title), {
+    {
+      title: `Connect ${at.face.title}`,
+      lead:
+        `${at.app} asks each person who uses it to connect their own ${at.face.title} account. Yours is used only when you use the app, and you can disconnect it from your own connections page.`,
+    },
+    h(
+      Card,
+      null,
+      heading(at.face.title, {
         mark: logo(at.face),
         status: at.status == 'needed'
-          ? ''
+          ? null
           : at.status == 'broken'
           ? status('Yours needs reconnecting', 'negative')
           : status('Yours is connected', 'positive'),
         actions: at.on && !at.keyed
-          ? `<form method="post"><button class="Button Button-go" type="submit">${
-            at.status == 'needed' ? 'Connect' : 'Connect again'
-          }</button></form>`
-          : '',
-      })
-    }${about(at.face)}${howTo(at.face, at.status != 'connected')}${
-      at.say
-        ? `<p class="Notice${at.no ? ' Notice-negative' : ''}" role="status">${
-          esc(at.say)
-        }</p>`
-        : ''
-    }${
-      !at.on
-        ? `<p class="Card_Sub">Keys can't be saved here yet.</p>`
-        : at.keyed
-        ? `<form method="post">${
-          keyBox(
-            'key',
-            'Paste your key',
-            '<button class="Button Button-go" type="submit">Save key</button>',
-            '',
-            at.face.fields,
+          ? h(
+            'form',
+            { method: 'post' },
+            send(at.status == 'needed' ? 'Connect' : 'Connect again'),
           )
-        }</form>`
-        : ''
-    }</section><p class="Note"><a href="${esc(at.back)}">Back to ${
-      esc(at.app)
-    }</a></p>`,
+          : null,
+      }),
+      about(at.face),
+      howTo(at.face, at.status != 'connected'),
+      said(at.say, at.no),
+      !at.on ? h(Card.Sub, null, "Keys can't be saved here yet.") : at.keyed
+        ? h(
+          'form',
+          { method: 'post' },
+          keyBox('key', 'Paste your key', send('Save key'), '', at.face.fields),
+        )
+        : null,
+    ),
+    h('p', { class: 'Note' }, h('a', { href: at.back }, `Back to ${at.app}`)),
   )
+
+// What a press answered, said back on the page it drew again.
+let said = (say?: string, no?: boolean) =>
+  say ? h(Notice, { mod: no && 'negative', role: 'status' }, say) : null
 
 // A one-click link, opened (identity.ts LINK). Opening it spends nothing: a
 // messaging app or mail scanner that fetches the address to draw a preview
 // would otherwise sign itself in and leave the person a dead link. The button
 // carries the pass on, and pressing it is what spends the code.
 export let askLink = (t: string, env: Host = {}) =>
-  shell(
+  page(
     env,
-    'Sign in to yaks.app',
-    'This link signs you in once, for ten minutes.',
-    200,
-    `<form method="post" action="/login/link">${held('t', t)}
-<button class="Button Button-go" type="submit">Sign in</button>
-</form>${home(env)}`,
-    { 'cache-control': 'private, no-store', 'referrer-policy': 'no-referrer' },
+    {
+      title: 'Sign in to yaks.app',
+      lead: 'This link signs you in once, for ten minutes.',
+      headers: {
+        'cache-control': 'private, no-store',
+        'referrer-policy': 'no-referrer',
+      },
+    },
+    h(
+      'form',
+      { method: 'post', action: '/login/link' },
+      held('t', t),
+      send('Sign in'),
+    ),
+    home(env),
   )
 
 // A custom domain asking to sign in: consent names its host and its space.
@@ -2586,17 +2854,24 @@ export let askHandoff = (
   consent: string,
   env: Host = {},
 ) =>
-  shell(
+  page(
     env,
-    `Sign in to ${esc(host)}`,
-    'This signs you in to this space only.',
-    200,
-    `<form method="post" action="/login/handoff">${held('return', back)}${
-      held('consent', consent)
-    }
-<button class="Button Button-go" type="submit">Continue to ${esc(host)}</button>
-</form>${home(env)}`,
-    { 'cache-control': 'private, no-store', 'referrer-policy': 'no-referrer' },
+    {
+      title: `Sign in to ${host}`,
+      lead: 'This signs you in to this space only.',
+      headers: {
+        'cache-control': 'private, no-store',
+        'referrer-policy': 'no-referrer',
+      },
+    },
+    h(
+      'form',
+      { method: 'post', action: '/login/handoff' },
+      held('return', back),
+      held('consent', consent),
+      send(`Continue to ${host}`),
+    ),
+    home(env),
   )
 
 // An app asking, for a browser that is already signed in: one click is the
@@ -2608,16 +2883,20 @@ export let askAllow = (
   consent: string,
   env: Host = {},
 ) =>
-  shell(
+  page(
     env,
-    'Allow access to your apps on yaks.app',
-    `${esc(who)} would like to use your apps on yaks.app as ${esc(email)}.`,
-    200,
-    `<form method="post" action="/oauth/allow">${carried(q)}${
-      held('consent', consent)
-    }
-<button class="Button Button-go" type="submit">Allow</button>
-</form>${home(env)}`,
+    {
+      title: 'Allow access to your apps on yaks.app',
+      lead: `${who} would like to use your apps on yaks.app as ${email}.`,
+    },
+    h(
+      'form',
+      { method: 'post', action: '/oauth/allow' },
+      carried(q),
+      held('consent', consent),
+      send('Allow'),
+    ),
+    home(env),
   )
 
 // The connector page, signed in (T-32972). Provider steps come first. The
@@ -2644,7 +2923,7 @@ export type Yours = {
   // What this space pays (billing.ts `Card`, T-33125). This is the surface
   // that starts a purchase, and it is signed-in web only: the agent surface
   // may name the pricing page and nothing else (C-33033).
-  plan: Card
+  plan: Billed
   // The name of the payment provider that bills it (payments.ts), as the
   // plan card says it.
   provider?: string
@@ -2654,29 +2933,61 @@ export type Yours = {
   paid?: boolean
 }
 
+// A space's address, its name typed in the box and the apex after it.
+let addressBox = (
+  id: string,
+  name: string,
+  value: string,
+  env: Host,
+  more = {},
+) =>
+  h(
+    At,
+    null,
+    h(Field, {
+      id,
+      name,
+      maxlength: 63,
+      autocomplete: 'off',
+      spellcheck: 'false',
+      ...more,
+      value,
+    }),
+    h(At.End, null, `.${apex(env)}`),
+  )
+
 // The address card, for a person who is signed in. The form posts, so it
 // works with no script at all; the script below turns that into an inline
 // answer, which is what a person choosing a name expects.
 let mine = (y: Yours, env: Host) =>
-  `<section class="Card">${heading('Where your apps live')}
-<p class="Now">Your apps live at <b>${esc(spaceHost(env, y.slug))}</b>.</p>
-<form class="Form Addr" method="post" action="/connect">${
-    labeled(
-      'your-space',
-      'Your address',
-      `<div class="Form_Line"><span class="At"><input class="Field" id="your-space" name="space" maxlength="63" autocomplete="off" spellcheck="false" value="${
-        esc(y.said ?? y.slug)
-      }"><span class="At_End">.${
-        apex(env)
-      }</span></span><button class="Button Button-go" type="submit">Save</button></div>`,
-      MOVES,
-    )
-  }
-<p class="Notice${y.no ? ' Notice-negative' : ''}" role="status">${
-    esc(y.say ?? '')
-  }</p>
-</form>
-</section>`
+  h(
+    Card,
+    null,
+    heading('Where your apps live'),
+    h(
+      'p',
+      { class: 'Now' },
+      'Your apps live at ',
+      h('b', null, spaceHost(env, y.slug)),
+      '.',
+    ),
+    h(
+      Form,
+      { class: 'Addr', method: 'post', action: '/connect' },
+      labeled(
+        'your-space',
+        'Your address',
+        h(
+          Form.Line,
+          null,
+          addressBox('your-space', 'space', y.said ?? y.slug, env),
+          send('Save'),
+        ),
+        MOVES,
+      ),
+      h(Notice, { mod: y.no && 'negative', role: 'status' }, y.say ?? ''),
+    ),
+  )
 
 // What changing an address does, said on both cards that change it: the
 // apps go along, and the old address redirects only until somebody else takes
@@ -2709,24 +3020,33 @@ let plan = (
   }, unlimited visitors, ${size(limits.bytes)} of app data${
     tier == 'organization' ? `, AI use included, and email support` : ''
   }`
-  let host = esc(spaceHost(env, y.slug))
+  let host = spaceHost(env, y.slug)
   let head = tier == 'free'
-    ? `<p>${host} is on the <b>free</b> plan — ${allowance}. <a href="${
-      url(env, '/pricing')
-    }">Compare plans</a>.</p>`
-    : `<p>${host} is on <b>${NAMES[tier]}</b> — ${allowance}.${
-      ends ? ` It runs until ${esc(ends)} and then stops renewing.` : ''
-    }${
+    ? h(
+      'p',
+      null,
+      `${host} is on the `,
+      h('b', null, 'free'),
+      ` plan — ${allowance}. `,
+      h('a', { href: url(env, '/pricing') }, 'Compare plans'),
+      '.',
+    )
+    : h(
+      'p',
+      null,
+      `${host} is on `,
+      h('b', null, NAMES[tier]),
+      ` — ${allowance}.`,
+      ends ? ` It runs until ${ends} and then stops renewing.` : '',
       y.plan.free
-        ? ` It’s free through ${
-          esc(day(y.plan.free))
-        }: a month for each person you invited who built their first app. ` +
-          'Subscribe now to keep it after that; nothing is charged before then.'
-        : ''
-    }</p>`
+        ? ` It’s free through ${day(y.plan.free)}: a month for each person ` +
+          'you invited who built their first app. Subscribe now to keep it ' +
+          'after that; nothing is charged before then.'
+        : '',
+    )
   // The button names the space it buys for: a plan is a space's, never the
   // person's (D-131886), and someone with two spaces pays for the one named.
-  let space = y.title || spaceHost(env, y.slug)
+  let space = y.title || host
   let buy = (want: Want) =>
     billButton(
       'checkout',
@@ -2748,50 +3068,65 @@ let plan = (
         ),
       ]
       : []),
-    y.plan.known ? billButton('portal', 'Manage billing', target) : '',
-  ].filter(Boolean).join('')
+    y.plan.known ? billButton('portal', 'Manage billing', target) : null,
+  ].filter(Boolean)
   // Where the Organization plan has no price yet, a free space still hears
   // how to get it: the pricing page offers it everywhere.
   let ask = tier == 'free' && !y.plan.organization?.length
-    ? `<p class="Form_Hint">The Organization plan is not on sale here yet. ` +
-      `Email <a href="mailto:hello@yaks.app">hello@yaks.app</a> to start ` +
-      `on it.</p>`
-    : ''
-  return `<section class="Card Bill" id="plan">${
+    ? h(
+      Form.Hint,
+      null,
+      'The Organization plan is not on sale here yet. Email ',
+      h('a', { href: 'mailto:hello@yaks.app' }, 'hello@yaks.app'),
+      ' to start on it.',
+    )
+    : null
+  return h(
+    Card,
+    { class: 'Bill', id: 'plan' },
     heading('Plan', {
       status: tier == 'free'
         ? status('Free')
         : status(tier == 'plus' ? 'Plus' : 'Organization', 'positive'),
-      actions: doors,
-    })
-  }
-${head}${billedLine(y.plan, y.payer, y.provider)}${ask}
-${
+      actions: doors.length ? doors : null,
+    }),
+    head,
+    billedLine(y.plan, y.payer, y.provider),
+    ask,
     y.paid
-      ? '<p class="Notice">Thanks — that went through. Your space moves to its ' +
-        'new plan in a moment.</p>'
-      : ''
-  }
-<p class="Notice Bill_Say" role="status"></p>
-</section>`
+      ? h(
+        Notice,
+        null,
+        'Thanks — that went through. Your space moves to its new plan in a moment.',
+      )
+      : null,
+    h(Notice, { class: 'Bill_Say', role: 'status' }),
+  )
 }
 
 // Whom the plan is billed to, where the payment provider has met the space:
 // the address its receipts go to, or, when the provider couldn't be asked just
 // now (`undefined`), only that it bills the space. A space the provider never
 // met is billed to nobody. A page not told the provider's name leaves it out.
-let billedLine = (card: Card, payer?: Payer | null, provider?: string) => {
+let billedLine = (card: Billed, payer?: Payer | null, provider?: string) => {
   if (!card.known) {
-    return card.tier == 'free'
-      ? '<p class="Form_Hint">Nothing is billed.</p>'
-      : ''
+    return card.tier == 'free' ? h(Form.Hint, null, 'Nothing is billed.') : null
   }
-  let through = provider ? ` through ${esc(provider)}` : ''
+  let through = provider ? ` through ${provider}` : ''
   return payer?.email
-    ? `<p>Billed to <b>${esc(payer.email)}</b>${
-      payer.name ? ` (${esc(payer.name)})` : ''
-    }${through}. Manage billing changes the card, the address and who receives the receipts.</p>`
-    : `<p>Billed${through}. Manage billing shows the card and the receipts.</p>`
+    ? h(
+      'p',
+      null,
+      'Billed to ',
+      h('b', null, payer.email),
+      payer.name ? ` (${payer.name})` : '',
+      `${through}. Manage billing changes the card, the address and who receives the receipts.`,
+    )
+    : h(
+      'p',
+      null,
+      `Billed${through}. Manage billing shows the card and the receipts.`,
+    )
 }
 
 // Each allowance as the Billing page names it, how its figures read, and what
@@ -2823,9 +3158,9 @@ let gaugeRow = (name: string, figure: string, hint: string, share: number) =>
     hint ? ` · ${hint}` : ''
   }</span></div>${
     share >= 1
-      ? status('At the limit', 'negative')
+      ? statusHtml('At the limit', 'negative')
       : share >= WARN
-      ? status('Near the limit', 'negative')
+      ? statusHtml('Near the limit', 'negative')
       : ''
   }</li>`
 
@@ -2851,7 +3186,7 @@ let allowances = (
     ? `, last read at ${esc(bill.read.slice(11, 16))} UTC`
     : ''
   return `<section class="Card">${
-    heading('This month')
+    headingHtml('This month')
   }<p class="Card_Sub">What ${
     esc(spaceHost(env, slug))
   } has used since the 1st, counted hourly${read}. Each starts again on the 1st, except what the space holds.</p><ul class="Rows">${rows}${
@@ -2870,56 +3205,94 @@ let NAMES = { plus: 'the Plus plan', organization: 'the Organization plan' }
 // Connector forms do not ask the same questions. Keep each answer beside the
 // provider step that asks for it, so a person never has to work out whether a
 // field belongs to the form they are looking at.
-let field = (label: string, value: string, what: string) =>
-  `<div><dt>${esc(label)}</dt><dd>${copyable(value, what)}</dd></div>`
+let field = (label: string, value: Kids, what?: string) =>
+  h(
+    'div',
+    null,
+    h('dt', null, label),
+    what == null ? value : h('dd', null, copyable(value, what)),
+  )
 
-let fields = (rows: string) => `<dl class="Fields">${rows}</dl>`
+let fields = (...rows: Kids[]) => h('dl', { class: 'Fields' }, rows)
 
 let chatgptFields = (env: Host) =>
   fields(
-    field('Name', CONNECTOR.title, 'the name') +
-      field('Description', CONNECTOR.description, 'the description') +
-      `<div><dt>Icon</dt><dd class="Connect_Icon">
-<a href="${
-        url(env, '/yaks-app.png')
-      }" download="yaks-app.png" aria-label="Download the yaks.app icon">
-<img src="${
-        url(env, '/yaks-app.png')
-      }" width="56" height="56" alt="The yaks.app icon"></a>
-<a href="${url(env, '/yaks-app.png')}" download="yaks-app.png">Download icon</a>
-</dd></div>`,
+    field('Name', CONNECTOR.title, 'the name'),
+    field('Description', CONNECTOR.description, 'the description'),
+    field(
+      'Icon',
+      h(
+        'dd',
+        { class: 'Connect_Icon' },
+        h(
+          'a',
+          {
+            href: url(env, '/yaks-app.png'),
+            download: 'yaks-app.png',
+            'aria-label': 'Download the yaks.app icon',
+          },
+          h('img', {
+            src: url(env, '/yaks-app.png'),
+            width: 56,
+            height: 56,
+            alt: 'The yaks.app icon',
+          }),
+        ),
+        h(
+          'a',
+          { href: url(env, '/yaks-app.png'), download: 'yaks-app.png' },
+          'Download icon',
+        ),
+      ),
+    ),
   )
 
 let external = (href: string, label: string) =>
-  `<a href="${esc(href)}" target="_blank" rel="noopener">${label}</a>`
+  h('a', { href, target: '_blank', rel: 'noopener' }, label)
+
+let b = (words: string) => h('b', null, words)
+let code = (words: string) => h('code', null, words)
 
 // What a person asks for their first app. The assistant already knows them,
 // so the ask hands it their own situation rather than a scenario we made up
 // for them (the app-ideas prompt's own question, prompts/app-ideas.md).
-let firstAsk = copyable(
-  "Any yaks.app ideas you think I'd like, based on our chat history?",
-  'the first app request',
-)
+let firstAsk = () =>
+  copyable(
+    "Any yaks.app ideas you think I'd like, based on our chat history?",
+    'the first app request',
+  )
 
 // An address on this platform, written out for somebody to type or paste.
-let at = (path: string, env: Host) => `<code>${url(env, path)}</code>`
+let at = (path: string, env: Host) => code(url(env, path))
 
 // What to write in an OAuth box, for the forms that have boxes (T-34414).
 // Every value is the authorization server's own — route.ts `OAUTH` is what
 // identity.ts configures the provider with and what both `/.well-known`
 // documents serve — so this page cannot come to teach an address the door
 // does not answer.
-let ID = 'Leave <b>OAuth Client ID</b> and <b>OAuth Client Secret</b> empty.'
-
-let boxes = (env: Host) =>
-  `<b>Authorization URL</b> ${at(OAUTH.authorize, env)}, <b>Token URL</b> ${
-    at(OAUTH.token, env)
-  }, <b>Registration URL</b> ${
-    at(OAUTH.register, env)
-  }, <b>Scope</b> <code>${OAUTH.scope}</code>.`
-
-let oauthHelp = (env: Host) =>
-  `For clients that need manual setup: ${ID} ${boxes(env)}`
+let oauthHelp = (env: Host) => [
+  'For clients that need manual setup: Leave ',
+  b('OAuth Client ID'),
+  ' and ',
+  b('OAuth Client Secret'),
+  ' empty. ',
+  b('Authorization URL'),
+  ' ',
+  at(OAUTH.authorize, env),
+  ', ',
+  b('Token URL'),
+  ' ',
+  at(OAUTH.token, env),
+  ', ',
+  b('Registration URL'),
+  ' ',
+  at(OAUTH.register, env),
+  ', ',
+  b('Scope'),
+  ' ',
+  code(OAUTH.scope),
+  '.',
+]
 
 // This repository is itself a plugin marketplace (T-34666): `.agents/plugins/
 // marketplace.json` offers `plugins/yaks.app/`, whose `.mcp.json` names the
@@ -2934,12 +3307,24 @@ export let claudeAdd = (env: Host) =>
   `&connectorName=${encodeURIComponent(CONNECTOR.title)}` +
   `&connectorUrl=${encodeURIComponent(url(env, '/mcp'))}`
 
-// Nothing interpolated below is anybody's input, so it is written as the
-// markup it is; everything that is a person's is escaped where it enters.
-//
+// One client's way to connect: its steps (or, where it has more than one
+// interface, its paths of steps), what to know before and after, and the
+// chat to open once it is done.
+type Client = {
+  key: string
+  tab: string
+  title: string
+  intro?: Kids
+  paths?: { title: string; steps: Kids[] }[]
+  steps?: Kids[]
+  note?: Kids
+  details?: { summary: string; text: Kids }
+  finish: Kids
+}
+
 // Keep setup paths and field labels matched to each client's form, including
 // differences between its desktop and mobile interfaces.
-let clients = (env: Host) => [
+let clients = (env: Host): Client[] => [
   {
     key: 'claude',
     tab: 'Claude',
@@ -2948,41 +3333,64 @@ let clients = (env: Host) => [
       {
         title: 'Web + Desktop',
         steps: [
-          'Open ' + external(
-            claudeAdd(env),
-            'Customize → Connectors → Add',
-          ) + '.',
-          'Check it has these values:' + fields(
-            field('Name', CONNECTOR.title, 'the name') +
+          [
+            'Open ',
+            external(claudeAdd(env), 'Customize → Connectors → Add'),
+            '.',
+          ],
+          [
+            'Check it has these values:',
+            fields(
+              field('Name', CONNECTOR.title, 'the name'),
               field(
                 'Remote MCP server URL',
                 url(env, '/mcp'),
                 'the connection URL',
               ),
-          ),
-          'Click <b>Continue</b>.',
+            ),
+          ],
+          ['Click ', b('Continue'), '.'],
         ],
       },
       {
         title: 'Mobile App',
         steps: [
-          'Claude’s help pages only describe adding a connector on ' +
-          'claude.ai or the desktop app, so add yaks.app there first, ' +
-          'using the <b>Web + Desktop</b> steps.',
-          'Then open the Claude app on your phone. Your connector works ' +
-          'there too: in a chat, tap <b>+</b> in the message box, then ' +
-          '<b>Connectors</b>, and make sure yaks.app is switched on.',
+          [
+            'Claude’s help pages only describe adding a connector on ' +
+            'claude.ai or the desktop app, so add yaks.app there first, ' +
+            'using the ',
+            b('Web + Desktop'),
+            ' steps.',
+          ],
+          [
+            'Then open the Claude app on your phone. Your connector works ' +
+            'there too: in a chat, tap ',
+            b('+'),
+            ' in the message box, then ',
+            b('Connectors'),
+            ', and make sure yaks.app is switched on.',
+          ],
         ],
       },
     ],
     // Claude's own limits on custom connectors, from its documentation
     // (claude.com/docs/connectors/custom/remote-mcp): the two that stop
     // somebody partway through these steps.
-    note: 'Claude’s free plan allows one custom connector. On a Team or ' +
-      'Enterprise plan, an owner adds it under <b>Organization settings</b> ' +
-      '→ <b>Connectors</b>, and then you press <b>Connect</b> beside it ' +
-      'in <b>Customize</b> → <b>Connectors</b>.',
-    finish: 'Open ' + external('https://claude.ai/new', 'a new Claude chat'),
+    note: [
+      'Claude’s free plan allows one custom connector. On a Team or ' +
+      'Enterprise plan, an owner adds it under ',
+      b('Organization settings'),
+      ' → ',
+      b('Connectors'),
+      ', and then you press ',
+      b('Connect'),
+      ' beside it in ',
+      b('Customize'),
+      ' → ',
+      b('Connectors'),
+      '.',
+    ],
+    finish: ['Open ', external('https://claude.ai/new', 'a new Claude chat')],
   },
   {
     key: 'chatgpt',
@@ -2999,15 +3407,28 @@ let clients = (env: Host) => [
       'way today, but Claude works on any plan. It works on the web, not in ' +
       'the phone app.',
     steps: [
-      'Copy this URL:' +
-      fields(field('Connection', url(env, '/mcp'), 'the connection URL')),
-      'Open ' +
-      external('https://chatgpt.com/plugins', 'ChatGPT Plugins') +
-      ', tap the <b>+</b> button, then <b>Add custom MCP server</b>.',
-      'Add the name and description:' + chatgptFields(env),
-      'Under <b>Connection</b>, paste the URL you copied.',
-      'Read the warning, tap <b>I understand and want to continue</b>, then ' +
-      '<b>Create as a plugin</b>.',
+      [
+        'Copy this URL:',
+        fields(field('Connection', url(env, '/mcp'), 'the connection URL')),
+      ],
+      [
+        'Open ',
+        external('https://chatgpt.com/plugins', 'ChatGPT Plugins'),
+        ', tap the ',
+        b('+'),
+        ' button, then ',
+        b('Add custom MCP server'),
+        '.',
+      ],
+      ['Add the name and description:', chatgptFields(env)],
+      ['Under ', b('Connection'), ', paste the URL you copied.'],
+      [
+        'Read the warning, tap ',
+        b('I understand and want to continue'),
+        ', then ',
+        b('Create as a plugin'),
+        '.',
+      ],
       'Sign in with your email when ChatGPT asks.',
     ],
     // The repository's plugin names production; a staging visitor needs the
@@ -3015,29 +3436,46 @@ let clients = (env: Host) => [
     details: apex(env) == apex()
       ? {
         summary: 'Connect from the ChatGPT desktop app',
-        text:
+        text: [
           'This way, yaks.app stays up to date without waiting for a review. ' +
-          'In the ChatGPT desktop app, choose ' +
-          '<b>Add plugin marketplace</b>, then copy and paste this:' +
-          fields(field('Repository', REPO, 'the repository')) +
+          'In the ChatGPT desktop app, choose ',
+          b('Add plugin marketplace'),
+          ', then copy and paste this:',
+          fields(field('Repository', REPO, 'the repository')),
           'You can also add it in your workspace’s plugin settings.',
+        ],
       }
       : undefined,
-    finish: 'Open ' + external('https://chatgpt.com/', 'a new ChatGPT chat'),
+    finish: ['Open ', external('https://chatgpt.com/', 'a new ChatGPT chat')],
   },
   {
     key: 'claude-code',
     tab: 'Claude Code',
     title: 'Claude Code',
     steps: [
-      `In your terminal: <code class="Copy_Text">claude mcp add --transport http yaks ${
-        url(env, '/mcp')
-      }</code>`,
-      'Start Claude Code, run <code>/mcp</code>, pick <b>yaks</b> and choose ' +
-      '<b>Authenticate</b>. It opens your browser to sign in.',
+      [
+        'In your terminal: ',
+        h(
+          Copy.Text,
+          { as: 'code' },
+          `claude mcp add --transport http yaks ${url(env, '/mcp')}`,
+        ),
+      ],
+      [
+        'Start Claude Code, run ',
+        code('/mcp'),
+        ', pick ',
+        b('yaks'),
+        ' and choose ',
+        b('Authenticate'),
+        '. It opens your browser to sign in.',
+      ],
     ],
-    note: 'Add <code>--scope user</code> to that first line to have it in ' +
-      'every project, not just this one.',
+    note: [
+      'Add ',
+      code('--scope user'),
+      ' to that first line to have it in every project, not just this one.',
+    ],
     finish: 'Start a new Claude Code chat',
   },
   {
@@ -3045,15 +3483,38 @@ let clients = (env: Host) => [
     tab: 'Cursor',
     title: 'Cursor',
     steps: [
-      'Open <b>Cursor Settings</b> → <b>Tools &amp; Integrations</b> and ' +
-      'press <b>New MCP Server</b>. It opens <code>~/.cursor/mcp.json</code>.',
-      'Add the server, with the URL as its one field: <code class="Copy_Text">' +
-      '{ "mcpServers": { "yaks": { "url": "' + url(env, '/mcp') +
-      '" } } }</code>',
-      'Back in <b>Tools &amp; Integrations</b>, click <b>yaks</b> and sign in.',
+      [
+        'Open ',
+        b('Cursor Settings'),
+        ' → ',
+        b('Tools & Integrations'),
+        ' and press ',
+        b('New MCP Server'),
+        '. It opens ',
+        code('~/.cursor/mcp.json'),
+        '.',
+      ],
+      [
+        'Add the server, with the URL as its one field: ',
+        h(
+          Copy.Text,
+          { as: 'code' },
+          `{ "mcpServers": { "yaks": { "url": "${url(env, '/mcp')}" } } }`,
+        ),
+      ],
+      [
+        'Back in ',
+        b('Tools & Integrations'),
+        ', click ',
+        b('yaks'),
+        ' and sign in.',
+      ],
     ],
-    note: 'A <code>.cursor/mcp.json</code> in a project folder does the same ' +
-      'thing for that project alone.',
+    note: [
+      'A ',
+      code('.cursor/mcp.json'),
+      ' in a project folder does the same thing for that project alone.',
+    ],
     finish: 'Open a new Agent chat in Cursor',
   },
   {
@@ -3061,10 +3522,19 @@ let clients = (env: Host) => [
     tab: 'Grok',
     title: 'Grok',
     steps: [
-      'Open ' + external('https://grok.com/connectors', 'Grok Connectors') +
-      ' and choose <b>New Connector</b>, then <b>Custom</b>.',
-      'Enter this server URL:' +
-      fields(field('URL', url(env, '/mcp?auth=required'), 'the MCP URL')),
+      [
+        'Open ',
+        external('https://grok.com/connectors', 'Grok Connectors'),
+        ' and choose ',
+        b('New Connector'),
+        ', then ',
+        b('Custom'),
+        '.',
+      ],
+      [
+        'Enter this server URL:',
+        fields(field('URL', url(env, '/mcp?auth=required'), 'the MCP URL')),
+      ],
       'Connect and follow the prompt to sign in to yaks.app.',
     ],
     finish: 'Start a new Grok chat',
@@ -3074,80 +3544,141 @@ let clients = (env: Host) => [
     tab: 'Other',
     title: 'Anything else that speaks MCP',
     steps: [
-      'Add a streamable HTTP connection with this URL:' +
-      fields(field('URL', url(env, '/mcp'), 'the MCP URL')),
-      'If it asks for a name, use <b>yaks.app</b>. Then follow its sign-in ' +
-      'prompt.',
+      [
+        'Add a streamable HTTP connection with this URL:',
+        fields(field('URL', url(env, '/mcp'), 'the MCP URL')),
+      ],
+      [
+        'If it asks for a name, use ',
+        b('yaks.app'),
+        '. Then follow its sign-in prompt.',
+      ],
     ],
     details: {
       summary: 'More about authentication',
-      text: oauthHelp(env) +
+      text: [
+        ...oauthHelp(env),
         ' Sign-in is required when connecting. To use the signed-out tools in ' +
-        'a client that supports mixed authentication, use ' +
-        `<code>${url(env, '/mcp?auth=mixed')}</code>. ` +
-        `<code>${url(env, '/mcp?auth=required')}</code> also requires sign-in.`,
+        'a client that supports mixed authentication, use ',
+        code(url(env, '/mcp?auth=mixed')),
+        '. ',
+        code(url(env, '/mcp?auth=required')),
+        ' also requires sign-in.',
+      ],
     },
     finish: 'Start a new chat in your MCP client',
   },
 ]
 
-let steps = (items: string[]) =>
-  `<ol>${items.map((s) => `<li>${s}</li>`).join('')}</ol>`
+let steps = (items: Kids[]) => h('ol', null, items.map((s) => h('li', null, s)))
 
 // Native radio tabs share their layout with the working style-guide example.
 let doors = (env: Host) =>
-  `<fieldset class="Tabs">
-<legend class="Tabs_Legend">Which app do you use?</legend>
-${
+  h(
+    TabSet,
+    null,
+    h(TabSet.Legend, null, 'Which app do you use?'),
     clients(env).map((a, i) =>
-      `<div class="Tabs_Item">
-<input type="radio" name="agent" id="tab-${a.key}" value="${a.key}"${
-        i ? '' : ' checked'
-      }>
-<label class="Tabs_Tab" for="tab-${a.key}">${a.tab}</label>
-<section class="Card Tabs_Panel Tabs_Panel-${a.key}"><h2 class="Card_Title">${a.title}</h2>
-${a.intro ? `<p>${a.intro}</p>` : ''}
-${
-        a.paths
-          ? a.paths.map((p) =>
-            `<h3 class="Connect_Path">${p.title}</h3>${steps(p.steps)}`
-          ).join('')
-          : steps(a.steps)
-      }
-${a.note ? `<p class="Note">${a.note}</p>` : ''}
-${
-        a.details
-          ? `<details class="More"><summary>${a.details.summary}</summary><div class="More_Body Note">${a.details.text}</div></details>`
-          : ''
-      }
-<div class="Connect_Next"><p>Make your first app</p>
-${a.finish}, then ask:${firstAsk}
-<span class="Note">Pick one to build, then ask for changes in the same chat. Keep shaping it as you use it.</span></div>
-</section></div>`
-    ).join('')
-  }
-</fieldset>`
+      h(
+        TabSet.Item,
+        null,
+        h('input', {
+          type: 'radio',
+          name: 'agent',
+          id: `tab-${a.key}`,
+          value: a.key,
+          checked: !i,
+        }),
+        h(TabSet.Tab, { for: `tab-${a.key}` }, a.tab),
+        h(
+          TabSet.Panel,
+          { mod: a.key, class: 'Card' },
+          h(Card.Title, null, a.title),
+          a.intro ? h('p', null, a.intro) : null,
+          a.paths
+            ? a.paths.map((p) => [
+              h('h3', { class: 'Connect_Path' }, p.title),
+              steps(p.steps),
+            ])
+            : steps(a.steps!),
+          a.note ? h('p', { class: 'Note' }, a.note) : null,
+          a.details
+            ? h(
+              More,
+              null,
+              h('summary', null, a.details.summary),
+              h(More.Body, { class: 'Note' }, a.details.text),
+            )
+            : null,
+          h(
+            'div',
+            { class: 'Connect_Next' },
+            h('p', null, 'Make your first app'),
+            a.finish,
+            ', then ask:',
+            firstAsk(),
+            h(
+              'span',
+              { class: 'Note' },
+              'Pick one to build, then ask for changes in the same chat. Keep shaping it as you use it.',
+            ),
+          ),
+        ),
+      )
+    ),
+  )
+
+// Shows a part only while an agent is connected, or only while none is
+// (connected_ui.ts `agentLive` keeps it true as agents come and go).
+let state = (connected: boolean, show: boolean) => ({
+  [`data-${connected ? 'connected' : 'disconnected'}`]: '',
+  hidden: !show,
+})
+
+// The one link a person pastes into their own agent, which reads from it how
+// to connect itself (docs.ts `AGENT`, public/agent.md).
+let pasteLink = (env: Host) =>
+  h(
+    Form.Field,
+    null,
+    h(Form.Label, { as: 'p' }, 'Paste this link into your AI agent'),
+    copyable(url(env, AGENT.path), 'the link for your agent'),
+    h(
+      'span',
+      { class: 'Note' },
+      'Claude, ChatGPT, Claude Code, Cursor or another agent reads from it how to connect to yaks.app, does what it can itself, and tells you the one step that’s yours.',
+    ),
+  )
 
 // `back` is where a row's Disconnect returns to: the page it is on.
-let agentSetup = (agents: Agent[], env: Host, back: string) =>
-  `${agentList(agents, 'rows', back)}
-<p ${
-    state(true, !!agents.length)
-  }>Ask for an app, or keep improving one in the same chat.</p>
-<p ${
-    state(false, !agents.length)
-  }>Connect once, then build and keep improving your apps in your usual chats.</p>
-<section class="Connect_Setup">
-<h2 class="Group" ${state(true, !!agents.length)}>Connect another agent</h2>
-${pasteLink(env)}
-<p>Or connect it yourself, with the steps for your app:</p>
-${doors(env)}</section>`
+let agentSetup = (agents: Agent[], env: Host, back: string) => [
+  agentList(agents, 'rows', back),
+  h(
+    'p',
+    state(true, !!agents.length),
+    'Ask for an app, or keep improving one in the same chat.',
+  ),
+  h(
+    'p',
+    state(false, !agents.length),
+    'Connect once, then build and keep improving your apps in your usual chats.',
+  ),
+  h(
+    'section',
+    { class: 'Connect_Setup' },
+    h(Group, state(true, !!agents.length), 'Connect another agent'),
+    pasteLink(env),
+    h('p', null, 'Or connect it yourself, with the steps for your app:'),
+    doors(env),
+  ),
+]
 
 // The only script a tab needs, and it is not what switches one: the radios do
 // that with no script at all. This keeps the chosen one in the address, so a
 // link can name a tab and a reload comes back to it. Matched by value, never
 // built into a selector — a hash is whatever a stranger put in it.
-let tabbing = `<script>
+let tabbing = () =>
+  run(`
 let tabs = document.querySelector('.Tabs')
 if (tabs) {
   let all = [...tabs.querySelectorAll('input[name=agent]')]
@@ -3163,12 +3694,13 @@ if (tabs) {
     }
   })
 }
-</script>`
+`)
 
 // One listener, no framework: the form answers in place. Constant text, no
 // interpolation, and every write to the page is textContent — the page never
 // speaks HTML on a person's behalf.
-let inline = `<script>
+let inline = () =>
+  run(`
 let f = document.querySelector('.Addr')
 if (f) f.addEventListener('submit', async (e) => {
   e.preventDefault()
@@ -3199,20 +3731,21 @@ if (f) f.addEventListener('submit', async (e) => {
   }
   go.disabled = false
 })
-</script>`
+`)
 
 // The billing buttons: ask our own door for the payment provider's URL and
 // follow it. The
 // URL is minted per person and expires, so it is never written into the page.
-let billing = `<script>
+let billing = () =>
+  run(`
 for (let b of document.querySelectorAll('.Bill_Go')) {
   b.addEventListener('click', async () => {
     let say = b.closest('.Bill').querySelector('.Bill_Say')
     b.disabled = true
     say.className = 'Notice Bill_Say Loading'
     say.innerHTML = ${
-  JSON.stringify(yak('calculating') + '<span>One moment…</span>')
-}
+    JSON.stringify(yak('calculating') + '<span>One moment…</span>')
+  }
     try {
       let r = await fetch(b.dataset.target || '/api/billing/' + b.dataset.door, {
         method: 'POST',
@@ -3232,22 +3765,37 @@ for (let b of document.querySelectorAll('.Bill_Go')) {
     b.disabled = false
   })
 }
-</script>`
+`)
 
 export let connect = (yours: Yours, status = 200, env: Host = {}) =>
-  shell(
+  page(
     env,
-    'Connect yaks.app',
-    'Build and manage your apps from your usual chats.',
-    status,
-    `${agentSetup(yours.agents ?? [], env, '/connect')}
-<details class="More Attach"${status != 200 || yours.paid ? ' open' : ''}>
-<summary>Your address and plan</summary>
-<div class="More_Body">${mine(yours, env)}${plan(yours, env)}</div>
-</details>
-<p class="Note"><a href="${url(env, MANAGE)}">Your apps and settings</a></p>
-<p class="Note"><a href="${url(env, '/help')}">Need help?</a></p>
-${home(env)}${copying}${tabbing}${inline}${billing}${
-      agentLive('/oauth/agents')
-    }`,
+    {
+      title: 'Connect yaks.app',
+      lead: 'Build and manage your apps from your usual chats.',
+      status,
+    },
+    agentSetup(yours.agents ?? [], env, '/connect'),
+    h(
+      More,
+      { class: 'Attach', open: status != 200 || yours.paid },
+      h('summary', null, 'Your address and plan'),
+      h(More.Body, null, mine(yours, env), plan(yours, env)),
+    ),
+    h(
+      'p',
+      { class: 'Note' },
+      h('a', { href: url(env, MANAGE) }, 'Your apps and settings'),
+    ),
+    h(
+      'p',
+      { class: 'Note' },
+      h('a', { href: url(env, '/help') }, 'Need help?'),
+    ),
+    home(env),
+    copying(),
+    tabbing(),
+    inline(),
+    billing(),
+    agentLive('/oauth/agents'),
   )

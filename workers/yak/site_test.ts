@@ -926,16 +926,10 @@ test('the help page answers its own questions in JSON-LD', () => {
 })
 
 // The connect instructions, as they are served, one tab per app.
-let occurrences = (html: string, s: string) => html.split(s).length - 1
-
 let panel = (html: string, key: string) => {
-  let start = html.indexOf(
-    `<section class="Card Tabs_Panel Tabs_Panel-${key}">`,
-  )
-  assert(start >= 0, `${key} panel is missing`)
-  let end = html.indexOf('</section>', start)
-  assert(end >= 0, `${key} panel does not close`)
-  return html.slice(start, end)
+  let found = parseHTML(html).document.querySelector(`.Tabs_Panel-${key}`)
+  assert(found, `${key} panel is missing`)
+  return found
 }
 
 // `/connect` is a signed-in page (T-34408), so it always has a space to say
@@ -947,13 +941,25 @@ let page = () =>
   }).text()
 
 test('ChatGPT gets a downloadable icon within its upload limit', async () => {
-  let html = panel(await page(), 'chatgpt')
+  let tab = panel(await page(), 'chatgpt')
   let href = `${SITE_URL}/yaks-app.png`
-  assertEquals(occurrences(html, `href="${href}" download="yaks-app.png"`), 2)
-  assertStringIncludes(
-    html,
-    `<a href="${href}" download="yaks-app.png" aria-label="Download the yaks.app icon">
-<img src="${href}" width="56" height="56" alt=`,
+  let downloads = [...tab.querySelectorAll('a[download]')]
+  assertEquals(
+    downloads.map((a) => [a.getAttribute('href'), a.getAttribute('download')]),
+    [[href, 'yaks-app.png'], [href, 'yaks-app.png']],
+  )
+  let shown = downloads[0].querySelector('img')!
+  assertEquals(
+    [
+      shown.getAttribute('src'),
+      shown.getAttribute('width'),
+      shown.getAttribute('height'),
+    ],
+    [href, '56', '56'],
+  )
+  assertEquals(
+    downloads[0].getAttribute('aria-label'),
+    'Download the yaks.app icon',
   )
 
   png('yaks-app.png', 256, 256, false)

@@ -1,42 +1,66 @@
 // Connected agents render as status rows or compact launch links. Each
 // shape shares its server markup with the browser's refresh template; pages
 // without a list still refresh prompts without touching surrounding inputs.
+// The rows are @yaks/ui's (Card, Rows, State, Button, Icon), drawn by the
+// pencil skin.
+import { Button, Card, Icon, Rows, State } from '@yaks/ui/parts'
+import { h } from 'preact'
 import type { Agent, Brand } from './connected.ts'
-import { esc } from './html.ts'
-import { icon } from './icons.ts'
+import { icons } from './icons.ts'
 
 let destinations: Partial<Record<Brand, { href: string; label: string }>> = {
   chatgpt: { href: 'https://chatgpt.com/', label: 'Open ChatGPT' },
   claude: { href: 'https://claude.ai/new', label: 'Open Claude' },
 }
 
+let hidden = (name: string, value: string, more = {}) =>
+  h('input', { type: 'hidden', name, ...more, value })
+
 // A row's way out: it revokes what the row stands for and comes back to
 // `back` (identity.ts answers the post).
 let disconnect = (agent: Agent | undefined, back: string) =>
-  `<form method="post" action="/oauth/agents/disconnect">
-<input type="hidden" name="agent" data-agent-id value="${esc(agent?.id ?? '')}">
-<input type="hidden" name="return" value="${esc(back)}">
-<button class="Button" type="submit" data-agent-disconnect aria-label="Disconnect ${
-    esc(agent?.name ?? '')
-  }">Disconnect</button></form>`
+  h(
+    'form',
+    { method: 'post', action: '/oauth/agents/disconnect' },
+    hidden('agent', agent?.id ?? '', { 'data-agent-id': '' }),
+    hidden('return', back),
+    h(Button, {
+      type: 'submit',
+      'data-agent-disconnect': '',
+      'aria-label': `Disconnect ${agent?.name ?? ''}`,
+    }, 'Disconnect'),
+  )
 
 let row = (agent?: Agent, links = false, back = '') => {
   let link = agent?.brand &&
       Object.hasOwn(destinations, agent.brand)
     ? destinations[agent.brand]
     : undefined
-  if (links && agent && !link) return ''
-  let open = `<a class="Agents_Open" data-agent-open${
-    link ? ` href="${link.href}"` : ' hidden'
-  } target="_blank" rel="noopener noreferrer"><span data-agent-action>${
-    link?.label ?? ''
-  }</span>${icon('external-link')}</a>`
-  return links ? `<li>${open}</li>` : `<li class="Rows_Item">
-<div class="Rows_Main"><strong class="Rows_Name" data-agent-name>${
-    esc(agent?.name ?? '')
-  }</strong>
-<span class="State State-positive"><span class="Dot Dot-positive"></span>Connected</span></div>
-<div class="Rows_Actions">${open}${disconnect(agent, back)}</div></li>`
+  if (links && agent && !link) return null
+  let open = h(
+    'a',
+    {
+      class: 'Agents_Open',
+      'data-agent-open': '',
+      href: link?.href,
+      hidden: !link,
+      target: '_blank',
+      rel: 'noopener noreferrer',
+    },
+    h('span', { 'data-agent-action': '' }, link?.label ?? ''),
+    h(Icon, { of: icons['external-link'] }),
+  )
+  return links ? h('li', null, open) : h(
+    Rows.Item,
+    { as: 'li' },
+    h(
+      Rows.Main,
+      null,
+      h(Rows.Name, { 'data-agent-name': '' }, agent?.name ?? ''),
+      h(State, { mod: 'positive' }, 'Connected'),
+    ),
+    h(Rows.Actions, null, open, disconnect(agent, back)),
+  )
 }
 
 /**
@@ -51,25 +75,46 @@ export let agentList = (
   back = '',
 ) => {
   let links = view == 'links'
-  let rows = agents.map((c) => row(c, links, back)).join('')
-  let tag = links ? 'div' : 'section'
-  return `<${tag} ${
-    links
-      ? 'data-agent-links'
-      : `class="Card" data-connected${rows ? '' : ' hidden'}`
-  } data-agents aria-live="polite">${
-    links
-      ? ''
-      : '<header class="Card_Head"><h2 class="Card_Title">Connected agents</h2></header>'
-  }
-<ul class="Agents ${
-    links ? 'Agents-links' : 'Rows'
-  }" aria-label="Connected agents"${rows ? '' : ' hidden'}>${rows}</ul>
-<template data-agent-row>${row(undefined, links, back)}</template></${tag}>`
+  let rows = agents.map((c) => row(c, links, back)).filter(Boolean)
+  let list = h(
+    links ? 'ul' : Rows,
+    {
+      ...(links
+        ? { class: 'Agents Agents-links' }
+        : { as: 'ul', class: 'Agents' }),
+      'aria-label': 'Connected agents',
+      hidden: !rows.length,
+    },
+    rows,
+  )
+  let template = h(
+    'template',
+    { 'data-agent-row': '' },
+    row(undefined, links, back),
+  )
+  // Links sit bare in what holds them; rows are a card of their own.
+  return h(
+    links ? 'div' : Card,
+    {
+      ...(links
+        ? { 'data-agent-links': '' }
+        : { 'data-connected': '', hidden: !rows.length }),
+      'data-agents': '',
+      'aria-live': 'polite',
+    },
+    links ? null : h(Card.Head, null, h(Card.Title, null, 'Connected agents')),
+    list,
+    template,
+  )
 }
 
+/** What keeps the list current while the page is open: on focus and on
+ * coming back to the tab, the agents are asked for again and each row the
+ * template draws replaces one that changed. */
 export let agentLive = (endpoint: string) =>
-  `<script>(()=>{
+  h('script', {
+    dangerouslySetInnerHTML: {
+      __html: `(()=>{
 let root=document.querySelector('[data-agents]');
 let links=root?.hasAttribute('data-agent-links');
 let list=root?.querySelector('.Agents');
@@ -83,8 +128,8 @@ let refresh=async()=>{
   busy=true;
   try{
     let response=await fetch(${
-    JSON.stringify(endpoint).replaceAll('<', '\\u003c')
-  },{credentials:'same-origin',cache:'no-store',headers:{accept:'application/json'}});
+        JSON.stringify(endpoint).replaceAll('<', '\\u003c')
+      },{credentials:'same-origin',cache:'no-store',headers:{accept:'application/json'}});
     if(!response.ok)return;
     let data=await response.json();
     if(!Array.isArray(data.agents)||!data.agents.every(c=>c&&typeof c.name==='string'&&typeof c.id==='string'))return;
@@ -116,4 +161,6 @@ let refresh=async()=>{
 };
 window.addEventListener('focus',refresh);
 document.addEventListener('visibilitychange',refresh);
-})();</script>`
+})();`,
+    },
+  })

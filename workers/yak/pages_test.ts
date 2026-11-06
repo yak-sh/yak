@@ -35,14 +35,29 @@ let CAL = {
   theirs: false,
   fields: [KEY],
 }
-// What a face draws: its logo as an image, never as markup, its line, and its
-// site linked by its host.
-let drawn = [
-  `<img class="Card_Mark" src="data:image/svg+xml,${
-    encodeURIComponent(CAL.logo).replaceAll("'", '&#39;')
-  }"`,
-  'Your calendar. <a href="https://cal.test/">cal.test</a>',
-]
+// What a card says of its service: its logo as an image, never as markup,
+// its line, and its site linked by its host.
+let faced = (card: Element) => ({
+  logo: card.querySelector('img.Card_Mark')?.getAttribute('src'),
+  line: card.querySelector('.Card_Sub')?.textContent,
+  site: card.querySelector('.Card_Sub a')?.getAttribute('href'),
+})
+let drawn = {
+  logo: `data:image/svg+xml,${encodeURIComponent(CAL.logo)}`,
+  line: 'Your calendar. cal.test',
+  site: 'https://cal.test/',
+}
+// How a card says to get its service's key: whether it stands open, and what
+// it says.
+let how = (card: Element) => {
+  let fold = [...card.querySelectorAll('details.More')].find((d) =>
+    d.querySelector('summary')?.textContent == 'How to get the key'
+  )
+  return fold && {
+    open: fold.hasAttribute('open'),
+    says: fold.querySelector('.More_Body')!.innerHTML,
+  }
+}
 let page: DeskPage = { space: 'ada', apps: [], sell: 'none' }
 
 let staged = async (response: Response, contains: string[]) => {
@@ -314,14 +329,11 @@ let listing = (
   }, env).text()
 
 test('connections: how to get a key sits open beside a connection needing one, and closed once connected', async () => {
-  assertStringIncludes(
-    await listing('needed'),
-    `<details class="More" open><summary>How to get the key</summary><div class="More_Body">${HOW}</div></details>`,
-  )
-  assertStringIncludes(
-    await listing('connected'),
-    `<details class="More"><summary>How to get the key</summary><div class="More_Body">${HOW}</div></details>`,
-  )
+  let card = async (status: 'needed' | 'connected') =>
+    parseHTML(await listing(status)).document
+      .querySelector('[data-connection="w"]')!
+  assertEquals(how(await card('needed')), { open: true, says: HOW })
+  assertEquals(how(await card('connected')), { open: false, says: HOW })
 })
 
 test('connections: a service the space added can be changed there, all but where its key goes', async () => {
@@ -365,21 +377,29 @@ test('connections: a page opened to add one from the directory offers it first, 
       theirs: true,
     },
   })
-  let at = html.indexOf('>ESV API</h2>')
-  assert(at > 0 && at < html.indexOf('>Weather</h2>'), html)
-  let card = html.slice(
-    html.lastIndexOf('<form', at),
-    html.indexOf('</form>', at),
+  let cards = [
+    ...parseHTML(html).document.querySelectorAll('.Desk_Content > .Card'),
+  ]
+  assertEquals(
+    cards.map((c) => c.querySelector('h2')?.textContent),
+    ['ESV API', 'Weather', 'Add a key'],
   )
-  for (
-    let text of [
-      `<details class="More" open><summary>How to get the key</summary><div class="More_Body">${HOW}`,
-      // Its site is its maker's word, linked as theirs.
-      '<a href="https://api.esv.org" rel="nofollow ugc">api.esv.org</a>',
-      'name="integration" value="ESV"',
-      'value="add">Save key',
-    ]
-  ) assertStringIncludes(card, text)
+  let card = cards[0]
+  assertEquals(how(card), { open: true, says: HOW })
+  // Its site is its maker's word, linked as theirs.
+  let site = card.querySelector('.Card_Sub a')!
+  assertEquals(
+    [site.getAttribute('href'), site.getAttribute('rel'), site.textContent],
+    ['https://api.esv.org', 'nofollow ugc', 'api.esv.org'],
+  )
+  assertEquals(
+    card.querySelector<HTMLInputElement>('[name=integration]')!.value,
+    'ESV',
+  )
+  assertEquals(
+    card.querySelector('button[value=add]')!.textContent,
+    'Save key',
+  )
 })
 
 // An app's use of a connection, as a row draws it.
@@ -530,9 +550,12 @@ test('askConnect: the app, the service, the one form, and the way back', async (
       'Yours is connected',
       'Connect again',
       'href="https://ada.yaks.fyi/notes/">Back to Notes',
-      ...drawn,
     ]
   ) assertStringIncludes(html, text)
+  assertEquals(
+    faced(parseHTML(html).document.querySelector('.Card')!),
+    drawn,
+  )
 })
 
 test('connections: a built integration is offered by its face, and a site is linked only at https', async () => {
@@ -548,8 +571,10 @@ test('connections: a built integration is offered by its face, and a site is lin
         built: [{ name: 'cal', keyed: false, face: { ...CAL, site } }],
       },
     }, env).text()
-  let html = await offered(CAL.site)
-  for (let text of ['>Cal</h2>', ...drawn]) assertStringIncludes(html, text)
+  let card = parseHTML(await offered(CAL.site)).document
+    .querySelector('.Desk_Content > .Card')!
+  assertEquals(card.querySelector('h2')!.textContent, 'Cal')
+  assertEquals(faced(card), drawn)
   assertEquals((await offered('javascript:alert(1)')).includes('alert'), false)
 })
 
