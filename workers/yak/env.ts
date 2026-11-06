@@ -46,6 +46,14 @@ export type Inbound = {
   setReject(reason: string): void | Promise<void>
 }
 
+// The slice of Cloudflare's Images binding we use: bytes in, one format out.
+// It refuses a format it can't read with an ImagesError whose code is 9520.
+export type Images = {
+  input(stream: ReadableStream<Uint8Array>): {
+    output(o: { format: string }): Promise<{ response(): Response }>
+  }
+}
+
 /** What a test hands a kernel as its environment: any of Env's bindings, and
  * the secrets a config names, which are read by name (config.ts
  * `phoneConfig`). */
@@ -338,6 +346,10 @@ export type Env = {
   // and code mode, so sucrase is in its upload and not this one (esbuild.ts
   // `stripping`). Absent in a test run and the workerd probes.
   ESBUILD?: Fetcher & { strip: Strip }
+  // Cloudflare Images (wrangler.toml `[images]`), which converts a picture
+  // the vision model can't read to one it can (documents.ts `legible`).
+  // Absent in a test run and the workerd probes.
+  IMAGES?: Images
   // yak-raster, which draws an app's icon.svg as its icon.png (raster.ts).
   // Absent in a test run and the workerd probes.
   RASTER?: Fetcher

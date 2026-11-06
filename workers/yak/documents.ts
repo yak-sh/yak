@@ -101,6 +101,34 @@ export let transcribe = async (
   )
 }
 
+// Cloudflare Images' code for a format it can't read.
+let UNSUPPORTED = 9520
+
+/**
+ * A picture as bytes the vision model reads: PNG, JPEG, GIF and WebP as they
+ * are, anything Cloudflare Images reads (an iPhone's HEIC photo, say)
+ * converted to JPEG, and undefined for what neither reads.
+ */
+export let legible = async (
+  env: Pick<Stored['env'], 'IMAGES'>,
+  bytes: Uint8Array<ArrayBuffer>,
+): Promise<{ bytes: Uint8Array<ArrayBuffer>; mime: string } | undefined> => {
+  let mime = mediaTypeOf(bytes)
+  if (mime) return { bytes, mime }
+  if (!env.IMAGES) return
+  try {
+    let out = await env.IMAGES.input(new Blob([bytes]).stream())
+      .output({ format: 'image/jpeg' })
+    return {
+      bytes: new Uint8Array(await out.response().arrayBuffer()),
+      mime: 'image/jpeg',
+    }
+  } catch (e) {
+    if ((e as { code?: number }).code == UNSUPPORTED) return
+    throw e
+  }
+}
+
 export type Extractor = {
   pdf(page?: number): Promise<PdfPage>
   ocr(image: string): Promise<string>

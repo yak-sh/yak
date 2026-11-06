@@ -1,3 +1,4 @@
+import { base64 } from './bytes.ts'
 import { test } from '@yaks/testing'
 import { assertEquals, assertStringIncludes } from '@std/assert'
 import { parseHTML } from 'linkedom'
@@ -860,13 +861,34 @@ let photo = await keepFile(
   'image/jpeg',
   new Uint8Array([255, 216, 255, 217]),
 )
-// An iPhone's HEIC photo claims image/*, which the vision model cannot read.
-let heic = await keepFile(
+// An iPhone's HEIC photo, which the vision model cannot read and Cloudflare
+// Images converts; a TIFF neither reads.
+let HEIC = new Uint8Array([
+  0,
+  0,
+  0,
+  24,
+  ...new TextEncoder().encode('ftypheic'),
+])
+let CONVERTED = new Uint8Array([255, 216, 255, 224, 255, 217])
+f.env.IMAGES = {
+  input: (stream) => ({
+    output: async ({ format }) => {
+      let bytes = new Uint8Array(await new Response(stream).arrayBuffer())
+      if (format != 'image/jpeg' || bytes.join() != HEIC.join()) {
+        throw Object.assign(new Error('unsupported'), { code: 9520 })
+      }
+      return { response: () => new Response(CONVERTED) }
+    },
+  }),
+}
+let heic = await keepFile(f.env, f.space, 'IMG_0042.heic', 'image/heic', HEIC)
+let tiff = await keepFile(
   f.env,
   f.space,
-  'IMG_0042.heic',
-  'image/heic',
-  new Uint8Array([0, 0, 0, 24, ...new TextEncoder().encode('ftypheic')]),
+  'scan.tiff',
+  'image/tiff',
+  new TextEncoder().encode('II*\0'),
 )
 let pdf = await keepFile(
   f.env,
@@ -891,7 +913,7 @@ let mediaId = await receive(media, {
   space: f.space.eid,
   person: f.person,
   channel: 'chat',
-  files: [photo, heic, pdf],
+  files: [photo, heic, tiff, pdf],
 }, 'Read the attached minutes.')
 await drain(media)
 let mediaAnswer = (await answerOf(media, mediaId)).operator_answer
@@ -909,8 +931,14 @@ test('PDF pages and a JPEG photo are read through metered extraction before aski
   assertEquals(afterMedia > beforeMedia, true)
   assertEquals((mediaAnswer as { text: string }).text, 'Read the documents.')
 })
-test('a picture the vision model cannot read is never sent to it, and the person is told which formats it reads', () => {
-  assertEquals(JSON.stringify(ocrInputs).includes('image/heic'), false)
+test('a HEIC photo reaches the vision model converted to JPEG', () => {
+  assertStringIncludes(
+    JSON.stringify(ocrInputs),
+    'data:image/jpeg;base64,' + base64(CONVERTED),
+  )
+})
+test('a picture nothing can read is never sent to the model, and the person is told which formats it reads', () => {
+  assertEquals(/image\/(heic|tiff)/.test(JSON.stringify(ocrInputs)), false)
   assertStringIncludes(
     JSON.stringify(mediaAsks[0].items),
     'Ask the sender for a PNG, JPEG, GIF or WebP.',

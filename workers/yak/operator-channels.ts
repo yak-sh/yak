@@ -1,11 +1,10 @@
 import type { Bundle, Comp } from '@yaks/graph'
-import { mediaTypeOf } from '@yaks/blob'
 import { base64 } from './bytes.ts'
 import { derivedEid } from '@yaks/graph/identity'
 import { writes } from '@yaks/member'
 import { directoryOf, type Space } from './directory.ts'
 import type { Env } from './env.ts'
-import { extractor, isPdf, supported } from './documents.ts'
+import { extractor, isPdf, legible, supported } from './documents.ts'
 import { mailFrom, outgoing } from './post.ts'
 import { sha256 } from './versions.ts'
 import { type Ctx, inApp, refuse } from './tool.ts'
@@ -127,15 +126,21 @@ let fileText = async (env: Env, space: Space, file: File) => {
   let kept = await env.BLOBS.get(file.key)
   if (!kept) throw new Error('Operator attachment is missing: ' + file.name)
   let body = await kept.arrayBuffer()
-  let source = extractor(env, space, body, file.name, file.mime)
   if (file.mime.startsWith('image/')) {
     // A picture is read by what its bytes are, not the type it was sent
-    // with: the vision model takes PNG, JPEG, GIF and WebP, and refuses a
-    // HEIC photo or anything else as a fault of ours.
-    let bytes = new Uint8Array(body)
-    if (!mediaTypeOf(bytes)) return UNREAD_PICTURE
-    return source.ocr(base64(bytes))
+    // with, and one the vision model can't take is converted first.
+    let seen = await legible(env, new Uint8Array(body))
+    if (!seen) return UNREAD_PICTURE
+    return extractor(
+      env,
+      space,
+      seen.bytes.buffer,
+      file.name,
+      seen.mime,
+    )
+      .ocr(base64(seen.bytes))
   }
+  let source = extractor(env, space, body, file.name, file.mime)
   if (isPdf(file.name, file.mime)) {
     let { pages } = await source.pdf()
     let text = []
