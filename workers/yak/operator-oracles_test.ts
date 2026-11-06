@@ -6,12 +6,14 @@ import { ORACLE } from '@yaks/topic'
 import { human } from '@yaks/id'
 import { platform } from './directory-rows-probe.ts'
 import { declared } from './directory-fixture.ts'
-import { directoryOf } from './directory.ts'
+import { directoryOf, stamp } from './directory.ts'
 import { operatorMemory, operatorModel } from './operator-testing.ts'
 import { operating, operatorContext } from './operator.ts'
 import { drain } from './operator-store.ts'
 import { oracleContext, oracleMap } from './operator-oracles.ts'
-import { prefixOf } from './files.ts'
+import { NOTES } from './standing.ts'
+import { staged } from './release.ts'
+import { r2RawObjects } from './lib/objects.ts'
 import { conversationOf } from './operator-host.ts'
 import { rootOf } from './operator-channels.ts'
 import { KERNEL, meta } from './meta.ts'
@@ -32,11 +34,20 @@ await dir.apply({
     doc: { title: 'Recipe box' },
   }],
 }, { 'x-yak-person': owner, 'x-yak-role': 'owner' })
-let app = (await dir.app(space, 'recipes'))!
-await declared(env, space, app)
-let notes = `${prefixOf(space, app)}/NOTES.md`
-await env.BLOBS.put(
-  notes,
+// A deployed app's notes are its release's (standing.ts): a deploy stages
+// them with the release, then names the release on the app.
+let eid = (await dir.app(space, 'recipes'))!.eid
+let release = async (notes: string) => {
+  let source = `home/.releases/${eid}/${crypto.randomUUID()}`
+  let staging = staged(r2RawObjects(env.BLOBS), {}, source)
+  await staging.files.put(`${source}/${NOTES}`, new TextEncoder().encode(notes))
+  await staging.finish()
+  await stamp(env, { entities: [{ entity: { eid }, app: { source } }] })
+  let app = (await dir.app(space, 'recipes'))!
+  await declared(env, space, app)
+  return app
+}
+let app = await release(
   'Use grams. Include ingredient amounts in the instructions.',
 )
 let store = operatorMemory()
@@ -173,7 +184,7 @@ await meta(env).apply([{
   memory: { space: id },
   doc: { body: 'Use metric units throughout this space.' },
 }], KERNEL)
-await env.BLOBS.put(notes, 'Use millilitres for liquids.')
+await release('Use millilitres for liquids.')
 await oracleMap(ctx, store.g)
 let refreshed = await oracleContext(ctx, store.g, app.eid)
 let hidden = crypto.randomUUID()
