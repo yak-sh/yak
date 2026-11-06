@@ -1,4 +1,4 @@
-#!/usr/bin/env -S deno run --allow-read --allow-write --allow-net=registry.cloudflare.com --allow-env --allow-sys=uid --allow-run=deno,node,pnpm,git,pgrep,kill,docker,env
+#!/usr/bin/env -S deno run --allow-read --allow-write --allow-net=registry.cloudflare.com,api.cloudflare.com --allow-env --allow-sys=uid --allow-run=deno,node,pnpm,git,pgrep,kill,docker,env
 // The one door to this Worker's wrangler: `deno task deploy:yak`,
 // `deno task dev:yak`, their `-staging` variants and the test runner
 // (bin/test.ts) all come through here, so the pinned version is written once
@@ -34,7 +34,8 @@ import { imaged } from './sandbox/base.ts'
 import { installed } from '@yaks/cli/dependencies'
 import { assets } from './asset-ready.ts'
 import { from as sources, plan } from './sheet-assets.ts'
-import { sleep } from '@yaks/fp'
+import { once, sleep } from '@yaks/fp'
+import { credentials, type Reads, reads } from './deployed.ts'
 export { stale } from '@yaks/cli/dependencies'
 
 export let WRANGLER_VERSION = pinned.version
@@ -51,6 +52,10 @@ export let dir = fileURLToPath(new URL('./', import.meta.url)).replace(
 )
 
 let repo = fileURLToPath(new URL('../../', import.meta.url))
+
+// What serves, read through one `wrangler auth token` the first read asks
+// for: every read waits for pnpm to install the pinned Wrangler first.
+let cloudflare = reads(dir, once(() => credentials(WRANGLER, dir)))
 
 // A prerequisite made, and what making it took; `quiet` says only a failure.
 let timed = async <T>(name: string, make: () => Promise<T>, quiet = false) => {
@@ -639,13 +644,7 @@ type Bundle = { entry: string; output: string }
  * the kernel bundles. */
 export let executor = async (
   args: string[],
-  read = (args: string[]) =>
-    spawnCommand('env', {
-      args: [...PINNED.flatMap((v) => ['-u', v]), ...WRANGLER, ...args],
-      cwd: dir,
-      stdout: 'piped',
-      stderr: 'piped',
-    }).output(),
+  read: Reads['deployments'] = cloudflare.deployments,
   root = dir,
 ): Promise<string | undefined> => {
   if (
@@ -657,20 +656,9 @@ export let executor = async (
   if (typeof name != 'string') {
     throw Error('Executor config has no release name')
   }
-  try {
-    let result = await read(['deployments', 'list', '-c', model, '--json'])
-    if (
-      !result.success ||
-      !singleServing(JSON.parse(new TextDecoder().decode(result.stdout)))
-    ) {
-      console.log(
-        `${name}: no fully serving executor release; hosted calls remain inline`,
-      )
-      return
-    }
-  } catch {
+  if (!singleServing(await read(model))) {
     console.log(
-      `${name}: executor deployment unreadable; hosted calls remain inline`,
+      `${name}: no fully serving executor release; hosted calls remain inline`,
     )
     return
   }
@@ -857,6 +845,7 @@ export let prepareSibling = async (
       stdout: 'piped',
       stderr: 'piped',
     }).output(),
+  read: Reads = cloudflare,
 ): Promise<PreparedSibling> => {
   let config = args[args.indexOf('-c') + 1]
   let started = performance.now()
@@ -881,13 +870,11 @@ export let prepareSibling = async (
           '--containers-rollout=none',
         ])
       ),
-      Promise.resolve().then(() =>
-        query(['deployments', 'list', '-c', config, ...envs(args), '--json'])
-      ),
+      Promise.resolve().then(() => read.deployments(config, envs(args))),
     ])
     if (bundled.status == 'rejected') throw bundled.reason
     let built = bundled.value
-    let live = serving.status == 'fulfilled' ? serving.value : undefined
+    let deployments = serving.status == 'fulfilled' ? serving.value : undefined
     if (!built.success) {
       console.error(new TextDecoder().decode(built.stderr))
       return { args, config, root, started, code: built.code, remove }
@@ -917,28 +904,13 @@ export let prepareSibling = async (
       }),
       modules,
     )
-    let deployments: unknown
-    try {
-      if (live?.success) {
-        deployments = JSON.parse(new TextDecoder().decode(live.stdout))
-      }
-    } catch { /* unread means upload */ }
     // Cloudflare may cut deployment messages to 50 characters; the full
     // annotation remains on the sole serving version.
-    let same = await sameServing(digest, deployments, async (id) => {
-      let read = await query([
-        'versions',
-        'view',
-        id,
-        '-c',
-        config,
-        ...envs(args),
-        '--json',
-      ])
-      return read.success
-        ? JSON.parse(new TextDecoder().decode(read.stdout))
-        : null
-    })
+    let same = await sameServing(
+      digest,
+      deployments,
+      async (id) => await read.version(config, id, envs(args)) ?? null,
+    )
     console.log(
       `${config}: bundled and read serving deployment in ${
         ((performance.now() - started) / 1000).toFixed(3)
@@ -1270,59 +1242,35 @@ let envs = (args: string[]): string[] =>
       : []
   )
 
-// One read of wrangler's JSON in the deploy's own environment; anything
-// wrangler will not answer is null.
-let wrangled = async (args: string[], env: string[], wrangler = WRANGLER) => {
-  let r = await spawnCommand(wrangler[0], {
-    args: [...wrangler.slice(1), ...args, ...env, '--json'],
-    cwd: dir,
-    stdout: 'piped',
-    stderr: 'null',
-  }).output()
-  try {
-    return r.success ? JSON.parse(new TextDecoder().decode(r.stdout)) : null
-  } catch {
-    return null
-  }
+// The kernel's deployments in an environment, newest first; none unread.
+let deployments = async (env: string[]): Promise<Deployment[]> => {
+  let all = await cloudflare.deployments('wrangler.toml', env)
+  return (Array.isArray(all) ? all as Deployment[] : [])
+    .toSorted((a, b) => Date.parse(b.created_on) - Date.parse(a.created_on))
 }
-
-// The Worker's deployments, newest first.
-let deployments = async (
-  env: string[],
-  wrangler = WRANGLER,
-): Promise<Deployment[]> =>
-  ((await wrangled(['deployments', 'list'], env, wrangler)) ??
-    [] as Deployment[])
-    .toSorted((a: Deployment, b: Deployment) =>
-      Date.parse(b.created_on) - Date.parse(a.created_on)
-    )
 
 /** The commits the versions live now were deployed from, as the message this
  * door gives every version says (`--message` below), in the deploy's own
  * environment. Anything wrangler will not answer names no commit. */
-let serving = async (env: string[], wrangler = WRANGLER): Promise<string[]> => {
-  let [now] = await deployments(env, wrangler)
+let serving = async (env: string[]): Promise<string[]> => {
+  let [now] = await deployments(env)
   let annotated = SHA.exec(annotation(now ?? null))?.[0]
   if (
     now?.versions.length == 1 && now.versions[0].percentage == 100 && annotated
   ) return [annotated]
   let named = await Promise.all(
     (now?.versions ?? []).filter((v) => v.percentage > 0).map(async (v) => {
-      let version = await wrangled(
-        ['versions', 'view', v.version_id],
-        env,
-        wrangler,
-      )
-      return SHA.exec(annotation(version))?.[0]
+      let version = await cloudflare.version('wrangler.toml', v.version_id, env)
+      return SHA.exec(annotation(version ?? null))?.[0]
     }),
   )
   return named.filter((sha) => sha != null)
 }
 
 /** The Worker's two newest deployments as {@link Release}s for `head`. */
-let releases = async (head: string, env: string[], wrangler = WRANGLER) =>
+let releases = async (head: string, env: string[]) =>
   Promise.all(
-    (await deployments(env, wrangler)).slice(0, 2).map(
+    (await deployments(env)).slice(0, 2).map(
       async (d): Promise<Release> => {
         let message = annotation(d)
         let sha = SHA.exec(message)?.[0] ?? null
@@ -1346,7 +1294,7 @@ if (import.meta.main) {
   let wrangler = WRANGLER
   let guarded = command(argv) === 'deploy' && !argv.includes('--dry-run')
   let door = guarded
-    ? guard(() => seen(dir, readied.then(() => serving(envs(argv), wrangler))))
+    ? guard(() => seen(dir, readied.then(() => serving(envs(argv)))))
     : undefined
   let inspect = async () => door ? await door.first() : true
   let still = async () => door ? await door.still() : true
@@ -1449,7 +1397,7 @@ if (import.meta.main) {
       landed: guarded && !unpinned && command(argv) == 'deploy'
         ? undo(
           head,
-          () => releases(head, envs(argv), wrangler),
+          () => releases(head, envs(argv)),
           ({ version, message }) =>
             run([
               'versions',

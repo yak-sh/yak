@@ -47,7 +47,7 @@ export let wrangler: Run = async (args) => {
       'run',
       '--allow-read',
       '--allow-write',
-      '--allow-net=registry.cloudflare.com',
+      '--allow-net=registry.cloudflare.com,api.cloudflare.com',
       '--allow-env',
       '--allow-sys=uid',
       '--allow-run=node,pnpm,git,pgrep,kill,docker',

@@ -33,6 +33,7 @@ import {
   undo,
   uploadSibling,
 } from './wrangler.ts'
+import type { Reads, Version } from './deployed.ts'
 
 let apiFailure =
   'A request to the Cloudflare API (/accounts/a/workers/scripts/yak) failed.'
@@ -305,16 +306,6 @@ test('a step cancelled before it starts spawns no Wrangler process', async () =>
   )
 })
 
-let modelOutput = (
-  deployments: unknown,
-  success = true,
-): CommandOutput => ({
-  success,
-  code: success ? 0 : 1,
-  signal: null,
-  stdout: new TextEncoder().encode(JSON.stringify(deployments)),
-  stderr: new TextEncoder().encode('unavailable'),
-})
 let modelDeployment = (
   versions: { version_id: string; percentage: number }[],
 ) => [{
@@ -342,23 +333,22 @@ let withModelConfig = async (check: (kernel: string) => Promise<void>) => {
 }
 for (
   let [name, result, available] of [
-    ['unpublished', modelOutput([]), false],
+    ['unpublished', [], false],
     [
       'fully serving',
-      modelOutput(modelDeployment([{ version_id: 'v1', percentage: 100 }])),
+      modelDeployment([{ version_id: 'v1', percentage: 100 }]),
       true,
     ],
     [
       'split',
-      modelOutput(modelDeployment([
+      modelDeployment([
         { version_id: 'v1', percentage: 50 },
         { version_id: 'v2', percentage: 50 },
-      ])),
+      ]),
       false,
     ],
-    ['malformed', modelOutput(null), false],
-    ['refused', modelOutput([], false), false],
-    ['unreadable', Error('inspection failed'), false],
+    ['malformed', null, false],
+    ['unreadable', undefined, false],
   ] as const
 ) {
   test(`a ${name} executor deployment ${available ? 'enables' : 'leaves absent'} the kernel binding`, () =>
@@ -366,17 +356,9 @@ for (
       let args = ['deploy', '--message', 'commit']
       let bound = modelBound(
         args,
-        await executor(args, (query) => {
-          assertEquals(query, [
-            'deployments',
-            'list',
-            '-c',
-            '../model/wrangler.toml',
-            '--json',
-          ])
-          return result instanceof Error
-            ? Promise.reject(result)
-            : Promise.resolve(result)
+        await executor(args, (config) => {
+          assertEquals(config, '../model/wrangler.toml')
+          return Promise.resolve(result)
         }, kernel),
         kernel,
       )
@@ -410,7 +392,7 @@ test('executor activation preserves the prepared upload and removes its disposab
       args,
       await executor(args, () =>
         Promise.resolve(
-          modelOutput(modelDeployment([{ version_id: 'v1', percentage: 100 }])),
+          modelDeployment([{ version_id: 'v1', percentage: 100 }]),
         ), kernel),
       kernel,
     )
@@ -1266,8 +1248,8 @@ let checkSiblingPreparation = async () => {
       '-c',
       'outbound/wrangler.toml',
     ]
-    let live = '[]', digest = '', called = false
-    let version: CommandOutput | Error | undefined
+    let live: unknown = [], digest = '', called = false
+    let version: Version | Error | undefined
     let versionReads = 0
     let query = (argv: string[]) => {
       if (argv.includes('--dry-run')) {
@@ -1290,16 +1272,21 @@ let checkSiblingPreparation = async () => {
         )
         return Promise.resolve(result())
       }
-      if (argv[0] == 'versions') {
-        assertEquals(argv, [
-          'versions',
-          'view',
-          'v',
-          '-c',
+      throw Error(`unexpected Wrangler ${argv.join(' ')}`)
+    }
+    let read: Reads = {
+      deployments: (config, env) => {
+        assertEquals([config, env], [
           'outbound/wrangler.toml',
-          '--env',
-          'staging',
-          '--json',
+          ['--env', 'staging'],
+        ])
+        return Promise.resolve(live)
+      },
+      version: (config, id, env) => {
+        assertEquals([config, id, env], [
+          'outbound/wrangler.toml',
+          'v',
+          ['--env', 'staging'],
         ])
         versionReads++
         if (version instanceof Error) return Promise.reject(version)
@@ -1308,19 +1295,9 @@ let checkSiblingPreparation = async () => {
           'full deployment annotations need no extra version read',
         )
         return Promise.resolve(version)
-      }
-      assertEquals(argv, [
-        'deployments',
-        'list',
-        '-c',
-        'outbound/wrangler.toml',
-        '--env',
-        'staging',
-        '--json',
-      ])
-      return Promise.resolve(result(live))
+      },
     }
-    let prepared = await prepareSibling(args, [], root, query)
+    let prepared = await prepareSibling(args, [], root, query, read)
     try {
       let message = prepared.args[prepared.args.indexOf('--message') + 1]
       assertEquals(message.split('\n')[1], 'a'.repeat(40))
@@ -1411,14 +1388,14 @@ let checkSiblingPreparation = async () => {
     } finally {
       prepared.remove()
     }
-    live = JSON.stringify([{
+    live = [{
       created_on: '2026-10-10T16:00:00Z',
       annotations: {
         'workers/message': siblingMessage(digest, 'commit').slice(0, 50),
       },
       versions: [{ version_id: 'v', percentage: 100 }],
-    }])
-    prepared = await prepareSibling(args, [], root, query)
+    }]
+    prepared = await prepareSibling(args, [], root, query, read)
     try {
       called = false
       assertEquals(
@@ -1433,18 +1410,18 @@ let checkSiblingPreparation = async () => {
       prepared.remove()
     }
     assertEquals(versionReads, 0)
-    live = JSON.stringify([{
+    live = [{
       created_on: '2026-10-10T16:00:00Z',
       annotations: {
         'workers/message': ('a'.repeat(40) + '\ninputs:' + digest).slice(0, 50),
       },
       versions: [{ version_id: 'v', percentage: 100 }],
-    }])
-    version = result(JSON.stringify({
+    }]
+    version = {
       id: 'v',
       annotations: { 'workers/message': 'commit\ninputs:' + digest },
-    }))
-    prepared = await prepareSibling(args, [], root, query)
+    }
+    prepared = await prepareSibling(args, [], root, query, read)
     try {
       let uploads = 0
       assertEquals(
@@ -1474,29 +1451,34 @@ let checkSiblingPreparation = async () => {
       prepared.remove()
     }
     let failure = Error('bundle read failed')
-    let finish = Promise.withResolvers<CommandOutput>()
+    let finish = Promise.withResolvers<unknown>()
     let reading = Promise.withResolvers<void>()
     let output = ''
     let failed = prepareSibling(args, [], root, (argv) => {
-      if (argv.includes('--dry-run')) {
-        output = argv[argv.indexOf('--outdir') + 1]
-        return Promise.reject(failure)
-      }
-      reading.resolve()
-      return finish.promise.then((result) => {
-        assert(Deno.statSync(output).isDirectory, 'reads finish before cleanup')
-        return result
-      })
+      output = argv[argv.indexOf('--outdir') + 1]
+      return Promise.reject(failure)
+    }, {
+      ...read,
+      deployments: () => {
+        reading.resolve()
+        return finish.promise.then((result) => {
+          assert(
+            Deno.statSync(output).isDirectory,
+            'reads finish before cleanup',
+          )
+          return result
+        })
+      },
     }).then((value) => ({ value }), (error) => ({ error }))
     try {
       await reading.promise
       for (let i = 0; i < 4; i++) await Promise.resolve()
       assert(Deno.statSync(output).isDirectory, 'pending read retains output')
-      finish.resolve(result())
+      finish.resolve([])
       assertEquals(await failed, { error: failure })
       assertEquals([...Deno.readDirSync(join(root, '.wrangler'))], [])
     } finally {
-      finish.resolve(result())
+      finish.resolve([])
       await failed
     }
   } finally {

@@ -82,6 +82,9 @@ export let bundle = async (root: string, output: string, meta: string) => {
     let grouped = await rollup({
       input: resolve(root, entry),
       external: native,
+      // esbuild already dropped what nothing uses; shaking its output again
+      // was half of this pass's CPU and kept only 1% fewer bytes.
+      treeshake: false,
       plugins: [{
         name: 'source-maps',
         // esbuild just wrote every chunk a chunk imports. Rollup's own
