@@ -194,7 +194,9 @@ let adding = (
     let held = new Map(rows.map((r) => [r.entity.eid, r]))
     let foreign = bundles.filter((b) => {
       let row = held.get(b.entity.eid)
-      return row && !mine(row, who, via, instrument) && !idle(b, row)
+      if (!row || mine(row, who, via, instrument) || idle(b, row)) return false
+      if (dead(b) || dead(row)) throw new Denied(who, app, 'editor')
+      return true
     })
     if (!foreign.length) return bundles
     // Read referenced owners once, from stored requests rather than incoming
@@ -216,16 +218,15 @@ let adding = (
       let owners = new Map(rows.map((r) => [r.entity.eid, r]))
       for (let b of foreign) {
         let row = held.get(b.entity.eid)!
-        let allowed = !dead(b) && !dead(row) &&
-          comps(b).every(([name, patch]) =>
-            refs(row, name).some((eid) => {
-              let target = owners.get(eid)
-              return !!target && !dead(target) &&
-                mine(target, who, via, instrument) &&
-                (patch === null || !row[name] ||
-                  idle({ entity: b.entity, [name]: patch }, row))
-            })
-          )
+        let allowed = comps(b).every(([name, patch]) =>
+          refs(row, name).some((eid) => {
+            let target = owners.get(eid)
+            return !!target && !dead(target) &&
+              mine(target, who, via, instrument) &&
+              (patch === null || !row[name] ||
+                idle({ entity: b.entity, [name]: patch }, row))
+          })
+        )
         if (!allowed) throw new Denied(who, app, 'editor')
       }
       return bundles
