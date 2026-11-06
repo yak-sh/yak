@@ -417,47 +417,48 @@ test('an integrity hash is base64 of the same digest, not the hex', () => {
   )
 })
 
-// A stubbed web, so a fetch case is a header and a body.
-let served = async <T>(
-  answer: (at: URL) => Response,
-  body: () => Promise<T>,
-) => {
-  let was = globalThis.fetch
-  globalThis.fetch =
-    ((at: string | URL | Request) =>
-      Promise.resolve(answer(new URL(String(at))))) as typeof fetch
-  try {
-    return await body()
-  } finally {
-    globalThis.fetch = was
-  }
+for (
+  let [from, saying] of [
+    ['cdnjs.example/chess.js', 'is not a URL'],
+    ['http://cdnjs.example/chess.js', 'https only, not http'],
+    ['file:///etc/passwd', 'https only, not file'],
+  ]
+) {
+  test(`a fetch refuses ${from} before asking the web`, async () => {
+    await assertRejects(
+      () =>
+        fetched(from, () => {
+          throw Error('unexpected fetch')
+        }),
+      Error,
+      saying,
+    )
+  })
 }
 
-let refuses = (saying: string, from: string) =>
-  assertRejects(() => fetched(from), Error, saying)
+let library = new Response('export let go = () => {}', {
+  headers: { 'content-type': 'text/javascript; charset=utf-8' },
+})
+let missingLibrary = new Response('nope', { status: 404 })
 
 test('a fetch takes https, a live answer, and nothing over the ceiling', async () => {
-  await refuses('is not a URL', 'cdnjs.example/chess.js')
-  await refuses('https only, not http', 'http://cdnjs.example/chess.js')
-  await refuses('https only, not file', 'file:///etc/passwd')
-  await served(
+  let got = await fetched('https://cdnjs.example/chess.js', (at) => {
+    assertEquals(String(at), 'https://cdnjs.example/chess.js')
+    return Promise.resolve(library)
+  })
+  assertEquals(new TextDecoder().decode(got.bytes), 'export let go = () => {}')
+  assertEquals(got.mime, 'text/javascript')
+})
+
+test('a fetch refuses a web response that failed', async () => {
+  await assertRejects(
     () =>
-      new Response('export let go = () => {}', {
-        headers: { 'content-type': 'text/javascript; charset=utf-8' },
-      }),
-    async () => {
-      let got = await fetched('https://cdnjs.example/chess.js')
-      assertEquals(
-        new TextDecoder().decode(got.bytes),
-        'export let go = () => {}',
-      )
-      // The parameters are the response's business, not the app's.
-      assertEquals(got.mime, 'text/javascript')
-    },
-  )
-  await served(
-    () => new Response('nope', { status: 404 }),
-    () => refuses('answered 404', 'https://cdnjs.example/gone.js'),
+      fetched(
+        'https://cdnjs.example/gone.js',
+        () => Promise.resolve(missingLibrary),
+      ),
+    Error,
+    'answered 404',
   )
 })
 

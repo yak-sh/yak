@@ -17,6 +17,7 @@ import {
   line,
   noted,
   serve,
+  trackedIn,
 } from './unseen.ts'
 import type { Who } from './session.ts'
 import { tallying } from './lib/hops.ts'
@@ -126,26 +127,27 @@ let tracker = (rows: unknown[] = []) => {
 }
 
 let space = { eid: 'space-1', slug: 'ada' } as Space
-let cook = { eid: 'app-1', slug: 'cookbook' } as App
+let cook = { eid: 'app-1', slug: 'cookbook', version: 1 } as App
 let ada: Who = { person: ADA, role: 'owner' }
 // The kernel carries a space's tracker ticket for half its minute: signed
 // here, as an isolate's earlier request in the space signs it, so the case
 // times its reads and not WebCrypto's thread pool.
 await ticket(tracker().env, space, ada)
 
+let foldedHits = [1, 2, 3].map((n) => ({
+  kind: 'error',
+  tracked: true,
+  entity: { eid: `e${n}` },
+  error: { message: 'boom', request: 'page /cookbook/', at: `2026-01-0${n}` },
+}))
+
 test('app_errors says a break once, and its id archives every time', () => {
-  let hits = [1, 2, 3].map((n) => ({
-    kind: 'error',
-    tracked: true,
-    entity: { eid: `e${n}` },
-    error: { message: 'boom', request: 'page /cookbook/', at: `2026-01-0${n}` },
-  }))
-  let lines = folds(hits.map((hit) => ({ app: cook, hit }))).map(line)
+  let lines = folds(foldedHits.map((hit) => ({ app: cook, hit }))).map(line)
   assertEquals(lines.length, 1)
   assertStringIncludes(lines[0], 'boom (3 times since 2026-01-01')
   let id = lines[0].split(' ')[1]
-  assertEquals(closing(hits, [id]).length, 3)
-  assertEquals(closing(hits, ['nothing']).length, 0)
+  assertEquals(closing(foldedHits, [id]).length, 3)
+  assertEquals(closing(foldedHits, ['nothing']).length, 0)
 })
 
 test('app_errors shows a session error from its content', async () => {
@@ -186,14 +188,67 @@ test("a write's answer reads its space's breaks once", async () => {
   assertEquals(asked.length, 1)
 })
 
+let arrived = tracker([row('fresh-break', cook, 'boom', 'page /cookbook/')])
+
+test("a write's prefetched break remains in its one cached tracker read", async () => {
+  let { env, asked } = arrived
+  let open = await tallying(new Map(), async () => {
+    foresee(env, space, ada)
+    return await trackedIn(env, space, ada)
+  })
+  assertEquals(open.get(cook.eid)?.[0].error?.message, 'boom')
+  assertEquals(asked.length, 1)
+})
+
+let announced = tracker()
+let freshBreak = {
+  kind: 'error',
+  tracked: true,
+  entity: { eid: 'fresh-break' },
+  error: { message: 'boom', request: 'page /cookbook/', version: 1 },
+}
+let freshBreaks = new Map([[cook.eid, [freshBreak]]])
+await ticket(announced.env, space, ada, true)
+
+test("a write's reply carries its fresh break and marks it told", async () => {
+  let { env, asked } = announced
+  let offered = await serve(
+    env,
+    space,
+    ada,
+    undefined,
+    false,
+    () => Promise.resolve(freshBreaks),
+    () => Promise.resolve([cook]),
+  )
+  assertEquals(offered.length, 1)
+  assertStringIncludes(line(offered), 'page /cookbook/ — boom')
+  assertEquals(asked.length, 1)
+  assertEquals(asked[0].method, 'POST')
+  assertEquals(await asked[0].json(), {
+    app: cook.eid,
+    eids: ['fresh-break'],
+    mark: 'notified',
+  })
+})
+
+let dashboard = tracker([
+  ...[1, 2, 3].map((n) =>
+    row(`e${n}`, cook, 'boom', 'page /cookbook/', `2026-01-0${n}`)
+  ),
+  row('e4', cook, 'bang', 'page /cookbook/new', '2026-01-04'),
+])
+
 test('brokenIn says each break plainly and leaves it news', async () => {
-  let { env, asked } = tracker([
-    ...[1, 2, 3].map((n) =>
-      row(`e${n}`, cook, 'boom', 'page /cookbook/', `2026-01-0${n}`)
-    ),
-    row('e4', cook, 'bang', 'page /cookbook/new', '2026-01-04'),
-  ])
-  let said = (await brokenIn(env, space, ada, [cook])).get(cook.eid)!
+  let { env, asked } = dashboard
+  let said = (await brokenIn(
+    env,
+    space,
+    ada,
+    [cook],
+    (_env, _space, _who, ids) =>
+      Promise.resolve(new Map(ids.map((id) => [id, {}]))),
+  )).get(cook.eid)!
   assertEquals(
     said.map(({ said, where, times }) => ({ said, where, times })),
     [

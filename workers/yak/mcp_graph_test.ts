@@ -219,6 +219,19 @@ test('graph_query answers a count and a tally as their value', async () => {
 
 // A line naming only its app reads nothing, and an empty answer reads as an
 // empty app; the refusal hands over a line that reads what the app keeps.
+let choresVocab = loadVocab({
+  $defs: {
+    chore: { component: true },
+    doc: { component: true, properties: { title: { type: 'string' } } },
+  },
+})
+let chores = graph({ vocab: choresVocab, storage: ram(choresVocab) })
+chores.apply([{
+  entity: { eid: 'c' },
+  chore: {},
+  doc: { title: 'sweep' },
+}])
+
 test('a read naming only an app says what to read in it', async () => {
   let refused = unasked('chores', 'chores', {
     chore: {},
@@ -227,19 +240,6 @@ test('a read naming only an app says what to read in it', async () => {
   })
   let line = refused.match(/'([^']+&\.in=chores)'/)?.[1]
   assertEquals(line, '.chore&?doc&.in=chores')
-  // The line it hands over is one the read takes, and it finds the rows.
-  let vocab = loadVocab({
-    $defs: {
-      chore: { component: true },
-      doc: { component: true, properties: { title: { type: 'string' } } },
-    },
-  })
-  let chores = graph({ vocab, storage: ram(vocab) })
-  await chores.apply([{
-    entity: { eid: 'c' },
-    chore: {},
-    doc: { title: 'sweep' },
-  }])
   let { said, line: asked } = scope(line!)
   assertEquals(said, 'chores')
   assertEquals(
@@ -263,14 +263,22 @@ let store = graph({
 })
 store.apply([{ entity: { eid: 'milk' }, item: { name: 'milk' } }])
 
+let words = screened((w) => !!kept.comp(w), false)
+let keptIds = async (q: string) =>
+  (await store.read(asking(q, words))).map((b) => b.entity.eid)
+
 test('a read naming no component answers only what the app keeps', async () => {
-  let words = screened((w) => !!kept.comp(w), false)
-  let read = async (q: string) =>
-    (await store.read(asking(q, words))).map((b) => b.entity.eid)
-  for (let q of ['.limit=5', '*', '.limit=50']) {
-    assertEquals(await read(q), ['milk'], q)
-  }
-  assertEquals((await read('.archetype')).length > 0, true)
+  assertEquals(await keptIds('.limit=5'), ['milk'])
+})
+
+for (let q of ['*', '.limit=50']) {
+  test(`a read of ${q} answers only what the app keeps`, async () => {
+    assertEquals(await keptIds(q), ['milk'])
+  })
+}
+
+test('a read naming archetypes includes the store archetypes', async () => {
+  assertEquals((await keptIds('.archetype')).length > 0, true)
 })
 
 // An entity spans apps (T-32699): a read that names no app asks every store

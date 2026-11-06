@@ -10,6 +10,7 @@
 // never SQL; the apps of a space come from the directory part. The same
 // rows are the `app_errors` answer, one line each.
 import type { Bundle } from '@yaks/graph'
+import { cmp } from '@yaks/fp'
 import { addressId, parse, short } from '@yaks/id'
 import { derivedEid } from '@yaks/graph/identity'
 import * as dirPart from './directory.ts'
@@ -410,7 +411,7 @@ let same = (hit: Hit) =>
   `${hit.exception ? 'exception' : 'error'} ${where(hit)} ${said(hit)}`
 
 let newest = (a: Seen, b: Seen) =>
-  String(broke(b.hit).at ?? '').localeCompare(String(broke(a.hit).at ?? ''))
+  cmp(String(broke(b.hit).at ?? ''), String(broke(a.hit).at ?? ''))
 
 /** The occurrences gathered into breaks, newest first: each fold is one
  * break's occurrences, its newest first. */
@@ -704,6 +705,7 @@ export let brokenIn = async (
   space: Space,
   who: Who,
   apps: App[],
+  readFixings = fixings,
 ) => {
   let open = await trackedIn(env, space, who, true)
   let broken = apps.filter((a) => open.has(a.eid)).map((app) =>
@@ -711,7 +713,7 @@ export let brokenIn = async (
   )
   let all = broken.flatMap(([, f]) => f.map(([s]) => s))
   // A dashboard without the Operator's word still shows what broke.
-  let fixed = await fixings(
+  let fixed = await readFixings(
     env,
     space,
     who,
@@ -783,6 +785,7 @@ export let serve = async (
   app?: App,
   all = false,
   read = trackedIn,
+  apps = appsOf,
 ) => {
   if (app) {
     return offered(
@@ -797,7 +800,7 @@ export let serve = async (
   let open = await read(env, space, who, all)
   if (!open.size) return []
   let each = await Promise.all(
-    (await appsOf(env, space)).filter((a) => !a.trashed && open.has(a.eid))
+    (await apps(env, space)).filter((a) => !a.trashed && open.has(a.eid))
       .map((a) => offered(env, space, who, a, open.get(a.eid)!, all)),
   )
   return each.flat()

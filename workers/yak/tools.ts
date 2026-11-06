@@ -2441,7 +2441,7 @@ export let patching = (texts: Record<string, string>, list: Edit[]) => {
  *
  * https only: an app is made of bytes somebody can vouch for.
  */
-export let fetched = async (said: string) => {
+export let fetched = async (said: string, send: typeof fetch = fetch) => {
   let at: URL
   try {
     at = new URL(said)
@@ -2454,7 +2454,7 @@ export let fetched = async (said: string) => {
       `url: https only, not ${at.protocol.replace(':', '')}`,
     )
   }
-  let r = await fetch(at)
+  let r = await send(at)
   if (!r.ok) throw refuse('arguments', `${at} answered ${r.status}`)
   let bytes = new Uint8Array(await r.arrayBuffer())
   return {
