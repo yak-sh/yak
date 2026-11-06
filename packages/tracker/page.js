@@ -155,17 +155,45 @@
     })
 
   // A load can fail with the file in place: Safari stops every load of a page
-  // the moment the person heads elsewhere, and a stopped stylesheet fires this
-  // same event while the page is still up, as does a phone dropping
+  // the moment the person heads elsewhere, and a stopped stylesheet or module
+  // fires this same event while the page is still up, as does a phone dropping
   // its connection. So a miss is asked for again, and only one the server
   // refuses is news. One that answers, or that cannot be asked because the
   // connection or the page is gone, is not a fault of the app's or ours. A
-  // module's entry answering says nothing of the files it imports, and a page
-  // of an opaque origin cannot read its own server's answer, so those misses
-  // are said as they come.
-  let unasked = (el) =>
-    self.origin == 'null' ||
-    (el.tagName == 'SCRIPT' && el.type == 'module')
+  // page of an opaque origin cannot read its own server's answer, so its
+  // misses are said as they come.
+  let unasked = () => self.origin == 'null'
+
+  // A module's miss says only that its graph did not load: the entry, or any
+  // file it imports. So the graph is asked for again, the entry and then each
+  // file of this origin it imports by address, and the answer is the first
+  // file the server refuses, or null when every one answers. A bare name
+  // resolves through the page's import map, which only the browser reads.
+  let IMPORTS =
+    /(?:^|[;\s}])(?:import|export)\s*(?:[\w$*{}\s,]+from\s*)?['"]([^'"\n]+)['"]/g
+  let GRAPH = 32
+  let refused = async (url, seen = new Set()) => {
+    if (seen.has(url.href) || seen.size >= GRAPH) return null
+    seen.add(url.href)
+    let r = await plain(url.href, { cache: 'no-store' })
+    if (!r.ok) {
+      r.body?.cancel()
+      return url
+    }
+    for (let [, name] of (await r.text()).matchAll(IMPORTS)) {
+      if (!/^\.{0,2}\//.test(name)) continue
+      let next
+      try {
+        next = new URL(name, r.url || url.href)
+      } catch {
+        continue
+      }
+      let missing = mine(next) && await refused(next, seen)
+      if (missing) return missing
+    }
+    return null
+  }
+  let module = (el) => el.tagName == 'SCRIPT' && el.type == 'module'
 
   // What the fetch below already answered for: a rejection it judged (no
   // answer, or one the page gave up on, said there). The caller hears it
@@ -193,15 +221,23 @@
       // edge injects, blocked in the visitor's browser, is the platform's news
       // and not this app's.
       if (where && !mine(where)) return
-      let miss = () =>
+      // A module names its entry, so its release can be put back (yaks.app
+      // `failedScript`), and `url` the file that was refused.
+      let miss = (url = src) =>
         broke({
           message: `failed to load ${el.tagName.toLowerCase()}${
             src ? ` ${src}` : ''
           }`,
-          url: src || location.href,
+          url: url || location.href,
           mechanism: 'onerror',
         })
-      if (!where || unasked(el)) return miss()
+      if (!where || unasked()) return miss()
+      if (module(el)) {
+        return refused(where).then(
+          (url) => url ? miss(url.href) : sorry(),
+          sorry,
+        )
+      }
       return answers(where.href).then(
         (there) => there ? sorry() : miss(),
         sorry,

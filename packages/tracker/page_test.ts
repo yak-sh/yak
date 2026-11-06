@@ -28,11 +28,14 @@ let reporter = new Function(...globals, code)
 type El = { tagName: string; href?: string; src?: string; type?: string }
 
 // A page whose server answers each address with the status `files` gives it,
-// or drops the connection for any other.
+// or with a 200 carrying the text it gives, and drops the connection for any
+// other.
 type Script = { src: string; type?: string; crossOrigin?: string }
 
+type Files = Record<string, number | string>
+
 let page = (
-  files: Record<string, number>,
+  files: Files,
   scripts: Script[] = [],
   builtins: { Array: unknown } = { Array },
 ) => {
@@ -49,9 +52,13 @@ let page = (
     asked.push(url)
     // A page that stopped waiting hears why: fetch rejects with the reason.
     if (init?.signal?.aborted) return Promise.reject(init.signal.reason)
-    return url in files
-      ? Promise.resolve(new Response('body', { status: files[url] }))
-      : Promise.reject(new TypeError('Load failed'))
+    let got = files[url]
+    if (got == null) return Promise.reject(new TypeError('Load failed'))
+    return Promise.resolve(
+      typeof got == 'string'
+        ? new Response(got)
+        : new Response('body', { status: got }),
+    )
   }
   // The window the script runs in: `fetch` is whatever the window holds by
   // then, as a page's own global is.
@@ -107,7 +114,7 @@ let page = (
 
 // Fire `el`'s failed load. The listener answers with its handling, settled
 // once the miss is filed or let go.
-let load = async (el: El, files: Record<string, number>) => {
+let load = async (el: El, files: Files) => {
   let p = page(files)
   await p.heard.get('error')!({ target: el })
   return { asked: p.asked, said: await p.said() }
@@ -116,7 +123,7 @@ let load = async (el: El, files: Record<string, number>) => {
 // The page fetches `url`: what its caller heard, and what was filed.
 let call = async (
   url: string,
-  files: Record<string, number>,
+  files: Files,
   signal?: AbortSignal,
 ) => {
   let p = page(files)
@@ -213,13 +220,48 @@ test('a stylesheet the server refuses is reported', async () =>
 test('a miss that cannot be asked about is not reported', async () =>
   equal(await load(link, {}), { asked: [file], said: [] }))
 
-test("a module's miss is reported unasked: its imports may be missing", async () => {
-  let src = file.replace('styles.css', 'app.js')
+let entry = file.replace('styles.css', 'app.js')
+let dep = (name: string) => file.replace('styles.css?v=5', name)
+let module = (files: Files) =>
+  load({ tagName: 'SCRIPT', type: 'module', src: entry }, files)
+let source = `import { hl } from './hl.js'
+import './repl.js'
+export * from "../x/more.js"
+import { marked } from 'marked'
+let s = 'not an import'`
+
+let more = `${at}api/assets/x/more.js`
+
+test('a module whose graph answers was stopped, not missing', async () =>
   equal(
-    await load({ tagName: 'SCRIPT', type: 'module', src }, { [src]: 200 }),
-    { asked: [], said: [`failed to load script ${src}`] },
+    await module({
+      [entry]: source,
+      [dep('hl.js')]: 200,
+      [dep('repl.js')]: "import './hl.js'",
+      [more]: 200,
+    }),
+    { asked: [entry, dep('hl.js'), dep('repl.js'), more], said: [] },
+  ))
+
+test('a module is reported, naming its entry, when an import is refused', async () => {
+  let p = page({ [entry]: source, [dep('hl.js')]: 404 })
+  await p.heard.get('error')!({
+    target: { tagName: 'SCRIPT', type: 'module', src: entry },
+  })
+  equal(
+    (await p.bodies()).map(({ message, url }) => ({ message, url })),
+    [{ message: `failed to load script ${entry}`, url: dep('hl.js') }],
   )
 })
+
+test('a module whose entry is refused is reported', async () =>
+  equal(await module({ [entry]: 404 }), {
+    asked: [entry],
+    said: [`failed to load script ${entry}`],
+  }))
+
+test('a module that cannot be asked about is not reported', async () =>
+  equal(await module({}), { asked: [entry], said: [] }))
 
 let release = `${at}api/release?version=5`
 
