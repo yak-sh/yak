@@ -14,7 +14,7 @@
   },
   "devDependencies": {
     "@std/assert": "npm:@jsr/std__assert@^1.0.0",
-    "@yaks/graph": "0.2.24",
+    "@yaks/graph": "0.2.25",
     "@yaks/ram": "0.2.24",
     "@yaks/testing": "0.2.17"
   }

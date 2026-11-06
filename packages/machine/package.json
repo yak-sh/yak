@@ -16,16 +16,16 @@
   "description": "Computers, explicit connection transports and durable file-and-command workspaces, separate from sandbox provisioning.",
   "dependencies": {
     "@yaks/fp": "0.2.23",
-    "@yaks/graph": "0.2.24",
+    "@yaks/graph": "0.2.25",
     "@yaks/process": "0.2.24",
     "@yaks/tools": "0.2.24",
     "@yaks/vocab": "0.2.23"
   },
   "devDependencies": {
-    "@yaks/harness": "0.2.24",
+    "@yaks/harness": "0.2.25",
     "@yaks/kernel": "0.2.24",
     "@yaks/ram": "0.2.24",
-    "@yaks/session": "0.2.24",
+    "@yaks/session": "0.2.25",
     "@yaks/testing": "0.2.17"
   }
 }

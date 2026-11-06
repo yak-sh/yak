@@ -1,6 +1,6 @@
 {
   "name": "@yaks/heal",
-  "version": "0.2.24",
+  "version": "0.2.25",
   "type": "module",
   "exports": {
     ".": "./mod.ts",
@@ -16,18 +16,18 @@
     "@yaks/client": "0.2.24",
     "@yaks/doc": "0.2.24",
     "@yaks/edge": "0.2.24",
-    "@yaks/effects": "0.2.24",
+    "@yaks/effects": "0.2.25",
     "@yaks/fp": "0.2.23",
-    "@yaks/graph": "0.2.24",
-    "@yaks/harness": "0.2.24",
-    "@yaks/host": "0.2.24",
+    "@yaks/graph": "0.2.25",
+    "@yaks/harness": "0.2.25",
+    "@yaks/host": "0.2.25",
     "@yaks/id": "0.2.23",
-    "@yaks/inspect": "0.2.24",
+    "@yaks/inspect": "0.2.23",
     "@yaks/kernel": "0.2.24",
     "@yaks/provenance": "0.2.23",
     "@yaks/query": "0.2.23",
     "@yaks/tools": "0.2.24",
-    "@yaks/tracker": "0.2.24",
+    "@yaks/tracker": "0.2.23",
     "@yaks/ui": "0.2.24",
     "@yaks/vocab": "0.2.23",
     "preact": "10.29.7"
@@ -35,14 +35,14 @@
   "devDependencies": {
     "@preact/signals": "2.9.4",
     "@std/assert": "npm:@jsr/std__assert@^1.0.0",
-    "@yaks/mail": "0.2.24",
-    "@yaks/model": "0.2.24",
+    "@yaks/mail": "0.2.23",
+    "@yaks/model": "0.2.25",
     "@yaks/notify": "0.2.24",
     "@yaks/process": "0.2.24",
     "@yaks/project": "0.2.24",
     "@yaks/ram": "0.2.24",
-    "@yaks/session": "0.2.24",
-    "@yaks/task": "0.2.24",
+    "@yaks/session": "0.2.25",
+    "@yaks/task": "0.2.23",
     "@yaks/testing": "0.2.17"
   }
 }

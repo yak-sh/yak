@@ -1,6 +1,6 @@
 {
   "name": "@yaks/inspect",
-  "version": "0.2.24",
+  "version": "0.2.23",
   "type": "module",
   "exports": {
     ".": "./mod.ts",
@@ -13,13 +13,13 @@
     "@preact/signals": "2.9.4",
     "@yaks/edge": "0.2.24",
     "@yaks/fp": "0.2.23",
-    "@yaks/graph": "0.2.24",
+    "@yaks/graph": "0.2.25",
     "@yaks/markdown": "0.2.24",
     "@yaks/query": "0.2.23",
     "@yaks/render": "0.2.24",
     "@yaks/tui": "0.2.24",
     "@yaks/ui": "0.2.24",
-    "@yaks/ux": "0.2.24",
+    "@yaks/ux": "0.2.23",
     "@yaks/vocab": "0.2.23",
     "preact": "10.29.7"
   },
@@ -27,7 +27,7 @@
     "@std/assert": "npm:@jsr/std__assert@^1.0.0",
     "@yaks/client": "0.2.24",
     "@yaks/draft": "0.2.24",
-    "@yaks/filter": "0.2.24",
+    "@yaks/filter": "0.2.23",
     "@yaks/match": "0.2.24",
     "@yaks/ram": "0.2.24",
     "@yaks/testing": "0.2.17",

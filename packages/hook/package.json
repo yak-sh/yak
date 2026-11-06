@@ -11,7 +11,7 @@
   "dependencies": {
     "@yaks/doc": "0.2.24",
     "@yaks/edge": "0.2.24",
-    "@yaks/graph": "0.2.24",
+    "@yaks/graph": "0.2.25",
     "@yaks/vocab": "0.2.23"
   },
   "devDependencies": {

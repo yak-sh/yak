@@ -1,6 +1,6 @@
 {
   "name": "@yaks/game",
-  "version": "0.2.24",
+  "version": "0.2.23",
   "type": "module",
   "exports": {
     ".": "./mod.ts",

@@ -11,15 +11,15 @@
   "description": "Creates directed links as graph entities with content-derived eids, validates writes, and follows links through storage reads and SQL queries.",
   "dependencies": {
     "@yaks/fp": "0.2.23",
-    "@yaks/graph": "0.2.24",
+    "@yaks/graph": "0.2.25",
     "@yaks/query": "0.2.23",
-    "@yaks/sql": "0.2.24",
+    "@yaks/sql": "0.2.25",
     "@yaks/vocab": "0.2.23"
   },
   "devDependencies": {
     "@std/assert": "npm:@jsr/std__assert@^1.0.0",
     "@yaks/ram": "0.2.24",
-    "@yaks/sqlite": "0.2.24",
+    "@yaks/sqlite": "0.2.25",
     "@yaks/testing": "0.2.17"
   }
 }

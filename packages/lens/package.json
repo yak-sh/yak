@@ -11,7 +11,7 @@
   "description": "Compiles reversible JSON document changes, with graph bundle, query, and migration adapters.",
   "dependencies": {
     "@yaks/fp": "0.2.23",
-    "@yaks/graph": "0.2.24",
+    "@yaks/graph": "0.2.25",
     "@yaks/match": "0.2.24",
     "@yaks/query": "0.2.23",
     "@yaks/vocab": "0.2.23"

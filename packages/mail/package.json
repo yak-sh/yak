@@ -1,6 +1,6 @@
 {
   "name": "@yaks/mail",
-  "version": "0.2.24",
+  "version": "0.2.23",
   "type": "module",
   "exports": {
     ".": "./mod.ts",
@@ -16,14 +16,14 @@
   "description": "Represents letters and their delivery outcomes as graph components, sends them through a sender the caller supplies, and converts arrivals to bundles.",
   "dependencies": {
     "@yaks/api": "0.2.24",
-    "@yaks/cli": "0.2.24",
+    "@yaks/cli": "0.2.25",
     "@yaks/doc": "0.2.24",
     "@yaks/edge": "0.2.24",
-    "@yaks/effects": "0.2.24",
+    "@yaks/effects": "0.2.25",
     "@yaks/fp": "0.2.23",
-    "@yaks/graph": "0.2.24",
+    "@yaks/graph": "0.2.25",
     "@yaks/hook": "0.2.24",
-    "@yaks/host": "0.2.24",
+    "@yaks/host": "0.2.25",
     "@yaks/id": "0.2.23",
     "@yaks/notify": "0.2.24",
     "@yaks/query": "0.2.23",
@@ -35,7 +35,7 @@
     "@yaks/kernel": "0.2.24",
     "@yaks/project": "0.2.24",
     "@yaks/ram": "0.2.24",
-    "@yaks/task": "0.2.24",
+    "@yaks/task": "0.2.23",
     "@yaks/testing": "0.2.17"
   }
 }

@@ -10,7 +10,7 @@
   "description": "Synchronizes a client graph with a server, applies live query updates, and reconciles optimistic writes or reverts them when refused.",
   "dependencies": {
     "@yaks/fp": "0.2.23",
-    "@yaks/graph": "0.2.24",
+    "@yaks/graph": "0.2.25",
     "@yaks/query": "0.2.23",
     "@yaks/vocab": "0.2.23"
   },

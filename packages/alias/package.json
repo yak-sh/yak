@@ -11,7 +11,7 @@
   "description": "Assigns persistent, unique names to graph entities and resolves those names wherever an entity id is accepted.",
   "dependencies": {
     "@yaks/fp": "0.2.23",
-    "@yaks/graph": "0.2.24",
+    "@yaks/graph": "0.2.25",
     "@yaks/key": "0.2.24",
     "@yaks/vocab": "0.2.23"
   },

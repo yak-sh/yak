@@ -11,7 +11,7 @@
   "dependencies": {
     "@yaks/alias": "0.2.24",
     "@yaks/fp": "0.2.23",
-    "@yaks/graph": "0.2.24",
+    "@yaks/graph": "0.2.25",
     "@yaks/match": "0.2.24",
     "@yaks/query": "0.2.23",
     "@yaks/ram": "0.2.24",

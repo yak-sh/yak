@@ -1,6 +1,6 @@
 {
   "name": "@yaks/effects",
-  "version": "0.2.24",
+  "version": "0.2.25",
   "type": "module",
   "exports": {
     ".": "./mod.ts",
@@ -13,9 +13,9 @@
   "description": "Runs application code after graph changes commit, with isolated failures, an optional pool for persisted runs, and leases for work held by one process.",
   "dependencies": {
     "@yaks/fp": "0.2.23",
-    "@yaks/graph": "0.2.24",
+    "@yaks/graph": "0.2.25",
     "@yaks/id": "0.2.23",
-    "@yaks/inspect": "0.2.24",
+    "@yaks/inspect": "0.2.23",
     "@yaks/match": "0.2.24",
     "@yaks/query": "0.2.23",
     "@yaks/tools": "0.2.24",
@@ -27,10 +27,10 @@
   },
   "devDependencies": {
     "@std/assert": "npm:@jsr/std__assert@^1.0.0",
-    "@yaks/journal": "0.2.24",
+    "@yaks/journal": "0.2.23",
     "@yaks/ram": "0.2.24",
-    "@yaks/sql": "0.2.24",
-    "@yaks/sqlite": "0.2.24",
+    "@yaks/sql": "0.2.25",
+    "@yaks/sqlite": "0.2.25",
     "@yaks/testing": "0.2.17",
     "linkedom": "^0.18.12",
     "preact-render-to-string": "6.7.0"

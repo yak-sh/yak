@@ -10,7 +10,7 @@
   "description": "Typed tool objects from a scoped registry, bounded short script execution and recorded nested calls through an isolated evaluator.",
   "dependencies": {
     "@yaks/fp": "0.2.23",
-    "@yaks/graph": "0.2.24",
+    "@yaks/graph": "0.2.25",
     "@yaks/tools": "0.2.24",
     "sucrase": "3.35.1"
   },
