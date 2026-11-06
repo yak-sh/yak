@@ -1,7 +1,7 @@
 /**
  * What fills a volume, as a look at it records it:
  * `occupancy{volume, day, at, size, used, free, counted, paths}`, one row a
- * volume a UTC day. Here are reading `df` and `du` into one, and reading a run
+ * volume a UTC day. Here are selecting local disks and reading a run
  * of them the way the Disks page does: what a directory holds, what is too
  * small to list, which directories are drawn open, the largest files, the
  * change between two looks, and which file is the graph's own. Pure; looking
@@ -25,7 +25,7 @@ export type Occupancy = {
   paths: Record<string, number>
 }
 
-/** A filesystem on a disk, as `df` reports it. */
+/** A mounted filesystem on a local disk. */
 export type Disk = { mount: string; size: number; used: number; free: number }
 
 /** What a walk of a volume counted. */
@@ -66,41 +66,59 @@ let DISK = new Set([
   'ntfs',
   'ntfs3',
   'fuseblk',
+  'apfs',
+  'hfs',
+  'hfsplus',
 ])
 
-/**
- * The disks in `df -B1 --output=source,fstype,size,used,avail,target`'s
- * table: each local disk filesystem once, at its shortest mount, leaving out
- * those kept in memory, by the kernel or over a network.
- *
- * ```ts
- * import { disks } from './occupancy.ts'
- * import { equal } from '@yaks/testing'
- *
- * let table = [
- *   'Filesystem Type 1B-blocks Used Avail Mounted on',
- *   '/dev/sda1 ext4 1000 600 300 /',
- *   'tmpfs tmpfs 50 1 49 /run',
- *   '/dev/sdb1 xfs 2000 100 1900 /mnt/my data',
- *   '/dev/sda1 ext4 1000 600 300 /srv/bind',
- * ].join('\n')
- * equal(disks(table), [
- *   { mount: '/', size: 1000, used: 600, free: 300 },
- *   { mount: '/mnt/my data', size: 2000, used: 100, free: 1900 },
- * ])
- * ```
- */
-export let disks = (table: string): Disk[] => {
-  let seen = new Map<string, Disk>()
-  for (let line of table.split('\n')) {
+/** A mounted volume from the host's disk API. */
+export type Mounted = {
+  mountpoint: string
+  device: string
+  fs: string
+  type: string
+  ok: boolean
+  error?: string
+  usage: { total: number; free: number; available: number } | null
+}
+
+// Retain the table input accepted by published callers.
+let tableVolumes = (table: string): Mounted[] =>
+  table.split('\n').flatMap((line) => {
     let m = line.trim().match(
       /^(\S+)\s+(\S+)\s+(\d+)\s+(\d+)\s+(\d+)\s+(\/.*)$/,
     )
-    if (!m || !DISK.has(m[2])) continue
-    let [, source, , size, used, free, mount] = m
-    let had = seen.get(source)
+    if (!m) return []
+    let [, device, fs, size, used, free, mountpoint] = m
+    return [{
+      device,
+      fs,
+      mountpoint,
+      type: 'fixed',
+      ok: true,
+      usage: { total: +size, free: +size - +used, available: +free },
+    }]
+  })
+
+/** Each local disk once, at its shortest mount, excluding virtual and network
+ * filesystems. Available space excludes blocks reserved by the filesystem. */
+export let disks = (volumes: Mounted[] | string): Disk[] => {
+  if (typeof volumes == 'string') volumes = tableVolumes(volumes)
+  let seen = new Map<string, Disk>()
+  for (let volume of volumes) {
+    if (volume.type == 'network' || !DISK.has(volume.fs.toLowerCase())) continue
+    if (!volume.ok || !volume.usage) {
+      throw Error(`Cannot measure ${volume.mountpoint}: ${volume.error}`)
+    }
+    let { mountpoint: mount, device, usage } = volume
+    let had = seen.get(device)
     if (had && had.mount.length <= mount.length) continue
-    seen.set(source, { mount, size: +size, used: +used, free: +free })
+    seen.set(device, {
+      mount,
+      size: usage.total,
+      used: usage.total - usage.free,
+      free: usage.available,
+    })
   }
   return [...seen.values()].toSorted((a, b) => a.mount.localeCompare(b.mount))
 }

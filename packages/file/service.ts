@@ -1,19 +1,18 @@
-import * as disk from '@yaks/file/io'
-import { command as processCommand } from '@yaks/process/command'
 /**
  * What fills this computer's disks, as a duty: the module a server imports at
- * `@yaks/file/service`. Each pass reads the computer's disks (`df`), and walks
+ * `@yaks/file/service`. Each pass reads the computer's disks, and walks
  * each one whose day has no look yet, or whose latest look is `AGAIN` old
- * (`du`, one filesystem at a time, at the lowest CPU and disk priority), into
+ * (one filesystem at a time through the file API), into
  * the day's `occupancy` row. The Disks page reads only those rows (./page.ts),
  * so opening it measures nothing.
  *
- * A walk stopped by the process winding down is killed, and the next process
+ * A walk stops when the process winds down, and the next process
  * walks again from its first pass; what an earlier walk read is still in the
  * kernel's cache, so the next goes faster.
  *
  * @module
  */
+import { walk } from './measure.ts'
 import type { Graph } from '@yaks/graph'
 import { sleep } from '@yaks/fp'
 import { volumeOf } from './mod.ts'
@@ -22,20 +21,16 @@ import {
   type Disk,
   disks,
   due,
-  entries,
   listed,
   occupancyIn,
   occupancyOf,
   type Walk,
-  walked,
 } from './occupancy.ts'
 
 /** How long a pass waits for the next, in milliseconds: an hour. */
 export let EVERY = 60 * 60 * 1000
 
-/** How old a volume's latest look is before it is walked again: an hour. A
- * walk of this box's 140 GB takes half a minute once the kernel has its
- * directories cached, and sixteen minutes the first time after a boot. */
+/** How old a volume's latest look is before it is walked again: an hour. */
 export let AGAIN = 60 * 60 * 1000
 
 /** How a computer is looked at: its disks, and a walk of one. */
@@ -50,67 +45,13 @@ export type Looking = {
   ) => Promise<Walk | undefined>
 }
 
-let text = new TextDecoder()
-
-// A command's output; undefined once `signal` aborts, which kills it. `du`
-// says so and goes on when it cannot read a directory, exiting 1; what it
-// counted leaves that directory out.
-let run = async (
-  [command, ...args]: string[],
-  signal?: AbortSignal,
-): Promise<string | undefined> => {
-  let out = await processCommand(command, {
-    args,
-    stdin: 'null',
-    stdout: 'piped',
-    stderr: 'piped',
-    signal,
-  }).output().catch((e: unknown) => {
-    if (signal?.aborted) return undefined
-    throw e
-  })
-  if (!out || signal?.aborted) return undefined
-  let said = text.decode(out.stdout)
-  if (out.code == 0 || (out.code == 1 && said)) return said
-  throw Error(
-    `${command} exited ${out.code}: ${text.decode(out.stderr).slice(0, 400)}`,
-  )
-}
-
-/** This computer, looked at through `df` and `du`. */
+/** This computer, measured without platform commands. */
 export let computer: Looking = {
-  disks: async () =>
-    disks(
-      await run([
-        'df',
-        '-B1',
-        '--output=source,fstype,size,used,avail,target',
-      ]) ??
-        '',
-    ),
-  walk: async (mount, least, signal) => {
-    let out = await run([
-      'ionice',
-      '-c3',
-      'nice',
-      '-n19',
-      'du',
-      '-x',
-      '-a',
-      '-0',
-      '-B1',
-      `--threshold=${least}`,
-      mount,
-    ], signal)
-    if (out == null) return undefined
-    let found = entries(out)
-    let dirs = new Set<string>()
-    for (let [, path] of found) {
-      let stat = await disk.lstat(path).catch(() => undefined)
-      if (stat?.isDirectory) dirs.add(path)
-    }
-    return walked(found, mount, dirs)
+  disks: async () => {
+    let { default: native } = await import('@iislove/diskusage')
+    return disks(await native.listVolumes())
   },
+  walk,
 }
 
 /** One pass: walk each of this computer's disks that is due a look, into its

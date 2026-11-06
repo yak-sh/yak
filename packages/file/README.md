@@ -61,15 +61,17 @@ after it.
 
 A host that lists `@yaks/file` among its plugins runs its duty
 (`@yaks/file/service`) for the computer it is on. Every hour it reads the
-computer's disks (`df`: each local disk filesystem once, leaving out those in
-memory, the kernel's and network mounts), and walks each one whose day has no
-look yet, or whose latest look is an hour old (`du -x`, at the lowest CPU and
-disk priority). The walk lists every directory and file holding at least a
-thousandth of the volume, so a directory listed holds everything listed under
-it, and the day's `occupancy` row keeps it beside the filesystem's size, used
-and free bytes. A later look that day replaces the earlier, so a run of days is
-the trend. A walk of this box's 140 GB takes half a minute once the kernel has
-cached its directories, and sixteen minutes the first time after a boot.
+computer's disks through a native volume API, excluding virtual and network
+filesystems. It walks each one whose day has no look yet, or whose latest look
+is an hour old, using file APIs without starting commands. The walk stays on one
+device, counts allocated blocks and hard links once, and never follows symlinks.
+Protected or disappearing paths remain uncounted. Cancellation keeps partial
+walks out of the graph.
+
+The walk lists every directory and file holding at least a thousandth of the
+volume. The day's `occupancy` row keeps those paths beside the filesystem's
+size, used and available bytes. A later look that day replaces the earlier, so a
+run of days is the trend.
 
 ```ts
 import { lines, walked } from '@yaks/file/occupancy'
