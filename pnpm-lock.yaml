@@ -4253,6 +4253,9 @@ importers:
       '@yaks/fp':
         specifier: 0.2.23
         version: link:../fp
+      '@yaks/hook':
+        specifier: 0.2.24
+        version: link:../hook
       '@yaks/host':
         specifier: 0.2.24
         version: link:../host

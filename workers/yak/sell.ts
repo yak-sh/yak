@@ -23,24 +23,24 @@
 //
 // This is a different relationship from billing.ts, which is the platform's own
 // plan: there the provider sells to us and we are the customer. Nothing crosses
-// between them: a different account, a different webhook endpoint, a
-// different signing secret.
+// between them: what the provider hears about a seller's account reaches
+// `apply` here, and only what it hears about our own subscriptions reaches
+// billing.ts (payment-doors.ts).
 //
 // Nothing here may fail quietly, the same rule billing.ts keeps: a break is an
-// exception entity in the meta store, a refusal is a sentence the person reads,
-// and the webhook's filing is capped so a stranger posting garbage at a public
-// door cannot write rows without end.
+// exception entity in the meta store, and a refusal is a sentence the person
+// reads.
 import { sha256 } from '@yaks/graph/sha256'
 import { derivedEid } from '@yaks/graph/identity'
 import { moved } from './billing.ts'
 import { payments, shops, via } from './payments.ts'
-import { ours, refusal } from '@yaks/hook'
 import type {
   Line,
   Paid,
   Sale,
   Seller as Shop,
   Settled,
+  Shopped,
 } from '@yaks/host/payments'
 import { fault } from './unseen.ts'
 import * as dirPart from './directory.ts'
@@ -607,7 +607,8 @@ export let receipt = (
 }
 
 /**
- * One verified event, read by the provider (payments.ts `shops`), applied.
+ * One verified event about a seller's account, as the provider heard it at
+ * its door (payment-doors.ts), applied.
  * Answers what it did, which is what the door says back: the provider ignores
  * the body, and a person reading the logs does not.
  *
@@ -620,8 +621,7 @@ export let receipt = (
  *   a payment moved             it was refunded or disputed (T-34526), or the
  *                               dispute was decided (T-37887)
  */
-export let apply = async (env: Env, event: unknown): Promise<string> => {
-  let heard = (await shops(env)).heard(event)
+export let apply = async (env: Env, heard: Shopped): Promise<string> => {
   let on = heard.account
   if (!on) return 'not a connected account event'
   let dir = dirOf(env)
@@ -789,90 +789,10 @@ let settled = async (
   return `${app.slug}: ${status}`
 }
 
-// The webhook door is on the open internet, so what it files has a ceiling:
-// per isolate, per minute, the way billing.ts caps its own. Only a refusal that
-// can mean our secret is wrong is filed at all (`ours`, @yaks/hook), and it is
-// worth seeing once and never a hundred times an hour.
-let FILED = 6
-let filed = new Map<string, { minute: number; n: number }>()
-
-let hushed = (what: string) => {
-  let minute = Math.floor(Date.now() / 60_000)
-  let hit = filed.get(what)
-  if (!hit || hit.minute != minute) {
-    filed.set(what, { minute, n: 1 })
-    return false
-  }
-  return ++hit.n > FILED
-}
+// ---- the owner's door (T-34554) --------------------------------------------
 
 let json = (status: number, code: string, message: string) =>
   Response.json({ error: { code, message } }, { status })
-
-/**
- * Stripe's Connect door, at `https://yaks.app/stripe/connect`. Its own endpoint
- * with its own signing secret, because that is how Stripe delivers connected-
- * account events: the platform's endpoint (billing.ts) hears about our
- * subscription, and this one hears about our sellers. Two endpoints, two
- * `whsec_…`, and a secret that verified the wrong one is a door that answers
- * nothing.
- *
- * The body is read as text once and verified as that exact string: the
- * signature covers the raw bytes, so parsing and re-serializing would verify
- * something Stripe never signed. The scheme is identical to the platform
- * endpoint's, which is why the verifier is billing.ts's and not a second copy.
- *
- * Until the secret is set this answers 503 in one sentence, and everything else
- * about selling still works: a space connects, a checkout session is created, a
- * buyer pays. What is missing is only what the events would have told us —
- * whether the seller became ready, and the order row. That is deliberate: the
- * secret is the owner's to set (README.md), and half a feature that says so is
- * better than a door that pretends.
- */
-let hook = async (env: Env, req: Request) => {
-  if (req.method != 'POST') {
-    return json(405, 'method_not_allowed', 'post the event here')
-  }
-  let raw = await req.text()
-  if (!env.STRIPE_CONNECT_WEBHOOK_SECRET) {
-    if (!hushed('unset')) {
-      await fault(
-        env,
-        'POST /stripe/connect',
-        new Error(
-          'STRIPE_CONNECT_WEBHOOK_SECRET is not set — an event went unread',
-        ),
-      )
-    }
-    return json(503, 'no_selling', 'this door is not switched on here yet')
-  }
-  let no = await refusal(
-    'stripe',
-    env.STRIPE_CONNECT_WEBHOOK_SECRET,
-    raw,
-    req.headers,
-  )
-  if (no) {
-    if (ours(no) && !hushed(no)) {
-      await fault(env, 'POST /stripe/connect', new Error(no))
-    }
-    return json(400, 'bad_signature', no)
-  }
-  let event: unknown
-  try {
-    event = JSON.parse(raw)
-  } catch {
-    return json(400, 'bad_event', 'that was not an event')
-  }
-  // A failure past this line is ours, so it throws: index.ts files it and
-  // answers a 5xx, and Stripe delivers again. That is exactly what we want for
-  // a store that was busy or a Stripe call that timed out.
-  return Response.json({ received: true, did: await apply(env, event) })
-}
-
-export let fetch = (req: Request, env: Env): Promise<Response> => hook(env, req)
-
-// ---- the owner's door (T-34554) --------------------------------------------
 
 /**
  * The pricing page as it is served: the file, with the live rate in its one

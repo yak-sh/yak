@@ -28,7 +28,7 @@ export let SLUG = /^[a-z0-9][a-z0-9-]{0,62}$/
 // person lands in it: a new chat with its Operator (T-140507). Its settings
 // are its other pages, `/manage/<space>/<page>`, behind Manage; the
 // person's own, wherever they are, are `/manage/account/<page>` (T-136122),
-// which no space can be named (`RESERVED` holds `account`).
+// which no space can be named (directory.ts `RESERVED` holds `account`).
 export let MANAGE = '/manage'
 export let ACCOUNT = 'account'
 /** A page of one space's. */
@@ -337,78 +337,6 @@ export type Route = {
   // the path from its slash; at the apex or a bare space, the whole path
   path: string
 }
-
-// The slugs no space or app may take, because at `<slug>.yaks.app` and at
-// `<slug>@yaks.app` (post.ts `mailFrom`) they would read as the platform
-// speaking (T-37886): a sign-in page at `login.yaks.app`, a letter from
-// `security@yaks.app`. The doors that mint an address check it (tools.ts
-// `fresh`, directory.ts `free` and `own`, identity.ts `choose`); an address
-// already held keeps working. `yak` is the platform's own space (directory.ts
-// `META`), and `origin` and `saas` its custom-hostname origin (`ORIGIN`).
-// `sha` and `git` are the platform's own key prefixes in the files bucket
-// (versions.ts `SHA`, gitobj.ts `BODY`): a space's files are kept under its
-// slug, so a space by either name would share storage with the platform's.
-export let RESERVED = new Set([
-  'abuse',
-  'account',
-  'accounts',
-  'admin',
-  'administrator',
-  'api',
-  'app',
-  'apps',
-  'auth',
-  'billing',
-  'cf-bounce',
-  'checkout',
-  'connect',
-  'dashboard',
-  'docs',
-  'email',
-  'git',
-  'hello',
-  'help',
-  'hostmaster',
-  'login',
-  'logout',
-  'mail',
-  'manage',
-  'mcp',
-  'mx',
-  'no-reply',
-  'noreply',
-  'oauth',
-  'official',
-  'origin',
-  'password',
-  'pay',
-  'payment',
-  'payments',
-  'postmaster',
-  'pricing',
-  'privacy',
-  'root',
-  'saas',
-  'secure',
-  'security',
-  'settings',
-  'sha',
-  'sign-in',
-  'sign-up',
-  'signin',
-  'signup',
-  'staff',
-  'status',
-  'stripe',
-  'support',
-  'system',
-  'terms',
-  'verify',
-  'webmaster',
-  'www',
-  'yak',
-  'yaks',
-])
 
 // Where a hostname somebody else owns is served from: the address on our own
 // zone that the request is carried to, and the mount the app sits at there

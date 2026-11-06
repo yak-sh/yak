@@ -1,7 +1,8 @@
 // What Stripe lends a party selling on an account of its own, as @yaks/host's
 // `Shops`: a Connect account opened once, finished through Stripe's hosted
 // onboarding, Checkout Sessions on it that the platform takes an application
-// fee from, and the events Stripe posts about it read into the host's words.
+// fee from, and the events Stripe posts about it read into the host's words
+// (`shopped`, which ./doors.ts hears them with).
 //
 // Direct charges throughout, the "charge merchants directly" model. The
 // connected account is the merchant: the charge is on their books, Stripe's
@@ -240,13 +241,6 @@ export let shops = (options: Keyed): Shops => {
     if (!url) throw new Error(`stripe made ${what} with no url`)
     return url
   }
-  // A charge's payment and what it carries: a charge inherits its intent's
-  // metadata, and is read back on the seller's own account for a dispute,
-  // which carries none of its own.
-  let payment = (o: Charge) => {
-    let id = idOf(o.payment_intent)
-    return id ? { id, tags: { ...o.metadata } } : null
-  }
   return {
     on: () => !!options.key,
     open: async (who) => {
@@ -260,41 +254,52 @@ export let shops = (options: Keyed): Shops => {
     // their charge rather than the platform's.
     checkout: (on, sale) =>
       made('a checkout session', '/v1/checkout/sessions', session(sale), on),
-    heard: (event): Shopped => {
-      let e = (event ?? {}) as Event
-      let type = e.type ?? ''
-      let account = e.account ?? ''
-      let o = e.data?.object ?? {}
-      if (type == 'account.updated') {
-        return { account, about: 'seller', seller: sellerOf(o as Account) }
-      }
-      if (type == 'account.application.deauthorized') {
-        return { account, about: 'revoked' }
-      }
-      if (type == 'checkout.session.completed') {
-        return { account, about: 'sale', sale: paidOf(o as Session) }
-      }
-      let c = o as Charge
-      let to = settledBy(type, c)
-      if (!to) return { account, about: 'other' }
-      return {
-        account,
-        about: 'payment',
-        to,
-        payment: async () => {
-          if (type == 'charge.refunded') return payment(c)
-          let charge = idOf(c.charge)
-          if (!charge) return null
-          return payment(
-            await ask(
-              options,
-              `/v1/charges/${encodeURIComponent(charge)}`,
-              undefined,
-              account,
-            ) as Charge,
-          )
-        },
-      }
+  }
+}
+
+// A charge's payment and what it carries: a charge inherits its intent's
+// metadata, and is read back on the seller's own account for a dispute, which
+// carries none of its own.
+let payment = (o: Charge) => {
+  let id = idOf(o.payment_intent)
+  return id ? { id, tags: { ...o.metadata } } : null
+}
+
+/** A verified event Stripe posted to the Connect endpoint, read, with the
+ * account it happened on. */
+export let shopped = (options: Keyed) => (event: unknown): Shopped => {
+  let e = (event ?? {}) as Event
+  let type = e.type ?? ''
+  let account = e.account ?? ''
+  let o = e.data?.object ?? {}
+  if (type == 'account.updated') {
+    return { account, about: 'seller', seller: sellerOf(o as Account) }
+  }
+  if (type == 'account.application.deauthorized') {
+    return { account, about: 'revoked' }
+  }
+  if (type == 'checkout.session.completed') {
+    return { account, about: 'sale', sale: paidOf(o as Session) }
+  }
+  let c = o as Charge
+  let to = settledBy(type, c)
+  if (!to) return { account, about: 'other' }
+  return {
+    account,
+    about: 'payment',
+    to,
+    payment: async () => {
+      if (type == 'charge.refunded') return payment(c)
+      let charge = idOf(c.charge)
+      if (!charge) return null
+      return payment(
+        await ask(
+          options,
+          `/v1/charges/${encodeURIComponent(charge)}`,
+          undefined,
+          account,
+        ) as Charge,
+      )
     },
   }
 }

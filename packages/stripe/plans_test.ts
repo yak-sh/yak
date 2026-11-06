@@ -2,7 +2,7 @@
 // what each call puts on the wire, against a Stripe stood in by `fetch`.
 import { clock, equal, ok, test } from '@yaks/testing'
 import { stub } from '@std/testing/mock'
-import { periodEnd, plans, read, type Sub, trialFor } from './plans.ts'
+import { changed, periodEnd, plans, read, type Sub, trialFor } from './plans.ts'
 
 let PERIOD = 1_790_000_000
 let ORG = ['price_org_month', 'price_org_year']
@@ -44,7 +44,9 @@ let stripe = (answer: (path: string) => Response) => {
   )
   return { asked, [Symbol.dispose]: () => fetch.restore() }
 }
-let lent = plans({ key: 'sk', clock: clock(NOW), prices: PRICES })
+let OPTIONS = { key: 'sk', clock: clock(NOW), prices: PRICES }
+let lent = plans(OPTIONS)
+let heard = changed(OPTIONS)
 
 test('the period end is read off the item, and off the subscription', () => {
   equal(periodEnd(sub()), PERIOD)
@@ -171,7 +173,7 @@ test('a charge is moved later once, and never earlier', async () => {
 })
 
 test('an event reads its tags, its subscription and whether it moved money', async () => {
-  let updated = lent.heard({
+  let updated = heard({
     type: 'customer.subscription.updated',
     created: PERIOD,
     data: { object: sub({ metadata: { space: 's', apex: 'yaks.app' } }) },
@@ -184,7 +186,7 @@ test('an event reads its tags, its subscription and whether it moved money', asy
   equal((await updated.subscription())?.id, 'sub_1')
   // An invoice carries its subscription's tags under `parent`, and names it.
   using s = stripe(() => Response.json(sub({ id: 'sub_2' })))
-  let invoice = lent.heard({
+  let invoice = heard({
     type: 'invoice.paid',
     livemode: false,
     data: {
@@ -202,6 +204,6 @@ test('an event reads its tags, its subscription and whether it moved money', asy
   equal([invoice.live, invoice.tags.apex], [false, 'yaks.fyi'])
   equal((await invoice.subscription())?.id, 'sub_2')
   equal(s.asked.map((a) => a.path), ['/v1/subscriptions/sub_2'])
-  let none = lent.heard({ type: 'checkout.session.completed', data: {} })
+  let none = heard({ type: 'checkout.session.completed', data: {} })
   ok((await none.subscription()) === undefined)
 })

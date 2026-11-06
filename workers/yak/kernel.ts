@@ -47,9 +47,11 @@
 //                             the address a person's apps live at
 //     /oauth/*                identity.ts: the OAuth 2.1 door for agents
 //     /.well-known/oauth-*    identity.ts: the provider's metadata
-//     /stripe/webhook         billing.ts: what Stripe says happened
 //     /api/billing/*          billing.ts: checkout and the customer portal
-//     /stripe/connect         sell.ts: what a seller's account says happened
+//     /<via>/<door>           payment-doors.ts: what the payment provider
+//                             config.ts `payments` lends as `via` heard at
+//                             each door it lends (/stripe/webhook,
+//                             /stripe/connect)
 //     /<via>/webhook          operator-texts.ts: texts and calls to the
 //                             Operator, for each phone phones.ts lends
 //     /<via>/stream           operator-calls.ts: a call's audio
@@ -129,6 +131,7 @@ import {
   shared,
 } from './route.ts'
 import * as pageReport from './page-report.ts'
+import { paymentDoor } from './payment-doors.ts'
 import * as sell from './sell.ts'
 import * as sweep from './sweep.ts'
 import * as tunnel from './tunnel.ts'
@@ -214,22 +217,21 @@ let serve = async (req: Request, env: Env, r: Route) => {
   ) {
     return bound(env.IDENTITY, identity, env).fetch(req)
   }
-  // Money, before the connector: Stripe's webhook posts to `/stripe/webhook`
-  // (beside sell.ts's `/stripe/connect`). `/api/*` at the apex is otherwise
-  // all mcp.ts's, a door that answers a JSON 404 to everything but `/mcp`.
-  // The checkout and portal doors sit under that prefix because they are the
-  // same part (billing.ts) and are reachable only from a signed-in page —
-  // never from a tool answer (C-33033).
-  if (path == '/stripe/webhook' || path.startsWith('/api/billing/')) {
+  // Money, before the connector. `/api/*` at the apex is otherwise all
+  // mcp.ts's, a door that answers a JSON 404 to everything but `/mcp`. The
+  // checkout and portal doors sit under that prefix because they are the same
+  // part (billing.ts) and are reachable only from a signed-in page — never
+  // from a tool answer (C-33033).
+  if (path.startsWith('/api/billing/')) {
     return bound(env.BILLING, billing.fetch, env).fetch(req)
   }
-  // The other Stripe door, and it is its own endpoint on purpose (sell.ts,
-  // T-34523): what a seller's connected account says happened, verified with a
-  // second signing secret. Not under `/api/` — that prefix is the graph's —
-  // and guarded all the same, as every write is (route.ts `guarded`). It costs
-  // this one nothing: Stripe posts server to server with no Origin at all, and
-  // an absent Origin is allowed (route.ts `sameOrigin`).
-  if (path == '/stripe/connect') return sell.fetch(req, env)
+  // The payment provider's webhook doors (payment-doors.ts), each its own
+  // endpoint with its own signing secret. Not under `/api/` — that prefix is
+  // the graph's — and guarded all the same, as every write is (route.ts
+  // `guarded`). It costs them nothing: a provider posts server to server with
+  // no Origin at all, and an absent Origin is allowed (route.ts `sameOrigin`).
+  let paid = await paymentDoor(req, env)
+  if (paid) return paid
   // A phone's doors, for any provider config.ts `phoneConfig` lends as `via`
   // (phones.ts): its texts, their outcomes and its calls ringing, as it
   // posts them (operator-texts.ts); a call's audio, streamed to the Operator

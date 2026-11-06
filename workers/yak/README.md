@@ -644,9 +644,10 @@ and `yak admin erase` keep what's named there however long it sits idle, and a
 ## STRIPE_WEBHOOK_SECRET — the billing door's events
 
 billing.ts is the platform's own plan: Stripe sells to us, and tells us at
-`POST /stripe/webhook`. The handler reads five v1 events and nothing else
-(@yaks/stripe plans `heard`, lent through config.ts `payments`, which also names
-the key and price ids above); the dashboard steps are the Connect ones below
+`POST /stripe/webhook`. @yaks/stripe serves that door (its `webhook` door, lent
+through config.ts `payments`, which names this secret beside the key and price
+ids above, and served by payment-doors.ts): it verifies each event and reads
+five v1 events and nothing else. The dashboard steps are the Connect ones below
 with these differences:
 
 | step | where                                                                                                                                                                                 |
@@ -669,9 +670,11 @@ The platform API key is the **same** one — a direct charge is our key acting o
 the merchant's account through a `Stripe-Account` header, never a key of theirs
 — so `STRIPE_KEY` needs nothing done to it.
 
-Until the secret is set, `POST /stripe/connect` answers 503 in one sentence and
-everything else still works: a space connects, a checkout session is created, a
-buyer pays. What is missing is only what the events would have told us.
+@yaks/stripe serves that door too (its `connect` door, the secret named in
+config.ts `payments`). Until the secret is set, `POST /stripe/connect` answers
+503 in one sentence and everything else still works: a space connects, a
+checkout session is created, a buyer pays. What is missing is only what the
+events would have told us.
 
 The dashboard steps, in full. In the **sandbox** first, then again in live:
 

@@ -443,11 +443,12 @@ grouped approximately by function, **not** by dependency order.
   text spoken, a call's audio heard a turn at a time, and a model that hears and
   speaks a call itself.
 - **[@yaks/stripe](./stripe)** — Stripe's API over fetch with retries under one
-  idempotency key, acting on a connected account when asked, and the signature
-  its webhooks carry; its graph facet lends Stripe as a payment provider whose
-  plans are customers, Checkout, the portal and subscriptions, and whose shops
-  are Connect accounts and Checkout on them with an application fee. The host
-  lends the key.
+  idempotency key, acting on a connected account when asked; its graph facet
+  lends Stripe as a payment provider whose plans are customers, Checkout, the
+  portal and subscriptions, whose shops are Connect accounts and Checkout on
+  them with an application fee, and whose doors verify the events its two
+  webhook endpoints post and read them into the host's words. The host lends the
+  key and the secrets.
 - **[@yaks/telnyx](./telnyx)** — Telnyx texting transport, signed webhook
   events, and Call Control with its media stream.
 - **[@yaks/voipms](./voipms)** — voip.ms texting transport, numbers and

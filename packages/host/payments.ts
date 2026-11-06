@@ -1,10 +1,10 @@
 /** What a payment provider lends a host that takes money through it (the
  * lending kind `payments`, ./lending.ts): its name, for the sentences people
- * read, the plans it sells a party, and the shops a party sells through on an
- * account of its own. Each is functions over the provider's
- * own wire, answering in words that name no provider, so a host's billing
- * keeps its rules and refusals and a second provider has one contract to
- * meet. */
+ * read, the plans it sells a party, the shops a party sells through on an
+ * account of its own, and the webhook doors it hears both at. Each is
+ * functions over the provider's own wire, answering in words that name no
+ * provider, so a host's billing keeps its rules and refusals and a second
+ * provider has one contract to meet. */
 
 /** A party's details and tags as a payer is minted with them, and what every
  * object the provider makes for that party carries back: the host's own
@@ -57,9 +57,11 @@ export type Checkout = {
   trial?: string | null
 }
 
-/** One verified event the provider posted, read: when and how it happened,
- * what the object it is about carries, and the subscription it is about. */
-export type Heard = {
+/** A subscription changed, as one verified event the provider posted says:
+ * when and how it happened, what the object it is about carries, and the
+ * subscription it is about. */
+export type Changed = {
+  about: 'subscription'
   /** when it happened */
   at: string
   /** whether it moved money, rather than happening in a sandbox */
@@ -102,8 +104,6 @@ export type Plans = {
   /** a subscription's next charge moved to `until`, prorating nothing,
    * unless it falls then or later: asked again, it moves nothing twice */
   postpone: (id: string, until: string) => Promise<void>
-  /** one event the provider posted, already verified, read */
-  heard: (event: unknown) => Heard
 }
 
 /** A seller's account as its provider reads it: its id, whether it may take
@@ -195,10 +195,20 @@ export type Shops = {
   onboarding: (account: string, back: string) => Promise<string>
   /** the address of a hosted checkout on a seller's account */
   checkout: (account: string, sale: Sale) => Promise<string>
-  /** one event the provider posted about a seller's account, already
-   * verified, read */
-  heard: (event: unknown) => Shopped
 }
+
+/** One verified event the provider posted, read into the host's words: a
+ * subscription changed, or something happened on a seller's account. */
+export type Heard = Changed | Shopped
+
+/** What a door said of one request posted to it: the event it heard, or why
+ * it refused it, `ours` where the refusal can mean the host's own secret is
+ * wrong, which is worth reporting. */
+export type Said = { heard: Heard } | { refused: string; ours: boolean }
+
+/** A webhook door: one request the provider posted, verified and read.
+ * Undefined where it holds no secret to verify with, so it hears nothing. */
+export type Door = (request: Request) => Promise<Said | undefined>
 
 /** A payment provider as it is lent. */
 export type Payments = {
@@ -207,4 +217,8 @@ export type Payments = {
   name: string
   plans: Plans
   shops: Shops
+  /** its webhook doors by name, which a host serves at `/<via>/<name>`, `via`
+   * the name it is lent under, so the provider is told one address per door
+   * and every door's events reach the host read */
+  doors: Record<string, Door>
 }

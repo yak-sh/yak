@@ -6,25 +6,25 @@
 // an out-of-order delivery leave the graph exactly where it was.
 //
 // The door reads the whole subscription off the event and asks Stripe nothing
-// back, so the subscription each event carries is a fabricated one ({@link
-// fakeSub}), the shape @yaks/stripe plans `read` reads — the subject here is the
-// route, the Origin guard and idempotent, out-of-order delivery, none of which
-// is the purchase (roster_test.ts holds that against Stripe). The kernel boots
+// back, so the subscription each event carries is a fabricated one
+// (@yaks/stripe/testing `fakeSub`), the shape its plans `read` reads — the
+// subject here is the route, the Origin guard and idempotent, out-of-order
+// delivery, none of which is the purchase (roster_test.ts holds that against Stripe). The kernel boots
 // with a webhook secret and no STRIPE_KEY, the shape a deploy has before the
 // owner sets one; Stripe cannot reach a loopback kernel, so the test signs each
 // delivery with that secret.
 import { test } from '@yaks/testing'
 import { assert, assertEquals } from '@std/assert'
 import {
-  delivered,
-  fakeSub,
+  apexPost,
   kernel,
   meta,
   seed,
+  tagged,
   unique,
   WEBHOOK_SECRET,
 } from './probe.ts'
-import { signed } from '@yaks/stripe/testing'
+import { delivered, fakeSub, signed } from '@yaks/stripe/testing'
 
 test(
   'the webhook flips a plan, once, whatever order it arrives in',
@@ -47,7 +47,7 @@ test(
       let post = async (type: string, sub: unknown, at: number) =>
         (JSON.parse(
           await delivered(
-            k,
+            apexPost(k),
             '/stripe/webhook',
             WEBHOOK_SECRET,
             type,
@@ -61,7 +61,7 @@ test(
       assertEquals(await plan(), undefined)
 
       // ---- the subscription starts ----
-      let sub = fakeSub(space)
+      let sub = fakeSub(tagged(space))
       let now = Math.floor(Date.now() / 1000)
       let updated = 'customer.subscription.updated'
       assertEquals(await post(updated, sub, now), `${jeff2} is plus`)

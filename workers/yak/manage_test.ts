@@ -50,7 +50,7 @@ test('the dashboard is at the apex, whatever serves the space', async () => {
     for (let app of ['site', 'private-notes', 'discarded']) {
       await agent.tool('app_new', { space: slug, slug: app, title: app })
     }
-    // `manage` is reserved now (route.ts RESERVED), and an app that held the
+    // `manage` is reserved now (directory.ts RESERVED), and an app that held the
     // name before that keeps it: made under another slug, then renamed in
     // the directory the way it stood before the reservation.
     let held = String(

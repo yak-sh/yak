@@ -1,7 +1,7 @@
 // What Stripe sells a party as @yaks/host's `Plans`: a customer minted once,
 // a subscription bought through Checkout and managed in the customer portal,
 // its trial moved to give time free, and the events Stripe posts about it
-// read into the host's words.
+// read into the host's words (`changed`, which ./doors.ts hears them with).
 //
 // Checkout runs under Managed Payments: Stripe is the merchant of record, so
 // it sells, collects and remits the tax, and the parameters it controls
@@ -13,7 +13,7 @@
 // else. A paying price no tier lists buys the first tier the options name, so
 // a subscription made before a later tier existed reads as it did.
 import type {
-  Heard,
+  Changed,
   Per,
   Plans,
   Standing,
@@ -260,34 +260,37 @@ export let plans = (options: Options): Plans => {
         proration_behavior: 'none',
       })
     },
-    // A `customer.subscription.*` event carries its subscription whole. A
-    // checkout session or an invoice names it, and one GET answers what they
-    // left out: an invoice's moved under `parent` in API 2025-03-31.basil,
-    // and the old field is read too for the reason `periodEnd` reads both.
-    heard: (event): Heard => {
-      let e = (event ?? {}) as Event
-      let o = e.data?.object ?? {}
-      let reference = o.client_reference_id
-      let parent = (o.parent ?? {}) as {
-        subscription_details?: { subscription?: string | { id?: string } }
-      }
-      let named = idOf(
-        (o.subscription as string | { id?: string } | undefined) ??
-          parent.subscription_details?.subscription,
-      )
-      return {
-        at: new Date((e.created ?? Math.floor(now() / 1000)) * 1000)
-          .toISOString(),
-        live: e.livemode !== false,
-        tags: tagsOf(o),
-        ...typeof reference == 'string' && reference ? { reference } : {},
-        subscription: () =>
-          (e.type ?? '').startsWith('customer.subscription.')
-            ? Promise.resolve(read(o as Sub, options.prices))
-            : named
-            ? subscription(named)
-            : Promise.resolve(undefined),
-      }
-    },
+  }
+}
+
+/** A verified event Stripe posted to the platform's own endpoint, read: a
+ * `customer.subscription.*` event carries its subscription whole, and a
+ * checkout session or an invoice names it, which one GET answers. An
+ * invoice's name for it moved under `parent` in API 2025-03-31.basil, and the
+ * old field is read too, for the reason `periodEnd` reads both. */
+export let changed = (options: Options) => (event: unknown): Changed => {
+  let e = (event ?? {}) as Event
+  let o = e.data?.object ?? {}
+  let reference = o.client_reference_id
+  let parent = (o.parent ?? {}) as {
+    subscription_details?: { subscription?: string | { id?: string } }
+  }
+  let named = idOf(
+    (o.subscription as string | { id?: string } | undefined) ??
+      parent.subscription_details?.subscription,
+  )
+  let now = options.clock?.now() ?? Date.now()
+  return {
+    about: 'subscription',
+    at: new Date((e.created ?? Math.floor(now / 1000)) * 1000).toISOString(),
+    live: e.livemode !== false,
+    tags: tagsOf(o),
+    ...typeof reference == 'string' && reference ? { reference } : {},
+    subscription: () =>
+      (e.type ?? '').startsWith('customer.subscription.')
+        ? Promise.resolve(read(o as Sub, options.prices))
+        : named
+        ? plans(options).subscription(named)
+        : Promise.resolve(undefined),
   }
 }

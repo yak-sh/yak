@@ -577,9 +577,9 @@ database_id = "88b2e161-99bf-4777-ab6d-b18fcf66ca95"
 # subscription reads and an invite's month (reward.ts, which needs Subscriptions
 # write) speak with (T-32760); STRIPE_WEBHOOK_SECRET is what the
 # events Stripe posts to /stripe/webhook are verified against
-# (billing.ts). Unset, those doors say the paid tier is not switched on here
-# rather than half-working, and a webhook that arrives unread is filed where
-# the owner sees it.
+# (config.ts `payments`, payment-doors.ts). Unset, those doors say the paid
+# tier is not switched on here rather than half-working, and a webhook that
+# arrives unread is filed where the owner sees it.
 # OPENAI_API_KEY, AI_GATEWAY and AI_GATEWAY_TOKEN are the OTHER provider, and
 # all three are unset on purpose: no gateway exists on the account and nothing
 # needs one, since both tiers build on the `[ai]` binding above (T-34238 is

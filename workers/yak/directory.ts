@@ -59,10 +59,85 @@ import {
 } from './meta.ts'
 import { caught, refusing } from './defects.ts'
 import { mailFrom } from './post.ts'
-import { RESERVED, SLUG } from './route.ts'
+import { SLUG } from './route.ts'
+import { payments } from './config.ts'
 import { firstOf } from './router.ts'
 import { nameOf } from './signin.ts'
 import type { Texting } from './operator-texts.ts'
+
+// The slugs no space or app may take, because at `<slug>.yaks.app` and at
+// `<slug>@yaks.app` (post.ts `mailFrom`) they would read as the platform
+// speaking (T-37886): a sign-in page at `login.yaks.app`, a letter from
+// `security@yaks.app`. The doors that mint an address check it (tools.ts
+// `fresh`, `free` and `own` here, identity.ts `choose`); an address already
+// held keeps working. `yak` is the platform's own space (`META`), and
+// `origin` and `saas` its custom-hostname origin (route.ts `ORIGIN`).
+// `sha` and `git` are the platform's own key prefixes in the files bucket
+// (versions.ts `SHA`, gitobj.ts `BODY`): a space's files are kept under its
+// slug, so a space by either name would share storage with the platform's.
+// The payment provider's name is its doors' prefix (config.ts `payments`,
+// payment-doors.ts), so a space by that name would read as the provider.
+export let RESERVED = new Set([
+  payments.via,
+  'abuse',
+  'account',
+  'accounts',
+  'admin',
+  'administrator',
+  'api',
+  'app',
+  'apps',
+  'auth',
+  'billing',
+  'cf-bounce',
+  'checkout',
+  'connect',
+  'dashboard',
+  'docs',
+  'email',
+  'git',
+  'hello',
+  'help',
+  'hostmaster',
+  'login',
+  'logout',
+  'mail',
+  'manage',
+  'mcp',
+  'mx',
+  'no-reply',
+  'noreply',
+  'oauth',
+  'official',
+  'origin',
+  'password',
+  'pay',
+  'payment',
+  'payments',
+  'postmaster',
+  'pricing',
+  'privacy',
+  'root',
+  'saas',
+  'secure',
+  'security',
+  'settings',
+  'sha',
+  'sign-in',
+  'sign-up',
+  'signin',
+  'signup',
+  'staff',
+  'status',
+  'support',
+  'system',
+  'terms',
+  'verify',
+  'webmaster',
+  'www',
+  'yak',
+  'yaks',
+])
 
 export let META = { space: 'yak', app: 'platform' }
 // The meta space's own store, named the way every app's is. Its slugs are

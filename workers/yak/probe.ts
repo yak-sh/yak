@@ -14,7 +14,7 @@ import { type Directory, directoryOf, spaceHandle } from './directory.ts'
 import { valueIn } from '@yaks/tools/value'
 import { parse } from 'smol-toml'
 import { endpoints } from './endpoints.ts'
-import { signed } from '@yaks/stripe/testing'
+import { delivered, fakeSub } from '@yaks/stripe/testing'
 import { Ajv } from 'ajv'
 
 let logs = new Map<string, string>()
@@ -908,39 +908,28 @@ export let attached = async (
   return ((await (await fetch(at)).json()).result as unknown[]).length > 0
 }
 
-/**
- * A subscription object shaped the way the webhook door reads one — the fields
- * @yaks/stripe plans `read` touches, and no more. The door reads the whole
- * subscription off the event and never asks Stripe back, so this stands in for
- * one Stripe holds wherever a test's subject is what the plan allows or how the
- * door behaves rather than the purchase itself. `over` sets the fields a
- * particular delivery turns on — a cancellation's `status` and `ended_at`.
- */
-export let fakeSub = (space: string, over: Record<string, unknown> = {}) => {
-  let id = crypto.randomUUID().replaceAll('-', '')
-  return {
-    id: `sub_probe${id}`,
-    customer: `cus_probe${id}`,
-    status: 'active',
-    metadata: { space, apex: apex() },
-    current_period_end: Math.floor(Date.now() / 1000) + 30 * 86400,
-    ...over,
-  }
-}
+/** What the kernel's apex answers a request posted to `path`, the way a
+ * provider posts its events (@yaks/stripe/testing `delivered`). */
+export let apexPost =
+  (k: Pick<Kernel, 'at'>) => (path: string, init: RequestInit) =>
+    k.at('yaks.app', path, init)
+
+/** What a subscription bought for `space` here is tagged with. */
+export let tagged = (space: string) => ({ space, apex: apex() })
 
 /**
  * A space on Plus for a test whose subject is what the plan allows, not how it
  * is bought: a signed `subscription.updated` carrying an active subscription
- * ({@link fakeSub}) Stripe never held. Nothing is asked of the sandbox, so
- * nothing is left in it.
+ * (@yaks/stripe/testing `fakeSub`) Stripe never held. Nothing is asked of the
+ * sandbox, so nothing is left in it.
  */
 export let onPlus = (k: Pick<Kernel, 'at'>, space: string) =>
   delivered(
-    k,
+    apexPost(k),
     '/stripe/webhook',
     WEBHOOK_SECRET,
     'customer.subscription.updated',
-    fakeSub(space),
+    fakeSub(tagged(space)),
   )
 
 // ---- a zip, as a person would drop one (unzip.ts, drop.ts, T-34230) --------
@@ -1129,45 +1118,4 @@ export let bearerFor = async (
   })).json() as { access_token?: string }
   if (!got.access_token) throw new Error(`token: ${JSON.stringify(got)}`)
   return got.access_token
-}
-
-/**
- * A signed Stripe event delivered directly to the kernel's webhook handler.
- * The event's object is input data; this fixture makes no service call.
- */
-export let delivered = async (
-  k: Pick<Kernel, 'at'>,
-  path: '/stripe/webhook' | '/stripe/connect',
-  secret: string,
-  type: string,
-  object: unknown,
-  // The connected account an event is about. Stripe puts it on the envelope
-  // rather than in the object, and it is what the Connect door attributes by,
-  // so an event without one is not about a seller at all (sell.ts `apply`).
-  on?: string,
-  // When Stripe made the event. A redelivery is the same event again, so a
-  // test that replays one passes the same moment twice.
-  at = Math.floor(Date.now() / 1000),
-) => {
-  let raw = JSON.stringify({
-    id: `evt_${crypto.randomUUID()}`,
-    type,
-    created: at,
-    // The envelope says the object's mode, which is the sandbox's unless the
-    // object says otherwise.
-    livemode: (object as { livemode?: boolean }).livemode ?? false,
-    ...(on ? { account: on } : {}),
-    data: { object },
-  })
-  let r = await k.at('yaks.app', path, {
-    method: 'POST',
-    body: raw,
-    headers: {
-      'content-type': 'application/json',
-      'stripe-signature': await signed(secret, raw, at),
-    },
-  })
-  let said = await r.text()
-  if (!r.ok) throw new Error(`${path}: ${r.status} ${said}`)
-  return said
 }

@@ -160,8 +160,10 @@ assistants' connector directories for those who already use one.
 - **The numbers.** workers/yak/meter.ts (`FREE`, `PLUS`, `ORGANIZATION`,
   `LETTERS`, `BUDGET`, `PRICE`, `YEARLY`, `SPACES`), and site_test.ts holds the pages to them. The plan is
   `plan{tier, customer, subscription, status, until, ending, at}` on the space
-  (packages/platform/vocab.json). Checkout, the billing portal and the Stripe
-  webhook are in workers/yak/billing.ts. How metering and refusals work is
+  (packages/platform/vocab.json). Checkout, the billing portal and what a
+  subscription changing does to the plan are in workers/yak/billing.ts; the
+  provider's webhook doors are @yaks/stripe's, served by
+  workers/yak/payment-doors.ts. How metering and refusals work is
   `yaks-app`.
 - **The site.** The home page is workers/yak/public/index.html, which carries a
   JSON-LD copy of the plans and a card for each of the three, as pricing.html

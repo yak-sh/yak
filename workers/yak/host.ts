@@ -10,7 +10,7 @@ export let url = (env: Host, path = '') => `https://${apex(env)}${path}`
 // addresses.
 export let replyTo = (env: Host = {}) => `hello@${apex(env)}`
 // The address a stranger writes to sign up (D-136811, inbox.ts `signingUp`). Its
-// local part is RESERVED (route.ts), so no space answers to it.
+// local part is RESERVED (directory.ts), so no space answers to it.
 export let signupAddress = (env: Host = {}) => `signup@${apex(env)}`
 
 let addresses = new RegExp(

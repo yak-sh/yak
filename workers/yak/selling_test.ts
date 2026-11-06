@@ -1,6 +1,6 @@
 /// <reference lib="deno.ns" />
 // Selling through the platform in memory: the shop example, checkout inputs,
-// signed webhook refusals, account removal and the platform fee.
+// a seller's signed events, account removal and the platform fee.
 import { assert, assertEquals, assertStringIncludes } from '@std/assert'
 import { test } from '@yaks/testing'
 import { stub } from '@std/testing/mock'
@@ -12,9 +12,10 @@ import { appVocab } from './vocab.ts'
 import * as apps from './apps.ts'
 import { directory, stamp } from './directory.ts'
 import * as dirPart from './directory.ts'
-import type { Env } from './env.ts'
+import type { Env, Vars } from './env.ts'
 import { added, asked } from './examples/shop/cart.js'
-import { signed } from '@yaks/stripe/testing'
+import { delivered } from '@yaks/stripe/testing'
+import { paymentDoor } from './payment-doors.ts'
 import * as sell from './sell.ts'
 import { call, type Ctx } from './tools.ts'
 import {
@@ -29,7 +30,7 @@ import { platform as bindings } from './directory-rows-probe.ts'
 import { lifecycleStores } from './app-lifecycle-probe.ts'
 import { operators } from './operator-service-probe.ts'
 
-let platform = (vars: Partial<Env> = {}) => {
+let platform = (vars: Vars = {}) => {
   let scenario = bindings(SECRET, { BUILDER: operators, ...vars })
   return { ...scenario, ...lifecycleStores(scenario.env) }
 }
@@ -230,58 +231,25 @@ let pressed = async (env: Env, sell: string) =>
 
 let WHSEC = 'whsec_a_connect_probe_secret'
 
-test('the connect door refuses what Stripe did not sign', async () => {
-  let env = { STRIPE_CONNECT_WEBHOOK_SECRET: WHSEC } as Env
-  let raw = '{"type":"account.updated"}'
-  let post = (headers: Record<string, string>) =>
-    sell.fetch(
-      new Request('https://yaks.app/stripe/connect', {
-        method: 'POST',
-        body: raw,
-        headers: { 'content-type': 'application/json', ...headers },
-      }),
-      env,
-    )
-  assertEquals((await post({})).status, 400)
-  assertEquals(
-    (await (await post({ 'stripe-signature': 't=1,v1=beef' })).json())
-      .error.code,
-    'bad_signature',
-  )
-  // The platform's secret is not this door's secret. Two endpoints, two
-  // `whsec_`, and a door that verified the wrong one is a door answering
-  // nothing.
-  let at = Math.floor(Date.now() / 1000)
-  assertEquals(
-    (await post({
-      'stripe-signature': await signed('whsec_the_other_one', raw, at),
-    })).status,
-    400,
-  )
-  // GET is not how an event arrives.
-  assertEquals(
-    (await sell.fetch(new Request('https://yaks.app/stripe/connect'), env))
-      .status,
-    405,
-  )
-})
-
-// The secret is the owner's to set (README.md). Until he has, the door says so
-// in one sentence — and every other half of selling still works, which is the
-// whole reason it is a 503 rather than a boot failure.
-test('with no connect secret the door says so, and nothing else breaks', async () => {
-  let env = {} as Env
-  let res = await sell.fetch(
-    new Request('https://yaks.app/stripe/connect', {
-      method: 'POST',
-      body: '{}',
-      headers: { 'content-type': 'application/json' },
-    }),
-    env,
-  )
-  assertEquals(res.status, 503)
-  assertEquals((await res.json()).error.code, 'no_selling')
-})
+// What the provider's Connect door did with one signed event about `on`'s
+// account (payment-doors.ts), as Stripe would deliver it.
+let connected =
+  (env: Vars) =>
+  async (type: string, object: Record<string, unknown>, on: string) =>
+    (JSON.parse(
+      await delivered(
+        async (path, init) =>
+          (await paymentDoor(
+            new Request(`https://yaks.app${path}`, init),
+            env as Env,
+          ))!,
+        '/stripe/connect',
+        WHSEC,
+        type,
+        object,
+        on,
+      ),
+    ) as { did: string }).did
 
 // The one button a space can press without a Stripe key set is Stop, and it
 // needs no Stripe call at all: forgetting an account is a write of ours.
@@ -298,13 +266,11 @@ test('a seller is updated by its events and stopped by its button', async () => 
   })
   assertEquals(await sold(env), { ...seller, ready: false })
   let updated = (charges_enabled: boolean) =>
-    sell.apply(env, {
-      type: 'account.updated',
-      account: 'acct_probe',
-      data: {
-        object: { id: 'acct_probe', charges_enabled, details_submitted: true },
-      },
-    })
+    connected(env)(
+      'account.updated',
+      { id: 'acct_probe', charges_enabled, details_submitted: true },
+      'acct_probe',
+    )
   assertEquals(await updated(true), 'ada can sell')
   assertEquals(await sold(env), { ...seller, ready: true })
   assertEquals(await updated(true), 'unchanged')
@@ -328,11 +294,13 @@ test('a sale is filed, refunded, disputed and restored on its order', async () =
     }],
   })
   let tags = { space: k.space.eid, app: 'shop' }
+  let shop = connected({
+    ...k.env,
+    STRIPE_KEY: 'sk_probe',
+    STRIPE_CONNECT_WEBHOOK_SECRET: WHSEC,
+  })
   let heard = (type: string, object: Record<string, unknown>) =>
-    sell.apply(
-      { ...k.env, STRIPE_KEY: 'sk_probe' } as Env,
-      { type, account: 'acct_shop', data: { object } },
-    )
+    shop(type, object, 'acct_shop')
   assertEquals(
     await heard('checkout.session.completed', {
       id: 'cs_shop',

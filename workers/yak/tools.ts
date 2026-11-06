@@ -101,6 +101,7 @@ import {
   mailbox,
   META,
   MODES,
+  RESERVED,
   type Role,
   type Space,
   stamp,
@@ -227,7 +228,7 @@ import {
   spaceHost,
   url as hostUrl,
 } from './host.ts'
-import { foreign, planSettings, RESERVED, SLUG } from './route.ts'
+import { foreign, planSettings, SLUG } from './route.ts'
 import { globs } from './router.ts'
 import { vocabAt } from './reach.ts'
 import { applying, seeding } from './release-seed.ts'
@@ -595,7 +596,7 @@ let slug = (v: unknown, what: string) => {
 }
 
 // A slug about to become an address, which may not be one the platform keeps
-// for itself (route.ts `RESERVED`).
+// for itself (directory.ts `RESERVED`).
 let unreserved = (s: string, what: string) => {
   if (RESERVED.has(s)) {
     throw refuse(

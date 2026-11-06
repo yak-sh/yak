@@ -105,6 +105,7 @@ import {
   daysLeft,
   directory,
   META,
+  RESERVED,
   type Role,
   type Space,
 } from './directory.ts'
@@ -168,7 +169,6 @@ import {
   MANAGE,
   OAUTH,
   onZone,
-  RESERVED,
   says,
   SLUG,
 } from './route.ts'

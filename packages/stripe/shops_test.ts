@@ -11,7 +11,7 @@
 import { equal, test } from '@yaks/testing'
 import { stub } from '@std/testing/mock'
 import type { Sale } from '@yaks/host/payments'
-import { shops } from './shops.ts'
+import { shopped, shops } from './shops.ts'
 
 // Stripe, answering each call with `answer(path)`, and the calls it heard.
 let stripe = (answer: (path: string) => unknown) => {
@@ -36,6 +36,7 @@ let stripe = (answer: (path: string) => unknown) => {
   return { asked, [Symbol.dispose]: () => fetch.restore() }
 }
 let lent = shops({ key: 'sk' })
+let heard = shopped({ key: 'sk' })
 
 test('an account is the charge-merchants-directly model, in full', async () => {
   using s = stripe(() => ({ id: 'acct_1', details_submitted: true }))
@@ -124,7 +125,7 @@ test('a checkout is a payment on the seller’s account, its tags on the payment
 })
 
 let event = (type: string, object: Record<string, unknown>) =>
-  lent.heard({ type, account: 'acct_1', data: { object } })
+  heard({ type, account: 'acct_1', data: { object } })
 
 test('an account event is the seller, an absent flag false', () => {
   equal(
@@ -139,7 +140,7 @@ test('an account event is the seller, an absent flag false', () => {
     account: 'acct_1',
     about: 'revoked',
   })
-  equal(lent.heard({ type: 'account.updated' }).account, '')
+  equal(heard({ type: 'account.updated' }).account, '')
 })
 
 test('a completed session is the sale, paid only once the money is there', () => {

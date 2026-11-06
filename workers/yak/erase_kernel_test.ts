@@ -14,18 +14,19 @@ import { test, until } from '@yaks/testing'
 import { ticket } from './erase.ts'
 import type { Space } from './directory.ts'
 import {
+  apexPost,
   attach,
   attached,
   client,
   connector,
-  delivered,
-  fakeSub,
   kernel,
   letters,
   meta,
   seed,
+  tagged,
   WEBHOOK_SECRET,
 } from './probe.ts'
+import { delivered, fakeSub } from '@yaks/stripe/testing'
 
 let space = (over: Partial<Space> = {}): Space => ({
   operator: 'Wren',
@@ -217,9 +218,9 @@ test('a space whose subscription lapsed unpaid may be erased', async () => {
   try {
     let them = await seed(k, [{ slug: 'lapsed21', apps: [] }])
     let eid = them.eids.lapsed21
-    let sub = { ...fakeSub(eid), status: 'incomplete_expired' }
+    let sub = fakeSub(tagged(eid), { status: 'incomplete_expired' })
     await delivered(
-      k,
+      apexPost(k),
       '/stripe/webhook',
       WEBHOOK_SECRET,
       'customer.subscription.updated',

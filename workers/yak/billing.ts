@@ -1,11 +1,12 @@
 // The paid tiers (D-32751, T-33125; the Organization plan, D-134567): what a
-// space pays, and the three doors it takes — checkout, the customer portal,
-// and the webhook the payment provider posts the truth to. The provider is
-// the plans config.ts `payments` lends (payments.ts, @yaks/host/payments): it
-// mints a payer, opens its hosted checkout and portal, and reads a
-// subscription into `{id, payer, tier, status, until, ending}`, deciding
-// which tier a price buys and where a status stands. What a space may buy,
-// who may buy it, and every refusal a person reads are this file's.
+// space pays, its two doors — checkout and the customer portal — and what a
+// subscription changing, as the payment provider heard it at its webhook door
+// (payment-doors.ts), does to a space's plan. The provider is the plans
+// config.ts `payments` lends (payments.ts, @yaks/host/payments): it mints a
+// payer, opens its hosted checkout and portal, and reads a subscription into
+// `{id, payer, tier, status, until, ending}`, deciding which tier a price
+// buys and where a status stands. What a space may buy, who may buy it, and
+// every refusal a person reads are this file's.
 //
 // The one idea: `plan` on a space is a function of one subscription, never a
 // running total of the events that arrived. Every webhook ends at
@@ -28,14 +29,14 @@
 // Nothing here may fail quietly. A signature we cannot verify, a checkout we
 // cannot create, a subscription of ours we cannot attribute to a space — each
 // is reported to the tracker (unseen.ts `fault`), not a line on a log nobody
-// opens. The webhook door is public, so filing is capped per isolate
-// (`FILED`): a stranger posting garbage must not be able to file without end.
+// opens.
 //
 // The kernel writes `plan` and no client ever can: every property is stamped in
 // the vocabulary, so `admitted()` drops them off any write that does not carry
 // the kernel flag. `tier` is what usage.ts `ceilings()` reads, and a tier a
 // person could write is a person who can lift their own ceilings.
 import type {
+  Changed,
   Per,
   Plans,
   Standing,
@@ -56,7 +57,6 @@ import { bound, type Env } from './env.ts'
 import { apex, type Host } from './host.ts'
 
 import { sessionAt } from './session.ts'
-import { ours, refusal } from '@yaks/hook'
 import { fault } from './unseen.ts'
 import { plans } from './payments.ts'
 
@@ -172,24 +172,6 @@ export let lost = (
 
 let json = (status: number, code: string, message: string) =>
   Response.json({ error: { code, message } }, { status })
-
-// The webhook door is on the open internet, so what it files has a ceiling:
-// per isolate, per minute, the way unseen.ts caps a crash-looping page. Only a
-// refusal that can mean our secret is wrong is filed at all (`ours`, @yaks/hook):
-// a well-formed signature that does not match is worth seeing once and never a
-// hundred times an hour, and a request with no signature is a stranger's.
-let FILED = 6
-let filed = new Map<string, { minute: number; n: number }>()
-
-let hushed = (what: string) => {
-  let minute = Math.floor(Date.now() / 60_000)
-  let hit = filed.get(what)
-  if (!hit || hit.minute != minute) {
-    filed.set(what, { minute, n: 1 })
-    return false
-  }
-  return ++hit.n > FILED
-}
 
 let dirOf = (env: Env) => directory(bound(env.DIRECTORY, dirPart.fetch, env))
 
@@ -415,14 +397,13 @@ export let portal = async (env: Env, req: Request, at?: Space) => {
   }
 }
 
-// ---- the webhook ---------------------------------------------------------
+// ---- a subscription changed ---------------------------------------------
 
 // One verified event, applied. Answers what it did, which is what the door
 // says back — the provider ignores the body, and a person reading the logs
 // does not.
-export let apply = async (env: Env, event: unknown) => {
+export let apply = async (env: Env, heard: Changed) => {
   let lent = await plans(env)
-  let heard = lent.heard(event)
   // Another deployment's purchase is its business, not a fault of ours, and it
   // is let go before a read that our key may not even be able to answer.
   let here = apex(env)
@@ -452,10 +433,10 @@ export let apply = async (env: Env, event: unknown) => {
     // repeat an unanswerable question for three days.
     await fault(
       env,
-      'POST /stripe/webhook',
+      'a subscription heard',
       new Error(
-        `${(event as { type?: string }).type}: no space owns subscription ` +
-          `${next.subscription} (customer ${next.customer})`,
+        `no space owns subscription ${next.subscription} ` +
+          `(customer ${next.customer})`,
       ),
     )
     return 'unattributed'
@@ -469,54 +450,8 @@ export let apply = async (env: Env, event: unknown) => {
   return `${space.slug} is ${next.tier}`
 }
 
-// Stripe's door (T-142133 moves it to the provider). The body is read as text
-// once and verified as that exact string: the signature covers the raw bytes,
-// so parsing and re-serializing would verify something Stripe never signed.
-//
-// It carries no `Origin` — this is server to server — and route.ts
-// `sameOrigin` allows an absent Origin deliberately, which is what lets a
-// webhook through the guard that separates spaces (index.ts, T-33118). A
-// silently 403'd webhook is a plan that never activates, so
-// origin_test.ts holds that open on purpose.
-let hook = async (env: Env, req: Request) => {
-  if (req.method != 'POST') {
-    return json(405, 'method_not_allowed', 'post the event here')
-  }
-  let raw = await req.text()
-  if (!env.STRIPE_WEBHOOK_SECRET) {
-    if (!hushed('unset')) {
-      await fault(
-        env,
-        'POST /stripe/webhook',
-        new Error('STRIPE_WEBHOOK_SECRET is not set — an event went unread'),
-      )
-    }
-    return json(503, 'no_billing', 'this door is not switched on here')
-  }
-  let no = await refusal('stripe', env.STRIPE_WEBHOOK_SECRET, raw, req.headers)
-  if (no) {
-    if (ours(no) && !hushed(no)) {
-      await fault(env, 'POST /stripe/webhook', new Error(no))
-    }
-    return json(400, 'bad_signature', no)
-  }
-  let event: unknown
-  try {
-    event = JSON.parse(raw)
-  } catch {
-    return json(400, 'bad_event', 'that was not an event')
-  }
-  // A failure past this line is ours, so it throws: index.ts files it and
-  // answers a 5xx, and the provider delivers again. That is exactly what we
-  // want for a store that was busy or a call to the provider that timed out.
-  return Response.json({ received: true, did: await apply(env, event) })
-}
-
 export let fetch = (req: Request, env: Env): Promise<Response> => {
   let path = new URL(req.url).pathname
-  if (path == '/stripe/webhook') {
-    return hook(env, req)
-  }
   if (req.method != 'POST') {
     return Promise.resolve(
       json(405, 'method_not_allowed', 'post to this door'),

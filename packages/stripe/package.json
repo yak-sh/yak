@@ -4,15 +4,17 @@
   "type": "module",
   "exports": {
     ".": "./mod.ts",
+    "./doors": "./doors.ts",
     "./graph": "./graph.ts",
     "./plans": "./plans.ts",
     "./testing": "./testing.ts",
     "./shops": "./shops.ts"
   },
   "license": "Apache-2.0",
-  "description": "Stripe's API over fetch, the signature its webhooks carry, and the plans and shops it sells as a payment provider a host is lent.",
+  "description": "Stripe's API over fetch, and the plans, shops and signed webhook doors it lends a host as a payment provider.",
   "dependencies": {
     "@yaks/fp": "0.2.23",
+    "@yaks/hook": "0.2.24",
     "@yaks/host": "0.2.24"
   },
   "devDependencies": {
