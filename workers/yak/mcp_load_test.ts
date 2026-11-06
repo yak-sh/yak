@@ -598,6 +598,20 @@ test('an app says what it holds, and keeps notes about itself', async () => {
       '4097 bytes — 4096 at most',
     )
 
+    // A deploy names a new release, so the roster kept for the caller
+    // (standing.ts `listed`) reads that app again: an app that grew notes
+    // says so on the next `initialize`, and `about` hands them over.
+    await agent.tool('app_files', {
+      space,
+      app: 'chores',
+      path: 'NOTES.md',
+      content: 'Rotate the bins weekly.',
+    })
+    await agent.tool('app_deploy', { space, app: 'chores' })
+    let again = await agent.call('initialize', HELLO)
+    assertEquals(again.instructions.split(HAS_NOTES).length, 3)
+    assertStringIncludes(await agent.tool('about'), 'Rotate the bins weekly.')
+
     // A member of another space is told nothing about any of it: reach is
     // membership, the same question the tool list asks (declared.ts).
     let maya = connector(k, (await signIn(k)).cookie)

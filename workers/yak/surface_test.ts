@@ -133,6 +133,7 @@ test('what an app wrote stays off the surface a host reads', () => {
     space: space('kitchen'),
     app: app('recipes'),
     said,
+    noted: true,
     kinds: ['recipe'],
     commands: [],
   }

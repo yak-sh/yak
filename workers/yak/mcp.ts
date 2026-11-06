@@ -193,7 +193,7 @@ async (
   // from what the door gathers rather than read a second time, and only when
   // a prompt is asked for.
   let made = async () =>
-    (await stood.apps()).map((e) => ({
+    (await stood.listed()).map((e) => ({
       title: e.app.title || e.app.slug,
       url: url(e.space, e.app, ctx.env),
     }))

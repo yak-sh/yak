@@ -39,14 +39,21 @@
 // — half of what somebody wrote is worse than a pointer to all of it.
 import { once } from '@yaks/fp'
 import { clock } from './timing.ts'
-import { r2Objects } from './lib/objects.ts'
+import { r2Objects, r2RawObjects } from './lib/objects.ts'
 import { prefixOf } from './files.ts'
-import { type App, type Space, url } from './directory.ts'
+import {
+  type App,
+  META_STORE,
+  releaseOf,
+  type Space,
+  url,
+} from './directory.ts'
 import type { Env } from './env.ts'
 import type { Host } from './host.ts'
-import { at, reachable, toolsOf } from './declared.ts'
-import { vocabAt } from './reach.ts'
+import { reachable, toolsOf } from './declared.ts'
+import { at, vocabAt } from './reach.ts'
 import { told } from './memory.ts'
+import { background, caught } from './defects.ts'
 import type { Ctx } from './tools.ts'
 
 /** The file, at the app's root. */
@@ -77,27 +84,56 @@ export let tooLong = (path: string, n: number): string =>
       'the reasoning behind them.'
     : ''
 
-/** One app, as the passage says it. */
-export type Entry = {
+/** One app on the roster: its rows, and what it says about itself. */
+export type Listed = {
   space: Space
   app: App
-  /** its NOTES.md, or '' */
-  said: string
   /** the components its vocab.json declares */
   kinds: string[]
   /** the commands it declares, as `command` takes them (declared.ts) */
   commands: string[]
+  /** whether it keeps a NOTES.md */
+  noted: boolean
+}
+
+/** One app, as the passage says it with its notes. */
+export type Entry = Listed & {
+  /** its NOTES.md, or '' */
+  said: string
+}
+
+// What a line says beyond the rows naming it.
+type Line = Pick<Listed, 'kinds' | 'commands' | 'noted'>
+
+// Each app's notes this isolate has read, by the release holding them: a
+// release's files never change under its name (release.ts), so the notes read
+// once are its notes for as long as it is live.
+let HELD = 1024
+let heldNotes = new Map<string, Promise<string>>()
+let keep = <T>(all: Map<string, T>, key: string, value: T) => {
+  all.delete(key)
+  all.set(key, value)
+  for (let old of all.keys()) {
+    if (all.size <= HELD) break
+    all.delete(old)
+  }
+  return value
 }
 
 /** One app's notes, or '' where it has none. */
-export let notesOf = async (
-  env: Env,
-  space: Space,
-  app: App,
-): Promise<string> => {
-  // `read` rather than has-then-get: this runs per app whenever the roster is
-  // said, and most apps have no notes, so a second round trip would land on
-  // the common case.
+export let notesOf = (env: Env, space: Space, app: App): Promise<string> => {
+  let source = app.source
+  if (!source) return notesAt(env, space, app)
+  let held = heldNotes.get(source)
+  if (held) return held
+  let read = notesAt(env, space, app)
+  read.catch(() => heldNotes.get(source) == read && heldNotes.delete(source))
+  return keep(heldNotes, source, read)
+}
+
+let notesAt = async (env: Env, space: Space, app: App) => {
+  // `read` rather than has-then-get: most apps have no notes, so a second
+  // round trip would land on the common case.
   let bytes = await r2Objects(env.BLOBS).read(
     `${prefixOf(space, app)}/${NOTES}`,
   )
@@ -112,6 +148,97 @@ export let notesOf = async (
 // as an app with no words of its own.
 let kindsOf = async (ctx: Ctx, space: Space, app: App): Promise<string[]> =>
   Object.keys((await vocabAt(ctx.env, space, app)).$defs ?? {})
+
+// One app's line, read from its release and its declaration, the three reads
+// at once (T-34986).
+let lineOf = async (ctx: Ctx, space: Space, app: App): Promise<Line> => {
+  let [said, kinds, commands] = await Promise.all([
+    notesOf(ctx.env, space, app),
+    kindsOf(ctx, space, app),
+    toolsOf(ctx.env, space, app).then(Object.keys),
+  ])
+  return { kinds, commands, noted: !!said }
+}
+
+// What a line is read from: the release holding the notes and the declaration
+// holding the words and the commands. Both are written once under names
+// nothing else writes (declaration.ts), so a line is right for as long as the
+// row names the same two; a deploy, a rollback or a borrowed word names new
+// ones, and the line is read again. An app with no release keeps its notes in
+// files written in place, and the platform's store speaks the platform's own
+// words, so neither has a name to keep a line under.
+let named = (space: Space, app: App) =>
+  app.source && at({ space, app }) != META_STORE
+    ? `${app.eid} ${app.source} ${releaseOf(app)}`
+    : ''
+
+// The lines this isolate has read, by what they were read from.
+let heldLines = new Map<string, Line>()
+
+// Where a caller's roster is kept: every line of theirs in one object, so an
+// isolate that has read none of their apps reads one object rather than each
+// app's notes, words and commands (T-133891). It holds what each app
+// declares and whether it keeps notes, never what its person wrote: the notes
+// stay in the app's own release, where erasing the app erases them.
+let rosterAt = (person: string) => `.rosters/${person}.json`
+
+let kept = async (env: Env, person: string): Promise<Record<string, Line>> => {
+  let bytes = await r2RawObjects(env.BLOBS).read(rosterAt(person))
+  return bytes ? JSON.parse(new TextDecoder().decode(bytes)) : {}
+}
+
+/**
+ * Every app the caller can reach, with what it declares and whether it keeps
+ * notes: from this isolate where it read them, else from the roster kept for
+ * the caller, else from the app itself — and then the kept roster is written
+ * again, holding the caller's reach as it is now.
+ *
+ * The door already walked the reach before it asks for this, so it rides in
+ * (mcp.ts `door`). A caller without one — the builder — reads it here.
+ */
+export let listed = async (
+  ctx: Ctx,
+  reach?: { space: Space; app: App }[],
+): Promise<Listed[]> => {
+  let all = reach ?? await reachable(ctx)
+  let names = all.map(({ space, app }) => named(space, app))
+  let missed = names.some((n) => n && !heldLines.has(n))
+  let roster = missed && ctx.person ? await kept(ctx.env, ctx.person) : {}
+  let lines = await Promise.all(
+    all.map(({ space, app }, i) =>
+      heldLines.get(names[i]) ?? roster[names[i]] ?? lineOf(ctx, space, app)
+    ),
+  )
+  let now: Record<string, Line> = {}
+  for (let [i, name] of names.entries()) {
+    if (name) now[name] = keep(heldLines, name, lines[i])
+  }
+  let was = Object.keys(roster)
+  if (
+    missed && ctx.person &&
+    (was.length != Object.keys(now).length || was.some((n) => !now[n]))
+  ) {
+    background(
+      r2RawObjects(ctx.env.BLOBS).put(
+        rosterAt(ctx.person),
+        new TextEncoder().encode(JSON.stringify(now)),
+      ).catch((e) => caught(e, { request: 'roster keep' })),
+    )
+  }
+  return all.map(({ space, app }, i) => ({ space, app, ...lines[i] }))
+}
+
+/** The listed apps with their notes, each read only where there are some. */
+export let entries = async (
+  ctx: Ctx,
+  apps: Listed[] | Promise<Listed[]>,
+): Promise<Entry[]> =>
+  await Promise.all(
+    (await apps).map(async (e) => ({
+      ...e,
+      said: e.noted ? await notesOf(ctx.env, e.space, e.app) : '',
+    })),
+  )
 
 // A component name as a person would say the things it holds. English enough
 // for a sentence and no more: a wrong plural costs a reader nothing, and a
@@ -129,48 +256,19 @@ let many = (word: string) =>
 let holds = (kinds: string[]) =>
   `holds ${(kinds.length ? kinds : ['doc']).map(many).join(', ')}`
 
-/**
- * Every app the caller can reach, with what it says about itself.
- *
- * The door already walked the reach and already listed the commands before it
- * asks for this, so both ride in rather than being read a second time on every
- * call (mcp.ts `door`). A caller with neither — the builder — reads them here.
- */
-export let entries = async (
-  ctx: Ctx,
-  reach?: { space: Space; app: App }[],
-  commands?: { at: string; name: string }[],
-): Promise<Entry[]> =>
-  await Promise.all(
-    (reach ?? await reachable(ctx)).map(async ({ space, app }) => {
-      // An app's three reads at once — its notes, its words, its commands —
-      // none waits on another (T-34986).
-      let [said, kinds, names] = await Promise.all([
-        notesOf(ctx.env, space, app),
-        kindsOf(ctx, space, app),
-        // The commands the door already listed, picked out by the app they
-        // are of — `<space>/<app>`, which is the same word `command` takes.
-        commands
-          ? commands.filter((c) => c.at == at(space, app)).map((c) => c.name)
-          : toolsOf(ctx.env, space, app).then(Object.keys),
-      ])
-      return { space, app, said, kinds, commands: names }
-    }),
-  )
-
 /** The line an app with notes gets on the roster, in place of them. */
 export let HAS_NOTES = 'Keeps notes of its own, which about hands over.'
 
 // One app's heading and the line under it — then either its notes, or a line
 // saying it has some. The roster is the half that rides on the instructions,
 // so what an app's person wrote appears only where something asked for it.
-let entry = (e: Entry, notes: boolean, env: Host): string =>
+let entry = (e: Listed & { said?: string }, notes: boolean, env: Host) =>
   `## ${e.space.slug}/${e.app.slug}\n` +
   `${url(e.space, e.app, env)} — ${e.app.title || e.app.slug}, ${
     holds(e.kinds)
   }.` +
   `${e.commands.length ? ` Commands: ${e.commands.join(', ')}.` : ''}` +
-  `${e.said ? notes ? `\n\n${e.said}` : ` ${HAS_NOTES}` : ''}`
+  `${notes ? e.said ? `\n\n${e.said}` : '' : e.noted ? ` ${HAS_NOTES}` : ''}`
 
 let OPENING = `# The apps here
 
@@ -208,6 +306,8 @@ let heard = async (ctx: Ctx): Promise<string[]> => {
 export type Standing = {
   /** every app in reach, with what it says about itself */
   apps: () => Promise<Entry[]>
+  /** every app in reach, with what it declares and whether it keeps notes */
+  listed: () => Promise<Listed[]>
   /** the roster: every app, its address, what it holds, its commands */
   text: () => Promise<string>
   /** the roster with each app's notes, and what the person has said here */
@@ -236,14 +336,15 @@ export type Standing = {
 export let standing = (
   ctx: Ctx,
   reach?: { space: Space; app: App }[],
-  commands?: { at: string; name: string }[],
 ): Standing => {
   let c = ctx.clock ?? clock()
-  let apps = once(() => c.time('standing', () => entries(ctx, reach, commands)))
+  let lines = once(() => c.time('standing', () => listed(ctx, reach)))
+  let apps = once(() => entries(ctx, lines()))
   let said = once(() => heard(ctx))
   return {
     apps,
-    text: async () => passage(await apps(), false, ctx.env),
+    listed: lines,
+    text: async () => passage(await lines(), false, ctx.env),
     notes: async () => {
       let [all, told] = await Promise.all([apps(), said()])
       return [passage(all, true, ctx.env), ...told].filter(Boolean)
@@ -253,7 +354,11 @@ export let standing = (
 }
 
 /** The apps as one passage, or '' where there are none. */
-export let passage = (apps: Entry[], notes = false, env: Host = {}): string =>
+export let passage = (
+  apps: (Listed & { said?: string })[],
+  notes = false,
+  env: Host = {},
+): string =>
   apps.length
     ? `${OPENING}\n\n${apps.map((e) => entry(e, notes, env)).join('\n\n')}`
     : ''

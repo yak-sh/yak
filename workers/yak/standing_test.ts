@@ -47,6 +47,7 @@ let entry = (slug: string, over: Partial<Entry> = {}): Entry => ({
   kinds: [],
   commands: [],
   ...over,
+  noted: !!over.said,
 })
 
 test('the notes are refused over the cap, with the number', () => {
