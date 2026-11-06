@@ -119,10 +119,19 @@ export type { CacheContext } from './cache.ts'
 import type { CacheContext } from './cache.ts'
 import type { Affordable } from './afford.ts'
 
-/** The row holding a provider's latest reading of one plan-limit window
- * (`rate_limit`), named by its provider entity and the window in minutes. */
-export let limitEid = (provider: Eid, window: number): Eid =>
-  identityEid('rate_limit', [provider, String(window)])
+/** The row holding the latest reading of one plan-limit window
+ * (`rate_limit`), named by its provider entity, the window in minutes and,
+ * where the reading came from one, the account whose plan it is. */
+export let limitEid = (provider: Eid, window: number, account?: Eid): Eid =>
+  identityEid('rate_limit', [
+    provider,
+    String(window),
+    ...account ? [account] : [],
+  ])
+
+/** The row of an account a CLI keeps on this machine (`account`), named by
+ * its directory. */
+export let accountEid = (home: string): Eid => identityEid('account', [home])
 export let TOOL = 'tool'
 export let QUESTIONS = 'questions'
 export let ANSWER = 'answer'

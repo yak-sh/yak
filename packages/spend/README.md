@@ -31,13 +31,14 @@ A day's tally is a `spend` row on an eid derived from its `day`, holding its
 - `models`: `[read, written, fresh, generated, dollars, requests]` by model;
 - `entries`: `[tokens, dollars]` for the fifty transcript entries that cost most
   as they were carried request after request.
-- `plans`: by the provider whose plan the requests billed against, the dollars
-  they ran up on it, in all and by part, session, task, model and entry. A
-  request the native harness sent bills its `using` provider's plan (Claude's
-  CLI Claude's; Codex's CLI, and OpenAI signed in with ChatGPT, Codex's); one
-  read from a Claude Code transcript or a Codex rollout bills that CLI's; a
-  request paid by the token (OpenRouter, OpenAI with an API key) bills none
-  (`PLANS`, `planOf` in ./day.ts).
+- `plans`: by the account whose plan the requests billed against
+  (`account{home, provider}`, @yaks/model), the dollars they ran up on it, in
+  all and by part, session, task, model and entry. A request read from a Claude
+  Code transcript or a Codex rollout bills the account whose directory holds it;
+  one the native harness sent bills the account its `using` provider's CLI signs
+  in with here (Claude's CLI Claude Code's; Codex's CLI, and OpenAI signed in
+  with ChatGPT, Codex's); a request paid by the token (OpenRouter, OpenAI with
+  an API key) bills none (`PLANS`, `planOf` in ./day.ts).
 
 Dollars are what the provider reported, else the tokens at the model row's
 `price`. The totals are measured; the split across parts, and across a session's
@@ -74,8 +75,11 @@ week holds one. Give the model a `price` row and the next tally heals it.
 `@yaks/spend/service` is a duty: every ten minutes it tallies today again (and
 yesterday, for the first hours of a day), and keeps the Claude plan's newest
 limits as `rate_limit` rows, read from the cache claude-status writes
-(`~/.cache/claude-usage`, or `$CLAUDE_USAGE_DIR`). Codex's limits arrive with
-its sessions. Options: `every` (milliseconds) and `usage` (the cache directory).
+(`~/.cache/claude-usage`, or `$CLAUDE_USAGE_DIR`): the limits of the account
+`yak serve`'s environment signs in with, or of the one a `CLAUDE_CONFIG_DIR=`
+line in the reading names. Codex's limits arrive with its sessions, each
+account's with its own. Options: `every` (milliseconds) and `usage` (the cache
+directory).
 
 `@yaks/spend/graph` is what marks a day `untallied`: a request written after its
 day ended, as every request of a transcript read in after the fact is, marks its
@@ -96,9 +100,11 @@ request arriving during the tally marks the day again.
 
 `./views` offers the browsing app a `Spend` page in its sidebar (`/?page=spend`,
 which `./routes` also answers at `/spend`, the address `yak serve` prints when
-it starts): each plan limit against its pace, then the week's tally beside the
-week before, ranked by dollars, over the list of days. A day's row opens to that
-day's tally. The bars are @yaks/ui's `Meter`.
+it starts): each account's plan limits against their pace, what each account ran
+up this week beside the total, then the week's tally beside the week before,
+ranked by dollars, over the list of days. An account is named by its provider
+where the provider keeps one, else by its directory (`.claude-work`). A day's
+row opens to that day's tally. The bars are @yaks/ui's `Meter`.
 
 Beside each row's dollars, its **week %** estimates what it cost on a
 subscription: its share of each plan's weekly limit. `rates` measures a plan's

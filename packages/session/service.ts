@@ -61,19 +61,21 @@ import { sessionEid, sessionFor } from './who.ts'
 import { step, walker } from './parts.ts'
 import { archive } from './archive.ts'
 import {
-  claudeProjects,
-  claudeRunning,
-  codexSessions,
+  accountRows,
   type Found,
   header,
-  rollouts,
-  transcripts,
+  held,
+  type Home,
+  homes,
+  runningOf,
+  transcriptsOf,
   versionOf,
 } from './files.ts'
 export {
-  claudeProjects,
-  codexSessions,
   type Found,
+  held,
+  type Home,
+  homes,
   rollouts,
   transcripts,
 } from './files.ts'
@@ -85,15 +87,13 @@ export type Options = {
   /** how often transcripts are looked at, in milliseconds (default one
    * second) */
   every?: number
-  /** the Claude projects directory transcripts are read from (default
-   * `~/.claude/projects`) */
-  transcripts?: string
-  /** Codex sessions directory (default `$CODEX_HOME/sessions` or
-   * `~/.codex/sessions`). */
-  codex?: string
-  /** the directory naming Claude's running processes (default
-   * `~/.claude/sessions`) */
-  running?: string
+  /** more accounts to read, beside the ones found on their own: each a
+   * Claude Code `CLAUDE_CONFIG_DIR` or a Codex `CODEX_HOME` (./files.ts
+   * `homes`) */
+  homes?: string[]
+  /** whether the `~/.claude*` and `~/.codex*` accounts, and the ones the
+   * environment names, are found on their own (default true) */
+  find?: boolean
   /** how long a session keeps its full depth after it was last written, in
    * milliseconds (default 14 days) */
   full?: number
@@ -314,6 +314,9 @@ let format = (f: Found, t: Pick<Tail, 'operator'> = {}): Reader =>
   f.runner == 'codex'
     ? (e: Parameters<typeof codexRollout>[0]) => {
       let said = codexRollout(e)
+      if (said.limits && f.account) {
+        said.limits = said.limits.map((l) => ({ ...l, account: f.account }))
+      }
       if (
         e.type == 'session_meta' &&
         (e.payload as { id?: string })?.id != f.id
@@ -361,24 +364,20 @@ export let HOT = 10 * 60_000
 // Every transcript, listed again once `scan` has passed since the last
 // listing; `all` says whether this look listed them.
 let listed = async (
-  dir: string,
-  codex: string | undefined,
+  from: Home[],
   seen: Seen,
   now: number,
   scan: number,
 ): Promise<{ files: Found[]; all: boolean }> => {
   let last = seen.listed
   if (last && now - last.at < scan) return { files: last.files, all: false }
-  let files = [
-    ...await transcripts(dir),
-    ...codex ? await rollouts(codex) : [],
-  ]
+  let files = await held(from)
   seen.listed = { at: now, files }
   return { files, all: true }
 }
 
 /**
- * One look at every transcript under `dir`: each written to in the last
+ * One look at every transcript the accounts `from` keep: each written to in the last
  * `full` milliseconds is read on at full depth, and one older transcript not
  * yet read to its end is read in, its prose only. The one least behind is read
  * first, each for a `slice` (and at least a line), until the look has read for
@@ -389,11 +388,10 @@ let listed = async (
  */
 export let look = async (
   g: Graph,
-  dir: string,
+  from: Home[],
   seen: Seen,
   o: {
     person?: Eid
-    codex?: string
     full?: number
     scan?: number
     now?: number
@@ -417,7 +415,7 @@ export let look = async (
   // Each transcript with lines to read: how far behind a tail on it is, or
   // when it was written where none is open yet.
   let owed: Due[] = []
-  let { files, all } = await listed(dir, o.codex, seen, now, o.scan ?? SCAN)
+  let { files, all } = await listed(from, seen, now, o.scan ?? SCAN)
   let written = seen.written ??= new Map()
   for (let f of files) {
     let t = seen.tails.get(f.path)
@@ -618,8 +616,6 @@ export let service = async (
   signal: AbortSignal = AbortSignal.abort(),
 ): Promise<void> => {
   await reapLeases(host.graph.storage)
-  let dir = options.transcripts ?? claudeProjects()
-  let codex = options.codex ?? codexSessions()
   if (signal.aborted) return
   let said = host.config?.person
   let person = said && ((await host.graph.address([said])).get(said) ?? said)
@@ -627,24 +623,37 @@ export let service = async (
   let trimming: AsyncGenerator<Eid[]> | undefined
   let due = 0
   let reconcile = 0
+  let from: Home[] = []
+  let named = new Set<string>()
+  let found = 0
   try {
     while (!signal.aborted) {
       try {
         await feed(host.graph)
-        if (dir || codex) {
-          await look(host.graph, dir ?? '', seen, {
-            codex,
-            ...(person ? { person: person as Eid } : {}),
-            full: options.full,
-            scan: options.scan,
-            signal,
-          })
+        // The accounts are found again as often as transcripts are listed,
+        // so one signed in while the server runs is read too.
+        if (Date.now() >= found) {
+          found = Date.now() + (options.scan ?? SCAN)
+          from = await homes(options.homes, options.find)
+          let fresh = from.filter((h) => !named.has(h.dir))
+          if (fresh.length) {
+            await host.graph.apply(accountRows(fresh), { trusted: true })
+          }
+          for (let h of fresh) named.add(h.dir)
         }
+        await look(host.graph, from, seen, {
+          ...(person ? { person: person as Eid } : {}),
+          full: options.full,
+          scan: options.scan,
+          signal,
+        })
         if (Date.now() >= reconcile) {
           reconcile = Date.now() + HOUR
           await endGone(host.graph, {
-            projects: dir,
-            running: options.running ?? claudeRunning(),
+            claude: from.filter((h) => h.runner == 'claude').map((h) => ({
+              projects: transcriptsOf(h),
+              running: runningOf(h),
+            })),
           })
         }
         if (!trimming && Date.now() >= due) {
@@ -737,10 +746,9 @@ export let recounted = async (
 ): Promise<number> => {
   let after = Date.parse(since)
   let now = o.now ?? Date.now()
-  let all = [
-    ...await transcripts(o.transcripts ?? claudeProjects() ?? ''),
-    ...await rollouts(o.codex ?? codexSessions() ?? ''),
-  ]
+  let from = await homes(o.homes, o.find)
+  if (from.length) await g.apply(accountRows(from), { trusted: true })
+  let all = await held(from)
   let found: Found[] = []
   for (let f of all) {
     if (((await stat(f.path))?.mtime?.getTime() ?? 0) >= after) found.push(f)
@@ -800,10 +808,8 @@ export let kept = async (
   o: Options = {},
 ): Promise<Map<string, { path: string; read: Reader }>> =>
   new Map(
-    [
-      ...await transcripts(o.transcripts ?? claudeProjects() ?? ''),
-      ...await rollouts(o.codex ?? codexSessions() ?? ''),
-    ].filter((f) => !f.parent && !f.path.endsWith('.zst'))
+    (await held(await homes(o.homes, o.find)))
+      .filter((f) => !f.parent && !f.path.endsWith('.zst'))
       .map((f) => [f.id, { path: f.path, read: format(f) }]),
   )
 

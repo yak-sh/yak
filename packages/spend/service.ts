@@ -19,6 +19,12 @@ import { sleep } from '@yaks/fp'
 import { recompute } from './day.ts'
 import { after, dayOf } from './window.ts'
 import { read } from './budget.ts'
+import { identityEid } from '@yaks/graph/identity'
+
+// The plans a tally kept by provider, before each account kept its own.
+let PROVIDERS = new Set(
+  ['claude', 'codex'].map((name) => identityEid('provider', [name])),
+)
 
 /** What a config can set for this duty. */
 export type Options = {
@@ -59,14 +65,16 @@ export let pass = async (
   }
   await tally(today)
   for (let m of await owed(g)) unpriced.add(m)
-  // A day of the past week tallied before tallies kept their plans is
-  // tallied again, so its week reads in plan shares too.
+  // A day of the past week tallied before tallies kept their plans, or kept
+  // them by provider before each account had its own, is tallied again, so
+  // its week reads in each account's shares too.
   let kept = await g.read(
     `.spend .spend.day>=${after(today, -8)} .fields=spend.day,spend.plans`,
   )
   for (let b of kept) {
-    let s = b.spend as { day: string; plans?: unknown }
-    if (!s.plans && s.day != today) await tally(s.day)
+    let s = b.spend as { day: string; plans?: Record<Eid, unknown> }
+    let byProvider = Object.keys(s.plans ?? {}).some((k) => PROVIDERS.has(k))
+    if ((!s.plans || byProvider) && s.day != today) await tally(s.day)
   }
   await read(g, o.usage)
   return [...unpriced]

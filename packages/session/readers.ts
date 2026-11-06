@@ -55,6 +55,8 @@ export type Said = {
 /** A provider's plan limit, as a log reports it (@yaks/model `rate_limit`). */
 export type Limit = {
   provider: string
+  /** the account whose plan it is, where the reader knows it */
+  account?: string
   window: number
   used: number
   resets?: string

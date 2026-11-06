@@ -13,8 +13,8 @@ import { env } from '@yaks/process/env'
 import type { Bundle, Comp, Eid, Graph } from '@yaks/graph'
 import { identityEid } from '@yaks/graph/identity'
 import { parse } from '@yaks/id'
-import type { Price } from '@yaks/model'
-import { claudeProjects, codexSessions } from '@yaks/session/files'
+import { accountEid, type Price } from '@yaks/model'
+import { type Home, home } from '@yaks/session/files'
 import { absolute } from '@yaks/file/local'
 import { after, dayEid } from './window.ts'
 import { type Known, type Spend, tally } from './tally.ts'
@@ -28,55 +28,62 @@ let quoted = (s: string) => JSON.stringify(s)
 
 let provider = (name: string) => identityEid('provider', [name])
 
-/** Which plan each provider that serves models bills against, by the name of
- * the provider whose limits measure it (`rate_limit`): the Claude and Codex
- * CLIs their own subscriptions, and OpenAI's API the ChatGPT sign-in's, which
- * is Codex's, unless an API key pays for it by the token (the harness takes a
- * key first). Any other provider bills no plan. */
-export let PLANS = (key = false): Map<Eid, Eid> =>
-  new Map(
-    Object.entries({
-      claude: 'claude',
-      codex: 'codex',
-      'codex-cli': 'codex',
-      ...key ? {} : { openai: 'codex' },
-    }).map(([from, to]) => [provider(from), provider(to)]),
+type Runner = Home['runner']
+
+/** Which CLI's plan each provider that serves models bills against: the
+ * Claude and Codex CLIs their own subscriptions, and OpenAI's API the ChatGPT
+ * sign-in's, which is Codex's, unless an API key pays for it by the token (the
+ * harness takes a key first). Any other provider bills no plan. */
+export let PLANS = (key = false): Map<Eid, Runner> => {
+  let plans: Record<string, Runner> = {
+    claude: 'claude',
+    codex: 'codex',
+    'codex-cli': 'codex',
+    ...key ? {} : { openai: 'codex' },
+  }
+  return new Map(
+    Object.entries(plans).map(([from, to]) => [provider(from), to]),
   )
+}
 
 /**
- * The provider whose plan a request billed against: by the provider that
- * served it, as the native harness records it in `using`, else by the CLI
- * whose transcript it was read from, which `paths` says where each file of
- * this computer is. A request that billed no plan was paid by the token.
+ * The account whose plan a request billed against: the account its
+ * transcript is in, which `paths` says where each file of this computer is
+ * and `homes` where each account keeps its own; else, for one the native
+ * harness sent, the account the CLI of its `using` provider signs in with
+ * here. A request that billed no plan was paid by the token.
  *
  * ```ts
  * import { planOf, PLANS } from './day.ts'
- * import { claudeProjects } from '@yaks/session/files'
+ * import { home, type Home } from '@yaks/session/files'
+ * import { accountEid } from '@yaks/model'
  * import { identityEid } from '@yaks/graph/identity'
  * import { equal } from '@yaks/testing'
  *
  * let p = (name: string) => identityEid('provider', [name])
- * let paths = new Map([['f', `${claudeProjects()}/p/s.jsonl`]])
- * let plan = planOf(PLANS(), paths)
+ * let paths = new Map([['f', '/u/.claude-work/projects/p/s.jsonl']])
+ * let homes = new Map([['/u/.claude-work', 'w']])
+ * let plan = planOf(PLANS(), paths, homes)
  * let r = { entity: { eid: 'r' } }
- * equal(plan({ ...r, lines: { file: 'f', start: 3 } }), p('claude'))
- * equal(plan({ ...r, using: { provider: p('openai') } }), p('codex'))
+ * equal(plan({ ...r, lines: { file: 'f', start: 3 } }), 'w')
+ * equal(plan({ ...r, using: { provider: p('openai') } }), accountEid(home('codex')!))
  * equal(planOf(PLANS(true))({ ...r, using: { provider: p('openai') } }), undefined)
  * equal(plan({ ...r, using: { provider: p('openrouter') } }), undefined)
  * ```
  */
 export let planOf = (
-  plans: Map<Eid, Eid>,
+  plans: Map<Eid, Runner>,
   paths: Map<Eid, string> = new Map(),
+  homes: Map<string, Eid> = new Map(),
 ) =>
 (b: Bundle): Eid | undefined => {
   let served = str(comp(b, 'using').provider)
-  if (served) return plans.get(served)
+  if (served) {
+    let dir = plans.has(served) ? home(plans.get(served)!) : undefined
+    return dir && accountEid(dir)
+  }
   let source = paths.get(str(comp(b, 'lines').file)) ?? ''
-  let cli =
-    ([['claude', claudeProjects()], ['codex', codexSessions()]] as const)
-      .find(([, root]) => root && source.startsWith(`${root}/`))?.[0]
-  return cli && provider(cli)
+  return [...homes].find(([dir]) => source.startsWith(`${dir}/`))?.[1]
 }
 
 // Where each transcript the rows were read from is on this computer's disks.
@@ -233,9 +240,16 @@ export let known = async (
     return byRoot.get(root(s)) ?? []
   }
   let tasks = new Map(sessions.map((s) => [s, of(s)]))
+  let homes = new Map(
+    (await g.read('.account *')).map((b) => [
+      str(comp(b, 'account').home),
+      b.entity.eid,
+    ]),
+  )
   let plan = planOf(
     PLANS(!!env.get('OPENAI_API_KEY')),
     await located(g, rows),
+    homes,
   )
   let plans = new Map(
     rows.flatMap((b): [Eid, Eid][] => {

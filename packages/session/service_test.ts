@@ -4,6 +4,7 @@ import { type Comp, type Graph, identityEid } from '@yaks/graph'
 import { ids, locked, lockOn, seed, store } from './testing.ts'
 import {
   BATCH,
+  type Home,
   look,
   recounted,
   type Seen,
@@ -64,7 +65,7 @@ let side = (text: string) =>
 // or `<session>/subagents/agent-<id>`, each last written `ago` milliseconds
 // before now.
 let projectFiles = (files: Record<string, { text: string; ago?: number }>) => {
-  let dir = Deno.makeTempDirSync()
+  let dir = `${Deno.makeTempDirSync()}/projects`
   for (let [name, f] of Object.entries(files)) {
     let path = `${dir}/-home-me-code/${name}.jsonl`
     Deno.mkdirSync(path.slice(0, path.lastIndexOf('/')), { recursive: true })
@@ -83,7 +84,7 @@ let projects = async (
   try {
     await body(dir)
   } finally {
-    Deno.removeSync(dir, { recursive: true })
+    Deno.removeSync(dir.slice(0, -'/projects'.length), { recursive: true })
   }
 }
 
@@ -94,6 +95,11 @@ let told = async (g: Graph, id: string) => {
     .map((b) => (b.content as { body: string } | undefined)?.body ?? '(call)')
 }
 
+// The Claude account whose projects directory `dir` is.
+let claude = (dir: string): Home[] => [
+  { runner: 'claude', dir: dir.slice(0, -'/projects'.length) },
+]
+
 // A look given all the time it needs: a case that checks what a read writes
 // sets no deadline, and the cases on how looks share time set their own.
 let read = (
@@ -101,7 +107,7 @@ let read = (
   dir: string,
   seen: Seen,
   o: Parameters<typeof look>[3] = {},
-) => look(g, dir, seen, { slice: Infinity, budget: Infinity, ...o })
+) => look(g, claude(dir), seen, { slice: Infinity, budget: Infinity, ...o })
 
 let DAY = 24 * 60 * 60 * 1000
 
@@ -168,7 +174,11 @@ test('a backfill reads in what the duty has not read yet, then measures it', () 
   }, async (dir) => {
     let g = locked(store())
     let since = new Date(Date.now() - 40 * DAY).toISOString().slice(0, 10)
-    let o = { transcripts: dir, codex: '', person: ids.ada }
+    let o = {
+      homes: claude(dir).map((h) => h.dir),
+      find: false,
+      person: ids.ada,
+    }
     assertEquals(await recounted(g, since, o), 2)
     assertEquals(await told(g, 'fresh'), [
       'fix it',
@@ -214,7 +224,7 @@ await projects({
   old: { text: lines('x', 'y'), ago: 30 * DAY },
 }, async (dir) => {
   let g = locked(store()), seen: Seen = { tails: new Map(), done: new Set() }
-  let once = () => look(g, dir, seen, { slice: 0, budget: 0 })
+  let once = () => look(g, claude(dir), seen, { slice: 0, budget: 0 })
   for (let i = 0; i < 3; i++) await once()
   let first = await Promise.all(
     ['live', 'long', 'old'].map((id) => told(g, id)),
@@ -247,7 +257,7 @@ await projects({
     let path = `${dir}/-home-me-code/old-${i}.jsonl`
     Deno.writeTextFileSync(path, lines('old').split('\n')[0] + '\n')
     Deno.utimeSync(path, new Date(0), new Date(0))
-    await look(g, dir, seen, { slice: 0, budget: 0 })
+    await look(g, claude(dir), seen, { slice: 0, budget: 0 })
   }
   waiting = await told(g, 'waiting')
 })
@@ -523,7 +533,7 @@ await projects(
       return get(ids, comps)
     }
     let seen: Seen = { tails: new Map(), done: new Set() }
-    for (let i = 0; i < 8; i++) await look(g, dir, seen, { slice: 0 })
+    for (let i = 0; i < 8; i++) await look(g, claude(dir), seen, { slice: 0 })
     resumed = await told(g, 'old')
     opened = reopened
     Deno.writeTextFileSync(`${dir}/-home-me-code/old.jsonl`, lines('new'), {

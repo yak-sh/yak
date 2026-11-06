@@ -259,10 +259,11 @@ export let imported = (
     let provider = identityEid('provider', [l.provider])
     put({ entity: { eid: provider }, provider: { name: l.provider } })
     put({
-      entity: { eid: limitEid(provider, l.window) },
+      entity: { eid: limitEid(provider, l.window, l.account) },
       rate_limit: {
         provider,
         window: l.window,
+        ...l.account ? { account: l.account } : {},
         used: l.used,
         ...l.resets ? { resets: l.resets } : {},
         ...said.at ? { at: said.at } : {},

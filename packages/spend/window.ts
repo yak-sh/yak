@@ -12,8 +12,11 @@ import type { Spend } from './tally.ts'
 /** A plan limit, as its `rate_limit` row reads, its provider named. */
 export type Limit = {
   provider: string
-  /** the provider's eid */
+  /** the plan's: its account's eid, else, for a reading that named no
+   * account, its provider's */
   of: Eid
+  /** what the plan is called: its account's name, else its provider's */
+  name: string
   /** minutes: 10080 a week, 300 five hours */
   window: number
   /** percent used */
@@ -38,25 +41,59 @@ export let dayOf = (at: number | string): string =>
 /** The row a day's tally is kept on. */
 export let dayEid = (day: string): Eid => identityEid('spend', [day])
 
-/** The limits `rate_limit` rows hold, each provider's longest window first. */
+/**
+ * What each account is called, from its `account` row and its provider's
+ * name: the provider's name where it keeps one account, else the account's
+ * directory, `.claude-work`.
+ *
+ * ```ts
+ * import { accountNames } from './window.ts'
+ * import { equal } from '@yaks/testing'
+ *
+ * let a = (eid: string, home: string, provider: string) =>
+ *   ({ entity: { eid }, account: { home, provider } })
+ * let names = new Map([['c', 'claude'], ['x', 'codex']])
+ * let rows = [a('1', '/u/.claude', 'c'), a('2', '/u/.claude-work', 'c'), a('3', '/u/.codex', 'x')]
+ * equal([...accountNames(rows, names).values()], ['.claude', '.claude-work', 'codex'])
+ * ```
+ */
+export let accountNames = (
+  rows: Bundle[],
+  providers: Map<Eid, string>,
+): Map<Eid, string> => {
+  let of = (b: Bundle) => str((b.account as { provider?: Eid }).provider)
+  let count = new Map<Eid, number>()
+  for (let b of rows) count.set(of(b), (count.get(of(b)) ?? 0) + 1)
+  return new Map(
+    rows.filter((b) => b.account).map((b) => {
+      let home = str((b.account as { home?: string }).home)
+      let name = count.get(of(b)) == 1
+        ? providers.get(of(b))
+        : home.slice(home.lastIndexOf('/') + 1)
+      return [b.entity.eid, name || home]
+    }),
+  )
+}
+
+/** The limits `rate_limit` rows hold, each plan's longest window first, by
+ * `names`: the providers' and the accounts'. */
 export let limitsOf = (rows: Bundle[], names: Map<Eid, string>): Limit[] =>
   rows.flatMap((b): Limit[] => {
     let r = b.rate_limit as Record<string, unknown> | undefined
     if (!r) return []
+    let provider = names.get(str(r.provider)) ?? str(r.provider)
+    let of = str(r.account ?? r.provider)
     return [{
-      provider: names.get(str(r.provider)) ?? str(r.provider),
-      of: str(r.provider),
+      provider,
+      of,
+      name: names.get(of) ?? provider,
       window: Number(r.window),
       used: Number(r.used ?? 0),
       ...r.resets ? { resets: str(r.resets) } : {},
       ...r.at ? { at: str(r.at) } : {},
     }]
   }).sort((a, b) =>
-    a.provider == b.provider
-      ? b.window - a.window
-      : a.provider < b.provider
-      ? -1
-      : 1
+    a.name == b.name ? b.window - a.window : a.name < b.name ? -1 : 1
   )
 
 // When a window that reset at `resets` resets next, from `now`.
@@ -71,7 +108,7 @@ let next = (resets: number, window: number, now: number) =>
  * import { paceOf } from './window.ts'
  * import { equal } from '@yaks/testing'
  *
- * let week = { provider: 'claude', of: 'c', window: 10080, used: 25,
+ * let week = { provider: 'claude', of: 'c', name: 'claude', window: 10080, used: 25,
  *   resets: '2026-10-27T11:00:00Z' }
  * equal(paceOf(week, Date.parse('2026-10-23T23:00:00Z')), 0.5)
  * ```
@@ -96,7 +133,7 @@ export let current = (l: Limit, now: number): boolean =>
  * import { span } from './window.ts'
  * import { equal } from '@yaks/testing'
  *
- * let week = { provider: 'claude', of: 'c', window: 10080, used: 25,
+ * let week = { provider: 'claude', of: 'c', name: 'claude', window: 10080, used: 25,
  *   resets: '2026-10-27T11:00:00Z' }
  * let now = Date.parse('2026-10-21T12:00:00Z')
  * equal(span([week], now), ['2026-10-20', '2026-10-21'])
@@ -124,7 +161,7 @@ export let span = (
  * What a dollar of each plan is worth in its weekly limit: the percent of
  * the week its latest reading says is used, over the dollars its requests
  * ran up at list price from the day the week began to the day of the
- * reading, by the provider's eid. An estimate: the days are whole UTC days,
+ * reading, by the plan's eid (its account's). An estimate: the days are whole UTC days,
  * and the dollars are what the tokens would cost bought one by one. A plan
  * with no reading of this week, or no dollars in it, has none.
  *
@@ -133,7 +170,7 @@ export let span = (
  * import { empty } from './tally.ts'
  * import { equal } from '@yaks/testing'
  *
- * let week = { provider: 'claude', of: 'c', window: 10080, used: 30,
+ * let week = { provider: 'claude', of: 'c', name: 'claude', window: 10080, used: 30,
  *   resets: '2026-10-27T11:00:00Z', at: '2026-10-21T12:00:00Z' }
  * let day = (d: string, dollars: number) => ({ ...empty(d),
  *   plans: { c: { dollars, parts: {}, sessions: {}, tasks: {}, models: {}, entries: {} } } })
@@ -164,7 +201,7 @@ let weekDays = (l: Limit, days: Spend[], now: number): Spend[] | undefined => {
 
 /**
  * The models a plan's weekly rate was built without a price for, by the
- * provider's eid: their requests are in the week's dollars as nothing, so the
+ * plan's eid: their requests are in the week's dollars as nothing, so the
  * rate reads too low. A plan whose week holds none has no entry.
  *
  * ```ts
@@ -172,7 +209,7 @@ let weekDays = (l: Limit, days: Spend[], now: number): Spend[] | undefined => {
  * import { empty } from './tally.ts'
  * import { equal } from '@yaks/testing'
  *
- * let week = { provider: 'codex', of: 'c', window: 10080, used: 30,
+ * let week = { provider: 'codex', of: 'c', name: 'codex', window: 10080, used: 30,
  *   resets: '2026-10-27T11:00:00Z', at: '2026-10-21T12:00:00Z' }
  * let plan = { dollars: 1, unpriced: ['m'], parts: {}, sessions: {}, tasks: {}, models: {}, entries: {} }
  * let days = [{ ...empty('2026-10-20'), plans: { c: plan } }]

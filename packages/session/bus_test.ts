@@ -330,7 +330,7 @@ test('a line the harness gave up on at its hook stays owed for the next', () => 
 test('the session duty delivers without a Claude transcript directory', async () => {
   let g = await fresh()
   let stop = new AbortController()
-  let run = service({ graph: g }, { transcripts: '' }, stop.signal)
+  let run = service({ graph: g }, { find: false }, stop.signal)
   try {
     await until(async () => (await g.get(['knock']))[0].notified)
     assertEquals((await g.read('.entry.session=native')).length, 2)

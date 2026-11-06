@@ -108,8 +108,9 @@ let quiet = async (g: Graph, b: Bundle, cutoff: number): Promise<boolean> => {
 }
 
 type Sweep = {
-  projects?: string
-  running?: string
+  /** each Claude Code account: where its transcripts are, and where it lists
+   * its processes */
+  claude?: { projects: string; running: string }[]
   alive?: (pid: number) => Promise<boolean>
   now?: number
 }
@@ -117,7 +118,12 @@ type Sweep = {
 /** The sessions {@link endGone} would mark, without marking them. */
 export let goneSessions = async (g: Graph, o: Sweep = {}): Promise<Eid[]> => {
   let now = o.now ?? Date.now()
-  let live = o.running && await runningSessions(o.running, o.alive)
+  let accounts = await Promise.all(
+    (o.claude ?? []).map(async (a) => ({
+      projects: `${a.projects}/`,
+      live: await runningSessions(a.running, o.alive),
+    })),
+  )
   let open = await g.read(`.${SESSION} !${SESSION}.ended .fields=entity.eid`)
   let held = await g.read(`.${CLAIM}.session .fields=${CLAIM}.session`)
   let parts = [SESSION, 'spawned', 'process', 'exit', 'created']
@@ -163,7 +169,9 @@ export let goneSessions = async (g: Graph, o: Sweep = {}): Promise<Eid[]> => {
       ) gone.push(eid)
       continue
     }
-    if (o.projects && path.startsWith(`${o.projects}/`)) {
+    let account = accounts.find((a) => path.startsWith(a.projects))
+    if (account) {
+      let live = account.live
       if (!live || (mtime(path) ?? 0) > now - SETTLING) continue
       let id = String(comp(await root(b), SESSION).id ?? '')
       // A subagent finishes long before the process it ran in.
@@ -180,13 +188,13 @@ export let goneSessions = async (g: Graph, o: Sweep = {}): Promise<Eid[]> => {
 /**
  * Write `session.ended` on every session whose process is gone or, with no
  * process to ask about, that has come to rest, and answer with their eids.
- * `projects` is where Claude's transcripts are and `running` where it lists its
- * processes. It is an observation, not an edit, so `updated` stays as it was.
+ * `claude` names each Claude Code account's transcripts and the directory where
+ * it lists its processes. It is an observation, not an edit, so `updated` stays as it was.
  *
  * ```ts
  * import { endGone } from '@yaks/session/ended'
  *
- * // await endGone(graph, { projects, running })
+ * // await endGone(graph, { claude: [{ projects, running }] })
  * ```
  */
 export let endGone = async (g: Graph, o: Sweep = {}): Promise<Eid[]> => {

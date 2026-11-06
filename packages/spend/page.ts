@@ -16,6 +16,7 @@ import { mention, type Props, useNamed, type View } from '@yaks/inspect'
 import { Head, Loading, Meter, Section, Table } from '@yaks/ui'
 import { merged, ranked, type Rows, type Spend, spendOf } from './tally.ts'
 import {
+  accountNames,
   after,
   current,
   type Limit,
@@ -80,11 +81,11 @@ let Limits = (
           let pace = paceOf(l, now)
           return h(
             Row,
-            { key: `${l.provider} ${l.window}` },
+            { key: `${l.of} ${l.window}` },
             h(
               Cell,
               { mod: 'key' },
-              `${l.provider} ${l.window == 10080 ? 'week' : 'five hours'}`,
+              `${l.name} ${l.window == 10080 ? 'week' : 'five hours'}`,
             ),
             h(Cell, {}, h(Meter, { value: l.used / 100, mark: pace })),
             h(
@@ -167,11 +168,12 @@ let Ranking = (
   }: {
     title: string
     sub: string
-    row: Rows
+    /** which of a tally's rows these are, for `share` */
+    row?: Rows
     rows: [string, number[]][]
     at: number
     name: (key: string) => ComponentChildren
-    more: (ns: number[], key: string) => string[]
+    more: (ns: number[], key: string) => ComponentChildren[]
     heads: string[]
     share?: Share
     /** what a row's dollars say (default: the dollars) */
@@ -211,13 +213,56 @@ let Ranking = (
             h(Cell, {}, name(k)),
             h(Cell, {}, h(Meter, { value: ns[at] / most, width: 10 })),
             h(Cell, { mod: 'num' }, paid(k, ns[at])),
-            share ? h(Cell, { mod: 'num' }, share(row, k, ns[at])) : null,
+            share && row
+              ? h(Cell, { mod: 'num' }, share(row, k, ns[at]))
+              : null,
             ...more(ns, k).map((s, i) => h(Cell, { key: i, mod: 'num' }, s)),
           )
         ),
       ),
     ),
   )
+}
+
+// What each account ran up, beside its share of its own plan's week and the
+// week before; what billed no plan is the last row, paid by the token.
+let Accounts = (
+  { io, s, before, rate, unpriced, names }: {
+    io: Props['io']
+    s: Spend
+    before: Spend
+    rate: Map<string, number>
+    unpriced: Map<string, string[]>
+    names: Map<string, string>
+  },
+) => {
+  let rows: Record<string, number[]> = {}
+  for (let [k, p] of Object.entries(s.plans)) rows[k] = [p.dollars]
+  for (let k of Object.keys(before.plans)) rows[k] ??= [0]
+  let billed = Object.values(rows).reduce((n, [d]) => n + d, 0)
+  if (s.dollars - billed > 0.005) rows[''] = [s.dollars - billed]
+  let was = (k: string) =>
+    k ? before.plans[k]?.dollars ?? 0 : before.dollars -
+      Object.values(before.plans).reduce((n, p) => n + p.dollars, 0)
+  return h(Ranking, {
+    title: 'Accounts',
+    sub:
+      'What each account’s requests ran up at list price, and their share of that account’s own weekly limit. A request paid by the token bills no account.',
+    rows: ranked(rows, 0),
+    at: 0,
+    name: (k) => h('span', {}, k ? names.get(k) ?? k : 'paid by the token'),
+    more: (ns, k) => [
+      !k
+        ? ''
+        : unpriced.has(k)
+        ? h(Unpriced, { io, models: unpriced.get(k)! })
+        : rate.has(k)
+        ? percent(ns[0] * rate.get(k)!)
+        : 'no reading',
+      dollars(was(k)),
+    ],
+    heads: ['week %', 'week before'],
+  })
 }
 
 // A part's name, linked to the entries it is made of that were written in
@@ -349,12 +394,16 @@ let facts = (s: Spend) => [
  * week before. */
 export let Page = ({ io, got }: Props): JSX.Element => {
   let now = Date.now()
-  let names = new Map(
+  let providers = new Map(
     (got.providers?.rows ?? []).map((b) => [
       b.entity.eid,
       String((b.provider as { name?: unknown }).name ?? ''),
     ]),
   )
+  let names = new Map([
+    ...providers,
+    ...accountNames(got.accounts?.rows ?? [], providers),
+  ])
   let limits = limitsOf(got.limits?.rows ?? [], names)
   let days = (got.days?.rows ?? []).map(spendOf).filter((s): s is Spend => !!s)
   let [from, to] = span(limits, now)
@@ -385,6 +434,10 @@ export let Page = ({ io, got }: Props): JSX.Element => {
     ),
     waiting(got.limits, 'the plan limits') ??
       h(Limits, { io, limits, now, rate, unpriced }),
+    waiting(got.days, 'the tallies') ??
+      (Object.keys(week.plans).length
+        ? h(Accounts, { io, s: week, before, rate, unpriced, names })
+        : null),
     waiting(got.days, 'the tallies') ??
       h(Breakdown, {
         io,
@@ -422,6 +475,7 @@ export let inspectViews: View[] = [
       days: '.spend * .order=-spend.day .limit=21',
       limits: '.rate_limit *',
       providers: '.provider *',
+      accounts: '.account *',
     }),
     Render: Page,
   },

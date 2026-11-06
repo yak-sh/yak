@@ -234,11 +234,29 @@
         }
       }
     },
+    "account": {
+      "component": true,
+      "journal": false,
+      "type": "object",
+      "description": "an account a provider's CLI keeps on this machine: the config directory it signs in from and keeps its transcripts in (`CLAUDE_CONFIG_DIR`, `CODEX_HOME`). Each has a plan of its own",
+      "properties": {
+        "home": {
+          "type": "string",
+          "identity": true,
+          "description": "the account's directory, `/Users/erik/.claude-work`; the entity id is derived from it"
+        },
+        "provider": {
+          "type": "string",
+          "ref": "provider",
+          "description": "the provider whose CLI keeps it"
+        }
+      }
+    },
     "rate_limit": {
       "component": true,
       "journal": false,
       "type": "object",
-      "description": "how much of a provider's plan limit is used: one row per provider and window, holding its latest reading",
+      "description": "how much of a plan limit is used: one row per provider, window and account, holding its latest reading",
       "properties": {
         "provider": {
           "type": "string",
@@ -250,6 +268,12 @@
         "window": {
           "type": "integer",
           "description": "the limit's window in minutes: 10080 for a week, 300 for five hours",
+          "identity": true
+        },
+        "account": {
+          "type": "string",
+          "ref": "account",
+          "description": "the account whose plan it is, where the reading came from one: a transcript of that account, or its status line",
           "identity": true
         },
         "used": {

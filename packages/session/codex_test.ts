@@ -41,15 +41,15 @@ let metadata = (id: string, parent?: string) =>
       : 'cli',
   })
 let seen = (): Seen => ({ tails: new Map(), done: new Set() })
-let dir = Deno.makeTempDirSync()
+let home = Deno.makeTempDirSync()
+let dir = `${home}/sessions`
 Deno.mkdirSync(`${dir}/2026/10/19`, { recursive: true })
 let path = (id: string) =>
   `${dir}/2026/10/19/rollout-2026-10-19T15-00-00-${id}.jsonl`
 // A look at the rollouts given all the time it needs: these cases check what a
 // read writes, and how looks share their time is service_test.ts's.
 let read = (graph: Graph, seen: Seen, o: Parameters<typeof look>[3] = {}) =>
-  look(graph, '', seen, {
-    codex: dir,
+  look(graph, [{ runner: 'codex', dir: home }], seen, {
     slice: Infinity,
     budget: Infinity,
     ...o,
@@ -298,4 +298,4 @@ test('old Codex rollouts backfill prose through the existing bounded importer', 
   assertEquals(old.filter((b) => b.using).length, 2)
 })
 
-Deno.removeSync(dir, { recursive: true })
+Deno.removeSync(home, { recursive: true })

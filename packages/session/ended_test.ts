@@ -104,7 +104,7 @@ let session = async (
 let ended = async (g: Graph, eid: string) =>
   ((await g.get([eid]))[0]?.session as Comp | undefined)?.ended == true
 
-let sweep = (g: Graph) => endGone(g, { projects, running, alive })
+let sweep = (g: Graph) => endGone(g, { claude: [{ projects, running }], alive })
 
 test('a session its process no longer runs ends and reads stopped', async () => {
   let s = store(), g = locked(s)
@@ -292,7 +292,10 @@ test('no running-process directory ends nothing', async () => {
   let s = store(), g = locked(s)
   await session(s, g, ids.run1, 'gone', log(3))
   assertEquals(
-    await endGone(g, { projects, running: `${root}/none`, alive }),
+    await endGone(g, {
+      claude: [{ projects, running: `${root}/none` }],
+      alive,
+    }),
     [],
   )
 })

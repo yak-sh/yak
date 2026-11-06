@@ -687,15 +687,25 @@ stay. Provider/model selections and compaction summaries stay too, so an older
 transcript can still resume, and so does an entry that records what a turn cost,
 since the session's cost is their sum.
 
-| Option        | Default              | Meaning                                 |
-| ------------- | -------------------- | --------------------------------------- |
-| `every`       | `1000`               | milliseconds between looks              |
-| `transcripts` | `~/.claude/projects` | where Claude transcripts are read from  |
-| `codex`       | `~/.codex/sessions`  | where Codex rollouts are read from      |
-| `full`        | 14 days              | how long a session keeps its full depth |
+| Option  | Default | Meaning                                                 |
+| ------- | ------- | ------------------------------------------------------- |
+| `every` | `1000`  | milliseconds between looks                              |
+| `homes` | none    | more account directories to read, beside the ones found |
+| `find`  | `true`  | whether accounts are found on their own                 |
+| `full`  | 14 days | how long a session keeps its full depth                 |
 
-The Codex default follows `CODEX_HOME` when set; the Claude default follows
-`CLAUDE_CONFIG_DIR`.
+An **account** is a directory a CLI keeps one sign-in and its transcripts in:
+Claude Code's `CLAUDE_CONFIG_DIR` (its `projects`), Codex's `CODEX_HOME` (its
+`sessions`). Someone with several accounts keeps each in a directory of its own,
+so the duty reads every account it finds (`homes` in ./files.ts): the ones
+`yak serve`'s environment names, else `~/.claude` and `~/.codex`; every
+`~/.claude*` and `~/.codex*` directory holding transcripts; and each one the
+`homes` option lists, known as Claude Code's by its `projects` and as Codex's by
+its `sessions`. They are found again as often as transcripts are listed. Each is
+an `account{home, provider}` row (@yaks/model), and each transcript keeps its
+account: a Codex rollout's plan readings are that account's `rate_limit` rows,
+and @yaks/spend bills a request to the account whose directory holds its
+transcript.
 
 ## Identity and HTTP attribution
 

@@ -13,8 +13,16 @@ import { human } from '@yaks/id'
 import { recompute } from './day.ts'
 import { after, dayOf } from './window.ts'
 import { merged, ranked, type Spend, spendOf } from './tally.ts'
-import { current, type Limit, limitsOf, paceOf, span } from './window.ts'
-import { dollars, label, tokens } from './words.ts'
+import {
+  accountNames,
+  current,
+  type Limit,
+  limitsOf,
+  paceOf,
+  rates,
+  span,
+} from './window.ts'
+import { dollars, label, percent, tokens } from './words.ts'
 
 let answer = (call: Bundle, body: string): Bundle[] => [{
   entity: { eid: '$said' },
@@ -31,20 +39,41 @@ export let read = async (
   since?: string,
   until?: string,
   now: number = Date.now(),
-): Promise<{ spend: Spend; limits: Limit[]; from: string; to: string }> => {
+): Promise<
+  {
+    spend: Spend
+    limits: Limit[]
+    rate: Map<Eid, number>
+    accounts: Map<Eid, string>
+    from: string
+    to: string
+  }
+> => {
+  let providers = await names(g, 'provider')
+  let accounts = accountNames(await g.read('.account *'), providers)
   let limits = limitsOf(
     await g.read('.rate_limit *'),
-    await names(g, 'provider'),
+    new Map([...providers, ...accounts]),
   )
   let [from, to] = span(limits, now, since, until)
+  // A week's rates are read from the days its week began, which can be
+  // before the span.
   let rows = await g.read(
-    `.spend .spend.day>=${JSON.stringify(from)} .spend.day<=${
+    `.spend .spend.day>=${JSON.stringify(after(from, -7))} .spend.day<=${
       JSON.stringify(to)
     } *`,
   )
-  let days = rows.map(spendOf).filter((s): s is Spend => !!s)
+  let all = rows.map(spendOf).filter((s): s is Spend => !!s)
     .sort((a, b) => a.day < b.day ? -1 : 1)
-  return { spend: merged(days), limits, from, to }
+  let days = all.filter((d) => d.day >= from)
+  return {
+    spend: merged(days),
+    limits,
+    rate: rates(limits, all, now),
+    accounts,
+    from,
+    to,
+  }
 }
 
 // Each row of a kind, by eid, named.
@@ -70,7 +99,7 @@ export let report = async (
   g: Graph,
   o: { since?: string; until?: string; top?: number; now?: number } = {},
 ): Promise<string> => {
-  let { spend: s, limits, from, to } = await read(
+  let { spend: s, limits, rate, accounts, from, to } = await read(
     g,
     o.since,
     o.until,
@@ -105,7 +134,7 @@ export let report = async (
     } generated)`,
     ...limits.filter((l) => current(l, o.now ?? Date.now())).map((l) => {
       let pace = paceOf(l, o.now ?? Date.now())
-      return `${l.provider} ${l.window == 10080 ? 'week' : 'five hours'}: ${
+      return `${l.name} ${l.window == 10080 ? 'week' : 'five hours'}: ${
         Math.round(l.used)
       }% used, ${Math.round(pace * 100)}% of it gone${
         l.resets
@@ -113,6 +142,23 @@ export let report = async (
           : ''
       }`
     }),
+    ...Object.keys(s.plans).length
+      ? [
+        '',
+        'Accounts:',
+        ...ranked(
+          Object.fromEntries(
+            Object.entries(s.plans).map(([k, p]) => [k, [p.dollars]]),
+          ),
+          0,
+        ).map(([k, [d]]) =>
+          `  ${dollars(d).padStart(10)}  ${
+            (rate.has(k) ? percent(d * rate.get(k)!) : 'no reading')
+              .padStart(7)
+          }  ${accounts.get(k) ?? k}`
+        ),
+      ]
+      : [],
     '',
     'Parts of the context:',
     ...pick(s.parts, 4).map(([k, ns]) => line(k, ns, 4, sum(ns))),

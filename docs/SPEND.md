@@ -3,8 +3,8 @@
 yak reads the transcripts Claude Code and Codex already keep on your computer
 and shows what they cost: by day, model, session and part of the context, at
 each model's list price, beside the weekly limits of the plans they ran on. It
-reads `~/.claude/projects` and `~/.codex/sessions` (or `$CODEX_HOME/sessions`),
-needs nothing configured, and keeps everything on your machine.
+reads every account each one keeps on your computer, needs nothing configured,
+and keeps everything on your machine.
 
 ## Install on a Mac
 
@@ -50,6 +50,21 @@ again any time; what it has already read is not read twice.
 The same report is in the terminal: `yak spend show` for this week, or
 `yak spend show 2026-10-01` from a day on.
 
+## Several accounts
+
+Each Claude Code or Codex account keeps its sign-in and its transcripts in a
+directory of its own: `~/.claude` and `~/.codex`, and any other you start one
+with, as in `CLAUDE_CONFIG_DIR=~/.claude-work claude` or
+`CODEX_HOME=~/.codex-work codex`. yak reads every `~/.claude*` and `~/.codex*`
+directory that holds transcripts, finding a new one within a minute, and the
+Spend page shows each account apart: what its requests cost this week, beside
+the total, and its own plan's limits. An account kept somewhere else is listed
+in `~/.yak/yak.json`, in place of the plain `"@yaks/session"` entry:
+
+```json
+{ "use": "@yaks/session", "with": { "homes": ["/Volumes/work/claude"] } }
+```
+
 ## What the numbers mean
 
 - **Dollars** are what the requests would cost at the model's list price, from
@@ -57,10 +72,11 @@ The same report is in the terminal: `yak spend show` for this week, or
   model the table doesn't know reads `unpriced` instead of a number. To price
   one, or to change one, set a price on its row, in dollars per million tokens:
   `yak graph apply claude-sonnet-4-5 .price.input=3 .price.output=15 .price.cached=0.3`.
-- **Week %** is a row's share of a plan's weekly limit. Codex reports its limits
-  in its transcripts, so its share appears on its own. Claude Code reports them
-  only to a status line, so Claude's share appears only where one is set up to
-  keep them (see [packages/spend](../packages/spend/README.md)).
+- **Week %** is a row's share of its account's weekly limit. Codex reports its
+  limits in its transcripts, so each Codex account's share appears on its own.
+  Claude Code reports them only to a status line, so a Claude account's share
+  appears only where one is set up to keep them (see
+  [packages/spend](../packages/spend/README.md)).
 
 ## Updating
 

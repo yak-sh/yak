@@ -31,7 +31,7 @@ export type Spend = {
   models: Record<Eid, number[]>
   /** by entry: [tokens, dollars] */
   entries: Record<Eid, number[]>
-  /** by the provider whose plan the requests billed against: what they ran
+  /** by the account whose plan the requests billed against: what they ran
    * up on it */
   plans: Record<Eid, Plan>
   /** the models a request was weighed with no price for, and reported no
@@ -60,7 +60,7 @@ export type Known = {
   fixed: Map<Eid, Record<string, number>>
   /** the tasks each session worked on */
   tasks: Map<Eid, Eid[]>
-  /** the provider whose plan each request billed against, where one did */
+  /** the account whose plan each request billed against, where one did */
   plans?: Map<Eid, Eid>
 }
 
