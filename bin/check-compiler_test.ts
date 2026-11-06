@@ -1,5 +1,5 @@
 import { equal, test, throws } from '@yaks/testing'
-import { compiler } from './check-compiler.ts'
+import { compiler, GO } from './check-compiler.ts'
 
 test('compiler hosts wait for the preceding native compilation and retain both answers', async () => {
   let finish = Promise.withResolvers<void>()
@@ -15,7 +15,7 @@ test('compiler hosts wait for the preceding native compilation and retain both a
   })
   let deno = compile(['deno']), workers = compile(['workers'])
   await started.promise
-  equal(calls, [{ args: ['deno'], env: { GOMAXPROCS: '1' } }])
+  equal(calls, [{ args: ['deno'], env: GO }])
   finish.resolve()
   equal(await Promise.all([deno, workers]), ['deno', 'workers'])
   equal(calls.map((c) => c.args), [['deno'], ['workers']])
@@ -32,5 +32,5 @@ test('a failed native compilation releases the next host and preserves the calle
   let deno = compile(['deno']), workers = compile(['workers'])
   await throws(() => deno, /compiler stopped/)
   equal(await workers, { success: false, diagnostics: 'worker type error' })
-  equal(calls, Array(2).fill({ GOMAXPROCS: '3', KEEP: 'yes' }))
+  equal(calls, Array(2).fill({ ...GO, GOMAXPROCS: '3', KEEP: 'yes' }))
 })
