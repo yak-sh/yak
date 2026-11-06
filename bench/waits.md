@@ -73,17 +73,9 @@ HTTP tools/list is also checked by collection; declaration is not visibility.
 deno eval 'import { inventory } from "./bench/operation-commands.ts"; import { read } from "./packages/cli/config.ts"; console.log(JSON.stringify(await inventory(read(Deno.env.get("HOME") + "/.yak/yak.json")), null, 2))'
 ```
 
-## Isolated lifecycle and diagnostic acceptance
+## Isolated lifecycle acceptance
 
-`operation-diagnostics` banks CLI model-list local catalogue handling plus
-CLI/HTTP session-home saved workspace changes and CLI/HTTP vector-check over a
-built native index containing 2,001 offline hash vectors. Model listing crosses
-the actual CLI parser/runner and owned loopback HTTP catalogue; the only
-external URL is redirected before transport. Dummy local authentication never
-represents real credentials or OpenAI latency. Vector-check verifies the
-populated native index, not an empty or waiting check.
-
-The remaining suites bank best-of-three runs, three round medians per run, three
+The lifecycle suites bank best-of-three runs, three round medians per run, three
 samples per round, with tolerance zero. All are registered in `SUITES` and
 `HOURLY`, under the persistent scheduler's 25-minute window. The installed cron
 invokes that lane every 30 minutes; a collection that fails twice running

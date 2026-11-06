@@ -37,7 +37,6 @@ export let SUITES = [
   'person-commands',
   'hook-waits',
   'operation-commands',
-  'operation-diagnostics',
   'operation-scale',
   'web-client',
   'client-frame',
@@ -59,7 +58,6 @@ export let HOURLY = [
   'person-commands',
   'hook-waits',
   'operation-commands',
-  'operation-diagnostics',
   'operation-scale',
 ]
 
