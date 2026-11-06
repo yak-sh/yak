@@ -27,9 +27,24 @@
 // starts from the build info its repository's checkouts last shared. The
 // project names no path of its checkout in a file every module sees, so that
 // shared work stays valid there.
+//
+// A root that passed is not checked again while it, everything it and its
+// examples reach, the compiler, its options and its globals hold what they
+// held (`proofs`); every checkout on the machine shares those passes (`TYPED`).
+// A program whose roots have all passed starts no compiler.
 import { dirname } from 'node:path'
 import config from '../deno.json' with { type: 'json' }
-import { FACTS, remembered, type Survey, survey } from '@yaks/testing/deps'
+import { createHash } from 'node:crypto'
+import {
+  digest,
+  FACTS,
+  passed,
+  remember,
+  remembered,
+  seal,
+  type Survey,
+  survey,
+} from '@yaks/testing/deps'
 import { exported, fences, typed } from '@yaks/testing/examples'
 import { changes, git, member } from './test-changes.ts'
 import { type Info, type Project, project, relative } from './tsconfig.ts'
@@ -56,6 +71,79 @@ export const TSC = 'npm:typescript@7.0.2/tsc'
 /** The checkout, and the project directory in it. */
 let CHECKOUT = dirname(dirname(new URL(import.meta.url).pathname))
 let DIR = `${CHECKOUT}/.types`
+
+/** Where the roots that passed are kept, by proof (`proofs`), for every
+ * checkout on this machine. */
+export let TYPED = `${
+  Deno.env.get('XDG_CACHE_HOME') ?? `${Deno.env.get('HOME')}/.cache`
+}/yak/types-passed.json`
+
+let hex = (text: string) => createHash('sha256').update(text).digest('hex')
+
+/// anonymous(`a/.b.ts.t3.${Deno.pid}.example.ts`) -> 'a/.b.ts.t3.example.ts'
+/// anonymous('a/b.ts') -> 'a/b.ts'
+/** A path as every run names it: an example written `beside` its page
+ * without the process that wrote it. */
+export let anonymous = (path: string) =>
+  path.replace(/(\.t\d+)\.\d+\.example\.([jt]sx?)$/, '$1.example.$2')
+
+/**
+ * Each root's proof: `platform` (what the compiler, its options and its
+ * globals are), the root, and the seal of everything it and its examples
+ * reach in the program `info` describes, a file in the checkout by what it
+ * holds (`held`), any other module by its versioned specifier. A root's
+ * diagnostics follow from those alone, so one that passed by a proof passes
+ * by it again.
+ */
+export let proofs = async (
+  info: Info,
+  roots: string[],
+  docs: string[],
+  platform: string,
+  held: (path: string) => Promise<string>,
+  base = `file://${CHECKOUT}/`,
+): Promise<Map<string, string>> => {
+  let at = (s: string) => info.redirects[s] ?? s
+  let next = new Map<string, string[]>(), own = new Map<string, string>()
+  await Promise.all(info.modules.map(async (m) => {
+    next.set(
+      m.specifier,
+      (m.dependencies ?? []).flatMap((d) =>
+        [d.code?.specifier, d.type?.specifier].flatMap((s) => s ? [at(s)] : [])
+      ),
+    )
+    let path = m.specifier.startsWith(base)
+      ? decodeURIComponent(m.specifier.slice(base.length))
+      : undefined
+    own.set(
+      m.specifier,
+      path ? `${anonymous(path)} ${await held(path)}` : m.specifier,
+    )
+  }))
+  for (let targets of [...next.values()]) {
+    for (let t of targets) if (!next.has(t)) next.set(t, [])
+  }
+  let seals = seal(next, (n) => own.get(n) ?? n)
+  let of = (path: string) =>
+    seals.get(at(new URL(path, base).href)) ?? `unresolved ${path}`
+  return new Map(roots.map((root) => [
+    root,
+    hex([
+      platform,
+      root,
+      of(root),
+      ...docs.filter((d) => paged(d) == root).map(of).sort(),
+    ].join('\n')),
+  ]))
+}
+
+/// failed(['a.ts(1,2): error TS1: no', 'b/c.ts(3,4): error TS2: x']) -> ['a.ts', 'b/c.ts']
+/// failed(['error TS5023: Unknown compiler option']) -> undefined
+/** The files diagnostics were reported in, or none when one names no file. */
+export let failed = (diagnostics: string[]) => {
+  let files = diagnostics.map((d) => /^([^(\s]+)\(\d+,\d+\): /.exec(d)?.[1])
+  return files.every(Boolean) ? [...new Set(files as string[])] : undefined
+}
 
 // The config's excludes, each compiled once: `matchesGlob` compiles its glob
 // on every call, and every module in the checkout is asked of each.
@@ -222,6 +310,7 @@ let reached = async (
     entries,
     made: imports([...roots, ...entries]),
     hostedMade: imports(entries),
+    survey: s,
   }
 }
 
@@ -400,6 +489,24 @@ let program = async (on: Platform, roots: string[], snapshot?: Survey) => {
     ])
     if (!found) throw new Error('Cannot resolve source types')
     let graphed = { ...found, npmPackages: found.npmPackages ?? {} } as Info
+    let platform = hex(JSON.stringify([
+      TSC,
+      Deno.version.deno,
+      on.options,
+      on.hosted,
+      Object.entries(globals).map(([name, text]) => [name, hex(text)]),
+    ]))
+    let proven = await proofs(
+      graphed,
+      roots,
+      docs,
+      platform,
+      (path) => snapshot?.of(path) ?? digest(path),
+    )
+    let kept = passed(TYPED)
+    let open = roots.filter((r) => !(proven.get(r)! in kept))
+    if (!open.length) return true
+    let checking = [...open, ...docs.filter((d) => open.includes(paged(d)))]
     let manifests = Object.fromEntries(
       [...new Set(graphed.modules.flatMap((m) => m.npmPackage ?? []))]
         .map((id) => [id, manifest(graphed.npmPackages[id].localPath)]),
@@ -408,7 +515,7 @@ let program = async (on: Platform, roots: string[], snapshot?: Survey) => {
       graphed,
       CHECKOUT,
       on.dir,
-      [...roots, ...docs],
+      checking,
       manifests,
       on.options,
       Object.keys(globals),
@@ -441,6 +548,13 @@ let program = async (on: Platform, roots: string[], snapshot?: Survey) => {
     if (!tsc.success && !/error TS/.test(tsc.out)) {
       console.error(tsc.out, tsc.err)
       return false
+    }
+    let red = failed(errors)
+    if (red) {
+      remember(
+        open.filter((r) => !red.includes(r)).map((r) => proven.get(r)!),
+        TYPED,
+      )
     }
     return !errors.length
   } finally {
@@ -508,7 +622,7 @@ let check = async (
       ...hosted
         ? [{
           made: hostedMade,
-          check: () => program(hosted, entries),
+          check: () => program(hosted, entries, snapshot),
         }]
         : [],
     ],
@@ -526,7 +640,7 @@ export let types = async (
 ) => {
   let { entries: hosted } = await workers()
   if (!changed.some((p) => checked(p) || hosted.includes(p))) return true
-  let { roots, entries, made, hostedMade } = await reached(
+  let { roots, entries, made, hostedMade, survey } = await reached(
     changed,
     hosted,
     snapshot,
@@ -539,7 +653,7 @@ export let types = async (
       run,
       prepared,
       hostedMade,
-      snapshot ? await snapshot : undefined,
+      survey,
     )
 }
 

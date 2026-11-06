@@ -1,6 +1,13 @@
 import { equal, test, throws } from '@yaks/testing'
 import { type Info, survey, WIDE } from '@yaks/testing/deps'
-import { generate, MADE, programs, scope } from './check-types.ts'
+import {
+  beside,
+  generate,
+  MADE,
+  programs,
+  proofs,
+  scope,
+} from './check-types.ts'
 
 test('source imports reuse complete readiness receipts and make the remaining outputs', async () => {
   let called: string[][] = []
@@ -139,4 +146,61 @@ test('a change checks its importers, and its own package past a module loading a
     ['pkg/lock.ts', 'pkg/host.ts', 'pkg/host_test.ts', 'app/direct.ts'],
   )
   Deno.removeSync(dir, { recursive: true })
+})
+
+// A program: each module of the checkout by path, and what it imports.
+let proven = (
+  graph: Record<string, string[]>,
+  bytes: Record<string, string>,
+  roots: string[],
+  docs: string[] = [],
+  platform = 'p',
+) =>
+  proofs(
+    {
+      modules: Object.entries(graph).map(([m, deps]) => ({
+        specifier: m.includes(':') ? m : `file:///c/${m}`,
+        dependencies: deps.map((d) => ({
+          specifier: d,
+          code: { specifier: d.includes(':') ? d : `file:///c/${d}` },
+        })),
+      })),
+      redirects: {},
+      npmPackages: {},
+    },
+    roots,
+    docs,
+    platform,
+    (path) => Promise.resolve(bytes[path] ?? 'none'),
+    'file:///c/',
+  )
+
+test('a root is proven by all it and its examples reach, whichever process wrote them', async () => {
+  let doc = (pid: string) => beside('a.ts', 3, 'ts').replace(`${Deno.pid}`, pid)
+  let program = (pid: string, bytes: Record<string, string>) =>
+    proven(
+      {
+        'a.ts': ['b.ts'],
+        'b.ts': ['jsr:@std/x@1'],
+        [doc(pid)]: ['a.ts', 'e.ts'],
+        'e.ts': [],
+        'z.ts': [],
+        'jsr:@std/x@1': [],
+      },
+      bytes,
+      ['a.ts', 'z.ts'],
+      [doc(pid)],
+    ).then((m) => [m.get('a.ts'), m.get('z.ts')])
+  let base = { 'a.ts': '1', 'b.ts': '1', 'e.ts': '1', 'z.ts': '1' }
+  let [a, z] = await program('1', base)
+  equal(await program('2', base), [a, z])
+  for (let file of ['a.ts', 'b.ts', 'e.ts']) {
+    let [a2, z2] = await program('1', { ...base, [file]: '2' })
+    equal([a2 != a, z2], [true, z])
+  }
+  equal(
+    (await proven({ 'a.ts': [] }, base, ['a.ts'], [], 'q')).get('a.ts') !=
+      (await proven({ 'a.ts': [] }, base, ['a.ts'])).get('a.ts'),
+    true,
+  )
 })
