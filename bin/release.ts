@@ -1,16 +1,19 @@
 #!/usr/bin/env -S deno run --allow-read --allow-write --allow-env --allow-run=git,pnpm --allow-net=api.jsr.io
 // bin/release — publish what changed, so a fix in one package ships at once.
 //
-// A release publishes the packages that changed since their published version,
-// every published package that depends on one of those, and a package JSR does
-// not have yet only once something the release publishes imports it. Each
-// moves to the release's version; every other package keeps the version JSR
-// already has. `deno publish` writes an import of a sibling as
-// `jsr:@yaks/x@^<its version>`, so a package it publishes resolves both the
-// siblings that move with it and the ones that stay.
+// A release publishes the packages whose published files changed since the
+// newest version JSR holds of them, and a package JSR does not have yet only
+// once something the release publishes imports it. Each moves to the release's
+// version; every other package is written at the version JSR holds, so a
+// publish that stopped partway leaves nothing behind that a later release
+// counts as changed. `deno publish` writes an import of a sibling as
+// `jsr:@yaks/x@^<its version>`, so a package left where it is already
+// resolves a sibling the release moves: a dependent moves too only when the
+// release takes a package it imports past that range (0.2.x to 0.3.0).
 //
-//   bin/release.ts plan      # what a release would publish today, and why
-//   bin/release.ts 0.2.18    # write the versions, commit and tag
+//   bin/release.ts plan          # what the next patch release would publish, and why
+//   bin/release.ts plan 0.3.0    # what that release would publish
+//   bin/release.ts 0.2.18        # write the versions, commit and tag
 //
 // It writes the versions and every package a CLI of the release may load, at
 // the version it loads (`LIST`, which @yaks/cli ships), then commits and tags:
@@ -25,7 +28,7 @@
 //   git push --atomic origin main v0.2.18
 
 import { matchesGlob } from 'node:path'
-import { has, read, REPO } from './jsr.ts'
+import { newest, read, REPO, row } from './jsr.ts'
 import { versioned, versions } from './release-packages.ts'
 import { members } from '@yaks/cli/dependencies'
 export { versioned } from './release-packages.ts'
@@ -100,44 +103,87 @@ export let unlisted = async (
   return names.filter((_, i) => pages[i] == null)
 }
 
-/** A member as a release weighs it: whether JSR has a page for it, whether it
- * changed since the version JSR holds (a version JSR lacks, as after a publish
- * that stopped partway, counts as changed), and the members it imports. */
+/** A member as a release weighs it: whether JSR has a page for it, the newest
+ * version JSR holds of it, whether its published files changed since that
+ * version (none held counts as changed), and the members it imports. */
 export type Member = {
   name: string
-  version: string
   published: boolean
+  held: string | null
   changed: boolean
   deps: string[]
 }
 
-/** The packages a release publishes: the published ones that changed, every
- * published one importing a package it publishes, and an unpublished one only
- * once a package it publishes imports it.
+let numbers = (v: string) => v.split(/[.-]/).slice(0, 3).map(Number)
+
+/** Whether `^from`, the range `deno publish` writes for an import of a sibling
+ * at `from`, takes `to`: the same numbers up to and including the first that
+ * is not zero.
+ *
+ * ```ts
+ * import { assertEquals } from '@std/assert'
+ * assertEquals(caret('0.2.17', '0.2.25'), true)
+ * assertEquals(caret('0.2.17', '0.3.0'), false)
+ * assertEquals(caret('1.2.0', '1.9.0'), true)
+ * assertEquals(caret('0.0.3', '0.0.4'), false)
+ * ```
+ */
+export let caret = (from: string, to: string) => {
+  let [a, b] = [numbers(from), numbers(to)]
+  let lead = a.findIndex((n) => n != 0)
+  return a.slice(0, lead < 0 ? 3 : lead + 1).every((n, i) => n == b[i])
+}
+
+/** The patch release after the newest of `versions`.
+ *
+ * ```ts
+ * import { assertEquals } from '@std/assert'
+ * assertEquals(following(['0.2.17', '0.2.24', '0.2.9']), '0.2.25')
+ * ```
+ */
+export let following = (versions: string[]) => {
+  let [x, y, z] = versions.map(numbers).reduce((a, b) => {
+    let i = a.findIndex((n, i) => n != b[i])
+    return i < 0 || a[i] > b[i] ? a : b
+  })
+  return `${x}.${y}.${z + 1}`
+}
+
+/** The packages a release at `version` publishes: the published ones that
+ * changed, a published one importing a package it moves past the range that
+ * import was published with, and an unpublished one only once a package it
+ * publishes imports it.
  *
  * ```ts
  * import { assertEquals } from '@std/assert'
  * let m = (name: string, deps: string[], changed = false, published = true) =>
- *   ({ name, version: '0.1.0', published, changed, deps })
- * assertEquals(pick([
+ *   ({ name, held: published ? '0.1.0' : null, published, changed, deps })
+ * let all = [
  *   m('sqlite', [], true),
  *   m('cli', ['sqlite']),
  *   m('fp', []),
  *   m('voice', ['fp'], true, false),
- * ]), ['cli', 'sqlite'])
+ * ]
+ * assertEquals(pick(all, '0.1.1'), ['sqlite'])
+ * assertEquals(pick(all, '0.2.0'), ['cli', 'sqlite'])
  * assertEquals(pick([
  *   m('mail', ['resend'], true),
  *   m('resend', [], true, false),
- * ]), ['mail', 'resend'])
+ * ], '0.1.1'), ['mail', 'resend'])
  * ```
  */
-export let pick = (all: Member[]): string[] => {
+export let pick = (all: Member[], version: string): string[] => {
   let out = new Set(
     all.filter((m) => m.published && m.changed).map((m) => m.name),
   )
+  let held = new Map(all.map((m) => [m.name, m.held]))
+  let past = (dep: string) => {
+    let at = held.get(dep)
+    return out.has(dep) && at != null && !caret(at, version)
+  }
   let pulls = (m: Member) =>
     m.published
-      ? m.deps.some((dep) => out.has(dep))
+      ? m.deps.some(past)
       : all.some((r) => out.has(r.name) && r.deps.includes(m.name))
   for (let grew = true; grew;) {
     grew = false
@@ -203,8 +249,8 @@ let git = async (root: string, ...args: string[]) => {
   return code ? null : new TextDecoder().decode(stdout)
 }
 
-// Whether a member's published files moved since the release that tagged its
-// version. A version no tag names is weighed as changed.
+// Whether a member's published files moved since the release that tagged
+// `version`. A version no tag names is weighed as changed.
 let moved = async (
   root: string,
   dir: string,
@@ -238,7 +284,8 @@ let moved = async (
   return false
 }
 
-/** Every publishing member, weighed against JSR and the tag of its version. */
+/** Every publishing member, weighed against JSR and the tag of the newest
+ * version JSR holds of it. */
 export let weigh = async (
   root = '.',
   get: typeof fetch = fetch,
@@ -255,23 +302,14 @@ export let weigh = async (
   return await Promise.all(
     all.flat().map(async ({ dir, config }) => {
       let name = config.name as string
-      let version = config.version as string
-      let [page, held] = await Promise.all([
-        read(get, name),
-        has(get, name, version),
-      ])
+      let page = await row(get, name)
+      let held = page && newest(page)
       return {
         name,
-        version,
         published: page != null,
-        changed: !held ||
-          await moved(
-            root,
-            dir,
-            version,
-            config.publish?.exclude ?? [],
-            names,
-          ),
+        held,
+        changed: held == null ||
+          await moved(root, dir, held, config.publish?.exclude ?? [], names),
         deps: Object.keys(config.dependencies ?? {}).filter((d) =>
           names.has(d)
         ),
@@ -280,15 +318,21 @@ export let weigh = async (
   )
 }
 
-/** What a release would publish today, said as lines. */
-export let plan = async (root = '.', get: typeof fetch = fetch) => {
+/** What a release at `version` would publish today, said as lines: by
+ * default the patch release after the newest version JSR holds. */
+export let plan = async (
+  root = '.',
+  get: typeof fetch = fetch,
+  version?: string,
+) => {
   let all = await weigh(root, get)
-  let picked = new Set(pick(all))
+  version ??= following(all.flatMap((m) => m.held ?? []))
+  let picked = new Set(pick(all, version))
   let fresh = all.filter((m) => picked.has(m.name) && !m.published)
   let held = all.filter((m) => !m.published && !picked.has(m.name))
   let say = (ms: Member[]) => ms.map((m) => m.name).join(' ') || 'none'
   return [
-    `publishes ${picked.size}: ${[...picked].join(' ')}`,
+    `v${version} publishes ${picked.size}: ${[...picked].join(' ')}`,
     `new on JSR: ${say(fresh)}`,
     `kept at their published version: ${
       say(all.filter((m) => m.published && !picked.has(m.name)))
@@ -308,7 +352,7 @@ export let release = async (version: string, root = '.') => {
     throw new Error(`v${version} is already a release`)
   }
   let all = await weigh(root)
-  let picked = pick(all)
+  let picked = pick(all, version)
   if (!picked.length) throw new Error('nothing changed since the last release')
   let missing = await unlisted(picked)
   if (missing.length) {
@@ -318,13 +362,10 @@ export let release = async (version: string, root = '.') => {
         `to ${REPO.owner}/${REPO.name} in its settings, then release.`,
     )
   }
-  let next = new Map(picked.map((name) => [name, version]))
-  let paths = await versions(root, next)
-  let loads = new Map(
-    all.filter((m) => m.published).map((m) => [m.name, m.version]),
-  )
-  for (let [name, at] of next) loads.set(name, at)
-  await Deno.writeTextFile(`${root}/${LIST}`, list(loads))
+  let at = new Map(all.flatMap((m) => m.held ? [[m.name, m.held]] : []))
+  for (let name of picked) at.set(name, version)
+  let paths = await versions(root, at)
+  await Deno.writeTextFile(`${root}/${LIST}`, list(at))
   await run('-C', root, 'add', ...paths, `${root}/${LIST}`)
   await run('-C', root, 'commit', '-m', `Release v${version}`)
   await run('-C', root, 'tag', `v${version}`)
@@ -333,13 +374,16 @@ export let release = async (version: string, root = '.') => {
 }
 
 if (import.meta.main) {
-  let [version] = Deno.args
+  let [version, at] = Deno.args
   if (version == 'plan') {
-    for (let line of await plan()) console.log(line)
+    if (at && !semver(at)) throw new Error(`not a version: ${at} (want 0.1.0)`)
+    for (let line of await plan('.', fetch, at)) console.log(line)
   } else if (version) {
     await release(version)
   } else {
-    console.error('usage: bin/release.ts plan | <version>   e.g. 0.2.18')
+    console.error(
+      'usage: bin/release.ts plan [version] | <version>   e.g. 0.2.18',
+    )
     Deno.exit(2)
   }
 }

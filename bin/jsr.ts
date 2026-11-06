@@ -223,27 +223,30 @@ let fail = async (what: string, res: Response) => {
   throw new Error(`${what}: ${res.status} ${(await res.text()).trim()}`)
 }
 
-// The page JSR holds, or null when the package has no row yet. Anonymous: GET
-// is the one door here that needs no token.
-export let read = async (get: Fetch, name: string) => {
+// The row JSR holds for a package, as it answers, or null when there is none.
+// Anonymous: GET is the one door here that needs no token.
+export let row = async (
+  get: Fetch,
+  name: string,
+): Promise<Record<string, unknown> | null> => {
   let { scope, pkg } = split(name)
   let res = await get(`${API}/scopes/${scope}/packages/${pkg}`)
   if (res.status == 404) return (await res.body?.cancel(), null)
   if (!res.ok) await fail(`GET ${name}`, res)
-  return mine(await res.json())
+  return await res.json()
 }
 
-// Whether JSR holds that version of the package.
-export let has = async (get: Fetch, name: string, version: string) => {
-  let { scope, pkg } = split(name)
-  let res = await get(
-    `${API}/scopes/${scope}/packages/${pkg}/versions/${version}`,
-  )
-  if (res.status == 404) return (await res.body?.cancel(), false)
-  if (!res.ok) await fail(`GET ${name}@${version}`, res)
-  await res.body?.cancel()
-  return true
+// The page JSR holds, or null when the package has no row yet.
+export let read = async (get: Fetch, name: string) => {
+  let page = await row(get, name)
+  return page && mine(page)
 }
+
+// The newest version JSR holds of a package its row names, if any.
+/// newest({ latestVersion: '0.2.23' }) -> '0.2.23'
+/// newest({ latestVersion: null }) -> null
+export let newest = (page: Record<string, unknown>): string | null =>
+  (page.latestVersion as string | null) ?? null
 
 // One field, one request — UpdatePackageRequest is a oneOf.
 export let write = async (

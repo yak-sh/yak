@@ -155,16 +155,19 @@ changes what every process on the box pays, and that is the owner's call.
 ## Publishing
 
 A release publishes what changed, so a fix in one package ships at once.
-bin/release.ts publishes the packages whose published files moved since their
-version's tag, every published package that imports one of them, and a package
-JSR doesn't have yet only once something it publishes imports it. Those move to
-the release's version. The rest keep the version JSR already has, and a
-sibling's import (`jsr:@yaks/x@^<version>`) resolves either way.
-packages/cli/release.json pins every package of the release at its version, and
-an installed CLI loads a plugin a config names at that pin.
+bin/release.ts publishes the packages whose published files moved since the
+newest version JSR holds of them, and a package JSR doesn't have yet only once
+something it publishes imports it. Those move to the release's version; the
+rest are written at the version JSR holds. A sibling's import is published as
+`jsr:@yaks/x@^<version>`, so a package left where it is already resolves the
+new version of what it imports: its dependents move with it only when a
+release crosses that range (0.2.x to 0.3.0), and a patch release of one package
+publishes one package. packages/cli/release.json pins every package of the
+release at its version, and an installed CLI loads a plugin a config names at
+that pin.
 
 ```sh
-bin/release.ts plan      # what a release would publish today, and how many JSR then holds
+bin/release.ts plan      # what the next patch release would publish, and how many JSR then holds
 bin/release.ts 0.2.18    # write the versions, commit and tag; pushing the tag publishes
 ```
 
