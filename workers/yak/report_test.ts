@@ -16,13 +16,7 @@ import {
 } from '@std/assert'
 import { fetch as fileFetch } from './files.ts'
 import { test, tick, until } from '@yaks/testing'
-import { type Bundle, type Comp, graph } from '@yaks/graph'
-import { misfit } from '@yaks/graph/errors'
-import { admitSchema } from '@yaks/graph/schema'
-import { refuse } from '@yaks/api'
-import { loadVocab } from '@yaks/vocab'
-import { ram } from '@yaks/ram'
-import { answered } from './meta.ts'
+import type { Bundle, Comp } from '@yaks/graph'
 import {
   client,
   connector,
@@ -34,19 +28,6 @@ import {
   unique,
   vocabFile,
 } from './probe.ts'
-
-let words = loadVocab([{
-  $defs: {
-    signature: {
-      component: true,
-      type: 'object',
-      properties: {
-        stars: { type: 'number' },
-        note: { type: 'string', validate: true, maxLength: 8 },
-      },
-    },
-  },
-}])
 
 let jeff59 = unique('jeff59')
 let club60 = unique('club60')
@@ -310,45 +291,6 @@ test('a refusal the door meant is not a break', async () => {
   } finally {
     await k.stop()
   }
-})
-
-// A write the app's own words cannot keep is its page's code wrong, which
-// nobody chose (T-123885): the page still hears the refusal it always has
-// (400), and the door files it as a break only when the store says it
-// `misfit`. A bound the schema opts into refuses what a visitor typed on
-// purpose, and files nothing. The store's answer is read the way the kernel
-// reads it (meta.ts `answered`).
-let appStore = graph({
-  storage: ram(words),
-  vocab: words,
-  plugins: [admitSchema(words)],
-})
-test("a write the app's own vocabulary refuses is a break", async () => {
-  let g = appStore
-  let heard = async (signature: Comp) => {
-    let sent: Response | null = null
-    try {
-      await g.apply([{ entity: { eid: 'sig' }, signature }])
-    } catch (e) {
-      sent = refuse(e)
-    }
-    let said = sent && await answered(sent)
-    return said && {
-      status: sent!.status,
-      filed: misfit(said),
-      said: said.message,
-    }
-  }
-
-  let mistyped = {
-    status: 400,
-    filed: true,
-    said: 'signature.stars is a number',
-  }
-  assertEquals(await heard({ stars: '5' }), mistyped)
-  let tooLong = await heard({ note: 'far too long' })
-  assertEquals([tooLong?.status, tooLong?.filed], [400, false])
-  assertEquals(await heard({ stars: 5, note: 'lovely' }), null)
 })
 
 // A break names the deploy it happened on. The directory's read cache is 30

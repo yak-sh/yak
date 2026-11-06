@@ -168,7 +168,8 @@ import { pageSpeaks } from './lenses.ts'
 import { admitted, pageScript, type Scripts } from './page-script.ts'
 import { appDoc } from './vocab.ts'
 import type { Bundle } from '@yaks/graph'
-import { misfit, Refused, Stale, status } from '@yaks/graph/errors'
+import { Refused, Stale } from '@yaks/graph/errors'
+import { mistaken } from './mistake.ts'
 import { token } from '@yaks/graph/sha256'
 import { callStored } from './package-tools.ts'
 import { edits, mode, reads, writes } from '@yaks/member'
@@ -399,45 +400,25 @@ let rejection = (error: unknown, tags: Record<string, string>) =>
     error instanceof Error ? error.message : String(error),
   )
 
-// Whether the app's own page asked: client.js names the release its page runs,
-// and a page's plain fetch says it came from this origin. Anything else (curl,
-// an agent's HTTP tool, another site) wrote its own line, which may not be the
-// app's at all: a form encoder turns the page's `.followon&?doc` into
-// `.followon=&%3Fdoc=` (T-124645). Its refusal is that caller's to read.
-let fromPage = (req: Request) =>
-  req.headers.has('x-yak-version') ||
-  req.headers.get('sec-fetch-site') == 'same-origin'
-
 // What the page's own code got wrong, as the store refused it: a break in the
 // app, filed here at its door because the page may catch the refusal and the
 // browser reporter deliberately files no 4xx (unseen.ts `refusal`). The page
 // still hears the refusal as it always has. It names the release the page
 // ran, which client.js sends, else the one serving.
-let mistaken = async (
+let mistake = async (
   req: Request,
   env: Env,
   space: Space,
   app: App,
   e: unknown,
-  entrypoint: string,
+  entrypoint: 'query' | 'apply',
 ) => {
-  if (!fromPage(req)) return
   try {
-    let raw = req.headers.get('x-yak-version')
-    let version = raw != null && /^[0-9]+$/.test(raw) &&
-        Number.isSafeInteger(Number(raw))
-      ? Number(raw)
-      : await serving(env, space, app)
-    let url = new URL(req.url)
-    await noted(
-      {
-        request: `${req.method} ${url.pathname}${url.search}`,
-        version,
-        message: e instanceof Error ? e.message : String(e),
-        mistake: true,
-      },
-      { env, space, app, request: req, entrypoint },
-    )
+    await mistaken(req, e, entrypoint, {
+      version: () => serving(env, space, app),
+      note: (report) =>
+        noted(report, { env, space, app, request: req, entrypoint }),
+    })
   } catch (why) {
     caught(why, {
       request: `report ${entrypoint} failure`,
@@ -2107,8 +2088,7 @@ export let api = async (
       // A page's query is app code, even when the store answers its invalid
       // grammar or unknown word with 400. Other refusals stay quiet; platform
       // failures keep their own reporting.
-      let code = e instanceof Error && 'status' in e ? e.status : status(e)
-      if (code == 400) await mistaken(req, env, space, app, e, 'query')
+      await mistake(req, env, space, app, e, 'query')
       return rejection(e, {
         request: 'GET /api/query',
         space: space.slug,
@@ -2254,7 +2234,7 @@ export let api = async (
       // A write the store's words cannot keep is the page's code wrong about
       // its own vocabulary. Every other no here (a name somebody holds, a
       // bound the schema sets, access, a pace) was meant.
-      if (misfit(e)) await mistaken(req, env, space, app, e, 'apply')
+      await mistake(req, env, space, app, e, 'apply')
       return rejection(e, {
         request: 'POST /api/apply',
         space: space.slug,

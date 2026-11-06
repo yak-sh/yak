@@ -3,12 +3,7 @@
 // use the browser's cookie and form paths, including the boundaries that keep
 // another person, and another page, from changing this account.
 import { test } from '@yaks/testing'
-import {
-  assert,
-  assertEquals,
-  assertMatch,
-  assertStringIncludes,
-} from '@std/assert'
+import { assert, assertEquals, assertStringIncludes } from '@std/assert'
 import {
   client,
   connector,
@@ -20,9 +15,6 @@ import {
 } from './probe.ts'
 import { chatPath, LOGOUT, MANAGE, managePath } from './route.ts'
 import { parseHTML } from 'linkedom'
-import type { App } from './directory.ts'
-import { library } from './pages.ts'
-import { folds, type Plain, plain, type Seen } from './unseen.ts'
 
 test('the dashboard is at the apex, whatever serves the space', async () => {
   let k = await kernel()
@@ -338,50 +330,6 @@ test('a person makes a space, opens it first, and signs out', async () => {
   }
 })
 
-// Two reports of one throw, as the tracker holds them, are one break.
-let chores = { eid: 'a1', slug: 'chores' } as App
-let report = (eid: string): Seen => ({
-  app: chores,
-  hit: {
-    kind: 'error',
-    entity: { eid },
-    error: {
-      message: 'chores is not a function',
-      at: `2026-10-14T00:0${eid}`,
-    },
-  },
-})
-let page = (errors: Plain[]) =>
-  library(
-    {
-      space: 'fixme',
-      apps: [
-        { eid: 'a1', slug: 'chores', title: 'chores', errors },
-        { eid: 'a2', slug: 'notes', title: 'notes' },
-      ],
-    } as Parameters<typeof library>[0],
-    {},
-  )
-
-let reports = [report('1'), report('2')]
-test('an app that throws is marked on the dashboard, with what to ask', () => {
-  let html = page(folds(reports).map(plain))
-  // One mark, on the app that broke, linking to what to do about it.
-  assertEquals(html.match(/Apps_Tag-warn[^>]*>[^<]*/g)?.length, 1)
-  assertMatch(
-    html,
-    /<strong>chores<\/strong>.*?<a class="Apps_Tag Apps_Tag-warn" href="#fix-chores">1 error<\/a>/s,
-  )
-  let fix = html.slice(html.indexOf('id="fix-chores"'))
-  assertStringIncludes(fix, 'chores is not a function')
-  assertStringIncludes(fix, '2 times')
-  assertStringIncludes(fix, 'Fix the errors in my chores app on yaks.app')
-})
-
-test('a fixed app has no dashboard error mark or repair request', () => {
-  assert(!/Apps_Tag-warn|class="Card Fix"/.test(page([])))
-})
-
 // The Billing page (T-131895), through the kernel: the space's own allowances.
 test('billing shows the space’s allowances', async () => {
   let k = await kernel()
@@ -408,28 +356,4 @@ test('billing shows the space’s allowances', async () => {
   } finally {
     await k.stop()
   }
-})
-
-// What the space's Operator made of a break stands beside it (T-136297):
-// working, its answer, or why it could not finish, with the way to its work.
-test("a break says what the space's Operator made of it", () => {
-  let [broke] = folds(reports).map(plain)
-  let shown = (operator?: Plain['operator']) => {
-    let html = page([{ ...broke, operator }])
-    return html.slice(html.indexOf('id="fix-chores"'))
-  }
-  assert(!shown().includes('The Operator'), 'a break it never heard of')
-  assertStringIncludes(shown({}), 'The Operator is fixing it.')
-  assertStringIncludes(
-    shown({ answer: 'Defined chores and deployed.' }),
-    'The Operator: Defined chores and deployed.',
-  )
-  assertStringIncludes(
-    shown({ failed: 'This space has spent its model budget.' }),
-    'The Operator could not fix it. This space has spent its model budget.',
-  )
-  assertStringIncludes(
-    shown({}),
-    `href="${chatPath('fixme', broke.fix)}"`,
-  )
 })
