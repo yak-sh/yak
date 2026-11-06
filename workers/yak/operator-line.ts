@@ -31,7 +31,6 @@ import { ctxOf, ownConnection, pageOf } from './connections.ts'
 import { apex } from './host.ts'
 import { opened, seal } from './lib/token.ts'
 import { meta } from './meta.ts'
-import { fault } from './unseen.ts'
 import type { operatorStore } from './operator-store.ts'
 
 type Store = ReturnType<typeof operatorStore>
@@ -262,8 +261,9 @@ export let phoneSend = (
 /**
  * `GET /<via>/<ticket>`: a text that reached a person's connected number, as
  * the callback of the provider lent as `via` sends it. A ticket the kernel
- * did not seal is refused and reported; a text from anyone the Operator has
- * not texted from that number lately is the person's own and is not read.
+ * did not seal is the caller's own forgery or stale link, refused and not
+ * reported; a text from anyone the Operator has not texted from that number
+ * lately is the person's own and is not read.
  * The provider is answered `ok`, which stops it sending the text again.
  */
 export let lineDoor = async (
@@ -279,14 +279,7 @@ export let lineDoor = async (
     ticket,
     secretOf(env),
   )
-  if (!held?.connection) {
-    await fault(
-      env,
-      `GET /${via}`,
-      new Error(`a ${via} callback with no ticket of ours`),
-    )
-    return new Response('not ours', { status: 403 })
-  }
+  if (!held?.connection) return new Response('not ours', { status: 403 })
   let ok = () =>
     new Response('ok', { headers: { 'content-type': 'text/plain' } })
   let arrival = own.called(url.searchParams)
