@@ -2,7 +2,8 @@
 // he sits in the hero and idles (idle.js). Scroll him out of view and, once
 // the page has been still a moment, he scampers in from the edge of the
 // window down the left margin, only as far as it takes to be back in frame,
-// and plops down there to idle. While he is in frame he stays put. Scroll
+// and plops down there to idle. Out of the hero he is placed on the page, so
+// he scrolls with it like the words do; while he is in frame he stays put. Scroll
 // back up to the hero and he scampers up the margin, away from you, steps
 // into his place and plops there.
 //
@@ -130,7 +131,8 @@
 
     // where: 'home' (in the hero) or 'out' (in the margin)
     // act: 'sit', 'rise', 'walk', 'step' (into his place), 'plop'
-    // y is his top in the window; `seen` the scroll it was measured at
+    // x and y are his place on the page, not in the window, so the page
+    // carries him as it scrolls and nothing has to chase the scroll
     let where = 'home',
       act = 'sit',
       size = 0,
@@ -138,13 +140,13 @@
       x = 0,
       dir = 1,
       homing = false
-    let phase = 0, last = 0, scrolled = -Infinity, seen = 0
+    let phase = 0, last = 0, scrolled = -Infinity
     addEventListener('scroll', () => scrolled = performance.now(), {
       passive: true,
     })
 
     let out = () => {
-      where = 'out', size = lane.size, x = lane.x, seen = scrollY
+      where = 'out', size = lane.size, x = lane.x + scrollX
       yak.classList.add('Wander-out')
       yak.style.width = yak.style.height = `${size}px`
       document.body.append(yak)
@@ -167,26 +169,26 @@
       last = now
       let quiet = now - scrolled > DELAY
       let s = slot.getBoundingClientRect()
-      let room = innerHeight - size - PAD
       let inView = s.bottom > 0 && s.top < innerHeight
+      // the window's top and bottom, and his place in the hero, on the page
+      let top = scrollY, bottom = scrollY + innerHeight
+      let hx = s.left + scrollX, hy = s.top + scrollY
+      // where he goes: his place, or the nearest spot in frame
+      let target = () =>
+        inView ? hy : Math.min(Math.max(y, top + PAD), bottom - size - PAD)
 
       if (where == 'home') {
         if (inView || !quiet || !lane.size) return
         // out of sight in the hero: he comes in from the window's edge nearest it
         out()
-        y = s.bottom <= 0 ? -size : innerHeight
+        y = s.bottom <= 0 ? top - size : bottom
         act = 'walk', phase = 0
       }
       if (!lane.size) return home()
 
-      // a page that scrolls carries him with it
-      y -= scrollY - seen
-      seen = scrollY
-      let target = inView ? s.top : Math.min(Math.max(y, PAD), room)
-
-      if (act == 'sit' && quiet && Math.abs(target - y) > 1) {
-        if (y <= -size) y = -size, act = 'walk'
-        else if (y >= innerHeight) y = innerHeight, act = 'walk'
+      if (act == 'sit' && quiet && Math.abs(target() - y) > 1) {
+        if (y <= top - size) y = top - size, act = 'walk'
+        else if (y >= bottom) y = bottom, act = 'walk'
         else act = 'rise', phase = 0
       }
       if (act == 'rise') {
@@ -195,8 +197,7 @@
         else show(strips.plop, FRAMES - 1 - Math.floor(phase))
       }
       if (act == 'walk') {
-        target = inView ? s.top : Math.min(Math.max(y, PAD), room)
-        let gap = target - y
+        let gap = target() - y
         if (Math.abs(gap) <= 1) act = inView ? 'step' : 'plop', phase = 0
         else {
           dir = Math.sign(gap)
@@ -206,9 +207,9 @@
       }
       if (act == 'step') {
         // the last few steps sideways into his place, toward you
-        let dx = s.left - x, dy = s.top - y, d = Math.hypot(dx, dy)
+        let dx = hx - x, dy = hy - y, d = Math.hypot(dx, dy)
         if (d <= 1) {
-          x = s.left, y = s.top, act = 'plop', phase = 0, homing = true
+          x = hx, y = hy, act = 'plop', phase = 0, homing = true
         } else {
           let k = Math.min(1, PACE * dt / d)
           x += dx * k, y += dy * k, dir = 1

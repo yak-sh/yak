@@ -1,6 +1,7 @@
 // The home page's yak (public/wander.js) run over index.html in a 1440 by
 // 900 window, its frames stepped by hand. The page's words start where the
-// column does; the hero's yak sits at the top of the page.
+// column does; the hero's yak sits at the top of the page. Out of the hero
+// his place is on the page, so a scroll alone never moves him.
 import { test } from '@yaks/testing'
 import { assert, assertEquals } from '@std/assert'
 import { parseHTML } from 'linkedom'
@@ -62,6 +63,7 @@ let page = async (column = 144) => {
     performance: { now: () => env.now },
     requestAnimationFrame: (f: (t: number) => void) => env.frames.push(f),
     addEventListener: (type: string, f: () => void) => env.on[type] = f,
+    scrollX: 0,
     get scrollY() {
       return env.scrollY
     },
@@ -135,19 +137,19 @@ test('scrolled out of view, he scampers in just far enough to be in frame, and t
   await p.step(500)
   assertEquals(p.where(), 'home sitting', 'he waits for the page to be still')
   await p.step(3000)
-  assertEquals(p.where(), 'translate(21px, 12px) sitting')
+  assertEquals(p.where(), 'translate(21px, 1512px) sitting')
   await p.scroll(1400)
   await p.step(3000)
   assertEquals(
     p.where(),
-    'translate(21px, 112px) sitting',
+    'translate(21px, 1512px) sitting',
     'in frame, he does not move',
   )
   await p.scroll(700)
   await p.step(3000)
   assertEquals(
     p.where(),
-    'translate(21px, 760px) sitting',
+    'translate(21px, 1460px) sitting',
     'half out below, he comes back up just enough',
   )
 })

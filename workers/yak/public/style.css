@@ -613,8 +613,9 @@
     height: 100%;
   }
 
-  /* The yak out in the margin is fixed in the window, above the page and
-     never in the way of a click. Each of his pictures is a layer: the one
+  /* The yak out in the margin is placed on the page (body is not
+     positioned, so this is the document's corner), scrolling with it, above
+     its words and never in the way of a click. Each of his pictures is a layer: the one
      marked data-on shows, and a strip of frames shows one frame at a time. */
   .Wander {
     position: relative;
@@ -623,7 +624,7 @@
   }
 
   .Wander-out {
-    position: fixed;
+    position: absolute;
     top: 0;
     left: 0;
     z-index: 1;
