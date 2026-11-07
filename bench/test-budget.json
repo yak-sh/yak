@@ -4113,10 +4113,6 @@
       "the platform's receipt leaves from the app's own address": 30.9,
       "the same letter written twice is sent once": 31.6
     },
-    "workers/yak/manage_test.ts": {
-      "Billing management opens checkout and the customer portal for this space": 1812.2,
-      "the dashboard is at the apex, whatever serves the space": 542.2
-    },
     "workers/yak/mcp_auth_test.ts": {
       "?auth=required answers the challenge a probing host needs": 48.4,
       "mixed auth: a stranger reads the menu, then signs in for it": 59.5,
