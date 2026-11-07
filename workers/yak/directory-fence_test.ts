@@ -30,6 +30,8 @@ let fixture = async (rules: Rule[] = [], time?: Clock) => {
   }
   let core = new ServingCopy({ persistence })
   let begins: number[] = [], finishes: number[] = []
+  // Each fence raised and each transaction opened, in order.
+  let trail: string[] = []
   let beforeBegin = () => Promise.resolve()
   let offered = (revision: number) => revision
   let beforeFinish = (_revision: number) => Promise.resolve()
@@ -38,6 +40,7 @@ let fixture = async (rules: Rule[] = [], time?: Clock) => {
     begin: async (floor) => {
       let revision = core.begin(floor)
       begins.push(revision)
+      trail.push('begin')
       await beforeBegin()
       return offered(revision)
     },
@@ -56,6 +59,16 @@ let fixture = async (rules: Rule[] = [], time?: Clock) => {
     get: (key) => Promise.resolve().then(() => core.get(key)),
   }
   let ctx = state(PLATFORM_STORE)
+  let open = ctx.storage.transactionSync.bind(ctx.storage), depth = 0
+  ctx.storage.transactionSync = <T>(body: () => T) => {
+    if (!depth) trail.push('tx')
+    depth++
+    try {
+      return open(body)
+    } finally {
+      depth--
+    }
+  }
   let store: Store
   let env = {
     CLOCK: time,
@@ -114,6 +127,7 @@ let fixture = async (rules: Rule[] = [], time?: Clock) => {
     body,
     begins,
     finishes,
+    trail,
     settle,
     ask: (path: string, body?: unknown) =>
       store.fetch(
@@ -253,7 +267,9 @@ await proof(
 // burial a right guess writes hold back no serving check. The person a right
 // guess signs in is decided in the same write (T-148969), and fences only
 // when it is minted or named: someone the directory already holds, named,
-// signs in under none.
+// signs in under none. A guess that fences raises its fence before it opens
+// any transaction: one rolled back would hold the fence's ask until storage
+// confirmed it (graph.ts `foreseeing`).
 await proof(
   "a sign-in code's whole life leaves serving checks standing",
   async () => {
@@ -270,6 +286,16 @@ await proof(
       return { spent, fences: f.begins.length - before }
     }
     let first = await signIn(), again = await signIn()
+    let trail = async (code: string) => {
+      let from = f.trail.length
+      await spend(f.at, 'secret', 'trail@example.com', code)
+      return f.trail.slice(from)
+    }
+    let code = (await mint(f.at, 'secret', 'trail@example.com'))!
+    let trails = [
+      await trail(code == '000000' ? '000001' : '000000'),
+      await trail(code),
+    ]
     let [person] = await f.at.query(`.person&.email.address=${at}&?doc`)
     let left = (await f.at.query(`.signin.email=${at}`)).length
     return () =>
@@ -278,11 +304,13 @@ await proof(
         again,
         left,
         title: (person?.doc as { title?: string })?.title,
+        trails,
       }, {
         first: { spent: [null, person?.entity.eid], fences: 1 },
         again: { spent: [null, person?.entity.eid], fences: 0 },
         left: 0,
         title: 'fence',
+        trails: [['tx'], ['begin', 'tx']],
       })
   },
 )

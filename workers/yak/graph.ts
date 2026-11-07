@@ -268,7 +268,13 @@ import { argsOf, who } from '@yaks/graph/call'
 import { comps, dead as deleted, TOMBSTONE } from '@yaks/graph/bundle'
 import { hook, type HookContext } from '@yaks/graph/plugin'
 import { doomed } from '@yaks/graph/read'
-import { applyOptions, graph, identityEid, REQUESTS } from '@yaks/graph'
+import {
+  applyOptions,
+  foreseen,
+  graph,
+  identityEid,
+  REQUESTS,
+} from '@yaks/graph'
 import { actorOf as writerOf } from '@yaks/graph/provenance'
 import { Refused } from '@yaks/graph/errors'
 import { DELIVER, MAIL } from '@yaks/mail'
@@ -773,12 +779,20 @@ installContext({
 // delete or component fences.
 //
 // A request a plugin decides inside the write carries none of the rows it
-// writes until it runs, so it is tried under no fence, and run again under
-// one when what it decided names what a copied line does (`Unraised`): a
+// writes until it runs, so what it will decide is foreseen first, by a read
+// of committed state outside any transaction (@yaks/graph `foreseen`): a
 // guess that opens writes the person signing in only when it mints or names
 // them (facets/signin-graph.ts), and a wrong one writes nothing but sign-in
-// rows. `$own` mints a person's space and seat (facets/directory-graph.ts)
-// whenever it is asked, so it fences from the start.
+// rows. One foreseen to name what a copied line does takes its fence before
+// it writes. Trying it under no fence instead would cost the fence a wait:
+// a transaction rolled back still holds the object's output until storage
+// confirms the commit it opened, the fence's `begin` included (workerd
+// `transactionSync` notes a write before its savepoint). The
+// foresight can miss what the write then decides, so one foreseen to raise
+// none is still tried under none, and run again under a fence when it turns
+// out to (`Unraised`). `$own` mints a person's space and seat
+// (facets/directory-graph.ts) whenever it is asked, so it fences from the
+// start.
 let UNNAMED = new Set(['signin'])
 let STAMPS = new Set(['created', 'updated'])
 let UNFENCED = new Set([...RECEIPTS, 'archetype', ...UNNAMED])
@@ -1698,11 +1712,33 @@ export class Store {
           let fence = () =>
             fenced(copy, under, this.#committed, clockOf(this.#time))
           // A write no authorization reads raises no fence (`unfenced`), and
-          // one decided inside raises it once it turns out to (`deciding`).
+          // one decided inside raises it as foreseen, or once it turns out to
+          // (`deciding`).
           let unread = () =>
             deciding(bundles)
-              ? refenced(() => under(UNREAD), fence)
+              ? after(
+                foreseeing(bundles, opts?.trusted),
+                (raises) =>
+                  raises ? fence() : refenced(() => under(UNREAD), fence),
+              )
               : under(UNREAD)
+          // Whether what a batch's requests decide names what a copied line
+          // does, as foreseen. A foresight that fails foresees nothing: the
+          // write decides again, and says why.
+          let foreseeing = (b: Bundle[], trusted?: boolean) => {
+            let raises = (decided: Bundle[]) => {
+              if (!unfenced(decided.filter((d) => !deleted(d)))) return true
+              let gone = killed(decided)
+              return !!gone.length &&
+                after(g.get(gone), (rows) => !unheld(rows))
+            }
+            try {
+              let out = after(foreseen(g, b, trusted), raises)
+              return isPromise(out) ? out.catch(() => false) : out
+            } catch {
+              return false
+            }
+          }
           let gone = killed(bundles)
           if (unfenced(bundles.filter((b) => !deleted(b)))) {
             if (!gone.length) return unread()

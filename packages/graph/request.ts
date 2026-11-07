@@ -14,3 +14,64 @@
 // (./unchanged.ts), and a graph whose copy is not the truth cannot tell.
 
 export { requested, REQUESTS } from './bundle.ts'
+
+import { each } from '@yaks/fp'
+import type { Bundle } from './bundle.ts'
+import type { Graph } from './graph.ts'
+import type { Tx } from './storage.ts'
+
+let unwritten = () => {
+  throw new Error('a foresight reads, and writes nothing')
+}
+
+/**
+ * What the plugins answering a batch's requests decide it writes, as
+ * committed state stands, read outside any transaction: their `authorize`
+ * hooks run over `outside`, as `apply()` runs them over its own transaction,
+ * and a hook that writes there throws. It is a foresight, for a caller
+ * choosing how to write: the write decides again inside its transaction, and
+ * may find otherwise. Bundles no plugin decides come back as they went.
+ *
+ * ```ts
+ * import { equal } from '@yaks/testing'
+ * import { foreseen, graph } from '@yaks/graph'
+ * import { hook } from '@yaks/graph/plugin'
+ * import { ram } from '@yaks/ram'
+ * import { loadVocab } from '@yaks/vocab'
+ * let body = { type: 'string' }
+ * let vocab = loadVocab([{ $defs: { note: { component: true, properties: { body } } } }])
+ * let g = graph({ storage: ram(vocab), vocab })
+ * // `$first` writes a note where the entity holds none yet.
+ * g.use({
+ *   name: 'first',
+ *   requests: ['$first'],
+ *   authorize: hook(['$first'], async ([b], tx) => {
+ *     let [held] = await tx.get([b.entity.eid])
+ *     return held?.note ? [] : [{ entity: b.entity, note: { body: 'first' } }]
+ *   }),
+ * })
+ * let first = [{ entity: { eid: 'a' }, $first: {} }]
+ * equal(await foreseen(g, first), [{ entity: { eid: 'a' }, note: { body: 'first' } }])
+ * await g.apply([{ entity: { eid: 'a' }, note: { body: 'mine' } }])
+ * equal(await foreseen(g, first), [])
+ * ```
+ */
+export let foreseen = (
+  g: Pick<Graph, 'plugins' | 'outside'>,
+  bundles: Bundle[],
+  trusted?: boolean,
+): Bundle[] | Promise<Bundle[]> => {
+  let tx: Tx = {
+    ...g.outside,
+    patch: unwritten,
+    remove: unwritten,
+    revive: unwritten,
+  }
+  return each(g.plugins, bundles, (b, p) => {
+    let h = p.authorize
+    let asked = p.requests?.some((r) => b.some((x) => r in x))
+    return h && asked && (!h.keys || b.some((x) => h.keys!.some((k) => k in x)))
+      ? h(b, tx, undefined, { graph: g, trusted })
+      : b
+  })
+}
