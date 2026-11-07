@@ -287,7 +287,9 @@ import {
   fields as project,
   list,
   parse,
+  present,
   retired,
+  want,
 } from '@yaks/query'
 import { effectsIn, loadVocab, type Vocab, type VocabDoc } from '@yaks/vocab'
 import { decode as fromWire, stringify } from '@yaks/vocab/wire'
@@ -1091,8 +1093,17 @@ export class Store {
       // writes can then persist attempts in the transaction that owes them.
       await this.#effects.work(this.#stored(this.#graph).graph, undefined, 0)
       // An alarm this object owes may have been spent by an instance that
-      // died before arming the next (`#holding`).
-      await this.#owed(this.#now())
+      // died before arming the next (`#holding`). Nobody waits for it: it is
+      // recovered behind the answer that woke this object, which would
+      // otherwise wait on this query, the first an isolate compiles, before
+      // its own (T-148354).
+      setTimeout(
+        () =>
+          this.#maintenance(() => this.#owed(this.#now())).catch((e) =>
+            defect(e, { request: 'owed alarm', store: this.#name() })
+          ),
+        0,
+      )
       // A lexicon not yet read is the alarm's to read, never this request's.
       if (this.#unread()) await this.#arming(this.#soon(), 'lexicon')
     }
@@ -5010,7 +5021,17 @@ export class Store {
     )
     if (!eids.length) return { refs, names: {} }
     let missing = eids.filter((eid) => !this.#people.has(eid))
-    let read = missing.length ? this.#graph.get(missing, ['person', 'doc']) : []
+    // Only a person is named, so the read asks for one: a query that
+    // requires `person` can match no description of the vocabulary, which
+    // the graph would otherwise derive on an isolate's first answer to rule
+    // the eids out (@yaks/code `describing`).
+    let read = missing.length
+      ? this.#graph.read(and(
+        equals('entity.eid', list(...missing)),
+        present('person'),
+        want('doc'),
+      ))
+      : []
     return after(read, (found) => {
       for (let eid of missing) this.#people.set(eid, null)
       for (let b of found) {

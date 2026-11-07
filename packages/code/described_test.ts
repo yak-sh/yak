@@ -109,6 +109,10 @@ test('a graph describes what it is served with, and stops describing what it is 
   ])
   assertEquals(await befores(), 1)
   assertEquals((await eids(`.refs=${note}`)).length, 5)
+  // A description is read by its eid, and a read that requires a component
+  // no description wears answers none.
+  assertEquals(await eids(`.entity.eid=${note}`), [note])
+  assertEquals(await eids(`.entity.eid=${note}&.note`), [])
   assertEquals(
     (await d.get([note], ['_comp']))[0]._comp,
     (await g.get([note], ['_comp']))[0]._comp,

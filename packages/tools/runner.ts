@@ -88,8 +88,9 @@ let running = new WeakMap<Graph, Map<Eid, Promise<Bundle[]>>>()
 
 /** What a runner is built with. */
 export type Opts = {
-  /** what it can run */
-  tools: Tool[] | Registry
+  /** what it can run: a registry made only once a call asks for a tool,
+   * so a process that runs none builds none */
+  tools: Tool[] | Registry | (() => Registry)
   /** the graph the tools read and write, when that is not the graph the calls
    * are recorded in (a server that keeps its call records separately) */
   host?: Graph
@@ -301,7 +302,8 @@ export let keeps = (
  * `reconcile()` is explicit recovery for calls without a recorded effect.
  */
 export let runner = (g: Graph, opts: Opts): Runner => {
-  let catalog = registryOf(opts.tools)
+  let made: Registry | undefined
+  let catalog = () => made ??= registryOf(opts.tools)
   let otherwise = opts.otherwise && namedTool(opts.otherwise)
   let clock = opts.clock ?? measuring
   let now = () => clock.now()
@@ -374,7 +376,7 @@ export let runner = (g: Graph, opts: Opts): Runner => {
   let toolOf = (call: Bundle): NamedTool | undefined =>
     opts.takes && !opts.takes(call)
       ? undefined
-      : catalog.get(String((call.call as Comp).to)) ?? otherwise
+      : catalog().get(String((call.call as Comp).to)) ?? otherwise
   // One promise per call in flight in this process, in the map before the
   // work starts, so nothing the work sets off finds the call untaken.
   let tracked = (id: Eid, go: () => Promise<Bundle[]>): Promise<Bundle[]> => {
@@ -578,7 +580,7 @@ export let runner = (g: Graph, opts: Opts): Runner => {
         if (opts.report) {
           let [call] = await g.get([id])
           let to = String((call?.call as Comp | undefined)?.to)
-          await opts.report(error, call, catalog.get(to)?.name)
+          await opts.report(error, call, catalog().get(to)?.name)
         }
       }
     }
@@ -628,7 +630,7 @@ export let runner = (g: Graph, opts: Opts): Runner => {
     let fresh = asked.filter((t) => !stood.has(t))
     if (fresh.length) {
       let bundles = registering.catch(() => []).then(() =>
-        standing(fresh.map((t) => catalog.get(t.name) ?? t))
+        standing(fresh.map((t) => catalog().get(t.name) ?? t))
       ).catch((error) => {
         for (let t of fresh) {
           if (stood.get(t) === bundles) stood.delete(t)
@@ -650,18 +652,20 @@ export let runner = (g: Graph, opts: Opts): Runner => {
 
   return {
     rules: plans,
-    registry: catalog,
+    get registry() {
+      return catalog()
+    },
     admit: (asked) => {
       let tool = toolOf(asked)
       return tool && {
         tool,
-        ensure: () => ensure([catalog.get(tool.name) ?? tool]),
+        ensure: () => ensure([catalog().get(tool.name) ?? tool]),
         call: () => born(asked, tool),
         read: () => read(asked, tool),
       }
     },
     get tools() {
-      return catalog.list()
+      return catalog().list()
     },
     // Once per tool per runner, however many callers ask, and only the rows
     // that are missing or say something else: a tool row is the same row
@@ -670,7 +674,7 @@ export let runner = (g: Graph, opts: Opts): Runner => {
     // graph. A caller that names the tool a call points at stands up that one
     // row, which is what a server building a runner per request needs.
     ensure: (names) =>
-      ensure(catalog.list().filter((t) => !names || names.includes(t.name))),
+      ensure(catalog().list().filter((t) => !names || names.includes(t.name))),
     // A direct read has no stored lifecycle and owes no write reply.
     read,
     // Recorded work is written claimed before the tool runs.

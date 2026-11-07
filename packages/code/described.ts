@@ -22,7 +22,7 @@
 // rows are the vocabulary's, the same for every graph served with it, so a
 // host keeping many graphs on one vocabulary copies it into none of them.
 
-import { map, type Pred, type Query } from '@yaks/query'
+import { bare, type Clause, map, type Pred, type Query } from '@yaks/query'
 import type { Bundle, Comp, Graph, Plugin } from '@yaks/graph'
 import { derivedEid, identities } from '@yaks/graph/identity'
 import { link, unlink } from '@yaks/edge'
@@ -217,11 +217,28 @@ let derive = (vocab: Vocab) => {
   return held
 }
 
+// Every eid a description has is derived (@yaks/graph/identity
+// `derivedEid`), so only a value of that shape can name one.
+let DERIVED =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-8[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/
+
+// The components a description wears: its own, its title, and an edge's.
+let WORN = new Set([...META, 'entity', 'doc', 'edge'])
+
 // Whether a query can match a description: a clause names one of its
 // components, other than to want it or leave it out, or one of its entities.
-let asks = (query: Query, held: Map<string, Bundle>): boolean => {
+// A query that requires a component no description wears (`.person`)
+// matches none. The rows are derived only to ask whether a value that could
+// be one of their eids is, so an isolate's first read, the one a store waking
+// cold answers, derives nothing unless it can match a description.
+let asks = (query: Query, held: () => Map<string, Bundle>): boolean => {
   let named = (path: string[]) => path.some((p) => META.includes(p))
-  let says = (raw?: string) => raw != null && held.has(raw)
+  let says = (raw?: string) =>
+    raw != null && DERIVED.test(raw) && held().has(raw)
+  let unworn = (c: Clause) =>
+    c.kind == 'pred' && c.op == '!' && bare(c) && !c.not && !c.where &&
+    !WORN.has(c.path[0])
+  if (query.kind == 'and' && query.clauses.some(unworn)) return false
   let hit = false
   map(query, (c) => {
     hit ||= c.kind == 'pred'
@@ -256,8 +273,8 @@ export let describing: Plugin = {
   name: '@yaks/code describing',
   view: ({ vocab }, original) => {
     if (!vocab?.comp('_comp')) return null
+    if (!asks(original, () => derive(vocab))) return null
     let held = derive(vocab)
-    if (!asks(original, held)) return null
     let stale = (b: Bundle) => held.has(b.entity.eid) || SAID.some((r) => b[r])
     return {
       original,

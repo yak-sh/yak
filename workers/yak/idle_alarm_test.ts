@@ -184,6 +184,8 @@ test('a new incarnation re-arms the alarm its pending effects owe', async () => 
     new Request('http://store/query?q=.effect.state=pending', { headers }),
   )
   assertEquals((await read.json()).length, 1)
+  // Re-armed behind the answer, which waits for none of it.
+  await new Promise((r) => setTimeout(r, 0))
   assertEquals(await ctx.storage.getAlarm(), next)
 })
 

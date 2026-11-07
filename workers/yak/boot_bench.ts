@@ -1,17 +1,18 @@
 /// <reference lib="deno.ns" />
 // What a Store pays when it comes back: its constructor over storage that
-// outlived the last incarnation — `#start`, the reshaping and migration
-// questions, and `#boot` → `#build` (the vocabulary loaded, the graph and every
-// plugin composed, the doors raised). A Durable Object that can hibernate is
-// dropped from memory after 10 idle seconds and runs its constructor again on
-// the next request, and in production that next call costs ~300 ms more than a
-// warm one (Workers traces, 2026-09-24). This is our share of it.
+// outlived the last incarnation, then the first request, which runs `#start`,
+// the reshaping and migration questions, and `#build` (the vocabulary loaded,
+// the graph and every plugin composed, the doors raised) before its read. A
+// Durable Object that can hibernate is dropped from memory after 10 idle
+// seconds and runs its constructor again on the next request.
 //
 // Over the workerd stand-in, as graph_test.ts runs the Store: each object is
-// deployed and served once first, so what is timed is a wake — the schema
-// stamp already matches and no DDL runs — never a first boot. Runtime work
-// (restoring the object, a cold isolate loading the bundle) is outside it.
-// Gated by bin/bench-gate.ts, which ratchets each ratio down.
+// deployed and served once first under the same Worker version, so what is
+// timed is a wake — the schema fit stands and no DDL runs — never a first
+// boot. Runtime work (restoring the object, a cold isolate loading the bundle)
+// is outside it, and so is a cold isolate's JIT: every wake here after the
+// first runs warm code. An isolate's first wake costs several times more
+// (T-148354), and only a fresh process shows it.
 import { durable } from '../../packages/durable-object/testing.ts'
 import type { Wire } from '@yaks/durable-object'
 import { PLATFORM_STORE } from '@yaks/platform/names'
@@ -19,6 +20,11 @@ import { Store } from './graph.ts'
 
 // One object's state: storage that outlives an incarnation, and the sockets
 // the runtime holds for it.
+// One Worker version for every incarnation, as the runtime gives it.
+let BIND = {
+  CF_VERSION_METADATA: { id: 'v1', timestamp: '2026-11-07T00:00:00Z' },
+}
+
 let state = () => {
   let live: Wire[] = []
   return {
@@ -61,7 +67,7 @@ let app = state()
     'x-yak-person': ADA,
     'x-yak-role': 'owner',
   }
-  let store = new Store(app)
+  let store = new Store(app, BIND)
   await ok(send(store, '/vocab', head, {
     $defs: {
       recipe: {
@@ -94,7 +100,7 @@ let app = state()
 // write.
 let directory = state()
 {
-  let store = new Store(directory)
+  let store = new Store(directory, BIND)
   let person = crypto.randomUUID()
   await ok(send(store, '/apply', {
     'x-store': PLATFORM_STORE,
@@ -113,10 +119,20 @@ let directory = state()
   )
 }
 
-Deno.bench('store boot: an app store wakes', () => {
-  new Store(app)
+let reader = {
+  'x-store': 'ada/recipes',
+  'x-yak-app': APP,
+  'x-yak-access': 'public',
+}
+
+Deno.bench('store boot: an app store wakes and answers a read', async () => {
+  await ok(send(new Store(app, BIND), '/query?q=.recipe&.limit=1', reader))
 })
 
-Deno.bench('store boot: the directory wakes', () => {
-  new Store(directory)
+Deno.bench('store boot: the directory wakes and answers a read', async () => {
+  await ok(
+    send(new Store(directory, BIND), '/query?q=.space.slug=ada', {
+      'x-store': PLATFORM_STORE,
+    }),
+  )
 })

@@ -201,6 +201,14 @@ A query that works on the box can be refused in a store.
   in it (T-143307). Start it beside what the request already waits on, with
   `WARM` (door.ts), which touches no storage, so a start nobody follows up
   leaves nothing behind.
+- **An isolate's first wake runs every path cold.** Its boot and first read
+  cost a store 130-320 ms of CPU against a warm wake's 5-15 ms (T-148354):
+  each function runs for the first time, and each per-isolate derivation (a
+  vocabulary's words, its description rows) is made then. A bench in one
+  process times warm code, so measure a first wake in a fresh process over a
+  stored copy of the object (CPU profile with `deno run --cpu-prof`). Keep
+  what the first request runs to what its answer needs: work nobody waits for
+  (re-arming an owed alarm, `#start`) runs behind the answer.
 - **128 MB per isolate**, shared by every object in it (`HELD` in
   packages/embedding/held.ts caps vector copies at 48 MB; the vectors are
   `search-and-embeddings`). The kernel Worker has the same 128 MB, so a body

@@ -628,10 +628,11 @@ export let assemble = (
       // one-shot command opens a host to ask one question and should not write
       // just to say hello.
       makeRunner = () => {
-        let tools = host.registry
         toolPart?.('runner')
         return prepared.factories.runner(g!, {
-          tools,
+          // Built by the first call that asks for a tool: effects need the
+          // runner as the graph opens, and most openings run no tool.
+          tools: () => host.registry,
           // This host owns the calls it claims, so the start-up pass re-runs its
           // own interrupted calls and leaves alone another runner's, or those an
           // imported transcript recorded as already run.
