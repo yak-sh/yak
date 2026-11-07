@@ -117,8 +117,9 @@ test('the plugin commits a release, and commits it once', async () => {
   assertEquals((await g.read('.made')).map((r) => r.entity.eid), [head])
 
   // A second touch of the same release makes no second commit: the plugin
-  // asked, and the host said there was nothing to commit.
-  await g.apply([{ entity: { eid: release }, release: { files: '{}' } }])
+  // asked, and the host said there was nothing to commit. The touch changes
+  // the row, since a write that changes nothing reaches no plugin at all.
+  await g.apply([{ entity: { eid: release }, release: { files: '{"a":1}' } }])
   assertEquals(await refAt(g, APP), head)
   assertEquals((await g.read('.made')).length, 1)
   assert(seen.length > 1, 'the second write reached the plugin')
