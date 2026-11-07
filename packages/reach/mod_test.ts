@@ -84,3 +84,36 @@ test('a refusal in one member leaves every member unwritten', async () => {
   )
   assertEquals(eids(await books.read('.entity.eid=wild')), [])
 })
+
+test('a remote member says where each piece lives, and whose number the row is', async () => {
+  let { fan, books, loans } = await setup()
+  await fan.written([books, loans], undefined, [
+    { entity: { eid: 'kim' }, loan: { to: 'Bo' } },
+  ])
+  let far: Member = { ...loans, at: 'yaks.app', remote: true }
+  let homes = async (members: Member[]) =>
+    Object.fromEntries(
+      (await fan.read(members, '.loan&?book') as Bundle[]).map((
+        b,
+      ) => [b.entity.eid, b._stores]),
+    )
+  assertEquals(await homes([books, far]), {
+    dune: { book: 'me/books', loan: 'yaks.app' },
+    kim: { loan: 'yaks.app', entity: 'yaks.app' },
+  })
+  // yaks.app answering across its own stores says where within it.
+  let stores: Member = {
+    ...far,
+    read: async (line, o) => {
+      let out = await far.read(line, o)
+      return Array.isArray(out)
+        ? out.map((b) => ({ ...b, _stores: { loan: 'nora/lending' } }))
+        : out
+    },
+  }
+  assertEquals(await homes([books, stores]), {
+    dune: { book: 'me/books', loan: 'yaks.app/nora/lending' },
+    kim: { loan: 'yaks.app/nora/lending', entity: 'yaks.app' },
+  })
+  assertEquals((await homes([books, loans])).kim, undefined)
+})

@@ -17,6 +17,7 @@
 
 import type { Bundle } from '@yaks/graph'
 import { human, idOf, short } from '@yaks/id'
+import { homeOf } from '@yaks/reach'
 import {
   define,
   type H,
@@ -249,7 +250,14 @@ let shown = <Node>(
   want: Wants = {},
 ): Shown<Node> => {
   let demand = want.eid
-  let id = human(vocab)
+  // A number is its store's own: one another host gave is shown with that
+  // host (`T-12@yaks.app`), so it is never taken for this graph's T-12.
+  let homed = (b: Bundle, text: string) => {
+    let at = b.entity.num ? homeOf(b) : undefined
+    return at ? `${text}@${at}` : text
+  }
+  let humanOf = human(vocab)
+  let id = (b: Bundle) => homed(b, humanOf(b))
   let idAs = idOf(vocab)
   let held = new Map(
     [...links, ...named, ...answer].map((b) => [b.entity.eid, b]),
@@ -258,7 +266,7 @@ let shown = <Node>(
     needed: demand ? (eids) => eids.forEach(demand) : undefined,
     id: (b) => {
       let hit = hitOf(b)
-      return hit ? idAs({ ...b.entity, kind: hit.kind }) : id(b)
+      return hit ? homed(b, idAs({ ...b.entity, kind: hit.kind })) : id(b)
     },
     kind: (b) => hitOf(b)?.kind ?? (vocab.kindOf(b) || 'entity'),
     name: (eid) => {

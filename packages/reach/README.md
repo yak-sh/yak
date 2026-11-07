@@ -19,7 +19,9 @@ A **member** is a value (`Member`):
 - `vocab()`: the words it declares as its own;
 - `space`, `name` and `sandboxed`, optional: the members whose words agree on
   their shapes, what a caller calls it, and whether it takes only the writes
-  aimed at it.
+  aimed at it;
+- `remote`, optional: a graph other than the caller's own, such as another host,
+  whose pieces a bundle always names in `_stores`.
 
 Where a member runs (a Durable Object, a remote host, a graph in memory) is the
 caller's business.
@@ -52,8 +54,14 @@ With one member, a read is that member's own answer. With several:
 2. The eids every part selected are the answer. A part that only asks for a
    component (`?loan`) is fetched, never intersected.
 3. Each eid is gathered from every member and composed into one bundle. The
-   first member to answer a component owns it, and `_stores` names each
-   component's home when a bundle spans two.
+   first member in reach order to answer a component owns it, and the first to
+   hold the entity gives its spine. `_stores` names each component's home when a
+   bundle spans two members or wears a remote member's piece, and names
+   `entity`'s home too when the spine, and so its `num`, is a remote member's: a
+   `num` is its store's own (@yaks/id), so `homeOf(bundle)` says whose it is,
+   and the yak CLI shows it as `T-12@yaks.app`. A member that is itself composed
+   (yaks.app across its stores) has its own `_stores` said within it, as
+   `yaks.app/nora/lending`.
 
 Ranked hits interleave member by member. An `.order=` and its window run over
 the merged bundles with @yaks/match, in the union of the members' words, since

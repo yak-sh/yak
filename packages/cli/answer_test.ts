@@ -228,6 +228,18 @@ test('a reference prints as the id of the entity looked up for it', () => {
   // Not looked up: its handle, which a shell reads as a comment from the `#`.
   assertEquals(facts([]), 'completed: by #3333333333')
   assertEquals(facts([t11]), 'completed: by T-11')
+  let far = { _stores: { entity: 'yaks.app' } }
+  assertEquals(facts([{ ...t11, ...far }]), 'completed: by T-11@yaks.app')
+})
+
+test('a number another host gave is shown with that host', () => {
+  let far = {
+    _stores: { doc: 'yaks.app', task: 'yaks.app', entity: 'yaks.app' },
+  }
+  assertEquals(
+    said({ ...t9, ...far }, t10),
+    'T-9@yaks.app Fix the bar open\nT-10 Ship it done',
+  )
 })
 
 test('a held answer is drawn by a plugin’s terminal views first', async () => {

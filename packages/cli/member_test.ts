@@ -29,7 +29,10 @@ let host = (at: string, g = shopGraph()) => {
 
 let hosts = () => [
   host('shop.test'),
-  host('lend.test', graph({ storage: ram(lender), vocab: lender })),
+  {
+    ...host('lend.test', graph({ storage: ram(lender), vocab: lender })),
+    remote: true,
+  },
 ]
 
 let fan = reach({ core: shop })
@@ -56,6 +59,14 @@ test('a write across two hosts lands each component where its word lives, and re
   ])
   equal(await fan.read(members, '.book&.loan&.count'), { count: 1 })
   equal(await members[0].read('.loan'), [])
+})
+
+test('a row only another host holds says so, its number included', async () => {
+  let members = hosts()
+  let kim = { eid: crypto.randomUUID() }
+  await fan.written(members, undefined, [{ entity: kim, loan: { to: 'Bo' } }])
+  let [row] = await fan.read(members, '.loan') as Record<string, unknown>[]
+  equal(row._stores, { loan: 'lend.test', entity: 'lend.test' })
 })
 
 test('a rehearsed write keeps nothing on any host', async () => {

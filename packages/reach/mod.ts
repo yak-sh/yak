@@ -61,6 +61,31 @@ export type Member = {
   vocab: () => Promise<VocabDoc>
   /** A copy that takes only the writes aimed at it. */
   sandboxed?: boolean
+  /** A graph other than the caller's own, such as another host: a bundle
+   * wearing any piece of it says so in `_stores`, and names it as the home of
+   * `entity` when the spine came from it, since a `num` is its store's own. */
+  remote?: boolean
+}
+
+/** Where a bundle's `entity`, and so its `num`, lives when that is a remote
+ * member rather than the caller's own graph (`_stores.entity`). A `num` is
+ * its store's own, so one from elsewhere is shown with its home.
+ *
+ * ```ts
+ * import { homeOf } from '@yaks/reach'
+ * import { assertEquals } from '@std/assert'
+ *
+ * let eid = 'a3f19c02-4b00-4000-8000-000000000001'
+ * assertEquals(
+ *   homeOf({ entity: { eid, num: 12 }, _stores: { entity: 'yaks.app' } }),
+ *   'yaks.app',
+ * )
+ * assertEquals(homeOf({ entity: { eid, num: 5 } }), undefined)
+ * ```
+ */
+export let homeOf = (b: Bundle): string | undefined => {
+  let at = (b._stores as Record<string, unknown> | undefined)?.entity
+  return typeof at == 'string' ? at : undefined
 }
 
 /** The language every member shares, and how the composition reports. */
@@ -321,11 +346,26 @@ type Held = {
   // The archetype each member assigned the row: a pointer at the tables that
   // member holds, so the composition answers one of them, never a merge.
   arch: Record<string, string>
+  // The member each component came from, which a write routes by.
   home: Record<string, string>
+  // Where each component is said to live (`_stores`): its member, or within
+  // it where a member composed of others says so in its own `_stores`. The
+  // spine's is `entity`, and only when its `num` is a remote member's.
+  where: Record<string, string>
   // A word two spaces mean two things by (`apartIn`), held per space instead
   // of merged: space → the member that has it and what it holds.
-  split: Record<string, Record<string, { at: string; comp: unknown }>>
+  split: Record<
+    string,
+    Record<string, { at: string; where: string; comp: unknown }>
+  >
 }
+
+// `_stores`, on a bundle that must say where it lives: its pieces live in
+// more than one place, or its number is a remote member's (`entity`).
+let storesOf = (where: Record<string, string>) =>
+  where.entity || new Set(Object.values(where)).size > 1
+    ? { _stores: where }
+    : {}
 
 /** What the caller asked, which the gather would otherwise lose: the
  * components the answer keeps (`want`), the words two spaces mean two things
@@ -454,6 +494,7 @@ export let reach = (words: Words): Reach => {
     let held = new Map<string, Held>()
     if (!eids.length) return held
     let spaces = new Map(members.map((m) => [m.at, spaceOf(m)]))
+    let remote = new Set(members.filter((m) => m.remote).map((m) => m.at))
     let heard = await asked(
       members,
       `.entity.eid=${eids.join(',')}`,
@@ -468,20 +509,42 @@ export let reach = (words: Words): Reach => {
         // member's and is chosen with the kind, so no merge of the components
         // may spell it a second time.
         let { archetype, ...spine } = row.entity
-        let one: Held = held.get(eid) ??
-          { entity: spine, comps: {}, kinds: {}, arch: {}, home: {}, split: {} }
-        held.set(eid, one)
+        // A member composed of others (yaks.app across its stores) says
+        // where within it each piece lives, which is said here within it.
+        let inner = (row._stores ?? {}) as Record<string, string>
+        let within = (name: string) => inner[name] ? `${at}/${inner[name]}` : at
+        let one = held.get(eid)
+        if (!one) {
+          one = {
+            entity: spine,
+            comps: {},
+            kinds: {},
+            arch: {},
+            home: {},
+            where: {},
+            split: {},
+          }
+          if (remote.has(at) || inner.entity) {
+            one.where.entity = within('entity')
+          }
+          held.set(eid, one)
+        }
         if (archetype != null) one.arch[at] ??= archetype
         for (let [name, comp] of Object.entries(row)) {
-          if (name == 'kind' || name == 'entity') continue
+          if (name == 'kind' || name == 'entity' || name == '_stores') continue
           if (apart.has(name)) {
             one.split[name] ??= {}
-            one.split[name][spaces.get(at) ?? at] ??= { at, comp }
+            one.split[name][spaces.get(at) ?? at] ??= {
+              at,
+              where: within(name),
+              comp,
+            }
             continue
           }
           if (name in one.comps) continue
           one.comps[name] = comp
           one.home[name] = at
+          one.where[name] = within(name)
         }
         one.kinds[at] ??= String(row.kind ?? '')
       }
@@ -493,7 +556,8 @@ export let reach = (words: Words): Reach => {
    * first member that answers a component owns it here; `entity` is the
    * first member's, whose archetype comes from the member whose word named
    * the kind. `_stores` says which member holds which component, and rides
-   * only on a bundle that spans two. */
+   * on a bundle that spans two or wears a remote member's piece; it names
+   * `entity` too when the spine, and so the `num`, is a remote member's. */
   let composed = async (
     members: Member[],
     eids: string[],
@@ -515,7 +579,9 @@ export let reach = (words: Words): Reach => {
         ...Object.entries(extra).filter(([n]) => keeps(n)),
       ])
       let where = Object.fromEntries(
-        Object.entries({ ...one.home, ...home }).filter(([n]) => keeps(n)),
+        Object.entries({ ...one.where, ...home }).filter(([n]) =>
+          n == 'entity' || keeps(n)
+        ),
       )
       let said = kindFrom(
         Object.entries(one.kinds).filter(([at]) =>
@@ -532,7 +598,7 @@ export let reach = (words: Words): Reach => {
         // it is answering for.
         ...(space ? { space } : {}),
         ...comps,
-        ...(new Set(Object.values(where)).size > 1 ? { _stores: where } : {}),
+        ...storesOf(where),
       }
     }
     let parted = (one: Held, space?: string) => {
@@ -544,7 +610,7 @@ export let reach = (words: Words): Reach => {
       return bundle(
         one,
         Object.fromEntries(mine.map(([n, h]) => [n, h.comp])),
-        Object.fromEntries(mine.map(([n, h]) => [n, h.at])),
+        Object.fromEntries(mine.map(([n, h]) => [n, h.where])),
         space,
       )
     }
@@ -660,10 +726,7 @@ export let reach = (words: Words): Reach => {
         .filter(([name]) => name != comp)
       delete out[comp]
       delete out._stores
-      if (new Set(homes.map(([, at]) => at)).size > 1) {
-        out._stores = Object.fromEntries(homes)
-      }
-      return out
+      return { ...out, ...storesOf(Object.fromEntries(homes)) }
     }
   }
 
@@ -743,10 +806,13 @@ export let reach = (words: Words): Reach => {
         named.every((n) => words.has(n) || core.all.includes(n))
       ? new Set(named)
       : null
-    let from = named.length && !p ? [...new Set(named.flatMap(speak))] : members
+    // In reach order, whatever order the line names its words in: the first
+    // member holding the entity gives its spine, and so its `num`.
     let by = orderedBy(orders, vocab)
+    let asks = new Set([...named, ...(by ? [by] : [])].flatMap(speak))
+    let from = named.length && !p ? members.filter((m) => asks.has(m)) : members
     let bundles = await composed(
-      by ? [...new Set([...from, ...speak(by)])] : from,
+      from,
       eids,
       {
         want: want && by ? new Set([...want, by]) : want,
