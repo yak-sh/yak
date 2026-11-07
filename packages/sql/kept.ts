@@ -360,14 +360,16 @@ let PROBES = [
 // The call this is, and the shape it has; undefined for a call whose ids the
 // lowering reads as more than opaque (a computed row's id). An id `generated`
 // matches is never a human one (`T-12`, `12`), which is a prefix and digits.
+// Everything a lowering begins from is in the key, so it is known before the
+// query begins, and a kept shape begins nothing: the spine a query reads
+// follows from its clauses, the backings and the tags (./bind.ts `spineOf`).
 let called = (
   kind: string,
   ast: And,
   vocab: Vocab,
   opts: BindOpts,
-  p: Prepared,
 ) => {
-  let o = p.opts
+  let o = opts
   let place = new Map<string, number>(), operands: string[] = []
   let shape = renamed(ast, vocab, (id) => {
     let k = place.get(id)
@@ -434,11 +436,10 @@ let called = (
     ]),
     !!opts.archetypes,
     !!opts.census,
-    p.spine ?? null,
   ])
   return {
     key,
-    call: { now: o.now!, roots: roots ?? [], operands, refs, tags } as Call,
+    call: { roots: roots ?? [], operands, refs, tags },
   }
 }
 
@@ -691,7 +692,8 @@ export let sourceScreen = (
 
 // The statement `begin` lowers for this call, from the shelf while its shape's
 // proof and every answer it heard stand. `kind` names how it begins, so two
-// lowerings of one AST keep apart.
+// lowerings of one AST keep apart. A kept statement is bound without beginning
+// the query: no extension compiled any of it, so none is told it begins.
 let kept = (
   kind: string,
   ast: And,
@@ -699,6 +701,12 @@ let kept = (
   opts: BindOpts,
   begin: Begin,
 ): Raw => {
+  let shaped = called(kind, ast, vocab, opts)
+  let s = shelf(vocab), held = shaped && s.get(shaped.key)
+  if (held && 'sql' in held && stands(held.asked, opts)) {
+    put(s, shaped!.key, held)
+    return bound(held, { ...shaped!.call, now: opts.now ?? Date.now() })
+  }
   let asked: Asked[] = [], touched = { any: false }
   let p = within(
     touched,
@@ -710,15 +718,9 @@ let kept = (
       }),
   )
   let lowered = () => within(touched, () => render(p.lower()))
-  let shaped = called(kind, ast, vocab, opts, p)
-  if (!shaped) return lowered()
-  let { key, call } = shaped
-  let s = shelf(vocab), held = s.get(key)
-  if (held === null) return lowered()
-  if (held && 'sql' in held && stands(held.asked, opts)) {
-    put(s, key, held)
-    return bound(held, call)
-  }
+  if (!shaped || held === null) return lowered()
+  // The clock the lowering read.
+  let { key } = shaped, call = { ...shaped.call, now: p.opts.now! }
   // Seen once, under a catalog that still answers as it did: prove it.
   if (held && 'first' in held && stands(held.asked, opts)) {
     let proof = proven(begin, ast, vocab, opts, held, call)

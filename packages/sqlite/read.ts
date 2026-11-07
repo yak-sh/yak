@@ -63,6 +63,7 @@ import {
   screen,
   type Select,
   select,
+  setOf,
   type Source,
   sourceScreen,
   storedOnly,
@@ -896,14 +897,6 @@ export let admitted = (eids: string[], screen: Raw | null): Select =>
         : lit(true),
     ),
   })
-
-// A list of names as a set, made once for each list.
-let sets = new WeakMap<readonly string[], Set<string>>()
-let setOf = (names: readonly string[]): Set<string> => {
-  let got = sets.get(names)
-  if (!got) sets.set(names, got = new Set(names))
-  return got
-}
 
 // `answered`: the eids are what a query under `opts.visibility` answered, in
 // this same snapshot, so the scope has admitted each one already. Their

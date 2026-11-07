@@ -196,8 +196,13 @@ test('a begin hook that intercepts a warmed predicate runs once', () => {
 // A begin hook that changes the options' reference map: compiled with a
 // reference plan and without, the answers agree, and the screen sees the map
 // as begin left it.
-let hooked = (value: number, replace: boolean, cached: boolean) => {
-  let q = and(eq('mark.owner', eid(1)))
+let hooked = (
+  value: number,
+  replace: boolean,
+  cached: boolean,
+  path = 'mark.owner',
+) => {
+  let q = and(eq(path, eid(1)))
   let begun = 0, screen: Screen | undefined
   let opts: BindOpts = { references: { [eid(1)]: value } }
   opts.extend = [{
@@ -223,7 +228,18 @@ test('begin preserves captured reference maps it replaces', () => {
 })
 
 test('begin sees in-place changes to captured reference maps', () => {
-  equal(hooked(3, false, true), hooked(3, false, false))
+  let path = 'link.left'
+  equal(hooked(3, false, true, path), hooked(3, false, false, path))
+})
+
+test('a kept shape binds its call without beginning an extension', () => {
+  let begun = 0
+  let extension: Extension = { name: 'kept', compile: {}, begin: () => begun++ }
+  let q = and(eq('mark.owner', eid(1)))
+  let at = (ref: number) =>
+    compile(q, vocab, { extend: [extension], references: { [eid(1)]: ref } })
+  for (let ref of [1, 2, 3]) equal(at(ref).params, [ref])
+  equal(begun, 2)
 })
 
 let words = loadVocab([...vocab.docs, {

@@ -36,3 +36,24 @@ export let listed = (names: readonly string[] | undefined): number => {
   }
   return n
 }
+
+let sets = new WeakMap<readonly string[], ReadonlySet<string>>()
+
+/**
+ * A list of names as a set, made once for each list: a store hands every read
+ * the same lists.
+ *
+ * ```ts
+ * import { setOf } from '@yaks/sql'
+ * import { assertEquals } from '@std/assert'
+ *
+ * let names = ['doc', 'task']
+ * assertEquals(setOf(names).has('task'), true)
+ * assertEquals(setOf(names), setOf(names))
+ * ```
+ */
+export let setOf = (names: readonly string[] = []): ReadonlySet<string> => {
+  let got = sets.get(names)
+  if (!got) sets.set(names, got = new Set(names))
+  return got
+}

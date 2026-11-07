@@ -231,7 +231,9 @@ export let claimed = (exts: readonly Extension[], q: Clause): boolean => {
 // boundary between two queries, the second would rank using the first's
 // leftover state. So the binder tells each extension that a new query has
 // begun, before any of its clauses compile; an extension that remembers nothing
-// between calls simply does not declare this hook.
+// between calls simply does not declare this hook. A query bound into the
+// statement its shape lowered to before (./kept.ts) compiles no clause, so
+// it begins nothing.
 //
 // It is called with the query's {@link Screen}, because an extension that ranks
 // needs one. A ranking cut to a limit before the rest of the query has filtered

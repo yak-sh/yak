@@ -6,6 +6,7 @@ import type { And, Clause } from '@yaks/query/core'
 import type { Vocab } from '@yaks/vocab'
 import type { BindOpts } from './bind.ts'
 import { literals } from './ident.ts'
+import { setOf } from './listed.ts'
 import { as, lit, type Select, select, table } from './ast.ts'
 
 let vacant = select({
@@ -21,8 +22,8 @@ export let empty = (
 ): Select | undefined => {
   // An extension may replace the built-in predicate (./extend.ts).
   if (opts.extend?.some((e) => e.compile.pred)) return undefined
-  let absent = new Set(opts.absent)
-  if (!opts.references && !absent.size) return undefined
+  if (!opts.references && !opts.absent?.length) return undefined
+  let absent = setOf(opts.absent)
   let visit = (c: Clause): boolean | undefined => {
     if (c.kind == 'and' || c.kind == 'or') {
       let arms = c.clauses.map(visit)

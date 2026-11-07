@@ -46,7 +46,7 @@
 
 export * from './query.ts'
 export { absentDerived, absentFrom } from './absent.ts'
-export { listed } from './listed.ts'
+export { listed, setOf } from './listed.ts'
 export * from './cascade.ts'
 export { type At, type Gone, type On, type Plan, rule } from './match.ts'
 export {

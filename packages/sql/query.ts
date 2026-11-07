@@ -7,6 +7,7 @@ export * from './derived.ts'
 export * from './extend.ts'
 export { walk } from './walk.ts'
 export { absentDerived, absentFrom } from './absent.ts'
+export { setOf } from './listed.ts'
 export { pinned } from './pinned.ts'
 export {
   bind,
