@@ -699,10 +699,12 @@ export let store = (base, { clock = system } = {}) => {
       let sub = subs.get(f.id)
       if (!sub) return
       sub.heard = true
+      // The store filed a refusal that is the page's mistake, and a failure
+      // of ours, where it caught them; a no meant for the visitor is no
+      // break. The page hears it through `ready`.
       if (f.refused) {
-        let e = new Error(f.refused.message ?? f.refused.error)
-        sub.first.reject(e)
-        throw e
+        sub.first.reject(new Error(f.refused.message ?? f.refused.error))
+        return
       }
       fold(sub, f)
       let now = rows(sub)
@@ -756,8 +758,8 @@ export let store = (base, { clock = system } = {}) => {
   // before it goes on (`let rows = await subscribe(f, draw).ready`), so that
   // page subscribes rather than querying first and asking the store twice. It
   // rejects with the store's refusal of the filter; a socket that will not
-  // open only keeps it waiting for the rows. A rejection nobody awaits is the
-  // socket's to report, as it always was, so it is not reported twice.
+  // open only keeps it waiting for the rows. A rejection nobody awaits is
+  // the store's to report (graph.ts `#mistook`), so it is not reported twice.
   let subscribe = (filter, cb) => {
     let name = `${++n}:${filter}`
     let q = asked(filter)

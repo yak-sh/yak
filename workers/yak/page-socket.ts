@@ -9,6 +9,8 @@ import { type App, appStore, type Space } from './directory.ts'
 import type { Env } from './env.ts'
 import { reading, sources } from './page-graph.ts'
 import { caught } from './defects.ts'
+import { mistaken } from './mistake.ts'
+import { noted, serving } from './unseen.ts'
 import { vouched, type Who } from './session.ts'
 
 type Socket = {
@@ -87,6 +89,31 @@ export let pageSocket = async (
   let out = queue(front, undefined, () => front.readyState == 1)
   let subs = new Map<string, { line: string | true; version: number }>()
   let closed = false
+  // A watch the page's code got wrong is the app's break, as its store files
+  // one (graph.ts `#mistook`): once for this socket, though every change
+  // refreshes it.
+  let filed = new Set<string>()
+  let mistook = (line: string, error: unknown) => {
+    if (filed.has(line)) return
+    filed.add(line)
+    mistaken(req, error, 'query', {
+      version: () => serving(env, space, app),
+      note: (report) =>
+        noted({ ...report, request: `subscribe ${line}` }, {
+          env,
+          space,
+          app,
+          request: req,
+          entrypoint: 'subscribe',
+        }),
+    }).catch((why) =>
+      caught(why, {
+        request: 'report subscribe failure',
+        space: space.slug,
+        app: app.slug,
+      })
+    )
+  }
 
   let refresh = (id: string) => {
     let sub = subs.get(id)
@@ -107,6 +134,7 @@ export let pageSocket = async (
           space: space.slug,
           app: app.slug,
         })
+        mistook(sub.line as string, error)
         out.send({ id, refused: refusal(error) })
       },
     )

@@ -405,6 +405,9 @@ and may carry [transient frames](../graph/README.md#transient-text).
 `subscriptions(graph, { invalidate })` accepts an application dependency rule:
 returning `true` from `invalidate(query, applied)` refreshes that subscription.
 It does not discover dependencies outside the query automatically.
+`refused(error, query)` is told of each subscription the registry refuses and
+closes, the caller's own refusals included, for a host that knows whose query it
+was to report.
 
 ### Relayed values
 

@@ -462,6 +462,10 @@ export let subscriptions = (graph: Graph, opts: {
   /** How many closed answers stand at once for a page to ask again (default
    * 256). */
   keep?: number
+  /** Told of every subscription the registry refuses and closes, with its
+   * query: the caller's own refusals too, which `fault` leaves unreported,
+   * for a host that knows whose query it was to judge. */
+  refused?: (error: unknown, query: string) => void
 } = {}): Subs => {
   let base = graph
   let ending = new AbortController()
@@ -773,6 +777,11 @@ export let subscriptions = (graph: Graph, opts: {
     held.get(sub.sink)?.delete(sub.id)
     forget(sub, false)
     fault(err, 'subscription')
+    try {
+      opts.refused?.(err, sub.query)
+    } catch (why) {
+      fault(why, 'subscription refused')
+    }
     sub.sink({ id: sub.id, refused: refusal(err) })
   }
 

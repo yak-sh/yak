@@ -276,7 +276,7 @@ import {
   REQUESTS,
 } from '@yaks/graph'
 import { actorOf as writerOf } from '@yaks/graph/provenance'
-import { Refused } from '@yaks/graph/errors'
+import { Refused, status } from '@yaks/graph/errors'
 import { DELIVER, MAIL } from '@yaks/mail'
 import { subscription } from './notices.ts'
 import {
@@ -357,6 +357,7 @@ import { behindAnswer, owed, ran, reading, skewed } from './running.ts'
 import { type Relocating, relocation } from './relocate.ts'
 import { type Meta, metaOf, minted } from './meta.ts'
 import { caught, defect, refusing } from './defects.ts'
+import { noted } from './unseen.ts'
 import {
   apart,
   elapsed,
@@ -1846,7 +1847,10 @@ export class Store {
         PLATFORM_STORE,
       ),
     )
-    let subs = subscriptions(g, this.#time)
+    let subs = subscriptions(g, {
+      ...this.#time,
+      refused: (error, query) => this.#mistook(error, query),
+    })
     this.#subs = subs
     // A relayed arrival rouses the wakes it makes hold once the registry has
     // released, with nobody waiting on it: work past the message's answer,
@@ -3771,6 +3775,47 @@ export class Store {
     return Promise.resolve()
   }
 
+  // The watches whose refusal this incarnation filed: a page asks the same
+  // watch again on every reconnect, and its mistake is one break.
+  #mistakes = new Set<string>()
+  // Each watch's line as the page wrote it, by the line the registry holds,
+  // which carries this store's screen (`#naming`).
+  #watched = new Map<string, string>()
+
+  // A watch the store refused in its own words, the page's code wrong about
+  // them (an unknown word, a line that does not parse), filed as the app's
+  // break the way its query door files the same line (apps.ts `mistake`).
+  // Only an app's pages open a socket to its store, through its door's
+  // `/api/ws`, so a watch here is always the page's. Any other refusal stays
+  // the caller's; a failure of ours was already reported (@yaks/api `fault`).
+  #mistook(error: unknown, held: string) {
+    let app = this.#said('app')
+    let query = this.#watched.get(held) ?? held
+    if (!app || status(error) != 400) return
+    let message = error instanceof Error ? error.message : String(error)
+    let key = `${query}\n${message}`
+    if (this.#mistakes.has(key) || this.#mistakes.size >= 100) return
+    this.#mistakes.add(key)
+    let filed = (async () => {
+      let at = await this.#directory().appAt(app)
+      if (!at) return
+      await noted({
+        request: `subscribe ${query}`,
+        version: at.app.version ?? null,
+        message,
+        mistake: true,
+      }, {
+        env: this.#bind as Env,
+        space: at.space,
+        app: at.app,
+        entrypoint: 'subscribe',
+      })
+    })().catch((why) =>
+      defect(why, { request: 'report subscribe failure', store: this.#name() })
+    )
+    this.#ctx.waitUntil?.(filed)
+  }
+
   #failed(e: unknown) {
     let message = 'the schema refused'
     try {
@@ -5238,7 +5283,12 @@ export class Store {
   // sink it was opened with.
   #naming(subs: Subs, words: string[]): Subs {
     return naming(subs, {
-      query: (line) => asking(line, words, this.#personal),
+      query: (line) => {
+        let asked = asking(line, words, this.#personal)
+        if (this.#watched.size >= 256) this.#watched.clear()
+        this.#watched.set(asked, line)
+        return asked
+      },
       kind: this.#kind,
       names: this.#names,
     })

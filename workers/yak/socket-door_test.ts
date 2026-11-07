@@ -2,7 +2,8 @@
 // store, which answers the socket, or says the words the app uses from other
 // homes, so the door opens one across them (page-socket.ts) instead.
 import { equal, test } from '@yaks/testing'
-import { installPair } from '../../packages/workerd/testing.ts'
+import type { Bundle } from '@yaks/graph'
+import { installPair, made } from '../../packages/workerd/testing.ts'
 import * as apps from './apps.ts'
 import { USES } from './door.ts'
 import { KERNEL } from './meta.ts'
@@ -83,3 +84,49 @@ let store = await (async () => {
 })()
 test('a store whose app uses words from other homes answers its socket with them', () =>
   equal(store, { status: 204, uses: JSON.stringify({ shelf: 'library' }) }))
+
+// A watch the app's store cannot read is the page's code wrong: the store
+// files it as the app's break, once however often the page asks it again, and
+// the page still hears the refusal (graph.ts `#mistook`).
+let mistook = await (async () => {
+  let filed: Bundle[] = []
+  await using scenario = platform({
+    ERRORS: { send: (rows) => Promise.resolve(void filed.push(...rows)) },
+  })
+  let { env, object, settled } = scenario
+  let { app } = await seeded(env)
+  let undo = installPair()
+  try {
+    let res = await apps.fetch(
+      visit('/cookbook/api/ws', {
+        headers: { cookie: await as(ADA), upgrade: 'websocket' },
+      }),
+      env,
+    )
+    await res.body?.cancel()
+    let ws = made.at(-1)![1]
+    for (let id of ['a', 'b']) {
+      await object(app.store!).webSocketMessage(
+        ws,
+        JSON.stringify({ subscribe: '.nope', id }),
+      )
+    }
+    await settled()
+    let broke = filed.filter((row) => row.exception)
+    return {
+      refused: ws.taken().map((f) => [f.id, f.refused?.message]),
+      breaks: broke.map((row) => [
+        (row.exception as { value: string }).value,
+        (row.error as { tags: { request: string } }).tags.request,
+        (row.during as { app: string }).app == app.eid,
+      ]),
+    }
+  } finally {
+    undo()
+  }
+})()
+test("a page's watch its store refuses in its own words is filed once as the app's break", () =>
+  equal(mistook, {
+    refused: [['a', 'unknown prop: .nope'], ['b', 'unknown prop: .nope']],
+    breaks: [['unknown prop: .nope', 'subscribe .nope', true]],
+  }))
