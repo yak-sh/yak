@@ -386,6 +386,7 @@ export let REQUESTS: string[] = [
   '$at',
   '$alias',
   '$quiet',
+  '$touch',
 ]
 
 /**

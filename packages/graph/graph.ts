@@ -19,6 +19,7 @@
 //   ───────────────────  the transaction opens
 //   gather      core     every read this batch is going to need, in one call
 //   precondition core    the `$was` check   (a lease check is a hook here)
+//                        then what the graph already holds leaves the batch
 //   rules       rules    the declarative half, over the batch as an overlay
 //   mutate      core     the patches are written
 //   cascade     core     deletions spread; the entities they take join the
@@ -102,6 +103,7 @@ import {
 } from './gather.ts'
 import { guard } from './guard.ts'
 import { mutate, rejoin } from './mutate.ts'
+import { unchanged } from './unchanged.ts'
 import { ordered } from './ordered.ts'
 import { cascade } from './cascade.ts'
 import {
@@ -1012,7 +1014,21 @@ export let graph = (opts: Options): Graph => {
       return isPromise(done) ? done.then(raise) : raise()
     }
 
+    // The bundles that would have changed nothing (./unchanged.ts): out of
+    // the run, and back in its answer where the caller put them.
+    let idle: Bundle[] = []
+    let asked: Bundle[] = []
+    let answer = (b: Bundle[]): Bundle[] => {
+      if (!idle.length) return composed(b)
+      let at = new Map<Eid, number>()
+      for (let [i, row] of asked.entries()) {
+        if (!at.has(row.entity.eid)) at.set(row.entity.eid, i)
+      }
+      let place = (row: Bundle) => at.get(row.entity.eid) ?? asked.length
+      return composed([...idle, ...b]).sort((x, y) => place(x) - place(y))
+    }
     let inside = (bundles: Bundle[]): Bundle[] | Promise<Bundle[]> => {
+      asked = bundles
       checking = admission && !fallback && !bundles.some((b) => b.$prune) &&
         certified(bundles)
       let transacting = (tx: Tx) => {
@@ -1052,6 +1068,12 @@ export let graph = (opts: Options): Graph => {
           // (./rules.ts).
           let holds = (eid: Eid) => snap.got.get(eid) ?? undefined
           let checks: WriteHook[] | undefined
+          idle = []
+          let quiet: Step = (b) =>
+            after(unchanged(b, held), ({ kept, idle: left }) => {
+              idle.push(...left)
+              return kept
+            })
           return after(
             each(
               [
@@ -1100,6 +1122,9 @@ export let graph = (opts: Options): Graph => {
                     }),
                 ),
                 (b: Bundle[]) => admission ? overlaid(b, vocab, o.overlay) : b,
+                // What the graph already holds is no write: it leaves before
+                // the rules can fire on it (./unchanged.ts).
+                quiet,
                 // The declared rules, before any row of the batch is
                 // written: what they produce joins the batch, and `mutate`
                 // writes it like anything else.
@@ -1145,6 +1170,8 @@ export let graph = (opts: Options): Graph => {
                   },
                   holds,
                 ),
+                // And what a rule or hook said again leaves before the write.
+                quiet,
                 phase('mutate', held, (b) => {
                   b = b.filter((row) => !row.$prune)
                   if (checking && !certified(b)) throw new NeedsWrite()
@@ -1433,7 +1460,7 @@ export let graph = (opts: Options): Graph => {
         ),
         phase('prepare', outside),
         inside,
-        (b) => timed('compose', () => composed(b)),
+        (b) => timed('compose', () => answer(b)),
       ],
       owned(formed(bundles, (name) => name in derives())),
       (b, step) => step(b),

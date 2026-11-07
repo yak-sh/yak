@@ -343,9 +343,12 @@ export let sync = (graph: Graph, opts: SyncOpts): Sync => {
         let eids = [...new Set(bundles.map((b) => b.entity.eid))]
         return after(tx.get(eids), (held) => {
           let was = new Map(held.map((b) => [b.entity.eid, b]))
-          let asked = bundles.map((b) =>
-            asking(b, was.get(b.entity.eid) ?? null)
-          )
+          // Written whatever the page held (`$touch`): its copy may be
+          // stale, and the server's copy decides what changes.
+          let asked = bundles.map((b) => ({
+            ...asking(b, was.get(b.entity.eid) ?? null),
+            $touch: true,
+          }))
           // A delete waits for the server: the whole list is sent as it
           // stands, and none of it is applied here until the response is.
           if (bundles.some(dead)) {

@@ -23,11 +23,11 @@ let librarian = '00000000-0000-4000-8000-000000000001'
 let now = '2026-09-07T04:20:00.000Z'
 let tagged = (marked = false) => {
   let one = graph({ storage: memory(), vocab: shelfWords })
-  one.apply([{
+  one.apply([{ entity: { eid: 'b0' }, doc: { title: 'Emma' } }, {
     entity: { eid: 'b1' },
     book: { pages: 412 },
     doc: { title: 'Dune' },
-    ...(marked ? { bookmark: { of: 'b1' } } : {}),
+    ...(marked ? { bookmark: { of: 'b0' } } : {}),
   }])
   let seen: unknown[] = []
   one.use({

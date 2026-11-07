@@ -154,7 +154,7 @@ test('an actor with no instrument stamps who wrote it', async () => {
 test('stamps follow numeric timestamp declarations', async () => {
   let vocab = loadVocab({
     $defs: {
-      item: { component: true },
+      item: { component: true, properties: { n: { type: 'number' } } },
       created: {
         component: true,
         properties: { at: { type: 'number', stamped: true } },
@@ -167,11 +167,11 @@ test('stamps follow numeric timestamp declarations', async () => {
   })
   let g = graph({ vocab, storage: ram(vocab) })
   let now = '2026-10-12T12:00:00.000Z'
-  let [created] = await g.apply([{ entity: { eid: 'item' }, item: {} }], {
+  let [created] = await g.apply([{ entity: { eid: 'item' }, item: { n: 1 } }], {
     now,
   })
   equal((created.created as Comp).at, Date.parse(now))
-  let [updated] = await g.apply([{ entity: { eid: 'item' }, item: {} }], {
+  let [updated] = await g.apply([{ entity: { eid: 'item' }, item: { n: 2 } }], {
     now,
   })
   equal((updated.updated as Comp).at, Date.parse(now))

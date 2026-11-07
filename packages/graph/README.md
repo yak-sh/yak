@@ -1470,13 +1470,19 @@ equal(proseOf(vocab, { kind: 'book' }).startsWith('# book'), true)
 
 The `stamp` phase fills `created` once, `updated` on subsequent content edits,
 and [marks](../vocab/README.md#vocabulary) when first written. Adding or
-removing only marks preserves `updated`: each mark records its own event. These
-components must be declared in the vocabulary. `now` or `clock` supplies the
-timestamp; `graph({ provenance })` can choose per-entity attribution while
-retaining the stamp mechanism. `graph({ provenance: false })` leaves `created`
-and `updated` to another graph while still stamping marks. Trusted writes with
-`stamp: false` skip core stamps and marks, while plugin rules, hooks,
-validation, journaling, and effects still run.
+removing only marks preserves `updated`: each mark records its own event. A
+write of what the graph already holds changes nothing, so it stamps nothing:
+before the rules and again before the write, a component patch whose every
+property equals the stored value, or the removal of a component the entity
+lacks, leaves the batch (unchanged.ts). An entity left with nothing to say is
+not stamped, journaled, matched by a rule or effect, or heard by a watch, and
+comes back in the answer as the caller wrote it. These components must be
+declared in the vocabulary. `now` or `clock` supplies the timestamp;
+`graph({ provenance })` can choose per-entity attribution while retaining the
+stamp mechanism. `graph({ provenance: false })` leaves `created` and `updated`
+to another graph while still stamping marks. Trusted writes with `stamp: false`
+skip core stamps and marks, while plugin rules, hooks, validation, journaling,
+and effects still run.
 
 ```ts
 import { graph, signed } from '@yaks/graph'

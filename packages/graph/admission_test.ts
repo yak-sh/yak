@@ -384,11 +384,13 @@ test('a warmed write uses rules installed after its first apply', async () => {
     },
   })
   let g = graph({ storage: ram(vocab), vocab })
-  let input: Bundle[] = [{ entity: { eid: 'b1' }, book: { pages: 1 } }]
-  await g.apply(input)
+  let input = (
+    pages: number,
+  ): Bundle[] => [{ entity: { eid: 'b1' }, book: { pages } }]
+  await g.apply(input(1))
   let policy: Plugin = { name: 'titles', declared: [] }
   g.use(policy)
-  await g.apply(input)
+  await g.apply(input(2))
   policy.declared!.push({ name: 'title', match: '.book !doc +doc.title=Read' })
-  assertEquals((await g.apply(input))[0].doc, { title: 'Read' })
+  assertEquals((await g.apply(input(3)))[0].doc, { title: 'Read' })
 })

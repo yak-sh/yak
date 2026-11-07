@@ -88,13 +88,13 @@ test('what a wants forgot is read from the storage, and kept', () => {
     },
   }
   let h = graph({ storage, vocab: books, plugins: [forgetful] })
-  let calls = (x: Graph) => {
+  let calls = (x: Graph, pages: number) => {
     n.get = 0
-    x.apply([{ entity: { eid: 'b1' }, book: { pages: 500 } }])
+    x.apply([{ entity: { eid: 'b1' }, book: { pages } }])
     return n.get
   }
   // One extra call for the miss, and only one: the answer is kept.
-  assertEquals(calls(h), calls(g) + 1)
+  assertEquals(calls(h, 500), calls(g, 501) + 1)
   assertEquals((seen[0].doc as { title: string }).title, 'Chilton')
 })
 

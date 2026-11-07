@@ -68,7 +68,10 @@ for (let async of [false, true]) {
     })
     calls.length = 0
     assertEquals(
-      await g.apply([{ entity: { eid: 'b' }, book: { pages: 4 } }]),
+      await g.apply([{
+        entity: { eid: 'b' },
+        book: { pages: 4, shelved: true },
+      }]),
       [],
     )
     assertEquals(calls, ['pick'])

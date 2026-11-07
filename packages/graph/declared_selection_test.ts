@@ -134,7 +134,7 @@ test('a changing write policy is checked only on eligible declared rules', () =>
   policyAllowed = true
   policyCalls = 0
   let rows = policyGraph.apply([{
-    entity: { eid: 'policy' },
+    entity: { eid: 'policy, again' },
     input: {},
   }]) as Bundle[]
   assertEquals(output(rows), true)

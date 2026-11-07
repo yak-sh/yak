@@ -8,5 +8,9 @@
 // `$alias` and `$quiet` are the core's own bookkeeping rather than a caller's
 // ask, and they are admitted for the same reason a stamped property is: a
 // caller that read a bundle back and sent it again is doing a normal thing.
+//
+// `$touch` asks for a write even where the bundle holds what is stored: a
+// write of what the graph already holds is otherwise no write
+// (./unchanged.ts), and a graph whose copy is not the truth cannot tell.
 
 export { requested, REQUESTS } from './bundle.ts'

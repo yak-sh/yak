@@ -100,14 +100,14 @@ test('a write that changes nothing wakes no watch, and any change does', () => {
   c.close()
 })
 
-test('a stamp is a change: writing the same values again wakes a watch', () => {
+test('writing the same values again wakes no watch', () => {
   let c = boxClient()
   c.mutate([dal()])
   let heard = 0
   c.watch('.recipe.course=dinner').subscribe(() => heard++)
 
   c.mutate([dal()])
-  assertEquals(heard, 1)
+  assertEquals(heard, 0)
   c.close()
 })
 
