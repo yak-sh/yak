@@ -823,7 +823,8 @@ let funnelPage = (
             h(Group, null, say),
             facts(all.map((r) => [
               r.name,
-              `${r.home} visits · ${r.click} clicks · ${r.signup} sign-ups`,
+              `${r.home} visits · ${r.click} clicks · ${r.signup} sign-ups · ` +
+              `${r.checkout} checkouts`,
             ])),
           )
           : null

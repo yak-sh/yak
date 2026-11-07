@@ -14,7 +14,7 @@
 // owner sets one; Stripe cannot reach a loopback kernel, so the test signs each
 // delivery with that secret.
 import { test } from '@yaks/testing'
-import { assert, assertEquals } from '@std/assert'
+import { assert, assertEquals, assertMatch } from '@std/assert'
 import {
   apexPost,
   kernel,
@@ -25,6 +25,7 @@ import {
   WEBHOOK_SECRET,
 } from './probe.ts'
 import { delivered, fakeSub, signed } from '@yaks/stripe/testing'
+import { GET_PLAN } from './route.ts'
 
 test(
   'the webhook flips a plan, once, whatever order it arrives in',
@@ -215,6 +216,30 @@ test('the billing doors say no before they say anything else', async () => {
     assert(
       !card.includes('Manage billing'),
       'but not billing nobody has ever had',
+    )
+
+    // A plan's Get Started on the home and pricing pages, followed by
+    // somebody signed in, lands on the Billing page of the space they open
+    // first, where the card offers the plan.
+    let to: string = GET_PLAN
+    let hops = 0
+    let landed
+    for (;;) {
+      landed = await k.at('yaks.app', to, {
+        headers: { cookie },
+        redirect: 'manual',
+      })
+      let next = landed.headers.get('location')
+      if (!next) break
+      await landed.body?.cancel()
+      to = new URL(next, 'https://yaks.app').pathname
+      assert(++hops < 5, 'Get Started goes round in circles')
+    }
+    assertMatch(to, /^\/manage\/[a-z0-9-]+\/billing$/)
+    assertEquals(landed.status, 200)
+    assert(
+      (await landed.text()).includes('Get the Plus plan'),
+      'the Billing page offers the Plus plan',
     )
 
     // And the informational page is there for anybody, with no way to buy on

@@ -80,6 +80,7 @@ test('the funnel reads each step, a share of the one it follows, and where visit
         { key: 'meta//pilot', step: 'home', n: 9 },
         { key: 'meta//pilot', step: 'click', n: 4 },
         { key: 'meta//pilot', step: 'signup', n: '2' },
+        { key: 'meta//pilot', step: 'checkout', n: 1 },
       ]
       : q.includes('blob9')
       ? [
@@ -94,6 +95,9 @@ test('the funnel reads each step, a share of the one it follows, and where visit
         { step: 'home', n: 40 },
         { step: 'click', n: 10 },
         { step: 'code_sent', n: '10' },
+        { step: 'signup', n: 8 },
+        { step: 'checkout', n: 4 },
+        { step: 'paid', n: 1 },
       ]
   )
   try {
@@ -105,18 +109,22 @@ test('the funnel reads each step, a share of the one it follows, and where visit
     assertEquals(of.code_sent.share, 0.25)
     assertEquals(of.signed_in.share, 0)
     // A share of a step nobody took is no share at all.
-    assertEquals(of.signup, { name: 'signup', say: 'First sign-ins', n: 0 })
+    assertEquals(of.signup, { name: 'signup', say: 'First sign-ins', n: 8 })
+    // A checkout is a share of the sign-ups, and a plan bought of the
+    // checkouts.
+    assertEquals(of.checkout.share, 0.5)
+    assertEquals(of.paid.share, 0.25)
     assertEquals(f.from, [{ site: 'news.example.com', n: 3 }])
     // A button the page no longer has is no call to action.
     assertEquals(f.buttons, [
       { button: 'start', say: 'Start free, in the hero', n: 6 },
     ])
     assertEquals(f.campaigns, [
-      { name: 'meta//pilot', home: 9, click: 4, signup: 2 },
+      { name: 'meta//pilot', home: 9, click: 4, signup: 2, checkout: 1 },
     ])
     assertEquals(f.variants, [
-      { name: 'ask', home: 20, click: 0, signup: 0 },
-      { name: 'operator', home: 18, click: 5, signup: 3 },
+      { name: 'ask', home: 20, click: 0, signup: 0, checkout: 0 },
+      { name: 'operator', home: 18, click: 5, signup: 3, checkout: 0 },
     ])
     assertEquals(
       sql.asked.every((q) => q.includes(`index1 = '${FUNNEL}'`)),

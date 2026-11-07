@@ -56,6 +56,7 @@ import {
 import { bound, type Env } from './env.ts'
 import { apex, type Host } from './host.ts'
 
+import { step } from './funnel.ts'
 import { sessionAt } from './session.ts'
 import { fault } from './unseen.ts'
 import { plans } from './payments.ts'
@@ -119,6 +120,12 @@ export let moved = <T extends Record<string, unknown>>(
   for (let [k, v] of Object.entries(next)) if (!now || now[k] !== v) out[k] = v
   return out
 }
+
+// Whether this row moves a space onto a paid plan it was not on: the funnel's
+// plan bought (funnel.ts). A duplicate or a stale event never gets this far,
+// and a change between paid plans or a renewal is no purchase.
+export let bought = (now: Plan | null | undefined, next: Plan) =>
+  !paid(now?.tier) && paid(next.tier)
 
 // ---- who this subscription belongs to ------------------------------------
 
@@ -343,6 +350,7 @@ export let checkout = async (
       tags: tagsOf(env, space),
       trial: free,
     })
+    step(env, 'checkout', req)
     return Response.json({ url })
   } catch (e) {
     await fault(env, 'POST /api/billing/checkout', e)
@@ -447,6 +455,9 @@ export let apply = async (env: Env, heard: Changed) => {
   await stamp(env, {
     entities: [{ entity: { eid: space.eid }, plan: changed }],
   })
+  // Counted with no request: the provider's delivery says nothing of the
+  // person who paid.
+  if (bought(space.plan, next)) step(env, 'paid')
   return `${space.slug} is ${next.tier}`
 }
 

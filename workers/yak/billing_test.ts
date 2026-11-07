@@ -8,6 +8,7 @@ import { test } from '@yaks/testing'
 import { assert, assertEquals } from '@std/assert'
 import type { Subscription } from '@yaks/host/payments'
 import {
+  bought,
   elsewhere,
   freeThrough,
   lost,
@@ -144,6 +145,22 @@ test('a new subscription after a cancelled one is not refused', () => {
 test('a first plan is never stale', () => {
   assert(!stale(null, plan(), standing))
   assertEquals(Object.keys(moved(null, plan())).length, 7)
+})
+
+test('a plan is bought when a space moves onto a paid plan, and only then', () => {
+  let free = plan({ status: 'canceled' })
+  assert(bought(null, plan()), 'a first subscription')
+  assert(
+    bought(free, plan({ id: 'sub_2' }, LATER)),
+    'one after a cancelled one',
+  )
+  assert(!bought(row(), plan({}, LATER)), 'a renewal')
+  assert(
+    !bought(row(), plan({ tier: 'organization' }, LATER)),
+    'a change of plan',
+  )
+  assert(!bought(row(), free), 'a cancellation')
+  assert(!bought(null, plan({ status: 'incomplete' })), 'a charge not yet made')
 })
 
 // --- whose purchase ------------------------------------------------------

@@ -27,6 +27,7 @@ import {
   size,
   YEARLY,
 } from './meter.ts'
+import { GET_PLAN } from './route.ts'
 import { AWAKE } from './sandbox.ts'
 import { sheeted } from './sheets.ts'
 import { WORN } from './sheet-assets.ts'
@@ -648,8 +649,8 @@ test('every public page hands a stranger sign-in, never /connect', () => {
   assertEquals(doors, [
     '/login',
     '/login',
-    '/login?return=%2Fconnect%23plan',
-    '/login?return=%2Fconnect%23plan',
+    GET_PLAN,
+    GET_PLAN,
     '/login',
   ], 'a home-page door misses sign-in')
 })
@@ -1027,7 +1028,7 @@ test('pricing cards offer signup and omit build quotas', () => {
     )
     assertEquals(
       cards.map((c) => c.querySelector('.Button')?.getAttribute('href')),
-      tiers.map((t) => paid(t) ? '/login?return=%2Fconnect%23plan' : '/login'),
+      tiers.map((t) => paid(t) ? GET_PLAN : '/login'),
     )
     for (let card of cards) assert(!/\bbuild/i.test(card.textContent!), page)
   }

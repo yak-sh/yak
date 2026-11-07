@@ -1,11 +1,11 @@
 // yaks.app's own funnel (D-123514, T-135225): each step a stranger takes from
-// the home page to coming back, counted where it happens and read back as a
-// count a step. It rides on the Visits dataset (views.ts): a step is a data
-// point under the index FUNNEL, which no app's eid can be, with the step where
-// a view keeps its app's slug. So it keeps what a view keeps (where the
-// request came from, its country, browser or bot) and no more: no person, no
-// cookie, no IP, and nothing that joins a step to whoever took it. Three
-// months, as for a view.
+// the home page to buying a plan and coming back, counted where it happens
+// and read back as a count a step. It rides on the Visits dataset (views.ts):
+// a step is a data point under the index FUNNEL, which no app's eid can be,
+// with the step where a view keeps its app's slug. So it keeps what a view
+// keeps (where the request came from, its country, browser or bot) and no
+// more: no person, no cookie, no IP, and nothing that joins a step to whoever
+// took it. Three months, as for a view.
 import type { Env } from './env.ts'
 import { caught } from './defects.ts'
 import type { Host } from './host.ts'
@@ -45,6 +45,8 @@ export let STEPS = [
   { name: 'install_done', say: 'Installs finished', of: 'install' },
   { name: 'first_app', say: "Spaces' first apps", of: 'signup' },
   { name: 'first_deploy', say: "Apps' first deploys", of: 'first_app' },
+  { name: 'checkout', say: 'Checkouts started', of: 'signup' },
+  { name: 'paid', say: 'Plans bought', of: 'checkout' },
   { name: 'returned', say: 'People back a day or more later' },
 ] as const
 
@@ -100,6 +102,12 @@ export let clicked = async (
   return new Response(null, { status: 204 })
 }
 
+// The steps counted for each campaign and variant: those a request takes, so
+// its arrival and its variant name them. A plan bought is heard from the
+// payment provider and names neither.
+let PER = ['home', 'click', 'signup', 'checkout'] as const
+let per = PER.map((s) => `'${s}'`).join(', ')
+
 let over = (days: number, dataset: string) =>
   `FROM ${table(dataset)} WHERE index1 = '${FUNNEL}' AND timestamp >= ` +
   `NOW() - INTERVAL '${whole(days, KEPT_DAYS)}' DAY`
@@ -114,19 +122,20 @@ export let sources = (days: number, dataset = DATASET) =>
   `${SLUG} = 'home' AND ${FROM} != '' AND ${CLIENT} = 'browser' ` +
   `GROUP BY site ORDER BY n DESC LIMIT ${TOP}`
 
-// The home page's visits, clicks and sign-ups by what a step says in
-// `column`, busiest first.
+// The home page's visits, clicks, sign-ups and checkouts by what a step says
+// in `column`, busiest first.
 let by = (column: string) => (days: number, dataset = DATASET) =>
   `SELECT ${column} AS key, ${SLUG} AS step, ${COUNT} AS n ` +
-  `${over(days, dataset)} AND ${SLUG} IN ('home', 'click', 'signup') AND ` +
-  `${column} != '' GROUP BY key, step ORDER BY n DESC LIMIT ${TOP * 3}`
+  `${over(days, dataset)} AND ${SLUG} IN (${per}) AND ${column} != '' ` +
+  `GROUP BY key, step ORDER BY n DESC LIMIT ${TOP * PER.length}`
 
 /** The campaigns that brought people to the home page, and how many of them
- * clicked a call to action and signed up (arrival.ts `campaign`). */
+ * clicked a call to action, signed up and started a checkout (arrival.ts
+ * `campaign`). */
 export let campaigns = by(CAMPAIGN)
 
 /** The home page variants visitors were shown, and how many of them clicked a
- * call to action and signed up (variant.ts). */
+ * call to action, signed up and started a checkout (variant.ts). */
 export let variants = by(VARIANT)
 
 /** How many times each call to action was clicked, busiest first. */
@@ -146,19 +155,20 @@ export type Funnel = {
   variants: Split[]
 }
 
-/** The home page's visits, clicks and sign-ups under one campaign or
- * variant. */
-export type Split = {
-  name: string
-  home: number
-  click: number
-  signup: number
-}
+/** The home page's visits, clicks, sign-ups and checkouts under one campaign
+ * or variant. */
+export type Split = { name: string } & Record<typeof PER[number], number>
 
 let split = (rows: Record<string, unknown>[]): Split[] =>
   [...Map.groupBy(rows, (r) => String(r.key))].map(([name, rows]) => {
     let n = (step: string) => Number(rows.find((r) => r.step == step)?.n) || 0
-    return { name, home: n('home'), click: n('click'), signup: n('signup') }
+    return {
+      name,
+      ...Object.fromEntries(PER.map((s) => [s, n(s)])) as Record<
+        typeof PER[number],
+        number
+      >,
+    }
   })
 
 /** The funnel over the last `days`, from the counts as the SQL API answers

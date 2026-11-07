@@ -1,5 +1,6 @@
 /** @jsxImportSource preact */
 import { Button, Card } from '@yaks/ui'
+import { GET_PLAN } from '../route.ts'
 import { Data, Page, Yours } from './frame.tsx'
 import { Idle } from '../mascot.ts'
 
@@ -397,7 +398,7 @@ export let Home = () => (
           </ul>{' '}
           <Button
             mod='go'
-            href='/login?return=%2Fconnect%23plan'
+            href={GET_PLAN}
             data-cta='plus'
           >
             Get Started
@@ -423,7 +424,7 @@ export let Home = () => (
           </ul>{' '}
           <Button
             mod='go'
-            href='/login?return=%2Fconnect%23plan'
+            href={GET_PLAN}
             data-cta='organization'
           >
             Get Started

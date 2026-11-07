@@ -253,6 +253,13 @@ export let signInAt = (page: string, env: Host) => {
   to.searchParams.set('return', page)
   return to.href
 }
+/** Where a paid plan's Get Started sends a stranger (site/home.tsx,
+ * site/pricing.tsx): signing in, then the Billing page of the space they open
+ * first, whose plan card is the button that buys the plan. Not the connector
+ * page, where the card waits closed below the setup. */
+export let GET_PLAN = `/login?return=${
+  encodeURIComponent(managePath('billing'))
+}`
 /** The page that installs a published app by its name (install.ts). Here
  * beside the sign-in address, since a visitor's bar (visit.ts) sends a
  * stranger through the one to the other. */

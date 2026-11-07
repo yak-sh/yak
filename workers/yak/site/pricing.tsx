@@ -1,5 +1,6 @@
 /** @jsxImportSource preact */
 import { Button, Card } from '@yaks/ui'
+import { GET_PLAN } from '../route.ts'
 import { Page, Yours } from './frame.tsx'
 
 export let Pricing = () => (
@@ -60,7 +61,7 @@ export let Pricing = () => (
             <li>AI use included</li>
             <li>You make changes with your assistant</li>
           </ul>{' '}
-          <Button mod='go' href='/login?return=%2Fconnect%23plan'>
+          <Button mod='go' href={GET_PLAN}>
             Get Started
           </Button>
         </Card>
@@ -86,7 +87,7 @@ export let Pricing = () => (
               Your staff ask by email or chat, and yaks.app makes the change
             </li>
           </ul>{' '}
-          <Button mod='go' href='/login?return=%2Fconnect%23plan'>
+          <Button mod='go' href={GET_PLAN}>
             Get Started
           </Button>
         </Card>
