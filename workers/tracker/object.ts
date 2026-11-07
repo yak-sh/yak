@@ -285,6 +285,16 @@ export class Tracker {
       throw error
     }
   }
+  #scopes = async () => await this.ctx.storage.get<string[]>('scopes') ?? []
+  // Reached only by the Worker, never HTTP: a space tracker it routed to
+  // joins the platform's list of them (`/scopes`), once.
+  enroll = async (scope: string): Promise<void> => {
+    if (this.scope != platform || scope == platform) return
+    let scopes = await this.#scopes()
+    if (!scopes.includes(scope)) {
+      await this.ctx.storage.put('scopes', [...scopes, scope])
+    }
+  }
   // Reached only by the platform tracker's `bug_settle`, never HTTP.
   settle = (eids: string[], reason?: string): Promise<number> =>
     this.#run('settle', async () => {
@@ -442,6 +452,14 @@ export class Tracker {
           hash: this.env.BUNDLE_HASH ?? null,
           version: this.env.CF_VERSION_METADATA?.id ?? null,
         })
+      }
+      // The space trackers this one has routed to, which every bug door
+      // reads beside it.
+      if (new URL(request.url).pathname == '/scopes') {
+        if (this.scope != platform || !access.admin) {
+          return json({ error: 'platform only' }, 403)
+        }
+        return json({ scopes: await this.#scopes() })
       }
       if (new URL(request.url).pathname == '/trace-budget') {
         if (this.scope != platform || !access.admin) {

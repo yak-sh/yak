@@ -123,6 +123,7 @@ export let follow = (
   bugs: Bundle[],
   url: string,
   mutate: Client['mutate'],
+  scope?: string,
 ) => Promise<(bug: Bundle) => Promise<void>> => {
   let decide = fixing(g, options)
   // What a decision reads off a task, never its computed components.
@@ -144,13 +145,18 @@ export let follow = (
   // What a fixer does last: resolve its bug in the tracker, explained, which
   // completes the task once the follower hears it. A bug is resolved only
   // with its explanation, so the fixer, who knows why, writes it.
-  let last = (bug: string, url: string) => {
+  let last = (bug: string, url: string, scope?: string) => {
     // A harness's remote host must not redirect a bare box command. Keep the
-    // configured command/config; only the platform tracker takes a source flag.
+    // configured command/config; only the platform tracker takes a source
+    // flag, and a space's tracker its scope beside it.
     let cli = `env -u YAKS_HOST ${options.cli ?? 'yak'}`
-    let source = url == 'yaks.app' ? ' --source yaks.app' : ''
+    let source = url == 'yaks.app'
+      ? ` --source yaks.app${scope ? ` --scope ${scope}` : ''}`
+      : ''
     return [
-      `The authoritative tracker for this task is ${url}. ` +
+      `The authoritative tracker for this task is ${url}${
+        scope ? `, in the tracker of the space ${scope}` : ''
+      }. ` +
       (source
         ? 'Use its explicit platform source below.'
         : 'Use the configured box tracker below, not the platform source. ' +
@@ -170,7 +176,7 @@ export let follow = (
       'find why it happened and fix that.',
     ].join('\n\n')
   }
-  return async (bugs, url, mutate) => {
+  return async (bugs, url, mutate, scope) => {
     bugs = bugs.filter((bug) => bug.bug)
     let { fix, home, fixers } = decide(
       bugs.filter((bug) => !bug.resolved && !bug.archived)
@@ -223,10 +229,12 @@ export let follow = (
       let evidence = bug.entity.eid
       let page = /^https?:/.test(url)
         ? `${base(url)}/${encodeURIComponent(evidence)}`
-        : web && `${base(web)}${remoteBug(url, evidence)}`
+        : web && `${base(web)}${remoteBug(url, evidence, { scope })}`
       let where = page
         ? `[the tracker](${page})`
-        : `${url}'s tracker: \`yak bug show ${evidence} --source ${url}\``
+        : `${url}'s tracker: \`yak bug show ${evidence} --source ${url}${
+          scope ? ` --scope ${scope}` : ''
+        }\``
       let title = str(comp(bug, 'doc')?.title).split('\n')[0] ||
         'Fix tracker bug'
       let what = bug.regressed ? reopened(bug) : title
@@ -235,7 +243,7 @@ export let follow = (
       let body = owner.session
         ? `${kind} your work raised${
           owner.task ? ` on ${human(g.vocab)(owner.task)}` : ''
-        }: ${what} (${where})\n\n${last(evidence, url)}`
+        }: ${what} (${where})\n\n${last(evidence, url, scope)}`
         : `${kind}: ${
           what.length > 240 ? `${what.slice(0, 240)}…` : what
         } (${where})`
@@ -295,7 +303,7 @@ export let follow = (
             reopen,
             opening: str(comp(bug, 'regressed')?.at),
             open: true,
-            last: last(evidence, url),
+            last: last(evidence, url, scope),
             writes: [
               ...reopen
                 ? [{
@@ -341,7 +349,7 @@ export let follow = (
         return {
           task,
           bug: evidence,
-          last: last(evidence, url),
+          last: last(evidence, url, scope),
           writes: [
             task,
             link(eid, 'about', evidence),

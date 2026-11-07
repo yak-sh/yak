@@ -23,7 +23,7 @@ self.onmessage = ({ data }: MessageEvent<Said>) => {
           stop.signal,
           data.tag,
         )
-        : await doors.mark(data.bug, data.name, data.said)
+        : await doors.mark(data.bug, data.name, data.said, data.scope)
       tell({ id: data.id, value })
     } catch (error) {
       // The signed doors already redact transport errors and remote addresses.

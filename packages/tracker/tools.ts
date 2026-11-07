@@ -30,6 +30,7 @@ import { mark as upstream, retry } from './remote.ts'
 import { type Explanation, explanation } from './resolution.ts'
 import { survivor } from './merge.ts'
 import { occurring } from './reading.ts'
+import { bugsIn, everywhere } from './everywhere.ts'
 
 /** The part of a store the bug tools read and mark: this graph, or the box
  * tracker's graph over its wire. */
@@ -283,12 +284,18 @@ export let runs = (
     bug_list: (call, g) => {
       let args = argsOf(call)
       if (source(call) == 'yaks.app') {
-        return remote(
-          new URLSearchParams({
-            query: str(args.query) || '.bug.status=open',
-            limit: String(args.limit ?? 50),
-          }),
-        ).then((rows) => answer(call, { rows }, 'yaks.app'))
+        let query = str(args.query) || '.bug.status=open'
+        let limit = Number(args.limit ?? 50)
+        return everywhere(
+          options,
+          (scope) =>
+            bugsIn(options, scope, query, limit, go).catch((error) => {
+              throw new CallError('remote', (error as Error).message)
+            }),
+          go,
+        ).then(({ rows, unread }) =>
+          answer(call, { rows, ...unread.length ? { unread } : {} }, 'yaks.app')
+        )
       }
       return after(
         bugs(

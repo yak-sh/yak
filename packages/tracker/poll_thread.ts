@@ -16,6 +16,7 @@ export type Said =
     bug: string
     name: Mark
     said: Record<string, string>
+    scope?: string
   }
   | { abort: number }
 
@@ -71,6 +72,7 @@ export let pollThread = (remote: Remote): Doors & { close: () => void } => {
       bug: string
       name: Mark
       said: Record<string, string>
+      scope?: string
     },
     signal?: AbortSignal,
   ): Promise<unknown> => {
@@ -107,7 +109,7 @@ export let pollThread = (remote: Remote): Doors & { close: () => void } => {
   return {
     bugs: (params, signal, tag) =>
       ask({ params: params.toString(), tag }, signal) as Promise<Read>,
-    mark: (bug, name, said) => ask({ bug, name, said }),
+    mark: (bug, name, said, scope) => ask({ bug, name, said, scope }),
     close: () => {
       closed = true
       fail(new Error('Remote tracker poll is closed'))

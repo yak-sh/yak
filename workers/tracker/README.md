@@ -60,8 +60,8 @@ activation time and letters' delivery outcomes. Threaded tracker letters require
 the [Message-ID receipt bridge](../../packages/mail/README.md#named-transports).
 
 Authenticated endpoints: `/bugs`, `/unseen`, `/traces`, `/trace`, `/query`,
-`/vocab`, `/ws`, `POST /resolve`, `/archive` and `/reopen` with `{bug}`,
-`POST /retry` with `{of}`, and `POST /settle` with `{eids, reason}`.
+`/vocab`, `/ws`, `/scopes`, `POST /resolve`, `/archive` and `/reopen` with
+`{bug}`, `POST /retry` with `{of}`, and `POST /settle` with `{eids, reason}`.
 `/ws?scope=…&ticket=…` accepts subscriptions, unsubscribe and ACK only, never
 relay writes. `/query` returns graph bundles. General `/apply` is absent.
 `POST /resolve`, `/archive` and `/reopen` require a separately signed
@@ -85,6 +85,12 @@ admin and intake capabilities. It accepts `{app, eids, mark}` to add `notified`
 or `archived` to the app's occurrences; `remove: true` removes that mark,
 allowing an incorrectly archived occurrence to reopen without changing its
 report or delivery history.
+
+`GET /scopes?scope=platform` answers an admin `{scopes: [space eid, …]}`: every
+space tracker the Worker has routed to, which the platform tracker keeps. A
+space's tracker joins it the first time it takes intake or answers a door, once
+an isolate, so every bug door (`bug_list`, `admin_errors`, the heal follower)
+reads each space's bugs beside the platform's.
 
 `GET /bugs?query=<bug-query>&limit=50&app=<global-eid>` returns bug bundles,
 filtered and ordered before its 1–100 limit. Without `query` it includes all bug

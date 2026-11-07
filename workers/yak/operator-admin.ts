@@ -1,5 +1,6 @@
 // What the platform admin's Operator reads of the platform (T-146331): its
-// errors and bugs in the platform tracker, a space's budget and spend, and
+// errors and bugs in the platform tracker and every space's, a space's budget
+// and spend, and
 // the fee. They are offered only in the sessions of a person who owns the
 // meta space (tool.ts `admin`), read through the whole directory, since an
 // Operator's own is narrowed to its space. Each only reads: nothing that
@@ -8,6 +9,7 @@
 import type { Tool } from '@yaks/session'
 import { errors } from '@yaks/tracker/errors'
 import { type Options, read } from '@yaks/tracker/routes'
+import { bugsIn, everywhere } from '@yaks/tracker/everywhere'
 import { type Directory, META } from './directory.ts'
 import type { Env } from './env.ts'
 import { standing } from './budget.ts'
@@ -55,7 +57,7 @@ export let adminTools = (env: Env, dir: Directory): Tool[] => [
       done: "Read yaks.app's errors",
     },
     description:
-      "Every unresolved bug in yaks.app's tracker, newest first: lifetime count, first and last seen, global bug id, who it reached, place and message. Then the time to fix of the bugs resolved in the window (a week without since), and how long the oldest has been open. bug_show reads one in full.",
+      "Every unresolved bug in yaks.app's trackers, the platform's and each space's, newest first: lifetime count, first and last seen, global bug id, the space whose tracker holds it (the scope bug_show takes), who it reached, place and message. Then the time to fix of the bugs resolved in the window (a week without since), and how long the oldest has been open. bug_show reads one in full.",
     parameters: {
       type: 'object',
       properties: {
@@ -85,20 +87,30 @@ export let adminTools = (env: Env, dir: Directory): Tool[] => [
     title: "List yaks.app's bugs",
     step: { doing: "Listing yaks.app's bugs…", done: "Listed yaks.app's bugs" },
     description:
-      "List bugs in yaks.app's tracker, open by default, as rows. A query narrows them, such as .bug.status=open .order=-bug.hits.",
+      "List bugs in every yaks.app tracker, the platform's and each space's, open by default, as rows; a space tracker's rows name the space in $scope, the scope bug_show takes, and a tracker that could not be read is said in unread. A query narrows them, such as .bug.status=open .order=-bug.hits.",
     parameters: {
       type: 'object',
       properties: {
         query: { type: 'string', description: 'A tracker query.' },
-        limit: { type: 'integer', minimum: 1, maximum: 100 },
+        limit: {
+          type: 'integer',
+          minimum: 1,
+          maximum: 100,
+          description: 'How many from each tracker; 50 by default.',
+        },
       },
     },
     readOnly: true,
-    run: (args) =>
-      bugs(env, {
-        query: text(args.query) || '.bug.status=open',
-        limit: String(args.limit ?? 50),
-      }),
+    run: async (args) => {
+      let { options, go } = trackerOf(env)
+      let query = text(args.query) || '.bug.status=open'
+      let { rows, unread } = await everywhere(
+        options,
+        (scope) => bugsIn(options, scope, query, Number(args.limit ?? 50), go),
+        go,
+      )
+      return JSON.stringify({ rows, ...unread.length ? { unread } : {} })
+    },
   },
   {
     name: 'bug_show',
@@ -124,6 +136,11 @@ export let adminTools = (env: Env, dir: Directory): Tool[] => [
           type: 'string',
           description: 'The next a previous answer named.',
         },
+        scope: {
+          type: 'string',
+          description:
+            "The global eid of the space whose tracker holds the bug, as bug_list names it in $scope; the platform's by default.",
+        },
       },
       required: ['bug'],
     },
@@ -133,6 +150,7 @@ export let adminTools = (env: Env, dir: Directory): Tool[] => [
         bug: text(args.bug),
         limit: String(args.limit ?? 5),
         ...text(args.after) ? { after: text(args.after) } : {},
+        ...text(args.scope) ? { scope: text(args.scope) } : {},
       }),
   },
   {

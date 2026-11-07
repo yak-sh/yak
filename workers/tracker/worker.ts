@@ -23,6 +23,7 @@ export type Stub = {
   admitTrace: (scope: string, rows: Bundle[]) => Promise<unknown>
   ingestTrace: (rows: Bundle[]) => Promise<boolean>
   settle: (eids: string[]) => Promise<number>
+  enroll: (scope: string) => Promise<void>
 }
 export type Env = Omit<Settings, 'TRACKERS'> & {
   BUNDLE_HASH?: string
@@ -183,6 +184,9 @@ export let reporting = (env: Pick<Env, 'ERRORS' | 'CF_VERSION_METADATA'>) =>
     eid,
   })
 }
+// The space trackers this isolate has enrolled in the platform's list.
+let enrolled = new Set<string>()
+
 export let worker = (
   env: Env,
   ticket: typeof sign = sign,
@@ -206,14 +210,33 @@ export let worker = (
       (error) => evicted(error) || opaque(error),
       wait,
     )
+  // A space tracker that took intake or answered a door joins the platform's
+  // list of them, which every bug door reads (`/scopes`), once an isolate. A
+  // failed enrolment is reported and tried again by the next request.
+  let enroll = async (scope: string) => {
+    if (scope == platform || enrolled.has(scope)) return
+    try {
+      await call(platform, (stub) => stub.enroll(scope))
+      enrolled.add(scope)
+    } catch (error) {
+      await report(error, 'enroll')
+    }
+  }
   // An HTTP door, its body read again by each send. A request without one has
   // nothing a send uses up, so each send takes it as it is: in Deno, copying
   // a Request took longer than the rest of the send.
-  let send = (scope: string, request: Request, body: ArrayBuffer | null) =>
-    call(
+  let send = async (
+    scope: string,
+    request: Request,
+    body: ArrayBuffer | null,
+  ) => {
+    let answer = await call(
       scope,
       (stub) => stub.fetch(body ? new Request(request, { body }) : request),
     )
+    if (answer.ok) await enroll(scope)
+    return answer
+  }
   // Where a receipt stands, asked through the object's stable read doors
   // across Worker/DO deployment propagation. The runtime holds its signing
   // key; the build learns only whether its canary arrived or failed.
@@ -377,7 +400,10 @@ export let worker = (
       consume(
         messages,
         (scope) => ({
-          ingest: (rows) => call(scope, (stub) => stub.ingest(rows)),
+          ingest: async (rows) => {
+            await call(scope, (stub) => stub.ingest(rows))
+            await enroll(scope)
+          },
         }),
         (error) => report(error, 'queue'),
         async (message, error) => {

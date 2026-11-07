@@ -39,18 +39,20 @@ in place. A configured `project` is needed to enable the switch. The read-only
 The `@yaks/heal/service` **follower** follows the open bugs (`.bug.status=open`)
 of the configured tracker graphs through a headless
 [client](../client/README.md) subscription on `/ws`, and of the platform tracker
-on yaks.app, when `remote` names it, through [tracker](../tracker/README.md)'s
-polled `./poll` watch, so an answer costs what its open bugs cost, never every
-bug ever filed. A **pass** reconciles the bugs of each followed tracker in turn:
-every open bug in a periodic pass, or only the bugs whose answer moved. A bug
-that left an answer was resolved or archived, and the pass reads it from that
-tracker by id with its marks; a periodic pass also reads by id what the box's
-open work is about (`about` edges from tasks neither completed nor cancelled),
-so a bug closed while no pass heard it, before a restart say, still closes its
-work. The platform's bugs reach people, so each pass takes them first, and after
-a restart no other tracker's bug takes a fixer slot until the platform's first
-poll settles (answered or failed, within a minute). The Worker has no page, so
-their tasks link the bug's page on the first configured tracker web
+on yaks.app, when `remote` names it, and of each space's tracker it lists
+(`/scopes`, asked each periodic pass), through [tracker](../tracker/README.md)'s
+polled `./poll` watch, the space trackers' polls sharing one thread, so an
+answer costs what its open bugs cost, never every bug ever filed. A **pass**
+reconciles the bugs of each followed tracker in turn: every open bug in a
+periodic pass, or only the bugs whose answer moved. A bug that left an answer
+was resolved or archived, and the pass reads it from that tracker by id with its
+marks; a periodic pass also reads by id what the box's open work is about
+(`about` edges from tasks neither completed nor cancelled), so a bug closed
+while no pass heard it, before a restart say, still closes its work. The
+platform's bugs reach people, so each pass takes them first, and after a restart
+no other tracker's bug takes a fixer slot until the platform's first poll
+settles (answered or failed, within a minute). The Worker has no page, so their
+tasks link the bug's page on the first configured tracker web
 (`/?.bug&side=yaks.app&bug=<eid>`), or with none name
 `yak bug show <eid> --source yaks.app`. Its marks carry no precondition. The
 tracker web role serves that query independently of intake. One process holds

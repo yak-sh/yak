@@ -189,7 +189,12 @@ await remote.graph.apply([
 let secret = 'test-only'
 let upstream = trackerDoor(remote, platform, secret)
 let config = { remote: { url: 'https://tracker.test', secret } }
-let go = ((url, init) => upstream(new Request(url, init))) as typeof fetch
+// The platform tracker lists no space's tracker.
+let go =
+  ((url, init) =>
+    new URL(String(url)).pathname == '/scopes'
+      ? Promise.resolve(Response.json({ scopes: [] }))
+      : upstream(new Request(url, init))) as typeof fetch
 
 // The box's letters: what people wrote to the platform's addresses, and what
 // left for them afterwards. Every listing below reads them, as the tool does.
@@ -273,7 +278,7 @@ test('errors defaults to every unresolved bug however old, newest first', () => 
   assertEquals(all.said[0].includes('lifetime'), true)
   assertEquals(
     all.said[1],
-    'COUNT  FIRST SEEN  LAST SEEN  BUG  REACHED  PLACE  MESSAGE',
+    'COUNT  FIRST SEEN  LAST SEEN  BUG  SPACE  REACHED  PLACE  MESSAGE',
   )
   assertEquals(
     all.said[3].endsWith('TypeError: Invalid redirect value'),
@@ -284,7 +289,7 @@ test('errors defaults to every unresolved bug however old, newest first', () => 
 
 test('errors says whom each bug reached, a person apart from a probe', () => {
   let cell = (eid: string) =>
-    all.said.find((line) => line.split('  ')[3] == eid)?.split('  ')[4]
+    all.said.find((line) => line.split('  ')[3] == eid)?.split('  ')[5]
   assertEquals(cell(ids[1]), '2 people')
   assertEquals(cell(ids[2]), 'test accounts only')
   assertEquals(cell(ids[3]), 'no person recorded')

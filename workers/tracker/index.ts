@@ -34,6 +34,9 @@ export class Tracker extends DurableObject<Env> implements Stub {
   settle(eids: string[]) {
     return this.tracker.settle(eids)
   }
+  enroll(scope: string) {
+    return this.tracker.enroll(scope)
+  }
   admitTrace(scope: string, rows: Bundle[]) {
     return this.tracker.admitTrace(scope, rows)
   }

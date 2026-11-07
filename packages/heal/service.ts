@@ -24,8 +24,8 @@ import { kernelDoc, kernelKeywords } from '@yaks/kernel'
 import { provenanceDoc } from '@yaks/provenance'
 import { docDoc } from '@yaks/doc'
 import { trackerDoc } from '@yaks/tracker/vocab'
-import { poll } from '@yaks/tracker/poll'
-import type { Remote } from '@yaks/tracker/remote'
+import { type Doors, poll, pollThread } from '@yaks/tracker/poll'
+import { type Remote, spaces as listed } from '@yaks/tracker/remote'
 import { loadVocab, type VocabDoc } from '@yaks/vocab'
 import { follow, owed } from './follow.ts'
 import type { Options as FixOptions } from './fix.ts'
@@ -63,13 +63,19 @@ export type Options = FixOptions & {
   /** Base URLs of tracker graphs; no tracker is followed unless named. */
   trackers?: string[]
   /** The platform tracker Worker, the same `{url, secret}` as
-   * @yaks/tracker's own `remote`: polled, and followed before the trackers. */
+   * @yaks/tracker's own `remote`: polled, and followed before the trackers,
+   * and each space's tracker it lists after it. */
   remote?: Remote
+  /** The global eids of the spaces whose trackers are followed beside the
+   * platform's (default: the platform tracker's list of them), asked each
+   * periodic pass. */
+  spaces?: () => Promise<string[]>
   /** Time between passes when no tracker answer changed, in ms (default
    * 60000): re-check task marks and gates that open with time (cap, cooldown). */
   every?: number
-  /** Open a live tracker query and write door; defaults to the headless client. */
-  open?: (url: string) => Tracker
+  /** Open a live tracker query and write door, `scope` naming a space's
+   * tracker on yaks.app; defaults to the headless client and the poll. */
+  open?: (url: string, scope?: string) => Tracker
   /** Pause between passes; defaults to an abortable sleep. */
   wait?: typeof sleep
   /** The clock passes and failures are timed by (default `Date.now`). */
@@ -170,11 +176,18 @@ export let service = async (
   // answer is keyed and linked as `yaks.app`, since the Worker's address is
   // no page anyone can open.
   let platform = options.remote?.url ? PLATFORM : undefined
-  let urls = [
-    ...platform ? [platform] : [],
-    ...new Set(options.trackers ?? []),
+  let trackers = [...new Set(options.trackers ?? [])]
+  if (!platform && !trackers.length) return
+  // Each space's tracker on yaks.app follows the platform's, keyed by its
+  // scope, and joins once the platform lists it.
+  let scopes = new Map<string, string>()
+  let keyOf = (scope: string) => `${PLATFORM} space ${scope}`
+  let list = options.spaces ??
+    (() => listed(options.remote!))
+  let urls = () => [
+    ...platform ? [platform, ...scopes.keys()] : [],
+    ...trackers,
   ]
-  if (!urls.length) return
   let once = signal.aborted
   let every = options.every ?? 60_000
   let watches = new Map<string, Tracker>()
@@ -238,13 +251,18 @@ export let service = async (
         throw error
       }
     }
+  // The space trackers' polls share one thread for their signed doors.
+  let thread: (Doors & { close: () => void }) | undefined
   let open = options.open ??
-    ((url: string) =>
+    ((url: string, scope?: string) =>
       url == PLATFORM
         ? poll(options.remote!, followed, {
           every: options.every && Math.min(options.every, 30_000),
           report: (error) => void report(error, 'tracker poll'),
           log: options.log,
+          ...scope
+            ? { scope, doors: thread ??= pollThread(options.remote!) }
+            : {},
         })
         : track(url, {
           // A refused mark is the tracker refusing heal's own write: an
@@ -277,49 +295,65 @@ export let service = async (
           await fail('owed read', 'the box', error)
         }
       }
-      for (let url of urls) {
+      // A bug some tracker answers is asked by id only there, once it leaves.
+      owing = owing.filter((eid) =>
+        ![...members.values()].some((held) => held.has(eid))
+      )
+      if (all && platform) {
+        try {
+          for (let scope of await list()) scopes.set(keyOf(scope), scope)
+          fine('space list', PLATFORM)
+        } catch (error) {
+          covered = false
+          await fail('space list', PLATFORM, error)
+        }
+      }
+      for (let name of urls()) {
         if (!once && signal.aborted) return
+        let scope = scopes.get(name)
+        let url = scope ? PLATFORM : name
         let step = 'open'
         try {
-          let watch = watches.get(url)
+          let watch = watches.get(name)
           if (!watch) {
-            watch = open(url)
-            let at = url
+            watch = open(url, scope)
             watch.subscribe(() => {
-              heard.add(at)
+              heard.add(name)
               nudge()
             })
-            watches.set(url, watch)
+            watches.set(name, watch)
           }
           if (watch.refused) {
             watch.close()
-            watches.delete(url)
+            watches.delete(name)
             throw new Error(watch.refused)
           }
-          fine('open', url)
+          fine('open', name)
           if (!watch.ready) {
             covered = false
             // Until the platform's first poll settles, no other tracker's bug
             // takes a fixer slot; a poll always settles, answered or failed.
-            if (url == platform && !once && !heard.has(url)) break
+            if (name == platform && !once && !heard.has(name)) break
             continue
           }
           let held = new Set(watch.value.map((bug) => bug.entity.eid))
           // A bug that left the answer was resolved or archived: its marks
           // are read by id at once, to close its work. One whose read fails
           // stays a member, so the next pass asks again.
-          let left = [...members.get(url) ?? []].filter((eid) => !held.has(eid))
+          let left = [...members.get(name) ?? []].filter((eid) =>
+            !held.has(eid)
+          )
           let asked = [...new Set([...left, ...owing])]
             .filter((eid) => !held.has(eid))
           step = 'read by id'
           let closed = asked.length ? await watch.get(asked) : []
-          if (asked.length) fine(step, url)
+          if (asked.length) fine(step, name)
           step = 'reconcile'
-          members.set(url, held)
-          for (let eid of left) replayed.delete(`${url} ${eid}`)
+          members.set(name, held)
+          for (let eid of left) replayed.delete(`${name} ${eid}`)
           let due = [
             ...watch.value.flatMap((bug) => {
-              let key = `${url} ${bug.entity.eid}`
+              let key = `${name} ${bug.entity.eid}`
               // Occurrence counts and last-seen timestamps change on every
               // hit; they do not change the work or a fixer gate. A
               // regression, mark or changed evidence does, and the periodic
@@ -334,7 +368,7 @@ export let service = async (
             }),
             ...closed.map((bug) => ({
               bug,
-              key: `${url} ${bug.entity.eid}`,
+              key: `${name} ${bug.entity.eid}`,
               row: undefined,
             })),
           ]
@@ -342,7 +376,8 @@ export let service = async (
           let settle = await reconcile(
             due.map(({ bug }) => bug),
             url,
-            marks(url, watch.mutate),
+            marks(name, watch.mutate),
+            scope,
           )
           for (let { bug, key, row } of due) {
             if (!once && signal.aborted) return
@@ -357,7 +392,7 @@ export let service = async (
           }
         } catch (error) {
           covered = false
-          await fail(step, url, error)
+          await fail(step, name, error)
         }
       }
       if (all && covered) whole = began
@@ -371,5 +406,6 @@ export let service = async (
     } while (!signal.aborted)
   } finally {
     for (let watch of watches.values()) watch.close()
+    thread?.close()
   }
 }

@@ -477,7 +477,10 @@ test('admin_errors answers its caller with every unresolved bug', async () => {
     let { admin_errors } = runs({
       ...host,
       config,
-      fetch: (input, init) => trackerAt(new Request(input, init)),
+      fetch: (input, init) =>
+        new URL(String(input)).pathname == '/scopes'
+          ? Promise.resolve(Response.json({ scopes: [] }))
+          : trackerAt(new Request(input, init)),
     })
     let answer = await admin_errors(
       { entity: { eid: 'call' }, call: { args: {} } },
@@ -485,7 +488,12 @@ test('admin_errors answers its caller with every unresolved bug', async () => {
     ) as Bundle[]
     let said = body(answer)
     ok(said.startsWith('Tracker: 1 unresolved bugs'))
-    ok(said.includes(`${bug}  no person recorded  -  Error: still broken`))
+    ok(
+      said.includes(
+        `${bug}  platform  no person recorded  -  Error: still broken`,
+      ),
+    )
+    ok(!said.includes('Not read'))
   } finally {
     await host.close()
   }

@@ -17,9 +17,10 @@ references may name entities in other stores.
 | `./tools`      | `bug_list`, `bug_show`, `bug_resolve`, `bug_archive`, `bug_reopen`, `tracker_retry` |
 | `./service`    | Spool record admission and acknowledgement                                          |
 | `./remote`     | Signed remote reads, bug marks and durable error delivery                           |
-| `./poll`       | A polled watch of the platform tracker's bugs, with marks                           |
+| `./poll`       | A polled watch of the platform tracker's bugs, or a space tracker's, with marks     |
 | `./fixtime`    | Time to fix: first seen (or regressed) to resolved                                  |
 | `./errors`     | The admin_errors report: unresolved bugs, newest first, and their time to fix       |
+| `./everywhere` | One read of every tracker on yaks.app: the platform's and each space's it lists     |
 | `./graph`      | The precondition refusing an unexplained resolution                                 |
 | `./resolution` | A resolution's explanation: its check and how it reads                              |
 
@@ -488,19 +489,24 @@ each store it marks. A box mark reaches the configured Worker under the bug's
 global eid before returning the local patch. Missing credentials, unavailable
 transport or a refused remote mark refuse the command without marking the box
 copy. Without a remote configuration, box marks remain local. A `yaks.app` mark
-requires remote configuration and marks the Worker; the standing pass brings its
-marks to a matching box group without importing remote-only bugs. Retrying a
-mark is safe, including when the box copy is already marked.
+requires remote configuration and marks the Worker, the platform's tracker or
+the space's `--scope` names; the standing pass brings its marks to a matching
+box group without importing remote-only bugs. Retrying a mark is safe, including
+when the box copy is already marked.
 
 A config whose graph holds no bugs of its own, as the box's default yak composes
 the tracker's `vocab` and `tools` beside `admin errors`, names `yaks.app` its
-`source`: its bug tools read and mark the Worker with no `--source` named. It
-names the box tracker's graph as `box`, its base URL, and `--source box` reads
-that graph through its `/query` and marks it through its `/apply`, by the
-references that graph keeps (`B-7`, a short handle, a title), naming the calling
-run in `x-via`. The tracker's `box.json` composes `@yaks/api` with `who` set to
-the box's base URL, so its door asks the box who that run is and a mark records
-the agent in `by` and its session in `via`, whether it came this way or from
+`source`: its bug tools read and mark the Worker with no `--source` named.
+`bug list` there reads every tracker on yaks.app, the platform's and each
+space's the platform lists (`./everywhere`), `--limit` from each; a space
+tracker's rows name its space in `$scope`, which `bug show` and the marks take
+as `--scope`, and one that could not be read is said in `unread`. It names the
+box tracker's graph as `box`, its base URL, and `--source box` reads that graph
+through its `/query` and marks it through its `/apply`, by the references that
+graph keeps (`B-7`, a short handle, a title), naming the calling run in `x-via`.
+The tracker's `box.json` composes `@yaks/api` with `who` set to the box's base
+URL, so its door asks the box who that run is and a mark records the agent in
+`by` and its session in `via`, whether it came this way or from
 `yak --config ~/.yak/tracker.json`. So one set of tools serves both trackers.
 The `code.cwd` option names the checkout a resolution's commits are read from,
 so `--since` and `--fix` take a short sha as Git reads it:
@@ -525,6 +531,7 @@ so `--since` and `--fix` take a short sha as Git reads it:
 yak bug list --source yaks.app --limit 20
 yak bug list '.bug.status=resolved' --source yaks.app
 yak bug show <global-bug-eid> --source yaks.app
+yak bug resolve <global-bug-eid> --source yaks.app --scope <space eid> --broke '…' --cause '…' --fix <sha> --recur '…'
 yak bug resolve <global-bug-eid> --source yaks.app --broke '…' --cause '…' --fix <sha> --recur '…'
 yak bug show B-7 --source box
 yak bug archive <box-bug-id> --source box --reason '…'

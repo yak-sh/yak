@@ -339,6 +339,44 @@ test('a platform object tells an admin the bundle it runs, before booting', asyn
   })
   equal((await ask(false)).status, 403)
 })
+test('the platform lists each space tracker it enrolled once, to an admin', async () => {
+  let secret = 'scratch', kept = new Map<string, unknown>()
+  let object = new Tracker({
+    id: { name: platform },
+    getWebSockets: () => [],
+    acceptWebSocket: () => {},
+    storage: {
+      sql: {
+        exec: () => {
+          throw Error('scratch storage unavailable')
+        },
+      },
+      transactionSync: (body) => body(),
+      get: <T>(key: string) => Promise.resolve(kept.get(key) as T),
+      put: (key, value) => Promise.resolve(void kept.set(key, value)),
+      getAlarm: () => Promise.resolve(null),
+      setAlarm: () => Promise.resolve(),
+    },
+  }, { TRACKER_SECRET: secret })
+  let ask = async (admin: boolean) =>
+    await object.fetch(
+      new Request('https://tracker.internal/scopes', {
+        headers: {
+          authorization: `Bearer ${await sign({
+            scope: platform,
+            person: platform,
+            admin,
+            exp: Date.now() / 1000 + 60,
+          }, secret)}`,
+        },
+      }),
+    )
+  equal(await (await ask(true)).json(), { scopes: [] })
+  let other = '00000000-0000-4000-8000-000000000002'
+  for (let scope of [space, other, space, platform]) await object.enroll(scope)
+  equal(await (await ask(true)).json(), { scopes: [space, other] })
+  equal((await ask(false)).status, 403)
+})
 test('a retry through the door arms the alarm that works the run', async () => {
   let secret = 'scratch', alarms: number[] = []
   let { sql, transactionSync } = durable()

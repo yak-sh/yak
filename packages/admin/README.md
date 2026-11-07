@@ -30,7 +30,11 @@ account to be the platform admin or the configured person's own email. `errors`
 reads through the signed tracker door configured by `@yaks/tracker` in
 `tracker.json` beside this graph (or this config's own tracker plugin). The
 remote URL and vault reference come from that config. It lists every unresolved
-bug (not resolved or archived), however old, newest first. There is no time
+bug (not resolved or archived), however old, newest first, from every tracker on
+yaks.app: the platform's and each space's it lists (@yaks/tracker
+`./everywhere`), read in parallel. SPACE names the space whose tracker holds a
+bug, the `--scope` that `bug show` and `bug resolve` take, or `platform`; a
+tracker that could not be read is said on a `Not read` line. There is no time
 window by default; `--since` optionally narrows by last seen. The header counts
 the matching bugs; counts and first seen cover each bug's lifetime. Each row
 says whom the bug reached: people, test accounts only, or no person recorded.

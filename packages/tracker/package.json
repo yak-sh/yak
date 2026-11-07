@@ -23,6 +23,7 @@
     "./fixtime": "./fixtime.ts",
     "./brief": "./brief.ts",
     "./errors": "./errors.ts",
+    "./everywhere": "./everywhere.ts",
     "./merge": "./merge.ts"
   },
   "license": "Apache-2.0",

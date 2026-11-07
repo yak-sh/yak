@@ -1,13 +1,14 @@
-// The platform's errors as the tracker holds them: its unresolved bugs,
-// newest first, and how long the bugs resolved in a window took to fix. One
-// report for every door that reads it: admin_errors on the box, and the
-// platform admin's Operator on yaks.app.
+// yaks.app's errors as its trackers hold them, the platform's and every
+// space's: their unresolved bugs, newest first, and how long the bugs
+// resolved in a window took to fix. One report for every door that reads it:
+// admin_errors on the box, and the platform admin's Operator on yaks.app.
 import type { Bundle } from '@yaks/graph'
 import { CallError } from '@yaks/tools/errors'
 import { whom } from './brief.ts'
 import { fixes, fixtime, opened, span } from './fixtime.ts'
 import { explained } from './resolution.ts'
 import { type Options, read } from './routes.ts'
+import { everywhere } from './everywhere.ts'
 
 type Row = Record<string, unknown>
 let object = (v: unknown): Row =>
@@ -46,15 +47,18 @@ export let windowOf = (since: string | undefined, end: number): Window => {
   return { seconds, from, last: since ?? '7d' }
 }
 
-// Every bug a query matches, a page of 100 at a time.
+// Every bug a query matches in the tracker `scope` names, a page of 100 at a
+// time.
 let pages = async (
   options: Options,
   go: typeof fetch,
   query: string,
+  scope: string,
 ): Promise<Bundle[]> => {
   let rows: Bundle[] = [], after = ''
   for (;;) {
     let params = new URLSearchParams({
+      scope,
       query: query + (after ? ` .after=${after}` : ''),
       limit: '100',
     })
@@ -70,8 +74,12 @@ let pages = async (
   }
 }
 
+// The tracker a bug is in: the platform's, or the space's it names.
+let space = (row: Bundle) => text(row.$scope) || 'platform'
 let named = (row: Bundle) =>
-  `${row.entity.eid} ${line(object(row.doc).title).slice(0, 80)}`
+  `${row.entity.eid}${row.$scope ? ` in space ${row.$scope}` : ''} ${
+    line(object(row.doc).title).slice(0, 80)
+  }`
 
 /** The report's lines. The optional window matches unresolved bugs by their
  * latest occurrence and times the fixes resolved within it; without one,
@@ -93,16 +101,23 @@ export let errors = async (
     window = ` .bug.last>=${from} .bug.last<=${new Date(end).toISOString()}`
     seen = ` last seen in preceding ${seconds}s`
   }
-  let rows = await pages(
-    options,
-    go,
-    `!resolved !archived${window} .order=-bug.last`,
+  let [open, closed] = await Promise.all(
+    [
+      `!resolved !archived${window} .order=-bug.last`,
+      `.resolved .resolved.at>=${from}`,
+    ]
+      .map((query) =>
+        everywhere(options, (scope) => pages(options, go, query, scope), go)
+      ),
   )
-  let fixed = await pages(options, go, `.resolved .resolved.at>=${from}`)
+  let rows = open.rows.toSorted((a, b) =>
+    time(object(b.bug).last) - time(object(a.bug).last)
+  )
+  let fixed = closed.rows
   let { count, median, worst } = fixes(fixed)
   let report = [
-    `Tracker: ${rows.length} unresolved bugs from yaks.app and the box (not resolved or archived)${seen}, newest first; counts and first seen cover each bug's lifetime`,
-    'COUNT  FIRST SEEN  LAST SEEN  BUG  REACHED  PLACE  MESSAGE',
+    `Tracker: ${rows.length} unresolved bugs from yaks.app, its spaces and the box (not resolved or archived)${seen}, newest first; counts and first seen cover each bug's lifetime. SPACE is the tracker that holds it, the scope bug_show and bug_resolve take`,
+    'COUNT  FIRST SEEN  LAST SEEN  BUG  SPACE  REACHED  PLACE  MESSAGE',
     ...rows.map((row) => {
       let bug = object(row.bug)
       return [
@@ -110,6 +125,7 @@ export let errors = async (
         iso(time(bug.first)),
         iso(time(bug.last)),
         row.entity.eid,
+        space(row),
         whom(
           Number(bug.people ?? 0),
           typeof bug.account == 'string' ? bug.account : null,
@@ -152,6 +168,9 @@ export let errors = async (
         bare == 1 ? '' : 's'
       } resolved with no explanation recorded`,
     )
+  }
+  for (let why of new Set([...open.unread, ...closed.unread])) {
+    report.push(`Not read: ${why}`)
   }
   let oldest = rows.reduce<Bundle | undefined>(
     (a, b) => !a || opened(b) < opened(a) ? b : a,

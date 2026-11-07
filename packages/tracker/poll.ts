@@ -25,6 +25,8 @@ import { type Clock, system } from '@yaks/fp'
 import { outage } from './outage.ts'
 import { pollThread } from './poll_thread.ts'
 
+export { pollThread }
+
 /** A polled answer of the platform tracker, with its mark door. */
 export type Polled = {
   /** the query each poll asks the Worker */
@@ -55,11 +57,13 @@ export type Doors = {
     tag?: string,
   ) => Promise<Read>
   /** a mark on one bug and what it says: a resolution's explanation, the
-   * fixer's `task` with `taken` */
+   * fixer's `task` with `taken`; in the platform's tracker, or the space's
+   * `scope` names */
   mark: (
     bug: string,
     name: Mark,
     said: Record<string, string>,
+    scope?: string,
   ) => Promise<unknown>
 }
 
@@ -67,8 +71,21 @@ export type Doors = {
 export let signed = (remote: Remote, go: typeof fetch = fetch): Doors => ({
   bugs: (params, signal, tag) =>
     read({ remote }, 'bugs', params, signal, go, tag),
-  mark: (bug, name, said) => mark(remote, bug, name, go, said),
+  mark: (bug, name, said, scope) => mark(remote, bug, name, go, said, scope),
 })
+
+/** `doors` asking the tracker of the space `scope` names, or as they ask
+ * without one: the platform's. */
+export let scoped = (doors: Doors, scope?: string): Doors =>
+  scope
+    ? {
+      bugs: (params, signal, tag) => {
+        params.set('scope', scope)
+        return doors.bugs(params, signal, tag)
+      },
+      mark: (bug, name, said) => doors.mark(bug, name, said, scope),
+    }
+    : doors
 
 export type PollOpts = {
   /** time between polls, in ms (default 30000) */
@@ -83,8 +100,12 @@ export type PollOpts = {
   /** a poll the tracker could not answer, which the next one retries, and
    * its answering again (default: `console.warn`) */
   log?: (line: string) => void
-  /** where it asks (default: signed doors on a dedicated worker event loop) */
+  /** where it asks (default: signed doors on a dedicated worker event loop),
+   * which several polls may share */
   doors?: Doors
+  /** the global eid of the space whose tracker it polls; the platform's
+   * without one */
+  scope?: string
   /** what time it is, and how a wait is set — between polls, a hung poll's
    * and a page's deadline (default: the runtime's), so a test can hold the
    * clock */
@@ -257,7 +278,7 @@ let saying = (mark: unknown): Record<string, string> =>
   )
 
 /**
- * Poll the platform tracker's bugs until closed.
+ * Poll the platform tracker's bugs, or a space tracker's, until closed.
  *
  * ```ts
  * import { poll } from '@yaks/tracker/poll'
@@ -279,7 +300,7 @@ export let poll = (
   opts: PollOpts = {},
 ): Polled => {
   let thread = opts.doors ? undefined : pollThread(remote)
-  let doors = opts.doors ?? thread!
+  let doors = scoped(opts.doors ?? thread!, opts.scope)
   let clock = opts.clock ?? system
   let value: Bundle[] = [], ready = false
   // The tag `value` was read at.

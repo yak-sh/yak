@@ -59,7 +59,23 @@ let token = await sign({
   exp: Date.now() / 1000 + 60,
 }, config.remote.secret)
 let upstream = door(remote, platform, config.remote.secret)
-let go = ((url, init) => upstream(new Request(url, init))) as typeof fetch
+// A space's tracker beside the platform's, which the platform lists.
+let space = '00000000-0000-4000-8000-0000000000a1'
+let spaceStore = store(ram(vocab, options), { sink: () => {} })
+await spaceStore.graph.apply([{
+  entity: { eid: ids[2] },
+  doc: { title: 'space problem' },
+  bug: { fault: 'space', hits: 1 },
+}], { trusted: true })
+let spaceDoor = door(spaceStore, space, config.remote.secret)
+let go = ((url: URL, init?: RequestInit) => {
+  let at = new URL(url)
+  return at.pathname == '/scopes'
+    ? Promise.resolve(Response.json({ scopes: [space] }))
+    : (at.searchParams.get('scope') == space ? spaceDoor : upstream)(
+      new Request(url, init),
+    )
+}) as typeof fetch
 let read = runner(box, {
   tools: loadTools(trackerDoc, runs({}, config, go)),
 }).read
@@ -74,10 +90,13 @@ let said = (answer: Bundle[]) => worded(answerOf(answer, ids[4]))
 
 // Prepare the signed read once, then check both the remote result and the box.
 let listed = await ask('bug_list', { source: 'yaks.app', limit: 1 })
-test('platform bug list filters and sorts before its limit without importing rows', async () => {
+test("platform bug list filters and sorts before its limit in each tracker, a space's naming it, without importing rows", async () => {
   let answer = listed
   equal(valueIn(answer)?.source, 'yaks.app')
-  equal(rows(answer).map((b) => b.entity.eid), [ids[1]])
+  equal(
+    rows(answer).map((b) => [b.entity.eid, b.$scope]),
+    [[ids[1], undefined], [ids[2], space]],
+  )
   ok(said(answer).includes('yaks.app'))
   equal(await box.read('.entity *'), before)
 })
@@ -86,6 +105,9 @@ test('platform bug list filters and sorts before its limit without importing row
 test('platform bug list sends the caller query and limit to the Worker', async () => {
   let asked: URLSearchParams | undefined
   let worker = ((url: URL) => {
+    if (url.pathname == '/scopes') {
+      return Promise.resolve(Response.json({ scopes: [] }))
+    }
     asked = url.searchParams
     return Promise.resolve(Response.json([]))
   }) as typeof fetch
@@ -98,6 +120,26 @@ test('platform bug list sends the caller query and limit to the Worker', async (
   equal([asked?.get('query'), asked?.get('limit')], [
     '.bug .order=bug.hits',
     '2',
+  ])
+})
+test('a space tracker that cannot be read is said beside every other bug', async () => {
+  let worker = ((url: URL) =>
+    Promise.resolve(
+      url.pathname == '/scopes'
+        ? Response.json({ scopes: [space] })
+        : url.searchParams.get('scope') == space
+        ? new Response('', { status: 403 })
+        : Response.json([{ entity: { eid: ids[1] }, bug: {} }]),
+    )) as typeof fetch
+  let answer = valueIn(
+    await runs({}, config, worker).bug_list({
+      entity: { eid: ids[4] },
+      call: { args: { source: 'yaks.app' } },
+    }, box),
+  )
+  equal((answer?.rows as Bundle[]).map((b) => b.entity.eid), [ids[1]])
+  equal(answer?.unread, [
+    `space ${space}: Remote tracker refused the read (403)`,
   ])
 })
 test("a space's bug shows from its tracker, the scope its letter names", async () => {

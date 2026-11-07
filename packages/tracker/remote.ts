@@ -235,6 +235,38 @@ export let mark = async (
   return true
 }
 
+/** The global eids of the spaces whose trackers the Worker has routed to,
+ * as the platform tracker lists them. */
+export let spaces = async (
+  remote: Remote,
+  go: typeof fetch = fetch,
+): Promise<string[]> => {
+  let response = await request(
+    remote,
+    'scopes',
+    new URLSearchParams({ scope: 'platform' }),
+    {},
+    go,
+  ).catch((error) => {
+    throw unanswered(error)
+  })
+  let answer = await response.json().catch(() => null) as
+    | { scopes?: unknown }
+    | null
+  if (!response.ok) {
+    let refusal =
+      `Remote tracker refused its list of spaces (${response.status})`
+    throw unavailable(response.status)
+      ? new Unavailable(refusal)
+      : Error(refusal)
+  }
+  let scopes = answer?.scopes
+  if (!Array.isArray(scopes) || scopes.some((s) => typeof s != 'string')) {
+    throw Error('Remote tracker answered no list of spaces')
+  }
+  return scopes
+}
+
 /** Put the Worker's failed effect runs `of` names (a handler, or one run's id)
  * back to pending once their cause is fixed, returning how many it did. */
 export let retry = async (

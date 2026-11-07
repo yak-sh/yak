@@ -12,15 +12,19 @@ import { handleChannels, receive } from './operator-channels.ts'
 // The platform admin's Operator reads the platform; nobody else's does
 // (T-146331). Each person asks their own Operator in their own space; the
 // admin's reads another space's budget.
-// The platform tracker: no bug open, none resolved, and every read it is
-// asked kept.
+// The platform tracker and the one space's it lists: no bug open, none
+// resolved, and every read they are asked kept.
 let reads: URL[] = []
+let space = crypto.randomUUID()
 let p = platform('operator-admin', {
   TRACKER_SECRET: 'tracker-secret',
   TRACKER: {
     fetch: (req: globalThis.Request) => {
-      reads.push(new URL(req.url))
-      return Promise.resolve(Response.json([]))
+      let url = new URL(req.url)
+      reads.push(url)
+      return Promise.resolve(
+        Response.json(url.pathname == '/scopes' ? { scopes: [space] } : []),
+      )
     },
   } as unknown as Env['TRACKER'],
 })
@@ -111,10 +115,14 @@ test("the admin's Operator reads any space's budget", () => {
   )
 })
 
-test("the admin's Operator reads the platform tracker's bugs", () => {
+test("the admin's Operator reads the bugs of the platform tracker and of each space's", () => {
   assertMatch(outputs[1], /^Tracker: 0 unresolved bugs/)
   assertEquals(
-    reads.map((u) => [u.pathname, u.searchParams.get('scope')]),
-    [['/bugs', 'platform'], ['/bugs', 'platform']],
+    reads.map((u) => `${u.pathname} ${u.searchParams.get('scope')}`).sort(),
+    [
+      ...Array(2).fill(`/bugs ${space}`),
+      ...Array(2).fill('/bugs platform'),
+      ...Array(2).fill('/scopes platform'),
+    ].sort(),
   )
 })

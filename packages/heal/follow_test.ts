@@ -58,7 +58,8 @@ let alone = (g: Graph, options?: Options) => {
     row: Bundle,
     at: string,
     mutate: Parameters<typeof pass>[2],
-  ) => (await pass([row], at, mutate))(row)
+    scope?: string,
+  ) => (await pass([row], at, mutate, scope))(row)
 }
 let pick = (doc: VocabDoc, ...names: string[]): VocabDoc => ({
   $defs: Object.fromEntries(names.map((name) => [name, doc.$defs![name]])),
@@ -1089,28 +1090,29 @@ test('a fixer gate reopens regressed work and announces its bug', async () => {
 })
 
 let ordered = await off()
-test('the platform tracker is followed first', async () => {
+test('the platform tracker is followed first, then each space tracker it lists', async () => {
   let opened: string[] = []
   await service(ordered.host, {
     ...ordered.config,
     remote: { url: 'https://tracker.example' },
-    open: (at) => {
-      opened.push(at)
+    spaces: () => Promise.resolve(['s']),
+    open: (at, scope) => {
+      opened.push(scope ? `${at} ${scope}` : at)
       return { ...ordered.config.open!(at), value: [] }
     },
   })
-  equal(opened, [PLATFORM, url])
+  equal(opened, [PLATFORM, `${PLATFORM} s`, url])
   ordered.close()
 })
 
 // The body of the platform bug's task, filed by a follower that knows which
 // trackers have a web of their own.
-let platform = async (trackers: string[]) => {
+let platform = async (trackers: string[], scope?: string) => {
   let f = await off({ trackers })
   let [row] = await f.tracker.get([bug])
   let reconcile = alone(f.g, f.config)
   return async () => {
-    await reconcile(row, PLATFORM, (rows) => put(f.tracker, rows))
+    await reconcile(row, PLATFORM, (rows) => put(f.tracker, rows), scope)
     let [task] = await f.g.get([taskEid(bug)])
     f.close()
     return String(comp(task, 'doc').body)
@@ -1127,6 +1129,21 @@ test("with no tracker web, a platform bug's task names the command that reads it
   ok((await noWeb()).includes(`yak bug show ${bug} --source yaks.app`))
 })
 
+let inSpace = await platform([url], 's')
+let noWebInSpace = await platform([], 's')
+test("a space bug's task links its page in that space's tracker, or names its scope in the command that reads it", async () => {
+  ok(
+    (await inSpace()).includes(
+      `(${url}/?.bug&side=yaks.app&scope=s&bug=${bug})`,
+    ),
+  )
+  ok(
+    (await noWebInSpace()).includes(
+      `yak bug show ${bug} --source yaks.app --scope s`,
+    ),
+  )
+})
+
 let held = await off()
 test("until the platform's first poll settles, no other tracker's bug takes a slot", async () => {
   let listeners: ((bundles: Bundle[]) => void)[] = []
@@ -1136,6 +1153,7 @@ test("until the platform's first poll settles, no other tracker's bug takes a sl
   await service(held.host, {
     ...held.config,
     remote: { url: 'https://tracker.example' },
+    spaces: () => Promise.resolve([]),
     open: (at) =>
       at == 'yaks.app'
         ? {
@@ -1591,16 +1609,21 @@ for (let terminal of ['ended', 'stop', 'failed']) {
   }
 }
 
-for (let source of [url, 'yaks.app']) {
+for (
+  let [source, scope] of [[url], ['yaks.app'], ['yaks.app', 's']] as const
+) {
   let f = await fixture({ cli: 'yak --config /srv/tracker.json' })
   let [evidence] = await f.tracker.get([bug])
   let reconcile = alone(f.g, f.config)
-  test(`${source == url ? 'local' : 'platform'} fixer instructions target their authoritative tracker`, async () => {
-    await reconcile(evidence, source, (rows) => put(f.tracker, rows))
+  let kind = source == url ? 'local' : scope ? "a space's" : 'platform'
+  test(`${kind} fixer instructions target their authoritative tracker`, async () => {
+    await reconcile(evidence, source, (rows) => put(f.tracker, rows), scope)
     let [entry] = await rows(f.g, 'entry')
     let body = String(comp(entry, 'content').body)
     let command = `env -u YAKS_HOST yak --config /srv/tracker.json bug`
-    let suffix = source == 'yaks.app' ? ' --source yaks.app' : ''
+    let suffix = source == 'yaks.app'
+      ? ` --source yaks.app${scope ? ` --scope ${scope}` : ''}`
+      : ''
     ok(body.includes(`${command} resolve ${bug}${suffix} --broke`))
     ok(body.includes(`${command} show ${bug}${suffix}`))
     equal(body.includes('--source yaks.app'), source == 'yaks.app')

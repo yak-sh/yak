@@ -132,6 +132,7 @@ let setup = (now: () => number = Date.now) => {
     admitTrace: () => Promise.resolve(false),
     ingestTrace: () => Promise.resolve(false),
     settle: () => Promise.resolve(0),
+    enroll: () => Promise.resolve(),
   }
   let w = worker({
     BUNDLE_HASH: hash,

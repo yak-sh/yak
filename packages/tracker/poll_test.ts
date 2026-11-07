@@ -69,6 +69,23 @@ let namedGot = await namedPoll.get([
   'gone',
 ])
 namedPoll.close()
+test("a space's poll asks and marks that space's tracker", async () => {
+  let asked: (string | null)[] = [], scopes: (string | undefined)[] = []
+  let doors: Doors = {
+    bugs: (params) => {
+      asked.push(params.get('scope'))
+      return Promise.resolve({ ok: true, value: [] })
+    },
+    mark: (_bug, _name, _said, scope) => {
+      scopes.push(scope)
+      return Promise.resolve(true)
+    },
+  }
+  let open = await polled(poll(remote, '.bug', { doors, scope: 's' }))
+  await open.mutate([{ entity: { eid: 'a' }, taken: { task: 'T-7' } }])
+  open.close()
+  equal([asked, scopes], [['s'], ['s']])
+})
 test('a poll reads bugs by id whatever its query, a page of ids to a request', () => {
   equal(namedGot, namedBugs)
   equal(named.named.map((ids) => ids.length), [100, 51])

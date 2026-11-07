@@ -31,6 +31,7 @@ let fixture = (doors: Partial<Stub> = {}) => {
     admitTrace: fail,
     ingestTrace: fail,
     settle: fail,
+    enroll: fail,
     ...doors,
   }
   // No stub reads a ticket, so a scratch one stands in for signing: a
@@ -202,4 +203,35 @@ test("the minute's monitor and a queue's intake wait out a moving object, unrepo
     equal(await ran(door, [lost, refused, reset, unstarted]), [5, 0])
     equal(await ran(door, [broken]), [1, 1])
   }
+})
+
+test("a space tracker that answers a door or takes intake joins the platform's list once", async () => {
+  let enrolled: string[] = []
+  let { w } = fixture({
+    fetch: (request) =>
+      Promise.resolve(
+        Response.json({}, {
+          status: new URL(request.url).pathname == '/bugs' ? 200 : 403,
+        }),
+      ),
+    ingest: () => Promise.resolve(),
+    enroll: (scope) => (enrolled.push(scope), Promise.resolve()),
+  })
+  let [a, b, c] = [0, 1, 2].map(() => crypto.randomUUID())
+  let ask = (path: string, scope: string) =>
+    w.fetch(new Request(`https://tracker.test${path}?scope=${scope}`))
+  await ask('/bugs', a)
+  await ask('/bugs', a)
+  await ask('/query', b)
+  await ask('/bugs', 'platform')
+  await w.queue([{
+    body: [{
+      entity: { eid: crypto.randomUUID() },
+      error: {},
+      during: { space: c },
+    }],
+    ack: () => {},
+    retry: () => {},
+  }])
+  equal(enrolled, [a, c])
 })
