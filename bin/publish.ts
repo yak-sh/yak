@@ -11,7 +11,10 @@
 // and so does any member that publishes nothing and names one of those:
 // Deno resolves every dependency a member's package.json names. A dry run
 // (`--dry-run`, the source check) is given every member, so it checks every
-// package's public API as one workspace.
+// package's public API as one workspace. Member directories named after the
+// flags are each published alone, within that whole workspace: what
+// `deno task test` dry-runs for the packages a change touches
+// (./test-checks.ts), a second or so each, where every package takes four.
 //
 // A publish ships, in @yaks/cli's `made/`, the canvas a fresh `yak init`
 // serves (@yaks/web/canvas `prepare`), made here from the release's own
@@ -171,6 +174,20 @@ export let shipping = async (
   )
 }
 
+/** Whether a member's own deno.json lets it publish: `deno publish` refuses
+ * one with `publish: false`, and has no manifest to project without one. */
+let publishes = (m: Member) => {
+  let text = (() => {
+    try {
+      return Deno.readTextFileSync(`${root}${m.dir}/deno.json`)
+    } catch (error) {
+      if (error instanceof Deno.errors.NotFound) return null
+      throw error
+    }
+  })()
+  return m.name != null && text != null && JSON.parse(text).publish !== false
+}
+
 let member = (dir: string): Member => {
   let pkg = JSON.parse(Deno.readTextFileSync(`${root}${dir}/package.json`))
   let deps = ['dependencies', 'devDependencies', 'optionalDependencies']
@@ -178,16 +195,47 @@ let member = (dir: string): Member => {
   return { dir, name: pkg.name, deps }
 }
 
-if (import.meta.main) {
-  let all = members().map(member)
-  let dry = Deno.args.includes('--dry-run')
+/** `deno publish` with the projected config at `config`. Run alone, it
+ * answers in the terminal, where a publish asks to authorize; beside others,
+ * each answer is kept until all are done, so none interleave. */
+let publish = (config: string, args: string[], piped = false) =>
+  new Deno.Command(Deno.execPath(), {
+    args: ['publish', '--config', config, ...args],
+    // Keep the source checkout's Git cleanliness and provenance checks.
+    cwd: root,
+    stdin: piped ? 'null' : 'inherit',
+    stdout: piped ? 'piped' : 'inherit',
+    stderr: piped ? 'piped' : 'inherit',
+  })
+
+/** Publish each named member that publishes alone, in the whole workspace. */
+let alone = async (all: Member[], named: string[], flags: string[]) => {
+  let each = all.filter((m) => named.includes(m.dir) && publishes(m))
+  if (!each.length) return 0
+  return await project(root, all.map((m) => m.dir), async (target) => {
+    let runs = await Promise.all(
+      each.map((m) =>
+        publish(`${target}/${m.dir}/deno.json`, flags, true).output()
+      ),
+    )
+    for (let run of runs) {
+      await Deno.stdout.write(run.stdout)
+      await Deno.stderr.write(run.stderr)
+    }
+    return runs.every((run) => run.success) ? 0 : 1
+  })
+}
+
+/** Publish the release, or dry-run every member. */
+let whole = async (all: Member[], flags: string[]) => {
+  let dry = flags.includes('--dry-run')
   let held = new Set(
     (await publishing(root)).map((p) => p.name)
       .filter((name) => !Object.hasOwn(pinned, name)),
   )
   let left = dry ? [] : out(all, held, pinned)
   let dirs = all.filter((m) => !left.includes(m.dir)).map((m) => m.dir)
-  Deno.exitCode = await project(root, dirs, async (target) => {
+  return await project(root, dirs, async (target) => {
     if (!dry && dirs.includes('packages/cli')) {
       let [canvas, { STARTER }] = await Promise.all([
         import('@yaks/web/canvas'),
@@ -202,14 +250,16 @@ if (import.meta.main) {
         JSON.stringify(await shipping(target, dirs), null, 2) + '\n',
       )
     }
-    let status = await new Deno.Command(Deno.execPath(), {
-      args: ['publish', '--config', `${target}/deno.json`, ...Deno.args],
-      // Keep the source checkout's Git cleanliness and provenance checks.
-      cwd: root,
-      stdin: 'inherit',
-      stdout: 'inherit',
-      stderr: 'inherit',
-    }).spawn().status
+    let status = await publish(`${target}/deno.json`, flags).spawn().status
     return status.code
   })
+}
+
+if (import.meta.main) {
+  let all = members().map(member)
+  let flags = Deno.args.filter((arg) => arg.startsWith('-'))
+  let named = Deno.args.filter((arg) => !arg.startsWith('-'))
+  Deno.exitCode = named.length
+    ? await alone(all, named, flags)
+    : await whole(all, flags)
 }

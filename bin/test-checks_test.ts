@@ -58,6 +58,23 @@ test("a change to a source of the Worker's generated content checks it is fresh"
   equal(['packages/a/a.ts', 'plugins/other/a.md'].map(content), [false, false])
 })
 
+test('a change dry-runs the publish of each package it is in', () => {
+  let published = (changed: string[]) =>
+    checks(changed).find((c) => c.name == 'publish')?.args.slice(6)
+  equal(
+    published([
+      'packages/a/a.ts',
+      'packages/a/sub/b_test.ts',
+      'packages/b/deno.json',
+      'workers/yak/a.ts',
+      'bin/a.ts',
+      'packages/README.md',
+    ]),
+    ['packages/a', 'packages/b', 'workers/yak'],
+  )
+  equal(published(['bin/a.ts', 'deno.json']), undefined)
+})
+
 let file = Deno.makeTempFileSync({ suffix: '.ts' })
 let called: Check[] = []
 let files = await format([file, `${file}.deleted`], (c) => {

@@ -1,9 +1,10 @@
 // Local source checks cover the change: its lint, its raw bytes, the
 // Worker's generated content when it touches a source of it and what the
-// generator read and loaded as it last passed changed since (`kept`), and the
-// types of what it reaches. Runtime tests follow consumers. Main CI checks every
-// module's types, and the workspace's public API as the publisher reads it,
-// after the push.
+// generator read and loaded as it last passed changed since (`kept`), the
+// public API of each package it touches as JSR's publisher reads it (slow
+// types: an export without its declared type), and the types of what it
+// reaches. Runtime tests follow consumers. Main CI checks every module's
+// types, and every package's public API, after the push.
 
 import { createHash } from 'node:crypto'
 import {
@@ -26,6 +27,10 @@ let code = (path: string) => /\.[mc]?[jt]sx?$/.test(path)
 let generated = (path: string) =>
   /^(?:workers\/yak|plugins\/yaks\.app)\/|(?:^|\/)(?:deno|vocab)\.json$/
     .test(path)
+// The workspace member a path is in, by the layout package.json's workspaces
+// name; bin/publish.ts dry-runs those that publish.
+let member = (path: string) =>
+  path.match(/^(?:packages|workers)\/[^/]+(?=\/)/)?.[0]
 let formatted = (path: string) =>
   /\.(?:[mc]?[jt]sx?|jsonc?|md|markdown|ya?ml|css|scss|html)$/.test(path)
 
@@ -40,7 +45,8 @@ export type Check = {
   keeps?: string
 }
 
-/** Format, lint and byte-check existing changed files. A change to what
+/** Format, lint and byte-check existing changed files, and dry-run the
+ * publish of each package they are in. A change to what
  * workers/yak/content.ts, load.ts or plugins/yaks.app is generated from checks
  * they are fresh, and fails naming `deno task content`. */
 export let checks = (changed: string[]): Check[] => {
@@ -49,6 +55,7 @@ export let checks = (changed: string[]): Check[] => {
   // The workspace's own config, named: a yaks app's package.json is a config
   // to Deno too, and found beside a file it would replace the workspace's.
   let config = ['--config', 'deno.json', '--permit-no-files']
+  let members = [...new Set(changed.flatMap((path) => member(path) ?? []))]
   return [
     ...fmt.length ? [{ name: 'format', args: ['fmt', ...config, ...fmt] }] : [],
     ...lint.length
@@ -58,6 +65,20 @@ export let checks = (changed: string[]): Check[] => {
       ? [{
         name: 'bytes',
         args: ['run', '--allow-read', 'bin/check-bytes.ts', ...changed],
+      }]
+      : [],
+    ...members.length
+      ? [{
+        name: 'publish',
+        args: [
+          'run',
+          '-A',
+          'bin/publish.ts',
+          '--dry-run',
+          '--allow-dirty',
+          '--no-check',
+          ...members,
+        ],
       }]
       : [],
     ...changed.some(generated)

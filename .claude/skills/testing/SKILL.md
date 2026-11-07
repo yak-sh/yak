@@ -123,9 +123,10 @@ stronger.
 `deno task test` with no paths uses the dependency graph to select tests and
 doctests the branch and working changes reach, including consumers, the nearest
 first and the rest of them left to main's CI (`--all` runs them here). It applies
-formatting to changed files and lints them. Every package's public API as
-the publisher reads it (slow types, a package import that closes a cycle) is
-main's CI's (`deno task check:publish`). Beside the tests it checks the types of source and doc comments the
+formatting to changed files and lints them. It dry-runs the publish of each
+package the change touches, so an export without its declared type fails the
+run (a second or so a package); every package's public API at once is main's
+CI's (`deno task check:publish`). Beside the tests it checks the types of source and doc comments the
 change reaches, each changed module, each importing one, and each of its package importing one however far, as
 `deno task check:types` does alone: TypeScript's native compiler (tsgo) checks
 them in the project Deno's resolution describes, in seconds where the whole

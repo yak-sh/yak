@@ -86,8 +86,8 @@ packages/draft is a good small one to copy:
   `./vocab` and `./views`, with only the web platform in scope.
 - **Explicit types on every export.** A published package's exported functions
   and values declare their types, return types included, because jsr refuses to
-  publish an export whose type it has to infer. `deno task test` doesn't run the
-  publish check, so run `deno task check:publish` before landing.
+  publish an export whose type it has to infer. `deno task test` dry-runs the
+  publish of each package a change touches, so it fails on one.
 - **Its line in packages/README.md's index.**
 
 ## Facets: where things run
