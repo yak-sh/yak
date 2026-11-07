@@ -1503,6 +1503,25 @@
   .Talk_Part-screens .Talk_MadeNote {
     padding: .25rem .5rem 0;
   }
+  /* The draft or the app live, a radio each, while both are there: only
+     the checked one's note and frame show. */
+  .Talk_Screens {
+    --control-height: 2rem;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0 1.25rem;
+    padding: 0 .5rem;
+  }
+  .Talk_Screens ~ .Talk_MadeNote {
+    padding-top: 0;
+  }
+  .Talk_Part-screens:has([name=screen]) [data-screen] {
+    display: none;
+  }
+  .Talk_Part-screens:has([name=screen][value=draft]:checked) [data-screen=draft],
+  .Talk_Part-screens:has([name=screen][value=live]:checked) [data-screen=live] {
+    display: block;
+  }
   .Talk_Thread,
   .Talk_Said {
     display: grid;

@@ -89,6 +89,19 @@ let after = async (...steps: Item[]) => {
     does: names('does'),
     screens: part('screens')?.querySelector('iframe')?.getAttribute('src') ??
       part('screens')?.textContent,
+    // Its frames by which they are, the radios that switch them and which
+    // is on, and what each says it is.
+    frames: Object.fromEntries(
+      [...part('screens')?.querySelectorAll('iframe') ?? []].map((f) => [
+        f.getAttribute('data-screen'),
+        f.getAttribute('src'),
+      ]),
+    ),
+    switch: [...part('screens')?.querySelectorAll('.Check') ?? []].map((
+      c,
+    ) => [c.textContent, c.querySelector('input')?.hasAttribute('checked')]),
+    notes: [...part('screens')?.querySelectorAll('p[data-screen]') ?? []]
+      .map((p) => p.getAttribute('data-screen')),
     asks: document.querySelector('#ask [name=app]')?.getAttribute('value'),
   }
 }
@@ -114,6 +127,13 @@ let drawn = await after(
   }),
 )
 let live = await after(call('app_deploy', { app: 'recipes' }))
+let changing = await after(
+  call('app_files', {
+    app: 'recipes',
+    files: [file('index.html', '<h1>Every recipe</h1>')],
+  }),
+)
+let again = await after(call('app_deploy', { app: 'recipes' }))
 
 test('beside a newcomer’s chat, what their app keeps and can do as their Operator decides them, before any screen', () => {
   equal(started, {
@@ -122,6 +142,9 @@ test('beside a newcomer’s chat, what their app keeps and can do as their Opera
     keeps: ['Recipe'],
     does: ['Plan week', 'Add and find what it keeps'],
     screens: `Recipe box’s screens show here as ${space.operator} draws them.`,
+    frames: {},
+    switch: [],
+    notes: [],
     asks: 'recipes',
   })
 })
@@ -137,6 +160,23 @@ test('its screens open once the first is drawn: the draft, following each write'
 test('once released, its screens are the app itself, live', () => {
   equal(live.open, 'screens')
   equal(live.screens, 'https://plum.yaks.app/recipes/')
+  equal([live.switch, live.notes], [[], []])
+})
+
+test('while a live app has changes not yet released, its screens show the draft, with a switch to live and a line saying each', () => {
+  equal(changing.open, 'screens')
+  equal(changing.switch, [['Draft', true], ['Live', false]])
+  equal(changing.notes, ['draft', 'live'])
+  equal(Object.keys(changing.frames), ['draft', 'live'])
+  equal(
+    changing.frames.draft?.startsWith(
+      'https://plum.yaks.app/recipes/_preview/',
+    ),
+    true,
+  )
+  equal(changing.frames.live, 'https://plum.yaks.app/recipes/')
+  // Released, they are the app itself again.
+  equal(again.frames, { live: 'https://plum.yaks.app/recipes/' })
 })
 
 // They keep it: with an address, they are signed in like anyone.

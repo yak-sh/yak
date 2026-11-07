@@ -1054,11 +1054,12 @@ export let aboutPath = (space: string, app: string, open = 'new') =>
 /** An app as the chat shows it. */
 type Shown = { slug: string; title: string }
 
-/** An app beside the chat as it is being made: what it is made of, whether
- * it is live, and where its screens are, if anywhere yet: the app itself once
- * released, else its draft's preview link (preview.ts) once the draft holds a
- * page, which follows the draft write by write (public/release.js). */
-type Making = Shown & { made: Made; live: boolean; src: string | null }
+/** An app beside the chat as it is being made: what it is made of, and
+ * where its screens are, if anywhere yet: the app itself once released, and
+ * its draft's preview link (preview.ts), which follows the draft write by
+ * write (public/release.js), while the draft holds a page that is not live:
+ * before the first release, and while changes wait for the next. */
+type Making = Shown & { made: Made; live: string | null; draft: string | null }
 
 // An app beside the chat as the person may see it, with the tools' own
 // access (tool.ts `inApp`), from its draft as it stands (written.ts
@@ -1077,25 +1078,102 @@ let makingOf = async (
   let draft = await drafting(r2RawObjects(env.BLOBS), ctx.dir, app)
   let file = VOCABS.find((p) => p in draft.files)
   let words = file ? await draft.view.read(`${draft.root}/${file}`) : null
-  let live = !!app.source
   let drawn = Object.keys(draft.files).some((p) => p.endsWith('.html'))
+  let pending = drawn && draft.unreleased && !!env.SESSION_SECRET
   return {
     slug: app.slug,
     title: app.title || app.slug,
     made: madeOf(words && new TextDecoder().decode(words), file),
-    live,
-    src: live
+    live: app.source
       ? `https://${spaceHost(env, space.slug)}/${app.slug}/`
-      : drawn && env.SESSION_SECRET
-      ? (await linkOf(ctx, space, app, found.who)).at
       : null,
+    draft: pending ? (await linkOf(ctx, space, app, found.who)).at : null,
   }
 }
 
 // Which of the canvas's tabs opens: the newest stage of making it reached,
 // screens once there are any.
-let stageOf = ({ made, src }: Making) =>
-  src ? 'screens' : !made.kinds.length && made.acts.length ? 'does' : 'keeps'
+let stageOf = ({ made, live, draft }: Making) =>
+  live || draft
+    ? 'screens'
+    : !made.kinds.length && made.acts.length
+    ? 'does'
+    : 'keeps'
+
+// Its screens: the draft while it differs from what is live, and the app
+// itself once released, each in a frame, the one on screen said. While both
+// are there a pair of radios switches them (pages.css shows the frame of the
+// checked one, and the other loads once shown), the draft first, since it
+// is what is changing.
+let screens = (app: Making, operator: string) => {
+  let { live, draft } = app
+  let frame = (which: 'draft' | 'live', at: string) =>
+    h('iframe', {
+      class: 'Talk_Frame',
+      src: at,
+      title: `${app.title}, ${which == 'draft' ? 'the draft' : 'live'}`,
+      'data-frame': which,
+      'data-screen': which,
+      ...which == 'live' && draft ? { loading: 'lazy' } : {},
+    })
+  let note = (which: string, said: string) =>
+    h('p', { class: 'Talk_MadeNote', 'data-screen': which }, said)
+  if (!live && !draft) {
+    return h(
+      Empty,
+      null,
+      h(
+        'p',
+        null,
+        `${app.title}’s screens show here as ${operator} draws them.`,
+      ),
+    )
+  }
+  if (!live) {
+    return [
+      note(
+        'draft',
+        `A draft with its own test data, changing as ${operator} works on it.`,
+      ),
+      frame('draft', draft!),
+    ]
+  }
+  if (!draft) return frame('live', live)
+  let pick = (which: string, word: string) =>
+    h(
+      Check,
+      null,
+      h('input', {
+        type: 'radio',
+        name: 'screen',
+        value: which,
+        checked: which == 'draft',
+      }),
+      word,
+    )
+  return [
+    h(
+      'div',
+      {
+        class: 'Talk_Screens',
+        role: 'radiogroup',
+        'aria-label': 'Which screens',
+      },
+      pick('draft', 'Draft'),
+      pick('live', 'Live'),
+    ),
+    note(
+      'draft',
+      `${operator}’s changes, not live yet, with the draft’s own test data.`,
+    ),
+    note(
+      'live',
+      `What people see now. The draft’s changes show here once released.`,
+    ),
+    frame('draft', draft),
+    frame('live', live),
+  ]
+}
 
 // The app open beside the chat (T-140509), and the one the Operator is
 // making in it (D-146737, `following`): its icon, its name and where it
@@ -1113,6 +1191,8 @@ let canvas = (env: Env, space: Space, app: Making, operator: string) => {
   let title = app.title || app.slug
   let whose = { app: title, operator }
   let stage = stageOf(app)
+  // Where Open takes it: the app itself, else its draft.
+  let away = app.live ?? app.draft
   let tab = (id: string, name: string, ...inside: Node[]) =>
     h(
       TabSet.Item,
@@ -1157,10 +1237,10 @@ let canvas = (env: Env, space: Space, app: Making, operator: string) => {
         h('b', null, title),
         h('small', null, host),
       ),
-      app.src
+      away
         ? h(
           Button,
-          { href: app.src, target: '_blank', rel: 'noopener' },
+          { href: away, target: '_blank', rel: 'noopener' },
           h(Icon, { of: icons['external-link'] }),
           'Open',
         )
@@ -1173,34 +1253,8 @@ let canvas = (env: Env, space: Space, app: Making, operator: string) => {
         TabSet,
         { class: 'Talk_Made', 'aria-label': `What ${title} is made of` },
         tab('keeps', 'What it keeps', keeps(app.made, whose)),
-        tab('does', 'What it can do', does(app.made, whose, app.live)),
-        tab(
-          'screens',
-          'Screens',
-          !app.src
-            ? h(
-              Empty,
-              null,
-              h(
-                'p',
-                null,
-                `${title}’s screens show here as ${operator} draws them.`,
-              ),
-            )
-            : [
-              app.live ? null : h(
-                'p',
-                { class: 'Talk_MadeNote' },
-                `A draft with its own test data, changing as ${operator} works on it.`,
-              ),
-              h('iframe', {
-                class: 'Talk_Frame',
-                src: app.src,
-                title,
-                'data-frame': '',
-              }),
-            ],
-        ),
+        tab('does', 'What it can do', does(app.made, whose, !!app.live)),
+        tab('screens', 'Screens', screens(app, operator)),
       ),
     ),
   )
@@ -1646,7 +1700,7 @@ let follows = ${JSON.stringify(follows)}
 let canvas = () => document.querySelector('[data-app]')
 let ours = (apps = []) => apps.filter((c) => !c.space || c.space == here).map((c) => c.app)
 let changing = (o) => {
-  let app = canvas(), shown = app?.querySelector('[data-frame]')
+  let app = canvas(), shown = app?.querySelector('[data-frame=live]')
   if (shown && ours(o.changed).includes(app.dataset.app)) shown.src = shown.getAttribute('src')
   if (app) return void (ours(o.worked).includes(app.dataset.app) && remake(app.dataset.app))
   let opening = follows ? ours(o[follows]) : []

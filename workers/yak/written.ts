@@ -30,6 +30,7 @@ import { derivedEid, mint } from '@yaks/graph/identity'
 import { token } from '@yaks/graph/sha256'
 import type { App, Directory, Space } from './directory.ts'
 import { filesAt, filesIn, viewOf } from './release.ts'
+import { same } from './versions.ts'
 import { vouched, type Who } from './session.ts'
 import { refuse } from './tool.ts'
 import { META } from './release_index.ts'
@@ -110,6 +111,8 @@ export type Draft = {
   files: Files
   /** the draft's own writes */
   rows: Written[]
+  /** whether those writes leave files other than the serving release's */
+  unreleased: boolean
   view: Objects
 }
 
@@ -120,9 +123,15 @@ export let drafting = async (
   dir: Directory,
   app: App,
 ): Promise<Draft> => {
-  let { files, rows } = await over(dir, app, served(raw, app))
+  let { files, rows, base } = await over(dir, app, served(raw, app))
   let root = draftRoot(app)
-  return { root, files, rows, view: viewOf(raw, root, files) }
+  return {
+    root,
+    files,
+    rows,
+    unreleased: !same(base, files),
+    view: viewOf(raw, root, files),
+  }
 }
 
 /** The paths an app's draft holds, for what an erasure says it took. A
@@ -145,7 +154,7 @@ let over = async (dir: Directory, app: App, base: Promise<Files>) => {
     base,
     app.draft ? dir.written(app, app.draft) : Promise.resolve([]),
   ])
-  return { files: overlaid(files, rows), rows }
+  return { files: overlaid(files, rows), rows, base: files }
 }
 
 /** One change to what an app's preview link serves, as its pages hear it:
