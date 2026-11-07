@@ -38,6 +38,8 @@ import MessageSquare from 'lucide/dist/esm/icons/message-square.mjs'
 // @ts-types="@yaks/ui/lucide"
 import Mail from 'lucide/dist/esm/icons/mail.mjs'
 // @ts-types="@yaks/ui/lucide"
+import Mic from 'lucide/dist/esm/icons/mic.mjs'
+// @ts-types="@yaks/ui/lucide"
 import Phone from 'lucide/dist/esm/icons/phone.mjs'
 // @ts-types="@yaks/ui/lucide"
 import TriangleAlert from 'lucide/dist/esm/icons/triangle-alert.mjs'
@@ -92,6 +94,7 @@ export let icons = {
   'message-circle': MessageCircle,
   'message-square': MessageSquare,
   mail: Mail,
+  mic: Mic,
   phone: Phone,
   'triangle-alert': TriangleAlert,
 }

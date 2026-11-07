@@ -1862,6 +1862,27 @@
   .Talk:has([data-task][data-pending]) .Talk_Send {
     margin-left: 0;
   }
+  /* The microphone (public/voice.js): a calm glow while it listens. */
+  .Talk_Voice[hidden] {
+    display: none;
+  }
+  .Talk_Voice[data-listening] {
+    color: var(--accent);
+    border-color: var(--accent);
+    box-shadow: 0 0 0 .25rem color-mix(in srgb, var(--accent) 18%, transparent);
+    animation: Talk_Listening 1.6s ease-in-out infinite alternate;
+  }
+  @keyframes Talk_Listening {
+    to {
+      box-shadow: 0 0 0 .45rem color-mix(in srgb, var(--accent) 8%,
+        transparent);
+    }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .Talk_Voice[data-listening] {
+      animation: none;
+    }
+  }
   .Talk_Status {
     margin: .3rem 0 0;
     color: var(--muted);

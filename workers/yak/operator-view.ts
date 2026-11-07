@@ -12,6 +12,7 @@ import { statusOf } from '@yaks/session'
 import type { Step } from '@yaks/tools/title'
 import { toolEid } from '@yaks/tools/result'
 import { blocks, parse } from '@yaks/markdown/structural'
+import type { H } from '@yaks/render'
 import { PART } from '@yaks/persona'
 import { type ComponentChildren as Node, Fragment, h } from 'preact'
 import { renderToString } from 'preact-render-to-string'
@@ -873,6 +874,8 @@ let CHANGES = byEid(RELEASING)
 let WORKS = byEid({ ...RELEASING, app_files: 'app', sandbox_ship: 'app' })
 // The tool that starts a new app.
 let STARTS = byEid({ app_new: 'slug' })
+// The tools that change an app's draft without releasing it.
+let WRITES = byEid({ app_files: 'app', sandbox_ship: 'app' })
 
 // Each call to one of `tools` whose answer came back past `from` (by
 // `entry.seq`) and was not refused: the app it named, and when it answered.
@@ -909,6 +912,68 @@ export let worked = apps(WORKS)
 /** The apps these lines started, oldest first, which open beside the
  * conversation that started them (operator-page.ts `chatPage`). */
 export let started = apps(STARTS)
+
+// What `app_files` does without changing a file.
+let LOOKS = ['list', 'read', 'history']
+
+// A reply's words as they are said aloud: its Markdown without the markup or
+// code, and only its first sentences, the most a person on their feet hears.
+let SENTENCES = 2
+let plainly: H<string> = (tag, _props, ...inside) => {
+  if (tag == 'pre' || tag == 'img') return ''
+  if (tag == 'br') return ' '
+  let words = (inside as unknown[]).flat(Infinity)
+    .filter((c) => typeof c == 'string' || typeof c == 'number').join('')
+  return /^(p|h\d|li|blockquote|tr)$/.test(tag) ? words + '\n' : words
+}
+let firstSaid = (text: string) =>
+  blocks(parse(text), plainly).join('').split('\n').map((l) => l.trim())
+    .filter(Boolean).join(' ').split(/(?<=[.!?])\s+/).slice(0, SENTENCES)
+    .join(' ')
+
+/**
+ * What a step past `from` says aloud, oldest first: a short line for each
+ * change that landed in an app (a release, a new app, files written), in
+ * the words its step reads in, and the first sentences of each reply. The
+ * chat page speaks them to a person who talked to it (public/voice.js).
+ *
+ * ```ts
+ * import { equal } from '@yaks/testing'
+ * import { toolEid } from '@yaks/tools/result'
+ * import { aloud } from './operator-view.ts'
+ * let names = (_: string, args?: Record<string, unknown>) =>
+ *   ({ doing: '', done: `Wrote ${args?.path}` })
+ * let call = (n: number, op: string) => [
+ *   { entity: { eid: `c${n}` }, entry: { session: 's', seq: n },
+ *     call: { to: toolEid('app_files'), args: { app: 'notes', op, path: `${n}.css` } } },
+ *   { entity: { eid: `r${n}` }, entry: { session: 's', seq: n }, result: { call: `c${n}` } },
+ * ]
+ * let reply = { entity: { eid: 'o' }, entry: { session: 's', seq: 3 }, output: {},
+ *   content: { body: 'Done. **Warmer** now. Tell me more.\n\n```css\na{}\n```' } }
+ * equal(aloud([...call(1, 'read'), ...call(2, 'write'), reply], names, 0), [
+ *   'Wrote 2.css', 'Done. Warmer now.',
+ * ])
+ * equal(aloud([...call(1, 'write'), reply], names, 2), ['Done. Warmer now.'])
+ * ```
+ */
+export let aloud = (entries: Bundle[], names: Names, from: number) => {
+  let calls = new Map(
+    entries.filter((b) => b.call).map((b) => [b.entity.eid, comp(b, 'call')!]),
+  )
+  return entries.flatMap((b) => {
+    if (Number(comp(b, 'entry')?.seq ?? 0) <= from) return []
+    let body = String(comp(b, 'content')?.body ?? '')
+    if (b.output && !b.notice && body.trim()) return [firstSaid(body)]
+    if (!b.result || b.refusal || b.exception) return []
+    let call = calls.get(String(comp(b, 'result')!.call))
+    let args = (call?.args ?? {}) as Record<string, unknown>
+    let to = String(call?.to)
+    let lands = CHANGES.has(to) || WRITES.has(to) && !LOOKS.includes(
+          String(args.op ?? ''),
+        )
+    return lands ? [names(to, args).done] : []
+  }).filter(Boolean)
+}
 
 // One app, however each call named its space.
 let same = (a: Changed, b: Changed) =>
@@ -965,8 +1030,8 @@ export let making = (
 /** An app underway in a conversation, and whether it started it. */
 export type Underway = Changed & { started: boolean }
 
-/** One task's frame: the lines a step changed, what it is doing now, and
- * the apps it changed, worked on and started. */
+/** One task's frame: the lines a step changed, what it is doing now, the
+ * apps it changed, worked on and started, and what it says aloud. */
 export let frame = (
   task: string,
   entries: Bundle[],
@@ -980,14 +1045,16 @@ export let frame = (
     changed: changed(entries, from),
     worked: worked(entries, from),
     started: started(entries, from),
+    said: aloud(entries, names, from),
     ...doingNow(entries, names),
   },
 })
 
 /** A helper's frame: what it was told past `from`, drawn inside the step
  * that started it (that step drawn again) or, for a helper no step drawn
- * started, on its own; the apps it changed, worked on and started; and what
- * the Operator that started it is doing now. */
+ * started, on its own; the apps it changed, worked on and started, and the
+ * changes it landed said aloud, never its replies, which are the Operator's
+ * to hear; and what the Operator that started it is doing now. */
 export let helperFrame = (
   task: string,
   helper: Helper,
@@ -1012,6 +1079,7 @@ export let helperFrame = (
       changed: changed(helper.entries, from),
       worked: worked(helper.entries, from),
       started: started(helper.entries, from),
+      said: aloud(helper.entries.filter((b) => !b.output), names, from),
       ...doingNow(entries, names),
     },
   }

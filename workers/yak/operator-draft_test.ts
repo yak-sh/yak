@@ -14,6 +14,7 @@ import { platform } from './testing.ts'
 import { type Beside, chatPage, operatorAnswer } from './operator-page.ts'
 import type { Who } from './session.ts'
 import { redraw } from './public/redraw.js'
+import { voice } from './public/voice.js'
 import { released } from './operator-testing.ts'
 import { openedOf } from './operator-host.ts'
 import { operatorStore } from './operator-store.ts'
@@ -52,6 +53,41 @@ let serve = async (url: string | URL, init?: RequestInit, as: Who = who) =>
     space,
     as,
   ))!
+
+// A browser that hears and speaks (public/voice.js), for the load that sets
+// it: what it is told it heard, and what it says.
+type Recognized = { onresult?: (e: unknown) => void; onend?: () => void }
+let talker = () => {
+  let t = {
+    heard: null as Recognized | null,
+    spoken: [] as string[],
+    platform: (Event: unknown) => ({
+      Recognition: class {
+        constructor() {
+          t.heard = this as Recognized
+        }
+        start() {}
+        stop() {}
+      },
+      synthesis: {
+        speak: (u: { text: string }) => void (u.text && t.spoken.push(u.text)),
+        cancel: () => {},
+      },
+      Utterance: class {
+        constructor(public text: string) {}
+      },
+      fetch,
+      lang: 'en',
+      setTimeout,
+      Event,
+    }),
+    says: (words: string) =>
+      t.heard!.onresult!({ results: [[{ transcript: words }]] }),
+    stops: () => t.heard!.onend!(),
+  }
+  return t
+}
+let speaking: ReturnType<typeof talker> | undefined
 
 // One browser's localStorage, kept across loads of the page.
 let storage = (): Stash => {
@@ -95,6 +131,10 @@ let load = async (
     })
     Object.defineProperty(form, 'action', {
       value: form.getAttribute('action'),
+    })
+    Object.defineProperty(form, 'requestSubmit', {
+      value: () =>
+        form.dispatchEvent(new Event('submit', { cancelable: true })),
     })
   }
   class FormOf extends FormData {
@@ -173,9 +213,11 @@ let load = async (
   let sockets: Page[] = []
   let source = document.querySelector('script[type=module]')!.textContent!
     .replace(/^import .*$/gm, '')
+  let talking = speaking
   new Function(
     'browserDrafts',
     'redraw',
+    'voice',
     'when',
     'setInterval',
     'document',
@@ -190,6 +232,8 @@ let load = async (
   )(
     opened,
     redraw,
+    (o: Parameters<typeof voice>[0]) =>
+      voice(talking ? { ...o, platform: talking.platform(Event) as never } : o),
     when,
     // the stamps' minute, which no test waits for
     () => 0,
@@ -417,6 +461,15 @@ test('the app beside the chat loads again when the Operator changes it, and only
   page.hear(changing('x', { space: 'clerk', app: 'notes' }))
   page.hear(changing('x', { space: '', app: 'notes' }))
   assertEquals(page.loads, { app: 2, page: 0 })
+  page.leave()
+})
+
+test('the microphone stays hidden where neither the browser nor the platform hears', async () => {
+  let page = await load(storage())
+  assertEquals(
+    page.document.querySelector('[data-voice]')!.hasAttribute('hidden'),
+    true,
+  )
   page.leave()
 })
 
@@ -702,4 +755,37 @@ test('a page reads its draft only as it opens and as its socket opens, never on 
   let opened = await tried()
   page.leave()
   assertEquals([alone, opened], [5, 10])
+})
+
+// Last, since it sends a message to the road conversation.
+test('words said to the chat are its draft as they are heard, and once sent, what each step lands is said back', async () => {
+  let t = speaking = talker()
+  let page = await load(storage(), false, road, apps)
+  speaking = undefined
+  await page.heard()
+  let task = page.document.querySelector('[data-task]')!.getAttribute(
+    'data-task',
+  )!
+  let mic = page.document.querySelector('[data-voice]')!
+  assertEquals(mic.hasAttribute('hidden'), false)
+  page.press(mic)
+  // what is heard follows what the box held
+  t.says('and the agenda')
+  await settle()
+  assertEquals(
+    await stored('operator:' + road),
+    'Add the hearing date and the agenda',
+  )
+  t.stops()
+  await settle()
+  page.hear({
+    operator: {
+      task,
+      rows: [],
+      now: '',
+      said: ['Released notes', 'Done. The date is on it.'],
+    },
+  })
+  assertEquals(t.spoken, ['Released notes', 'Done. The date is on it.'])
+  page.leave()
 })

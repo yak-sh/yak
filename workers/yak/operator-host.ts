@@ -682,7 +682,8 @@ export let conversationOf = async (
  * socket: the lines past `from` (by `entry.seq`, the last 30 when unknown),
  * and the newest seq it covers, to start the next from. A helper's step
  * shows in the conversation that started it, and `opens` is where a
- * conversation opens by its id.
+ * conversation opens by its id. Only a step past a known `from` says
+ * anything aloud: the lines drawn when it is unknown are old news.
  */
 export let frameOf = async (
   store: Store,
@@ -721,20 +722,23 @@ export let frameOf = async (
     let helpers = await helpersBy(store, calls)
     return {
       seq,
-      frame: frame(
-        await keyOf(store, session),
-        entries,
-        await namesOf(store, entries, named),
-        since,
-        {
-          helpers,
-          offers: await offersOf(store, [
-            ...entries,
-            ...helpers.flatMap((h) => h.entries),
-          ]),
-          called,
-          opens,
-        },
+      frame: hushed(
+        from,
+        frame(
+          await keyOf(store, session),
+          entries,
+          await namesOf(store, entries, named),
+          since,
+          {
+            helpers,
+            offers: await offersOf(store, [
+              ...entries,
+              ...helpers.flatMap((h) => h.entries),
+            ]),
+            called,
+            opens,
+          },
+        ),
       ),
     }
   }
@@ -759,16 +763,25 @@ export let frameOf = async (
   }
   return {
     seq,
-    frame: helperFrame(
-      await keyOf(store, parent),
-      helper,
-      started,
-      await namesOf(store, started, named),
-      from ?? 0,
-      { offers: await offersOf(store, helper.entries), called, opens },
+    frame: hushed(
+      from,
+      helperFrame(
+        await keyOf(store, parent),
+        helper,
+        started,
+        // its own steps named as well as the one that started it
+        await namesOf(store, [...started, ...helper.entries], named),
+        from ?? 0,
+        { offers: await offersOf(store, helper.entries), called, opens },
+      ),
     ),
   }
 }
+
+let hushed = <F extends { operator: { said: string[] } }>(
+  from: number | undefined,
+  f: F,
+) => from == null ? { ...f, operator: { ...f.operator, said: [] } } : f
 
 export type Listener = {
   send: (data: string) => void

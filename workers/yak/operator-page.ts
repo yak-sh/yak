@@ -60,11 +60,15 @@ import { given } from './operator-name.ts'
 import {
   backendOf,
   BUTLERS,
+  hearing,
   modelOf,
   offered,
   paceOf,
   sampled,
+  setupOf,
+  speaking,
   speaks,
+  speechOf,
   voiceOf,
 } from './speech.ts'
 import { ModelError } from '@yaks/model'
@@ -98,6 +102,10 @@ let html = (node: Node) => renderToString(h(Fragment, null, node))
 let COUNT = 10
 let SIZE = 16 * 1000 * 1000
 let READ = ['image/*', 'text/*', ...DOCUMENTS.map((d) => '.' + d)].join(',')
+// The most a recording heard at once may be, a minute of Opus with room to
+// spare, and the most a line said at once.
+let HEARD = 2 * 1000 * 1000
+let SAID = 600
 
 let shown = (number: string) =>
   number.replace(/^\+1(\d{3})(\d{3})(\d{4})$/, '$1-$2-$3')
@@ -631,6 +639,47 @@ export let operatorAnswer = async (
           'content-type': 'audio/mpeg',
           'cache-control': 'private, max-age=86400',
         },
+      })
+    } catch (e) {
+      if (e instanceof CallError) {
+        return Response.json({ message: e.message }, { status: 400 })
+      }
+      if (e instanceof ModelError) {
+        return Response.json({ message: e.message }, {
+          status: e.code == 'limit' ? 402 : 503,
+        })
+      }
+      throw e
+    }
+  }
+  // Speech for a browser that has none of its own (public/voice.js): what
+  // the person said, heard, and the Operator's line, said in its own voice
+  // and pace. Each is charged to the space's one budget (speech.ts).
+  if ((q.has('hear') || q.has('speak')) && req.method == 'POST') {
+    try {
+      if (q.has('hear')) {
+        let type = req.headers.get('content-type') ?? ''
+        if (!type.startsWith('audio/') || !req.body) {
+          throw refuse('arguments', 'Send what was said as audio.')
+        }
+        let audio = await gathered(
+          req.body,
+          HEARD,
+          () => refuse('arguments', 'Talk for up to a minute at a time.'),
+        )
+        if (!audio.length) return Response.json({ text: '' })
+        let got = await hearing(env, space, audio, type)
+        return Response.json({ text: got.text })
+      }
+      let asked = await req.json().catch(() => null) as { text?: unknown }
+      let text = String(asked?.text ?? '').trim()
+      if (!text || text.length > SAID) {
+        throw refuse('arguments', `Send up to ${SAID} characters to say.`)
+      }
+      let { voice, provider, speed } = setupOf(env, space)
+      let said = await speaking(env, space, text, { voice, provider, speed })
+      return new Response(said.body, {
+        headers: { 'content-type': said.type, 'cache-control': 'no-store' },
       })
     } catch (e) {
       if (e instanceof CallError) {
@@ -1744,6 +1793,7 @@ export let chatPage = async (
       talked.begun || open,
       follows,
       talked.standing,
+      !!speechOf(env),
     ),
     app,
   })
@@ -1845,6 +1895,20 @@ let composer = (
           { class: 'Talk_Stop', type: 'button', 'data-stop': '' },
           'Stop',
         ),
+        // shown where the browser or the platform can hear (public/voice.js)
+        h(
+          Button,
+          {
+            class: 'Talk_Voice',
+            type: 'button',
+            hidden: true,
+            'data-voice': '',
+            'aria-pressed': 'false',
+            title: 'Talk instead of typing',
+          },
+          h(Icon, { of: icons.mic }),
+          h('span', { 'data-voice-says': '' }, 'Talk'),
+        ),
         h(Button, { mod: 'go', class: 'Talk_Send', type: 'submit' }, 'Send'),
       ),
     ),
@@ -1852,9 +1916,11 @@ let composer = (
   )
 }
 
-// The chat app's script: the durable draft and sending, Stop, and the
-// conversation kept current from the Builder object's socket, each step's
-// lines put in place by id.
+// The chat app's script: the durable draft and sending, Stop, talking
+// instead of typing, and the conversation kept current from the Builder
+// object's socket, each step's lines put in place by id and what it says
+// aloud said to a person who talked. `paid` is whether the platform's
+// speech is on, for a browser that has none of its own.
 let chatScript = (
   at: string,
   who: Who,
@@ -1864,10 +1930,12 @@ let chatScript = (
   talk: string,
   follows: Follows,
   standing: string,
+  paid: boolean,
 ) =>
   `<script type="module">
 import { browserDrafts } from '/_draft.js'
 import { redraw } from '/redraw.js'
+import { voice } from '/voice.js'
 import { when } from '/when.js'
 let open = ${JSON.stringify(open)}
 let root = ${JSON.stringify(root)}
@@ -2009,6 +2077,7 @@ let drafts = browserDrafts(draftClient, '${space.eid}:operator', { by: '${who.pe
 let place = ${JSON.stringify('operator:' + talk)}
 if (form) { drafts.bind(form.elements.say, place); form.elements.say.focus() }
 let said = (e) => { status.textContent = e.message }
+let speech = form && voice({ button: form.querySelector('[data-voice]'), form, say: form.elements.say, at: '${at}', paid: ${paid}, said })
 let thread = () => box.querySelector('[data-task]')
 let working = () => !!box.querySelector('[data-pending]')
 // The yak beside the box shows what the Operator is doing (mascot.ts
@@ -2101,6 +2170,7 @@ let hear = (frame) => {
   let card = thread()
   if (!card) return void read().catch(said)
   if (card.dataset.task != o.task) return
+  if (o.said) speech?.tell(o.said)
   standing = undefined
   let was = near()
   let rows = card.querySelector('[data-rows]')
