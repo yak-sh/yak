@@ -27,6 +27,18 @@ let vocab = loadVocab([
 ], [kernelKeywords, idKeywords])
 
 let DB = '/box/yak.db'
+// The config this command line reads: the server's plugins, whose own words
+// and views the answer is drawn with.
+let config = {
+  db: DB,
+  plugins: [
+    '@yaks/kernel',
+    '@yaks/id',
+    '@yaks/doc',
+    '@yaks/task',
+    '@yaks/tools',
+  ],
+}
 let query = { name: 'graph_query', readOnly: true } as Declared
 let write = { name: 'graph_apply' } as Declared
 
@@ -68,7 +80,7 @@ let asked = async (
       page: () => Promise.resolve(''),
       ...more,
     }
-    let code = await warm(c, { db: DB }, declared, args, async (request) => {
+    let code = await warm(c, config, declared, args, async (request) => {
       sent.push((await request.clone().json()).method)
       return fetch(request)
     })

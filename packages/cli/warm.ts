@@ -3,8 +3,10 @@
 // warm, and answers in milliseconds what a command opening the graph itself
 // spends half a second importing (./local.ts). Its `/mcp` is the door every
 // agent's MCP tools already use, so a command and an MCP call run the same
-// tool through the same runner, and the answer is printed the way an MCP
-// server's is (./platform.ts `printed`).
+// tool through the same runner. The answer is drawn here, with this config's
+// own vocabulary and views, exactly as a command that opened the graph draws
+// it (./terminal.ts `shown`): the server's own account of its words is never
+// needed, so no cached copy of it can be stale.
 //
 // Nothing has to be running: a command no server answers opens the graph
 // itself, as it always could. The server is found at the address its config
@@ -29,12 +31,13 @@
 // tool). Once a call is under way, what the server says is the answer, and a
 // connection lost during it is an error, never a second run.
 
+import type { Bundle } from '@yaks/graph'
 import { DB, served } from '@yaks/api/address'
-import type { Config } from './config.ts'
-import type { Declared } from './words.ts'
-import { doorUrl, Refused, rpc } from './rpc.ts'
+import { type Config, pluginViews, used } from './config.ts'
+import { type Declared, words } from './words.ts'
+import { doorUrl, Refused, type Rpc, rpc } from './rpc.ts'
 import type { Ctx } from './run.ts'
-import type { Result } from './roster.ts'
+import { type Result, saidBy } from './roster.ts'
 
 // JSON-RPC's invalid params, which an MCP server answers an unknown tool with
 // before running anything.
@@ -93,9 +96,58 @@ export let warm = async (
     if (error instanceof Refused && error.code == UNKNOWN) return
     throw error
   }
-  let { printed } = await import('./platform.ts')
-  return await printed({ ...c, host, ask }, null, declared.name, said, args, {
-    readOnly: declared.readOnly,
-    page: declared.page,
-  })
+  return await printed(c, config, declared, said, ask)
+}
+
+// The bundles a reply answers with, which every tool whose answer is entities
+// sends under `structuredContent.result` (@yaks/mcp `answerSchema`).
+let bundles = (said: Result): Bundle[] | undefined => {
+  let result = (said.structuredContent as { result?: unknown } | undefined)
+    ?.result
+  return Array.isArray(result) ? result : undefined
+}
+
+// A reply printed as the command would have printed the answer had it run the
+// tool itself (./local.ts `tool`): `--json` as the data, entities through the
+// views, a refusal's exit code 1. A reply with no entities is its text.
+let printed = async (
+  c: Ctx,
+  config: Config,
+  declared: Declared,
+  said: Result,
+  ask: Rpc,
+): Promise<number> => {
+  let code = said.isError ? 1 : 0
+  let answer = bundles(said)
+  if (c.json && said.structuredContent !== undefined) {
+    c.out(JSON.stringify(said.structuredContent, null, 2))
+    return code
+  }
+  if (!answer) {
+    let { text } = saidBy(said)
+    if (text) (code ? c.note : c.out)(text)
+    return code
+  }
+  let plugins = (config.plugins ?? []).map(used)
+  let [{ vocab }, { registry }, { shown }] = await Promise.all([
+    words(config),
+    import('./answer.ts'),
+    import('./terminal.ts'),
+  ])
+  let asked = (name: string, args: Record<string, unknown>) =>
+    ask('tools/call', { name, arguments: args })
+      .then((r) => bundles(r as Result) ?? [], () => [])
+  await shown(
+    c,
+    plugins,
+    await registry(plugins, pluginViews),
+    vocab,
+    answer,
+    {
+      lookup: (ids) => asked('graph_show', { ids }),
+      query: (q) => asked('graph_query', { q }),
+    },
+    declared,
+  )
+  return code
 }

@@ -41,16 +41,9 @@ import type { AnatomyObservation } from '@yaks/code/anatomy'
 import type { Vocab } from '@yaks/vocab'
 import { EFFECT } from '@yaks/effects'
 import { answerOf, faulted, structured, toolEid } from '@yaks/tools/result'
-import { registry, terminal } from './answer.ts'
-import { show } from './terminal.ts'
-import {
-  type Config,
-  exported,
-  pluginTui,
-  pluginViews,
-  read,
-  used,
-} from './config.ts'
+import { registry } from './answer.ts'
+import { shown } from './terminal.ts'
+import { type Config, exported, pluginViews, read, used } from './config.ts'
 import { asides, hosts } from './held.ts'
 import type { Listing } from './subcommands.ts'
 import { VIA } from './rpc.ts'
@@ -458,27 +451,18 @@ export let tool = async (
     let text = await host.text(answer, declared)
     if (text) c.out(text)
   } else {
-    await show(
+    await shown(
       c,
+      plugins(listing),
       await drawn(listing, host),
       host.vocab,
       answer,
-      c.tui || c.tty
-        ? {
-          views: await terminal(
-            plugins(listing),
-            pluginViews,
-            pluginTui,
-            host.observe,
-          ),
-          config: c.config,
-        }
-        : {},
       {
         lookup: (eids) => host.graph.get(eids),
         query: (q) => host.graph.read(q),
       },
       declared,
+      host.observe,
     )
   }
   // A refusal is data, not an exception: the text is printed either way
