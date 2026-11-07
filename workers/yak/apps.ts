@@ -3492,6 +3492,12 @@ let served = async (
   let mount = req.headers.get(MOUNT)
   let path = r.path
   let front = !!app && app.home
+  // Site keeps what is the same for everyone (page-cache.ts `keepable`): the
+  // own files of an app anyone may read (public or open), and the release
+  // files of one anyone may install. From a directory copy a moment old it
+  // keeps only a public app's.
+  let keeps = (app: App, path: string) =>
+    keepable(app, path) && !(dir.stale && app.access != 'public')
   if (!app) {
     // Which app is home is a directory read, so it was read above, where env
     // is, and not in route.ts, which is pure (index.ts `aimed`, same reason).
@@ -3523,7 +3529,14 @@ let served = async (
     // moves from one app to another (tools.ts `app_set`), and a 301 a browser
     // cached would outlive the move.
     return redirect(`/${url.search}`)
-  } else if (path == '') return redirect(`${url.pathname}/`)
+  } else if (path == '') {
+    // `/<app>` itself, sent to its slash, which is how a link is often
+    // shared. Site keeps the forward as it keeps the page behind it, so a
+    // visitor following one waits on no directory read and is given no cookie.
+    let slash = redirect(`${url.pathname}/`)
+    if (!edge) return slash
+    return keeps(app, path) ? marked(keep(slash, space, app, [302])) : passed()
+  }
   // The app's own worker, coming back through its service binding for its
   // store or its files (dispatch.ts): the grant says who it is acting as, so
   // there is no cookie to read — and a request holding one is never sent back
@@ -3575,17 +3588,10 @@ let served = async (
     viewed(env, req, page, seen(space, app))
     return page
   }
-  // Site keeps what is the same for everyone (page-cache.ts `keepable`): the
-  // own files of an app anyone may read (public or open), and the release
-  // files of one anyone may install. Nor does the gateway ask Site about the
-  // addresses of an app it keeps nothing of for a while.
-  if (edge && dir.stale && app.access != 'public') {
-    return passed()
-  }
-  if (!keepable(app, path)) {
-    if (edge) return passed()
-    if (!keepable(app)) unkept(req, env, bare, c)
-  }
+  // Nor does the gateway ask Site about the addresses of an app it keeps
+  // nothing of for a while.
+  if (edge && !keeps(app, path)) return passed()
+  if (!edge && !keepable(app)) unkept(req, env, bare, c)
   let paper = tokenOf(path)
   if (paper) {
     let reads = req.method == 'GET' || req.method == 'HEAD'

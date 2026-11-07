@@ -288,6 +288,26 @@ test('directory serving: private and credentialed gateway access waits for autho
   equal(privatePage, { first: 204, pass: 204, pending: true, files: 0 })
 })
 
+// An app's address without its slash forwards to it, the same for everyone
+// who may read the app, so Site keeps the forward as it keeps the page.
+let forwards = []
+for (let access of ['public', 'open', 'private'] as const) {
+  let answer = await fixture(access).site('/cookbook')
+  forwards.push([
+    access,
+    answer.status,
+    answer.headers.get('location'),
+    answer.headers.get('cache-tag'),
+  ])
+}
+test("directory serving: Site keeps a readable app's forward to its slash", () => {
+  equal(forwards, [
+    ['public', 302, '/cookbook/', 'app:a,space:s'],
+    ['open', 302, '/cookbook/', 'app:a,space:s'],
+    ['private', 204, null, null],
+  ])
+})
+
 // A published app's release files are anyone's: installing it hands them out
 // (directory.ts `offered`). So Site keeps them even for a private app, whose
 // pages and data it never keeps, and an unpublished private app's stay behind
