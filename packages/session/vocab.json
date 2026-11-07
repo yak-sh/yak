@@ -977,8 +977,8 @@
       "changed": [
         "fired.at"
       ],
-      "target": ".wake.target.persona",
-      "description": "Knock the operator of the persona a wake is aimed at, once each time it fires, with the wake's note: the session a person opened wearing it, else its project, where the knock waits for the next session at work. A persona's standing duty, such as a morning standup, is such a wake"
+      "target": ".wake.target",
+      "description": "Knock the operator of the persona a wake is aimed at, once each time it fires, with the wake's note (woken.ts reads whether the target is a persona, since @yaks/persona may not be in the vocabulary): the session a person opened wearing it, else its project, where the knock waits for the next session at work. A persona's standing duty, such as a morning standup, is such a wake"
     },
     "native": {
       "component": true,
