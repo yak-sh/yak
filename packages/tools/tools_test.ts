@@ -235,6 +235,27 @@ test('a call is the transcript: the ask, the answer, the result beside it', asyn
   assertEquals(again.find((b) => b.result)!.entity.eid, result.entity.eid)
 })
 
+test('a write a runner answers for nobody waiting is recorded as written', async () => {
+  let note: Tool = {
+    noun: 'example',
+    verb: 'note',
+    description: 'Make a person',
+    inputSchema: { type: 'object', properties: {} },
+    run: () => [{ entity: { eid: '$note' }, person: {} }],
+  }
+  let { g, r } = world([note])
+  await r.ensure()
+  let asked = called('example_note', {}, 'someone')
+  await g.apply([{ entity: { eid: 'someone' }, process: { pid: 1 } }, asked])
+  await r.run(asked.entity.eid)
+  let [person] = await g.read('.person&*')
+  let [said] = JSON.parse(body((await g.read('.result&*'))[0]))
+  assertEquals(said.entity.eid, person.entity.eid)
+  assertEquals(said.$alias, '$note')
+  assertEquals(said.$actor, undefined)
+  assertEquals((said.created as Comp).by, 'someone')
+})
+
 test('a direct tool reply carries what its caller is owed beside its data', async () => {
   let vocab = words()
   let g = graph({ vocab, storage: ram(vocab, { computed: executionComputed }) })

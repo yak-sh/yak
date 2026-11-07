@@ -76,7 +76,14 @@ import { CallError, UnfinishedCall } from './errors.ts'
 export { UnfinishedCall } from './errors.ts'
 import { persist } from './persist.ts'
 import { invoke } from './invoke.ts'
-import { answerOf, measuring, results, toolEid, toolRow } from './result.ts'
+import {
+  answerOf,
+  measuring,
+  results,
+  toolEid,
+  toolRow,
+  worded,
+} from './result.ts'
 import type { Clock } from '@yaks/fp'
 import { type Registry, registryOf } from './registry.ts'
 
@@ -494,7 +501,8 @@ export let runner = (g: Graph, opts: Opts): Runner => {
       keep = keeps(tool, state),
       code?: string,
     ): Promise<Bundle[]> => {
-      let end = (said: Bundle[]) => ending(call, started, state, said)
+      let words: Bundle[] = []
+      let end = (said: Bundle[]) => ending(call, started, state, words = said)
       let ended: Bundle[]
       ;[ended, made] = opts.onResult
         ? ridden(made, state, end)
@@ -505,12 +513,26 @@ export let runner = (g: Graph, opts: Opts): Runner => {
         ...ended,
         ...code ? [{ entity: { eid: id }, interrupted: { code } }] : [],
       ]
+      // An answer that is written is worded as it was written, in the same
+      // transaction: each alias under the eid it became, stamped, with no
+      // request keys on it, as a caller reading the result later reads it.
+      let result = ended.find((b) => b.result)!.entity
+      let receipt = keep && words === made
+        ? (applied: Bundle[]) => [{
+          entity: result,
+          content: { body: worded(answerOf(applied, id)) },
+        }]
+        : undefined
       // A retry reports the storage error separately from the call's failure,
       // which was reported at its catch boundary before recording the answer.
       // The exception's properties are stamped: only its catcher writes them.
       let trusted = made.some((b) => b.exception)
       let landed = await persist(
-        () => g.apply(bundles, trusted ? { trusted } : undefined),
+        () =>
+          g.apply(bundles, {
+            ...trusted ? { trusted } : {},
+            ...receipt ? { receipt } : {},
+          }),
         (e) => opts.report?.(e, call, tool.name),
         clock,
       )

@@ -194,6 +194,13 @@ export type ApplyOpts = {
   check?: boolean
   /** Hold observers until an enclosing transaction commits. */
   deferEffects?: (run: () => void | Promise<void>) => void
+  /** What the caller writes about the batch as applied, in its transaction:
+   * the batch as {@link Graph.apply} would return it so far (every alias
+   * resolved, stamps on), in; patches to write beside it, out. They are
+   * admitted and written like a rule's, before the journal. A runner's
+   * receipt for a call is worded so from the write it answers
+   * (@yaks/tools). */
+  receipt?: (applied: Bundle[]) => Bundle[] | Promise<Bundle[]>
 }
 
 let applyKeys = {
@@ -205,6 +212,7 @@ let applyKeys = {
   now: true,
   check: true,
   deferEffects: true,
+  receipt: true,
 } satisfies Record<keyof ApplyOpts, true>
 
 /** Check apply's options before a local or remote graph starts its write. */
@@ -215,8 +223,8 @@ export let applyOptions = (opts: ApplyOpts = {}, admission = false): void =>
   ])
 
 /** Data options for a write, also usable across a thread boundary.
- * Deferred effects belong to a local graph. */
-export type WriteOpts = Omit<ApplyOpts, 'deferEffects'>
+ * Deferred effects and receipts belong to a local graph. */
+export type WriteOpts = Omit<ApplyOpts, 'deferEffects' | 'receipt'>
 
 /**
  * How a dry run leaves a transaction that has done all its work. The phases
@@ -1101,6 +1109,20 @@ export let graph = (opts: Options): Graph => {
           // (./rules.ts).
           let holds = (eid: Eid) => snap.got.get(eid) ?? undefined
           let checks: WriteHook[] | undefined
+          // The write itself, one operation at a time where a plugin's
+          // ordered policy asks for that.
+          let write: Step = (b) =>
+            checks?.length
+              ? ordered(
+                b,
+                tx,
+                vocab,
+                snap,
+                st,
+                checks,
+                !!(o.trusted && o.replica),
+              )
+              : mutate(b, held, st, vocab, !!(o.trusted && o.replica))
           idle = []
           let quiet: Step = (b) =>
             after(unchanged(b, held), ({ kept, idle: left }) => {
@@ -1215,17 +1237,7 @@ export let graph = (opts: Options): Graph => {
                     let check = p.beforeWrite?.(b)
                     return check ? [check] : []
                   })
-                  return checks.length
-                    ? ordered(
-                      b,
-                      tx,
-                      vocab,
-                      snap,
-                      st,
-                      checks,
-                      !!(o.trusted && o.replica),
-                    )
-                    : mutate(b, held, st, vocab, !!(o.trusted && o.replica))
+                  return write(b)
                 }),
                 phase(
                   'cascade',
@@ -1240,6 +1252,18 @@ export let graph = (opts: Options): Graph => {
                 // holds for an entity: a newly created entity is one with no
                 // `created` component.
                 phase('stamp', tx, (b) => births(b, st), holds),
+                // The caller's receipt, worded from the batch as applied and
+                // written in its transaction.
+                (b: Bundle[]) =>
+                  o.receipt
+                    ? after(o.receipt(answer(b)), (more) =>
+                      more.length
+                        ? after(
+                          after(run.admit(more, held, b), write),
+                          (wrote) => [...b, ...wrote],
+                        )
+                        : b)
+                    : b,
                 // Journal and commit hooks read the classified writes. Their
                 // own writes need the second flush after those hooks finish.
                 flush,

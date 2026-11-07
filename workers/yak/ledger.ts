@@ -120,8 +120,18 @@ export let ledger = (host: Graph, records?: Graph): Graph => {
     let batch = (Array.isArray(bundles) ? bundles : [bundles]) as Bundle[]
     let here = batch.filter(mine)
     let there = batch.filter((b) => !mine(b))
-    let sent = there.length ? await host[method](there, opts) : []
-    let kept = here.length ? await self[method](here, opts) : []
+    // A receipt is worded from the whole batch as applied, the data `host`
+    // wrote included, and written with the bookkeeping it describes.
+    let { receipt, ...rest } = opts ?? {}
+    let sent = there.length ? await host[method](there, rest) : []
+    let kept = here.length
+      ? await self[method](here, {
+        ...rest,
+        ...receipt
+          ? { receipt: (applied: Bundle[]) => receipt([...sent, ...applied]) }
+          : {},
+      })
+      : []
     return [...sent, ...kept]
   }
   let door: Graph = {
