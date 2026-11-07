@@ -61,7 +61,7 @@ type Fixture = ReturnType<typeof fixture>
 
 // The units started, in order.
 let started = (f: Fixture) =>
-  f.calls.filter((c) => c[1] == 'start').map((c) => c[2])
+  f.calls.filter((c) => c[1] == 'start').flatMap((c) => c.slice(2))
 // The units stopped, call by call.
 let stopped = (f: Fixture) =>
   f.calls.filter((c) => c[1] == 'stop').map((c) => c.slice(2))
@@ -77,7 +77,7 @@ let fail = (f: Fixture, action: string, unit?: string) => {
   }
 }
 
-test('restart retires the old units only after every replacement is ready', async () => {
+test('restart starts every replacement at once and retires the old units only after all are ready', async () => {
   let f = fixture()
   f.options.ready = (path) => {
     f.paths.push(path)
@@ -99,15 +99,7 @@ test('restart retires the old units only after every replacement is ready', asyn
     'yak-web@*.service',
     'yak-tracker-web@*.service',
   ])
-  assertEquals(f.events, [
-    'list',
-    'start',
-    'ready',
-    'ready',
-    'start',
-    'ready',
-    'stop',
-  ])
+  assertEquals(f.events, ['list', 'start', 'ready', 'ready', 'ready', 'stop'])
   assertEquals(stopped(f), [[
     'yak-work@old.service',
     'yak-work@older.service',
@@ -115,7 +107,7 @@ test('restart retires the old units only after every replacement is ready', asyn
   ]])
   let file = (unit: string) =>
     `/runtime/${unit.replace('@', '-').replace('.service', '.ready')}`
-  assertEquals(f.paths, [file(work), file(work), file(web)])
+  assertEquals(f.paths, [file(work), file(web), file(work)])
   assertEquals(
     said,
     `${work} ready in 0.1s; stopping yak-work@old.service, yak-work@older.service\n` +
@@ -226,7 +218,7 @@ let unready = fixture(['yak-tracker@old'])
 unready.options.ready = (path) => Promise.resolve(!path.includes('yak-web-'))
 let unreadyError = await assertRejects(() => restart(unready.options), Error)
 
-test('a replacement that never readies leaves the old units and earlier replacements running', () => {
+test('a replacement that never readies leaves the old units and the ready replacements running', () => {
   assertMatch(unreadyError.message, /Timed out/)
   let [work, tracker, web] = started(unready)
   assertEquals(stopped(unready), [[web]])
@@ -306,8 +298,8 @@ let options: RestartOptions = {
   run: (_command, args) => {
     if (args.includes('list-units')) snapshots.push([...active])
     if (args.includes('start')) {
-      active.add(args[3])
-      starts.push(args[3])
+      for (let unit of args.slice(3)) active.add(unit)
+      starts.push(...args.slice(3))
     }
     if (args.includes('stop')) {
       for (let unit of args.slice(3)) active.delete(unit)

@@ -1,9 +1,9 @@
 import * as disk from '@yaks/file/io'
 import { command as launchCommand } from '@yaks/process/command'
-// Ready-first handover for the box's processes. Each role's replacement is
-// started from its unit template and waited on until it says it is ready (its
-// readiness file); only once every replacement is ready are the old units asked
-// to stop, without waiting for them. A worker is ready once its pool and graph
+// Ready-first handover for the box's processes. Every role's replacement is
+// started at once from its unit template and waited on until it says it is
+// ready (its readiness file); only once every replacement is ready are the old
+// units asked to stop, without waiting for them. A worker is ready once its pool and graph
 // are assembled, and its old one drains its steps in flight. A web is ready
 // once it is listening: it shares its port with the one it replaces
 // (`yak serve --share`), so nothing is refused while the old one stops.
@@ -232,61 +232,73 @@ let handover = async (options: RestartOptions): Promise<string> => {
     ...r,
     old: active.filter((unit) => r.old.some((p) => matches(p, unit))),
   })).filter((r) => !r.optional || r.old.length)
-  let candidates: { unit: string; ready: boolean }[] = []
-  let said: string[] = []
+  // Every replacement starts at once and readies beside the old units, so the
+  // handover takes as long as its slowest role, not the sum of them.
+  let candidates = replacing.map((role) => {
+    let instance = crypto.randomUUID()
+    return {
+      role,
+      unit: `${role.unit}@${instance}.service`,
+      file: readyFile(options.runtimeDir, role.unit, instance),
+      ready: false,
+      took: 0,
+    }
+  })
   try {
-    for (let role of replacing) {
-      let instance = crypto.randomUUID()
-      let candidate = { unit: `${role.unit}@${instance}.service`, ready: false }
-      let file = readyFile(options.runtimeDir, role.unit, instance)
-      candidates.push(candidate)
-      let began = now()
-      await call('--no-block', 'start', candidate.unit)
-      while (true) {
-        if (now() >= deadline) {
-          // Inspect before cleanup: systemd may unload the stopped instance,
-          // losing precisely the evidence of whether it ever started.
-          let state: string
-          try {
-            state = await call(
-              'show',
-              candidate.unit,
-              '--property=ActiveState,SubState,Result,Job,InvocationID,MainPID,ExecMainStartTimestamp,ExecMainStatus',
-            )
-          } catch (error) {
-            state = String(error)
-          }
-          throw new Error(
-            `Timed out after ${PATIENCE}ms waiting for ${file}\n${state.trim()}`,
+    let began = now()
+    if (candidates.length) {
+      await call('--no-block', 'start', ...candidates.map((c) => c.unit))
+    }
+    while (candidates.some((c) => !c.ready)) {
+      let waiting = candidates.filter((c) => !c.ready)
+      if (now() >= deadline) {
+        // Inspect before cleanup: systemd may unload the stopped instance,
+        // losing precisely the evidence of whether it ever started.
+        let state: string
+        try {
+          state = await call(
+            'show',
+            ...waiting.map((c) => c.unit),
+            '--property=Id,ActiveState,SubState,Result,Job,InvocationID,MainPID,ExecMainStartTimestamp,ExecMainStatus',
           )
+        } catch (error) {
+          state = String(error)
         }
-        let found = await exists(file)
-        if (found && now() < deadline) break
+        throw new Error(
+          `Timed out after ${PATIENCE}ms waiting for ${
+            waiting.map((c) => c.file).join(', ')
+          }\n${state.trim()}`,
+        )
+      }
+      for (let candidate of waiting) {
+        if (await exists(candidate.file) && now() < deadline) {
+          candidate.ready = true
+          candidate.took = now() - began
+        }
+      }
+      if (candidates.some((c) => !c.ready)) {
         await sleep(Math.min(100, Math.max(0, deadline - now())))
       }
-      candidate.ready = true
-      said.push(
-        `${candidate.unit} ready in ${((now() - began) / 1000).toFixed(1)}s` +
-          (role.old.length ? `; stopping ${role.old.join(', ')}` : ''),
-      )
     }
     let old = replacing.flatMap((r) => r.old)
     if (old.length) await call('--no-block', 'stop', ...old)
-    return said.join('\n')
+    return candidates.map(({ unit, took, role }) =>
+      `${unit} ready in ${(took / 1000).toFixed(1)}s` +
+      (role.old.length ? `; stopping ${role.old.join(', ')}` : '')
+    ).join('\n')
   } catch (error) {
     // A ready replacement survives later failures. Never retire old units
     // until every replacement is ready; a failed start may still have queued
     // a job.
     let errors: unknown[] = [error]
-    await Promise.all(
-      candidates.filter((c) => !c.ready).map(async (candidate) => {
-        try {
-          await call('--no-block', 'stop', candidate.unit)
-        } catch (cleanup) {
-          errors.push(cleanup)
-        }
-      }),
-    )
+    let unready = candidates.filter((c) => !c.ready).map((c) => c.unit)
+    if (unready.length) {
+      try {
+        await call('--no-block', 'stop', ...unready)
+      } catch (cleanup) {
+        errors.push(cleanup)
+      }
+    }
     if (errors.length > 1) {
       throw new AggregateError(errors, 'Handover and cleanup failed')
     }
