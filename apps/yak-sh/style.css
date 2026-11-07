@@ -1822,8 +1822,79 @@ h2 {
 .Block dd a {
   text-decoration: none;
 }
+
+/* ---------------------------------------------------------------- setup
+   A part with one field: the address, sent through apply() and out of the
+   tab, then what happens next, and the write drawn as the band draws it. */
+.Setup_Form label {
+  display: block;
+  margin-bottom: .5rem;
+  font: 500 .8rem var(--mono);
+  color: var(--muted);
+}
+.Setup_Field {
+  display: flex;
+  max-width: 34rem;
+  border: 1px solid var(--border2);
+  border-radius: 8px;
+  background: var(--card);
+  overflow: hidden;
+}
+.Setup_Field:focus-within {
+  border-color: var(--accent);
+}
+.Setup_Field input {
+  flex: 1;
+  min-width: 0;
+  padding: .75rem .9rem;
+  border: 0;
+  outline: 0;
+  background: none;
+  color: var(--text);
+  font: 1rem var(--font);
+}
+.Setup_Field button {
+  border: 0;
+  padding: 0 1.2rem;
+  font: 500 .9rem var(--font);
+  color: var(--card);
+  background: var(--accent);
+  cursor: pointer;
+}
+.Setup_Told {
+  max-width: 34rem;
+  margin: 1.4rem 0;
+  padding: .9rem 1rem;
+  border-left: 2px solid var(--border2);
+  background: var(--card);
+}
+.Setup_Told.is-sent {
+  border-color: var(--accent);
+}
+.Setup_Told b {
+  display: block;
+  font-weight: 500;
+}
+.Setup_Told p {
+  margin: .4rem 0 0;
+}
+.Setup_Write {
+  display: grid;
+  grid-template-columns: minmax(0, 5fr) minmax(0, 6fr);
+  gap: 2rem;
+  align-items: start;
+  margin-top: 2rem;
+}
+.Setup .Phases {
+  margin: 0 0 0 1.2rem;
+  font-size: .9rem;
+}
+.Setup .Phases [data-phase] > :not(.Dot, b, .Skip) {
+  display: none;
+}
 @media (max-width: 880px) {
-  .Part {
+  .Part,
+  .Setup_Write {
     grid-template-columns: minmax(0, 1fr);
   }
   .Part_Head {

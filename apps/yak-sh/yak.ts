@@ -57,8 +57,12 @@ import * as inboxVocab from '@yaks/inbox/vocab'
 import { queueing } from '@yaks/inbox/letters'
 import * as inboxMail from '@yaks/inbox/mail'
 import { effects, generation } from '@yaks/effects'
+import * as draftVocab from '@yaks/draft/vocab'
+import * as draftGraph from '@yaks/draft/graph'
+import { desk, type Stash } from '@yaks/draft'
 import { outbox } from './outbox.ts'
 import { SHOP, shopDoc, YOURS } from './shop.ts'
+import * as signin from './signin.ts'
 
 /** Each package the page's graph is made of, and the facets it imports: what
  * a config lists and a host's `load` answers, here imported up front so the
@@ -89,6 +93,8 @@ export let PACKAGES: Record<string, Record<string, unknown>> = {
   '@yaks/effects': { vocab: effectsVocab },
   '@yaks/mail': { vocab: mailVocab, graph: mailGraph, effects: mailEffects },
   '@yaks/inbox': { vocab: inboxVocab },
+  '@yaks/draft': { vocab: draftVocab, graph: draftGraph },
+  signin: { vocab: signin.vocab, effects: signin.effects },
 }
 
 let load =
@@ -107,6 +113,20 @@ let CONFIG: Config = {
 // task is T-1.
 let UNNUMBERED = ['call', 'edge', 'effect', 'execution', 'lease', 'mail']
   .concat(['output', 'process', 'result', 'tool', 'file', 'pane', 'layout'])
+  .concat(['draft', 'signin_request'])
+
+// The graph in a tab starts over on a reload; what the person typed does not
+// (M-59093). Their drafts are kept in the stash under the person they typed
+// them as, and written back as the graph starts.
+const TYPED = 'yak.sh:typed'
+type Typed = { you?: string; drafts?: Bundle[] }
+let typedIn = (stash?: Stash): Typed => {
+  try {
+    return JSON.parse(stash?.getItem(TYPED) ?? '{}')
+  } catch {
+    return {}
+  }
+}
 
 /** The commands a tab can answer: no files to write, no process to watch. */
 export let OFFERED = new Set([
@@ -140,9 +160,18 @@ export type Change = {
 export type Yak = Awaited<ReturnType<typeof yak>>
 
 /** A graph in memory with the page's packages, a person typing into it, and
- * an agent beside them. A failed effect is tried again `retry` ms later. */
-export let yak = async ({ retry = 1500 } = {}) => {
-  let you = mint()
+ * an agent beside them. A failed effect is tried again `retry` ms later;
+ * `fetch` is how the one effect that leaves the tab reaches yaks.app
+ * (signin.ts), and `stash` keeps what the person types across a reload. */
+export let yak = async (
+  { retry = 1500, fetch, stash }: {
+    retry?: number
+    fetch?: typeof globalThis.fetch
+    stash?: Stash
+  } = {},
+) => {
+  let typed = typedIn(stash)
+  let you = typed.you ?? mint()
   let agent = mint()
   // Every phase each write runs, the batch as it left each one, and what it
   // committed, told to whoever listens: the page draws from these.
@@ -192,6 +221,7 @@ export let yak = async ({ retry = 1500 } = {}) => {
       blobs,
       artifacts: blobs,
       senders: { outbox: box },
+      ...fetch ? { fetch } : {},
       stopping: new AbortController().signal,
       duties: () => work(),
       end: () => Promise.resolve(),
@@ -264,6 +294,15 @@ export let yak = async ({ retry = 1500 } = {}) => {
     doc: { title: 'You' },
     email: { address: YOURS },
   }])
+  let kept = (typed.drafts ?? []).filter((b) =>
+    (b.draft as Comp | undefined)?.text
+  )
+  if (kept.length) {
+    await g.apply(kept.map(({ entity, draft }) => {
+      let { by, place, text } = draft as Comp
+      return { entity: { eid: entity.eid }, draft: { by, place, text } }
+    }))
+  }
   let met: Promise<unknown> | undefined
   let meet = () =>
     met ??= Promise.resolve(g.apply([{
@@ -377,6 +416,39 @@ export let yak = async ({ retry = 1500 } = {}) => {
     readings: [inboxMail.reading({ person: you, from: SHOP })!],
   })
 
+  // What the person types and has not sent, kept in the graph and in the
+  // stash until it is (@yaks/draft).
+  let drafts = desk({
+    mutate: (bundles) => g.apply(bundles),
+    // A watch reads again after each commit that wrote a draft.
+    watch: (q) => {
+      let value: Bundle[] = []
+      let heard = new Set<(rows: Bundle[]) => void>()
+      let read = () =>
+        Promise.resolve(g.read(q)).then((rows) => {
+          value = rows
+          for (let h of heard) h(rows)
+        })
+      let hear = ({ bundles }: Change) =>
+        void (bundles.some((b) => b.draft) && read())
+      void read()
+      listeners.add(hear)
+      return {
+        get value() {
+          return value
+        },
+        subscribe: (fn) => (heard.add(fn), () => void heard.delete(fn)),
+        close: () => void listeners.delete(hear),
+      }
+    },
+  }, { by: () => you, stash, report: (e) => globalThis.reportError(e) })
+  listeners.add(({ bundles }) => {
+    if (!stash || !bundles.some((b) => b.draft)) return
+    Promise.resolve(g.read('.draft ?draft')).then((drafts) =>
+      stash.setItem(TYPED, JSON.stringify({ you, drafts }))
+    ).catch((e) => globalThis.reportError(e))
+  })
+
   // The person was written before anything listened.
   for (let b of await g.get([you])) rows.set(b.entity.eid, b)
 
@@ -420,6 +492,8 @@ export let yak = async ({ retry = 1500 } = {}) => {
     },
     /** The outbox the mail effect delivers to. */
     outbox: box,
+    /** What the person has typed and not sent, by where they typed it. */
+    drafts,
     /** What a new session wearing a persona (by its short id) starts with:
      * its text and everything it contains, as @yaks/persona says it to an
      * agent, printed the way a command's answer is. */

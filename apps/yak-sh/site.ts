@@ -64,6 +64,8 @@ export let FILES = [
   'outbox.ts',
   'docs.ts',
   'idle.ts',
+  'signin.ts',
+  'setup.ts',
 ]
 
 /** A section: the view that draws it and what it says. A step's `sh` block
@@ -124,6 +126,7 @@ let packages = (group: string, rows: [string, string][]) =>
 export let HERO = '6f166202-b881-400d-84c7-dd8620dc7826'
 export let SELF = '525ab3f6-bdc3-48a6-b2f3-e88fa2d06a1b'
 let YAKS_APP = 'a3c9e1f4-7b2d-4e68-9f05-1d8b6c4a2e93'
+let SETUP = 'e8b1d4a7-3c6f-4e29-b5d0-7a2c9f1e6b43'
 
 export let SECTIONS: Section[] = [
   {
@@ -336,6 +339,16 @@ export let SECTIONS: Section[] = [
     ),
   },
   {
+    eid: SETUP,
+    pane: '4f7c2a9e-1b5d-4c83-a6e0-9d3b8f2c7a15',
+    view: 'Setup',
+    title: 'Get set up on yaks.app',
+    body: part(
+      "Type your email address, and yaks.app's Operator writes to you. Its letter has a code and a link that signs you in. Reply to it, and the Operator sets you up: `yak` installed and signed in, yaks.app added to Claude or ChatGPT, and your first app online.",
+      "This is the one thing on this page that leaves the tab. What you type becomes a bundle in the graph here and goes through `apply()` like everything above; its effect then posts your address to yaks.app's sign-in door, the one yaks.app's own sign-in uses. Nothing more is sent until you reply.",
+    ),
+  },
+  {
     eid: 'd15f7ff7-ada4-4202-9874-f523e797d35a',
     pane: '156e61d0-9281-41ac-a1b3-19aa77f1c2be',
     view: 'Part',
@@ -498,6 +511,7 @@ export let SECTIONS: Section[] = [
 export let ANCHORS: Record<string, string> = {
   '8d0c64a5-4f1e-4b8e-9a51-0c3e2f6a7b19': 'yak',
   [YAKS_APP]: 'yaks-app',
+  [SETUP]: 'setup',
   'd15f7ff7-ada4-4202-9874-f523e797d35a': 'install',
   '3e7b9c21-6a4d-4c85-b0f2-9d18e5a4c3b7': 'packages',
 }

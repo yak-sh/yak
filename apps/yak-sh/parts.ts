@@ -104,19 +104,23 @@ let held = (pieces: Piece[]) => {
   ]
 }
 
-let Part: FunctionComponent<Ctx & { e: Bundle }> = ({ e, yak }) => {
-  let eid = e.entity.eid
-  // Its number: its place among the page's parts.
-  let parts = yak.rows()
-    .filter((b) => text(b, 'pane', 'view') == 'Part')
+/** A part's number: its place among the page's parts, the sections drawn
+ * as one (`Part`, and `Setup`, which is a part with a form). */
+export let numbered = (yak: Ctx['yak'], eid: string) =>
+  yak.rows()
+    .filter((b) => ['Part', 'Setup'].includes(text(b, 'pane', 'view')))
     .sort((a, b) =>
       Number(text(a, 'pane', 'order')) - Number(text(b, 'pane', 'order'))
     )
     .map((b) => text(b, 'pane', 'content'))
+    .indexOf(eid) + 1
+
+let Part: FunctionComponent<Ctx & { e: Bundle }> = ({ e, yak }) => {
+  let eid = e.entity.eid
   let { head, pieces } = partOf(text(e, 'doc', 'body'))
   return h('section', { class: 'Part', id: ANCHORS[eid], 'data-eid': eid }, [
     h('div', { class: 'Part_Head' }, [
-      h('span', { class: 'Bubble' }, String(parts.indexOf(eid) + 1)),
+      h('span', { class: 'Bubble' }, String(numbered(yak, eid))),
       h('h2', null, words(text(e, 'doc', 'title'))),
       h(Prose, { source: head }),
     ]),

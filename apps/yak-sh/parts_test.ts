@@ -43,7 +43,14 @@ test('the page draws its parts from the graph: numbered steps, package tables, t
     retry: 0,
   })
   let all = (s: string) => [...root.querySelectorAll(s)]
-  equal(all('.Part .Bubble').map((b) => b.textContent), ['1', '2', '3', '4'])
+  equal(all('.Part .Bubble').map((b) => b.textContent), [
+    '1',
+    '2',
+    '3',
+    '4',
+    '5',
+  ])
+  equal(all('#setup h2')[0].textContent, 'Get set up on yaks.app')
   equal(
     all('#yaks-app h2')[0].textContent,
     'yaks.app hosts web apps on the same packages',

@@ -9,6 +9,7 @@ import { fileOf } from '@yaks/file'
 import { css } from '@yaks/diagram'
 import { figure } from './figure.ts'
 import { turns } from './turns.ts'
+import type { Stash } from '@yaks/draft'
 
 /** Start the page in `root`: its graph, its prompt and its drawing. */
 export let start = async (
@@ -19,9 +20,13 @@ export let start = async (
     pace?: { key: number; pause: number }
     /** how long a failed effect waits to be tried again, in ms */
     retry?: number
+    /** how the one effect that leaves the tab reaches yaks.app */
+    post?: typeof fetch
+    /** where what the person types is kept across a reload */
+    stash?: Stash
   } = {},
 ) => {
-  let y = await yak({ retry: opts.retry })
+  let y = await yak({ retry: opts.retry, fetch: opts.post, stash: opts.stash })
   await y.graph.apply(seed())
   let read = opts.fetch ??
     ((path: string) => fetch(new URL(path, root.ownerDocument.baseURI)))

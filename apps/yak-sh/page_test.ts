@@ -12,13 +12,17 @@ import { SHOP, YOURS } from './shop.ts'
 import { inboxAt, rendered } from '@yaks/inbox/letters'
 import { INSIDE, PHASES } from '@yaks/graph/plugin'
 import { options } from 'preact'
+import type { Stash } from '@yaks/draft'
+import { PLACE } from './signin.ts'
 
 let dir = new URL('./', import.meta.url)
 // A tab paints its next frame as soon as it can; preact's hooks wait 35 ms
 // for one where there is no requestAnimationFrame.
 options.requestAnimationFrame = (fn) => setTimeout(fn)
 let tick = () => new Promise((ok) => setTimeout(ok))
-let open = async () => {
+let open = async (
+  more: { post?: typeof fetch; stash?: Stash } = {},
+) => {
   let window = parseHTML(await Deno.readTextFile(new URL('index.html', dir)))
   let { document } = window
   Object.defineProperty(document, 'baseURI', { value: dir.href })
@@ -29,6 +33,7 @@ let open = async () => {
     load: () => import('./views.ts'),
     pace: { key: 0, pause: 0 },
     retry: 0,
+    ...more,
   })
   // Everything queued has run, and the page has drawn and run its effects.
   let settle = async () => {
@@ -517,4 +522,125 @@ test('every yaks.app in the words is a link to it that opens in a new tab, and c
   equal(said.filter((el) => !el.closest('code, pre') && !away(el)), [])
   equal(said.filter(away).length > 8, true)
   equal(said.some((el) => el.closest('code')), true)
+})
+
+// Web Storage, in memory: what a reload of the tab finds.
+let storage = (): Stash => {
+  let kept = new Map<string, string>()
+  return {
+    get length() {
+      return kept.size
+    },
+    key: (i) => [...kept.keys()][i] ?? null,
+    getItem: (k) => kept.get(k) ?? null,
+    setItem: (k, v) => void kept.set(k, v),
+    removeItem: (k) => void kept.delete(k),
+  }
+}
+
+// yaks.app's sign-in door, answering each ask with the next status given
+// (the last one again once they run out), and what it was asked.
+let door = (...statuses: number[]) => {
+  let asked: { url: string; method: string; address: string }[] = []
+  let post = ((url: string, init: RequestInit) => {
+    asked.push({
+      url,
+      method: String(init.method),
+      address: String(new URLSearchParams(String(init.body)).get('address')),
+    })
+    let status = statuses[Math.min(asked.length, statuses.length) - 1]
+    return Promise.resolve(new Response('<p>card</p>', { status }))
+  }) as typeof fetch
+  return { post, asked }
+}
+
+let setup = (root: Element) => {
+  let section = root.querySelector('.Setup')!
+  let input = section.querySelector<HTMLInputElement>('input')!
+  return {
+    section,
+    input,
+    type: (value: string) => {
+      input.value = value
+      fire(input, 'input')
+    },
+    send: () => fire(section.querySelector('form')!, 'submit'),
+    told: () => section.querySelector('.Setup_Told')?.textContent ?? '',
+  }
+}
+
+test('what you type into the set-up field is kept as a draft, and a reload finds it', async () => {
+  let stash = storage()
+  let first = await open({ stash })
+  setup(first.root).type('ann@example.com')
+  await first.settle()
+  equal(first.page.yak.drafts.text(PLACE), 'ann@example.com')
+  first.page.page.close()
+  let again = await open({ stash })
+  await again.settle()
+  equal(setup(again.root).input.value, 'ann@example.com')
+  again.page.page.close()
+})
+
+test('the address sent runs through apply() in the tab, and its effect asks yaks.app for the letter', async () => {
+  let yaks = door(200)
+  let { root, page, settle } = await open({ post: yaks.post })
+  let s = setup(root)
+  match(
+    s.section.textContent!,
+    /the one thing on this page that leaves the tab/,
+  )
+  s.type('ann@example.com')
+  s.send()
+  await settle()
+  equal(yaks.asked, [{
+    url: 'https://yaks.app/login',
+    method: 'POST',
+    address: 'ann@example.com',
+  }])
+  match(s.told(), /^Sent\. Check your email\./)
+  match(s.told(), /ann@example\.com.*just reply to it/)
+  equal(s.input.value, '')
+  let rows = [...s.section.querySelectorAll('.Source [data-row]')].map((r) =>
+    r.getAttribute('data-row')
+  )
+  equal(rows.includes('signin_request') && rows.includes('signin_sent'), true)
+  match(
+    s.section.querySelector('.Source')!.textContent!,
+    /door: "https:\/\/yaks\.app\/login"/,
+  )
+  let on = [...s.section.querySelectorAll('.Phases li.on')].map((p) =>
+    p.getAttribute('data-phase')
+  )
+  for (let p of ['mint', 'rules', 'commit', 'effect']) {
+    equal(on.includes(p), true, p)
+  }
+  match(s.section.querySelector('.Call')!.textContent!, /page → graph_apply/)
+  page.page.close()
+})
+
+test('an address the door refuses goes back in the box, and a door that is busy is asked again on its own', async () => {
+  let refusing = door(400)
+  let one = await open({ post: refusing.post })
+  let s = setup(one.root)
+  s.type('not an address')
+  s.send()
+  await one.settle()
+  match(s.told(), /isn't an email address/)
+  equal(s.input.value, 'not an address')
+  one.page.page.close()
+
+  let busy = door(503, 200)
+  let two = await open({ post: busy.post })
+  let t = setup(two.root)
+  t.type('ann@example.com')
+  t.send()
+  await two.settle()
+  for (let i = 0; i < 20 && !t.told().startsWith('Sent'); i++) {
+    await new Promise((ok) => setTimeout(ok, 5))
+    await two.settle()
+  }
+  equal(busy.asked.length, 2)
+  match(t.told(), /^Sent\./)
+  two.page.page.close()
 })

@@ -6,6 +6,7 @@
 // commit is shown: the outbox it was handed to, and a toast once it was sent.
 import { type FunctionComponent, h } from 'preact'
 import { useRef } from 'preact/hooks'
+import type { RefObject } from 'preact'
 import { Prose, words } from './prose.ts'
 import { human } from '@yaks/id'
 import { INSIDE, type Phase, PHASES } from '@yaks/graph/plugin'
@@ -15,6 +16,7 @@ import type { Change } from './yak.ts'
 import { happened, type Try } from './outbox.ts'
 import { text, useHeard, useReached, useTold } from './told.ts'
 import { opener } from './editor.ts'
+import { SIGNS } from './windows.ts'
 import { proseOf, scriptOf, shown } from './site.ts'
 
 type Band = FunctionComponent<Ctx & { e: Bundle }>
@@ -181,7 +183,7 @@ let valued = (v: unknown) =>
  * As the reader passes each phase the text is the bundle as that phase left
  * it, each line the phase changed lit with what it did, and the braces light
  * at commit. */
-let Source = (
+export let Source = (
   { rows, changed, state }: {
     rows: Row[]
     changed: Map<string, unknown>
@@ -312,6 +314,70 @@ let Outbox = ({ tries }: { tries: Try[] }) =>
     ),
   ])
 
+/** The write, then each phase of apply() it ran, those inside the
+ * transaction in one box: a phase turns green once the reader has passed it
+ * and it ran. */
+export let Phases = (
+  { state, call, made, list }: {
+    state: ReturnType<typeof standing>
+    /** the command the write came from */
+    call: { kind: string; text: string }
+    /** whether the write has been made */
+    made: boolean
+    list?: RefObject<HTMLOListElement>
+  },
+) => {
+  let phase = (p: Phase) =>
+    h('li', {
+      class: state.phase(p, PHASES.indexOf(p)) || undefined,
+      // A phase clicked comes to the reading line, so the write runs to it.
+      onClick: (ev: Event) =>
+        (ev.currentTarget as Element).scrollIntoView?.({
+          block: 'center',
+          behavior: 'smooth',
+        }),
+      'data-phase': p,
+      key: p,
+    }, [
+      h('span', { class: 'Dot' }),
+      h('b', null, p),
+      h(Prose, { source: DOES[p] }),
+      h(
+        'span',
+        { class: 'Skip' },
+        p == 'audit'
+          ? "This write committed, so audit didn't run."
+          : "This write didn't run this phase.",
+      ),
+    ])
+  // The phases inside the transaction are one box, whatever has run.
+  let open = PHASES.indexOf(INSIDE[0])
+  let shut = open + INSIDE.length
+  return h('ol', {
+    class: 'Phases',
+    ref: list,
+    'aria-label': 'The write, and the phases of apply() it ran',
+  }, [
+    h('li', { class: made ? 'Call on' : 'Call', key: 'call' }, [
+      h('span', { class: 'Dot' }),
+      h('b', null, 'the write'),
+      h('code', null, [
+        call.kind == 'agent' ? SIGNS.mcp : SIGNS[call.kind] ?? SIGNS.sh,
+        call.text,
+      ]),
+    ]),
+    ...PHASES.slice(0, open).map(phase),
+    h('li', { class: 'Tx', key: 'tx' }, [
+      h('span', { class: 'Tx_Name' }, 'one transaction'),
+      h('ol', {
+        'aria-label':
+          'Inside one transaction: all of these are stored, or none',
+      }, PHASES.slice(open, shut).map(phase)),
+    ]),
+    ...PHASES.slice(shut).map(phase),
+  ])
+}
+
 const EFFECT = PHASES.indexOf('effect')
 
 export let Stack: Band = (ctx) => {
@@ -351,66 +417,13 @@ export let Stack: Band = (ctx) => {
     : human(yak.vocab)(named)
   let tries = past ? yak.outbox.tries().filter((t) => t.subject == title) : []
   let sent = past && after?.delivered ? text(after, 'mail', 'to') : ''
-  // A phase turns green once the reader has passed it and it ran.
-  let phase = (p: Phase) =>
-    h('li', {
-      class: state.phase(p, PHASES.indexOf(p)) || undefined,
-      // A phase clicked comes to the reading line, so the write runs to it.
-      onClick: (ev: Event) =>
-        (ev.currentTarget as Element).scrollIntoView?.({
-          block: 'center',
-          behavior: 'smooth',
-        }),
-      'data-phase': p,
-      key: p,
-    }, [
-      h('span', { class: 'Dot' }),
-      h('b', null, p),
-      h(Prose, { source: DOES[p] }),
-      h(
-        'span',
-        { class: 'Skip' },
-        p == 'audit'
-          ? "This write committed, so audit didn't run."
-          : "This write didn't run this phase.",
-      ),
-    ])
   // The command the write came from: the band's own until a write is made.
   let own = scriptOf(body).find((c) => c.kind == 'mcp')
   let call = said ?? { kind: 'agent', text: own ? shown(own) : '' }
-  // The phases inside the transaction are one box, whatever has run.
-  let open = PHASES.indexOf(INSIDE[0])
-  let shut = open + INSIDE.length
   return h('section', { class: 'Band Stack', 'data-eid': e.entity.eid }, [
     h('div', { class: 'Stack_Text' }, [
       h(Head, { e }),
-      h('ol', {
-        class: 'Phases',
-        ref: list,
-        'aria-label': 'The write, and the phases of apply() it ran',
-      }, [
-        h(
-          'li',
-          { class: eid && upto >= -1 ? 'Call on' : 'Call', key: 'call' },
-          [
-            h('span', { class: 'Dot' }),
-            h('b', null, 'the write'),
-            h('code', null, [
-              call.kind == 'agent' ? 'agent → ' : '$ ',
-              call.text,
-            ]),
-          ],
-        ),
-        ...PHASES.slice(0, open).map(phase),
-        h('li', { class: 'Tx', key: 'tx' }, [
-          h('span', { class: 'Tx_Name' }, 'one transaction'),
-          h('ol', {
-            'aria-label':
-              'Inside one transaction: all of these are stored, or none',
-          }, PHASES.slice(open, shut).map(phase)),
-        ]),
-        ...PHASES.slice(shut).map(phase),
-      ]),
+      h(Phases, { state, call, made: !!eid && upto >= -1, list }),
     ]),
     h('figure', { class: 'Stack_Figure', ref: drawing }, [
       rows.length ? h(Source, { rows, changed, state }) : null,

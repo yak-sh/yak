@@ -5,6 +5,7 @@
     "@yaks/cli": "platform",
     "@yaks/diagram": "platform",
     "@yaks/doc": "platform",
+    "@yaks/draft": "platform",
     "@yaks/edge": "platform",
     "@yaks/effects": "platform",
     "@yaks/file": "platform",

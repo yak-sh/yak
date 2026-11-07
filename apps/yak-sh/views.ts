@@ -17,6 +17,7 @@ import { INSTALL, proseOf, scriptOf, shown } from './site.ts'
 import { Logo } from './idle.ts'
 import { Copy, parts } from './parts.ts'
 import { Stack } from './bands.ts'
+import { Setup } from './setup.ts'
 import { Doors, Memory, Rules } from './doors.ts'
 import type { Turns } from './turns.ts'
 import { BUFFER, played, text, useHeard, useTold } from './told.ts'
@@ -507,5 +508,6 @@ export let views = define([
   { view: 'Doors', match: doc, Render: Doors },
   { view: 'Rules', match: doc, Render: Rules },
   { view: 'Memory', match: doc, Render: Memory },
+  { view: 'Setup', match: doc, Render: Setup },
   ...parts.map((p) => ({ ...p, match: doc })),
 ] as never)
