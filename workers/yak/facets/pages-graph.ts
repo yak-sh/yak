@@ -30,7 +30,17 @@
 // published app owes them only when it changes what they show of it
 // (`LISTING`, T-143236): a purge empties them in every colo, and agents
 // release published examples many times an hour.
+//
+// A delete owes what the entity it took could have shown: an app, a space, a
+// listed row. A row no page shows owes nothing, so neither a sign-in code
+// buried nor an effect's finished run purges a page (T-148652): each was a
+// purge of every listing, waiting on the account's purge bucket before the
+// write answered. What a delete takes is read before it does
+// (`quietened`); a casualty of its cascade, unread, owes as it always has.
 import type { Bundle, Hook, Plugin, Tx } from '@yaks/graph'
+import { hook, type HookContext } from '@yaks/graph/plugin'
+import { dead, TOMBSTONE } from '@yaks/graph/bundle'
+import { after } from '@yaks/fp'
 import type { Options } from './store.ts'
 import { APP_PARTS, idOf, publishingOf, SPACE_PARTS } from '../directory.ts'
 import { appTag, cardTag, purge, SITE_TAG, spaceTag } from '../purge.ts'
@@ -87,6 +97,8 @@ let unshown = (b: Bundle, row: Bundle) =>
 // Whether an app's row has a chosen screenshot.
 let shot = (row: Bundle) =>
   !!(row.screenshot as { blob?: string | null } | undefined)?.blob
+// Whether an entity as it stands holds anything a page shows.
+let shown = (row: Bundle) => has(row, [...SHOWN, ...LISTED])
 // Whether a patch writes something a page could show.
 let shows = (b: Bundle) =>
   SHOWN.some((part) =>
@@ -162,16 +174,22 @@ let shows = (b: Bundle) =>
  * )
  * // A new fee changes what /pricing quotes.
  * assertEquals(await owed([{ entity: { eid: 'm' }, fee: { bps: 250 } }], offered), ['site'])
+ * // A delete owes every page its entity could have been on, unless it was
+ * // one no page shows.
+ * let buried = { entity: { eid: 'c' }, tombstone: {} }
+ * assertEquals(await owed([buried], rows), ['site', 'app:c', 'space:c'])
+ * assertEquals(await owed([buried], rows, new Set(['c'])), [])
  * ```
  */
 export let owed = async (
   applied: Bundle[],
   rows: (eids: string[]) => Promise<Bundle[]>,
+  quiet: ReadonlySet<string> = new Set(),
 ): Promise<string[]> => {
   let tags = new Set<string>()
-  if (applied.some((b) => has(b, LISTED) || b.tombstone)) tags.add(SITE_TAG)
-  for (let b of applied) {
-    if (!b.tombstone) continue
+  let gone = applied.filter((b) => b.tombstone && !quiet.has(b.entity.eid))
+  if (gone.length || applied.some((b) => has(b, LISTED))) tags.add(SITE_TAG)
+  for (let b of gone) {
     tags.add(appTag(b.entity.eid))
     tags.add(spaceTag(b.entity.eid))
   }
@@ -207,15 +225,54 @@ export let owed = async (
   return [...tags]
 }
 
+// The entities a batch deletes by name.
+let killing = (bundles: Bundle[]) => [
+  ...new Set(bundles.filter(dead).map((b) => b.entity.eid)),
+]
+
 export let plugins = (_host: unknown, options: Options): Plugin[] => {
+  // Each attempt's deleted entities that held nothing a page shows, read
+  // while they stand and heard by the same attempt's effect.
+  let quiet = new WeakMap<object, Set<string>>()
+  let quietened = hook(['$delete', TOMBSTONE], (bundles, tx, _err, context) => {
+    let at = context?.transaction
+    let killed = killing(bundles)
+    let { env, meta } = options.store
+    if (!at || !killed.length || !meta || !env.PURGER) return bundles
+    return after(tx.get(killed), (rows) => {
+      quiet.set(
+        at,
+        new Set(rows.filter((r) => !shown(r)).map((r) => r.entity.eid)),
+      )
+      return bundles
+    })
+  })
   let effect: Hook = Object.assign(
-    async (applied: Bundle[], tx: Tx) => {
+    async (
+      applied: Bundle[],
+      tx: Tx,
+      _err?: unknown,
+      context?: HookContext,
+    ) => {
       let { env, meta } = options.store
       if (!meta || !env.PURGER) return applied
-      await purge(env, await owed(applied, async (eids) => await tx.get(eids)))
+      let still = context?.transaction && quiet.get(context.transaction)
+      await purge(
+        env,
+        await owed(applied, async (eids) => await tx.get(eids), still),
+      )
       return applied
     },
-    { keys: [...PARTS, ...LISTED, 'tombstone'] },
+    { keys: [...PARTS, ...LISTED, TOMBSTONE] },
   )
-  return [{ name: 'yak/pages', admission: () => true, hooks: { effect } }]
+  return [{
+    name: 'yak/pages',
+    admission: () => true,
+    // What `quietened` reads, gathered with the batch.
+    wants: (bundles) => {
+      let killed = killing(bundles)
+      return killed.length ? [{ eids: killed }] : []
+    },
+    hooks: { precondition: quietened, effect },
+  }]
 }
