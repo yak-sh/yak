@@ -952,6 +952,21 @@ export let operatorRequest = async (
       ? Response.json((await answering(store, [row]))[0])
       : Response.json({ message: 'That request is missing.' }, { status: 404 })
   }
+  // A file sent with a request, or brought back by a step of a session the
+  // asker owns (an image the Operator made), to open from the conversation.
+  if (path == '/operator/attachment') {
+    let [row] = await store.g.get([String(args.id ?? '')])
+    let sent = (row?.operator_request ?? row?.operator_files) as
+      | { files?: unknown[] }
+      | undefined
+    let file = sent?.files?.[Number(args.file)]
+    let session = comp(row, 'entry')?.session
+    return file && await own(session ? String(session) : row!.entity.eid)
+      ? Response.json(file)
+      : Response.json({ message: 'That attachment is missing.' }, {
+        status: 404,
+      })
+  }
   if (path == '/operator/requests') {
     let ids = Array.isArray(args.ids) ? args.ids.map(String) : []
     return Response.json(

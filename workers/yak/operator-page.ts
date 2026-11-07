@@ -29,6 +29,7 @@ import {
 } from './route.ts'
 import { PLATFORM_BACKGROUND } from './apps.ts'
 import {
+  type File,
   keepFile,
   type Request as Intake,
   rootOf,
@@ -402,10 +403,12 @@ export let operatorAnswer = async (
     })
   }
   if (q.has('attachment')) {
-    let row = await operatorDoor(env, space, who, 'request', {
+    let file = await operatorDoor(env, space, who, 'attachment', {
       id: q.get('attachment'),
-    }) as Bundle
-    let file = (row.operator_request as Intake).files?.[Number(q.get('file'))]
+      file: Number(q.get('file')),
+    }).catch((e) => e?.status == 404 ? null : Promise.reject(e)) as
+      | File
+      | null
     if (!file) {
       return new Response('That attachment is missing.', { status: 404 })
     }

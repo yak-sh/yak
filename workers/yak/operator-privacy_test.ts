@@ -23,7 +23,8 @@ let [
   request,
   pending,
   unknown,
-] = Array.from({ length: 10 }, () => crypto.randomUUID())
+  made,
+] = Array.from({ length: 11 }, () => crypto.randomUUID())
 let who = (person: string): Held => ({ person, space, role: 'owner' })
 // Deliberately not rootOf(space, ada): the stored owner determines access.
 let secret = 'My private appointment'
@@ -59,6 +60,14 @@ await store.g.apply([
     entry: { session },
     content: { body: secret },
   })),
+  // A file a step brought back, owned by its session's person.
+  {
+    entity: { eid: made },
+    entry: { session: root },
+    operator_files: {
+      files: [{ name: 'image.png', mime: 'image/png', key: 'k' }],
+    },
+  },
   // Knowing the derived id does not confer ownership when the record differs.
   {
     entity: { eid: rootOf(space, bea) },
@@ -122,6 +131,20 @@ test('a derived conversation id does not override its stored owner or space', as
     () => undefined,
   )
   assertEquals(response!.status, 404)
+})
+
+test('a file a step brought back opens only for its session’s owner', async () => {
+  assertEquals((await read(ada, 'attachment', { id: made, file: 0 })).body, {
+    name: 'image.png',
+    mime: 'image/png',
+    key: 'k',
+  })
+  for (
+    let [person, args] of [[bea, { id: made, file: 0 }], [ada, {
+      id: made,
+      file: 1,
+    }]] as const
+  ) assertEquals((await read(person, 'attachment', args)).status, 404)
 })
 
 test('request and transcript doors hide other people’s requests and tasks', async () => {

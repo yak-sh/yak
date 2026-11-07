@@ -410,6 +410,19 @@ export let agents: {
   ],
 }
 
+/** What the Operator makes pictures with (operator-images.ts): a provider
+ * `providing` names, and the models of it the Operator may choose, the first
+ * the one it uses unless asked for another. */
+export let images = {
+  provider: 'openai',
+  models: [
+    'gpt-image-2.6-flare',
+    'gpt-image-2.6-sunburst',
+    'gpt-image-2.5-flare',
+    'gpt-image-2.5-sunburst',
+  ],
+}
+
 /** The model providers an app's store is lent (models.ts), the same way: by
  * the provider name each serves under, the first serving a model no row says
  * the provider of. A provider named bare is the app's own, called on the

@@ -85,6 +85,7 @@ import {
 import { textSend } from './operator-texts.ts'
 import { iconic } from './raster.ts'
 import { phoneSend } from './operator-line.ts'
+import { imageNew } from './operator-images.ts'
 import { googleTold, googleTools } from './operator-google.ts'
 import { notification } from './operator-updates.ts'
 import { wakeTools } from './operator-wakes.ts'
@@ -1132,6 +1133,7 @@ export let operating = (
       textSend(env, ctx, space),
       mailSend(env, ctx, space, store),
       phoneSend(env, ctx, space, store),
+      imageNew(env, space),
       ...wakeTools(store, space),
       ...subscriptionTools(store, space, watching),
       ...google,

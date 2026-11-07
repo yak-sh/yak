@@ -161,16 +161,18 @@ export let unsaid = (files: Sent[]) =>
 // The kinds a browser draws as a picture, never a drawing that runs (SVG).
 export let PICTURES = ['image/png', 'image/jpeg', 'image/gif', 'image/webp']
 
-/** The files a person sent, under their words as a chat app shows them: a
- * picture as itself, any other file as its kind and name, each opening the
- * original (operator-page.ts `?attachment=`, answered on either page). */
-export let attached = (request: string, files: Sent[]) =>
+/** The files a person sent, under their words as a chat app shows them, or
+ * a step brought back, under the step: a picture as itself, any other file as
+ * its kind and name, each opening the original (operator-page.ts
+ * `?attachment=`, answered on either page). `row` is the request or the
+ * step's result the files came with. */
+export let attached = (row: string, files: Sent[]) =>
   files.length
     ? h(
       'div',
       { class: 'Talk_Files' },
       files.map((f, i) => {
-        let href = `?attachment=${request}&file=${i}`
+        let href = `?attachment=${row}&file=${i}`
         return PICTURES.includes(f.mime ?? '')
           ? h(
             'a',
@@ -300,7 +302,8 @@ let tried = (doing: string) =>
   'Tried ' + doing.replace(/…$/, '').replace(/^./, (c) => c.toLowerCase())
 
 // A tool call and, once it came back, its answer: one row, under the call's
-// id, so the answer takes the call's place on the page.
+// id, so the answer takes the call's place on the page. The files it brought
+// back (an image it made) are drawn under it, open.
 let tool = (
   call: Bundle,
   names: Names,
@@ -310,7 +313,8 @@ let tool = (
   let c = comp(call, 'call')!
   let said = names(String(c.to), c.args as Record<string, unknown>)
   let ok = result ? !comp(result, 'refusal') && !result.exception : null
-  return step(
+  let files = (comp(result, 'operator_files')?.files ?? []) as Sent[]
+  let drawn = step(
     ok == null ? said.doing : ok ? said.done : tried(said.doing),
     ok == null ? 'on' : ok ? '' : 'no',
     h('p', null, 'What it asked for'),
@@ -327,6 +331,9 @@ let tool = (
           comp(result, 'refusal'),
       ),
   )
+  return files.length
+    ? h(Fragment, null, drawn, attached(result!.entity.eid, files))
+    : drawn
 }
 
 // A helper session's end, told to the Operator (@yaks/session `deliverChild`):
