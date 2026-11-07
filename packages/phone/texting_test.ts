@@ -182,19 +182,21 @@ let send = async (g: ReturnType<typeof rig>, args: Record<string, unknown>) =>
     await runs().text_send({ entity: { eid: 'c' }, call: { args } }, g),
   )
 
-test('text_send texts someone who agreed, by id or number, and refuses anyone else', async () => {
+test('text_send texts someone who agreed, by id, number or name, and refuses anyone else', async () => {
   let texts = stash()
   let g = rig(texts)
   await g.apply(person)
   await send(g, { to: ana, body: 'Deployed.' })
   await send(g, { to: '(269) 555-0142', body: 'Live.' })
-  assertEquals(texts.sent.map((t) => t.text), ['Deployed.', 'Live.'])
+  await g.apply([{ entity: { eid: ana }, doc: { title: 'Ana' } }])
+  await send(g, { to: 'Ana', body: 'Done.' })
+  assertEquals(texts.sent.map((t) => t.text), ['Deployed.', 'Live.', 'Done.'])
   let refused = (args: Record<string, unknown>) =>
     send(g, args).then(() => '', (e: Error) => e.name)
   assertEquals(await refused({ to: '+12695550199', body: 'Hi' }), 'CallError')
   await g.apply([{ entity: { eid: consentEid(ana) }, sms_consent: null }])
   assertEquals(await refused({ to: ana, body: 'Hi' }), 'CallError')
-  assertEquals(texts.sent.length, 2)
+  assertEquals(texts.sent.length, 3)
 })
 
 // A provider whose texts arrive by an unsigned callback, as voip.ms's do.

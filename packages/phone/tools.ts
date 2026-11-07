@@ -4,14 +4,14 @@
 // the config's `sender.via` names, so this file never talks to a provider.
 
 import type { Bundle, Comp, Eid, Graph } from '@yaks/graph'
-import { argsOf } from '@yaks/graph/call'
+import { argsOf, referenced } from '@yaks/graph/call'
 import type { Runs } from '@yaks/graph/tools'
 import { CallError } from '@yaks/tools/errors'
 import { consentEid, mobile } from './mod.ts'
 
 let str = (v: unknown): string => v == null ? '' : String(v)
 
-// Who `to` names: an id, or a number someone here wears.
+// Who `to` names: a number someone here wears, or an id or name.
 let reached = async (graph: Graph, to: string): Promise<Eid | undefined> => {
   let number = /[a-z]/i.test(to) ? null : mobile(to)
   if (number) {
@@ -20,7 +20,8 @@ let reached = async (graph: Graph, to: string): Promise<Eid | undefined> => {
     )
     return found?.entity.eid
   }
-  return (await graph.get([to], ['phone']))[0]?.entity.eid
+  let [eid] = await referenced(graph, [to], 'phone')
+  return (await graph.get([eid], ['phone']))[0]?.entity.eid
 }
 
 /** The implementations of the tools ./vocab.json declares. */
