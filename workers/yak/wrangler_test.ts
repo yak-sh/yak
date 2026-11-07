@@ -10,7 +10,6 @@ import { Buffer } from 'node:buffer'
 import { parse } from 'smol-toml'
 import { globToRegExp } from '@std/path/glob-to-regexp'
 import {
-  aheadOf,
   bundled,
   executor,
   fronted,
@@ -31,7 +30,7 @@ import {
   siblingMessage,
   SIBLINGS,
   siblings,
-  undo,
+  stagedDeploy,
   uploadDigest,
   uploadSibling,
 } from './wrangler.ts'
@@ -1157,66 +1156,90 @@ test('a retry leaves a newer version live when it activates after an attempt', a
   assertEquals([await b.deploy(1, activating), b.uploads()], [0, 1])
 })
 
-// Two builds racing to one Worker, as on 2026-11-05: the parent's build (`a`)
-// and its child's (`b`) both look while an older commit serves, the child's
-// upload finishes first, and the parent's finishes 3 s later. `undo` is the
-// door's look after its deploy; without it the parent serves.
-let race = async (looks: boolean) => {
+// Two builds racing to one Worker, as on 2026-11-07: the parent's build (`a`)
+// and its child's (`b`) both look while an older commit serves, and their
+// uploads finish in `order`. Each build goes live through its staged steps,
+// its guard looking right before its version does. What serves, newest first.
+let race = async (order: string) => {
   let [a, b, old] = ['a'.repeat(40), 'b'.repeat(40), 'f'.repeat(40)]
-  let cf = [{ sha: old, version: 'v0' }]
-  let read = (_root: string, ...[op, , head, sha]: string[]) =>
-    Promise.resolve({
-      code: op == 'merge-base' && !(head == a && sha == b) ? 1 : 0,
-      out: '',
-    })
-  let releases = (head: string) => () =>
-    Promise.all(
-      cf.slice(0, 2).map(async ({ sha, version }) => ({
-        sha,
-        version,
-        message: sha,
-        ahead: await aheadOf('/c', head, sha, read),
-      })),
-    )
-  let finished = {
-    a: Promise.withResolvers<void>(),
-    b: Promise.withResolvers<void>(),
-  }
-  let door = async (head: string, after?: Promise<void>) => {
-    let g = guard(
-      () =>
-        seen(
-          '/c',
-          [cf[0].sha],
-          (_r, ...args) =>
-            args[0] == 'rev-parse'
-              ? Promise.resolve({ code: 0, out: head })
-              : read(_r, ...args),
-        ),
-      () => {},
-    )
+  let cf = [old]
+  let notes: string[] = []
+  let turns = [...order].map(() => Promise.withResolvers<void>())
+  let door = async (head: string) => {
+    let read = (_root: string, ...args: string[]) =>
+      Promise.resolve(
+        args[0] == 'rev-parse'
+          ? { code: 0, out: head }
+          : { code: args[0] == 'merge-base' && args[3] == b ? 0 : 1, out: '' },
+      )
+    let g = guard(() => seen('/c', [cf[0]], read), (l) => notes.push(l))
     assert(await g.first())
-    let restore = (
-      { sha, version }: { sha: string | null; version: string | null },
-    ) => Promise.resolve(cf.unshift({ sha: sha!, version: version! }) && 0)
-    return runStep(['deploy'], async () => {
-      await after
-      cf.unshift({ sha: head, version: `v-${head[0]}` })
-      return { code: 0, output: '' }
-    }, {
-      allowed: g.still,
-      landed: looks ? undo(head, releases(head), restore, () => {}) : undefined,
-    })
+    let turn = order.indexOf(head[0])
+    let upload = async () => {
+      if (turn) await turns[turn - 1].promise
+      return {
+        code: 0,
+        output: `Worker Version ID: ${
+          head.slice(0, 8)
+        }-0000-4000-8000-000000000000`,
+      }
+    }
+    let run = (args: string[]) =>
+      runStep(args, () => {
+        if (args[0] == 'versions') cf.unshift(head)
+        else notes.push(`${head[0]} ${args.slice(0, 2).join(' ')}`)
+        return Promise.resolve({ code: 0, output: '' })
+      }, { allowed: g.still })
+    let code = await stagedDeploy(['deploy'], upload, run, g.declined)
+    turns[turn].resolve()
+    return code
   }
-  let child = door(b).then(() => finished.b.resolve())
-  let parent = door(a, finished.b.promise)
-  await Promise.all([child, parent])
-  return cf.map((d) => d.sha[0]).join('')
+  assertEquals(await Promise.all([door(a), door(b)]), [0, 0])
+  return { serving: cf.map((sha) => sha[0]).join(''), notes }
 }
 
-test('an older build that finishes last puts back the newer one it replaced', async () => {
-  assertEquals(await race(false), 'abf')
-  assertEquals(await race(true), 'babf')
+test('an older build that finishes last leaves the newer one serving', async () => {
+  let late = await race('ba')
+  assertEquals(late.serving, 'bf')
+  assert(late.notes.includes(
+    `not deploying: ${'b'.repeat(8)} is live and ahead of ${'a'.repeat(8)}`,
+  ))
+  assert(!late.notes.includes('a triggers deploy'))
+  assertEquals((await race('ab')).serving, 'baf')
+})
+
+test('a staged deploy uploads, puts its version live, then applies its triggers', async () => {
+  let id = '0123abcd-0000-4000-8000-000000000000'
+  let deploy = async (output: string, code = 0, declined = false) => {
+    let ran: string[] = []
+    let result = await stagedDeploy(
+      ['deploy', '--message', 'm', '-c', 'b.toml'],
+      () => Promise.resolve({ code, output }),
+      (args) => {
+        ran.push(args.slice(0, 3).join(' '))
+        return Promise.resolve(0)
+      },
+      () => declined,
+      () => {},
+    )
+    return [result, ...ran]
+  }
+  let uploaded = `Uploaded yak\nWorker Version ID: ${id}\n`
+  assertEquals(await deploy(uploaded), [
+    0,
+    `versions deploy ${id}@100%`,
+    'triggers deploy -c',
+  ])
+  assertEquals(await deploy(uploaded, 0, true), [
+    0,
+    `versions deploy ${id}@100%`,
+  ])
+  assertEquals(
+    await deploy('This Worker has a pending Durable Object migration', 1),
+    [0, 'deploy --message m'],
+  )
+  assertEquals(await deploy('Authentication error', 1), [1])
+  assertEquals(await deploy('Uploaded yak'), [1])
 })
 
 test('only a Wrangler step that changes what serves asks the guard', async () => {

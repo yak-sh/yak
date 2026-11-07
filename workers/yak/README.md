@@ -212,13 +212,19 @@ is still not live then.
 
 Builds run on watched-path pushes and finish in any order. The deploy guard
 (`wrangler.ts` `guard`) lets a completed build deploy unless a newer commit is
-already live. It reads live versions beside preparation, then again before each
-upload and retry, since another build can deploy while this one prepares or
-waits. A push to main does not stop a completed build from deploying. A build
-behind a newer live version deploys nothing and says why in its log. A newer
-build can still go live during an older one's upload, so after its deploy the
-door reads the release it replaced (`undo`), and when that release's commit is
-ahead of its own, it deploys that version again.
+already live, so a commit goes live only when it equals or descends from what
+serves. It reads live versions beside preparation, then again right before the
+step that puts a version live and before each retry, since another build can go
+live while this one prepares, uploads or waits. `wrangler deploy` uploads and
+goes live in one call, so the kernel deploys in three steps (`staged`):
+`versions upload` makes a version that serves nothing, `versions deploy` puts it
+live once the guard has looked, and `triggers deploy` applies its crons and
+queue consumers. A pending Durable Object migration, which only
+`wrangler
+deploy` applies, deploys in one step. A push to main does not stop a
+completed build from deploying. A build behind a newer live version deploys
+nothing, leaves the newer one serving and says why in its log; nothing is put
+back after a deploy.
 
 The sandbox tools use the Cloudflare provider in
 [@yaks/machine](../../packages/machine/README.md#cloudflare-containers).

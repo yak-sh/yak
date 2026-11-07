@@ -184,25 +184,21 @@ let deploying = (args: string[]) =>
  * boundary supplies diagnostics; the timer and signal belong to the caller.
  * Deploys get three attempts; permanent failures and other commands get one.
  * Each attempt that would change what serves first asks `allowed`, the deploy
- * guard as it stands then; one it refuses deploys nothing and exits 0. One
- * that went live then runs `landed`, which looks at what it replaced. */
+ * guard as it stands then; one it refuses deploys nothing and exits 0. */
 export let runStep = async (
   args: string[],
   execute: (args: string[]) => Promise<StepResult>,
-  { wait = sleep, signal, allowed, landed }: {
+  { wait = sleep, signal, allowed }: {
     wait?: typeof sleep
     signal?: AbortSignal
     allowed?: () => Promise<boolean>
-    landed?: () => Promise<unknown>
   } = {},
 ): Promise<number> => {
   let promotes = deploying(args) && !args.includes('--dry-run')
   let { code } = await retried(args, async () => {
     if (signal?.aborted) return { code: 130, output: '' }
     if (promotes && allowed && !await allowed()) return { code: 0, output: '' }
-    let result = await execute(args)
-    if (promotes && !result.code && landed) await landed()
-    return result
+    return await execute(args)
   }, { wait, signal, attempts: deploying(args) ? 3 : 1 })
   return code
 }
@@ -1121,14 +1117,18 @@ export let descendants = (pid: number): number[] => {
 // ---- which commit may go live ----------------------------------------------
 //
 // Builds finish in any order. A completed build may deploy unless a newer
-// commit, or its own, is already live. Read live versions again before each upload and
-// retry: a newer build can finish while this one prepares or waits. A check
-// before an upload cannot see a newer build that goes live during it, so two
-// builds that both looked before either went live both deploy, and the last
-// to finish serves (9c39a10f went live 3 s after its child d348e1ab on
-// 2026-11-05). Cloudflare deploys without comparing what it replaces, so the
-// door looks after its deploy too (`undo`): when the release it replaced
-// carries a commit ahead of its own, it puts that release back.
+// commit, or its own, is already live: on main's history, only a commit that
+// equals or descends from what serves goes live. Read live versions again
+// right before the step that puts a version live, and before each retry: a
+// newer build can go live while this one prepares, uploads or waits.
+// `wrangler deploy` uploads and goes live in one call, so a look before it is
+// as old as Wrangler's start and the upload: on 2026-11-07 f08d33d0's look was
+// 27 s old when it went live, 9 s after its child d6e29ff9 had (a look after
+// a deploy, `undo`, then saw it and was refused by the same guard, since
+// f08d33d0 alone was live by then). The kernel's version is uploaded first,
+// serving nothing, and goes live in a step of its own (`staged`). Nothing is
+// put back after a deploy: a build behind a newer live commit declines and
+// says so, and leaves the newer one serving.
 
 /** This build's commit and the commits live now, with whether each is ahead
  * of this one (null when git cannot tell). */
@@ -1250,50 +1250,68 @@ export let aheadOf = async (
   return code == 0 ? true : code == 1 ? false : null
 }
 
-/** A deployment of the Worker, newest first: the commit its message names,
- * its one version at 100% (null when split or unread), its message, and
- * whether its commit is ahead of this build's. */
-export type Release = {
-  sha: string | null
-  version: string | null
-  message: string
-  ahead: boolean | null
+// Wrangler's account of what its `versions upload` made, and what it says when
+// a migration stops one.
+let UPLOADED = /Worker Version ID: ([0-9a-f]{8}-[0-9a-f-]{27})/
+let MIGRATING = /pending Durable Object migration/
+
+/// staged(['deploy', '--message', 'm', '-c', 'b.toml']).upload -> ['versions', 'upload', '--message', 'm', '-c', 'b.toml']
+/// staged(['--env', 's', 'deploy', '-c', 'b.toml', '--message', 'm']).promote('v1') -> ['versions', 'deploy', 'v1@100%', '--yes', '--env', 's', '-c', 'b.toml', '--message', 'm']
+/// staged(['deploy', '--config=b.toml', '--message', 'm', '-e', 's']).triggers -> ['triggers', 'deploy', '--config=b.toml', '-e', 's']
+/** A `wrangler deploy` as the three steps it makes: upload a version that
+ * serves nothing, put that version live (`versions deploy`, which also syncs
+ * the settings versions don't carry), then apply its triggers (crons, queue
+ * consumers, routes). */
+export let staged = (args: string[]) => {
+  let at = args.indexOf(command(args)!)
+  let kept = (...flags: string[]) =>
+    args.flatMap((a, i) =>
+      flags.includes(a)
+        ? [a, args[i + 1]]
+        : flags.some((f) => a.startsWith(`${f}=`))
+        ? [a]
+        : []
+    )
+  return {
+    upload: [...args.slice(0, at), 'versions', 'upload', ...args.slice(at + 1)],
+    promote: (version: string) => [
+      'versions',
+      'deploy',
+      `${version}@100%`,
+      '--yes',
+      ...kept('--env', '-e', '-c', '--config', '--message'),
+    ],
+    triggers: ['triggers', 'deploy', ...kept('--env', '-e', '-c', '--config')],
+  }
 }
 
-/// let ours = { sha: 'a', version: 'v2', message: 'a', ahead: false }
-/// let newer = { sha: 'b', version: 'v1', message: 'b', ahead: true }
-/// overtook('a', [ours, newer])?.version -> 'v1'
-/// overtook('a', [ours, { ...newer, ahead: false }]) -> undefined
-/// overtook('a', [ours, { ...newer, ahead: null }]) -> undefined
-/// overtook('a', [ours, { ...newer, version: null }]) -> undefined
-/// overtook('a', [newer, ours]) -> undefined
-/// overtook('a', [ours]) -> undefined
-/** The release this build's deploy replaced, when its commit is ahead of this
- * build's: an older build that finished last went live over a newer one. Only
- * while this build's deploy is the newest; a later one answers for itself. */
-export let overtook = (head: string, releases: Release[]) => {
-  let [now, before] = releases
-  return now?.sha == head && before?.ahead && before.version
-    ? before
-    : undefined
-}
-
-/** After this build went live, puts back the release it replaced when that
- * release is ahead of it ({@link overtook}), through `restore`. */
-export let undo = (
-  head: string,
-  releases: () => Promise<Release[]>,
-  restore: (release: Release) => Promise<number>,
+/** Deploys the kernel through its {@link staged} steps. `upload` runs a
+ * Wrangler step and answers its output; `run` runs one the guard looks at
+ * first when it puts a version live; `declined` says whether the guard
+ * refused, and then the triggers stay as the live version left them. A
+ * pending Durable Object migration, which only `wrangler deploy` applies,
+ * deploys in one step, its look before the upload. */
+export let stagedDeploy = async (
+  args: string[],
+  upload: (args: string[]) => Promise<StepResult>,
+  run: (args: string[]) => Promise<number>,
+  declined: () => boolean,
   note = console.log,
-) =>
-async () => {
-  let newer = overtook(head, await releases())
-  if (!newer) return false
-  note(
-    `${short(head)} went live over ${short(newer.sha!)}, which is ahead of ` +
-      `it; restoring version ${newer.version}`,
-  )
-  return !await restore(newer)
+): Promise<number> => {
+  let steps = staged(args)
+  let { code, output } = await upload(steps.upload)
+  if (code && MIGRATING.test(output)) {
+    note('a Durable Object migration is pending; deploying in one step')
+    return await run(args)
+  }
+  if (code) return code
+  let version = UPLOADED.exec(output)?.[1]
+  if (!version) {
+    note('wrangler versions upload named no version; nothing went live')
+    return 1
+  }
+  let promoted = await run(steps.promote(version))
+  return promoted || declined() ? promoted : await run(steps.triggers)
 }
 
 /** The deploy guard looks beside preparation (`first`) and reads fresh live
@@ -1321,6 +1339,7 @@ export let guard = (
       return decide(saw)
     },
     still: async () => !refused && decide(await look()),
+    declined: () => refused != null,
   }
 }
 
@@ -1359,26 +1378,6 @@ let serving = async (env: string[]): Promise<string[]> => {
   return named.filter((sha) => sha != null)
 }
 
-/** The Worker's two newest deployments as {@link Release}s for `head`. */
-let releases = async (head: string, env: string[]) =>
-  Promise.all(
-    (await deployments(env)).slice(0, 2).map(
-      async (d): Promise<Release> => {
-        let message = annotation(d)
-        let sha = SHA.exec(message)?.[0] ?? null
-        let [one] = d.versions
-        return {
-          sha,
-          version: d.versions.length == 1 && one.percentage == 100
-            ? one.version_id
-            : null,
-          message,
-          ahead: sha ? await aheadOf(dir, head, sha) : null,
-        }
-      },
-    ),
-  )
-
 if (import.meta.main) {
   let began = new Date()
   let started = performance.now()
@@ -1390,7 +1389,6 @@ if (import.meta.main) {
     : undefined
   let inspect = async () => door ? await door.first() : true
   let still = async () => door ? await door.still() : true
-  let head = ''
   if (command(argv) === 'deploy') {
     // Versions carry their commit so `yak admin deploys` need not infer it by
     // time, and when this door began, which the deploy catch-up times.
@@ -1402,7 +1400,6 @@ if (import.meta.main) {
     }).output()
     if (!commit.success) system.exit(commit.code)
     let line = new TextDecoder().decode(commit.stdout).trim()
-    head = line.split(' ')[0]
     argv.push('--message', versionMessage(line, began))
   }
   let children = new Set<system.ChildProcess>()
@@ -1428,81 +1425,79 @@ if (import.meta.main) {
     })
   }
   // env(1) execs wrangler in its own place, so the pid signalled is the same.
-  let run = (argv: string[], unpinned = false): Promise<number> =>
-    runStep(argv, async (argv) => {
-      console.log(
-        `Wrangler ${command(argv)} ${
-          argv.includes('-c') ? argv[argv.indexOf('-c') + 1] : 'wrangler.toml'
-        }: starting at ${((performance.now() - started) / 1000).toFixed(3)}s`,
-      )
-      let [cmd, ...args] = unpinned
-        ? ['env', ...PINNED.flatMap((v) => ['-u', v]), ...wrangler]
-        : wrangler
-      let capture = deploying(argv)
-      let log = capture ? io.makeTempFileSync({ suffix: '.log' }) : undefined
+  let spawned = async (
+    argv: string[],
+    unpinned = false,
+  ): Promise<StepResult> => {
+    console.log(
+      `Wrangler ${command(argv)} ${
+        argv.includes('-c') ? argv[argv.indexOf('-c') + 1] : 'wrangler.toml'
+      }: starting at ${((performance.now() - started) / 1000).toFixed(3)}s`,
+    )
+    let [cmd, ...args] = unpinned
+      ? ['env', ...PINNED.flatMap((v) => ['-u', v]), ...wrangler]
+      : wrangler
+    let capture = deploying(argv) ||
+      command(argv) == 'versions' && argv.includes('upload')
+    let log = capture ? io.makeTempFileSync({ suffix: '.log' }) : undefined
+    try {
+      let child = spawnCommand(cmd, {
+        args: [...args, ...argv],
+        cwd: dir,
+        ...(log
+          ? {
+            env: {
+              WRANGLER_LOG_PATH: log,
+              WRANGLER_WRITE_LOGS: 'true',
+              WRANGLER_LOG_SANITIZE: 'true',
+            },
+            stdout: 'piped' as const,
+            stderr: 'piped' as const,
+          }
+          : {}),
+      }).spawn()
+      children.add(child)
       try {
-        let child = spawnCommand(cmd, {
-          args: [...args, ...argv],
-          cwd: dir,
-          ...(log
-            ? {
-              env: {
-                WRANGLER_LOG_PATH: log,
-                WRANGLER_WRITE_LOGS: 'true',
-                WRANGLER_LOG_SANITIZE: 'true',
-              },
-              stdout: 'piped' as const,
-              stderr: 'piped' as const,
-            }
-            : {}),
-        }).spawn()
-        children.add(child)
-        try {
-          let completed = await Promise.allSettled([
-            child.status,
-            capture ? forwarded(child.stdout, system.stdout) : '',
-            capture ? forwarded(child.stderr, system.stderr) : '',
-          ])
-          for (let result of completed) {
-            if (result.status == 'rejected') throw result.reason
-          }
-          let [status, stdout, stderr] = completed.map((result) =>
-            (result as PromiseFulfilledResult<unknown>).value
-          ) as [system.CommandStatus, string, string]
-          return {
-            code: status.code,
-            output: `${stdout}\n${stderr}`,
-            log: log ? logTail(log) : '',
-          }
-        } finally {
-          children.delete(child)
+        let completed = await Promise.allSettled([
+          child.status,
+          capture ? forwarded(child.stdout, system.stdout) : '',
+          capture ? forwarded(child.stderr, system.stderr) : '',
+        ])
+        for (let result of completed) {
+          if (result.status == 'rejected') throw result.reason
+        }
+        let [status, stdout, stderr] = completed.map((result) =>
+          (result as PromiseFulfilledResult<unknown>).value
+        ) as [system.CommandStatus, string, string]
+        return {
+          code: status.code,
+          output: `${stdout}\n${stderr}`,
+          log: log ? logTail(log) : '',
         }
       } finally {
-        if (log) io.removeSync(log)
+        children.delete(child)
       }
-    }, {
+    } finally {
+      if (log) io.removeSync(log)
+    }
+  }
+  let run = (argv: string[], unpinned = false): Promise<number> =>
+    runStep(argv, (argv) => spawned(argv, unpinned), {
       signal: stopped.signal,
       allowed: still,
-      // A sibling's message names its inputs, not its commit, and an older
-      // sibling with the same inputs serves the same code; a restore is not
-      // looked after again.
-      landed: guarded && !unpinned && command(argv) == 'deploy'
-        ? undo(
-          head,
-          () => releases(head, envs(argv)),
-          ({ version, message }) =>
-            run([
-              'versions',
-              'deploy',
-              `${version}@100%`,
-              '--yes',
-              '--message',
-              message,
-              ...envs(argv),
-            ]),
-        )
-        : undefined,
     })
+  // The kernel's deploy goes live in a step of its own, the guard's look
+  // right before it (`staged`).
+  let deploy = (args: string[]) =>
+    door && command(args) == 'deploy'
+      ? stagedDeploy(
+        args,
+        (args) =>
+          retried(args, () => spawned(args), { signal: stopped.signal }),
+        run,
+        door.declined,
+      )
+      : run(args)
   let made = preparing()
   let readied = made.dependencies.then(() => {
     // Choose after pnpm has installed: a cold checkout has this pin now too.
@@ -1573,7 +1568,7 @@ if (import.meta.main) {
       runWrangler(
         argv,
         (args, unpinned) =>
-          unpinned ? uploads.get(args[args.indexOf('-c') + 1])! : run(args),
+          unpinned ? uploads.get(args[args.indexOf('-c') + 1])! : deploy(args),
         async () => await kernelStep(argv, await bundle),
       ),
     () => made.all,
