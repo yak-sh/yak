@@ -8,7 +8,7 @@ import { cookieValue } from './lib/token.ts'
 import { type Fetcher, reset } from './door.ts'
 import type { Env } from './env.ts'
 import { background, defect } from './defects.ts'
-import { elapsed } from './lib/hops.ts'
+import { apart, elapsed } from './lib/hops.ts'
 import { evicted, jittered, opaque, retried } from '@yaks/durable-object'
 import { type Clock, system } from '@yaks/fp'
 import { setImmediate } from 'node:timers'
@@ -35,13 +35,89 @@ export type ServingCopies = {
   idFromName(name: string): unknown
   get(id: unknown): ServingCopyDoor
 }
-export let copyOf = (env: Pick<Env, 'SERVING_COPY'>) => {
-  let copy = env.SERVING_COPY?.get(env.SERVING_COPY.idFromName('public'))
-  return copy && timedCopy(copy)
+export let copyOf = (env: Pick<Env, 'SERVING_COPY' | 'CLOCK'>) => {
+  let copies = env.SERVING_COPY
+  let copy = copies?.get(copies.idFromName('public'))
+  return copy &&
+    remembered(timedCopy(copy), toldTo(copies!), env.CLOCK ?? system)
+}
+
+// Every read of the directory fills the copy behind its answer, and a page's
+// requests read the same lines at the same revision again and again: each
+// fill after the first is a trip into the copy that changes nothing, since it
+// already holds that body at that revision (T-147833). So the copy's door
+// remembers, for its binding, what this isolate told it, and tells it a line
+// at a revision once. What it cannot see from here, a fence raised and
+// lowered by another isolate or a line the copy trimmed, it learns again by
+// telling once more after REFILL: a fill only ever spares a trip, and the
+// copy still answers a stalled read only at a revision it holds current.
+type Told = Map<string, [revision: number, at: number]>
+let told = new WeakMap<ServingCopies, Told>()
+let toldTo = (copies: ServingCopies) => {
+  let held = told.get(copies)
+  if (!held) told.set(copies, held = new Map())
+  return held
+}
+/** How long a line told to the copy at a revision goes untold at it again. */
+export let REFILL = 10_000
+// The most lines remembered: as many as the copy holds (serving-copy.ts).
+let LINES = 1000
+
+let remembered = (
+  copy: ServingCopyDoor,
+  told: Told,
+  { now }: Pick<Clock, 'now'>,
+): ServingCopyDoor => {
+  let holds = ([revision, key]: Filled) => {
+    let was = told.get(key)
+    return was?.[0] == revision && now() - was[1] < REFILL
+  }
+  // Whether the copy kept each answer: one it holds already is not sent.
+  let tell = async (
+    answers: Filled[],
+    send: (unheld: Filled[]) => Promise<boolean[]>,
+  ) => {
+    let held = answers.map(holds)
+    let unheld = answers.filter((_, n) => !held[n])
+    if (!unheld.length) return held
+    let kept = await send(unheld)
+    unheld.forEach(([revision, key], n) => {
+      if (!kept[n]) return
+      told.delete(key)
+      told.set(key, [revision, now()])
+      if (told.size > LINES) told.delete(told.keys().next().value!)
+    })
+    let n = 0
+    return held.map((h) => h || kept[n++])
+  }
+  // A fence this isolate raises or lowers empties the copy.
+  let emptying =
+    <A extends unknown[], T>(call: (...a: A) => Promise<T>) =>
+    async (...a: A) => {
+      try {
+        return await call(...a)
+      } finally {
+        told.clear()
+      }
+    }
+  let { publish, publishes, settle } = copy
+  let one =
+    (send: (...answer: Filled) => Promise<boolean>) =>
+    async (...answer: Filled) =>
+      (await tell([answer], async ([a]) => [await send(...a)]))[0]
+  return {
+    ...copy,
+    ...publish && { publish: one(publish) },
+    ...publishes && { publishes: (answers) => tell(answers, publishes) },
+    ...settle && { settle: emptying(settle) },
+    begin: emptying(copy.begin),
+    put: one(copy.put),
+  }
 }
 
 // Each call into the copy is a round trip to its object, summed on the
-// request's tally as `copy_wait` (timing.ts).
+// request's tally as `copy_wait` (timing.ts). A fill behind an answer runs
+// apart from it (hops.ts `apart`): the request never waits on it.
 let timedCopy = (copy: ServingCopyDoor): ServingCopyDoor => {
   let timed = <T>(call: () => Promise<T>) => elapsed('copy_wait', call)
   let { read, valid, publish, publishes, revision, settle } = copy
@@ -359,8 +435,10 @@ export let publicDirectory = (
           let epoch = answer.headers.get(EPOCH)
           if (answer.ok && epoch != null && /^\d+$/.test(epoch)) {
             background(
-              answer.clone().text().then((body) =>
-                copy.put(Number(epoch), key, body)
+              apart(() =>
+                answer.clone().text().then((body) =>
+                  copy.put(Number(epoch), key, body)
+                )
               ).then(() => {}, () => {}),
             )
           }
@@ -520,7 +598,9 @@ export let signedDirectory = (
           // write it has fenced but not yet committed is one this read came
           // before. The copy is filled behind the answer, for a stall to fall
           // back on (`fill`).
-          background(fill(req, Number(epoch), key, body).catch(() => {}))
+          background(
+            apart(() => fill(req, Number(epoch), key, body)).catch(() => {}),
+          )
           return new Response(body, { headers: { [EPOCH]: epoch } })
         }
         void (async () => {
