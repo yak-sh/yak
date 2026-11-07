@@ -155,8 +155,12 @@ The subscription reconnects with [sync](../sync/README.md)'s backoff and asks
 for a fresh answer; while disconnected, its cached answer is not ready and files
 nothing. An opening or query refusal is reported and retried. A failed box apply
 rolls back and is reported; the next pass retries the bug from the current
-tracker answer, without advancing a checkpoint. Shutdown closes subscriptions
-and stops the pause between passes.
+tracker answer, without advancing a checkpoint. A failure reports at once,
+tagged with the step that caught it (`open`, `owed read`, `read by id`, `mark`,
+`reconcile`); the same failure at that step again, a blip the next passes ride
+out or one 503 across every bug's mark, is not reported again, and the step's
+next success logs how long it failed. Shutdown closes subscriptions and stops
+the pause between passes.
 
 ## Config
 

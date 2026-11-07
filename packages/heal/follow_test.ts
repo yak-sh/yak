@@ -522,6 +522,67 @@ test('the service resumes when a tracker is available again', async () => {
   outage.close()
 })
 
+// The service over `f`'s tracker, whose `door` fails on the passes in `down`
+// (the first is 1), `passes` passes a minute apart on a test clock, `between`
+// run after the first: what it reported, as `step: error`, and logged.
+let blips = async (
+  f: Awaited<ReturnType<typeof fixture>>,
+  door: 'get' | 'mutate',
+  down: number[],
+  passes: number,
+  between: () => unknown = () => {},
+) => {
+  let time = clock(), pass = 1, reports: string[] = [], logs: string[] = []
+  let stop = new AbortController()
+  await service({
+    graph: f.g,
+    report: (error, context) =>
+      void reports.push(`${context?.tags?.step}: ${error}`),
+  }, {
+    ...f.config,
+    now: time.now,
+    log: (line) => void logs.push(line),
+    open: (at) => {
+      let watch = f.config.open!(at)
+      let through = watch[door] as (...args: unknown[]) => Promise<Bundle[]>
+      watch[door] = (...args: unknown[]) =>
+        down.includes(pass)
+          ? Promise.reject(Error('the tracker answered 503'))
+          : through(...args)
+      return watch
+    },
+    wait: async () => {
+      if (pass == 1) await between()
+      await time.advance(60_000)
+      if (++pass > passes) stop.abort()
+    },
+  }, stop.signal)
+  f.close()
+  return { reports, logs }
+}
+let marking = await fixture()
+let markBlip = await blips(marking, 'mutate', [1, 2], 3)
+let reading = await off()
+let readBlip = await blips(
+  reading,
+  'get',
+  [2, 3],
+  4,
+  () => put(reading.tracker, [{ entity: { eid: bug }, resolved: {} }]),
+)
+test('a blip in a mark or a read by id reports at once, once, and recovers', async () => {
+  let once = (step: string, ms: number) => ({
+    reports: [`${step}: Error: the tracker answered 503`],
+    logs: [
+      `@yaks/heal — ${step} of ${url} succeeds again after ${ms} ms of Error: the tracker answered 503`,
+    ],
+  })
+  equal(markBlip, once('mark', 120_000))
+  ok(comp((await marking.tracker.get([bug]))[0], 'taken'))
+  equal(readBlip, once('read by id', 120_000))
+  ok((await reading.g.get([taskEid(bug)]))[0].completed)
+})
+
 let migrated = await fixture()
 let old = identityEid('task', ['old bug task'])
 await put(migrated.g, [{

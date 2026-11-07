@@ -1,6 +1,12 @@
 // One leased heal service follows tracker query answers. Sync owns reconnects;
 // each pass reads the present answer again, so neither a failed box write nor
 // a failed tracker mark loses work.
+//
+// A failure is reported at once where it is caught, tagged with its step: the
+// read of the box's owed work, opening a tracker, its read by id, a mark, a
+// bug's reconcile. The same failure at the same step again, pass after pass
+// or bug after bug, is the same bug and is not reported again; the first time
+// the step succeeds, a line says so, and a failure after that reports anew.
 
 import {
   type Client,
@@ -65,6 +71,10 @@ export type Options = FixOptions & {
   open?: (url: string) => Tracker
   /** Pause between passes; defaults to an abortable sleep. */
   wait?: typeof sleep
+  /** The clock passes and failures are timed by (default `Date.now`). */
+  now?: () => number
+  /** A step that failed succeeding again (default `console.warn`). */
+  log?: (line: string) => void
 }
 
 // The replica holds the follower's answer and marks, never tracker intake,
@@ -180,18 +190,58 @@ export let service = async (
   // A changed answer ends the wait at once; the timer re-checks tasks and gates.
   let nudge = () => {}
   let changed = () => new Promise<void>((wake) => nudge = wake)
-  let report = async (error: unknown) => {
+  let now = options.now ?? Date.now
+  let log = options.log ?? console.warn
+  let report = async (error: unknown, step: string) => {
     try {
-      if (host.report) await host.report(error)
-      else console.error(error)
+      let tags = { package: '@yaks/heal', step }
+      if (host.report) await host.report(error, { tags })
+      else console.error(`@yaks/heal ${step} —`, error)
     } catch { /* a reporting failure cannot stop recovery */ }
   }
+  // The failure each step last reported and since when, by the step and
+  // what it was about (a tracker, a bug), while that step keeps failing; and
+  // the failures already told, so one caught again further out is not.
+  let failing = new Map<string, { cause: string; since: number }>()
+  let told = new WeakSet<object>()
+  let fail = async (step: string, about: string, error: unknown) => {
+    if (told.has(Object(error))) return
+    if (Object(error) === error) told.add(error as object)
+    let key = `${step} ${about}`, cause = String(error)
+    if (failing.get(key)?.cause == cause) return
+    failing.set(key, { cause, since: now() })
+    await report(error, step)
+  }
+  let fine = (step: string, about: string) => {
+    let key = `${step} ${about}`, was = failing.get(key)
+    if (!was) return
+    failing.delete(key)
+    log(
+      `@yaks/heal — ${step} of ${about} succeeds again after ${
+        now() - was.since
+      } ms of ${was.cause}`,
+    )
+  }
+  // A failed mark is told as the mark's, not its bug's reconcile.
+  let marks =
+    (url: string, mutate: Tracker['mutate']): Tracker['mutate'] =>
+    async (...args) => {
+      try {
+        let done = await mutate(...args)
+        fine('mark', url)
+        return done
+      } catch (error) {
+        await fail('mark', url, error)
+        throw error
+      }
+    }
   let open = options.open ??
     ((url: string) =>
       url == PLATFORM
         ? poll(options.remote!, followed, {
           every: options.every && Math.min(options.every, 30_000),
-          report: (error) => void report(error),
+          report: (error) => void report(error, 'tracker poll'),
+          log: options.log,
         })
         : track(url, {
           // A refused mark is the tracker refusing heal's own write: an
@@ -201,13 +251,14 @@ export let service = async (
               trouble.refused
                 ? new WriteRefused(trouble.sent, trouble.refused)
                 : trouble.error,
+              'tracker sync',
             )
           },
         }))
   try {
     do {
       let moved = changed()
-      let began = Date.now()
+      let began = now()
       let all = began - whole >= every
       let covered = true
       // A whole pass also asks the trackers after what the box's open work is
@@ -217,13 +268,15 @@ export let service = async (
       if (all) {
         try {
           owing = await owed(host.graph)
+          fine('owed read', 'the box')
         } catch (error) {
           covered = false
-          await report(error)
+          await fail('owed read', 'the box', error)
         }
       }
       for (let url of urls) {
         if (!once && signal.aborted) return
+        let step = 'open'
         try {
           let watch = watches.get(url)
           if (!watch) {
@@ -240,6 +293,7 @@ export let service = async (
             watches.delete(url)
             throw new Error(watch.refused)
           }
+          fine('open', url)
           if (!watch.ready) {
             covered = false
             // Until the platform's first poll settles, no other tracker's bug
@@ -254,7 +308,10 @@ export let service = async (
           let left = [...members.get(url) ?? []].filter((eid) => !held.has(eid))
           let asked = [...new Set([...left, ...owing])]
             .filter((eid) => !held.has(eid))
+          step = 'read by id'
           let closed = asked.length ? await watch.get(asked) : []
+          if (asked.length) fine(step, url)
+          step = 'reconcile'
           members.set(url, held)
           for (let eid of left) replayed.delete(`${url} ${eid}`)
           let due = [
@@ -282,21 +339,22 @@ export let service = async (
           let settle = await reconcile(
             due.map(({ bug }) => bug),
             url,
-            watch.mutate,
+            marks(url, watch.mutate),
           )
           for (let { bug, key, row } of due) {
             if (!once && signal.aborted) return
             try {
               await settle(bug)
               if (row) replayed.set(key, row)
+              fine('reconcile', key)
             } catch (error) {
               replayed.delete(key)
-              await report(error)
+              await fail('reconcile', key, error)
             }
           }
         } catch (error) {
           covered = false
-          await report(error)
+          await fail(step, url, error)
         }
       }
       if (all && covered) whole = began
