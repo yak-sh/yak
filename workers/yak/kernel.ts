@@ -283,6 +283,9 @@ let serve = async (req: Request, env: Env, r: Route) => {
   // What breaks in the platform's own pages (page-report.ts), before the
   // connector for the same reason as the fee's.
   if (path == pageReport.PATH) return pageReport.answer(req, env)
+  // A click on a home-page call to action (funnel.ts), before the connector
+  // for the same reason.
+  if (path == funnel.CLICKED) return funnel.clicked(req, env)
   if (path == '/mcp' || path.startsWith('/api/')) {
     return bound(env.MCP, mcp, env).fetch(req)
   }

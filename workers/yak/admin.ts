@@ -750,7 +750,7 @@ let WINDOWS = [1, 7, 30, 90]
 
 // yaks.app's own funnel (funnel.ts): each step's count over the window, and
 // its share of the step it follows, then the sites that sent the home page
-// its visitors.
+// its visitors, the calls to action they clicked and the campaigns.
 let funnelPage = (
   d: Reading,
   f: Funnel | null | Error,
@@ -804,6 +804,14 @@ let funnelPage = (
           facts(f.from.map((r) => [r.site, String(r.n)])),
         )
         : null,
+      f.buttons.length
+        ? h(
+          Fragment,
+          null,
+          h(Group, null, 'Clicked on the home page'),
+          facts(f.buttons.map((r) => [r.say, String(r.n)])),
+        )
+        : null,
       f.campaigns.length
         ? h(
           Fragment,
@@ -811,7 +819,7 @@ let funnelPage = (
           h(Group, null, 'Came from campaigns'),
           facts(f.campaigns.map((r) => [
             r.campaign,
-            `${r.home} visits · ${r.signup} sign-ups`,
+            `${r.home} visits · ${r.click} clicks · ${r.signup} sign-ups`,
           ])),
         )
         : null,

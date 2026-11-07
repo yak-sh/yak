@@ -105,10 +105,11 @@ export let FUNNEL = 'yaks.app'
  * The data point one step of yaks.app's funnel is written as: a view of the
  * platform itself, whose slug is the step. The request, where there is one,
  * says what a view says of it, and after it the campaign its arrival names
- * (arrival.ts); a step taken away from any request (a person coming back)
- * says only the step.
+ * (arrival.ts) and the call to action clicked, for a click (funnel.ts
+ * `clicked`); a step taken away from any request (a person coming back) says
+ * only the step.
  */
-export let stepOf = (step: string, req?: Visited) => {
+export let stepOf = (step: string, req?: Visited, button = '') => {
   let url = req && new URL(req.url)
   let p = point({
     app: FUNNEL,
@@ -120,7 +121,7 @@ export let stepOf = (step: string, req?: Visited) => {
     client: req ? classed(req.headers.get('user-agent')) : '',
     status: 0,
   })
-  p.blobs.push(clipped(req ? campaign(arrival(req)) : ''))
+  p.blobs.push(clipped(req ? campaign(arrival(req)) : ''), clipped(button))
   return p
 }
 

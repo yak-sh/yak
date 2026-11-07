@@ -2,9 +2,11 @@
 // read back as.
 import { test } from '@yaks/testing'
 import { assertEquals } from '@std/assert'
-import { funnel, step } from './funnel.ts'
+import { parseHTML } from 'linkedom'
+import { clicked, CTAS, funnel, step } from './funnel.ts'
 import { FUNNEL, isHome } from './view-point.ts'
 import { analytics, dataset } from './testing.ts'
+import { page } from './site/mod.ts'
 import type { Env } from './env.ts'
 
 let BROWSER = 'Mozilla/5.0 (Macintosh) AppleWebKit Safari'
@@ -25,12 +27,21 @@ test('a step is written under the platform, saying what a view says and its camp
   assertEquals(views.points, [
     {
       indexes: [FUNNEL],
-      blobs: ['', 'code_sent', '/', '', 'news.example.com', 'browser', ''],
+      blobs: [
+        '',
+        'code_sent',
+        '/',
+        '',
+        'news.example.com',
+        'browser',
+        '',
+        '',
+      ],
       doubles: [0],
     },
     {
       indexes: [FUNNEL],
-      blobs: ['', 'returned', '', '', '', '', ''],
+      blobs: ['', 'returned', '', '', '', '', '', ''],
       doubles: [0],
     },
     {
@@ -43,6 +54,7 @@ test('a step is written under the platform, saying what a view says and its camp
         'news.example.com',
         'browser',
         'meta//pilot',
+        '',
       ],
       doubles: [0],
     },
@@ -64,21 +76,35 @@ test('the funnel reads each step, a share of the one it follows, and where visit
       : q.includes('blob7')
       ? [
         { campaign: 'meta//pilot', step: 'home', n: 9 },
+        { campaign: 'meta//pilot', step: 'click', n: 4 },
         { campaign: 'meta//pilot', step: 'signup', n: '2' },
       ]
-      : [{ step: 'home', n: 40 }, { step: 'code_sent', n: '10' }]
+      : q.includes('blob8')
+      ? [{ button: 'start', n: 6 }, { button: 'gone', n: 1 }]
+      : [
+        { step: 'home', n: 40 },
+        { step: 'click', n: 10 },
+        { step: 'code_sent', n: '10' },
+      ]
   )
   try {
     let env = { CF_ANALYTICS_TOKEN: 't', CF_ACCOUNT: 'a' } as Env
     let f = (await funnel(env, 7))!
     let of = Object.fromEntries(f.steps.map((s) => [s.name, s]))
     assertEquals(of.home.n, 40)
+    assertEquals(of.click.share, 0.25)
     assertEquals(of.code_sent.share, 0.25)
     assertEquals(of.signed_in.share, 0)
     // A share of a step nobody took is no share at all.
     assertEquals(of.signup, { name: 'signup', say: 'First sign-ins', n: 0 })
     assertEquals(f.from, [{ site: 'news.example.com', n: 3 }])
-    assertEquals(f.campaigns, [{ campaign: 'meta//pilot', home: 9, signup: 2 }])
+    // A button the page no longer has is no call to action.
+    assertEquals(f.buttons, [
+      { button: 'start', say: 'Start free, in the hero', n: 6 },
+    ])
+    assertEquals(f.campaigns, [
+      { campaign: 'meta//pilot', home: 9, click: 4, signup: 2 },
+    ])
     assertEquals(
       sql.asked.every((q) => q.includes(`index1 = '${FUNNEL}'`)),
       true,
@@ -87,4 +113,63 @@ test('the funnel reads each step, a share of the one it follows, and where visit
     sql.done()
   }
   assertEquals(await funnel({} as Env), null)
+})
+
+// A beacon from the home page, as public/cta.js sends it.
+let beacon = (body: string, headers: Record<string, string> = {}) =>
+  new Request('https://yaks.app/api/click', {
+    method: 'POST',
+    body,
+    headers: {
+      'user-agent': BROWSER,
+      'sec-fetch-site': 'same-origin',
+      cookie: 'yak_came=utm_source=meta&utm_campaign=pilot&at=5',
+      ...headers,
+    },
+  })
+
+test('a click on a call to action is counted by its button and campaign', async () => {
+  let views = dataset()
+  let env = { VIEWS: views } as never
+  let said = await clicked(beacon('start'), env)
+  assertEquals(said.status, 204)
+  assertEquals(views.points.map((p) => p.blobs), [
+    ['', 'click', '/api/click', '', '', 'browser', 'meta//pilot', 'start'],
+  ])
+  // No such button, another site's page, a crawler: answered alike, counted
+  // as nothing.
+  for (
+    let req of [
+      beacon('nope'),
+      beacon('start', { 'sec-fetch-site': 'cross-site' }),
+      beacon('start', { 'user-agent': 'Googlebot/2.1' }),
+    ]
+  ) assertEquals((await clicked(req, env)).status, 204)
+  assertEquals(views.points.length, 1)
+  assertEquals((await clicked(new Request(beacon('x').url), env)).status, 405)
+})
+
+test("each of the home page's calls to action sends its name when clicked", async () => {
+  let { document } = parseHTML(page('index.html'))
+  let named = [...document.querySelectorAll('[data-cta]')]
+  assertEquals(
+    named.map((b) => b.getAttribute('data-cta')),
+    CTAS.map((c) => c.name),
+  )
+  assertEquals(
+    !!document.querySelector('script[src="cta.js"]'),
+    true,
+  )
+  let code = await Deno.readTextFile(
+    new URL('./public/cta.js', import.meta.url),
+  )
+  let on: (e: unknown) => void = () => {}
+  let sent: [string, string][] = []
+  new Function('addEventListener', 'navigator', code)(
+    (_: string, fn: (e: unknown) => void) => on = fn,
+    { sendBeacon: (to: string, name: string) => sent.push([to, name]) },
+  )
+  for (let b of named) on({ target: b.querySelector('*') ?? b })
+  on({ target: document.querySelector('h1') })
+  assertEquals(sent, CTAS.map((c) => ['/api/click', c.name]))
 })

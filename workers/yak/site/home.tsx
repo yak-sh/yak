@@ -144,6 +144,7 @@ export let Home = () => (
       <>
         <script src='carousel.js' defer />
         <script src='wander.js' defer />
+        <script src='cta.js' defer />
         <Data of={data} />
       </>
     }
@@ -162,8 +163,9 @@ export let Home = () => (
           online at your own address.
         </p>
         <div class='Hello_Doors'>
-          <Button mod='go' href='/login'>Start free</Button>{' '}
-          <a href='#examples'>
+          <Button mod='go' href='/login' data-cta='start'>Start free</Button>
+          {' '}
+          <a href='#examples' data-cta='examples'>
             See examples <span aria-hidden='true'>↓</span>
           </a>
         </div>
@@ -393,7 +395,11 @@ export let Home = () => (
               Your own domain, like <b>ourbookclub.com</b>
             </li>
           </ul>{' '}
-          <Button mod='go' href='/login?return=%2Fconnect%23plan'>
+          <Button
+            mod='go'
+            href='/login?return=%2Fconnect%23plan'
+            data-cta='plus'
+          >
             Get Started
           </Button>
         </Card>
@@ -415,7 +421,11 @@ export let Home = () => (
               Your own domain, like <b>ourtownship.org</b>
             </li>
           </ul>{' '}
-          <Button mod='go' href='/login?return=%2Fconnect%23plan'>
+          <Button
+            mod='go'
+            href='/login?return=%2Fconnect%23plan'
+            data-cta='organization'
+          >
             Get Started
           </Button>
         </Card>
@@ -433,7 +443,7 @@ export let Home = () => (
         into the assistant you already use, and describe your first app.
       </p>
       <p class='Join_Doors'>
-        <Button mod='go' href='/login'>Start free</Button>
+        <Button mod='go' href='/login' data-cta='join'>Start free</Button>
       </p>
       <p class='Note Note-small'>Free to start. Setup takes a few minutes.</p>
     </Card>

@@ -45,10 +45,10 @@ export let ours = (
   message != 'Script error.' &&
   (stack.match(ADDRESS) ?? []).some((at) => onApex(at, env))
 
-// Whether a page of ours sent it: the browser says the post is the apex's own,
-// or names the apex as its origin. A page served with `no-referrer` (the
-// sign-in handoff) sends `Origin: null`, but its fetch is still same-origin.
-let fromOurs = (req: Request, env: Host) => {
+/** Whether a page of ours sent it: the browser says the post is the apex's
+ * own, or names the apex as its origin. A page served with `no-referrer` (the
+ * sign-in handoff) sends `Origin: null`, but its fetch is still same-origin. */
+export let fromOurs = (req: Request, env: Host) => {
   let origin = req.headers.get('origin')
   return req.headers.get('sec-fetch-site') == 'same-origin' ||
     !!origin && onApex(origin, env)
