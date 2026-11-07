@@ -277,7 +277,7 @@ export let narrowed = (
     if (!space) throw refuse('missing', `no space ${slug}`)
     return space
   }
-  return {
+  let self: Directory = {
     ...dir,
     space: async (want: string) => {
       if (!eid && want != slug && !letIn.size) return null
@@ -296,6 +296,16 @@ export let narrowed = (
           }
           : {},
       }
+    },
+    // A call naming an app and no space means the narrowed space when no
+    // other space let its holder in (tool.ts `ownSpace`), read as its page.
+    // Spaces it was let into are asked the long way.
+    holding: async (app, person, _over, every) => {
+      if (beyond.length) return null
+      let page = await self.page(slug, app, person, over, every)
+      return page.space && matches(page.space)
+        ? { holding: [page.space], page }
+        : null
     },
     spaces: async (person: string, role?: Role) => [
       ...(await dir.spaces(person, role)).filter(matches),
@@ -334,4 +344,5 @@ export let narrowed = (
     own: narrowedTo,
     narrowedTo,
   }
+  return self
 }

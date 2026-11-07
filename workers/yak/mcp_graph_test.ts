@@ -142,15 +142,21 @@ test('a tool that names one app reads the directory once', async () => {
           jsonrpc: '2.0',
           id: 1,
           method: 'tools/call',
-          params: { name, arguments: { space, app: 'once', ...args } },
+          params: { name, arguments: { app: 'once', ...args } },
         }),
       })
       assertEquals((await r.json()).result.isError, undefined, name)
       return /hops;dur=(\d+)/.exec(r.headers.get('server-timing')!)?.[1]
     }
+    // Named by its space, or by the app alone among the caller's spaces.
     assertEquals(
-      [await hops('app_files', { op: 'list' }), await hops('app_errors', {})],
-      ['2', '3'],
+      [
+        await hops('app_files', { space, op: 'list' }),
+        await hops('app_errors', { space }),
+        await hops('app_files', { op: 'list' }),
+        await hops('app_errors', {}),
+      ],
+      ['2', '3', '2', '3'],
     )
   } finally {
     await k.stop()

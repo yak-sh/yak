@@ -1759,6 +1759,59 @@ let revised = async (via: Fetcher, q: string): Promise<Revised> => {
   return { text, revision: Number(epoch) }
 }
 
+type Page = ReturnType<typeof paged>
+
+// What a page says out of the rows one snapshot answered: the space (its
+// row given), the app at the address, the front page, the roster when
+// `every` app was read, and the asker's seat (`directory.page`).
+let paged = (
+  rows: ReadRow[],
+  space: ReadRow | undefined,
+  app: string | null | undefined,
+  person: string | null | undefined,
+  over: boolean,
+  every: boolean,
+) => {
+  let apps = rows.filter((row) => row.app).map(appOf)
+  // The app living at the address, as `app` asks: not one that left it
+  // (an app's slug falls back to the address it left, `appAbout`), and a
+  // live one before one in the trash that kept it.
+  let here = rows.filter((row) => app && row.app?.slug == app).map(appOf)
+  let member = space &&
+    rows.find((row) =>
+      row.member && idOf(row.member.person) == person &&
+      idOf(row.member.space) == space.entity.eid
+    )?.member
+  return {
+    space: space ? spaceOf(space) : null,
+    app: here.find((one) => !one.trashed) ?? here.at(0) ?? null,
+    home: apps.find((one) => one.home && !one.trashed) ?? null,
+    roster: every ? apps : null,
+    ...person
+      ? {
+        role: member?.role ?? null,
+        ...(over
+          ? {
+            administrative: rows.some((row) =>
+              row.member &&
+              idOf(row.member.person) == person &&
+              row.member.role == 'owner' &&
+              idOf(row.member.space) != space?.entity.eid
+            ) ||
+              space?.space?.slug == META.space && member?.role == 'owner',
+          }
+          : {}),
+        grants: new Map(
+          rows.filter((row) => row.grant).map((row) => [
+            idOf(row.grant!.app),
+            row.grant!.access as Role,
+          ]),
+        ),
+      }
+      : {},
+  }
+}
+
 // Every read carries the directory's revision. The app and the homes it borrows
 // from select declarations written by one directory commit.
 // Address lookups select one app, routing the app and the front page; the
@@ -1910,44 +1963,78 @@ export let directoryRows = (rows: {
       let rows = await query(
         `(.space.slug=${slug}&${SPACE_ABOUT})|(${which}&${ABOUT})${seat}`,
       )
-      let space = rows.find((row) => row.space)
+      return paged(
+        rows,
+        rows.find((row) => row.space),
+        app,
+        person,
+        over,
+        every,
+      )
+    },
+    // The page of the one space among the person's seats holding a live app
+    // at `app`: what a call naming an app and no space means (tool.ts
+    // `ownSpace`), in the same one snapshot as `page`. `holding` is every
+    // such space, so a caller whose two spaces each hold the app is asked
+    // which, and `page` is said only when one does. The meta space is the
+    // platform's, never a space a call means without naming it. Null is a
+    // directory that cannot say it in one read (grants.ts `narrowed`), and
+    // the caller asks the long way.
+    holding: async (
+      app: string,
+      person: string,
+      over = false,
+      every = false,
+    ): Promise<{ holding: Space[]; page: Page | null } | null> => {
+      if (!person) return { holding: [], page: null }
+      let mine = `members_space.member.person=${person}`
+      let held = `apps.app.slug=${app}`
+      let which = every
+        ? `.app&.app.space.${mine}&.app.space.${held}`
+        : `(.app.slug=${app}&.app.space.${mine})|` +
+          `(.app&.home&.app.space.${mine}&.app.space.${held})`
+      let rows = await query(
+        `(.space&.${mine}&.${held}&${SPACE_ABOUT})|(${which}&${ABOUT})` +
+          `|(.member.person=${person})` +
+          `|(.grant.person=${person}&.grant.app.app.space.${held})` +
+          (over ? `|(.space.slug=${META.space})` : ''),
+      )
+      let meta = rows.find((row) => row.space?.slug == META.space)
       let apps = rows.filter((row) => row.app).map(appOf)
-      // The app living at the address, as `app` asks: not one that left it
-      // (an app's slug falls back to the address it left, `appAbout`), and a
-      // live one before one in the trash that kept it.
-      let here = rows.filter((row) => app && row.app?.slug == app).map(appOf)
-      let member = space &&
-        rows.find((row) =>
-          row.member && idOf(row.member.person) == person &&
-          idOf(row.member.space) == space.entity.eid
-        )?.member
+      let holding = rows.filter((row) =>
+        row.space && row !== meta &&
+        apps.some((one) =>
+          one.slug == app && !one.trashed && one.space == row.entity.eid
+        )
+      ).map(spaceOf).filter((space) => !space.trashed)
+      if (holding.length != 1) return { holding, page: null }
+      let [space] = holding
+      // The page's rows: this space's own, and the caller's seat in the
+      // platform's where the door says `over`.
+      let theirs = new Set(
+        apps.filter((one) => one.space == space.eid).map((one) => one.eid),
+      )
+      let here = (eid: Id) =>
+        idOf(eid) == space.eid || over && idOf(eid) == meta?.entity.eid
+      let own = rows.filter((row) =>
+        row.space
+          ? row.entity.eid == space.eid
+          : row.app
+          ? idOf(row.app.space) == space.eid
+          : row.member
+          ? here(row.member.space)
+          : !!row.grant && theirs.has(idOf(row.grant.app))
+      )
       return {
-        space: space ? spaceOf(space) : null,
-        app: here.find((one) => !one.trashed) ?? here.at(0) ?? null,
-        home: apps.find((one) => one.home && !one.trashed) ?? null,
-        roster: every ? apps : null,
-        ...person
-          ? {
-            role: member?.role ?? null,
-            ...(over
-              ? {
-                administrative: rows.some((row) =>
-                  row.member &&
-                  idOf(row.member.person) == person &&
-                  row.member.role == 'owner' &&
-                  idOf(row.member.space) != space?.entity.eid
-                ) ||
-                  slug == META.space && member?.role == 'owner',
-              }
-              : {}),
-            grants: new Map(
-              rows.filter((row) => row.grant).map((row) => [
-                idOf(row.grant!.app),
-                row.grant!.access as Role,
-              ]),
-            ),
-          }
-          : {},
+        holding,
+        page: paged(
+          own,
+          own.find((row) => row.space),
+          app,
+          person,
+          over,
+          every,
+        ),
       }
     },
     // A subdomain the space has left, still pointing at it (T-34658) — what

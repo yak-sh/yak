@@ -302,19 +302,16 @@ export let byCaller = async (ctx: Ctx, who: Who) => ({
 // (grants.ts `narrowed`): after the app, since an app it was let in to work
 // on lives in another space, and before the spaces the person owns, which
 // for an admin's or a PA's Operator are many.
-export let ownSpace = async (ctx: Ctx, app?: unknown) => {
+//
+// `holding` is the spaces holding the app when the directory said them
+// already (`entered`).
+export let ownSpace = async (
+  ctx: Ctx,
+  app?: unknown,
+  holding?: Space[],
+) => {
   if (typeof app == 'string' && app) {
-    let holding: Space[] = []
-    for (let space of await ctx.dir.spaces(ctx.person)) {
-      // An app in the trash does not hold its slug against a live one
-      // (erase.ts, T-34430): it answers nothing anywhere else, and a person
-      // who deleted their `garden` should not be asked which garden they
-      // meant. It is still reachable by naming its space, which is what
-      // `app_restore` says when two of them spell one slug.
-      // Nor does an app of a space in the trash.
-      let here = await ctx.dir.app(space, app)
-      if (here && !here.trashed && !space.trashed) holding.push(space)
-    }
+    holding ??= await held(ctx, app)
     if (holding.length == 1) return holding[0]
     if (holding.length > 1) {
       throw refuse(
@@ -343,6 +340,21 @@ export let ownSpace = async (ctx: Ctx, app?: unknown) => {
       : ctx.dir).own(ctx.person)
   if (ctx.reopen) return (await reacquire(ctx, space, undefined, false)).space
   return space
+}
+
+// The caller's spaces holding a live app at `app`. An app in the trash does
+// not hold its slug against a live one (erase.ts, T-34430): it answers
+// nothing anywhere else, and a person who deleted their `garden` should not
+// be asked which garden they meant. It is still reachable by naming its
+// space, which is what `app_restore` says when two of them spell one slug.
+// Nor does an app of a space in the trash.
+let held = async (ctx: Ctx, app: string) => {
+  let holding: Space[] = []
+  for (let space of await ctx.dir.spaces(ctx.person)) {
+    let here = await ctx.dir.app(space, app)
+    if (here && !here.trashed && !space.trashed) holding.push(space)
+  }
+  return holding
 }
 
 // The platform's admin: an owner of the meta space, the seat every platform
@@ -383,10 +395,17 @@ let spaceOf = async (ctx: Ctx, args: Args) => {
 // The space a call names with the caller's seat in it, its apps (the one it
 // names among them) and, where the door says `over`, whether the caller is
 // the platform's admin: one snapshot of the directory (directory.ts `page`),
-// so a door admits a call in one trip. A space it means without naming, or
-// one found only at an address it has left, is read as `spaceOf` reads it,
-// and the caller's seat after.
+// so a door admits a call in one trip. A call naming an app and no space
+// reads the one space of theirs holding it the same way (directory.ts
+// `holding`). Any other space it means without naming, or one found only at
+// an address it has left, is read as `spaceOf` reads it, and the caller's
+// seat after.
 let entered = async (ctx: Ctx, args: Args, over: boolean, app?: string) => {
+  if (args.space == null && app) {
+    let found = await ctx.dir.holding(app, ctx.person, over, true)
+    if (found?.page?.space) return { space: found.page.space, page: found.page }
+    if (found) return { space: await ownSpace(ctx, app, found.holding) }
+  }
   if (args.space == null) return { space: await spaceOf(ctx, args) }
   let slug = text(args.space, 'space')
   let page = await ctx.dir.page(slug, app ?? null, ctx.person, over, true)
