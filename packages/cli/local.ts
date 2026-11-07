@@ -86,6 +86,8 @@ export let dutiesOf = (
 // duties, leases and sockets run on. A write, and the reads in its own
 // transaction, still run here, and a read sent after a write commits sees it.
 // A passing command opens none; it would wait on the workers starting.
+let HOUR = 60 * 60 * 1000
+
 let lend = (path: string, config: Config) =>
   dbOf(config) != ':memory:' ? readThread(path) : undefined
 
@@ -299,6 +301,13 @@ export let work = async (
       host.stop()
     })
   }, 1000)
+  // What ends while this worker runs is buried within the hour, not at the
+  // next start.
+  let burying = setInterval(() => {
+    void host.bury().catch((error) =>
+      host.report?.(error, { tags: { step: 'bury' } })
+    )
+  }, HOUR)
   let running = Promise.all([host.duties(), reconcile(host.runner)])
   try {
     if (ready) {
@@ -308,6 +317,7 @@ export let work = async (
     await running
   } finally {
     clearInterval(timer)
+    clearInterval(burying)
     if (ready) {
       await disk.remove(ready).catch((error) => {
         if (!(error instanceof disk.errors.NotFound)) throw error

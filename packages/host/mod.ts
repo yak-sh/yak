@@ -228,7 +228,10 @@ export interface Host {
   /** {@link Host.end} for each process on this machine that ended without
    * closing (@yaks/process `vanished`). What a process about to stay up does
    * before it reconciles (@yaks/api `serve`), so a crash leaves nothing held
-   * by the dead. Answers the processes it closed. */
+   * by the dead. Then it looks once more at every workspace process with no
+   * `exit` (@yaks/machine `overdue`), so one whose waiter stopped looking has
+   * its ending recorded. The worker does both on start and every hour.
+   * Answers the processes it closed. */
   bury: () => Promise<Bundle[]>
   /** Whether a lease's holder is over (@yaks/process `gone`): a process on
    * this machine whose pid is gone, or one whose row records its `exit`, as a

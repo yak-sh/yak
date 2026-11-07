@@ -3,6 +3,7 @@ import * as process from '@yaks/process/system'
 import * as disk from '@yaks/file/io'
 import { getStarts } from './get_starts.ts'
 import { workspaceCapabilities } from './workspaces.ts'
+import { overdue } from '@yaks/machine/targets'
 import { resolveHome } from './machines.ts'
 import { sandboxCapabilities } from './sandboxes.ts'
 /**
@@ -680,6 +681,19 @@ let composed = async (
             await host.end(
               b.entity.eid,
               `interrupted: process ${pid} ended without closing`,
+            )
+          }
+          // A workspace command records its ending when it is looked at, and
+          // whoever waited on it may have stopped looking first.
+          if (host.workspaces) {
+            await overdue(
+              g,
+              host.workspaces,
+              (error, workspace) =>
+                report(error, {
+                  during: { process: selfEid() },
+                  tags: { step: 'workspace process look', workspace },
+                }),
             )
           }
           return dead

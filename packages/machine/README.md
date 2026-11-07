@@ -158,6 +158,13 @@ is 5 ms, since a look there is one shell, not a network round trip. A short
 command answers within a fraction of a second; a call waiting on a long one
 costs a look every two seconds. An abort ends only the wait, never the command.
 
+A process's `exit` is written by a look, so a run whose wait ended first (a
+timeout, an abort, the waiting process gone) keeps none until something looks
+again. `overdue(graph, workspaces, failed?)`, exported at
+`@yaks/machine/targets`, looks once at every workspace process with no `exit`,
+skipping a workspace that refuses to connect and passing any other failure to
+`failed`. The `yak` worker runs it on start and every hour (@yaks/host `bury`).
+
 `@yaks/machine/targets` exports `sessionHome(graph, session, workspace, cwd?)`.
 It validates the target and performs a guarded home write; omitting cwd clears
 the old cwd. The harness offers this as `session_home`. A direct graph write can

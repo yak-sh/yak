@@ -10,7 +10,8 @@ import { docs as sessionDocs } from '@yaks/session/vocab'
 import { docs as harnessDocs } from '@yaks/harness/vocab'
 import { machineDoc } from './vocab.ts'
 import { workspacePolicy } from './graph.ts'
-import { processWorkspace, sessionHome, targetFor } from './targets.ts'
+import { overdue, processWorkspace, sessionHome, targetFor } from './targets.ts'
+import { executionWorkspace } from './execution.ts'
 import { workspaceTools } from './tools.ts'
 import type { Workspace } from './workspace.ts'
 
@@ -159,4 +160,68 @@ test('an absent process is a caller refusal, never a local recovery guess', asyn
     'Process launch workspace is unknown',
   )
   ok(error instanceof Refused)
+})
+
+test('a workspace process nobody waited out has its ending recorded by the next look', async () => {
+  let g = graph({ storage: ram(vocab), vocab })
+  let here = mint(), gone = mint(), broken = mint()
+  let ended = mint(),
+    running = mint(),
+    lost = mint(),
+    away = mint(),
+    stuck = mint(),
+    done = mint()
+  // What each run's receipt says, as the look script prints it.
+  let receipts: Record<string, string> = {
+    [ended]: 'exit 3',
+    [running]: 'running 4242',
+    [lost]: 'lost',
+  }
+  let transport = {
+    execute: (script: string) =>
+      Promise.resolve(
+        Object.entries(receipts).find(([id]) => script.includes(id))?.[1] ??
+          'pending',
+      ),
+  }
+  let row = (eid: string, workspace: string) => ({
+    entity: { eid },
+    process: { workspace, command: 'true', cwd: '/' },
+  })
+  await g.apply([
+    row(ended, here),
+    row(running, here),
+    row(lost, here),
+    row(away, gone),
+    row(stuck, broken),
+    { ...row(done, here), exit: { code: 0 } },
+  ])
+  let failures: string[] = []
+  let looked = await overdue(g, {
+    connect: (workspace) => {
+      if (workspace == gone) throw new Refused('released')
+      if (workspace == broken) throw new Error('unreachable')
+      return Promise.resolve(
+        executionWorkspace(g, transport, {
+          workspace,
+          root: '/',
+          receipts: '/receipts',
+        }),
+      )
+    },
+  }, (_, workspace) => failures.push(workspace))
+  let exits = Object.fromEntries(
+    (await g.get([ended, running, lost, away, stuck, done], ['exit']))
+      .map((b) => [b.entity.eid, b.exit ?? null]),
+  )
+  equal(looked, 3)
+  equal(exits, {
+    [ended]: { code: 3 },
+    [running]: null,
+    [lost]: {},
+    [away]: null,
+    [stuck]: null,
+    [done]: { code: 0 },
+  })
+  equal(failures, [broken])
 })

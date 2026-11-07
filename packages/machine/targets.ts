@@ -88,6 +88,40 @@ export let sessionHome = async (
   }])
 }
 
+/**
+ * Look once more at every workspace process with no `exit`. A look records the
+ * ending its receipt holds, so a run whose waiter stopped looking (a shell
+ * call's timeout, an aborted turn, the process that waited ending) gets its
+ * `exit` here. A workspace that refuses to connect (released, its placement
+ * unknown) has nothing to look at; any other failure goes to `failed`, and
+ * the other workspaces are still looked at. Answers how many were looked at.
+ */
+export let overdue = async (
+  g: Graph,
+  workspaces: Workspaces,
+  failed: (error: unknown, workspace: string) => void = () => {},
+): Promise<number> => {
+  let held = new Map<string, string[]>()
+  for (let row of await g.read('.process&!exit')) {
+    let workspace = component(row.process)?.workspace
+    if (typeof workspace != 'string') continue
+    held.set(workspace, [...held.get(workspace) ?? [], row.entity.eid])
+  }
+  let looked = 0
+  for (let [workspace, ids] of held) {
+    try {
+      let machine = await workspaces.connect(workspace)
+      for (let id of ids) {
+        await machine.look(id)
+        looked++
+      }
+    } catch (error) {
+      if (!(error instanceof Refused)) failed(error, workspace)
+    }
+  }
+  return looked
+}
+
 /** Process operations ignore the caller's current home. */
 export let processWorkspace = async (
   g: Graph,
