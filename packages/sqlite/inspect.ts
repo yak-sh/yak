@@ -1,6 +1,7 @@
 // Bounded physical facts about a SQLite store. The caller sees names and
 // counts, never definitions, statement text, or row values.
 
+import { foreign } from './physical.ts'
 import { populations } from './population.ts'
 import { by, col, type Driver, gt, lit, select, table } from '@yaks/sql'
 
@@ -74,7 +75,7 @@ export let inspect = (
   let names = db.query({ t: 'pragma', name: 'table_list' })
     .filter((r) => r.schema == 'main' && r.type == 'table')
     .map((r) => String(r.name))
-    .filter((name) => !/^(_+cf_|sqlite_)/i.test(name))
+    .filter((name) => !foreign(name))
     .sort((a, b) =>
       Number(first.has(b)) - Number(first.has(a)) ||
       a.localeCompare(b)
@@ -119,7 +120,7 @@ export let identity = (db: Driver, eid: string): Identity => {
   let names = db.query({ t: 'pragma', name: 'table_list' })
     .filter((r) => r.schema == 'main' && r.type == 'table')
     .map((r) => String(r.name))
-    .filter((name) => !/^(_+cf_|sqlite_)/i.test(name))
+    .filter((name) => !foreign(name))
     .sort((a, b) =>
       Number(b == 'tombstone') - Number(a == 'tombstone') || a.localeCompare(b)
     )

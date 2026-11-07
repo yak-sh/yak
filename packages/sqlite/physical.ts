@@ -12,6 +12,12 @@ import {
   val,
 } from '@yaks/sql'
 
+/** Whether a table is not the file's own: SQLite's catalogue, or one the host
+ * keeps inside it. A Durable Object's `_cf_KV` and `_cf_METADATA` are listed
+ * by `table_list` like any other, and workerd's authorizer refuses every
+ * statement naming them, a pragma included, with SQLITE_AUTH (T-34019). */
+export let foreign = (name: string): boolean => /^(sqlite_|_+cf_)/i.test(name)
+
 /** Every table the file's schema lists, with the statement it was made by. */
 export let defined: Stmt = select({
   cols: [col('name'), col('sql')],
@@ -231,8 +237,7 @@ export function componentTables(
       .filter((r) => r.schema == 'main' && r.type == 'table')
       .map((r) => String(r.name))
       .filter((name) =>
-        name != 'entity' && !name.startsWith('sqlite_') &&
-        !name.startsWith('_yaks_') && !/^_+cf_/i.test(name)
+        name != 'entity' && !name.startsWith('_yaks_') && !foreign(name)
       )
       .sort()
     held = { revision: current, tables: found, checked: new Map() }

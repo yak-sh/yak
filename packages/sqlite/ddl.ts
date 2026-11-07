@@ -70,7 +70,7 @@ import {
   table,
   val,
 } from '@yaks/sql'
-import { checks, objects, type Stood, stood } from './physical.ts'
+import { checks, foreign, objects, type Stood, stood } from './physical.ts'
 import { unit } from './unit.ts'
 import { clocked, versioned } from './versions.ts'
 import { writtenDdl } from './written.ts'
@@ -896,7 +896,7 @@ let joined = (owed: string[] = [], more: string[]) => [
 let kept = (r: Row) =>
   r.schema == 'main' &&
   (r.type == 'table' || r.type == 'shadow') &&
-  !/^sqlite_|^_+cf_/i.test(String(r.name))
+  !foreign(String(r.name))
 
 /** The tables planner statistics are kept for ({@link analyzed}). */
 export let analyzable = (driver: Driver): string[] =>

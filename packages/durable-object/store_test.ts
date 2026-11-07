@@ -202,3 +202,18 @@ test('an empty identity lookup opens no transaction or SQL statement', () => {
   assertEquals(s.get([]), [])
   assertEquals([transactions, statements], [0, 0])
 })
+
+test("the graves a sweep may prune are found past Cloudflare's own tables", () => {
+  using db = durable()
+  db.beneath({
+    t: 'create table',
+    name: '_cf_KV',
+    cols: [{ name: 'key', type: 'text' }],
+  })
+  let s = storage(db, shop)
+  s.install()
+  s.tx((tx) => tx.patch([{ entity: { eid: 'p1' }, doc: { title: 'Kettle' } }]))
+  s.tx((tx) => tx.remove([{ eid: 'p1' }]))
+  let later = new Date(Date.now() + 60_000).toISOString()
+  assertEquals(s.buried(later, { limit: 9 }), { eids: ['p1'] })
+})

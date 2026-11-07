@@ -29,18 +29,20 @@ import {
 import type { Vocab } from '@yaks/vocab'
 import type { Graves } from '@yaks/graph'
 import { TOMBSTONE } from '@yaks/graph/bundle'
+import { foreign } from './physical.ts'
 
 /** A table and one of its columns that names an identity. */
 export type Referrer = [table: string, column: string]
 
 /** Every column in the file that names an identity: each foreign key to
  * `entity`, wherever it is declared, and each stored `keep` reference. The
- * tombstone's own key is not a referrer. */
+ * tombstone's own key is not a referrer, and a {@link foreign} table is never
+ * asked. */
 export let referrers = (driver: Driver, vocab: Vocab): Referrer[] => {
   let names = driver.query({ t: 'pragma', name: 'table_list' })
     .filter((r) => r.schema == 'main' && r.type == 'table')
     .map((r) => String(r.name))
-    .filter((name) => name != TOMBSTONE && !name.startsWith('sqlite_'))
+    .filter((name) => name != TOMBSTONE && !foreign(name))
   let keyed = names.flatMap((name) =>
     driver.query({ t: 'pragma', name: 'foreign_key_list', arg: name })
       .filter((r) => r.table == 'entity')
