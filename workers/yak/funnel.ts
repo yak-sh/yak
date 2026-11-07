@@ -23,6 +23,7 @@ import {
   SLUG,
   table,
   TOP,
+  VARIANT,
   whole,
 } from './views.ts'
 
@@ -113,13 +114,20 @@ export let sources = (days: number, dataset = DATASET) =>
   `${SLUG} = 'home' AND ${FROM} != '' AND ${CLIENT} = 'browser' ` +
   `GROUP BY site ORDER BY n DESC LIMIT ${TOP}`
 
-/** The campaigns that brought people to the home page, and how many of them
- * clicked a call to action and signed up, busiest first (arrival.ts
- * `campaign`). */
-export let campaigns = (days: number, dataset = DATASET) =>
-  `SELECT ${CAMPAIGN} AS campaign, ${SLUG} AS step, ${COUNT} AS n ` +
+// The home page's visits, clicks and sign-ups by what a step says in
+// `column`, busiest first.
+let by = (column: string) => (days: number, dataset = DATASET) =>
+  `SELECT ${column} AS key, ${SLUG} AS step, ${COUNT} AS n ` +
   `${over(days, dataset)} AND ${SLUG} IN ('home', 'click', 'signup') AND ` +
-  `${CAMPAIGN} != '' GROUP BY campaign, step ORDER BY n DESC LIMIT ${TOP * 3}`
+  `${column} != '' GROUP BY key, step ORDER BY n DESC LIMIT ${TOP * 3}`
+
+/** The campaigns that brought people to the home page, and how many of them
+ * clicked a call to action and signed up (arrival.ts `campaign`). */
+export let campaigns = by(CAMPAIGN)
+
+/** The home page variants visitors were shown, and how many of them clicked a
+ * call to action and signed up (variant.ts). */
+export let variants = by(VARIANT)
 
 /** How many times each call to action was clicked, busiest first. */
 export let buttons = (days: number, dataset = DATASET) =>
@@ -134,13 +142,24 @@ export type Funnel = {
   steps: Count[]
   from: { site: string; n: number }[]
   buttons: { button: string; say: string; n: number }[]
-  campaigns: {
-    campaign: string
-    home: number
-    click: number
-    signup: number
-  }[]
+  campaigns: Split[]
+  variants: Split[]
 }
+
+/** The home page's visits, clicks and sign-ups under one campaign or
+ * variant. */
+export type Split = {
+  name: string
+  home: number
+  click: number
+  signup: number
+}
+
+let split = (rows: Record<string, unknown>[]): Split[] =>
+  [...Map.groupBy(rows, (r) => String(r.key))].map(([name, rows]) => {
+    let n = (step: string) => Number(rows.find((r) => r.step == step)?.n) || 0
+    return { name, home: n('home'), click: n('click'), signup: n('signup') }
+  })
 
 /** The funnel over the last `days`, from the counts as the SQL API answers
  * them: a step nobody took is a zero, not a gap. */
@@ -150,6 +169,7 @@ export let shaped = (
   from: Record<string, unknown>[] = [],
   by: Record<string, unknown>[] = [],
   pressed: Record<string, unknown>[] = [],
+  shown: Record<string, unknown>[] = [],
 ): Funnel => {
   let had = new Map(rows.map((r) => [String(r.step), Number(r.n) || 0]))
   let n = (name: string) => had.get(name) ?? 0
@@ -168,17 +188,8 @@ export let shaped = (
         ? [{ button: cta.name, say: cta.say, n: Number(r.n) || 0 }]
         : []
     }),
-    campaigns: [...Map.groupBy(by, (r) => String(r.campaign))].map((
-      [campaign, rows],
-    ) => {
-      let n = (step: string) => Number(rows.find((r) => r.step == step)?.n) || 0
-      return {
-        campaign,
-        home: n('home'),
-        click: n('click'),
-        signup: n('signup'),
-      }
-    }),
+    campaigns: split(by),
+    variants: split(shown),
   }
 }
 
@@ -188,11 +199,12 @@ export let funnel = async (env: Env, days = 7): Promise<Funnel | null> => {
   if (!env.CF_ANALYTICS_TOKEN || !env.CF_ACCOUNT) return null
   let window = whole(days, KEPT_DAYS)
   let dataset = env.VIEWS_DATASET ?? DATASET
-  let [rows, from, by, pressed] = await Promise.all([
+  let [rows, from, by, pressed, shown] = await Promise.all([
     ran(env, counts(window, dataset)),
     ran(env, sources(window, dataset)),
     ran(env, campaigns(window, dataset)),
     ran(env, buttons(window, dataset)),
+    ran(env, variants(window, dataset)),
   ])
-  return shaped(window, rows, from, by, pressed)
+  return shaped(window, rows, from, by, pressed, shown)
 }

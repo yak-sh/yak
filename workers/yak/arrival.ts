@@ -7,7 +7,8 @@
 //
 // The funnel counts its steps by the campaign (funnel.ts), and an ad network is
 // told of a visit its click brought (conversions.ts). Nothing here imports past
-// this file, so yak-front (front/) holds it.
+// lib/cookie.ts, so yak-front (front/) holds it.
+import { cookieValue } from './lib/cookie.ts'
 
 /** The cookie an arrival is kept in, apart from the session's. */
 export let COOKIE = 'yak_came'
@@ -45,14 +46,6 @@ export let cameFrom = (url: URL, now = Date.now()): Came | null => {
   return Object.keys(said).length ? { at: now, said } : null
 }
 
-let cookieOf = (header: string | null) => {
-  for (let part of (header ?? '').split(';')) {
-    let [k, ...v] = part.trim().split('=')
-    if (k == COOKIE) return v.join('=')
-  }
-  return null
-}
-
 let read = (value: string): Came | null => {
   let q = new URLSearchParams(value), at = Number(q.get('at'))
   q.delete('at')
@@ -70,7 +63,7 @@ let landing = (req: Request) => {
 
 /** The arrival a request carries: its own address's, else its cookie's. */
 export let arrival = (req: Request): Came | null => {
-  let cookie = cookieOf(req.headers.get('cookie'))
+  let cookie = cookieValue(req.headers.get('cookie'), COOKIE)
   return landing(req) ?? (cookie ? read(cookie) : null)
 }
 

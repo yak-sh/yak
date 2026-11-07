@@ -812,17 +812,22 @@ let funnelPage = (
           facts(f.buttons.map((r) => [r.say, String(r.n)])),
         )
         : null,
-      f.campaigns.length
-        ? h(
-          Fragment,
-          null,
-          h(Group, null, 'Came from campaigns'),
-          facts(f.campaigns.map((r) => [
-            r.campaign,
-            `${r.home} visits · ${r.click} clicks · ${r.signup} sign-ups`,
-          ])),
-        )
-        : null,
+      ...([
+        ['Came from campaigns', f.campaigns],
+        ['Home page variants', f.variants],
+      ] as const).map(([say, all]) =>
+        all.length
+          ? h(
+            Fragment,
+            null,
+            h(Group, null, say),
+            facts(all.map((r) => [
+              r.name,
+              `${r.home} visits · ${r.click} clicks · ${r.signup} sign-ups`,
+            ])),
+          )
+          : null
+      ),
     )
   return desk(
     d,

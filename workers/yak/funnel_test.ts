@@ -36,12 +36,13 @@ test('a step is written under the platform, saying what a view says and its camp
         'browser',
         '',
         '',
+        '',
       ],
       doubles: [0],
     },
     {
       indexes: [FUNNEL],
-      blobs: ['', 'returned', '', '', '', '', '', ''],
+      blobs: ['', 'returned', '', '', '', '', '', '', ''],
       doubles: [0],
     },
     {
@@ -54,6 +55,7 @@ test('a step is written under the platform, saying what a view says and its camp
         'news.example.com',
         'browser',
         'meta//pilot',
+        '',
         '',
       ],
       doubles: [0],
@@ -75,9 +77,16 @@ test('the funnel reads each step, a share of the one it follows, and where visit
       ? [{ site: 'news.example.com', n: 3 }]
       : q.includes('blob7')
       ? [
-        { campaign: 'meta//pilot', step: 'home', n: 9 },
-        { campaign: 'meta//pilot', step: 'click', n: 4 },
-        { campaign: 'meta//pilot', step: 'signup', n: '2' },
+        { key: 'meta//pilot', step: 'home', n: 9 },
+        { key: 'meta//pilot', step: 'click', n: 4 },
+        { key: 'meta//pilot', step: 'signup', n: '2' },
+      ]
+      : q.includes('blob9')
+      ? [
+        { key: 'ask', step: 'home', n: 20 },
+        { key: 'operator', step: 'home', n: 18 },
+        { key: 'operator', step: 'click', n: 5 },
+        { key: 'operator', step: 'signup', n: 3 },
       ]
       : q.includes('blob8')
       ? [{ button: 'start', n: 6 }, { button: 'gone', n: 1 }]
@@ -103,7 +112,11 @@ test('the funnel reads each step, a share of the one it follows, and where visit
       { button: 'start', say: 'Start free, in the hero', n: 6 },
     ])
     assertEquals(f.campaigns, [
-      { campaign: 'meta//pilot', home: 9, click: 4, signup: 2 },
+      { name: 'meta//pilot', home: 9, click: 4, signup: 2 },
+    ])
+    assertEquals(f.variants, [
+      { name: 'ask', home: 20, click: 0, signup: 0 },
+      { name: 'operator', home: 18, click: 5, signup: 3 },
     ])
     assertEquals(
       sql.asked.every((q) => q.includes(`index1 = '${FUNNEL}'`)),
@@ -134,7 +147,7 @@ test('a click on a call to action is counted by its button and campaign', async 
   let said = await clicked(beacon('start'), env)
   assertEquals(said.status, 204)
   assertEquals(views.points.map((p) => p.blobs), [
-    ['', 'click', '/api/click', '', '', 'browser', 'meta//pilot', 'start'],
+    ['', 'click', '/api/click', '', '', 'browser', 'meta//pilot', 'start', ''],
   ])
   // No such button, another site's page, a crawler: answered alike, counted
   // as nothing.

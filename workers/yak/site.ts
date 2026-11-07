@@ -30,6 +30,7 @@ import { cardTag, SITE_TAG } from './purge.ts'
 import { sheeted } from './sheets.ts'
 import { type Clock, clock, timed } from './timing.ts'
 import { COUNTED, counted } from './views.ts'
+import { PATHS } from './variant.ts'
 
 let uncached = (page: Response) => {
   let headers = new Headers(page.headers)
@@ -112,9 +113,10 @@ let rendered = async (
     page = await c.time('listed', () => dir.integrations())
       .then((all) => integrations(all, env))
   } else {
+    // A home page variant (variant.ts): its own file, with the showcase.
     let file = await c.time(
       'assets',
-      () => env.ASSETS.fetch(new Request(url(env, '/'))),
+      () => env.ASSETS.fetch(new Request(url(env, path))),
     )
     page = file.status == 404
       ? lost(env)
@@ -183,7 +185,7 @@ export let validated = async (
   // listing change purges these pages through the directory's usual hook.
   headers.set('cache-control', KEPT)
   headers.set('cache-tag', SITE_TAG)
-  if (path == '/' && env.CF_VERSION_METADATA) {
+  if (PATHS.includes(path) && env.CF_VERSION_METADATA) {
     headers.set('x-yak-version', env.CF_VERSION_METADATA.id)
   }
   // A revalidation must replace deployment metadata even when the page's

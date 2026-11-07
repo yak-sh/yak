@@ -8,6 +8,7 @@ import { assetPath } from './asset_url.ts'
 import { matches } from './public-cache.ts'
 import type { Fetcher } from './env.ts'
 import { bearing, MOUNT } from './route.ts'
+import { PATHS, shown } from './variant.ts'
 
 // How long Site holds an answer before asking again, and how long past that a
 // visitor may still be answered from it while it is asked (stale while it
@@ -198,8 +199,9 @@ export let asked = async (
 
 // ---- the apex's listings ---------------------------------------------------
 
-/** The apex's pages Site keeps; the review and identity doors stay uncached. */
-export let LISTINGS = ['/', '/gallery', '/integrations']
+/** The apex's pages Site keeps, each home page variant's among them
+ * (variant.ts); the review and identity doors stay uncached. */
+export let LISTINGS = [...new Set([...PATHS, '/gallery', '/integrations'])]
 
 /** Where the gallery serves an app's chosen screenshot by its sha (gallery.ts
  * `image`). Site keeps each beside the listings that show it, and a listing
@@ -209,6 +211,11 @@ export let PICTURES = '/gallery/image/'
 /** Whether Site keeps this apex path: a listing, or a picture one shows. */
 export let isListing = (path: string) =>
   LISTINGS.includes(path) || path.startsWith(PICTURES)
+
+/** The listing a visit to this apex path is answered with: the home page
+ * variant its visitor is shown (variant.ts) for `/`, else the path's own. */
+export let listed = (req: Request, path: string) =>
+  path == '/' ? shown(req).path : path
 
 /** Where Site keeps one of them. The hostname is a placeholder for a service
  * binding; the apex is in the path because Workers Caching keys by path and

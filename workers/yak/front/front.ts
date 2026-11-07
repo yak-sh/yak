@@ -17,6 +17,7 @@ import { apex, type Host } from '../host.ts'
 import {
   asked,
   isListing,
+  listed,
   listing,
   remember,
   scope,
@@ -34,6 +35,7 @@ import {
 } from '../view-point.ts'
 import { type Conversion, conversionOf, keep } from '../arrival.ts'
 import { foreign, platform, spaceDoor } from '../route.ts'
+import * as variant from '../variant.ts'
 
 export type Lent = { waitUntil: (work: Promise<unknown>) => void }
 
@@ -142,7 +144,7 @@ export let kept = (
   ) return null
   if (host == apex(env)) {
     if (!isListing(path)) return null
-    return listing(req, env.SITE, apex(env), path).then((page) => {
+    return listing(req, env.SITE, apex(env), listed(req, path)).then((page) => {
       if (page.status >= 500) return null
       // A visit to the home page is the funnel's first step (funnel.ts).
       if (env.VIEWS && isHome(req, path, page)) {
@@ -156,7 +158,7 @@ export let kept = (
           env.ADS!.told(c).catch((e) => report(e, env, ctx, 'front ads', req)),
         )
       }
-      return keep(req, page)
+      return variant.keep(req, keep(req, page))
     })
   }
   // `x.y.yaks.app` is the kernel's to say what it is (route.ts `route`).

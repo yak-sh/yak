@@ -105,7 +105,7 @@ import * as docs from './docs.ts'
 import * as gallery from './gallery.ts'
 import * as appPage from './app-page.ts'
 import { call } from './tools.ts'
-import { isListing } from './kept-page.ts'
+import { isListing, listed } from './kept-page.ts'
 import { HANDOFF } from './handoff.ts'
 import { apex, hosted, url } from './host.ts'
 import { named } from './sheets.ts'
@@ -139,6 +139,7 @@ import * as site from './site.ts'
 import * as funnel from './funnel.ts'
 import { isHome, isPage } from './view-point.ts'
 import { keep } from './arrival.ts'
+import * as variant from './variant.ts'
 import * as ads from './ads.ts'
 import { fault, refusal } from './unseen.ts'
 
@@ -306,7 +307,7 @@ let serve = async (req: Request, env: Env, r: Route) => {
   // The apex's public pages are cached behind a separate entrypoint; only
   // these paths reach it, without credentials or unbounded query strings.
   if ((req.method == 'GET' || req.method == 'HEAD') && isListing(path)) {
-    let page = await site.forward(req, env, path)
+    let page = await site.forward(req, env, listed(req, path))
     if (isHome(req, path, page)) funnel.step(env, 'home', req)
     return seen(req, env, page)
   }
@@ -377,7 +378,7 @@ let serve = async (req: Request, env: Env, r: Route) => {
 // (arrival.ts), and tells the ad network whose click brought it (ads.ts).
 let seen = (req: Request, env: Env, page: Response) => {
   if (isPage(req, page)) ads.after(env, 'view', req)
-  return keep(req, page)
+  return variant.keep(req, keep(req, page))
 }
 
 // A foreign host that has reached the Worker (route.ts origin, T-33036) but
