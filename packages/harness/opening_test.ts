@@ -20,7 +20,7 @@ test('native openings distinguish people and their commands from automated calle
       let [caller, operator] of [
         [{}, true],
         [{ by: 'person' }, true],
-        [{ by: h.me, via: h.me }, true],
+        [{ via: h.me }, true],
         [{ by: 'agent' }, false],
         [{ by: 'person', via: 'agent' }, false],
         [{ by: 'effect' }, false],

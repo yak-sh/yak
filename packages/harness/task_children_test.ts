@@ -391,10 +391,12 @@ for (let writer of ['p', 'child', 'other', 'external']) {
       await h.fx.idle()
       let [work] = await h.g.read('.task&*')
       let stamp = work.completed as Comp
-      // The host writes as itself; a session working for nobody leaves `by`
-      // unsaid, whatever its bundle claimed, and names itself in `via`.
-      if (writer == 'external') assertEquals(stamp.by, h.me)
-      else assertEquals([stamp.by ?? null, stamp.via], [null, actor])
+      // The host and a session working for nobody both leave `by` unsaid,
+      // whatever a bundle claimed, and name their instrument in `via`.
+      assertEquals([stamp.by ?? null, stamp.via], [
+        null,
+        writer == 'external' ? h.me : actor,
+      ])
       let receiptId = derivedEid('delivery:' + child + ':task:work:done')
       assertEquals(
         (await transcript(h.g, 'p')).some((b) => b.entity.eid == receiptId),

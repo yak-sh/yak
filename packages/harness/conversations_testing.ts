@@ -111,7 +111,8 @@ export let conversationFixture = async () => {
     graph: h.g,
     sessions: h.g,
     tools,
-    authenticate: () => ({ by: h.me, via: h.me }),
+    authenticate: () => ({ via: h.me }),
+    me: h.me,
   })
   let request = async (name: string, args: Record<string, unknown> = {}) => {
     let res = await handler(

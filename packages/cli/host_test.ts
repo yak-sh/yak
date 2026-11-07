@@ -48,6 +48,8 @@ import { parse as parseToml } from 'smol-toml'
 // The host of these tests, as its own writes are signed: this process, whose
 // row every composition here writes on the way in.
 let me = selfEid()
+// Who a stamp says wrote a row, and through what.
+let through = (c: Comp) => [c.by, c.via]
 let ana = {
   by: '00000000-0000-4000-8000-000000000001',
   via: '00000000-0000-4000-8000-000000000002',
@@ -281,7 +283,7 @@ test('compose takes each facet from its own subpath, and mounts the doors', asyn
     assertEquals(applied.status, 200)
     // The door signs what it applied with the identity it authenticated,
     // whatever the client said about itself.
-    assertEquals((await applied.json())[0].created.by, me)
+    assertEquals(through((await applied.json())[0].created), [undefined, me])
 
     let found = await serving(host)(new Request('http://h/query?q=.book'))
     assertEquals((await found.json())[0].book.title, 'Spring')
@@ -461,7 +463,7 @@ test('a host that names itself writes as itself, and a plugin may say who else',
     }
 
     let stamp = (b: Bundle) => b.created as Comp
-    assertEquals(stamp((await wrote())[0]).by, me)
+    assertEquals(through(stamp((await wrote())[0])), [undefined, me])
     assertEquals(
       stamp((await wrote({ authorization: 'Bearer t' }))[0]).by,
       ana.by,
@@ -469,7 +471,7 @@ test('a host that names itself writes as itself, and a plugin may say who else',
     // And what the host writes with nobody at any door at all — an effect, a
     // boot pass — is signed the same way.
     let [own] = await host.graph.apply([{ entity: { eid: 'b9' }, book: {} }])
-    assertEquals((own.created as Comp).by, me)
+    assertEquals(through(own.created as Comp), [undefined, me])
   } finally {
     host.close()
   }
@@ -496,9 +498,10 @@ test('a command line writes as the session it names, through the same door as HT
         ...await signer(host, via, typed),
       })).find((b) => b.book)?.created as Comp
     assertEquals((await add('her-run')).by, ana.by)
-    // A run the door does not know, or none at all, is this process's writing.
-    assertEquals((await add('nobody')).by, me)
-    assertEquals((await add()).by, me)
+    // A run the door does not know, or none at all, is nobody's writing
+    // through this process.
+    assertEquals(through(await add('nobody')), [undefined, me])
+    assertEquals(through(await add()), [undefined, me])
     // A line typed at a terminal, naming no session, is the config's person's;
     // a session typed into a terminal is still that session's.
     assertEquals((await add(undefined, true)).by, jo)
@@ -551,9 +554,10 @@ test('a process writes itself in, signs with that row, and stamps its exit', asy
     let [row] = await host.graph.read(`.process&?created&?exit`)
     assertEquals(row.entity.eid, me)
     assertEquals((row.process as Comp).pid, Deno.pid)
-    // …and the row is its own author: a process signs everything it writes,
-    // itself first, so `created.by` is never an id nothing minted.
-    assertEquals((row.created as Comp).by, me)
+    // …and the row came through itself: a process is the instrument of
+    // everything it writes, itself first, so `created.via` is never an id
+    // nothing minted, and it acts for nobody, so `created.by` is empty.
+    assertEquals(through(row.created as Comp), [undefined, me])
     assertEquals(row.exit, undefined)
   } finally {
     await host.close(7)
