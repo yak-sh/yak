@@ -59,7 +59,7 @@ import {
 import { BUILD, DIRTY, TABLE } from './ddl.ts'
 import { admitted, current } from './native.ts'
 import type { Near } from './near.ts'
-import { cosine, floats } from './vector.ts'
+import { code, cosine, floats } from './vector.ts'
 
 /** How many bytes of vectors this process holds across every copy: 48 MB of
  * a Worker isolate's 128 MB, which every object in it shares. */
@@ -89,27 +89,6 @@ export type Held = {
   scales: Float32Array
   codes: Int8Array
   slot: Map<number, number>
-}
-
-// Code `v` into `codes` from `at`: each coordinate over the largest, rounded
-// to one of 255 steps from -127 to 127. Returns the scale that turns the
-// codes' dot product with a query back into cosine times the query's length;
-// 0 for a vector with no direction.
-let code = (v: Float32Array, codes: Int8Array, at = 0): number => {
-  let max = 0, sum = 0, dim = v.length
-  for (let j = 0; j < dim; j++) {
-    let x = v[j]
-    sum += x * x
-    if (x > max) max = x
-    else if (-x > max) max = -x
-  }
-  if (!max) {
-    codes.fill(0, at, at + dim)
-    return 0
-  }
-  let k = 127 / max
-  for (let j = 0; j < dim; j++) codes[at + j] = Math.round(v[j] * k)
-  return max / 127 / Math.sqrt(sum)
 }
 
 // The first `size` coded vectors' scores against `query`: each one's codes'

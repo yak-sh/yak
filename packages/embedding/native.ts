@@ -1,5 +1,7 @@
-// Exact sqlite-vector scans over canonical vectors. Native distance work
-// stays inside the engine; no derived index is rebuilt under the graph lock.
+// Exact sqlite-vector scans over stored vectors, or over their int8 codes once
+// every vector has them (./coded.ts), the pool then scored from the floats
+// (./near.ts). Native distance work stays inside the engine; no derived index
+// is rebuilt under the graph lock.
 import {
   and,
   as,
@@ -20,8 +22,9 @@ import {
   table,
   val,
 } from '@yaks/sql'
-import { BUILD, DIRTY, TABLE } from './ddl.ts'
-import { pack } from './vector.ts'
+import { BUILD, CODE, DIRTY, TABLE } from './ddl.ts'
+import { coded, pack } from './vector.ts'
+import { complete } from './coded.ts'
 
 /** Explicit one-time installation: back up the database before calling this
  * on shared storage. The adapter loads its vector facility, which adds the
@@ -109,8 +112,8 @@ export let state = (db: Statements): State => ({
   dirty: db.ownership == 'exclusive' ? tally(db, DIRTY) : 0,
 })
 
-// The shape registered on one connection.
-type Conn = { dim: number }
+// The shapes registered on one connection: the floats', and the codes'.
+type Conn = { dim: number; codes: number }
 let conns = new WeakMap<Statements, Conn>()
 
 // This connection's state, loading the extension the first time, or null
@@ -121,14 +124,18 @@ let conn = (db: Statements): Conn | null => {
   if (had) return had
   if (!db.facilities?.vector || !installed(db)) return null
   install(db)
-  let made = { dim: 0 }
+  let made = { dim: 0, codes: 0 }
   conns.set(db, made)
   return made
 }
 
-let ask = (db: Statements, name: string, ...args: (string | number)[]) =>
+let ask = (
+  db: Statements,
+  name: string,
+  ...args: (string | number)[]
+) =>
   db.query(select({
-    cols: [as(fn(name, lit(TABLE), lit('vec'), ...args.map(lit)), 'out')],
+    cols: [as(fn(name, ...args.map(lit)), 'out')],
   }))[0]?.out
 
 // The table set up on this connection at a dimension, once: sqlite-vector
@@ -138,11 +145,28 @@ let init = (db: Statements, c: Conn, dim: number): boolean => {
     ask(
       db,
       'vector_init',
+      TABLE,
+      'vec',
       `type=FLOAT32,dimension=${dim},distance=COSINE`,
     )
     c.dim = dim
   }
   return c.dim == dim
+}
+
+// The codes' table set up the same way, at the floats' dimension.
+let initCodes = (db: Statements, c: Conn, dim: number): boolean => {
+  if (!c.codes) {
+    ask(
+      db,
+      'vector_init',
+      CODE,
+      'code',
+      `type=INT8,dimension=${dim},distance=COSINE`,
+    )
+    c.codes = dim
+  }
+  return c.codes == dim
 }
 
 /** Register the vector shape once, before read-only connections use it. */
@@ -187,7 +211,8 @@ let few = (db: Statements, within: Raw): boolean => {
   ) <= limit
 }
 
-/** Exact native candidates, screened before the result is limited. Small
+/** Native candidates, screened before the result is limited: the exact
+ * nearest pool, or the nearest by codes, which the floats then rank. Small
  * screens use the ordinary vector reader to avoid scanning the whole corpus. */
 export let candidates = (
   db: Statements,
@@ -197,13 +222,17 @@ export let candidates = (
   let c = conn(db)
   if (!c || (opts.within && few(db, opts.within))) return null
   if (only(db) != opts.model || !init(db, c, query.length)) return null
+  // The codes, where every vector has them: a fifth of the bytes to read.
+  let [name, column, probe] = complete(db) && initCodes(db, c, query.length)
+    ? [CODE, 'code', coded(query)]
+    : [TABLE, 'vec', pack(query)]
   let v = (name: string) => col(name, 'v')
   let scan = {
     cols: [as(v('id'), 'owner'), as(v('distance'), 'distance')],
     from: call('vector_full_scan', [
-      lit(TABLE),
-      lit('vec'),
-      val(pack(query)),
+      lit(name),
+      lit(column),
+      val(probe),
     ], 'v'),
     where: opts.within ? admitted(opts.within, v('id')) : undefined,
     order: [v('distance'), v('id')],

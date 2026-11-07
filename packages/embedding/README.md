@@ -290,10 +290,11 @@ work stays queued.
 
 `drain(db, fields, embedder, { batch?, signal? })` sweeps pass after pass until
 nothing is owed, registering the native scan or folding the pass into the
-vectors held in memory after each (below), and returns `{ fresh, refused }`: the
-service's loop is a drain and a wait, and a host with nothing standing between
-requests (a Durable Object sleeps) drains once a write commits. An aborted
-`signal` stops it after the pass it is in.
+vectors held in memory after each (below), then codes every vector that has no
+int8 codes (Native scans), and returns `{ fresh, refused }`: the service's loop
+is a drain and a wait, and a host with nothing standing between requests (a
+Durable Object sleeps) drains once a write commits. An aborted `signal` stops it
+after the pass it is in.
 
 A model that does not answer is an outage the drains ride out: its texts stay
 owed, are still found by their words, and are embedded by the first drain after
@@ -394,17 +395,28 @@ another ranking; it receives the same screen.
 
 ## Native scans
 
-The native `vector_full_scan` reads canonical float vectors. The screen and
-exclusion of deleted entities apply before candidates are limited. Writes are
-visible immediately, including those made by another connection. There is no
-quantized index or rebuild on the write path.
+The native `vector_full_scan` reads each vector's int8 codes on shared storage,
+and the float vectors where some vector has none yet. The screen and exclusion
+of deleted entities apply before candidates are limited, and the pool is ranked
+by its float vectors. Writes are visible immediately, including those made by
+another connection. There is no quantized index or rebuild on the write path.
+
+The codes live in `embedding_code`, one row per vector: each coordinate over the
+vector's largest in 127 steps, whose cosine is the vector's within a step. A row
+takes 384 bytes at 384 dimensions where the floats take 1,536 and only two fit a
+4 KB page, so a scan whose pages the box's cache has let go reads a fifth as
+much from disk: 577 MB of floats for 282k vectors, against about 115 MB of
+codes. The sweep codes each vector it stores, triggers delete a vector's codes
+when it changes or goes, and `drain` codes whatever has none (`heal`: vectors
+another writer stored, or stored before the table existed). A search uses the
+codes once there are as many as vectors.
 
 A read-only probe of 202,852 stored 384-dimensional vectors took 513–585 ms for
-a warm broad top-eight search and 592 ms with a task filter. Cold calls under
-concurrent migration and database load took up to 13.4 s. A full index rebuild
-held the live worker for 27.9 s. Exact scans trade broad-search latency for
-predictable writes and exact ranking. Narrow screens keep the direct vector
-reader.
+a warm broad top-eight search over the floats and 592 ms with a task filter.
+Cold calls under concurrent migration and database load took up to 13.4 s, and a
+search by meaning on the box once took 11 s waiting on disk. A full index
+rebuild held the live worker for 27.9 s. Exact scans trade broad-search latency
+for predictable writes. Narrow screens keep the direct vector reader.
 
 `installNative(db)` loads the storage adapter's vector facility once on a
 writable database. `prepare(db)` registers its vector shape before read-only

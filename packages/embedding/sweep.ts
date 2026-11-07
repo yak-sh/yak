@@ -41,6 +41,7 @@ import { type Due, due, left, owe, paid, watch } from './owed.ts'
 import { pack, unit } from './vector.ts'
 import { prepare } from './native.ts'
 import { absorb } from './held.ts'
+import { heal, put as code } from './coded.ts'
 
 /** How many queued entities one sweep takes by default. */
 export let BATCH = 64
@@ -229,6 +230,7 @@ export let put = (
   vec: Float32Array,
 ): void => {
   let fresh = (k: string) => col(k, 'excluded')
+  let stored = unit(vec)
   db.query({
     t: 'insert',
     into: TABLE,
@@ -237,7 +239,7 @@ export let put = (
       val(owner),
       val(model),
       val(hash(model, text)),
-      val(pack(unit(vec))),
+      val(pack(stored)),
     ]],
     upsert: [{
       on: [col('owner')],
@@ -249,6 +251,7 @@ export let put = (
       },
     }],
   })
+  code(db, owner, stored)
 }
 
 // Delete one entity's vector: it has no text to make one from, or its text
@@ -372,13 +375,17 @@ export let sweep = async (
   return { fresh: todo.length - refused.length, left: left(db), refused }
 }
 
+// A turn for the rest of the thread between batches of codes.
+let pause = () => new Promise((done) => setTimeout(done, 0))
+
 /** What one {@link drain} did: how many vectors it made, and the texts the
  * embedder refused. */
 export type Drained = { fresh: number; refused: Swept['refused'] }
 
 /**
- * Sweep pass after pass until nothing is owed, and stop, folding each pass into
- * the vectors this process holds (./held.ts `absorb`). A
+ * Sweep pass after pass until nothing is owed, folding each pass into the
+ * vectors this process holds (./held.ts `absorb`), then code every vector that
+ * has no codes (./coded.ts), and stop. A
  * host with nothing standing between requests (a Durable Object sleeps) runs
  * this when a write asks; the service (./service.ts) runs it, then waits. An
  * aborted `signal` stops it after the pass it is in. An embedder that cannot
@@ -404,6 +411,10 @@ export let drain = async (
     done.refused.push(...swept.refused)
     prepare(db)
     absorb(db)
-    if (!swept.left || opts.signal?.aborted) return done
+    if (opts.signal?.aborted) return done
+    if (!swept.left) {
+      while (heal(db) && !opts.signal?.aborted) await pause()
+      return done
+    }
   }
 }

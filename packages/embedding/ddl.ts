@@ -1,6 +1,7 @@
 // Canonical vectors, exclusive-reader cache generations, and the embedding
-// queue. Shared readers scan canonical vectors directly; only exclusive stores
-// track changes for their process-local HELD cache.
+// queue. Shared readers scan each vector's int8 codes natively, a fifth of the
+// bytes the floats take, and score the nearest few from their floats; only
+// exclusive stores track changes for their process-local HELD cache.
 
 import {
   col,
@@ -21,6 +22,12 @@ export let BUILD = 'embedding_build'
 
 /** Vectors changed since the exclusive reader refreshed its cache. */
 export let DIRTY = 'embedding_dirty'
+
+/** Each vector's int8 codes, on shared storage. A row is the codes of the
+ * vector its owner holds now: triggers delete it when that vector changes or
+ * goes, so the table only ever lacks codes, and a scan uses it once it has as
+ * many rows as the vectors (./coded.ts). */
+export let CODE = 'embedding_code'
 
 /** The queue's name: one row per entity owed a look, and how many writes have
  * queued it since it was last settled. */
@@ -45,6 +52,22 @@ let triggers = (['insert', 'update', 'delete'] as const).map((
     upsert: [{ on: [col('owner')] }],
   }],
 }))
+
+// A vector's codes go with the vector they were made from, whoever writes it.
+let stale = (event: 'update' | 'delete'): CreateTrigger => ({
+  t: 'create trigger',
+  name: `${CODE}_stale_${event}`,
+  ifNot: true,
+  timing: 'after',
+  event,
+  ...event == 'update' ? { of: ['vec'] } : {},
+  on: TABLE,
+  body: [{
+    t: 'delete',
+    from: CODE,
+    where: eq(col('owner'), col('owner', 'old')),
+  }],
+})
 
 /**
  * Heal a store whose vector tables were made while their key was named
@@ -116,7 +139,7 @@ export let schema = (
     cols: ['id', 'n'],
     rows: [[lit(1), lit(0)]],
   },
-  ...(ownership == 'exclusive' ? tracked() : []),
+  ...(ownership == 'exclusive' ? tracked() : coded()),
   {
     t: 'create table',
     name: OWED,
@@ -134,3 +157,30 @@ let tracked = (): Stmt[] => [{
   ifNot: true,
   cols: [{ name: 'owner', type: 'integer', pk: true }],
 }, ...triggers]
+
+let coded = (): Stmt[] => [
+  {
+    t: 'create table',
+    name: CODE,
+    ifNot: true,
+    cols: [
+      {
+        name: 'owner',
+        type: 'integer',
+        pk: true,
+        ref: { table: 'entity', cols: ['id'] },
+      },
+      { name: 'code', type: 'blob', notNull: true },
+    ],
+  },
+  {
+    // What counting the codes reads: a few bytes a row, not the codes.
+    t: 'create index',
+    name: `${CODE}_owner`,
+    on: CODE,
+    cols: [col('owner')],
+    ifNot: true,
+  },
+  stale('update'),
+  stale('delete'),
+]

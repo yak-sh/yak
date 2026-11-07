@@ -63,3 +63,34 @@ export let cosine = (a: Float32Array, b: Float32Array): number => {
   let len = Math.sqrt(la) * Math.sqrt(lb)
   return len ? dot / len : 0
 }
+
+/**
+ * Code `v` into `codes` from `at`: each coordinate over the largest, rounded
+ * to one of 255 steps from -127 to 127. Returns the scale that turns the
+ * codes' dot product with a query back into cosine times the query's length;
+ * 0 for a vector with no direction. The codes alone keep the direction, so
+ * their cosine is the vector's, give or take a step.
+ */
+export let code = (v: Float32Array, codes: Int8Array, at = 0): number => {
+  let max = 0, sum = 0, dim = v.length
+  for (let j = 0; j < dim; j++) {
+    let x = v[j]
+    sum += x * x
+    if (x > max) max = x
+    else if (-x > max) max = -x
+  }
+  if (!max) {
+    codes.fill(0, at, at + dim)
+    return 0
+  }
+  let k = 127 / max
+  for (let j = 0; j < dim; j++) codes[at + j] = Math.round(v[j] * k)
+  return max / 127 / Math.sqrt(sum)
+}
+
+/** A vector's int8 codes as a blob, the shape a native int8 scan reads. */
+export let coded = (v: Float32Array): Uint8Array => {
+  let codes = new Int8Array(v.length)
+  code(v, codes)
+  return new Uint8Array(codes.buffer)
+}
