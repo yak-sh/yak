@@ -60,6 +60,7 @@ import { idOf } from './derived.ts'
 import { type Extension, ranking, type Site } from './extend.ts'
 import { render } from './render.ts'
 import { empty } from './empty.ts'
+import { listed } from './listed.ts'
 import type { Compiled } from './query.ts'
 
 // The values one call binds into a kept statement.
@@ -405,9 +406,9 @@ let called = (
     o.unordered ?? null,
     opts.graves ?? null,
     o.exactIds ?? null,
-    o.missingIndexes ?? null,
+    listed(o.missingIndexes),
     o.visibility ?? null,
-    opts.absent ?? null,
+    listed(opts.absent),
     opts.population ?? null,
     identify(opts.derived),
     identify(opts.backed),

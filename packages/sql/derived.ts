@@ -116,12 +116,23 @@ export let tablesOf = (expr: Expr): string[] | undefined => {
 }
 /** A stable read of its stored value through auxiliary tables only. The
  * owning component's visibility decides whether that value may be returned;
- * no other graph relation contributes to it. */
+ * no other graph relation contributes to it. A read asks this of every
+ * provider, and the answer is the prop's and the vocabulary's alone, so it is
+ * worked out once for each pair. */
 export let storedOnly = (prop: DerivedProp, vocab: Vocab): boolean => {
-  if (!prop.stable || !prop.text) return false
-  let sources = tablesOf(prop.text(col('__stored')))
-  return !!sources && sources.every((name) => !vocab.comp(name))
+  let byVocab = stored.get(prop)
+  if (!byVocab) stored.set(prop, byVocab = new WeakMap())
+  let known = byVocab.get(vocab)
+  if (known === undefined) {
+    let sources = prop.stable && prop.text
+      ? tablesOf(prop.text(col('__stored')))
+      : undefined
+    known = !!sources && sources.every((name) => !vocab.comp(name))
+    byVocab.set(vocab, known)
+  }
+  return known
 }
+let stored = new WeakMap<DerivedProp, WeakMap<Vocab, boolean>>()
 
 // ---- status ladders ----
 //
@@ -192,6 +203,13 @@ export let ladders = (v: Vocab): Derived => {
 let merged = new WeakMap<Vocab, WeakMap<Derived, Derived>>()
 let made = new WeakSet<Derived>()
 let empty: Derived = {}
+
+/** `to`, a registry wherever `from` is one: what rewrites a store's registry
+ * (./absent.ts) holds its ladders already, and is read through as it is. */
+export let alike = (from: Derived, to: Derived): Derived => {
+  if (made.has(from)) made.add(to)
+  return to
+}
 
 /**
  * The registry a store reads through: every ladder the vocabulary declares

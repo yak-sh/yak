@@ -896,6 +896,14 @@ export let admitted = (eids: string[], screen: Raw | null): Select =>
     ),
   })
 
+// A list of names as a set, made once for each list.
+let sets = new WeakMap<readonly string[], Set<string>>()
+let setOf = (names: readonly string[]): Set<string> => {
+  let got = sets.get(names)
+  if (!got) sets.set(names, got = new Set(names))
+  return got
+}
+
 export let get = (
   driver: Driver,
   vocab: Vocab,
@@ -910,11 +918,11 @@ export let get = (
   // less any the file does not hold yet, which no entity can wear: those a
   // reader was told of, else the ones no write has raised (./raise.ts). A
   // caller's own read overrides read those as worn by nobody too.
-  let gone = new Set(opts.absent ?? unraised(driver, vocab))
-  if (gone.size) {
+  let absent = opts.absent ?? unraised(driver, vocab)
+  if (absent.length) {
     opts = {
       ...opts,
-      derived: absentDerived(vocab, derivedOf(vocab, opts.derived), [...gone]),
+      derived: absentDerived(vocab, derivedOf(vocab, opts.derived), absent),
     }
   }
   if (opts.visibility) {
@@ -1062,7 +1070,7 @@ export let get = (
   let names =
     (comps
       ? [...new Set(comps)].filter((c) => readable(vocab).has(c))
-      : tables(vocab)).filter((c) => !gone.has(c))
+      : tables(vocab)).filter((c) => !setOf(absent).has(c))
   let remembered = at(
     at(shapes, driver, () => new WeakMap()),
     vocab,

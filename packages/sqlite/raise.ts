@@ -170,25 +170,56 @@ export let recorded = (driver: Driver): void => {
   })
 }
 
-/** The tables of `vocab` raised on a first write that this file holds. */
-export let raisedIn = (driver: Driver, vocab: Vocab): Set<string> => {
-  let all = held(driver)
-  return new Set(
-    tables(vocab).filter((c) => lazy(vocab, c) && (!all || all.has(c))),
-  )
+// What the file holds of a vocabulary's tables, for each receipt the file
+// has (`held`): every write and read asks it, and only a statement moving the
+// schema or a receipt recorded changes it. The lists are frozen, since every
+// caller is handed the same one.
+type Standing = {
+  raised: ReadonlySet<string>
+  unraised: string[]
+  stood: string[]
 }
+let standings = new WeakMap<
+  Driver,
+  { at: number; all?: Set<string>; by: WeakMap<Vocab, Standing> }
+>()
+let standing = (driver: Driver, vocab: Vocab): Standing => {
+  let all = held(driver)
+  let at = revision(driver, 'schema')
+  let k = standings.get(driver)
+  if (k?.at !== at || k.all !== all) {
+    standings.set(driver, k = { at, all, by: new WeakMap() })
+  }
+  let got = k.by.get(vocab)
+  if (!got) {
+    let raised = new Set(
+      tables(vocab).filter((c) => lazy(vocab, c) && (!all || all.has(c))),
+    )
+    got = {
+      raised,
+      unraised: Object.freeze(
+        tables(vocab).filter((c) => lazy(vocab, c) && !raised.has(c)),
+      ) as string[],
+      stood: Object.freeze(
+        tables(vocab).filter((c) => !lazy(vocab, c) || raised.has(c)),
+      ) as string[],
+    }
+    k.by.set(vocab, got)
+  }
+  return got
+}
+
+/** The tables of `vocab` raised on a first write that this file holds. */
+export let raisedIn = (driver: Driver, vocab: Vocab): Set<string> =>
+  new Set(standing(driver, vocab).raised)
 
 /** The components of `vocab` whose table waits for a first write. */
-export let unraised = (driver: Driver, vocab: Vocab): string[] => {
-  let stands = raisedIn(driver, vocab)
-  return tables(vocab).filter((c) => lazy(vocab, c) && !stands.has(c))
-}
+export let unraised = (driver: Driver, vocab: Vocab): string[] =>
+  standing(driver, vocab).unraised
 
 /** The tables of `vocab` this file holds. */
-export let stood = (driver: Driver, vocab: Vocab): string[] => {
-  let stands = raisedIn(driver, vocab)
-  return tables(vocab).filter((c) => !lazy(vocab, c) || stands.has(c))
-}
+export let stood = (driver: Driver, vocab: Vocab): string[] =>
+  standing(driver, vocab).stood
 
 /** Those of `stmts` that rest on no table this file lacks, as its schema
  * says: what an install makes, before any receipt is recorded. */

@@ -19,7 +19,7 @@ import {
   select,
   sub,
 } from './ast.ts'
-import type { Derived, DerivedProp } from './derived.ts'
+import { alike, type Derived, type DerivedProp } from './derived.ts'
 import { inline, q } from './render.ts'
 import { type Dialect, field } from './sqlite.ts'
 
@@ -78,6 +78,8 @@ export let absentDialect = (
 }
 
 let rewritten = new WeakMap<Derived, Map<string, Derived>>()
+// The list each rewritten registry was last asked for.
+let madeFor = new WeakMap<Derived, readonly string[]>()
 
 /** The read overrides `derived`, with each component in `absent` read as an
  * empty relation wherever one of their expressions names its table: a
@@ -112,11 +114,17 @@ export let absentDerived = (
   absent?: readonly string[],
 ): Derived => {
   if (!absent?.length) return derived
+  // Every read of a store rewrites its registry again, and the registry its
+  // options hold was made for the very list they hold.
+  if (madeFor.get(derived) === absent) return derived
   let key = [...absent].sort().join(' ')
   let held = rewritten.get(derived) ?? new Map<string, Derived>()
   rewritten.set(derived, held)
   let got = held.get(key)
-  if (got) return got
+  if (got) {
+    madeFor.set(got, absent)
+    return got
+  }
   let gone = new Set(absent)
   let walk = (value: unknown): unknown => {
     if (Array.isArray(value)) return value.map(walk)
@@ -152,5 +160,6 @@ export let absentDerived = (
     }]),
   )
   held.set(key, got)
-  return got
+  madeFor.set(got, absent)
+  return alike(derived, got)
 }

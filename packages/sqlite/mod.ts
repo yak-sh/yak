@@ -119,7 +119,7 @@ import { burying } from './buried.ts'
 import { located, measure } from './measure.ts'
 import { bindings } from './rules.ts'
 import { basis, local, memoized, rooted, simple } from './memo.ts'
-import { revision } from '@yaks/sql'
+import { listed, revision } from '@yaks/sql'
 import { watch } from './watch.ts'
 import { gotten, metered, named } from './budget.ts'
 import { comps, dead } from '@yaks/graph/bundle'
@@ -469,14 +469,25 @@ let asking = <O extends { signal?: AbortSignal; parent?: string }>(o?: O) => {
 
 // The effective read options are data; order of object keys is immaterial,
 // while arrays, query clauses, paths and literal token strings keep order.
-let keyed = (value: unknown) =>
-  JSON.stringify(
-    value,
-    (_key, v) =>
-      v && typeof v == 'object' && !Array.isArray(v)
-        ? Object.fromEntries(Object.keys(v).sort().map((k) => [k, v[k]]))
-        : v,
-  )
+// Every read keys its options, so an array of plain values is written whole by
+// `JSON.stringify` and only objects are taken apart.
+let plain = (v: unknown) => !v || typeof v != 'object'
+let keyed = (value: unknown): string | undefined => {
+  if (plain(value)) return JSON.stringify(value)
+  let v = value as { toJSON?: () => unknown } & Record<string, unknown>
+  if (typeof v.toJSON == 'function') return keyed(v.toJSON())
+  if (Array.isArray(v)) {
+    return v.every(plain)
+      ? JSON.stringify(v)
+      : `[${v.map((x) => keyed(x) ?? 'null').join(',')}]`
+  }
+  let out: string[] = []
+  for (let k of Object.keys(v).sort()) {
+    let got = keyed(v[k])
+    if (got !== undefined) out.push(`${JSON.stringify(k)}:${got}`)
+  }
+  return `{${out.join(',')}}`
+}
 
 // The ledgers of the units open on each driver, outermost first (`tracked`).
 type Writing = { ledger: Ledger; complete: boolean }
@@ -687,16 +698,28 @@ export let storage = (
   ) => {
     if (!policies(o) || virtual(eids, o)) return run()
     // Registries are fixed per store. A per-call replacement is unknown and
-    // bypasses reuse; the remaining effective inputs belong in the key.
+    // bypasses reuse; the remaining effective inputs belong in the key, the
+    // long lists of names as their numbers (@yaks/sql `listed`).
     let {
       derived: _d,
       backed: _b,
       tags: _t,
       extend: _e,
       archetypes: _a,
+      absent,
+      missingIndexes,
       ...inputs
     } = o
-    return memo.view(keyed(['get', eids, comps, inputs, pending]), run, comps)
+    let key = [
+      'get',
+      eids,
+      comps,
+      inputs,
+      pending,
+      listed(absent),
+      listed(missingIndexes),
+    ]
+    return memo.view(keyed(key)!, run, comps)
   }
   let kept = (
     fetch: (eids: string[], comps?: string[]) => Bundle[],
