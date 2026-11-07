@@ -1555,7 +1555,10 @@ test('/login/who answers whether the cookie signs somebody in', async () => {
         headers: cookie ? { cookie } : {},
       })
       assertEquals(r.headers.get('cache-control'), 'private, no-store')
-      return (await r.json()).signedIn
+      let answer = await r.json()
+      // No deploy is named where the runtime names none (public/deploy.js).
+      assertEquals(answer.deploy, null)
+      return answer.signedIn
     }
     assertEquals(await who(), false)
     assertEquals(await who(`${COOKIE}=forged`), false)

@@ -1823,7 +1823,7 @@ let read = async () => {
 // Each step the Operator takes arrives on the socket as the lines it changed,
 // put in place by id; a conversation the page has not drawn yet (a request
 // just taken up) reads the page again, and another one's step is not this page's.
-let live = false
+let live = false, opened = false
 let hear = (frame) => {
   if (frame.drafts) for (let heard of hearing) heard(frame.drafts)
   let o = frame.operator
@@ -1869,10 +1869,14 @@ let listen = () => {
   let socket = new WebSocket(location.origin.replace(/^http/, 'ws') + '${at}?live=1')
   // A socket still opening after the wait is closed, and so opened again.
   let opening = setTimeout(() => socket.close(), WAIT)
+  // A socket opening again may follow a deploy, which the page then moves onto
+  // (public/deploy.js).
   socket.onopen = () => {
     clearTimeout(opening); live = true; readDrafts(); read().catch(said)
     let app = canvas()
     if (app) remake(app.dataset.app)
+    if (opened) dispatchEvent(new Event('yak-reconnect'))
+    opened = true
   }
   socket.onmessage = (e) => { try { hear(JSON.parse(e.data)) } catch (error) { said(error) } }
   socket.onclose = () => { clearTimeout(opening); live = false; poll(); setTimeout(listen, 3000) }
@@ -1888,6 +1892,7 @@ form?.addEventListener('submit', async (e) => {
   e.preventDefault()
   let button = form.querySelector('[type=submit]')
   button.disabled = true
+  form.setAttribute('aria-busy', 'true')
   status.textContent = 'Sending…'
   try {
     submission = new FormData(form)
@@ -1902,7 +1907,7 @@ form?.addEventListener('submit', async (e) => {
     if (thread()?.dataset.task != root) return void location.assign(chats + request + (app ? '?app=' + encodeURIComponent(app.dataset.app) : ''))
     await read(); poll()
   } catch (error) { said(error) }
-  finally { button.disabled = false }
+  finally { button.disabled = false; form.removeAttribute('aria-busy') }
 })
 // When each message was sent, in the person's own time, kept current.
 let stamps = () => {

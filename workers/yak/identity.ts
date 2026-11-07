@@ -212,6 +212,7 @@ import {
   type Who,
 } from './session.ts'
 import { WHO } from './signed.ts'
+import { versionOf } from './running.ts'
 import { background, caught, refusing } from './defects.ts'
 import { step } from './funnel.ts'
 import * as ads from './ads.ts'
@@ -1171,9 +1172,13 @@ let ours = async (req: Request, env: Env): Promise<Response> => {
     return await begun(req, env, field('say'))
   }
 
-  // Whether this browser is signed in, for the site's island (signed.ts).
+  // Whether this browser is signed in, for the site's island (signed.ts), and
+  // which deploy answers, for a page drawn by an older one (public/deploy.js).
   if (path == WHO && req.method == 'GET') {
-    return Response.json({ signedIn: !!await browser(env, req) }, {
+    return Response.json({
+      signedIn: !!await browser(env, req),
+      deploy: versionOf(env.CF_VERSION_METADATA),
+    }, {
       headers: { 'cache-control': 'private, no-store' },
     })
   }

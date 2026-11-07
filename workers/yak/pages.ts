@@ -70,6 +70,7 @@ import {
 import { CONNECTOR } from './seo.ts'
 import { AGENT } from './docs.ts'
 import { apex, type Host, spaceHost, url } from './host.ts'
+import { versionOf } from './running.ts'
 import { Yak, yak } from './mascot.ts'
 import { links } from './sheets.ts'
 import {
@@ -166,6 +167,17 @@ let optional = (label: Kids) => [
 let script = (value: unknown) =>
   JSON.stringify(value).replaceAll('<', '\\u003c')
 
+// The script that moves an open page onto a newer deploy (public/deploy.js),
+// told the deploy that drew it. None where the runtime names no deploy.
+let deployed = (env: Host) => {
+  let v = versionOf(env.CF_VERSION_METADATA)
+  return v
+    ? `<script src="${url(env, '/deploy.js')}" data-deploy="${
+      esc(v.id)
+    }" data-deploy-at="${esc(v.at)}" defer></script>`
+    : ''
+}
+
 // The document every page here is, around the `<main>` it is handed as markup:
 // its head, and the scripts the parts in it call for.
 let documented = (
@@ -205,7 +217,9 @@ ${links(env, 'pages.css')}${
       main.includes('data-idle')
         ? `<script src="${url(env, '/idle.js')}" defer></script>`
         : ''
-    }<script src="${url(env, '/drop.js')}" defer></script></body>
+    }<script src="${url(env, '/drop.js')}" defer></script>${
+      deployed(env)
+    }</body>
 </html>`,
     {
       status,

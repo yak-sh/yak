@@ -1,6 +1,7 @@
 import type { Env } from './env.ts'
 
-export type Host = Pick<Env, 'APEX' | 'LOCAL_DEV'>
+// A deployment: its addresses, and which deploy of it is running.
+export type Host = Pick<Env, 'APEX' | 'LOCAL_DEV' | 'CF_VERSION_METADATA'>
 
 // Addresses belong to the deployment; the product is always called yaks.app.
 export let apex = (env: Host = {}) => env.APEX || 'yaks.app'
