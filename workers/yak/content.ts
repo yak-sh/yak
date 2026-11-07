@@ -9,7 +9,7 @@
 // hand-written ones this stands in for, imported for their shape alone.
 import type { Page } from './guide.ts'
 import type { Said } from './prompts.ts'
-import type { Words } from './tool.ts'
+import type { Words } from './tool-words.ts'
 
 /** Every guide page's row, by slug. */
 export let PAGES: Record<string, Page> = {

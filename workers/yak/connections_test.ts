@@ -21,12 +21,12 @@ import {
   callback,
   connecting,
   connectionsOf,
-  connectionTools,
   ctxOf,
   type Hold,
   hook as receiveHook,
   own,
 } from './connections.ts'
+import { connectionTools } from './connection-tools.ts'
 import { directory, over, storeName } from './directory.ts'
 import { PLATFORM_OBJECT } from './door.ts'
 import { db, named, platform } from './testing.ts'
@@ -36,7 +36,7 @@ import { envDoor, fetchDoor, outbound } from './outbound.ts'
 import { PUBLISHED } from './published.ts'
 import type { Asked } from './apps.ts'
 import { opened } from './lib/token.ts'
-import { desk } from './pages.ts'
+import { desk } from './desk-pages.ts'
 import { minted, type Who } from './session.ts'
 import { vaultOf } from './vault.ts'
 import { within } from './defects.ts'

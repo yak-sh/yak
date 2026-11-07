@@ -19,7 +19,8 @@ import { reachOf } from './operator-reach.ts'
 import { builderOf, operatorDoor, SPACE } from './build-door.ts'
 import { vouched, type Who } from './session.ts'
 import { PROTOCOL, protocolled, upgrading } from './protocol.ts'
-import { choice as spaceChoice, esc, type Picked, shell } from './pages.ts'
+import { esc, type Picked, shell } from './pages.ts'
+import { choice as spaceChoice } from './desk-pages.ts'
 import { spaceHost, url } from './host.ts'
 import {
   ADMIN,

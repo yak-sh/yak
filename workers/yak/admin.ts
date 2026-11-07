@@ -61,7 +61,8 @@ import {
   SideNav,
 } from '@yaks/ui/parts'
 import { esc, markup, raw } from './html.ts'
-import { deskFrame, lost, shell } from './pages.ts'
+import { lost, shell } from './pages.ts'
+import { deskFrame } from './desk-pages.ts'
 import { type IconName, icons } from './icons.ts'
 import { type Host, spaceHost, url } from './host.ts'
 import { DAYS, NOT_ON, statsOf } from './views.ts'

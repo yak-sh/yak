@@ -43,13 +43,12 @@ import {
   inApp,
   inSpace,
   refuse,
-  type Row,
   SPACE,
   str,
   text,
   type Tool,
-  worded,
 } from './tool.ts'
+import { type Row, worded } from './tool-words.ts'
 import { call } from './tools.ts'
 import type { Supply } from '@yaks/builders'
 import type { Ask } from '@yaks/builders/tools'

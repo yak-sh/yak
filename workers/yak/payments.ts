@@ -6,14 +6,13 @@
 // sell.ts connects a seller and opens their checkouts through its shops.
 import type { Payments, Plans, Shops } from '@yaks/host/payments'
 import { payments as config } from './config.ts'
-import { lent } from './lent.ts'
 
 // One lending per environment. Its options read the environment as they are
 // used, so a key put after the first call is used by the next.
 let held = new WeakMap<object, Promise<Payments>>()
 
 let lend = async (env: object) => {
-  let all = await lent(env, 'payments', config)
+  let all = await (await import('./lent.ts')).lent(env, 'payments', config)
   if (!Object.hasOwn(all, config.via)) {
     throw new Error(`no payment provider ${config.via} is lent`)
   }

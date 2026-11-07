@@ -8,9 +8,12 @@ import {
 import { type Bundle, graph } from '@yaks/graph'
 import { ram } from '@yaks/ram'
 import { accept, acceptLink, door, invitedWords, placeOf } from './invite.ts'
-import { invitedHere, refusedSaid, shared, shut, waiting } from './apps.ts'
+import { invitedHere, refusedSaid, shut, waiting } from './apps.ts'
+import { shared } from './manage.ts'
 import { markup } from './html.ts'
-import { invited as invitationPage, type Offer, people } from './pages.ts'
+import { type Offer } from './pages.ts'
+import { invited as invitationPage } from './signin-pages.ts'
+import { people } from './desk-pages.ts'
 import { aloud, peopleOwned, type Person, shown } from './people.ts'
 import {
   type App,

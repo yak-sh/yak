@@ -42,7 +42,7 @@
 // The roster alone, not the package: its root carries the MCP SDK and zod,
 // which a Wire waking to pass a line along never runs (T-37977).
 import { rosterLine } from '@yaks/mcp/roster'
-import { VERSION } from './seo.ts'
+import { VERSION } from './running.ts'
 import type { Env } from './env.ts'
 import { fetchOf } from './door.ts'
 import { evicted, jittered } from '@yaks/durable-object'

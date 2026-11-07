@@ -36,7 +36,6 @@ import {
 } from '@yaks/model'
 import { defect } from './defects.ts'
 import { reserved, settled } from './model-spend.ts'
-import { native, platform } from './providers.ts'
 import { mint } from '@yaks/graph'
 import { derivedEid } from '@yaks/graph/identity'
 import { Stale } from '@yaks/graph/errors'
@@ -1191,6 +1190,7 @@ export let metered = (
     let dir = ns ? directoryOf(ns) : null
     let space = dir ? await spaceOf(dir) : null
     let provider = ''
+    let { native, platform } = await import('./providers.ts')
     let door = ns && space
       ? native(bind, platform(bind as Env), {
         hold: (quote) =>

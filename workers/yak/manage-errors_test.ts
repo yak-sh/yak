@@ -7,7 +7,8 @@ import {
 } from '@std/assert'
 import type { App } from './directory.ts'
 import { markup } from './html.ts'
-import { fixing, library, operated } from './pages.ts'
+import { fixing, operated } from './pages.ts'
+import { library } from './desk-pages.ts'
 import { chatPath } from './route.ts'
 import { folds, type Plain, plain, type Seen } from './unseen.ts'
 

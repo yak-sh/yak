@@ -66,6 +66,7 @@ import {
   url,
 } from './directory.ts'
 import type { Env } from './env.ts'
+import { type Standing } from './gallery-row.ts'
 import { configOf, keyed, prefixOf, rootOf } from './files.ts'
 import type { Letter } from './mail.ts'
 import type { Actor, Bundle } from '@yaks/graph'
@@ -78,7 +79,6 @@ import { type Host, hosted, replyTo, url as siteUrl } from './host.ts'
 import { sheeted } from './sheets.ts'
 import { browserOf } from './session.ts'
 import { caught } from './defects.ts'
-import { staff } from './admin.ts'
 import { DEMO } from './gallery-demo.ts'
 import { PICTURES } from './kept-page.ts'
 import { opens } from './sample.ts'
@@ -91,11 +91,6 @@ import type { Args, Ctx, Out } from './tool.ts'
 export let PATH = GALLERY.path
 export let REVIEW = `${PATH}/review`
 export let IMAGE = PICTURES
-// Where each published app's own page lives (app-page.ts): one address per
-// platform-wide name, listed or not.
-export let PAGE = '/apps/'
-export let pageAt = (name: string, env: Host = {}) =>
-  siteUrl(env, `${PAGE}${encodeURIComponent(name)}`)
 
 // Where a code review is asked for: the yaks.app project's own address on the
 // box (its project wears it), so the letter is filed as a priority-1 task on
@@ -142,11 +137,6 @@ export let door = (token: string, env: Host = {}) =>
 
 // ---- what is on the row ------------------------------------------------
 
-export type Standing = 'listed' | 'asked' | 'no'
-
-export let standing = (app: App): Standing =>
-  app.gallery?.listedAt ? 'listed' : app.gallery?.askedAt ? 'asked' : 'no'
-
 // The one sentence every door says about where an app stands, so the tool
 // answer, the space page and the review door never tell three stories.
 export let saying = (at: Standing, env: Host = {}) =>
@@ -155,11 +145,6 @@ export let saying = (at: Standing, env: Host = {}) =>
     : at == 'asked'
     ? 'awaiting gallery review'
     : 'not in the gallery'
-
-// The word the space page's pill wears, which is the same three states said
-// short enough to sit beside an app's name.
-export let pilled = (at: Standing) =>
-  at == 'listed' ? 'in the gallery' : at == 'asked' ? 'gallery: waiting' : ''
 
 // ---- the listing -------------------------------------------------------
 
@@ -833,7 +818,7 @@ export let answer = async (
   }
   // Signed out, which is what an agent is here: sent to sign in and handed back
   // to this very page. Signed in as anybody but the platform's admin: refused.
-  let who = await staff(req, env, dir)
+  let who = await (await import('./admin.ts')).staff(req, env, dir)
   if (who == null) {
     let back = asked.pathname +
       (req.method == 'POST' ? `?t=${encodeURIComponent(held)}` : asked.search)

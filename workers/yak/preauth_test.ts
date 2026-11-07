@@ -136,7 +136,7 @@ test('the public tools are the signed-in ones, word for word', async () => {
   for (let t of PUBLIC) {
     let full = TOOLS.find((f) => f.name == t.name)
     assert(full, `${t.name} is public but not offered signed in`)
-    // Both lists say what tools.yml says (tool.ts `worded`), so they cannot
+    // Both lists say what tools.yml says (tool-words.ts `worded`), so they cannot
     // drift; what is checked here is that the row is offered at all.
     assertEquals(full.description, WORDS[t.name].description)
     assertEquals(full.input, NO_ARGS)

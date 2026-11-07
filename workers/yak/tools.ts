@@ -53,7 +53,7 @@ import { fullFiles } from './usage.ts'
 import { TOOLS_EXAMPLE, viewsOf } from '@yaks/tools/declared'
 import { appTools } from './tool-grammar.ts'
 import type { Actor, Bundle } from '@yaks/graph'
-import { VERSION } from './seo.ts'
+import { VERSION } from './running.ts'
 import {
   appDoc,
   componentsOf,
@@ -79,6 +79,7 @@ import {
   configOf,
   mimeOf,
   prefixOf,
+  seedy,
   servesSaid,
   sourceOnly,
   warm,
@@ -182,16 +183,14 @@ import {
   drop as unGallery,
   letter as galleryLetter,
   owned as ownerOf,
-  pageAt,
   pictureOf,
   review as reviewCode,
   saying,
   searched,
-  type Standing,
-  standing as onGallery,
   ticket as ticketFor,
   type Verdict,
 } from './gallery.ts'
+import { pageAt, type Standing, standing as onGallery } from './gallery-row.ts'
 import type { Caller } from './asking.ts'
 import {
   DEFAULT,
@@ -248,7 +247,6 @@ import {
   loaded,
   loadParts,
   parts,
-  seedy,
   sow,
   type Sown,
   span,
@@ -333,7 +331,6 @@ import {
   refuse,
   rejected,
   renew,
-  type Row,
   seatIn,
   type Shape,
   SPACE,
@@ -341,11 +338,12 @@ import {
   str,
   text,
   type Tool,
-  worded,
 } from './tool.ts'
+import { type Row, worded } from './tool-words.ts'
 import { read } from '@yaks/yaml'
-import { viewsTools } from './views.ts'
-import { carried, connectionTools, rebind } from './connections.ts'
+import { viewsTools } from './views-tools.ts'
+import { carried, rebind } from './connections.ts'
+import { connectionTools } from './connection-tools.ts'
 import { background, caught } from './defects.ts'
 import { step } from './funnel.ts'
 import { adopt, unadopt, type Visit, visitOf } from './visit.ts'

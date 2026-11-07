@@ -575,3 +575,51 @@ The after window is small and nearly all probes, and the two windows tell a cold
 request by different signs, so these medians are a direction rather than a
 measurement. Cloudflare's own `startup_time_ms` across the versions: 48–116 ms,
 median 60, over the 73 before; 7–16 ms, median 7, over the 7 after.
+
+## A space's page compiles what serves it: T-148886
+
+November 7, 2026. With T-148770 a cold gateway isolate compiled kernel.ts's
+static closure, which held the apex, the dashboard, the tool roster and their
+words as well as a space's pages. The modules that tied them together are cut,
+each at the boundary of what it serves:
+
+- kernel.ts routes; the apex's pages and doors are apex.ts, loaded on the first
+  request to the apex (the home page's misses, sign-in, `/manage`, admin, money,
+  phones), and drop.ts on its one `POST /deploy`.
+- apps.ts serves a space; the dashboard is manage.ts, loaded on the first
+  `/manage` request. An app's platform doors under `/api/` (`stats`,
+  `connections`, `env`, `fetch`, `tunneled`, `documents`, `ai`, `speech`, `rtc`,
+  `notices`) are loaded by the first segment of their path (apps.ts `DOORS`),
+  and a release's recovery, a lens's words, a draft's files and borrowed words
+  (reach.ts) are loaded where they are asked for.
+- pages.ts keeps the pages a space serves and the shell; the identity door's
+  pages are signin-pages.ts (the sign-in's phone numbers, the connector's words)
+  and the dashboard's are desk-pages.ts.
+- A tool row wears its words through tool-words.ts `worded`, not tool.ts, whose
+  refusals every door uses; connections.ts's and views.ts's rows are
+  connection-tools.ts and views-tools.ts. So the generated content.ts and yaml
+  leave the page.
+- gallery-row.ts is where an app stands in the gallery, what a space's index and
+  badge read; gallery.ts reaches admin.ts only for its review.
+- `VERSION` is running.ts's, beside the deploy version it stands in for; `seedy`
+  is files.ts's; data.ts owns `titleOf` and `readOnly`; post.ts, payments.ts and
+  phones.ts load lent.ts (and with it every package's vocabulary) when they
+  first lend.
+
+Compile and top-level evaluation as above (Node 26, `vm.SourceTextModule`, a
+fresh process each, medians of 8 alternating rounds, Site's of 4), main at
+`db80df3cf` against this change:
+
+| Isolate woken for                | Modules |       Compiled | Compile ms | Evaluate ms |
+| -------------------------------- | ------: | -------------: | ---------: | ----------: |
+| A space's page (kernel.ts)       | 87 → 64 | 2.99 → 1.46 MB |   122 → 68 |     70 → 36 |
+| The apex (kernel.ts and apex.ts) |     128 |        2.94 MB |        127 |          66 |
+| The dashboard (and manage.ts)    |     129 |        2.96 MB |        132 |          63 |
+| Site (site.ts)                   | 84 → 78 | 2.96 → 2.16 MB |   117 → 93 |     65 → 48 |
+
+An apex request compiles what it did before, and the dashboard only 18 KB more.
+What is left of a space's page is led by libphonenumber (142 KB), which
+directory.ts reaches through signin.ts `nameOf`: its `canon` spells a typed
+number in E.164 for every caller, though the directory's rows name a person by
+an email address. Then `@yaks/sql` and `@yaks/sqlite` (240 KB together, through
+defects.ts and @yaks/durable-object) and `@yaks/graph`'s errors (76 KB).

@@ -1,6 +1,7 @@
 // The preview tool's declaration stays separate from its request runtime:
 // the roster is needed while the app and preview routers are loading.
-import { APP, type Row, SPACE, str, worded } from './tool.ts'
+import { APP, SPACE, str } from './tool.ts'
+import { type Row, worded } from './tool-words.ts'
 
 export let tools = [worded(
   {

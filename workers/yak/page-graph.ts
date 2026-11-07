@@ -10,7 +10,7 @@ import { bound, type Env } from './env.ts'
 import { sandboxed } from './installed.ts'
 import { answered, answeredBody, metaOf } from './meta.ts'
 import { borrows } from '@yaks/reach'
-import { type Reach, read, vocabAt } from './reach.ts'
+import type { Reach } from './reach.ts'
 import { vouched, type Who } from './session.ts'
 import { caught } from './defects.ts'
 import type { VocabDoc } from '@yaks/vocab'
@@ -85,7 +85,7 @@ export let reading = async (
   headers: Record<string, string> = {},
 ): Promise<unknown> => {
   if (borrows(line, uses)) {
-    return read(
+    return (await import('./reach.ts')).read(
       env,
       reach.map((r, i) =>
         i == 0 ? { ...r, headers: { ...r.headers, ...headers } } : r
@@ -207,7 +207,7 @@ export let vocabulary = async (
   let docs = result.docs!
   let borrowed = await Promise.all(
     reach.slice(1).map(async ({ app: home }) => {
-      let doc = await vocabAt(env, space, home)
+      let doc = await (await import('./reach.ts')).vocabAt(env, space, home)
       let defs = Object.fromEntries(
         Object.entries(doc.$defs ?? {}).filter(([name]) =>
           uses[name] == home.slug

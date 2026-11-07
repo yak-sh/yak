@@ -20,12 +20,12 @@ import {
   loadParts,
   PART,
   parts,
-  seedy,
   sow,
   type Sown,
   sown,
   STINT,
 } from './seed.ts'
+import { seedy } from './files.ts'
 import { fits, ROOM } from './writes.ts'
 
 let file = (path: string, bundles: unknown[]) => ({

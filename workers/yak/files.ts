@@ -31,7 +31,6 @@ import { elapsed, hop } from './lib/hops.ts'
 import { type Served, storeOf } from './door.ts'
 import { answered, metaOf } from './meta.ts'
 import { caught, relayed, responding } from './defects.ts'
-import { seedy } from './seed.ts'
 import type { Env, Fetcher } from './env.ts'
 import { BUILT } from './versions.ts'
 import { drawn, ICON_SVG } from './raster.ts'
@@ -319,6 +318,17 @@ let MANIFEST = new Set([
   // module top time cannot wait on a cycle.
   '/NOTES.md',
 ])
+
+/** The bundle formats, for the file beside index.html. A `.csv` is not one:
+ * a spreadsheet needs to be told which component a row is, which only a load
+ * that names it can say. */
+let BUNDLES = ['.yml', '.json']
+
+/** A file the app is seeded from: `seed.yml` or `seed.json` beside
+ * index.html, or either of those in a `seed/` folder beside it. */
+export let seedy = (path: string) =>
+  BUNDLES.some((e) => path == `seed${e}`) ||
+  (path.startsWith('seed/') && BUNDLES.some((e) => path.endsWith(e)))
 
 export let inside = (path: string) => MANIFEST.has(path) || seedy(path.slice(1))
 

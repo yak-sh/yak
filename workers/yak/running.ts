@@ -23,6 +23,11 @@
 // dev` and the test kernels there is none, and nothing is stamped or compared.
 
 /** A Worker version: the runtime's id for it and when it was uploaded. */
+// The platform's release, as a person reads it: what a connector says it runs
+// (`serverInfo.version`), what a feedback letter names, and the stand-in for
+// Cloudflare's per-deploy id wherever the runtime gives none.
+export let VERSION = '0.1.0'
+
 export type Version = { id: string; at: string }
 
 /** The binding's shape, as env.ts declares it. */

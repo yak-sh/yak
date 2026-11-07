@@ -3,7 +3,7 @@
 import { type App, draftStore } from './directory.ts'
 import type { Door } from './door.ts'
 import type { Env } from './env.ts'
-import { type Reach, routed } from './reach.ts'
+import type { Reach } from './reach.ts'
 import type { Applying } from './seed.ts'
 import { Pending, said } from './writes.ts'
 
@@ -41,6 +41,7 @@ export let seeding = (
     named,
   ]
   return async (bundles, check) => {
+    let { routed } = await import('./reach.ts')
     let { parts } = await routed(env, reach, named, bundles)
     let answers = await Promise.all(parts.map(({ r, entities }) =>
       applying(

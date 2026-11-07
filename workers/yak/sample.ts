@@ -29,7 +29,7 @@ import { r2RawObjects } from './lib/objects.ts'
 import { KERNEL } from './meta.ts'
 import { filesAt } from './release.ts'
 import { applying } from './release-seed.ts'
-import { seedy, sow } from './seed.ts'
+import { seedy } from './files.ts'
 import { addressed, type Files } from './versions.ts'
 
 /** Whether an app keeps a sample: a private app on offer. An open or public
@@ -155,7 +155,7 @@ export let sampled = async (
     method: 'POST',
     body: JSON.stringify(declared.tools),
   }, head)
-  await sow(
+  await (await import('./seed.ts')).sow(
     await Promise.all(
       Object.keys(files).filter(seedy).map(async (path) => ({
         path,

@@ -10,7 +10,7 @@
 // take, since they have no version-metadata binding either.
 import { test } from '@yaks/testing'
 import { assertEquals, assertStringIncludes } from '@std/assert'
-import { VERSION } from './seo.ts'
+import { VERSION } from './running.ts'
 import { resumable, Wire } from './stream.ts'
 import { kvStorage } from './testing.ts'
 

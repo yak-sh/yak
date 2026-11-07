@@ -22,7 +22,7 @@ import {
   vocabFile,
   when,
 } from './probe.ts'
-import { VERSION } from './seo.ts'
+import { VERSION } from './running.ts'
 import { HELLO, minted } from './mcp-probe.ts'
 
 // The other direction (T-32950): an app's breaks reach the person's agent,

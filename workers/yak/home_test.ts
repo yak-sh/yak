@@ -4,7 +4,8 @@
 import { test } from '@yaks/testing'
 import { assert, assertEquals, assertStringIncludes } from '@std/assert'
 import { parseHTML } from 'linkedom'
-import { desk, spaceIndex } from './pages.ts'
+import { spaceIndex } from './pages.ts'
+import { desk } from './desk-pages.ts'
 import { managePath } from './route.ts'
 
 // The dashboard itself, drawn straight (pages.ts `desk` is pure): the order

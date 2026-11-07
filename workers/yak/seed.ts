@@ -39,22 +39,12 @@ import { CallError } from '@yaks/tools/errors'
 import { read } from '@yaks/yaml'
 import { type Sheet, sheet } from './csv.ts'
 import { refuse } from './tool.ts'
+import { seedy } from './files.ts'
 import { Pending, ROOM } from './writes.ts'
 
 /** What a seed is written in: YAML first — the warm path (M-34605) — then
  * JSON, which YAML reads anyway, and a spreadsheet (csv.ts). */
 let DATA = ['.yml', '.json', '.csv']
-
-/** The bundle formats, for the file beside index.html. A `.csv` is not one:
- * a spreadsheet needs to be told which component a row is, which only a load
- * that names it can say. */
-let BUNDLES = ['.yml', '.json']
-
-/** A file the app is seeded from: `seed.yml` or `seed.json` beside
- * index.html, or either of those in a `seed/` folder beside it. */
-export let seedy = (path: string) =>
-  BUNDLES.some((e) => path == `seed${e}`) ||
-  (path.startsWith('seed/') && BUNDLES.some((e) => path.endsWith(e)))
 
 /** Whether `file` is one a load `path` names: the file itself, or any `*.json`
  * or `*.csv` under it when the path is a folder. A path naming something that

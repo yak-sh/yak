@@ -5,7 +5,8 @@ import { assert, assertEquals } from '@std/assert'
 import { parseHTML } from 'linkedom'
 import type { Bundle } from '@yaks/graph'
 import { frame, talk } from './operator-view.ts'
-import { desk, shell } from './pages.ts'
+import { shell } from './pages.ts'
+import { desk } from './desk-pages.ts'
 import { IDLE, idle, MOVES } from './mascot.ts'
 
 let env = { APEX: 'yaks.fyi' }

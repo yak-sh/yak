@@ -152,6 +152,7 @@ export let NOT_EMAIL = 'That is not an email address. Check it and try again.'
 export let NOT_ADDRESS = 'That is not an email address or a US mobile ' +
   'number. Check it and try again.'
 import { KERNEL, type Meta, meta } from './meta.ts'
+import { lost } from './pages.ts'
 import {
   askAllow,
   askCode,
@@ -161,8 +162,7 @@ import {
   askLink,
   connect,
   deleted,
-  lost,
-} from './pages.ts'
+} from './signin-pages.ts'
 import { chatPath, hostOf, LOGOUT, MANAGE, OAUTH, onZone } from './route.ts'
 import { INVITE, LINK, SLUG } from '@yaks/platform/names'
 import { counted, FULL, keep, oneBuild, START } from './newcomer.ts'

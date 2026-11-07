@@ -17,9 +17,7 @@ import type { Directory, Role, Space } from './directory.ts'
 import { type App, appStore } from './directory.ts'
 import { declarationOf } from './declaration.ts'
 import type { Env } from './env.ts'
-import { holding } from './invite.ts'
 import { KERNEL, metaOf } from './meta.ts'
-import { tell } from './operator-updates.ts'
 
 /** The `join` word of an app's vocab.json, as vocab.ts `appDoc` admits it. */
 export type Join = {
@@ -99,12 +97,17 @@ export let join = async (
   person: string,
   role: Role,
 ) => {
-  let grant = await holding(dir, { space, app }, person, role)
+  let grant = await (await import('./invite.ts')).holding(
+    dir,
+    { space, app },
+    person,
+    role,
+  )
   await dir.apply(
     { entities: [grant] },
     { 'x-yak-person': person, 'x-yak-role': 'owner' },
   )
-  await tell(env, space, {
+  await (await import('./operator-updates.ts')).tell(env, space, {
     to: space.eid,
     words: `${await dir.nameAt(person) ?? 'Someone'} joined ${
       app.title || app.slug

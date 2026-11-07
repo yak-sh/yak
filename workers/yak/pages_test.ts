@@ -2,17 +2,9 @@ import { test } from '@yaks/testing'
 import { assert, assertEquals, assertStringIncludes } from '@std/assert'
 import { parseHTML } from 'linkedom'
 import { KEY } from '@yaks/connections'
-import {
-  askCode,
-  askConnect,
-  askEmail,
-  connect,
-  desk,
-  type DeskPage,
-  lost,
-  spaceBinned,
-  spaceIndex,
-} from './pages.ts'
+import { type DeskPage, lost, spaceBinned, spaceIndex } from './pages.ts'
+import { askCode, askConnect, askEmail, connect } from './signin-pages.ts'
+import { desk } from './desk-pages.ts'
 import type { Borrowed, Connections, Shown, Using } from './connections.ts'
 
 let env = { APEX: 'yaks.fyi' }

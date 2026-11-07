@@ -25,7 +25,7 @@ let ROSTER = [...TOOLS, ...PUBLISHED]
 
 // The words are the file's (tools.yml, M-34605), and this is the pair of
 // checks that keeps the file and the roster one list: a row whose name the
-// file does not know throws at load (tool.ts `worded`), and an entry no row
+// file does not know throws at load (tool-words.ts `worded`), and an entry no row
 // claims is a description nobody will ever read.
 test('the tool words are the file, and the file is the roster', () => {
   let yml = read(

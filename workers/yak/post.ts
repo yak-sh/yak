@@ -25,7 +25,6 @@ import { SLUG } from '@yaks/platform/names'
 import { apex, type Host } from './host.ts'
 import type { Env } from './env.ts'
 import { type Post, posts } from './config.ts'
-import { lent } from './lent.ts'
 
 // Apply at the transport so app effects and platform letters obey one rule.
 export let sink = <T extends string | string[]>(
@@ -99,7 +98,9 @@ export let transport = async (
   tags: Record<string, string> = {},
 ): Promise<Built> =>
   post({ via: env.MAIL_VIA ?? kind.via }, {
-    senders: await lent(env, 'senders', kind, { tags }),
+    senders: await (await import('./lent.ts')).lent(env, 'senders', kind, {
+      tags,
+    }),
   })
 
 /** What a transport reads: the env the providers' options name, the deploy's

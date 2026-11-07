@@ -27,11 +27,11 @@ import {
   inSpace,
   owns,
   refuse,
-  type Row,
   SPACE,
   str,
   text,
 } from './tool.ts'
+import { type Row } from './tool-words.ts'
 
 /** Who files a space's toll-free verification for it: the platform, as the
  * reseller carriers ask about. */

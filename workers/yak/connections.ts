@@ -93,22 +93,9 @@ import type { Door } from './route.ts'
 import { enabling, MANAGE, manageAt, OURS, signInAt } from './route.ts'
 import { caught } from './defects.ts'
 import { domainOf, vouched, type Who, whoIs } from './session.ts'
-import {
-  APP,
-  type Ctx as Asking,
-  inApp,
-  inSpace,
-  refuse,
-  type Row,
-  SPACE,
-  str,
-  text,
-  worded,
-} from './tool.ts'
+import { type Ctx as Asking, refuse } from './tool.ts'
 import { vaulted, vaultOf } from './vault.ts'
 import { drawn } from './theirs.ts'
-import { INTEGRATIONS, said } from './integrations.ts'
-import { EITHER } from './preauth.ts'
 
 /** Where a service sends a person back after they sign in there. */
 export let CALLBACK = '/connections/callback'
@@ -123,11 +110,16 @@ let ATTEMPT_AGE = 600
 // The biggest webhook body kept, as a store keeps it: one blob.
 let HOOK_ROOM = 1_000_000
 
-let EID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/
+export let EID =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/
 
-let comp = (b: Bundle | undefined, name: string): Comp =>
+export let comp = (b: Bundle | undefined, name: string): Comp =>
   (b?.[name] ?? {}) as Comp
 let strs = (v: unknown): string[] => Array.isArray(v) ? v.map(String) : []
+
+// One app's use of a connection.
+let integrationOf = (b: Bundle | undefined) =>
+  String(comp(b, CONNECTION).integration)
 
 /** A service as a page draws it: what a person calls it, a line about it,
  * its site, its logo and how to get its key, each empty where its integration
@@ -456,7 +448,7 @@ let usersOf = async (env: Env, connection: string): Promise<string[]> =>
 // The same for each of those apps: after a key is kept, a sign-in finished,
 // or a connection ended. The person's act is done either way, so a worker
 // that could not be brought up to date is ours to hear about, not theirs.
-let rebound = async (env: Env, apps: string[]) => {
+export let rebound = async (env: Env, apps: string[]) => {
   let dir = dirOf(env)
   for (let eid of apps) {
     let at = await dir.appAt(eid)
@@ -719,7 +711,7 @@ export let connectionsOf = async (
 
 // A lend changes host-owned caps in other spaces. Ownership is checked by
 // its caller; only the resulting bundles are applied as the host.
-let lending = async (
+export let lending = async (
   env: Env,
   app: string,
   integration: string,
@@ -1268,7 +1260,8 @@ export let own: Answer = async (
   })
   let i = asked && await known(c.graph.read, integration)
   // Load the page renderer when the Connect door answers.
-  let { askConnect, lost } = await import('./pages.ts')
+  let { lost } = await import('./pages.ts')
+  let { askConnect } = await import('./signin-pages.ts')
   if (!asked || !i || (i.testing && !enabled(req).includes(integration))) {
     return lost(env)
   }
@@ -1394,229 +1387,3 @@ export let hook: Door = async ({ env, req, path, space: slug }) => {
   )
   return new Response(null, { status: 204 })
 }
-
-// ---- the tools (T-38030) ---------------------------------------------------
-
-// One app's use of a connection.
-let integrationOf = (b: Bundle | undefined) =>
-  String(comp(b, CONNECTION).integration)
-
-// Attaching a connected credential remains a platform verb. The package owns
-// need and list; published.ts translates their former connector arguments.
-let CONNECTIONS: Row[] = [
-  {
-    name: 'connection_attach',
-    destructive: false,
-    idempotent: true,
-    input: {
-      type: 'object',
-      properties: {
-        space: SPACE,
-        app: APP,
-        connection: str(
-          'the id of a connected connection owned by this space, from ' +
-            'store_connection_list',
-        ),
-        binding: str(
-          'the name the app reads it as, env.NAME in worker.js and from ' +
-            "./api/env in a page; omit for the service's name in capitals",
-        ),
-      },
-      required: ['app', 'connection'],
-    },
-    run: async (ctx, args) => {
-      let { space, app, who } = await inApp(ctx, args)
-      if (who.role != 'owner') {
-        throw refuse(
-          'access',
-          `only the owner of ${space.slug} may attach its connection`,
-        )
-      }
-      let connection = text(args.connection, 'connection')
-      let c = ctxOf(ctx.env, who)
-      let [b] = EID.test(connection)
-        ? await c.graph.read(`.entity.eid=${connection}&.${CONNECTION}`)
-        : []
-      let refused = barred(
-        'attach',
-        await holdOf(ctx.env, space, who, b, app.eid),
-      )
-      if (refused) throw refuse('access', refused)
-      let bundles = await attach(c.graph.read, {
-        owner: space.eid,
-        app: app.eid,
-        connection,
-        ...args.binding == null
-          ? {}
-          : { binding: text(args.binding, 'binding') },
-      }).catch((e) => {
-        throw refuse('conflict', e instanceof Error ? e.message : String(e))
-      })
-      if (bundles.length) await c.graph.apply(bundles)
-      await rebound(ctx.env, [app.eid])
-      let [l] = await c.graph.read(
-        `.entity.eid=${edgeEid(app.eid, USES, connection)}&.${USES}`,
-      )
-      return {
-        space,
-        text: `${space.slug}/${app.slug} can use connection ${connection}, ` +
-          `as env.${comp(l, USES).binding}. ` +
-          'Only app members can call out through it. The credential stays in the vault.',
-      }
-    },
-  },
-  {
-    name: 'connection_lend',
-    destructive: false,
-    idempotent: true,
-    input: {
-      type: 'object',
-      properties: {
-        space: SPACE,
-        app: APP,
-        integration: str(
-          'the integration of a shared connection this app uses',
-        ),
-        cap: {
-          type: ['integer', 'null'],
-          minimum: 1,
-          description:
-            'the calls a month each installed copy may make; null stops lending and recalls outstanding loans from this app',
-        },
-      },
-      required: ['app', 'integration', 'cap'],
-    },
-    run: async (ctx, args) => {
-      let { space, app, who } = await inApp(ctx, args)
-      if (who.role != 'owner') {
-        throw refuse(
-          'access',
-          `only the owner of ${space.slug} may lend its connection`,
-        )
-      }
-      let integration = text(args.integration, 'integration')
-      let c = ctxOf(ctx.env)
-      // An app with none to lend is told so by `lend`.
-      let connection = await using(c.graph.read, { app: app.eid, integration })
-      let refused = connection &&
-        barred('lend', await holdOf(ctx.env, space, who, connection, app.eid))
-      if (refused) throw refuse('access', refused)
-      if (args.cap !== null && typeof args.cap != 'number') {
-        throw refuse(
-          'cap',
-          'Give a whole number of calls a month, or null to stop lending.',
-        )
-      }
-      let cap = args.cap as number | null
-      await lending(ctx.env, app.eid, integration, cap)
-      return {
-        space,
-        text: cap == null
-          ? `${space.slug}/${app.slug} stopped lending ${integration}; every copy borrowing through it needs its own connection now.`
-          : `${space.slug}/${app.slug} lends ${integration} to copies installed from it, capped at ${cap} calls a month each. A changed cap reaches copies already borrowing it. The key stays in the vault; each copy keeps its own data and may connect its own key instead.`,
-      }
-    },
-  },
-  {
-    name: 'integration_set',
-    destructive: false,
-    idempotent: true,
-    input: {
-      type: 'object',
-      properties: {
-        space: SPACE,
-        integration: str(
-          'a custom integration this space made, by name, as ' +
-            'store_connection_list names it',
-        ),
-        title: str('what a person calls the service, as its maker writes it'),
-        tagline: str('one line saying what the service is'),
-        site: str("the service's https address on the web"),
-        instructions: str(
-          'how a person gets its key, in markdown, written for them and the ' +
-            'agent helping them: where to sign up, which page issues the ' +
-            'key, what to paste',
-        ),
-        listed: {
-          type: 'boolean',
-          description: 'true lists it in the integration directory at ' +
-            'yaks.app/integrations, where anyone may find it and add it to ' +
-            'a space of theirs with their own key; false takes it out',
-        },
-      },
-      required: ['integration'],
-    },
-    run: async (ctx, args) => {
-      let { space, who } = await inSpace(ctx, args, true)
-      if (who.role != 'owner') {
-        throw refuse(
-          'access',
-          `only the owner of ${space.slug} changes what its integrations say`,
-        )
-      }
-      let name = text(args.integration, 'integration')
-      let c = ctxOf(ctx.env, who)
-      let about = Object.fromEntries(
-        ABOUT.filter((k) => args[k] != null).map((k) => [k, String(args[k])]),
-      )
-      let bundles = await set(c.graph.read, {
-        ...about,
-        owner: space.eid,
-        integration: name,
-        ...args.listed == null ? {} : { listed: args.listed == true },
-      })
-      if (bundles.length) await c.graph.apply(bundles)
-      let i = await known(c.graph.read, name)
-      let shown = (await c.graph.read(
-        `.entity.eid=${integrationEid(name)}&.${LISTED}`,
-      )).length > 0
-      let said = (['title', 'tagline', 'site'] as const)
-        .filter((k) => i?.[k]).map((k) => `${k} ${i![k]}`).join('; ')
-      return {
-        space,
-        text:
-          `${name} says: ${said || 'no title, tagline or site'}.${
-            i?.instructions
-              ? `\n\nHow to get its key:\n\n${i.instructions}`
-              : '\n\nIt says nothing yet of how to get its key.'
-          }\n\nIts key is only ever sent to ${
-            i?.hosts.join(', ') || 'no host'
-          }, which no change here moves. Each space's connections page shows ` +
-          'the instructions beside a connection needing its key. ' +
-          (shown
-            ? `It is listed in the integration directory, whose page shows ` +
-              `it within half a minute: ${url(ctx.env, INTEGRATIONS.path)}#${
-                encodeURIComponent(name)
-              }`
-            : 'It is not listed in the integration directory; listed: true ' +
-              'lists it.'),
-      }
-    },
-  },
-  {
-    name: 'integration_list',
-    readOnly: true,
-    // A token is welcome and none is needed: the directory is public, and
-    // this is how the anonymous door knows it may call this (anon.ts
-    // `openly`).
-    security: EITHER,
-    input: {
-      type: 'object',
-      properties: {
-        words: str(
-          'what to look for, in the words the person used: matched against ' +
-            "each service's name, title, line, site, hosts and instructions",
-        ),
-      },
-    },
-    run: async (ctx, args) => {
-      let words = args.words == null ? '' : String(args.words)
-      return {
-        text: said(await ctx.dir.integrations(words), words, ctx.env),
-      }
-    },
-  },
-]
-
-/** The connector row for attaching a space's connected credential. */
-export let connectionTools = CONNECTIONS.map(worded)

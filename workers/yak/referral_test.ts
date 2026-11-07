@@ -4,7 +4,7 @@ import { equal, ok, test } from '@yaks/testing'
 import { parseHTML } from 'linkedom'
 import { rows } from './directory-rows-probe.ts'
 import type { Env, Vars } from './env.ts'
-import { desk } from './pages.ts'
+import { desk } from './desk-pages.ts'
 import { codeIn, codeOf, invitation } from './referral.ts'
 
 let { dir } = rows()

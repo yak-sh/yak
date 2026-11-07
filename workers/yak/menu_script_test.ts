@@ -3,7 +3,7 @@
 import { test } from '@yaks/testing'
 import { assert, assertEquals } from '@std/assert'
 import { parseHTML } from 'linkedom'
-import { desk } from './pages.ts'
+import { desk } from './desk-pages.ts'
 
 let code = await Deno.readTextFile(
   new URL('./public/menu.js', import.meta.url),

@@ -7,7 +7,6 @@
 import type { Transport } from '@yaks/phone'
 import type { Phone } from '@yaks/phone/plugin'
 import { phoneConfig } from './config.ts'
-import { lent } from './lent.ts'
 import type { Env } from './env.ts'
 
 // One lending per environment. Its options read the environment as they are
@@ -16,7 +15,10 @@ let held = new WeakMap<object, Promise<Record<string, Phone>>>()
 
 // A phone plugin's texter is its phone (@yaks/phone/plugin `texters`).
 let lend = async (env: Env) =>
-  await lent(env, 'texters', phoneConfig) as Record<string, Phone>
+  await (await import('./lent.ts')).lent(env, 'texters', phoneConfig) as Record<
+    string,
+    Phone
+  >
 
 /** Every phone config.ts `phoneConfig` lends, by name. Two plugins lending
  * one name are refused: which answers would be an accident of order. */

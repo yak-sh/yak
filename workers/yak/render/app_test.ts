@@ -9,7 +9,7 @@ import { entity } from '@yaks/preact'
 import { resolve } from '@yaks/render'
 import { mount } from '../../../packages/preact/testing.ts'
 import { markup } from '../html.ts'
-import { desk } from '../pages.ts'
+import { desk } from '../desk-pages.ts'
 import { app } from './app.ts'
 import { registry, tile, vocab } from './mod.ts'
 

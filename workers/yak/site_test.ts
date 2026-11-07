@@ -41,7 +41,7 @@ import { DRAWN, MARKDOWN } from './docs.ts'
 import { page as galleryPage } from './gallery.ts'
 import { INTEGRATIONS, page as integrationsPage } from './integrations.ts'
 import { PAGES, uriOf, WHOLE } from './guide.ts'
-import { askEmail, connect } from './pages.ts'
+import { askEmail, connect } from './signin-pages.ts'
 import * as site from './site/mod.ts'
 import {
   ADDRESSES,

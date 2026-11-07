@@ -208,7 +208,7 @@ let HEAD = `// Generated — do not edit. The words live in the files:
 // hand-written ones this stands in for, imported for their shape alone.
 import type { Page } from './guide.ts'
 import type { Said } from './prompts.ts'
-import type { Words } from './tool.ts'
+import type { Words } from './tool-words.ts'
 `
 
 let body = () =>

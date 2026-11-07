@@ -8,6 +8,7 @@ import { type ComponentChildren as Node, h } from 'preact'
 import { Button, Empty, Rows } from '@yaks/ui/parts'
 import { read } from '@yaks/yaml'
 import type { Declared } from './operator-persona.ts'
+import { readOnly, titleOf } from './data.ts'
 
 /** How the Operator writes a new app so the column beside the chat shows it
  * being made in order and in plain words, declared beside the code that
@@ -34,23 +35,6 @@ export type Made = { kinds: Kind[]; acts: Act[]; finds: string[] }
 
 let object = (v: unknown): v is Record<string, unknown> =>
   !!v && typeof v == 'object' && !Array.isArray(v)
-
-/** The words a component, command or property gives itself, which name it
- * for a person ('' for none); the data editor labels its controls by them too
- * (data.ts). */
-/// titleOf({ title: ' Address line 2 ' }) -> 'Address line 2'
-/// titleOf({ title: 2 }) -> ''
-export let titleOf = (entry: { title?: unknown }): string =>
-  typeof entry.title == 'string' ? entry.title.trim() : ''
-
-/** Whether a property is one the app keeps for itself, which nobody fills in
- * (a slug, a sort position, a flag on sample rows), said the way JSON Schema
- * says it. What it keeps leaves it out; the data editor shows it, never as a
- * control (data.ts). */
-/// readOnly({ readOnly: true }) -> true
-/// readOnly({ readOnly: 'yes' }) -> false
-export let readOnly = (property: { readOnly?: unknown }): boolean =>
-  property.readOnly === true
 
 // A name as a person writes it: `meal_plan`, `mealPlan` and `meal-plan` are
 // all "meal plan"; a `title` the entry gives is its own.

@@ -36,8 +36,6 @@
 import type { Env } from './env.ts'
 import { api } from '@yaks/cloudflare/analytics'
 import type { Answer } from './apps.ts'
-import { APP, inApp, type Row, SPACE as SPACE_ARG, worded } from './tool.ts'
-import { url as appUrl } from './directory.ts'
 import { background, caught } from './defects.ts'
 import { elapsed } from './lib/hops.ts'
 import { failure, resent } from '@yaks/cloudflare/api'
@@ -600,57 +598,3 @@ export let stats: Answer = async (at) => {
     return at.json(502, 'refused', e instanceof Error ? e.message : String(e))
   }
 }
-
-// The rows, said as rows: the words each says about itself are in
-// tools.yml under its name (tool.ts `worded`).
-let STATS: Row[] = [
-  {
-    name: 'app_stats',
-    readOnly: true,
-    // The numbers come from Cloudflare's analytics, past yaks.app.
-    openWorld: true,
-    input: {
-      type: 'object',
-      properties: {
-        space: SPACE_ARG,
-        app: APP,
-        days: {
-          type: 'number',
-          description:
-            'how far back, in days (default 30). Cloudflare keeps three ' +
-            'months, so anything past 90 is the same answer as 90.',
-        },
-      },
-      required: ['app'],
-    },
-    run: async (ctx, args) => {
-      let { space, app } = await inApp(ctx, args)
-      let days = args.days == null ? undefined : Number(args.days)
-      // No token, no numbers — one sentence rather than an error, because
-      // there is nothing the agent or the person can do about it (views.ts).
-      let asked = statsOf(ctx.env, app.eid, days)
-      if (!asked) return { text: NOT_ON, space }
-      let seen = await asked
-      let list = (head: string, rows: { name: string; views: number }[]) =>
-        rows.length
-          ? [`${head}:`, ...rows.map((r) => `- ${r.name} — ${r.views}`)]
-          : []
-      let text = seen.total
-        ? [
-          `${space.slug}/${app.slug} — ${seen.total} ${
-            seen.total == 1 ? 'visit' : 'visits'
-          } in ${seen.days} ` +
-          `days${ago(seen)} (${appUrl(space, app, ctx.env)})`,
-          ...list('Pages', seen.pages),
-          ...list('Came from', seen.from),
-          ...list('Countries', seen.countries),
-        ].join('\n')
-        : `${space.slug}/${app.slug} — nobody has opened it in ${seen.days} ` +
-          `days${ago(seen)}`
-      return { text, space }
-    },
-  },
-]
-
-/** The connector row for reading an app's visitor counts. */
-export let viewsTools = STATS.map(worded)

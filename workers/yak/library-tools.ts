@@ -23,11 +23,11 @@ import {
   inApp,
   refuse,
   rejected,
-  type Row,
   SPACE,
   str,
   text,
 } from './tool.ts'
+import { type Row } from './tool-words.ts'
 import { acceptsOf, belowFloor, Untaken, uploaded } from './uploads.ts'
 
 // What the library sends as itself, and the token a robots.txt group names

@@ -33,10 +33,10 @@ import {
   searched,
   showcase,
   type Shown,
-  standing,
   ticket,
   ticketed,
 } from './gallery.ts'
+import { standing } from './gallery-row.ts'
 import type { Env } from './env.ts'
 import { markup } from './html.ts'
 import { app, cards, space } from './testing.ts'
