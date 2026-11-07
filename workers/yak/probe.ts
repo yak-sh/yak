@@ -686,17 +686,27 @@ export let owned = async (
   person: string,
   slug: string,
   title = slug,
+) => (await ownedAll(k, person, [{ slug, title }]))[0]
+
+// Several such spaces, written in one apply: their eids, in order.
+let ownedAll = async (
+  k: Kernel,
+  person: string,
+  each: { slug: string; title?: string }[],
 ) => {
-  let eid = crypto.randomUUID()
-  await meta(k).apply([
+  let eids = each.map(() => crypto.randomUUID())
+  await meta(k).apply(each.flatMap(({ slug, title = slug }, i) => [
     {
-      entity: { eid },
+      entity: { eid: eids[i] },
       doc: { title },
-      space: { slug, store: spaceHandle(slug, eid) },
+      space: { slug, store: spaceHandle(slug, eids[i]) },
     },
-    { entity: { eid: '$seat' }, member: { space: eid, person, role: 'owner' } },
-  ])
-  return eid
+    {
+      entity: { eid: `$seat${i}` },
+      member: { space: eids[i], person, role: 'owner' },
+    },
+  ]))
+  return eids
 }
 
 // A person with spaces and apps: they sign in, own each space (`owned`), and
@@ -712,8 +722,9 @@ export let seed = async (
   let made = async (tool: string, args: Record<string, unknown>) =>
     String((await agent.answer(tool, args)).value?.eid)
   let eids: Record<string, string> = {}
-  for (let s of spaces) {
-    eids[s.slug] = await owned(k, them.person, s.slug)
+  let owns = await ownedAll(k, them.person, spaces)
+  for (let [i, s] of spaces.entries()) {
+    eids[s.slug] = owns[i]
     for (let a of s.apps) {
       eids[`${s.slug}/${a}`] = await made('app_new', {
         space: s.slug,

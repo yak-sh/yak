@@ -9,7 +9,7 @@
 //
 // The asset question is what the second test exists for. A page served at `/`
 // carries the address it was served at as its `<base href>` (apps.ts
-// `based`), so `photo.png` written in the page has to find the app's file.
+// `based`), so `photo.svg` written in the page has to find the app's file.
 // The test resolves the page's own relative URLs against the base the kernel
 // gave it and fetches those, rather than asserting a path by hand, so a base
 // that moved would fail here.
@@ -27,15 +27,46 @@ import {
 } from '@std/assert'
 import { parseHTML } from 'linkedom'
 import { chatPath, managePath } from './route.ts'
-import {
-  accepted,
-  client,
-  connector,
-  kernel,
-  seed,
-  signIn,
-  unique,
-} from './probe.ts'
+import { accepted, connector, kernel, seed, signIn, unique } from './probe.ts'
+
+// What the cases read, made once for the file by the first that asks: one
+// owner, and a space of each case's own, so that no case reads another's
+// writes. A space and its apps are most of what a case would otherwise cost.
+let build = async () => {
+  let k = await kernel()
+  let at = {
+    shown: unique('shown'),
+    bare: unique('bare'),
+    homing: unique('homing'),
+    front: unique('front'),
+    trips: unique('trips'),
+    reached: unique('reached'),
+    whose: unique('whose'),
+  }
+  let them = await seed(k, [
+    { slug: at.shown, apps: ['recipes', 'garden'] },
+    { slug: at.bare, apps: [] },
+    { slug: at.homing, apps: ['site', 'garden'] },
+    { slug: at.front, apps: ['site', 'garden'] },
+    { slug: at.trips, apps: ['one', 'two'] },
+    { slug: at.reached, apps: [] },
+    { slug: at.whose, apps: [] },
+  ])
+  let agent = connector(k, them.cookie)
+  // The listed space shows a stranger an app once it is released: before, it
+  // answers nothing at its address. Its garden is released, and private.
+  for (let app of ['recipes', 'garden']) {
+    await agent.tool('app_deploy', { space: at.shown, app })
+  }
+  await agent.tool('app_set', {
+    space: at.shown,
+    app: 'garden',
+    access: 'private',
+  })
+  return { k, at, them, agent }
+}
+let built: ReturnType<typeof build> | undefined
+let world = () => built ??= build()
 
 // What the browser would ask for, given a page and a URL written in it: the
 // page's `<base href>` resolved against the address it was served at.
@@ -47,342 +78,308 @@ let resolves = (page: string, at: string, href: string) => {
 }
 
 test('a space with no front page lists what you may open', async () => {
-  let k = await kernel()
-  let jeff21 = unique('jeff21')
-  let bare21Space = unique('bare21')
-  try {
-    let them = await seed(k, [
-      { slug: jeff21, apps: ['recipes', 'garden'] },
-      { slug: bare21Space, apps: [] },
-    ])
-    let agent = connector(k, them.cookie)
-    // A stranger is shown an app once it is released: before, it answers
-    // nothing at its address.
-    for (let app of ['recipes', 'garden']) {
-      await agent.tool('app_deploy', { space: jeff21, app })
-    }
-    await agent.tool('app_set', {
-      space: jeff21,
-      app: 'garden',
-      access: 'private',
+  let { k, at: { shown: jeff21, bare: bare21Space }, them } = await world()
+  let at = (cookie?: string) =>
+    k.at(`${jeff21}.yaks.app`, '/', {
+      redirect: 'manual',
+      headers: cookie ? { cookie } : {},
     })
-    let at = (cookie?: string) =>
-      k.at(`${jeff21}.yaks.app`, '/', {
-        redirect: 'manual',
-        headers: cookie ? { cookie } : {},
-      })
 
-    // A stranger: the public app by name, the private one not even as a
-    // name, a way in, and what this place is.
-    let out = await at()
-    assertEquals(out.status, 200)
-    let cold = await out.text()
-    assertStringIncludes(cold, 'href="/recipes/"')
-    assert(!cold.includes('garden'), cold)
-    assertStringIncludes(cold, 'private')
-    assertStringIncludes(cold, 'https://yaks.app/login?return=')
-    assertStringIncludes(cold, 'What is yaks.app?')
-    // Nothing about choosing a front page: the choice is not a stranger's.
-    // The words move (7b586b44 reworded them); what has to hold is that only
-    // the owner is offered the choice, so both halves name the thing the
-    // block is about rather than the sentence it says it in.
-    assert(!cold.includes('front page'), cold)
+  // A stranger: the public app by name, the private one not even as a
+  // name, a way in, and what this place is.
+  let out = await at()
+  assertEquals(out.status, 200)
+  let cold = await out.text()
+  assertStringIncludes(cold, 'href="/recipes/"')
+  assert(!cold.includes('garden'), cold)
+  assertStringIncludes(cold, 'private')
+  assertStringIncludes(cold, 'https://yaks.app/login?return=')
+  assertStringIncludes(cold, 'What is yaks.app?')
+  // Nothing about choosing a front page: the choice is not a stranger's.
+  // The words move (7b586b44 reworded them); what has to hold is that only
+  // the owner is offered the choice, so both halves name the thing the
+  // block is about rather than the sentence it says it in.
+  assert(!cold.includes('front page'), cold)
 
-    // The owner: both apps, the way to manage their apps at the apex, and no
-    // pitch or sign-in — they are home.
-    let mine = await (await at(them.cookie)).text()
-    assertStringIncludes(mine, 'href="/recipes/"')
-    assertStringIncludes(mine, 'href="/garden/"')
+  // The owner: both apps, the way to manage their apps at the apex, and no
+  // pitch or sign-in — they are home.
+  let mine = await (await at(them.cookie)).text()
+  assertStringIncludes(mine, 'href="/recipes/"')
+  assertStringIncludes(mine, 'href="/garden/"')
+  assertStringIncludes(
+    mine,
+    `href="https://yaks.app${managePath('apps', jeff21)}"`,
+  )
+  assert(!mine.includes('name="name"'), mine)
+  assert(!mine.includes('What is yaks.app?'), mine)
+  assert(!mine.includes('login?return='), mine)
+  // And nothing is being held back from them, so nothing says so.
+  assert(!mine.includes('private. Ask'), mine)
+
+  // Someone signed in who is nobody here sees what the stranger sees, minus
+  // the sign-in and the pitch: they have an account already.
+  let ann = await signIn(k, `ann-${crypto.randomUUID().slice(0, 8)}@yaks.app`)
+  let guest = await (await at(ann.cookie)).text()
+  assertStringIncludes(guest, 'href="/recipes/"')
+  assert(!guest.includes('garden'), guest)
+  assertStringIncludes(guest, 'private')
+  assert(!guest.includes('What is yaks.app?'), guest)
+
+  // A space with nothing in it is still a space, and still a 200: the
+  // owner is told they can build here, a stranger is told nothing is open.
+  let empty = await k.at(`${bare21Space}.yaks.app`, '/')
+  assertEquals(empty.status, 200)
+  assertStringIncludes(await empty.text(), 'Nothing here is open')
+  let ready = await k.at(`${bare21Space}.yaks.app`, '/', {
+    headers: { cookie: them.cookie },
+  })
+  assertStringIncludes(
+    await ready.text(),
+    `href="https://yaks.app${managePath('apps', bare21Space)}"`,
+  )
+
+  // An API address is still a machine door when no app answers there: a
+  // missing space, a bare space with no front app, and a missing named app
+  // all refuse in JSON. Returning the human 404 page here made clients
+  // parse an entire HTML document as an unexpected defect.
+  for (
+    let [host, path] of [
+      ['nowhere21.yaks.app', '/api/query'],
+      [`${bare21Space}.yaks.app`, '/api/query'],
+      [`${jeff21}.yaks.app`, '/missing/api/query'],
+    ]
+  ) {
+    let missing = await k.at(host, path)
+    assertEquals(missing.status, 404, `${host}${path}`)
     assertStringIncludes(
-      mine,
-      `href="https://yaks.app${managePath('apps', jeff21)}"`,
+      missing.headers.get('content-type') ?? '',
+      'application/json',
     )
-    assert(!mine.includes('name="name"'), mine)
-    assert(!mine.includes('What is yaks.app?'), mine)
-    assert(!mine.includes('login?return='), mine)
-    // And nothing is being held back from them, so nothing says so.
-    assert(!mine.includes('private. Ask'), mine)
-
-    // Someone signed in who is nobody here sees what the stranger sees, minus
-    // the sign-in and the pitch: they have an account already.
-    let ann = await signIn(k, `ann-${crypto.randomUUID().slice(0, 8)}@yaks.app`)
-    let guest = await (await at(ann.cookie)).text()
-    assertStringIncludes(guest, 'href="/recipes/"')
-    assert(!guest.includes('garden'), guest)
-    assertStringIncludes(guest, 'private')
-    assert(!guest.includes('What is yaks.app?'), guest)
-
-    // A space with nothing in it is still a space, and still a 200: the
-    // owner is told they can build here, a stranger is told nothing is open.
-    let empty = await k.at(`${bare21Space}.yaks.app`, '/')
-    assertEquals(empty.status, 200)
-    assertStringIncludes(await empty.text(), 'Nothing here is open')
-    let ready = await k.at(`${bare21Space}.yaks.app`, '/', {
-      headers: { cookie: them.cookie },
+    assertEquals(await missing.json(), {
+      error: { code: 'not_found', message: 'no app at that address' },
     })
-    assertStringIncludes(
-      await ready.text(),
-      `href="https://yaks.app${managePath('apps', bare21Space)}"`,
-    )
-
-    // An API address is still a machine door when no app answers there: a
-    // missing space, a bare space with no front app, and a missing named app
-    // all refuse in JSON. Returning the human 404 page here made clients
-    // parse an entire HTML document as an unexpected defect.
-    for (
-      let [host, path] of [
-        ['nowhere21.yaks.app', '/api/query'],
-        [`${bare21Space}.yaks.app`, '/api/query'],
-        [`${jeff21}.yaks.app`, '/missing/api/query'],
-      ]
-    ) {
-      let missing = await k.at(host, path)
-      assertEquals(missing.status, 404, `${host}${path}`)
-      assertStringIncludes(
-        missing.headers.get('content-type') ?? '',
-        'application/json',
-      )
-      assertEquals(await missing.json(), {
-        error: { code: 'not_found', message: 'no app at that address' },
-      })
-    }
-
-    // Only the bare address lists. A path under a space with no front page
-    // names nothing, and says so.
-    let deep = await k.at(`${jeff21}.yaks.app`, '/nothing/at/all')
-    assertEquals(deep.status, 404)
-    assertStringIncludes(await deep.text(), 'Nothing here yet')
-    // A hostname nobody made is still nobody's.
-    assertEquals((await k.at('nowhere.yaks.app', '/')).status, 404)
-  } finally {
-    await k.stop()
   }
+
+  // Only the bare address lists. A path under a space with no front page
+  // names nothing, and says so.
+  let deep = await k.at(`${jeff21}.yaks.app`, '/nothing/at/all')
+  assertEquals(deep.status, 404)
+  assertStringIncludes(await deep.text(), 'Nothing here yet')
+  // A hostname nobody made is still nobody's.
+  assertEquals((await k.at('nowhere.yaks.app', '/')).status, 404)
 })
 
 // Builder and setup are separate destinations, and the live script is served
 // on the same origin as the optional builder.
 test('management separates app creation from agent setup', async () => {
-  let k = await kernel()
-  let bare22Space = unique('bare22')
-  try {
-    let { cookie } = await seed(k, [{ slug: bare22Space, apps: [] }])
-    let at = (view: Parameters<typeof managePath>[0]) =>
-      k.at('yaks.app', managePath(view, bare22Space), { headers: { cookie } })
-    let library = await (await at('apps')).text()
-    assert(!library.includes('<textarea'), library)
-    assert(!library.includes('type="file"'), library)
-    // The page is the apex's, and its forms aim at the space's own doors.
-    let fresh = await (await at('new')).text()
-    assertStringIncludes(
-      fresh,
-      `action="https://${bare22Space}.yaks.app/api/build"`,
-    )
-    assertStringIncludes(
-      fresh,
-      `action="https://${bare22Space}.yaks.app/deploy"`,
-    )
-    assertStringIncludes(fresh, 'src="/build.js"')
-    assert(!fresh.includes('name="agent"'), fresh)
-    assertEquals((await k.at('yaks.app', '/build.js')).status, 200)
-    assertEquals(
-      (await k.at(`${bare22Space}.yaks.app`, '/api/build.js')).status,
-      200,
-    )
-    let setup = await (await at('agents')).text()
-    assertStringIncludes(setup, '<h1>Agents</h1>')
-    assertStringIncludes(setup, 'Connect another agent')
-    assertStringIncludes(setup, 'name="agent"')
-    assert(!setup.includes('<textarea'), setup)
-  } finally {
-    await k.stop()
-  }
+  let { k, at: { bare: bare22Space }, them: { cookie } } = await world()
+  let at = (view: Parameters<typeof managePath>[0]) =>
+    k.at('yaks.app', managePath(view, bare22Space), { headers: { cookie } })
+  let library = await (await at('apps')).text()
+  assert(!library.includes('<textarea'), library)
+  assert(!library.includes('type="file"'), library)
+  // The page is the apex's, and its forms aim at the space's own doors.
+  let fresh = await (await at('new')).text()
+  assertStringIncludes(
+    fresh,
+    `action="https://${bare22Space}.yaks.app/api/build"`,
+  )
+  assertStringIncludes(
+    fresh,
+    `action="https://${bare22Space}.yaks.app/deploy"`,
+  )
+  assertStringIncludes(fresh, 'src="/build.js"')
+  assert(!fresh.includes('name="agent"'), fresh)
+  assertEquals((await k.at('yaks.app', '/build.js')).status, 200)
+  assertEquals(
+    (await k.at(`${bare22Space}.yaks.app`, '/api/build.js')).status,
+    200,
+  )
+  let setup = await (await at('agents')).text()
+  assertStringIncludes(setup, '<h1>Agents</h1>')
+  assertStringIncludes(setup, 'Connect another agent')
+  assertStringIncludes(setup, 'name="agent"')
+  assert(!setup.includes('<textarea'), setup)
 })
 
 test('Settings chooses the homepage the way app_set home does', async () => {
-  let k = await kernel()
-  let slug = unique('homing')
-  try {
-    let { cookie } = await seed(k, [{ slug, apps: ['site', 'garden'] }])
-    let at = managePath('settings', slug)
-    let chosen = async () =>
-      parseHTML(await (await k.at(k.host, at, { headers: { cookie } })).text())
-        .document.querySelector('#your-home option[selected]')
-        ?.getAttribute('value')
-    let choose = (home: string) =>
-      k.at(k.host, at, {
-        method: 'POST',
-        headers: { cookie },
-        body: new URLSearchParams({ home }),
-      })
-    assertEquals(await chosen(), '')
-    assertEquals((await choose('garden')).status, 303)
-    assertEquals(await chosen(), 'garden')
-    await choose('site')
-    assertEquals(await chosen(), 'site')
-    await choose('')
-    assertEquals(await chosen(), '')
-  } finally {
-    await k.stop()
-  }
+  let { k, at: { homing: slug }, them: { cookie } } = await world()
+  let at = managePath('settings', slug)
+  let chosen = async () =>
+    parseHTML(await (await k.at(k.host, at, { headers: { cookie } })).text())
+      .document.querySelector('#your-home option[selected]')
+      ?.getAttribute('value')
+  let choose = (home: string) =>
+    k.at(k.host, at, {
+      method: 'POST',
+      headers: { cookie },
+      body: new URLSearchParams({ home }),
+    })
+  assertEquals(await chosen(), '')
+  assertEquals((await choose('garden')).status, 303)
+  assertEquals(await chosen(), 'garden')
+  await choose('site')
+  assertEquals(await chosen(), 'site')
+  await choose('')
+  assertEquals(await chosen(), '')
 })
 
 test('the front page is served at the space root', async () => {
-  let k = await kernel()
-  let jeff23 = unique('jeff23')
-  try {
-    let { cookie } = await seed(k, [{
-      slug: jeff23,
-      apps: ['site', 'garden'],
-    }])
-    let agent = connector(k, cookie)
-    await agent.tool('app_set', { space: jeff23, app: 'site', home: true })
-    let owner = client(k, `${jeff23}.yaks.app`, 'site', cookie)
-    // A page written the way a site is: a relative image and stylesheet, and
-    // a relative link to a place that is no file.
-    let page = '<!doctype html><html><head>' +
-      '<link rel="stylesheet" href="style.css">' +
-      '</head><body><h1>Her business</h1><img src="photo.png">' +
-      '<a href="about">About</a></body></html>'
-    await owner.put('/index.html', page)
-    await owner.put('/photo.png', 'not really a png')
-    await owner.put('/style.css', 'h1 { color: peru }')
-    await owner.put('/deep/note.txt', 'down a directory')
-    await agent.tool('app_deploy', { space: jeff23, app: 'site' })
-
-    // The root is the app: 200 with its page, not a 302 into `/site/`.
-    let root = await k.at(`${jeff23}.yaks.app`, '/', { redirect: 'manual' })
-    assertEquals(root.status, 200)
-    let served = await root.text()
-    assertStringIncludes(served, '<h1>Her business</h1>')
-    // Its reporter's doors are at the root as well — report.js reads them
-    // off its tag, so the tag has to name the address the page was served at.
-    assertStringIncludes(
-      served,
-      '<script data-yak-at="/" data-yak-version="1">',
-    )
-
-    // The page's own relative URLs, resolved as a browser would and then
-    // fetched — from the root, and from a pretty path under it, where a
-    // relative URL would otherwise resolve against the page's depth.
-    for (let at of ['/', '/about', '/deep/anything']) {
-      let served = await k.at(`${jeff23}.yaks.app`, at)
-      assertEquals(served.status, 200, at)
-      let drawn = await served.text()
-      assertStringIncludes(drawn, '<h1>Her business</h1>')
-      for (
-        let [href, want] of [
-          ['photo.png', 'not really a png'],
-          ['style.css', 'h1 { color: peru }'],
-        ]
-      ) {
-        let to = resolves(drawn, at, href)
-        let got = await k.at(`${jeff23}.yaks.app`, to)
-        assertEquals(got.status, 200, `${at} -> ${to}`)
-        assertEquals(await got.text(), want, to)
-      }
-    }
-    // A file down a directory, and a root-absolute address a page might
-    // carry: the front page answers for every path no app claims.
-    for (let path of ['/style.css', '/deep/note.txt']) {
-      assertEquals((await k.at(`${jeff23}.yaks.app`, path)).status, 200, path)
-    }
-    // Every path no app claims — except `/.well-known/`, which is the
-    // platform's on a hostname of ours (route.ts `platform`). That is where a
-    // site grants authority over its own name, and this name is not the
-    // space's to grant on: `assetlinks.json` would hand a native Android app
-    // the right to intercept URLs for `jeff.yaks.app`, and an
-    // `acme-challenge` token would pass HTTP-01 at a public CA and yield a
-    // trusted certificate for it. So the front page answers none of them,
-    // however ordinary the file looks — the home app included, since it is
-    // the app that would otherwise get them all.
-    // domain_test.ts holds the other half: on a hostname one app owns
-    // outright the name is theirs, so the authority is theirs to grant.
-    let claims = [
-      '/.well-known/acme-challenge/token',
-      '/.well-known/pki-validation/ca3.txt',
-      '/.well-known/assetlinks.json',
-      '/.well-known/apple-app-site-association',
-      '/.well-known/apple-developer-merchantid-domain-association',
-      '/.well-known/security.txt',
-    ]
-    for (let path of claims) await owner.put(path, 'the app said so')
-    for (let path of claims) {
-      let r = await k.at(`${jeff23}.yaks.app`, path)
-      assertEquals(r.status, 404, `${path} reached the app`)
-      assertEquals((await r.text()).includes('the app said so'), false, path)
-    }
-    // `robots.txt` is about the whole host too and is still the app's, which
-    // is the line the rule is actually drawn on: a robots file grants nobody
-    // anything, and the site's face is the home app. It is the obvious thing
-    // to sweep in beside the others, so it is held here on purpose.
-    await owner.put('/robots.txt', 'User-agent: *\nDisallow:')
-    await agent.tool('app_deploy', { space: jeff23, app: 'site' })
-    let robots = await k.at(`${jeff23}.yaks.app`, '/robots.txt')
-    assertEquals(robots.status, 200)
-    assertEquals(await robots.text(), 'User-agent: *\nDisallow:')
-    // Under the app's own prefix it is a file like any other: a grant is read
-    // at the root, and this is not the root.
-    let own = await k.at(`${jeff23}.yaks.app`, '/site/.well-known/security.txt')
-    assertEquals(own.status, 200)
-    assertEquals(await own.text(), 'the app said so')
-    // Its store's doors answer at the root too — named by the hostname and
-    // nothing else, the way they are on a custom domain (domain_test.ts).
-    let rows = await k.at(`${jeff23}.yaks.app`, '/api/graph')
-    assertStringIncludes((await rows.json()).db, `do:${jeff23}/site.`)
-    // But `/<x>/api/…` named an app that is not here: a page asking a store
-    // at a wrong address hears a 404, never HTML it cannot parse.
-    let missing = await k.at(`${jeff23}.yaks.app`, '/gone/api/query')
-    assertEquals(missing.status, 404)
-    assertEquals(await missing.json(), {
-      error: { code: 'not_found', message: 'no app at that address' },
-    })
-
-    // Its own `/<app>/` forwards here rather than serving the same page at a
-    // second address, and takes the query string with it.
-    for (let at of ['/site', '/site/', '/site/?a=1']) {
-      let sent = await k.at(`${jeff23}.yaks.app`, at, { redirect: 'manual' })
-      assertEquals(sent.status, 302, at)
-      assertEquals(
-        sent.headers.get('location'),
-        at.endsWith('?a=1') ? '/?a=1' : '/',
-        at,
-      )
-      await sent.body?.cancel()
-    }
-    // Deeper under that prefix is no forward: a link someone holds to a file
-    // lands on the file.
-    let deep = await k.at(`${jeff23}.yaks.app`, '/site/deep/note.txt', {
-      redirect: 'manual',
-    })
-    assertEquals(deep.status, 200)
-    assertEquals(await deep.text(), 'down a directory')
-
-    // Precedence, stated: the space's apps own the first path segment, and
-    // the front page answers what is left. `/garden` is the garden app even
-    // though the front page answers for any other path.
-    let sibling = await k.at(`${jeff23}.yaks.app`, '/garden', {
-      redirect: 'manual',
-    })
-    assertEquals(sibling.status, 302)
-    assertEquals(sibling.headers.get('location'), '/garden/')
-    assertEquals((await k.at(`${jeff23}.yaks.app`, '/garden/')).status, 404)
-
-    // The front page moves, and the addresses move with it: the app that was
-    // it serves at its own prefix again — no stale forward — and the root is
-    // the new one's.
-    await agent.tool('app_set', { space: jeff23, app: 'garden', home: true })
-    let back = await k.at(`${jeff23}.yaks.app`, '/site/', {
-      redirect: 'manual',
-    })
-    assertEquals(back.status, 200)
-    assertStringIncludes(await back.text(), '<h1>Her business</h1>')
-    assertStringIncludes(
-      (await (await k.at(`${jeff23}.yaks.app`, '/api/graph')).json()).db,
-      `do:${jeff23}/garden.`,
-    )
-  } finally {
-    await k.stop()
+  let { k, at: { front: jeff23 }, agent } = await world()
+  await agent.tool('app_set', { space: jeff23, app: 'site', home: true })
+  // A page written the way a site is: a relative image and stylesheet, and
+  // a relative link to a place that is no file.
+  let photo = '<svg xmlns="http://www.w3.org/2000/svg"/>'
+  let page = '<!doctype html><html><head>' +
+    '<link rel="stylesheet" href="style.css">' +
+    '</head><body><h1>Her business</h1><img src="photo.svg">' +
+    '<a href="about">About</a></body></html>'
+  // And the files a site grants authority over its name with, and its
+  // robots file, written and released with the rest (what each is for is
+  // below).
+  let claims = [
+    '/.well-known/acme-challenge/token',
+    '/.well-known/pki-validation/ca3.txt',
+    '/.well-known/assetlinks.json',
+    '/.well-known/apple-app-site-association',
+    '/.well-known/apple-developer-merchantid-domain-association',
+    '/.well-known/security.txt',
+  ]
+  let files = {
+    'index.html': page,
+    'photo.svg': photo,
+    'style.css': 'h1 { color: peru }',
+    'deep/note.txt': 'down a directory',
+    'robots.txt': 'User-agent: *\nDisallow:',
+    ...Object.fromEntries(claims.map((c) => [c.slice(1), 'the app said so'])),
   }
+  await agent.tool('app_files', {
+    space: jeff23,
+    app: 'site',
+    files: Object.entries(files).map(([path, content]) => ({ path, content })),
+  })
+  await agent.tool('app_deploy', { space: jeff23, app: 'site' })
+
+  // The root is the app: 200 with its page, not a 302 into `/site/`.
+  let root = await k.at(`${jeff23}.yaks.app`, '/', { redirect: 'manual' })
+  assertEquals(root.status, 200)
+  let served = await root.text()
+  assertStringIncludes(served, '<h1>Her business</h1>')
+  // Its reporter's doors are at the root as well — report.js reads them
+  // off its tag, so the tag has to name the address the page was served at.
+  assertStringIncludes(
+    served,
+    '<script data-yak-at="/" data-yak-version="1">',
+  )
+
+  // The page's own relative URLs, resolved as a browser would and then
+  // fetched — from the root, and from a pretty path under it, where a
+  // relative URL would otherwise resolve against the page's depth.
+  for (let at of ['/', '/about', '/deep/anything']) {
+    let served = await k.at(`${jeff23}.yaks.app`, at)
+    assertEquals(served.status, 200, at)
+    let drawn = await served.text()
+    assertStringIncludes(drawn, '<h1>Her business</h1>')
+    for (
+      let [href, want] of [
+        ['photo.svg', photo],
+        ['style.css', 'h1 { color: peru }'],
+      ]
+    ) {
+      let to = resolves(drawn, at, href)
+      let got = await k.at(`${jeff23}.yaks.app`, to)
+      assertEquals(got.status, 200, `${at} -> ${to}`)
+      assertEquals(await got.text(), want, to)
+    }
+  }
+  // A file down a directory, and a root-absolute address a page might
+  // carry: the front page answers for every path no app claims.
+  for (let path of ['/style.css', '/deep/note.txt']) {
+    assertEquals((await k.at(`${jeff23}.yaks.app`, path)).status, 200, path)
+  }
+  // Every path no app claims — except `/.well-known/`, which is the
+  // platform's on a hostname of ours (route.ts `platform`). That is where a
+  // site grants authority over its own name, and this name is not the
+  // space's to grant on: `assetlinks.json` would hand a native Android app
+  // the right to intercept URLs for `jeff.yaks.app`, and an
+  // `acme-challenge` token would pass HTTP-01 at a public CA and yield a
+  // trusted certificate for it. So the front page answers none of them,
+  // however ordinary the file looks — the home app included, since it is
+  // the app that would otherwise get them all.
+  // domain_test.ts holds the other half: on a hostname one app owns
+  // outright the name is theirs, so the authority is theirs to grant.
+  for (let path of claims) {
+    let r = await k.at(`${jeff23}.yaks.app`, path)
+    assertEquals(r.status, 404, `${path} reached the app`)
+    assertEquals((await r.text()).includes('the app said so'), false, path)
+  }
+  // `robots.txt` is about the whole host too and is still the app's, which
+  // is the line the rule is actually drawn on: a robots file grants nobody
+  // anything, and the site's face is the home app. It is the obvious thing
+  // to sweep in beside the others, so it is held here on purpose.
+  let robots = await k.at(`${jeff23}.yaks.app`, '/robots.txt')
+  assertEquals(robots.status, 200)
+  assertEquals(await robots.text(), 'User-agent: *\nDisallow:')
+  // Under the app's own prefix it is a file like any other: a grant is read
+  // at the root, and this is not the root.
+  let own = await k.at(`${jeff23}.yaks.app`, '/site/.well-known/security.txt')
+  assertEquals(own.status, 200)
+  assertEquals(await own.text(), 'the app said so')
+  // Its store's doors answer at the root too — named by the hostname and
+  // nothing else, the way they are on a custom domain (domain_test.ts).
+  let rows = await k.at(`${jeff23}.yaks.app`, '/api/graph')
+  assertStringIncludes((await rows.json()).db, `do:${jeff23}/site.`)
+  // But `/<x>/api/…` named an app that is not here: a page asking a store
+  // at a wrong address hears a 404, never HTML it cannot parse.
+  let missing = await k.at(`${jeff23}.yaks.app`, '/gone/api/query')
+  assertEquals(missing.status, 404)
+  assertEquals(await missing.json(), {
+    error: { code: 'not_found', message: 'no app at that address' },
+  })
+
+  // Its own `/<app>/` forwards here rather than serving the same page at a
+  // second address, and takes the query string with it.
+  for (let at of ['/site', '/site/', '/site/?a=1']) {
+    let sent = await k.at(`${jeff23}.yaks.app`, at, { redirect: 'manual' })
+    assertEquals(sent.status, 302, at)
+    assertEquals(
+      sent.headers.get('location'),
+      at.endsWith('?a=1') ? '/?a=1' : '/',
+      at,
+    )
+    await sent.body?.cancel()
+  }
+  // Deeper under that prefix is no forward: a link someone holds to a file
+  // lands on the file.
+  let deep = await k.at(`${jeff23}.yaks.app`, '/site/deep/note.txt', {
+    redirect: 'manual',
+  })
+  assertEquals(deep.status, 200)
+  assertEquals(await deep.text(), 'down a directory')
+
+  // Precedence, stated: the space's apps own the first path segment, and
+  // the front page answers what is left. `/garden` is the garden app even
+  // though the front page answers for any other path.
+  let sibling = await k.at(`${jeff23}.yaks.app`, '/garden', {
+    redirect: 'manual',
+  })
+  assertEquals(sibling.status, 302)
+  assertEquals(sibling.headers.get('location'), '/garden/')
+  assertEquals((await k.at(`${jeff23}.yaks.app`, '/garden/')).status, 404)
+
+  // The front page moves, and the addresses move with it: the app that was
+  // it serves at its own prefix again — no stale forward — and the root is
+  // the new one's.
+  await agent.tool('app_set', { space: jeff23, app: 'garden', home: true })
+  let back = await k.at(`${jeff23}.yaks.app`, '/site/', {
+    redirect: 'manual',
+  })
+  assertEquals(back.status, 200)
+  assertStringIncludes(await back.text(), '<h1>Her business</h1>')
+  assertStringIncludes(
+    (await (await k.at(`${jeff23}.yaks.app`, '/api/graph')).json()).db,
+    `do:${jeff23}/garden.`,
+  )
 })
 
 // Every trip to the directory is a wait from wherever the request landed, so a
@@ -390,17 +387,11 @@ test('the front page is served at the space root', async () => {
 // sit, the space with every app in it, and the rows of a page's own, by the
 // walk to the space's address.
 test('a dashboard page reads the directory in one trip', async () => {
-  let k = await kernel()
-  let slug = unique('trips')
-  let other = unique('reached')
-  let { cookie } = await seed(k, [{ slug, apps: ['one', 'two'] }, {
-    slug: other,
-    apps: [],
-  }])
+  let { k, at: { trips: slug, reached: other }, them: { cookie }, agent } =
+    await world()
   // Somebody else invited to the space and to an app, and another space's
   // Operator let in, so the People page and the Operator's settings have rows
   // of their own to name.
-  let agent = connector(k, cookie)
   let guest = await signIn(k)
   await agent.tool('member_add', { space: slug, email: guest.email })
   await agent.tool('member_add', {
@@ -468,15 +459,12 @@ test('a dashboard page reads the directory in one trip', async () => {
 // A space with no front page answers its bare address with its listing, from
 // the one read that routed it, for a stranger and for its owner alike.
 test("a space's listing reads the directory in one trip", async () => {
-  let k = await kernel()
-  let slug = unique('listed')
-  let { cookie } = await seed(k, [{ slug, apps: ['one', 'two'] }])
-  await connector(k, cookie).tool('app_deploy', { space: slug, app: 'two' })
+  let { k, at: { shown: slug }, them: { cookie } } = await world()
   for (let headers of [{}, { cookie }] as Record<string, string>[]) {
     await k.settled()
     let page = await k.at(`${slug}.yaks.app`, '/', { headers })
     assertEquals(page.status, 200)
-    assertStringIncludes(await page.text(), 'href="/two/"')
+    assertStringIncludes(await page.text(), 'href="/recipes/"')
     assertEquals(
       /hops;dur=(\d+)/.exec(page.headers.get('server-timing') ?? '')?.[1],
       '1',
@@ -485,11 +473,9 @@ test("a space's listing reads the directory in one trip", async () => {
 })
 
 test("the selector names whose space each one you're a member of is", async () => {
-  let k = await kernel()
-  let slug = unique('whose')
-  let them = await seed(k, [{ slug, apps: [] }])
+  let { k, at: { whose: slug }, them, agent } = await world()
   let guest = await signIn(k)
-  await connector(k, them.cookie).tool('member_add', {
+  await agent.tool('member_add', {
     space: slug,
     email: guest.email,
     role: 'editor',
