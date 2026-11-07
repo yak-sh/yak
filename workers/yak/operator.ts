@@ -56,7 +56,8 @@ import { inReach } from './declared.ts'
 import { connected, reaching } from './agent.ts'
 import { coded } from './agent-code.ts'
 import { ledger } from './ledger.ts'
-import { type Args, type Ctx, inSpace, refuse } from './tool.ts'
+import { admin, type Args, type Ctx, inSpace, refuse } from './tool.ts'
+import { adminTools } from './operator-admin.ts'
 import { platformFault } from './unseen.ts'
 import { bound, type Env } from './env.ts'
 import type { Held } from './build-door.ts'
@@ -1070,10 +1071,14 @@ export let operating = (
     let persona = await spaced(g.storage, space)
     if (persona.length) await g.apply(persona, { trusted: true })
     reached('persona', persona)
-    let [roster, google] = await Promise.all([
+    // The platform admin's sessions also read the platform: who they are is
+    // read through the whole directory, which the Operator's is not.
+    let whole = (options.directory ?? opening(env))()
+    let [roster, google, platform] = await Promise.all([
       operatorRoster(ctx, store, { space: space.eid, tasked: !!task })
         .then((r) => reached('roster', r)),
       googleTools(env, ctx, space).then((t) => reached('google', t)),
+      admin({ dir: whole, person: ctx.person! }),
     ])
     return [
       // A conversation and its forks hand coding and careful reasoning
@@ -1087,6 +1092,7 @@ export let operating = (
       ...wakeTools(store, space),
       ...subscriptionTools(store, space, watching),
       ...google,
+      ...platform ? adminTools(env, whole) : [],
       ...options.tools?.(ctx, files) ?? [],
       ...options.browsers
         ? browserTools(env, space, ctx.person, options.browsers)

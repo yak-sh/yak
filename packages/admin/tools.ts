@@ -18,6 +18,7 @@ import { given, read as configAt, used } from '@yaks/cli/config'
 import type { Options as TrackerOptions } from '@yaks/tracker/routes'
 import { type Account, account } from './account.ts'
 import { ADMIN } from '../../workers/yak/lib/bots.ts'
+import { budgetLines } from '../../workers/yak/lib/budget-lines.ts'
 
 import { Refused } from './refusal.ts'
 export { Refused } from './refusal.ts'
@@ -38,7 +39,6 @@ import {
   setBudget,
   setFee,
   setTunnel,
-  type SpaceBudget,
   standing,
   storeApply,
   storeQuery,
@@ -56,18 +56,6 @@ import { errors, tail } from './logs.ts'
 import { revert } from './revert.ts'
 
 type Args = Record<string, unknown>
-
-// Dollars to the cent, as a person reads them.
-let usd = (n: number) => `$${n.toFixed(2)}`
-
-// A space's budget as it stands (workers/yak/budget.ts).
-let budgetLines = (b: SpaceBudget) => [
-  `${b.space}: ${usd(b.limit)} a month (${
-    b.dollars == null ? "its plan's" : 'set by the platform'
-  })`,
-  `spent    ${usd(b.spent)} this month`,
-  `starter  ${usd(b.starter)} left as the month began`,
-]
 
 // The vault name a machine's tunnel token is kept under, which the box's
 // config names for @yaks/tunnel's service.

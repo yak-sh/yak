@@ -65,6 +65,12 @@ let doors = {
 }
 let marks: string[] = Object.values(doors)
 
+// What a door answered, when it answered JSON.
+let answered = (response: Response) =>
+  response.json().catch(() => null) as Promise<
+    { error?: string; retried?: number } | null
+  >
+
 export let request = async (
   remote: Remote,
   path: string,
@@ -195,7 +201,7 @@ export let mark = async (
     go,
   )
   if (response.status == 404) {
-    let answer = await response.json().catch(() => null)
+    let answer = await answered(response)
     if (answer?.error == 'bug not found') return false
     // A Worker whose deploy has not reached its object yet answers a new door
     // as no route, while the box already sends it.
@@ -208,7 +214,7 @@ export let mark = async (
   if (!response.ok) {
     // A refusal says why (an unexplained resolution); a failure only fails.
     let why = response.status == 400
-      ? (await response.json().catch(() => null))?.error
+      ? (await answered(response))?.error
       : undefined
     throw Error(
       `Remote tracker refused the mark (${response.status})${
@@ -237,7 +243,7 @@ export let retry = async (
     },
     go,
   )
-  let answer = await response.json().catch(() => null)
+  let answer = await answered(response)
   if (response.status == 404 && answer?.error == 'tracker route not found') {
     throw Error('Remote tracker has no retry door (404)')
   }

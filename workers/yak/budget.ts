@@ -17,6 +17,7 @@ import { directory, type Space, stamp } from './directory.ts'
 import { bound, type Env } from './env.ts'
 import { adminWho } from './identity.ts'
 import { added, budget, monthOf, starterOf } from './meter.ts'
+import type { SpaceBudget } from './lib/budget-lines.ts'
 
 let dirOf = (env: Env) => directory(bound(env.DIRECTORY, dirPart.fetch, env))
 
@@ -26,16 +27,20 @@ let json = (status: number, code: string, message: string) =>
 // Dollars to the cent, as digits: `Number('')` is 0, a budget of nothing.
 let DOLLARS = /^\d+(\.\d+)?$/
 
-let shown = (space: Space) => {
+/** A space's budget as it stands: the door's answer, and what the platform
+ * admin's Operator reads (operator-admin.ts). */
+export let standing = (space: Space): SpaceBudget => {
   let now = budget(space)
-  return Response.json({
+  return {
     space: space.slug,
-    dollars: space.budget,
+    dollars: space.budget ?? null,
     limit: now.limit,
     spent: now.spent,
     starter: starterOf(space),
-  })
+  }
 }
+
+let shown = (space: Space) => Response.json(standing(space))
 
 export let fetch = async (req: Request, env: Env): Promise<Response> => {
   if (req.method != 'GET' && req.method != 'POST') {

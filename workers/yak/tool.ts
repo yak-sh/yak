@@ -347,9 +347,11 @@ export let ownSpace = async (ctx: Ctx, app?: unknown) => {
 
 // The platform's admin: an owner of the meta space, the seat every platform
 // act answers to (sell.ts `fees`, tunnel.ts).
-export let admin = async (ctx: Ctx): Promise<boolean> => {
-  let meta = await ctx.dir.space(META.space)
-  return !!meta && await ctx.dir.role(meta, ctx.person) == 'owner'
+export let admin = async (
+  { dir, person }: Pick<Ctx, 'dir' | 'person'>,
+): Promise<boolean> => {
+  let meta = await dir.space(META.space)
+  return !!meta && await dir.role(meta, person) == 'owner'
 }
 
 // The caller's role in a space: their seat's. Where the door says `over` —

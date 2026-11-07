@@ -251,16 +251,9 @@ export let feeNow = (session: string): Promise<Fee> =>
 export let setFee = (session: string, bps: number): Promise<Fee> =>
   said(posted(apex(FEE), { bps: String(bps) }, session))
 
-/** A space's monthly model and voice budget (workers/yak/budget.ts): the
- * dollars set on it, null where its plan's stands, the limit it answers to,
- * what it spent this month, and what is left of its starter as it began. */
-export type SpaceBudget = {
-  space: string
-  dollars: number | null
-  limit: number
-  spent: number
-  starter: number
-}
+/** A space's monthly model and voice budget (workers/yak/budget.ts). */
+export type { SpaceBudget } from '../../workers/yak/lib/budget-lines.ts'
+import type { SpaceBudget } from '../../workers/yak/lib/budget-lines.ts'
 
 export let BUDGET = '/api/budget'
 

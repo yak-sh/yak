@@ -19,6 +19,7 @@ references may name entities in other stores.
 | `./remote`     | Signed remote reads, bug marks and durable error delivery                           |
 | `./poll`       | A polled watch of the platform tracker's bugs, with marks                           |
 | `./fixtime`    | Time to fix: first seen (or regressed) to resolved                                  |
+| `./errors`     | The admin_errors report: unresolved bugs, newest first, and their time to fix       |
 | `./graph`      | The precondition refusing an unexplained resolution                                 |
 | `./resolution` | A resolution's explanation: its check and how it reads                              |
 
