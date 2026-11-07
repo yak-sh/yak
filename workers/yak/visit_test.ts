@@ -271,6 +271,9 @@ await (await eve.at('/')).res.body?.cancel()
 let eveSaid = await eve.rows()
 let eveSilent = await browser(`yak_session=${eve.jar.get('yak_session')}`)
   .rows()
+let stranger = browser()
+let strangerFirst = await stranger.rows()
+let strangerNext = await stranger.rows()
 await k.stop()
 
 test('a stranger reads the sample and hears they may write', () => {
@@ -391,4 +394,10 @@ test('a browser says which stores it holds, and is read whole once when it says 
 test('a browser whose cookies say it holds no store of the app asks the directory nothing', () => {
   assertEquals([eveSaid.titles, eveSilent.titles], [['Sample'], ['Sample']])
   assertEquals(eveSaid.hops + 1, eveSilent.hops)
+})
+
+test('a browser that came with no cookie asks the directory nothing of its stores', () => {
+  assertEquals(strangerFirst.titles, ['Sample'])
+  assertEquals(strangerFirst.hops, strangerNext.hops)
+  assert(stranger.jar.has(STORES))
 })

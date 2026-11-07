@@ -262,6 +262,15 @@ export let signedOut = async (req: Request, env: Host, secret: string) => {
 let sets = (res: Response) =>
   new RegExp(`(?:^|,\\s*)${COOKIE}=`).test(res.headers.get('set-cookie') ?? '')
 
+// The instrument each request's browser was given on it, where it came with
+// none: nothing has been written with it, so it holds nothing (visit.ts
+// `ownOf` asks the directory nothing for it).
+let born = new WeakMap<Request, string>()
+
+/** Whether `via` was minted for this request, which `browsing` served. */
+export let newcomer = (req: Request, via: string) =>
+  born.get(req) == instrumentEid(via)
+
 /** Serve an app with the browser's own vouched instrument. The same cookie
  * holds a browser seal while signed out and a session seal while signed in;
  * an old session gains an instrument without losing its person or standing.
@@ -285,6 +294,7 @@ export let browsing = async (
     browser.exp - Date.now() / 1000 > SESSION / 2
   ) return serve(req)
   let via = browser?.source ?? browser?.via ?? crypto.randomUUID()
+  if (!browser) born.set(req, instrumentEid(via))
   let exp = Math.floor(Date.now() / 1000) + SESSION
   let token = claims
     ? await sign(

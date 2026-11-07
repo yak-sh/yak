@@ -49,7 +49,7 @@ import { KERNEL, meta } from './meta.ts'
 import { COPY } from './relocate.ts'
 import { installAt, signInAt } from './route.ts'
 import { cleared, sampling } from './sample.ts'
-import { domainOf, SESSION, type Who } from './session.ts'
+import { domainOf, newcomer, SESSION, type Who } from './session.ts'
 
 /** A browser's own store of an app: its handle, where its uploads go, when it
  * was last used, and the app it became once installed. */
@@ -246,7 +246,8 @@ export let visitOf = async (
 // cookie holding the instrument it speaks for. The directory is still asked
 // about a store the cookies name, so a cookie only ever spares a read, and
 // cookies of another instrument, or none at all, mean its stores are read
-// whole, once. A cookie of its own per store, because the answer that read
+// whole, once; a browser that came with no instrument at all holds nothing,
+// and is told so unasked. A cookie of its own per store, because the answer that read
 // the stores and the one that made a store can cross: each sets only its own
 // names, and neither undoes the other.
 
@@ -278,6 +279,10 @@ export let ownOf = async (
   app: string,
 ): Promise<Visit | null> => {
   let me = tag(instrumentEid(via)), header = req.headers.get('cookie')
+  if (newcomer(req, via)) {
+    tell(req, via, [STORES])
+    return null
+  }
   if (cookieValue(header, STORES) == me) {
     return cookieValue(header, storeCookie(app)) == me
       ? await visitOf(env, via, app)
