@@ -138,6 +138,7 @@ export let sessionStatus = {
     dispatch = dispatchStatus,
     declared: (name: string) => boolean = () => true,
     text: (stored: Expr) => Expr = (stored) => stored,
+    one?: Expr,
   ): Select | undefined => {
     if (
       !values.every((v) =>
@@ -197,12 +198,17 @@ export let sessionStatus = {
     // A transcript with no entry a passive notice leaves is empty, ended or not.
     let empty = wanted.includes('empty')
     // Nothing ended owes anything, so the mark answers before any entry is read.
+    // Given `one` owner, the screen reads that session alone.
+    let kept = [
+      ...one ? [eq(col('entity', 's'), one)] : [],
+      ...stopped || empty
+        ? []
+        : [not(fn('coalesce', col('ended', 's'), lit(false)))],
+    ]
     let candidates = select({
       cols: [col('entity', 's'), col('ended', 's'), as(latest, 'latest')],
       from: table('session', 's'),
-      ...stopped || empty ? {} : {
-        where: not(fn('coalesce', col('ended', 's'), lit(false))),
-      },
+      ...kept.length ? { where: and(...kept) } : {},
     })
     let actionable = wanted.some((v) => v != 'stopped' && v != 'empty')
     let newest = col('latest', 'candidate')
@@ -1380,12 +1386,23 @@ export let sessionDerived = (vocab: Vocab, reading: Derived = {}): Derived => {
       stable: !reading['content.body'] ||
         reading['content.body'].stable == true,
       test: (owner, values, scope) => {
+        // Unfinished words screen the one session as the select screens
+        // every session: most rest, and the exact rule reads only the rest.
         if (
           !values.every((v) =>
             (v.t == 'val' || v.t == 'lit') &&
             ['stopped', 'failed'].includes(String(v.v))
           )
-        ) return undefined
+        ) {
+          let one = sessionStatus.select(
+            values,
+            dispatch,
+            declared(scope),
+            text,
+            owner,
+          )
+          return one && exists(one)
+        }
         return among(
           sessionStatus.expr(
             owner,

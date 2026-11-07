@@ -973,6 +973,31 @@ for (let typed of [false, true]) {
       [],
     )
   })
+  test(`one session's filter matches every transcript shape (archetypes: ${typed})`, () => {
+    let sets = [['pending', 'running'], ['queued'], ['empty'], [
+      'stopped',
+      'pending',
+    ]]
+    // Named sessions are tested one by one, as a few named owners always are.
+    let named = qeq(
+      'entity.eid',
+      list(...shapes.map(([name]) => `${name}/${S}`)),
+    )
+    let wrong = sets.flatMap((words) => {
+      let got = (g.read(all(
+        named,
+        qeq('session.status', list(...words)),
+        fields('session.id'),
+      )) as Bundle[]).map((b) => (b.session as { id: string }).id)
+      let want = shapes.filter(([, , word]) => words.includes(word))
+        .map(([name]) => name)
+      return [
+        ...got.filter((name) => !want.includes(name)),
+        ...want.filter((name) => !got.includes(name)),
+      ].map((name) => `${name}: ${words}`)
+    })
+    assertEquals(wrong, [])
+  })
   test(`the SQL view answers the same word as the rule (archetypes: ${typed})`, () => {
     let want = Object.fromEntries(shapes.map(([name, , w]) => [name, w]))
     // Each word filters exactly the transcripts in that shape.
