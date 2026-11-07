@@ -288,6 +288,9 @@ export type Space = {
   // The model that answers its calls (speech.ts `setupOf`), or none for the
   // quickest on here.
   voice_model?: string | null
+  // The larger model its talking model hands a hard request to, on the
+  // provider's side (speech.ts `BACKENDS`), or none for its Operator.
+  voice_backend?: string | null
   // How long, in seconds, its Operator's conversations ask the model's
   // provider to keep their cached prefix, or none for the provider's default.
   cache_retention?: number | null
@@ -723,6 +726,7 @@ export type Row = {
     voice?: string | null
     voice_speed?: string | null
     voice_model?: string | null
+    voice_backend?: string | null
     cache_retention?: number | null
   }
   starter?: { dollars?: number | null }
@@ -1248,6 +1252,7 @@ export let spaceOf = (r: Row): Space => ({
   voice: r.operator?.voice ?? null,
   voice_speed: r.operator?.voice_speed ?? null,
   voice_model: r.operator?.voice_model ?? null,
+  voice_backend: r.operator?.voice_backend ?? null,
   cache_retention: r.operator?.cache_retention ?? null,
   logo: r.space_logo?.sha
     ? { sha: r.space_logo.sha, type: r.space_logo.type ?? '' }
@@ -2088,7 +2093,8 @@ export let directoryRows = (rows: {
     },
     // The space's Operator called `name` (operator-name.ts `given`), or
     // speaking in `voice` at `voice_speed` and answered on a call by
-    // `voice_model` (speech.ts `setupOf`).
+    // `voice_model`, which hands a hard request to `voice_backend` (speech.ts
+    // `setupOf`).
     operate: async (
       space: Space,
       operator: {
@@ -2096,6 +2102,7 @@ export let directoryRows = (rows: {
         voice?: string
         voice_speed?: string
         voice_model?: string
+        voice_backend?: string
       },
       headers: Record<string, string>,
     ): Promise<Space> => {

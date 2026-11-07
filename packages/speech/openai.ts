@@ -54,6 +54,29 @@ let PRICES: Record<
   },
   'gpt-realtime-2.1': { audioIn: 32, audioOut: 64, textIn: 4, textOut: 24 },
 }
+
+// The larger models GPT-Live hands its work to on OpenAI's side, in dollars
+// per million tokens: input, cached input, cache writes and output.
+let BACKENDS: Record<string, [number, number, number, number]> = {
+  'gpt-6-luna': [0.1, 0.01, 0.125, 0.5],
+  'gpt-6-sol': [2, 0.2, 2.5, 10],
+}
+type Used = {
+  input_tokens?: number
+  output_tokens?: number
+  input_tokens_details?: {
+    cached_tokens?: number
+    cache_write_tokens?: number
+  }
+}
+let backendCost = (model: string, u: Used = {}) => {
+  let [input, cached, written, output] = BACKENDS[model] ??
+    BACKENDS['gpt-6-sol']
+  let reused = u.input_tokens_details?.cached_tokens ?? 0
+  let wrote = u.input_tokens_details?.cache_write_tokens ?? 0
+  return (((u.input_tokens ?? 0) - reused - wrote) * input + reused * cached +
+    wrote * written + (u.output_tokens ?? 0) * output) / 1e6
+}
 let costOf = (model: string, usage: Usage = {}) => {
   let p = PRICES[model] ?? PRICES['gpt-realtime-2.1']
   let i = usage.input_token_details ?? {}, o = usage.output_token_details ?? {}
@@ -367,7 +390,27 @@ export let OPENAI: Provider = {
           ...setup.format ? { format: wired(setup.format) } : {},
           output: { voice: setup.voice },
         },
-        delegation: { type: 'client' },
+        delegation: setup.backend
+          ? {
+            type: 'responses',
+            responses: {
+              model: setup.backend.model,
+              instructions: setup.backend.instructions,
+              tools: [
+                ...setup.backend.tools.map((t) => ({
+                  type: 'function',
+                  ...t,
+                  strict: false,
+                })),
+                { type: 'web_search' },
+              ],
+              tool_choice: 'auto',
+              // One call at a time, each answered before the next.
+              parallel_tool_calls: false,
+              reasoning: { effort: 'low' },
+            },
+          }
+          : { type: 'client' },
       },
     })],
     audio: (bytes) =>
@@ -375,10 +418,19 @@ export let OPENAI: Provider = {
         type: 'session.input_audio.append',
         audio: base64(bytes),
       }),
-    read: (data) => {
+    read: (data, _, backend) => {
       let e = parsed(data) as Event & {
-        delegation?: { id?: string }
-        event?: unknown
+        delegation?: { id?: string; target?: string }
+        event?: {
+          type?: string
+          item?: {
+            type?: string
+            call_id?: string
+            name?: string
+            arguments?: string
+          }
+          response?: { usage?: Used }
+        }
       }
       switch (e.type) {
         case 'session.started':
@@ -389,8 +441,31 @@ export let OPENAI: Provider = {
           return e.delta ? [{ saying: e.delta }] : []
         case 'session.output_audio.delta':
           return e.delta ? [{ audio: unbase64(e.delta) }] : []
+        // Work its backend does is no one's here but its tools'.
         case 'session.delegation.created':
-          return e.delegation?.id ? [{ delegated: e.delegation.id }] : []
+          return e.delegation?.id && e.delegation.target != 'responses'
+            ? [{ delegated: e.delegation.id }]
+            : []
+        // What the backend does, each of its events wrapped in one of these.
+        case 'response.event': {
+          let n = e.event ?? {}
+          if (
+            n.type == 'response.output_item.done' &&
+            n.item?.type == 'function_call'
+          ) {
+            return [{
+              call: {
+                id: n.item.call_id ?? '',
+                name: n.item.name ?? '',
+                args: n.item.arguments ?? '{}',
+              },
+            }]
+          }
+          if (n.type == 'response.completed' && backend) {
+            return [{ spent: backendCost(backend, n.response?.usage) }]
+          }
+          return []
+        }
         case 'error':
           return [{ error: String(e.error?.message) }]
       }
@@ -401,6 +476,14 @@ export let OPENAI: Provider = {
     // the session, so asking it that way to say a line now has it say the
     // line again later, and only that.
     answer: (id, output) => appended('commentary', output, id),
+    backends: Object.keys(BACKENDS),
+    result: (call, output) => [
+      JSON.stringify({
+        type: 'response.item.create',
+        item: { type: 'function_call_output', call_id: call, output },
+      }),
+      JSON.stringify({ type: 'response.create' }),
+    ],
     say: (text) => appended('commentary', text),
     tell: (text) => appended('thinking', text),
   }],

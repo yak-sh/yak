@@ -48,6 +48,7 @@ import {
 } from './operator-texts.ts'
 import { given } from './operator-name.ts'
 import {
+  backendOf,
   BUTLERS,
   modelOf,
   offered,
@@ -252,7 +253,7 @@ export let nameCard = (at: string, name: string) =>
 export let voiceCard = (
   at: string,
   space: Pick<Space, 'operator'>,
-  { setup, voices, ways, paces }: ReturnType<typeof offered>,
+  { setup, voices, ways, paces, backends }: ReturnType<typeof offered>,
 ) =>
   setting(
     at,
@@ -303,6 +304,12 @@ export let voiceCard = (
         about: w.about,
         checked: w.model == setup.model,
       })),
+    ),
+    choices(
+      'voice-backend',
+      'Hard requests',
+      'voice_backend',
+      backends.map((b) => ({ ...b, checked: b.id == setup.backend })),
     ),
   )
 // What a person agreed to be texted at. Any opt-in this space's operator
@@ -455,12 +462,14 @@ export let operatorAnswer = async (
       let { id } = voiceOf(String(form.get('voice') ?? ''))
       let model = form.get('voice_model')
       let speed = form.get('voice_speed')
+      let backend = form.get('voice_backend')
       let set = await directoryOf(env.STORE).operate(
         space,
         {
           voice: id,
           ...speed ? { voice_speed: paceOf(String(speed)).id } : {},
           ...model ? { voice_model: modelOf(String(model), id) } : {},
+          ...backend ? { voice_backend: backendOf(String(backend)).id } : {},
         },
         vouched(who),
       )
@@ -468,6 +477,7 @@ export let operatorAnswer = async (
         voice: set.voice,
         voice_speed: set.voice_speed,
         voice_model: set.voice_model,
+        voice_backend: set.voice_backend,
       })
     } catch (e) {
       if (!(e instanceof CallError)) throw e

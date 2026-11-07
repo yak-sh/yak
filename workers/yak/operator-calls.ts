@@ -24,8 +24,10 @@
 // so an object restarted under a call loses at most that much of its charge,
 // and the stream opened again charges only its own.
 import { type Clock, system } from '@yaks/fp'
+import { CallError } from '@yaks/tools'
 import type { Frame, Line, Ring } from '@yaks/phone'
 import {
+  type Backend,
   type Keyed,
   type Provider,
   type Setup,
@@ -33,6 +35,7 @@ import {
   type Talk as Talker,
   talk,
   type Talked,
+  talkerOf,
   type Told,
   type Turns,
   turns,
@@ -327,11 +330,18 @@ export type Talk = Around & {
   wait?: number
 }
 
+/** The Operator's own tools, as another model working for the caller calls
+ * them (operator.ts `tools`). */
+export type Tools = Awaited<ReturnType<Operator['tools']>>
+
 /** A call a model hears and speaks itself, asking the Operator. */
 export type Talking = Around & {
   talk: (told: Talked) => Talker
   /** its status tools beside `ask`, each answered by reading */
   looks?: Look[]
+  /** the Operator's own tools, for a larger model the talking model hands
+   * hard requests to on its provider's side (`BACKEND`) */
+  tools?: Tools
   /** what it is told of the Operator as the call starts, and again whenever
    * the Operator's work moves, when that changed (operator-glance.ts) */
   glance?: { recent: () => Promise<string>; work: () => Promise<string> }
@@ -685,6 +695,12 @@ Delegation policy: Your backend is the Operator's own work, which can do anythin
 export let instructed = (name: string, duplex = false) =>
   duplex ? `${butler(name)}\n\n${DUPLEX}` : `${butler(name)} ${TURNED}`
 
+/** What a larger model a talking model hands hard requests to on its
+ * provider's side is told: that it works for the caller's Operator on a live
+ * call, with the Operator's tools, and hands longer work to the Operator. */
+export let backed = (name: string, now: Date) =>
+  `You work for ${name}, a person's Operator on yaks.app, while it is on the phone with them: it hands you what they ask that needs thought, facts, their apps or something done. Transcripts of the call can have mistakes and unfinished phrases; use the latest of what they said, and when a detail you need is unclear, say what to ask them instead of guessing. You have the Operator's tools: use them for their apps, rows, messages, reminders and memory. Anything that takes more than a few steps, such as building or changing an app, or that needs the Operator's own conversation with them, give to the ask tool in their words, and report what it answers. It is ${now.toISOString()} now. Answer in a sentence or two of plain words with the facts and what was done, and say something was done only once a tool said so.`
+
 /**
  * One call's conversation with a model that hears and speaks itself: the
  * caller's audio goes to it and its audio to them, and what it asks of the
@@ -752,7 +768,15 @@ export let talking = (o: Talking): Call => {
           return FAILED
         })
       }
-      if (name != ASK.name) return `There is no tool called ${name}.`
+      if (name != ASK.name) {
+        if (!o.tools) return `There is no tool called ${name}.`
+        return await o.tools.run(name, JSON.parse(args)).catch((error) => {
+          // A tool's refusal of what it was asked is its answer.
+          if (error instanceof CallError) return error.message
+          c.report(error)
+          return FAILED
+        })
+      }
       let { request } = JSON.parse(args) as { request?: string }
       return await ask(String(request ?? ''))
     },
@@ -898,7 +922,7 @@ declare let WebSocketPair: { new (): { 0: unknown; 1: Upgraded } }
  * model's call (`talks`), its lines kept in their conversation and its tools
  * the Operator's status and `ask`. `begin` makes the call this object's.
  */
-export let calling = (
+export let calling = async (
   env: Env,
   operator: Operator,
   space: Space,
@@ -984,9 +1008,38 @@ export let calling = (
     dir: directoryOf(env.STORE),
   }
   let looked = looks(glance)
-  let how: { instructions: string; tools: Tool[] } = {
-    instructions: instructed(space.operator ?? 'the Operator', setup.duplex),
-    tools: [ASK, ...looked.map(({ read: _, ...tool }) => tool)],
+  let name = space.operator ?? 'the Operator'
+  let tools = [ASK, ...looked.map(({ read: _, ...tool }) => tool)]
+  // A duplex model whose Operator picked a larger model on its provider's
+  // side hands its work there, offered the Operator's own tools through the
+  // caller's reach; where those cannot be read, the call goes on handing its
+  // work to the Operator.
+  let t = talkerOf(setup.provider, setup.model)
+  let own = t?.duplex && t.backends.includes(setup.backend)
+    ? await operator.tools({ person: ticket.person }, space).catch((e) => {
+      defect(e, CALL)
+      return undefined
+    })
+    : undefined
+  let how: {
+    instructions: string
+    tools: Tool[]
+    backend?: Backend
+  } = {
+    instructions: instructed(name, setup.duplex),
+    tools,
+    ...own
+      ? {
+        backend: {
+          model: setup.backend,
+          instructions: backed(name, new Date()),
+          tools: [
+            ...tools,
+            ...own.tools.filter((o) => !tools.some((m) => m.name == o.name)),
+          ],
+        },
+      }
+      : {},
   }
   return {
     around,
@@ -1008,6 +1061,7 @@ export let calling = (
         // Behind a talking model the Operator answers with the fastest model.
         ask: asking(CALL_MODELS[0], ticket.call),
         note: (text, said) => note(text, { said }),
+        tools: own,
         talk,
       })
     },
@@ -1046,7 +1100,7 @@ export let answering = async (
   passed(ticket.at, setup.provider)
   let pair = new WebSocketPair()
   pair[1].accept()
-  let c = calling(env, operator, space, ticket, armed, {
+  let c = await calling(env, operator, space, ticket, armed, {
     setup,
     perMinute: line.perMinute,
     hangup: () => caller().hangup(ticket.call),

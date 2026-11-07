@@ -1,5 +1,5 @@
 import { equal, test, until } from '@yaks/testing'
-import { assertRejects } from '@std/assert'
+import { assertRejects, assertThrows } from '@std/assert'
 import {
   accept,
   balance,
@@ -676,4 +676,109 @@ test('GPT-Live is started, takes its own turns, keeps each side’s words as lin
   })
   // Priced by the minute of the stream, $0.05.
   equal(stream.close(), { seconds: 0.42, dollars: 0.035 / 100 })
+})
+
+test('GPT-Live hands its work to a larger model on OpenAI’s side, whose tool calls are answered here and whose tokens are priced', async () => {
+  let s = socket()
+  let told: unknown[] = []
+  let tools = [{ name: 'apps', description: 'Their apps.', parameters: {} }]
+  let stream = talk({
+    provider: OPENAI,
+    key: 'k1',
+    model: 'gpt-live-1',
+    format: { encoding: 'mulaw', rate: 8000 },
+    instructions: 'Be brief.',
+    backend: { model: 'gpt-6-luna', instructions: 'Do the work.', tools },
+    open: s.open,
+    told: {
+      audio: () => {},
+      call: (
+        name,
+        args,
+      ) => (told.push({ call: name, args }),
+        Promise.resolve('Shopping and Recipes.')),
+      delegate: () => (told.push('delegate'), Promise.resolve('')),
+    },
+  })
+  let event = (e: object) => s.fire('message', JSON.stringify(e))
+  s.fire('open')
+  equal(s.json()[0].session.delegation, {
+    type: 'responses',
+    responses: {
+      model: 'gpt-6-luna',
+      instructions: 'Do the work.',
+      tools: [
+        { type: 'function', ...tools[0], strict: false },
+        { type: 'web_search' },
+      ],
+      tool_choice: 'auto',
+      parallel_tool_calls: false,
+      reasoning: { effort: 'low' },
+    },
+  })
+  event({ type: 'session.started' })
+  // The work is the backend's: nothing here is asked to do it.
+  event({
+    type: 'session.delegation.created',
+    delegation: { id: 'd1', target: 'responses' },
+  })
+  event({
+    type: 'response.event',
+    delegation_id: 'd1',
+    event: {
+      type: 'response.output_item.done',
+      item: {
+        type: 'function_call',
+        call_id: 'c1',
+        name: 'apps',
+        arguments: '{}',
+      },
+    },
+  })
+  await until(() => s.sent.length == 3)
+  equal(told, [{ call: 'apps', args: '{}' }])
+  equal(s.json().slice(1), [{
+    type: 'response.item.create',
+    item: {
+      type: 'function_call_output',
+      call_id: 'c1',
+      output: 'Shopping and Recipes.',
+    },
+  }, { type: 'response.create' }])
+  // 1,000 tokens written to the cache, 4,000 read from it, 1,000 new and 100
+  // out, at gpt-6-luna's rates.
+  event({
+    type: 'response.event',
+    delegation_id: 'd1',
+    event: {
+      type: 'response.completed',
+      response: {
+        usage: {
+          input_tokens: 6000,
+          output_tokens: 100,
+          input_tokens_details: {
+            cached_tokens: 4000,
+            cache_write_tokens: 1000,
+          },
+        },
+      },
+    },
+  })
+  equal(stream.close().dollars.toFixed(6), '0.000315')
+})
+
+test('GPT-Live hands work only to a larger model it has', () => {
+  let s = socket()
+  let opened = () =>
+    talk({
+      provider: OPENAI,
+      key: 'k1',
+      model: 'gpt-live-1',
+      format: { encoding: 'mulaw', rate: 8000 },
+      instructions: 'Be brief.',
+      backend: { model: 'gpt-2', instructions: '', tools: [] },
+      open: s.open,
+      told: { audio: () => {}, call: () => Promise.resolve('') },
+    })
+  assertThrows(opened, Error, 'hands no work to gpt-2')
 })

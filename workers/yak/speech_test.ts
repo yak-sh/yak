@@ -189,6 +189,7 @@ test('an Operator’s setup: its voice names the provider, its pace how fast it 
     model: 'gpt-realtime-2.1-mini',
     talks: true,
     duplex: false,
+    backend: 'operator',
   })
   // Where its provider is off, the next way, in a butler's voice.
   equal(
@@ -201,6 +202,7 @@ test('an Operator’s setup: its voice names the provider, its pace how fast it 
       model: 'claude-haiku-5-5',
       talks: false,
       duplex: false,
+      backend: 'operator',
     },
   )
   // A voice the quickest way can't speak keeps its voice, answered the next.
@@ -214,6 +216,7 @@ test('an Operator’s setup: its voice names the provider, its pace how fast it 
     model: 'gpt-realtime-2.1-mini',
     talks: true,
     duplex: false,
+    backend: 'operator',
   })
   equal(of('aura-2-draco-en', 'claude-sonnet-5-5', 'brisk').pace, 'brisk')
   equal(of(undefined, undefined, 'gone').pace, 'normal')
@@ -226,4 +229,8 @@ test('an Operator’s setup: its voice names the provider, its pace how fast it 
     ) => [o.voice, o.talks, o.duplex]),
     [['marin', true, true], ['cedar', true, true]],
   )
+  // Who its talking model hands hard requests to: the Operator, unless a
+  // larger model on its provider's side was picked.
+  equal(setupOf(on, { voice_backend: 'gpt-6-sol' }).backend, 'gpt-6-sol')
+  equal(setupOf(on, { voice_backend: 'gpt-2' }).backend, 'operator')
 })

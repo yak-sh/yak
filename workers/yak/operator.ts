@@ -1058,6 +1058,42 @@ export let operating = (
     ], { trusted: true })
   }
 
+  // The tools a session of this Operator is offered beside its own: the
+  // person's apps through their reach, and the Operator's own doors.
+  let roster = async (session: string): Promise<Tool[]> => {
+    let [{ space, ctx, files }, task, [row]] = await Promise.all([
+      working(env, store, session, options.directory),
+      taskOf(store, session),
+      g.get([session]),
+    ])
+    reached('working', space)
+    let persona = await spaced(g.storage, space)
+    if (persona.length) await g.apply(persona, { trusted: true })
+    reached('persona', persona)
+    let [roster, google] = await Promise.all([
+      operatorRoster(ctx, store, { space: space.eid, tasked: !!task })
+        .then((r) => reached('roster', r)),
+      googleTools(env, ctx, space).then((t) => reached('google', t)),
+    ])
+    return [
+      // A conversation and its forks hand coding and careful reasoning
+      // to the stronger model in a fresh helper, which starts no other.
+      ...!(row?.spawned && !row.fork && !topicOf(row)) ? [delegated] : [],
+      ...roster,
+      platformBug(ctx, space),
+      textSend(env, ctx, space),
+      mailSend(env, ctx, space, store),
+      phoneSend(env, ctx, space, store),
+      ...wakeTools(store, space),
+      ...subscriptionTools(store, space, watching),
+      ...google,
+      ...options.tools?.(ctx, files) ?? [],
+      ...options.browsers
+        ? browserTools(env, space, ctx.person, options.browsers)
+        : [],
+    ]
+  }
+
   // This object's runner, a new one each time the object starts: a Durable
   // Object has one instance at a time, so a call or lease held by any other
   // was held by an instance a reset or a kill ended, and is taken up now
@@ -1095,39 +1131,7 @@ export let operating = (
           session: { persona: ORACLE, topic },
         }
       },
-      remote: async (session) => {
-        let [{ space, ctx, files }, task, [row]] = await Promise.all([
-          working(env, store, session, options.directory),
-          taskOf(store, session),
-          g.get([session]),
-        ])
-        reached('working', space)
-        let persona = await spaced(g.storage, space)
-        if (persona.length) await g.apply(persona, { trusted: true })
-        reached('persona', persona)
-        let [roster, google] = await Promise.all([
-          operatorRoster(ctx, store, { space: space.eid, tasked: !!task })
-            .then((r) => reached('roster', r)),
-          googleTools(env, ctx, space).then((t) => reached('google', t)),
-        ])
-        return [
-          // A conversation and its forks hand coding and careful reasoning
-          // to the stronger model in a fresh helper, which starts no other.
-          ...!(row?.spawned && !row.fork && !topicOf(row)) ? [delegated] : [],
-          ...roster,
-          platformBug(ctx, space),
-          textSend(env, ctx, space),
-          mailSend(env, ctx, space, store),
-          phoneSend(env, ctx, space, store),
-          ...wakeTools(store, space),
-          ...subscriptionTools(store, space, watching),
-          ...google,
-          ...options.tools?.(ctx, files) ?? [],
-          ...options.browsers
-            ? browserTools(env, space, ctx.person, options.browsers)
-            : [],
-        ]
-      },
+      remote: roster,
       // The conversation and its work forks share a short topic map. Only a
       // session opened on a topic carries that topic's compiled context.
       instructions: async (session) => {
@@ -1305,19 +1309,14 @@ export let operating = (
   // their words by phone and the talking model's as the Operator's own
   // (`notice.own`), so its next turn reads what it said as said by itself.
   let note: Operator['note'] = async (held, space, text, o) => {
-    let session = rootOf(space.eid, held.person)
-    let fresh = !(await g.get([session]))[0]?.session
-    if (fresh) {
-      await readying(held, space)
-      await started(session, held.person, space)
-    }
+    let { session, fresh } = await conversing(held, space)
     let line = o.said ? { content: { body: text }, notice: { own: true } } : {
       content: { body: o.began ? CALLED : HEARD + text },
       notice: {},
       operator_channel: channelOf('voice', o.began ? '' : HEARD),
     }
     await g.apply([
-      ...fresh ? [await carrying(session, held, space, {})] : [],
+      ...fresh ? [fresh] : [],
       {
         entity: { eid: crypto.randomUUID() },
         entry: { session },
@@ -1331,6 +1330,47 @@ export let operating = (
       },
     ], { trusted: true })
     options.tell?.(session)
+  }
+
+  // The person's one conversation, begun where it has not been: `fresh` is
+  // then what it carries on with, for the caller's write to apply.
+  let conversing = async (held: Asker, space: Space) => {
+    let session = rootOf(space.eid, held.person)
+    if ((await g.get([session]))[0]?.session) return { session }
+    await readying(held, space)
+    await started(session, held.person, space)
+    return { session, fresh: await carrying(session, held, space, {}) }
+  }
+
+  // What another model working for the person is offered (a call's backend
+  // on OpenAI's side, operator-calls.ts): the tools their conversation is
+  // offered, through their reach in the space, each run as a call of that
+  // conversation. Starting helpers is the conversation's own, so it is left
+  // out.
+  let tools: Operator['tools'] = async (held, space) => {
+    let { session, fresh } = await conversing(held, space)
+    if (fresh) await g.apply([fresh], { trusted: true })
+    let offered = (await roster(session)).filter((t) => t != delegated)
+    let named = new Map(offered.map((t) => [t.name, t]))
+    return {
+      tools: offered.map(({ name, description, parameters }) => ({
+        name,
+        description,
+        parameters,
+      })),
+      run: async (name, args) => {
+        let tool = named.get(name)
+        if (!tool) {
+          throw new CallError('tool', `There is no tool called ${name}.`)
+        }
+        let call = {
+          entity: { eid: crypto.randomUUID() },
+          call: { to: name, args },
+        }
+        let told = await tool.run(args, { session, call, entries: [] })
+        return typeof told == 'string' ? told : told.text
+      },
+    }
   }
 
   // An agent asking through operator_run waits on one answer, so its words
@@ -1421,7 +1461,7 @@ export let operating = (
   // What to call a person in what the Operator shows of its work.
   let named = (person: string) => dir().nameAt(person)
 
-  return { store, reads, ask, note, run, stop, named, watching }
+  return { store, reads, ask, note, tools, run, stop, named, watching }
 }
 
 export type Asking = {
@@ -1471,6 +1511,13 @@ export type Operator = {
     text: string,
     o: { call: string; said?: boolean; began?: boolean },
   ) => Promise<void>
+  /** The tools the person's conversation is offered, for another model
+   * working for them to call through the same reach: each `run` answers in
+   * words, and refuses with a CallError as a tool does. */
+  tools: (held: Asker, space: Space) => Promise<{
+    tools: { name: string; description: string; parameters: object }[]
+    run: (name: string, args: Record<string, unknown>) => Promise<string>
+  }>
   /** Stop a conversation (with its helpers) or a task's running session at
    * once, the step in flight included: nothing more is done until new words
    * reopen it. */

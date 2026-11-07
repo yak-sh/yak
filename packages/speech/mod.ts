@@ -96,6 +96,18 @@ export type Setup = {
   speed: number
   instructions: string
   tools: { name: string; description: string; parameters: object }[]
+  /** a larger model a duplex model hands its work to on the provider's
+   * side, one of its `backends`, told `instructions` and calling `tools`
+   * through `told.call`; without one, the work goes to whoever runs the
+   * call (`told.delegate`) */
+  backend?: Backend
+}
+
+/** A larger model a duplex model hands its work to on the provider's side. */
+export type Backend = {
+  model: string
+  instructions: string
+  tools: Setup['tools']
 }
 
 /** A speech provider as data. */
@@ -167,8 +179,9 @@ export type Talker = {
   path: (model: string) => string
   opening: (setup: Setup) => string[]
   audio: (bytes: Uint8Array) => string
-  /** what one message means, on a stream talking with `model` */
-  read: (data: unknown, model: string) => Said[]
+  /** what one message means, on a stream talking with `model`, handing its
+   * work to `backend` where it has one */
+  read: (data: unknown, model: string, backend?: string) => Said[]
   /** a tool's answer given back, or a delegation's */
   answer: (call: string, output: string) => string[]
   /** something the model is told mid-stream, for what it says next,
@@ -216,6 +229,11 @@ export type Duplex = {
   perMinute: number
   /** the model asked to say `text` now */
   say: (text: string) => string[]
+  /** the larger models it hands its work to on the provider's side
+   * (`Setup.backend`), the quickest first */
+  backends: string[]
+  /** a backend's tool call answered, and its work let go on */
+  result: (call: string, output: string) => string[]
 }
 
 let MEDIA: Record<Format['encoding'], string> = {
@@ -648,6 +666,8 @@ export type Talking = {
   speed?: number
   instructions: string
   tools?: Setup['tools']
+  /** a duplex model's larger model on the provider's side (`Setup.backend`) */
+  backend?: Backend
 }
 
 type Calls = NonNullable<Talker['calls']>
@@ -683,6 +703,7 @@ let setup = (
   speed: paced(t.speeds, o.speed),
   instructions: o.instructions,
   tools: t.duplex ? [] : [LISTEN, ...o.tools ?? []],
+  ...t.duplex && o.backend ? { backend: o.backend } : {},
 })
 
 let carrier = (provider: Provider, model?: string): Calls => {
@@ -932,7 +953,13 @@ let duplexed = (o: Talks, t: Talker & Duplex): Talk => {
     throw new Error(`${o.provider.name}'s duplex model joins no call`)
   }
   let set = setup(t, o, format)
-  let bytes = 0
+  if (set.backend && !t.backends.includes(set.backend.model)) {
+    throw new Error(
+      `${o.provider.name}'s ${set.model} hands no work to ${set.backend.model}`,
+    )
+  }
+  // The stream's seconds and what its backend's work cost.
+  let bytes = 0, backed = 0
   // Each side's words since the other last spoke, and the caller's since the
   // model last handed work over.
   let hearing = '', saying = '', asked = ''
@@ -957,7 +984,7 @@ let duplexed = (o: Talks, t: Talker & Duplex): Talk => {
     o.provider.live + t.path(set.model),
     t.opening(set),
     (data) => {
-      for (let x of t.read(data, set.model)) {
+      for (let x of t.read(data, set.model, set.backend?.model)) {
         if (x.ready && held) { for (let m of held.splice(0)) s.send(m) }
         if (x.ready) held = undefined
         if (x.hearing) said(), hearing += x.hearing
@@ -970,6 +997,13 @@ let duplexed = (o: Talks, t: Talker & Duplex): Talk => {
           o.told.audio(x.audio)
         }
         if (x.error) o.told.lost?.(x.error)
+        if (x.spent) backed += x.spent
+        let call = x.call
+        if (call) {
+          Promise.resolve(o.told.call(call.name, call.args))
+            .catch((error) => `That did not work: ${error?.message ?? error}`)
+            .then((output) => t.result(call.id, output).forEach(send))
+        }
         let id = x.delegated
         if (id) {
           heard(), said()
@@ -987,7 +1021,7 @@ let duplexed = (o: Talks, t: Talker & Duplex): Talk => {
   )
   let spent = () => {
     let seconds = bytes / perSecond(format)!
-    return { seconds, dollars: seconds / 60 * t.perMinute }
+    return { seconds, dollars: seconds / 60 * t.perMinute + backed }
   }
   return {
     send: (audio) => {

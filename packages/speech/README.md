@@ -63,7 +63,11 @@ argument; nothing here reads the environment.
   `ago` seconds back to their last sound. Its tools are whoever runs the call:
   work it hands over goes to `told.delegate(request)`, the caller's words since
   it last did, and what that answers it says in its own words, as it does what
-  `say` asks. It is priced by the minute.
+  `say` asks. Given a `backend` (`{model, instructions, tools}`, one of the
+  entry's `backends`: gpt-6-luna or gpt-6-sol), it hands its work to that larger
+  model on the provider's side instead, which searches the web itself and calls
+  `tools` through `told.call(name, args)`, each answer letting its work go on.
+  It is priced by the minute, and its backend by the token.
 - A call the provider's own line carries, sent to it over SIP, never passes its
   audio here. `talk.calls.rang(event)` reads the provider's webhook for the
   call's `id` and SIP `headers`; `accept({provider, key, call, …})` picks it up

@@ -2,6 +2,7 @@
 // number answers, the stream door's refusals, the `voice` channel, and one
 // call's conversation with its line, speech and Operator stood in for.
 import { clock, equal, test, until } from '@yaks/testing'
+import { CallError } from '@yaks/tools'
 import { line } from '@yaks/telnyx'
 import { consentEid } from '@yaks/phone'
 import { OPENAI, type Socket, talk, type Talked, type Told } from '@yaks/speech'
@@ -740,6 +741,41 @@ test('a talking model is told the conversation and the work as the call starts, 
     true,
   )
   equal(failures.map((e) => (e as Error).message), ['the inbox is gone'])
+  equal(c.asked, [])
+  c.frame({ event: 'stop' })
+  await c.call.ended
+})
+
+test("a talking model's backend calls the Operator's own tools: their refusal is its answer, and a failure is reported", async () => {
+  let failures: unknown[] = []
+  let ran: [string, unknown][] = []
+  let c = talkingCall(false, {
+    tools: {
+      tools: [],
+      run: (name, args) => {
+        ran.push([name, args])
+        if (name == 'wake_set') {
+          return Promise.reject(new CallError('arguments', 'Say when.'))
+        }
+        if (name == 'text_send') {
+          return Promise.reject(new Error('the line is down'))
+        }
+        return Promise.resolve('Written.')
+      },
+    },
+    report: (e) => void failures.push(e),
+  })
+  equal(await c.told().call('graph_apply', '{"app":"list"}'), 'Written.')
+  equal(await c.told().call('wake_set', '{}'), 'Say when.')
+  equal(
+    (await c.told().call('text_send', '{}')).startsWith('That failed'),
+    true,
+  )
+  equal(ran, [['graph_apply', { app: 'list' }], ['wake_set', {}], [
+    'text_send',
+    {},
+  ]])
+  equal(failures.map((e) => (e as Error).message), ['the line is down'])
   equal(c.asked, [])
   c.frame({ event: 'stop' })
   await c.call.ended

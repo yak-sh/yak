@@ -160,7 +160,7 @@ export let carrying = async (
   }
   passed(ticket.at, provider)
   let call = { ...speech, call: ticket.call }
-  let c = calling(env, operator, space, ticket, armed, {
+  let c = await calling(env, operator, space, ticket, armed, {
     setup: { ...setup, ...how, provider, talks: true, duplex: !!t.duplex },
     perMinute: LINE,
     hangup: () => hangup(call),

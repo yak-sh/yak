@@ -1,5 +1,7 @@
 import { test, until } from '@yaks/testing'
-import { assertEquals, assertStringIncludes } from '@std/assert'
+import { assertEquals, assertRejects, assertStringIncludes } from '@std/assert'
+import { CallError } from '@yaks/tools'
+import { rootOf } from './operator-channels.ts'
 import type { Item, Model, Request } from '@yaks/model'
 import { comp } from '../../packages/graph/testing.ts'
 import { platform } from './directory-rows-probe.ts'
@@ -668,4 +670,24 @@ test('Stop reaches a helper a helper started', () => {
     new Set(stops.map((b) => comp(b, 'entry').session)),
     new Set([top, child, grandchild]),
   )
+})
+
+test('another model working for a person is offered the tools their conversation is, and runs them through the same reach', async () => {
+  let store = operatorMemory()
+  let op = operate(store, f, operatorModel(() => Promise.reject('no model')))
+  let { tools, run } = await op.tools(f.held, f.space)
+  let names = tools.map((t) => t.name)
+  for (let name of ['graph_query', 'graph_apply', 'wake_set', 'text_send']) {
+    assertEquals(names.includes(name), true, name)
+  }
+  // Starting a helper is the conversation's own.
+  assertEquals(names.includes('fork'), false)
+  assertEquals(
+    await run('app_files', { app: 'notices', op: 'list' }),
+    '(no files)\nNothing is released yet.',
+  )
+  await assertRejects(() => run('nope', {}), CallError, 'no tool called nope')
+  // Their conversation is begun for the calls to be its own.
+  let root = rootOf(f.space.eid, f.held.person)
+  assertEquals((await store.g.get([root]))[0]?.session != undefined, true)
 })

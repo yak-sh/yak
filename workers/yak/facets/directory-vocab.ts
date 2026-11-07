@@ -129,12 +129,13 @@ export let directoryDoc: VocabDoc = {
       component: true,
       type: 'object',
       description:
-        "The space's Operator, the assistant that works in it: the name it goes by, the voice it speaks in, how fast it speaks, and the model that answers it on a call.",
+        "The space's Operator, the assistant that works in it: the name it goes by, the voice it speaks in, how fast it speaks, the model that answers it on a call, and the larger model that model hands a hard request to on the provider's side, if not the Operator.",
       properties: {
         name: text,
         voice: text,
         voice_speed: text,
         voice_model: text,
+        voice_backend: text,
         cache_retention: num,
       },
     },

@@ -100,6 +100,42 @@ let WAYS: Way[] = [
   },
 ]
 
+/** Who a talking model hands a hard request to on a call, in the settings
+ * page's words: the Operator itself, through `ask`, or a larger model run on
+ * the voice's own provider's side, offered the Operator's tools
+ * (operator-calls.ts). The Operator is what nobody picked. */
+export type Backend = { id: string; name: string; about: string }
+
+export let BACKENDS: Backend[] = [
+  {
+    id: 'operator',
+    name: 'Your Operator',
+    about:
+      'Hands it to your Operator, with everything it knows of you and every tool it has.',
+  },
+  {
+    id: 'gpt-6-luna',
+    name: 'OpenAI’s quick model',
+    about:
+      'Answers on OpenAI’s side with your Operator’s tools, and hands bigger work to your Operator.',
+  },
+  {
+    id: 'gpt-6-sol',
+    name: 'OpenAI’s larger model',
+    about:
+      'Like the quick one, a little slower, and better at harder requests.',
+  },
+]
+
+/** The backend named `id`, refused when there is none by that id. */
+export let backendOf = (id: string) => {
+  let backend = BACKENDS.find((b) => b.id == id)
+  if (!backend) {
+    throw new CallError('arguments', 'Pick one of the ways listed.')
+  }
+  return backend
+}
+
 /** How fast an Operator speaks on a call, in the settings page's words: a
  * multiple of each provider's own pace, which each holds within the speeds
  * it has (@yaks/speech `paced`). Normal is what nobody picked. */
@@ -145,7 +181,7 @@ export let speaks = (model: string, id: string) =>
  * even where it is not among them, so a save never changes it unasked. */
 export let offered = (
   env: Speaking,
-  space: Pick<Space, 'voice' | 'voice_model' | 'voice_speed'>,
+  space: Pick<Space, 'voice' | 'voice_model' | 'voice_speed' | 'voice_backend'>,
 ) => {
   let setup = setupOf(env, space)
   let on = (v: Voiced) => speechOf(env, v.provider)
@@ -162,7 +198,11 @@ export let offered = (
       about: 'Kept until you pick one of the others.',
     })
   }
-  return { setup, voices, ways, paces: PACES }
+  // A larger model on OpenAI's side only where OpenAI is on.
+  let backends = BACKENDS.filter((b) =>
+    b.id == 'operator' || !!speechOf(env, OPENAI)
+  )
+  return { setup, voices, ways, paces: PACES, backends }
 }
 
 /** The voice named `id`, refused when no provider has one by that id. */
@@ -203,7 +243,7 @@ export let modelOf = (id: string, voice: string) => {
  * the voice picked, in its own voice when none was. */
 export let setupOf = (
   env: Speaking,
-  space: Pick<Space, 'voice' | 'voice_model' | 'voice_speed'>,
+  space: Pick<Space, 'voice' | 'voice_model' | 'voice_speed' | 'voice_backend'>,
 ) => {
   let pace = PACES.find((p) => p.id == space.voice_speed) ?? paceOf('normal')
   let model = space.voice_model ??
@@ -226,6 +266,10 @@ export let setupOf = (
     talks: !!talk,
     /** it hears and speaks at once, taking its own turns */
     duplex: !!talk?.duplex,
+    // Who its talking model hands a hard request to, where it can hand one
+    // to a larger model on its provider's side (operator-calls.ts).
+    backend: BACKENDS.find((b) => b.id == space.voice_backend)?.id ??
+      'operator',
   }
 }
 
