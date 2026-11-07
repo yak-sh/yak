@@ -575,9 +575,13 @@ export let handoff = async (req: Request, env: Env): Promise<Response> => {
  * Every way of signing up ends here: a code, a link, a letter (`joined`) and
  * a text (`textedIn`).
  */
-export let settle = async (env: Env, person: string): Promise<Space> => {
+export let settle = async (
+  env: Env,
+  person: string,
+  owning: Promise<Space> = dirOf(env).own(person),
+): Promise<Space> => {
   let dir = dirOf(env)
-  let own = await dir.own(person)
+  let own = await owning
   let space = await dir.space(META.space)
   if (space && await dir.memberless(space)) {
     await meta(env).apply([{
@@ -748,12 +752,16 @@ let landed = async (
     async () => keep(env, dir, await browser(env, req), person),
   )
   // Their space, and the platform for the first person ever, are settled
-  // behind the answer, which needs neither: it is the session and where to
-  // send them. A door that shows them their space finds it, or mints it in
-  // the same one write (directory.ts `own`), one space between the two, so a
-  // new person's first page never waits on more than that (T-148852).
+  // behind the answer (T-148852). Their own space is found, or minted in one
+  // write (directory.ts `own`), once, here: one sent nowhere in particular
+  // lands straight on it (T-149706), where /manage was one more trip for the
+  // browser that found it again, and the answer waits on it for nobody else.
+  let to = back && onZone(back, env)
+  let own = dir.own(person)
   background(
-    settle(env, person).then(() => {}, (e) => fault(env, 'settle', e)),
+    apart(() =>
+      settle(env, person, own).then(() => {}, (e) => fault(env, 'settle', e))
+    ),
   )
   // A person who has never signed in before is the funnel's sign-up
   // (funnel.ts): the first time, whether their row came from this sign-in or
@@ -789,7 +797,17 @@ let landed = async (
     page.headers.set('set-cookie', set)
     return page
   }
-  return redirect(backTo(back, env), set, 303)
+  // A space they can't be given now is the settle's to report, and /manage
+  // tries again.
+  return redirect(
+    to || await c.time('own', () =>
+      own.then(
+        (space) => hostUrl(env, chatPath(space.slug)),
+        () => hostUrl(env, MANAGE),
+      )),
+    set,
+    303,
+  )
 }
 
 /**

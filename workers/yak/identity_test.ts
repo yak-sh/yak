@@ -413,10 +413,11 @@ test('a person signs in by mail, and an agent by OAuth', async () => {
     let inn = await form(k, '/login/code', { email, code })
     assertEquals(inn.status, 303)
     // Sent from nowhere, they land on their own space — the signed-in home of
-    // the platform, where attaching an assistant is one link away (T-34233).
+    // the platform, where attaching an assistant is one link away (T-34233) —
+    // straight, with no /manage between to find it again (T-149706).
     assertEquals(
       inn.headers.get('location'),
-      'https://yaks.app/manage',
+      `https://yaks.app/manage/${email.split('@')[0]}`,
     )
     let set = inn.headers.get('set-cookie') ?? ''
     assertMatch(set, /^yak_session=/)
@@ -492,7 +493,7 @@ test('a person signs in by mail, and an agent by OAuth', async () => {
       assertEquals(r.status, 303)
       return {
         to: r.headers.get('location'),
-        home: 'https://yaks.app/manage',
+        home: `https://yaks.app/manage/${addr.split('@')[0]}`,
       }
     }
     let notes = 'https://someone.yaks.app/notes/'
@@ -775,7 +776,7 @@ test('a person signs in by mail, and an agent by OAuth', async () => {
     assertEquals(over.status, 303)
     assertEquals(
       over.headers.get('location'),
-      'https://yaks.app/manage',
+      `https://yaks.app/manage/${email.split('@')[0]}`,
     )
     await over.body?.cancel()
 
@@ -1042,8 +1043,8 @@ test('/login never draws the box for a browser already signed in', async () => {
       return r.headers.get('location')
     }
     let aimed = (back: string) => `/login?return=${encodeURIComponent(back)}`
-    let { cookie, person } = await signIn(k)
-    let home = 'https://yaks.app/manage'
+    let { cookie, person, name } = await signIn(k)
+    let home = `https://yaks.app/manage/${name}`
 
     // Aimed nowhere: their own space, which is where a fresh sign-in with no
     // return goes too.
@@ -1115,7 +1116,7 @@ test(
       assertEquals(inn.status, 303)
       assertEquals(
         inn.headers.get('location'),
-        'https://yaks.app/manage',
+        `https://yaks.app/manage/${slug}`,
       )
       let cookie = (inn.headers.get('set-cookie') ?? '').split(';')[0]
 
@@ -1333,7 +1334,7 @@ test('the connector page, and the address chosen on it', async () => {
     assertEquals(inn.status, 303)
     assertEquals(
       inn.headers.get('location'),
-      'https://yaks.app/manage',
+      `https://yaks.app/manage/${email.split('@')[0]}`,
     )
     await inn.body?.cancel()
     let cookie = (inn.headers.get('set-cookie') ?? '').split(';')[0]
@@ -1468,9 +1469,10 @@ test(
   },
 )
 
-// A new person's space is settled behind the code's answer (identity.ts
-// `landed`), so the page it sends them to is asked for while that is still
-// going, and lands them in their one space all the same.
+// A new person's space is found or minted before the code's answer, which
+// sends them straight to it (identity.ts `landed`, T-149706), and the rest of
+// settling them goes on behind it: the page works right after the code, and
+// they hold the one space.
 test("a new person's first page works right after the code", async () => {
   let k = await kernel()
   try {
@@ -1482,18 +1484,13 @@ test("a new person's first page works right after the code", async () => {
     })
     await inn.body?.cancel()
     let cookie = (inn.headers.get('set-cookie') ?? '').split(';')[0]
-    let go = async (to: string | null) => {
-      let r = await k.at('yaks.app', new URL(to!).pathname, {
-        redirect: 'manual',
-        headers: { cookie },
-      })
-      await r.body?.cancel()
-      return r
-    }
-    let first = await go(inn.headers.get('location'))
     let at = `https://yaks.app/manage/${email.split('@')[0]}`
-    assertEquals([first.status, first.headers.get('location')], [302, at])
-    assertEquals((await go(at)).status, 200)
+    let page = await k.at('yaks.app', new URL(at).pathname, {
+      redirect: 'manual',
+      headers: { cookie },
+    })
+    await page.body?.cancel()
+    assertEquals([inn.headers.get('location'), page.status], [at, 200])
     await k.settled()
     let [them] = await meta(k).query(`.person&.email.address=${email}`)
     let seats = await meta(k).query(`.member.person=${them.entity.eid}`)
@@ -1543,7 +1540,7 @@ test('a link signs a person in, once or until it is revoked', async () => {
     await inn.body?.cancel()
     assertEquals(
       inn.headers.get('location'),
-      'https://yaks.app/manage',
+      `https://yaks.app/manage/${email.split('@')[0]}`,
     )
     assertEquals(inn.headers.get('referrer-policy'), 'no-referrer')
     let cookie = (inn.headers.get('set-cookie') ?? '').split(';')[0]
