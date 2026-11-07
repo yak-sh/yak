@@ -37,6 +37,8 @@ import { BODY, DOC, TITLE } from '@yaks/doc'
 import { human } from '@yaks/id'
 import { safe } from '@yaks/text'
 import type { Vocab } from '@yaks/vocab'
+import { PART } from './part.ts'
+export { PART }
 
 /** A persona and the documents it is built from: both sets, already resolved
  * and ordered, and the tools it offers. */
@@ -55,10 +57,6 @@ export type Worn = {
 
 /** The heading over the documents a persona only mentions by id. */
 export let NAMED = '## Reads'
-
-/** What stands between two parts of what an agent is told: each document
- * worn, and what its host adds after them. */
-export let PART = '\n\n---\n\n'
 
 // Printed once, under that heading: a reader who meets an id needs to know it
 // is an id and not a citation. Which tool resolves it is the caller's

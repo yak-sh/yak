@@ -73,15 +73,14 @@ import {
 } from './speech.ts'
 import { ModelError } from '@yaks/model'
 import { CallError } from '@yaks/tools/errors'
+import { type Changed, talks, type Underway } from './operator-view.ts'
 import {
   attached,
-  type Changed,
+  type Lines,
   PICTURES,
   reply,
-  talks,
   trouble,
-  type Underway,
-} from './operator-view.ts'
+} from './operator-draw.ts'
 import { does, keeps, type Made, madeOf, type Page, pagesOf } from './made.ts'
 import { drafting } from './written.ts'
 import { r2RawObjects } from './lib/objects.ts'
@@ -790,14 +789,17 @@ export let operatorAnswer = async (
         status: 426,
       })
     }
-    // The conversation the page shows, for its socket to say where it stands.
-    let talk = q.get('talk')
+    // The conversation the page shows, for its socket to say where it
+    // stands, and whether it draws its lines from data.
+    let on = new URLSearchParams()
+    if (q.get('talk')) on.set('talk', q.get('talk')!)
+    if (q.has('lines')) on.set('lines', '1')
     return socketTo(
       env,
       space,
       req,
       who,
-      '/operator/ws' + (talk ? '?talk=' + encodeURIComponent(talk) : ''),
+      '/operator/ws' + (on.size ? '?' + on : ''),
     )
   }
   // A browser lent to the Operator (operator-browser.ts), signed in by the
@@ -813,7 +815,16 @@ export let operatorAnswer = async (
   // One conversation read again.
   if (q.has('talk')) {
     let open = q.get('talk')!
-    let talked = await conversationOf(env, space, who, at, open)
+    let talked = await conversationOf(
+      env,
+      space,
+      who,
+      at,
+      open,
+      false,
+      undefined,
+      q.has('lines'),
+    )
     if (!talked.title) {
       return Response.json({ message: 'That conversation is missing.' }, {
         status: 404,
@@ -823,6 +834,7 @@ export let operatorAnswer = async (
       title: talked.title,
       task: talked.task,
       html: talked.html,
+      ...talked.lines ? { lines: talked.lines, now: talked.now } : {},
       making: ours(space, talked.making),
       started: !!talked.making?.started,
       standing: talked.standing,
@@ -880,6 +892,7 @@ export let conversationOf = async (
   open: string,
   everyone = false,
   opens?: string,
+  drawing = false,
 ) => {
   let none = {
     root: '',
@@ -887,36 +900,58 @@ export let conversationOf = async (
     begun: '',
     title: '',
     html: '',
+    lines: null,
+    now: '',
     making: null,
     standing: '',
   }
   if (open == 'new') return none
-  let { root, task, begun, title, html, waiting, making, standing } =
-    await operatorDoor(
-      env,
-      space,
-      who,
-      'conversation',
-      { at, open, ...everyone ? { everyone } : {}, ...opens ? { opens } : {} },
-    ).catch((e) => {
-      if (e.status != 404) throw e
-      return { ...none, waiting: [] }
-    }) as {
-      root: string
-      task: string
-      begun: string
-      title: string
-      html: string
-      waiting: Bundle[]
-      making: Underway | null
-      standing: string
-    }
+  let {
+    root,
+    task,
+    begun,
+    title,
+    html,
+    lines = null,
+    now = '',
+    waiting,
+    making,
+    standing,
+  } = await operatorDoor(
+    env,
+    space,
+    who,
+    'conversation',
+    {
+      at,
+      open,
+      ...everyone ? { everyone } : {},
+      ...opens ? { opens } : {},
+      ...drawing ? { lines: true } : {},
+    },
+  ).catch((e) => {
+    if (e.status != 404) throw e
+    return { ...none, waiting: [] }
+  }) as {
+    root: string
+    task: string
+    begun: string
+    title: string
+    html: string
+    lines?: Lines | null
+    now?: string
+    waiting: Bundle[]
+    making: Underway | null
+    standing: string
+  }
   return {
     root,
     task,
     begun,
     title,
     html: html + conversation(waiting),
+    lines,
+    now,
     making,
     standing,
   }
@@ -1941,6 +1976,7 @@ let chatScript = (
   `<script type="module">
 import { browserDrafts } from '/_draft.js'
 import { redraw } from '/redraw.js'
+import { rowsOf } from '/_talk.js'
 import { voice } from '/voice.js'
 import { when } from '/when.js'
 let open = ${JSON.stringify(open)}
@@ -2164,8 +2200,10 @@ let read = async () => {
   try { await reading } finally { reading = undefined }
 }
 // Each step the Operator takes arrives on the socket as the lines it changed,
-// put in place by id; a conversation the page has not drawn yet (a request
-// just taken up) reads the page again, and another one's step is not this page's.
+// each as the entries it draws, drawn here as the conversation draws them
+// (operator-rows.ts) and put in place by id; a conversation the page has not
+// drawn yet (a request just taken up) reads the page again, and another
+// one's step is not this page's.
 let live = false, opened = false
 let hear = (frame) => {
   if (frame.drafts) for (let heard of hearing) heard(frame.drafts)
@@ -2195,7 +2233,7 @@ let hear = (frame) => {
     return follow(was)
   }
   typing?.remove()
-  for (let row of o.rows) {
+  for (let row of o.lines ? rowsOf(o.lines) : o.rows) {
     let at = document.getElementById('row-' + row.id)
     if (!at) {
       at = document.createElement('div')
@@ -2212,7 +2250,7 @@ let hear = (frame) => {
   follow(was)
 }
 let listen = () => {
-  let socket = new WebSocket(location.origin.replace(/^http/, 'ws') + '${at}?live=1' + (open == 'new' ? '' : '&talk=' + encodeURIComponent(open)))
+  let socket = new WebSocket(location.origin.replace(/^http/, 'ws') + '${at}?live=1&lines=1' + (open == 'new' ? '' : '&talk=' + encodeURIComponent(open)))
   // A socket still opening after the wait is closed, and so opened again.
   let opening = setTimeout(() => socket.close(), WAIT)
   // A socket opening again may follow a deploy, which the page then moves onto

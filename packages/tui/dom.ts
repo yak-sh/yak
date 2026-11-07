@@ -184,8 +184,9 @@ export class TElement extends TNode {
   }
   /** Press it, as a primary-button click does: a check box flips and a
    * radio turns on (back again when a listener cancels the click, else
-   * telling its `input` and `change`), a submit button submits its form, and
-   * a link no listener took is followed (`onNavigate`). */
+   * telling its `input` and `change`), a submit button submits its form, a
+   * `details`' summary opens or closes it, and a link no listener took is
+   * followed (`onNavigate`). */
   click() {
     let mark = this.matches('input') && this.attr('type')
     let was = this.checked
@@ -219,6 +220,11 @@ export class TElement extends TNode {
       }
     }
     if (!taken) return
+    let details = this.localName == 'summary' && this.parentNode
+    if (details && details.localName == 'details') {
+      if (details.hasAttribute('open')) details.removeAttribute('open')
+      else details.setAttribute('open', '')
+    }
     let form = submits(this) && this.closest('form')
     if (form) {
       dispatch(form, new Event('submit', { bubbles: true, cancelable: true }))

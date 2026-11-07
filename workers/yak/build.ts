@@ -526,6 +526,7 @@ export class Builder {
       )
     }
     if (new URL(request.url).pathname == '/operator/ws') {
+      let asked = new URL(request.url).searchParams
       let watching = {
         person,
         role,
@@ -534,10 +535,12 @@ export class Builder {
         called: space.operator,
         opens: managePath('operator', space.slug),
         operator: true,
+        // Its lines sent as data, which it draws (operator-draw.ts `Lines`).
+        lines: asked.has('lines'),
       }
       // The conversation the page was drawn with, whose standing its `ready`
       // says, read once the socket hears every step after it.
-      let talk = new URL(request.url).searchParams.get('talk')
+      let talk = asked.get('talk')
       let { standingAt } = await import('./operator-host.ts')
       return this.#accept(
         watching,

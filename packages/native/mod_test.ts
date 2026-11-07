@@ -102,3 +102,19 @@ test('a press, a field and a toggle deliver what the person did to the app', asy
   assertEquals(words(now()), '<>|Add|[x]Socks')
   free()
 })
+
+test('a details shows its summary until pressed, then what it holds, and closes again', async () => {
+  let { now, free } = await painted(
+    h('details', {}, h('summary', {}, 'Read notes'), h('p', {}, 'It asked')),
+  )
+  let shown = () => words(now())
+  assertEquals(shown(), 'Read notes')
+  let press = () => ((now() as Box).children[0] as Text).press!()
+  press()
+  await settle()
+  assertEquals(shown(), 'Read notes|It asked')
+  press()
+  await settle()
+  assertEquals(shown(), 'Read notes')
+  free()
+})

@@ -5,8 +5,9 @@ Operator, its apps and its pages. yaks.app is one variant of it; a township's or
 an org's app is another, built from the same code (`variants.ts`). A kit-built
 app is drawn natively: its view renders through Preact into @yaks/tui's
 in-memory DOM, @yaks/native paints the tree as plain nodes, and `kit.tsx` turns
-those into React Native views. Every other app, the Operator and the space's
-pages open as their web pages in a web view holding the same session (D-148409).
+those into React Native views. The Operator is drawn the same way, from the
+lines its chat page's socket sends. Every other app and the space's pages open
+as their web pages in a web view holding the same session (D-148409).
 
 - `variants.ts`: each app the shell is built as, as data: its name, bundle id,
   icon, Apple team, EAS Update channel, the space it opens, and which config
@@ -23,12 +24,19 @@ pages open as their web pages in a web view holding the same session (D-148409).
   the app itself, so a deploy reaches the phone without a new shell. An app that
   names no view, or imports a package the shell does not carry, opens as its web
   page. `yak open` loads the same view the same way in a terminal.
+- `operator.tsx`: the space's Operator, drawn natively. It reads the person's
+  conversation from the chat page (`?talk=&lines=1`) and keeps it current over
+  the page's socket (`?live=1&lines=1`), which sends each line as the entries it
+  draws (workers/yak/operator-draw.ts `Lines`). Each line is drawn by the
+  drawing the web page uses, and painted by @yaks/native under that file's
+  `look`. Words typed in its box are posted to the chat page, as its own box
+  sends them.
 - `kit.tsx`: the React Native host for @yaks/native's nodes.
 - `globals.ts`: the `Event` and window @yaks/tui's DOM reaches for, which Hermes
   lacks.
-- `metro.config.js`: resolves `@yaks/ui` to its parts, the in-memory DOM and the
-  painter from `packages/`, and the shell's own React, React Native and Preact
-  for every file.
+- `metro.config.js`: resolves `@yaks/<name>/<path>` to the file
+  `packages/<name>` exports there, `@yaks/ui` to its parts, and the shell's own
+  React, React Native, Preact and marked for every file, workers/yak's included.
 
 ## Run it on a phone with Expo Go
 

@@ -21,21 +21,28 @@ import { phoneTexts } from './phone-move.ts'
 import { channeled } from './channel-move.ts'
 import type { operatorStore } from './operator-store.ts'
 import { transcript } from '@yaks/session'
-import { stepOf } from '@yaks/tools/title'
 import type { Tool } from '@yaks/model'
 import {
   frame,
-  type Helper,
   helperFrame,
   making,
-  type Names,
   now,
-  type Offers,
   stateOf,
   talk,
   type Underway,
+  withRows,
   type Worked,
 } from './operator-view.ts'
+import {
+  type Helper,
+  type Lines,
+  lines as drawnLines,
+  type Named as ToolNamed,
+  namer,
+  type Naming,
+  type Offers,
+  wire,
+} from './operator-draw.ts'
 
 type Store = ReturnType<typeof operatorStore>
 let comp = (b: Bundle | undefined, name: string) =>
@@ -59,25 +66,28 @@ let personOf = async (store: Store, entries: Bundle[], named: Named) => {
   return person ? await named(String(person)) : null
 }
 
-// How each call in a transcript reads to the person it works for, by its
-// tool's step (`call.to` is a tool's eid).
-let namesOf = async (
+// What each call in a transcript is said from, to the person it works for:
+// the tool it points at (`call.to` is a tool's eid), as its `tool` names it,
+// and that person (operator-draw.ts `namer`).
+let namingOf = async (
   store: Store,
   entries: Bundle[],
   named: Named,
-): Promise<Names> => {
+): Promise<Naming> => {
   let tools = await store.g.get([
     ...new Set(
       entries.flatMap((b) => b.call ? [String(comp(b, 'call')!.to)] : []),
     ),
   ])
-  let held = new Map(
-    tools.filter(Boolean).map((b) => [b.entity.eid, comp(b, 'tool') ?? {}]),
-  )
-  let person = await personOf(store, entries, named)
-  let known = person ? { person } : undefined
-  return (tool, args) =>
-    stepOf(held.get(tool) ?? { title: 'Use a tool' }, args, known)
+  return {
+    tools: Object.fromEntries(
+      tools.filter(Boolean).map((b) => {
+        let { name, title, step } = (comp(b, 'tool') ?? {}) as ToolNamed
+        return [b.entity.eid, { name, title, step }]
+      }),
+    ),
+    person: await personOf(store, entries, named),
+  }
 }
 
 // A task's sessions, oldest first.
@@ -386,7 +396,7 @@ export let helpingOf = async (
     let wrote = lines.findLast((b) => b.output && !b.notice && b.content)
     return {
       ...worked,
-      now: now(lines, await namesOf(store, lines, named)),
+      now: now(lines, namer(await namingOf(store, lines, named))),
       ...wrote ? { wrote: String(comp(wrote, 'content')!.body) } : {},
     }
   }))
@@ -521,6 +531,7 @@ const NONE = {
   begun: '',
   title: '',
   html: '',
+  lines: null,
   waiting: [] as Bundle[],
   making: null,
   standing: '',
@@ -592,6 +603,8 @@ export let conversationOf = async (
   begun: string
   title: string
   html: string
+  lines: Lines | null
+  now?: string
   waiting: Bundle[]
   making: Underway | null
   standing: string
@@ -609,7 +622,13 @@ export let conversationOf = async (
     let calls = new Set(
       entries.flatMap((b) => b.call ? [b.entity.eid] : []),
     )
-    let seen = { ...await seenOf(store, [row], entries, calls), called, opens }
+    let seen = {
+      ...await seenOf(store, [row], entries, calls),
+      called,
+      opens,
+      ...await namingOf(store, entries, named),
+    }
+    let names = namer(seen)
     return {
       task: eid,
       begun: open,
@@ -621,11 +640,13 @@ export let conversationOf = async (
       html: talk(
         { entity: { eid } } as Bundle,
         entries,
-        await namesOf(store, entries, named),
+        names,
         filesOf(asked),
         at,
         seen,
       ),
+      lines: wire(drawnLines(entries, names, seen), entries, seen),
+      now: now(entries, names),
       waiting: [],
       making: making(entries, seen.helpers),
       standing: standingOf([row], entries, seen.helpers),
@@ -637,6 +658,7 @@ export let conversationOf = async (
       begun: open,
       title: firstLine(found.waiting[0]),
       html: '',
+      lines: null,
       waiting: found.waiting,
       making: null,
       standing: '',
@@ -658,19 +680,20 @@ export let conversationOf = async (
       String(comp(b, 'created')?.at ?? ''),
     )
   )
-  let seen = { ...await seenOf(store, sessions, entries), called, opens }
+  let seen = {
+    ...await seenOf(store, sessions, entries),
+    called,
+    opens,
+    ...await namingOf(store, entries, named),
+  }
+  let names = namer(seen)
   return {
     task,
     begun: asked[0]?.entity.eid ?? task,
     title: String(comp(held, 'doc')?.title ?? 'A request'),
-    html: talk(
-      held,
-      entries,
-      await namesOf(store, entries, named),
-      filesOf(asked),
-      at,
-      seen,
-    ),
+    html: talk(held, entries, names, filesOf(asked), at, seen),
+    lines: wire(drawnLines(entries, names, seen), entries, seen),
+    now: now(entries, names),
     waiting: [],
     making: making(entries, seen.helpers),
     standing: standingOf(sessions, entries, seen.helpers),
@@ -720,25 +743,21 @@ export let frameOf = async (
         ),
     )
     let helpers = await helpersBy(store, calls)
+    let naming = await namingOf(store, entries, named)
     return {
       seq,
       frame: hushed(
         from,
-        frame(
-          await keyOf(store, session),
-          entries,
-          await namesOf(store, entries, named),
-          since,
-          {
-            helpers,
-            offers: await offersOf(store, [
-              ...entries,
-              ...helpers.flatMap((h) => h.entries),
-            ]),
-            called,
-            opens,
-          },
-        ),
+        frame(await keyOf(store, session), entries, namer(naming), since, {
+          helpers,
+          offers: await offersOf(store, [
+            ...entries,
+            ...helpers.flatMap((h) => h.entries),
+          ]),
+          called,
+          opens,
+          ...naming,
+        }),
       ),
     }
   }
@@ -761,6 +780,8 @@ export let frameOf = async (
     let [step] = await store.g.get([call])
     if (comp(step, 'entry')?.session == parent) started.unshift(step)
   }
+  // its own steps named as well as the one that started it
+  let naming = await namingOf(store, [...started, ...helper.entries], named)
   return {
     seq,
     frame: hushed(
@@ -769,10 +790,14 @@ export let frameOf = async (
         await keyOf(store, parent),
         helper,
         started,
-        // its own steps named as well as the one that started it
-        await namesOf(store, [...started, ...helper.entries], named),
+        namer(naming),
         from ?? 0,
-        { offers: await offersOf(store, helper.entries), called, opens },
+        {
+          offers: await offersOf(store, helper.entries),
+          called,
+          opens,
+          ...naming,
+        },
       ),
     ),
   }
@@ -842,7 +867,14 @@ export let operatorFrames = (
       )
       if (!made) return
       told.set(session, made.seq)
-      send(pages, made.frame)
+      // A page that asked for lines as data draws them itself; one opened
+      // before they were is sent them drawn (operator-view.ts `withRows`).
+      let drawing = pages.filter((ws) =>
+        (ws.deserializeAttachment() as { lines?: boolean }).lines
+      )
+      let older = pages.filter((ws) => !drawing.includes(ws))
+      if (drawing.length) send(drawing, made.frame)
+      if (older.length) send(older, withRows(made.frame))
     },
     typing: async (session: string, text: string) => {
       let pages = await watching(session)
@@ -1108,18 +1140,17 @@ export let operatorRequest = async (
     if (!everyone && !await own(open)) {
       return args.open ? missing() : Response.json({ ...NONE, root })
     }
-    return Response.json({
-      root,
-      ...await conversationOf(
-        store,
-        String(args.at ?? ''),
-        open,
-        operator.named,
-        everyone,
-        held.called,
-        typeof args.opens == 'string' ? args.opens : undefined,
-      ),
-    })
+    let { lines, ...talked } = await conversationOf(
+      store,
+      String(args.at ?? ''),
+      open,
+      operator.named,
+      everyone,
+      held.called,
+      typeof args.opens == 'string' ? args.opens : undefined,
+    )
+    // Its lines as data only for a reader that draws them (the iOS shell).
+    return Response.json({ root, ...talked, ...args.lines ? { lines } : {} })
   }
   if (path == '/operator/remove') {
     // A person removes their own; the platform's admin anyone's.

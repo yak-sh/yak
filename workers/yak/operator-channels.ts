@@ -25,7 +25,8 @@ import type { Operator } from './operator.ts'
 import { phoneTexts } from './phone-move.ts'
 import type { Declared } from './operator-persona.ts'
 import type { operatorStore } from './operator-store.ts'
-import { onPage, unsaid } from './operator-view.ts'
+import { onPage } from './operator-view.ts'
+import { unsaid } from './operator-draw.ts'
 import { handover, naming } from './handover.ts'
 
 /** What a person reads when the Operator could not start on their request

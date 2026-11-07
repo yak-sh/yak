@@ -16,7 +16,7 @@ import { chatPath, managePath } from './route.ts'
 import { spaceHost } from './host.ts'
 import type { Update } from './operator-updates.ts'
 import { lastDay } from './views.ts'
-import { markdown } from './operator-view.ts'
+import { markdown } from './operator-draw.ts'
 import { caught } from './defects.ts'
 
 /** A person's Updates in a space, and how many wait on them: what needs

@@ -76,6 +76,9 @@ node_modules
 # Browser binary wire codec, generated from @yaks/vocab.
 /workers/yak/public/_wire.js
 
+# The Operator chat's line drawing, generated from workers/yak/operator-rows.ts.
+/workers/yak/public/_talk.js
+
 # Temporary standalone platform compiler configs.
 .platform-*.json
 

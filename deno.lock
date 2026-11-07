@@ -5108,6 +5108,7 @@
             "npm:@yaks/member@0.2.25",
             "npm:@yaks/memory@0.2.23",
             "npm:@yaks/model@0.2.32",
+            "npm:@yaks/native@0.2.24",
             "npm:@yaks/notify@0.2.28",
             "npm:@yaks/oauth@0.2.23",
             "npm:@yaks/openai@0.2.26",

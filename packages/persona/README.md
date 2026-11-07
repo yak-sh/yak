@@ -312,6 +312,7 @@ is drawn as its source, as written.
 | ---------------- | ------------------------------------------------------------------------------------------------------- |
 | `.`              | `wear`, `voice`, `owed`, `wearing`, `offer`, `common`, the component names, and the vocabulary document |
 | `./vocab`        | the component declarations alone                                                                        |
+| `./part`         | `PART`, what stands between the parts of what an agent is told, importing nothing else                  |
 | `./tools`        | `runs(host)` — `persona_read` returns the Markdown, `persona_sync` writes                               |
 | `./effects`      | `effects(host, {files, skills})` — independently enables persona files and skills                       |
 | `./skills`       | Graph skill reads and read-only checkout views                                                          |

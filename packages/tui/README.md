@@ -187,17 +187,17 @@ element vim's cursor stands on (`data-cursor`) too. `scrollIntoView()` keeps an
 element in sight, the scroll region around it showing it on the next paint.
 `click()` presses it as a browser's click does: a check box flips and a radio
 turns on (back again when a listener cancels it, else telling its `input` and
-`change`; `checked` is its attribute), a submit button submits its form, and a
-link no listener took is followed: `onNavigate` names where. `isConnected` is
-whether a node hangs under a screen's root; `contentEditable` and
-`isContentEditable` read and set text typed over in place, and `textContent`
-sets an element's text. After each paint, `place(lines, hidden)` records what
-was painted: `getBoundingClientRect()` is then the cells an element and
-everything inside it painted (an empty box at the origin out of a window's
-sight), and `checkVisibility()` is false where the sheet hid it or what holds
-it. `run` and the test `mount` record every paint; a test painting with
-`screenful` calls `place` itself. Attribute names are lowercased, as an HTML
-document's are.
+`change`; `checked` is its attribute), a submit button submits its form, a
+`details`' `summary` opens or closes it (its `open` attribute), and a link no
+listener took is followed: `onNavigate` names where. `isConnected` is whether a
+node hangs under a screen's root; `contentEditable` and `isContentEditable` read
+and set text typed over in place, and `textContent` sets an element's text.
+After each paint, `place(lines, hidden)` records what was painted:
+`getBoundingClientRect()` is then the cells an element and everything inside it
+painted (an empty box at the origin out of a window's sight), and
+`checkVisibility()` is false where the sheet hid it or what holds it. `run` and
+the test `mount` record every paint; a test painting with `screenful` calls
+`place` itself. Attribute names are lowercased, as an HTML document's are.
 
 `@yaks/tui/interaction` is what a browser does for its controls by itself: Tab
 and Shift-Tab walk them, Enter and Space press one, a field takes what is typed

@@ -132,11 +132,17 @@ let WORDS = [
 let worn = (style: Style): Style =>
   Object.fromEntries(Object.entries(style).filter(([k]) => WORDS.includes(k)))
 
-// Whether an element takes a press: a button, a link, or anything the app
-// listens to clicks on.
+// Whether an element takes a press: a button, a link, a summary (which opens
+// its details), or anything the app listens to clicks on.
 let pressable = (el: TElement) =>
-  el.localName == 'button' || el.hasAttribute('href') ||
-  el.hasAttribute('data-href') || el.handlers.has('click')
+  el.localName == 'button' || el.localName == 'summary' ||
+  el.hasAttribute('href') || el.hasAttribute('data-href') ||
+  el.handlers.has('click')
+
+// What a closed `details` shows of what it holds: its summary alone.
+let shut = (el: TElement, c: TNode) =>
+  el.localName == 'details' && !el.hasAttribute('open') &&
+  (c instanceof TText || (c as TElement).localName != 'summary')
 
 // A press clicks it, which submits a submit button's form and flips a box,
 // as a browser's click does (@yaks/tui/dom).
@@ -234,6 +240,7 @@ export let paint = (
     key: keyOf(el),
     style,
     children: el.childNodes.flatMap((c): Node[] => {
+      if (shut(el, c)) return []
       if (c instanceof TText) {
         return c.data.trim()
           ? [{ kind: 'text', key: keyOf(c), style: inner, runs: [c.data] }]

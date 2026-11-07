@@ -5530,6 +5530,9 @@ importers:
       "@yaks/model":
         specifier: 0.2.32
         version: link:../../packages/model
+      "@yaks/native":
+        specifier: 0.2.24
+        version: link:../../packages/native
       "@yaks/notify":
         specifier: 0.2.28
         version: link:../../packages/notify

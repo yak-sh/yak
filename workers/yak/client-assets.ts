@@ -14,6 +14,8 @@ let parts = {
   '_draft.js': '../../packages/draft/browser.ts',
   '_outbox.js': '../../packages/sync/outbox.ts',
   '_wire.js': '../../packages/vocab/wire.ts',
+  // The Operator chat's line drawing (operator-rows.ts), for its page alone.
+  '_talk.js': './operator-rows.ts',
 }
 
 export let assets = async (to = new URL('./public/', import.meta.url)) => {

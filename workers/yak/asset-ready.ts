@@ -63,7 +63,8 @@ export let assetInputs = (paths: string[]) =>
   paths.filter((path) =>
     /^(?:packages\/|workers\/yak\/(?:public|site)\/)/.test(path) ||
     /^(?:deno\.(?:jsonc?|lock)|bin\/compiler-packages\.ts)$/.test(path) ||
-    /^workers\/yak\/(?:wrangler\.ts|asset-ready\.ts|client-assets\.ts|sheet-assets\.ts|sandbox\/(?:cli-assets|launch)\.ts|package(?:-lock)?\.json|deno\.json)$/
+    // `_talk.js` is built from operator-rows.ts and what it imports here.
+    /^workers\/yak\/(?:wrangler\.ts|asset-ready\.ts|client-assets\.ts|sheet-assets\.ts|operator-(?:rows|draw)\.ts|icons\.ts|sandbox\/(?:cli-assets|launch)\.ts|package(?:-lock)?\.json|deno\.json)$/
       .test(path)
   ).filter((path) =>
     !/(^|\/)(?:node_modules|\.wrangler|fixtures?|tests?)(\/|$)/.test(path) &&
@@ -93,6 +94,7 @@ let outputs = async (root: string) => {
       '_draft.js',
       '_outbox.js',
       '_wire.js',
+      '_talk.js',
       '_client.js',
       '_cli/current.json',
       '_cli/launch.ts',

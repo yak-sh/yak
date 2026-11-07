@@ -68,15 +68,14 @@ let split = (style: object) => {
 }
 
 let run = (r: Run, i: number) =>
-  typeof r == 'string'
-    ? r
-    : (
-      <Text key={r.key ?? i} style={r.style} onPress={r.press}>
-        {r.runs.map(run)}
-      </Text>
-    )
+  typeof r == 'string' ? r : (
+    <Text key={r.key ?? i} style={r.style} onPress={r.press}>
+      {r.runs.map(run)}
+    </Text>
+  )
 
-let Draw = ({ node }: { node: Node }) => {
+/** A painted node as React Native views. */
+export let Draw = ({ node }: { node: Node }) => {
   switch (node.kind) {
     case 'text': {
       if (!node.press) {

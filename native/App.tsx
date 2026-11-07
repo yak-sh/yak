@@ -1,7 +1,8 @@
 // The shell, as the app its variant makes it (variants.ts): sign in once, then
-// the space's Operator, its apps, and its pages, under the space's brand. A kit-built app is drawn natively (kit.tsx); every other app,
-// and the Operator for now, open as their web pages in a web view that holds
-// the same session.
+// the space's Operator, its apps, and its pages, under the space's brand. The
+// Operator (operator.tsx) and a kit-built app (kit.tsx) are drawn natively;
+// every other app and the space's pages open as their web pages in a web view
+// that holds the same session.
 import { useEffect, useState } from 'react'
 import {
   ActivityIndicator,
@@ -17,6 +18,7 @@ import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context'
 import { StatusBar } from 'expo-status-bar'
 import { WebView } from 'react-native-webview'
 import { colors, Kit } from './kit.tsx'
+import { Operator } from './operator.tsx'
 import { nativeOf, type NativeView, viewAt } from '@yaks/native/remote'
 import { carried } from './remote.ts'
 import { shown } from './variants.ts'
@@ -205,12 +207,16 @@ let Opened = ({ app }: { app: AppRow }) => {
   let [view, setView] = useState<NativeView | null | 'web'>(null)
   useEffect(() => {
     setView(null)
-    nativeOf(app.url)
-      .then((url) => url ? viewAt(url, carried) : 'web' as const)
-      .then(setView, (e) => {
-        console.warn(`${app.url} opens on the web: ${e.message}`)
-        setView('web')
-      })
+    let load = async () => {
+      let url = await nativeOf(app.url)
+      return url ? await viewAt(url, carried) : 'web' as const
+    }
+    // A view is a component, which a state setter given it would call as an
+    // updater: it is set as what an updater answers.
+    load().then((v) => setView(() => v), (e) => {
+      console.warn(`${app.url} opens on the web: ${e.message}`)
+      setView('web')
+    })
   }, [app.url])
   if (view == null) {
     return (
@@ -240,7 +246,7 @@ let Shell = ({ all }: { all: Space[] }) => {
   let body = open
     ? 'app' in open ? <Opened app={open.app} /> : <Web url={open.url} />
     : tab == 'operator'
-    ? <Web url={`${APEX}/manage/${space.slug}/operator`} />
+    ? <Operator space={space} />
     : tab == 'apps'
     ? <Apps space={space} open={(app) => setOpen({ app })} />
     : <Pages space={space} open={(url) => setOpen({ url })} />

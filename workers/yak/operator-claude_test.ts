@@ -9,7 +9,8 @@ import { operatorMemory } from './operator-testing.ts'
 import { drain } from './operator-store.ts'
 import { operating } from './operator.ts'
 import { conversationOf, frameOf } from './operator-host.ts'
-import { reply } from './operator-view.ts'
+import { reply } from './operator-draw.ts'
+import { rowsOf } from './operator-rows.ts'
 import { transcript } from '@yaks/session'
 import { PART } from '@yaks/persona'
 
@@ -178,7 +179,7 @@ test('the conversation shows the context the Operator and each helper were given
   let live = await frameOf(store, child.entity.eid)
   assertEquals(live!.frame.operator.task, out.task)
   // A helper's step brings the page that step, live, its context inside.
-  let rows = live!.frame.operator.rows
+  let rows = rowsOf(live!.frame.operator.lines)
   assertEquals(rows.map((r) => `row-${r.id}`), [step.parentElement!.id])
   assertStringIncludes(rows[0].html, 'The context the helper was given')
 })

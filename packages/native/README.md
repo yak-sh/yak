@@ -13,6 +13,9 @@ widgets:
 - a press on a `text` or `box`, which clicks the element, and submits its form
   when it is a submit button.
 
+A closed `details` paints its `summary` alone, which a press opens, as a
+browser's does.
+
 The package imports no platform and holds no widget, so it runs and is tested
 anywhere. The iOS shell (`native/kit.tsx` at the repository root) is the host
 that turns each node into a React Native view.
