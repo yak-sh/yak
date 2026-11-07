@@ -67,12 +67,29 @@ export let arrival = (req: Request): Came | null => {
   return landing(req) ?? (cookie ? read(cookie) : null)
 }
 
+// Whether an answer is a page a person opened: a GET or HEAD answered with
+// HTML, or sent on (a redirect, a 304) to one.
+let opened = (req: Request, res: Response) =>
+  (req.method == 'GET' || req.method == 'HEAD') &&
+  (res.status >= 300 && res.status < 400 ||
+    res.status < 300 &&
+      (res.headers.get('content-type') ?? '').startsWith('text/html'))
+
 /**
  * The answer to a page an address with an arrival opened, keeping that
  * arrival; any other answer as it was. Apex only: no app's host ever sees it.
+ *
+ * ```ts
+ * import { assertEquals } from '@std/assert'
+ * let at = 'https://yaks.app/login?utm_source=meta'
+ * let page = new Response('', { headers: { 'content-type': 'text/html' } })
+ * assertEquals(keep(new Request(at), page).headers.has('set-cookie'), true)
+ * let json = Response.json({})
+ * assertEquals(keep(new Request(at), json).headers.has('set-cookie'), false)
+ * ```
  */
 export let keep = (req: Request, res: Response): Response => {
-  let came = res.status < 400 && landing(req)
+  let came = opened(req, res) && landing(req)
   if (!came) return res
   let value = new URLSearchParams({ ...came.said, at: String(came.at) })
   let out = new Response(res.body, res)

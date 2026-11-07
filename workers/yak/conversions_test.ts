@@ -68,3 +68,28 @@ test('a visit an ad brought is told as a page seen, and its sign-up as a registr
   assertEquals(plain.headers.get('set-cookie'), null)
   assertEquals((await told()).length, 2)
 })
+
+test('every apex page an ad lands on keeps its arrival and is told as a page seen', async () => {
+  let k = await kernel()
+  for (let path of ['/login', '/docs', '/pricing', '/manage']) {
+    let before = toldMeta(k).length
+    let page = await k.at(k.host, `${path}?fbclid=Ab1&utm_source=meta`, {
+      redirect: 'manual',
+      headers: { 'user-agent': BROWSER },
+    })
+    await page.body?.cancel()
+    assertStringIncludes(
+      page.headers.get('set-cookie') ?? '',
+      `${COOKIE}=`,
+      path,
+    )
+    await k.settled()
+    let views = toldMeta(k).slice(before)
+      .map(({ event }) => [event.event_name, event.event_source_url])
+    assertEquals(
+      views,
+      page.status == 200 ? [['PageView', `https://${k.host}${path}`]] : [],
+      path,
+    )
+  }
+})

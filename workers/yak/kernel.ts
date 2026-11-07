@@ -160,42 +160,52 @@ let unconditional = (req: Request) => {
   return new Request(req, { headers })
 }
 
-let serve = async (req: Request, env: Env, r: Route) => {
+// Every answer at the apex leaves through `seen`, so whichever page a link
+// lands a person on keeps its arrival and tells its view: /login and the
+// docs as well as the cached listings.
+let serve = async (req: Request, env: Env, r: Route) =>
+  r.space == null
+    ? seen(req, env, await atApex(req, env, r.path))
+    : atSpace(req, env, r.space)
+
+// A space's hostname: its previews, its drops, its hooks and its apps.
+let atSpace = async (req: Request, env: Env, space: string) => {
   let asked = new URL(req.url).pathname
-  let noticed = r.space == null && asked.match(/^\/mail\/([a-z0-9-]+)$/)
+  if (/^\/[^/]+\/_preview(?:\/|$)/.test(asked)) {
+    return (await import('./preview.ts')).fetch(req, env)
+  }
+  // The one path on a space's hostname the kernel answers itself (drop.ts,
+  // T-34230): a file dropped on the space's own page, which becomes an app.
+  // POST only, so an app whose slug happens to be `deploy` still serves its
+  // own pages at the same address.
+  if (req.method == 'POST' && asked == '/deploy') {
+    return drop.fetch(req, env)
+  }
+  // Git and connection hooks belong to the space's hostname, ahead of
+  // its apps and the home app's catch-all worker.
+  let arrived = { env, req, path: asked, space }
+  let mine = await (await import('./git_door.ts')).answer(arrived) ??
+    await hook(arrived)
+  if (mine) return mine
+  return bound(env.APPS, apps.fetch, env).fetch(req)
+}
+
+// The apex: the platform's own pages and doors.
+let atApex = async (req: Request, env: Env, path: string) => {
+  let noticed = path.match(/^\/mail\/([a-z0-9-]+)$/)
   if (noticed) {
     return (await import('./mail-receipts.ts')).receipts(req, env, noticed[1])
   }
-  if (r.space == null && asked.startsWith('/__packages/')) {
+  if (path.startsWith('/__packages/')) {
     // The canonical origin is common to every app. Files caches compiler
     // assets by content, without a tenant or release discriminator.
     return (await import('./files.ts')).door(env).fetch(
-      new Request(packageAt(asked), {
+      new Request(packageAt(path), {
         method: req.method,
         headers: req.headers,
       }),
     )
   }
-  if (r.space != null) {
-    if (/^\/[^/]+\/_preview(?:\/|$)/.test(asked)) {
-      return (await import('./preview.ts')).fetch(req, env)
-    }
-    // The one path on a space's hostname the kernel answers itself (drop.ts,
-    // T-34230): a file dropped on the space's own page, which becomes an app.
-    // POST only, so an app whose slug happens to be `deploy` still serves its
-    // own pages at the same address.
-    if (req.method == 'POST' && asked == '/deploy') {
-      return drop.fetch(req, env)
-    }
-    // Git and connection hooks belong to the space's hostname, ahead of
-    // its apps and the home app's catch-all worker.
-    let arrived = { env, req, path: asked, space: r.space }
-    let mine = await (await import('./git_door.ts')).answer(arrived) ??
-      await hook(arrived)
-    if (mine) return mine
-    return bound(env.APPS, apps.fetch, env).fetch(req)
-  }
-  let path = r.path
   if (path == '/icons.svg') {
     return new Response(sprite(), {
       headers: {
@@ -309,7 +319,7 @@ let serve = async (req: Request, env: Env, r: Route) => {
   if ((req.method == 'GET' || req.method == 'HEAD') && isListing(path)) {
     let page = await site.forward(req, env, listed(req, path))
     if (isHome(req, path, page)) funnel.step(env, 'home', req)
-    return seen(req, env, page)
+    return page
   }
   // The gallery's ticketed review stays on this uncached gateway.
   let dir = directory(bound(env.DIRECTORY, dirPart.fetch, env), {
@@ -370,12 +380,13 @@ let serve = async (req: Request, env: Env, r: Route) => {
   // Pricing is the other static page with a dynamic splice.
   if (path == '/pricing') page = await sell.priceAt(dir, page)
   return type == 'text/html' && page.status == 200
-    ? seen(req, env, await site.worn(req, page, env))
+    ? await site.worn(req, page, env)
     : page
 }
 
-// A page of the site a person opened: it keeps the arrival its link carried
-// (arrival.ts), and tells the ad network whose click brought it (ads.ts).
+// An answer at the apex a person opened: it keeps the arrival its link carried
+// (arrival.ts), and a page tells the ad network whose click brought it
+// (ads.ts).
 let seen = (req: Request, env: Env, page: Response) => {
   if (isPage(req, page)) ads.after(env, 'view', req)
   return variant.keep(req, keep(req, page))
