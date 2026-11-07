@@ -109,3 +109,6 @@ export let Packing = ({ store }: { store: Store }) => {
     ),
   )
 }
+
+/** The view the iOS shell draws natively, named by index.html. */
+export default Packing

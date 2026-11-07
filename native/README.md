@@ -11,9 +11,15 @@ view holding the same session (D-148409).
 - `yaks.ts`: the doors it asks yaks.app at, the ones a browser uses: the sign-in
   card's posts, the connector's tools at `/mcp`, and an app's store at
   `<app>/api/`.
-- `kit.tsx`: the React Native host for @yaks/native's nodes, and `drawn`, the
-  apps it draws natively by slug. Their view modules are bundled with the shell
-  for now (apps/packing/view.ts).
+- `remote.ts`: loads a kit-built app's view from the app itself, so a deploy
+  reaches the phone without a new shell. An app names its view in its front
+  page, `<link rel="yaks-native" href="view.ts">`. The shell fetches that module
+  and what it imports by relative path, compiles each from TypeScript (sucrase),
+  and runs it with the packages the shell carries (`preact`, `preact/hooks`,
+  `@yaks/ui`) standing in for the app's `"platform"` ones. Its default export is
+  a component taking the app's `store`. An app that names no view, or imports a
+  package the shell does not carry, opens as its web page.
+- `kit.tsx`: the React Native host for @yaks/native's nodes.
 - `globals.ts`: the `Event` and window @yaks/tui's DOM reaches for, which Hermes
   lacks.
 - `metro.config.js`: resolves `@yaks/ui` to its parts, the in-memory DOM and the

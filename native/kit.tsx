@@ -1,9 +1,6 @@
-// A kit-built app drawn natively: its view renders through Preact into the
-// in-memory DOM, @yaks/native paints that as plain nodes, and this file is
-// the one place they become React Native views. Which apps the shell can draw
-// so is `drawn` below: their view modules are bundled with the shell for now,
-// keyed by app slug; loading an app's own page module from the app is next
-// (D-148409).
+// A kit-built app drawn natively: its view (loaded from the app, remote.ts)
+// renders through Preact into the in-memory DOM, @yaks/native paints that as
+// plain nodes, and this file is the one place they become React Native views.
 import { useEffect, useState } from 'react'
 import {
   Pressable,
@@ -14,15 +11,10 @@ import {
   TextInput,
   View,
 } from 'react-native'
-import { type ComponentChild, h } from 'preact'
+import { h } from 'preact'
 import { type Colors, look, mount, type Node, type Run } from '@yaks/native'
-import { Packing } from '../apps/packing/view.ts'
+import type { NativeView } from './remote.ts'
 import { type App, store } from './yaks.ts'
-
-/** The apps this shell draws natively, by slug. */
-export let drawn: Record<string, (app: App) => ComponentChild> = {
-  packing: (app) => h(Packing, { store: store(app) }),
-}
 
 /** The phone's palette: yak.sh's gouache, on its dark floor. */
 export let colors: Colors = {
@@ -138,9 +130,12 @@ let Draw = ({ node }: { node: Node }) => {
 }
 
 /** One kit-built app, drawn natively. */
-export let Kit = ({ app }: { app: App }) => {
+export let Kit = ({ app, view }: { app: App; view: NativeView }) => {
   let [node, setNode] = useState<Node | null>(null)
-  useEffect(() => mount(drawn[app.slug](app), looks, setNode), [app.url])
+  useEffect(
+    () => mount(h(view, { store: store(app) }), looks, setNode),
+    [app.url, view],
+  )
   return (
     <ScrollView
       style={styles.page}

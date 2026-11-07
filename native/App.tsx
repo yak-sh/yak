@@ -15,7 +15,8 @@ import {
 import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context'
 import { StatusBar } from 'expo-status-bar'
 import { WebView } from 'react-native-webview'
-import { colors, drawn, Kit } from './kit.tsx'
+import { colors, Kit } from './kit.tsx'
+import { nativeOf, type NativeView, viewAt } from './remote.ts'
 import {
   APEX,
   type App as AppRow,
@@ -156,7 +157,7 @@ let Apps = (
       >
         <Text style={styles.rowTitle}>{item.title}</Text>
         <Text style={styles.rowSub}>
-          {drawn[item.slug] ? 'native' : 'web'} · {item.access}
+          {item.access}
         </Text>
       </Pressable>
     )}
@@ -192,6 +193,29 @@ let TABS: [Tab, string][] = [
   ['space', 'Space'],
 ]
 
+// An app, drawn natively when its page names a native view the shell can
+// load, and as its web page otherwise.
+let Opened = ({ app }: { app: AppRow }) => {
+  let [view, setView] = useState<NativeView | null | 'web'>(null)
+  useEffect(() => {
+    setView(null)
+    nativeOf(app)
+      .then((url) => url ? viewAt(url) : 'web' as const)
+      .then(setView, (e) => {
+        console.warn(`${app.url} opens on the web: ${e.message}`)
+        setView('web')
+      })
+  }, [app.url])
+  if (view == null) {
+    return (
+      <View style={[styles.page, styles.center]}>
+        <ActivityIndicator color={colors.accent} />
+      </View>
+    )
+  }
+  return view == 'web' ? <Web url={app.url} /> : <Kit app={app} view={view} />
+}
+
 // What a tab has open over it: an app, or one of the space's pages.
 type Open = { app: AppRow } | { url: string } | null
 
@@ -203,11 +227,7 @@ let Shell = ({ all }: { all: Space[] }) => {
   let [open, setOpen] = useState<Open>(null)
   let title = open && 'app' in open ? open.app.title : space.title
   let body = open
-    ? 'app' in open
-      ? drawn[open.app.slug]
-        ? <Kit app={open.app} />
-        : <Web url={open.app.url} />
-      : <Web url={open.url} />
+    ? 'app' in open ? <Opened app={open.app} /> : <Web url={open.url} />
     : tab == 'operator'
     ? <Web url={`${APEX}/manage/${space.slug}/operator`} />
     : tab == 'apps'

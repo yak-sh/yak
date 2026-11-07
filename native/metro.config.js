@@ -1,6 +1,5 @@
 // The shell's bundle reaches into the repository for what it is made of: the
-// kit's parts, the in-memory DOM they render into, the painter, and the
-// kit-built apps it draws natively. `@yaks/ui` resolves to its parts alone
+// kit's parts, the in-memory DOM they render into, and the painter. `@yaks/ui` resolves to its parts alone
 // (packages/ui/parts.ts), the entry for a host that serves its look from
 // elsewhere, as this one does through @yaks/native's look. Every package the
 // shell itself holds (React, React Native, Preact) resolves from here, so a
@@ -11,7 +10,7 @@ const path = require('node:path')
 const repo = path.resolve(__dirname, '..')
 const config = getDefaultConfig(__dirname)
 
-config.watchFolders = [path.join(repo, 'packages'), path.join(repo, 'apps')]
+config.watchFolders = [path.join(repo, 'packages')]
 
 const hosted = {
   '@yaks/ui': 'packages/ui/parts.ts',

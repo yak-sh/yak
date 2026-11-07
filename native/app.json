@@ -14,6 +14,20 @@
         "NSMicrophoneUsageDescription": "Talk to your Operator."
       }
     },
-    "plugins": ["expo-status-bar"]
+    "plugins": [
+      "expo-status-bar"
+    ],
+    "extra": {
+      "eas": {
+        "projectId": "f87fef9c-5d1c-4fef-9f9c-f62d4872c6d6"
+      }
+    },
+    "owner": "justyaks",
+    "runtimeVersion": {
+      "policy": "sdkVersion"
+    },
+    "updates": {
+      "url": "https://u.expo.dev/f87fef9c-5d1c-4fef-9f9c-f62d4872c6d6"
+    }
   }
 }
