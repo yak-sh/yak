@@ -1,15 +1,10 @@
+// A command from a checkout pins its source tree: deferred imports must never
+// read a checkout that can land. What a launch loads before it runs the
+// snapshot is loaded with it (./yak.ts), under the checkout's land lock, and
+// the snapshot loads its own copy of every module it runs.
 import * as system from '@yaks/process/system'
 import * as disk from '@yaks/file/io'
-import {
-  type ChildProcess,
-  command as launchCommand,
-} from '@yaks/process/command'
-// A command from a checkout pins its source tree. Deno's resolver is fixed
-// when a process starts, so deferred imports must never read a checkout that
-// can land. What a launcher runs is loaded with it (./yak.ts), under the
-// checkout's land lock.
-import { wind } from '@yaks/process/wind'
-import { installed } from './dependencies.ts'
+import { command as launchCommand } from '@yaks/process/command'
 import { registerHooks } from 'node:module'
 import { isAbsolute } from 'node:path'
 import { fileURLToPath, pathToFileURL } from 'node:url'
@@ -24,14 +19,6 @@ let digest = async (bytes: Uint8Array) =>
       await crypto.subtle.digest('SHA-256', new Uint8Array(bytes)),
     ),
   )
-
-// Inherited environment is not ownership. Only runtime() consuming this
-// invocation's launch handshake may identify the launcher a caller can signal.
-let launcherPid: number | undefined
-
-/** The process a caller owns: its validated runtime launcher, or itself when
- * work() was imported directly rather than launched through the CLI. */
-export let readinessPid = (): number => launcherPid ?? system.pid
 
 /** Runtime metadata belongs only to code loaded from that runtime's tree,
  * not to another checkout invoked with an inherited environment. */
@@ -77,9 +64,9 @@ let feed = async (
 
 /** Which slot a launch runs from, and which idle entries go. A slot already
  * holding these sources is shared. Otherwise the lowest number no live process
- * names is rewritten: its paths repeat, so Deno's emits and the CLI's memo for
- * unchanged files are reused, and the cache holds one tree per running
- * version. Nothing a live process names is ever touched.
+ * runs from is rewritten: its paths repeat, so Deno's emits and the CLI's memo
+ * for unchanged files are reused, and the cache holds one tree per running
+ * version. Nothing a live process runs from is ever touched.
  *
  * ```ts
  * import { assertEquals } from '@std/assert'
@@ -112,9 +99,12 @@ export let slot = (
 
 let escape = (text: string) => text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
 
-/** The cache entries a live process runs from, read from every command line.
- * When processes can't be listed, every entry counts as live. */
+/** The cache entries a live process runs from: a launch holds its slot's
+ * `.live` lock while it runs, and a process started from a slot's `yak.ts`
+ * names it on its command line. When processes can't be listed, every entry
+ * counts as live. */
 let live = async (cache: string, names: string[]): Promise<Set<string>> => {
+  let used: Set<string>
   try {
     let { stdout } = await launchCommand('ps', {
       args: ['-axww', '-o', 'command='],
@@ -122,10 +112,19 @@ let live = async (cache: string, names: string[]): Promise<Set<string>> => {
       stderr: 'null',
     }).output()
     let named = new RegExp(`${escape(cache)}/([^/\\s]+)`, 'g')
-    return new Set([...decode(stdout).matchAll(named)].map((m) => m[1]))
+    used = new Set([...decode(stdout).matchAll(named)].map((m) => m[1]))
   } catch {
     return new Set(names)
   }
+  for (let name of names) {
+    if (used.has(name)) continue
+    let file = await disk.open(`${cache}/${name}/.live`, { write: true })
+      .catch(absent)
+    if (!file) continue
+    if (!(await file.tryLock(true))) used.add(name)
+    file.close()
+  }
+  return used
 }
 
 // The commit a checkout stands at, its tracked edits as a binary patch, and
@@ -171,21 +170,13 @@ let capture = async (root: string) => {
  * checkout is read: a landing writes it under that lock, held exclusively, so
  * a launch never captures half a merge, and the capture's own index write
  * never takes the index from a landing. The cache's lock keeps other
- * launchers out until `release`, called once the child is started and names
- * its slot. A child resolves its workspace afresh over this tree; its cwd and
+ * launchers out until `release`, called once the command holds its slot.
+ * What runs from the slot resolves its workspace over this tree; its cwd and
  * graph config still name the caller's data. */
 export let snapshot = async (
   root: string,
   whole: () => void = () => {},
 ): Promise<{ root: string; commit: string; release: () => void }> => {
-  if (runtimeRoot()) {
-    whole()
-    return {
-      root,
-      commit: system.env.get('YAK_RUNTIME_COMMIT')!,
-      release: () => {},
-    }
-  }
   let { commit, patch, files } = await capture(root).finally(whole)
   let hash = await digest(new TextEncoder().encode(JSON.stringify([
     1,
@@ -239,7 +230,7 @@ export let snapshot = async (
   }
 }
 
-let absent = (error: unknown) => {
+let absent = (error: unknown): undefined => {
   if (!(error instanceof disk.errors.NotFound)) throw error
 }
 
@@ -281,6 +272,7 @@ let build = async ({ root, commit, patch, files, target, hash }: {
     await disk.mkdir(to.slice(0, to.lastIndexOf('/')), { recursive: true })
     await disk.writeFile(to, bytes, { mode: mode ?? undefined })
   }
+  let { installed } = await import('./dependencies.ts')
   await installed(target)
   if (!patch.length && !files.length) {
     await disk.writeTextFile(`${target}/.base`, commit)
@@ -338,135 +330,73 @@ export let runtimeStack = (
   to = runtimeRoot() ? system.env.get('YAK_RUNTIME_ROOT') : undefined,
 ): string => from && to ? stack.replaceAll(to + '/', from + '/') : stack
 
-/// import { pid } from '@yaks/process/system'
-/// alive(pid) -> true
-/// alive(1) -> true
-/// alive(2 ** 31 - 1) -> false
-/** Whether a pid names a process: one this user may not signal still does. */
-export let alive = (pid: number): boolean => {
-  try {
-    system.kill(pid, 0)
-    return true
-  } catch (error) {
-    return !(error instanceof disk.errors.NotFound)
-  }
-}
-
-/** A worker's inspector is local and opt-in at launch, never a live signal. */
-export let inspector = (port: string): string => {
+/** A worker's inspector is local and opt-in at launch, never a live signal:
+ * `YAK_WORK_INSPECT` names its port, 0 for any free one. */
+export let inspector = (port: string): number => {
   if (!/^\d+$/.test(port) || Number(port) < 0 || Number(port) > 65535) {
     throw new Error('YAK_WORK_INSPECT must be a local port (0..65535)')
   }
-  return `--inspect=127.0.0.1:${Number(port)}`
+  return Number(port)
 }
 
-/** Run a CLI command from immutable sources, forwarding its terminal, its
- * interrupts and resizes, and waiting for the child to drain. JSR releases are
- * already immutable. Independent workers reuse the sources with their own
- * lifetime. `whole` releases the checkout's land lock the launcher holds
- * (./yak.ts) once the checkout is read. */
-export let runtime = async (
+// The flags `yak` runs with, beside its deno.json.
+// TODO: deno.json's "no-legacy-abort" says this; Deno 2.9.1 ignores it there
+// (./install.ts).
+export let FLAGS = ['-q', '-A', '--unstable-no-legacy-abort']
+
+// The open `.live` file of the slot this process runs from (`live`).
+let held: disk.FsFile | undefined
+
+/** Run a CLI command from immutable sources: its snapshot's own `yak.ts`, in
+ * this process. Deno resolves the snapshot's imports through the snapshot's
+ * own node_modules, so nothing the command loads comes from the checkout.
+ * `whole` releases the checkout's land lock the caller holds (./yak.ts) once
+ * the checkout is read. Deno read the checkout's deno.json as this process
+ * started, before that lock: when a landing has written it since, the command
+ * starts afresh from its snapshot in a process of its own, which names the
+ * slot on its command line. JSR releases are already immutable and never
+ * launch. */
+export let launch = async (
   argv: string[],
-  whole: () => void = () => {},
-): Promise<number | undefined> => {
-  if (!ROOT.href.startsWith('file:')) {
-    whole()
-    return
-  }
-  let { fileURLToPath } = await import('node:url')
+  whole: () => void,
+): Promise<void> => {
   let root = fileURLToPath(ROOT).replace(/\/$/, '')
-  let here = ROOT.href.replace(/\/$/, '')
-  let privateTree = runtimeRoot()
-  if (privateTree && system.env.get('YAK_RUNTIME_PINNED') == '1') {
-    whole()
-    // Consume the launch token: an independent CLI invocation must own its
-    // child, even if it inherits this process's environment and sources.
-    system.env.delete('YAK_RUNTIME_PINNED')
-    let launcher = Number(system.env.get('YAK_LAUNCH_PID'))
-    // If the launcher ended before startup, this child belongs to the reaper.
-    if (launcher > 0 && launcher == system.ppid) {
-      launcherPid = launcher
-      system.disconnected().then(() => system.kill(system.pid, 'SIGKILL'))
-    } else if (launcher > 0 && !alive(launcher)) return 137
-    return
+  let { root: dir, commit, release } = await snapshot(root, whole)
+  let url = pathToFileURL(dir).href
+  let env = {
+    YAK_RUNTIME_FROM: ROOT.href.replace(/\/$/, ''),
+    YAK_RUNTIME_ROOT: url,
+    YAK_RUNTIME_COMMIT: commit,
   }
-  let child: ChildProcess | undefined
-  let finished = Promise.withResolvers<void>()
-  let stopped = wind.draining
-  let stop = () => {
-    stopped = true
-    try {
-      child?.kill('SIGTERM')
-    } catch (error) {
-      if (!(error instanceof disk.errors.NotFound)) throw error
-    }
-    return finished.promise
-  }
-  let release = wind.hold({ drain: stop, force: stop })
-  // A terminal's resize reaches its foreground group alone, which the
-  // detached child is not in: a terminal app redraws on it (@yaks/tui).
-  let resize = () => {
-    try {
-      child?.kill('SIGWINCH')
-    } catch (error) {
-      if (!(error instanceof disk.errors.NotFound)) throw error
-    }
-  }
-  system.addSignalListener('SIGWINCH', resize)
-  let unlock = () => {}
-  try {
-    let { root: dir, commit, release: launched } = await snapshot(root, whole)
-    unlock = launched
-    if (stopped) return 143
-    let url = new URL(`file://${dir}`).href
-    let [command, ...args] = [
-      system.execPath(),
-      'run',
-      // Deno's own lines as a fresh tree fetches its modules say nothing to
-      // whoever started the command; its errors print all the same.
-      '-q',
-      '-A',
-      // TODO: deno.json's "no-legacy-abort" says this; Deno 2.9.1 ignores it
-      // there (./install.ts).
-      '--unstable-no-legacy-abort',
-      ...system.env.get('YAK_WORK_INSPECT') && argv.includes('work')
-        ? [inspector(system.env.get('YAK_WORK_INSPECT')!)]
-        : [],
-      '--config',
-      `${dir}/deno.json`,
-      `${dir}/packages/cli/yak.ts`,
-      ...argv,
-    ]
-    child = launchCommand(command, {
-      args,
-      env: {
-        YAK_RUNTIME_FROM: privateTree
-          ? system.env.get('YAK_RUNTIME_FROM')!
-          : here,
-        YAK_RUNTIME_ROOT: url,
-        YAK_RUNTIME_COMMIT: commit,
-        YAK_RUNTIME_PINNED: '1',
-        YAK_LAUNCH_PID: String(system.pid),
-      },
+  let config = (await disk.stat(`${root}/deno.json`)).mtime
+  if (config && config.getTime() >= performance.timeOrigin) {
+    let child = launchCommand(system.execPath(), {
+      args: [
+        'run',
+        ...FLAGS,
+        '--config',
+        `${dir}/deno.json`,
+        `${dir}/packages/cli/yak.ts`,
+        ...argv,
+      ],
+      env,
       stdin: 'inherit',
       stdout: 'inherit',
       stderr: 'inherit',
-      // IPC closes however the launcher ends, without taking terminal stdin.
-      ipc: true,
-      // A terminal interrupt reaches only the launcher, which forwards it.
-      detached: true,
     }).spawn()
-    // The child's command line now names its slot, so no launcher rewrites it.
-    unlock()
-    let status = await child.status
-    // A command can finish normally while it drains. The launcher was still
-    // interrupted: preserve failure semantics so systemd restarts a worker
-    // signalled outside an explicit unit stop.
-    return stopped ? 143 : status.code
-  } finally {
-    unlock()
-    finished.resolve()
     release()
-    system.removeSignalListener('SIGWINCH', resize)
+    // A terminal's interrupt reaches the command itself, which winds down.
+    system.addSignalListener('SIGINT', () => {})
+    system.addSignalListener('SIGTERM', () => child.kill('SIGTERM'))
+    return system.exit((await child.status).code)
   }
+  try {
+    held = await disk.open(`${dir}/.live`, { create: true, write: true })
+    await held.lock(false)
+  } finally {
+    release()
+  }
+  for (let [name, value] of Object.entries(env)) system.env.set(name, value)
+  let { start } = await import(`${url}/packages/cli/yak.ts`)
+  await start(argv)
 }

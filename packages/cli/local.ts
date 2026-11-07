@@ -71,7 +71,6 @@ import { thread } from '@yaks/threads'
 import { during, peek } from '@yaks/trace'
 import { dutyRoles, rolesOf, workerRoles } from './roles.ts'
 import { declarations } from './declarations.ts'
-import { readinessPid } from './runtime.ts'
 import { lifetime } from './lifetime.ts'
 export { rolesOf } from './roles.ts'
 
@@ -302,12 +301,8 @@ export let work = async (
   let running = Promise.all([host.duties(), reconcile(host.runner)])
   try {
     if (ready) {
-      // Readiness identifies the launcher a caller owns and signals. The
-      // graph's process row identifies the child running these duties.
-      await disk.writeTextFile(
-        ready,
-        `${readinessPid()}\n`,
-      )
+      // Readiness names the process a caller owns and signals.
+      await disk.writeTextFile(ready, `${system.pid}\n`)
     }
     await running
   } finally {

@@ -435,32 +435,35 @@ and portable views. It imports only the selected subpaths; tools stay lazy.
 Unmapped packages use the ordinary JSR loader. An absent optional facet remains
 absent; an exported facet that fails still fails the load.
 
-A **runtime snapshot** is an immutable source tree used by a long-lived CLI
-command. From a Git checkout, `yak serve` and `yak work` run in a runtime
-snapshot containing the commit, tracked edits and untracked files, read while
-holding the checkout's land lock shared (`@yaks/git/land`), so a launch never
-captures a landing half done and never takes the index from one. Deno resolves
-the workspace against that tree, and deferred tool imports read it too. A
-landing can add an export, change a tool or remove a dependency while the
-running command keeps its own code. The next launch uses the checkout's current
-code. JSR releases already have immutable sources.
+A **runtime snapshot** is an immutable source tree a CLI command runs from. From
+a Git checkout, every `yak` command runs in a runtime snapshot containing the
+commit, tracked edits and untracked files, read while holding the checkout's
+land lock shared (`@yaks/git/land`), so a launch never captures a landing half
+done and never takes the index from one. The command runs in the process that
+took the snapshot: that process loads only the land lock and the launcher from
+the checkout, then imports the snapshot's own `yak.ts`, and Deno resolves the
+snapshot's workspace through the snapshot's own `node_modules`. Deferred tool
+imports read the snapshot too. A landing can add an export, change a tool or
+remove a dependency while the running command keeps its own code. The next
+launch uses the checkout's current code. Deno reads the checkout's `deno.json`
+as the process starts, before the land lock; when a landing has written it
+since, the command starts afresh from its snapshot in a process of its own. JSR
+releases already have immutable sources.
 
 Runtime snapshots live in numbered slots under `$XDG_CACHE_HOME/yak/runtime`
 (otherwise `$HOME/.cache/yak/runtime`); `YAK_RUNTIME_CACHE` selects another
 directory. A launch whose sources a slot already holds shares it. Otherwise it
-rewrites the lowest slot no running process names on its command line, so a slot
-never changes under a process, and its paths repeat: Deno's compiled modules and
-the CLI's memo stay valid for every file the landing left alone. Slots no
-process runs from are removed at the next launch, so the cache holds one tree
-per running version. Launchers take the cache's lock until their child has
-started. The launcher forwards interrupts and waits for the command to drain.
-The command watches a dedicated IPC channel and kills itself when that channel
-closes, however the launcher ends. Terminal stdin remains inherited. The child
-runs detached so terminal interrupts reach it through the launcher once. A
-detached duty worker has its own launcher and can outlive the web command while
-reusing its runtime snapshot. The graph config, database and working directory
-retain their caller's paths; file plugins and machine providers inside the
-source checkout follow the runtime snapshot.
+rewrites the lowest slot no running process runs from, so a slot never changes
+under a process, and its paths repeat: Deno's compiled modules and the CLI's
+memo stay valid for every file the landing left alone. A command holds its
+slot's `.live` lock while it runs, and a process started from a slot's `yak.ts`,
+such as a duty worker, names the slot on its command line. Slots no process runs
+from are removed at the next launch, so the cache holds one tree per running
+version. Launchers take the cache's lock until their command holds its slot. A
+detached duty worker starts from its web's snapshot and can outlive the web
+command. The graph config, database and working directory retain their caller's
+paths; file plugins and machine providers inside the source checkout follow the
+runtime snapshot.
 
 `@yaks/cli/memo` exports `remember(inputs, roots, make, options)` for derived
 JSON data. A hit validates the source files before reusing the value; failed
@@ -538,8 +541,7 @@ replacement started sooner would race the restarting worker for its service
 leases and hold them, on the web's code, until the web ends. Failed launches are
 reported and retried; a draining process withdraws its duties before its
 in-flight work ends. Config `duties: false` disables this too, for deliberately
-inert hosts. Readiness identifies only this invocation's validated launcher,
-never a PID inherited from a different worker's environment.
+inert hosts. Readiness names the worker's own process.
 
 A **process layout** is the config's `processes` list of systemd unit templates.
 `yak work --process <unit>` selects that entry's `roles` (or all duties when

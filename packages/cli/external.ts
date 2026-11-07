@@ -15,6 +15,7 @@ import {
 } from '@yaks/process'
 import { resolve } from 'node:path'
 import { launching } from './release.ts'
+import { FLAGS } from './runtime.ts'
 
 /** The commits other hosts made, handed over as they arrive (@yaks/host). */
 export type Feed = (each: (news: News) => void) => () => void
@@ -332,11 +333,12 @@ let start = async (
     let child = launchCommand(system.execPath(), {
       args: [
         'run',
-        '-q',
-        '-A',
+        ...FLAGS,
         '--config',
         await launching(() => Promise.resolve(dir)),
-        system.mainModule,
+        // The `yak` this command runs, beside its config: a command from a
+        // checkout runs its snapshot's (./runtime.ts `launch`).
+        new URL('./yak.ts', import.meta.url).href,
         '--config',
         resolve(path),
         'work',

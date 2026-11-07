@@ -30,8 +30,8 @@ test('a runtime remaps source paths without moving neighboring checkouts or data
 
 test('worker inspector launch binds only a local numeric port', async () => {
   let { inspector } = await import('./runtime.ts')
-  equal(inspector('19285'), '--inspect=127.0.0.1:19285')
-  equal(inspector('0'), '--inspect=127.0.0.1:0')
+  equal(inspector('19285'), 19285)
+  equal(inspector('0'), 0)
   for (let value of ['-1', '65536', '0.0.0.0:9229', '9229 --allow-all']) {
     let error = false
     try {
@@ -99,7 +99,22 @@ test('a slot follows its checkout: a landing rewrites only what landed, edits ri
     await git('checkout', '-q', '.')
     await disk.remove(`${root}/new.ts`)
     await commit({ 'c.ts': 'c2' })
-    equal((await tree()).found, { 'a.ts': 'a2', 'c.ts': 'c2', 'kept.ts': 'k' })
+    let held = await tree()
+    equal(held.found, { 'a.ts': 'a2', 'c.ts': 'c2', 'kept.ts': 'k' })
+    // A launch holds its slot's `.live` lock as long as it runs from it.
+    let live = await disk.open(`${held.dir}/.live`, {
+      create: true,
+      write: true,
+    })
+    await live.lock(false)
+    await commit({ 'c.ts': 'c3' })
+    let beside = await tree()
+    equal(beside.dir == held.dir, false)
+    equal(beside.found.c, undefined)
+    equal(await disk.readTextFile(`${held.dir}/c.ts`), 'c2')
+    live.close()
+    await commit({ 'c.ts': 'c4' })
+    equal((await tree()).dir, held.dir)
   } finally {
     if (was) Deno.env.set('YAK_RUNTIME_CACHE', was)
     else Deno.env.delete('YAK_RUNTIME_CACHE')

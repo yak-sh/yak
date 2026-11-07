@@ -352,7 +352,7 @@ export let own: Command[] = [
       let path = configPath(c.config)
       if (!args.handover) {
         let { launching } = await import('./release.ts')
-        let { runtimeSource } = await import('./runtime.ts')
+        let { runtimeSource, FLAGS } = await import('./runtime.ts')
         // The units run the checkout's command, never this command's private
         // copy of it (./runtime.ts), which goes once nothing runs from it.
         let source = (path: string) =>
@@ -360,7 +360,7 @@ export let own: Command[] = [
         let launch = [
           system.execPath(),
           'run',
-          '-A',
+          ...FLAGS,
           '--config',
           await launching(
             () => disk.makeTempDir({ dir: runtimeDir, prefix: 'yak-restart-' }),

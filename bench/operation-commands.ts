@@ -243,6 +243,7 @@ async function collect(
         args: [
           'run',
           '-A',
+          '--unstable-no-legacy-abort',
           '--config',
           `${root}deno.json`,
           `${root}packages/cli/yak.ts`,

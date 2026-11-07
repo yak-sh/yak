@@ -56,6 +56,7 @@ export async function measure(
     Deno.execPath(),
     'run',
     '-A',
+    '--unstable-no-legacy-abort',
     '--config',
     `${root}deno.json`,
     `${root}packages/cli/yak.ts`,
