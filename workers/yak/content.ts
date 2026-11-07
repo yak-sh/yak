@@ -135,7 +135,7 @@ export let PAGES: Record<string, Page> = {
     'slug': 'sharing',
     'title': 'Access, Publishing and Installing',
     'description':
-      "Who may read and write an app (the public, open and private access settings), inviting people with member_add to one app or the whole space, roles, a stranger's own copy of a private published app, kept by app_install(visit: true), and publishing and installing: app_publish, app_install, app_update, the gallery, an installed copy's independent data and borrowed connections, how it runs like the space's own apps and the sandboxed setting, version pinning, and what an update does to the data people saved.",
+      "Who may read and write an app (the public, open and private access settings), inviting people with member_add to one app or the whole space, roles, letting the people an app's own rows list join it (join in vocab.json), a stranger's own copy of a private published app, kept by app_install(visit: true), and publishing and installing: app_publish, app_install, app_update, the gallery, an installed copy's independent data and borrowed connections, how it runs like the space's own apps and the sandboxed setting, version pinning, and what an update does to the data people saved.",
     'brief':
       'access settings, inviting people, publishing and installing an app',
   },

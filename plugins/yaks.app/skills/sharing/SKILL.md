@@ -1,6 +1,6 @@
 ---
 name: sharing
-description: "Access, Publishing and Installing (yaks.app). Who may read and write an app (the public, open and private access settings), inviting people with member_add to one app or the whole space, roles, a stranger's own copy of a private published app, kept by app_install(visit: true), and publishing and installing: app_publish, app_install, app_update, the gallery, an installed copy's independent data and borrowed connections, how it runs like the space's own apps and the sandboxed setting, version pinning, and what an update does to the data people saved."
+description: "Access, Publishing and Installing (yaks.app). Who may read and write an app (the public, open and private access settings), inviting people with member_add to one app or the whole space, roles, letting the people an app's own rows list join it (join in vocab.json), a stranger's own copy of a private published app, kept by app_install(visit: true), and publishing and installing: app_publish, app_install, app_update, the gallery, an installed copy's independent data and borrowed connections, how it runs like the space's own apps and the sandboxed setting, version pinning, and what an update does to the data people saved."
 ---
 
 # Access, Publishing and Installing
@@ -191,6 +191,42 @@ and counts against nothing.
 decide who belongs could never be opened again. Removing someone leaves their
 sign-in working: they lose access to this space, not to the platform.
 `member_remove(email, app)` removes access to that one app and leaves the rest.
+
+## Letting the people an app lists join it
+
+An app whose own data already lists its people, such as a church directory with
+every member's email address, can let them in without an invitation each. Its
+`vocab.json` names the properties that hold those addresses, and optionally an
+email domain, under `join`:
+
+    {
+      "join": {
+        "emails": ["individual.email", "household.email"],
+        "domain": "example.org",
+        "role": "viewer"
+      },
+      "$defs": { ... }
+    }
+
+`emails` lists `component.property` names this manifest declares; one value may
+hold several addresses separated by commas, and capitals do not matter. `domain`
+lets in every address at that domain, without the `@`. `role` is `viewer` (the
+default) or `editor`. `join` needs `emails`, `domain` or both, and takes effect
+with the next `app_deploy`.
+
+Somebody signed in with a listed address who opens the private app sees a Join
+button instead of "Nothing here yet."; on a `public` app, where they can already
+read, `me()` returns `join` with the role pressing Join would give them (else
+`null`), so the page can offer it. Pressing it posts to the app's `api/join` and
+makes them a guest of that app at that role, exactly as an accepted
+`member_add(email, app, role)` would, and the space's people are told in their
+Updates. Everyone else is offered nothing, and their `api/join` is refused. The
+address is always the one the person signed in with, which the sign-in code
+proved is theirs.
+
+`member_add` still works beside it. Removing a person's row, or changing its
+address, stops them joining again, but access they already have stays until
+`member_remove` takes it away, as for any guest.
 
 ## Publishing and installing
 

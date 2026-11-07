@@ -281,9 +281,36 @@ export let linkOf = (place: Place, env: Host) =>
     : `https://${spaceHost(env, place.space.slug)}/`
 
 /**
+ * The seat or grant `person` holds at `role` in `place`, as the bundle that
+ * writes it: one already held (taken some other way since) is re-roled rather
+ * than doubled. Accepting an invitation writes it, and so does joining an app
+ * that lists the person (join.ts).
+ */
+export let holding = async (
+  dir: Directory,
+  place: Place,
+  person: string,
+  role: Role,
+): Promise<Bundle> => {
+  let held = place.app
+    ? await dir.grant(place.app, person)
+    : await dir.member(place.space, person)
+  return place.app
+    ? held ? { entity: { eid: held.eid }, grant: { access: role } } : {
+      entity: { eid: crypto.randomUUID() },
+      grant: { app: place.app.eid, person, access: role },
+    }
+    : held
+    ? { entity: { eid: held.eid }, member: { role } }
+    : {
+      entity: { eid: crypto.randomUUID() },
+      member: { space: place.space.eid, person, role },
+    }
+}
+
+/**
  * Taking it: the invitation goes and the seat or grant it offered is written,
- * in one batch. One already held (a seat taken some other way since) is
- * re-roled rather than doubled.
+ * in one batch.
  */
 export let accept = async (
   dir: Directory,
@@ -291,23 +318,10 @@ export let accept = async (
   place: Place,
 ) => {
   let { person, role } = invite
-  let held = place.app
-    ? await dir.grant(place.app, person)
-    : await dir.member(place.space, person)
   await dir.apply({
     entities: [
       { entity: { eid: invite.eid }, tombstone: {} },
-      place.app
-        ? held ? { entity: { eid: held.eid }, grant: { access: role } } : {
-          entity: { eid: crypto.randomUUID() },
-          grant: { app: place.app.eid, person, access: role },
-        }
-        : held
-        ? { entity: { eid: held.eid }, member: { role } }
-        : {
-          entity: { eid: crypto.randomUUID() },
-          member: { space: place.space.eid, person, role },
-        },
+      await holding(dir, place, person, role),
     ],
   }, { 'x-yak-person': person, 'x-yak-role': 'owner' })
 }

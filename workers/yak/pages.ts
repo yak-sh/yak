@@ -52,6 +52,7 @@ import { type IconName, icons } from './icons.ts'
 import { day, esc, fileDrop, markup, raw } from './html.ts'
 import { holder, tile } from './render/mod.ts'
 import type { People, Person } from './people.ts'
+import type { Role } from './directory.ts'
 import type { Plain } from './unseen.ts'
 import { type Invitation, qr } from './referral.ts'
 import { shown } from '@yaks/phone'
@@ -3393,6 +3394,26 @@ export let invitedTo = (title: string, env: Host = {}) =>
       `Accept the invitation to ${title} from the letter yaks.app sent you, then open this link again.`,
     status: 403,
   }, home(env))
+
+// A private app opened by somebody its own data lists (join.ts): one press
+// and they are in, at the role the app says. The form posts to the app's own
+// join door, which asks the rows again rather than trusting this page.
+export let joinable = (
+  at: { title: string; role: Role; action: string },
+  env: Host = {},
+) =>
+  page(
+    env,
+    {
+      title: `Join ${at.title}`,
+      lead: `You are listed in ${at.title}. Join to ${
+        at.role == 'viewer' ? 'see' : 'use'
+      } it.`,
+      status: 403,
+    },
+    h('form', { method: 'post', action: at.action }, send('Join')),
+    home(env),
+  )
 
 // An invitation that is no longer open: withdrawn, or for a space or an app
 // that is gone. Which one is nobody's business but the inviter's.

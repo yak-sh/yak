@@ -483,6 +483,53 @@ export let OPENS: Record<string, string> = {
   rtc: 'speak and listen through its voice door',
 }
 
+/**
+ * What is wrong with a manifest's `join` (join.ts): `emails` names this
+ * manifest's own properties as `component.property`, `domain` is an email
+ * domain, `role` is viewer or editor, and at least one of the first two is
+ * said.
+ */
+/// joinErrors({ domain: 'example.org' }, {}) -> []
+/// joinErrors({ emails: ['m.email'] }, { m: { properties: { email: {} } } }) -> []
+/// joinErrors({ role: 'owner' }, {}).length -> 2
+export let joinErrors = (join: unknown, defs: unknown): string[] => {
+  if (!object(join)) {
+    return [
+      'it is an object: { "emails": ["member.email"], "domain": ' +
+      '"example.org", "role": "viewer" }',
+    ]
+  }
+  let own = object(defs) ? defs : {}
+  let declared = (path: string) => {
+    let [comp, prop, ...more] = path.split('.')
+    let def = own[comp]
+    return !more.length && object(def) && object(def.properties) &&
+      prop in def.properties
+  }
+  let { emails, domain, role, ...rest } = join
+  return [
+    ...Object.keys(rest).map((k) =>
+      `${k} is not one of its words: emails, domain, role`
+    ),
+    ...emails === undefined ||
+        Array.isArray(emails) && emails.every((e) => typeof e == 'string')
+      ? (emails as string[] ?? []).filter((e) => !declared(e)).map((e) =>
+        `emails: ${e} is not a component.property this manifest declares`
+      )
+      : ['emails is a list of component.property names, e.g. ["member.email"]'],
+    ...domain === undefined ||
+        typeof domain == 'string' && /^[a-z0-9-]+(\.[a-z0-9-]+)+$/i.test(domain)
+      ? []
+      : ['domain is an email domain, such as example.org, without the @'],
+    ...role === undefined || role == 'viewer' || role == 'editor'
+      ? []
+      : ['role is viewer or editor: what joining makes them'],
+    ...emails === undefined && domain === undefined
+      ? ['it names emails, a domain, or both: who may join']
+      : [],
+  ]
+}
+
 /** The files an app's words may be written in, the one read when both
  * are there first. */
 export let VOCABS = ['vocab.yml', 'vocab.json']
@@ -510,7 +557,9 @@ export let VOCABS = ['vocab.yml', 'vocab.json']
  * are each {@link OPENS}: who may spend the space's budget through the
  * app. `blob` is which uploads the app takes (@yaks/blob `Accepts`), checked
  * where bytes come in (apps.ts `took`, `inParts`; inbox.ts), and its `floor`
- * who may upload them (app-authority.ts `floorsOf`). `packages` is
+ * who may upload them (app-authority.ts `floorsOf`). `join` is who may join
+ * the app by being listed in its own rows ({@link joinErrors}, join.ts).
+ * `packages` is
  * the one the person never writes here: a deploy lifts it off package.json's
  * `"platform"` dependencies ({@link stated}), and the store speaks their
  * words ({@link lent}).
@@ -559,6 +608,12 @@ export let appDoc = (source: unknown, file = 'vocab.json'): VocabDoc => {
       throw refuse('arguments', `${file}: "blob": ${wrong.join('; ')}`)
     }
   }
+  if (held.join !== undefined) {
+    let wrong = joinErrors(held.join, held.$defs)
+    if (wrong.length) {
+      throw refuse('arguments', `${file}: "join": ${wrong.join('; ')}`)
+    }
+  }
   let packages = held.packages
   if (
     packages !== undefined &&
@@ -569,7 +624,7 @@ export let appDoc = (source: unknown, file = 'vocab.json'): VocabDoc => {
   let body = Object.fromEntries(
     Object.entries(held).filter(([k]) =>
       !(k == 'tools' && off !== undefined) && !(k in OPENS) && k != 'blob' &&
-      k != 'packages'
+      k != 'join' && k != 'packages'
     ),
   )
   let keys = Object.keys(body)
@@ -596,6 +651,7 @@ export let appDoc = (source: unknown, file = 'vocab.json'): VocabDoc => {
   if (off !== undefined) doc = { ...doc, tools: off }
   for (let [word] of opens) doc = { ...doc, [word]: held[word] }
   if (held.blob !== undefined) doc = { ...doc, blob: held.blob }
+  if (held.join !== undefined) doc = { ...doc, join: held.join }
   if (packages?.length) {
     doc = { ...doc, packages: [...new Set(packages)].sort() }
   }

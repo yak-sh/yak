@@ -113,6 +113,7 @@ import {
   type DeskPage,
   editor,
   invitedTo,
+  joinable as joinPage,
   LOGO,
   nothingHere,
   sentence,
@@ -121,6 +122,7 @@ import {
   type Visits,
 } from './pages.ts'
 import { again } from './invite.ts'
+import { join, joinable } from './join.ts'
 import { peopleIn } from './people.ts'
 import { CallError } from '@yaks/tools/errors'
 import { untrash, untrashSpace } from './erase.ts'
@@ -297,6 +299,8 @@ let SAYS: Record<string, string> = {
   not_found: "no such door under this app's api",
   not_a_writer: 'sign in to change this app',
   not_a_reader: 'sign in to see this app',
+  // Join, by somebody the app's own rows do not list (join.ts).
+  not_listed: 'only the people this app lists may join it',
   no_bytes: 'an upload needs a body: post the file itself',
   upload_gone: 'that upload is no longer under way — begin it again',
   too_large: 'that file is bigger than this app takes',
@@ -372,17 +376,28 @@ export let invitedHere = async (
   )
 
 /** The page for a signed-in person an app's pages are shut to: that their
- * invitation waits, if the owner let them in, else that nothing is here. */
+ * invitation waits, if the owner let them in, else Join where the app's own
+ * rows list them (join.ts), else that nothing is here. `at` is the app's
+ * address as served, where its join door is. */
 export let shut = async (
-  dir: Parameters<typeof waiting>[0],
+  env: Env,
+  dir: Parameters<typeof waiting>[0] & Parameters<typeof joinable>[1],
   space: Space,
   app: App,
-  person: string,
-  env: Host,
-) =>
-  await waiting(dir, space, app, person, 'not_a_reader')
-    ? invitedTo(app.title || app.slug, env)
+  who: { person: string; role: Role | null; guest?: boolean },
+  at: string,
+) => {
+  if (await waiting(dir, space, app, who.person, 'not_a_reader')) {
+    return invitedTo(app.title || app.slug, env)
+  }
+  let role = await joinable(env, dir, space, app, who)
+  return role
+    ? joinPage(
+      { title: app.title || app.slug, role, action: `${at}api/join` },
+      env,
+    )
     : nothingHere(env)
+}
 
 let json = (
   status: number,
@@ -1849,8 +1864,24 @@ export let api = async (
         ? null
         : signInAt(req.headers.get('referer') || req.url, env),
       invited: await invitedHere(dir, space, app, person, mayRead, mayPost),
+      // The role pressing Join gives them, where the app's own rows list
+      // them and it is more than they hold (join.ts), else null.
+      join: await joinable(env, dir, space, app, who),
       visit: who.visit ?? null,
     })
+  }
+  // Joining an app whose own rows list them (join.ts): signed in, and the
+  // rows asked again here rather than taken from the page that offered it.
+  // A browser's form lands back on the app; anything else hears the role.
+  if (path == '/join') {
+    if (req.method != 'POST') return json(405, 'method_not_allowed')
+    if (!who.person) return await refused('not_a_reader')
+    let role = await joinable(env, dir, space, app, who)
+    if (!role) return json(403, 'not_listed')
+    await join(env, dir, space, app, who.person, role)
+    return req.headers.get('accept')?.includes('text/html')
+      ? redirect(mount, 303)
+      : Response.json({ joined: role })
   }
   // The app's platform doors use the same refusals as its store doors.
   let asked: Asked = { env, req, path, space, app, who, refuse: refused, json }
@@ -3913,7 +3944,14 @@ let served = async (
   // The worker passed, and the files are not this visitor's to see.
   if (!own && !file) {
     if (door == 'sign-in') return redirect(signInAt(req.url, env), 303)
-    return await shut(dir, space, app, who.person!, env)
+    return await shut(
+      env,
+      dir,
+      space,
+      app,
+      { person: who.person!, role: who.role, guest: who.guest },
+      bare,
+    )
   }
   // File pages already pass through woven(). Worker pages use the same
   // reporter, without buffering or changing their navigation and asset URLs.

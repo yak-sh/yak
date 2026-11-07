@@ -105,11 +105,13 @@ test('a friend who has not accepted is told the invitation waits', async () => {
 
 test("a private app's page tells an invited friend it waits, and a stranger nothing", async () => {
   let { dir } = closedTo
-  let page = await shut(dir, space, diary, 'ana', {})
+  let at = (person: string) =>
+    shut({} as Env, dir, space, diary, { person, role: null }, '/diary/')
+  let page = await at('ana')
   assertEquals(page.status, 403)
   assertStringIncludes(await page.text(), 'Your invitation is waiting')
   assertStringIncludes(
-    await (await shut(dir, space, diary, 'bo', {})).text(),
+    await (await at('bo')).text(),
     'Nothing here yet',
   )
 })
