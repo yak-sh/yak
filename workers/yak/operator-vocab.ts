@@ -247,5 +247,13 @@ export let operatorDoc: VocabDoc = {
       tries: 3,
       description: 'Deliver a kept answer through its originating channel.',
     },
+    operator_alert: {
+      effect: true,
+      created: ['notification'],
+      idempotent: false,
+      tries: 3,
+      description:
+        'Tell the person a notification the Operator wrote them, the way they chose to be alerted (operator-alerts.ts).',
+    },
   },
 }

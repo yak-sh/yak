@@ -64,6 +64,7 @@ import { payments } from './config.ts'
 import { firstOf } from './router.ts'
 import { nameOf } from './signin.ts'
 import type { Texting } from './operator-texts.ts'
+import type { Alerting } from './operator-alerts.ts'
 
 // The slugs no space or app may take, because at `<slug>.yaks.app` and at
 // `<slug>@yaks.app` (post.ts `mailFrom`) they would read as the platform
@@ -772,6 +773,7 @@ export type Row = {
     verification?: string | null
   }
   sms_consent?: { person: Id; consent: string; at: string; space?: Id }
+  operator_alerts?: { channel?: Alerting | null }
   signed_in?: { at?: string | null; via?: string | null }
   used?: { at?: string | null }
   changed?: { at?: string | null }
@@ -2612,6 +2614,10 @@ export let directoryRows = (rows: {
         }
         : null
     },
+    // How this person chose to be told what their Operators tell them, or
+    // null when they have not chosen (operator-alerts.ts `routeOf`).
+    alerts: async (person: string): Promise<Alerting | null> =>
+      (await one(`.entity.eid=${person}`))?.operator_alerts?.channel ?? null,
     // What to call this person anywhere their address must not go: the name
     // they chose in their settings or were invited under, else the front of
     // their address (signin.ts `nameOf`). An app's store is written this and never the address, so a

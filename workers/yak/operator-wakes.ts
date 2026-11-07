@@ -67,7 +67,7 @@ export let wakeTools = (store: Store, space: Space): Tool[] => [
     title: 'Set a wake-up',
     step: { doing: 'Setting a wake-up…', done: 'Set a wake-up' },
     description:
-      'Come back to something later for the person you work for: once at a time ("remind me at 5", "check this tomorrow"), or on a cadence (every morning at 9, every 2 hours). When it fires, the words you give in say arrive in your conversation with them as theirs, marked as your wake-up, and what you answer reaches them in their Updates. Write say as what to do then, with what you will need to know. Give at, every, or both. It runs as them and is paid from the space’s budget each time it fires.',
+      'Come back to something later for the person you work for: once at a time ("remind me at 5", "check this tomorrow"), or on a cadence (every morning at 9, every 2 hours). When it fires, the words you give in say arrive in your conversation with them as theirs, marked as your wake-up, and what you answer reaches them in their Updates and the way they chose to be alerted. Write say as what to do then, with what you will need to know. Give at, every, or both. It runs as them and is paid from the space’s budget each time it fires.',
     parameters: {
       type: 'object',
       properties: {

@@ -329,12 +329,12 @@ let BY: Record<
     let every = part<{ every?: string } | undefined>(wake, 'wake')?.every
     return `Your wake-up ${wake ? short(wake.entity.eid) : '(gone)'} fired${
       every ? `, as it does ${every}` : ''
-    }. These are the words you set it with, and what you answer reaches them in their Updates: `
+    }. These are the words you set it with, and what you answer reaches them in their Updates and the way they chose to be alerted: `
   },
   subscription: (_, __, sub) =>
     `Your subscription ${
       sub ? short(sub.entity.eid) : '(gone)'
-    } saw its rows change. These are the words you set it with, then what changed, and what you answer reaches them in their Updates: `,
+    } saw its rows change. These are the words you set it with, then what changed, and what you answer reaches them in their Updates and the way they chose to be alerted: `,
   update: (_, __, about) => {
     let asked = part<Comp>(about, 'decision')?.question
     return asked
@@ -371,7 +371,7 @@ Ask nothing of them first: no form, no password, no link to follow. When your co
 
 // The Operator's own address, and the sender its letters leave on, counted
 // against the space's mail allowance (meter.ts).
-let postOf = (env: Env, space: Space, kind = 'mail') => {
+export let postOf = (env: Env, space: Space, kind = 'mail') => {
   let from = mailFrom(space.slug, null, env)
   return {
     from,
@@ -383,7 +383,8 @@ let postOf = (env: Env, space: Space, kind = 'mail') => {
   }
 }
 
-let html = (text: string) => `<p>${esc(text).replaceAll('\n', '<br>')}</p>`
+export let htmlOf = (text: string) =>
+  `<p>${esc(text).replaceAll('\n', '<br>')}</p>`
 let re = (subject: string) => /^re:/i.test(subject) ? subject : 'Re: ' + subject
 
 export let channels = (env: Env): Record<string, Channel> => {
@@ -444,7 +445,7 @@ export let channels = (env: Env): Record<string, Channel> => {
         to: request.address!,
         subject: re(subject),
         text,
-        html: html(text),
+        html: htmlOf(text),
         ...(request.reply_to ? { replyTo: request.reply_to } : {}),
       })
     },
@@ -570,7 +571,7 @@ export let mailSend = (
       ...(cc ? { cc } : {}),
       subject,
       text: body,
-      html: html(body),
+      html: htmlOf(body),
       ...(replyTo ? { replyTo } : {}),
     })
     await store.g.apply([{
@@ -786,6 +787,12 @@ export let handleChannels = (
           },
         }], { trusted: true })
       }
+    },
+    // What the Operator tells a person reaches them the way they chose
+    // (operator-alerts.ts).
+    operator_alert: async (event) => {
+      let { alert } = await import('./operator-alerts.ts')
+      await alert(env, operator.store, event.entity.eid)
     },
     // An answer goes out on its request's channel, unless another answer of
     // its turn carries it (`with`). One kept on the request itself is from

@@ -350,7 +350,7 @@ export let textSend = (env: Env, ctx: Ctx, space: Space): Tool => ({
   title: 'Send a text',
   step: { doing: 'Texting %{person}…', done: 'Texted %{person}' },
   description:
-    'Send a text message to the person you are working for, at the mobile number they agreed to be texted at. Use it when they asked to be texted, or to tell them something they would want to know away from the page. Keep it short; it is signed with your name. Their reply reaches you as a new request. Refused when they have not agreed to texts.',
+    'Send a text message to the person you are working for, at the mobile number they agreed to be texted at. Use it when they asked to be texted; to tell them something away from the page, use notification_send, which reaches them the way they chose. Keep it short; it is signed with your name. Their reply reaches you as a new request. Refused when they have not agreed to texts.',
   parameters: {
     type: 'object',
     properties: { text: { type: 'string', description: 'What to say.' } },
@@ -366,15 +366,8 @@ export let textSend = (env: Env, ctx: Ctx, space: Space): Tool => ({
         'This person has not agreed to texts. They can on the Operator page.',
       )
     }
-    let { textSigned } = await import('./operator-channels.ts')
     try {
-      let phone = charged(env, space, await phoneOf(env, space.sender))
-      let { id } = await phone.send({
-        to: texting.number,
-        text: `${await signingIn(env, texting.number, text)}\n\n${
-          textSigned(space)
-        }`,
-      })
+      let { id } = await textPerson(env, space, texting.number, text)
       return JSON.stringify({ texted: texting.number, id: id ?? null })
     } catch (error) {
       if (error instanceof Blocked) throw refuse('blocked', error.message)
@@ -382,3 +375,20 @@ export let textSend = (env: Env, ctx: Ctx, space: Space): Tool => ({
     }
   },
 })
+
+/** A text from `space`'s Operator to the person at `number`, a number they
+ * agreed to: signed with its name, its links signing them in, and paid from
+ * the space's budget. */
+export let textPerson = async (
+  env: Env,
+  space: Space,
+  number: string,
+  text: string,
+) => {
+  let { textSigned } = await import('./operator-channels.ts')
+  let phone = charged(env, space, await phoneOf(env, space.sender))
+  return phone.send({
+    to: number,
+    text: `${await signingIn(env, number, text)}\n\n${textSigned(space)}`,
+  })
+}

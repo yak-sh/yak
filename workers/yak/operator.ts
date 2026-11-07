@@ -84,6 +84,7 @@ import {
   starting,
 } from './operator-channels.ts'
 import { textSend } from './operator-texts.ts'
+import { notificationSend } from './operator-alerts.ts'
 import { iconic } from './raster.ts'
 import { phoneSend } from './operator-line.ts'
 import { imageNew } from './operator-images.ts'
@@ -185,7 +186,7 @@ let ON_TASK =
 // What every session is told where it is given the tool that asks the person
 // it works for to choose (operator-updates.ts).
 let ASKING =
-  ' Ask the person you work for: the question reaches them in their Updates under Needs you, with a button for each choice, and what they choose comes back to you in your conversation with them. Use it for a choice that is theirs to make (spending money, sending to people, deleting), not to confirm routine work.'
+  ' Ask the person you work for: the question reaches them in their Updates under Needs you, with a button for each choice, and what they choose comes back to you in your conversation with them. When they are not in this conversation, tell them it waits with notification_send. Use it for a choice that is theirs to make (spending money, sending to people, deleting), not to confirm routine work.'
 
 // What the Operator is told of the spaces it reaches beyond its own.
 let told = (
@@ -1144,6 +1145,7 @@ export let operating = (
       ...roster,
       platformBug(ctx, space),
       textSend(env, ctx, space),
+      notificationSend(ctx, space, store),
       mailSend(env, ctx, space, store),
       phoneSend(env, ctx, space, store),
       imageNew(env, space),

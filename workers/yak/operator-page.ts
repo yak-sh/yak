@@ -48,6 +48,7 @@ import {
   type Texting,
   texts,
 } from './operator-texts.ts'
+import { type Alerting, alertsRow, routeOf } from './operator-alerts.ts'
 import { given } from './operator-name.ts'
 import {
   backendOf,
@@ -214,7 +215,7 @@ export let textsCard = (
     h(
       'p',
       null,
-      'Text your Operator about anything, and it answers by text; call it, and it answers by voice. It also texts you when it finishes a change, needs an answer from you, or something about your space needs you, and apps you build can text you reminders. You can still use chat and email.',
+      'Text your Operator about anything, and it answers by text; call it, and it answers by voice. It also texts you its alerts, unless you choose email for them, and apps you build can text you reminders. You can still use chat and email.',
     ),
     from || call
       ? h(
@@ -270,6 +271,52 @@ export let textsCard = (
     ),
     h('p', null, 'Agreeing is not required to use yaks.app.'),
   )
+
+// Where a person chooses how their Operators tell them something away from
+// the page (operator-alerts.ts): what they would be told by when they have
+// not chosen is checked.
+export let alertsCard = (
+  at: string,
+  chosen: Alerting | null,
+  consent: Texting | null,
+  email: string | null,
+) => {
+  let route = routeOf(chosen, consent, email)
+  let current = chosen ?? route?.by ?? 'updates'
+  let offers = [
+    {
+      id: 'text',
+      name: 'Text',
+      about: consent
+        ? `to ${shown(consent.number)}`
+        : 'once you agree to texts below; until then, by email',
+    },
+    {
+      id: 'email',
+      name: 'Email',
+      about: email
+        ? `to ${email}`
+        : 'once you give an address; until then, by text',
+    },
+    { id: 'updates', name: 'Only in Updates', about: 'nothing sent' },
+  ]
+  return setting(
+    at,
+    'alerts',
+    'Alerts',
+    h(
+      'p',
+      null,
+      'How your Operator tells you something when you are not here: work you are waiting on finished, something needs you, or you asked to be told. It is always in your Updates too.',
+    ),
+    choices(
+      'alerts-channel',
+      'Tell me by',
+      'channel',
+      offers.map((o) => ({ ...o, checked: o.id == current })),
+    ),
+  )
+}
 
 // Where a space's people change what its Operator is called.
 export let nameCard = (at: string, name: string) =>
@@ -483,6 +530,21 @@ export let operatorAnswer = async (
         )
       }
       return Response.json(now)
+    } catch (e) {
+      if (!(e instanceof CallError)) throw e
+      return Response.json({ message: e.message }, { status: 400 })
+    }
+  }
+  if (q.has('alerts') && req.method == 'POST') {
+    let form = await req.formData()
+    try {
+      let person = who.person ?? ''
+      await directoryOf(env.STORE).apply({
+        entities: [alertsRow(person, String(form.get('channel') ?? ''))],
+      }, vouched(who))
+      return Response.json({
+        channel: await directoryOf(env.STORE).alerts(person),
+      })
     } catch (e) {
       if (!(e instanceof CallError)) throw e
       return Response.json({ message: e.message }, { status: 400 })
@@ -771,12 +833,16 @@ export let conversationOf = async (
 // conversations in the chat app (`chatPage`), and the texts it may send.
 export let operatorBody = async (env: Env, space: Space, who: Who) => {
   let at = managePath('operator', space.slug)
-  let [consent, { pa, beyond }, phone, platform] = await Promise.all([
-    directoryOf(env.STORE).texting(who.person ?? ''),
-    reachOf(directoryOf(env.STORE), space, who.person ?? ''),
-    phoneAt(env, space.sender),
-    phoneAt(env),
-  ])
+  let dir = directoryOf(env.STORE)
+  let [consent, { pa, beyond }, phone, platform, chosen, email] = await Promise
+    .all([
+      dir.texting(who.person ?? ''),
+      reachOf(dir, space, who.person ?? ''),
+      phoneAt(env, space.sender),
+      phoneAt(env),
+      dir.alerts(who.person ?? ''),
+      dir.emailAt(who.person ?? ''),
+    ])
   let from = phone?.transport().number
   let call = platform?.caller ? platform.transport().number : undefined
   let address = mailFrom(space.slug, null, env)
@@ -809,6 +875,7 @@ export let operatorBody = async (env: Env, space: Space, who: Who) => {
     talks(space.slug),
     nameCard(at, operator),
     voiceCard(at, space, offered(env, space)),
+    alertsCard(at, chosen, consent, email),
     textsCard(at, consent, from, call),
   ]) + settingsScript
 }

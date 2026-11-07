@@ -188,6 +188,16 @@ export let directoryDoc: VocabDoc = {
       type: 'object',
       properties: { address: text },
     },
+    // How a person is told what their Operators tell them away from the page
+    // (operator-alerts.ts): by text, by email, or only in their Updates.
+    // Without it, by text when they agreed to texts, else by email.
+    operator_alerts: {
+      component: true,
+      type: 'object',
+      properties: {
+        channel: { type: 'string', enum: ['text', 'email', 'updates'] },
+      },
+    },
     // A file an app published at a path of its address (public-files.ts):
     // served to anyone there, before the app runs, whatever its access. Its
     // eid is derived from the app and the path, so an address holds one file.
