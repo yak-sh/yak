@@ -12,12 +12,16 @@
 // component table is made when the store installs. One that rests on some is
 // made once every table it rests on stands: by the install, over a file that
 // holds them, and otherwise in the transaction of the write that raises the
-// last of them, before that write's rows, so its triggers see them.
+// last of them, before that write's rows, so its triggers see them. An object
+// that rests on none but is kept over a component's table (a substring index's
+// list of pieces) is made with the first raised statement that names it,
+// where no install made it.
 //
 // A read of a component with no table answers as one worn by no entity
 // (@yaks/sql `absentDialect`, `absentDerived`).
 
 import {
+  catalogue,
   type Derived,
   type Driver,
   erect,
@@ -199,6 +203,25 @@ export let holds = (
   return stmts.filter((_, i) => on[i].every((c) => stands.has(c)))
 }
 
+// Those of `stmts` that rest on no component table, make an object one of
+// `raised` names, and the file lacks: what a host keeps over a component's
+// table for it alone (a substring index's list of pieces) stands once the
+// component's first write does, as what rests on the component does.
+let unmade = (
+  driver: Driver,
+  stmts: readonly Stmt[],
+  on: string[][],
+  raised: Stmt[],
+): Stmt[] => {
+  let made = (s: Stmt) =>
+    s.t.startsWith('create ') && 'name' in s ? s.name : null
+  let alone = stmts.filter((s, i) => !on[i].length && made(s) != null)
+  if (!alone.length) return []
+  let named = names(raised, new Set())
+  let held = new Set(catalogue(driver).map((o) => o.name))
+  return alone.filter((s) => named.has(made(s)!) && !held.has(made(s)!))
+}
+
 // The schema revisions a run of raises on one connection moved through, the
 // first of them where the run began: what moved the schema and nothing else.
 let runs = new WeakMap<Driver, number[]>()
@@ -232,12 +255,10 @@ export let raise = (
   let made = new Set(fresh)
   let from = revision(driver, 'schema')
   let on = rests(vocab, stmts)
-  erect(
-    driver,
-    stmts.filter((_, i) =>
-      on[i].some((c) => made.has(c)) && on[i].every((c) => stands.has(c))
-    ),
+  let raised = stmts.filter((_, i) =>
+    on[i].some((c) => made.has(c)) && on[i].every((c) => stands.has(c))
   )
+  erect(driver, [...unmade(driver, stmts, on, raised), ...raised])
   let now = new Set([...held(driver) ?? componentTables(driver), ...fresh])
   meta(driver).set(TABLES, [...now].sort().join(' '))
   let to = revision(driver, 'schema')

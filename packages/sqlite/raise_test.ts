@@ -129,6 +129,18 @@ test('what a host keeps over two tables is made once both stand', async () => {
   )
 })
 
+test('a table kept over a component for it alone is made with what names it', async () => {
+  // No host made `marked` beside the store: the trigger that writes it does.
+  let d = mem(), s = storage(d, vocab, { derived, over: () => over })
+  s.install()
+  let g = graph({ storage: s, vocab })
+  await g.apply([{ entity: { eid: 'a' }, tag: { name: 'red' }, mark: {} }])
+  equal(
+    d.query(select({ cols: [col('entity')], from: table('marked') })).length,
+    1,
+  )
+})
+
 test('taking away a word nobody wrote makes nothing, and a removal reads no missing table', async () => {
   let d = mem(), s = made(d)
   let g = graph({ storage: s, vocab })
