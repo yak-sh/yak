@@ -1,15 +1,55 @@
 // The platform domain’s rules, composed through its graph facet.
-import type { Plugin } from '@yaks/graph'
+import type { Bound, Plugin } from '@yaks/graph'
 import type { Options } from './store.ts'
 import type { Env } from '../env.ts'
 import { reporting } from '../wake.ts'
-import { added, trended, unaffordable } from '../meter.ts'
+import { added, credited, trended, unaffordable } from '../meter.ts'
 import { idOf, type Row, spaceOf, stamp } from '../directory.ts'
 import { monthOf } from '../meter.ts'
 import { Refused } from '@yaks/graph/errors'
 
 let props = (c: unknown): Record<string, unknown> =>
   c && typeof c == 'object' ? Object.fromEntries(Object.entries(c)) : {}
+
+// A spend added to its month, refused first where it is held and does not
+// fit what is left (meter.ts `unaffordable`). A block bought is credit, not a
+// month's spend (billing.ts `credited`), and a space holding credit draws on
+// it for what the month spends past its budget.
+let spending = (row: Bound) => {
+  let { meter, trend, spend, Now } = row
+  let said = props(spend)
+  let now = new Date(Now.at)
+  let space = row.space ? spaceOf(row as unknown as Row) : null
+  if (said.held) {
+    if (!space) throw new Refused('The paying space is missing')
+    let what: 'models' | 'realtime' | 'texts' =
+      (['realtime', 'texts'] as const).find((k) => said[k]) ?? 'models'
+    let no = unaffordable(
+      space,
+      what,
+      Number(said[what] ?? 0),
+      now,
+      !!said.visitors,
+    )
+    if (no) {
+      throw new Refused(no, {
+        eid: (row.entity as { eid?: string } | undefined)?.eid,
+        comp: 'spend',
+        prop: what,
+      })
+    }
+  }
+  let { held: _, bought, ...spent } = said
+  let next = added(props(meter), spent)
+  let drew = row.credit && space &&
+    credited(space, next, Number(bought ?? 0), now)
+  return {
+    meter: drew ? { ...next, credit: drew.drawn } : next,
+    trend: trended(props(trend), spent, Date.parse(Now.at)),
+    ...drew ? { credit: drew.credit } : {},
+    spend: null,
+  }
+}
 
 export let plugins = (_host: unknown, options: Options): Plugin[] => [{
   name: 'yak/meter',
@@ -61,36 +101,17 @@ export let plugins = (_host: unknown, options: Options): Plugin[] => [{
     name: 'spend',
     phase: 'rules',
     // The space's plan and budget are read from its view, never named in the
-    // match: a `+` there would give a space that has none an empty one.
-    match: '+meter, +trend, *spend, #Now',
-    run: (row) => {
-      let { meter, trend, spend, Now } = row
-      let said = props(spend)
-      if (said.held) {
-        if (!row.space) throw new Refused('The paying space is missing')
-        let what: 'models' | 'realtime' | 'texts' =
-          (['realtime', 'texts'] as const).find((k) => said[k]) ?? 'models'
-        let no = unaffordable(
-          spaceOf(row as unknown as Row),
-          what,
-          Number(said[what] ?? 0),
-          new Date(Now.at),
-          !!said.visitors,
-        )
-        if (no) {
-          throw new Refused(no, {
-            eid: (row.entity as { eid?: string } | undefined)?.eid,
-            comp: 'spend',
-            prop: what,
-          })
-        }
-      }
-      let { held: _, ...spent } = said
-      return {
-        meter: added(props(meter), spent),
-        trend: trended(props(trend), spent, Date.parse(Now.at)),
-        spend: null,
-      }
-    },
+    // match: a `+` there would give a space that has none an empty one. A
+    // space with credit is the rule below's, which writes it too.
+    match: '+meter, +trend, *spend, !credit, #Now',
+    run: spending,
+  }, {
+    // The same spend on a space holding credit (D-134567): what the month now
+    // spends past its budget is drawn from its credit in this same
+    // transaction, and a block bought added to it (meter.ts `credited`).
+    name: 'spend-credit',
+    phase: 'rules',
+    match: '+meter, +trend, *credit, *spend, #Now',
+    run: spending,
   }],
 }]

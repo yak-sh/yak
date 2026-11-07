@@ -1,7 +1,8 @@
 // What Stripe sells a party as @yaks/host's `Plans`: a customer minted once,
 // a subscription bought through Checkout and managed in the customer portal,
-// its trial moved to give time free, and the events Stripe posts about it
-// read into the host's words (`changed`, which ./doors.ts hears them with).
+// its trial moved to give time free, a one-off Checkout in payment mode for
+// something paid for once, and the events Stripe posts about either read into
+// the host's words (`changed`, which ./doors.ts hears them with).
 //
 // Checkout runs under Managed Payments: Stripe is the merchant of record, so
 // it sells, collects and remits the tax, and the parameters it controls
@@ -13,6 +14,7 @@
 // else. A paying price no tier lists buys the first tier the options name, so
 // a subscription made before a later tier existed reads as it did.
 import type {
+  Bought,
   Changed,
   Per,
   Plans,
@@ -158,6 +160,11 @@ type Event = {
   data?: { object?: Record<string, unknown> }
 }
 
+/** The tax code a one-off purchase is sold under: artificial intelligence as
+ * a service, cloud based, for business use, which Managed Payments takes
+ * (its eligibility page). A product made inline carries its own. */
+export let ONCE_TAX = 'txcd_10105002'
+
 let path = (subscription: string) =>
   `/v1/subscriptions/${encodeURIComponent(subscription)}`
 
@@ -238,6 +245,36 @@ export let plans = (options: Options): Plans => {
       if (!url) throw new Error('stripe made a checkout session with no url')
       return url
     },
+    // Payment mode under Managed Payments, the price made inline with its
+    // tax code and tax included, as every price here is: no dashboard price
+    // to keep in step. The tags ride the session's own metadata, which the
+    // event saying it was paid carries back whole.
+    once: async (asked) => {
+      let made = await ask(options, '/v1/checkout/sessions', {
+        mode: 'payment',
+        customer: asked.payer,
+        line_items: {
+          0: {
+            price_data: {
+              currency: asked.currency.toLowerCase(),
+              unit_amount: asked.cents,
+              tax_behavior: 'inclusive',
+              product_data: { name: asked.name, tax_code: ONCE_TAX },
+            },
+            quantity: 1,
+          },
+        },
+        success_url: asked.done,
+        cancel_url: asked.cancel,
+        client_reference_id: asked.reference,
+        metadata: asked.tags,
+        payment_intent_data: { metadata: asked.tags },
+        managed_payments: { enabled: true },
+      })
+      let url = String(made.url ?? '')
+      if (!url) throw new Error('stripe made a checkout session with no url')
+      return url
+    },
     // The portal needs a configuration on the account; without one Stripe
     // refuses, and the refusal throws.
     portal: async (payer, back) => {
@@ -267,30 +304,51 @@ export let plans = (options: Options): Plans => {
  * `customer.subscription.*` event carries its subscription whole, and a
  * checkout session or an invoice names it, which one GET answers. An
  * invoice's name for it moved under `parent` in API 2025-03-31.basil, and the
- * old field is read too, for the reason `periodEnd` reads both. */
-export let changed = (options: Options) => (event: unknown): Changed => {
-  let e = (event ?? {}) as Event
-  let o = e.data?.object ?? {}
-  let reference = o.client_reference_id
-  let parent = (o.parent ?? {}) as {
-    subscription_details?: { subscription?: string | { id?: string } }
+ * old field is read too, for the reason `periodEnd` reads both. A checkout
+ * session in payment mode is a purchase: completed, its money there or on
+ * its way, and `checkout.session.async_payment_succeeded` when what was on
+ * its way arrives. */
+export let changed =
+  (options: Options) => (event: unknown): Changed | Bought => {
+    let e = (event ?? {}) as Event
+    let o = e.data?.object ?? {}
+    let reference = o.client_reference_id
+    let now = options.clock?.now() ?? Date.now()
+    let at = new Date((e.created ?? Math.floor(now / 1000)) * 1000)
+      .toISOString()
+    let live = e.livemode !== false
+    let referred = typeof reference == 'string' && reference
+      ? { reference }
+      : {}
+    if ((e.type ?? '').startsWith('checkout.session.') && o.mode == 'payment') {
+      return {
+        about: 'purchase',
+        at,
+        live,
+        checkout: String(o.id ?? ''),
+        paid: o.payment_status == 'paid',
+        tags: tagsOf(o),
+        ...referred,
+      }
+    }
+    let parent = (o.parent ?? {}) as {
+      subscription_details?: { subscription?: string | { id?: string } }
+    }
+    let named = idOf(
+      (o.subscription as string | { id?: string } | undefined) ??
+        parent.subscription_details?.subscription,
+    )
+    return {
+      about: 'subscription',
+      at,
+      live,
+      tags: tagsOf(o),
+      ...referred,
+      subscription: () =>
+        (e.type ?? '').startsWith('customer.subscription.')
+          ? Promise.resolve(read(o as Sub, options.prices))
+          : named
+          ? plans(options).subscription(named)
+          : Promise.resolve(undefined),
+    }
   }
-  let named = idOf(
-    (o.subscription as string | { id?: string } | undefined) ??
-      parent.subscription_details?.subscription,
-  )
-  let now = options.clock?.now() ?? Date.now()
-  return {
-    about: 'subscription',
-    at: new Date((e.created ?? Math.floor(now / 1000)) * 1000).toISOString(),
-    live: e.livemode !== false,
-    tags: tagsOf(o),
-    ...typeof reference == 'string' && reference ? { reference } : {},
-    subscription: () =>
-      (e.type ?? '').startsWith('customer.subscription.')
-        ? Promise.resolve(read(o as Sub, options.prices))
-        : named
-        ? plans(options).subscription(named)
-        : Promise.resolve(undefined),
-  }
-}

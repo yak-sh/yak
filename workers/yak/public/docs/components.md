@@ -674,8 +674,8 @@ The complete list of reserved names:
     builder_answer builder_dep builder_edit builder_model_answer
     builder_open builder_ring built call call_ready call_woken called calls
     cancel cancelled checkout chosen cites code_review comment commit compat
-    completed connection contains content cost created delegates
-    delete_upload deliver delivered demo deploy dispatch doc
+    completed connection contains content cost created credit credit_block
+    delegates delete_upload deliver delivered demo deploy dispatch doc
     document_extract document_page document_text draft edge effect email
     entity entry error exception execution failed favorite fee feedback file
     filed finding fired former gallery gitobj grant home hook hostname image

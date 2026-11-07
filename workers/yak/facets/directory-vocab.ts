@@ -487,8 +487,9 @@ export let directoryDoc: VocabDoc = {
     // starts (model-spend.ts `reserved`), and the write is refused when it
     // does not fit what is left of the month's budget. A `refunded` one is
     // the platform owner's correction (budget.ts), `why` it was refunded,
-    // journaled with who wrote it since the meter is not. Stamped, both, for
-    // the reason the budget is.
+    // journaled with who wrote it since the meter is not. A `bought` one is a
+    // block of credit paid for, added to the space's `credit` (billing.ts
+    // `credited`). Stamped, all three, for the reason the budget is.
     spend: {
       component: true,
       type: 'object',
@@ -504,6 +505,21 @@ export let directoryDoc: VocabDoc = {
         visitors: num,
         refunded: owned(num),
         why: owned(text),
+        bought: owned(num),
+      },
+    },
+    // One block of credit paid for (billing.ts `credited`), named by the
+    // checkout that sold it, so a payment told twice is credited once: the
+    // row is written only where none is, in the write whose `spend{bought}`
+    // adds the block to the space's `credit`. Stamped, for the reason the
+    // budget is.
+    credit_block: {
+      component: true,
+      type: 'object',
+      properties: {
+        space: owned(ref('keep')),
+        dollars: owned(num),
+        checkout: owned(text),
       },
     },
     // When this person last got in, and how (identity.ts `landed`, T-34351).

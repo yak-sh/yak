@@ -31,11 +31,18 @@
 // is reported to the tracker (unseen.ts `fault`), not a line on a log nobody
 // opens.
 //
+// A block of AI credit (D-134567) is the one thing sold here once rather than
+// by subscription: a checkout in payment mode, paid before it is spent, and
+// credited by the event that says its money arrived (`credited`). The
+// checkout names the block, so a payment told twice is one block: its row is
+// written only where none is, in the same write that adds it to the space.
+//
 // The kernel writes `plan` and no client ever can: every property is stamped in
 // the vocabulary, so `admitted()` drops them off any write that does not carry
 // the kernel flag. `tier` is what usage.ts `ceilings()` reads, and a tier a
 // person could write is a person who can lift their own ceilings.
 import type {
+  Bought,
   Changed,
   Per,
   Plans,
@@ -55,6 +62,19 @@ import {
 } from './directory.ts'
 import { bound, type Env } from './env.ts'
 import { apex, type Host } from './host.ts'
+import { derivedEid } from '@yaks/graph/identity'
+import { Stale } from '@yaks/graph/errors'
+import {
+  BLOCK,
+  buyable,
+  CREDITED,
+  creditLeft,
+  CURRENCY,
+  dollars,
+  drawnOf,
+  heldOf,
+  monthOf,
+} from './meter.ts'
 
 import { step } from './funnel.ts'
 import { sessionAt } from './session.ts'
@@ -241,6 +261,10 @@ export type Card = {
   /** the day the Plus plan given free runs through, while it does */
   free?: string
   organization?: Want['per'][]
+  /** its AI credit, where its plan buys credit or it holds some: the cap,
+   * what is left to spend this month, what this month drew, and whether a
+   * block may be bought now */
+  credit?: { cap: number; left: number; drawn: number; buy: boolean }
 }
 
 /** The day a space's Plus plan given free runs through (`comped`, a month
@@ -254,8 +278,9 @@ export let freeThrough = (
     ? space.comped
     : null
 
-export let planCard = (lent: Plans, space: Space): Card => {
+export let planCard = (lent: Plans, space: Space, now = new Date()): Card => {
   let free = freeThrough(space)
+  let credits = CREDITED.includes(space.tier ?? 'free') || !!space.credit
   return {
     tier: space.tier ?? 'free',
     ends: space.plan?.ending ?? '',
@@ -264,6 +289,16 @@ export let planCard = (lent: Plans, space: Space): Card => {
     organization: (['month', 'year'] as const).filter((per) =>
       lent.offers('organization', per)
     ),
+    ...credits
+      ? {
+        credit: {
+          cap: space.credit?.cap ?? 0,
+          left: creditLeft(space, now),
+          drawn: drawnOf(space, now),
+          buy: lent.on() && buyable(space, now),
+        },
+      }
+      : {},
   }
 }
 
@@ -360,6 +395,158 @@ export let checkout = async (
       "we couldn't start that — it's been logged, try again in a minute",
     )
   }
+}
+
+// ---- AI credit -----------------------------------------------------------
+
+/** The most a cap may be, in dollars a month: a typo of a zero too many is
+ * not a budget anybody meant. */
+export let CAP = 10_000
+
+/** Why a cap typed into the plan card is not one, or null where it is: whole
+ * dollars, from none to {@link CAP}. */
+export let badCap = (dollars: number) =>
+  Number.isInteger(dollars) && dollars >= 0 && dollars <= CAP
+    ? null
+    : `A cap is whole dollars, from $0 to $${CAP.toLocaleString('en-US')}`
+
+/** The cap its owner set on a space's AI credit, written; an error a person
+ * reads where it is refused. Lowering it below what the space holds for the
+ * month stops spending at the cap, and keeps the credit for later months. */
+export let setCap = async (
+  env: Env,
+  req: Request,
+  space: Space,
+  dollars: number,
+) => {
+  let person = await buyer(env, req)
+  if (!person) return 'Sign in first'
+  if (await dirOf(env).role(space, person) != 'owner') {
+    return `Only ${space.slug}'s owner may set its cap`
+  }
+  if (!CREDITED.includes(space.tier ?? 'free')) {
+    return `AI credit comes with ${planName('organization')}`
+  }
+  let bad = badCap(dollars)
+  if (bad) return bad
+  await stamp(env, {
+    entities: [{ entity: { eid: space.eid }, credit: { cap: dollars } }],
+  })
+  return null
+}
+
+// Buy a block of credit: the provider's checkout for something paid once,
+// opened only where one more block stays within the cap. Answers the URL, as
+// `checkout` does, from a signed-in page only.
+export let buy = async (env: Env, req: Request, at?: Space) => {
+  let person = await buyer(env, req)
+  if (!person) return json(401, 'unauthorized', 'sign in first')
+  let lent = await plans(env)
+  if (!lent.on()) {
+    return json(503, 'no_billing', 'credit is not on sale here')
+  }
+  let dir = dirOf(env)
+  let space = at ?? await dir.own(person)
+  if (await dir.role(space, person) != 'owner') {
+    return json(
+      403,
+      'not_the_owner',
+      `only ${space.slug}'s owner may buy its credit`,
+    )
+  }
+  if (!CREDITED.includes(space.tier ?? 'free')) {
+    return json(
+      409,
+      'not_credited',
+      `AI credit comes with ${planName('organization')}`,
+    )
+  }
+  if (!buyable(space)) {
+    let cap = space.credit?.cap ?? 0
+    return json(
+      409,
+      'over_cap',
+      cap
+        ? `${space.slug} holds ${dollars(heldOf(space))} of credit this ` +
+          `month, and another $${BLOCK} would pass its ${dollars(cap)} cap; ` +
+          `raise the cap first`
+        : `Set a monthly cap for ${space.slug} first: it is $0 until you choose one`,
+    )
+  }
+  let email = await dir.emailAt(person) ?? ''
+  try {
+    let back = at ? planSettings(at.slug, env) : `https://${apex(env)}/connect`
+    let url = await lent.once({
+      payer: await payerFor(env, lent, space, email),
+      name: `$${BLOCK} of AI credit for ${space.slug}`,
+      cents: BLOCK * 100,
+      currency: CURRENCY,
+      done: `${back}?paid=1`,
+      cancel: `${back}?paid=0`,
+      reference: space.eid,
+      tags: { ...tagsOf(env, space), credit: String(BLOCK) },
+    })
+    return Response.json({ url })
+  } catch (e) {
+    await fault(env, 'POST /api/billing/credit', e)
+    return json(
+      502,
+      'checkout_failed',
+      "we couldn't start that — it's been logged, try again in a minute",
+    )
+  }
+}
+
+/** The block a paid checkout buys, as its row and the spend that adds it,
+ * written together once: the row only where none is (`$was`), so a second
+ * telling of the same payment is refused as stale and credits nothing. */
+export let block = (
+  space: string,
+  checkout: string,
+  bought: number,
+  at: Date,
+) => [{
+  entity: { eid: derivedEid('credit-block|' + checkout) },
+  $was: { credit_block: { checkout: null } },
+  credit_block: { space, dollars: bought, checkout },
+}, {
+  // `credit` is named so the space holds one for the spend to add to
+  // (meter-graph.ts `spend-credit`), whatever it held before.
+  entity: { eid: space },
+  credit: {},
+  spend: { month: monthOf(at), bought },
+}]
+
+// A one-off checkout heard: a block of credit, credited once its money is
+// there. A checkout completed with its payment still on its way says so and
+// is credited by the later event that it arrived.
+export let credited = async (env: Env, heard: Bought) => {
+  let here = apex(env)
+  if (elsewhere(heard.tags, here)) return 'elsewhere'
+  let bought = Number(heard.tags.credit)
+  if (!bought) return 'nothing to do'
+  if (!heard.paid) return 'not paid yet'
+  let dir = dirOf(env)
+  let space = await whose(dir, { space: heard.tags.space || heard.reference })
+  if (!space) {
+    if (!heard.live && heard.tags.apex != here) return 'elsewhere'
+    await fault(
+      env,
+      'a purchase heard',
+      new Error(`no space owns the credit bought at ${heard.checkout}`),
+    )
+    return 'unattributed'
+  }
+  let eid = derivedEid('credit-block|' + heard.checkout)
+  try {
+    await stamp(env, {
+      entities: block(space.eid, heard.checkout, bought, new Date(heard.at)),
+    })
+  } catch (e) {
+    if (e instanceof Stale && e.eid == eid) return 'already credited'
+    throw e
+  }
+  return `${space.slug} bought $${bought} of credit`
 }
 
 // Manage what is already paid for: the provider's own portal, where a person
@@ -479,5 +666,6 @@ export let fetch = (req: Request, env: Env): Promise<Response> => {
     )
   }
   if (path == '/api/billing/portal') return portal(env, req)
+  if (path == '/api/billing/credit') return buy(env, req)
   return Promise.resolve(json(404, 'not_found', 'no door here'))
 }

@@ -301,6 +301,10 @@
         "refunded": {
           "type": "number",
           "description": "dollars of models, voice and texts this month the platform refunded, off what the month spent and off drawn"
+        },
+        "credit": {
+          "type": "number",
+          "description": "dollars of this month's models, voice and texts past the space's budget, drawn from its credit"
         }
       },
       "description": "what a space used in one month"
@@ -355,6 +359,29 @@
         }
       },
       "description": "what a space pays for: a function of one Stripe subscription, derived whole from it on every webhook. The platform writes it and no client can."
+    },
+    "credit": {
+      "component": true,
+      "journal": false,
+      "type": "object",
+      "properties": {
+        "cap": {
+          "type": "number",
+          "stamped": true,
+          "description": "the most dollars the space's owner lets it spend past its monthly budget in a month, which is also the most credit it may hold for one month: 0 until they choose one"
+        },
+        "bought": {
+          "type": "number",
+          "stamped": true,
+          "description": "dollars of credit ever bought, each block paid before it is spent"
+        },
+        "spent": {
+          "type": "number",
+          "stamped": true,
+          "description": "dollars of credit ever spent; what is left of bought carries to the next month"
+        }
+      },
+      "description": "AI credit a space buys in blocks and spends past its monthly model and voice budget, up to a cap its owner sets (meter.ts `creditOf`). The platform writes it: the cap through the plan settings' door, the rest in the directory's own transaction as a block is paid for and as a spend goes past the budget."
     },
     "published": {
       "component": true,

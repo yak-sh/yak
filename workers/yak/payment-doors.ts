@@ -2,8 +2,8 @@
 // provider config.ts `payments` names lends (payments.ts), `via` the name it
 // is lent under. The provider verifies what is posted there and reads it into
 // the Worker's words (@yaks/host/payments `Heard`); a subscription that
-// changed is billing.ts's to apply, and anything that happened on a seller's
-// account is sell.ts's. Nothing here names a provider, and the paths are the
+// changed and a block of credit paid for are billing.ts's to apply, and
+// anything that happened on a seller's account is sell.ts's. Nothing here names a provider, and the paths are the
 // ones the provider was told, so nothing is registered with it again.
 //
 // It carries no `Origin` — this is server to server — and route.ts
@@ -12,7 +12,7 @@
 // silently 403'd event is a plan that never activates, so origin_test.ts
 // holds that open on purpose.
 import type { Heard } from '@yaks/host/payments'
-import { apply as subscribed } from './billing.ts'
+import { apply as subscribed, credited } from './billing.ts'
 import { apply as shopped } from './sell.ts'
 import { payments, via } from './payments.ts'
 import { fault } from './unseen.ts'
@@ -46,7 +46,11 @@ let json = (status: number, code: string, message: string) =>
 /** What one verified event did, which is what its door says back: the
  * provider ignores the body, and a person reading the logs does not. */
 export let applied = (env: Env, heard: Heard): Promise<string> =>
-  heard.about == 'subscription' ? subscribed(env, heard) : shopped(env, heard)
+  heard.about == 'subscription'
+    ? subscribed(env, heard)
+    : heard.about == 'purchase'
+    ? credited(env, heard)
+    : shopped(env, heard)
 
 /**
  * The provider's door at this request's path, answered; null where it lends

@@ -57,6 +57,36 @@ export type Checkout = {
   trial?: string | null
 }
 
+/** A hosted checkout for one thing paid for once, such as a block of
+ * credit: its price whole, in the currency's smallest unit, tax included,
+ * and what the buyer reads it as. Paid before anything is given for it. */
+export type Once = {
+  payer: string
+  name: string
+  cents: number
+  currency: string
+  done: string
+  cancel: string
+  /** the host's own name for what is bought, carried back on the checkout */
+  reference: string
+  /** carried on the checkout and every event about it */
+  tags: Tags
+}
+
+/** A one-off checkout paid, as one verified event the provider posted says:
+ * the checkout, which names the purchase however often it is told, whether
+ * the money is there (a checkout can complete with its payment still on its
+ * way, and a later event says it arrived), and what it carried. */
+export type Bought = {
+  about: 'purchase'
+  at: string
+  live: boolean
+  checkout: string
+  paid: boolean
+  tags: Tags
+  reference?: string
+}
+
 /** A subscription changed, as one verified event the provider posted says:
  * when and how it happened, what the object it is about carries, and the
  * subscription it is about. */
@@ -94,6 +124,8 @@ export type Plans = {
   billed: (payer: string) => Promise<{ email: string; name: string } | null>
   /** the address of a hosted checkout */
   checkout: (asked: Checkout) => Promise<string>
+  /** the address of a hosted checkout for something paid for once */
+  once: (asked: Once) => Promise<string>
   /** the address of the hosted portal where a payer manages what it pays,
    * handing them back to `back` */
   portal: (payer: string, back: string) => Promise<string>
@@ -203,8 +235,9 @@ export type Shops = {
 }
 
 /** One verified event the provider posted, read into the host's words: a
- * subscription changed, or something happened on a seller's account. */
-export type Heard = Changed | Shopped
+ * subscription changed, a one-off checkout was paid, or something happened
+ * on a seller's account. */
+export type Heard = Changed | Bought | Shopped
 
 /** What a door said of one request posted to it: the event it heard, or why
  * it refused it, `ours` where the refusal can mean the host's own secret is

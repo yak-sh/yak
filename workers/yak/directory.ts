@@ -195,6 +195,9 @@ export type Meter = {
   // owner refunded (budget.ts): off what the month spent and off `drawn`,
   // while each source's own still says what it cost.
   refunded?: number
+  // The dollars of models, voice and texts this month past the space's
+  // budget, drawn from its credit (meter.ts `credited`).
+  credit?: number
   at: string
 }
 export type Tier = 'free' | 'plus' | 'organization'
@@ -250,6 +253,11 @@ export type Plan = {
   at: string
 }
 
+/** A space's AI credit (D-134567, meter.ts `creditOf`): the cap its owner
+ * set on a month past its budget, and every dollar of it bought and spent,
+ * so what was not spent carries to the next month. */
+export type Credit = { cap: number; bought: number; spent: number }
+
 /** A space's connected account, as the directory holds it (sell.ts). Four
  * properties and no more: the merchant's own books are their provider's, and
  * the platform keeps only which provider it is (`via`), the id every call
@@ -304,6 +312,9 @@ export type Space = {
   // The same row whole, for the one caller that needs every property of it
   // (billing.ts). Null where no `plan` row has ever been written.
   plan: Plan | null
+  // Its AI credit, where its owner ever set a cap or bought any; null on
+  // every other space, which spends nothing past its budget.
+  credit?: Credit | null
   // The day the Plus plan given free runs through (`comped`, reward.ts),
   // past or to come; absent or null where none was ever given.
   comped?: string | null
@@ -797,6 +808,11 @@ export type Row = {
     ending?: string | null
     at?: string | null
   }
+  credit?: {
+    cap?: number | null
+    bought?: number | null
+    spent?: number | null
+  }
   seller?: {
     via?: string | null
     account?: string | null
@@ -836,6 +852,7 @@ let meterOf = (r: Row): Meter | null =>
       drawn: r.meter.drawn ?? 0,
       visitors: r.meter.visitors ?? 0,
       refunded: r.meter.refunded ?? 0,
+      credit: r.meter.credit ?? 0,
       at: r.meter.at ?? '',
     }
     : null
@@ -1162,6 +1179,7 @@ let ABOUT = APP_PARTS.map((part) => `?${part}`).join('&')
 export let SPACE_PARTS = [
   'doc',
   'plan',
+  'credit',
   'meter',
   'notified',
   'trashed',
@@ -1283,6 +1301,13 @@ export let spaceOf = (r: Row): Space => ({
     : {}),
   tier: tierOf(r.space!.slug, r.plan?.tier ?? null, r.comped?.until),
   plan: planOf(r),
+  credit: r.credit
+    ? {
+      cap: r.credit.cap ?? 0,
+      bought: r.credit.bought ?? 0,
+      spent: r.credit.spent ?? 0,
+    }
+    : null,
   comped: r.comped?.until ?? null,
   seller: sellerOf(r),
   fee: r.fee?.bps ?? 0,

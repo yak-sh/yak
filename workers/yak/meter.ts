@@ -283,11 +283,153 @@ export let starterOf = (space: Space, now = new Date()) => {
   return Math.max(0, (space.starter ?? STARTER) - Math.max(0, before))
 }
 
-/** The dollars a space's models and voice may spend this month: the month
- * the platform's owner set on it (budget.ts), else its plan's, and what is
- * left of its starter. */
-export let limitOf = (space: Space, now = new Date()) =>
+/** The dollars a space's models and voice may spend this month before its
+ * credit: the month the platform's owner set on it (budget.ts), else its
+ * plan's, and what is left of its starter. */
+export let budgetOf = (space: Space, now = new Date()) =>
   (space.budget ?? BUDGET[space.tier ?? 'free']) + starterOf(space, now)
+
+/** The dollars a space's models and voice may spend this month: its budget,
+ * and past it what its credit allows. */
+export let limitOf = (space: Space, now = new Date()) =>
+  budgetOf(space, now) + creditOf(space, now)
+
+// ---- credit (D-134567) ------------------------------------------------------
+//
+// Past its monthly budget, a space on the Organization plan spends credit its
+// owner bought in blocks, before it is spent, up to a monthly cap they set:
+// $0 until they choose one, so a space with no credit spends what it always
+// has. The cap bounds both what the space spends past its budget in a month
+// and what credit it may hold for one month, so nothing is ever bought past
+// it. What a month leaves unspent carries to the next, inside that month's
+// cap. `credit.spent` counts every dollar drawn, and the month's meter what
+// this month drew (`meter.credit`), so what the space held as the month
+// began is a subtraction, and the draw is kept in the directory's own
+// transaction with the spend that made it (meter-graph.ts `spend`).
+//
+// Only the Organization plan buys it (D-134567 answers T-131904 for that
+// plan); credit already bought is spent on whatever plan the space is on.
+// There is no top-up that buys a block when the budget runs out: that is a
+// charge with nobody at the page, and Managed Payments, which sells every
+// plan here, authorizes no charge of its own outside its subscriptions.
+
+/** Dollars of credit one checkout buys. */
+export let BLOCK = 10
+
+/** The plans that may buy credit. */
+export let CREDITED: Tier[] = ['organization']
+
+/** What this month has drawn from the space's credit. */
+export let drawnOf = (space: Space, now = new Date()) =>
+  spent(space, now).credit ?? 0
+
+/** The credit a space holds for this month: what it held as the month
+ * began and has bought since, drawn or not. */
+export let heldOf = (space: Space, now = new Date()) =>
+  space.credit
+    ? space.credit.bought - (space.credit.spent - drawnOf(space, now))
+    : 0
+
+/** The dollars past its budget a space may spend this month: the credit it
+ * holds for it, up to its cap. */
+export let creditOf = (space: Space, now = new Date()) =>
+  Math.max(0, Math.min(space.credit?.cap ?? 0, heldOf(space, now)))
+
+/** What is left of that this month. */
+export let creditLeft = (space: Space, now = new Date()) =>
+  Math.max(0, creditOf(space, now) - drawnOf(space, now))
+
+/** Whether a space may buy a block now: its plan buys credit, and one more
+ * leaves what it holds for the month within its cap. */
+export let buyable = (space: Space, now = new Date()) =>
+  CREDITED.includes(space.tier ?? 'free') &&
+  heldOf(space, now) + BLOCK <= (space.credit?.cap ?? 0) + 1e-9
+
+/**
+ * The patch a spend makes to a space's credit and month: the draw, the
+ * month's spending past the budget, up to what its credit allows, and a
+ * block bought added to it. Null where the space has no credit and buys
+ * none, which is every space that never chose a cap. `meter` is the month's
+ * reading once the spend is added.
+ *
+ * ```ts
+ * import { credited } from './meter.ts'
+ * import { equal } from '@yaks/testing'
+ *
+ * let now = new Date('2026-11-07T12:00:00Z')
+ * let base = { tier: 'organization', budget: 60, starter: 0, meter: null }
+ * let space = { ...base, credit: { cap: 20, bought: 10, spent: 0 } } as never
+ * equal(credited(space, { month: '2026-11', models: 65 }, 0, now), {
+ *   credit: { cap: 20, bought: 10, spent: 5 },
+ *   drawn: 5,
+ * })
+ * // never past what it bought
+ * equal(credited(space, { month: '2026-11', models: 90 }, 0, now)?.drawn, 10)
+ * equal(credited({ ...base, credit: null } as never, { month: '2026-11', models: 90 }, 0, now), null)
+ * ```
+ */
+export let credited = (
+  space: Space,
+  meter: Partial<Meter>,
+  bought: number,
+  now = new Date(),
+) => {
+  let was = space.credit
+  if (!was && !bought) return null
+  let credit = {
+    cap: was?.cap ?? 0,
+    bought: (was?.bought ?? 0) + bought,
+    spent: was?.spent ?? 0,
+  }
+  let before = drawnOf(space, now)
+  let room = Math.max(
+    0,
+    Math.min(credit.cap, credit.bought - (credit.spent - before)),
+  )
+  let past = used({ ...spent(space, now), ...meter } as Meter, 'models') -
+    budgetOf(space, now)
+  let drawn = Math.max(0, Math.min(past, room))
+  credit.spent += drawn - before
+  return { credit, drawn }
+}
+
+/** Where a space stands against its cap this month: four fifths of it
+ * drawn, or no more to draw, the cap or its credit reached; null otherwise
+ * and for a space with no cap. */
+export let capped = (space: Space, now = new Date()): Capped | null => {
+  let cap = space.credit?.cap ?? 0
+  if (!cap) return null
+  let drawn = drawnOf(space, now)
+  let room = creditOf(space, now)
+  if (room && drawn >= room - 1e-9) return 'at'
+  return drawn >= cap * WARN ? 'near' : null
+}
+
+export type Capped = 'near' | 'at'
+
+/** The line a space's owner hears at a {@link capped} standing: what it
+ * is, for which space, and where the cap is raised or credit bought. */
+export let capLine = (
+  space: Space,
+  standing: Capped,
+  env: Host = {},
+  now = new Date(),
+) => {
+  let cap = space.credit?.cap ?? 0
+  let at = planSettings(space.slug, env)
+  if (standing == 'near') {
+    return `${space.slug} has spent ${dollars(drawnOf(space, now))} of its ` +
+      `${dollars(cap)} monthly cap on AI credit past its budget. Raise the ` +
+      `cap or buy credit in plan settings: ${at}`
+  }
+  return creditOf(space, now) >= cap - 1e-9
+    ? `${space.slug} has reached its ${dollars(cap)} monthly cap on AI ` +
+      `credit, so its models, voices and texts stop until the 1st. Nothing ` +
+      `is charged past the cap. Raise it in plan settings: ${at}`
+    : `${space.slug} has spent the AI credit it bought, so its models, ` +
+      `voices and texts stop until the 1st or until more is bought, up to ` +
+      `its ${dollars(cap)} monthly cap. Buy credit in plan settings: ${at}`
+}
 
 /** The space's models and voice this month, against its budget. */
 export let budget = (space: Space, now = new Date()): Budget => ({

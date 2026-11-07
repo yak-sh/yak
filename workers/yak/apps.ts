@@ -65,7 +65,15 @@ import { ahead, bearing, granted, itsApp, ran } from './dispatch.ts'
 import { bound, type Env } from './env.ts'
 import type { Beside } from './operator-page.ts'
 import { pageAt, pilled, standing } from './gallery.ts'
-import { billedTo, checkout, planCard, portal, wanted } from './billing.ts'
+import {
+  billedTo,
+  buy,
+  checkout,
+  planCard,
+  portal,
+  setCap,
+  wanted,
+} from './billing.ts'
 import { payments, plans } from './payments.ts'
 import { connecting, connectionsOf, enabled } from './connections.ts'
 import {
@@ -3057,6 +3065,21 @@ let saved = async (
     return checkout(env, req, space, wanted(form))
   }
   if (form.get('billing') == 'portal') return portal(env, req, space)
+  if (form.get('billing') == 'credit') return buy(env, req, space)
+  // The plan card's cap on AI credit: a plain form, so it lands back on the
+  // page saying it saved, or why not.
+  if (form.get('billing') == 'cap') {
+    let no = await setCap(env, req, space, Number(form.get('cap')))
+    if (no) {
+      return desk(req, env, dir, space, who, 'billing', {
+        say: sentence(no),
+        no: true,
+      })
+    }
+    let to = sentFrom(req, env)
+    to.searchParams.set('saved', '1')
+    return redirect(to.href, 303)
+  }
   // The other button on this page: one app out of the trash (erase.ts,
   // T-34430). Its own form, so it is its own POST — a plain button and no
   // script, the way the drop zone and the settings form are — and it lands

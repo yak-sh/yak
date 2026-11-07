@@ -51,6 +51,8 @@ import { bound, type Env } from './env.ts'
 import { holding, outside } from './held.ts'
 import {
   atStored,
+  capLine,
+  capped,
   ceilings,
   type Counts,
   FILES,
@@ -62,7 +64,7 @@ import {
   WARN,
 } from './meter.ts'
 import { mail } from './mail.ts'
-import { replyTo } from './host.ts'
+import { type Host, replyTo } from './host.ts'
 import { KERNEL, meta } from './meta.ts'
 import { type Alerts, type Usage, warning } from './usage-alert.ts'
 import { type Answer as Asked, ask, said } from '@yaks/cloudflare/analytics'
@@ -345,6 +347,41 @@ export let measured = async (
   return { entities, turned, refused }
 }
 
+type Dir = ReturnType<typeof directory>
+
+/** The words a space's owners hear about its cap on AI credit now, and the
+ * name of the one notification they make for each owner: one line at four
+ * fifths of the cap and one when no more may be drawn (meter.ts `capped`),
+ * each named by the space, the month and the standing, so the hourly reading
+ * that finds it again tells nobody twice. Null for a space with nothing to
+ * hear. */
+export let capNotice = (space: Space, now: Date, env: Host = {}) => {
+  let standing = capped(space, now)
+  return standing && {
+    words: capLine(space, standing, env, now),
+    id: (owner: string) =>
+      `credit-cap|${space.eid}|${monthOf(now)}|${standing}|${owner}`,
+  }
+}
+
+// Each line told to the space's owners, in their Updates and the way each
+// chose to be alerted (operator-updates.ts `tell`, which reports its own
+// failures).
+let capsTold = async (env: Env, dir: Dir, spaces: Space[], now: Date) => {
+  let { tell } = await import('./operator-updates.ts')
+  for (let space of spaces) {
+    let notice = capNotice(space, now, env)
+    if (!notice) continue
+    for (let owner of await dir.owners(space)) {
+      await tell(env, space, {
+        to: owner,
+        words: notice.words,
+        id: notice.id(owner),
+      })
+    }
+  }
+}
+
 // The hourly reading. Returns how many rows it wrote, so a caller (and the
 // log) can say whether it found anything at all. A space whose files cannot be
 // listed keeps its last figure, every other space is still read, and the first
@@ -397,6 +434,7 @@ export let sweep = async (env: Env, now = new Date()) => {
   // spends and app byte reports still refresh them at their own doors.
   if (turned.length) await stamp(env, { entities: turned }, { stamp: false })
   if (entities.length) await stamp(env, { entities }, { stamp: false })
+  await capsTold(env, dir, spaces.map((s) => s.space), now)
   let account = answer && accountOf(answer, now)
   if (account) await accountAlert(env, account)
   if (refused.length) throw refused[0]

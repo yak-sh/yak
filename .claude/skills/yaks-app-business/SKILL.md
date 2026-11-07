@@ -125,6 +125,10 @@ the pricing page hold what each one carries:
   organization budgets by the year (D-134567, T-135234). It carries the Plus
   plan's allowances and adds the Operator built in, so staff ask by email or
   chat and yaks.app makes the change, a larger model budget and support.
+  Past that budget it spends AI credit its owner buys in $10 blocks, paid
+  before it is spent, up to a monthly cap they set on the plan card: $0
+  until they choose one, and nothing is ever charged past it (meter.ts
+  `creditOf`, billing.ts `buy`).
   Jeff on its name: "just call it the organization plan" (T-139983).
 
 Copy is written for a stranger. "Each space is free or on a paid plan"
@@ -160,7 +164,8 @@ assistants' connector directories for those who already use one.
 - **The numbers.** workers/yak/meter.ts (`FREE`, `PLUS`, `ORGANIZATION`,
   `LETTERS`, `BUDGET`, `PRICE`, `YEARLY`, `SPACES`), and site_test.ts holds the pages to them. The plan is
   `plan{tier, customer, subscription, status, until, ending, at}` on the space
-  (packages/platform/vocab.json). Checkout, the billing portal and what a
+  (packages/platform/vocab.json), and its AI credit is `credit{cap, bought,
+  spent}` beside it. Checkout, the billing portal and what a
   subscription changing does to the plan are in workers/yak/billing.ts; the
   provider's webhook doors are @yaks/stripe's, served by
   workers/yak/payment-doors.ts. How metering and refusals work is

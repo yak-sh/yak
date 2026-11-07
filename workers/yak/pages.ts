@@ -75,10 +75,12 @@ import { versionOf } from './running.ts'
 import { Yak, yak } from './mascot.ts'
 import { links } from './sheets.ts'
 import {
+  BLOCK,
   type Budget,
   type Ceiling,
   ceilings,
   count,
+  dollars,
   type Gauge,
   PRICE,
   share,
@@ -3977,6 +3979,7 @@ let plan = (
     }),
     head,
     billedLine(y.plan, y.payer, y.provider),
+    target && y.plan.credit ? credit(y.plan.credit, space, target) : null,
     ask,
     y.paid
       ? h(
@@ -3988,6 +3991,49 @@ let plan = (
     h(Notice, { class: 'Bill_Say', role: 'status' }),
   )
 }
+
+// The plan card's AI credit (D-134567): past its monthly budget a space
+// spends credit bought in blocks, up to the cap its owner types here, which
+// is $0 until they choose one. The cap is a plain form to the settings page;
+// the block is a billing button like the plans', since it leaves for the
+// provider's checkout.
+let credit = (
+  c: NonNullable<Billed['credit']>,
+  space: string,
+  target: string,
+) =>
+  h(
+    Form,
+    { method: 'post', action: target },
+    h('input', { type: 'hidden', name: 'billing', value: 'cap' }),
+    labeled(
+      'credit-cap',
+      'Monthly cap on AI credit',
+      h(
+        Form.Line,
+        null,
+        h(Field, {
+          id: 'credit-cap',
+          name: 'cap',
+          type: 'number',
+          min: 0,
+          step: 1,
+          inputmode: 'numeric',
+          value: c.cap,
+          required: true,
+        }),
+        send('Save'),
+        c.buy ? billButton('credit', `Buy $${BLOCK} of credit`, target) : null,
+      ),
+      c.cap
+        ? `Past its monthly AI budget, ${space} spends credit you buy in $${BLOCK} blocks, never more than ${
+          dollars(c.cap)
+        } a month. ${dollars(c.left)} is left to spend this month, and ${
+          dollars(c.drawn)
+        } spent. Credit not spent carries to next month.`
+        : `Past its monthly AI budget, ${space} can spend credit you buy in $${BLOCK} blocks, up to a monthly cap in dollars you choose here. Nothing is ever charged past it.`,
+    ),
+  )
 
 // Whom the plan is billed to, where the payment provider has met the space:
 // the address its receipts go to, or, when the provider couldn't be asked just
