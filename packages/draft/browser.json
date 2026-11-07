@@ -9,6 +9,7 @@
   },
   "entries": [
     ".",
+    "./graph",
     "./input",
     "./browser"
   ]
