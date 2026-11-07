@@ -45,12 +45,16 @@ and setup; this is the map and the feel.
 - **A store**: one Durable Object per app (`graph.ts`), a graph composed from
   the packages: `appVocab(manifest)`, @yaks/durable-object's storage over
   @yaks/sqlite, `graph()`, `api()` and sockets. It owns no behavior of its own.
-  Every object is created beside the kernel (door.ts `STORES_AT`), since the
-  kernel makes every call a store answers. An object never moves, so a store
-  far from it (`/api/relocate?where=<handle>&colo=IAD` says where one stands) moves
-  to a new object through relocate.ts: `?store=<handle>&prepare=<new>`, then
-  `&to=<new>`, which hands every request on and names the new object in
-  `app.store`. `yak admin relocate [--move]` does it for every far app.
+  Every object is hinted to eastern North America (door.ts `STORES_AT`), and
+  Cloudflare puts it near the Worker that first reaches it there, so one the
+  kernel reaches first stands beside it (ORD, IAD), since the kernel makes every
+  call a store answers. Elsewhere in the region costs each call more (EWR about
+  12 ms, MIA about 25, T-149707). An object never moves, so a store far from it
+  (`/api/relocate?where=<handle>&colo=IAD` says where one stands, reaching a new
+  name first from the kernel) moves to a new object through relocate.ts:
+  `?store=<handle>&prepare=<new>`, then `&to=<new>`, which hands every request
+  on and names the new object in `app.store`. `yak admin relocate [--move]`
+  does it for every far app, and answers each store's line.
 - **The directory**: the store named `yak/platform` on the platform's own
   vocabulary (`directory.ts`, `meta.ts`): spaces, apps, members, deploys. Its
   file stands in the object `PLATFORM_OBJECT` (`door.ts`), near Chicago; an

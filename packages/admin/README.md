@@ -90,11 +90,12 @@ yak admin query reviewer/notes '.doc' --as reviewer
 
 ## Moving a far store
 
-`relocate` says the colo each store's object stands in and marks one outside
-eastern North America far, since the kernel makes every call a store answers.
-`--move` moves each far app's store to a new object beside the kernel
-(workers/yak/relocate.ts), and reads every entity it held again through the new
-one.
+`relocate` says the colo each store's object stands in and marks one outside the
+kernel's own colos (ORD, IAD) far, since the kernel makes every call a store
+answers. `--move` moves each far app's store to a new object beside the kernel
+(workers/yak/relocate.ts): the new object is first reached from the kernel, and
+one that stands far anyway is passed over for another name before anything is
+copied. It reads every entity the store held again through the new one.
 
 ```sh
 yak admin relocate --as admin@bot.yak.sh

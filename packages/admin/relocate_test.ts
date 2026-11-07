@@ -2,31 +2,37 @@ import { test } from '@yaks/testing'
 import { assertEquals, assertMatch } from '@std/assert'
 import { relocate, renamed } from './relocate.ts'
 
-// A platform of stores, each standing where `at` says; a prepared object
-// stands where `lands` says, and the hand-off keeps what `keeps` leaves.
+// A platform of stores, each standing where `at` says; each new object stands
+// where the next of `lands` says (the last one again once they run out), and
+// the hand-off keeps what `keeps` leaves.
 let run = async (o: {
   at: Record<string, string>
-  lands?: string
+  lands?: string[]
   keeps?: (eids: string[]) => string[]
   move?: boolean
 }) => {
   let at = { ...o.at }
+  let lands = [...o.lands ?? ['IAD']]
   let handed = new Set<string>()
+  let prepared: string[] = []
   let said: string[] = []
   let summary = await relocate({
     stores: Object.keys(o.at).map((s) => ({ store: s, at: s })),
-    standing: (store) => Promise.resolve(at[store]),
+    standing: (store) =>
+      Promise.resolve(
+        at[store] ??= lands.length > 1 ? lands.shift()! : lands[0],
+      ),
     eids: (where) =>
       Promise.resolve(
         handed.has(where) ? (o.keeps ?? ((e) => e))(['a', 'b']) : ['a', 'b'],
       ),
-    prepare: (_store, to) => (at[to] = o.lands ?? 'IAD', Promise.resolve()),
+    prepare: (_store, to) => (prepared.push(at[to]), Promise.resolve()),
     hand: (store) => (handed.add(store), Promise.resolve()),
     move: o.move ?? true,
     out: (line) => said.push(line.replace(/\.[0-9a-f]{6}/, '.new')),
     stopping: new AbortController().signal,
   })
-  return { said, summary, handed: [...handed] }
+  return { said, summary, prepared, handed: [...handed] }
 }
 
 test('a far app store moves beside the kernel; near ones and others stay', async () => {
@@ -49,9 +55,19 @@ test('without --move a far store is only said', async () => {
   assertEquals([r.said, r.handed], [['ada/notes  SJC, far'], []])
 })
 
-test('a new object that lands far is never handed the requests', async () => {
-  let r = await run({ at: { 'ada/notes': 'SJC' }, lands: 'LHR' })
-  assertEquals(r.handed, [])
+test('a store elsewhere in eastern North America is far from the kernel', async () => {
+  let r = await run({ at: { 'ada/notes': 'MIA', 'ada/trip': 'IAD' } })
+  assertEquals(r.handed, ['ada/notes'])
+})
+
+test('a new object that stands far is passed over for another name', async () => {
+  let r = await run({ at: { 'ada/notes': 'MIA' }, lands: ['EWR', 'ORD'] })
+  assertEquals([r.prepared, r.handed], [['ORD'], ['ada/notes']])
+})
+
+test('a store no new object stands near is never copied or handed on', async () => {
+  let r = await run({ at: { 'ada/notes': 'SJC' }, lands: ['LHR'] })
+  assertEquals([r.prepared, r.handed], [[], []])
   assertEquals(r.summary.at(-1), '1 failed: ada/notes')
 })
 

@@ -252,7 +252,7 @@
       "noun": "admin",
       "verb": "relocate",
       "title": "Say where every yaks.app store stands, and move an app's far store beside the kernel",
-      "description": "Cloudflare never moves a Durable Object, and the kernel makes every call a store answers, so a store far from it waits on each. This wakes every store in turn and prints the colo its object stands in, marking one outside eastern North America far. --move moves each far app's store to a new object beside the kernel: copied while it serves, handed on in a short hold, the directory then naming the new object, and every entity it held read again through the new one; a missing entity stops the sweep. A space or space/app narrows it. The platform’s act, so the selected account must have the platform role.\n\n  yak admin relocate --as admin@bot.yak.sh\n  yak admin relocate ada --move --as admin@bot.yak.sh",
+      "description": "Cloudflare never moves a Durable Object, and the kernel makes every call a store answers, so a store far from it waits on each. This wakes every store in turn and prints the colo its object stands in, marking one outside the kernel's own colos (ORD, IAD) far. --move moves each far app's store to a new object beside the kernel, a new name tried while one stands far: copied while it serves, handed on in a short hold, the directory then naming the new object, and every entity it held read again through the new one; a missing entity stops the sweep. A space or space/app narrows it. The platform’s act, so the selected account must have the platform role.\n\n  yak admin relocate --as admin@bot.yak.sh\n  yak admin relocate ada --move --as admin@bot.yak.sh",
       "input": {
         "where": {
           "type": "string",

@@ -102,7 +102,12 @@ export type Namespace = {
  * answers, and beside the directory in ORD. Cloudflare uses a hint only at an
  * object's first get and never moves an object, so one created near a person
  * elsewhere answers every call from an ocean away, for good: a store in VIE
- * answers the kernel about 95 ms later than one in ATL. */
+ * answers the kernel about 95 ms later than one in ATL. The hint names a
+ * region, and within it Cloudflare picks the colo near the Worker that first
+ * reaches the object: every birth, reached first from the kernel, stood in ORD
+ * (T-149707), and a store elsewhere in the region (EWR, MIA) answers it 10 to
+ * 25 ms later, so a move's new object is reached first from the kernel too
+ * (@yaks/admin relocate.ts `sited`). */
 export let STORES_AT = 'enam'
 
 /** The object a store's name stands in, created where `STORES_AT` says. */

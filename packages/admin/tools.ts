@@ -70,6 +70,12 @@ let word = (a: Args, name: string): string | undefined =>
 let json = (v: unknown) => JSON.stringify(v, null, 2)
 
 let out = (line: string) => console.log(line)
+// A sweep's lines, printed as they come and kept for its answer, which is all a
+// caller over the connector or the command line sees of them.
+let kept = () => {
+  let lines: string[] = []
+  return { lines, out: (line: string) => (lines.push(line), out(line)) }
+}
 let note = (line: string) => console.error(line)
 
 let pushNote = (p: PushProgress) => {
@@ -511,18 +517,15 @@ export let runs = (
         `${rehearse ? 'rehearsing' : 'waking'} ${stores.length} stores` +
           (pace ? `, ${pace} a minute` : ''),
       )
-      return [
-        said(
-          call,
-          await sweep({
-            stores,
-            ask: (store) => moveIn(at.bearer, store, rehearse),
-            pace,
-            out,
-            stopping: host.stopping,
-          }),
-        ),
-      ]
+      let each = kept()
+      let summary = await sweep({
+        stores,
+        ask: (store) => moveIn(at.bearer, store, rehearse),
+        pace,
+        out: each.out,
+        stopping: host.stopping,
+      })
+      return [said(call, [...each.lines, ...summary])]
     }),
 
     // Where every store stands, and with --move each app's store far from
@@ -535,22 +538,18 @@ export let runs = (
       let eids = async (where: string) =>
         (await storeQuery(at.bearer, where, ['.entity']) as Bundle[])
           .map((b) => String((b.entity as Comp).eid))
-      return [
-        said(
-          call,
-          await relocate({
-            stores,
-            standing: (store) => standing(at.bearer, store),
-            eids,
-            prepare: (store, to) =>
-              relocateIn(at.bearer, store, { prepare: to }),
-            hand: (store, to) => relocateIn(at.bearer, store, { to }),
-            move: a.move === true,
-            out,
-            stopping: host.stopping,
-          }),
-        ),
-      ]
+      let each = kept()
+      let summary = await relocate({
+        stores,
+        standing: (store) => standing(at.bearer, store),
+        eids,
+        prepare: (store, to) => relocateIn(at.bearer, store, { prepare: to }),
+        hand: (store, to) => relocateIn(at.bearer, store, { to }),
+        move: a.move === true,
+        out: each.out,
+        stopping: host.stopping,
+      })
+      return [said(call, [...each.lines, ...summary])]
     }),
 
     admin_deploys: verb(async (call) => {
