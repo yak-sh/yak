@@ -943,22 +943,15 @@ let navigation = (at: DeskPage, view: ManageView, env: Host) => {
   let { title, back } = yourOperator(at)
   let operator = link('operator', title)
   let host = spaceHost(env, at.space)
-  return [
-    h('a', { class: 'Desk_Skip', href: '#content' }, 'Skip to content'),
-    h(
-      'aside',
-      { class: 'Desk_Side', id: 'menu', 'aria-label': 'Manage' },
-      h(
-        'div',
-        { class: 'Desk_Top' },
-        h(
-          Button,
-          { mod: 'go', class: 'Desk_Back', href: chatPath(at.space) },
-          glyph('chevron-left'),
-          `Back to ${back}`,
-        ),
-        h(Button, { class: 'Desk_Close', href: '#' }, '✕ Close'),
-      ),
+  return {
+    label: 'Manage',
+    top: h(
+      Button,
+      { mod: 'go', class: 'Desk_Back', href: chatPath(at.space) },
+      glyph('chevron-left'),
+      `Back to ${back}`,
+    ),
+    side: [
       h('h2', { class: 'Desk_Title' }, 'Manage'),
       h(
         'div',
@@ -1018,9 +1011,50 @@ let navigation = (at: DeskPage, view: ManageView, env: Host) => {
           h('button', { class: 'Desk_Out', type: 'submit' }, 'Sign out'),
         ),
       ),
-    ),
-  ]
+    ],
+  }
 }
+
+/** A side in the dashboard's frame: what it is called, what sits beside its
+ * Close on a phone, and what it holds. */
+export type Side = { label: string; top?: Kids; side: Kids }
+
+// The dashboard's frame, which every dashboard page is drawn in (`desk`, and
+// the platform's admin directory, admin.ts `desk`): the side beside the page;
+// on a phone a top bar naming the page, whose Menu opens the same side over
+// the whole screen and whose Close shuts it (`:target`, no script).
+export let deskFrame = (
+  at: Side & { where: Kids; head: Kids; content: Kids; class?: string },
+) => [
+  h(
+    'header',
+    { class: 'Desk_Bar' },
+    h(Button, { href: '#menu' }, '☰ Menu'),
+    h('span', { class: 'Desk_Where' }, at.where),
+  ),
+  h('a', { class: 'Desk_Skip', href: '#content' }, 'Skip to content'),
+  h(
+    'aside',
+    { class: 'Desk_Side', id: 'menu', 'aria-label': at.label },
+    h(
+      'div',
+      { class: 'Desk_Top' },
+      at.top,
+      h(Button, { class: 'Desk_Close', href: '#' }, '✕ Close'),
+    ),
+    at.side,
+  ),
+  h(
+    'div',
+    { class: 'Desk_Body' },
+    h('header', { class: 'Desk_Head' }, at.head),
+    h('div', {
+      class: ['Desk_Content', at.class].filter(Boolean).join(' '),
+      id: 'content',
+      tabindex: '-1',
+    }, at.content),
+  ),
+]
 
 // The space selector (T-135919, T-136122, T-136983, T-137003): the space
 // every link under it changes, as a box saying its name, and Change, which
@@ -2775,24 +2809,10 @@ export let desk = (at: DeskPage, env: Host = {}) => {
       },
       layout: 'Desk',
     },
-    h(
-      'header',
-      { class: 'Desk_Bar' },
-      h(Button, { href: '#menu' }, '☰ Menu'),
-      h(
-        'span',
-        { class: 'Desk_Where' },
-        h('b', null, titles[view]),
-        h('small', null, whose),
-      ),
-    ),
-    navigation(at, view, env),
-    h(
-      'div',
-      { class: 'Desk_Body' },
-      h(
-        'header',
-        { class: 'Desk_Head' },
+    deskFrame({
+      ...navigation(at, view, env),
+      where: [h('b', null, titles[view]), h('small', null, whose)],
+      head: [
         h(
           'div',
           null,
@@ -2809,14 +2829,9 @@ export let desk = (at: DeskPage, env: Host = {}) => {
             '+ New app',
           )
           : null,
-      ),
-      h(
-        'div',
-        { class: 'Desk_Content', id: 'content', tabindex: '-1' },
-        said(at.say, at.no),
-        body,
-      ),
-    ),
+      ],
+      content: [said(at.say, at.no), body],
+    }),
     ['apps', 'new'].includes(view) ? copying() : null,
     ['apps', 'new', 'agents'].includes(view)
       ? agentLive('/oauth/agents')

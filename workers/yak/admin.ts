@@ -54,7 +54,7 @@ import {
   SideNav,
 } from '@yaks/ui/parts'
 import { esc, markup, raw } from './html.ts'
-import { lost, shell } from './pages.ts'
+import { deskFrame, lost, shell } from './pages.ts'
 import { type IconName, icons } from './icons.ts'
 import { type Host, spaceHost, url } from './host.ts'
 import { DAYS, NOT_ON, statsOf } from './views.ts'
@@ -444,36 +444,20 @@ let desk = (
     esc(title),
     null,
     status,
-    markup(h(
-      Fragment,
-      null,
-      h('a', { class: 'Desk_Skip', href: '#content' }, 'Skip to content'),
-      h(
-        'aside',
-        { class: 'Desk_Side' },
-        h(
-          'a',
-          { class: 'Desk_Brand', href: url(d.env, '/') },
-          h(Idle, { base: url(d.env), size: 44 }),
-          'yaks.app',
-        ),
-        h(SideNav, { 'aria-label': 'Directory' }, nav),
+    markup(deskFrame({
+      label: 'Directory',
+      top: h(
+        'a',
+        { class: 'Desk_Brand', href: url(d.env, '/') },
+        h(Idle, { base: url(d.env), size: 44 }),
+        'yaks.app',
       ),
-      h(
-        'div',
-        { class: 'Desk_Body' },
-        h(
-          'header',
-          { class: 'Desk_Head' },
-          h('div', null, kicker, h('h1', null, title)),
-        ),
-        h('div', {
-          class: 'Desk_Content Directory_Content',
-          id: 'content',
-          tabindex: -1,
-        }, body),
-      ),
-    )),
+      side: h(SideNav, { 'aria-label': 'Directory' }, nav),
+      where: [h('b', null, title), h('small', null, 'Admin')],
+      head: h('div', null, kicker, h('h1', null, title)),
+      content: body,
+      class: 'Directory_Content',
+    })),
     { 'cache-control': 'private, no-store', 'x-robots-tag': 'noindex' },
     'Desk',
   )

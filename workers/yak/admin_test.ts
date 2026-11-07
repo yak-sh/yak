@@ -429,6 +429,12 @@ let page = async (path: string) => {
   }
   return {
     current: document.querySelector('[aria-current="page"]')?.textContent,
+    // On a phone, the top bar's Menu and the side it opens.
+    menu: [
+      document.querySelector('.Desk_Bar a')?.getAttribute('href'),
+      document.querySelector('#menu')?.getAttribute('aria-label'),
+      document.querySelector('#menu .Desk_Close')?.getAttribute('href'),
+    ],
     signedUp: tiles('Signed up through an invite'),
     starters: tiles('Given the starter'),
     invited: tiles('Invited'),
@@ -436,6 +442,10 @@ let page = async (path: string) => {
 }
 let invites = await page('/admin/invites')
 let jeffs = await page('/admin/jeff')
+
+test('on a phone, Menu opens the admin side as it opens the dashboard side', () => {
+  assertEquals(invites.menu, ['#menu', 'Directory', '#'])
+})
 
 test("the admin's Invites page says who invited whom, when, and the month each first app gave", () => {
   assertEquals(invites.current, 'Invites3')
