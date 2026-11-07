@@ -34,6 +34,7 @@ import { operatorDoc } from './operator-vocab.ts'
 import { draftDoc, drafts } from '@yaks/draft'
 import { memoryDoc } from '@yaks/memory/vocab'
 import { topicDoc } from '@yaks/topic'
+import { topics } from '@yaks/topic/graph'
 import { wakeDoc } from '@yaks/wake/vocab'
 import { due, soonest, tick, wakes } from '@yaks/wake'
 import { caught } from './defects.ts'
@@ -153,7 +154,15 @@ export let operatorGraph = (
   let g = graph({
     storage,
     vocab,
-    plugins: [sessions(), drafts(), ids(vocab), wakes(), ...plugins, fx],
+    plugins: [
+      sessions(),
+      drafts(),
+      ids(vocab),
+      wakes(),
+      topics(),
+      ...plugins,
+      fx,
+    ],
   })
   return { g, fx, vocab }
 }

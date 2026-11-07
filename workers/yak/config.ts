@@ -225,7 +225,7 @@ export let directoryConfig: Config = {
         entry.tool !== true || ['memory_save', 'memory_recall'].includes(name)
       ).map(([name]) => name),
     },
-    { use: '@yaks/topic', facets: ['vocab'], words: ['topic'] },
+    { use: '@yaks/topic', facets: ['vocab', 'graph'], words: ['topic'] },
     { use: '@yaks/connections', facets: toolFacets },
     // Each call out through a `uses` link counted on it (outbound.ts).
     { use: '@yaks/egress', facets: ['vocab', 'graph'] },

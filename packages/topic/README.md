@@ -208,10 +208,12 @@ read, and as the markdown a session opened on it starts from), `cut` (a body cut
 at a paragraph), `ORACLE` (the persona a topic session wears), and the constants
 `TOPIC`, `FIND`, `TOPICS`, `CUT`, `BUDGET`, `LEVELS`, `LINES` and `GIST`.
 `@yaks/topic/vocab` exports `topicDoc` and `docs: [topicDoc]` for schema
-loaders. `@yaks/topic/views` exports `inspectViews()`, which loads the shelves,
-the page, the tree and the tile; `tabs`, the two tabs a topic wears;
-`destinations`, the Topics page the sidebar offers; and `icons`, the glyph it
-wears.
+loaders. `@yaks/topic/graph` exports `plugins()`, whose `normalize` hook folds
+every `topic.name` a write carries with `named`, so a name typed in any case or
+spacing, through any door, is the one topic's. `@yaks/topic/views` exports
+`inspectViews()`, which loads the shelves, the page, the tree and the tile;
+`tabs`, the two tabs a topic wears; `destinations`, the Topics page the sidebar
+offers; and `icons`, the glyph it wears.
 
 ## Compatibility
 

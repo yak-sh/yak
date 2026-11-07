@@ -6,8 +6,8 @@
 // "tests" in the next and "test suite" in a third, and what is known about it
 // scatters across three topics that each hold a third (M-12915 on why). Three
 // things stand against that. A topic's name is unique (`topic.name`'s index),
-// folded to lowercase with single spaces, so a name said twice is one topic
-// whoever says it, and the second of two builds at once is refused; whoever
+// folded to lowercase with single spaces on the way in whoever writes it
+// (./graph.ts), so a name said twice is one topic, and the second of two builds at once is refused; whoever
 // makes one is shown the topics that exist, nearest its words by meaning,
 // first, so it reuses a subject already named; and `topic_new` refuses a name
 // that is taken, or whose words hold another topic's or are held by them

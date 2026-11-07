@@ -5,6 +5,7 @@
   "exports": {
     ".": "./mod.ts",
     "./vocab": "./vocab.ts",
+    "./graph": "./graph.ts",
     "./tools": "./tools.ts",
     "./views": "./views.ts"
   },
