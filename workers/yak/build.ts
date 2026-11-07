@@ -77,7 +77,7 @@ import {
 } from '@yaks/sql'
 import type { Beat, Line } from './builder.ts'
 import { directory, type Space } from './directory.ts'
-import { behind, onceRead, type Restartable } from './running.ts'
+import { BEAT, behind, onceRead, type Restartable } from './running.ts'
 import * as dirPart from './directory.ts'
 import type { Env } from './env.ts'
 import type { Who } from './session.ts'
@@ -131,9 +131,6 @@ type Socket = Watching | Lent
 // row.
 let CUT = 120
 
-/** How long an incarnation's owed work waits once its answers have been
- * read, so the runtime has sent them on (`#behind`). */
-let BEAT = 100
 export let line = (text: string): string => {
   let first = text.trim().split('\n')[0] ?? ''
   return first.length > CUT ? `${first.slice(0, CUT - 1)}…` : first

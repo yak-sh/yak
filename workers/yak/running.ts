@@ -22,6 +22,8 @@
 // invocation's is everyone's (defects-runtime.ts `entry`). Under `wrangler
 // dev` and the test kernels there is none, and nothing is stamped or compared.
 
+import { type Clock, system } from '@yaks/fp'
+
 /** A Worker version: the runtime's id for it and when it was uploaded. */
 // The platform's release, as a person reads it: what a connector says it runs
 // (`serverInfo.version`), what a feedback letter names, and the stand-in for
@@ -214,38 +216,58 @@ export let reading = (request: Request): boolean =>
   (request.method == 'GET' || request.method == 'HEAD') &&
   !request.headers.has('upgrade')
 
+/** How long an object's work behind an answer waits once its caller has read
+ * the answer through (`onceRead`), so the runtime has sent it on: the runtime
+ * sends an answer on in turns of its own event loop, and what runs meanwhile
+ * holds it, or, for a restart, cuts it off (T-149700, T-150814). */
+export let BEAT = 100
+
 /**
  * A read's answer from an object that owes its caller a restart, with the
- * restart behind it (T-148194). Restarting first made the read wait for a new
- * instance: a cold start of a few hundred milliseconds after each deploy, and
- * once 32 s that Cloudflare took to start one. A refusal may be a door only the
- * caller's deploy has, so the object restarts at once instead, and the
- * caller's door sends the read again to the new code.
+ * restart behind it (T-148194): a beat (`BEAT`) after its caller has read the
+ * answer through. Restarting first made the read wait for a new instance: a
+ * cold start of a few hundred milliseconds after each deploy, and once 32 s
+ * that Cloudflare took to start one. A restart on a timer set as the handler
+ * returned ran before the runtime had sent the answer on, so the read failed
+ * as evicted and its door's resend waited 21 s for the new instance
+ * (T-150814). A refusal may be a door only the caller's deploy has, so the
+ * object restarts at once instead, and the caller's door sends the read again
+ * to the new code.
  *
  * ```ts
  * import { assertEquals, assertThrows } from '@std/assert'
+ * import { clock } from '@yaks/testing'
  * let restarts = 0
  * let restart = () => {
  *   restarts++
  *   throw new Error('reset')
  * }
- * let answer = behindAnswer(new Response('ok'), restart)
+ * let time = clock()
+ * let answer = behindAnswer(new Response('ok'), restart, time)
+ * await time.advance(1000)
  * assertEquals([answer.status, restarts], [200, 0])
- * await new Promise((r) => setTimeout(r, 0))
+ * assertEquals(await answer.text(), 'ok')
+ * await time.advance(BEAT - 1)
+ * assertEquals(restarts, 0)
+ * await time.advance(1)
  * assertEquals(restarts, 1)
  * assertThrows(() => behindAnswer(new Response('', { status: 404 }), restart))
  * assertEquals(restarts, 2)
  * ```
  */
-export let behindAnswer = (answer: Response, restart: () => void): Response => {
+export let behindAnswer = (
+  answer: Response,
+  restart: () => void,
+  clock: Clock = system,
+): Response => {
   if (answer.status >= 400 && answer.status < 500) restart()
   // The restart throws as it resets the object, with nothing in flight.
-  setTimeout(() => {
-    try {
-      restart()
-    } catch { /* the reset */ }
-  }, 0)
-  return answer
+  return onceRead(answer, () =>
+    clock.after(BEAT, () => {
+      try {
+        restart()
+      } catch { /* the reset */ }
+    }))
 }
 
 /**

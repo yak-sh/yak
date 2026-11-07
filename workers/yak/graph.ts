@@ -3940,7 +3940,11 @@ export class Store {
     )
     if (!restart) return this.#door(request, waking, woke)
     if (!reading(request)) restart()
-    return behindAnswer(await this.#door(request, waking, woke), restart)
+    return behindAnswer(
+      await this.#door(request, waking, woke),
+      restart,
+      clockOf(this.#time),
+    )
   }
 
   async #door(
