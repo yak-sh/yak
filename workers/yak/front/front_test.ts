@@ -36,6 +36,7 @@ let front = (
   kernel = () => new Response('kernel'),
 ) => {
   let asked: string[] = [], forwarded: Request[] = [], used: string[] = []
+  let warmed: string[] = []
   let points: unknown[] = [], errors: unknown[] = [], retained: unknown[] = []
   let told: Conversion[] = []
   let env: FrontEnv = {
@@ -57,6 +58,10 @@ let front = (
         used.push(eid)
         return Promise.resolve()
       },
+      wake: (store) => {
+        warmed.push(store)
+        return Promise.resolve()
+      },
     },
     ADS: {
       told: (c) => {
@@ -76,7 +81,18 @@ let front = (
     serve(new Request(url, init), env, {
       waitUntil: (work) => retained.push(work),
     })
-  return { go, env, asked, forwarded, used, points, errors, retained, told }
+  return {
+    go,
+    env,
+    asked,
+    forwarded,
+    used,
+    warmed,
+    points,
+    errors,
+    retained,
+    told,
+  }
 }
 
 test('a kept page answers from the edge with no kernel, counted once', async () => {
@@ -102,6 +118,33 @@ test('a kept page answers from the edge with no kernel, counted once', async () 
   await f.go(at)
   assertEquals(f.used, ['a'])
   assertEquals(f.points.length, 2)
+})
+
+// The page's scripts ask its store next, so a page a browser runs starts it,
+// sent or revalidated; bytes it loads start nothing, and nor does a page kept
+// before it said its store.
+test('a kept page starts the store its scripts ask next', async () => {
+  let store = JSON.stringify({
+    app: 'a',
+    space: 'ada',
+    slug: 'cookbook',
+    store: 'ada/cookbook.abc123',
+  })
+  let script = { 'content-type': 'text/javascript', [SEEN]: store }
+  let cases: [Response, RequestInit, string[]][] = [
+    [page({ [SEEN]: store }), {}, ['ada/cookbook.abc123']],
+    [page({ [SEEN]: store }), { headers: { 'if-none-match': '"v1"' } }, [
+      'ada/cookbook.abc123',
+    ]],
+    [page({ [SEEN]: store }), { method: 'HEAD' }, ['ada/cookbook.abc123']],
+    [page(script), {}, []],
+    [page(), {}, []],
+  ]
+  for (let [kept, init, warmed] of cases) {
+    let f = front(() => kept)
+    await f.go(at, init)
+    assertEquals(f.warmed, warmed, JSON.stringify(init))
+  }
 })
 
 // A kept forward is kept by its path alone; the visitor's query goes on with

@@ -1585,8 +1585,10 @@ export let restoreOf = (r: Row) => ({
 // (migrate.ts `handled`), which is what the app was already named before the
 // property existed; it fires for nobody after the directory's first request of
 // the deploy.
-export let storeName = (space: Space, app: AppInfo) =>
-  app.store ?? `${space.slug}/${app.slug}`
+export let storeName = (
+  space: Pick<Space, 'slug'>,
+  app: { slug: string; store?: string | null },
+) => app.store ?? `${space.slug}/${app.slug}`
 
 /** The dispatch script serving the app's live release: each release uploads
  * its own (`app-<eid>-r-<uuid>`, tools.ts), and an app released before that

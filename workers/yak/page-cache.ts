@@ -51,19 +51,30 @@ import {
   KEEP,
   KEPT,
   NOW,
+  opens,
   remember,
   scope,
   SEEN,
+  type Seen,
   UNKEPT,
   UNKEPT_AT,
 } from './kept-page.ts'
 import { appTag, SITE_TAG, spaceTag } from './purge.ts'
 import { hostOf, MOUNT } from './route.ts'
 import type { Clock } from './timing.ts'
-import { scheduleUse } from './used.ts'
+import { scheduleUse, wake } from './used.ts'
 import { seen, viewed } from './views.ts'
 
 export { KEPT, pageAt, personal, shareable, visitor } from './kept-page.ts'
+
+/** What a page of an app owes as the gateway answers it: its count
+ * (views.ts), and its store started where a browser goes on to run it, since
+ * the page's scripts ask the store next (used.ts `wake`). yak-front does the
+ * same for a page it answers from the edge (front.ts `kept`). */
+export let shown = (env: Env, req: Request, page: Response, at: Seen) => {
+  viewed(env, req, page, at)
+  if (at.store && opens(page)) wake(env, at.store)
+}
 
 /** An answer Site may keep: which app it was a page of (none, for a space's
  * own 404 or index), for the gateway's count, and the tags its purge names. A
@@ -78,7 +89,14 @@ export { KEPT, pageAt, personal, shareable, visitor } from './kept-page.ts'
 export let keep = (
   page: Response,
   space: { eid: string; slug: string } | null,
-  app: { eid: string; slug: string; fence?: string | null } | null,
+  app:
+    | {
+      eid: string
+      slug: string
+      store?: string | null
+      fence?: string | null
+    }
+    | null,
   statuses = [200, 404],
   alone?: Alone,
 ) => {
@@ -206,7 +224,7 @@ export let asked = (
       req.headers.get(MOUNT),
       c,
       (answer, at) => {
-        viewed(env, req, answer, at)
+        shown(env, req, answer, at)
         if (answer.status < 400) scheduleUse(env, at.app)
       },
       session,

@@ -241,7 +241,7 @@ import { sampled, unsampled } from './sample.ts'
 import { titling, vouched, type Who } from './session.ts'
 import { type Clock, clock } from './timing.ts'
 import { addressee, canon, nameOf } from './signin.ts'
-import { ACCEPTED, type Door, storeOf, WARM } from './door.ts'
+import { ACCEPTED, type Door } from './door.ts'
 import {
   asked,
   loaded,
@@ -254,7 +254,7 @@ import {
 } from './seed.ts'
 import { said as sentence } from './writes.ts'
 import { archive, breaks, folds, line, serve, trackedIn } from './unseen.ts'
-import { scheduleUse } from './used.ts'
+import { scheduleUse, wake } from './used.ts'
 import {
   atCeiling,
   ceilings,
@@ -2000,20 +2000,12 @@ let born = (
 
 /**
  * Start the object a born row names while the birth reads and writes the
- * directory (T-143307). A new object took 150 to 500 ms to start, and a write
- * sent the moment app_new answered waited on it, since the store app_new asks
- * for behind its answer was still starting. The start touches nothing the
- * object holds (door.ts `WARM`), so a birth refused after it leaves nothing.
+ * directory (T-143307): a write sent the moment app_new answered waited on it,
+ * since the store app_new asks for behind its answer was still starting. A
+ * birth refused after it leaves nothing.
  */
-let warmed = (env: Env, row: Bundle) => {
-  let { store } = row.app as { store: string }
-  background(
-    storeOf(env.STORE, store)(WARM, {}, KERNEL).then(
-      (r) => r.body?.cancel(),
-      (e) => caught(e, { request: 'store warm', store }),
-    ),
-  )
-}
+let warmed = (env: Env, row: Bundle) =>
+  wake(env, (row.app as { store: string }).store)
 
 /**
  * The manifest an app declares, as the bytes it is stored in, whichever

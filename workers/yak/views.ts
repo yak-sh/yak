@@ -41,6 +41,8 @@ import { elapsed } from './lib/hops.ts'
 import { failure, resent } from '@yaks/cloudflare/api'
 import { isView, pointOf, type Visited } from './view-point.ts'
 import { appTag } from './purge.ts'
+import { type Space, storeName } from './directory.ts'
+import type { Seen } from './kept-page.ts'
 export { classed } from './crawlers.ts'
 export { point, referred, type View } from './view-point.ts'
 
@@ -60,11 +62,18 @@ export let VARIANT = 'blob9'
 
 /** One page view's identity: which app it was a page of, and the address it
  * was served under. The eid is the data point's one index, so every query
- * groups by the app and a rename never loses a day of history. */
+ * groups by the app and a rename never loses a day of history. Beside it the
+ * app's store, which a page's scripts ask next (used.ts `wake`); a data point
+ * never carries it. */
 export let seen = (
-  space: { slug: string },
-  app: { eid: string; slug: string },
-) => ({ app: app.eid, space: space.slug, slug: app.slug })
+  space: Pick<Space, 'slug'>,
+  app: { eid: string; slug: string; store?: string | null },
+): Seen => ({
+  app: app.eid,
+  space: space.slug,
+  slug: app.slug,
+  store: storeName(space, app),
+})
 
 /**
  * Count one page view, if it is one. Called with whatever the door is about to

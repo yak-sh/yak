@@ -141,7 +141,15 @@ import { token } from '@yaks/graph/sha256'
 import { edits, mode, reads, writes } from '@yaks/member'
 import { type Door, USES } from './door.ts'
 import { type Clock, clock, timed } from './timing.ts'
-import { asked, keep, keepable, passed, told, unkept } from './page-cache.ts'
+import {
+  asked,
+  keep,
+  keepable,
+  passed,
+  shown,
+  told,
+  unkept,
+} from './page-cache.ts'
 import { type Alone, CLIENT, fixed } from './kept-page.ts'
 import { cookieValue } from '@yaks/platform/cookie'
 import { noted, refusal, serving } from './unseen.ts'
@@ -171,7 +179,7 @@ import { full, fullFiles } from './usage.ts'
 import { free } from './meter.ts'
 import { scheduleBy } from './used.ts'
 import { sha256 } from './versions.ts'
-import { seen, viewed } from './views.ts'
+import { seen } from './views.ts'
 import { refuse } from './tool.ts'
 import { routes as commandRoutes } from '@yaks/tools/routes'
 import { commandIn, commandsIn } from './app-command.ts'
@@ -2743,7 +2751,7 @@ let served = async (
     }
     let page = reporting(open, req, bare)
     if (edge) return keep(page, space, app)
-    viewed(env, req, page, seen(space, app))
+    shown(env, req, page, seen(space, app))
     return page
   }
   // Nor does the gateway ask Site about the addresses of an app it keeps
@@ -2851,7 +2859,7 @@ let served = async (
     // counted as the home app's page view — at the bare hostname, which is
     // where the home app is mounted.
     if (early) {
-      viewed(env, req, early.page, seen(space, early.app))
+      shown(env, req, early.page, seen(space, early.app))
       let page = early.page
       if (
         page.body &&
@@ -3157,7 +3165,7 @@ let served = async (
   // what an app answered: the `/api/` doors returned above, a file that is not
   // HTML is not a page, and the platform's own pages — the space index, the
   // trash, a wrong address — never come back through here.
-  viewed(env, req, page, seen(space, app))
+  shown(env, req, page, seen(space, app))
   if (page.status < 400) scheduleBy(env, who, app.eid)
   return wall(reporting(page, req, at))
 }

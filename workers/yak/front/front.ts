@@ -20,6 +20,7 @@ import {
   listed,
   listing,
   LOGIN,
+  opens,
   remember,
   scope,
   stranger,
@@ -46,7 +47,10 @@ export type FrontEnv = Host & {
   // ad networks it tells (index.ts `Ads`).
   KERNEL: Pick<Fetcher, 'fetch'>
   SITE: Pick<Fetcher, 'fetch'>
-  USES: { used(eid: string): Promise<void> | void }
+  USES: {
+    used(eid: string): Promise<void> | void
+    wake(store: string): Promise<void> | void
+  }
   ADS?: { told(c: Conversion): Promise<void> }
   VIEWS?: { writeDataPoint(point: unknown): void }
   ERRORS?: { send: (body: never) => Promise<void> }
@@ -195,6 +199,15 @@ export let kept = (
       ctx.waitUntil(
         Promise.resolve(env.USES.used(at.app)).catch((e) =>
           report(e, env, ctx, 'front used', req)
+        ),
+      )
+    }
+    // The page's scripts ask its store next, and a store asleep takes longer
+    // to start than they take to load (page-cache.ts `shown`).
+    if (at.store && opens(answer)) {
+      ctx.waitUntil(
+        Promise.resolve(env.USES.wake(at.store)).catch((e) =>
+          report(e, env, ctx, 'front wake', req)
         ),
       )
     }

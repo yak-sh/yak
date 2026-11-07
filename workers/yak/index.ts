@@ -293,8 +293,9 @@ export class Lexicon extends DurableObject<Env> implements Lexical {
 }
 
 // What yak-front (front/) owes for a page it answered from the edge: the app was
-// used. That Worker holds no door onto a store, so it hands the receipt here,
-// behind the response it has already sent. RPC, which the cache never answers.
+// used, and its store starts for the page's scripts. That Worker holds no door
+// onto a store, so it hands both here, behind the response it has already
+// sent. RPC, which the cache never answers.
 export class Uses extends WorkerEntrypoint {
   declare env: Env
 
@@ -304,6 +305,14 @@ export class Uses extends WorkerEntrypoint {
       'Uses used',
       async () =>
         (await import('./used.ts')).scheduleUse(this.env, eid, waitUntil),
+    )
+  }
+
+  wake(store: string): void {
+    entry(
+      this.env,
+      'Uses wake',
+      async () => (await import('./used.ts')).wake(this.env, store, waitUntil),
     )
   }
 }

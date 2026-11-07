@@ -133,8 +133,17 @@ export let shareable = (req: Request, path = new URL(req.url).pathname) => {
     !path.includes('/~')
 }
 
-/** What a page may say of itself as it answers from the edge. */
-export type Seen = { app: string; space: string; slug: string }
+/** What a page may say of itself as it answers from the edge, and the store
+ * its app keeps (a handle, directory.ts `storeName`), which a page that
+ * `opens` starts (used.ts `wake`). A page kept before it said its store says
+ * none, and starts nothing. */
+export type Seen = { app: string; space: string; slug: string; store?: string }
+
+/** Whether a browser goes on to run this answer, so that its scripts ask the
+ * app's store next: an HTML page, sent whole or revalidated. */
+export let opens = (res: Response) =>
+  (res.status == 200 || res.status == 304) &&
+  (res.headers.get('content-type') ?? '').startsWith('text/html')
 /** Whom a kept page alone is for, where it isn't everyone: strangers, or a
  * person signed in who holds no seat in its space (a space's index, as each
  * is shown it). */

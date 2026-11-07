@@ -19,6 +19,7 @@ import {
   visitor,
 } from './page-cache.ts'
 import { clock } from './timing.ts'
+import { within } from './defects.ts'
 import { dataset } from './testing.ts'
 
 let space = { eid: 's', slug: 'ada' }
@@ -117,6 +118,49 @@ test('a kept page answers a revalidation with a 304, and counts a HEAD as a view
   assertEquals(fresh!.status, 304)
   // The HEAD is a view; the 304 sent none.
   assertEquals(g.views.points.length, 1)
+})
+
+// The page's scripts ask its store next, so a page a browser runs starts it
+// (used.ts `wake`), sent or revalidated, and bytes it loads start nothing.
+test('a page the gateway answers from the edge starts its store', async () => {
+  let reached: string[] = []
+  let STORE = {
+    idFromName: (name: string) => name,
+    get: (id: unknown) => ({
+      fetch: (req: Request) => {
+        reached.push(`${id} ${new URL(req.url).pathname}`)
+        return Promise.resolve(new Response(null, { status: 204 }))
+      },
+    }),
+  }
+  let script = new Response('export {}', {
+    headers: { 'content-type': 'text/javascript' },
+  })
+  let g = gateway(
+    (to) =>
+      keep(
+        to.url.endsWith('.js') ? script.clone() : page('one'),
+        space,
+        { ...app, store: 'ada/cookbook.abc123' },
+      ),
+  )
+  Object.assign(g.env, { STORE })
+  let get = async (url?: string, init?: RequestInit) => {
+    let held: Promise<void>[] = []
+    await within(g.env, {}, () => g.get(url, init), undefined, {
+      retain: (work) => held.push(work),
+    })
+    await Promise.all(held)
+    // Beside it the use receipt the platform store keeps (used.ts).
+    return reached.splice(0).filter((to) => to.startsWith('ada/'))
+  }
+  let first = await get()
+  assertEquals(first, ['ada/cookbook.abc123 /warm'])
+  assertEquals(
+    await get(undefined, { headers: { 'if-none-match': '"one"' } }),
+    first,
+  )
+  assertEquals(await get('https://ada.yaks.app/cookbook/api/client.js'), [])
 })
 
 // A write, and the rows it leaves (the released app `a` of space `s`, and the

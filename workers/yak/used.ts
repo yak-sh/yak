@@ -6,10 +6,10 @@
 import type { Comp, Plugin } from '@yaks/graph'
 import type { Handler } from '@yaks/effects'
 import { parse, retired } from '@yaks/query'
-import { type Namespace, storeOf } from './door.ts'
+import { type Namespace, storeOf, WARM } from './door.ts'
 import { PLATFORM_STORE } from '@yaks/platform/names'
 import { answered, KERNEL } from './meta.ts'
-import { background, defect, within } from './defects.ts'
+import { background, caught, defect, within } from './defects.ts'
 import type { Env } from './env.ts'
 import { tallying } from './lib/hops.ts'
 
@@ -133,6 +133,25 @@ export let scheduleUse = (
   eid: string,
   retain?: (work: Promise<void>) => void,
 ): void => schedule(env, used(eid), retain)
+
+/** Start the object `store` names (door.ts `WARM`) for a caller about to ask
+ * it something: a page's scripts, whose first `/api/` call would otherwise wait
+ * out the whole start (T-149697), or a birth's first write (T-143307). A new
+ * object takes 150 to 500 ms to start before any code of ours runs in it, and
+ * the start reads nothing it holds, so one nobody follows up keeps nothing. */
+export let wake = (
+  env: Partial<Env>,
+  store: string,
+  retain?: (work: Promise<void>) => void,
+): void => {
+  if (!env.STORE) return
+  ;(retain ?? background)(
+    storeOf(env.STORE, store)(WARM, {}, KERNEL).then(
+      (r) => r.body?.cancel(),
+      (e) => caught(e, { request: 'store warm', store }),
+    ),
+  )
+}
 
 /** A write changed this app's store, or its code reported an error. */
 export let scheduleMark = (
