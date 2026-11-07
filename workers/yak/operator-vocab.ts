@@ -189,20 +189,6 @@ export let operatorDoc: VocabDoc = {
         },
       },
     },
-    // The opt-in as this store kept it before the number moved onto the
-    // person in the directory (@yaks/phone). Only read, to hand the rows over
-    // (operator-host.ts `/operator/texts`).
-    sms_consent: {
-      component: true,
-      description:
-        'A person agreed to texts from the operator at this number, in these words; moving to the directory.',
-      properties: {
-        person: { type: 'string', ref: 'person', death: 'keep' },
-        number: { type: 'string' },
-        consent: { type: 'string' },
-        at: { type: 'string', format: 'date-time' },
-      },
-    },
     // What a row that fires asks the Operator, as the person who set it: a
     // wake-up (operator-wakes.ts), and any other trigger that becomes a turn
     // in their conversation (operator-channels.ts `fire`).

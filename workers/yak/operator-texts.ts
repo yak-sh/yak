@@ -108,21 +108,6 @@ export let texts = (
   ]
 }
 
-// TODO(T-136921): a space's operator store kept the opt-in as
-// `sms_consent{person, number, consent, at}` until the number moved onto the
-// person. The Operator page hands those rows to the directory as it opens;
-// this and the operator store's old declaration go once no store holds one.
-/** A row the operator store kept, as the directory keeps it. */
-export let handed = (
-  kept: { person: string; number: string; consent: string; at: string },
-): Bundle[] => [
-  { entity: { eid: kept.person }, phone: { number: kept.number } },
-  {
-    entity: { eid: consentEid(kept.person) },
-    sms_consent: { person: kept.person, consent: kept.consent, at: kept.at },
-  },
-]
-
 import { phoneNamed, phoneOf } from './phones.ts'
 
 /**

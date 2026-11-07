@@ -43,7 +43,6 @@ import { inApp, refuse } from './tool.ts'
 import { Idle, MOVES } from './mascot.ts'
 import {
   CONSENT,
-  handed,
   REPLIES,
   tell,
   type Texting,
@@ -364,27 +363,6 @@ export let voiceCard = (
       backends.map((b) => ({ ...b, checked: b.id == setup.backend })),
     ),
   )
-// What a person agreed to be texted at. Any opt-in this space's operator
-// store still keeps from before the number moved onto the person is handed to
-// the directory first, unless the directory already holds a newer one
-// (operator-texts.ts `handed`). The move is the platform's, not the
-// viewer's, so it is written as the platform.
-let textingOf = async (env: Env, space: Space, who: Who) => {
-  let dir = directoryOf(env.STORE)
-  let kept = await operatorDoor(env, space, who, 'texts', {}) as Parameters<
-    typeof handed
-  >[0][]
-  if (kept.length) {
-    let had = await Promise.all(kept.map((k) => dir.texting(k.person)))
-    let owed = kept.filter((_, i) => !had[i])
-    if (owed.length) {
-      await dir.apply({ entities: owed.flatMap(handed) })
-    }
-    await operatorDoor(env, space, who, 'texts', { handed: true })
-  }
-  return dir.texting(who.person ?? '')
-}
-
 /** A request no session has taken yet, as its conversation draws it: what
  * was asked with the files sent with it, and what became of it in plain
  * words, never the error. */
@@ -781,7 +759,7 @@ export let conversationOf = async (
 export let operatorBody = async (env: Env, space: Space, who: Who) => {
   let at = managePath('operator', space.slug)
   let [consent, { pa, beyond }, phone, platform] = await Promise.all([
-    textingOf(env, space, who),
+    directoryOf(env.STORE).texting(who.person ?? ''),
     reachOf(directoryOf(env.STORE), space, who.person ?? ''),
     phoneAt(env, space.sender),
     phoneAt(env),

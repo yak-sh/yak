@@ -890,19 +890,6 @@ export let operatorRequest = async (
     if (Array.isArray(args.bundles)) drafted(kept)
     return Response.json({ bundles: kept })
   }
-  // The opt-ins this store kept before the number moved onto the person
-  // (operator-texts.ts `handed`): listed for the page to hand to the
-  // directory, then dropped once it has.
-  if (path == '/operator/texts') {
-    let kept = await store.g.read('.sms_consent')
-    if (args.handed === true) {
-      await store.g.apply(
-        kept.map((row) => ({ entity: row.entity, sms_consent: null })),
-      )
-      return Response.json([])
-    }
-    return Response.json(kept.map((row) => row.sms_consent))
-  }
   if (path == '/operator/receive') {
     let intake = {
       ...args.request as Request,

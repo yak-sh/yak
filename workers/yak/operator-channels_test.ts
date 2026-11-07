@@ -31,9 +31,8 @@ import {
   keepFile,
   receive,
 } from './operator-channels.ts'
-import { operating, type Operator, operatorContext } from './operator.ts'
+import { operating, operatorContext } from './operator.ts'
 import { answering, operatorRequest } from './operator-host.ts'
-import { handed } from './operator-texts.ts'
 import { drain, type operatorStore as Stored } from './operator-store.ts'
 
 // One Operator per store, as the Builder object keeps, answered by `model`.
@@ -562,39 +561,6 @@ test('a space whose budget is spent texts the person that it is, and nothing els
   )
   assertStringIncludes(String(unpaidSend), 'texts go again on the 1st')
   assertEquals(unpaidSent, [])
-})
-
-// An opt-in kept in the operator store before the number moved onto the
-// person: listed at the door, then dropped once handed over.
-let legacy = operatorMemory()
-let door = (args: Record<string, unknown>) =>
-  operatorRequest(
-    { store: legacy } as unknown as Operator,
-    f.held,
-    '/operator/texts',
-    args,
-    () => undefined,
-  ).then((r) => r!.json())
-let old = {
-  person: f.held.person,
-  number: '+12695550199',
-  consent: 'Text me.',
-  at: '2026-11-03T00:00:00.000Z',
-}
-await legacy.g.apply([{
-  entity: { eid: crypto.randomUUID() },
-  sms_consent: old,
-}])
-let listed = await door({})
-await door({ handed: true })
-let left = await door({})
-test('the operator store hands its old opt-ins over and keeps none', () => {
-  assertEquals(listed, [old])
-  assertEquals(handed(old)[0], {
-    entity: { eid: f.held.person },
-    phone: { number: '+12695550199' },
-  })
-  assertEquals(left, [])
 })
 
 let draft = async (text?: string, over = '') => {
