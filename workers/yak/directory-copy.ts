@@ -26,6 +26,8 @@ export type ServingCopyDoor = {
   finish(revision: number): Promise<boolean>
   /** A failed mutation ends its fence at the directory's committed revision. */
   settle?(revision: number, committed: number): Promise<boolean>
+  /** Fenced for good: the directory fences another copy now. */
+  retire?(): Promise<boolean>
   put(revision: number, key: string, body: string): Promise<boolean>
   get(key: string): Promise<string | null>
 }
@@ -35,11 +37,61 @@ export type ServingCopies = {
   idFromName(name: string): unknown
   get(id: unknown): ServingCopyDoor
 }
+/** The copy's name. An object stands where it was first reached and never
+ * moves (relocate.ts), so the copy beside the directory near Chicago (door.ts
+ * `PLATFORM_OBJECT`) is a new name, first reached by the directory itself
+ * (`handover`). */
+export let COPY = 'public/ord'
+/** The copy the directory fenced before it held a mark of which (`handover`). */
+export let FORMER = 'public'
+
 export let copyOf = (env: Pick<Env, 'SERVING_COPY' | 'CLOCK'>) => {
   let copies = env.SERVING_COPY
-  let copy = copies?.get(copies.idFromName('public'))
+  let copy = copies?.get(copies.idFromName(COPY))
   return copy &&
     remembered(timedCopy(copy), toldTo(copies!), env.CLOCK ?? system)
+}
+
+// The directory moves to a new copy by retiring the one it fenced before, and
+// raises no fence until that one is retired. Until then a Worker still on
+// older code, reading the former copy, could be answered there at a revision
+// the directory has moved past without fencing it. Retired, the former copy
+// answers nobody (serving-copy.ts `retire`). The new copy is reached at the
+// same moment, from the directory, so it stands beside it: every Worker fills
+// it only behind an answer of the directory's. `was` is the copy the directory
+// last fenced, null when it has fenced none, and `moved` marks the handover
+// done, so it happens once.
+let handing = new WeakMap<ServingCopies, Promise<void>>()
+export let handover = (
+  env: Pick<Env, 'SERVING_COPY' | 'CLOCK'>,
+  was: string | null,
+  moved: () => void,
+): ServingCopyDoor | undefined => {
+  let copies = env.SERVING_COPY
+  let copy = copyOf(env)
+  if (!copies || !copy || was == COPY) return copy
+  let ready = handing.get(copies)
+  if (!ready) {
+    let wait = jittered(env.CLOCK ?? system)
+    let former = was && copies.get(copies.idFromName(was))
+    ready = Promise.all([
+      former && retried(() => former.retire?.(), true, moving, wait),
+      copy.revision?.(),
+    ]).then(moved)
+    handing.set(copies, ready)
+    // A handover that fails is tried again by the next fence, which waits.
+    ready.catch((e) => {
+      handing.delete(copies)
+      if (!moving(e)) defect(e, { request: 'serving copy handover' })
+    })
+  }
+  return {
+    ...copy,
+    begin: async (at) => {
+      await ready
+      return await copy.begin(at)
+    },
+  }
 }
 
 // Every read of the directory fills the copy behind its answer, and a page's
@@ -224,12 +276,29 @@ export let fenced = async <T>(
       } finally {
         released(revision)
       }
-      await retried(() => copy.finish(revision), true, moving, wait)
       failed = false
+      // The fence is lowered after the write is answered: a stalled read
+      // waits on the directory meanwhile, and a read of the committed
+      // revision lowers it as well (serving-copy.ts `publish`).
+      background(apart(() => lower(copy, revision, committed, wait)))
       return out
     }
   } finally {
     if (failed) await mend(copy, committed)
+  }
+}
+
+let lower = async (
+  copy: ServingCopyDoor,
+  revision: number,
+  committed: () => number,
+  wait: ReturnType<typeof jittered>,
+) => {
+  try {
+    await retried(() => copy.finish(revision), true, moving, wait)
+  } catch (e) {
+    if (!moving(e)) defect(e, { request: 'serving fence finish' })
+    await mend(copy, committed)
   }
 }
 

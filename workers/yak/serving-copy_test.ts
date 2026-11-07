@@ -291,3 +291,22 @@ test('serving copy: settle finishes a committed fence, rewinds a rolled-back one
   equal(copy.valid(n), false)
   equal(restart().valid(k + 1), false)
 })
+
+test('serving copy: a retired copy answers nobody and no fence lowers it', () => {
+  let { copy } = fixture()
+  copy.put(0, '.app', 'body')
+  let at = copy.begin()
+  copy.retire()
+  let revision = copy.revision
+  unavailable(copy, '.app')
+  equal(
+    [
+      copy.finish(revision),
+      copy.settle(revision, at),
+      copy.publish(revision, '.app', 'body'),
+      copy.valid(revision),
+    ],
+    [false, false, false, false],
+  )
+  unavailable(copy, '.app')
+})

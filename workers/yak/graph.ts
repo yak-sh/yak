@@ -14,9 +14,12 @@ import {
 } from './store-schema.ts'
 export { fitOf, KV, shapeOf, stands } from './store-schema.ts'
 import {
+  COPY,
   copyOf,
   EPOCH,
   fenced,
+  FORMER,
+  handover,
   mend,
   READS,
   readsAnswer,
@@ -613,6 +616,8 @@ let clockOf = ({ now, timer }: Time): Clock => ({
 // as data.
 type Word =
   | 'directory-revision'
+  // The serving copy the directory fences (directory-copy.ts `handover`).
+  | 'serving-copy'
   | 'policy'
   | 'name'
   | 'vocab'
@@ -1557,7 +1562,6 @@ export class Store {
                       let named = rest.flatMap((b) =>
                         deleted(b) ? ['$delete'] : comps(b).map(([n]) => n)
                       )
-                      console.log('DEBUG', JSON.stringify(rest))
                       throw new Error(
                         `An unfenced write committed ${named}`,
                       )
@@ -1655,7 +1659,7 @@ export class Store {
             )
           let batch = meta ? this.#copyBatch.getStore() : undefined
           if (batch != null) return under(batch)
-          let copy = meta && !opts?.check ? copyOf(this.#bind) : undefined
+          let copy = meta && !opts?.check ? this.#copy() : undefined
           if (!copy) return under(-1)
           // Effects may themselves write the directory and acquire a newer
           // fence. Only explicit synchronous mover batches reuse an epoch.
@@ -1859,6 +1863,17 @@ export class Store {
   #get(k: Word): string | null {
     return this.#slots.read(k)
   }
+
+  /** The directory's door to its serving copy, handed over from the one it
+   * fenced before: a directory that has committed under a fence and holds no
+   * mark of which copy fenced it under the former one. */
+  #copy = () =>
+    handover(
+      this.#bind as Env,
+      this.#get('serving-copy') ??
+        (this.#get('directory-revision') ? FORMER : null),
+      () => this.#put('serving-copy', COPY),
+    )
 
   /** The revision the directory holds committed, read past a rolled-back
    * write's memory of it. */
@@ -3267,7 +3282,7 @@ export class Store {
         let vocabWas = this.#get('vocab')
         try {
           let m = this.#mover(held, rule)
-          let copy = name == PLATFORM_STORE ? copyOf(this.#bind) : undefined
+          let copy = name == PLATFORM_STORE ? this.#copy() : undefined
           let plan = this.#tx(() => batch(m, rule, was, SIZE))
           if (plan.rows.length) left--
           if (plan.forward.length) {
@@ -4963,9 +4978,7 @@ export class Store {
   #asked = served(async (request) => {
     // Capture before any yield: a read begun before a mutation cannot fill the
     // copy at the newer revision, even if its response arrives afterwards.
-    let copy = this.#get('name') == PLATFORM_STORE && this.#bind.SERVING_COPY
-      ? copyOf(this.#bind as Env)
-      : undefined
+    let copy = this.#get('name') == PLATFORM_STORE ? this.#copy() : undefined
     if (copy && new URL(request.url).searchParams.get('mend') == '1') {
       await mend(copy, this.#committed)
     }

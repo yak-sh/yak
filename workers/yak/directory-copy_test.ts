@@ -2,8 +2,11 @@ import { clock, test } from '@yaks/testing'
 import { assertEquals, assertRejects } from '@std/assert'
 import {
   anonymousPage,
+  COPY,
   EPOCH,
+  FORMER,
   gathered,
+  handover,
   publicDirectory,
   READS,
   readsAnswer,
@@ -353,4 +356,46 @@ test('a long list of reads takes the trips its addresses need', async () => {
   let long = '.x'.repeat(1500)
   await Promise.all(['a', 'b', 'c'].map((n) => ask(long + n)))
   assertEquals(trips.map((t) => t.length), [2, 1])
+})
+
+// The directory moves to a new copy (`handover`): the former copy is retired
+// before the first fence the directory raises on the new one.
+test('a handover retires the former copy before its first fence', async () => {
+  let cores = new Map<string, ServingCopy>()
+  let calls: string[] = []
+  let retiring!: () => void
+  let door = (name: string): ServingCopyDoor => {
+    let core = new ServingCopy({
+      persistence: { read: () => undefined, write: () => {} },
+    })
+    cores.set(name, core)
+    return {
+      begin: (
+        at,
+      ) => (calls.push(`begin ${name}`), Promise.resolve(core.begin(at))),
+      finish: (n) => Promise.resolve(core.finish(n)),
+      revision: () => Promise.resolve(core.revision),
+      retire: () =>
+        new Promise<boolean>((done) => retiring = () => done(core.retire()))
+          .finally(() => calls.push(`retire ${name}`)),
+      put: (n, k, b) => Promise.resolve(core.put(n, k, b)),
+      get: () => Promise.resolve(null),
+    }
+  }
+  let SERVING_COPY = { idFromName: (name: string) => name, get: door }
+  let moved = 0
+  let copy = handover({ SERVING_COPY }, FORMER, () => moved++)!
+  let begun = copy.begin(7)
+  await new Promise((r) => setTimeout(r, 0))
+  let early = [...calls]
+  retiring()
+  assertEquals(await begun, 8)
+  assertEquals(early, [])
+  assertEquals(calls, [`retire ${FORMER}`, `begin ${COPY}`])
+  assertEquals(moved, 1)
+  assertEquals(cores.get(FORMER)!.valid(cores.get(FORMER)!.revision), false)
+  // Once handed over, the directory fences the new copy alone.
+  calls.length = 0
+  await handover({ SERVING_COPY }, COPY, () => moved++)!.begin(8)
+  assertEquals(calls, [`begin ${COPY}`])
 })

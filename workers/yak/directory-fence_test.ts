@@ -718,23 +718,39 @@ await proof('a failed begin RPC prevents the directory mutation', async () => {
   }
 })
 
+// A write is answered once it commits under its fence, and the fence is
+// lowered after: a finish still on its way holds the answer back no longer.
 await proof(
-  'a lost finish leaves the committed mutation closed across restart',
+  'a committed write is answered before its fence is lowered',
+  async () => {
+    let f = await fixture()
+    let release!: () => void
+    f.onFinish(() => new Promise<void>((r) => release = r))
+    await f.at.apply(patch, KERNEL)
+    let fenced = unavailable(f)
+    release()
+    await f.settle()
+    return () => {
+      equal(fenced, true)
+      equal(f.finishes, [f.initial + 1])
+      ok(f.core().valid(f.initial + 1))
+    }
+  },
+)
+
+await proof(
+  'a lost finish still answers the write, and the fence is mended',
   async () => {
     let f = await fixture()
     f.onFinish(() => Promise.reject(new Error('finish RPC lost')))
     let error = await refusal(() => f.at.apply(patch, KERNEL))
+    await f.settle()
     let committed = f.committed()
-    f.restart()
-    let rows = await f.at.query('.entity.eid=app&.app')
-    let blocked = unavailable(f)
     return () => {
-      ok(error.includes('finish RPC lost'), error)
+      equal(error, '')
       equal(committed, { access: 'private', epoch: String(f.initial + 1) })
-      equal((rows[0].app as { access: string }).access, 'private')
       equal(f.finishes, [])
-      equal(blocked, true)
-      equal(f.core().put(f.initial + 1, '.app', f.body), false)
+      ok(f.core().valid(f.initial + 1))
     }
   },
 )

@@ -75,7 +75,7 @@ export class ServingCopy {
 
   /** Only the latest mutation may unblock; bodies are filled separately. */
   finish(revision: number): boolean {
-    if (revision !== this.#revision) return false
+    if (revision !== this.#revision || this.#retired) return false
     if (!this.#blocked) return true
     this.#persist(revision, false, this.#answers)
     this.#blocked = false
@@ -91,7 +91,7 @@ export class ServingCopy {
    * cleared by begin and refill from the directory.
    */
   settle(revision: number, committed: number): boolean {
-    if (revision !== this.#revision) return false
+    if (revision !== this.#revision || this.#retired) return false
     // An open copy at another revision than the directory's committed one
     // serves nothing a read can confirm: it moves to the committed revision.
     if (!this.#blocked) {
@@ -106,6 +106,24 @@ export class ServingCopy {
     this.#revision = committed
     this.#blocked = false
     return true
+  }
+
+  /**
+   * The directory fences another copy now (directory-copy.ts `handover`), so
+   * this one is fenced for good: blocked at the last revision there is, which
+   * no write commits under and no finish, settle or fill lowers. A Worker
+   * still on older code reads here, and is answered by the directory alone.
+   */
+  retire(): boolean {
+    this.#revision = Number.MAX_SAFE_INTEGER
+    this.#blocked = true
+    this.#answers.clear()
+    this.#persist(this.#revision, true, this.#answers)
+    return true
+  }
+
+  get #retired(): boolean {
+    return this.#revision == Number.MAX_SAFE_INTEGER
   }
 
   /**
