@@ -1,7 +1,7 @@
 // The data editor through the whole kernel (probe.ts `kernel`): its door, then
 // public/data.js driven on a linkedom document over the served client, as a
 // clerk would use it on a township's notices, meetings and links.
-import { test } from '@yaks/testing'
+import { test, until } from '@yaks/testing'
 import { assert, assertEquals, assertStringIncludes } from '@std/assert'
 import { parseHTML } from 'linkedom'
 import {
@@ -67,16 +67,22 @@ Deno.writeTextFileSync(
 let served = await import(`file://${dir}/client.js`)
 Deno.removeSync(dir, { recursive: true })
 
-let settled = async () => {
-  for (let i = 0; i < 40; i++) await new Promise((go) => setTimeout(go, 5))
-}
-
 // One person's page: the editor on a document of its own, and what a person
 // does to it. The drafts are a desk in memory; @yaks/draft has its own tests.
 let page = (cookie: string) => {
   let door = browser(k, host, cookie)
   let store = served.store(`${door.origin}/site/api/`)
   let typed = new Map<string, string>()
+  // The page's work is its calls to the store: it has settled when none is
+  // in flight. A handler starts its call as it is dispatched, and the next
+  // call of a chain starts in the microtasks before `until` looks again.
+  let busy = 0
+  let held =
+    <A extends unknown[], T>(f: (...a: A) => Promise<T>) => (...a: A) => {
+      busy++
+      return f(...a).finally(() => busy--)
+    }
+  let settled = () => until(() => busy == 0, { label: 'the page’s calls' })
   let { document } = parseHTML(
     '<!doctype html><html><body><div id="data"></div></body></html>',
   )
@@ -87,16 +93,19 @@ let page = (cookie: string) => {
     addEventListener: (_: string, fn: () => unknown) => hear = fn,
   }
   let client = {
-    ...store,
+    me: held(store.me),
+    query: held(store.query),
+    apply: held(store.apply),
+    upload: held(store.upload),
     draftEid: served.draftEid,
     drafts: () => ({
       text: (p: string) => typed.get(p) ?? '',
       type: (p: string, text: string) => typed.set(p, text),
-      spend: async (p: string, also: unknown[] = []) => {
+      spend: held(async (p: string, also: unknown[] = []) => {
         if (also.length) await store.apply(also)
         typed.delete(p)
         return true
-      },
+      }),
     }),
   }
   let go = async (hash: string) => {
@@ -169,7 +178,6 @@ test('the page carries the app’s words, escaped, and the script is served', as
 test('a row is added, listed, edited, linked, given a file and removed', async () => {
   let p = page(them.cookie)
   await p.start()
-  await settled()
   // Everything the app keeps, without its link words.
   assertEquals(p.rows(), ['Announcement', 'Meeting', 'Link'])
 
