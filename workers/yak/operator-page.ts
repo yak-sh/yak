@@ -35,7 +35,6 @@ import {
   type File,
   keepFile,
   type Request as Intake,
-  rootOf,
 } from './operator-channels.ts'
 import { mailFrom } from './post.ts'
 import { parts } from './form.ts'
@@ -739,9 +738,16 @@ export let conversationOf = async (
   everyone = false,
   opens?: string,
 ) => {
-  let none = { task: '', begun: '', title: '', html: '', making: null }
+  let none = {
+    root: '',
+    task: '',
+    begun: '',
+    title: '',
+    html: '',
+    making: null,
+  }
   if (open == 'new') return none
-  let { task, begun, title, html, waiting, making } = await operatorDoor(
+  let { root, task, begun, title, html, waiting, making } = await operatorDoor(
     env,
     space,
     who,
@@ -751,6 +757,7 @@ export let conversationOf = async (
     if (e.status != 404) throw e
     return { ...none, waiting: [] }
   }) as {
+    root: string
     task: string
     begun: string
     title: string
@@ -758,7 +765,14 @@ export let conversationOf = async (
     waiting: Bundle[]
     making: Underway | null
   }
-  return { task, begun, title, html: html + conversation(waiting), making }
+  return {
+    root,
+    task,
+    begun,
+    title,
+    html: html + conversation(waiting),
+    making,
+  }
 }
 
 // The Operator's settings, which the dashboard draws beside its side like
@@ -1502,12 +1516,14 @@ export let chatPage = async (
   let at = managePath('operator', space.slug)
   // The space's address opens the person's one conversation, and a new chat
   // only until they have one (T-141349).
-  let root = rootOf(space.eid, who.person ?? '')
   let [talked, news, newcomer] = await Promise.all([
-    conversationOf(env, space, who, at, open == 'new' ? root : open),
+    conversationOf(env, space, who, at, open == 'new' ? '' : open),
     updatesOf(env, space, who),
     who.person ? directoryOf(env.STORE).newcomer(who.person) : false,
   ])
+  // Their one conversation, as the store names it: what an empty `open` asks
+  // for (operator-host.ts `/operator/conversation`).
+  let root = talked.root
   if (open == 'new' && talked.title) open = root
   let fresh = open == 'new'
   let first = beside.name?.trim().split(/\s+/)[0]
@@ -1597,6 +1613,7 @@ export let chatPage = async (
       who,
       space,
       open,
+      root,
       talked.begun || open,
       follows,
     ),
@@ -1715,6 +1732,7 @@ let chatScript = (
   who: Who,
   space: Space,
   open: string,
+  root: string,
   talk: string,
   follows: Follows,
 ) =>
@@ -1723,7 +1741,7 @@ import { browserDrafts } from '/_draft.js'
 import { redraw } from '/redraw.js'
 import { when } from '/when.js'
 let open = ${JSON.stringify(open)}
-let root = ${JSON.stringify(rootOf(space.eid, who.person ?? ''))}
+let root = ${JSON.stringify(root)}
 let chats = ${JSON.stringify(chatPath(space.slug, ''))}
 let box = document.querySelector('[data-conversation]')
 let heading = document.querySelector('[data-title]')

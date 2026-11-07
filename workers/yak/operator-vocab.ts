@@ -68,6 +68,11 @@ export let operatorDoc: VocabDoc = {
         space: { type: 'string', ref: 'entity', death: 'keep' },
         person: { type: 'string', ref: 'person', death: 'keep' },
         administrative: { type: 'boolean' },
+        conversation: {
+          type: 'boolean',
+          description:
+            "The person's one conversation with the Operator (operator-channels.ts `rootAt`), whoever's it was begun as.",
+        },
         files: { type: 'array', items: { type: 'object' } },
       },
     },

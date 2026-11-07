@@ -9,9 +9,11 @@ import { ownerOf, owns } from './operator-access.ts'
 import type { Held } from './build-door.ts'
 import { type Operator, readOperator } from './operator.ts'
 import {
+  handOver,
   letterOf,
   receive,
   type Request,
+  rootAt,
   rootOf,
   textOf,
 } from './operator-channels.ts'
@@ -296,15 +298,16 @@ let conversationsOf = async (
   everyone?: Named,
 ) => {
   if (!everyone) {
-    let root = rootOf(space, person)
+    let root = await rootAt(store, space, person)
     let [held] = await store.g.get([root])
     return held?.session && await owns(store, root, { person, space })
       ? [{ root, title: CONVERSATION }]
       : []
   }
   let held = (await store.g.read('.operator_session ?spawned')).filter((b) =>
-    !b.spawned &&
-    b.entity.eid == rootOf(space, String(comp(b, 'operator_session')!.person))
+    !b.spawned && (comp(b, 'operator_session')!.conversation ||
+      b.entity.eid ==
+        rootOf(space, String(comp(b, 'operator_session')!.person)))
   )
   return await Promise.all(held.map(async (b) => ({
     root: b.entity.eid,
@@ -354,9 +357,11 @@ export let helpingOf = async (
   named: Named = nameless,
 ): Promise<Helping[]> => {
   let helpers = await store.g.read(
-    `.spawned.parent=${
-      rootOf(space, person)
-    } ?created .order=-created.at .limit=${most}`,
+    `.spawned.parent=${await rootAt(
+      store,
+      space,
+      person,
+    )} ?created .order=-created.at .limit=${most}`,
   )
   return await Promise.all(helpers.map(async (helper) => {
     let { worked, lines } = await helperOf(store, helper)
@@ -493,6 +498,16 @@ export let openedOf = async (
  * `making`). `called` is what its Operator is called, and `opens` where a
  * conversation opens by its id, at the chat app's `at` unless the admin's.
  */
+// A conversation that is not here, or not yet.
+const NONE = {
+  task: '',
+  begun: '',
+  title: '',
+  html: '',
+  waiting: [] as Bundle[],
+  making: null,
+}
+
 export let conversationOf = async (
   store: Store,
   at: string,
@@ -554,16 +569,7 @@ export let conversationOf = async (
     }
   }
   let held = found.task
-  if (!held) {
-    return {
-      task: '',
-      begun: '',
-      title: '',
-      html: '',
-      waiting: [],
-      making: null,
-    }
-  }
+  if (!held) return NONE
   let task = held.entity.eid
   let requests = await requested(store)
   let sessions = await sessionsOf(store, task)
@@ -1014,19 +1020,31 @@ export let operatorRequest = async (
     if ('request' in answer) await armed()
     return Response.json(answer)
   }
+  // What `from` had here is the person's now (newcomer.ts `keep`).
+  if (path == '/operator/handover') {
+    await handOver(store, spaceId, String(args.from ?? ''), person)
+    return Response.json({})
+  }
+  // The conversation open, or with none named the person's own, which
+  // `root` names either way, begun or not.
   if (path == '/operator/conversation') {
-    if (!everyone && !await own(String(args.open ?? ''))) return missing()
-    return Response.json(
-      await conversationOf(
+    let root = await rootAt(store, spaceId, person)
+    let open = String(args.open || root)
+    if (!everyone && !await own(open)) {
+      return args.open ? missing() : Response.json({ ...NONE, root })
+    }
+    return Response.json({
+      root,
+      ...await conversationOf(
         store,
         String(args.at ?? ''),
-        String(args.open ?? ''),
+        open,
         operator.named,
         everyone,
         held.called,
         typeof args.opens == 'string' ? args.opens : undefined,
       ),
-    )
+    })
   }
   if (path == '/operator/remove') {
     // A person removes their own; the platform's admin anyone's.

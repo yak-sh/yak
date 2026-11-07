@@ -26,6 +26,7 @@ import { phoneTexts } from './phone-move.ts'
 import type { Declared } from './operator-persona.ts'
 import type { operatorStore } from './operator-store.ts'
 import { onPage, unsaid } from './operator-view.ts'
+import { handover, naming } from './handover.ts'
 
 /** What a person reads when the Operator could not start on their request
  * for a reason that is not theirs to fix. */
@@ -242,6 +243,46 @@ export let fire = async (
  * which forks for the work (D-137704). */
 export let rootOf = (space: string, person: string) =>
   derivedEid(`operator-root|${space}|${person}`)
+
+/** The person's one conversation in `store`: the one said to be theirs
+ * (`operator_session.conversation`), as a conversation handed to them is
+ * (`handOver`), else the one `rootOf` begins for them. */
+export let rootAt = async (store: Store, space: string, person: string) => {
+  let mine = rootOf(space, person)
+  let held = person
+    ? await store.g.read(
+      `.operator_session.person=${person}&.operator_session.conversation=true&!spawned&.fields=entity.eid`,
+    )
+    : []
+  return held.length && !held.some((b) => b.entity.eid == mine)
+    ? held[0].entity.eid
+    : mine
+}
+
+/** Everything in a space's Operator store that named `from` names `to`
+ * (handover.ts), so their conversation, requests, asks, wake-ups, drafts and
+ * Updates are `to`'s: newcomer.ts `keep`, into an account they already had.
+ * Their conversation stays where it is and is said to be `to`'s one. */
+export let handOver = async (
+  store: Store,
+  space: string,
+  from: string,
+  to: string,
+) => {
+  let root = rootOf(space, from)
+  let moved = handover(await store.g.read(naming(from)), from, to).map((b) =>
+    b.entity.eid == root && b.operator_session
+      ? {
+        ...b,
+        operator_session: {
+          ...part<Comp>(b, 'operator_session'),
+          conversation: true,
+        },
+      }
+      : b
+  )
+  if (moved.length) await store.g.apply(moved, { trusted: true })
+}
 
 export let requestId = (space: string, message: string) =>
   message

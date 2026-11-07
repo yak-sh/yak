@@ -79,7 +79,7 @@ import {
   attachmentId,
   type File,
   mailSend,
-  rootOf,
+  rootAt,
   SHOWN,
   starting,
 } from './operator-channels.ts'
@@ -1223,12 +1223,13 @@ export let operating = (
   )))
 
   // Whoever carries a session on, the newest words' reach applies, and the
-  // files it was given stay with it.
+  // files it was given stay with it. A person's one conversation says so.
   let carrying = async (
     session: string,
     held: Asker,
     space: Space,
     o: Asking,
+    conversation = false,
   ) => {
     let files = [
       ...new Map(
@@ -1242,6 +1243,7 @@ export let operating = (
         space: space.eid,
         person: held.person,
         ...held.administrative ? { administrative: true } : {},
+        ...conversation ? { conversation } : {},
         ...files.length ? { files } : {},
       },
     }
@@ -1300,13 +1302,13 @@ export let operating = (
     // A person's words with no task are the next input of their one
     // conversation with the Operator.
     if (!named) {
-      let session = rootOf(space.eid, held.person)
+      let session = await rootAt(store, space.eid, held.person)
       if ((await g.get([input]))[0]) return { task: '', session, input }
       if (!await conversed(store, session)) {
         await started(session, held.person, space)
       }
       await g.apply([
-        await carrying(session, held, space, o),
+        await carrying(session, held, space, o, true),
         given(session, input, text, by, o),
       ], { trusted: true })
       options.tell?.(session)
@@ -1399,11 +1401,11 @@ export let operating = (
   // The person's one conversation, begun where it has not been: `fresh` is
   // then what it carries on with, for the caller's write to apply.
   let conversing = async (held: Asker, space: Space) => {
-    let session = rootOf(space.eid, held.person)
+    let session = await rootAt(store, space.eid, held.person)
     if (await conversed(store, session)) return { session }
     await readying(held, space)
     await started(session, held.person, space)
-    return { session, fresh: await carrying(session, held, space, {}) }
+    return { session, fresh: await carrying(session, held, space, {}, true) }
   }
 
   // What another model working for the person is offered (a call's backend
@@ -1535,7 +1537,7 @@ export type Asking = {
   // The request the words came in, which makes giving them again a no-op.
   request?: string
   // The task the words carry on; without one they go to the person's
-  // conversation with the Operator (`rootOf`).
+  // conversation with the Operator (`rootAt`).
   task?: string
   // The session a new task starts, for a replay to find.
   session?: string

@@ -28,6 +28,7 @@ import { type Directory, idOf, newcomerIs, stamp } from './directory.ts'
 import type { Row, Space } from './directory.ts'
 import type { Namespace } from './door.ts'
 import type { Env as Platform } from './env.ts'
+import { handover, naming } from './handover.ts'
 import { meta } from './meta.ts'
 import { type Ctx, refuse } from './tool.ts'
 
@@ -126,6 +127,22 @@ export let confined = (ctx: Ctx, t: Tool): Tool =>
     },
   }
 
+// Bundles for the same rows as one bundle a row, each component's
+// properties together.
+let joined = (bundles: Bundle[]) =>
+  [...Map.groupBy(bundles, (b) => b.entity.eid).values()].map((same) =>
+    same.reduce((a, b) => {
+      let out: Bundle = { ...a }
+      for (let [name, comp] of Object.entries(b)) {
+        let had = out[name]
+        out[name] = had && comp && typeof had == 'object'
+          ? { ...had as Comp, ...comp as Comp }
+          : comp
+      }
+      return out
+    })
+  )
+
 let dayOf = (now: Date) => now.toISOString().slice(0, 10)
 let tallyEid = (day: string, source = '') =>
   derivedEid('newcomer-builds|' + day + (source ? '|' + source : ''))
@@ -202,10 +219,12 @@ export let oneBuild = (env: Env, space: Space, now = new Date()) =>
  * newcomer's own (signin.ts `addressee`), so `person` is `was`: they stay
  * who they were, and their space, its apps, its chat and their Updates stay
  * theirs; they only stop being a newcomer. An address somebody already held
- * moves the newcomer's owner seats to them, so the spaces, their apps and
- * their chats are theirs, and the browsers the newcomer held too, so the
- * guest work and the visits made on them are theirs (attribution.ts,
- * visit.ts). Each space is lifted to its plan's budget, and to the starter
+ * hands them everything that named the newcomer (handover.ts): in the
+ * directory their owner seats, so the spaces and their apps are theirs, and
+ * the browsers the newcomer held, so the guest work and the visits made on
+ * them are theirs (attribution.ts, visit.ts); and in each space's Operator
+ * store their chat, its requests and asks (operator-channels.ts
+ * `handOver`). Each space is lifted to its plan's budget, and to the starter
  * too when this is the first space `person` has started. A space is their
  * own only when they own none yet. The newcomer then holds nothing and goes
  * (erase.ts `vacated`), and the browser is signed in as `person`. Nothing
@@ -237,22 +256,19 @@ export let keep = async (
     })
   }
   if (!newcomerIs(came)) return
-  let [theirs, mine, [row], browsers] = await Promise.all([
+  let [theirs, mine, [row], named] = await Promise.all([
     dir.seats(was, 'owner'),
     dir.seats(person, 'owner'),
     meta(env).query(`.entity.eid=${person}&?started`),
-    meta(env).query(`.browser.by=${was}`),
+    meta(env).query(naming(was)),
   ])
   let first = !row?.started && theirs.length > 0
-  let moved = [
-    ...browsers.map((b) => ({
-      entity: { eid: b.entity.eid },
-      browser: { by: person },
-    })),
+  let moved = joined([
+    ...handover(named as Bundle[], was, person),
     ...theirs.flatMap((s) => [
       {
         entity: { eid: s.seat },
-        member: { person, own: !mine.length && s == theirs[0] },
+        member: { own: !mine.length && s == theirs[0] },
       },
       {
         entity: { eid: s.space.eid },
@@ -263,8 +279,14 @@ export let keep = async (
     ...first
       ? [{ entity: { eid: person }, started: { space: theirs[0].space.eid } }]
       : [],
-  ]
+  ])
   if (moved.length) await stamp(env, { entities: moved })
+  let { operatorDoor } = await import('./build-door.ts')
+  for (let s of theirs) {
+    await operatorDoor(env, s.space, { person, role: 'owner' }, 'handover', {
+      from: was,
+    })
+  }
   let { vacated } = await import('./erase.ts')
   await vacated(env, dir, was, { person, role: 'owner' })
 }

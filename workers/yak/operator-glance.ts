@@ -7,7 +7,7 @@
 // which the voice asks (operator-calls.ts `ASK`).
 import type { Directory } from './directory.ts'
 import { moment } from './html.ts'
-import { rootOf } from './operator-channels.ts'
+import { rootAt } from './operator-channels.ts'
 import { type Helping, helpingOf } from './operator-host.ts'
 import type { operatorStore } from './operator-store.ts'
 import { updatesOf } from './operator-updates.ts'
@@ -42,9 +42,11 @@ let cut = (text: string, most = LONGEST) => {
 export let recentOf = async (g: Glance, most = RECENT) => {
   // Most entries are steps and tool calls, not words.
   let entries = await g.store.g.read(
-    `.entry.session=${rootOf(g.space, g.person)}&.order=-entry.seq&.limit=${
-      most * 8
-    }&*`,
+    `.entry.session=${await rootAt(
+      g.store,
+      g.space,
+      g.person,
+    )}&.order=-entry.seq&.limit=${most * 8}&*`,
   )
   return wordsOf(entries).slice(-most).map((line) => cut(line)).join('\n')
 }

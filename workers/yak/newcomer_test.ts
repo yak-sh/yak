@@ -25,7 +25,7 @@ import {
 } from './newcomer.ts'
 import { collected } from './erase.ts'
 import { answer } from './admin.ts'
-import { META } from './directory.ts'
+import { type Id, idOf, META } from './directory.ts'
 import { meta } from './meta.ts'
 import { COOKIE, sign } from './lib/token.ts'
 import type { Ctx } from './tool.ts'
@@ -84,7 +84,8 @@ let known = await k.dir.known(owner)
 
 // Keeping: Dana, new here, gives her address in the first chat's card and
 // spends the code the letter brings, on the browser she built on; Ana, who
-// has a space of her own, keeps the second beside it, and the browser its
+// has a space of her own, does the same on the browser that built the
+// second, which joins her account with its chat and the other browser its
 // newcomer built on.
 let person = async (address: string) => {
   let eid = crypto.randomUUID()
@@ -94,13 +95,13 @@ let person = async (address: string) => {
   return eid
 }
 let row = (eid: string) => meta(env).query(`.entity.eid=${eid}`)
-let signIn = (path: string, fields: Record<string, string>) =>
+let signIn = (path: string, fields: Record<string, string>, on = cookie) =>
   k.at('yaks.app', path, {
     method: 'POST',
     redirect: 'manual',
     headers: {
       'content-type': 'application/x-www-form-urlencoded',
-      cookie,
+      cookie: on,
     },
     body: new URLSearchParams(fields).toString(),
   })
@@ -128,8 +129,23 @@ await k.dir.stamp({ entities: [{ entity: { eid: browser }, browser: {} }] })
 await k.dir.stamp({
   entities: [{ entity: { eid: browser }, browser: { by: otherNewcomer } }],
 })
-await keep(env, k.dir, otherNewcomer, ana)
-let keptBrowser = (await row(browser))[0]?.browser
+let otherBack = new URL(second.headers.get('location')!).pathname
+await (await signIn(
+  '/login',
+  { address: 'ana@example.com', return: otherBack },
+  cookieOf(second),
+)).body?.cancel()
+let anaIn = await signIn('/login/code', {
+  address: 'ana@example.com',
+  code: await mailed(k, 'ana@example.com'),
+  return: otherBack,
+}, cookieOf(second))
+let anaChat = await k.at('yaks.app', otherBack, {
+  headers: { cookie: cookieOf(anaIn) },
+})
+let anaChatSaid = parseHTML(await anaChat.text()).document.body
+  .textContent ?? ''
+let keptBrowser = (await row(browser))[0]?.browser as { by: Id }
 let keptNewcomer = await row(otherNewcomer)
 let danaSeats = await k.dir.seats(dana, 'owner')
 let anaSeats = await k.dir.seats(ana, 'owner')
@@ -232,7 +248,7 @@ test('a newcomer is a person with no address yet', () => {
 })
 
 test("keeping into an account takes the newcomer's browser, and their row goes", () => {
-  assertEquals(keptBrowser, { by: ana })
+  assertEquals(idOf(keptBrowser.by), ana)
   assertEquals(keptNewcomer, [])
 })
 
@@ -271,6 +287,18 @@ test("an address new here becomes the newcomer's own, and their chat stays their
   assertEquals(chatAfter.status, 200)
   assert(!chatAfterSaid.includes('This chat is not here'), chatAfterSaid)
   assert(!chatAfterSaid.includes('Keep this app'), 'nothing left to keep')
+})
+
+test("an address with an account takes the newcomer's chat, signed in", () => {
+  assertEquals(anaIn.status, 303)
+  assertEquals(
+    new URL(anaIn.headers.get('location')!, 'https://yaks.app').pathname,
+    otherBack,
+  )
+  assertEquals(anaChat.status, 200)
+  assert(!anaChatSaid.includes('This chat is not here'), anaChatSaid)
+  assert(anaChatSaid.includes('A chore chart'), anaChatSaid)
+  assert(!anaChatSaid.includes('Keep this app'), 'nothing left to keep')
 })
 
 test('an address new here keeps the space as its own, at its plan', async () => {
