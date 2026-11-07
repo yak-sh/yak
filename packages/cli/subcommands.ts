@@ -4,7 +4,9 @@
 // (./words.ts) and their terminal controls (`./cli`), so listing them opens
 // nothing and loads none of the code that opens a graph: a usage page, a help
 // page and a mistyped word cost a command no more than the declarations. The
-// one a command line runs imports that code then (./local.ts).
+// one a command line runs is asked of the `yak serve` running over that graph
+// (./warm.ts), and only where none can answer it imports the code that opens
+// the graph here (./local.ts).
 
 import { type Config, read, subpath } from './config.ts'
 import type { CliFacet } from './host.ts'
@@ -12,6 +14,7 @@ import { type Declarations, declarations } from './declarations.ts'
 import { prepare } from './prepare.ts'
 import type { Command, Ctx } from './run.ts'
 import { traceCommand } from './trace_control.ts'
+import { warm } from './warm.ts'
 
 /** What a listing read before any graph was open: the config, its plugins'
  * words, and the terminal controls each plugin's `./cli` holds, beside the
@@ -49,6 +52,8 @@ export let commands = async (c: Ctx): Promise<Command[]> => {
         let code = await cli?.tools?.[declared.name]?.(args, c)
         if (code !== undefined) return code
       }
+      let code = await warm(c, config, declared, args)
+      if (code !== undefined) return code
       return (await local(declared)).tool(c, declared, args, listing)
     },
   }))

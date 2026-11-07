@@ -365,7 +365,7 @@ export let runs = (
       await hooks()
     // The `yak serve` of this graph's config, where it would listen.
     let server = str(args.server) ||
-      (await import('@yaks/api/tools')).served(host.config ?? {})
+      (await import('@yaks/api/address')).served(host.config ?? {})
     let remove = !!args.remove
     let path = install(str(args.path) || settingsPath(), {
       server,

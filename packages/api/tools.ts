@@ -44,40 +44,10 @@ import type { Runs } from '@yaks/graph/tools'
 import type { Runner } from '@yaks/tools'
 import { CallError } from '@yaks/tools/errors'
 import { denoListen, denoReady } from './deno.ts'
+import { DB, HOSTNAME, PORT, served } from './address.ts'
 import type { Handler, Route } from './route.ts'
 
-/** The port `serve` listens on when neither the call nor the config names
- * one. */
-export let PORT = 8787
-
-/** The interface `serve` binds when neither the call nor the config names
- * one: this machine alone. A server that answers every request as the machine
- * itself (@yaks/cli's `doorman`) is offered to a network only when a config
- * says so. */
-export let HOSTNAME = '127.0.0.1'
-
-/** Where a client on this machine reaches the server a config serves: its
- * port, else {@link PORT}, at its hostname, or this machine's own address
- * where it names none or every interface.
- *
- * ```ts
- * import { assertEquals } from '@std/assert'
- * import { served } from '@yaks/api/tools'
- *
- * assertEquals(served({}), 'http://127.0.0.1:8787')
- * assertEquals(
- *   served({ port: 5173, hostname: '0.0.0.0' }),
- *   'http://127.0.0.1:5173',
- * )
- * ```
- */
-export let served = (
-  config: { port?: number; hostname?: string },
-): string => {
-  let { hostname = HOSTNAME, port = PORT } = config
-  let any = ['0.0.0.0', '::', '[::]'].includes(hostname)
-  return `http://${any ? HOSTNAME : hostname}:${port}`
-}
+export { HOSTNAME, PORT, served } from './address.ts'
 
 /** Seconds a stopping server lets requests finish before cancelling reads
  * and cutting streamed answers. Admitted writes drain even after this grace
@@ -108,6 +78,44 @@ export type Serving = {
 }
 
 let seconds = (ms: number): string => `${Math.round(ms / 1000)}s`
+
+/** `handler`, serving the graph file `db`, for a request whose {@link DB}
+ * header names the file it means: the file this server serves is answered
+ * with the header said back, which is how a client knows the answer came from
+ * its graph, and any other is answered 421 Misdirected Request, with nothing
+ * run. A request naming none is answered as it always was.
+ *
+ * ```ts
+ * import { assertEquals } from '@std/assert'
+ * import { DB } from '@yaks/api/address'
+ * import { addressed } from '@yaks/api/tools'
+ *
+ * let handle = addressed(() => new Response('ok'), '/g.db')
+ * let asked = (db?: string) =>
+ *   handle(new Request('http://x/', { headers: db ? { [DB]: db } : {} }))
+ * let mine = await asked('/g.db')
+ * assertEquals([mine.status, mine.headers.get(DB)], [200, '/g.db'])
+ * assertEquals((await asked()).headers.get(DB), null)
+ * assertEquals((await asked('/copy.db')).status, 421)
+ * ```
+ */
+export let addressed =
+  (handler: Handler, db?: string): Handler => async (request) => {
+    let meant = request.headers.get(DB)
+    if (meant == null) return handler(request)
+    if (meant != db) {
+      return new Response('this server serves another graph', { status: 421 })
+    }
+    let answer = await handler(request)
+    if (answer.status < 200) return answer
+    let headers = new Headers(answer.headers)
+    headers.set(DB, meant)
+    return new Response(answer.body, {
+      status: answer.status,
+      statusText: answer.statusText,
+      headers,
+    })
+  }
 
 /** What a server says once it listens at `at`: the address and the graph,
  * then each door a route says something about, at `origin`, where a client on
@@ -168,7 +176,7 @@ export let runs = (host: Serving): Runs => ({
     if (args.share === true) await warmed()
     let at = ''
     let began = Date.now()
-    let active = requests(handler)
+    let active = requests(addressed(handler, host.config.db))
     let server
     try {
       server = denoListen({

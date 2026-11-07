@@ -16,15 +16,17 @@ import * as disk from '@yaks/file/io'
 //   yak recipes add_recipe --title 'Lemon cake' --serves 4
 //   cat bundles.ndjson | yak apply
 //
-//   yak --config yak.json task list   # opens that graph, runs the tool, exits
+//   yak --config yak.json task list   # asks its server, else opens that graph
 //   yak land                          # the same, on the checkout you are in
 //   yak serve --config yak.json       # the same, for a tool that stays up
 //
 // There is no server process to start. A config file names a graph — a SQLite
-// file and the plugins that read and write it — and a `yak` command opens it,
-// imports them, runs the tool in this process and exits. SQLite in WAL mode
-// accepts as many writers as there are commands running, so nothing waits on a
-// daemon somebody had to start. `--host` is for a graph this machine cannot
+// file and the plugins that read and write it — and a `yak` command asks the
+// `yak serve` already running over it, which holds those plugins loaded
+// (./warm.ts). Where none is running, the command opens the graph, imports
+// them, runs the tool in this process and exits. SQLite in WAL mode accepts as
+// many writers as there are commands running, so nothing waits on a daemon
+// somebody had to start. `--host` is for a graph this machine cannot
 // open as a file, and then the command talks to that machine's MCP server at
 // `/mcp`; `yak serve` is the process that answers one.
 //

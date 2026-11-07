@@ -82,9 +82,22 @@ imports `./views`, and `./tui` under `--tui`.
 A [host](../host/README.md) composes a graph and lends capabilities to its
 plugins. The CLI is the box's concrete host. A config file describes a local
 graph: its SQLite database, plugins, and host settings. A command that selects a
-config opens that graph in its own process, runs the requested tool, and exits.
-It does not require `yak serve`. SQLite uses WAL mode for file-backed graphs,
+config asks the `yak serve` running over that graph to run its tool, at the
+address the config says it listens on, through the same `/mcp` an agent's MCP
+tools use ([`warm.ts`](./warm.ts)). That server holds the graph's code loaded,
+so the command loads none of it. Where no server answers for that graph file,
+the command opens the graph in its own process, runs the tool, and exits, so it
+does not require `yak serve`. SQLite uses WAL mode for file-backed graphs,
 allowing separate CLI and server processes to share the database.
+
+A command stays in its own process when the server could not run it the same
+way: a tool that declares a role beyond the graph (`serve`), an answer held in
+the terminal (`--tui`), a plugin's terminal control, and a write typed at a
+keyboard with no session, which this process signs as the config's person. Every
+request names the graph file it means (`x-yak-db`, @yaks/api/address); the
+server serving that file says it back, and one serving another answers 421 and
+runs nothing, so a copy whose config names the same port never writes to the
+graph it was copied from.
 
 `--host` has a different meaning on the command line: it selects a remote
 hostname or origin whose MCP endpoint is `/mcp`. A bare hostname uses HTTPS.

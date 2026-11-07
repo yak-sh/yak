@@ -5,7 +5,8 @@ import * as disk from '@yaks/file/io'
 // runs the tool right here and exits — no server, no socket, nothing
 // listening.
 //
-// That is the ordinary way a `yak` command runs. SQLite in WAL mode accepts as
+// That is how a `yak` command runs where no `yak serve` answers for its graph
+// (./warm.ts asks the one that does). SQLite in WAL mode accepts as
 // many writers as there are commands running, each one serialized by the file
 // itself, so nothing bottlenecks on a process somebody has to remember to
 // start. `yak serve` is one more of those commands: a tool that stays up

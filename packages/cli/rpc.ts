@@ -19,8 +19,13 @@
 /** The newest MCP protocol version this client supports. */
 export let PROTOCOL = '2025-06-18'
 
-/** The server said no: a transport failure, or a JSON-RPC error. */
-export class Refused extends Error {}
+/** The server said no: a transport failure, or a JSON-RPC error, whose
+ * code it carries. */
+export class Refused extends Error {
+  constructor(message: string, readonly code?: number | string) {
+    super(message)
+  }
+}
 
 /** Nobody is signed in — the message is the sentence to print. */
 export class Unauthorized extends Error {}
@@ -40,6 +45,8 @@ export type Door = {
    * stores transcripts resolves it to that session and attributes the writes
    * to it (@yaks/session/graph); one that does not ignores the header. */
   via?: string | null
+  /** more headers sent on every request */
+  headers?: Record<string, string>
   fetch?: (request: Request) => Response | Promise<Response>
 }
 
@@ -92,6 +99,7 @@ export let rpc = (door: Door): Rpc => {
         ...(token ? { authorization: `Bearer ${token}` } : {}),
         ...(door.via ? { [VIA]: door.via } : {}),
         ...(session ? { 'mcp-session-id': session } : {}),
+        ...door.headers,
       },
       body: JSON.stringify({ jsonrpc: '2.0', id: ++n, method, params }),
     })
@@ -121,7 +129,7 @@ export let rpc = (door: Door): Rpc => {
           : SIGN_IN,
       )
     }
-    if (reply.error) throw new Refused(reply.error.message)
+    if (reply.error) throw new Refused(reply.error.message, reply.error.code)
     if (!reply.result) throw new Refused(`${door.url} said ${r.status}`)
     return reply.result
   }
