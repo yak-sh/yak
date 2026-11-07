@@ -11,7 +11,7 @@ import { PLATFORM_STORE } from '@yaks/platform/names'
 import { answered, KERNEL } from './meta.ts'
 import { background, caught, defect, within } from './defects.ts'
 import type { Env } from './env.ts'
-import { tallying } from './lib/hops.ts'
+import { apart, tallying } from './lib/hops.ts'
 
 export let useUntil = (now = Date.now()) =>
   new Date((Math.floor(now / 3_600_000) + 1) * 3_600_000).toISOString()
@@ -138,20 +138,22 @@ export let scheduleUse = (
  * it something: a page's scripts, whose first `/api/` call would otherwise wait
  * out the whole start (T-149697), or a birth's first write (T-143307). A new
  * object takes 150 to 500 ms to start before any code of ours runs in it, and
- * the start reads nothing it holds, so one nobody follows up keeps nothing. */
+ * the start reads nothing it holds, so one nobody follows up keeps nothing.
+ * Nothing waits on it, so it is no trip of the answer's (hops.ts `apart`). */
 export let wake = (
   env: Partial<Env>,
   store: string,
   retain?: (work: Promise<void>) => void,
 ): void => {
-  if (!env.STORE) return // Counted apart from the request's own trips (lib/hops.ts), since nobody
-  // waits on it.
+  let STORE = env.STORE
+  if (!STORE) return
   ;(retain ?? background)(
-    tallying(new Map(), () => storeOf(env.STORE!, store)(WARM, {}, KERNEL))
-      .then(
+    apart(() =>
+      storeOf(STORE, store)(WARM, {}, KERNEL).then(
         (r) => r.body?.cancel(),
         (e) => caught(e, { request: 'store warm', store }),
-      ),
+      )
+    ),
   )
 }
 

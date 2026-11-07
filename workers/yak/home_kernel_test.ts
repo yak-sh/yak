@@ -434,10 +434,11 @@ test('a dashboard page reads the directory in one trip', async () => {
     assertEquals(await trips(managePath(view, slug)), '1', view)
   }
   // The chat asks its space's Operator once beside it, for the conversation
-  // and the Updates together, and that asks the directory once; what it
-  // waited on the Operator is said.
+  // and the Updates together, handing it the space and seat it read, so the
+  // Operator asks the directory nothing (T-149700); what it waited on the
+  // Operator is said.
   let chat = await timing(chatPath(slug))
-  assertEquals(/hops;dur=(\d+)/.exec(chat)?.[1], '3')
+  assertEquals(/hops;dur=(\d+)/.exec(chat)?.[1], '2')
   assertMatch(chat, /operator_wait;dur=\d+/)
   // A page of the person's own asks only about them, at once.
   for (let view of ['profile', 'shared'] as const) {
