@@ -4069,6 +4069,17 @@
           ]
         }
       },
+      "packages/native": {
+        "packageJson": {
+          "dependencies": [
+            "npm:@jsr/std__assert@1",
+            "npm:@yaks/testing@0.2.30",
+            "npm:@yaks/tui@0.2.24",
+            "npm:@yaks/ui@0.2.30",
+            "npm:preact@10.29.7"
+          ]
+        }
+      },
       "packages/notify": {
         "packageJson": {
           "dependencies": [

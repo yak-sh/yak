@@ -1,0 +1,14 @@
+{
+  "$defs": {
+    "bring": {
+      "description": "Something to bring on a trip; its words are its doc's title.",
+      "properties": {}
+    },
+    "packed": {
+      "description": "When the item was packed; an unpacked item has none.",
+      "properties": {
+        "at": { "type": "string", "format": "date-time" }
+      }
+    }
+  }
+}

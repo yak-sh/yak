@@ -1,0 +1,19 @@
+{
+  "expo": {
+    "name": "yaks.app",
+    "slug": "yaks-app",
+    "scheme": "yaks",
+    "version": "0.1.0",
+    "orientation": "portrait",
+    "userInterfaceStyle": "dark",
+    "backgroundColor": "#272b35",
+    "ios": {
+      "bundleIdentifier": "app.yaks",
+      "supportsTablet": true,
+      "infoPlist": {
+        "NSMicrophoneUsageDescription": "Talk to your Operator."
+      }
+    },
+    "plugins": ["expo-status-bar"]
+  }
+}

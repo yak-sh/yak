@@ -1,0 +1,17 @@
+{
+  "name": "@yaks/native",
+  "version": "0.2.24",
+  "type": "module",
+  "exports": "./mod.ts",
+  "license": "Apache-2.0",
+  "description": "Paints the kits' Preact tree, rendered into @yaks/tui's in-memory DOM, as plain native nodes (box, text, press, field, toggle) a native host draws with its own widgets.",
+  "dependencies": {
+    "@yaks/tui": "0.2.24",
+    "@yaks/ui": "0.2.30"
+  },
+  "devDependencies": {
+    "@std/assert": "npm:@jsr/std__assert@^1.0.0",
+    "@yaks/testing": "0.2.30",
+    "preact": "10.29.7"
+  }
+}

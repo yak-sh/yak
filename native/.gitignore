@@ -1,0 +1,3 @@
+# Expo's local state and export output.
+.expo/
+dist/
