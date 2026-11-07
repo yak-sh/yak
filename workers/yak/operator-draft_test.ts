@@ -56,12 +56,16 @@ let storage = (): Stash => {
 
 // A load of the page: its script run as served. `cut` holds every save that
 // leaves while the person is on it, as a page that is left before they land.
+// `held` holds its first draft read and its socket unanswered, as a network
+// can, until the page's time limit gives each up; its waits run a thousand
+// times faster.
 let load = async (
   stash: Stash,
   cut = false,
   open = 'new',
   beside: Beside = {},
   app?: string,
+  held = false,
 ) => {
   let html = await (await chatPage(p.env, space, who, open, beside, app))
     .text()
@@ -88,14 +92,22 @@ let load = async (
   }
   let timers = new Set<ReturnType<typeof setTimeout>>()
   let after = (fn: () => void, ms: number) => {
-    let t = setTimeout(() => (timers.delete(t), fn()), ms)
+    let t = setTimeout(() => (timers.delete(t), fn()), held ? ms / 1000 : ms)
     timers.add(t)
     return t
   }
   // The draft reads the page has had answered, each taken in before the next.
   let reads = 0
+  let holding = held
   let fetch = async (url: string, init?: RequestInit) => {
     if (cut && init?.method == 'POST') return new Promise<Response>(() => {})
+    if (holding && url.includes('draft=1') && init?.signal) {
+      holding = false
+      return new Promise<Response>((_, no) =>
+        // the time limit, passed
+        queueMicrotask(() => no(new DOMException('timed out', 'TimeoutError')))
+      )
+    }
     let answer = await serve(url, init)
     if (url.includes('draft=1') && !init?.method) {
       queueMicrotask(() => void reads++)
@@ -160,6 +172,9 @@ let load = async (
       constructor() {
         sockets.push(this)
       }
+      close() {
+        queueMicrotask(() => this.onclose?.())
+      }
     },
     Event,
   )
@@ -168,11 +183,14 @@ let load = async (
     focused,
     loads,
     document,
+    sockets,
     // A frame the Operator's socket sends the page.
     hear: (frame: unknown) =>
       sockets[0].onmessage!({ data: JSON.stringify(frame) }),
     press: (button: Element) =>
       button.dispatchEvent(new Event('click', { bubbles: true })),
+    // Whether the page has heard the store's drafts.
+    read: () => reads > 0,
     // Once the page has heard the store's drafts.
     heard: async () => {
       while (!reads) await new Promise((ok) => setTimeout(ok, 1))
@@ -351,4 +369,30 @@ test('words typed on one page show on the person’s other open page as its sock
   assertEquals(there.say.value, 'Ask for the south shelter instead')
   here.leave()
   there.leave()
+})
+
+// A draft read and a socket the network never answers are given up and asked
+// again, so the draft still arrives and the socket opens anew.
+let hold = storage()
+let typed = await load(hold)
+await typed.heard()
+typed.type('Order salt for the township garage')
+await settle()
+typed.leave()
+// Whether `ok` comes true within two seconds.
+let until = async (ok: () => boolean) => {
+  for (let end = Date.now() + 2000; !ok() && Date.now() < end;) {
+    await new Promise((go) => setTimeout(go, 1))
+  }
+  return ok()
+}
+let waited = await load(storage(), false, 'new', {}, undefined, true)
+let reread = await until(waited.read)
+await settle()
+let reopened = await until(() => waited.sockets.length > 1)
+waited.leave()
+
+test("the Operator's chat app reads its draft again when a read is never answered", () => {
+  assertEquals([reread, reopened], [true, true])
+  assertEquals(waited.say.value, 'Order salt for the township garage')
 })

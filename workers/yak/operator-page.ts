@@ -1491,6 +1491,10 @@ let changing = (o) => {
 }
 let status = document.querySelector('[data-send-status]') ?? document.createElement('p')
 let draftAt = '${at}?draft=1'
+// How long the page waits on its door before giving up and asking again, so
+// a request the network holds unanswered fails in seconds rather than stopping
+// the draft from syncing until something else ends it.
+let WAIT = 10_000
 let submission
 let draftClient = {
   me: async () => ({ person: '${who.person}' }),
@@ -1500,7 +1504,7 @@ let draftClient = {
       let sent = submission; submission = undefined
       sent.set('draft', JSON.stringify(bundles))
       response = await fetch(form.action, { method: 'POST', body: sent })
-    } else response = await fetch(draftAt, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ bundles }) })
+    } else response = await fetch(draftAt, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ bundles }), signal: AbortSignal.timeout(WAIT) })
     if (!response.ok) throw new Error('Your draft could not sync. A recovery copy is kept on this device.')
     return response.json()
   },
@@ -1515,11 +1519,14 @@ let draftClient = {
 let hearing = new Set()
 let readDrafts = async (hears = hearing) => {
   try {
-    let response = await fetch(draftAt)
+    let response = await fetch(draftAt, { signal: AbortSignal.timeout(WAIT) })
     if (!response.ok) throw new Error(String(response.status))
     let { bundles } = await response.json()
     for (let hear of hears) if (hearing.has(hear)) hear(bundles)
-  } catch (e) { status.textContent = 'Your draft is kept on this device until syncing returns.' }
+  } catch (e) {
+    status.textContent = 'Your draft is kept on this device until syncing returns.'
+    setTimeout(() => [...hears].some((h) => hearing.has(h)) && readDrafts(hears), 3000)
+  }
 }
 let drafts = browserDrafts(draftClient, '${space.eid}:operator', { by: '${who.person}', report: (e) => { status.textContent = e.message } })
 // Each conversation keeps its own draft, and the box is ready to type in.
@@ -1646,9 +1653,11 @@ let hear = (frame) => {
 }
 let listen = () => {
   let socket = new WebSocket(location.origin.replace(/^http/, 'ws') + '${at}?live=1')
-  socket.onopen = () => { live = true; readDrafts(); read().catch(said) }
+  // A socket still opening after the wait is closed, and so opened again.
+  let opening = setTimeout(() => socket.close(), WAIT)
+  socket.onopen = () => { clearTimeout(opening); live = true; readDrafts(); read().catch(said) }
   socket.onmessage = (e) => { try { hear(JSON.parse(e.data)) } catch (error) { said(error) } }
-  socket.onclose = () => { live = false; poll(); setTimeout(listen, 3000) }
+  socket.onclose = () => { clearTimeout(opening); live = false; poll(); setTimeout(listen, 3000) }
 }
 let polling = false
 let poll = async () => {
