@@ -8,6 +8,7 @@ import { assert, assertEquals, assertRejects } from '@std/assert'
 import { type Bundle, derivedEid, graph } from '@yaks/graph'
 import { graphDoc } from '@yaks/graph/vocab'
 import { served, subscriptions, Unauthorized } from '@yaks/api'
+import { TEXT } from '@yaks/api/address'
 import { ram } from '@yaks/ram'
 import { sessionDoc, sessionEid } from '@yaks/session'
 import { authenticate as sessionAuth } from '@yaks/session/graph'
@@ -103,6 +104,26 @@ test('the door answers the protocol, and signs what a tool writes', async () => 
 
   let found: Bundle[] = await graph.read('.book.price=12&*')
   assertEquals(comp(found[0], 'created').by, MEMBER)
+})
+
+test('a request asking for text is answered drawn and told so, and any other as always', async () => {
+  let door = mcp({
+    graph: shopGraph(),
+    text: (answer, tool) =>
+      Promise.resolve(`${answer.length} ${tool.readOnly}`),
+  })
+  let asked = call('graph_query', { q: '.book' })
+  asked.headers.set(TEXT, 'drawn')
+  let drawn = await door(asked)
+  assertEquals(drawn.headers.get(TEXT), 'drawn')
+  assertEquals((await drawn.json()).result.content, [
+    { type: 'text', text: '0 true' },
+  ])
+  let plain = await door(call('graph_query', { q: '.book' }))
+  assertEquals(plain.headers.has(TEXT), false)
+  assertEquals((await plain.json()).result.content, [
+    { type: 'text', text: '[]' },
+  ])
 })
 
 test('a slow tool answers with its committed outcome', async () => {

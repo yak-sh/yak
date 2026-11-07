@@ -18,6 +18,13 @@ export let HOSTNAME = '127.0.0.1'
  * config shares a port with another graph's never reaches that graph. */
 export let DB = 'x-yak-db'
 
+/** The header a request asks for a tool's answer drawn as text in, as the
+ * server's own views draw it (@yaks/mcp `Options.text`): what a command not
+ * writing to a terminal prints, sent so the command loads no views. A server
+ * that drew it says the header back; one that did not answers as it does
+ * every client. */
+export let TEXT = 'x-yak-text'
+
 /** Where a client on this machine reaches the server a config serves: its
  * port, else {@link PORT}, at its hostname, or this machine's own address
  * where it names none or every interface.

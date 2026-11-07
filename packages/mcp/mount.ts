@@ -25,6 +25,7 @@
 // did not come from this handler.
 
 import { type Authenticate, type Handler, json, refuse } from '@yaks/api'
+import { TEXT } from '@yaks/api/address'
 import type { Actor, Bundle, Graph } from '@yaks/graph'
 import { status } from '@yaks/graph/errors'
 import { SESSION, sessionFor, speaking } from '@yaks/session'
@@ -620,13 +621,26 @@ export let mcp = (opts: MountOptions): Handler => {
       ...opts.reply ? { reply: opts.reply } : {},
       ...opts.clock ? { clock: opts.clock } : {},
     })
-  let built = async (actor: Actor | null, exchange?: Exchange) =>
+  // A request asking in `x-yak-text` has each answer drawn by the host's
+  // views (Options.text), and is told so in the same header.
+  let drawing = (request: Request) =>
+    request.headers.has(TEXT) ? opts.text : undefined
+  let drawn = (request: Request, response: Response) => {
+    if (drawing(request)) response.headers.set(TEXT, 'drawn')
+    return response
+  }
+  let built = async (
+    request: Request,
+    actor: Actor | null,
+    exchange?: Exchange,
+  ) =>
     await prepared(
       server({
         ...opts,
         instructions: await instructed(opts, exchange),
         actor,
         runner: running(),
+        text: drawing(request),
       }),
       opts,
       exchange,
@@ -676,7 +690,7 @@ export let mcp = (opts: MountOptions): Handler => {
       // Whatever else the calling program serves — resources, prompts — is
       // registered before the request is answered, so `resources/list` sees
       // them on the very first call rather than the second.
-      let mcp = await built(caller, { method: body.method })
+      let mcp = await built(request, caller, { method: body.method })
       let cancel = () => {}
       let asked = mcp.answer(body, 'legacy', request.signal)
       let late = ms == null ? undefined : new Promise<never>((_, no) => {
@@ -686,7 +700,7 @@ export let mcp = (opts: MountOptions): Handler => {
         let { reply } = await (late ? Promise.race([asked, late]) : asked)
         let answer = json(reply)
         if (conn) answer.headers.set(ID, conn.id)
-        return answer
+        return drawn(request, answer)
       } finally {
         cancel()
       }
@@ -720,7 +734,7 @@ export let mcp = (opts: MountOptions): Handler => {
     }
     let mcp
     try {
-      mcp = await built(actor, { method: message.method as string })
+      mcp = await built(request, actor, { method: message.method as string })
     } catch (err) {
       await report(err)
       return rejected(
@@ -737,10 +751,13 @@ export let mcp = (opts: MountOptions): Handler => {
     }
     let { reply, early } = await mcp.answer(asking, 'modern', request.signal)
     let code = (reply.error as { code?: number } | undefined)?.code
-    return Response.json(reply, {
-      status: early && code !== undefined ? EARLY[code] ?? 200 : 200,
-      headers: { 'Content-Type': 'application/json' },
-    })
+    return drawn(
+      request,
+      Response.json(reply, {
+        status: early && code !== undefined ? EARLY[code] ?? 200 : 200,
+        headers: { 'Content-Type': 'application/json' },
+      }),
+    )
   }
 
   return async (request) => {

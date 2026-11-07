@@ -100,6 +100,12 @@ export type Options = {
    * reads. Used where a runner is built here; a runner passed in has its
    * own. */
   reply?: RunnerOpts['reply']
+  /** the answer drawn as text, which is then the whole of a reply's text: the
+   * host's own views (@yaks/host `Host.text`), for a caller that prints what
+   * a command not writing to a terminal prints. The HTTP door sets it only
+   * for a request that asks (./mount.ts), so every other client reads the
+   * reply it always did. */
+  text?: (answer: Bundle[], tool: Tool) => Promise<string>
   /** Optional local file input: callers opt in with `_files: true`. Hosted
    * servers without a reader keep literal inputs and their exact schemas. */
   readFile?: ReadFile
@@ -548,7 +554,14 @@ export let server = (
       }
       if (!t.readOnly) await admitted.ensure()
       let landed = await (t.readOnly ? admitted.read() : admitted.call())
-      out = said(t, answerOf(landed, id), faulted(landed, id))
+      let answer = answerOf(landed, id)
+      out = said(t, answer, faulted(landed, id))
+      if (opts.text) {
+        out = {
+          ...out,
+          content: [{ type: 'text', text: await opts.text(answer, t) }],
+        }
+      }
     } catch (err) {
       // The runner answers a tool's own throw as a fault above; a throw that
       // reaches here is the runner's (a call it could not record), reported

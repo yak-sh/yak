@@ -3,10 +3,14 @@
 // warm, and answers in milliseconds what a command opening the graph itself
 // spends half a second importing (./local.ts). Its `/mcp` is the door every
 // agent's MCP tools already use, so a command and an MCP call run the same
-// tool through the same runner. The answer is drawn here, with this config's
-// own vocabulary and views, exactly as a command that opened the graph draws
-// it (./terminal.ts `shown`): the server's own account of its words is never
-// needed, so no cached copy of it can be stale.
+// tool through the same runner. An answer printed to no terminal, and not as
+// `--json`, is the text the server's own views draw (@yaks/api/address
+// `TEXT`), which is what a command that opened the graph prints there
+// (./local.ts `tool`, the host's `text`), so this process loads no views. One
+// for a terminal is drawn here, with this config's own vocabulary and views,
+// as a command that opened the graph draws it (./terminal.ts `shown`): the
+// server's own account of its words is never needed, so no cached copy of it
+// can be stale.
 //
 // Nothing has to be running: a command no server answers opens the graph
 // itself, as it always could. The server is found at the address its config
@@ -32,9 +36,9 @@
 // connection lost during it is an error, never a second run.
 
 import type { Bundle } from '@yaks/graph'
-import { DB, served } from '@yaks/api/address'
+import { DB, served, TEXT } from '@yaks/api/address'
 import { type Config, pluginViews, used } from './config.ts'
-import { type Declared, words } from './words.ts'
+import type { Declared } from './words.ts'
 import { doorUrl, Refused, type Rpc, rpc } from './rpc.ts'
 import type { Ctx } from './run.ts'
 import { type Result, saidBy } from './roster.ts'
@@ -72,7 +76,10 @@ export let warm = async (
   let ask = rpc({
     url: doorUrl(host),
     via: c.via,
-    headers: { [DB]: config.db! },
+    headers: {
+      [DB]: config.db!,
+      ...c.json || c.tty ? {} : { [TEXT]: 'drawn' },
+    },
     fetch: async (request) => {
       last = undefined
       return last = await go(request)
@@ -95,6 +102,11 @@ export let warm = async (
     if (last && !ours()) return
     if (error instanceof Refused && error.code == UNKNOWN) return
     throw error
+  }
+  if (last?.headers.has(TEXT)) {
+    let { text } = saidBy(said)
+    if (text) c.out(text)
+    return said.isError ? 1 : 0
   }
   return await printed(c, config, declared, said, ask)
 }
@@ -130,7 +142,7 @@ let printed = async (
   }
   let plugins = (config.plugins ?? []).map(used)
   let [{ vocab }, { registry }, { shown }] = await Promise.all([
-    words(config),
+    import('./words.ts').then(({ words }) => words(config)),
     import('./answer.ts'),
     import('./terminal.ts'),
   ])

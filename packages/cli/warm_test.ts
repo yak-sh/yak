@@ -46,10 +46,14 @@ type Fetch = (request: Request) => Response | Promise<Response>
 
 // A server over a graph holding one task, serving `served` (undefined: one
 // from before servers said which file they serve).
-let server = async (served?: string): Promise<Fetch> => {
+// A server that draws its own text (`yak serve`'s views) draws `drawn`.
+let server = async (
+  served?: string,
+  text?: (answer: unknown[]) => Promise<string>,
+): Promise<Fetch> => {
   let g = graph({ storage: ram(vocab, { number: true }), vocab })
   await g.apply([{ entity: { eid: '$a' }, doc: { title: 'Fix it' }, task: {} }])
-  let door = mcp({ graph: g, authenticate: () => null })
+  let door = mcp({ graph: g, authenticate: () => null, text })
   return served ? addressed(door, served) : door
 }
 
@@ -128,4 +132,18 @@ test('a call lost after it was sent is an error, never run again here', async ()
     return fetch(request)
   }
   await throws(() => asked(lost), 'connection reset')
+})
+
+test("an answer for no terminal is the server's own text, and one for a terminal or as data is not", async () => {
+  let fetch = await server(
+    DB,
+    (answer) => Promise.resolve(`${answer.length} drawn there`),
+  )
+  equal((await asked(fetch)).said, '1 drawn there')
+  let via = crypto.randomUUID()
+  let tty = { columns: 80, write: () => {} }
+  for (let more of [{ via, tty }, { via, json: true }]) {
+    let { said } = await asked(fetch, query, undefined, more)
+    ok(!said.includes('drawn there'), said)
+  }
 })

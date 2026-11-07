@@ -12,7 +12,7 @@ import * as system from '@yaks/process/system'
 // A composed host lends its runner and registry. A caller that lends only a
 // tool list gets the transport's generic tier beside those plugin tools.
 
-import type { Graph, NamedTool } from '@yaks/graph'
+import type { Bundle, Graph, NamedTool } from '@yaks/graph'
 import type { Reply, Runner } from '@yaks/tools'
 import { generic } from '@yaks/graph/tools'
 import { graphDoc } from '@yaks/graph/vocab'
@@ -37,6 +37,12 @@ export type Hosting = {
   runner?: Runner
   search?: Search
   reply?: Reply
+  /** a tool's answer as this host's views draw it, sent to a request that
+   * asks for it (@yaks/api/address `TEXT`) */
+  text?: (
+    answer: Bundle[],
+    tool: { readOnly?: boolean; page?: boolean },
+  ) => Promise<string>
 }
 
 // The handler, made by the first request to `/mcp`: a server listens before
@@ -56,6 +62,7 @@ let mounted = async (host: Hosting): Promise<Handler> => {
     tools: host.tools.filter((t) => !tier.has(t.name)),
     search: host.search,
     reply: host.reply,
+    text: host.text,
     readFile: (path) => io.readTextFile(path),
     name: host.config.name ?? 'yak',
     skills: (built, exchange) =>
