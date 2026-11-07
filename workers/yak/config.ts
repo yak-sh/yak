@@ -358,9 +358,10 @@ let workersAi: Plug = {
   with: { ai: { binding: 'AI' }, gateway: { binding: 'AI_GATEWAY' } },
 }
 
-// OpenAI through the account's AI Gateway, on the platform's key or the
-// gateway's own token. Both are unset on purpose (wrangler.toml), so asking
-// OpenAI is refused.
+// OpenAI, on the platform's key or through the account's AI Gateway on the
+// gateway's own token. The key is the "yaks.app images" project's, which may
+// use only the GPT Image models, so OpenAI answers an app's image asks and
+// refuses the rest; no gateway is set (wrangler.toml).
 let openai: Plug = {
   use: '@yaks/openai',
   with: {

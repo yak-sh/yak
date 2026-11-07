@@ -21,6 +21,7 @@ import {
   OPENAI,
 } from './credential.ts'
 import type { ImageGeneration, Images } from './images.ts'
+import { generations, image, imageListed, imageQuote } from './generations.ts'
 import type { TransportCredential } from './transport.ts'
 import { openaiDoc } from './vocab.ts'
 
@@ -128,7 +129,9 @@ export let configuredImages = (
   return { store }
 }
 
-/** `openai`, served over what the host lends. */
+/** `openai`, served over what the host lends: a GPT Image model's name
+ * answers with an image kept in the lent store (generations.ts), any other
+ * with the Responses API. */
 export let providers = (
   lent: Lent,
   options: Options = {},
@@ -139,36 +142,60 @@ export let providers = (
     lent.env('HARNESS_IMAGES'),
   )
   let base = aimed(options), token = options.gateway?.token
+  let signing = base
+    ? {
+      ...opened(lent, base, options.key),
+      authentication: 'optional' as const,
+    }
+    : signedIn(lent, options.key)
+  let headers = {
+    ...options.headers,
+    ...token ? { 'cf-aig-authorization': `Bearer ${token}` } : {},
+  }
+  let text = deferredModel(
+    () =>
+      import('./responses.ts').then(({ responses }) =>
+        responses({
+          ...signing,
+          headers,
+          fetch: lent.fetch,
+          redact: true,
+          images,
+          web: options.web ?? lent.env('HARNESS_WEB') != '0',
+          receipts: lent.receipts,
+        })
+      ),
+    {
+      vocab: openaiDoc,
+      mark: (reply, cache) => ({
+        openai: { response_id: reply.id, ...prefixCacheMark(reply, cache) },
+      }),
+      anchor: () => undefined,
+      lateResults: true,
+      recover: true,
+    },
+  )
+  let pictures = generations({
+    credential: signing.credential,
+    headers,
+    fetch: lent.fetch,
+    media: { store: lent.store, maxBytes: images?.maxBytes },
+    receipts: lent.receipts,
+  })
   return {
-    openai: deferredModel(
-      () =>
-        import('./responses.ts').then(({ responses }) =>
-          responses({
-            ...base
-              ? {
-                ...opened(lent, base, options.key),
-                authentication: 'optional',
-              }
-              : signedIn(lent, options.key),
-            headers: {
-              ...options.headers,
-              ...token ? { 'cf-aig-authorization': `Bearer ${token}` } : {},
-            },
-            fetch: lent.fetch,
-            redact: true,
-            images,
-            web: options.web ?? lent.env('HARNESS_WEB') != '0',
-            receipts: lent.receipts,
-          })
-        ),
+    openai: Object.assign(
+      (req: Parameters<Model>[0]) =>
+        image(req.model) ? pictures(req) : text(req),
+      text,
       {
-        vocab: openaiDoc,
-        mark: (reply, cache) => ({
-          openai: { response_id: reply.id, ...prefixCacheMark(reply, cache) },
-        }),
-        anchor: () => undefined,
-        lateResults: true,
-        recover: true,
+        quote: (req: Parameters<Model>[0], remaining: number) =>
+          image(req.model) ? imageQuote(req, remaining) : undefined,
+        info: (name: string) =>
+          Promise.resolve(image(name) ? imageListed(name) : undefined),
+        recover: async (call: string) =>
+          image(String((await lent.receipts?.read(call))?.model))
+            ? pictures.recover(call)
+            : text.recover!(call),
       },
     ),
   }

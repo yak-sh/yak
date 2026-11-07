@@ -282,6 +282,27 @@ There is no reliable structured capability-rejection contract across these
 endpoints, so the adapter does not infer support from error-message substrings
 or cache negative observations. No paid capability probes are performed.
 
+## GPT Image models
+
+The `openai` provider answers a GPT Image model's name
+(`gpt-image-2.6-sunburst`, `gpt-image-2.6-flare`, `gpt-image-2.5-sunburst`,
+`gpt-image-2.5-flare` and their snapshots) through the Image API's
+`/images/generations` door instead of Responses. The newest user text is the
+prompt; `Request.input` may carry `size`, `quality`, `background`,
+`output_format` (`png`, `jpeg` or `webp`), `output_compression`, `moderation`
+and `complexity`, and anything else is refused as `bad_request` before a call.
+One image is made. Its answer is saved as a private media receipt before its
+bytes are stored in the lent store, so `recover(call)` delivers it again without
+buying it twice; `reply.artifacts` carries its address, never the payload.
+`info(name)` lists it with image output.
+
+`quote(req, remaining)` holds twice what OpenAI's cost calculator says the image
+makes at its quality and size (`max` and 2880x2880 where `auto`), plus the
+prompt's bytes as text tokens. `reply.cost` is what the answer's `usage` says it
+used at OpenAI's published rates: $5 per million text input tokens, $8 per
+million image input tokens and $30 per million output tokens. A ChatGPT grant
+cannot use the Image API and is refused.
+
 ## Hosted web tools
 
 `responses()` offers OpenAI's native `web_search` tool by default, alongside

@@ -592,12 +592,14 @@ database_id = "88b2e161-99bf-4777-ab6d-b18fcf66ca95"
 # (config.ts `payments`, payment-doors.ts). Unset, those doors say the paid
 # tier is not switched on here rather than half-working, and a webhook that
 # arrives unread is filed where the owner sees it.
-# OPENAI_API_KEY, AI_GATEWAY and AI_GATEWAY_TOKEN are the OTHER provider, and
-# all three are unset on purpose: no gateway exists on the account and nothing
-# needs one, since both tiers build on the `[ai]` binding above (T-34238 is
-# the owner's to open if we ever want OpenAI). Set AI_GATEWAY plus one of the
-# keys and point BUILDER_MODEL_PAID at an OpenAI model, and the paid build
-# speaks to OpenAI instead. BUILDER_MODEL_FREE and BUILDER_MODEL_PAID are the
+# OPENAI_API_KEY is the "yaks.app images" OpenAI project's service account
+# key (1Password "OpenAI yaks.app images"): it may use only the GPT Image 2.5
+# and 2.6 models and spend $20 a month, and an app's image asks spend the
+# space's budget on it (config.ts `openai`). AI_GATEWAY and AI_GATEWAY_TOKEN
+# are unset on purpose: no gateway exists on the account and nothing needs
+# one, since both builder tiers build on the `[ai]` binding above. Point
+# BUILDER_MODEL_PAID at an OpenAI model on a key that may use it, and the paid
+# build speaks to OpenAI instead. BUILDER_MODEL_FREE and BUILDER_MODEL_PAID are the
 # model ids, unset meaning builder.ts's own defaults.
 # TRACKER_SECRET signs tenant-scoped reads at the independent tracker.
 # VAULT_KEY is the key the vault above is encrypted under: 32 random bytes in

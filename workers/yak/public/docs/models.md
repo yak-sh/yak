@@ -9,7 +9,8 @@ guide:
     transcript entry naming a model, the app's store calls the model, and the
     reply is written as rows in the same transcript for any subscribed page to
     receive. Instructions, typed questions answered as rows (a choice, a
-    yes-or-no, a score), audio from a connected model, builders over stored
+    yes-or-no, a score), image generation with OpenAI's GPT Image models,
+    audio from a connected model, builders over stored
     rows, a single synchronous call through ./api/ai/run or a worker's AI
     binding, image input, the commands a model may call, who may call a model,
     and model prices and how platform and connected models are paid for.
@@ -145,6 +146,29 @@ A model that does not answer typed questions refuses them rather than guessing;
 only Jev answers them. The answers are for the page only: no later turn reads
 them, or the questions another turn asked, so a transcript that a page asks
 questions about every few minutes keeps its window for the conversation itself.
+
+## Image generation
+
+An app can make an image with one of OpenAI's GPT Image models, paid from the
+space's budget like any platform model: `gpt-image-2.6-sunburst` for detailed
+work, `gpt-image-2.6-flare` for fast iteration, and their 2.5 releases
+`gpt-image-2.5-sunburst` and `gpt-image-2.5-flare`. The entry's text is the
+prompt. `sending.input` may set `size` (`auto` or `WIDTHxHEIGHT`, both edges
+multiples of 16), `quality` (`auto`, `low`, `medium`, `high`, `xhigh`, `max`),
+`background`, `output_format` (`png`, `jpeg` or `webp`), `output_compression`,
+`moderation` and `complexity`; anything else is refused.
+
+    await apply({
+      entity: { eid: '$picture' },
+      entry: { session: easel },
+      content: { body: 'A yak in gouache on a cream background' },
+      using: { provider: 'openai', model: 'gpt-image-2.6-flare' },
+      sending: { input: { size: '1024x1024', quality: 'low' } },
+    })
+
+The reply is an `entry` with `attachment.artifact` pointing to an `artifact`
+row, as with audio, and the page shows it from `./api/blob/<artifact-id>`. A
+prompt OpenAI declines receives a `refusal` entry.
 
 ## Audio generation with a connected model
 
@@ -371,12 +395,17 @@ is refused, whatever `models` says.
 
 These platform models spend the space's monthly yaks.app budget:
 
-| model                                     | for             | per million tokens in | out   |
-| ----------------------------------------- | --------------- | --------------------- | ----- |
-| `@cf/zai-org/glm-5.3-flash`               | chat, and tools | $0.15                 | $0.50 |
-| `@cf/meta/llama-4-scout-17b-16e-instruct` | pictures        | $0.27                 | $0.85 |
-| `typesafe/jev`                            | typed questions | $0.042                | free  |
-| `@cf/baai/bge-base-en-v1.5`               | embeddings      | $0.067                | —     |
+| model                                                      | for             | per million tokens in | out   |
+| ---------------------------------------------------------- | --------------- | --------------------- | ----- |
+| `@cf/zai-org/glm-5.3-flash`                                | chat, and tools | $0.15                 | $0.50 |
+| `@cf/meta/llama-4-scout-17b-16e-instruct`                  | pictures        | $0.27                 | $0.85 |
+| `typesafe/jev`                                             | typed questions | $0.042                | free  |
+| `@cf/baai/bge-base-en-v1.5`                                | embeddings      | $0.067                | —     |
+| `gpt-image-2.6-sunburst`, `-flare`, and their 2.5 releases | images          | $5 text, $8 image     | $30   |
+
+A GPT Image call holds twice what OpenAI's calculator says its image costs (the
+largest size and `max` quality when unset) and is charged what OpenAI reports it
+used: a 1024x1024 `low` image is about $0.025.
 
 Every platform call is charged at its model's price against that budget, which
 belongs to the space the app is in. What one space spends never counts against
