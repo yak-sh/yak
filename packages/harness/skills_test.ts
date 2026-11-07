@@ -1,9 +1,9 @@
 // Native skills read graph instructions without asking a machine for files.
 import { test } from '@yaks/testing'
-import { assert, assertEquals } from '@std/assert'
+import { assert, assertEquals, assertInstanceOf } from '@std/assert'
 import { type Bundle, type Comp, derivedEid, graph } from '@yaks/graph'
 import { ram } from '@yaks/ram'
-import { wordsOf } from '@yaks/session'
+import { ToolError, wordsOf } from '@yaks/session'
 import { skillItems, skillTools } from './skills.ts'
 import { harness } from './testing.ts'
 
@@ -174,29 +174,35 @@ test('graph skill edits reach the next native instruction load', () => {
 test('graph skill removals reach the next native catalogue', async () => {
   assertEquals(await removed.catalogue(), '')
 })
-let removedLoad = await removed.load()
+// A refused load is thrown as a refusal, keeping its code (tools.ts
+// `failure`); what it says is its message.
+let refusal = (load: Promise<unknown>) =>
+  load.then(() => '', (e: Error) => {
+    assertInstanceOf(e, ToolError)
+    return e.message
+  })
+
+let removedLoad = await refusal(removed.load())
 test('graph skill removals refuse the next native instruction load', () => {
-  assert(removedLoad.result.includes('No skill named checking'))
+  assertEquals(removedLoad, 'No skill named checking')
 })
 
-let manualLoad = await manual.load()
+let manualLoad = await refusal(manual.load())
 test('user-only graph skills stay hidden and refuse model loading', async () => {
   try {
     assertEquals(await manual.catalogue(), '')
-    let { result } = manualLoad
-    assert(result.includes('user invocation only'))
-    assert(!result.includes('Exact graph instructions'))
+    assert(manualLoad.includes('user invocation only'))
+    assert(!manualLoad.includes('Exact graph instructions'))
   } finally {
     manual.close()
   }
 })
 
-let ambiguousLoad = await ambiguous.load()
+let ambiguousLoad = await refusal(ambiguous.load())
 test('ambiguous graph skill names refuse rather than loading another repository', () => {
   try {
-    let { result } = ambiguousLoad
-    assert(result.includes('more than one repository'))
-    assert(!result.includes('Different instructions'))
+    assert(ambiguousLoad.includes('more than one repository'))
+    assert(!ambiguousLoad.includes('Different instructions'))
   } finally {
     ambiguous.close()
   }
