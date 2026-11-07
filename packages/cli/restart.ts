@@ -154,7 +154,9 @@ export let stale = async (
   let [, template, instance] = /^(.+)@(.+)\.service$/.exec(unit) ?? []
   if (!instance) return 'no instance'
   let file = codeFile(readyFile(runtimeDir, template, instance))
-  let code = await disk.readTextFile(file).then(JSON.parse, () => undefined)
+  let code = await disk.readTextFile(file).then(JSON.parse).catch(() =>
+    undefined
+  )
   return code ? await codeStale(code, tree) : 'it keeps no code record'
 }
 

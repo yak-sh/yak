@@ -1,3 +1,4 @@
+import { fault } from '@yaks/api/refuse'
 import * as system from '@yaks/process/system'
 import * as disk from '@yaks/file/io'
 import { command as launchCommand } from '@yaks/process/command'
@@ -319,6 +320,13 @@ let start = async (
 ): Promise<void> => {
   let dir = await disk.makeTempDir({ prefix: 'yak-work-' })
   let file = `${dir}/ready`
+  // The worker keeps its code record beside its ready file for as long as it
+  // runs (./code.ts), so the dir goes once the worker has ended.
+  let clear = () =>
+    disk.remove(dir, { recursive: true }).catch((error) =>
+      fault(error, `removing ${dir}`)
+    )
+  let launched = false
   try {
     // A detached child keeps the worker outside web shutdown's process group,
     // on macOS too, which ships no setsid(1). Its stdin is the tether: this
@@ -354,6 +362,8 @@ let start = async (
       stderr: 'piped',
       detached: true,
     }).spawn()
+    launched = true
+    child.status.then(clear, clear)
     let told = tail(child.stderr).catch((error) =>
       `stderr unreadable: ${error}`
     )
@@ -381,8 +391,9 @@ let start = async (
       undefined,
       signal,
     )
-  } finally {
-    await disk.remove(dir, { recursive: true })
+  } catch (error) {
+    if (!launched) await clear()
+    throw error
   }
 }
 
