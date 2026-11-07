@@ -278,23 +278,24 @@ accepted. `--platform` supplies the runtime's tag, so selecting that tag keeps
 all tests in the runtime. `--times` writes what the run took, in milliseconds,
 to `<dir>/<platform>.json` (`tests.json` without a platform): the whole run, its
 planning and loading, each file's load, each test that ran with its file, name,
-wall time (`ms`), CPU time (`cpu`) and whether it passed. CPU time includes
-every thread's user and system time and reaped child processes, from the shared
-benchmark clock. Waiting for timers, I/O or a CPU contributes no CPU time. The
-per-test performance budget uses `cpu`; wall time remains diagnostic. Existing
-budget records are marked `legacy-wall-ceilings`: retained upper bounds that
-`--write` lowers using CPU samples. The report also records each file the run
-remembered as passed, with its proof in the pass record (`forget` from
-`@yaks/testing/deps` takes one back), and how many tests it skipped and files it
-left out as unchanged.
+wall time (`ms`), CPU time (`cpu`) and whether it passed. A test's CPU time is
+the user and system time of the thread it runs on and of the child processes
+reaped while it ran (`threadtime` from @yaks/benchmark). Waiting for timers, I/O
+or a CPU contributes no CPU time. The per-test performance budget uses `cpu`;
+wall time remains diagnostic. Existing budget records are marked
+`legacy-wall-ceilings`: retained upper bounds that `--write` lowers using CPU
+samples. The report also records each file the run remembered as passed, with
+its proof in the pass record (`forget` from `@yaks/testing/deps` takes one
+back), and how many tests it skipped and files it left out as unchanged.
 
-Process CPU measures work during the case's interval, including runtime work
-queued earlier. Concurrent V8 compilation can be queued during a module's load
-and run during later cases; their `cpu` includes that work even when their
-bodies use less CPU. A sample above the budget therefore needs attribution
-before changing the case. Compare thread CPU clocks with native compilation and
-GC traces around the unchanged runner boundaries. Keep the reported process CPU
-whole: thread readings are diagnostics, and tracing itself perturbs timings.
+The process's other threads are left out because their work is not the test's.
+V8 compiles and collects garbage on background threads whenever it likes, often
+for a module loaded several tests before, and the whole process's CPU would
+charge that to whichever test is running. What the test runs on its own thread,
+the interpreter, the compiling it waits for and the collecting it triggers
+there, counts, so a test reads over only when its own work grew. A test's work
+in a worker or in Deno's blocking I/O threads does not count; a test that does
+its work there is timed by its wall time.
 
 A file whose tests all passed is skipped while its dependencies are unchanged.
 Its **key** holds what it depends on before it runs: its module dependencies

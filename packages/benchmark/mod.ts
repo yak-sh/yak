@@ -43,6 +43,7 @@ export {
   type ReportedRun,
   type Reporter,
   type Reporters,
+  threadtime,
   waited,
 } from './host.ts'
 export { type Files, type Options, Regressed, run } from './runner.ts'

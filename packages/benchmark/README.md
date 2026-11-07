@@ -138,6 +138,13 @@ time. CPU accounting requires getrusage(2) on Linux or macOS; other platforms,
 including Windows, fail explicitly. CPU runs record load averages without
 waiting to sample host pressure.
 
+`threadtime()` is the calling thread's CPU time (clock_gettime(2)'s
+`CLOCK_THREAD_CPUTIME_ID`) and the same finished children: `cputime()` without
+the process's other threads. V8 compiles, collects garbage and runs blocking I/O
+on those threads whenever it likes, so a reading of a short span taken with
+`cputime()` can carry work started long before it; the test runner
+(@yaks/testing) times each test with `threadtime()`.
+
 ```ts
 import { type Sample, stopwatch } from '@yaks/benchmark'
 import { ok } from '@yaks/testing'
@@ -440,7 +447,7 @@ try {
 | -------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------- |
 | `.`      | `bench`, `stopwatch`, `run`, `Regressed`                                                                                                                                                                                                        | Timed callbacks and JSON runner.                   |
 | `.`      | `median`, `baseline`, `best`, `compare`, `limit`, `loaded`, `spread`, `Coverage`                                                                                                                                                                | Pure aggregation and ratchet.                      |
-| `.`      | `busy`, `cputime`, `processCpu`, `waited`, `configure`, `host`                                                                                                                                                                                  | Process reporter factory and current host context. |
+| `.`      | `busy`, `cputime`, `threadtime`, `processCpu`, `waited`, `configure`, `host`                                                                                                                                                                    | Process reporter factory and current host context. |
 | `.`      | `Bench`, `TimedBench`, `Iteration`, `TimeUnit`, `Suite`, `CollectedSuite`, `Workload`, `Direction`, `Sample`, `Samples`, `Round`, `Result`, `Run`, `Baseline`, `Regression`, `Host`, `Reporter`, `ReportedRun`, `Reporters`, `Options`, `Files` | Authoring, result, host and effect-boundary types. |
 | `./deno` | `extract`, `DenoReport`                                                                                                                                                                                                                         | Deno JSON import with provenance.                  |
 

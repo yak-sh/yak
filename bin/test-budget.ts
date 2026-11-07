@@ -17,10 +17,11 @@
 // alone can be well within it in the whole suite. A test that got slower is
 // over in every run, and every run says so.
 //
-// A test is timed in CPU milliseconds: every thread's user and system time,
-// including completed children, from the same clock benchmarks use. Waiting
-// for a timer, I/O or a CPU contributes no CPU time. Wall time is diagnostic
-// only; the runner's separate timeout still detects a hung test.
+// A test is timed in CPU milliseconds: the user and system time of the thread
+// it runs on and of the children it reaped (@yaks/benchmark `threadtime`), not
+// V8's background threads, whose compiling and collecting a test does not
+// choose. Waiting for a timer, I/O or a CPU contributes no CPU time. Wall time
+// is diagnostic only; the runner's separate timeout still detects a hung test.
 //
 // A platform's wall clock is said, never compared: it adds every wait among
 // the run's processes and the host's other users.

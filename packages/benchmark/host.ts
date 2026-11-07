@@ -5,7 +5,7 @@ import { command as processCommand } from '@yaks/process/command'
  * run, not when a bench is declared. Reporter factories receive this context;
  * the default factory is empty until a reporting provider is installed. */
 import type { Run } from './result.ts'
-import { layouts, milliseconds } from './rusage.ts'
+import { layouts, milliseconds, nanos } from './rusage.ts'
 
 export type Host = {
   config: Record<string, unknown>
@@ -107,34 +107,58 @@ export let busy = async (ms = 1000): Promise<number | undefined> => {
     : (after - before) / (took * 1000 * navigator.hardwareConcurrency)
 }
 
-let rusage: ((who: number) => number) | undefined
+type Clocks = { rusage: (who: number) => number; thread: () => number }
+let clocks: Clocks | undefined
+let open = (): Clocks => {
+  if (clocks) return clocks
+  let layout = layouts[system.os]
+  if (!layout) {
+    throw new Error(
+      `CPU accounting with child processes is unsupported on ${system.os}`,
+    )
+  }
+  let { symbols } = Deno.dlopen(layout.library, {
+    getrusage: { parameters: ['i32', 'buffer'], result: 'i32' },
+    clock_gettime: { parameters: ['i32', 'buffer'], result: 'i32' },
+  })
+  // Two 16-byte timevals and fourteen 64-bit longs, on both systems.
+  let usage = new Uint8Array(144)
+  let view = new DataView(usage.buffer)
+  let time = new Uint8Array(16)
+  let spec = new DataView(time.buffer)
+  return clocks = {
+    rusage: (who) => {
+      if (symbols.getrusage(who, usage) != 0) {
+        throw new Error(`getrusage(${who}) failed`)
+      }
+      return milliseconds(view, layout.micros)
+    },
+    thread: () => {
+      if (symbols.clock_gettime(layout.thread, time) != 0) {
+        throw new Error('clock_gettime(CLOCK_THREAD_CPUTIME_ID) failed')
+      }
+      return nanos(spec)
+    },
+  }
+}
+
 /** CPU milliseconds used by every thread in this process and its finished,
  * waited-for children, user and system, from getrusage(2) on Linux and Darwin.
  * Other platforms fail explicitly: self-only CPU would miss child work.
  * A child counts after it exits and is reaped; a process that outlives a
  * measurement must report its CPU separately. */
 export let cputime = (): number => {
-  if (!rusage) {
-    let layout = layouts[system.os]
-    if (!layout) {
-      throw new Error(
-        `CPU accounting with child processes is unsupported on ${system.os}`,
-      )
-    }
-    let { symbols } = Deno.dlopen(layout.library, {
-      getrusage: { parameters: ['i32', 'buffer'], result: 'i32' },
-    })
-    // Two 16-byte timevals and fourteen 64-bit longs, on both systems.
-    let usage = new Uint8Array(144)
-    let view = new DataView(usage.buffer)
-    rusage = (who) => {
-      if (symbols.getrusage(who, usage) != 0) {
-        throw new Error(`getrusage(${who}) failed`)
-      }
-      return milliseconds(view, layout.micros)
-    }
-  }
+  let { rusage } = open()
   return rusage(0) + rusage(-1)
+}
+
+/** CPU milliseconds used by the calling thread and this process's finished,
+ * waited-for children, user and system: `cputime` without the process's other
+ * threads, where V8 compiles, collects garbage and runs blocking I/O beside
+ * the thread whenever it likes. Two readings bracket the thread's own work. */
+export let threadtime = (): number => {
+  let { rusage, thread } = open()
+  return thread() + rusage(-1)
 }
 
 /** How long the calling thread has waited for a CPU since it started, in ms:

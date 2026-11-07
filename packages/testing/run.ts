@@ -2,7 +2,7 @@ import * as system from '@yaks/process/system'
 // Runs collected tests one at a time, in the order they were declared, and
 // says how each went in the lines `deno test` prints (`name ... ok (12ms)`),
 // which what watches a run reads.
-import { cputime } from '@yaks/benchmark'
+import { threadtime } from '@yaks/benchmark'
 import { own } from './own.ts'
 import { closing, type Test } from './suite.ts'
 
@@ -120,7 +120,7 @@ export let apart = () => {
 export let one = async (
   test: Test,
   timeout: number,
-  cpu: () => number | undefined = cputime,
+  cpu: () => number | undefined = threadtime,
 ): Promise<Outcome> => {
   let { body, ...reported } = test
   if (test.skip) {
