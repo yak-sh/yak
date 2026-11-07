@@ -10,13 +10,14 @@ import * as system from './system.ts'
 //
 // Two things follow from that row, and they are why it is worth writing.
 //
-// A write has an author even when no client made a request — the rules a
-// transaction fires, the effects that run after it commits, a file somebody
-// imports — and the author is this run of this program, not a name a config
-// file made up. So this row is what the server signs its writes with
-// (@yaks/cli), which makes `created.by` on any row the answer to "which run
-// wrote this", and a child process's row, written by its parent, identifies its
-// parent without needing a property for it.
+// A write comes through something even when no client made a request — the
+// rules a transaction fires, the effects that run after it commits, a file
+// somebody imports — and that something is this run of this program, not a
+// name a config file made up. So this row is the instrument the server writes
+// through (@yaks/cli), which makes `created.via` on any row the answer to "which
+// run wrote this", and a child process's row, written by its parent,
+// identifies its parent without needing a property for it. A process is never
+// the actor in `by`: it acts for nobody.
 //
 // A run that opened a graph says which roles it serves (@yaks/cli `compose`):
 // the graph, `web`, `effects`, a plugin's service by its name. Start-up work

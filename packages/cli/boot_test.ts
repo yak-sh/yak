@@ -57,7 +57,7 @@ test('a composed host answers through its endpoints and carries the serve verb',
   let { names, applied, found, me } = endpoints
   assert(names.includes('session_list'), names.join(' '))
   assert(names.includes('graph_apply'), names.join(' '))
-  assertEquals(applied[0].created.by, me)
+  assertEquals([applied[0].created.by, applied[0].created.via], [undefined, me])
   assertEquals(found[0].entity.eid, 'boot-session')
   assertEquals(found[0].session.status, 'empty')
 })

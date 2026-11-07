@@ -50,11 +50,11 @@ let empty = await speaking(g, (await g.get(['empty']))[0])
 for (
   let [login, expected] of [
     [{ by: 'external' }, { by: 'external', via: 'empty' }],
-    [{ by: 'process', via: 'process' }, { via: 'empty' }],
+    [{ via: 'process' }, { via: 'empty' }],
     [null, { via: 'empty' }],
   ] as [Actor | null, Actor][]
 ) {
-  test(`an unnamed connection keeps its run with login ${login?.by ?? 'none'}`, () => {
+  test(`an unnamed connection keeps its run with login ${JSON.stringify(login)}`, () => {
     assertEquals(writer(empty, login), expected)
   })
 }

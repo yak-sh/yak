@@ -395,7 +395,8 @@ let unknownVia = await (async () => {
   let door = mcp({
     graph: g,
     sessions: g,
-    authenticate: () => ({ by: 'process', via: 'process' }),
+    authenticate: () => ({ via: 'process' }),
+    me: 'process',
   })
   let request = call('graph_apply', {
     bundles: [{ entity: { eid: 'b1' }, book: { price: 12 } }],
@@ -426,7 +427,8 @@ let unnamedModern = await (async () => {
   let door = mcp({
     graph: g,
     sessions: g,
-    authenticate: () => ({ by: process, via: process }),
+    authenticate: () => ({ via: process }),
+    me: process,
   })
   let request = rpc('tools/call', {
     name: 'graph_apply',

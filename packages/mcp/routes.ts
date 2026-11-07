@@ -31,6 +31,8 @@ export type Hosting = {
   config: { name?: string }
   graph: Graph
   who: Authenticate
+  /** The process serving the host, whose own writes come through it. */
+  me?: string
   tools: NamedTool[]
   runner?: Runner
   search?: Search
@@ -50,6 +52,7 @@ let mounted = async (host: Hosting): Promise<Handler> => {
     runner: host.runner,
     sessions: host.graph.vocab.comp(SESSION) ? host.graph : undefined,
     authenticate: host.who,
+    me: host.me,
     tools: host.tools.filter((t) => !tier.has(t.name)),
     search: host.search,
     reply: host.reply,

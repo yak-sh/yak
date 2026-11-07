@@ -61,6 +61,9 @@ export type MountOptions = Omit<Options, 'actor'> & {
    * (default: nobody). Throwing `Unauthorized` refuses the request with a
    * 401. */
   authenticate?: Authenticate
+  /** The process serving this door: a login of nobody through it is the
+   * host's own fallback, which opens a connection of its own. */
+  me?: string
   /** Legacy one-shot call timeout in ms; modern exchanges use client cancellation. */
   timeout?: number
   /** The clock the handler keeps time by: the legacy `timeout`, and its
@@ -83,21 +86,15 @@ let refusing = (err: unknown, request: Request): Response => {
 let ID = 'mcp-session-id'
 
 // The host's own process fallback: a request that named no caller, which the
-// host signs as its process acting for itself through itself.
-let fallback = (login: Actor | null) => !!login?.by && login.by == login.via
-
-// What a call speaks as where no connection names its run: the login, except
-// the host's fallback, which comes through the process for nobody. A process
-// is an instrument, never an actor, so it stands in `via` alone.
-let unnamed = (login: Actor | null): Actor | null =>
-  fallback(login) ? { via: login!.via } : login
+// host signs as nobody through its process `me`. A process is an instrument,
+// never an actor, so it stands in `via` alone.
+let fallback = (login: Actor | null, me?: string) =>
+  !!me && !login?.by && login?.via == me
 
 /** The connection's own actor wins over its login. An authenticated identity
  * outside the graph remains a fallback when the connection names no actor. */
 export let writer = (session: Actor, login: Actor | null): Actor =>
-  !session.by && login?.by && !fallback(login)
-    ? { ...session, by: login.by }
-    : session
+  !session.by && login?.by ? { ...session, by: login.by } : session
 
 // The header is an opaque connection id, not a graph address. A process can
 // restart between requests: the graph, rather than this handler, remembers it.
@@ -105,6 +102,7 @@ let connected = async (
   graph: Graph,
   id: string | null,
   actor: Actor | null,
+  me?: string,
 ): Promise<{ session: Bundle; id: string } | undefined> => {
   if (id != null) {
     if (!id) return undefined
@@ -120,7 +118,7 @@ let connected = async (
     return { session, id }
   }
   let fresh = crypto.randomUUID()
-  let owner = actor?.by && !fallback(actor)
+  let owner = actor?.by
     ? (await graph.get([actor.by]))[0]?.entity.eid
     : undefined
   let [session] = await graph.apply([{
@@ -134,7 +132,7 @@ let connected = async (
       // identity stays on this request's attribution without making session
       // creation fail.
       ...(owner ? { actor: owner } : {}),
-      ...(fallback(actor) ? { fallback: true } : {}),
+      ...(fallback(actor, me) ? { fallback: true } : {}),
     },
   }], { trusted: true })
   return { session, id: fresh }
@@ -658,11 +656,14 @@ export let mcp = (opts: MountOptions): Handler => {
       // A request whose run the door already knows (named in `x-via`, or by
       // the harness call its message makes) speaks through that run; only
       // one naming none speaks through a connection of its own. The host's
-      // own fallback is the process acting through itself, which names none.
-      let named = !!actor?.via && actor.via != actor.by
-      let conn = named || !opts.sessions
-        ? undefined
-        : await connected(opts.sessions, request.headers.get(ID), actor)
+      // own fallback is its process for nobody, which names none.
+      let named = !!actor?.via && !fallback(actor, opts.me)
+      let conn = named || !opts.sessions ? undefined : await connected(
+        opts.sessions,
+        request.headers.get(ID),
+        actor,
+        opts.me,
+      )
       if (
         !named && opts.sessions && request.headers.has(ID) &&
         !conn
@@ -671,7 +672,7 @@ export let mcp = (opts: MountOptions): Handler => {
       }
       let caller = conn
         ? writer(await speaking(opts.sessions!, conn.session), actor)
-        : unnamed(actor)
+        : actor
       // Whatever else the calling program serves — resources, prompts — is
       // registered before the request is answered, so `resources/list` sees
       // them on the very first call rather than the second.
@@ -719,7 +720,7 @@ export let mcp = (opts: MountOptions): Handler => {
     }
     let mcp
     try {
-      mcp = await built(unnamed(actor), { method: message.method as string })
+      mcp = await built(actor, { method: message.method as string })
     } catch (err) {
       await report(err)
       return rejected(

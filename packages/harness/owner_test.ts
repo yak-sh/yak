@@ -22,9 +22,7 @@ let host = { me: 'me', config: { person: 'jeff' } }
 let owner = (actor: Actor) =>
   conversationOwner({ entity: { eid: 'c' }, $actor: actor }, g, host as never)
 
-for (
-  let actor of [{ by: 'me', via: 'me' }, { via: 'me' }, { via: 'opened' }]
-) {
+for (let actor of [{ via: 'me' }, { via: 'opened' }]) {
   test(`the host fallback ${JSON.stringify(actor)} speaks as its person`, async () => {
     assertEquals(await owner(actor), 'jeff')
   })

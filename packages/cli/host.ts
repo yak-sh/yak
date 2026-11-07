@@ -299,13 +299,14 @@ let revealing = (vault?: Local): Reveal =>
   vault ? { secret: (name) => peek(vault, name, { env: process.env.get }) } : {}
 
 /**
- * Who a host writes as when no request named a caller: this PROCESS, acting
- * for itself through itself.
+ * Who a host writes as when no request named a caller: nobody, through this
+ * PROCESS. A process is an instrument, never an actor, so it stands in `via`
+ * alone, the way a session does (M-31958).
  *
  * There is no configured actor name. A run of a program is not a singleton and
  * never was — two `yak` commands and a `yak serve` over one file are three
- * writers — so the identity is the `process` row this run wrote on the way in
- * (@yaks/process `started`). That makes `created.by` the answer to *which run*
+ * writers — so the instrument is the `process` row this run wrote on the way in
+ * (@yaks/process `started`). That makes `created.via` the answer to *which run*
  * wrote a thing, and lets a child process's row, written by its parent, record
  * whose child it is without needing a property for it.
  *
@@ -313,7 +314,7 @@ let revealing = (vault?: Local): Reveal =>
  * writes go unattributed rather than attributed to an id nothing created.
  */
 export let writer = (vocab: Vocab): Actor | null =>
-  vocab.comp(PROCESS) ? { by: selfEid(), via: selfEid() } : null
+  vocab.comp(PROCESS) ? { via: selfEid() } : null
 
 /**
  * Open the graph a config names, for the roles this process serves: import
@@ -382,7 +383,7 @@ let composed = async (
   let clock = opts.clock ?? system
   let report = reporter(
     opts.readOnly ? {} : config,
-    { by: selfEid(), via: selfEid() },
+    { via: selfEid() },
     // Asked now and awaited only by a report: the commit is this run's, and
     // a command that reports nothing does not wait on git to learn it.
     config.tracker && !opts.readOnly
