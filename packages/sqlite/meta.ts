@@ -20,6 +20,7 @@ import {
   eq,
   ge,
   lt,
+  revision,
   select,
   table,
   val,
@@ -163,9 +164,15 @@ export let requires = (driver: Driver, plugins: readonly string[]): void => {
 // A key's value, read without assuming the table is there yet. The table is
 // asked after by name (`table_info`, empty for one that is not there) rather
 // than found in the whole catalogue, which a store reads on every wake.
-// The drivers whose file has the table: once it has, it keeps it, so a value
-// read again is one statement.
+// The drivers whose file has the table: once it has, it keeps it. A value read
+// again is held by its connection until a write moves its data
+// (@yaks/sql `revision`): an install and every read asks the schema receipt,
+// dozens of times over a deploy that writes it a few.
 let standing = new WeakSet<Driver>()
+let held = new WeakMap<
+  object,
+  { at: number; values: Map<string, string | undefined> }
+>()
 let kept = (driver: Driver, k: string): string | undefined => {
   if (!standing.has(driver)) {
     if (!driver.query({ t: 'pragma', name: 'table_info', arg: META }).length) {
@@ -173,7 +180,11 @@ let kept = (driver: Driver, k: string): string | undefined => {
     }
     standing.add(driver)
   }
-  return meta(driver).get(k)
+  let at = revision(driver, 'data'), on = driver.connection ?? driver
+  let read = held.get(on)
+  if (read?.at !== at) held.set(on, read = { at, values: new Map() })
+  if (!read.values.has(k)) read.values.set(k, meta(driver).get(k))
+  return read.values.get(k)
 }
 
 /** The key the component tables the file holds are kept under, as their

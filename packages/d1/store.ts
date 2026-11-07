@@ -206,7 +206,7 @@ export let storage = <S extends Prepared<S>>(
 
   // Many statements, still one round trip — and, when they are writes, one
   // transaction. The answers come back per statement, in order.
-  let send = async (stmts: Stmt[]): Promise<Row[][]> =>
+  let send = async (stmts: readonly Stmt[]): Promise<Row[][]> =>
     stmts.length
       ? (await db.batch(stmts.map(prep))).map((r) => r.results.map(unbind))
       : []

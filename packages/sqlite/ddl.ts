@@ -52,6 +52,7 @@ import {
   type Derived,
   type Driver,
   eq,
+  exists,
   type Expr,
   fn,
   from,
@@ -367,8 +368,16 @@ export let retabled = (
 
 // Declared and automatic reference indexes. Created last, after `grown()`: an
 // index may name a column its table only gained on this boot, and SQLite
-// rejects one over a column that is not there yet.
-export let indexed = (vocab: Vocab): CreateIndex[] => [
+// rejects one over a column that is not there yet. Kept per vocabulary, the
+// way the statements resting on them are (./raise.ts `rests`): every store of
+// a vocabulary asks for the same list as it opens.
+let indexes = new WeakMap<Vocab, readonly CreateIndex[]>()
+export let indexed = (vocab: Vocab): readonly CreateIndex[] => {
+  let held = indexes.get(vocab)
+  if (!held) indexes.set(vocab, held = indexing(vocab))
+  return held
+}
+let indexing = (vocab: Vocab): CreateIndex[] => [
   // Adapters that only replay schema() may still have the old spine. Until
   // they opt into archetypes/migration, do not index a column they lack.
   ...(vocab.comp('archetype')
@@ -872,11 +881,29 @@ let sample = (driver: Driver) => {
   }
 }
 
-// A table remembered as empty may have filled since installation. Probe only
-// one row: a plain count bills every owner once it is no longer empty.
-let populated = (driver: Driver, name: string) =>
-  driver.query(select({ cols: [lit(1)], from: table(name), limit: lit(1) }))
-    .length > 0
+// Those of `names` that hold a row, asked in one statement: a plain count
+// bills every row of a table, and this one row at most of each, as a probe of
+// its own would, but one statement for all of them.
+let populated = (driver: Driver, names: string[]): string[] => {
+  let filled: string[] = []
+  for (let i = 0; i < names.length; i += PROBES) {
+    let some = names.slice(i, i + PROBES)
+    let [row] = driver.query(select({
+      cols: some.map((name, j) =>
+        as(
+          exists(select({ cols: [lit(1)], from: table(name), limit: lit(1) })),
+          `t${j}`,
+        )
+      ),
+    }))
+    filled.push(...some.filter((_, j) => Number(row[`t${j}`])))
+  }
+  return filled
+}
+
+// Below SQLite's column limit and a Durable Object's, for one statement's
+// probes.
+let PROBES = 100
 
 // Whether a table remembered by name is still there: a catalogue read, no rows.
 let extant = (driver: Driver, name: string) =>
@@ -884,8 +911,7 @@ let extant = (driver: Driver, name: string) =>
 
 // Whether a table expected to hold rows does: one billed row at most.
 let holds = (driver: Driver, name: string) =>
-  driver.query(select({ cols: [lit(1)], from: table(name), limit: lit(1) }))
-    .length > 0
+  populated(driver, [name]).length > 0
 
 let joined = (owed: string[] = [], more: string[]) => [
   ...new Set([...owed, ...more]),
@@ -931,8 +957,13 @@ let owing = (
 ): Statistics | undefined => {
   let owed = previous?.owed ?? []
   if (previous && unchanged && bytes < previous.bytes * 10) {
-    let empty = previous.empty.filter((name) => extant(driver, name))
-    let filled = empty.filter((name) => populated(driver, name))
+    let standing = new Set(
+      driver.query({ t: 'pragma', name: 'table_list' }).map((r) =>
+        String(r.name)
+      ),
+    )
+    let empty = previous.empty.filter((name) => standing.has(name))
+    let filled = populated(driver, empty)
     if (!filled.length && empty.length == previous.empty.length) return
     return {
       bytes: previous.bytes,
@@ -956,7 +987,7 @@ let owing = (
   ) {
     let missing = names.map((r) => String(r.name))
       .filter((name) => !taken.has(name) && !owed.includes(name))
-    let filled = missing.filter((name) => populated(driver, name))
+    let filled = populated(driver, missing)
     let partial = names.filter((r) =>
       taken.has(String(r.name)) &&
       driver.query({ t: 'pragma', name: 'index_list', arg: String(r.name) })
@@ -975,7 +1006,7 @@ let owing = (
   // afresh, found at a billed row a table, and the bytes stored now are what
   // the next growth is measured from.
   let all = names.map((r) => String(r.name))
-  let filled = all.filter((name) => holds(driver, name))
+  let filled = populated(driver, all)
   return {
     bytes,
     empty: all.filter((name) => !filled.includes(name)),

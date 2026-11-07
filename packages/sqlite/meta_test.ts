@@ -3,7 +3,7 @@
 import { test } from '@yaks/testing'
 import { assert, assertEquals, assertNotEquals } from '@std/assert'
 import { META, schema } from './ddl.ts'
-import { EPOCH, epoch, meta } from './meta.ts'
+import { EPOCH, epoch, epochAt, meta } from './meta.ts'
 import { objects, storage } from './mod.ts'
 import { type Driver, insert, render } from '@yaks/sql'
 import { mem, shop } from './testing.ts'
@@ -93,4 +93,19 @@ test('install adopts a server_meta the host already raised', () => {
   // And the rows it already held are still the store's answers.
   assertEquals(epoch(d), 'held')
   assertEquals(meta(d).get(EPOCH), 'held')
+})
+
+test('a key read again follows each write and rollback', () => {
+  let d = installed()
+  let m = meta(d)
+  m.set(EPOCH, 'one')
+  assertEquals(epochAt(d), 'one')
+  m.set(EPOCH, 'two')
+  assertEquals(epochAt(d), 'two')
+  d.query({ t: 'savepoint', name: 'held' })
+  m.set(EPOCH, 'three')
+  assertEquals(epochAt(d), 'three')
+  d.query({ t: 'rollback', to: 'held' })
+  d.query({ t: 'release', name: 'held' })
+  assertEquals(epochAt(d), 'two')
 })

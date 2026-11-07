@@ -50,3 +50,12 @@ test('an empty reference policy remains a valid source screen', () => {
     [],
   )
 })
+test('a value of a component no table holds yet selects nothing', () => {
+  let absent = { absent: ['link'] }
+  equal(compile(parse('.link.to=target'), vocab, absent).answer, [])
+  equal(
+    compile(parse('.link.to=target|.entity.eid=two'), vocab, absent).answer,
+    undefined,
+  )
+  equal(compile(parse('!link.to'), vocab, absent).answer, undefined)
+})
