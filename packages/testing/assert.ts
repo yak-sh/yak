@@ -1,7 +1,53 @@
 // What a test says it expects. Each check returns what it checked, so it
 // reads as a value (`let row = ok(rows[0])`), and a failure throws with the
 // difference shown.
-import { assert, assertEquals, AssertionError } from '@std/assert'
+import {
+  assert,
+  assertEquals,
+  AssertionError,
+  equal as same,
+} from '@std/assert'
+
+let object = (v: unknown): v is Record<string, unknown> =>
+  typeof v == 'object' && v !== null
+
+type Node = { nodeType: number; outerHTML?: string; textContent: unknown }
+
+// A DOM node, linkedom's or a browser's. Its properties link the whole
+// document, so showing them never ends; a failure shows its markup instead.
+let node = (v: object): v is Node =>
+  typeof (v as Node).nodeType == 'number' && 'textContent' in v
+
+// `v` as a failure shows it: each DOM node within its arrays, plain objects,
+// maps and sets as the node's markup, the rest as it is.
+let shown = (v: unknown, path = new Set<object>()): unknown => {
+  if (!object(v) || path.has(v)) return v
+  if (node(v)) return v.outerHTML ?? v.textContent
+  let within = new Set(path).add(v)
+  let show = (x: unknown) => shown(x, within)
+  return Array.isArray(v)
+    ? v.map(show)
+    : v instanceof Map
+    ? new Map([...v].map(([k, x]) => [show(k), show(x)]))
+    : v instanceof Set
+    ? new Set([...v].map(show))
+    : [Object.prototype, null].includes(Object.getPrototypeOf(v))
+    ? Object.fromEntries(Object.entries(v).map(([k, x]) => [k, show(x)]))
+    : v
+}
+
+// `actual` is `expected`, or a failure shows how they differ. Values unequal
+// yet shown alike (two nodes with one markup) say so.
+let check = (actual: unknown, expected: unknown, message?: string) => {
+  if (same(actual, expected)) return
+  let [a, b] = [shown(actual), shown(expected)]
+  assertEquals(a, b, message)
+  throw new AssertionError(
+    `Values are not equal, though they show alike${
+      message ? `: ${message}` : '.'
+    }\n${Deno.inspect(a, { depth: 4 })}`,
+  )
+}
 
 /**
  * Deep equality: `actual` is `expected`, structurally.
@@ -11,7 +57,7 @@ import { assert, assertEquals, AssertionError } from '@std/assert'
  * ```
  */
 export let equal = <T>(actual: T, expected: T, message?: string): T => {
-  assertEquals(actual, expected, message)
+  check(actual, expected, message)
   return actual
 }
 
@@ -26,9 +72,6 @@ export let ok = <T>(actual: T, message?: string): NonNullable<T> => {
   assert(actual, message)
   return actual
 }
-
-let object = (v: unknown): v is Record<string, unknown> =>
-  typeof v == 'object' && v !== null
 
 // `actual`, cut to the shape of `pattern`: a key the pattern leaves out is
 // left out, a RegExp that tests true and a class the value is an instance of
@@ -65,7 +108,7 @@ let cut = (actual: unknown, pattern: unknown): unknown =>
  * ```
  */
 export let match = <T>(actual: T, pattern: unknown, message?: string): T => {
-  assertEquals(cut(actual, pattern), pattern, message)
+  check(cut(actual, pattern), pattern, message)
   return actual
 }
 

@@ -4414,6 +4414,10 @@ importers:
       '@yaks/process':
         specifier: 0.2.28
         version: link:../process
+    devDependencies:
+      linkedom:
+        specifier: ^0.18.12
+        version: 0.18.15
 
   packages/text:
     dependencies:

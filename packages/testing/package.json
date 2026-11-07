@@ -22,5 +22,7 @@
     "@yaks/fp": "0.2.23",
     "@yaks/process": "0.2.28"
   },
-  "devDependencies": {}
+  "devDependencies": {
+    "linkedom": "^0.18.12"
+  }
 }
