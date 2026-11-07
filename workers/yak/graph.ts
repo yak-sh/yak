@@ -755,15 +755,32 @@ installContext({
 // effect's run, which deletes itself once it finishes (@yaks/effects
 // pool.ts). So the receipts each hour's first use writes, and the runs the
 // directory's effects leave, hold back no serving check (T-131212,
-// T-147454). A deleted entity's stamps and tombstone go with it. Any other
+// T-147454). A deleted entity's stamps and tombstone go with it.
+//
+// A sign-in code (`signin`) is an entity no copied line names: it is read only
+// where a code is asked for and spent (signin.ts), by the directory's own
+// query, never through the copy, and nothing points at one. So a write to
+// one, the stamps on it included, changes no answer the copy could give, and
+// asking, every guess and the burial after a right one raise none (T-148651).
+// A stamp on any other entity is as fenced as what it stamps. Any other
 // delete or component fences.
-let UNFENCED = new Set([...RECEIPTS, 'archetype'])
-let UNHELD = new Set([...UNFENCED, 'effect', 'created', 'updated'])
+let UNNAMED = new Set(['signin'])
+let STAMPS = new Set(['created', 'updated'])
+let UNFENCED = new Set([...RECEIPTS, 'archetype', ...UNNAMED])
+let UNHELD = new Set([...UNFENCED, 'effect', ...STAMPS])
 let UNREAD = -2
-let unfenced = (bundles: Bundle[], words = UNFENCED): boolean =>
-  bundles.every((b) =>
-    !deleted(b) && comps(b).every(([name]) => words.has(name))
+let unfenced = (bundles: Bundle[], words = UNFENCED): boolean => {
+  let unnamed = new Set(
+    bundles.filter((b) => comps(b).some(([name]) => UNNAMED.has(name)))
+      .map((b) => b.entity.eid),
   )
+  return bundles.every((b) =>
+    !deleted(b) &&
+    comps(b).every(([name]) =>
+      words.has(name) || STAMPS.has(name) && unnamed.has(b.entity.eid)
+    )
+  )
+}
 // The entities a batch deletes, and whether entities as they stand hold
 // anything an authorization reads.
 let killed = (bundles: Bundle[]): Eid[] => [
@@ -1540,6 +1557,7 @@ export class Store {
                       let named = rest.flatMap((b) =>
                         deleted(b) ? ['$delete'] : comps(b).map(([n]) => n)
                       )
+                      console.log('DEBUG', JSON.stringify(rest))
                       throw new Error(
                         `An unfenced write committed ${named}`,
                       )

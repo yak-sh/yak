@@ -18,6 +18,8 @@ import {
   ServingCopyUnavailable,
 } from './serving-copy.ts'
 import { db, slot, state } from './testing.ts'
+import { mint, spend } from './signin.ts'
+import { within } from './defects.ts'
 
 let fixture = async (rules: Rule[] = [], time?: Clock) => {
   let saved: ServingCopyState | undefined
@@ -239,6 +241,37 @@ await proof(
       equal({ run, seat }, {
         run: { fences: 0, left: 0 },
         seat: { fences: 1 },
+      })
+  },
+)
+
+// A sign-in code's rows are read only by spending and asking, from the
+// directory itself, never from the copy (T-148651): asking, guessing and the
+// burial after a right guess hold back no serving check.
+await proof(
+  "a sign-in code's whole life leaves serving checks standing",
+  async () => {
+    let f = await fixture()
+    let at = 'fence@example.com'
+    let code = (await mint(f.at, 'secret', at))!
+    let buried: Promise<void>[] = []
+    let spent = await within(
+      {},
+      {},
+      async () => [
+        await spend(f.at, 'secret', at, code == '000000' ? '000001' : '000000'),
+        await spend(f.at, 'secret', at, code),
+      ],
+      undefined,
+      { retain: (work) => buried.push(work) },
+    )
+    await Promise.all(buried)
+    let left = (await f.at.query(`.signin.email=${at}`)).length
+    return () =>
+      equal({ spent, left, fences: f.begins.length }, {
+        spent: [false, true],
+        left: 0,
+        fences: 0,
       })
   },
 )
