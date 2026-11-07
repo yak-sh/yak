@@ -1,8 +1,9 @@
 // A class the runtime constructs at once whose object is made on its first
-// call, from a module loaded then (T-148770). workerd compiles a module when
-// it is first imported (wrangler.toml `new_module_registry`), so an isolate
-// that wakes a Store compiles the Store's code and not the router's, and one
-// that answers a page compiles none of the Store's own.
+// call, from a module loaded then (T-148770). A module is evaluated when it is
+// first imported, so an isolate that wakes a Store evaluates the Store's code
+// and not the router's, and one that answers a page none of the Store's own.
+// Compiling is the registry's, which compiles every module as the isolate
+// starts (wrangler.toml, T-148980).
 
 type Made = new (...args: never[]) => object
 type Answering = Record<string, (...args: unknown[]) => unknown>

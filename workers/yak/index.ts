@@ -4,13 +4,13 @@
 // nothing that decides where a request goes; that is the router (kernel.ts).
 //
 // Nothing here imports the code it runs (T-148770). Each class loads its own
-// module when the runtime first calls it, and workerd compiles a module when
-// it is first imported (wrangler.toml `new_module_registry`): an isolate that
-// wakes a Store compiles the Store's code, one that answers a page from Site
-// compiles Site's, and neither compiles the other's. The Store Durable Object
-// (graph.ts) is its own module, and so are the Wire object (stream.ts), which
-// holds a person's open agent stream, and the Builder (build.ts), which holds
-// a space's build conversation.
+// module when the runtime first calls it, and a module is evaluated when it is
+// first imported: an isolate that wakes a Store evaluates the Store's code, one
+// that answers a page from Site evaluates Site's, and neither the other's.
+// Every module is compiled as the isolate starts (wrangler.toml, T-148980).
+// The Store Durable Object (graph.ts) is its own module, and so are the Wire
+// object (stream.ts), which holds a person's open agent stream, and the
+// Builder (build.ts), which holds a space's build conversation.
 import {
   DurableObject,
   RpcTarget,

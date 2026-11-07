@@ -1,8 +1,8 @@
 // The kernel's modules: every door stays a dynamic import, and what the entry
 // imports statically shares one chunk. The entry (index.ts) loads each class's
-// code on its first call, and workerd compiles a module when it is first
-// imported (wrangler.toml `new_module_registry`), so that chunk is all a cold
-// isolate compiles before it knows what it was woken for (T-148770).
+// code on its first call, and a module is evaluated when it is first imported,
+// so that chunk is all a cold isolate evaluates before it knows what it was
+// woken for (T-148770).
 import * as io from '@yaks/file/io'
 import * as system from '@yaks/process/system'
 import { build, type Metafile, stop } from 'esbuild'
