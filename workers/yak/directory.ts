@@ -737,6 +737,7 @@ export type Row = {
   visitor_share?: { percent?: number | null; calls?: number | null }
   started?: { space?: Id | null }
   newcomer?: { at?: string }
+  visitor_build?: { at?: string }
   created?: { at?: string }
   member?: { space: Id; person: Id; role: Role; own?: boolean }
   grant?: { app: Id; person: Id; access: Role }
@@ -830,6 +831,11 @@ let meterOf = (r: Row): Meter | null =>
       at: r.meter.at ?? '',
     }
     : null
+
+/** Whether a person's row is a newcomer's (newcomer.ts): the home page's box
+ * signed their browser in, and they have no address and no number yet. */
+export let newcomerIs = (r?: Pick<Row, 'newcomer' | 'email' | 'phone'>) =>
+  !!r?.newcomer && !r.email && !r.phone
 
 // A person's address as a hostname label: the local part, lowercased, with
 // anything that is not a slug character folded to a dash. `jeff@yak.sh`
@@ -2397,7 +2403,7 @@ export let directoryRows = (rows: {
           ),
           // A row's days ride only here: every other read of a row does
           // without.
-          query(`.space&${SPACE_ABOUT}&?trend&${stamps}`),
+          query(`.space&${SPACE_ABOUT}&?trend&?visitor_build&${stamps}`),
           query(`.app&${ABOUT}&?trend&${stamps}&?changed&?errored`),
           query('.member'),
           // Only which app and when: a release's whole row is its file list.
@@ -2613,12 +2619,9 @@ export let directoryRows = (rows: {
     // page that shows its bylines shows names (T-32654).
     nameAt: async (person: string): Promise<string | null> =>
       (await self.known(person))?.name ?? null,
-    // Whether this person is a newcomer (newcomer.ts): the home page's box
-    // signed their browser in, and they have no address and no number yet.
-    newcomer: async (person: string) => {
-      let row = await one(`.entity.eid=${person}`)
-      return !!row?.newcomer && !row.email && !row.phone
-    },
+    // Whether this person is a newcomer (`newcomerIs`).
+    newcomer: async (person: string) =>
+      newcomerIs(await one(`.entity.eid=${person}`)),
     // All at once, from the person's one row: what to call them, where to
     // write to them and the mobile number they gave. Null for anybody the platform has no address for.
     known: async (person: string) =>

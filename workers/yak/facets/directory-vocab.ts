@@ -451,12 +451,22 @@ export let directoryDoc: VocabDoc = {
       properties: { space: owned(ref('keep')) },
     },
     // When a person came in by the home page's box (newcomer.ts), before they
-    // had an address: a newcomer until they give one (directory.ts
-    // `newcomer`).
+    // had an address: a newcomer (directory.ts `newcomer`) until they sign in
+    // on that browser or their space is erased, when the row goes
+    // (erase.ts `vacated`).
     newcomer: {
       component: true,
       type: 'object',
       properties: { at: { type: 'string', format: 'date-time' } },
+    },
+    // When the home page's box opened this space for a newcomer
+    // (newcomer.ts `oneBuild`). It stays once they keep it, so the platform
+    // admin's Visitor builds page (admin.ts) says who kept each build after
+    // the newcomer's own row is gone.
+    visitor_build: {
+      component: true,
+      type: 'object',
+      properties: { at: owned(time) },
     },
     // What a space just spent on its month: a letter, a build, a model call, a
     // voice's lease, an app's text, container seconds. The directory adds it to the `meter`

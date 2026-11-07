@@ -37,6 +37,7 @@ import {
   type Directory,
   idOf,
   META,
+  newcomerIs,
   type Row,
   type Space,
   spaceOf,
@@ -367,27 +368,27 @@ let facts = (all: [string, string][]) =>
     ),
   )
 
-// Every visitor's build (newcomer.ts), newest first: the newcomer the home
-// page's box made, the space it opened them (their `started`), and who owns
-// that space now, when the newcomer no longer does: whoever kept it by signing
-// up (newcomer.ts `keep`).
+// Every visitor's build (newcomer.ts), newest first: each space the home
+// page's box opened a newcomer (its `visitor_build`), and who owns it now when
+// a newcomer no longer does: whoever kept it by signing up (newcomer.ts
+// `keep`).
 let builds = (d: Reading) => {
   let owners = group(
     d.census.seats.filter((s) => s.member!.role == 'owner'),
     seatSpace,
   )
+  let newcomers = new Set(
+    d.census.people.filter(newcomerIs).map((r) => r.entity.eid),
+  )
   return newest(
-    d.census.people.filter((r) => r.newcomer),
-    (r) => r.newcomer!.at ?? '',
-  ).map((r) => {
-    let at = r.started?.space ? idOf(r.started.space) : ''
-    let held = (owners.get(at) ?? []).map(seatPerson)
-    return {
-      r,
-      space: d.spaces.get(at),
-      keeper: held.includes(r.entity.eid) ? undefined : held[0],
-    }
-  })
+    d.census.spaces.filter((r) => r.visitor_build),
+    (r) => r.visitor_build!.at ?? '',
+  ).map((r) => ({
+    r,
+    space: d.spaces.get(r.entity.eid),
+    keeper: (owners.get(r.entity.eid) ?? []).map(seatPerson)
+      .find((p) => !newcomers.has(p)),
+  }))
 }
 
 // The visitors' builds: how many the box opened today against the day's cap,

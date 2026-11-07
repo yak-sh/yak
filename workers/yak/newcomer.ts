@@ -24,8 +24,10 @@ import { token } from '@yaks/graph'
 import type { Bundle, Comp, Tool } from '@yaks/graph'
 import { Stale } from '@yaks/graph/errors'
 import { derivedEid } from '@yaks/graph/identity'
-import { type Directory, type Space, stamp } from './directory.ts'
+import { type Directory, newcomerIs, stamp } from './directory.ts'
+import type { Row, Space } from './directory.ts'
 import type { Namespace } from './door.ts'
+import type { Env as Platform } from './env.ts'
 import { meta } from './meta.ts'
 import { type Ctx, refuse } from './tool.ts'
 
@@ -182,73 +184,83 @@ export let counted = async (env: Env, source: string, now = new Date()) => {
 
 /** A newcomer's space, held to one build's dollars: its budget is PER_BUILD,
  * said to be a newcomer's so its refusals ask for their email (meter.ts
- * `unkept`), and it holds no starter. */
-export let oneBuild = (env: Env, space: Space) =>
+ * `unkept`), and it holds no starter. It is a visitor's build from now on,
+ * kept or not (admin.ts). */
+export let oneBuild = (env: Env, space: Space, now = new Date()) =>
   stamp(env, {
     entities: [{
       entity: { eid: space.eid },
       budget: { dollars: PER_BUILD, newcomer: true },
       starter: { dollars: 0 },
+      visitor_build: { at: now.toISOString() },
     }],
   })
 
 /**
  * A newcomer keeping what they built (D-146737): signing in on the browser a
  * newcomer `was`, as `person`, moves the newcomer's owner seats to them, so
- * the spaces, their apps and their chats are theirs. Each space is lifted to
- * its plan's budget, and to the starter too when this is the first space
- * `person` has started. A space is their own only when they own none yet.
- * Nothing happens for anyone who was not a newcomer.
+ * the spaces, their apps and their chats are theirs, and the browsers the
+ * newcomer held too, so the guest work and the visits made on them are
+ * theirs (attribution.ts, visit.ts). Each space is lifted to its plan's
+ * budget, and to the starter too when this is the first space `person` has
+ * started. A space is their own only when they own none yet. The newcomer
+ * then holds nothing and goes (erase.ts `vacated`), and the browser is
+ * signed in as `person`. Nothing happens for anyone who was not a newcomer.
  */
 export let keep = async (
-  env: Env,
+  env: Platform,
   dir: Directory,
   was: string | null,
   person: string,
 ) => {
   if (!was || was == person || !await dir.newcomer(was)) return
-  let [theirs, mine, [row]] = await Promise.all([
+  let [theirs, mine, [row], browsers] = await Promise.all([
     dir.seats(was, 'owner'),
     dir.seats(person, 'owner'),
     meta(env).query(`.entity.eid=${person}&?started`),
+    meta(env).query(`.browser.by=${was}`),
   ])
-  if (!theirs.length) return
-  let first = !row?.started
-  await stamp(env, {
-    entities: [
-      ...theirs.flatMap((s) => [
-        {
-          entity: { eid: s.seat },
-          member: { person, own: !mine.length && s == theirs[0] },
-        },
-        {
-          entity: { eid: s.space.eid },
-          budget: null,
-          ...first && s == theirs[0] ? { starter: null } : {},
-        },
-      ]),
-      ...first
-        ? [{ entity: { eid: person }, started: { space: theirs[0].space.eid } }]
-        : [],
-    ],
-  })
+  let first = !row?.started && theirs.length > 0
+  let moved = [
+    ...browsers.map((b) => ({
+      entity: { eid: b.entity.eid },
+      browser: { by: person },
+    })),
+    ...theirs.flatMap((s) => [
+      {
+        entity: { eid: s.seat },
+        member: { person, own: !mine.length && s == theirs[0] },
+      },
+      {
+        entity: { eid: s.space.eid },
+        budget: null,
+        ...first && s == theirs[0] ? { starter: null } : {},
+      },
+    ]),
+    ...first
+      ? [{ entity: { eid: person }, started: { space: theirs[0].space.eid } }]
+      : [],
+  ]
+  if (moved.length) await stamp(env, { entities: moved })
+  let { vacated } = await import('./erase.ts')
+  await vacated(env, dir, was, { person, role: 'owner' })
 }
 
 /**
- * The spaces newcomers opened more than KEEPING ago that nobody kept and
- * that are not in the trash yet, each with the newcomer who owns it. Keeping
- * moves a newcomer's owner seats to whoever signed in (`keep`), so a seat a
- * newcomer still holds is a space nobody kept.
+ * The newcomers who came in more than KEEPING ago, each with the spaces they
+ * own, in the trash or not. Keeping moves a newcomer's owner seats to
+ * whoever signed in (`keep`) and the newcomer goes, as they go when their
+ * space is erased (erase.ts `vacated`), so a newcomer still here is one
+ * nobody kept, and one holding nothing is one whose going died halfway.
  */
 export let unkept = async (env: Env, dir: Directory, now = new Date()) => {
   let since = now.getTime() - KEEPING
-  let people = (await meta(env).query('.newcomer ?email ?phone')).filter((r) =>
-    !r.email && !r.phone &&
-    Date.parse(String((r.newcomer as Comp).at)) <= since
-  ).map((r) => r.entity.eid)
+  let people = (await meta(env).query('.newcomer ?email ?phone') as Row[])
+    .filter((r) => newcomerIs(r) && Date.parse(r.newcomer!.at ?? '') <= since)
+    .map((r) => r.entity.eid)
   let seats = await Promise.all(people.map((p) => dir.seats(p, 'owner')))
-  return seats.flatMap((held, i) =>
-    held.filter((s) => !s.space.trashed)
-      .map((s) => ({ space: s.space, person: people[i] }))
-  )
+  return people.map((person, i) => ({
+    person,
+    spaces: seats[i].map((s) => s.space),
+  }))
 }

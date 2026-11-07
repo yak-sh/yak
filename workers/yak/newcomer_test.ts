@@ -26,6 +26,7 @@ import {
 import { collected } from './erase.ts'
 import { answer } from './admin.ts'
 import { META } from './directory.ts'
+import { meta } from './meta.ts'
 import { COOKIE, sign } from './lib/token.ts'
 import type { Ctx } from './tool.ts'
 import { TOOLS } from './tools.ts'
@@ -78,8 +79,12 @@ let chat = parseHTML(
 ).document
 let card = chat.querySelector('form.Talk_Keep')
 
-// Keeping: Dana, new here, keeps the first space; Ana, who has a space of
-// her own, keeps the second beside it.
+let newcomer = await k.dir.newcomer(owner)
+let known = await k.dir.known(owner)
+
+// Keeping: Dana, new here, keeps the first space and the browser the
+// newcomer built it on; Ana, who has a space of her own, keeps the second
+// beside it.
 let person = async (address: string) => {
   let eid = crypto.randomUUID()
   await k.dir.stamp({
@@ -87,8 +92,16 @@ let person = async (address: string) => {
   })
   return eid
 }
+let row = (eid: string) => meta(env).query(`.entity.eid=${eid}`)
+let browser = crypto.randomUUID()
+await k.dir.stamp({ entities: [{ entity: { eid: browser }, browser: {} }] })
+await k.dir.stamp({
+  entities: [{ entity: { eid: browser }, browser: { by: owner } }],
+})
 let dana = await person('dana@example.com')
 await keep(env, k.dir, owner, dana)
+let keptBrowser = (await row(browser))[0]?.browser
+let keptNewcomer = await row(owner)
 let ana = await person('ana@example.com')
 let anas = await k.dir.own(ana)
 let other = (await k.dir.space(spaceOf(second)))!
@@ -98,7 +111,9 @@ let anaSeats = await k.dir.seats(ana, 'owner')
 let kept = (await k.dir.space(space.slug))!
 
 // Nobody keeps a third: the daily sweep leaves it its week, then trashes it.
-let left = spaceOf(await build('A plant watering log', { ip: '203.0.113.9' }))
+let leaving = await build('A plant watering log', { ip: '203.0.113.9' })
+let left = spaceOf(leaving)
+let leaver = (await k.dir.owners((await k.dir.space(left))!))[0]
 let swept = async (after: number) => {
   await collected(env, new Date(Date.now() + after))
   let slugs = [left, space.slug, other.slug]
@@ -135,6 +150,19 @@ let builds = parseHTML(
     k.dir,
   ))!.text(),
 ).document
+let today = await opened(k.dir)
+
+// Thirty days on the trash erases the third space, and its newcomer with it;
+// their browser, still signed in as them, is a stranger at the box again.
+let leaverBefore = await row(leaver)
+await collected(env, new Date(Date.now() + KEEPING + 31 * 24 * hour))
+let leaverAfter = await row(leaver)
+let anew = await build('A plant watering log, again', {
+  ip: '203.0.113.10',
+  cookie: cookieOf(leaving),
+})
+let anewSpace = (await k.dir.space(spaceOf(anew)))!
+let anewOwner = (await k.dir.owners(anewSpace))[0]
 
 test("a stranger's idea opens a space of their own, signed in, in its chat", () => {
   assertEquals(first.status, 303)
@@ -159,9 +187,27 @@ test("a newcomer's build at its budget asks for their email, not a plan", () => 
   assertEquals(unaffordable(kept, 'models', 1e6)?.includes('Plus plan'), true)
 })
 
-test('a newcomer is a person with no address yet', async () => {
-  assert(await k.dir.newcomer(owner))
-  assertEquals(await k.dir.known(owner), null)
+test('a newcomer is a person with no address yet', () => {
+  assert(newcomer)
+  assertEquals(known, null)
+})
+
+test("keeping takes the newcomer's browser, and their row goes", () => {
+  assertEquals(keptBrowser, { by: dana })
+  assertEquals(keptNewcomer, [])
+})
+
+test("erasing an unkept newcomer's space erases its newcomer", () => {
+  assertEquals(leaverBefore.length, 1)
+  assertEquals(leaverAfter, [])
+})
+
+test("an erased newcomer's browser builds as a newcomer anew", async () => {
+  assertEquals(anew.status, 303)
+  assert(anew.headers.get('set-cookie'), 'signed in again')
+  assert(anewOwner != leaver)
+  assert(await k.dir.newcomer(anewOwner))
+  assertEquals(anewSpace.budget, PER_BUILD)
 })
 
 test("a newcomer's chat asks for their email, to come back to it", () => {
@@ -253,8 +299,8 @@ test('a newcomer builds, and is asked for an address before anything else', asyn
   assertEquals(ran, ['app_new', 'app_files', 'mail_send'])
 })
 
-test("the admin's Visitor builds page says today's builds against the day's, and who kept each", async () => {
-  assertEquals(await opened(k.dir), 3)
+test("the admin's Visitor builds page says today's builds against the day's, and who kept each", () => {
+  assertEquals(today, 3)
   let said = (el: ParentNode) =>
     Object.fromEntries(
       [...el.querySelectorAll('dl > div')].map((d) => [

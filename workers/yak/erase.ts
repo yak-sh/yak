@@ -451,7 +451,11 @@ export let erase = async (
   }, vouched(who))
   // Everyone who was in it just lost every view its apps declared
   // (declared.ts, T-33004) — the same move being removed from a space makes.
-  for (let m of d.members) await reachChanged(env, m.person)
+  // A newcomer who was in it now holds nothing, and goes with it.
+  for (let m of d.members) {
+    await reachChanged(env, m.person)
+    await vacated(env, dir, m.person, who)
+  }
   return { files, apps: d.apps.length, hosts: d.hosts.length }
 }
 
@@ -796,10 +800,18 @@ export let collected = async (env: Env, now = new Date()) => {
   let dir = directory(bound(env.DIRECTORY, dirPart.fetch, env))
   // A newcomer's budget is a month's (newcomer.ts `KEEPING`): trashed, the
   // space spends nothing in the next one, and each one on its own, so one
-  // that will not go holds up none of the rest.
-  for (let { space, person } of await unkept(env, dir, now)) {
-    await trashSpace(env, dir, space, { person, role: 'owner' })
-      .catch((why) => caught(why, { request: 'trash an unkept space' }))
+  // that will not go holds up none of the rest. A newcomer holding nothing
+  // is one whose keeping or erasing died before their row went, finished.
+  for (let { person, spaces } of await unkept(env, dir, now)) {
+    let who = { person, role: 'owner' as const }
+    if (!spaces.length) {
+      await vacated(env, dir, person, who)
+        .catch((why) => caught(why, { request: 'erase a vacant newcomer' }))
+    }
+    for (let space of spaces.filter((s) => !s.trashed)) {
+      await trashSpace(env, dir, space, who)
+        .catch((why) => caught(why, { request: 'trash an unkept space' }))
+    }
   }
   let idle = new Set(await abandoned(env, now))
   let gone = 0
@@ -950,18 +962,40 @@ export let closed = async (
   for (let space of c.spaces) {
     await erase(env, dir, await doomed(dir, space), who)
   }
-  // Its credentials before its row, so none of them can write the row back.
+  await buried(env, dir, c.person, who)
+  return c
+}
+
+// A person gone: their credentials before their row, so none of them can
+// write the row back, then the row, whose death cascades to every seat,
+// grant and invite naming them, then the stores their browsers were given
+// and they never installed, which nobody else can reach.
+let buried = async (env: Env, dir: Directory, person: string, who: Who) => {
   let { unheld } = await import('./identity.ts')
-  await unheld(env, c.person)
+  await unheld(env, person)
   await dir.stamp({
-    entities: [{ entity: { eid: c.person }, tombstone: {} }],
+    entities: [{ entity: { eid: person }, tombstone: {} }],
   }, vouched(who))
-  // The stores their browsers were given and they never installed: nobody
-  // else can reach them, and they were the account's.
-  for (let given of await visits(env, { by: c.person })) {
+  for (let given of await visits(env, { by: person })) {
     await unvisited(env, given)
   }
-  return c
+}
+
+/**
+ * A newcomer (newcomer.ts) who holds nothing any more goes, as a closed
+ * account does: once keeping moved their seats to whoever signed in
+ * (newcomer.ts `keep`), or once their space was erased (`erase`). So the
+ * daily sweep (newcomer.ts `unkept`) reads only newcomers still building.
+ * Anybody else, or a newcomer with a seat left, is left alone.
+ */
+export let vacated = async (
+  env: Env,
+  dir: Directory,
+  person: string,
+  who: Who,
+) => {
+  if (!await dir.newcomer(person) || (await dir.seated(person)).length) return
+  await buried(env, dir, person, who)
 }
 
 // No app store is woken by the preview. A file write is a `written` row, which

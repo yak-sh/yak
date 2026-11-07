@@ -322,7 +322,7 @@ let starter: Renderer = {
 // anybody has, or that it went to the trash unkept. The row opens the space.
 let build: Renderer = {
   view: 'Directory.Build.Tile',
-  match: parse('.newcomer'),
+  match: parse('.visitor_build'),
   render: (b, h, ctx) => {
     let space = ctx.space as Ref | undefined
     let u = uses(ctx), keeper = str(ctx.keeper)
@@ -337,7 +337,7 @@ let build: Renderer = {
         ctx.trashed ? tag(h, 'in the trash', true) : null,
       ],
       [
-        ['Opened', moment(stamp(b, 'newcomer')) || 'unknown'],
+        ['Opened', moment(stamp(b, 'visitor_build')) || 'unknown'],
         ['Spent this month', trended(h, spend(u.spend), u.spending)],
         ['Apps', count(u.apps ?? 0)],
         ['Kept by', keeper || 'not yet'],

@@ -855,6 +855,11 @@ let begun = async (req: Request, env: Env, said: string) => {
   let words = said.trim().slice(0, SAID)
   if (!words) return redirect(hostUrl(env, '/'), undefined, 303)
   let person = await browser(env, req)
+  // A cookie outlives a newcomer whose space nobody kept and was erased
+  // (erase.ts `vacated`): their browser is a stranger again.
+  if (person && !(await meta(env).query(`.entity.eid=${person}&.person`))[0]) {
+    person = null
+  }
   let set: string | undefined
   if (!person) {
     if (!await counted(env, await visitor(secret(env), source(req)))) {

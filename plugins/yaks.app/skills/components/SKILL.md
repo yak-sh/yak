@@ -679,8 +679,8 @@ The complete list of reserved names:
     space_logo spend staged started starter stop submitted subscription
     supersedes supervises sweep switched task text text_post theme tool
     topic trashed tree_entry trend tunnel typed updated usage uses using
-    verified visit visitor_calls visitor_share volume wake wants web worked
-    worktree written
+    verified visit visitor_build visitor_calls visitor_share volume wake
+    wants web worked worktree written
 
 When your first choice is reserved, name the component for its specific purpose:
 the reserved name is the general one, and yours is the specific one. Not
