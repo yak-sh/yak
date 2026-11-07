@@ -250,6 +250,12 @@ export type PropSchema = {
   const?: unknown
   default?: unknown
   description?: string
+  // What a component, command or property is called for a person ("Address
+  // line 2", not street2), and, on a property, true = its owner manages its
+  // value and nobody edits it (a slug, a sort position): JSON Schema's own
+  // annotations, which the store stores nothing for.
+  title?: string
+  readOnly?: boolean
   examples?: readonly unknown[]
   $ref?: string
   // yaks core keywords (death is loose here — a JSON import infers plain

@@ -4,8 +4,10 @@
  * `Form.Actions`. A field never trails a sentence: what explains it is its
  * hint, under it. A label says a field may be left empty in a
  * `Form.Optional` beside its words. `Form.Line` keeps one field and the
- * button that sends it on one line while they fit. What sending does is the
- * caller's.
+ * button that sends it on one line while they fit. A value nobody may change
+ * here (JSON Schema's `readOnly`) is `Form.Value`, its words where a control
+ * would be, under a label that is no `label` for: `Form.Value-none` says
+ * there is none. What sending does is the caller's.
  *
  * @module
  */
@@ -20,15 +22,18 @@ import { Field } from './Field.ts'
 /** A form. */
 export let Form:
   & Part
-  & Record<'Field' | 'Label' | 'Optional' | 'Hint' | 'Line' | 'Actions', Part> =
-    block('form', 'Form', {
-      Field: 'div',
-      Label: 'label',
-      Optional: 'span',
-      Hint: 'p',
-      Line: 'div',
-      Actions: 'div',
-    })
+  & Record<
+    'Field' | 'Label' | 'Optional' | 'Hint' | 'Value' | 'Line' | 'Actions',
+    Part
+  > = block('form', 'Form', {
+    Field: 'div',
+    Label: 'label',
+    Optional: 'span',
+    Hint: 'p',
+    Value: 'p',
+    Line: 'div',
+    Actions: 'div',
+  })
 
 /** What it is, in a line. */
 export let description =
@@ -41,13 +46,16 @@ export let sheet = (c: Colors): Sheet => ({
   Form_Label: { fg: c.text, bold: true, block: true },
   Form_Optional: { fg: c.muted },
   Form_Hint: { fg: c.muted },
+  Form_Value: { fg: c.text, wrap: true },
+  'Form_Value-none': { fg: c.dim },
   Form_Line: { spaced: true },
   Form_Actions: { spaced: true },
 })
 
-let { Label, Optional, Hint, Line, Actions } = Form
+let { Label, Optional, Hint, Value, Line, Actions } = Form
 
-/** A form of two fields, one optional and one on a line with its button. */
+/** A form of two fields, one optional and one on a line with its button, and
+ * a value the form shows but does not change. */
 export let specimens = (): Specimen[] => [
   [
     'Form, Field, Label, Optional, Hint, Line, Actions',
@@ -71,6 +79,19 @@ export let specimens = (): Specimen[] => [
           h(Optional, {}, '(optional)'),
         ),
         h(Field, { id: 'form-note', lines: true, value: '' }),
+      ),
+      h(
+        Form.Field,
+        {},
+        h(Label, { as: 'span' }, 'Slug'),
+        h(Value, {}, 'weather-api'),
+        h(Hint, {}, 'Made from the service, so it is not typed here.'),
+      ),
+      h(
+        Form.Field,
+        {},
+        h(Label, { as: 'span' }, 'Last used'),
+        h(Value, { mod: 'none' }, 'None'),
       ),
       h(
         Form.Field,

@@ -1,87 +1,12 @@
 // An app's data editor (apps.ts serves it at `<app>/_web/data`): its rows
 // listed, added, edited and removed, generated from the words its vocab.json
 // declares, through the same `./api/*` doors its own pages use. Nothing here
-// knows an app: `kinds` and `fields` read a declaration into data, `valued` and
-// `patch` turn a row and a form into a bundle, and `open` draws them with
-// yaks.app's controls (@yaks/ui's parts, drawn by the pencil skin).
-
-// What is not a row a person keeps: a link between rows, what lives only in a
-// page or a moment, and what each person holds privately.
-let kept = (def) =>
-  def.properties && !def.edge && !def.personal && !def.tool && !def.tools &&
-  (def.sync == null || def.sync == 'server') &&
-  (def.durable == null || def.durable == 'forever')
+// knows an app: the page hands it the kinds its words keep (data.ts `kinds`),
+// `valued` and `patch` turn a row and a form into a bundle, and `open` draws
+// them with yaks.app's controls (@yaks/ui's parts, drawn by the pencil skin).
+// A field the app keeps for itself (`readOnly`) is shown, never a control.
 
 let MAX = 200
-
-let spoken = (word) => {
-  let text = word.replaceAll('_', ' ')
-  return text[0].toUpperCase() + text.slice(1)
-}
-
-let lines = (s) => s.type == 'array' && (s.items?.type ?? 'string') == 'string'
-
-// The control a property is edited with, from what it declares. A file is a
-// reference to the platform's `blob`, or the guide's `blob` text property.
-let control = (prop, s) => {
-  if (s.ref == 'blob' || (prop == 'blob' && s.type == 'string')) return 'file'
-  if (s.ref) return 'pick'
-  if (s.enum) return 'choice'
-  if (s.type == 'number' || s.type == 'integer') return 'number'
-  if (s.type == 'boolean') return 'bool'
-  if (lines(s)) return 'lines'
-  if (s.type != 'string') return 'json'
-  if (s.format == 'date-time') return 'time'
-  if (s.format == 'uri') return 'url'
-  return 'text'
-}
-
-/// fields('note', { properties: { when: { type: 'string', format: 'date-time' } } }).map((f) => f.control)
-///   -> ['text', 'text', 'time']
-export let fields = (name, def) => [
-  ...[['title', 'Title'], ['body', 'Text']]
-    .filter(([prop]) => !def.properties?.[prop])
-    .map(([prop, label]) => ({
-      comp: 'doc',
-      prop,
-      label,
-      control: 'text',
-    })),
-  ...Object.entries(def.properties ?? {})
-    .filter(([, s]) =>
-      !s.computed && !s.stamped && !s.status && !s.contentEncoding
-    )
-    .map(([prop, s]) => ({
-      comp: name,
-      prop,
-      label: spoken(prop),
-      hint: s.description,
-      control: control(prop, s),
-      ref: s.ref,
-      choices: s.enum,
-    })),
-]
-
-// What a row's list shows of a kind, and the rows that kind's words have no
-// row for: an app whose rows are plain docs still has rows to edit.
-/// kinds({ link: { properties: { url: { type: 'string' } } }, tap: { edge: true, properties: {} } }).map((k) => k.name)
-///   -> ['link', 'doc']
-export let kinds = (defs = {}) => {
-  let own = Object.entries(defs).filter(([, def]) => kept(def))
-    .map(([name, def]) => ({
-      name,
-      label: spoken(name),
-      hint: def.description,
-      line: `.${name}`,
-      fields: fields(name, def),
-    }))
-  return [...own, {
-    name: 'doc',
-    label: own.length ? 'Other rows' : 'Rows',
-    line: ['.doc', '!comment', ...own.map((k) => `!${k.name}`)].join('&'),
-    fields: fields('doc', { properties: {} }),
-  }]
-}
 
 // A date-time as a datetime-local control holds it: the writer's own clock.
 let local = (iso) => {
@@ -146,10 +71,13 @@ let place = (f) => `${f.comp}.${f.prop}`
 ///   -> { entity: { eid: '$row' }, note: {} }
 /// patch({ name: 'note', fields: f }, { entity: { eid: 'a' }, note: { n: 1 } }, { 'note.n': '1' })
 ///   -> null
+/// patch({ name: 'note', fields: [{ ...f[0], readOnly: true }] }, { entity: { eid: 'a' }, note: { n: 1 } }, { 'note.n': '2' })
+///   -> null
 export let patch = (kind, row, typed) => {
   let out = { entity: { eid: row?.entity.eid ?? '$row' } }
   if (!row) out[kind.name] = {}
   for (let f of kind.fields) {
+    if (f.readOnly) continue
     let text = typed[place(f)]
     if (text == null || text == valued(f, row?.[f.comp]?.[f.prop])) continue
     let value = stored(f, text)
@@ -204,13 +132,11 @@ let el = (doc) => (tag, attrs = {}, ...kids) => {
 }
 
 /** Draw the editor in `root`. `view` holds the route in its location's hash. */
-export let open = ({ root, client, words, view, files }) => {
+export let open = ({ root, client, kinds: all, accepts, view, files }) => {
   let h = el(root.ownerDocument)
-  let all = kinds(words.$defs)
   let me = client.me()
   let drafts = me.then((m) => m.person ? client.drafts({ by: m.person }) : null)
   let drawn = 0
-  let accepts = words.blob?.contentMediaType
 
   let say = (text, no = false) =>
     h(
@@ -438,6 +364,28 @@ export let open = ({ root, client, words, view, files }) => {
     return [hold, shown, writes ? zone : null, said]
   }
 
+  // A value the app keeps for itself, as words where a control would be: a
+  // reference by its row's name, a file by its link.
+  let valueOf = async (f, id, raw) => {
+    if (f.control == 'file') {
+      let [, link] = fileControl(f, id, raw ?? '', false, () => {})
+      return link
+    }
+    let none = h('p', { class: 'Form_Value Form_Value-none' }, 'None')
+    if (f.control == 'bool') {
+      return h('p', { class: 'Form_Value' }, raw ? 'Yes' : 'No')
+    }
+    if (raw == null || raw === '') return none
+    if (f.control == 'pick') {
+      let [to] = await client.query(`id=${raw}&*`)
+      return h('p', { class: 'Form_Value' }, to ? title(to, f.ref) : raw)
+    }
+    let text = f.control == 'time'
+      ? new Date(raw).toLocaleString()
+      : valued(f, raw)
+    return text ? h('p', { class: 'Form_Value' }, text) : none
+  }
+
   let controlOf = async (f, id, value, writes, changed) => {
     let attrs = { class: 'Field', id, name: place(f), disabled: !writes }
     if (f.control == 'file') {
@@ -517,10 +465,14 @@ export let open = ({ root, client, words, view, files }) => {
       note.textContent = text
       note.className = `Notice${no ? ' Notice-negative' : ''}`
     }
+    // What the form writes, and what it shows: a new row has nothing yet of
+    // what the app keeps for itself.
+    let written = kind.fields.filter((f) => !f.readOnly)
+    let shown = row ? kind.fields : written
     // What the form says now, beside what the row holds.
     let saying = () =>
       Object.fromEntries(
-        kind.fields.map((f) => {
+        written.map((f) => {
           let field = page.querySelector(`[name="${place(f)}"]`)
           let text = f.control == 'bool'
             ? field.checked ? 'true' : ''
@@ -541,8 +493,17 @@ export let open = ({ root, client, words, view, files }) => {
         Object.keys(changes()).length ? JSON.stringify(changes()) : '',
       )
     let parts = await Promise.all(
-      kind.fields.map(async (f, i) => {
+      shown.map(async (f, i) => {
         let id = `field-${i}`
+        if (f.readOnly) {
+          return h(
+            'div',
+            { class: 'Form_Field' },
+            h('span', { class: 'Form_Label' }, f.label),
+            await valueOf(f, id, row[f.comp]?.[f.prop]),
+            f.hint ? h('p', { class: 'Form_Hint' }, f.hint) : null,
+          )
+        }
         let value = typed[place(f)] ?? valued(f, row?.[f.comp]?.[f.prop])
         let control = await controlOf(f, id, value, writes, changed)
         return h(

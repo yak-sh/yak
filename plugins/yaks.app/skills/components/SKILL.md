@@ -357,7 +357,8 @@ A `title` on a component or a property names it in a person's words, and
 `"readOnly": true` marks a property the app keeps for itself, which nobody fills
 in (a slug, a sort position, a flag on sample rows). The column beside the
 Operator's chat names what an app keeps by its titles and leaves the `readOnly`
-properties out:
+properties out; the data editor labels its controls by the titles too, and shows
+a `readOnly` value without a control to change it:
 
     "street2": { "type": "string", "title": "Address line 2" },
     "slug":    { "type": "string", "readOnly": true }
@@ -598,7 +599,10 @@ title and text, then one control per property, from what the property declares:
 
 So declare a meeting's files and links as references and the editor needs
 nothing more: `"agenda": {"type": "string", "ref": "blob", "death": "keep"}`. A
-property's `description` is shown under its control.
+component or property is labelled by its `title`, or by its name where it gives
+none, and a property's `description` is shown under its control. A property
+marked `"readOnly": true` is the app's to write: the editor shows its value as
+text, with no control, never writes it, and leaves it off a new row's form.
 
 ## Changing the vocabulary across deploys
 

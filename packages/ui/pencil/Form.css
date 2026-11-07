@@ -29,6 +29,17 @@
   color: var(--muted);
   font-size: var(--fine, var(--small));
 }
+/* A value shown where its control would be, which nobody changes here: its
+   words as they are, every line and long word kept inside the field. */
+.Form_Value {
+  margin: 0;
+  color: var(--text);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+.Form_Value-none {
+  color: var(--dim);
+}
 /* One field and the button that sends it, on one line while they fit. */
 .Form_Line {
   display: flex;

@@ -87,6 +87,9 @@ import {
 } from './meter.ts'
 import type { Card as Billed, Payer, Want } from './billing.ts'
 import { columns } from '@yaks/ui/chart'
+import type { Accepts } from '@yaks/blob'
+import type { VocabDoc } from '@yaks/vocab'
+import { kinds } from './data.ts'
 
 type Kids = ComponentChildren
 
@@ -2853,11 +2856,12 @@ export let desk = (at: DeskPage, env: Host = {}) => {
   )
 }
 
-/** The data editor's page (public/data.js draws what is in it): an app's own
- * words, read by the script as data. */
+/** The data editor's page (public/data.js draws what is in it): what an
+ * app's words keep (data.ts `kinds`) and the files it takes, handed to the
+ * script as data. */
 export let editor = (
   env: Host,
-  at: { app: string; at: string; words: unknown; version: string },
+  at: { app: string; at: string; words: VocabDoc; version: string },
 ) =>
   page(
     env,
@@ -2899,7 +2903,13 @@ await open({
   client,
   view: window,
   files: ${script(`${at.at}/api/blob/`)},
-  words: ${script(at.words)},
+  kinds: ${script(kinds(at.words.$defs))},
+  accepts: ${
+          script(
+            [(at.words.blob as Accepts | undefined)?.contentMediaType ?? []]
+              .flat().join(',') || null,
+          )
+        },
 })
 `,
       },

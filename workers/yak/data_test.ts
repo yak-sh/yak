@@ -13,7 +13,9 @@ import {
   signIn,
   unique,
 } from './probe.ts'
-import { fields, kinds, open, patch, title } from './public/data.js'
+import type { PropSchema } from '@yaks/vocab'
+import { fields, kinds } from './data.ts'
+import { open, patch, title } from './public/data.js'
 
 let k = await kernel()
 let space = unique('township')
@@ -29,17 +31,19 @@ let words = {
       properties: {
         posted: { type: 'string', format: 'date-time' },
         pinned: { type: 'boolean' },
+        slug: { type: 'string', readOnly: true },
       },
     },
     meeting: {
       properties: {
-        held: { type: 'string', format: 'date-time' },
+        held: { type: 'string', format: 'date-time', title: 'Held on' },
         agenda: file,
         minutes: file,
         attendance: { type: 'number' },
       },
     },
     link: {
+      title: 'Useful link',
       properties: {
         url: { type: 'string', format: 'uri' },
         meeting: { type: 'string', ref: 'meeting', death: 'detach' },
@@ -140,7 +144,15 @@ let page = (cookie: string) => {
         new document.defaultView!.Event('input'),
       )
     },
-    start: () => open({ root, client, words, view, files: '/site/api/blob/' }),
+    start: () =>
+      open({
+        root,
+        client,
+        kinds: kinds(words.$defs),
+        accepts: null,
+        view,
+        files: '/site/api/blob/',
+      }),
     rows: () =>
       [...root.querySelectorAll('.Rows_Name')].map((r) => r.textContent),
     text: () => root.textContent,
@@ -159,13 +171,14 @@ test('the door sends a stranger to sign in and hides from who holds nothing', as
   assertEquals(none.status, 404)
 })
 
-test('the page carries the app’s words, escaped, and the script is served', async () => {
+test('the page carries what the deployed words keep, escaped, and the script is served', async () => {
   let res = await k.at(host, '/site/_web/data', {
     headers: { cookie: them.cookie },
   })
   assertEquals(res.status, 200)
   let html = await res.text()
-  assertStringIncludes(html, '"announcement"')
+  let [, served] = html.match(/kinds: (\[.*\]),\n/)!
+  assertEquals(JSON.parse(served), kinds(words.$defs))
   assertStringIncludes(html, '/site/api/client.js')
   assert(html.includes('class="Data"'))
   let script = await k.at(host, '/site/_web/data.js', {
@@ -179,9 +192,12 @@ test('a row is added, listed, edited, linked, given a file and removed', async (
   let p = page(them.cookie)
   await p.start()
   // Everything the app keeps, without its link words.
-  assertEquals(p.rows(), ['Announcement', 'Meeting', 'Link'])
+  assertEquals(p.rows(), ['Announcement', 'Meeting', 'Useful link'])
 
+  // What the app keeps for itself is no control: a new row has none of it.
   await p.go('#announcement/new')
+  assertEquals(p.field('announcement.slug'), null)
+  assert(!p.text().includes('Slug'))
   p.fill('doc.title', 'Road closed')
   p.fill('doc.body', 'Until Friday.\nUse Elm St.')
   assert(p.typed.size == 1, 'what is typed is kept before it is saved')
@@ -189,8 +205,31 @@ test('a row is added, listed, edited, linked, given a file and removed', async (
   assertEquals(p.rows(), ['Road closed'])
   assertEquals(p.typed.size, 0)
 
+  // Once the app has written it, the row shows it, and an edit leaves it be.
+  let reader = served.store(`${browser(k, host, them.cookie).origin}/site/api/`)
+  let [notice] = await reader.query('.announcement')
+  await reader.apply([{
+    entity: { eid: notice.entity.eid },
+    announcement: { slug: 'road-closed' },
+  }])
+  await p.go(`#announcement/${notice.entity.eid}`)
+  assertEquals(p.field('announcement.slug'), null)
+  assertEquals(
+    [...p.root.querySelectorAll('.Form_Value')].map((v) => v.textContent),
+    ['road-closed'],
+  )
+  p.fill('doc.title', 'Road closed till Friday')
+  await p.press('Save')
+  let [edited] = await reader.query('.announcement&?doc')
+  assertEquals(
+    [edited.doc.title, edited.announcement.slug],
+    ['Road closed till Friday', 'road-closed'],
+  )
+
   // A meeting with its agenda, uploaded through the door.
+  // A property is labelled by its title, where it gives one.
   await p.go('#meeting/new')
+  assertStringIncludes(p.text(), 'Held on')
   p.fill('doc.title', 'October meeting')
   p.fill('meeting.attendance', '12')
   p.fill('meeting.held', '2026-10-05T19:00')
@@ -209,7 +248,6 @@ test('a row is added, listed, edited, linked, given a file and removed', async (
     .setAttribute('selected', '')
   await p.press('Save')
 
-  let reader = served.store(`${browser(k, host, them.cookie).origin}/site/api/`)
   let [link] = await reader.query('.link&?doc')
   assertEquals(link.link.tags, ['records', 'archive'])
   assertEquals(link.link.url, 'https://example.com/minutes')
@@ -308,7 +346,8 @@ test('someone who may only read sees the rows and no way to change them', async 
 })
 
 test('words become controls, and the rest is left out', () => {
-  let of = (s: object) => fields('x', { properties: { p: s } }).at(-1)!.control
+  let of = (s: PropSchema) =>
+    fields('x', { properties: { p: s } }).at(-1)!.control
   assertEquals(of({ type: 'string' }), 'text')
   assertEquals(of({ type: 'number' }), 'number')
   assertEquals(of({ type: 'boolean' }), 'bool')

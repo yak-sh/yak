@@ -35,9 +35,22 @@ export type Made = { kinds: Kind[]; acts: Act[]; finds: string[] }
 let object = (v: unknown): v is Record<string, unknown> =>
   !!v && typeof v == 'object' && !Array.isArray(v)
 
-// The words an entry gives itself, which name it for a person.
-let titleOf = (entry: Record<string, unknown>) =>
+/** The words a component, command or property gives itself, which name it
+ * for a person ('' for none); the data editor labels its controls by them too
+ * (data.ts). */
+/// titleOf({ title: ' Address line 2 ' }) -> 'Address line 2'
+/// titleOf({ title: 2 }) -> ''
+export let titleOf = (entry: { title?: unknown }): string =>
   typeof entry.title == 'string' ? entry.title.trim() : ''
+
+/** Whether a property is one the app keeps for itself, which nobody fills in
+ * (a slug, a sort position, a flag on sample rows), said the way JSON Schema
+ * says it. What it keeps leaves it out; the data editor shows it, never as a
+ * control (data.ts). */
+/// readOnly({ readOnly: true }) -> true
+/// readOnly({ readOnly: 'yes' }) -> false
+export let readOnly = (property: { readOnly?: unknown }): boolean =>
+  property.readOnly === true
 
 // A name as a person writes it: `meal_plan`, `mealPlan` and `meal-plan` are
 // all "meal plan"; a `title` the entry gives is its own.
@@ -47,11 +60,10 @@ let plain = (key: string, entry: Record<string, unknown> = {}) =>
     .trim().toLowerCase()
 
 // What a kind keeps of one, as a person reads it: all but the properties
-// the app keeps for itself, which say so the way JSON Schema does, as
-// `readOnly` (a slug, a sort position, a flag on sample rows).
+// the app keeps for itself.
 let shown = (properties: Record<string, unknown>) =>
   Object.entries(properties).map(([p, s]) => [p, object(s) ? s : {}] as const)
-    .filter(([, s]) => s.readOnly !== true)
+    .filter(([, s]) => !readOnly(s))
 let capital = (s: string) => s.charAt(0).toUpperCase() + s.slice(1)
 // A name inside a sentence, but one that begins with an acronym ("URL").
 let lower = (s: string) =>
