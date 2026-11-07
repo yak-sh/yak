@@ -77,8 +77,9 @@ export type Dialect = {
   // Passing an owner explicitly means a correlated child or dereference target
   // rather than the row being selected.
   archetype?: (owner?: string) => string
-  /** Physical owner selection by a held archetype set. */
-  archetypeSource?: (v: Vocab) => string
+  /** Physical owner selection by a held archetype set; `keyed` when the
+   * owners are sought by their keys, so no archetype index is walked. */
+  archetypeSource?: (v: Vocab, keyed?: boolean) => string
   // Value lowerings. Each returns a fragment, or null when it cannot be
   // expressed with exactly the semantics the JavaScript matcher has (the caller
   // then declines the whole compilation — exact or nothing).
@@ -467,8 +468,8 @@ export let sqlite: Dialect = {
   joinOn: (comp, base) => `"${comp}"."entity" = ${ownerKey(base)}`,
   col,
   presence: (comp) => ({ sql: `"${comp}"."entity" is not null`, params: [] }),
-  archetypeSource: (v) =>
-    `"entity" indexed by "${
+  archetypeSource: (v, keyed) =>
+    keyed ? '"entity"' : `"entity" indexed by "${
       indexName(
         v,
         'entity',

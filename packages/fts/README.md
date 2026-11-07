@@ -97,10 +97,13 @@ holding up to `GRAMS` (8) of the trigrams of the needle's first `SPAN`
 characters, spread from its start to its end (`grammed`), in their first `CUT`
 or a piece, and the owed texts, and whether there are at most `FEW_TEXTS`
 (4,000) of them. A read is then driven from those rows, each still tested, so a
-needle nothing holds reads only the owed texts. A needle more rows hold reads in
-its own order and stops at its page, as it does without an index, and so does a
-needle shorter than three characters and a test while `fill` says the index is
-still being filled. Bare words never read a substring index (`worded(fields)`).
+needle nothing holds reads only the owed texts. Beside a shape the archetype
+index would select by (`.entry !result`), those rows are the candidates, sought
+by key and their shape tested, not picked out of every owner of the shape. A
+needle more rows hold reads in its own order and stops at its page, as it does
+without an index, and so does a needle shorter than three characters and a test
+while `fill` says the index is still being filled. Bare words never read a
+substring index (`worded(fields)`).
 
 ## The four pieces
 

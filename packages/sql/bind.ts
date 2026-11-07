@@ -339,8 +339,14 @@ type Ctx = {
   points?: Set<string>
   tables: Set<string>
   /** the first disjunction's entity ids, and the condition that tests them;
-   * `arms` reads the same owners one archetype each, in its index's order */
-  candidates?: Frag & { test: Cond; whole?: boolean; arms?: Frag[] }
+   * `arms` reads the same owners one archetype each, in its index's order;
+   * `keyed` ones are sought by key, a few a substring index found */
+  candidates?: Frag & {
+    test: Cond
+    whole?: boolean
+    arms?: Frag[]
+    keyed?: boolean
+  }
   shapeCandidates?: boolean
   numberedShapePage?: boolean
   /** A mandatory equality's index reads in the statement's order, and the
@@ -2343,12 +2349,28 @@ let conjuncts = (ctx: Ctx, clauses: Clause[]): Cond[] => {
     }
     let admitted = admitting && byArchetype(ctx, admitting)
     if (admitted) shape = admitted
-    let reading = (where: Frag): Frag => ({
-      sql: `select "entity".${admitted ? '*' : '"id"'} from ${
-        ctx.d.archetypeSource!(ctx.v)
-      } where ${where.sql}`,
-      params: where.params,
-    })
+    // A substring test whose index finds few owners names the candidates
+    // itself: they are sought by key and their shape tested, rather than every
+    // owner of the shape read from the archetype index, sorted and joined to
+    // the reader's visibility before the few are picked out of them. On the
+    // box's transcripts, `.content.body~=T-150783 .entry !result !notice`
+    // walked 193,696 entries for 116 owners.
+    let few = rest.map((c) =>
+      c.kind == 'pred' && !c.not ? gram(ctx, c) : undefined
+    ).find(Boolean)
+    let reading = (where: Frag): Frag => {
+      let w = few
+        ? render(
+          and(among(raw('"entity"."id"'), few), raw(where.sql, where.params)),
+        )
+        : where
+      return {
+        sql: `select "entity".${admitted ? '*' : '"id"'} from ${
+          ctx.d.archetypeSource!(ctx.v, !!few)
+        } where ${w.sql}`,
+        params: w.params,
+      }
+    }
     // An index of the archetype alone keeps each archetype's owners in id
     // order, the order a page of them is read in. One that keys the number
     // too (@yaks/id) keeps them in the number's.
@@ -2363,7 +2385,8 @@ let conjuncts = (ctx: Ctx, clauses: Clause[]): Cond[] => {
       ...reading(render(shape)),
       test: shape,
       whole: !!admitted,
-      arms: ids && ids.length > 1 && ids.length <= MERGED
+      keyed: !!few,
+      arms: !few && ids && ids.length > 1 && ids.length <= MERGED
         ? ids.map((id) => reading({ sql: `${key} = ?`, params: [id] }))
         : undefined,
     }
@@ -3140,7 +3163,7 @@ let indexedRelation = (
     ) {
       return {
         ...s,
-        from: raw(ctx.d.archetypeSource!(ctx.v)),
+        from: raw(ctx.d.archetypeSource!(ctx.v, ctx.candidates.keyed)),
         where: and(
           s.where ?? TRUE,
           raw(
@@ -5380,9 +5403,9 @@ let visible = (
     // so the stored archetype answers it exactly. The candidates it seeks
     // still join the scoped spine, which keeps the reader's visibility.
     archetypeSource: masked && base.archetypeSource
-      ? (v) =>
+      ? (v, keyed) =>
         `(select "id", "archetype" as "__stored_archetype" from ${
-          base.archetypeSource!(v)
+          base.archetypeSource!(v, keyed)
         }) as "entity"`
       : base.archetypeSource,
     archetype: masked
