@@ -6,7 +6,10 @@
 // requests, visits, storage, version, owners, last deploy, last write to its
 // store, last error and latest use. Each opens to a page of its own. The
 // Invites page says who signed up through whose invite and the month each
-// first app gave, and who was given the starter and when.
+// first app gave, and who was given the starter and when. The Visitor builds
+// page says how many builds the home page's box opened today against the
+// day's cap, what each spent against its budget and which were kept by
+// signing up (newcomer.ts, D-146737).
 //
 // Only an owner of the `yak` space sees it, signed in by the platform's
 // session cookie (`staff`); anybody else is told nothing is here, and an
@@ -38,7 +41,8 @@ import {
   type Space,
   spaceOf,
 } from './directory.ts'
-import { budget, monthOf, starterOf } from './meter.ts'
+import { budget, dollars, monthOf, starterOf } from './meter.ts'
+import { DAILY, opened, PER_BUILD, PER_SOURCE } from './newcomer.ts'
 import { isTestAddress } from './lib/bots.ts'
 import { sessionAt } from './session.ts'
 import { drawn } from './render/mod.ts'
@@ -349,6 +353,86 @@ let starters = (d: Reading) => {
     : empty('Nobody has been given the starter yet')
 }
 
+// What was counted, a fact a line, on a card.
+let facts = (all: [string, string][]) =>
+  h(
+    Card,
+    { as: 'div' },
+    h(
+      'dl',
+      { class: 'Fields Directory_Facts' },
+      all.map(([say, n]) =>
+        h('div', null, h('dt', null, say), h('dd', null, n))
+      ),
+    ),
+  )
+
+// Every visitor's build (newcomer.ts), newest first: the newcomer the home
+// page's box made, the space it opened them (their `started`), and who owns
+// that space now, when the newcomer no longer does: whoever kept it by signing
+// up (newcomer.ts `keep`).
+let builds = (d: Reading) => {
+  let owners = group(
+    d.census.seats.filter((s) => s.member!.role == 'owner'),
+    seatSpace,
+  )
+  return newest(
+    d.census.people.filter((r) => r.newcomer),
+    (r) => r.newcomer!.at ?? '',
+  ).map((r) => {
+    let at = r.started?.space ? idOf(r.started.space) : ''
+    let held = (owners.get(at) ?? []).map(seatPerson)
+    return {
+      r,
+      space: d.spaces.get(at),
+      keeper: held.includes(r.entity.eid) ? undefined : held[0],
+    }
+  })
+}
+
+// The visitors' builds: how many the box opened today against the day's cap,
+// how many were kept and what they spent, then each of them.
+let buildsPage = (d: Reading, today: number) => {
+  let all = builds(d)
+  let spent = sum(all.map((b) => b.space ? budget(b.space).spent : 0))
+  return desk(
+    d,
+    'Visitor builds',
+    'builds',
+    h(
+      Fragment,
+      null,
+      facts([
+        ['Opened today', `${today} of ${DAILY}`],
+        ['Kept', `${all.filter((b) => b.keeper).length} of ${all.length}`],
+        ['Spent this month', dollars(spent)],
+        [
+          'Limits',
+          `${dollars(PER_BUILD)} a build, ${PER_SOURCE} a day from one address`,
+        ],
+      ]),
+      h(Group, null, 'Builds'),
+      all.length
+        ? card(
+          all.map(({ r, space, keeper }) =>
+            drawn(r, 'Directory.Build.Tile', {
+              base: PATH,
+              uses: space && {
+                ...d.uses.get(space.eid),
+                spend: budget(space),
+              },
+              space: space && { eid: space.eid, name: space.slug },
+              address: space ? spaceHost(d.env, space.slug) : '',
+              trashed: !!space?.trashed,
+              keeper: keeper ? personRef(d, keeper).name : '',
+            })
+          ),
+        )
+        : empty('Nobody has built from the home page yet'),
+    ),
+  )
+}
+
 // Who invited whom and the month each first app gave, then everybody given
 // the starter. Inviting yourself and making accounts for the starter are
 // against the terms, and are watched here rather than refused anywhere
@@ -380,11 +464,12 @@ let lists = (c: Census): Record<List, Row[]> => ({
 let tested = (d: Reading) => d.tests ? '?tests=1' : ''
 
 // The desk: the three lists down the side, each with how many it holds, the
-// funnel below them, and the invites with how many signed up through one.
+// funnel below them, the invites with how many signed up through one, and the
+// visitors' builds with how many there have been.
 let desk = (
   d: Reading,
   title: string,
-  current: List | 'sessions' | 'funnel' | 'invites' | null,
+  current: List | 'sessions' | 'funnel' | 'invites' | 'builds' | null,
   body: ComponentChildren,
   kicker: ComponentChildren = null,
   status = 200,
@@ -437,6 +522,13 @@ let desk = (
       'qr-code',
       'Invites',
       invited(d).length,
+    ),
+    link(
+      'builds',
+      `${PATH}/builds${tested(d)}`,
+      'bot',
+      'Visitor builds',
+      builds(d).length,
     ),
   ]
   return shell(
@@ -768,19 +860,6 @@ let funnelPage = (
     let s = STEPS.find((s) => s.name == name)
     return s && 'of' in s ? say(s.of).toLowerCase() : ''
   }
-  // What was counted, a fact a line, on a card.
-  let facts = (all: [string, string][]) =>
-    h(
-      Card,
-      { as: 'div' },
-      h(
-        'dl',
-        { class: 'Fields Directory_Facts' },
-        all.map(([say, n]) =>
-          h('div', null, h('dt', null, say), h('dd', null, n))
-        ),
-      ),
-    )
   let body = f instanceof Error
     ? empty(`The counts could not be read: ${f.message}`)
     : !f
@@ -880,6 +959,7 @@ export let answer = async (
   let d = read(env, await dir.census(), asked.searchParams.has('tests'))
   if (isList(rest)) return list(d, rest, asked.searchParams.get('q') ?? '')
   if (rest == 'invites') return invitesPage(d)
+  if (rest == 'builds') return buildsPage(d, await opened(dir))
   if (rest == 'sessions') return await sessionsPage(d, env, who)
   if (rest == 'funnel') {
     let days = Number(asked.searchParams.get('days')) || 7

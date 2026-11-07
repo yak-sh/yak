@@ -2,25 +2,31 @@
 // a stranger opens a space of their own holding one build's dollars, signs
 // their browser in and takes them to its Operator's chat; the same browser
 // goes on in that space; and past an address's builds they meet the sign-in
-// card saying why. A newcomer's Operator may build and nothing else.
+// card saying why. A newcomer's Operator may build and nothing else. The
+// platform admin sees each build, what it spent and who kept it.
 import { assert, assertEquals, assertRejects } from '@std/assert'
 import { parseHTML } from 'linkedom'
 import { cleanup, test } from '@yaks/testing'
 import type { Tool } from '@yaks/graph'
 import { fresh } from './probe.ts'
 import type { Env } from './env.ts'
-import { atCeiling, limitOf, unaffordable, UNKEPT } from './meter.ts'
+import { atCeiling, dollars, limitOf, unaffordable, UNKEPT } from './meter.ts'
 import {
   BUILDING,
   confined,
+  DAILY,
   FULL,
   KEEP,
   keep,
   KEEPING,
+  opened,
   PER_BUILD,
   START,
 } from './newcomer.ts'
 import { collected } from './erase.ts'
+import { answer } from './admin.ts'
+import { META } from './directory.ts'
+import { COOKIE, sign } from './lib/token.ts'
 import type { Ctx } from './tool.ts'
 import { TOOLS } from './tools.ts'
 import { PUBLISHED } from './published.ts'
@@ -102,6 +108,33 @@ let swept = async (after: number) => {
 let hour = 3_600_000
 let inWeek = await swept(KEEPING - hour)
 let pastWeek = await swept(KEEPING + hour)
+
+// The admin's Visitor builds page, read once everything above is done.
+let root = await person('root@example.com')
+await k.dir.stamp({
+  entities: [{
+    entity: { eid: crypto.randomUUID() },
+    member: {
+      person: root,
+      space: (await k.dir.space(META.space))!.eid,
+      role: 'owner',
+    },
+  }],
+})
+let session = await sign(
+  { person: root, space: null, exp: 4e9 },
+  env.SESSION_SECRET!,
+)
+let builds = parseHTML(
+  await (await answer(
+    new Request('https://yaks.app/admin/builds', {
+      headers: { cookie: `${COOKIE}=${session}` },
+    }),
+    env,
+    '/admin/builds',
+    k.dir,
+  ))!.text(),
+).document
 
 test("a stranger's idea opens a space of their own, signed in, in its chat", () => {
   assertEquals(first.status, 303)
@@ -218,4 +251,29 @@ test('a newcomer builds, and is asked for an address before anything else', asyn
   assertEquals((refused as Error).message, KEEP)
   await call(false, 'mail_send')
   assertEquals(ran, ['app_new', 'app_files', 'mail_send'])
+})
+
+test("the admin's Visitor builds page says today's builds against the day's, and who kept each", async () => {
+  assertEquals(await opened(k.dir), 3)
+  let said = (el: ParentNode) =>
+    Object.fromEntries(
+      [...el.querySelectorAll('dl > div')].map((d) => [
+        d.querySelector('dt')!.textContent,
+        d.querySelector('dd')!.textContent,
+      ]),
+    )
+  let facts = said(builds.querySelector('.Directory_Facts')!)
+  assertEquals([facts['Opened today'], facts.Kept], [`3 of ${DAILY}`, '2 of 3'])
+  let rows = [...builds.querySelectorAll('.Directory_Row')].map((row) => [
+    row.querySelector('strong')!.textContent,
+    [...row.querySelectorAll('.Apps_Tag')].map((t) => t.textContent).join(),
+    said(row)['Kept by'],
+    said(row)['Spent this month'].replace(/^\$[\d.]+ of /, ''),
+  ])
+  assertEquals(rows.map((r) => r.slice(0, 3)), [
+    [left, 'in the trash', 'not yet'],
+    [other.slug, 'kept', 'ana'],
+    [space.slug, 'kept', 'dana'],
+  ])
+  assertEquals(rows[0][3], dollars(PER_BUILD))
 })

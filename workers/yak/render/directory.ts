@@ -5,13 +5,14 @@
 // since a space's apps and a person's budget are other rows. So do the names
 // of what it points at: a reference is drawn by name and links to its page.
 // The Invites page draws an invite somebody signed up with, and a person
-// given the starter, as rows of the same shape.
+// given the starter, as rows of the same shape, and the Visitor builds page
+// a visitor's build.
 
 import { parse } from '@yaks/query'
 import { type Days, sparkline } from '@yaks/ui/chart'
 import type { Child, Context, H, Renderer } from '@yaks/render'
 import { COMPED } from '../directory.ts'
-import { day } from '../html.ts'
+import { day, moment } from '../html.ts'
 import { count, dollars, size } from '../meter.ts'
 
 /** What one row uses, as the page counted it. */
@@ -315,6 +316,36 @@ let starter: Renderer = {
   },
 }
 
+// A visitor's build (newcomer.ts), drawn on the admin's Visitor builds page:
+// the space the home page's box opened, when, what its models spent this
+// month against its budget, its apps, and who kept it by signing up, if
+// anybody has, or that it went to the trash unkept. The row opens the space.
+let build: Renderer = {
+  view: 'Directory.Build.Tile',
+  match: parse('.newcomer'),
+  render: (b, h, ctx) => {
+    let space = ctx.space as Ref | undefined
+    let u = uses(ctx), keeper = str(ctx.keeper)
+    return row(
+      h,
+      ctx,
+      space?.eid ?? b.entity.eid,
+      space?.name ?? 'A space gone',
+      str(ctx.address),
+      [
+        keeper ? tag(h, 'kept') : null,
+        ctx.trashed ? tag(h, 'in the trash', true) : null,
+      ],
+      [
+        ['Opened', moment(stamp(b, 'newcomer')) || 'unknown'],
+        ['Spent this month', trended(h, spend(u.spend), u.spending)],
+        ['Apps', count(u.apps ?? 0)],
+        ['Kept by', keeper || 'not yet'],
+      ],
+    )
+  },
+}
+
 let personPage: Renderer = {
   view: 'Directory.Page',
   match: parse('.person'),
@@ -435,6 +466,7 @@ export let directory = [
   app,
   referral,
   starter,
+  build,
   personPage,
   spacePage,
   appPage,

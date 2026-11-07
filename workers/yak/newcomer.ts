@@ -21,7 +21,7 @@
 // (agent.ts `platform`), since mail, texts, numbers, members, domains and
 // publishing reach people who never asked to hear from a stranger.
 import { token } from '@yaks/graph'
-import type { Comp, Tool } from '@yaks/graph'
+import type { Bundle, Comp, Tool } from '@yaks/graph'
 import { Stale } from '@yaks/graph/errors'
 import { derivedEid } from '@yaks/graph/identity'
 import { type Directory, type Space, stamp } from './directory.ts'
@@ -128,6 +128,18 @@ export let confined = (ctx: Ctx, t: Tool): Tool =>
 let dayOf = (now: Date) => now.toISOString().slice(0, 10)
 let tallyEid = (day: string, source = '') =>
   derivedEid('newcomer-builds|' + day + (source ? '|' + source : ''))
+// The builds a tally's row counts on `day`: none once its day has passed.
+let buildsOn = (row: Bundle | undefined, day: string) => {
+  let had = row?.newcomer_builds as Comp | undefined
+  return had?.day == day ? Number(had.builds ?? 0) : 0
+}
+
+/** The newcomers' spaces opened today (UTC) across everybody, against
+ * DAILY: what the platform admin's Visitor builds page says (admin.ts). */
+export let opened = async (dir: Pick<Directory, 'read'>, now = new Date()) => {
+  let day = dayOf(now)
+  return buildsOn((await dir.read(`.entity.eid=${tallyEid(day)}`))[0], day)
+}
 
 /**
  * Count one more newcomer's space today, from `source` (signin.ts `visitor`,
@@ -147,10 +159,7 @@ export let counted = async (env: Env, source: string, now = new Date()) => {
         }),
       ),
     )
-    let builds = rows.map(({ row }) => {
-      let had = row?.newcomer_builds as Comp | undefined
-      return had?.day == day ? Number(had.builds ?? 0) : 0
-    })
+    let builds = rows.map(({ row }) => buildsOn(row, day))
     if (builds[0] >= DAILY || (builds[1] ?? 0) >= PER_SOURCE) return false
     try {
       await stamp(env, {

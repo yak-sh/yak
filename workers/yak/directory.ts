@@ -2386,13 +2386,15 @@ export let directoryRows = (rows: {
     // Every person, space, app, seat and invite there is, each row whole with
     // when it was made and last used: the platform admin's directory
     // (admin.ts), and nothing else, asks this. Fresh, since the admin opens it
-    // to see what is. A person says the number they text from and which space
-    // their starter went to.
+    // to see what is. A person says the number they text from, which space
+    // their starter went to, and when they came in by the home page's box.
     census: async () => {
       let stamps = '?created&?used'
       let [people, spaces, apps, seats, deploys, referrals] = await Promise
         .all([
-          query(`.person&?doc&?email&?phone&?signed_in&?started&${stamps}`),
+          query(
+            `.person&?doc&?email&?phone&?signed_in&?started&?newcomer&${stamps}`,
+          ),
           // A row's days ride only here: every other read of a row does
           // without.
           query(`.space&${SPACE_ABOUT}&?trend&${stamps}`),
