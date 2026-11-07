@@ -129,13 +129,14 @@ let remembered = (eid: string, now = Date.now()) => {
   return false
 }
 
-/** What the edge holds for this request, or null when it is the kernel's. */
+/** What the edge holds for this request; null when it is the kernel's, or the
+ * status Site refused an apex page with (a 4xx), which the kernel answers. */
 export let kept = (
   req: Request,
   env: FrontEnv,
   ctx: Lent,
   said: string[] = [],
-): Promise<Response | null> | null => {
+): Promise<Response | number | null> | null => {
   let url = new URL(req.url)
   let host = url.hostname.toLowerCase(), path = url.pathname
   if (
@@ -144,22 +145,33 @@ export let kept = (
   ) return null
   if (host == apex(env)) {
     if (!isListing(path)) return null
-    return listing(req, env.SITE, apex(env), listed(req, path)).then((page) => {
-      if (page.status >= 500) return null
-      // A visit to the home page is the funnel's first step (funnel.ts).
-      if (env.VIEWS && isHome(req, path, page)) {
-        env.VIEWS.writeDataPoint(stepOf('home', req as Visited))
-      }
-      // The ad network whose click brought this visit is the kernel's to tell
-      // (ads.ts), behind this answer; the arrival is kept here (arrival.ts).
-      let c = env.ADS && isPage(req, page) && conversionOf('view', req)
-      if (c) {
-        ctx.waitUntil(
-          env.ADS!.told(c).catch((e) => report(e, env, ctx, 'front ads', req)),
-        )
-      }
-      return variant.keep(req, keep(req, page))
-    })
+    return listing(req, env.SITE, apex(env), listed(req, path)).then(
+      async (page) => {
+        if (page.status >= 500) return null
+        // Site keeps no page that isn't found (site.ts `rendered`), so a 4xx
+        // is a page the kernel answers too: a missing one, or one this Worker
+        // lists before Site's deploy does (wrangler.ts `SIBLINGS`).
+        if (page.status >= 400) {
+          await page.body?.cancel()
+          return page.status
+        }
+        // A visit to the home page is the funnel's first step (funnel.ts).
+        if (env.VIEWS && isHome(req, path, page)) {
+          env.VIEWS.writeDataPoint(stepOf('home', req as Visited))
+        }
+        // The ad network whose click brought this visit is the kernel's to tell
+        // (ads.ts), behind this answer; the arrival is kept here (arrival.ts).
+        let c = env.ADS && isPage(req, page) && conversionOf('view', req)
+        if (c) {
+          ctx.waitUntil(
+            env.ADS!.told(c).catch((e) =>
+              report(e, env, ctx, 'front ads', req)
+            ),
+          )
+        }
+        return variant.keep(req, keep(req, page))
+      },
+    )
   }
   // `x.y.yaks.app` is the kernel's to say what it is (route.ts `route`).
   if (host.slice(0, -apex(env).length - 1).includes('.')) return null
@@ -200,13 +212,26 @@ let report = (
 
 export let serve = async (req: Request, env: FrontEnv, ctx: Lent) => {
   let at = Date.now(), cold = served++ == 0, said: string[] = []
+  let refused: number | null = null
   try {
     let page = await kept(req, env, ctx, said)
-    if (page) return finished(page, env, at, cold, said)
+    if (page instanceof Response) return finished(page, env, at, cold, said)
+    refused = page
   } catch (error) {
     report(error, env, ctx, 'front fetch', req)
   }
   let res = await env.KERNEL.fetch(req)
+  // A page the kernel serves that Site refused is one Worker deployed ahead of
+  // the other: the visitor has the page all the same, and the skew is a bug.
+  if (refused && res.status < 400) {
+    report(
+      new Error(`Site answered ${refused} for an apex page the kernel serves`),
+      env,
+      ctx,
+      'front listing',
+      req,
+    )
+  }
   let mount = res.headers.get(UNKEPT_AT)
   if (!mount) return res
   // An app whose pages are never kept pays the hop to Site once in a while,

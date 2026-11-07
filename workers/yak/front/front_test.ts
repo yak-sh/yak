@@ -31,7 +31,10 @@ let page = (headers: Record<string, string> = {}) =>
     },
   })
 
-let front = (site: (req: Request) => Response | Promise<Response>) => {
+let front = (
+  site: (req: Request) => Response | Promise<Response>,
+  kernel = () => new Response('kernel'),
+) => {
   let asked: string[] = [], forwarded: Request[] = [], used: string[] = []
   let points: unknown[] = [], errors: unknown[] = [], retained: unknown[] = []
   let told: Conversion[] = []
@@ -46,7 +49,7 @@ let front = (site: (req: Request) => Response | Promise<Response>) => {
     KERNEL: {
       fetch: ((req: Request) => {
         forwarded.push(req)
-        return Promise.resolve(new Response('kernel'))
+        return Promise.resolve(kernel())
       }) as never,
     },
     USES: {
@@ -222,6 +225,22 @@ test('a broken Site is reported and answered by the kernel', async () => {
 test("a listing Site fails to render is the kernel's to answer", async () => {
   let f = front(() => new Response('broken', { status: 500 }))
   assertEquals(await (await f.go('https://yaks.app/')).text(), 'kernel')
+})
+
+// yak-front deploys before the kernel (wrangler.ts `SIBLINGS`), so for a while
+// it may list a page the Site it asks doesn't keep yet.
+test('an apex page Site refuses is answered by the kernel, reported when it serves it', async () => {
+  let lost = () => new Response('lost', { status: 404 })
+  let f = front(lost)
+  let res = await f.go('https://yaks.app/pricing')
+  assertEquals([res.status, await res.text()], [200, 'kernel'])
+  await Promise.all(f.retained)
+  assertEquals(f.errors.length, 1)
+  let missing = front(lost, lost)
+  res = await missing.go('https://yaks.app/docs/nowhere')
+  assertEquals([res.status, await res.text()], [404, 'lost'])
+  await Promise.all(missing.retained)
+  assertEquals(missing.errors.length, 0)
 })
 
 test("the apex's listings come from Site, with their own lifetime", async () => {
