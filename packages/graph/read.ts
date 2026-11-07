@@ -455,10 +455,7 @@ export let reader = (opts: {
       )
     }
     let names = named(vocab, q, nested)
-    return continuing(
-      storage.read(q, readOpts, names ? [...names] : undefined),
-      (rows) => rows.map(only(names)),
-    )
+    return storage.read(q, readOpts, names ? [...names] : undefined)
   }
 
   let readPlain = (query: Query, readOpts?: ReadOpts) =>

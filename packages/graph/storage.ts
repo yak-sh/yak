@@ -233,7 +233,8 @@ export type Storage = {
    * reported (a table whose rows do not fit, a unique index they break); it
    * serves the shape it holds meanwhile. */
   install: () => void | Error[] | Promise<void | Error[]>
-  /** a query → its entities, with `comps` only where the caller names them */
+  /** a query → its entities, carrying only `comps` where the caller names
+   * them: the graph answers a read with these rows as they are, cut once */
   read: (
     query: Query,
     opts?: ReadOpts,

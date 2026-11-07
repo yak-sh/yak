@@ -288,9 +288,9 @@ export let named = (
 /** A row cut to what was asked for. The spine names it, its tombstone says it
  * is gone, a text query's `rank` is the answer's own word about it, and `$`
  * keys are the graph's notes on the row rather than components, so those ride
- * whatever the filter said. A read cuts every row it answers, often twice
- * (storage, then the graph), so a row allocates nothing to be looked at: a
- * row that carries nothing else is its own answer. */
+ * whatever the filter said. A storage cuts every row it reads, so a row
+ * allocates nothing to be looked at: a row that carries nothing else is its
+ * own answer. */
 export let only = (want: Set<string> | null): (b: Bundle) => Bundle => {
   if (!want) return (b) => b
   let keep = (k: string) => reserved(k) || k == 'rank' || want.has(k)
