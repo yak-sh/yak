@@ -152,8 +152,11 @@ to the new version on its own, seconds later; Cloudflare releases them
 eventually consistently. A busy object finishes on the code it has for up to
 five minutes before taking up a deploy (wrangler.toml `[durable_objects]
 code_update_strategy`, deferred, `max_delay = 300`), so an Operator is not
-reset under its reply (T-145428). A store still behind its caller answers a refusal as a
-failure the caller's door retries, and reports it (running.ts `skewed`). So a call from the new Worker can reach a store
+reset under its reply (T-145428). A store a newer Worker reaches restarts for its deploy:
+a write first, a read behind its answer, on the code it has (running.ts
+`behindAnswer`), since the restart's new instance can take seconds to start. A
+store still behind its caller answers a refusal as a failure the caller's door
+retries, and reports it (running.ts `skewed`). So a call from the new Worker can reach a store
 still on the previous code: a new store route or RPC answers as missing for a
 while, and a probe right after a deploy can see the old behavior. A bug's
 occurrence carries the version it ran (`commit`); one from the previous version

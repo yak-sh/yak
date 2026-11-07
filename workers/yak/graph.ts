@@ -341,7 +341,7 @@ import {
 import { PLATFORM_STORE } from '@yaks/platform/names'
 import { type Mark, type Stamp, type Standing } from '@yaks/platform/mover'
 import { borrows } from '@yaks/reach'
-import { behind, ran, skewed } from './running.ts'
+import { behindAnswer, owed, ran, reading, skewed } from './running.ts'
 import { type Relocating, relocation } from './relocate.ts'
 import { type Meta, metaOf, minted } from './meta.ts'
 import { caught, defect, refusing } from './defects.ts'
@@ -3733,9 +3733,24 @@ export class Store {
     let waking = !this.#started, woke = this.#now()
     let named = request.headers.get('x-store')
     if (waking && named) this.#prepare(named).catch(() => {})
-    // A caller on a later deploy restarts this object before it does anything
-    // for the request, so a door the deploy added answers (running.ts).
-    await behind(request.headers, this.#bind.CF_VERSION_METADATA, this.#ctx)
+    // A caller on a later deploy restarts this object, so a door the deploy
+    // added answers (running.ts). A read is answered first, on the code this
+    // object has, and the restart follows it; a write restarts it first.
+    let restart = await owed(
+      request.headers,
+      this.#bind.CF_VERSION_METADATA,
+      this.#ctx,
+    )
+    if (!restart) return this.#door(request, waking, woke)
+    if (!reading(request)) restart()
+    return behindAnswer(await this.#door(request, waking, woke), restart)
+  }
+
+  async #door(
+    request: Request,
+    waking: boolean,
+    woke: number,
+  ): Promise<Response> {
     let path = new URL(request.url).pathname
     let kernel = request.headers.get('x-yak-kernel') == '1'
     if (path == '/apply' && request.method == 'POST') {

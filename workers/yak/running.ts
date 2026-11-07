@@ -8,7 +8,9 @@
 // `doorOf` for a store, `fetchOf` for the Wire and the Builder), and an object
 // that a newer caller reaches restarts itself on the spot (`behind`); the
 // caller's retry of an evicted request (@yaks/durable-object `evicted`) then
-// meets the new code, unless Cloudflare is still deferring the deploy for it
+// meets the new code. A store answers a read on the code it has and restarts
+// behind the answer (`behindAnswer`), so no reader waits for the restart. The
+// new code comes up unless Cloudflare is still deferring the deploy for it
 // (wrangler.toml `code_update_strategy`, up to five minutes), when it starts
 // again on the code it had. A store still behind its caller after its
 // restart answers a refusal as a failure the caller sends again, and reports
@@ -138,13 +140,37 @@ export let ran = async (
 })
 
 /**
- * Restart this object, before it does anything for the request, when its
- * caller runs a later deploy than both the one it runs and the one it last
- * restarted for. Restarts only move forward, so callers on two new deploys
- * never take turns restarting it: an object the runtime starts again on older
- * code is where the runtime means it to be, and it serves every caller no
- * newer than the deploy it last restarted for, refusing a newer one nothing
- * (`skewed`).
+ * The restart this object owes its caller, when the caller runs a later deploy
+ * than both the one it runs and the one it last restarted for; null when it
+ * owes none. The deploy it restarts for is kept first, so restarts only move
+ * forward and callers on two new deploys never take turns restarting it: an
+ * object the runtime starts again on older code is where the runtime means it
+ * to be, and it serves every caller no newer than the deploy it last restarted
+ * for, refusing a newer one nothing (`skewed`). Running the restart fails the
+ * request in flight in the runtime's own words.
+ */
+export let owed = async (
+  headers: Headers,
+  mine: Meta | null | undefined,
+  ctx: Restartable,
+): Promise<(() => void) | null> => {
+  let theirs = caller(headers), s = ctx.storage, abort = ctx.abort
+  if (
+    !theirs || !newer(theirs, versionOf(mine)) || !abort || !s.get || !s.put
+  ) return null
+  let last = await restartedFor(s)
+  if (last && !newer(theirs, last)) return null
+  await s.put(RESTARTED, theirs)
+  await s.sync?.()
+  return () => {
+    retiring.add(ctx)
+    abort.call(ctx, `${BEHIND} ${theirs.id}`)
+  }
+}
+
+/**
+ * Restart this object, before it does anything for the request, when it owes
+ * its caller a restart (`owed`).
  *
  * ```ts
  * import { assertEquals } from '@std/assert'
@@ -174,18 +200,47 @@ export let behind = async (
   headers: Headers,
   mine: Meta | null | undefined,
   ctx: Restartable,
-): Promise<void> => {
-  let theirs = caller(headers), s = ctx.storage
-  if (
-    !theirs || !newer(theirs, versionOf(mine)) || !ctx.abort || !s.get ||
-    !s.put
-  ) return
-  let last = await restartedFor(s)
-  if (last && !newer(theirs, last)) return
-  await s.put(RESTARTED, theirs)
-  await s.sync?.()
-  retiring.add(ctx)
-  ctx.abort(`${BEHIND} ${theirs.id}`)
+): Promise<void> => (await owed(headers, mine, ctx))?.()
+
+/** Whether a request only reads, so the code an object has may answer it
+ * before the object restarts for its caller's deploy. A socket is held open,
+ * so it is no read. */
+export let reading = (request: Request): boolean =>
+  (request.method == 'GET' || request.method == 'HEAD') &&
+  !request.headers.has('upgrade')
+
+/**
+ * A read's answer from an object that owes its caller a restart, with the
+ * restart behind it (T-148194). Restarting first made the read wait for a new
+ * instance: a cold start of a few hundred milliseconds after each deploy, and
+ * once 32 s that Cloudflare took to start one. A refusal may be a door only the
+ * caller's deploy has, so the object restarts at once instead, and the
+ * caller's door sends the read again to the new code.
+ *
+ * ```ts
+ * import { assertEquals, assertThrows } from '@std/assert'
+ * let restarts = 0
+ * let restart = () => {
+ *   restarts++
+ *   throw new Error('reset')
+ * }
+ * let answer = behindAnswer(new Response('ok'), restart)
+ * assertEquals([answer.status, restarts], [200, 0])
+ * await new Promise((r) => setTimeout(r, 0))
+ * assertEquals(restarts, 1)
+ * assertThrows(() => behindAnswer(new Response('', { status: 404 }), restart))
+ * assertEquals(restarts, 2)
+ * ```
+ */
+export let behindAnswer = (answer: Response, restart: () => void): Response => {
+  if (answer.status >= 400 && answer.status < 500) restart()
+  // The restart throws as it resets the object, with nothing in flight.
+  setTimeout(() => {
+    try {
+      restart()
+    } catch { /* the reset */ }
+  }, 0)
+  return answer
 }
 
 // The words a store that runs an older deploy than its caller answers a

@@ -66,12 +66,38 @@ test('an older caller, the same deploy, or no version never restarts it', async 
   assertEquals(o.restarts, [])
 })
 
-test('a store restarts at its door before it does anything for a newer caller', async () => {
+// A store's own door: a write restarts it first, a read is answered on the
+// code it has and the restart follows the answer (T-148194).
+let older = (o: ReturnType<typeof object>) =>
+  new Store(Object.assign(state(), { abort: o.abort }) as never, {
+    CF_VERSION_METADATA: A,
+  })
+let asked = (path: string, method = 'GET') =>
+  new Request(`http://store${path}`, {
+    method,
+    headers: { ...Object.fromEntries(from(B)), 'x-yak-kernel': '1' },
+    body: method == 'POST' ? '{}' : undefined,
+  })
+
+test("a store restarts at its door before it does anything for a newer caller's write", async () => {
   let o = object()
-  let store = new Store(o.ctx as never, { CF_VERSION_METADATA: A })
-  let e = await assertRejects(() =>
-    store.fetch(new Request('http://store/restore', { headers: from(B) }))
-  )
+  let e = await assertRejects(() => older(o).fetch(asked('/restore', 'POST')))
+  assert(evicted(e))
+  assertEquals(o.restarts.length, 1)
+})
+
+test("a store answers a newer caller's read on the code it has, and restarts behind the answer", async () => {
+  let o = object()
+  let answer = await older(o).fetch(asked('/restore'))
+  assertEquals(await answer.json(), { from: 'at-0', to: '' })
+  assertEquals(o.restarts, [])
+  await new Promise((r) => setTimeout(r, 0))
+  assertEquals(o.restarts.length, 1)
+})
+
+test('a read the older code has no door for restarts the store at once', async () => {
+  let o = object()
+  let e = await assertRejects(() => older(o).fetch(asked('/nowhere')))
   assert(evicted(e))
   assertEquals(o.restarts.length, 1)
 })
@@ -116,6 +142,7 @@ test('a call that reaches a store on the old deploy is answered by the new one',
   }
   let answer = await storeOf(ns, 'ada/cookbook', undefined, unpaused)(
     '/restore',
+    { method: 'POST', body: '{}' },
   )
   assertEquals(answer.status, 404)
   assertEquals(o.restarts.length, 1)
