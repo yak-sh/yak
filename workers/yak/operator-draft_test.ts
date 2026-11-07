@@ -415,17 +415,35 @@ let made = (document: Document) => ({
 test('what the app beside the chat is made of is drawn again as the Operator works on it, its screens left loaded', async () => {
   let page = await load(storage(), false, 'new', apps, 'notes')
   let { document } = page
-  let screens = document.querySelector('[data-frame]')
+  let frames = () =>
+    [...document.querySelectorAll('[data-frame]')].map((f) =>
+      f.getAttribute('data-frame')
+    )
   assertEquals(made(document), { keeps: [], open: ['screens'] })
-  await files(person, 'notes', [
-    'vocab.json',
-    { $defs: { notice: { properties: { posted: { type: 'string' } } } } },
-  ])
-  page.hear(working({ space: 'mill', app: 'notes' }))
-  page.hear(working({ space: '', app: 'notes' }))
+  assertEquals(frames(), ['live'])
+  let wrote = async (properties: object) => {
+    await files(person, 'notes', [
+      'vocab.json',
+      { $defs: { notice: { properties } } },
+    ])
+    page.hear(working({ space: 'mill', app: 'notes' }))
+    page.hear(working({ space: '', app: 'notes' }))
+  }
+  // The first change to the live app puts its draft beside it.
+  await wrote({ posted: { type: 'string' } })
   assert(await until(() => made(document).keeps.length > 0))
   assertEquals(made(document), { keeps: ['Notice'], open: ['screens'] })
-  assertEquals(document.querySelector('[data-frame]'), screens)
+  assertEquals(frames(), ['draft', 'live'])
+  // The next leaves both frames as they are.
+  let screens = document.querySelector('[data-frame]')
+  await wrote({ posted: { type: 'string' }, title: { type: 'string' } })
+  assert(
+    await until(() =>
+      document.querySelector('[data-part=keeps] .Rows_Meta')?.textContent ==
+        'Posted and title'
+    ),
+  )
+  assert(document.querySelector('[data-frame]') === screens)
   assertEquals(page.loads, { app: 0, page: 0 })
   page.leave()
 })
