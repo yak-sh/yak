@@ -15,7 +15,7 @@ import plug from 'lucide/dist/esm/icons/plug.mjs'
 // @ts-types="./lucide.d.ts"
 import bot from 'lucide/dist/esm/icons/bot.mjs'
 import { el, type Props } from './el.ts'
-import type { Colors, Specimen } from './theme.ts'
+import type { Colors, Native, Specimen } from './theme.ts'
 
 let Svg = el('svg', 'Icon')
 
@@ -42,6 +42,20 @@ export let description =
 /** A terminal draws no lines. */
 export let sheet = (_c: Colors): Sheet => ({
   Icon: { hidden: true },
+})
+
+/** On a phone it is drawn in lines, a little taller than its words, in
+ * their colour. */
+export let native = (_c: Colors): Native => ({
+  Icon: {
+    width: 18,
+    height: 18,
+    fill: 'none',
+    stroke: 'currentColor',
+    strokeWidth: 2,
+    strokeLinecap: 'round',
+    strokeLinejoin: 'round',
+  },
 })
 
 /** An icon on its own, and one leading its words. */

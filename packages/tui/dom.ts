@@ -402,6 +402,10 @@ export class TElement extends TNode {
   attr(k: string): string | undefined {
     return this.attrs.get(k)
   }
+  /** The names of the attributes it has, as a browser lists them. */
+  getAttributeNames(): string[] {
+    return [...this.attrs.keys()]
+  }
   /** The class attribute, as Preact names it. */
   get className(): string {
     return this.attrs.get('class') ?? ''

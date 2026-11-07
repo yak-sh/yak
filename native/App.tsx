@@ -202,11 +202,14 @@ let tabs = (brand: Brand | null): [Tab, string][] => [
 ]
 
 // An app, drawn natively when its page names a native view the shell can
-// load, and as its web page otherwise.
+// load, and as its web page otherwise, or when the view opens one of its
+// pages there.
 let Opened = ({ app }: { app: AppRow }) => {
   let [view, setView] = useState<NativeView | null | 'web'>(null)
+  let [page, setPage] = useState<string | null>(null)
   useEffect(() => {
     setView(null)
+    setPage(null)
     let load = async () => {
       let url = await nativeOf(app.url)
       return url ? await viewAt(url, carried) : 'web' as const
@@ -225,7 +228,10 @@ let Opened = ({ app }: { app: AppRow }) => {
       </View>
     )
   }
-  return view == 'web' ? <Web url={app.url} /> : <Kit app={app} view={view} />
+  if (page) return <Web url={page} />
+  return view == 'web'
+    ? <Web url={app.url} />
+    : <Kit app={app} view={view} web={setPage} />
 }
 
 // What a tab has open over it: an app, or one of the space's pages.
