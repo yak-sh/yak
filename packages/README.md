@@ -266,6 +266,11 @@ grouped approximately by function, **not** by dependency order.
   files), or both. Each path remembers the Git blob and value hash it last
   agreed on, so a path both sides changed is reported as a conflict and never
   overwritten.
+- **[@yaks/reach](./reach)** — a graph made of graphs. Each member is a value
+  that reads a line, applies bundles and says its words; a read is asked of
+  every member that speaks it and merged into one bundle per eid, and a write
+  sends each component to the member its word lives in, rehearsed everywhere
+  before any commits. yaks.app's stores are its members.
 - **[@yaks/effects](./effects)** — Run code after committed component changes or
   newly matching query patterns, isolating failures from the original
   transaction. What a commit owes is declared in the vocabulary

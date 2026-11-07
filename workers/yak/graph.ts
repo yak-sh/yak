@@ -336,7 +336,7 @@ import {
 } from './door.ts'
 import { PLATFORM_STORE } from '@yaks/platform/names'
 import { type Mark, type Stamp, type Standing } from '@yaks/platform/mover'
-import { borrows } from './reach.ts'
+import { borrows } from '@yaks/reach'
 import { behind, ran, skewed } from './running.ts'
 import { type Relocating, relocation } from './relocate.ts'
 import { type Meta, metaOf, minted } from './meta.ts'
@@ -4815,7 +4815,7 @@ export class Store {
   // round trip that answers it also says, in `x-yak-uses`, which words this
   // app uses from other homes, refusals included. A line naming one is not
   // this store's to answer alone: it is answered 204, unread, and the kernel
-  // composes it from this store and those homes (reach.ts `read`).
+  // composes it from this store and those homes (@yaks/reach `read`).
   async #paged(request: Request): Promise<Response> {
     let url = new URL(request.url)
     if (url.searchParams.get('uses') != '1') return await this.#asked(request)

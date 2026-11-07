@@ -3674,6 +3674,43 @@ importers:
         specifier: 0.2.30
         version: link:../testing
 
+  packages/reach:
+    dependencies:
+      '@yaks/archetype':
+        specifier: 0.2.24
+        version: link:../archetype
+      '@yaks/edge':
+        specifier: 0.2.24
+        version: link:../edge
+      '@yaks/graph':
+        specifier: 0.2.33
+        version: link:../graph
+      '@yaks/key':
+        specifier: 0.2.24
+        version: link:../key
+      '@yaks/match':
+        specifier: 0.2.30
+        version: link:../match
+      '@yaks/query':
+        specifier: 0.2.32
+        version: link:../query
+      '@yaks/tools':
+        specifier: 0.2.30
+        version: link:../tools
+      '@yaks/vocab':
+        specifier: 0.2.32
+        version: link:../vocab
+    devDependencies:
+      '@std/assert':
+        specifier: npm:@jsr/std__assert@^1.0.0
+        version: '@jsr/std__assert@1.0.19'
+      '@yaks/ram':
+        specifier: 0.2.24
+        version: link:../ram
+      '@yaks/testing':
+        specifier: 0.2.30
+        version: link:../testing
+
   packages/render:
     dependencies:
       '@yaks/graph':
@@ -5489,6 +5526,9 @@ importers:
       '@yaks/ram':
         specifier: 0.2.24
         version: link:../../packages/ram
+      '@yaks/reach':
+        specifier: 0.2.24
+        version: link:../../packages/reach
       '@yaks/render':
         specifier: 0.2.24
         version: link:../../packages/render

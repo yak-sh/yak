@@ -1,4 +1,4 @@
-import { tokens } from '@yaks/query'
+import { bareLine, tokens } from '@yaks/query'
 
 /** A line's tokens written back as one line: `&` between clauses, nothing
  * around the `|` that separates two arms. */
@@ -10,12 +10,6 @@ export let joined = (segs: string[]) =>
     '',
   )
 
-/** A line without the `?` a query string opens with, and any `&` after it. A
- * `?` before a word is the grammar's own (`?doc` asks for a component), so it
- * stays. */
-export let bare = (line: string) =>
-  line.replace(/^\?(?![A-Za-z_])/, '').replace(/^&+/, '')
-
 // The `.in=` rider: which app a read is scoped to. It is the platform's word,
 // not the query grammar's, so it comes off the line before any store sees it —
 // a store knows about components, and which of several stores to ask is a
@@ -24,7 +18,7 @@ export let bare = (line: string) =>
 /// scope('.doc .in=recipes') -> { said: 'recipes', line: '.doc' }
 /// scope('.in=me/trip&.doc|.task') -> { said: 'me/trip', line: '.doc|.task' }
 export let scope = (line: string) => {
-  let segs = tokens(bare(line))
+  let segs = tokens(bareLine(line))
   let said = segs.find((s) => /^\.in=/.test(s))?.slice(4)
   return { said, line: joined(segs.filter((s) => !/^\.in=/.test(s))) }
 }

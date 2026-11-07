@@ -25,8 +25,8 @@
 // line as the query string itself and the Store takes it as one parameter, and
 // three of the page's riders lost their leading dot on the way over.
 import type { Bundle } from '@yaks/graph'
-import { tokens } from '@yaks/query'
-import { bare, joined } from './query-line.ts'
+import { bareLine, tokens } from '@yaks/query'
+import { joined } from './query-line.ts'
 import { minted } from './meta.ts'
 import { refuse } from './tool.ts'
 import { IDEMPOTENCY } from './door.ts'
@@ -93,7 +93,7 @@ let members = (value: string) =>
  */
 export let lined = (search: string): string =>
   joined(
-    tokens(bare(search)).map((seg) => {
+    tokens(bareLine(search)).map((seg) => {
       if (seg == '|') return seg
       if (seg.startsWith('(')) return `(${lined(seg.slice(1, -1))})`
       let m = OPERATOR.exec(seg)

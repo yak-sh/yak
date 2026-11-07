@@ -239,7 +239,7 @@ export let wordOf = (s: PropSchema): string => {
  * A document as `{comp: {prop: word}}` — every component's properties as the
  * word that names each one's type. That is how the kernel reads a
  * vocabulary where it needs the types and not the keywords (tools.ts `sheetOf`,
- * reach.ts `spoken`); the document itself is what a store keeps and answers.
+ * @yaks/reach `spoken`); the document itself is what a store keeps and answers.
  */
 export let wordsOf = (doc: VocabDoc): Record<string, Record<string, string>> =>
   Object.fromEntries(

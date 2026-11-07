@@ -539,6 +539,19 @@ export let parseDot = (token: string): Clause[] | null => {
 
 // ---- tokenizing a whole query ----
 
+/** A line without the `?` a query string opens with, and any `&` after it. A
+ * `?` before a word is the grammar's own (`?doc` asks for a component), so it
+ * stays.
+ *
+ * ```ts
+ * import { assertEquals } from '@std/assert'
+ * assertEquals(bareLine('?&.doc'), '.doc')
+ * assertEquals(bareLine('?doc'), '?doc')
+ * ```
+ */
+export let bareLine = (line: string) =>
+  line.replace(/^\?(?![A-Za-z_])/, '').replace(/^&+/, '')
+
 // The token split: whitespace and `&` both end a token; a quoted run is one
 // token even across them, and so is a bracket on a path. A quote opens only at
 // a token's start or immediately after an operator, so an apostrophe inside a

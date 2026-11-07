@@ -14,9 +14,9 @@ import { reacquire } from './tool.ts'
 // One server lists every tier because all of them are `Tool`s.
 //
 // The graph is A composition, not a database. A person's data lives in one
-// Store object per app (graph.ts), an entity spans several, and reach.ts
-// already asks them all and merges one bundle per eid. `reaching()` wears that
-// as the `Graph` the package takes: `read` is the fan-out, `apply` is the
+// Store object per app (graph.ts), an entity spans several, and @yaks/reach,
+// with each store a member (reach.ts), asks them all and merges one bundle per
+// eid. `reaching()` wears that as the `Graph` @yaks/mcp takes: `read` is the fan-out, `apply` is the
 // routed write, and `storage` answers the one identity read `graph_show`
 // makes. Everything a Graph does that a composition cannot — DDL, a
 // transaction — throws rather than pretending, because nothing calls it.
@@ -404,7 +404,7 @@ let unreduced = (value: Reduced): Row[] =>
 
 // The one read `graph_show` makes, and the only reason this Graph carries a
 // storage at all: these eids, whole, out of every store that holds a piece of
-// one (reach.ts `composed`).
+// one (@yaks/reach `composed`).
 let held = (
   ctx: Ctx,
   reach: Reach[],
@@ -489,7 +489,7 @@ let held = (
 // word before the platform said it keeps it in its own store (vocab.ts
 // `beneath`), and here the word is the platform's. Each store still decides
 // what it takes: a write routes each component to the store that declares it
-// (reach.ts `written`).
+// (@yaks/reach `written`).
 let spoken = async (ctx: Ctx, reach: Reach[]): Promise<Vocab> => {
   // Each store's words as the document it keeps, read once per request
   // (reach.ts `vocabAt`): the roster already asked for them (standing.ts
@@ -518,7 +518,7 @@ let spoken = async (ctx: Ctx, reach: Reach[]): Promise<Vocab> => {
 // is how a caller matches the id it just minted to the word it asked for.
 //
 // Each store composed its own answer (@yaks/graph `composed`), and an entity
-// spanning apps was answered once per store it landed in (reach.ts `written`);
+// spanning apps was answered once per store it landed in (@yaks/reach `written`);
 // composing the parts is what makes that one entity again. The alias is put on
 // after, because this door minted the aliases itself before the batch was
 // split, so no store ever saw one.
@@ -534,7 +534,7 @@ let aliased = (
 }
 
 // Which app a write goes in, when nothing else can say. A word's HOME decides
-// most of it (reach.ts `routed`) — the app that declared the component owns
+// most of it (@yaks/reach `routed`) — the app that declared the component owns
 // the write, and a shared word rides with the app's own words beside it — but
 // a brand-new entity wearing nothing but shared words has no home to go to,
 // and then somebody has to name one.
@@ -574,7 +574,7 @@ let aimed = async (ctx: Ctx, batch: Bundle[]) => {
  * whose answer is entities is listed with: the generic bundle, and the two
  * words a row says about itself beside its components. `kind` is what the
  * entity is, on every row a store or the composing read answers (graph.ts
- * `#kind`, reach.ts `composed`); `space` is the space a row answers for where
+ * `#kind`, @yaks/reach `composed`); `space` is the space a row answers for where
  * two spaces mean two things by one word (T-32728). Both are documented on the
  * rows graph_query answers (public/docs/querying.md, entities.md). The
  * directory also stores `space` as a component, so that name can carry the

@@ -1,0 +1,25 @@
+{
+  "name": "@yaks/reach",
+  "version": "0.2.24",
+  "type": "module",
+  "exports": {
+    ".": "./mod.ts"
+  },
+  "license": "Apache-2.0",
+  "description": "A graph made of graphs: a read asked of every member and merged into one bundle per eid, and a write split by component and routed to the member each word lives in.",
+  "dependencies": {
+    "@yaks/archetype": "0.2.24",
+    "@yaks/edge": "0.2.24",
+    "@yaks/graph": "0.2.33",
+    "@yaks/key": "0.2.24",
+    "@yaks/match": "0.2.30",
+    "@yaks/query": "0.2.32",
+    "@yaks/tools": "0.2.30",
+    "@yaks/vocab": "0.2.32"
+  },
+  "devDependencies": {
+    "@std/assert": "npm:@jsr/std__assert@^1.0.0",
+    "@yaks/ram": "0.2.24",
+    "@yaks/testing": "0.2.30"
+  }
+}

@@ -24,7 +24,7 @@
 // signed out there is nobody to have a reach, so the call names its app and
 // this resolves it — the app's `access` deciding, exactly as it decides for
 // the page (apps.ts, door.ts). The store is asked with no vouch on the
-// request at all (reach.ts `doorOf` over `nobody`), so the same answer is
+// request at all (reach.ts `memberOf` over `nobody`), so the same answer is
 // checked twice: here, and by @yaks/member inside the store.
 import type { Tool } from '@yaks/graph'
 import type { Security } from '@yaks/mcp'
