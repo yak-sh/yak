@@ -11,8 +11,9 @@
 // A subagent also ends once its log has been quiet, while the session it ran
 // under goes on. A managed run is left to its own `exit` (@yaks/process). A
 // session with no transcript file has no process here to ask about, so it is
-// over once it has been quiet and holds nothing, a day if its turn is
-// unfinished. Anything new said to it clears the mark (./reopen.ts).
+// over once it has been quiet, a day if its turn is unfinished. A claim keeps
+// it only mid-turn or while it is parked there (./wake.ts); otherwise the claim
+// goes with the mark. Anything new said to it clears the mark (./reopen.ts).
 
 import * as fs from '@yaks/file/io'
 
@@ -23,6 +24,7 @@ import { runs } from '@yaks/process'
 import { CLAIM, SESSION } from './comp.ts'
 import { versionOf } from './files.ts'
 import { UNFINISHED } from './state.ts'
+import { parked } from './wake.ts'
 
 // A log this recent may belong to a process that has yet to list itself.
 let SETTLING = 5 * 60 * 1000
@@ -162,11 +164,13 @@ export let goneSessions = async (g: Graph, o: Sweep = {}): Promise<Eid[]> => {
     }
     let [file] = s.transcript ? await g.get([String(s.transcript)]) : []
     let path = file && await absolute(g, file)
-    // No log to ask about: quiet says it, and a claim is work it is parked on.
+    // No log to ask about: quiet says it. What it holds keeps it only while
+    // its turn is unfinished or it is parked there.
     if (!path) {
-      if (
-        !holding.has(eid) && await quiet(g, b, now - (owes ? STALLED : QUIET))
-      ) gone.push(eid)
+      let keeps = holding.has(eid) && (owes || await parked(g, eid))
+      if (!keeps && await quiet(g, b, now - (owes ? STALLED : QUIET))) {
+        gone.push(eid)
+      }
       continue
     }
     let account = accounts.find((a) => path.startsWith(a.projects))

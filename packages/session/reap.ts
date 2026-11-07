@@ -10,10 +10,9 @@
 // lose its lock mid-edit), so the correction happens at the one moment a fresh,
 // reliable answer is available: start-up.
 //
-// A session that is merely over — its transcript settled — still holds what it
-// holds. Letting go is the rewind's business (D-35040), not a sweep's. A session
-// an outside harness ran, whose process is gone, is ended by ./ended.ts, and its
-// claims go with that.
+// A session that is merely over is ended by ./ended.ts, and its claims go with
+// that: one an outside harness ran once its process is gone, one with no
+// transcript file once it has been quiet and is not parked on what it holds.
 //
 // What is read here is exactly the locks and the sessions holding them, never
 // the whole graph: locks are few by nature, since only work in progress holds

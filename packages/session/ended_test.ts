@@ -14,11 +14,14 @@ import { fileDoc } from '@yaks/file/vocab'
 import { machineDoc } from '@yaks/machine/vocab'
 import { processDoc } from '@yaks/process/vocab'
 import { provenanceDoc } from '@yaks/provenance'
+import { taskDoc } from '@yaks/task'
+import { edgeDoc, edgeKeywords, link } from '@yaks/edge'
 import { sessionDoc } from './comp.ts'
 import { attemptComputed } from './attempt.ts'
 import { statusComputed } from './state.ts'
 import { endGone, runningSessions } from './ended.ts'
 import { sessions } from './plugin.ts'
+import { running as runner } from './run.ts'
 import { versionOf } from './files.ts'
 
 let root = Deno.makeTempDirSync()
@@ -44,6 +47,8 @@ let vocab = loadVocab([
   machineDoc,
   processDoc,
   provenanceDoc,
+  taskDoc,
+  edgeDoc,
   {
     $defs: {
       knock: {
@@ -58,7 +63,7 @@ let vocab = loadVocab([
       },
     },
   },
-])
+], [edgeKeywords])
 let store = () =>
   ram(vocab, {
     computed: { ...executionComputed, ...attemptComputed, ...statusComputed },
@@ -267,8 +272,6 @@ test('a session with no process to ask about ends quiet, owing and holding nothi
     said('failed', 1, { exception: { type: 'x', value: 'no' } }),
     { entity: { eid: 'owes' }, session: { id: 'owes' } },
     said('owes', 1),
-    { entity: { eid: 'holds' }, session: { id: 'holds' } },
-    { entity: { eid: 'work' }, claim: { session: 'holds' } },
   )
   let later = { now: Date.now() + 3 * HOUR }
   assertEquals(await endGone(g), [])
@@ -280,6 +283,59 @@ test('a session with no process to ask about ends quiet, owing and holding nothi
   assertEquals(await status('failed'), 'failed')
   assertEquals(await ended(g, 'owes'), false)
   assertEquals(await endGone(g, later), [])
+})
+
+test('a session with no transcript file lets go of a claim only once quiet and not parked there', async () => {
+  let s = store()
+  let g = graph({ storage: s, vocab, plugins: [sessions()] })
+  let settled = (session: string, task: string): Bundle[] => [
+    { entity: { eid: session }, session: { id: session } },
+    {
+      entity: { eid: `${session}-1` },
+      entry: { session, seq: 1 },
+      content: { body: 'go' },
+    },
+    {
+      entity: { eid: `${session}-2` },
+      entry: { session, seq: 2 },
+      content: { body: 'done' },
+      output: { source: `${session}-1` },
+    },
+    { entity: { eid: task }, task: {}, claim: { session } },
+  ]
+  await seed(
+    s,
+    ...settled('over', 'idle'),
+    ...settled('parked', 'y'),
+    { entity: { eid: 'x' }, task: {} },
+    link('y', 'requires', 'x'),
+    { entity: { eid: 'mid' }, session: { id: 'mid' } },
+    {
+      entity: { eid: 'mid-1' },
+      entry: { session: 'mid', seq: 1 },
+      content: { body: 'go' },
+    },
+    { entity: { eid: 'long' }, task: {}, claim: { session: 'mid' } },
+  )
+  assertEquals(await endGone(g), [])
+  let later = { now: Date.now() + 3 * HOUR }
+  assertEquals(await endGone(g, later), ['over'])
+  assertEquals(await endGone(g, { now: Date.now() + 30 * HOUR }), [])
+  let release =
+    runner(g, { holder: 'w', model: () => Promise.reject(), tools: [] })
+      .session_release
+  for (let eid of ['over', 'parked', 'mid']) {
+    await release(
+      { kind: 'changed', name: 'session', entity: { eid } },
+      g.outside,
+      (b) => g.apply(b, { trusted: true }),
+    )
+  }
+  let holders = await g.read('.claim.session .fields=entity.eid,claim.session')
+  assertEquals(
+    holders.map((b) => [b.entity.eid, (b.claim as Comp).session]).sort(),
+    [['long', 'mid'], ['y', 'parked']],
+  )
 })
 
 test('a log just written waits for its process to list itself', async () => {
