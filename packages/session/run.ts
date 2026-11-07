@@ -12,7 +12,12 @@ import { Stale } from '@yaks/graph/errors'
 import { token } from '@yaks/graph/sha256'
 import { effectsIn } from '@yaks/vocab'
 import { actionable, exceptionOf } from '@yaks/tools/fault'
-import { dependents } from '@yaks/task'
+import {
+  dependents,
+  settled,
+  statusComps,
+  statusOf as taskStatus,
+} from '@yaks/task'
 import {
   active,
   admitNext,
@@ -670,18 +675,35 @@ export let answer = async (
   if (await answering(g, session, r)) await settle(g, session, r)
 }
 
+// Let go of what `session` holds on `eid`. The guard protects a claim that
+// another writer handed to a different session after this read.
+let unclaim = async (g: Graph, eid: Eid, session: Eid): Promise<void> => {
+  try {
+    await g.apply([{
+      entity: { eid },
+      [CLAIM]: null,
+      $was: { [CLAIM]: { session: token(session) } },
+    }], { trusted: true })
+  } catch (err) {
+    if (!(err instanceof Stale)) throw err
+  }
+}
+
 // A terminal entry or a held task finishing identifies the transcript whose
-// locks may be due for release. A
-// managed run that ended cleanly keeps the ones it is parked on (./wake.ts):
-// its next run is owed, or waits on a dependency. The guard protects a claim
-// that another writer handed to a different session after this read. A swept
-// claim can also name a holder the graph no longer has.
+// locks may be due for release. A task that is done or cancelled lets go of
+// its claim whoever holds it, since nobody is working on it. A managed run
+// that ended cleanly keeps the others it is parked on (./wake.ts): its next
+// run is owed, or waits on a dependency. A swept claim can also name a holder
+// the graph no longer has.
 let release = async (g: Graph, e: Event, tx: ReadTx): Promise<void> => {
-  let b = await one(g, e.entity.eid, ['entry', CLAIM])
+  let b = await one(g, e.entity.eid, ['entry', CLAIM, ...statusComps(g.vocab)])
   let session = b && await isSession(g, b.entity.eid)
     ? b.entity.eid
     : comp(b, 'entry')?.session ?? comp(b, CLAIM)?.session
   if (typeof session != 'string') return
+  if (b?.task && b[CLAIM] && settled(taskStatus(g.vocab, b))) {
+    await unclaim(g, b.entity.eid, session)
+  }
   let present = async () =>
     (await tx.read(
       `.entity.eid=${session}&.session&.fields=entity.eid`,
@@ -718,15 +740,7 @@ let release = async (g: Graph, e: Event, tx: ReadTx): Promise<void> => {
     if (owed || parked && await waits(g, session, held.entity.eid)) {
       continue
     }
-    try {
-      await g.apply([{
-        entity: held.entity,
-        [CLAIM]: null,
-        $was: { [CLAIM]: { session: token(session) } },
-      }], { trusted: true })
-    } catch (err) {
-      if (!(err instanceof Stale)) throw err
-    }
+    await unclaim(g, held.entity.eid, session)
   }
 }
 

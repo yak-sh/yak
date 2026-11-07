@@ -929,7 +929,7 @@
         "completed",
         "cancelled"
       ],
-      "description": "release claims held by a transcript that stopped or failed, except those a managed run that ended cleanly is parked on: a task still waiting on a dependency, or any while a request waits for its next run. A parked task finishing lets its claim go. Runs recorded with terminal marks are claimed by the next worker even when no worker was serving effects"
+      "description": "release the claim of a task that is done or cancelled, whoever holds it, and the claims held by a transcript that stopped or failed, except those a managed run that ended cleanly is parked on: a task still waiting on a dependency, or any while a request waits for its next run. Runs recorded with terminal marks are claimed by the next worker even when no worker was serving effects"
     },
     "session_wake": {
       "effect": true,

@@ -200,6 +200,13 @@ let CANCELLED = await image(managed('m1', 0), [
   { entity: { eid: 'y' }, cancelled: {} },
 ])
 let FAILED = await image(managed('m1', 3))
+// A run still going, its process listed, holding `y` and `z` as `y` is done
+// or cancelled.
+let going = (mark: string) =>
+  image(managed('m1', 0).slice(0, 4), [
+    { entity: { eid: 'z' }, claim: { session: 'm1' } },
+  ], [{ entity: { eid: 'y' }, [mark]: {} }])
+let CLOSED = [await going('completed'), await going('cancelled')]
 let WOKEN = await image([...managed('m1', 0), ...doneBy('x'), ...rerun(2)])
 let WOKEN_Z = await image(
   [...managed('m1', 0), ...doneBy('x'), ...rerun(2)],
@@ -541,6 +548,13 @@ test('a parked task finished by somebody else lets its claim go', async () => {
   await w.release('y')
   assertEquals(await w.claim('y'), undefined)
 })
+
+for (let w of CLOSED) {
+  test('a task closed while its holder still runs lets its claim go', async () => {
+    await w.release('y')
+    assertEquals([await w.claim('y'), await w.claim('z')], [undefined, 'm1'])
+  })
+}
 
 test('a managed run wrapping up keeps the task it is parked on', async () => {
   let w = GOING
