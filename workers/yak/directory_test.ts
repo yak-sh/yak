@@ -362,6 +362,44 @@ test('directory page: its apps answer the request again, until it writes', async
   })
 })
 
+// The invitations a page read found answer that request alone: one client
+// serves every request of an isolate (`directoryOf`), and an invitation sent
+// or withdrawn between two of them is the second one's news.
+let inviting = async (before: boolean) => {
+  let vocab = platformVocab()
+  let g = graph({ storage: ram(vocab), vocab })
+  let invite = { entity: { eid: 'i1' }, invite: { to: 's1', person: 'p1' } }
+  await g.apply([
+    { entity: { eid: 's1' }, space: { slug: 'jeff', store: 'jeff' } },
+    { entity: { eid: 'p1' }, person: {} },
+    ...before ? [invite] : [],
+  ], { trusted: true })
+  let dir = directory(fixture({
+    query: (q) => g.read(q) as Promise<dirPart.Row[]>,
+    apply: () => Promise.resolve([]),
+  }))
+  let asked = () => tallying(new Map(), () => dir.invite('s1', 'p1'))
+  await tallying(new Map(), async () => {
+    await dir.page('jeff', null, 'p1')
+    await dir.invite('s1', 'p1')
+  })
+  await g.apply([before ? { ...invite, $delete: true } : invite], {
+    trusted: true,
+  })
+  return (await asked())?.eid ?? null
+}
+for (
+  let [name, before, after] of [['withdrawn', true, null], [
+    'sent',
+    false,
+    'i1',
+  ]] as const
+) {
+  test(`directory page: an invitation ${name} since another request's read is seen`, async () => {
+    assertEquals(await inviting(before), after)
+  })
+}
+
 // A comp is the platform holding one of its own spaces to no ceiling. It is a
 // constant read here and a property nowhere: what makes that safe is that
 // nothing on the wire can reach it, which is the same reason `plan` is

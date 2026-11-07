@@ -2023,29 +2023,38 @@ export let directoryRows = (rows: {
 }) => {
   let query = rows.query
   let one = async (q: string) => (await query(q))[0]
-  // The invitations a page's read found standing for the person it asked
-  // about (`page`), by the space or app each is to: `invite` asks nothing
-  // more of them while this request has written nothing since, as a line
-  // already read is answered again (hops.ts `recall`). A space or app the
-  // read held with no invitation to it is known to have none.
-  let invited = new Map<string, { eid: string; role: Role } | null>()
-  let invitedAt: number | undefined
-  let invitedFor: string | null = null
-  let held = (to: string, person: string) =>
-    invitedFor == person && invitedAt != null && invitedAt == wrote(META_STORE)
-      ? invited.get(to)
-      : undefined
-  // Every app of each space a request's page read named whole (`page` with
-  // `every`), by the space's eid, with where the request stood in its
-  // directory writes then: its `apps` is answered from it until the request
-  // writes there (hops.ts `wrote`), so a page asks its space's apps once.
-  let rosters = new WeakMap<Tally, Map<string, { at: number; apps: App[] }>>()
-  let roster = () => {
+  // What this request's page reads found, kept with the request (hops.ts
+  // `ambient`) and answering no other, since a client outlives a request
+  // (`directoryOf` holds one an isolate long), and each with where the
+  // request stood in its directory writes then (hops.ts `wrote`): it answers
+  // until the request writes there, as a line already read is answered again
+  // (hops.ts `recall`). `apps` is every app of each space a page named whole
+  // (`page` with `every`), by the space's eid, so a page asks its space's
+  // apps once. `invited` is the invitations standing for the person a page
+  // asked about, by the space or app each is to, so `invite` asks nothing
+  // more of them; a space or app the read held with no invitation to it is
+  // known to have none.
+  type Found = {
+    apps: Map<string, { at: number; apps: App[] }>
+    invited?: {
+      at: number
+      person: string
+      to: Map<string, { eid: string; role: Role } | null>
+    }
+  }
+  let requests = new WeakMap<Tally, Found>()
+  let found = () => {
     let tally = ambient()
     if (!tally) return undefined
-    let held = rosters.get(tally)
-    if (!held) rosters.set(tally, held = new Map())
+    let held = requests.get(tally)
+    if (!held) requests.set(tally, held = { apps: new Map() })
     return held
+  }
+  let held = (to: string, person: string) => {
+    let invited = found()?.invited
+    return invited?.person == person && invited.at == wrote(META_STORE)
+      ? invited.to.get(to)
+      : undefined
   }
   let write = (
     mutation: { entities: Bundle[] },
@@ -2148,21 +2157,23 @@ export let directoryRows = (rows: {
       let rows = await query(
         `(.space.slug=${slug}&${SPACE_ABOUT})|(${which}&${ABOUT})${seat}`,
       )
-      if (person && epoch != null && epoch == wrote(META_STORE)) {
-        invited = new Map(
+      let mine = epoch != null && epoch == wrote(META_STORE)
+        ? found()
+        : undefined
+      if (mine && person) {
+        let to = new Map<string, { eid: string; role: Role } | null>(
           rows.filter((row) => row.space || row.app)
             .map((row) => [row.entity.eid, null]),
         )
         for (let row of rows) {
           if (row.invite && idOf(row.invite.person) == person) {
-            invited.set(idOf(row.invite.to), {
+            to.set(idOf(row.invite.to), {
               eid: row.entity.eid,
               role: row.invite.role,
             })
           }
         }
-        invitedAt = epoch
-        invitedFor = person
+        mine.invited = { at: epoch!, person, to }
       }
       let page = paged(
         rows,
@@ -2172,10 +2183,9 @@ export let directoryRows = (rows: {
         over,
         every,
       )
-      if (
-        page.space && page.roster && epoch != null &&
-        epoch == wrote(META_STORE)
-      ) roster()?.set(page.space.eid, { at: epoch, apps: page.roster })
+      if (mine && page.space && page.roster) {
+        mine.apps.set(page.space.eid, { at: epoch!, apps: page.roster })
+      }
       return page
     },
     // The same for a space named by its eid, as an object keyed by it knows
@@ -2541,7 +2551,7 @@ export let directoryRows = (rows: {
       }
       let eids = [space].flat().map((s) => s.eid)
       if (!eids.length) return []
-      let read = eids.length == 1 ? roster()?.get(eids[0]) : undefined
+      let read = eids.length == 1 ? found()?.apps.get(eids[0]) : undefined
       if (read && read.at === wrote(META_STORE)) {
         return structuredClone(read.apps)
       }
