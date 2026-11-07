@@ -8,6 +8,7 @@ import type { Steps } from '@yaks/tools/title'
 export { CallError as ToolError } from '@yaks/tools/errors'
 import { argsOf } from '@yaks/graph/call'
 import { derivedEid, identityEid } from '@yaks/graph/identity'
+import { sleep } from '@yaks/fp'
 import { Refused, Stale } from '@yaks/graph/errors'
 import { sha256, token } from '@yaks/graph/sha256'
 import { transient } from '@yaks/graph/read'
@@ -214,6 +215,14 @@ export type Tool = Declared & {
  * one. */
 export let PATIENCE = 10_000
 
+/** How long a call's answer waits for its Pending entry's write, in
+ * milliseconds. A write that has not landed by then is reported, never
+ * written after the answer, and the answer lands without it. */
+export let HELD = 5_000
+
+// Where a call's Pending write stands, and whether its answer stopped waiting.
+type Pending = { at: 'reading' | 'writing'; late: boolean }
+
 /** A model as one provider serves it: the adapter that asks, and the name
  * that provider knows the model by (`serves.name`). */
 export type Served = {
@@ -237,6 +246,9 @@ export type Deps = {
   /** How long a background call runs before it is given a Pending entry
    * ({@link PATIENCE} where absent). */
   patience?: number
+  /** How long a call's answer waits for its Pending entry's write
+   * ({@link HELD} where absent). */
+  held?: number
   streaming?: boolean
   /** How long streamed text may stand unstored ({@link CHECKPOINT} where
    * absent); zero stores it only when the reply ends. */
@@ -1185,32 +1197,58 @@ export let react = async (
     // A background call still running when its patience runs out is given a
     // Pending entry, something new for the model to read. Only while the call
     // is the newest reply's: a later request already sent it as pending. The
-    // call's answer waits for that write, so its Pending always comes first.
+    // call's answer waits for that write, so its Pending comes first, but
+    // only for HELD: a write that has not landed by then is reported where it
+    // stood, and the answer lands without it, so a call is never left running
+    // behind its own Pending.
     const patient = async (
       call: Bundle,
       tool: Tool,
       work: () => Promise<Told> | Told,
     ): Promise<Told> => {
       if (!call.tool_async || tool.waits) return work()
-      let wrote: Promise<unknown> | undefined
+      let wrote: Promise<boolean> | undefined
+      let pending: Pending = { at: 'reading', late: false }
       let timer = setTimeout(() => {
-        wrote = outlasted(call).catch((error) =>
+        wrote = outlasted(call, pending).then(() => true, (error) => {
           deps.report?.(error, session, 'pending')
-        )
+          return true
+        })
       }, deps.patience ?? PATIENCE)
       try {
         return await work()
       } finally {
         clearTimeout(timer)
-        await wrote
+        let held = deps.held ?? HELD
+        let stop = new AbortController()
+        if (
+          wrote &&
+          !await Promise.race([
+            wrote,
+            sleep(held, stop.signal).then(() => false),
+          ])
+        ) {
+          pending.late = true
+          deps.report?.(
+            new Error(
+              `Pending entry for call ${call.entity.eid} not written within ` +
+                `${held} ms of its answer (${pending.at}); the answer lands ` +
+                'without it',
+            ),
+            session,
+            'pending',
+          )
+        }
+        stop.abort()
       }
     }
-    const outlasted = async (call: Bundle) => {
+    const outlasted = async (call: Bundle, pending: Pending) => {
       let [newest] = await g.read(
         `.ask&.entry.session=${session} .order=-entry.seq .limit=1 ` +
           '.fields=entity.eid',
       )
-      if (newest?.entity.eid != comp(call, CALL)?.source) return
+      if (newest?.entity.eid != comp(call, CALL)?.source || pending.late) return
+      pending.at = 'writing'
       await g.apply([{
         ...line({ tool_progress: { call: call.entity.eid } }, PENDING),
         entity: { eid: derivedEid(`pending ${call.entity.eid}`) },

@@ -2397,3 +2397,58 @@ test('an async call is answered by a Pending paired with it', () => {
     output: PENDING,
   }])
 })
+
+// A call that outlasts its patience, answered once its Pending write started:
+// the write lands, or never settles. The answer lands either way, after any
+// Pending that landed, and a write left hanging is reported where it stood.
+let outlasting = async (lands: boolean) => {
+  let g = world()
+  let started = Promise.withResolvers<void>()
+  let stuck: Graph = Object.assign(Object.create(g), {
+    apply: (bundles: Bundle[], o?: Parameters<Graph['apply']>[1]) => {
+      if (!bundles.some((b) => b.tool_progress)) return g.apply(bundles, o)
+      started.resolve()
+      return lands ? g.apply(bundles, o) : new Promise(() => {})
+    },
+  })
+  let late = {
+    ...echo,
+    run: async () => (await started.promise, 'late answer'),
+  }
+  let deps: Deps = {
+    model: scripted([calls(['held-c1', 'hi'])]).model,
+    tools: [late],
+    asyncTools: true,
+    mint,
+  }
+  await react(g, ids.s, deps)
+  let call = (await transcript(g, ids.s)).find((b) => b.call)!
+  let reported: string[] = []
+  await react(stuck, ids.s, {
+    ...deps,
+    runCall: call.entity.eid,
+    patience: 0,
+    held: 5,
+    report: (e, _, phase) => reported.push(`${phase}: ${e}`),
+  })
+  return {
+    kinds: (await transcript(g, ids.s)).flatMap((b) =>
+      b.tool_progress ? ['pending'] : b.result ? [textOf(b)] : []
+    ),
+    reported: reported.map((r) => r.replace(/call \S+/, 'call c')),
+  }
+}
+
+test("a call's answer comes after its Pending, and never waits on one that does not land", async () => {
+  assertEquals(await outlasting(true), {
+    kinds: ['pending', 'late answer'],
+    reported: [],
+  })
+  assertEquals(await outlasting(false), {
+    kinds: ['late answer'],
+    reported: [
+      'pending: Error: Pending entry for call c not written within 5 ms of ' +
+      'its answer (writing); the answer lands without it',
+    ],
+  })
+})
