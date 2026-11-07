@@ -7,6 +7,7 @@ import {
   assertRejects,
   assertStringIncludes,
 } from '@std/assert'
+import { saying } from '@yaks/tools/schema'
 import { ROWS } from './agent.ts'
 
 import {
@@ -194,13 +195,14 @@ test(
       // And every one of them promises the same answer (T-37852): bundles,
       // under `result`, which is what each tool returns as structured content.
       // The shape is the generic one with this platform's row words declared
-      // (agent.ts `ROWS`) and not the vocabulary typed out per tool, which
-      // would be megabytes of listing. graph_schema answers a vocabulary
-      // document instead (T-37998); code_mode answers declarations or a script's
+      // (agent.ts `ROWS`), with the `said` beside them that every listed
+      // answer declares (@yaks/tools/schema `saying`), and not the vocabulary
+      // typed out per tool, which would be megabytes of listing. graph_schema
+      // answers a vocabulary document instead (T-37998); code_mode answers declarations or a script's
       // value and receipts, rather than graph rows.
       for (let t of tools as { name: string; outputSchema?: unknown }[]) {
         if (['graph_schema', 'code_mode'].includes(t.name)) continue
-        assertEquals(t.outputSchema, ROWS, `${t.name}'s answer`)
+        assertEquals(t.outputSchema, saying(ROWS), `${t.name}'s answer`)
       }
       let schema = (tools as { name: string; outputSchema?: unknown }[])
         .find((t) => t.name == 'graph_schema')!.outputSchema as {
