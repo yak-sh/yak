@@ -1516,15 +1516,32 @@ let draftClient = {
     return () => hearing.delete(hear)
   }
 }
+// A read that had no answer in time, or one the platform failed, is asked
+// again after a second, then two, four and eight: a deploy is a moment in
+// which the edge answers 502 and the Builder restarts, and the page reads past
+// it quietly (the reporter holds what it meets meanwhile). Only a read that
+// failed through all of them is said.
+let ask = async (url) => {
+  for (let pause of [1000, 2000, 4000, 8000, null]) {
+    try {
+      let response = await fetch(url, { signal: AbortSignal.timeout(WAIT) })
+      if (response.status < 500 || pause == null) return response
+      response.body?.cancel()
+    } catch (e) { if (pause == null) throw e }
+    await new Promise((on) => setTimeout(on, pause))
+  }
+}
 let hearing = new Set()
+let KEPT = 'Your draft is kept on this device until syncing returns.'
 let readDrafts = async (hears = hearing) => {
   try {
-    let response = await fetch(draftAt, { signal: AbortSignal.timeout(WAIT) })
+    let response = await ask(draftAt)
     if (!response.ok) throw new Error(String(response.status))
     let { bundles } = await response.json()
+    if (status.textContent == KEPT) status.textContent = ''
     for (let hear of hears) if (hearing.has(hear)) hear(bundles)
   } catch (e) {
-    status.textContent = 'Your draft is kept on this device until syncing returns.'
+    status.textContent = KEPT
     setTimeout(() => [...hears].some((h) => hearing.has(h)) && readDrafts(hears), 3000)
   }
 }
@@ -1595,7 +1612,7 @@ let read = async () => {
   reading = (async () => {
     do {
       again = false
-      let response = await fetch('${at}?talk=' + encodeURIComponent(open))
+      let response = await ask('${at}?talk=' + encodeURIComponent(open))
       if (!response.ok) throw new Error('This page could not be brought up to date. Your conversation is saved; reload to try again.')
       let got = await response.json()
       let was = near()

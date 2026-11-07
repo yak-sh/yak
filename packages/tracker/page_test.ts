@@ -109,7 +109,7 @@ let page = (
     Promise.all(sent.map(async (b) => JSON.parse(await b.text())))
   let said = async () => (await bodies()).map((b) => b.message)
   let lines = () => shown.map((el) => el.textContent)
-  return { win, heard, asked, said, bodies, lines }
+  return { win, heard, asked, said, bodies, lines, time }
 }
 
 // Fire `el`'s failed load. The listener answers with its handling, settled
@@ -120,7 +120,8 @@ let load = async (el: El, files: Files) => {
   return { asked: p.asked, said: await p.said() }
 }
 
-// The page fetches `url`: what its caller heard, and what was filed.
+// The page fetches `url` and asks nothing more for ten seconds: what its
+// caller heard, and what was filed.
 let call = async (
   url: string,
   files: Files,
@@ -129,6 +130,7 @@ let call = async (
   let p = page(files)
   let heard = await p.win.fetch(url, { signal })
     .then((r) => r.status, (e) => e?.message ?? e)
+  await p.time.advance(10_000)
   return { heard, said: await p.said() }
 }
 
@@ -271,6 +273,57 @@ test('a fetch the server fails is reported', async () =>
     said: ['500 /cookbook/api/release: body'],
   }))
 
+// The page asks `release` once for each answer, five seconds apart, the
+// server answering each ask as it says (null: no answer; 'late': the page gave
+// up waiting): what is filed once the page has been quiet ten seconds, and
+// what as it is left at once.
+let asks = async (answers: (number | null | 'late')[]) => {
+  let late = new DOMException('timed out', 'TimeoutError')
+  let run = async (end: (p: ReturnType<typeof page>) => unknown) => {
+    let files: Files = {}
+    let p = page(files)
+    for (let status of answers) {
+      if (typeof status != 'number') delete files[release]
+      else files[release] = status
+      let signal = status == 'late' ? AbortSignal.abort(late) : undefined
+      await p.win.fetch(release, { signal }).catch(() => {})
+      await p.time.advance(5_000)
+    }
+    await end(p)
+    return await p.said()
+  }
+  return {
+    quiet: await run((p) => p.time.advance(10_000)),
+    left: await run((p) => p.heard.get('pagehide')!({})),
+  }
+}
+
+let failed = '502 /cookbook/api/release: body'
+
+test('a failure the page asks past is not reported', async () =>
+  equal(await asks([502, null, 'late', 502, 200]), { quiet: [], left: [] }))
+
+test('a wait given up on that the page asks past is not reported', async () =>
+  equal(await asks(['late', 200]), { quiet: [], left: [] }))
+
+test('a failure the page asks no more about is reported once', async () =>
+  equal(await asks([502, 502]), { quiet: [failed], left: [failed] }))
+
+test('a failure the page keeps asking about is reported within a minute', async () => {
+  let p = page({ [release]: 502 })
+  for (let s = 0; s < 65; s += 5) {
+    await p.win.fetch(release)
+    await p.time.advance(5_000)
+  }
+  equal(await p.said(), [failed])
+})
+
+test('a refusal is reported at once', async () => {
+  let p = page({ [release]: 403 })
+  await p.win.fetch(release)
+  equal(await p.said(), ['403 /cookbook/api/release: body'])
+})
+
 test('a fetch that never had an answer is its caller’s, not a report', async () =>
   equal(await call(release, {}), { heard: 'Load failed', said: [] }))
 
@@ -298,6 +351,7 @@ let uncaught = async (
   let p = page({})
   let reason = await p.win.fetch(url, { signal }).then(() => null, wrap)
   p.heard.get('unhandledrejection')!({ reason })
+  await p.time.advance(10_000)
   return await p.said()
 }
 

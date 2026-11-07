@@ -56,16 +56,17 @@ let storage = (): Stash => {
 
 // A load of the page: its script run as served. `cut` holds every save that
 // leaves while the person is on it, as a page that is left before they land.
-// `held` holds its first draft read and its socket unanswered, as a network
-// can, until the page's time limit gives each up; its waits run a thousand
-// times faster.
+// `network` 'held' holds its first draft read and its socket unanswered, as a
+// network can, until the page's time limit gives each up; 'deploying' answers
+// the first read of each address 502, as the edge does while a deploy replaces
+// the Worker. Under either, the page's waits run a thousand times faster.
 let load = async (
   stash: Stash,
   cut = false,
   open = 'new',
   beside: Beside = {},
   app?: string,
-  held = false,
+  network?: 'held' | 'deploying',
 ) => {
   let html = await (await chatPage(p.env, space, who, open, beside, app))
     .text()
@@ -92,15 +93,20 @@ let load = async (
   }
   let timers = new Set<ReturnType<typeof setTimeout>>()
   let after = (fn: () => void, ms: number) => {
-    let t = setTimeout(() => (timers.delete(t), fn()), held ? ms / 1000 : ms)
+    let t = setTimeout(() => (timers.delete(t), fn()), network ? ms / 1000 : ms)
     timers.add(t)
     return t
   }
   // The draft reads the page has had answered, each taken in before the next.
   let reads = 0
-  let holding = held
+  let holding = network == 'held'
+  let failed = new Set<string>()
   let fetch = async (url: string, init?: RequestInit) => {
     if (cut && init?.method == 'POST') return new Promise<Response>(() => {})
+    if (network == 'deploying' && !init?.method && !failed.has(url)) {
+      failed.add(url)
+      return new Response('Bad Gateway', { status: 502 })
+    }
     if (holding && url.includes('draft=1') && init?.signal) {
       holding = false
       return new Promise<Response>((_, no) =>
@@ -184,6 +190,11 @@ let load = async (
     loads,
     document,
     sockets,
+    // What the page says under its box.
+    status: () => document.querySelector('[data-send-status]')!.textContent,
+    failed,
+    // The Operator's socket opening, as after a deploy restarted it.
+    open: () => (sockets[0] as { onopen: () => void }).onopen(),
     // A frame the Operator's socket sends the page.
     hear: (frame: unknown) =>
       sockets[0].onmessage!({ data: JSON.stringify(frame) }),
@@ -386,7 +397,7 @@ let until = async (ok: () => boolean) => {
   }
   return ok()
 }
-let waited = await load(storage(), false, 'new', {}, undefined, true)
+let waited = await load(storage(), false, 'new', {}, undefined, 'held')
 let reread = await until(waited.read)
 await settle()
 let reopened = await until(() => waited.sockets.length > 1)
@@ -395,4 +406,17 @@ waited.leave()
 test("the Operator's chat app reads its draft again when a read is never answered", () => {
   assertEquals([reread, reopened], [true, true])
   assertEquals(waited.say.value, 'Order salt for the township garage')
+})
+
+test('a page whose reads meet a deploy’s 502 reads again and catches up quietly', async () => {
+  let page = await load(storage(), false, park, {}, undefined, 'deploying')
+  let box = page.document.querySelector('[data-conversation]')!
+  box.innerHTML = ''
+  page.open()
+  await page.heard()
+  for (let i = 0; i < 200 && !box.innerHTML; i++) await settle()
+  assertEquals(page.failed.size, 2, 'the draft and the conversation met it')
+  assertEquals(!!box.innerHTML, true, 'the conversation is drawn again')
+  assertEquals(page.status(), '')
+  page.leave()
 })

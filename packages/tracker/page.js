@@ -312,20 +312,62 @@
     }
   }
 
+  // A failure the platform answered (a 5xx), or a wait the page gave up on,
+  // is held while the page asks the same request again, and let go once it is
+  // answered: a deploy is a moment in which the edge answers 502 while the
+  // Worker is replaced and an object restarts, and a page that reads again
+  // past it recovered, which is no break. It is said once the page has not
+  // asked again for `HOLD` (an ask with no answer is asking), a minute after
+  // it was first held (`LONGEST`) whatever the page does, or as the page is
+  // left; the soft state waits with it.
+  let HOLD = 10_000
+  let LONGEST = 60_000
+  let held = new Map()
+  let drop = (key) => {
+    let h = held.get(key)
+    if (!h) return null
+    held.delete(key)
+    clearTimeout(h.quiet)
+    clearTimeout(h.cap)
+    return h
+  }
+  let say = (key) => {
+    let h = drop(key)
+    if (!h) return
+    send(h.body)
+    sorry()
+  }
+  let hold = (key, body = held.get(key)?.body) => {
+    let h = held.get(key)
+    if (!h) held.set(key, h = { cap: setTimeout(() => say(key), LONGEST) })
+    clearTimeout(h.quiet)
+    h.body = body
+    h.quiet = setTimeout(() => say(key), HOLD)
+  }
+  addEventListener('pagehide', () => {
+    for (let key of [...held.keys()]) say(key)
+  })
+
   globalThis.fetch = async (input, init) => {
     // Against the page's base, not its address: the kernel gives every page a
     // `<base>` at the app's own root (apps.ts `based`), so that is what the
     // browser resolved `./api/query` against — resolving it against
     // `location.href` here would name a path nothing was ever asked for.
     let where = new URL((input && input.url) || input, document.baseURI)
+    let key = `${
+      (init && init.method) || (input && input.method) || 'GET'
+    } ${where.href}`
     try {
       let r = await plain(input, init)
       if (mine(where) && where.pathname.includes('/api/')) {
         crumb('fetch', `${r.status} ${where.pathname}`)
       }
+      if (r.ok && drop(key)) {
+        crumb('fetch', `${asked(where)}: answered once asked again`)
+      }
       if (!r.ok && mine(where)) {
         let why = await r.clone().text().catch(() => '')
-        send({
+        let body = {
           message: `${r.status} ${asked(where)}: ${why}`.slice(0, 2000),
           url: location.href,
           // The answer as it came, so the door can tell a no it meant — a
@@ -338,28 +380,36 @@
           // (report.ts `FILED`); the door files it no second time.
           filed: r.headers.has('x-yak-filed'),
           mechanism: 'wrapper',
-        })
-        // The one thing this script does read the status for: whether to draw
-        // over the page. A no somebody meant is the platform working and never
-        // becomes a sorry line; a 5xx is nobody's choice.
-        if (r.status >= 500) sorry()
+        }
+        // The two things this script does read the status for: whether to
+        // draw over the page, and whether the page may yet recover. A no
+        // somebody meant is the platform working, said at once and never a
+        // sorry line; a 5xx is nobody's choice, held while the page asks
+        // again (`hold`).
+        if (r.status >= 500) hold(key, body)
+        else send(body)
       }
       return r
     } catch (e) {
       // A fetch that rejects never had an answer. One the page gave up waiting
-      // for is a door too slow, and news. Any other is the connection
-      // dropping, the person leaving, or the page's own abort, none of them
-      // the app's fault or ours (release.js checks again later). The caller
-      // hears it either way, and one it leaves uncaught is let go at
-      // `unhandledrejection` above, since it is decided here.
+      // for is a door too slow, and news, held as a 5xx is while the page asks
+      // again (`hold`). Any other is the connection dropping, the person
+      // leaving, or the page's own abort, none of them the app's fault or
+      // ours (release.js checks again later), and a held failure asked again
+      // this way is still being asked. The caller hears it either way, and
+      // one it leaves uncaught is let go at `unhandledrejection` above, since
+      // it is decided here.
       if (mine(where) && e && typeof e == 'object') judged.add(e)
       if (mine(where) && e?.name == 'TimeoutError') {
-        broke({
+        hold(key, {
           message: `${asked(where)}: ${said(e)}`,
           url: location.href,
           mechanism: 'wrapper',
         })
-      } else if (mine(where)) crumb('fetch', `${where.pathname}: ${said(e)}`)
+      } else if (mine(where)) {
+        crumb('fetch', `${where.pathname}: ${said(e)}`)
+        if (held.has(key)) hold(key)
+      }
       throw e
     }
   }
