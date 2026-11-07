@@ -673,9 +673,10 @@ let readOn = async (g: Graph, session: string, o: Opts): Promise<void> => {
  * before its launch. A run going whose watcher is over, or leaving, is this
  * process's from now on: its watcher, its pid watched and its log read on
  * from where the transcript stands. A start a process that is over never
- * launched is started again, given what the session was told, and told to the
- * tracker, since a process ending with a start half made is a failure of its
- * own. What another process still reads, or still starts, is left to it, for
+ * launched is started again, given what the session was told: a process
+ * ending with a start half made is what a restart does, and starting it again
+ * is its recovery, so nothing is told unless the start again fails. What
+ * another process still reads, or still starts, is left to it, for
  * the next look. The duty looks once as it starts ({@link resume}) and again
  * every so often after (@yaks/spawn/service).
  *
@@ -731,13 +732,6 @@ export let takeUp = async (g: Graph, o: Opts = {}): Promise<Run[]> => {
 // this host has no provider for) is let go, so it no longer reads as running.
 let again = async (g: Graph, row: Bundle, o: Opts): Promise<void> => {
   let session = row.entity.eid
-  failure(
-    o,
-    session,
-    'start cut off',
-    `a spawned run's start was cut off before its launch: its process ` +
-      `${proc(row)?.watcher ?? '(unrecorded)'} is over, so it starts again`,
-  )
   if (await start(g, session, o)) return
   try {
     await g.apply([{

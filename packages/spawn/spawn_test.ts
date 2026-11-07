@@ -339,8 +339,7 @@ test('a start a process that is over cut off before its launch starts again', as
     let argv = await until(() => s.started[0], 'a launch')
     assert(argv.at(-1)!.includes('do the thing'), argv.join(' '))
     assertEquals(proc(await s.row())?.watcher, selfEid())
-    assertEquals(s.reports.length, 1)
-    assert(s.reports[0].startsWith('start cut off: '), s.reports[0])
+    assertEquals(s.reports, [])
   } finally {
     s.done()
   }
