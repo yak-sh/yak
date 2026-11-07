@@ -186,14 +186,14 @@ test('wrapping a native transcript without a runner id ends it and releases work
 test('an outside caller receives what was addressed to its session once', async () => {
   let g = await fresh()
   let call = { entity: { eid: 'call' }, created: { via: 'outside' } }
-  let first = await reply(g, call)
+  let first = await reply({ graph: g }, call)
   assertEquals(first.length, 1)
   assertEquals(
     (first[0].content as { body: string }).body.includes('A letter'),
     true,
   )
   assertEquals((await g.get(['letter']))[0].notified != null, true)
-  assertEquals(await reply(g, call), [])
+  assertEquals(await reply({ graph: g }, call), [])
 })
 
 // An outside session and a letter delivered to it, before its harness reports
@@ -240,13 +240,16 @@ let posted = await scene(async () => {
     ]),
   )
   return {
-    fork: await heard(g, fork),
+    fork: await heard({ graph: g }, fork),
     forkSaid: await said(g, 'letter'),
     // a subagent's own tool reply, which wears the session's id, takes nothing
-    reply: await reply(g, call),
+    reply: await reply({ graph: g }, call),
     replySaid: await said(g, 'letter'),
     told: tells(
-      await heard(g, { session_id: 'outside', hook_event_name: 'PostToolUse' }),
+      await heard({ graph: g }, {
+        session_id: 'outside',
+        hook_event_name: 'PostToolUse',
+      }),
       'A letter',
     ),
     toldSaid: await said(g, 'letter'),
@@ -274,10 +277,13 @@ let hooked = await scene(async () => {
     ]),
   )
   return {
-    reply: await reply(g, call),
-    fork: await heard(g, fork),
+    reply: await reply({ graph: g }, call),
+    fork: await heard({ graph: g }, fork),
     forkSaid: await said(g, 'later'),
-    told: tells(await heard(g, { session_id: 'outside' }), 'A later letter'),
+    told: tells(
+      await heard({ graph: g }, { session_id: 'outside' }),
+      'A later letter',
+    ),
   }
 })
 test('a hooked session hears nothing through a tool reply, only at its hook', () => {
@@ -359,7 +365,7 @@ test('native comments never feed through the bus; outside task claims retain the
       doc: { body: 'claimed words' },
     },
   ], { trusted: true })
-  let first = await reply(g, {
+  let first = await reply({ graph: g }, {
     entity: { eid: 'call2' },
     created: { via: 'outside' },
   })
@@ -394,7 +400,7 @@ test('a process-backed harness claim still hears comments with a using entry', a
       doc: { body: 'person reply' },
     },
   ], { trusted: true })
-  let lines = await reply(g, {
+  let lines = await reply({ graph: g }, {
     entity: { eid: 'outside-call' },
     created: { via: 'outside' },
   })
@@ -437,7 +443,7 @@ for (
     ], { trusted: true })
     for (let by of ['outside', 'native', 'gone']) await correspond(g, by)
     let call = { entity: { eid: 'call' }, created: { via: 'outside' } }
-    let heard = await reply(g, call)
+    let heard = await reply({ graph: g }, call)
     assertEquals(
       heard.map((b) => (b.content as { body: string }).body)
         .filter((line) => line.includes('Yes, go ahead.')).length,
@@ -455,7 +461,7 @@ for (
     assertEquals(await said(g, 'answer-native'), true)
     // Nobody hears for a session that is not listening: its reply waits.
     assertEquals(await said(g, 'answer-gone'), false)
-    assertEquals((await reply(g, call)).length, 0)
+    assertEquals((await reply({ graph: g }, call)).length, 0)
   })
 }
 

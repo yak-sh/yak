@@ -473,7 +473,7 @@ export let pendingItems = async (
   return items
 }
 
-type Routes = { items: Bundle[]; creators: Map<Eid, string> }
+export type Routes = { items: Bundle[]; creators: Map<Eid, string> }
 export type News = { comments: Routes; replies: Routes }
 
 let routed = async (

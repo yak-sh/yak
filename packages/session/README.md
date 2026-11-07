@@ -846,6 +846,13 @@ process or a filing written asks about everything again, as the first pass does.
 A quiet graph costs the bus no read, and what is written is said at once. A host
 with no feed asks about everything every second.
 
+The doors an outside session hears at (its hook and its tool replies) follow the
+same commits through a ledger (`ledger` in [`bus.ts`](./bus.ts)): the unsaid
+person-written comments and replies, by the creator of what each answers. Its
+first use reads them all once; after that a door reads again only what was
+written since its last use and what its own session is owed, never the unsaid
+history. A host with no feed reads everything at each door.
+
 ## Replies to a session's letters
 
 A letter answering one a session wrote (`mail.reply_to` naming a letter whose

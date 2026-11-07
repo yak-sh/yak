@@ -42,6 +42,7 @@ import {
   type News,
   pending,
   replies as replyRoutes,
+  type Routes,
   undeliver,
 } from './listen.ts'
 import { sessionFor } from './who.ts'
@@ -74,15 +75,36 @@ let ROUTES = [
   'email',
 ]
 
+let item = (b: Bundle) => ITEMS.some((c) => c in b)
+
 /** Add to `into` what these committed bundles give a pass to look at. */
 export let noted = (into: Scope, bundles: Bundle[]): Scope => {
   for (let b of bundles) {
     if (ROUTES.some((c) => c in b)) into.all = true
-    else if (ITEMS.some((c) => c in b)) into.items.add(b.entity.eid)
+    else if (item(b)) into.items.add(b.entity.eid)
     let session = comp(b, 'entry').session
     if (typeof session == 'string') into.sessions.add(session)
   }
   return into
+}
+
+/** Hand `hear` every commit: this graph's own through its `effect` phase,
+ * and every other process's through the host's feed. Without a feed the
+ * others' commits cannot be heard, so nothing is heard, and the caller asks
+ * about everything instead. Returns what unsubscribes the feed. */
+let heed = (
+  host: { graph: Graph; feed?: Feed },
+  name: string,
+  hear: (bundles: Bundle[], missed: boolean) => void,
+): (() => void) | undefined => {
+  let stop = host.feed?.((news) => hear(news.applied.flat(), news.missed))
+  if (stop) {
+    host.graph.use({
+      name,
+      hooks: { effect: (bundles) => (hear(bundles, false), bundles) },
+    })
+  }
+  return stop
 }
 
 let merge = (into: Scope, from: Scope): Scope => {
@@ -291,20 +313,13 @@ export let follow = async (
   let bell = Promise.withResolvers<void>()
   let ring = () => bell.resolve()
   signal.addEventListener('abort', ring, { once: true })
-  let hear = (bundles: Bundle[], missed = false) => {
-    if (signal.aborted) return
-    noted(next, bundles).all ||= missed
-    if (!idle(next)) ring()
-  }
-  let stop = signal.aborted ? undefined : host.feed?.((news) => {
-    hear(news.applied.flat(), news.missed)
-  })
-  if (stop) {
-    host.graph.use({
-      name: '@yaks/session/bus',
-      hooks: { effect: (bundles) => (hear(bundles), bundles) },
+  let stop = signal.aborted
+    ? undefined
+    : heed(host, '@yaks/session/bus', (bundles, missed) => {
+      if (signal.aborted) return
+      noted(next, bundles).all ||= missed
+      if (!idle(next)) ring()
     })
-  }
   try {
     while (true) {
       let now = stop ? next : scope(true)
@@ -327,13 +342,113 @@ export let follow = async (
   }
 }
 
+/** A process's book of the unsaid person-written comments and replies, by
+ * the creator of what each answers: what {@link pending} reads for one
+ * outside session at its doors instead of every unsaid item in the graph. */
+export type Ledger = {
+  /** The comments and replies owed to this session, read again by id. */
+  owed: (session: Eid) => Promise<News>
+}
+
+/** What a door over this host's graph needs to hear for one session. */
+export type Door = {
+  graph: Graph
+  feed?: Feed
+  stopping?: AbortSignal
+}
+
+let ledgers = new WeakMap<Graph, Ledger>()
+
+// How many written items a ledger keeps to read again before it reads
+// everything instead: a door unused for long costs one full read, not memory
+// that grows with every commit meanwhile.
+let BACKLOG = 5000
+
+/** The graph's ledger, kept from its commits, as {@link follow} keeps the
+ * native bus: the first use reads every unsaid comment and reply once, and
+ * each later use reads again only the items written since, so a door's read
+ * costs what its session is owed and what was written meanwhile. What routes
+ * an item here, the creator of what it answers, is written before it and
+ * never changes. A said item is dropped when its mark is heard. Undefined for
+ * a host with no feed, whose doors read everything each time; a missed commit
+ * reads everything again. */
+export let ledger = (host: Door): Ledger | undefined => {
+  let kept = ledgers.get(host.graph)
+  if (kept || !host.feed) return kept
+  let g = host.graph
+  let by = new Map<Eid, Set<Eid>>(), whose = new Map<Eid, Eid>()
+  let written = new Set<Eid>(), stale = true
+  let stop = heed(host, '@yaks/session/ledger', (bundles, missed) => {
+    stale ||= missed
+    for (let b of bundles) if (item(b)) written.add(b.entity.eid)
+    if (written.size > BACKLOG) stale = true
+    if (stale) written.clear()
+  })
+  host.stopping?.addEventListener('abort', () => stop?.(), { once: true })
+  let enter = (r: Routes, name: string, prop: string) => {
+    for (let b of r.items) {
+      let creator = r.creators.get(String(comp(b, name)[prop]))
+      if (!creator) continue
+      by.set(creator, (by.get(creator) ?? new Set()).add(b.entity.eid))
+      whose.set(b.entity.eid, creator)
+    }
+  }
+  let drop = (id: Eid) => {
+    by.get(whose.get(id) ?? '')?.delete(id)
+    whose.delete(id)
+  }
+  let read = async (ids?: Eid[]) => {
+    let news = {
+      comments: await comments(g, ids),
+      replies: await replyRoutes(g, ids),
+    }
+    enter(news.comments, 'comment', 'target')
+    enter(news.replies, 'mail', 'reply_to')
+    return news
+  }
+  let update = async () => {
+    let ids = stale ? undefined : [...written]
+    if (ids && !ids.length) return
+    stale = false
+    written.clear()
+    if (ids) ids.forEach(drop)
+    else {
+      by.clear()
+      whose.clear()
+    }
+    try {
+      await read(ids)
+    } catch (error) {
+      stale = true
+      throw error
+    }
+  }
+  // One use at a time, so two doors at once never index a read twice.
+  let turn: Promise<unknown> = Promise.resolve()
+  let made: Ledger = {
+    owed: (session) => {
+      let done = turn.then(async () => {
+        await update()
+        let ids = [...by.get(session) ?? []]
+        ids.forEach(drop)
+        return read(ids)
+      })
+      turn = done.catch(() => {})
+      return done
+    },
+  }
+  ledgers.set(g, made)
+  return made
+}
+
 // Every line owed to an outside session, each marked said as it is taken.
 let owed = async (
-  g: Graph,
+  host: Door,
   id: Eid,
 ): Promise<{ item: Bundle; line: string }[]> => {
+  let g = host.graph
   let out: { item: Bundle; line: string }[] = []
-  for (let said of await pending(g, id)) {
+  for (let said of await pending(g, id, await ledger(host)?.owed(id))) {
     if (await deliver(g, null, said.item)) out.push(said)
   }
   return out
@@ -350,7 +465,8 @@ let hooked = async (g: Graph, id: Eid): Promise<boolean> =>
  * session whose harness reports to the hook door ({@link heard}) hears there
  * instead: its forks and subagents call tools under its id too, and the first
  * of them to call would take what its own line of work is owed. */
-export let reply = async (g: Graph, call: Bundle): Promise<Bundle[]> => {
+export let reply = async (host: Door, call: Bundle): Promise<Bundle[]> => {
+  let g = host.graph
   if (!g.vocab.comp('notified')) return []
   let id = who(call)?.via
   if (!id) return []
@@ -361,7 +477,7 @@ export let reply = async (g: Graph, call: Bundle): Promise<Bundle[]> => {
     !session?.session || await hooked(g, id) ||
     (await hearing(g, [id])).length
   ) return []
-  return (await owed(g, id)).map(({ item, line }) => ({
+  return (await owed(host, id)).map(({ item, line }) => ({
     entity: {
       eid: derivedEid(`session reply ${call.entity.eid} ${item.entity.eid}`),
     },
@@ -393,10 +509,11 @@ export type Hook = {
  * beats a line lost.
  */
 export let heard = async (
-  g: Graph,
+  host: Door,
   hook: Hook,
   reaches: () => Promise<boolean> = () => Promise.resolve(true),
 ): Promise<object> => {
+  let g = host.graph
   if (!g.vocab.comp('notified')) return {}
   let said = typeof hook.session_id == 'string' ? hook.session_id : ''
   let session = said ? await sessionFor(g, said, [`${SESSION}.id`]) : undefined
@@ -404,7 +521,7 @@ export let heard = async (
   let id = session.entity.eid
   if (!await hooked(g, id)) await g.apply([{ entity: { eid: id }, hooked: {} }])
   if (hook.agent_id) return {}
-  let taken = await owed(g, id)
+  let taken = await owed(host, id)
   if (!taken.length) return {}
   if (!await reaches()) {
     await undeliver(g, null, taken.map(({ item }) => item))

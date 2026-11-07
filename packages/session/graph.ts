@@ -28,7 +28,7 @@
 import type { Authenticate } from '@yaks/api'
 import type { Actor, Bundle, Graph, Plugin } from '@yaks/graph'
 import { announced, callIn } from './announce.ts'
-import { reply as owed } from './bus.ts'
+import { type Door, reply as owed } from './bus.ts'
 import { sessions } from './plugin.ts'
 import { sessionFor, speaking } from './who.ts'
 
@@ -38,8 +38,8 @@ export { callIn } from './announce.ts'
 export let plugins = (): Plugin[] => [sessions()]
 
 /** What a direct tool call owes the session speaking through it. */
-export let reply = (host: Host) => (call: Bundle): Promise<Bundle[]> =>
-  owed(host.graph, call)
+export let reply = (host: Door) => (call: Bundle): Promise<Bundle[]> =>
+  owed(host, call)
 
 /** The request header a caller names its run in. */
 export let VIA = 'x-via'

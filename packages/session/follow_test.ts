@@ -15,7 +15,8 @@ import { ram } from '@yaks/ram'
 import { taskDoc } from '@yaks/task/vocab'
 import { toolsDoc } from '@yaks/tools/vocab'
 import { loadVocab } from '@yaks/vocab'
-import { follow } from './bus.ts'
+import { follow, heard } from './bus.ts'
+import type { Feed } from '@yaks/host'
 import { sessionDoc } from './comp.ts'
 import { sessions } from './plugin.ts'
 import { statusComputed } from './status.ts'
@@ -191,4 +192,84 @@ test('a session coming to work hears what its project holds', async () => {
   } finally {
     await f.close()
   }
+})
+
+// An outside session's hook door, over a graph whose feed tells it what other
+// processes write, with every comment it reads named.
+let door = async (rows: Bundle[]) => {
+  let store = ram(vocab, { computed: statusComputed })
+  let g = graph({ vocab, storage: store, plugins: [sessions()] })
+  for (let row of rows) await g.apply([row], { trusted: true })
+  let seen = new Set<string>()
+  let count = (found: Bundle[]) => {
+    for (let b of found) if (b.comment) seen.add(b.entity.eid)
+    return found
+  }
+  let watched = {
+    ...g,
+    read: async (...a: Parameters<typeof g.read>) => count(await g.read(...a)),
+    get: async (...a: Parameters<typeof g.get>) => count(await g.get(...a)),
+  }
+  let others: Parameters<Feed>[0] | undefined
+  let host = {
+    graph: watched,
+    feed: (
+      each: Parameters<Feed>[0],
+    ) => (others = each, () => others = undefined),
+  }
+  return {
+    /** the lines the session's next hook hears, and the comments it read */
+    hook: async () => {
+      seen.clear()
+      let said = await heard(host, { session_id: 'outside' }) as {
+        hookSpecificOutput?: { additionalContext: string }
+      }
+      return {
+        lines: said.hookSpecificOutput?.additionalContext.split('\n') ?? [],
+        read: [...seen].sort(),
+      }
+    },
+    elsewhere: async (rows: Bundle[]) => {
+      store.tx((tx) => tx.patch(rows))
+      await others?.({ applied: [rows], missed: false })
+    },
+  }
+}
+
+let human = (eid: string, target: string): Bundle => ({
+  entity: { eid },
+  comment: { target },
+  doc: { body: eid },
+  created: { by: 'person', via: 'person' },
+})
+
+test('the hook door reads what its session is owed and what was written since, not the unsaid history', async () => {
+  let d = await door([
+    { entity: { eid: 'outside' }, session: { id: 'outside' } },
+    { entity: { eid: 'agent' }, session: { id: 'agent' } },
+    { entity: { eid: 'person' }, doc: { title: 'Person' } },
+    {
+      entity: { eid: 'mine' },
+      task: {},
+      $actor: { by: 'outside', via: 'outside' },
+    },
+    {
+      entity: { eid: 'theirs' },
+      task: {},
+      $actor: { by: 'agent', via: 'agent' },
+    },
+    { ...human('first', 'mine'), $actor: { by: 'person', via: 'person' } },
+    ...Array.from({ length: 50 }, (_, i) => ({
+      ...human(`history${i}`, 'theirs'),
+      $actor: { by: 'person', via: 'person' },
+    })),
+  ])
+  equal((await d.hook()).lines.length, 1)
+  await d.elsewhere([human('later', 'mine'), human('other', 'theirs')])
+  await d.elsewhere([human('gone', 'mine')])
+  await d.elsewhere([{ entity: { eid: 'gone' }, notified: {} }])
+  let { lines, read } = await d.hook()
+  equal(lines.map((l) => l.split(': ')[1]), ['later'])
+  equal(read, ['later', 'other'])
+  equal(await d.hook(), { lines: [], read: [] })
 })

@@ -13,9 +13,8 @@
 
 import { earlier } from '@yaks/memory/earlier'
 import type { Host, Meaning } from '@yaks/host'
-import type { Graph } from '@yaks/graph'
 import type { Authenticate, Route } from '@yaks/api'
-import { heard, type Hook } from './bus.ts'
+import { type Door, heard, type Hook } from './bus.ts'
 import { hear } from './announce.ts'
 import type { Runner } from '@yaks/tools'
 import { lifecycle } from './lifecycle.ts'
@@ -32,8 +31,7 @@ let open = (request: Request): Promise<boolean> =>
 
 /** `POST /session/hook`: one hook event in, the context it adds out. */
 export let routes = (
-  host: {
-    graph: Graph
+  host: Door & {
     config?: { person?: string }
     meaning?: Meaning
     who?: Authenticate
@@ -97,7 +95,7 @@ export let routes = (
     if (edge) return edge
     if (await hear(host.graph, hook)) return Response.json({})
     return Response.json(
-      await heard(host.graph, hook as Hook, () => open(request)),
+      await heard(host, hook as Hook, () => open(request)),
     )
   },
 }]
