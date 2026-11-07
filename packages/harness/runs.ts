@@ -25,7 +25,7 @@ import type { Host } from '@yaks/host'
 
 import { MODEL, PROVIDER } from '@yaks/model'
 import { and, conjoin, parse, stringify } from '@yaks/query'
-import { transcript, usingBefore } from '@yaks/session'
+import { newestOf, usingOf } from '@yaks/session'
 import { changes } from '@yaks/session/wait'
 import { begin, seed, through } from './agent.ts'
 import { defaultUsing } from './default.ts'
@@ -114,6 +114,13 @@ let following = async (
 // tool's answer, or waiting for a place to run.
 let WORKING = ['pending', 'running', 'queued']
 
+// A transcript's newest entry, read alone: a reply to a long transcript never
+// reads the rest of it.
+let newest = async (graph: Graph, s: Eid): Promise<Bundle[]> => {
+  let last = await newestOf(graph, s)
+  return last ? [last] : []
+}
+
 // Wait for the reply: once the session's own computed status (@yaks/session
 // status.ts, one statement over the store) says it is no longer working, where
 // it settled — the newest entry, which is the model's reply, or the error or
@@ -128,7 +135,7 @@ let settled = async (
     let [self] = await graph.get([s], ['session'])
     let status = (self?.session as Comp | undefined)?.status
     if (!WORKING.includes(String(status)) || done) {
-      return (await transcript(graph, s)).slice(-1)
+      return await newest(graph, s)
     }
   }
   throw new Error('wait ended without a final read')
@@ -151,7 +158,7 @@ let begun = async (
       return await graph.get([s])
     }
     if (!WORKING.includes(String(status)) || done) {
-      return (await transcript(graph, s)).slice(-1)
+      return await newest(graph, s)
     }
   }
   throw new Error('wait ended without a final read')
@@ -327,8 +334,7 @@ export let runs = (host?: Host): Runs => ({
     // The session arrives as its eid: @yaks/tools resolved what was typed (an
     // eid, `S-81`, a run's own id) and refused one that names no session.
     let s = String(args.session)
-    let prior = usingBefore(await transcript(graph, s)) ??
-      await selectedUsing(graph, s)
+    let prior = await usingOf(graph, s) ?? await selectedUsing(graph, s)
     // A knock needs no model: the run going on chose its own.
     let actor = who(call)
     if (await outside(graph, s, prior)) {

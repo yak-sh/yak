@@ -11,6 +11,7 @@ import {
   argsOf,
   type Bundle,
   type Comp,
+  type Graph,
   mint,
   namedTool,
   offered,
@@ -285,6 +286,42 @@ test('a follow-up to a finished spawned session goes on with its provider and mo
     assertEquals(await send({}), kept)
     assertEquals(await send({ provider: 'claude' }), kept)
     assertEquals(await send({ model: 'opus' }), kept)
+  } finally {
+    await h.close()
+  }
+})
+
+// Entities what follows brings back through the graph's doors.
+let counted = (g: Graph) => {
+  let rows = 0
+  for (let door of ['read', 'get'] as const) {
+    let through = g[door].bind(g) as (...a: unknown[]) => Promise<unknown[]>
+    ;(g as unknown as Record<string, unknown>)[door] = async (
+      ...a: unknown[]
+    ) => {
+      let got = await through(...a)
+      rows += got.length
+      return got
+    }
+  }
+  return () => rows
+}
+
+test('a follow-up to a long transcript reads its newest lines, not all of them', async () => {
+  let { h, s, claude, opus, send } = await finished()
+  try {
+    await h.g.apply(
+      Array.from({ length: 100 }, () => ({
+        entity: { eid: mint() },
+        entry: { session: s },
+        content: { body: 'a line' },
+      })),
+      { trusted: true },
+    )
+    let rows = counted(h.g)
+    let kept = { provider: claude, model: opus, effort: 'high' }
+    assertEquals(await send({}), kept)
+    assert(rows() < 30, `read ${rows()} rows`)
   } finally {
     await h.close()
   }
