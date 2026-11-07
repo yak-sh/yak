@@ -385,7 +385,7 @@ test("an object works its Operator once every answer under way has gone, not bet
   assertEquals(said.slice(0, 3), ['updates', 'conversation', 'armed'])
 })
 
-test('a new incarnation makes its Operator while the seat read is under way', async () => {
+test('a new incarnation makes its store while a seat read is under way', async () => {
   let o = await seeded()
   // What its storage ran before the seat read answered, and in all.
   let ran = 0

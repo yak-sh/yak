@@ -225,6 +225,10 @@ export class Builder {
   #sql: Driver
   #env: Env
   #operator?: Promise<import('./operator.ts').Operator>
+  // What a read of the Operator needs, made without it (`#stored`).
+  #store?: Promise<
+    Pick<import('./operator.ts').Operator, 'store' | 'named' | 'stop'>
+  >
   // What the pages watching the Operator are told, once it is at work.
   #frames?: ReturnType<typeof import('./operator-host.ts').operatorFrames>
   // Whether a build is running in this object right now. In memory on purpose:
@@ -244,7 +248,7 @@ export class Builder {
   #until = 0
   #draining = false
   // What this incarnation takes up from the one before it, once it has
-  // answered the request that woke it (`#work`).
+  // answered the request that woke it (`#stored`).
   #owed?: () => void
   // The requests this incarnation is answering now.
   #asked = 0
@@ -303,6 +307,7 @@ export class Builder {
     await this.#ctx.storage.deleteAll()
     this.#sql.query(SAID)
     this.#operator = undefined
+    this.#store = undefined
     this.#frames = undefined
   }
 
@@ -472,7 +477,7 @@ export class Builder {
           // (operator-updates.ts `tell`).
           if (url.pathname == '/operator/tell') {
             let { notification } = await import('./operator-updates.ts')
-            let { store } = await this.#work()
+            let { store } = await this.#stored()
             await store.g.apply([notification(await request.json())], {
               trusted: true,
             })
@@ -481,13 +486,13 @@ export class Builder {
           if (url.pathname == '/operator/receipt') {
             let { operatorReceipt } = await import('./operator-host.ts')
             return await operatorReceipt(
-              await this.#work(),
+              await this.#stored(),
               await request.json(),
             )
           }
           let { operatorReply } = await import('./operator-host.ts')
           return await operatorReply(
-            await this.#work(),
+            await this.#stored(),
             space,
             url.pathname,
             await request.json(),
@@ -530,8 +535,8 @@ export class Builder {
     let person = request.headers.get('x-yak-person')
     let spaceId = request.headers.get(SPACE)
     if (!person || !spaceId) return no(401, NOBODY)
-    let working = this.#work()
-    working.catch(() => {})
+    let reading = this.#stored()
+    reading.catch(() => {})
     // The space and the person's seat in it, as the kernel read them; read
     // here, in one read, for a caller that read none. Read here for every
     // request, it was a round trip on each chat page, asked only once a new
@@ -551,12 +556,12 @@ export class Builder {
     if (new URL(request.url).pathname == '/operator/browser') {
       return this.#accept({ browser: true, person, space: spaceId }, request)
     }
-    let operator = await working
+    let read = await reading
     if (new URL(request.url).pathname == '/operator/call') {
       let { answering } = await import('./operator-calls.ts')
       return answering(
         this.#env,
-        operator,
+        await this.#work(),
         space,
         JSON.parse(request.headers.get('x-yak-call') ?? '{}'),
         () => this.#arming,
@@ -566,7 +571,7 @@ export class Builder {
       let { carrying } = await import('./operator-carried.ts')
       return carrying(
         this.#env,
-        operator,
+        await this.#work(),
         space,
         JSON.parse(request.headers.get('x-yak-call') ?? '{}'),
         () => this.#arming,
@@ -592,7 +597,7 @@ export class Builder {
       return this.#accept(
         watching,
         undefined,
-        talk ? () => standingAt(operator.store, talk, watching) : undefined,
+        talk ? () => standingAt(read.store, talk, watching) : undefined,
       )
     }
     let args = await request.json() as Record<string, unknown>
@@ -605,7 +610,7 @@ export class Builder {
       called: space.operator,
     }
     let response = await operatorRequest(
-      operator,
+      read,
       held,
       new URL(request.url).pathname,
       args,
@@ -615,31 +620,32 @@ export class Builder {
     if (response) return response
     // Its steps run on the pool, as every other Operator session's do: words
     // given while it works land in it.
-    return Response.json(await operator.run(held, space, args))
+    return Response.json(await (await this.#work()).run(held, space, args))
   }
 
-  #work() {
-    return this.#operator ??= (async () => {
+  // The Operator's store, what to call a person, and what the pages watching
+  // it are told: all a read needs, made without the Operator, whose code
+  // (its model, its tools, its harness) is loaded and made for what it runs
+  // (`#work`). A chat page's first visit made both before its answer.
+  #stored() {
+    return this.#store ??= (async () => {
       let { operatorStore, SLICE } = await import('./operator-store.ts')
-      let { attachmentTools, handleChannels } = await import(
-        './operator-channels.ts'
-      )
-      let { operating } = await import('./operator.ts')
       let { operatorFrames } = await import('./operator-host.ts')
       // A write that owes work starts it now, beside a step in flight, so a
       // person's words reach the session they are for at once, within a
       // slice; the alarm is there for what this wake leaves. The work goes on
-      // after the write answers, held by the object (`waitUntil`).
+      // after the write answers, held by the object (`waitUntil`), once the
+      // Operator whose handlers do it is made.
       let nudge = () => {
         this.#arming = this.#ctx.storage.setAlarm(Date.now())
         if (!this.#draining && Date.now() >= this.#until) {
           this.#until = Date.now() + SLICE
         }
         if (Date.now() >= this.#until) return
+        let until = this.#until
         this.#ctx.waitUntil?.(
-          store.fx.work(store.g, undefined, { until: this.#until }).catch((e) =>
-            caught(e, { request: 'operator effects' })
-          ),
+          this.#work().then(() => store.fx.work(store.g, undefined, { until }))
+            .catch((e) => caught(e, { request: 'operator effects' })),
         )
       }
       let store = operatorStore(this.#ctx.storage, {
@@ -649,11 +655,39 @@ export class Builder {
         nudge,
       })
       this.#fx = store.fx
-      let frames = this.#frames = operatorFrames(
+      // What a person is called, as the Operator asks it (operator.ts
+      // `named`).
+      let named = (person: string) =>
+        dirPart.directoryOf(this.#env.STORE).nameAt(person)
+      this.#frames = operatorFrames(
         store,
         () => this.#ctx.getWebSockets(),
-        (person) => operator.named(person),
+        named,
       )
+      // An incarnation takes up what the one before it left: a step a deploy
+      // reset under its reply runs again at once, behind the first request's
+      // answer (a page reconnecting) rather than whenever the person next says
+      // something. Worked, not only armed: an alarm the reset cut off can hold
+      // the next one back for minutes.
+      this.#owed = nudge
+      return {
+        store,
+        named,
+        // Stopping a task is the Operator's own.
+        stop: async (task: string, by: string) =>
+          (await this.#work()).stop(task, by),
+      }
+    })()
+  }
+
+  #work() {
+    return this.#operator ??= (async () => {
+      let { store } = await this.#stored()
+      let frames = this.#frames!
+      let { attachmentTools, handleChannels } = await import(
+        './operator-channels.ts'
+      )
+      let { operating } = await import('./operator.ts')
       let operator = operating(store, this.#env, {
         tools: attachmentTools(this.#env),
         browsers: this.#lent,
@@ -679,12 +713,6 @@ export class Builder {
           ).catch((e) => caught(e, { request: 'operator call' })),
       })
       handleChannels(operator, this.#env)
-      // An incarnation takes up what the one before it left: a step a deploy
-      // reset under its reply runs again at once, behind the first request's
-      // answer (a page reconnecting) rather than whenever the person next says
-      // something. Worked, not only armed: an alarm the reset cut off can hold
-      // the next one back for minutes.
-      this.#owed = nudge
       return operator
     })()
   }

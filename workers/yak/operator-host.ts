@@ -7,7 +7,7 @@ import { enqueue } from '@yaks/effects'
 import { derivedEid } from '@yaks/graph/identity'
 import { ownerOf, owns } from './operator-access.ts'
 import type { Held } from './build-door.ts'
-import { type Operator, readOperator } from './operator.ts'
+import type { Operator } from './operator.ts'
 import {
   handOver,
   letterOf,
@@ -916,7 +916,7 @@ let drafts = (bundles: Bundle[], person: string) =>
  * letter or text was written for.
  */
 export let operatorReply = async (
-  operator: Operator,
+  operator: Pick<Operator, 'store'>,
   space: string,
   path: string,
   args: Record<string, unknown>,
@@ -960,8 +960,11 @@ export let operatorReply = async (
   })
 }
 
+/** A person's request of the Operator, answered from its store; only `stop`
+ * asks the Operator itself, which its object makes for what it runs
+ * (build.ts `#work`). */
 export let operatorRequest = async (
-  operator: Operator,
+  operator: Pick<Operator, 'store' | 'named' | 'stop'>,
   held: Held,
   path: string,
   args: Record<string, unknown>,
@@ -1176,6 +1179,8 @@ export let operatorRequest = async (
     return Response.json({ removed: await remove(store, ids) })
   }
   if (path == '/operator/read') {
+    // The Operator's code loads for what it runs, not with every read.
+    let { readOperator } = await import('./operator.ts')
     // The platform's admin reads every person's, as on the admin page.
     let readable = (id: string) => access.administrative === true || own(id)
     let open = typeof args.task == 'string' ? args.task : ''
