@@ -7,7 +7,8 @@ import type { Bundle, Comp, Eid, Graph } from '@yaks/graph'
 import { argsOf, referenced } from '@yaks/graph/call'
 import type { Runs } from '@yaks/graph/tools'
 import { CallError } from '@yaks/tools/errors'
-import { consentEid, mobile } from './mod.ts'
+import { consentEid } from './mod.ts'
+import { mobile } from './mobile.ts'
 
 let str = (v: unknown): string => v == null ? '' : String(v)
 

@@ -448,3 +448,23 @@ test('a memo over modules published on jsr.io is kept and hit, and a new version
   equal(await mutable(), { run: 3 })
   equal(await mutable(), { run: 4 })
 })
+
+test('a memo kept in a fixed tree is hit without a stat inside it', async () => {
+  let f = fixture(), runs = 0, asked: string[] = []
+  let statSync = f.io.statSync
+  f.io.statSync = (path) => (asked.push(path), statSync(path))
+  let get = (id: string) =>
+    remember({}, ['file:///source/mod.ts'], () => ({ run: ++runs }), {
+      ...f.opts,
+      tree: { root: '/source', id },
+    })
+  equal(await get('a'), { run: 1 })
+  let inside = async (id: string) => {
+    asked.length = 0
+    equal(await get(id), { run: 1 })
+    return asked.filter((p) => p.startsWith('/source/')).length
+  }
+  equal(await inside('a'), 0)
+  equal(await inside('b') > 0, true)
+  equal(await inside('b'), 0)
+})

@@ -1,13 +1,16 @@
 import * as system from '@yaks/process/system'
 import * as disk from '@yaks/file/io'
+import { runtimeTree } from './runtime.ts'
 // Derived command declarations, kept between processes while their inputs and
 // sources agree. A memo is disposable: an unreadable memo or a source whose
 // dependencies cannot be proved leaves the ordinary derivation in charge.
 // Every command asks, so a hit is proved the way a version control index
 // proves a clean tree: by each source's stat as it was read, or its
 // directory's stat while it remains absent, and by contents where a stat
-// moved. A memo nothing has read for a day (a deleted worktree's, a probe
-// config's, an older version's) goes at the next miss.
+// moved. Inside the snapshot a command runs from (./runtime.ts), which
+// nothing rewrites while it runs, the snapshot's id proves every file. A memo
+// nothing has read for a day (a deleted worktree's, a probe config's, an older
+// version's) goes at the next miss.
 
 /** A source module, or an optional facet of a configured package. */
 export type MemoRoot = string | readonly [plugin: string, facet: string]
@@ -39,6 +42,10 @@ export type MemoOptions = {
   imports?: (source: string, name?: string) => Promise<string[]>
   /** The digest boundary is synchronous in memory tests. */
   digest?: (text: string) => string | Promise<string>
+  /** A directory whose files cannot change while this process runs, and the
+   * id naming its contents (./runtime.ts `runtimeTree`): a memo kept under
+   * the same id proves every file inside it without asking for its stat. */
+  tree?: { root: string; id: string }
 }
 
 type Record<T> = {
@@ -53,6 +60,8 @@ type Record<T> = {
   sums: string[]
   /** each source module's dependencies, as written in it */
   lexed: { [path: string]: string[] }
+  /** the id of the tree (`MemoOptions.tree`) its files inside were read in */
+  tree?: string
   value: T
 }
 
@@ -172,6 +181,7 @@ export let remember = async <T>(
   let io = opts.files ?? disk
   let digest = opts.digest ?? sha256
   let locate = opts.resolve ?? import.meta.resolve
+  let tree = 'tree' in opts ? opts.tree : runtimeTree()
   let resolved = new Map<string, string>()
   let resolve = (specifier: string): string => {
     let known = resolved.get(specifier)
@@ -379,9 +389,14 @@ export let remember = async <T>(
       // A witness whose directory moved proves nothing, and its leaf is
       // stat'd instead. A hit never lists a directory or rewrites the memo:
       // an ancestor that is always moving (/tmp, a home directory) would
-      // cost every command a listing of it.
+      // cost every command a listing of it. A file inside the tree the memo
+      // was kept in holds what it held then, and keeps its stat unasked.
       let directories = new Map<string, string>()
-      let stats = known.files.map((path) => {
+      let fixed = tree && known.tree == tree.id ? `${tree.root}/` : undefined
+      let stats = known.files.map((path, i) => {
+        if (fixed && path.startsWith(fixed) && known.stats[i]) {
+          return known.stats[i]
+        }
         let witness = known.absent?.[path]
         if (witness) {
           let [parent, before] = witness
@@ -392,7 +407,10 @@ export let remember = async <T>(
         return stat(path)
       })
       if (stats.every((s, i) => s && s == known.stats[i])) {
-        seen()
+        // Proved in a tree it was not kept in, it is kept under this one,
+        // once, so the next hit here asks nothing inside it.
+        if (tree && known.tree != tree.id) keep({ ...known, tree: tree.id })
+        else seen()
         return known.value
       }
       // A stat moved without saying whether its contents did (a checkout, a
@@ -402,6 +420,7 @@ export let remember = async <T>(
           ...known,
           stats,
           absent: absent(known.files, stats, known.absent),
+          tree: tree?.id,
         })
         return known.value
       }
@@ -604,6 +623,7 @@ export let remember = async <T>(
           absent: absent(files, was),
           sums: digests,
           lexed: Object.fromEntries(lexed),
+          tree: tree?.id,
           value,
         })
         sweep()

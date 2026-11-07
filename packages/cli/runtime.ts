@@ -176,7 +176,9 @@ let capture = async (root: string) => {
 export let snapshot = async (
   root: string,
   whole: () => void = () => {},
-): Promise<{ root: string; commit: string; release: () => void }> => {
+): Promise<
+  { root: string; commit: string; hash: string; release: () => void }
+> => {
   let { commit, patch, files } = await capture(root).finally(whole)
   let hash = await digest(new TextEncoder().encode(JSON.stringify([
     1,
@@ -212,7 +214,7 @@ export let snapshot = async (
     // A slot that holds these sources is the whole cost of a warm launch:
     // which processes are live matters only to a slot about to be written.
     let hit = entries.find((e) => /^\d+$/.test(e.name) && e.hash == hash)
-    if (hit) return { root: `${cache}/${hit.name}`, commit, release }
+    if (hit) return { root: `${cache}/${hit.name}`, commit, hash, release }
     let pick = slot(
       entries,
       await live(cache, entries.map((e) => e.name)),
@@ -223,7 +225,7 @@ export let snapshot = async (
       await disk.remove(`${cache}/${name}`, { recursive: true })
     }
     await build({ root, commit, patch, files, target, hash })
-    return { root: target, commit, release }
+    return { root: target, commit, hash, release }
   } catch (error) {
     release()
     throw error
@@ -323,6 +325,14 @@ export let runtimeSource = (
 ): string =>
   from && to && url.startsWith(to + '/') ? from + url.slice(to.length) : url
 
+/** The private tree this runtime runs from, as a path, and the digest that
+ * names its contents (a slot's `.hash`): a slot is rewritten only while no
+ * process runs from it, so nothing inside it changes while this one runs. */
+export let runtimeTree = (): { root: string; id: string } | undefined => {
+  let id = runtimeRoot() ? system.env.get('YAK_RUNTIME_TREE') : undefined
+  return id ? { root: fileURLToPath(ROOT).replace(/\/$/, ''), id } : undefined
+}
+
 /** Stack traces keep the checkout's source addresses for the code catalog. */
 export let runtimeStack = (
   stack: string,
@@ -361,12 +371,13 @@ export let launch = async (
   whole: () => void,
 ): Promise<void> => {
   let root = fileURLToPath(ROOT).replace(/\/$/, '')
-  let { root: dir, commit, release } = await snapshot(root, whole)
+  let { root: dir, commit, hash, release } = await snapshot(root, whole)
   let url = pathToFileURL(dir).href
   let env = {
     YAK_RUNTIME_FROM: ROOT.href.replace(/\/$/, ''),
     YAK_RUNTIME_ROOT: url,
     YAK_RUNTIME_COMMIT: commit,
+    YAK_RUNTIME_TREE: hash,
   }
   let config = (await disk.stat(`${root}/deno.json`)).mtime
   if (config && config.getTime() >= performance.timeOrigin) {

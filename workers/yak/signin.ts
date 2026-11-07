@@ -1,7 +1,7 @@
 // A sign-in code's whole life (D-32318 §Auth), over the meta store and
 // nothing else: ask for one, spend it, and find or mint the person behind the
 // address. An address is where a code goes: an email address, mailed, or a US
-// mobile number in E.164 form (@yaks/phone `mobile`), texted (T-136826). A
+// mobile number in E.164 form (@yaks/phone/mobile `mobile`), texted (T-136826). A
 // row and a person are keyed by whichever it is, `signin{email}` or
 // `signin{phone}` and `email{address}` or `phone{number}`. Every write is a bundle through `/apply` — `{entity, ...comps}`,
 // the read shape written back — under the kernel flag, because a `signin` is
@@ -28,7 +28,7 @@ import { Stale } from '@yaks/graph/errors'
 import { token } from '@yaks/graph/sha256'
 import { KERNEL, type Meta, minted } from './meta.ts'
 import { secretKey } from '@yaks/secrets/signed'
-import { mobile } from '@yaks/phone'
+import { mobile } from '@yaks/phone/mobile'
 import { type Host, signupAddress } from './host.ts'
 import type { Letter } from './mail.ts'
 

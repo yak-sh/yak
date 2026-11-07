@@ -4269,10 +4269,12 @@ let lower = (
   // Try a bounded prefix in the exact requested order. Only when it holds a
   // complete page can later entities be excluded; a sparse recent prefix takes
   // the original component-driven road instead. Population density alone says
-  // nothing about where a component's newest numbered owners lie.
+  // nothing about where a component's newest numbered owners lie. A window in
+  // the default order is the same page: newest number first, then the owner.
+  let newest = order ? order.value == '-entity.num' : counts
   if (
     limit && limit.n > 0 && Number.isSafeInteger(limit.n) &&
-    order?.value == '-entity.num' && numbered && !after && !fields &&
+    newest && numbered && !after && !fields &&
     !vocab.prop('entity', 'num')?.computed && !ctx.derived['entity.num'] &&
     !sort?.ranked &&
     !ctx.spine && !ctx.eids && !ctx.correlated &&

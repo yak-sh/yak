@@ -21,7 +21,8 @@ import {
   credential,
   type Ctx as Connections,
 } from '@yaks/connections'
-import { type Account, Blocked, Denied, mobile, type Own } from '@yaks/phone'
+import { type Account, Blocked, Denied, type Own } from '@yaks/phone'
+import { mobile } from '@yaks/phone/mobile'
 import { phoneOf, phones } from './phones.ts'
 import { charged } from './text-spend.ts'
 import type { Tool } from '@yaks/session'

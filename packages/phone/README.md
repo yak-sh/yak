@@ -184,7 +184,8 @@ speaks through @yaks/speech (workers/yak/operator-calls.ts).
 ## Example
 
 ```ts
-import { consentEid, mobile, phoneDoc } from '@yaks/phone'
+import { consentEid, phoneDoc } from '@yaks/phone'
+import { mobile } from '@yaks/phone/mobile'
 import { graph } from '@yaks/graph'
 import { ram } from '@yaks/ram'
 import { loadVocab } from '@yaks/vocab'

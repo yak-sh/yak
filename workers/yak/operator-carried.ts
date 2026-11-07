@@ -20,7 +20,7 @@
 //    provider's SIP address (OpenAI's `sip:<project>@sip.api.openai.com`,
 //    TLS signaling and SRTP media).
 import { ours, refusal } from '@yaks/hook'
-import { mobile } from '@yaks/phone'
+import { mobile } from '@yaks/phone/mobile'
 import { accept, hangup, type Provider, reject, talk } from '@yaks/speech'
 import type { Space } from './directory.ts'
 import type { Env } from './env.ts'

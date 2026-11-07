@@ -4,6 +4,7 @@
   "type": "module",
   "exports": {
     ".": "./mod.ts",
+    "./mobile": "./mobile.ts",
     "./vocab": "./vocab.ts",
     "./effects": "./effects.ts",
     "./plugin": "./plugin.ts",

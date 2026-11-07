@@ -175,22 +175,32 @@ let str = (v: unknown): string => typeof v == 'string' ? v : ''
  * whatever the session that spawned it works as, so a subagent works as the
  * persona it runs under. Never a session; `undefined` where nothing names one.
  * A session with no persona anywhere up its line should be rare, and a door
- * that starts one is worth fixing rather than falling back for.
+ * that starts one is worth fixing rather than falling back for. Each session
+ * is read for those properties alone: the rest of `session` (its computed
+ * `status` above all) costs a command its compile and answers nothing here.
  */
 export let actorOf = async (
-  g: Pick<Graph, 'get' | 'vocab'>,
+  g: Pick<Graph, 'read' | 'vocab'>,
   session: Eid,
 ): Promise<Eid | undefined> => {
-  let filed = !!g.vocab.prop('filed', 'project')
-  let comps = [SESSION, 'filed', 'spawned'].filter((c) => g.vocab.comp(c))
+  let fields = [
+    `${SESSION}.persona`,
+    `${SESSION}.actor`,
+    'filed.project',
+    'spawned.parent',
+  ].filter((f) => g.vocab.prop(...f.split('.') as [string, string]))
   let seen = new Set<Eid>()
   for (let at: Eid = session; at && !seen.has(at) && seen.size < DEPTH;) {
     seen.add(at)
-    let [s] = await g.get([at], comps)
-    if (!s?.[SESSION] || s[TOMBSTONE] != null) return
-    let named = s[SESSION] as Comp
-    let project = filed ? str((s.filed as Comp | undefined)?.project) : ''
-    let by = str(named.persona) || str(named.actor) || project
+    let [s] = await g.read(
+      `.entity.eid=${JSON.stringify(at)} .${SESSION} .fields=${
+        fields.join(',')
+      }`,
+    )
+    if (!s) return
+    let named = s[SESSION] as Comp | undefined
+    let project = str((s.filed as Comp | undefined)?.project)
+    let by = str(named?.persona) || str(named?.actor) || project
     if (by) return by as Eid
     at = str((s.spawned as Comp | undefined)?.parent) as Eid
   }
@@ -203,7 +213,7 @@ export let actorOf = async (
  * standing in it.
  */
 export let speaking = async (
-  g: Pick<Graph, 'get' | 'vocab'>,
+  g: Pick<Graph, 'read' | 'vocab'>,
   s: Bundle,
 ): Promise<Actor> => {
   let via = s.entity.eid

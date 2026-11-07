@@ -9,9 +9,9 @@ import {
   Blocked,
   consentEid,
   keyword,
-  mobile,
   type Text,
 } from '@yaks/phone'
+import { mobile } from '@yaks/phone/mobile'
 import { writes } from '@yaks/member'
 import { type Ctx, refuse } from './tool.ts'
 import type { Tool } from '@yaks/session'

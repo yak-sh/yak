@@ -70,11 +70,12 @@ let page = (
   hidden = false,
   peers = false,
   hooks: Extension[] = [],
+  order = ' .order=-entity.num',
 ) => {
   let q = render(
     compile(
       parse(
-        '.doc .order=-entity.num .limit=13' +
+        `.doc${order} .limit=13` +
           (peers ? '&.edges.peers=doc.title&.edges.limit=52' : ''),
       ),
       vocab,
@@ -123,6 +124,14 @@ test('a numbered recent component page costs its prefix, not its history', () =>
         .map((i) => `recent-${i}`),
     )
     ok(got.steps < 6000, `${n} historical docs: ${got.steps} VM steps`)
+  }
+})
+
+test('a page in the default order is the same bounded numbered page', () => {
+  for (let f of [...dense, sparse]) {
+    let got = page(f, false, false, [], '')
+    equal(got.ids, page(f).ids)
+    if (f.recent) ok(got.steps < 6000, `${f.n} historical docs: ${got.steps}`)
   }
 })
 
