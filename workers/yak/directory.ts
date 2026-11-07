@@ -1350,6 +1350,22 @@ let unrooted = (space: string, slug: string) => {
   return slug
 }
 
+// Every way in writes the person before asking for their space (signin.ts
+// `personOf`, identity.ts `textedIn`), so a credential naming nobody outlived
+// an account that was erased. Minting for it would bring the row back as a
+// bare `person{}` (T-144468).
+let erased = () =>
+  new CallError('access', 'This account was erased. Sign in again.')
+
+// What a person's own space is named for: their address. One with no address
+// (who signed up by text) has nothing to name it after, so it is named at
+// random until they rename it: one name for all of them would number its way
+// past every space already holding it, a read each.
+let slugOf = (row: Row) =>
+  row.email?.address
+    ? slugFor(row.email.address)
+    : `space-${crypto.randomUUID().slice(0, 6)}`
+
 // A person who owns several spaces, none marked as theirs and none named by
 // their address: one renamed away from it before `member.own` (T-135921), so
 // which is theirs is a guess the tracker hears about until their seat is
@@ -2378,6 +2394,19 @@ export let directoryRows = (rows: {
       headers: Record<string, string>,
       own = false,
     ) => {
+      let { eid, entities } = await self.minting(person, slug, title, own)
+      await self.stamp({ entities }, headers)
+      return eid
+    },
+    // What minting that space writes, read and decided here and written by
+    // whoever asked: `mint` above, or the directory itself inside the write
+    // that mints a person their own (`owning`).
+    minting: async (
+      person: string,
+      slug: string,
+      title: string,
+      own = false,
+    ) => {
       let eid = crypto.randomUUID()
       let [claims, seats, row] = await Promise.all([
         self.claimed(slug),
@@ -2389,7 +2418,8 @@ export let directoryRows = (rows: {
         seats.map((s) => ({ eid: s.space.eid, name: s.space.operator })),
       )
       let first = !row?.started && !seats.some((s) => s.role == 'owner')
-      await self.stamp({
+      return {
+        eid,
         entities: [
           {
             entity: { eid: person },
@@ -2403,8 +2433,10 @@ export let directoryRows = (rows: {
             operator: { name },
             ...(first ? {} : { starter: { dollars: 0 } }),
           },
+          // Its eid chosen here too, not a `$seat` the store resolves: a
+          // batch decided inside a write (`owning`) is past resolving one.
           {
-            entity: { eid: '$seat' },
+            entity: { eid: crypto.randomUUID() },
             member: {
               space: eid,
               person,
@@ -2413,9 +2445,8 @@ export let directoryRows = (rows: {
             },
           },
           ...claims,
-        ],
-      }, headers)
-      return eid
+        ] as Bundle[],
+      }
     },
     // A space moved to another address, retitled, or made to forget one it
     // left: the one write behind both doors that do it (tools.ts `space_set`,
@@ -3150,8 +3181,12 @@ export let directoryRows = (rows: {
     // A person seated before the mark is marked once, at the space their
     // address names or the only one they own. Being a member of somebody
     // else's is not having one, so an invited person is minted theirs here
-    // rather than handed the inviter's (T-33142). A race that loses on the
-    // unique slug re-reads and finds the winner.
+    // rather than handed the inviter's (T-33142).
+    //
+    // The mint is the request `$own`, decided inside the write that makes it
+    // (facets/directory-graph.ts, by `owning` below), so two doors asking at
+    // once (a sign-in settling behind its answer and the first page it sent
+    // them to) mint one space between them, and the later finds the earlier's.
     //
     // `want` is the address they chose at the sign-in card, taken only when it
     // is a slug and still free — the card asked the same question a moment
@@ -3164,20 +3199,8 @@ export let directoryRows = (rows: {
       let marked = mine.find((s) => s.own)
       if (marked) return marked.space
       let row = await one(`.entity.eid=${person}`)
-      // Every way in writes the person before asking for their space
-      // (signin.ts `personOf`, identity.ts `textedIn`), so a credential naming
-      // nobody outlived an account that was erased. Minting for it would bring
-      // the row back as a bare `person{}` (T-144468).
-      if (!row) {
-        throw new CallError('access', 'This account was erased. Sign in again.')
-      }
-      // A person with no address (one who signed up by text) has nothing to
-      // name their space after, so it is named at random until they rename
-      // it: one name for all of them would number its way past every space
-      // already holding it, a read each.
-      let wanted = row?.email?.address
-        ? slugFor(row.email.address)
-        : `space-${crypto.randomUUID().slice(0, 6)}`
+      if (!row) throw erased()
+      let wanted = slugOf(row)
       let found = mine.find((s) => s.space.slug == wanted) ??
         (mine.length == 1 ? mine[0] : null)
       if (found) {
@@ -3187,23 +3210,33 @@ export let directoryRows = (rows: {
         return found.space
       }
       if (mine.length) return unmarked(person, mine[0].space)
+      await self.stamp({
+        entities: [{
+          entity: { eid: '$own' },
+          $own: { person, ...(want ? { want } : {}) },
+        }],
+      }, { 'x-yak-person': person, 'x-yak-role': 'owner' })
+      let theirs = await self.seats(person, 'owner')
+      let space = (theirs.find((s) => s.own) ?? theirs[0])?.space
+      if (!space) throw erased()
+      return space
+    },
+    // What minting a person their own space writes, decided over this
+    // directory's reads: nothing once they own a space or have no row, else
+    // the batch space_new writes (`minting`), at the address they chose if it
+    // is still free and otherwise the next free one their address names. A
+    // space nobody has named is known by the name it answers to, which is
+    // what `/connect` writes when one is chosen there too.
+    owning: async (person: string, want?: string): Promise<Bundle[]> => {
+      let [mine, row] = await Promise.all([
+        self.seats(person, 'owner'),
+        one(`.entity.eid=${person}`),
+      ])
+      if (mine.length || !row) return []
       let chosen = !!want && SLUG.test(want) && !RESERVED.has(want) &&
         !await self.space(want)
-      let slug = chosen ? want! : await self.free(wanted)
-      // The same batch space_new writes (`mint`). A space nobody has named is
-      // known by the name it answers to, which is what `/connect` writes when
-      // one is chosen there too.
-      try {
-        await self.mint(person, slug, slug, {
-          'x-yak-person': person,
-          'x-yak-role': 'owner',
-        }, true)
-      } catch (e) {
-        let [theirs] = await self.spaces(person, 'owner')
-        if (!theirs) throw e
-        return theirs
-      }
-      return (await self.space(slug))!
+      let slug = chosen ? want! : await self.free(slugOf(row))
+      return (await self.minting(person, slug, slug, true)).entities
     },
     // The space this directory is narrowed to: none, for the whole directory
     // (grants.ts `narrowed` answers one).

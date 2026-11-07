@@ -771,10 +771,16 @@ installContext({
 // asking, every guess and the burial a right one writes raise none (T-148651).
 // A stamp on any other entity is as fenced as what it stamps. Any other
 // delete or component fences.
+//
+// So does a request a plugin decides inside the write whose rows a copied
+// line names, though the batch carries none of them until it runs: `$own`
+// mints a person's space and seat (facets/directory-graph.ts). A guess
+// writes nothing but sign-in rows, and fences nothing.
 let UNNAMED = new Set(['signin'])
 let STAMPS = new Set(['created', 'updated'])
 let UNFENCED = new Set([...RECEIPTS, 'archetype', ...UNNAMED])
 let UNHELD = new Set([...UNFENCED, 'effect', ...STAMPS])
+let DECIDED = ['$own']
 let UNREAD = -2
 let unfenced = (bundles: Bundle[], words = UNFENCED): boolean => {
   let unnamed = new Set(
@@ -783,6 +789,7 @@ let unfenced = (bundles: Bundle[], words = UNFENCED): boolean => {
   )
   return bundles.every((b) =>
     !deleted(b) &&
+    !DECIDED.some((request) => request in b) &&
     comps(b).every(([name]) =>
       words.has(name) || STAMPS.has(name) && unnamed.has(b.entity.eid)
     )

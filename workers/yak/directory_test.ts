@@ -6,8 +6,9 @@ import { Stale } from '@yaks/graph/errors'
 import { graph } from '@yaks/graph'
 import { ram } from '@yaks/ram'
 import { matcher } from '@yaks/match'
-import type { Bundle } from '@yaks/graph'
+import type { Bundle, Tx } from '@yaks/graph'
 import { platformVocab } from './vocab.ts'
+import { plugins } from './facets/directory-graph.ts'
 import * as dirPart from './directory.ts'
 import { type App, directory, type Space } from './directory.ts'
 import type { Env } from './env.ts'
@@ -456,8 +457,17 @@ let held = () => {
   let vocab = platformVocab()
   let answer = (search: string) =>
     matcher(new URLSearchParams(search).get('q') ?? '', vocab)(rows as Bundle[])
-  let apply = (body: string) => {
-    let entities = JSON.parse(body) as Record<string, unknown>[]
+  // A request the directory decides inside the write (`$own`) is decided by
+  // its own hook, over these rows.
+  let [decides] = plugins()
+  let tx = { read: (q: string) => answer(`?q=${encodeURIComponent(q)}`) }
+  let apply = async (body: string) => {
+    let entities = await decides.authorize!(
+      JSON.parse(body) as Bundle[],
+      tx as unknown as Tx,
+      undefined,
+      { graph: {}, trusted: true },
+    ) as unknown as Record<string, unknown>[]
     let alias: Record<string, string> = {}
     let named = (v: unknown) =>
       typeof v == 'string' && v.startsWith('$') ? alias[v] : v
@@ -618,18 +628,17 @@ test('signing in asks the directory a bounded number of questions', async () => 
   m.put(first, { person: {}, email: { address: 'first@yaks.app' } })
   await m.dir.own(first)
 
-  // What a later person's first sign-in costs: who they are and where they sit,
-  // in one trip; who they are again for the address their slug is derived from
-  // (the request's memory answers it on the deploy), whether that slug is free,
-  // whether it still redirects for a space that left it (which the mint takes
-  // from that space, D-131924: one read over the handful of spaces that ever
-  // moved), the write, and the space read back afterwards.
+  // What a later person's first sign-in costs: where they sit, who they are
+  // (a seat from before `member.own` is marked at the space their address
+  // names), the write that mints their space, which reads whether its address
+  // is free and still redirects for a space that left it (D-131924) where it
+  // writes (facets/directory-graph.ts), and their seat read back afterwards.
   let them = crypto.randomUUID()
   m.put(them, { person: {}, email: { address: 'dana@yaks.app' } })
   m.hops.length = 0
   let mine = await m.dir.own(them)
   assertEquals(mine.slug, 'dana')
-  assertEquals(m.hops.length, 6, m.hops.join('\n'))
+  assertEquals(m.hops.length, 4, m.hops.join('\n'))
 
   // And what it costs once they have one: the ordinary sign-in, which is
   // every sign-in after the first: where they sit, and those spaces, in one

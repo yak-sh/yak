@@ -1415,6 +1415,41 @@ test(
   },
 )
 
+// A new person's space is settled behind the code's answer (identity.ts
+// `landed`), so the page it sends them to is asked for while that is still
+// going, and lands them in their one space all the same.
+test("a new person's first page works right after the code", async () => {
+  let k = await kernel()
+  try {
+    let email = `probe-${crypto.randomUUID().slice(0, 8)}@yaks.app`
+    await (await form(k, '/login', { email })).body?.cancel()
+    let inn = await form(k, '/login/code', {
+      email,
+      code: await mailed(k, email),
+    })
+    await inn.body?.cancel()
+    let cookie = (inn.headers.get('set-cookie') ?? '').split(';')[0]
+    let go = async (to: string | null) => {
+      let r = await k.at('yaks.app', new URL(to!).pathname, {
+        redirect: 'manual',
+        headers: { cookie },
+      })
+      await r.body?.cancel()
+      return r
+    }
+    let first = await go(inn.headers.get('location'))
+    let at = `https://yaks.app/manage/${email.split('@')[0]}`
+    assertEquals([first.status, first.headers.get('location')], [302, at])
+    assertEquals((await go(at)).status, 200)
+    await k.settled()
+    let [them] = await meta(k).query(`.person&.email.address=${email}`)
+    let seats = await meta(k).query(`.member.person=${them.entity.eid}`)
+    assertEquals(seats.length, 1)
+  } finally {
+    await k.stop()
+  }
+})
+
 // One click instead of six digits (link.ts, T-34351), and the standing link an
 // app directory's reviewer is given instead of a mailbox — OpenAI's review
 // refuses any credential that needs one. Both are the same door and the same

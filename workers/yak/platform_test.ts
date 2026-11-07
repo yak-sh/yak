@@ -192,6 +192,16 @@ test('a person is found by their address, or minted at it', async () => {
   assertEquals((row.email as { address: string }).address, 'ana@yaks.app')
 })
 
+// A sign-in settles a new person's space behind its answer while the page it
+// sent them to asks for it (identity.ts `landed`): one space between them.
+test('a person asking for their own space twice at once gets one', async () => {
+  let { at, dir } = platform()
+  let dana = await personOf(at, DANA)
+  let [one, two] = await Promise.all([dir.own(dana), dir.own(dana)])
+  assertEquals([one.eid, one.slug], [two.eid, 'dana'])
+  assertEquals((await dir.seats(dana)).length, 1)
+})
+
 // The platform's own admin (D-35373). It is seeded — a fresh kernel has one
 // before anybody signs in — and a store holding half of it is completed rather
 // than left: production was seeded long before the admin existed, and on a

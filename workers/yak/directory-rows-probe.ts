@@ -13,6 +13,7 @@ import { effects, type Handlers } from '@yaks/effects'
 import { cleanup } from '@yaks/testing'
 import { plugins as trash } from './facets/trash-graph.ts'
 import { plugins as meter } from './facets/meter-graph.ts'
+import { plugins as owning } from './facets/directory-graph.ts'
 import { vaultOf } from './vault.ts'
 import type { Options } from './facets/store.ts'
 import { ram } from '@yaks/ram'
@@ -51,7 +52,11 @@ export let rows = (
   )
   let options = { store: { meta: false } } as Options
   for (
-    let plugin of [...trash(undefined, options), ...meter(undefined, options)]
+    let plugin of [
+      ...trash(undefined, options),
+      ...meter(undefined, options),
+      ...owning(),
+    ]
   ) g.use(plugin)
   let failures: unknown[] = []
   let fx = handlers && effects(vocab, {

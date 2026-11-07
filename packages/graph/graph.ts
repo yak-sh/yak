@@ -442,6 +442,19 @@ let iso = (ms: number): string =>
 let failed = (err: unknown, at: { phase: Phase; plugin: string }) =>
   console.error(`${at.plugin} failed at ${at.phase} —`, err)
 
+// What an authorize hook writes is past minting, so an `$alias` it names
+// would be stored as that very eid, one entity every such write shares.
+let unminted = (bundles: Bundle[]) => {
+  let stray = bundles.find((b) => isAlias(b.entity.eid))
+  if (stray) {
+    throw new Refused(
+      `${stray.entity.eid} is an alias inside the transaction, where ` +
+        'nothing mints one: a hook writes at an eid it chose',
+    )
+  }
+  return bundles
+}
+
 // A written reference that names nothing is refused naming the property that
 // held it and what that property takes, `resolved.fix takes an entity's id or
 // name: a sentence names nothing`, so a writer knows which field to fix.
@@ -1098,14 +1111,17 @@ export let graph = (opts: Options): Graph => {
             each(
               [
                 (b: Bundle[]) =>
-                  runHooks(
-                    run,
-                    'precondition',
-                    held,
-                    plugins.flatMap((p): [string, Hook][] =>
-                      p.authorize ? [[p.name, p.authorize]] : []
+                  after(
+                    runHooks(
+                      run,
+                      'precondition',
+                      held,
+                      plugins.flatMap((p): [string, Hook][] =>
+                        p.authorize ? [[p.name, p.authorize]] : []
+                      ),
+                      b,
                     ),
-                    b,
+                    unminted,
                   ),
                 phase(
                   'precondition',

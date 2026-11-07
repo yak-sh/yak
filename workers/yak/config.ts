@@ -526,6 +526,7 @@ export let domains = {
   },
   'yak/directory': {
     vocab: './facets/directory-vocab.ts',
+    graph: './facets/directory-graph.ts',
     effects: './facets/directory-effects.ts',
   },
   'yak/trash': {

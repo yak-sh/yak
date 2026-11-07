@@ -271,6 +271,26 @@ await proof(
   },
 )
 
+// A person's own space is decided inside the write that mints it
+// (facets/directory-graph.ts), so the batch carries none of the space and seat
+// a copied line names, and it fences as they would.
+await proof("minting a person's own space fences serving checks", async () => {
+  let f = await fixture()
+  await f.at.apply([{
+    entity: { eid: 'dana' },
+    person: {},
+    email: { address: 'dana@example.com' },
+  }], KERNEL)
+  let before = f.begins.length
+  await f.at.apply(
+    [{ entity: { eid: '$own' }, $own: { person: 'dana' } }],
+    KERNEL,
+  )
+  let seats = (await f.at.query('.member.person=dana')).length
+  return () =>
+    equal({ fences: f.begins.length - before, seats }, { fences: 1, seats: 1 })
+})
+
 // A model call's hold on its space's budget is refused past the budget in the
 // directory's own transaction, so it holds back no serving check; a plain
 // spend still fences (T-141144).

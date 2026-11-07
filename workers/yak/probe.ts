@@ -240,19 +240,20 @@ let boot = async (
     logs.delete(log)
   }
   let door = driven(service.url, secret, log, apex(), cf.url)
+  let deliveries = async () => {
+    while (held.size) await Promise.allSettled([...held])
+  }
   try {
     return {
       ...door,
-      owner: await signIn(door, `owner@${apex()}`),
+      owner: await signIn({ ...door, deliveries }, `owner@${apex()}`),
       dir: directoryOf(p.env.STORE),
       views,
       reported,
       flushReports: () => reportClock.advance(10_000),
       settled,
       builder: p.builder,
-      deliveries: async () => {
-        while (held.size) await Promise.allSettled([...held])
-      },
+      deliveries,
       close,
     }
   } catch (e) {
@@ -595,6 +596,9 @@ export let signIn = async (
   let inn = await form('/login/code', { address: email, code })
   if (inn.status != 303) throw new Error(`code: ${await inn.text()}`)
   await inn.body?.cancel()
+  // Signed in a moment ago: their space, settled behind the answer
+  // (identity.ts `landed`), stands.
+  await k.deliveries?.()
   let cookie = (inn.headers.get('set-cookie') ?? '').split(';')[0]
   let claims = await verify(cookie.slice(COOKIE.length + 1), k.secret)
   if (!claims) throw new Error('the sign-in set no session')

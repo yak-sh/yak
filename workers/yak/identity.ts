@@ -653,20 +653,23 @@ let landed = async (
     'keep',
     async () => keep(env, dir, await browser(env, req), person),
   )
+  // Their space, and the platform for the first person ever, are settled
+  // behind the answer, which needs neither: it is the session and where to
+  // send them. A door that shows them their space finds it, or mints it in
+  // the same one write (directory.ts `own`), one space between the two, so a
+  // new person's first page never waits on more than that (T-148852).
+  background(
+    settle(env, person).then(() => {}, (e) => fault(env, 'settle', e)),
+  )
   // A person who has never signed in before is the funnel's sign-up
   // (funnel.ts): the first time, whether their row came from this sign-in or
-  // from somebody inviting them. Asked beside settling, and the stamp written
-  // after the answer, which says nothing that depends on it (T-34158).
-  let [, [row]] = await Promise.all([
-    c.time('settle', () => settle(env, person)),
-    via
-      ? c.time(
-        'signed',
-        () => store.query(`.entity.eid=${person} ?signed_in ?email`),
-      )
-      : [],
-  ])
+  // from somebody inviting them. The stamp is written after the answer,
+  // which says nothing that depends on it (T-34158).
   if (via) {
+    let [row] = await c.time(
+      'signed',
+      () => store.query(`.entity.eid=${person} ?signed_in ?email`),
+    )
     background(
       store.apply([{
         entity: { eid: person },

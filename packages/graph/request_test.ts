@@ -32,3 +32,23 @@ test('the core answers its own without a plugin', async () => {
   }])
   assertEquals(out.length, 1)
 })
+
+test('a request an authorize hook answers writes at the eids it chose', async () => {
+  let shelved = (eid: string) =>
+    graph({
+      storage: memory(),
+      vocab: books,
+      plugins: [{
+        name: 'test',
+        requests: ['$shelve'],
+        authorize: (bundles) =>
+          bundles.map((b) =>
+            b.$shelve ? { entity: { eid }, doc: { title: 'Dune' } } : b
+          ),
+      }],
+    }).apply([{ entity: { eid: '$s' }, $shelve: true }])
+  assertEquals((await shelved('b')).map((b) => b.entity.eid), ['b'])
+  // Minting is past inside the transaction, so an alias there would be
+  // stored as that very eid.
+  assertThrows(() => shelved('$b'), Refused, '$b is an alias')
+})
