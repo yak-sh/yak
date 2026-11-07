@@ -92,6 +92,7 @@ import {
   agentsOf,
   disconnect,
   disconnectAll,
+  type Kept,
   replace,
   servicesOf,
 } from './connected.ts'
@@ -269,10 +270,11 @@ let addressIn = (row?: Record<string, unknown>) =>
   (row?.email as { address?: string } | undefined)?.address ?? null
 
 // The provider as connected.ts reads it, each wait on it an `oauth_wait`
-// (timing.ts). A person's grants are read once a request (hops.ts `recall`),
-// so a page can ask them ahead of knowing whether it shows them (apps.ts
-// `foresee`), until a grant is revoked. A client whose metadata document
-// cannot be fetched just now is unknown, not gone: its grants still stand.
+// (timing.ts). A person's grants and each client are read once a request
+// (hops.ts `recall`), so a page can ask them ahead of knowing whether it shows
+// them (manage.ts `foresee`), until a grant is revoked. A client whose
+// metadata document cannot be fetched just now is unknown, not gone: its
+// grants still stand.
 let grants = (env: Env) => {
   let oauth = api(env)
   let waiting = <T>(work: () => Promise<T>) => elapsed('oauth_wait', work)
@@ -286,14 +288,15 @@ let grants = (env: Env) => {
     revokeGrant: (id: string, person: string) =>
       writing('oauth', () => waiting(() => oauth.revokeGrant(id, person))),
     lookupClient: (id: string) =>
-      waiting(async () => {
-        try {
-          return await oauth.lookupClient(id)
-        } catch (error) {
-          if (error instanceof CimdFetchError) return undefined
-          throw error
-        }
-      }),
+      recall('oauth', `client ${id}`, () =>
+        waiting(async () => {
+          try {
+            return await oauth.lookupClient(id)
+          } catch (error) {
+            if (error instanceof CimdFetchError) return undefined
+            throw error
+          }
+        })),
   }
 }
 
@@ -969,16 +972,18 @@ let asked = async (req: Request, env: Env, q: string) => {
  * the client's code is sent. The grant this replaces stays until the client
  * exchanges the new grant's code (`tokenExchangeCallback` below, connected.ts
  * `replace`), so a sign-in abandoned at the client leaves the old one working
- * (T-121901). */
+ * (T-121901). The grant keeps the name its client gave itself (connected.ts
+ * `Kept`), so listing the person's agents reads no registration. */
 export let consent = (
   oauth: Pick<OAuthHelpers, 'completeAuthorization'>,
   ask: AuthRequest,
   person: string,
+  client?: string,
 ) =>
   oauth.completeAuthorization({
     request: ask,
     userId: person,
-    metadata: {},
+    metadata: (client ? { client } : {}) satisfies Kept,
     scope: ask.scope,
     props: { person } satisfies Props,
     revokeExistingGrants: false,
@@ -995,7 +1000,8 @@ let allow = async (
 ) => {
   let ask = await asked(req, env, q)
   if (ask instanceof Response) return ask
-  let { redirectTo } = await consent(api(env), ask, person)
+  let client = await grants(env).lookupClient(ask.clientId)
+  let { redirectTo } = await consent(api(env), ask, person, client?.clientName)
   step(env, 'connector_granted', req, {
     who: await dirOf(env).emailAt(person),
   })

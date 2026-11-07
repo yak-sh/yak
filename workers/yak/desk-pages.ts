@@ -470,7 +470,7 @@ export let choice = (
 let connectCard = (at: DeskPage, env: Host) =>
   h(
     Card,
-    { class: 'Desk_Connect', ...state(false, !at.agents?.length) },
+    { class: 'Desk_Connect', ...state(false, at.agents) },
     heading('Connect your agent', {
       actions: h(
         Button,
@@ -541,13 +541,13 @@ export let library = (at: DeskPage, env: Host) => {
         'Your apps will live here',
         h(
           'div',
-          state(true, !!at.agents?.length),
+          state(true, at.agents),
           h('p', null, 'Ask your agent for your first app. Try this:'),
           firstAsk(),
         ),
         h(
           'div',
-          state(false, !at.agents?.length),
+          state(false, at.agents),
           h(
             'p',
             null,
@@ -1886,7 +1886,7 @@ export let desk = (at: DeskPage, env: Host = {}) => {
     body = [
       h(
         Card,
-        { class: 'Desk_Start', ...state(true, !!at.agents?.length) },
+        { class: 'Desk_Start', ...state(true, at.agents) },
         heading('Ask your agent for a new yaks app'),
         agentList(at.agents ?? [], 'links'),
         h(Form.Field, null, h(Form.Label, { as: 'p' }, 'Try this'), firstAsk()),

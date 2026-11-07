@@ -955,18 +955,18 @@ export let agentSetup = (agents: Agent[], env: Host, back: string) => [
   agentList(agents, 'rows', back),
   h(
     'p',
-    state(true, !!agents.length),
+    state(true, agents),
     'Ask for an app, or keep improving one in the same chat.',
   ),
   h(
     'p',
-    state(false, !agents.length),
+    state(false, agents),
     'Connect once, then build and keep improving your apps in your usual chats.',
   ),
   h(
     'section',
     { class: 'Connect_Setup' },
-    h(Group, state(true, !!agents.length), 'Connect another agent'),
+    h(Group, state(true, agents), 'Connect another agent'),
     pasteLink(env),
     h('p', null, 'Or connect it yourself, with the steps for your app:'),
     doors(env),

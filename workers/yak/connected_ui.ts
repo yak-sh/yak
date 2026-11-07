@@ -110,7 +110,8 @@ export let agentList = (
 
 /** What keeps the list current while the page is open: on focus and on
  * coming back to the tab, the agents are asked for again and each row the
- * template draws replaces one that changed. */
+ * template draws replaces one that changed. A page drawn before its agents
+ * were known (pages.ts `state`, unsettled) asks for them as it loads. */
 export let agentLive = (endpoint: string) =>
   h('script', {
     dangerouslySetInnerHTML: {
@@ -121,6 +122,7 @@ let list=root?.querySelector('.Agents');
 let template=root?.querySelector('[data-agent-row]');
 let disconnected=document.querySelector('[data-disconnected]');
 if(!list&&!disconnected)return;
+let unsettled=()=>document.querySelectorAll('[data-unsettled]');
 let destinations=${JSON.stringify(destinations)};
 let busy=false;
 let refresh=async()=>{
@@ -157,10 +159,12 @@ let refresh=async()=>{
     let any=data.agents.length>0;
     document.querySelectorAll('[data-connected]').forEach(el=>{el.hidden=!any});
     document.querySelectorAll('[data-disconnected]').forEach(el=>{el.hidden=any});
+    unsettled().forEach(el=>el.removeAttribute('data-unsettled'));
   }catch{}finally{busy=false}
 };
 window.addEventListener('focus',refresh);
 document.addEventListener('visibilitychange',refresh);
+if(unsettled().length)refresh();
 })();`,
     },
   })

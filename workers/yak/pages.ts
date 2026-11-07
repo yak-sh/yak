@@ -732,6 +732,8 @@ export type DeskPage = {
   trash?: { eid: string; slug: string; title: string; days: number }[]
   name?: string
   email?: string
+  /** the person's connected agents; none while not yet known, which leaves
+   * what depends on them for the page's script to settle (`state`) */
   agents?: Agent[]
   views?: Visits[] | null
   viewDays?: number
@@ -1721,11 +1723,14 @@ export let firstAsk = () =>
 // An address on this platform, written out for somebody to type or paste.
 export let at = (path: string, env: Host) => code(url(env, path))
 
-// Shows a part only while an agent is connected, or only while none is
-// (connected_ui.ts `agentLive` keeps it true as agents come and go).
-export let state = (connected: boolean, show: boolean) => ({
+// Shows a part only while an agent is connected, or only while none is, as
+// `agents` says, and neither on a page drawn before they were known, which
+// marks it unsettled (connected_ui.ts `agentLive` settles it as the page
+// loads, and keeps it true as agents come and go).
+export let state = (connected: boolean, agents?: readonly unknown[]) => ({
   [`data-${connected ? 'connected' : 'disconnected'}`]: '',
-  hidden: !show,
+  hidden: !agents || connected != agents.length > 0,
+  ...agents ? {} : { 'data-unsettled': '' },
 })
 
 // The only script a tab needs, and it is not what switches one: the radios do

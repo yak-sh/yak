@@ -6,7 +6,7 @@ import {
 } from '@cloudflare/workers-oauth-provider'
 import { kv } from './binding-probe.ts'
 import { consent } from './identity.ts'
-import { replace } from './connected.ts'
+import { agentsOf, replace } from './connected.ts'
 import type { Env } from './env.ts'
 
 // Connecting an assistant again replaces its grant, but only once the new one
@@ -84,4 +84,17 @@ test('connecting again keeps the old grant until the new one is taken', async ()
 test('the grant taken takes away the one it replaces', async () => {
   assertEquals(await replace(oauth, 'q', 'newer'), ['older'])
   assertEquals(await held('q'), ['newer'])
+})
+
+// A person who connected the assistant by the provider's own consent.
+await consent(oauth, authorization, 'r', 'Probe agent')
+
+test('a grant names its agent as consented, reading no registration', async () => {
+  let looked: string[] = []
+  let agents = await agentsOf({
+    listUserGrants: (person, options) => oauth.listUserGrants(person, options),
+    lookupClient: (id) => (looked.push(id), oauth.lookupClient(id)),
+  }, 'r')
+  assertEquals(agents.map((a) => a.name), ['Probe agent'])
+  assertEquals(looked, [])
 })

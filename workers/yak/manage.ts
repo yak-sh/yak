@@ -91,6 +91,14 @@ import { json, kernels, moved, redirect, shelf } from './apps.ts'
 // call. Nothing above the owner block below asks for it, so nothing else pays.
 let identity = () => import('./identity.ts')
 
+// The agents a person has connected (connected.ts `agentsOf`).
+let agentsOf = (env: Env, person: string) =>
+  identity().then((part) => part.agents(env, person))
+
+// What a read has answered by now, or nothing while it is still out: a page
+// that shows it only when it is in hand never waits on it.
+let inHand = <T>(read?: Promise<T>) => Promise.race([read, undefined])
+
 // Every app's visitors, for the owner's block: every app in the same four
 // queries (views.ts `statsFor`), each answer already cached for a few minutes
 // there — and a failure is `null` rather than a throw, because this is the
@@ -330,6 +338,9 @@ let rowsAhead = (
   at: Ahead,
 ): Promise<unknown>[] => {
   let walk = walkTo(at.slug, at.space.then((s) => s?.eid ?? ''))
+  // The person's own agents, which the page shows only if they are in hand
+  // by the time it is drawn (`desk`).
+  if (view == 'apps' || view == 'new') return [agentsOf(at.env, person)]
   if (view == 'people') return [dir.people(walk), dir.admits(walk)]
   if (view == 'operator') {
     return [
@@ -475,12 +486,23 @@ let desk = async (
     void trackedIn(env, space, who, true).catch(() => {})
   }
   let shelved = dir.apps(space).then((apps) => shelf(apps, space, who))
+  // Whether an agent is connected, for the pages that say how to make an app
+  // with one. They are drawn with it only if it is in hand once everything
+  // else is, since the provider's first read of a person's grants takes
+  // longer than the rest of the page (T-149703), and the page's script
+  // settles what depends on it (pages.ts `state`). A read that fails is
+  // reported and left to the script too.
+  let agents = view == 'apps' || view == 'new'
+    ? agentsOf(env, owner).catch((e) => {
+      caught(e, { request: 'read agents', space: space.slug })
+      return undefined
+    })
+    : undefined
   let [
     { here, all },
     broken,
     views,
     fee,
-    agents,
     people,
     connections,
     picks,
@@ -509,11 +531,6 @@ let desk = async (
       ? shelved.then(({ all }) => all.length ? visits(env, all) : undefined)
       : undefined,
     feeOf(dir),
-    // Whether an agent is connected, for the pages that say how to make an
-    // app with one.
-    view == 'apps' || view == 'new'
-      ? identity().then((part) => part.agents(env, owner))
-      : undefined,
     // Who is in the space and its apps (people.ts), read only for the page
     // that shows it.
     view == 'people'
@@ -555,6 +572,7 @@ let desk = async (
       : undefined,
     payments(env),
   ])
+  let known = await inHand(agents)
   let page = deskPage({
     views,
     viewDays: DAYS,
@@ -595,7 +613,7 @@ let desk = async (
       }
       : undefined,
     fee: rate(fee),
-    agents,
+    agents: known,
     people: people?.[0],
     operators: people?.[1].map((r) => ({
       eid: r.space.eid,
@@ -649,7 +667,7 @@ let mine = async (
     dir.seats(person).then((seats) => pickable(dir, seats)),
     dir.nameAt(person),
     view == 'profile' ? dir.emailAt(person) : undefined,
-    view == 'agents' ? identity().then((part) => part.agents(env, person)) : [],
+    view == 'agents' ? agentsOf(env, person) : [],
     view == 'shared' ? shared(dir, person) : undefined,
     view == 'invite' ? invitation(env, dir, person) : undefined,
     dir.own(person),

@@ -1,9 +1,10 @@
 // Connected agents are a view of the OAuth provider's surviving grants.
-// Callback hosts identify web clients; local and older clients use their
-// registered names. Multiple installations of one agent share one entry.
-// A grant a re-authorization replaces is revoked here too, once the new one
-// is in the client's hands (`replace`), and the person disconnects an entry
-// by revoking the grants it stands for (`disconnect`).
+// Callback hosts identify web clients; local and older clients use the name
+// their grant kept at consent, else their registered one. Multiple
+// installations of one agent share one entry. A grant a re-authorization
+// replaces is revoked here too, once the new one is in the client's hands
+// (`replace`), and the person disconnects an entry by revoking the grants it
+// stands for (`disconnect`).
 //
 // A service that signs in the way an agent does is not one: Zapier holds a
 // yaks.app grant as a space holds a Google Calendar token, so its grant is a
@@ -100,9 +101,14 @@ let callback = (uri: string | undefined) => {
   return {}
 }
 
+/** What a grant keeps of its client (identity.ts `consent`): the name the
+ * person saw on the consent card, so listing it reads no registration. */
+export type Kept = { client?: string }
+
 // Which listed agent a grant stands for, or nothing: a service's grant
-// (`servicesOf`) and one whose registration is gone are no agent. Each
-// client is looked up once however many grants it holds.
+// (`servicesOf`) and one whose registration is gone are no agent. A grant
+// that kept its client's name is named by it; any other looks its client up,
+// once however many grants it holds.
 let identifier = (oauth: Pick<Clients, 'lookupClient'>) => {
   let clients = new Map<string, Promise<ClientInfo | null | undefined>>()
   let lookup = (id: string) => {
@@ -110,22 +116,43 @@ let identifier = (oauth: Pick<Clients, 'lookupClient'>) => {
     clients.set(id, client)
     return client
   }
-  return async (grant: Pick<GrantSummary, 'clientId' | 'redirectUri'>) => {
+  let nameOf = async (
+    grant: Pick<GrantSummary, 'clientId' | 'metadata'>,
+  ): Promise<string | undefined | null> => {
+    let kept = (grant.metadata as Kept | undefined)?.client
+    if (typeof kept == 'string') return kept
+    let client = await lookup(grant.clientId)
+    return client === null ? null : client?.clientName
+  }
+  return async (
+    grant: Pick<GrantSummary, 'clientId' | 'redirectUri' | 'metadata'>,
+  ) => {
     if (serviceOf(grant.redirectUri)) return
     let host = callback(grant.redirectUri)
     let brand = host.brand
-    let client: ClientInfo | null | undefined
+    let name: string | undefined | null
     if (!brand) {
-      client = await lookup(grant.clientId)
-      if (client === null) return
-      if (host.local) brand = named(client?.clientName)
+      name = await nameOf(grant)
+      if (name === null) return
+      if (host.local) brand = named(name)
     }
     return {
       id: brand ?? grant.clientId,
-      name: brand ? names[brand] : client?.clientName?.trim() || 'Other agent',
+      name: brand ? names[brand] : name?.trim() || 'Other agent',
       ...(brand ? { brand } : {}),
     }
   }
+}
+
+// Each grant still standing beside the agent it stands for, if any: every
+// one identified at once, rather than each after the one before.
+let identified = async (oauth: Clients, person: string, now: number) => {
+  let which = identifier(oauth)
+  let grants: GrantSummary[] = []
+  for await (let grant of live(oauth, person, now)) grants.push(grant)
+  return Promise.all(
+    grants.map(async (grant) => ({ grant, agent: await which(grant) })),
+  )
 }
 
 export let agentsOf = async (
@@ -133,10 +160,8 @@ export let agentsOf = async (
   person: string,
   now = Math.floor(Date.now() / 1000),
 ): Promise<Agent[]> => {
-  let which = identifier(oauth)
   let found = new Map<string, Agent>()
-  for await (let grant of live(oauth, person, now)) {
-    let agent = await which(grant)
+  for (let { grant, agent } of await identified(oauth, person, now)) {
     if (!agent) continue
     let previous = found.get(agent.id)
     found.set(agent.id, {
@@ -160,11 +185,8 @@ export let disconnect = async (
   person: string,
   agent: string,
 ) => {
-  let which = identifier(oauth)
-  let gone: string[] = []
-  for await (let grant of live(oauth, person, 0)) {
-    if ((await which(grant))?.id == agent) gone.push(grant.id)
-  }
+  let gone = (await identified(oauth, person, 0))
+    .filter((g) => g.agent?.id == agent).map((g) => g.grant.id)
   await Promise.all(gone.map((id) => oauth.revokeGrant(id, person)))
   return gone
 }

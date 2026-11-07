@@ -1,12 +1,14 @@
 // The component updates its own rows and what shows while any agent is
 // connected, preserves form state, and never trusts names or remote link
 // destinations.
-import { test } from '@yaks/testing'
+import { test, until } from '@yaks/testing'
 import { assert, assertEquals } from '@std/assert'
 import { parseHTML } from 'linkedom'
 import type { Agent } from './connected.ts'
+import { h } from 'preact'
 import { renderToString } from 'preact-render-to-string'
 import { agentList, agentLive } from './connected_ui.ts'
+import { state } from './pages.ts'
 
 // The list as the page it is on is sent.
 let html = (...a: Parameters<typeof agentList>) =>
@@ -30,13 +32,20 @@ let script = new Function(
   ),
 )
 
+// A part shown while an agent is connected or while none is, as the page
+// draws it from what it knew (pages.ts `state`).
+let part = (connected: boolean, agents?: Agent[], text = '') =>
+  renderToString(h('p', state(connected, agents), text))
+
 let mount = (
   initial: Agent[] = [],
   view: 'rows' | 'links' | false = 'rows',
+  drawn: 'known' | 'unknown' = 'known',
 ) => {
+  let known = drawn == 'known' ? initial : undefined
   let { document } = parseHTML(`<html><body>
-<p data-disconnected${initial.length ? ' hidden' : ''}>Connect your agent</p>
-<p data-connected${initial.length ? '' : ' hidden'}>Your agents</p>
+${part(false, known, 'Connect your agent')}
+${part(true, known, 'Your agents')}
 <div><input value="draft"></div>
 ${view ? html(initial, view, '/manage/connect') : ''}
 </body></html>`)
@@ -271,5 +280,21 @@ test('connected state refreshes without an agent list or row template', async ()
       assertEquals(m.document.querySelector('[data-agent-row]'), null)
       assert(m.document.querySelector('input') === draft)
     }
+  }
+})
+
+test('a page drawn before its agents were known settles them as it loads', async () => {
+  for (let agents of [[], [chatgpt]]) {
+    let m = mount(agents, 'links', 'unknown')
+    let shown = () =>
+      [...m.document.querySelectorAll<HTMLElement>('p')]
+        .filter((p) => !p.hidden).map((p) => p.textContent)
+    assertEquals(shown(), [])
+    await until(() => shown().length, { poll: 0 })
+    assertEquals(shown(), [
+      agents.length ? 'Your agents' : 'Connect your agent',
+    ])
+    assertEquals(m.calls.length, 1)
+    assertEquals(m.document.querySelector('[data-unsettled]'), null)
   }
 })

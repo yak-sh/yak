@@ -137,6 +137,26 @@ test('agents: unknown registered clients stay visible; missing clients do not', 
   ])
 })
 
+test('agents: a grant that kept its client name reads no registration', async () => {
+  let p = provider([[
+    grant('code', {
+      redirectUri: 'http://localhost:1234/callback',
+      metadata: { client: 'Claude Code' },
+    }),
+    grant('custom', { metadata: { client: 'My agent' } }),
+  ]], { code: 'Renamed', custom: 'Renamed' })
+  assertEquals(await agentsOf(p.oauth, 'person'), [
+    {
+      id: 'claude-code',
+      brand: 'claude-code',
+      name: 'Claude Code',
+      connectedAt: 10,
+    },
+    { id: 'custom', name: 'My agent', connectedAt: 10 },
+  ])
+  assertEquals(p.looked, [])
+})
+
 test('agents: unavailable metadata retains its grant without hiding other agents', async () => {
   let p = provider([[
     grant('https://unavailable.test/client.json'),
