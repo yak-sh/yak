@@ -416,11 +416,13 @@ export let directoryDoc: VocabDoc = {
     },
     // A space's monthly dollar budget for models and voice, in place of its
     // plan's (meter.ts `limitOf`). Stamped, and written only by the platform
-    // owner's door (budget.ts), for the reason the fee is.
+    // owner's door (budget.ts), for the reason the fee is, and by a
+    // newcomer's start (newcomer.ts `oneBuild`), whose budget is one build's
+    // and says so (`newcomer`) until keeping it lifts the budget whole.
     budget: {
       component: true,
       type: 'object',
-      properties: { dollars: owned(num) },
+      properties: { dollars: owned(num), newcomer: owned(bool) },
     },
     // The dollars a space holds once, before its monthly budget, where it
     // holds other than meter.ts `STARTER`: none on a person's later spaces

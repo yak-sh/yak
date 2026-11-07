@@ -9,7 +9,7 @@ import { cleanup, test } from '@yaks/testing'
 import type { Tool } from '@yaks/graph'
 import { fresh } from './probe.ts'
 import type { Env } from './env.ts'
-import { limitOf } from './meter.ts'
+import { atCeiling, limitOf, unaffordable, UNKEPT } from './meter.ts'
 import {
   BUILDING,
   confined,
@@ -103,6 +103,13 @@ test("a stranger's idea opens a space of their own, signed in, in its chat", () 
 test("a newcomer's space holds one build's dollars and no starter", () => {
   assertEquals(space.budget, PER_BUILD)
   assertEquals(limitOf(space), PER_BUILD)
+})
+
+test("a newcomer's build at its budget asks for their email, not a plan", () => {
+  assertEquals(unaffordable(space, 'models', PER_BUILD + 1), UNKEPT)
+  assertEquals(atCeiling(space, 'models'), UNKEPT)
+  assertEquals(atCeiling(space, 'seconds').includes('Plus plan'), true)
+  assertEquals(unaffordable(kept, 'models', 1e6)?.includes('Plus plan'), true)
 })
 
 test('a newcomer is a person with no address yet', async () => {

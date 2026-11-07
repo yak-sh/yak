@@ -164,13 +164,14 @@ export let counted = async (env: Env, source: string, now = new Date()) => {
   }
 }
 
-/** A newcomer's space, held to one build's dollars: its budget is PER_BUILD
- * and it holds no starter. */
+/** A newcomer's space, held to one build's dollars: its budget is PER_BUILD,
+ * said to be a newcomer's so its refusals ask for their email (meter.ts
+ * `unkept`), and it holds no starter. */
 export let oneBuild = (env: Env, space: Space) =>
   stamp(env, {
     entities: [{
       entity: { eid: space.eid },
-      budget: { dollars: PER_BUILD },
+      budget: { dollars: PER_BUILD, newcomer: true },
       starter: { dollars: 0 },
     }],
   })

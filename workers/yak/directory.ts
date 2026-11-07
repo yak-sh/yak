@@ -318,6 +318,10 @@ export type Space = {
   // platform's owner set one (budget.ts), in place of its plan's (meter.ts
   // `BUDGET`). Null on every space nobody has given one, which is almost all.
   budget: number | null
+  // Whether that budget is a newcomer's one build (newcomer.ts `oneBuild`):
+  // what lifts it is keeping the app, so its refusals ask for their email
+  // rather than offering a plan (meter.ts `unkept`).
+  newcomer?: boolean
   // The dollars this space holds once, before its monthly budget, where it
   // holds other than meter.ts `STARTER`: none for a person's later spaces
   // (`mint`). Absent on almost every space.
@@ -719,7 +723,7 @@ export type Row = {
     from_bookmark?: string | null
   }
   fee?: { bps?: number | null }
-  budget?: { dollars?: number | null }
+  budget?: { dollars?: number | null; newcomer?: boolean | null }
   space_logo?: { sha?: string | null; type?: string | null }
   operator?: {
     name?: string | null
@@ -1269,6 +1273,7 @@ export let spaceOf = (r: Row): Space => ({
   seller: sellerOf(r),
   fee: r.fee?.bps ?? 0,
   budget: r.budget?.dollars ?? null,
+  newcomer: !!r.budget?.newcomer,
   starter: r.starter?.dollars ?? null,
   visitors: r.visitor_share?.percent ?? null,
   visitorCalls: r.visitor_share?.calls ?? null,

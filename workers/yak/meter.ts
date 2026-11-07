@@ -360,6 +360,7 @@ export let unaffordable = (
       `them this month, so it cannot answer you now. It answers visitors ` +
       `again on the 1st`
   }
+  if (space.newcomer) return UNKEPT
   let { spent, limit } = budget(space, now)
   return spent >= limit
     ? atCeiling(space, what)
@@ -661,6 +662,7 @@ export let atCeiling = (
   what: 'apps' | Spend,
   env: Host = {},
 ) => {
+  if (space.newcomer && what != 'apps' && budgeted(what)) return UNKEPT
   let free = ceilings(space.tier, space.slug)!
   let tier = space.tier ?? 'free'
   // Comped spaces can hit the letter/build allowances, not the app ceiling.
@@ -711,6 +713,14 @@ export let atCeiling = (
   }[what]()
   return `${said}. ${plans(space, env)}`
 }
+
+// What stops a newcomer's build at its budget, spent or too little for the
+// next call: their space holds one build (newcomer.ts `oneBuild`), and what
+// lifts it is giving their email in the card above their chat (operator-page.ts
+// `keepCard`, newcomer.ts `keep`), not a plan they have no way to buy yet.
+export let UNKEPT = `This free build has used what it can before you keep ` +
+  `it. Give your email in the card above this chat to keep this app and ` +
+  `keep building, free`
 
 // Where every refusal ends: the page that describes the plans.
 export let plans = (space: Space, env: Host) =>
