@@ -26,7 +26,7 @@ export let DEMO = `yourname${BOT}`
 
 // An address we cannot see is not proof, so it reads as somebody's: the safe
 // direction to be wrong in.
-export let isTestAddress = (address: string) =>
+export let isTestAddress = (address: string): boolean =>
   (address.endsWith(BOT) && address != ADMIN && address != DEMO) ||
   address.endsWith('.invalid')
 
@@ -35,5 +35,5 @@ type Arrived = Request & { cf?: { verifiedBotCategory?: string } }
 
 // Unverified reads as a person, the same safe direction: a request with no
 // `cf` came from inside, and a bot Cloudflare could not verify is let through.
-export let isVerifiedBot = (req: Request) =>
+export let isVerifiedBot = (req: Request): boolean =>
   !!(req as Arrived).cf?.verifiedBotCategory

@@ -4,7 +4,10 @@
 export let COOKIE = 'yak_session'
 
 // One cookie's value out of a Cookie header, or null.
-export let cookieValue = (header: string | null, name = COOKIE) => {
+export let cookieValue = (
+  header: string | null,
+  name = COOKIE,
+): string | null => {
   for (let part of (header ?? '').split(';')) {
     let [k, ...v] = part.trim().split('=')
     if (k == name) return v.join('=')
