@@ -585,10 +585,14 @@ export class Builder {
       let operator = operating(store, this.#env, {
         tools: attachmentTools(this.#env),
         browsers: this.#lent,
-        tell: (session) =>
+        tell: (session) => {
           void frames.tell(session).catch((e) =>
             caught(e, { request: 'operator socket' })
-          ),
+          )
+          void import('./operator-calls.ts').then(({ moved }) =>
+            moved(store, session)
+          ).catch((e) => caught(e, { request: 'operator call' }))
+        },
         typing: (session, text) => {
           void frames.typing(session, text).catch((e) =>
             caught(e, { request: 'operator socket' })

@@ -313,6 +313,15 @@ export let OPENAI: Provider = {
         },
       }),
     cancel: JSON.stringify({ type: 'response.cancel' }),
+    tell: (text) =>
+      JSON.stringify({
+        type: 'conversation.item.create',
+        item: {
+          type: 'message',
+          role: 'system',
+          content: [{ type: 'input_text', text }],
+        },
+      }),
   },
 }
 

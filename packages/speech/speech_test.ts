@@ -321,6 +321,23 @@ test('a tool the model asks for is answered with its output, and it goes on', as
   ])
 })
 
+test('what the model is told mid-stream is a note it reads, asking no response', () => {
+  let { s, stream } = talking(() => Promise.resolve(''))
+  s.fire('open')
+  stream.tell('You are building the recipe app.')
+  equal(s.json().slice(1), [{
+    type: 'conversation.item.create',
+    item: {
+      type: 'message',
+      role: 'system',
+      content: [{
+        type: 'input_text',
+        text: 'You are building the recipe app.',
+      }],
+    },
+  }])
+})
+
 test('a response asked for while one is under way waits for it to be done', async () => {
   let { s, stream, event } = talking(() => Promise.resolve('Booked.'))
   s.fire('open')

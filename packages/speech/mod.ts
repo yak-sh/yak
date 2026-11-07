@@ -157,6 +157,9 @@ export type Provider = {
     respond: (text?: string) => string
     /** what stops the response under way */
     cancel: string
+    /** something the model is told mid-stream, for what it says next,
+     * answered by nothing */
+    tell: (text: string) => string
   }
   /** the account's credit left, in dollars, where the provider says */
   balance?: (ask: Ask) => Promise<number>
@@ -498,6 +501,8 @@ export type Talk = {
   send: (audio: Uint8Array) => void
   /** ask the model to say `text` */
   say: (text: string) => void
+  /** tell the model something it knows from now on, saying nothing of it */
+  tell: (text: string) => void
   /** the seconds heard so far, and what the stream cost */
   spent: () => { seconds: number; dollars: number }
   /** end the stream; what it cost */
@@ -627,6 +632,9 @@ export let talk = (
       s.send(t.audio(audio))
     },
     say: (text) => ask(t.respond(text)),
+    tell: (text) => {
+      if (!s.closed()) s.send(t.tell(text))
+    },
     spent: () => ({ seconds: bytes / perSecond(o.format)!, dollars }),
     close: () => {
       s.close()

@@ -41,7 +41,8 @@ argument; nothing here reads the environment.
   `told.heard` and `told.said` are each side's words, and
   `told.call(name, args)` answers a tool the model asked for with its output,
   before it goes on, and `told.done()` ends each of its responses. `say(text)`
-  asks it to say something; `spent()` answers the seconds heard and what the
+  asks it to say something, and `tell(text)` tells it something it knows from
+  now on without answering it; `spent()` answers the seconds heard and what the
   stream cost so far, and `close()` ends it answering the same, each response
   priced at its model's rates, or the stream's when it names none. A provider
   without `talk` refuses.

@@ -543,7 +543,7 @@ let talkingCall = (real = false, given: Partial<Talking> = {}) => {
   }
   let told!: Talked
   let heard: Uint8Array[] = [], said: string[] = [], asked: string[] = []
-  let noted: [string, boolean][] = []
+  let noted: [string, boolean][] = [], known: string[] = []
   let done: Parameters<Around['done']>[0][] = []
   // The realtime stream's socket: what was sent on it, and its messages.
   let stream: Record<string, ((e: { data?: unknown }) => void)[]> = {}
@@ -572,6 +572,7 @@ let talkingCall = (real = false, given: Partial<Talking> = {}) => {
       return {
         send: (audio) => void heard.push(audio),
         say: (text) => void said.push(text),
+        tell: (text) => void known.push(text),
         spent: () => ({ seconds: 1, dollars: 0.25 }),
         close: () => ({ seconds: 1, dollars: 0.25 }),
       }
@@ -611,6 +612,7 @@ let talkingCall = (real = false, given: Partial<Talking> = {}) => {
     said,
     asked,
     noted,
+    known,
     done,
     frame,
     played,
@@ -686,6 +688,56 @@ test('a talking model hears the call, asks the Operator, and says its answer', a
   let [turn] = c.done[0].turns
   // The words before the Operator answered were its acknowledgement.
   equal(turn.first! <= turn.answer!, true)
+})
+
+test('a talking model is told the conversation and the work as the call starts, the work again only once it changed, and answers status with its tools without asking the Operator', async () => {
+  let time = clock()
+  let work = 'Building the recipe box.'
+  let failures: unknown[] = []
+  let c = talkingCall(false, {
+    time,
+    glance: {
+      recent: () => Promise.resolve('They asked for a recipe box.'),
+      work: () => Promise.resolve(work),
+    },
+    looks: [
+      {
+        name: 'apps',
+        description: 'Their apps.',
+        parameters: {},
+        read: () => Promise.resolve('home/recipes'),
+      },
+      {
+        name: 'updates',
+        description: 'Their Updates.',
+        parameters: {},
+        read: () => Promise.reject(new Error('the inbox is gone')),
+      },
+    ],
+    report: (e) => void failures.push(e),
+  })
+  await until(() => c.known.length == 1)
+  equal(c.known, ['They asked for a recipe box.\n\nBuilding the recipe box.'])
+  // Moves that leave the work as it was tell nothing.
+  c.call.moved()
+  c.call.moved()
+  await time.advance(2000)
+  equal(c.known.length, 1)
+  work = 'Built the recipe box.'
+  c.call.moved()
+  await time.advance(2000)
+  await until(() => c.known.length == 2)
+  equal(c.known[1], 'Built the recipe box.')
+  equal(await c.told().call('apps', '{}'), 'home/recipes')
+  // A lookup that fails is reported, and the caller told it failed on our side.
+  equal(
+    (await c.told().call('updates', '{}')).startsWith('That failed'),
+    true,
+  )
+  equal(failures.map((e) => (e as Error).message), ['the inbox is gone'])
+  equal(c.asked, [])
+  c.frame({ event: 'stop' })
+  await c.call.ended
 })
 
 test("a recorded call is the caller's conversation: their words theirs, its voice's the Operator's own, and what its voice asked folded behind a mark", async () => {

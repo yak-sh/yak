@@ -26,6 +26,7 @@ import {
   type Helper,
   helperFrame,
   type Names,
+  now,
   type Offers,
   stateOf,
   talk,
@@ -297,6 +298,57 @@ let whose = async (session: Bundle, named: Named) =>
       'someone'
   }`
 
+// A helper the Operator started, as its work is listed, and its newest lines.
+let helperOf = async (store: Store, helper: Bundle) => {
+  let eid = helper.entity.eid
+  let lines = await linesOf(store, eid, TAIL)
+  let state = stateOf(lines, true)
+  let worked: Worked = {
+    open: eid,
+    title: askedOf(await openingOf(store, eid)),
+    state,
+    at: String(
+      comp(lines.at(-1), 'created')?.at ?? comp(helper, 'created')?.at ?? '',
+    ),
+    busy: busy(state),
+  }
+  return { worked, lines }
+}
+
+/** A piece of work as `helpingOf` tells it: while it works, the step under
+ * way and the newest words it wrote. */
+export type Helping = Worked & { now?: string; wrote?: string }
+
+/**
+ * The work a person's conversation set going, newest first, at most `most`:
+ * each helper as `workOf` lists it and, while it works, the step under way
+ * (operator-view.ts `now`) and the newest words it wrote, how far it got. A
+ * call's voice is told it (operator-glance.ts).
+ */
+export let helpingOf = async (
+  store: Store,
+  space: string,
+  person: string,
+  most = 8,
+  named: Named = nameless,
+): Promise<Helping[]> => {
+  let helpers = await store.g.read(
+    `.spawned.parent=${
+      rootOf(space, person)
+    } ?created .order=-created.at .limit=${most}`,
+  )
+  return await Promise.all(helpers.map(async (helper) => {
+    let { worked, lines } = await helperOf(store, helper)
+    if (!worked.busy) return worked
+    let wrote = lines.findLast((b) => b.output && !b.notice && b.content)
+    return {
+      ...worked,
+      now: now(lines, await namesOf(store, lines, named)),
+      ...wrote ? { wrote: String(comp(wrote, 'content')!.body) } : {},
+    }
+  }))
+}
+
 /**
  * The Operator's work for `person`, as its conversations are listed
  * (operator-view.ts `worked`, `talks`): their conversation first, then,
@@ -346,21 +398,10 @@ export let workOf = async (
     }
   }))
   let titles = new Map(conversations.map((c) => [c.root, c.title]))
-  let work = await Promise.all(helpers.map(async (helper) => {
-    let eid = helper.entity.eid
-    let lines = await linesOf(store, eid, TAIL)
-    let state = stateOf(lines, true)
-    return {
-      open: eid,
-      title: askedOf(await openingOf(store, eid)),
-      state,
-      at: String(
-        comp(lines.at(-1), 'created')?.at ?? comp(helper, 'created')?.at ?? '',
-      ),
-      busy: busy(state),
-      from: titles.get(String(comp(helper, 'spawned')?.parent)),
-    }
-  }))
+  let work = await Promise.all(helpers.map(async (helper) => ({
+    ...(await helperOf(store, helper)).worked,
+    from: titles.get(String(comp(helper, 'spawned')?.parent)),
+  })))
   let waiting = taken(await own(requests)).map((r) => {
     let failed = r.failed ?? r.bounced
     return {

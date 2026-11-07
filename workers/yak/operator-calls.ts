@@ -53,6 +53,7 @@ import {
 import type { Operator } from './operator.ts'
 import { ownerOf } from './operator-access.ts'
 import { receive, requestId } from './operator-channels.ts'
+import { glanceOf, type Look, looks } from './operator-glance.ts'
 import { SPACE } from './build.ts'
 
 /** The longest a call lasts, in minutes. */
@@ -258,6 +259,9 @@ export type Call = {
   answered: (text: string) => void
   /** whether the caller is waiting on an answer */
   waiting: () => boolean
+  /** the Operator's work for the caller moved: what the call knows of it is
+   * read again */
+  moved: () => void
   /** the call ended */
   ended: Promise<void>
 }
@@ -314,6 +318,11 @@ export type Talk = Around & {
 /** A call a model hears and speaks itself, asking the Operator. */
 export type Talking = Around & {
   talk: (told: Talked) => Talker
+  /** its status tools beside `ask`, each answered by reading */
+  looks?: Look[]
+  /** what it is told of the Operator as the call starts, and again whenever
+   * the Operator's work moves, when that changed (operator-glance.ts) */
+  glance?: { recent: () => Promise<string>; work: () => Promise<string> }
   /** each line said on the call, the caller's or (`said`) the model's, for
    * their conversation, settled once it is kept there */
   note: (text: string, said: boolean) => Promise<void>
@@ -332,6 +341,10 @@ export let ACKS = [
   'Just a moment, please.',
   'Bear with me.',
 ]
+
+// How long a talking model's call waits, once the Operator's work moved,
+// before reading it again: the steps of a burst are told as one.
+let GLANCED = 2000
 
 // How long a caller hears nothing after their turn before an
 // acknowledgement fills it: a quick answer comes with none.
@@ -604,6 +617,7 @@ export let converse = (o: Talk): Call => {
       asked = streamed = false
     },
     waiting: () => asked,
+    moved: () => {},
     ended: c.ended,
   }
 }
@@ -613,7 +627,7 @@ export let converse = (o: Talk): Call => {
 export let ASK = {
   name: 'ask',
   description:
-    'Ask the Operator, who has every tool, the conversation so far and the person’s apps, messages and memory, for something the person asked with content: something done, found, remembered or changed, or a question you cannot answer yourself. Never for a filler, an acknowledgement, a laugh, a reaction or remark, half a sentence, or words that make no sense where they fall: those you answer yourself or let pass. Give their request in their own words, with anything said earlier that it depends on. It answers with what to tell them.',
+    'Ask the Operator, who has every tool, the conversation so far and the person’s apps, messages and memory, for something the person asked with content: something done, found, remembered or changed, or a question that what you were told and your status tools do not answer. Never for a filler, an acknowledgement, a laugh, a reaction or remark, half a sentence, or words that make no sense where they fall: those you answer yourself or let pass. Give their request in their own words, with anything said earlier that it depends on. It answers with what to tell them.',
   parameters: {
     type: 'object',
     properties: {
@@ -629,7 +643,7 @@ export let ASK = {
 /** What a talking model is told: who it is, how it sounds, and that the
  * Operator, through `ask`, does the work. */
 export let instructed = (name: string) =>
-  `You are ${name}, a person's Operator on yaks.app, on the phone with them. Speak like a refined British butler: cool, calm, professional, and brisk: a sentence or two, each short, in plain speech. Most of what a caller says is not a request, and you answer it yourself, never with the ask tool: greetings, thanks, goodbyes and small talk; fillers and hesitations such as um, uh, oh or hm; acknowledgements such as okay, yep, right, cool or got it; a laugh; a reaction or remark such as "that's odd" or "we still have work to do"; and half a sentence they have not finished. To these say a word or two, or nothing and let them go on, and never ask what they meant. Words that make no sense where they fall, such as "one" or "under the sink", are the room or the line: let them pass. While you wait for an answer, an okay or a hum needs nothing from you. Only when they ask for something with content does it go to the ask tool, at once, with their request in their own words: anything they want done, found, remembered or changed, and any question about their apps, messages, accounts, work, what was said before, or what you can do for them. Through it you can do anything they could ask of you in writing, so never say you cannot do something or have no tools: ask. Call it without a word first when the answer should come quickly. Only when it will plainly take a while, such as building or changing something, say a few words first, never the same ones twice in a row, and never speak of the tool or of anyone else doing the work. Then say what it answers, in your own voice, as briefly as it allows. Never guess what the tool would know.`
+  `You are ${name}, a person's Operator on yaks.app, on the phone with them. Speak like a refined British butler: cool, calm, professional, and brisk: a sentence or two, each short, in plain speech. Most of what a caller says is not a request, and you answer it yourself, never with the ask tool: greetings, thanks, goodbyes and small talk; fillers and hesitations such as um, uh, oh or hm; acknowledgements such as okay, yep, right, cool or got it; a laugh; a reaction or remark such as "that's odd" or "we still have work to do"; and half a sentence they have not finished. To these say a word or two, or nothing and let them go on, and never ask what they meant. Words that make no sense where they fall, such as "one" or "under the sink", are the room or the line: let them pass. While you wait for an answer, an okay or a hum needs nothing from you. You are told the newest of your conversation with them and the work you have going for them, and told the work again as it moves; your status tools (work, updates, apps, conversation) look up how things stand. A question about how things stand, such as what you are working on and how far it got, whether anything needs them, which apps they have, or what was said before, you answer yourself from what you were told or a status tool, at once, as nothing more than what they say. Anything else they ask with content goes to the ask tool, at once, with their request in their own words: anything they want done, found, remembered or changed, and any question your notes and status tools do not answer. Never do anything yourself: whatever is done is done through ask. Through it you can do anything they could ask of you in writing, so never say you cannot do something or have no tools: ask. Call it without a word first when the answer should come quickly. Only when it will plainly take a while, such as building or changing something, say a few words first, never the same ones twice in a row, and never speak of the tool or of anyone else doing the work. Then say what it answers, in your own voice, as briefly as it allows. Never guess what the tool would know.`
 
 /**
  * One call's conversation with a model that hears and speaks itself: the
@@ -661,6 +675,7 @@ export let talking = (o: Talking): Call => {
     },
   )
   let asking = false
+  let looks = new Map((o.looks ?? []).map((l) => [l.name, l]))
   talker = o.talk({
     over: () => c.clear(),
     stopped: () => c.stopped(),
@@ -669,6 +684,13 @@ export let talking = (o: Talking): Call => {
     done: () => void keep(),
     audio: (bytes) => c.play(bytes, !asking),
     call: async (name, args) => {
+      let look = looks.get(name)
+      if (look) {
+        return await look.read().catch((error) => {
+          c.report(error)
+          return FAILED
+        })
+      }
       if (name != ASK.name) return `There is no tool called ${name}.`
       let { request } = JSON.parse(args) as { request?: string }
       c.acked()
@@ -694,9 +716,34 @@ export let talking = (o: Talking): Call => {
   })
   c.limit(() => talker?.say(GOODBYE))
   if (o.hello) talker.say(o.hello)
+  // What it knows of the Operator: the conversation and the work as the
+  // call starts, then the work again a moment after it moves, when what it
+  // says changed.
+  let known = '', glancing = false
+  let work = () =>
+    o.glance!.work().then((text) => {
+      let told = text != known && !c.over()
+      known = text
+      return told ? text : ''
+    })
+  let tell = (texts: Promise<string>[]) =>
+    Promise.all(texts).then((told) => {
+      let text = told.filter(Boolean).join('\n\n')
+      if (text && !c.over()) talker?.tell(text)
+    }).catch(c.report)
+  if (o.glance) tell([o.glance.recent(), work()])
+  let moved = () => {
+    if (!o.glance || glancing || c.over()) return
+    glancing = true
+    c.later(GLANCED, () => {
+      glancing = false
+      tell([work()])
+    })
+  }
   return {
     typed: () => {},
     paused: () => {},
+    moved,
     answered: (text) => {
       let next = pending.shift()
       asking = pending.length > 0
@@ -737,6 +784,17 @@ export let typed = async (
   session: string,
   text: string,
 ) => (await waitingOn(store, session))?.typed(text)
+
+/** An Operator session moved (a step landed, words were given): the call
+ * its person is on, if any, reads the Operator's work again. */
+export let moved = async (
+  store: Parameters<typeof ownerOf>[0],
+  session: string,
+) => {
+  if (!live.size) return
+  let owner = await ownerOf(store, session)
+  if (owner) callOf(owner.space, owner.person)?.moved()
+}
 
 /** An Operator session's model ended a step, such as before a tool call:
  * what it wrote is said on the call waiting on it now. */
@@ -878,9 +936,18 @@ export let answering = async (
       })
     ).catch((e) => defect(e, CALL))
   if (setup.talks && opens.began) note('', { began: true })
+  let glance = {
+    store: operator.store,
+    space: space.eid,
+    person: ticket.person,
+    dir: directoryOf(env.STORE),
+  }
+  let looked = looks(glance)
   let call: Call = setup.talks
     ? talking({
       ...around,
+      looks: looked,
+      glance: glanceOf(glance),
       // Behind a talking model the Operator answers with the fastest model.
       ask: asking(CALL_MODELS[0], ticket.call),
       note: (text, said) => note(text, { said }),
@@ -892,7 +959,7 @@ export let answering = async (
           voice: setup.voice,
           speed: setup.speed,
           instructions: instructed(space.operator ?? 'the Operator'),
-          tools: [ASK],
+          tools: [ASK, ...looked.map(({ read: _, ...tool }) => tool)],
           told,
           open: upgraded,
         }),

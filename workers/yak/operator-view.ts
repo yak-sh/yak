@@ -647,6 +647,76 @@ let asked = (entries: Bundle[]) => {
   return inside
 }
 
+/**
+ * A conversation's words as plain lines, for a reader that hears rather than
+ * sees it (a call's voice, operator-glance.ts): each of the person's words
+ * and each of the Operator's replies, oldest first, with when, who and how
+ * it came. What a call's voice asked inside its turns is left out, what was
+ * said aloud on the call standing for it, as are helpers' reports and the
+ * platform's words.
+ *
+ * ```ts
+ * import { equal } from '@yaks/testing'
+ * import { HEARD, wordsOf } from './operator-view.ts'
+ * let at = '2026-11-06T21:04:00.000Z'
+ * let line = (seq: number, b: object) => ({
+ *   entity: { eid: `e${seq}` }, entry: { session: 's', seq },
+ *   created: { at }, ...b,
+ * })
+ * equal(wordsOf([
+ *   line(1, {
+ *     content: { body: 'Build me a recipe box' },
+ *     operator_channel: { channel: 'text' },
+ *   }),
+ *   line(2, { output: {}, content: { body: 'On it.' } }),
+ *   line(3, {
+ *     notice: {}, operator_call: { call: 'c' },
+ *     operator_channel: { channel: 'voice', framing: HEARD },
+ *     content: { body: HEARD + 'Is it done?' },
+ *   }),
+ *   line(4, {
+ *     operator_call: { call: 'c', asked: true },
+ *     content: { body: 'Is the recipe box done?' },
+ *   }),
+ *   line(5, { output: {}, content: { body: 'Nearly.' } }),
+ *   line(6, {
+ *     notice: { own: true }, operator_call: { call: 'c', said: true },
+ *     content: { body: 'Nearly there.' },
+ *   }),
+ * ]), [
+ *   '6 Nov 2026, 21:04 UTC, they, by text: Build me a recipe box',
+ *   '6 Nov 2026, 21:04 UTC, you: On it.',
+ *   '6 Nov 2026, 21:04 UTC, they, by phone: Is it done?',
+ *   '6 Nov 2026, 21:04 UTC, you, by phone: Nearly there.',
+ * ])
+ * ```
+ */
+export let wordsOf = (entries: Bundle[]): string[] => {
+  let sorted = entries.toSorted((a, b) =>
+    Number(comp(a, 'entry')?.seq) - Number(comp(b, 'entry')?.seq)
+  )
+  let inside = asked(sorted)
+  return sorted.flatMap((b) => {
+    let body = String(comp(b, 'content')?.body ?? '')
+    let called = comp(b, 'operator_call')
+    if (!body || inside.has(b.entity.eid) || called?.began) return []
+    // A helper's report and the platform's own words are no one's speech.
+    if (told(b, body) || b.system) return []
+    let how = VIA[String(comp(b, 'operator_channel')?.channel)]?.[1]
+    let who = called?.said
+      ? 'you, by phone'
+      : b.output && !b.notice
+      ? 'you'
+      : (called && b.notice) || theirs(b)
+      ? `they${how ? `, ${how[0].toLowerCase()}${how.slice(1)}` : ''}`
+      : ''
+    let said = who.startsWith('they') ? spoken(b, body) : body
+    if (!who || !said) return []
+    let at = moment(String(comp(b, 'created')?.at ?? ''))
+    return [`${at ? `${at}, ` : ''}${who}: ${said}`]
+  })
+}
+
 // The exchange folded behind a small mark between what the caller said and
 // what they heard: their request and the Operator's work and answer.
 let Asked = ({ nodes }: { nodes: Node[] }) =>
