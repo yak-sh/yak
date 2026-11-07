@@ -1,26 +1,32 @@
-// bin/app-grep's pure seams: which keys are an app's files, which copies a
-// run gets and removes, and how a match reads. The bucket and rg are the
+// bin/app-grep's pure seams: what a run lists, which copies it gets, and how
+// a match reads. The bucket and rg are the
 // tool's own business.
 import { test } from '@yaks/testing'
 import { assertEquals } from '@std/assert'
-import { gone, isFile, isKept, shown, stale } from './app-grep.ts'
+import { isKept, isPlace, prefixes, shown, stale } from './app-grep.ts'
 
 let sha = 'a'.repeat(64)
 
-test('isFile: an app file, never an upload or the platform bytes', () => {
-  let cases: [string, boolean][] = [
-    ['yourname/recipes/index.html', true],
-    ['yourname/recipes/lib/app.js', true],
-    ['yourname/recipes/.well-known/settings.json', true],
-    [`.model-receipts/app-eid/${sha}`, false],
-    ['yourname/recipes/blobs/notes.js', true],
-    [`yourname/recipes/blobs/${sha}`, false],
-    [`sha/${sha}`, false],
-    [`git/${sha}`, false],
-    ['yourname/recipes/../x', false],
-    ['yourname//index.html', false],
+test('prefixes: the kept bytes and what each space indexes, never the platform', () => {
+  let top = ['.rosters/', '__packages/', 'git/', 'jeff/', 'sha/', 'yourname/']
+  let want = [
+    ...[...'0123456789abcdef'].map((h) => `sha/${h}`),
+    'jeff/.releases/',
+    'jeff/.declarations/',
+    'yourname/.releases/',
+    'yourname/.declarations/',
   ]
-  for (let [key, want] of cases) assertEquals(isFile(key), want, key)
+  assertEquals(prefixes(top), want)
+})
+
+test('isPlace: a key the mirror can hold below itself', () => {
+  let cases: [string, boolean][] = [
+    ['jeff/.releases/eid/r.json', true],
+    ['jeff/.releases/../x', false],
+    ['jeff/.releases//x', false],
+    ['jeff/.releases/./x', false],
+  ]
+  for (let [key, want] of cases) assertEquals(isPlace(key), want, key)
 })
 
 test('isKept: the bytes a kept version names, and nothing else', () => {
@@ -33,15 +39,21 @@ test('isKept: the bytes a kept version names, and nothing else', () => {
   for (let [key, want] of cases) assertEquals(isKept(key), want, key)
 })
 
-test('stale and gone: a run gets what moved and removes what left', () => {
+test('stale: a run gets what moved, and a kept key only when no copy is held', () => {
   let objs = [
     { key: 'a/b/same', etag: '1' },
     { key: 'a/b/moved', etag: '3' },
     { key: 'a/b/new', etag: '4' },
+    { key: `sha/${sha}`, etag: '5' },
+    { key: `sha/${'b'.repeat(64)}`, etag: '6' },
   ]
-  let had = { 'a/b/same': '1', 'a/b/moved': '2', 'a/b/left': '5' }
-  assertEquals(stale(objs, had).map((o) => o.key), ['a/b/moved', 'a/b/new'])
-  assertEquals(gone(objs, had), ['a/b/left'])
+  let had = { 'a/b/same': '1', 'a/b/moved': '2' }
+  let held = new Set(['a/b/same', 'a/b/moved', `sha/${sha}`])
+  assertEquals(stale(objs, had, held).map((o) => o.key), [
+    'a/b/moved',
+    'a/b/new',
+    `sha/${'b'.repeat(64)}`,
+  ])
 })
 
 test('shown: a match reads path:line: text', () => {
