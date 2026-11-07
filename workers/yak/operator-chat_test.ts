@@ -11,7 +11,7 @@ import { parseHTML } from 'linkedom'
 import { type Item, ModelError } from '@yaks/model'
 import { directoryOf } from './directory.ts'
 import { platform } from './testing.ts'
-import { operatorModel, operatorService } from './operator-testing.ts'
+import { operatorModel, operatorService, released } from './operator-testing.ts'
 import { receive, rootOf } from './operator-channels.ts'
 import { CONVERSATION } from './operator-host.ts'
 import { toolEid } from '@yaks/tools/result'
@@ -49,6 +49,12 @@ await directoryOf(p.env.STORE).apply({
 }, { 'x-yak-person': person, 'x-yak-role': 'owner' })
 let space = (await directoryOf(p.env.STORE).at(eid))!
 let who = { person, role: 'owner' as const, space: eid }
+// The one of their apps the person opens beside the chat.
+await released(
+  { env: p.env, dir: directoryOf(p.env.STORE), person },
+  'app1',
+  'Holdfast',
+)
 
 let call = (name: string, args: unknown): Item[] => [{
   kind: 'call',

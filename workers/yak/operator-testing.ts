@@ -19,6 +19,7 @@ import {
 } from './operator-host.ts'
 import { attachmentTools, handleChannels } from './operator-channels.ts'
 import { drain } from './operator-store.ts'
+import { type Ctx, TOOLS } from './tools.ts'
 
 // A test's Operator model, answered by whatever `answer` is when it is asked:
 // one Operator per store, its script changed between requests.
@@ -123,4 +124,18 @@ export let operatorService = (env: Env, held: Held, options: Options) => {
       await Promise.all(pending.splice(0))
     },
   }
+}
+
+/** An app the person made and released, as their Operator makes one
+ * (tools.ts `app_new`, `app_files`, `app_deploy`), for the chat to draw
+ * beside it. */
+export let released = async (ctx: Ctx, slug: string, title: string) => {
+  let run = (name: string, args: Record<string, unknown>) =>
+    TOOLS.find((t) => t.name == name)!.run(ctx, args)
+  await run('app_new', { slug, title })
+  await run('app_files', {
+    app: slug,
+    files: [{ path: 'index.html', content: `<h1>${title}</h1>` }],
+  })
+  await run('app_deploy', { app: slug })
 }

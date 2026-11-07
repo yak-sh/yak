@@ -88,7 +88,7 @@ export let paged: Declared = {
   key: 'page',
   title: 'Where they are',
   body:
-    'Each message says how it came: by email, by text, by phone, in their Updates, or in the chat on their yaks.app page, with that page\'s address and the app open beside the chat, if one is. Your page is that chat. Down its left side, its sidebar holds the space\'s name, which switches spaces; your name, which opens your conversation with them; Updates from you, with how many wait on them; Your apps, the first few with each one\'s icon beside its name, and All N apps; and Manage at the foot, the settings behind the page (its apps, people, billing and the rest). Beside the sidebar is your conversation and the box they write in, and with an app open, the app runs live in a column beside the chat under its icon, name and address. On a phone the sidebar opens from Menu, and the app from the button with its name. When they write "here" or "this" on the page, they mean what that page shows. By email, text or phone they are not looking at it.',
+    'Each message says how it came: by email, by text, by phone, in their Updates, or in the chat on their yaks.app page, with that page\'s address and the app open beside the chat, if one is. Your page is that chat. Down its left side, its sidebar holds the space\'s name, which switches spaces; your name, which opens your conversation with them; Updates from you, with how many wait on them; Your apps, the first few with each one\'s icon beside its name, and All N apps; and Manage at the foot, the settings behind the page (its apps, people, billing and the rest). Beside the sidebar is your conversation and the box they write in, and with an app open, a column beside the chat holds it under its icon, name and address, in three tabs: What it keeps (the components of its vocab.json, in plain words), What it can do (its commands), and Screens (the app running live, or before its first deploy its draft preview, once the draft holds a page). For someone who has not given their email yet, the app you are making opens there by itself. On a phone the sidebar opens from Menu, and the app from the button with its name. When they write "here" or "this" on the page, they mean what that page shows. By email, text or phone they are not looking at it.',
 }
 
 /** How the caller's words on a call its talking model hears reach the
@@ -859,19 +859,23 @@ export type Changed = { space: string; app: string }
 // The tools that put out a new version of an app, by the id a call points
 // at (@yaks/tools `toolEid`), each with the argument that names the app.
 // Writing files only stages them; app_deploy releases them.
-let CHANGES = new Map(
-  Object.entries({
-    app_new: 'slug',
-    app_deploy: 'app',
-    app_rollback: 'app',
-    app_update: 'app',
-  }).map(([name, arg]) => [toolEid(name), arg]),
-)
+let RELEASING = {
+  app_new: 'slug',
+  app_deploy: 'app',
+  app_rollback: 'app',
+  app_update: 'app',
+}
+let byEid = (tools: Record<string, string>) =>
+  new Map(Object.entries(tools).map(([name, arg]) => [toolEid(name), arg]))
+let CHANGES = byEid(RELEASING)
+// The tools that work on an app: those, and those that read or write the
+// files of its draft.
+let WORKS = byEid({ ...RELEASING, app_files: 'app', sandbox_ship: 'app' })
 
-/** The apps these lines changed, oldest first: each call to a tool that puts
- * out a new version whose answer came back past `from` (by `entry.seq`) and
- * was not refused. An app named as space/app is that space's. */
-export let changed = (entries: Bundle[], from = -1): Changed[] => {
+// Each call to one of `tools` whose answer came back past `from` (by
+// `entry.seq`) and was not refused: the app it named, and when it answered.
+// An app named as space/app is that space's.
+let answered = (tools: Map<string, string>, entries: Bundle[], from = -1) => {
   let calls = new Map(
     entries.filter((b) => b.call).map((b) => [b.entity.eid, comp(b, 'call')!]),
   )
@@ -880,17 +884,58 @@ export let changed = (entries: Bundle[], from = -1): Changed[] => {
     if (Number(comp(b, 'entry')?.seq ?? 0) <= from) return []
     let call = calls.get(String(comp(b, 'result')!.call))
     let args = (call?.args ?? {}) as Record<string, unknown>
-    let named = args[CHANGES.get(String(call?.to)) ?? '']
+    let named = args[tools.get(String(call?.to)) ?? '']
     if (typeof named != 'string' || !named) return []
     let [space, app] = named.includes('/')
       ? named.split('/', 2)
       : [typeof args.space == 'string' ? args.space : '', named]
-    return [{ space, app }]
+    return [{ space, app, at: String(comp(b, 'created')?.at ?? '') }]
   })
+}
+let apps =
+  (tools: Map<string, string>) => (entries: Bundle[], from = -1): Changed[] =>
+    answered(tools, entries, from).map(({ space, app }) => ({ space, app }))
+
+/** The apps these lines put out a new version of, oldest first. */
+export let changed = apps(CHANGES)
+
+/** The apps these lines worked on, oldest first: those they changed, and
+ * those whose draft they read or wrote, which the chat draws beside the
+ * conversation as each step lands (operator-page.ts `canvas`). */
+export let worked = apps(WORKS)
+
+/**
+ * The app a conversation is making: the one its newest step worked on, of
+ * its own lines and its helpers', which do most of its work.
+ *
+ * ```ts
+ * import { equal } from '@yaks/testing'
+ * import { toolEid } from '@yaks/tools/result'
+ * import { making } from './operator-view.ts'
+ * let step = (n: number, app: string) => [
+ *   { entity: { eid: `c${n}` }, entry: { session: 's', seq: n },
+ *     call: { to: toolEid('app_files'), args: { app } } },
+ *   { entity: { eid: `r${n}` }, entry: { session: 's', seq: n + 1 },
+ *     created: { at: `2026-11-07T0${n}:00:00Z` }, result: { call: `c${n}` } },
+ * ]
+ * equal(making(step(2, 'recipes'), [{ entries: step(1, 'chores') }]), {
+ *   space: '', app: 'recipes',
+ * })
+ * equal(making(step(1, 'recipes'), [{ entries: step(2, 'chores') }]), {
+ *   space: '', app: 'chores',
+ * })
+ * equal(making([]), null)
+ * ```
+ */
+export let making = (entries: Bundle[], helpers: Helper[] = []) => {
+  let newest = [entries, ...helpers.map((h) => h.entries)]
+    .flatMap((lines) => answered(WORKS, lines))
+    .sort((a, b) => a.at.localeCompare(b.at)).at(-1)
+  return newest ? { space: newest.space, app: newest.app } : null
 }
 
 /** One task's frame: the lines a step changed, what it is doing now, and
- * the apps it changed. */
+ * the apps it changed and worked on. */
 export let frame = (
   task: string,
   entries: Bundle[],
@@ -902,6 +947,7 @@ export let frame = (
     task,
     rows: touched(entries, names, from, seen),
     changed: changed(entries, from),
+    worked: worked(entries, from),
     ...doingNow(entries, names),
   },
 })
@@ -932,6 +978,7 @@ export let helperFrame = (
           .filter((r) => r.id == helper.call)
         : told.map((r) => drawn({ id: r.id, node: r.draw() })),
       changed: changed(helper.entries, from),
+      worked: worked(helper.entries, from),
       ...doingNow(entries, names),
     },
   }

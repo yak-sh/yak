@@ -68,6 +68,7 @@ import {
   stated,
   teach,
   unsaid,
+  VOCABS,
   wordsOf,
 } from './vocab.ts'
 import { withKinds } from './kinds.ts'
@@ -836,7 +837,7 @@ let releasedDoc = async (
   if (!app.version) return {}
   let at = (await ctx.dir.deploys(app)).find((v) => v.version == app.version)
   if (!at) throw refuse('missing', `no v${app.version} of ${app.slug}`)
-  let file = ['vocab.yml', 'vocab.json'].find((name) => at.files[name])
+  let file = VOCABS.find((name) => at.files[name])
   if (!file) return {}
   let bytes = await pins(blobs).get(at.files[file])
   if (!bytes) throw refuse('missing', `no blob for ${at.files[file]}`)
@@ -2021,7 +2022,7 @@ let declaring = async (
   space: Space,
   app: App,
 ): Promise<{ file: string; source: string | null; pkg: string | null }> => {
-  let files = ['vocab.yml', 'vocab.json', 'package.json']
+  let files = [...VOCABS, 'package.json']
   let read = await Promise.all(
     files.map((file) => blobs.read(fileKey(space, app, file))),
   )
@@ -2034,7 +2035,7 @@ let declaring = async (
 
 // The words a publication declares, read from the bytes its vocab file names.
 let offeredWords = async (raw: Objects, files: Files) => {
-  let file = ['vocab.yml', 'vocab.json'].find((path) => path in files)
+  let file = VOCABS.find((path) => path in files)
   let bytes = file ? await raw.read(addressed(files[file])) : null
   if (file && !bytes) throw refuse('missing', `no blob for ${files[file]}`)
   return { file: file ?? 'vocab.json', source: bytes ? decoded(bytes) : null }

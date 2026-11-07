@@ -483,6 +483,10 @@ export let OPENS: Record<string, string> = {
   rtc: 'speak and listen through its voice door',
 }
 
+/** The files an app's words may be written in, the one read when both
+ * are there first. */
+export let VOCABS = ['vocab.yml', 'vocab.json']
+
 /**
  * An app's `vocab.json` as one document: a JSON Schema 2020-12 document with
  * `$defs`, which is the one form a manifest is written in. A manifest of

@@ -1451,6 +1451,58 @@
     background: var(--card);
     box-shadow: 0 0 0 1px var(--border2);
   }
+  /* What it is made of, a tab each over one sheet that fills the column
+     under its name: the lists scroll inside the sheet, whose drawn edge
+     stays put, and its screens fill it. */
+  .Talk_Made {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    grid-template-rows: auto minmax(0, 1fr);
+    height: 100%;
+  }
+  .Talk_Made .Tabs_Panel {
+    grid-column: 1 / -1;
+    grid-row: 2;
+    grid-template-rows: minmax(0, 1fr);
+    align-content: stretch;
+  }
+  /* Room inside the scroller for the pencil lines of what it holds. */
+  .Talk_Sheet {
+    display: grid;
+    align-content: start;
+    gap: .75rem;
+    min-height: 0;
+    margin: -.25rem;
+    padding: .25rem;
+    overflow: auto;
+  }
+  .Talk_Part-screens {
+    --pad-block: .5rem;
+    --pad-inline: .5rem;
+  }
+  .Talk_Part-screens .Talk_Sheet {
+    display: flex;
+    flex-direction: column;
+    gap: .5rem;
+    overflow: visible;
+  }
+  .Talk_Part-screens .Empty {
+    margin: auto 0;
+  }
+  .Talk_Part-screens .Talk_Frame {
+    flex: 1 1 auto;
+    min-height: 0;
+    box-shadow: none;
+    border-radius: calc(var(--radius) - .25rem);
+  }
+  .Talk_MadeNote {
+    margin: 0;
+    color: var(--muted);
+    font-size: var(--fine);
+  }
+  .Talk_Part-screens .Talk_MadeNote {
+    padding: .25rem .5rem 0;
+  }
   .Talk_Thread,
   .Talk_Said {
     display: grid;

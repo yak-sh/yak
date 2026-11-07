@@ -1,16 +1,21 @@
 // The Operator chat app's own script, run over linkedom with its fetches answered
 // by operatorAnswer, loaded again and again over one localStorage: what a
-// person typed is kept when the page is left with its save cut off.
+// person typed is kept when the page is left with its save cut off. And the
+// app beside the chat, drawn again as the Operator works on it, which a
+// newcomer's page opens as their Operator starts making it.
 
 import { test } from '@yaks/testing'
-import { assertEquals } from '@std/assert'
+import { assert, assertEquals, assertStringIncludes } from '@std/assert'
 import { parseHTML } from 'linkedom'
 import type { Stash } from '@yaks/draft'
 import { browserDrafts } from '../../packages/draft/browser.ts'
 import { directoryOf } from './directory.ts'
 import { platform } from './testing.ts'
 import { type Beside, chatPage, operatorAnswer } from './operator-page.ts'
+import type { Who } from './session.ts'
 import { redraw } from './public/redraw.js'
+import { released } from './operator-testing.ts'
+import { TOOLS } from './tools.ts'
 import { when } from './public/when.js'
 
 let p = platform('operator-draft')
@@ -31,13 +36,19 @@ await directoryOf(p.env.STORE).apply({
 }, { 'x-yak-person': person, 'x-yak-role': 'owner' })
 let space = (await directoryOf(p.env.STORE).at(eid))!
 let who = { person, role: 'owner' as const, space: eid }
+// The one of their apps the person opens beside the chat.
+await released(
+  { env: p.env, dir: directoryOf(p.env.STORE), person },
+  'notes',
+  'Notes',
+)
 let base = 'https://yaks.app/manage/clerk/operator'
-let serve = async (url: string | URL, init?: RequestInit) =>
+let serve = async (url: string | URL, init?: RequestInit, as: Who = who) =>
   (await operatorAnswer(
     new Request(new URL(url, base), init),
     p.env,
     space,
-    who,
+    as,
   ))!
 
 // One browser's localStorage, kept across loads of the page.
@@ -68,8 +79,9 @@ let load = async (
   beside: Beside = {},
   app?: string,
   network?: 'held' | 'deploying' | 'down',
+  as: Who = who,
 ) => {
-  let html = await (await chatPage(p.env, space, who, open, beside, app))
+  let html = await (await chatPage(p.env, space, as, open, beside, app))
     .text()
   let { document, Event } = parseHTML(html)
   // What linkedom's forms lack: their fields by name, their action, and a
@@ -121,7 +133,7 @@ let load = async (
         queueMicrotask(() => no(new DOMException('timed out', 'TimeoutError')))
       )
     }
-    let answer = await serve(url, init)
+    let answer = await serve(url, init, as)
     if (url.includes('draft=1') && !init?.method) {
       queueMicrotask(() => void reads++)
     }
@@ -373,6 +385,104 @@ test('a chat with no app beside it stays as it is when the Operator changes one'
   )!
   page.hear(changing(task, { space: '', app: 'club' }))
   assertEquals(page.loads, { app: 0, page: 0 })
+  page.leave()
+})
+
+// A step that worked on these apps, as the Operator's socket tells it.
+let working = (...worked: object[]) => ({
+  operator: { task: 'x', rows: [], now: '', worked },
+})
+let files = (person: string, app: string, ...written: [string, unknown][]) =>
+  TOOLS.find((t) => t.name == 'app_files')!.run(
+    { env: p.env, dir: directoryOf(p.env.STORE), person },
+    {
+      app,
+      files: written.map(([path, content]) => ({
+        path,
+        content: typeof content == 'string' ? content : JSON.stringify(content),
+      })),
+    },
+  )
+// What the app beside a page says it keeps, and which of its tabs is open.
+let made = (document: Document) => ({
+  keeps: [...document.querySelectorAll('[data-part=keeps] .Rows_Name')]
+    .map((e) => e.textContent),
+  open: [...document.querySelectorAll('[name=made]')]
+    .filter((r) => r.hasAttribute('checked') || (r as HTMLInputElement).checked)
+    .map((r) => r.getAttribute('value')),
+})
+
+test('what the app beside the chat is made of is drawn again as the Operator works on it, its screens left loaded', async () => {
+  let page = await load(storage(), false, 'new', apps, 'notes')
+  let { document } = page
+  let screens = document.querySelector('[data-frame]')
+  assertEquals(made(document), { keeps: [], open: ['screens'] })
+  await files(person, 'notes', [
+    'vocab.json',
+    { $defs: { notice: { properties: { posted: { type: 'string' } } } } },
+  ])
+  page.hear(working({ space: 'mill', app: 'notes' }))
+  page.hear(working({ space: '', app: 'notes' }))
+  assert(await until(() => made(document).keeps.length > 0))
+  assertEquals(made(document), { keeps: ['Notice'], open: ['screens'] })
+  assertEquals(document.querySelector('[data-frame]'), screens)
+  assertEquals(page.loads, { app: 0, page: 0 })
+  page.leave()
+})
+
+// A newcomer (newcomer.ts), whose Operator is making them an app.
+let newcomer = crypto.randomUUID()
+await directoryOf(p.env.STORE).apply({
+  entities: [
+    {
+      entity: { eid: newcomer },
+      person: {},
+      newcomer: { at: new Date().toISOString() },
+    },
+    {
+      entity: { eid: crypto.randomUUID() },
+      member: { person: newcomer, space: eid, role: 'owner' },
+    },
+  ],
+}, { 'x-yak-person': person, 'x-yak-role': 'owner' })
+await TOOLS.find((t) => t.name == 'app_new')!.run(
+  { env: p.env, dir: directoryOf(p.env.STORE), person: newcomer },
+  { slug: 'recipes', title: 'Recipe box' },
+)
+
+test("a newcomer's chat opens the app their Operator is making beside it, then its screens as the first is drawn", async () => {
+  let page = await load(
+    storage(),
+    false,
+    'new',
+    {},
+    undefined,
+    undefined,
+    { person: newcomer, role: 'owner' },
+  )
+  let { document } = page
+  assertEquals(document.querySelector('[data-app]'), null)
+  await files(newcomer, 'recipes', ['vocab.json', {
+    $defs: { recipe: { properties: { serves: { type: 'number' } } } },
+  }])
+  page.hear(working({ space: '', app: 'recipes' }))
+  assert(await until(() => made(document).keeps.length > 0))
+  assertEquals(made(document), { keeps: ['Recipe'], open: ['keeps'] })
+  assert(document.querySelector('.Talk')!.classList.contains('Talk-app'))
+  assertEquals(
+    document.querySelector('.Talk_Bar .Talk_Show')?.textContent,
+    'Recipe box',
+  )
+  assertEquals(document.querySelector('[data-frame]'), null)
+  // The first page drawn opens its screens: the draft, as it stands.
+  await files(newcomer, 'recipes', ['index.html', '<h1>Recipes</h1>'])
+  page.hear(working({ space: '', app: 'recipes' }))
+  assert(await until(() => !!document.querySelector('[data-frame]')))
+  assertEquals(made(document).open.at(-1), 'screens')
+  assertStringIncludes(
+    document.querySelector('[data-frame]')!.getAttribute('src')!,
+    'https://clerk.yaks.app/recipes/_preview/',
+  )
   page.leave()
 })
 

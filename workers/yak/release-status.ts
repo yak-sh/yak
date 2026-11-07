@@ -5,7 +5,7 @@ import { type App, type Directory } from './directory.ts'
 import type { Env } from './env.ts'
 import { r2Objects } from './lib/objects.ts'
 import { pins, type Version } from './versions.ts'
-import { appDoc } from './vocab.ts'
+import { appDoc, VOCABS } from './vocab.ts'
 
 let held = new WeakMap<Env, Map<string, Promise<Reload | undefined>>>()
 let filesOf = (v: Version) =>
@@ -35,7 +35,7 @@ export let releaseStatus = async (
       if (oldFiles == newFiles) return undefined
       let blobs = pins(r2Objects(env.BLOBS))
       let vocab = async (v: Version): Promise<VocabDoc> => {
-        let file = ['vocab.yml', 'vocab.json'].find((p) => v.files[p])
+        let file = VOCABS.find((p) => v.files[p])
         if (!file) return {}
         let bytes = await blobs.get(v.files[file])
         if (!bytes) throw new Error(`release has no bytes for ${file}`)

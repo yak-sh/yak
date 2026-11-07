@@ -16,7 +16,7 @@
 import { writes } from '@yaks/member'
 import { derivedEid } from '@yaks/graph/identity'
 import { appTools } from './tool-grammar.ts'
-import { appVocab, stated } from './vocab.ts'
+import { appVocab, stated, VOCABS } from './vocab.ts'
 import { api, storing, unwritten, woven } from './apps.ts'
 import {
   type App,
@@ -217,7 +217,7 @@ let digest = async (modules: Module[], config: unknown) =>
   ])))
 
 // The files whose change sets the store up again.
-let VOCAB = ['vocab.yml', 'vocab.json', 'package.json']
+let VOCAB = [...VOCABS, 'package.json']
 
 /**
  * Build one state of a draft for its link: stage its files, compile what the
@@ -453,6 +453,29 @@ export let watching =
     }
   }
 
+/** An app's preview link for the caller (`ctx.person`), and the app with
+ * its link (`followed`, minted the first time one is asked for): where it is
+ * mounted, and its address. Nothing is built until a page asks for it. */
+export let linkOf = async (ctx: Ctx, space: Space, app: App, who: Who) => {
+  let open = await followed(ctx.dir, space, app, who)
+  let ticket = await seal(
+    'preview',
+    {
+      app: app.eid,
+      space: space.eid,
+      person: ctx.person,
+      link: open.followed!,
+    } satisfies Ticket,
+    ctx.env.SESSION_SECRET!,
+  )
+  let mount = `/${app.slug}/_preview/${ticket}/`
+  return {
+    open,
+    mount,
+    at: `https://${spaceHost(ctx.env, space.slug)}${mount}`,
+  }
+}
+
 export let preview = async (ctx: Ctx, args: Args) => {
   let view = viewport(args)
   let path = page(args.path)
@@ -470,20 +493,9 @@ export let preview = async (ctx: Ctx, args: Args) => {
       'Cloudflare Browser Rendering is not configured',
     )
   }
-  let open = await followed(ctx.dir, space, app, who)
-  let ticket = await seal(
-    'preview',
-    {
-      app: app.eid,
-      space: space.eid,
-      person: ctx.person,
-      link: open.followed!,
-    } satisfies Ticket,
-    ctx.env.SESSION_SECRET!,
-  )
-  let mount = `/${app.slug}/_preview/${ticket}/`
+  let { open, mount, at } = await linkOf(ctx, space, app, who)
   await following(ctx, space, open, open.followed!, mount, who)
-  let url = `https://${spaceHost(ctx.env, space.slug)}${mount}${path}`
+  let url = at + path
   let value: Record<string, unknown> = {
     url,
     draft: open.draft ?? null,

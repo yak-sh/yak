@@ -22,9 +22,11 @@ import { transcript } from '@yaks/session'
 import { stepOf } from '@yaks/tools/title'
 import type { Tool } from '@yaks/model'
 import {
+  type Changed,
   frame,
   type Helper,
   helperFrame,
+  making,
   type Names,
   now,
   type Offers,
@@ -486,7 +488,8 @@ export let openedOf = async (
  * no session has taken it, for the page to draw as it always has. `task` is
  * what the page keys the conversation by (a task, or the session), and
  * `begun` the request it began with, the same before and after a session
- * takes it up (the key, for one no request began). `called` is what its
+ * takes it up (the key, for one no request began), and `making` the app its
+ * newest step worked on (operator-view.ts `making`). `called` is what its
  * Operator is called, and `opens` where a conversation opens by its id, at
  * the chat app's `at` unless the admin's.
  */
@@ -504,6 +507,7 @@ export let conversationOf = async (
   title: string
   html: string
   waiting: Bundle[]
+  making: Changed | null
 }> => {
   let found = await openedOf(store, open)
   if (found.session) {
@@ -536,6 +540,7 @@ export let conversationOf = async (
         seen,
       ),
       waiting: [],
+      making: making(entries, seen.helpers),
     }
   }
   if (found.waiting) {
@@ -545,6 +550,7 @@ export let conversationOf = async (
       title: firstLine(found.waiting[0]),
       html: '',
       waiting: found.waiting,
+      making: null,
     }
   }
   let held = found.task
@@ -555,6 +561,7 @@ export let conversationOf = async (
       title: '',
       html: '',
       waiting: [],
+      making: null,
     }
   }
   let task = held.entity.eid
@@ -585,6 +592,7 @@ export let conversationOf = async (
       seen,
     ),
     waiting: [],
+    making: making(entries, seen.helpers),
   }
 }
 

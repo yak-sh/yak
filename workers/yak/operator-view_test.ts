@@ -1,6 +1,6 @@
 // An error in the Operator's chat reads as words; what it said shows only
-// inside a closed "Details". A conversation says which apps it changed, for
-// the app beside the chat (T-140509).
+// inside a closed "Details". A conversation says which apps it changed and
+// worked on, for the app beside the chat (T-140509, D-146737).
 import { test } from '@yaks/testing'
 import { assert, assertEquals, assertStringIncludes } from '@std/assert'
 import { parseHTML } from 'linkedom'
@@ -13,6 +13,7 @@ import {
   helperFrame,
   rows,
   touched,
+  worked,
 } from './operator-view.ts'
 import { channelMove } from './channel-move.ts'
 
@@ -117,6 +118,27 @@ test('a conversation says which apps it put out a new version of, in which space
   assertEquals(
     helperFrame('t', { entries: steps.slice(0, 4) }, [], names, 0).operator
       .changed,
+    [{ space: '', app: 'notes' }],
+  )
+})
+
+test('a conversation says which apps it worked on, files read and written included', () => {
+  assertEquals(worked(steps), [
+    { space: '', app: 'notes' },
+    { space: '', app: 'notes' },
+    { space: 'mill', app: 'club' },
+    { space: 'mill', app: 'notes' },
+    { space: '', app: 'chores' },
+  ])
+  assertEquals(frame('t', steps, names, 2).operator.worked, [
+    { space: '', app: 'notes' },
+    { space: 'mill', app: 'club' },
+    { space: 'mill', app: 'notes' },
+    { space: '', app: 'chores' },
+  ])
+  assertEquals(
+    helperFrame('t', { entries: steps.slice(0, 2) }, [], names, 0).operator
+      .worked,
     [{ space: '', app: 'notes' }],
   )
 })
