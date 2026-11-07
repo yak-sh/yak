@@ -1,7 +1,7 @@
 // Stable filesystem identity and foreign-target refusal through Git's public
 // workspace API, without processes or caller-directory assumptions.
 import { equal, ok, test, throws } from '@yaks/testing'
-import { graph } from '@yaks/graph'
+import { type Comp, graph } from '@yaks/graph'
 import { ram } from '@yaks/ram'
 import { fixture } from './testing.ts'
 import { filesystem, retained, workspaceGit } from './workspace.ts'
@@ -119,6 +119,48 @@ await cwdGuard.apply([
 ])
 test('an ancestor launch workspace with a checkout cwd also keeps its files', async () =>
   equal(await retained(cwdGuard, 'tree'), true))
+
+let homes = fixture({
+  docs: [{
+    $defs: {
+      session: {
+        component: true,
+        type: 'object',
+        properties: { status: { type: 'string' } },
+      },
+      home: {
+        component: true,
+        type: 'object',
+        properties: { workspace: { type: 'string' }, cwd: { type: 'string' } },
+      },
+    },
+  }],
+}).g
+await homes.apply([
+  { entity: { eid: 'box' }, machine: { address: 'ssh://box' } },
+  { entity: { eid: 'root' }, workspace: { machine: 'box', root: '/' } },
+  { entity: { eid: 'tree' }, workspace: { machine: 'box', root: '/repo' } },
+])
+// Whether a session of this status, at home in the checkout by its workspace
+// or by its cwd, keeps it.
+let homed = async (status: string, home: Comp) => {
+  await homes.apply([{ entity: { eid: 's' }, session: { status }, home }])
+  return retained(homes, 'tree')
+}
+for (
+  let [status, keeps] of [
+    ['running', true],
+    ['queued', true],
+    ['settled', false],
+    ['stopped', false],
+    ['failed', false],
+  ] as const
+) {
+  test(`a ${status} session's home ${keeps ? 'keeps' : 'no longer keeps'} its checkout`, async () => {
+    equal(await homed(status, { workspace: 'tree', cwd: '/repo' }), keeps)
+    equal(await homed(status, { workspace: 'root', cwd: '/repo/src' }), keeps)
+  })
+}
 
 let store = ram(g.vocab)
 let watched = graph({ vocab: g.vocab, storage: store })

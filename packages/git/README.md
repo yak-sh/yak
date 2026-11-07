@@ -611,7 +611,8 @@ checkouts of their own, by default Claude Code's `.claude/worktrees` inside the
 primary checkout. A relative root is resolved there. Other unmanaged
 observations, foreign filesystem contexts and unknown placement never authorize
 removal. It checks idle time, dirty files, unlanded commits, session homes,
-launch workspaces and local process paths. A home change alone does not remove
+launch workspaces and local process paths. A session's home keeps its checkout
+until the session settles, stops or fails. A home change alone does not remove
 files. Managed observations remain available to `restore`. The `idle` and
 `every` options set the idle threshold and pass interval.
 
@@ -667,8 +668,9 @@ let own = await git.create({ path: '/repo-task', branch: 'task' })
 let kept = await git.reclaim(own.entity.eid)
 ```
 
-`reclaim` keeps dirty and unlanded checkouts, homes referring to the checkout or
-its descendants, and processes whose launch workspace remains there. It never
-treats a sandbox disposal or a home switch as a Git cleanup request. Callers
-must also establish that the target has no untracked external users; connectors
-do not make graph references a complete process inventory.
+`reclaim` keeps dirty and unlanded checkouts, homes of unsettled sessions
+referring to the checkout or its descendants, and processes whose launch
+workspace remains there. It never treats a sandbox disposal or a home switch as
+a Git cleanup request. Callers must also establish that the target has no
+untracked external users; connectors do not make graph references a complete
+process inventory.

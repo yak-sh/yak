@@ -61,52 +61,6 @@ let rooted = (common: string, roots: string[]): Promise<string[]> =>
 
 let there = (path: string) => io.stat(path).then(() => true, () => false)
 
-let text = (value: unknown): value is string => typeof value == 'string'
-
-/** A session with a home, and the paths it works in: its cwd and its
- * machine's address, as real paths. */
-type Seat = { session: string; paths: Set<string> }
-
-// Where every session with a home works, read for its home alone. A session's
-// status is derived from its transcript (@yaks/session), dear enough that
-// reading it of every session took a minute, in one statement that held the
-// worker's thread; asked of every session for each idle worktree, it held a
-// worker for hours and let every lease it renews lapse.
-let seats = async (g: Graph): Promise<Seat[]> => {
-  if (!g.vocab.comp('session') || !g.vocab.comp('home')) return []
-  if (!g.vocab.prop('home', 'workspace')) return []
-  let rows = await g.rows(
-    '.session .home .fields=entity.eid,home.workspace,home.cwd',
-  ) as Record<string, unknown>[]
-  let ids = [...new Set(rows.map((r) => r['home.workspace']).filter(text))]
-  let places = new Map(
-    (ids.length ? await g.get(ids, ['workspace']) : []).map((
-      b,
-    ) => [b.entity.eid, b.workspace as Comp | undefined]),
-  )
-  let local = (await localFilesystem(g)).workspace as Comp
-  return rows.flatMap((r) => {
-    let place = places.get(String(r['home.workspace']))
-    if (!place || place.machine != local.machine || place.sandbox) return []
-    return [{
-      session: String(r.eid),
-      paths: new Set([place.root, r['home.cwd']].filter(text)),
-    }]
-  })
-}
-
-// Whether any of these sessions still holds its checkout: its transcript is
-// not over, or its process still runs. Only they are asked their status.
-let holding = async (g: Graph, sessions: string[]): Promise<boolean> => {
-  if (!sessions.length) return false
-  let comps = ['session', 'process', 'exit'].filter((c) => g.vocab.comp(c))
-  return (await g.get(sessions, comps)).some((b) =>
-    !['settled', 'stopped', 'failed'].includes(
-      String((b.session as Comp | undefined)?.status),
-    ) || Boolean(b.process && !b.exit)
-  )
-}
-
 /** Take back every idle worktree of the repository at `common` that holds
  * nothing, managed or under one of `roots`, and return the idle ones kept,
  * with why. A `signal` that aborts ends the pass before the next worktree. */
@@ -124,8 +78,6 @@ export let collect = async (
   let kept: Record<string, Held> = {}
   let filesystem = await localFilesystem(g)
   let repository = repositoryEid(common, filesystem.entity.eid)
-  // Read once a pass, at the first worktree it is needed for.
-  let seated: Promise<Seat[]> | undefined
   for (let path of await linked(common)) {
     if (signal?.aborted) break
     if (await idleFor(path, now) < idle) continue
@@ -136,10 +88,7 @@ export let collect = async (
     }
     let seen = await discover(g, path).catch(() => row)
     if (!seen || await retained(g, seen.entity.eid)) continue
-    let on = (await (seated ??= seats(g)))
-      .filter((s) => inUse(real, s.paths))
-      .map((s) => s.session)
-    if (await holding(g, on) || inUse(real, await processes())) continue
+    if (inUse(real, await processes())) continue
     let held = await reclaim(path, 'refs/heads/main').catch(() =>
       'failed' as Held
     )

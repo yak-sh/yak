@@ -346,9 +346,26 @@ fi`)).trimEnd()
   return { discover, create, reclaim, context: context.entity.eid }
 }
 
-/** Graph references that keep a checkout. A running process uses its launch
- * workspace even after a session switches its default. Missing placement is
- * not evidence that it runs elsewhere. */
+let eids = (rows: Bundle[]) => rows.map((b) => b.entity.eid)
+
+// Whether any of these sessions still holds its checkout: its transcript is
+// not over, or its process still runs. A session's status is derived from its
+// transcript (@yaks/session) and dear to read, so only the sessions whose home
+// is in the checkout are asked.
+let holding = async (g: Graph, sessions: string[]): Promise<boolean> => {
+  if (!sessions.length) return false
+  let comps = ['session', 'process', 'exit'].filter((c) => g.vocab.comp(c))
+  return (await g.get([...new Set(sessions)], comps)).some((b) =>
+    !['settled', 'stopped', 'failed'].includes(
+      String((b.session as Comp | undefined)?.status),
+    ) || Boolean(b.process && !b.exit)
+  )
+}
+
+/** Graph references that keep a checkout: a process that has not exited, or
+ * the home of a session that has not settled. A running process uses its
+ * launch workspace even after a session switches its default. Missing
+ * placement is not evidence that it runs elsewhere. */
 export let retained = async (g: Graph, workspace: string): Promise<boolean> => {
   let [target] = await g.get([workspace], ['workspace'])
   let place = target?.workspace as Comp | undefined
@@ -378,7 +395,7 @@ export let retained = async (g: Graph, workspace: string): Promise<boolean> => {
       present(name),
       ...name == 'process' ? [absent('exit')] : [],
       ...root ? [contains(`${name}.cwd`, root)] : [],
-      fields(`${name}.workspace`, `${name}.cwd`),
+      fields('entity.eid', `${name}.workspace`, `${name}.cwd`),
     ))
     let refs = [...new Set(rows.map((b) => (b[name] as Comp).workspace))]
       .filter((id): id is string => typeof id == 'string')
@@ -386,26 +403,29 @@ export let retained = async (g: Graph, workspace: string): Promise<boolean> => {
       (await g.get(refs, ['workspace', ...sandbox]))
         .filter(beside).map((b) => b.entity.eid),
     )
-    if (
-      rows.some((b) => {
-        let p = b[name] as Comp
-        return local.has(String(p.workspace)) && inTree(p.cwd)
-      })
-    ) return true
+    let here = rows.filter((b) => {
+      let p = b[name] as Comp
+      return local.has(String(p.workspace)) && inTree(p.cwd)
+    })
+    if (name == 'process' ? here.length : await holding(g, eids(here))) {
+      return true
+    }
   }
   // Recheck direct attachments after the cwd checks: another process can
   // attach while those reads yield. Never keep a liveness snapshot across passes.
   for (let name of ['home', 'process']) {
     if (!ids.length || !g.vocab.prop(name, 'workspace')) continue
+    let attached = await g.read(and(
+      present(name),
+      ...name == 'process' ? [absent('exit'), limit(1)] : [],
+      eq(`${name}.workspace`, list(...ids)),
+      fields('entity.eid'),
+    ))
     if (
-      (await g.read(and(
-        present(name),
-        ...name == 'process' ? [absent('exit')] : [],
-        eq(`${name}.workspace`, list(...ids)),
-        fields('entity.eid'),
-        limit(1),
-      ))).length
-    ) return true
+      name == 'process' ? attached.length : await holding(g, eids(attached))
+    ) {
+      return true
+    }
   }
   return false
 }
