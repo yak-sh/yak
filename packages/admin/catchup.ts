@@ -12,7 +12,7 @@
 // files that build's failure; a look that started a second build beside it
 // would only race it. Otherwise the catch-up asks main's deploy hook for a
 // build once, marking the commit `rebuilt{said}` with what Builds answered
-// (workers/yak/hook.ts reads the answer for the kernel's rebuild too).
+// (@yaks/cloudflare/hook reads the answer for the kernel's rebuild too).
 // The hook starts none while one is queued or initializing, so a build that is
 // merely waiting its turn costs nothing. A build the hook did start is
 // reported only for a failure of ours (`ours`). A head whose own build passed
@@ -53,7 +53,7 @@
 // does not is reported too.
 
 import { median } from './usage.ts'
-import { PENDING } from '../../workers/yak/hook.ts'
+import { PENDING } from '@yaks/cloudflare/hook'
 
 /** How long a push may go not live before the catch-up looks for its build.
  * Builds queues one within seconds of the push, and a build of `yak` took 78 s
@@ -122,7 +122,7 @@ export let ran = (run: Run): Build =>
 
 /** What serves: the commit its deployment was built from, when it went live
  * (ms), whether an operator rolled back to it, and whether it already has the
- * head's Worker source (wrangler.ts `WATCHED`). */
+ * head's Worker source (watched.ts `WATCHED`). */
 export type Live = { sha: string; at: number; rollback: boolean; has: boolean }
 
 /** Dates each head by the first look that shows it (`now` in ms): the time of

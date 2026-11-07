@@ -20,7 +20,7 @@
 // death after that says so again. A burst of deploys longer than `STUCK` kills
 // every run in it, and the run after the last one is what finishes.
 //
-// A run Cloudflare could not answer for now (workers_api.ts `Unavailable`:
+// A run Cloudflare could not answer for now (@yaks/cloudflare/api `Unavailable`:
 // its own failure, through every resend) is the same: no fault of the job's,
 // and the next run does what it could not. It is a line in the log and the
 // streak goes on; once no run has finished for `STUCK`, the outage is
@@ -36,7 +36,7 @@ import { next, span } from '@yaks/wake'
 import type { Env } from './env.ts'
 import { KERNEL, meta } from './meta.ts'
 import { BucketUnavailable } from '@yaks/blob'
-import { Unavailable } from './workers_api.ts'
+import { Unavailable } from '@yaks/cloudflare/api'
 import type { Wake as Schedule } from '@yaks/wake'
 
 /** A directory schedule row, with the tags its job matches. */

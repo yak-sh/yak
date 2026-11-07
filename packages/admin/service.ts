@@ -22,7 +22,7 @@
 //
 // A deploy is timed from the same reads: wrangler's deployments say when each
 // commit went live, and the version that went live says when the deploy door
-// began the deploy that made it (workers/yak/wrangler.ts `versionMessage`),
+// began the deploy that made it (@yaks/cloudflare/wrangler `versionMessage`),
 // one more wrangler read for each deploy. The push is not the start: Workers
 // Builds can hold a build for minutes before it runs (T-133165), and that
 // wait is Cloudflare's, nothing this repo can make faster. yaks.app's home
@@ -36,7 +36,8 @@ import { token } from '@yaks/graph/sha256'
 import { Interrupted } from '@yaks/tools/errors'
 import type { Host } from '@yaks/host'
 import { sleep } from '@yaks/fp'
-import { beganIn, WATCHED } from '../../workers/yak/wrangler.ts'
+import { beganIn } from '@yaks/cloudflare/wrangler'
+import { WATCHED } from './watched.ts'
 import {
   BOUND,
   type Build,
@@ -78,9 +79,9 @@ import {
   report as jumped,
   variables,
 } from './usage.ts'
-import { ask, said as answered } from '../../workers/yak/analytics.ts'
-import { Unavailable } from '../../workers/yak/workers_api.ts'
-import { hooked, PENDING } from '../../workers/yak/hook.ts'
+import { ask, said as answered } from '@yaks/cloudflare/analytics'
+import { Unavailable } from '@yaks/cloudflare/api'
+import { hooked, PENDING } from '@yaks/cloudflare/hook'
 
 /** How long the service waits between looks at main. */
 export let EVERY = 60_000
@@ -523,7 +524,7 @@ export let SETTLE = 10 * 60_000
 
 /** How long Cloudflare's analytics may go unanswered before the usage watch
  * reports it: two looks after the first that failed, each riding out about
- * eight seconds of resends (workers/yak/workers_api.ts `resent`). A token
+ * eight seconds of resends (@yaks/cloudflare/api `resent`). A token
  * over Cloudflare's API limit is refused (429) for the next five minutes,
  * which the look after the first can land inside. */
 export let OUTAGE = 10 * EVERY

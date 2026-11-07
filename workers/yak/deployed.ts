@@ -7,7 +7,7 @@ import * as system from '@yaks/process/system'
 import { command as spawnCommand } from '@yaks/process/command'
 import { join } from 'node:path'
 import { parse } from 'smol-toml'
-import { resent } from './workers_api.ts'
+import { resent } from '@yaks/cloudflare/api'
 
 export let API = 'https://api.cloudflare.com/client/v4'
 

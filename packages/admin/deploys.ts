@@ -11,7 +11,7 @@ import {
   retried,
   type StepResult,
   WRANGLER,
-} from '../../workers/yak/wrangler.ts'
+} from '@yaks/cloudflare/wrangler'
 import { Refused } from './refusal.ts'
 import { output } from './subprocess.ts'
 
@@ -411,7 +411,7 @@ export let needGit = async (
 }
 
 /** Run Wrangler in the Worker's directory. A passing Cloudflare API outage
- * is retried (workers/yak/wrangler.ts `retried`); a lasting one throws its
+ * is retried (@yaks/cloudflare/wrangler `retried`); a lasting one throws its
  * `failure`. */
 export let wrangler = async (
   root: string,

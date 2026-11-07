@@ -17,7 +17,7 @@ import {
   windowOf,
 } from '@yaks/tracker/errors'
 import type { Options } from '@yaks/tracker/routes'
-import { WRANGLER } from '../../workers/yak/wrangler.ts'
+import { WRANGLER } from '@yaks/cloudflare/wrangler'
 import { spawn, wasInterrupted } from './subprocess.ts'
 
 export { GRACE } from './subprocess.ts'

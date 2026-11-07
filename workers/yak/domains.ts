@@ -24,7 +24,7 @@
 // Unset, every door here refuses saying so — a domain half-attached would
 // leave a billable hostname at Cloudflare with nothing pointing at it.
 import { answered } from './dispatch.ts'
-import { resent } from './workers_api.ts'
+import { resent } from '@yaks/cloudflare/api'
 import type { Env } from './env.ts'
 import { apex as hostApex, type Host } from './host.ts'
 import { type Host as Hostname, stamp } from './directory.ts'

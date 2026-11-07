@@ -1,7 +1,7 @@
 #!/usr/bin/env -S deno run -A
 // Each executor release keeps its Worker and Workflow names. A changed bundle
 // gets another release, leaving accepted calls on the Worker that accepted them.
-import { WRANGLER, WRANGLER_VERSION } from '../yak/wrangler.ts'
+import { WRANGLER, WRANGLER_VERSION } from '@yaks/cloudflare/wrangler'
 import { installed } from '@yaks/cli/dependencies'
 import { fileURLToPath } from 'node:url'
 import { parse } from 'smol-toml'

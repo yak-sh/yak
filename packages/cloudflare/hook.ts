@@ -1,9 +1,9 @@
-// What Workers Builds answers a POST to a deploy hook, read once for both
-// places that ask: the kernel's rebuild of a failed build (builds.ts) and the
-// box's deploy catch-up (@yaks/admin catchup.ts). The hook starts no build
+// What Workers Builds answers a POST to a deploy hook, read once for every
+// place that asks, such as yaks.app's rebuild of a failed build and the box's
+// deploy catch-up (@yaks/admin). The hook starts no build
 // while one of the branch is queued or initializing: it answers 200,
 // `success`, `already_exists`, and the pending build is the one that deploys.
-// That answer started nothing, so neither place counts it as a start.
+// That answer started nothing, so no place counts it as a start.
 
 type Answer = {
   success?: boolean

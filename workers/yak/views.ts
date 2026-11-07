@@ -34,13 +34,13 @@
 // that row stands for, so a plain `count()` under-reports a busy app by
 // exactly the factor that made it busy, and nothing would say so.
 import type { Env } from './env.ts'
-import { api } from './analytics.ts'
+import { api } from '@yaks/cloudflare/analytics'
 import type { Answer } from './apps.ts'
 import { APP, inApp, type Row, SPACE as SPACE_ARG, worded } from './tool.ts'
 import { url as appUrl } from './directory.ts'
 import { background, caught } from './defects.ts'
 import { elapsed } from './lib/hops.ts'
-import { failure, resent } from './workers_api.ts'
+import { failure, resent } from '@yaks/cloudflare/api'
 import { isView, pointOf, type Visited } from './view-point.ts'
 import { appTag } from './purge.ts'
 export { classed } from './crawlers.ts'
@@ -124,7 +124,7 @@ export let ROWS = 1000
  */
 export let FRESH = 5 * 60_000
 
-/** The one endpoint on the analytics API (analytics.ts) that answers SQL. The
+/** The one endpoint on the analytics API (@yaks/cloudflare/analytics) that answers SQL. The
  * account is CF_ACCOUNT, which is not a secret. */
 export let sqlAt = (env: Env) =>
   `${api(env)}/accounts/${env.CF_ACCOUNT}/analytics_engine/sql`
@@ -221,8 +221,8 @@ export let HEDGE = 1500
  * One query, run. The API takes SQL as the request body and answers JSON. A
  * dataset nobody has written to yet does not exist, and that is an app with no
  * views rather than a failure, so a 404 is an empty answer. A query only
- * reads, so one Cloudflare fails on its own side is sent again (workers_api.ts
- * `resent`), and one that stalls is asked again past HEDGE (`hedged`), so
+ * reads, so one Cloudflare fails on its own side is sent again
+ * (@yaks/cloudflare/api `resent`), and one that stalls is asked again past HEDGE (`hedged`), so
  * neither holds up a page.
  */
 export let ran = (env: Env, sql: string): Promise<Rows> =>

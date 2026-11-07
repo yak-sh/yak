@@ -4,9 +4,22 @@
 // build logs and Email Sending.
 // A probe points it at its Cloudflare stand-in; production uses Cloudflare.
 import { sleep } from '@yaks/fp'
-import type { Env } from './env.ts'
 
-export let accountUrl = (env: Env, path: string) =>
+/** Where a call reaches the account: Cloudflare's API, unless WORKERS_API
+ * aims a probe somewhere else, and the account it names. */
+export type Account = { CF_ACCOUNT?: string; WORKERS_API?: string }
+
+/** A path under the account's API.
+ *
+ * ```ts
+ * import { assertEquals } from '@std/assert'
+ * assertEquals(
+ *   accountUrl({ CF_ACCOUNT: 'a' }, '/workers/scripts'),
+ *   'https://api.cloudflare.com/client/v4/accounts/a/workers/scripts',
+ * )
+ * ```
+ */
+export let accountUrl = (env: Account, path: string) =>
   `${env.WORKERS_API ?? 'https://api.cloudflare.com/client/v4'}` +
   `/accounts/${env.CF_ACCOUNT}${path}`
 
@@ -24,7 +37,7 @@ let IDEMPOTENT = ['GET', 'HEAD', 'PUT', 'DELETE']
  * call: its servers erred, or it asked for a slower pace (429, which
  * {@link resent} sends again only after the wait it names). A 401 or 403
  * refuses the token, which fails every time and is answered at once
- * (bindings.ts names the scope it lacks).
+ * (the caller names the scope it lacks).
  *
  * ```ts
  * import { assertEquals } from '@std/assert'
@@ -36,7 +49,7 @@ export let passing = (status: number) => status >= 500 || status == 429
 /** A call Cloudflare failed on its own side through every resend: a passing
  * status, or a connection that kept dropping. It refused nothing, so a later
  * call may well be answered: a platform job that meets one is in an outage,
- * not broken, until it lasts (wake.ts `reporting`). */
+ * not broken, until it lasts. */
 export class Unavailable extends Error {
   override name = 'Unavailable'
 }

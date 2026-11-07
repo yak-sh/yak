@@ -14,9 +14,10 @@ From the repository root, bundle without deploying:
 deno run -A workers/model/wrangler.ts deploy --dry-run
 ```
 
-The wrapper reuses the kernel's pinned Wrangler, pnpm installation and workspace
-import paths. A push to main deploys through this Worker's own Workers Builds
-connection. The kernel build does not deploy the executor.
+The wrapper runs the Wrangler @yaks/cloudflare pins, and reuses the pnpm
+installation and workspace import paths. A push to main deploys through this
+Worker's own Workers Builds connection. The kernel build does not deploy the
+executor.
 
 | Workers Builds setting  | Value                                                                                                                       |
 | ----------------------- | --------------------------------------------------------------------------------------------------------------------------- |

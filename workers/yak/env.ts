@@ -148,7 +148,7 @@ export type Env = {
   // without `remote = true` and in the workerd probes, where no `binding`
   // sender is lent.
   MAIL?: object
-  // Account Analytics Read serves every analytics read (analytics.ts): the
+  // Account Analytics Read serves every analytics read (@yaks/cloudflare/analytics): the
   // meter (usage.ts), the kill sweep (kills.ts) and page visits (views.ts).
   // CF_ACCOUNT is public and configured in wrangler.toml. ANALYTICS_API aims
   // all of them somewhere other than Cloudflare, for a probe.

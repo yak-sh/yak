@@ -184,7 +184,7 @@ export let imaged = async (
 }
 
 if (import.meta.main) {
-  let { WRANGLER } = await import('../wrangler.ts')
+  let { WRANGLER } = await import('@yaks/cloudflare/wrangler')
   console.log(
     await based({ wrangler: WRANGLER, dry: system.args.includes('--dry-run') }),
   )

@@ -23,7 +23,7 @@ The scratch harness owns one workerd runtime, closes it in `finally`, and
 removes its scratch directory. It checks SQLite intake, duplicate delivery,
 tenant authorization, subscription frames, heartbeat intake and the queue canary
 through the runtime consumer. It sends no email and deploys nothing. The build
-door uses the pinned Wrangler and workspace paths from
+door uses the Wrangler @yaks/cloudflare pins, and the kernel's deploy guard from
 `workers/yak/wrangler.ts`; `packages/cli/dependencies.ts` installs the workspace
 with pnpm before a cold build.
 

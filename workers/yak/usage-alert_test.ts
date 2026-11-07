@@ -7,7 +7,7 @@ import {
   assertStringIncludes,
 } from '@std/assert'
 import { type Usage, warning } from './usage-alert.ts'
-import { API } from './analytics.ts'
+import { API } from '@yaks/cloudflare/analytics'
 import { sweep } from './usage.ts'
 import { platform } from './testing.ts'
 import { meta } from './meta.ts'

@@ -599,6 +599,10 @@ grouped approximately by function, **not** by dependency order.
   D1 has no interactive transaction to hold open. It also keeps a vault of
   secrets in D1, encrypted under a key the caller holds, meeting @yaks/secrets'
   vault shape without importing it.
+- **[@yaks/cloudflare](./cloudflare)** — Cloudflare's account API outside a
+  binding: the fetch that resends what Cloudflare failed on its own side, its
+  analytics, the Workers Builds deploy hook's answer, and the pinned Wrangler
+  every Worker's deploy door and the box's admin run.
 - **[@yaks/sync](./sync)** — Send local graph changes to a server and reconcile
   or revert optimistic updates. `now()` estimates store time from measured
   socket round trips. Deletion batches wait for the server. Schema keywords

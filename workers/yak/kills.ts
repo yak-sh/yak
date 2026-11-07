@@ -9,7 +9,7 @@
 //
 // The directory's kill sweep (facets/kills-graph.ts) reads the minutes since
 // the last run finished and reports each kill it finds, once.
-import { ask, said } from './analytics.ts'
+import { ask, said } from '@yaks/cloudflare/analytics'
 import { defect } from './defects.ts'
 import type { Env } from './env.ts'
 import { sleep } from '@yaks/fp'

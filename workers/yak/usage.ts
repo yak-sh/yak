@@ -65,7 +65,7 @@ import { mail } from './mail.ts'
 import { replyTo } from './host.ts'
 import { KERNEL, meta } from './meta.ts'
 import { type Alerts, type Usage, warning } from './usage-alert.ts'
-import { type Answer as Asked, ask, said } from './analytics.ts'
+import { type Answer as Asked, ask, said } from '@yaks/cloudflare/analytics'
 import { caught } from './defects.ts'
 import { visited } from './views.ts'
 

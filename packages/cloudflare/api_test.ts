@@ -2,7 +2,7 @@
 // with one status each time, or drops (`null`), and what the caller gets.
 import { test } from '@yaks/testing'
 import { assertEquals } from '@std/assert'
-import { resent } from './workers_api.ts'
+import { resent } from './api.ts'
 
 type Call = [string, number | null, boolean?, string?]
 

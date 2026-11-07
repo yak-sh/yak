@@ -1,0 +1,21 @@
+{
+  "name": "@yaks/cloudflare",
+  "version": "0.2.0",
+  "type": "module",
+  "exports": {
+    "./api": "./api.ts",
+    "./analytics": "./analytics.ts",
+    "./hook": "./hook.ts",
+    "./wrangler": "./wrangler.ts"
+  },
+  "license": "Apache-2.0",
+  "description": "Cloudflare's account API, analytics, Workers Builds deploy hooks and the pinned wrangler, as every Worker door and the box's admin share them.",
+  "dependencies": {
+    "@yaks/fp": "0.2.23",
+    "wrangler": "4.158.0"
+  },
+  "devDependencies": {
+    "@std/assert": "npm:@jsr/std__assert@^1.0.0",
+    "@yaks/testing": "0.2.30"
+  }
+}

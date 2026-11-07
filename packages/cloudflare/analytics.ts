@@ -1,17 +1,18 @@
 // Cloudflare's analytics, read with the account's analytics token: its GraphQL
-// API, the one call the meter (usage.ts), the kill sweep (kills.ts) and the
-// box's usage watch (@yaks/admin) share, and the Analytics Engine SQL the
-// views read (views.ts). Each brings its own query and reads its own answer.
+// API, and the address of the Analytics Engine SQL API beside it. Each caller
+// brings its own query and reads its own answer.
 // A query only reads, so it goes through the account API's fetch as an
-// idempotent call (workers_api.ts `resent`): a failure that is Cloudflare's
+// idempotent call (api.ts `resent`): a failure that is Cloudflare's
 // own is sent again, and one that outlasts every resend is `Unavailable`. A
 // token that cannot read analytics answers 200 with `errors`, which `said`
 // turns into the same throw as a refused call; a 200 whose `errors` say
 // Cloudflare failed inside ("Internal server error") is `Unavailable`, an
-// outage the next run reads past (wake.ts `reporting`).
-import type { Env } from './env.ts'
+// outage the next run reads past.
 import { sleep } from '@yaks/fp'
-import { failure, resent, Unavailable } from './workers_api.ts'
+import { failure, resent, Unavailable } from './api.ts'
+
+/** The analytics token, and where its reads go. */
+export type Analytics = { CF_ANALYTICS_TOKEN?: string; ANALYTICS_API?: string }
 
 /** Cloudflare's API. */
 export let API = 'https://api.cloudflare.com/client/v4'
@@ -25,7 +26,8 @@ export let API = 'https://api.cloudflare.com/client/v4'
  * assertEquals(api({ ANALYTICS_API: 'http://127.0.0.1:9' }), 'http://127.0.0.1:9')
  * ```
  */
-export let api = (env: Pick<Env, 'ANALYTICS_API'>) => env.ANALYTICS_API ?? API
+export let api = (env: Pick<Analytics, 'ANALYTICS_API'>) =>
+  env.ANALYTICS_API ?? API
 
 export type Answer<T> = {
   data?: T
@@ -33,7 +35,7 @@ export type Answer<T> = {
 }
 
 export let ask = async <T>(
-  env: Pick<Env, 'CF_ANALYTICS_TOKEN' | 'ANALYTICS_API'>,
+  env: Analytics,
   query: string,
   variables: Record<string, string>,
   wait: (ms: number) => Promise<void> = sleep,
@@ -65,7 +67,7 @@ export let ask = async <T>(
  *
  * ```ts
  * import { assertEquals, assertThrows } from '@std/assert'
- * import { Unavailable } from './workers_api.ts'
+ * import { Unavailable } from './api.ts'
  * assertEquals(said({ data: 1 }), 1)
  * assertThrows(() => said({ errors: [{ message: 'no' }] }), Error, 'analytics: no')
  * let down = { errors: [{ message: 'Internal server error' }] }

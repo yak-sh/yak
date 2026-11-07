@@ -169,14 +169,14 @@ build itself, and it times every deploy.
 Each minute it reads main's head from origin. Once origin first showed the head
 (its push, to within a look) `LATE` (3 minutes; Builds queues a build within
 seconds of a push) ago, it reads what `yak` serves with wrangler and compares
-the two commits through the build's watch paths (workers/yak/wrangler.ts
-`WATCHED`), so a push no build was meant for (a test, a README, an app) counts
-as live. A head that is not live and that Builds is still building waits for its
-build: Builds keeps a check run named `Workers Builds: yak` on the commit in
-GitHub, in progress while the build runs, and the catch-up reads it with `gh`. A
-head that changed no watched path has no build of its own, so the check run read
-is that of the newest commit before it that did. A head whose build failed waits
-a `BOUND` from the failure: Builds tells the kernel, which builds main again
+the two commits through the build's watch paths (watched.ts `WATCHED`), so a
+push no build was meant for (a test, a README, an app) counts as live. A head
+that is not live and that Builds is still building waits for its build: Builds
+keeps a check run named `Workers Builds: yak` on the commit in GitHub, in
+progress while the build runs, and the catch-up reads it with `gh`. A head that
+changed no watched path has no build of its own, so the check run read is that
+of the newest commit before it that did. A head whose build failed waits a
+`BOUND` from the failure: Builds tells the kernel, which builds main again
 through the deploy hook and files that build's failure (workers/yak/builds.ts),
 and no check run shows that build. Any other head that is not live, or a failed
 one still not live a `BOUND` on, asks main's deploy hook for a build, and the
@@ -249,8 +249,8 @@ a jump in that tracker is still heard.
 
 A look that fails is tried again five minutes later, for the same hour. A query
 Cloudflare fails on its own side (a 5xx or a 429) is sent again within each look
-(workers/yak/workers_api.ts `resent`), and a look it fails through every resend
-is a log line; once Cloudflare has not answered for five minutes, the outage is
+(@yaks/cloudflare/api `resent`), and a look it fails through every resend is a
+log line; once Cloudflare has not answered for five minutes, the outage is
 reported once, with the last failure as its cause. Any other failure, such as a
 token refused 401 or 403, is reported at once. Either is one report until a look
 succeeds.
