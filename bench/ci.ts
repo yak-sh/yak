@@ -183,6 +183,8 @@ let LINE = /^[^\t]*\t([^\t]*)\t\S+ ?(.*)$/
 ///   -> [{ name: 'a test', file: 'w/a_test.ts' }]
 /// failing('g\tcheck\tT FAILED | 8 passed | 2 failed: check:fmt, check:lint (3.1s)')
 ///   -> [{ name: 'check:fmt' }, { name: 'check:lint' }]
+/// failing('g\ttests\tT FAILED | 0 passed | 1 failed: a (w/a_test.ts) | 0 over budget (2.0s)\ng\ttests\tT ##[error]Process completed with exit code 1.')
+///   -> [{ name: 'tests' }]
 /// failing('g\tbuild\tT ##[error]Process completed with exit code 1.')
 ///   -> [{ name: 'build' }]
 /** What failed in a run, from its failed steps' log: each test the runner's
@@ -194,8 +196,9 @@ export let failing = (log: string): Failed[] => {
     let [, step, said] = line.match(LINE) ?? []
     if (said == undefined) continue
     let test = said.match(/^(.+) => \.\/(\S+?)(?::\d+:\d+)?$/)
+    // The checks' closing line ends at the names; the tests' goes on.
     let checks = said.match(
-      /^FAILED \| \d+ passed \| \d+ failed: (.+) \(\S+\)$/,
+      /^FAILED \| \d+ passed \| \d+ failed: ([^|]+) \(\S+\)$/,
     )
     if (test) tests.set(said, { name: test[1], file: test[2] })
     else if (checks) {

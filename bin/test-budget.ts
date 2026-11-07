@@ -288,15 +288,17 @@ let seconds = (ms: number) => `${(ms / 1000).toFixed(1)}s`
 /// closing(0, { deno: { wall: 9, tests: [{ file: 'a', name: 'x', ms: 1, ok: true }], ignored: 2, left: 3 } }, 0, 2300)
 ///   -> 'ok | 1 passed | 0 failed | 2 ignored | 3 unchanged since they passed | 0 over budget (2.3s)'
 /// closing(1, { deno: { wall: 9, tests: [{ file: 'a', name: 'x', ms: 1, ok: false }] } }, 2)
-///   -> 'FAILED | 0 passed | 1 failed | 2 over budget'
+///   -> 'FAILED | 0 passed | 1 failed: x (a) | 2 over budget'
 /// closing(0, {}, 0, 1000, 0, 4)
 ///   -> 'ok | 0 passed | 0 failed | 4 farther consumers left to CI | 0 over budget (1.0s)'
 /**
  * The run in one line: its verdict by its exit code, the tests that passed
- * and failed on every platform, those skipped and the files left out as
- * unchanged since they passed (`left`, or as each platform says), the files
- * `beyond` what it had time for, the tests the budget flags, and what the run
- * took.
+ * and failed on every platform, the first few failures by name, those
+ * skipped and the files left out as unchanged since they passed (`left`, or
+ * as each platform says), the files `beyond` what it had time for, the tests
+ * the budget flags, and what the run took. A failure is named here, in the
+ * line a run's tail is read by, so the budget's lines just above it never
+ * pass for the reason it is red.
  */
 export let closing = (
   exit: number,
@@ -308,13 +310,18 @@ export let closing = (
 ) => {
   let all = Object.values(runs)
   let tests = all.flatMap((r) => r.tests)
-  let failed = tests.filter((t) => !t.ok).length
+  let red = tests.filter((t) => !t.ok)
+  let failed = red.length
   let sum = (k: 'ignored' | 'left') => all.reduce((n, r) => n + (r[k] ?? 0), 0)
   let unchanged = left ?? sum('left')
+  let named = [
+    ...red.slice(0, 3).map((t) => `${t.name} (${t.file})`),
+    ...failed > 3 ? [`${failed - 3} more`] : [],
+  ].join('; ')
   return `${exit ? 'FAILED' : 'ok'} | ${
     [
       `${tests.length - failed} passed`,
-      `${failed} failed`,
+      failed ? `${failed} failed: ${named}` : '0 failed',
       ...sum('ignored') ? [`${sum('ignored')} ignored`] : [],
       ...unchanged ? [`${unchanged} unchanged since they passed`] : [],
       ...beyond ? [`${beyond} farther consumers left to CI`] : [],
