@@ -20,7 +20,10 @@ export let KEPT = 'public, max-age=30, stale-while-revalidate=86400'
 
 // Bumped when how a page is woven changes and kept pages must not wait out
 // their freshness: every key moves, and the old pages are never read again.
-let GENERATION = 2
+// What a page says of itself is woven too: a page kept before it said its
+// store (`Seen.store`) wakes nothing, and a stale copy is renewed only where
+// it is read, so copies from before that went on answering (T-150366).
+let GENERATION = 3
 
 // What Site says of a pass for now only (`passed`), which no cache holds.
 export let UNKEPT = 'private, no-store'
