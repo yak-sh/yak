@@ -1949,14 +1949,29 @@ export type Listing = {
   persons: Map<string, Known>
 }
 
-// A listing out of the rows one read answered, all but what to call the
-// people it names: only what stands in the person's spaces is kept, and who is
-// in a space only where they own it, since that is the owner's alone
-// (people.ts).
-let listed = (
-  rows: ReadRow[],
-  person: string,
-): Omit<Listing, 'persons'> => {
+// The arms of a read answering who holds or is offered a place in the spaces
+// `at` walks to, and their apps: each place by the row that holds it and its
+// walk to the space, and whom it names by the same walk back from them
+// (`people`, `listing`).
+let placed = (at: string) => {
+  let places = [
+    ['member', `space${at}`],
+    ['grant', `app.app.space${at}`],
+    ['invite', `to${at}`],
+    ['invite', `to.app.space${at}`],
+  ]
+  return [
+    ...places.map(([held, to]) => `(.${held}.${to})`),
+    ...places.map(([held, to]) =>
+      `(.${held}s_person.${held}.${to}&.email&?doc&?phone)`
+    ),
+  ]
+}
+
+// A listing out of the rows one read answered: only what stands in the
+// person's spaces is kept, and who is in a space, and what to call them, only
+// where they own it, since that is the owner's alone (people.ts).
+let listed = (rows: ReadRow[], person: string): Listing => {
   let seats = seatsOf(rows, person).filter((s) => s.space.slug != META.space)
   let spaces = new Set(seats.map((s) => s.space.eid))
   let apps = rows.filter((r) => r.app && spaces.has(idOf(r.app.space)))
@@ -1970,6 +1985,7 @@ let listed = (
     ...apps.filter((a) => owned.has(a.space)).map((a) => a.eid),
   ])
   let held = heldOf(rows).filter((h) => theirs.has(h.on))
+  let named = new Set(held.map((h) => h.person))
   return {
     seats,
     apps,
@@ -1979,6 +1995,7 @@ let listed = (
         return app != null && eids.has(idOf(app))
       }),
     held,
+    persons: new Map([...personsOf(rows)].filter(([eid]) => named.has(eid))),
   }
 }
 
@@ -2309,32 +2326,25 @@ export let directoryRows = (rows: {
         ),
       }
     },
-    // A person's whole listing in two reads (tools.ts `app_list`). The first
-    // is one snapshot of every row reached from the person's own seats, so
-    // nothing in it waits on ids an earlier read learned. Who is in their
-    // spaces is read in each of them and kept only where they own it
-    // (`listed`), since no one hop says "a seat of theirs that is an owner's".
-    // What to call those people is the second: a reverse hop inside another
-    // (`.members_person.member.space.members_space…`) is not a question the
-    // SQL compiler answers.
+    // A person's whole listing in one read (tools.ts `app_list`): one
+    // snapshot of every row reached from the person's own seats, so nothing
+    // in it waits on ids an earlier read learned. Who is in their spaces, and
+    // what to call them, is read in each of them and kept only where they own
+    // it (`listed`), since no one hop says "a seat of theirs that is an
+    // owner's".
     listing: async (person: string): Promise<Listing> => {
-      if (!person) return { ...listed([], person), persons: new Map() }
+      if (!person) return listed([], person)
       let mine = `members_space.member.person=${person}`
       let rows = await query(
         [
           `(.member.person=${person})`,
           `(.space&.${mine}&${SPACE_ABOUT})`,
-          `(.member.space.${mine})`,
           `(.app.space.${mine}&${ABOUT})`,
           `(.binding.app.app.space.${mine})`,
-          `(.grant.app.app.space.${mine})`,
-          `(.invite.to.${mine})`,
-          `(.invite.to.app.space.${mine})`,
+          ...placed(`.${mine}`),
         ].join('|'),
       )
-      let got = listed(rows, person)
-      let named = [...new Set(got.held.map((h) => h.person))]
-      return { ...got, persons: await self.persons(named) }
+      return listed(rows, person)
     },
     // A subdomain the space has left, still pointing at it (T-34658) — what
     // `former` is to an app, one level up. Asked only after `space` has
@@ -2904,22 +2914,7 @@ export let directoryRows = (rows: {
         return { held: [], persons: new Map() }
       }
       let at = 'path' in spaces ? spaces.path : `=${spaces.join(',')}`
-      // Each place by the row that holds it and its walk to the space; whom
-      // it names, by the same walk back from them.
-      let places = [
-        ['member', `space${at}`],
-        ['grant', `app.app.space${at}`],
-        ['invite', `to${at}`],
-        ['invite', `to.app.space${at}`],
-      ]
-      let rows = await query(
-        [
-          ...places.map(([held, to]) => `(.${held}.${to})`),
-          ...places.map(([held, to]) =>
-            `(.${held}s_person.${held}.${to}&.email&?doc&?phone)`
-          ),
-        ].join('|'),
-      )
+      let rows = await query(placed(at).join('|'))
       return { held: heldOf(rows), persons: personsOf(rows) }
     },
     // How many invitations this person has sent in the hour it names. Fresh:

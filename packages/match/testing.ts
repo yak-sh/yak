@@ -260,6 +260,10 @@ export let QUERIES: string[] = [
   '.reviews.review.stars=5',
   '.reviews.review.stars>=4',
   '.books',
+  // a reverse hop whose child turns back again: whoever wrote a book beside
+  // an author of a sold one
+  '.books.book.author.books.book.status=sold',
+  '.reviews.review.book.book.author.books.book.status=sold',
   // bare words
   'spring',
   'fables',

@@ -205,3 +205,46 @@ test('a path that turns back is read from its root component', () => {
 test('a path that turns back answers under a visibility policy', () => {
   equal(turned[1].seen, ['db'])
 })
+
+// A reverse hop whose child turns back again: the people seated beside P,
+// read from P's seats and the seats of their spaces, however many seats
+// stand in spaces P is not in.
+let beside = (n: number) => {
+  let db = new Database(':memory:'), d = driver(db)
+  let store = storage(d, seated)
+  store.install()
+  let g = graph({ storage: store, vocab: seated, plugins: [archetypes()] })
+  let seat = (eid: string, space: string, person: string) => ({
+    entity: { eid },
+    member: { space, person },
+  })
+  g.apply([
+    ...['P', 'Q', 'R'].map((eid) => ({ entity: { eid }, person: {} })),
+    ...['mine', 'away'].map((eid) => ({ entity: { eid }, space: {} })),
+    seat('p', 'mine', 'P'),
+    seat('q', 'mine', 'Q'),
+    seat('r', 'away', 'R'),
+    ...Array.from({ length: n }, (_, i) => seat(`x${i}`, 'away', `R`)),
+  ])
+  let q = '.members_person.member.space.members_space.member.person=P'
+  let sql = render(compile(parse(q), seated, { archetypes: catalog(d) }))
+  let stmt = db.prepare(sql.sql)
+  let eids = stmt.all(...sql.params).map((r) => String(r.eid)).sort()
+  return {
+    eids,
+    steps: status.symbols.sqlite3_stmt_status(stmt.unsafeHandle, 4, 1),
+  }
+}
+let besides = [10, 40].map(beside)
+
+test('a reverse hop inside a reverse hop answers the people beside one', () => {
+  equal(besides.map((b) => b.eids), [['P', 'Q'], ['P', 'Q']])
+})
+
+test('a reverse hop inside a reverse hop reads the seats it reaches', () => {
+  let [small, large] = besides
+  ok(
+    large.steps < small.steps + 30,
+    `${small.steps} then ${large.steps} VM steps for four times the seats`,
+  )
+})

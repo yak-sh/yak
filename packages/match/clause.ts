@@ -519,9 +519,13 @@ let reverse = (ctx: Ctx, name: string, a: Assoc, p: Pred): Test => {
   }
   // Inside the hop the identity component names the child, not the entity being
   // tested, so a child predicate that reached it would silently ask a different
-  // question.
+  // question. A child path that turns back again is aimed as far as it goes
+  // forward, and its own reverse hop is read from the child.
+  let back = ctx.v.turn(rest)
   if (
-    rest.length && ctx.v.aim(rest.join('.')).some((h) => h.comp == 'entity')
+    rest.length &&
+    ctx.v.aim((back > 0 ? rest.slice(0, back) : rest).join('.'))
+      .some((h) => h.comp == 'entity')
   ) {
     throw new Unsupported(
       'a reverse hop through the spine',

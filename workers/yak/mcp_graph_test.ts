@@ -164,10 +164,10 @@ test('a tool that names one app reads the directory once', async () => {
 })
 
 // A person's whole listing is one question (tools.ts `app_list`): their
-// seats, every app across them and who is in the spaces they own come from
-// one directory snapshot, and what to call those people from a second read
-// (directory.ts `listing`), whichever space or app it names.
-test('app_list reads the directory twice', async () => {
+// seats, every app across them, who is in the spaces they own and what to
+// call those people come from one directory snapshot (directory.ts
+// `listing`), whichever space or app it names.
+test('app_list reads the directory once', async () => {
   let k = await kernel()
   try {
     let { cookie } = await signIn(k)
@@ -192,7 +192,7 @@ test('app_list reads the directory twice', async () => {
     }
     assertEquals(
       [await hops({}), await hops({ space }), await hops({ app: 'listed' })],
-      ['2', '2', '2'],
+      ['1', '1', '1'],
     )
   } finally {
     await k.stop()

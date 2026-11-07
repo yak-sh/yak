@@ -4902,10 +4902,10 @@ let OURS: Row[] = [
       },
     },
     // The listing is one question, so it is asked as one: the caller's
-    // seats, every app across them, everything bound to those apps and who is
-    // in the spaces they own come from one directory snapshot, and what to
-    // call those people from a second read (directory.ts `listing`), then one
-    // parallel wave for what each space's tracker holds.
+    // seats, every app across them, everything bound to those apps, who is
+    // in the spaces they own and what to call them come from one directory
+    // snapshot (directory.ts `listing`), then one parallel wave for what each
+    // space's tracker holds.
     // Asked space by space and app by app it was eleven reads before the
     // first app and three more per app, in turn (T-35431), and asked kind by
     // kind it was five to eight in turn (T-148244).
@@ -4951,8 +4951,12 @@ let OURS: Row[] = [
       let bound = boundOf(listing.bound).filter((b) => alive.has(b.app))
       // What is broken in each app, as each space's tracker holds it: one read
       // a space, all at once, and no app's store woken to list it (T-123502).
+      // A space with no app to list has nothing broken to say.
+      let tracked = seats.filter(({ space }) =>
+        living.some((a) => a.space == space.eid)
+      )
       let broken = new Map(
-        (await Promise.all(seats.map(async ({ space, role }) => [
+        (await Promise.all(tracked.map(async ({ space, role }) => [
           ...await trackedIn(ctx.env, space, asCaller(ctx, role), true),
         ]))).flat().map(([app, hits]) => [app, breaks(hits)] as const),
       )

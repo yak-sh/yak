@@ -662,7 +662,9 @@ test('a deploy through the connector asks the directory each thing once until it
 // broken in each is the space's tracker's to say. A listing that woke every
 // store spent the month's requests of apps nobody had opened.
 test('a listing asks the directory a fixed number of times', async () => {
-  let p = platform('listing-hops-secret')
+  let p = platform('listing-hops-secret', {
+    MAIL: { send: () => Promise.resolve({ messageId: 'sent' }) },
+  })
   let { env } = p
   let dir = directory({ fetch: (r) => dirPart.fetch(r, env) })
   let ADA = 'a0000000-0000-4000-8000-0000000000ad'
@@ -686,26 +688,55 @@ test('a listing asks the directory a fixed number of times', async () => {
       }))
     ),
   }, { 'x-yak-person': ADA, 'x-yak-role': 'owner' })
+  // Bo sits in one, Cy is a guest of one of its apps, and Di is still invited.
+  let seated = async (email: string, app?: string) => {
+    await call(setup, 'member_add', {
+      space: 'one',
+      email,
+      app,
+      role: 'viewer',
+    })
+    let person = (await dir.personAt(email))!
+    let space = (await dir.space('one'))!
+    let at = app ? (await dir.app(space, app))! : null
+    let to = (await dir.invite(at?.eid ?? space.eid, person))!
+    await accept(dir, { ...to, person }, { space, app: at })
+  }
+  await seated('bo@books.example')
+  await seated('cy@books.example', 'a-app')
+  await call(setup, 'member_add', {
+    space: 'one',
+    email: 'di@books.example',
+    role: 'editor',
+  })
   // What the setup's writes owed runs after them; only the listing is counted.
   await p.settled()
+  // Each call its own client, as each request is: a client gathers the reads
+  // asked in one turn into one trip, whoever asked them.
   let costs = async (name: string, args: Record<string, unknown>) => {
     let c = clock()
+    let own = directory({ fetch: (r) => dirPart.fetch(r, env) })
     await c.counting(() =>
-      call({ env, dir, person: ADA, clock: c }, name, args)
+      call({ env, dir: own, person: ADA, clock: c }, name, args)
     )
     let said = stages(c.header())
     if (name == 'about') assertEquals(said.stmts, 0)
     else assertEquals(said.stmts > 0, true)
     return { hops: said.hops, stmts: said.stmts, r2: said.r2 }
   }
-  // Her seats, the apps, their bindings and who is in the spaces she owns
-  // are one read (directory.ts `listing`), the people it names one more, and
-  // nothing per app; a space named is found among the same seats.
+  // Her seats, the apps, their bindings, who is in the spaces she owns and
+  // what to call them are one read (directory.ts `listing`), and nothing per
+  // app; a space named is found among the same seats.
   assertEquals(await costs('about', {}), { hops: 0, stmts: 0, r2: 0 })
   let all = await costs('app_list', {})
-  assertEquals({ hops: all.hops, r2: all.r2 }, { hops: 2, r2: 0 })
-  let one = await costs('app_list', { space: 'one' })
-  assertEquals({ hops: one.hops, r2: one.r2 }, { hops: 2, r2: 0 })
+  assertEquals({ hops: all.hops, r2: all.r2 }, { hops: 1, r2: 0 })
+  let one = await costs('app_list', { space: 'one', people: true })
+  assertEquals({ hops: one.hops, r2: one.r2 }, { hops: 1, r2: 0 })
+  let said = (await call(setup, 'app_list', { space: 'one', people: true }))
+    .text
+  for (let email of ['bo', 'cy', 'di']) {
+    assertStringIncludes(said, `${email}@books.example`)
+  }
 })
 
 // The other half of asking once: every row of the one answer has to find its
@@ -741,6 +772,35 @@ test('one read of the bindings still lands each on its own app', async () => {
   assertStringIncludes(one.text, 'binding: DB (d1) — recipes-db; creation')
   assertStringIncludes(one.text, 'email ada.recipes@')
   assertEquals(one.text.includes('/garden/'), false)
+})
+
+// What is broken is said of the apps listed, so a space whose apps are all in
+// the trash, or that has none, asks its tracker nothing.
+let trackerAsked = await (async () => {
+  let { env } = rows('listing-tracker-secret')
+  let dir = directory({ fetch: (r) => dirPart.fetch(r, env) })
+  let ctx: Ctx = { env, dir, person: 'a0000000-0000-4000-8000-0000000000ad' }
+  await call(ctx, 'space_new', { slug: 'ada', title: 'Ada' })
+  await call(ctx, 'app_new', { space: 'ada', slug: 'recipes', title: 'R' })
+  await owned(ctx, 'bin')
+  await call(ctx, 'app_new', { space: 'bin', slug: 'old', title: 'Old' })
+  await call(ctx, 'app_delete', { space: 'bin', app: 'old' })
+  await owned(ctx, 'bare')
+  let asked: string[] = []
+  let tracker = env.TRACKER!
+  env.TRACKER = {
+    fetch: (r: Request) => {
+      asked.push(new URL(r.url).searchParams.get('scope')!)
+      return tracker.fetch(r)
+    },
+  } as typeof tracker
+  return { ctx, asked, ada: (await dir.space('ada'))!.eid }
+})()
+test('a listing asks the tracker only of spaces with an app to list', async () => {
+  let { ctx, asked, ada } = trackerAsked
+  let said = (await call(ctx, 'app_list', {})).text
+  assertStringIncludes(said, 'In the trash: Old (old)')
+  assertEquals(asked, [ada])
 })
 
 test('free custom domains return plan settings before provisioning', async () => {

@@ -1786,11 +1786,15 @@ let reverse = (
   p: Pred,
   target = ctx.d.ownerKey('entity'),
 ): Cond => {
-  if (ctx.owner) throw new Unsupported('a nested reverse association')
+  // Inside another reverse hop only a child filter is read, as the owners it
+  // names (`semi`, below): a count or an EXISTS there would name the same
+  // table as the row around it.
+  let nested = () => new Unsupported('a nested reverse association')
   let child = ctx.d.table(a.comp)
   let corr = `${refKey(ctx, a.comp, a.prop)} = ${target}`
   let rest = p.path.slice(1)
   let value = flat(p.value)
+  if (ctx.owner && !rest.length && !p.where) throw nested()
   // A reference that lands on the other spine never points at an entity on
   // this one: there are no children, so each test is answered as for none.
   let far = lands(ctx.v, a.comp, a.prop) != ctx.spine
@@ -1829,8 +1833,11 @@ let reverse = (
       params: [Number(value)],
     })
   }
+  let back = ctx.v.turn(rest)
   if (
-    rest.length && ctx.v.aim(rest.join('.')).some((h) => h.comp == 'entity')
+    rest.length &&
+    ctx.v.aim((back > 0 ? rest.slice(0, back) : rest).join('.'))
+      .some((h) => h.comp == 'entity')
   ) {
     throw new Unsupported(
       'a reverse hop through the spine',
@@ -1846,6 +1853,7 @@ let reverse = (
   // components' own owner sets, which a sparse one drives.
   let semi = !p.not && !ctx.correlated && !ctx.bounded && !ctx.row &&
     !ctx.candidates && !ctx.few
+  if (ctx.owner && !semi) throw nested()
   let sub: Ctx = {
     ...ctx,
     tables: new Set(),
@@ -2502,6 +2510,23 @@ let clause = (ctx: Ctx, c: Clause): Cond => {
       chained(ctx.v, hops)
       let root = hops[0]
       ctx.tables.add(root.comp)
+      // Inside a reverse hop the row is the child's, its components joined
+      // beside it, so the path starts at its own column: the seats beside a
+      // person's (`.members_person.member.space.members_space…`) are read by
+      // the index on `member.space`.
+      if (ctx.owner) {
+        let target = chain(ctx, hops, refKey(ctx, root.comp, root.prop))
+        return and(
+          notNull(raw(target)),
+          reverse(
+            ctx,
+            c.path[back],
+            ctx.v.assoc(c.path[back])!,
+            { ...c, path: c.path.slice(back) },
+            target,
+          ),
+        )
+      }
       let start =
         `(select "__forward"."${root.prop}" from ${
           source(ctx, root.comp)

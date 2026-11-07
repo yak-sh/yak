@@ -833,13 +833,16 @@ correlated lookup per row.
 
 [Reverse associations](../vocab/README.md#routing-and-references) compile to
 correlated EXISTS or count subqueries, which preserve one outer row per entity.
-`.refs=<eid>` finds backlinks across reference properties, grouping columns by
-table and cutting compound selects to fit the engine limit. Each backlink
-predicate binds its target once, regardless of the number of reference columns.
-A window of backlinks in the default order (`.refs=<eid>&.limit=200`) costs
-about its page: when the entity has more than 10,000 references the statement
-walks the newest entities in order and keeps the referrers among them, and
-otherwise it looks up each referrer and sorts them.
+A child filter whose path turns back again
+(`.members_person.member.space.members_space.member.person=P`, the people seated
+beside P) is read as the owners each child set names, innermost first, from the
+child's own reference column. `.refs=<eid>` finds backlinks across reference
+properties, grouping columns by table and cutting compound selects to fit the
+engine limit. Each backlink predicate binds its target once, regardless of the
+number of reference columns. A window of backlinks in the default order
+(`.refs=<eid>&.limit=200`) costs about its page: when the entity has more than
+10,000 references the statement walks the newest entities in order and keeps the
+referrers among them, and otherwise it looks up each referrer and sorts them.
 [Walks](../query/README.md#walks-and-qualifiers) compile reference chains to a
 recursive common table expression. The exported `walk` accepts a one-step query
 projecting `from` and `to` integer ids; edge packages supply their own step.
@@ -998,7 +1001,8 @@ try {
 
 Text terms need [@yaks/fts](../fts/README.md) or another Extension; `.near`
 needs [@yaks/embedding](../embedding/README.md); edge-typed walks need
-[@yaks/edge](../edge/README.md). Nested reverse associations and reverse child
+[@yaks/edge](../edge/README.md). A nested reverse association other than a child
+filter read as a set (a count, an absence, a negation) and reverse child
 predicates reading entity metadata are unsupported. JSON-valued properties
 permit presence tests and whole-value projections, but not comparisons, ordering
 or aggregation. Some scalar comparisons also decline when SQLite cannot match
