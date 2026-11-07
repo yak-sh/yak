@@ -223,6 +223,8 @@ await mailbox.apply([
   }),
   got('bob', 'bob@example.com', 1),
   got('carl', 'carl@example.com', 2, { archived: {} }),
+  // An answered letter archived afterwards still counts, as answered.
+  got('hal', 'hal@example.com', 3, { archived: {} }),
   got('fay', 'fay@example.com', 4),
   got('gus', 'gus@example.com', 2),
   got('notice', 'noreply@notify.cloudflare.com', 1),
@@ -240,6 +242,7 @@ await mailbox.apply([
   sent('gus-answer', 1, { to: 'gus@example.com', target: 'gus' }),
   // A letter to bob that is not a reply answers nothing.
   sent('bob-notice', 0.5, { to: 'bob@example.com' }),
+  sent('hal-answer', 2.5, { to: 'hal@example.com', reply_to: 'hal' }),
 ], { trusted: true })
 
 let listed = async (
@@ -316,13 +319,13 @@ test('errors includes full resolved explanations only when requested', () => {
   ])
 })
 
-test('errors times the first answer to each person who wrote in its window', () => {
+test('errors counts the letters that needed an answer, not those archived unanswered', () => {
   let after = all.said.slice(
     all.said.findIndex((l) => l.startsWith('Open longest')) + 1,
   )
   assertMatch(
     after[0],
-    /^People's letters in the last 7d: 5, answered 3, median 2h, worst 3h30m \(.+ from fay\)$/,
+    /^People's letters in the last 7d: 5, answered 4, median 1h30m, worst 3h30m \(.+ from fay\)$/,
   )
   assertEquals(after.length, 2)
   assertMatch(after[1], /^Unanswered 1h: .+ from bob@example\.com {2}from bob$/)

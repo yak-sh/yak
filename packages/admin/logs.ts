@@ -226,9 +226,10 @@ let OURS = /@(?:[\w-]+\.)*(?:bot\.yak\.sh|yaks\.app)$/i
 let ours = (address: string) => OURS.test(address)
 
 // People's letters beside the bugs: each letter a person wrote to one of the
-// platform's addresses in the window, how long until an answer to it
-// left (@yaks/mail/answers), and every one still waiting. Archiving a letter
-// says it needs no answer.
+// platform's addresses in the window that needed an answer, how long until an
+// answer to it left (@yaks/mail/answers), and every one still waiting.
+// Archiving a letter says it needs no answer, so an archived letter nobody
+// answered leaves the count.
 let letters = async (
   graph: Pick<Graph, 'read' | 'vocab'>,
   from: string,
@@ -242,7 +243,8 @@ let letters = async (
     return ours(to) && who && !ours(who) && !automated(who)
   })
   let sent = await graph.read(`${answersSince(from)} .limit=1000`)
-  let paired = answers(got, sent), id = human(graph.vocab)
+  let paired = answers(got, sent).filter((a) => a.answer || !a.letter.archived)
+  let id = human(graph.vocab)
   let { count, median, worst } = spread(
     paired.flatMap((a) =>
       a.ms == undefined ? [] : [{ ms: a.ms, of: a.letter }]
@@ -251,13 +253,13 @@ let letters = async (
   let title = (b: Bundle) =>
     line((b.doc as Comp | undefined)?.title).slice(0, 80)
   return [
-    `People's letters in the last ${last}: ${got.length}, answered ${count}` +
+    `People's letters in the last ${last}: ${paired.length}, answered ${count}` +
     (worst
       ? `, median ${span(median!)}, worst ${span(worst.ms)} (${id(worst.of)} ${
         title(worst.of)
       })`
       : ''),
-    ...paired.filter((a) => !a.answer && !a.letter.archived).map((
+    ...paired.filter((a) => !a.answer).map((
       { letter },
     ) =>
       `Unanswered ${span(end - arrived(letter))}: ${id(letter)} from ${
