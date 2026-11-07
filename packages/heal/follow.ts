@@ -84,7 +84,8 @@ let knock = (
 
 /** Whom a bug's opening names (`during`): the session whose work raised it,
  * while it is still at work, and the task that work was on, unless that was
- * cancelled. */
+ * cancelled. The task only names the work in the session's knock; the bug's
+ * own task holds the fix. */
 type Owner = { session?: string; task?: Bundle }
 
 // A running fixer holding the bug's task has taken the bug, and the tracker
@@ -321,36 +322,9 @@ export let follow = (
         let owner = await whose(bug)
         let { project, where, title, knocks } = await news(bug, owner)
         // The session at work holds what its work raised, so no fixer starts
-        // beside it; once it ends, a fixer may take the work over.
-        let held = owner.session && !comp(owner.task, 'claim')?.session
-          ? { claim: { session: owner.session } }
-          : {}
-        if (owner.task) {
-          let work = owner.task
-          let done = !!work.completed
-          return {
-            task: { ...work, ...held },
-            bug: evidence,
-            reopen: done,
-            open: true,
-            last: last(evidence, url),
-            writes: [
-              ...done || held.claim
-                ? [{
-                  entity: work.entity,
-                  ...done ? { completed: null } : {},
-                  ...held,
-                  $was: {
-                    completed: { at: token(comp(work, 'completed')?.at) },
-                    claim: { session: token(comp(work, 'claim')?.session) },
-                  },
-                }]
-                : [],
-              link(work.entity.eid, 'about', evidence),
-              ...knocks,
-            ],
-          }
-        }
+        // beside it; once it ends, a fixer may take the work over. The task
+        // its work was on is not the bug's: a regression is work of its own.
+        let held = owner.session ? { claim: { session: owner.session } } : {}
         task = {
           entity: { eid },
           task: {},

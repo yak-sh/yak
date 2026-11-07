@@ -1834,10 +1834,12 @@ test('unmuting reopened regression starts a fresh fixer instead of continuing it
 })
 
 // A bug whose opening names the session whose work raised it and that work's
-// task, done: `up` says whether the session is still at work.
+// task, done: `up` says whether the session is still at work. The bug is
+// resolved and comes back once, and the finished task stays as it was.
 let raised = async (up: boolean) => {
   let f = await fixture()
   let session = crypto.randomUUID(), work = crypto.randomUUID()
+  let done = { at: '2026-10-02T00:00:00Z' }
   await put(f.g, [
     {
       entity: { eid: session },
@@ -1848,7 +1850,7 @@ let raised = async (up: boolean) => {
       entity: { eid: work },
       task: {},
       doc: { title: 'land the lens mover' },
-      completed: { at: '2026-10-02T00:00:00Z' },
+      completed: done,
     },
   ])
   await put(f.tracker, [{
@@ -1857,32 +1859,56 @@ let raised = async (up: boolean) => {
   }])
   f.commits.length = 0
   await f.replay()
-  let [task] = await f.g.get([work])
+  let [opened] = await f.g.get([taskEid(bug)])
   let knocks = await rows(f.g, 'knock')
+  let fixers = await rows(f.g, 'fixer')
+  await put(f.tracker, [{
+    entity: { eid: bug },
+    resolved: { at: '2026-10-02T00:00:02Z' },
+  }])
+  await f.replay()
+  await put(f.tracker, [{
+    entity: { eid: bug },
+    resolved: null,
+    regressed: { at: '2026-10-02T00:00:03Z' },
+  }])
+  await f.replay()
+  let [task] = await f.g.get([work])
+  let [own] = await f.g.get([taskEid(bug)])
   f.close()
   return {
     session,
+    done,
     task,
+    opened,
+    own,
     knocks,
-    fixers: await rows(f.g, 'fixer'),
-    derived: (await f.g.get([taskEid(bug)])).filter((row) => row.task),
+    fixers,
     about: (await f.g.get([edgeEid(work, 'about', bug)]))[0],
   }
 }
 let atWork = await raised(true), ended = await raised(false)
-test('a bug goes to the session at work that raised it, on its task', () => {
-  let { session, task, knocks, fixers, derived, about } = atWork
-  ok(!task.completed && about && !derived.length)
-  equal(comp(task, 'claim').session, session)
+test('a bug goes to the session at work that raised it, on its own task', () => {
+  let { session, done, task, opened, knocks, fixers, about } = atWork
+  equal(comp(task, 'completed').at, done.at)
+  ok(!about && opened.task && !opened.completed)
+  equal(comp(opened, 'claim').session, session)
   equal(fixers, [])
   equal(knocks.map((k) => comp(k, 'knock').target), [session])
   let body = String(comp(knocks[0], 'doc').body)
   ok(body.includes('TypeError: missing row') && body.includes('bug resolve'))
 })
-test('a bug whose session ended starts a fixer on the task it raised', () => {
-  let { task, knocks, fixers, derived, about } = ended
-  ok(!task.completed && about && !derived.length)
+test('a bug whose session ended starts a fixer on its own task', () => {
+  let { done, task, opened, knocks, fixers, about } = ended
+  equal(comp(task, 'completed').at, done.at)
+  ok(!about && opened.task && !opened.completed)
   equal(fixers.length, 1)
-  equal(comp(task, 'claim').session, fixers[0].entity.eid)
+  equal(comp(opened, 'claim').session, fixers[0].entity.eid)
   equal(knocks.map((k) => comp(k, 'knock').target), [project])
+})
+test('the task a bug was raised on stays finished as the bug resolves and comes back', () => {
+  for (let { done, task, own } of [atWork, ended]) {
+    equal(comp(task, 'completed').at, done.at)
+    ok(!own.completed)
+  }
 })

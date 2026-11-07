@@ -62,10 +62,11 @@ pool. Serve that role beside the box's other worker roles, for example
 For a bug without a task, one apply writes the task, its `about` edge and, when
 the gates allow it, the fixer request. A bug whose opening names the session
 whose work raised it (`during{session, entity}`,
-[tracker](../tracker/README.md)) goes to that work: its task, reopened, is the
-bug's work unless it was cancelled. While that session is at work (process up or
-turn going on), the task is claimed for it, so no fixer starts beside it, and
-the opening's knock goes to it, carrying the resolve step, instead of to the
+[tracker](../tracker/README.md)) still gets a task of its own: the task that
+work was on stays as it was, finished or not, since a regression is not the
+feature. While that session is at work (process up or turn going on), the bug's
+task is claimed for it, so no fixer starts beside it, and the opening's knock
+goes to it, naming its task and carrying the resolve step, instead of to the
 home project. Once it ends, its claim no longer holds the task, and a fixer may
 take the work. An existing task linked by an `about` edge is reused. A replay or
 another follower reads the task and its claim and writes nothing while its fixer
