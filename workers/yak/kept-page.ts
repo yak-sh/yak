@@ -208,14 +208,32 @@ export let asked = async (
  * (variant.ts); the review and identity doors stay uncached. */
 export let LISTINGS = [...new Set([...PATHS, '/gallery', '/integrations'])]
 
+/** The apex's own pages that are the same for every visitor of a deploy: the
+ * site's files (site/mod.ts `PAGES`) and the guide's pages (docs.ts). Site
+ * keeps them too, so a visit never waits on the kernel's placement. */
+export let STATICS = [
+  '/pricing',
+  '/help',
+  '/terms',
+  '/privacy',
+  '/cookies',
+  '/acceptable-use',
+]
+let GUIDE = /^\/docs(?:\/[\w-]+)?$/
+
+/** Whether this apex path is one of those pages. */
+export let isStatic = (path: string) =>
+  STATICS.includes(path) || GUIDE.test(path)
+
 /** Where the gallery serves an app's chosen screenshot by its sha (gallery.ts
  * `image`). Site keeps each beside the listings that show it, and a listing
  * change purges both. */
 export let PICTURES = '/gallery/image/'
 
-/** Whether Site keeps this apex path: a listing, or a picture one shows. */
+/** Whether Site keeps this apex path: a listing, a picture one shows, or a
+ * static page. */
 export let isListing = (path: string) =>
-  LISTINGS.includes(path) || path.startsWith(PICTURES)
+  LISTINGS.includes(path) || path.startsWith(PICTURES) || isStatic(path)
 
 /** The listing a visit to this apex path is answered with: the home page
  * variant its visitor is shown (variant.ts) for `/`, else the path's own. */

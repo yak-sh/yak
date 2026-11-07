@@ -52,7 +52,9 @@ let UNSEEN = [
 let DRAFT = ['draft', 'fence', 'followed']
 // A space's routing: which app answers which path, and whether any does.
 let ROUTING = ['home', 'trashed', 'former']
-let LISTED = ['gallery', 'screenshot', 'integration', 'listed']
+// What the kept apex pages show beside apps: the listings, and the platform's
+// fee, which /pricing quotes (sell.ts `priceAt`).
+let LISTED = ['gallery', 'screenshot', 'integration', 'listed', 'fee']
 // What home and /gallery show of a published app beside its listing
 // (gallery.ts `shown`): its offer, its title, where it answers, and who may
 // open it. A release changes none of these, so it leaves them in the cache.
@@ -150,6 +152,8 @@ let shows = (b: Bundle) =>
  *   await owed([{ entity: { eid: 'x' }, doc: { title: 'b' } }], offered),
  *   ['site', 'app:x'],
  * )
+ * // A new fee changes what /pricing quotes.
+ * assertEquals(await owed([{ entity: { eid: 'm' }, fee: { bps: 250 } }], offered), ['site'])
  * ```
  */
 export let owed = async (

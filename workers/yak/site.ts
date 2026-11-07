@@ -10,6 +10,7 @@ import { copyOf } from './directory-copy.ts'
 import { edged } from './apps.ts'
 import {
   isListing,
+  isStatic,
   KEPT,
   listing,
   listingAt,
@@ -21,13 +22,15 @@ import { r2Objects } from './lib/objects.ts'
 import { directory } from './directory.ts'
 import * as dirPart from './directory.ts'
 import { bound, type Env } from './env.ts'
+import * as docs from './docs.ts'
 import * as gallery from './gallery.ts'
 import { INTEGRATIONS, page as integrations } from './integrations.ts'
-import { apex, type Host, url } from './host.ts'
+import { apex, type Host, hosted, url } from './host.ts'
 import { lost } from './pages.ts'
 import { matches } from './public-cache.ts'
 import { cardTag, SITE_TAG } from './purge.ts'
-import { sheeted } from './sheets.ts'
+import { named, sheeted } from './sheets.ts'
+import { priceAt } from './sell.ts'
 import { type Clock, clock, timed } from './timing.ts'
 import { COUNTED, counted } from './views.ts'
 import { textable } from './phones.ts'
@@ -93,6 +96,65 @@ export let fetch = async (req: Request, env: Env): Promise<Response> => {
 export let drawn = async (env: Env, path: string) =>
   path == OPERATOR && !await textable(env) ? `${OPERATOR}-email` : path
 
+let unconditional = (req: Request) => {
+  let headers = new Headers(req.headers)
+  headers.delete('if-none-match')
+  return new Request(req, { headers })
+}
+
+/** An apex path no door of the kernel's claims: the guide's pages (docs.ts,
+ * T-37752) and the 301s the addresses it moved from answer, else this
+ * deploy's files. The kernel answers every such path with it, and Site the
+ * static pages it keeps (kept-page.ts `isStatic`). */
+export let statics = async (
+  req: Request,
+  env: Env,
+  path: string,
+  dir: dirPart.Directory,
+): Promise<Response> => {
+  // Before the assets, which serve the same markdown as files at those pages'
+  // `.md` addresses — the whole rule (T-37793).
+  let read = await docs.answer(req, env, path)
+  if (read) return read
+  // A page's bytes are this file's with the head's links swapped (sheets.ts), so
+  // the file's etag says nothing about them: `worn` below answers for a page.
+  let page = await env.ASSETS.fetch(
+    /\.\w+$/.test(path) ? req : unconditional(req),
+  )
+  if (page.status == 404) {
+    // A page held from before a deploy names the sheet that deploy replaced.
+    let was = named(path)
+    return was ? Response.redirect(url(env, was), 302) : lost(env)
+  }
+  let type = page.headers.get('content-type')?.split(';')[0].trim() ?? ''
+  if (
+    apex(env) != apex() && page.status == 200 && page.body &&
+    ['text/html', 'text/plain', 'text/markdown', 'text/x-markdown'].includes(
+      type,
+    )
+  ) {
+    let headers = new Headers(page.headers)
+    headers.delete('content-length')
+    headers.delete('etag')
+    page = new Response(hosted(await page.text(), env), {
+      status: page.status,
+      headers,
+    })
+  }
+  // Setup is also served on space hosts, where the download attribute alone
+  // cannot download this cross-origin icon.
+  if (path == '/yaks-app.png') {
+    let headers = new Headers(page.headers)
+    headers.set('content-disposition', 'attachment; filename="yaks-app.png"')
+    return new Response(page.body, { status: page.status, headers })
+  }
+  // Pricing is the other static page with a dynamic splice.
+  if (path == '/pricing') page = await priceAt(dir, page)
+  return type == 'text/html' && page.status == 200
+    ? await worn(req, page, env)
+    : page
+}
+
 let rendered = async (
   req: Request,
   env: Env,
@@ -119,6 +181,11 @@ let rendered = async (
   } else if (path == INTEGRATIONS.path) {
     page = await c.time('listed', () => dir.integrations())
       .then((all) => integrations(all, env))
+  } else if (isStatic(path)) {
+    page = await c.time(
+      'static',
+      () => statics(new Request(url(env, path)), env, path, dir),
+    )
   } else {
     // A home page variant (variant.ts): its own file, with the showcase.
     let file = await c.time(

@@ -188,9 +188,10 @@ test('the apex answers the crawler and the model', async () => {
     await none.text()
     assertEquals(none.status, 404)
 
-    // The public pages include listings, so their rendered bodies carry a
-    // short bound and their own ETags. A review ticket and sign-in stay live.
-    for (let path of ['/', '/gallery']) {
+    // The public pages include listings and the static pages, so their
+    // rendered bodies carry a short bound and their own ETags. A review ticket
+    // and sign-in stay live.
+    for (let path of ['/', '/gallery', '/pricing', '/docs', '/docs/querying']) {
       let first = await k.at('yaks.app', path)
       assertEquals(first.status, 200, path)
       assertEquals(

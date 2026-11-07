@@ -136,6 +136,8 @@ test('what no kept page may answer goes to the kernel without asking Site', asyn
     ['https://a.b.yaks.app/'],
     ['https://yaks.app/login'],
     ['https://yaks.app/mcp'],
+    ['https://yaks.app/docs/querying.md'],
+    ['https://yaks.app/docs/a/b'],
   ]
   for (let [url, init] of cases) {
     let f = front(() => page())
@@ -241,6 +243,18 @@ test("the apex's listings come from Site, with their own lifetime", async () => 
     'public, max-age=30, must-revalidate',
   )
   assertEquals(res.headers.get('server-timing')!.includes('site_old'), false)
+})
+
+test("the apex's static pages and the guide's come from Site", async () => {
+  for (let path of ['/pricing', '/terms', '/docs', '/docs/querying']) {
+    let f = front(() =>
+      new Response(path, { headers: { 'cf-cache-status': 'HIT' } })
+    )
+    let res = await f.go(`https://yaks.app${path}?utm_source=x`)
+    assertEquals(await res.text(), path)
+    assertEquals(f.asked, [`https://site.invalid/yaks.app${path}`])
+    assertEquals(f.forwarded.length, 0)
+  }
 })
 
 test("a listing an ad's click opened keeps its arrival and hands the kernel the view", async () => {

@@ -103,14 +103,12 @@ import { customOf, reading, refresh, type Step } from './domains.ts'
 import * as drop from './drop.ts'
 import * as install from './install.ts'
 import { bound, type Env, type Handler, type Inbound } from './env.ts'
-import * as docs from './docs.ts'
 import * as gallery from './gallery.ts'
 import * as appPage from './app-page.ts'
 import { call } from './tools.ts'
 import { isListing, listed } from './kept-page.ts'
 import { HANDOFF } from './handoff.ts'
-import { apex, hosted, url } from './host.ts'
-import { named } from './sheets.ts'
+import { apex } from './host.ts'
 import { sprite } from './icons.ts'
 import { lost, oops, provisioning } from './pages.ts'
 import { callback, hook } from './connections.ts'
@@ -157,12 +155,6 @@ let identity: Handler = async (req, env) =>
   (await import('./identity.ts')).fetch(req, env)
 let mcp: Handler = async (req, env) =>
   (await import('./mcp.ts')).fetch(req, env)
-
-let unconditional = (req: Request) => {
-  let headers = new Headers(req.headers)
-  headers.delete('if-none-match')
-  return new Request(req, { headers })
-}
 
 // Every answer at the apex leaves through `seen`, so whichever page a link
 // lands a person on keeps its arrival and tells its view: /login and the
@@ -351,49 +343,7 @@ let atApex = async (req: Request, env: Env, path: string) => {
   // The platform admin's directory, signed in and uncached like the review.
   let directed = await admin.answer(req, env, path, dir)
   if (directed) return directed
-  // The documentation (docs.ts, T-37752): the guide's markdown drawn as pages
-  // of this site, and the 301s the addresses it moved from answer. Before the
-  // assets, which serve the same markdown as files at those pages' `.md`
-  // addresses — the whole rule (T-37793).
-  let read = await docs.answer(req, env, path)
-  if (read) return read
-  // A page's bytes are this file's with the head's links swapped (sheets.ts), so
-  // the file's etag says nothing about them: `worn` below answers for a page.
-  let page = await env.ASSETS.fetch(
-    /\.\w+$/.test(path) ? req : unconditional(req),
-  )
-  if (page.status == 404) {
-    // A page held from before a deploy names the sheet that deploy replaced.
-    let was = named(path)
-    return was ? Response.redirect(url(env, was), 302) : lost(env)
-  }
-  let type = page.headers.get('content-type')?.split(';')[0].trim() ?? ''
-  if (
-    apex(env) != apex() && page.status == 200 && page.body &&
-    ['text/html', 'text/plain', 'text/markdown', 'text/x-markdown'].includes(
-      type,
-    )
-  ) {
-    let headers = new Headers(page.headers)
-    headers.delete('content-length')
-    headers.delete('etag')
-    page = new Response(hosted(await page.text(), env), {
-      status: page.status,
-      headers,
-    })
-  }
-  // Setup is also served on space hosts, where the download attribute alone
-  // cannot download this cross-origin icon.
-  if (path == '/yaks-app.png') {
-    let headers = new Headers(page.headers)
-    headers.set('content-disposition', 'attachment; filename="yaks-app.png"')
-    return new Response(page.body, { status: page.status, headers })
-  }
-  // Pricing is the other static page with a dynamic splice.
-  if (path == '/pricing') page = await sell.priceAt(dir, page)
-  return type == 'text/html' && page.status == 200
-    ? await site.worn(req, page, env)
-    : page
+  return site.statics(req, env, path, dir)
 }
 
 // An answer at the apex a person opened: it keeps the arrival its link carried
