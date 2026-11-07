@@ -129,3 +129,79 @@ test("a walk to a component's presence reads its root's rows, not every entity",
     `${small.steps} then ${large.steps} VM steps for four times the tasks`,
   )
 })
+
+// A path that turns back (`.members_space`, the seats whose space is the
+// one reached) answers the component it starts from and is read from that
+// component's rows: entities that are no binding grow, and the one binding
+// under a seat of P's is all that is read.
+let seated = loadVocab([archetypeDoc, {
+  $defs: {
+    entity: { component: true, type: 'object' },
+    space: { component: true, type: 'object' },
+    person: { component: true, type: 'object' },
+    other: { component: true, type: 'object' },
+    member: {
+      component: true,
+      type: 'object',
+      properties: { space: ref('space'), person: ref('entity') },
+    },
+    app: {
+      component: true,
+      type: 'object',
+      properties: { space: ref('space') },
+    },
+    binding: {
+      component: true,
+      type: 'object',
+      properties: { app: ref('app') },
+    },
+  },
+}])
+let turning = (n: number) => {
+  let db = new Database(':memory:'), d = driver(db)
+  let store = storage(d, seated)
+  store.install()
+  let g = graph({ storage: store, vocab: seated, plugins: [archetypes()] })
+  g.apply([
+    { entity: { eid: 'P' }, person: {} },
+    { entity: { eid: 'mine' }, space: {} },
+    { entity: { eid: 'seat' }, member: { space: 'mine', person: 'P' } },
+    { entity: { eid: 'recipes' }, app: { space: 'mine' } },
+    { entity: { eid: 'db' }, binding: { app: 'recipes' } },
+    { entity: { eid: 'away' }, space: {} },
+    { entity: { eid: 'theirs' }, app: { space: 'away' } },
+    { entity: { eid: 'elsewhere' }, binding: { app: 'theirs' } },
+    ...Array.from({ length: n }, (_, i) => ({
+      entity: { eid: `x${i}` },
+      other: {},
+    })),
+  ])
+  let q = '.binding.app.app.space.members_space.member.person=P'
+  let sql = render(compile(parse(q), seated, { archetypes: catalog(d) }))
+  let stmt = db.prepare(sql.sql)
+  stmt.all(...sql.params)
+  return {
+    seen: store.rows(q, { visibility: { entity: '!other' } })
+      .map((r) => r.eid),
+    read: g.read(`(${q})|(.space&.members_space.member.person=P)`) as Bundle[],
+    steps: status.symbols.sqlite3_stmt_status(stmt.unsafeHandle, 4, 1),
+  }
+}
+let turned = [10, 40].map(turning)
+
+test('a path that turns back answers its root component', () => {
+  let [db] = turned[1].read.filter((b) => b.entity.eid == 'db')
+  equal(db.binding, { app: 'recipes' })
+})
+
+test('a path that turns back is read from its root component', () => {
+  let [small, large] = turned
+  ok(
+    large.steps < small.steps + 30,
+    `${small.steps} then ${large.steps} VM steps for four times the entities`,
+  )
+})
+
+test('a path that turns back answers under a visibility policy', () => {
+  equal(turned[1].seen, ['db'])
+})

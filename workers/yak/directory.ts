@@ -2149,9 +2149,9 @@ export let directoryRows = (rows: {
       let mine = `members_space.member.person=${person}`
       let held = `apps.app.slug=${app}`
       let which = every
-        ? `.app&.app.space.${mine}&.app.space.${held}`
+        ? `.app.space.${mine}&.app.space.${held}`
         : `(.app.slug=${app}&.app.space.${mine})|` +
-          `(.app&.home&.app.space.${mine}&.app.space.${held})`
+          `(.home&.app.space.${mine}&.app.space.${held})`
       let rows = await query(
         `(.space&.${mine}&.${held}&${SPACE_ABOUT})|(${which}&${ABOUT})` +
           `|(.member.person=${person})` +
@@ -2198,9 +2198,7 @@ export let directoryRows = (rows: {
     },
     // A person's whole listing in two reads (tools.ts `app_list`). The first
     // is one snapshot of every row reached from the person's own seats, so
-    // nothing in it waits on ids an earlier read learned. Each arm names its
-    // component beside the path that turns back through the seats: that is
-    // what carries the component and what the statement drives from. Who is in their
+    // nothing in it waits on ids an earlier read learned. Who is in their
     // spaces is read in each of them and kept only where they own it
     // (`listed`), since no one hop says "a seat of theirs that is an owner's".
     // What to call those people is the second: a reverse hop inside another
@@ -2213,12 +2211,12 @@ export let directoryRows = (rows: {
         [
           `(.member.person=${person})`,
           `(.space&.${mine}&${SPACE_ABOUT})`,
-          `(.member&.member.space.${mine})`,
-          `(.app&.app.space.${mine}&${ABOUT})`,
-          `(.binding&.binding.app.app.space.${mine})`,
-          `(.grant&.grant.app.app.space.${mine})`,
-          `(.invite&.invite.to.${mine})`,
-          `(.invite&.invite.to.app.space.${mine})`,
+          `(.member.space.${mine})`,
+          `(.app.space.${mine}&${ABOUT})`,
+          `(.binding.app.app.space.${mine})`,
+          `(.grant.app.app.space.${mine})`,
+          `(.invite.to.${mine})`,
+          `(.invite.to.app.space.${mine})`,
         ].join('|'),
       )
       let got = listed(rows, person)

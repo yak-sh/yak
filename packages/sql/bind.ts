@@ -1444,15 +1444,19 @@ let presence = (ctx: Ctx, cs: Clause[]): string | undefined => {
     return comps.length > 1 && ctx.rarest?.(comps) || comps[0]
   }
   // A walk that must arrive starts from a row of its root's: `.claim.session
-  // .session` is the claims whose holder is a session, read from the claims.
-  // Joined from the entity instead, the walk is a lookup per entity that no
-  // index can drive, and without statistics SQLite reads every entity.
+  // .session` is the claims whose holder is a session, read from the claims,
+  // and `.binding.app.app.space.members_space.member.person=P`, which turns
+  // back through the seats, is read from the bindings. Joined from the entity
+  // instead, the walk is a lookup per entity that no index can drive, and
+  // without statistics SQLite reads every entity.
   for (let c of flat) {
     if (
       c.kind != 'pred' || c.not || c.where || c.path.length < 3 ||
       !needs(opOf(c), c.value)
     ) continue
-    let root = aimed(ctx, c)?.[0]
+    let root = ctx.v.turn(c.path) > 0
+      ? { comp: c.path[0], prop: c.path[1] }
+      : aimed(ctx, c)?.[0]
     if (root?.prop && spined(root.comp)) return root.comp
   }
 }

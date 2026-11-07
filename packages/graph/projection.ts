@@ -272,8 +272,12 @@ export let named = (
     let absent = c.op == '=' &&
       (c.value == null || (c.value.kind == 'scalar' && !c.value.raw))
     if (absent) continue
+    // A path that turns back (`.binding.app.app.space.members_space…`) is
+    // aimed forward as far as it goes, and starts from the same component.
+    let back = vocab.turn(c.path)
+    let forward = back > 0 ? c.path.slice(0, back) : c.path
     try {
-      let comp = vocab.aim(c.path.join('.'), c.op == '!' || c.op == '?')[0]
+      let comp = vocab.aim(forward.join('.'), c.op == '!' || c.op == '?')[0]
         ?.comp
       if (comp && comp != 'entity') want.add(comp)
     } catch { /* a word this graph never declared asks for nothing */ }

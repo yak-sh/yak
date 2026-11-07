@@ -799,9 +799,12 @@ export let storage = (
     let operands = new Set<string>()
     let visit = (c: Clause): void => {
       if (c.kind == 'and' || c.kind == 'or') return c.clauses.forEach(visit)
+      // A path through a reference, or one read from the far side
+      // (`.members_space.member.person=P`), compares no reference of its own.
       if (
         c.kind != 'pred' || c.where || c.op != '=' ||
-        !literals(c.value)?.length
+        !literals(c.value)?.length || c.path.length > 2 ||
+        vocab.assoc(c.path[0])
       ) return
       let hops = vocab.aim(c.path.join('.'), bare(c)), h = hops[0]
       let prop = h && vocab.prop(h.comp, h.prop)
