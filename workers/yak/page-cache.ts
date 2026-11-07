@@ -14,8 +14,11 @@
 // anyone may read (public or open), with no worker of its own, no sandbox, no
 // router claiming the path and no cookie, the release files of a private one
 // anyone may install (`keepable`), a space's 404 where no app answers, or its
-// index as a stranger sees it, which no person is answered.
-// Anything else is a pass, kept as briefly as a page.
+// index as a stranger sees it, which no person is answered. A person signed
+// in who holds no seat in the space is shown its index as such an outsider,
+// kept under their own session (kept-page.ts `pageAt`): a seat written there
+// purges it, and a member's is never kept. Anything else is a pass, kept as
+// briefly as a page.
 //
 // The gateway remembers, as briefly, every address Site passed and every app
 // it served itself of which nothing is ever kept (`unkept`: an unpublished
@@ -41,6 +44,7 @@ import { type App, offered } from './directory.ts'
 import type { Env } from './env.ts'
 import { sandboxed } from './installed.ts'
 import {
+  type Alone,
   asked as askedOf,
   BROWSER,
   fixed,
@@ -59,13 +63,14 @@ import type { Clock } from './timing.ts'
 import { scheduleUse } from './used.ts'
 import { seen, viewed } from './views.ts'
 
-export { KEPT, pageAt, shareable, visitor } from './kept-page.ts'
+export { KEPT, pageAt, personal, shareable, visitor } from './kept-page.ts'
 
 /** An answer Site may keep: which app it was a page of (none, for a space's
  * own 404 or index), for the gateway's count, and the tags its purge names. A
  * missing space uses the site tag, purged when a space is created or renamed. A
  * page or a 404, unless the caller names other `statuses` the same for
- * everyone, and for everyone unless it is a `stranger`'s alone. An
+ * everyone, and for everyone unless it is a stranger's or an outsider's
+ * `alone`. An
  * app mid-release (its fence up, versions.ts `fenced`) had its pages purged
  * as the release began (tools.ts `released`), and its commit purges nothing
  * more (facets/pages-graph.ts), so a page of it kept now would outlive the
@@ -75,7 +80,7 @@ export let keep = (
   space: { eid: string; slug: string } | null,
   app: { eid: string; slug: string; fence?: string | null } | null,
   statuses = [200, 404],
-  stranger = false,
+  alone?: Alone,
 ) => {
   if (!statuses.includes(page.status) || page.headers.has('set-cookie')) {
     return passed()
@@ -91,7 +96,7 @@ export let keep = (
     SEEN,
     JSON.stringify({
       ...space ? app ? seen(space, app) : { space: space.slug } : {},
-      ...stranger ? { stranger } : {},
+      ...alone ? { [alone]: true } : {},
     }),
   )
   return new Response(page.body, { status: page.status, headers })
@@ -159,10 +164,16 @@ export let passed = (now = false) =>
   new Response(null, { status: 204, headers: now ? { [NOW]: '1' } : {} })
 
 /** Site's half: served()'s anonymous answer as Site keeps it, or the pass
- * every other answer is. */
-export let kept = async (answer: Response) => {
+ * every other answer is. At a session's own key (`personal`) that is only
+ * the page drawn for an outsider: whatever else it served the person is
+ * everyone's, kept at its own key, or theirs alone, which is never kept. */
+export let kept = async (answer: Response, personal = false) => {
   let tags = answer.headers.get(KEEP)
-  if (!tags) {
+  let alone = JSON.parse(answer.headers.get(SEEN) ?? '{}') as Record<
+    Alone,
+    true | undefined
+  >
+  if (!tags || personal && !alone.outsider) {
     await answer.body?.cancel()
     return new Response(null, {
       status: 204,
@@ -179,8 +190,14 @@ export let kept = async (answer: Response) => {
 
 /** The gateway's half: the kept page for this request, counted, or null
  * when Site passed and the gateway serves it itself, as it does a stranger's
- * page when a `person` asks. */
-export let asked = (req: Request, env: Env, c: Clock, person = false) =>
+ * page when the `session` of a person it verified asks, unless Site keeps
+ * their own. */
+export let asked = (
+  req: Request,
+  env: Env,
+  c: Clock,
+  session: string | null = null,
+) =>
   env.SITE
     ? askedOf(
       req,
@@ -192,6 +209,6 @@ export let asked = (req: Request, env: Env, c: Clock, person = false) =>
         viewed(env, req, answer, at)
         if (answer.status < 400) scheduleUse(env, at.app)
       },
-      person,
+      session,
     )
     : Promise.resolve(null)

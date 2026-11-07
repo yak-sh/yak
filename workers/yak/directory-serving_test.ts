@@ -9,6 +9,7 @@ import { EPOCH, type ServingCopyDoor, STALL } from './directory-copy.ts'
 import type { Env } from './env.ts'
 import { pageAt } from './page-cache.ts'
 import { SEEN } from './kept-page.ts'
+import { sign } from './lib/token.ts'
 import { fetch as siteFetch } from './site.ts'
 import { ServingCopy, type ServingCopyState } from './serving-copy.ts'
 import { ADA_OWNS, platform, seeded, visit } from './serving-probe.ts'
@@ -335,6 +336,42 @@ test("directory serving: Site keeps a space's index as a stranger sees it", () =
     ['public', 0, 200, 'space:s', stranger, false],
     ['private', 1, 200, 'space:s', stranger, false],
     ['private', 0, 200, 'space:s', stranger, false],
+  ])
+})
+
+// A person signed in is shown the index as Site keeps it at their session's
+// key: an outsider's, the private app unnamed, while they hold no seat; a
+// member's never; and a key whose cookie is not its session is nobody's.
+let SECRET = 'a session secret'
+let sessionOf = (person: string) =>
+  sign({ person, space: null, exp: Date.now() / 1000 + 3600, via: 'v' }, SECRET)
+let [outsider, owner] = await Promise.all(['p', 'o'].map(sessionOf))
+let seated = []
+for (let [key, cookie] of [[outsider], [owner], [outsider, owner]]) {
+  let f = fixture('private')
+  f.env.SESSION_SECRET = SECRET
+  f.rows.push({
+    entity: { eid: 'm' },
+    member: { space: 's', person: 'o', role: 'owner' },
+  })
+  let answer = await siteFetch(
+    new Request(pageAt('ada.yaks.app', '/', null, key), {
+      headers: { cookie: `yak_session=${cookie ?? key}` },
+    }),
+    f.env,
+  )
+  seated.push([
+    answer.status,
+    answer.headers.get('cache-tag'),
+    JSON.parse(answer.headers.get(SEEN) ?? 'null'),
+    (await answer.text()).includes('href="/cookbook/"'),
+  ])
+}
+test("directory serving: Site keeps a person's index only while they hold no seat", () => {
+  equal(seated, [
+    [200, 'space:s', { space: 'ada', outsider: true }, false],
+    [204, null, null, false],
+    [204, null, null, false],
   ])
 })
 

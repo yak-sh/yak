@@ -3,7 +3,7 @@
 import { test } from '@yaks/testing'
 import { assertEquals, assertStringIncludes } from '@std/assert'
 import { type FrontEnv, serve, settled } from './front.ts'
-import { pageAt, SEEN } from '../kept-page.ts'
+import { pageAt, personal, SEEN } from '../kept-page.ts'
 import type { Conversion } from '../arrival.ts'
 import { COOKIE } from '../variant.ts'
 
@@ -343,27 +343,48 @@ test('a cookie that owes something from the kernel routes there', () => {
   assertEquals(asked('yak_session=!!!'), false)
 })
 
-// A space's index as a stranger sees it is kept for strangers, and a person
-// signed in, who is shown their own, goes on to the kernel.
-test("a space's index answers a stranger from the edge, never a person", async () => {
-  let f = front(() =>
-    page({ [SEEN]: JSON.stringify({ space: 'ada', stranger: true }) })
-  )
+// A space's index as a stranger sees it is kept for strangers. A person
+// signed in is answered their own copy, kept at their session's key while
+// they hold no seat in the space, and a member, whose key Site passes, goes on
+// to the kernel.
+test("a space's index answers a stranger and an outsider from the edge, never a member", async () => {
+  let token = (person: string) => body({ person, via: 'v', exp: days(80) })
+  let [outsider, member] = [token('p'), token('m')]
+  let cookies: (string | null)[] = []
+  let f = front((req) => {
+    if (!personal(req.url)) {
+      return page({ [SEEN]: JSON.stringify({ space: 'ada', stranger: true }) })
+    }
+    cookies.push(req.headers.get('cookie'))
+    return req.url == pageAt('ada.yaks.app', '/', null, outsider)
+      ? new Response('<body>own</body>', {
+        headers: { [SEEN]: JSON.stringify({ space: 'ada', outsider: true }) },
+      })
+      : new Response(null, { status: 204 })
+  })
   let home = 'https://ada.yaks.app/'
-  assertEquals(await (await f.go(home)).text(), '<body>kept</body>')
+  let as = async (cookie?: string) =>
+    await (await f.go(home, cookie ? { headers: { cookie } } : {})).text()
   let browser = `yak_session=${body({ via: 'v', exp: days(80) })}`
-  let person = `yak_session=${body({ person: 'p', via: 'v', exp: days(80) })}`
   assertEquals(
-    await (await f.go(home, { headers: { cookie: browser } })).text(),
-    '<body>kept</body>',
+    [
+      await as(),
+      await as(browser),
+      await as(`yak_session=${outsider}`),
+      await as(`yak_session=${member}`),
+      await as(),
+    ],
+    [
+      '<body>kept</body>',
+      '<body>kept</body>',
+      '<body>own</body>',
+      'kernel',
+      '<body>kept</body>',
+    ],
   )
-  assertEquals(
-    await (await f.go(home, { headers: { cookie: person } })).text(),
-    'kernel',
-  )
-  assertEquals([f.asked.length, f.forwarded.length, f.used], [3, 1, []])
-  // The page stays a stranger's: the next one is answered from it.
-  assertEquals(await (await f.go(home)).text(), '<body>kept</body>')
+  // Site renders a session's own key for that session alone.
+  assertEquals(cookies, [`yak_session=${outsider}`, `yak_session=${member}`])
+  assertEquals([f.forwarded.length, f.used], [1, []])
 })
 
 test("an app the kernel says is never kept isn't asked about again", async () => {

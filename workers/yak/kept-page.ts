@@ -9,7 +9,8 @@ import { matches } from './public-cache.ts'
 import type { Fetcher } from './env.ts'
 import { bearing, MOUNT } from './route.ts'
 import { PATHS, shown } from './variant.ts'
-import { cookieValue } from '@yaks/platform/cookie'
+import { COOKIE, cookieValue } from '@yaks/platform/cookie'
+import { sha256 } from '@yaks/graph/sha256'
 
 // How long Site holds an answer before asking again, and how long past that a
 // visitor may still be answered from it while it is asked (stale while it
@@ -61,25 +62,44 @@ export let scope = (host: string, mount: string | null, at: string) =>
 
 /** Where Site keeps one address's page. The hostname is a placeholder for
  * the binding; what names the page is the path, which carries the hostname
- * the gateway routed, because the cache key holds no hostname of its own. */
-export let pageAt = (host: string, path: string, mount: string | null) =>
+ * the gateway routed, because the cache key holds no hostname of its own.
+ * `session` keys a signed-in person's own copy of a page kept for strangers
+ * (`asked`): the digest of their session token, which only they hold, so
+ * nobody else's request ever reads it, and a forged cookie names a key Site
+ * never filled. */
+export let pageAt = (
+  host: string,
+  path: string,
+  mount: string | null,
+  session?: string,
+) =>
   `https://site.invalid/@${encodeURIComponent(host)}${path}?g=${GENERATION}${
     mount ? `&mount=${encodeURIComponent(mount)}` : ''
-  }`
+  }${session ? `&who=${heldBy(session)}` : ''}`
 
-/** The address a key names, as the request a visitor would have sent. */
-export let visitor = (url: string): Request | null => {
+// What a key says of the session it is for.
+let heldBy = (session: string) => sha256(session).slice(0, 32)
+
+/** The address a key names, as the request a visitor would have sent: with
+ * the session cookie `asking` carries, where the key is that session's own
+ * and the cookie is the session it names, else with no cookie at all. */
+export let visitor = (url: string, asking?: Request): Request | null => {
   let { pathname, searchParams } = new URL(url)
   let at = pathname.indexOf('/', 2)
   if (!pathname.startsWith('/@') || at < 0) return null
   let host = decodedPath(pathname.slice(2, at))
   if (host == null) return null
   let mount = searchParams.get('mount')
-  return new Request(
-    `https://${host}${pathname.slice(at)}`,
-    { headers: mount ? { [MOUNT]: mount } : {} },
-  )
+  let headers = new Headers(mount ? { [MOUNT]: mount } : {})
+  let session = asking && cookieValue(asking.headers.get('cookie'))
+  if (session && searchParams.get('who') == heldBy(session)) {
+    headers.set('cookie', `${COOKIE}=${session}`)
+  }
+  return new Request(`https://${host}${pathname.slice(at)}`, { headers })
 }
+
+/** Whether a key is a session's own (`pageAt`). */
+export let personal = (url: string) => new URL(url).searchParams.has('who')
 
 /** The platform's modules an app's pages import from its `/api/` (apps.ts
  * `api`): one file for every app, from the platform's assets. */
@@ -115,9 +135,12 @@ export let shareable = (req: Request, path = new URL(req.url).pathname) => {
 
 /** What a page may say of itself as it answers from the edge. */
 export type Seen = { app: string; space: string; slug: string }
-// What Site says of a kept page: that, and whether it is a stranger's alone
-// (a space's index).
-type Said = Partial<Seen> & { stranger?: boolean }
+/** Whom a kept page alone is for, where it isn't everyone: strangers, or a
+ * person signed in who holds no seat in its space (a space's index, as each
+ * is shown it). */
+export type Alone = 'stranger' | 'outsider'
+// What Site says of a kept page: that, and whom it is for alone.
+type Said = Partial<Seen> & { [who in Alone]?: true }
 
 /** The part of a request clock this path uses; the front Worker keeps none. */
 export type Timer = {
@@ -132,8 +155,10 @@ export type Timer = {
 let HITS = ['HIT', 'UPDATING', 'STALE']
 
 /** The kept page for this request, or null when Site passed and the caller
- * serves it itself, as it does a stranger's page when a `person` asks. A page
- * view is the caller's to count (`count`). */
+ * serves it itself. A stranger's page is never a person's: a `session` that
+ * names one is answered their own copy (`pageAt`), which Site keeps only
+ * while they hold no seat in its space, so a member is always the caller's
+ * to serve. A page view is the caller's to count (`count`). */
 export let asked = async (
   req: Request,
   site: Pick<Fetcher, 'fetch'>,
@@ -141,7 +166,7 @@ export let asked = async (
   mount: string | null,
   c: Timer,
   count: (answer: Response, at: Seen) => void,
-  person = false,
+  session: string | null = null,
 ) => {
   let path = new URL(req.url).pathname
   if (!shareable(req, path)) return null
@@ -154,34 +179,48 @@ export let asked = async (
     return null
   }
   let pick = req.headers.get(PICK)
-  let got = await c.time(
-    'page',
-    () =>
-      site.fetch(
-        // A kept redirect is the visitor's to follow, not this fetch's.
-        new Request(key, {
-          headers: pick ? { [PICK]: pick } : {},
-          redirect: 'manual',
-        }),
-      ),
-    (r) => r.headers.get('cf-cache-status'),
-  )
-  // A hit carries the old render's timing, not work done for this view.
-  if (!HITS.includes(got.headers.get('cf-cache-status') ?? '')) {
-    c.include(got.headers.get('server-timing'))
+  // What Site holds at a key, and what it says of it, or null for a pass.
+  let held = async (key: string, cookie?: string) => {
+    let got = await c.time(
+      'page',
+      () =>
+        site.fetch(
+          // A kept redirect is the visitor's to follow, not this fetch's.
+          new Request(key, {
+            headers: {
+              ...pick ? { [PICK]: pick } : {},
+              ...cookie ? { cookie: `${COOKIE}=${cookie}` } : {},
+            },
+            redirect: 'manual',
+          }),
+        ),
+      (r) => r.headers.get('cf-cache-status'),
+    )
+    // A hit carries the old render's timing, not work done for this view.
+    if (!HITS.includes(got.headers.get('cf-cache-status') ?? '')) {
+      c.include(got.headers.get('server-timing'))
+    }
+    let said = got.headers.get(SEEN)
+    if (!said) {
+      await got.body?.cancel()
+      if (got.headers.get('cache-control') != UNKEPT) remember(site, key)
+      return null
+    }
+    return { got, at: JSON.parse(said) as Said }
   }
-  let said = got.headers.get(SEEN)
-  if (!said) {
-    await got.body?.cancel()
-    if (got.headers.get('cache-control') != UNKEPT) remember(site, key)
-    return null
-  }
+  let kept = await held(key)
+  if (!kept) return null
   // Not a pass: the next stranger is answered from it.
-  let at = JSON.parse(said) as Said
-  if (at.stranger && person) {
-    await got.body?.cancel()
-    return null
+  if (kept.at.stranger && session) {
+    await kept.got.body?.cancel()
+    let own = pageAt(host, path, mount, session)
+    kept = passes(site, [own]) ? null : await held(own, session)
+    if (!kept?.at.outsider) {
+      await kept?.got.body?.cancel()
+      return null
+    }
   }
+  let { got, at } = kept
   let headers = new Headers(got.headers)
   headers.set('cache-control', headers.get(BROWSER) || 'private, no-cache')
   for (

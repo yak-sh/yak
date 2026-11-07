@@ -192,7 +192,8 @@ import { edits, mode, reads, writes } from '@yaks/member'
 import { type Door, USES } from './door.ts'
 import { type Clock, clock, timed } from './timing.ts'
 import { asked, keep, keepable, passed, told, unkept } from './page-cache.ts'
-import { CLIENT, fixed } from './kept-page.ts'
+import { type Alone, CLIENT, fixed } from './kept-page.ts'
+import { cookieValue } from '@yaks/platform/cookie'
 import {
   brokenIn,
   fault,
@@ -1861,10 +1862,19 @@ export let api = async (
   // Answered to anyone: a stranger learning they must sign in is the point.
   if (path == '/me') {
     let person = who.person
+    // Asked together, so they travel as one trip (directory-copy.ts
+    // `gathered`): each in turn was a round trip of the page's first wait.
+    let [name, invited, join] = await Promise.all([
+      person ? dir.nameAt(person) : null,
+      invitedHere(dir, space, app, person, mayRead, mayPost),
+      // The role pressing Join gives them, where the app's own rows list
+      // them and it is more than they hold (join.ts), else null.
+      joinable(env, dir, space, app, who),
+    ])
     return Response.json({
       person,
       via: who.via ?? null,
-      name: person ? await dir.nameAt(person) : null,
+      name,
       role: who.role,
       reads: mayRead,
       // A stranger reading the sample writes, and their first write gives
@@ -1873,10 +1883,8 @@ export let api = async (
       signIn: person
         ? null
         : signInAt(req.headers.get('referer') || req.url, env),
-      invited: await invitedHere(dir, space, app, person, mayRead, mayPost),
-      // The role pressing Join gives them, where the app's own rows list
-      // them and it is more than they hold (join.ts), else null.
-      join: await joinable(env, dir, space, app, who),
+      invited,
+      join,
       visit: who.visit ?? null,
     })
   }
@@ -2332,17 +2340,25 @@ let shelf = (apps: App[], space: Space, who: Who) => {
 // as whoever is asking may see them, and to its owner the way to its
 // dashboard. The apps and the asker's seat are the route's own read
 // (directory.ts `page`), so the listing waits on no directory read of its own.
+// It says whom it is the same page for (page-cache.ts `keep`): every
+// stranger, or every person signed in with no seat here, who are shown only
+// what a stranger is; a member's is theirs.
 let index = async (
   req: Request,
   env: Env,
   space: Space,
   apps: App[],
   seatOf: (person: string) => Promise<Role | null>,
-): Promise<Response> => {
+): Promise<{ page: Response; alone: Alone | null }> => {
   let who = await whoIs(req, env.SESSION_SECRET, seatOf, space.eid)
   let { all, mine } = shelf(apps, space, who)
   let owner = who.role == 'owner'
-  return spaceIndex({
+  let alone: Alone | null = !who.person
+    ? 'stranger'
+    : !who.role
+    ? 'outsider'
+    : null
+  let page = spaceIndex({
     space: space.slug,
     title: space.title,
     // What the pill says about the gallery (gallery.ts, T-34476). Listed is
@@ -2362,6 +2378,7 @@ let index = async (
     signIn: signInAt(req.url, env),
     manage: owner ? manageAt(space.slug, 'apps', env) : undefined,
   }, env)
+  return { page, alone }
 }
 
 // The dashboard, at the apex (T-39354): the person's own pages at
@@ -3384,8 +3401,10 @@ let served = async (
   // The space, the app at the address, the front page and the seat of the
   // person the cookie names, in one read of the directory: every rung below
   // asks one of them, and asking each in turn was a round trip apiece.
+  // Site's request carries a cookie only at a session's own key (kept-page.ts
+  // `visitor`), where it serves the person their own copy of a stranger's page.
   let [cookied, authenticated] = await Promise.all([
-    edge ? null : sessionPerson(req, env.SESSION_SECRET),
+    sessionPerson(req, env.SESSION_SECRET),
     !edge && req.headers.has('authorization') && !bearing(req) &&
       url.pathname.includes('/api/')
       ? asking(env, req)
@@ -3393,10 +3412,16 @@ let served = async (
   ])
   let person = authenticated?.who?.person ?? cookied
   if (!edge) {
-    let page = await asked(visitor, env, c, !!person)
+    let session = cookied && cookieValue(req.headers.get('cookie'))
+    let page = await asked(visitor, env, c, session || null)
     if (page) return page
   }
   let routing = c.time('route', () => dir.page(r.space!, r.app, person))
+  // What `/me` tells a person beside their standing (api `/me`), asked with
+  // the route so a page's first question waits on that one trip.
+  if (person && !edge && url.pathname.endsWith('/api/me')) {
+    dir.nameAt(person).catch(() => {})
+  }
   let reading = routing.then((route) => route.space)
   // A seat, from that read for the person it asked about, else the directory.
   let seatOf = async (p: string) => {
@@ -3539,9 +3564,18 @@ let served = async (
         return edge ? keep(none, space, null) : none
       }
       // A stranger's view is the same for every stranger, so Site keeps it
-      // for them, and a person is never answered it (kept-page.ts `asked`).
-      let listed = await index(req, env, space, (await routing).roster!, seatOf)
-      return edge ? marked(keep(listed, space, null, [200], true)) : listed
+      // for them, and a person is never answered it (kept-page.ts `asked`):
+      // one with no seat here is answered their own, kept at their session's
+      // key, and a member's is never kept.
+      let { page, alone } = await index(
+        req,
+        env,
+        space,
+        (await routing).roster!,
+        seatOf,
+      )
+      if (!edge) return page
+      return alone ? marked(keep(page, space, null, [200], alone)) : passed()
     }
     // `/<x>/api/…` named an app that is not here. That is a wrong address,
     // not one of the front page's own paths: a page asking a store there has
@@ -4023,7 +4057,7 @@ let served = async (
     await page.body?.cancel()
     return edge
       ? passed()
-      : await index(req, env, space, (await routing).roster!, seatOf)
+      : (await index(req, env, space, (await routing).roster!, seatOf)).page
   }
   // Site's page is counted by the gateway that sends it (page-cache.ts).
   if (edge) return marked(keep(reporting(page, req, at), space, app))

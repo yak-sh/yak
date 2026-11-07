@@ -274,6 +274,16 @@ let eveSilent = await browser(`yak_session=${eve.jar.get('yak_session')}`)
 let stranger = browser()
 let strangerFirst = await stranger.rows()
 let strangerNext = await stranger.rows()
+// A person signed in with no seat here, their browser holding its cookies:
+// the page, and the first thing it asks, each in one directory trip.
+let fay = browser((await signIn(k)).cookie)
+await (await fay.at('/')).res.body?.cancel()
+let fayAsked = []
+for (let path of ['/', '/api/me']) {
+  let { res, hops } = await fay.at(path)
+  fayAsked.push([res.status, hops])
+  await res.body?.cancel()
+}
 await k.stop()
 
 test('a stranger reads the sample and hears they may write', () => {
@@ -394,6 +404,10 @@ test('a browser says which stores it holds, and is read whole once when it says 
 test('a browser whose cookies say it holds no store of the app asks the directory nothing', () => {
   assertEquals([eveSaid.titles, eveSilent.titles], [['Sample'], ['Sample']])
   assertEquals(eveSaid.hops + 1, eveSilent.hops)
+})
+
+test('a person with no seat waits on the one read that routes them, page and me alike', () => {
+  assertEquals(fayAsked, [[200, 1], [200, 1]])
 })
 
 test('a browser that came with no cookie asks the directory nothing of its stores', () => {

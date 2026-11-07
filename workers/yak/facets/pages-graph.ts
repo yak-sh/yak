@@ -26,6 +26,11 @@
 // shown, so an app with one, or a write to what it publishes, owes as any
 // other does.
 //
+// A seat written in a space purges it too: a person signed in with none is
+// shown its index as an outsider, kept under their session (page-cache.ts),
+// and once they hold one theirs is a member's. A seat taken away owes
+// nothing, since a member's index was never kept.
+//
 // The listings (home and /gallery, site.ts) are the site's, and a write to a
 // published app owes them only when it changes what they show of it
 // (`LISTING`, T-143236): a purge empties them in every colo, and agents
@@ -172,6 +177,11 @@ let shows = (b: Bundle) =>
  *   await owed([{ entity: { eid: 'x' }, doc: { title: 'b' } }], offered),
  *   ['site', 'space:s'],
  * )
+ * // A seat written in a space: a person who held none is shown its index
+ * // as a member now.
+ * let seats = async (eids: string[]) =>
+ *   eids.map((eid) => ({ entity: { eid }, member: { space: 's', person: 'p' } }))
+ * assertEquals(await owed([{ entity: { eid: 'm' }, member: { role: 'owner' } }], seats), ['space:s'])
  * // A new fee changes what /pricing quotes.
  * assertEquals(await owed([{ entity: { eid: 'm' }, fee: { bps: 250 } }], offered), ['site'])
  * // A delete owes every page its entity could have been on, unless it was
@@ -194,7 +204,7 @@ export let owed = async (
     tags.add(spaceTag(b.entity.eid))
   }
   let touched = applied.filter((b) =>
-    !b.tombstone && (shows(b) || 'gallery' in b)
+    !b.tombstone && (shows(b) || 'gallery' in b || 'member' in b)
   )
   let now = new Map(
     (touched.length ? await rows(touched.map((b) => b.entity.eid)) : [])
@@ -202,6 +212,8 @@ export let owed = async (
   )
   for (let b of touched) {
     let row = now.get(b.entity.eid)
+    let seat = row?.member as { space: string | { eid: string } } | undefined
+    if (seat && 'member' in b) tags.add(spaceTag(idOf(seat.space)))
     if (row?.app) {
       if ((row.published || 'published' in b) && lists(b)) tags.add(SITE_TAG)
       // A card with no screenshot points where its files say (gallery.ts
@@ -263,7 +275,7 @@ export let plugins = (_host: unknown, options: Options): Plugin[] => {
       )
       return applied
     },
-    { keys: [...PARTS, ...LISTED, TOMBSTONE] },
+    { keys: [...PARTS, ...LISTED, 'member', TOMBSTONE] },
   )
   return [{
     name: 'yak/pages',

@@ -84,11 +84,13 @@ export let settled = (req: Request, now = Date.now()) => {
     claims.exp - now / 1000 > HALF_LIFE
 }
 
-/** Whether this request's cookie names a person, read only to route: a page
- * kept for strangers is not theirs (kept-page.ts `asked`). */
-let personal = (req: Request) => {
+/** The session this request's cookie holds where it names a person, read only
+ * to route: a page kept for strangers is not theirs, and Site answers the
+ * session its own copy only once the kernel verified it (kept-page.ts
+ * `asked`). */
+let session = (req: Request) => {
   let token = cookieValue(req.headers.get('cookie'))
-  return !!token && !!claimed(token)?.person
+  return token && claimed(token)?.person ? token : null
 }
 
 // What an answer from here says about the time it took, under the same names
@@ -196,7 +198,7 @@ export let kept = (
         ),
       )
     }
-  }, personal(req))
+  }, session(req))
 }
 
 let report = (

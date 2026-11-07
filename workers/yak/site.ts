@@ -15,6 +15,7 @@ import {
   listing,
   listingAt,
   LOGIN,
+  personal,
   shareable,
   visitor,
 } from './kept-page.ts'
@@ -69,12 +70,12 @@ let checksum = async (body: string) =>
   ].map((byte) => byte.toString(16).padStart(2, '0')).join('')
 
 export let fetch = async (req: Request, env: Env): Promise<Response> => {
-  let asked = req.method == 'GET' ? visitor(req.url) : null
+  let asked = req.method == 'GET' ? visitor(req.url, req) : null
   if (asked) {
     let page = await edged(asked, env)
     let copied = page.headers.has('x-yak-directory-copy')
     page.headers.delete('x-yak-directory-copy')
-    let answer = await kept(page)
+    let answer = await kept(page, personal(req.url))
     return copied ? uncached(answer) : answer
   }
   let root = `/${encodeURIComponent(apex(env))}`

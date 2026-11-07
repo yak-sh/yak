@@ -48,7 +48,7 @@ import {
 } from './door.ts'
 import { PLATFORM_STORE, SLUG } from '@yaks/platform/names'
 import { ADMIN } from '@yaks/platform/bots'
-import { recall, writing } from './lib/hops.ts'
+import { recall, writing, wrote } from './lib/hops.ts'
 import { refusal } from '@yaks/api'
 import { CallError } from '@yaks/tools/errors'
 import {
@@ -2023,6 +2023,18 @@ export let directoryRows = (rows: {
 }) => {
   let query = rows.query
   let one = async (q: string) => (await query(q))[0]
+  // The invitations a page's read found standing for the person it asked
+  // about (`page`), by the space or app each is to: `invite` asks nothing
+  // more of them while this request has written nothing since, as a line
+  // already read is answered again (hops.ts `recall`). A space or app the
+  // read held with no invitation to it is known to have none.
+  let invited = new Map<string, { eid: string; role: Role } | null>()
+  let invitedAt: number | undefined
+  let invitedFor: string | null = null
+  let held = (to: string, person: string) =>
+    invitedFor == person && invitedAt != null && invitedAt == wrote(META_STORE)
+      ? invited.get(to)
+      : undefined
   let write = (
     mutation: { entities: Bundle[] },
     headers: Record<string, string> = {},
@@ -2115,13 +2127,32 @@ export let directoryRows = (rows: {
       let seat = person
         ? `|(.member.space.space.slug=${slug}&.member.person=${person})` +
           `|(.grant.app.app.space.space.slug=${slug}&.grant.person=${person})` +
+          `|(.invite.to.space.slug=${slug}&.invite.person=${person})` +
+          `|(.invite.to.app.space.space.slug=${slug}&.invite.person=${person})` +
           (over
             ? `|(.member.space.space.slug=${META.space}&.member.person=${person})`
             : '')
         : ''
+      let epoch = wrote(META_STORE)
       let rows = await query(
         `(.space.slug=${slug}&${SPACE_ABOUT})|(${which}&${ABOUT})${seat}`,
       )
+      if (person && epoch != null && epoch == wrote(META_STORE)) {
+        invited = new Map(
+          rows.filter((row) => row.space || row.app)
+            .map((row) => [row.entity.eid, null]),
+        )
+        for (let row of rows) {
+          if (row.invite && idOf(row.invite.person) == person) {
+            invited.set(idOf(row.invite.to), {
+              eid: row.entity.eid,
+              role: row.invite.role,
+            })
+          }
+        }
+        invitedAt = epoch
+        invitedFor = person
+      }
       return paged(
         rows,
         rows.find((row) => row.space),
@@ -2739,6 +2770,8 @@ export let directoryRows = (rows: {
     // role it offers. The same guard as `member`.
     invite: async (to: string, person: string) => {
       if (!person) return null
+      let known = held(to, person)
+      if (known !== undefined) return known
       let row = await one(`.invite.to=${to}&.invite.person=${person}`)
       return row?.invite ? { eid: row.entity.eid, role: row.invite.role } : null
     },
