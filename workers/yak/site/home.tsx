@@ -208,16 +208,11 @@ export let Home = () => (
         </div>
         <p class='Hello_Kicker'>Build, host and share web apps</p>
         <h1 class='Title Title-hero' id='hello'>
-          Describe an app, and watch it being built.
-        </h1>
-        <p class='Note Note-lead'>
-          yaks.app builds it while you watch and puts it online at your own
-          address.
-        </p>
-        <form class='Hello_Ask' method='post' action={START}>
-          <label class='Hello_Label' for='say'>
-            Describe the app you want
+          <label for='say'>
+            Say what you need an app for, and watch it being built.
           </label>
+        </h1>
+        <form class='Hello_Ask' method='post' action={START}>
           <Field
             lines
             id='say'
@@ -231,8 +226,10 @@ export let Home = () => (
           </Button>
         </form>
         <p class='Note Note-small'>
-          Free, with no sign-up to start. Or ask the assistant you already use,
-          like Claude or ChatGPT. <a href='#cost'>$9 a month</a> for more.{' '}
+          Free, with no sign-up to start. Your app goes online at your own
+          address, for any phone or computer. <a href='#cost'>$9 a month</a>
+          {' '}
+          for more.{' '}
           <a href='#examples' data-cta='examples'>
             See examples <span aria-hidden='true'>↓</span>
           </a>

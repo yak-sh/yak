@@ -19,7 +19,8 @@ type By = 'text' | 'email'
 
 let ASK = {
   text: {
-    label: 'Start with your mobile number',
+    label:
+      'Enter your mobile number to get an Operator that builds apps for you.',
     field: (
       <Field
         id='address'
@@ -43,7 +44,7 @@ let ASK = {
     again: 'Start with your number',
   },
   email: {
-    label: 'Start with your email',
+    label: 'Enter your email to get an Operator that builds apps for you.',
     field: (
       <Field
         id='address'
@@ -56,13 +57,7 @@ let ASK = {
       />
     ),
     send: 'Email me a code',
-    hint: (
-      <>
-        Signing up by text is not open yet, so we email your code. Once you are
-        in, add your mobile number in your Operator's settings to text and call
-        it.
-      </>
-    ),
+    hint: 'We email you a six-digit code. There is no password to make.',
     first: [
       'We email you a code',
       'Type its six digits on the next page, or press the link in the email.',
@@ -95,15 +90,10 @@ export let Operator = ({ by }: { by: By }) => {
           </div>
           <p class='Hello_Kicker'>Build, host and share web apps</p>
           <h1 class='Title Title-hero' id='hello'>
-            Get an Operator that builds apps for you.
+            <label for='address'>{ask.label}</label>
           </h1>
-          <p class='Note Note-lead'>
-            Tell it what you need, and it builds the app and puts it online at
-            your own address.
-          </p>
           <Form method='post' action='/login' id='start'>
             <Form.Field>
-              <Form.Label for='address'>{ask.label}</Form.Label>
               <Form.Line>
                 {ask.field}
                 <Button mod='go' type='submit' data-cta='start'>
@@ -114,8 +104,9 @@ export let Operator = ({ by }: { by: By }) => {
             </Form.Field>
           </Form>
           <p class='Note Note-small'>
-            Free to start, or <a href='#cost'>${PRICE.plus} a month</a>{' '}
-            for more.
+            Tell it what you need, and it builds the app and puts it online at
+            your own address. Free to start, or{' '}
+            <a href='#cost'>${PRICE.plus} a month</a> for more.
           </p>
         </div>
         <Examples>

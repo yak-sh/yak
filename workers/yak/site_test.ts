@@ -669,6 +669,18 @@ test("the home page's box posts an idea to be built", () => {
   )
 })
 
+// An ad visitor on a phone meets the ask first: each home page's heading is
+// the label of the box its hero asks them to fill.
+test("each home page's heading asks for what its box takes", () => {
+  for (let name of ['index.html', 'operator.html', 'operator-email.html']) {
+    let document = parsed(name)
+    let label = document.querySelector('h1 label')!
+    let box = document.getElementById(label.getAttribute('for')!)!
+    assertEquals(box.closest('.Hello') != null, true, name)
+    assertEquals(box.hasAttribute('required'), true, name)
+  }
+})
+
 test('an assistant name is escaped on the sign-in page', async () => {
   let html = await askEmail({ who: 'A & B' }).text()
   assertStringIncludes(html, 'A &amp; B')

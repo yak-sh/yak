@@ -721,14 +721,15 @@ export let StyleGuide = () => (
         </li>
         <li>
           <b>.Hello</b>, <b>.Hello_Copy</b>, <b>.Hello_Yak</b>,{' '}
-          <b>.Hello_Ask</b>, <b>.Hello_Label</b>, <b>.Demo</b>,{' '}
-          <b>.Demo_Title</b>, <b>.Demo_Slides</b>, <b>.Demo_Controls</b>,{' '}
-          <b>.Demo_Dots</b>, <b>.Demo_Dot</b>, <b>.Demo_Step</b>,{' '}
-          <b>.Demo_Pause</b> (the examples' carousel), <b>.Yours</b>,{' '}
-          <b>.Yours_List</b>, <b>.Make</b>, <b>.Make_Intro</b>,{' '}
-          <b>.Make_List</b>, <b>.Make_Card</b> (a <b>.Card</b> an app is),{' '}
-          <b>.Make_Shot</b>, <b>.How</b>, <b>.Steps</b>, <b>.Step_Name</b>,{' '}
-          <b>.Join</b>, <b>.Join_Doors</b>{' '}
+          <b>.Hello_Ask</b>, <b>.Demo</b>, <b>.Demo_Title</b>,{' '}
+          <b>.Demo_Slides</b>, <b>.Demo_Controls</b>, <b>.Demo_Dots</b>,{' '}
+          <b>.Demo_Dot</b>, <b>.Demo_Step</b>, <b>.Demo_Pause</b>{' '}
+          (the examples' carousel), <b>.Yours</b>, <b>.Yours_List</b>,{' '}
+          <b>.Make</b>, <b>.Make_Intro</b>, <b>.Make_List</b>, <b>.Make_Card</b>
+          {' '}
+          (a <b>.Card</b> an app is), <b>.Make_Shot</b>, <b>.How</b>,{' '}
+          <b>.Steps</b>, <b>.Step_Name</b>, <b>.Join</b>, <b>.Join_Doors</b>
+          {' '}
           — home page sections and their layout elements. Pricing also uses{' '}
           <b>.Hello</b>, <b>.Yours</b>, and{' '}
           <b>.Join</b>; homepage-specific overrides stay under{' '}

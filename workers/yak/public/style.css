@@ -669,10 +669,6 @@
     max-width: 36rem;
   }
 
-  .Hello_Label {
-    font-weight: 700;
-  }
-
   .Hello_Ask textarea.Field {
     width: 100%;
     min-height: 6.5rem;
@@ -684,9 +680,10 @@
     justify-self: end;
   }
 
-  /* A phone: the yak sits beside the kicker rather than over it, and the box
-     opens three lines tall, so the box and its button are on the first
-     screen even under an in-app browser's bars. */
+  /* A phone: the yak sits beside the kicker rather than over it, the heading
+     is the box's label, and the box opens three lines tall, so the box and
+     its button are on the first screen even under an in-app browser's
+     bars. */
   @media (max-width: 40rem) {
     .Hello_Copy {
       grid-template-columns: auto minmax(0, 1fr);
