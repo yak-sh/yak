@@ -2,8 +2,7 @@
 // behind an asynchronous RPC-shaped door. No Store state is shared with it.
 import { backoff } from '@yaks/durable-object'
 import { select, table } from '@yaks/sql'
-import { clock, equal, ok, test } from '@yaks/testing'
-import type { Clock } from '@yaks/fp'
+import { type Clock, clock, equal, ok, test } from '@yaks/testing'
 import { doorOf, IDEMPOTENCY } from './door.ts'
 import { PLATFORM_STORE } from '@yaks/platform/names'
 import type { Rehearsal } from '@yaks/platform/mover'
@@ -87,6 +86,13 @@ let fixture = async (rules: Rule[] = [], time?: Clock) => {
       doc: { title: 'Before' },
     },
   ], KERNEL)
+  // The app made owes its effects (reward.ts `reward_referral`), and each
+  // settles with a directory write that fences: wait them out, so a proof's
+  // fences are its own however long they take. On a clock of its own, the
+  // pool's pauses between passes are kept on it, so it is moved meanwhile.
+  while (ctx.pending.size) {
+    await (time?.advance(0) ?? Promise.allSettled([...ctx.pending]))
+  }
   let answer = await read()
   let initial = Number(answer.headers.get(EPOCH))
   let body = await answer.text()
