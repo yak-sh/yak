@@ -11,49 +11,49 @@
       "name": "cli/help",
       "unit": "ms",
       "better": "lower",
-      "median": 345.8139999999985,
-      "reference": "ccf6c8ed4150d5bd43dbd1c5cf31e0bd0f9eaca8",
-      "tolerance": 0.628
+      "median": 200.03999999999724,
+      "reference": "28bdee96b6046d6de08b87b3e935a0a36775220f",
+      "tolerance": 0.45
     },
     {
       "name": "cli/task-list",
       "unit": "ms",
       "better": "lower",
-      "median": 898.3940000000002,
-      "reference": "ccf6c8ed4150d5bd43dbd1c5cf31e0bd0f9eaca8",
+      "median": 680.2799999999988,
+      "reference": "28bdee96b6046d6de08b87b3e935a0a36775220f",
       "tolerance": 0.95
     },
     {
       "name": "cli/graph-show",
       "unit": "ms",
       "better": "lower",
-      "median": 724.0400000000009,
-      "reference": "ccf6c8ed4150d5bd43dbd1c5cf31e0bd0f9eaca8",
-      "tolerance": 0.459
+      "median": 524.0359999999964,
+      "reference": "28bdee96b6046d6de08b87b3e935a0a36775220f",
+      "tolerance": 0.146
     },
     {
       "name": "cli/graph-query",
       "unit": "ms",
       "better": "lower",
-      "median": 613.9589999999989,
-      "reference": "ccf6c8ed4150d5bd43dbd1c5cf31e0bd0f9eaca8",
-      "tolerance": 0.405
+      "median": 474.2250000000022,
+      "reference": "28bdee96b6046d6de08b87b3e935a0a36775220f",
+      "tolerance": 0.241
     },
     {
       "name": "cli/graph-apply",
       "unit": "ms",
       "better": "lower",
-      "median": 891.4439999999995,
-      "reference": "ccf6c8ed4150d5bd43dbd1c5cf31e0bd0f9eaca8",
-      "tolerance": 0.543
+      "median": 678.4880000000012,
+      "reference": "28bdee96b6046d6de08b87b3e935a0a36775220f",
+      "tolerance": 0.234
     },
     {
       "name": "hook/UserPromptSubmit",
       "unit": "ms",
       "better": "lower",
-      "median": 357.2580000000007,
-      "reference": "ccf6c8ed4150d5bd43dbd1c5cf31e0bd0f9eaca8",
-      "tolerance": 0.815
+      "median": 202.61899999999878,
+      "reference": "28bdee96b6046d6de08b87b3e935a0a36775220f",
+      "tolerance": 0.522
     },
     {
       "name": "connector/graph-query",
