@@ -1,6 +1,6 @@
 /**
  * @yaks/tui renders a Preact tree to a terminal. Preact draws into a fake DOM
- * (`dom.ts`); a backend turns that tree into what the screen shows. The
+ * (@yaks/dom); a backend turns that tree into what the screen shows. The
  * backend that ships is a hand-written ANSI painter which repaints only the
  * lines that changed, so a keystroke usually repaints a single line. Swap in
  * another backend without changing a single widget.
@@ -31,7 +31,7 @@ export {
   TNode,
   touch,
   TText,
-} from './dom.ts'
+} from '@yaks/dom'
 export { decode, feed, type Key, type Name } from './input.ts'
 export {
   ansi,
@@ -80,7 +80,7 @@ export {
   type VisualState,
 } from './visual.ts'
 
-export { Image, type ImageSource } from './Image.ts'
+export { Image, type ImageSource, showing } from './Image.ts'
 
 export { useKeymap } from './keymap.ts'
 export { pressFocused, pressTo } from './screen.ts'

@@ -2,6 +2,7 @@
 import type { Comp } from '@yaks/graph'
 import { toolEid } from '@yaks/tools/result'
 import { parse } from '@yaks/query'
+import { showing } from '@yaks/tui'
 import { define, type Renderer, type Rendering } from '@yaks/render'
 import { entryBody } from '@yaks/session'
 import { parse as markdown, render as renderMarkdown } from '@yaks/markdown'
@@ -114,16 +115,7 @@ export let transcriptViews = define([
         | undefined
       if (!load || !ctx.inlineImages) return h('div', { wrap: '1' }, alt)
       return h('terminal-image', {
-        ref: (node: unknown) => {
-          if (node) {
-            ;(node as { image?: unknown }).image = {
-              key: eid,
-              alt,
-              rows: 8,
-              load: () => load(eid),
-            }
-          }
-        },
+        ref: showing({ key: eid, alt, rows: 8, load: () => load(eid) }),
       })
     },
   },

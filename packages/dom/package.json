@@ -1,0 +1,14 @@
+{
+  "name": "@yaks/dom",
+  "version": "0.2.24",
+  "type": "module",
+  "exports": {
+    ".": "./mod.ts"
+  },
+  "license": "Apache-2.0",
+  "description": "A just-enough in-memory DOM for Preact to render against outside a browser, which a terminal painter (@yaks/tui) and a native painter (@yaks/native) each paint.",
+  "devDependencies": {
+    "@std/assert": "npm:@jsr/std__assert@^1.0.0",
+    "@yaks/testing": "0.2.30"
+  }
+}

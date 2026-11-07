@@ -1,6 +1,6 @@
 /** @jsxImportSource preact */
 // Shared navigation runs in two hosts. The browser has a whole document; the
-// TUI installs a FAKE one (tui/dom.ts) carrying only what preact reaches for
+// TUI installs a FAKE one (@yaks/dom) carrying only what preact reaches for
 // — createElement, createTextNode, activeElement. So navigation startup
 // cannot object-guard alone: `document?.querySelectorAll(…)` passes the guard
 // and then throws on the missing member, which is how the TUI lost its boot.

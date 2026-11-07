@@ -9,7 +9,7 @@
  */
 
 import { type ComponentType, h, render } from 'preact'
-import { install, onPaint, place } from './dom.ts'
+import { install, onPaint, place } from '@yaks/dom'
 import { decode } from './input.ts'
 import { clearMouse, routeMouse } from './mouse.ts'
 import { ansiBackend, type Line, screenful } from './paint.ts'

@@ -176,14 +176,16 @@ grouped approximately by function, **not** by dependency order.
   filter permits relative URLs and explicit `http`, `https` and `mailto`
   schemes.
 
-- **[@yaks/tui](./tui)** — the same Preact trees on a terminal: a fake DOM, a
+- **[@yaks/dom](./dom)** — the in-memory DOM Preact renders into outside a
+  browser, which @yaks/tui paints to a terminal and @yaks/native to native
+  views.
+- **[@yaks/tui](./tui)** — the same Preact trees on a terminal: @yaks/dom, a
   swappable backend (a diffing ANSI painter today), and the three widgets a
   console app is made of — a scrolling transcript, a multi-line input box, and a
   frame with a sidebar of pluggable panels.
 - **[@yaks/native](./native)** — the same Preact trees as native views: it
-  paints @yaks/tui's in-memory DOM as plain nodes (box, text, field, toggle,
-  press) that a native host, the iOS shell in `native/`, draws with its own
-  widgets.
+  paints @yaks/dom as plain nodes (box, text, field, toggle, press) that a
+  native host, the iOS shell in `native/`, draws with its own widgets.
 - **[@yaks/ui](./ui)** — the UI components: display-only parts with semantic
   variants (`Dot`, `Id`, `Stamp`, `Tabs`, `Menu`, `Tip`, `Field`, `Choices`,
   `Button`, `Chip`, `Value`, `Pairs`, `Tile`, `Rows`, `Section`, `Timeline`,

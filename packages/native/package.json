@@ -7,9 +7,9 @@
     "./remote": "./remote.ts"
   },
   "license": "Apache-2.0",
-  "description": "Paints the kits' Preact tree, rendered into @yaks/tui's in-memory DOM, as plain native nodes (box, text, press, field, toggle, pick, drawing, image, and a web notice for what only a browser draws) a native host draws with its own widgets, and loads a kit-built app's view and store from the app for any host outside a browser.",
+  "description": "Paints the kits' Preact tree, rendered into @yaks/dom's in-memory DOM, as plain native nodes (box, text, press, field, toggle, pick, drawing, image, and a web notice for what only a browser draws) a native host draws with its own widgets, and loads a kit-built app's view and store from the app for any host outside a browser.",
   "dependencies": {
-    "@yaks/tui": "0.2.24",
+    "@yaks/dom": "0.2.24",
     "@yaks/ui": "0.2.30",
     "sucrase": "3.35.1"
   },

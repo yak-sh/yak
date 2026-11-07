@@ -1,5 +1,5 @@
 import { visualState } from './visual.ts'
-import { TElement } from './dom.ts'
+import { TElement } from '@yaks/dom'
 import type { Mouse } from './input.ts'
 import type { Line } from './paint.ts'
 

@@ -11,8 +11,8 @@ import type { MouseEvent } from './mouse.ts'
 /** An identity-anchored, lazily measured viewport. No total-height pass. */
 import { type ComponentChildren, h, render, type VNode } from 'preact'
 import { useLayoutEffect, useRef } from 'preact/hooks'
-import { TElement, touch } from './dom.ts'
-import { clip, lay, type Line } from './paint.ts'
+import { TElement, touch } from '@yaks/dom'
+import { clip, lay, type Line, viewports } from './paint.ts'
 import { type Sheet, type Style } from './theme.ts'
 import { terminalFocused, useKeys } from './screen.ts'
 import type { Key } from './input.ts'
@@ -773,7 +773,7 @@ export let VirtualList = <T extends VirtualItem>(
     },
     ref: (el: unknown) => {
       if (!el) return
-      ;(el as TElement).viewport = (width, height, style, sheet) => {
+      viewports.set(el as TElement, (width, height, style, sheet) => {
         selectionWidth.current = width
         env.current = { style, sheet }
         state.current!.cursorVisible = terminalFocused.value
@@ -833,7 +833,7 @@ export let VirtualList = <T extends VirtualItem>(
         return attrs.scrollbar
           ? drawScrollbar(lines, width, frame.current.position, sheet)
           : lines
-      }
+      })
     },
   })
 }

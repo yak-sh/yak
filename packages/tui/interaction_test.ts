@@ -1,6 +1,6 @@
 /** Native keyboard events, focus, selection and form submission in a fake DOM. */
 import { equal, ok, test } from '@yaks/testing'
-import { dispatch, install, TElement } from './dom.ts'
+import { dispatch, install, TElement } from '@yaks/dom'
 import { event, interaction } from './interaction.ts'
 import { h, render } from 'preact'
 import { act } from 'preact/test-utils'

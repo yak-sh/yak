@@ -4,7 +4,7 @@
  * every key is a keydown on the element in focus first, so a page's own
  * listeners (vim's keys, @yaks/ux/keys) hear it as they would in a browser.
  * The app owns links and history; this adapter knows only DOM controls. */
-import { dispatch, doc, onNavigate, type TElement } from './dom.ts'
+import { dispatch, doc, onNavigate, type TElement } from '@yaks/dom'
 import { edit } from './Textarea.ts'
 import type { Key } from './input.ts'
 

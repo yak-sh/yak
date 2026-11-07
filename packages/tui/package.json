@@ -8,13 +8,13 @@
     "./theme": "./theme.ts",
     "./history": "./history.ts",
     "./interaction": "./interaction.ts",
-    "./dom": "./dom.ts",
     "./testing": "./testing.ts"
   },
   "license": "Apache-2.0",
   "description": "Renders Preact trees in a terminal through a replaceable backend, with a diffing ANSI painter and scrolling, input, and layout widgets.",
   "dependencies": {
     "@preact/signals": "2.9.4",
+    "@yaks/dom": "0.2.24",
     "@yaks/fp": "0.2.23",
     "@yaks/process": "0.2.28",
     "@yaks/text": "0.2.24",

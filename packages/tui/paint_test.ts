@@ -1,6 +1,6 @@
 import { test } from '@yaks/testing'
 import { assert, assertEquals } from '@std/assert'
-import { TElement, TText } from './dom.ts'
+import { TElement, TText } from '@yaks/dom'
 import { ansi, ansiBackend, lay, type Line, screenful } from './paint.ts'
 
 let el = (

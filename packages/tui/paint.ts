@@ -38,12 +38,13 @@ import { scrollbar } from './scrollbar.ts'
  */
 
 import { safe as strip, safeHref } from '@yaks/text'
-import type { TElement, TNode } from './dom.ts'
-import { doc, touch, TText } from './dom.ts'
+import type { TElement, TNode } from '@yaks/dom'
+import { doc, touch, TText } from '@yaks/dom'
 import { table } from './table.ts'
 import { type Track, tracks } from './grid.ts'
 import { graphics } from './graphics.ts'
 import { base, compose, type Sheet, type Style } from './theme.ts'
+import type { ImageSource } from './Image.ts'
 
 /** A run of text under one style. */
 export type Seg = {
@@ -55,12 +56,28 @@ export type Seg = {
   style: Style
   owner?: TElement
   image?: {
-    source: import('./Image.ts').ImageSource
+    source: ImageSource
     row: number
     rows: number
     width: number
   }
 }
+
+/** A virtual list's window: the lines it shows at a width and height. */
+export type Viewport = (
+  width: number,
+  height: number,
+  style: Style,
+  sheet: Sheet,
+) => Line[]
+
+// What an element paints in place of its children, kept here by the element
+// rather than on it: the DOM is every painter's, and these are the
+// terminal's.
+/** The image an element (`Image`) paints. */
+export let images: WeakMap<TElement, ImageSource> = new WeakMap()
+/** The window a virtual list's element paints. */
+export let viewports: WeakMap<TElement, Viewport> = new WeakMap()
 /** One screen line, as styled runs. */
 export type Line = Seg[]
 /** What a scroll region measured on the last paint, per element id: its
@@ -598,20 +615,22 @@ let layout = (
   c: Ctx,
   o = own(el, c.sheet),
 ): Line[] => {
-  if (el.image) {
-    let rows = Math.max(1, Math.min(16, Math.floor(el.image.rows) || 8))
+  let image = images.get(el)
+  if (image) {
+    let rows = Math.max(1, Math.min(16, Math.floor(image.rows) || 8))
     return Array.from({ length: rows }, (_, row) => [{
       text: row == 0
-        ? safe(el.image!.alt).replaceAll('\n', ' ').slice(0, w).padEnd(w)
+        ? safe(image.alt).replaceAll('\n', ' ').slice(0, w).padEnd(w)
         : ' '.repeat(w),
       style: st,
       owner: el,
-      image: { source: el.image!, row, rows, width: w },
+      image: { source: image, row, rows, width: w },
     }])
   }
   let selected = visualLines(el.attr('id') ?? '', w, h ?? 6)
   if (selected) return selected
-  if (el.viewport) return el.viewport(w, h ?? 0, st, c.sheet)
+  let viewport = viewports.get(el)
+  if (viewport) return viewport(w, h ?? 0, st, c.sheet)
   let s = inherit(st, o)
   if (el.localName == 'svg') {
     return o.glyph ? [[{ text: o.glyph, style: s, owner: el }]] : []
@@ -749,7 +768,7 @@ export let lay = (
 ): Line[] => {
   let o = own(el, c.sheet)
   if (!shows(el, o, c)) return []
-  let boxed = el.viewport || el.attr('scroll') != null ||
+  let boxed = viewports.has(el) || el.attr('scroll') != null ||
     num(el, 'width') != null || o.width != null ||
     el.attr('grow') != null || o.grow
   let lines = layout(el, st, w, h, c, o)
@@ -763,7 +782,9 @@ export let lay = (
 // claimed it first; a viewport's are all its own.
 let owned = (el: TElement, lines: Line[]): Line[] =>
   lines.map((line) =>
-    line.map((seg) => !el.viewport && seg.owner ? seg : { ...seg, owner: el })
+    line.map((seg) =>
+      !viewports.has(el) && seg.owner ? seg : { ...seg, owner: el }
+    )
   )
 
 let fit = (lines: Line[], h: number): Line[] =>

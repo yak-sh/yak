@@ -1,7 +1,9 @@
 /**
- * A just-enough DOM for Preact to render against outside a browser (the undom
- * trick): elements are plain objects, every mutation marks the tree dirty, and
- * whoever owns the screen paints on the next microtask. `install()` swaps
+ * @yaks/dom: a just-enough DOM for Preact to render against outside a browser
+ * (the undom trick): elements are plain objects, every mutation marks the tree
+ * dirty, and whoever owns the screen paints on the next microtask. A painter is
+ * a small reader of this tree: @yaks/tui paints it to a terminal, @yaks/native
+ * to native views, so a kit-built app is one tree on both. `install()` swaps
  * `globalThis.document` for this one and hands back the render root plus the
  * restore, so a process that also holds a browser document (a test suite) keeps
  * its own.
@@ -50,7 +52,7 @@ let revealed: TElement | undefined
 let follow = (_href: string) => {}
 
 /** Say how a pressed link is followed: the app's own navigation, since a
- * terminal has no location to load. */
+ * painter outside a browser has no location to load. */
 export let onNavigate = (fn: (href: string) => void): void => {
   follow = fn
 }
@@ -117,8 +119,6 @@ export class TText extends TNode {
 
 /** An element: children, class, attributes, listeners. */
 export class TElement extends TNode {
-  image?: import('./Image.ts').ImageSource
-
   // Preact uses native property presence to normalize event names to lowercase.
   onwheel = null
   onclick = null
@@ -278,14 +278,6 @@ export class TElement extends TNode {
     this.selectionEnd = end
     if (doc.activeElement == this) this.setAttribute('data-caret', start)
   }
-  /** Optional viewport layout owned by a virtual list, not DOM children. */
-  viewport?: (
-    width: number,
-    height: number,
-    style: import('./theme.ts').Style,
-    sheet: import('./theme.ts').Sheet,
-  ) => import('./paint.ts').Line[]
-
   /** DOM node type, as Preact expects to read it. */
   nodeType = 1
   /** Children in document order. */

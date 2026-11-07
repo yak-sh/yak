@@ -1,7 +1,7 @@
 import { derivedEid } from '@yaks/graph/identity'
 import { test } from '@yaks/testing'
 import { h, render as mountTree } from 'preact'
-import { install, TElement } from '../tui/dom.ts'
+import { install, TElement } from '@yaks/dom'
 import { screenful } from '../tui/paint.ts'
 import { dress } from './sheet.ts'
 import { define, resolve } from '@yaks/render'

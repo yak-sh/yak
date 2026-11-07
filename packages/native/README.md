@@ -1,7 +1,7 @@
 # @yaks/native
 
 `@yaks/native` paints the kits' Preact tree as plain native nodes. Preact
-renders into @yaks/tui's in-memory DOM, as it does for a terminal, and `paint`
+renders into @yaks/dom's in-memory DOM, as it does for a terminal, and `paint`
 reads that tree into the kinds of node a native host draws with its own widgets:
 
 - `box`: a flex box holding other nodes, pressable when the element takes a

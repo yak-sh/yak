@@ -60,6 +60,7 @@
   "devDependencies": {
     "@std/assert": "npm:@jsr/std__assert@^1.0.0",
     "@yaks/benchmark": "0.2.30",
+    "@yaks/dom": "0.2.24",
     "@yaks/openai": "0.2.26",
     "@yaks/openrouter": "0.2.30",
     "@yaks/ram": "0.2.24",

@@ -193,7 +193,7 @@ let menuRef = (ev: MouseEvent) => {
 }
 
 // Startup, exported so either host's document can be proven against it. The
-// TUI's fake document (tui/dom.ts) carries only what preact reaches for, so
+// TUI's fake document (@yaks/dom) carries only what preact reaches for, so
 // an object guard is not enough here — `document?.member(…)` passes it and
 // then throws on the missing member. Guard the METHOD, always.
 type Host = {

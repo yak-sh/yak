@@ -17,7 +17,7 @@
  */
 
 import { type ComponentChild, render } from 'preact'
-import { install } from './dom.ts'
+import { install } from '@yaks/dom'
 import { printout } from './paint.ts'
 import type { Sheet } from './theme.ts'
 

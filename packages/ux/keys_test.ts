@@ -111,11 +111,14 @@ let press = (key: string, shiftKey = false) => {
   return e.defaultPrevented
 }
 // The cursor's item, by its text or its tag; pointing at one puts the cursor
-// there, and pointing at none takes it away.
+// there, and pointing at none takes it away. It paints the page first: where
+// things sit is the process's last paint, which another file's may have been.
 let cursor = () => root.querySelector('[data-cursor]')
 let on = () => cursor()?.textContent || cursor()?.localName
-let point = (at = 'none') =>
+let point = (at = 'none') => {
+  paint()
   keys.point({ target: root.querySelector(at) ?? root } as unknown as Event)
+}
 let walked = (...keys: string[]) => keys.map((k) => (press(k), on()))
 screen.free()
 

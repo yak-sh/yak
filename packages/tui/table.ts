@@ -1,6 +1,6 @@
 /** Semantic table layout. Intrinsic sizing samples bounded text; cells wrap at
  * their allocated widths. This module does not depend on Markdown or graphs. */
-import { TElement, TText } from './dom.ts'
+import { TElement, TText } from '@yaks/dom'
 import type { Line } from './paint.ts'
 import type { Sheet, Style } from './theme.ts'
 

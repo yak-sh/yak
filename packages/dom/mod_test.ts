@@ -1,6 +1,6 @@
 import { test } from '@yaks/testing'
 import { assert, assertEquals } from '@std/assert'
-import { install, onPaint, TElement, touch, TText } from './dom.ts'
+import { install, onPaint, TElement, touch, TText } from './mod.ts'
 
 let tick = () => Promise.resolve()
 

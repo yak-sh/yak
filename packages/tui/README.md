@@ -1,7 +1,7 @@
 # @yaks/tui
 
 `@yaks/tui` renders Preact components in a terminal. Preact writes an in-memory
-tree through the small DOM implementation in `dom.ts`; a `Backend` measures and
+tree through the small DOM implementation in @yaks/dom; a `Backend` measures and
 paints that tree. The included ANSI backend updates only changed terminal rows.
 
 The package does not persist application data. Components keep transient input,

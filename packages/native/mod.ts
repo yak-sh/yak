@@ -1,6 +1,6 @@
 /**
  * @yaks/native: the kits' Preact tree, painted as native views. Preact
- * renders into @yaks/tui's in-memory DOM, as it does for a terminal; `paint`
+ * renders into @yaks/dom's in-memory DOM, as it does for a terminal; `paint`
  * reads that tree into plain nodes a native host draws with its own widgets:
  * a box, a run of text, a press, a field, a toggle, a pick, a drawing, an
  * image, and what only a browser draws (`web`). It holds no widget and
@@ -24,7 +24,7 @@ import {
   type TElement,
   type TNode,
   TText,
-} from '@yaks/tui/dom'
+} from '@yaks/dom'
 
 /** A native style: a React Native style object's keys and values. */
 export type Style = Record<string, string | number>
@@ -243,7 +243,7 @@ let shut = (el: TElement, c: TNode) =>
   (c instanceof TText || (c as TElement).localName != 'summary')
 
 // A press clicks it, which submits a submit button's form and flips a box,
-// as a browser's click does (@yaks/tui/dom).
+// as a browser's click does (@yaks/dom).
 let pressOf = (el: TElement) =>
   pressable(el) && !el.hasAttribute('disabled') ? () => el.click() : undefined
 

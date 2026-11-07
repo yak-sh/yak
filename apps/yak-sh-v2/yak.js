@@ -110,7 +110,7 @@ let from = {
 // is written, run, and its answer printed through the views, or as data under
 // `--json`. A refusal is an answer too, and exit code 1. The answer is printed
 // rather than painted: @yaks/tui's painter swaps `globalThis.document` for a
-// document of its own (tui/dom.ts), and a browser window will not give its
+// document of its own (@yaks/dom), and a browser window will not give its
 // up.
 let command = (declared) => ({
   ...declared,

@@ -2,7 +2,7 @@
  * A virtual surface supplies one item, never its entire history. */
 import { safe } from '@yaks/text'
 import { useLayoutEffect, useRef } from 'preact/hooks'
-import { touch } from './dom.ts'
+import { touch } from '@yaks/dom'
 import type { Key } from './input.ts'
 import type { Line } from './paint.ts'
 import { visualRows, visualSpot } from './textRows.ts'

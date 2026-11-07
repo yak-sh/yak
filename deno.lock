@@ -3310,6 +3310,14 @@
           ]
         }
       },
+      "packages/dom": {
+        "packageJson": {
+          "dependencies": [
+            "npm:@jsr/std__assert@1",
+            "npm:@yaks/testing@0.2.30"
+          ]
+        }
+      },
       "packages/draft": {
         "packageJson": {
           "dependencies": [
@@ -3594,6 +3602,7 @@
             "npm:@yaks/client@0.2.24",
             "npm:@yaks/connections@0.2.28",
             "npm:@yaks/context@0.2.23",
+            "npm:@yaks/dom@0.2.24",
             "npm:@yaks/edge@0.2.24",
             "npm:@yaks/effects@0.2.33",
             "npm:@yaks/file@0.2.28",
@@ -4074,8 +4083,8 @@
         "packageJson": {
           "dependencies": [
             "npm:@jsr/std__assert@1",
+            "npm:@yaks/dom@0.2.24",
             "npm:@yaks/testing@0.2.30",
-            "npm:@yaks/tui@0.2.24",
             "npm:@yaks/ui@0.2.30",
             "npm:preact@10.29.7",
             "npm:sucrase@3.35.1"
@@ -4842,6 +4851,7 @@
           "dependencies": [
             "npm:@jsr/std__assert@1",
             "npm:@preact/signals@2.9.4",
+            "npm:@yaks/dom@0.2.24",
             "npm:@yaks/fp@0.2.23",
             "npm:@yaks/markdown@0.2.30",
             "npm:@yaks/process@0.2.28",
