@@ -325,6 +325,77 @@ test('the door refuses a stranger before it reaches the object', async () => {
   assertEquals(said.error.message, NOBODY)
 })
 
+// An object's directory reads, the `held`th of them kept from answering
+// until let go: a seat read still under way.
+let holding = (o: { env: Env }, held: number) => {
+  let gate = Promise.withResolvers<void>()
+  let reads = 0
+  let { STORE } = o.env
+  o.env.STORE = {
+    ...STORE,
+    idFromName: (name) => STORE.idFromName(name),
+    get: (id) => {
+      let stub = STORE.get(id)
+      return {
+        ...stub,
+        fetch: async (req: Request) => {
+          if (reads++ == held) await gate.promise
+          return stub.fetch(req)
+        },
+      } as typeof stub
+    },
+  }
+  return { asked: () => reads > held, go: () => gate.resolve() }
+}
+
+let asking =
+  (o: Awaited<ReturnType<typeof seeded>>, said: string[] = []) =>
+  async (path: string) => {
+    let r = await o.object.fetch(
+      new Request(`https://builder/operator/${path}`, {
+        method: 'POST',
+        headers: { 'x-space-eid': o.space.eid, 'x-yak-person': ADA },
+        body: '{}',
+      }),
+    )
+    await r.body?.cancel()
+    said.push(path)
+  }
+
+let tick = () => new Promise((r) => setTimeout(r, 1))
+
+test("an object works its Operator once every answer under way has gone, not between a page's two reads", async () => {
+  let o = await seeded()
+  let said: string[] = []
+  let arm = o.ctx.storage.setAlarm.bind(o.ctx.storage)
+  o.ctx.storage.setAlarm = (at) => (said.push('armed'), arm(at))
+  let ask = asking(o, said)
+  let seat = holding(o, 1)
+  let both = Promise.all([ask('updates'), ask('conversation')])
+  while (!said.length) await tick()
+  await tick()
+  seat.go()
+  await both
+  await Promise.all(o.ctx.pending)
+  assertEquals(said.slice(0, 3), ['updates', 'conversation', 'armed'])
+})
+
+test('a new incarnation makes its Operator while the seat read is under way', async () => {
+  let o = await seeded()
+  // What its storage ran before the seat read answered, and in all.
+  let ran = 0
+  let { sql } = o.ctx.storage
+  let exec = sql.exec.bind(sql)
+  sql.exec = (...args) => (ran++, exec(...args))
+  let seat = holding(o, 0)
+  let read = asking(o)('conversation')
+  await until(() => seat.asked())
+  let held = ran
+  seat.go()
+  await read
+  assert(held > (ran - held) / 2, `${held} of ${ran} ran before the seat`)
+})
+
 // Behind the answer, not before it: what the owed work writes would hold
 // the answer until storage confirmed it.
 test('an object works its Operator once its first answer has gone, so a step a deploy reset runs again at once', async () => {

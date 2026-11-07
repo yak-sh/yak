@@ -10,10 +10,12 @@ import { assert, assertEquals, assertStringIncludes } from '@std/assert'
 import { parseHTML } from 'linkedom'
 import { type Item, ModelError } from '@yaks/model'
 import { directoryOf } from './directory.ts'
+import type { Env } from './env.ts'
 import { platform } from './testing.ts'
 import { operatorModel, operatorService, released } from './operator-testing.ts'
 import { receive, rootOf } from './operator-channels.ts'
 import { CONVERSATION } from './operator-host.ts'
+import { notification } from './operator-updates.ts'
 import { toolEid } from '@yaks/tools/result'
 import {
   aboutPath,
@@ -727,4 +729,40 @@ test('a chat in which the Operator changed an app opens with no app beside it', 
   let { document } = await sided('owner')
   assertEquals(document.querySelector('.Talk_App'), null)
   assertEquals(document.querySelector('#ask [name=app]'), null)
+})
+
+// The page's Operator, recording what it is asked; `old` is a Builder on the
+// code from before a conversation answered Updates beside it, as one is for
+// a deploy's window.
+let asked = async (old: boolean) => {
+  let paths: string[] = []
+  let BUILDER: Env['BUILDER'] = {
+    idFromName: (name) => name,
+    get: (name) => ({
+      fetch: async (req: Request) => {
+        let path = new URL(req.url).pathname
+        paths.push(path)
+        let answer = await service.binding.get(name).fetch(req)
+        if (!old || path != '/operator/conversation') return answer
+        let { updates: _, ...before } = await answer.json()
+        return Response.json(before)
+      },
+    }),
+  }
+  let page = await chatPage({ ...p.env, BUILDER }, space, who, 'new', beside)
+  let { document } = parseHTML(await page.text())
+  return {
+    paths,
+    count: document.querySelector('.Talk_Count')?.textContent,
+  }
+}
+
+test('a chat page asks its Operator once, and a Builder on older code for its Updates apart', async () => {
+  await service.store.g.apply([
+    notification({ to: person, words: 'The notices app is live.' }),
+  ], { trusted: true })
+  let [now, before] = [await asked(false), await asked(true)]
+  assertEquals(now.paths, ['/operator/conversation'])
+  assertEquals(before.paths, ['/operator/conversation', '/operator/updates'])
+  assertEquals([now.count, before.count], ['1', '1'])
 })

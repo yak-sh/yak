@@ -1,4 +1,4 @@
-import { updating } from './operator-updates.ts'
+import { updatesOf, updating } from './operator-updates.ts'
 import { addressed, type Bundle, type Graph } from '@yaks/graph'
 import { refuse } from './tool.ts'
 import { remove } from './operator-remove.ts'
@@ -1133,12 +1133,19 @@ export let operatorRequest = async (
     return Response.json({})
   }
   // The conversation open, or with none named the person's own, which
-  // `root` names either way, begun or not.
+  // `root` names either way, begun or not. With `updates`, the person's
+  // Updates beside it: a chat page's two reads in one request.
   if (path == '/operator/conversation') {
     let root = await rootAt(store, spaceId, person)
     let open = String(args.open || root)
+    let news = async () =>
+      args.updates === true
+        ? { updates: await updatesOf(store, person, spaceId) }
+        : {}
     if (!everyone && !await own(open)) {
-      return args.open ? missing() : Response.json({ ...NONE, root })
+      return args.open
+        ? missing()
+        : Response.json({ ...NONE, root, ...await news() })
     }
     let { lines, ...talked } = await conversationOf(
       store,
@@ -1150,7 +1157,12 @@ export let operatorRequest = async (
       typeof args.opens == 'string' ? args.opens : undefined,
     )
     // Its lines as data only for a reader that draws them (the iOS shell).
-    return Response.json({ root, ...talked, ...args.lines ? { lines } : {} })
+    return Response.json({
+      root,
+      ...talked,
+      ...args.lines ? { lines } : {},
+      ...await news(),
+    })
   }
   if (path == '/operator/remove') {
     // A person removes their own; the platform's admin anyone's.

@@ -90,7 +90,14 @@ import { VOCABS } from './vocab.ts'
 import { DOCUMENTS } from './documents.ts'
 import { phoneAt } from './phones.ts'
 import { icons } from './icons.ts'
-import { needing, needsCard, updates, updatesOf, visitsOf } from './updates.ts'
+import {
+  needing,
+  needsCard,
+  type Updates,
+  updates,
+  updatesOf,
+  visitsOf,
+} from './updates.ts'
 
 // What this page draws, as markup: the edge where its parts become text.
 let html = (node: Node) => renderToString(h(Fragment, null, node))
@@ -816,16 +823,9 @@ export let operatorAnswer = async (
   // One conversation read again.
   if (q.has('talk')) {
     let open = q.get('talk')!
-    let talked = await conversationOf(
-      env,
-      space,
-      who,
-      at,
-      open,
-      false,
-      undefined,
-      q.has('lines'),
-    )
+    let talked = await conversationOf(env, space, who, at, open, {
+      lines: q.has('lines'),
+    })
     if (!talked.title) {
       return Response.json({ message: 'That conversation is missing.' }, {
         status: 404,
@@ -883,17 +883,22 @@ let socketTo = (
 /** One conversation, opened by its task or a request: its sessions as they
  * ran (operator-view.ts `talk`), or the request alone while no session has
  * taken it. `everyone` reads any person's, for the platform's admin, each
- * titled by whose it is, and `opens` is where its helpers' conversations
- * open, by their id: the chat app's unless the admin's. */
+ * titled by whose it is, `opens` is where its helpers' conversations open,
+ * by their id (the chat app's unless the admin's), `lines` answers its lines
+ * as data, and `updates` the person's Updates beside it, in the same
+ * request. */
 export let conversationOf = async (
   env: Env,
   space: Space,
   who: Who,
   at: string,
   open: string,
-  everyone = false,
-  opens?: string,
-  drawing = false,
+  { everyone = false, opens, lines: drawing = false, updates = false }: {
+    everyone?: boolean
+    opens?: string
+    lines?: boolean
+    updates?: boolean
+  } = {},
 ) => {
   let none = {
     root: '',
@@ -906,7 +911,11 @@ export let conversationOf = async (
     making: null,
     standing: '',
   }
-  if (open == 'new') return none
+  // A Builder still on the code before it answers none (a deploy's window),
+  // and is asked for them apart.
+  let news = async (read?: Updates) =>
+    !updates ? undefined : read ?? await updatesOf(env, space, who)
+  if (open == 'new') return { ...none, updates: await news() }
   let {
     root,
     task,
@@ -918,6 +927,7 @@ export let conversationOf = async (
     waiting,
     making,
     standing,
+    updates: read,
   } = await operatorDoor(
     env,
     space,
@@ -929,6 +939,7 @@ export let conversationOf = async (
       ...everyone ? { everyone } : {},
       ...opens ? { opens } : {},
       ...drawing ? { lines: true } : {},
+      ...updates ? { updates } : {},
     },
   ).catch((e) => {
     if (e.status != 404) throw e
@@ -944,8 +955,10 @@ export let conversationOf = async (
     waiting: Bundle[]
     making: Underway | null
     standing: string
+    updates?: Updates
   }
   return {
+    updates: await news(read),
     root,
     task,
     begun,
@@ -1734,11 +1747,13 @@ export let chatPage = async (
   let at = managePath('operator', space.slug)
   // The space's address opens the person's one conversation, and a new chat
   // only until they have one (T-141349).
-  let [talked, news, newcomer] = await Promise.all([
-    conversationOf(env, space, who, at, open == 'new' ? '' : open),
-    updatesOf(env, space, who),
+  let [talked, newcomer] = await Promise.all([
+    conversationOf(env, space, who, at, open == 'new' ? '' : open, {
+      updates: true,
+    }),
     who.person ? directoryOf(env.STORE).newcomer(who.person) : false,
   ])
+  let news = talked.updates!
   // Their one conversation, as the store names it: what an empty `open` asks
   // for (operator-host.ts `/operator/conversation`).
   let root = talked.root

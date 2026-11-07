@@ -245,6 +245,8 @@ export class Builder {
   // What this incarnation takes up from the one before it, once it has
   // answered the request that woke it (`#work`).
   #owed?: () => void
+  // The requests this incarnation is answering now.
+  #asked = 0
   // The browsers people lend the Operator, and the calls asked of them that
   // wait for an answer: in memory, as the step waiting on one is.
   #lent: Browsers
@@ -405,8 +407,19 @@ export class Builder {
    * `reported`, door.ts `metered`). */
   async fetch(request: Request): Promise<Response> {
     let tally: Tally = new Map()
-    let answer = await tallying(tally, () => this.#answer(request))
-    this.#behind(() => this.#resume())
+    this.#asked++
+    let answer
+    try {
+      answer = await tallying(tally, () => this.#answer(request))
+    } finally {
+      this.#asked--
+    }
+    // Behind every answer under way, not only this one: a page asks for two
+    // things at once, and the owed work run between them is the second's to
+    // wait for.
+    this.#behind(() => {
+      if (!this.#asked) this.#resume()
+    })
     let headers = new Headers(answer.headers)
     for (let [name, value] of Object.entries(reported(tally))) {
       headers.set(name, value)
@@ -510,6 +523,10 @@ export class Builder {
     let person = request.headers.get('x-yak-person')
     let spaceId = request.headers.get(SPACE)
     if (!person || !spaceId) return no(401, NOBODY)
+    // The Operator made beside the read it waits on: a new incarnation's CPU
+    // spent while the directory answers, not after.
+    let working = this.#work()
+    working.catch(() => {})
     // The space and the person's seat in it, fresh, in one read.
     let access = await directory({
       fetch: (req: Request) => dirPart.fetch(req, this.#env),
@@ -525,7 +542,7 @@ export class Builder {
     if (new URL(request.url).pathname == '/operator/browser') {
       return this.#accept({ browser: true, person, space: spaceId }, request)
     }
-    let operator = await this.#work()
+    let operator = await working
     if (new URL(request.url).pathname == '/operator/call') {
       let { answering } = await import('./operator-calls.ts')
       return answering(

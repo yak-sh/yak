@@ -763,8 +763,7 @@ let operatorPage = async (
     vouch(person),
     managePath('operator', space.slug),
     open,
-    true,
-    home,
+    { everyone: true, opens: home },
   ).catch((e) => {
     caught(e, { request: 'admin operator conversation' })
     return e instanceof Error ? e : new Error(String(e))
