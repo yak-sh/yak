@@ -329,7 +329,7 @@ let hung = await (async () => {
     remote,
     every: 3_600_000,
     reconcileEvery: 0,
-    timer: (run, ms) => time.after(ms, run),
+    clock: time,
     log: (line) => logged.push(line),
     notice: (error) => {
       notices.push(error.message)
@@ -374,7 +374,10 @@ let misconfigured = await (async () => {
     remote,
     every: 0,
     reconcileEvery: 0,
-    timer: (run, ms) => (passes++, time.after(ms, run)),
+    clock: {
+      now: time.now,
+      after: (ms, run) => (passes++, time.after(ms, run)),
+    },
     log: (line) => logged.push(line),
     notice: (error) => (notices.push(error.message), Promise.resolve()),
     fetch: ((_url, init) => {
@@ -433,7 +436,7 @@ let single = await (async () => {
   let thrown = await service({ graph }, {
     source: spool.source,
     remote,
-    timer: (run, ms) => time.after(ms, run),
+    clock: time,
     log: () => {},
     report: (error) => reports.push((error as Error).message),
     notice: (error) => (notices.push(error.message), Promise.resolve()),

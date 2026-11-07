@@ -21,7 +21,8 @@ import {
 } from './remote.ts'
 import { type Read, read } from './routes.ts'
 import type { Mark } from './letter.ts'
-import { later, outage, type Timer } from './outage.ts'
+import { type Clock, system } from '@yaks/fp'
+import { outage } from './outage.ts'
 import { pollThread } from './poll_thread.ts'
 
 /** A polled answer of the platform tracker, with its mark door. */
@@ -84,10 +85,10 @@ export type PollOpts = {
   log?: (line: string) => void
   /** where it asks (default: signed doors on a dedicated worker event loop) */
   doors?: Doors
-  /** how a wait is set — between polls, the outage's, and a page's deadline
-   * — returning what cancels it (default: `setTimeout`), so a test can hold
-   * the clock */
-  timer?: Timer
+  /** what time it is, and how a wait is set — between polls, a hung poll's
+   * and a page's deadline (default: the runtime's), so a test can hold the
+   * clock */
+  clock?: Clock
 }
 
 const PAGE = 100, PAGES = 100
@@ -107,7 +108,7 @@ export type Page = (
 export let pages = (
   doors: Doors,
   stop?: AbortSignal,
-  { timeout, timer = later }: { timeout?: number; timer?: Timer } = {},
+  { timeout, clock = system }: { timeout?: number; clock?: Clock } = {},
 ): Page =>
 async (params, tag) => {
   stop?.throwIfAborted()
@@ -115,9 +116,9 @@ async (params, tag) => {
   // transport names it a timeout (./remote.ts `late`).
   let late = new AbortController()
   let cancel = timeout
-    ? timer(
-      () => late.abort(new DOMException('Signal timed out.', 'TimeoutError')),
+    ? clock.after(
       timeout,
+      () => late.abort(new DOMException('Signal timed out.', 'TimeoutError')),
     )
     : () => {}
   let signal = timeout
@@ -279,20 +280,20 @@ export let poll = (
 ): Polled => {
   let thread = opts.doors ? undefined : pollThread(remote)
   let doors = opts.doors ?? thread!
-  let timer = opts.timer ?? later
+  let clock = opts.clock ?? system
   let value: Bundle[] = [], ready = false
   // The tag `value` was read at.
   let held: string | undefined
   let listeners = new Set<(bundles: Bundle[]) => void>()
   let stop = new AbortController()
-  let page = pages(doors, stop.signal, { timeout: opts.timeout, timer })
+  let page = pages(doors, stop.signal, { timeout: opts.timeout, clock })
   let every = opts.every ?? 30_000
   let watched = outage({
     name: 'Tracker poll',
     every,
     report: opts.report,
     log: opts.log,
-    timer,
+    clock,
     signal: stop.signal,
   })
   let pass = async () => {
@@ -320,7 +321,7 @@ export let poll = (
         stop.signal.removeEventListener('abort', end)
         done()
       }
-      let cancel = timer(end, ms)
+      let cancel = clock.after(ms, end)
       stop.signal.addEventListener('abort', end, { once: true })
     })
   ;(async () => {

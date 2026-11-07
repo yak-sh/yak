@@ -112,7 +112,7 @@ test('a poll that hangs settles as failed, and says it timed out', async () => {
     })) as typeof fetch
   let hung = polled(poll(remote, '.bug', {
     timeout: 5,
-    timer: (fn, ms) => time.after(ms, fn),
+    clock: time,
     doors: signed(remote, hang),
     report: (error) => filed.push(error),
     log: (line) => logged.push(line),
@@ -156,9 +156,12 @@ let polls = async (...said: (string | Error)[]) => {
   let left = [...said]
   let resting = Promise.withResolvers<void>()
   let open = poll(remote, '.bug', {
-    timer: (fn, ms) => {
-      if (ms == 30_000) resting.resolve()
-      return time.after(ms, fn)
+    clock: {
+      now: time.now,
+      after: (ms, fn) => {
+        if (ms == 30_000) resting.resolve()
+        return time.after(ms, fn)
+      },
     },
     doors: {
       bugs: () => {
@@ -202,7 +205,7 @@ test('a tracker that stays unanswered is filed once, five minutes in', async () 
 })
 
 test('an answer restarts the five minutes', async () => {
-  equal((await polls(...times(9, 'busy'), 'ok', ...times(10, 'busy'))).filed, [
+  equal((await polls(...times(9, 'busy'), 'ok', ...times(11, 'busy'))).filed, [
     '600 s Error: Remote tracker has not answered for 5 minutes (Error: Remote tracker refused the read (503))',
   ])
 })
@@ -210,7 +213,7 @@ test('an answer restarts the five minutes', async () => {
 test('a poll that never settles is filed as hung, once, and the next one runs', async () => {
   let time = clock(), filed: unknown[] = [], asked = 0
   let open = poll(remote, '.bug', {
-    timer: (fn, ms) => time.after(ms, fn),
+    clock: time,
     doors: {
       bugs: () => (asked++, new Promise(() => {})),
       mark: () => Promise.resolve(),

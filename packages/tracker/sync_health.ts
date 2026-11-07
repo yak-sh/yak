@@ -9,7 +9,8 @@
 import type { Graph } from '@yaks/graph'
 import { ingest } from './intake.ts'
 import { coalesce, type Coalesced, report, type WindowClock } from './report.ts'
-import { type Outage, outage, type Timer } from './outage.ts'
+import type { Clock } from '@yaks/fp'
+import { outage, type Watched } from './outage.ts'
 
 export type Direction = 'delivery' | 'standing'
 
@@ -23,11 +24,11 @@ export let syncing = (
   notice: Notice,
   opts: {
     every: number
-    timer?: Timer
+    clock?: Clock
     signal?: AbortSignal
     log?: (line: string) => void
   },
-): Outage =>
+): Watched =>
   outage({
     ...opts,
     name: `Tracker ${direction} sync`,

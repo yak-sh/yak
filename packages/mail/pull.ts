@@ -31,6 +31,7 @@
 // everything a blip left behind. Transient failures are logged while retrying;
 // a delayed letter reports the outage that held it up when the edge recovers.
 
+import { answered, failing, type Outage } from '@yaks/effects/outage'
 import type { Eid, Graph } from '@yaks/graph'
 import { hooked, type Request } from '@yaks/hook'
 import { type Arrivals, arrived, routed } from './arrive.ts'
@@ -266,9 +267,10 @@ let request = (r: EdgeRequest): Request => ({
   ...(r.sig_ok == null ? {} : { verified: !!r.sig_ok }),
 })
 
-/** An outage kept until the tray answers, including the cause a delayed letter
- * reports. A caller that retries shares this map across passes. */
-export type Down = Map<string, { since: number; error: unknown }>
+/** Each tray's outage (@yaks/effects/outage), kept until it answers, with
+ * the failure a delayed letter reports as its cause. A caller that retries
+ * shares this map across passes. */
+export type Down = Map<string, Outage & { error: unknown }>
 
 // What every tray of one pass shares.
 type Pass = {
@@ -304,16 +306,20 @@ let tray = async <T extends { id: string }>(
       }
     }
     if (done.length) await ack(done)
-    if (down?.delete(name)) {
-      log(`@yaks/mail — ${name} tray recovered`, { tags: { tray: name } })
+    let lasted = answered(down?.get(name), now())
+    if (lasted != null) {
+      down!.delete(name)
+      log(`@yaks/mail — ${name} tray recovered after ${lasted} ms`, {
+        tags: { tray: name },
+      })
     }
     return done.length
   } catch (err) {
     if (!down || !(err instanceof Unavailable)) fail(`take ${name}s`, err)
     else {
-      let previous = down.get(name)
-      down.set(name, { since: previous?.since ?? began, error: err })
-      if (!previous) {
+      let { outage, fresh } = failing(down.get(name), began)
+      down.set(name, { ...outage, error: err })
+      if (fresh) {
         log(
           new Error(
             `@yaks/mail — ${name} tray unavailable; retrying next pass`,

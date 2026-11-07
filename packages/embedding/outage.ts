@@ -15,10 +15,12 @@
 // all: its texts wait for the ceiling to lift, logged once, never reported.
 //
 // It is @yaks/mail's delayed letter (pull.ts) for vectors: what fails is the
-// wait, not each try. The outage is a value the host keeps between drains; a
-// Durable Object keeps it in its own storage, since it sleeps between the
-// alarms that retry.
+// wait, not each try. The outage is @yaks/effects/outage's record, as it is for
+// the mail pull, the tracker's passes and heal: a value the host keeps between
+// drains, which a Durable Object keeps in its own storage, since it sleeps
+// between the alarms that retry.
 
+import { answered, failing, type Outage } from '@yaks/effects/outage'
 import { Unanswered, Withheld } from './embedder.ts'
 
 /**
@@ -30,11 +32,11 @@ import { Unanswered, Withheld } from './embedder.ts'
  */
 export let OVERDUE: number = 15 * 60_000
 
-/** An outage a host's drains are riding out: since when no drain has
- * answered, whether the wait has been reported or, withheld, needs no report,
- * and the unexpected failure already reported, while drains keep failing by
- * it. */
-export type Outage = { since: number; told?: true; bug?: string }
+/** An outage a host's drains are riding out (@yaks/effects/outage): since
+ * when no drain has answered, whether the wait has been reported or, withheld,
+ * needs no report, and as its `cause` the unexpected failure already
+ * reported, while drains keep failing by it. */
+export type { Outage }
 
 /** What one drain's outcome makes of the outage: the outage it leaves, the
  * failure to report and the line to log, where there is one. */
@@ -67,19 +69,19 @@ export class Overdue extends Error {
  * equal(drained(null, 0), { outage: null })
  * equal(drained({ since: 0 }, 90_000),
  *   { outage: null, log: 'the outage ended after 90000 ms' })
- * equal(drained({ since: 0, bug: 'Error: no table' }, 9_000), {
+ * equal(drained({ since: 0, cause: 'Error: no table' }, 9_000), {
  *   outage: null,
  *   log: 'drains answer again after 9000 ms of Error: no table',
  * })
  * ```
  */
 export let drained: Ride = (outage, now) => {
-  if (!outage) return { outage }
-  let ms = now - outage.since
+  let ms = answered(outage, now)
+  if (ms == null) return { outage: null }
   return {
     outage: null,
-    log: outage.bug
-      ? `drains answer again after ${ms} ms of ${outage.bug}`
+    log: outage?.cause
+      ? `drains answer again after ${ms} ms of ${outage.cause}`
       : `the outage ended after ${ms} ms`,
   }
 }
@@ -98,33 +100,33 @@ export let drained: Ride = (outage, now) => {
  * equal(failed(down)(null, 0).outage, { since: 0 })
  * equal(failed(down)({ since: 0 }, 60_000), { outage: { since: 0 } })
  * let bug = failed(Error('no table'))
- * equal(bug(null, 0).outage, { since: 0, bug: 'Error: no table' })
+ * equal(bug(null, 0).outage, { since: 0, cause: 'Error: no table' })
  * equal(bug(bug(null, 0).outage, 3_000).report, undefined)
  * ```
  */
-export let failed = (error: unknown): Ride => (outage, now) => {
+export let failed = (error: unknown): Ride => (met, now) => {
   if (error instanceof Withheld) {
-    return outage ? { outage: { ...outage, told: true } } : {
-      outage: { since: now, told: true },
-      log: `${error.message}; its texts wait until it lifts`,
+    let { outage, fresh } = failing(met, now)
+    return {
+      outage: outage.told ? outage : { ...outage, told: true },
+      ...fresh
+        ? { log: `${error.message}; its texts wait until it lifts` }
+        : {},
     }
   }
   if (!(error instanceof Unanswered)) {
-    let bug = String(error)
-    if (outage?.bug == bug) return { outage }
-    return { outage: { ...outage ?? { since: now }, bug }, report: error }
+    let { outage, fresh } = failing(met, now, { cause: String(error) })
+    return fresh ? { outage, report: error } : { outage }
   }
-  if (!outage) {
+  let { outage, fresh, stayed } = failing(met, now, { limit: OVERDUE })
+  if (fresh) {
     return {
-      outage: { since: now },
+      outage,
       log:
         `${error.message} (${error.cause}); its texts wait for the next drain`,
     }
   }
-  let waited = now - outage.since
-  if (outage.told || waited < OVERDUE) return { outage }
-  return {
-    outage: { ...outage, told: true },
-    report: new Overdue(waited, error),
-  }
+  return stayed == null
+    ? { outage }
+    : { outage, report: new Overdue(stayed, error) }
 }

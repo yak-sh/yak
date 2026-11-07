@@ -322,20 +322,21 @@ The delivery and standing syncs decide what a failed pass is as the poll below
 does (`./outage.ts`): a pass the Worker could not answer for now (`Unavailable`
 from `./remote`: a delivery answered 408, 429 or 5xx, or not answered at all; a
 read refused 503 or 504) is a log line, and its answering again another. A sync
-left unanswered for five minutes (`OUTAGE`) is reported once. A delivery stops
-at the first batch the Worker could not answer, the rest left for the next pass,
-so each pass ends within a request's minute while the Worker is down. A pass
-still running after five minutes has hung on this side: it is reported once as
-that, never as the Worker not answering, its signal aborts, and the next pass
-runs. A pass this side cannot set up (`Misconfigured` from `./remote`: no
-address, no secret, or an address it does not send to; a read refused 500) is
-reported at once, and once until a pass ends otherwise; the remote is read at
-each use, so the pass after a fix goes out, and logs that the tracker is set up
-again. Any other failure (a refusal of what was sent or asked, a bad page, a
-failure on this side) is reported at once. Each report is admitted directly to
-the local tracker as `Tracker <direction> sync failed: <what failed>`, with the
-failure as its `cause`, a flood coalesced; its independent mail duty notifies
-the configured recipient without using the failing remote outbox.
+left unanswered for five minutes (`OUTAGE`) is reported once, by the first
+failed pass that finds it so (@yaks/effects/outage). A delivery stops at the
+first batch the Worker could not answer, the rest left for the next pass, so
+each pass ends within a request's minute while the Worker is down. A pass still
+running after five minutes has hung on this side: it is reported once as that,
+never as the Worker not answering, its signal aborts, and the next pass runs. A
+pass this side cannot set up (`Misconfigured` from `./remote`: no address, no
+secret, or an address it does not send to; a read refused 500) is reported at
+once, and once until a pass ends otherwise; the remote is read at each use, so
+the pass after a fix goes out, and logs that the tracker is set up again. Any
+other failure (a refusal of what was sent or asked, a bad page, a failure on
+this side) is reported at once. Each report is admitted directly to the local
+tracker as `Tracker <direction> sync failed: <what failed>`, with the failure as
+its `cause`, a flood coalesced; its independent mail duty notifies the
+configured recipient without using the failing remote outbox.
 
 A **standing pass** reads remote bug marks every thirty seconds and reconciles
 matching box groups by global eid or their fault and app. The Worker owns

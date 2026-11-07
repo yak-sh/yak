@@ -232,6 +232,10 @@ test('pull: an unavailable empty edge retries without reporting a delayed letter
   assertEquals([told.length, logged.length, down.size], [0, 2, 2])
   await at(LATE + 2, up.at)
   assertEquals([told.length, logged.length, down.size], [0, 4, 0])
+  assertEquals(logged.slice(2), [
+    `@yaks/mail — message tray recovered after ${LATE + 2} ms`,
+    `@yaks/mail — request tray recovered after ${LATE + 2} ms`,
+  ])
   await at(LATE + 3, out, false)
   assertEquals(told.length, 2)
 })

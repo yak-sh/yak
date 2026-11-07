@@ -23,7 +23,7 @@ let passes = async (...said: string[]) => {
     return Promise.resolve()
   }, {
     every: 30_000,
-    timer: (run, ms) => time.after(ms, run),
+    clock: time,
     log: (line) => logged.push(line),
   })
   for (let next of said) {
@@ -74,7 +74,7 @@ test('a stopped sync tells nothing while it drains', async () => {
     return Promise.resolve()
   }, {
     every: 30_000,
-    timer: (run, ms) => time.after(ms, run),
+    clock: time,
     signal: stop.signal,
   })
   let end!: () => void

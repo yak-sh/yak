@@ -16,6 +16,7 @@ import {
   WriteRefused,
 } from '@yaks/client'
 import { sleep } from '@yaks/effects'
+import { answered, failing, type Outage } from '@yaks/effects/outage'
 import { type Clock, heard } from '@yaks/fp'
 import type { Bundle, Graph } from '@yaks/graph'
 import type { Host } from '@yaks/host'
@@ -199,27 +200,29 @@ export let service = async (
       else console.error(`@yaks/heal ${step} —`, error)
     } catch { /* a reporting failure cannot stop recovery */ }
   }
-  // The failure each step last reported and since when, by the step and
-  // what it was about (a tracker, a bug), while that step keeps failing; and
-  // the failures already told, so one caught again further out is not.
-  let failing = new Map<string, { cause: string; since: number }>()
+  // The failure each step last reported and since when
+  // (@yaks/effects/outage), by the step and what it was about (a tracker, a
+  // bug), while that step keeps failing; and the failures already told, so
+  // one caught again further out is not.
+  let failures = new Map<string, Outage>()
   let told = new WeakSet<object>()
   let fail = async (step: string, about: string, error: unknown) => {
     if (told.has(Object(error))) return
     if (Object(error) === error) told.add(error as object)
-    let key = `${step} ${about}`, cause = String(error)
-    if (failing.get(key)?.cause == cause) return
-    failing.set(key, { cause, since: now() })
-    await report(error, step)
+    let key = `${step} ${about}`
+    let { outage, fresh } = failing(failures.get(key), now(), {
+      cause: String(error),
+    })
+    failures.set(key, outage)
+    if (fresh) await report(error, step)
   }
   let fine = (step: string, about: string) => {
-    let key = `${step} ${about}`, was = failing.get(key)
-    if (!was) return
-    failing.delete(key)
+    let key = `${step} ${about}`, was = failures.get(key)
+    let lasted = answered(was, now())
+    if (lasted == null) return
+    failures.delete(key)
     log(
-      `@yaks/heal — ${step} of ${about} succeeds again after ${
-        now() - was.since
-      } ms of ${was.cause}`,
+      `@yaks/heal — ${step} of ${about} succeeds again after ${lasted} ms of ${was?.cause}`,
     )
   }
   // A failed mark is told as the mark's, not its bug's reconcile.

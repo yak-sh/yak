@@ -11,7 +11,7 @@ import { files } from './file.ts'
 import { caught, type Context, spool } from './report.ts'
 import { delivery, type Remote, Unavailable } from './remote.ts'
 import { reconcile } from './reconcile.ts'
-import type { Timer } from './outage.ts'
+import type { Clock } from '@yaks/fp'
 import {
   type Direction,
   type Notice,
@@ -26,9 +26,9 @@ export type Options = {
   report?: (error: unknown, context?: Partial<Context>) => void
   remote?: Remote
   fetch?: typeof fetch
-  /** how the outage's wait is set (./outage.ts), so a test can hold the
-   * clock */
-  timer?: Timer
+  /** what time it is and how a wait is set for the syncs' passes
+   * (./outage.ts), so a test can hold the clock */
+  clock?: Clock
   /** Independent local notice path; never forwarded into the failing outbox. */
   notice?: Notice
   /** a sync the platform tracker could not answer, and its answering again
@@ -128,7 +128,7 @@ export let service = async (
   let health = (direction: Direction, every: number) =>
     syncing(direction, options.notice ?? notices!, {
       every,
-      timer: options.timer,
+      clock: options.clock,
       signal: stop,
       log: options.log,
     })
