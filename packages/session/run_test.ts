@@ -1145,7 +1145,16 @@ let availability = await (async () => {
   await b.fx.work(b.g)
   await b.fx.idle()
   let left = await b.g.read('.effect.handler=session_run .effect.state=pending')
-  return { waiting, before, asked: asked.length, status, left }
+  await b.g.apply([
+    ...ask('outside'),
+    { entity: { eid: 'outside' }, process: { pid: 123 } },
+  ])
+  await b.fx.work(b.g)
+  await b.fx.idle()
+  let outside = await b.g.read(
+    '.effect.handler=session_run .effect.state=pending',
+  )
+  return { waiting, before, asked: asked.length, status, left, outside }
 })()
 
 test('unavailable providers leave work queued until a replacement can answer', () => {
@@ -1158,4 +1167,8 @@ test('unavailable providers leave work queued until a replacement can answer', (
 
 test('terminal transcripts do not defer work for an unavailable provider', () => {
   assertEquals(availability.left, [])
+})
+
+test('a transcript another command line runs leaves no work waiting for a host', () => {
+  assertEquals(availability.outside, [])
 })

@@ -280,8 +280,7 @@ export let answers = (
   override?: Model,
 ) =>
 async (using: Comp | undefined, session?: Eid): Promise<boolean> => {
-  let comps = ['native', 'process'].filter((c) => g.vocab.comp(c))
-  let [owner] = session ? await g.get([session], comps) : []
+  let [owner] = session ? await g.get([session], owners(g)) : []
   if (owner?.process && !owner.native) return false
   let provider = using?.provider
   if (provider != null) {
@@ -297,4 +296,23 @@ async (using: Comp | undefined, session?: Eid): Promise<boolean> => {
   if (using?.model == null) return false
   let all = await offers(g, String(using.model), implementations)
   return all.some((o) => o.serve)
+}
+
+// What says who runs a session's turns: a command line's `process`, and
+// `native` where that command line is our own harness.
+let owners = (g: Graph) => ['native', 'process'].filter((c) => g.vocab.comp(c))
+
+/** Whether a command line other than our own harness runs `session` (it has a
+ * `process` and no `native`): its turns are taken there, so no host answers
+ * it, here or anywhere (`answers`).
+ *
+ * ```ts
+ * import { outside } from '@yaks/session'
+ *
+ * // if (await outside(graph, session)) return
+ * ```
+ */
+export let outside = async (g: Graph, session: Eid): Promise<boolean> => {
+  let [owner] = await g.get([session], owners(g))
+  return !!owner?.process && !owner.native
 }

@@ -39,6 +39,7 @@ import {
   type Step,
 } from './react.ts'
 import { hasAsk, openOf, usingOf } from './reach.ts'
+import { outside } from './providers.ts'
 import {
   kindOf,
   openCalls,
@@ -553,9 +554,12 @@ let advance = (
         await end()
         return
       }
-      if (await usingOf(g, session) || await hasAsk(g, session)) {
-        await r.attempt?.defer?.(1000)
-      }
+      // A host that can answer it may yet join; a command line other than
+      // ours takes its turns itself, so nothing will, and nothing waits.
+      if (
+        (await usingOf(g, session) || await hasAsk(g, session)) &&
+        !await outside(g, session)
+      ) await r.attempt?.defer?.(1000)
       return
     }
     await holding(g, `${RUN}/${session}`, {
