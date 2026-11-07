@@ -268,7 +268,8 @@ export let caught = (error: unknown, context: Context): Promise<void> => {
 }
 
 /** One break a page reported to its door: the page reporter's own body
- * (./page), or an entry the browser's Reporting API sent. */
+ * (./page), an entry the browser's Reporting API sent, or a native shell's,
+ * which names itself by `type` and says what it runs in its `tags`. */
 export type Break = {
   /** the page's release, when its reporter said which it loaded */
   version: number | null
@@ -285,6 +286,9 @@ export type Break = {
   file?: string
   /** the browser that sent it, its user agent ({@link received}) */
   agent?: string
+  /** what its sender says of itself, which its door decides whether to keep:
+   * a native shell's variant and the update it runs */
+  tags?: Record<string, string>
 }
 type Mechanism = NonNullable<Context['mechanism']>
 let MECHANISMS = new Set<unknown>([
@@ -328,6 +332,14 @@ let crumbs = (sent: unknown): Crumb[] | undefined => {
   return kept.length ? kept : undefined
 }
 
+let tagged = (sent: unknown): Record<string, string> | undefined => {
+  if (!sent || typeof sent != 'object' || Array.isArray(sent)) return undefined
+  let kept = Object.entries(sent).filter(([k, v]) =>
+    typeof v == 'string' && v && k.length <= 40
+  ).slice(0, 12).map(([k, v]) => [k, (v as string).slice(0, 500)])
+  return kept.length ? Object.fromEntries(kept) : undefined
+}
+
 // The header a server sets on an answer whose failure it has already reported,
 // where it caught it (@yaks/api `FILED`): the page reporter carries it as
 // `filed`, and {@link broken} files that answer no second time.
@@ -364,7 +376,8 @@ export let meant = (_answer: string, status: number): boolean =>
  * The breaks a page's report door was sent, out of either body: the page
  * reporter's `{message, stack?, cause?, url?, page?, line?, status?, answer?,
  * mechanism?, version?, breadcrumbs?}`, or the Reporting API's array of `{type, url,
- * body}`. Junk answers with nothing: a malformed body is the sender's bug, not
+ * body}`. A native shell sends the reporter's, naming itself as `type` and
+ * adding `tags` of its own. Junk answers with nothing: a malformed body is the sender's bug, not
  * a break in the page. An answer the reporter saw that `refusal` calls a no
  * somebody meant (default {@link meant}) is the page working, not a break,
  * and so is a fetch of the page's own origin that had no answer, which an older
@@ -396,6 +409,16 @@ export let meant = (_answer: string, status: number): boolean =>
  *   mechanism: 'console',
  * }))
  * equal(wrapped.cause, 'it has not reopened: 7 attempts')
+ * let [shell] = broken(JSON.stringify({
+ *   type: 'shell',
+ *   message: 'no store',
+ *   page: 'https://yaks.app/manage/ada/operator',
+ *   tags: { variant: 'yaks-app', update: 'u1', bad: 7 },
+ * }))
+ * equal([shell.request, shell.tags], [
+ *   'shell /manage/ada/operator',
+ *   { variant: 'yaks-app', update: 'u1' },
+ * ])
  * equal(broken(JSON.stringify({ message: '403 /apply', status: 403 })), [])
  * equal(broken(JSON.stringify({ message: '502 /x', status: 502, filed: true })), [])
  * let fetched = (message: string) =>
@@ -447,6 +470,7 @@ export let broken = (
     let at = pathOf(b.page ?? r.url ?? b.url ?? b.documentURL)
     let source = b.sourceFile ?? b.url
     let breadcrumbs = crumbs(b.breadcrumbs)
+    let tags = tagged(b.tags)
     return [{
       version:
         typeof b.version == 'number' && Number.isSafeInteger(b.version) &&
@@ -465,6 +489,7 @@ export let broken = (
         ? { mechanism: b.mechanism as Mechanism }
         : {},
       ...breadcrumbs ? { breadcrumbs } : {},
+      ...tags ? { tags } : {},
       ...b.page != null && typeof b.url == 'string' && b.url
         ? { file: b.url }
         : {},

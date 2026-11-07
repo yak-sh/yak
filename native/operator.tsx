@@ -15,6 +15,7 @@ import {
   look as talkLook,
 } from '../workers/yak/operator-draw.ts'
 import { colors, Draw } from './kit.tsx'
+import { report } from './report.ts'
 import { APEX, type Space } from './yaks.ts'
 
 let looks = (() => {
@@ -62,6 +63,10 @@ let Talk = ({ space }: { space: Space }) => {
   }
   useSoon(() => {
     let socket: WebSocket | undefined, gone = false, mine = ''
+    // A drop the socket recovers from says nothing; one it has not reopened
+    // from in thirty seconds is reported, once while it lasts, as
+    // @yaks/sync's `Dropped` is.
+    let down = 0, tries = 0, told = false
     let hear = (frame: Frame) => {
       let o = frame.operator
       if (!o || (mine && o.task != mine)) return
@@ -74,10 +79,26 @@ let Talk = ({ space }: { space: Space }) => {
       socket = new WebSocket(`${at.replace(/^http/, 'ws')}?live=1&lines=1`)
       // Opened again, it may have missed steps: the conversation is read
       // again, as the page does.
-      socket.onopen = () =>
+      socket.onopen = () => {
+        down = tries = 0
+        told = false
         read().then((t) => void (mine = t), (e) => setTrouble(e.message))
+      }
       socket.onmessage = (e) => hear(JSON.parse(String(e.data)))
-      socket.onclose = () => void (!gone && setTimeout(listen, 3000))
+      socket.onclose = (e) => {
+        if (gone) return
+        down ||= Date.now()
+        tries++
+        if (!told && Date.now() - down >= 30_000) {
+          told = true
+          report(
+            Error(`The Operator's socket closed (${e.code}) and stays shut`, {
+              cause: `it has not reopened: ${tries} attempts`,
+            }),
+          )
+        }
+        setTimeout(listen, 3000)
+      }
     }
     listen()
     return () => {
@@ -126,7 +147,10 @@ let Talk = ({ space }: { space: Space }) => {
 export let Operator = ({ space }: { space: Space }) => {
   let [node, setNode] = useState<Node | null>(null)
   let scroll = useRef<ComponentRef<typeof ScrollView>>(null)
-  useEffect(() => mount(h(Talk, { space }), looks, setNode), [space.slug])
+  useEffect(
+    () => mount(h(Talk, { space }), looks, setNode, { fell: report }),
+    [space.slug],
+  )
   return (
     <KeyboardAvoidingView style={styles.page} behavior='padding'>
       <ScrollView

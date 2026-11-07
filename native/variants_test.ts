@@ -17,7 +17,7 @@ test('a variant makes the shell its own app, on its own channel', () => {
     team: 'TEAM1',
     icon: 'checks.png',
     plugins: ['expo-location'],
-  })
+  }, 'c0ffee')
   equal(made.name, 'Checks')
   equal(made.slug, 'yaks-app')
   equal(made.icon, 'checks.png')
@@ -33,12 +33,14 @@ test('a variant makes the shell its own app, on its own channel', () => {
   })
   equal(made.extra.eas, { projectId: 'p' })
   equal((made.extra.variant as { space: string }).space, 'checks')
+  equal(made.extra.commit, 'c0ffee')
 })
 
 test('no variant named is yaks.app, and a name with no variant refuses', () => {
   let made = configOf(base, variantOf(''))
   equal([made.name, made.ios.bundleIdentifier], ['yaks.app', 'app.yaks'])
   equal('appleTeamId' in made.ios, false)
+  equal('commit' in made.extra, false)
   assertThrows(() => variantOf('nowhere'), Error, 'names no variant')
 })
 

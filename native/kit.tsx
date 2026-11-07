@@ -57,6 +57,7 @@ import {
 } from '@yaks/native'
 import { type NativeView, store } from '@yaks/native/remote'
 import type { App } from './yaks.ts'
+import { report } from './report.ts'
 
 /** The phone's palette: yak.sh's gouache, on its dark floor. */
 export let colors: Colors = {
@@ -352,7 +353,7 @@ class Caught extends Component<{ children: ReactNode }, { fault?: string }> {
     return { fault: e.message }
   }
   override componentDidCatch(e: Error) {
-    console.error(e)
+    report(e)
   }
   override render() {
     return this.state.fault != null
@@ -383,6 +384,7 @@ export let Kit = (
         setPulled(false)
       },
       {
+        fell: report,
         // A link within the app opens its page; any other, the browser.
         follow: (href) => {
           let to = new URL(href, home)

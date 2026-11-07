@@ -67,14 +67,16 @@ type Made = {
   plugins: unknown[]
   ios: { bundleIdentifier: string; appleTeamId?: string }
   updates: { requestHeaders: Record<string, string> }
-  extra: { variant: Variant & { key: string } }
+  extra: { variant: Variant & { key: string }; commit?: string }
 }
 
-/** The shell's base config (app.json) made into the app `variant` is; the
- * running shell reads the variant back from `extra.variant`. */
+/** The shell's base config (app.json) made into the app `variant` is, built
+ * from `commit`; the running shell reads both back from `extra`, and tags
+ * what it reports with them (report.ts). */
 export let configOf = <C extends Config>(
   base: C,
   variant: Variant & { key: string },
+  commit?: string,
 ): C & Made => ({
   ...base,
   name: variant.name,
@@ -92,7 +94,7 @@ export let configOf = <C extends Config>(
       'expo-channel-name': variant.channel,
     },
   },
-  extra: { ...base.extra, variant },
+  extra: { ...base.extra, variant, ...(commit ? { commit } : {}) },
 })
 
 /** What a variant shows of the person's spaces: its own space alone where it

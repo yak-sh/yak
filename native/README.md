@@ -32,6 +32,14 @@ as their web pages in a web view holding the same session (D-148409).
   `look`. Words typed in its box are posted to the chat page, as its own box
   sends them.
 - `kit.tsx`: the React Native host for @yaks/native's nodes.
+- `report.ts`: every failure the shell meets reaches the tracker where it is
+  caught, posted to the apex's report door as a platform page's is
+  (workers/yak/page-report.ts) and tagged with the variant, its version, the EAS
+  update it runs and the commit that update was published from (`app.config.ts`
+  stamps it): a view that throws, a view that would not load, the Operator's
+  socket shut for thirty seconds, an error or rejection nothing caught, and a
+  launch of the embedded bundle because an update crashed. A phone with no
+  network, and a refusal of the person's own input, are no break.
 - `globals.ts`: the `Event` and window @yaks/tui's DOM reaches for, which Hermes
   lacks.
 - `metro.config.js`: resolves `@yaks/<name>/<path>` to the file

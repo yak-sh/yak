@@ -21,6 +21,7 @@ import { colors, Kit } from './kit.tsx'
 import { Operator } from './operator.tsx'
 import { nativeOf, type NativeView, viewAt } from '@yaks/native/remote'
 import { carried } from './remote.ts'
+import { report, went } from './report.ts'
 import { shown } from './variants.ts'
 import {
   APEX,
@@ -216,8 +217,10 @@ let Opened = ({ app }: { app: AppRow }) => {
     }
     // A view is a component, which a state setter given it would call as an
     // updater: it is set as what an updater answers.
+    // One that would not load opens on the web, and is reported, on the app's
+    // page (`went`).
     load().then((v) => setView(() => v), (e) => {
-      console.warn(`${app.url} opens on the web: ${e.message}`)
+      report(e)
       setView('web')
     })
   }, [app.url])
@@ -246,8 +249,15 @@ let Shell = ({ all }: { all: Space[] }) => {
   let [brand, setBrand] = useState<Brand | null>(null)
   useEffect(() => {
     setBrand(null)
-    brandOf(space.slug).then(setBrand, (e) => console.warn(e))
+    brandOf(space.slug).then(setBrand, report)
   }, [space.slug])
+  useEffect(() => {
+    went(
+      open
+        ? 'app' in open ? open.app.url : open.url
+        : `${APEX}/manage/${space.slug}/${tab}`,
+    )
+  }, [space.slug, tab, open])
   let title = open && 'app' in open ? open.app.title : space.title
   let body = open
     ? 'app' in open ? <Opened app={open.app} /> : <Web url={open.url} />
@@ -308,7 +318,7 @@ export default function App() {
   let [all, setAll] = useState<Space[] | null | 'out'>(null)
   let load = () =>
     spaces().then((all) => setAll(shown(variant, all)), (e) => {
-      if (!(e instanceof SignedOut)) console.warn(e)
+      if (!(e instanceof SignedOut)) report(e)
       setAll('out')
     })
   useEffect(() => {

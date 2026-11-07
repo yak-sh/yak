@@ -121,6 +121,38 @@ test('a break is tagged with the browser that sent it', async () => {
   equal((row.error as { tags: Record<string, string> }).tags.agent, safari)
 })
 
+test('the iOS shell is filed from no page, tagged as it says, at its commit', async () => {
+  let shell = (tags: object) =>
+    filed(
+      new Blob([JSON.stringify({
+        type: 'shell',
+        message: 'no store',
+        stack: 'Error: no store\n    at anonymous (main.jsbundle:1:9)',
+        cause: 'it has not reopened: 9 attempts',
+        mechanism: 'catch',
+        page: 'https://yaks.app/manage/ada/operator',
+        tags,
+      })]),
+      {},
+    )
+  let [row] = await shell({
+    variant: 'checks',
+    update: 'u1',
+    commit: 'c0ffee',
+  })
+  let error = row.error as {
+    tags: Record<string, string>
+    commit: string
+    exception: { cause: string }
+  }
+  equal(
+    [error.tags.request, error.tags.variant, error.tags.update, error.commit],
+    ['shell /manage/ada/operator', 'checks', 'u1', 'c0ffee'],
+  )
+  ok(JSON.stringify(row).includes('it has not reopened: 9 attempts'))
+  equal(await shell({ update: 'u1' }), [])
+})
+
 test('a page that does not break sends nothing', async () => {
   equal((await ran('<script>let fine = 1</script>')).sent, [])
 })

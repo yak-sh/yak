@@ -12,9 +12,11 @@
 // there sent it. An extension's frames are on its own scheme, a
 // muted "Script error." is a script from another origin by the browser's own
 // rule, and a post no page of ours made is a stranger's: each is answered as
-// if filed and dropped. A repeat of a break is one more occurrence of its bug
+// if filed and dropped. The iOS shell (native/report.ts) is ours whole and
+// reports here from no page: its report names it (`type` shell, `tags` its
+// variant), is tagged as it says, and names the commit it was published from. A repeat of a break is one more occurrence of its bug
 // in the tracker, which groups it (@yaks/tracker `faultKey`) and notifies once.
-import { received } from '@yaks/tracker/report'
+import { type Break, received } from '@yaks/tracker/report'
 import { defect } from './defects.ts'
 import { apex, type Host } from './host.ts'
 import { isVerifiedBot } from '@yaks/platform/bots'
@@ -54,26 +56,35 @@ export let fromOurs = (req: Request, env: Host) => {
     !!origin && onApex(origin, env)
 }
 
-/** File what a platform page says broke. A no one of our doors meant is no
- * break (unseen.ts `refusal`), a page a verified bot renders has nobody
- * looking at it, and what no page of ours sent, or our scripts did not throw,
- * is not ours (`ours`). */
+/** The iOS shell's report (native/report.ts): what it says of itself. */
+let shell = ({ request, tags }: Break) =>
+  request.startsWith('shell ') && tags?.variant ? tags : null
+
+/** File what a platform page, or the iOS shell, says broke. A no one of our
+ * doors meant is no break (unseen.ts `refusal`), a page a verified bot renders
+ * has nobody looking at it, and what no page of ours sent, or our scripts did
+ * not throw, is not ours (`ours`). */
 export let answer = async (req: Request, env: Host): Promise<Response> => {
   if (req.method != 'POST') {
     return Response.json({ error: 'method_not_allowed' }, { status: 405 })
   }
-  if (isVerifiedBot(req) || !fromOurs(req, env)) {
+  if (isVerifiedBot(req)) {
     await req.body?.cancel()
     return new Response(null, { status: 204 })
   }
+  let page = fromOurs(req, env)
   for (let broke of await received(req, refusal)) {
-    if (!ours(broke, env) || over('platform')) continue
-    let { request, message, stack, mechanism, breadcrumbs, agent } = broke
-    defect(Object.assign(Error(message), { stack }), {
+    let said = shell(broke)
+    if (!(said || page && ours(broke, env)) || over('platform')) continue
+    let { request, message, stack, cause, mechanism, breadcrumbs, agent } =
+      broke
+    let { commit, ...tags } = said ?? {}
+    defect(Object.assign(Error(message), { stack, cause }), {
+      ...tags,
       request,
       page: request.slice(request.indexOf(' ') + 1),
       agent,
-    }, { page: { mechanism, breadcrumbs } })
+    }, { commit, page: { mechanism, breadcrumbs } })
   }
   return new Response(null, { status: 204 })
 }

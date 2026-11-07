@@ -8,8 +8,8 @@ import { type Variant, variantOf } from './variants.ts'
 export let APEX = 'https://yaks.app'
 
 /** The app this build is (app.config.ts puts it in `extra`). */
-export let variant: Variant = Constants.expoConfig?.extra?.variant ??
-  variantOf()
+export let variant: Variant & { key: string } =
+  Constants.expoConfig?.extra?.variant ?? variantOf()
 
 /** One app of a space, as `app_list` answers it. */
 export type App = { slug: string; title: string; url: string; access: string }
