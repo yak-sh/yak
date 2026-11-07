@@ -38,6 +38,7 @@ import {
   setBudget,
   setFee,
   setTunnel,
+  type SpaceBudget,
   standing,
   storeApply,
   storeQuery,
@@ -55,6 +56,18 @@ import { errors, tail } from './logs.ts'
 import { revert } from './revert.ts'
 
 type Args = Record<string, unknown>
+
+// Dollars to the cent, as a person reads them.
+let usd = (n: number) => `$${n.toFixed(2)}`
+
+// A space's budget as it stands (workers/yak/budget.ts).
+let budgetLines = (b: SpaceBudget) => [
+  `${b.space}: ${usd(b.limit)} a month (${
+    b.dollars == null ? "its plan's" : 'set by the platform'
+  })`,
+  `spent    ${usd(b.spent)} this month`,
+  `starter  ${usd(b.starter)} left as the month began`,
+]
 
 // The vault name a machine's tunnel token is kept under, which the box's
 // config names for @yaks/tunnel's service.
@@ -322,8 +335,7 @@ export let runs = (
       let now = dollars == null
         ? await budgetNow(at.bearer, space)
         : await setBudget(at.bearer, space, dollars == 'plan' ? '' : dollars)
-      let set = now.dollars == null ? "its plan's" : 'set by the platform'
-      return [said(call, `${now.space}: $${now.limit} a month (${set})`)]
+      return [said(call, budgetLines(now))]
     }),
 
     admin_refund: verb(async (call) => {
@@ -335,13 +347,7 @@ export let runs = (
       }
       let at = await acting(a)
       let now = await refund(at.bearer, space, dollars, String(a.why))
-      return [
-        said(call, [
-          `${now.space}: $${dollars} refunded`,
-          `spent    $${now.spent} of $${now.limit} this month`,
-          `starter  $${now.starter}`,
-        ]),
-      ]
+      return [said(call, [`$${dollars} refunded`, ...budgetLines(now)])]
     }),
 
     admin_erase: verb(async (call) => {
