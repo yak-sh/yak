@@ -6,7 +6,13 @@
 // opens another, and an address gets three letters an hour — a window no test
 // can sit through, and a count nobody buys back by burning a code.
 import { test } from '@yaks/testing'
-import { assert, assertEquals, assertFalse, assertMatch } from '@std/assert'
+import {
+  assert,
+  assertEquals,
+  assertFalse,
+  assertMatch,
+  assertRejects,
+} from '@std/assert'
 import {
   called,
   canon,
@@ -19,7 +25,6 @@ import {
   nameOf,
   personOf,
   SENDS,
-  type Signin,
   spend,
   texted,
   TRIES,
@@ -27,7 +32,9 @@ import {
   VISITS,
   WINDOW,
 } from './signin.ts'
-import { type Bundle, Stale, token } from '@yaks/graph'
+import type { Bundle } from '@yaks/graph'
+import { Refused } from '@yaks/graph/errors'
+import { held as holding } from './signin-fixture.ts'
 import type { Meta } from './meta.ts'
 
 let n = 0
@@ -61,6 +68,16 @@ let door = (rows: unknown[]) => {
 let soon = () => new Date(Date.now() + 60_000).toISOString()
 let past = () => new Date(Date.now() - 1).toISOString()
 
+// The rows behind the sign-in rules, read as `ME`'s unless another is named.
+let held = async (rows: Bundle[]) => {
+  let d = await holding(rows)
+  return {
+    ...d,
+    rows: (address = ME) => d.rows(address),
+    tries: () => d.tries(ME),
+  }
+}
+
 let SECRET = 'a probe secret'
 let ME = 'me@yaks.app'
 // The mac of the code most tests send, made once: the first one imports the
@@ -70,48 +87,40 @@ let CODE = await mac(ME, '123456', SECRET)
 // A bundle that buries the entity: a tombstone.
 let forgotten = (wrote: Bundle[]) => wrote.some((b) => b.tombstone)
 
-// The guess count each patched row was left holding.
-let tries = (wrote: Bundle[]) =>
-  wrote.map((b) => (b.signin as { tries?: number } | undefined)?.tries)
-    .filter((t) => t != null)
-
 test('the live code opens, and is spent', async () => {
   assertEquals(
     CODE,
     '4b16a8c088351316c93cd7b715ff2bb70e1e34901046eab1b9c6d8d19a952e02',
   )
-  let d = door([row(ME, CODE, soon())])
+  let d = await held([row(ME, CODE, soon())])
   assert(await spend(d.at, SECRET, ME, '123456'))
-  // Closed in the guarded write that took the guess, buried after.
-  assertEquals(tries(d.wrote), [TRIES])
-  assert(forgotten(d.wrote))
+  // Buried in the write that took the guess: one trip.
+  assertEquals(d.trips(), 1)
+  assertEquals(await d.rows(), [])
 })
 
 test('a wrong guess costs a try, not the code', async () => {
-  let d = door([row(ME, CODE, soon())])
+  let d = await held([row(ME, CODE, soon())])
   assertFalse(await spend(d.at, SECRET, ME, '654321'))
-  assertFalse(forgotten(d.wrote))
-  assertEquals(tries(d.wrote), [1])
+  assertEquals(d.trips(), 1)
+  assertEquals(await d.tries(), [1])
 })
 
 test('the last guess burns the code, and leaves its record', async () => {
-  let burnt = row(ME, CODE, soon(), TRIES - 1)
-  let d = door([burnt])
+  let d = await held([row(ME, CODE, soon(), TRIES - 1)])
   assertFalse(await spend(d.at, SECRET, ME, '654321'))
-  assertEquals(tries(d.wrote), [TRIES])
   // The row stays: it is one of the three letters this hour, and burning a
   // code is not how anyone buys a fourth.
-  assertFalse(forgotten(d.wrote))
+  assertEquals(await d.tries(), [TRIES])
   // And it opens nothing now, right digits or not.
-  let after = door([{ ...burnt, signin: { ...burnt.signin, tries: TRIES } }])
-  assertFalse(await spend(after.at, SECRET, ME, '123456'))
-  assertEquals(after.wrote.length, 0)
+  assertFalse(await spend(d.at, SECRET, ME, '123456'))
+  assertEquals(await d.tries(), [TRIES])
 })
 
 test('an expired code opens nothing, right digits or not', async () => {
-  let d = door([row(ME, CODE, past())])
+  let d = await held([row(ME, CODE, past())])
   assertFalse(await spend(d.at, SECRET, ME, '123456'))
-  assertEquals(d.wrote.length, 0)
+  assertEquals(await d.tries(), [0])
 })
 
 // Several codes can stand for one address at once, because the store keeps a
@@ -124,13 +133,13 @@ test('every standing code opens, and one guess costs them all', async () => {
   ]
   let both = () => standing.map((code) => row(ME, code, soon()))
   for (let code of ['111111', '222222']) {
-    let d = door(both())
+    let d = await held(both())
     assert(await spend(d.at, SECRET, ME, code), code)
-    assert(forgotten(d.wrote))
+    assertEquals(await d.rows(), [])
   }
-  let d = door(both())
+  let d = await held(both())
   assertFalse(await spend(d.at, SECRET, ME, '333333'))
-  assertEquals(tries(d.wrote), [1, 1])
+  assertEquals(await d.tries(), [1, 1])
 })
 
 // The ceiling. A row outlives its code as the record that a letter went out,
@@ -145,86 +154,75 @@ let record = (ago: number) => ({
   },
 })
 
-let minted = (wrote: Bundle[]) =>
-  wrote.filter((b) => (b.signin as { code?: string } | undefined)?.code)
-
 test('three letters an hour to one address, and no more', async () => {
-  let under = door([record(0), record(60_000)])
+  let under = await held([record(0), record(60_000)])
   assert(await mint(under.at, SECRET, ME))
-  assertEquals(minted(under.wrote).length, 1)
+  assertEquals(under.trips(), 1)
+  assertEquals((await under.rows()).length, SENDS)
 
-  let full = door(Array.from({ length: SENDS }, () => record(60_000)))
+  let full = await held(Array.from({ length: SENDS }, () => record(60_000)))
   assertEquals(await mint(full.at, SECRET, ME), null)
-  assertEquals(minted(full.wrote).length, 0)
-  assertFalse(forgotten(full.wrote))
+  assertEquals((await full.rows()).length, SENDS)
+  // Asked at once, they still get one letter between them.
+  let last = await held([record(0), record(60_000)])
+  let codes = await Promise.all(
+    Array.from({ length: 5 }, () => mint(last.at, SECRET, ME)),
+  )
+  assertEquals(codes.filter(Boolean).length, 1)
 })
 
 test('the window passes and the address may ask again', async () => {
   let old = Array.from({ length: SENDS }, () => record(WINDOW + 60_000))
-  let d = door(old)
+  let d = await held(old)
   assert(await mint(d.at, SECRET, ME))
-  // Swept, since nothing else ever sweeps them.
-  assert(forgotten(d.wrote))
-  assertEquals(minted(d.wrote).length, 1)
+  // Swept in the same write, since nothing else ever sweeps them.
+  assertEquals(d.trips(), 1)
+  assertEquals((await d.rows()).length, 1)
 })
 
 test('signing in clears the count', async () => {
-  let full = [
+  let d = await held([
     ...Array.from({ length: SENDS - 1 }, () => record(60_000)),
     row(ME, CODE, soon()),
-  ]
-  let d = door(full)
+  ])
   assert(await spend(d.at, SECRET, ME, '123456'))
-  assertEquals(d.wrote.filter((b) => b.tombstone).length, full.length)
+  assertEquals(await d.rows(), [])
 })
 
-// A store that holds its rows and keeps `$was` the way the graph does
-// (@yaks/graph guard.ts): a count written on a read that has since moved is
-// refused, and nothing in its batch lands.
-let guarded = (rows: Signin[]) => {
-  let at: Meta = {
-    query: () => Promise.resolve(structuredClone(rows) as unknown as Bundle[]),
-    apply: (bundles) => {
-      let row = (eid: string) => rows.find((r) => r.entity.eid == eid)
-      for (let b of bundles) {
-        let r = row(b.entity.eid)
-        let was = (b.$was as { signin?: { tries?: string | null } })?.signin
-        if (was && token(r?.signin.tries) != was.tries) {
-          return Promise.reject(new Stale(b.entity.eid, 'signin', 'tries', 0))
-        }
-      }
-      for (let b of bundles) {
-        let r = row(b.entity.eid)
-        if (b.tombstone) rows.splice(rows.indexOf(r!), 1)
-        else if (r) Object.assign(r.signin, b.signin)
-      }
-      return Promise.resolve(bundles)
-    },
-  }
-  return at
-}
-
 test('forty guesses at once still get five, and the code dies', async () => {
-  let rows = [row(ME, CODE, soon()) as Signin]
-  let store = guarded(rows)
+  let d = await held([row(ME, CODE, soon())])
   let wrong = Array.from({ length: 40 }, (_, i) => String(i).padStart(6, '9'))
-  let opened = await Promise.all(wrong.map((c) => spend(store, SECRET, ME, c)))
+  let opened = await Promise.all(wrong.map((c) => spend(d.at, SECRET, ME, c)))
   assertEquals(opened.filter(Boolean), [])
-  assertEquals(rows[0].signin.tries, TRIES)
-  assertFalse(await spend(store, SECRET, ME, '123456'))
+  assertEquals(await d.tries(), [TRIES])
+  assertFalse(await spend(d.at, SECRET, ME, '123456'))
 })
 
 test('a code belongs to its address', async () => {
   // The address is inside the mac, so the row's own email cannot be edited
   // into someone else's sign-in.
-  let d = door([row('you@yaks.app', CODE, soon())])
+  let d = await held([row('you@yaks.app', CODE, soon())])
   assertFalse(await spend(d.at, SECRET, 'you@yaks.app', '123456'))
+  assertFalse(await spend(d.at, SECRET, ME, '123456'))
 })
 
 test('no code at all is no sign-in', async () => {
-  let d = door([])
+  let d = await held([])
   assertFalse(await spend(d.at, SECRET, ME, '123456'))
-  assertEquals(d.wrote.length, 0)
+  assertEquals(d.trips(), 1)
+})
+
+test('only the platform guesses at a code', async () => {
+  let d = await held([row(ME, CODE, soon())])
+  await assertRejects(
+    async () =>
+      await d.graph.apply([{
+        entity: { eid: '$guess' },
+        $guess: { email: ME, code: CODE },
+      }]),
+    Refused,
+  )
+  assertEquals(await d.tries(), [0])
 })
 
 // What a person is called. An address is never it: the platform's own older
@@ -316,10 +314,9 @@ let asking = (rows: (line: string) => unknown[]) => {
 }
 
 test('a code for a number is kept under the number, with who asked', async () => {
-  let d = asking(() => [])
+  let d = await held([])
   let code = await mint(d.at, SECRET, '269-555-0142', 'v1')
-  assertEquals(d.asked, [`.signin.phone="${NUMBER}"`])
-  let [{ signin }] = minted(d.wrote) as unknown as Signin[]
+  let [{ signin }] = await d.rows(NUMBER)
   assertEquals([signin.phone, signin.email, signin.from], [
     NUMBER,
     undefined,
@@ -327,22 +324,16 @@ test('a code for a number is kept under the number, with who asked', async () =>
   ])
   assertEquals(signin.code, await mac(NUMBER, code!, SECRET))
   // A letter keeps no visitor: only texts are counted per visitor.
-  let mailed = asking(() => [])
-  await mint(mailed.at, SECRET, ME, 'v1')
-  assertEquals(
-    (minted(mailed.wrote)[0].signin as Signin['signin']).from,
-    undefined,
-  )
+  await mint(d.at, SECRET, ME, 'v1')
+  assertEquals((await d.rows())[0].signin.from, undefined)
 })
 
 test('a number signs in with its code, and a person wears the number', async () => {
   let code = await mac(NUMBER, '123456', SECRET)
-  let d = asking(
-    () => [{
-      entity: { eid: 'e1' },
-      signin: { phone: NUMBER, code, expires: soon(), tries: 0 },
-    }],
-  )
+  let d = await held([{
+    entity: { eid: 'e1' },
+    signin: { phone: NUMBER, code, expires: soon(), tries: 0 },
+  }])
   assert(await spend(d.at, SECRET, '(269) 555-0142', '123456'))
   let fresh = asking(() => [])
   assertEquals(await personOf(fresh.at, NUMBER), 'p1')

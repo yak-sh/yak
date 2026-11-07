@@ -4,9 +4,8 @@
 // working. The root that made most of them reachable is the platform's shape:
 // yaks.app is not on the Public Suffix List, so every `<space>.yaks.app` app is
 // same-site with the apex, and anybody can serve code from a free space.
-import { clock, test } from '@yaks/testing'
-import { type Bundle, Stale, token } from '@yaks/graph'
-import type { Meta } from './meta.ts'
+import { test } from '@yaks/testing'
+import { held } from './signin-fixture.ts'
 import { codeCheck } from './identity.ts'
 import { guess, mac, TRIES } from './signin.ts'
 import { assertEquals, assertStringIncludes } from '@std/assert'
@@ -152,11 +151,9 @@ test(
 )
 
 // The cryptographic boundary prepares digests once; the race runs at
-// the same guarded store and HTTP refusal seam the sign-in form uses.
+// the directory's own sign-in rules and the HTTP refusal seam the form uses.
 let codeEmail = 'concurrent-guess@yaks.app'
 let codeSecret = 'concurrent guess probe secret'
-let codeCounts = Array.from({ length: TRIES + 1 }, (_, n) => token(n))
-let staleCode = new Stale('code', 'signin', 'tries', 0)
 let codeDigests = await Promise.all(
   Array.from(
     { length: 41 },
@@ -164,48 +161,28 @@ let codeDigests = await Promise.all(
   ),
 )
 
-let codeRows: Bundle[][] = codeCounts.map((_, tries) => [{
-  entity: { eid: 'code' },
-  signin: {
-    email: codeEmail,
-    code: codeDigests[0],
-    expires: new Date(60_000).toISOString(),
-    tries,
-  },
-}])
-
 test(
   'forty guesses at a sign-in code at once still get five (T-37875)',
   async () => {
-    let time = clock()
-    let tries = 0
-    let store: Meta = {
-      query: () => Promise.resolve(codeRows[tries]),
-      apply: (bundles) => {
-        for (let b of bundles) {
-          let was = (b.$was as { signin?: { tries: string } })?.signin
-          if (was && was.tries != codeCounts[tries]) {
-            return Promise.reject(staleCode)
-          }
-        }
-        for (let b of bundles) {
-          tries = (b.signin as { tries: number }).tries
-        }
-        return Promise.resolve(bundles)
+    let d = await held([{
+      entity: { eid: 'code' },
+      signin: {
+        email: codeEmail,
+        code: codeDigests[0],
+        expires: new Date(Date.now() + 60_000).toISOString(),
+        tries: 0,
       },
-    }
+    }])
     let attempt = (digest: string) =>
-      codeCheck(store, codeEmail, digest, '', '', {}, time.now)
+      codeCheck(d.at, codeEmail, digest, '', '', {})
     let guessed = await Promise.all(
-      codeDigests.slice(1).map((digest) =>
-        guess(store, codeEmail, digest, time.now)
-      ),
+      codeDigests.slice(1).map((digest) => guess(d.at, codeEmail, digest)),
     )
     assertEquals(guessed, Array(40).fill(false))
     let wrong = await attempt(codeDigests[1])
     assertEquals(wrong?.status, 400)
     assertEquals(wrong?.headers.get('set-cookie'), null)
-    assertEquals(tries, TRIES)
+    assertEquals(await d.tries(codeEmail), [TRIES])
     // Five guesses exhaust the code, including the rightful digits.
     let right = await attempt(codeDigests[0])
     assertEquals(right?.status, 400)

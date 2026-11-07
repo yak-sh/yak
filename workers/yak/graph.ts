@@ -583,6 +583,8 @@ export type Stored = {
   manifest: () => VocabDoc
   /** a failure noted in the app's break log and reported, never thrown */
   broke: (what: string, error: unknown) => void
+  /** the store's clock (`Time`), which its own decisions read the hour by */
+  now: () => number
 }
 
 /** The Worker's bindings: outgoing mail for every store, and `#Env` for the
@@ -766,7 +768,7 @@ installContext({
 // where a code is asked for and spent (signin.ts), by the directory's own
 // query, never through the copy, and nothing points at one. So a write to
 // one, the stamps on it included, changes no answer the copy could give, and
-// asking, every guess and the burial after a right one raise none (T-148651).
+// asking, every guess and the burial a right one writes raise none (T-148651).
 // A stamp on any other entity is as fenced as what it stamps. Any other
 // delete or component fences.
 let UNNAMED = new Set(['signin'])
@@ -2393,6 +2395,7 @@ export class Store {
     commands: () => readTools(this.#get('tools') || '{}'),
     manifest: () => meant(this.#get('vocab')),
     broke: (what, error) => void this.#broke(what, error),
+    now: () => this.#now(),
   })
 
   #patch(bundles: Bundle[]) {

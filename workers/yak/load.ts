@@ -218,6 +218,7 @@ let facets: Record<string, () => Promise<unknown>> = {
   'yak/pages/graph': () => import('./facets/pages-graph.ts'),
   'yak/publishing/graph': () => import('./facets/publishing-graph.ts'),
   'yak/remake/graph': () => import('./facets/remake-graph.ts'),
+  'yak/signin/graph': () => import('./facets/signin-graph.ts'),
   'yak/trash/graph': () => import('./facets/trash-graph.ts'),
   'yak/trash/effects': () => import('./facets/trash-effects.ts'),
   'yak/wrap/graph': () => import('./facets/wrap-graph.ts'),

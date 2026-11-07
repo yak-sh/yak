@@ -27,7 +27,6 @@ import type { Bundle } from '@yaks/graph'
 import { Stale } from '@yaks/graph/errors'
 import { token } from '@yaks/graph/sha256'
 import { KERNEL, type Meta, minted } from './meta.ts'
-import { background, caught } from './defects.ts'
 import { secretKey } from '@yaks/secrets/signed'
 import { mobile } from '@yaks/phone'
 import { type Host, signupAddress } from './host.ts'
@@ -148,9 +147,6 @@ export let codeLetter = (
 
 // The property an address is kept under, on a `signin` and on a person.
 let key = (address: string) => texted(canon(address)) ? 'phone' : 'email'
-let line = (address: string) =>
-  `.signin.${key(address)}=${JSON.stringify(canon(address))}`
-
 let hex = (b: ArrayBuffer) => new Uint8Array(b).toHex()
 
 let enc = new TextEncoder()
@@ -170,13 +166,13 @@ let digits = () =>
 
 let apply = (store: Meta, bundles: Bundle[]) => store.apply(bundles, KERNEL)
 
+let bury = (eid: string): Bundle => ({ entity: { eid }, tombstone: {} })
+
 // The whole entity goes, not just the component: a sign-in leaves nothing
 // behind. `tombstone` is the bundle's word for death (T-32429), so this
 // is one more bundle like every other write here.
 let forget = (store: Meta, eids: string[]) =>
-  eids.length
-    ? apply(store, eids.map((eid) => ({ entity: { eid }, tombstone: {} })))
-    : Promise.resolve(null)
+  eids.length ? apply(store, eids.map(bury)) : Promise.resolve(null)
 
 // Every row ever written for an address, newest first. A row outlives the code
 // it carried: dead, it is the record that the letter went out, and that record
@@ -186,20 +182,93 @@ let signins = async (store: Meta, filter: string) =>
     .filter((r) => r.signin) as unknown as Signin[])
     .sort((a, b) => Date.parse(b.signin.expires) - Date.parse(a.signin.expires))
 
-let sent = (store: Meta, address: string) => signins(store, line(address))
-
 // When the letter went out. `expires` is the code's death and LIFE is fixed,
 // so a row carries its own send time without a second property.
 let when = (r: Signin) => Date.parse(r.signin.expires) - LIFE
 
+// Whether a row still counts toward its hour, at `now`.
+let standing = (now: number) => (r: Signin) => when(r) > now - WINDOW
+
 // The rows that still count, the rest swept: nothing else sweeps them.
 let recent = async (store: Meta, all: Signin[]) => {
-  let floor = Date.now() - WINDOW
+  let now = Date.now()
   await forget(
     store,
-    all.filter((r) => when(r) <= floor).map((r) => r.entity.eid),
+    all.filter((r) => !standing(now)(r)).map((r) => r.entity.eid),
   )
-  return all.filter((r) => when(r) > floor)
+  return all.filter(standing(now))
+}
+
+/** The filter line that reads every row an address's codes left. */
+export let line = (address: string) =>
+  `.signin.${key(address)}=${JSON.stringify(canon(address))}`
+
+/**
+ * What asking for a code writes, decided over every row the address holds
+ * where they are kept (facets/signin-graph.ts), in the transaction that
+ * writes the new code: the rows fallen out of the hour buried, and the new
+ * row unless the address has had its SENDS letters this hour.
+ *
+ * ```ts
+ * import { asked, LIFE } from './signin.ts'
+ * import { assertEquals } from '@std/assert'
+ * let row = (eid: string, sent: number) => ({
+ *   entity: { eid },
+ *   signin: { email: 'a@b.c', code: 'x', tries: 0,
+ *     expires: new Date(sent + LIFE).toISOString() },
+ * })
+ * let now = Date.parse('2026-11-07T12:00:00Z')
+ * let ask = { entity: { eid: 'new' }, signin: { email: 'a@b.c' } }
+ * assertEquals(asked(ask, [row('old', now - 2 * 3600_000)], now), [
+ *   { entity: { eid: 'old' }, tombstone: {} },
+ *   ask,
+ * ])
+ * let full = ['a', 'b', 'c'].map((eid) => row(eid, now - 60_000))
+ * assertEquals(asked(ask, full, now), [])
+ * ```
+ */
+export let asked = (ask: Bundle, rows: Signin[], now: number): Bundle[] => {
+  let stale = rows.filter((r) => !standing(now)(r)).map((r) =>
+    bury(r.entity.eid)
+  )
+  return rows.filter(standing(now)).length >= SENDS ? stale : [...stale, ask]
+}
+
+/**
+ * What a guess at an address's codes writes, decided over every row the
+ * address holds, in the transaction that writes it: a try off every open
+ * code, or, when the guess is one of them, every row buried. A guess costs a
+ * try on every open code, so five guesses is five however many letters are
+ * in the inbox; a row out of tries opens nothing and stays as the record.
+ * Each count is guarded on the reading it was taken from (`$was`).
+ *
+ * ```ts
+ * import { guessed, TRIES } from './signin.ts'
+ * import { assertEquals } from '@std/assert'
+ * let now = Date.parse('2026-11-07T12:00:00Z')
+ * let row = (eid: string, code: string, tries = 0) => ({
+ *   entity: { eid },
+ *   signin: { email: 'a@b.c', code, tries,
+ *     expires: new Date(now + 60_000).toISOString() },
+ * })
+ * assertEquals(guessed([row('a', 'right')], 'right', now), [
+ *   { entity: { eid: 'a' }, tombstone: {} },
+ * ])
+ * let [wrong] = guessed([row('a', 'right')], 'wrong', now)
+ * assertEquals(wrong.signin, { tries: 1 })
+ * assertEquals(guessed([row('a', 'right', TRIES)], 'right', now), [])
+ * ```
+ */
+export let guessed = (rows: Signin[], want: string, now: number): Bundle[] => {
+  let live = rows.filter((r) => open(r, now))
+  if (live.some((r) => r.signin.code == want)) {
+    return rows.map((r) => bury(r.entity.eid))
+  }
+  return live.map((r) => ({
+    entity: { eid: r.entity.eid },
+    signin: { tries: (r.signin.tries ?? 0) + 1 },
+    $was: { signin: { tries: counted(r.signin.tries) } },
+  }))
 }
 
 /**
@@ -250,19 +319,20 @@ let open = (r: Signin, now: number) =>
 // minted, nothing to send. Codes already standing are left standing: the
 // store keeps a mac and not the digits, so a second ask cannot re-send the
 // first letter's code, and letting the first one live is what a slow letter
-// needs. Rows that have fallen out of the window are swept here. `from` is
-// the visitor (`visitor`), kept on a texted code so `welcome` can count it.
+// needs. `from` is the visitor (`visitor`), kept on a texted code so
+// `mayText` can count it.
+//
+// One trip: the store reads the address's rows and decides in the write's
+// own transaction (`asked`), so asks sent at once cannot all pass the
+// ceiling, and the answer says whether the row was written.
 export let mint = async (
   store: Meta,
   secret: string,
   address: string,
   from = '',
 ) => {
-  if ((await recent(store, await sent(store, address))).length >= SENDS) {
-    return null
-  }
   let code = digits()
-  await apply(store, [{
+  let applied = await apply(store, [{
     entity: { eid: '$code' },
     signin: {
       [key(address)]: canon(address),
@@ -272,26 +342,20 @@ export let mint = async (
       tries: 0,
     },
   }])
-  return code
+  return minted(applied).$code ? code : null
 }
 
 // Spend a code. True for any code still open on this address — several can
 // stand at once — and signing in ends the address's whole story: the codes and
-// the records that counted them go together, so a person who gets in starts
-// over with a full three.
+// the records that counted them go together, in the write that took the
+// guess, so a person who gets in starts over with a full three.
 //
-// A guess costs a try on every open code, so five guesses is five however
-// many letters are in the inbox. A row out of tries opens nothing and stays
-// only as the record; burning one is what an attacker would do to buy
-// another letter, and it buys nothing.
-//
-// The try is taken before the guess is compared, and taken in the store's own
-// transaction: each count is written on the precondition that it is still the
-// count this guess read (`$was`, @yaks/graph guard.ts). Read, compare, then
-// write was two steps, so forty guesses sent at once all read the same count,
-// all ran, and the right code still opened (T-37875). Now concurrent guesses
-// queue on the count: a guess whose read went stale reads again, and the
-// sixth finds nothing open.
+// The try is taken before the guess is compared, in the store's own
+// transaction, and each count on the precondition that it is still the count
+// it was read at (`$was`, @yaks/graph guard.ts). Read, compare, then write
+// was two steps, so forty guesses sent at once all read the same count, all
+// ran, and the right code still opened (T-37875). Now the read and the write
+// are one transaction, and a guess whose count moved is asked again.
 export let spend = async (
   store: Meta,
   secret: string,
@@ -301,45 +365,20 @@ export let spend = async (
   return guess(store, address, await mac(address, code, secret))
 }
 
-/** Spend a prepared code digest, keeping concurrent guesses on guarded counts. */
-export let guess = async (
-  store: Meta,
-  address: string,
-  want: string,
-  now: () => number = Date.now,
-) => {
+/** Spend a prepared code digest: one trip, which the store answers with the
+ * address's rows buried when it opened (`guessed`). */
+export let guess = async (store: Meta, address: string, want: string) => {
   for (;;) {
-    let rows = await sent(store, address)
-    let live = rows.filter((r) => open(r, now()))
-    if (!live.length) return false
-    // A right guess closes every open code in the same guarded write a wrong
-    // one takes its try in, so it opens once however many race it.
-    let hit = live.some((r) => r.signin.code == want)
     try {
-      await apply(
-        store,
-        live.map((r) => ({
-          entity: { eid: r.entity.eid },
-          signin: { tries: hit ? TRIES : (r.signin.tries ?? 0) + 1 },
-          $was: { signin: { tries: counted(r.signin.tries) } },
-        })),
-      )
+      let applied = await apply(store, [{
+        entity: { eid: '$guess' },
+        $guess: { [key(address)]: canon(address), code: want },
+      }])
+      return applied.some((b) => b.tombstone)
     } catch (e) {
       if (e instanceof Stale) continue
       throw e
     }
-    // Burying the rows is a delete, which asks the store what else dies with
-    // them, and was most of a sign-in's wait (T-34158): it goes after the
-    // answer, and a closed code opens nothing meanwhile.
-    if (hit) {
-      background(
-        forget(store, rows.map((r) => r.entity.eid)).then(
-          () => {},
-          (e) => caught(e, { request: 'sign-in sweep' }),
-        ),
-      )
-    }
-    return hit
   }
 }
 

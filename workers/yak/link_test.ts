@@ -5,7 +5,6 @@
 // the door it hangs on is held through the kernel (identity_test.ts).
 import { test } from '@yaks/testing'
 import { assert, assertEquals, assertRejects } from '@std/assert'
-import type { Bundle } from '@yaks/graph'
 import { seal } from './lib/token.ts'
 import {
   DAYS,
@@ -17,7 +16,7 @@ import {
   stand,
   whose,
 } from './link.ts'
-import type { Meta } from './meta.ts'
+import { held } from './signin-fixture.ts'
 import { mac, mint, spend } from './signin.ts'
 
 let SECRET = 'a probe secret'
@@ -48,29 +47,6 @@ let kv = () => {
 
 let book = () => links(kv())!
 
-// The meta store signin.ts writes through, holding its rows: a mint adds one,
-// a tombstone takes it away, and a `tries` patch lands on the row it names —
-// enough that spending a code twice is the same story here as in the store.
-let store = () => {
-  let rows: Bundle[] = []
-  let at: Meta = {
-    query: () => Promise.resolve([...rows]),
-    apply: (bundles) => {
-      for (let b of bundles) {
-        if (b.tombstone) {
-          rows = rows.filter((r) => r.entity.eid != b.entity.eid)
-          continue
-        }
-        let held = rows.find((r) => r.entity.eid == b.entity.eid)
-        if (held) Object.assign(held.signin as object, b.signin)
-        else rows.push({ ...b, entity: { eid: `e${rows.length + 1}` } })
-      }
-      return Promise.resolve(bundles)
-    },
-  }
-  return at
-}
-
 test('a letter’s link carries the code, and what it was finishing', async () => {
   let url = await onceLink(SECRET, {
     email: ME,
@@ -91,7 +67,7 @@ test('a letter’s link carries the code, and what it was finishing', async () =
 })
 
 test('following the link spends the code, and nothing spends it twice', async () => {
-  let at = store()
+  let { at } = await held([])
   let code = (await mint(at, SECRET, ME))!
   let t = new URL(await onceLink(SECRET, { email: ME, code })).searchParams
     .get('t')!

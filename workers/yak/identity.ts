@@ -933,9 +933,8 @@ export let codeCheck = async (
   q = '',
   back = '',
   env: Host = {},
-  now: () => number = Date.now,
 ): Promise<Response | null> =>
-  await guess(store, address, digest, now) ? null : askCode({
+  await guess(store, address, digest) ? null : askCode({
     address,
     q,
     back,
