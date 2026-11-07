@@ -213,8 +213,9 @@ export let drain = async (
   return run == null ? wake : wake == null ? run : Math.min(run, wake)
 }
 
-/** This process, as the retention pass's lease names its holder. */
-let holder = crypto.randomUUID()
+/** This process, as the retention pass's lease names its holder: minted at
+ * the first pass, since a Worker may not make random values at load. */
+let holder: string | undefined
 
 /**
  * The store's daily retention pass (@yaks/effects `expireDaily`) in what the
@@ -228,7 +229,7 @@ let expiring = async (g: Graph, until: number) => {
   if (left <= 0) return
   try {
     await expireDaily(g, {
-      owner: holder,
+      owner: holder ??= crypto.randomUUID(),
       signal: AbortSignal.timeout(left),
     })
   } catch (e) {
