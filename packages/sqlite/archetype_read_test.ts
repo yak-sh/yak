@@ -7,6 +7,7 @@ import { loadVocab } from '@yaks/vocab'
 import { mem, seedIdentities, shop, spy, unit } from './testing.ts'
 import { get, storage } from './mod.ts'
 import { get as census } from './fixtures/census.ts'
+import { POPULATION } from './population.ts'
 
 let vocab = loadVocab([...shop.docs, archetypeDoc, {
   $defs: {
@@ -130,10 +131,13 @@ test('classified gathers select only present tables and only their owners', () =
   assertEquals(asked.length, 1) // value-only queries do not load the catalog
   asked = []
   s.rows('.doc .marker')
-  // Mandatory presence drives its component, without catalog discovery.
-  assertEquals(asked.length, 1)
-  assert(asked[0].sql.includes('from "doc"'), asked[0].sql)
-  assert(asked[0].sql.includes('"marker"'), asked[0].sql)
+  // Mandatory presence drives its component, without catalog discovery: the
+  // census only looks whether the file counts populations, to drive the
+  // rarest, and this one does not.
+  assertEquals(asked.map((q) => q.sql.split(' ')[0]), ['pragma', 'select'])
+  assert(asked[0].sql.includes(POPULATION), asked[0].sql)
+  assert(asked[1].sql.includes('from "doc"'), asked[1].sql)
+  assert(asked[1].sql.includes('"marker"'), asked[1].sql)
   asked = []
   s.rows('.doc .marker')
   assertEquals(asked.length, 1) // asked again, the answer is kept
