@@ -13,6 +13,8 @@ export {
   type Census,
   crowded,
   type Numbered,
+  type Rarest,
+  rarest,
   screen,
   tallied,
   visibleBacked,

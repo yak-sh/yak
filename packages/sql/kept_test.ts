@@ -479,6 +479,18 @@ test('a kept statement takes the road its census of a required component chooses
   equal(roads.size, 2)
 })
 
+test('required components are read from the one the census counts fewest of', () => {
+  let held: Record<string, number> = { one: 500_000, two: 46_000 }
+  let census = { held: (c: string) => held[c], largest: () => 6.9e6 }
+  let q = and(present('one'), present('two'))
+  let from = (o: BindOpts) => same(q, o).sql.match(/ eid from "(\w+)"/)?.[1]
+  let driver = () => from({ census })
+  equal([driver(), driver(), driver()], ['two', 'two', 'two'])
+  held = { one: 3, two: 46_000 }
+  equal([driver(), driver()], ['one', 'one'])
+  equal(from({}), 'one')
+})
+
 test('a kept statement takes the road its census chooses now', () => {
   let held = 19_000
   let census = { held: () => held, largest: () => 3.2e6 }

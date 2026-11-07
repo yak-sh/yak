@@ -10,7 +10,7 @@
 // its place, plus every input the lowering reads: the options' data, the
 // registries by identity, the extensions' hooks, the archetype catalog's
 // answers, and the census's choices of road (./bind.ts `walks`, `crowded`,
-// `numbered`).
+// `numbered`, `rarest`).
 // The values a kept statement binds anew are the clock, the root candidates
 // (`eids`), those ids and numbers, the integer ids the ids resolve to, and the
 // store's tags (./derived.ts `Tags`), so one statement serves every store of a
@@ -51,6 +51,7 @@ import {
   type Heard,
   type Prepared,
   prepared,
+  rarest,
   screening,
   sourceScreen as unkept,
   walks,
@@ -81,6 +82,7 @@ type Asked =
   | { walks: string; page?: number; answer: boolean }
   | { crowded: string; n: number; answer: boolean | undefined }
   | { numbered: string; answer: boolean | undefined }
+  | { rarest: string[]; answer: string | undefined }
 type Kept = {
   sql: string
   params: (Param | Bind)[]
@@ -145,7 +147,7 @@ let recorded = (
 let choosing = (
   census: Census | undefined,
   log: Asked[],
-): Pick<Heard, 'walks' | 'crowded' | 'numbered'> =>
+): Pick<Heard, 'walks' | 'crowded' | 'numbered' | 'rarest'> =>
   census
     ? {
       walks: (comp, page) => {
@@ -161,6 +163,11 @@ let choosing = (
       numbered: (comp) => {
         let answer = census.numbered?.(comp)
         log.push({ numbered: comp, answer })
+        return answer
+      },
+      rarest: (comps) => {
+        let answer = rarest(census, comps)
+        log.push({ rarest: comps, answer })
         return answer
       },
     }
@@ -190,6 +197,8 @@ let stands = (asked: Asked[], opts: BindOpts): boolean =>
       ? crowded(opts.census, a.crowded, a.n) === a.answer
       : 'numbered' in a
       ? opts.census?.numbered?.(a.numbered) === a.answer
+      : 'rarest' in a
+      ? rarest(opts.census, a.rarest) === a.answer
       : 'presence' in a
       ? !!opts.archetypes && alike(opts.archetypes(a.presence), a.ids)
       : opts.archetypes?.held === a.held
@@ -206,6 +215,9 @@ let agree = (a: Asked[], b: Asked[]) =>
         x.answer === y.answer
       : 'numbered' in x
       ? 'numbered' in y && x.numbered == y.numbered && x.answer === y.answer
+      : 'rarest' in x
+      ? 'rarest' in y && x.rarest.join() == y.rarest.join() &&
+        x.answer === y.answer
       : 'presence' in x
       ? 'presence' in y && alike(x.ids, y.ids) &&
         JSON.stringify(x.presence) == JSON.stringify(y.presence)

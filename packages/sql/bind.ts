@@ -260,6 +260,31 @@ export let crowded = (
   return held != null ? held > n : census?.exceeds?.(comp, n)
 }
 
+/** Which of `comps` the fewest entities hold, as `census` counts them: the
+ * component a conjunction of presences is driven from, so `.call&.tool_async`
+ * reads the few background calls rather than every call. `undefined` when
+ * the store keeps no count of one of them.
+ *
+ * ```ts
+ * import { rarest } from '@yaks/sql'
+ * import { equal } from '@yaks/testing'
+ * let n = { call: 498_620, tool_async: 45_890 } as Record<string, number>
+ * let census = { held: (c: string) => n[c], largest: () => 6.9e6 }
+ * equal(rarest(census, ['call', 'tool_async']), 'tool_async')
+ * equal(rarest(census, ['call', 'entry']), undefined)
+ * ```
+ */
+export type Rarest = (comps: string[]) => string | undefined
+export let rarest = (
+  census: Census | undefined,
+  comps: string[],
+): string | undefined => {
+  let held = comps.map((c) => census?.held(c))
+  if (held.some((n) => n == null)) return
+  let least = held.indexOf(Math.min(...held as number[]))
+  return comps[least]
+}
+
 // The mutable state one call to `bind` threads through: the schema, the
 // dialect, the derived-property registry, the registered extensions, the moment
 // time phrases resolve against, and the growing set of component tables to left
@@ -324,6 +349,8 @@ type Ctx = {
   crowded?: Crowded
   /** whether any entity holding a component has a number (`Census`) */
   numbered?: Numbered
+  /** which of several components the fewest entities hold (`rarest`) */
+  rarest?: Rarest
   /** the computed component whose rows this query reads as its spine, when it
    * reads a backing's rather than the entity table */
   spine?: string
@@ -1393,12 +1420,23 @@ let presence = (ctx: Ctx, cs: Clause[]): string | undefined => {
     comp != 'entity' && !!ctx.v.comp(comp) && !computed(ctx.v, comp) &&
     (ctx.d.scoped || source(ctx, comp) == `"${comp}"` &&
         ctx.d.table(comp) == `"${comp}"`)
-  for (let c of [...extra, ...flat]) {
-    if (
-      c.kind != 'pred' || c.not || c.where || c.path.length != 1 ||
-      opOf(c) != EXISTS
-    ) continue
-    if (spined(c.path[0])) return c.path[0]
+  // Of several required components, the one the fewest entities hold drives,
+  // as the census counts them: `.call&.entry&.tool_async` read from `call`
+  // probed all 498,620 calls for their 45,890 background ones (T-147328).
+  let required = (cs: Clause[]) => [
+    ...new Set(
+      cs.flatMap((c) =>
+        c.kind == 'pred' && !c.not && !c.where && c.path.length == 1 &&
+          opOf(c) == EXISTS && spined(c.path[0])
+          ? [c.path[0]]
+          : []
+      ),
+    ),
+  ]
+  let comps = required(extra)
+  if (!comps.length) comps = required(flat)
+  if (comps.length) {
+    return comps.length > 1 && ctx.rarest?.(comps) || comps[0]
   }
   // A walk that must arrive starts from a row of its root's: `.claim.session
   // .session` is the claims whose holder is a session, read from the claims.
@@ -3334,6 +3372,7 @@ export type Heard = Pick<BindOpts, 'archetypes' | 'extend'> & {
   walks?: Walks
   crowded?: Crowded
   numbered?: Numbered
+  rarest?: Rarest
 }
 
 export let prepared = (
@@ -3419,6 +3458,8 @@ export let prepared = (
       opts.absent?.includes(comp)
         ? false
         : (heard.numbered ?? opts.census?.numbered)?.(comp),
+    rarest: heard.rarest ??
+      (opts.census && ((comps) => rarest(opts.census, comps))),
     spine,
     correlated: scope?.correlated,
     exactIds: opts.exactIds,
@@ -5038,6 +5079,7 @@ let visible = (
       walks: heard.walks,
       crowded: heard.crowded,
       numbered: heard.numbered,
+      rarest: heard.rarest,
     },
   )
   return {
