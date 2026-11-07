@@ -70,7 +70,7 @@ All exports are available from `@yaks/sql`; the table groups them by purpose.
 | Rendering             | `render`, `shape`, `excerpt`, `isRaw`                                                                                       |
 | Numeric lookup        | `lookup`                                                                                                                    |
 | Drivers               | `Driver`, `Row`, `effect`, `scan`, `tally`, `revision`                                                                      |
-| Property reads        | `Tag`, `tagOf`, `held`, `field`, `Derived`, `DerivedProp`, `ladders`, `derivedOf`, `worn`                                   |
+| Property reads        | `Tag`, `tagOf`, `held`, `field`, `Derived`, `DerivedProp`, `ladders`, `derivedOf`, `worn`, `pinned`                         |
 | Computed components   | `Backing`, `Backings`, `Held`, `eidOf`, `idOf`, `eidAt`, `visibleBacked`                                                    |
 | Clause compilation    | `Extension`, `Compile`, `Site`, `OrderBy`, `Begin`, `Screen`, `claimed`                                                     |
 | Presence optimization | `ArchetypeSet`, `Matching`, `archetypeSet`                                                                                  |
@@ -477,6 +477,13 @@ equal(ladders(vocab)['job.status'].values, ['failed', 'pending'])
 let override = { tag: 'enum' as const, expr: () => lit('pending') }
 equal(derivedOf(vocab, { 'job.status': override })['job.status'], override)
 ```
+
+A store fills in the rows a query selected by reading each property again.
+`pinned(query, vocab, derived)` is the registry for that gather: a derived
+property the query's conjuncts equate with one of its `values` reads as that
+value, bound as a parameter, so `.session.status=settled` computes each
+session's status once, in the filter. Any other filter leaves the property to
+its expression.
 
 ## Computed components
 

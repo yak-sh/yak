@@ -54,6 +54,7 @@ import {
   lit,
   oneOf,
   op,
+  pinned,
   type Query as Sub,
   type Raw,
   render,
@@ -1323,9 +1324,13 @@ export let read = (
   let parsed = ast(query)
   let eids = ask(parsed).filter((r) => r.eid != null).map((r) => String(r.eid))
   if (!eids.length) return []
-  let derived = opts.derived ?? NONE, asked = requestedDerived(parsed, derived)
-  // A query asking for no derived value a whole read leaves out reads its
-  // entities as the store's own get does, through `fetch` where one is given.
+  let derived = opts.derived ?? NONE
+  // What the filter pinned it computed once already: the rows are filled in
+  // with that value (@yaks/sql `pinned`).
+  let asked = pinned(parsed, vocab, requestedDerived(parsed, derived))
+  // A query asking for no derived value a whole read leaves out, and pinning
+  // none, reads its entities as the store's own get does, through `fetch`
+  // where one is given.
   return fetch && asked == derived
     ? fetch(eids, comps)
     : get(driver, vocab, eids, { ...opts, derived: asked }, comps)
