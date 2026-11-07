@@ -4044,6 +4044,9 @@ importers:
       "@yaks/testing":
         specifier: 0.2.30
         version: link:../testing
+      "@yaks/wake":
+        specifier: 0.2.24
+        version: link:../wake
 
   packages/spawn:
     dependencies:

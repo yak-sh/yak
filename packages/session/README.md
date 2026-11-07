@@ -818,6 +818,17 @@ same way to the project the number it reached is filed under (`filed.project` on
 the entity wearing that `phone{number}`). `session_texted` knocks once per text
 ([`texted_test.ts`](./texted_test.ts)).
 
+## A persona's duties
+
+A persona's standing duty is a wake aimed at it (@yaks/wake's
+`wake{every, target, note}`): TaskMaster's morning standup is
+`wake{every: '0 7 * * * America/Detroit', target: <TaskMaster>, note}`, the
+owner's morning in his time zone. Each time the box's clock fires it,
+`session_woken` knocks the persona's operator once with the note, else its
+project, where the knock waits for the next session at work. Nothing starts a
+session, and the duty's work is the operator's to do
+([`woken_test.ts`](./woken_test.ts)).
+
 ## Claimed-work comments
 
 The session bus delivers no comment to a native transcript: a comment stays a

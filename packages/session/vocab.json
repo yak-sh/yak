@@ -969,6 +969,17 @@
       "target": ".text !deliver",
       "description": "Knock whoever a text that arrived answers: the session that last texted its number while that session can hear, else its project's operator, else the project. A text from a number no session texted is the project's that the number it reached is filed under."
     },
+    "session_woken": {
+      "effect": true,
+      "created": [
+        "fired"
+      ],
+      "changed": [
+        "fired.at"
+      ],
+      "target": ".wake.target.persona",
+      "description": "Knock the operator of the persona a wake is aimed at, once each time it fires, with the wake's note: the session a person opened wearing it, else its project, where the knock waits for the next session at work. A persona's standing duty, such as a morning standup, is such a wake"
+    },
     "native": {
       "component": true,
       "journal": false,
