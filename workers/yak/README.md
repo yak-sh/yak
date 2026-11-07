@@ -13,7 +13,10 @@ deno task deploy:yak   # dev:yak for a local wrangler dev
 allows `x-yak-host` to select a hostname on loopback requests. A direct
 `wrangler dev` needs `--var LOCAL_DEV:1` to enable the same local override.
 Deployed requests ignore the header. Production and staging disable both
-workers.dev routes and preview URLs; callers use the zone or service bindings.
+workers.dev routes and preview URLs; callers use the zone or service bindings. A
+local dev run is composed as yaks.app is: `yak-front` takes the port and the
+kernel runs behind it (wrangler.ts `fronted`), so the apex's `/_cli/` answers
+from front's assets there too.
 
 yaks.app's routes belong to `yak-front` (`front/`), not to this Worker: it
 answers what Site's cache holds and hands everything else to the kernel's

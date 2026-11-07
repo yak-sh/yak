@@ -13,6 +13,7 @@ import {
   aheadOf,
   bundled,
   executor,
+  fronted,
   guard,
   images,
   kernelStep,
@@ -412,6 +413,42 @@ test('executor activation preserves the prepared upload and removes its disposab
       Deno.removeSync(source)
     }
   }))
+
+test("a local dev run puts yak-front before the kernel, which keeps the run's vars", () => {
+  let root = Deno.makeTempDirSync()
+  try {
+    Deno.writeTextFileSync(
+      join(root, 'wrangler.toml'),
+      'name="yak"\n[vars]\nAPEX="yaks.app"\n[env.staging]\nname="yak-staging"',
+    )
+    let args = ['dev', '--var', 'LOCAL_DEV:1', '--env', 'staging']
+    let dev = fronted(args, root)
+    let copy = dev.args.at(-1)!
+    assertEquals(dev.args, [...args, '-c', 'front/wrangler.toml', '-c', copy])
+    let config = parse(Deno.readTextFileSync(join(root, copy))) as {
+      vars: unknown
+      env: { staging: { vars: unknown } }
+    }
+    assertEquals(config.vars, { APEX: 'yaks.app', LOCAL_DEV: '1' })
+    assertEquals(config.env.staging.vars, { LOCAL_DEV: '1' })
+    dev.remove()
+    assertEquals([...Deno.readDirSync(root)].map((e) => e.name), [
+      'wrangler.toml',
+    ])
+    assertEquals(fronted(['dev'], root).args, [
+      'dev',
+      '-c',
+      'front/wrangler.toml',
+      '-c',
+      'wrangler.toml',
+    ])
+    for (let same of [['deploy'], ['dev', '-c', 'front/wrangler.toml']]) {
+      assertEquals(fronted(same, root).args, same)
+    }
+  } finally {
+    Deno.removeSync(root, { recursive: true })
+  }
+})
 
 test('local and staging commands leave executor activation to production builds', async () => {
   for (

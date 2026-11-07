@@ -748,6 +748,70 @@ export let modelBound = (
   return { args: bound, remove: () => io.removeSync(config) }
 }
 
+type Vars = { vars?: Record<string, unknown> }
+
+// The `--var KEY:VALUE` pairs these arguments give, in either form.
+let cliVars = (args: string[]) => {
+  let out: Record<string, string> = {}, taking = false
+  for (let arg of args) {
+    if (arg == '--var') {
+      taking = true
+      continue
+    }
+    if (arg.startsWith('--var=')) arg = arg.slice('--var='.length)
+    else if (arg.startsWith('-') || !taking) {
+      taking = false
+      continue
+    }
+    let at = arg.indexOf(':')
+    if (at > 0) out[arg.slice(0, at)] = arg.slice(at + 1)
+  }
+  return out
+}
+
+/** A local `dev` composed as yaks.app is: yak-front first, which takes the
+ * port and answers what it answers there (the apex's /_cli/ among it), and
+ * the kernel behind it, reached through front's service bindings. Wrangler
+ * hands a second config only its own vars and `--env`, so the kernel runs
+ * from a disposable copy beside it that carries this run's `--var`s.
+ * Unchanged for any other command, or one that names its own config. */
+export let fronted = (args: string[], root = dir) => {
+  if (
+    command(args) != 'dev' ||
+    args.some((a) => /^(-c|--config)(=|$)/.test(a))
+  ) return { args, remove: () => {} }
+  let vars = cliVars(args)
+  let front = ['-c', 'front/wrangler.toml']
+  if (!Object.keys(vars).length) {
+    return {
+      args: [...args, ...front, '-c', 'wrangler.toml'],
+      remove: () => {},
+    }
+  }
+  let path = join(root, 'wrangler.toml')
+  let parsed = parse(io.readTextFileSync(path)) as Vars & {
+    env?: Record<string, Vars>
+  }
+  for (let part of [parsed, ...Object.values(parsed.env ?? {})]) {
+    part.vars = { ...part.vars, ...vars }
+  }
+  let config = io.makeTempFileSync({
+    dir: root,
+    prefix: '.dev-',
+    suffix: '.toml',
+  })
+  try {
+    io.writeTextFileSync(config, stringify(parsed))
+  } catch (error) {
+    io.removeSync(config)
+    throw error
+  }
+  return {
+    args: [...args, ...front, '-c', relative(root, config)],
+    remove: () => io.removeSync(config),
+  }
+}
+
 let bundleEntry = (output: string, meta: string, base: string): Bundle => {
   let { outputs } = JSON.parse(io.readTextFileSync(meta)) as {
     outputs: Record<string, { entryPoint?: string }>
@@ -1489,11 +1553,13 @@ if (import.meta.main) {
       try {
         if (served.status == 'rejected') throw served.reason
         let bound = modelBound(bundle.args, served.value)
+        let composed = fronted(bound.args)
         return {
-          args: bound.args,
+          args: composed.args,
           output: bundle.output,
           executor: served.value,
           remove: () => {
+            composed.remove()
             bound.remove()
             bundle.remove()
           },

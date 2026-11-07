@@ -37,7 +37,7 @@ import {
   type Visited,
 } from '../view-point.ts'
 import { type Conversion, conversionOf, keep } from '../arrival.ts'
-import { foreign, platform, spaceDoor } from '../route.ts'
+import { foreign, hostOf, loopback, platform, spaceDoor } from '../route.ts'
 import * as variant from '../variant.ts'
 
 export type Lent = { waitUntil: (work: Promise<unknown>) => void }
@@ -154,8 +154,7 @@ export let kept = (
   ctx: Lent,
   said: string[] = [],
 ): Promise<Response | number | null> | null => {
-  let url = new URL(req.url)
-  let host = url.hostname.toLowerCase(), path = url.pathname
+  let host = hostOf(req, env), path = new URL(req.url).pathname
   if (
     (req.method != 'GET' && req.method != 'HEAD') || foreign(host, env) ||
     platform(host, path, env) || !settled(req)
@@ -237,11 +236,12 @@ let report = (
 }
 
 /** Whether this is the apex's sandbox CLI (../sandbox/launch.ts fetches it),
- * which this Worker's assets hold and the kernel's don't. */
+ * which this Worker's assets hold and the kernel's don't. A local dev run's
+ * bare loopback host is its apex, as it is the kernel's. */
 let cli = (req: Request, env: FrontEnv) => {
-  let url = new URL(req.url)
-  return url.hostname.toLowerCase() == apex(env) &&
-    url.pathname.startsWith('/_cli/')
+  let host = hostOf(req, env)
+  return (host == apex(env) || loopback(host)) &&
+    new URL(req.url).pathname.startsWith('/_cli/')
 }
 
 export let serve = async (req: Request, env: FrontEnv, ctx: Lent) => {
@@ -273,7 +273,7 @@ export let serve = async (req: Request, env: FrontEnv, ctx: Lent) => {
   // not on every view.
   remember(
     env.SITE,
-    scope(new URL(req.url).hostname.toLowerCase(), null, mount),
+    scope(hostOf(req, env), null, mount),
   )
   let out = new Response(res.body, res)
   out.headers.delete(UNKEPT_AT)

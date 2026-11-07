@@ -126,6 +126,25 @@ test("the apex's sandbox CLI answers from this Worker's assets", async () => {
   assertEquals(f.forwarded.length, 2)
 })
 
+// A local dev run puts this Worker before the kernel (../wrangler.ts
+// `fronted`), so its loopback host and `x-yak-host` read as the kernel's do.
+test("a local dev run's apex answers the sandbox CLI from this Worker's assets", async () => {
+  let f = front(() => new Response(null, { status: 404 }))
+  f.env.LOCAL_DEV = '1'
+  let url = 'http://localhost:8787/_cli/current.json'
+  for (
+    let [host, mine] of [
+      [null, true],
+      ['yaks.app', true],
+      ['ada.yaks.app', false],
+    ] as const
+  ) {
+    let res = await f.go(url, host ? { headers: { 'x-yak-host': host } } : {})
+    assertEquals(await res.text(), mine ? '{"hash":"h"}' : 'kernel', host!)
+  }
+  assertEquals(f.files.length, 2)
+})
+
 test('a kept page answers from the edge with no kernel, counted once', async () => {
   let f = front(() => page())
   let res = await f.go(at)

@@ -365,13 +365,14 @@ export let aimedAt = (
   mount: app ? '/' : null,
 })
 
-let dev = (host: string) =>
+/** Whether a hostname is this machine's: a local dev run's, never deployed. */
+export let loopback = (host: string) =>
   host == 'localhost' || host == '127.0.0.1' || host == '[::1]' ||
   host.endsWith('.localhost')
 
 export let hostOf = (req: Request, env: Host = {}) => {
   let host = new URL(req.url).hostname.toLowerCase()
-  return env.LOCAL_DEV == '1' && dev(host)
+  return env.LOCAL_DEV == '1' && loopback(host)
     ? (req.headers.get('x-yak-host') ?? host).toLowerCase()
     : host
 }
@@ -382,7 +383,7 @@ export let hostOf = (req: Request, env: Host = {}) => {
 // today is decided before this is ever asked: the apex, a space, a dev host,
 // and `x.y.yaks.app`, which was the apex before custom domains and still is.
 export let foreign = (host: string, env: Host = {}) =>
-  !dev(host) && host != apex(env) && !host.endsWith(`.${apex(env)}`)
+  !loopback(host) && host != apex(env) && !host.endsWith(`.${apex(env)}`)
 
 // An address on the platform's own zone: https, and the apex or a hostname
 // under it. It is what a sign-in may hand someone back to (T-32593) — a
