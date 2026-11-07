@@ -116,9 +116,8 @@ export type Doors = {
   /** what yak serves, and each commit its recent deployments put live with
    * when the first of them did (ms) */
   live: () => Promise<Omit<Live, 'has'> & { debuts: Debut[] }>
-  /** when the deploy door began the deploy that made a version (ms), if the
-   * version says */
-  began: (version: string) => Promise<number | undefined>
+  /** the message a version was made with, if it has one */
+  said: (version: string) => Promise<string | undefined>
   /** whether yaks.app's home page answers 200: nothing, or why it does not */
   answers: () => Promise<string | undefined>
   /** whether two commits hold the same Worker source */
@@ -234,9 +233,9 @@ export let box = (
         debuts: debuts(rows).map((d) => ({ ...d, at: Date.parse(d.at) })),
       }
     },
-    began: async (version) => {
+    said: async (version) => {
       let raw = await wrangled(['versions', 'view', version])
-      return beganIn((raw.result ?? raw).annotations?.['workers/message'])
+      return (raw.result ?? raw).annotations?.['workers/message']
     },
     answers: async () => {
       for (let tries = 1;; tries++) {
@@ -406,7 +405,9 @@ let untimed = async (g: Graph, shown: Debut[]): Promise<Debut[]> => {
 
 /** Times each deploy, oldest first, and answers the ones it timed. A version
  * that does not say when its deploy began, or says after it went live, is
- * left untimed. */
+ * left untimed, and so is one made for another commit: a commit that changed
+ * nothing the kernel runs is deployed as the version already serving
+ * (workers/yak/wrangler.ts `kernelStep`), which says when that one began. */
 let measure = async (
   g: Graph,
   doors: Doors,
@@ -414,7 +415,8 @@ let measure = async (
 ): Promise<Deployed[]> => {
   let timed: Deployed[] = []
   for (let { sha, at, version } of fresh) {
-    let began = await doors.began(version)
+    let said = await doors.said(version)
+    let began = shaIn(said) == sha ? beganIn(said) : undefined
     if (began != null && began <= at) timed.push({ sha, began, live: at })
   }
   if (timed.length) {

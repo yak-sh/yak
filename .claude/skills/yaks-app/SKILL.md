@@ -117,7 +117,12 @@ and setup; this is the map and the feel.
 
 A push to main deploys, through Cloudflare Workers Builds (watch paths in
 workers/yak/wrangler.ts `WATCHED`: the Worker's source, not its tests or
-READMEs). Nothing gates it; main's CI reports asynchronously and files bugs.
+READMEs). A build whose kernel bytes match the serving version's (`inputs:`
+digest, wrangler.ts `kernelStep`) makes no new version, since a new version
+starts every isolate cold: it deploys the serving one under its commit. The
+build is deterministic, so keep it so: a stamp, sha or time in the bundle or
+`public/` would make every push a new version again.
+Nothing gates it; main's CI reports asynchronously and files bugs.
 Nobody waits for CI or a deploy to finish their work. Safety lives in recovery,
 and recovery is quick:
 

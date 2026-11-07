@@ -16,6 +16,7 @@ import { adminDoc } from './vocab.ts'
 import { type Doors, pass, service } from './service.ts'
 import { Unavailable } from '@yaks/cloudflare/api'
 import { PENDING } from '@yaks/cloudflare/hook'
+import { versionMessage } from '@yaks/cloudflare/wrangler'
 
 // The words the catch-up writes, and the entity they sit on.
 let pick = (doc: VocabDoc, ...names: string[]): VocabDoc => ({
@@ -55,7 +56,7 @@ let fixture = (
         ...live,
       })
     },
-    began: () => Promise.resolve(undefined),
+    said: () => Promise.resolve(undefined),
     answers: () => Promise.resolve(undefined),
     same: () => Promise.resolve(same),
     build: () => Promise.resolve(build),
@@ -272,7 +273,12 @@ let deploys = (took: number[], home?: string) => {
   }))
   f.doors.live = () =>
     Promise.resolve({ sha: HEAD, at: landed, rollback: false, debuts })
-  f.doors.began = (version) => Promise.resolve(push(Number(version.slice(1))))
+  f.doors.said = (version) => {
+    let i = Number(version.slice(1))
+    return Promise.resolve(
+      versionMessage(`${shas[i]} subject`, new Date(push(i))),
+    )
+  }
   let asked = 0
   f.doors.answers = () => (asked++, Promise.resolve(home))
   f.at.now = landed + LATE
@@ -295,6 +301,21 @@ test('each deploy a look shows is timed once, and the head asks yaks.app once', 
     began: '2026-10-13T12:42:23.000Z',
     live: '2026-10-13T12:43:23.000Z',
   })
+})
+
+test('a deploy of the version another commit made is not timed', async () => {
+  let f = deploys([60, 60])
+  let live = f.doors.live
+  f.doors.live = async () => {
+    let shown = await live()
+    let debuts = shown.debuts.map((d) => ({ ...d, version: 'v0' }))
+    return { ...shown, debuts }
+  }
+  equal(await f.look(), { faults: [], asked: 1 })
+  let timed = await f.g.get(['0'.repeat(40), HEAD], ['deployed'])
+  equal(timed.filter((row) => row.deployed).map((row) => row.entity.eid), [
+    '0'.repeat(40),
+  ])
 })
 
 test('deploys that got slower are a bug of their own', async () => {

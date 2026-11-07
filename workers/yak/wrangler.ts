@@ -424,7 +424,7 @@ export let siblingMessage = (digest: string, commit = '') =>
 /** Skip an upload only when the single serving deployment carries the digest
  * of these exact inputs. A version's full annotation can replace a truncated
  * deployment summary only when it names that deployment's sole live version. */
-export let sameSibling = (
+export let sameUpload = (
   digest: string,
   deployments: unknown,
   version?: { id?: string; annotations?: Record<string, string> } | null,
@@ -447,9 +447,9 @@ export let sameSibling = (
 export let sameServing = async (
   digest: string,
   deployments: unknown,
-  read: (id: string) => Promise<Parameters<typeof sameSibling>[2]>,
+  read: (id: string) => Promise<Parameters<typeof sameUpload>[2]>,
 ) => {
-  let version: Parameters<typeof sameSibling>[2]
+  let version: Parameters<typeof sameUpload>[2]
   let current = singleServing(deployments)
   if (
     current && typeof current.versions[0].version_id == 'string' &&
@@ -459,11 +459,11 @@ export let sameServing = async (
       version = await read(current.versions[0].version_id)
     } catch { /* unread means upload */ }
   }
-  return sameSibling(digest, deployments, version)
+  return sameUpload(digest, deployments, version)
 }
 
 /** Wrangler's upload inputs, not source timestamps or the last main commit. */
-export let siblingDigest = (
+export let uploadDigest = (
   config: string,
   modules: Record<string, Uint8Array>,
 ) => {
@@ -478,6 +478,116 @@ export let siblingDigest = (
     hash.update(body)
   }
   return hash.digest('hex')
+}
+
+/** The digest of what an upload is made of: its config, the pinned Wrangler
+ * (not where this checkout installed it, so every worktree's deploy of the
+ * same inputs finds the same upload serving), its flags, which can override
+ * config bindings too, and the files it carries. Not its `--message`: that
+ * names the commit, which changes on every push and is not what runs. */
+export let inputsOf = (
+  config: string,
+  args: string[],
+  files: Record<string, Uint8Array>,
+) =>
+  uploadDigest(
+    JSON.stringify({
+      config,
+      wrangler: WRANGLER_VERSION,
+      args: args.filter((arg, i) =>
+        arg != '--message' && args[i - 1] != '--message'
+      ),
+    }),
+    files,
+  )
+
+/** Every file under `at` that `keep` admits, by its path from `at`. */
+let contents = (
+  at: string,
+  keep: (path: string) => boolean = () => true,
+  out: Record<string, Uint8Array> = {},
+  from = at,
+) => {
+  for (let entry of io.readDirSync(at)) {
+    let file = join(at, entry.name)
+    if (entry.isDirectory) contents(file, keep, out, from)
+    else if (entry.isFile && keep(relative(from, file))) {
+      out[relative(from, file)] = io.readFileSync(file)
+    }
+  }
+  return out
+}
+
+/** The kernel's bundle as its upload carries it: the modules, not their
+ * source maps or esbuild's account of its inputs. */
+let shipped = (path: string) =>
+  !path.endsWith('.map') && !path.startsWith('metafile.json')
+
+/** What the kernel's deploy runs: its upload, its version annotated with the
+ * digest of its inputs ({@link inputsOf}: config, served executor, flags,
+ * modules and assets), or, when the single version serving was made from the
+ * same inputs, a deployment of that version under this commit's message. A
+ * push that changes nothing the kernel runs (a test, a probe, a package it
+ * doesn't bundle) builds the same bytes, and the same bytes as a new version
+ * would start every isolate cold. The deployment names the commit, so the
+ * guard, the deploy catch-up and `yak admin deploys` see it live. Without a
+ * bundle (`-c`, `--no-bundle`) or a message, or in a dry run, it uploads as
+ * asked. */
+export let kernelStep = async (
+  argv: string[],
+  { args, output, executor }: {
+    args: string[]
+    output?: string
+    executor?: string
+  },
+  read: Reads = cloudflare,
+  root = dir,
+): Promise<string[]> => {
+  let said = argv.indexOf('--message')
+  if (!output || said < 0 || argv.includes('--dry-run')) return args
+  let env = envs(argv)
+  let serving = Promise.resolve().then(() =>
+    read.deployments('wrangler.toml', env)
+  ).catch(() => undefined)
+  let files = contents(output, shipped)
+  for (let [path, bytes] of Object.entries(contents(join(root, 'public')))) {
+    files[`public/${path}`] = bytes
+  }
+  let digest = inputsOf(
+    JSON.stringify({
+      config: io.readTextFileSync(join(root, 'wrangler.toml')),
+      executor,
+    }),
+    argv,
+    files,
+  )
+  let message = `${argv[said + 1]}\ninputs:${digest}`
+  let deployments = await serving
+  if (
+    await sameServing(
+      digest,
+      deployments,
+      async (id) => await read.version('wrangler.toml', id, env) ?? null,
+    )
+  ) {
+    let { versions: [live] } = singleServing(deployments)!
+    console.log(
+      `wrangler.toml: unchanged upload ${digest.slice(0, 12)} — ` +
+        `deploying serving version ${live.version_id} under this commit`,
+    )
+    return [
+      'versions',
+      'deploy',
+      `${live.version_id}@100%`,
+      '--yes',
+      '--message',
+      message,
+      ...env,
+    ]
+  }
+  let annotated = [...args]
+  annotated[annotated.indexOf('--message') + 1] = message
+  return annotated
 }
 
 /** Replace local image builds with source-addressed registry images. The temporary
@@ -514,7 +624,7 @@ export let siblingImages = async (
       })
       let ref = refs.get(descriptor)
       if (!ref) {
-        let digest = siblingDigest(
+        let digest = uploadDigest(
           descriptor,
           imageInputs(path, root, [container]),
         )
@@ -699,7 +809,7 @@ export let bundled = async (
     !siblings(args).length ||
     args.some((a) => /^(--no-bundle)(=|$)/.test(a))
   ) {
-    return { args, remove: () => {} }
+    return { args, output: undefined, remove: () => {} }
   }
   let output = scratch(root, 'kernel-')
   let config: string | undefined
@@ -730,7 +840,7 @@ export let bundled = async (
       entry: join(output, 'index.js'),
       output,
     }, root)
-    return { args: [...upload, '-c', config], remove }
+    return { args: [...upload, '-c', config], output, remove }
   } catch (error) {
     remove()
     throw error
@@ -806,18 +916,9 @@ export let prepareSibling = async (
       }
     }
     Object.assign(modules, images(config, root))
-    let digest = siblingDigest(
-      JSON.stringify({
-        config: io.readTextFileSync(join(root, config)),
-        // The pin, not where this checkout installed it: every worktree's
-        // deploy of the same inputs finds the same upload already serving.
-        wrangler: WRANGLER_VERSION,
-        // Flags can override config bindings too; the commit annotation alone
-        // changes on every push and is not part of the serving code.
-        args: args.filter((arg, i) =>
-          arg != '--message' && args[i - 1] != '--message'
-        ),
-      }),
+    let digest = inputsOf(
+      io.readTextFileSync(join(root, config)),
+      args,
       modules,
     )
     // Cloudflare may cut deployment messages to 50 characters; the full
@@ -1360,6 +1461,8 @@ if (import.meta.main) {
         let bound = modelBound(bundle.args, served.value)
         return {
           args: bound.args,
+          output: bundle.output,
+          executor: served.value,
           remove: () => {
             bound.remove()
             bundle.remove()
@@ -1375,7 +1478,7 @@ if (import.meta.main) {
         argv,
         (args, unpinned) =>
           unpinned ? uploads.get(args[args.indexOf('-c') + 1])! : run(args),
-        async () => (await bundle).args,
+        async () => await kernelStep(argv, await bundle),
       ),
     () => made.all,
   )

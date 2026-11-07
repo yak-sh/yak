@@ -15,6 +15,7 @@ import {
   executor,
   guard,
   images,
+  kernelStep,
   modelBound,
   preflight,
   prepareSibling,
@@ -22,14 +23,14 @@ import {
   runStep,
   runWrangler,
   sameServing,
-  sameSibling,
+  sameUpload,
   seen,
-  siblingDigest,
   siblingImages,
   siblingMessage,
   SIBLINGS,
   siblings,
   undo,
+  uploadDigest,
   uploadSibling,
 } from './wrangler.ts'
 import type { Reads, Version } from './deployed.ts'
@@ -645,7 +646,7 @@ test('a wrangler command with no sibling deploy runs once with its own pinned id
 
 test('sibling uploads use all bundled modules and configuration, not file order', () => {
   let bytes = (s: string) => new TextEncoder().encode(s)
-  let first = siblingDigest('prod', {
+  let first = uploadDigest('prod', {
     'index.js': bytes('code'),
     'compiler.wasm': bytes('wasm'),
   })
@@ -654,32 +655,32 @@ test('sibling uploads use all bundled modules and configuration, not file order'
     '78e269c07d9160015f4c535ac9e35fa92a746e16e6ec0b33c75b55597366fed4',
   )
   assertEquals(
-    siblingDigest('prod', {
+    uploadDigest('prod', {
       'compiler.wasm': bytes('wasm'),
       'index.js': bytes('code'),
     }),
     first,
   )
   assert(
-    siblingDigest('staging', {
+    uploadDigest('staging', {
       'index.js': bytes('code'),
       'compiler.wasm': bytes('wasm'),
     }) != first,
   )
   assert(
-    siblingDigest('prod', {
+    uploadDigest('prod', {
       'index.js': bytes('code'),
       'compiler.wasm': bytes('new wasm'),
     }) != first,
   )
   assert(
-    siblingDigest('prod', {
+    uploadDigest('prod', {
       'index.js': bytes('new catalog'),
       'compiler.wasm': bytes('wasm'),
     }) != first,
   )
   assert(
-    siblingDigest('prod', {
+    uploadDigest('prod', {
       'renamed.js': bytes('code'),
       'compiler.wasm': bytes('wasm'),
     }) != first,
@@ -694,19 +695,19 @@ test('only the fully serving sibling with matching upload inputs is reusable', (
   })
   let old = deployment('old', '2026-10-07T07:00:00Z')
   let now = deployment('new', '2026-10-07T08:00:00Z')
-  assertEquals(sameSibling('new', [now, old]), true)
-  assertEquals(sameSibling('new', [old, now]), true)
-  assertEquals(sameSibling('old', [old, now]), false)
-  assertEquals(sameSibling('new', null), false)
-  assertEquals(sameSibling('new', [null]), false)
+  assertEquals(sameUpload('new', [now, old]), true)
+  assertEquals(sameUpload('new', [old, now]), true)
+  assertEquals(sameUpload('old', [old, now]), false)
+  assertEquals(sameUpload('new', null), false)
+  assertEquals(sameUpload('new', [null]), false)
   assertEquals(
-    sameSibling('new', [{ ...now, created_on: 'not a date' }]),
+    sameUpload('new', [{ ...now, created_on: 'not a date' }]),
     false,
   )
-  assertEquals(sameSibling('new', []), false)
-  assertEquals(sameSibling('new', [{ ...now, annotations: {} }]), false)
+  assertEquals(sameUpload('new', []), false)
+  assertEquals(sameUpload('new', [{ ...now, annotations: {} }]), false)
   assertEquals(
-    sameSibling('new', [{
+    sameUpload('new', [{
       ...now,
       versions: [{ version_id: 'v', percentage: 50 }, {
         version_id: 'v2',
@@ -951,6 +952,127 @@ test('a build leaves a newer version live when it activates during preparation',
   )
   main.live = undefined
   assertEquals(await b.door.still(), false)
+})
+
+// A kernel bundle and its assets, and what the door runs to deploy commit
+// `commit` while a version made with `serving` (a message) is all that serves.
+let built = Deno.makeTempDirSync()
+let put = (path: string, text: string) => {
+  Deno.mkdirSync(dirname(join(built, path)), { recursive: true })
+  Deno.writeTextFileSync(join(built, path), text)
+}
+for (
+  let [path, text] of [
+    ['wrangler.toml', 'name = "yak"'],
+    ['public/style.css', 'a{}'],
+    ['out/index.js', 'export default {}'],
+    ['out/chunk.js', 'export let lazy = 1'],
+    ['out/index.js.map', '{}'],
+    ['out/metafile.json', '{}'],
+  ]
+) put(path, text)
+let kernelDeploy = (
+  commit: string,
+  serving?: string,
+  { executor, flags = [] }: { executor?: string; flags?: readonly string[] } =
+    {},
+) => {
+  let argv = ['deploy', ...flags, '--message', commit]
+  let read: Reads = {
+    deployments: () =>
+      Promise.resolve(
+        serving == null ? [] : [{
+          created_on: '2026-11-07T20:54:14Z',
+          versions: [{ version_id: 'v1', percentage: 100 }],
+          annotations: { 'workers/message': serving },
+        }],
+      ),
+    version: () => Promise.resolve(undefined),
+  }
+  let args = [...argv, '-c', 'bundle.toml']
+  return kernelStep(
+    argv,
+    { args, output: join(built, 'out'), executor },
+    read,
+    built,
+  )
+}
+let uploaded = await kernelDeploy('a')
+let made = uploaded[uploaded.indexOf('--message') + 1]
+// Whether commit b reuses the version commit a made, `path` holding `text`.
+let reuses = async (
+  path?: string,
+  text = '',
+  options?: Parameters<typeof kernelDeploy>[2],
+) => {
+  let at = path && join(built, path)
+  let was = at && (() => {
+    try {
+      return Deno.readTextFileSync(at)
+    } catch {
+      return undefined
+    }
+  })()
+  if (path) put(path, text)
+  try {
+    return (await kernelDeploy('b', made, options))[0] == 'versions'
+  } finally {
+    if (at) was == null ? Deno.removeSync(at) : put(path!, was)
+  }
+}
+
+test("a kernel upload's version carries the digest of its inputs", () => {
+  assertEquals(uploaded.toSpliced(2, 1), [
+    'deploy',
+    '--message',
+    '-c',
+    'bundle.toml',
+  ])
+  assert(/^a\ninputs:[a-f0-9]{64}$/.test(made), made)
+})
+
+test('a commit whose kernel inputs are unchanged deploys the serving version under its own message', async () => {
+  assertEquals(await kernelDeploy('b', made), [
+    'versions',
+    'deploy',
+    'v1@100%',
+    '--yes',
+    '--message',
+    `b\n${made.split('\n')[1]}`,
+  ])
+})
+
+test('a changed module, asset, config, flag or executor uploads; a source map or metafile does not', async () => {
+  let seen = []
+  for (
+    let [path, text, options] of [
+      ['out/index.js', 'export default 1'],
+      ['out/chunk.js', 'export let lazy = 2'],
+      ['public/style.css', 'b{}'],
+      ['public/_web/new.js', ''],
+      ['wrangler.toml', 'name = "yak"\nworkers_dev = false'],
+      [undefined, '', { flags: ['--var', 'A:1'] }],
+      [undefined, '', { executor: 'yak-model' }],
+      ['out/index.js.map', '{"sources":[]}'],
+      ['out/metafile.json', '{"inputs":{}}'],
+    ] as const
+  ) seen.push(await reuses(path, text, options))
+  assertEquals(seen, [
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
+    true,
+    true,
+  ])
+})
+
+test('a dry run uploads as asked', async () => {
+  let args = await kernelDeploy('b', made, { flags: ['--dry-run'] })
+  assertEquals(args.at(-3), 'b')
 })
 
 test('a build leaves its own commit live when another build of it went live first', async () => {

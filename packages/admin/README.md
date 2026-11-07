@@ -218,15 +218,17 @@ start.
 A look that reads what `yak` serves also times every deploy wrangler's
 deployments list shows. A commit went live at its first deployment (one version,
 naming its commit, not a rollback), and its deploy began when that version's
-message says the deploy door began it. Each is kept once, on the commit's
-entity, as `deployed{began, live}`. The push is not the start: Workers Builds
-can hold a build for minutes before it runs, and that wait is Cloudflare's. When
-the median from start to live of the latest `WINDOW` (10) is past `SLOW` (2
-minutes, about twice what a deploy takes), the catch-up reports
-`deploy slow:yak`, and every deploy while it stays slow adds a hit: deploys that
-got slower are a bug of their own, never main's gate going red. When main's head
-goes live through its own deploy, yaks.app's home page has to answer 200 within
-three tries ten seconds apart, or the catch-up reports `deploy down:yak`.
+message says the deploy door began it. A commit that changed nothing the kernel
+runs went live as the version another commit made, whose message names that
+commit, and is not timed. Each is kept once, on the commit's entity, as
+`deployed{began, live}`. The push is not the start: Workers Builds can hold a
+build for minutes before it runs, and that wait is Cloudflare's. When the median
+from start to live of the latest `WINDOW` (10) is past `SLOW` (2 minutes, about
+twice what a deploy takes), the catch-up reports `deploy slow:yak`, and every
+deploy while it stays slow adds a hit: deploys that got slower are a bug of
+their own, never main's gate going red. When main's head goes live through its
+own deploy, yaks.app's home page has to answer 200 within three tries ten
+seconds apart, or the catch-up reports `deploy down:yak`.
 
 ```json
 { "use": "@yaks/admin", "with": { "hook": { "secret": "BUILD_HOOK" } } }

@@ -179,18 +179,28 @@ pushes it. A changed sibling uploads its prepared modules and source maps
 through a temporary config beside the original, preserving its bindings and
 naming the registry image. Wrangler bundles no second time and rolls the image
 out without rebuilding it. Registry, build or push failures refuse the sibling
-and kernel deploy. Workers Builds has Docker for changed compiler images.
-`bin/build-yak` with no argument still runs the check and the workers tests by
-hand. Within a build, a Wrangler deploy whose Cloudflare call fails for a moment
-(a 5xx, the containers API's internal error, a version not yet readable after
-its upload, a spent or refused asset upload session) runs again, three attempts
-in all (`wrangler.ts` `runStep`). A push's build that fails is started once more
-through the `BUILD_HOOK` deploy hook (builds.ts), since most failures are the
-network's. While that build runs, the first failure is a log line, as it is when
-the hook answers that a build of main is already pending (`hook.ts`, which the
-catch-up reads its answers with too); the second build's failure is filed, and
-so is a failure the hook refused or could not be reached for. A push Builds
-starts no build for fails nowhere, so the box looks: its deploy catch-up
+and kernel deploy. Workers Builds has Docker for changed compiler images. The
+kernel is compared the same way (`wrangler.ts` `kernelStep`): its bundled
+modules (not source maps or the metafile), its `public/` assets, its
+configuration, flags, Wrangler pin and the executor it binds. Its version's
+annotation keeps the commit and `began:` lines first and ends with
+`inputs:<hex sha256>`. A push that changes nothing the kernel runs (a test, a
+probe, a package it doesn't bundle) builds the same bytes, so instead of a new
+version, which would start every isolate cold, the door deploys the serving
+version under the new commit's message, and the guard, the deploy catch-up and
+`yak admin deploys` see that commit live. The catch-up times no such deploy: its
+version says when the commit that made it began. `bin/build-yak` with no
+argument still runs the check and the workers tests by hand. Within a build, a
+Wrangler deploy whose Cloudflare call fails for a moment (a 5xx, the containers
+API's internal error, a version not yet readable after its upload, a spent or
+refused asset upload session) runs again, three attempts in all (`wrangler.ts`
+`runStep`). A push's build that fails is started once more through the
+`BUILD_HOOK` deploy hook (builds.ts), since most failures are the network's.
+While that build runs, the first failure is a log line, as it is when the hook
+answers that a build of main is already pending (`hook.ts`, which the catch-up
+reads its answers with too); the second build's failure is filed, and so is a
+failure the hook refused or could not be reached for. A push Builds starts no
+build for fails nowhere, so the box looks: its deploy catch-up
 ([@yaks/admin](../../packages/admin/README.md#the-deploy-catch-up)) starts
 main's build through a deploy hook of its own once main's head is not live 3
 minutes after it landed with no build under way, and reports it. A head whose
