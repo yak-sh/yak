@@ -2,6 +2,7 @@
 // person gets and the sheets it names.
 import { assert, assertEquals, assertStringIncludes } from '@std/assert'
 import { test } from '@yaks/testing'
+import { halved } from '@yaks/ui'
 import { kernel } from './probe.ts'
 import { lost } from './pages.ts'
 import { from, plan } from './sheet-assets.ts'
@@ -26,6 +27,13 @@ for (let root of ['style.css', 'pages.css']) {
     let order = ['@layer tokens, base', '--font:', ':where(html)::after']
       .map((text) => css.indexOf(text))
     assertEquals(order, order.toSorted((a, b) => a - b))
+  })
+
+  test(`sheets: ${root} says every light-dark() pair again in halves`, () => {
+    let css = sheet(root)
+    assertStringIncludes(css, '--mine: #f8e0c8;')
+    assertStringIncludes(css, '--accent: #a7c080;')
+    assertEquals(halved(css), css)
   })
 
   test(`sheets: everything ${root} points at is a content-named file beside it`, () => {

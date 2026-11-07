@@ -35,6 +35,19 @@ test("a theme's colours are its stylesheet's dark ones", async () => {
   }
 })
 
+test("a browser without light-dark() still gets every theme's colours", async () => {
+  for (let [theme, value] of Object.entries(themes)) {
+    let css = await stylesheet({ kits, theme: value })
+    let [, lacking = ''] = css.split('@supports not (color: light-dark(')
+    let [, dark = ''] = lacking.split('prefers-color-scheme: dark')
+    for (let [name, hex] of Object.entries(value.colors)) {
+      if (typeof hex != 'string') continue
+      assert(dark.includes(`--${name}: ${hex};`), `${theme} --${name}`)
+    }
+    assert(!lacking.slice(0, lacking.indexOf('@media')).includes('light-dark'))
+  }
+})
+
 test('a browser gets the theme, then every part', async () => {
   let css = await stylesheet({ kits, theme: everforest })
   assert(css.indexOf('--bg:') < css.indexOf('.Dot {'))

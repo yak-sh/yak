@@ -2,7 +2,7 @@
 import type { Route } from '@yaks/api'
 import { text } from '@yaks/api/asset'
 import { bundle, kept } from '@yaks/cli/page'
-import { everforest, kits, rosepine, stylesheet } from '@yaks/ui'
+import { everforest, halved, kits, rosepine, stylesheet } from '@yaks/ui'
 import { guarded, type Hosting, http } from './http.ts'
 
 export let PAGE = '<!doctype html><html lang="en"><head>' +
@@ -68,7 +68,7 @@ export let routes = (host: Hosting): Route[] => {
       asset(
         `/visualize/themes/${name}.css`,
         'text/css; charset=utf-8',
-        () => text(theme.css),
+        async () => halved(await text(theme.css)),
       )
     ),
     ...http(host),

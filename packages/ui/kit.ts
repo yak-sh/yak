@@ -29,6 +29,7 @@ import * as empty from './Empty.ts'
 import * as field from './Field.ts'
 import * as form from './Form.ts'
 import * as gallery from './Gallery.ts'
+import { halved } from './halved.ts'
 import * as group from './Group.ts'
 import * as head from './Head.ts'
 import * as icon from './Icon.ts'
@@ -233,7 +234,7 @@ let read = async (url: URL) => {
     path.startsWith('#') || path.startsWith('data:')
       ? path
       : new URL(path, url).href
-  return css.replace(
+  return halved(css).replace(
     /url\(\s*(['"]?)([^)'"\s]+)\1\s*\)/g,
     (_, _quote, path) => `url("${at(path)}")`,
   )

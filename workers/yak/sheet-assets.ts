@@ -11,7 +11,7 @@
 // `_client.js` is, with what it points at under `_ui/`. The plan composes it
 // in memory, so a plan never waits on a build having run.
 import * as io from '@yaks/file/io'
-import { type Composition, kit, linen, pencil, sheets } from '@yaks/ui'
+import { type Composition, halved, kit, linen, pencil, sheets } from '@yaks/ui'
 import { createHash } from 'node:crypto'
 import { dirname, join, relative } from 'node:path'
 import { fileURLToPath } from 'node:url'
@@ -124,7 +124,7 @@ export let plan = (read: Read) => {
       (_, imported) => inlined(imported),
     )
   for (let root of ROOTS) {
-    let css = inlined(root).replace(
+    let css = halved(inlined(root)).replace(
       POINTED,
       (_, file, fragment = '') => `url(${place(file, read(file))}${fragment})`,
     )
