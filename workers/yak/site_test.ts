@@ -34,6 +34,7 @@ import { WORN } from './sheet-assets.ts'
 import { kit, pencil } from '@yaks/ui'
 import { CAP } from './invite.ts'
 import { CODE_NOTE } from './signin.ts'
+import { START } from './newcomer.ts'
 import type { Tier } from './directory.ts'
 import { quoted, rate } from './sell.ts'
 import { DRAWN, MARKDOWN } from './docs.ts'
@@ -649,11 +650,23 @@ test('every public page hands a stranger sign-in, never /connect', () => {
     .map((a) => a.getAttribute('href'))
   assertEquals(doors, [
     '/login',
-    '/login',
     GET_PLAN,
     GET_PLAN,
     '/login',
   ], 'a home-page door misses sign-in')
+})
+
+test("the home page's box posts an idea to be built", () => {
+  let box = parsed('index.html').querySelector('form.Hello_Ask')!
+  assertEquals(
+    [box.getAttribute('method'), box.getAttribute('action')],
+    ['post', START],
+  )
+  assertEquals(box.querySelector('textarea[name="say"][required]')?.id, 'say')
+  assertEquals(
+    box.querySelector('button[type="submit"]')?.textContent,
+    'Build it',
+  )
 })
 
 test('an assistant name is escaped on the sign-in page', async () => {

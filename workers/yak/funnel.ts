@@ -33,6 +33,7 @@ import {
 export let STEPS = [
   { name: 'home', say: 'Home page visits' },
   { name: 'click', say: 'Calls to action clicked', of: 'home' },
+  { name: 'started', say: 'Builds started from the home page', of: 'home' },
   { name: 'code_sent', say: 'Sign-in codes sent', of: 'home' },
   { name: 'signed_in', say: 'Sign-ins finished', of: 'code_sent' },
   { name: 'signup', say: 'First sign-ins', of: 'signed_in' },
@@ -57,7 +58,7 @@ export type Step = typeof STEPS[number]['name']
  * (site/home.tsx), and what the admin calls it. The Operator's page
  * (site/operator.tsx) names its hero's and closing card's alike. */
 export let CTAS = [
-  { name: 'start', say: 'Start free, or the code, in the hero' },
+  { name: 'start', say: 'Start free, the code or Build it, in the hero' },
   { name: 'examples', say: 'See examples' },
   { name: 'plus', say: "The Plus plan's Get Started" },
   { name: 'organization', say: "The Organization plan's Get Started" },

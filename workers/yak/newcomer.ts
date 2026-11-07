@@ -1,0 +1,206 @@
+// A newcomer (D-146737): somebody who typed an app idea into the home page's
+// box before signing up. Pressing Build it signs their browser in as a person
+// with no address and no number yet, gives them a space of their own like any
+// sign-up (identity.ts `settle`), and hands their words to its Operator, which
+// builds the app while they watch. Giving an address keeps it.
+//
+// The spending is a pilot with caps said in dollars, all of them here:
+//
+//   per build     a newcomer's space may spend PER_BUILD dollars on models
+//                 (its `budget`, with no starter), which meter.ts `limitOf`
+//                 and model-spend.ts `reserved` hold it to like any space
+//   per day       DAILY newcomers' spaces open a UTC day, across everybody,
+//                 and PER_SOURCE from one address, counted as each opens
+//
+// So a day spends at most DAILY × PER_BUILD dollars, on the Operator's own
+// models (operator.ts `operatorChoice`). Until they give an address a
+// newcomer may only build: every tool outside BUILDING asks for one first
+// (agent.ts `platform`), since mail, texts, numbers, members, domains and
+// publishing reach people who never asked to hear from a stranger.
+import { token } from '@yaks/graph'
+import type { Comp, Tool } from '@yaks/graph'
+import { Stale } from '@yaks/graph/errors'
+import { derivedEid } from '@yaks/graph/identity'
+import { type Directory, type Space, stamp } from './directory.ts'
+import type { Namespace } from './door.ts'
+import { meta } from './meta.ts'
+import { type Ctx, refuse } from './tool.ts'
+
+type Env = { STORE: Namespace }
+
+/** The dollars one newcomer's build may spend. */
+export let PER_BUILD = 1
+/** Newcomers' spaces opened a day (UTC), across everybody. */
+export let DAILY = 20
+/** The same, from one address. */
+export let PER_SOURCE = 2
+
+/** Where the home page's box posts. */
+export let START = '/start'
+
+/** What the box answers once a day's builds are taken. */
+export let FULL =
+  "Today's free builds are all taken. Sign up free to build in your own space."
+
+/** What a newcomer's Operator hears from a tool that reaches past building. */
+export let KEEP =
+  'Ask them for their email first, in the card above this chat: this space ' +
+  'is a free build until they keep it, and until then it can only build.'
+
+/** The tools a newcomer's Operator may call: making, changing and looking at
+ * apps in its own space. */
+export let BUILDING = new Set([
+  'about',
+  'app_delete',
+  'app_deploy',
+  'app_errors',
+  'app_files',
+  'app_install',
+  'app_list',
+  'app_preview',
+  'app_restore',
+  'app_rollback',
+  'app_set',
+  'app_stats',
+  'app_update',
+  'app_versions',
+  'builder_build',
+  'builder_choose',
+  'builder_supply',
+  'command',
+  'commands',
+  'gallery_search',
+  'guide',
+  'library_list',
+  'library_read',
+  'memory_recall',
+  'memory_save',
+  'sandbox_exec',
+  'sandbox_read',
+  'sandbox_shell',
+  'sandbox_ship',
+  'sandbox_stop',
+  'sandbox_wait',
+  'sandbox_write',
+  'store_effect_retry',
+  'store_inspect',
+  'store_load',
+  'store_restore',
+  'store_retry',
+  'store_trace',
+  'store_writes',
+])
+
+/** A tool as a newcomer meets it: the same tool, refusing them when it is not
+ * one of BUILDING. Who is a newcomer is read when such a tool is called, so
+ * the tools that build cost nobody a read. */
+export let confined = (ctx: Ctx, t: Tool): Tool =>
+  BUILDING.has(t.name ?? '') ? t : {
+    ...t,
+    run: async (...args) => {
+      if (ctx.person && await ctx.dir.newcomer(ctx.person)) {
+        throw refuse('access', KEEP)
+      }
+      return t.run(...args)
+    },
+  }
+
+let dayOf = (now: Date) => now.toISOString().slice(0, 10)
+let tallyEid = (day: string, source = '') =>
+  derivedEid('newcomer-builds|' + day + (source ? '|' + source : ''))
+
+/**
+ * Count one more newcomer's space today, from `source` (signin.ts `visitor`,
+ * the address as a keyed hash): false when the day's or the address's builds
+ * are taken. Both counts are one write, guarded on what was read, so two at
+ * once never count as one.
+ */
+export let counted = async (env: Env, source: string, now = new Date()) => {
+  let day = dayOf(now)
+  let store = meta(env)
+  while (true) {
+    let rows = await Promise.all(
+      [tallyEid(day), ...source ? [tallyEid(day, source)] : []].map(
+        async (eid) => ({
+          eid,
+          row: (await store.query(`.entity.eid=${eid}`))[0],
+        }),
+      ),
+    )
+    let builds = rows.map(({ row }) => {
+      let had = row?.newcomer_builds as Comp | undefined
+      return had?.day == day ? Number(had.builds ?? 0) : 0
+    })
+    if (builds[0] >= DAILY || (builds[1] ?? 0) >= PER_SOURCE) return false
+    try {
+      await stamp(env, {
+        entities: rows.map(({ eid, row }, i) => ({
+          entity: { eid },
+          $was: {
+            newcomer_builds: {
+              day: token((row?.newcomer_builds as Comp)?.day ?? null),
+              builds: token((row?.newcomer_builds as Comp)?.builds ?? null),
+            },
+          },
+          newcomer_builds: { day, builds: builds[i] + 1 },
+        })),
+      })
+      return true
+    } catch (e) {
+      if (!(e instanceof Stale)) throw e
+    }
+  }
+}
+
+/** A newcomer's space, held to one build's dollars: its budget is PER_BUILD
+ * and it holds no starter. */
+export let oneBuild = (env: Env, space: Space) =>
+  stamp(env, {
+    entities: [{
+      entity: { eid: space.eid },
+      budget: { dollars: PER_BUILD },
+      starter: { dollars: 0 },
+    }],
+  })
+
+/**
+ * A newcomer keeping what they built (D-146737): signing in on the browser a
+ * newcomer `was`, as `person`, moves the newcomer's owner seats to them, so
+ * the spaces, their apps and their chats are theirs. Each space is lifted to
+ * its plan's budget, and to the starter too when this is the first space
+ * `person` has started. A space is their own only when they own none yet.
+ * Nothing happens for anyone who was not a newcomer.
+ */
+export let keep = async (
+  env: Env,
+  dir: Directory,
+  was: string | null,
+  person: string,
+) => {
+  if (!was || was == person || !await dir.newcomer(was)) return
+  let [theirs, mine, [row]] = await Promise.all([
+    dir.seats(was, 'owner'),
+    dir.seats(person, 'owner'),
+    meta(env).query(`.entity.eid=${person}&?started`),
+  ])
+  if (!theirs.length) return
+  let first = !row?.started
+  await stamp(env, {
+    entities: [
+      ...theirs.flatMap((s) => [
+        {
+          entity: { eid: s.seat },
+          member: { person, own: !mine.length && s == theirs[0] },
+        },
+        {
+          entity: { eid: s.space.eid },
+          budget: null,
+          ...first && s == theirs[0] ? { starter: null } : {},
+        },
+      ]),
+      ...first
+        ? [{ entity: { eid: person }, started: { space: theirs[0].space.eid } }]
+        : [],
+    ],
+  })
+}

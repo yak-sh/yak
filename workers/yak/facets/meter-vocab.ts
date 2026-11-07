@@ -26,6 +26,18 @@ export let docs: VocabDoc[] = [{
         calls: { type: 'number' },
       },
     },
+    // The newcomers' spaces opened on `day` (newcomer.ts `counted`): one row
+    // for everybody and one per address they came from, against newcomer.ts
+    // `DAILY` and `PER_SOURCE`.
+    newcomer_builds: {
+      component: true,
+      wire: false,
+      type: 'object',
+      properties: {
+        day: { type: 'string' },
+        builds: { type: 'number' },
+      },
+    },
     account_usage: {
       component: true,
       wire: false,

@@ -1280,6 +1280,7 @@
   }
   /* The conversation, at a reading width in the middle of the page. */
   .Talk_Column,
+  .Talk_Keep,
   .Talk_Needs,
   .Talk_Box,
   .Talk_Starts {
@@ -1345,6 +1346,12 @@
   }
   .Talk_Needs {
     margin-bottom: .75rem;
+  }
+  /* A newcomer's address, asked for over the chat (newcomer.ts). */
+  .Talk_Keep {
+    display: grid;
+    gap: .75rem;
+    padding-block: 1rem .25rem;
   }
   .Talk_Needs:empty {
     display: none;

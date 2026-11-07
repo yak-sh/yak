@@ -46,6 +46,7 @@ import { detached } from '@yaks/graph/storage'
 import { parse, stringify } from '@yaks/query'
 import { addressed, wordish } from '@yaks/alias'
 import { barred, openly } from './anon.ts'
+import { confined } from './newcomer.ts'
 import type { Search } from '@yaks/mcp'
 import { answerWith } from '@yaks/tools/schema'
 import type { PropSchema, Vocab } from '@yaks/vocab'
@@ -280,7 +281,8 @@ export let sugared = (ctx: Ctx, t: Sugar): Tool => ({
 
 /**
  * The platform's verbs, as a plugin on the caller's graph: the whole tool
- * table, for everybody. It contributes no components — the words are the apps'
+ * table, for everybody, and for a newcomer only the ones that build
+ * (newcomer.ts `confined`). It contributes no components — the words are the apps'
  * own — only tools, and every one of them is bound to the person asking.
  *
  * With nobody asking it is the same list (T-34541): a tool that needs a token
@@ -295,8 +297,10 @@ export let sugared = (ctx: Ctx, t: Sugar): Tool => ({
  */
 export let platform = (ctx: Ctx): Plugin => {
   let bound = (t: Sugar) =>
-    ctx.person || openly(t) ? sugared(ctx, t) : barred(sugared(ctx, t), ctx.env)
-  let signed = (t: Tool) => ctx.person ? t : barred(t, ctx.env)
+    ctx.person || openly(t)
+      ? confined(ctx, sugared(ctx, t))
+      : barred(sugared(ctx, t), ctx.env)
+  let signed = (t: Tool) => ctx.person ? confined(ctx, t) : barred(t, ctx.env)
   return {
     name: 'yak/platform',
     tools: [

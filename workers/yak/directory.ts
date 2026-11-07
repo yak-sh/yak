@@ -732,6 +732,7 @@ export type Row = {
   starter?: { dollars?: number | null }
   visitor_share?: { percent?: number | null; calls?: number | null }
   started?: { space?: Id | null }
+  newcomer?: { at?: string }
   created?: { at?: string }
   member?: { space: Id; person: Id; role: Role; own?: boolean }
   grant?: { app: Id; person: Id; access: Role }
@@ -2605,6 +2606,12 @@ export let directoryRows = (rows: {
     // page that shows its bylines shows names (T-32654).
     nameAt: async (person: string): Promise<string | null> =>
       (await self.known(person))?.name ?? null,
+    // Whether this person is a newcomer (newcomer.ts): the home page's box
+    // signed their browser in, and they have no address and no number yet.
+    newcomer: async (person: string) => {
+      let row = await one(`.entity.eid=${person}`)
+      return !!row?.newcomer && !row.email && !row.phone
+    },
     // All at once, from the person's one row: what to call them, where to
     // write to them and the mobile number they gave. Null for anybody the platform has no address for.
     known: async (person: string) =>

@@ -448,6 +448,14 @@ export let directoryDoc: VocabDoc = {
       type: 'object',
       properties: { space: owned(ref('keep')) },
     },
+    // When a person came in by the home page's box (newcomer.ts), before they
+    // had an address: a newcomer until they give one (directory.ts
+    // `newcomer`).
+    newcomer: {
+      component: true,
+      type: 'object',
+      properties: { at: { type: 'string', format: 'date-time' } },
+    },
     // What a space just spent on its month: a letter, a build, a model call, a
     // voice's lease, an app's text, container seconds. The directory adds it to the `meter`
     // inside the write's own transaction (meter.ts `spend`), so two spends at

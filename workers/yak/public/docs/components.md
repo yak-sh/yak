@@ -668,13 +668,13 @@ The complete list of reserved names:
     filed finding fired former gallery gitobj grant home hook hostname image
     inference installed integration integration_install interrupted invite
     inviting key lease lines listed mail mail_answered mail_dismissed
-    mail_post mail_task member memory meter model model_reservation notice
-    notice_confirmed notice_letter notice_posted notice_subscription
-    notified notify_trash occupancy offer openai opened openrouter operator
-    operator_reach order output output_of parent pending person persona
-    phone phone_line plan price product project provider provisional
-    public_file published quarantined questions reads recalled ref
-    referenced refusal register_writes release_remake report repository
+    mail_post mail_task member memory meter model model_reservation newcomer
+    newcomer_builds notice notice_confirmed notice_letter notice_posted
+    notice_subscription notified notify_trash occupancy offer openai opened
+    openrouter operator operator_reach order output output_of parent pending
+    person persona phone phone_line plan price product project provider
+    provisional public_file published quarantined questions reads recalled
+    ref referenced refusal register_writes release_remake report repository
     representation requires restored result retired revision rtc rtc_lapse
     satisfies screenshot secret seeded seller sender sending serves session
     session_input session_run sfu signed_in signin sms_consent space

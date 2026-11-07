@@ -1,7 +1,8 @@
 /** @jsxImportSource preact */
 import type { ComponentChildren } from 'preact'
-import { Button, Card } from '@yaks/ui'
+import { Button, Card, Field } from '@yaks/ui'
 import { GET_PLAN } from '../route.ts'
+import { START } from '../newcomer.ts'
 import { Data, Page, Yours } from './frame.tsx'
 import { Idle } from '../mascot.ts'
 
@@ -207,21 +208,34 @@ export let Home = () => (
         </div>
         <p class='Hello_Kicker'>Build, host and share web apps</p>
         <h1 class='Title Title-hero' id='hello'>
-          Build an app by asking Claude or ChatGPT.
+          Describe an app, and watch it being built.
         </h1>
         <p class='Note Note-lead'>
-          The assistant you already use writes the app, and yaks.app puts it
-          online at your own address.
+          yaks.app builds it while you watch and puts it online at your own
+          address.
         </p>
-        <div class='Hello_Doors'>
-          <Button mod='go' href='/login' data-cta='start'>Start free</Button>
-          {' '}
+        <form class='Hello_Ask' method='post' action={START}>
+          <label class='Hello_Label' for='say'>
+            Describe the app you want
+          </label>
+          <Field
+            lines
+            id='say'
+            name='say'
+            required
+            maxLength={4000}
+            placeholder='What should it do, and who is it for?'
+          />
+          <Button mod='go' type='submit' data-cta='start'>
+            Build it
+          </Button>
+        </form>
+        <p class='Note Note-small'>
+          Free, with no sign-up to start. Or ask the assistant you already use,
+          like Claude or ChatGPT. <a href='#cost'>$9 a month</a> for more.{' '}
           <a href='#examples' data-cta='examples'>
             See examples <span aria-hidden='true'>↓</span>
           </a>
-        </div>
-        <p class='Note Note-small'>
-          Free to start, or <a href='#cost'>$9 a month</a> for more.
         </p>
       </div>
       <Examples>

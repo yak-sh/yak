@@ -129,6 +129,7 @@ import {
   sameOrigin,
   shared,
 } from './route.ts'
+import { START } from './newcomer.ts'
 import * as pageReport from './page-report.ts'
 import { paymentDoor } from './payment-doors.ts'
 import * as sell from './sell.ts'
@@ -220,6 +221,7 @@ let atApex = async (req: Request, env: Env, path: string) => {
   }
   if (
     path == '/login' || path.startsWith('/login/') || path == '/connect' ||
+    path == START ||
     path == '/invite' || path == LOGOUT ||
     // Closing a space (identity.ts `closing`, T-33166): a signed-in page and
     // its form, so it belongs with the rest of the cookie's surface rather

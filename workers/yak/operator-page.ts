@@ -102,6 +102,42 @@ let setting = (at: string, id: string, title: string, ...inside: Node[]) =>
 let field = (id: string, label: string, control: Node) =>
   h(Form.Field, null, h(Form.Label, { for: id }, label), control)
 
+/** Over a newcomer's chat (newcomer.ts): their address, which signs them in
+ * by a code and keeps the space, its apps and this chat as theirs, back on
+ * this page (identity.ts `landed`, newcomer.ts `keep`). */
+export let keepCard = (back: string) =>
+  h(
+    Form,
+    { class: 'Talk_Keep', method: 'post', action: '/login' },
+    h(
+      Card,
+      null,
+      h(Card.Head, null, h(Card.Title, null, 'Keep this app')),
+      h(
+        'p',
+        null,
+        "Give your email and we'll send you a code. The app and this chat become yours, free.",
+      ),
+      field(
+        'keep-email',
+        'Email',
+        h(Field, {
+          id: 'keep-email',
+          name: 'address',
+          type: 'email',
+          required: true,
+          autocomplete: 'email',
+        }),
+      ),
+      h('input', { type: 'hidden', name: 'return', value: back }),
+    ),
+    h(
+      Form.Actions,
+      null,
+      h(Button, { mod: 'go', type: 'submit' }, 'Send me a code'),
+    ),
+  )
+
 // One of a few to pick, as a radio: its name in bold, what it means beside
 // it, `also` on its input.
 type Offer = { id: string; name: string; about: string; checked: boolean }
@@ -1225,9 +1261,10 @@ export let chatPage = async (
   // The space's address opens the person's one conversation, and a new chat
   // only until they have one (T-141349).
   let root = rootOf(space.eid, who.person ?? '')
-  let [talked, news] = await Promise.all([
+  let [talked, news, newcomer] = await Promise.all([
     conversationOf(env, space, who, at, open == 'new' ? root : open),
     updatesOf(env, space, who),
+    who.person ? directoryOf(env.STORE).newcomer(who.person) : false,
   ])
   if (open == 'new' && talked.title) open = root
   let fresh = open == 'new'
@@ -1272,6 +1309,7 @@ export let chatPage = async (
     main: [
       // The conversation is drawn by the Builder object (operator-view.ts
       // `talk`), and what needs the person by Updates (updates.ts).
+      newcomer ? keepCard(here) : null,
       talked.html ? column(talked.html) : column('', greeting),
       landing
         ? h(

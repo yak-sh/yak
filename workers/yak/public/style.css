@@ -662,12 +662,26 @@
     --title-size: clamp(2rem, 4vw + 1rem, 2.75rem);
   }
 
-  .Hello_Doors {
-    display: flex;
-    flex-wrap: wrap;
-    align-items: center;
-    gap: 1rem 1.5rem;
+  /* The box an idea is typed in, with its button under it at the right. */
+  .Hello_Ask {
+    display: grid;
+    gap: 0.75rem;
+    max-width: 36rem;
+  }
+
+  .Hello_Label {
     font-weight: 700;
+  }
+
+  .Hello_Ask textarea.Field {
+    width: 100%;
+    min-height: 6.5rem;
+    font-size: var(--size);
+    line-height: 1.5;
+  }
+
+  .Hello_Ask .Button {
+    justify-self: end;
   }
 
   .Demo {

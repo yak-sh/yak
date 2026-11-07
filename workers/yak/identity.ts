@@ -176,6 +176,7 @@ import {
   lost,
 } from './pages.ts'
 import {
+  chatPath,
   hostOf,
   INVITE,
   LINK,
@@ -186,6 +187,7 @@ import {
   says,
   SLUG,
 } from './route.ts'
+import { counted, FULL, keep, oneBuild, START } from './newcomer.ts'
 import {
   called,
   canon,
@@ -799,6 +801,7 @@ let landed = async (
 ) => {
   let store = meta(env)
   let dir = dirOf(env)
+  await keep(env, dir, await browser(env, req), person)
   await settle(env, person)
   if (via) {
     // A person who has never signed in before is the funnel's sign-up
@@ -839,6 +842,51 @@ let landed = async (
   }
   return redirect(backTo(back, env), set, 303)
 }
+
+/**
+ * An app idea from the home page's box, built (D-146737). Somebody signed in
+ * builds in their own space. A stranger becomes a newcomer: a person with no
+ * address yet, signed in on this browser, whose space holds one build's
+ * dollars (newcomer.ts `oneBuild`), once the day and their address have builds
+ * left (`counted`); past either they meet the sign-in card saying so.
+ */
+let begun = async (req: Request, env: Env, said: string) => {
+  let words = said.trim().slice(0, SAID)
+  if (!words) return redirect(hostUrl(env, '/'), undefined, 303)
+  let person = await browser(env, req)
+  let set: string | undefined
+  if (!person) {
+    if (!await counted(env, await visitor(secret(env), source(req)))) {
+      return signCard(env, { why: FULL, status: 429 })
+    }
+    person = crypto.randomUUID()
+    await meta(env).apply([{
+      entity: { eid: person },
+      person: {},
+      newcomer: { at: new Date().toISOString() },
+    }], KERNEL)
+    set = await minted(req, env, secret(env), person)
+  }
+  let space = await settle(env, person)
+  if (set) await oneBuild(env, space)
+  let request = crypto.randomUUID()
+  let chat = hostUrl(env, chatPath(space.slug, request))
+  let { operatorDoor } = await import('./build-door.ts')
+  await operatorDoor(env, space, { person, role: 'owner' }, 'receive', {
+    say: words,
+    request: {
+      channel: 'chat',
+      files: [],
+      page: hostUrl(env, chatPath(space.slug)),
+    },
+    options: { id: request },
+  })
+  step(env, 'started', req)
+  return redirect(chat, set, 303)
+}
+
+// The longest idea the box takes, in characters: a few paragraphs.
+let SAID = 4000
 
 /** A code attempt either opens or returns the same closed sign-in card. */
 export let codeCheck = async (
@@ -1115,6 +1163,12 @@ let ours = async (req: Request, env: Env): Promise<Response> => {
       await signedOut(req, env, env.SESSION_SECRET),
       303,
     )
+  }
+
+  // The home page's box (newcomer.ts): the words go to the Operator of the
+  // space they build in, and the browser follows them into its chat.
+  if (path == START && req.method == 'POST' && env.SESSION_SECRET) {
+    return await begun(req, env, field('say'))
   }
 
   // Whether this browser is signed in, for the site's island (signed.ts).
