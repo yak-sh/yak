@@ -40,6 +40,20 @@ test('a file opens in WAL with NORMAL sync, a bounded journal and incremental au
   }
 })
 
+test('a file grows a whole MiB at a time', () => {
+  let dir = Deno.makeTempDirSync()
+  let sql = open(`${dir}/graph.db`)
+  try {
+    sql.query({ t: 'create table', name: 't', cols: [{ name: 'x' }] })
+    sql.query(insert('t', { x: 1 }))
+    sql.query({ t: 'pragma', name: 'wal_checkpoint' })
+    assertEquals(Deno.statSync(`${dir}/graph.db`).size, 2 ** 20)
+  } finally {
+    sql.close()
+    Deno.removeSync(dir, { recursive: true })
+  }
+})
+
 test('a database named without a directory makes none', () => {
   let name = `file:${crypto.randomUUID()}?mode=memory&cache=shared`
   open(name).close()

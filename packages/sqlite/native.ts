@@ -118,6 +118,10 @@ let bindSteps = () =>
       parameters: ['pointer', 'i32', 'i32', 'pointer'],
       result: 'i32',
     },
+    sqlite3_file_control: {
+      parameters: ['pointer', 'pointer', 'i32', 'buffer'],
+      result: 'i32',
+    },
   })
 let decoder = (names: string[], compile: Statement['getRowObject']) => {
   let key = JSON.stringify(names)
@@ -293,6 +297,19 @@ export let configure = (
     null,
   )
   if (code) throw new Error(`SQLite refused ${name} (${code})`)
+}
+
+/** Grow the main database's file `bytes` at a time
+ * (`SQLITE_FCNTL_CHUNK_SIZE`), so most writes land in blocks the file already
+ * has, and syncing them changes no size. */
+export let chunk = (db: Database, bytes: number): void => {
+  let code = (steps ??= bindSteps()).symbols.sqlite3_file_control(
+    db.unsafeHandle,
+    null,
+    6,
+    new Int32Array([bytes]),
+  )
+  if (code) throw new Error(`SQLite refused a chunk size of ${bytes} (${code})`)
 }
 
 /**

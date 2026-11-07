@@ -11,7 +11,7 @@ import * as io from '@yaks/file/io'
 
 import { Database } from './legacy.ts'
 import { type Driver, render } from '@yaks/sql'
-import { configure, driver } from './native.ts'
+import { chunk, configure, driver } from './native.ts'
 
 import { loadable, open as reader } from './read-db.ts'
 
@@ -81,6 +81,15 @@ export let open = (path: string, opts: { readOnly?: boolean } = {}): Opened => {
     // short command's slowest steps. The automatic checkpoint still moves
     // pages into the file every thousand.
     configure(db, 'SQLITE_DBCONFIG_NO_CKPT_ON_CLOSE', true)
+    // A checkpoint that grows the file changes its size, and syncing a size
+    // waits for ext4's journal to commit, which waits for every other
+    // process's ordered writes: beside a copy of the graph held at its disk cap
+    // that was 10 s on a server's main thread (T-133091). Growing a 128th of
+    // the file at a time, between 1 and 64 MiB, makes that once an hour on the
+    // box's graph and costs a small file one MiB.
+    let [{ page_size }] = d.query({ t: 'pragma', name: 'page_size' })
+    let mib = Number(page_count) * Number(page_size) / 128 / 2 ** 20
+    if (d.file) chunk(db, Math.min(64, Math.max(1, Math.floor(mib))) * 2 ** 20)
   }
   return Object.assign(d, {
     ...loadable() && {

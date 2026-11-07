@@ -10,6 +10,11 @@
 //
 // The options are Homebrew's for 3.53.3, which the box's processes ran on,
 // with what SQLite's own configure adds to them, so a query plans as it did.
+// On Linux that includes fdatasync, which syncs a file's data and the size it
+// needs, where fsync also forces ext4's journal to commit for a changed mtime:
+// that commit waits for every other process's ordered writes, and with a copy
+// of the graph held at its disk cap (bin/limits) a server's checkpoint waited
+// 10 s on it, off its CPU (T-133091).
 // The library is linked -Bsymbolic. Homebrew's Deno links the machine's
 // libsqlite3 (`ldd $(which deno)`), so that library's API is in the process
 // before ours loads, and a second library linked without -Bsymbolic binds its
@@ -43,6 +48,7 @@ export let OPTIONS = [
   '-DSQLITE_MAX_VARIABLE_NUMBER=250000',
   '-DSQLITE_USE_URI=1',
   '-DSQLITE_THREADSAFE=1',
+  ...Deno.build.os == 'linux' ? ['-DHAVE_FDATASYNC=1'] : [],
 )
 
 let mac = Deno.build.os == 'darwin'

@@ -294,18 +294,21 @@ Each run can first reset the copy from a **snapshot**, a read-only backup of the
 box's database, so every run starts from the same bytes:
 
 ```sh
-sqlite3 -readonly ~/.yak/yak.db ".backup $HOME/.cache/yak-bench/base.db"
+bin/copy-db ~/.cache/yak-bench/base.db
 # yak.json there: ~/.yak/yak.json with `db` naming the copy, its own `port`
 # and `hostname`, and `tracker.spool` and @yaks/spawn's `worktrees` beside it
 deno task bench box -- --config ~/.cache/yak-bench/yak.json \
   --base ~/.cache/yak-bench/base.db
 ```
 
-Copying a 10 GB snapshot takes minutes; without `--base` the copy keeps what
-earlier runs wrote. Local children run this checkout's code without network
-permission and with no session, token or other graph in their environment; the
-CLI serves no effects, and the in-process pool runs a no-op for every declared
-effect. The suite's sections, each one selectable with `--only`:
+`bin/copy-db` takes the snapshot as one read transaction saw it, under the box's
+memory and disk caps; a bare `sqlite3 .backup` starts over at every commit on
+the box and never finishes. Copying a 10 GB snapshot takes minutes; without
+`--base` the copy keeps what earlier runs wrote. Local children run this
+checkout's code without network permission and with no session, token or other
+graph in their environment; the CLI serves no effects, and the in-process pool
+runs a no-op for every declared effect. The suite's sections, each one
+selectable with `--only`:
 
 | Section   | Benches                                                                                                                                                                                                                                                                                               |
 | --------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
