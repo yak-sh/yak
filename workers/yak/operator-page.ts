@@ -1509,7 +1509,9 @@ let draftClient = {
     return response.json()
   },
   // Read once, then heard on the page's socket as each change lands, and read
-  // again whenever the socket opens, for what landed while it was closed.
+  // again whenever the socket opens, for what landed while it was closed. It
+  // is never read on a timer: what is typed here is kept on the device and
+  // written whether or not a read answered.
   subscribe: (_q, hear) => {
     hearing.add(hear)
     readDrafts([hear])
@@ -1533,17 +1535,18 @@ let ask = async (url) => {
 }
 let hearing = new Set()
 let KEPT = 'Your draft is kept on this device until syncing returns.'
+// A read failed through all of ask's tries is said, and asked again when the
+// socket next opens; a hearer that throws is the page's own fault, and goes to
+// the reporter.
 let readDrafts = async (hears = hearing) => {
+  let bundles
   try {
     let response = await ask(draftAt)
     if (!response.ok) throw new Error(String(response.status))
-    let { bundles } = await response.json()
-    if (status.textContent == KEPT) status.textContent = ''
-    for (let hear of hears) if (hearing.has(hear)) hear(bundles)
-  } catch (e) {
-    status.textContent = KEPT
-    setTimeout(() => [...hears].some((h) => hearing.has(h)) && readDrafts(hears), 3000)
-  }
+    bundles = (await response.json()).bundles
+  } catch (e) { return void (status.textContent = KEPT) }
+  if (status.textContent == KEPT) status.textContent = ''
+  for (let hear of hears) if (hearing.has(hear)) hear(bundles)
 }
 let drafts = browserDrafts(draftClient, '${space.eid}:operator', { by: '${who.person}', report: (e) => { status.textContent = e.message } })
 // Each conversation keeps its own draft, and the box is ready to type in.

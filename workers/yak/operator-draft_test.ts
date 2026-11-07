@@ -59,14 +59,15 @@ let storage = (): Stash => {
 // `network` 'held' holds its first draft read and its socket unanswered, as a
 // network can, until the page's time limit gives each up; 'deploying' answers
 // the first read of each address 502, as the edge does while a deploy replaces
-// the Worker. Under either, the page's waits run a thousand times faster.
+// the Worker; 'down' fails every draft read. Under any, the page's waits run a
+// thousand times faster.
 let load = async (
   stash: Stash,
   cut = false,
   open = 'new',
   beside: Beside = {},
   app?: string,
-  network?: 'held' | 'deploying',
+  network?: 'held' | 'deploying' | 'down',
 ) => {
   let html = await (await chatPage(p.env, space, who, open, beside, app))
     .text()
@@ -101,8 +102,14 @@ let load = async (
   let reads = 0
   let holding = network == 'held'
   let failed = new Set<string>()
+  // Each draft read the page asks, answered or not.
+  let asked = 0
   let fetch = async (url: string, init?: RequestInit) => {
     if (cut && init?.method == 'POST') return new Promise<Response>(() => {})
+    if (url.includes('draft=1') && !init?.method) asked++
+    if (network == 'down' && url.includes('draft=1') && !init?.method) {
+      throw new TypeError('Failed to fetch')
+    }
     if (network == 'deploying' && !init?.method && !failed.has(url)) {
       failed.add(url)
       return new Response('Bad Gateway', { status: 502 })
@@ -193,6 +200,7 @@ let load = async (
     // What the page says under its box.
     status: () => document.querySelector('[data-send-status]')!.textContent,
     failed,
+    asked: () => asked,
     // The Operator's socket opening, as after a deploy restarted it.
     open: () => (sockets[0] as { onopen: () => void }).onopen(),
     // A frame the Operator's socket sends the page.
@@ -419,4 +427,16 @@ test('a page whose reads meet a deploy’s 502 reads again and catches up quietl
   assertEquals(!!box.innerHTML, true, 'the conversation is drawn again')
   assertEquals(page.status(), '')
   page.leave()
+})
+
+test('a page reads its draft only as it opens and as its socket opens, never on a timer', async () => {
+  let page = await load(storage(), false, 'new', {}, undefined, 'down')
+  // ask's five tries, then a hundred seconds more, sped up
+  await new Promise((ok) => setTimeout(ok, 120))
+  let alone = page.asked()
+  page.open()
+  await new Promise((ok) => setTimeout(ok, 120))
+  let opened = page.asked()
+  page.leave()
+  assertEquals([alone, opened], [5, 10])
 })
