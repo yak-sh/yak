@@ -87,6 +87,7 @@ import {
   type Frag,
   from,
   gt,
+  isRaw,
   type Join,
   lit,
   not,
@@ -4489,12 +4490,21 @@ export let visibleDerived = (vocab: Vocab, opts: BindOpts): Derived => {
       )
       : table(name, alias)
   }
+  // An owner read through a row the scope admits needs no screen (`ownerReads`).
+  let scoping = <T extends Cond | Select>(node: T): T => {
+    let owned = admitted && !screens.size ? ownerReads(vocab, node) : new Set()
+    return sources(
+      node,
+      (name, alias, src) =>
+        owned.has(src) ? table(name, alias) : source(name, alias),
+    )
+  }
   // A derived expression can read the same protected relation many times.
   // Name each permission screen once instead of repeating it at every probe.
   let expression = (expr: Cond): Cond => {
     allowed = []
     names = new Map()
-    let scoped = sources(expr, source)
+    let scoped = scoping(expr)
     return allowed.length
       ? sub(select({ with: allowed, cols: [scoped] }))
       : scoped
@@ -4502,7 +4512,7 @@ export let visibleDerived = (vocab: Vocab, opts: BindOpts): Derived => {
   let selection = (query: Select): Select => {
     allowed = []
     names = new Map()
-    let scoped = sources(query, source)
+    let scoped = scoping(query)
     return allowed.length
       ? { ...scoped, with: [...allowed, ...scoped.with ?? []] }
       : scoped
@@ -4934,6 +4944,67 @@ let rowAdmits = (
   return (owner) => admitting(vocab, plain, scope, owner, alive)
 }
 
+// An owner's identity and shape, read through a row an owner-keyed scope
+// admits: the `entity` joined on a component row's owner, and the `archetype`
+// that entity names. The scope asks of the owner what it already asked of the
+// row, a component's rows belong to live entities, and the shape names only
+// components the row's owner is read through anyway, so both stand admitted
+// with the row. A derived property reads an entry's shape for every entry it
+// reads: screening each again cost more than the rule (T-148077). The tables
+// are returned by node, since one alias can name a joined owner in one
+// subquery and a free read of the table in the next.
+let ownerReads = (vocab: Vocab, node: unknown): Set<Source> => {
+  let found = new Set<Source>()
+  let named = (src: Source) =>
+    !isRaw(src) && src.t == 'table' && !src.args ? src : undefined
+  // Whether `on` equates `alias`'s `key` with a column `of` names.
+  let joined = (on: Cond | undefined, alias: string, key: string) => {
+    if (on?.t != 'op' || on.op != '=' || on.parts.length != 2) return
+    let [a, b] = on.parts
+    if (a.t != 'col' || b.t != 'col') return
+    let [mine, theirs] = a.of == alias && a.name == key ? [a, b] : [b, a]
+    if (mine.of != alias || mine.name != key || !theirs.of) return
+    return theirs
+  }
+  let walk = (value: unknown): void => {
+    if (Array.isArray(value)) return value.forEach(walk)
+    if (!value || typeof value != 'object' || isRaw(value)) return
+    let obj = value as Record<string, unknown>
+    if (obj.t == 'select') {
+      let q = obj as Select
+      let joins = q.joins ?? []
+      let rows = new Set<string>()
+      for (let src of [...[q.from ?? []].flat(), ...joins.map((j) => j.src)]) {
+        let t = named(src)
+        if (
+          t && t.name != 'entity' && t.name != 'archetype' && vocab.comp(t.name)
+        ) {
+          rows.add(t.as ?? t.name)
+        }
+      }
+      let ids = new Set<string>()
+      for (let { src, on } of joins) {
+        let t = named(src)
+        if (t?.name != 'entity') continue
+        let row = joined(on, t.as ?? t.name, 'id')
+        if (row?.name == 'entity' && rows.has(row.of!)) {
+          found.add(src)
+          ids.add(t.as ?? t.name)
+        }
+      }
+      for (let { src, on } of joins) {
+        let t = named(src)
+        if (t?.name != 'archetype') continue
+        let owner = joined(on, t.as ?? t.name, 'entity')
+        if (owner?.name == 'archetype' && ids.has(owner.of!)) found.add(src)
+      }
+    }
+    Object.values(obj).forEach(walk)
+  }
+  walk(node)
+  return found
+}
+
 let visible = (
   ast: And,
   vocab: Vocab,
@@ -5164,6 +5235,20 @@ let visible = (
     )
     : undefined
   let scope = { masked: [...hidden] }
+  // A derived property's relations, each read through the scope, but for an
+  // owner read through a row it admits (`ownerReads`).
+  let scoping = <T extends Cond | Select>(node: T): T => {
+    let owned = ownerAdmitted && !masked ? ownerReads(vocab, node) : new Set()
+    return sources(
+      node,
+      (name, alias, src) =>
+        !vocab.comp(name) ? table(name, alias) : raw(
+          `${
+            owned.has(src) ? base.source?.(name) ?? quoted(name) : source(name)
+          } as ${quoted(alias ?? name)}`,
+        ),
+    )
+  }
   let inner = prepared(
     ast,
     vocab,
@@ -5179,10 +5264,7 @@ let visible = (
               ? {
                 test: (owner: Cond, values: Cond[]) => {
                   let test = prop.test!(owner, values, scope)
-                  return test && sources(test, (name, alias) =>
-                    vocab.comp(name)
-                      ? raw(`${source(name)} as ${quoted(alias ?? name)}`)
-                      : table(name, alias))
+                  return test && scoping(test)
                 },
               }
               : {},
@@ -5190,21 +5272,11 @@ let visible = (
               ? {
                 select: (values: Cond[]) => {
                   let set = prop.select!(values, scope)
-                  return set && sources(set, (name, alias) =>
-                    vocab.comp(name)
-                      ? raw(`${source(name)} as ${quoted(alias ?? name)}`)
-                      : table(name, alias))
+                  return set && scoping(set)
                 },
               }
               : {},
-            expr: (owner: Cond) =>
-              sources(
-                prop.expr(owner, scope),
-                (name, alias) =>
-                  vocab.comp(name)
-                    ? raw(`${source(name)} as ${quoted(alias ?? name)}`)
-                    : table(name, alias),
-              ),
+            expr: (owner: Cond) => scoping(prop.expr(owner, scope)),
           },
         ]),
       ),

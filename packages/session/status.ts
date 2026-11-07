@@ -612,6 +612,7 @@ export let sessionStatus = {
           ),
           'refused_source',
         ),
+        ...typed ? [col('tables', 'shape')] : [],
       ],
       from: table('entry', 'e'),
       joins: shapes,
@@ -783,6 +784,7 @@ export let sessionStatus = {
           'refused_seq',
         ),
         as(col('refused_source', 'l'), 'refused_source'),
+        ...typed ? [as(col('tables', 'l'), 'newest_tables')] : [],
       ],
       from: table(LATEST, 'l'),
       joins: [
@@ -814,11 +816,28 @@ export let sessionStatus = {
     // anchors are read once, so the turn's rows hang off them as a left join
     // rather than a union of two reads. Each row reads every component it
     // wears in one pass: through the archetype, else a join per component.
+    // The shape is joined on the entry itself, where a reader's scope admits
+    // it with the entry (@yaks/sql bind.ts `ownerReads`); the newest alone
+    // brings its own.
     let span = select({
       cols: [
         as(fn('coalesce', col('entity', 'i'), anchor('newest')), 'entity'),
         col('seq', 'i'),
         star('anchor'),
+        ...typed
+          ? [as(
+            fn(
+              'coalesce',
+              col('tables', 'shape'),
+              iff(
+                isNull(col('entity', 'i')),
+                anchor('newest_tables'),
+                lit(null),
+              ),
+            ),
+            'tables',
+          )]
+          : [],
       ],
       from: table(ANCHOR, 'anchor'),
       joins: [
@@ -830,11 +849,29 @@ export let sessionStatus = {
             ge(col('seq', 'i'), start),
           ),
         ),
+        ...typed
+          ? [
+            left(
+              table('entity', 'owner'),
+              eq(col('id', 'owner'), col('entity', 'i')),
+            ),
+            left(
+              table('archetype', 'shape'),
+              eq(col('entity', 'shape'), col('archetype', 'owner')),
+            ),
+          ]
+          : [],
       ],
       where: or(isNull(anchor('newest_seq')), notNull(col('entity', 'i'))),
     })
-    let joins: Join[] = typed ? archetype('span') : []
-    let wears = typed ? shaped : (comp: string) => notNull(col('entity', comp))
+    let joins: Join[] = []
+    let wears = typed
+      ? (comp: string) =>
+        gt(
+          fn('instr', col('tables', 'span'), lit(JSON.stringify(comp))),
+          lit(0),
+        )
+      : (comp: string) => notNull(col('entity', comp))
     // Each component the rule reads, where the entry wears it: its id.
     let comps = [
       'stop',
