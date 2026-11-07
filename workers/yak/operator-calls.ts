@@ -818,6 +818,10 @@ export let talking = (o: Talking): Call => {
       c.report(new Error(`A call's talk stream was lost: ${why}`))
       c.finish()
     },
+    refused: (why) =>
+      c.report(
+        new Error(`A call's talk model refused what it was sent: ${why}`),
+      ),
   })
   c.limit(() => talker?.say(GOODBYE))
   if (o.hello) talker.say(o.hello)

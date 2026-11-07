@@ -545,14 +545,15 @@ let wired = (format: Raw) =>
     ? { type: 'audio/pcmu', rate: 8000 }
     : { type: 'audio/pcm', rate: format.rate }
 
-// About 500 tokens, the most GPT-Live takes in one append.
-let APPENDED = 1800
+// The most GPT-Live takes in one append is 500 tokens, and a token is at
+// least a byte, so a part of at most this many UTF-8 bytes always fits.
+let APPENDED = 500
 
 /**
  * `text` appended to what GPT-Live knows, as `kind` (`instructions` it
  * follows, `thinking` it knows without saying, `commentary` it says), about a
  * delegation or the whole session, in parts each of at most `APPENDED`
- * characters, split between paragraphs, else lines, else words.
+ * UTF-8 bytes, split between paragraphs, else lines, else words.
  *
  * ```ts
  * import { equal } from '@yaks/testing'
@@ -563,8 +564,10 @@ let APPENDED = 1800
  *   delegation_id: null,
  *   content: 'A.',
  * }])
- * let long = ['a'.repeat(1000), 'b'.repeat(1000)].join('\n\n')
- * equal(live.tell(long).map((m) => JSON.parse(m).content.length), [1000, 1000])
+ * let long = ['a'.repeat(400), 'b'.repeat(400)].join('\n\n')
+ * equal(live.tell(long).map((m) => JSON.parse(m).content.length), [400, 400])
+ * let wide = '界'.repeat(400)
+ * equal(live.tell(wide).map((m) => JSON.parse(m).content.length), [166, 166, 68])
  * ```
  */
 let appended = (kind: string, text: string, id: string | null = null) =>
@@ -576,17 +579,32 @@ let appended = (kind: string, text: string, id: string | null = null) =>
     })
   )
 
-// `text` in parts of at most `most` characters, split at the widest break
+let utf8 = new TextEncoder()
+
+// `text` in parts of at most `most` UTF-8 bytes, split at the widest break
 // that fits.
 let parts = (text: string, most: number): string[] => {
-  if (text.length <= most) return [text]
+  let fit = fitting(text, most)
+  if (fit == text.length) return [text]
   for (let gap of ['\n\n', '\n', ' ']) {
-    let at = text.lastIndexOf(gap, most)
+    let at = text.lastIndexOf(gap, fit)
     if (at > 0) {
       return [text.slice(0, at), ...parts(text.slice(at + gap.length), most)]
     }
   }
-  return [text.slice(0, most), ...parts(text.slice(most), most)]
+  return [text.slice(0, fit), ...parts(text.slice(fit), most)]
+}
+
+// How many of `text`'s UTF-16 units fit in `most` UTF-8 bytes, never
+// splitting a character.
+let fitting = (text: string, most: number) => {
+  let bytes = 0, at = 0
+  for (let c of text) {
+    bytes += utf8.encode(c).length
+    if (bytes > most) break
+    at += c.length
+  }
+  return at
 }
 
 // The model a `response.done` was answered by, where it says: it reports

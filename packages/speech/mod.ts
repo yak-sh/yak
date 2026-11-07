@@ -573,6 +573,8 @@ export type Talked = {
   ended?: () => void
   /** the stream failed or closed before `close` was asked */
   lost?: (reason: string) => void
+  /** a duplex model refused something it was sent, its stream still open */
+  refused?: (reason: string) => void
 }
 
 /** A talk stream: audio in, the model's audio and words out. */
@@ -996,7 +998,9 @@ let duplexed = (o: Talks, t: Talker & Duplex): Talk => {
           }
           o.told.audio(x.audio)
         }
-        if (x.error) o.told.lost?.(x.error)
+        // One refused event leaves the stream open: a stream that failed
+        // closes, and is lost.
+        if (x.error) o.told.refused?.(x.error)
         if (x.spent) backed += x.spent
         let call = x.call
         if (call) {
