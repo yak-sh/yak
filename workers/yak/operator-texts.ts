@@ -23,6 +23,8 @@ import { mint } from './signin.ts'
 import { meta } from './meta.ts'
 import { onceLink, relink } from './link.ts'
 import { apex } from './host.ts'
+import { countedTexts } from './meter.ts'
+import { charged, costOf } from './text-spend.ts'
 
 /** The consent box's words, kept with each person who agreed to them. */
 export let CONSENT =
@@ -234,7 +236,9 @@ export let arrived = async (
   let own = await dir.textSpace(arrival.to)
   if (own) {
     let { lineArrived } = await import('./operator-line.ts')
-    if (await lineArrived(env, [own], arrival)) return
+    let took = await lineArrived(env, [own], arrival)
+    if (took?.fresh) await countedTexts(env, took.space, costOf(arrival.text))
+    if (took) return
   }
   let person: string | null = await dir.phoned(arrival.from)
   let word = keyword(arrival.text)
@@ -306,6 +310,11 @@ export let arrived = async (
   if (!response.ok) {
     throw new Error('Operator text intake failed: ' + await response.text())
   }
+  // Counted once it is the Operator's, and only the first time a provider
+  // posts it.
+  if (response.status == 202) {
+    await countedTexts(env, space, costOf(arrival.text))
+  }
 }
 
 /**
@@ -374,7 +383,8 @@ export let textSend = (env: Env, ctx: Ctx, space: Space): Tool => ({
     }
     let { textSigned } = await import('./operator-channels.ts')
     try {
-      let { id } = await (await phoneOf(env, space.sender)).send({
+      let phone = charged(env, space, await phoneOf(env, space.sender))
+      let { id } = await phone.send({
         to: texting.number,
         text: `${await signingIn(env, texting.number, text)}\n\n${
           textSigned(space)

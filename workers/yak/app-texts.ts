@@ -12,8 +12,7 @@
 // nothing reaches the people an app keeps before its owner's registration
 // stands, and nothing needs a flag to say so.
 //
-// Every text that leaves spends from the space's one budget (D-131886), its
-// segments weighed at `PER_SEGMENT`.
+// Every text that leaves spends from the space's one budget (text-spend.ts).
 import type { Bundle } from '@yaks/graph'
 import {
   type Arrival,
@@ -26,35 +25,9 @@ import {
 import { type App, appStore, directoryOf, type Space } from './directory.ts'
 import type { Env } from './env.ts'
 import { KERNEL, metaOf } from './meta.ts'
-import { countedTexts } from './meter.ts'
-import { onHold } from './model-spend.ts'
-import { ModelError } from '@yaks/model'
 import { phoneOf } from './phones.ts'
-import { refuse } from './tool.ts'
-
-/** Dollars a segment of a text costs: Telnyx's US rate, $0.004 a segment
- * each way, with the carriers' 10DLC pass-through fees (up to about $0.004)
- * on top. */
-export let PER_SEGMENT = 0.008
-
-/**
- * How many segments a carrier sends `text` as: 160 characters in one, 153 in
- * each of several, or 70 and 67 when it needs more than GSM's characters.
- *
- * ```ts
- * import { equal } from '@yaks/testing'
- * import { segments } from './app-texts.ts'
- * equal(segments('Prayer meeting at 7.'), 1)
- * equal(segments('a'.repeat(161)), 2)
- * equal(segments('🙏'.repeat(71)), 2)
- * ```
- */
-export let segments = (text: string) => {
-  let gsm = /^[\n\r\x20-\x7e£¥èéùìòÇØøÅåÄÖÑÜäöñüà§¿¡]*$/.test(text)
-  let [one, each] = gsm ? [160, 153] : [70, 67]
-  let n = gsm ? text.length : [...text].length
-  return n <= one ? 1 : Math.ceil(n / each)
-}
+import { countedTexts } from './meter.ts'
+import { charged, costOf } from './text-spend.ts'
 
 /** Why a text from an app without a number of its own did not go. */
 export let PILOT =
@@ -93,22 +66,10 @@ export let appTexter = (
       let agreed = person ? await dir.texting(person) : null
       if (agreed?.number != text.to) throw new Blocked(PILOT)
     }
-    // Held on the space's budget before it goes, refused there in the
-    // directory's own transaction, and charged once sent (model-spend.ts
-    // `onHold`).
-    let cost = segments(text.text) * PER_SEGMENT
-    let receipt = await onHold(env, at, cost, 'texts', async (spent) => {
-      let sent = await (await phoneOf(env, at.sender)).send({
-        to: text.to,
-        text: text.text,
-        ...(from ? { from } : {}),
-      })
-      spent(cost)
-      return sent
-    }).catch((e) => {
-      throw e instanceof ModelError && e.code == 'limit'
-        ? refuse('limit', e.message)
-        : e
+    let receipt = await charged(env, at, await phoneOf(env, at.sender)).send({
+      to: text.to,
+      text: text.text,
+      ...(from ? { from } : {}),
     })
     return { ...receipt, ...(from ? { from } : {}) }
   },
@@ -152,7 +113,7 @@ export let appArrived = async (
       text: said,
       from: arrival.to,
     })
-    await countedTexts(env, line.space, segments(said) * PER_SEGMENT)
+    await countedTexts(env, line.space, costOf(said))
     answer.text = {
       ...answer.text as object,
       ...(id ? { message_id: id } : {}),

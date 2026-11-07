@@ -1,6 +1,10 @@
 import { base64 } from './bytes.ts'
 import { test } from '@yaks/testing'
-import { assertEquals, assertStringIncludes } from '@std/assert'
+import {
+  assertAlmostEquals,
+  assertEquals,
+  assertStringIncludes,
+} from '@std/assert'
 import { parseHTML } from 'linkedom'
 import { renderToString } from 'preact-render-to-string'
 import type { Item, Model, Request } from '@yaks/model'
@@ -58,6 +62,7 @@ import { endpoints } from './endpoints.ts'
 import { chatPath } from './route.ts'
 import { REPLIES, textDoor, textSend } from './operator-texts.ts'
 import { textSigned } from './operator-channels.ts'
+import { PER_SEGMENT } from './text-spend.ts'
 import type { Bundle } from '@yaks/graph'
 import type { Binding } from '@yaks/cloudflare-mail'
 
@@ -462,6 +467,7 @@ let afterUnsigned = (await byText()).length
 let signedIn = await texting('t1', 'Post the agenda')
 let [asked] = await byText()
 let answered = texted.splice(0)
+let textsSpent = (await f.dir.at(f.space.eid))!.meter!.texts
 await texting('t2', 'help')
 await texting('t3', 'STOP')
 let replies = texted.splice(0)
@@ -483,6 +489,9 @@ test("a signed text reaches the space's Operator, which answers by text; an unsi
     to: ANA,
     text: `Which date and time?\n\n${textSigned(f.space)}`,
   }])
+})
+test("the text in and the Operator's answer each spend a segment of the space's budget", () => {
+  assertAlmostEquals(textsSpent!, 2 * PER_SEGMENT)
 })
 test('HELP and STOP are answered in the campaign words, and STOP ends consent', () => {
   assertEquals(replies.map((r) => r.text), [REPLIES.help, REPLIES.stop])
@@ -513,12 +522,46 @@ blocked.clear()
 let refusedAnswer = (await byText()).find((r) =>
   (r.doc as { body: string }).body == 'Post the minutes'
 )
-await telnyxApi.stop()
 test('an answer a carrier will not carry yet is bounced with the reason', () => {
   assertStringIncludes(
     String((refusedAnswer?.bounced as { reason: string }).reason),
     'business texting registration',
   )
+})
+
+// A space whose budget is spent: the Operator's answer by text and its
+// text_send are refused, and the person is told so by text.
+let { stamp } = await import('./directory.ts')
+let budgetOf = (dollars: number | null) =>
+  stamp(f.env, {
+    entities: [{
+      entity: { eid: f.space.eid },
+      budget: dollars == null ? null : { dollars },
+      starter: dollars == null ? null : { dollars },
+    }],
+  })
+await budgetOf(0)
+texted.splice(0)
+await texting('t5', 'Post the budget')
+let toldSpent = texted.splice(0)
+let unpaidAnswer = (await byText()).find((r) =>
+  (r.doc as { body: string }).body == 'Post the budget'
+)
+let unpaidSend = await Promise.resolve(
+  textSend(f.env, f.ctx, f.space).run({ text: 'Hi' }),
+).catch((e: Error) => e.message)
+let unpaidSent = texted.splice(0)
+await budgetOf(null)
+await telnyxApi.stop()
+test('a space whose budget is spent texts the person that it is, and nothing else', () => {
+  assertEquals(toldSpent.length, 1)
+  assertStringIncludes(toldSpent[0].text, 'texts go again on the 1st')
+  assertStringIncludes(
+    String((unpaidAnswer?.bounced as { reason: string }).reason),
+    'texts go again on the 1st',
+  )
+  assertStringIncludes(String(unpaidSend), 'texts go again on the 1st')
+  assertEquals(unpaidSent, [])
 })
 
 // An opt-in kept in the operator store before the number moved onto the

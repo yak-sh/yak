@@ -699,11 +699,13 @@ export let atCeiling = (
     realtime: () =>
       `${space.slug}'s model and voice budget for this month is spent — ` +
       `voices go quiet until the 1st`,
-    // An app's broadcast stops here; the answers to STOP and HELP a carrier
-    // requires go regardless (app-texts.ts).
+    // The Operator's texts and an app's broadcast stop here; the answers to
+    // STOP and HELP a carrier requires go regardless (app-texts.ts), and so
+    // does the text telling a person their Operator's answer did not
+    // (operator-channels.ts `texted`).
     texts: () =>
       `${space.slug}'s model and voice budget for this month is spent, and ` +
-      `its apps' texts spend it too — they go again on the 1st`,
+      `texts spend it too — texts go again on the 1st`,
     seconds: () =>
       `${space.slug} is on the ${tier} tier, which is ${
         count(allowance('seconds', space.tier))

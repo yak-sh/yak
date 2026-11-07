@@ -15,7 +15,7 @@ import { Blocked } from '@yaks/phone'
 import { appStore } from './directory.ts'
 import { KERNEL, metaOf } from './meta.ts'
 import { vouched } from './session.ts'
-import { FREE, LETTERS, metering, PRICE } from './meter.ts'
+import { countedTexts, FREE, LETTERS, metering, PRICE } from './meter.ts'
 import { caught } from './defects.ts'
 import { CallError } from '@yaks/tools/errors'
 import { esc } from './html.ts'
@@ -396,17 +396,32 @@ export let channels = (env: Env): Record<string, Channel> => {
     if (!space) throw new Error('Operator reply has no space')
     let { DISCLOSURE, signingIn } = await import('./operator-texts.ts')
     let { phoneOf } = await import('./phones.ts')
+    let { charged, costOf, unpaid } = await import('./text-spend.ts')
     let end = textSigned(space) + (request.signup ? `\n${DISCLOSURE}` : '')
     let phone = await phoneOf(
       env,
       request.via ? { ...space.sender, via: request.via } : space.sender,
     )
-    return phone.send({
+    let text = (words: string) => ({
       to: request.address!,
-      text: `${await signingIn(env, request.address!, answer.text)}\n\n${end}`,
+      text: `${words}\n\n${end}`,
       ...(back.from ? { from: back.from } : {}),
       ...(back.agent ? { agent: back.agent } : {}),
     })
+    try {
+      return await charged(env, space, phone).send(
+        text(await signingIn(env, request.address!, answer.text)),
+      )
+    } catch (error) {
+      if (!unpaid(error)) throw error
+      // Someone who texted is told by text why no answer came, however the
+      // budget stands, and that text is counted all the same; the answer
+      // bounces with the same words.
+      let said = text((error as Error).message)
+      await phone.send(said)
+      await countedTexts(env, space, costOf(said.text))
+      throw error
+    }
   }
   return {
     chat: () => Promise.resolve({}),
@@ -796,8 +811,9 @@ export let handleChannels = (
       } catch (error) {
         if (error instanceof Unsent) throw error
         // A carrier's block (a text before the number may send, or to a
-        // person who replied STOP) is expected, and only bounces.
-        if (!(error instanceof Blocked)) {
+        // person who replied STOP) is expected, and only bounces, as does a
+        // refusal said to the person, such as a spent budget.
+        if (!(error instanceof Blocked) && !(error instanceof CallError)) {
           caught(error, {
             request: 'operator delivery',
             channel: request.channel,

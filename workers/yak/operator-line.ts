@@ -23,6 +23,7 @@ import {
 } from '@yaks/connections'
 import { type Account, Blocked, Denied, mobile, type Own } from '@yaks/phone'
 import { phoneOf, phones } from './phones.ts'
+import { charged } from './text-spend.ts'
 import type { Tool } from '@yaks/session'
 import type { Env } from './env.ts'
 import type { Space } from './directory.ts'
@@ -205,8 +206,10 @@ export let phoneSend = (
     let line = held?.line
     let from = space.sender?.number ??
       String(comp(line, CONNECTION).account ?? '')
+    // A number the space holds is the platform's phone, paid from the space's
+    // budget (text-spend.ts); one the person connected is theirs to pay.
     let account = space.sender
-      ? await phoneOf(env, space.sender)
+      ? charged(env, space, await phoneOf(env, space.sender))
       : await accountOf(
         ctxOf(env),
         held!.own,
@@ -301,7 +304,9 @@ export let lineDoor = async (
   return ok()
 }
 
-/** A reply from any provider enters the conversation of the text it answers. */
+/** A reply from any provider enters the conversation of the text it answers:
+ * the space whose Operator took it, with whether it is new there (a provider
+ * posts a text again until it is answered), or null when none did. */
 export let lineArrived = async (
   env: Env,
   spaces: Space[],
@@ -342,7 +347,7 @@ export let lineArrived = async (
       throw new Error('Operator text intake failed: ' + await response.text())
     }
     await response.body?.cancel()
-    return true
+    return { space, fresh: response.status == 202 }
   }
-  return false
+  return null
 }
