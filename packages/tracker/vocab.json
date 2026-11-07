@@ -463,7 +463,7 @@
       "noun": "bug",
       "verb": "resolve",
       "title": "Resolve bugs",
-      "description": "Mark a bug fixed, once its fix is live, explained: what broke and whom it reached, why, the commits that introduced and fixed it, and whether it can come back. Resolve only a bug whose cause you fixed and saw live; one that stopped, went quiet or passed on a rerun stays open until its cause is found and fixed. Box marks reach the configured remote tracker before the local mark; yaks.app marks only the platform tracker.",
+      "description": "Mark a bug fixed, once its fix is live, explained: what broke and whom it reached, why, the commits that introduced and fixed it, and whether it can come back. Resolve only a bug whose cause you fixed and saw live; one that stopped, went quiet or passed on a rerun stays open until its cause is found and fixed. Box marks reach the configured remote tracker before the local mark; yaks.app marks the platform tracker, or the space tracker its scope names.",
       "input": {
         "bug": {
           "type": "string",
@@ -476,6 +476,10 @@
             "yaks.app"
           ],
           "description": "Mark box bugs (this graph's, or the box tracker's graph the config names), including their remote copy when configured, or the platform tracker on yaks.app; the default is the configured source, box unless the config names yaks.app (as the box's default yak does, beside admin_errors)."
+        },
+        "scope": {
+          "type": "string",
+          "description": "For yaks.app, the global eid of the space whose tracker holds the bug, as a space tracker's letter names it in its link (scope=…); the platform tracker by default."
         },
         "broke": {
           "type": "string",
@@ -515,7 +519,7 @@
       "noun": "bug",
       "verb": "archive",
       "title": "Archive bugs",
-      "description": "Hide a bug without discarding occurrences, saying why: an archived bug is one someone set aside, never fixed. Archiving closes its task; a task's own state never marks its bug. Box marks reach the configured remote tracker before the local mark; yaks.app marks only the platform tracker.",
+      "description": "Hide a bug without discarding occurrences, saying why: an archived bug is one someone set aside, never fixed. Archiving closes its task; a task's own state never marks its bug. Box marks reach the configured remote tracker before the local mark; yaks.app marks the platform tracker, or the space tracker its scope names.",
       "input": {
         "bug": {
           "type": "string",
@@ -532,6 +536,10 @@
             "yaks.app"
           ],
           "description": "Mark box bugs (this graph's, or the box tracker's graph the config names), including their remote copy when configured, or the platform tracker on yaks.app; the default is the configured source, box unless the config names yaks.app (as the box's default yak does, beside admin_errors)."
+        },
+        "scope": {
+          "type": "string",
+          "description": "For yaks.app, the global eid of the space whose tracker holds the bug, as a space tracker's letter names it in its link (scope=…); the platform tracker by default."
         }
       },
       "idempotent": true,
@@ -549,7 +557,7 @@
       "noun": "bug",
       "verb": "reopen",
       "title": "Reopen bugs",
-      "description": "Take a bug's resolution back, so it is open again until an agent fixes its cause: for one resolved without a fix, such as one that only stopped. Its occurrences and its thread stay as they are, and a bug whose opening was told is not told again. Box marks reach the configured remote tracker before the local mark; yaks.app marks only the platform tracker.",
+      "description": "Take a bug's resolution back, so it is open again until an agent fixes its cause: for one resolved without a fix, such as one that only stopped. Its occurrences and its thread stay as they are, and a bug whose opening was told is not told again. Box marks reach the configured remote tracker before the local mark; yaks.app marks the platform tracker, or the space tracker its scope names.",
       "input": {
         "bug": {
           "type": "string",
@@ -562,6 +570,10 @@
             "yaks.app"
           ],
           "description": "Mark box bugs (this graph's, or the box tracker's graph the config names), including their remote copy when configured, or the platform tracker on yaks.app; the default is the configured source, box unless the config names yaks.app (as the box's default yak does, beside admin_errors)."
+        },
+        "scope": {
+          "type": "string",
+          "description": "For yaks.app, the global eid of the space whose tracker holds the bug, as a space tracker's letter names it in its link (scope=…); the platform tracker by default."
         }
       },
       "idempotent": true,

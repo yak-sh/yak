@@ -126,20 +126,21 @@ platform tracker's letters (`side: 'yaks.app'`) name a bug by global eid and
 link to `/?.bug&side=yaks.app&bug=<eid>`, where the box's tracker web reads it
 through `/tracker/bugs` and draws it with the same pages. A space's tracker
 holds its own bugs, so its letters add its `scope` (`&scope=<space eid>`), which
-the page and `bug_show` read the bug from. Its identity derives from the store,
-recipient, bug eid, opening or regression mark, and full `created.at` or
-`regressed.at`, so a replayed effect keeps the same letter. A letter is read
-alone by someone deciding whether it is urgent, so `letter.ts` writes from the
-bug and its retained occurrences all the tracker holds: the subject names where
-it ran (box or yaks.app, the space and app, and "test account" when only test
-accounts were reached) and the headline, never the bug's id; the body carries
-the whole message, where it ran (process or worker, app version, operation),
-whom it reached, how often and in the last hour, the failing request, the code,
-the commit, the top of the stack, the breadcrumbs before it, every other tag,
-and a link naming the bug. Reporters supply what it reads: the box tags its
-`command` and host `roles`, yaks.app its `space` and `app` slugs and whose space
-it is (`account`). A later letter takes the opening's subject after `Re:` and
-names the opening in `mail.reply_to`, which @yaks/mail sends as In-Reply-To and
+the page and `bug_show` read the bug from, and `bug_resolve`, `bug_archive` and
+`bug_reopen` mark it in. Its identity derives from the store, recipient, bug
+eid, opening or regression mark, and full `created.at` or `regressed.at`, so a
+replayed effect keeps the same letter. A letter is read alone by someone
+deciding whether it is urgent, so `letter.ts` writes from the bug and its
+retained occurrences all the tracker holds: the subject names where it ran (box
+or yaks.app, the space and app, and "test account" when only test accounts were
+reached) and the headline, never the bug's id; the body carries the whole
+message, where it ran (process or worker, app version, operation), whom it
+reached, how often and in the last hour, the failing request, the code, the
+commit, the top of the stack, the breadcrumbs before it, every other tag, and a
+link naming the bug. Reporters supply what it reads: the box tags its `command`
+and host `roles`, yaks.app its `space` and `app` slugs and whose space it is
+(`account`). A later letter takes the opening's subject after `Re:` and names
+the opening in `mail.reply_to`, which @yaks/mail sends as In-Reply-To and
 References: those headers make the thread. A regression's letter answers the
 opening's thread, and `bug_follow` adds one reply there when a bug is resolved
 or archived, and one when a fixer takes it (`taken{at, by, via, task}`, once per

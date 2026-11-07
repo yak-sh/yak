@@ -188,19 +188,21 @@ export let marking = (
 })
 
 /** Mark a Worker copy, returning false when the Worker does not hold it. A
- * resolution carries its explanation and `taken` the fixer's `task`. */
+ * resolution carries its explanation and `taken` the fixer's `task`. The
+ * copy is the platform tracker's, or the tracker of the space `scope` names. */
 export let mark = async (
   remote: Remote,
   bug: string,
   name: keyof typeof doors,
   go: typeof fetch = fetch,
   said: Record<string, string> = {},
+  scope = 'platform',
 ): Promise<boolean> => {
   let { door, body } = marking(bug, name, said)
   let response = await request(
     remote,
     door,
-    new URLSearchParams({ scope: 'platform' }),
+    new URLSearchParams({ scope }),
     {
       method: 'POST',
       headers: { 'content-type': 'application/json' },

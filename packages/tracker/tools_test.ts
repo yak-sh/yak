@@ -113,6 +113,23 @@ test("a space's bug shows from its tracker, the scope its letter names", async (
   }, box)
   equal([asked?.get('scope'), asked?.get('bug')], [scope, ids[1]])
 })
+test("a space's bug is resolved in its tracker, the scope its letter names", async () => {
+  let asked: URL | undefined
+  let worker = ((url: URL) => {
+    asked = url
+    return Promise.resolve(Response.json({ ok: true }))
+  }) as typeof fetch
+  let scope = crypto.randomUUID()
+  let args = { source: 'yaks.app', bug: ids[1], broke: 'b', cause: 'c' }
+  await runs({}, config, worker).bug_resolve({
+    entity: { eid: ids[4] },
+    call: { args: { ...args, recur: 'r', scope } },
+  }, box)
+  equal([asked?.pathname, asked?.searchParams.get('scope')], [
+    '/resolve',
+    scope,
+  ])
+})
 test('the remote store applies a caller query and order before its limit', async () =>
   equal(
     (await remote.bugs(undefined, '.bug .order=bug.hits', 2))
