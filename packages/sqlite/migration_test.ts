@@ -2,6 +2,7 @@ import { test } from '@yaks/testing'
 import { assertEquals, assertRejects, assertThrows } from '@std/assert'
 import { type CreateTable, insert, lit, scan } from '@yaks/sql'
 import { open, type Opened } from './db.ts'
+import { open as openRead } from './read-db.ts'
 import {
   MigrationPending,
   migrations,
@@ -34,6 +35,17 @@ function fixture() {
     },
   }
 }
+test('a graph without the control table has announced no migration', () => {
+  for (const db of [open(':memory:'), openRead(':memory:')]) {
+    try {
+      const control = migrations(db)
+      assertEquals(control.read(), undefined)
+      assertEquals(control.ready(), 0)
+    } finally {
+      db.close()
+    }
+  }
+})
 test('committed announcement is visible, blocks startup and competitors, monitor latches once', () => {
   const f = fixture()
   try {

@@ -1,5 +1,6 @@
 /** Cooperative, preannounced SQLite migrations. Not a distributed lock service. */
 import {
+  catalogue,
   col,
   type Driver,
   eq,
@@ -76,11 +77,14 @@ export function migrationSchema(): Stmt[] {
   }]
 }
 
-/** Bind migration control over a graph a writer has brought to its schema. */
+/** Bind migration control over a graph. A file no writer has brought to its
+ * schema (a reader's fresh `:memory:`, a file nothing wrote) has no control
+ * table, which reads as no migration ever announced. */
 export function migrations(db: Driver): MigrationControl {
   const set = (set: Record<string, Expr>) =>
     db.query({ t: 'update', table: CONTROL, set, where: one })
   const read = (): MigrationState | undefined => {
+    if (!catalogue(db).some((o) => o.name == CONTROL)) return undefined
     const r = db.query(reading)[0]
     return r && {
       generation: Number(r.generation),
