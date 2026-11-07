@@ -163,6 +163,42 @@ test('a tool that names one app reads the directory once', async () => {
   }
 })
 
+// A person's whole listing is one question (tools.ts `app_list`): their
+// seats, every app across them and who is in the spaces they own come from
+// one directory snapshot, and what to call those people from a second read
+// (directory.ts `listing`), whichever space or app it names.
+test('app_list reads the directory twice', async () => {
+  let k = await kernel()
+  try {
+    let { cookie } = await signIn(k)
+    let agent = connector(k, cookie)
+    let made = await agent.tool('app_new', { slug: 'listed', title: 'Listed' })
+    let space = /https:\/\/([a-z0-9-]+)\.yaks\.app/.exec(made)![1]
+    let hops = async (args: Record<string, unknown>) => {
+      let r = await k.at('yaks.app', '/mcp', {
+        method: 'POST',
+        headers: { cookie, 'content-type': 'application/json' },
+        body: JSON.stringify({
+          jsonrpc: '2.0',
+          id: 1,
+          method: 'tools/call',
+          params: { name: 'app_list', arguments: args },
+        }),
+      })
+      let { result } = await r.json()
+      assertEquals(result.isError, undefined, JSON.stringify(result))
+      assertStringIncludes(result.content[0].text, 'Listed')
+      return /hops;dur=(\d+)/.exec(r.headers.get('server-timing')!)?.[1]
+    }
+    assertEquals(
+      [await hops({}), await hops({ space }), await hops({ app: 'listed' })],
+      ['2', '2', '2'],
+    )
+  } finally {
+    await k.stop()
+  }
+})
+
 test(
   'a platform secret alias derives before the reach hands it to the store',
   async () => {

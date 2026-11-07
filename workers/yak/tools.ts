@@ -43,7 +43,7 @@ import type { Reload } from '@yaks/platform'
 import { configured, deployWorker } from './deploy_worker.ts'
 import type { Config } from './wrangler_app.ts'
 import { compiled } from './esbuild.ts'
-import { bindingLines, bindings } from './bindings.ts'
+import { bindingLines, boundOf } from './bindings.ts'
 import { broken, mediaTypeOf, type Objects } from '@yaks/blob'
 import { blobPrefix } from './blob-key.ts'
 import { r2Objects, r2RawObjects } from './lib/objects.ts'
@@ -101,6 +101,7 @@ import {
   handle,
   homing,
   kept,
+  type Listing,
   mailbox,
   META,
   MODES,
@@ -2730,6 +2731,24 @@ let roomFor = async (ctx: Ctx) => {
 let SLUGS = PAGES.map((p) => p.slug).join(', ')
 let COVERING = PAGES.map((p) => `${p.slug} (${p.brief})`).join(', ')
 
+// The caller's seat in the space at `slug`, out of their listing, or else
+// asked as every tool asks it (tool.ts `seatIn`): an address the space has
+// left, or the refusal of a space they do not sit in.
+let seatAmong = async (ctx: Ctx, listing: Listing, slug: string) => {
+  let seat = listing.seats.find((s) => s.space.slug == slug)
+  return seat ? [seat] : await seatIn(ctx, slug)
+}
+
+// The caller's spaces holding a live app at `app`, out of their listing: what
+// tool.ts `ownSpace` asks them for.
+let holdingIn = (listing: Listing, app: string) =>
+  listing.seats.map((s) => s.space).filter((space) =>
+    !space.trashed &&
+    listing.apps.some((a) =>
+      a.space == space.eid && a.slug == app && !a.trashed
+    )
+  )
+
 /** Someone in a space or an app, as app_list answers them (people.ts). */
 type Someone = ReturnType<typeof shown>
 
@@ -4892,31 +4911,38 @@ let OURS: Row[] = [
         },
       },
     },
-    // The listing is one question, so it is asked as one (T-35431): five
-    // directory reads that do not grow with the answer — the caller's seats
-    // (which spaces, and what they are in each), every app across them, and
-    // everything bound to those apps — then one parallel wave for the single
-    // fact only an app's own store holds. Asked space by space and app by app
-    // it was eleven reads before the first app and three more per app, in
-    // turn: three spaces of three apps cost 38 round trips and now cost 23,
-    // 18 of them at once (tools_test.ts).
+    // The listing is one question, so it is asked as one: the caller's
+    // seats, every app across them, everything bound to those apps and who is
+    // in the spaces they own come from one directory snapshot, and what to
+    // call those people from a second read (directory.ts `listing`), then one
+    // parallel wave for what each space's tracker holds.
+    // Asked space by space and app by app it was eleven reads before the
+    // first app and three more per app, in turn (T-35431), and asked kind by
+    // kind it was five to eight in turn (T-148244).
     run: async (ctx, args) => {
       // One app asked about is listed alone, in full and with its people
       // named; naming the app names its space, as every other tool reads it.
       let named = args.app == null ? null : text(args.app, 'app')
-      let seats = args.space != null
-        ? await seatIn(ctx, text(args.space, 'space'))
-        : named != null
-        ? await seatIn(ctx, (await ownSpace(ctx, named)).slug)
-        : await ctx.dir.seats(ctx.person)
+      let listing = await ctx.dir.listing(ctx.person)
       // An account with no space gains its own. A narrowed credential's
       // `own` names its scope instead, so standing still comes from a seat.
-      if (!seats.length) {
-        let space = await ctx.dir.own(ctx.person)
-        let role = await ctx.dir.role(space, ctx.person)
-        if (role) seats = [{ space, role }]
+      // Naming an app finds its space as every tool does (tool.ts
+      // `ownSpace`), which gains it the same way.
+      if (!listing.seats.length && args.space == null && named == null) {
+        await ctx.dir.own(ctx.person)
+        listing = await ctx.dir.listing(ctx.person)
       }
-      let whole = await ctx.dir.apps(seats.map((s) => s.space))
+      let seats = args.space != null
+        ? await seatAmong(ctx, listing, text(args.space, 'space'))
+        : named != null
+        ? await seatAmong(
+          ctx,
+          listing,
+          (await ownSpace(ctx, named, holdingIn(listing, named))).slug,
+        )
+        : listing.seats
+      let held = new Set(seats.map((s) => s.space.eid))
+      let whole = listing.apps.filter((a) => held.has(a.space))
       let every = named == null ? whole : whole.filter((a) => a.slug == named)
       if (named != null && !every.length) {
         throw refuse('missing', `no app ${named} in ${seats[0]!.space.slug}`)
@@ -4927,11 +4953,12 @@ let OURS: Row[] = [
       // person has, and what they threw away and can still have back
       // (erase.ts, T-34430).
       let living = every.filter((a) => !a.trashed)
+      let alive = new Set(living.map((a) => a.eid))
       // Who is in each space the caller owns and in each of its apps, and who
       // has yet to accept (people.ts): the owner's to read, as on their
-      // dashboard's People page, and two reads however many there are.
-      let people = peopleOwned(ctx.dir, seats, living)
-      let bound = await bindings(ctx.env, living)
+      // dashboard's People page.
+      let gathered = peopleOwned(listing, seats, living)
+      let bound = boundOf(listing.bound).filter((b) => alive.has(b.app))
       // What is broken in each app, as each space's tracker holds it: one read
       // a space, all at once, and no app's store woken to list it (T-123502).
       let broken = new Map(
@@ -4939,7 +4966,6 @@ let OURS: Row[] = [
           ...await trackedIn(ctx.env, space, asCaller(ctx, role), true),
         ]))).flat().map(([app, hits]) => [app, breaks(hits)] as const),
       )
-      let gathered = await people
       let now = new Date()
       // Two readers, two forms (M-37853), and each carries every fact: Claude
       // on the web documents the words as what its model reads, Claude Code

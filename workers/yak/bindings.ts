@@ -48,13 +48,19 @@ export let bindings = async (
 ) => {
   let eids = [app].flat().map((a) => a.eid)
   if (!eids.length) return []
-  return (await meta(env).query(`.binding.app=${eids.join(',')}`)).map((r) => ({
-    ...(r.binding as Omit<Binding, 'eid'>),
-    eid: r.entity.eid,
-  })).sort((a, b) =>
-    a.name.localeCompare(b.name) || a.type.localeCompare(b.type)
-  )
+  return boundOf(await meta(env).query(`.binding.app=${eids.join(',')}`))
 }
+
+/** The bindings among rows already read, in the order `bindings` says them
+ * (directory.ts `Listing`). */
+export let boundOf = (
+  rows: { entity: { eid: string }; binding?: unknown }[],
+): Binding[] =>
+  rows.flatMap((r) =>
+    r.binding
+      ? [{ ...(r.binding as Omit<Binding, 'eid'>), eid: r.entity.eid }]
+      : []
+  ).sort((a, b) => a.name.localeCompare(b.name) || a.type.localeCompare(b.type))
 
 let paths: Record<Product, string> = {
   d1: '/d1/database',

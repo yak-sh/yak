@@ -1812,6 +1812,140 @@ let paged = (
   }
 }
 
+// A person's seats among the rows one read answered: each space they sit in
+// with their own seat in it and the seat of whoever owns it.
+let seatsOf = (rows: ReadRow[], person: string, role?: Role): Seat[] => {
+  let seats = rows.filter((r) => r.member)
+  let held = new Map(
+    seats.filter((r) => idOf(r.member!.person) == person)
+      .map((r) => [idOf(r.member!.space), r]),
+  )
+  let owners = new Map(
+    seats.filter((r) => r.member!.role == 'owner')
+      .map((r) => [idOf(r.member!.space), idOf(r.member!.person)]),
+  )
+  return rows.flatMap((r) => {
+    let seat = r.space && held.get(r.entity.eid)
+    if (!seat || role && seat.member!.role != role) return []
+    return [{
+      space: spaceOf(r),
+      role: seat.member!.role as Role,
+      seat: seat.entity.eid,
+      own: !!seat.member!.own,
+      owner: owners.get(r.entity.eid),
+    }]
+  })
+}
+
+// Each seat, grant and invitation among the rows, as `held` answers them.
+let heldOf = (rows: ReadRow[]) =>
+  rows.flatMap((r): Held[] => {
+    let { member: m, grant: g, invite: i } = r
+    let at = m
+      ? { held: 'seat' as const, on: m.space, who: m.person, role: m.role }
+      : g
+      ? { held: 'grant' as const, on: g.app, who: g.person, role: g.access }
+      : i
+      ? { held: 'invite' as const, on: i.to, who: i.person, role: i.role }
+      : null
+    return at
+      ? [{
+        eid: r.entity.eid,
+        held: at.held,
+        on: idOf(at.on),
+        person: idOf(at.who),
+        role: at.role,
+        sent: i?.sent ?? null,
+      }]
+      : []
+  })
+
+/** What to call a person, where their letters go and the number they gave. */
+export type Known = { name: string; email: string; phone: string | null }
+
+// Each person among the rows with an address, by eid (`persons`).
+let personsOf = (rows: ReadRow[]): Map<string, Known> =>
+  new Map(
+    rows.flatMap((row) =>
+      row.email
+        ? [
+          [row.entity.eid, {
+            name: nameOf(row.doc?.title, row.email.address),
+            email: row.email.address,
+            phone: row.phone?.number ?? null,
+          }] as const,
+        ]
+        : []
+    ),
+  )
+
+/** A person's whole listing (tools.ts `app_list`): their seats, the meta
+ * space's left out as `seats` leaves it; every app in those spaces and what is
+ * bound to each; and, in the spaces they own, who holds or is offered a place
+ * in the space or its apps, and what to call each of them (people.ts). */
+export type Listing = {
+  seats: Seat[]
+  apps: App[]
+  bound: Bundle[]
+  held: Held[]
+  persons: Map<string, Known>
+}
+
+// A listing out of the rows one read answered, all but what to call the
+// people it names: only what stands in the person's spaces is kept, and who is
+// in a space only where they own it, since that is the owner's alone
+// (people.ts).
+let listed = (
+  rows: ReadRow[],
+  person: string,
+): Omit<Listing, 'persons'> => {
+  let seats = seatsOf(rows, person).filter((s) => s.space.slug != META.space)
+  let spaces = new Set(seats.map((s) => s.space.eid))
+  let apps = rows.filter((r) => r.app && spaces.has(idOf(r.app.space)))
+    .map(appOf)
+  let eids = new Set(apps.map((a) => a.eid))
+  let owned = new Set(
+    seats.filter((s) => s.role == 'owner').map((s) => s.space.eid),
+  )
+  let theirs = new Set([
+    ...owned,
+    ...apps.filter((a) => owned.has(a.space)).map((a) => a.eid),
+  ])
+  let held = heldOf(rows).filter((h) => theirs.has(h.on))
+  return {
+    seats,
+    apps,
+    bound: rows.map(({ policy: _, ...row }) => row as Bundle)
+      .filter((row) => {
+        let app = (row.binding as { app?: Id } | undefined)?.app
+        return app != null && eids.has(idOf(app))
+      }),
+    held,
+  }
+}
+
+/** The same listing asked the long way, one question after another, over a
+ * directory that cannot say it in one read (grants.ts `narrowed`). */
+export let listingOf = async (
+  dir: Directory,
+  person: string,
+): Promise<Listing> => {
+  let seats = await dir.seats(person)
+  let apps = await dir.apps(seats.map((s) => s.space))
+  let owned = seats.filter((s) => s.role == 'owner').map((s) => s.space.eid)
+  let [bound, held] = await Promise.all([
+    apps.length
+      ? dir.read(`.binding.app=${apps.map((a) => a.eid).join(',')}`)
+      : [],
+    dir.held(
+      owned,
+      apps.filter((a) => owned.includes(a.space)).map((a) => a.eid),
+    ),
+  ])
+  let persons = await dir.persons([...new Set(held.map((h) => h.person))])
+  return { seats, apps, bound, held, persons }
+}
+
 // Every read carries the directory's revision. The app and the homes it borrows
 // from select declarations written by one directory commit.
 // Address lookups select one app, routing the app and the front page; the
@@ -2036,6 +2170,33 @@ export let directoryRows = (rows: {
           every,
         ),
       }
+    },
+    // A person's whole listing in two reads (tools.ts `app_list`). The first
+    // is one snapshot of every row reached from the person's own seats, so
+    // nothing in it waits on ids an earlier read learned. Who is in their
+    // spaces is read in each of them and kept only where they own it
+    // (`listed`), since no one hop says "a seat of theirs that is an owner's".
+    // What to call those people is the second: a reverse hop inside another
+    // (`.members_person.member.space.members_space…`) is not a question the
+    // SQL compiler answers.
+    listing: async (person: string): Promise<Listing> => {
+      if (!person) return { ...listed([], person), persons: new Map() }
+      let mine = `members_space.member.person=${person}`
+      let rows = await query(
+        [
+          `(.member.person=${person})`,
+          `(.space&.${mine}&${SPACE_ABOUT})`,
+          `(.member.space.${mine})`,
+          `(.app&.app.space.${mine}&${ABOUT})`,
+          `(.binding.app.app.space.${mine})`,
+          `(.grant.app.app.space.${mine})`,
+          `(.invite.to.${mine})`,
+          `(.invite.to.app.space.${mine})`,
+        ].join('|'),
+      )
+      let got = listed(rows, person)
+      let named = [...new Set(got.held.map((h) => h.person))]
+      return { ...got, persons: await self.persons(named) }
     },
     // A subdomain the space has left, still pointing at it (T-34658) — what
     // `former` is to an app, one level up. Asked only after `space` has
@@ -2578,26 +2739,7 @@ export let directoryRows = (rows: {
         ...apps.length ? [`.grant.app=${list(apps)}`] : [],
         `.invite.to=${list([...spaces, ...apps])}`,
       ]
-      return (await query(asked.join(' | '))).flatMap((r): Held[] => {
-        let { member: m, grant: g, invite: i } = r
-        let at = m
-          ? { held: 'seat' as const, on: m.space, who: m.person, role: m.role }
-          : g
-          ? { held: 'grant' as const, on: g.app, who: g.person, role: g.access }
-          : i
-          ? { held: 'invite' as const, on: i.to, who: i.person, role: i.role }
-          : null
-        return at
-          ? [{
-            eid: r.entity.eid,
-            held: at.held,
-            on: idOf(at.on),
-            person: idOf(at.who),
-            role: at.role,
-            sent: i?.sent ?? null,
-          }]
-          : []
-      })
+      return heldOf(await query(asked.join(' | ')))
     },
     // How many invitations this person has sent in the hour it names. Fresh:
     // two invitations a second apart must not both read the same count.
@@ -2739,26 +2881,9 @@ export let directoryRows = (rows: {
     known: async (person: string) =>
       (await self.persons([person])).get(person) ?? null,
     // The same, for many people in one read.
-    persons: async (
-      persons: string[],
-    ): Promise<
-      Map<string, { name: string; email: string; phone: string | null }>
-    > => {
+    persons: async (persons: string[]): Promise<Map<string, Known>> => {
       if (!persons.length) return new Map()
-      let rows = await query(`.entity.eid=${persons.join(',')}`)
-      return new Map(
-        rows.flatMap((row) =>
-          row.email
-            ? [
-              [row.entity.eid, {
-                name: nameOf(row.doc?.title, row.email.address),
-                email: row.email.address,
-                phone: row.phone?.number ?? null,
-              }] as const,
-            ]
-            : []
-        ),
-      )
+      return personsOf(await query(`.entity.eid=${persons.join(',')}`))
     },
     // Every space this person belongs to, the meta space left out: `yak` is
     // the platform's own, and a person who owns it (the first to sign in)
@@ -2786,26 +2911,7 @@ export let directoryRows = (rows: {
       let rows = await query(
         `(.member.person=${person})|(.space&${mine})|(.member.role=owner&.member.space${mine})&*`,
       )
-      let seats = rows.filter((r) => r.member)
-      let held = new Map(
-        seats.filter((r) => idOf(r.member!.person) == person)
-          .map((r) => [idOf(r.member!.space), r]),
-      )
-      let owners = new Map(
-        seats.filter((r) => r.member!.role == 'owner')
-          .map((r) => [idOf(r.member!.space), idOf(r.member!.person)]),
-      )
-      return rows.flatMap((r) => {
-        let seat = r.space && held.get(r.entity.eid)
-        if (!seat || role && seat.member!.role != role) return []
-        return [{
-          space: spaceOf(r),
-          role: seat.member!.role as Role,
-          seat: seat.entity.eid,
-          own: !!seat.member!.own,
-          owner: owners.get(r.entity.eid),
-        }]
-      })
+      return seatsOf(rows, person, role)
     },
     // The eid of each space this person sits in, with their role there: all
     // of them whatever a caller goes on to keep, so that every question about

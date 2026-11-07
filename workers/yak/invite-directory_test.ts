@@ -17,6 +17,7 @@ import {
   type Directory,
   directoryRows,
   type Held,
+  type Listing,
   type Space,
 } from './directory.ts'
 import type { Env } from './env.ts'
@@ -185,36 +186,35 @@ let row = (
   on: string,
   sent: string | null = null,
 ): Held => ({ eid: `${person}/${on}`, held, on, person, role, sent })
+let places = [
+  row('seat', JEFF, 'owner', 'sp'),
+  row('seat', 'bo', 'editor', 'sp'),
+  row('grant', 'ana', 'editor', 'ap'),
+  row('invite', 'cy', 'viewer', 'sp', '2026-10-14T09:00:00Z'),
+]
 let roster = {
-  held: () =>
-    Promise.resolve([
-      row('seat', JEFF, 'owner', 'sp'),
-      row('seat', 'bo', 'editor', 'sp'),
-      row('grant', 'ana', 'editor', 'ap'),
-      row('invite', 'cy', 'viewer', 'sp', '2026-10-14T09:00:00Z'),
-    ]),
-  persons: (ids: string[]) =>
-    Promise.resolve(
-      new Map(ids.map((id) => [id, { name: id, email: emailOf(id) }])),
-    ),
-} as unknown as Directory
+  held: places,
+  persons: new Map(
+    places.map((h) => [h.person, { name: h.person, email: emailOf(h.person) }]),
+  ),
+} as unknown as Listing
 let [bo, ana, cy] = ['bo', 'ana', 'cy'].map(emailOf)
 let emails = (them: Person[]) =>
   them.map((p) => shown(p)).map((p) => `${p.email} ${p.role}`)
 
 let ownerSeats = [{ space, role: 'owner' as const }]
 let ownedApps = [diary]
-let namedRoster = (await peopleOwned(roster, ownerSeats, ownedApps)).get(
+let namedRoster = peopleOwned(roster, ownerSeats, ownedApps).get(
   space.eid,
 )!
-let pageRoster = (await peopleOwned(roster, ownerSeats, ownedApps)).get(
+let pageRoster = peopleOwned(roster, ownerSeats, ownedApps).get(
   space.eid,
 )!
 let rosterPage = { space: 'jeff', apps: [], people: pageRoster }
 // The registry composes its vocabulary and compiles render queries once.
 people(rosterPage)
-test('the owner and their assistant see who is in and who has not accepted', async () => {
-  let here = (await peopleOwned(roster, ownerSeats, ownedApps))
+test('the owner and their assistant see who is in and who has not accepted', () => {
+  let here = peopleOwned(roster, ownerSeats, ownedApps)
     .get(space.eid)!
 
   // The words name who has yet to accept, which is what someone may be
@@ -242,10 +242,10 @@ test('the People page lists members and offers to resend a pending invitation', 
   assertStringIncludes(page, 'name="again" value="cy/sp"')
 })
 
-test('a member is not shown who else is in the space', async () => {
+test('a member is not shown who else is in the space', () => {
   // bo's seat is a member's: the space's people, and who its owner invited,
   // are not his to read, even asking (app_list's `people`).
-  let his = await peopleOwned(roster, [{ space, role: 'editor' }], [diary])
+  let his = peopleOwned(roster, [{ space, role: 'editor' }], [diary])
   assertEquals(his.size, 0)
 })
 

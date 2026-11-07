@@ -27,7 +27,13 @@
 // within about a minute rather than instantly — which is why the life is short
 // and the ceiling is a day.
 import { opened, seal } from './lib/token.ts'
-import type { Directory, Reach, Role, Seat } from './directory.ts'
+import {
+  type Directory,
+  listingOf,
+  type Reach,
+  type Role,
+  type Seat,
+} from './directory.ts'
 import { refuse } from './tool.ts'
 
 // What a grant token opens with, so identity.ts knows to open it here.
@@ -307,6 +313,9 @@ export let narrowed = (
         ? { holding: [page.space], page }
         : null
     },
+    // A listing is its seats here, which no one read of the whole directory
+    // says, so it is asked the long way over them.
+    listing: (person: string) => listingOf(self, person),
     spaces: async (person: string, role?: Role) => [
       ...(await dir.spaces(person, role)).filter(matches),
       ...also(role).map((r) => r.space),

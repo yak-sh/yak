@@ -4,7 +4,7 @@
 // friend can't get in" has the same first step on both (T-123886). It is the
 // owner's alone: an invitation names an address the owner typed, and that is
 // nobody else's to read.
-import type { App, Directory, Held, Role, Space } from './directory.ts'
+import type { App, Directory, Held, Listing, Role, Space } from './directory.ts'
 import type { Host } from './host.ts'
 import { manageAt } from './route.ts'
 
@@ -32,11 +32,22 @@ export let peopleIn = async (
   apps: App[],
 ): Promise<People[]> => {
   let held = await dir.held(spaces.map((s) => s.eid), apps.map((a) => a.eid))
-  let known = await dir.persons([...new Set(held.map((h) => h.person))])
+  let persons = await dir.persons([...new Set(held.map((h) => h.person))])
+  return peopleOf({ held, persons }, spaces, apps)
+}
+
+/** Who is in these spaces and in their apps among `apps`, out of every place
+ * held or offered there and what to call each person (directory.ts
+ * `Listing`). */
+export let peopleOf = (
+  { held, persons }: Pick<Listing, 'held' | 'persons'>,
+  spaces: Space[],
+  apps: App[],
+): People[] => {
   let people = held.map((h): Person => ({
     ...h,
-    name: known.get(h.person)?.name ?? '',
-    email: known.get(h.person)?.email ?? null,
+    name: persons.get(h.person)?.name ?? '',
+    email: persons.get(h.person)?.email ?? null,
   })).sort((a, b) =>
     RANK.indexOf(a.role) - RANK.indexOf(b.role) ||
     a.name.localeCompare(b.name)
@@ -59,14 +70,14 @@ export let peopleIn = async (
  * those spaces' apps among `apps`. A space they are only a member of has no
  * entry: who else is in it, and who the owner invited, is the owner's alone
  * to read. */
-export let peopleOwned = async (
-  dir: Directory,
+export let peopleOwned = (
+  listing: Pick<Listing, 'held' | 'persons'>,
   seats: { space: Space; role: Role }[],
   apps: App[],
-): Promise<Map<string, People>> => {
+): Map<string, People> => {
   let owned = seats.filter((s) => s.role == 'owner').map((s) => s.space)
-  let all = await peopleIn(
-    dir,
+  let all = peopleOf(
+    listing,
     owned,
     apps.filter((a) => owned.some((s) => s.eid == a.space)),
   )
