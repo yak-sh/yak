@@ -118,7 +118,9 @@ understood by yaks storage adapters. With `said`, it adds search terms as a
 filter; without `near` or explicit ids, the newest words come first (descending
 `created.at`). Every component comes back, since the words may be a doc's body
 or an entry's content. Search terms do not request BM25 ranking. A `.near` query
-requires a configured embedding index.
+requires a configured embedding index. A memory carrying a `quarantined` stamp
+(@yaks/kernel) is never in the line, so no recall, passage or ranking returns
+one.
 
 Ranking by meaning is the host's: `host.meaning` ([@yaks/host](../host)) takes
 words and a filter line and answers the entities nearest them in meaning among

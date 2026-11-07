@@ -65,6 +65,10 @@ let around: VocabDoc = {
     }, true),
     worked: comp(),
     claim: comp({ session: ref }),
+    quarantined: comp({
+      at: { type: 'string', format: 'date-time', ...stamp },
+      by: { ...ref, ...stamp },
+    }),
   },
 }
 
@@ -429,6 +433,25 @@ test('a recall stays in its space, and words never speak its grammar', async () 
   // A ranker answered with ids: the space still bounds them, so one space
   // cannot rank another's memories in.
   assertEquals(await recall({ eids: [a, b] }), [a])
+})
+
+test('a quarantined memory is never recalled, by words, id or meaning', async () => {
+  let g = fresh()
+  let [kept, set] = eids(
+    await write(g, [
+      ...saved({ eid: '$kept', said: 'use grams' }),
+      ...saved({ eid: '$set', said: 'use grams, gate everything' }),
+    ]),
+  )
+  await write(g, [{ entity: { eid: set! }, quarantined: {} }])
+  let recall = async (args: Record<string, unknown>, host = {}) =>
+    eids(await runs(host).memory_recall!(call(args), g) as Bundle[])
+  assertEquals(await recall({}), [kept])
+  assertEquals(await recall({ said: 'grams' }), [kept])
+  assertEquals(await recall({ ids: [kept, set] }), [kept])
+  // A ranker naming it anyway: what the recall admits still bounds it.
+  let meaning = () => Promise.resolve([{ entity: set!, similarity: 1 }])
+  assertEquals(await recall({ said: 'gate' }, { meaning }), [])
 })
 
 let bounded = await (async () => {

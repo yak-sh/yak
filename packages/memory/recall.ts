@@ -12,9 +12,16 @@
 // a memory marks — a doc's body, a transcript entry's content — and the newest
 // of the selected rows come first, because a query string carries no bm25
 // score.
+//
+// Every one of those reads is a line, so a quarantined memory — one somebody
+// set aside as harmful to act on (@yaks/kernel `quarantined`) — is left out
+// here, once, and no door that recalls hands it back as if it stood.
 
 import type { Bundle, Comp, Eid } from '@yaks/graph'
 import { MEMORY } from './comp.ts'
+
+// The stamp @yaks/kernel puts on what is set aside as harmful to act on.
+let QUARANTINED = 'quarantined'
 
 /** One memory, read back. */
 export type Memory = {
@@ -123,13 +130,13 @@ export type Asked = {
  * ranked by meaning; otherwise the newest words first. Words do not rank:
  * @yaks/fts compiles a word into a condition and keeps its bm25 score for the
  * search tool, so a query string carrying words is a filter and the newest
- * still come first. Every component comes back (`*`), since the words may be a
- * doc's body or an entry's content and a row carries only what its query
- * names.
+ * still come first. A quarantined memory never comes back. Every component
+ * comes back (`*`), since the words may be a doc's body or an entry's content
+ * and a row carries only what its query names.
  *
  * ```ts
  * line({ space: 's1', limit: 8 })
- * // '.memory.space=s1&*&.order=-created.at&.limit=8'
+ * // '.memory.space=s1&!quarantined&*&.order=-created.at&.limit=8'
  * ```
  */
 export let line = (asked: Asked): string => {
@@ -142,6 +149,7 @@ export let line = (asked: Asked): string => {
     // A memory is what is being asked for, so the component is always in the
     // query; naming it with a space bounds the result and names it at once.
     asked.space ? `.${MEMORY}.space=${asked.space}` : `.${MEMORY}`,
+    `!${QUARANTINED}`,
     ...(asked.scope ? [`.${MEMORY}.scope=${asked.scope}`] : []),
     ...(asked.feedback ? ['.feedback'] : []),
     '*',
