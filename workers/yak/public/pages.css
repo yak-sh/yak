@@ -323,7 +323,8 @@
      The frame fills the window, as the chat app's does, so the body's paper
      runs to the window's right edge; its content keeps its own width. */
   /* A TV (screen.ts): seen across a room, so the code is large; once
-     paired, the draft fills the screen edge to edge. */
+     paired, the draft fills the screen edge to edge, and each change it
+     takes is said in a line over its corner. */
   .Tv main {
     max-width: 48rem;
   }
@@ -347,6 +348,22 @@
     width: 100vw;
     height: 100vh;
     border: 0;
+  }
+  .Tv_Said {
+    position: fixed;
+    left: 2rem;
+    bottom: 2rem;
+    max-width: calc(100vw - 4rem);
+    margin: 0;
+    padding: .6rem 1.1rem;
+    border: 1px solid var(--border2);
+    border-radius: var(--radius);
+    background: var(--card);
+    color: var(--text);
+    font-size: clamp(1.25rem, 2.5vw, 2rem);
+  }
+  .Tv_Said:empty {
+    display: none;
   }
   .Desk {
     display: block;

@@ -11,7 +11,9 @@
 // a write of its views module so) and still reload if it cannot; else a
 // write of only stylesheets the page links swaps each in place, and any other
 // reloads the page, keeping the window's scroll and the values typed into its
-// fields.
+// fields. A framed page tells its frame each write first (`{"yak-draft":…}`),
+// so a TV showing it (screen.ts) can say what just changed; to any origin,
+// since only the app's space and yaks.app may frame it (cache.ts `sealed`).
 ;(() => {
   let script = document.currentScript
   if (!script) return
@@ -101,8 +103,17 @@
       next.addEventListener('load', () => link.remove(), { once: true })
       link.after(next)
     }
+    let framed = globalThis.parent != null && globalThis.parent != globalThis
     let took = (news) => {
       if (news.link != link || !Array.isArray(news.files)) return
+      if (framed) {
+        globalThis.parent.postMessage({
+          'yak-draft': {
+            files: news.files.map((f) => ({ path: f.path, sha: f.sha })),
+            at: news.at,
+          },
+        }, '*')
+      }
       // Each file with the address it serves at; a page that took the write
       // and could not use it calls `reload`, the one this page would have had.
       let files = news.files.map((file) => ({

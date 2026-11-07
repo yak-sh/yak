@@ -3222,6 +3222,9 @@ export let askCode = (at: {
 // What a TV page's script does: keep the screen awake, ask again every
 // `data-ask` ms, and move when the answer moves. Constant code: what it
 // reads comes from its page's data attributes.
+// How long a TV says what just changed.
+let SAID = 8000
+
 let TV = `(() => {
   let page = document.querySelector('[data-tv]')
   let ask = Number(page.dataset.ask)
@@ -3238,6 +3241,29 @@ let TV = `(() => {
     setTimeout(look, ask)
   }
   setTimeout(look, ask)
+  // Each write the framed draft takes, said over it for a few seconds: the
+  // TV's half of what the phone says aloud.
+  let line = page.querySelector('.Tv_Said')
+  let named = (paths) => paths.length > 3 ? paths.length + ' files'
+    : paths.length > 1 ? paths.slice(0, -1).join(', ') + ' and ' + paths.at(-1)
+    : paths[0]
+  let said = (files) => {
+    let wrote = files.filter((f) => f.sha).map((f) => f.path)
+    let gone = files.filter((f) => !f.sha).map((f) => f.path)
+    return [
+      wrote.length ? 'Wrote ' + named(wrote) : '',
+      gone.length ? 'Removed ' + named(gone) : '',
+    ].filter(Boolean).join('. ') || 'Released ' + page.dataset.title
+  }
+  let quiet
+  addEventListener('message', (e) => {
+    let frame = page.querySelector('iframe')
+    let news = e.data?.['yak-draft']
+    if (!line || !frame || e.source != frame.contentWindow || !Array.isArray(news?.files)) return
+    line.textContent = said(news.files)
+    clearTimeout(quiet)
+    quiet = setTimeout(() => line.textContent = '', ${SAID})
+  })
 })()`
 
 let pairAt = (env: Host) => url(env, '/tv/pair')
@@ -3282,8 +3308,9 @@ export let screenCode = (code: string, left: number, env: Host = {}) => {
   )
 }
 
-/** A paired TV: the draft the person last wrote, filling the screen, or a
- * line saying nothing is being built. */
+/** A paired TV: the draft the person last wrote, filling the screen, with
+ * a line over it saying each change as it lands, or a line saying nothing is
+ * being built. */
 export let watching = (
   shows: { app: string; title: string; url: string } | null,
   env: Host = {},
@@ -3293,9 +3320,21 @@ export let watching = (
     { title: shows ? shows.title : 'Your screen', layout: 'Tv' },
     h(
       'section',
-      { class: 'Tv_Watch', 'data-tv': '', 'data-ask': 15000 },
+      {
+        class: 'Tv_Watch',
+        'data-tv': '',
+        'data-ask': 15000,
+        'data-title': shows?.title,
+      },
       shows
-        ? h('iframe', { class: 'Tv_Frame', src: shows.url, title: shows.title })
+        ? [
+          h('iframe', {
+            class: 'Tv_Frame',
+            src: shows.url,
+            title: shows.title,
+          }),
+          h(Notice, { class: 'Tv_Said', role: 'status' }),
+        ]
         : h(
           Empty,
           null,

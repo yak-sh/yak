@@ -92,8 +92,10 @@ A TV can follow the person instead of one app. It opens `yaks.app/tv` and shows
 an eight-letter code; the person types it at `yaks.app/tv/pair` on their phone,
 or reads it out for `screen_pair`. The paired TV then shows the draft of the app
 they last wrote to, moving to another app when they write there, read-only: its
-page's writes are refused and what it keeps stays in the page. They unpair it at
-`yaks.app/tv/pair`, and the TV shows a new code.
+page's writes are refused and what it keeps stays in the page. Each write is
+said over it for a few seconds as it lands ("Wrote styles.css"), and a deploy as
+"Released" and the app's title. They unpair it at `yaks.app/tv/pair`, and the TV
+shows a new code.
 
 Before either, the page receives a cancelable **`yak-draft` event on `window`**.
 Its `detail` is `{app, link, draft, files: [{path, sha, url, entries?}], at}`,

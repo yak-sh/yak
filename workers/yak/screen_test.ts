@@ -235,3 +235,132 @@ test('the person reads the code out, and their agent pairs the TV with screen_pa
   let wrong = await run('screen_pair', { code: 'nonsense' }).catch((e) => e)
   equal(wrong.code, 'missing')
 })
+
+// The TV's own script on its page, framing the draft's page with
+// public/release.js in it: no network, no browser. `wrote` is a write the
+// link's socket tells the framed page of; `said` what the TV shows over it.
+let release = await Deno.readTextFile(
+  new URL('./public/release.js', import.meta.url),
+)
+let watch = async (tvPage: Document, url: string) => {
+  let ears: ((e: { data: unknown; source: unknown }) => void)[] = []
+  let timers = new Map<number, () => void>()
+  let script = (doc: Document, has: string) =>
+    [...doc.querySelectorAll('script')].find((s) =>
+      s.textContent!.includes(has) || s.hasAttribute(has)
+    )!
+  let running = (world: Record<string, unknown>, code: string) => {
+    world.globalThis = world
+    new Function('world', `with (world) { ${code} }`)(world)
+  }
+  let inside: Record<string, unknown> = {}
+  Object.defineProperty(tvPage.querySelector('iframe')!, 'contentWindow', {
+    value: inside,
+  })
+  running({
+    document: tvPage,
+    Number,
+    Array,
+    navigator: {},
+    location: { reload: () => {} },
+    fetch: () => new Promise(() => {}),
+    setTimeout: (
+      fn: () => void,
+    ) => (timers.set(timers.size + 1, fn), timers.size),
+    clearTimeout: (n: number) => timers.delete(n),
+    addEventListener: (n: string, fn: (typeof ears)[0]) =>
+      n == 'message' && ears.push(fn),
+  }, script(tvPage, 'data-tv').textContent!)
+
+  let { document } = parseHTML(
+    await (await handler.fetch(new Request(url), env)).text(),
+  )
+  let tag = script(document, 'data-yak-at')
+  Object.defineProperty(document, 'currentScript', { value: tag })
+  Object.defineProperty(document, 'baseURI', { value: url })
+  Object.defineProperty(document, 'readyState', { value: 'complete' })
+  let socket: Record<string, (e: { data: string }) => void> = {}
+  running(
+    Object.assign(inside, {
+      document,
+      URL,
+      JSON,
+      Map,
+      Number,
+      Proxy,
+      Reflect,
+      Infinity,
+      Math,
+      String,
+      name: '',
+      scrollX: 0,
+      scrollY: 0,
+      location: { href: url, reload: () => {} },
+      sessionStorage: { getItem: () => null, setItem: () => {} },
+      WebSocket: class {
+        addEventListener(n: string, fn: (e: { data: string }) => void) {
+          socket[n] = fn
+        }
+      },
+      CustomEvent: class {
+        constructor(public type: string, public init: { detail: unknown }) {}
+      },
+      dispatchEvent: () => true,
+      addEventListener: () => {},
+      setTimeout: () => {},
+      parent: {
+        postMessage: (data: unknown) =>
+          ears.forEach((fn) => fn({ data, source: inside })),
+      },
+    }),
+    release,
+  )
+  let line = tvPage.querySelector('.Tv_Said')!
+  return {
+    wrote: (files: { path: string; sha: string | null }[]) =>
+      socket.message({
+        data: JSON.stringify({
+          draft: {
+            app: 'A',
+            link: tag.dataset.yakDraft,
+            draft: files.length ? 'W' : null,
+            files,
+            at: 'now',
+          },
+        }),
+      }),
+    from: (source: unknown, data: unknown) =>
+      ears.forEach((fn) => fn({ data, source })),
+    said: () => line.textContent,
+    quiet: () => [...timers.values()].at(-1)!(),
+  }
+}
+
+test('each change the draft takes on a TV is said over it as it lands, then goes quiet', async () => {
+  let screen = await tv()
+  equal((await form('/tv/pair', ada, { code: screen.code })).status, 303)
+  await draft('garden', 'Beans up the trellis')
+  let { showing } = await screen.now()
+  let page = await doc(await screen.open())
+  let shown = await watch(page, showing.url)
+  equal(shown.said(), '')
+
+  shown.wrote([{ path: 'index.html', sha: 'a' }])
+  equal(shown.said(), 'Wrote index.html')
+  shown.wrote([
+    { path: 'styles.css', sha: 'b' },
+    { path: 'app.js', sha: 'c' },
+    { path: 'old.js', sha: null },
+  ])
+  equal(shown.said(), 'Wrote styles.css and app.js. Removed old.js')
+  shown.wrote(['a', 'b', 'c', 'd'].map((n) => ({ path: `${n}.css`, sha: n })))
+  equal(shown.said(), 'Wrote 4 files')
+  shown.wrote([])
+  equal(shown.said(), 'Released Garden')
+
+  // Only the frame it holds speaks to it.
+  shown.from({}, { 'yak-draft': { files: [{ path: 'x.html', sha: 'x' }] } })
+  equal(shown.said(), 'Released Garden')
+  shown.quiet()
+  equal(shown.said(), '')
+})
