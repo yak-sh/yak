@@ -683,9 +683,9 @@ export class Builder {
   }
 
   // Work started once the answer has gone, held by the object. Started
-  // before the answer returns, it goes first, and what it writes (the owed
-  // work arms the alarm and starts the pool) holds the answer until storage
-  // confirms it: a cold object's first page waited 264 ms more for it.
+  // before the answer returns, it goes first: the page waits for its CPU
+  // (the pool's start-up runs) and for what it writes (the alarm armed, their
+  // rows) to be confirmed.
   #behind(work: () => void) {
     this.#ctx.waitUntil?.(
       new Promise<void>((done) =>

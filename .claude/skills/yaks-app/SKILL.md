@@ -209,16 +209,18 @@ A query that works on the box can be refused in a store.
   stored copy of the object (CPU profile with `deno run --cpu-prof`). Keep
   what the first request runs to what its answer needs: work nobody waits for
   (re-arming an owed alarm, `#start`) runs behind the answer.
-- **A write holds the answer.** An object's answer leaves only once every
-  write made before it returned is confirmed, an alarm set included: a cold
-  Builder's first page waited 264 ms after its handler had answered
-  (T-148780). So a read writes nothing before its answer: a schema is fitted
-  once a Worker version (graph.ts `#stood`, operator-store.ts `FITTED`), a
+- **An object's trace leaves out its CPU.** Its spans and
+  `time_to_first_byte_ms` advance only across I/O, so a cold Builder whose
+  handler span read 126 ms spent 279 ms of CPU, and its caller's fetch of it
+  took 761 (T-148780). Time an object by its caller's fetch span (Workers
+  observability, by `$metadata.traceId`) beside the invocation's
+  `cpu_time_ms`. Everything run before a handler returns is the caller's to
+  wait for, and so is the confirmation of every write made before it. So a
+  read does only what its answer needs first: a schema is fitted once a
+  Worker version (graph.ts `#stood`, operator-store.ts `FITTED`), a
   migration that finished says so once (channel-move.ts `CHANNELED`), and
-  work behind the answer starts in a timer after it returns (build.ts
-  `#behind`, running.ts `behindAnswer`), not on the way out. A trace's spans
-  (Workers observability, by `$metadata.traceId`) show the gap: the
-  object's handler ends well before its caller's fetch does.
+  the rest starts in a timer once the answer has returned (build.ts
+  `#behind`, running.ts `behindAnswer`).
 - **128 MB per isolate**, shared by every object in it (`HELD` in
   packages/embedding/held.ts caps vector copies at 48 MB; the vectors are
   `search-and-embeddings`). The kernel Worker has the same 128 MB, so a body

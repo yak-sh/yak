@@ -89,8 +89,8 @@ export let FITTED = 'operator:fitted'
  * so it is fitted once a Worker version (`options.version`, the version the
  * pool's runs are cut under too): a wake under the version that fitted it runs
  * no DDL and writes nothing, as a Store's does (graph.ts `#stood`). Fitting
- * inspects every table and writes its receipt, and an object's write holds
- * its answer until storage confirms it: a cold object's first took 260 ms.
+ * on every wake read the schema four times over and wrote its receipt before
+ * the first request's answer.
  * With no version (a test's runtime names none) every wake fits.
  */
 export let operatorStore = (
