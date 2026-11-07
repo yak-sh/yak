@@ -138,6 +138,8 @@ export let assetUrl = (
     : ref
 }
 
+let ADDRESS = /^(?:\/|\.\.?\/)/
+
 let mapUrl = (
   ref: string,
   mount: string,
@@ -146,7 +148,7 @@ let mapUrl = (
   reserved: (path: string) => boolean,
   base: string,
 ) => {
-  if (!/^(?:\/|\.\.?\/)/.test(ref)) return ref
+  if (!ADDRESS.test(ref)) return ref
   let found = local(ref, mount, bare, reserved, base)
   return found && !/\.html?$/i.test(found.path)
     ? versioned(mount, release, found)
@@ -166,7 +168,66 @@ let mapEntries = (
     )
     : entries
 
-/** Keep local import-map targets and scopes with the script release. */
+let SCRIPT = /<script\b([^>]*)>([\s\S]*?)<\/script\s*>/gi
+let typeOf = (attrs: string) => {
+  let type = /\btype\s*=\s*(?:"([^"]*)"|'([^']*)'|([^\s>]+))/i.exec(attrs)
+  return (type?.[1] ?? type?.[2] ?? type?.[3] ?? '').trim().toLowerCase()
+}
+let SCRIPTS = new Set([
+  '',
+  'module',
+  'text/javascript',
+  'application/javascript',
+])
+// `import … from './x.js'`, `export … from './x.js'`, `import './x.js'` and
+// `import('./x.js')`: a module named by its address, not computed.
+let SPECIFIER = /\b(?:from|import)\s*\(?\s*(['"])((?:\/|\.\.?\/)[^'"\n]*)\1/g
+
+// What a page's own scripts import by address, keyed by the address the
+// browser resolves and pointed at its release, the rule `<script src>` follows
+// (`assetUrl`). A page's inline module importing `./cooking.js` would
+// otherwise fetch the app's mutable address, which is asked again on every
+// load; its release address never changes, so the browser keeps it. A
+// release's module asking for the app's API (`./api/client.js`, below the
+// release) is pointed at the same address the page imports it by, so the
+// client is one module, not a second copy behind `apiOut`'s redirect.
+// The address a page's reference resolves to, as an import map keys it.
+let resolved = (ref: string, base: string) => {
+  let url = new URL(ref, new URL(base, 'https://app.invalid'))
+  return url.href.slice(url.origin.length)
+}
+
+let imported = (
+  html: string,
+  mount: string,
+  bare: string,
+  release: string,
+  reserved: (path: string) => boolean,
+  base: string,
+) => {
+  let imports: Record<string, string> = {}
+  let modules = false
+  for (let [, attrs, body] of html.matchAll(SCRIPT)) {
+    let type = typeOf(attrs)
+    modules ||= type == 'module'
+    if (!SCRIPTS.has(type)) continue
+    for (let [, , ref] of body.matchAll(SPECIFIER)) {
+      let next = assetUrl(ref, mount, bare, release, reserved, base)
+      if (next == ref) continue
+      imports[resolved(ref, base)] = next
+    }
+  }
+  if (modules) imports[`${mount}api/assets/${release}/api/`] = `${mount}api/`
+  return imports
+}
+
+let mapJson = (map: unknown) => JSON.stringify(map).replaceAll('<', '\\u003c')
+
+/** Keep a page's local modules with its release: an import map's local
+ * targets and scopes move to it, and what the page's scripts import by
+ * address is added to the page's import map (one written at the head when
+ * the page has none), where the author's own entry for the same address
+ * wins. */
 export let assetMaps = (
   html: string,
   mount: string,
@@ -174,33 +235,53 @@ export let assetMaps = (
   release: string,
   reserved: (path: string) => boolean = () => false,
   base = mount,
-) =>
-  html.replace(
-    /<script\b([^>]*)>([\s\S]*?)<\/script\s*>/gi,
-    (whole, attrs: string, body: string) => {
-      let type = /\btype\s*=\s*(?:"([^"]*)"|'([^']*)'|([^\s>]+))/i
-        .exec(attrs)
-      if ((type?.[1] ?? type?.[2] ?? type?.[3])?.toLowerCase() != 'importmap') {
-        return whole
+) => {
+  let imports = imported(html, mount, bare, release, reserved, base)
+  let merged = false
+  let move = (url: string) => mapUrl(url, mount, bare, release, reserved, base)
+  let page = html.replace(SCRIPT, (whole, attrs: string, body: string) => {
+    if (typeOf(attrs) != 'importmap') return whole
+    let map
+    try {
+      map = JSON.parse(body)
+    } catch {
+      return whole
+    }
+    if (!map || typeof map != 'object' || Array.isArray(map)) return whole
+    let plain = map.imports == null ||
+      typeof map.imports == 'object' && !Array.isArray(map.imports)
+    let own: Record<string, unknown> = plain ? map.imports ?? {} : {}
+    map.imports = mapEntries(map.imports, move)
+    if (map.scopes && typeof map.scopes == 'object') {
+      map.scopes = Object.fromEntries(
+        Object.entries(map.scopes).map(([scope, imports]) => [
+          move(scope),
+          mapEntries(imports, move),
+        ]),
+      )
+    }
+    // The first map is the one every browser reads. An author's key by
+    // address answers the page's own import of it too, before the release's.
+    if (!merged && plain) {
+      let theirs = Object.entries(own).filter(([key]) => ADDRESS.test(key))
+        .map(([key, value]) => [
+          resolved(key, base),
+          typeof value == 'string' ? move(value) : value,
+        ])
+      map.imports = {
+        ...imports,
+        ...Object.fromEntries(theirs),
+        ...map.imports as Record<string, unknown>,
       }
-      let map
-      try {
-        map = JSON.parse(body)
-      } catch {
-        return whole
-      }
-      if (!map || typeof map != 'object' || Array.isArray(map)) return whole
-      let move = (url: string) =>
-        mapUrl(url, mount, bare, release, reserved, base)
-      map.imports = mapEntries(map.imports, move)
-      if (map.scopes && typeof map.scopes == 'object') {
-        map.scopes = Object.fromEntries(
-          Object.entries(map.scopes).map(([scope, imports]) => [
-            move(scope),
-            mapEntries(imports, move),
-          ]),
-        )
-      }
-      return whole.replace(body, JSON.stringify(map).replaceAll('<', '\\u003c'))
-    },
-  )
+    }
+    merged = true
+    return whole.replace(body, mapJson(map))
+  })
+  if (merged || !Object.keys(imports).length) return page
+  // Ahead of every module, and of any `<meta>` policy the head carries.
+  let head = /<head\b[^>]*>/i.exec(page)
+  let at = head ? head.index + head[0].length : page.search(/<script\b/i)
+  return page.slice(0, at) +
+    `<script type="importmap">${mapJson({ imports })}</script>` +
+    page.slice(at)
+}

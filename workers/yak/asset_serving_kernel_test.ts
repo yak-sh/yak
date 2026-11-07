@@ -25,6 +25,8 @@ test('a page uses release assets whose bytes survive deploy and rollback', async
               '"./scripts/":{"@scope":"./scripts/worker.js"}}}' +
               '</script>' +
               '<script type="module" src="./scripts/main.js"></script>' +
+              `<script type="module">import { v } from './scripts/chunk.js'` +
+              '</script>' +
               '<a href="./next.html">next</a>' +
               '<form action="./api/apply"></form><h1>page</h1>',
           },
@@ -75,6 +77,23 @@ test('a page uses release assets whose bytes survive deploy and rollback', async
       `"@local":"/page/api/assets/${release1}/scripts/chunk.js"`,
     )
     assertStringIncludes(first, `"/page/api/assets/${release1}/scripts/":`)
+    // The page's own module imports its release's file, which the browser
+    // keeps, and a release module's client is the page's.
+    let imports = (html: string) =>
+      JSON.parse(/<script type=importmap>(.*?)<\/script>/.exec(html)![1])
+        .imports
+    let chunk1 = `/page/api/assets/${release1}/scripts/chunk.js`
+    assertEquals(imports(first)['/page/scripts/chunk.js'], chunk1)
+    assertEquals(
+      imports(first)[`/page/api/assets/${release1}/api/`],
+      '/page/api/',
+    )
+    let kept = await at(chunk1)
+    assertEquals(
+      kept.headers.get('cache-control'),
+      'private, max-age=31536000, immutable',
+    )
+    assertEquals(await kept.text(), "export let v = 'first'")
     assertStringIncludes(first, '<a href="./next.html">')
     assertStringIncludes(first, '<form action="./api/apply">')
     // A page in a folder is sent to its folder's address by the bound files
@@ -128,6 +147,11 @@ test('a page uses release assets whose bytes survive deploy and rollback', async
     )
     assertStringIncludes(await (await at(css1)).text(), '/*first*/')
     assertStringIncludes(await (await at(css2)).text(), '/*second*/')
+    // A deploy moves the import, and the old release keeps its bytes.
+    let chunk2 = imports(second)['/page/scripts/chunk.js']
+    assertEquals(chunk2, `/page/api/assets/${release2}/scripts/chunk.js`)
+    assertEquals(await (await at(chunk2)).text(), "export let v = 'second'")
+    assertEquals(await (await at(chunk1)).text(), "export let v = 'first'")
     assertStringIncludes(
       await (await at('/page/styles/main.css')).text(),
       '/*second*/',

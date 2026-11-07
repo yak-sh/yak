@@ -194,3 +194,82 @@ test("a release asset's API reference climbs out through its mount", () => {
   )
   assertEquals(apiOut('/lib/main.js'), null)
 })
+
+// A module a page's scripts import by address is fetched from its release,
+// which never changes, rather than from the app's address, asked again on
+// every load. The client a release's module reaches below the release is the
+// one the page imports, so it runs once.
+test("a page's imports by address follow its release", () => {
+  let id = '3c92f71b-848e-4492-95e7-c73402b90ffc'
+  let root = `/cookbook/api/assets/${id}/`
+  let mapOf = (html: string, base = '/cookbook/') => {
+    let served = assetMaps(
+      html,
+      '/cookbook/',
+      '/cookbook/',
+      id,
+      () => false,
+      base,
+    )
+    let map = /<script type="?importmap"?>(.*?)<\/script>/.exec(served)?.[1]
+    return map ? JSON.parse(map).imports : null
+  }
+  let page = (script: string, type = 'module') =>
+    `<!doctype html><head><title>t</title></head>` +
+    `<script type="${type}">${script}</script>`
+  assertEquals(
+    mapOf(page(
+      `import { a } from './cooking.js'\nimport './side.js'\n` +
+        `export * from "../cookbook/lib/x.mjs"\nlet m = import('./later.js')\n` +
+        `import { me } from './api/client.js'\nimport 'lit'\n` +
+        `import('./' + name)\nimport x from 'https://cdn.example/x.js'`,
+    )),
+    {
+      '/cookbook/cooking.js': `${root}cooking.js`,
+      '/cookbook/side.js': `${root}side.js`,
+      '/cookbook/lib/x.mjs': `${root}lib/x.mjs`,
+      '/cookbook/later.js': `${root}later.js`,
+      [`${root}api/`]: '/cookbook/api/',
+    },
+  )
+  assertEquals(
+    mapOf(page(`import './me.js'`), '/cookbook/about/')
+      ?.['/cookbook/about/me.js'],
+    `${root}about/me.js`,
+  )
+  // A classic script's dynamic import counts; a page with no module has no map.
+  assertEquals(mapOf(page(`import('./a.js')`, 'text/javascript')), {
+    '/cookbook/a.js': `${root}a.js`,
+  })
+  assertEquals(mapOf('<p>no scripts</p><script>let a = 1</script>'), null)
+  assertEquals(mapOf(page(`"from": "./x.js"`, 'application/json')), null)
+  // The map leads the head, ahead of every module and any policy.
+  let served = assetMaps(
+    page(`import './a.js'`).replace(
+      '<title>',
+      '<meta http-equiv="content-security-policy"><title>',
+    ),
+    '/cookbook/',
+    '/cookbook/',
+    id,
+  )
+  assertEquals(served.indexOf('<head><script type="importmap">'), 15)
+  // An author's map takes the page's imports, keeping its own entry for one.
+  let authored = assetMaps(
+    `<script type=importmap>{"imports":{"./a.js":"./b.js"}}</script>` +
+      `<script type=module>import './a.js'; import './c.js'</script>`,
+    '/cookbook/',
+    '/cookbook/',
+    id,
+  )
+  assertEquals((authored.match(/importmap/g) ?? []).length, 1)
+  assertEquals(
+    JSON.parse(/importmap>(.*?)<\/script>/.exec(authored)![1]).imports,
+    {
+      '/cookbook/a.js': `${root}b.js`,
+      '/cookbook/c.js': `${root}c.js`,
+      [`${root}api/`]: '/cookbook/api/',
+      [`${root}a.js`]: `${root}b.js`,
+    },
+  )
+})
