@@ -48,7 +48,7 @@ import {
 } from './door.ts'
 import { PLATFORM_STORE, SLUG } from '@yaks/platform/names'
 import { ADMIN } from '@yaks/platform/bots'
-import { recall, writing, wrote } from './lib/hops.ts'
+import { ambient, recall, type Tally, writing, wrote } from './lib/hops.ts'
 import { refusal } from '@yaks/api'
 import { CallError } from '@yaks/tools/errors'
 import {
@@ -2035,6 +2035,18 @@ export let directoryRows = (rows: {
     invitedFor == person && invitedAt != null && invitedAt == wrote(META_STORE)
       ? invited.get(to)
       : undefined
+  // Every app of each space a request's page read named whole (`page` with
+  // `every`), by the space's eid, with where the request stood in its
+  // directory writes then: its `apps` is answered from it until the request
+  // writes there (hops.ts `wrote`), so a page asks its space's apps once.
+  let rosters = new WeakMap<Tally, Map<string, { at: number; apps: App[] }>>()
+  let roster = () => {
+    let tally = ambient()
+    if (!tally) return undefined
+    let held = rosters.get(tally)
+    if (!held) rosters.set(tally, held = new Map())
+    return held
+  }
   let write = (
     mutation: { entities: Bundle[] },
     headers: Record<string, string> = {},
@@ -2057,21 +2069,20 @@ export let directoryRows = (rows: {
     }
     return await asked
   }
-  // The `operator_reach` rows on one side, each with the live space on the other.
+  // The `operator_reach` rows on one side, each with the live space on the
+  // other, in one read.
   let reaching = async (
     side: 'space' | 'operator',
     other: 'space' | 'operator',
     eid: string,
   ): Promise<Reach[]> => {
-    let rows = (await query(`.operator_reach.${side}=${eid}`))
-      .filter((r) => r.operator_reach)
-    if (!rows.length) return []
+    let found = await query(
+      `(.operator_reach.${side}=${eid})` +
+        `|(.space&.operator_reachs_${other}.operator_reach.${side}=${eid}&${SPACE_ABOUT})`,
+    )
+    let rows = found.filter((r) => r.operator_reach)
     let spaces = new Map(
-      (await query(
-        `.entity.eid=${
-          rows.map((r) => idOf(r.operator_reach![other])).join(',')
-        }`,
-      )).filter((r) => r.space).map((r) => [r.entity.eid, spaceOf(r)]),
+      found.filter((r) => r.space).map((r) => [r.entity.eid, spaceOf(r)]),
     )
     return rows.flatMap((r) => {
       let space = spaces.get(idOf(r.operator_reach![other]))
@@ -2153,13 +2164,38 @@ export let directoryRows = (rows: {
         invitedAt = epoch
         invitedFor = person
       }
-      return paged(
+      let page = paged(
         rows,
         rows.find((row) => row.space),
         app,
         person,
         over,
         every,
+      )
+      if (
+        page.space && page.roster && epoch != null &&
+        epoch == wrote(META_STORE)
+      ) roster()?.set(page.space.eid, { at: epoch, apps: page.roster })
+      return page
+    },
+    // The same for a space named by its eid, as an object keyed by it knows
+    // it (build.ts `#operate`): the space and the seat of whoever is asking,
+    // in one read, and no apps.
+    seat: async (eid: string, person: string, over = false) => {
+      let rows = await query(
+        `(.entity.eid=${eid}&.space&${SPACE_ABOUT})` +
+          `|(.member.space=${eid}&.member.person=${person})` +
+          (over
+            ? `|(.member.space.space.slug=${META.space}&.member.person=${person})`
+            : ''),
+      )
+      return paged(
+        rows,
+        rows.find((row) => row.space && row.entity.eid == eid),
+        null,
+        person,
+        over,
+        false,
       )
     },
     // The page of the one space among the person's seats holding a live app
@@ -2505,6 +2541,10 @@ export let directoryRows = (rows: {
       }
       let eids = [space].flat().map((s) => s.eid)
       if (!eids.length) return []
+      let read = eids.length == 1 ? roster()?.get(eids[0]) : undefined
+      if (read && read.at === wrote(META_STORE)) {
+        return structuredClone(read.apps)
+      }
       return (await query(`.app.space=${eids.join(',')}&${ABOUT}`))
         .map(appOf)
     },

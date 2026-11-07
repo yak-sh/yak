@@ -85,6 +85,8 @@ import * as dirPart from './directory.ts'
 import type { Env } from './env.ts'
 import type { Who } from './session.ts'
 import { caught, refusing } from './defects.ts'
+import { reported, type Tally, tallying } from './lib/hops.ts'
+import { headed } from './timing.ts'
 import { type Browsers, browsers, type Lent } from './operator-browser.ts'
 import { PROTOCOL, protocolled } from './protocol.ts'
 import { managePath } from './route.ts'
@@ -237,6 +239,9 @@ export class Builder {
   // leaves.
   #until = 0
   #draining = false
+  // What this incarnation takes up from the one before it, once it has
+  // answered the request that woke it (`#work`).
+  #owed?: () => void
   // The browsers people lend the Operator, and the calls asked of them that
   // wait for an answer: in memory, as the step waiting on one is.
   #lent: Browsers
@@ -392,7 +397,21 @@ export class Builder {
    * (apps.ts vouches it the way it vouches a store request) — this object is
    * never reached from the internet.
    */
+  /** An answer, with what its work cost the caller's Server-Timing: the
+   * round trips and waits behind it, as a store's carries them (hops.ts
+   * `reported`, door.ts `metered`). */
   async fetch(request: Request): Promise<Response> {
+    let tally: Tally = new Map()
+    let answer = await tallying(tally, () => this.#answer(request))
+    this.#resume()
+    let headers = new Headers(answer.headers)
+    for (let [name, value] of Object.entries(reported(tally))) {
+      headers.set(name, value)
+    }
+    return headed(answer, headers)
+  }
+
+  async #answer(request: Request): Promise<Response> {
     // A caller on a later deploy restarts this object first, but only an idle
     // one: a build in flight (a model call can take minutes), an Operator's
     // step under way or a page's socket is never cut for it, and keeps the
@@ -488,17 +507,16 @@ export class Builder {
     let person = request.headers.get('x-yak-person')
     let spaceId = request.headers.get(SPACE)
     if (!person || !spaceId) return no(401, NOBODY)
-    let space = await this.#space(spaceId)
-    if (!space) return no(404, 'that space is gone')
-    let dir = directory({
+    // The space and the person's seat in it, fresh, in one read.
+    let access = await directory({
       fetch: (req: Request) => dirPart.fetch(req, this.#env),
-    })
-    let access = await dir.page(
-      space.slug,
-      null,
+    }).seat(
+      spaceId,
       person,
       request.headers.get('x-yak-administrative') == '1',
     )
+    let space = access.space
+    if (!space) return no(404, 'that space is gone')
     let role = access.administrative ? 'owner' as const : access.role ?? null
     if (!writes(role)) return no(403, NOT_A_WRITER)
     if (new URL(request.url).pathname == '/operator/browser') {
@@ -630,11 +648,11 @@ export class Builder {
       })
       handleChannels(operator, this.#env)
       // An incarnation takes up what the one before it left: a step a deploy
-      // reset under its reply runs again at once, on the first request (a page
-      // reconnecting) rather than whenever the person next says something.
-      // Worked here, not only armed: an alarm the reset cut off can hold the
-      // next one back for minutes.
-      nudge()
+      // reset under its reply runs again at once, behind the first request's
+      // answer (a page reconnecting) rather than whenever the person next says
+      // something. Worked, not only armed: an alarm the reset cut off can hold
+      // the next one back for minutes.
+      this.#owed = nudge
       return operator
     })()
   }
@@ -651,9 +669,17 @@ export class Builder {
     })
   }
 
+  // The incarnation's owed work, started once.
+  #resume() {
+    let owed = this.#owed
+    this.#owed = undefined
+    owed?.()
+  }
+
   async alarm() {
     let { drain, SLICE, waking } = await import('./operator-store.ts')
     let { store } = await this.#work()
+    this.#resume()
     this.#wake ??= waking(
       this.#ctx.storage,
       (e) => caught(e, { request: 'operator alarm' }),

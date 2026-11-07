@@ -19,9 +19,14 @@
 // anonymous, member and owner are each asked separately.
 
 import { test } from '@yaks/testing'
-import { assert, assertEquals, assertStringIncludes } from '@std/assert'
+import {
+  assert,
+  assertEquals,
+  assertMatch,
+  assertStringIncludes,
+} from '@std/assert'
 import { parseHTML } from 'linkedom'
-import { managePath } from './route.ts'
+import { chatPath, managePath } from './route.ts'
 import {
   accepted,
   client,
@@ -381,22 +386,34 @@ test('the front page is served at the space root', async () => {
 })
 
 // Every trip to the directory is a wait from wherever the request landed, so a
-// dashboard page asks everything it can at once: who the person is and where
-// they sit first, then the rows those name.
-test('a dashboard page reads the directory in two trips at most', async () => {
+// dashboard page asks everything it can at once: who the person is, where they
+// sit and the space with every app in it, then only the rows of a page's own
+// that the space's eid names.
+test('a dashboard page reads the directory in one trip, two for rows of its own', async () => {
   let k = await kernel()
   let slug = unique('trips')
   let { cookie } = await seed(k, [{ slug, apps: ['one', 'two'] }])
-  let trips = async (path: string) => {
+  let timing = async (path: string) => {
     await k.settled()
     let page = await k.at('yaks.app', path, { headers: { cookie } })
     await page.body?.cancel()
     assertEquals(page.status, 200)
-    return /hops;dur=(\d+)/.exec(page.headers.get('server-timing') ?? '')?.[1]
+    return page.headers.get('server-timing') ?? ''
   }
-  for (let view of ['apps', 'settings', 'billing', 'connections'] as const) {
+  let trips = async (path: string) =>
+    /hops;dur=(\d+)/.exec(await timing(path))?.[1]
+  for (let view of ['apps', 'new', 'settings', 'billing', 'trash'] as const) {
+    assertEquals(await trips(managePath(view, slug)), '1', view)
+  }
+  for (let view of ['connections', 'people', 'operator'] as const) {
     assertEquals(await trips(managePath(view, slug)), '2', view)
   }
+  // The chat asks its space's Operator twice beside it, the conversation and
+  // the Updates, and each of those asks the directory once; what it waited
+  // on the Operator is said.
+  let chat = await timing(chatPath(slug))
+  assertEquals(/hops;dur=(\d+)/.exec(chat)?.[1], '5')
+  assertMatch(chat, /operator_wait;dur=\d+/)
   // A page of the person's own asks only about them, at once.
   for (let view of ['profile', 'shared'] as const) {
     assertEquals(await trips(managePath(view)), '1', view)

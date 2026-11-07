@@ -342,6 +342,26 @@ for (
   })
 }
 
+// A page read names every app of its space, so asking them again in the same
+// request costs no trip, until the request writes to the directory.
+test('directory page: its apps answer the request again, until it writes', async () => {
+  let asked = 0
+  let dir = directory(fixture({
+    query: (q) => (asked++, routingGraph.read(q) as Promise<dirPart.Row[]>),
+    apply: () => Promise.resolve([]),
+  }))
+  await tallying(new Map(), async () => {
+    let page = await dir.page('jeff')
+    let read = asked
+    assertEquals(await dir.apps(page.space!), page.roster)
+    assertEquals(asked, read)
+    await dir.apply({ entities: [{ entity: { eid: 'a1' }, doc: {} }] })
+    read = asked
+    await dir.apps(page.space!)
+    assertEquals(asked, read + 1)
+  })
+})
+
 // A comp is the platform holding one of its own spaces to no ceiling. It is a
 // constant read here and a property nowhere: what makes that safe is that
 // nothing on the wire can reach it, which is the same reason `plan` is

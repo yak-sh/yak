@@ -28,7 +28,8 @@
 // Every `<name>_wait` is milliseconds spent waiting on one kind of service,
 // summed over the request wherever it waited (hops.ts `elapsed`), a store's
 // own waits included: `directory_wait` and `store_wait` at the door onto a
-// store (door.ts), `copy_wait` on the serving copy (directory-copy.ts),
+// store (door.ts), `operator_wait` at the door onto a space's Operator
+// (build-door.ts `builderOf`), `copy_wait` on the serving copy (directory-copy.ts),
 // `r2_wait` on the bucket, `analytics_wait` on Cloudflare's SQL API for visit
 // counts (views.ts).
 import { counts, type Tally, tallying } from './lib/hops.ts'

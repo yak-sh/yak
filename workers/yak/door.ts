@@ -21,15 +21,14 @@ import { evicted, killed, opaque, retried, starved } from '@yaks/durable-object'
 // it asked in turn, how long it waited to start when this fetch woke it, and
 // what it waited on (`x-yak-waits`). Only the door sees every answer, so it is
 // also where a parent request collects those costs, and times the round trip
-// itself: `directory_wait` or `store_wait` (timing.ts).
+// itself under `wait`: `directory_wait`, `store_wait` or `operator_wait`
+// (timing.ts).
 let metered = async (
-  name: string,
+  wait: string,
   send: () => Promise<Response>,
 ): Promise<Response> => {
-  let res = await elapsed(
-    name == PLATFORM_STORE ? 'directory_wait' : 'store_wait',
-    send,
-  )
+  hop('hops')
+  let res = await elapsed(wait, send)
   heard(res.headers.get(WAITS))
   for (
     let [header, name] of [
@@ -250,13 +249,12 @@ export let doorOf = (
         req.headers.set('x-yak-base-release', String(app.base))
       }
     }
-    hop('hops')
     // And the one place a write to a store is seen, whichever door made it: a
     // read this request remembers is never answered from before it (hops.ts
     // `writing`, directory.ts `directory`).
     let read = req.method == 'GET' || req.method == 'HEAD'
     return metered(
-      name,
+      name == PLATFORM_STORE ? 'directory_wait' : 'store_wait',
       () => read ? send(req) : writing(name, () => send(req)),
     )
   }
@@ -295,16 +293,25 @@ export let reset = async (r: Response): Promise<Error | null> => {
 
 /** A request factory, not a spent Request: every send gets its own body.
  * Each carries the caller's deploy, so an object still on older code restarts
- * onto it rather than answering for it (running.ts `behind`). */
-export let fetchOf =
-  (ns: Namespace, name: string, wait?: (ms: number) => Promise<void>) =>
-  (make: () => Request): Promise<Response> =>
+ * onto it rather than answering for it (running.ts `behind`). Named an
+ * `as`, each round trip is counted and timed under it, with the costs its
+ * answer reports (`metered`). */
+export let fetchOf = (
+  ns: Namespace,
+  name: string,
+  wait?: (ms: number) => Promise<void>,
+  as?: string,
+) =>
+(make: () => Request): Promise<Response> => {
+  let send = () =>
     retried(
       () => ns.get(ns.idFromName(objectOf(name))).fetch(stamped(make())),
       true,
       undefined,
       wait,
     )
+  return as ? metered(as, send) : send()
+}
 
 // An answer a resend could replace, read whole inside the replay that sent it:
 // a restart that cuts off its body is sent again instead of reaching whoever

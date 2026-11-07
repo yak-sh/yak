@@ -53,9 +53,9 @@ export type Frame =
   | { busy: string }
 
 /** This space's object. The name is the space's eid, which never moves — a
- * slug does. */
+ * slug does. A request's waits on it are its `operator_wait` (timing.ts). */
 export let builderOf = (env: Env, space: string) =>
-  fetchOf(env.BUILDER, space, jittered(env.CLOCK))
+  fetchOf(env.BUILDER, space, jittered(env.CLOCK), 'operator_wait')
 
 /**
  * The handshake, carried to the object with the kernel's own vouch on it and
