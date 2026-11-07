@@ -1,9 +1,13 @@
 // What the file keeps, as SQLite's page statistics (`dbstat`) count it: each
 // table's bytes with its indexes folded in, and its rows, which are the cells
 // of its own leaf pages; and the file's bytes and how many of them are free.
-// `dbstat` reads every page it counts, which on a file of gigabytes takes a
-// minute, so the walk takes one b-tree at a time, each in a read unit, and
-// lets its thread's other work run between them.
+// `dbstat` reads every page it counts, and one b-tree of a file of gigabytes
+// is one statement that reads for half a minute, mostly waiting on the disk.
+// A file is therefore measured in a Worker over a read-only connection of its
+// own (./measure_worker.ts), so no caller's thread waits on it. A database in
+// memory has no other connection to give it, and is walked where it is, a
+// b-tree at a time, each in a read unit, letting its thread's other work run
+// between them.
 
 import {
   as,
@@ -64,12 +68,13 @@ export let located = (driver: Driver): string | undefined => {
 }
 
 /**
- * Measure the file, a b-tree at a time; undefined once `signal` aborts.
+ * Walk the b-trees of the database `driver` holds on this thread; undefined
+ * once `signal` aborts. A caller wants {@link measure}.
  *
  * ```ts
  * import { col, val } from '@yaks/sql'
  * import { mem } from './testing.ts'
- * import { measure } from './measure.ts'
+ * import { walk } from './measure.ts'
  * import { equal, ok } from '@yaks/testing'
  *
  * let db = mem()
@@ -78,14 +83,14 @@ export let located = (driver: Driver): string | undefined => {
  * db.query({ t: 'create index', name: 'note_body', on: 'note', cols: [col('body')] })
  * let body = [val('x'.repeat(100))]
  * db.query({ t: 'insert', into: 'note', cols: ['body'], rows: Array(12).fill(body) })
- * let m = (await measure(db))!
+ * let m = (await walk(db))!
  * equal(m.tables.note[1], 12)
  * ok(m.tables.note[0] >= 4 * 512, 'the table and its index, folded in')
  * equal('note_body' in m.tables, false)
  * ok(m.bytes >= m.tables.note[0])
  * ```
  */
-export let measure = async (
+export let walk = async (
   driver: Driver,
   signal?: AbortSignal,
 ): Promise<Measure | undefined> => {
@@ -116,3 +121,42 @@ export let measure = async (
     tables,
   }
 }
+
+/** What ./measure_worker.ts answers. */
+export type Measured = { value: Measure } | { error: string }
+
+/**
+ * Measure the database: a file in a Worker of its own, which ends when
+ * `signal` aborts, and memory by {@link walk}; undefined once `signal` aborts.
+ */
+export let measure = (
+  driver: Driver,
+  signal?: AbortSignal,
+): Promise<Measure | undefined> => {
+  let file = located(driver)
+  return file ? aside(file, signal) : walk(driver, signal)
+}
+
+let aside = (file: string, signal?: AbortSignal) =>
+  new Promise<Measure | undefined>((resolve, reject) => {
+    if (signal?.aborted) return resolve(undefined)
+    let worker = new Worker(new URL('./measure_worker.ts', import.meta.url), {
+      type: 'module',
+    })
+    let end = () => {
+      worker.terminate()
+      signal?.removeEventListener('abort', stop)
+    }
+    let stop = () => (end(), resolve(undefined))
+    signal?.addEventListener('abort', stop, { once: true })
+    worker.onmessage = ({ data }: MessageEvent<Measured>) => {
+      end()
+      'value' in data ? resolve(data.value) : reject(new Error(data.error))
+    }
+    worker.onerror = (e) => {
+      e.preventDefault()
+      end()
+      reject(e.error ?? new Error(e.message))
+    }
+    worker.postMessage(file)
+  })

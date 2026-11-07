@@ -186,10 +186,13 @@ passes the dead by however they were removed.
 
 `store.measure(signal)` says what the file keeps (./measure.ts), as SQLite's
 page statistics (`dbstat`) count it: the file's bytes and free bytes, and each
-table's bytes with its indexes folded in, and its rows. It reads one b-tree at a
-time in a read unit and lets its thread's other work run between them, since a
-file of gigabytes takes a minute to read through. `store.file` is where the file
-is, as SQLite opened it (`PRAGMA database_list`), and absent for one in memory.
+table's bytes with its indexes folded in, and its rows. `dbstat` reads every
+page, and one b-tree of a file of gigabytes is a statement that reads for half a
+minute, so a file is measured in a Worker over a read-only connection of its own
+(./measure_worker.ts) and the caller's thread never waits on it; a database in
+memory is walked a b-tree at a time, each in a read unit. `store.file` is where
+the file is, as SQLite opened it (`PRAGMA database_list`), and absent for one in
+memory.
 
 `store.buried(before, { after, limit })` offers the graves a retention sweep may
 prune (./buried.ts): tombstones laid before `before` that no column in the file
