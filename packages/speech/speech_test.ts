@@ -412,48 +412,115 @@ test('a caller talking over the model stops it only once their words say somethi
   equal(cancels(), 1)
 })
 
-test('a caller turn ends when the model hears it end, or once quiet after a lone "Okay."', () => {
-  let { s, told, stream, event } = talking(() => Promise.resolve(''))
-  s.fire('open')
-  let sent = (type: string) => s.json().filter((m) => m.type == type).length
-  let hear = (...words: string[]) => {
-    event({ type: 'input_audio_buffer.speech_started' })
-    for (let delta of words) {
+// A talk stream a caller speaks to: `speak` starts their turn, `quiet` is
+// seconds of a quiet line at 8 kHz μ-law and `loud` a sound, `heard` their
+// words once heard, and `says` the model's audio. `sent` counts what was sent
+// of a type.
+let calling = () => {
+  let c = talking(() => Promise.resolve(''))
+  c.s.fire('open')
+  let { s, stream, event } = c
+  return {
+    ...c,
+    speak: () => event({ type: 'input_audio_buffer.speech_started' }),
+    quiet: (seconds = 0.7) =>
+      stream.send(new Uint8Array(Math.round(seconds * 8000)).fill(0xff)),
+    loud: () => stream.send(new Uint8Array(160).fill(0x10)),
+    heard: (transcript: string) =>
       event({
-        type: 'conversation.item.input_audio_transcription.delta',
-        delta,
-      })
-    }
+        type: 'conversation.item.input_audio_transcription.completed',
+        transcript,
+      }),
+    says: () => event({ type: 'response.output_audio.delta', delta: 'AwQ=' }),
+    done: () => event({ type: 'response.done' }),
+    sent: (type: string) => s.json().filter((m) => m.type == type).length,
   }
-  // 0.7 s of a quiet line, or of a sound, at 8 kHz μ-law.
-  let quiet = () => stream.send(new Uint8Array(5600).fill(0xff))
-  let loud = () => stream.send(new Uint8Array(160).fill(0x10))
-  hear(' Tuesday', '.')
-  quiet()
+}
+
+test('a caller turn ends when the model hears it end, or once quiet, and its answer waits for their words', () => {
+  let { told, speak, quiet, heard, says, done, sent, event } = calling()
+  speak()
   event({ type: 'input_audio_buffer.speech_stopped' })
-  equal([told, sent('response.create'), sent('input_audio_buffer.commit')], [
-    ['stopped'],
-    1,
-    0,
-  ])
-  event({ type: 'response.done' })
-  // "Okay." said, the caller still talking or thinking, waits for the model.
-  loud()
-  hear(' Okay', '.')
-  hear(' Okay', ',')
-  quiet()
-  hear(' Hmm', '.')
-  quiet()
+  says()
+  heard('Tuesday.')
+  done()
+  equal([sent('response.create'), sent('input_audio_buffer.commit')], [1, 0])
+  speak()
+  quiet(0.5)
   equal(sent('response.create'), 1)
-  // Quiet after a lone "Okay.", the turn ends without it, once.
-  loud()
-  hear(' Okay', '.')
+  quiet(0.2)
+  // Their words still heard once it ended are its own, not talking over.
+  for (let delta of [' What', ' time', ' is', ' it']) {
+    event({ type: 'conversation.item.input_audio_transcription.delta', delta })
+  }
+  says()
+  event({ type: 'response.output_audio_transcript.done', transcript: 'Hi.' })
+  equal([sent('response.create'), sent('input_audio_buffer.commit')], [2, 1])
+  equal(sent('response.cancel'), 0)
+  equal(told.length, 5)
+  heard('What time is it?')
+  equal(told.slice(5), [{ heard: 'What time is it?' }, [3, 4], { said: 'Hi.' }])
+  equal(told.slice(0, 5), [
+    'stopped',
+    { heard: 'Tuesday.' },
+    [3, 4],
+    'done',
+    'stopped',
+  ])
+})
+
+test('an answer is not said when the caller stops where a sentence goes on, the model listens, or they talk first; left unanswered, it comes once they are long quiet', () => {
+  let { s, told, speak, quiet, loud, heard, says, done, sent, event } =
+    calling()
+  let answers = () => told.filter((t) => Array.isArray(t)).length
+  // "My address is": what the model began to say is stopped, and nothing
+  // is said until they have been quiet 5 s, asked with their tools alone.
+  speak()
   quiet()
-  equal(sent('input_audio_buffer.commit'), 1)
-  event({ type: 'input_audio_buffer.speech_stopped' })
+  says()
+  heard('My address is')
+  done()
+  quiet(4)
+  equal([answers(), sent('response.cancel'), sent('response.create')], [
+    0,
+    1,
+    1,
+  ])
+  quiet(1)
+  let reply = s.json().at(-1)
+  equal(reply.response.tools.map((t: { name: string }) => t.name), ['ask'])
+  says()
+  done()
+  equal(answers(), 1)
+  // The model asks to listen.
+  speak()
+  quiet()
   event({
-    type: 'error',
-    error: { code: 'input_audio_buffer_commit_empty', message: 'x' },
+    type: 'response.function_call_arguments.done',
+    call_id: 'l1',
+    name: 'listen',
+    arguments: '{}',
   })
-  equal([told, sent('response.create')], [['stopped', 'done', 'stopped'], 2])
+  heard('Book it for Friday.')
+  done()
+  equal(s.json().at(-1).item, {
+    type: 'function_call_output',
+    call_id: 'l1',
+    output: 'Listening.',
+  })
+  // Talking again before it plays: the answer under way is stopped, and the
+  // one after their words is said.
+  speak()
+  quiet()
+  heard('Okay.')
+  loud()
+  says()
+  speak()
+  quiet()
+  says()
+  done()
+  says()
+  equal([answers(), sent('response.cancel')], [1, 3])
+  heard('So I need a plumber.')
+  equal(answers(), 2)
 })

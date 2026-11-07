@@ -38,11 +38,14 @@ argument; nothing here reads the environment.
   talked over the model and what plays should stop (once their words say
   something, `meant`: an "okay", a laugh or a noise lets it go on, and the
   response under way is cancelled), `told.stopped()` ends their turn, when the
-  model hears it end, or once they are quiet after a turn `whole` by its words
-  (a lone "Okay.", which the model would wait out), `told.heard` and `told.said`
-  are each side's words, and `told.call(name, args)` answers a tool the model
-  asked for with its output, before it goes on, and `told.done()` ends each of
-  its responses. `say(text)` asks it to say something, and `tell(text)` tells it
+  model hears it end or once they are quiet 0.7 s. What the model says to it
+  waits for their words, and is not said when they stopped where a sentence goes
+  on (`open`: "the", "is", "um", a comma), when the model calls the stream's own
+  `listen` tool, or when they talk again before it plays; a turn left unanswered
+  is answered once they have been quiet 5 s. `told.heard` and `told.said` are
+  each side's words, and `told.call(name, args)` answers a tool the model asked
+  for with its output, before it goes on, and `told.done()` ends each of its
+  responses. `say(text)` asks it to say something, and `tell(text)` tells it
   something it knows from now on without answering it; `spent()` answers the
   seconds heard and what the stream cost so far, and `close()` ends it answering
   the same, each response priced at its model's rates, or the stream's when it

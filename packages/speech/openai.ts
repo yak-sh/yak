@@ -218,11 +218,10 @@ export let OPENAI: Provider = {
           input: {
             format: wire(setup.format),
             transcription: { model: 'gpt-live-transcribe', language: 'en' },
-            // A phone held to the ear. The model, not silence, says when
-            // the caller is done, letting an "um" or a half sentence run on
-            // instead of answering it as a turn of its own; mod.ts `talk`
-            // answers it. Unsure, it waits up to 4 s at medium eagerness, 8 s
-            // at low, and 2 s at high, which ends a turn at a thinking pause.
+            // A phone held to the ear. The model says when the caller is
+            // done, in about a second when it is sure; unsure, it waits up to
+            // 4 s at medium eagerness, and mod.ts `talk` ends the turn sooner
+            // and answers it. High eagerness ends a turn at a thinking pause.
             noise_reduction: { type: 'near_field' },
             turn_detection: {
               type: 'semantic_vad',
@@ -259,7 +258,11 @@ export let OPENAI: Provider = {
           said.push({ stopped: true })
           break
         case 'conversation.item.input_audio_transcription.completed':
-          if (e.transcript?.trim()) said.push({ heard: e.transcript.trim() })
+          said.push({ heard: e.transcript?.trim() ?? '' })
+          break
+        // Words not heard are none.
+        case 'conversation.item.input_audio_transcription.failed':
+          said.push({ heard: '' })
           break
         case 'conversation.item.input_audio_transcription.delta':
           if (e.delta) said.push({ hearing: e.delta })
@@ -309,12 +312,16 @@ export let OPENAI: Provider = {
         item: { type: 'function_call_output', call_id: call, output },
       }),
     ],
-    respond: (text) =>
+    respond: (text, tools) =>
       JSON.stringify({
         type: 'response.create',
-        ...text == undefined ? {} : {
+        ...text == undefined && !tools ? {} : {
           response: {
-            instructions: `Say exactly this, and nothing else: ${text}`,
+            ...text == undefined ? {} : {
+              instructions: `Say exactly this, and nothing else: ${text}`,
+            },
+            ...tools &&
+              { tools: tools.map((t) => ({ type: 'function', ...t })) },
           },
         },
       }),

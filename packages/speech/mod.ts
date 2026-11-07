@@ -53,7 +53,7 @@ export type Said = {
   start?: true
   /** the caller stopped talking, and the model is about to answer */
   stopped?: true
-  /** what the caller said, once heard */
+  /** what the caller said, once heard: nothing, when no words were */
   heard?: string
   /** the next of the caller's words, heard as they talk */
   hearing?: string
@@ -153,8 +153,9 @@ export type Provider = {
     read: (data: unknown, model: string) => Said[]
     /** a tool's answer given back */
     answer: (call: string, output: string) => string[]
-    /** the model asked for a response: to say `text`, or without it to go on */
-    respond: (text?: string) => string
+    /** the model asked for a response: to say `text`, or without it to go
+     * on, asking for `tools` alone when they are given */
+    respond: (text?: string, tools?: Setup['tools']) => string
     /** what stops the response under way */
     cancel: string
     /** something the model is told mid-stream, for what it says next,
@@ -518,8 +519,12 @@ let FILLERS = new Set(
     .split(' '),
 )
 
-// The fillers of a caller thinking, who has more to say.
-let THINKING = new Set('ah hm hmm mm uh um'.split(' '))
+// The words a sentence goes on after: articles, prepositions, conjunctions,
+// possessives, "is", and the fillers of a caller thinking.
+let ON = new Set(
+  'a an the to of for with from into at by and or but because if my your our their is ah er hm hmm mm uh um'
+    .split(' '),
+)
 
 let words = (text: string) =>
   text.toLowerCase().split(/\s+/).map((w) => w.replace(/[^a-z]/g, ''))
@@ -537,31 +542,44 @@ let words = (text: string) =>
 export let meant = (text: string): number =>
   words(text).filter((w) => !FILLERS.has(w)).length
 
-/** Whether `text` is a whole turn by its words alone: fillers said as a
- * sentence, ending in one that is not a caller thinking. A model that hears
- * when a turn ends takes a lone "Okay." for the start of more, and waits.
+/** Whether `text` stops where a sentence goes on: on a comma or a dash, or
+ * on a word a sentence goes on after (`ON`: "the", "to", "is", "um"). A caller
+ * heard to stop there has more to say.
  *
  * ```ts
  * import { equal } from '@yaks/testing'
- * import { whole } from '@yaks/speech'
- * equal(['Okay.', ' Um, yes.', 'Okay,', 'Hmm.', 'Okay. So', 'Book it.'].map(whole),
- *   [true, true, false, false, false, false])
+ * import { open } from '@yaks/speech'
+ * let lines = ['My address is', 'So what I need is, um', 'Okay,', 'Okay.',
+ *   'Forty-two Elm Street.', 'Can you come out tomorrow?', '']
+ * equal(lines.map(open), [true, true, true, false, false, false, false])
  * ```
  */
-export let whole = (text: string): boolean => {
+export let open = (text: string): boolean => {
   let w = words(text)
-  return !!w.length && w.every((x) => FILLERS.has(x)) &&
-    !THINKING.has(w.at(-1)!) && /[.!?]\s*$/.test(text)
+  return !!w.length && (/[,\-–—…]\s*$/.test(text) || ON.has(w.at(-1)!))
 }
 
 // The words a caller says over the model before it stops: fewer, or only
 // fillers, and it goes on. Two say "wait, stop" or "hold on".
 let OVER = 2
 
-// The seconds a caller is quiet after a `whole` turn before it ends. Their
-// words are heard about as late, and one going on ("Okay, so…") is talking
-// again by then.
+// The seconds a caller is quiet before their turn ends, when the model has
+// not heard it end: it waits on some whole sentences, and on a lone "Okay.".
+// One going on ("Okay, so…") is mostly talking again by then.
 let QUIET = 0.7
+
+// The seconds a turn left unanswered waits for more before it is answered,
+// longer than a caller's pause to think.
+let LONG = 5
+
+// The stream's own tool: the model asks for it to say nothing while the
+// caller has more to say.
+let LISTEN = {
+  name: 'listen',
+  description:
+    'Say nothing and keep listening: the caller stopped partway through what they are saying, cut off mid-sentence, trailing off to think, or with only an um or uh. They have more to say.',
+  parameters: { type: 'object', properties: {} },
+}
 
 /**
  * A model that hears and speaks in one stream: `send` takes the caller's raw
@@ -574,8 +592,12 @@ let QUIET = 0.7
  * model writes its audio faster than it is said, so what it says is mostly
  * still playing, its response long done, when the caller talks.
  *
- * The model says when the caller's turn ends, and is answered then; a turn
- * `whole` by its words ends once they are `QUIET`, without waiting for it.
+ * The caller's turn ends when the model hears it end, or once they are
+ * `QUIET`, and is answered. What the model says to it waits for the caller's
+ * words, and is never said when they stopped where a sentence goes on
+ * (`open`), when the model asks to `LISTEN`, or when the caller talks again
+ * before it plays. A turn left unanswered is answered once they have been
+ * quiet `LONG`.
  */
 export let talk = (
   o: {
@@ -604,19 +626,42 @@ export let talk = (
   // What the caller has said since they started talking, whether it stopped
   // the model, and whether the response it stopped is still sending audio.
   let hearing = '', over = false, hushed = false
-  // Whether the caller's turn ended and was answered, and for how many
-  // seconds their audio has been quiet.
-  let ended = false, quiet = 0
+  // Whether the caller's turn ended, whether they spoke since it last did,
+  // and for how many seconds their audio has been quiet. `heard` is their
+  // words last heard; `unheard`, that the turn's are still to come.
+  let ended = true, spoke = false, quiet = 0, heard = '', unheard = false
+  // The ask for the turn's answer while it is not yet played or asked of a
+  // tool, and whether the turn was left unanswered. What the model says while
+  // the turn's words are `unheard` is `held`: each thing to do once they are,
+  // and to do instead if it is never said.
+  let pending: string | undefined, unanswered = false
+  let held: { run: () => void; drop?: () => void }[] | undefined
+  let out = (run: () => void, drop?: () => void) =>
+    held ? held.push({ run, drop }) : run()
   let end = () => {
     if (ended) return
     ended = true
+    if (spoke) spoke = false, unheard = true
+    if (unheard) held = []
     o.told.stopped?.()
-    ask(goOn)
+    if (!unheard && open(heard)) return void (unanswered = true)
+    ask(pending = goOn)
   }
   let soon = () => {
-    if (ended || quiet < QUIET || !whole(hearing)) return
-    s.send(t.commit)
-    end()
+    if (!ended && quiet >= QUIET) s.send(t.commit), end()
+    if (unanswered && quiet >= LONG) {
+      unanswered = false
+      ask(pending = t.respond(undefined, o.tools ?? []))
+    }
+  }
+  // The turn's answer is not said: what is held is dropped, the ask still
+  // waiting is not sent, and the response under way is stopped.
+  let withdraw = () => {
+    for (let h of held ?? []) h.drop?.()
+    let m = pending!
+    held = pending = undefined
+    if (waiting.includes(m)) waiting.splice(waiting.indexOf(m), 1)
+    else if (busy && last == m) s.send(t.cancel), hushed = true
   }
   let ask = (m: string) => {
     if (m != goOn || !waiting.includes(m)) waiting.push(m)
@@ -636,38 +681,63 @@ export let talk = (
       format: o.format,
       speed: paced(t.speeds, o.speed),
       instructions: o.instructions,
-      tools: o.tools ?? [],
+      tools: [LISTEN, ...o.tools ?? []],
     }),
     (data) => {
       for (let said of t.read(data, model)) {
-        if (said.start) hearing = '', over = ended = false
-        if (said.hearing) hearing += said.hearing, soon()
-        if (said.hearing && !over && meant(hearing) >= OVER) {
+        if (said.start) {
+          if (pending) withdraw()
+          hearing = '', over = ended = unanswered = false, spoke = true
+        }
+        // Their words still heard once their turn ended are its own.
+        if (said.hearing) hearing += said.hearing
+        if (said.hearing && !ended && !over && meant(hearing) >= OVER) {
           over = true
           if (busy) s.send(t.cancel), hushed = true
           o.told.over?.()
         }
         if (said.stopped) end()
-        if (said.heard) o.told.heard?.(said.heard)
-        if (said.audio && !hushed) o.told.audio(said.audio)
-        if (said.said) o.told.said?.(said.said)
+        if (said.heard != undefined) {
+          if (said.heard) o.told.heard?.(said.heard)
+          heard = said.heard, unheard = false
+          if (pending && open(heard)) withdraw(), unanswered = true
+          let h = held ?? []
+          held = undefined
+          for (let { run } of h) run()
+        }
+        let audio = said.audio
+        if (audio && !hushed) {
+          out(() => (pending = undefined, o.told.audio(audio)))
+        }
+        let text = said.said
+        if (text) out(() => o.told.said?.(text))
         if (said.spent) dollars += said.spent
-        if (said.begun) busy = true
+        if (said.begun) {
+          busy = true
+          if (hushed) s.send(t.cancel)
+        }
         if (said.busy && last) waiting.unshift(last), busy = true
         if (said.done) {
-          o.told.done?.()
+          out(() => o.told.done?.(), () => o.told.done?.())
           busy = hushed = false
           next()
         }
         if (said.error) o.told.lost?.(said.error)
         let call = said.call
-        if (call) {
-          o.told.call(call.name, call.args)
-            .catch((error) => `That did not work: ${error?.message ?? error}`)
-            .then((output) => {
-              for (let m of t.answer(call.id, output)) s.send(m)
-              ask(goOn)
-            })
+        if (call?.name == LISTEN.name) {
+          if (pending) withdraw(), unanswered = true
+          for (let m of t.answer(call.id, 'Listening.')) s.send(m)
+        } else if (call) {
+          let answer = (output: string, more = true) => {
+            for (let m of t.answer(call.id, output)) s.send(m)
+            if (more) ask(goOn)
+          }
+          out(() => {
+            pending = undefined
+            o.told.call(call.name, call.args)
+              .catch((error) => `That did not work: ${error?.message ?? error}`)
+              .then(answer)
+          }, () => answer('Not asked: they went on talking.', false))
         }
       }
     },
@@ -678,10 +748,13 @@ export let talk = (
       if (s.closed()) return
       bytes += audio.length
       s.send(t.audio(audio))
-      quiet = sounds(audio, o.format)
-        ? 0
-        : quiet + audio.length / perSecond(o.format)!
-      soon()
+      if (!sounds(audio, o.format)) {
+        quiet += audio.length / perSecond(o.format)!
+        return soon()
+      }
+      // Talking again before the answer plays, the caller is not done.
+      quiet = 0
+      if (pending) withdraw(), ended = false
     },
     say: (text) => ask(t.respond(text)),
     tell: (text) => {
