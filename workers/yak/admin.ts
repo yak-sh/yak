@@ -64,10 +64,11 @@ import { caught } from './defects.ts'
 import { operatorDoor } from './build-door.ts'
 import { type Listed, listed, type Worked } from './operator-view.ts'
 import { column, conversationOf } from './operator-page.ts'
-import { managePath } from './route.ts'
+import { ADMIN, managePath } from './route.ts'
+import { admin } from './tool.ts'
 import { Idle } from './mascot.ts'
 
-export let PATH = '/admin'
+export let PATH = ADMIN
 
 // Who may read it: an owner of the meta space, by the platform session cookie
 // and nothing else, never a bearer token, which is what an agent holds. Null
@@ -75,8 +76,7 @@ export let PATH = '/admin'
 export let staff = async (req: Request, env: Env, dir: Directory) => {
   let person = (await sessionAt(req, env.SESSION_SECRET))?.person
   if (!person) return null
-  let meta = await dir.space(META.space)
-  return meta && await dir.role(meta, person) == 'owner' ? person : ''
+  return await admin({ dir, person }) ? person : ''
 }
 
 type List = 'people' | 'spaces' | 'apps'

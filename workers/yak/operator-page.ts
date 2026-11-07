@@ -20,6 +20,7 @@ import { PROTOCOL, protocolled, upgrading } from './protocol.ts'
 import { choice as spaceChoice, esc, type Picked, shell } from './pages.ts'
 import { spaceHost, url } from './host.ts'
 import {
+  ADMIN,
   chatPath,
   logoPath,
   MANAGE,
@@ -826,11 +827,13 @@ for (let form of document.querySelectorAll('#texts, #name, #voice')) {
 
 /** What the chat app's side holds beside every page of it, read by its door
  * (apps.ts `beside`): every space the person may open (its selector), the
- * apps of this one they may open, and what they are called. */
+ * apps of this one they may open, what they are called, and whether they are
+ * the platform's admin (tool.ts `admin`). */
 export type Beside = {
   spaces?: Picked[]
   apps?: { eid: string; slug: string; title: string }[]
   name?: string | null
+  admin?: boolean
 }
 
 // How many of the space's apps the side shows before "All N apps".
@@ -842,7 +845,8 @@ let APPS = 4
 // with how many wait on the person; the space's apps; and at the foot Manage,
 // the settings behind the product (today's dashboard pages: its Apps for the
 // space's owner, the Operator's settings for a member, the only one of them
-// they may open), where older chats are listed. `current` holds what this
+// they may open), where older chats are listed, and for the platform's admin
+// Admin, its directory (admin.ts). `current` holds what this
 // page shows: a conversation, `updates`, and `app` the app open beside it.
 // Each app opens beside the conversation on screen, or else the person's one
 // conversation, so their words stay where they were (T-140509, T-141273).
@@ -960,6 +964,9 @@ let side = (
         h(Icon, { of: icons['sliders-horizontal'] }),
         'Manage',
       ),
+      beside.admin
+        ? link(ADMIN, false, h(Icon, { of: icons.shield }), 'Admin')
+        : null,
     ),
   )
 }

@@ -206,6 +206,9 @@ export let OURS = '/_yaks'
 // already routes it to the identity part with the rest of the sign-in surface.
 export let LINK = '/login/link'
 
+/** The platform admin's directory, on the platform's own host (admin.ts). */
+export let ADMIN = '/admin'
+
 /** Where signing out is posted (identity.ts). */
 export let LOGOUT = '/logout'
 

@@ -122,10 +122,17 @@ let sided = async (
   role: 'owner' | 'editor',
   open = task,
   app?: string,
+  admin = false,
 ) => {
   let { document } = parseHTML(
-    await (await chatPage(p.env, space, { ...who, role }, open, beside, app))
-      .text(),
+    await (await chatPage(
+      p.env,
+      space,
+      { ...who, role },
+      open,
+      { ...beside, admin },
+      app,
+    )).text(),
   )
   let lines = [
     ...document.querySelectorAll(
@@ -288,6 +295,7 @@ test("the chat app installs to a home screen as its Operator's web app", () => {
 
 let owner = await sided('owner')
 let member = await sided('editor')
+let admin = await sided('owner', task, undefined, true)
 test('the side holds the space, the Operator, Updates, a few apps and Manage', () => {
   let op = space.operator
   assertEquals(owner.said, [
@@ -325,6 +333,9 @@ test('the side holds the space, the Operator, Updates, a few apps and Manage', (
   // A member may open none of the settings but the Operator's.
   assertEquals(member.said.includes('All 6 apps'), false)
   assertEquals(member.to.Manage, managePath('operator', 'clerk'))
+  // The platform's admin alone has Admin, after Manage.
+  assertEquals(admin.said, [...owner.said, 'Admin'])
+  assertEquals(admin.to.Admin, '/admin')
 })
 
 test('a new chat greets the person by name, with ways to start that fill the box', () => {

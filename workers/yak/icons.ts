@@ -54,6 +54,8 @@ import Settings2 from 'lucide/dist/esm/icons/settings-2.mjs'
 // @ts-types="@yaks/ui/lucide"
 import Share2 from 'lucide/dist/esm/icons/share-2.mjs'
 // @ts-types="@yaks/ui/lucide"
+import Shield from 'lucide/dist/esm/icons/shield.mjs'
+// @ts-types="@yaks/ui/lucide"
 import SlidersHorizontal from 'lucide/dist/esm/icons/sliders-horizontal.mjs'
 // @ts-types="@yaks/ui/lucide"
 import Trash2 from 'lucide/dist/esm/icons/trash-2.mjs'
@@ -69,6 +71,7 @@ export let icons = {
   bot: Bot,
   bell: Bell,
   'sliders-horizontal': SlidersHorizontal,
+  shield: Shield,
   plug: Plug,
   users: Users,
   user: User,

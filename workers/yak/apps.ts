@@ -228,7 +228,7 @@ import { voice } from './rtc.ts'
 import { speechDoor } from './speech.ts'
 import { notices } from './notices.ts'
 import { reach } from './tunnel.ts'
-import { refuse } from './tool.ts'
+import { admin, refuse } from './tool.ts'
 import { letIn, letOut } from './operator-reach.ts'
 import { routes as commandRoutes } from '@yaks/tools/routes'
 import { commandIn, commandsIn } from './app-command.ts'
@@ -2549,21 +2549,23 @@ let pickable = async (dir: ReturnType<typeof directory>, seats: Seat[]) => {
 
 // What the chat app's side holds (operator-page.ts `Beside`), asked at once:
 // the spaces its selector offers, the apps here this person may open, and
-// what they are called.
+// what they are called, and whether they are the platform's admin.
 let beside = async (
   dir: ReturnType<typeof directory>,
   space: Space,
   who: Owner,
 ): Promise<Beside> => {
-  let [spaces, { mine }, name] = await Promise.all([
+  let [spaces, { mine }, name, platform] = await Promise.all([
     dir.seats(who.person).then((seats) => pickable(dir, seats)),
     dir.apps(space).then((apps) => shelf(apps, space, who)),
     dir.nameAt(who.person),
+    admin({ dir, person: who.person }),
   ])
   return {
     spaces,
     apps: mine.map((a) => ({ eid: a.eid, slug: a.slug, title: a.title })),
     name,
+    admin: platform,
   }
 }
 
