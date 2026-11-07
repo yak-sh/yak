@@ -278,8 +278,16 @@ export type Tool<R = Bundle[]> = {
   run: (call: Bundle, graph: Graph) => R | Promise<R>
 }
 
-/** A read hook's caller options and committed storage, outside a transaction. */
-export type ReadContext = { opts: ReadOpts; tx: ReadTx; vocab?: Vocab }
+/** A read hook's caller options and committed storage, outside a transaction.
+ * `screened`: the bundles an answer hook is given are storage's answer to a
+ * read under `opts.visibility`, every scope's included, rather than patches or
+ * rows from elsewhere. */
+export type ReadContext = {
+  opts: ReadOpts
+  tx: ReadTx
+  vocab?: Vocab
+  screened?: boolean
+}
 
 /** A caller's vocabulary over canonical candidates. The graph addresses
  * `original` before asking for the view, reads whole candidates with `query`,
@@ -331,7 +339,8 @@ export type Plugin = {
   ) => ReadView | null | Promise<ReadView | null>
   /** Rewrite a parsed query after core addressing and before storage. */
   ask?: (ctx: ReadContext, query: Ast) => Ast | Promise<Ast>
-  /** Rewrite outgoing bundles after storage and projection. */
+  /** Rewrite outgoing bundles after storage and projection. A scope's own
+   * policy already holds for bundles its context calls `screened`. */
   answer?: (ctx: ReadContext, bundles: Bundle[]) => Bundle[] | Promise<Bundle[]>
 
   /** Rewrite scalar projections and reductions after storage and caller views. */

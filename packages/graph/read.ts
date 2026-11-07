@@ -17,7 +17,7 @@ import type {
   Visibility,
 } from './storage.ts'
 import { detached } from './storage.ts'
-import type { Plugin, ReadView } from './plugin.ts'
+import type { Plugin, ReadContext, ReadView } from './plugin.ts'
 import type { Graph, Options } from './graph.ts'
 import { Refused } from './errors.ts'
 import { minted } from './mint.ts'
@@ -109,9 +109,15 @@ export let reader = (opts: {
     }
     return visibility ? { ...readOpts, visibility } : readOpts
   }
-  let readContext = (plugin: Plugin, options: ReadOpts = {}) => {
+  let readContext = (
+    plugin: Plugin,
+    options: ReadOpts = {},
+    screened = false,
+  ): ReadContext => {
     let authoritative = outsideRead()
-    if (plugin.scope) return { opts: options, tx: authoritative, vocab }
+    if (plugin.scope) {
+      return { opts: options, tx: authoritative, vocab, screened }
+    }
     let limited = (extra: ReadOpts = {}) =>
       scoped({
         ...options,
@@ -126,7 +132,7 @@ export let reader = (opts: {
       whole: read,
       get: (ids, comps, o) => authoritative.get(ids, comps, limited(o)),
     }
-    return { opts: options, tx, vocab }
+    return { opts: options, tx, vocab, screened }
   }
   // The same convenience a tool's arguments get (tool.ts `addressed`), applied
   // to a query string: wherever the query names an entity, an id a person can
@@ -291,6 +297,7 @@ export let reader = (opts: {
     readOpts?: ReadOpts,
     owner?: Plugin,
     mandatory = false,
+    screened = false,
   ) => {
     if (!answerHooks.length) return bundles
     let hooks = answerHooks.filter((p) =>
@@ -302,7 +309,7 @@ export let reader = (opts: {
     return each(
       hooks,
       bundles,
-      (at, p) => p.answer!(readContext(p, readOpts), at),
+      (at, p) => p.answer!(readContext(p, readOpts, screened), at),
     )
   }
 
@@ -479,7 +486,9 @@ export let reader = (opts: {
       (q) =>
         continuing(
           readStored(q, readOpts, !!readOpts?.native || q !== query),
-          (rows) => answer(rows, readOpts),
+          // Whole bundles the store read under this read's scopes.
+          (rows) =>
+            answer(rows, readOpts, undefined, false, !projection(vocab, q)),
         ),
     )
   }

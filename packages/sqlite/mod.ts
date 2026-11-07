@@ -743,6 +743,7 @@ export let storage = (
     o: Opts,
     fetch = cached,
     pending: string[] = owing(),
+    answered = false,
   ) => {
     let effective = { ...opts(), ...o }
     let eligible = known(o)
@@ -760,6 +761,7 @@ export let storage = (
         eligible && !base.visibility && !virtual(eids, effective)
           ? reading(effective, fetch)
           : undefined,
+        answered,
       )
     return eligible ? reused(eids, comps, effective, run, pending) : run()
   }
@@ -771,8 +773,8 @@ export let storage = (
     Object.keys(o).every((k) =>
         k != 'now' && (UNREAD.has(k) || k == 'visibility')
       )
-      ? (eids: string[], comps?: string[]) =>
-        viewed(eids, comps, o, fetch, pending())
+      ? (eids: string[], comps?: string[], answered?: boolean) =>
+        viewed(eids, comps, o, fetch, pending(), answered)
       : undefined
   let tests = new WeakMap<And, Map<boolean, Filter | undefined>>()
   let tested = (query: And, exactIds = false): Filter | undefined => {

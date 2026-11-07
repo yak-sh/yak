@@ -290,8 +290,9 @@ export let personal = (
     },
     // Subscription relays and coverage carry patches, whose owner need not be
     // present. Consult canonical rows instead of trusting incoming bylines.
-    answer: ({ opts, tx }, bundles) => {
-      if (!caller(opts) || !bundles.length) return bundles
+    // Rows the store read under this scope are already what it allows.
+    answer: ({ opts, tx, screened }, bundles) => {
+      if (!caller(opts) || !bundles.length || screened) return bundles
       return after(tx.get(bundles.map((b) => b.entity.eid), comps), (rows) => {
         let held = new Map(rows.map((b) => [b.entity.eid, b]))
         let targets = [

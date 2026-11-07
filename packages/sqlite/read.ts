@@ -905,6 +905,9 @@ let setOf = (names: readonly string[]): Set<string> => {
   return got
 }
 
+// `answered`: the eids are what a query under `opts.visibility` answered, in
+// this same snapshot, so the scope has admitted each one already. Their
+// aspects and the entities they reference are still put to it.
 export let get = (
   driver: Driver,
   vocab: Vocab,
@@ -913,6 +916,7 @@ export let get = (
   comps?: string[],
   unclassified: string[] = [],
   cache?: ReadCache,
+  answered = false,
 ): Bundle[] => {
   if (!eids.length) return []
   // The tables this read may touch: every component's, or the named ones',
@@ -975,7 +979,9 @@ export let get = (
     // scope: an id no entity has (most an address asks about, @yaks/alias)
     // costs no screen.
     let held = cache?.fetch(eids, comps)
-    let allowed = permitted(held ? held.map((b) => b.entity.eid) : eids)
+    let allowed = answered
+      ? new Set(eids)
+      : permitted(held ? held.map((b) => b.entity.eid) : eids)
     let ids = eids.filter((eid) => allowed.has(eid))
     let scoped = () => ({ ...plain, derived: visibleDerived(vocab, opts) })
     let found = held
@@ -1319,7 +1325,7 @@ export let read = (
   opts: BindOpts = {},
   comps?: string[],
   ask: (query: And) => Row[] = (q) => rows(driver, vocab, q, opts),
-  fetch?: (eids: string[], comps?: string[]) => Bundle[],
+  fetch?: (eids: string[], comps?: string[], answered?: boolean) => Bundle[],
 ): Bundle[] => {
   let parsed = ast(query)
   let eids = ask(parsed).filter((r) => r.eid != null).map((r) => String(r.eid))
@@ -1330,8 +1336,16 @@ export let read = (
   let asked = pinned(parsed, vocab, requestedDerived(parsed, derived))
   // A query asking for no derived value a whole read leaves out, and pinning
   // none, reads its entities as the store's own get does, through `fetch`
-  // where one is given.
-  return fetch && asked == derived
-    ? fetch(eids, comps)
-    : get(driver, vocab, eids, { ...opts, derived: asked }, comps)
+  // where one is given. Either way, the entities are the query's own answer,
+  // which its scope admitted.
+  return fetch && asked == derived ? fetch(eids, comps, true) : get(
+    driver,
+    vocab,
+    eids,
+    { ...opts, derived: asked },
+    comps,
+    [],
+    undefined,
+    true,
+  )
 }
