@@ -565,6 +565,26 @@ test('a claim whose holder has exited is free, and runs once', async () => {
   })
 })
 
+test('a claim whose holder the host says is gone is free, though it wrote no exit', async () => {
+  // A Durable Object reset under a call: its runner wrote nothing on the way.
+  let { g } = world([echo], 'host1')
+  let r = runner(g, {
+    tools: [echo],
+    owner: 'host1',
+    gone: (holder) => holder == 'dead',
+    report: () => {},
+  })
+  await r.ensure()
+  await g.apply(['dead', 'host2'].map((by) => ({
+    entity: { eid: `held by ${by}` },
+    call: { to: toolEid('example_echo'), args: { value: by } },
+    execution: { by },
+  })))
+  let ran = await r.drive()
+  assertEquals(ran.filter((b) => b.result).map(body), ['dead 2'])
+  assertEquals(await r.run('held by host2'), [])
+})
+
 test('an interrupted call is answered as interrupted, and no sweep runs it again', async () => {
   let hang = Promise.withResolvers<Bundle[]>()
   let stuck: Tool = { ...echo, verb: 'wait', run: () => hang.promise }

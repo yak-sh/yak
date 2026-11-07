@@ -123,6 +123,11 @@ export type Opts = {
    * is running in another runner under the same name. Omitted, this runner
    * claims anonymously and takes any call nobody else holds. */
   owner?: Eid
+  /** whether a holder other than {@link owner} is known to have ended without
+   * writing its `exit` (a Durable Object reset under a call): its calls are
+   * free, as an exited holder's are. The host says; this package never
+   * looks. */
+  gone?: (holder: Eid) => boolean | Promise<boolean>
   /** the program running these calls on this machine, as @yaks/process
    * records one — `{pid, command, cwd}` — put on every call a tool is handed,
    * for a tool that acts on the machine rather than the graph. The caller
@@ -312,7 +317,8 @@ export let runner = (g: Graph, opts: Opts): Runner => {
   // name, or failed there, and either way the owner is not over. Another's
   // claim is `theirs` — unless its row records an `exit`, which makes the
   // claim `lapsed`: nothing is coming back to finish the call, so it is
-  // taken the way a re-run takes one, claiming over `running`. The holder
+  // taken the way a re-run takes one, claiming over `running`; so does a
+  // holder the host's `gone` says is over. The holder
   // entity is fetched whole rather than queried by `.exit`, so a graph that
   // tracks no processes simply never finds one — this package reads a
   // component by name and requires nothing of the vocabulary.
@@ -324,6 +330,7 @@ export let runner = (g: Graph, opts: Opts): Runner => {
     // An unnamed runner's own claim still owes the unfinished-call check.
     if (!opts.owner && by == owner) return 'free'
     if (by == opts.owner) return 'mine'
+    if (await opts.gone?.(by as Eid)) return 'lapsed'
     let [holder] = await g.get([String(by)], ['exit'])
     return holder?.exit ? 'lapsed' : 'theirs'
   }

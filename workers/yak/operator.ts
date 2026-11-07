@@ -3,6 +3,7 @@ import {
   type Comp,
   type Graph,
   identityEid,
+  mint,
   type NamedTool,
   namedTool,
 } from '@yaks/graph'
@@ -1057,10 +1058,16 @@ export let operating = (
     ], { trusted: true })
   }
 
+  // This object's runner, a new one each time the object starts: a Durable
+  // Object has one instance at a time, so a call or lease held by any other
+  // was held by an instance a reset or a kill ended, and is taken up now
+  // (@yaks/tools `whose`), rather than left `running` with nobody to finish it.
+  let me = mint()
+  let gone = (holder: string) => holder != me
   fx.handle(stepwise(running(
     g,
     lend({
-      h: { g, fx, vocab, me: identityEid('operator', ['runner']) },
+      h: { g, fx, vocab, me, gone },
       model,
       name,
       provider,

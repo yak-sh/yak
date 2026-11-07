@@ -227,6 +227,9 @@ export type Served = {
 export type Deps = {
   /** Experimental durable request admission with transient text. */
   owner?: Eid
+  /** Whether a holder of a call's claim ended without writing its `exit`, so
+   * the call it held is recovered now (@yaks/tools `RunnerOpts.gone`). */
+  gone?: (holder: Eid) => boolean | Promise<boolean>
   /** Dispatch native calls through independent durable effects. */
   asyncTools?: boolean
   /** Internal effect execution of one recorded call (never a model request). */
@@ -1218,6 +1221,7 @@ export let react = async (
       tools: [...new Set(toolEntities.values())].map(served),
       otherwise: unserved,
       owner: deps.owner ?? session,
+      ...deps.gone ? { gone: deps.gone } : {},
       report: (error) => deps.report?.(error, session, 'tool'),
       // A refusal is the call's answer: one entry, its result.
       onResult: true,
@@ -1290,7 +1294,7 @@ export let react = async (
         const holder = comp(pending, 'execution')?.by
         if (deps.runCall && holder != null) {
           const [owner] = await g.get([String(holder)], ['exit'])
-          if (owner?.exit) {
+          if (owner?.exit || await deps.gone?.(String(holder) as Eid)) {
             await g.apply([{
               entity: pending.entity,
               execution: { by: null },
