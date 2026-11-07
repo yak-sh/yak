@@ -122,6 +122,10 @@ let bindSteps = () =>
       parameters: ['pointer', 'pointer', 'i32', 'buffer'],
       result: 'i32',
     },
+    sqlite3_wal_hook: {
+      parameters: ['pointer', 'function', 'pointer'],
+      result: 'pointer',
+    },
   })
 let decoder = (names: string[], compile: Statement['getRowObject']) => {
   let key = JSON.stringify(names)
@@ -310,6 +314,29 @@ export let chunk = (db: Database, bytes: number): void => {
     new Int32Array([bytes]),
   )
   if (code) throw new Error(`SQLite refused a chunk size of ${bytes} (${code})`)
+}
+
+/** Call `heard` with the pages in the WAL after each commit
+ * (`sqlite3_wal_hook`), on the thread that committed, before its COMMIT
+ * returns. The hook takes the place of SQLite's own checkpoint every thousand
+ * pages, which ran there. The returned close comes after the database's. */
+export let walHook = (
+  db: Database,
+  heard: (pages: number) => void,
+): { close: () => void } => {
+  let hook = new Deno.UnsafeCallback(
+    { parameters: ['pointer', 'pointer', 'pointer', 'i32'], result: 'i32' },
+    (_arg, _db, _name, pages) => {
+      heard(pages)
+      return 0
+    },
+  )
+  ;(steps ??= bindSteps()).symbols.sqlite3_wal_hook(
+    db.unsafeHandle,
+    hook.pointer,
+    null,
+  )
+  return hook
 }
 
 /**

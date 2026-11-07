@@ -11,7 +11,8 @@ import * as io from '@yaks/file/io'
 
 import { Database } from './legacy.ts'
 import { type Driver, render } from '@yaks/sql'
-import { chunk, configure, driver } from './native.ts'
+import { chunk, configure, driver, walHook } from './native.ts'
+import { checkpoint } from './checkpoint.ts'
 
 import { loadable, open as reader } from './read-db.ts'
 
@@ -36,8 +37,9 @@ let CACHE = 64 * 1024 * 1024
  *
  * Every connection runs with foreign keys on. A file is one other processes
  * may have open too, so it also runs in WAL mode, with WAL's crash-safe pairing
- * `synchronous = normal`, a 64 MiB WAL checkpointed as it fills, a 64 MiB
- * page cache, no checkpoint on close, and a one-minute busy timeout, and a new file starts in incremental
+ * `synchronous = normal`, a 64 MiB WAL checkpointed on a thread of its own
+ * once it fills (`wal` sets the size, for a test), a 64 MiB page cache, no
+ * checkpoint on close or commit, and a one-minute busy timeout, and a new file starts in incremental
  * auto-vacuum mode, so the pages a delete frees can be given back (./owe.ts `reclaim`); a database in memory
  * belongs to this process alone and needs none of that. A graph batch may be large, so contention gives
  * the one writer that bounded minute to finish. A writer held longer is a
@@ -51,7 +53,10 @@ let CACHE = 64 * 1024 * 1024
  * sql.close()
  * ```
  */
-export let open = (path: string, opts: { readOnly?: boolean } = {}): Opened => {
+export let open = (
+  path: string,
+  opts: { readOnly?: boolean; wal?: number } = {},
+): Opened => {
   if (opts.readOnly) return reader(path)
   // A file's directory, made when absent. A name with none (`graph.db`, a
   // `file:` URI such as `file:x?mode=memory`) is SQLite's to resolve.
@@ -81,11 +86,8 @@ export let open = (path: string, opts: { readOnly?: boolean } = {}): Opened => {
     if (!page_count) set('auto_vacuum', 'incremental')
     set('journal_mode', 'wal')
     set('synchronous', 'normal')
-    set('journal_size_limit', WAL)
-    // A checkpoint syncs both files, and a commit that crosses the mark waits
-    // for it: at SQLite's thousand pages, a large write paid a sync every 4
-    // MiB. It runs once the WAL reaches the size it is kept to.
-    set('wal_autocheckpoint', WAL / 4096)
+    let wal = opts.wal ?? WAL
+    set('journal_size_limit', wal)
     // The pages a connection keeps: at SQLite's 2 MiB, a write to a graph of
     // a few hundred MiB read most of the index pages it touched back from the
     // file, statement by statement.
@@ -93,8 +95,8 @@ export let open = (path: string, opts: { readOnly?: boolean } = {}): Opened => {
     // The last connection to close leaves the WAL for the next to append to.
     // A checkpoint on close syncs both files, and the next process's first
     // commit then starts the WAL afresh and syncs its header: together a
-    // short command's slowest steps. The automatic checkpoint still moves
-    // the pages into the file.
+    // short command's slowest steps. The checkpoint thread still moves the
+    // pages into the file.
     configure(db, 'SQLITE_DBCONFIG_NO_CKPT_ON_CLOSE', true)
     // A checkpoint that grows the file changes its size, and syncing a size
     // waits for ext4's journal to commit, which waits for every other
@@ -105,6 +107,24 @@ export let open = (path: string, opts: { readOnly?: boolean } = {}): Opened => {
     let [{ page_size }] = d.query({ t: 'pragma', name: 'page_size' })
     let mib = Number(page_count) * Number(page_size) / 128 / 2 ** 20
     if (d.file) chunk(db, Math.min(64, Math.max(1, Math.floor(mib))) * 2 ** 20)
+    // A checkpoint syncs the file, which on this box waited seconds behind
+    // other processes' writes, and SQLite runs its own inside the COMMIT that
+    // crosses its mark, on the committing thread: a server's main thread was
+    // held 5.6 s (bug bace8585). The hook takes its place, and only asks
+    // ./checkpoint.ts's thread once the WAL holds what it is kept to.
+    if (d.file) {
+      let mark = wal / Number(page_size)
+      let hook: { close(): void } | undefined = walHook(
+        db,
+        (pages) => pages >= mark && checkpoint(path),
+      )
+      let close = d.close
+      d.close = () => {
+        close()
+        hook?.close()
+        hook = undefined
+      }
+    }
   }
   return Object.assign(d, {
     ...loadable() && {
