@@ -478,7 +478,13 @@ runs in `jeff` or another person's space.
   invocation (outcome, wall and CPU time, the object it ran in) is Workers
   observability, read with the cloudflare-api MCP's `telemetry/query` or the
   box's own token (`secrets-and-connections`); an event's timestamp is when the
-  invocation ended. Calls to a store that wait
+  invocation ended. An object's event can outlast its answer by a minute:
+  while the object has work under way (its alarm, say), the runtime holds the
+  last request's event open until that work ends or another request comes. So
+  the directory's `/used` read 44 s and a seats query 21 s while their callers'
+  fetch spans took 17 and 629 ms (T-149085, the alarm remaking two releases).
+  Before calling an event's wall time a wait, read its caller's fetch span
+  under the same `$metadata.traceId`. Calls to a store that wait
   with 0 ms CPU, ended by resets saying "instance is no longer active" or
   "internal error; reference = …", are the runtime stalling that object, not our
   code. Every app door reads its app row from the directory, so a stalled
