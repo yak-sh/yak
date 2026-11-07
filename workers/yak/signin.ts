@@ -101,47 +101,49 @@ export let CODE_NOTE =
 export let codeText = (code: string) =>
   `yaks.app: your sign-in code is ${code}. It expires in 10 minutes. Reply STOP to opt out, HELP for help.`
 
+// What the Operator says to someone it has not met and to someone who already
+// has a space (identity.ts `met`): the one letter's only difference.
+export let GREETING = {
+  new: {
+    hi: "Hi, I'm your Operator, the AI assistant on yaks.app.",
+    reply: "Or just reply to this email, and tell me what you'd like to " +
+      "make. I'll set up your space and help you get going: installing " +
+      'yak, adding yaks.app to Claude or ChatGPT, and putting your first ' +
+      'app live.',
+  },
+  back: {
+    hi: "Hi, it's your Operator at yaks.app. Welcome back.",
+    reply: "Or just reply to this email, and tell me what you'd like to " +
+      "make or change next. I'll pick it up in your space.",
+  },
+}
+
 /**
- * The letter a code goes out in: the code in the subject and first, then the
- * one click that spends it (link.ts). Asked for from yak.sh (route.ts
- * `asker`), it is the Operator's note to someone it has not met, and a reply
- * goes to the sign-up address, which signs its sender up and hands the reply
- * to the Operator as their first words (inbox.ts `signingUp`).
+ * The letter a code goes out in, the Operator's from wherever it was asked
+ * for: the code in the subject and first, then the one click that spends it
+ * (link.ts), then an invitation to reply. A reply goes to the sign-up
+ * address, which signs its sender up, or finds them, and hands the reply to
+ * their Operator (inbox.ts `signingUp`).
  */
 export let codeLetter = (
   to: string,
   code: string,
   link: string,
-  operator = false,
+  met: keyof typeof GREETING = 'new',
   env: Host = {},
-): Letter => {
-  let lasts = 'If you did not ask for this, nothing has happened and you ' +
-    'can ignore it.'
-  let subject = `${code} is your yaks.app code`
-  return operator
-    ? {
-      to,
-      subject,
-      name: 'yaks.app Operator',
-      replyTo: signupAddress(env),
-      body: "Hi, I'm your Operator, the AI assistant on yaks.app.\n\n" +
-        `Your sign-in code is ${code}.\n\n` +
-        `Or sign in with one click: ${link}\n\n` +
-        "Or just reply to this email, and tell me what you'd like to " +
-        "make. I'll set up your space and help you get going: installing " +
-        'yak, adding yaks.app to Claude or ChatGPT, and putting your first ' +
-        'app live.\n\n' +
-        `The code and the link last ten minutes. ${lasts}\n\n` +
-        'Your Operator at yaks.app',
-    }
-    : {
-      to,
-      subject,
-      body: `Your yaks.app sign-in code is ${code}.\n\n` +
-        `Or sign in with one click: ${link}\n\n` +
-        `It lasts ten minutes. ${lasts}`,
-    }
-}
+): Letter => ({
+  to,
+  subject: `${code} is your yaks.app code`,
+  name: 'yaks.app Operator',
+  replyTo: signupAddress(env),
+  body: `${GREETING[met].hi}\n\n` +
+    `Your sign-in code is ${code}.\n\n` +
+    `Or sign in with one click: ${link}\n\n` +
+    `${GREETING[met].reply}\n\n` +
+    'The code and the link last ten minutes. If you did not ask for this, ' +
+    'nothing has happened and you can ignore it.\n\n' +
+    'Your Operator at yaks.app',
+})
 
 // The property an address is kept under, on a `signin` and on a person.
 let key = (address: string) => texted(canon(address)) ? 'phone' : 'email'

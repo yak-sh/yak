@@ -133,6 +133,7 @@ let again = {
   person: await dir.personAt('dana@example.com'),
   spaces: (await dir.seats(person, 'owner')).length,
   letters: letters.splice(0).length,
+  heard: asked.at(-1)!.items.at(-1),
 }
 let refused = []
 for (
@@ -171,8 +172,14 @@ test('the letter is their first words to the Operator, marked as signing up, and
   assertStringIncludes(reply.text!, space.operator!)
 })
 
+// They have a space now, so the Operator hears them write, not sign up.
 test('a second letter from them reaches the same space, with no second person', () => {
-  assertEquals(again, { person, spaces: 1, letters: 1 })
+  let { heard, ...rest } = again
+  assertEquals(rest, { person, spaces: 1, letters: 1 })
+  assertStringIncludes(
+    heard?.kind == 'user' ? heard.text : '',
+    'By email: Hi yaks.app, sign me up!',
+  )
 })
 
 test('a letter that carries an invite credits whoever invited them', () => {

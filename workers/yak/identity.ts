@@ -176,7 +176,6 @@ import {
   lost,
 } from './pages.ts'
 import {
-  asker,
   chatPath,
   hostOf,
   LOGOUT,
@@ -738,6 +737,15 @@ let invitedBy = async (env: Env, person: string, said: string) => {
   } catch (e) {
     caught(e, { request: 'invite credit' })
   }
+}
+
+// Whether the person at an address already has a space of their own, which
+// is who the Operator's letter greets as met (signin.ts `GREETING`) and whose
+// letter to the sign-up address is no sign-up (inbox.ts `signingUp`).
+export let met = async (env: Env, email: string) => {
+  let dir = dirOf(env)
+  let person = await dir.personAt(canon(email))
+  return !!person && (await dir.seats(person, 'owner')).length > 0
 }
 
 /**
@@ -1306,9 +1314,9 @@ let ours = async (req: Request, env: Env): Promise<Response> => {
       // The letter carries the code and the one click that spends it
       // (link.ts): the same code said as a link, so it lasts the same ten
       // minutes and dies the moment either one is used. Somebody reading this
-      // on a phone should not have to retype anything. Asked for from yak.sh
-      // (route.ts `asker`), it is the Operator's, and a reply to it signs
-      // them up as following the link does (signin.ts `codeLetter`).
+      // on a phone should not have to retype anything. It is the Operator's,
+      // wherever it was asked for, greeting someone who has a space as met, and a reply to it signs them up as following the link does
+      // (signin.ts `codeLetter`).
       let link = await onceLink(secret(env), {
         email: address,
         code,
@@ -1322,15 +1330,13 @@ let ours = async (req: Request, env: Env): Promise<Response> => {
       // again.
       step(env, 'code_sent', req)
       background(
-        mail(env)(
-          codeLetter(
-            address,
-            code,
-            link,
-            !!asker(req.headers.get('origin')),
-            env,
-          ),
-        ).catch((e) => fault(env, 'POST /login', e)),
+        met(env, address)
+          .then((met) =>
+            mail(env)(
+              codeLetter(address, code, link, met ? 'back' : 'new', env),
+            )
+          )
+          .catch((e) => fault(env, 'POST /login', e)),
       )
     }
     return timed(askCode({ address, q, back }, env), c)

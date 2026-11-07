@@ -393,25 +393,26 @@ test('five texted codes an hour from one visitor, and no more', async () => {
   assert(await mayText(asking(() => []).at, ''))
 })
 
-// The code is what a person opens the letter for, so it leads both letters.
-// The Operator's, asked for from yak.sh, is from the Operator and answers to
-// the sign-up address, whose reply signs them up (inbox.ts `signingUp`).
+// The code is what a person opens the letter for, so it leads the letter,
+// which is the Operator's and answers to the sign-up address, whose reply
+// signs them up (inbox.ts `signingUp`). Only the greeting knows who is back.
 test('a code letter leads with the code, and the Operator invites a reply', () => {
   let link = 'https://yaks.app/login/link?t=x'
-  let plain = codeLetter('dana@example.com', '123456', link)
-  let mine = codeLetter('dana@example.com', '123456', link, true)
-  for (let l of [plain, mine]) {
-    assertEquals(l.subject, '123456 is your yaks.app code')
+  let fresh = codeLetter('dana@example.com', '123456', link)
+  let back = codeLetter('dana@example.com', '123456', link, 'back')
+  for (let l of [fresh, back]) {
+    assertEquals(
+      [l.subject, l.name, l.replyTo],
+      ['123456 is your yaks.app code', 'yaks.app Operator', 'signup@yaks.app'],
+    )
     assertMatch(
       l.body,
-      /sign-in code is 123456\.\n\nOr sign in with one click: https:\/\/yaks\.app\/login\/link\?t=x\n/,
+      /sign-in code is 123456\.\n\nOr sign in with one click: https:\/\/yaks\.app\/login\/link\?t=x\n\nOr just reply to this email/,
     )
   }
-  assertEquals([plain.name, plain.replyTo], [undefined, undefined])
-  assertEquals([mine.name, mine.replyTo], [
-    'yaks.app Operator',
-    'signup@yaks.app',
-  ])
-  assertMatch(mine.body, /^Hi, I'm your Operator/)
-  assertMatch(mine.body, /just reply to this email/)
+  assertMatch(fresh.body, /^Hi, I'm your Operator.*\n[^]*set up your space/)
+  assertMatch(
+    back.body,
+    /^Hi, it's your Operator at yaks\.app\. Welcome back\./,
+  )
 })

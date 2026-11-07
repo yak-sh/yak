@@ -252,8 +252,9 @@ export let arrived = async (m: Inbound, env: Env): Promise<string> => {
 // machine's address signs nobody up. Then the sender is a person with their
 // own space (identity.ts `joined`, the sign-up a code gives), and the letter is
 // their first words to its Operator, which answers in the letter's thread.
-// Someone who already has a space is writing to its Operator. A reply to the
-// Operator's sign-in letter lands here too (signin.ts `codeLetter`).
+// Someone who already has a space (identity.ts `met`) is writing to its
+// Operator, not signing up. A reply to the Operator's sign-in letter
+// lands here too (signin.ts `codeLetter`).
 let signingUp = async (m: Inbound, env: Env): Promise<string | null> => {
   if (m.to.trim().toLowerCase() != signupAddress(env)) return null
   let from = author(m).trim().toLowerCase()
@@ -268,7 +269,8 @@ let signingUp = async (m: Inbound, env: Env): Promise<string | null> => {
       } instead.`,
     )
   }
-  let { joined } = await import('./identity.ts')
+  let { joined, met } = await import('./identity.ts')
+  let back = await met(env, from)
   let mail = await parsed(m, env)
   let { person, space } = await joined(
     env,
@@ -283,7 +285,7 @@ let signingUp = async (m: Inbound, env: Env): Promise<string | null> => {
     '/operator/receive',
     { 'x-yak-person': person },
     { verified: true },
-    { signup: true },
+    back ? {} : { signup: true },
   )
 }
 

@@ -923,15 +923,11 @@ test('a connector keeps its door until the person closes it', async () => {
   }
 })
 
-// The sign-in box is for somebody signed out (T-34209). A browser carrying a
-// session is never asked again: `GET /login` reads the cookie first and sends
-// them on — to the page they were headed for when it is ours to send them to,
-// and to where a fresh sign-in lands when it is nowhere or a stranger's, which
-// is the same guard closing the same open redirect.
-// yak.sh asks for the code from its own page (D-138669): the door takes it
-// with no cookie, and the letter is the Operator's, answered at the sign-up
-// address. Any other page is still a stranger.
-test('a code asked for from yak.sh comes from the Operator', async () => {
+// Every code comes in the Operator's letter, answered at the sign-up address,
+// whether asked for on yaks.app or from yak.sh (D-138669), whose page the door
+// takes with no cookie; any other page is still a stranger. Someone who has
+// signed in before is greeted as met.
+test("every code letter is the Operator's, and greets who is back", async () => {
   let k = await kernel()
   try {
     let ask = (origin: string, email: string) =>
@@ -956,11 +952,28 @@ test('a code asked for from yak.sh comes from the Operator', async () => {
     let forged = await ask('https://evil.example', email)
     assertEquals(forged.status, 403)
     await forged.body?.cancel()
+    let first = letters(k, email).length
+    await signIn(k, email)
+    await signIn(k, email)
+    let [mine, back] = letters(k, email).slice(first)
+    for (let l of [mine, back]) {
+      assertEquals([l.name, l.replyTo], [
+        'yaks.app Operator',
+        'signup@yaks.app',
+      ])
+    }
+    assertMatch(mine.body, /^Hi, I'm your Operator/)
+    assertMatch(back.body, /Welcome back/)
   } finally {
     await k.stop()
   }
 })
 
+// The sign-in box is for somebody signed out (T-34209). A browser carrying a
+// session is never asked again: `GET /login` reads the cookie first and sends
+// them on — to the page they were headed for when it is ours to send them to,
+// and to where a fresh sign-in lands when it is nowhere or a stranger's, which
+// is the same guard closing the same open redirect.
 test('/login never draws the box for a browser already signed in', async () => {
   let k = await kernel()
   try {

@@ -589,17 +589,15 @@ export let shared = (method: string, pathname: string) =>
 
 // The pages of ours at other addresses that ask the sign-in door for a code
 // (D-138669): yak.sh's "Get set up on yaks.app" section posts the address
-// typed there, and the letter it asks for is the Operator's (signin.ts
-// `codeLetter`).
+// typed there, and gets the letter any sign-in gets (signin.ts `codeLetter`).
 export let ASKERS = ['yak.sh']
 
-/** Which of {@link ASKERS} a request's `Origin` names, if any. */
-export let asker = (origin: string | null) => {
+// Whether a request's `Origin` is one of {@link ASKERS}.
+let asker = (origin: string | null) => {
   try {
-    let host = new URL(origin ?? '').hostname.toLowerCase()
-    return ASKERS.includes(host) ? host : null
+    return ASKERS.includes(new URL(origin ?? '').hostname.toLowerCase())
   } catch {
-    return null
+    return false
   }
 }
 
@@ -612,7 +610,7 @@ export let askable = (
   method: string,
   pathname: string,
   origin: string | null,
-) => method == 'POST' && pathname == '/login' && !!asker(origin)
+) => method == 'POST' && pathname == '/login' && asker(origin)
 
 // A sandboxed app's page asking its own doors (installed.ts, D-37901): the
 // path carries its page token as `/<app>/~<token>/…`, or `/~<token>/…` for a
