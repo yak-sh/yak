@@ -12,7 +12,7 @@ import { caught } from './defects.ts'
 import type { Host } from './host.ts'
 import { fromOurs } from './page-report.ts'
 import { isPerson } from './crawlers.ts'
-import { isTestAddress } from '@yaks/platform/bots'
+import { CHECK, isTestAddress } from '@yaks/platform/bots'
 import { FUNNEL, stepOf, type Visited } from './view-point.ts'
 import {
   BUTTON,
@@ -144,9 +144,13 @@ export let start = (window: number | Date, now = Date.now()) =>
       : Math.min(now, Math.max(now - KEPT_DAYS * DAY, window.getTime())),
   )
 
-// A person's step: one a browser took, or one taken away from any request.
-// A crawler's, an agent's or a test account's is counted apart (`apart`).
-let PEOPLE = `${CLIENT} IN ('browser', '')`
+// Who took a step: the client it was written with, or `test` for one whose
+// arrival names an agent's check as its source (@yaks/platform/bots `CHECK`),
+// though a browser, or a script saying it is one, took it. A person's step is
+// one a browser took, or one taken away from any request; a crawler's, an
+// agent's or a test account's is counted apart (`apart`).
+let WHO = `if(${CAMPAIGN} LIKE '${CHECK}/%', 'test', ${CLIENT})`
+let PEOPLE = `${WHO} IN ('browser', '')`
 
 let over = (since: Date, dataset: string, who = PEOPLE) =>
   `FROM ${table(dataset)} WHERE index1 = '${FUNNEL}' AND ${who} AND ` +
@@ -159,7 +163,7 @@ export let counts = (since: Date, dataset = DATASET) =>
 /** How many times each step was taken by somebody other than a person: a
  * crawler, an agent's script or a test account, by which. */
 export let apart = (since: Date, dataset = DATASET) =>
-  `SELECT ${CLIENT} AS client, ${SLUG} AS step, ${COUNT} AS n ` +
+  `SELECT ${WHO} AS client, ${SLUG} AS step, ${COUNT} AS n ` +
   `${over(since, dataset, `NOT ${PEOPLE}`)} GROUP BY client, step ` +
   `ORDER BY n DESC`
 

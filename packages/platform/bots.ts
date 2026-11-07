@@ -37,3 +37,9 @@ type Arrived = Request & { cf?: { verifiedBotCategory?: string } }
 // `cf` came from inside, and a bot Cloudflare could not verify is let through.
 export let isVerifiedBot = (req: Request): boolean =>
   !!(req as Arrived).cf?.verifiedBotCategory
+
+// A visit is nobody's when its link names the fleet's own checks as its
+// source (`utm_source=agent-check`): an agent checking a live page, through a
+// browser or a script that says it is one, tags its visit so, and the funnel
+// counts what it does apart from a person's (workers/yak funnel.ts).
+export let CHECK = 'agent-check'

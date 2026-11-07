@@ -109,7 +109,10 @@ checks`. It is kept from the idle sweep, so it outlasts any check. Never check
 in the owner's `jeff` space or any person's: a test row there lands in his
 conversation, Updates and task list. A check that needs a clean account runs
 `yak admin throwaway '<command>'` (listing accounts is
-`secrets-and-connections`). Acting as the owner is his to grant (M-31958). The box's own server runs main after `yak restart`. The platform
+`secrets-and-connections`). A check of yaks.app's own pages or funnel tags its
+visit `utm_source=agent-check` (@yaks/platform/bots `CHECK`), in its link or
+its `yak_came` cookie, so whatever it clicks or starts counts apart from
+people's. Acting as the owner is his to grant (M-31958). The box's own server runs main after `yak restart`. The platform
 itself is `yaks-app`.
 
 ## Seeing a live page at a width

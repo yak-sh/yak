@@ -113,7 +113,7 @@ test('the funnel reads each step, a share of the one it follows, and where visit
   let sql = analytics((q) =>
     q.includes("blob2 = 'home'")
       ? [{ site: 'news.example.com', n: 3 }]
-      : q.includes('blob7')
+      : q.includes('blob7 AS key')
       ? [
         { key: 'meta//pilot', step: 'home', n: 9 },
         { key: 'meta//pilot', step: 'click', n: 4 },
@@ -129,7 +129,7 @@ test('the funnel reads each step, a share of the one it follows, and where visit
       ]
       : q.includes('blob8')
       ? [{ button: 'start', n: 6 }, { button: 'gone', n: 1 }]
-      : q.includes('NOT blob6')
+      : q.includes('NOT if(')
       ? [{ client: 'test', step: 'signup', n: '2' }, {
         client: 'bot',
         step: 'home',
@@ -178,10 +178,17 @@ test('the funnel reads each step, a share of the one it follows, and where visit
       { client: 'test', step: 'signup', n: 2 },
       { client: 'bot', step: 'home', n: 5 },
     ])
+    // An agent's check, tagged so in its link, is a test account's step,
+    // whatever client it was written with.
+    let who = "if(blob7 LIKE 'agent-check/%', 'test', blob6)"
     assertEquals(
-      sql.asked.filter((q) => q.includes("NOT blob6 IN ('browser', '')"))
+      sql.asked.filter((q) => q.includes(`NOT ${who} IN ('browser', '')`))
         .length,
       1,
+    )
+    assertEquals(
+      sql.asked.every((q) => q.includes(`${who} IN ('browser', '')`)),
+      true,
     )
     assertEquals(
       sql.asked.every((q) =>
