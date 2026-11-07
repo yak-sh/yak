@@ -236,7 +236,10 @@ test('the operator edits app rows through agent tools and records its work priva
   assertEquals(comp(meetings[0], 'created').via, out.session)
   assertEquals(tasks.length, 0)
   assertEquals(other, null)
-  assertEquals(String(asked[0].instructions).includes('assistant'), false)
+  assertEquals(
+    String(asked[0].instructions).includes('their personal assistant'),
+    false,
+  )
 })
 
 answer = (req) =>
@@ -317,6 +320,7 @@ test("the Operator on a person's own space is their PA, reaching each of their s
   assertEquals(paMeetings.length, meetings.length)
   assertStringIncludes(refused ?? '', 'peek')
   let told = String(paAsked[0].instructions)
+  assertStringIncludes(told, 'their personal assistant')
   for (let said of ['clerk (owner)', 'other (owner)', 'peek (viewer)']) {
     assertStringIncludes(told, said)
   }
