@@ -151,7 +151,7 @@ let CUT = 120
 
 /** How long an incarnation's owed work waits once its answers have been
  * read, so the runtime has sent them on (`#behind`). */
-let BEAT = 1000
+let BEAT = 100
 export let line = (text: string): string => {
   let first = text.trim().split('\n')[0] ?? ''
   return first.length > CUT ? `${first.slice(0, CUT - 1)}…` : first
@@ -762,12 +762,6 @@ export class Builder {
   // work waits a beat (`BEAT`): begun on a timer as the handler returned, or
   // as the answer was read, the Operator's start-up held a first visit to
   // /manage/checks 81-140 ms after its answer was read (T-149700).
-  //
-  // The beat is counted by the object's clock, which stands still while its
-  // code runs and reads a timer's deadline when it fires, so the read path's
-  // own CPU on a new isolate (about 100 ms compiling its modules) is time the
-  // beat cannot see: a beat of 100 ms began the start-up as the answer was
-  // read (T-150377).
   #behind(work: () => void) {
     this.#ctx.waitUntil?.(
       new Promise<void>((done) =>

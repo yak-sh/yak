@@ -235,9 +235,8 @@ A query that works on the box can be refused in a store.
   migration that finished says so once (channel-move.ts `CHANNELED`), and
   the rest starts in a timer once the answer has returned (build.ts
   `#behind`, running.ts `behindAnswer`). An object's clock stands still
-  while its code runs and reads a timer's deadline when the timer fires, so
-  no timer inside an object sees a stretch of its own CPU: on a new isolate
-  the read path's compiling used up a 100 ms beat unseen (T-150377).
+  while its code runs and reads a timer's own deadline when it fires, so no
+  time read inside an object shows how long its code ran (T-150377).
 - **128 MB per isolate**, shared by every object in it (`HELD` in
   packages/embedding/held.ts caps vector copies at 48 MB; the vectors are
   `search-and-embeddings`). The kernel Worker has the same 128 MB, so a body

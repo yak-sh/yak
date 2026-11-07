@@ -23,19 +23,19 @@ export let esc = (s: string) =>
   s.replaceAll('&', '&amp;').replaceAll('<', '&lt;').replaceAll('>', '&gt;')
     .replaceAll('"', '&quot;').replaceAll("'", '&#39;')
 
-// Reuse the two formatters: date formatting should not construct an ICU
-// formatter for every cell of a server-rendered page.
-let days = Object.fromEntries(
-  (['long', 'short'] as const).map((month) => [
-    month,
-    new Intl.DateTimeFormat('en-GB', {
-      day: 'numeric',
-      month,
-      year: 'numeric',
-      timeZone: 'UTC',
-    }),
-  ]),
-)
+// A formatter is made the first time a page formats with it, then reused for
+// every cell after: making one loads ICU's data, about 16 ms of a new
+// isolate's CPU, which most isolates importing this (a space's Operator
+// reading its chat page) never format a day with (T-150377).
+let made = new Map<string, Intl.DateTimeFormat>()
+let formatter = (key: string, options: Intl.DateTimeFormatOptions) => {
+  let f = made.get(key)
+  if (!f) {
+    f = new Intl.DateTimeFormat('en-GB', { ...options, timeZone: 'UTC' })
+    made.set(key, f)
+  }
+  return f
+}
 
 // The month said short where a day sits in a narrow column.
 /// day('2026-10-13T11:37:16.784Z') -> '13 October 2026'
@@ -43,24 +43,25 @@ let days = Object.fromEntries(
 /// day('soon') -> ''
 export let day = (iso: string, month: 'long' | 'short' = 'long') => {
   let at = new Date(iso)
-  return Number.isNaN(at.getTime()) ? '' : days[month].format(at)
+  return Number.isNaN(at.getTime())
+    ? ''
+    : formatter(month, { day: 'numeric', month, year: 'numeric' }).format(at)
 }
-
-let minutes = new Intl.DateTimeFormat('en-GB', {
-  day: 'numeric',
-  month: 'short',
-  year: 'numeric',
-  hour: '2-digit',
-  minute: '2-digit',
-  timeZone: 'UTC',
-})
 
 // A moment to the minute, where when it changed matters more than its day.
 /// moment('2026-10-13T11:37:16.784Z') -> '13 Oct 2026, 11:37 UTC'
 /// moment('soon') -> ''
 export let moment = (iso: string) => {
   let at = new Date(iso)
-  return Number.isNaN(at.getTime()) ? '' : `${minutes.format(at)} UTC`
+  return Number.isNaN(at.getTime()) ? '' : `${
+    formatter('minute', {
+      day: 'numeric',
+      month: 'short',
+      year: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit',
+    }).format(at)
+  } UTC`
 }
 
 // A file input as a drop zone (@yaks/ui `Drop`, public/drop.js): the
