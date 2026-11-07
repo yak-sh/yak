@@ -1,6 +1,7 @@
 /** @jsxImportSource preact */
 // A session row names the work and shows its latest activity and model.
-import { test, tick } from '../../testing.ts'
+import { test, tick, until } from '../../testing.ts'
+import { host, reader } from '../../host_testing.ts'
 import { test as preparedTest } from '@yaks/testing'
 import { identityEid } from '@yaks/graph/identity'
 import { h, render } from 'preact'
@@ -829,6 +830,56 @@ test('Session paints the newest page and loads earlier entries on demand', async
       Object.defineProperty(globalThis, 'getComputedStyle', priorStyle)
     } else {delete (globalThis as { getComputedStyle?: unknown })
         .getComputedStyle}
+    useRoute(off)
+    cache.value = {}
+    resetSignals()
+  }
+})
+
+test('Session hears a comment its transcript cites, on whatever it targets', async () => {
+  let off = useRoute(() => {})
+  let s = 'citing-session'
+  let row = (eid: string, num: number, comps: Record<string, unknown>) => ({
+    entity: { eid, num },
+    ...comps,
+  })
+  let said = (eid: string, num: number, target: string, body: string) =>
+    row(eid, num, {
+      comment: { target },
+      doc: { title: '', body },
+      created: { at: '2026-11-07T20:00:00.000Z', by: 'someone', via: 'other' },
+    })
+  let cites = (eid: string, from: string, to: string) =>
+    row(eid, 0, { edge: { from, to }, references: {} })
+  let rows = [
+    row('cited-task', 9001, { task: {}, doc: { title: 'a task', body: '' } }),
+    row('entry-1', 0, { entry: { session: s, seq: 1 } }),
+    said('by-entry', 9002, 'cited-task', 'cited by an entry'),
+    said('by-session', 9003, 'cited-task', 'cited by the session'),
+    said('unheard', 9004, 'cited-task', 'never cited'),
+    cites('edge-1', 'entry-1', 'by-entry'),
+    cites('edge-2', s, 'by-session'),
+    cites('edge-3', 'entry-1', 'cited-task'),
+  ]
+  let read = reader(rows)
+  let wire = host((ask) => ({ bundles: read(ask.subscribe) }))
+  cache.value = {
+    [s]: {
+      entity: { eid: s, num: 9000 },
+      session: { eid: s, id: s, status: 'settled' },
+    },
+  }
+  resetSignals()
+  let mounted = mount(<Session e={ent(s)} />)
+  try {
+    landSub({ sub: entryPage(s), changes: [], replace: true })
+    await until(() => mounted.root.textContent.includes('cited by the session'))
+    let text = mounted.root.textContent
+    assert(text.includes('cited by an entry'), text)
+    assert(!text.includes('never cited'), text)
+  } finally {
+    mounted.free()
+    wire.free()
     useRoute(off)
     cache.value = {}
     resetSignals()

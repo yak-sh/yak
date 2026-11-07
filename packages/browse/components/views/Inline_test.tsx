@@ -68,13 +68,12 @@ test('Inline renderers say the title without the id', () => {
   cache.value = {}
 })
 
-// A dependency row paints a PEER: what an edge rider projected
-// (`.edges.peers=task.status,doc.title` — subserve.ts peerPayload), which is
-// the derived status and none of the marks it came from. The pip and the strike
+// A dependency row may paint a PROJECTED row (`.fields=task.status,doc.title`),
+// which is the derived status and none of the marks it came from. The pip and the strike
 // must read that, or a card lists its own done children as open.
 test('a projected peer paints its settled status', () => {
   cache.value = {}
-  // Landed the way the rider delivers it, so the test holds the peer's real
+  // Landed the way a projection delivers it, so the test holds the peer's
   // partial shape rather than a hand-built row that happens to agree.
   applyLocal([
     { eid: 'peer', name: 'entity', comp: { num: 3 } },

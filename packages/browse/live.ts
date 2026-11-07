@@ -46,7 +46,6 @@ import type { Row } from './client.ts'
 import { sessionQueries } from './sessions.ts'
 import {
   distinctValues,
-  EDGES,
   EXISTS,
   type Field,
   fieldsOf,
@@ -530,18 +529,6 @@ let predLine = (p: Pred): string | undefined => {
       r.depth == null ? '' : `[<=${r.depth}]`
     }${r.dir}${value}`
   }
-  if (p.op === EDGES) {
-    // Each directive is a separate predicate; do not coalesce their identity.
-    if (p.edge) {
-      return `.edges[${p.edge.type}${
-        p.edge.via ? `,${p.edge.via.comp}.${p.edge.via.prop}` : ''
-      }]`
-    }
-    if (p.limit != null) return `.edges.limit=${p.limit}`
-    return p.peers?.length
-      ? `.edges.peers=${p.peers.map((f) => `${f.comp}.${f.prop}`).join(',')}`
-      : '.edges'
-  }
   if (p.rev) {
     let r = p.rev
     let assoc = r.name
@@ -957,15 +944,12 @@ export let clearForTest = () => {
   subFailures.clear()
   subFields.clear()
   subWindows.clear()
-  routeWindows.clear()
   subTicks.clear()
   heldTicks.clear()
   edgeHolders.clear()
-  subEdges.clear()
   boardUses.clear()
   boardEntrySubs.clear()
   entryUses.clear()
-  edgeUses.clear()
   routeUses.clear()
   rowsSub.clear()
   oneShots.clear()
@@ -1124,18 +1108,6 @@ export let myMode = (target: string) => {
     : undefined
 }
 
-// What an entity cites: its `references` edges, read as ordinary held edges.
-// The selector that loaded them has already projected entry endpoints to
-// Sessions; this door only reads the endpoint index, so a render never sees or
-// scans the durable entry partition.
-export let references = (eid: string): string[] => [
-  ...new Set(
-    relations(eid).value.filter((d) => d.type == 'referenced').map((d) =>
-      d.child
-    ),
-  ),
-]
-
 // The sentence a cached edge entity says. An edge wears `edge{from, to}` and
 // exactly one nature tag, so the row IS the triple — this is how a client that
 // holds the entity answers for a sentence its unlink no longer names.
@@ -1214,10 +1186,7 @@ let publishLocal = (
   // An edge is an ENTITY, so its rows land through the ordinary loop below —
   // but the edge TABLE this client renders from is keyed by the sentence, so
   // read the sentences out first, while the cache still holds what an unlink
-  // is about to take away. This is the FULL-BROADCAST arm; a filtered client
-  // hears its edges through the `.edges` rider instead, so the stream itself
-  // is the holder, and a rider holding the same triple keeps it when the
-  // stream lets go.
+  // is about to take away. The stream itself is the holder.
   let said = moves(changes, (e) => depOf(graph[e]))
   for (let { eid, name, comp } of changes) {
     if (name == 'entity' && comp == null) {
@@ -1580,22 +1549,6 @@ export type Sub = {
   // replace frame: the columns these rows carry, and by omission the ones they
   // do NOT. Absent means full components. `loaded()` reads it.
   fields?: Field[]
-  // The EDGES RIDER's half of the frame (T-22371): the dep triples INCIDENT to
-  // this sub's result set, and — where the query asked `.edges.peers=` — the far
-  // endpoints' projected rows. Both are held BY THE SUB, refcounted and released
-  // with it, exactly as its members are. This is what replaced `snapshot.deps`:
-  // a client no longer receives every edge in the graph in order to render the
-  // handful its open cards are about.
-  edges?: Dep[]
-  unedges?: Dep[]
-  peers?: Change[]
-  unpeers?: string[]
-  // The rider's own stated BOUND (T-33752), the window's counterpart for edges:
-  // these are the newest `limit` of `total` incident sentences. Present exactly
-  // when the delivery is a PREFIX, so its absence says the sub holds the whole
-  // neighbourhood — which is what a card reads to say "and 1,747 more" rather
-  // than passing a page off as everything the entity is joined to.
-  edgeWindow?: Window
   // The archetype descriptors this frame's rows wear that the socket had not
   // shipped before (T-37445); learned before the rows render.
   archetypes?: Change[]
@@ -1701,15 +1654,6 @@ export let subWindow = (sub: string): Window | undefined => {
   return subWindows.get(sub)
 }
 
-// The same statement about a sub's EDGES. Keyed by the routed entity rather
-// than by the sub, because that is how a view asks: `edgeWindow(eid)` is what
-// the card about that entity may say about the edges it is not showing.
-let routeWindows = new Map<string, Window>()
-export let edgeWindow = (eid: string): Window | undefined => {
-  tick(routeName(eid)).value
-  return routeWindows.get(eid)
-}
-
 // What each PROJECTED sub declared it carries (D-22567 §3) — recorded from the
 // server's own statement on the reply, so the client believes the frame rather
 // than re-deriving the contract. A sub absent here streams FULL components.
@@ -1743,22 +1687,17 @@ export let loaded = (eid: string, comp: string, prop: string): boolean => {
   return false
 }
 
-// Edges are HELD the way rows are (T-22371). `subEdges` is which triples each
-// sub delivered and `subPeers` the far endpoints its `.edges.peers=` projection
-// carried; `edgeHolders` refcounts a triple across the subs that named it, so
-// two cards about one blocker keep a single edge between them and the last one
-// to close takes it away. `deps` — the client's whole edge table — is exactly
-// the union. Before this it was `allDeps`: every edge in the graph, shipped at
-// boot because an edge had no scoped delivery, so nothing could be released.
+// Edges are HELD (T-22371): `edgeHolders` refcounts a triple across what holds
+// it, and `deps`, the client's whole edge table, is exactly the union. An edge
+// is an entity, so it arrives as an ordinary row, and the holders are the two
+// below.
 let edgeHolders = new Map<string, { dep: Dep; subs: Set<string> }>()
-let subEdges = new Map<string, Set<string>>()
 let edgeKey = (d: Dep) => `${d.parent}\0${d.type}\0${d.child}`
 
 // Two holders that are not subscriptions. LIVE_EDGES is the complete broadcast
 // itself — a shadow client (TUI, tests) still hears every edge write and
 // nothing else keeps those edges. SEED_EDGES is a legacy whole-graph snapshot's
-// `deps`, held forever because nothing ever hands them back. A filtered browser
-// has neither: every edge it holds arrives on a rider and leaves with it.
+// `deps`, held forever because nothing ever hands them back.
 let LIVE_EDGES = '\0live'
 let SEED_EDGES = '\0seed'
 
@@ -1772,7 +1711,6 @@ let syncHolders = () => {
   let now = deps.peek()
   if (now === heldDeps) return
   edgeHolders.clear()
-  subEdges.clear()
   for (let d of now) {
     edgeHolders.set(edgeKey(d), { dep: d, subs: new Set([SEED_EDGES]) })
   }
@@ -1788,18 +1726,15 @@ let release = (sub: string, key: string, lost: Dep[]) => {
   lost.push(h.dep)
 }
 
-// One sub's edge delta, folded into the shared table. Answers with the triples
-// whose HOLDING moved — the ones the union gained or lost — so the caller
-// reindexes and republishes exactly those endpoints, never the whole table.
+// One holder's edge delta, folded into the shared table. Answers with the
+// triples whose HOLDING moved — the ones the union gained or lost — so the
+// caller reindexes and republishes exactly those endpoints, never the table.
 let holdEdges = (sub: string, add: Dep[], cut: Dep[]) => {
   syncHolders()
-  let mine = subEdges.get(sub) ?? new Set<string>()
-  subEdges.set(sub, mine)
   let gained: Dep[] = []
   let lost: Dep[] = []
   for (let d of add) {
     let k = edgeKey(d)
-    mine.add(k)
     let h = edgeHolders.get(k)
     if (!h) {
       edgeHolders.set(k, h = { dep: d, subs: new Set() })
@@ -1807,11 +1742,7 @@ let holdEdges = (sub: string, add: Dep[], cut: Dep[]) => {
     }
     h.subs.add(sub)
   }
-  for (let d of cut) {
-    let k = edgeKey(d)
-    mine.delete(k)
-    release(sub, k, lost)
-  }
+  for (let d of cut) release(sub, edgeKey(d), lost)
   return { gained, lost }
 }
 
@@ -1823,41 +1754,9 @@ let edgesAt = (eid: string): Dep[] => {
   for (let [k, h] of [...edgeHolders]) {
     if (h.dep.parent != eid && h.dep.child != eid) continue
     edgeHolders.delete(k)
-    for (let s of h.subs) subEdges.get(s)?.delete(k)
     lost.push(h.dep)
   }
   return lost
-}
-
-// Everything one sub holds, handed back — a replace's clean slate and the
-// unsubscribe half.
-let freeEdges = (sub: string): Dep[] => {
-  syncHolders()
-  let mine = subEdges.get(sub)
-  subEdges.delete(sub)
-  let lost: Dep[] = []
-  if (mine) { for (let k of mine) release(sub, k, lost) }
-  return lost
-}
-
-// Fold a gained/lost set into the deps signal and the derived edge index, then
-// wake exactly the endpoints that moved — the same maintenance applyLocal does
-// for a live edge write, which is why relations() needs no new door.
-let settleEdges = (gained: Dep[], lost: Dep[]) => {
-  if (!gained.length && !lost.length) return
-  let parents = new Set<string>()
-  let children = new Set<string>()
-  let mark = (d: Dep, gone: boolean) => {
-    reindexEdge(ix, d, gone)
-    parents.add(d.parent)
-    children.add(d.child)
-  }
-  syncIx()
-  for (let d of lost) mark(d, true)
-  for (let d of gained) mark(d, false)
-  deps.value = heldDeps = [...edgeHolders.values()].map((h) => h.dep)
-  ixDeps = deps.peek()
-  publish(new Set(), parents, children)
 }
 
 // A subscription frame: land its changes like any batch (adds + updates flow
@@ -1904,7 +1803,7 @@ let landSubFrame = (f: Sub & { changes: Change[] }) => {
     // first read cannot remain silently undefined and an old read cannot pose
     // as current. Only a later successful replacement clears this state.
     ticked(f.sub)
-    return { eids: [], edges: [] }
+    return
   }
   if (f.replace) subFailures.delete(f.sub)
   // An aggregate frame lands in its tally signal and nowhere else — it carries
@@ -1923,19 +1822,13 @@ let landSubFrame = (f: Sub & { changes: Change[] }) => {
         s.map.value = next
       }
     }
-    return { eids: [], edges: [] }
+    return
   }
   // A window rides any frame that has one to state; a REPLACE with none is the
   // server saying this answer is whole, which must clear a bound left by the
   // query this frame replaced.
   if (f.window) subWindows.set(f.sub, f.window)
   else if (f.replace) subWindows.delete(f.sub)
-  // A route sub is one entity's edges, so its stated bound is that entity's.
-  if (f.sub.startsWith('route:')) {
-    let eid = f.sub.slice('route:'.length)
-    if (f.edgeWindow) routeWindows.set(eid, f.edgeWindow)
-    else if (f.replace) routeWindows.delete(eid)
-  }
   // The projection is recorded BEFORE the rows land, so the cache is never
   // briefly holding projected columns while `loaded` still calls the row full.
   // The server states it on every replace; a maintenance frame inherits what
@@ -1943,9 +1836,6 @@ let landSubFrame = (f: Sub & { changes: Change[] }) => {
   if (f.replace) {
     f.fields ? subFields.set(f.sub, f.fields) : subFields.delete(f.sub)
   }
-  let dropped = f.replace ? freeEdges(f.sub) : []
-  let rode = holdEdges(f.sub, f.edges ?? [], f.unedges ?? [])
-  settleEdges(rode.gained, [...dropped, ...rode.lost])
   let set = [...queryUses.values()].find((s) => s.sub === f.sub)
   if (set) {
     let client = ensureClient()
@@ -1955,10 +1845,6 @@ let landSubFrame = (f: Sub & { changes: Change[] }) => {
   ticked(f.sub)
   heldMoved([...f.changes.map((c) => c.eid), ...f.drop ?? []])
   if (f.replace) answered(f.sub)
-  return {
-    eids: [...new Set([...f.changes, ...f.peers ?? []].map((c) => c.eid))],
-    edges: [...rode.gained, ...rode.lost],
-  }
 }
 
 // A control frame is an OBJECT (design §1), distinct from the array batches
@@ -1998,14 +1884,11 @@ let answered = (sub: string, refused = false) => {
 let forget = (sub: string) => {
   let members = replica?.members(sub) ?? []
   replica?.close(sub)
-  let lost = freeEdges(sub)
   subQueries.delete(sub)
   shadowSubs.delete(sub)
   subWindows.delete(sub)
-  if (sub.startsWith('route:')) routeWindows.delete(sub.slice('route:'.length))
   subFields.delete(sub)
   agreement?.checked.delete(sub)
-  settleEdges([], lost)
   ticked(sub)
   heldMoved(members)
 }
@@ -2074,7 +1957,6 @@ let subFailures = new Map<
   string,
   { reason: string; reference: string }
 >()
-let edgeUses = new Map<string, number>()
 // A board whose query NAMES the lazy partition (`.entry.session=S-3`) can't be
 // answered from the root cache — entries are omitted from the snapshot. So the
 // board holds an entry subscription per scoped session (the same door a Session
@@ -2088,23 +1970,6 @@ let boardEntrySubs = new Map<string, Map<string, () => void>>()
 
 let ownBoard = (sub: string, q: string) => primeSub(sub, q)
 let dropBoard = (sub: string) => unsubscribe(sub)
-
-// Hold one addressed edge-rider query for a component's lifetime. The rider is
-// query grammar, not a feature channel: callers may select any stored edge type
-// and endpoint projection the server understands, and the ordinary sub cache
-// owns/refcounts its triples exactly like every other `.edges` delivery.
-let edgeSub = (eid: string, rider: string) => {
-  let sub = `edges:${eid}:${rider}`
-  let n = edgeUses.get(sub) ?? 0
-  edgeUses.set(sub, n + 1)
-  if (!n) ownBoard(sub, `id=${eid}&${rider}`)
-  return () => {
-    let held = (edgeUses.get(sub) ?? 1) - 1
-    if (held > 0) return void edgeUses.set(sub, held)
-    edgeUses.delete(sub)
-    dropBoard(sub)
-  }
-}
 
 // A fullscreen board opens a WINDOW over its membership, not the whole of it
 // (D-22567 §4). A board is a saved query, and the Everything board's `.task`
@@ -2222,13 +2087,10 @@ let routeUses = new Map<string, number>()
 export let routeName = (eid: string, fields?: string) =>
   `route:${eid}${fields ? `:${fields}` : ''}`
 // A tile paints one row and nothing about its neighbours: `ROW` asks for the
-// whole entity with no edge rider, where a bare route carries 100 edges and
-// their peers (a shelved session: 4.8 KB and ~40 ms of serving, for a chip).
+// whole entity without the edge subs a bare route holds beside it.
 export let ROW = '*'
 let routeLine = (eid: string, fields?: string) =>
-  fields == ROW
-    ? `id=${eid}`
-    : `id=${eid}&${fields ? `.fields=${fields}` : ROUTE_EDGES}`
+  fields && fields != ROW ? `id=${eid}&.fields=${fields}` : `id=${eid}`
 
 export let entityRead = (
   eid: string,
@@ -2282,26 +2144,22 @@ let routeSub = (eid: string, fields?: string) => {
   }
 }
 
+// How many links an entity has, once either end of its route holds a prefix:
+// each end asks for the newest hundred, and its window states the total.
+export let edgeTotal = (eid: string): number | undefined => {
+  let ends = ['from', 'to'].map((end) => `${routeName(eid)}:${end}`)
+  if (!ends.some((sub) => subWindow(sub)?.total != null)) return undefined
+  return ends.reduce(
+    (n, sub) => n + (subWindow(sub)?.total ?? subEids(sub)?.size ?? 0),
+    0,
+  )
+}
+
 // Several tiles' rows in one sub. A reference list or a shelf of pins paints N
 // entities, and N `route:<eid>:*` subs cost N serves and N frames where one
 // `id=a,b,c` line answers the same rows together. Concurrent readers share an
 // immutable bounded request; each still owns its lifetime independently.
 let rowsSub = rowHolds(ownBoard, dropBoard)
-
-// What an entity sub asks for BESIDE its row (T-22371): the edges incident to
-// it, and enough of each far endpoint to render the sentence — an id (the spine
-// rides always), a status and a title. That is what a requires-tree needs, and
-// it is why no card has to subscribe to its blockers: the peer projection is a
-// read of two columns, not a membership. Every consumer of `relations()` — Show's
-// requires/contains/reads lists, Relate, the Meta tally, the TUI's refs —
-// is fed from here now that the graph's whole edge table no longer rides the boot.
-//
-// And it says HOW MANY (T-33752). A card renders a list of sentences, not a
-// hub's whole neighbourhood: P-19 is joined to 1,947 entities, and shipping
-// them cost 902 KB and 942ms to open one project — a peer row apiece for a list
-// nothing can read. The bound is what the view renders; the frame states the
-// total it is a prefix of, and Show says how many more there are.
-let ROUTE_EDGES = '.edges.peers=task.status,doc.title&.edges.limit=100'
 
 // Bring a lazy board's scoped-session entry subscriptions into line with its
 // query `q` (`''` closes them all). Reuses the ref-counted entrySub, so a board
@@ -2995,15 +2853,14 @@ export let aggValue = (name: string, value = ''): number | undefined => {
 }
 
 // What a mounted component holds open while it draws it: a query, a board's
-// members, an entity, a list's rows, a session's entries, an entity's edge
-// rider, an aggregate, a comment badge's tally, or this tab's screen rows.
+// members, an entity, a list's rows, a session's entries, an aggregate, a
+// comment badge's tally, or this tab's screen rows.
 export type Hold =
   | { query: Pred[]; source?: string; typed?: boolean }
   | { board: Ent }
   | { entity: string; fields?: string }
   | { rows: string[] }
   | { entries: string }
-  | { edges: string; rider: string }
   | { agg: string; line: string; once?: boolean; typed?: boolean }
   | { comments: string }
   | { client: string }
@@ -3034,8 +2891,6 @@ let holdKey = (h: Hold): string =>
     ? `rows:${[...new Set(h.rows)].join(',')}`
     : 'entries' in h
     ? `entries:${h.entries}`
-    : 'edges' in h
-    ? `edges:${h.edges}:${h.rider}`
     : 'agg' in h
     ? `agg:${h.agg}:${h.once ? 'once' : 'live'}:${
       h.typed ? 'typed:' : ''
@@ -3057,8 +2912,6 @@ let open = (h: Hold): () => void =>
     ? rowsSub([...new Set(h.rows)])
     : 'entries' in h
     ? entrySub(h.entries)
-    : 'edges' in h
-    ? edgeSub(h.edges, h.rider)
     : 'agg' in h
     ? h.typed
       ? typing(h.agg, () => holdAgg(h.agg, h.line, h.once))

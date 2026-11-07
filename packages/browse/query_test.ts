@@ -6,7 +6,6 @@ import { assertEquals, assertThrows } from '@std/assert'
 import { Unknown } from '@yaks/vocab'
 import { scalar } from '@yaks/query'
 import {
-  edgeRider,
   matchQuery,
   pageRanked,
   parseQuery,
@@ -76,12 +75,6 @@ test('saved reference literals resolve as one operand', () => {
     )
     assertEquals(seen, [name])
     assertEquals(matchQuery({ filed: { assignee: eid } }, preds), true)
-  }
-})
-
-test('edge selectors accept boolean and named relation declarations', () => {
-  for (let type of ['cites', 'imports', 'referenced']) {
-    assertEquals(edgeRider(parseQuery(`.edges[${type}]`))?.select, { type })
   }
 })
 

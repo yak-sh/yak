@@ -23,7 +23,7 @@ import { Twig } from '@yaks/kernel/Comments'
 import { branches } from '@yaks/kernel/comments'
 import { Entity, resolve } from '../Entity.tsx'
 import { mdMentions, type Mention } from '../../md.ts'
-import { useCommentsOn, useQueryResult, useReferences } from '../useQuery.ts'
+import { useCitedComments, useCommentsOn, useQueryResult } from '../useQuery.ts'
 import { UrlVal } from '@yaks/ux'
 import { Ansi } from '../Ansi.tsx'
 import { SessionDot, useSessionStanding } from '../session_status.tsx'
@@ -611,7 +611,8 @@ export let Session = (
   // The facts fold behind the one lifecycle fact worth keeping in the bar.
   let started = e.created?.at
   let gist = started ? `started ${ago(started)}` : 'not started'
-  // A comment joins the thread once the transcript cites it. A managed resume
+  // A comment, on the session or on anything else, joins the thread once the
+  // transcript cites it. A managed resume
   // prints `C-id: words` as its own user row, so that copy hides; graph-native
   // context/tool delivery has a reference without a duplicate say row.
   let inputs = new Set(
@@ -619,11 +620,15 @@ export let Session = (
       x.row?.kind == 'say' && x.row.role == 'user' ? [x.row.text] : []
     ),
   )
-  let cited = new Set(useReferences(e.eid))
-  let cs = useCommentsOn(e.eid).filter((c) => {
-    let body = c.doc?.body ?? ''
-    return !inputs.has(body) && !inputs.has(`${idOf(c)}: ${body}`)
-  })
+  let citing = useCitedComments(e.eid)
+  let cited = new Set(citing.map((c) => c.eid))
+  let all = [...useCommentsOn(e.eid), ...citing]
+  let cs = [...new Map(all.map((c) => [c.eid, c])).values()]
+    .sort((a, b) => a.num - b.num)
+    .filter((c) => {
+      let body = c.doc?.body ?? ''
+      return !inputs.has(body) && !inputs.has(`${idOf(c)}: ${body}`)
+    })
   let heard = (c: Ent) => c.created?.via == e.eid || cited.has(c.eid)
   let heardCs = cs.filter(heard)
   let trees = branches(cs.map(domainBundle))

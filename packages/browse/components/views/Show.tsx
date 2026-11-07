@@ -10,7 +10,7 @@ import {
   base,
   commentCount,
   crewed,
-  edgeWindow,
+  edgeTotal,
   ent,
   gated,
   mutate,
@@ -348,10 +348,10 @@ export let Acceptance = ({ e }: { e: Ent }) => {
 // children (ent() splits those out of refs into kids, so they'd
 // otherwise only show as board tallies) and its requires/reads.
 export let Dependencies = ({ e }: { e: Ent }) => {
-  // A hub's edges arrive BOUNDED (live.ts ROUTE_EDGES): the newest `limit` of
-  // `total` sentences. Say what is missing rather than letting a page read as
-  // the whole neighbourhood — the same statement a windowed list owes (M-16612).
-  let win = edgeWindow(e.eid)
+  // A hub's edges arrive BOUNDED (live.ts routeSub): the newest hundred at
+  // each end. Say what is missing rather than letting a page read as the whole
+  // neighbourhood — the same statement a windowed list owes (M-16612).
+  let total = edgeTotal(e.eid)
   let shown = parents(e.eid).length + e.kids.length + e.refs.length
   // The far end of each sentence is its own row: held here, beside the list.
   useRows([
@@ -359,7 +359,7 @@ export let Dependencies = ({ e }: { e: Ent }) => {
     ...e.kids.map((k) => k.eid),
     ...e.refs.map((r) => r.child),
   ])
-  let more = win?.total == null ? 0 : win.total - shown
+  let more = total == null ? 0 : total - shown
   return (
     <>
       {parents(e.eid).map((d) => (

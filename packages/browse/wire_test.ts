@@ -44,15 +44,11 @@ test('an answer lands as changes: the spine, each component, a death', () => {
   )
 })
 
-test('a line asks the host by .entity.eid and preserves projections without riders', () => {
+test('a line asks the host by .entity.eid and preserves projections', () => {
   assertEquals(yakLine('id=a,b'), '.entity.eid=a,b')
   assertEquals(
-    yakLine('id=a&.edges.peers=task.status,doc.title&.edges.limit=100'),
-    '.entity.eid=a',
-  )
-  assertEquals(
-    yakLine('.task&.fields=doc.title&.edges[requires]&.limit=5'),
-    '.task&.fields=doc.title&.limit=5',
+    yakLine('id=a&.fields=doc.title&.limit=5'),
+    '.entity.eid=a&.fields=doc.title&.limit=5',
   )
 })
 

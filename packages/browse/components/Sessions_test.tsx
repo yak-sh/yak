@@ -49,7 +49,7 @@ let drop = await contribute([facet])
 let mounted = mount(
   <>
     <FilterInput eid={list} />
-    <QueryList eid={list} query={allSessionsQuery} edges={false} />
+    <QueryList eid={list} query={allSessionsQuery} />
   </>,
 )
 let titles = () =>

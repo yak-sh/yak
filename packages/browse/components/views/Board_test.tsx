@@ -8,13 +8,7 @@ import type { Bundle } from '@yaks/graph'
 import { applyLocal, cache, config, ent } from '../../live.ts'
 import { host, reader } from '../../host_testing.ts'
 import { uuid } from '../../types.ts'
-import {
-  edgeRider,
-  fieldsOf,
-  orderOf,
-  parseQuery,
-  windowOf,
-} from '../../query.ts'
+import { fieldsOf, orderOf, parseQuery, windowOf } from '../../query.ts'
 
 // Enter through the registry, as the app does; importing Board first would
 // invert its deliberate Entity render cycle.
@@ -28,7 +22,6 @@ test('board columns request a projected, priority-ordered screenful', () => {
   let q = columnLine('.task', 'open', 8)
   assertEquals(windowOf(parseQuery(q)), { limit: 8 })
   assertEquals(orderOf(parseQuery(q)), 'filed.priority')
-  assertEquals(edgeRider(parseQuery(q))?.limit, 32)
   assertEquals(fieldsOf(parseQuery(q))?.some((f) => f.prop == 'body'), false)
   assertEquals(windowOf(parseQuery(columnLine('.limit=3 .task', 'open', 8))), {
     limit: 3,

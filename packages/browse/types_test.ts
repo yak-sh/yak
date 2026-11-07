@@ -87,9 +87,8 @@ test('stamped: declared, and still not wire-writable', () => {
 })
 
 // The marks are the evidence; a materialized `task.status` is the floor under
-// them. An edge rider's peer arrives PROJECTED — spine, kind, and the columns
-// `.edges.peers=task.status,doc.title` named — so it carries the derived value
-// and none of the comps it was derived from; reading marks alone painted every
+// them. A projected row (`.fields=task.status,doc.title`) carries the derived
+// value and none of the comps it was derived from; reading marks alone painted every
 // done dependency as open on its parent's card.
 test('statusOf: marks first, a projected task.status beneath them', () => {
   let cases: [Record<string, unknown>, string][] = [

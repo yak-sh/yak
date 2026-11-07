@@ -79,12 +79,6 @@ export { WALK_DEPTH, WALK_LIMIT } from '@yaks/query'
 // leaf tested against op/value.
 export type Hop = { comp: string; prop: string }
 
-// A stored-edge selector carried by the EDGES rider. `type` narrows edge
-// sentences; `via` replaces an endpoint wearing that component with the entity
-// its reference column names. The projection is what lets an entry-owned edge
-// read as session-owned without loading the entry partition.
-export type EdgeSelector = { type: string; via?: Hop }
-
 export type Pred = {
   comp: string
   prop: string
@@ -141,18 +135,6 @@ export type Pred = {
   // membership — which is why a reply that carries one also states the total it
   // is a prefix of.
   win?: Win
-  // The EDGES RIDER's peer projection: `.edges.peers=status,title` names the
-  // columns the FAR endpoint of each incident edge carries into the reply, so a
-  // requires-tree renders (id, status) without subscribing every blocker row.
-  // Empty for a bare `.edges`. op is EDGES; edgeRider() reads the directive.
-  peers?: Hop[]
-  edge?: EdgeSelector
-  // The EDGES RIDER's BOUND — `.edges.limit=200`. A hub's incident set is not
-  // what a card renders, and each edge beyond the bound costs a projected peer
-  // row, so the rider windows like a row set does: a prefix, newest sentences
-  // first, and the reply states the total it is a prefix of. Its own field
-  // rather than `win`, which is the ROW window and spells itself `.limit=`.
-  limit?: number
   // A WALK rather than a column read: `.requires[<=3]->T-42` selects
   // the entities that reach `value` through at most `depth` hops of one step —
   // an edge type, or a reference column (`via`) — and `<-` walks the other way.
@@ -389,45 +371,6 @@ export let PROJECT = 'project'
 export let fieldsOf = (preds: Pred[]): Field[] | undefined =>
   preds.find((p) => p.op == PROJECT)?.fields
 
-// The EDGES RIDER — `.edges`, optionally `.edges.peers=status,title`. A typed
-// form (`.edges[referenced,entry.session]`) selects stored sentences after
-// projecting endpoints through one reference column. It rides the pred list
-// like AGG/PROJECT and delivers triples INCIDENT to its result set — the scoped
-// replacement for shipping every edge at boot. `peers` names far-end columns.
-export let EDGES = 'edges'
-
-// The rider a query carries, or undefined for a plain membership query. Several
-// `.edges` tokens union their peer columns — one rider, one delivery.
-export type EdgeRider = { peers: Hop[]; select?: EdgeSelector; limit?: number }
-
-export let edgeRider = (preds: Pred[]): EdgeRider | undefined => {
-  let asked = preds.filter((p) => p.op == EDGES)
-  if (!asked.length) return undefined
-  let seen = new Set<string>()
-  let peers: Hop[] = []
-  for (let p of asked) {
-    for (let h of p.peers ?? []) {
-      let key = `${h.comp}.${h.prop}`
-      if (seen.has(key)) continue
-      seen.add(key)
-      peers.push(h)
-    }
-  }
-  let selected = asked.flatMap((p) => p.edge ? [p.edge] : [])
-  let shapes = new Set(selected.map((s) => JSON.stringify(s)))
-  if (shapes.size > 1) throw new Error('one edge rider cannot mix selectors')
-  let select = selected[0]
-  // The TIGHTEST bound wins: two tokens asking for one delivery cannot each get
-  // their own length, and the smaller ask is the one that is satisfied by it.
-  let limits = asked.flatMap((p) => p.limit == null ? [] : [p.limit])
-  let limit = limits.length ? Math.min(...limits) : undefined
-  return {
-    peers,
-    ...(select ? { select } : {}),
-    ...(limit == null ? {} : { limit }),
-  }
-}
-
 // A WALK pred — `.requires[<=3]->T-42` — is a real filter, not a rider: it
 // SELECTS a transitive closure over one step, optionally capped by hops.
 // sql.ts compiles it to a recursive CTE over the indexed dep table (or the
@@ -649,7 +592,7 @@ let fieldOf = (path: string[], wake: boolean): Field => {
 // `(.a=1&.order=hot|.b=2)` quietly drop the order.
 let alternative = (preds: Pred[]): Pred[] => {
   let rider = preds.find((p) =>
-    [ORDER, NEAR, AGG, WINDOW, PROJECT, EDGES, WANT].includes(p.op)
+    [ORDER, NEAR, AGG, WINDOW, PROJECT, WANT].includes(p.op)
   )
   if (rider) {
     throw new Error(`.${rider.op} belongs outside the | alternatives`)
@@ -658,14 +601,6 @@ let alternative = (preds: Pred[]): Pred[] => {
 }
 
 let bindClause = (c: Clause): Pred[] => {
-  let rider = (extra: Partial<Pred>): Pred[] => [{
-    comp: '',
-    prop: '',
-    op: EDGES,
-    value: '',
-    peers: [],
-    ...extra,
-  }]
   switch (c.kind) {
     case 'and':
       return c.clauses.flatMap((c) => bindClause(c))
@@ -730,25 +665,6 @@ let bindClause = (c: Clause): Pred[] => {
         value: String(cursor),
         win: { [c.kind]: cursor },
       }]
-    }
-    case 'edges': {
-      let edge: EdgeSelector | undefined
-      if (c.select) {
-        let { type, via: path } = c.select
-        if (!(edges as readonly string[]).includes(type)) {
-          throw new Error(`.edges selects one edge type (${edges.join(', ')})`)
-        }
-        let via = path && columnOf(path, '.edges endpoint projection')
-        if (via && !isRef(via.comp, via.prop)) {
-          throw new Error('.edges endpoint projection must be one {eid} column')
-        }
-        edge = { type, ...(via ? { via } : {}) }
-      }
-      return rider({
-        peers: c.peers.map((p) => columnOf(p, '.edges.peers')),
-        ...(edge ? { edge } : {}),
-        ...(c.limit != null ? { limit: c.limit } : {}),
-      })
     }
     case 'walk': {
       let path = c.path.join('.')
@@ -1093,7 +1009,7 @@ export let matchQuery = (
     }
     if (
       p.op == ORDER || p.op == NEAR || p.op == AGG || p.op == PROJECT ||
-      p.op == EDGES || p.op == WANT
+      p.op == WANT
     ) {
       return true
     }

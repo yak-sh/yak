@@ -260,13 +260,7 @@ export let Page = ({ at }: { at: string }) => {
           ? (
             <>
               {place.view && <PagePart view={place.view} />}
-              {place.query && (
-                <QueryList
-                  eid={filter!}
-                  query={place.query}
-                  edges={place.key != 'sessions'}
-                />
-              )}
+              {place.query && <QueryList eid={filter!} query={place.query} />}
             </>
           )
           : !e && screenGone(at)

@@ -9,7 +9,7 @@ import { cache, config, ent, problem } from './live.ts'
 import { hostCommands } from './host_commands.ts'
 import { actionsFor } from './components/registry.ts'
 import { Entity } from './components/Entity.tsx'
-import { useCommentsOn, useReferences } from './components/useQuery.ts'
+import { useCitedComments, useCommentsOn } from './components/useQuery.ts'
 import { Navigation } from './components/Navigation.tsx'
 import { mount } from './components/mount.ts'
 import { held, host } from './host_testing.ts'
@@ -45,7 +45,7 @@ test('a document-only vocabulary browses without task, session or box-only reads
   let wire = host(() => ({ bundles: [] }))
   let View = () => {
     useCommentsOn('document')
-    useReferences('document')
+    useCitedComments('document')
     return h('div', {}, h(Navigation, {}), h(Entity, { eid: 'document' }))
   }
   let seen = mount(h(View, {}))

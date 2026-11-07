@@ -72,8 +72,7 @@ export let columnLine = (q: string, status: string, limit: number): string => {
   ].join(',')
   return q + '&.task&.task.status=' + status +
     (orderOf(preds) ? '' : '&.order=filed.priority') +
-    '&.limit=' + Math.min(bound ?? Infinity, limit) + fields +
-    '&.edges.peers=task.status,doc.title&.edges.limit=' + limit * 4
+    '&.limit=' + Math.min(bound ?? Infinity, limit) + fields
 }
 
 // A board as kanban over its saved QUERY (board.query, query.ts grammar):

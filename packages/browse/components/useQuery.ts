@@ -20,7 +20,6 @@ import {
   problem,
   queryEids,
   querySubscription,
-  references,
   type SubscriptionRead,
   useHold,
 } from '../live.ts'
@@ -186,20 +185,15 @@ export let useChatFor = (
     !!actor && !!vocab.prop('chat', 'actor') && !!vocab.prop('chat', 'target'),
   ).eids.map(ent)[0]
 
-let referenceQuery = () => {
-  let kinds = [
-    ...(vocab.comp('referenced') ? ['referenced'] : []),
-    ...(vocab.prop('entry', 'session') ? ['entry.session'] : []),
-  ]
-  return kinds.length ? `.edges[${kinds.join(',')}]` : undefined
-}
+// The comments a session's transcript cites: those the session, or one of its
+// entries, holds an edge to. A comment delivered to a graph-native session is
+// cited, not said, so this is how its thread hears a comment on whatever the
+// session works on. Edges are entities, so this is an ordinary row query.
+let citedLine = (session: string) =>
+  vocab.prop('comment', 'target') && vocab.prop('edge', 'to') &&
+    vocab.prop('entry', 'session')
+    ? `.comment&(.edges_to.edge.from=${session}|.edges_to.edge.from.entry.session=${session})`
+    : ''
 
-// What an entity cites (live.ts `references`): a typed edge rider over one
-// addressed entity. The server projects entry endpoints to their Session
-// through the indexed entry.session column, so a session cites what its
-// entries do; this hook only owns the subscription and reads its scoped edges.
-export let useReferences = (eid: string): string[] => {
-  let query = referenceQuery()
-  useHold(query && { edges: eid, rider: query })
-  return references(eid)
-}
+export let useCitedComments = (session: string): Ent[] =>
+  useQueryEids(citedLine(session), true).map(ent).sort((a, b) => a.num - b.num)
