@@ -7,7 +7,7 @@ import { parse } from '@yaks/query'
 import { loadVocab } from '@yaks/vocab'
 import { driver } from '../sqlite/native.ts'
 import { sqlitePath } from '../sqlite/sqlitepath.ts'
-import { col, compile, insert, type Row } from './mod.ts'
+import { type BindOpts, col, compile, insert, type Row } from './mod.ts'
 
 let vocab = loadVocab({
   $defs: {
@@ -96,8 +96,8 @@ let status = Deno.dlopen(sqlitePath, {
     result: 'i32',
   },
 })
-let read = (line: string) => {
-  let q = compile(parse(line), vocab)
+let read = (line: string, opts?: BindOpts) => {
+  let q = compile(parse(line), vocab, opts)
   let stmt = db.prepare(q.sql)
   try {
     let rows = stmt.all<Row>(...q.params)
@@ -175,4 +175,48 @@ test('a page in an indexed order stops at the page', () => {
     let { steps } = read(line)
     assert(steps < 10_000, `${steps} VM instructions: ${line}`)
   }
+})
+
+// A census that counts a component's owners few sends a tested page to its
+// newest few, and to every owner only when those cannot fill it: the answer
+// is the walk's.
+let few = (held: Record<string, number>): BindOpts => ({
+  census: { held: (c) => held[c], largest: () => 4096 },
+})
+let counted: [string, string, BindOpts][] = [
+  [
+    'the newest few',
+    '.entry .content.body~=common .order=-created.at .limit=3',
+    few({ entry: 40 }),
+  ],
+  [
+    'past the newest few',
+    '.entry .content.body~=rare .order=-created.at .limit=3',
+    few({ entry: 40 }),
+  ],
+  [
+    'fewer than a page',
+    '.comment !link .order=-created.at .limit=3',
+    few({ comment: 2 }),
+  ],
+  [
+    'oldest first',
+    '.comment !link .order=created.at .limit=3',
+    few({ comment: 2 }),
+  ],
+]
+for (let [name, line, opts] of counted) {
+  test(`a page of few owners: ${name}`, () =>
+    assertEquals(read(line, opts).eids, read(line).eids))
+}
+
+// The two comments, under a test both pass, are fewer than the page: the walk
+// reads every moment to learn it, 188,483 VM steps, and the census sends the
+// page to the comments.
+test('a page of few owners reads them, not the index', () => {
+  let { steps } = read(
+    '.comment !link .order=-created.at .limit=3',
+    few({ comment: 2 }),
+  )
+  assert(steps < 1_000, `${steps} VM instructions`)
 })

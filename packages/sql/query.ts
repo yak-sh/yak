@@ -18,6 +18,7 @@ export {
   type Rarest,
   rarest,
   screen,
+  sorts,
   tallied,
   visibleBacked,
   visibleDerived,

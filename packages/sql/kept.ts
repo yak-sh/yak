@@ -9,8 +9,8 @@
 // whole number a numeric property is compared above or below, stood in for by
 // its place, plus every input the lowering reads: the options' data, the
 // registries by identity, the extensions' hooks, the archetype catalog's
-// answers, and the census's choices of road (./bind.ts `walks`, `crowded`,
-// `numbered`, `rarest`).
+// answers, and the census's choices of road (./bind.ts `walks`, `sorts`,
+// `crowded`, `numbered`, `rarest`).
 // The values a kept statement binds anew are the clock, the root candidates
 // (`eids`), those ids and numbers, the integer ids the ids resolve to, and the
 // store's tags (./derived.ts `Tags`), so one statement serves every store of a
@@ -53,6 +53,7 @@ import {
   prepared,
   rarest,
   screening,
+  sorts,
   sourceScreen as unkept,
   walks,
 } from './bind.ts'
@@ -80,6 +81,7 @@ type Asked =
   | { held: boolean | undefined }
   | { presence: Presence; ids: readonly number[] | undefined }
   | { walks: string; page?: number; answer: boolean }
+  | { sorts: string; page: number; answer: boolean }
   | { crowded: string; n: number; answer: boolean | undefined }
   | { numbered: string; answer: boolean | undefined }
   | { rarest: string[]; answer: string | undefined }
@@ -147,12 +149,17 @@ let recorded = (
 let choosing = (
   census: Census | undefined,
   log: Asked[],
-): Pick<Heard, 'walks' | 'crowded' | 'numbered' | 'rarest'> =>
+): Pick<Heard, 'walks' | 'sorts' | 'crowded' | 'numbered' | 'rarest'> =>
   census
     ? {
       walks: (comp, page) => {
         let answer = walks(census, comp, page)
         log.push({ walks: comp, page, answer })
+        return answer
+      },
+      sorts: (comp, page) => {
+        let answer = sorts(census, comp, page)
+        log.push({ sorts: comp, page, answer })
         return answer
       },
       crowded: (comp, n) => {
@@ -193,6 +200,8 @@ let stands = (asked: Asked[], opts: BindOpts): boolean =>
   asked.every((a) =>
     'walks' in a
       ? walks(opts.census, a.walks, a.page) === a.answer
+      : 'sorts' in a
+      ? sorts(opts.census, a.sorts, a.page) === a.answer
       : 'crowded' in a
       ? crowded(opts.census, a.crowded, a.n) === a.answer
       : 'numbered' in a
@@ -209,6 +218,9 @@ let agree = (a: Asked[], b: Asked[]) =>
     let y = b[i]
     return 'walks' in x
       ? 'walks' in y && x.walks == y.walks && x.page === y.page &&
+        x.answer === y.answer
+      : 'sorts' in x
+      ? 'sorts' in y && x.sorts == y.sorts && x.page == y.page &&
         x.answer === y.answer
       : 'crowded' in x
       ? 'crowded' in y && x.crowded == y.crowded && x.n == y.n &&

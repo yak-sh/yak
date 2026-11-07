@@ -237,6 +237,36 @@ export let walks = (
   return !!held && census!.largest() * (page ?? held) < 2 * held * held
 }
 
+/** Whether a page of `comp`'s owners in an indexed order, beside a test no
+ * index answers, is read from the owners rather than by walking the order's
+ * index, as `census` sizes the two roads. The owners' road reads at most
+ * every owner. The walk reads page × entities / owners rows when every owner
+ * passes the test, and the whole index when fewer than a page do, which no
+ * count foretells. The owners are read where the most that road can lose to
+ * the walk, owners² / (page × entities), is less than the most the walk can
+ * lose to it, entities / owners: the box's 21,606 sessions, under a test that
+ * leaves 35 of them, walked 3.5 million moments for 5.7 s. Without a count,
+ * the walk.
+ *
+ * ```ts
+ * import { sorts } from '@yaks/sql'
+ * import { equal } from '@yaks/testing'
+ * let census = (held?: number) => ({ held: () => held, largest: () => 1.4e7 })
+ * equal(sorts(census(21_606), 'session', 51), true)
+ * equal(sorts(census(450_000), 'entry', 51), false)
+ * equal(sorts(census(), 'session', 51), false)
+ * ```
+ */
+export type Sorts = (comp: string, page: number) => boolean
+export let sorts = (
+  census: Census | undefined,
+  comp: string,
+  page: number,
+): boolean => {
+  let held = census?.held(comp)
+  return !!held && held ** 3 < page * census!.largest() ** 2
+}
+
 /** Whether more than `n` rows of `comp` are stored, as `census` tells it:
  * its count where it keeps one, else its bounded look; `undefined` when it
  * can tell neither.
@@ -353,6 +383,9 @@ type Ctx = {
   archetypes?: ArchetypeSet
   /** whether a page of a component's owners walks the EID index (`walks`) */
   walks?: Walks
+  /** whether a tested page in an indexed order sorts a component's owners
+   * (`sorts`) */
+  sorts?: Sorts
   /** whether more than so many rows of a component are stored (`crowded`) */
   crowded?: Crowded
   /** whether any entity holding a component has a number (`Census`) */
@@ -510,7 +543,7 @@ let fresh = (
 // Reuse bindings without asking each consumer to manage a CTE namespace.
 // Referenced source identifiers include alternate dialect/overlay names;
 // resolving an unused source could open its backing or visibility policy.
-let share = (ctx: Ctx, query: Query): Source => {
+let share = (ctx: Ctx, query: Query, materialized = false): Source => {
   let found = ctx.shared.get(query)
   if (found) return found.source
   let rendered = render(query)
@@ -523,7 +556,7 @@ let share = (ctx: Ctx, query: Query): Source => {
   let source = table(name)
   ctx.shared.set(query, {
     source,
-    cte: { name, q: rendered, materialized: false },
+    cte: { name, q: rendered, materialized },
   })
   return source
 }
@@ -1373,6 +1406,10 @@ let refGroups = (v: Vocab): Arm[][] => {
  * the same on the box: 10,000 seeks, or the 138,000 entities a walk passes to
  * find a page of 200 so spread among 6.9 million. */
 let MANY = 10_000
+
+/** How many pages of a component's newest owners a tested page in an indexed
+ * order reads before it reads them all (`inOrder`). */
+let FEW = 4
 
 // The owners of the rows whose reference properties point at `value`, as one
 // selection of ids, or none where the vocabulary has no reference property:
@@ -3420,6 +3457,7 @@ export type Prepared = { opts: BindOpts; spine?: string; lower: () => Select }
  * census's choices of road. */
 export type Heard = Pick<BindOpts, 'archetypes' | 'extend'> & {
   walks?: Walks
+  sorts?: Sorts
   crowded?: Crowded
   numbered?: Numbered
   rarest?: Rarest
@@ -3498,6 +3536,8 @@ export let prepared = (
     archetypes: spine ? undefined : heard.archetypes,
     walks: heard.walks ??
       (opts.census && ((comp, page) => walks(opts.census, comp, page))),
+    sorts: heard.sorts ??
+      (opts.census && ((comp, page) => sorts(opts.census, comp, page))),
     // A table the file lacks holds no rows, and is never asked for them.
     crowded: (comp, n) =>
       opts.absent?.includes(comp)
@@ -3832,10 +3872,14 @@ let inOrder = (ast: And, ctx: Ctx): Frag | undefined => {
       c.kind == 'pred' && !c.not && (indexable(ctx, c) || !!gram(ctx, c))
     )
   ) return
-  let page = (walk: Ctx['walk'], has: Pred[], n: Cond | number): Query => {
+  let page = (
+    road: Partial<Ctx>,
+    has: Pred[],
+    n: Cond | number,
+  ): Query => {
     let q = lower({ kind: 'and', clauses: [...filters, ...has, order] }, {
       ...ctx,
-      walk,
+      ...road,
       tables: new Set(),
     }, [])
     let arm = render({
@@ -3848,6 +3892,71 @@ let inOrder = (ast: And, ctx: Ctx): Frag | undefined => {
     return select({
       from: from(raw(arm.sql, arm.params, arm.table, arm.origin)),
     })
+  }
+  // Beside a test, fewer than a page of the component that drives the read
+  // may pass it, and the walk then reads the whole index to learn so: 6 s for
+  // the box's live sessions, `.session !session.ended`, among 3.5 million
+  // moments (T-149664). Where the owners are few (`sorts`), the newest few of
+  // them, a page of the component alone, are tested first, each as a finite
+  // root (`bounded`), and only a page they cannot fill reads and sorts every
+  // owner. A derived test, `.session.status=stopped`, then probes a few
+  // hundred sessions rather than selecting every one: 109 ms, from 5.7 s.
+  let driven = presence(ctx, ast.clauses)
+  let tests = (c: Clause) =>
+    c.kind != 'pred' || c.not || c.where || opOf(c) != 'want' &&
+      !(c.path.length == 1 && c.path[0] == driven && opOf(c) == EXISTS)
+  let tested = flattened(filters).some(tests)
+  // A page of the component alone fills at the rate its owners come, which
+  // the census tells (`walks`), and a sparse one reads and sorts its owners.
+  if (driven && !tested && ctx.walks?.(driven, limit.n) === false) return
+  if (driven && tested && ctx.sorts?.(driven, limit.n)) {
+    let few = lower(
+      {
+        kind: 'and',
+        clauses: [
+          { kind: 'pred', path: [driven], op: '!', value: null },
+          order,
+          { kind: 'limit', n: limit.n * FEW },
+        ],
+      },
+      { ...ctx, tables: new Set() },
+      [],
+    )
+    let newest = render({
+      ...few,
+      cols: [raw(`${ctx.d.ownerKey('entity')} as id`)],
+    })
+    // Both are lowered before the newest are shared, so that only the
+    // statement's own WITH holds them, read once for the page and for whether
+    // it is full; a page that is stops the rest at LIMIT 0.
+    let first = page(
+      { bounded: true, candidates: { ...newest, test: TRUE } },
+      [],
+      limit.n,
+    )
+    let rest = page({ walk: null }, [], limit.n)
+    let lead = share(ctx, first, true)
+    let full = exists(select({
+      cols: [lit(1)],
+      from: lead,
+      limit: lit(1),
+      offset: lit(limit.n - 1),
+    }))
+    return render(select({
+      from: from({
+        t: 'compound',
+        op: 'union',
+        parts: [
+          select({ cols: [col('id')], from: lead }),
+          select({
+            from: from(select({
+              from: from(rest),
+              limit: { t: 'case', arms: [[full, val(0)]], else: val(limit.n) },
+            })),
+          }),
+        ],
+      }),
+    }))
   }
   let holding: Pred = { kind: 'pred', path, op: '!', value: null }
   // Blank, so it holds an empty text too, which the holding half may also read.
@@ -3875,13 +3984,17 @@ let inOrder = (ast: And, ctx: Ctx): Frag | undefined => {
     `not exists (${held.sql} limit 1 offset ${MANY})`,
     held.params,
   )
-  let lead = page(first[0], first[1], few ?? limit.n), led = render(lead)
+  let lead = page({ walk: first[0] }, first[1], few ?? limit.n)
+  let led = render(lead)
   let full = raw(
     `exists (${led.sql} limit 1 offset ${limit.n - 1})`,
     led.params,
   )
-  let parts = [lead, page(rest[0], rest[1], few ? or(few, full) : full)]
-  if (few) parts.push(page(null, [], not(few)))
+  let parts = [
+    lead,
+    page({ walk: rest[0] }, rest[1], few ? or(few, full) : full),
+  ]
+  if (few) parts.push(page({ walk: null }, [], not(few)))
   return render(select({
     from: from({ t: 'compound', op: 'union', parts }),
   }))

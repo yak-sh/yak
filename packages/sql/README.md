@@ -737,10 +737,14 @@ property, `.entry .order=-created.at .limit=20`, walks that property's index in
 its order and stops at the page, sorting only each run of equal values by the
 number and id; the entities with no value are read only when the walk cannot
 fill the page. A filter an index seeks, or a needle few rows hold, bounds the
-sort already and keeps the single statement. A `.after` cursor is bound like any
-other value, so every page of one query is the same statement. A `.limit` is
-written into the statement, because SQLite prepares a statement again each time
-its limit is bound.
+sort already and keeps the single statement. Under a test no index answers, a
+component whose owners are few beside the entities, as the census counts them
+(`sorts`), is read instead of the index: `.session !session.ended` tests the
+newest few pages of sessions first and sorts every session only when those
+cannot fill the page, where a walk that never fills it reads the whole index. A
+`.after` cursor is bound like any other value, so every page of one query is the
+same statement. A `.limit` is written into the statement, because SQLite
+prepares a statement again each time its limit is bound.
 
 ```ts
 import { compile } from '@yaks/sql'
