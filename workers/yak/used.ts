@@ -144,12 +144,14 @@ export let wake = (
   store: string,
   retain?: (work: Promise<void>) => void,
 ): void => {
-  if (!env.STORE) return
+  if (!env.STORE) return // Counted apart from the request's own trips (lib/hops.ts), since nobody
+  // waits on it.
   ;(retain ?? background)(
-    storeOf(env.STORE, store)(WARM, {}, KERNEL).then(
-      (r) => r.body?.cancel(),
-      (e) => caught(e, { request: 'store warm', store }),
-    ),
+    tallying(new Map(), () => storeOf(env.STORE!, store)(WARM, {}, KERNEL))
+      .then(
+        (r) => r.body?.cancel(),
+        (e) => caught(e, { request: 'store warm', store }),
+      ),
   )
 }
 
