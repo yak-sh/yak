@@ -2,10 +2,11 @@ import { Refused } from '@yaks/graph/errors'
 import { targetFor, type Workspaces } from '@yaks/machine/targets'
 // Instruction admission reads only the explicitly named machine. The files
 // become immutable prompt snapshots; later machine edits do not rewrite them.
-import type { Comp, Graph } from '@yaks/graph'
+import type { Comp, Eid, Graph } from '@yaks/graph'
 import { type Snapshot, snapshot } from '@yaks/context'
 import type { Machine } from '@yaks/machine'
 import { owing } from './session_machines.ts'
+import { personaOf } from './worn.ts'
 import { type As, offer, wearing } from '@yaks/persona'
 import { compile, gather } from '@yaks/topic'
 import { human } from '@yaks/id'
@@ -110,23 +111,39 @@ export let topical = async (g: Graph, topic: string): Promise<Snapshot> => {
 }
 
 /** Who a session is and what it is opened on: its persona or work (@yaks/persona
- * `As`), and the topic whose tree follows the persona's text. */
-export type On = As & { topic?: string }
+ * `As`), the topic whose tree follows the persona's text, and the session
+ * that started it, whose persona it wears where nothing else gives one. */
+export type On = As & { topic?: string; starter?: Eid }
+
+// Who a session wears where nothing chose it a persona and neither its work
+// nor its checkout carries one: the persona of the session that started it
+// (./worn.ts `personaOf`), as a helper works as its starter does.
+let starting = async (g: Graph, home: Comp, context: On): Promise<On> => {
+  if (context.persona || !context.starter) return context
+  if (await wearing(g, String(home.cwd ?? ''), context)) return context
+  let persona = await personaOf(g, context.starter)
+  return persona ? { ...context, persona } : context
+}
 
 /** What a session opening here begins with: its instruction files, the topic
- * it is opened on after them, and the names of the tools the persona it wears
- * offers (@yaks/persona `offer`), which are then all a turn is offered. No
- * `tools` where that persona offers none, which leaves the runner's own set. */
+ * it is opened on after them, the persona it wears (@yaks/persona `wearing`,
+ * else its starter's) and the names of the tools that persona offers
+ * (@yaks/persona `offer`), which are then all a turn is offered. No `tools`
+ * where that persona offers none, which leaves the runner's own set. */
 export let openingFor = async (
   g: Graph,
   home: Comp,
   workspaces?: Workspaces,
   context: On = {},
-): Promise<{ files: Snapshot[]; tools?: string[] }> => {
-  let files = await instructionsFor(g, home, workspaces, context)
-  if (context.topic) files.push(await topical(g, context.topic))
-  let tools = home.cwd || context.persona || context.work
-    ? offer(await wearing(g, String(home.cwd ?? ''), context))
-    : undefined
-  return { files, ...tools ? { tools } : {} }
+): Promise<{ files: Snapshot[]; persona?: Eid; tools?: string[] }> => {
+  let as = await starting(g, home, context)
+  let files = await instructionsFor(g, home, workspaces, as)
+  if (as.topic) files.push(await topical(g, as.topic))
+  let worn = await wearing(g, String(home.cwd ?? ''), as)
+  let tools = offer(worn)
+  return {
+    files,
+    ...worn ? { persona: worn.persona.entity.eid } : {},
+    ...tools ? { tools } : {},
+  }
 }

@@ -211,8 +211,13 @@ command call records an intention through the configured default sandbox
 binding; no adapter means a refusal. `--workspace <workspace-id>` names a
 file-and-command target; `--cwd` selects its command directory.
 `--work <task-or-project>` admits that work's common graph persona and files the
-session under its project; `--persona` chooses a persona explicitly. A missing
-instruction projection without graph context refuses opening. See
+session under its project; `--persona` chooses a persona explicitly. The session
+records the persona it wears as `session.persona`: the one chosen, else its
+work's, else the one its checkout carries, else the persona of the session that
+started it (a Claude Code subagent's run of `yak session new` wears its
+parent's). One wearing none records that session's actor as `session.actor`, so
+what it writes names an actor (@yaks/session `actorOf`). A missing instruction
+projection without graph context refuses opening. See
 [Session workspaces](#session-workspaces).
 
 Frontend drafts are local to the terminal's machine. `HARNESS_DRAFT_DIR`
@@ -591,8 +596,8 @@ instructions; it is an explicit wake-producing operation, not a passive notice.
 OpenAI receives ordered developer messages, including instructions added during
 the conversation.
 
-Root sessions record their explicitly selected persona through `@yaks/persona`
-and `@yaks/context`, along with any prompt snapshots their caller supplies. A
+Root sessions record the persona they wear through `@yaks/persona` and
+`@yaks/context`, along with any prompt snapshots their caller supplies. A
 session any other door writes as data, wearing a persona and holding no
 instructions (browse's chat on a persona writes `session{operator, persona}`,
 `native{}` and its first entry; on a topic,

@@ -301,21 +301,21 @@ export let runs = (host?: Host): Runs => ({
       }
       : homeAt(undefined, word(args, 'cwd'))
     let id = crypto.randomUUID()
+    let via = who(call)?.via
     let opened = await openingFor(
       graph,
       home,
       host?.workspaces,
-      { persona, work, topic },
+      { persona, work, topic, starter: via },
     )
     let s = await begin(graph, prompt || undefined, {
       eid: id,
       home,
       ...opened,
       work,
-      ...persona ? { persona } : {},
       ...topic ? { topic } : {},
       by: caller(call),
-      via: who(call)?.via,
+      via,
       using: { ...using, ...effort ? { effort } : {} },
     })
     return prompt && args.wait !== false

@@ -31,6 +31,7 @@ import type { Vocab } from '@yaks/vocab'
 import { MODEL, type Model, ModelError, PROVIDER, TOOL } from '@yaks/model'
 import { toolEid } from '@yaks/tools/result'
 import {
+  actorOf,
   admit,
   answer,
   answering,
@@ -336,6 +337,9 @@ export let begin = async (
   },
 ): Promise<Eid> => {
   let operator = await humanCaller(g, { by: o.by, via: o.via })
+  // A session wearing no persona works as the session that started it does
+  // (@yaks/session `actorOf`), so what it writes still names an actor.
+  let actor = !o.persona && o.via ? await actorOf(g, o.via) : undefined
   let project = o.project ??
     (o.work
       ? (await lineage(g, o.work)).find((b) => b.project)?.entity.eid
@@ -355,6 +359,7 @@ export let begin = async (
         id: session.slice(0, 8),
         operator,
         ...o.persona ? { persona: o.persona } : {},
+        ...actor ? { actor } : {},
         ...o.topic ? { topic: o.topic } : {},
       },
       native: {},

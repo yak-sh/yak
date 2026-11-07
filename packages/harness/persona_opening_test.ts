@@ -84,6 +84,22 @@ let opened = await (async () => {
       topic: yaks,
       using: { provider },
     })
+    // A session a helper starts, choosing nothing, wears its starter's
+    // persona; one whose starter wears none works as the actor it names.
+    await g.apply([
+      { entity: { eid: 'starter' }, session: { persona: 'farmer' } },
+      { entity: { eid: 'helper' }, spawned: { parent: 'starter' } },
+      { entity: { eid: 'named' }, session: { actor: yaks } },
+    ], { trusted: true })
+    let from = async (via: string) =>
+      (await g.get([
+        await begin(g, undefined, {
+          ...await openingFor(g, {}, undefined, { starter: via }),
+          via,
+          using: { provider },
+        }),
+      ]))[0]
+    let helped = await from('helper')
     let prompts = (s: string) =>
       g.read(`.entry.session=${s}&.prompt&*&.order=entry.seq`)
     return {
@@ -95,6 +111,9 @@ let opened = await (async () => {
       asked: await prompts(asked),
       session: (await g.get(['worn']))[0],
       opened: (await g.get([asked]))[0],
+      helped,
+      helpedPrompts: await prompts(helped.entity.eid),
+      named: await from('named'),
       yaks,
     }
   } finally {
@@ -139,4 +158,14 @@ test('a session on a topic opens with its persona, then the topic compiled', () 
     ok(topic.includes('A yak is a bovid.'))
   }
   equal((opened.opened.session as Comp).topic, opened.yaks)
+})
+
+test('a session its starter begins wears the persona its starter wears', () => {
+  equal((opened.helped.session as Comp).persona, 'farmer')
+  equal(offered(opened.helpedPrompts[0]), ['topic_find', 'search'])
+})
+
+test('a session whose starter wears no persona works as its starter does', () => {
+  equal((opened.named.session as Comp).actor, opened.yaks)
+  equal((opened.named.session as Comp).persona, undefined)
 })
