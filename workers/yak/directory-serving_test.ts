@@ -308,6 +308,19 @@ test("directory serving: Site keeps a readable app's forward to its slash", () =
   ])
 })
 
+// The gateway's own forward, a private app's, takes the visitor's query with
+// it, so a shared link's `ref` or an ad's `utm_*` reaches the page.
+let carried = await appFetch(
+  visit('/cookbook?utm_source=x'),
+  fixture('private').env,
+)
+test("directory serving: an app's forward to its slash keeps the query", () => {
+  equal(
+    [carried.status, carried.headers.get('location')],
+    [302, '/cookbook/?utm_source=x'],
+  )
+})
+
 // A published app's release files are anyone's: installing it hands them out
 // (directory.ts `offered`). So Site keeps them even for a private app, whose
 // pages and data it never keeps, and an unpublished private app's stay behind

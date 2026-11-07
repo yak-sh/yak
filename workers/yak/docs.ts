@@ -275,12 +275,15 @@ export let answer = async (
   env: Env,
   path: string,
 ): Promise<Response | null> => {
+  // A moved address keeps its query, so a shared link's `ref` arrives too.
+  let search = new URL(req.url).search
   if (path == '/technical') {
-    return Response.redirect(url(env, pathOf('technical')), 301)
+    return Response.redirect(url(env, pathOf('technical')) + search, 301)
   }
   let moved = MOVED.exec(path)
   if (moved) {
-    return Response.redirect(url(env, `${PATH}${moved[1] ?? ''}.md`), 301)
+    let to = url(env, `${PATH}${moved[1] ?? ''}.md`) + search
+    return Response.redirect(to, 301)
   }
   if (req.method != 'GET' && req.method != 'HEAD') return null
   if (path == PATH) {

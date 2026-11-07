@@ -101,6 +101,15 @@ test('a kept page answers from the edge with no kernel, counted once', async () 
   assertEquals(f.points.length, 2)
 })
 
+// A kept forward is kept by its path alone; the visitor's query goes on with
+// them, so an ad's `utm_*` reaches the page it points at.
+test("a kept forward keeps the visitor's query", async () => {
+  let f = front(() => page({ location: '/cookbook/' }))
+  let res = await f.go('https://ada.yaks.app/cookbook?utm_source=x')
+  assertEquals(f.asked, [pageAt('ada.yaks.app', '/cookbook', null)])
+  assertEquals(res.headers.get('location'), '/cookbook/?utm_source=x')
+})
+
 test('a revalidation is a 304 and a HEAD has no body', async () => {
   let f = front(() => page())
   let same = await f.go(at, { headers: { 'if-none-match': '"v1"' } })

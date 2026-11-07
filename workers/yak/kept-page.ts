@@ -184,6 +184,11 @@ export let asked = async (
   ) {
     headers.delete(name)
   }
+  // A kept forward is kept by its path alone, so the visitor's query, a
+  // shared link's `ref` or an ad's `utm_*`, goes on with them.
+  let to = headers.get('location')
+  let search = new URL(req.url).search
+  if (to && search && !to.includes('?')) headers.set('location', to + search)
   let etag = headers.get('etag')
   let answer = etag && matches(req.headers.get('if-none-match'), etag)
     ? new Response(null, { status: 304, headers })

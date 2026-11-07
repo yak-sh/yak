@@ -210,6 +210,20 @@ test('the addresses the documentation moved from redirect to it', async () => {
   }
 })
 
+// A moved address keeps its query, so a shared link's `ref` arrives too.
+test('a documentation move keeps the query', async () => {
+  for (
+    let [was, now] of [
+      ['/technical', '/docs/technical'],
+      ['/guide/querying.md', '/docs/querying.md'],
+    ]
+  ) {
+    let req = new Request(`https://yaks.app${was}?ref=hn`)
+    let said = await answer(req, site(), was)
+    assertEquals(said!.headers.get('location'), `https://yaks.app${now}?ref=hn`)
+  }
+})
+
 // The link a person pastes into their agent (T-135903): a browser gets the
 // page, an agent's fetch gets the markdown, and both are public/agent.md.
 let asked = async (accept: string) => {

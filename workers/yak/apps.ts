@@ -3531,9 +3531,11 @@ let served = async (
     return redirect(`/${url.search}`)
   } else if (path == '') {
     // `/<app>` itself, sent to its slash, which is how a link is often
-    // shared. Site keeps the forward as it keeps the page behind it, so a
-    // visitor following one waits on no directory read and is given no cookie.
-    let slash = redirect(`${url.pathname}/`)
+    // shared, its query with it. Site keeps the forward as it keeps the page
+    // behind it, so a visitor following one waits on no directory read and is
+    // given no cookie, and the visitor's query is put back on as it is served
+    // (kept-page.ts `asked`).
+    let slash = redirect(`${url.pathname}/${url.search}`)
     if (!edge) return slash
     return keeps(app, path) ? marked(keep(slash, space, app, [302])) : passed()
   }
