@@ -575,6 +575,8 @@ let browser = (code: string, page: string, version = 1) => {
           new DOMException('timed out', 'TimeoutError'),
         ),
       }),
+    // The person leaves the page, which says whatever the reporter held.
+    leave: () => ears.pagehide?.forEach((fn) => fn({})),
     filed: () =>
       Promise.all(beacons.map(async (b) => JSON.parse(await b.text()))),
     drawn,
@@ -617,10 +619,14 @@ test("the platform's own scripts are never the app's break", async () => {
     )
 
     // A query the page gave up on includes the filter that stalled, without
-    // exposing query strings from other API doors in the exception store.
+    // exposing query strings from other API doors in the exception store. It
+    // is held while the page may ask again, and said as the page is left.
     let query = browser(code, page)
     await query.late(`${page}api/query?.player&.created.by=ada`).catch(() => {})
+    assertEquals(await query.filed(), [], 'held while the page may ask again')
+    query.leave()
     let failures = await query.filed()
+    assertEquals(failures.length, 1, 'and said as the page is left')
     assertStringIncludes(
       failures[0].message,
       '/weather/api/query?.player&.created.by=ada',
