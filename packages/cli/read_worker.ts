@@ -67,8 +67,10 @@ self.onmessage = ({ data }: MessageEvent<Said>) => {
             return graph.read(call.query, call.opts)
           case 'rows':
             return graph.rows(call.query, call.opts)
-          case 'search':
-            return served.search?.(call.words, call.opts) ?? []
+          case 'hits':
+            return served.hits?.(call.words, call.opts?.limit ?? 20) ?? []
+          case 'said':
+            return served.said?.(call.words, call.found, call.opts.limit) ?? []
           case 'meaning':
             return served.meaning?.(call.words, call.opts) ?? []
         }

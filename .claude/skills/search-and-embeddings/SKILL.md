@@ -87,8 +87,13 @@ these are the words for it:
 - **The sweep:** triggers queue every written entity in `embedding_owed`, and
   the plugin's service drains it in batches (packages/embedding/README.md,
   "The sweep"). Writes never wait on embedding.
-- **The index:** sqlite-vector keeps 2-bit codes; a search scans them for
-  candidates and ranks those by exact cosine ("The index").
+- **The index:** sqlite-vector scans every stored float vector exactly
+  (`vector_full_scan`, packages/embedding/native.ts); a screen admitting at
+  most an eighth of them is scored directly instead. At 276k vectors the full
+  scan is about 0.3 s of every unscreened search.
+- **The search tool's halves:** words (@yaks/fts) and meaning each read the
+  store alone, so `yak serve` runs them on its two read lanes at once and
+  says the hit lines in a worker (packages/cli/searching.ts).
 - **Neighbours on write:** a tool call that creates a task, memory or comment
   answers its three nearest of the same kind ("A write answers what it is
   near"). The doc view's similar-task twins cut at `FLOOR` in
@@ -152,6 +157,12 @@ a caller may read. The `search` tool merges it with full-text hits.
   to 51,075; ranking each index's best N and reading only those took it to
   2,073 (T-131858). Check ranking decisions through the in-process search
   interface; observe billing from the live platform after deployment.
+- **bm25 over a question's words is the floor.** FTS5 counts the 6,411
+  transcript rows holding all of "what is it that we would have done if all
+  of them were out there" in 56 ms and ranks them in about 0.5 s, walking
+  every instance of every word in rows of 20k tokens (median). No word is in
+  half the rows, so every one moves the order: ranking by the distinctive
+  words alone kept 4 of the top 21 (T-134349). Cut elsewhere, not the rank.
 - **Open:** 1-bit codes for the box's scan (T-59519), `.near` on D1 (T-59333),
   embedding calls spending from an account's budget (T-59279).
 

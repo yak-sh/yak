@@ -12,6 +12,8 @@ import type { Meaning, MeaningHit } from '@yaks/host'
 import { type Context, context, type Event, forward } from '@yaks/trace'
 import { how, own, since, type Spent, spent } from './stall.ts'
 import { readActivity } from './read_activity.ts'
+import { type Found, searching } from './searching.ts'
+import type { Hit } from '@yaks/fts'
 
 /** Everything a web host asks of its store that only reads it: the graph's
  * reads, ranked text search and search by meaning. */
@@ -24,9 +26,15 @@ type Call =
   | { op: 'read' | 'rows'; query: Query; opts?: ReadOpts }
   | { op: 'get'; eids: Eid[]; comps?: string[]; opts?: ReadOpts }
   | {
-    op: 'search' | 'meaning'
+    op: 'hits' | 'meaning'
     words: string
     opts?: { limit?: number; within?: string; signal?: AbortSignal }
+  }
+  | {
+    op: 'said'
+    words: string
+    found: Found
+    opts: { limit: number; signal?: AbortSignal }
   }
 
 export type Said =
@@ -298,8 +306,22 @@ export let readThread = (
       ask({ op: 'rows', query, opts }).then((value) => value as Row[]),
     get: (eids, comps, opts) =>
       ask({ op: 'get', eids, comps, opts }).then((value) => value as Bundle[]),
-    search: (words, opts) =>
-      ask({ op: 'search', words, opts }).then((value) => value as Bundle[]),
+    // Each half of a search on a lane of its own, at once, then its lines
+    // made where its rows are read.
+    search: searching(
+      (words, count) =>
+        Promise.all([
+          ask({ op: 'hits', words, opts: { limit: count } }),
+          ask({ op: 'meaning', words, opts: { limit: count } }),
+        ]).then(([hits, meaning]) => ({
+          words: hits as Hit[],
+          meaning: meaning as MeaningHit[],
+        })),
+      (words, found, limit) =>
+        ask({ op: 'said', words, found, opts: { limit } }).then((value) =>
+          value as Bundle[]
+        ),
+    ),
     meaning: (words, opts) =>
       ask({ op: 'meaning', words, opts }).then((value) =>
         value as MeaningHit[]

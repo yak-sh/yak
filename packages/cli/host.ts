@@ -72,6 +72,7 @@ import { filler, SCHEMA_DUTY, tend } from '@yaks/sqlite/owe'
 import { survey } from '@yaks/sqlite/survey'
 import type { Opened } from '@yaks/sqlite/db'
 import type { Search } from '@yaks/graph/tools'
+import { type Found, searching } from './searching.ts'
 import {
   adopt,
   find,
@@ -228,6 +229,12 @@ export type CliFacet = {
  * the caller of {@link compose} needs. */
 export type Served = Host & {
   storage: Store
+  /** the text half of {@link Host.search}: the best `count` text hits for the
+   * words, read here, where the search tool searches at all */
+  hits?: (words: string, count: number) => Hit[]
+  /** the rest of {@link Host.search}: the best `limit` of what its halves
+   * found, read and said as hit lines */
+  said?: (words: string, found: Found, limit: number) => Promise<Bundle[]>
   /** wind down, with the graph still open: {@link Host.stopping} aborts, so
    * the duties stop and whatever hangs off it ends — a server stops taking
    * requests and answers the ones in flight, a transcript starts no new step —
@@ -562,6 +569,9 @@ let composed = async (
     // lists a ranked `search` tool. A property marked `contains: true` keeps a
     // substring index beside them, which a `~=` test of it reads.
     let text = indexed(vocab)
+    // The search's halves where it searches at all (./searching.ts).
+    let hits: Served['hits']
+    let said: Served['said']
 
     let host: Host
     let g: Graph | undefined
@@ -801,44 +811,41 @@ let composed = async (
       },
       search: (built) => {
         part?.('search')
-        return wordFields(text).length
-          ? async (words, opts) => {
-            let limit = Math.max(
-              0,
-              Math.min(100, Math.trunc(opts?.limit ?? 20)),
-            )
-            if (!limit) return []
-            let count = Math.max(20, limit * 2)
-            let [literal, similar] = await Promise.all([
-              Promise.resolve(find(sql, text, words, { limit: count })),
-              built.meaning?.(words, { limit: count }) ?? Promise.resolve([]),
-            ])
-            let hits = merged(literal, similar, limit)
-            let found = await built.graph.get(hits.map((h) => h.entity))
-            let at = new Map(found.map((b) => [b.entity.eid, b]))
-            // A snippet that says only the title says what the hit line
-            // already does; the row's other text says what it is.
-            let line = hit(vocab, split(words))
-            return hits.flatMap((h) => {
-              let b = at.get(h.entity)
-              if (!b) return []
-              return [{
-                entity: b.entity,
-                hit: {
-                  ...line(b, h.snippet),
-                  source: h.source,
-                  ...(b.entry && typeof b.entry == 'object' &&
-                      'session' in b.entry && typeof b.entry.session == 'string'
-                    ? {
-                      session: b.entry.session,
-                      speaker: b.output ? 'output' : 'input',
-                    }
-                    : {}),
-                },
-              }]
-            })
-          }
-          : undefined
+        if (!wordFields(text).length) return undefined
+        hits = (words, count) => find(sql, text, words, { limit: count })
+        said = async (words, found, limit) => {
+          let hits = merged(found.words, found.meaning, limit)
+          let rows = await built.graph.get(hits.map((h) => h.entity))
+          let at = new Map(rows.map((b) => [b.entity.eid, b]))
+          // A snippet that says only the title says what the hit line
+          // already does; the row's other text says what it is.
+          let line = hit(vocab, split(words))
+          return hits.flatMap((h) => {
+            let b = at.get(h.entity)
+            if (!b) return []
+            return [{
+              entity: b.entity,
+              hit: {
+                ...line(b, h.snippet),
+                source: h.source,
+                ...(b.entry && typeof b.entry == 'object' &&
+                    'session' in b.entry && typeof b.entry.session == 'string'
+                  ? {
+                    session: b.entry.session,
+                    speaker: b.output ? 'output' : 'input',
+                  }
+                  : {}),
+              },
+            }]
+          })
+        }
+        return searching(
+          async (words, count) => ({
+            words: hits!(words, count),
+            meaning: await built.meaning?.(words, { limit: count }) ?? [],
+          }),
+          said,
+        )
       },
     })
     host = built.host
@@ -969,6 +976,8 @@ let composed = async (
       storage: store!,
       graph: g,
       fx,
+      hits,
+      said,
       // The last transaction, then the file: every lease this process holds
       // released, and its ending stamped. One transaction, because they are
       // one fact — a process that is over is not doing any work, and the next
