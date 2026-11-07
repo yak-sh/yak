@@ -138,11 +138,11 @@ export let skillEffects = (
   // started from. Graph edits arrive as skill_files passes, which refresh both.
   let seen: string[] | undefined
   let settled = new Map<string, string>()
-  let moved = (): boolean => {
+  let moved = async (): Promise<boolean> => {
     if (!seen) return true
     for (let root of seen) {
       let was = settled.get(root)
-      if (was == undefined || was != stamp(root)) return true
+      if (was == undefined || was != await stamp(root)) return true
     }
     return false
   }
@@ -184,7 +184,7 @@ export let skillEffects = (
           if (signal.aborted) break
           settled.delete(root)
           // Stamped before the sync reads, so a change during it moves it.
-          let before = stamp(root)
+          let before = await stamp(root)
           let result = await sync(host.graph, root, await memory(root))
           // Conflicts and refusals (a dirty checkout, a diverged main) may
           // clear without touching these files, so they keep being retried.
@@ -250,7 +250,7 @@ export let skillEffects = (
           // reconciles, whatever an earlier watcher settled.
           seen = undefined
           do {
-            if (moved()) await reconcile()
+            if (await moved()) await reconcile()
             if (signal.aborted) break
             await pause(runtime.poll ?? 2_000, signal)
           } while (!signal.aborted)

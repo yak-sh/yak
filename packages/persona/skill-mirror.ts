@@ -198,11 +198,11 @@ let syncRepository = async (
         let at = root
         for (let part of path.split('/')) {
           at += `/${part}`
-          if (fs.lstatSync(at).isSymlink) {
+          if ((await fs.lstat(at)).isSymlink) {
             throw new Refused(`skills: symlink ${at}`)
           }
         }
-        let bytes = fs.readFileSync(full)
+        let bytes = await fs.readFile(full)
         if (bytes.includes(0)) throw new Refused(`skills: binary file ${path}`)
         let text: string
         try {
@@ -437,15 +437,15 @@ let syncRepository = async (
         }
       }
       if (d.text == undefined) {
-        fs.removeSync(d.path)
+        await fs.remove(d.path)
         learned.set(d.path, null)
         result.removed.push(d.path)
       } else {
         let folder = d.path.slice(0, d.path.lastIndexOf('/'))
-        fs.mkdirSync(folder, { recursive: true })
+        await fs.mkdir(folder, { recursive: true })
         let tmp = `${d.path}.${crypto.randomUUID()}.tmp`
-        fs.writeTextFileSync(tmp, d.text)
-        fs.renameSync(tmp, d.path)
+        await fs.writeTextFile(tmp, d.text)
+        await fs.rename(tmp, d.path)
         learned.set(d.path, { blob: d.sides.value!, hash: d.sides.value })
         result.wrote.push(d.path)
       }
@@ -596,10 +596,11 @@ let syncRepository = async (
 
 // Advisory locks are process-scoped on some platforms. Serialize callers in
 // this process too; the persistent common-dir lock coordinates other processes.
-// A caller joins the queue before it yields, so callers are served in the order
-// they called: resolving the root asynchronously let a later one finish its
-// lookup first and take the head.
+// Callers are served in the order they called: roots resolve one after
+// another, and each caller joins its root's queue as its lookup ends, so a
+// later lookup cannot finish first and take the head.
 let pending = new Map<string, Promise<unknown>>()
+let resolving: Promise<unknown> = Promise.resolve()
 let failed = (root: string, error: unknown) => {
   if (!(error instanceof Error)) {
     return new Error(`skills at ${root}: ${String(error)}`, { cause: error })
@@ -613,21 +614,27 @@ export let syncSkills = async (
   memory: string,
   opts: SkillSyncOpts = {},
 ): Promise<SkillSync> => {
-  try {
-    root = fs.realPathSync(root)
-  } catch (error) {
-    throw failed(root, error)
-  }
-  let before = pending.get(root) ?? Promise.resolve()
-  let next = before.catch(() => {}).then(() =>
-    syncRepository(g, root, memory, opts)
-  ).catch((error) => {
-    throw failed(root, error)
+  let joined = resolving.then(async () => {
+    let real: string
+    try {
+      real = await fs.realPath(root)
+    } catch (error) {
+      throw failed(root, error)
+    }
+    let before = pending.get(real) ?? Promise.resolve()
+    let next = before.catch(() => {}).then(() =>
+      syncRepository(g, real, memory, opts)
+    ).catch((error) => {
+      throw failed(real, error)
+    })
+    pending.set(real, next)
+    return { real, next }
   })
-  pending.set(root, next)
+  resolving = joined.catch(() => {})
+  let { real, next } = await joined
   try {
     return await next
   } finally {
-    if (pending.get(root) === next) pending.delete(root)
+    if (pending.get(real) === next) pending.delete(real)
   }
 }

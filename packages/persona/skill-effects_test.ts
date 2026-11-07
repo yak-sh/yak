@@ -368,7 +368,7 @@ test('skill watcher reconciles at startup, polls, and cleans on shutdown', async
   let asleep = deferred()
   let fx = fixture({
     poll: 17,
-    stamp: () => String(version),
+    stamp: () => Promise.resolve(String(version)),
     sync: async (_g, _root, memory) => {
       paths.push(memory)
       await Deno.writeTextFile(memory, '{}')

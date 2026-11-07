@@ -148,9 +148,9 @@ export let RACY = 2_000
 // One line per path: its kind, inode, size and change times, or its absence.
 // A path changed within RACY of `now` is racy, as Git calls it: a rewrite in
 // the same tick would leave every stat equal, so it has no stable mark.
-let mark = (path: string, now: number): string | undefined => {
+let mark = async (path: string, now: number): Promise<string | undefined> => {
   try {
-    let i = fs.lstatSync(path)
+    let i = await fs.lstat(path)
     let kind = i.isSymlink ? 'l' : i.isDirectory ? 'd' : 'f'
     let changed = i.ctime?.getTime() ?? i.mtime?.getTime() ?? now
     if (changed > now - RACY) return
@@ -161,13 +161,18 @@ let mark = (path: string, now: number): string | undefined => {
     throw error
   }
 }
-let walk = (dir: string, out: string[], now: number): boolean => {
-  let line = mark(dir, now)
+// Listed a directory at a time, so the thread runs its timers between them.
+let walk = async (
+  dir: string,
+  out: string[],
+  now: number,
+): Promise<boolean> => {
+  let line = await mark(dir, now)
   if (line === undefined) return false
   out.push(line)
   let entries: fs.DirEntry[]
   try {
-    entries = [...fs.readDirSync(dir)]
+    entries = await Array.fromAsync(fs.readDir(dir))
   } catch (error) {
     if (gone(error)) return true
     throw error
@@ -175,9 +180,9 @@ let walk = (dir: string, out: string[], now: number): boolean => {
   for (let entry of entries.sort((a, b) => a.name < b.name ? -1 : 1)) {
     let path = `${dir}/${entry.name}`
     if (entry.isDirectory) {
-      if (!walk(path, out, now)) return false
+      if (!await walk(path, out, now)) return false
     } else {
-      let line = mark(path, now)
+      let line = await mark(path, now)
       if (line === undefined) return false
       out.push(line)
     }
@@ -189,16 +194,19 @@ let walk = (dir: string, out: string[], now: number): boolean => {
  * HEAD (the tracked set, staged blobs and branch) and every path under
  * .claude/skills. Equal stamps mean a sync would read the same files, so a
  * watcher compares these instead of syncing; a racy path keeps it syncing
- * until its change is RACY old. No Git process runs, and the few stats are
- * synchronous: cheaper than a thread-pool hop each. */
-export let stamp = (root: string, now: number = Date.now()): string => {
+ * until its change is RACY old. No Git process runs, and no stat or listing
+ * holds the thread: a box under load can take seconds over one. */
+export let stamp = async (
+  root: string,
+  now: number = Date.now(),
+): Promise<string> => {
   let out: string[] = []
   let racy = () => `racy ${crypto.randomUUID()}`
   for (let name of ['index', 'HEAD']) {
-    let line = mark(`${root}/.git/${name}`, now)
+    let line = await mark(`${root}/.git/${name}`, now)
     if (line === undefined) return racy()
     out.push(line)
   }
-  if (!walk(`${root}/.claude/skills`, out, now)) return racy()
+  if (!await walk(`${root}/.claude/skills`, out, now)) return racy()
   return out.join('\n')
 }

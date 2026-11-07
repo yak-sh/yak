@@ -132,17 +132,17 @@ export let plan = async (
 // A write goes to a temp file beside the target and is renamed over it: a
 // reader mid-write — a harness loading its instructions — sees the old file or
 // the new one, never an empty one.
-let put = (path: string, text: string) => {
-  io.mkdirSync(path.slice(0, path.lastIndexOf('/')) || '.', {
+let put = async (path: string, text: string) => {
+  await io.mkdir(path.slice(0, path.lastIndexOf('/')) || '.', {
     recursive: true,
   })
   let tmp = `${path}.${crypto.randomUUID()}.tmp`
   try {
-    io.writeTextFileSync(tmp, text)
-    io.renameSync(tmp, path)
+    await io.writeTextFile(tmp, text)
+    await io.rename(tmp, path)
   } catch (e) {
     try {
-      io.removeSync(tmp)
+      await io.remove(tmp)
     } catch { /* nothing to clean */ }
     throw e
   }
@@ -169,11 +169,11 @@ export let sync = async (b: Binding): Promise<Report> => {
     } else if (act == 'write') {
       try {
         if (text == null) {
-          io.removeSync(path)
+          await io.remove(path)
           out.removed.push(path)
           learned.set(path, null)
         } else {
-          put(path, text)
+          await put(path, text)
           out.wrote.push(path)
           learned.set(path, { blob: sides.value!, hash: sides.value })
         }
@@ -205,7 +205,7 @@ export let present = async (paths: string[]): Promise<Map<string, string>> => {
   for (let path of paths) {
     let text: string
     try {
-      text = io.readTextFileSync(path)
+      text = await io.readTextFile(path)
     } catch {
       continue
     }
@@ -219,23 +219,22 @@ export let present = async (paths: string[]): Promise<Map<string, string>> => {
 export let memo = (
   file: string,
 ): Pick<Binding, 'agreed' | 'remember'> => {
-  let load = (): Record<string, Agreed> => {
+  let load = async (): Promise<Record<string, Agreed>> => {
     try {
-      return JSON.parse(io.readTextFileSync(file))
+      return JSON.parse(await io.readTextFile(file))
     } catch {
       return {}
     }
   }
   return {
-    agreed: () => Promise.resolve(new Map(Object.entries(load()))),
-    remember: (changed) => {
-      let all = load()
+    agreed: async () => new Map(Object.entries(await load())),
+    remember: async (changed) => {
+      let all = await load()
       for (let [path, a] of changed) {
         if (a) all[path] = a
         else delete all[path]
       }
-      put(file, JSON.stringify(all, null, 1) + '\n')
-      return Promise.resolve()
+      await put(file, JSON.stringify(all, null, 1) + '\n')
     },
   }
 }
