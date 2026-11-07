@@ -169,8 +169,9 @@ export let RETRY = 60_000
 
 /**
  * How long one wake starts runs for. An alarm is one invocation, whose CPU
- * the runtime caps (30 s): a store whose sessions keep owing steps (forks
- * forking) would otherwise work them all in one alarm until it is killed.
+ * the runtime caps (wrangler.toml `[limits]`, five minutes): a store whose
+ * sessions keep owing steps (forks forking) would otherwise work them all in
+ * one alarm until it is killed.
  * What a slice leaves waits for the next alarm, armed at once.
  */
 export let SLICE = 10_000

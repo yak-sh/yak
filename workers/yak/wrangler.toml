@@ -44,6 +44,14 @@ upload_source_maps = true
 # absent, it creates the deployment through the versions API, which drops it.
 containers = []
 
+# Every invocation's CPU, a Durable Object's alarm included, may run five
+# minutes instead of the default 30 s. A Builder's alarm carries every
+# Operator step in flight on its object (operator-store.ts `drain`): eight
+# concurrent model steps at a few seconds each outran 30 s, and the runtime's
+# kill took each step and tool call with it (bug 4a9916fb).
+[limits]
+cpu_ms = 300000
+
 [[worker_loaders]]
 binding = "LOADER"
 
