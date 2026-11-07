@@ -68,16 +68,12 @@ let sparse = fixture(1000, false)
 let page = (
   f: ReturnType<typeof fixture>,
   hidden = false,
-  peers = false,
   hooks: Extension[] = [],
   order = ' .order=-entity.num',
 ) => {
   let q = render(
     compile(
-      parse(
-        `.doc${order} .limit=13` +
-          (peers ? '&.edges.peers=doc.title&.edges.limit=52' : ''),
-      ),
+      parse(`.doc${order} .limit=13`),
       vocab,
       {
         extend: [traverse(vocab), ...hooks],
@@ -100,17 +96,16 @@ let page = (
 let observedDense = dense.map((f) => ({ n: f.n, got: page(f) }))
 let observedHidden = page(dense[1], true)
 let observedSparse = page(sparse)
-let observedPeers = page(dense[1], false, true)
-let observedIdleHook = page(dense[1], false, true, [{
+let observedIdleHook = page(dense[1], false, [{
   name: 'idle-ranker',
   compile: {},
   order: () => null,
 }])
-let observedRealHooks = page(dense[1], false, true, [
+let observedRealHooks = page(dense[1], false, [
   search([]),
   semantic(storage(dense[1].d, vocab).statements, { model: 'test' }),
 ])
-let observedClaimedHook = page(dense[1], false, true, [{
+let observedClaimedHook = page(dense[1], false, [{
   name: 'custom-num',
   compile: {},
   order: (field) => field == 'entity.num' ? raw('0 + 0') : null,
@@ -129,7 +124,7 @@ test('a numbered recent component page costs its prefix, not its history', () =>
 
 test('a page in the default order is the same bounded numbered page', () => {
   for (let f of [...dense, sparse]) {
-    let got = page(f, false, false, [], '')
+    let got = page(f, false, [], '')
     equal(got.ids, page(f).ids)
     if (f.recent) ok(got.steps < 6000, `${f.n} historical docs: ${got.steps}`)
   }
@@ -148,19 +143,14 @@ test('a numbered page falls back when its recent prefix has too few matches', ()
   )
 })
 
-test('a numbered page with peer edges keeps its bounded selection', () => {
-  equal(observedPeers.ids, observedDense[1].got.ids)
-  ok(observedPeers.steps < 6000, `${observedPeers.steps} VM steps`)
-})
-
 test('unclaimed search order hooks keep a physical numbered page bounded', () => {
   for (let got of [observedIdleHook, observedRealHooks]) {
-    equal(got.ids, observedPeers.ids)
+    equal(got.ids, observedDense[1].got.ids)
     ok(got.steps < 6000, `${got.steps} VM steps`)
   }
 })
 test('an extension claiming number order retains its own ranking', () => {
-  equal(observedClaimedHook.ids, observedPeers.ids)
+  equal(observedClaimedHook.ids, observedDense[1].got.ids)
   ok(
     observedClaimedHook.steps > 6000,
     'claimed order must retain original path',

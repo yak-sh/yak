@@ -227,7 +227,7 @@ grouped approximately by function, **not** by dependency order.
   `edge{from, to}` component an entity carries, the id derived from the
   from/relation/to triple it records, the relations a vocabulary declares, and
   traversal — both as a walk over storage and as the `@yaks/sql` extension that
-  compiles `.cites->p1` and `.edges`.
+  compiles `.cites->p1`.
 - **[@yaks/key](./key)** — Store lookup values as entities with `key{of, value}`
   plus an application tag such as `isbn`, `email` or `alias`. Each key id is
   derived from `sha256("<kind>|<value>")`, making a value unique within its

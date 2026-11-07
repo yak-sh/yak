@@ -8,7 +8,6 @@ import {
   and,
   clauses,
   coerce,
-  edges,
   eq,
   field,
   fields,
@@ -88,15 +87,6 @@ test('field selector', () => {
     { path: ['pin', 'x'], wake: true },
     { path: ['pin', 'z'], wake: false },
   ])
-})
-
-// Edges builder shapes match the parser's.
-test('edges builder', () => {
-  assertEquals(edges(), { kind: 'edges', peers: [] })
-  assertEquals(edges({ peers: [['status']] }), {
-    kind: 'edges',
-    peers: [['status']],
-  })
 })
 
 // Accessors pick directives out of a clause list.

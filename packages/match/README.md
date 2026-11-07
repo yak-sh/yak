@@ -621,10 +621,8 @@ used by @yaks/sql, with `by` set to `@yaks/match`. A caller using both therefore
 has one error type to catch. Every refusal happens when the query is compiled,
 before any bundle is read.
 
-- **`.near=`** — nearest-neighbour search needs vectors, and **`.edges`** asks
-  for links to be returned alongside the result. This evaluator does not
-  implement either directive. Walks are supported using the supplied entities;
-  see above.
+- **`.near=`** — nearest-neighbour search needs vectors, which this evaluator
+  does not hold. Walks are supported using the supplied entities; see above.
 - **`.count`, `.distinct=`, `.tally=` in `matcher()` or `filter()`** — these
   return aggregate rows rather than entities; `rows()` answers them. As in
   @yaks/sql (`tallied`), `.distinct` and `.tally` count a number as the number

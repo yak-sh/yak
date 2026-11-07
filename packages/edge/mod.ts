@@ -37,9 +37,9 @@
  * - **Walking is querying.** {@link walk} implements `out`, `in` and a bounded
  *   `reach` over {@link https://jsr.io/@yaks/graph | @yaks/graph}'s `Storage`
  *   interface, and {@link traverse} adds to
- *   {@link https://jsr.io/@yaks/sql | @yaks/sql} the two clauses it cannot
- *   compile on its own — `.cites[<=3]->p1`, a recursive walk over one relation,
- *   and `.edges[cites]`, which returns a result's links alongside it.
+ *   {@link https://jsr.io/@yaks/sql | @yaks/sql} the clause it cannot compile
+ *   on its own: `.cites[<=3]->p1`, a recursive walk over one relation. A link
+ *   is an entity, so a query reads links as rows (`.cites&.edge.from=p1`).
  *
  * It imports no platform API, so the same code runs on a server, in a worker,
  * and in a browser tab.

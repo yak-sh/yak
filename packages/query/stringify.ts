@@ -152,14 +152,6 @@ let one = (c: Clause): string => {
       return `.limit=${c.n}`
     case 'after':
       return `.after=${'n' in c ? c.n : c.eid}`
-    case 'edges': {
-      let s = c.select
-      return [
-        s ? `.edges[${s.type}${s.via ? ',' + path(s.via) : ''}]` : '',
-        c.limit == null ? '' : `.edges.limit=${c.limit}`,
-        c.peers.length ? `.edges.peers=${c.peers.map(path).join(',')}` : '',
-      ].filter(Boolean).join('&') || '.edges'
-    }
     case 'walk':
       return `.${path(c.path)}${c.depth ? `[<=${c.depth}]` : ''}${c.dir}${
         plain(c.target)

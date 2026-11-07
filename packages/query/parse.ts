@@ -224,11 +224,10 @@ let ORDER = '.order takes a property as comp.prop with no leading dot, ' +
   '- first for descending (.order=-created.at, .order=entity.num), ' +
   'or a ranking (hot; search with words; similar with .near)'
 
-// The reserved names whose whole meaning is presence: `.count` counts, `.edges`
-// carries edges back, `.refs` references anything.
+// The reserved names whose whole meaning is presence: `.count` counts, `.refs`
+// references anything.
 let PRESENCE: Record<string, Clause> = {
   count: { kind: 'count' },
-  edges: { kind: 'edges', peers: [] },
   refs: { kind: 'refs', op: '!', value: '' },
 }
 // And the one whose absence means something of its own: `!refs` references
@@ -292,23 +291,12 @@ let pres = (word: string): Clause => ({
   value: null,
 })
 
-// `.edges[referenced,entry.session]` — one stored edge type and an optional
-// endpoint reference: two bare qualifiers, read through the same bracket as
-// everything else. `.edges` alone carries edges back with nothing selected.
-let edgeSelect = (quals: Qual[]): Clause => {
-  let [type, via, ...more] = quals
-  if (!type || more.length || quals.some((q) => q.op || q.key)) {
-    throw new SyntaxError(
-      '.edges selects one edge type and an optional endpoint reference: ' +
-        '.edges[referenced,entry.session]',
-    )
-  }
-  return {
-    kind: 'edges',
-    peers: [],
-    select: { type: type.value, ...(via ? { via: path(via.value) } : {}) },
-  }
-}
+// The `.edges` rider in each of its spellings (`.edges`, `.edges[cites,via]`,
+// `.edges.peers=doc.title`, `.edges.limit=200`) asked a server to carry each
+// row's edges back, and no server has fetched them since the subscription
+// server went. Kept releases still send it, so it reads as no clause at all:
+// an edge is an entity, and `.cites&.edge.from=T-1` reads one as a row.
+let RIDER = /^(?:\.edges!?|\.?edges(?:\[.*\]!?|\.(?:peers|limit)=.*))$/s
 
 // One token to the clauses it contributes, or null when it is not a clause at
 // all (a bare word) — which the caller reads as a text term. A directive is one
@@ -339,6 +327,7 @@ export let parseDot = (token: string): Clause[] | null => {
     }
     throw new SyntaxError(`a reverse filter needs a child predicate: ${token}`)
   }
+  if (RIDER.test(token)) return []
   let marked = sigil(token)
   if (marked) return marked
   // `$x=5` — a variable and the value bound to it. A query consisting of
@@ -403,12 +392,10 @@ export let parseDot = (token: string): Clause[] | null => {
   }
 
   if (!rest || rest == '!') {
-    // A leading dot and no operator: presence — `.edges[cites]` selecting one
-    // edge type is the exception.
+    // A leading dot and no operator: presence.
     // Kept releases speak suffix presence (T-122930). Read it here so every
     // query door, subscriptions and strict matches share its answer.
     if (!dotted && bracket == null) return null
-    if (pathStr == 'edges' && quals.length) return [edgeSelect(quals)]
     refuse(pathStr, quals, bracket)
     return [PRESENCE[pathStr] ?? pres(pathStr)]
   }
@@ -507,26 +494,6 @@ export let parseDot = (token: string): Clause[] | null => {
     let n = cursor(val)
     return [n == null ? { kind: 'after', eid: val } : { kind: 'after', n }]
   }
-  // `.edges.limit=200` / `.edges.peers=status,title` — how the edges `.edges`
-  // carries back are cut and projected.
-  if (segs[0] == 'edges') {
-    if (segs.length == 2 && segs[1] == 'limit' && op == '=') {
-      if (!/^\d+$/.test(val)) {
-        throw new SyntaxError(
-          '.edges.limit takes a whole number: .edges.limit=200',
-        )
-      }
-      return [{ kind: 'edges', peers: [], limit: Number(val) }]
-    }
-    if (segs.length == 2 && segs[1] == 'peers' && op == '=' && val) {
-      return [{ kind: 'edges', peers: val.split(',').map(path) }]
-    }
-    throw new SyntaxError(
-      '.edges rides a query (.edges) and may project the far endpoint ' +
-        '(.edges.peers=status,title)',
-    )
-  }
-
   if (!rawValue && op == '=') throw spelled(token, `!${pathStr}`)
   if (!rawValue && op == '!=') throw spelled(token, `.${pathStr}`)
 
@@ -689,12 +656,12 @@ let parts = (tok: string, prev?: string, next?: string): string[] => {
   return out.filter(Boolean)
 }
 
-// A kept release's suffix spelling (`.p!`, `.p?`, T-122930), which parseDot
-// translates rather than refuses.
-let suffixed = (tok: string): boolean => {
+// A kept release's spelling, which parseDot translates rather than refuses:
+// suffix presence (`.p!`, `.p?`, T-122930) or the `.edges` rider.
+let kept = (tok: string): boolean => {
   let h = tok.startsWith('.') ? tok.match(HEAD) : null
   let rest = h ? tok.slice(h[0].length) : ''
-  return rest == '!' || rest == '?'
+  return rest == '!' || rest == '?' || RIDER.test(tok)
 }
 
 // One token to its clauses, noting in `old` each retired spelling it read. A
@@ -709,7 +676,7 @@ let read = (tok: string, opts: ParseOpts, old: string[]): Clause[] => {
   }
   if (!/^["']/.test(tok)) {
     let cs = parseDot(tok)
-    if (cs && suffixed(tok)) old.push(tok)
+    if (cs && kept(tok)) old.push(tok)
     if (cs) return cs
     if (opts.text === false) {
       throw new SyntaxError(
@@ -751,7 +718,8 @@ let RETIRED = new WeakMap<And, string[]>()
 
 /**
  * The retired spellings a parsed query was written in: each suffix presence
- * `.p!` or optional `.p?` the parser translated for a kept app release. A door
+ * `.p!` or optional `.p?` the parser translated for a kept app release, and
+ * each `.edges` rider it read as nothing. A door
  * that records who still sends them can tell when a translation may go
  * (T-123000, M-37853).
  *
@@ -761,6 +729,7 @@ let RETIRED = new WeakMap<And, string[]>()
  *
  * equal(retired(parse('.drill!&.doc?')), ['.drill!', '.doc?'])
  * equal(retired(parse('.a!,.b (.c?|.d)')), ['.a!', '.c?'])
+ * equal(retired(parse('.post&.edges[cites]')), ['.edges[cites]'])
  * equal(retired(parse('.drill ?doc !gone')), [])
  * ```
  */
@@ -824,7 +793,7 @@ let fresh = (q: string, opts: ParseOpts): And => {
   }
   let old: string[] = []
   let groups = alts.map((toks) => clauses(toks, opts, old))
-  if (groups.length > 1 && groups.some((g) => !g.length)) {
+  if (alts.length > 1 && alts.some((toks) => !toks.length)) {
     throw new SyntaxError(`an empty alternative beside |: ${q}`)
   }
   let out = groups.length == 1 ? groups[0] : alternation(groups)

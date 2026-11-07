@@ -12,15 +12,10 @@ let composed = extend({ vocab: blog })
 let sql = (line: string, ext: Extension[] = composed) =>
   compile(parse(line), blog, { extend: ext }).sql
 
-test('a host composing the package compiles .edges', () => {
-  assertEquals(sql('.post&.edges'), sql('.post'))
-})
-
 test('a host composing the package compiles a relation walk', () => {
   assertEquals(sql('.cites[<=3]->p1').includes('with recursive'), true)
 })
 
-test('a host without the package refuses .edges and a relation walk', () => {
-  assertThrows(() => sql('.post&.edges', []), Unsupported)
+test('a host without the package refuses a relation walk', () => {
   assertThrows(() => sql('.cites[<=3]->p1', []), Unsupported)
 })

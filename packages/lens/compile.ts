@@ -248,15 +248,6 @@ export let compile = (rows: Bundle[], speaks?: Speaks): Lens => {
             fields: c.fields.map((f) => ({ ...f, path: rewrite(f.path) })),
           }
         }
-        if (c.kind == 'edges') {
-          return {
-            ...c,
-            peers: c.peers.map(rewrite),
-            ...(c.select?.via
-              ? { select: { ...c.select, via: rewrite(c.select.via) } }
-              : {}),
-          }
-        }
         if (c.kind == 'order') {
           let sign = c.value.startsWith('-') ? '-' : ''
           return {

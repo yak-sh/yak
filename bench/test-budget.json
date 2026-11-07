@@ -1426,7 +1426,6 @@
       "unlinking drops the sentence and keeps the identity": 2.8
     },
     "packages/edge/sql_test.ts": {
-      ".edges rides a query without narrowing it": 3,
       "<- walks the other way: what the target reaches": 3.6,
       "a cycle terminates on the depth cap": 3.5,
       "a walk follows one relation, not every link": 8.4,

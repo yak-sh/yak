@@ -84,17 +84,6 @@ export type After = { kind: 'after'; n: number } | {
   kind: 'after'
   eid: string
 }
-// Carries stored edges back with the answer. `select` picks one edge type and
-// optionally projects an endpoint through a reference property (`via`, raw
-// segments); `peers` names the properties of the far endpoint (each a raw path)
-// to carry back.
-export type EdgeSelect = { type: string; via?: string[] }
-export type Edges = {
-  kind: 'edges'
-  select?: EdgeSelect
-  peers: string[][]
-  limit?: number
-}
 // A qualifier: one argument of the bracket a path may carry (`.p[<=3]`,
 // `.p[key=v]`, `.p[word]`). The bracket binds to the path and is read before
 // any operator, so each kind of clause declares which qualifiers it accepts and
@@ -174,7 +163,6 @@ export type Clause =
   | Every
   | Limit
   | After
-  | Edges
   | Walk
   | Ensure
   | Gate
@@ -365,16 +353,6 @@ export let variable = (name: string, value?: Input): Var => ({
   ...(value === undefined ? {} : { value: coerce(value) }),
 })
 
-export let edges = (
-  opts: { select?: EdgeSelect; peers?: string[][] } = {},
-): Edges => ({
-  kind: 'edges',
-  peers: opts.peers ?? [],
-  ...(
-    opts.select ? { select: opts.select } : {}
-  ),
-})
-
 // ---- accessors ----
 // The clause list a compiler such as @yaks/sql reads its directives out of,
 // plus a few of the common lookups, written once so every caller need not scan
@@ -396,7 +374,6 @@ let SHAPES = new Set([
   'every',
   'limit',
   'after',
-  'edges',
 ])
 
 /** Whether a clause shapes the answer rather than choosing it.

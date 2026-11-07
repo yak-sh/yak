@@ -6,8 +6,7 @@
 //
 // The same subpath carries the query half, because a host gathers every read
 // path's clause compilers from here (@yaks/cli `GraphFacet`): without it, a
-// host that composes this package refuses a walk over a relation and the
-// `.edges` rider.
+// host that composes this package refuses a walk over a relation.
 
 import type { Plugin } from '@yaks/graph'
 import type { Extension } from '@yaks/sql'
@@ -18,7 +17,7 @@ import { traverse } from './sql.ts'
 /** Derived edge ids, and the relations this vocabulary declares. */
 export let plugins = (host: { vocab: Vocab }): Plugin[] => [edges(host.vocab)]
 
-/** The walk over a relation and the `.edges` rider, compiled (./sql.ts). */
+/** The walk over a relation, compiled (./sql.ts). */
 export let extend = (host: { vocab: Vocab }): Extension[] => [
   traverse(host.vocab),
 ]

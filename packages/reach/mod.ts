@@ -118,8 +118,9 @@ let refusing = (e: unknown) =>
 
 // The words a dotted segment can open with that belong to the whole line: the
 // grammar's own riders, its aggregates, and the spine every member's entities
-// share (`.entity.eid=`, which is what `id=` becomes). Everything else after a
-// dot is a component, and it is the segment's part.
+// share (`.entity.eid=`, which is what `id=` becomes). `.edges`, a retired
+// rider that parses to nothing, is still the line's rather than a component.
+// Everything else after a dot is a component, and it is the segment's part.
 let RIDERS = ['order', 'near', 'limit', 'after', 'edges', 'kind', 'fields']
 let AGGS = ['count', 'distinct', 'tally']
 let LINE = ['entity', ...RIDERS, ...AGGS]

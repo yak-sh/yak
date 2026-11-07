@@ -1,10 +1,9 @@
-// The query half: the two clauses @yaks/sql cannot compile on its own because
-// they follow links, supplied here as an
+// The query half: the walk over a relation, which @yaks/sql cannot compile on
+// its own because it follows links, supplied here as an
 // {@link https://jsr.io/@yaks/sql | @yaks/sql} Extension.
 //
 //   `.cites[<=3]->p1`   the posts that reach p1 through at most 3 cites
 //   `.cites<-p1`        what p1 reaches: everything it cites, transitively
-//   `.edges[cites]`    return each result's links along with it
 //
 // The walk is a filter, and @yaks/sql compiles it — one recursive CTE, seeded
 // at the target and stepped along the arrow (`walk`). What that package
@@ -14,12 +13,8 @@
 // returns null when it does not, leaving the binder to try the path as a
 // reference property instead.
 //
-// `.edges` is not a filter: it does not change which entities the query
-// selects, it asks for their links to be returned alongside them. So it
-// compiles to TRUE and the links are fetched by a separate read
-// ({@link walk}). It still returns null for a relation the vocabulary does not
-// declare, because a clause naming nothing is a typo, not a query that matches
-// everything.
+// A link is an entity, so a query reads links as rows (`.cites&.edge.from=p1`)
+// with nothing from this module.
 //
 // This module assumes the storage layout @yaks/sql's SQLite dialect reads and
 // @yaks/sqlite creates: an `entity` table of integer ids, one table per
@@ -35,7 +30,6 @@ import {
   type Query,
   select,
   table,
-  TRUE,
   walk,
 } from '@yaks/sql'
 import type { Vocab } from '@yaks/vocab'
@@ -53,11 +47,11 @@ let linked = (tag: string): Query =>
   })
 
 /**
- * The @yaks/sql extension that compiles the traversal clauses: `compile(ast,
- * vocab, { extend: [traverse(vocab)] })`. Both return null when the vocabulary
- * has no `edge` component, or when they name a relation it does not declare —
- * the walk then falls through to @yaks/sql's own reference-property walk, and
- * `.edges` to its rejection.
+ * The @yaks/sql extension that compiles the walk over a relation: `compile(ast,
+ * vocab, { extend: [traverse(vocab)] })`. It returns null when the vocabulary
+ * has no `edge` component, or when the walk names a relation it does not
+ * declare, and the walk then falls through to @yaks/sql's own
+ * reference-property walk.
  */
 export let traverse = (vocab: Vocab): Extension => {
   let rels = relations(vocab)
@@ -69,11 +63,6 @@ export let traverse = (vocab: Vocab): Extension => {
         if (clause.kind != 'walk' || clause.path.length != 1) return null
         let t = tag(clause.path[0])
         return t ? walk(site.owner, clause, linked(t)) : null
-      },
-      edges: (clause) => {
-        if (clause.kind != 'edges') return null
-        if (clause.select && !tag(clause.select.type)) return null
-        return vocab.comp(EDGE) ? TRUE : null
       },
     },
   }

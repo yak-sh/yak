@@ -338,7 +338,7 @@ test('the filter door judges one bundle at a time', () => {
 })
 
 test('what it cannot answer exactly, it declines', () => {
-  for (let q of ['.near=b1', '.count', '.distinct=book.status', '.edges']) {
+  for (let q of ['.near=b1', '.count', '.distinct=book.status']) {
     let e = assertThrows(() => matcher(q, shop), Unsupported) as Unsupported
     assertEquals(e.by, '@yaks/match', q)
   }

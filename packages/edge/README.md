@@ -265,7 +265,8 @@ try {
   equal(await found('.cites[<=1]->p3'), ['p2'])
   equal(await found('.cites[<=2]->p3'), ['p1', 'p2'])
   equal(await found('.cites<-p1'), ['p2', 'p3'])
-  equal(await found('.post&.edges[cites]'), ['p1', 'p2', 'p3'])
+  equal((await found('.cites&.edge.to=p3')).length, 1)
+  equal(await found('.post&.edges_to.edge.from=p1'), ['p2'])
 } finally {
   db.close()
 }
@@ -277,8 +278,10 @@ bounds recursion by hops and can include the start if a cycle returns to it.
 Reference-property walks remain the SQL compiler's responsibility. Undeclared
 relations are refused.
 
-`.edges[cites]` does not filter the selection or fetch link bundles. The caller
-must fetch the requested links separately.
+A link is an entity, so its rows are read like any other: `.cites&.edge.to=p3`
+selects the links citing p3, and a reverse association reaches them from a row
+(`.post&.edges_to.edge.from=p1`). The retired `.edges` rider reads as no clause
+at all (@yaks/query `retired`).
 
 ## Composition
 

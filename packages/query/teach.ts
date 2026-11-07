@@ -70,13 +70,6 @@ export let DIRECTIVES: Taught[] = [
     means: 'continue past one entity, by number or id (.after=T-13882)',
   },
   {
-    spell: '.edges',
-    word: 'rider',
-    means: 'the edges incident to the answer; ' +
-      '.edges.peers=task.status,doc.title ' +
-      'projects the far endpoint; .edges[type,via] selects one type',
-  },
-  {
     spell: '->',
     word: 'walk',
     means: '.requires->T-42 what reaches T-42 through requires; <- the other ' +

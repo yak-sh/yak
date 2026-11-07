@@ -111,8 +111,8 @@ let indexed = (from: Source): Index =>
   Array.isArray(from) ? index(from) : from as Index
 
 // The directives a selection refuses: an aggregate is a row shape, not a
-// selection of entities (rows() lifts it out first), and `.near` and `.edges`
-// need an index no bundle holds. Every other directive (@yaks/query
+// selection of entities (rows() lifts it out first), and `.near` needs an
+// index no bundle holds. Every other directive (@yaks/query
 // `directive()`) sits in the clause list without filtering anything: a
 // projection (`fields`, `*`) names which properties the result should carry and
 // nothing about which bundles match, so it is carried along and never tested.
@@ -121,7 +121,6 @@ let DECLINED = new Set([
   'count',
   'distinct',
   'tally',
-  'edges',
 ])
 
 let find = <T extends Clause>(cs: Clause[], kind: string): T | undefined =>

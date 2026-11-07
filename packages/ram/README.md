@@ -430,11 +430,10 @@ properties. Missing and `null` values match the same way. RAM preserves
 JavaScript value types; SQL storage may return an integer for a stored boolean.
 
 Unsupported queries throw `Unsupported` from @yaks/match: examples include
-`.near`, `.edges`, and computed properties without a function. Aggregates use
-`rows`, rather than `read`. See the [matcher](../match/README.md) for the
-supported subset. Text search matches tokens in stored text without a full-text
-index or relevance ranking; tokenization can differ from a database's full-text
-engine.
+`.near` and computed properties without a function. Aggregates use `rows`,
+rather than `read`. See the [matcher](../match/README.md) for the supported
+subset. Text search matches tokens in stored text without a full-text index or
+relevance ranking; tokenization can differ from a database's full-text engine.
 
 The package is pure TypeScript with no Deno, Node, or DOM-specific imports and
 can run in browsers and server JavaScript runtimes. Its runtime dependencies

@@ -105,7 +105,6 @@ let SET = new Set([
   'distinct',
   'tally',
   'near',
-  'edges',
 ])
 
 // A conjunction's clauses, flat: `(a b) c` is three clauses.

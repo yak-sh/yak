@@ -9,7 +9,7 @@
 // `-comp` gone, meaning this write removed it, `#Name` resource, `$name`
 // variable), the operators, any-of lists, ranges, time literals, the reserved
 // directives (order, near, refs, count, distinct, tally, fields, `*`, limit,
-// after, edges), the walk, the shape of a dotted path, and how tokens separate
+// after), the walk, the shape of a dotted path, and how tokens separate
 // — and nothing about any schema. Whether `status` is a property, a reference
 // or an enum, and how a field maps to storage, is left to a compiler that has a
 // schema (`@yaks/sql` takes this AST plus a schema and compiles SQL). Given a

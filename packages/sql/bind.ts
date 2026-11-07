@@ -38,9 +38,8 @@ import { presence as simplePresence } from './presence.ts'
 // which is in this vocabulary.
 //
 // What is NOT here fails loudly, by throwing `Unsupported` rather than
-// returning a silently wrong answer: the `.edges` rider (edge-typed, so
-// @yaks/edge's), a walk over neither a relation nor reference properties, and
-// the `.near` nearest-neighbour search, which needs vectors this package does
+// returning a silently wrong answer: a walk over neither a relation nor
+// reference properties, and the `.near` nearest-neighbour search, which needs vectors this package does
 // not hold — @yaks/embedding registers as an extension and compiles it,
 // ordering included.
 
@@ -2489,9 +2488,8 @@ let clause = (ctx: Ctx, c: Clause): Cond => {
 
 // The directives, read off the top-level clause list. order/limit/after modify
 // an ordinary query; count/distinct/tally change what it selects; fields and
-// `*` add projected columns; near/edges are refused unless an extension claims
-// them, in which case they filter like any other clause.
-let UNREACHED = new Set(['near', 'edges'])
+// `*` add projected columns; near is refused unless an extension claims it, in
+// which case it filters like any other clause.
 let find = <T extends Clause>(cs: Clause[], kind: string): T | undefined =>
   cs.find((c) => c.kind == kind) as T | undefined
 
@@ -3922,10 +3920,8 @@ let lower = (
       scope,
     )
   }
-  for (let c of cs) {
-    if (UNREACHED.has(c.kind) && !claims(ctx, c.kind)) {
-      throw new Unsupported(`.${c.kind}`, 'query extension is unavailable')
-    }
+  if (cs.some((c) => c.kind == 'near') && !claims(ctx, 'near')) {
+    throw new Unsupported('.near', 'query extension is unavailable')
   }
   let filters = cs.filter((c) => !directive(c) || claims(ctx, c.kind))
   let count = find<Count>(cs, 'count')
@@ -4293,13 +4289,9 @@ let lower = (
     !vocab.prop('entity', 'num')?.computed && !ctx.derived['entity.num'] &&
     !sort?.ranked &&
     !ctx.spine && !ctx.eids && !ctx.correlated &&
-    !cs.some((c) => c.kind != 'edges' && claims(ctx, c.kind)) &&
-    ctx.ext.filter((e) => e.compile.edges).every((e) =>
-      e.name == '@yaks/edge'
-    ) &&
-    !reads.length && filters.filter((c) => c.kind != 'edges').length == 1 &&
-    ctx.present &&
-    facetOf(ctx, filters.find((c) => c.kind != 'edges')!)?.present &&
+    !cs.some((c) => claims(ctx, c.kind)) &&
+    !reads.length && filters.length == 1 && ctx.present &&
+    facetOf(ctx, filters[0])?.present &&
     !computed(vocab, ctx.present) && ctx.d.owned &&
     (ctx.d.scoped || ctx.d.spine == '"entity"')
   ) {

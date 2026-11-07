@@ -48,15 +48,6 @@ roundTrips('walk query', [
   '.p<-1',
 ])
 
-roundTrips('edges query', [
-  '.edges.limit=12',
-  '.edges[a,b]',
-  '.edges[referenced, entry.session]',
-  '.edges.peers=status,title',
-  '.edges',
-  '.env !refs .refs .count',
-])
-
 roundTrips('directive query', [
   '.task.status=open&.order=hot&.near=T-3&.limit=50&.after=900',
   '.after=0b5a3d6c-6f1e-4a43-9a5e-1c2d3e4f5a6b',
@@ -64,6 +55,7 @@ roundTrips('directive query', [
   '.tally=task.status',
   '.fields=pin.x,pin.z~',
   '.drill!',
+  '.env !refs .refs .count',
 ])
 
 roundTrips('quoted-value query', [

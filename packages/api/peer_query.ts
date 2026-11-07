@@ -73,7 +73,7 @@ let relax = (v: Vocab, c: Clause, without = false): Clause | null => {
   if (
     c.kind == 'order' || c.kind == 'limit' || c.kind == 'after' ||
     c.kind == 'fields' || c.kind == 'every' || c.kind == 'count' ||
-    c.kind == 'distinct' || c.kind == 'tally' || c.kind == 'edges'
+    c.kind == 'distinct' || c.kind == 'tally'
   ) return null
   return c
 }
@@ -115,8 +115,7 @@ let referent = (q: And, v: Vocab) => {
       } else if (
         c.kind == 'order' || c.kind == 'limit' || c.kind == 'after' ||
         c.kind == 'count' || c.kind == 'distinct' || c.kind == 'tally' ||
-        c.kind == 'refs' || c.kind == 'near' || c.kind == 'walk' ||
-        c.kind == 'edges'
+        c.kind == 'refs' || c.kind == 'near' || c.kind == 'walk'
       ) valid = false
     }
   }

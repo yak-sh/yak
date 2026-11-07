@@ -41,8 +41,8 @@
 // Coverage is stated plainly. The common query path is here and exact, reverse
 // hops (`.reviews>=5`, `.reviews.stars=5`) included; anything outside it throws
 // `Unsupported` rather than return an almost-right answer — see ./bind.ts for
-// the exact list (the `.edges` rider, an edge-typed walk, and the `.near`
-// nearest-neighbour search unless a vector package claims it).
+// the exact list (an edge-typed walk, and the `.near` nearest-neighbour search
+// unless a vector package claims it).
 
 export * from './query.ts'
 export { absentDerived, absentFrom } from './absent.ts'

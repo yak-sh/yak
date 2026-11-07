@@ -161,7 +161,7 @@ A directive belongs to the whole line wherever it is written.
 | `.limit=` `.after=` | `.limit=50&.after=T-13882`                  | a window; `.after` continues past an entity in any order                                                         |
 | `.refs=`            | `.refs=D-45640 .count`                      | what references it; `.refs` / `!refs` alone                                                                      |
 | `.near=`            | `.task .near=T-6461 .limit=3`               | ranked by meaning (`search-and-embeddings`)                                                                      |
-| `.edges`            | `.edges[requires]`                          | asks for the edges touching the answer; it doesn't filter, and the caller fetches them (packages/edge/README.md) |
+| `.edges`            | `.edges[requires]`                          | a retired spelling: it answers as if absent; read edges as rows (`.requires&.edge.from=T-1`)                     |
 
 `.order`, `.limit` and `.after` shape rows, so an aggregate ignores them:
 `.count&.limit=20` counts every match. With no `.order`, a window (`.limit`,

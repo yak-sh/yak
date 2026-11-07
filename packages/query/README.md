@@ -102,21 +102,21 @@ equal(parse(stringify(tree)), tree)
 
 All exports are available from `@yaks/query`.
 
-| Part                      | Exports                                                                                                                 |
-| ------------------------- | ----------------------------------------------------------------------------------------------------------------------- |
-| Parsing                   | `parse`, `stringify`, `parseDot`, `tokens`, `conjoin`, `valued`, `cursor`, `ParseOpts`                                  |
-| Predicates                | `eq`, `ne`, `contains`, `lt`, `le`, `gt`, `ge`, `present`, `absent`, `want`, `pred`, `bare`, `compares`                 |
-| Values and text           | `coerce`, `scalar`, `list`, `range`, `time`, `text`, `never`                                                            |
-| Composition               | `and`, `or`, `map`                                                                                                      |
-| Walks                     | `walk`, `WALK_LIMIT`, `WALK_DEPTH`                                                                                      |
-| Directives and references | `order`, `near`, `refs`, `hasRefs`, `count`, `distinct`, `tally`, `fields`, `field`, `every`, `limit`, `after`, `edges` |
-| Accessors                 | `clauses`, `directive`, `orderOf`, `nearOf`, `windowOf`                                                                 |
-| Rule instructions         | **`ensure`**, `gate`, `mutable`, `gone`, `resource`, `variable`, `declared`, `Declares`, `Set`                          |
-| Multi-entity matches      | `parseMatch`, `MatchPart`                                                                                               |
-| Time literals             | `isTimeLiteral`, `timeSpan`, `timeInstant`, `timeEdges`, `unitMs`, `Span`, `Edge`                                       |
-| Completion                | `complete`, `Completion`, `Cand`, `Source`                                                                              |
-| Format help               | `OPERATORS`, `DIRECTIVES`, `FORMAT`, `Taught`                                                                           |
-| AST types                 | `Query`, `Clause`, `Op`, `Value`, `Input`, and the node types in [ast.ts](./ast.ts)                                     |
+| Part                      | Exports                                                                                                        |
+| ------------------------- | -------------------------------------------------------------------------------------------------------------- |
+| Parsing                   | `parse`, `stringify`, `parseDot`, `tokens`, `conjoin`, `valued`, `cursor`, `ParseOpts`                         |
+| Predicates                | `eq`, `ne`, `contains`, `lt`, `le`, `gt`, `ge`, `present`, `absent`, `want`, `pred`, `bare`, `compares`        |
+| Values and text           | `coerce`, `scalar`, `list`, `range`, `time`, `text`, `never`                                                   |
+| Composition               | `and`, `or`, `map`                                                                                             |
+| Walks                     | `walk`, `WALK_LIMIT`, `WALK_DEPTH`                                                                             |
+| Directives and references | `order`, `near`, `refs`, `hasRefs`, `count`, `distinct`, `tally`, `fields`, `field`, `every`, `limit`, `after` |
+| Accessors                 | `clauses`, `directive`, `orderOf`, `nearOf`, `windowOf`                                                        |
+| Rule instructions         | **`ensure`**, `gate`, `mutable`, `gone`, `resource`, `variable`, `declared`, `Declares`, `Set`                 |
+| Multi-entity matches      | `parseMatch`, `MatchPart`                                                                                      |
+| Time literals             | `isTimeLiteral`, `timeSpan`, `timeInstant`, `timeEdges`, `unitMs`, `Span`, `Edge`                              |
+| Completion                | `complete`, `Completion`, `Cand`, `Source`                                                                     |
+| Format help               | `OPERATORS`, `DIRECTIVES`, `FORMAT`, `Taught`                                                                  |
+| AST types                 | `Query`, `Clause`, `Op`, `Value`, `Input`, and the node types in [ast.ts](./ast.ts)                            |
 
 ## Predicates and text
 
@@ -227,10 +227,14 @@ equal(parse('task.status=open'), parse('.task.status=open'))
 
 `parse(q, { text: false })` refuses bare words. Quoted text terms remain
 allowed. Suffix presence `.p!` and optional `.p?` are translated to `.p` and
-`?p` for callers in kept app releases, including strict queries;
-`retired(parse(q))` lists the ones a query was written in, so a door can note
-who still sends them. `.p!=`, `.p=`, and `!.p` throw with the accepted form. An
-empty query has a `never` clause, which selects nothing.
+`?p` for callers in kept app releases, including strict queries. The `.edges`
+rider those releases send (`.edges`, `.edges[type,via]`, `.edges.peers=`,
+`.edges.limit=`) asked for each row's edges, which no server fetches, so it
+reads as no clause at all; an edge is an entity, read as a row
+(`.cites&.edge.from=T-1`). `retired(parse(q))` lists the retired spellings a
+query was written in, so a door can note who still sends them. `.p!=`, `.p=`,
+and `!.p` throw with the accepted form. An empty query has a `never` clause,
+which selects nothing.
 
 Parsed ASTs are frozen throughout and cached by query string and strictness.
 Treat them as immutable; construct a different AST with builders or `map()`.
@@ -265,9 +269,8 @@ entity, by eid or human id.
 
 A **qualifier** is an argument in brackets on a path. It can be an operator and
 value (`<=3`), a key and value (`key=value`), or a bare word. A walk accepts one
-depth cap (`[<=3]`), and `.edges` accepts one or two bare words; other clauses
-refuse qualifiers. Brackets after an operator belong to the value, so
-`.doc.title~=x[1]` contains the literal `x[1]`.
+depth cap (`[<=3]`); other clauses refuse qualifiers. Brackets after an operator
+belong to the value, so `.doc.title~=x[1]` contains the literal `x[1]`.
 
 Without a depth qualifier, a walk carries no hop cap. `WALK_LIMIT` specifies the
 standard evaluator limit of 10,000 nearest entities other than the target.
@@ -297,22 +300,18 @@ clauses. Under OR, the parser lifts directives to the query's top-level clause
 list, so `.task|.note&.limit=2` limits the combined selection. `.refs` is a
 reserved name too, but it selects by references and is not a directive.
 
-| Written                              | Requested answer                                                                |
-| ------------------------------------ | ------------------------------------------------------------------------------- |
-| `.order=hot`                         | order by a ranking or a property path (`-created.at` descends)                  |
-| `.near=42`                           | similarity ranking relative to one entity                                       |
-| `.refs=42` / `.refs` / `!refs`       | references to 42 / any references / no references                               |
-| `.count`                             | number of matches                                                               |
-| `.distinct=comp.prop`                | distinct property values                                                        |
-| `.tally=comp.prop`                   | each property value with its count                                              |
-| `.fields=pin.x,pin.z~`               | selected properties; `~` excludes that property from subscription notifications |
-| `*` / `?*`                           | every component of each selected entity                                         |
-| `.limit=200`                         | at most 200 entities; `0` requests none                                         |
-| `.after=13882`                       | continue past one entity, by number, human id, or eid                           |
-| `.edges`                             | edges touching the answer                                                       |
-| `.edges[type,via]`                   | one edge type and an optional endpoint reference property                       |
-| `.edges.peers=task.status,doc.title` | properties of the far endpoint                                                  |
-| `.edges.limit=200`                   | at most 200 edges                                                               |
+| Written                        | Requested answer                                                                |
+| ------------------------------ | ------------------------------------------------------------------------------- |
+| `.order=hot`                   | order by a ranking or a property path (`-created.at` descends)                  |
+| `.near=42`                     | similarity ranking relative to one entity                                       |
+| `.refs=42` / `.refs` / `!refs` | references to 42 / any references / no references                               |
+| `.count`                       | number of matches                                                               |
+| `.distinct=comp.prop`          | distinct property values                                                        |
+| `.tally=comp.prop`             | each property value with its count                                              |
+| `.fields=pin.x,pin.z~`         | selected properties; `~` excludes that property from subscription notifications |
+| `*` / `?*`                     | every component of each selected entity                                         |
+| `.limit=200`                   | at most 200 entities; `0` requests none                                         |
+| `.after=13882`                 | continue past one entity, by number, human id, or eid                           |
 
 A property path through a reference in `.fields` requests what it reaches as its
 own bundle. See [graph projections](../graph/README.md#projections). The parser
@@ -336,7 +335,6 @@ import {
   cursor,
   directive,
   distinct,
-  edges,
   every,
   fields,
   hasRefs,
@@ -372,14 +370,6 @@ equal(
   ),
 )
 equal(parse('.refs=T-42 .refs !refs'), and(refs('T-42'), hasRefs(), refs()))
-equal(
-  parse('.edges[watches,author.team] .edges.peers=doc.title .edges.limit=2'),
-  and(
-    edges({ select: { type: 'watches', via: ['author', 'team'] } }),
-    edges({ peers: [['doc', 'title']] }),
-    { kind: 'edges', peers: [], limit: 2 },
-  ),
-)
 const query = parse(
   '.task|.note&.order=hot&.near=T-42&.limit=2&.after=book:dune',
 )

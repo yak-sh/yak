@@ -280,7 +280,6 @@ test('a query neither side can answer is declined by both', () => {
   for (
     let q of [
       '.near=b1',
-      '.edges',
       '.refs',
       '.reviews~=deep',
       // a path through a hop that is no reference, or to a whole component

@@ -12,7 +12,6 @@ import {
   contains,
   count,
   distinct,
-  edges,
   ensure,
   eq,
   every,
@@ -37,6 +36,7 @@ import {
   range,
   refs,
   resource,
+  retired,
   scalar,
   tally,
   text,
@@ -158,17 +158,6 @@ let cases: [string, ReturnType<typeof and>][] = [
   // a human id is the same number wearing its display prefix
   ['.after=T-13882', and(after(13882))],
   ['.after=child:abc', and(after('child:abc'))],
-  ['.edges', and(edges())],
-  [
-    '.edges.peers=status,title',
-    and(edges({ peers: [['status'], ['title']] })),
-  ],
-  // the bracket on `edges` is the select, read as two bare qualifiers
-  [
-    '.edges[referenced,entry.session]',
-    and(edges({ select: { type: 'referenced', via: ['entry', 'session'] } })),
-  ],
-  ['.edges[cites]', and(edges({ select: { type: 'cites' } }))],
   // the walk: a path, its optional cap, an arrow, one entity
   ['.requires->T-42', and(walk('requires', '->', 'T-42'))],
   ['.requires<-T-42', and(walk('requires', '<-', 'T-42'))],
@@ -186,10 +175,6 @@ let cases: [string, ReturnType<typeof and>][] = [
   [
     '.requires[<=2]->T-1&.status=open',
     and(walk('requires', '->', 'T-1', 2), eq('status', 'open')),
-  ],
-  [
-    '.edges[cites,author],.post',
-    and(edges({ select: { type: 'cites', via: ['author'] } }), present('post')),
   ],
   // a bracket after the operator is part of the value
   ['.title~=x[1]', and(contains('title', 'x[1]'))],
@@ -408,8 +393,6 @@ refused([
   ['.requires[<=3->X', 'unclosed bracket'],
   ['.requires->', 'one entity'],
   ['.requires->a,b', 'one entity'],
-  ['.edges[a,b,c]', 'one edge type'],
-  ['.edges[<=3]', 'one edge type'],
   // a written property takes one value; an unquoted comma makes a list
   ['+doc.body=Hi,there', 'is a list; quote a value'],
   ['+doc.body="Hi, there.",x', 'is a list; quote a value'],
@@ -420,10 +403,6 @@ refused([
 ])
 
 test('whitespace inside the bracket is the bracket’s own', () => {
-  assertEquals(
-    parse('.edges[referenced, entry.session]'),
-    and(edges({ select: { type: 'referenced', via: ['entry', 'session'] } })),
-  )
   assertEquals(
     parse('.requires[ <= 3 ]->T-1'),
     and(walk('requires', '->', 'T-1', 3)),
@@ -459,8 +438,6 @@ for (
     ['.doc.title!', '.doc.title'],
     ['.refs!', '.refs'],
     ['.count!', '.count'],
-    ['.edges!', '.edges'],
-    ['.edges[cites]!', '.edges[cites]'],
     ['(.drill!|.doc!)&?created', '(.drill|.doc)&?created'],
     ['.drill!,.doc!', '.drill,.doc'],
     ['.doc.title="Wow!"&.drill!', '.doc.title="Wow!"&.drill'],
@@ -501,14 +478,38 @@ test('bracketless reserved word is a plain predicate', () => {
   assertEquals(parse('.reaches=X'), and(eq('reaches', 'X')))
 })
 
-test('the edges rider has a nonnegative integer limit', () => {
-  assertEquals(
-    parse('.edges.limit=12'),
-    and({ kind: 'edges', peers: [], limit: 12 }),
-  )
-  assertThrows(() => parse('.edges.limit=-1'))
-  assertThrows(() => parse('.edges.limit=1.2'))
-})
+// Kept releases still send the `.edges` rider, which nothing answers: each
+// spelling reads as the query without it, and is named as retired.
+for (
+  let rider of [
+    '.edges',
+    '.edges!',
+    '.edges[cites]',
+    '.edges[cites]!',
+    'edges[referenced,entry.session]',
+    '.edges[referenced, entry.session]',
+    '.edges[a,b,c]',
+    '.edges.peers=status,title',
+    'edges.limit=12',
+    '.edges.limit=-1',
+  ]
+) {
+  test(`a kept release's ${rider} reads as nothing`, () => {
+    for (
+      let [q, plain] of [
+        [`.post&${rider}`, '.post'],
+        [`${rider} .post`, '.post'],
+        [`.post|.doc ${rider}`, '.post|.doc'],
+        [`.post|${rider}`, '.post'],
+      ]
+    ) {
+      for (let opts of [{}, { text: false }]) {
+        assertEquals(parse(q, opts), parse(plain, opts))
+        assertEquals(retired(parse(q, opts)), [rider])
+      }
+    }
+  })
+}
 
 test('nested reverse negations preserve each quantifier', () => {
   let one = parse('.reviews!.stars=5').clauses[0]

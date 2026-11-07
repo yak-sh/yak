@@ -71,17 +71,17 @@ test('a walk narrows a filter like any other clause', () => {
   assertEquals(found(chain(), '.cites[<=9]->p1 .post.title=Three'), ['p3'])
 })
 
-test('.edges rides a query without narrowing it', () => {
-  // The rider asks for the links to be delivered, so it must not change which
-  // entities the query selects.
+test("a kept release's .edges answers as if absent; a link reads as a row", () => {
   let s = chain()
-  assertEquals(found(s, '.post&.edges'), found(s, '.post'))
-  assertEquals(sql('.post&.edges').sql, sql('.post').sql)
+  for (
+    let rider of ['.edges', '.edges[cites]', '.edges[admires,post.title]']
+  ) assertEquals(found(s, `.post&${rider}`), found(s, '.post'))
+  assertEquals(found(s, '.cites&.edge.to=p1').length, 1)
+  assertEquals(found(s, '.post&.edges_to.edge.from=p2'), ['p1'])
 })
 
 test('a relation nothing declares is refused, not answered', () => {
   assertThrows(() => sql('.admires[<=2]->p1'), Unsupported)
-  assertThrows(() => sql('.edges[admires]'), Unsupported)
 })
 
 test('the walk seeks the edge table, never scans it', () => {
