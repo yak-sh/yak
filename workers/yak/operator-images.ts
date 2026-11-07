@@ -7,6 +7,7 @@
 // that made it, and library_add puts it in an app. No app is made to hold it.
 import { ModelError } from '@yaks/model'
 import type { Tool } from '@yaks/session'
+import { CallError } from '@yaks/tools/errors'
 import { images, providing } from './config.ts'
 import type { Space } from './directory.ts'
 import type { Env } from './env.ts'
@@ -14,10 +15,11 @@ import { accounted } from './meter.ts'
 import { attachmentId, type File, keepFile } from './operator-channels.ts'
 import { platform, served } from './providers.ts'
 import { refuse } from './tool.ts'
+import { mediaRoom } from './usage.ts'
 
 // What a model refuses that the Operator can correct, or the space's budget
-// can't cover: said back to it as a refusal. Anything else is a fault.
-let THEIRS = ['bad_request', 'input', 'limit']
+// or files can't hold: said back to it as a refusal. Anything else is a fault.
+let THEIRS = ['bad_request', 'input', 'limit', 'space_full']
 
 let EXT: Record<string, string> = { jpeg: 'jpg' }
 
@@ -74,7 +76,7 @@ export let imageNew = (env: Env, space: Space): Tool => ({
       (dir) => dir.at(space.eid),
       served(env, () => ({
         ...platform(env),
-        store: async (bytes, mime) => {
+        store: Object.assign(async (bytes: Uint8Array, mime: string) => {
           let ext = mime.split('/')[1]
           let file = await keepFile(
             env,
@@ -82,14 +84,18 @@ export let imageNew = (env: Env, space: Space): Tool => ({
             `image.${EXT[ext] ?? ext}`,
             mime,
             new Uint8Array(bytes),
-          )
+          ).catch((e) => {
+            // Filled since room was asked: said to the model as it was.
+            if (e instanceof CallError) throw new ModelError(e.code, e.message)
+            throw e
+          })
           kept.set(attachmentId(file), file)
           return {
             address: attachmentId(file),
             media_type: mime,
             size: bytes.byteLength,
           }
-        },
+        }, { room: mediaRoom(env, space) }),
       }), providing)[images.provider],
     )
     let reply = await make({

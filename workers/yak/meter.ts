@@ -1142,7 +1142,10 @@ export let accounted = (
           },
         })
       } catch (error) {
-        if (!submitted) await hold.settle(0, false)
+        // Media the space's files had no room to keep is not charged for,
+        // though its provider may have been paid.
+        let unkept = error instanceof ModelError && error.code == 'space_full'
+        if (!submitted || unkept) await hold.settle(0, false)
         throw error
       }
       let cost = charged(reply, tariff, hold.value.dollars)

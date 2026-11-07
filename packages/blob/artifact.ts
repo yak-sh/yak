@@ -21,10 +21,17 @@ export type Artifact = {
   media_type: string
   size: number
 }
-export type ArtifactStore = (
-  bytes: Uint8Array,
-  mediaType: string,
-) => Promise<Artifact>
+export type ArtifactStore =
+  & ((
+    bytes: Uint8Array,
+    mediaType: string,
+  ) => Promise<Artifact>)
+  & {
+    /** Refuses when the store has no room for more, so a model that makes
+     * bytes is asked before anything is paid for them. A store that is never
+     * full has none. */
+    room?: () => Promise<void>
+  }
 
 /** What these bytes are called: their SHA-256, lowercase hex. It is both the
  * key in the store and the eid of the row, so there is no second name for the

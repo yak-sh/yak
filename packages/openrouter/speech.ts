@@ -11,7 +11,7 @@ import {
   type Request,
   submitted,
 } from '@yaks/model'
-import type { MediaStore } from '@yaks/openai'
+import { mediaRoom, type MediaStore } from '@yaks/openai'
 import { deliver, type Output } from './media.ts'
 import { encoded } from './bytes.ts'
 
@@ -92,6 +92,7 @@ export let speech = async (
       : req.signal ?? options.signal,
   }
   let res: Response
+  await mediaRoom(options.media)
   await submitted(req)
   try {
     res = await (options.fetch ?? fetch)(

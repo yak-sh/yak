@@ -9,7 +9,12 @@ import {
   assertEquals,
   assertRejects,
 } from '@std/assert'
-import type { Lent, MediaReceipt, Request } from '@yaks/model'
+import {
+  type Lent,
+  type MediaReceipt,
+  ModelError,
+  type Request,
+} from '@yaks/model'
 import { imageCost, imageQuote, imageTokens } from './generations.ts'
 import { providers } from './provider.ts'
 
@@ -21,7 +26,7 @@ let usage = {
   output_tokens: 823,
 }
 
-let harness = (answer: () => Response) => {
+let harness = (answer: () => Response, room?: () => Promise<void>) => {
   let sent: { url: string; body: Record<string, unknown> }[] = []
   let stored: { bytes: Uint8Array; type: string }[] = []
   let receipts = new Map<string, MediaReceipt>()
@@ -32,14 +37,14 @@ let harness = (answer: () => Response) => {
     },
     key: () => Promise.resolve(undefined),
     refresh: () => Promise.resolve(undefined),
-    store: (bytes, type) => {
+    store: Object.assign((bytes: Uint8Array, type: string) => {
       stored.push({ bytes, type })
       return Promise.resolve({
         address: 'a1',
         media_type: type,
         size: bytes.length,
       })
-    },
+    }, { room }),
     env: (name) => name == 'OPENAI_API_KEY' ? 'sk-test' : undefined,
     receipts: {
       read: (call) => Promise.resolve(receipts.get(call)),
@@ -126,6 +131,13 @@ test('settings an image model does not take, and a refused prompt, are bad reque
   assertEquals(h.sent.length, 0)
   let e = await assertRejects(() => h.model(ask('gpt-image-2.6-flare')))
   assertEquals((e as { code: string }).code, 'bad_request')
+})
+
+test('a store with no room refuses before the image is asked or paid for', async () => {
+  let full = () => Promise.reject(new ModelError('space_full', 'full'))
+  let h = harness(ok, full)
+  let e = await assertRejects(() => h.model(ask('gpt-image-2.6-flare')))
+  assertEquals([(e as ModelError).code, h.sent.length], ['space_full', 0])
 })
 
 test('text models keep their token pricing and listing', async () => {

@@ -35,6 +35,8 @@ import { storeOf } from './door.ts'
 import { blobPrefix, receiptPrefix } from './blob-key.ts'
 import { filled, schemaOf } from '@yaks/tools/declared'
 import { accounted, countedMedia, metered } from './meter.ts'
+import { mediaRoom } from './usage.ts'
+import type { Env } from './env.ts'
 import { outbound } from './outbound.ts'
 import { caught } from './defects.ts'
 import type { Answer, Asked } from './apps.ts'
@@ -130,17 +132,27 @@ let visitorOf = (at: Stored) => async (req: { conversation?: string }) => {
     : by
 }
 
-// Where the media an app's models generate is kept: its own blobs.
-let artifacts = (at: Stored): ArtifactStore => async (bytes, mediaType) => {
-  let found = at.context ??
-    (at.env.STORE ? await directoryOf(at.env.STORE).appAt(at.app!) : null)
-  if (!found || !at.env.BLOBS) {
-    throw new ModelError('media_storage', 'This app has no blob store')
+// Where the media an app's models generate is kept: its own blobs, counted
+// among its space's files, which are asked for room before a model is paid.
+let artifacts = (at: Stored): ArtifactStore => {
+  let kept = async () => {
+    let found = at.context ??
+      (at.env.STORE ? await directoryOf(at.env.STORE).appAt(at.app!) : null)
+    if (!found || !at.env.BLOBS) {
+      throw new ModelError('media_storage', 'This app has no blob store')
+    }
+    return { ...found, blobs: at.env.BLOBS }
   }
-  return artifactStore(objectBlobs(
-    at.env.BLOBS,
-    blobPrefix(found.space, found.app),
-  ))(bytes, mediaType)
+  return Object.assign(
+    async (bytes: Uint8Array, mediaType: string) => {
+      let { space, app, blobs } = await kept()
+      return artifactStore(objectBlobs(blobs, blobPrefix(space, app)))(
+        bytes,
+        mediaType,
+      )
+    },
+    { room: async () => mediaRoom(at.env as Env, (await kept()).space)() },
+  )
 }
 
 // The vault holds small app-scoped pointers; private object storage holds media.
@@ -402,13 +414,15 @@ export let asking = (at: Stored): Handlers => {
 // How each way a model call fails is answered at the door: the allowance
 // spent, the model busy, a model not offered here (no model by that name, or
 // its license unaccepted), an input the model refuses, which is the caller's
-// to correct, and a host with no provider to lend.
+// to correct, a host with no provider to lend, and a space whose files have
+// no room for the media asked for.
 let STATUS: Record<string, number> = {
   limit: 429,
   busy: 503,
   model: 400,
   bad_request: 400,
   unbound: 503,
+  space_full: 413,
 }
 
 // What the door is posted: the model's name and its input, as its provider's

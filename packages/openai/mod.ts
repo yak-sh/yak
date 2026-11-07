@@ -58,7 +58,7 @@ export {
 } from './transport.ts'
 
 export type { ImageGeneration, Images } from './images.ts'
-export { generatedBytes, generatedMedia } from './media.ts'
+export { generatedBytes, generatedMedia, mediaRoom } from './media.ts'
 export type { MediaStore } from './media.ts'
 
 export { listing } from './list.ts'

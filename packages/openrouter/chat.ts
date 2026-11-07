@@ -12,7 +12,7 @@ import {
   submitted,
 } from '@yaks/model'
 import { jsonFrames } from '@yaks/model/sse'
-import type { MediaStore } from '@yaks/openai'
+import { mediaRoom, type MediaStore } from '@yaks/openai'
 import { chatTools, messages } from './prompt.ts'
 import { deliver, type Output } from './media.ts'
 
@@ -131,6 +131,7 @@ export let chat = async (
       : req.signal ?? options.signal,
   }
   let response: Response
+  if (media) await mediaRoom(options.media)
   await submitted(req)
   try {
     response = await (options.fetch ?? fetch)(

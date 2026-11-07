@@ -35,6 +35,7 @@
 // reads and the sentence a door says no with — is meter.ts, which this half
 // reads and the Store object reads too.
 import { patient } from '@yaks/blob'
+import { ModelError } from '@yaks/model'
 import { type ByDay, series, summed } from '@yaks/ui/chart'
 import type { Bundle } from '@yaks/graph'
 import * as dirPart from './directory.ts'
@@ -493,4 +494,12 @@ export let fullFiles = async (
   return delta > 0 && held.files + delta > ceiling
     ? atStored(space, 'files', held, env)
     : ''
+}
+
+/** Whether a space's files have room for media a model is about to make
+ * (@yaks/blob ArtifactStore `room`): one with no byte left is refused as full,
+ * the person's to free, before the model is paid. */
+export let mediaRoom = (env: Env, space: Space) => async () => {
+  let full = await fullFiles(env, space, [{ key: '', bytes: 1 }])
+  if (full) throw new ModelError('space_full', full)
 }

@@ -14,7 +14,7 @@ import {
   submitted,
 } from '@yaks/model'
 import { CODEX, type Credential } from './credential.ts'
-import { generatedMedia, type MediaStore } from './media.ts'
+import { generatedMedia, mediaRoom, type MediaStore } from './media.ts'
 
 // Each family's output tokens per quality at a square of 2,000,000 pixels'
 // weight, and GPT Image 2.6's own scale on them: OpenAI's cost calculator
@@ -212,6 +212,7 @@ export let generations = (options: Generations) => {
     if (credential.base == CODEX) {
       throw new ModelError('model', 'Image models need an OpenAI API key')
     }
+    await mediaRoom(options.media)
     await submitted(req)
     let res: Response
     try {

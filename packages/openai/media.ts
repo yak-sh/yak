@@ -7,6 +7,12 @@ export type MediaStore = {
   maxBytes?: number
 }
 
+/** Refuses, as the store says, when it has no room for media: asked by a
+ * model that makes bytes before its paid call. */
+export let mediaRoom = async (options?: MediaStore): Promise<void> => {
+  await options?.store.room?.()
+}
+
 /** Store one complete base64 media value, returning only its address and type. */
 export let generatedMedia = async (
   data: unknown,
@@ -72,7 +78,9 @@ export let generatedBytes = async (
   if (!call) throw new ModelError('media_call', 'Media output has no call ID')
   try {
     return { ...await options.store(bytes, mediaType), call }
-  } catch {
+  } catch (error) {
+    // A store's own refusal, such as having no room, is said as it is.
+    if (error instanceof ModelError) throw error
     throw new ModelError('media_storage', 'Could not persist generated media')
   }
 }

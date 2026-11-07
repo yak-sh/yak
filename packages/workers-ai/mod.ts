@@ -45,7 +45,7 @@ import {
   submitted,
   type Usage,
 } from '@yaks/model'
-import { generatedBytes, type MediaStore } from '@yaks/openai'
+import { generatedBytes, mediaRoom, type MediaStore } from '@yaks/openai'
 import {
   audioPrice,
   music,
@@ -573,7 +573,10 @@ export let workersAi = (
         receipt.id + ':audio',
         options.media,
       )
-    } catch {
+    } catch (error) {
+      if (error instanceof ModelError && error.code != 'media_storage') {
+        throw error
+      }
       throw new ModelError(
         'media_storage',
         'Music storage failed; recover the original call',
@@ -608,6 +611,7 @@ export let workersAi = (
     let sent = music(req.model)
       ? musicInput(req)
       : { ...input(req), ...streams ? { stream: true } : {} }
+    if (music(req.model)) await mediaRoom(options.media)
     await submitted(req)
     let response = await decoded(
       await (music(req.model) ? raw.bind(null, ai) : ai.run.bind(ai))(

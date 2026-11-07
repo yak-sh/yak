@@ -7,7 +7,7 @@ import { test } from '@yaks/testing'
 import { CallError } from '@yaks/tools/errors'
 import { parseHTML } from 'linkedom'
 import { directoryOf, stamp } from './directory.ts'
-import { monthOf } from './meter.ts'
+import { FILES, monthOf } from './meter.ts'
 import type { File } from './operator-channels.ts'
 import { imageNew } from './operator-images.ts'
 import { rows } from './operator-view.ts'
@@ -22,6 +22,15 @@ let usage = {
 }
 
 let p = platform('operator images')
+// Synthetic sizes put a space at its files line without allocating them.
+let occupied = new Map<string, number>()
+let list = p.env.BLOBS.list.bind(p.env.BLOBS)
+p.env.BLOBS.list = async (opts) => {
+  let page = await list(opts)
+  let size = occupied.get(opts?.prefix ?? '')
+  if (size) page.objects.push({ key: opts!.prefix + 'held', size } as never)
+  return page
+}
 let sent: { url: string; body: Record<string, unknown> }[] = []
 let env = {
   ...p.env,
@@ -33,17 +42,23 @@ let env = {
     )
   },
 } as typeof p.env
-let eid = mint()
-await stamp(env, {
-  entities: [{
-    entity: { eid },
-    space: { slug: 'easel-' + eid, store: eid },
-    budget: { dollars: 1 },
-    starter: { dollars: 0 },
-    meter: { month: monthOf(new Date()), models: 0 },
-  }],
-})
-let space = (await directoryOf(env.STORE).at(eid))!
+// A space with a dollar to spend, holding `files` bytes of its free tier's.
+let spaceWith = async (files = 0) => {
+  let eid = mint()
+  occupied.set(eid + '/', files)
+  await stamp(env, {
+    entities: [{
+      entity: { eid },
+      space: { slug: 'easel-' + eid, store: eid },
+      budget: { dollars: 1 },
+      starter: { dollars: 0 },
+      meter: { month: monthOf(new Date()), models: 0, files },
+    }],
+  })
+  return (await directoryOf(env.STORE).at(eid))!
+}
+let space = await spaceWith()
+let eid = space.eid
 let tool = imageNew(env, space)
 let made = await tool.run({
   prompt: 'A yak in gouache',
@@ -82,6 +97,24 @@ test('a prompt or setting the model can correct is refused, not a fault', async 
       size: 'huge',
     }]
   ) await assertRejects(async () => await tool.run(args), CallError)
+})
+
+test('a space whose files are full is told so, and nothing is asked or charged', async () => {
+  // Full before the ask, and filled by the image itself: the second is paid
+  // to OpenAI, but neither is kept or charged to the space.
+  for (let [files, asked] of [[FILES.free, 0], [FILES.free - 10, 1]]) {
+    let full = await spaceWith(files)
+    let before = sent.length
+    let e = await assertRejects(
+      async () =>
+        await imageNew(env, full).run({ prompt: 'A yak', quality: 'low' }),
+      CallError,
+    )
+    assertEquals([e.code, e.message.includes('files')], ['space_full', true])
+    assertEquals(sent.length - before, asked)
+    let after = (await directoryOf(env.STORE).at(full.eid))!
+    assertEquals(after.meter!.models, 0)
+  }
 })
 
 test('the picture a step made is drawn under it, opening the original', () => {
