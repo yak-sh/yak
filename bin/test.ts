@@ -1,9 +1,10 @@
 // Tests run on Deno, with a separate document for the terminal UI. Page
 // behavior runs in process on linkedom. With no paths, the dependency graph
 // selects tests reached by branch and working changes: every test file the
-// change edits, then a changed workspace package, then its nearest consumers,
-// as many as a few seconds hold by what each took as it last ran here; main's CI runs the
-// rest after the push. Cached passes leave out tests already passed unchanged.
+// change edits, then those naming a declaration it edits or one naming it
+// (@yaks/testing/names), then a changed workspace package, then its nearest
+// consumers, as many as a few seconds hold by what each took as it last ran
+// here; main's CI runs the rest after the push. Cached passes leave out tests already passed unchanged.
 // Paths narrow an explicit run.
 // There are no browser or workerd tests. A run whose files reach the Worker's
 // generated files and npm tree makes them current first (`READIES`).
@@ -32,7 +33,7 @@ if (import.meta.main && Deno.args[0] !== '--bulk') {
 let { relative } = await import('node:path')
 let { fileURLToPath } = await import('node:url')
 let { choose } = await import('@yaks/testing/choose')
-let { changes, member } = await import('./test-changes.ts')
+let { changes, edits, member } = await import('./test-changes.ts')
 let { check, format } = await import('./test-checks.ts')
 let { excluded, MADE: GENERATORS, sourceSurvey } = await import(
   './check-types.ts'
@@ -367,8 +368,10 @@ export let chosen = async (
   sources: string[] = [],
   inspect = survey,
   parsed?: ReadonlyMap<string, Examples>,
+  edited?: Record<string, string[]>,
 ) =>
   await choose(files, {
+    edits: edited,
     budget: SECONDS,
     cost: expected((await budget()).tests, took()),
     all,
@@ -401,6 +404,7 @@ export let prepare = async (
   sqlite: string,
   effects = {
     changes,
+    edits,
     format,
     find: (paths: string[]) => discover(paths, PAGES),
     chosen,
@@ -436,6 +440,10 @@ export let prepare = async (
   // with no parent for git to compare it with.
   let all = flags.includes('--all')
   let changedPaths = all ? [] : await effects.changes()
+  // What a whole change edits, which ranks the files naming it
+  // (@yaks/testing/names); a run of named paths is no change's.
+  let edited = all || paths.length ? undefined : effects.edits()
+  void edited?.catch(() => {})
   let changedFiles = await effects.format(changedPaths)
   let snapshot = Promise.withResolvers<Survey | undefined>()
   void snapshot.promise.catch(() => {})
@@ -485,6 +493,7 @@ export let prepare = async (
       changedFiles.filter((f) => /\.[mc]?[jt]sx?$/.test(f) && !excluded(f)),
       inspect,
       parsed,
+      await edited,
     )
     if (!inspected) snapshot.resolve(undefined)
     let imported = reaches(IMPORTED)

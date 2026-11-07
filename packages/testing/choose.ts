@@ -17,6 +17,7 @@ import {
 import type { Examples } from './examples.ts'
 import { tested } from './find.ts'
 import { plan, sweep } from './load.ts'
+import { naming } from './names.ts'
 
 /** What a run chose: the key of each file it was given, those it runs,
  * whether those import any of `paths` (true when the graph could not say),
@@ -35,9 +36,9 @@ export type Chosen = {
 /// let cost = (f: string) => ({ own: 1, near: 1, slow: 5, far: 1 })[f]!
 /// within(['far', 'slow', 'near', 'own'], rank, cost, 3) -> ['far', 'near', 'own']
 /// within(['far', 'slow', 'near', 'own'], rank, cost, 0) -> []
-/** Of `files`, what fits `budget`: the change's own files first (rank 0),
- * then the nearest and cheapest first. A file that does not fit is
- * passed over for a cheaper one behind it. Their order is kept. */
+/** Of `files`, what fits `budget`: the lowest rank first, and the cheapest
+ * first of a rank. A file that does not fit is passed over for a cheaper one
+ * behind it. Their order is kept. */
 export let within = (
   files: string[],
   rank: (file: string) => number,
@@ -67,12 +68,14 @@ export let within = (
  * file reads (./reads.ts), and a pass is kept by that too. `changed` first
  * narrows the files to those reached by these paths, even with no cache.
  * A narrowed run with a `budget` runs each file `changed` names, then what
- * fits the rest of it by what each file is expected to `cost`, the nearest to
- * the change first (./deps.ts `distance`,
- * `within`), and only those a distance reaches unless none is, and counts the
- * rest `beyond`: a run elsewhere with all of its files covers those. Given
- * each path's package (`owner`), the files of a changed package its distance
- * reaches come first, followed by those importing it.
+ * fits the rest of it by what each file is expected to `cost` (`within`):
+ * first the files naming a declaration the change `edits`, or one naming it,
+ * the fewest steps from it first (./names.ts `naming`, reading each file's
+ * `source`), then the nearest to the change (./deps.ts `distance`), and only
+ * those a distance reaches unless none is, and counts the rest `beyond`: a
+ * run elsewhere with all of its files covers those. Given each path's package
+ * (`owner`), the files of a changed package its distance reaches come first,
+ * followed by those importing it.
  * When deno cannot say what a module imports, a narrowed run reports that
  * selection is unavailable; an explicit run has no keys and runs its files.
  */
@@ -89,6 +92,8 @@ export let choose = async (
     budget,
     cost = () => 0,
     owner,
+    edits,
+    source = text,
     inspect = survey,
     parsed,
   }: {
@@ -102,6 +107,8 @@ export let choose = async (
     budget?: number
     cost?: (file: string) => number
     owner?: (path: string) => string | undefined
+    edits?: Record<string, string[]>
+    source?: (path: string) => string | undefined
     inspect?: (paths: string[]) => Promise<Survey | undefined>
     parsed?: ReadonlyMap<string, Examples>
   } = {},
@@ -195,8 +202,19 @@ export let choose = async (
       }
     }
     let far = changed && s.distance(changed, owner)
+    let root = (f: string) => plans.get(f) ?? f
+    let info = changed && edits ? await s.info(run.map(root)) : undefined
+    let named = info && edits
+      ? naming(info, run, edits, source, root)
+      : new Map<string, number>()
+    // A file naming what the change edits comes before every distance, the
+    // fewer steps from it the sooner.
     let rank = (f: string) =>
-      far ? Math.min(far(f), far(plans.get(f) ?? f)) : Infinity
+      named.has(f)
+        ? -1 / (1 + named.get(f)!)
+        : far
+        ? Math.min(far(f), far(root(f)))
+        : Infinity
     let near = run.filter((f) => rank(f) < Infinity)
     // A file the change edits is the change, and runs whatever it costs; the
     // budget left is for the rest of what it reaches.
@@ -224,6 +242,14 @@ export let choose = async (
     await Promise.all(
       [...plans.values()].map((p) => io.remove(p).catch(() => {})),
     )
+  }
+}
+
+let text = (path: string) => {
+  try {
+    return io.readTextFileSync(path)
+  } catch {
+    return undefined
   }
 }
 

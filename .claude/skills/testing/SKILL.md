@@ -41,9 +41,10 @@ ability to see the platform_" (15ce9bf9). He would rather recover than gate
 breaks live, and a failure is fixed forward.
 
 Run `deno task test` without paths on your finished change, then land with
-`yak land`. The command prioritizes tests and README examples of changed packages, then
-their nearest consumers, as many as about six seconds hold by what each file
-took as it last ran here, and checks the
+`yak land`. The command prioritizes the tests and README examples that import
+by name a declaration the change edits (or one whose body names it), then
+those of changed packages, then their nearest consumers, as many as about six
+seconds hold by what each file took as it last ran here, and checks the
 changed files; a package-only run
 can miss a consumer outside that package. Main's CI runs every test after the
 push, and the closing line counts the consumers left to it. There is no

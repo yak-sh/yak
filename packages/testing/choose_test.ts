@@ -18,7 +18,10 @@ let importing = async (tests: string[]) => {
       modules: [
         ...tests.map((f) => ({
           specifier: url(f),
-          dependencies: [{ code: { specifier: url('a.ts') } }],
+          dependencies: [{
+            specifier: './a.ts',
+            code: { specifier: url('a.ts') },
+          }],
         })),
         { specifier: url('a.ts'), dependencies: [] },
       ],
@@ -60,4 +63,26 @@ test('a test file the change edits runs whatever it costs, and what is left of t
   })
   equal(selected.run, ['slow_test.ts', 'b_test.ts'])
   equal(selected.beyond, 1)
+})
+
+test('a file importing a declaration the change edits comes before cheaper files as near', async () => {
+  let files = ['page_test.ts', 'b_test.ts', 'c_test.ts']
+  let s = await importing(files)
+  let source = (f: string) =>
+    ({
+      'page_test.ts': "import { page } from './a.ts'",
+      'b_test.ts': "import { other } from './a.ts'",
+    })[f]
+  let chosen = (edits?: Record<string, string[]>) =>
+    choose(files, {
+      changed: ['a.ts'],
+      all: true,
+      budget: 30,
+      cost: (f) => f == 'page_test.ts' ? 30 : 10,
+      edits,
+      source,
+      inspect: () => Promise.resolve(s),
+    })
+  equal((await chosen()).run, ['b_test.ts', 'c_test.ts'])
+  equal((await chosen({ 'a.ts': ['page'] })).run, ['page_test.ts'])
 })

@@ -50,6 +50,7 @@ let planned = async (args: string[], shallow = false, pass = true) => {
   let selected: { all: boolean; changed?: string[]; sources: string[] }[] = []
   let files = ['a_test.ts', 'a.ts']
   let plan = await prepare(args, '/sqlite.so', {
+    edits: () => Promise.resolve({}),
     changes: () =>
       changes((args) => {
         git.push(args)
@@ -116,6 +117,7 @@ let named = async (args: string[]) => {
   let found: string[][] = []
   let by: { files: string[]; changed?: string[] }[] = []
   await prepare(args, '/sqlite.so', {
+    edits: () => Promise.resolve({}),
     changes: () => Promise.resolve(['c.ts']),
     format: (paths) => Promise.resolve(paths),
     find: (paths) => {
@@ -164,6 +166,7 @@ let readied = async (
   let made: boolean[] = []
   let order: string[] = []
   let plan = await prepare([], '/sqlite.so', {
+    edits: () => Promise.resolve({}),
     changes: () => Promise.resolve(['worker.ts', 'guide.md']),
     format: (files) => Promise.resolve(files),
     find: () => Promise.resolve({ tests: ['a_test.ts'], pages: [] }),
@@ -220,6 +223,7 @@ test('planning and readiness failures settle source jobs waiting for their impor
     let settled = false
     await throws(() =>
       prepare([], '/sqlite.so', {
+        edits: () => Promise.resolve({}),
         changes: () => Promise.resolve(['worker.ts']),
         format: (files) => Promise.resolve(files),
         find: () => Promise.resolve({ tests: ['a_test.ts'], pages: [] }),
@@ -256,6 +260,7 @@ test('source planning and selection consume one command snapshot', async () => {
   let checked: unknown
   let chosen: unknown
   let result = await prepare([], '/sqlite.so', {
+    edits: () => Promise.resolve({}),
     changes: () => Promise.resolve(['a.ts']),
     format: (paths) => Promise.resolve(paths),
     find: () => Promise.resolve({ tests: ['a_test.ts'], pages: [] }),
@@ -289,6 +294,7 @@ test('selection receives the example snapshot from the same discovery', async ()
   let parsed = new Map([['guide.md', { fenced: [], lines: [] }]])
   let received: unknown
   let result = await prepare(['--all'], '/sqlite.so', {
+    edits: () => Promise.resolve({}),
     changes: () => Promise.resolve([]),
     format: (paths) => Promise.resolve(paths),
     find: () => Promise.resolve({ tests: [], pages: ['guide.md'], parsed }),

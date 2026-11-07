@@ -35,17 +35,18 @@ suite('sum', ({ it, equal }) => {
 ```
 
 From this repository, `deno task test` selects tests through the dependency
-graph, including consumers and examples, the nearest to the change first, as
-many as about eight seconds hold. The rest of its consumers run in main CI after
-the push, and the closing line counts them. It applies formatting to changed
-files, lints changed code, checks the public API of each changed package for
-slow types, and checks the types of the modules a change reaches, those changed,
-those importing one, and those of their package importing one however far, with
-their doc comment examples (`deno task check:types` alone); main CI checks every
-module after the push (`--all`). Paths and tags narrow a run while iterating;
-the finished change uses the no-path command to include its consumers. Tests run
-in process; page behavior uses linkedom, and terminal behavior uses @yaks/tui's
-`lay`. There are no browser tests or slow platform tier.
+graph, including consumers and examples, those naming what the change edits
+first, then the nearest to it, as many as about six seconds hold. The rest of
+its consumers run in main CI after the push, and the closing line counts them.
+It applies formatting to changed files, lints changed code, checks the public
+API of each changed package for slow types, and checks the types of the modules
+a change reaches, those changed, those importing one, and those of their package
+importing one however far, with their doc comment examples
+(`deno task check:types` alone); main CI checks every module after the push
+(`--all`). Paths and tags narrow a run while iterating; the finished change uses
+the no-path command to include its consumers. Tests run in process; page
+behavior uses linkedom, and terminal behavior uses @yaks/tui's `lay`. There are
+no browser tests or slow platform tier.
 
 ## Exports
 
@@ -333,7 +334,13 @@ file given runs.
 
 `choose` given a `budget` and what each file is expected to `cost` keeps a
 narrowed run to it. A file the change edits always runs, whatever it costs, and
-the rest fill what it leaves of the budget. A file's rank is its **distance**:
+the rest fill what it leaves of the budget. Given what the change `edits` (the
+top-level declaration holding each edited line, `declared`), the files naming
+one come first: those importing it by name, directly or from a module
+re-exporting it, then those naming a declaration whose body names it, up to
+`STEPS` such steps (./names.ts `naming`). A kernel test reaching an edited page
+only through the platform it composes names nothing, so a test calling the
+edited function runs before it. Every other file's rank is its **distance**:
 imports from a changed module to the file, never through a module that loads
 more than `WIDE` others. Such a module composes a platform, so nearly every
 change reaches its importers and that path says nothing about them. Given each
