@@ -64,8 +64,18 @@ export let declarations = (
     {
       callbacks: { cli: ['run'] },
       // A plugin found where the loader finds it: an installed `yak` names
-      // its packages at its own release on JSR (./config.ts `located`).
-      resolve: (specifier) => import.meta.resolve(located(specifier)),
+      // its packages at its own release on JSR (./config.ts `located`). The
+      // loader is asked once for a module it finds, which is nearly every
+      // one, and a miss tells `located` why.
+      resolve: (specifier) => {
+        try {
+          return import.meta.resolve(specifier)
+        } catch (error) {
+          return import.meta.resolve(located(specifier, () => {
+            throw error
+          }))
+        }
+      },
     },
   )
   held.set(key, made)
