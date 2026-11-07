@@ -365,6 +365,7 @@ import {
   tallying,
   waited,
 } from './lib/hops.ts'
+import { once, timed } from './lib/stage.ts'
 import { headed } from './timing.ts'
 import {
   batch,
@@ -1061,7 +1062,7 @@ export class Store {
     }
   }
 
-  #started: Promise<void> | null = null
+  #started = once()
   #startedDormant = false
   #facets = new Map<string, Prepared>()
   #facetsLoading = new Map<string, Promise<void>>()
@@ -1071,54 +1072,41 @@ export class Store {
   #expires: Expiry | undefined
 
   #ensureStarted(request?: Request): Promise<void> {
-    return this.#started ??= tallying(this.#pending, async () => {
-      this.#starting = true
-      try {
-        await this.#stage(
-          'start',
-          () => this.#maintenance(() => this.#start(request)),
-        )
-      } catch (e) {
-        this.#failed(e)
-      } finally {
-        this.#starting = false
-      }
-    })
+    return this.#started.run(() =>
+      tallying(this.#pending, async () => {
+        try {
+          await this.#stage(
+            'start',
+            () => this.#maintenance(() => this.#start(request)),
+          )
+        } catch (e) {
+          this.#failed(e)
+        }
+      })
+    )
   }
 
-  // Whether a start is under way, holding every request that arrives.
-  #starting = false
-
-  // A start, a settle or a replay holds whatever arrives behind it, and is the
-  // first suspect when a store answers slowly: a directory once stalled 41 s
-  // after Cloudflare moved it and nothing said what its new instance was doing
-  // (T-131928). Each is a phase of the store's trace (store_trace), and one
-  // that took a second or more says so in the Workers log too, where a run
-  // nobody traced is still seen. `log` is off for a settle, whose time is its
-  // replay's, already logged.
-  async #stage<T>(
+  // A start, a settle or a replay (lib/stage.ts) is a phase of the store's
+  // trace (store_trace), and one that took a second or more says so in the
+  // Workers log too, where a run nobody traced is still seen. `log` is off for
+  // a settle, whose time is its replay's, already logged.
+  #stage<T>(
     name: 'start' | 'settle' | 'replay',
     work: () => Promise<T>,
     log = true,
   ): Promise<T> {
-    let at = this.#now()
-    try {
-      return await during(
+    let traced = () =>
+      during(
         peek(this)?.begin({ kind: 'phase', name, package: 'workers/yak' }),
         work,
       )
-    } finally {
-      let ms = this.#now() - at
-      if (log && ms >= Store.SLOW) {
-        console.log(
-          'yak store slow',
-          JSON.stringify({ store: this.#name(), [name]: ms }),
-        )
-      }
-    }
+    if (!log) return traced()
+    return timed(this.#now, traced, (ms) =>
+      console.log(
+        'yak store slow',
+        JSON.stringify({ store: this.#name(), [name]: ms }),
+      ))
   }
-
-  static SLOW = 1000
 
   #prepare(name: string): Promise<void> {
     let kind = storeKind(name)
@@ -2907,9 +2895,9 @@ export class Store {
       // A trace is a report, so storage gone under the run costs the sample,
       // never the run's own answer or error.
       let space = request?.headers.get('x-yak-space') ??
-        (this.#started ? this.#said('space') : null)
+        (this.#started.ran ? this.#said('space') : null)
       let app = request?.headers.get('x-yak-app') ??
-        (this.#started ? this.#said('app') : null)
+        (this.#started.ran ? this.#said('app') : null)
       if (space) {
         let rows = sampleRequest(captured.spans, {
           origin,
@@ -3893,7 +3881,7 @@ export class Store {
     // object's plugins load while its storage opens (`#awake`): an isolate
     // that never ran them evaluates their modules then, and nothing in that
     // touches storage, so a dormant object loses nothing but the CPU.
-    let waking = !this.#started || this.#starting, woke = this.#now()
+    let waking = this.#started.holds, woke = this.#now()
     let named = request.headers.get('x-store')
     if (waking && named) this.#prepare(named).catch(() => {})
     // A caller on a later deploy restarts this object, so a door the deploy
@@ -3936,8 +3924,8 @@ export class Store {
         start: async () => {
           // Maintenance skipped ordinary recovery and runtime attachment.
           // Finish an in-flight boot, then establish the active runtime.
-          await this.#started
-          if (this.#startedDormant) this.#started = null
+          await this.#started.ran
+          if (this.#startedDormant) this.#started.forget()
           await this.#ensureStarted()
           return this.#refused ? this.#stalled() : undefined
         },
