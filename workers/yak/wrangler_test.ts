@@ -1070,6 +1070,14 @@ test('a changed module, asset, config, flag or executor uploads; a source map or
   ])
 })
 
+test("a long subject is cut so the message keeps its digest within Cloudflare's 1,000 characters", async () => {
+  let long = await kernelDeploy('c'.repeat(2000))
+  let message = long[long.indexOf('--message') + 1]
+  assertEquals(message.length, 1000)
+  assert(message.endsWith(`\n${made.split('\n')[1]}`), message)
+  assertEquals((await kernelDeploy('b', message))[0], 'versions')
+})
+
 test('a dry run uploads as asked', async () => {
   let args = await kernelDeploy('b', made, { flags: ['--dry-run'] })
   assertEquals(args.at(-3), 'b')

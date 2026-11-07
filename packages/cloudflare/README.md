@@ -32,7 +32,9 @@ repository's.
   `cloudflare api failed` fault whichever endpoint met Cloudflare's outage;
   `retried(args, execute, {attempts?})` runs a step again with backoff while
   that outage lasts. `versionMessage(commit, began)` and `beganIn(message)`
-  write and read the `began:` line a deploy door leaves on a version.
+  write and read the `began:` line a deploy door leaves on a version;
+  `noted(message, ...lines)` adds lines, cutting the subject so that every line
+  fits the 1,000 characters (`MESSAGE`) Cloudflare keeps of a message.
 
 ```ts
 import { accountUrl, failure, Unavailable } from '@yaks/cloudflare/api'

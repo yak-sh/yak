@@ -132,13 +132,29 @@ export let retried = async <T extends StepResult>(
   }
 }
 
+/** How much of a version's or deployment's message Cloudflare keeps: past it
+ * the message is cut to its first 997 characters and `...`. */
+export let MESSAGE = 1000
+
+/// noted('a subject\nbegan:0', 'inputs:1') -> 'a subject\nbegan:0\ninputs:1'
+/// noted('a'.repeat(2000), 'inputs:1').length -> 1000
+/// noted('a'.repeat(2000), 'inputs:1').endsWith('a…\ninputs:1') -> true
+/** A message with `lines` after its own, its first line (a commit and its
+ * subject) cut short so that every line after it fits in {@link MESSAGE}. */
+export let noted = (message: string, ...lines: string[]) => {
+  let [first, ...rest] = message.split('\n')
+  let tail = [...rest, ...lines].map((line) => `\n${line}`).join('')
+  let room = MESSAGE - tail.length
+  return (first.length > room ? first.slice(0, room - 1) + '…' : first) + tail
+}
+
 /// beganIn(versionMessage('739f56b25cae820c8541a8b4a1ade2f7a6c7e9be A subject', new Date(0))) -> 0
+/// beganIn(versionMessage('739f56b25cae820c8541a8b4a1ade2f7a6c7e9be ' + 'a'.repeat(1000), new Date(0))) -> 0
 /// beganIn('739f56b25cae820c8541a8b4a1ade2f7a6c7e9be A subject') -> undefined
 /** A version's message: its commit and subject, then when the deploy door
- * began the deploy that made it. Cloudflare cuts a deployment's copy to 50
- * characters, so the `began:` line lives on the version alone. */
+ * began the deploy that made it. */
 export let versionMessage = (commit: string, began: Date) =>
-  `${commit}\nbegan:${began.toISOString()}`
+  noted(commit, `began:${began.toISOString()}`)
 
 /** When the deploy door began the deploy that made a version (ms), as its
  * message's `began:` line says; a version deployed before the line, nothing. */

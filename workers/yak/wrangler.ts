@@ -25,6 +25,7 @@ import { from as sources, plan } from './sheet-assets.ts'
 import { once, sleep } from '@yaks/fp'
 import {
   command,
+  noted,
   retried,
   type StepResult,
   versionMessage,
@@ -561,7 +562,7 @@ export let kernelStep = async (
     argv,
     files,
   )
-  let message = `${argv[said + 1]}\ninputs:${digest}`
+  let message = noted(argv[said + 1], `inputs:${digest}`)
   let deployments = await serving
   if (
     await sameServing(
