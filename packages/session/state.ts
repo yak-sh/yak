@@ -70,6 +70,12 @@ let KINDS: [string, Kind][] = [
   ['interrupted', 'interrupted'],
 ]
 
+/** The components that make an entry a kind ranked before `kind`
+ * ({@link kindOf}), whatever else it carries: a stop naming the request it
+ * answers (`ask.through`) is a stop, not an ask. */
+export let outranking = (kind: Kind): string[] =>
+  KINDS.slice(0, KINDS.findIndex(([, k]) => k == kind)).map(([c]) => c)
+
 let content = (b: Bundle) => b[CONTENT] as Comp | undefined
 
 /** The ask an entry's prose came from, when a model returned it. */

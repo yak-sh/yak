@@ -113,9 +113,12 @@ let bootstrap = (() => {
 })()
 
 /** A store holding two people, two runs and two pages, with nothing locked
- * yet. */
-export let store = (): Storage => {
-  let s = ram(pages, { number: true, computed })
+ * yet; `status`, deriving each session's `session.status` as a database does. */
+export let store = ({ status = false } = {}): Storage => {
+  let s = ram(pages, {
+    number: true,
+    computed: status ? { ...computed, ...statusComputed } : computed,
+  })
   s.tx((tx) => tx.patch(bootstrap))
   return s
 }
@@ -181,3 +184,31 @@ export let transcriptGraph = (vocab: Vocab): Graph => {
   }
   return g
 }
+
+/** Entities what follows brings back through a graph's doors, a read's and a
+ * get's: how much of a transcript a reading reads. */
+export let counting = (g: Graph): () => number => {
+  let rows = 0
+  for (let door of ['read', 'get'] as const) {
+    let through = g[door].bind(g) as (...a: unknown[]) => Promise<unknown[]>
+    ;(g as unknown as Record<string, unknown>)[door] = async (
+      ...a: unknown[]
+    ) => {
+      let got = await through(...a)
+      rows += got.length
+      if (Deno.env.get('TRACE_ROWS')) {
+        console.error('ROWS', door, got.length, String(a[0]).slice(0, 160))
+      }
+      return got
+    }
+  }
+  return () => rows
+}
+
+/** `n` lines of words for a transcript to hold, from `seq` on. */
+export let filler = (session: string, n: number, seq = 1): Bundle[] =>
+  Array.from({ length: n }, (_, i) => ({
+    entity: { eid: `${session}-line-${seq + i}` },
+    entry: { session, seq: seq + i },
+    content: { body: 'a line' },
+  }))

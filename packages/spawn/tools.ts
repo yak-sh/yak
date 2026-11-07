@@ -32,20 +32,23 @@ import {
   carrying,
   CONTENT,
   ENTRY,
+  entryStatus,
   handing,
+  latestRequest,
   ordered,
   OUTPUT,
   parkedLine,
+  receiptOf,
+  seqOf,
   SESSION,
   sessionFor,
   sessionViews,
-  statusOf,
-  usingBefore,
+  usingOf,
 } from '@yaks/session'
 import { render } from '@yaks/text'
 import { CallError } from '@yaks/tools/errors'
 import { changes } from '@yaks/session/wait'
-import { requestOf, spelling } from './run.ts'
+import { spelling } from './run.ts'
 import { reportOf } from './completion.ts'
 
 /** What config can set for these tools. */
@@ -110,11 +113,6 @@ export let every = (said: unknown, dflt: number): number => {
 let one = async (g: Graph, eid: string): Promise<Bundle | undefined> =>
   (await g.get([eid]))[0]
 
-let entriesOf = async (graph: Graph, session: string): Promise<Bundle[]> =>
-  ordered(
-    await graph.read(`.${ENTRY}.session=${JSON.stringify(session)}&*`),
-  )
-
 let recent = async (graph: Graph, session: string, limit: number) =>
   ordered(
     await graph.read(
@@ -147,21 +145,23 @@ export let briefOf = reportOf
 // A run is over when whatever is behind it is over. A provider that prints its
 // final event and then lingers has a `stop` entry and is still running, so a
 // managed request also waits for the final import receipt.
-let over = (row: Bundle | undefined, entries: Bundle[]): boolean => {
-  if (!row?.[PROCESS]) return ENDED.has(statusOf(entries))
+let over = async (
+  graph: Graph,
+  row: Bundle,
+  status: string,
+): Promise<boolean> => {
+  if (!row[PROCESS]) return ENDED.has(status)
   if (comp(row, EXIT) == null) return false
-  let request = entries.filter(requestOf).at(-1)
-  return !request || entries.some((b) =>
-    b.stop && !b.lines &&
-    comp(b, 'ask')?.through == request.entity.eid &&
-    Number(comp(b, ENTRY)?.seq) > Number(comp(request, ENTRY)?.seq)
-  )
+  let request = await latestRequest(graph, row.entity.eid)
+  if (!request) return true
+  let receipt = await receiptOf(graph, row.entity.eid, request.entity.eid)
+  return !!receipt && seqOf(receipt) > seqOf(request)
 }
 
 // Before final import receipts existed, an ended run's log was removed only
 // after import. Those historical transcripts remain waitable after cleanup.
-let cleaned = async (graph: Graph, row: Bundle, entries: Bundle[]) => {
-  if (!row.process || !row.exit || !ENDED.has(statusOf(entries))) return false
+let cleaned = async (graph: Graph, row: Bundle, status: string) => {
+  if (!row.process || !row.exit || !ENDED.has(status)) return false
   let file = comp(row, SESSION)?.transcript
   if (!file) return false
   let [source] = await graph.get([String(file)], ['file'])
@@ -193,14 +193,13 @@ export let runs = (host: Host, options: Options = {}): Runs => {
   let ending = async (
     graph: Graph,
     row: Bundle,
-    entries: Bundle[],
+    status: string,
   ): Promise<string> => {
     let code = comp(row, EXIT)?.code
-    let stands = await parkedLine(graph, row.entity.eid, row) ??
-      statusOf(entries)
+    let stands = await parkedLine(graph, row.entity.eid, row) ?? status
     let head = `${human(graph.vocab)(row)} — ${stands}` +
       (code == null ? '' : `, exited ${code}`)
-    return [head, briefOf(row, entries)].filter(Boolean).join('\n')
+    return [head, await briefOf(graph, row)].filter(Boolean).join('\n')
   }
 
   // Re-read only when the committed revision changes, until the run is over,
@@ -220,13 +219,13 @@ export let runs = (host: Host, options: Options = {}): Runs => {
       })
     ) {
       let row = (await one(graph, session))!
-      let entries = await entriesOf(graph, session)
-      if (over(row, entries) || await cleaned(graph, row, entries)) {
-        return await ending(graph, row, entries)
+      let status = await entryStatus(graph, session)
+      if (
+        await over(graph, row, status) || await cleaned(graph, row, status)
+      ) {
+        return await ending(graph, row, status)
       }
-      let still = `${human(graph.vocab)(row)} — ${
-        statusOf(entries)
-      }, still running`
+      let still = `${human(graph.vocab)(row)} — ${status}, still running`
       if (host.stopping?.aborted) {
         return `${still}; this server is stopping, so wait again`
       }
@@ -380,11 +379,11 @@ export let runs = (host: Host, options: Options = {}): Runs => {
       if (row.stop) return [said(call, `${name} already asked to stop`)]
       let managed = !!row[PROCESS]
       if (!managed) {
-        let entries = await entriesOf(graph, row.entity.eid)
-        if (statusOf(entries) == 'stopped') {
+        if (await entryStatus(graph, row.entity.eid) == 'stopped') {
           return [said(call, `${name} already stopped`)]
         }
-        let provider = await one(graph, str(usingBefore(entries)?.provider))
+        let using = await usingOf(graph, row.entity.eid)
+        let provider = await one(graph, str(using?.provider))
         managed = !row.native &&
           comp(provider, 'provider')?.transport == 'process'
       }
@@ -402,7 +401,7 @@ export let runs = (host: Host, options: Options = {}): Runs => {
       let shown = await recent(graph, row.entity.eid, lines(args.lines))
       let status = await parkedLine(graph, row.entity.eid, row) ??
         (str(comp(row, SESSION)?.status) ||
-          statusOf(await entriesOf(graph, row.entity.eid)))
+          await entryStatus(graph, row.entity.eid))
       return [said(
         call,
         [

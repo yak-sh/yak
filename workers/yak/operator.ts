@@ -18,6 +18,7 @@ import {
   type Tool,
   transcript,
   transcriptBack,
+  transcriptWindow,
 } from '@yaks/session'
 import { derivedEid } from '@yaks/graph/identity'
 import { LIMIT } from '@yaks/session/status'
@@ -453,7 +454,7 @@ export let readOperator = async (
   let [row] = await g.get([task])
   // A conversation is its session: its newest lines, as a task's are read.
   if (row?.session) {
-    let entries = (await transcript(g, task)).slice(-LINES)
+    let { entries } = await transcriptWindow(g, task, { limit: LINES })
     return { sessions: [row], entries: sent(entries, context) }
   }
   if (!row?.task) throw refuse('missing', `no operator task ${task}`)

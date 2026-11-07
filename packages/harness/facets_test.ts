@@ -11,7 +11,6 @@ import {
   argsOf,
   type Bundle,
   type Comp,
-  type Graph,
   mint,
   namedTool,
   offered,
@@ -28,6 +27,7 @@ import { runs } from './runs.ts'
 import { HARNESS } from './default.ts'
 import { docs } from './vocab.ts'
 import { at, harness, working } from './testing.ts'
+import { counting } from '../session/testing.ts'
 
 let reads = { file: () => '', stdin: () => '' }
 
@@ -291,22 +291,6 @@ test('a follow-up to a finished spawned session goes on with its provider and mo
   }
 })
 
-// Entities what follows brings back through the graph's doors.
-let counted = (g: Graph) => {
-  let rows = 0
-  for (let door of ['read', 'get'] as const) {
-    let through = g[door].bind(g) as (...a: unknown[]) => Promise<unknown[]>
-    ;(g as unknown as Record<string, unknown>)[door] = async (
-      ...a: unknown[]
-    ) => {
-      let got = await through(...a)
-      rows += got.length
-      return got
-    }
-  }
-  return () => rows
-}
-
 test('a follow-up to a long transcript reads its newest lines, not all of them', async () => {
   let { h, s, claude, opus, send } = await finished()
   try {
@@ -318,7 +302,7 @@ test('a follow-up to a long transcript reads its newest lines, not all of them',
       })),
       { trusted: true },
     )
-    let rows = counted(h.g)
+    let rows = counting(h.g)
     let kept = { provider: claude, model: opus, effort: 'high' }
     assertEquals(await send({}), kept)
     assert(rows() < 30, `read ${rows()} rows`)

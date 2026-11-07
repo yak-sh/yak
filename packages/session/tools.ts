@@ -42,8 +42,9 @@
 // in. One that has been waiting for hours means the runner died mid-turn, or
 // the answer came back to a process that was gone — the transcript just stops,
 // and nothing anywhere reports it. Both checks read the same rule everything
-// else reads, ./status.ts `statusOf` over the entries, rather than a second
-// copy of it.
+// else reads, ./status.ts, rather than a second copy of it, and neither reads a
+// transcript whole: a status reads its newest part (./reach.ts), and a stall
+// the newest line of each transcript owing something.
 
 import type { Bundle, Comp, Graph } from '@yaks/graph'
 import { argsOf, who } from '@yaks/graph/call'
@@ -51,15 +52,15 @@ import { Refused } from '@yaks/graph/errors'
 import { TOMBSTONE } from '@yaks/graph/bundle'
 import type { Runs } from '@yaks/graph/tools'
 import { human } from '@yaks/id'
-import { and, eq, every, present } from '@yaks/query'
+import { and, every, present } from '@yaks/query'
 import type { Finding } from '@yaks/tools'
 import { checked } from '@yaks/tools/check'
 import { valued } from '@yaks/tools/value'
 import type { Vocab } from '@yaks/vocab'
 import { CLAIM, SESSION } from './comp.ts'
 import { sessionFor, spawning } from './who.ts'
-import { ENTRY } from './native.ts'
-import { marksOf, ordered, statusOf } from './state.ts'
+import { marksOf } from './state.ts'
+import { entryStatus, newestOf } from './reach.ts'
 import { promptContext, promptHook } from './prompt.ts'
 import type { Options as Reading } from './service.ts'
 import { listen } from './listen.ts'
@@ -73,6 +74,8 @@ export type Options = Reading & {
 }
 
 let HOURS = 2
+// What a transcript owes while it stalls: a turn, or an answer.
+let OWING = 'pending,running'
 
 // A run nothing will resume. `settled` is left out on purpose: it means
 // nothing is outstanding, not that the session is over.
@@ -148,11 +151,6 @@ let briefed = (eid: string, text: unknown): Bundle => ({
 
 /** The session a lock names. */
 let holderOf = (b: Bundle): string => str(comp(b, CLAIM).session)
-
-// One transcript's entries. Few sessions hold a lock, so this is queried per
-// holder rather than by reading every entry in the graph.
-let transcript = (graph: Pick<Graph, 'read'>, session: string) =>
-  graph.read(and(eq(`${ENTRY}.session`, session), every()))
 
 // When an entry was written, as the kernel stamps it. A graph that stamps
 // nothing has no timestamp to judge a stall by, which the check reports rather
@@ -401,9 +399,8 @@ export let runs = (
     )
     let over = new Map<string, string>()
     for (let eid of held.keys()) {
-      let marks = marksOf(held.get(eid))
-      let mark = marks.ended
-      let state = statusOf(await transcript(graph, eid), marks)
+      let mark = marksOf(held.get(eid)).ended
+      let state = await entryStatus(graph, eid)
       if (ENDED.includes(state)) over.set(eid, state)
       else if (mark) over.set(eid, 'ended')
     }
@@ -437,32 +434,23 @@ export let runs = (
     let id = human(host.vocab)
     let hours = options.hours ?? HOURS
     let cutoff = Date.now() - hours * 3_600_000
-    let sessions = await graph.read(and(present(SESSION), every()))
-    if (!sessions.length) {
-      return checked(call.entity.eid, 'no transcript has stalled', [])
-    }
-    // One read of the entries, grouped here: a transcript is only readable as
-    // a whole, and asking per session would be one query per session.
-    let lines = new Map<string, Bundle[]>()
-    let stamped = false
-    for (let b of await graph.read(and(present(ENTRY), every()))) {
-      let of = str(comp(b, ENTRY).session)
-      lines.set(of, [...lines.get(of) ?? [], b])
-      if (!isNaN(writtenAt(b))) stamped = true
-    }
-    if (!stamped) {
+    // The transcripts owing something, by their status (./status.ts, the
+    // rule everything reads), and the newest line of each alone: when it was
+    // written.
+    let owing = await graph.read(`.${SESSION}.status=${OWING}&*`)
+    let newest = await Promise.all(
+      owing.map((s) => newestOf(graph, s.entity.eid)),
+    )
+    if (owing.length && newest.every((b) => !b || isNaN(writtenAt(b)))) {
       return checked(call.entity.eid, 'no transcript has stalled', [{
         level: 'warn',
         text: 'this graph stamps no time on an entry, so a transcript that ' +
           'stalled cannot be told from one that is merely quiet — UNVERIFIED',
       }])
     }
-    let found = sessions.flatMap((s): Finding[] => {
-      let entries = lines.get(s.entity.eid) ?? []
-      let state = statusOf(entries, marksOf(s))
-      if (state != 'pending' && state != 'running') return []
-      let newest = ordered(entries).at(-1)
-      let at = newest ? writtenAt(newest) : NaN
+    let found = owing.flatMap((s, i): Finding[] => {
+      let state = str(comp(s, SESSION).status)
+      let at = newest[i] ? writtenAt(newest[i]) : NaN
       if (isNaN(at) || at > cutoff) return []
       return [{
         level: 'warn',

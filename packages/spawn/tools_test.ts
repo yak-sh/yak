@@ -42,7 +42,7 @@ import {
 import { processDoc, processes } from '@yaks/process'
 import { every, runs } from './tools.ts'
 import { spawnDoc } from './vocab.ts'
-import { transcriptGraph } from '../session/testing.ts'
+import { counting, filler, transcriptGraph } from '../session/testing.ts'
 
 let comp = (b: Bundle | undefined, name: string) =>
   (b?.[name] ?? undefined) as Comp | undefined
@@ -548,6 +548,50 @@ test('a transcript-only wait returns when its output settles', async () => {
   assertStringIncludes(said, 'all done')
   assert(!said.includes('still running'))
 })
+
+// A run asked of a provider, whose transcript holds two hundred lines before
+// its request; `ended`, a managed one whose process exited and whose final
+// import receipt is in.
+let long = async (ended: boolean) => {
+  let { g } = host()
+  let line = (seq: number, eid: string, comps: object) => ({
+    entity: { eid },
+    entry: { session: 's', seq },
+    ...comps,
+  })
+  await g.apply([
+    ...shelf,
+    {
+      entity: { eid: 's' },
+      session: {},
+      ...ended ? { process: { pid: 1 }, exit: { code: 0 } } : {},
+    },
+    ...filler('s', 200),
+    line(201, 'in', { content: { body: 'work' }, using: { provider: P } }),
+    line(202, 'said', {
+      content: { body: 'Fixed it' },
+      output: { source: 's' },
+    }),
+    ...ended ? [line(203, 'end', { ask: { through: 'in' }, stop: {} })] : [],
+  ])
+  return g
+}
+
+for (
+  let [name, ended, tool, says] of [
+    ['a wait on an ended run', true, 'session_wait', 'exited 0'],
+    ['a stop', false, 'session_stop', 'asked to stop'],
+  ] as const
+) {
+  test(`${name} with a long transcript reads its newest lines, not all of them`, async () => {
+    let g = await long(ended)
+    let read = counting(g)
+    let said = body(await tools[tool]!(...asked(g, { session: 's' })))
+    assertStringIncludes(said, says)
+    if (ended) assertStringIncludes(said, 'Fixed it')
+    assert(read() < 100, `read ${read()} rows`)
+  })
+}
 
 test('a wait answers "still running" rather than killing anything', async () => {
   let { g } = host()

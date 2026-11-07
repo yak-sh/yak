@@ -506,7 +506,11 @@ checkpoint nor window is its own context, and its turn reads it all. A runner
 reads a step's transcript once a pass (`reading()`): its checks before the step
 (a stop, a cancelled task, an answered call) judge the reading that `react()`
 then acts on, unless a line has landed since. `usingOf()` and `openOf()` ask for
-the model selection in force and the calls no result answers alone.
+the model selection in force and the calls no result answers alone, and so do
+`entryStatus()` for the status, `newestOf()` for the newest line, `saidOf()` for
+what a transcript said last, `firstInput()` for what it was first told,
+`firstRequest()` and `latestRequest()` for the line a run was started with and
+the one it goes on with, and `receiptOf()` for the stop that says a run ended.
 `transcriptWindow()` reads a bounded page for user interfaces:
 
 ```ts

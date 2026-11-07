@@ -57,8 +57,12 @@ import { edgeEid } from '@yaks/edge'
 import {
   CLAIM,
   cleanEnd,
+  firstInput,
+  firstRequest,
+  latestRequest,
   parked,
   type Reader,
+  receiptOf,
   requested,
   rouse,
   SESSION,
@@ -268,8 +272,7 @@ export let asked = async (
 ): Promise<Asked | null> => {
   let [owner] = await g.get([session])
   if (owner?.native) return null
-  let entries = await g.read(`.entry.session=${session}&.order=entry.seq&*`)
-  let request = entries.find(requestOf)
+  let request = await firstRequest(g, session)
   if (!request) return null
   let using = comp(request, 'using')!
   if (!using.provider) return null
@@ -294,10 +297,8 @@ export let asked = async (
   }
   // The instruction is the prose the request came with; a request stated on an
   // entry of its own takes the transcript's first input instead.
-  let input = entries.find((b) =>
-    b.content && !b.output && !b.lines && !b.notice
-  )
-  let said = comp(request, 'content') ?? comp(input, 'content')
+  let said = comp(request, 'content') ??
+    comp(await firstInput(g, session), 'content')
   return {
     provider: name,
     session,
@@ -657,9 +658,7 @@ let onward = async (
 let readOn = async (g: Graph, session: string, o: Opts): Promise<void> => {
   let job = await asked(g, session).catch(() => null)
   let adapter = job && (o.adapters ?? known)[job.provider]
-  let [request] = await g.read(
-    `.entry.session=${session}&.using&!ask&.order=-entry.seq&.limit=1`,
-  )
+  let request = await latestRequest(g, session)
   if (job && adapter) {
     let ask = { ...job.ask, through: request?.entity.eid ?? job.ask.through }
     follow(g, session, answering(adapter.read, ask), o, {
@@ -816,13 +815,9 @@ let ended = async (
   o: Opts,
   through?: string,
 ): Promise<void> => {
-  let newest = async (q: string) =>
-    (await g.read(
-      `.entry.session=${session}&${q}&.order=-entry.seq&.limit=1`,
-    ))[0]
   let [stop, request] = await Promise.all([
-    newest('.stop !lines .ask.through'),
-    through ? one(g, through) : newest('.using&!ask'),
+    receiptOf(g, session),
+    through ? one(g, through) : latestRequest(g, session),
   ])
   let seq = (b?: Bundle) => Number(comp(b, 'entry')?.seq ?? 0)
   if (stop && seq(stop) > seq(request)) return

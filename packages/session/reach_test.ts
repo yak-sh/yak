@@ -3,13 +3,7 @@
 
 import { test } from '@yaks/testing'
 import { assertEquals } from '@std/assert'
-import {
-  type Bundle,
-  type Comp,
-  type Graph,
-  graph,
-  identityEid,
-} from '@yaks/graph'
+import { type Bundle, type Comp, graph, identityEid } from '@yaks/graph'
 import { toolEid } from '@yaks/tools'
 import { ram } from '@yaks/ram'
 import { storage } from '@yaks/sqlite'
@@ -28,6 +22,7 @@ import { askingOf, context, lines, recent } from './compact.ts'
 import { sessions } from './plugin.ts'
 import { openOf, reach, usingOf } from './reach.ts'
 import { transcript } from './react.ts'
+import { counting, filler } from './testing.ts'
 import {
   newestAsk,
   openCalls,
@@ -224,23 +219,6 @@ for (let forked of [false, true]) {
   }
 }
 
-// Entities a reading brings back, counted at the graph's door: a read's, and
-// a get's of the rows a query named.
-let counting = (g: Graph) => {
-  let rows = 0
-  for (let door of ['read', 'get'] as const) {
-    let through = g[door].bind(g) as (...a: unknown[]) => Promise<unknown[]>
-    ;(g as unknown as Record<string, unknown>)[door] = async (
-      ...a: unknown[]
-    ) => {
-      let got = await through(...a)
-      rows += got.length
-      return got
-    }
-  }
-  return () => rows
-}
-
 // Four hundred lines of turns, then a window or a checkpoint that bounds what
 // a model is sent and a line that owes it a turn; or neither, and settled,
 // where a turn would be sent all of it.
@@ -308,6 +286,35 @@ for (let bound of ['window', 'checkpoint', 'neither'] as const) {
     assertEquals(statusRows < 120, true)
   })
 }
+
+// A run's transcript as @yaks/spawn leaves one: lines before its request, and
+// a stop that names the request it answers (`ask.through`), which is a stop,
+// not an ask, so no ask bounds the reading.
+let receipted = await (async () => {
+  let g = await world([
+    { entity: { eid: 's' }, session: {} },
+    ...filler('s', 200),
+    {
+      entity: { eid: 'in' },
+      entry: { session: 's', seq: 201 },
+      content: { body: 'work' },
+      using: { model: M },
+    },
+    {
+      entity: { eid: 'end' },
+      entry: { session: 's', seq: 202 },
+      ask: { through: 'in' },
+      stop: {},
+    },
+  ])
+  let rows = counting(g)
+  let status = statusOf(await reach(g, 's'))
+  return { status, rows: rows() }
+})()
+test('a status reads a bounded part of a long transcript whose only ask is a stop', () => {
+  assertEquals(receipted.status, 'stopped')
+  assertEquals(receipted.rows < 100, true)
+})
 
 // A turn of 130 tool steps behind a checkpoint that leaves the model nearly all
 // of them, its newest call still running, and a shared prompt from before it

@@ -7,7 +7,7 @@ import { loadVocab } from '@yaks/vocab'
 import { docDoc } from '@yaks/doc'
 import { taskDoc } from '@yaks/task'
 import { sessionDoc } from './comp.ts'
-import { ids, locked, pages, seed, store } from './testing.ts'
+import { counting, filler, ids, locked, pages, seed, store } from './testing.ts'
 import { hooked, type Options, runs } from './tools.ts'
 import { sessionEid } from './who.ts'
 import { fleet, said as personas } from '../persona/testing.ts'
@@ -381,7 +381,7 @@ let ago = (hours: number) =>
 
 // A page locked by `run1`, plus whatever entries the case gives that run.
 let rigged = (...entries: Bundle[]) => {
-  let s = store()
+  let s = store({ status: true })
   seed(
     s,
     { entity: { eid: ids.p1 }, claim: { session: ids.run1 } },
@@ -448,6 +448,17 @@ test('a harness transcript owed an answer for hours is a warn', async () => {
   let said = await checkup('session_check', g)
   assertEquals(said.level, 'warn')
   assert(said.body.includes('has been running since'), said.body)
+})
+
+test('a stall check reads the newest line of a long transcript, not every line', async () => {
+  let g = rigged(
+    ...filler(ids.run1, 200),
+    line(201, ago(9), { entity: { eid: 'l1' }, content: { body: 'go' } }),
+  )
+  let read = counting(g)
+  let said = await checkup('session_check', g)
+  assert(said.body.includes('has been running since'), said.body)
+  assert(read() < 30, `read ${read()} rows`)
 })
 
 test('a transcript owed an answer since a moment ago is working', async () => {

@@ -16,10 +16,11 @@ import { human } from '@yaks/id'
 import {
   children,
   cleanEnd,
-  ordered,
+  entryStatus,
   parked,
+  receiptOf,
+  saidOf,
   speaking,
-  statusOf,
   textOf,
 } from '@yaks/session'
 
@@ -28,16 +29,14 @@ let comp = (b: Bundle | undefined, name: string) =>
 let str = (v: unknown): string => v == null ? '' : String(v)
 let s = (n: number) => n == 1 ? '' : 's'
 
-/** The account a session wrote, otherwise its last spoken output. Tool
- * results and private reasoning are never the report of its work. */
-export let reportOf = (row: Bundle | undefined, entries: Bundle[]): string => {
+/** The account a session wrote, otherwise what it said last (@yaks/session
+ * `saidOf`). Tool results and private reasoning are never the report of its
+ * work. */
+export let reportOf = async (g: Graph, row: Bundle): Promise<string> => {
   let brief = str(comp(row, 'brief')?.text)
   if (brief) return brief
-  let spoken = entries.filter((b) =>
-    b.output && b.content && !b.reasoning && !b.call && !b.result && !b.stop
-  ).at(-1)
-  let failure = entries.filter((b) => b.stop && b.content).at(-1)
-  return spoken || failure ? textOf((spoken ?? failure)!) : ''
+  let said = await saidOf(g, row.entity.eid)
+  return said ? textOf(said) : ''
 }
 
 /** The subagents a run started that did not settle before it ended, each
@@ -49,7 +48,7 @@ export let unfinished = async (
   let kids = await children(g, session)
   let said = await Promise.all(kids.map(async (row) => ({
     row,
-    status: statusOf(await g.read(`.entry.session=${row.entity.eid}&*`)),
+    status: await entryStatus(g, row.entity.eid),
   })))
   return said.filter(({ status }) => status != 'settled')
 }
@@ -67,9 +66,7 @@ export let complete = async (g: Graph, session: string): Promise<void> => {
   ])
   if (!row?.process || !row.exit) return
   if (cleanEnd(row) && await parked(g, session)) return
-  let entries = ordered(await g.read(`.entry.session=${session}&*`))
-  let end = entries.filter((b) => b.stop && !b.lines && comp(b, 'ask')?.through)
-    .at(-1)
+  let end = await receiptOf(g, session)
   if (!end) return
   let source = str(comp(row, 'session')?.source)
   let [call] = source ? await g.get([source], ['call', 'entry', 'created']) : []
@@ -97,7 +94,7 @@ export let complete = async (g: Graph, session: string): Promise<void> => {
       cut.map(line).join('\n')
     }`
     : ''
-  let body = [title, stopped, reportOf(row, entries)].filter(Boolean)
+  let body = [title, stopped, await reportOf(g, row)].filter(Boolean)
     .join('\n\n')
   let reports = tasks.length ? tasks : ['']
   let actor = await speaking(g, row)

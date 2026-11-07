@@ -57,6 +57,7 @@ import {
   kindOf,
   marksOf,
   ordered,
+  outranking,
   RETRIES,
   sendingBefore,
   seqOf,
@@ -528,6 +529,83 @@ export let newestOf = async (
 export let hasAsk = async (g: Graph, session: Eid): Promise<boolean> =>
   !!await newest(await chain(g, session, { comps: [ENTRY] }), `&.${ASK}`)
 
+// The oldest entry a qualifier selects: what was said first never moves, so
+// nothing of it is remembered.
+let oldest = async (
+  r: Read,
+  qualifier: string,
+): Promise<Bundle | undefined> => {
+  for (let s of r.segs) {
+    let [row] = await selected(
+      r,
+      `${within(s)}${qualifier}&.order=entry.seq&.limit=1`,
+    )
+    if (row) return row
+  }
+}
+
+// A qualifier leaving out entries that carry any of `names` the vocabulary
+// declares: an undeclared one is carried by none.
+let without = (g: Graph, ...names: string[]) =>
+  names.filter((n) => g.vocab.comp(n)).map((n) => `&!${n}`).join('')
+
+// A request: an entry choosing the model a run goes on with, not an ask and
+// not a line read from a provider's log.
+let request = (g: Graph) => `&.${USING}${without(g, ASK, 'lines')}`
+
+/** The first request of a transcript, prose and all: what a run was started
+ * with. */
+export let firstRequest = async (
+  g: Graph,
+  session: Eid,
+): Promise<Bundle | undefined> =>
+  oldest(await chain(g, session, { bodies: true }), request(g))
+
+/** The newest request of a transcript: the one a run going on answers. */
+export let latestRequest = async (
+  g: Graph,
+  session: Eid,
+): Promise<Bundle | undefined> =>
+  newest(await chain(g, session, { comps: [ENTRY, USING] }), request(g))
+
+/** The first input of a transcript, prose and all: what it was first told. */
+export let firstInput = async (
+  g: Graph,
+  session: Eid,
+): Promise<Bundle | undefined> =>
+  oldest(
+    await chain(g, session, { bodies: true }),
+    `&.${CONTENT}${without(g, OUTPUT, 'lines', 'notice')}`,
+  )
+
+/** The newest receipt of a transcript: the stop that says a run ended, naming
+ * the request it answered (`ask.through`), or the one answering `through`. */
+export let receiptOf = async (
+  g: Graph,
+  session: Eid,
+  through?: Eid,
+): Promise<Bundle | undefined> =>
+  newest(
+    await chain(g, session, { comps: [ENTRY, ASK, 'stop'] }),
+    `&.stop${without(g, 'lines')}&.${ASK}.through` +
+      (through == null ? '' : `=${through}`),
+  )
+
+/** What a transcript said last, prose and all: its newest spoken output (not a
+ * call, a result, reasoning or an ending), else the newest ending that says
+ * why. */
+export let saidOf = async (
+  g: Graph,
+  session: Eid,
+): Promise<Bundle | undefined> => {
+  let r = await chain(g, session, { bodies: true })
+  return await newest(
+    r,
+    `&.${OUTPUT}&.${CONTENT}` +
+      without(g, 'reasoning', CALL, RESULT, 'stop'),
+  ) ?? await newest(r, `&.stop&.${CONTENT}`)
+}
+
 // What a reading holds besides its newest rows, found by one lookup for all:
 // the open calls (which no result answers), the prompts for a model turn or a
 // tool call, and the checkpoints for a model turn; and for a model turn the
@@ -671,7 +749,7 @@ let read = async (g: Graph, session: Eid, o: Reach): Promise<{
       if (n.noAsk == null && !rows.some((b) => kindOf(b) == 'ask')) {
         n.noAsk = !await newest(
           { ...r, names: [ENTRY], fields: '?entry' },
-          `&.${ASK}`,
+          `&.${ASK}${without(g, ...outranking('ask'))}`,
         )
       }
     }

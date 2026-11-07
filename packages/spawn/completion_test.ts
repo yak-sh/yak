@@ -9,6 +9,7 @@ import { loadVocab } from '@yaks/vocab'
 import { ram } from '@yaks/ram'
 import { sessions } from '@yaks/session'
 import { hear, pending } from '../session/listen.ts'
+import { counting, filler } from '../session/testing.ts'
 import { host } from './testing.ts'
 import { complete, reportOf } from './completion.ts'
 
@@ -186,9 +187,36 @@ for (
   })
 }
 
-test('a session brief takes precedence over imported spoken output', () => {
+test('a session brief takes precedence over imported spoken output', async () => {
   equal(
-    reportOf({ entity: { eid: 'child' }, brief: { text: 'My report' } }, rows),
+    await reportOf(finished, {
+      entity: { eid: 'child' },
+      brief: { text: 'My report' },
+    }),
     'My report',
+  )
+})
+
+// A run whose transcript holds a hundred more lines, and whose subagent's
+// holds as many again.
+let long = bare([
+  ...rows,
+  ...filler('child', 100, 6),
+  ...kid('busy', 'Build the app'),
+  ...filler('busy', 100),
+])
+test('an ended run with a long transcript reports from its newest lines, not all of them', async () => {
+  let read = counting(long)
+  await complete(long, 'child')
+  equal(read() < 100, true, `read ${read()} rows`)
+  let [report] = await long.read('.comment.target=work&*')
+  equal(
+    (report.doc as { body: string }).body,
+    [
+      `${await name(long)} — exited 0, 1 unfinished subagent`,
+      'Its subagents stopped with it, their work unfinished:\n' +
+      `- ${await name(long, 'busy')} Build the app (running)`,
+      'Fixed it; checks pass.',
+    ].join('\n\n'),
   )
 })
