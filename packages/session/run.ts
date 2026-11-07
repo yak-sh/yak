@@ -5,7 +5,7 @@ import { derivedEid } from '@yaks/graph/identity'
 // step. The session lease covers one step, and the tool runner claims each call.
 // A standalone consumer without a durable pool can explicitly settle a turn.
 
-import type { Event, Handlers } from '@yaks/effects'
+import type { Attempt, Event, Handlers } from '@yaks/effects'
 import { enqueue, held as lease, HOLD, holding } from '@yaks/effects'
 import type { Bundle, Comp, Eid, Graph, ReadTx } from '@yaks/graph'
 import { Stale } from '@yaks/graph/errors'
@@ -74,6 +74,9 @@ export type Runner = Deps & ChildLimits & {
 export let RUN = '@yaks/session/run'
 
 let ENDED: TranscriptStatus[] = ['settled', 'failed', 'stopped']
+
+// A background call some runner claimed and nothing has answered.
+let HELD = '.call&.entry&.tool_async&.execution&!results'
 
 let comp = (b: Bundle | undefined, name: string) =>
   b?.[name] as Comp | undefined
@@ -763,41 +766,63 @@ export let running = (
     }
     if (thrown) throw thrown
   }
+  // One background call, run by the tools runner's claim rather than the
+  // session's lease.
+  let tool = async (eid: string, attempt?: Attempt) => {
+    let r = await ready
+    let [call] = await g.get([eid])
+    let session = (call?.entry as Comp | undefined)?.session
+    if (!call?.tool_async || !session || !r.asyncTools) return
+    // The tool runner's claim, not the session's lease, serializes this call.
+    // A restarted effect inspects uncertain execution instead of replaying it.
+    let deps = {
+      ...r,
+      owner: r.holder,
+      asyncTools: false,
+      runCall: call.entity.eid,
+    }
+    let { read, status } = await readied(g, String(session), deps)
+    if (['stopped', 'failed'].includes(status)) return
+    // A call a result answers is done.
+    let open = openCalls(read.entries)
+    if (!open.some((b) => b.entity.eid == call.entity.eid)) return
+    const source = (call.call as Comp | undefined)?.source
+    const asked = read.entries.find((b) => b.entity.eid == source)
+    if (
+      r.answers && !await r.answers(asked?.using as Comp | undefined)
+    ) {
+      await attempt?.defer?.(1000)
+      return
+    }
+    let s = await react(g, String(session), deps, read)
+    await r.each?.(s, String(session))
+  }
+  // What a process finds as it starts: a background call still claimed by a
+  // holder that exited, or that the host says is gone (a Durable Object reset
+  // under it), has nobody to finish it. Each is taken up as session_tool takes
+  // one, so it is answered and its session moves on, however long ago its own
+  // run ended.
+  let recover = async () => {
+    let r = await ready
+    if (!r.asyncTools) return
+    for (let call of await g.read(HELD)) {
+      let by = (call.execution as Comp | undefined)?.by
+      if (by == null || by == r.holder) continue
+      let [holder] = await g.get([String(by)], ['exit'])
+      if (holder?.exit || await r.gone?.(String(by) as Eid)) {
+        await tool(call.entity.eid)
+      }
+    }
+  }
   return {
     ...declared(g, 'session_input') ? { session_input: run } : {},
     ...declared(g, 'session_tool')
       ? {
-        session_tool: async (e: Event, _tx, _write, attempt) => {
-          let r = await ready
-          let [call] = await g.get([e.entity.eid])
-          let session = (call?.entry as Comp | undefined)?.session
-          if (!call?.tool_async || !session || !r.asyncTools) return
-          // The tool runner's claim, not the session's lease, serializes this call.
-          // A restarted effect inspects uncertain execution instead of replaying it.
-          let deps = {
-            ...r,
-            owner: r.holder,
-            asyncTools: false,
-            runCall: call.entity.eid,
-          }
-          let { read, status } = await readied(g, String(session), deps)
-          if (['stopped', 'failed'].includes(status)) return
-          // A call a result answers is done.
-          let open = openCalls(read.entries)
-          if (!open.some((b) => b.entity.eid == call.entity.eid)) return
-          const source = (call.call as Comp | undefined)?.source
-          const asked = read.entries.find((b) => b.entity.eid == source)
-          if (
-            r.answers && !await r.answers(asked?.using as Comp | undefined)
-          ) {
-            await attempt?.defer?.(1000)
-            return
-          }
-          let s = await react(g, String(session), deps, read)
-          await r.each?.(s, String(session))
-        },
+        session_tool: (e: Event, _tx, _write, attempt) =>
+          tool(e.entity.eid, attempt),
       }
       : {},
+    ...declared(g, 'session_recover') ? { session_recover: recover } : {},
     session_run: run,
     ...declared(g, 'session_release')
       ? { session_release: (e: Event, tx: ReadTx) => release(g, e, tx) }

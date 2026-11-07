@@ -999,6 +999,11 @@
       "target": ".call&.entry&.tool_async",
       "description": "execute one asynchronous native tool call independently of the session lease; the tools runner owns its execution claim and final result"
     },
+    "session_recover": {
+      "effect": true,
+      "start": true,
+      "description": "whenever a process starts working the effects, take up each asynchronous call left running by a holder that has exited or that the host says is gone, through session_tool's path: the tool's recovery, else an answer that it was interrupted, and its turn goes on"
+    },
     "sending": {
       "component": true,
       "journal": false,

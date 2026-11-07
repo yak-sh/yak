@@ -106,9 +106,12 @@ export let operatorGraph = (
 ) => {
   let vocab = operatorVocab
   // Several runs at once: a person's next words, an email and a tool call
-  // are taken while a session waits on its model.
+  // are taken while a session waits on its model. Each incarnation owes its
+  // start-up runs as it first works the pool, so it takes up what the one
+  // before it left held (@yaks/session `session_recover`).
   let fx = effects(vocab, {
     singleOwner: true,
+    startup: 'join',
     defer: true,
     max: 8,
     ...options,

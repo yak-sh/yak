@@ -539,8 +539,9 @@ test('a reply a reset cut off keeps the words it showed, and its turn is taken u
 // A reset under a tool call that never returned: the next incarnation answers
 // the call as interrupted and the turn goes on, rather than the session
 // staying running with nobody to finish it (Jeff's app_preview, T-145961).
-let hung = operatorMemory()
-let hanging = false
+// `finished` is the call's own run having ended before the reset was seen,
+// as Jeff's did under the code before: only the incarnation's start-up finds
+// it then (T-146044).
 let preview = (run: () => Promise<string>) => () => [{
   name: 'preview',
   title: 'Preview the app',
@@ -548,44 +549,63 @@ let preview = (run: () => Promise<string>) => () => [{
   parameters: { type: 'object', properties: {} },
   run,
 }]
-let frozen = operate(hung, roundsPlatform, {
-  ...operatorModel((req) =>
-    Promise.resolve({
-      id: crypto.randomUUID(),
-      model: req.model,
-      items: calls('preview', {}),
-      cost: 0.001,
-    })
-  ),
-  tools: preview(() => {
-    hanging = true
-    return new Promise(() => {})
-  }),
-})
-let stalled = await frozen.ask(roundsHeld, roundsSpace, { say: 'Preview it.' })
-void drain(hung)
-await until(() => hanging)
-let reborn = operatorMemory(hung.storage)
-let retold: string[] = []
-operate(reborn, roundsPlatform, {
-  ...operatorModel((req) => {
-    retold.push(JSON.stringify(req.items))
-    return Promise.resolve({
-      id: crypto.randomUUID(),
-      model: req.model,
-      items: [{ kind: 'assistant', text: 'The preview was cut off.' }],
-      cost: 0.001,
-    })
-  }),
-  tools: preview(() => Promise.resolve('previewed')),
-})
-await drain(reborn)
-let after = (await reborn.g.read(`.entry.session=${stalled.session}&*`, {
-  durable: true,
-})).map((b) => comp(b, 'content')?.body).filter(Boolean)
+let cutOff = async (finished: boolean) => {
+  let hung = operatorMemory()
+  let hanging = false
+  let frozen = operate(hung, roundsPlatform, {
+    ...operatorModel((req) =>
+      Promise.resolve({
+        id: crypto.randomUUID(),
+        model: req.model,
+        items: calls('preview', {}),
+        cost: 0.001,
+      })
+    ),
+    tools: preview(() => {
+      hanging = true
+      return new Promise(() => {})
+    }),
+  })
+  let stalled = await frozen.ask(roundsHeld, roundsSpace, {
+    say: 'Preview it.',
+  })
+  void drain(hung)
+  await until(() => hanging)
+  let reborn = operatorMemory(hung.storage)
+  if (finished) {
+    let runs = await reborn.g.read('.effect.handler=session_tool')
+    await reborn.g.apply(
+      runs.map((b) => ({ entity: b.entity, $delete: true })),
+      { trusted: true },
+    )
+  }
+  let retold: string[] = []
+  operate(reborn, roundsPlatform, {
+    ...operatorModel((req) => {
+      retold.push(JSON.stringify(req.items))
+      return Promise.resolve({
+        id: crypto.randomUUID(),
+        model: req.model,
+        items: [{ kind: 'assistant', text: 'The preview was cut off.' }],
+        cost: 0.001,
+      })
+    }),
+    tools: preview(() => Promise.resolve('previewed')),
+  })
+  await drain(reborn)
+  let after = (await reborn.g.read(`.entry.session=${stalled.session}&*`, {
+    durable: true,
+  })).map((b) => comp(b, 'content')?.body).filter(Boolean)
+  return { retold: retold.join(), said: after.at(-1) }
+}
+let reset = await cutOff(false), left = await cutOff(true)
 test('a tool call a reset cut off is answered as interrupted, and its turn goes on', () => {
-  assertStringIncludes(retold.join(), 'Tool execution was interrupted')
-  assertEquals(after.at(-1), 'The preview was cut off.')
+  assertStringIncludes(reset.retold, 'Tool execution was interrupted')
+  assertEquals(reset.said, 'The preview was cut off.')
+})
+test('a call whose run ended under a gone holder is taken up as the next incarnation starts', () => {
+  assertStringIncludes(left.retold, 'Tool execution was interrupted')
+  assertEquals(left.said, 'The preview was cut off.')
 })
 
 // A call's words ask for the model the Operator answers calls with, and the
