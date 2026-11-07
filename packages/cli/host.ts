@@ -78,6 +78,7 @@ import {
   heal,
   type Hit,
   indexed,
+  pieces,
   schema as textSchema,
   search,
   split,
@@ -851,7 +852,9 @@ let composed = async (
     // Whoever works the effects also works off the schema work a pass owed
     // (@yaks/sqlite/owe), one process at a time under its lease, and does the
     // file's upkeep: its statistics, and once a day a check that each text
-    // index holds every row, refilling in windows one that drifted.
+    // index holds every row, refilling in windows one that drifted. Between
+    // them it makes the pieces of the texts longer than a substring index
+    // holds (@yaks/fts `pieces`), a window each.
     let duties = effecting && !opts.readOnly
       ? [...built.services, {
         name: SCHEMA_DUTY,
@@ -863,6 +866,9 @@ let composed = async (
                 name: 'heal',
                 run: (d) => void heal(d, text, { derived, fill: filler(d) }),
               }]
+              : [],
+            chores: text.length
+              ? [{ name: 'pieces', run: (d) => pieces(d, text, derived) }]
               : [],
             report: (error, work) =>
               void report(error, {

@@ -42,22 +42,31 @@ import {
   from,
   lit,
   lookup,
+  not,
   op,
   or,
+  type Query,
   type Raw,
   type Screen,
-  type Select,
   select,
   type Site,
   type Source,
   table,
+  unionAll,
   Unsupported,
   val,
 } from '@yaks/sql'
 import { permitted, ranked, screens } from './search.ts'
-import { type Field, indexes, indexName, tableOf, worded } from './fields.ts'
+import {
+  type Field,
+  indexes,
+  indexName,
+  tableOf,
+  tailOf,
+  worded,
+} from './fields.ts'
 import { grammed, named, term } from './term.ts'
-import { type Filler, PAST } from './ddl.ts'
+import { DONE, type Filler, PAST, PIECES, SPAN } from './ddl.ts'
 import { type And, type Clause, map, words as wordsIn } from '@yaks/query/core'
 
 // The ranking `.order=` names.
@@ -143,7 +152,7 @@ export let search = (
   }
   // What each needle's index found this query, by index and needle: one
   // read asks again for each plan it weighs.
-  let found = new Map<string, { owners: Select; few: boolean }>()
+  let found = new Map<string, { owners: Query; few: boolean }>()
   // The words this query searched for (as terms, and as typed), and what the
   // rest of it selects, remembered for its `.order=search`.
   let words: string[] = []
@@ -273,19 +282,52 @@ export let search = (
         )
       },
     },
-    // The rows of a property's substring index holding all of a needle's
-    // trigrams, or a text longer than it holds (`PAST`), and whether there
-    // are at most FEW_TEXTS of them.
+    // The texts a property's substring index finds holding all of a needle's
+    // trigrams, in their first CUT or a piece of their tail past it, and the
+    // ones longer than CUT whose pieces are still owed (`PAST` without
+    // `DONE`), and whether there are at most FEW_TEXTS of them. A needle's
+    // first SPAN characters lie whole in the first CUT or in one piece, so
+    // its trigrams are those characters'. A file without the tail index
+    // (an older writer's) holds the marker, and every longer text with it.
     contains: (comp, prop, needle) => {
       let ix = grams.find((ix) => ix.comp == comp && ix.props.includes(prop))
-      let m = ix && grammed(needle)
+      let m = ix && grammed([...needle].slice(0, SPAN).join(''))
       if (!ix || !m) return null
-      let fts = tableOf(ix)
-      let owners = select({
-        cols: [col('rowid')],
-        from: table(fts),
-        where: op('match', col(fts), val(`(${m}) OR "${PAST}"`)),
-      })
+      let fts = tableOf(ix), tail = tailOf(ix)
+      let match = (t: string, q: string) => op('match', col(t), val(q))
+      let owners: Query = db && stands(tail)
+        ? unionAll(
+          select({
+            cols: [col('rowid')],
+            from: table(fts),
+            where: match(fts, m),
+          }),
+          select({
+            cols: [op('/', col('rowid'), lit(PIECES))],
+            from: table(tail),
+            where: match(tail, m),
+          }),
+          select({
+            cols: [col('rowid')],
+            from: table(fts),
+            where: and(
+              match(fts, `"${PAST}"`),
+              not(among(
+                op('*', col('rowid'), lit(PIECES)),
+                select({
+                  cols: [col('rowid')],
+                  from: table(tail),
+                  where: match(tail, `"${DONE}"`),
+                }),
+              )),
+            ),
+          }),
+        )
+        : select({
+          cols: [col('rowid')],
+          from: table(fts),
+          where: match(fts, `(${m}) OR "${PAST}"`),
+        })
       // An index this file does not hold yet (its writer has not opened it
       // with this vocabulary), or holds while still filling it, finds too
       // few: the read goes in its own order, and, answered rather than

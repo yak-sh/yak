@@ -5,12 +5,21 @@ import '../sqlite/sqlitepath.ts'
 import { Database } from '@yaks/sqlite/testing'
 import { equal, ok, test } from '@yaks/testing'
 import { loadVocab } from '@yaks/vocab'
-import { col, compile, eq, insert, render, val } from '@yaks/sql'
+import { col, compile, type Driver, eq, insert, render, val } from '@yaks/sql'
 import { parse } from '@yaks/query'
 import { driver } from '../sqlite/native.ts'
 import { storage } from '../sqlite/mod.ts'
 import { sqlitePath } from '../sqlite/sqlitepath.ts'
-import { adopt, CUT, FEW_TEXTS, grams, search } from './mod.ts'
+import {
+  adopt,
+  CUT,
+  FEW_TEXTS,
+  grams,
+  heal,
+  pieces,
+  search,
+  SPAN,
+} from './mod.ts'
 
 let status = Deno.dlopen(sqlitePath, {
   sqlite3_stmt_status: {
@@ -118,6 +127,79 @@ test('a needle past the text an index holds is still found', () => {
   )
   equal(read('.note.text~=wyvern').eids, ['long'])
   equal(read('.note.text~=basilisk').eids, ['n7'])
+})
+
+// A store of one short note and one long one, three pieces past what the
+// substring index holds: a wyvern in the first piece, a griffin across the
+// end of the first CUT, a cockatrice across where the first piece ends, and a
+// manticore in the last. And what a test of a needle reads of its texts.
+let long = () => {
+  let db = driver(new Database(':memory:'))
+  let store = storage(db, vocab)
+  store.install()
+  store.raise()
+  db.query(insert('entity', { id: 1, eid: 'short' }, { id: 2, eid: 'long' }))
+  let dots = (n: number) => '.'.repeat(n)
+  let text = `${dots(CUT - 3)}griffin${dots(CUT - 2 * SPAN)} a wyvern ` +
+    `${dots(2 * SPAN - 23)}cockatrice${dots(CUT)} a manticore`
+  db.query(insert('note', { entity: 1, text: 'a hydra' }, { entity: 2, text }))
+  adopt(db, fields)
+  let ext = search(fields, db)
+  let reads = (needle: string) => {
+    ext.begin?.({} as never, { kind: 'and', clauses: [] })
+    let { owners } = ext.contains!('note', 'text', needle)!
+    return db.query(owners).map((r) => Number(Object.values(r)[0])).sort()
+  }
+  return { db, reads }
+}
+
+// Every piece owed, made a window at a time: how many windows it took.
+let made = (db: Driver) => {
+  let n = 0
+  while (pieces(db, fields)) n++
+  return n
+}
+
+let tailed = long()
+
+test('a long text is read whole until its pieces are made, then only what they hold', () => {
+  let { db, reads } = tailed
+  equal(reads('basilisk'), [2])
+  equal(made(db), 3)
+  equal(made(db), 0)
+  equal(
+    ['basilisk', 'hydra', 'wyvern', 'griffin', 'cockatrice', 'manticore']
+      .map(reads),
+    [[], [1], [2], [2], [2], [2]],
+  )
+})
+
+test('a tail index that drifted is emptied, its texts owed again', () => {
+  let { db, reads } = tailed
+  made(db)
+  db.query({ t: 'delete', from: 'note_trigram_piece' })
+  equal(heal(db, fields), ['note_trigram_tail'])
+  equal([reads('basilisk'), made(db), reads('basilisk')], [[2], 3, []])
+})
+
+test('a long text that changes is owed its pieces again, and one that goes takes them', () => {
+  let { db, reads } = long()
+  made(db)
+  let write = (text: string) =>
+    db.query({
+      t: 'update',
+      table: 'note',
+      set: { text: val(text) },
+      where: eq(col('entity'), val(2)),
+    })
+  write(`${'.'.repeat(CUT)} a basilisk`)
+  equal([reads('wyvern'), reads('chimera')], [[2], [2]])
+  equal(made(db), 1)
+  equal([reads('wyvern'), reads('basilisk'), reads('chimera')], [[], [2], []])
+  write('a chimera')
+  equal([reads('basilisk'), reads('chimera')], [[], [2]])
+  db.query({ t: 'delete', from: 'note', where: eq(col('entity'), val(2)) })
+  equal([reads('chimera'), made(db)], [[], 0])
 })
 
 test('a file not holding the index yet reads every value', () => {

@@ -267,6 +267,42 @@ export type Daily = { name: string; run: (driver: Driver) => void }
 
 let DAILY = 'daily:'
 
+/**
+ * Work a host's rows owe rather than its schema, found in them each time it
+ * is looked for: the box makes the pieces of its long texts' substring index
+ * this way (@yaks/fts `pieces`). `run` is one window, in one unit, and
+ * answers whether it found any to do. One that throws is put off an hour, as
+ * `chore:<name>` in `server_meta`.
+ */
+export type Chore = { name: string; run: (driver: Driver) => boolean }
+
+let CHORE = 'chore:'
+
+// One window of the first of `chores` that is not put off and finds work to
+// do; one that throws is put off an hour.
+let chore = (
+  driver: Driver,
+  chores: Chore[],
+  now: number,
+): Worked | undefined => {
+  let m = meta(driver)
+  for (let c of chores) {
+    let name = CHORE + c.name
+    let at = m.get(name)
+    if (at && Date.parse(at) > now) continue
+    try {
+      let did = unit(driver, () => {
+        if (at) m.del(name)
+        return c.run(driver)
+      })
+      if (did) return { name, done: false }
+    } catch (error) {
+      unit(driver, () => m.set(name, new Date(now + RETRY).toISOString()))
+      return { name, error }
+    }
+  }
+}
+
 /** Planner statistics (./ddl.ts `analyzed`): due once a day, and as soon as
  * an index or a rebuilt table is in place, when the tables that lack them, or
  * all that hold rows once the file has grown tenfold, are owed an analysis,
@@ -339,21 +375,23 @@ let analysis = (
 
 /**
  * Do one window, in one unit: of the first owed work that is due, else of
- * the first table owed an analysis ({@link analyze}), else of giving free
- * pages back ({@link reclaim}), else of the first of `daily` that is due.
- * Undefined when nothing is. A window that throws leaves its work as it was,
- * marked to be tried again in an hour, and says why.
+ * the first of `chores` with work to do, else of the first table owed an
+ * analysis ({@link analyze}), else of giving free pages back
+ * ({@link reclaim}), else of the first of `daily` that is due. Undefined
+ * when nothing is. A window that throws leaves its work as it was, marked to
+ * be tried again in an hour, and says why.
  */
 export let work = (
   driver: Driver,
   now: number = Date.now(),
   daily: Daily[] = [],
   sizes: Sizes = SIZES,
+  chores: Chore[] = [],
 ): Worked | undefined => {
   let due = owed(driver).find((w) => !w.next || Date.parse(w.next) <= now)
   if (!due) {
-    return analysis(driver, now, sizes) ?? reclaim(driver, now, sizes) ??
-      upkeep(driver, daily, now)
+    return chore(driver, chores, now) ?? analysis(driver, now, sizes) ??
+      reclaim(driver, now, sizes) ?? upkeep(driver, daily, now)
   }
   try {
     return unit(
@@ -789,8 +827,8 @@ let sleep = (ms: number, signal: AbortSignal) =>
  * Work off what this file owes, and do its upkeep, until `signal` aborts: a
  * window, a pause as long as the window held the lock so other writers get
  * their turn, and a look every `idle` milliseconds while nothing is due.
- * `daily` is the host's upkeep beside the statistics. A failed window is
- * `report`ed and waits its hour.
+ * `daily` is the host's upkeep beside the statistics, and `chores` the work
+ * its rows owe. A failed window is `report`ed and waits its hour.
  */
 export let tend = async (
   driver: Driver,
@@ -799,13 +837,14 @@ export let tend = async (
     report?: (error: unknown, work: string) => void
     idle?: number
     daily?: Daily[]
+    chores?: Chore[]
   },
 ): Promise<void> => {
   let idle = opts.idle ?? 60_000
   let daily = [statistics, ...opts.daily ?? []]
   while (!opts.signal.aborted) {
     let at = performance.now()
-    let did = work(driver, Date.now(), daily)
+    let did = work(driver, Date.now(), daily, SIZES, opts.chores)
     if (did && 'error' in did) opts.report?.(did.error, did.name)
     let held = performance.now() - at
     await sleep(did ? Math.max(10, held) : idle, opts.signal)

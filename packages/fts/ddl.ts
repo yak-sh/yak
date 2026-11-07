@@ -56,11 +56,15 @@ import {
   type Field,
   type Index,
   indexes,
+  piecesOf,
   tableOf,
+  tailOf,
+  textName,
   viewOf,
   worded,
 } from './fields.ts'
 import {
+  among,
   and,
   as,
   catalogue,
@@ -75,17 +79,23 @@ import {
   exists,
   type Expr,
   fn,
+  ge,
   gt,
   type Insert,
   join,
   le,
   lit,
+  lt,
+  not,
   op,
+  or,
   render,
   select,
   type Stmt,
   sub,
   table,
+  val,
+  type Write,
 } from '@yaks/sql'
 
 // How one column of `comp` reads as text, given the expression for its stored
@@ -93,9 +103,14 @@ import {
 // stored, which is every ordinary column. A substring index reads it `cut`.
 let reader =
   (ix: Index, derived: Derived) => (prop: string, stored: Expr): Expr => {
-    let text = derived[`${ix.comp}.${prop}`]?.text?.(stored) ?? stored
+    let text = whole(ix, derived)(prop, stored)
     return ix.trigram ? cut(text) : text
   }
+
+// How one column of `comp` reads as its whole text, uncut.
+let whole =
+  (ix: Index, derived: Derived) => (prop: string, stored: Expr): Expr =>
+    derived[`${ix.comp}.${prop}`]?.text?.(stored) ?? stored
 
 /** How much of a text a substring index holds: its first mebibyte. One row's
  * trigrams are made inside the write that stores it, about 190 ms a MiB, and
@@ -105,9 +120,24 @@ export let CUT = 1 << 20
 
 /** The trigram a substring index holds for a text longer than {@link CUT}:
  * three private-use characters, which no needle holds (a `~=` needle is
- * ASCII), so a test reads each such row whole as well as the ones its
- * needle's trigrams find. */
+ * ASCII), so a test reads each such row whole, as well as the ones its
+ * needle's trigrams find, until the text's tail index holds every piece of
+ * the rest. */
 export let PAST = '\u{F8FF}\u{F8FF}\u{F8FF}'
+
+/** The trigram a tail index holds in a text's done row, once it holds every
+ * piece of the text. */
+export let DONE = '\u{F8FE}\u{F8FE}\u{F8FE}'
+
+/** The rows a tail index keeps for each text: an entity's are
+ * `entity * PIECES + i`, its `i`th piece, and its done row at 0. A SQLite
+ * text holds at most 10^9 bytes, 954 pieces of {@link CUT}. */
+export let PIECES = 1 << 10
+
+/** The longest run of a text one of its pieces is sure to hold whole: each
+ * starts SPAN - 1 characters before the one before it ends. A test asks for
+ * the trigrams of its needle's first SPAN characters (./compile.ts). */
+export let SPAN = 1 << 10
 
 // A text as a substring index holds it: its first CUT characters, then PAST
 // when there were more.
@@ -117,6 +147,188 @@ let cut = (text: Expr): Expr =>
     fn('substr', text, lit(1), lit(CUT)),
     fn('iif', gt(fn('length', text), lit(CUT)), lit(PAST), lit('')),
   )
+
+// Row `id` of a tail index, out of `text`: the done row's marker, or a piece,
+// the CUT characters after the one before it, and the SPAN - 1 before them.
+let piece = (id: Expr, text: Expr): Expr => {
+  let i = op('%', id, lit(PIECES))
+  let start = op('-', op('*', i, lit(CUT)), lit(SPAN - 2))
+  return fn(
+    'iif',
+    eq(i, lit(0)),
+    lit(DONE),
+    fn('substr', text, start, lit(CUT + SPAN - 1)),
+  )
+}
+
+// The rows of a tail index or its piece table that are `entity`'s text's.
+let pieceOf = (entity: Expr): Expr =>
+  and(
+    ge(col('id'), op('*', entity, lit(PIECES))),
+    lt(col('id'), op('*', op('+', entity, lit(1)), lit(PIECES))),
+  )
+
+// A substring index's tail index: its piece table, the view reading each
+// piece out of its text, the index, and the triggers that drop a text's
+// pieces when it changes or goes. Nothing makes a piece inside a write:
+// `pieces` makes them a window at a time, and the text is owed until then.
+let tail = (ix: Index, derived: Derived): Stmt[] => {
+  let { comp, props } = ix
+  let fts = tailOf(ix), list = piecesOf(ix)
+  let text = (p: string, row?: string) =>
+    fn('coalesce', whole(ix, derived)(p, col(p, row)), lit(''))
+  let gone: Write[] = [
+    {
+      t: 'insert',
+      into: fts,
+      cols: [fts, 'rowid', ...props],
+      q: select({
+        cols: [
+          lit('delete'),
+          col('id'),
+          ...props.map((p) => piece(col('id'), text(p, 'old'))),
+        ],
+        from: table(list),
+        where: pieceOf(col('entity', 'old')),
+      }),
+    },
+    { t: 'delete', from: list, where: pieceOf(col('entity', 'old')) },
+  ]
+  let trigger = (
+    event: 'update' | 'delete',
+    when?: Expr,
+  ): CreateTrigger => ({
+    t: 'create trigger',
+    name: `${fts}_${event}`,
+    ifNot: true,
+    timing: 'after',
+    event,
+    on: comp,
+    ...when && { when },
+    body: gone,
+  })
+  return [
+    {
+      t: 'create table',
+      name: list,
+      ifNot: true,
+      cols: [{ name: 'id', type: 'integer', pk: true }],
+    },
+    {
+      t: 'create view',
+      name: textName(fts),
+      ifNot: true,
+      q: select({
+        cols: [
+          as(col('id', 'p'), 'id'),
+          ...props.map((p) => as(piece(col('id', 'p'), text(p, 'c')), p)),
+        ],
+        from: table(list, 'p'),
+        joins: [join(
+          table(comp, 'c'),
+          eq(col('entity', 'c'), op('/', col('id', 'p'), lit(PIECES))),
+        )],
+      }),
+    },
+    {
+      t: 'create virtual table',
+      name: fts,
+      ifNot: true,
+      using: 'fts5',
+      args: [
+        ...props,
+        ['content', textName(fts)],
+        ['content_rowid', 'id'],
+        ...GRAMS,
+      ],
+    },
+    trigger(
+      'update',
+      or(...props.map((p) => op('is not', col(p, 'old'), col(p, 'new')))),
+    ),
+    trigger('delete'),
+  ]
+}
+
+// Empty a tail index: every text it held pieces of is owed again.
+let forget = (db: Driver, ix: Index) => {
+  db.query(command(tailOf(ix), 'delete-all'))
+  db.query({ t: 'delete', from: piecesOf(ix) })
+}
+
+// Whether the file holds a table, view or index by this name.
+let holds = (db: Driver, name: string): boolean =>
+  catalogue(db).some((o) => o.name == name)
+
+/**
+ * Make the next piece of the first text a substring index holds only the
+ * first {@link CUT} of, and its done row with its last: one window of the
+ * work a long text's write leaves, about 190 ms for a piece. Run it in a
+ * unit of its own, as @yaks/sqlite's owed work does (`Chore`). False when
+ * every text's pieces are made, or the file holds no tail index yet.
+ */
+export let pieces = (
+  db: Driver,
+  fields: Field[],
+  derived: Derived = {},
+): boolean => {
+  for (let ix of standing(db, fields)) {
+    if (!ix.trigram || !holds(db, tailOf(ix))) continue
+    let head = tableOf(ix), fts = tailOf(ix), list = piecesOf(ix)
+    let [owed] = db.query(select({
+      cols: [as(col('rowid'), 'entity')],
+      from: table(head),
+      where: and(
+        op('match', col(head), val(`"${PAST}"`)),
+        not(exists(select({
+          cols: [lit(1)],
+          from: table(list),
+          where: eq(col('id'), op('*', col('rowid', head), lit(PIECES))),
+        }))),
+      ),
+      order: [col('rowid')],
+      limit: lit(1),
+    }))
+    if (!owed) continue
+    let at = Number(owed.entity) * PIECES
+    let [{ last }] = db.query(select({
+      cols: [as(fn('max', col('id')), 'last')],
+      from: table(list),
+      where: pieceOf(val(Number(owed.entity))),
+    }))
+    let i = last == null ? 1 : Number(last) - at + 1
+    let [{ size }] = db.query(select({
+      cols: [as(
+        fn(
+          'max',
+          ...ix.props.map((p) => fn('length', whole(ix, derived)(p, col(p)))),
+        ),
+        'size',
+      )],
+      from: table(ix.comp),
+      where: eq(col('entity'), val(Number(owed.entity))),
+    }))
+    let ids = (i + 1) * CUT >= Number(size) ? [at + i, at] : [at + i]
+    db.query({
+      t: 'insert',
+      into: list,
+      cols: ['id'],
+      rows: ids.map((id) => [val(id)]),
+    })
+    db.query({
+      t: 'insert',
+      into: fts,
+      cols: ['rowid', ...ix.props],
+      q: select({
+        cols: [col('id'), ...ix.props.map((p) => col(p))],
+        from: table(textName(fts)),
+        where: among(col('id'), ids.map((id) => val(id))),
+      }),
+    })
+    return true
+  }
+  return false
+}
 
 // An FTS5 command: a row written to the index's own hidden column.
 let command = (fts: string, word: string, rank?: number): Insert => ({
@@ -293,7 +505,10 @@ export let schema = (fields: Field[], derived: Derived = {}): Stmt[] => {
       )
     }
   }
-  return indexes(fields).flatMap((ix) => index(ix, derived))
+  return indexes(fields).flatMap((ix) => [
+    ...index(ix, derived),
+    ...ix.trigram ? tail(ix, derived) : [],
+  ])
 }
 
 /**
@@ -329,8 +544,9 @@ let standing = (db: Driver, fields: Field[], made = false): Index[] => {
   )
 }
 
-// Is this index still consistent with its table? Two checks, the cheap one
-// first: does it hold one row per row of the component table, and does FTS5's
+// Is index `fts` still consistent with the table `of` it holds a row for
+// each row of? Two checks, the cheap one first: does it hold one row per row
+// of the table (a tail index's of its piece table), and does FTS5's
 // own integrity check pass. Returns a description of the problem, or undefined
 // for a healthy index.
 //
@@ -353,16 +569,16 @@ let standing = (db: Driver, fields: Field[], made = false): Index[] => {
 // a needless rebuild, holding the writer for the entire transcript archive.
 let fault = (
   db: Driver,
-  ix: Index,
+  fts: string,
+  of: string,
   deep: boolean,
 ): string | undefined => {
-  let fts = tableOf(ix)
   let rows = (t: string) => sub(select({ cols: [count()], from: table(t) }))
   try {
     let counts = db.query(select({
       cols: [
         as(rows(`${fts}_docsize`), 'indexed'),
-        as(rows(ix.on ? viewOf(ix) : ix.comp), 'held'),
+        as(rows(of), 'held'),
       ],
     }))[0]
     let indexed = Number(counts.indexed), held = Number(counts.held)
@@ -372,6 +588,10 @@ let fault = (
     return e instanceof Error ? e.message : String(e)
   }
 }
+
+// What an index is checked against: a row for each of its component's, or of
+// its view's join for a scoped one.
+let heldOf = (ix: Index): string => ix.on ? viewOf(ix) : ix.comp
 
 export type HealOpts = {
   // also run FTS5's own integrity check, not just the row count (default
@@ -403,7 +623,14 @@ export let heal = (
   for (let ix of standing(db, fields, true)) {
     let fts = tableOf(ix)
     if (opts.fill?.pending(fts)) continue
-    let before = fault(db, ix, deep)
+    let before = fault(db, fts, heldOf(ix), deep)
+    // A tail index is checked against its piece table, and emptied when it
+    // drifted or its substring index did, its texts owed again.
+    if (ix.trigram && holds(db, tailOf(ix))) {
+      let drifted = !before && fault(db, tailOf(ix), piecesOf(ix), deep)
+      if (before || drifted) forget(db, ix)
+      if (drifted) healed.push(tailOf(ix))
+    }
     if (!before) continue
     healed.push(fts)
     let cursor = opts.fill?.owe(filling(ix, derived))
@@ -412,7 +639,7 @@ export let heal = (
       continue
     }
     db.query(command(fts, 'rebuild'))
-    let after = fault(db, ix, deep)
+    let after = fault(db, fts, heldOf(ix), deep)
     if (after) {
       throw new Error(
         `${fts} is still broken after a rebuild; before: ${before}; after: ${after}`,
@@ -575,8 +802,13 @@ export let adopt = (
     )
     return s && render(s).sql
   }
-  let planned: { ix: Index; mine: Stmt[]; rebuild: boolean; cursor?: Expr }[] =
-    []
+  let planned: {
+    ix: Index
+    mine: Stmt[]
+    rest: Stmt[]
+    rebuild: boolean
+    cursor?: Expr
+  }[] = []
   for (let ix of standing(db, fields)) {
     let fts = tableOf(ix)
     let have = declared(db, fts)
@@ -611,7 +843,24 @@ export let adopt = (
     }
     if (!same) gone('table', fts)
     let rebuild = !same || opts.heal === false && changed
-    planned.push({ ix, mine, rebuild })
+    // A tail index any of whose objects differs from what it would be made
+    // as is made again, empty: its pieces are made again in their windows.
+    let rest = ix.trigram ? tail(ix, derived) : []
+    let made = (s: Stmt) => 'name' in s ? s.name : ''
+    let kindOf = (s: Stmt) =>
+      s.t == 'create view'
+        ? 'view'
+        : s.t == 'create trigger'
+        ? 'trigger'
+        : 'table'
+    let stale = rest.some((s) => {
+      let had = stored(before, kindOf(s), made(s))
+      return had != null && body(had, made(s)) != body(render(s).sql, made(s))
+    })
+    if (stale) {
+      for (let s of [...rest].reverse()) gone(kindOf(s), made(s))
+    }
+    planned.push({ ix, mine, rest, rebuild })
   }
   // Size every fill against its content view before installing any indexes.
   // Raising each index separately would invalidate the catalogue for the next
@@ -631,11 +880,13 @@ export let adopt = (
     // Filled in windows: an emptied index, and triggers behind the cursor.
     if (plan.cursor) plan.mine = behind(db, plan.ix, derived, plan.cursor)
   }
-  erect(db, planned.flatMap(({ mine }) => mine))
+  erect(db, planned.flatMap(({ mine, rest }) => [...mine, ...rest]))
   for (let { ix, rebuild, cursor } of planned) {
     if (!rebuild) continue
     let fts = tableOf(ix)
     if (!cursor) db.query(command(fts, 'rebuild'))
+    // Its tail index's pieces were checked against the index as it was.
+    if (ix.trigram) forget(db, ix)
     recut.push(fts)
   }
   let healed = opts.heal === false ? [] : heal(db, fields, { ...opts, derived })

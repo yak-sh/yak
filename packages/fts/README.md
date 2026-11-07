@@ -68,18 +68,32 @@ windows by the same `Filler`. It keeps only which rows hold each trigram
 (`detail=none`): on the box's transcripts it is half the size of the text, where
 positions made it 2.4 times. It holds each text's first MiB (`CUT`), since a
 row's trigrams are made inside the write that stores it (about 190 ms a MiB),
-and a longer text carries one more trigram (`PAST`) so a test reads it whole as
-well.
+and a longer text carries one more trigram (`PAST`).
 
-The `search` extension answers @yaks/sql's `contains` hook from it: the rows
-holding up to `GRAMS` (8) of the needle's trigrams, spread from its start to its
-end (`grammed`), and whether there are at most `FEW_TEXTS` (4,000) of them. A
-read is then driven from those rows, each still tested, so a needle nothing
-holds reads only the texts longer than the index holds. A needle more rows hold
-reads in its own order and stops at its page, as it does without an index, and
-so does a needle shorter than three characters and a test while `fill` says the
-index is still being filled. Bare words never read a substring index
-(`worded(fields)`).
+The rest of a longer text goes in its **tail index**, `<comp>_trigram_tail`, in
+pieces of `CUT`, each starting `SPAN - 1` (1,023) characters before the one
+before it ends, so any run of `SPAN` characters lies whole in the first `CUT` or
+in one piece. Nothing makes a piece inside a write: `pieces(db, fields)` makes
+the next one owed, a window of about 190 ms in a unit of its own, and the text's
+last with a done row (`DONE`). Until then the text is **owed**, and a test reads
+it whole. The box runs it as a @yaks/sqlite `Chore` of the process that works
+off owed schema work; a store with nobody to run it keeps every longer text
+owed. The tail index reads each piece out of its text through
+`<comp>_trigram_tail_text`, a view over the table of the pieces it holds,
+`<comp>_trigram_piece`, whose ids are `entity * PIECES + i`, the done row at
+`i = 0`. A text that changes or goes takes its pieces with it, and is owed
+again. `heal` empties a tail index that drifted from its piece table, or whose
+substring index it rebuilt, and `adopt` one whose objects changed.
+
+The `search` extension answers @yaks/sql's `contains` hook from both: the texts
+holding up to `GRAMS` (8) of the trigrams of the needle's first `SPAN`
+characters, spread from its start to its end (`grammed`), in their first `CUT`
+or a piece, and the owed texts, and whether there are at most `FEW_TEXTS`
+(4,000) of them. A read is then driven from those rows, each still tested, so a
+needle nothing holds reads only the owed texts. A needle more rows hold reads in
+its own order and stops at its page, as it does without an index, and so does a
+needle shorter than three characters and a test while `fill` says the index is
+still being filled. Bare words never read a substring index (`worded(fields)`).
 
 ## The four pieces
 

@@ -1166,11 +1166,19 @@ in their place, so a test shrinks them to a few rows instead of building
 thousands.
 
 Owed work sits in `server_meta` as `owed:<kind>:<name>`, its statements as data,
-so any process can finish it. `work(driver, now?, daily?)` does one window of
-the first that is due (indexes, then fills, then refits, then clearing); a
-window that throws is kept with its error and tried again an hour later. With
-none due, a window analyzes the first table the receipt owes (`analyze`); one
-that throws waits an hour, kept in `server_meta` as `analyze`.
+so any process can finish it. `work(driver, now?, daily?, sizes?, chores?)` does
+one window of the first that is due (indexes, then fills, then refits, then
+clearing); a window that throws is kept with its error and tried again an hour
+later.
+
+With none due, a window does the first **chore** (`Chore`, `{name, run}`) in
+`chores` that finds work: work the rows owe rather than the schema, found in
+them each time, such as the pieces of a long text's substring index (@yaks/fts
+`pieces`). `run` takes one window in one unit and answers whether it found any.
+One that throws waits an hour, kept in `server_meta` as `chore:<name>`.
+
+With no chore to do, a window analyzes the first table the receipt owes
+(`analyze`); one that throws waits an hour, kept in `server_meta` as `analyze`.
 
 With nothing owed or to analyze, `work` **reclaims**: on a file in incremental
 mode whose free pages pass `SLACK` (16,384, 64 MiB of 4 KiB pages), one window
@@ -1187,11 +1195,11 @@ due as `daily:<name>`. `statistics` is one: it owes the analyses the tables
 lack, and is due again as soon as an owed index or a rebuilt table is in place.
 Opening a file whose print is recorded does neither.
 
-`tend(driver, {signal, daily?})` works windows and the statistics, with the
-host's `daily` beside them, until the signal aborts; on the box the process
-serving the effects role runs it under the `@yaks/sqlite/schema` lease, with a
-daily @yaks/fts `heal` that refills a drifted text index in windows. A database
-in memory owes nothing.
+`tend(driver, {signal, daily?, chores?})` works windows and the statistics, with
+the host's `daily` and `chores` beside them, until the signal aborts; on the box
+the process serving the effects role runs it under the `@yaks/sqlite/schema`
+lease, with a daily @yaks/fts `heal` that refills a drifted text index in
+windows, and @yaks/fts `pieces` as a chore. A database in memory owes nothing.
 
 ## Preannounced migrations
 

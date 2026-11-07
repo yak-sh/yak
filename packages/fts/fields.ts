@@ -123,6 +123,12 @@ export let tableOf = (ix: Index): string =>
 export let viewOf = (ix: Index): string =>
   textName(ix.trigram ? gramName(ix.name) : ix.name)
 
+// The substring index of the texts' tails past what a substring index holds,
+// and the table listing the pieces it holds: `content_trigram_tail`,
+// `content_trigram_piece`.
+export let tailOf = (ix: Index): string => `${gramName(ix.name)}_tail`
+export let piecesOf = (ix: Index): string => `${gramName(ix.name)}_piece`
+
 // The name of the view that presents an index's columns as text: `doc` →
 // `doc_text`. It is created for an index where at least one column has to be
 // resolved (a `text` expression in the store's @yaks/sql `Derived`: @yaks/blob

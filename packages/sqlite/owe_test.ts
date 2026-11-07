@@ -28,6 +28,7 @@ import { analyzedAt, installation } from './meta.ts'
 import { storage } from './mod.ts'
 import {
   build as buildAt,
+  type Chore,
   type Daily,
   DAY,
   filler as fillerAt,
@@ -86,8 +87,8 @@ let tiny: Sizes = {
 }
 let build = (db: Driver, stmts: Stmt[]) => buildAt(db, stmts, tiny)
 let filler = (db: Driver) => fillerAt(db, tiny)
-let work = (db: Driver, now?: number, daily?: Daily[]) =>
-  workAt(db, now, daily, tiny)
+let work = (db: Driver, now?: number, daily?: Daily[], chores?: Chore[]) =>
+  workAt(db, now, daily, tiny, chores)
 
 // A copy of a database standing in for a file (owing is what a file does).
 let copy = (from: Snapshot) =>
@@ -355,9 +356,9 @@ test('a drifted text index is refilled in windows', () => {
 })
 
 // What `work` does, each at the time it is asked.
-let did = (db: Driver, at: number, daily: Daily[]) => {
+let did = (db: Driver, at: number, daily: Daily[], chores?: Chore[]) => {
   let names: string[] = []
-  for (let w; (w = work(db, at, daily));) {
+  for (let w; (w = work(db, at, daily, chores));) {
     names.push(`${w.name}${'error' in w ? ' failed' : ''}`)
   }
   return names
@@ -384,6 +385,32 @@ test('upkeep is done once a day, and one that fails waits an hour', () => {
     [],
     ['daily:check'],
     ['daily:statistics', 'daily:check'],
+  ])
+})
+
+// Two chores, one with two windows of work, the other with one and failing
+// the first time it runs: what was done now, a moment on, and an hour on.
+let [, chored] = stage((db) => {
+  let left = 2, again = 1, fails = true
+  let chores: Chore[] = [{ name: 'pieces', run: () => left-- > 0 }, {
+    name: 'check',
+    run: () => {
+      if (fails) throw new Error('not now')
+      return again-- > 0
+    },
+  }]
+  let at = (t: number) =>
+    did(db, NOW + t, [], chores).filter((n) => n.startsWith('chore:'))
+  let first = at(0)
+  fails = false
+  return [first, at(1), at(RETRY)]
+}, files)
+
+test('a chore is worked a window at a time while it finds work, and one that fails waits an hour', () => {
+  assertEquals(chored, [
+    ['chore:pieces', 'chore:pieces', 'chore:check failed'],
+    [],
+    ['chore:check'],
   ])
 })
 
