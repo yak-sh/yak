@@ -294,6 +294,20 @@ export let runs = (host: Host, options: Options = {}): Runs => {
             : line,
         )]
       }
+      // A spawn runs the provider as a command (./run.ts). One reached over
+      // HTTP has no command to run, so a session and a claim for it would hold
+      // the task for work that never starts.
+      let served = comp(await one(graph, provider), 'provider')
+      if (served?.transport != 'process') {
+        throw new CallError(
+          'provider',
+          `${str(served?.name) || str(args.provider)} is not a command ` +
+            `line (transport ${str(served?.transport) || 'unset'}), and a ` +
+            'spawn runs a command-line agent: name a provider whose ' +
+            'transport is process, or start a native session with ' +
+            '`yak session new`',
+        )
+      }
       let effort = str(args.effort)
       let session = uuid()
       let parent = str(comp(call, ENTRY)?.session) || str(who(call)?.via)

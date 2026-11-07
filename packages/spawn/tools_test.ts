@@ -257,6 +257,21 @@ test('a spawn refuses what is not a provider, and work that is not there', async
   )
 })
 
+test('a spawn refuses an HTTP provider and leaves no session or claim', async () => {
+  let { g } = host()
+  let web = identityEid('provider', ['web'])
+  await g.apply([
+    ...shelf,
+    { entity: { eid: web }, provider: { name: 'web', transport: 'http' } },
+  ])
+  let refused = await assertRejects(() =>
+    through(g, 'session_spawn', { task: 'the-task', provider: web })
+  )
+  assertStringIncludes((refused as Error).message, 'command-line agent')
+  assertEquals(await g.read('.session&*'), [])
+  assertEquals(await g.read('.claim&*'), [])
+})
+
 test('a run is reached by its graph id or its provider id', async () => {
   let { g } = host()
   await g.apply([
