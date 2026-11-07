@@ -19,7 +19,7 @@
 
 import * as systemProcess from '@yaks/process/system'
 import { sleep } from '@yaks/fp'
-import type { Bundle, Comp } from '@yaks/graph'
+import { type Bundle, type Comp, minted } from '@yaks/graph'
 import { timed } from '@yaks/api/timing'
 import { type Registered, registration } from '@yaks/connections'
 
@@ -364,13 +364,18 @@ export type Closed = {
 
 export let ACCOUNT = '/api/account'
 
+/** An account is named by its address, or by its eid when its row has none. */
 export let closeAccount = (
   session: string,
   address: string,
   check = false,
 ): Promise<Closed> =>
   said(sent(
-    apex(`${ACCOUNT}?address=${encodeURIComponent(address)}`),
+    apex(
+      `${ACCOUNT}?${minted(address) ? 'person' : 'address'}=${
+        encodeURIComponent(address)
+      }`,
+    ),
     session,
     { method: check ? 'GET' : 'DELETE' },
   ))

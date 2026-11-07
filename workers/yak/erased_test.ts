@@ -8,7 +8,7 @@ import { directoryOf } from './directory.ts'
 import type { Env } from './env.ts'
 import { connector, fresh, signIn } from './probe.ts'
 import { ledger, mint } from './grants.ts'
-import { meta } from './meta.ts'
+import { KERNEL, meta } from './meta.ts'
 import { closed } from './erase.ts'
 import { BOT } from '@yaks/platform/bots'
 
@@ -48,4 +48,33 @@ test('an erased account is not revived by its cookie', () => {
 
 test("an erased account's grant is revoked with it", () => {
   assertEquals(called, 'mcp 401')
+})
+
+// A row a credential wrote back before its erase revoked them is a bare
+// `person{}` with no address to find it by, so it is named by its eid
+// (T-147822); a newcomer's row, also without an address, is a person building.
+let owner = { person: k.owner.person, role: 'owner' } as const
+let bare = async (more = {}) => {
+  let eid = crypto.randomUUID()
+  await meta(env).apply([{ entity: { eid }, person: {}, ...more }], KERNEL)
+  return eid
+}
+let revived = await bare()
+let newcomer = await bare({ newcomer: { at: new Date().toISOString() } })
+let gone = await closed(env, dir, revived, owner)
+let kept = await closed(env, dir, newcomer, owner).then(
+  () => 'erased',
+  (e: Error) => e.message,
+)
+
+test('a bare person row is erased by its eid', async () => {
+  assertEquals(gone?.person, revived)
+  assertEquals(await meta(env).query(`.entity.eid=${revived}`), [])
+})
+
+test("a newcomer's row is not erased by its eid", () => {
+  assertEquals(
+    kept,
+    `${newcomer} is not an expendable test account: only those are erased here`,
+  )
 })

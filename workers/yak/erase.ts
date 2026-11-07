@@ -59,7 +59,7 @@ import { ownedPrefix } from './file-root.ts'
 // bytes with nothing left pointing at them.
 import { r2Objects, r2RawObjects } from './lib/objects.ts'
 import { blobPrefix, receiptPrefix, uploadPrefix } from './blob-key.ts'
-import type { Bundle } from '@yaks/graph'
+import { type Bundle, minted } from '@yaks/graph'
 import { token } from '@yaks/graph/sha256'
 import { declarationOf, keepDeclaration } from './declaration.ts'
 import { sandboxed } from './installed.ts'
@@ -92,6 +92,7 @@ import {
   META,
   overdue,
   type PhoneLine,
+  type Row as DirRow,
   type Space,
   storeName,
   url,
@@ -916,6 +917,7 @@ export let collected = async (env: Env, now = new Date()) => {
 // seat. A person's own account is never closed here, and neither is a fixture.
 export type Closing = {
   person: string
+  /** The account as it was named: its address, or its eid. */
   address: string
   spaces: Space[]
   seats: Space[]
@@ -923,21 +925,35 @@ export type Closing = {
   heirs: { space: Space; seat: string }[]
 }
 
+// An account is named by its address, or by its eid when its row has none: a
+// person a credential wrote back after their erase is a bare `person{}`
+// (T-147822). Such a row is nobody who signs in, so it is as expendable as a
+// test account, unless it has a number or is a newcomer still building.
+let account = async (env: Env, named: string) => {
+  let [row] = await meta(env).query(
+    minted(named)
+      ? `.entity.eid=${named}&.person ?email ?phone ?newcomer`
+      : `.email.address="${named}"`,
+  ) as unknown as DirRow[]
+  if (!row) return null
+  let address = row.email?.address
+  let spent = address ? expendable(address) : !row.phone && !row.newcomer
+  if (!spent) {
+    throw refuse(
+      'access',
+      `${named} is not an expendable test account: only those are erased here`,
+    )
+  }
+  return row
+}
+
 export let closing = async (
   env: Env,
   dir: Directory,
   address: string,
 ): Promise<Closing | null> => {
-  let [row] = await meta(env).query(
-    `.email.address="${address}"`,
-  ) as unknown as Row[]
+  let row = await account(env, address)
   if (!row) return null
-  if (!expendable(address)) {
-    throw refuse(
-      'access',
-      `${address} is not an expendable test account: only those are erased here`,
-    )
-  }
   let person = row.entity.eid
   let out: Closing = { person, address, spaces: [], seats: [], heirs: [] }
   for (let { space } of await dir.seated(person)) {

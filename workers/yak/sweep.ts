@@ -86,7 +86,10 @@ let account = async (
     return json(405, 'method_not_allowed', 'read or delete an account')
   }
   let { closed, closing } = await import('./erase.ts')
-  let address = new URL(req.url).searchParams.get('address') ?? ''
+  // By address, or by eid an account whose row has none left (erase.ts
+  // `account`).
+  let asked = new URL(req.url).searchParams
+  let address = asked.get('address') ?? asked.get('person') ?? ''
   // The caller first, so nobody learns from the answer who has an account.
   let self = req.method == 'DELETE' && !!who.person &&
     await dir.emailAt(who.person) == address

@@ -281,7 +281,7 @@
       "input": {
         "address": {
           "type": "string",
-          "description": "the test account's whole address"
+          "description": "the test account's whole address, or the eid of a person row left with no address or number"
         },
         "check": {
           "type": "boolean",
