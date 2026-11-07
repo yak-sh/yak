@@ -193,13 +193,30 @@ test("each of the home page's calls to action sends its name when clicked", asyn
   let code = await Deno.readTextFile(
     new URL('./public/cta.js', import.meta.url),
   )
-  let on: (e: unknown) => void = () => {}
-  let sent: [string, string][] = []
-  new Function('addEventListener', 'navigator', code)(
-    (_: string, fn: (e: unknown) => void) => on = fn,
-    { sendBeacon: (to: string, name: string) => sent.push([to, name]) },
-  )
-  for (let b of named) on({ target: b.querySelector('*') ?? b })
-  on({ target: document.querySelector('h1') })
-  assertEquals(sent, CTAS.map((c) => ['/api/click', c.name]))
+  // What each click sends, by a browser whose beacon `queues` (true), refuses
+  // to queue (false) or is missing, as an in-app browser's may be.
+  let clicks = (queues?: boolean) => {
+    let on: (e: unknown) => void = () => {}
+    let sent: string[][] = []
+    new Function('addEventListener', 'navigator', 'fetch', code)(
+      (_: string, fn: (e: unknown) => void) => on = fn,
+      queues == undefined ? {} : {
+        sendBeacon: (to: string, name: string) => (
+          sent.push(['beacon', to, name]), queues
+        ),
+      },
+      (to: string, { body, keepalive }: RequestInit) => {
+        sent.push([keepalive ? 'keepalive' : 'fetch', to, String(body)])
+        return Promise.resolve()
+      },
+    )
+    for (let b of named) on({ target: b.querySelector('*') ?? b })
+    on({ target: document.querySelector('h1') })
+    return sent
+  }
+  let each = (...how: string[]) =>
+    CTAS.flatMap((c) => how.map((h) => [h, '/api/click', c.name]))
+  assertEquals(clicks(true), each('beacon'))
+  assertEquals(clicks(false), each('beacon', 'keepalive'))
+  assertEquals(clicks(), each('keepalive'))
 })

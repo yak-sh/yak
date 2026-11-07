@@ -684,6 +684,29 @@
     justify-self: end;
   }
 
+  /* A phone: the yak sits beside the kicker rather than over it, and the box
+     opens three lines tall, so the box and its button are on the first
+     screen even under an in-app browser's bars. */
+  @media (max-width: 40rem) {
+    .Hello_Copy {
+      grid-template-columns: auto minmax(0, 1fr);
+      align-items: end;
+    }
+
+    .Hello_Copy > :not(.Hello_Yak, .Hello_Kicker) {
+      grid-column: 1 / -1;
+    }
+
+    .Hello_Yak {
+      width: 4.5rem;
+      margin-left: -0.85rem;
+    }
+
+    .Hello_Ask textarea.Field {
+      min-height: 4.5rem;
+    }
+  }
+
   .Demo {
     display: grid;
     gap: var(--gap);
