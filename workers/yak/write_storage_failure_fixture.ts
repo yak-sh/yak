@@ -1,6 +1,7 @@
 // A storage exception that leaves the incarnation running must still answer
 // its waiting writer. The retained input then recovers through owner review.
 import { type State, Store } from './graph.ts'
+import { titling } from './testing.ts'
 
 export let writeStorageFailure = async (db: State['storage']) => {
   let context = {
@@ -28,7 +29,7 @@ export let writeStorageFailure = async (db: State['storage']) => {
   await ready.body?.cancel()
   let exec = db.sql.exec.bind(db.sql), failed = false
   db.sql.exec = (sql, ...bindings) => {
-    if (bindings.includes('poisoned-storage')) failed = true
+    if (titling(sql, bindings, 'poisoned-storage')) failed = true
     if (failed) throw new Error('SQLITE_IOERR: storage unavailable')
     return exec(sql, ...bindings)
   }

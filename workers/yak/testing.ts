@@ -157,6 +157,17 @@ export let db = ({ storage }: Held) => driver(storage)
 export let named = (held: Held, fields: Record<string, Param>) =>
   objects(db(held), fields).map((r) => String(r.name))
 
+/** Whether a statement the object's SQLite runs writes a doc row titled
+ * `title`, its title bound alone or inside a part of rows (@yaks/sql `parts`):
+ * where a test makes storage fail on one write. */
+export let titling = (sql: string, bindings: unknown[], title: string) =>
+  /^insert into "doc"/i.test(sql) &&
+  bindings.some((b) =>
+    b === title ||
+    typeof b == 'string' && b.startsWith('[') &&
+      b.includes(JSON.stringify(title))
+  )
+
 export let slot = (held: Held, k: string): string | null =>
   (db(held).query(slotOf(k))[0]?.v as string | undefined) ?? null
 export let keep = (held: Held, k: string, v: string) =>

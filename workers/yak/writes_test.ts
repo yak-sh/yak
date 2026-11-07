@@ -8,7 +8,7 @@ import { parse } from '@yaks/query'
 import { doorOf, IDEMPOTENCY, type Namespace, storeOf } from './door.ts'
 import { Store, type Time } from './graph.ts'
 import { by, lit, scan, tally } from '@yaks/sql'
-import { db, keep, named, state } from './testing.ts'
+import { db, keep, named, state, titling } from './testing.ts'
 import { KERNEL, metaOf, minted } from './meta.ts'
 import {
   fingerprinted,
@@ -88,12 +88,14 @@ let mended = (o: ReturnType<typeof object>) => {
 }
 
 // A failure only one write meets, the way any bug under a write throws: the
-// object's SQLite failing on a row that carries `word`. The cure takes it away.
+// object's SQLite failing on the doc row titled `word`. The cure takes it away.
 let poisoned = (o: ReturnType<typeof object>, word: string) => {
   let sql = o.ctx.storage.sql
   let exec = sql.exec
   sql.exec = (query, ...bindings) => {
-    if (bindings.includes(word)) throw new Error('SQLITE_IOERR: disk I/O error')
+    if (titling(query, bindings, word)) {
+      throw new Error('SQLITE_IOERR: disk I/O error')
+    }
     return exec.call(sql, query, ...bindings)
   }
   return () => void (sql.exec = exec)
