@@ -240,7 +240,8 @@ import { applying, seeding } from './release-seed.ts'
 import { sampled, unsampled } from './sample.ts'
 import { titling, vouched, type Who } from './session.ts'
 import { type Clock, clock } from './timing.ts'
-import { addressee, canon, nameOf } from './signin.ts'
+import { addressee, canon } from './signin.ts'
+import { nameOf } from './names.ts'
 import { ACCEPTED, type Door } from './door.ts'
 import {
   asked,

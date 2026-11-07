@@ -266,7 +266,7 @@ export let arrived = async (
   let signup = Date.parse(texting.at) == Date.parse(arrival.at) &&
     texting.consent == arrival.text.trim()
   let { requestId } = await import('./operator-channels.ts')
-  let { builderOf, SPACE } = await import('./build.ts')
+  let { builderOf, SPACE } = await import('./build-door.ts')
   let files = await pictures(env, space, arrival)
   let response = await builderOf(env, space.eid)(() =>
     new Request('https://builder/operator/receive', {

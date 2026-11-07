@@ -1,6 +1,7 @@
 // The space's private work stays beside its builder, outside app restores.
 import { type Graph, graph, type Plugin, type Storage } from '@yaks/graph'
-import { driver, type DurableStorage, storage } from '@yaks/durable-object'
+import { driver, type DurableStorage } from '@yaks/durable-object/sql'
+import { storage } from '@yaks/durable-object/store'
 import { loadVocab } from '@yaks/vocab'
 import { kernelDoc, kernelKeywords } from '@yaks/kernel/vocab'
 import { provenanceDoc } from '@yaks/provenance/vocab'
@@ -8,9 +9,10 @@ import { docDoc } from '@yaks/doc/vocab'
 import { taskDoc } from '@yaks/task/vocab'
 import { personaDoc } from '@yaks/persona'
 import { projectDoc } from '@yaks/project/vocab'
-import { sessionDoc, sessions } from '@yaks/session'
+import { sessionDoc } from '@yaks/session/vocab'
+import { plugins as sessions } from '@yaks/session/graph'
 import { modelDoc } from '@yaks/model'
-import { providerDocs } from './providers.ts'
+import { providerDocs } from './provider-vocab.ts'
 import { toolsDoc } from '@yaks/tools/vocab'
 import { sessionDerived } from '@yaks/session/status'
 import { contextDoc } from '@yaks/context'
@@ -169,7 +171,7 @@ export let operatorGraph = (
     storage,
     vocab,
     plugins: [
-      sessions(),
+      ...sessions(),
       drafts(),
       ids(vocab),
       wakes(),

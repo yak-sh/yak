@@ -669,3 +669,35 @@ Live, the app store's door (`/recipes/api/query?.recipe&.limit=1`) asked every
 (median 498) against 36–63 warm. Its invocations in the same minutes ran 223–261
 ms of wall, so about half of a cold wait is the object starting before any of
 our code runs (yaks-app skill, "A new object takes 150 to 500 ms to start").
+
+## The Operator's read loads what answers it: T-150377
+
+November 7, 2026. A chat page's first visit wakes the space's Builder object,
+whose read of the Operator (build.ts `#stored`, operator-host.ts
+`operatorRequest`) loaded build.ts, operator-store.ts and operator-host.ts with
+their static closures. Each tie to what the read never runs is cut where it is
+made:
+
+- operator-store.ts takes the providers' words from provider-vocab.ts, which
+  gen.ts writes with only config.ts `providing`'s `./vocab` facets, not from
+  providers.ts, which held load.ts and every package's vocabulary.
+- names.ts is what to call a person (`chose`, `nameOf`, over a stored email
+  address), so directory.ts no longer reaches libphonenumber through signin.ts.
+- build-door.ts loads pages.ts in `posting`, the gateway's, and every door to
+  the Builder imports its words from build-door.ts rather than build.ts.
+- The conversation's root is operator-root.ts; operator-host.ts and
+  operator-updates.ts load operator-channels.ts with the words a person sends.
+- Narrower facets: `@yaks/session/transcript`, `@yaks/session/vocab` and
+  `/graph`, `@yaks/session/status`; `@yaks/tools/errors` `refused`;
+  `@yaks/durable-object/sql`, `/store` and `/resets` without its sockets;
+  `@yaks/connections/integrations`; `@yaks/api/refuse`.
+
+Compile and top-level evaluation in Node 26 as above (a fresh process each,
+medians of 8 alternating rounds), main at `2052f6b4c` against this change:
+
+| Isolate woken for                   |   Modules |       Compiled | Compile ms | Evaluate ms |
+| ----------------------------------- | --------: | -------------: | ---------: | ----------: |
+| The Operator's read (and its entry) |   76 → 59 | 1.98 → 1.13 MB |    87 → 55 |     55 → 41 |
+| The Builder's class alone           |   20 → 13 | 1.14 → 0.57 MB |    52 → 30 |      18 → 5 |
+| A space's page (kernel.ts)          |   61 → 72 | 1.46 → 1.31 MB |    69 → 64 |     19 → 19 |
+| A Store (graph.ts)                  | 105 → 120 | 2.35 → 2.20 MB |   104 → 98 |     31 → 27 |

@@ -7,7 +7,7 @@
 // which the voice asks (operator-calls.ts `ASK`).
 import type { Directory } from './directory.ts'
 import { moment } from './html.ts'
-import { rootAt } from './operator-channels.ts'
+import { rootAt } from './operator-root.ts'
 import { type Helping, helpingOf } from './operator-host.ts'
 import type { operatorStore } from './operator-store.ts'
 import { updatesOf } from './operator-updates.ts'

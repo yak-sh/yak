@@ -253,10 +253,11 @@ names a connection with the integration it goes through too (its `reply`), so an
 agent that asked for a connection reads how to get its key;
 `@yaks/connections/effects` installs the built integrations when the process
 starts. `@yaks/connections/identity` derives an integration's id from its name
-for views and other readers. A host that composes this package also composes
-@yaks/secrets over its vault, the plugin and its effect, which seals each
-credential once the write commits and drops it when the connection is deleted,
-and @yaks/edge, which derives each `uses` link's id.
+for views and other readers, and `@yaks/connections/integrations` lists them
+(`listing`) for a reader that holds no connection. A host that composes this
+package also composes @yaks/secrets over its vault, the plugin and its effect,
+which seals each credential once the write commits and drops it when the
+connection is deleted, and @yaks/edge, which derives each `uses` link's id.
 
 ## Terminal sign-in
 

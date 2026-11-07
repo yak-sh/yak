@@ -10,7 +10,7 @@ import type { Env } from './env.ts'
 import { lent } from './lent.ts'
 import { KERNEL, metaOf } from './meta.ts'
 import { storeOf } from './door.ts'
-import { builderOf, SPACE } from './build.ts'
+import { builderOf, SPACE } from './build-door.ts'
 
 export let receipts = async (
   request: Request,

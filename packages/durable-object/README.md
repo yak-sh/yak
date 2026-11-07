@@ -236,7 +236,10 @@ assertEquals(moved(error) && replaced(reset), true)
 
 ## API
 
-The package has one import path, `@yaks/durable-object`:
+`@yaks/durable-object` exports everything below. A reader of the object's
+storage that holds no socket imports `@yaks/durable-object/sql` (`driver`),
+`/store` (`storage`) or `/resets` (the reset helpers) alone, without `sockets`
+and the `@yaks/api` dispatch it brings:
 
 | Export                                                  | Purpose                                             |
 | ------------------------------------------------------- | --------------------------------------------------- |

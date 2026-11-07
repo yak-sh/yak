@@ -70,7 +70,6 @@ import {
   CONTENT,
   ENTRY,
   EXCEPTION,
-  FORK,
   OUTPUT,
   REFUSAL,
   USING,
@@ -80,7 +79,6 @@ import {
   kindOf,
   newestAsk,
   openCalls,
-  ordered,
   sendingBefore,
   seqOf,
   statusOf,
@@ -145,7 +143,9 @@ let unless = <T>(signal: AbortSignal | undefined, work: Promise<T>) =>
 /** A refused tool invocation: expected, recorded as its result carrying
  * `refusal{code}`. */
 export { UnknownSession } from './unknown.ts'
-import { UnknownSession } from './unknown.ts'
+export { transcript } from './transcript.ts'
+import { transcript } from './transcript.ts'
+
 import { closed, PENDING, project } from './project.ts'
 export { PENDING, project } from './project.ts'
 import {
@@ -388,30 +388,6 @@ export let offered = (
     let t = own.find((t) => t.name == name) ?? more.find((t) => t.name == name)
     return t ? [t] : []
   })
-}
-
-/** A transcript's entries: a fork's prefix from its parent up to the anchor,
- * then its own, in order. */
-export let transcript = async (
-  g: Graph,
-  session: Eid,
-): Promise<Bundle[]> => {
-  let [self] = await g.read(
-    `.entity.eid=${session}&.session&.fields=entity.eid` +
-      (g.vocab.comp(FORK) ? ',fork.from' : ''),
-  )
-  if (!self) throw new UnknownSession(session)
-  let own = await g.read(`.${ENTRY}.session=${session}&*`)
-  let from = comp(self, FORK)?.from
-  if (!from) return ordered(own)
-  let [anchor] = await g.get([String(from)], [ENTRY])
-  let parent = anchor && comp(anchor, ENTRY)
-  if (!parent) return ordered(own)
-  let inherited = await transcript(g, String(parent.session))
-  return [
-    ...inherited.filter((b) => seqOf(b) <= seqOf(anchor)),
-    ...ordered(own),
-  ]
 }
 
 export let currentStatus = (

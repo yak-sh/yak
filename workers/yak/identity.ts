@@ -179,7 +179,6 @@ import {
   lodge,
   mac,
   mayText,
-  nameOf,
   type Person,
   personOf,
   sealed,
@@ -190,6 +189,7 @@ import {
   unsentAt,
   visitor,
 } from './signin.ts'
+import { nameOf } from './names.ts'
 import { textable } from './phones.ts'
 import { RETRY, source, within } from './rate.ts'
 import { type Caller, minted, sessionAt, signedOut } from './session.ts'

@@ -18,7 +18,6 @@ import type { Thread } from '@yaks/inbox'
 import { markAttention } from '@yaks/notify/attention'
 import type { Choice } from '@yaks/task'
 import { refuse } from './tool.ts'
-import { receive } from './operator-channels.ts'
 import type { operatorStore } from './operator-store.ts'
 import type { Env } from './env.ts'
 import type { Space } from './directory.ts'
@@ -203,6 +202,8 @@ export let updating = async (
       }]
       : [],
   ])
+  // The channels load with the words a person sends, not with every read.
+  let { receive } = await import('./operator-channels.ts')
   let request = await receive(
     store,
     {

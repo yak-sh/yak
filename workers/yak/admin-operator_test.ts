@@ -9,7 +9,8 @@ import { answer } from './admin.ts'
 import { directoryOf, META } from './directory.ts'
 import { platform } from './testing.ts'
 import { operatorModel, operatorService } from './operator-testing.ts'
-import { receive, rootOf } from './operator-channels.ts'
+import { receive } from './operator-channels.ts'
+import { rootOf } from './operator-root.ts'
 import { COOKIE, sign } from './lib/token.ts'
 
 let p = platform('admin-operator', { SESSION_SECRET: 'secret' })

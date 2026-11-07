@@ -52,11 +52,14 @@ import {
   type Manifest,
   providers,
   vocabs,
+  worded,
+  worder,
 } from './load-gen.ts'
 
 let HERE = new URL('.', import.meta.url)
 let TARGET = new URL('content.ts', HERE)
 let LOAD = new URL('load.ts', HERE)
+let WORDED = new URL('provider-vocab.ts', HERE)
 let PLUGIN = new URL('../../plugins/yaks.app/', HERE)
 
 let refuse = (why: string): never => {
@@ -408,14 +411,18 @@ let loaded = await formatted(
     lenders(embedding, manifests),
   ),
 )
+let spoken = await formatted(worder(worded(providing, manifests)))
 let checking = system.args.includes('--check')
-if (checking) {
-  if (await io.readTextFile(LOAD).catch(() => '') != loaded) {
+for (let [at, text] of [[LOAD, loaded], [WORDED, spoken]] as const) {
+  if (!checking) await io.writeTextFile(at, text)
+  else if (await io.readTextFile(at).catch(() => '') != text) {
     refuse(
-      'workers/yak/load.ts is stale — run `deno task content` and commit it',
+      `workers/yak/${
+        at.pathname.split('/').pop()
+      } is stale — run \`deno task content\` and commit it`,
     )
   }
-} else await io.writeTextFile(LOAD, loaded)
+}
 
 // ---- the reserved words ---------------------------------------------------
 //

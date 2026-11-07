@@ -2,7 +2,12 @@
   "name": "@yaks/durable-object",
   "version": "0.2.28",
   "type": "module",
-  "exports": "./mod.ts",
+  "exports": {
+    ".": "./mod.ts",
+    "./sql": "./sql.ts",
+    "./store": "./store.ts",
+    "./resets": "./resets.ts"
+  },
   "license": "Apache-2.0",
   "description": "Provides graph storage on a Cloudflare Durable Object's embedded SQLite and connects hibernatable WebSockets to query subscriptions.",
   "dependencies": {

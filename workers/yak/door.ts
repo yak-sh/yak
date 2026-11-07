@@ -15,7 +15,13 @@ import { elapsed, heard, hop, WAITS, writing } from './lib/hops.ts'
 import { defect } from './defects.ts'
 import { stamp } from './running.ts'
 import { PLATFORM_STORE } from '@yaks/platform/names'
-import { evicted, killed, opaque, retried, starved } from '@yaks/durable-object'
+import {
+  evicted,
+  killed,
+  opaque,
+  retried,
+  starved,
+} from '@yaks/durable-object/resets'
 
 // A store reports the statements it ran for this fetch, including any store
 // it asked in turn, how long it waited to start when this fetch woke it, and

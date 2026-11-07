@@ -35,7 +35,7 @@ import {
   type Ticket,
   upgraded,
 } from './operator-calls.ts'
-import { SPACE } from './build.ts'
+import { SPACE } from './build-door.ts'
 
 /** What a minute of a call on a provider's own line costs on the phone
  * provider's side: Telnyx's inbound toll-free minute on a SIP trunk, which

@@ -80,10 +80,10 @@ import {
   attachmentId,
   type File,
   mailSend,
-  rootAt,
   SHOWN,
   starting,
 } from './operator-channels.ts'
+import { rootAt } from './operator-root.ts'
 import { textSend } from './operator-texts.ts'
 import { notificationSend } from './operator-alerts.ts'
 import { iconic } from './raster.ts'

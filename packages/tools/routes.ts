@@ -1,36 +1,12 @@
 // A declared tool at an HTTP door. The host resolves the tool and caller;
 // this reads the invocation and answers its result or expected refusal.
-import { status } from '@yaks/graph/errors'
-import { CallError, parsed } from './args.ts'
+import { parsed } from './args.ts'
+import { CallError, refused } from './errors.ts'
 
 type Handler = (request: Request) => Response | Promise<Response>
 type Route = { method: string; path: string; handle: Handler }
 let object = (v: unknown): v is Record<string, unknown> =>
   !!v && typeof v == 'object' && !Array.isArray(v)
-
-let codes: Record<string, number> = {
-  access: 403,
-  arguments: 400,
-  conflict: 409,
-  limit: 429,
-  missing: 404,
-  unavailable: 503,
-}
-
-/** A thrown invocation refusal as its JSON HTTP answer. Defects are thrown
- * through so the host's failure boundary can report them. */
-export let refused = (e: unknown): Response => {
-  let code = e instanceof CallError
-    ? e.code
-    : e instanceof Error
-    ? e.name.toLowerCase()
-    : 'refused'
-  let statusCode = e instanceof CallError ? codes[code] ?? 400 : status(e)
-  if (statusCode >= 500 && !(e instanceof CallError)) throw e
-  return Response.json({
-    error: { code, message: e instanceof Error ? e.message : String(e) },
-  }, { status: statusCode })
-}
 
 /** POST `{name,args}` to one caller-scoped command runner. */
 let command = (

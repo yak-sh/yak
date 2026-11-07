@@ -16,7 +16,7 @@ import {
   watch as watchEmbedding,
 } from '@yaks/embedding'
 import { texts } from './embedding-read.ts'
-import { reserved } from '@yaks/durable-object'
+import { reserved } from '@yaks/durable-object/sql'
 import {
   catalogue,
   col,

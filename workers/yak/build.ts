@@ -62,12 +62,8 @@
 // T-34242); what that page draws is `POST /say` below — the round waited for,
 // then the whole conversation as this same list. One wire, two ways to read
 // it.
-import {
-  driver,
-  type DurableStorage,
-  type Hibernation,
-  type Wire,
-} from '@yaks/durable-object'
+import type { Hibernation, Wire } from '@yaks/durable-object'
+import { driver, type DurableStorage } from '@yaks/durable-object/sql'
 import type { Alarms } from './operator-store.ts'
 import { system } from '@yaks/fp'
 import { level, writes } from '@yaks/member'
@@ -99,20 +95,6 @@ import {
   seatOf,
   SPACE,
   WAIT,
-} from './build-door.ts'
-
-export {
-  BUILD,
-  builderOf,
-  type Frame,
-  type Held,
-  joining,
-  NOBODY,
-  NOT_A_WRITER,
-  posting,
-  SPACE,
-  WAIT,
-  wiped,
 } from './build-door.ts'
 
 /**

@@ -30,12 +30,8 @@ import { directoryOf } from './directory.ts'
 import { operatorMemory, operatorModel } from './operator-testing.ts'
 import { drain } from './operator-store.ts'
 import { operating } from './operator.ts'
-import {
-  handleChannels,
-  receive,
-  requestId,
-  rootOf,
-} from './operator-channels.ts'
+import { handleChannels, receive, requestId } from './operator-channels.ts'
+import { rootOf } from './operator-root.ts'
 import { answering, conversationOf, workOf } from './operator-host.ts'
 import { ANSWERED, ASKED, HELLO, SMALL_TALK } from './operator-calls_fixture.ts'
 import { parseHTML } from 'linkedom'

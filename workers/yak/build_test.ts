@@ -16,14 +16,14 @@
 import { assert, assertEquals, assertStringIncludes } from '@std/assert'
 import type { Wire } from '@yaks/durable-object'
 import * as apps from './apps.ts'
+import { Builder } from './build.ts'
 import {
-  Builder,
   type Frame,
   type Held,
   NOBODY,
   NOT_A_WRITER,
-} from './build.ts'
-import { seated } from './build-door.ts'
+  seated,
+} from './build-door.ts'
 import { directory } from './directory.ts'
 import * as dirPart from './directory.ts'
 import type { Env } from './env.ts'

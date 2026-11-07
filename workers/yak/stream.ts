@@ -45,7 +45,7 @@ import { rosterLine } from '@yaks/mcp/roster'
 import { VERSION } from './running.ts'
 import type { Env } from './env.ts'
 import { fetchOf } from './door.ts'
-import { evicted, jittered } from '@yaks/durable-object'
+import { evicted, jittered } from '@yaks/durable-object/resets'
 import { behind, type Restartable } from './running.ts'
 
 // The slice of the Durable Object runtime this object touches, structurally,

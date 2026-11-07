@@ -5,7 +5,7 @@ import { caught, within } from './defects.ts'
 import { origin } from '@yaks/tracker/report'
 import type { Env } from './env.ts'
 import { learn, restarting } from './running.ts'
-import { type Own, replaced } from '@yaks/durable-object'
+import { type Own, replaced } from '@yaks/durable-object/resets'
 
 let clock = {
   now: Date.now,

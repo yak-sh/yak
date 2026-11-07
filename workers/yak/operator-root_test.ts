@@ -11,8 +11,8 @@ import {
   handleChannels,
   receive,
   type Request as Intake,
-  rootOf,
 } from './operator-channels.ts'
+import { rootOf } from './operator-root.ts'
 import { conversationOf, workOf } from './operator-host.ts'
 
 // A person's messages reach their one conversation with the Operator, which

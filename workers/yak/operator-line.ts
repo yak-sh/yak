@@ -314,7 +314,7 @@ export let lineArrived = async (
   arrival: import('@yaks/phone').Arrival & { via: string },
 ) => {
   let { requestId } = await import('./operator-channels.ts')
-  let { builderOf, SPACE } = await import('./build.ts')
+  let { builderOf, SPACE } = await import('./build-door.ts')
   for (let space of spaces.filter((s) => !s.trashed)) {
     let response = await builderOf(env, space.eid)(() =>
       new Request('https://builder/operator/replied', {

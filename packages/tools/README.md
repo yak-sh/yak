@@ -144,7 +144,7 @@ is assigned a fresh eid first.
 | `@yaks/tools/schema`   | `inputSchemaOf`, `shapeOf`, `answerSchema`, `answerWith`: shared public schemas                                                                                                                                                                                                                                                                                                                                                                                                    |
 | `@yaks/tools/access`   | `mayCall`, `Floor`                                                                                                                                                                                                                                                                                                                                                                                                                                                                 |
 | `@yaks/tools/declared` | `parseTools`, `filled`, `invoke`, `commands`, `schemaOf`, `viewsOf`, `mayCall`, `TOOLS_EXAMPLE`; `Arg`, `ToolDef`, `Tools`, `Context`                                                                                                                                                                                                                                                                                                                                              |
-| `@yaks/tools/routes`   | `routes`, `refused`                                                                                                                                                                                                                                                                                                                                                                                                                                                                |
+| `@yaks/tools/routes`   | `routes`                                                                                                                                                                                                                                                                                                                                                                                                                                                                           |
 | `@yaks/tools/vocab`    | `toolsDoc`, `callDoc`, `toolDoc`, `docs`, `description`, `derived`                                                                                                                                                                                                                                                                                                                                                                                                                 |
 | `@yaks/tools/value`    | `valueIn`                                                                                                                                                                                                                                                                                                                                                                                                                                                                          |
 | `@yaks/tools/views`    | `views`                                                                                                                                                                                                                                                                                                                                                                                                                                                                            |
@@ -745,7 +745,7 @@ equal(routes({}), [])
 unexpected errors through to the host's failure boundary.
 
 ```ts
-import { refused } from '@yaks/tools/routes'
+import { refused } from '@yaks/tools/errors'
 import { CallError } from '@yaks/tools'
 import { equal } from '@yaks/testing'
 
@@ -801,7 +801,7 @@ answer formatting shared by both runners. `@yaks/tools/persist` supplies
 storage-certified write retries without loading either runner;
 `persist(write, report, clock?)` waits out its backoff on the clock it is given.
 `@yaks/tools/fault` classifies defects, and `@yaks/tools/errors` keeps shared
-invocation error identities.
+invocation error identities and `refused`, their HTTP answer.
 
 ```ts
 import { graph, mint } from '@yaks/graph'

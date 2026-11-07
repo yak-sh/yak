@@ -5,7 +5,8 @@ import type { Item, Request } from '@yaks/model'
 import { platform } from './directory-rows-probe.ts'
 import { directoryOf } from './directory.ts'
 import { operatorModel, operatorService } from './operator-testing.ts'
-import { fire, receive, rootOf } from './operator-channels.ts'
+import { fire, receive } from './operator-channels.ts'
+import { rootOf } from './operator-root.ts'
 import { drain } from './operator-store.ts'
 
 // A person asks their Operator to come back to something: it sets a wake-up

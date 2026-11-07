@@ -9,7 +9,7 @@ import { operatorFrames, operatorRequest } from './operator-host.ts'
 import type { Lines } from './operator-draw.ts'
 import { rowsOf } from './operator-rows.ts'
 import { chatPage, operatorAnswer } from './operator-page.ts'
-import { rootOf } from './operator-channels.ts'
+import { rootOf } from './operator-root.ts'
 import { platform } from './testing.ts'
 import type { Space } from './directory.ts'
 

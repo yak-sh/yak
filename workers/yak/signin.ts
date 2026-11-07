@@ -29,6 +29,7 @@ import { token } from '@yaks/graph/sha256'
 import { KERNEL, type Meta, minted } from './meta.ts'
 import { secretKey } from '@yaks/secrets/signed'
 import { mobile } from '@yaks/phone/mobile'
+import { chose, nameOf } from './names.ts'
 import { type Host, signupAddress } from './host.ts'
 import type { Letter } from './mail.ts'
 
@@ -520,19 +521,6 @@ export let personLine = (typed: string) => {
 
 let personAt = async (store: Meta, typed: string) =>
   (await store.query(personLine(typed)))[0] as Person | undefined
-
-// An address is not a name. A person minted before anyone was asked wears
-// their address as `doc.title` (T-32627), so that title reads as no name at
-// all: the next sign-in writes the front of the address in its place, and an
-// app's store never learns an address (T-32654). Nothing has to be rewritten on deploy.
-export let chose = (title?: string | null) =>
-  title && !title.includes('@') ? title : null
-
-// What to call someone: the name they chose, else the front of their address
-// — `dana` from `dana@example.com`. This is the only name that leaves the
-// directory.
-export let nameOf = (title: string | null | undefined, email: string) =>
-  chose(title) ?? canon(email).split('@')[0]
 
 // What a person signing in is first called: the front of their address, and
 // nothing for a number, which is no name; their space page asks.

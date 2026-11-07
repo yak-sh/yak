@@ -333,7 +333,7 @@ let replied = async (
 ): Promise<string | null> => {
   let thread = threadOf(m)
   if (!thread.length) return null
-  let { builderOf, SPACE } = await import('./build.ts')
+  let { builderOf, SPACE } = await import('./build-door.ts')
   let found = await builderOf(env, space.eid)(() =>
     new Request('https://builder/operator/letter', {
       method: 'POST',
@@ -398,7 +398,7 @@ let asked = async (
     ...(arrival.reply ? { reply: arrival.reply } : {}),
     ...(signed == null ? {} : { verified: signed }),
   })[0]
-  let { builderOf, SPACE } = await import('./build.ts')
+  let { builderOf, SPACE } = await import('./build-door.ts')
   let response = await builderOf(env, space.eid)(() =>
     new Request('https://builder' + path, {
       method: 'POST',

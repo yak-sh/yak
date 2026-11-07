@@ -499,7 +499,7 @@ let fix = async (env: Env, space: Space, app: App, hit: Hit) => {
   if (!owner) return
   let e = broke(hit)
   let at = where(hit)
-  let { builderOf, SPACE } = await import('./build.ts')
+  let { builderOf, SPACE } = await import('./build-door.ts')
   let response = await builderOf(env, space.eid)(() =>
     new Request('https://builder/operator/receive', {
       method: 'POST',

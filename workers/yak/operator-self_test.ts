@@ -12,8 +12,8 @@ import {
   handleChannels,
   receive,
   type Request as Intake,
-  rootOf,
 } from './operator-channels.ts'
+import { rootOf } from './operator-root.ts'
 
 // The Operator finds what it was told after it has left its context: its own
 // conversations, forks and memories are in its own store, read with the same

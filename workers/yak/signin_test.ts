@@ -16,13 +16,11 @@ import {
 import {
   called,
   canon,
-  chose,
   codeLetter,
   LIFE,
   mac,
   mayText,
   mint,
-  nameOf,
   personOf,
   SENDS,
   spend,
@@ -32,6 +30,7 @@ import {
   VISITS,
   WINDOW,
 } from './signin.ts'
+import { chose, nameOf } from './names.ts'
 import type { Bundle } from '@yaks/graph'
 import { Refused } from '@yaks/graph/errors'
 import { held as holding } from './signin-fixture.ts'

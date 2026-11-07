@@ -59,7 +59,7 @@ import type { Operator } from './operator.ts'
 import { ownerOf } from './operator-access.ts'
 import { receive, requestId } from './operator-channels.ts'
 import { glanceOf, type Look, looks } from './operator-glance.ts'
-import { SPACE } from './build.ts'
+import { SPACE } from './build-door.ts'
 
 /** The longest a call lasts, in minutes. */
 export let MINUTES = 10

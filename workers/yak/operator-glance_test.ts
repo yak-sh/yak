@@ -3,7 +3,7 @@
 import { equal, test } from '@yaks/testing'
 import { toolEid } from '@yaks/tools/result'
 import { operatorMemory } from './operator-testing.ts'
-import { rootOf } from './operator-channels.ts'
+import { rootOf } from './operator-root.ts'
 import { notification } from './operator-updates.ts'
 import { type Glance, glanceOf, looks } from './operator-glance.ts'
 

@@ -1,11 +1,10 @@
 // The kernel's door to a space's Builder: its request protocol and socket
 // frames, independent of the Durable Object that keeps the conversation.
-import { jittered } from '@yaks/durable-object'
+import { jittered } from '@yaks/durable-object/resets'
 import { type Level, level } from '@yaks/member'
 import { fetchOf } from './door.ts'
 import type { Space } from './directory.ts'
 import type { Env } from './env.ts'
-import { building } from './pages.ts'
 import { vouched, type Who } from './session.ts'
 import { answered } from './meta.ts'
 
@@ -142,6 +141,9 @@ export let posting = async (
   req: Request,
   who: Who,
 ): Promise<Response> => {
+  // The page it answers is the gateway's, loaded there already; the
+  // builder's object, which shares this module's words, never draws one.
+  let { building } = await import('./pages.ts')
   let form = await req.formData()
   let text = String(form.get('say') ?? '').trim()
   if (!text) {

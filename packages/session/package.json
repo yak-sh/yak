@@ -17,7 +17,8 @@
     "./wait": "./wait.ts",
     "./admission": "./admission.ts",
     "./cli": "./cli.ts",
-    "./ended": "./ended.ts"
+    "./ended": "./ended.ts",
+    "./transcript": "./transcript.ts"
   },
   "license": "Apache-2.0",
   "description": "Represents sessions as graph transcripts, derives status from their entries, manages claims, and runs a transcript wherever its effects are worked.",

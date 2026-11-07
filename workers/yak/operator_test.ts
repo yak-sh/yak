@@ -1,7 +1,7 @@
 import { test, until } from '@yaks/testing'
 import { assertEquals, assertRejects, assertStringIncludes } from '@std/assert'
 import { CallError } from '@yaks/tools'
-import { rootOf } from './operator-channels.ts'
+import { rootOf } from './operator-root.ts'
 import type { Item, Model, Request } from '@yaks/model'
 import { comp } from '../../packages/graph/testing.ts'
 import { platform } from './directory-rows-probe.ts'

@@ -15,7 +15,7 @@ import { NOTES } from './standing.ts'
 import { staged } from './release.ts'
 import { r2RawObjects } from './lib/objects.ts'
 import { conversationOf } from './operator-host.ts'
-import { rootOf } from './operator-channels.ts'
+import { rootOf } from './operator-root.ts'
 import { KERNEL, meta } from './meta.ts'
 import { link } from '@yaks/edge'
 

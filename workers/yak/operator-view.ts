@@ -6,7 +6,7 @@
 // (`frame`) as the entries each draws, which the page draws again and puts
 // in place by its id.
 import type { Bundle, Comp } from '@yaks/graph'
-import { statusOf } from '@yaks/session'
+import { statusOf } from '@yaks/session/status'
 import { toolEid } from '@yaks/tools/result'
 import { blocks, parse } from '@yaks/markdown/structural'
 import type { H } from '@yaks/render'

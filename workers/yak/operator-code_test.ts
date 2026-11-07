@@ -9,7 +9,8 @@ import { directoryOf } from './directory.ts'
 import { operatorMemory, operatorModel } from './operator-testing.ts'
 import { operating } from './operator.ts'
 import { drain } from './operator-store.ts'
-import { handleChannels, receive, rootOf } from './operator-channels.ts'
+import { handleChannels, receive } from './operator-channels.ts'
+import { rootOf } from './operator-root.ts'
 
 let { env } = platform('operator-code', {
   CODE_MODE: evaluate,

@@ -8,19 +8,12 @@ import { derivedEid } from '@yaks/graph/identity'
 import { ownerOf, owns } from './operator-access.ts'
 import type { Held } from './build-door.ts'
 import type { Operator } from './operator.ts'
-import {
-  handOver,
-  letterOf,
-  receive,
-  type Request,
-  rootAt,
-  rootOf,
-  textOf,
-} from './operator-channels.ts'
+import type { Request } from './operator-channels.ts'
+import { rootAt, rootOf } from './operator-root.ts'
 import { phoneTexts } from './phone-move.ts'
 import { channeled } from './channel-move.ts'
 import type { operatorStore } from './operator-store.ts'
-import { transcript } from '@yaks/session'
+import { transcript } from '@yaks/session/transcript'
 import type { Tool } from '@yaks/model'
 import {
   frame,
@@ -45,6 +38,12 @@ import {
 } from './operator-draw.ts'
 
 type Store = ReturnType<typeof operatorStore>
+// What the channels take a person's words in with: loaded by the request that
+// sends some, not by every read (operator-channels.ts).
+let channels = () => import('./operator-channels.ts')
+type Receiving = Parameters<
+  Awaited<ReturnType<typeof channels>>['receive']
+>[3]
 let comp = (b: Bundle | undefined, name: string) =>
   b?.[name] as Record<string, unknown> | undefined
 
@@ -923,6 +922,7 @@ export let operatorReply = async (
   armed: () => Promise<void> | undefined,
 ): Promise<Response> => {
   let { store } = operator
+  let { letterOf, receive, textOf } = await channels()
   let thread = Array.isArray(args.thread) ? args.thread.map(String) : []
   let texted = args.texted as { from: string; to: string } | undefined
   let letter = texted
@@ -939,7 +939,7 @@ export let operatorReply = async (
   if (path == '/operator/letter') {
     return Response.json({ letter: letter.entity.eid })
   }
-  let options = args.options as Parameters<typeof receive>[3]
+  let options = args.options as Receiving
   let [old] = options?.id ? await store.g.get([options.id]) : []
   let id = await receive(
     store,
@@ -1020,7 +1020,7 @@ export let operatorRequest = async (
       space: spaceId,
       administrative: access.administrative === true,
     }
-    let options = args.options as Parameters<typeof receive>[3]
+    let options = args.options as Receiving
     if (Array.isArray(args.draft)) {
       let also = drafts(args.draft as Bundle[], person)
       if ((await allowedDrafts(also)).length != also.length) return missing()
@@ -1028,6 +1028,7 @@ export let operatorRequest = async (
     }
     let [old] = options?.id ? await store.g.get([options.id]) : []
     if (old && !await own(old.entity.eid)) return missing()
+    let { receive } = await channels()
     let id = await receive(store, intake, String(args.say ?? ''), options)
     await armed()
     if (options?.also) {
@@ -1132,6 +1133,7 @@ export let operatorRequest = async (
   }
   // What `from` had here is the person's now (newcomer.ts `keep`).
   if (path == '/operator/handover') {
+    let { handOver } = await channels()
     await handOver(store, spaceId, String(args.from ?? ''), person)
     return Response.json({})
   }

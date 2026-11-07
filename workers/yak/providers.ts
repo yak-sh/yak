@@ -28,8 +28,7 @@ import {
 } from '@yaks/model'
 import { sentinel } from '@yaks/secrets'
 import { providing, serving } from './config.ts'
-import type { VocabDoc } from '@yaks/vocab'
-import { providerFacets, vocabFacets } from './load.ts'
+import { providerFacets } from './load.ts'
 import { ctxOf } from './connections.ts'
 import { vaultOf } from './vault.ts'
 import type { Env } from './env.ts'
@@ -38,12 +37,6 @@ let setting = (env: object, name: string): string | undefined => {
   let value = (env as Record<string, unknown>)[name]
   return typeof value == 'string' && value ? value : undefined
 }
-
-/** The words the configured providers record a reply with (their
- * `./vocab`), for a store that keeps their replies. */
-export let providerDocs: VocabDoc[] = (providing.plugins ?? []).flatMap(
-  (plug) => vocabFacets[used(plug)]?.docs ?? [],
-)
 
 /** What the platform lends a provider for its own agents (the Operator, the
  * builder): the transport it holds as it lends and its settings. Nobody is
