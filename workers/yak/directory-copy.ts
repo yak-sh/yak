@@ -12,6 +12,7 @@ import { apart, elapsed } from './lib/hops.ts'
 import { evicted, jittered, opaque, retried } from '@yaks/durable-object'
 import { type Clock, system } from '@yaks/fp'
 import { setImmediate } from 'node:timers'
+import { RETIRED } from './serving-copy.ts'
 
 export type ServingCopyDoor = {
   read?(key: string): Promise<{ revision: number; body: string } | null>
@@ -26,8 +27,6 @@ export type ServingCopyDoor = {
   finish(revision: number): Promise<boolean>
   /** A failed mutation ends its fence at the directory's committed revision. */
   settle?(revision: number, committed: number): Promise<boolean>
-  /** Fenced for good: the directory fences another copy now. */
-  retire?(): Promise<boolean>
   put(revision: number, key: string, body: string): Promise<boolean>
   get(key: string): Promise<string | null>
 }
@@ -56,7 +55,8 @@ export let copyOf = (env: Pick<Env, 'SERVING_COPY' | 'CLOCK'>) => {
 // raises no fence until that one is retired. Until then a Worker still on
 // older code, reading the former copy, could be answered there at a revision
 // the directory has moved past without fencing it. Retired, the former copy
-// answers nobody (serving-copy.ts `retire`). The new copy is reached at the
+// answers nobody (serving-copy.ts `RETIRED`), and it is retired by a call the
+// copy on every code answers, as a deploy leaves it on older code a while. The new copy is reached at the
 // same moment, from the directory, so it stands beside it: every Worker fills
 // it only behind an answer of the directory's. `was` is the copy the directory
 // last fenced, null when it has fenced none, and `moved` marks the handover
@@ -75,7 +75,7 @@ export let handover = (
     let wait = jittered(env.CLOCK ?? system)
     let former = was && copies.get(copies.idFromName(was))
     ready = Promise.all([
-      former && retried(() => former.retire?.(), true, moving, wait),
+      former && retried(() => former.begin(RETIRED - 1), true, moving, wait),
       copy.revision?.(),
     ]).then(moved)
     handing.set(copies, ready)

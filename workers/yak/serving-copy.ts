@@ -20,6 +20,15 @@ export type ServingCopyOptions = {
   maxAnswers?: number
 }
 
+/**
+ * The revision a copy the directory fences no longer stands at, once it fences
+ * another one (directory-copy.ts `handover`): `begin(RETIRED - 1)` blocks it
+ * there, as the copy on any code begins, and no write commits under it, no
+ * finish or settle lowers it and no fill matches it. A Worker still reading
+ * it is answered by the directory alone.
+ */
+export let RETIRED = Number.MAX_SAFE_INTEGER
+
 /** A cold or fenced copy cannot supply an answer. */
 export class ServingCopyUnavailable extends Error {
   readonly status = 503
@@ -108,22 +117,9 @@ export class ServingCopy {
     return true
   }
 
-  /**
-   * The directory fences another copy now (directory-copy.ts `handover`), so
-   * this one is fenced for good: blocked at the last revision there is, which
-   * no write commits under and no finish, settle or fill lowers. A Worker
-   * still on older code reads here, and is answered by the directory alone.
-   */
-  retire(): boolean {
-    this.#revision = Number.MAX_SAFE_INTEGER
-    this.#blocked = true
-    this.#answers.clear()
-    this.#persist(this.#revision, true, this.#answers)
-    return true
-  }
-
+  // A copy begun at the last revision is retired (`RETIRED`).
   get #retired(): boolean {
-    return this.#revision == Number.MAX_SAFE_INTEGER
+    return this.#revision == RETIRED
   }
 
   /**

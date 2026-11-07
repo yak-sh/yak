@@ -2,6 +2,7 @@
 // runtime timers or Durable Object boot is needed to exercise revision races.
 import { equal, ok, test } from '@yaks/testing'
 import {
+  RETIRED,
   ServingCopy,
   type ServingCopyState,
   ServingCopyUnavailable,
@@ -296,7 +297,7 @@ test('serving copy: a retired copy answers nobody and no fence lowers it', () =>
   let { copy } = fixture()
   copy.put(0, '.app', 'body')
   let at = copy.begin()
-  copy.retire()
+  copy.begin(RETIRED - 1)
   let revision = copy.revision
   unavailable(copy, '.app')
   equal(

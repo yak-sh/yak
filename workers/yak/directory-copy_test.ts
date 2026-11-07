@@ -13,7 +13,7 @@ import {
   type ServingCopyDoor,
   STALL,
 } from './directory-copy.ts'
-import { ServingCopy } from './serving-copy.ts'
+import { RETIRED, ServingCopy } from './serving-copy.ts'
 import { directory } from './directory.ts'
 import { type Namespace, storeOf } from './door.ts'
 
@@ -369,15 +369,16 @@ test('a handover retires the former copy before its first fence', async () => {
       persistence: { read: () => undefined, write: () => {} },
     })
     cores.set(name, core)
+    // The former copy is retired by a begin, which code of every version has.
+    let begin = (at?: number) =>
+      name == FORMER
+        ? new Promise<number>((done) => retiring = () => done(core.begin(at)))
+          .finally(() => calls.push(`retire ${name}`))
+        : (calls.push(`begin ${name}`), Promise.resolve(core.begin(at)))
     return {
-      begin: (
-        at,
-      ) => (calls.push(`begin ${name}`), Promise.resolve(core.begin(at))),
+      begin,
       finish: (n) => Promise.resolve(core.finish(n)),
       revision: () => Promise.resolve(core.revision),
-      retire: () =>
-        new Promise<boolean>((done) => retiring = () => done(core.retire()))
-          .finally(() => calls.push(`retire ${name}`)),
       put: (n, k, b) => Promise.resolve(core.put(n, k, b)),
       get: () => Promise.resolve(null),
     }
@@ -393,7 +394,7 @@ test('a handover retires the former copy before its first fence', async () => {
   assertEquals(early, [])
   assertEquals(calls, [`retire ${FORMER}`, `begin ${COPY}`])
   assertEquals(moved, 1)
-  assertEquals(cores.get(FORMER)!.valid(cores.get(FORMER)!.revision), false)
+  assertEquals(cores.get(FORMER)!.revision, RETIRED)
   // Once handed over, the directory fences the new copy alone.
   calls.length = 0
   await handover({ SERVING_COPY }, COPY, () => moved++)!.begin(8)
