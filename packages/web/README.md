@@ -26,13 +26,14 @@ List web and browse beside the graph and API plugins in a `yak serve` config:
 ```
 
 The routes facet answers `/` and entity addresses such as `/T-9` with the page
-(`./page`). A release ships the page already made too, so a host from JSR
-answers it from what Deno keeps instead of fetching its files from jsr.io.
-`/web/app.js` is the canvas (`./canvas`): browse's browser entry bundled with
-the configured plugins' views. A release ships the canvas of a fresh `yak init`
-already made, so a host composed that way answers with it instead of bundling
-from JSR on the person's machine. `/web/styles.css` serves @yaks/ui's stylesheet
-followed by browse's styles. The manifest and icons live beside the page.
+(`./page`). It and every file `/web/*` serves are read through Deno's module
+loader (@yaks/api/asset), so a host from JSR answers them from what Deno keeps,
+offline too, instead of fetching them from jsr.io. `/web/app.js` is the canvas
+(`./canvas`): browse's browser entry bundled with the configured plugins' views.
+A release ships the canvas of a fresh `yak init` already made, so a host
+composed that way answers with it instead of bundling from JSR on the person's
+machine. `/web/styles.css` serves @yaks/ui's stylesheet followed by browse's
+styles. The manifest and icons live beside the page.
 
 The page carries @yaks/tracker's page reporter inline, ahead of the app. It
 posts what it catches to `POST /api/report`, which reads the body with
@@ -63,7 +64,7 @@ more-specific routes.
 | `.`          | `routes`, `letters` and the host's `Hosting` interface |
 | `./routes`   | routes facet composed by the browser host              |
 | `./canvas`   | the canvas a composition serves, and `prepare`         |
-| `./page`     | the page every address answers, and `prepare`          |
+| `./page`     | the page every address answers                         |
 | `./outlived` | whether a page outlived the bundle it runs             |
 
 `assets.ts` builds the same module, page, stylesheet and icons into a static

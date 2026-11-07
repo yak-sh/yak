@@ -1,5 +1,6 @@
 /** Native asset adapter. The data/stream core remains runtime-independent. */
 import type { Route } from '@yaks/api'
+import { text } from '@yaks/api/asset'
 import { bundle, kept } from '@yaks/cli/page'
 import { everforest, kits, rosepine, stylesheet } from '@yaks/ui'
 import { guarded, type Hosting, http } from './http.ts'
@@ -19,12 +20,6 @@ export let PAGE = '<!doctype html><html lang="en"><head>' +
 
 export let entry = (main: string) =>
   `import { boot } from ${JSON.stringify(main)}\nboot()`
-
-let text = async (url: URL, signal: AbortSignal) => {
-  let response = await fetch(url, { signal })
-  if (!response.ok) throw new Error('asset unavailable')
-  return await response.text()
-}
 
 /** The very same host policy protects HTML, every asset, metadata and leases.
  * No bundle or stylesheet is built until an authenticated request needs it. */
@@ -65,15 +60,15 @@ export let routes = (host: Hosting): Route[] => {
     asset(
       '/visualize/styles.css',
       'text/css; charset=utf-8',
-      async (signal) =>
+      async () =>
         (await stylesheet({ kits, theme: everforest })) + '\n' +
-        (await text(new URL('./visualize.css', import.meta.url), signal)),
+        (await text(new URL('./visualize.css', import.meta.url))),
     ),
     ...Object.entries({ everforest, rosepine }).map(([name, theme]) =>
       asset(
         `/visualize/themes/${name}.css`,
         'text/css; charset=utf-8',
-        (signal) => text(theme.css, signal),
+        () => text(theme.css),
       )
     ),
     ...http(host),

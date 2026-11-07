@@ -57,8 +57,15 @@ export let shipped: Readonly<Record<string, readonly string[]>> = subpaths
 /** The unstable features a release runs with: this repository's deno.json's.
  * `lazy-dynamic-imports` is the one a person waits on: without it Deno loads
  * every module a literal `import()` reaches before the program starts
- * (./yak.ts `local`), and a `yak serve` from JSR listens 0.4 s later. */
-export let UNSTABLE = ['net', 'lazy-dynamic-imports', 'no-legacy-abort']
+ * (./yak.ts `local`), and a `yak serve` from JSR listens 0.4 s later.
+ * `raw-imports` reads the files a package ships from Deno's module cache
+ * instead of jsr.io (@yaks/api/asset). */
+export let UNSTABLE = [
+  'net',
+  'lazy-dynamic-imports',
+  'raw-imports',
+  'no-legacy-abort',
+]
 
 /** The config a resolver of this release runs under. */
 export let released: Resolving & { unstable: string[] } = {

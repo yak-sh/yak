@@ -76,6 +76,7 @@ import { paper } from './paper.ts'
 import { pencil } from './pencil.ts'
 import { rosepine } from './rosepine.ts'
 import { Fragment } from 'preact'
+import { text } from '@yaks/api/asset'
 import type { Composition, Contributions, Kit, Piece, Theme } from './theme.ts'
 
 /** Every part, by what it is for: the document's defaults, what is said
@@ -207,9 +208,7 @@ export let sheet = (c: Composition): Sheet =>
   )
 
 let read = async (url: URL) => {
-  let response = await fetch(url)
-  if (!response.ok) throw new Error(`UI stylesheet ${url}: ${response.status}`)
-  let css = await response.text()
+  let css = await text(url)
   // Inlining must retain each external sheet's address for images and imports.
   let at = (path: string) =>
     path.startsWith('#') || path.startsWith('data:')

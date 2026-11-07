@@ -37,6 +37,7 @@ import type { Config } from '@yaks/cli/config'
 import { type Context, received } from '@yaks/tracker/report'
 import type { Vault } from '@yaks/secrets'
 import { authorization } from './authorize.ts'
+import { bytes, text } from '@yaks/api/asset'
 
 /** What this facet reads off the host it is composing into: the vocabulary
  * its plugins loaded, and the graph a name is resolved in. */
@@ -62,16 +63,13 @@ export let letters: string[] = [...'ABCDEFGHIJKLMNOPQRSTUVWXYZ']
   .flatMap((l) => [l, l.toLowerCase()])
 
 let here = (path: string) => new URL(path, import.meta.url)
-let text = (path: string) => () => fetch(here(path)).then((r) => r.text())
-let bytes = (path: string) => () =>
-  fetch(here(path)).then(async (r) => new Uint8Array(await r.arrayBuffer()))
 
 // @yaks/ui's stylesheet carries every component's CSS, so it loads when the
 // stylesheet is first asked for, not before the server listens.
 let styles = async (app: Application) =>
   (await Promise.all([
     import('@yaks/ui').then((ui) => ui.stylesheet(ui.composition)),
-    app.styles ? fetch(app.styles).then((r) => r.text()) : '',
+    app.styles ? text(app.styles) : '',
   ]))
     .join('\n')
 
@@ -79,7 +77,7 @@ let files: [string, string, () => Promise<Body>][] = [
   [
     'manifest.webmanifest',
     'application/manifest+json',
-    text('./manifest.webmanifest'),
+    () => text(here('./manifest.webmanifest')),
   ],
   ...[
     'icon-192.png',
@@ -92,7 +90,7 @@ let files: [string, string, () => Promise<Body>][] = [
     ): [string, string, () => Promise<Uint8Array<ArrayBuffer>>] => [
       name,
       'image/png',
-      bytes(`./${name}`),
+      () => bytes(here(`./${name}`)),
     ]),
 ]
 

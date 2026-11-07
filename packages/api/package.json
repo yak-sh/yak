@@ -9,7 +9,8 @@
     "./routes": "./routes.ts",
     "./timing": "./timing.ts",
     "./refuse": "./refuse.ts",
-    "./graph": "./graph.ts"
+    "./graph": "./graph.ts",
+    "./asset": "./asset.ts"
   },
   "license": "Apache-2.0",
   "description": "Serves graph writes, queries, and live query subscriptions through an HTTP and WebSocket request handler.",

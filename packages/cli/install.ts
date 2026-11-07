@@ -97,8 +97,18 @@ export let serving = (dir: string, port: number): string[] => [
   `${dir}/ready`,
 ]
 
-/** What a warm-up of `yak serve` asks for once it listens. */
-export let CANVAS = ['/', '/web/app.js']
+/** What a warm-up of `yak serve` asks for once it listens, after the page at
+ * `/`: everything the page loads (its canvas, stylesheet, icons, manifest),
+ * which serve makes from the files Deno then keeps, so a first `yak serve`
+ * answers with them offline too.
+ *
+ * ```ts
+ * import { assertEquals } from '@std/assert'
+ * assertEquals(loads('<link href="/web/s.css" /><a href="https://x"><script src="/web/app.js">'), ['/web/s.css', '/web/app.js'])
+ * ```
+ */
+export let loads = (page: string): string[] =>
+  [...page.matchAll(/(?:href|src)="(\/[^"]*)"/g)].map(([, path]) => path)
 
 // Once `path` exists, or an error at `by`.
 let appeared = async (path: string, by: number) => {
@@ -132,7 +142,7 @@ let answered = async (url: string, by: number) => {
     try {
       let res = await fetch(url)
       let body = await res.text()
-      if (res.ok) return
+      if (res.ok) return body
       failure = new Error(`${url} answered ${res.status}: ${body}`)
     } catch (error) {
       if (!(error instanceof TypeError)) throw error
@@ -182,9 +192,9 @@ if (import.meta.main) {
         }).spawn()
         try {
           let by = Date.now() + 300_000
-          for (let path of CANVAS) {
-            await answered(`http://127.0.0.1:${port}${path}`, by)
-          }
+          let at = (path: string) =>
+            answered(`http://127.0.0.1:${port}${path}`, by)
+          for (let path of loads(await at('/'))) await at(path)
           await appeared(`${dir}/ready`, by)
         } catch (error) {
           console.error(String(error))

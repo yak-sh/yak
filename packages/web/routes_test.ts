@@ -57,3 +57,29 @@ test('a page telling of its own outdated code is no break; any other is', async 
   await page('live client — Refused: something else')
   equal(told, ['live client — Refused: something else'])
 })
+
+test('the page and every file it loads but its canvas answer without the network', async () => {
+  let vocab = loadVocab([])
+  let door = routes({
+    config: { db: ':memory:', plugins: ['@yaks/browse'] },
+    vocab,
+    graph: graph({ storage: ram(vocab), vocab }),
+  })
+  let get = async (path: string) => {
+    let route = door.find((r) => r.method == 'GET' && r.path == path)!
+    let res = await route.handle(new Request(`http://x${path}`))
+    equal([path, res.status], [path, 200])
+    return res.text()
+  }
+  let online = globalThis.fetch
+  globalThis.fetch = () => Promise.reject(new Error('offline'))
+  try {
+    let page = await get('/')
+    let files = [...page.matchAll(/(?:href|src)="(\/web\/[^"]*)"/g)]
+      .map(([, path]) => path).filter((path) => path != '/web/app.js')
+    equal(files.length, 5)
+    for (let path of files) await get(path)
+  } finally {
+    globalThis.fetch = online
+  }
+})

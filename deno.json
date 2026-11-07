@@ -112,6 +112,7 @@
   "unstable": [
     "net",
     "lazy-dynamic-imports",
+    "raw-imports",
     "no-legacy-abort"
   ]
 }

@@ -1,6 +1,7 @@
 /** The static guide composes the installed ./ui facets. Query links select
  * theme, skin and colour scheme without loading any client script. */
 import type { Route } from '@yaks/api'
+import { bytes } from '@yaks/api/asset'
 import { h } from 'preact'
 import { renderToString } from 'preact-render-to-string'
 import { Contents, Guide, title } from './guide.ts'
@@ -142,7 +143,7 @@ let file = async (q: URLSearchParams, contributed?: Contributions) => {
     return new Response('not a file of this guide', { status: 404 })
   }
   let type = TYPES[at.split('.').pop()!] ?? 'application/octet-stream'
-  return new Response((await fetch(at)).body, {
+  return new Response(await bytes(new URL(at)), {
     headers: { 'content-type': type },
   })
 }

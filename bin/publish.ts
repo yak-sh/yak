@@ -13,11 +13,10 @@
 // (`--dry-run`, the source check) is given every member, so it checks every
 // package's public API as one workspace.
 //
-// A publish ships, in @yaks/cli's `made/`, the page and the canvas a fresh
-// `yak init` serves (@yaks/web/page and @yaks/web/canvas `prepare`), made here
-// from the release's own checkout, so a person's `yak serve` answers with them
-// instead of fetching the page's files and bundling the canvas from JSR
-// (@yaks/cli/page `ahead`). It ships, in
+// A publish ships, in @yaks/cli's `made/`, the canvas a fresh `yak init`
+// serves (@yaks/web/canvas `prepare`), made here from the release's own
+// checkout, so a person's `yak serve` answers with it instead of bundling the
+// canvas from JSR (@yaks/cli/page `ahead`). It ships, in
 // @yaks/cli's `exports.json`, the subpaths every member publishes, so a CLI
 // from JSR loads a config's facets as one module graph (@yaks/cli/release
 // `shipped`).
@@ -190,13 +189,14 @@ if (import.meta.main) {
   let dirs = all.filter((m) => !left.includes(m.dir)).map((m) => m.dir)
   Deno.exitCode = await project(root, dirs, async (target) => {
     if (!dry && dirs.includes('packages/cli')) {
-      let [canvas, page, { STARTER }] = await Promise.all([
+      let [canvas, { STARTER }] = await Promise.all([
         import('@yaks/web/canvas'),
-        import('@yaks/web/page'),
         import('../packages/cli/init.ts'),
       ])
-      let made = new URL(`file://${target}/packages/cli/made/`)
-      await Promise.all([canvas.prepare(made, STARTER), page.prepare(made)])
+      await canvas.prepare(
+        new URL(`file://${target}/packages/cli/made/`),
+        STARTER,
+      )
       await Deno.writeTextFile(
         `${target}/packages/cli/exports.json`,
         JSON.stringify(await shipping(target, dirs), null, 2) + '\n',
