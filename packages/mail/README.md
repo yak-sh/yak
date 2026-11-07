@@ -372,12 +372,15 @@ the project hears the letter once on its bus (@yaks/session) and marks it
   completed. A letter we sent answers one when its `mail.reply_to` names it (a
   reply) or its `mail.target` does (one sent `about` it); `answering` in
   @yaks/mail/answers is that one definition, and `yak admin errors` lists
-  unanswered letters by it too. A letter that needs no answer is cancelled by
-  whoever reads it.
+  unanswered letters by it too.
+- `mail_dismissed`: a letter that needs no answer has its task cancelled by
+  whoever reads it, and cancelling archives the letter (`archived{at, by, via}`,
+  copied from `cancelled`), so `yak admin errors` stops listing it as
+  unanswered.
 
-Both are declared with `"option": "local"`, so a graph whose mail a person reads
-in a mail client files nothing, and a graph without `task` or `filed.project`
-does nothing.
+All three are declared with `"option": "local"`, so a graph whose mail a person
+reads in a mail client files nothing, and a graph without `task` or
+`filed.project` does nothing.
 
 ## Pulling from an edge
 

@@ -295,6 +295,15 @@
       "target": ".mail.reply_to | .mail.target",
       "option": "local",
       "description": "Complete the task a letter filed once this graph has delivered a letter answering it: its reply, or one sent about it."
+    },
+    "mail_dismissed": {
+      "effect": true,
+      "created": [
+        "cancelled"
+      ],
+      "target": ".task",
+      "option": "local",
+      "description": "Archive the letter whose task was cancelled, with the cancel's time and actor: cancelling a letter's task says it needs no answer, so it leaves the unanswered list."
     }
   }
 }

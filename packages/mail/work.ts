@@ -13,8 +13,12 @@
 //   mail_answered  a letter this graph delivered about it (./answers.ts
 //                  `answering`: its reply, or one sent about it) completes
 //                  the task the letter filed
+//   mail_dismissed the letter's task cancelled says the letter needs no
+//                  answer, so the letter is archived (`archived{at, by, via}`
+//                  copied from the cancel), which takes it off the unanswered
+//                  list (`yak admin errors`)
 //
-// Both are declared under the `local` option: a graph whose addresses are
+// All three are declared under the `local` option: a graph whose addresses are
 // entities that read it (an agent, a project) is one where a letter is work
 // for whoever works here; where a person reads the mail in a mail client, the
 // mailbox is the destination and files nothing.
@@ -65,14 +69,15 @@ let filing = (letter: Bundle, project: Eid): Bundle[] => {
       }`,
       body: `A letter${from ? ` from ${from}` : ''} reached this project. ` +
         `Read it with \`yak mail show ${eid}\`. A reply (\`yak mail ` +
-        'reply`) or a letter sent `--about` it completes this task; cancel ' +
-        'it when the letter needs no answer.',
+        'reply`) or a letter sent `--about` it completes this task. When ' +
+        'the letter needs no answer, cancel this task: that archives the ' +
+        'letter.',
     },
     filed: { project, priority: 1 },
   }]
 }
 
-/** `mail_task` and `mail_answered`, for a graph whose vocabulary has tasks
+/** `mail_task`, `mail_answered` and `mail_dismissed`, for a graph whose vocabulary has tasks
  * filed under projects; under any other, neither does anything. */
 export let work = (vocab?: Vocab): Handlers => ({
   mail_task: async (event, tx, write) => {
@@ -98,6 +103,29 @@ export let work = (vocab?: Vocab): Handlers => ({
     let open = tasks.filter((t) => t?.task && !t.completed && !t.cancelled)
     if (open.length) {
       await write(open.map((t) => ({ entity: t!.entity, completed: {} })))
+    }
+  },
+  mail_dismissed: async (event, tx, write) => {
+    if (!vocab?.comp('archived') || !vocab.comp('about')) return
+    let task = await one(tx, event.entity.eid)
+    let cancelled = task?.cancelled as Comp | undefined
+    if (!cancelled) return
+    let links = await tx.read(
+      `.about&.edge.from=${task!.entity.eid}`,
+    )
+    let letters = await tx.get(
+      links.map((l) => str(comp(l, 'edge').to))
+        .filter((to) => taskEid(to) == task!.entity.eid),
+    )
+    let waiting = letters.filter((l) => l?.[MAIL] && !l.archived)
+    if (waiting.length) {
+      let { at, by, via } = cancelled
+      await write(waiting.map((l) => ({
+        entity: l!.entity,
+        archived: Object.fromEntries(
+          Object.entries({ at, by, via }).filter(([, v]) => v != undefined),
+        ),
+      })))
     }
   },
 })

@@ -41,7 +41,8 @@ each resolved bug’s full explanation, for reviewing fixes. Then people's lette
 in the same window: each letter a person wrote to the platform's addresses
 (bot.yak.sh, yaks.app), how many have a reply in their thread with the median
 and worst time to that reply, and every one still waiting, oldest last. A letter
-that needs no answer is archived (`archived{}`) to leave the list.
+that needs no answer is archived (`archived{}`) to leave the list; cancelling
+the task the letter filed (@yaks/mail) archives it.
 
 ```sh
 yak admin errors --as admin

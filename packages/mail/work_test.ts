@@ -21,7 +21,7 @@ let pick = (doc: VocabDoc, ...names: string[]): VocabDoc => ({
   $defs: Object.fromEntries(names.map((name) => [name, doc.$defs![name]])),
 })
 let vocab = loadVocab([
-  pick(kernelDoc, 'entity', 'completed', 'about'),
+  pick(kernelDoc, 'entity', 'completed', 'about', 'archived'),
   edgeDoc,
   pick(docDoc, 'doc'),
   pick(taskDoc, 'task', 'cancelled'),
@@ -79,6 +79,7 @@ await g.apply([
   { ...arrive('c2', 'hello'), deliver: { to: 'ana' } },
   arrive('d1', 'hello'),
   arrive('e1', 'hello'),
+  arrive('f1', 'hello'),
 ], { trusted: true })
 await g.apply([{
   entity: { eid: 'd2' },
@@ -90,6 +91,10 @@ await g.apply([{
   doc: { title: 'About your feedback', body: 'Fixed.' },
   mail: { from: 'hello@books.example', target: 'e1' },
   deliver: { to: 'ana' },
+}], { trusted: true })
+await g.apply([{
+  entity: { eid: taskEid('f1') },
+  cancelled: { by: 'platform' },
 }], { trusted: true })
 
 test('a letter to an address filed under a project files a task there', async () => {
@@ -115,4 +120,11 @@ test('a letter reaching no project, or one going out, files nothing', async () =
 test('a delivered reply, or a letter sent about it, completes its task', async () => {
   equal(!!(await get(taskEid('d1')))?.completed, true)
   equal(!!(await get(taskEid('e1')))?.completed, true)
+})
+
+test("cancelling a letter's task archives the letter as the canceller", async () => {
+  let archived = comp(await get('f1'), 'archived')
+  equal(archived.by, 'platform')
+  equal(archived.at, comp(await get(taskEid('f1')), 'cancelled').at)
+  equal(!!(await get('a1'))?.archived, false)
 })
