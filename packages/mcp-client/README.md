@@ -54,7 +54,8 @@ remote JSON Schema `inputSchema`, MCP annotations, connection metadata, and a
 this package adds no invocation or result components.
 
 A **bundle** is one entity's components represented as a JSON object. A tool's
-`run` method returns bundles containing its text and structured output. Call
+`run` method returns bundles containing its text blocks, or its structured
+output when it wrote no text: a model reads one form, never both. Call
 `remote.call()` when the application needs the complete MCP result, including
 non-text content blocks.
 

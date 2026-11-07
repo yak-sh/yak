@@ -45,6 +45,30 @@ test('tool isError uses expected tool failure rather than a defect', async () =>
   }
 })
 
+test('a reply is read once: its text, or its structured content where it wrote none', async () => {
+  let h = await harness()
+  type Reply = Awaited<ReturnType<Remote['reply']>>
+  let reply: Reply = { content: [] }
+  let tools = connected(h, () => Promise.resolve(reply))
+  let read = async (
+    content: Reply['content'],
+    structuredContent?: Reply['structuredContent'],
+  ) => {
+    reply = { content, structuredContent }
+    let [tool] = await tools.snapshot()
+    return wordsOf(await tool.run({}))
+  }
+  let text = { type: 'text' as const, text: 'https://example.test/mockup/1' }
+  try {
+    assertEquals(await read([text], { saved: '<h1>' }), text.text)
+    assertEquals(await read([], { saved: '<h1>' }), '{"saved":"<h1>"}')
+    assertEquals(await read([text]), text.text)
+  } finally {
+    await tools.close()
+    await h.close()
+  }
+})
+
 test('remote images use external artifacts while large text retains bounded context policy', async () => {
   let h = await harness()
   let image = btoa('image-bytes')

@@ -35,8 +35,9 @@ test('portable client initializes, exposes unchanged schema and invokes exact re
     // A remote answer is prose to this graph: the words the server wrote,
     // in a bundle that says which call produced them.
     const out = await t.run(...asking({ html: '<h1>mockup</h1>' }))
-    // Every text block the server wrote, which is what it wrote for a reader.
-    assert(words(out).includes('https://example.test/mockup/1'))
+    // Every text block the server wrote, which is what it wrote for a reader,
+    // and not its structured content beside them.
+    assertEquals(words(out), 'https://example.test/mockup/1')
     assertEquals(
       (out[0].output as { source?: unknown }).source,
       'c1',
@@ -318,7 +319,7 @@ test('about tool accepts declared draft-07 input and output through SDK validati
   try {
     const [tool] = await c.tools()
     const result = await tool.run(...asking(validateToolInput(tool, {})))
-    assert(words(result).includes('about'))
+    assertEquals(words(result), 'about')
     assertEquals(called, 1)
     invalid = true
     // The remote's own outputSchema still governs the remote's reply: a

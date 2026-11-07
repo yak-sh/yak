@@ -55,6 +55,35 @@ const schemas: jsonSchemaValidator = {
   },
 }
 
+/**
+ * A reply's structured content as the text a model reads, when the reply has
+ * no text of its own. A server sends its answer twice, as text for a reader
+ * and as `structuredContent` for a parser, and a model reads one of them: the
+ * text, which the spec has carry the structured content's JSON and which is
+ * all a client that reads only text sees. A reply that wrote no text is read
+ * as its structured content.
+ *
+ * ```ts
+ * import { assertEquals } from '@std/assert'
+ * let text = { type: 'text', text: 'https://example.test/mockup/1' }
+ * let structuredContent = { saved: '<h1>mockup</h1>' }
+ * assertEquals(unsaid({ content: [text], structuredContent }), undefined)
+ * assertEquals(
+ *   unsaid({ content: [], structuredContent }),
+ *   '{"saved":"<h1>mockup</h1>"}',
+ * )
+ * ```
+ */
+export const unsaid = (
+  reply: { content?: unknown[]; structuredContent?: unknown },
+): string | undefined =>
+  reply.structuredContent == null ||
+    (reply.content ?? []).some((b) =>
+      (b as { type?: unknown } | null)?.type == 'text'
+    )
+    ? undefined
+    : JSON.stringify(reply.structuredContent)
+
 /** A trusted server's configuration, shared across the application.
  * Credentials are resolved separately. */
 export type Server = {
@@ -333,20 +362,19 @@ export const connect = (server: Server, options: Options = {}): Connection => {
         openWorld: t.annotations?.openWorldHint,
         meta: { server: server.name, remoteName: t.name },
         // A tool on another server replies in the MCP result format, and this
-        // graph stores text: the reply's text blocks, plus its structured
-        // content when it sent any, written as one entity recording which call
-        // produced it. A caller that needs the reply whole — artifacts,
-        // resources, the error flag — calls the connection's own `call`
-        // instead.
+        // graph stores text: the reply's text blocks, or its structured
+        // content where it wrote none ({@link unsaid}), written as one entity
+        // recording which call produced it. A caller that needs the reply
+        // whole — artifacts, resources, the error flag — calls the
+        // connection's own `call` instead.
         run: async (asked) => {
           let reply = await call(t.name, argsOf(asked))
           let blocks = (reply.content ?? []) as Record<string, unknown>[]
           let said = blocks
             .filter((block) => block.type == 'text')
             .map((block) => String(block.text ?? ''))
-          if (reply.structuredContent != null) {
-            said.push(JSON.stringify(reply.structuredContent))
-          }
+          let structured = unsaid(reply)
+          if (structured) said.push(structured)
           return [{
             entity: { eid: '$said' },
             content: { body: said.join('\n') },

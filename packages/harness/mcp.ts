@@ -1,5 +1,6 @@
 /** Host composition: shared MCP connections, signed in through their connections. */
 import { graphMCP } from './mcp_registry.ts'
+import { unsaid } from '@yaks/mcp-client'
 import { toolName } from '@yaks/graph/call'
 import { derivedEid } from '@yaks/graph/identity'
 import type { Harness } from './store.ts'
@@ -98,9 +99,8 @@ export const mcpTools = (
         )
       } else parts.push(`Unsupported MCP content type: ${String(block.type)}`)
     }
-    if (result.structuredContent != null) {
-      parts.push(JSON.stringify(result.structuredContent))
-    }
+    const structured = unsaid(result)
+    if (structured) parts.push(structured)
     const text = parts.join('\n')
     if (result.isError) {
       throw new ToolError('mcp_tool', text || 'Remote tool returned an error')
