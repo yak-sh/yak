@@ -453,7 +453,10 @@ export let directoryDoc: VocabDoc = {
     // once both count, and takes it off again: it is never kept. A `held`
     // spend is a model call or a voice's lease holding its most before it
     // starts (model-spend.ts `reserved`), and the write is refused when it
-    // does not fit what is left of the month's budget.
+    // does not fit what is left of the month's budget. A `refunded` one is
+    // the platform owner's correction (budget.ts), `why` it was refunded,
+    // journaled with who wrote it since the meter is not. Stamped, both, for
+    // the reason the budget is.
     spend: {
       component: true,
       type: 'object',
@@ -467,6 +470,8 @@ export let directoryDoc: VocabDoc = {
         texts: num,
         seconds: num,
         visitors: num,
+        refunded: owned(num),
+        why: owned(text),
       },
     },
     // When this person last got in, and how (identity.ts `landed`, T-34351).

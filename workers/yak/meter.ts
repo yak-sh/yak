@@ -251,13 +251,16 @@ let SPENDS: Spend[] = [
   'seconds',
 ]
 let LIMITED = Object.keys(ALLOWANCE) as Limited[]
-// What a spend adds to: each source, and the visitors' share of the dollars,
-// which is already counted in its source.
-let COUNTERS = [...SPENDS, 'visitors']
+// What a spend adds to: each source, the visitors' share of the dollars,
+// which is already counted in its source, and the dollars refunded.
+let COUNTERS = [...SPENDS, 'visitors', 'refunded']
 
-/** What a reading has spent: model, voice and text dollars together. */
+/** What a reading has spent: model, voice and text dollars together, less
+ * what the platform's owner refunded this month (budget.ts). */
 let used = (m: Meter, what: Spend) =>
-  budgeted(what) ? m.models + m.realtime + (m.texts ?? 0) : m[what]
+  budgeted(what)
+    ? m.models + m.realtime + (m.texts ?? 0) - (m.refunded ?? 0)
+    : m[what]
 
 export let allowance = (what: Limited, tier: Tier | null) =>
   ALLOWANCE[what][tier ?? 'free']
@@ -411,7 +414,9 @@ export let spent = (space: Space, now = new Date()): Meter =>
  * A meter with a spend added, as the patch that writes it: onto what it holds
  * when it holds the spend's month, and onto a fresh month when it holds
  * another. `built` counts every build ever and `drawn` every dollar, so a
- * new month carries them.
+ * new month carries them. A refund counts on the month beside what each
+ * source cost, and comes off `drawn`, so the month and the starter read as if
+ * the dollars refunded had never been spent.
  *
  * ```ts
  * import { added } from './meter.ts'
@@ -422,6 +427,8 @@ export let spent = (space: Space, now = new Date()): Meter =>
  * added(sep, { month: '2026-10', builds: 1 }).built // 4
  * added(sep, { month: '2026-10', builds: 1 }).models // 0
  * added({ ...sep, drawn: 4 }, { month: '2026-10', models: 0.5 }).drawn // 4.5
+ * added({ ...sep, drawn: 4 }, { month: '2026-09', refunded: 0.5 })
+ * // { month: '2026-09', refunded: 0.5, drawn: 3.5 }
  * ```
  */
 export let added = (
@@ -436,7 +443,8 @@ export let added = (
     : empty(month, n(meter?.built))
   for (let k of COUNTERS) if (n(spend[k])) out[k] = n(held?.[k]) + n(spend[k])
   if (n(spend.builds)) out.built = n(meter?.built) + n(spend.builds)
-  let cost = DOLLARS.reduce((sum, k) => sum + n(spend[k]), 0)
+  let cost = DOLLARS.reduce((sum, k) => sum + n(spend[k]), 0) -
+    n(spend.refunded)
   if (cost) out.drawn = n(meter?.drawn) + cost
   return out
 }

@@ -297,6 +297,10 @@
         "visitors": {
           "type": "number",
           "description": "dollars of models, voice and texts this month spent for its apps' visitors, already counted in each"
+        },
+        "refunded": {
+          "type": "number",
+          "description": "dollars of models, voice and texts this month the platform refunded, off what the month spent and off drawn"
         }
       },
       "description": "what a space used in one month"

@@ -252,11 +252,14 @@ export let setFee = (session: string, bps: number): Promise<Fee> =>
   said(posted(apex(FEE), { bps: String(bps) }, session))
 
 /** A space's monthly model and voice budget (workers/yak/budget.ts): the
- * dollars set on it, null where its plan's stands, and the limit it answers to. */
+ * dollars set on it, null where its plan's stands, the limit it answers to,
+ * what it spent this month, and what is left of its starter as it began. */
 export type SpaceBudget = {
   space: string
   dollars: number | null
   limit: number
+  spent: number
+  starter: number
 }
 
 export let BUDGET = '/api/budget'
@@ -272,6 +275,16 @@ export let setBudget = (
   dollars: string,
 ): Promise<SpaceBudget> =>
   said(posted(apex(BUDGET), { space, dollars }, session))
+
+/** Refund dollars the space spent this month, and why: they come off its
+ * month and its starter's draw, its budget left as it is. */
+export let refund = (
+  session: string,
+  space: string,
+  dollars: string,
+  why: string,
+): Promise<SpaceBudget> =>
+  said(posted(apex(BUDGET), { space, refund: dollars, why }, session))
 
 /** The store mover's sweep door (workers/yak/sweep.ts): every store there is,
  * and one of them asked to rehearse its rules, or woken to move what it owes.

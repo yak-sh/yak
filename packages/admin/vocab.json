@@ -135,6 +135,44 @@
         "dollars"
       ]
     },
+    "admin_refund": {
+      "tool": true,
+      "destructive": false,
+      "idempotent": false,
+      "noun": "admin",
+      "verb": "refund",
+      "title": "Refund a space's model spend",
+      "description": "Refund dollars a space's models and voice spent this month, and say why. They come off what its month spent and off what its starter has drawn, so its budget, plan and starter read as if they had not been spent; its budget is left as it is. Who refunded, how much and why are kept with the write. Set by the platform, so the selected account must have the platform role.\n\n  yak admin refund ada 12.50 'a runaway loop' --as admin@bot.yak.sh",
+      "input": {
+        "space": {
+          "type": "string",
+          "description": "the space, by its subdomain"
+        },
+        "dollars": {
+          "type": "string",
+          "description": "the dollars refunded, at most what the space spent this month"
+        },
+        "why": {
+          "type": "string",
+          "description": "why they are refunded"
+        },
+        "as": {
+          "type": "string",
+          "description": "the owner’s yaks.app connection, matched by whole address or the part before @; list the owner’s connections with connection_list(owner), or yak connection list <owner> (owner id or name), and use a yaks.app entry’s account. Default is your own email, else the oldest connection"
+        }
+      },
+      "required": [
+        "space",
+        "dollars",
+        "why"
+      ],
+      "openWorld": true,
+      "positional": [
+        "space",
+        "dollars",
+        "why"
+      ]
+    },
     "admin_fee": {
       "tool": true,
       "destructive": false,

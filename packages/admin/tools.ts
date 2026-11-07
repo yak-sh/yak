@@ -30,6 +30,7 @@ import {
   feeNow,
   linkFor,
   moveIn,
+  refund,
   relocateIn,
   renewing,
   rpc,
@@ -323,6 +324,24 @@ export let runs = (
         : await setBudget(at.bearer, space, dollars == 'plan' ? '' : dollars)
       let set = now.dollars == null ? "its plan's" : 'set by the platform'
       return [said(call, `${now.space}: $${now.limit} a month (${set})`)]
+    }),
+
+    admin_refund: verb(async (call) => {
+      let a = argsOf(call)
+      let space = String(a.space)
+      let dollars = String(a.dollars)
+      if (!/^\d+(\.\d+)?$/.test(dollars)) {
+        throw new CallError('dollars', `not a number of dollars: ${dollars}`)
+      }
+      let at = await acting(a)
+      let now = await refund(at.bearer, space, dollars, String(a.why))
+      return [
+        said(call, [
+          `${now.space}: $${dollars} refunded`,
+          `spent    $${now.spent} of $${now.limit} this month`,
+          `starter  $${now.starter}`,
+        ]),
+      ]
     }),
 
     admin_erase: verb(async (call) => {

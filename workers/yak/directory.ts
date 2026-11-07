@@ -190,6 +190,10 @@ export type Meter = {
   // The dollars of models, voice and texts this month that were spent for
   // the space's apps' visitors, already counted in each source's own.
   visitors?: number
+  // The dollars of models, voice and texts this month that the platform's
+  // owner refunded (budget.ts): off what the month spent and off `drawn`,
+  // while each source's own still says what it cost.
+  refunded?: number
   at: string
 }
 export type Tier = 'free' | 'plus' | 'organization'
@@ -813,6 +817,7 @@ let meterOf = (r: Row): Meter | null =>
       built: r.meter.built ?? 0,
       drawn: r.meter.drawn ?? 0,
       visitors: r.meter.visitors ?? 0,
+      refunded: r.meter.refunded ?? 0,
       at: r.meter.at ?? '',
     }
     : null
