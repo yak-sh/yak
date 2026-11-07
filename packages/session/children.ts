@@ -71,6 +71,10 @@ let taskRow = async (
 export let children = (g: Graph, session: Eid): Promise<Bundle[]> =>
   Promise.resolve(g.read(`.spawned.parent=${session}&*`))
 
+// How many sessions the cap counts: their number, never their rows.
+let running = async (g: Graph): Promise<number> =>
+  Number((await g.rows(`${live} .count`))[0]?.n ?? 0)
+
 /** The admission path the harness calls, shared by root starts and delegated
  * starts. */
 export let admit = <T>(
@@ -88,7 +92,7 @@ export let admit = <T>(
           throw new Error('invalid session cap')
         }
       }
-      if (!parent && (await g.read(live)).length >= maxSessions) {
+      if (!parent && await running(g) >= maxSessions) {
         throw new ToolError(
           'session_cap',
           `live session cap (${maxSessions}) reached`,

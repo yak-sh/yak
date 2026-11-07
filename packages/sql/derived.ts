@@ -73,6 +73,10 @@ export type DerivedProp = {
   // Undefined declines this optimization; projection and other operators keep
   // using expr. The binder retains the owning-component presence guard.
   select?: (values: Expr[], scope?: DerivedScope) => Select | undefined
+  // The values whose owners `select` finds are few, however large the store:
+  // a query that requires one of them drives from that selection and tests
+  // each of its other clauses on the owners it names.
+  few?: string[]
   // Exact equality for one owner. Bounded and correlated reads use this
   // instead of a global selector; undefined falls back to expr.
   test?: (owner: Expr, values: Expr[], scope?: DerivedScope) => Expr | undefined

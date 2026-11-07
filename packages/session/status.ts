@@ -133,6 +133,9 @@ export let sessionStatus = {
     'failed',
   ],
   deps: ['session'],
+  // Only a session not ended owes anything, and sessions end: what the cap
+  // counts is a few dozen of a store's tens of thousands.
+  few: ['pending', 'running', 'queued'],
   select: (
     values: Expr[],
     dispatch = dispatchStatus,
@@ -407,12 +410,31 @@ export let sessionStatus = {
     // Three last turns the rule can only read as finished: prose that asks for
     // nothing, a refusal naming no request, and a turn given up on. Nothing
     // about them needs the exact rule, and they are nearly every transcript.
-    let waiting = declared('tool_async') && declared('result')
-      ? among(
+    // A background call still unanswered: probed in each candidate's own
+    // entries where the candidates are the few not ended, and read once for
+    // the store where every ended session is one too.
+    let unanswered = (p: string) =>
+      not(exists(select({
+        cols: [lit(1)],
+        from: table('result', 'answer'),
+        where: eq(col('call', 'answer'), col('entity', p)),
+      })))
+    let few = !stopped && !empty
+    let background = declared('tool_async') && declared('result')
+    let waiting = !background ? lit(false) : few
+      ? exists(select({
+        cols: [lit(1)],
+        from: table('entry', 'pe'),
+        joins: [{
+          ...cross(table('tool_async', 'p')),
+          on: eq(col('entity', 'p'), col('entity', 'pe')),
+        }],
+        where: and(eq(col('session', 'pe'), owner), unanswered('p')),
+      }))
+      : among(
         owner,
         select({ cols: [col('session')], from: table('__status_waiting') }),
       )
-      : lit(false)
     let atRest = or(
       and(
         wears('output', newest),
@@ -465,7 +487,7 @@ export let sessionStatus = {
             q: controlOwners,
           }]
           : [],
-        ...declared('tool_async') && declared('result')
+        ...background && !few
           ? [{
             name: '__status_waiting',
             materialized: true,
@@ -476,11 +498,7 @@ export let sessionStatus = {
                 ...cross(table('entry', 'pe')),
                 on: eq(col('entity', 'pe'), col('entity', 'p')),
               }],
-              where: not(exists(select({
-                cols: [lit(1)],
-                from: table('result', 'answer'),
-                where: eq(col('call', 'answer'), col('entity', 'p')),
-              }))),
+              where: unanswered('p'),
             }),
           }]
           : [],

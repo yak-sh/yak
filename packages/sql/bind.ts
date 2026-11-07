@@ -328,6 +328,9 @@ type Ctx = {
   walk?: { comp: string; index: string } | null
   /** A mandatory stored value filter narrows the root rows (`narrowed`). */
   narrowed?: boolean
+  /** A mandatory derived equality whose owners are few (`DerivedProp.few`):
+   * its selection drives, and every other clause tests the owners it names. */
+  few?: Pred
   screens?: Map<Extension, Screen>
   shared: Map<Query, { cte: Cte; source: Source }>
   identities: WeakMap<Pred, Cond>
@@ -429,7 +432,7 @@ let owned = (ctx: Ctx, comp: string, where?: string): Cond => {
   // entire owning set first: a page's `!references` beside its few links read
   // all 36,600 `references` rows to answer for three.
   return ctx.correlated || ctx.bounded || ctx.present || ctx.candidates ||
-      ctx.half == 'numbered'
+      ctx.few || ctx.half == 'numbered'
     ? cond({
       sql: `exists (select 1 from ${ctx.d.table(comp)} where ${
         ctx.d.ownerKey(comp)
@@ -886,7 +889,8 @@ let single = (ctx: Ctx, hop: Hop, p: Pred): Cond => {
   // narrowed and correlated probes use an owner predicate or retain the keyed
   // expression; they never build a global candidate set for a few owners.
   let selected = ctx.derived[`${hop.comp}.${hop.prop}`]
-  let point = !!(ctx.bounded || ctx.narrowed || ctx.correlated || ctx.owner)
+  let point = !!(ctx.bounded || ctx.narrowed || ctx.correlated || ctx.owner) ||
+    !!ctx.few && ctx.few != p
   let operands = op == '' ? literals(p.value) : undefined
   if ((point ? selected?.test : selected?.select) && operands?.length) {
     // Use the same typed equality lowering as the scalar expression.
@@ -1518,7 +1522,7 @@ let union = (ctx: Ctx, alts: Clause[]): Cond => {
   // A correlated row, one of a few named owners, a row a bounded seek found or
   // one a page walks (`inOrder`) is already in hand: its alternatives are tests
   // of that row, never selections of their own.
-  if (ctx.correlated || ctx.bounded || ctx.row || ctx.walk) {
+  if (ctx.correlated || ctx.bounded || ctx.row || ctx.walk || ctx.few) {
     for (let { branch } of branches) {
       for (let table of branch.tables) ctx.tables.add(table)
     }
@@ -1804,7 +1808,7 @@ let reverse = (
   // Archetypes stay with the outer row: a child's presence tests are its
   // components' own owner sets, which a sparse one drives.
   let semi = !p.not && !ctx.correlated && !ctx.bounded && !ctx.row &&
-    !ctx.candidates
+    !ctx.candidates && !ctx.few
   let sub: Ctx = {
     ...ctx,
     tables: new Set(),
@@ -2075,6 +2079,22 @@ let narrowed = (ctx: Ctx, clauses: Clause[]): boolean =>
     return comp != 'entity' && !computed(ctx.v, comp) &&
       !ctx.v.prop(comp, prop)?.computed && !ctx.derived[`${comp}.${prop}`] &&
       !!ctx.v.prop(comp, prop)
+  })
+
+// A mandatory derived equality on values its property names few
+// (`DerivedProp.few`): `.session.status=pending,running,queued` is the 35 of
+// 21,607 sessions not ended, where `.entries.using|.entries.ask` beside it
+// reads 750,000 entries to name 11,700 of them.
+let few = (ctx: Ctx, clauses: Clause[]): Pred | undefined =>
+  flattened(clauses).find((c): c is Pred => {
+    if (
+      c.kind != 'pred' || c.not || c.where || c.path.length != 2 ||
+      opOf(c) != ''
+    ) return false
+    let values = literals(c.value)
+    let named = ctx.derived[c.path.join('.')]?.few
+    return !!named && !!values?.length &&
+      values.every((v) => named.includes(v))
   })
 
 // A stored reference presence test needs only its owner's key. Its root
@@ -2660,6 +2680,7 @@ let beginning = (
   let finite = owners(ctx, ast.clauses)
   ctx.bounded = finite != null
   ctx.narrowed = narrowed(ctx, ast.clauses)
+  ctx.few = few(ctx, ast.clauses)
   for (let e of ctx.ext) {
     let preparing = false
     let view = (read: (e: Extension) => Raw | null): Screen => {
