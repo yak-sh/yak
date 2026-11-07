@@ -36,8 +36,11 @@ export let duration = (since: string): number => {
   return seconds
 }
 
+/** A report's window: its length in seconds, its start, and how it was asked. */
+export type Window = { seconds: number; from: string; last: string }
+
 /** The window a report covers, ending at `end`: `since` back, or a week. */
-export let windowOf = (since: string | undefined, end: number) => {
+export let windowOf = (since: string | undefined, end: number): Window => {
   let seconds = since == undefined ? 7 * 86_400 : duration(since)
   let from = new Date(end - seconds * 1000).toISOString()
   return { seconds, from, last: since ?? '7d' }
