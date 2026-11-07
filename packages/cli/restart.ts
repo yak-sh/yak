@@ -4,8 +4,9 @@ import * as system from '@yaks/process/system'
 import { codeFile, stale as codeStale } from './code.ts'
 import { launching } from './release.ts'
 import { FLAGS, runtimeSource, runtimeTree } from './runtime.ts'
-// Ready-first handover for the box's processes. A role whose running units
-// run the code and config a replacement would (./code.ts) keeps them. Every
+// Ready-first handover for the box's processes, queued from the checkout's
+// `yak` ({@link queue}). A role whose running units run the code and config a
+// replacement would (./code.ts) keeps them. Every
 // other role's replacement is started at once from its unit template and
 // waited on until it says it is ready (its readiness file); only once every
 // replacement is ready are the old units asked to stop, without waiting for
