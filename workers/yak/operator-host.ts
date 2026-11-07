@@ -45,9 +45,11 @@ let nameless: Named = () => Promise.resolve(null)
 
 // The person a transcript's sessions work for, by what they are called.
 let personOf = async (store: Store, entries: Bundle[], named: Named) => {
-  let sessions = await store.g.get([
-    ...new Set(entries.map((b) => String(comp(b, 'entry')?.session ?? ''))),
-  ].filter(Boolean))
+  let sessions = await store.g.get(
+    [...new Set(entries.map((b) => String(comp(b, 'entry')?.session ?? '')))]
+      .filter(Boolean),
+    ['operator_session'],
+  )
   let person = sessions.map((b) => comp(b, 'operator_session')?.person)
     .find(Boolean)
   return person ? await named(String(person)) : null
@@ -108,12 +110,29 @@ let helpersOf = async (
   })))
 }
 
-// A session's own newest lines, oldest first: never the conversation a fork
-// was forked from, and never the whole of one that has run for weeks.
-let linesOf = async (store: Store, session: string, most: number) =>
-  (await store.g.read(
+// A session's own newest lines, oldest first, `most` of them and every one
+// past `from`: never the conversation a fork was forked from, and never the
+// whole of one that has run for weeks.
+let linesOf = async (
+  store: Store,
+  session: string,
+  most: number,
+  from?: number,
+) => {
+  let newest = (await store.g.read(
     `.entry.session=${session}&.order=-entry.seq&.limit=${most}&*`,
   )).reverse()
+  let oldest = Number(comp(newest[0], 'entry')?.seq)
+  if (from == null || newest.length < most || !(oldest > from + 1)) {
+    return newest
+  }
+  return [
+    ...await store.g.read(
+      `.entry.session=${session}&.entry.seq>${from}&.entry.seq<${oldest}&.order=entry.seq&*`,
+    ),
+    ...newest,
+  ]
+}
 // The helpers these calls started, each with its own lines.
 let helpersBy = async (store: Store, calls: Set<string>): Promise<Helper[]> =>
   calls.size
@@ -584,15 +603,13 @@ export let frameOf = async (
   called?: string,
   opens?: string,
 ) => {
-  let [row] = await store.g.get([session])
-  if (!row?.session) return null
-  // A task's session is short; a person's conversation and its helpers are
-  // read from their own newest lines.
-  let read = async (session: string) =>
-    await holding(store, session)
-      ? await transcript(store.g, session)
-      : await linesOf(store, session, TAIL)
-  let entries = await read(session)
+  let [row] = await store.g.read(
+    `.entity.eid=${session}&.session&.fields=entity.eid,spawned.parent,spawned.call`,
+  )
+  if (!row) return null
+  // Every session is read from its own newest lines, and those past the
+  // frame before.
+  let entries = await linesOf(store, session, TAIL, from)
   let seq = Math.max(
     0,
     ...entries.map((b) => Number(comp(b, 'entry')?.seq ?? 0)),
@@ -645,7 +662,12 @@ export let frameOf = async (
     call,
     entries: told && call ? await linesOf(store, session, SHOWN) : entries,
   }
-  let started = await read(parent)
+  // The step that started it, though older than the newest lines.
+  let started = await linesOf(store, parent, TAIL)
+  if (call && !started.some((b) => b.entity.eid == call)) {
+    let [step] = await store.g.get([call])
+    if (comp(step, 'entry')?.session == parent) started.unshift(step)
+  }
   return {
     seq,
     frame: helperFrame(
@@ -672,18 +694,22 @@ export let operatorFrames = (
 ) => {
   let told = new Map<string, number>()
   let tasks = new Map<string, string>()
-  // The pages one person has open on this Operator.
-  let pagesOf = (owner: Pick<Held, 'person' | 'space'>) =>
-    sockets().filter((ws) => {
-      let held = ws.deserializeAttachment() as
-        | (Held & { operator?: boolean })
-        | null
-      return held?.operator && held.person == owner.person &&
-        held.space == owner.space
+  // The pages open on this Operator, and those one person has open.
+  let open = () =>
+    sockets().filter((ws) =>
+      (ws.deserializeAttachment() as { operator?: boolean } | null)?.operator
+    )
+  let pagesOf = (owner: Pick<Held, 'person' | 'space'>, pages = open()) =>
+    pages.filter((ws) => {
+      let held = ws.deserializeAttachment() as Held
+      return held.person == owner.person && held.space == owner.space
     })
+  // Whom a session works for is asked only while a page is open.
   let watching = async (session: string) => {
+    let pages = open()
+    if (!pages.length) return []
     let owner = await ownerOf(store, session)
-    return owner ? pagesOf(owner) : []
+    return owner ? pagesOf(owner, pages) : []
   }
   let send = (watching: Listener[], frame: unknown) => {
     let sent = JSON.stringify(frame)

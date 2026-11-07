@@ -54,6 +54,32 @@ export let within = (s: Segment): string =>
   '.entry.session=' + s.session +
   (Number.isFinite(s.through) ? '&.entry.seq<=' + s.through : '')
 
+/** A transcript's newest entries, oldest first, read back through its
+ * segments a page at a time until `enough` holds of what was read, or to its
+ * start (`whole`): what a turn reads costs the turn, not every line the
+ * transcript ever held. */
+export let transcriptBack = async (
+  g: Graph,
+  session: Eid,
+  enough: (entries: Bundle[]) => boolean | Promise<boolean>,
+): Promise<{ entries: Bundle[]; whole: boolean }> => {
+  let segs = await transcriptSegments(g, session)
+  let read: Bundle[] = [], i = segs.length - 1, after = '', size = 32
+  while (i >= 0) {
+    let rows = await g.read(
+      `${within(segs[i])}&.order=-entry.seq&.limit=${size}${after}&*`,
+    )
+    read.push(...rows)
+    if (rows.length < size) i--, after = ''
+    else after = `&.after=${rows.at(-1)!.entity.eid}`
+    if (i >= 0 && await enough(read.toReversed())) {
+      return { entries: read.toReversed(), whole: false }
+    }
+    size *= 2
+  }
+  return { entries: read.toReversed(), whole: true }
+}
+
 /** Only positions are read while locating a page: no old content/blob bodies. */
 export let transcriptPlan = async (
   g: Graph,

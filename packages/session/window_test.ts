@@ -17,7 +17,7 @@ let tracked = () => {
   }])
   return graph({ storage: ram(vocab), vocab })
 }
-import { transcriptPlan, transcriptWindow } from './window.ts'
+import { transcriptBack, transcriptPlan, transcriptWindow } from './window.ts'
 test('transcript windows bound bodies, support both edges and entry anchors', async () => {
   let g = tracked()
   await g.apply([
@@ -84,4 +84,34 @@ test('nested fork page crosses stable ancestor boundaries without newer parent o
   assertEquals([page.before, page.after], [true, false])
   let empty = await transcriptPlan(g, 'd', { anchor: 'not-present', limit: 1 })
   assertEquals(empty.queries.length, 1)
+})
+test('a transcript is read back only as far as a reading needs, through its forks', async () => {
+  let g = tracked()
+  let line = (session: string, i: number) => ({
+    entity: { eid: session + i },
+    entry: { session, seq: i + 1 },
+    content: { body: String(i) },
+  })
+  await g.apply([
+    { entity: { eid: 's' }, session: {} },
+    ...Array.from({ length: 100 }, (_, i) => line('s', i)),
+    { entity: { eid: 'p' }, session: {} },
+    ...Array.from({ length: 10 }, (_, i) => line('p', i)),
+    { entity: { eid: 'c' }, session: {}, fork: { from: 'p5' } },
+    { entity: { eid: 'c0' }, entry: { session: 'c', seq: 7 } },
+  ])
+  let back = async (session: string, eid?: string) => {
+    let { entries, whole } = await transcriptBack(
+      g,
+      session,
+      (read) => read.some((b) => b.entity.eid == eid),
+    )
+    return [entries[0].entity.eid, entries.length, whole]
+  }
+  assertEquals(await back('s', 's90'), ['s68', 32, false])
+  assertEquals(await back('s', 's10'), ['s4', 96, false])
+  assertEquals(await back('s', 's1'), ['s0', 100, true])
+  assertEquals(await back('c', 'c0'), ['c0', 1, false])
+  assertEquals(await back('c', 'p4'), ['p0', 7, true])
+  assertEquals(await back('c'), ['p0', 7, true])
 })

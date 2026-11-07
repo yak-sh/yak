@@ -17,6 +17,7 @@ import {
   textOf,
   type Tool,
   transcript,
+  transcriptBack,
 } from '@yaks/session'
 import { derivedEid } from '@yaks/graph/identity'
 import { LIMIT } from '@yaks/session/status'
@@ -482,7 +483,7 @@ type Working = {
   files?: File[]
 }
 let workingOf = async ({ g }: Store, session: string) => {
-  let [row] = await g.get([session])
+  let [row] = await g.get([session], ['operator_session'])
   return comp(row, 'operator_session') as Working | undefined
 }
 // The space an ask is charged to: its session's, or for an exchange a session
@@ -571,7 +572,7 @@ let asked = (session?: string) => {
 // The session a helper works for, up its `spawned` links: a person's
 // conversation, or a task's session.
 let topOf = async (store: Store, session: string): Promise<string> => {
-  let [row] = await store.g.get([session])
+  let [row] = await store.g.get([session], ['spawned'])
   let parent = comp(row, 'spawned')?.parent
   return parent ? topOf(store, String(parent)) : session
 }
@@ -594,23 +595,51 @@ let routeOf = (request?: Comp) =>
 // before it. A helper's result stands for the inputs of the turn that started
 // it, so its answer goes where they came from.
 // `calls` names the call that started each child (`spawned{parent, call}`).
+// Of a transcript's newest lines alone (`whole` false), it is undefined where
+// the inputs lie before them.
 export let origins = (
   entries: Bundle[],
   end: number,
   calls: Map<string, string>,
-): Bundle[] => {
+  whole = true,
+): Bundle[] | undefined => {
   let from = entries.findLastIndex((b, i) =>
     i < end && kindOf(b) == 'output' && !!b.content
   )
-  return entries.slice(from + 1, end).filter(words)
-    .flatMap((b) => {
-      let child = comp(b, 'delivery')?.child
-      if (!child) return [b]
-      let call = entries.findIndex((c) =>
-        c.entity.eid == calls.get(String(child))
-      )
-      return call < 0 ? [] : origins(entries, call, calls)
-    })
+  if (from < 0 && !whole) return
+  let found: Bundle[] = []
+  for (let b of entries.slice(from + 1, end).filter(words)) {
+    let child = comp(b, 'delivery')?.child
+    if (!child) {
+      found.push(b)
+      continue
+    }
+    let call = entries.findIndex((c) =>
+      c.entity.eid == calls.get(String(child))
+    )
+    if (call < 0 && !whole) return
+    let more = call < 0 ? [] : origins(entries, call, calls, whole)
+    if (!more) return
+    found.push(...more)
+  }
+  return found
+}
+
+// A turn's answer: the newest words given, and the inputs the turn that
+// followed them answers. The turn ends at its reply, or where the transcript
+// does when it ended without one (stopped, failed). Undefined where they lie
+// before the lines read (`whole` false).
+let turnAt = (
+  entries: Bundle[],
+  calls: Map<string, string>,
+  whole = true,
+) => {
+  let mark = entries.findLast(words)
+  if (!mark) return whole ? { mark, given: [] } : undefined
+  let said = entries.findLastIndex((b) => kindOf(b) == 'output' && !!b.content)
+  let end = said > entries.indexOf(mark) ? said : entries.length
+  let given = origins(entries, end, calls, whole)
+  return given && { mark, given }
 }
 
 // What a model's refusal tells the person, by its code (@yaks/model
@@ -945,11 +974,43 @@ export let operating = (
       space: space ? (await dir().at(space))?.slug : null,
     })
   }
+  // What a step's end reads of its transcript, oldest first, never every
+  // line a conversation has held for weeks: a fork's or helper's own turn,
+  // and a conversation's back to the reply before the words it answers and
+  // before each call that started a helper whose result stands for words.
+  // A call's lines are context, never a turn's words or its reply. `calls`
+  // names the call that started each child these lines deliver from.
+  let ending = async (session: string, spawned: boolean) => {
+    let calls = new Map<string, string>()
+    let looked = new Set<string>()
+    let lines = (read: Bundle[]) =>
+      read.filter((b) => !(b.notice && b.operator_call))
+    let starts = async (entries: Bundle[]) => {
+      let children = [
+        ...new Set(entries.flatMap((b) => {
+          let child = comp(b, 'delivery')?.child
+          return child && !looked.has(String(child)) ? [String(child)] : []
+        })),
+      ]
+      for (let child of children) looked.add(child)
+      for (let b of await g.get(children, ['spawned'])) {
+        let call = comp(b, 'spawned')?.call
+        if (call) calls.set(b.entity.eid, String(call))
+      }
+    }
+    let read = await transcriptBack(g, session, async (read) => {
+      let entries = lines(read)
+      if (spawned) return entries.some(words)
+      await starts(entries)
+      return !!turnAt(entries, calls, false)
+    })
+    let entries = lines(read.entries)
+    if (!spawned) await starts(entries)
+    return { entries, calls, whole: read.whole }
+  }
   let answered = async (session: string) => {
-    let [row] = await g.get([session])
-    // A call's lines are context, never a turn's words or its reply.
-    let entries = ordered(await transcript(g, session))
-      .filter((b) => !(b.notice && b.operator_call))
+    let [row] = await g.get([session], ['spawned'])
+    let { entries, calls, whole } = await ending(session, !!row?.spawned)
     let reply = replyOf(turnOf(entries))
     // A fork or helper that could not finish reaches the tracker as it ends;
     // what it ended with goes to the session that started it (M-37965).
@@ -959,30 +1020,12 @@ export let operating = (
     }
     // One answer for each time it was given words: the turn ended again
     // (stopped, then a step in flight finishing) says it anew.
-    let mark = entries.findLast(words)
-    if (!mark) return
+    let turn = turnAt(entries, calls, whole)
+    if (!turn?.mark) return
+    let { mark } = turn
     let task = await taskOf(store, session)
     let space = (await workingOf(store, session))?.space
-    let children = await g.get([
-      ...new Set(
-        entries.flatMap((b) => {
-          let child = comp(b, 'delivery')?.child
-          return child ? [String(child)] : []
-        }),
-      ),
-    ])
-    let calls = new Map(
-      children.filter((b) => b?.spawned).map((
-        b,
-      ) => [b.entity.eid, String(comp(b, 'spawned')!.call)]),
-    )
-    // The turn ends at its reply, or where the transcript does when it
-    // ended without one (stopped, failed).
-    let said = entries.findLastIndex((b) =>
-      kindOf(b) == 'output' && !!b.content
-    )
-    let end = said > entries.indexOf(mark) ? said : entries.length
-    let given = new Set(origins(entries, end, calls).map((b) => b.entity.eid))
+    let given = new Set(turn.given.map((b) => b.entity.eid))
     let requests = (await g.read(
       `.operator_request.session=${session} .order=created.at`,
     )).filter((r) => given.has(derivedEid('operator-input|' + r.entity.eid)))
