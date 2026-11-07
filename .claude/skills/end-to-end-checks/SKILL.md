@@ -66,6 +66,12 @@ in your process.
   `db`; the first writer that opens it brings it to the schema your code
   expects. Copy no other way: `cp` of a live file is torn by its writes, and a
   bare `sqlite3 .backup` never finishes.
+- **Timing a read.** A measurement never changes the box for everyone else: no
+  dropping the page cache (`/proc/sys/vm/drop_caches`), no sysctl or kernel
+  setting, no heavy load aimed at the live servers. This container shares its
+  kernel with the Proxmox host and every guest on it, so those reach all of
+  them. For a cold read, time the first read of a fresh copy made with
+  `bin/copy-db`.
 
 A check worth keeping is a test (`testing`); a one-off is a script or a test you
 don't land, and either way it runs in one process and leaves nothing running.
