@@ -6,6 +6,7 @@ import { h } from 'preact'
 import { renderToString } from 'preact-render-to-string'
 import { parseHTML } from 'linkedom'
 import { does, keeps, madeOf } from './made.ts'
+import { appVocab } from './vocab.ts'
 
 let whose = { app: 'Recipe box', operator: 'Otto' }
 // What a panel says: each row's name and what describes it, or its one line
@@ -62,6 +63,25 @@ test('the kinds of things an app keeps, each named as a person would, with what 
       'The kinds of things Recipe box keeps show here as Otto decides them.',
     ])
   }
+})
+
+test('what a kind keeps leaves out what the app keeps for itself', () => {
+  let household = {
+    $defs: {
+      household: {
+        title: 'Family',
+        properties: {
+          slug: { type: 'string', readOnly: true },
+          street: { type: 'string' },
+          street2: { type: 'string', title: 'Address line 2' },
+          sample: { type: 'boolean', readOnly: true },
+        },
+      },
+    },
+  }
+  equal(kept(household), ['Family: Street and address line 2'])
+  // A deploy takes these words as written.
+  appVocab(household)
 })
 
 test('what an app can do: its own commands, then adding and finding what it keeps', () => {

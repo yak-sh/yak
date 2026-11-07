@@ -353,6 +353,15 @@ read them on the row, filter on them, and name them in a command.
 
     let quick = await query('.recipe.minutes<=30&?doc')
 
+A `title` on a component or a property names it in a person's words, and
+`"readOnly": true` marks a property the app keeps for itself, which nobody fills
+in (a slug, a sort position, a flag on sample rows). The column beside the
+Operator's chat names what an app keeps by its titles and leaves the `readOnly`
+properties out:
+
+    "street2": { "type": "string", "title": "Address line 2" },
+    "slug":    { "type": "string", "readOnly": true }
+
 You can write it as `vocab.yml` instead, if you find YAML easier to read: it is
 the same manifest with fewer braces and quotes. An app that has both is deployed
 from the `.yml`:

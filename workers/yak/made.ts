@@ -7,6 +7,21 @@
 import { type ComponentChildren as Node, h } from 'preact'
 import { Empty, Rows } from '@yaks/ui/parts'
 import { read } from '@yaks/yaml'
+import type { Declared } from './operator-persona.ts'
+
+/** How the Operator writes a new app so the column beside the chat shows it
+ * being made in order and in plain words, declared beside the code that
+ * reads it; the base persona contains it (operator-persona.ts). One write
+ * more than writing the whole app at once costs a build about a cent: the
+ * step reads the conversation from the cache ($0.10 a million tokens on
+ * Sonnet 5.5), against the $5 a newcomer's build may spend (newcomer.ts
+ * PER_BUILD). */
+export let building: Declared = {
+  key: 'building',
+  title: 'Making a new app',
+  body:
+    'While you make an app, the column beside the chat shows it being made, read from its draft as each write lands: What it keeps (the components of its vocab.json), What it can do (its commands), and Screens once the draft holds a page, the newest open. So when you make a new app, write its vocab.json first, in an app_files call of its own, and its pages after it: the person sees what it will keep before its screens. Give each component, each command and each property a title in the person\'s own words ("Address line 2", not street2), and mark a property the app keeps for itself, which nobody fills in (a slug, a sort position, a flag on sample rows), "readOnly": true: the column leaves it out.',
+}
 
 /** A kind of thing an app keeps: its name, and what it keeps of each. */
 export type Kind = { name: string; holds: string[] }
@@ -20,13 +35,23 @@ export type Made = { kinds: Kind[]; acts: Act[]; finds: string[] }
 let object = (v: unknown): v is Record<string, unknown> =>
   !!v && typeof v == 'object' && !Array.isArray(v)
 
+// The words an entry gives itself, which name it for a person.
+let titleOf = (entry: Record<string, unknown>) =>
+  typeof entry.title == 'string' ? entry.title.trim() : ''
+
 // A name as a person writes it: `meal_plan`, `mealPlan` and `meal-plan` are
 // all "meal plan"; a `title` the entry gives is its own.
 let plain = (key: string, entry: Record<string, unknown> = {}) =>
-  typeof entry.title == 'string' && entry.title.trim()
-    ? entry.title.trim()
-    : key.replace(/([a-z\d])([A-Z])/g, '$1 $2').replace(/[_\-\s]+/g, ' ')
-      .trim().toLowerCase()
+  titleOf(entry) ||
+  key.replace(/([a-z\d])([A-Z])/g, '$1 $2').replace(/[_\-\s]+/g, ' ')
+    .trim().toLowerCase()
+
+// What a kind keeps of one, as a person reads it: all but the properties
+// the app keeps for itself, which say so the way JSON Schema does, as
+// `readOnly` (a slug, a sort position, a flag on sample rows).
+let shown = (properties: Record<string, unknown>) =>
+  Object.entries(properties).map(([p, s]) => [p, object(s) ? s : {}] as const)
+    .filter(([, s]) => s.readOnly !== true)
 let capital = (s: string) => s.charAt(0).toUpperCase() + s.slice(1)
 // A name inside a sentence, but one that begins with an acronym ("URL").
 let lower = (s: string) =>
@@ -79,9 +104,8 @@ export let madeOf = (source: string | null, file = 'vocab.json'): Made => {
   return {
     kinds: kinds.map(([key, e]) => ({
       name: capital(plain(key, e)),
-      holds: Object.entries(object(e.properties) ? e.properties : {}).map((
-        [p, s],
-      ) => lower(plain(p, object(s) ? s : {}))),
+      holds: shown(object(e.properties) ? e.properties : {})
+        .map(([p, s]) => lower(plain(p, s))),
     })),
     acts: tools.map(([key, e]) => ({
       name: capital(plain(key, e)),
