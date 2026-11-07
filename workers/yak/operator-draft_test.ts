@@ -15,6 +15,8 @@ import { type Beside, chatPage, operatorAnswer } from './operator-page.ts'
 import type { Who } from './session.ts'
 import { redraw } from './public/redraw.js'
 import { released } from './operator-testing.ts'
+import { openedOf } from './operator-host.ts'
+import { operatorStore } from './operator-store.ts'
 import { TOOLS } from './tools.ts'
 import { when } from './public/when.js'
 
@@ -640,6 +642,48 @@ test('opening the chat app reads the conversation once, with the page', async ()
   landed.leave()
   assertEquals([still, landed.talks()], [0, 1])
   assertStringIncludes(box.innerHTML, 'Ask for the north shelter as well')
+})
+
+// A helper's line, drawn under the step that started it, moves where the
+// conversation stands as the conversation's own lines do.
+test('a helper’s line landing before the socket opens is read, once', async () => {
+  // The Builder object's store, beside the object, as another write lands.
+  let store = operatorStore(p.states.get(`builder ${eid}`)!.storage)
+  let { g } = store
+  let { session } = await openedOf(store, park)
+  let parent = session!.entity.eid
+  let call = crypto.randomUUID(), helper = crypto.randomUUID()
+  let told = (instructions: string) => ({
+    entity: { eid: crypto.randomUUID() },
+    entry: { session: helper },
+    ask: {},
+    sending: { instructions },
+  })
+  await g.apply([
+    {
+      entity: { eid: call },
+      entry: { session: parent },
+      call: { to: crypto.randomUUID(), args: {} },
+    },
+    { entity: { eid: helper }, session: {}, spawned: { parent, call } },
+    told('Find the pavilion’s June dates'),
+  ], { trusted: true })
+  let page = await load(storage(), false, park)
+  await page.connect()
+  await settle()
+  let still = page.talks()
+  page.leave()
+  let landed = await load(storage(), false, park)
+  let box = landed.document.querySelector('[data-conversation]')!
+  await g.apply([told('Find the north shelter’s June dates too')], {
+    trusted: true,
+  })
+  await landed.connect()
+  for (let i = 0; i < 100 && !landed.talks(); i++) await settle()
+  await settle()
+  landed.leave()
+  assertEquals([still, landed.talks()], [0, 1])
+  assertStringIncludes(box.innerHTML, 'Find the north shelter’s June dates too')
 })
 
 test('a page reads its draft only as it opens and as its socket opens, never on a timer', async () => {
