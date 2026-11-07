@@ -49,6 +49,10 @@ The package has two main responsibilities:
   [`subcommands.ts`](./subcommands.ts) lists the same command interface for a
   graph the current process can open, from its plugins' declarations alone, and
   [`local.ts`](./local.ts) opens that graph when one of them runs.
+  [`member.ts`](./member.ts) makes a remote host a member of a reach
+  (@yaks/reach): reads are its `graph_query`, writes its `graph_apply`, and its
+  door carries that host's own connection token. `$YAKS_TOKEN` and `--as` reach
+  only the host the line aims at.
 
 ## Roles
 

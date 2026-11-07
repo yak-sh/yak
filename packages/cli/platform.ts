@@ -22,6 +22,7 @@ import type { VocabDoc } from '@yaks/vocab'
 import type { Command, Ctx } from './run.ts'
 import type { Drawn } from './answer.ts'
 import { initialize, type Rpc } from './rpc.ts'
+import { schemaOf } from './member.ts'
 import { type Result, rosterAfter, saidBy } from './roster.ts'
 import { cached, forget, remember, type Roster } from './store.ts'
 import { type Listed, spelling } from './tool.ts'
@@ -65,13 +66,7 @@ let vocabOf = async (c: Ctx, held?: Roster): Promise<VocabDoc | null> => {
   let roster = held ?? await rosterOf(c.host, c.ask, c.state)
   if (roster.vocab) return roster.vocab
   if (!roster.tools.some((t) => t.name == 'graph_schema')) return null
-  let schema = async (args: Record<string, unknown>) =>
-    ((await c.ask('tools/call', {
-      name: 'graph_schema',
-      arguments: args,
-    })) as Result).structuredContent as VocabDoc | undefined
-  let index = await schema({})
-  let whole = await schema({ component: Object.keys(index?.$defs ?? {}) })
+  let whole = await schemaOf(c.ask)
   if (!whole) return null
   await remember(c.host, { ...roster, vocab: whole }, c.state)
   return whole

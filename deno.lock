@@ -3113,6 +3113,7 @@
             "npm:@yaks/provenance@0.2.28",
             "npm:@yaks/query@0.2.32",
             "npm:@yaks/ram@0.2.24",
+            "npm:@yaks/reach@0.2.24",
             "npm:@yaks/render@0.2.24",
             "npm:@yaks/sandbox@0.2.28",
             "npm:@yaks/secrets@0.2.28",

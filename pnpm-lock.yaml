@@ -1042,6 +1042,9 @@ importers:
       '@yaks/query':
         specifier: 0.2.32
         version: link:../query
+      '@yaks/reach':
+        specifier: 0.2.24
+        version: link:../reach
       '@yaks/render':
         specifier: 0.2.24
         version: link:../render
