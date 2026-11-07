@@ -225,9 +225,9 @@ let locked = await (async () => {
 })()
 test('a locked oldest record stays retryable while later records reach remote', () => {
   equal(locked, {
-    first: [false, true],
+    first: [false],
     later: 1,
-    sent: ['locked', 'behind-lock'],
+    sent: ['behind-lock', 'locked'],
     left: 0,
   })
 })
@@ -409,5 +409,56 @@ test('a remote this side cannot ask is told at once, once a cause, and recovers 
       'Tracker standing sync: Remote tracker is set up again',
     ],
     sent: 1,
+  })
+})
+
+// One pass (an aborted signal) on a held clock, where intake and delivery
+// both fail: a new record's admission fails once, and the tracker refuses the
+// record already admitted. The standing sync still runs.
+let single = await (async () => {
+  let g = fixture(), spool = memory(), time = clock()
+  let reports: string[] = [], notices: string[] = [], asked: string[] = []
+  let failing = true
+  let graph = {
+    ...g,
+    apply: (...args: Parameters<typeof g.apply>) => {
+      if (!failing) return g.apply(...args)
+      failing = false
+      return Promise.reject(Error('temporary local failure'))
+    },
+  }
+  spool.append('new')
+  spool.append('old')
+  ;[...spool.held][1].admitted = true
+  let thrown = await service({ graph }, {
+    source: spool.source,
+    remote,
+    timer: (run, ms) => time.after(ms, run),
+    log: () => {},
+    report: (error) => reports.push((error as Error).message),
+    notice: (error) => (notices.push(error.message), Promise.resolve()),
+    fetch: ((_url, init) => {
+      asked.push(init?.method ?? 'GET')
+      return Promise.resolve(
+        init?.method == 'POST'
+          ? new Response(null, { status: 400 })
+          : Response.json([]),
+      )
+    }) as typeof fetch,
+  }).then(() => [], (error) => (error.errors ?? [error]).map(String))
+  return { thrown, reports, notices, asked, left: spool.held.size }
+})()
+test('one pass runs every sync though an earlier one fails, each failure told', () => {
+  equal(single, {
+    thrown: [
+      'Error: temporary local failure',
+      'Error: Remote tracker refused intake (400)',
+    ],
+    reports: ['temporary local failure'],
+    notices: [
+      'Tracker delivery sync failed: Remote tracker refused intake (400)',
+    ],
+    asked: ['POST', 'GET'],
+    left: 2,
   })
 })

@@ -173,27 +173,34 @@ export let service = async (
     inward((signal) =>
       reconcile(host.graph, options.remote!, options.fetch, signal, seen)
     )
+  // Intake, delivery, then the standing sync. One pass (an aborted signal)
+  // runs each in turn, so delivery sends what intake just admitted; a live
+  // service runs them side by side, so neither remote refusal nor a minute of
+  // connection retries can delay a later local record. Either way each runs
+  // whatever another's failure, which is told for itself. The retained
+  // immutable eids make every loop replayable.
+  let loops = [
+    () => run(() => intake(host.graph, local, stop), unadmitted),
+    ...send
+      ? [
+        () => run(() => outward(forward)),
+        () => run(standing, undefined, reconcileEvery),
+      ]
+      : [],
+  ]
   try {
+    let results: PromiseSettledResult<void>[] = []
     if (signal.aborted) {
-      await run(() => intake(host.graph, local), unadmitted)
-      await run(() => outward(forward))
-      if (options.remote) await run(standing)
-    } else {
-      // Neither remote refusal nor a minute of connection retries can delay a
-      // later local record. The retained immutable eids make both loops
-      // replayable.
-      let results = await Promise.allSettled([
-        run(() => intake(host.graph, local, stop), unadmitted),
-        ...send
-          ? [
-            run(() => outward(forward)),
-            run(standing, undefined, reconcileEvery),
-          ]
-          : [],
-      ])
-      for (let result of results) {
-        if (result.status == 'rejected') throw result.reason
+      for (let loop of loops) {
+        results.push(...await Promise.allSettled([loop()]))
       }
+    } else results = await Promise.allSettled(loops.map((loop) => loop()))
+    let failures = results.flatMap((result) =>
+      result.status == 'rejected' ? [result.reason] : []
+    )
+    if (failures.length == 1) throw failures[0]
+    if (failures.length) {
+      throw new AggregateError(failures, 'Tracker service passes failed')
     }
   } finally {
     outward.close()

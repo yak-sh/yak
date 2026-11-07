@@ -143,9 +143,10 @@ test('a composed tracker drains a separate spool, preserving error attribution',
   equal(comp(remoteRows[0], 'during').entity, entity)
   equal(composed.remoteTraces, [])
   equal([composed.traces, composed.spans], [2, 2])
-  // A refusal admits its own local health notice, not another delivery.
-  equal(composed.notices.map((row) => comp(row, 'exception').value), [
+  // Each refusal admits its own local health notice, not another delivery.
+  equal(composed.notices.map((row) => comp(row, 'exception').value).sort(), [
     'Tracker delivery sync failed: Remote tracker refused intake (400)',
+    'Tracker standing sync failed: Remote tracker refused the read (400)',
   ])
   equal(rows.length, 1)
   equal(comp(rows[0], 'created').by, actor.by)
