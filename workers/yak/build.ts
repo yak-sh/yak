@@ -645,7 +645,9 @@ export class Builder {
   // (`#work`). A chat page's first visit made both before its answer.
   #stored() {
     return this.#store ??= (async () => {
-      let { operatorStore, SLICE } = await import('./operator-store.ts')
+      let { operatorStore, owing, SLICE } = await import(
+        './operator-store.ts'
+      )
       let { operatorFrames } = await import('./operator-host.ts')
       // A write that owes work starts it now, beside a step in flight, so a
       // person's words reach the session they are for at once, within a
@@ -671,6 +673,7 @@ export class Builder {
         nudge,
       })
       this.#fx = store.fx
+      owing(store.fx, () => this.#work())
       // What a person is called, as the Operator asks it (operator.ts
       // `named`).
       let named = (person: string) =>

@@ -14,7 +14,13 @@ import { providerDocs } from './providers.ts'
 import { toolsDoc } from '@yaks/tools/vocab'
 import { sessionDerived } from '@yaks/session/status'
 import { contextDoc } from '@yaks/context'
-import { effectDoc, effects, expireDaily } from '@yaks/effects'
+import {
+  effectDoc,
+  type Effects,
+  effects,
+  expireDaily,
+  type Handler,
+} from '@yaks/effects'
 import { edgeDoc, edgeKeywords } from '@yaks/edge'
 import {
   artifactDoc,
@@ -165,6 +171,30 @@ export let operatorGraph = (
     ],
   })
   return { g, fx, vocab }
+}
+
+/**
+ * The Operator's own effects (operator-vocab.ts), owed by every write from
+ * the moment its store is made, before the Operator whose code runs them
+ * (operator-channels.ts `handleChannels`) is: a commit owes runs only for
+ * effects with code, so a request a new incarnation received before it had
+ * made its Operator owed none, and was never taken up (T-150347). Each
+ * stands in until the Operator's own replaces it; a run that starts before
+ * then makes the Operator (`made`) and runs on its handler.
+ */
+export let owing = (fx: Effects, made: () => Promise<unknown>) => {
+  let own = Object.entries(operatorDoc.$defs ?? {})
+    .filter(([, def]) => (def as { effect?: boolean }).effect)
+    .map(([id]) => id)
+  fx.handle(Object.fromEntries(own.map((id) => {
+    let stand: Handler = async (...args) => {
+      await made()
+      let run = fx.slots().find((s) => s.id == id)?.run
+      if (!run || run == stand) throw new Error(`nothing runs ${id}`)
+      return run(...args)
+    }
+    return [id, stand]
+  })))
 }
 
 /** An object's alarm, as its storage keeps it. */
