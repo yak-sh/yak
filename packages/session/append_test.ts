@@ -169,6 +169,6 @@ test("an entry naming no session is refused as its writer's mistake", async () =
   )
   assertEquals([status(e), e.message], [
     400,
-    'nobody names no session',
+    "entry.session takes a session's id or name: nobody names no session",
   ])
 })

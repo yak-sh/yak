@@ -118,6 +118,22 @@ for (
   })
 }
 
+test('a reference that names nothing is refused naming its property', async () => {
+  let refused = await assertRejects(
+    async () =>
+      await make().apply([{ entity: { eid: target }, link: { to: 'a name' } }]),
+    Refused,
+  )
+  equal(
+    [refused.message, refused.comp, refused.prop],
+    [
+      "link.to takes an entity's id or name: a name names nothing",
+      'link',
+      'to',
+    ],
+  )
+})
+
 test('actor aliases resolve before stamps and a missing actor is refused', async () => {
   let g = make()
   let out = await g.apply([{

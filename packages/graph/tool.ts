@@ -94,6 +94,22 @@ export let addressed = async (
 }
 
 /**
+ * A reference's refusal, naming the field that held it and what it takes.
+ *
+ * ```ts
+ * import { equal } from '@yaks/testing'
+ * equal(
+ *   takes('resolved.fix', 'entity', 'a sentence names nothing'),
+ *   "resolved.fix takes an entity's id or name: a sentence names nothing",
+ * )
+ * ```
+ */
+export let takes = (field: string, kind: string, refusal: string): string =>
+  `${field} takes ${
+    kind == 'entity' ? 'an entity' : `a ${kind}`
+  }'s id or name: ${refusal}`
+
+/**
  * Resolve a reference through registered addresses, then an exact title of
  * the requested kind. Only a live word eid takes precedence over a name;
  * minted ids retain identity even when absent or deleted.

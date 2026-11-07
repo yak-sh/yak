@@ -6,7 +6,7 @@
 // handed one that names nothing, or it mints an entity under it.
 
 import type { Graph, NamedTool } from '@yaks/graph'
-import { referenced } from '@yaks/graph/call'
+import { referenced, takes } from '@yaks/graph/call'
 import { Refused } from '@yaks/graph/errors'
 import { TOMBSTONE } from '@yaks/graph/bundle'
 import { validateToolInput } from '@yaks/vocab/tools'
@@ -62,11 +62,9 @@ let ids = (v: unknown): string[] =>
     typeof x == 'string' && x != ''
   )
 
-let missing = (kind: string, said: string): CallError =>
-  new CallError(
-    'arguments',
-    `${said} names ${kind == 'entity' ? 'nothing' : `no ${kind}`}`,
-  )
+// A reference that names nothing, refused naming the argument that held it.
+let missing = (key: string, kind: string, refusal: string): CallError =>
+  new CallError('arguments', takes(key, kind, refusal))
 
 /**
  * Tool references are resolved here once: ids and registered aliases first,
@@ -84,12 +82,13 @@ export let resolved = async (
   let resolve = async (
     schema: Prop | undefined,
     value: unknown,
+    key = '',
   ): Promise<unknown> => {
     let kind = schema?.ref ?? schema?.items?.ref
     if (typeof kind != 'string') {
       if (Array.isArray(value) && schema?.items) {
         return await Promise.all(
-          value.map((item) => resolve(schema.items, item)),
+          value.map((item) => resolve(schema.items, item, key)),
         )
       }
       if (
@@ -97,9 +96,14 @@ export let resolved = async (
         schema?.properties
       ) {
         let out = { ...value }
-        for (let [key, child] of Object.entries(schema.properties)) {
-          if (Object.hasOwn(value, key)) {
-            Reflect.set(out, key, await resolve(child, Reflect.get(value, key)))
+        for (let [name, child] of Object.entries(schema.properties)) {
+          if (Object.hasOwn(value, name)) {
+            let at = key ? `${key}.${name}` : name
+            Reflect.set(
+              out,
+              name,
+              await resolve(child, Reflect.get(value, name), at),
+            )
           }
         }
         return out
@@ -112,9 +116,7 @@ export let resolved = async (
     try {
       eids = await referenced(graph, said, kind)
     } catch (error) {
-      if (error instanceof Refused) {
-        throw new CallError('arguments', error.message)
-      }
+      if (error instanceof Refused) throw missing(key, kind, error.message)
       throw error
     }
     let held = new Map(
@@ -125,7 +127,11 @@ export let resolved = async (
       if (
         !tool.readOnly && (!row || row[TOMBSTONE] != null || row[kind] == null)
       ) {
-        throw missing(kind, said[i])
+        throw missing(
+          key,
+          kind,
+          `${said[i]} names ${kind == 'entity' ? 'nothing' : `no ${kind}`}`,
+        )
       }
     }
     let index = 0

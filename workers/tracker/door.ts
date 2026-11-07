@@ -319,5 +319,13 @@ function refusal(
     if (value.length > most) {
       return `${key} is ${value.length} characters; it takes at most ${most}`
     }
+    if (SHAS.has(key) && !/^(?:[0-9a-f]{40}|[0-9a-f]{64})$/.test(value)) {
+      return `${key} takes a commit's full sha, 40 or 64 hex characters; ` +
+        `${value} is not one`
+    }
   }
 }
+
+// A resolution's commits, which the tracker keeps by their full shas: it has
+// no checkout to read a short one in (bug_resolve reads it on the box).
+let SHAS = new Set(['since', 'fix'])

@@ -1005,7 +1005,7 @@ test('a write naming nothing of its kind is refused, and mints nothing', async (
     )
     assertEquals(
       body(answer.find((b) => b.refusal)),
-      `${who} names no person`,
+      `who takes a person's id or name: ${who} names no person`,
     )
   }
   assertEquals(await g.get(['ghost']), [])

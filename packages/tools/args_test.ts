@@ -180,9 +180,11 @@ for (let shell of ['absent', 'empty', 'deleted']) {
           filed: { assignee: word },
         }]),
       Refused,
-      `${word} names nothing`,
     )
-    equal(failure.message, error.message)
+    equal([failure.message, error.message], [
+      `filed.assignee takes an entity's id or name: ${word} names nothing`,
+      `who takes an entity's id or name: ${word} names nothing`,
+    ])
     equal(await ask.g.get(['Nobodyhere']), [])
     let applied = await ask.g.apply([
       { entity: { eid: '$person' }, person: {} },

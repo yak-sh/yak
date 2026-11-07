@@ -397,6 +397,14 @@ for (
       { bug: other, fix: 'x'.repeat(65) },
       'fix is 65 characters; it takes at most 64',
     ],
+    [
+      { bug: other, fix: 'a sentence' },
+      "fix takes a commit's full sha, 40 or 64 hex characters; a sentence",
+    ],
+    [
+      { bug: other, since: '5b74f5116e' },
+      "since takes a commit's full sha, 40 or 64 hex characters; 5b74f5116e",
+    ],
     [{ bug: other, cause: 7 }, 'cause must be a string'],
     [{ bug: other, why: 'a' }, 'why is not a field here'],
     [{ bug: 'B-1' }, 'bug global eid or handle required'],

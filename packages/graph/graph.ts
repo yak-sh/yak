@@ -90,7 +90,7 @@ import { type Derive, isAlias, resolve, substitute } from './alias.ts'
 import { deriving, identified } from './identity.ts'
 import { mint as fresh, minted } from './mint.ts'
 import { admit, formed, known, unstamped } from './admit.ts'
-import { knownOptions, Refused } from './errors.ts'
+import { knownOptions, Refused, type Where } from './errors.ts'
 import { requested } from './request.ts'
 import { composed } from './compose.ts'
 import {
@@ -129,7 +129,7 @@ import { own, type Ready, ready, settle } from './declared.ts'
 import { state } from './state.ts'
 import { queries, reader as reading, retained } from './read.ts'
 import { NeedsWrite, rehearsing } from './admission.ts'
-import { referenced } from './tool.ts'
+import { referenced, takes } from './tool.ts'
 import { prune } from './prune.ts'
 import { enter } from './enter.ts'
 
@@ -441,6 +441,26 @@ let iso = (ms: number): string =>
 
 let failed = (err: unknown, at: { phase: Phase; plugin: string }) =>
   console.error(`${at.plugin} failed at ${at.phase} —`, err)
+
+// A written reference that names nothing is refused naming the property that
+// held it and what that property takes, `resolved.fix takes an entity's id or
+// name: a sentence names nothing`, so a writer knows which field to fix.
+let pointing = <T>(
+  resolve: () => T | Promise<T>,
+  at: Required<Where>,
+  kind: string,
+): T | Promise<T> => {
+  let named = (error: unknown): never => {
+    if (!(error instanceof Refused)) throw error
+    throw new Refused(takes(`${at.comp}.${at.prop}`, kind, error.message), at)
+  }
+  try {
+    let value = resolve()
+    return isPromise(value) ? value.catch(named) : value
+  } catch (error) {
+    return named(error)
+  }
+}
 
 // Each vocabulary's declared rules, read from its documents once.
 let declaredRules = new WeakMap<Vocab, ReturnType<typeof rulesIn>>()
@@ -1339,9 +1359,9 @@ export let graph = (opts: Options): Graph => {
         named,
         (out, { i, comp, prop, value, kind }) =>
           after(
-            referenced(
-              { ...tx, vocab, address },
-              [value],
+            pointing(
+              () => referenced({ ...tx, vocab, address }, [value], kind),
+              { eid: out[i].entity.eid, comp, prop },
               kind,
             ),
             ([eid]) => {
