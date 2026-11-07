@@ -13,6 +13,7 @@ import { declarations } from '../packages/cli/declarations.ts'
 import type { Config } from '../packages/cli/config.ts'
 import { initialize, rpc } from '../packages/cli/rpc.ts'
 import { settled } from './settled.ts'
+import { runtimeCache } from './runtime.ts'
 import { selected } from './selected.ts'
 import { fixture } from './fixture.ts'
 import {
@@ -208,7 +209,7 @@ async function collect(
     HARNESS_HOME: `${dir}/harness`,
     HARNESS_WORKTREE_DIR: `${dir}/worktrees`,
     PROCESS_DIR: `${dir}/process`,
-    YAK_RUNTIME_CACHE: `${dir}/runtime`,
+    YAK_RUNTIME_CACHE: runtimeCache(),
   }
   let host: Awaited<ReturnType<typeof compose>> | undefined
   let server: Deno.HttpServer<Deno.NetAddr> | undefined
@@ -230,7 +231,10 @@ async function collect(
     await settled(host)
     let graph = host.graph
     if (!scale) await populate(graph, tasks)
-    let cli = async (operation: Operation, input: Record<string, unknown>) => {
+    let cli = async (
+      operation: Pick<Operation, 'tool' | 'command'>,
+      input: Record<string, unknown>,
+    ) => {
       let flags = Object.entries(input).flatMap(([key, value]) => [
         `--${key.replaceAll('_', '-')}`,
         typeof value == 'string' ? value : JSON.stringify(value),
@@ -541,6 +545,12 @@ async function collect(
     }
     let filter = args.find((a) => a.startsWith('--family='))?.slice(9)
     if (filter) operations = operations.filter((o) => o.family == filter)
+    // The checkout's runtime slot is written by the first command, untimed.
+    if (operations.some((o) => selected(`cli/${o.family}`))) {
+      await cli({ tool: 'graph_query', command: ['graph', 'query'] }, {
+        q: '.task .count',
+      })
+    }
     for (let operation of operations) {
       let doors = ['cli', 'connector'].filter((door) =>
         selected(`${door}/${operation.family}`)

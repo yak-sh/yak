@@ -11,49 +11,49 @@
       "name": "cli/help",
       "unit": "ms",
       "better": "lower",
-      "median": 91.36899999999969,
-      "reference": "bc927bbb49a4cf12e948214b8e78626c710a5aab",
-      "tolerance": 0.924
+      "median": 345.8139999999985,
+      "reference": "ccf6c8ed4150d5bd43dbd1c5cf31e0bd0f9eaca8",
+      "tolerance": 0.628
     },
     {
       "name": "cli/task-list",
       "unit": "ms",
       "better": "lower",
-      "median": 541.1010000000024,
-      "reference": "bc927bbb49a4cf12e948214b8e78626c710a5aab",
-      "tolerance": 0.89
+      "median": 898.3940000000002,
+      "reference": "ccf6c8ed4150d5bd43dbd1c5cf31e0bd0f9eaca8",
+      "tolerance": 0.95
     },
     {
       "name": "cli/graph-show",
       "unit": "ms",
       "better": "lower",
-      "median": 326.7709999999988,
-      "reference": "bc927bbb49a4cf12e948214b8e78626c710a5aab",
-      "tolerance": 0.946
+      "median": 724.0400000000009,
+      "reference": "ccf6c8ed4150d5bd43dbd1c5cf31e0bd0f9eaca8",
+      "tolerance": 0.459
     },
     {
       "name": "cli/graph-query",
       "unit": "ms",
       "better": "lower",
-      "median": 258.47100000000137,
-      "reference": "bc927bbb49a4cf12e948214b8e78626c710a5aab",
-      "tolerance": 0.683
+      "median": 613.9589999999989,
+      "reference": "ccf6c8ed4150d5bd43dbd1c5cf31e0bd0f9eaca8",
+      "tolerance": 0.405
     },
     {
       "name": "cli/graph-apply",
       "unit": "ms",
       "better": "lower",
-      "median": 456.22999999999956,
-      "reference": "bc927bbb49a4cf12e948214b8e78626c710a5aab",
-      "tolerance": 0.458
+      "median": 891.4439999999995,
+      "reference": "ccf6c8ed4150d5bd43dbd1c5cf31e0bd0f9eaca8",
+      "tolerance": 0.543
     },
     {
       "name": "hook/UserPromptSubmit",
       "unit": "ms",
       "better": "lower",
-      "median": 97.02600000000166,
-      "reference": "bc927bbb49a4cf12e948214b8e78626c710a5aab",
-      "tolerance": 0.663
+      "median": 357.2580000000007,
+      "reference": "ccf6c8ed4150d5bd43dbd1c5cf31e0bd0f9eaca8",
+      "tolerance": 0.815
     },
     {
       "name": "connector/graph-query",
@@ -71,6 +71,5 @@
       "reference": "bc927bbb49a4cf12e948214b8e78626c710a5aab",
       "tolerance": 0.95
     }
-  ],
-  "reference": "bc927bbb49a4cf12e948214b8e78626c710a5aab"
+  ]
 }

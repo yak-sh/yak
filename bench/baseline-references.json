@@ -291,14 +291,21 @@
         "kind": "derived",
         "source": "git history of bench/person-commands.baseline.json: the banking commit introduced all retained medians; no measured product revision is recorded in the baseline, commit message, or inspected task comments",
         "benches": [
+          "connector/graph-query",
+          "connector/graph-apply"
+        ]
+      },
+      {
+        "reference": "ccf6c8ed4150d5bd43dbd1c5cf31e0bd0f9eaca8",
+        "kind": "recorded",
+        "source": "bench:ratchet --slower at ccf6c8ed4 (T-127738): a `yak` command from a checkout runs from its runtime snapshot through a launcher (T-141634)",
+        "benches": [
           "cli/help",
           "cli/task-list",
           "cli/graph-show",
           "cli/graph-query",
           "cli/graph-apply",
-          "hook/UserPromptSubmit",
-          "connector/graph-query",
-          "connector/graph-apply"
+          "hook/UserPromptSubmit"
         ]
       }
     ]

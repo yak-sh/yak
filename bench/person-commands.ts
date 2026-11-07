@@ -8,6 +8,7 @@ import { compose } from '../packages/cli/host.ts'
 import { read } from '../packages/cli/config.ts'
 import { starter } from '../packages/cli/init.ts'
 import { initialize, rpc } from '../packages/cli/rpc.ts'
+import { runtimeCache } from './runtime.ts'
 import { selected } from './selected.ts'
 
 export let PERSON_COMMANDS = [
@@ -47,7 +48,7 @@ export async function measure(
     HARNESS_HOME: `${dir}/harness`,
     HARNESS_WORKTREE_DIR: `${dir}/worktrees`,
     PROCESS_DIR: `${dir}/process`,
-    YAK_RUNTIME_CACHE: `${dir}/runtime`,
+    YAK_RUNTIME_CACHE: runtimeCache(),
     TASKS_SESSION: '',
     CLAUDE_CODE_SESSION_ID: '',
   }
@@ -186,6 +187,8 @@ export async function measure(
     if (!(await asset.arrayBuffer()).byteLength) {
       throw new Error('fixture asset is empty')
     }
+    // The checkout's runtime slot is written by the first command, untimed.
+    if (!(await cli(['help'])).includes('yak')) throw new Error('missing help')
     // First: preserve today's cost before the independent hook fix changes it.
     await timed('hook/UserPromptSubmit', async () => {
       let out = await cli(['session', 'context', '--hook', '-'], hook)
