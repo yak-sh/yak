@@ -325,7 +325,8 @@
       "properties": {
         "state": {
           "type": "string",
-          "description": "Legacy compatibility during the dispatch marks expansion; removed after the deferred cutover."
+          "index": true,
+          "description": "Legacy compatibility during the dispatch marks expansion; removed after the deferred cutover. Indexed because a settled legacy child keeps its dispatch, and admission seeks past them (./admission.ts)."
         },
         "args": {
           "type": "string"

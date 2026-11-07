@@ -8,7 +8,7 @@
 import type { Bundle, Comp, Eid, Graph } from '@yaks/graph'
 import { Stale } from '@yaks/graph/errors'
 import { token } from '@yaks/graph/sha256'
-import { and, limit, ne, order, present, want } from '@yaks/query'
+import { absent, and, eq, list, or, present, want } from '@yaks/query'
 import type { ChildLimits } from './children.ts'
 import { changes } from './wait.ts'
 
@@ -32,14 +32,22 @@ let marks = (g: Graph) =>
 let place = async (g: Graph, eid: Eid) =>
   (await g.get([eid], ['dispatch', ...marks(g)]))[0]
 
-// The children in `status`. A legacy row keeps its dispatch once settled, and
-// those outnumber the rest many times over: they are never read.
-let placed = async (g: Graph, status: string): Promise<Bundle[]> =>
-  (await g.read(and(
+// The children holding a place. A legacy row keeps its dispatch once settled,
+// and those outnumber the rest many times over: the index on `dispatch.state`
+// seeks past them, which a `!= 'settled'` would scan to the last.
+let holders = async (g: Graph): Promise<Bundle[]> =>
+  await g.read(and(
     present('dispatch'),
-    ne('dispatch.state', 'settled'),
+    or(
+      absent('dispatch.state'),
+      eq('dispatch.state', list('queued', 'active', 'waiting')),
+    ),
     ...marks(g).map(want),
-  ))).filter((b) => dispatchStatus(b) == status)
+  ))
+
+// The children in `status`.
+let placed = async (g: Graph, status: string): Promise<Bundle[]> =>
+  (await holders(g)).filter((b) => dispatchStatus(b) == status)
 
 let state = async (g: Graph, eid: Eid) => dispatchStatus(await place(g, eid))
 
@@ -110,13 +118,14 @@ export let queue = async (g: Graph): Promise<Bundle[]> =>
 export let active = async (g: Graph): Promise<number> =>
   (await placed(g, 'active')).length
 
-/** The order a child joining the queue takes: behind every other. */
-export let tail = async (g: Graph): Promise<number> => {
-  let [last] = await g.read(
-    and(present('dispatch.order'), order('-dispatch.order'), limit(1)),
-  )
-  return Math.max(0, Number(dispatch(last)?.order ?? 0)) + 1
-}
+/** The order a child joining the queue takes: behind every other holding a
+ * place. A settled child's order no longer places anyone. */
+export let tail = async (g: Graph): Promise<number> =>
+  Math.max(
+    0,
+    ...(await holders(g)).map((b) => Number(dispatch(b)?.order ?? 0)),
+  ) +
+  1
 
 /** Admit the oldest queued children while fewer than the bound are active. */
 export let admitNext = async (
