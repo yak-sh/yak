@@ -11,9 +11,10 @@
 // deploy before the secret was put — the vault is shut: writing a key is
 // refused before anything commits, and a deleted connection has nothing to
 // drop.
-import { d1Vault } from '@yaks/d1'
+import { type D1Vault, d1Vault } from '@yaks/d1'
 import type { Vault } from '@yaks/secrets'
 import type { Env } from './env.ts'
+import { elapsed } from './lib/hops.ts'
 
 let no = (): never => {
   throw new Error('no vault is set up here')
@@ -42,6 +43,22 @@ let keyOf = (text: string): Promise<CryptoKey> => {
   return key
 }
 
+// Each wait on the database a `vault_wait` (timing.ts), summed over the
+// request that waited.
+let timed = (vault: D1Vault): D1Vault => {
+  let waiting =
+    <A extends unknown[], T>(fn: (...a: A) => Promise<T>) => (...a: A) =>
+      elapsed('vault_wait', () => fn(...a))
+  return {
+    ...vault,
+    salt: waiting(vault.salt),
+    read: waiting(vault.read),
+    seal: waiting(vault.seal),
+    drop: waiting(vault.drop),
+    all: waiting(vault.all),
+  }
+}
+
 // Per binding, then per key: the workerd probes share one database between
 // kernels that may each be handed a key.
 let vaults = new WeakMap<object, Map<string, Vault>>()
@@ -56,7 +73,7 @@ export let vaultOf = (env: Partial<Env>): Vault => {
   if (!db || !key) return shut
   let keyed = vaults.get(db) ?? new Map<string, Vault>()
   vaults.set(db, keyed)
-  let held = keyed.get(key) ?? d1Vault(db, keyOf(key))
+  let held = keyed.get(key) ?? timed(d1Vault(db, keyOf(key)))
   keyed.set(key, held)
   return held
 }

@@ -550,6 +550,8 @@ export let connectionsOf = async (
   } = {},
 ): Promise<Connections> => {
   let { enable = [], dir = dirOf(env) } = at
+  // Awaited only on the person's own space.
+  at.services?.catch(() => {})
   let read = readOn(dir)
   let month = monthOf(Date.now())
   // Only what those answers name outside this space is asked after.
@@ -571,6 +573,24 @@ export let connectionsOf = async (
     .map((app) => ({ app: app.eid, title: app.title || app.slug }))
   let listed = new Set(listing.map((b) => b.entity.eid))
   let all = [...held, ...mine]
+  let taken = new Set(
+    all.filter((b) => b[CONNECTION])
+      .map((b) => String(comp(b, CONNECTION).integration)),
+  )
+  // A client is kept in the vault, so a deploy with none has no client either.
+  let offered = async (i: Integration) =>
+    !taken.has(i.name) && (!i.testing || enable.includes(i.name)) &&
+    connectable(i, vaulted(env) && await clientOf(vaultOf(env), read, i))
+  // What is offered, each client read from the vault at once and beside the
+  // reads below.
+  let offers = Promise.all(
+    built.map(async (i) =>
+      await offered(i)
+        ? [{ name: i.name, keyed: keyed(i), face: await faceOf(i.name, i) }]
+        : []
+    ),
+  ).then((each) => each.flat().sort((a, b) => a.name.localeCompare(b.name)))
+  offers.catch(() => {})
   let links = all.filter((b) => b[USES])
   // Each app's space and name: this space's from its roster, and an app
   // elsewhere borrowing from it, or lending to it, from the directory.
@@ -657,22 +677,6 @@ export let connectionsOf = async (
       }
     }),
   )
-  let taken = new Set(shown.map((s) => s.integration))
-  // A client is kept in the vault, so a deploy with none has no client either.
-  let offered = async (i: Integration) =>
-    !taken.has(i.name) && (!i.testing || enable.includes(i.name)) &&
-    connectable(i, vaulted(env) && await clientOf(vaultOf(env), read, i))
-  let offers = []
-  for (let i of built) {
-    if (await offered(i)) {
-      offers.push({
-        name: i.name,
-        keyed: keyed(i),
-        face: await faceOf(i.name, i),
-      })
-    }
-  }
-  offers.sort((a, b) => a.name.localeCompare(b.name))
   // The one the page was opened to add, from the integration directory: a
   // built one offered here, or a custom one its owner listed.
   let asked = wanted && !taken.has(wanted.name) &&
@@ -707,7 +711,7 @@ export let connectionsOf = async (
         }
       }),
     ),
-    built: offers.filter((b) => b.name != asked?.name),
+    built: (await offers).filter((b) => b.name != asked?.name),
     enable,
     ...asked ? { asked } : {},
   }

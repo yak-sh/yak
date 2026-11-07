@@ -2597,6 +2597,9 @@ let rowsAhead = (
   }
   if (view != 'connections') return []
   return [
+    // The outside services holding a grant from the person, shown only on
+    // their own space, asked before the page knows whether it is.
+    identity().then((part) => part.services(at.env, person)),
     connectionsAsked(
       at.env,
       at.space.then((s) => s ?? Promise.reject(new Error('no space here'))),
@@ -2778,19 +2781,16 @@ let desk = async (
     // page that shows it; on the person's own space (`member.own`), what they
     // connected for themselves and the services holding a grant from them.
     view == 'connections'
-      ? dir.seats(owner, 'owner').then((seats) => {
-        let own = seats.some((s) => s.own && s.space.eid == space.eid)
-        return connectionsOf(env, space, owner, {
-          dir,
-          by: walkTo(space.slug, space.eid).path,
-          own,
-          // Asked beside the directory's reads, never ahead of them.
-          services: own
-            ? identity().then((part) => part.services(env, owner))
-            : undefined,
-          enable: enabled(req),
-          add: q.get('add') ?? undefined,
-        })
+      ? connectionsOf(env, space, owner, {
+        dir,
+        by: walkTo(space.slug, space.eid).path,
+        own: dir.seats(owner, 'owner').then((seats) =>
+          seats.some((s) => s.own && s.space.eid == space.eid)
+        ),
+        // Asked beside the directory's reads, and kept only on their own.
+        services: identity().then((part) => part.services(env, owner)),
+        enable: enabled(req),
+        add: q.get('add') ?? undefined,
       })
       : undefined,
     // Every space this person may work in, which the side's selector offers.

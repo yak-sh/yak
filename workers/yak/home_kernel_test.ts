@@ -453,13 +453,16 @@ test('a dashboard page reads the directory in one trip', async () => {
     assertEquals(await trips(managePath(view)), '1', view)
   }
   // Their own space's connections also say which outside services hold a
-  // grant from them, asked beside the directory's reads.
+  // grant from them, asked beside the directory's reads, once, and the wait
+  // on them is said.
   let own = await k.at('yaks.app', managePath('connections'), {
     headers: { cookie },
   })
   await own.body?.cancel()
   let at = new URL(own.headers.get('location')!, 'https://yaks.app')
-  assertEquals(await trips(at.pathname), '1')
+  let said = await timing(at.pathname)
+  assertEquals(/hops;dur=(\d+)/.exec(said)?.[1], '1')
+  assertMatch(said, /oauth_wait;dur=\d+/)
 })
 
 // A space with no front page answers its bare address with its listing, from

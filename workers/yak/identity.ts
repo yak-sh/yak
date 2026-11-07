@@ -137,6 +137,7 @@ import { door } from './invite.ts'
 import { mail, mailable } from './mail.ts'
 import { fault } from './unseen.ts'
 import { type Clock, clock, timed } from './timing.ts'
+import { elapsed, recall, writing } from './lib/hops.ts'
 
 // What the sign-in card says when no letter can leave: the deploy's operator
 // reads which secret is missing, and a visitor reads that nothing is wrong
@@ -259,22 +260,32 @@ let dirOf = (env: Env) => directory(bound(env.DIRECTORY, dirPart.fetch, env))
 let addressIn = (row?: Record<string, unknown>) =>
   (row?.email as { address?: string } | undefined)?.address ?? null
 
-// The provider as connected.ts reads it. A client whose metadata document
+// The provider as connected.ts reads it, each wait on it an `oauth_wait`
+// (timing.ts). A person's grants are read once a request (hops.ts `recall`),
+// so a page can ask them ahead of knowing whether it shows them (apps.ts
+// `foresee`), until a grant is revoked. A client whose metadata document
 // cannot be fetched just now is unknown, not gone: its grants still stand.
 let grants = (env: Env) => {
   let oauth = api(env)
+  let waiting = <T>(work: () => Promise<T>) => elapsed('oauth_wait', work)
   return {
     listUserGrants: (person: string, options?: ListOptions) =>
-      oauth.listUserGrants(person, options),
-    revokeGrant: (id: string, person: string) => oauth.revokeGrant(id, person),
-    lookupClient: async (id: string) => {
-      try {
-        return await oauth.lookupClient(id)
-      } catch (error) {
-        if (error instanceof CimdFetchError) return undefined
-        throw error
-      }
-    },
+      recall(
+        'oauth',
+        `grants ${person} ${JSON.stringify(options ?? {})}`,
+        () => waiting(() => oauth.listUserGrants(person, options)),
+      ),
+    revokeGrant: (id: string, person: string) =>
+      writing('oauth', () => waiting(() => oauth.revokeGrant(id, person))),
+    lookupClient: (id: string) =>
+      waiting(async () => {
+        try {
+          return await oauth.lookupClient(id)
+        } catch (error) {
+          if (error instanceof CimdFetchError) return undefined
+          throw error
+        }
+      }),
   }
 }
 
