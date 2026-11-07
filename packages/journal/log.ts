@@ -44,6 +44,7 @@ import type { Vocab } from '@yaks/vocab'
 import {
   and,
   as,
+  call,
   col,
   type CreateTable,
   type Derived,
@@ -61,6 +62,7 @@ import {
   notNull,
   or,
   over,
+  type Param,
   type Row,
   type Select,
   select,
@@ -237,6 +239,31 @@ export let dropDdl = (): Drop[] =>
 let written = (value: Comp): [string, unknown][] =>
   Object.entries(value).filter(([prop]) => prop != 'eid')
 
+// The most text one JSON array of rows holds: well inside the largest string
+// a Durable Object binds (2 MB), however its characters encode.
+let PART = 512 * 1024
+
+// Rows as JSON arrays of at most PART characters each, a row longer than that
+// alone in its own.
+let parts = (list: Param[][]): string[] => {
+  let out: string[] = [], held: string[] = [], size = 0
+  let close = () => {
+    if (held.length) out.push(`[${held.splice(0).join(',')}]`)
+    size = 0
+  }
+  for (let row of list) {
+    let text = JSON.stringify(row)
+    if (size + text.length > PART) close()
+    held.push(text)
+    size += text.length + 1
+  }
+  close()
+  return out
+}
+
+// The `i`th cell of a row `parts` wrote, read from `json_each`.
+let cell = (i: number): Expr => fn('json_extract', col('value'), lit(`$[${i}]`))
+
 /** Which rows a transaction is written down as, beside its own row: a
  * `journal_change` row per component it wrote or removed (`changes`, the
  * attribution aspect), and a `journal_field` row per value (`values`, the
@@ -330,12 +357,13 @@ export let log = (opts: LogOpts): Log => {
   let jf = (c: string) => col(c, 'jf')
   // An eid bound where a column holds an entity-table id, and the lookup back
   // the other way.
-  let idOf = (eid: Eid | null | undefined): Expr =>
+  let idBy = (eid: Expr): Expr =>
     sub(select({
       cols: [col(idCol, 's')],
       from: table(spine, 's'),
-      where: eq(col(eidCol, 's'), val(eid ?? null)),
+      where: eq(col(eidCol, 's'), eid),
     }))
+  let idOf = (eid: Eid | null | undefined): Expr => idBy(val(eid ?? null))
   let eidOf = (id: Expr): Expr =>
     sub(select({
       cols: [col(eidCol, 's')],
@@ -551,46 +579,58 @@ export let log = (opts: LogOpts): Log => {
         },
         where: and(eq(col('rn'), lit(1)), eq(col('present'), lit(1))),
       })
-    applied.forEach(({ target, comp, value }, ordinal) => {
-      let change = num(
-        one({
+    // Every change is one row of a JSON array, and every field another: a
+    // transaction is a few statements however many components it wrote.
+    let changes = new Map<number, number>()
+    for (
+      let part of parts(applied.map(({ target, comp, value }, ordinal) => [
+        ordinal,
+        target,
+        comp,
+        value == null ? 'remove' : 'upsert',
+      ]))
+    ) {
+      rows({
+        t: 'insert',
+        into: 'journal_change',
+        cols: ['tx', 'ordinal', 'entity', 'component', 'operation'],
+        q: select({
+          cols: [val(seq), cell(0), idBy(cell(1)), cell(2), cell(3)],
+          from: call('json_each', [val(part)]),
+        }),
+        returning: [col('id'), col('ordinal')],
+      }).forEach((r) => changes.set(num(r.ordinal), num(r.id)))
+    }
+    if (!values) return seq
+    let fields: Param[][] = []
+    let flush = () => {
+      for (let part of parts(fields.splice(0))) {
+        rows({
           t: 'insert',
-          into: 'journal_change',
-          cols: ['tx', 'ordinal', 'entity', 'component', 'operation'],
-          rows: [[
-            val(seq),
-            val(ordinal),
-            idOf(target),
-            val(comp),
-            val(value == null ? 'remove' : 'upsert'),
-          ]],
-          returning: [col('id')],
-        })?.id,
-      )
+          into: 'journal_field',
+          cols: ['change', 'ordinal', 'field', 'present', 'value', 'ref'],
+          q: select({
+            cols: [0, 1, 2, 3, 4, 5].map(cell),
+            from: call('json_each', [val(part)]),
+          }),
+        })
+      }
+    }
+    applied.forEach(({ target, comp, value }, ordinal) => {
+      let change = changes.get(ordinal)!
       let field = (
         i: number,
         name: string,
         v: string | null,
         ref: number | null,
       ) =>
-        rows({
-          t: 'insert',
-          into: 'journal_field',
-          cols: ['change', 'ordinal', 'field', 'present', 'value', 'ref'],
-          rows: [[
-            val(change),
-            val(i),
-            val(name),
-            val(v == null && ref == null ? 0 : 1),
-            val(v),
-            val(ref),
-          ]],
-        })
-      if (!values) return
+        fields.push([change, i, name, v == null && ref == null ? 0 : 1, v, ref])
       if (value == null) {
         // A removal tombstones every property the component still had, so
         // property history stays self-contained across a removal and a later
-        // recreation.
+        // recreation. What it had may be this transaction's own earlier
+        // after-images, so those are written first.
+        flush()
         rows(held(target, comp)).forEach((f, i) =>
           field(i, String(f.field), null, null)
         )
@@ -605,6 +645,7 @@ export let log = (opts: LogOpts): Log => {
           : field(i, prop, enc(v) ?? 'null', null)
       )
     })
+    flush()
     return seq
   }
 

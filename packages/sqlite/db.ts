@@ -19,6 +19,13 @@ import { loadable, open as reader } from './read-db.ts'
  * it. */
 export type Opened = Driver & { close: () => void }
 
+// The WAL a file's connection keeps, and lets grow before a checkpoint, in
+// bytes: 16384 pages of 4 KiB.
+let WAL = 64 * 1024 * 1024
+
+// The most a file's connection keeps of its pages in memory, in bytes.
+let CACHE = 64 * 1024 * 1024
+
 /**
  * Open (or create) the database at `path` — a file, whose directory is made
  * when missing, or `:memory:` — as a {@link Driver} to bind `storage()` to.
@@ -29,8 +36,8 @@ export type Opened = Driver & { close: () => void }
  *
  * Every connection runs with foreign keys on. A file is one other processes
  * may have open too, so it also runs in WAL mode, with WAL's crash-safe pairing
- * `synchronous = normal`, a 64 MiB retained WAL limit, no checkpoint on close,
- * and a one-minute busy timeout, and a new file starts in incremental
+ * `synchronous = normal`, a 64 MiB WAL checkpointed as it fills, a 64 MiB
+ * page cache, no checkpoint on close, and a one-minute busy timeout, and a new file starts in incremental
  * auto-vacuum mode, so the pages a delete frees can be given back (./owe.ts `reclaim`); a database in memory
  * belongs to this process alone and needs none of that. A graph batch may be large, so contention gives
  * the one writer that bounded minute to finish. A writer held longer is a
@@ -74,12 +81,20 @@ export let open = (path: string, opts: { readOnly?: boolean } = {}): Opened => {
     if (!page_count) set('auto_vacuum', 'incremental')
     set('journal_mode', 'wal')
     set('synchronous', 'normal')
-    set('journal_size_limit', 64 * 1024 * 1024)
+    set('journal_size_limit', WAL)
+    // A checkpoint syncs both files, and a commit that crosses the mark waits
+    // for it: at SQLite's thousand pages, a large write paid a sync every 4
+    // MiB. It runs once the WAL reaches the size it is kept to.
+    set('wal_autocheckpoint', WAL / 4096)
+    // The pages a connection keeps: at SQLite's 2 MiB, a write to a graph of
+    // a few hundred MiB read most of the index pages it touched back from the
+    // file, statement by statement.
+    set('cache_size', -CACHE / 1024)
     // The last connection to close leaves the WAL for the next to append to.
     // A checkpoint on close syncs both files, and the next process's first
     // commit then starts the WAL afresh and syncs its header: together a
     // short command's slowest steps. The automatic checkpoint still moves
-    // pages into the file every thousand.
+    // the pages into the file.
     configure(db, 'SQLITE_DBCONFIG_NO_CKPT_ON_CLOSE', true)
     // A checkpoint that grows the file changes its size, and syncing a size
     // waits for ext4's journal to commit, which waits for every other
