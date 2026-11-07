@@ -195,7 +195,33 @@ export type Moving = {
   apply: (patch: Bundle[]) => Bundle[] | Promise<Bundle[]>
   tx: <T>(body: () => T) => T
   drop?: (paths: string[]) => void
+  /** Whether the store's words declare this component, or its property. */
+  speaks: (comp: string, prop?: string) => boolean
 }
+
+// The paths a line names, wherever they stand in it.
+let paths = (node: unknown): string[][] =>
+  Array.isArray(node)
+    ? node.flatMap(paths)
+    : node && typeof node == 'object'
+    ? [
+      ...Array.isArray((node as { path?: unknown }).path)
+        ? [(node as { path: string[] }).path]
+        : [],
+      ...paths((node as { clauses?: unknown }).clauses),
+      ...paths((node as { where?: unknown }).where),
+    ]
+    : []
+
+/** Whether the store speaks every word a rule's line names: each component,
+ * and the property named after it. A store lacking one holds nothing the rule
+ * moves, so the rule is done there. A line whose words it speaks and that is
+ * still refused was refused by our own code (a compiler a deploy changed), and
+ * fails the batch, which reports it. */
+export let spoken = (m: Moving, find: string | Query) =>
+  paths(typeof find == 'string' ? parse(find) : find).every(([comp, prop]) =>
+    m.speaks(comp, prop)
+  )
 
 /** Rows a batch takes. A store's one thread is held for the whole batch, and
  * one whose writes run many rules holds it longest: rehearsed, a batch of 200
@@ -246,7 +272,7 @@ export let batch = (
   try {
     rows = sync(m.read(page(rule, n, was?.after)))
   } catch (e) {
-    if (!(e instanceof Unknown)) throw e
+    if (!(e instanceof Unknown) || spoken(m, rule.find)) throw e
     return { rows: [], patch: [], forward: [], unspoken: e.prop }
   }
   let read = (line: string) => sync(m.read(line))
@@ -331,7 +357,7 @@ export let rehearse = (
         throw back
       })
     } catch (e) {
-      if (e instanceof Unknown) r.unspoken = e.prop
+      if (e instanceof Unknown && !spoken(m, rule.find)) r.unspoken = e.prop
       else if (e !== back) r.failed = said(e)
     }
     return r

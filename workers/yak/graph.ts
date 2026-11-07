@@ -25,6 +25,7 @@ import {
   Unfenced,
 } from './directory-copy.ts'
 import { queryCache } from './query-cache.ts'
+import { answers, recalling } from './answered.ts'
 import { appRead } from './app-read.ts'
 import { eraseStore, weighing } from './app-storage.ts'
 import { reviveStore, suspendStore } from './app-dormancy.ts'
@@ -650,6 +651,8 @@ type Word =
   | 'embedding-outage'
   // The searchable fields its whole lexicon was last read under (`#lexing`).
   | 'lexicon'
+  // The lines its query door answered under the words it holds (answered.ts).
+  | 'answered'
   // One person's localStorage in a walled page (page-storage.ts): their keys
   // as one JSON object, kept here rather than as rows, which the app's other
   // readers could query.
@@ -3104,6 +3107,7 @@ export class Store {
   // dropped when it is a rehearsal or the app remains dormant.
   #mover = (held: (() => void | Promise<void>)[], rule?: Rule): Moving => {
     let g = this.#graph
+    let words = this.#vocab
     if (rule?.source) {
       let source = {
         ...rule.source,
@@ -3128,7 +3132,7 @@ export class Store {
           }),
         ),
       }
-      let vocab = loadVocab([...this.#vocab.docs, source], metaKeywords)
+      let vocab = words = loadVocab([...this.#vocab.docs, source], metaKeywords)
       let derived = {
         ...blobRead(vocab),
         ...(!ownStore(this.#get('name') ?? '')
@@ -3159,6 +3163,9 @@ export class Store {
       },
       read: (q) => g.read(q, { native: true }),
       rows: (q) => g.rows(q, { native: true }),
+      speaks: (comp, prop) =>
+        prop ? !!words.prop(comp, prop) : !!words.comp(comp) ||
+          !!words.assoc(comp),
       apply: (patch) => {
         let was = this.#kernelling
         this.#kernelling = true
@@ -4948,8 +4955,22 @@ export class Store {
       defect(e, { request: 'query', store: this.#get('name') })
       throw e
     }
-    return await this.#reading(request)
+    return await this.#recalled(
+      [this.#get('vocab') ?? '', this.#get('uses') ?? ''],
+      line,
+      () => this.#reading(request),
+    )
   }
+
+  // A refusal of a line this door answered under the same words is the
+  // deploy's, not the caller's (answered.ts), and is reported here.
+  #recalled = recalling(
+    answers({
+      read: () => this.#get('answered'),
+      write: (value) => this.#put('answered', value),
+    }),
+    (error) => defect(error, { request: 'query', store: this.#get('name') }),
+  )
 
   // The word a row is named by. `kind` is not a property and no client can
   // derive it: it is the most specific component this vocabulary says the

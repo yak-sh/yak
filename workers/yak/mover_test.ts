@@ -2,9 +2,9 @@
 // alarm after boot, a rehearsal that moves nothing, and a failing batch that
 // leaves the store serving until fixed code arrives.
 import { test } from '@yaks/testing'
-import { assert, assertEquals, assertRejects } from '@std/assert'
+import { assert, assertEquals, assertRejects, assertThrows } from '@std/assert'
 import { type Bundle, type Comp, graph, Stale, token } from '@yaks/graph'
-import { loadVocab, pick, type VocabDoc } from '@yaks/vocab'
+import { loadVocab, pick, Unknown, type VocabDoc } from '@yaks/vocab'
 import { kernelDoc } from '@yaks/kernel/vocab'
 import { doorOf } from './door.ts'
 import { PLATFORM_STORE } from '@yaks/platform/names'
@@ -17,6 +17,7 @@ import { blobRead, blobs, sqliteBlobs } from '@yaks/blob'
 import { metaKeywords } from './vocab.ts'
 import { KERNEL, metaOf } from './meta.ts'
 import {
+  batch,
   dispatchMove,
   dispatchRule,
   doneEffectsRule,
@@ -271,6 +272,26 @@ test('a rule reading words a store does not speak is done there', async () => {
   await s.alarm()
   let [said] = await s.moves()
   assertEquals([said.unspoken, said.moved, !!said.done], ['nowhere', 0, true])
+})
+
+// d9f015365 refused `.effect.attempts=0` as `Unknown`, in stores that speak
+// both words, and the dead-mail mover took that for a store with no mail.
+test('a rule refused in words the store speaks fails its batch', () => {
+  let refusing = (speaks: boolean) => ({
+    read: () => {
+      throw new Unknown('effect.entity', 'unknown property: effect.entity')
+    },
+    rows: () => [],
+    apply: () => [],
+    tx: <T>(body: () => T) => body(),
+    speaks: () => speaks,
+  })
+  let attempts = rule({ find: '.effect.attempts=0' })
+  assertThrows(() => batch(refusing(true), attempts, null, 5), Unknown)
+  assertEquals(
+    batch(refusing(false), attempts, null, 5).unspoken,
+    'effect.entity',
+  )
 })
 
 let dispatchStore = async () => {
