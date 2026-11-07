@@ -59,6 +59,7 @@ import {
   storeAt,
   storeName,
   url as urlOf,
+  walkTo,
 } from './directory.ts'
 import * as dirPart from './directory.ts'
 import { ahead, bearing, granted, itsApp, ran } from './dispatch.ts'
@@ -242,7 +243,7 @@ import { speechDoor } from './speech.ts'
 import { notices } from './notices.ts'
 import { reach } from './tunnel.ts'
 import { refuse } from './tool.ts'
-import { letIn, letOut } from './operator-reach.ts'
+import { letIn, letOut, reachOf } from './operator-reach.ts'
 import { routes as commandRoutes } from '@yaks/tools/routes'
 import { commandIn, commandsIn } from './app-command.ts'
 import { type Limiter, source, tooMany, within } from './rate.ts'
@@ -2429,13 +2430,32 @@ let manage = async (req: Request, env: Env): Promise<Response> => {
     return mine(req, env, dir, { person, role: null, until }, at.account)
   }
   let view = at.view
-  if (req.method == 'GET' || req.method == 'HEAD') foresee(dir, person, view)
-  let { space, role, administrative } = await dir.page(
+  let paged = dir.page(
     at.space,
     null,
     person,
     view == 'operator' || view == 'updates',
   )
+  if (req.method == 'GET' || req.method == 'HEAD') {
+    // The page drawn on the dashboard, not a conversation in the chat app
+    // or one of the space's files.
+    let drawn = !at.open && !at.logo && !at.manifest
+    foresee(
+      dir,
+      person,
+      view,
+      drawn
+        ? {
+          env,
+          slug: at.space,
+          // A page read that fails is the page's to meet, below.
+          space: paged.then((p) => p.space, () => null),
+          add: url.searchParams.get('add'),
+        }
+        : undefined,
+    )
+  }
+  let { space, role, administrative } = await paged
   if (!space) {
     // A link written before the space moved to another name (T-34658).
     let was = await dir.formerly(at.space)
@@ -2528,13 +2548,64 @@ let foresee = (
   dir: ReturnType<typeof directory>,
   person: string,
   view: ManageView,
+  here?: Ahead,
 ) => {
+  let seats = dir.seats(person)
   void Promise.allSettled([
     feeOf(dir),
     dir.nameAt(person),
-    dir.seats(person),
+    seats,
     ...view == 'shared' ? [dir.granted(person)] : [],
+    ...here ? rowsAhead(dir, person, view, seats, here) : [],
   ])
+}
+
+// The space a page of one is at, while the read that learns it is in flight.
+type Ahead = {
+  env: Env
+  slug: string
+  space: Promise<Space | null>
+  add: string | null
+}
+
+// The rows a page of a space shows of its own (`desk`), asked by the walk to
+// its address as the page asks them once it knows the space, so they travel
+// beside the read that learns it (`page`). What the page may show is decided
+// only once that read answers.
+let rowsAhead = (
+  dir: ReturnType<typeof directory>,
+  person: string,
+  view: ManageView,
+  seats: Promise<Seat[]>,
+  at: Ahead,
+): Promise<unknown>[] => {
+  let walk = walkTo(at.slug, at.space.then((s) => s?.eid ?? ''))
+  if (view == 'people') return [dir.people(walk), dir.admits(walk)]
+  if (view == 'operator') {
+    return [
+      reachOf(dir, walk, person),
+      dir.texting(person),
+      dir.alerts(person),
+      dir.emailAt(person),
+      dir.pushes(person),
+    ]
+  }
+  if (view != 'connections') return []
+  return [
+    connectionsOf(
+      at.env,
+      at.space.then((s) => s ?? Promise.reject(new Error('no space here'))),
+      person,
+      {
+        dir,
+        by: walk.path,
+        own: seats.then((all) =>
+          all.some((s) => s.own && s.space.slug == at.slug)
+        ),
+        add: at.add ?? undefined,
+      },
+    ),
+  ]
 }
 
 // Who a dashboard page is drawn for: a person signed in, who owns the space.
@@ -2694,8 +2765,8 @@ let desk = async (
     // that shows it.
     view == 'people'
       ? Promise.all([
-        shelved.then(({ all }) => peopleIn(dir, [space], all)),
-        dir.admits(space.eid),
+        shelved.then(({ all }) => peopleIn(dir, space, all)),
+        dir.admits(walkTo(space.slug, space.eid)),
       ])
       : undefined,
     // What this space calls out through (connections.ts), read only for the
@@ -2706,6 +2777,7 @@ let desk = async (
         let own = seats.some((s) => s.own && s.space.eid == space.eid)
         return connectionsOf(env, space, owner, {
           dir,
+          by: walkTo(space.slug, space.eid).path,
           own,
           // Asked beside the directory's reads, never ahead of them.
           services: own
@@ -2774,7 +2846,7 @@ let desk = async (
       : undefined,
     fee: rate(fee),
     agents,
-    people: people?.[0][0],
+    people: people?.[0],
     operators: people?.[1].map((r) => ({
       eid: r.space.eid,
       slug: r.space.slug,

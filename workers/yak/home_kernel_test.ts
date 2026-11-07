@@ -387,12 +387,38 @@ test('the front page is served at the space root', async () => {
 
 // Every trip to the directory is a wait from wherever the request landed, so a
 // dashboard page asks everything it can at once: who the person is, where they
-// sit and the space with every app in it, then only the rows of a page's own
-// that the space's eid names.
-test('a dashboard page reads the directory in one trip, two for rows of its own', async () => {
+// sit, the space with every app in it, and the rows of a page's own, by the
+// walk to the space's address.
+test('a dashboard page reads the directory in one trip', async () => {
   let k = await kernel()
   let slug = unique('trips')
-  let { cookie } = await seed(k, [{ slug, apps: ['one', 'two'] }])
+  let other = unique('reached')
+  let { cookie } = await seed(k, [{ slug, apps: ['one', 'two'] }, {
+    slug: other,
+    apps: [],
+  }])
+  // Somebody else invited to the space and to an app, and another space's
+  // Operator let in, so the People page and the Operator's settings have rows
+  // of their own to name.
+  let agent = connector(k, cookie)
+  let guest = await signIn(k)
+  await agent.tool('member_add', { space: slug, email: guest.email })
+  await agent.tool('member_add', {
+    space: slug,
+    email: guest.email,
+    app: 'one',
+  })
+  let let_in = await k.at('yaks.app', managePath('people', slug), {
+    method: 'POST',
+    redirect: 'manual',
+    headers: {
+      cookie,
+      origin: 'https://yaks.app',
+      'content-type': 'application/x-www-form-urlencoded',
+    },
+    body: new URLSearchParams({ operator: other, role: 'viewer' }),
+  })
+  assertEquals(let_in.status, 303)
   let timing = async (path: string) => {
     await k.settled()
     let page = await k.at('yaks.app', path, { headers: { cookie } })
@@ -402,11 +428,19 @@ test('a dashboard page reads the directory in one trip, two for rows of its own'
   }
   let trips = async (path: string) =>
     /hops;dur=(\d+)/.exec(await timing(path))?.[1]
-  for (let view of ['apps', 'new', 'settings', 'billing', 'trash'] as const) {
+  for (
+    let view of [
+      'apps',
+      'new',
+      'settings',
+      'billing',
+      'trash',
+      'connections',
+      'people',
+      'operator',
+    ] as const
+  ) {
     assertEquals(await trips(managePath(view, slug)), '1', view)
-  }
-  for (let view of ['connections', 'people', 'operator'] as const) {
-    assertEquals(await trips(managePath(view, slug)), '2', view)
   }
   // The chat asks its space's Operator twice beside it, the conversation and
   // the Updates, and each of those asks the directory once; what it waited
@@ -425,7 +459,7 @@ test('a dashboard page reads the directory in one trip, two for rows of its own'
   })
   await own.body?.cancel()
   let at = new URL(own.headers.get('location')!, 'https://yaks.app')
-  assertEquals(await trips(at.pathname), '2')
+  assertEquals(await trips(at.pathname), '1')
 })
 
 // A space with no front page answers its bare address with its listing, from

@@ -488,7 +488,9 @@ export let connectionsOf = async (
   space: Space | Promise<Space>,
   person: string,
   at: {
-    own?: boolean
+    /** whether it is the person's own space; still being read, what they
+     * connected is asked beside the rest and kept only if it is */
+    own?: boolean | Promise<boolean>
     /** asked by the caller, and awaited only once the rest is read */
     services?: Promise<Service[]>
     enable?: string[]
@@ -500,7 +502,7 @@ export let connectionsOf = async (
     by?: `.${string}`
   } = {},
 ): Promise<Connections> => {
-  let { own = false, enable = [], add, dir = dirOf(env), by } = at
+  let { enable = [], add, dir = dirOf(env), by } = at
   let read: Read = (q) => typeof q == 'string' ? dir.read(q) : []
   let month = monthOf(Date.now())
   // The space's apps, connections and the links out of its apps, by its eid
@@ -520,17 +522,20 @@ export let connectionsOf = async (
   // once, so it travels as one trip (directory-copy.ts `gathered`); only what
   // those answers name outside this space is asked after. A walk says which
   // spaces it reached, so one that missed this space is asked again.
-  let [here, reached, ahead, listing, mine, built, wanted] = await Promise.all(
-    [
-      space,
-      by ? read(`${by}&.space`) : undefined,
-      drawn(by ? { path: by, eid } : await eid),
-      read(`.${LISTED}`),
-      own ? list(read, person) : [],
-      installed(read),
-      add ? known(read, add) : undefined,
-    ],
-  )
+  let [here, reached, ahead, listing, theirs, built, wanted, own] =
+    await Promise.all(
+      [
+        space,
+        by ? read(`${by}&.space`) : undefined,
+        drawn(by ? { path: by, eid } : await eid),
+        read(`.${LISTED}`),
+        at.own ? list(read, person) : [],
+        installed(read),
+        add ? known(read, add) : undefined,
+        at.own ?? false,
+      ],
+    )
+  let mine = own ? theirs : []
   let [apps, held, out] =
     !reached || reached.some((b) => b.entity.eid == here.eid)
       ? ahead

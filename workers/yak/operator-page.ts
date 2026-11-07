@@ -14,7 +14,7 @@ import {
   TabSet,
 } from '@yaks/ui/parts'
 import type { Env } from './env.ts'
-import { directoryOf, type Reach, type Space } from './directory.ts'
+import { directoryOf, type Reach, type Space, walkTo } from './directory.ts'
 import { reachOf } from './operator-reach.ts'
 import { builderOf, operatorDoor, SPACE } from './build-door.ts'
 import { vouched, type Who } from './session.ts'
@@ -967,7 +967,7 @@ export let operatorBody = async (env: Env, space: Space, who: Who) => {
     await Promise
       .all([
         dir.texting(who.person ?? ''),
-        reachOf(dir, space, who.person ?? ''),
+        reachOf(dir, walkTo(space.slug, space.eid), who.person ?? ''),
         phoneAt(env, space.sender),
         phoneAt(env),
         dir.alerts(who.person ?? ''),

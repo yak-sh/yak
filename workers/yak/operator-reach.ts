@@ -6,26 +6,26 @@
 // space (`member.own`) is their PA (T-136141): every space they sit in lets it
 // in, with their role there. Either way the Operator's directory is narrowed
 // to its space and these (grants.ts `narrowed`).
-import type { Directory, Reach, Role, Space } from './directory.ts'
+import type { Directory, Reach, Role, Space, Walk } from './directory.ts'
 import { refuse } from './tool.ts'
 
 let RANK: Role[] = ['viewer', 'editor', 'owner']
 
 /** The spaces this space's Operator reaches for this person, its own left
  * out, and whether it is their PA. Where a seat and an `operator_reach` row
- * both let it into one space, the greater role stands. */
+ * both let it into one space, the greater role stands. The space is named by
+ * its eid, or by a walk to it (directory.ts `Walk`). */
 export let reachOf = async (
   dir: Directory,
-  space: Pick<Space, 'eid'>,
+  space: Pick<Space, 'eid'> | Walk,
   person: string,
 ): Promise<{ pa: boolean; beyond: Reach[] }> => {
-  let [seats, granted] = await Promise.all([
+  let [seats, granted, eid] = await Promise.all([
     person ? dir.seats(person) : [],
-    dir.reaches(space.eid),
+    dir.reaches('path' in space ? space : space.eid),
+    space.eid,
   ])
-  let pa = seats.some((s) =>
-    s.own && s.role == 'owner' && s.space.eid == space.eid
-  )
+  let pa = seats.some((s) => s.own && s.role == 'owner' && s.space.eid == eid)
   let all = new Map<string, Reach>()
   let add = (r: Reach) => {
     let had = all.get(r.space.eid)
@@ -37,7 +37,7 @@ export let reachOf = async (
   if (pa) {
     for (let s of seats) add({ eid: s.seat, space: s.space, role: s.role })
   }
-  all.delete(space.eid)
+  all.delete(eid)
   return {
     pa,
     beyond: [...all.values()].filter((r) => !r.space.trashed),

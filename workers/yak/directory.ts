@@ -627,6 +627,21 @@ export type Host = {
 export type Id = string | { eid: string }
 export let idOf = (v: Id): string => typeof v == 'string' ? v : v.eid
 
+/** A space asked by a walk to it while its eid is still being read, and kept
+ * to that eid once known (@yaks/connections `Path`): so a page's own rows are
+ * asked beside the read that learns its space (`page`), and travel in its
+ * trip. */
+export type Walk = { path: `.${string}`; eid: Promise<string> }
+
+/** The walk to the space at an address. A page asks its rows by it whether
+ * or not it knows the eid yet, so the line it asks is the one asked ahead of
+ * it (apps.ts `foresee`), answered again from that reading (hops.ts
+ * `recall`). */
+export let walkTo = (slug: string, eid: string | Promise<string>): Walk => ({
+  path: `.space.slug=${slug}`,
+  eid: Promise.resolve(eid),
+})
+
 /** A directory row as a read hands it back: the components the kernel reads,
  * each optional, since a row is whichever of them it wears. */
 export type Row = {
@@ -1958,16 +1973,12 @@ export let listingOf = async (
   let seats = await dir.seats(person)
   let apps = await dir.apps(seats.map((s) => s.space))
   let owned = seats.filter((s) => s.role == 'owner').map((s) => s.space.eid)
-  let [bound, held] = await Promise.all([
+  let [bound, { held, persons }] = await Promise.all([
     apps.length
       ? dir.read(`.binding.app=${apps.map((a) => a.eid).join(',')}`)
       : [],
-    dir.held(
-      owned,
-      apps.filter((a) => owned.includes(a.space)).map((a) => a.eid),
-    ),
+    dir.people(owned),
   ])
-  let persons = await dir.persons([...new Set(held.map((h) => h.person))])
   return { seats, apps, bound, held, persons }
 }
 
@@ -2079,17 +2090,24 @@ export let directoryRows = (rows: {
     return await asked
   }
   // The `operator_reach` rows on one side, each with the live space on the
-  // other, in one read.
+  // other, in one read: of the space by its eid, or by a walk to it, kept to
+  // its eid once known.
   let reaching = async (
     side: 'space' | 'operator',
     other: 'space' | 'operator',
-    eid: string,
+    on: string | Walk,
   ): Promise<Reach[]> => {
-    let found = await query(
-      `(.operator_reach.${side}=${eid})` +
-        `|(.space&.operator_reachs_${other}.operator_reach.${side}=${eid}&${SPACE_ABOUT})`,
+    let at = typeof on == 'string' ? `=${on}` : on.path
+    let [found, eid] = await Promise.all([
+      query(
+        `(.operator_reach.${side}${at})` +
+          `|(.space&.operator_reachs_${other}.operator_reach.${side}${at}&${SPACE_ABOUT})`,
+      ),
+      typeof on == 'string' ? on : on.eid,
+    ])
+    let rows = found.filter((r) =>
+      r.operator_reach && idOf(r.operator_reach[side]) == eid
     )
-    let rows = found.filter((r) => r.operator_reach)
     let spaces = new Map(
       found.filter((r) => r.space).map((r) => [r.entity.eid, spaceOf(r)]),
     )
@@ -2840,19 +2858,36 @@ export let directoryRows = (rows: {
         }
         : null
     },
-    // Everyone holding or offered a place in these spaces and apps: each seat,
-    // each guest's grant and each invitation standing, in one read however
-    // many there are (people.ts gives it its shape). Fresh, because the page
-    // showing it is the page an invitation was just sent again from.
-    held: async (spaces: string[], apps: string[]): Promise<Held[]> => {
-      if (!spaces.length && !apps.length) return []
-      let list = (ids: string[]) => ids.join(',')
-      let asked = [
-        ...spaces.length ? [`.member.space=${list(spaces)}`] : [],
-        ...apps.length ? [`.grant.app=${list(apps)}`] : [],
-        `.invite.to=${list([...spaces, ...apps])}`,
+    // Everyone holding or offered a place in these spaces and their apps, by
+    // their eids or a walk to them: each seat, each guest's grant and each
+    // invitation standing, and what to call each of those people, in one read
+    // however many there are (people.ts gives it its shape, keeping what is
+    // of the space it draws). Fresh, because the page showing it is the page
+    // an invitation was just sent again from.
+    people: async (
+      spaces: string[] | { path: string },
+    ): Promise<Pick<Listing, 'held' | 'persons'>> => {
+      if (Array.isArray(spaces) && !spaces.length) {
+        return { held: [], persons: new Map() }
+      }
+      let at = 'path' in spaces ? spaces.path : `=${spaces.join(',')}`
+      // Each place by the row that holds it and its walk to the space; whom
+      // it names, by the same walk back from them.
+      let places = [
+        ['member', `space${at}`],
+        ['grant', `app.app.space${at}`],
+        ['invite', `to${at}`],
+        ['invite', `to.app.space${at}`],
       ]
-      return heldOf(await query(asked.join(' | ')))
+      let rows = await query(
+        [
+          ...places.map(([held, to]) => `(.${held}.${to})`),
+          ...places.map(([held, to]) =>
+            `(.${held}s_person.${held}.${to}&.email&?doc&?phone)`
+          ),
+        ].join('|'),
+      )
+      return { held: heldOf(rows), persons: personsOf(rows) }
     },
     // How many invitations this person has sent in the hour it names. Fresh:
     // two invitations a second apart must not both read the same count.
@@ -3091,8 +3126,9 @@ export let directoryRows = (rows: {
     },
     // The spaces that let a space's Operator in (T-136179), and the other
     // way, the Operators a space let in: each space with the role given.
-    reaches: (operator: string) => reaching('operator', 'space', operator),
-    admits: (space: string) => reaching('space', 'operator', space),
+    reaches: (operator: string | Walk) =>
+      reaching('operator', 'space', operator),
+    admits: (space: string | Walk) => reaching('space', 'operator', space),
     // The next free variant of a derived name: the name itself, else
     // numbered until nothing answers to it. What `own` mints, and what the
     // sign-in card offers a person before it does (T-32967).

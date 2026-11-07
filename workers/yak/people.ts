@@ -4,7 +4,15 @@
 // friend can't get in" has the same first step on both (T-123886). It is the
 // owner's alone: an invitation names an address the owner typed, and that is
 // nobody else's to read.
-import type { App, Directory, Held, Listing, Role, Space } from './directory.ts'
+import {
+  type App,
+  type Directory,
+  type Held,
+  type Listing,
+  type Role,
+  type Space,
+  walkTo,
+} from './directory.ts'
 import type { Host } from './host.ts'
 import { manageAt } from './route.ts'
 
@@ -24,16 +32,20 @@ export type People = {
 // Owners first, then whoever writes, then whoever reads.
 let RANK = ['owner', 'editor', 'viewer']
 
-/** Who is in these spaces and in their apps among `apps`, in two
- * directory reads however many there are. */
+/** Who is in this space and in its apps among `apps`, in one directory read
+ * by the walk to its address (directory.ts `walkTo`), which the page asked
+ * ahead of learning the space (apps.ts `foresee`). */
 export let peopleIn = async (
   dir: Directory,
-  spaces: Space[],
+  space: Space,
   apps: App[],
-): Promise<People[]> => {
-  let held = await dir.held(spaces.map((s) => s.eid), apps.map((a) => a.eid))
-  let persons = await dir.persons([...new Set(held.map((h) => h.person))])
-  return peopleOf({ held, persons }, spaces, apps)
+): Promise<People> => {
+  let [people] = peopleOf(
+    await dir.people(walkTo(space.slug, space.eid)),
+    [space],
+    apps,
+  )
+  return people
 }
 
 /** Who is in these spaces and in their apps among `apps`, out of every place
