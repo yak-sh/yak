@@ -57,6 +57,27 @@ export let STEPS = [
 export type Step = typeof STEPS[number]['name']
 export type { Funnel }
 
+/** A stranger's way, stage by stage, each the steps it adds up: a visit to the
+ * home page, a connector's sign-in or a build begun in the home page's box, a
+ * first sign-in, a space's first app, and coming back a day or more later.
+ * The steps join nobody to anybody, so a stage counts the times it was
+ * reached, not who reached it. */
+export let STAGES = [
+  { name: 'visit', say: 'Home page visits', steps: ['home'] },
+  {
+    name: 'began',
+    say: 'Connectors or home page builds begun',
+    steps: ['connector_start', 'started'],
+  },
+  { name: 'signup', say: 'First sign-ins', steps: ['signup'] },
+  { name: 'first_app', say: 'First apps', steps: ['first_app'] },
+  { name: 'back', say: 'Back a day or more later', steps: ['returned'] },
+] as const satisfies readonly {
+  name: string
+  say: string
+  steps: readonly Step[]
+}[]
+
 /** Each call to action on the home page, by the name its `data-cta` gives it
  * (site/home.tsx), and what the admin calls it. The Operator's page
  * (site/operator.tsx) names its hero's and closing card's alike. */
@@ -219,8 +240,17 @@ export let shaped = (
 ): Funnel => {
   let had = new Map(rows.map((r) => [String(r.step), Number(r.n) || 0]))
   let n = (name: string) => had.get(name) ?? 0
+  let sums = STAGES.map((s) => s.steps.reduce((t, step) => t + n(step), 0))
   return {
     since: since.toISOString(),
+    stages: STAGES.map((s, i) => ({
+      name: s.name,
+      say: s.say,
+      n: sums[i],
+      ...i && sums[i - 1]
+        ? { share: sums[i] / sums[i - 1], of: STAGES[i - 1].name }
+        : {},
+    })),
     steps: STEPS.map((s) => ({
       name: s.name,
       say: s.say,

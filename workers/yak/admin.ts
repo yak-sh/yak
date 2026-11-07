@@ -67,6 +67,7 @@ import { type IconName, icons } from './icons.ts'
 import { type Host, spaceHost, url } from './host.ts'
 import { DAYS, NOT_ON, statsOf } from './views.ts'
 import { type Funnel, funnel, STEPS } from './funnel.ts'
+import { stopped } from '@yaks/platform/funnel'
 import { type ByDay, series, summed } from '@yaks/ui/chart'
 import { caught } from './defects.ts'
 import { operatorDoor } from './build-door.ts'
@@ -842,11 +843,33 @@ let sessionsPage = async (d: Reading, env: Env, person: string) => {
   )
 }
 
+let pct = (share: number) => `${Math.round(share * 100)}%`
+
+// How far strangers got, a line a stage, and where most of them stop.
+let way = (f: Funnel): [string, string][] => {
+  let stop = stopped(f.stages)
+  return [
+    ...(f.stages ?? []).map((s): [string, string] => [
+      s.say,
+      `${s.n}${
+        s.share == null ? '' : ` · ${pct(s.share)} of the stage before`
+      }`,
+    ]),
+    ...stop
+      ? [[
+        'Most stop after',
+        `${stop.after.say} · ${pct(stop.went)} went on`,
+      ]] as [string, string][]
+      : [],
+  ]
+}
+
 // The windows the funnel is read over, in days.
 let WINDOWS = [1, 7, 30, 90]
 
-// yaks.app's own funnel (funnel.ts): each step's count over the window, and
-// its share of the step it follows, then the sites that sent the home page
+// yaks.app's own funnel (funnel.ts): how far strangers got, stage by stage,
+// and where most of them stop; each step's count over the window, and its
+// share of the step it follows; then the sites that sent the home page
 // its visitors, the calls to action they clicked and the campaigns, and last
 // the steps crawlers, agents and test accounts took, which count apart.
 let funnelPage = (
@@ -873,6 +896,9 @@ let funnelPage = (
     : h(
       Fragment,
       null,
+      h(Group, null, 'How far strangers got'),
+      facts(way(f)),
+      h(Group, null, 'Each step'),
       facts(f.steps.map((s) => [
         s.say,
         `${s.n}${

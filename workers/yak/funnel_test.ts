@@ -3,12 +3,21 @@
 import { test } from '@yaks/testing'
 import { assertEquals } from '@std/assert'
 import { parseHTML } from 'linkedom'
-import { clicked, CTAS, funnel, step, type Who } from './funnel.ts'
+import {
+  clicked,
+  CTAS,
+  funnel,
+  shaped,
+  STAGES,
+  step,
+  type Who,
+} from './funnel.ts'
+import { stopped } from '@yaks/platform/funnel'
 import { FUNNEL, isHome, type Visited } from './view-point.ts'
 import { analytics, dataset } from './testing.ts'
 import { page } from './site/mod.ts'
 import type { Env } from './env.ts'
-import { kernel, mailed, unique } from './probe.ts'
+import { connector, kernel, mailed, unique } from './probe.ts'
 
 let BROWSER = 'Mozilla/5.0 (Macintosh) AppleWebKit Safari'
 let visit = (ua = BROWSER, path = '/', cf?: Visited['cf']) =>
@@ -138,6 +147,8 @@ test('the funnel reads each step, a share of the one it follows, and where visit
       : [
         { step: 'home', n: 40 },
         { step: 'click', n: 10 },
+        { step: 'connector_start', n: 6 },
+        { step: 'started', n: 4 },
         { step: 'code_sent', n: '10' },
         { step: 'signup', n: 8 },
         { step: 'checkout', n: 4 },
@@ -149,6 +160,18 @@ test('the funnel reads each step, a share of the one it follows, and where visit
     let since = new Date(Math.floor(Date.now() / 1000 - 2 * 86_400) * 1000)
     let f = (await funnel(env, since))!
     assertEquals(f.since, since.toISOString())
+    // A stage adds up its steps, and is a share of the stage before it.
+    assertEquals(
+      f.stages!.map((s) => [s.name, s.n, s.share]),
+      [
+        ['visit', 40, undefined],
+        ['began', 10, 0.25],
+        ['signup', 8, 0.8],
+        ['first_app', 0, 0],
+        ['back', 0, undefined],
+      ],
+    )
+    assertEquals(stopped(f.stages)?.after.name, 'signup')
     let of = Object.fromEntries(f.steps.map((s) => [s.name, s]))
     assertEquals(of.home.n, 40)
     assertEquals(of.click.share, 0.25)
@@ -314,4 +337,64 @@ test("signing in through the doors in a browser counts a person's steps, and a t
     'signed_in browser',
     'signup browser',
   ])
+})
+
+// What the funnel's counts would answer for the steps the kernel wrote: a
+// person's alone, by step, as `counts` asks the SQL API.
+let read = (points: { indexes?: string[]; blobs?: string[] }[]) => {
+  let people = points.filter((p) =>
+    p.indexes?.[0] == FUNNEL && ['browser', ''].includes(p.blobs![5])
+  )
+  let by = Map.groupBy(people, (p) => p.blobs![1])
+  return shaped(
+    new Date(),
+    [...by].map(([step, all]) => ({ step, n: all.length })),
+  )
+}
+
+test("a stranger's way is read stage by stage, a crawler's and Meta's reviewer's left out, and where they stop is the stage most go no further than", async () => {
+  let k = await kernel()
+  let before = k.views.points.length
+  let opens = async (ua: string, cf?: Visited['cf']) => {
+    let r = await k.at(k.host, '/', {
+      headers: { 'user-agent': ua },
+      ...cf ? { cf } : {},
+    } as RequestInit)
+    await r.body?.cancel()
+  }
+  await opens(BROWSER)
+  await opens(BROWSER)
+  await opens('Googlebot/2.1')
+  await opens('facebookexternalhit/1.1')
+  let address = `${unique('ada')}@example.com`
+  let form = (path: string, fields: Record<string, string>) =>
+    k.at(k.host, path, {
+      method: 'POST',
+      redirect: 'manual',
+      headers: {
+        'content-type': 'application/x-www-form-urlencoded',
+        'user-agent': BROWSER,
+      },
+      body: new URLSearchParams(fields).toString(),
+    })
+  await (await form('/login', { address })).body?.cancel()
+  let inn = await form('/login/code', {
+    address,
+    code: await mailed(k, address),
+  })
+  await inn.body?.cancel()
+  let cookie = inn.headers.get('set-cookie')!.split(';')[0]
+  await connector(k, cookie).tool('app_new', {
+    slug: unique('first'),
+    title: 'First',
+  })
+  let f = read(k.views.points.slice(before))
+  assertEquals(
+    f.stages!.map((s) => [s.name, s.n]),
+    STAGES.map((s) => [
+      s.name,
+      { visit: 2, began: 0, signup: 1, first_app: 1, back: 0 }[s.name],
+    ]),
+  )
+  assertEquals(stopped(f.stages), { after: f.stages![0], went: 0 })
 })

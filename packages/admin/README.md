@@ -56,11 +56,14 @@ yak admin errors --since 14d --resolved --as admin
 ## The funnel
 
 `funnel` reads yaks.app's own funnel through the query /admin/funnel shows
-(workers/yak funnel.ts): each step people took from a time or a duration back,
-with its share of the step it follows, the sites and calls to action, and the
-home page's visits, clicks, sign-ups and checkouts by campaign and by variant.
-Steps crawlers, agents' scripts and `@bot.yak.sh` test accounts took are listed
-apart and are in no other count.
+(workers/yak funnel.ts): first how far strangers got, from a home page visit,
+through a connector or a build begun in the home page's box, a first sign-in and
+a first app, to coming back, and the stage most of them stop after; then each
+step people took from a time or a duration back, with its share of the step it
+follows, the sites and calls to action, and the home page's visits, clicks,
+sign-ups and checkouts by campaign and by variant. Steps crawlers, agents'
+scripts and `@bot.yak.sh` test accounts took are listed apart and are in no
+other count.
 
 ```sh
 yak admin funnel 2026-11-07T00:00Z --as admin

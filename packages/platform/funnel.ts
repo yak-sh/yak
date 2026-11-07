@@ -29,6 +29,10 @@ export type FunnelApart = { client: string; step: string; n: number }
 export type Funnel = {
   /** Where the window starts, as an ISO time; it runs to now. */
   since: string
+  /** How far strangers got: each stage of their way, from a visit to coming
+   * back, as the sum of the steps it is made of, and its share of the stage
+   * before it. A Worker older than these has none. */
+  stages?: FunnelCount[]
   /** Each step people took, in the order a person meets them. */
   steps: FunnelCount[]
   apart: FunnelApart[]
@@ -38,13 +42,40 @@ export type Funnel = {
   variants: FunnelSplit[]
 }
 
+/** A stage most go no further than, and the share of it that went on. */
+export type Stop = { after: FunnelCount; went: number }
+
+/**
+ * Where most stop: the stage the next one keeps the smallest share of, and
+ * that share. None until a stage after one somebody reached is read.
+ *
+ * @example
+ * ```ts
+ * import { assertEquals } from '@std/assert'
+ * let at = (name: string, n: number, share?: number) => ({ name, say: name, n, share })
+ * let way = [at('visit', 40), at('began', 4, 0.1), at('first_app', 2, 0.5)]
+ * assertEquals(stopped(way), { after: way[0], went: 0.1 })
+ * assertEquals(stopped([at('visit', 0)]), undefined)
+ * ```
+ */
+export let stopped = (stages: FunnelCount[] = []): Stop | undefined =>
+  stages.slice(1).reduce<Stop | undefined>(
+    (low, s, i) =>
+      s.share == null || (low && low.went <= s.share)
+        ? low
+        : { after: stages[i], went: s.share },
+    undefined,
+  )
+
+let pct = (share: number) => `${Math.round(share * 100)}%`
+
 let split = (s: FunnelSplit) =>
   `  ${s.name}: ${s.home} visits · ${s.click} clicks · ${s.signup} ` +
   `sign-ups · ${s.checkout} checkouts`
 
 /**
- * The funnel in lines: each step people took and its share of the one it
- * follows, then the sites, calls to action, campaigns and variants, and last
+ * The funnel in lines: how far strangers got, stage by stage, and where most
+ * of them stop; each step people took and its share of the one it follows; then the sites, calls to action, campaigns and variants, and last
  * what crawlers, agents and test accounts took, which no count above holds.
  *
  * @example
@@ -52,6 +83,10 @@ let split = (s: FunnelSplit) =>
  * import { assertEquals } from '@std/assert'
  * let f = {
  *   since: '2026-11-07T00:00:00.000Z',
+ *   stages: [
+ *     { name: 'visit', say: 'Home page visits', n: 40 },
+ *     { name: 'began', say: 'Connectors or home page builds begun', n: 4, share: 0.1, of: 'visit' },
+ *   ],
  *   steps: [
  *     { name: 'home', say: 'Home page visits', n: 40 },
  *     { name: 'click', say: 'Calls to action clicked', n: 10, share: 0.25, of: 'home' },
@@ -60,6 +95,10 @@ let split = (s: FunnelSplit) =>
  *   from: [], buttons: [], campaigns: [], variants: [],
  * }
  * assertEquals(funnelLines(f), [
+ *   'How far strangers got since 2026-11-07T00:00:00.000Z:',
+ *   '  Home page visits: 40',
+ *   '  Connectors or home page builds begun: 4 (10% of visit)',
+ *   '  Most stop after home page visits: 10% went on',
  *   'People since 2026-11-07T00:00:00.000Z:',
  *   '  Home page visits: 40',
  *   '  Calls to action clicked: 10 (25% of home)',
@@ -71,12 +110,21 @@ let split = (s: FunnelSplit) =>
 export let funnelLines = (f: Funnel): string[] => {
   let group = <T>(say: string, rows: T[], line: (r: T) => string) =>
     rows.length ? [say, ...rows.map(line)] : []
+  let count = (s: FunnelCount) =>
+    `  ${s.say}: ${s.n}` +
+    (s.share == null ? '' : ` (${pct(s.share)} of ${s.of})`)
+  let stop = stopped(f.stages)
   return [
+    ...group(`How far strangers got since ${f.since}:`, f.stages ?? [], count),
+    ...stop
+      ? [
+        `  Most stop after ${stop.after.say.toLowerCase()}: ${
+          pct(stop.went)
+        } went on`,
+      ]
+      : [],
     `People since ${f.since}:`,
-    ...f.steps.map((s) =>
-      `  ${s.say}: ${s.n}` +
-      (s.share == null ? '' : ` (${Math.round(s.share * 100)}% of ${s.of})`)
-    ),
+    ...f.steps.map(count),
     ...group(
       'Came to the home page from:',
       f.from,
