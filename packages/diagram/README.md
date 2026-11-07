@@ -7,8 +7,8 @@ graph changes, so what a write adds is drawn in beside what it names.
 - `layout(bundles, options?)` places a selection. It is pure: bundles in, a
   `Layout` of nodes and links with positions out.
 - `svg(layout, options?)` draws a layout as one `<svg>` string.
-- `tangles(layout)` lists what makes a layout hard to read, as `svg()` draws it.
-  It is pure.
+- `tangles(layout)` lists what makes a layout hard to read, as `svg()` draws it,
+  and `knots(layout, only?)` says what each involves. Both are pure.
 - `progress(layout, reached)` and `tip(layout, drawn)` say how far a pen has
   drawn each part as a reader moves through a story, and where the pen is. Both
   are pure.
@@ -83,13 +83,37 @@ shape and no other name.
 
 `tangles(layout)` names what is still tangled, with the short ids it involves:
 shapes too close, a line through a shape, lines that cross or run over each
-other, and a name written on a shape or another name.
+other, and a name written on a shape or another name. `knots(layout, only?)`
+gives the same, each with the keys of the shapes and lines it involves (a node's
+eid, a link's key), and with `only` just those that involve one of them.
 
-The placement is greedy and keeps what is placed, so it cannot foresee a line
-that arrives later between two entities already placed; a bend is how such a
-line gets around. Libraries were weighed for this: dagre and elkjs lay out a
-whole graph at once, so what is placed moves as the graph grows, and d3-force
-can hold placed nodes still but does not weigh crossings.
+### Making room
+
+When a newcomer's lines are tangled from the spot it took, the layout tries
+again, judging each arrangement by `knots`, and keeps the first in which nothing
+that joined or moved is tangled:
+
+1. the newcomer at its other spots, those whose lines route clear first, and
+   along the foot of the drawing nearest what it names, where what is outside
+   everything can reach round it;
+2. then an entity in its way moved 40, 80 and then 120 units, away from the
+   newcomer's spot first, with the newcomer at each of those spots again.
+
+In its way is what the newcomer's tangles involve, and what names two of the
+entities it names, and so wants the same spot. When no arrangement is clear, the
+one that adds fewest tangles wins, then the one that moves least. Each
+arrangement draws the whole drawing again, so a drawing of n entities tries at
+most 4000 / n² of them: 40 of ten, and none of more than 63.
+
+A node that moved keeps its `order` and `stage`, and `moved` says where it was;
+each line to it is drawn again, and its `moved` holds the bend and the place of
+its name it had.
+
+The placement is greedy and, but for making room, keeps what is placed, so it
+cannot foresee a line that arrives later between two entities already placed; a
+bend is how such a line gets around. Libraries were weighed for this: dagre and
+elkjs lay out a whole graph at once, so what is placed moves as the graph grows,
+and d3-force can hold placed nodes still but does not weigh crossings.
 
 Every node and link carries `fresh`, true when it joined in this layout, and
 `stage`, the `options.stage` it joined in (default 0).
@@ -114,6 +138,7 @@ a numbered task reads `T-7`.
 | `Diagram_Dia`                                        | an edge's diamond                                                    |
 | `Diagram_Pen`                                        | the pen, hidden until `ink()` puts it on a stroke                    |
 | `is-new`, `--i`                                      | joined in this layout; `--i` is its turn to be drawn                 |
+| `is-moved`                                           | a shape that moved in this layout to make room                       |
 
 Each stroke has `pathLength="1"`, so a stylesheet draws it in with
 `stroke-dashoffset`. `css` does that: each new shape, then the lines to it, is
@@ -121,6 +146,13 @@ drawn in one after another like a pen. It reads `--diagram-line`,
 `--diagram-soft`, `--diagram-fill`, `--diagram-paper`, `--diagram-glow`,
 `--diagram-font` and `--diagram-pen` (a stroke's duration), and draws nothing in
 under `prefers-reduced-motion`.
+
+What moved to make room glides there from where it was, easing in and out over
+0.9 s, so a reader's eye can follow it: a shape with `is-moved` and an
+`<animateTransform>`, each line to it with an `<animate>` of its path, and the
+line's name carried along. SMIL is used because CSS cannot animate a path's `d`
+in every browser. `svg(layout, { still: true })` draws it where it is, and
+`mount` passes `still` under `prefers-reduced-motion`.
 
 ## Drawing it in as a reader goes
 

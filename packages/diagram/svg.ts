@@ -6,7 +6,7 @@
 import { cut, type Layout, type Link, type Node } from './layout.ts'
 import { curves } from './pen.ts'
 import { type View, whole } from './view.ts'
-import { type Curve, half, outline, radius, tag } from './shape.ts'
+import { type Curve, curve, half, outline, radius, tag } from './shape.ts'
 
 /** How a layout is drawn. */
 export type SvgOptions = {
@@ -16,6 +16,9 @@ export type SvgOptions = {
   title?: string
   /** The part of the sheet in view (default all of it). */
   view?: View
+  /** Draw what moved to make room where it is now, without gliding there
+   * from where it was (as under prefers-reduced-motion). */
+  still?: boolean
 }
 
 let esc = (s: string) =>
@@ -28,10 +31,28 @@ let n = (x: number) => +x.toFixed(1)
 let fresh = (on: boolean, i: number) =>
   on ? [' is-new', ` style="--i:${i}"`] : ['', '']
 
-let text = (cls: string, x: number, y: number, s: string, anchor = '') =>
+// What moved to make room glides from where it was, easing in and out, so a
+// reader's eye can follow it.
+const GLIDE =
+  'dur="0.9s" calcMode="spline" keyTimes="0;1" keySplines=".45 0 .25 1"'
+let glide = (from: [number, number], to: [number, number]) =>
+  `<animateTransform attributeName="transform" type="translate" from="${
+    n(from[0])
+  } ${n(from[1])}" to="${n(to[0])} ${n(to[1])}" ${GLIDE}/>`
+let d = ({ x0, y0, cx, cy, x1, y1 }: Curve) =>
+  `M${n(x0)},${n(y0)}Q${n(cx)},${n(cy)} ${n(x1)},${n(y1)}`
+
+let text = (
+  cls: string,
+  x: number,
+  y: number,
+  s: string,
+  anchor = '',
+  inner = '',
+) =>
   `<text class="${cls}" x="${n(x)}" y="${n(y)}"${
     anchor ? ` text-anchor="${anchor}"` : ''
-  }>${esc(s)}</text>`
+  }>${inner}${esc(s)}</text>`
 
 // What a shape says: a round one its id inside and its title and components
 // beneath; any other its id, title and components inside, and a task's state
@@ -63,38 +84,51 @@ let words = (d: Node) => {
       : '')
 }
 
-let node = (d: Node, i: number) => {
+let node = (d: Node, i: number, still: boolean) => {
   let [cls, style] = fresh(d.fresh, i)
   let path = outline(d.shape, !!d.state)
   let state = d.state ? ` is-${esc(d.state)}` : ''
-  return `<g class="Diagram_Node Diagram_Node-${d.shape}${state}${cls}" data-key="${
-    esc(d.eid)
-  }" data-eid="${esc(d.eid)}" data-comps="${
+  let moved = d.moved && !still
+  return `<g class="Diagram_Node Diagram_Node-${d.shape}${state}${cls}${
+    moved ? ' is-moved' : ''
+  }" data-key="${esc(d.eid)}" data-eid="${esc(d.eid)}" data-comps="${
     esc(d.comps.join(' '))
   }" tabindex="0" transform="translate(${n(d.x)} ${n(d.y)})"${style}>` +
+    (moved ? glide([d.moved!.x, d.moved!.y], [d.x, d.y]) : '') +
     `<path class="Diagram_Fill" d="${path}"/>` +
     `<path class="Diagram_Stroke" pathLength="1" d="${path}"/>` +
     words(d) + '</g>'
 }
 
-let link = (l: Link, i: number, c: Curve) => {
-  let { x0, y0, cx, cy, x1, y1 } = c
+// A line that moved with an end glides from where it was, and its name with
+// it.
+let link = (l: Link, i: number, c: Curve, was?: Curve) => {
   let [cls, style] = fresh(l.fresh, i)
   let kind = l.eid ? 'Diagram_Link-edge' : 'Diagram_Link-ref'
   let head = l.eid ? 'Diagram-tip' : 'Diagram-tip-ref'
-  let line = `<path class="Diagram_Line" pathLength="1" d="M${n(x0)},${n(y0)}Q${
-    n(cx)
-  },${n(cy)} ${n(x1)},${n(y1)}" marker-end="url(#${head})"/>`
+  let sub = l.eid && (l.label ?? '')
+  let line = `<path class="Diagram_Line" pathLength="1" d="${
+    d(c)
+  }" marker-end="url(#${head})">${
+    was
+      ? `<animate attributeName="d" from="${d(was)}" to="${d(c)}" ${GLIDE}/>`
+      : ''
+  }</path>`
+  let t = tag(c, l.mid, l.name, sub)
+  let { x, y, name } = t
+  let gone = was && tag(was, l.moved!.mid, l.name, sub)
+  let g = gone ? glide([gone.x - x, gone.y - y], [0, 0]) : ''
   // An edge is an entity: a diamond on its line, its relation and its id
   // beside it.
-  let { x, y, name, sub } = tag(c, l.mid, l.name, l.eid && (l.label ?? ''))
   let named = l.eid
     ? `<path class="Diagram_Dia" d="M${n(x)},${n(y - 7)}L${n(x + 7)},${n(y)}L${
       n(x)
-    },${n(y + 7)}L${n(x - 7)},${n(y)}Z"/>` +
-      text('Diagram_Name', name[0], name[1], l.name, name[2]) +
-      (l.label ? text('Diagram_Sub', sub[0], sub[1], l.label, sub[2]) : '')
-    : text('Diagram_Name', name[0], name[1], l.name, name[2])
+    },${n(y + 7)}L${n(x - 7)},${n(y)}Z">${g}</path>` +
+      text('Diagram_Name', name[0], name[1], l.name, name[2], g) +
+      (l.label
+        ? text('Diagram_Sub', t.sub[0], t.sub[1], l.label, t.sub[2], g)
+        : '')
+    : text('Diagram_Name', name[0], name[1], l.name, name[2], g)
   return `<g class="Diagram_Link ${kind}${cls}" data-key="${
     esc(l.key)
   }" data-from="${esc(l.from)}" data-to="${esc(l.to)}" data-name="${
@@ -128,6 +162,15 @@ const PEN = '<g class="Diagram_Pen" opacity="0">' +
  */
 export let svg = (layout: Layout, opts: SvgOptions = {}): string => {
   let lines = curves(layout)
+  let still = !!opts.still
+  // Where each line was drawn before what it joins moved.
+  let then = new Map(
+    layout.nodes.map((d) => [d.eid, d.moved ? { ...d, ...d.moved } : d]),
+  )
+  let was = (l: Link) =>
+    l.moved && !still
+      ? curve(then.get(l.from)!, then.get(l.to)!, l.moved.bend)
+      : undefined
   // New strokes draw in the order they joined: shapes, then the lines to them.
   let order = [...layout.nodes, ...layout.links].filter((x) => x.fresh)
     .sort((a, b) => a.order - b.order)
@@ -140,10 +183,11 @@ export let svg = (layout: Layout, opts: SvgOptions = {}): string => {
   }" role="img">${title}` +
     DEFS +
     `<g class="Diagram_Links">${
-      layout.links.map((l) => link(l, index.get(l) ?? 0, lines.get(l.key)!))
-        .join('')
+      layout.links.map((l) =>
+        link(l, index.get(l) ?? 0, lines.get(l.key)!, was(l))
+      ).join('')
     }</g>` +
     `<g class="Diagram_Nodes">${
-      layout.nodes.map((d) => node(d, index.get(d) ?? 0)).join('')
+      layout.nodes.map((d) => node(d, index.get(d) ?? 0, still)).join('')
     }</g>${PEN}</svg>`
 }

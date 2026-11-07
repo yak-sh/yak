@@ -249,6 +249,62 @@ test('people and agents keep to the sides, and what names both lands between the
   assertEquals(tangles(drawn), [])
 })
 
+test('a newcomer with no untangled spot moves what is in its way as little as it must, and the drawing glides it there', () => {
+  // A line across the sheet between 1 and 2, and 3 above it and 4 below.
+  let spots: Record<string, [number, number]> = {
+    [eid(1)]: [.13, .5],
+    [eid(2)]: [.87, .5],
+    [eid(3)]: [.5, .3],
+    [eid(4)]: [.5, .7],
+  }
+  let first = [doc(1), doc(2, 'b', { wall: { to: eid(1) } }), doc(3), doc(4)]
+  let was = layout(first, { at: ({ eid }) => spots[eid] })
+  let both = [...first, doc(5, 'e', { names: { of: [eid(3), eid(4)] } })]
+  let now = layout(both, { was })
+  assertEquals(tangles(now), [])
+  let [moved, ...more] = now.nodes.filter((n) => n.moved)
+  assertEquals(more, [])
+  let gone = Math.hypot(moved.x - moved.moved!.x, moved.y - moved.moved!.y)
+  assert(gone > 0 && gone <= 120, `moved ${gone}`)
+  assertEquals(
+    now.nodes.filter((n) => !n.moved && !n.fresh).map((n) => [n.x, n.y]),
+    was.nodes.filter((n) => n.eid != moved.eid).map((n) => [n.x, n.y]),
+  )
+  assertEquals([moved.order, moved.fresh], [
+    was.nodes.find((n) => n.eid == moved.eid)!.order,
+    false,
+  ])
+  let lines = now.links.filter((l) => l.moved)
+  assert(
+    lines.length && lines.every((l) => [l.from, l.to].includes(moved.eid)),
+  )
+  // Drawn, it glides from where it was, its lines with it; drawn still, or
+  // drawn again, it does not.
+  let { document } = parseHTML(`<div>${svg(now)}</div>`)
+  let shape = document.querySelector(`[data-key="${moved.eid}"]`)!
+  assert(shape.classList.contains('is-moved'))
+  assertEquals(
+    shape.querySelector('animateTransform')!.getAttribute('from'),
+    [moved.moved!.x, moved.moved!.y].map((v) => +v.toFixed(1)).join(' '),
+  )
+  for (let l of lines) {
+    let group = document.querySelector(`[data-key="${l.key}"]`)!
+    let line = group.querySelector('.Diagram_Line')!
+    assertEquals(
+      line.querySelector('animate')!.getAttribute('to'),
+      line.getAttribute('d'),
+    )
+    // Its name glides too, and stays where ink() looks for it.
+    let name = group.querySelector('.Diagram_Name')!
+    assertEquals([name.parentNode, !!name.querySelector('animateTransform')], [
+      group,
+      true,
+    ])
+  }
+  assert(!svg(now, { still: true }).includes('<animate'))
+  assert(!svg(layout(both, { was: now })).includes('<animate'))
+})
+
 test('tangles says what is too close, runs through a shape, crosses, and writes over a name', () => {
   let at = (n: number, x: number, y: number) => ({
     eid: eid(n),

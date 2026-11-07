@@ -12,10 +12,8 @@ import { type At, BAND, type Line, LIVE, type Term } from './term.ts'
 export type Figure = ReturnType<typeof figure>
 
 /** What the drawing shows unless the visitor asks for more: only what the
- * story and the visitor make, not the site the graph also holds, nor mail:
- * your reply's comment is left off until it can be drawn untangled
- * (T-140424). */
-export const STORY = '(.task|.comment|.edge|.person|.persona) !mail *'
+ * story and the visitor make, not the site the graph also holds. */
+export const STORY = '.task|.comment|.edge|.person|.persona *'
 
 /** Queries a visitor can widen the drawing to, by what they show. */
 export const WIDER: [string, string][] = [

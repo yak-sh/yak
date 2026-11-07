@@ -25,6 +25,9 @@ export let half = (shape: Shape, task = false): [number, number] =>
     ? [79, 28]
     : [72, 25]
 
+/** The room kept clear between two shapes. */
+export const APART = 24
+
 /** A round shape's radius. */
 export let radius = (shape: Shape) => shape == 'round' ? 23 : 25
 

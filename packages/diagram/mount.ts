@@ -106,6 +106,9 @@ let follow = (graph: Graph, fn: () => void) => {
 export let mount = (sheet: Sheet, opts: MountOptions): Mounted => {
   let { graph, width, height, drawn, at, shapes } = opts
   let failed = opts.failed ?? ((err: unknown) => globalThis.reportError(err))
+  // A reader who asked for less motion sees what moved where it is now.
+  let still = !!globalThis.matchMedia?.('(prefers-reduced-motion: reduce)')
+    .matches
   let label = human(graph.vocab)
   let current = opts.query
   let last: Layout | undefined
@@ -146,7 +149,7 @@ export let mount = (sheet: Sheet, opts: MountOptions): Mounted => {
       stage: s,
     })
     seen = remember(seen, last)
-    sheet.innerHTML = svg(last, { ...opts, view: shown() })
+    sheet.innerHTML = svg(last, { still, ...opts, view: shown() })
     opts.viewed?.(shown()!)
     drawn?.(last)
     return last

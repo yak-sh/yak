@@ -1,10 +1,13 @@
 // Where each entity of a selection sits, and the lines between them. Pure:
 // bundles in, positions out. A drawing that has been seen keeps its places,
 // and a newcomer goes where it overlaps nothing, crosses few lines and sits a
-// short reach from what it names, the way a person adds to a sketch.
+// short reach from what it names, the way a person adds to a sketch; when no
+// such spot is left, what is in its way moves aside, as little as it must.
 import type { Bundle } from '@yaks/graph'
 import { cross, meets, type Spot } from './geometry.ts'
+import { knots } from './tangle.ts'
 import {
+  APART,
   type Curve,
   curve,
   half,
@@ -37,6 +40,9 @@ export type Node = {
   y: number
   /** Joined the drawing in this layout. */
   fresh: boolean
+  /** Where it was before, when it moved in this layout to make room for a
+   * newcomer. */
+  moved?: { x: number; y: number }
 }
 
 /** A line between two drawn entities: an `edge{from, to}` entity, named by
@@ -60,6 +66,9 @@ export type Link = {
   order: number
   stage: number
   fresh: boolean
+  /** Its bend and the place of its name before, when an end of it moved in
+   * this layout. */
+  moved?: { bend: number; mid: number }
 }
 
 /** A drawing's sheet, entities and lines. */
@@ -93,8 +102,6 @@ export type Options = {
   stage?: number
 }
 
-/** The room kept clear between two shapes. */
-export const APART = 24
 const QUIET = ['entity', 'created', 'updated']
 // A line drawn from bookkeeping would join everything to its writer.
 const SILENT = new Set(['entity', 'updated', 'tombstone'])
@@ -257,8 +264,9 @@ type Sheet = {
   h: number
   /** For an actor, the x of the side of the sheet it keeps to. */
   side?: number
-  /** What its lines cost, drawn as they would be from p. */
-  lines: (p: Spot) => number
+  /** What its lines cost, drawn as they would be from p, and how many of
+   * them cross a line, run through a shape or run over a line. */
+  lines: (p: Spot) => [number, number]
 }
 
 // What makes a drawing hard to read costs about as much as a line twice too
@@ -278,9 +286,11 @@ const PULL = .4, VIS = 600
 // that bend around it.
 const EDGE = 24
 
-// The cost of a newcomer at p. Overlapping a shape is never worth it, and below the sheet's bottom it costs more, so the sheet grows
-// only when full. Its lines are reckoned straight, as most are drawn.
-let cost = (p: Spot, s: Sheet) => {
+// The cost of a newcomer at p. Overlapping a shape is never worth it, and
+// below the sheet's bottom it costs more, so the sheet grows only when full.
+// Its lines are reckoned straight, as most are drawn; `routed` leaves out all
+// but their length, for a spot whose lines are drawn and paid for apart.
+let cost = (p: Spot, s: Sheet, routed = false) => {
   let [x, y] = p
   let c = s.boxes.covered(p, s.w, s.h)
   if (c) return c
@@ -299,6 +309,7 @@ let cost = (p: Spot, s: Sheet) => {
     let len = Math.hypot(dx, dy) - out(s.w, s.h, dx, dy) -
       out(n.w, n.h, dx, dy)
     c += Math.abs(len - LINK) * 1.5 + Math.max(0, SHORT - len) * 20
+    if (routed) continue
     for (let r of s.routes) {
       if (r.from != n.eid && r.to != n.eid) {
         if (crossing(p, n.at, r)) c += CROSS
@@ -354,10 +365,14 @@ let blind = ([x, y]: Spot, s: Sheet) => {
   return c
 }
 
-// The spot a newcomer takes: the cheapest within a reach of its neighbours
-// (or of the sheet's middle), or else the first free one, from the top down
-// and nearest that middle across.
-let place = (s: Sheet): Spot => {
+/** A spot a newcomer may take, and how many of its lines would be tangled
+ * there. */
+type Option = { at: Spot; knotted: number }
+
+// The spots a newcomer may take, the one it takes first: the cheapest within
+// a reach of its neighbours (or of the sheet's middle), or else the first free
+// one, from the top down and nearest that middle across.
+let place = (s: Sheet): Option[] => {
   let left = s.w + EDGE, right = s.width - s.w - EDGE, top = s.h + EDGE
   let n = s.reach.length
   let [ax, ay] = n
@@ -426,21 +441,32 @@ let place = (s: Sheet): Spot => {
         : kept,
     [],
   )
-  let best: [number, number, number] | undefined
+  let weighed: [number, number, number, number][] = []
+  let drawn = (x: number, y: number, s: Sheet) => {
+    let [lines, knotted] = s.lines([x, y])
+    let c = cost([x, y], s, true) + blind([x, y], s) + lines
+    weighed.push([c, x, y, knotted])
+  }
   for (let [, fx, fy, base] of apart) {
     spots = [[base, fx, fy]]
     scan(fx - sx, fx + sx, fy - sy, fy + sy, 5 * k, 4 * k)
-    let [[c, x, y]] = spots.sort((a, b) => a[0] - b[0])
-    c += blind([x, y], near) + s.lines([x, y])
-    if (!best || c < best[0]) best = [c, x, y]
+    let [[, x, y]] = spots.sort((a, b) => a[0] - b[0])
+    drawn(x, y, near)
   }
-  if (best) return [best[1], best[2]]
+  if (weighed.length) {
+    return weighed.sort((a, b) => a[0] - b[0])
+      .map(([, x, y, knotted]) => ({ at: [x, y], knotted }))
+  }
   let across: number[] = []
   for (let x = left; x <= right; x += s.w / 2) across.push(x)
   across.sort((a, b) => Math.abs(a - ax) - Math.abs(b - ax))
   // Shapes are only ever added, so a row found full stays full.
   for (let y = Math.max(top, s.boxes.full);; y += s.h, s.boxes.full = y) {
-    for (let x of across) if (!s.boxes.covered([x, y], s.w, s.h)) return [x, y]
+    for (let x of across) {
+      if (!s.boxes.covered([x, y], s.w, s.h)) {
+        return [{ at: [x, y], knotted: 0 }]
+      }
+    }
   }
 }
 
@@ -535,8 +561,10 @@ let fitted = (width: number, height: number, sizes: [number, number][]) => {
  * Lay out a selection. Entities in `was` keep their places and order, and
  * lines between them their bends; each new one takes the cheapest free spot,
  * clear of the lines and shapes there, and each new line bends around what is
- * in its way. A selection too big for the sheet gets a larger one of the same
- * shape, and the sheet grows downward when nothing on it is free.
+ * in its way. When a newcomer has no spot clear of tangles, an entity in its
+ * way moves as little as it must, and says where it was in `moved`. A
+ * selection too big for the sheet gets a larger one of the same shape, and
+ * the sheet grows downward when nothing on it is free.
  *
  * ```ts
  * import { layout } from '@yaks/diagram'
@@ -550,10 +578,184 @@ let fitted = (width: number, height: number, sizes: [number, number][]) => {
  * ```
  */
 export let layout = (bundles: Bundle[], opts: Options = {}): Layout => {
+  let [still, spots] = arrange(bundles, opts, new Map())
+  let tries = Math.floor(WORK / still.nodes.length ** 2)
+  if (!opts.was || !tries) return still
+  // A newcomer that found no spot clear of tangles makes room. Its next best
+  // spots are tried, and then what is in its way is moved, a little and then
+  // further, one entity at a time. The first arrangement where nothing that
+  // joined or moved is tangled wins, or else the one that tangles least
+  // (counting only what changed, which is all that can differ), then moves
+  // least. In its way is what its tangles involve, and what names two of the
+  // entities it names, and so wants the spot it wants.
+  let fresh = new Set(
+    [...still.nodes, ...still.links].filter((x) => x.fresh)
+      .map((x) => 'key' in x ? x.key : x.eid),
+  )
+  let tangled = knots(still, fresh)
+  if (!tangled.length) return still
+  let ends = new Map(still.links.map((l) => [l.key, [l.from, l.to]]))
+  let around = new Map<string, Set<string>>()
+  for (let l of still.links) {
+    for (let [a, b] of [[l.from, l.to], [l.to, l.from]]) {
+      around.set(a, (around.get(a) ?? new Set()).add(b))
+    }
+  }
+  let involved = new Set(
+    tangled.flatMap((k) => k.keys.flatMap((key) => ends.get(key) ?? [key])),
+  )
+  let newcomer = still.nodes.filter((n) =>
+    fresh.has(n.eid) && involved.has(n.eid)
+  )
+    .sort((a, b) => a.order - b.order)[0]?.eid
+  let rivals = [...involved].filter((e) => fresh.has(e)).flatMap((e) => {
+    let mine = around.get(e) ?? new Set()
+    return [...around].filter(([o, near]) =>
+      o != e && [...near].filter((n) => mine.has(n)).length >= 2
+    ).map(([o]) => o)
+  })
+  let old = new Map(opts.was.nodes.map((n) => [n.eid, n]))
+  let lined = (e: string) => around.get(e)?.size ?? 0
+  let movable = [...new Set([...rivals, ...involved])]
+    .filter((e) => old.has(e) && !fresh.has(e))
+    .sort((a, b) => lined(a) - lined(b))
+    .slice(0, MOVES)
+  // An arrangement, what it tangles of what changed, how many more tangles
+  // that makes than before, and how far it moves what was drawn. What was
+  // tangled before depends only on what moved.
+  let before = new Map<string, number>()
+  let score = (l: Layout): [Layout, number, number, number] => {
+    let moved = new Set(l.nodes.filter((n) => n.moved).map((n) => n.eid))
+    let changed = new Set([
+      ...fresh,
+      ...moved,
+      ...l.links.filter((k) => moved.has(k.from) || moved.has(k.to))
+        .map((k) => k.key),
+    ])
+    let left = knots(l, changed).length
+    let key = [...moved].sort().join()
+    if (!before.has(key)) before.set(key, knots(still, changed).length)
+    return [
+      l,
+      left,
+      left - before.get(key)!,
+      l.nodes.reduce(
+        (d, n) =>
+          d + (n.moved ? Math.hypot(n.x - n.moved.x, n.y - n.moved.y) : 0),
+        0,
+      ),
+    ]
+  }
+  // Where the newcomer is tried with each move: at every spot it could take,
+  // those whose lines route clear first, and then along the foot of the
+  // drawing, nearest across to what it names, since what is outside
+  // everything can reach round it. Every entity is pinned, so an arrangement
+  // only draws its lines again.
+  let me = still.nodes.find((n) => n.eid == newcomer)
+  let [w, h] = me ? half(me.shape, !!me.state) : [0, 0]
+  let named = [...around.get(newcomer ?? '') ?? []]
+    .map((e) => still.nodes.find((n) => n.eid == e)!.x)
+  let ax = named.reduce((a, x) => a + x / named.length, 0)
+  let across: number[] = []
+  for (let x = w + EDGE; me && x <= still.width - w - EDGE; x += w * .7) {
+    across.push(x)
+  }
+  across = across.sort((a, b) => Math.abs(a - ax) - Math.abs(b - ax))
+    .slice(0, FOOT)
+  let [own, ...others] = spots.get(newcomer ?? '') ?? []
+  let tried = [own, ...others.sort((a, b) => a.knotted - b.knotted)]
+    .filter(Boolean).map((o) => o.at)
+  let at = (pins: Map<string, Spot>): Spot[] => {
+    let l = {
+      ...still,
+      nodes: still.nodes.map((n) => {
+        let p = pins.get(n.eid)
+        return p ? { ...n, x: p[0], y: p[1] } : n
+      }),
+    }
+    let foot = Math.max(
+      ...l.nodes.filter((n) => n.eid != newcomer)
+        .map((n) => n.y + half(n.shape, !!n.state)[1] + APART),
+    )
+    let under = across.flatMap((x) =>
+      [foot - h, foot, foot + h].map((y): Spot => [x, y])
+    )
+    return [...tried, ...under].filter((p) => !blocked(l, newcomer!, p))
+  }
+  let best: ReturnType<typeof score> = [still, tangled.length, 0, 0]
+  // Whether an arrangement is untangled, or the tries are spent, keeping the
+  // best so far.
+  let done = (pins: Map<string, Spot>) => {
+    let s = score(arrange(bundles, opts, pins)[0])
+    if (s[2] < best[2] || s[2] == best[2] && s[3] < best[3]) best = s
+    return !s[1] || --tries <= 0
+  }
+  let move = (pins: Map<string, Spot>) =>
+    newcomer
+      ? at(pins).some((p) =>
+        (pins.size || p != own?.at) && done(new Map([...pins, [newcomer, p]]))
+      )
+      : done(pins)
+  if (newcomer && move(new Map())) return best[0]
+  // Each entity is moved out of the newcomer's way first: away from the spot
+  // it took, then aside, and toward it last.
+  let ways = Array.from({ length: 8 }, (_, a) => a * Math.PI / 4)
+  for (let r of NUDGES) {
+    for (let e of movable) {
+      let o = old.get(e)!
+      let [fx, fy] = own?.at ?? [o.x, o.y]
+      let away = Math.atan2(o.y - fy, o.x - fx)
+      let off = (a: number) =>
+        Math.abs(Math.atan2(Math.sin(a - away), Math.cos(a - away)))
+      for (let a of [...ways].sort((p, q) => off(p) - off(q))) {
+        let p: Spot = [o.x + r * Math.cos(a), o.y + r * Math.sin(a)]
+        if (!blocked(still, e, p) && move(new Map([[e, p]]))) return best[0]
+      }
+    }
+  }
+  return best[0]
+}
+
+// Whether the shape of `eid` at p would sit on the edge of a layout's sheet,
+// or on another of its shapes.
+let blocked = (l: Layout, eid: string, [x, y]: Spot) => {
+  let size = (n: Node) => half(n.shape, !!n.state)
+  let [w, h] = size(l.nodes.find((n) => n.eid == eid)!)
+  return x < w + EDGE || x > l.width - w - EDGE || y < h + EDGE ||
+    l.nodes.some((n) => {
+      let [nw, nh] = size(n)
+      return n.eid != eid && Math.abs(n.x - x) < w + nw + APART &&
+        Math.abs(n.y - y) < h + nh + APART
+    })
+}
+
+// How far a shape already drawn is tried away from where it was, nearest
+// first, so it moves no further than it must. Each arrangement tried lays out
+// and checks every entity again, which costs more the more there are, so a
+// drawing of n tries at most WORK / n² of them: 40 of ten, 10 of twenty, and
+// none past 63.
+const NUDGES = [40, 80, 120]
+const WORK = 4000
+// How many spots across the foot of the drawing the newcomer is tried at.
+const FOOT = 4
+
+// How many entities already drawn are tried in a new place, the fewest lined
+// first.
+const MOVES = 4
+
+// A layout with each entity of `moving` at the spot it gives: one drawn
+// before keeps its order and stage, and the lines to it are drawn again. With
+// it, the spots each other newcomer could take, the one it took first.
+let arrange = (
+  bundles: Bundle[],
+  opts: Options,
+  moving: Map<string, Spot>,
+): [Layout, Map<string, Option[]>] => {
   let { was, label = (b) => handle(b.entity.eid), quiet = QUIET } = opts
   let { shapes = SHAPES, stage = 0 } = opts
   let old = new Map(was?.nodes.map((n) => [n.eid, n]))
   let oldLinks = new Map(was?.links.map((l) => [l.key, l]))
+  let stays = (eid: string) => old.has(eid) && !moving.has(eid)
   let drawn = bundles.filter((b) => !isEdge(b)).map((b) => {
     let comps = words(b, quiet)
     let state = stateOf(b)
@@ -568,18 +770,26 @@ export let layout = (bundles: Bundle[], opts: Options = {}): Layout => {
   let lines = links(bundles)
   let spot = new Map<string, Spot>()
   let boxes = bands()
-  let put = (eid: string, p: Spot, [w, h]: [number, number]) => (
-    spot.set(eid, p), boxes.add([...p, w, h])
-  )
+  // The sheet as tall as it has grown: a line below the height asked for is
+  // still on it.
+  let bottom = height
+  let sheet = (y = 0, h = 0): Spot => [width, Math.max(bottom, y + h + APART)]
+  let put = (eid: string, p: Spot, [w, h]: [number, number]) => {
+    spot.set(eid, p)
+    boxes.add([...p, w, h])
+    bottom = Math.max(bottom, p[1] + h + APART)
+  }
   for (let { b, size } of drawn) {
-    let o = old.get(b.entity.eid)
-    if (o) put(o.eid, [o.x, o.y], size)
+    let eid = b.entity.eid, o = old.get(eid)
+    if (o) put(eid, moving.get(eid) ?? [o.x, o.y], size)
   }
   for (let { b, size } of drawn) {
     let eid = b.entity.eid
     if (spot.has(eid)) continue
     let pin = opts.at?.({ eid, label: label(b), bundle: b })
-    if (pin) put(eid, [pin[0] * width, pin[1] * height], size)
+    let mine = moving.get(eid)
+    if (mine) put(eid, mine, size)
+    else if (pin) put(eid, [pin[0] * width, pin[1] * height], size)
   }
   let byEid = new Map(bundles.map((b) => [b.entity.eid, b]))
   let seat = new Map(drawn.map((d) => [d.b.entity.eid, d]))
@@ -597,7 +807,7 @@ export let layout = (bundles: Bundle[], opts: Options = {}): Layout => {
   let bends = new Map<string, number>()
   let routes: Route[] = []
   let kept = (l: Line) =>
-    old.has(l.from) && old.has(l.to) ? oldLinks.get(l.key) : undefined
+    stays(l.from) && stays(l.to) ? oldLinks.get(l.key) : undefined
   let draw = (l: Line) => {
     let a = seated(l.from), b = seated(l.to)
     let bend = kept(l)?.bend
@@ -606,7 +816,7 @@ export let layout = (bundles: Bundle[], opts: Options = {}): Layout => {
       routes.push(traced(l.from, l.to, curve(a, b, bend)))
       return
     }
-    let [chosen, r] = route(a, b, shapesPlaced(), routes, [width, height])
+    let [chosen, r] = route(a, b, shapesPlaced(), routes, sheet())
     bends.set(l.key, chosen)
     routes.push(r)
   }
@@ -637,6 +847,7 @@ export let layout = (bundles: Bundle[], opts: Options = {}): Layout => {
   // is already placed first (in the order given when even), so each lands
   // beside what it names, and its lines are drawn before the next lands.
   let waiting = drawn.filter(({ b }) => !spot.has(b.entity.eid))
+  let choices = new Map<string, Option[]>()
   while (waiting.length) {
     let i = waiting.reduce(
       (best, d, j) =>
@@ -654,19 +865,22 @@ export let layout = (bundles: Bundle[], opts: Options = {}): Layout => {
     let side = actor(d.shape) ? sideOf(w) : undefined
     // Its lines to what is placed, drawn from p as they would be.
     let mine = (joined.get(eid) ?? []).filter((l) => spot.has(other(l, eid)))
-    let lines = ([x, y]: Spot) => {
-      let more = [...routes]
-      return mine.reduce((c, l) => {
+    let lines = ([x, y]: Spot): [number, number] => {
+      let more = [...routes], knotted = 0
+      let c = mine.reduce((c, l) => {
         let me = { eid, x, y, shape: d.shape, state: d.state }
         let them = seated(other(l, eid))
-        let [, r, cost] = l.from == eid
-          ? route(me, them, shapes, more, [width, height])
-          : route(them, me, shapes, more, [width, height])
+        let [bend, r, cost] = l.from == eid
+          ? route(me, them, shapes, more, sheet(y, h))
+          : route(them, me, shapes, more, sheet(y, h))
         more.push(r)
+        // What a line costs beyond its bend is a tangle.
+        if (cost - Math.abs(bend) * 2 >= Math.min(CROSS, OVER)) knotted++
         return c + cost
       }, 0)
+      return [c, knotted]
     }
-    let at = place({
+    let options = place({
       boxes,
       shapes,
       routes,
@@ -678,7 +892,8 @@ export let layout = (bundles: Bundle[], opts: Options = {}): Layout => {
       side,
       lines,
     })
-    put(eid, at, [w, h])
+    choices.set(eid, options)
+    put(eid, options[0].at, [w, h])
     ready()
   }
   // Where each line's name is written: kept, or the spot along it nearest
@@ -728,10 +943,15 @@ export let layout = (bundles: Bundle[], opts: Options = {}): Layout => {
       x,
       y,
       fresh: !o,
+      ...o && (o.x != x || o.y != y) ? { moved: { x: o.x, y: o.y } } : {},
     }
   })
+  let shifted = (eid: string) => {
+    let o = old.get(eid), at = spot.get(eid)!
+    return !!o && (o.x != at[0] || o.y != at[1])
+  }
   let after = Math.max(-1, ...(was?.links ?? []).map((l) => l.order)) + 1
-  return {
+  let drawing: Layout = {
     width,
     height: Math.max(
       height,
@@ -751,7 +971,11 @@ export let layout = (bundles: Bundle[], opts: Options = {}): Layout => {
         order: o?.order ?? after++,
         stage: o?.stage ?? stage,
         fresh: !o,
+        ...o && (shifted(l.from) || shifted(l.to))
+          ? { moved: { bend: o.bend, mid: o.mid } }
+          : {},
       }
     }),
   }
+  return [drawing, choices]
 }
