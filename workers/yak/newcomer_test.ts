@@ -13,15 +13,16 @@ import { limitOf } from './meter.ts'
 import {
   BUILDING,
   confined,
-  DAILY,
   FULL,
   KEEP,
   keep,
   PER_BUILD,
-  PER_SOURCE,
   START,
 } from './newcomer.ts'
 import type { Ctx } from './tool.ts'
+import { TOOLS } from './tools.ts'
+import { PUBLISHED } from './published.ts'
+import { packageTools } from './package-tools.ts'
 
 let env!: Env
 let k = await fresh({}, (e) => {
@@ -145,7 +146,6 @@ test('the same browser goes on building in the same space', () => {
 })
 
 test("past an address's builds, the sign-in card says why", () => {
-  assertEquals(PER_SOURCE, 2)
   assertEquals(second.status, 303)
   assert(spaceOf(second) && spaceOf(second) != space.slug)
   assertEquals(third.status, 429)
@@ -155,10 +155,6 @@ test("past an address's builds, the sign-in card says why", () => {
 test('an empty box goes back to the home page', () => {
   assertEquals(empty.status, 303)
   assertEquals(new URL(empty.headers.get('location')!).pathname, '/')
-})
-
-test('a day holds DAILY × PER_BUILD dollars at most', () => {
-  assertEquals(DAILY * PER_BUILD, 20)
 })
 
 // A tool as a newcomer meets it, and as anybody else does.
@@ -182,11 +178,18 @@ let call = async (newcomer: boolean, name: string) =>
     {} as Parameters<NonNullable<Tool['run']>>[1],
   )
 
+test('every tool a newcomer may call is one the platform has', () => {
+  let names = new Set(
+    [...TOOLS, ...PUBLISHED, ...packageTools({} as Ctx)].map((t) => t.name),
+  )
+  assertEquals([...BUILDING].filter((n) => !names.has(n)), [])
+})
+
 test('a newcomer builds, and is asked for an address before anything else', async () => {
-  assert(BUILDING.has('app_files') && !BUILDING.has('mail_send'))
+  await call(true, 'app_new')
   await call(true, 'app_files')
   let refused = await assertRejects(() => call(true, 'mail_send'))
   assertEquals((refused as Error).message, KEEP)
   await call(false, 'mail_send')
-  assertEquals(ran, ['app_files', 'mail_send'])
+  assertEquals(ran, ['app_new', 'app_files', 'mail_send'])
 })

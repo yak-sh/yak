@@ -28,10 +28,12 @@ import { type Ctx, refuse } from './tool.ts'
 
 type Env = { STORE: Namespace }
 
-/** The dollars one newcomer's build may spend. */
-export let PER_BUILD = 1
+/** The dollars one newcomer's build may spend. Every Operator turn holds
+ * its most before it starts (model-spend.ts `reserved`), which for a prompt
+ * its size is a few dollars, so less than this answers no turn at all. */
+export let PER_BUILD = 5
 /** Newcomers' spaces opened a day (UTC), across everybody. */
-export let DAILY = 20
+export let DAILY = 10
 /** The same, from one address. */
 export let PER_SOURCE = 2
 
@@ -57,7 +59,9 @@ export let BUILDING = new Set([
   'app_files',
   'app_install',
   'app_list',
+  'app_new',
   'app_preview',
+  'app_published',
   'app_restore',
   'app_rollback',
   'app_set',
@@ -69,8 +73,11 @@ export let BUILDING = new Set([
   'builder_supply',
   'command',
   'commands',
+  'connection_list',
   'gallery_search',
   'guide',
+  'integration_list',
+  'library_add',
   'library_list',
   'library_read',
   'memory_recall',
@@ -85,6 +92,8 @@ export let BUILDING = new Set([
   'store_effect_retry',
   'store_inspect',
   'store_load',
+  'store_memory_recall',
+  'store_memory_save',
   'store_restore',
   'store_retry',
   'store_trace',
