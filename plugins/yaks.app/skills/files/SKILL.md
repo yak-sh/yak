@@ -70,6 +70,13 @@ shows there as it lands, without calling `app_preview` again:
 - an `app_deploy` reloads the page to show what was released, and the page goes
   on following the next draft's writes.
 
+A TV can follow the person instead of one app. It opens `yaks.app/tv` and shows
+an eight-letter code; the person types it at `yaks.app/tv/pair` on their phone,
+or reads it out for `screen_pair`. The paired TV then shows the draft of the app
+they last wrote to, moving to another app when they write there, read-only: its
+page's writes are refused and what it keeps stays in the page. They unpair it at
+`yaks.app/tv/pair`, and the TV shows a new code.
+
 Before either, the page receives a cancelable **`yak-draft` event on `window`**.
 Its `detail` is `{app, link, draft, files: [{path, sha, url, entries?}], at}`,
 where `url` is the address the file serves at and `sha` is null for a deleted

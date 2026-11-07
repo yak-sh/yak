@@ -70,6 +70,7 @@ export type Use =
   | 'connect' // a connection's sign-in, on its way back (connections.ts)
   | 'line' // a person's own number's SMS callback (operator-line.ts)
   | 'call' // a call's audio stream, from its ring to its space (operator-calls.ts)
+  | 'screen' // a TV's code and the pairing it finds by it (screen.ts)
 
 type Obj = Record<string, unknown>
 

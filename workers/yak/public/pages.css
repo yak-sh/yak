@@ -322,6 +322,32 @@
      rows and forms (@yaks/ui, _ui.css); only what no other page draws is here.
      The frame fills the window, as the chat app's does, so the body's paper
      runs to the window's right edge; its content keeps its own width. */
+  /* A TV (screen.ts): seen across a room, so the code is large; once
+     paired, the draft fills the screen edge to edge. */
+  .Tv main {
+    max-width: 48rem;
+  }
+  .Tv_Code {
+    margin: 1.5rem 0;
+    color: var(--text);
+    font: 700 clamp(2.5rem, 9vw, 6rem)/1 var(--mono);
+    letter-spacing: .08em;
+  }
+  .Tv_Qr {
+    display: block;
+    width: min(60vw, 14rem);
+    margin: 0 auto 1.5rem;
+  }
+  .Tv:has(.Tv_Frame) main {
+    max-width: none;
+    padding: 0;
+  }
+  .Tv_Frame {
+    display: block;
+    width: 100vw;
+    height: 100vh;
+    border: 0;
+  }
   .Desk {
     display: block;
   }

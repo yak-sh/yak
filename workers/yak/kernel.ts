@@ -43,6 +43,8 @@
 //     /manage, /manage/*      apps.ts: the dashboard, one space's at a time
 //     /admin, /admin/*        admin.ts: the directory, for the platform admin
 //     /invite                identity.ts: an invitation's one click (invite.ts)
+//     /tv, /tv/*              screen.ts: a TV paired by a code, and the
+//                             phone's page that pairs and unpairs it
 //     /connect                identity.ts: the connector page, signed in, and
 //                             the address a person's apps live at
 //     /oauth/*                identity.ts: the OAuth 2.1 door for agents
@@ -219,6 +221,10 @@ let atApex = async (req: Request, env: Env, path: string) => {
   // The dashboard (apps.ts `manage`): the part that draws a space's pages.
   if (path == MANAGE || path.startsWith(`${MANAGE}/`)) {
     return bound(env.APPS, apps.fetch, env).fetch(req)
+  }
+  // A TV paired by a code (screen.ts): its page, and the phone's.
+  if (path == '/tv' || path.startsWith('/tv/')) {
+    return (await import('./screen.ts')).fetch(req, env)
   }
   if (
     path == '/login' || path.startsWith('/login/') || path == '/connect' ||

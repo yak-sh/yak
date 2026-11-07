@@ -698,6 +698,11 @@ export let WORDS: Record<string, Words> = {
     'description':
       "A short-lived token that signs the `yak` CLI in as this person: the same identity and exactly the same access they have here, never more. For working from a terminal, or a script that reaches their apps; the response is the one line to paste. A script sends the token as `authorization: Bearer <token>` to an app's own endpoints, so a dataset already in your own environment goes into a store by POSTing it as NDJSON to the app's ./api/apply, never typed into a tool call (https://yaks.app/docs/store). It lasts an hour unless `hours` says otherwise (24 at most), and `space` limits it to one space, which is the right choice when the token is going somewhere less safe than their laptop. The token is shown once, in the response, and stored nowhere it can be read back. `revoke` cancels a token before it expires, by the id the response that created it named. This tool requires a browser or connector sign-in; a CLI token cannot create or revoke tokens through it. Documentation: https://yaks.app/docs/sharing.",
   },
+  'screen_pair': {
+    'title': 'Pair a TV',
+    'description':
+      'Pair a TV, or any screen with a browser, with this person, so it shows, read-only, whatever draft their agent is building: the app they last wrote a draft in, following each write as it lands and moving to the next app they work on. The TV opens yaks.app/tv and shows an eight-letter code; pass the code the person reads out ("put it on my TV, the code is BCDF-GHJK"), in any case, with or without the dash. A paired screen changes nothing and reads only this person\'s drafts. They see and unpair their screens at yaks.app/tv/pair, where they can also type the code themselves. Returns a confirmation, or says the code matches no screen.',
+  },
   'feedback': {
     'title': 'Send feedback about yaks.app',
     'description':

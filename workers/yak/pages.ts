@@ -3213,6 +3213,191 @@ export let askCode = (at: {
   )
 }
 
+// A TV paired with a person (screen.ts, T-136193). The TV's own two pages
+// are a screen across a room, so they say one thing each, large: the code
+// and where to type it, or the draft. Each asks `/tv/now` again (RFC 8628's
+// polling) and moves when the answer does; a draft's own page hears each
+// write as it lands, so the TV asks only which draft to show.
+
+// What a TV page's script does: keep the screen awake, ask again every
+// `data-ask` ms, and move when the answer moves. Constant code: what it
+// reads comes from its page's data attributes.
+let TV = `(() => {
+  let page = document.querySelector('[data-tv]')
+  let ask = Number(page.dataset.ask)
+  let awake = () => navigator.wakeLock?.request('screen').catch(() => {})
+  awake()
+  document.addEventListener('visibilitychange', awake)
+  if (page.dataset.until) setTimeout(() => location.reload(), Number(page.dataset.until))
+  let look = async () => {
+    let now = await fetch('/tv/now', { cache: 'no-store' }).then((r) => r.json()).catch(() => null)
+    let frame = page.querySelector('iframe')
+    let url = now?.paired ? now.showing?.url ?? '' : null
+    if (now && (url == null) != !!page.dataset.code) return location.reload()
+    if (now && url != null && url != (frame?.getAttribute('src') ?? '')) return location.reload()
+    setTimeout(look, ask)
+  }
+  setTimeout(look, ask)
+})()`
+
+let pairAt = (env: Host) => url(env, '/tv/pair')
+
+/** The TV before it is paired: its code, where to type it, and the same
+ * address as a code a phone's camera opens with the code filled in. */
+export let screenCode = (code: string, left: number, env: Host = {}) => {
+  let at = `${pairAt(env)}?code=${code.replace('-', '')}`
+  return page(
+    env,
+    { title: 'Show your drafts on this screen', layout: 'Tv' },
+    h(
+      'section',
+      {
+        class: 'Tv_Pair',
+        'data-tv': '',
+        'data-code': code,
+        'data-ask': 5000,
+        'data-until': Math.max(left, 0),
+      },
+      h('h1', null, 'Show your drafts on this screen'),
+      h(
+        'p',
+        null,
+        'On your phone, go to ',
+        h('strong', null, `${apex(env)}/tv/pair`),
+        ' and enter this code:',
+      ),
+      h('p', { class: 'Tv_Code', 'aria-label': 'Your code' }, code),
+      h(
+        'a',
+        { class: 'Tv_Qr', href: at },
+        raw(qr(at, 'Scan to pair this screen')),
+      ),
+      h(
+        'p',
+        { class: 'Note' },
+        'This screen only shows what you are building. It can change nothing.',
+      ),
+    ),
+    run(TV),
+  )
+}
+
+/** A paired TV: the draft the person last wrote, filling the screen, or a
+ * line saying nothing is being built. */
+export let watching = (
+  shows: { app: string; title: string; url: string } | null,
+  env: Host = {},
+) =>
+  page(
+    env,
+    { title: shows ? shows.title : 'Your screen', layout: 'Tv' },
+    h(
+      'section',
+      { class: 'Tv_Watch', 'data-tv': '', 'data-ask': 15000 },
+      shows
+        ? h('iframe', { class: 'Tv_Frame', src: shows.url, title: shows.title })
+        : h(
+          Empty,
+          null,
+          'Nothing is being built right now. When your agent writes a draft, it shows here.',
+        ),
+    ),
+    run(TV),
+  )
+
+/** The phone's side: a box for the code the TV shows, then every screen
+ * paired with this person, each with its Unpair button. */
+export let pairing = (
+  at: {
+    code?: string
+    why?: string
+    done?: 'paired' | 'unpaired' | null
+    screens: { eid: string; paired: string; at: string | null }[]
+  },
+  status = 200,
+  env: Host = {},
+) =>
+  page(
+    env,
+    {
+      title: 'Pair a screen',
+      lead:
+        'Enter the code your TV shows. The TV then shows, read-only, whatever draft your agent is building.',
+      status,
+    },
+    at.why || at.done
+      ? h(
+        Notice,
+        { role: 'status', mod: at.why ? 'negative' : undefined },
+        at.why ??
+          (at.done == 'paired'
+            ? 'Paired. Your screen shows your newest draft in a few seconds; if it still shows a code, check the code and enter it again.'
+            : 'Unpaired. That screen shows nothing of yours now.'),
+      )
+      : null,
+    h(
+      'form',
+      { method: 'post', action: '/tv/pair' },
+      labeled(
+        'tv-code',
+        'Code',
+        h(Field, {
+          id: 'tv-code',
+          class: 'Code',
+          name: 'code',
+          value: at.code ?? '',
+          required: true,
+          autofocus: !at.code,
+          autocomplete: 'off',
+          autocapitalize: 'characters',
+          spellcheck: false,
+          placeholder: 'BCDF-GHJK',
+        }),
+      ),
+      send('Pair this screen'),
+    ),
+    at.screens.length
+      ? h(
+        Card,
+        null,
+        heading('Your screens'),
+        h(
+          Rows,
+          { as: 'ul' },
+          at.screens.map((s) =>
+            h(
+              Rows.Item,
+              { as: 'li' },
+              h(
+                Rows.Main,
+                null,
+                h(Rows.Name, null, 'Screen'),
+                h(
+                  Rows.Meta,
+                  null,
+                  s.at
+                    ? `Paired ${day(s.paired)}`
+                    : 'Waiting for the screen to show it',
+                ),
+              ),
+              h(
+                Rows.Actions,
+                null,
+                h(
+                  'form',
+                  { method: 'post', action: '/tv/unpair' },
+                  held('screen', s.eid),
+                  h(Button, { type: 'submit' }, 'Unpair'),
+                ),
+              ),
+            )
+          ),
+        ),
+      )
+      : null,
+    home(env),
+  )
+
 // Closing a space (T-33166, erase.ts): the page that stands in front of it.
 // It names what goes — every app, every domain, everyone who loses their way
 // in, and the address — because a person about to lose all of it should read

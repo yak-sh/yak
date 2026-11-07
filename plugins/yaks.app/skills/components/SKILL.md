@@ -678,7 +678,7 @@ The complete list of reserved names:
     product project provider provisional public_file published
     push_subscription quarantined questions reads recalled ref referenced
     refusal register_writes release_remake report repository representation
-    requires restored result retired revision rtc rtc_lapse satisfies
+    requires restored result retired revision rtc rtc_lapse satisfies screen
     screenshot secret seeded seller sender sending serves session
     session_input session_run sfu signed_in signin sms_consent space
     space_logo spend staged started starter stop submitted subscription

@@ -409,6 +409,34 @@
         "doc"
       ]
     },
+    "screen": {
+      "component": true,
+      "journal": false,
+      "type": "object",
+      "kind": true,
+      "properties": {
+        "person": {
+          "type": "string",
+          "ref": "entity",
+          "death": "cascade",
+          "stamped": true,
+          "description": "whose drafts the screen shows"
+        },
+        "paired": {
+          "type": "string",
+          "format": "date-time",
+          "stamped": true,
+          "description": "when the person typed the screen's code"
+        },
+        "at": {
+          "type": "string",
+          "format": "date-time",
+          "stamped": true,
+          "description": "when the screen took the pairing up; absent while the person's code waits for a screen to claim it"
+        }
+      },
+      "description": "a TV or any screen paired, read-only, with one person by the code it showed (RFC 8628): it shows whatever draft that person's agent is building. Its eid is derived from the code, so nothing is written until the person pairs it"
+    },
     "signin": {
       "component": true,
       "journal": false,

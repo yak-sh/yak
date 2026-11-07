@@ -224,6 +224,7 @@ import {
   selling,
 } from './sell.ts'
 import { payments } from './payments.ts'
+import { pair } from './screen.ts'
 import { mailFrom } from './post.ts'
 import {
   apex as platformHost,
@@ -6306,6 +6307,38 @@ let OURS: Row[] = [
           `${hours} ${hours == 1 ? 'hour' : 'hours'} from now.` +
           (space ? ` It reaches ${space.slug} and no other space.` : '') +
           `\n\nTake it back sooner: grant with revoke ${grant.id}.`,
+      }
+    },
+  },
+  {
+    name: 'screen_pair',
+    destructive: false,
+    idempotent: true,
+    input: {
+      type: 'object',
+      properties: {
+        code: str(
+          'the code the TV shows at yaks.app/tv: eight letters, as the ' +
+            'person reads them out',
+        ),
+      },
+      required: ['code'],
+    },
+    run: async (ctx, args) => {
+      let secret = ctx.env.SESSION_SECRET
+      if (!secret) throw refuse('unavailable', 'Screens are not configured')
+      let no = await pair(
+        ctx.dir,
+        secret,
+        ctx.person!,
+        text(args.code, 'code'),
+        Date.now(),
+      )
+      if (no) throw refuse('missing', no)
+      return {
+        text: 'Paired. Within a few seconds the screen shows, read-only, ' +
+          'the draft this person last wrote, and follows each draft after ' +
+          `it. They unpair it at ${hostUrl(ctx.env, '/tv/pair')}.`,
       }
     },
   },

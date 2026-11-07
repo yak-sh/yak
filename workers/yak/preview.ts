@@ -68,6 +68,7 @@ import type { Objects } from '@yaks/blob'
 import { sourceOf } from './wrangler_app.ts'
 import { decodedPath } from './request-path.ts'
 import { walled } from './installed.ts'
+import { screen as screenAt } from './screen.ts'
 
 let RATE = 0.09 / 3600
 let encode = (value: string) => new TextEncoder().encode(value)
@@ -75,13 +76,16 @@ let decode = (value: Uint8Array | null) =>
   value && new TextDecoder().decode(value)
 
 // What a link names: the app's link it follows (`app.followed`), as whom.
-// A ticket sealed before links outlived a deploy names it as `draft`.
+// A ticket sealed before links outlived a deploy names it as `draft`. A
+// ticket for a paired TV names its screen (screen.ts): it reads the draft as
+// a viewer, and only while that screen stays paired with the person.
 type Ticket = {
   app: string
   space: string
   person: string
   link?: string
   draft?: string
+  screen?: string
 }
 
 let privateHeaders = {
@@ -455,8 +459,15 @@ export let watching =
 
 /** An app's preview link for the caller (`ctx.person`), and the app with
  * its link (`followed`, minted the first time one is asked for): where it is
- * mounted, and its address. Nothing is built until a page asks for it. */
-export let linkOf = async (ctx: Ctx, space: Space, app: App, who: Who) => {
+ * mounted, and its address. Nothing is built until a page asks for it. A
+ * link for a paired TV names its `screen`. */
+export let linkOf = async (
+  ctx: Ctx,
+  space: Space,
+  app: App,
+  who: Who,
+  screen?: string,
+) => {
   let open = await followed(ctx.dir, space, app, who)
   let ticket = await seal(
     'preview',
@@ -465,6 +476,7 @@ export let linkOf = async (ctx: Ctx, space: Space, app: App, who: Who) => {
       space: space.eid,
       person: ctx.person,
       link: open.followed!,
+      ...screen ? { screen } : {},
     } satisfies Ticket,
     ctx.env.SESSION_SECRET!,
   )
@@ -561,7 +573,11 @@ let target = async (req: Request, env: Env) => {
     copy: copyOf(env),
     time: env.CLOCK,
   })
-  let found = await dir.target(ticket.space, ticket.person, ticket.app)
+  let [found, paired] = await Promise.all([
+    dir.target(ticket.space, ticket.person, ticket.app),
+    ticket.screen ? screenAt(dir, ticket.screen) : null,
+  ])
+  if (ticket.screen && paired?.person != ticket.person) return null
   let pair = found.space && found.app
     ? { space: found.space, app: found.app }
     : null
@@ -582,7 +598,9 @@ let target = async (req: Request, env: Env) => {
     storeName(pair.space, app),
   )
   if (bearing(req) && !grant) return null
-  let who: Who = grant
+  let who: Who = ticket.screen
+    ? { person: ticket.person, role: 'viewer', via: ticket.screen }
+    : grant
     ? { ...grant, role: grant.person == ticket.person ? role! : grant.role }
     : { person: ticket.person, role: role!, via: ticket.app }
   return {
@@ -593,6 +611,7 @@ let target = async (req: Request, env: Env) => {
     link,
     preview: app,
     who,
+    screen: ticket.screen ?? null,
     path: '/' + match[3],
     mount,
   }
@@ -626,6 +645,12 @@ export let fetch = async (req: Request, env: Env): Promise<Response> => {
         '/vocab.json',
       ].includes(at)
     ) return no()
+    // A TV only reads: its page's writes are refused, and what the page
+    // keeps for the person stays in the page (public/storage.js).
+    if (
+      found.screen &&
+      (at == '/apply' || (at == '/storage' && req.method != 'GET'))
+    ) return no(403)
     return privateResponse(
       await api(req, env, dir, space, found.preview, at, who, clock(), mount),
     )
