@@ -26,7 +26,7 @@
  *   `ledger` and `pencil`, yaks.app's; `composition`, the kits in the
  *   defaults; `stylesheet(composition)` dresses a browser (`sheets`, the
  *   same sheet by what each piece dresses), `sheet(composition)` a terminal
- *   (kit.ts).
+ *   and `native(composition)` a native host (kit.ts).
  * - `Guide`: every part in every variant, the guide `./routes` serves at `/ui`
  *   and `./cli` paints as `yak ui`; `Specimens`, one part's entry in it;
  *   `Worn`, the entries of the parts a host wears, for a guide of its own.
@@ -110,6 +110,7 @@ export {
   groups,
   kit,
   kits,
+  native,
   parts,
   sheet,
   sheets,
@@ -124,9 +125,11 @@ export type {
   Composition,
   Contributions,
   Kit,
+  Native,
   Piece,
   Skin,
   Specimen,
+  Style,
   Theme,
 } from './theme.ts'
 

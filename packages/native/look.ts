@@ -1,20 +1,22 @@
 /**
- * The native look of the kit parts a first app wears, keyed by the classes
- * they render (`Card`, `Card_Head`, `Button-go`), and the tags' defaults
- * beneath them. Each part's entry belongs beside its terminal `sheet` in
- * @yaks/ui, where it will move (T-148415); until then they are here, one
- * table a host reads through `paint`.
+ * The native look a host reads through `paint`: the tags' defaults, and the
+ * style of each class the kit parts render (`Card`, `Card_Head`,
+ * `Button-go`), which each part carries beside its terminal `sheet` in
+ * @yaks/ui (`native`).
  *
  * @module
  */
 
-import type { Colors } from '@yaks/ui'
+import { type Colors, type Composition, composition, native } from '@yaks/ui'
 import type { Look } from './mod.ts'
 
 export type { Colors }
 
-/** The native look over a theme's colors. */
-export let look = (c: Colors): Look => ({
+/** The native look over a theme's colours, of the parts in `at`'s kits as
+ * its skin wears them, @yaks/ui's own composition by default. A
+ * white-labelled app themes it with data: its colours, and the composition
+ * it wears. */
+export let look = (c: Colors, at: Composition = composition): Look => ({
   tags: {
     root: { flex: 1, backgroundColor: c.bg },
     main: { padding: 16, gap: 16 },
@@ -59,37 +61,5 @@ export let look = (c: Colors): Look => ({
       paddingHorizontal: 12,
     },
   },
-  classes: {
-    Card: {
-      backgroundColor: c.card,
-      borderRadius: 14,
-      padding: 16,
-      gap: 12,
-    },
-    Card_Head: {
-      flexDirection: 'row',
-      alignItems: 'center',
-      justifyContent: 'space-between',
-      gap: 8,
-    },
-    Card_Title: { fontSize: 20, fontWeight: '600', color: c.heading },
-    Card_Sub: { fontSize: 14, color: c.muted },
-    Card_Actions: { flexDirection: 'row', gap: 8 },
-    Button: { color: c.accent },
-    'Button-go': { backgroundColor: c.accent, color: c.bg },
-    'Button-danger': { color: c.negative },
-    'Button-quiet': { color: c.muted, paddingHorizontal: 6 },
-    Check: { fontSize: 17, color: c.text, paddingVertical: 6 },
-    Empty: {
-      borderColor: c.border2,
-      borderWidth: 1,
-      borderStyle: 'dashed',
-      borderRadius: 14,
-      padding: 16,
-      gap: 6,
-      color: c.muted,
-    },
-    Field: { color: c.text },
-    Notice: { color: c.muted, fontSize: 14 },
-  },
+  classes: native({ ...at, theme: { ...at.theme, colors: c } }),
 })

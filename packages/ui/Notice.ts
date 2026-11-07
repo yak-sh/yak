@@ -9,7 +9,7 @@
 import type { Sheet } from '@yaks/tui/theme'
 import { h } from 'preact'
 import { el, type Part } from './el.ts'
-import type { Colors, Specimen } from './theme.ts'
+import type { Colors, Native, Specimen } from './theme.ts'
 
 /** A line said back. */
 export let Notice: Part = el('p', 'Notice')
@@ -21,6 +21,12 @@ export let description = 'A line the page says back: what a press did.'
 export let sheet = (c: Colors): Sheet => ({
   Notice: { fg: c.muted },
   'Notice-negative': { fg: c.negative },
+})
+
+/** A notice on a phone is a small line, in the tone it is said in. */
+export let native = (c: Colors): Native => ({
+  Notice: { color: c.muted, fontSize: 14 },
+  'Notice-negative': { color: c.negative, fontSize: 14 },
 })
 
 /** What a press did, and why one did not. */

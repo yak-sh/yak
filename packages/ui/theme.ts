@@ -81,11 +81,20 @@ export type Theme = {
   colors: Colors
 }
 
+/** A native style: a React Native style object's keys and values. */
+export type Style = Record<string, string | number>
+
+/** A part's native entries: the style of each class it renders, beside its
+ * terminal `sheet`, which a native host draws its views with (@yaks/native). */
+export type Native = Record<string, Style>
+
 /** One sample in the style guide: what it shows, and the tree. */
 export type Specimen = [label: string, node: VNode]
 
 /** What each part of the kit brings besides its component: a line saying
- * what it is, its terminal entries, and its samples. Its CSS address travels with the part, wherever its author keeps it. */
+ * what it is, its terminal entries, its native ones where it has a native
+ * look, and its samples. Its CSS address travels with the part, wherever its
+ * author keeps it. */
 export type Piece = {
   // Kits contain components with different props; consumers import their typed component.
   // deno-lint-ignore no-explicit-any -- heterogeneous component registry
@@ -93,6 +102,7 @@ export type Piece = {
   css: URL
   description: string
   sheet: (c: Colors) => Sheet
+  native?: (c: Colors) => Native
   specimens: () => Specimen[]
 }
 
@@ -103,11 +113,12 @@ export type Kit = Record<string, Piece>
  * the part's own, and its `over` (one sheet or several, in order) is laid on
  * top of whichever the part wears, so a skin can add to a part without
  * copying it, and two skins can share what they lay. Missing entries fall back
- * to the kit; a missing terminal sheet keeps the kit's terminal rendering. */
+ * to the kit; a missing terminal sheet or native entry keeps the kit's. */
 export type Skin = Record<string, {
   css?: URL
   over?: URL | URL[]
   sheet?: (c: Colors) => Sheet
+  native?: (c: Colors) => Native
 }>
 
 /** The guide only needs UX specimens, not a dependency on their behaviour. */

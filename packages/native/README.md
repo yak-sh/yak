@@ -44,6 +44,8 @@ for them, and `store(api, fetch)` is the app's store over HTTP. The module's
 default export is a component taking that `store`. The iOS shell and `yak open`
 in a terminal (@yaks/browse) are its two hosts, each with its own `fetch`.
 
-`look(colors)` is the native look of the @yaks/ui parts a first app wears, over
-a theme's colours; each entry moves beside its part's terminal `sheet` in
-@yaks/ui (T-148415).
+`look(colors, composition?)` is the native look over a theme's colours: the
+tags' defaults, and each class's style, which every @yaks/ui part carries beside
+its terminal `sheet` (`native`). The composition's kits and skin, @yaks/ui's own
+by default, say which parts and how they are worn, so a white-labelled app
+themes the look with data alone.

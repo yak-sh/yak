@@ -10,7 +10,7 @@
 import type { Sheet } from '@yaks/tui/theme'
 import { h } from 'preact'
 import { el, type Part } from './el.ts'
-import type { Colors, Specimen } from './theme.ts'
+import type { Colors, Native, Specimen } from './theme.ts'
 
 /** A box or a radio and its words. */
 export let Check: Part = el('label', 'Check')
@@ -21,6 +21,11 @@ export let description = 'A check box or a radio, and its words.'
 /** Its box and its words stay apart, as in a browser. */
 export let sheet = (_c: Colors): Sheet => ({
   Check: { spaced: true },
+})
+
+/** A check on a phone is a row tall enough to press. */
+export let native = (c: Colors): Native => ({
+  Check: { fontSize: 17, color: c.text, paddingVertical: 6 },
 })
 
 let check = (

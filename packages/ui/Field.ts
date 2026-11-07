@@ -12,7 +12,7 @@
 import type { Sheet } from '@yaks/tui/theme'
 import { type FunctionComponent, h } from 'preact'
 import { el, type Props } from './el.ts'
-import type { Colors, Specimen } from './theme.ts'
+import type { Colors, Native, Specimen } from './theme.ts'
 
 let Line = el('input', 'Field')
 let Area = el('textarea', 'Field')
@@ -41,6 +41,12 @@ export let description =
 export let sheet = (c: Colors): Sheet => ({
   Field: { fg: c.text, bg: c.surface, border: c.border },
   'Field-bare': { fg: c.text },
+})
+
+/** A field on a phone types in the text's ink. */
+export let native = (c: Colors): Native => ({
+  Field: { color: c.text },
+  'Field-bare': { color: c.text },
 })
 
 /** Empty, typed in, typed in with the caret shown, picked in, and bare. */

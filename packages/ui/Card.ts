@@ -14,7 +14,7 @@ import { h } from 'preact'
 import { Button } from './Button.ts'
 import { block, type Part } from './el.ts'
 import { State } from './State.ts'
-import type { Colors, Specimen } from './theme.ts'
+import type { Colors, Native, Specimen } from './theme.ts'
 
 /** A card. */
 export let Card:
@@ -43,6 +43,21 @@ export let sheet = (c: Colors): Sheet => ({
   Card_Title: { fg: c.heading, bold: true },
   Card_Actions: { spaced: true },
   Card_Sub: { fg: c.muted },
+})
+
+/** A card on a phone is a raised surface, its corners rounded, its head
+ * one row with the title at one end and the actions at the other. */
+export let native = (c: Colors): Native => ({
+  Card: { backgroundColor: c.card, borderRadius: 14, padding: 16, gap: 12 },
+  Card_Head: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: 8,
+  },
+  Card_Title: { fontSize: 20, fontWeight: '600', color: c.heading },
+  Card_Sub: { fontSize: 14, color: c.muted },
+  Card_Actions: { flexDirection: 'row', gap: 8 },
 })
 
 let { Head, Mark, Title, Actions, Sub } = Card

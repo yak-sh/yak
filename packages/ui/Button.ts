@@ -11,7 +11,7 @@
 import type { Sheet } from '@yaks/tui/theme'
 import { h } from 'preact'
 import { el, type Part } from './el.ts'
-import type { Colors, Specimen } from './theme.ts'
+import type { Colors, Native, Specimen } from './theme.ts'
 
 /** A button. */
 export let Button: Part = el('button', 'Button')
@@ -26,6 +26,15 @@ export let sheet = (c: Colors): Sheet => ({
   'Button-danger': { fg: c.negative },
   'Button-go': { fg: c.bg, bg: c.accent, bold: true },
   'Button-quiet': { fg: c.muted },
+})
+
+/** A press on a phone is its word in its colour; the one to press is filled. */
+export let native = (c: Colors): Native => ({
+  Button: { color: c.accent },
+  'Button-add': { color: c.muted },
+  'Button-danger': { color: c.negative },
+  'Button-go': { backgroundColor: c.accent, color: c.bg },
+  'Button-quiet': { color: c.muted, paddingHorizontal: 6 },
 })
 
 /** Every variant. */

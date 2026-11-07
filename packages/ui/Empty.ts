@@ -10,7 +10,7 @@
 import type { Sheet } from '@yaks/tui/theme'
 import { h } from 'preact'
 import { el, type Part } from './el.ts'
-import type { Colors, Specimen } from './theme.ts'
+import type { Colors, Native, Specimen } from './theme.ts'
 
 /** Nothing here yet. */
 export let Empty: Part = el('section', 'Empty')
@@ -20,6 +20,19 @@ export let description = 'Nothing here yet: what will be, and how to start.'
 
 /** Muted, a blank line after it. */
 export let sheet = (c: Colors): Sheet => ({ Empty: { fg: c.muted, gap: true } })
+
+/** Nothing here yet, on a phone: a dashed outline round what will be. */
+export let native = (c: Colors): Native => ({
+  Empty: {
+    borderColor: c.border2,
+    borderWidth: 1,
+    borderStyle: 'dashed',
+    borderRadius: 14,
+    padding: 16,
+    gap: 6,
+    color: c.muted,
+  },
+})
 
 /** A place for the first app. */
 export let specimens = (): Specimen[] => [

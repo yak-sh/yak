@@ -77,7 +77,14 @@ import { pencil } from './pencil.ts'
 import { rosepine } from './rosepine.ts'
 import { Fragment } from 'preact'
 import { text } from '@yaks/api/asset'
-import type { Composition, Contributions, Kit, Piece, Theme } from './theme.ts'
+import type {
+  Composition,
+  Contributions,
+  Kit,
+  Native,
+  Piece,
+  Theme,
+} from './theme.ts'
 
 /** Every part, by what it is for: the document's defaults, what is said
  * inline, what is pressed or typed in, the way around, lists of things, and
@@ -203,6 +210,18 @@ export let sheet = (c: Composition): Sheet =>
       {},
       ...Object.entries(parts(c)).map(([name, part]) =>
         (c.skin?.[name]?.sheet ?? part.sheet)(c.theme.colors)
+      ),
+    ),
+  )
+
+/** Each part's native entries, the skin's where it replaces one, over the
+ * theme's colours: a native host's look of every class (@yaks/native). */
+export let native = (c: Composition): Native =>
+  Object.freeze(
+    Object.assign(
+      {},
+      ...Object.entries(parts(c)).map(([name, part]) =>
+        (c.skin?.[name]?.native ?? part.native)?.(c.theme.colors)
       ),
     ),
   )

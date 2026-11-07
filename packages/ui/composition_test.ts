@@ -7,7 +7,7 @@ import { print } from '@yaks/tui/print'
 let plain = (s: string) => s.replace(/\x1b\[[0-9;]*m/g, '')
 import { el } from './el.ts'
 import { Guide, Page, stopsOf, Worn } from './guide.ts'
-import { gather, kits, sheet, stylesheet } from './kit.ts'
+import { gather, kits, native, sheet, stylesheet } from './kit.ts'
 import { everforest } from './everforest.ts'
 import type { Composition, Kit } from './theme.ts'
 
@@ -46,6 +46,29 @@ test('external parts carry their own CSS; a partial skin replaces only named par
   }
   assertEquals(sheet(terminal).Extra, { bold: true })
   assertEquals(sheet(terminal).Dot, sheet({ kits, theme: everforest }).Dot)
+})
+
+test("each part's native entries paint over the theme's colours; a skin replaces only the parts it names", () => {
+  let parts = {
+    ...kits,
+    external: {
+      Extra: {
+        ...external.Extra,
+        native: (c) => ({ Extra: { color: c.positive } }),
+      },
+    } as Kit,
+  }
+  let phone = native({ kits: parts, theme: everforest })
+  assertEquals(phone.Extra, { color: everforest.colors.positive })
+  assertEquals(phone['Button-go'].backgroundColor, everforest.colors.accent)
+  let skinned = native({
+    kits: parts,
+    theme: everforest,
+    skin: { Button: { native: () => ({ Button: { color: 'ink' } }) } },
+  })
+  assertEquals(skinned.Button, { color: 'ink' })
+  assertEquals(skinned['Button-go'], undefined)
+  assertEquals(skinned.Card, phone.Card)
 })
 
 test("a skin's over lays its CSS on the part's rendering, the kit's or its own", async () => {

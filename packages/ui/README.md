@@ -12,10 +12,13 @@ adds a class to a part: `mod: 'ring'` adds `Dot-ring`. `block` attaches named
 parts using an underscore: `Menu.Item` renders `Menu_Item`.
 
 A **piece** carries a part's `Component`, CSS URL, terminal `sheet` function,
-`description` and `specimens` function (`Piece`). A **kit** names pieces
-(`Kit`); `kit` contains the base pieces, `groups` arranges them for the guide,
-and `kits` registers that kit as `base`. A **specimen** is a label and a Preact
-tree showing a part or variant (`Specimen`).
+optional `native` function, `description` and `specimens` function (`Piece`).
+`native(colors)` gives the React Native style of each class the part renders
+(`Native`), which a native host such as the iOS shell draws its views with
+([@yaks/native](../native/README.md)). A **kit** names pieces (`Kit`); `kit`
+contains the base pieces, `groups` arranges them for the guide, and `kits`
+registers that kit as `base`. A **specimen** is a label and a Preact tree
+showing a part or variant (`Specimen`).
 
 Parts present what their caller supplies. The caller chooses variants, owns
 state and handles presses; parts do not read a
@@ -307,14 +310,14 @@ uses `--size` and `--small`, defaulting to 14px and 12px; spacing uses `--gap`,
 `--radius` and `--measure`; raised boxes use `--shadow`. The base CSS derives
 `--half-gap`, `--soft` and the touch target floor `--tap`.
 
-A **skin** supplies CSS by piece name and optional terminal sheet replacements
-(`Skin`). An entry's `css` replaces the piece's own; its `over` is laid on top
-of whichever the piece wears, so a skin adds to a piece without copying it. A
-missing entry uses the kit's rendering. `paper`, the default, lays yak.sh's
-paper grain, fine link underlines and medium headings over the document's
-defaults (`base`); `ledger` replaces Button, Head and Tile with printed labels
-and ruled records, and lays its labels over Tabs. Other pieces retain the kit's
-rendering.
+A **skin** supplies CSS by piece name and optional terminal sheet and native
+replacements (`Skin`). An entry's `css` replaces the piece's own; its `over` is
+laid on top of whichever the piece wears, so a skin adds to a piece without
+copying it. A missing entry uses the kit's rendering. `paper`, the default, lays
+yak.sh's paper grain, fine link underlines and medium headings over the
+document's defaults (`base`); `ledger` replaces Button, Head and Tile with
+printed labels and ruled records, and lays its labels over Tabs. Other pieces
+retain the kit's rendering.
 
 A **composition** supplies `{ kits, theme, skin?, ux? }` to render a page and
 its guide (`Composition`). `composition` is the base kits in `gouache` and
@@ -322,10 +325,11 @@ its guide (`Composition`). `composition` is the base kits in `gouache` and
 refuses duplicate piece names. `stylesheet` loads the theme, then one CSS
 rendering per piece in kit order; it resolves relative CSS `url()` and quoted
 `@import` addresses against each CSS URL. `sheet` combines the selected terminal
-entries, including the base entries for [@yaks/tui](../tui/README.md)'s widgets.
+entries, including the base entries for [@yaks/tui](../tui/README.md)'s widgets,
+and `native` combines the native ones.
 
 ```ts
-import { composition, ledger, sheet, stylesheet } from '@yaks/ui'
+import { composition, ledger, native, sheet, stylesheet } from '@yaks/ui'
 import { equal } from '@yaks/testing'
 
 const dressed = { ...composition, skin: ledger }
@@ -333,6 +337,7 @@ const css = await stylesheet(dressed)
 equal(css.includes('.Button'), true)
 equal(sheet(dressed).Button.bold, true)
 equal(sheet(dressed).Field.fg, dressed.theme.colors.text)
+equal(native(dressed)['Button-go'].backgroundColor, dressed.theme.colors.accent)
 ```
 
 ## Contributions
