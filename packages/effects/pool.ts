@@ -35,8 +35,13 @@
 // the process happens until it ends — no request is answered (a Durable
 // Object's runtime refuses them as overloaded), no timer fires, no child
 // process is reaped and no signal is heard. So a worker gives way between
-// passes, a pass examines a bounded window, and no more than `max` runs go at
-// once ({@link MAX} unless told): a backlog is worked a slot at a time, each freed slot filled at once.
+// passes, and a turn starts at most a page of runs. How many go at once is
+// not a number: each time a worker gives way it times the turn, and it takes
+// more runs only while its thread comes back to it promptly (no more than
+// {@link LATE} ms behind). Runs waiting on the network cost the thread
+// nothing, so thousands can go at once; a thread busy starting or finishing
+// them, or starved by a loaded box, comes back late, and the worker takes no
+// more until it catches up. A host that wants a fixed bound still says `max`.
 //
 // Success deletes its run under the same claim guard; it leaves no done row.
 // There are two ways a run does not complete, and they are not the same:
@@ -196,8 +201,9 @@ export type Attempt = {
  * process wrote is picked up when nothing hears it land. */
 export let CAP = 1_000
 
-/** The most runs a worker has going at once where it is not told (`max`). */
-export let MAX = 64
+/** How late a worker's turn may come back (ms) and it still take more runs:
+ * past this, its event loop is full. */
+export let LATE = 50
 
 /** What every worker's presence lease is named under: `@yaks/effects/<eid>`. */
 export let POOL = '@yaks/effects'
@@ -221,7 +227,8 @@ export type PoolOpts = {
    * worker that names nobody claims under a fresh id and holds no presence
    * lease, since a lease's holder is an entity */
   owner: Eid
-  /** Maximum handlers this worker runs together (default: {@link MAX}). */
+  /** Maximum handlers this worker runs together (default: no bound but its
+   * event loop, {@link LATE}). */
   max?: number
   /** Positive integer maximum candidates examined per pass, including fresh
    * start-up admission (default: 32). */
@@ -398,7 +405,7 @@ export let pool = (ctx: Ctx, opts: Partial<PoolOpts> = {}): Pool => {
   let hold = opts.lease ?? 60_000
   let mint = opts.mint ?? (() => crypto.randomUUID() as Eid)
   let wait = opts.backoff ?? backoff
-  let max = opts.max ?? MAX
+  let max = opts.max ?? Infinity
   let disabled = new Set(opts.disabled)
   let stamp = (ms: number) => new Date(ms).toISOString()
   let limit = (s?: Slot) => s?.effect?.tries ?? opts.tries ?? TRIES
@@ -418,6 +425,18 @@ export let pool = (ctx: Ctx, opts: Partial<PoolOpts> = {}): Pool => {
   let ran = 0, errors = 0
   let ends = seconds()
   let loop: { done: Promise<void>; signal: AbortSignal } | undefined
+  // How late the last turn this worker gave way came back, by its clock: a
+  // full event loop runs it late.
+  let behind = 0
+  let turn = async () => {
+    let at = clock()
+    await sleep(0, undefined, time)
+    behind = clock() - at
+  }
+  // Whether this process takes another run: it works the pool, has a slot,
+  // and its thread is keeping up.
+  let room = (taken = 0) =>
+    member && running.size + admitting + taken < max && behind <= LATE
 
   // What an attempt records as it starts: the code it runs, and, on a shared
   // store, the claim.
@@ -651,7 +670,7 @@ export let pool = (ctx: Ctx, opts: Partial<PoolOpts> = {}): Pool => {
   // One pass over what is owed: every row this process can run that nobody
   // holds and whose backoff is up, claimed and started. Returns the runs.
   // Separate handler windows keep one backlog from owning the pass.
-  let turn = 0
+  let next = 0
   // The last pass found every slot taken: the next run to end wakes the
   // worker, rather than leaving its slot empty for a nap.
   let full = false
@@ -671,9 +690,10 @@ export let pool = (ctx: Ctx, opts: Partial<PoolOpts> = {}): Pool => {
         ...disabled,
       ]),
     ]
-    if (!member || running.size + admitting >= max || !names.length) {
+    if (!room() || !names.length) {
       full = member && running.size + admitting >= max
-      return { started, more: false }
+      // A thread behind takes its next turn before it looks again.
+      return { started, more: member && !!names.length && behind > LATE }
     }
     if (!budget) return { started, more: true }
     // Every handler's ready runs but our own live ones, a page of them: what
@@ -752,7 +772,7 @@ export let pool = (ctx: Ctx, opts: Partial<PoolOpts> = {}): Pool => {
       }
       // Reads and owner checks can yield to a writer that fills a slot.
       // Reserve against the current admission count, not the scan's earlier one.
-      if (!member || running.size + admitting >= max) return
+      if (!room()) return
       let mine = {
         attempts: cut ? attempts : attempts + 1,
         next: null,
@@ -776,12 +796,9 @@ export let pool = (ctx: Ctx, opts: Partial<PoolOpts> = {}): Pool => {
       heads.get(String((b[EFFECT] as Comp).handler))?.rows.push(b)
     }
     try {
-      while (
-        member && running.size + admitting < max && budget > 0 &&
-        drained.size < names.length
-      ) {
-        let name = names[turn % names.length]
-        turn = (turn + 1) % names.length
+      while (room() && budget > 0 && drained.size < names.length) {
+        let name = names[next % names.length]
+        next = (next + 1) % names.length
         if (drained.has(name)) continue
         // One candidate, then the next handler's, not the rest of this backlog.
         let cached = heads.get(name)
@@ -953,16 +970,15 @@ export let pool = (ctx: Ctx, opts: Partial<PoolOpts> = {}): Pool => {
           if (signal.aborted) break
           told(err)
         }
-        await sleep(
-          more ? 0 : CAP,
-          AbortSignal.any([signal, nap!.signal]),
-          time,
-        )
-        // A wake ends the nap at once, never the turn: what the pass started,
-        // and a signal to stop, are heard before the next pass.
+        // A turn for what the pass started, and a signal to stop, before
+        // the next; a wake ends the nap at once, never the turn.
+        await turn()
+        if (!more) {
+          await sleep(CAP, AbortSignal.any([signal, nap!.signal]), time)
+        }
         if (nap!.signal.aborted) {
           nap = new AbortController()
-          await sleep(0, undefined, time)
+          await turn()
         }
       }
     } finally {
@@ -1001,9 +1017,8 @@ export let pool = (ctx: Ctx, opts: Partial<PoolOpts> = {}): Pool => {
     let rows: Bundle[] = []
     for (let s of ctx.slots()) {
       if (s.kind != 'started' || !s.run) continue
-      let ours = immediate && member && !disabled.has(s.id) && limit(s) > 0 &&
-        mine.length < page &&
-        running.size + admitting + mine.length < max
+      let ours = immediate && !disabled.has(s.id) && limit(s) > 0 &&
+        mine.length < page && room(mine.length)
       let eid = mint()
       let row: Comp = {
         handler: s.id,
@@ -1112,8 +1127,8 @@ export let pool = (ctx: Ctx, opts: Partial<PoolOpts> = {}): Pool => {
         let key = [s.id, e.entity.eid, e.name, e.kind].join('|')
         if (seen.has(key)) continue
         seen.add(key)
-        let ours = member && !opts.defer && !!s.run &&
-          running.size + admitting + mine.length < max
+        let ours = !opts.defer && !!s.run && mine.length < page &&
+          room(mine.length)
         let row: Comp = {
           handler: s.id,
           target: e.entity.eid,
@@ -1178,7 +1193,7 @@ export let pool = (ctx: Ctx, opts: Partial<PoolOpts> = {}): Pool => {
             else while (await still(settled, beat, time)) await renew(g)
           }
           // A turn for timers and I/O between passes, never after the last.
-          if (n + 1 < passes && clock() < until) await sleep(0, undefined, time)
+          if (n + 1 < passes && clock() < until) await turn()
         }
         return
       }

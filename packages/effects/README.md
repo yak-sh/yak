@@ -362,17 +362,20 @@ equal(fx.running(), [])
 ```
 
 A worker joining the pool claims runs its own commits owe and starts them after
-commit. `defer: true` leaves those runs for `work`; `max` limits simultaneous
-handlers (`MAX`, 64, unless told), so a backlog starts a slot at a time, and a
-run ending while every slot is taken wakes the worker to fill it. Other
-processes' runs are heard as they land when the host gives `watch`, a
-subscription calling back on each new `effect` row (@yaks/sqlite's
-`Store.watch`, about 5 ms behind the other process's commit); without it they
-are picked up on the next pass, at most a second (`CAP`) away. `wake` starts
-that pass sooner. `nudge` notifies the host once after a commit owes declared
-work, whether claimed here or left pending. A host can keep its `work` promise
-alive through handler completion and wake another worker to drain the remaining
-runs.
+commit. `defer: true` leaves those runs for `work`. How many runs go at once is
+bounded by the worker's event loop, not a number: a turn starts at most a page
+of runs, and a worker whose last turn came back more than `LATE` (50) ms behind
+takes no more until its thread catches up, so runs waiting on the network go by
+the thousand while a busy or starved thread stops taking. `max` sets a fixed
+bound where a host wants one, and a run ending while every slot is taken wakes
+the worker to fill it. Other processes' runs are heard as they land when the
+host gives `watch`, a subscription calling back on each new `effect` row
+(@yaks/sqlite's `Store.watch`, about 5 ms behind the other process's commit);
+without it they are picked up on the next pass, at most a second (`CAP`) away.
+`wake` starts that pass sooner. `nudge` notifies the host once after a commit
+owes declared work, whether claimed here or left pending. A host can keep its
+`work` promise alive through handler completion and wake another worker to drain
+the remaining runs.
 
 Each pass examines a bounded page of candidate runs, 32 by default, read for
 every handler at once. A candidate starts only when it is due, claimable and has
@@ -380,7 +383,7 @@ a local slot. Selection shares turns among handled and explicitly disabled
 effects, so one handler's backlog does not crowd out the others: where the page
 comes back full, a handler it holds no run of reads a window of its own on its
 turn. Disabled runs settle without spending attempts. The page bounds candidate
-reads; `max` separately limits concurrent handlers.
+reads; the event loop, or `max`, separately limits concurrent handlers.
 
 `pool(ctx, options)` exposes the same operations for a caller supplying registry
 slots, a writer, and a reporter.

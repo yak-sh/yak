@@ -19,10 +19,10 @@ import { after, system } from '@yaks/fp'
 import { loadVocab, pick } from '@yaks/vocab'
 import { parse } from '@yaks/query'
 import { memory } from '../graph/testing.ts'
-import { test, tick, until } from '@yaks/testing'
+import { test, until } from '@yaks/testing'
 import { effects, type Handler, type Opts } from './registry.ts'
 import { leaseEid, released } from './lease.ts'
-import { MAX, POOL, working } from './pool.ts'
+import { LATE, POOL, working } from './pool.ts'
 import { pooledBlog } from './testing.ts'
 
 let store = () => ram(pooledBlog, { number: true })
@@ -295,12 +295,25 @@ test('a worker that stays up starts no more than max, and fills a freed slot at 
   }
 })
 
-test('a worker told no max still starts a backlog a bounded slot at a time', async () => {
-  let a = await gated(MAX + 1)
+test('a worker told no max takes runs a page a turn while its turns come back on time', async () => {
+  // Turns come back `late` ms behind: a full event loop, by the pool's clock.
+  let late = LATE + 1, skew = 0, turns = 0
+  let clock = {
+    now: () => Date.now() + skew,
+    after: (ms: number, fn: () => void) =>
+      system.after(ms, () => {
+        if (!ms) turns++, skew += late
+        fn()
+      }),
+  }
+  let a = await gated(100, { clock })
   try {
-    await until(() => a.ran.length == MAX)
-    await tick()
-    assertEquals(a.fx.running().length, MAX)
+    // The first turn is the first page; every turn after came back late.
+    await until(() => turns > 5)
+    assertEquals(a.fx.running().length, 32)
+    late = 0
+    await until(() => a.ran.length == 100)
+    assertEquals(a.fx.running().length, 100)
   } finally {
     await a.stop()
   }
