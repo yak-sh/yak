@@ -509,3 +509,69 @@ The handler itself is quick on a cold isolate (`gateway;dur=16`), so most of a
 cold request's 200–450 ms comes before our code runs. What the platform does in
 that time is not measured here; how often a new version starts every isolate is
 what this repository decides.
+
+## A cold isolate compiles what its class runs: T-148770
+
+November 7, 2026, `d05627b60`, live as `89eb6e5b` at 16:57 UTC. workerd's module
+registry compiled every uploaded module when an isolate started, dynamically
+imported chunks included, so T-133988 cut what was uploaded.
+`new_module_registry` (wrangler.toml; not experimental, the default for
+compatibility dates from 2026-11-17) compiles a module when it is first
+imported. Local workerd 2026-11-04, a fresh process each, ready to the first
+answer:
+
+| Upload                                    | Ready ms |
+| ----------------------------------------- | -------: |
+| An empty Worker                           |       25 |
+| The whole kernel uploaded, never imported |      188 |
+| The same, `new_module_registry`           |       65 |
+
+So `index.ts` now imports none of the code it runs. Each Durable Object is a
+`deferred` class (deferred.ts) that makes its object from its module on the
+first call, and each entrypoint, the gateway's `fetch`, `email` and `queue`
+among them, imports its module and the tracker's boundary inside the call. The
+who-is-asking helpers moved from identity.ts to asking.ts, which loads the OAuth
+provider only for an agent's token. The entry's static chunk is 9 KB.
+
+Compile and top-level evaluation in Node 26 (`vm.SourceTextModule` over the
+built kernel, `cloudflare:workers` stubbed, a fresh process each, medians of 8
+alternating rounds). Before, the registry compiled every module whatever woke
+the isolate:
+
+| Isolate woken for       | Modules | Compiled | Compile ms | Evaluate ms |
+| ----------------------- | ------: | -------: | ---------: | ----------: |
+| Anything, before        |     122 |  3.83 MB |        173 |          86 |
+| The gateway (kernel.ts) |      89 |  2.99 MB |        122 |          72 |
+| A Store (graph.ts)      |      80 |  2.57 MB |        110 |          53 |
+| Site (site.ts)          |      85 |  2.96 MB |        125 |          67 |
+
+Local workerd, a fresh process per observation, 25 alternating rounds:
+
+| To the first answer        | Before → after, median |   Paired | After faster |
+| -------------------------- | ---------------------: | -------: | -----------: |
+| Gateway, `GET /robots.txt` |       274.8 → 249.6 ms | −20.1 ms |     21 of 25 |
+| A Store's first `fetch`    |       276.1 → 224.9 ms | −46.8 ms |     25 of 25 |
+
+The gateway's share is the smallest because kernel.ts's static closure is most
+of the kernel: `apps.ts` holds both a space's serving and the dashboard, and
+reaches `load.ts`, `tools.ts`, admin, libphonenumber and yaml in two or three
+imports. T-148886 holds that.
+
+Production, kernel spans, probes included (T-133988's `measure.mjs`). The 6
+hours before the deploy against its first 46 minutes, which served 7 versions,
+each of them starting every isolate cold. Compiling now happens inside the first
+call, so a cold request no longer shows as first byte minus wall time: before, a
+cold request is one that waited 75 ms or more; after, one that spent 150 ms or
+more of CPU, which only the first request of an isolate does (warm requests
+after it take 5–20 ms):
+
+| Class         | Before: cold n, first byte p50 / p90 | After: cold n, first byte p50 / p90 |
+| ------------- | -----------------------------------: | ----------------------------------: |
+| Space gateway |                   287, 480 / 1564 ms |                   26, 189 / 2377 ms |
+| Site          |                    696, 428 / 747 ms |                    40, 260 / 915 ms |
+| MCP gateway   |                   113, 442 / 1099 ms |                   11, 127 / 1073 ms |
+
+The after window is small and nearly all probes, and the two windows tell a cold
+request by different signs, so these medians are a direction rather than a
+measurement. Cloudflare's own `startup_time_ms` across the versions: 48–116 ms,
+median 60, over the 73 before; 7–16 ms, median 7, over the 7 after.
