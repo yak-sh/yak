@@ -37,13 +37,6 @@ compatibility_flags = [
 minify = true
 upload_source_maps = true
 
-# No container of its own: the sandbox's is yak-sandbox's (sandbox/). Empty
-# rather than absent, because the pinned wrangler uploads a Worker that names
-# containers through the script PUT, the one that carries
-# `code_update_strategy` (`[unsafe.metadata.code_update_strategy]` below);
-# absent, it creates the deployment through the versions API, which drops it.
-containers = []
-
 # Every invocation's CPU, a Durable Object's alarm included, may run five
 # minutes instead of the default 30 s. A Builder's alarm carries every
 # Operator step in flight on its object (operator-store.ts `drain`): eight
@@ -283,13 +276,7 @@ class_name = "Lexicon"
 # (build.ts `#work`). Meanwhile an object on the code before its caller's
 # answers a refusal its caller retries (running.ts `skewed`), and Worker and
 # object code stay compatible across one deploy.
-#
-# The pinned wrangler (4.111.0) predates `[durable_objects]
-# code_update_strategy` (4.150.0). With `containers` it uploads through the
-# script PUT, which takes `unsafe.metadata` as upload metadata, the field
-# 4.150.0 writes there itself; move it there, and drop `containers = []`,
-# once the pin passes 4.150.0.
-[unsafe.metadata.code_update_strategy]
+[durable_objects.code_update_strategy]
 mode = "deferred"
 max_delay = 300
 
@@ -622,7 +609,6 @@ database_id = "88b2e161-99bf-4777-ab6d-b18fcf66ca95"
 name = "yak-staging"
 workers_dev = false
 preview_urls = false
-containers = []
 
 [[env.staging.worker_loaders]]
 binding = "LOADER"
@@ -716,7 +702,7 @@ name = "LEXICON"
 class_name = "Lexicon"
 
 # As above: a busy object finishes on its code for up to five minutes.
-[env.staging.unsafe.metadata.code_update_strategy]
+[env.staging.durable_objects.code_update_strategy]
 mode = "deferred"
 max_delay = 300
 

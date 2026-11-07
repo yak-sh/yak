@@ -134,7 +134,7 @@
     "@yaks/client": "0.2.24",
     "@yaks/preact": "0.2.24",
     "es-module-lexer": "2.3.2",
-    "wrangler": "4.111.0"
+    "wrangler": "4.158.0"
   },
   "version": "0.2.17",
   "type": "module"

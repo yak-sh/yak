@@ -16,9 +16,9 @@
 // with `could not parse email` (T-34179). Never pin below a wrangler whose
 // miniflare simulates the builder; mail_test.ts holds it.
 //
-// And not the newest either: 4.128.0 boots the same probes three times slower
-// and drops kernels under parallel load (`Network connection lost`), where
-// 4.111.0 runs them at the old pin's pace. Measure before moving.
+// Measure the kernel probes before moving it: 4.128.0 booted them three times
+// slower and dropped kernels under parallel load (`Network connection lost`);
+// 4.158.0 runs them at 4.111.0's pace.
 // Installation is shared with the rest of the pnpm workspace.
 import * as io from '@yaks/file/io'
 import * as system from '@yaks/process/system'
