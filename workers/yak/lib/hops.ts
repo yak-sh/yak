@@ -73,8 +73,11 @@ export let ambient = (): Tally | undefined => here.getStore()
 
 /** Run `work` outside any request's count. What a store does on its own
  * after answering (its effect pool) is no request's round trip, though it
- * starts inside one. */
-export let apart = <T>(work: () => T): T => here.exit(work)
+ * starts inside one. A run with no tally, not `exit`: Deno's `exit` holds
+ * only until the work's first await, and the request's count came back after
+ * it. */
+export let apart = <T>(work: () => T): T =>
+  here.run(undefined as unknown as Tally, work)
 
 /** One round trip, named. A no-op wherever nobody is counting.
  *

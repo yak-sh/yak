@@ -139,7 +139,7 @@ import { door } from './invite.ts'
 import { mail, mailable } from './mail.ts'
 import { fault } from './unseen.ts'
 import { type Clock, clock, timed } from './timing.ts'
-import { elapsed, recall, writing } from './lib/hops.ts'
+import { apart, elapsed, recall, writing } from './lib/hops.ts'
 
 // What the sign-in card says when no letter can leave: the deploy's operator
 // reads which secret is missing, and a visitor reads that nothing is wrong
@@ -608,52 +608,70 @@ export let met = async (env: Env, email: string) => {
   return !!person && (await dir.seats(person, 'owner')).length > 0
 }
 
-// A code's letter, or its text, sent after the card that says so has been
-// answered. The letter carries the code and the one click that spends it
-// (link.ts): the same code said as a link, so it lasts the same ten minutes
-// and dies the moment either one is used, and somebody reading it on a phone
-// retypes nothing. It is the Operator's, wherever it was asked for, greeting
-// someone who has a space as met, and a reply to it signs them up as
-// following the link does (signin.ts `codeLetter`). A text goes from the
-// platform's number.
+// A code asked for, kept and sent after the card that says so has been
+// answered (T-149702): the card says the same whether or not the address had
+// had its letters (signin.ts `asked`), so nothing in it waits on the
+// directory's write, and the letter waits on nothing but that write. The
+// letter carries the code and the one click that spends it (link.ts): the
+// same code said as a link, so it lasts the same ten minutes and dies the
+// moment either one is used, and somebody reading it on a phone retypes
+// nothing. It is the Operator's, wherever it was asked for, greeting someone
+// who has a space as met, and a reply to it signs them up as following the
+// link does (signin.ts `codeLetter`). A text goes from the platform's number.
 //
 // One that never leaves is a break for us to read, and the person's to know
 // (M-16612): it is reported, unless a carrier's block (expected until the
 // texting campaign is approved), and said on the code's row (signin.ts
-// `unsent`), which the next card that browser asks for says.
-let deliver = async (
+// `unsent`), which the next card that browser asks for says. A write that
+// fails is reported, and leaves no row to say it on.
+let send = async (
   env: Env,
+  req: Request,
   o: {
     address: string
     ask: Ask
-    eid: string
+    from: string
     q: string | null
     back: string | null
   },
 ) => {
   let { address, ask } = o
+  let text = texted(address)
+  // Whom the letter greets and its link, made beside the write it waits on.
+  let greeted = text ? null : met(env, address).catch((e) => {
+    fault(env, 'POST /login (met)', e)
+    return false
+  })
+  let link = onceLink(secret(env), {
+    email: address,
+    code: ask.code,
+    q: o.q || undefined,
+    back: o.back || undefined,
+  }, apex(env))
+  let eid: string | null = null
   try {
-    if (texted(address)) {
+    eid = await lodge(meta(env), secret(env), address, ask, o.from)
+    if (!eid) return
+    step(env, 'code_sent', req, { who: address })
+    if (text) {
       let { phoneOf } = await import('./phones.ts')
       await (await phoneOf(env)).send({ to: address, text: codeText(ask.code) })
       return
     }
-    let [link, greeted] = await Promise.all([
-      onceLink(secret(env), {
-        email: address,
-        code: ask.code,
-        q: o.q || undefined,
-        back: o.back || undefined,
-      }, apex(env)),
-      met(env, address),
-    ])
     await mail(env)(
-      codeLetter(address, ask.code, link, greeted ? 'back' : 'new', env),
+      codeLetter(
+        address,
+        ask.code,
+        await link,
+        await greeted ? 'back' : 'new',
+        env,
+      ),
     )
   } catch (e) {
     if (!(e instanceof Blocked)) fault(env, 'POST /login', e)
+    if (!eid) return
     let why = e instanceof Error ? e.message : `${e}`
-    await unsent(meta(env), o.eid, ask, why)
+    await unsent(meta(env), eid, ask, why)
       .catch((e) => fault(env, 'POST /login (unsent)', e))
   }
 }
@@ -1265,22 +1283,18 @@ let ours = async (req: Request, env: Env): Promise<Response> => {
       ) {
         return signCard(env, { q, back, why: TOO_MANY, status: 429 })
       }
-      // A card asked for again says what became of the letter the last one
-      // said was sent (signin.ts `unsentAt`), read beside the new code's
-      // write.
+      // The code is kept and sent behind the answer (`send`). A card asked
+      // for again says what became of the letter the last one said was sent
+      // (signin.ts `unsentAt`), the one read this answer waits on.
       let ask = drawn()
-      let [eid, failed] = await Promise.all([
-        c.time('mint', () => lodge(meta(env), secret(env), address, ask, from)),
-        lastLetter(env, address, field('sent')),
+      // Apart from this answer's count: its trips are not this answer's.
+      background(apart(() => send(env, req, { address, ask, from, q, back })))
+      let [sent, failed] = await Promise.all([
+        sealed(secret(env), address, ask),
+        field('sent')
+          ? c.time('unsent', () => lastLetter(env, address, field('sent')))
+          : null,
       ])
-      if (eid) {
-        // The letter or text goes after the answer (T-124082): posting it was
-        // a second of the wait, the longest in signing up, and the card says
-        // nothing that depends on it.
-        step(env, 'code_sent', req, { who: address })
-        background(deliver(env, { address, ask, eid, q, back }))
-      }
-      let sent = await sealed(secret(env), address, ask)
       return timed(
         askCode({ address, q, back, sent, unsent: failed }, env),
         c,

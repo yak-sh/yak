@@ -925,6 +925,20 @@ test('a connector keeps its door until the person closes it', async () => {
   }
 })
 
+// The card says the same whether or not a code was kept, so asking for one
+// waits on no store: the code is kept and mailed behind the answer.
+test('asking for a code waits on no store, and its letter still comes', async () => {
+  let k = await kernel()
+  let email = `${unique('ask')}@yaks.app`
+  let card = await form(k, '/login', { email })
+  await card.body?.cancel()
+  equal(
+    [card.status, /\bhops;dur=0\b/.test(card.headers.get('server-timing')!)],
+    [200, true],
+  )
+  assertMatch(await mailed(k, email), /^\d{6}$/)
+})
+
 // The card answers before its letter goes, so a letter that never leaves is
 // said on the next card that browser asks for, by the seal its card carries
 // (M-16612), and reported. Nobody without the seal hears of it.

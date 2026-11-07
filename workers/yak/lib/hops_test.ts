@@ -4,7 +4,15 @@
 // read, and never outlives the request.
 import { test } from '@yaks/testing'
 import { assertEquals, assertRejects } from '@std/assert'
-import { counts, hop, recall, type Tally, tallying, writing } from './hops.ts'
+import {
+  apart,
+  counts,
+  hop,
+  recall,
+  type Tally,
+  tallying,
+  writing,
+} from './hops.ts'
 
 test('a hop counts on the tally that is running, and nowhere else', () => {
   let tally: Tally = new Map()
@@ -35,6 +43,22 @@ test('a nested tally is the inner one, and the outer resumes', () => {
     hop('hops')
   })
   assertEquals([counts(outer).hops, counts(inner).hops], [2, 1])
+})
+
+// Work a request leaves running past its answer is no hop of the answer's,
+// across every await it makes.
+test('work apart counts on no tally, after an await as before it', async () => {
+  let tally: Tally = new Map()
+  await tallying(tally, async () => {
+    await apart(async () => {
+      hop('hops')
+      await Promise.resolve()
+      await new Promise((go) => setTimeout(go, 0))
+      hop('hops')
+    })
+    hop('hops')
+  })
+  assertEquals(counts(tally).hops, 1)
 })
 
 // A store read that answers how many times it has been asked.
