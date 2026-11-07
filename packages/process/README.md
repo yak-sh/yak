@@ -179,7 +179,9 @@ Additional entry points are `@yaks/process/vocab`, `@yaks/process/graph` and
 stderr modes. `ipc: true` adds a parent-child channel separate from those
 streams; `disconnected()` from `@yaks/process/system` settles in the child when
 its parent closes the channel or exits, including an exit before the child
-starts listening. `detached: true` gives the child its own process group.
+starts listening. A child's `kill()` signals it by pid and leaves that channel
+open, so a child told to drain is not also told its parent is gone.
+`detached: true` gives the child its own process group.
 
 ## Winding down
 

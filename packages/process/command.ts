@@ -119,8 +119,17 @@ let child = (p: NativeChild): ChildProcess => {
       ])
       return { ...result, stdout, stderr }
     },
+    // By pid, not `p.kill`: Deno's `p.kill` also closes an IPC channel, and a
+    // child tied to its parent by one (@yaks/cli runtime.ts) reads that as the
+    // parent gone and ends at once, instead of draining on the signal.
     kill: (signal = 'SIGTERM') => {
-      p.kill(signal)
+      if (p.exitCode != null || p.signalCode != null || !p.pid) return
+      try {
+        process.kill(p.pid, signal)
+      } catch (error) {
+        // Exited before its exit was heard: as `p.kill`, nothing to signal.
+        if ((error as { code?: string }).code != 'ESRCH') throw error
+      }
     },
     ref: () => {
       p.ref()
