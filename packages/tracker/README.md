@@ -1,9 +1,12 @@
 # @yaks/tracker
 
 An **error** is a sample of a mistake, representing `error.hits` occurrences
-(one when omitted); a **bug** groups errors with the same fault. Intake keeps a
-reporter's UUID so a queue or spool resend is the same sample. Grouping runs
-downstream and atomically links it and adds its hits to `bug.hits`. All
+(one when omitted); a **bug** groups errors with the same fault: the broken
+entity's kind, the message without its volatile parts and the top frame of the
+stack. A failure Cloudflare names by its `reference` is the platform's, so its
+fault has no frame: one storage reset caught by several calls is one bug. Intake
+keeps a reporter's UUID so a queue or spool resend is the same sample. Grouping
+runs downstream and atomically links it and adds its hits to `bug.hits`. All
 references may name entities in other stores.
 
 | Export         | Owns                                                                                |

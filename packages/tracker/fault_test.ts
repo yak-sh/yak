@@ -3,6 +3,7 @@ import { faultKey, normalize, stablePlace } from './fault.ts'
 import { capture } from './report.ts'
 import { grouped } from './group.ts'
 import { title } from './model.ts'
+import type { Bundle } from '@yaks/graph'
 
 let failures = [
   [
@@ -134,4 +135,29 @@ test('bundle content hashes keep the same bug and stable place across deploys', 
 test('nested build hashes disappear while module and source names remain', () => {
   equal(stablePlace('mcp-UYAXGUQF-BwweQTu3.js:90 misfit'), 'mcp.js:90 misfit')
   equal(stablePlace('/src/long-module.ts:20 run'), '/src/long-module.ts:20 run')
+})
+
+// One storage reset, caught by three calls of one alarm (October 15).
+let caught = (message: string, at: string) => {
+  let error = Error(message)
+  error.stack = `Error: ${message}\n    at ${at} (index.js:70:42443)`
+  return capture(error, { sink: () => {}, during: { kind: 'request' } })[0]
+}
+let bugOf = (row: Bundle) => grouped(row, undefined, [])[1].entity.eid
+test('a failure Cloudflare names by reference is one bug wherever it was caught', () => {
+  let reset = (ref: string) =>
+    'Internal error in Durable Object storage caused object to be reset; ' +
+    `reference = ${ref}`
+  let sites = ['answered', 'Object.tx', 'Object.getAlarm']
+  let bugs = sites.map((at) =>
+    bugOf(caught(reset('48q6hau1fptrm6g69pk2lqqh'), at))
+  )
+  equal(new Set(bugs).size, 1)
+  equal(bugOf(caught(reset('k6485n9hkq5dtpqlkoqrhvt1'), 'run')), bugs[0])
+  let others = [
+    caught('internal error; reference = s9gqbk7i3cdgmgq8ovlkm2e', 'answered'),
+    caught('Internal error in Durable Object storage', 'answered'),
+    caught('Internal error in Durable Object storage', 'Object.tx'),
+  ].map(bugOf)
+  equal(new Set([...bugs, ...others]).size, 4)
 })

@@ -3,6 +3,9 @@
 import type { Bundle } from '@yaks/graph'
 import { comp, str, title } from './model.ts'
 
+// Cloudflare names each of its runtime's internal failures with a reference.
+let REFERENCE = /(;\s*reference\s*=\s*)[a-z0-9]+\b/gi
+
 // esbuild content hashes name a release, never a failure site. Keep the
 // module name and extension, including the path when one is present.
 export let stablePlace = (text: string): string =>
@@ -29,7 +32,7 @@ export let normalize = (text: string): string =>
       '$1_#',
     ) // Stripe's long opaque object ids; keep the object type
     // Cloudflare's per-occurrence reference, after any of its internal errors
-    .replace(/(;\s*reference\s*=\s*)[a-z0-9]+\b/g, '$1#')
+    .replace(REFERENCE, '$1#')
     .replace(
       /[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/g,
       '#',
@@ -59,7 +62,10 @@ let head = (stack?: string | null): string => {
 
 /**
  * The key one open bug is filed under: the broken entity's kind, the
- * normalized message, and the normalized top frame of the stack.
+ * normalized message, and the normalized top frame of the stack. A failure
+ * Cloudflare names by its reference is the platform's, wherever our code
+ * met it, so it keys without a frame: one storage reset caught by several
+ * calls is one bug.
  *
  * ```ts
  * import { faultKey } from '@yaks/tracker'
@@ -73,7 +79,7 @@ export let faultKey = (
   message: string,
   stack?: string | null,
 ): string => {
-  let top = head(stack)
+  let top = message.search(REFERENCE) < 0 ? head(stack) : ''
   return `${kind}:${normalize(message)}${top ? `@${top}` : ''}`
 }
 
