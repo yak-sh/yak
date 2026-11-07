@@ -198,27 +198,40 @@ let atWork = async (
     )
     : []
 
-// A project and the projects filed under it at any depth (`->`), or above it
-// (`<-`): @yaks/project's sub-projects, read through `filed.project`.
-let family = async (
+/** Every project, by the project it is filed under (@yaks/project's
+ * sub-projects, `filed.project`), or '' at the top. */
+export type Projects = Map<Eid, Eid>
+
+/** The graph's {@link Projects}: one read of the projects alone. A walk down
+ * `filed.project` from a project would pass through every task filed there. */
+export let projects = async (
   graph: Pick<Graph, 'vocab' | 'read'>,
-  project: Eid,
-  dir: '->' | '<-',
-): Promise<Eid[]> => [
-  project,
-  ...graph.vocab.prop('filed', 'project') && graph.vocab.comp('project')
-    ? (await graph.read(
-      and(present('project'), walk('filed.project', dir, project)),
-    )).map((b) => b.entity.eid)
-    : [],
-]
+): Promise<Projects> =>
+  new Map(
+    graph.vocab.prop('filed', 'project') && graph.vocab.comp('project')
+      ? (await graph.read(and(present('project'), fields('filed.project'))))
+        .map((b) => [b.entity.eid, str(comp(b, 'filed').project)])
+      : [],
+  )
+
+/** A project and every project filed under it at any depth. */
+export let below = (tree: Projects, project: Eid): Eid[] => {
+  let found = [project], seen = new Set(found)
+  for (let i = 0; i < found.length; i++) {
+    for (let [p, parent] of tree) {
+      if (parent == found[i] && !seen.has(p)) found.push(p), seen.add(p)
+    }
+  }
+  return found
+}
 
 /** The projects a session works for: the home of the persona it wears, and
- * every project filed under that home at any depth. None when it wears no
- * persona. */
+ * every project filed under that home at any depth, from `tree` when the
+ * caller keeps one. None when it wears no persona. */
 export let worksFor = async (
   graph: Pick<Graph, 'vocab' | 'read' | 'get'>,
   s: Bundle | undefined,
+  tree?: Projects,
 ): Promise<Eid[]> => {
   let persona = str(comp(s, SESSION).persona)
   if (!persona || !graph.vocab.prop('persona', 'home')) return []
@@ -226,7 +239,7 @@ export let worksFor = async (
     and(eq('entity.eid', persona), fields('persona.home')),
   )
   let home = str(comp(worn, 'persona').home)
-  return home ? await family(graph, home, '->') : []
+  return home ? below(tree ?? await projects(graph), home) : []
 }
 
 /** The native transcripts at work that may hear these items once they are
@@ -474,7 +487,9 @@ export let pendingItems = async (
 }
 
 export type Routes = { items: Bundle[]; creators: Map<Eid, string> }
-export type News = { comments: Routes; replies: Routes }
+/** What a caller already read for {@link pending}: the unsaid comments and
+ * replies it may route, and the graph's projects when it keeps them. */
+export type News = { comments: Routes; replies: Routes; projects?: Projects }
 
 let routed = async (
   graph: Pick<Graph, 'vocab' | 'read'>,
@@ -582,15 +597,15 @@ export let pending = async (
   }
   // A session with no project can hear only its addressed items. Deriving
   // its transcript status cannot change that answer and reads its whole log.
-  let projects = await worksFor(graph, owner)
+  let reach = await worksFor(graph, owner, news?.projects)
   let working = !native ||
-    (projects.length > 0 && (await atWork(graph, [session])).length > 0)
+    (reach.length > 0 && (await atWork(graph, [session])).length > 0)
   let items = await pendingItems(
     session,
     native,
     working,
     addressed,
-    () => held(graph, session, projects),
+    () => held(graph, session, reach),
   )
   if (!items.length) return []
   let pointed = [

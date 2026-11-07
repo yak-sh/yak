@@ -200,14 +200,21 @@ let door = async (rows: Bundle[]) => {
   let store = ram(vocab, { computed: statusComputed })
   let g = graph({ vocab, storage: store, plugins: [sessions()] })
   for (let row of rows) await g.apply([row], { trusted: true })
-  let seen = new Set<string>()
+  let seen = new Set<string>(), projects = new Set<string>()
   let count = (found: Bundle[]) => {
     for (let b of found) if (b.comment) seen.add(b.entity.eid)
     return found
   }
+  // The projects written, and those a query found (not one a line named).
+  let made = new Set(rows.filter((b) => b.project).map((b) => b.entity.eid))
+  let queried = (found: Bundle[]) => {
+    for (let b of found) if (made.has(b.entity.eid)) projects.add(b.entity.eid)
+    return count(found)
+  }
   let watched = {
     ...g,
-    read: async (...a: Parameters<typeof g.read>) => count(await g.read(...a)),
+    read: async (...a: Parameters<typeof g.read>) =>
+      queried(await g.read(...a)),
     get: async (...a: Parameters<typeof g.get>) => count(await g.get(...a)),
   }
   let others: Parameters<Feed>[0] | undefined
@@ -218,18 +225,22 @@ let door = async (rows: Bundle[]) => {
     ) => (others = each, () => others = undefined),
   }
   return {
-    /** the lines the session's next hook hears, and the comments it read */
+    /** the lines the session's next hook hears, and the comments and
+     * projects it read */
     hook: async () => {
       seen.clear()
+      projects.clear()
       let said = await heard(host, { session_id: 'outside' }) as {
         hookSpecificOutput?: { additionalContext: string }
       }
       return {
         lines: said.hookSpecificOutput?.additionalContext.split('\n') ?? [],
         read: [...seen].sort(),
+        projects: [...projects].sort(),
       }
     },
     elsewhere: async (rows: Bundle[]) => {
+      for (let b of rows) if (b.project) made.add(b.entity.eid)
       store.tx((tx) => tx.patch(rows))
       await others?.({ applied: [rows], missed: false })
     },
@@ -271,5 +282,43 @@ test('the hook door reads what its session is owed and what was written since, n
   let { lines, read } = await d.hook()
   equal(lines.map((l) => l.split(': ')[1]), ['later'])
   equal(read, ['later', 'other'])
-  equal(await d.hook(), { lines: [], read: [] })
+  equal(await d.hook(), { lines: [], read: [], projects: [] })
+})
+
+test('the hook door reads its projects again only after a project is written', async () => {
+  let knock = (eid: string, target: string): Bundle => ({
+    entity: { eid },
+    knock: { target },
+    doc: { body: eid },
+  })
+  let d = await door([
+    { entity: { eid: 'home' }, project: {} },
+    { entity: { eid: 'operator' }, persona: { home: 'home' } },
+    {
+      entity: { eid: 'outside' },
+      session: { id: 'outside', persona: 'operator' },
+    },
+    { entity: { eid: 'sub' }, project: {}, filed: { project: 'home' } },
+    { entity: { eid: 'chore' }, task: {}, filed: { project: 'sub' } },
+    { entity: { eid: 'apart' }, project: {} },
+    knock('first', 'sub'),
+  ])
+  let heard = async () => {
+    let { lines, projects } = await d.hook()
+    return { lines: lines.map((l) => l.split(': ')[1]), projects }
+  }
+  equal(await heard(), { lines: ['first'], projects: ['apart', 'home', 'sub'] })
+  await d.elsewhere([knock('again', 'sub'), knock('aside', 'apart')])
+  equal(await heard(), { lines: ['again'], projects: [] })
+  await d.elsewhere([
+    { entity: { eid: 'deeper' }, project: {}, filed: { project: 'sub' } },
+  ])
+  await d.elsewhere([knock('deep', 'deeper')])
+  equal((await heard()).lines, ['deep'])
+  // a refiled project carries no `project` of its own
+  await d.elsewhere([{ entity: { eid: 'apart' }, filed: { project: 'home' } }])
+  equal(await heard(), {
+    lines: ['aside'],
+    projects: ['apart', 'deeper', 'home', 'sub'],
+  })
 })

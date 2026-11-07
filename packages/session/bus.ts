@@ -41,6 +41,8 @@ import {
   natives,
   type News,
   pending,
+  type Projects,
+  projects,
   replies as replyRoutes,
   type Routes,
   undeliver,
@@ -260,12 +262,14 @@ export let due = async (g: Graph, at: Scope = scope(true)): Promise<Due[]> => {
   if (!g.vocab.comp('notified')) return []
   let out: Due[] = []
   let ids = at.all ? undefined : [...at.items]
-  let news = {
+  let news: News = {
     comments: await comments(g, ids),
     replies: await replyRoutes(g, ids),
   }
   let found = !ids || ids.length ? await candidates(g, news, ids) : []
-  for (let id of await hearing(g, [...new Set([...found, ...at.sessions])])) {
+  let listening = await hearing(g, [...new Set([...found, ...at.sessions])])
+  if (listening.length) news.projects = await projects(g)
+  for (let id of listening) {
     for (let said of await pending(g, id, news)) {
       out.push({ session: id, ...said })
     }
@@ -343,8 +347,9 @@ export let follow = async (
 }
 
 /** A process's book of the unsaid person-written comments and replies, by
- * the creator of what each answers: what {@link pending} reads for one
- * outside session at its doors instead of every unsaid item in the graph. */
+ * the creator of what each answers, and of the graph's projects: what
+ * {@link pending} reads for one outside session at its doors instead of every
+ * unsaid item in the graph and the walk to its projects. */
 export type Ledger = {
   /** The comments and replies owed to this session, read again by id. */
   owed: (session: Eid) => Promise<News>
@@ -369,21 +374,36 @@ let BACKLOG = 5000
  * each later use reads again only the items written since, so a door's read
  * costs what its session is owed and what was written meanwhile. What routes
  * an item here, the creator of what it answers, is written before it and
- * never changes. A said item is dropped when its mark is heard. Undefined for
- * a host with no feed, whose doors read everything each time; a missed commit
- * reads everything again. */
+ * never changes. A said item is dropped when its mark is heard. The projects
+ * are read again only after a commit writes a project. Undefined for a host
+ * with no feed, whose doors read everything each time; a missed commit reads
+ * everything again. */
 export let ledger = (host: Door): Ledger | undefined => {
   let kept = ledgers.get(host.graph)
   if (kept || !host.feed) return kept
   let g = host.graph
   let by = new Map<Eid, Set<Eid>>(), whose = new Map<Eid, Eid>()
   let written = new Set<Eid>(), stale = true
+  // The projects as last read, and how many commits have written one: a read
+  // that a write overtook is used once and not kept.
+  let tree: Projects | undefined, moved = 0
   let stop = heed(host, '@yaks/session/ledger', (bundles, missed) => {
     stale ||= missed
-    for (let b of bundles) if (item(b)) written.add(b.entity.eid)
+    let filed = missed
+    for (let b of bundles) {
+      if (item(b)) written.add(b.entity.eid)
+      filed ||= 'project' in b || !!tree?.has(b.entity.eid)
+    }
+    if (filed) tree = undefined, moved++
     if (written.size > BACKLOG) stale = true
     if (stale) written.clear()
   })
+  let known = async () => {
+    if (tree) return tree
+    let at = moved, read = await projects(g)
+    if (at == moved) tree = read
+    return read
+  }
   host.stopping?.addEventListener('abort', () => stop?.(), { once: true })
   let enter = (r: Routes, name: string, prop: string) => {
     for (let b of r.items) {
@@ -431,7 +451,8 @@ export let ledger = (host: Door): Ledger | undefined => {
         await update()
         let ids = [...by.get(session) ?? []]
         ids.forEach(drop)
-        return read(ids)
+        let news = await read(ids)
+        return { ...news, projects: await known() }
       })
       turn = done.catch(() => {})
       return done

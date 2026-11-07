@@ -859,10 +859,12 @@ with no feed asks about everything every second.
 
 The doors an outside session hears at (its hook and its tool replies) follow the
 same commits through a ledger (`ledger` in [`bus.ts`](./bus.ts)): the unsaid
-person-written comments and replies, by the creator of what each answers. Its
-first use reads them all once; after that a door reads again only what was
-written since its last use and what its own session is owed, never the unsaid
-history. A host with no feed reads everything at each door.
+person-written comments and replies, by the creator of what each answers, and
+the graph's projects, by the project each is filed under. Its first use reads
+them all once; after that a door reads again only what was written since its
+last use and what its own session is owed, never the unsaid history, and reads
+the projects again only after a commit writes one. A host with no feed reads
+everything at each door.
 
 ## Replies to a session's letters
 
