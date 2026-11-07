@@ -296,6 +296,45 @@ test('a line that drops is reported lost once its stream has not opened again', 
   }
 })
 
+test('a line that sends nothing is lost, and the call lets its sockets go', async () => {
+  let lost: unknown[] = [], closed: string[] = []
+  let time = clock()
+  let c = calling(undefined, {
+    time,
+    quiet: 10,
+    back: 5,
+    report: (e) => void lost.push(e),
+    listen: () => ({
+      send: () => {},
+      spent: () => ({ seconds: 0, dollars: 0 }),
+      close: () => (closed.push('speech'), { seconds: 0, dollars: 0 }),
+    }),
+  })
+  await time.advance(6)
+  c.frame({ event: 'media', media: { track: 'inbound', payload: 'AQI=' } })
+  await time.advance(6)
+  equal(c.done, [])
+  await time.advance(4)
+  await c.call.ended
+  equal([c.done[0].ended, closed], ['quiet', ['speech']])
+  await time.advance(5)
+  equal((lost[0] as Error).message, "A call's line went quiet before it ended")
+})
+
+test('a line opened again for a call ends the one it replaced, which is not lost', async () => {
+  let lost: unknown[] = []
+  let time = clock()
+  let opening = () =>
+    calling(undefined, { time, back: 5, report: (e) => void lost.push(e) })
+  let first = opening(), again = opening()
+  await first.call.ended
+  equal(first.done[0].ended, 'again')
+  again.frame({ event: 'stop' })
+  await again.call.ended
+  await time.advance(5)
+  equal(lost, [])
+})
+
 test('a line closed cleanly ends the call quietly, with or without the provider saying it stopped', async () => {
   for (let code of [1000, 1001, undefined]) {
     let c = calling()

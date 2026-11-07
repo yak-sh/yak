@@ -80,6 +80,16 @@ let away = new Map<
   { at: number; cancel: () => void }
 >()
 
+// A line the provider carries streams audio all the while, silence included;
+// one that sent nothing for this many milliseconds was let go without a
+// close, as the socket of a stream whose request ended before it was
+// answered never closes.
+let QUIET = 10_000
+
+// The call each line in this object carries, by the provider's name for the
+// call: a line opened again for it ends the one it replaced.
+let carried = new Map<string, () => void>()
+
 /** How often a call charges its line and what it heard since it last did, in
  * milliseconds. */
 export let CHARGED = 10_000
@@ -301,7 +311,8 @@ export type Around = {
    * the dollars of what it heard, every CHARGED and as it ends */
   charge: (used: { seconds: number; heard: number }) => Promise<void>
   /** what the call used in all, how its turns were timed, and what ended
-   * it (`stop`, `close 1000`, `error`, `ended` or `us`), once it ends */
+   * it (`stop`, `close 1000`, `error`, `quiet`, `again`, `ended` or `us`),
+   * once it ends */
   done: (
     call: { seconds: number; heard: number; turns: Timed[]; ended: string },
   ) => Promise<void>
@@ -312,6 +323,9 @@ export type Around = {
   /** how long a dropped line waits for its stream to open again before the
    * call is reported lost, in milliseconds: RESUMED */
   back?: number
+  /** how long a line sends nothing before the call is lost, in
+   * milliseconds: QUIET */
+  quiet?: number
   report?: (error: unknown) => void
   /** the clock its timers and turns run on: the runtime's */
   time?: Clock
@@ -411,7 +425,10 @@ let held = (socket: Socket): Socket => ({
 // so a line closed cleanly ends the call quietly. One that fails, or closes
 // any other way before the call ended, is a stream the call lost, unless the
 // provider opens it again: it does when the object carrying it restarts, as
-// every deploy restarts it, and the call says it is back. A restarted
+// every deploy restarts it, and the call says it is back, ending the line it
+// replaced if this object still carries it. A line that goes quiet is lost
+// the same way: the stream its provider opened again may have been given
+// up before it was answered, whose socket never closes. A restarted
 // object's wait dies with it; a stream it cannot open again is refused at
 // the door, which reports it.
 let carry = (
@@ -426,6 +443,7 @@ let carry = (
   let time = o.time ?? system
   away.get(o.call)?.cancel()
   away.delete(o.call)
+  if (wire) carried.get(o.call)?.()
   let lost = (error: Error) =>
     away.set(o.call, {
       at: time.now(),
@@ -462,6 +480,7 @@ let carry = (
   let finish = (ended = 'us') => {
     if (over) return
     over = true
+    if (carried.get(o.call) == again) carried.delete(o.call)
     for (let cancel of timers) cancel()
     close()
     try {
@@ -473,7 +492,21 @@ let carry = (
     Promise.all([charge(), o.done({ ...used, turns, ended }).catch(report)])
       .finally(finished)
   }
+  let again = () => finish('again')
+  let heardAt = time.now()
+  let listening = (ms: number) =>
+    later(ms, () => {
+      let left = heardAt + (o.quiet ?? QUIET) - time.now()
+      if (left > 0) return listening(left)
+      lost(new Error(`A call's line went quiet before it ended`))
+      finish('quiet')
+    })
+  if (wire) {
+    carried.set(o.call, again)
+    listening(o.quiet ?? QUIET)
+  }
   wire?.addEventListener('message', (event) => {
+    heardAt = time.now()
     let frame: Frame = line!.frame(String(event.data))
     if (frame.audio) hear(frame.audio)
     if (frame.stop) finish('stop')
@@ -890,12 +923,15 @@ export let upgraded = (url: string, { authorization }: Keyed): Socket => {
   let fire = (type: string, event: { data?: unknown } = {}) =>
     on[type]?.forEach((f) => f(event))
   let ws: Upgraded | undefined
+  // Closed before it opened: closed as it opens.
+  let closed: [number?, string?] | undefined
   fetch(url.replace(/^wss:/, 'https:'), {
     headers: { upgrade: 'websocket', authorization },
   }).then((res) => {
     let socket = (res as Response & { webSocket?: Upgraded }).webSocket
     if (!socket) throw new Error(`the stream answered ${res.status}`)
     socket.accept()
+    if (closed) return socket.close(...closed)
     ws = socket
     for (let type of ['message', 'close', 'error'] as const) {
       socket.addEventListener(
@@ -907,7 +943,8 @@ export let upgraded = (url: string, { authorization }: Keyed): Socket => {
   }).catch(() => fire('error'))
   return held({
     send: (data) => ws?.send(data),
-    close: (code, reason) => ws?.close(code, reason),
+    close: (code, reason) =>
+      ws ? ws.close(code, reason) : void (closed = [code, reason]),
     addEventListener: (type, f) => void (on[type] ??= []).push(f),
   })
 }
