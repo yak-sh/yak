@@ -402,7 +402,11 @@ export let said = (
 ): string => {
   let id = human(vocab)(b)
   let doc = comp(b, 'doc')
-  let text = fold(str(doc.body) || str(doc.title))
+  // A knock's words ride in `doc` or, from a session's own notices
+  // (wake.ts), in `content{body}`.
+  let text = fold(
+    str(doc.body) || str(doc.title) || str(comp(b, 'content').body),
+  )
   let from = author(b) ? ` from ${named(author(b))}` : ''
   let line = b.comment
     ? `comment ${id} on ${named(str(comp(b, 'comment').target))}${from}`

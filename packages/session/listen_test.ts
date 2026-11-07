@@ -32,6 +32,19 @@ test('an item is one line, whitespace folded, naming what it points at', () => {
   )
 })
 
+test('a knock carried in content{body} says its body', () => {
+  let b: Bundle = {
+    entity: { eid: 'k1' },
+    knock: { target: 's1' },
+    created: { via: 's2' },
+    content: { body: 'A dependency cannot progress.\nT-9 is missing' },
+  }
+  assertEquals(
+    said(vocab, b, named).split(' at ')[1],
+    'S1 from S2: A dependency cannot progress. T-9 is missing',
+  )
+})
+
 // A graph that answers every query with the rows `rows` holds at the time, and
 // whose apply keeps what it was handed.
 let ears = loadVocab([docDoc, sessionDoc, {
