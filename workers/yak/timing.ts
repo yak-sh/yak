@@ -21,7 +21,7 @@
 // bug we keep writing. `hops;dur=7` is an N+1 read straight off a curl.
 //
 // `wake` is milliseconds again, and appears only when a store this request
-// reached had to start first (graph.ts `#fetch`): what those stores waited
+// reached had not yet started (graph.ts `#fetch`): what those stores waited
 // for while starting. Their compute is not in it, since a store's clock moves
 // only across I/O; the difference is in the stage that called them.
 //

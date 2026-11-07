@@ -163,7 +163,7 @@ export let counts = (tally: Tally) => {
 }
 
 /** How long a request waited for its object to start, noted on its tally:
- * only the request that woke the object has anything to say. */
+ * only a request that arrived before the start finished has anything to say. */
 export let waited = (
   tally: Tally,
   waking: boolean,

@@ -43,7 +43,7 @@ await after.apply([{
   dish: { n: 0 },
 }])
 
-test('only the request that woke a store says how long it waited to start', () => {
+test('only a request that arrived before its store started says how long it waited', () => {
   let time = clock(1000)
   let says = (waking: boolean) => {
     let tally: Tally = new Map()

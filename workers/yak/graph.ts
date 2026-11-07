@@ -1072,13 +1072,53 @@ export class Store {
 
   #ensureStarted(request?: Request): Promise<void> {
     return this.#started ??= tallying(this.#pending, async () => {
+      this.#starting = true
       try {
-        await this.#maintenance(() => this.#start(request))
+        await this.#stage(
+          'start',
+          () => this.#maintenance(() => this.#start(request)),
+        )
       } catch (e) {
         this.#failed(e)
+      } finally {
+        this.#starting = false
       }
     })
   }
+
+  // Whether a start is under way, holding every request that arrives.
+  #starting = false
+
+  // A start, a settle or a replay holds whatever arrives behind it, and is the
+  // first suspect when a store answers slowly: a directory once stalled 41 s
+  // after Cloudflare moved it and nothing said what its new instance was doing
+  // (T-131928). Each is a phase of the store's trace (store_trace), and one
+  // that took a second or more says so in the Workers log too, where a run
+  // nobody traced is still seen. `log` is off for a settle, whose time is its
+  // replay's, already logged.
+  async #stage<T>(
+    name: 'start' | 'settle' | 'replay',
+    work: () => Promise<T>,
+    log = true,
+  ): Promise<T> {
+    let at = this.#now()
+    try {
+      return await during(
+        peek(this)?.begin({ kind: 'phase', name, package: 'workers/yak' }),
+        work,
+      )
+    } finally {
+      let ms = this.#now() - at
+      if (log && ms >= Store.SLOW) {
+        console.log(
+          'yak store slow',
+          JSON.stringify({ store: this.#name(), [name]: ms }),
+        )
+      }
+    }
+  }
+
+  static SLOW = 1000
 
   #prepare(name: string): Promise<void> {
     let kind = storeKind(name)
@@ -3845,13 +3885,15 @@ export class Store {
     }
     let relocated = await this.#relocation(request)
     if (relocated) return relocated
-    // The request that wakes this object waits for it to start, and says how
-    // long beside its answer (`x-yak-wake`, timing.ts). The runtime's clock
+    // A request that arrives before this object has started waits for it,
+    // and says how long beside its answer (`x-yak-wake`, timing.ts): the one
+    // that woke it, and every one behind a start already under way, such as
+    // an alarm's. The runtime's clock
     // moves only across I/O, so that is the waiting, never the compute. The
     // object's plugins load while its storage opens (`#awake`): an isolate
     // that never ran them evaluates their modules then, and nothing in that
     // touches storage, so a dormant object loses nothing but the CPU.
-    let waking = !this.#started, woke = this.#now()
+    let waking = !this.#started || this.#starting, woke = this.#now()
     let named = request.headers.get('x-store')
     if (waking && named) this.#prepare(named).catch(() => {})
     // A caller on a later deploy restarts this object, so a door the deploy
@@ -4193,7 +4235,7 @@ export class Store {
       }
       this.#callers.clear()
     }
-    return this.#draining = run()
+    return this.#draining = this.#stage('replay', run)
   }
 
   /** One kept write, applied: out of the log when it commits or is refused
@@ -4227,7 +4269,8 @@ export class Store {
   /** The log first, for a request that reads: unless the log itself failed,
    * which the alarm owns, or a replay is already running. */
   #settle(): Promise<unknown> | void {
-    if (this.#draining) return this.#draining
+    let draining = this.#draining
+    if (draining) return this.#stage('settle', () => draining, false)
     if (!this.#stuck && waiting(this.#sql)) return this.#drain()
   }
 
