@@ -662,7 +662,7 @@ export let talking = (o: Talking): Call => {
   )
   let asking = false
   talker = o.talk({
-    start: () => c.clear(),
+    over: () => c.clear(),
     stopped: () => c.stopped(),
     heard: (text) => void lines.push({ text, said: false }),
     said: (text) => void lines.push({ text, said: true }),

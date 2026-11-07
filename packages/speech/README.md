@@ -34,14 +34,17 @@ argument; nothing here reads the environment.
   so far and their cost, and `close()` ends the stream answering the same.
 - `talk({provider, key, format, instructions, tools?, model?, voice?, speed?, told})`
   is a model that hears and speaks itself. `send` takes the caller's raw
-  samples; `told.audio(bytes)` is what to play them, `told.start()` and
-  `told.stopped()` mark their turn, `told.heard` and `told.said` are each side's
-  words, and `told.call(name, args)` answers a tool the model asked for with its
-  output, before it goes on, and `told.done()` ends each of its responses.
-  `say(text)` asks it to say something; `spent()` answers the seconds heard and
-  what the stream cost so far, and `close()` ends it answering the same, each
-  response priced at its model's rates, or the stream's when it names none. A
-  provider without `talk` refuses.
+  samples; `told.audio(bytes)` is what to play them, `told.over()` that they
+  talked over the model and what plays should stop (once their words say
+  something, `meant`: an "okay", a laugh or a noise lets it go on, and the
+  response under way is cancelled), `told.stopped()` ends their turn,
+  `told.heard` and `told.said` are each side's words, and
+  `told.call(name, args)` answers a tool the model asked for with its output,
+  before it goes on, and `told.done()` ends each of its responses. `say(text)`
+  asks it to say something; `spent()` answers the seconds heard and what the
+  stream cost so far, and `close()` ends it answering the same, each response
+  priced at its model's rates, or the stream's when it names none. A provider
+  without `talk` refuses.
 - A stream's `open(url, {authorization, protocols})` makes its socket: by
   default the platform's `WebSocket`, offering the key as the provider's
   subprotocols; a host whose sockets take headers sends `authorization`.

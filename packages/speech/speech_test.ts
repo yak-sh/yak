@@ -243,13 +243,14 @@ let talking = (
     tools: [{ name: 'ask', description: 'Ask.', parameters: {} }],
     open: s.open,
     told: {
-      start: () => told.push('start'),
+      over: () => told.push('over'),
       stopped: () => told.push('stopped'),
       heard: (text) => told.push({ heard: text }),
       audio: (bytes) => told.push([...bytes]),
       said: (text) => told.push({ said: text }),
       call: calls,
       done: () => told.push('done'),
+      lost: (why) => told.push('lost: ' + why),
     },
   })
   let event = (e: object) => s.fire('message', JSON.stringify(e))
@@ -290,7 +291,7 @@ test('a talk stream is set up with the voice, tools and μ-law, then hears and s
       },
     },
   })
-  equal(told, ['start', 'stopped', { heard: 'Hello' }, [3, 4], {
+  equal(told, ['stopped', { heard: 'Hello' }, [3, 4], {
     said: 'Hi.',
   }, 'done'])
   equal(stream.close(), { seconds: 2 / 8000, dollars: 2 })
@@ -353,4 +354,43 @@ test('a response asked for while one is under way waits for it to be done', asyn
   equal(s.json().at(-1), { type: 'response.create' })
   event({ type: 'response.done' })
   equal(created(), 3)
+})
+
+test('a caller talking over the model stops it only once their words say something', () => {
+  let { s, told, event } = talking(() => Promise.resolve(''))
+  s.fire('open')
+  let hear = (...words: string[]) => {
+    event({ type: 'input_audio_buffer.speech_started' })
+    for (let delta of words) {
+      event({
+        type: 'conversation.item.input_audio_transcription.delta',
+        delta,
+      })
+    }
+  }
+  let cancels = () => s.json().filter((m) => m.type == 'response.cancel').length
+  event({ type: 'response.created' })
+  event({ type: 'response.output_audio.delta', delta: 'AQ==' })
+  // An "okay", a laugh or one word lets it go on.
+  hear(' Okay', '.', ' Ha', '.', ' Cool', ',', ' uh')
+  hear(' One', '.')
+  equal(told, [[1]])
+  equal(cancels(), 0)
+  // Words that say something stop what plays and the response under way,
+  // whose audio still on its way is not played.
+  hear(' Okay', ',', ' hold', ' on', ',', ' I')
+  event({ type: 'response.output_audio.delta', delta: 'Ag==' })
+  equal(told, [[1], 'over'])
+  equal(cancels(), 1)
+  event({ type: 'response.done' })
+  // Once the response is done, a caller talking over what still plays
+  // stops it with nothing to cancel, and a stop too late is no failure.
+  hear(' Wait', ' stop')
+  event({
+    type: 'error',
+    error: { code: 'response_cancel_not_active', message: 'x' },
+  })
+  event({ type: 'response.output_audio.delta', delta: 'Aw==' })
+  equal(told, [[1], 'over', 'done', 'over', [3]])
+  equal(cancels(), 1)
 })

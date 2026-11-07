@@ -49,12 +49,14 @@ export type Turn = { start?: true; end?: string; error?: string }
 
 /** What one message on a talk stream means. */
 export type Said = {
-  /** the caller started talking: whatever is playing should stop */
+  /** the caller started talking */
   start?: true
   /** the caller stopped talking, and the model is about to answer */
   stopped?: true
   /** what the caller said, once heard */
   heard?: string
+  /** the next of the caller's words, heard as they talk */
+  hearing?: string
   /** audio the model speaks, in the stream's format */
   audio?: Uint8Array
   /** what the model said, once said */
@@ -153,6 +155,8 @@ export type Provider = {
     answer: (call: string, output: string) => string[]
     /** the model asked for a response: to say `text`, or without it to go on */
     respond: (text?: string) => string
+    /** what stops the response under way */
+    cancel: string
   }
   /** the account's credit left, in dollars, where the provider says */
   balance?: (ask: Ask) => Promise<number>
@@ -471,8 +475,8 @@ export let turns = (
 
 /** What a talk stream tells as the caller and the model speak. */
 export type Talked = {
-  /** the caller started talking: whatever is playing should stop */
-  start?: () => void
+  /** the caller talked over the model: whatever is playing should stop */
+  over?: () => void
   /** the caller stopped talking; the model's answer is on its way */
   stopped?: () => void
   /** what the caller said, once heard */
@@ -500,11 +504,40 @@ export type Talk = {
   close: () => { seconds: number; dollars: number }
 }
 
+// What a caller says to show they are listening, not to be heard: a sound
+// of these alone, while the model speaks, lets it go on.
+let FILLERS = new Set(
+  'ah aha alright cool fine good gotcha great ha haha hm hmm huh mhm mm mmhm nice oh ok okay right sure uh uhhuh um wow yeah yep yes yup'
+    .split(' '),
+)
+
+/** How many of `text`'s words say something, the `FILLERS` aside.
+ *
+ * ```ts
+ * import { equal } from '@yaks/testing'
+ * import { meant } from '@yaks/speech'
+ * equal(meant(' Okay. Ha. Cool, uh'), 0)
+ * equal(meant('Okay, hold on'), 2)
+ * ```
+ */
+export let meant = (text: string): number =>
+  text.toLowerCase().split(/\s+/).map((w) => w.replace(/[^a-z']/g, ''))
+    .filter((w) => w && !FILLERS.has(w.replace(/'/g, ''))).length
+
+// The words a caller says over the model before it stops: fewer, or only
+// fillers, and it goes on. Two say "wait, stop" or "hold on".
+let OVER = 2
+
 /**
  * A model that hears and speaks in one stream: `send` takes the caller's raw
  * samples in `format`, and `told` hears what the model says back and the
  * tools it asks for, each answered with its output before it goes on. The
  * provider's `talk` says how; one without it refuses.
+ *
+ * A caller who talks over the model stops it (`over`) once their words say
+ * something (`meant`): an "okay", a laugh, or a noise, lets it go on. The
+ * model writes its audio faster than it is said, so what it says is mostly
+ * still playing, its response long done, when the caller talks.
  */
 export let talk = (
   o: {
@@ -530,6 +563,9 @@ export let talk = (
   // again if it was refused; waiting asks to go on are one.
   let busy = false, last: string | undefined
   let waiting: string[] = [], goOn = t.respond()
+  // What the caller has said since they started talking, whether it stopped
+  // the model, and whether the response it stopped is still sending audio.
+  let hearing = '', over = false, hushed = false
   let ask = (m: string) => {
     if (m != goOn || !waiting.includes(m)) waiting.push(m)
     next()
@@ -552,17 +588,22 @@ export let talk = (
     }),
     (data) => {
       for (let said of t.read(data, model)) {
-        if (said.start) o.told.start?.()
+        if (said.start) hearing = '', over = false
+        if (said.hearing && !over && meant(hearing += said.hearing) >= OVER) {
+          over = true
+          if (busy) s.send(t.cancel), hushed = true
+          o.told.over?.()
+        }
         if (said.stopped) o.told.stopped?.()
         if (said.heard) o.told.heard?.(said.heard)
-        if (said.audio) o.told.audio(said.audio)
+        if (said.audio && !hushed) o.told.audio(said.audio)
         if (said.said) o.told.said?.(said.said)
         if (said.spent) dollars += said.spent
         if (said.begun) busy = true
         if (said.busy && last) waiting.unshift(last), busy = true
         if (said.done) {
           o.told.done?.()
-          busy = false
+          busy = hushed = false
           next()
         }
         if (said.error) o.told.lost?.(said.error)

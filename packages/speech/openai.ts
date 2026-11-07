@@ -226,6 +226,9 @@ export let OPENAI: Provider = {
               type: 'semantic_vad',
               eagerness: 'low',
               create_response: true,
+              // The caller talking stops the model only once their words
+              // say something (mod.ts `talk`), not at the first sound.
+              interrupt_response: false,
             },
           },
           output: {
@@ -256,6 +259,9 @@ export let OPENAI: Provider = {
         case 'conversation.item.input_audio_transcription.completed':
           if (e.transcript?.trim()) said.push({ heard: e.transcript.trim() })
           break
+        case 'conversation.item.input_audio_transcription.delta':
+          if (e.delta) said.push({ hearing: e.delta })
+          break
         case 'response.output_audio.delta':
           if (e.delta) said.push({ audio: unbase64(e.delta) })
           break
@@ -281,6 +287,8 @@ export let OPENAI: Provider = {
           break
         }
         case 'error':
+          // A stop that came as the response finished has nothing to stop.
+          if (e.error?.code == 'response_cancel_not_active') break
           said.push(
             e.error?.code == 'conversation_already_has_active_response'
               ? { busy: true }
@@ -304,6 +312,7 @@ export let OPENAI: Provider = {
           },
         },
       }),
+    cancel: JSON.stringify({ type: 'response.cancel' }),
   },
 }
 
