@@ -6,10 +6,17 @@ import type { Remote } from './remote.ts'
 import type { Read } from './routes.ts'
 import type { Mark } from './letter.ts'
 
+// Each ask carries the remote as it stands, read at use as every door's is,
+// so a fixed address or secret reaches the next poll without a restart.
 export type Said =
-  | { start: Remote }
-  | { id: number; params: string; tag?: string }
-  | { id: number; bug: string; name: Mark; said: Record<string, string> }
+  | { id: number; remote: Remote; params: string; tag?: string }
+  | {
+    id: number
+    remote: Remote
+    bug: string
+    name: Mark
+    said: Record<string, string>
+  }
   | { abort: number }
 
 export type Heard =
@@ -57,7 +64,6 @@ export let pollThread = (remote: Remote): Doors & { close: () => void } => {
       event.preventDefault()
       fail(new Error('Remote tracker poll worker failed'))
     }
-    w.postMessage({ start: remote } satisfies Said)
     return w
   }
   let ask = (
@@ -85,7 +91,13 @@ export let pollThread = (remote: Remote): Doors & { close: () => void } => {
         let w = start()
         pending.set(id, { resolve, reject, clean })
         signal?.addEventListener('abort', abort, { once: true })
-        w.postMessage({ ...call, id } satisfies Said)
+        w.postMessage(
+          {
+            ...call,
+            id,
+            remote: { url: remote.url, secret: remote.secret },
+          } satisfies Said,
+        )
       } catch {
         fail(new Error('Remote tracker poll worker failed'))
         reject(new Error('Remote tracker poll worker failed'))

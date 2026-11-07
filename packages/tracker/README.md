@@ -327,7 +327,11 @@ at the first batch the Worker could not answer, the rest left for the next pass,
 so each pass ends within a request's minute while the Worker is down. A pass
 still running after five minutes has hung on this side: it is reported once as
 that, never as the Worker not answering, its signal aborts, and the next pass
-runs. Any other failure (a refusal of what was sent or asked, a bad page, a
+runs. A pass this side cannot set up (`Misconfigured` from `./remote`: no
+address, no secret, or an address it does not send to; a read refused 500) is
+reported at once, and once until a pass ends otherwise; the remote is read at
+each use, so the pass after a fix goes out, and logs that the tracker is set up
+again. Any other failure (a refusal of what was sent or asked, a bad page, a
 failure on this side) is reported at once. Each report is admitted directly to
 the local tracker as `Tracker <direction> sync failed: <what failed>`, with the
 failure as its `cause`, a flood coalesced; its independent mail duty notifies
@@ -363,10 +367,12 @@ statuses) is a log line, and the next poll tries again. A Worker that has not
 answered for five minutes (`OUTAGE`) is reported once, with the last failure as
 its cause: when the platform tracker is down, the box is what says so. A poll
 still running after five minutes has hung on this side, and is reported once as
-that; the next poll runs. Any other failed poll (a refusal of what was asked, an
-invalid page, a failed worker) is reported at once. The standing pass reads
-through the same pages (`./poll`'s `pages`), and both syncs decide through the
-same `./outage.ts`.
+that; the next poll runs. A poll this side cannot set up (a read refused 500) is
+reported at once, once, and the poll worker is handed the remote with each read,
+so a fix reaches the next poll. Any other failed poll (a refusal of what was
+asked, an invalid page, a failed worker) is reported at once. The standing pass
+reads through the same pages (`./poll`'s `pages`), and both syncs decide through
+the same `./outage.ts`.
 
 `./remote` shares the signed transport with the read-through routes. Intake and
 bug marks each carry a separate capability, so a reader's ticket cannot submit

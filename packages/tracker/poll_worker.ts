@@ -2,21 +2,17 @@ import { freshFetch } from '@yaks/process/http'
 // This worker opens no graph, services or reporting loop. Credentials stay in
 // its messages and never in a worker URL or an error.
 import { signed } from './poll.ts'
-import type { Doors } from './poll.ts'
 import type { Heard, Said } from './poll_thread.ts'
 
-let doors: Doors
+let go = freshFetch()
 let running = new Map<number, AbortController>()
 let tell = (value: Heard) => self.postMessage(value)
 self.onmessage = ({ data }: MessageEvent<Said>) => {
-  if ('start' in data) {
-    doors = signed(data.start, freshFetch())
-    return
-  }
   if ('abort' in data) {
     running.get(data.abort)?.abort()
     return
   }
+  let doors = signed(data.remote, go)
   let stop = new AbortController()
   running.set(data.id, stop)
   void (async () => {

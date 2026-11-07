@@ -145,6 +145,11 @@ let replies: Record<string, Read> = {
     error: 'Remote tracker did not answer in time',
     status: 504,
   },
+  unset: {
+    ok: false,
+    error: 'Remote tracker secret is unavailable',
+    status: 500,
+  },
 }
 let polls = async (...said: (string | Error)[]) => {
   let time = clock(), filed: string[] = [], logged: string[] = []
@@ -228,6 +233,13 @@ test('any other failed poll is filed at once', async () => {
     '30 s Error: Remote tracker returned an invalid page of bugs',
     '60 s Error: Remote tracker poll worker failed',
   ])
+})
+
+test('a poll this side cannot set up is filed at once, once, and recovers when fixed', async () => {
+  equal(await polls('unset', 'unset', 'unset', 'ok'), {
+    filed: ['0 s Error: Remote tracker secret is unavailable'],
+    logged: ['Tracker poll: Remote tracker is set up again'],
+  })
 })
 
 // A Worker that tags its answer: a poll holding the tag is told nothing moved.

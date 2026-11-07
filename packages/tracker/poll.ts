@@ -12,7 +12,13 @@
 // ./outage.ts's, as it is for the tracker service's syncs.
 import type { Bundle } from '@yaks/graph'
 import { minted } from '@yaks/graph/identity'
-import { mark, type Remote, unanswered, Unavailable } from './remote.ts'
+import {
+  mark,
+  Misconfigured,
+  type Remote,
+  unanswered,
+  Unavailable,
+} from './remote.ts'
 import { type Read, read } from './routes.ts'
 import type { Mark } from './letter.ts'
 import { later, outage, type Timer } from './outage.ts'
@@ -95,7 +101,8 @@ export type Page = (
 
 /** The pages `doors` answers. A refusal throws, as `Unavailable` (./remote.ts)
  * where the tracker could not answer for now: a 503 or 504 (./routes.ts
- * `read`), or a page past its `timeout`. A stop ends a page as itself, never
+ * `read`), or a page past its `timeout`; as `Misconfigured` where this side
+ * could not set the read up, a 500. A stop ends a page as itself, never
  * as the read it cut short. */
 export let pages = (
   doors: Doors,
@@ -124,6 +131,8 @@ async (params, tag) => {
     if (got.ok) return got
     throw got.status == 503 || got.status == 504
       ? new Unavailable(got.error)
+      : got.status == 500
+      ? new Misconfigured(got.error)
       : Error(got.error)
   } finally {
     cancel()

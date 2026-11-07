@@ -43,6 +43,11 @@ export let unavailable = (status: number) =>
  * on this side. */
 export class Unavailable extends Error {}
 
+/** A request this side cannot set up: no address, no secret, or an address it
+ * does not send to. It is a failure to fix now, never the tracker being down;
+ * the remote is read at each use, so the request after a fix goes out. */
+export class Misconfigured extends Error {}
+
 /// unanswered(new DOMException('', 'TimeoutError')) instanceof Unavailable -> true
 /// unanswered(new DOMException('', 'AbortError')) instanceof Unavailable -> false
 /** `error`, or the `Unavailable` it is when a timeout caused it. */
@@ -78,21 +83,22 @@ export let request = async (
   init: RequestInit = {},
   go: typeof fetch = fetch,
 ): Promise<Response> => {
-  if (!remote.url || !remote.secret) {
-    throw Error('Remote tracker is unavailable')
+  if (!remote.url) throw new Misconfigured('Remote tracker is not configured')
+  if (!remote.secret) {
+    throw new Misconfigured('Remote tracker secret is unavailable')
   }
   let url: URL
   try {
     url = new URL(remote.url)
   } catch {
-    throw Error('Remote tracker address is invalid')
+    throw new Misconfigured('Remote tracker address is invalid')
   }
   if (
     url.username || url.password ||
     !['http:', 'https:'].includes(url.protocol) ||
     url.protocol == 'http:' &&
       !['127.0.0.1', 'localhost', '[::1]'].includes(url.hostname)
-  ) throw Error('Remote tracker address is invalid')
+  ) throw new Misconfigured('Remote tracker address is invalid')
   url.pathname = `${url.pathname.replace(/\/$/, '')}/${path}`
   url.search = params.toString()
   url.hash = ''

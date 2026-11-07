@@ -65,8 +65,9 @@ test('a remote bug read names its bug by eid or by the handle a knock quotes', a
   equal(asked, ['4fde03f7', id])
 })
 // What the box's door answers where the remote is unconfigured, has no
-// secret, or answers each status: a refusal of what was asked is 502, and a
-// tracker that cannot answer for now 503.
+// secret or a bad address, which this side cannot ask, 500, or answers each
+// status: a refusal of what was asked is 502, and a tracker that cannot
+// answer for now 503.
 let door = (remote?: { url: string; secret?: string }, status = 200) =>
   routes(
     {},
@@ -76,6 +77,7 @@ let door = (remote?: { url: string; secret?: string }, status = 200) =>
 let failures = await Promise.all([
   door(),
   door({ url: 'https://tracker.invalid' }),
+  door({ url: 'http://tracker.invalid', secret }),
   ...[403, 429, 500, 503].map((status) =>
     door({ url: 'https://tracker.invalid', secret }, status)
   ),
@@ -89,7 +91,7 @@ let nonAdminAccess = await authorize(
   derivedEid('tracker|platform'),
 )
 test('remote failures are explicit and contain no upstream body, URL, ticket or secret', () => {
-  equal(failures.map((r) => r.status), [503, 503, 502, 503, 503, 503])
+  equal(failures.map((r) => r.status), [500, 500, 500, 502, 503, 503, 503])
   ok(!bodies.some((body) => body.includes(secret)))
   equal(nonAdminAccess, null)
 })

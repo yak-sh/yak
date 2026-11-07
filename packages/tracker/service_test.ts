@@ -355,3 +355,59 @@ test('a standing sync that hangs on the box is told as a hang, once, and the nex
     logged: [],
   })
 })
+
+// A service whose remote this side cannot ask: first an address it does not
+// send to, then no secret, then fixed, the remote read at each use. Its
+// passes run back to back on a held clock that never moves, so a report
+// owed only after five minutes never comes.
+let misconfigured = await (async () => {
+  let stop = new AbortController(), g = fixture(), spool = memory()
+  let time = clock(), passes = 0, sent = 0
+  let notices: string[] = [], logged: string[] = []
+  let remote: { url: string; secret?: string } = {
+    url: 'http://tracker.example',
+    secret: 'test',
+  }
+  spool.append('unset')
+  let running = service({ graph: g }, {
+    source: spool.source,
+    remote,
+    every: 0,
+    reconcileEvery: 0,
+    timer: (run, ms) => (passes++, time.after(ms, run)),
+    log: (line) => logged.push(line),
+    notice: (error) => (notices.push(error.message), Promise.resolve()),
+    fetch: ((_url, init) => {
+      if (init?.method == 'POST') sent++
+      return Promise.resolve(Response.json([]))
+    }) as typeof fetch,
+  }, stop.signal)
+  let more = (n: number) => {
+    let until_ = passes + n
+    return until(() => passes > until_, { poll: 0 })
+  }
+  await more(20)
+  remote.url = 'https://tracker.example'
+  delete remote.secret
+  await more(20)
+  remote.secret = 'test'
+  await until(() => logged.length == 2 && !spool.held.size, { poll: 0 })
+  stop.abort()
+  await running
+  return { notices: notices.sort(), logged: logged.sort(), sent }
+})()
+test('a remote this side cannot ask is told at once, once a cause, and recovers when fixed', () => {
+  equal(misconfigured, {
+    notices: [
+      'Tracker delivery sync failed: Remote tracker address is invalid',
+      'Tracker delivery sync failed: Remote tracker secret is unavailable',
+      'Tracker standing sync failed: Remote tracker address is invalid',
+      'Tracker standing sync failed: Remote tracker secret is unavailable',
+    ],
+    logged: [
+      'Tracker delivery sync: Remote tracker is set up again',
+      'Tracker standing sync: Remote tracker is set up again',
+    ],
+    sent: 1,
+  })
+})

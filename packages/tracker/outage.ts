@@ -8,9 +8,12 @@
 // not answered for OUTAGE is reported, once, with the last failure as its
 // cause, since the box is the witness when the platform tracker is down. A
 // pass that has not finished in OUTAGE has hung on this side, and reports
-// that, once. Any other failure (a refusal of what was asked, a bad answer, a
+// that, once. A pass this side could not set up (`Misconfigured`: no
+// address, no secret, a bad address) reports at once, and once until a pass
+// ends otherwise: the remote is read at each use, so the pass after its fix
+// goes out. Any other failure (a refusal of what was asked, a bad answer, a
 // failure on this side) is a bug now, and reports at once.
-import { Unavailable } from './remote.ts'
+import { Misconfigured, Unavailable } from './remote.ts'
 
 /** How a wait is set, returning what cancels it. */
 export type Timer = (run: () => void, ms: number) => () => void
@@ -35,11 +38,11 @@ export type Watching = {
   /** time between passes, in ms */
   every: number
   /** a failure to fix: a pass that failed other than by `Unavailable`, at
-   * once, the tracker not answering for OUTAGE, once, and a pass running
-   * for OUTAGE, once */
+   * once (`Misconfigured` once until a pass ends otherwise), the tracker not
+   * answering for OUTAGE, once, and a pass running for OUTAGE, once */
   report?: (error: unknown) => void
-  /** a pass the tracker could not answer, and its answering again (default:
-   * `console.warn`) */
+  /** a pass the tracker could not answer, and its answering again or being
+   * set up again (default: `console.warn`) */
   log?: (line: string) => void
   /** how a wait is set (default: `setTimeout`), so a test can hold the clock */
   timer?: Timer
@@ -77,6 +80,9 @@ export let outage = (
     down?.cancel()
     down = undefined
   }
+  // The message of the setup failure already reported, while passes keep
+  // failing by it.
+  let unset: string | undefined
   let pass = async <T>(
     run: (signal: AbortSignal) => Promise<T>,
   ): Promise<T> => {
@@ -111,6 +117,8 @@ export let outage = (
       ])
       running = false
       cancel()
+      if (unset) log(`${name}: Remote tracker is set up again`)
+      unset = undefined
       if (down) {
         log(
           `${name}: Remote tracker answered again after ${failed(down.failed)}`,
@@ -124,6 +132,7 @@ export let outage = (
         cancel()
         throw error
       }
+      if (!(error instanceof Misconfigured)) unset = undefined
       if (error instanceof Unavailable) {
         if (down) cancel()
         else {
@@ -136,7 +145,10 @@ export let outage = (
         // It answered, wrongly, or this side failed: a bug now, not an outage.
         cancel()
         over()
-        report(error)
+        if (error instanceof Misconfigured) {
+          if (unset != error.message) report(error)
+          unset = error.message
+        } else report(error)
       }
       throw error
     }

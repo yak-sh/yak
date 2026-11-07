@@ -5,6 +5,7 @@ import type { Route } from '@yaks/api'
 import { BARE } from '@yaks/id'
 import {
   late,
+  Misconfigured,
   type Remote,
   request as upstream,
   unavailable,
@@ -15,9 +16,10 @@ let uuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
 
 /** What a read answered: its value and the tag it was read at, or that
  * nothing moved since the tag it was asked with, or the refusal and the
- * status it is: 503 where the tracker is out of reach or cannot answer for
- * now, 504 where it did not answer in time, and 502 or 404 where it refused
- * what was asked. */
+ * status it is: 500 where this side cannot set the read up (./remote.ts
+ * `Misconfigured`), 503 where the tracker is out of reach or cannot answer
+ * for now, 504 where it did not answer in time, and 502 or 404 where it
+ * refused what was asked. */
 export type Read =
   | { ok: true; value: unknown; tag?: string; unchanged?: false }
   | { ok: true; value?: undefined; tag: string; unchanged: true }
@@ -39,11 +41,6 @@ export let read = async (
    * since answers that, reading nothing */
   tag?: string,
 ): Promise<Read> => {
-  let remote = options.remote
-  if (!remote?.url) return refused('Remote tracker is not configured', 503)
-  if (!remote.secret) {
-    return refused('Remote tracker secret is unavailable', 503)
-  }
   let scope = query.get('scope') ?? 'platform'
   if (scope != 'platform' && !uuid.test(scope)) {
     return refused('scope must be platform or a global space eid', 400)
@@ -81,7 +78,7 @@ export let read = async (
   let response: Response
   try {
     response = await upstream(
-      remote,
+      options.remote ?? {},
       path,
       params,
       { signal, ...tag ? { headers: { 'if-none-match': tag } } : {} },
@@ -89,6 +86,7 @@ export let read = async (
     )
   } catch (error) {
     // Neither a credential, ticket, configured URL nor upstream body is an error report.
+    if (error instanceof Misconfigured) return refused(error.message, 500)
     return late(error)
       ? refused('Remote tracker did not answer in time', 504)
       : refused('Remote tracker is unavailable', 503)
