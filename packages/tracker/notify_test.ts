@@ -7,6 +7,7 @@ import type { Bundle } from '@yaks/graph'
 import { bare } from './fixture_test.ts'
 import { follow as followed, notify, type Options } from './effects.ts'
 import { comp, type Desk, str } from './model.ts'
+import { platform } from './reading.ts'
 
 let options = {
   to: crypto.randomUUID(),
@@ -15,6 +16,7 @@ let options = {
   url: 'https://bugs.example.test',
 }
 let at = '2026-10-02T00:00:10Z'
+let space = crypto.randomUUID()
 let bug = (eid = crypto.randomUUID()): Bundle => ({
   entity: { eid },
   created: { at },
@@ -412,21 +414,29 @@ check('a bug forwarded by the box gets its letter only there', async (g) => {
   ok((await g.get([boxed.entity.eid]))[0].notified)
 })
 
-check(
-  "a platform bug's letter opens it on the side the tracker web reads it from",
-  async (g) => {
-    let row = bug()
-    row.entity = { ...row.entity, num: 7 }
-    await put(g, [row])
-    await replay(g, row, { side: 'yaks.app' })
-    let [letter] = await letters(g)
-    let { body } = comp(letter, 'doc') as Record<string, string>
-    let eid = row.entity.eid
-    ok(
-      body.includes(
-        `[View ${eid}](https://bugs.example.test/?.bug&side=yaks.app&bug=${eid})`,
-      ),
-      body,
-    )
-  },
-)
+// A letter's link reads the bug from the tracker that wrote it: the
+// platform's by default, a space's by its scope.
+for (
+  let [store, scope] of [[platform, ''], [space, `&scope=${space}`]] as const
+) {
+  check(
+    `a ${
+      store == platform ? 'platform' : "space's"
+    } bug's letter opens it in its tracker`,
+    async (g) => {
+      let row = bug()
+      row.entity = { ...row.entity, num: 7 }
+      await put(g, [row])
+      await replay(g, row, { side: 'yaks.app', store })
+      let [letter] = await letters(g)
+      let { body } = comp(letter, 'doc') as Record<string, string>
+      let eid = row.entity.eid
+      ok(
+        body.includes(
+          `[View ${eid}](https://bugs.example.test/?.bug&side=yaks.app${scope}&bug=${eid})`,
+        ),
+        body,
+      )
+    },
+  )
+}

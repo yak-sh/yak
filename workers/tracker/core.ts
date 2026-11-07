@@ -2,7 +2,6 @@
 // preserves reporter eids; bounded passes leave unfinished effects recoverable.
 
 import type { Bundle, Comp, Plugin, Storage } from '@yaks/graph'
-import { derivedEid } from '@yaks/graph/identity'
 import { graph } from '@yaks/graph'
 import { loadVocab } from '@yaks/vocab'
 import { CallError } from '@yaks/tools/errors'
@@ -38,7 +37,7 @@ import {
   present,
 } from '@yaks/query'
 
-export let platform = derivedEid('tracker|platform')
+export { platform } from '@yaks/tracker/remote'
 export let vocab = loadVocab([
   kernelDoc,
   provenanceDoc,

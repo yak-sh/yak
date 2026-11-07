@@ -156,12 +156,13 @@ export let notify = async (
 }
 
 // A bug's name and page: its human id where the store keeps one, or its
-// global eid on the side the tracker web reads it from.
+// global eid on the side the tracker web reads it from, in this store's
+// scope there: a space's tracker holds bugs the platform's does not.
 let address = (g: Desk, row: Bundle, options: Options) => {
   let eid = row.entity.eid
   let name = row.entity.num && !options.side ? human(g.vocab)(row) : eid
   let path = options.side
-    ? remoteBug(options.side, eid)
+    ? remoteBug(options.side, eid, { scope: options.store })
     : `/${encodeURIComponent(name)}`
   return {
     name,

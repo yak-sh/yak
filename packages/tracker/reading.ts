@@ -1,6 +1,7 @@
 // How a bug and an error read, whatever draws them: the whole message, where
 // it happened, whether it is still broken, and the queries a page asks.
 import type { Bundle } from '@yaks/graph'
+import { derivedEid } from '@yaks/graph/identity'
 import { type And, and, eq, every, order, querySearch } from '@yaks/query'
 import { comp, type Frame, str, title } from './model.ts'
 import { place, sha, spot } from './brief.ts'
@@ -22,22 +23,39 @@ export let occurrences = (eid: string): string =>
 export let occurring = (eid: string): And =>
   and(eq('error.bug', eid), every(), order('-error.at'))
 
+/** The platform tracker's global eid: the scope a read names by default. */
+export let platform: string = derivedEid('tracker|platform')
+
 /** A bug's page on the box's tracker web when it lives on another side (the
- * platform tracker, `yaks.app`), read through by global eid; one of its
- * occurrences opens on the same page.
+ * platform tracker, `yaks.app`), read through by global eid. A space's
+ * tracker holds its own bugs, so its page names that tracker's `scope`; one
+ * of the bug's occurrences opens on the same page.
  *
  * ```ts
  * import { assertEquals } from '@std/assert'
  * assertEquals(
- *   remoteBug('yaks.app', 'b', 'e'),
+ *   remoteBug('yaks.app', 'b', { error: 'e' }),
  *   '/?.bug&side=yaks.app&bug=b&error=e',
+ * )
+ * assertEquals(
+ *   remoteBug('yaks.app', 'b', { scope: 's' }),
+ *   '/?.bug&side=yaks.app&scope=s&bug=b',
+ * )
+ * assertEquals(
+ *   remoteBug('yaks.app', 'b', { scope: platform }),
+ *   '/?.bug&side=yaks.app&bug=b',
  * )
  * ```
  */
-export let remoteBug = (side: string, bug: string, error?: string): string =>
+export let remoteBug = (
+  side: string,
+  bug: string,
+  { scope, error }: { scope?: string; error?: string } = {},
+): string =>
   `/${
     querySearch('.bug', {
       side,
+      ...scope && scope != platform ? { scope } : {},
       bug,
       ...error ? { error } : {},
     })

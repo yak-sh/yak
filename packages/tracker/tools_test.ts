@@ -100,6 +100,19 @@ test('platform bug list sends the caller query and limit to the Worker', async (
     '2',
   ])
 })
+test("a space's bug shows from its tracker, the scope its letter names", async () => {
+  let asked: URLSearchParams | undefined
+  let worker = ((url: URL) => {
+    asked = url.searchParams
+    return Promise.resolve(Response.json({ rows: [], occurrences: 0 }))
+  }) as typeof fetch
+  let scope = crypto.randomUUID()
+  await runs({}, config, worker).bug_show({
+    entity: { eid: ids[4] },
+    call: { args: { source: 'yaks.app', bug: ids[1], scope } },
+  }, box)
+  equal([asked?.get('scope'), asked?.get('bug')], [scope, ids[1]])
+})
 test('the remote store applies a caller query and order before its limit', async () =>
   equal(
     (await remote.bugs(undefined, '.bug .order=bug.hits', 2))

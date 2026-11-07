@@ -301,6 +301,7 @@ export let runs = (
             bug: str(args.bug),
             limit: String(size),
             ...cursor ? { after: cursor } : {},
+            ...args.scope ? { scope: str(args.scope) } : {},
           }),
         )
         return answer(call, shown as Shown, 'yaks.app')

@@ -10,8 +10,10 @@
 // on a connection of its own, with a ticket a minute from expiry, and taking
 // its whole answer, never one long wait on a connection gone bad.
 import type { Bundle } from '@yaks/graph'
-import { derivedEid } from '@yaks/graph/identity'
+import { platform } from './reading.ts'
 import { sign } from './ticket.ts'
+
+export { platform }
 
 export type Remote = { url?: string; secret?: string }
 
@@ -104,7 +106,7 @@ export let request = async (
   url.hash = ''
   let scope = params.get('scope') ?? 'platform'
   let claims = {
-    scope: scope == 'platform' ? derivedEid('tracker|platform') : scope,
+    scope: scope == 'platform' ? platform : scope,
     person: 'box-tracker',
     admin: true,
     ...path == 'errors' ? { ingest: true } : {},

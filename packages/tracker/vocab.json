@@ -436,6 +436,10 @@
           "type": "string",
           "description": "The next a previous answer named: reads the occurrences older than it."
         },
+        "scope": {
+          "type": "string",
+          "description": "For yaks.app, the global eid of the space whose tracker holds the bug, as a space tracker's letter names it in its link (scope=…); the platform tracker by default."
+        },
         "source": {
           "type": "string",
           "enum": [

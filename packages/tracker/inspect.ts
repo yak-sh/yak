@@ -570,9 +570,10 @@ type Read = { bug: string; rows?: Bundle[]; error?: string }
  * change; nothing is admitted to the box's or the page's graph. Its numbers
  * belong to the other store, so its rows read by eid. */
 let RemoteBug = (
-  { io, side, bug, error }: {
+  { io, side, scope, bug, error }: {
     io: Io
     side: string
+    scope?: string
     bug: string
     error?: string
   },
@@ -580,7 +581,8 @@ let RemoteBug = (
   let [read, set] = useState<Read>()
   useEffect(() => {
     let abort = new AbortController()
-    void fetch(`/tracker/bugs?${new URLSearchParams({ bug })}`, {
+    let ask = new URLSearchParams({ bug, ...scope ? { scope } : {} })
+    void fetch(`/tracker/bugs?${ask}`, {
       signal: abort.signal,
     }).then(async (r) => {
       let body = await r.json()
@@ -590,7 +592,7 @@ let RemoteBug = (
       if (!abort.signal.aborted) set({ bug, error: String(e?.message ?? e) })
     })
     return () => abort.abort()
-  }, [bug])
+  }, [bug, scope])
   let held = read?.bug == bug ? read : undefined
   if (held?.error) {
     return h(Section.Sub, { role: 'alert' }, `Bug unavailable: ${held.error}`)
@@ -604,9 +606,9 @@ let RemoteBug = (
   // are on it already.
   let link = (eid: string) =>
     errors.some((b) => b.entity.eid == eid)
-      ? remoteBug(side, bug, eid)
+      ? remoteBug(side, bug, { scope, error: eid })
       : rows.some((b) => b.entity.eid == eid)
-      ? remoteBug(side, bug)
+      ? remoteBug(side, bug, { scope })
       : io.link(eid)
   let id = (b: Bundle) => io.id({ ...b, entity: { eid: b.entity.eid } })
   let there: Io = {
@@ -662,7 +664,7 @@ export let inspectViews: View[] = [
   },
   {
     // A bug query's page, where a letter about a bug on another side opens it
-    // (`?.bug&side=yaks.app&bug=…`). Its second clause outranks timing's
+    // (`?.bug&side=yaks.app&bug=…`, with `&scope=…` for a space's tracker). Its second clause outranks timing's
     // query page, which draws no bug query differently.
     view: 'Inspect.Query',
     match: parse(".entity.eid~='browse-query:' .entity.eid~='.bug'"),
@@ -674,6 +676,7 @@ export let inspectViews: View[] = [
         ? h(RemoteBug, {
           io: props.io,
           side,
+          scope: params.get('scope') ?? undefined,
           bug,
           error: params.get('error') ?? undefined,
         })
