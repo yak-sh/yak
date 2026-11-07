@@ -1,7 +1,8 @@
 import { derivedEid, mint } from '@yaks/graph/identity'
 import { toolName } from '@yaks/graph/call'
 import type { Reply } from '@yaks/tools'
-import { answerOf, toolEid, worded } from '@yaks/tools/result'
+import { answerOf, faultOf, toolEid, worded } from '@yaks/tools/result'
+import { Interrupted } from '@yaks/tools/errors'
 import { runner } from '@yaks/tools'
 import { artifactTools } from './artifact_tools.ts'
 
@@ -29,7 +30,13 @@ import { type Blobs, valueTools } from '@yaks/blob'
 // for a server.
 
 import { machines, type SessionMachines } from './session_machines.ts'
-import type { Entity, Graph, Tool as GraphTool } from '@yaks/graph'
+import type {
+  Bundle,
+  Comp,
+  Entity,
+  Graph,
+  Tool as GraphTool,
+} from '@yaks/graph'
 import { core } from '@yaks/mcp/tools'
 import { inputSchemaOf } from '@yaks/tools/schema'
 import { workspaceTools } from '@yaks/machine/tools'
@@ -41,6 +48,20 @@ import {
   type Tool,
   ToolError,
 } from '@yaks/session'
+
+// A graph call that failed, thrown again as what it was, so the session's own
+// runner records it as that rather than as words it answered: a refusal keeps
+// its code, interrupted work stays interrupted, and a defect is a defect.
+let failure = (fault: Bundle): Error => {
+  let words = String((fault.content as Comp | undefined)?.body ?? '')
+  let refusal = fault.refusal as Comp | undefined
+  let exception = fault.exception as Comp | undefined
+  if (refusal) return new ToolError(String(refusal.code), words)
+  if (!exception) return new Interrupted(words)
+  return Object.assign(new Error(String(exception.value ?? words)), {
+    name: String(exception.type ?? 'Error'),
+  })
+}
 
 /**
  * Graph tools as tools a model may call: the generic tier (`graph_apply`,
@@ -88,14 +109,14 @@ export let graphTools = (
       let id = call?.call
         ? derivedEid(`harness graph tool ${call.call.entity.eid}`)
         : mint()
-      return worded(answerOf(
-        await r.call({
-          entity: { eid: id },
-          call: { to: toolEid(toolName(t)), args: args ?? {} },
-          ...(actor ? { $actor: actor } : {}),
-        }),
-        id,
-      ))
+      let landed = await r.call({
+        entity: { eid: id },
+        call: { to: toolEid(toolName(t)), args: args ?? {} },
+        ...(actor ? { $actor: actor } : {}),
+      })
+      let fault = faultOf(landed, id)
+      if (fault) throw failure(fault)
+      return worded(answerOf(landed, id))
     },
     recover: async (_, ctx) => {
       let id = derivedEid(`harness graph tool ${ctx.call.entity.eid}`)

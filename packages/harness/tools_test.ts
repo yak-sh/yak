@@ -315,3 +315,45 @@ test('a session’s graph_show of an id that names nothing answers the rest', ()
     refused: false,
   })
 })
+
+// A session's graph_show naming no id, which the tool refuses: what its
+// transcript records for the call and its result.
+let refused = await (async () => {
+  let h = await harness()
+  let asked = 0
+  let a = agent({
+    h,
+    release: () => h.close(),
+    name: 'fake',
+    tools: graphTools(h.g),
+    model: (req) =>
+      Promise.resolve({
+        id: `r${++asked}`,
+        model: req.model,
+        items: asked == 1
+          ? [{ kind: 'call', id: 'c1', name: 'graph_show', args: '{"ids":[]}' }]
+          : [{ kind: 'assistant', text: 'done' }],
+      }),
+  })
+  let s = await a.start('show nothing')
+  await until(async () =>
+    (await a.transcript(s)).some((b) => body(b) == 'done')
+  )
+  let entries = await a.transcript(s)
+  let result = entries.find((b) => b.result)!
+  let call = entries.find((b) => b.call)!
+  await a.close()
+  return {
+    refusal: result.refusal,
+    words: body(result),
+    state: (call.execution as Comp).state,
+  }
+})()
+
+test('a session’s refused graph tool call lands as a refusal, not an answer', () => {
+  assertEquals(refused, {
+    refusal: { code: 'Refused' },
+    words: 'graph_show needs at least one id',
+    state: 'failed',
+  })
+})

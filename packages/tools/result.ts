@@ -306,6 +306,19 @@ export let faulted = (landed: Bundle[], call: Eid): boolean => {
 }
 
 /**
+ * The fault a failed call left, aimed at it: its `refusal{code}`, its
+ * `exception` or its interruption's `notice`, beside the words it said. None
+ * for a call that answered, however its answer is shaped ({@link faulted}).
+ */
+export let faultOf = (landed: Bundle[], call: Eid): Bundle | undefined =>
+  faulted(landed, call)
+    ? landed.find((b) =>
+      (b.output as Comp | undefined)?.source == call &&
+      !!(b.refusal || b.exception || b.notice)
+    )
+    : undefined
+
+/**
  * What a call answered, for display: the tool's own bundles, without the
  * runner's record of this call — the call itself and its result, which
  * carries a copy of the answer's text so a transcript can show one line per
