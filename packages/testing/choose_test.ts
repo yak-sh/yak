@@ -1,5 +1,5 @@
 import { choose } from './choose.ts'
-import { survey } from './deps.ts'
+import { note, survey } from './deps.ts'
 import { equal, test } from './mod.ts'
 
 let unchanged = await choose(['missing_test.ts'], { changed: [] })
@@ -44,6 +44,31 @@ test('selection uses the supplied command snapshot and retains dependency keys',
   equal(selected.run, ['a_test.ts'])
   equal(selected.reaches(['a.ts']), true)
   equal(selected.keys.size, 1)
+})
+
+test('what a file read is known only as this version of it read it, not as another did', async () => {
+  let s = await importing(['a_test.ts'])
+  let reads = `${await Deno.makeTempDir()}/reads.json`
+  let read = async () =>
+    (await choose(['a_test.ts'], {
+      all: true,
+      observed: true,
+      reads,
+      inspect: () => Promise.resolve(s),
+    })).read('a_test.ts')
+  let { keys } = await choose(['a_test.ts'], {
+    all: true,
+    inspect: () => Promise.resolve(s),
+  })
+  // As the file read before a test reading a generated page was added to it.
+  note({ 'a_test.ts': ['a.ts'] }, reads, { 'a_test.ts': 'its last version' })
+  equal(await read(), undefined)
+  note({ 'a_test.ts': ['a.ts'] }, reads)
+  equal(await read(), undefined)
+  note({ 'a_test.ts': ['a.ts'] }, reads, {
+    'a_test.ts': keys.get('a_test.ts')!,
+  })
+  equal(await read(), ['a.ts'])
 })
 
 test('a workspace-wide change keeps its own tests within the local budget', async () => {

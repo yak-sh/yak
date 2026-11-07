@@ -15,6 +15,7 @@ import {
   remembered,
   shared,
   survey,
+  versions,
   WIDE,
 } from './deps.ts'
 
@@ -265,6 +266,16 @@ test('what a file read is kept by its name, reading nothing included', () => {
     'b_test.ts': [],
     'c_test.ts': [],
   })
+})
+
+test('the version of a file that read it is kept beside what it read, and a pass naming none forgets it', () => {
+  let kept = `${dir}/versions.json`
+  note({ 'a_test.ts': ['x'], 'b_test.ts': [] }, kept, {
+    'a_test.ts': 'one',
+    'b_test.ts': 'two',
+  })
+  note({ 'b_test.ts': ['y'] }, kept)
+  equal(versions(kept), { 'a_test.ts': 'one' })
 })
 
 test('relevance follows transitive imports and named data, with an empty pass cache', () => {

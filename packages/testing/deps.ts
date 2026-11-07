@@ -839,8 +839,13 @@ export let remember = (
 }
 
 // The reads store names each path once, and each file's reads by their
-// place in that list: files share most of what they read.
-type Reads = { paths?: string[]; files?: Record<string, number[]> }
+// place in that list: files share most of what they read. A file's key as it
+// passed is kept beside its reads, where its run knew it.
+type Reads = {
+  paths?: string[]
+  files?: Record<string, number[]>
+  keys?: Record<string, string>
+}
 
 /** What each file read as it last passed, in any checkout. A proof holds
  * the file's key, so reads kept from another version of it match only a
@@ -852,21 +857,37 @@ export let recall = (store = READS): Record<string, string[]> => {
   )
 }
 
+/** The key each file had as it last passed, where its run knew it: the
+ * version of it its reads (`recall`) are what. */
+export let versions = (store = READS): Record<string, string> =>
+  (load(store) as Reads).keys ?? {}
+
 /** Adds what each file read as it passed now, nothing included: a file kept
- * as reading nothing is known to, where one with no entry is unknown. */
-export let note = (reads: Record<string, string[]>, store = READS): void => {
+ * as reading nothing is known to, where one with no entry is unknown. `keys`
+ * says which version of each file read it. */
+export let note = (
+  reads: Record<string, string[]>,
+  store = READS,
+  keys: Record<string, string> = {},
+): void => {
   if (!Object.keys(reads).length) return
   let all = recall(store)
+  let known = versions(store)
   for (let [f, paths] of Object.entries(reads)) {
     delete all[f]
     all[f] = paths
+    if (keys[f]) known[f] = keys[f]
+    else delete known[f]
   }
   let index = new Map<string, number>()
   let at = (p: string) => index.get(p) ?? index.set(p, index.size).get(p)!
-  let files = Object.fromEntries(
-    Object.entries(all).slice(-KEEP).map(([f, paths]) => [f, paths.map(at)]),
+  let kept = Object.entries(all).slice(-KEEP)
+  let files = Object.fromEntries(kept.map(([f, paths]) => [f, paths.map(at)]))
+  let had = kept.flatMap(([f]) => known[f] ? [[f, known[f]]] : [])
+  write(
+    { paths: [...index.keys()], files, keys: Object.fromEntries(had) },
+    store,
   )
-  write({ paths: [...index.keys()], files }, store)
 }
 
 /** Where what each file last took to load and run is kept, beside them. */

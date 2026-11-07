@@ -9,10 +9,12 @@ import {
   key,
   passed,
   proof,
+  READS,
   recall,
   shared,
   type Survey,
   survey,
+  versions,
 } from './deps.ts'
 import type { Examples } from './examples.ts'
 import { tested } from './find.ts'
@@ -21,7 +23,8 @@ import { naming } from './names.ts'
 
 /** What a run chose: the key of each file it was given, those it runs,
  * whether those import any of `paths` (true when the graph could not say),
- * and what a file read as it last passed, where that is known. */
+ * and what a file read as this version of it last passed, where that is
+ * known: another version's reads are not this one's. */
 export type Chosen = {
   keys: Map<string, string>
   run: string[]
@@ -84,6 +87,7 @@ export let choose = async (
   {
     all = false,
     observed = false,
+    reads: store = READS,
     kind = () => '',
     also = () => [],
     runner = [],
@@ -99,6 +103,8 @@ export let choose = async (
   }: {
     all?: boolean
     observed?: boolean
+    /** Where what files read as they passed is kept (deps.ts `note`). */
+    reads?: string
     kind?: (file: string) => string
     also?: (kind: string) => string[]
     runner?: string[]
@@ -131,7 +137,8 @@ export let choose = async (
     let kinds = [...new Set(files.map(kind))]
     // What each file read as it last passed, surveyed with the rest: the
     // modules among them were imported by a computed specifier.
-    let read = observed ? recall() : {}
+    let read = observed ? recall(store) : {}
+    let known = observed ? versions(store) : {}
     let reads = (f: string) => observed ? read[f] ?? [] : undefined
     let s = await inspect([
       ...files.filter(tested),
@@ -236,7 +243,7 @@ export let choose = async (
       sources: typed,
       beyond: run.length - kept.length,
       reaches: (paths) => s.reaches(roots, paths),
-      read: (f) => observed ? read[f] : undefined,
+      read: (f) => observed && known[f] == keys.get(f) ? read[f] : undefined,
     }
   } finally {
     await Promise.all(

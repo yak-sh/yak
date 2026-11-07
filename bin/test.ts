@@ -320,8 +320,9 @@ export let READIES = [
 /** The generated assets among those: what public/ holds under a name
  * beginning `_`, but `_headers`, which git keeps, and the site's pages at its
  * top (workers/yak/site/). A run makes them only when a file it runs read one
- * as it last passed, or has no reads kept: bundling them is seconds a run
- * whose files never read them need not wait. */
+ * as this version of it last passed, or has no reads kept of this version: a
+ * test added to a file may read what its last version did not. Bundling them
+ * is seconds a run whose files never read them need not wait. */
 export let MADE = /^workers\/yak\/public\/(?:_(?!headers$)|[^/]+\.html$)/
 
 /** The generated modules a source imports (check-types.ts `MADE`): a run

@@ -141,7 +141,11 @@ let remembered: Record<string, string> = s
   : {}
 remember(Object.values(remembered))
 if (seen && s) {
-  note(Object.fromEntries(passing.map((p) => [p, read(p)!])))
+  note(
+    Object.fromEntries(passing.map((p) => [p, read(p)!])),
+    undefined,
+    Object.fromEntries(passing.map((p) => [p, key.get(p)!])),
+  )
 }
 let wall = performance.now() - started
 summary(outcomes, wall, { left, planned, loading }, verbose)
