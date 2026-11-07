@@ -257,6 +257,10 @@ export class Builder {
   #owed?: () => void
   // The requests this incarnation is answering now.
   #asked = 0
+  // Whether the build's conversation's table stands. Made when it is first
+  // asked about, so a wake of the Operator alone writes nothing before its
+  // answer: a write holds an object's answer until storage confirms it.
+  #raised = false
   // The browsers people lend the Operator, and the calls asked of them that
   // wait for an answer: in memory, as the step waiting on one is.
   #lent: Browsers
@@ -265,12 +269,19 @@ export class Builder {
     this.#ctx = ctx
     this.#sql = driver(ctx.storage)
     this.#env = env
-    this.#sql.query(SAID)
     this.#lent = browsers(() => ctx.getWebSockets(), env.CLOCK)
+  }
+
+  // The build's conversation's table, made when it is first asked about
+  // (`#raised`).
+  #table() {
+    if (!this.#raised) this.#sql.query(SAID)
+    this.#raised = true
   }
 
   /** The conversation so far, whole. */
   said(): Line[] {
+    this.#table()
     return this.#sql
       .query(select({
         cols: [col('json')],
@@ -281,6 +292,7 @@ export class Builder {
   }
 
   #keep(said: Line[]) {
+    this.#table()
     for (let l of said) {
       this.#sql.query({
         t: 'insert',
@@ -301,8 +313,7 @@ export class Builder {
    *
    * Idempotent, because a delete that died halfway is finished by asking
    * again (erase.ts order): emptying an empty object empties it again. The
-   * table is planted back so the next space at this name — the eid is fresh,
-   * but nothing here relies on that — wakes with a schema rather than none.
+   * table is made again by whatever next asks about the conversation.
    *
    * The sockets are left where they are: a page still holding one is watching
    * a space that no longer exists, and the next line it says is answered
@@ -310,7 +321,7 @@ export class Builder {
    */
   async wipe() {
     await this.#ctx.storage.deleteAll()
-    this.#sql.query(SAID)
+    this.#raised = false
     this.#operator = undefined
     this.#store = undefined
     this.#frames = undefined

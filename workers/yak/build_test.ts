@@ -425,6 +425,31 @@ test('an object works its Operator a beat after its first answer has been read, 
   assertEquals([unread, read, await armed()], [false, false, true])
 })
 
+// A write holds an object's answer until storage confirms it.
+test('a new incarnation answers a chat page writing nothing first', async () => {
+  let o = await seeded()
+  o.env.CF_VERSION_METADATA = { id: 'v1', timestamp: '2026-11-07T00:00:00Z' }
+  await asking(o)('conversation')
+  while (o.ctx.pending.size) await Promise.all(o.ctx.pending)
+  let wrote: string[] = []
+  let { sql } = o.ctx.storage
+  let exec = sql.exec.bind(sql)
+  sql.exec = (query, ...args) => {
+    if (!/^\s*(select|pragma)/i.test(query)) wrote.push(query)
+    return exec(query, ...args)
+  }
+  let again = new Builder(o.ctx, o.env)
+  let answer = await again.fetch(
+    new Request('https://builder/operator/conversation', {
+      method: 'POST',
+      headers: { 'x-space-eid': o.space.eid, 'x-yak-person': ADA },
+      body: '{}',
+    }),
+  )
+  await answer.text()
+  assertEquals(wrote, [])
+})
+
 test('an object takes the space and seat the kernel read, and reads them itself only for a caller that read none', async () => {
   let o = await seeded()
   let seat = holding(o, Infinity)
