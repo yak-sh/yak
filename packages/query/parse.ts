@@ -549,7 +549,7 @@ export let parseDot = (token: string): Clause[] | null => {
  * assertEquals(bareLine('?doc'), '?doc')
  * ```
  */
-export let bareLine = (line: string) =>
+export let bareLine = (line: string): string =>
   line.replace(/^\?(?![A-Za-z_])/, '').replace(/^&+/, '')
 
 // The token split: whitespace and `&` both end a token; a quoted run is one

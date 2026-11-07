@@ -202,7 +202,10 @@ let orderedBy = (orders: Window, vocab: Vocab): string | null => {
  * assertEquals(global, ['.limit=5'])
  * ```
  */
-export let split = (line: string) => {
+export let split = (line: string): {
+  parts: Map<string, { segs: string[]; asks: boolean }>
+  global: string[]
+} => {
   let parts = new Map<string, { segs: string[]; asks: boolean }>()
   let global: string[] = []
   for (let seg of segsOf(line)) {
@@ -228,7 +231,10 @@ export let split = (line: string) => {
  * assertEquals(borrows('.constructor', {}), false)
  * ```
  */
-export let borrows = (line: string, uses: Record<string, string>) =>
+export let borrows = (
+  line: string,
+  uses: Record<string, string>,
+): boolean =>
   [...split(line).parts.keys()].some((name) => Object.hasOwn(uses, name))
 
 let eidOf = (b: Bundle) => b.entity?.eid ?? ''
@@ -282,7 +288,7 @@ let spaceOf = (m: Member) => m.space ?? m.at
 // the other members use it, so a disagreement can only be across spaces, and
 // there the name is two words. Properties only one side declares agree by
 // construction: a vocabulary only ever grows.
-let apartIn = (vocabs: { m: Member; doc: VocabDoc }[]) => {
+let apartIn = (vocabs: { m: Member; doc: VocabDoc }[]): Set<string> => {
   let seen = new Map<string, Map<string, Record<string, string>>>()
   for (let { m, doc } of vocabs) {
     for (let [name, schema] of Object.entries(doc.$defs ?? {})) {
@@ -333,9 +339,47 @@ export type Ask = {
   live?: boolean
 }
 
+/** Which members declare which word, the words two spaces mean two things
+ * by, and the union of every member's words. */
+export type Spoken = {
+  words: Map<string, Member[]>
+  apart: Set<string>
+  vocab: Vocab
+}
+
+/** A write cut into one part per member it lands in, and the eid each
+ * `$alias` was given. */
+export type Routed = {
+  parts: { member: Member; entities: Bundle[] }[]
+  aliases: Record<string, string>
+}
+
+/** The operations every set of members is asked through. */
+export type Reach = {
+  read: (members: Member[], line: string, live?: boolean) => Promise<unknown>
+  composed: (members: Member[], eids: string[], ask?: Ask) => Promise<Bundle[]>
+  routed: (
+    members: Member[],
+    named: Member | undefined,
+    bundles: Bundle[],
+    key?: string,
+  ) => Promise<Routed>
+  written: (
+    members: Member[],
+    named: Member | undefined,
+    bundles: Bundle[],
+    opts?: { key?: string; check?: boolean },
+  ) => Promise<{
+    bundles: Bundle[]
+    aliases: Record<string, string>
+    where: string
+  }>
+  spoken: (members: Member[]) => Promise<Spoken>
+}
+
 /** A composition over a shared language: the operations every set of
  * members is asked through. */
-export let reach = (words: Words) => {
+export let reach = (words: Words): Reach => {
   let { core, hidden = () => false, silent = () => {} } = words
   let union = words.union ??
     ((defs: Record<string, PropSchema>) =>
@@ -538,7 +582,7 @@ export let reach = (words: Words) => {
   /** Which members declare which word, in member order, so the first
    * declarer is the word's home; the words two spaces mean two things by
    * (`apart`); and the union of every member's words (`vocab`). */
-  let spoken = async (members: Member[]) => {
+  let spoken = async (members: Member[]): Promise<Spoken> => {
     let own = await Promise.all(
       members.map(async (m) => ({ m, doc: await m.vocab() })),
     )
@@ -730,7 +774,7 @@ export let reach = (words: Words) => {
     named: Member | undefined,
     bundles: Bundle[],
     key?: string,
-  ) => {
+  ): Promise<Routed> => {
     // A sandboxed copy owns only writes aimed at it. Every routing decision
     // chooses from the same eligible members.
     members = members.filter((m) => !m.sandboxed || m == named)
