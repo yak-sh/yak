@@ -190,7 +190,9 @@ let SPECIFIER = /\b(?:from|import)\s*\(?\s*(['"])((?:\/|\.\.?\/)[^'"\n]*)\1/g
 // load; its release address never changes, so the browser keeps it. A
 // release's module asking for the app's API (`./api/client.js`, below the
 // release) is pointed at the same address the page imports it by, so the
-// client is one module, not a second copy behind `apiOut`'s redirect.
+// client is one module, not a second copy behind `apiOut`'s redirect. Both
+// are pointed at `client`, the client's name of its bytes, where there is one:
+// the browser keeps it, where `./api/client.js` is asked again on every load.
 // The address a page's reference resolves to, as an import map keys it.
 let resolved = (ref: string, base: string) => {
   let url = new URL(ref, new URL(base, 'https://app.invalid'))
@@ -204,6 +206,7 @@ let imported = (
   release: string,
   reserved: (path: string) => boolean,
   base: string,
+  client: string | null,
 ) => {
   let imports: Record<string, string> = {}
   let modules = false
@@ -217,7 +220,14 @@ let imported = (
       imports[resolved(ref, base)] = next
     }
   }
-  if (modules) imports[`${mount}api/assets/${release}/api/`] = `${mount}api/`
+  if (modules) {
+    imports[`${mount}api/assets/${release}/api/`] = `${mount}api/`
+    if (client) {
+      for (let at of [`${mount}api/`, `${mount}api/assets/${release}/api/`]) {
+        imports[`${at}client.js`] = `${mount}api/${client}`
+      }
+    }
+  }
   return imports
 }
 
@@ -227,7 +237,9 @@ let mapJson = (map: unknown) => JSON.stringify(map).replaceAll('<', '\\u003c')
  * targets and scopes move to it, and what the page's scripts import by
  * address is added to the page's import map (one written at the head when
  * the page has none), where the author's own entry for the same address
- * wins. */
+ * wins. A page of modules imports the store client by `client`, its name
+ * below the app's `api/` (sheets.ts `client`), and asks for it beside the
+ * map, so it arrives with the page's first module rather than after it. */
 export let assetMaps = (
   html: string,
   mount: string,
@@ -235,8 +247,14 @@ export let assetMaps = (
   release: string,
   reserved: (path: string) => boolean = () => false,
   base = mount,
+  client: string | null = null,
 ) => {
-  let imports = imported(html, mount, bare, release, reserved, base)
+  let imports = imported(html, mount, bare, release, reserved, base, client)
+  let named = imports[`${mount}api/client.js`]
+  let preload = (map: Record<string, unknown>) =>
+    named && map[`${mount}api/client.js`] == named
+      ? `<link rel="modulepreload" href="${named}">`
+      : ''
   let merged = false
   let move = (url: string) => mapUrl(url, mount, bare, release, reserved, base)
   let page = html.replace(SCRIPT, (whole, attrs: string, body: string) => {
@@ -274,8 +292,10 @@ export let assetMaps = (
         ...map.imports as Record<string, unknown>,
       }
     }
+    let first = !merged && plain
     merged = true
-    return whole.replace(body, mapJson(map))
+    return whole.replace(body, mapJson(map)) +
+      (first ? preload(map.imports as Record<string, unknown>) : '')
   })
   if (merged || !Object.keys(imports).length) return page
   // Ahead of every module, and of any `<meta>` policy the head carries.
@@ -283,5 +303,5 @@ export let assetMaps = (
   let at = head ? head.index + head[0].length : page.search(/<script\b/i)
   return page.slice(0, at) +
     `<script type="importmap">${mapJson({ imports })}</script>` +
-    page.slice(at)
+    preload(imports) + page.slice(at)
 }

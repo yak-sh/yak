@@ -19,7 +19,9 @@ import { fileURLToPath } from 'node:url'
 let ROOTS = ['style.css', 'pages.css']
 let DIR = '_yak'
 
-/** What the pages name besides their sheets, named as they are. */
+/** What the pages name besides their sheets, named as they are. The store
+ * client among them is an app's, served below its `api/` by the name made
+ * here (sheets.ts `client`), since it finds the app's doors beside itself. */
 export let FILES = [
   'report.js',
   'deploy.js',
@@ -32,6 +34,7 @@ export let FILES = [
   'wander.js',
   'favicon-32.png',
   'apple-touch-icon.png',
+  '_client.js',
 ]
 
 /** The kit's sheet among the sources. */

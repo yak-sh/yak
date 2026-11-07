@@ -14,6 +14,11 @@ let NAMES = typeof YAK_NAMED == 'undefined' ? {} : YAK_NAMED
 export let asset = (env: Host, name: string, names = NAMES) =>
   url(env, `/${names[name] ?? name}`)
 
+/** The store client's content-made name below an app's `api/` (apps.ts
+ * `api`), or null where none was made. */
+export let client = (names = NAMES) =>
+  names['_client.js']?.replace(/^_yak\/_/, '') ?? null
+
 // The face nearly every page's text is in, asked for before the sheet is parsed.
 let FONT = 'nunito-latin.woff2'
 

@@ -3,8 +3,9 @@
 // (`_client.js`, served at `./api/client.js`): fetched as parts, the parts
 // were a round trip after the client's own on every load. The parts are
 // written beside it, for the bundle to read and for a page that loaded the
-// client before it was one. The site's own pages (site/mod.ts) and the kit's
-// share of its look (sheet-assets.ts) are written beside it.
+// client before it was one. The site's own pages (site/mod.ts) and its files
+// under names of their bytes (sheet-assets.ts) are written beside it, those
+// once the client is, since it is one of them.
 import * as io from '@yaks/file/io'
 import { bundle } from '@yaks/cli/page'
 import { written } from './sheet-assets.ts'
@@ -32,4 +33,6 @@ export let assets = async (to = new URL('./public/', import.meta.url)) => {
     await bundle(new URL('client.js', to)),
   )
 }
-if (import.meta.main) await Promise.all([assets(), written(), pages()])
+if (import.meta.main) {
+  await Promise.all([assets().then(() => written()), pages()])
+}

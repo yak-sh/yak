@@ -111,13 +111,18 @@ export let CLIENT = [
   '/_wire.js',
 ]
 
+/** The store client under a name of its bytes (sheets.ts `client`), the
+ * address a page of modules imports it by. */
+export let NAMED_CLIENT = /^\/client\.[0-9a-f]{10}\.js$/
+
 /** Whether a path names bytes at an app's `/api/` that are the same for
  * everyone who may read the app: a release's asset (asset_url.ts) or one of
  * the platform's modules. A page's first paint loads them, so Site keeps them
  * as it keeps the page. */
 export let fixed = (path: string) => {
   let api = /^(?:\/[^/]+)?\/api(\/.+)$/.exec(path)?.[1]
-  return !!api && (CLIENT.includes(api) || !!assetPath(api))
+  return !!api &&
+    (CLIENT.includes(api) || NAMED_CLIENT.test(api) || !!assetPath(api))
 }
 
 /** Whether a request could be answered by a kept page: a read with nothing

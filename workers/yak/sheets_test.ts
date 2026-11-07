@@ -12,7 +12,7 @@ import { kernel } from './probe.ts'
 import { lost } from './pages.ts'
 import { parseHTML } from 'linkedom'
 import { FILES, from, plan } from './sheet-assets.ts'
-import { asset, links, named, sheeted } from './sheets.ts'
+import { asset, client, links, named, sheeted } from './sheets.ts'
 import { direct } from './wrangler.ts'
 
 let PUBLIC = new URL('./public/', import.meta.url).pathname
@@ -106,6 +106,8 @@ test('sheets: each file the pages name is kept under a name of its bytes, as it 
     `https://yaks.app/${names['drop.js']}`,
   )
   assertEquals(asset({}, 'og.png', names), 'https://yaks.app/og.png')
+  assertMatch(client(names)!, /^client\.[0-9a-f]{10}\.js$/)
+  assertEquals(client({}), null)
 })
 
 // The addresses of the site's own files a page leaves with.

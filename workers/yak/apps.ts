@@ -32,7 +32,8 @@ import { copyOf } from './directory-copy.ts'
 import { apex, type Host, url as hostUrl } from './host.ts'
 import { r2Objects } from './lib/objects.ts'
 import { BUILD, joining, NOBODY, NOT_A_WRITER, posting } from './build-door.ts'
-import { browserImmutable } from './cache.ts'
+import { browserImmutable, immutable } from './cache.ts'
+import { client } from './sheets.ts'
 import {
   apiOut,
   assetMaps,
@@ -150,7 +151,7 @@ import {
   told,
   unkept,
 } from './page-cache.ts'
-import { type Alone, CLIENT, fixed } from './kept-page.ts'
+import { type Alone, CLIENT, fixed, NAMED_CLIENT } from './kept-page.ts'
 import { cookieValue } from '@yaks/platform/cookie'
 import { noted, refusal, serving } from './unseen.ts'
 import { broken } from '@yaks/tracker/report'
@@ -461,6 +462,23 @@ let platformFile = (req: Request, env: Env, path: string) =>
     }),
   )
 
+// The store client under a name of its bytes (sheet-assets.ts), which never
+// changes under it, so the browser keeps it. A page held from before a deploy
+// names one this deploy no longer holds, and is sent to the client it has.
+let namedClient = async (req: Request, env: Env, path: string) => {
+  let file = await platformFile(req, env, `/_yak/_${path.slice(1)}`)
+  if (file.status == 404) {
+    await file.body?.cancel()
+    return new Response(null, {
+      status: 302,
+      headers: { location: 'client.js' },
+    })
+  }
+  let headers = new Headers(file.headers)
+  headers.set('cache-control', immutable['cache-control'])
+  return new Response(file.body, { status: file.status, headers })
+}
+
 // The reporter, into every page the kernel serves (page-script.ts), wherever
 // the page has a place to put it ahead of its own code: first inside
 // `<head>`, else first inside `<body>`, else before the page's first script,
@@ -530,7 +548,7 @@ let mapped = (
 ) => {
   let id = releaseId(source)
   return id && !hasBase(html)
-    ? assetMaps(html, at, bare, id, assetReserved, base)
+    ? assetMaps(html, at, bare, id, assetReserved, base, client())
     : html
 }
 let released = (
@@ -1641,6 +1659,7 @@ export let api = async (
   // every app, so it comes from the platform's assets, not the app's blobs.
   // It is served as one module, its parts bundled in (client-assets.ts).
   if (path == '/client.js') return platformFile(req, env, '/_client.js')
+  if (NAMED_CLIENT.test(path)) return namedClient(req, env, path)
   if (CLIENT.includes(path)) return platformFile(req, env, path)
   let store = appStore(env.STORE, space, app, env)
   // What the page (or the browser itself) says broke. Anyone may report —

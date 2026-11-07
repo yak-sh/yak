@@ -2,6 +2,7 @@
 // stay where the page put them.
 import { test } from '@yaks/testing'
 import { assertEquals } from '@std/assert'
+import { parseHTML } from 'linkedom'
 import {
   apiOut,
   assetMaps,
@@ -271,5 +272,54 @@ test("a page's imports by address follow its release", () => {
       [`${root}api/`]: '/cookbook/api/',
       [`${root}a.js`]: `${root}b.js`,
     },
+  )
+})
+
+// A page of modules asks for the store client by the name of its bytes, which
+// the browser keeps, and before its first module has said it imports it.
+test('a page of modules imports the store client by its bytes, asked for beside the map', () => {
+  let id = '3c92f71b-848e-4492-95e7-c73402b90ffc'
+  let named = '/guestbook/api/client.0123456789.js'
+  let served = (
+    html: string,
+    client: string | null = 'client.0123456789.js',
+  ) => {
+    let { document } = parseHTML(
+      assetMaps(
+        html,
+        '/guestbook/',
+        '/guestbook/',
+        id,
+        () => false,
+        '/guestbook/',
+        client,
+      ),
+    )
+    let map = document.querySelector('script[type="importmap"]')
+    return {
+      imports: map ? JSON.parse(map.textContent!).imports : null,
+      preloads: [...document.querySelectorAll('link[rel="modulepreload"]')]
+        .map((link) => link.getAttribute('href')),
+      next: map?.nextElementSibling?.getAttribute('rel'),
+    }
+  }
+  let page = `<head></head><script type="module" src="./app.js"></script>`
+  let { imports, preloads, next } = served(page)
+  assertEquals(imports['/guestbook/api/client.js'], named)
+  assertEquals(imports[`/guestbook/api/assets/${id}/api/client.js`], named)
+  assertEquals([preloads, next], [[named], 'modulepreload'])
+  // Into an author's map, unless the author maps the client elsewhere.
+  let theirs = (imports: object) =>
+    served(
+      `<script type="importmap">${JSON.stringify({ imports })}</script>` + page,
+    )
+  assertEquals(theirs({ lit: './lit.js' }).preloads, [named])
+  assertEquals(theirs({ './api/client.js': './mine.js' }).preloads, [])
+  // No module, or no name, asks for nothing more.
+  assertEquals(served('<script>let a = 1</script>').preloads, [])
+  let unnamed = served(page, null)
+  assertEquals(
+    [unnamed.imports['/guestbook/api/client.js'], unnamed.preloads],
+    [undefined, []],
   )
 })

@@ -37,6 +37,8 @@ import {
   storeName,
 } from './directory.ts'
 import { pageScript } from './page-script.ts'
+import { from, plan } from './sheet-assets.ts'
+import { client as clientNamed } from './sheets.ts'
 import * as dirPart from './directory.ts'
 import { granting, scriptName } from './dispatch.ts'
 import type { Env } from './env.ts'
@@ -135,7 +137,8 @@ let client = (env: Env, cookie?: string) => {
 let CAKE = 'c0000000-0000-4000-8000-00000000cake'.replace('cake', '0001')
 
 // The platform's own scripts, read once.
-let ASSETS = assets(new URL('./public/', import.meta.url))
+let PUBLIC = new URL('./public/', import.meta.url)
+let ASSETS = assets(PUBLIC)
 await pageScript(ASSETS, '/', 0, { badge: 'https://yaks.app/' })
 
 // ---- the tests -------------------------------------------------------------
@@ -170,6 +173,25 @@ test('a page is served with its base and its reporter', async () => {
   let js = await apps.fetch(visit('/cookbook/api/client.js'), env)
   assertEquals(js.status, 200)
   assertEquals(served(await js.text()), { imports: [], store: true })
+})
+
+// The client by the name of its bytes (sheets.ts `client`) is the same
+// client, which the browser keeps for good. A page held from before a deploy
+// names one it no longer holds, and is sent to the client it has.
+test('the client by its bytes is kept for good, and an old name finds the client', async () => {
+  await using scenario = platform()
+  let { env } = scenario
+  await seeded(env, 'public', scenario.dir)
+  let name = clientNamed(plan(await from(PUBLIC.pathname)).names)!
+  let kept = await apps.fetch(visit(`/cookbook/api/${name}`), env)
+  assertEquals(kept.status, 200)
+  assertEquals(
+    kept.headers.get('cache-control'),
+    'public, max-age=31536000, immutable',
+  )
+  assertEquals(served(await kept.text()), { imports: [], store: true })
+  let old = await apps.fetch(visit('/cookbook/api/client.0123456789.js'), env)
+  assertEquals([old.status, old.headers.get('location')], [302, 'client.js'])
 })
 
 // The badge is the platform's, decided as a page is served: the same file
