@@ -6,6 +6,7 @@ import {
   FRAMING,
   promptBound,
   requestBound,
+  retained,
 } from './afford.ts'
 import { weigh } from './vocab.ts'
 
@@ -161,7 +162,47 @@ test('media, or history the provider holds, is bounded by the context window', (
   assertEquals(requestBound({ items: [], tools: [], anchor: 'r1' }, 9000), 9000)
   assertEquals(
     requestBound({ items: [], tools: [] }, 9000),
-    2 * '[null,[],[],null,null]'.length + FRAMING,
+    2 * '[null,[],null,null][]'.length + FRAMING,
+  )
+})
+
+test('a tool is declared as text, whatever its arguments are named', () => {
+  let tools = [{
+    name: 'library_read',
+    description: 'Read a document',
+    parameters: { properties: { document: { type: 'string' } } },
+  }]
+  assertEquals(
+    requestBound({ items: [], tools }, 1_000_000),
+    2 * ('[null,[],null,null]' + JSON.stringify(tools)).length + FRAMING,
+  )
+})
+
+test('a request is held at the hour cache write tariff only when it asks to keep its prefix an hour', () => {
+  let price = {
+    input: 2,
+    output: 0,
+    cached: 0.1,
+    cache_write: 2.5,
+    cache_write_1h: 4,
+  }
+  let held = (seconds?: number) =>
+    affordable(retained(price, seconds), 1_000_000, 100, 0)!.dollars
+  assertEquals([held(), held(300), held(3599), held(3600), held(7200)], [
+    2.5,
+    2.5,
+    2.5,
+    4,
+    4,
+  ])
+  // A charge of unclassified input weighs it at the same tariff.
+  assertEquals(
+    charged(
+      { usage: { input_tokens: 1_000_000, output_tokens: 0 } },
+      retained(price),
+      9,
+    ).dollars,
+    2.5,
   )
 })
 

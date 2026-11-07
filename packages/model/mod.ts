@@ -112,6 +112,7 @@ export {
   FRAMING,
   promptBound,
   requestBound,
+  retained,
 } from './afford.ts'
 export { cachedPrefixExpires, cacheExpiry, prefixCacheMark } from './cache.ts'
 export { acknowledged, began, submitCall, submitted } from './submission.ts'

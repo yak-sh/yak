@@ -133,12 +133,13 @@ export let native = (
       if (info.context == null) return null
       // Every choice bills the prompt again; each embedded text fills at
       // most its own context window.
+      let { tools, ...said } = sent
       let texts = price!.output == 0 && Array.isArray(sent.text)
         ? sent.text.length
         : 1
       let quote = affordable(
         { ...price!, output: price!.output * choices },
-        choices * promptBound(sent, info.context * texts),
+        choices * promptBound(said, info.context * texts, tools),
         remaining,
         desired,
       )

@@ -23,7 +23,7 @@ export let turn = async (
         : price && input != null
         ? affordable(
           price,
-          promptBound([ask.system, ask.said, ask.fns], input),
+          promptBound([ask.system, ask.said], input, ask.fns),
           remaining,
           ask.tokens,
         )

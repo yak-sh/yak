@@ -32,6 +32,7 @@ import {
   type Native,
   type Price,
   requestBound,
+  retained,
 } from '@yaks/model'
 import { defect } from './defects.ts'
 import { reserved, settled } from './model-spend.ts'
@@ -1097,10 +1098,9 @@ export let accounted = (
       // A request priced by the call is quoted by its model alone.
       let own = model.quote?.(req, 0) !== undefined
       let info = own ? undefined : await model.info?.(req.model)
-      let tariff = reached(
-        'priced',
-        info?.price ?? await price?.(req.model),
-      )
+      let listed = reached('priced', info?.price ?? await price?.(req.model))
+      // Held and charged at what the request can be billed.
+      let tariff = listed && retained(listed, req.cacheRetention)
       let call = req.call ?? mint()
       let visitor = await visiting?.(req)
       let hold = await reserved(

@@ -183,6 +183,33 @@ test('a model that searches reserves its tools’ most and is charged each searc
   assertAlmostEquals(await searching.used(), 0.0015 + 0.0001 + 0.02)
 })
 
+let keeping = [await fixture(), await fixture()]
+test('a request holds the hour cache write tariff only when it asks to keep its prefix an hour', async () => {
+  let held: number[] = []
+  let raw: Model = Object.assign(async (ask: Parameters<Model>[0]) => {
+    held.push(await keeping[held.length].used())
+    return {
+      id: 'kept',
+      model: ask.model,
+      items: [],
+      usage: { input_tokens: 1000, output_tokens: 10 },
+    }
+  }, {
+    info: () =>
+      Promise.resolve({
+        name: 'bounded',
+        context: 1000,
+        price: { input: 1, output: 1, cache_write: 2, cache_write_1h: 4 },
+      }),
+  })
+  await withModel(keeping[0].space, raw)(req)
+  await withModel(keeping[1].space, raw)({ ...req, cacheRetention: 3600 })
+  assertAlmostEquals(held[0], 0.002 + 0.002)
+  assertAlmostEquals(held[1], 0.004 + 0.002)
+  // Input the provider did not classify is charged at the tariff it was held at.
+  assertAlmostEquals(await keeping[0].used(), 0.002 + 0.00001)
+})
+
 test('raw multiple choices and completion-token aliases share one affordable bound', async () => {
   await choices.run({ n: 2, max_tokens: 1000, max_completion_tokens: 1000 })
   assertEquals(choices.asked.length, 1)

@@ -19,6 +19,7 @@ import {
   ModelError,
   type Price,
   requestBound,
+  retained,
   submitCall,
 } from '@yaks/model'
 import { capture } from '@yaks/tracker/report'
@@ -187,7 +188,10 @@ export let lending = async (
         // have committed before the object-write acknowledgement was lost.
         if (!await read(at.env, job.request)) {
           let [model] = await at.graph.get([String((ask.ask as Comp).to)])
-          let price = model?.price as Price | undefined
+          // Frozen as the request can be billed, so the hold and the charge
+          // weigh it alike.
+          let listed = model?.price as Price | undefined
+          let price = listed && retained(listed, req.cacheRetention)
           let context = (model?.model as Comp | undefined)?.context as
             | number
             | undefined

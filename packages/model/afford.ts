@@ -26,19 +26,24 @@ let textual = (value: unknown): boolean =>
         !media.has(k) && !(k == 'kind' && media.has(String(v))) && textual(v),
     ))
 
-/** An upper bound on the input tokens a text prompt can bill, never above the
- * model's context window. A text token covers at least one UTF-8 byte, so the
- * prompt's compact JSON bounds its text; doubling it covers a template that
- * re-renders that JSON with spaces and indentation, and FRAMING the markers
- * around it. Media is tokenized by its pixels or samples, not its bytes, so a
- * prompt carrying any is bounded by the context window alone. */
-export let promptBound = (prompt: unknown, context: number): number =>
+let size = (value: unknown) =>
+  new TextEncoder().encode(JSON.stringify(value) ?? '').length
+
+/** An upper bound on the input tokens a text prompt and the tools it declares
+ * can bill, never above the model's context window. A text token covers at
+ * least one UTF-8 byte, so the compact JSON bounds the text; doubling it
+ * covers a template that re-renders that JSON with spaces and indentation,
+ * and FRAMING the markers around it. Media is tokenized by its pixels or
+ * samples, not its bytes, so a prompt carrying any is bounded by the context
+ * window alone. Only the prompt is searched for media: a tool is declared as
+ * text, whatever its arguments are named. */
+export let promptBound = (
+  prompt: unknown,
+  context: number,
+  tools?: unknown,
+): number =>
   textual(prompt)
-    ? Math.min(
-      context,
-      2 * new TextEncoder().encode(JSON.stringify(prompt) ?? '').length +
-        FRAMING,
-    )
+    ? Math.min(context, 2 * (size(prompt) + size(tools)) + FRAMING)
     : context
 
 /** A request's input bound. An anchor continues a conversation the provider
@@ -50,9 +55,18 @@ export let requestBound = (
   context: number,
 ): number =>
   req.anchor ? context : promptBound(
-    [req.instructions, req.items, req.tools, req.questions, req.input],
+    [req.instructions, req.items, req.questions, req.input],
     context,
+    req.tools,
   )
+
+/** A request's price as it can be billed. A provider keeps the longest cache
+ * lifetime it offers that is not over what the request asks
+ * (`Request.cacheRetention`), or its default, so only a request asking an
+ * hour can write to the hour's cache at its dearer tariff. */
+export let retained = (price: Price, seconds = 0): Price =>
+  seconds >= HOUR ? price : { ...price, cache_write_1h: undefined }
+let HOUR = 3600
 
 let valid = (n: number) => Number.isFinite(n) && n >= 0
 let upward = (dollars: number) => Math.ceil(dollars * 1e12) / 1e12

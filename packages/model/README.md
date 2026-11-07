@@ -360,13 +360,22 @@ insufficient. It reserves input at the highest applicable cache tariff, rounds
 the maximum cost upward, and requires the provider to enforce the returned
 output limit.
 
-`promptBound(prompt, context)` is that bound for a text prompt, built before the
-call: twice its compact JSON's UTF-8 bytes (a text token covers at least one
-byte; doubling covers a template's spaces and indentation) plus `FRAMING`
-tokens, and never more than `context`. A prompt carrying media is bounded by
-`context` alone. `requestBound(request, context)` applies it to a `Request`'s
-instructions, items, tools, questions and input, or gives `context` when an
-`anchor` continues history the provider holds.
+`promptBound(prompt, context, tools?)` is that bound for a text prompt and the
+tools it declares, built before the call: twice their compact JSON's UTF-8 bytes
+(a text token covers at least one byte; doubling covers a template's spaces and
+indentation) plus `FRAMING` tokens, and never more than `context`. A prompt
+carrying media is bounded by `context` alone; tools are declared as text, so an
+argument named `document` or `image` is not media.
+`requestBound(request,
+context)` applies it to a `Request`'s instructions,
+items, questions and input beside its tools, or gives `context` when an `anchor`
+continues history the provider holds.
+
+`retained(price, cacheRetention?)` is a request's price as it can be billed: a
+provider keeps the longest cache lifetime it offers not over what the request
+asks, or its default, so the hour's write tariff (`cache_write_1h`) applies only
+to a request asking to keep its prefix an hour. A caller holds and charges a
+request at this price.
 
 `charged(reply, price, maximumReservedDollars)` settles reported dollars or
 complete usage conservatively. Missing usage retains the reserved maximum;
