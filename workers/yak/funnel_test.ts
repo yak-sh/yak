@@ -3,11 +3,12 @@
 import { test } from '@yaks/testing'
 import { assertEquals } from '@std/assert'
 import { parseHTML } from 'linkedom'
-import { clicked, CTAS, funnel, step } from './funnel.ts'
+import { clicked, CTAS, funnel, step, type Who } from './funnel.ts'
 import { FUNNEL, isHome, type Visited } from './view-point.ts'
 import { analytics, dataset } from './testing.ts'
 import { page } from './site/mod.ts'
 import type { Env } from './env.ts'
+import { kernel, mailed, unique } from './probe.ts'
 
 let BROWSER = 'Mozilla/5.0 (Macintosh) AppleWebKit Safari'
 let visit = (ua = BROWSER, path = '/', cf?: Visited['cf']) =>
@@ -27,7 +28,7 @@ test("a step is written under the platform, saying what a view says and its camp
   step({ VIEWS: views }, 'signup', visit('yaks-e2e-bot'))
   step({ VIEWS: views }, 'started', visit('ClaudeBot/1.0'))
   step({ VIEWS: views }, 'returned')
-  step({ VIEWS: views }, 'first_app', undefined, { test: true })
+  step({ VIEWS: views }, 'first_app', undefined, { who: 'e2e@bot.yak.sh' })
   step(
     { VIEWS: views },
     'home',
@@ -76,6 +77,27 @@ test("a step is written under the platform, saying what a view says and its camp
       doubles: [0],
     },
   ])
+})
+
+test("a step for a test account, or for a space only test accounts own, is a test's", () => {
+  let views = dataset()
+  let client = (who: Who) => {
+    step({ VIEWS: views }, 'paid', undefined, { who })
+    return views.points.at(-1)!.blobs![5]
+  }
+  let cases: [Who, string][] = [
+    ['snappy-survey@bot.yak.sh', 'test'],
+    ['nobody@example.invalid', 'test'],
+    [['a@bot.yak.sh', 'b@bot.yak.sh'], 'test'],
+    // The platform's own admin and the demo's holder are not throwaways.
+    ['admin@bot.yak.sh', ''],
+    ['ada@example.com', ''],
+    [['a@bot.yak.sh', 'ada@example.com'], ''],
+    [['a@bot.yak.sh', null], ''],
+    [null, ''],
+    [[], ''],
+  ]
+  assertEquals(cases.map(([who]) => client(who)), cases.map(([, c]) => c))
 })
 
 test('the home page is visited by a browser asking for /, not a crawler', () => {
@@ -248,4 +270,41 @@ test("each of the home page's calls to action sends its name when clicked", asyn
   assertEquals(clicks(true), each('beacon'))
   assertEquals(clicks(false), each('beacon', 'keepalive'))
   assertEquals(clicks(), each('keepalive'))
+})
+
+test("signing in through the doors in a browser counts a person's steps, and a test account's apart", async () => {
+  let k = await kernel()
+  let signs = async (address: string) => {
+    let form = (path: string, fields: Record<string, string>) =>
+      k.at(k.host, path, {
+        method: 'POST',
+        redirect: 'manual',
+        headers: {
+          'content-type': 'application/x-www-form-urlencoded',
+          'user-agent': BROWSER,
+        },
+        body: new URLSearchParams(fields).toString(),
+      })
+    let before = k.views.points.length
+    await (await form('/login', { address })).body?.cancel()
+    let inn = await form('/login/code', {
+      address,
+      code: await mailed(k, address),
+    })
+    assertEquals(inn.status, 303)
+    await inn.body?.cancel()
+    return k.views.points.slice(before)
+      .filter((p) => p.indexes?.[0] == FUNNEL)
+      .map((p) => `${p.blobs?.[1]} ${p.blobs?.[5]}`)
+  }
+  assertEquals(await signs(`${unique('snappy-survey')}@bot.yak.sh`), [
+    'code_sent test',
+    'signed_in test',
+    'signup test',
+  ])
+  assertEquals(await signs(`${unique('ada')}@example.com`), [
+    'code_sent browser',
+    'signed_in browser',
+    'signup browser',
+  ])
 })

@@ -16,9 +16,10 @@ export type Visited = Request & {
 let AGENTS =
   /claude|anthropic|gptbot|chatgpt|openai|oai-search|perplexity|gemini|google-extended|cohere|bytespider|amazonbot|meta-externalagent|applebot-extended|ccbot|duckassist|youbot/i
 
-// Crawlers, monitors, link unfurlers and anything speaking through a library.
+// Crawlers, monitors, link unfurlers and anything speaking through a library
+// or a runtime's own fetch, such as Deno's, which the fleet's CLI signs in by.
 let BOTS =
-  /bot|spider|crawler|crawl|slurp|curl|wget|python-requests|go-http-client|okhttp|libwww|httpclient|monitor|uptime|headlesschrome|phantomjs|scrapy|feedfetcher|preview|facebookexternalhit|embedly|pingdom/i
+  /bot|spider|crawler|crawl|slurp|curl|wget|python-requests|go-http-client|okhttp|libwww|httpclient|monitor|uptime|headlesschrome|phantomjs|scrapy|feedfetcher|preview|facebookexternalhit|embedly|pingdom|^deno\/|^node$|^bun\/|undici|node-fetch|axios/i
 
 // Networks whose every request is a machine's, whatever browser it names: an
 // ad network fetching and rendering an ad's landing page to review it, minutes

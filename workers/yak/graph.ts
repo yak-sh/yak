@@ -4328,7 +4328,7 @@ export class Store {
       }
       let mark = word == 'changed' || word == 'errored' ? String(word) : null
       let [row] = await this.#graph.read(
-        `.entity.eid=${eid} ${mark ? `?${mark}` : '?used ?person'}`,
+        `.entity.eid=${eid} ${mark ? `?${mark}` : '?used ?person ?email'}`,
       )
       if (!row) {
         return json({ error: 'NotFound', message: 'no such entity' }, 404)
@@ -4354,7 +4354,8 @@ export class Store {
       else {
         await this.#asIs([{ entity: { eid }, used: { at } }], { stamp: false })
         if (row.person && returned(previous, at)) {
-          funnel.step(this.#bind, 'returned')
+          let who = (row.email as { address?: string } | undefined)?.address
+          funnel.step(this.#bind, 'returned', undefined, { who: who ?? null })
         }
       }
       return json({ at })

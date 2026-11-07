@@ -76,6 +76,9 @@ test('classed: an assistant, a crawler, a person, a script', () => {
       'python-requests/2.32.3',
       'facebookexternalhit/1.1',
       'Pingdom.com_bot_version_1.4',
+      'Deno/2.5.6',
+      'node',
+      'Bun/1.3.1',
     ]
   ) assertEquals(classed(asked(ua)), 'bot', ua)
 

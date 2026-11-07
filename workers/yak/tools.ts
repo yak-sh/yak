@@ -377,10 +377,9 @@ let rostered = (ctx: Ctx) =>
 // put this afternoon's recipe in.
 let said = async (ctx: Ctx) => await ctx.standing?.() ?? ''
 
-// Whether the caller is a test account, whose funnel steps count apart from a
-// person's (funnel.ts `step`).
-let tested = async (ctx: Ctx) =>
-  isTestAddress(await ctx.dir.emailAt(ctx.person) ?? '')
+// The caller's address, which says whom a funnel step is for (funnel.ts
+// `step`).
+let caller = (ctx: Ctx) => ctx.dir.emailAt(ctx.person)
 
 // How a caller got in, said the way a person would say it (identity.ts
 // `Caller`).
@@ -3227,7 +3226,7 @@ let OURS: Row[] = [
         ),
       )
       if (!apps.length) {
-        step(ctx.env, 'first_app', undefined, { test: await tested(ctx) })
+        step(ctx.env, 'first_app', undefined, { who: await caller(ctx) })
       }
       // No link to hand on yet (T-135905): its address serves nothing until
       // a version is released, so the text says not to give it, and
@@ -3896,7 +3895,7 @@ let OURS: Row[] = [
         }
       }
       if (version == 1) {
-        step(ctx.env, 'first_deploy', undefined, { test: await tested(ctx) })
+        step(ctx.env, 'first_deploy', undefined, { who: await caller(ctx) })
       }
       return {
         text:

@@ -84,6 +84,9 @@ export type Door = ReturnType<typeof driven>
 export type Kernel = Door & {
   owner: Person
   dir: Directory
+  // Every data point the Visits dataset was handed: page views and funnel
+  // steps.
+  views: { points: { indexes?: string[]; blobs?: string[] }[] }
   stop: () => Promise<void>
   // In-process HTTP probes can inspect what crossed the tracker queue door.
   reported: Bundle[]
@@ -155,7 +158,7 @@ let boot = async (
 ) => {
   let [
     { handler },
-    { ai, emailed, limiter, lasting, modelPage },
+    { ai, dataset, emailed, limiter, lasting, modelPage },
     { within },
   ] = await Promise
     .all([
@@ -167,12 +170,16 @@ let boot = async (
   let log = crypto.randomUUID()
   logs.set(log, '')
   let cf = cloudflare(log)
+  let views = dataset()
   let p = lasting(secret, {
     ...vars(secret, cf.url),
     // What the runtime binds beside the config: this deploy's id, and the
     // `send_email` binding an app's letters leave through.
     CF_VERSION_METADATA: { id: crypto.randomUUID() },
     MAIL: cf.binding,
+    // The Visits dataset, kept in memory: what the kernel counts (views.ts,
+    // funnel.ts) is read off `views`.
+    VIEWS: views,
     // A model that says nothing, priced from a page of our own: an app's
     // break starts its space's Operator (unseen.ts `fix`), and no test
     // reaches Workers AI or its catalogue.
@@ -238,6 +245,7 @@ let boot = async (
       ...door,
       owner: await signIn(door, `owner@${apex()}`),
       dir: directoryOf(p.env.STORE),
+      views,
       reported,
       flushReports: () => reportClock.advance(10_000),
       settled,

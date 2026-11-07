@@ -33,6 +33,7 @@ let dir = {
         : null,
     ),
   seats: () => Promise.resolve(spaces),
+  emailAt: () => Promise.resolve('ada@example.com'),
 } as unknown as Directory
 let request = (method: string, signed = true, name = 'trip-plan') =>
   new Request(`https://yaks.app${at(name)}`, {

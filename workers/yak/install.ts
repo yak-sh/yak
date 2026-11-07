@@ -103,8 +103,9 @@ export let answer = async (req: Request, env: Env, dir: Directory) => {
       404,
     )
   }
-  if (req.method == 'GET') step(env, 'install', req)
   let who = await whoIs(req, env.SESSION_SECRET, () => Promise.resolve(null))
+  let address = who.person ? await dir.emailAt(who.person) : null
+  if (req.method == 'GET') step(env, 'install', req, { who: address })
   if (!who.person) {
     return Response.redirect(signInAt(url(env, installAt(name)), env), 303)
   }
@@ -143,7 +144,7 @@ export let answer = async (req: Request, env: Env, dir: Directory) => {
     if (typeof destination != 'string') {
       throw new Error('Installation returned no app address')
     }
-    step(env, 'install_done', req)
+    step(env, 'install_done', req, { who: address })
     return Response.redirect(destination, 303)
   } catch (error) {
     let status = refusing(error, { request: 'POST /install' })

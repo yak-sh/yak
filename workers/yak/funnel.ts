@@ -12,6 +12,7 @@ import { caught } from './defects.ts'
 import type { Host } from './host.ts'
 import { fromOurs } from './page-report.ts'
 import { isPerson } from './crawlers.ts'
+import { isTestAddress } from '@yaks/platform/bots'
 import { FUNNEL, stepOf, type Visited } from './view-point.ts'
 import {
   BUTTON,
@@ -67,27 +68,40 @@ export let CTAS = [
   { name: 'join', say: 'Start, in the closing card' },
 ] as const
 
+/** Whom a step is for: a person's address, or the addresses of the owners
+ * of the space it is for. An address nobody knows (null) is a person's. */
+export type Who = string | null | readonly (string | null)[]
+
 /**
  * Count one step. Fire-and-forget, as a view is (views.ts `viewed`): nothing
  * waits on it, and a throw is one report rather than a broken door. A step
  * taken through a request is a person's only when a browser asked
  * (crawlers.ts `isPerson`): a crawler's, an assistant's or a script's, such
- * as an agent going through the sign-up live, counts as nothing. One a test
- * account took (`test`, @yaks/platform/bots), such as an agent signing up
+ * as an agent going through the sign-up live, counts as nothing. One for a
+ * test account (`who`, @yaks/platform/bots), such as an agent signing up
  * through a browser, is counted apart from a person's.
  */
 export let step = (
   env: Pick<Env, 'VIEWS'>,
   name: Step,
   req?: Request,
-  also: { button?: string; test?: boolean } = {},
+  { button, who }: { button?: string; who?: Who } = {},
 ) => {
   if (!env.VIEWS || (req && !isPerson(req))) return
   try {
-    env.VIEWS.writeDataPoint(stepOf(name, req as Visited | undefined, also))
+    env.VIEWS.writeDataPoint(
+      stepOf(name, req as Visited | undefined, { button, test: tested(who) }),
+    )
   } catch (e) {
     caught(e, { request: 'funnel write' })
   }
+}
+
+// Whether a step is a test account's: it is for somebody, and every address
+// it is for is a test account's.
+let tested = (who: Who = []) => {
+  let all = [who].flat()
+  return all.length > 0 && all.every((a) => a != null && isTestAddress(a))
 }
 
 /** Where a page's script (public/cta.js) posts the call to action clicked. */

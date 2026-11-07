@@ -60,7 +60,6 @@ import { step } from './funnel.ts'
 import { sessionAt } from './session.ts'
 import { fault } from './unseen.ts'
 import { plans } from './payments.ts'
-import { isTestAddress } from '@yaks/platform/bots'
 
 // ---- the plan, derived from one subscription -----------------------------
 
@@ -351,7 +350,7 @@ export let checkout = async (
       tags: tagsOf(env, space),
       trial: free,
     })
-    step(env, 'checkout', req, { test: isTestAddress(email) })
+    step(env, 'checkout', req, { who: email })
     return Response.json({ url })
   } catch (e) {
     await fault(env, 'POST /api/billing/checkout', e)
@@ -456,9 +455,14 @@ export let apply = async (env: Env, heard: Changed) => {
   await stamp(env, {
     entities: [{ entity: { eid: space.eid }, plan: changed }],
   })
-  // Counted with no request: the provider's delivery says nothing of the
-  // person who paid.
-  if (bought(space.plan, next)) step(env, 'paid')
+  // Counted with no request, for the space's owners: the provider's delivery
+  // says nothing of the person who paid.
+  if (bought(space.plan, next)) {
+    let owners = await dir.owners(space)
+    step(env, 'paid', undefined, {
+      who: await Promise.all(owners.map((p) => dir.emailAt(p))),
+    })
+  }
   return `${space.slug} is ${next.tier}`
 }
 

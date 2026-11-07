@@ -219,7 +219,6 @@ import { sha256 } from '@yaks/graph/sha256'
 import { consentEid, shown } from '@yaks/phone'
 import { credit } from './referral.ts'
 import { carried } from './protocol.ts'
-import { isTestAddress } from '@yaks/platform/bots'
 
 // What a grant carries and a token gives back: the person, nothing else.
 // Membership is read from the directory at request time, never a claim.
@@ -421,6 +420,11 @@ let backTo = (back: string, env: Host) =>
   (back && onZone(back, env)) || hostUrl(env, MANAGE)
 
 let dirOf = (env: Env) => directory(bound(env.DIRECTORY, dirPart.fetch, env))
+
+// The address on a person's row, which says whom a funnel step is for
+// (funnel.ts `step`): null for a row with none, such as a newcomer's.
+let addressIn = (row?: Record<string, unknown>) =>
+  (row?.email as { address?: string } | undefined)?.address ?? null
 
 // The provider as connected.ts reads it. A client whose metadata document
 // cannot be fetched just now is unknown, not gone: its grants still stand.
@@ -817,16 +821,15 @@ let landed = async (
     // A person who has never signed in before is the funnel's sign-up
     // (funnel.ts): the first time, whether their row came from this sign-in
     // or from somebody inviting them.
-    let [row] = await store.query(`.entity.eid=${person} ?signed_in`)
+    let [row] = await store.query(`.entity.eid=${person} ?signed_in ?email`)
     await store.apply([{
       entity: { eid: person },
       signed_in: { at: new Date().toISOString(), via },
     }], KERNEL)
-    // A test account's sign-in counts apart from a person's (funnel.ts).
-    let test = isTestAddress(await dir.emailAt(person) ?? '')
-    step(env, 'signed_in', req, { test })
+    let who = addressIn(row)
+    step(env, 'signed_in', req, { who })
     if (!row?.signed_in) {
-      step(env, 'signup', req, { test })
+      step(env, 'signup', req, { who })
       ads.after(env, 'signup', req)
     }
   }
@@ -868,9 +871,10 @@ let begun = async (req: Request, env: Env, said: string) => {
   let person = await browser(env, req)
   // A cookie outlives a newcomer whose space nobody kept and was erased
   // (erase.ts `vacated`): their browser is a stranger again.
-  if (person && !(await meta(env).query(`.entity.eid=${person}&.person`))[0]) {
-    person = null
-  }
+  let [known] = person
+    ? await meta(env).query(`.entity.eid=${person}&.person ?email`)
+    : []
+  if (!known) person = null
   let set: string | undefined
   if (!person) {
     if (!await counted(env, await visitor(secret(env), source(req)))) {
@@ -898,7 +902,7 @@ let begun = async (req: Request, env: Env, said: string) => {
     },
     options: { id: request },
   })
-  step(env, 'started', req)
+  step(env, 'started', req, { who: addressIn(known) })
   return redirect(chat, set, 303)
 }
 
@@ -1050,7 +1054,9 @@ let allow = async (
   let ask = await asked(req, env, q)
   if (ask instanceof Response) return ask
   let { redirectTo } = await consent(api(env), ask, person)
-  step(env, 'connector_granted', req)
+  step(env, 'connector_granted', req, {
+    who: await dirOf(env).emailAt(person),
+  })
   return redirect(redirectTo, set)
 }
 
@@ -1316,7 +1322,7 @@ let ours = async (req: Request, env: Env): Promise<Response> => {
     if (code && text) {
       // The text goes after the answer, as the letter does, from the
       // platform's number (operator-texts.ts `tell`).
-      step(env, 'code_sent', req)
+      step(env, 'code_sent', req, { who: address })
       let { tell } = await import('./operator-texts.ts')
       background(
         tell(
@@ -1343,7 +1349,7 @@ let ours = async (req: Request, env: Env): Promise<Response> => {
       // that depends on it. One that will not leave is a break for us to
       // read, and the card's "Send a new code" is the person's way to ask
       // again.
-      step(env, 'code_sent', req)
+      step(env, 'code_sent', req, { who: address })
       background(
         met(env, address)
           .then((met) =>
@@ -1451,15 +1457,17 @@ let ours = async (req: Request, env: Env): Promise<Response> => {
     let q = url.search.slice(1)
     let ask = await asked(req, env, q)
     if (ask instanceof Response) return ask
-    step(env, 'connector_start', req)
     let who = await withAuth(env, req)
+    let [row] = who
+      ? await meta(env).query(`.entity.eid=${who.person}`) as {
+        email?: { address: string }
+        phone?: { number: string }
+      }[]
+      : []
+    step(env, 'connector_start', req, { who: addressIn(row) })
     if (!who) {
       return signCard(env, { q, who: await clientName(env, ask) })
     }
-    let [row] = await meta(env).query(`.entity.eid=${who.person}`) as {
-      email?: { address: string }
-      phone?: { number: string }
-    }[]
     return askAllow(
       row?.email?.address ??
         (row?.phone ? shown(row.phone.number) : 'yourself'),
