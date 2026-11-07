@@ -23,6 +23,16 @@ routes = [
   { pattern = "*/*", zone_name = "yaks.app" },
 ]
 
+# The sandbox CLI (../sandbox/cli-assets.ts writes public/_cli), served at the
+# apex's /_cli/ to the sandbox's launcher. It changes with every runtime source
+# under packages/, so it rides here and not in the kernel, whose new version
+# would start every isolate cold. run_worker_first: front.ts decides that only
+# the apex serves it.
+[assets]
+directory = "./public"
+binding = "CLI"
+run_worker_first = true
+
 [observability.logs]
 enabled = true
 invocation_logs = true
@@ -79,6 +89,11 @@ routes = [
   { pattern = "yaks.fyi/*", zone_name = "yaks.fyi" },
   { pattern = "*.yaks.fyi/*", zone_name = "yaks.fyi" },
 ]
+
+[env.staging.assets]
+directory = "./public"
+binding = "CLI"
+run_worker_first = true
 
 [env.staging.observability.logs]
 enabled = true

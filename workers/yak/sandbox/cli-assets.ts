@@ -1,6 +1,7 @@
-// The sandbox runs the CLI sources carried by the Worker it talks to. Each
-// release serves a content-addressed workspace and a small current descriptor;
-// changing CLI source never changes the sandbox's toolchain image.
+// The sandbox runs the CLI sources yak-front serves at the apex's `/_cli/`
+// (front/wrangler.toml). Each release serves a content-addressed workspace and
+// a small current descriptor; changing CLI source never changes the sandbox's
+// toolchain image, nor the kernel's version.
 import * as io from '@yaks/file/io'
 import * as system from '@yaks/process/system'
 import { command as spawnCommand } from '@yaks/process/command'
@@ -41,10 +42,10 @@ export let serialized = (files: Record<string, string>): string =>
     ),
   })
 
-/** Generate the static assets Wrangler binds to this Worker version. */
+/** Generate the static assets Wrangler binds to yak-front's version. */
 export let assets = async (
   root = fileURLToPath(new URL('../../../', import.meta.url)),
-  output = join(root, 'workers/yak/public/_cli'),
+  output = join(root, 'workers/yak/front/public/_cli'),
 ): Promise<Release & { files: number; bytes: number }> => {
   root = resolve(root)
   let listed = await spawnCommand('git', {
@@ -98,7 +99,7 @@ if (import.meta.main) {
   let started = performance.now()
   let root = system.args[0] ??
     fileURLToPath(new URL('../../../', import.meta.url))
-  let output = system.args[1] ?? join(root, 'workers/yak/public/_cli')
+  let output = system.args[1] ?? join(root, 'workers/yak/front/public/_cli')
   let release = await assets(root, output)
   console.log(
     `Sandbox CLI: ${release.files} files, ${release.bytes} bytes, ${

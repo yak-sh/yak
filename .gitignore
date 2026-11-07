@@ -51,9 +51,9 @@ node_modules
 /bench/*.results.json
 /bench/*.json.tmp
 
-# The sandbox CLI workspace and launcher, and the compiler catalog, generated
-# for the Worker asset upload.
-/workers/yak/public/_cli/
+# The sandbox CLI workspace and launcher, generated for yak-front's asset
+# upload, and the compiler catalog, for the kernel's.
+/workers/yak/front/public/
 /workers/yak/public/_compiler/
 
 # The browser client as one module, generated from public/client.js.

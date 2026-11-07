@@ -52,6 +52,8 @@ export type FrontEnv = Host & {
     wake(store: string): Promise<void> | void
   }
   ADS?: { told(c: Conversion): Promise<void> }
+  // The sandbox CLI this Worker's assets carry (wrangler.toml `[assets]`).
+  CLI: Pick<Fetcher, 'fetch'>
   VIEWS?: { writeDataPoint(point: unknown): void }
   ERRORS?: { send: (body: never) => Promise<void> }
   WORKER_NAME?: string
@@ -234,10 +236,19 @@ let report = (
   )
 }
 
+/** Whether this is the apex's sandbox CLI (../sandbox/launch.ts fetches it),
+ * which this Worker's assets hold and the kernel's don't. */
+let cli = (req: Request, env: FrontEnv) => {
+  let url = new URL(req.url)
+  return url.hostname.toLowerCase() == apex(env) &&
+    url.pathname.startsWith('/_cli/')
+}
+
 export let serve = async (req: Request, env: FrontEnv, ctx: Lent) => {
   let at = Date.now(), cold = served++ == 0, said: string[] = []
   let refused: number | null = null
   try {
+    if (cli(req, env)) return await env.CLI.fetch(req)
     let page = await kept(req, env, ctx, said)
     if (page instanceof Response) return finished(page, env, at, cold, said)
     refused = page

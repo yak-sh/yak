@@ -92,7 +92,7 @@ export let readiness = (
         }
       },
     )
-  return { dependencies, web, catalog, client, all }
+  return { dependencies, web, catalog, cli, client, all }
 }
 
 let modules = (root: string, quiet: boolean) =>
@@ -296,6 +296,29 @@ export let images = (
     [parsed, ...Object.values(parsed.env ?? {})]
       .flatMap((c) => c.containers ?? []),
   )
+}
+
+type Assets = { assets?: { directory?: string } }
+
+/** The static files a config uploads beside its modules, by path from `root`:
+ * every file under each `[assets]` directory it names. */
+export let served = (
+  config: string,
+  root = dir,
+): Record<string, Uint8Array> => {
+  let path = join(root, config)
+  let parsed = parse(io.readTextFileSync(path)) as Assets & {
+    env?: Record<string, Assets>
+  }
+  let out: Record<string, Uint8Array> = {}
+  for (let part of [parsed, ...Object.values(parsed.env ?? {})]) {
+    if (!part.assets?.directory) continue
+    let at = join(dirname(path), part.assets.directory)
+    for (let [file, bytes] of Object.entries(contents(at))) {
+      out[relative(root, join(at, file))] = bytes
+    }
+  }
+  return out
 }
 
 let imageInputs = (
@@ -916,7 +939,7 @@ export let prepareSibling = async (
         modules[file.name] = io.readFileSync(join(output, file.name))
       }
     }
-    Object.assign(modules, images(config, root))
+    Object.assign(modules, images(config, root), served(config, root))
     let digest = inputsOf(
       io.readTextFileSync(join(root, config)),
       args,
@@ -1421,8 +1444,10 @@ if (import.meta.main) {
   let uploads = new Map(
     siblings(argv).map((args) => [
       args[args.indexOf('-c') + 1],
+      // yak-front's assets are the sandbox CLI (front/wrangler.toml), which
+      // its bundle and digest read.
       preflight(
-        () => readied,
+        () => Promise.all([readied, made.cli]),
         () => inspected,
         () => prepareSibling(args, wrangler),
         async (prepared) => uploadSibling(await prepared, run, wrangler),

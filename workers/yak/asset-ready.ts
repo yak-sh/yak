@@ -73,10 +73,13 @@ export let assetInputs = (paths: string[]) =>
 
 let outputs = async (root: string) => {
   let publicDir = join(root, 'public')
+  let cli = join(root, 'front/public')
   let { url } = JSON.parse(
-    await io.readTextFile(join(publicDir, '_cli/current.json')),
+    await io.readTextFile(join(cli, '_cli/current.json')),
   )
   return [
+    ...['_cli/current.json', '_cli/launch.ts', url]
+      .map((name) => join(cli, name)),
     ...[
       'app.js',
       'styles.css',
@@ -96,9 +99,6 @@ let outputs = async (root: string) => {
       '_wire.js',
       '_talk.js',
       '_client.js',
-      '_cli/current.json',
-      '_cli/launch.ts',
-      url,
       ...(await ui()).keys(),
       ...Object.keys(PAGES),
       ...Object.values(plan(await from(publicDir)).names),

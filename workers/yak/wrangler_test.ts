@@ -25,6 +25,7 @@ import {
   sameServing,
   sameUpload,
   seen,
+  served,
   siblingImages,
   siblingMessage,
   SIBLINGS,
@@ -566,6 +567,20 @@ test("a sibling's images are its Dockerfiles and their build contexts", async ()
       'ctx/lib/b.ts',
       'w/Dockerfile',
     ])
+    // A sibling's static assets are part of its upload, so its digest.
+    write(
+      'a/wrangler.toml',
+      '[assets]\ndirectory = "./public"\n' +
+        '[env.lab.assets]\ndirectory = "../shared"\n',
+    )
+    for (let path of ['a/public/_cli/current.json', 'shared/x.txt']) {
+      write(path)
+    }
+    assertEquals(Object.keys(served('a/wrangler.toml', root)).sort(), [
+      'a/public/_cli/current.json',
+      'shared/x.txt',
+    ])
+    assertEquals(served('w/wrangler.toml', root), {})
   } finally {
     Deno.removeSync(root, { recursive: true })
   }

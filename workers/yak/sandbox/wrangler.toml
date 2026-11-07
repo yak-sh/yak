@@ -58,7 +58,7 @@ new_sqlite_classes = ["Workbench"]
 # them on the free tier and two on the Plus plan (../sandbox.ts `AWAKE`).
 # Raising it is one number.
 #
-# The toolchain image is stable. The kernel's assets supply the CLI workspace
+# The toolchain image is stable. yak-front's assets supply the CLI workspace
 # on first yak use; a package change builds no sandbox image.
 [[containers]]
 class_name = "Workbench"

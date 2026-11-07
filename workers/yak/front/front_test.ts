@@ -36,6 +36,7 @@ let front = (
   kernel = () => new Response('kernel'),
 ) => {
   let asked: string[] = [], forwarded: Request[] = [], used: string[] = []
+  let files: string[] = []
   let warmed: string[] = []
   let points: unknown[] = [], errors: unknown[] = [], retained: unknown[] = []
   let told: Conversion[] = []
@@ -45,6 +46,12 @@ let front = (
       fetch: ((req: Request) => {
         asked.push(req.url)
         return Promise.resolve(site(req))
+      }) as never,
+    },
+    CLI: {
+      fetch: ((req: Request) => {
+        files.push(req.url)
+        return Promise.resolve(new Response('{"hash":"h"}'))
       }) as never,
     },
     KERNEL: {
@@ -86,6 +93,7 @@ let front = (
     env,
     asked,
     forwarded,
+    files,
     used,
     warmed,
     points,
@@ -94,6 +102,29 @@ let front = (
     told,
   }
 }
+
+// The CLI's bytes change with every package, so they are this Worker's assets
+// and a CLI change starts no kernel isolate cold (wrangler.toml `[assets]`).
+test("the apex's sandbox CLI answers from this Worker's assets", async () => {
+  // A space's own `/_cli/` is its app's, kept or not.
+  let f = front(() => new Response(null, { status: 404 }))
+  for (
+    let [url, mine] of [
+      ['https://yaks.app/_cli/current.json', true],
+      ['https://yaks.app/_cli/launch.ts', true],
+      ['https://ada.yaks.app/_cli/current.json', false],
+      ['https://yaks.app/_client.js', false],
+    ] as const
+  ) {
+    let res = await f.go(url)
+    assertEquals(await res.text(), mine ? '{"hash":"h"}' : 'kernel', url)
+  }
+  assertEquals(f.files, [
+    'https://yaks.app/_cli/current.json',
+    'https://yaks.app/_cli/launch.ts',
+  ])
+  assertEquals(f.forwarded.length, 2)
+})
 
 test('a kept page answers from the edge with no kernel, counted once', async () => {
   let f = front(() => page())
