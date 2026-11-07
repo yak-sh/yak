@@ -347,6 +347,15 @@ let stands = (driver: Driver, make: CreateView): boolean => {
     body(String(row.sql)) == body(render({ ...make, ifNot: false }).sql)
 }
 
+// What `retabled` answers by vocabulary and read overrides: the doc view, and
+// each list it made for a file whose clocks stand as they should, by whether
+// the file is one and its view stands. The same list each time, so what rests
+// on what in it (./raise.ts `rests`) is worked out once, as for `indexed`.
+let retables = new WeakMap<
+  Vocab,
+  WeakMap<Derived, { view: Stmt[]; lists: Map<string, readonly Stmt[]> }>
+>()
+
 /** {@link tabled} for a file that may already hold them: the doc view is
  * dropped and made again only where the file's says something else. Making an
  * identical view again still changes the schema, and every other connection
@@ -355,15 +364,28 @@ export let retabled = (
   driver: Driver,
   vocab: Vocab,
   derived: Derived = {},
-): Stmt[] => {
-  let view = docDdl(vocab, derived)
-  let make = view.find((s): s is CreateView => s.t == 'create view')
-  return [
+): readonly Stmt[] => {
+  let by = retables.get(vocab) ?? new WeakMap()
+  retables.set(vocab, by)
+  let k = by.get(derived)
+  if (!k) {
+    by.set(derived, k = { view: docDdl(vocab, derived), lists: new Map() })
+  }
+  let file = !!driver.file
+  let make = k.view.find((s): s is CreateView => s.t == 'create view')
+  let shown = !!make && stands(driver, make)
+  let clock = clocked(driver, clocks(vocab, file))
+  let key = `${file} ${shown}`
+  let held = clock.length ? undefined : k.lists.get(key)
+  if (held) return held
+  let made = [
     ...spine(vocab),
-    ...clocked(driver, clocks(vocab, !!driver.file)),
-    ...told(vocab, !!driver.file),
-    ...make && stands(driver, make) ? [] : view,
+    ...clock,
+    ...told(vocab, file),
+    ...shown ? [] : k.view,
   ]
+  if (!clock.length) k.lists.set(key, made)
+  return made
 }
 
 // Declared and automatic reference indexes. Created last, after `grown()`: an
@@ -423,15 +445,25 @@ let fitsIndex = (
   Number(held.partial) == Number(!!now.where) &&
   (!now.where || predicate(sql) == predicate(render(now).sql))
 
-/** Retire vocabulary indexes whose declaration disappeared or changed. */
+// The SQL SQLite keeps for an index made by `create`: its statement as it
+// renders, but for `if not exists`, which the engine leaves out, and its
+// leading keywords, which the engine keeps in capitals.
+let made = (create: CreateIndex): string =>
+  render({ ...create, ifNot: false }).sql
+    .replace(/^create (unique )?index/, (k) => k.toUpperCase())
+
+/** Retire vocabulary indexes whose declaration disappeared or changed. An
+ * index whose kept SQL is the one its declaration makes is as declared, and
+ * the engine is asked nothing about it. */
 export let retired = (driver: Driver, vocab: Vocab): Stmt[] => {
   let wanted = new Map(indexed(vocab).map((i) => [i.name, i]))
   let listed = new Map<string, Map<string, Row>>()
   return objects(driver, { type: 'index' }).flatMap((row) => {
     let table = String(row.tbl_name), name = String(row.name)
     if (!(table == 'entity' || vocab.comp(table))) return []
-    if (!managed(driver, table, name)) return []
     let now = wanted.get(name)
+    if (now?.on == table && row.sql == made(now)) return []
+    if (!managed(driver, table, name)) return []
     if (now?.on == table) {
       let held = listed.get(table)
       if (!held) {

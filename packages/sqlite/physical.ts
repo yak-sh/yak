@@ -223,6 +223,13 @@ let components = new WeakMap<
   { revision: number; tables: string[]; checked: Map<string, boolean> }
 >()
 
+// Whether a table is a component's, by the statement SQLite keeps for it: the
+// same statement makes the same columns, so a store whose tables were made as
+// another's were (every app store's core words) asks the engine nothing, and
+// a schema that moved asks only of the tables it changed.
+let shaped = new Map<string, boolean>()
+let SHAPED = 4096
+
 export function componentTables(
   driver: Driver,
   known: readonly string[] = [],
@@ -245,21 +252,32 @@ export function componentTables(
   }
   let accounted = new Set(known)
   let wanted = candidates && new Set(candidates)
+  let made: Map<string, string | null> | undefined
+  let { checked } = held
   return held.tables.filter((name) => {
     if (accounted.has(name) || wanted && !wanted.has(name)) return false
-    let component = held.checked.get(name)
+    let component = checked.get(name)
     if (component === undefined) {
-      component = driver.query({
-        t: 'pragma',
-        name: 'table_info',
-        schema: 'main',
-        arg: name,
-      })
-        .some((r) =>
-          r.name == 'entity' && Number(r.pk) == 1 &&
-          String(r.type).toLowerCase() == 'integer'
-        )
-      held.checked.set(name, component)
+      made ??= new Map(catalogue(driver).map((o) => [o.name, o.sql]))
+      let sql = made.get(name)
+      component = sql == null ? undefined : shaped.get(sql)
+      if (component === undefined) {
+        component = driver.query({
+          t: 'pragma',
+          name: 'table_info',
+          schema: 'main',
+          arg: name,
+        })
+          .some((r) =>
+            r.name == 'entity' && Number(r.pk) == 1 &&
+            String(r.type).toLowerCase() == 'integer'
+          )
+        if (sql != null) {
+          if (shaped.size >= SHAPED) shaped.delete(shaped.keys().next().value!)
+          shaped.set(sql, component)
+        }
+      }
+      checked.set(name, component)
     }
     return component
   })
@@ -277,6 +295,12 @@ export function componentTables(
 export let shape = (driver: Driver, names: readonly string[]): string => {
   let asked = new Set(names)
   let found = catalogue(driver).filter((o) => asked.has(o.name))
-  let bytes = found.reduce((n, o) => n + [...o.sql ?? ''].length, 0)
+  let bytes = found.reduce((n, o) => n + characters(o.sql ?? ''), 0)
   return `${found.length}/${bytes}`
 }
+
+// A string's characters, as code points: its UTF-16 units, one fewer for each
+// surrogate pair, worked out without splitting it.
+let PAIR = /[\uD800-\uDBFF][\uDC00-\uDFFF]/g
+let characters = (text: string): number =>
+  text.length - (text.match(PAIR)?.length ?? 0)

@@ -560,12 +560,15 @@ export let raised = (d: Driver, vocab: Vocab, own = false): Error[] => {
 
 /** The journal's tables dropped from a store whose words keep no journal:
  * every app store raised them from cac5e3065 to T-65227, and nothing has read
- * them since (T-131164). A table its words declare as a component stays. A
- * drop that fails comes back for the caller to report, and the store serves
- * what it holds. */
-export let unjournaled = (d: Driver, vocab: Vocab): Error[] =>
-  vocab.comp('_tx') ? [] : journalDrop()
-    .filter((s) => !vocab.comp(s.name))
+ * them since (T-131164). A table its words declare as a component stays, and
+ * one the store does not hold is not dropped again: any DDL moves the schema's
+ * revision, and with it everything read of the schema. A drop that fails comes
+ * back for the caller to report, and the store serves what it holds. */
+export let unjournaled = (d: Driver, vocab: Vocab): Error[] => {
+  if (vocab.comp('_tx')) return []
+  let held = new Set(catalogue(d).map((o) => o.name))
+  return journalDrop()
+    .filter((s) => !vocab.comp(s.name) && held.has(s.name))
     .flatMap((s) => {
       try {
         d.query(s)
@@ -574,6 +577,7 @@ export let unjournaled = (d: Driver, vocab: Vocab): Error[] =>
         return [e as Error]
       }
     })
+}
 
 // Installation semantics participate in the Store print even when its words
 // did not change (for example, a component removed by an earlier release, the

@@ -5,33 +5,39 @@ import { by, type Driver, insert, val } from '@yaks/sql'
 import { mem } from './testing.ts'
 
 // A database of these tables: `entity` and `infrastructure` keyed by `id`,
-// the rest by `entity`, as a component's table is.
-let file = (tables: Record<string, { name: string; type: string }[]>) => {
+// the rest by `entity`, as a component's table is. Each table also has a
+// column named for its database, so no table another made the same way
+// answers for it: a process learns once what a table's statement makes.
+let file = (
+  own: string,
+  tables: Record<string, { name: string; type: string }[]>,
+) => {
   let driver = mem()
   for (let [name, cols] of Object.entries(tables)) {
     let key = name == 'entity' || name == 'infrastructure' ? 'id' : 'entity'
     driver.query({
       t: 'create table',
       name,
-      cols: [{ name: key, type: 'integer', pk: true }, ...cols],
+      cols: [
+        { name: key, type: 'integer', pk: true },
+        ...cols,
+        { name: own, type: 'text' },
+      ],
     })
   }
   return driver
 }
-// How many column rows the driver's table_info pragmas have read since.
+// How many tables the driver has been asked the columns of since.
 let counted = (driver: Driver) => {
-  let query = driver.query.bind(driver), rows = 0
+  let query = driver.query.bind(driver), asked = 0
   driver.query = (statement) => {
-    let found = query(statement)
-    if (statement.t == 'pragma' && statement.name == 'table_info') {
-      rows += found.length
-    }
-    return found
+    if (statement.t == 'pragma' && statement.name == 'table_info') asked++
+    return query(statement)
   }
-  return () => rows
+  return () => asked
 }
 
-let known = file({ known: [], hidden: [], infrastructure: [] })
+let known = file('known', { known: [], hidden: [], infrastructure: [] })
 let knownRows = counted(known)
 test('component discovery reads only tables the caller has not accounted for', () => {
   equal(componentTables(known, ['known']), ['hidden'])
@@ -42,7 +48,7 @@ test('component discovery reads only tables the caller has not accounted for', (
   equal(knownRows(), 3)
 })
 
-let held = file({
+let held = file('held', {
   entity: [
     { name: 'eid', type: 'text' },
     { name: 'archetype', type: 'integer' },
@@ -70,5 +76,5 @@ test('removal discovers the physical tables its descriptor names, with a fallbac
     where: by({ eid: 'owner' }),
   })
   equal(heldBy(held, ['owner']), ['archetype', 'doc', 'hidden', 'unused'])
-  equal(heldRows(), 6)
+  equal(heldRows(), 5)
 })
