@@ -147,3 +147,11 @@ test('explicit source newlines become structural breaks before terminal renderin
   assert(json.includes('"tag":"br"'), json)
   assert(json.includes('"tag":"strong"'), json)
 })
+
+test('a soft line break is a space between its two words', () => {
+  let words = (source: string) =>
+    JSON.stringify(render(parse(source, { breaks: false }), tree))
+  assert(words('verdict and\nfindings.').includes('verdict and findings.'))
+  assert(words('- the letter \n  filed').includes('the letter filed'))
+  assert(!words('a\nb').includes('\\n'))
+})

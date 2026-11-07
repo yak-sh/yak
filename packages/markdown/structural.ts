@@ -207,8 +207,12 @@ export let blocks = <Node>(tokens: Token[], host: H<Node>): Child<Node>[] => {
         ]
       }
       case 'text': {
+        // A soft line break, kept as a newline when `breaks` is off, is a
+        // space in Markdown. Left as a newline, a terminal would break the
+        // line there, and a renderer that joins wrapped rows would run its
+        // two words together.
         let v = t as Tokens.Text
-        return v.tokens ? children(v.tokens) : [v.text]
+        return v.tokens ? children(v.tokens) : [v.text.replace(/ *\n */g, ' ')]
       }
       case 'escape':
         return [(t as Tokens.Escape).text]
