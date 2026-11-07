@@ -6,8 +6,9 @@
 // a person's words ("On the phone, you said: "), which the Operator took for
 // the caller quoting it: each is made the Operator's own words. The private
 // Operator graph is moved in bounded writes during its work, never in Durable
-// Object boot, once an isolate.
+// Object boot, once a store.
 import type { Bundle, Comp, Graph } from '@yaks/graph'
+import type { Meta } from '@yaks/sqlite'
 import { channelOf } from './operator-view.ts'
 
 // Each channel's framing as operator-channels.ts `BY` and operator.ts `note`
@@ -89,10 +90,19 @@ export let saidMove = (row: Bundle): Bundle[] => {
 
 let moved = new WeakSet<Graph>()
 
+/** Where a store that has been moved says so (`marks`): nothing writes the
+ * old shapes any more, so a store moved once owes no other pass. */
+export let CHANNELED = 'operator:channeled'
+
 /** Every framed row of `g` given its channel, and every old line a talking
- * model said made the Operator's own, once an isolate. */
-export let channeled = async (g: Graph) => {
-  if (moved.has(g)) return
+ * model said made the Operator's own: once a store where it keeps `marks`,
+ * else once an isolate. Once an isolate was every wake's first request
+ * searching every entry's words six ways. */
+export let channeled = async (
+  g: Graph,
+  marks?: Pick<Meta, 'get' | 'set'>,
+) => {
+  if (moved.has(g) || marks?.get(CHANNELED)) return
   moved.add(g)
   for (let [find, move] of [[FIND, channelMove], [OLD, saidMove]] as const) {
     let rows = (await g.read(find)).flatMap(move)
@@ -100,4 +110,5 @@ export let channeled = async (g: Graph) => {
       await g.apply(rows.slice(i, i + 50), { trusted: true, stamp: false })
     }
   }
+  marks?.set(CHANNELED, '1')
 }

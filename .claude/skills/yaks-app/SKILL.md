@@ -209,6 +209,16 @@ A query that works on the box can be refused in a store.
   stored copy of the object (CPU profile with `deno run --cpu-prof`). Keep
   what the first request runs to what its answer needs: work nobody waits for
   (re-arming an owed alarm, `#start`) runs behind the answer.
+- **A write holds the answer.** An object's answer leaves only once every
+  write made before it returned is confirmed, an alarm set included: a cold
+  Builder's first page waited 264 ms after its handler had answered
+  (T-148780). So a read writes nothing before its answer: a schema is fitted
+  once a Worker version (graph.ts `#stood`, operator-store.ts `FITTED`), a
+  migration that finished says so once (channel-move.ts `CHANNELED`), and
+  work behind the answer starts in a timer after it returns (build.ts
+  `#behind`, running.ts `behindAnswer`), not on the way out. A trace's spans
+  (Workers observability, by `$metadata.traceId`) show the gap: the
+  object's handler ends well before its caller's fetch does.
 - **128 MB per isolate**, shared by every object in it (`HELD` in
   packages/embedding/held.ts caps vector copies at 48 MB; the vectors are
   `search-and-embeddings`). The kernel Worker has the same 128 MB, so a body

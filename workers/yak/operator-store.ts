@@ -38,6 +38,7 @@ import { wakeDoc } from '@yaks/wake/vocab'
 import { due, soonest, tick, wakes } from '@yaks/wake'
 import { caught } from './defects.ts'
 import { adopt, indexed, search } from '@yaks/fts'
+import { installed, type Meta, meta } from '@yaks/sqlite'
 
 export let operatorVocab = loadVocab([
   kernelDoc,
@@ -80,10 +81,22 @@ export let operatorVocab = loadVocab([
   wakeDoc,
 ], [kernelKeywords, edgeKeywords, blobKeywords])
 
+/** Where the file keeps the Worker version whose schema it stands at. */
+export let FITTED = 'operator:fitted'
+
+/**
+ * The Operator's store over its object's storage. Its schema is the code's,
+ * so it is fitted once a Worker version (`options.version`, the version the
+ * pool's runs are cut under too): a wake under the version that fitted it runs
+ * no DDL and writes nothing, as a Store's does (graph.ts `#stood`). Fitting
+ * inspects every table and writes its receipt, and an object's write holds
+ * its answer until storage confirms it: a cold object's first took 260 ms.
+ * With no version (a test's runtime names none) every wake fits.
+ */
 export let operatorStore = (
   durable: DurableStorage,
   options: Parameters<typeof effects>[1] = {},
-) => {
+): OperatorStore => {
   let vocab = operatorVocab
   let sql = driver(durable)
   let kept = sqliteBlobs(sql)
@@ -91,11 +104,31 @@ export let operatorStore = (
   // The Operator finds what was said in its own work by its words: an
   // entry's text, a doc's title and body, a memory (@yaks/fts).
   let text = indexed(vocab)
-  let store = storage(durable, vocab, { derived, extend: [search(text, sql)] })
-  for (let stmt of blobSchema()) sql.query(stmt)
-  store.install()
-  adopt(sql, text, derived, { heal: false })
-  return operatorGraph(store, blobs({ vocab, blobs: kept }), options)
+  let { version } = options
+  let stood = !!version && installed(sql) != null &&
+    meta(sql).get(FITTED) == version
+  let store = storage(durable, vocab, {
+    derived,
+    extend: [search(text, sql)],
+    ...stood ? { schemaReady: () => true } : {},
+  })
+  if (!stood) {
+    for (let stmt of blobSchema()) sql.query(stmt)
+    let left = store.install()
+    adopt(sql, text, derived, { heal: false })
+    if (version && !left.length) meta(sql).set(FITTED, version)
+  }
+  return {
+    ...operatorGraph(store, blobs({ vocab, blobs: kept }), options),
+    marks: meta(sql),
+  }
+}
+
+/** The Operator's work graph, and where its file keeps what was done to it
+ * once (channel-move.ts `channeled`), which a store in memory has nowhere
+ * to keep. */
+export type OperatorStore = ReturnType<typeof operatorGraph> & {
+  marks?: Meta
 }
 
 /** The Operator's work graph, independent of its durable storage boundary. */
@@ -198,11 +231,11 @@ export let SLICE = 10_000
  * or null when neither is.
  */
 export let drain = async (
-  { g, fx }: Pick<ReturnType<typeof operatorStore>, 'g' | 'fx'>,
+  { g, fx, marks }: Pick<OperatorStore, 'g' | 'fx' | 'marks'>,
   until = Date.now() + SLICE,
 ): Promise<number | null> => {
   await phoneTexts(g)
-  await channeled(g)
+  await channeled(g, marks)
   // A firing is the store's own write, as every other write the Operator
   // keeps of itself is.
   let { refused } = await tick({

@@ -9,9 +9,11 @@ import {
   BACKSTOP,
   drain,
   operatorGraph,
+  operatorStore,
   operatorVocab,
   waking,
 } from './operator-store.ts'
+import { durable } from '../../packages/durable-object/testing.ts'
 
 let storage = () => {
   let at: number | null = null
@@ -120,4 +122,28 @@ test('a drain expires what the vocabulary declares expired', async () => {
   await drain(store)
   let left = await store.g.read('.announced')
   assertEquals(left.map((b) => b.announced), [fresh.announced])
+})
+
+// What a wake asks of its file beyond reading it: the schema's DDL and every
+// write, any of which holds the object's answer until storage confirms it.
+let fitted = durable()
+operatorStore(fitted, { version: 'v1' })
+let written = (version: string) => {
+  let said: string[] = []
+  let exec = fitted.sql.exec
+  fitted.sql.exec = (query, ...bindings) => (
+    said.push(query), exec(query, ...bindings)
+  )
+  try {
+    operatorStore(fitted, { version })
+  } finally {
+    fitted.sql.exec = exec
+  }
+  return said.filter((q) => !/^\s*(select|pragma|savepoint|release)\b/i.test(q))
+}
+
+test('a wake under the Worker version that fitted its store runs no DDL and writes nothing, and another version fits it again', () => {
+  assertEquals(written('v1'), [])
+  assertEquals(written('v2').length > 0, true)
+  assertEquals(written('v2'), [])
 })

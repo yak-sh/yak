@@ -406,7 +406,7 @@ export class Builder {
   async fetch(request: Request): Promise<Response> {
     let tally: Tally = new Map()
     let answer = await tallying(tally, () => this.#answer(request))
-    this.#resume()
+    this.#behind(() => this.#resume())
     let headers = new Headers(answer.headers)
     for (let [name, value] of Object.entries(reported(tally))) {
       headers.set(name, value)
@@ -680,6 +680,26 @@ export class Builder {
     let owed = this.#owed
     this.#owed = undefined
     owed?.()
+  }
+
+  // Work started once the answer has gone, held by the object. Started
+  // before the answer returns, it goes first, and what it writes (the owed
+  // work arms the alarm and starts the pool) holds the answer until storage
+  // confirms it: a cold object's first page waited 264 ms more for it.
+  #behind(work: () => void) {
+    this.#ctx.waitUntil?.(
+      new Promise<void>((done) =>
+        setTimeout(() => {
+          try {
+            work()
+          } catch (e) {
+            caught(e, { request: 'operator resume' })
+          } finally {
+            done()
+          }
+        }, 0)
+      ),
+    )
   }
 
   async alarm() {

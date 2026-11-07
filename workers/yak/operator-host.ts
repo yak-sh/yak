@@ -971,7 +971,7 @@ export let operatorRequest = async (
   let { person, space: spaceId } = held
   let { store } = operator
   await phoneTexts(store.g)
-  await channeled(store.g)
+  await channeled(store.g, store.marks)
   let access = held
   let own = (id: string) => owns(store, id, held)
   let missing = () =>

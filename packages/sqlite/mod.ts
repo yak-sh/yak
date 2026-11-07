@@ -227,6 +227,7 @@ export {
   EPOCH,
   epoch,
   epochAt,
+  installed,
   type Meta,
   meta,
   printed,

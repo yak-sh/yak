@@ -82,3 +82,19 @@ test("a talking model's old line, framed as the person's words, is made the Oper
     ],
   )
 })
+
+// A store that keeps marks is moved once, not once an incarnation: what
+// nothing writes any more is never searched for again.
+test('a store moved once is not searched again by its next incarnation', async () => {
+  let kept = new Map<string, string>()
+  let marks = { get: (k: string) => kept.get(k), set: kept.set.bind(kept) }
+  let { g, storage } = operatorMemory()
+  await g.apply([{ entity: { eid: session }, session: {} }], {
+    trusted: true,
+  })
+  await channeled(g, marks)
+  await g.apply([said(0, 'By email: Hello')], { trusted: true })
+  let { g: woken } = operatorMemory(storage)
+  await channeled(woken, marks)
+  assertEquals((await woken.get([ids[0]]))[0].operator_channel, undefined)
+})

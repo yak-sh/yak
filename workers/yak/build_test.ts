@@ -325,9 +325,10 @@ test('the door refuses a stranger before it reaches the object', async () => {
   assertEquals(said.error.message, NOBODY)
 })
 
-test('an object works its Operator as it first serves it, so a step a deploy reset runs again at once', async () => {
+// Behind the answer, not before it: what the owed work writes would hold
+// the answer until storage confirmed it.
+test('an object works its Operator once its first answer has gone, so a step a deploy reset runs again at once', async () => {
   let o = await seeded()
-  let before = await o.ctx.storage.getAlarm()
   let read = await o.object.fetch(
     new Request('https://builder/operator/conversation', {
       method: 'POST',
@@ -336,5 +337,10 @@ test('an object works its Operator as it first serves it, so a step a deploy res
     }),
   )
   await read.body?.cancel()
-  assertEquals([before, (await o.ctx.storage.getAlarm()) != null], [null, true])
+  let answered = await o.ctx.storage.getAlarm()
+  await Promise.all(o.ctx.pending)
+  assertEquals([answered, (await o.ctx.storage.getAlarm()) != null], [
+    null,
+    true,
+  ])
 })
