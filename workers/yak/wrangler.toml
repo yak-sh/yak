@@ -21,11 +21,10 @@ compatibility_date = "2025-05-08"
 
 # enable_nodejs_process_v2 supplies the native process object to the module
 # build, alongside the runtime's node: modules, without JS polyfills.
-# The legacy module registry stays (T-148980): it compiles every uploaded
-# module as an isolate starts, which Cloudflare does in tens of milliseconds,
-# while `new_module_registry` compiled each inside the first call that imported
-# it and doubled a cold Store call's CPU (185 -> 482 ms median). A
-# compatibility_date from 2026-11-17 turns the new one on unless
+# The legacy module registry stays (T-148980). Loading the same modules in a
+# new isolate's first call cost far more under `new_module_registry`: a cold
+# Store call's median CPU was 482 ms with it and 152 ms without, startup 7 and
+# 0-1 ms. A compatibility_date from 2026-11-17 turns the new one on unless
 # `legacy_module_registry` is added.
 # durable_object_io_tasks_prevent_eviction keeps an object up while it waits
 # on I/O nobody connected is waiting for: a call finishing in `Outlast` after

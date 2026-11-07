@@ -639,4 +639,33 @@ direction the Node measure gives. The saving in compile holds only under
 `new_module_registry`, which compiles a module on its first import: the legacy
 registry compiles every uploaded module at startup, so without it what this
 leaves out of a page's isolate is its evaluation (70 → 36 ms), not its compile.
-T-148980 is weighing that registry against the CPU a cold Store call now spends.
+T-148980, below, measured otherwise and went back to the legacy registry.
+
+## The legacy registry loads a first call cheaper: T-148980
+
+November 7, 2026, `9d548420a`, live as `c545e78c` at 18:01 UTC. T-148770's
+`new_module_registry` cut Cloudflare's `startup_time_ms` to 7, but whatever a
+new isolate took first paid for loading its modules inside the call, at far more
+than the legacy registry's load. Workers observability, every Store call of 100
+ms of CPU or more (a cold isolate's first call), median CPU / wall:
+
+| Window (UTC)                                | Registry | Store calls n | CPU ms | Wall ms | Directory probe | App store probe |
+| ------------------------------------------- | -------- | ------------: | -----: | ------: | --------------: | --------------: |
+| 15:57–16:57, before T-148770                | legacy   |           151 |    185 |     273 |             277 |             135 |
+| 16:57–17:58, T-148770 and T-148886          | new      |           176 |    448 |     602 |             599 |             322 |
+| 18:01–18:22, this change (deferred classes) | legacy   |            57 |    152 |     309 |             296 |             129 |
+
+The probes are the tracker's minute probe of the directory (5b23bd26, n 13,
+31, 7) and of an app store's `.recipe&.limit=1` (5b139ccf), CPU only.
+`startup_time_ms` with the legacy registry and the 9 KB entry is 0-1 ms. So the
+deferred classes stay: a Store's isolate still evaluates none of the router's
+code, and its first call costs less than it did before T-148770. Local workerd
+timed the opposite (T-148770's 188 → 65 ms ready); production is the measure. A
+compatibility date from 2026-11-17 brings the new registry back unless
+`legacy_module_registry` is added.
+
+Live, the app store's door (`/recipes/api/query?.recipe&.limit=1`) asked every
+100 s from 18:04 to 18:19: 7 of 10 found a new isolate, `store_wait` 416–730 ms
+(median 498) against 36–63 warm. Its invocations in the same minutes ran 223–261
+ms of wall, so about half of a cold wait is the object starting before any of
+our code runs (yaks-app skill, "A new object takes 150 to 500 ms to start").
