@@ -107,6 +107,41 @@ test('coverage reads the store again once the feed missed commits', async () => 
   assertEquals(p.reads(), 2)
 })
 
+// A read answers what the store held when it looked, which can be before a
+// commit the feed hands over while the read is still under way.
+let reading =
+  (looked: Bundle[], news: Bundle[][], missed = false) => async () => {
+    let reads = 0
+    let store: Store = {
+      ...processes([]).store,
+      running: async () => {
+        let held = reads++ ? [...looked, ...news.flat()] : looked
+        await Promise.resolve()
+        if (reads == 1) covered.hear({ applied: news, missed })
+        return held
+      },
+    }
+    let covered = coverage(
+      store,
+      ['effects', 'wake'],
+      () => Promise.resolve(false),
+    )
+    return [await covered.missing(), reads]
+  }
+
+test('what the feed hears during the first read is not lost to it', async () => {
+  let look = reading([row('pool', ['graph', 'effects'])], [
+    [row('waker', ['graph', 'wake'])],
+    [{ entity: { eid: 'pool' }, [PROCESS]: { roles: ['graph'] } }],
+  ])
+  assertEquals(await look(), [['effects'], 1])
+})
+
+test('commits missed during a read are read again', async () => {
+  let look = reading([], [[row('pool', ['effects', 'wake'])]], true)
+  assertEquals(await look(), [[], 2])
+})
+
 test('a known coverer whose pid is gone stops covering without a feed row', async () => {
   let p = processes([row('pool', ['effects'])])
   let dead = false

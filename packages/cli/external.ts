@@ -29,8 +29,10 @@ export type Feed = (each: (news: News) => void) => () => void
  * for hundreds of milliseconds at a time. They are read once. After that the
  * rows the feed hears say which processes took up or gave up a duty role, and
  * a look asks only whether the pids of the ones known still live; when the
- * feed missed some, they are read once more. A store with no feed says nothing
- * of what changed, so each look reads it whole. */
+ * feed missed some, they are read once more. A read takes long enough for the
+ * feed to speak meanwhile, and may have looked before what it says, so what it
+ * hears during a read is folded into what the read found. A store with no
+ * feed says nothing of what changed, so each look reads it whole. */
 export let coverage = (
   processes: Store,
   roles: readonly string[],
@@ -48,27 +50,39 @@ export let coverage = (
     return Array.isArray(said) ? said.filter((role) => wanted.has(role)) : []
   }
   let known: Map<string, string[]> | undefined
-  let read = async () =>
-    new Map(
+  // What the feed said of each process while a read was under way, in order.
+  let during: [string, string[]][] | undefined
+  let fold = (into: Map<string, string[]>, eid: string, duties: string[]) => {
+    if (duties.length) into.set(eid, duties)
+    else into.delete(eid)
+  }
+  let read = async (): Promise<Map<string, string[]>> => {
+    let said: [string, string[]][] = during = []
+    let found = new Map(
       (await processes.running()).flatMap((row) => {
         let duties = serves(row) ?? []
         return duties.length ? [[row.entity.eid, duties] as const] : []
       }),
     )
+    // Missed news while reading leaves the read's moment unknown: read again.
+    if (during !== said) return read()
+    during = undefined
+    for (let [eid, duties] of said) fold(found, eid, duties)
+    return found
+  }
   return {
     /** Fold what other hosts committed; true when coverage may have moved. */
     hear: ({ applied, missed }: News): boolean => {
-      if (missed) known = undefined
+      if (missed) known = during = undefined
       let moved = missed
       for (let row of applied.flat()) {
         let eid = row.entity.eid
         let ended = row.$delete || row.tombstone || row[EXIT]
         let duties = ended ? [] : serves(row)
         if (!duties) continue
-        moved ||= duties.length > 0 || !!known?.has(eid)
-        if (!known) continue
-        if (duties.length) known.set(eid, duties)
-        else known.delete(eid)
+        moved ||= duties.length > 0 || !!known?.has(eid) || !!during
+        during?.push([eid, duties])
+        if (known) fold(known, eid, duties)
       }
       return moved
     },

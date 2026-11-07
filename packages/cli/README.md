@@ -543,18 +543,20 @@ box graph for the roles it is handed. The same package works the pool and leased
 services for independent `yak work` processes.
 
 A web checks coverage, including with `--no-duties`: it reads the unexited
-processes once, then follows the process rows its feed hears, and every second
-asks whether the pids of the processes known to serve a duty still live; a store
-with no feed is read whole each second. What is uncovered when the web starts,
-it starts at once, and the web listens without waiting for those workers. A duty
-role lost after that has 30 seconds (`GRACE`) to be taken up again, as it is
-when systemd restarts a worker in place; one still unserved then reports to the
-tracker's durable spool, before an independent replacement is started. A
-replacement started sooner would race the restarting worker for its service
-leases and hold them, on the web's code, until the web ends. Failed launches are
-reported and retried; a draining process withdraws its duties before its
-in-flight work ends. Config `duties: false` disables this too, for deliberately
-inert hosts. Readiness names the worker's own process.
+processes once, then follows the process rows its feed hears (what it hears
+while that read is under way is folded into what the read found, since the read
+may have looked first), and every second asks whether the pids of the processes
+known to serve a duty still live; a store with no feed is read whole each
+second. What is uncovered when the web starts, it starts at once, and the web
+listens without waiting for those workers. A duty role lost after that has 30
+seconds (`GRACE`) to be taken up again, as it is when systemd restarts a worker
+in place; one still unserved then reports to the tracker's durable spool, before
+an independent replacement is started. A replacement started sooner would race
+the restarting worker for its service leases and hold them, on the web's code,
+until the web ends. Failed launches are reported and retried; a draining process
+withdraws its duties before its in-flight work ends. Config `duties: false`
+disables this too, for deliberately inert hosts. Readiness names the worker's
+own process.
 
 A **process layout** is the config's `processes` list of systemd unit templates.
 `yak work --process <unit>` selects that entry's `roles` (or all duties when
