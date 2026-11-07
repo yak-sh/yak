@@ -219,6 +219,7 @@ import { sha256 } from '@yaks/graph/sha256'
 import { consentEid, shown } from '@yaks/phone'
 import { credit } from './referral.ts'
 import { carried } from './protocol.ts'
+import { isTestAddress } from '@yaks/platform/bots'
 
 // What a grant carries and a token gives back: the person, nothing else.
 // Membership is read from the directory at request time, never a claim.
@@ -821,9 +822,11 @@ let landed = async (
       entity: { eid: person },
       signed_in: { at: new Date().toISOString(), via },
     }], KERNEL)
-    step(env, 'signed_in', req)
+    // A test account's sign-in counts apart from a person's (funnel.ts).
+    let test = isTestAddress(await dir.emailAt(person) ?? '')
+    step(env, 'signed_in', req, { test })
     if (!row?.signed_in) {
-      step(env, 'signup', req)
+      step(env, 'signup', req, { test })
       ads.after(env, 'signup', req)
     }
   }

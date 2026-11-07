@@ -377,6 +377,11 @@ let rostered = (ctx: Ctx) =>
 // put this afternoon's recipe in.
 let said = async (ctx: Ctx) => await ctx.standing?.() ?? ''
 
+// Whether the caller is a test account, whose funnel steps count apart from a
+// person's (funnel.ts `step`).
+let tested = async (ctx: Ctx) =>
+  isTestAddress(await ctx.dir.emailAt(ctx.person) ?? '')
+
 // How a caller got in, said the way a person would say it (identity.ts
 // `Caller`).
 let HOW: Record<Caller['via'], string> = {
@@ -3221,7 +3226,9 @@ let OURS: Row[] = [
           (e) => caught(e, { tool: 'app_new', space: space.slug, app: s }),
         ),
       )
-      if (!apps.length) step(ctx.env, 'first_app')
+      if (!apps.length) {
+        step(ctx.env, 'first_app', undefined, { test: await tested(ctx) })
+      }
       // No link to hand on yet (T-135905): its address serves nothing until
       // a version is released, so the text says not to give it, and
       // app_deploy's answer carries it once the page answers. The data keeps
@@ -3888,7 +3895,9 @@ let OURS: Row[] = [
           value: { deployed: false, ...review },
         }
       }
-      if (version == 1) step(ctx.env, 'first_deploy')
+      if (version == 1) {
+        step(ctx.env, 'first_deploy', undefined, { test: await tested(ctx) })
+      }
       return {
         text:
           `deployed ${space.slug}/${app.slug} v${version}: ${

@@ -60,6 +60,7 @@ import { step } from './funnel.ts'
 import { sessionAt } from './session.ts'
 import { fault } from './unseen.ts'
 import { plans } from './payments.ts'
+import { isTestAddress } from '@yaks/platform/bots'
 
 // ---- the plan, derived from one subscription -----------------------------
 
@@ -350,7 +351,7 @@ export let checkout = async (
       tags: tagsOf(env, space),
       trial: free,
     })
-    step(env, 'checkout', req)
+    step(env, 'checkout', req, { test: isTestAddress(email) })
     return Response.json({ url })
   } catch (e) {
     await fault(env, 'POST /api/billing/checkout', e)

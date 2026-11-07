@@ -284,6 +284,17 @@ export let refund = (
 ): Promise<SpaceBudget> =>
   said(posted(apex(BUDGET), { space, refund: dollars, why }, session))
 
+/** yaks.app's own funnel (workers/yak admin.ts `funnelDoor`), the counts
+ * /admin/funnel shows, from `since`, an ISO time. Only an owner of the `yak`
+ * space is answered. */
+export type { Funnel } from '@yaks/platform/funnel'
+import type { Funnel } from '@yaks/platform/funnel'
+
+export let FUNNEL = '/api/funnel'
+
+export let funnelNow = (session: string, since: string): Promise<Funnel> =>
+  said(sent(apex(`${FUNNEL}?since=${encodeURIComponent(since)}`), session))
+
 /** The store mover's sweep door (workers/yak/sweep.ts): every store there is,
  * and one of them asked to rehearse its rules, or woken to move what it owes.
  * An owner of the `yak` space is answered. */

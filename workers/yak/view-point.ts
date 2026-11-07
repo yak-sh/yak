@@ -91,8 +91,14 @@ export let FUNNEL = 'yaks.app'
  * (arrival.ts), the call to action clicked, for a click (funnel.ts
  * `clicked`), and the home page variant its visitor was shown (variant.ts); a
  * step taken away from any request (a person coming back) says only the step.
+ * A step a test account took (@yaks/platform/bots) says `test` where a view
+ * says who asked, so it is counted apart from a person's.
  */
-export let stepOf = (step: string, req?: Visited, button = '') => {
+export let stepOf = (
+  step: string,
+  req?: Visited,
+  { button = '', test = false }: { button?: string; test?: boolean } = {},
+) => {
   let url = req && new URL(req.url)
   let p = point({
     app: FUNNEL,
@@ -101,7 +107,7 @@ export let stepOf = (step: string, req?: Visited, button = '') => {
     path: url?.pathname ?? '',
     country: req?.cf?.country ?? '',
     from: req && url ? referred(req.headers.get('referer'), url.host) : '',
-    client: req ? classed(req) : '',
+    client: test ? 'test' : req ? classed(req) : '',
     status: 0,
   })
   p.blobs.push(

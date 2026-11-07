@@ -196,6 +196,28 @@
         "bps"
       ]
     },
+    "admin_funnel": {
+      "tool": true,
+      "noun": "admin",
+      "verb": "funnel",
+      "title": "Read yaks.app's funnel counts",
+      "description": "yaks.app's own funnel, the counts /admin/funnel shows, read through the same query: each step people took from `since` to now (home page visits, calls to action clicked, builds started, sign-in codes, sign-ins, first sign-ins, connectors, installs, first apps and deploys, checkouts, plans bought, people back a day later), each with its share of the step it follows; the sites that sent home page visitors; each call to action's clicks; and home page visits, clicks, sign-ups and checkouts by campaign (source/medium/campaign) and by home page variant. A step counts only for a person's browser, or for a person away from any request: what crawlers (bot), agents' scripts (agent) and test accounts on bot.yak.sh (test) took is listed apart, by step, and is in no count above. Read from yaks.app's analytics, kept 90 days. The platform's read, so the selected account must own the yak space.\n\n  yak admin funnel --as admin@bot.yak.sh\n  yak admin funnel 2026-11-07T00:00Z --as admin@bot.yak.sh\n  yak admin funnel 24h --as admin@bot.yak.sh",
+      "input": {
+        "since": {
+          "type": "string",
+          "description": "where the window starts: an ISO time such as 2026-11-07T00:00Z, or a duration back from now such as 6h or 30d; 7d by default"
+        },
+        "as": {
+          "type": "string",
+          "description": "the owner’s yaks.app connection, matched by whole address or the part before @; list the owner’s connections with connection_list(owner), or yak connection list <owner> (owner id or name), and use a yaks.app entry’s account. Default is your own email, else the oldest connection"
+        }
+      },
+      "readOnly": true,
+      "openWorld": true,
+      "positional": [
+        "since"
+      ]
+    },
     "admin_move": {
       "tool": true,
       "noun": "admin",

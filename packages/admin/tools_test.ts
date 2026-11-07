@@ -107,6 +107,65 @@ test('fee uses computed own account by default and --as selects another bearer',
   }
 })
 
+test("funnel reads the platform's counts from a time or a duration back", async () => {
+  let { host, kept, ask } = await box()
+  try {
+    await kept('own@example.com', 'own-bearer')
+    let asked: string[] = []
+    await answering((url) => {
+      let since = new URL(url).searchParams.get('since')!
+      asked.push(since)
+      return Response.json({
+        since,
+        steps: [
+          { name: 'home', say: 'Home page visits', n: 40 },
+          {
+            name: 'signup',
+            say: 'First sign-ins',
+            n: 2,
+            share: 0.5,
+            of: 'signed_in',
+          },
+        ],
+        apart: [{ client: 'test', step: 'signup', n: 2 }],
+        from: [],
+        buttons: [],
+        campaigns: [{
+          name: 'meta//pilot',
+          home: 9,
+          click: 4,
+          signup: 2,
+          checkout: 0,
+        }],
+        variants: [],
+      })
+    }, async () => {
+      equal(
+        body(await ask('admin_funnel', { since: '2026-11-07T00:00Z' })),
+        [
+          'People since 2026-11-07T00:00:00.000Z:',
+          '  Home page visits: 40',
+          '  First sign-ins: 2 (50% of signed_in)',
+          'By campaign:',
+          '  meta//pilot: 9 visits · 4 clicks · 2 sign-ups · 0 checkouts',
+          'Not people, counted apart:',
+          '  test signup: 2',
+        ].join('\n'),
+      )
+      await ask('admin_funnel', { since: '1d' })
+      await assertRejects(
+        () => ask('admin_funnel', { since: 'nope' }),
+        CallError,
+      )
+    })
+    equal(asked[0], '2026-11-07T00:00:00.000Z')
+    equal(Math.round((Date.now() - Date.parse(asked[1])) / 3_600_000), 24)
+    equal(asked.length, 2)
+  } finally {
+    await host.close()
+  }
+})
+
 // What the hosted tools are asked, for each gallery decision the CLI takes.
 let forwarded = async (args: Record<string, string>) => {
   let sent: unknown

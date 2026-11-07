@@ -9,6 +9,7 @@
     "./cookie": "./cookie.ts",
     "./bots": "./bots.ts",
     "./budget": "./budget.ts",
+    "./funnel": "./funnel.ts",
     "./mover": "./mover.ts"
   },
   "license": "Apache-2.0",

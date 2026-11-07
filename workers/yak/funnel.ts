@@ -6,6 +6,7 @@
 // keeps (where the request came from, its country, browser or bot) and no
 // more: no person, no cookie, no IP, and nothing that joins a step to whoever
 // took it. Three months, as for a view.
+import type { Funnel, FunnelSplit } from '@yaks/platform/funnel'
 import type { Env } from './env.ts'
 import { caught } from './defects.ts'
 import type { Host } from './host.ts'
@@ -53,6 +54,7 @@ export let STEPS = [
 ] as const
 
 export type Step = typeof STEPS[number]['name']
+export type { Funnel }
 
 /** Each call to action on the home page, by the name its `data-cta` gives it
  * (site/home.tsx), and what the admin calls it. The Operator's page
@@ -70,17 +72,19 @@ export let CTAS = [
  * waits on it, and a throw is one report rather than a broken door. A step
  * taken through a request is a person's only when a browser asked
  * (crawlers.ts `isPerson`): a crawler's, an assistant's or a script's, such
- * as an agent going through the sign-up live, counts as nothing.
+ * as an agent going through the sign-up live, counts as nothing. One a test
+ * account took (`test`, @yaks/platform/bots), such as an agent signing up
+ * through a browser, is counted apart from a person's.
  */
 export let step = (
   env: Pick<Env, 'VIEWS'>,
   name: Step,
   req?: Request,
-  button?: string,
+  also: { button?: string; test?: boolean } = {},
 ) => {
   if (!env.VIEWS || (req && !isPerson(req))) return
   try {
-    env.VIEWS.writeDataPoint(stepOf(name, req as Visited | undefined, button))
+    env.VIEWS.writeDataPoint(stepOf(name, req as Visited | undefined, also))
   } catch (e) {
     caught(e, { request: 'funnel write' })
   }
@@ -102,7 +106,7 @@ export let clicked = async (
   }
   let name = (await req.text()).slice(0, 64)
   if (CTAS.some((c) => c.name == name) && fromOurs(req, env)) {
-    step(env, 'click', req, name)
+    step(env, 'click', req, { button: name })
   }
   return new Response(null, { status: 204 })
 }
@@ -113,25 +117,49 @@ export let clicked = async (
 let PER = ['home', 'click', 'signup', 'checkout'] as const
 let per = PER.map((s) => `'${s}'`).join(', ')
 
-let over = (days: number, dataset: string) =>
-  `FROM ${table(dataset)} WHERE index1 = '${FUNNEL}' AND timestamp >= ` +
-  `NOW() - INTERVAL '${whole(days, KEPT_DAYS)}' DAY`
+let DAY = 86_400_000
 
-/** How many times each step was taken over the window. */
-export let counts = (days: number, dataset = DATASET) =>
-  `SELECT ${SLUG} AS step, ${COUNT} AS n ${over(days, dataset)} GROUP BY step`
+/**
+ * Where a window starts: `days` before now, or at a moment, and never further
+ * back than a step is kept.
+ */
+export let start = (window: number | Date, now = Date.now()) =>
+  new Date(
+    typeof window == 'number'
+      ? now - whole(window, KEPT_DAYS) * DAY
+      : Math.min(now, Math.max(now - KEPT_DAYS * DAY, window.getTime())),
+  )
+
+// A person's step: one a browser took, or one taken away from any request.
+// A crawler's, an agent's or a test account's is counted apart (`apart`).
+let PEOPLE = `${CLIENT} IN ('browser', '')`
+
+let over = (since: Date, dataset: string, who = PEOPLE) =>
+  `FROM ${table(dataset)} WHERE index1 = '${FUNNEL}' AND ${who} AND ` +
+  `timestamp >= toDateTime(${Math.floor(since.getTime() / 1000)})`
+
+/** How many times people took each step from `since`. */
+export let counts = (since: Date, dataset = DATASET) =>
+  `SELECT ${SLUG} AS step, ${COUNT} AS n ${over(since, dataset)} GROUP BY step`
+
+/** How many times each step was taken by somebody other than a person: a
+ * crawler, an agent's script or a test account, by which. */
+export let apart = (since: Date, dataset = DATASET) =>
+  `SELECT ${CLIENT} AS client, ${SLUG} AS step, ${COUNT} AS n ` +
+  `${over(since, dataset, `NOT ${PEOPLE}`)} GROUP BY client, step ` +
+  `ORDER BY n DESC`
 
 /** The sites that sent people to the home page, busiest first. */
-export let sources = (days: number, dataset = DATASET) =>
-  `SELECT ${FROM} AS site, ${COUNT} AS n ${over(days, dataset)} AND ` +
-  `${SLUG} = 'home' AND ${FROM} != '' AND ${CLIENT} = 'browser' ` +
+export let sources = (since: Date, dataset = DATASET) =>
+  `SELECT ${FROM} AS site, ${COUNT} AS n ${over(since, dataset)} AND ` +
+  `${SLUG} = 'home' AND ${FROM} != '' ` +
   `GROUP BY site ORDER BY n DESC LIMIT ${TOP}`
 
 // The home page's visits, clicks, sign-ups and checkouts by what a step says
 // in `column`, busiest first.
-let by = (column: string) => (days: number, dataset = DATASET) =>
+let by = (column: string) => (since: Date, dataset = DATASET) =>
   `SELECT ${column} AS key, ${SLUG} AS step, ${COUNT} AS n ` +
-  `${over(days, dataset)} AND ${SLUG} IN (${per}) AND ${column} != '' ` +
+  `${over(since, dataset)} AND ${SLUG} IN (${per}) AND ${column} != '' ` +
   `GROUP BY key, step ORDER BY n DESC LIMIT ${TOP * PER.length}`
 
 /** The campaigns that brought people to the home page, and how many of them
@@ -144,27 +172,11 @@ export let campaigns = by(CAMPAIGN)
 export let variants = by(VARIANT)
 
 /** How many times each call to action was clicked, busiest first. */
-export let buttons = (days: number, dataset = DATASET) =>
-  `SELECT ${BUTTON} AS button, ${COUNT} AS n ${over(days, dataset)} AND ` +
+export let buttons = (since: Date, dataset = DATASET) =>
+  `SELECT ${BUTTON} AS button, ${COUNT} AS n ${over(since, dataset)} AND ` +
   `${SLUG} = 'click' AND ${BUTTON} != '' GROUP BY button ORDER BY n DESC`
 
-/** One step's count over the window, and its share of the step it follows. */
-export type Count = { name: Step; say: string; n: number; share?: number }
-
-export type Funnel = {
-  days: number
-  steps: Count[]
-  from: { site: string; n: number }[]
-  buttons: { button: string; say: string; n: number }[]
-  campaigns: Split[]
-  variants: Split[]
-}
-
-/** The home page's visits, clicks, sign-ups and checkouts under one campaign
- * or variant. */
-export type Split = { name: string } & Record<typeof PER[number], number>
-
-let split = (rows: Record<string, unknown>[]): Split[] =>
+let split = (rows: Record<string, unknown>[]): FunnelSplit[] =>
   [...Map.groupBy(rows, (r) => String(r.key))].map(([name, rows]) => {
     let n = (step: string) => Number(rows.find((r) => r.step == step)?.n) || 0
     return {
@@ -176,25 +188,31 @@ let split = (rows: Record<string, unknown>[]): Split[] =>
     }
   })
 
-/** The funnel over the last `days`, from the counts as the SQL API answers
- * them: a step nobody took is a zero, not a gap. */
+/** The funnel from `since`, from the counts as the SQL API answers them: a
+ * step nobody took is a zero, not a gap. */
 export let shaped = (
-  days: number,
+  since: Date,
   rows: Record<string, unknown>[],
   from: Record<string, unknown>[] = [],
   by: Record<string, unknown>[] = [],
   pressed: Record<string, unknown>[] = [],
   shown: Record<string, unknown>[] = [],
+  others: Record<string, unknown>[] = [],
 ): Funnel => {
   let had = new Map(rows.map((r) => [String(r.step), Number(r.n) || 0]))
   let n = (name: string) => had.get(name) ?? 0
   return {
-    days,
+    since: since.toISOString(),
     steps: STEPS.map((s) => ({
       name: s.name,
       say: s.say,
       n: n(s.name),
-      ...'of' in s && n(s.of) ? { share: n(s.name) / n(s.of) } : {},
+      ...'of' in s && n(s.of) ? { share: n(s.name) / n(s.of), of: s.of } : {},
+    })),
+    apart: others.map((r) => ({
+      client: String(r.client),
+      step: String(r.step),
+      n: Number(r.n) || 0,
     })),
     from: from.map((r) => ({ site: String(r.site), n: Number(r.n) || 0 })),
     buttons: pressed.flatMap((r) => {
@@ -208,18 +226,20 @@ export let shaped = (
   }
 }
 
-/** The funnel over the last `days`, or null where analytics are not
- * switched on (views.ts `statsFor`). */
-export let funnel = async (env: Env, days = 7): Promise<Funnel | null> => {
+/** The funnel over the last `days`, or from a moment to now (`start`), or
+ * null where analytics are not switched on (views.ts `statsFor`). The admin's
+ * page (admin.ts) and its tool (`/api/funnel`, `door`) both read this. */
+export let funnel = async (
+  env: Env,
+  window: number | Date = 7,
+): Promise<Funnel | null> => {
   if (!env.CF_ANALYTICS_TOKEN || !env.CF_ACCOUNT) return null
-  let window = whole(days, KEPT_DAYS)
+  let since = start(window)
   let dataset = env.VIEWS_DATASET ?? DATASET
-  let [rows, from, by, pressed, shown] = await Promise.all([
-    ran(env, counts(window, dataset)),
-    ran(env, sources(window, dataset)),
-    ran(env, campaigns(window, dataset)),
-    ran(env, buttons(window, dataset)),
-    ran(env, variants(window, dataset)),
-  ])
-  return shaped(window, rows, from, by, pressed, shown)
+  let [rows, from, by, pressed, shown, others] = await Promise.all(
+    [counts, sources, campaigns, buttons, variants, apart].map((q) =>
+      ran(env, q(since, dataset))
+    ),
+  )
+  return shaped(since, rows, from, by, pressed, shown, others)
 }

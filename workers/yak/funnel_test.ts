@@ -27,6 +27,7 @@ test("a step is written under the platform, saying what a view says and its camp
   step({ VIEWS: views }, 'signup', visit('yaks-e2e-bot'))
   step({ VIEWS: views }, 'started', visit('ClaudeBot/1.0'))
   step({ VIEWS: views }, 'returned')
+  step({ VIEWS: views }, 'first_app', undefined, { test: true })
   step(
     { VIEWS: views },
     'home',
@@ -51,6 +52,12 @@ test("a step is written under the platform, saying what a view says and its camp
     {
       indexes: [FUNNEL],
       blobs: ['', 'returned', '', '', '', '', '', '', ''],
+      doubles: [0],
+    },
+    // A test account's step is written to be counted apart.
+    {
+      indexes: [FUNNEL],
+      blobs: ['', 'first_app', '', '', '', 'test', '', '', ''],
       doubles: [0],
     },
     {
@@ -100,6 +107,12 @@ test('the funnel reads each step, a share of the one it follows, and where visit
       ]
       : q.includes('blob8')
       ? [{ button: 'start', n: 6 }, { button: 'gone', n: 1 }]
+      : q.includes('NOT blob6')
+      ? [{ client: 'test', step: 'signup', n: '2' }, {
+        client: 'bot',
+        step: 'home',
+        n: 5,
+      }]
       : [
         { step: 'home', n: 40 },
         { step: 'click', n: 10 },
@@ -111,7 +124,9 @@ test('the funnel reads each step, a share of the one it follows, and where visit
   )
   try {
     let env = { CF_ANALYTICS_TOKEN: 't', CF_ACCOUNT: 'a' } as Env
-    let f = (await funnel(env, 7))!
+    let since = new Date(Math.floor(Date.now() / 1000 - 2 * 86_400) * 1000)
+    let f = (await funnel(env, since))!
+    assertEquals(f.since, since.toISOString())
     let of = Object.fromEntries(f.steps.map((s) => [s.name, s]))
     assertEquals(of.home.n, 40)
     assertEquals(of.click.share, 0.25)
@@ -135,8 +150,22 @@ test('the funnel reads each step, a share of the one it follows, and where visit
       { name: 'ask', home: 20, click: 0, signup: 0, checkout: 0 },
       { name: 'operator', home: 18, click: 5, signup: 3, checkout: 0 },
     ])
+    // Crawlers, agents and test accounts are counted apart, in no count
+    // above: every other query reads a person's steps alone.
+    assertEquals(f.apart, [
+      { client: 'test', step: 'signup', n: 2 },
+      { client: 'bot', step: 'home', n: 5 },
+    ])
     assertEquals(
-      sql.asked.every((q) => q.includes(`index1 = '${FUNNEL}'`)),
+      sql.asked.filter((q) => q.includes("NOT blob6 IN ('browser', '')"))
+        .length,
+      1,
+    )
+    assertEquals(
+      sql.asked.every((q) =>
+        q.includes(`index1 = '${FUNNEL}'`) &&
+        q.includes(`toDateTime(${since.getTime() / 1000})`)
+      ),
       true,
     )
   } finally {

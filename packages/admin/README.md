@@ -49,6 +49,20 @@ yak admin errors --as admin
 yak admin errors --since 14d --resolved --as admin
 ```
 
+## The funnel
+
+`funnel` reads yaks.app's own funnel through the query /admin/funnel shows
+(workers/yak funnel.ts): each step people took from a time or a duration back,
+with its share of the step it follows, the sites and calls to action, and the
+home page's visits, clicks, sign-ups and checkouts by campaign and by variant.
+Steps crawlers, agents' scripts and `@bot.yak.sh` test accounts took are listed
+apart and are in no other count.
+
+```sh
+yak admin funnel 2026-11-07T00:00Z --as admin
+yak admin funnel 24h --as admin
+```
+
 ## A throwaway without a browser
 
 `throwaway` runs one shell command as a test account. It creates a random

@@ -19,6 +19,8 @@ import type { Options as TrackerOptions } from '@yaks/tracker/routes'
 import { type Account, account } from './account.ts'
 import { ADMIN } from '@yaks/platform/bots'
 import { budgetLines } from '@yaks/platform/budget'
+import { funnelLines } from '@yaks/platform/funnel'
+import { duration } from '@yaks/tracker/errors'
 
 import { Refused } from './refusal.ts'
 export { Refused } from './refusal.ts'
@@ -28,6 +30,7 @@ import {
   close,
   doomedIn,
   feeNow,
+  funnelNow,
   linkFor,
   moveIn,
   refund,
@@ -324,6 +327,20 @@ export let runs = (
         ? await budgetNow(at.bearer, space)
         : await setBudget(at.bearer, space, dollars == 'plan' ? '' : dollars)
       return [said(call, budgetLines(now))]
+    }),
+
+    admin_funnel: verb(async (call) => {
+      let a = argsOf(call)
+      let since = word(a, 'since') ?? '7d'
+      let from = /^\d+[smhd]?$/.test(since)
+        ? new Date(Date.now() - duration(since) * 1000)
+        : new Date(since)
+      if (isNaN(from.getTime())) {
+        throw new CallError('since', `not a time or a duration: ${since}`)
+      }
+      let at = await acting(a)
+      let f = await funnelNow(at.bearer, from.toISOString())
+      return [said(call, funnelLines(f).join('\n'))]
     }),
 
     admin_refund: verb(async (call) => {

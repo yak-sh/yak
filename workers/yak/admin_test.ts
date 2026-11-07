@@ -338,7 +338,9 @@ test("the admin's funnel shows each step's count", async () => {
     assertEquals(page.status, 200)
     let html = await page.text()
     assertStringIncludes(html, '<dt>Home page visits</dt><dd>12</dd>')
-    assertStringIncludes(sql.asked[0], "INTERVAL '30' DAY")
+    // Thirty days back, in the seconds the SQL API's toDateTime takes.
+    let at = Number(/toDateTime\((\d+)\)/.exec(sql.asked[0])![1]) * 1000
+    assertEquals(Math.round((Date.now() - at) / 86_400_000), 30)
   } finally {
     sql.done()
   }

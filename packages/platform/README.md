@@ -62,6 +62,7 @@ neither restates the other's names. Each is pure.
 | `@yaks/platform/cookie` | `COOKIE`, the cookie a platform session rides in, and `cookieValue(header, name?)`, one cookie out of a `Cookie` header                                                                        |
 | `@yaks/platform/bots`   | which accounts and visitors are nobody's: `BOT`, the fleet's bot domain, `ADMIN` and `DEMO`, its two addresses that are not throwaways, `isTestAddress` and `isVerifiedBot`                    |
 | `@yaks/platform/budget` | `SpaceBudget`, a space's monthly model and voice budget, and `budgetLines`, the lines a person reads it in                                                                                     |
+| `@yaks/platform/funnel` | `Funnel`, yaks.app's own funnel as its admin door answers it, and `funnelLines`, the lines a person reads it in                                                                                |
 | `@yaks/platform/mover`  | what the store mover answers: `Swept`, a store a sweep asks; `Mark`, a rule's name; `Stamp`, `Standing` and `Rehearsal`, where a rule stands in a store and what a rehearsal found             |
 
 ## Compatibility

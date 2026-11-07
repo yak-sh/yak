@@ -306,6 +306,9 @@ let atApex = async (req: Request, env: Env, path: string) => {
   // A click on a home-page call to action (funnel.ts), before the connector
   // for the same reason.
   if (path == funnel.CLICKED) return funnel.clicked(req, env)
+  // The funnel as data for the box's admin_funnel tool (admin.ts
+  // `funnelDoor`), the owner's door, before the connector for the same reason.
+  if (path == admin.FUNNEL) return admin.funnelDoor(req, env)
   if (path == '/mcp' || path.startsWith('/api/')) {
     return bound(env.MCP, mcp, env).fetch(req)
   }

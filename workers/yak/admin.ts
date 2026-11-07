@@ -30,11 +30,13 @@
 // vouch. The Sessions page lists them across the most recently active spaces,
 // newest first, each opening on that same page.
 
-import type { Env } from './env.ts'
+import { bound, type Env } from './env.ts'
 import { type Held, holding } from './held.ts'
 import {
   appAbout,
   type Directory,
+  directory,
+  fetch as directoryFetch,
   idOf,
   META,
   newcomerIs,
@@ -71,6 +73,7 @@ import { type Listed, listed, type Worked } from './operator-view.ts'
 import { column, conversationOf } from './operator-page.ts'
 import { ADMIN, managePath } from './route.ts'
 import { admin } from './tool.ts'
+import { adminWho } from './identity.ts'
 import { Idle } from './mascot.ts'
 
 export let PATH = ADMIN
@@ -844,7 +847,8 @@ let WINDOWS = [1, 7, 30, 90]
 
 // yaks.app's own funnel (funnel.ts): each step's count over the window, and
 // its share of the step it follows, then the sites that sent the home page
-// its visitors, the calls to action they clicked and the campaigns.
+// its visitors, the calls to action they clicked and the campaigns, and last
+// the steps crawlers, agents and test accounts took, which count apart.
 let funnelPage = (
   d: Reading,
   f: Funnel | null | Error,
@@ -857,7 +861,7 @@ let funnelPage = (
       'aria-current': n == days ? 'page' : undefined,
     }, n == 1 ? '1 day' : `${n} days`),
   ])
-  let say = (name: string) => STEPS.find((s) => s.name == name)!.say
+  let say = (name: string) => STEPS.find((s) => s.name == name)?.say ?? name
   let of = (name: string) => {
     let s = STEPS.find((s) => s.name == name)
     return s && 'of' in s ? say(s.of).toLowerCase() : ''
@@ -910,6 +914,16 @@ let funnelPage = (
           )
           : null
       ),
+      f.apart.length
+        ? h(
+          Fragment,
+          null,
+          h(Group, null, 'Not people, counted apart'),
+          facts(
+            f.apart.map((r) => [`${r.client} · ${say(r.step)}`, String(r.n)]),
+          ),
+        )
+        : null,
     )
   return desk(
     d,
@@ -926,6 +940,47 @@ let funnelPage = (
       body,
     ),
   )
+}
+
+/** Where the funnel is answered as data, for the box's admin_funnel tool. */
+export let FUNNEL = '/api/funnel'
+
+let refused = (status: number, code: string, message: string) =>
+  Response.json({ error: { code, message } }, { status })
+
+/**
+ * The funnel as data (funnel.ts `funnel`, the page's own read): from `since`,
+ * an ISO time, or over the last `days`, a week by default. An owner of the
+ * meta space is answered by a bearer token as well as by a session, as the
+ * fee's door is (sell.ts `fees`): an agent reads what the page shows.
+ */
+export let funnelDoor = async (req: Request, env: Env): Promise<Response> => {
+  if (req.method != 'GET') {
+    return refused(405, 'method_not_allowed', 'get the funnel')
+  }
+  let dir = directory(bound(env.DIRECTORY, directoryFetch, env))
+  let meta = await dir.space(META.space)
+  if (!meta) {
+    return refused(503, 'no_platform', 'the directory has not seeded yet')
+  }
+  let who = await adminWho(env, req, (person) => dir.role(meta, person))
+  if (who.role != 'owner') {
+    return refused(
+      403,
+      'not_owner',
+      `the funnel is read by an owner of ${meta.slug}`,
+    )
+  }
+  let asked = new URL(req.url).searchParams
+  let since = asked.get('since')
+  let at = since ? new Date(since) : null
+  if (at && isNaN(at.getTime())) {
+    return refused(400, 'bad_since', `not a time: ${since}`)
+  }
+  let f = await funnel(env, at ?? (Number(asked.get('days')) || 7))
+  return f
+    ? Response.json(f)
+    : refused(503, 'not_on', 'visitor counts are not switched on here')
 }
 
 /** The admin's directory, at {@link PATH}, or null for any other path. */
@@ -969,7 +1024,7 @@ export let answer = async (
       caught(e, { request: 'admin funnel' })
       return e instanceof Error ? e : new Error(String(e))
     })
-    return funnelPage(d, f, f && !(f instanceof Error) ? f.days : days)
+    return funnelPage(d, f, days)
   }
   let [eid, part, open = ''] = rest.split('/')
   let r = [...d.census.people, ...d.census.spaces, ...d.census.apps]
