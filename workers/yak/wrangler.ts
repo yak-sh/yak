@@ -780,17 +780,17 @@ export let direct = (
 }
 
 // Keep relative bindings, assets and image paths beside their original config.
-// These modules already contain the pin's transforms and source maps.
+// These modules already contain the pin's transforms and source maps. `fit`
+// is what one Worker's config needs besides, as the kernel's sheets.
 let unbundled = async (
   from: string,
   { entry, output }: Bundle,
   root: string,
+  fit: (config: Record<string, unknown>) => Promise<unknown> = async () => {},
 ) => {
   let path = join(root, from)
   let parsed = parse(io.readTextFileSync(path))
-  if (parsed.assets) {
-    direct(parsed, plan(await sources(join(dirname(path), 'public'))).names)
-  }
+  await fit(parsed)
   Object.assign(parsed, {
     main: entry,
     base_dir: output,
@@ -860,10 +860,13 @@ export let bundled = async (
     let upload = args.filter((_, i) =>
       metaAt < 0 || i != metaAt && (!next || i != metaAt + 1)
     )
-    config = await unbundled('wrangler.toml', {
-      entry: join(output, 'index.js'),
-      output,
-    }, root)
+    config = await unbundled(
+      'wrangler.toml',
+      { entry: join(output, 'index.js'), output },
+      root,
+      async (parsed) =>
+        direct(parsed, plan(await sources(join(root, 'public'))).names),
+    )
     return { args: [...upload, '-c', config], output, remove }
   } catch (error) {
     remove()

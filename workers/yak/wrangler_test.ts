@@ -1377,9 +1377,12 @@ let checkSiblingPreparation = async () => {
     Deno.mkdirSync(join(root, 'outbound'))
     Deno.writeTextFileSync(
       join(root, 'outbound/wrangler.toml'),
-      'main="worker.ts"\nupload_source_maps=true\ncompatibility_flags=["nodejs_compat"]\n[[containers]]\nimage="./Dockerfile"\n[env.staging.vars]\nLABEL="stage"',
+      'main="worker.ts"\nupload_source_maps=true\ncompatibility_flags=["nodejs_compat"]\n[assets]\ndirectory="./public"\n[[containers]]\nimage="./Dockerfile"\n[env.staging.vars]\nLABEL="stage"',
     )
     Deno.writeTextFileSync(join(root, 'outbound/Dockerfile'), 'FROM deno')
+    // A sibling's assets are its own: none of the kernel's sheets (T-150316).
+    Deno.mkdirSync(join(root, 'outbound/public'))
+    Deno.writeTextFileSync(join(root, 'outbound/public/a.json'), '{}')
     let args = [
       'deploy',
       '--env',
@@ -1464,6 +1467,7 @@ let checkSiblingPreparation = async () => {
         assertEquals(config.upload_source_maps, true)
         assertEquals(config.compatibility_flags, ['nodejs_compat'])
         assertEquals(config.env, { staging: { vars: { LABEL: 'stage' } } })
+        assertEquals(config.assets, { directory: './public' })
         assertEquals(Deno.readTextFileSync(config.main as string), 'worker.js')
         assertEquals(
           Deno.readTextFileSync(
@@ -1494,7 +1498,7 @@ let checkSiblingPreparation = async () => {
       assertEquals(
         [...Deno.readDirSync(join(root, 'outbound'))].map((file) => file.name)
           .toSorted(),
-        ['Dockerfile', 'wrangler.toml'],
+        ['Dockerfile', 'public', 'wrangler.toml'],
       )
       assert(called)
       let ensured = false
@@ -1528,7 +1532,7 @@ let checkSiblingPreparation = async () => {
       assertEquals(
         [...Deno.readDirSync(join(root, 'outbound'))].map((file) => file.name)
           .toSorted(),
-        ['Dockerfile', 'wrangler.toml'],
+        ['Dockerfile', 'public', 'wrangler.toml'],
       )
     } finally {
       prepared.remove()
