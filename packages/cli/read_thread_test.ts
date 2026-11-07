@@ -3,6 +3,7 @@ import { test } from '@yaks/testing'
 import { assertEquals, assertRejects } from '@std/assert'
 import { readThread } from './read_thread.ts'
 import { readActivity } from './read_activity.ts'
+import { type Asker, asking } from '@yaks/graph/asker'
 
 // A worker stuck in synchronous SQL cannot service the close message. No
 // writes live in this worker, so closing must terminate it without a reply.
@@ -206,10 +207,12 @@ test('a cancelled read past its grace gives up its worker', async () => {
 })
 
 // One read, `.memory.scope="secret"`, on a reader whose timers fire when its
-// clock passes them. Each step is `<ms>` (the clock moves there and the
-// checks due run), `<ms> <cpu> <wait>` (the same, with what the worker's
-// thread has spent by then, in s), or `answer`. Says what was told.
-let watched = async (...steps: string[]) => {
+// clock passes them, asked for `who` when given. Each step is `<ms>` (the
+// clock moves there and the checks due run), `<ms> <cpu> <wait>` (the same,
+// with what the worker's thread has spent by then, in s), or `answer`. Says
+// what was told, and who asked when someone did.
+let watched = (...steps: string[]) => watching(undefined, steps)
+let watching = async (who: Asker | undefined, steps: string[]) => {
   let { workers, restore } = fakes()
   let clock = 0, spent = { cpu: 0, wait: 0 }
   let due: { at: number; fn: () => void }[] = []
@@ -223,11 +226,16 @@ let watched = async (...steps: string[]) => {
     },
   })
   let told: string[] = []
-  reader.overrun((error) =>
-    told.push(`${error.message} (${(error.cause as Error).message})`)
+  reader.overrun((error, asker) =>
+    told.push(
+      `${error.message} (${(error.cause as Error).message})` +
+        (asker ? ` asked by ${JSON.stringify(asker)}` : ''),
+    )
   )
   try {
-    let long = Promise.resolve(reader.read('.memory.scope="secret"'))
+    let long = Promise.resolve(
+      asking(who, () => reader.read('.memory.scope="secret"')),
+    )
     long.catch(() => {})
     workers[0].onmessage?.({ data: { thread: '1/task/2' } })
     for (let step of steps) {
@@ -280,4 +288,12 @@ test('a read is told when its own time passes slow', async () => {
     ]],
   ]
   for (let [steps, told] of cases) assertEquals(await watched(...steps), told)
+})
+
+// A slow read names who asked it, as its door said where the read began: the
+// timer that tells of it runs long after the door's work has moved on.
+test('a slow read is told with who asked it', async () => {
+  let who = { door: '/ws', page: '/P-19', session: 's' }
+  let [told] = await watching(who, ['10000 9 0', '11000 9.5 0'])
+  assertEquals(told.split(' asked by ')[1], JSON.stringify(who))
 })

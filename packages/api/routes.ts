@@ -29,6 +29,17 @@ import { fault } from './refuse.ts'
 import { refusing, type Upgrade } from './socket.ts'
 import { denoUpgrade } from './deno.ts'
 import { Refused } from '@yaks/graph/errors'
+import { type Asker, asking } from '@yaks/graph/asker'
+
+// The page a request came from: the one that sent it, or the one a
+// navigation asks for. Its path only; a query string can carry a token.
+let pageOf = (request: Request): string | undefined => {
+  let from = request.headers.get('referer')
+  if (from) return URL.parse(from)?.pathname
+  if (request.headers.get('sec-fetch-mode') == 'navigate') {
+    return new URL(request.url).pathname
+  }
+}
 
 let socketing = (request: Request) =>
   new URL(request.url).pathname == '/ws' &&
@@ -145,7 +156,18 @@ export let handler = (host: Hosting, options: {
     return route && (exact(route) || !DOORS.includes(path)) ? route : undefined
   }
   let filters = host.filters ?? []
-  return served(async (request) => {
+  let routeOf = (request: Request) => {
+    let path = new URL(request.url).pathname
+    return claimed(request)?.path ?? (DOORS.includes(path) ? path : undefined)
+  }
+  // Whatever a request starts, a read on another thread too, answers the
+  // route it came through and the page that sent it (@yaks/graph/asker).
+  let asker = (request: Request): Asker | undefined => {
+    let door = routeOf(request)
+    let page = pageOf(request)
+    return door ? { door, ...(page && { page }) } : undefined
+  }
+  let answer = async (request: Request): Promise<Response> => {
     try {
       for (let f of filters) await f(request)
     } catch (error) {
@@ -157,14 +179,12 @@ export let handler = (host: Hosting, options: {
     }
     let route = claimed(request)
     if (!route) return door(request)
-    let answer = await route.handle(request)
-    return request.method == 'HEAD' ? new Response(null, answer) : answer
-  }, {
+    let answered = await route.handle(request)
+    return request.method == 'HEAD' ? new Response(null, answered) : answered
+  }
+  return served((request) => asking(asker(request), () => answer(request)), {
     graph: host.graph,
     report,
-    route: (request) => {
-      let path = new URL(request.url).pathname
-      return claimed(request)?.path ?? (DOORS.includes(path) ? path : undefined)
-    },
+    route: routeOf,
   })
 }

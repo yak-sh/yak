@@ -18,6 +18,7 @@ import {
 } from '@yaks/graph'
 import { effectDoc, effects } from '@yaks/effects'
 import { ram } from '@yaks/ram'
+import { asker } from '@yaks/graph/asker'
 import { kernelDoc, kernelKeywords } from '@yaks/kernel'
 import { provenanceDoc } from '@yaks/provenance'
 import { idDoc } from '@yaks/id/vocab'
@@ -1323,4 +1324,20 @@ test('an unresolved nested reference refuses before the tool writes', async () =
     'arguments',
   )
   assertEquals(await absent.g.get(['nested-write']), [])
+})
+
+// A tool's work answers the tool and the session that called it, so a read it
+// starts on another thread names them when it fails.
+test('a tool runs as asked by its name and its caller session', async () => {
+  let asked: unknown[] = []
+  let { g, r } = world([{
+    ...echo,
+    run: (c, g) => (asked.push(asker()), echo.run(c, g)),
+  }])
+  await r.ensure()
+  let session = mint()
+  await g.apply([{ entity: { eid: session }, person: {} }])
+  let call = called('example_echo', { value: 'hi' })
+  await r.call({ ...call, $actor: { via: session } })
+  assertEquals(asked, [{ door: 'example_echo', session }])
 })

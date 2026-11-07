@@ -143,6 +143,7 @@ across processes and does not implement every SQL query feature.
 | `@yaks/graph/tools`      | `loadTools`, `runs`, `tier`, `generic`, `edited`, `linked`, and their implementation types                                                                                                         |
 | `@yaks/graph/hit`        | `hit`, `called`, `snippet`, `titleOf`: the one line a search row says itself as, naming it by its human id where it has one                                                                        |
 | `@yaks/graph/held`       | `held`, `Held`: native reads kept across commits, read again only for the entities a commit touched                                                                                                |
+| `@yaks/graph/asker`      | `asking`, `asker`, `installAsker`: the door, session and page a piece of work answers, said once where it begins so a failure deep inside names its sender                                         |
 
 ### Read-only graphs
 

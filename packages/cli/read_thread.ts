@@ -8,6 +8,7 @@ import * as disk from '@yaks/file/io'
 import { mask, parse, stringify } from '@yaks/query'
 import type { Bundle, Eid, Graph, Query, ReadOpts, Row } from '@yaks/graph'
 import type { Search } from '@yaks/graph/tools'
+import { type Asker, asker } from '@yaks/graph/asker'
 import type { Meaning, MeaningHit } from '@yaks/host'
 import { type Context, context, type Event, forward } from '@yaks/trace'
 import { how, own, since, type Spent, spent } from './stall.ts'
@@ -83,8 +84,9 @@ let blocked = (thread: string): string => {
  * comes; only one still running `grace` ms after its caller left (a runaway
  * query) ends its worker, so it cannot hold a lane for good. A read still
  * running when its own time passes `slow` ms is told to whoever `overrun` was
- * given, once, with its masked query: one that runs on is a failure, and the
- * query is what names it. Its own time is its wall clock less what the box
+ * given, once, with its masked query and who asked it (@yaks/graph/asker,
+ * taken when the read was asked): one that runs on is a failure, and the
+ * query and its door are what name it. Its own time is its wall clock less what the box
  * kept its worker waiting for a CPU (./stall.ts), so a busy box makes no read
  * slow. One the worker cuts off past its budget (@yaks/sqlite/budget) is a
  * refusal its caller hears, not a failure. */
@@ -112,8 +114,8 @@ export let readThread = (
    * waits on a worker starting */
   answering: () => boolean
   close: () => Promise<void>
-  /** where a read that runs past `slow` is told */
-  overrun: (tell: (error: Error) => void) => void
+  /** where a read that runs past `slow` is told, with who asked it */
+  overrun: (tell: (error: Error, asker?: Asker) => void) => void
 } => {
   type Job = {
     id: number
@@ -121,6 +123,8 @@ export let readThread = (
     resolve: (value: unknown) => void
     reject: (error: unknown) => void
     trace?: Context
+    /** who asked it, as its door said */
+    asker?: Asker
     off: () => void
     /** its caller left; the answer goes nowhere */
     dropped?: boolean
@@ -140,7 +144,7 @@ export let readThread = (
     thread?: string
     activity: ReturnType<typeof readActivity>
   }
-  let told: (error: Error) => void = () => {}
+  let told: (error: Error, asker?: Asker) => void = () => {}
   let up = false
   let lanes = new Set<Lane>()
   let waiting: Job[] = []
@@ -242,14 +246,17 @@ export let readThread = (
     let left = slow - own(ran, s)
     if (left >= 1000) return again(left)
     if (!looked) return again(1000)
-    told(Object.assign(
-      new Error(
-        `a read has run ${slow / 1000} s and is still running: ` +
-          asked(job.call),
-        { cause: new Error(waited(lane, ran, s)) },
+    told(
+      Object.assign(
+        new Error(
+          `a read has run ${slow / 1000} s and is still running: ` +
+            asked(job.call),
+          { cause: new Error(waited(lane, ran, s)) },
+        ),
+        { name: 'SlowRead' },
       ),
-      { name: 'SlowRead' },
-    ))
+      job.asker,
+    )
   }
   let drain = () => {
     while (waiting.length && !closed) {
@@ -292,6 +299,7 @@ export let readThread = (
         resolve,
         reject,
         trace: context(),
+        asker: asker(),
         off: () => signal?.removeEventListener('abort', cancel),
       }
       signal?.addEventListener('abort', cancel, { once: true })

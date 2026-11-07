@@ -15,6 +15,7 @@ import { isPromise } from '@yaks/fp'
 import { during, peek, scope } from '@yaks/trace'
 import { mask } from '@yaks/query/core'
 import type { Bundle, ReadOpts } from '@yaks/graph'
+import { asker, asking } from '@yaks/graph/asker'
 import { coalescer } from '@yaks/graph/bundle'
 import { admission } from './admission.ts'
 import type { Frame, Sink, Subs } from './subs.ts'
@@ -417,6 +418,9 @@ export let attach = (
   let q = queue(socket, timer, () => socket.readyState == OPEN)
   let to = q.send
   let shut = false
+  // Who the upgrade answered (its route); each message is asked by it, from
+  // the page a subscription says it came from.
+  let who = asker()
   let drop = () => {
     if (shut) return
     shut = true
@@ -438,9 +442,14 @@ export let attach = (
       msg?.acks === true &&
       (typeof msg.subscribe == 'string' || msg.subscribe === true)
     ) q.enable(msg.frames === true)
-    let out = scope(
-      undefined,
-      () => receive(subs, to, data, now, input, opts, writer),
+    let page = typeof msg?.page == 'string' ? msg.page.slice(0, 512) : ''
+    let out = asking(
+      who && (page ? { ...who, page } : who),
+      () =>
+        scope(
+          undefined,
+          () => receive(subs, to, data, now, input, opts, writer),
+        ),
     )
     if (out == 'close') {
       drop()

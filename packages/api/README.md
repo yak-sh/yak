@@ -508,7 +508,7 @@ produce a `refused` frame with a recoverable top-level id, or an empty id. They
 do not close the socket or disturb other subscriptions.
 
 ```text
-→ { subscribe: "<query>" | true, id: "<id>", acks?: true, frames?: true }
+→ { subscribe: "<query>" | true, id: "<id>", acks?: true, frames?: true, page?: "<path>" }
 → { ack: "<token>" }
 → { unsubscribe: "<id>" }
 → { relay: Bundle[] }
@@ -555,6 +555,9 @@ equal(replies, [{
 }])
 equal(clockReply(socket, { clock: '12.5' }, 1_800_000_000_000), false)
 ```
+
+A subscription's `page` is the path of the page that asked for it, which a
+failure its reads meet names (@yaks/graph/asker); nothing answers by it.
 
 An **ack** is the token a client echoes after applying a frame. With
 `acks:

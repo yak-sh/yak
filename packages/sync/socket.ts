@@ -232,6 +232,14 @@ export let backoff = (wait: number, most: number): number =>
 let wsUrl = (url: string): string =>
   `${url.replace(/^http/, 'ws').replace(/\/$/, '')}/ws`
 
+// What a subscription says beside its query: acks, grouped frames, and in a
+// browser the page asking, which a failure its reads meet names.
+let asking = () => {
+  let page = (globalThis as { document?: Document }).document?.location
+    ?.pathname
+  return { acks: true, frames: true, ...(page && { page }) }
+}
+
 let OPEN = 1
 let BUFFER = 8 * 1024
 
@@ -522,9 +530,7 @@ export let wire = (opts: WireOpts): Wire => {
       for (let [id, query] of asks) {
         if (refused.has(id)) continue
         resetting.add(id) // its answer will be the whole set, as it now stands
-        s.send(
-          stringify({ subscribe: query, id, acks: true, frames: true }),
-        )
+        s.send(stringify({ subscribe: query, id, ...asking() }))
       }
       resume() // at once, when nothing is asked
       say(true)
@@ -647,7 +653,7 @@ export let wire = (opts: WireOpts): Wire => {
       resetting.add(key)
       opts.pending?.(key)
       open()
-      send({ subscribe: query, id: key, acks: true, frames: true })
+      send({ subscribe: query, id: key, ...asking() })
       return key
     },
     unsubscribe: (id) => {

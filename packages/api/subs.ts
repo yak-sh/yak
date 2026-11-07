@@ -34,6 +34,7 @@
 // what remembers who is in.
 
 import type { Bundle, Eid, Graph, News, Query, ReadOpts } from '@yaks/graph'
+import { type Asker, asker, asking } from '@yaks/graph/asker'
 import { after, isPromise, over } from '@yaks/fp'
 import { during, link, parent, peek, scope, unlink } from '@yaks/trace'
 import type { TransientFrame } from '@yaks/graph'
@@ -218,6 +219,8 @@ type Sub = {
   ast?: And
   view?: ReadView
   opts?: ReadOpts
+  /** who opened it, whom its reads after a commit answer too */
+  asker?: Asker
   send: (frame: Frame) => void | Promise<void>
   /** the entities currently in the set */
   members: Set<Eid>
@@ -992,6 +995,8 @@ export let subscriptions = (graph: Graph, opts: {
   // entities it selects from the ones they reach; any other query is the
   // graph's read, the same answer `/query` gives.
   let ask = (sub: Sub, q: string): Answer =>
+    asking(sub.asker, () => asked(sub, q))
+  let asked = (sub: Sub, q: string): Answer =>
     sub.view
       ? viewed(sub.view, reading(sub))
       : sub.plan?.reaches.length
@@ -1159,6 +1164,7 @@ export let subscriptions = (graph: Graph, opts: {
       raw: query === true,
       query: line,
       opts: options,
+      asker: asker(),
       send: delivery(sink, id, readOpts, query === true),
       members: new Set(),
       fields: new Map(),

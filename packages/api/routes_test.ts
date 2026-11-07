@@ -6,6 +6,8 @@ import type { Filter } from './route.ts'
 import { handler } from './routes.ts'
 import { fake, req, shopGraph } from './testing.ts'
 import { Refused } from '@yaks/graph/errors'
+import { type Asker, asker, installAsker } from '@yaks/graph/asker'
+import { AsyncLocalStorage } from 'node:async_hooks'
 
 class Denied extends Error {
   override name = 'Denied'
@@ -162,5 +164,48 @@ test('a request that broke is answered with its id and reported once', async () 
       status: 500,
       agent: 'curl 8.5.0',
     })
+  }
+})
+
+// Whatever a request starts answers who asked it, as a host's task-local
+// carrier keeps it: the route it came through and the page that sent it (its
+// path alone), and a socket's subscription the page it says it came from.
+test('a read answers the door and page that asked it', async () => {
+  let local = new AsyncLocalStorage<Asker | undefined>()
+  let restore = installAsker({
+    get: () => local.getStore(),
+    run: (who, work) => local.run(who, work),
+  })
+  let asked: (Asker | undefined)[] = []
+  let graph = shopGraph()
+  let h = handler({
+    graph: {
+      ...graph,
+      read: (q, o) => (asked.push(asker()), graph.read(q, o)),
+    },
+    who: () => null,
+    routes: [],
+  }, {
+    upgrade: () => {
+      let socket = fake()
+      sockets.push(socket)
+      return { socket, response: new Response(null, { status: 101 }) }
+    },
+  })
+  try {
+    let from = { referer: 'http://shop.test/P-19?token=secret' }
+    await h(req('/query?q=.book', { headers: from }))
+    await h(req('/ws', { headers: { upgrade: 'websocket' } }))
+    sockets.at(-1)!.emit(
+      'message',
+      JSON.stringify({ subscribe: '.book', id: 's1', page: '/P-7' }),
+    )
+    await new Promise((done) => setTimeout(done, 0))
+    assertEquals(asked, [
+      { door: '/query', page: '/P-19' },
+      { door: '/ws', page: '/P-7' },
+    ])
+  } finally {
+    restore()
   }
 })

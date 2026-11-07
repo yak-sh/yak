@@ -3,6 +3,7 @@ import type { Bundle, Comp, Graph, NamedTool } from '@yaks/graph'
 import { who } from '@yaks/graph/call'
 import { signed } from '@yaks/graph/provenance'
 import { status } from '@yaks/graph/errors'
+import { asking } from '@yaks/graph/asker'
 import type { Opts } from './runner.ts'
 import { CallError, parsed, resolved, validated } from './args.ts'
 import { Interrupted } from './errors.ts'
@@ -90,13 +91,17 @@ export let invoke = async (
   try {
     let args = await resolved(tool, validated(tool, parsed(c.args)), host)
     let actor = who(call)
-    let asking: Bundle = {
+    let called: Bundle = {
       ...call,
       call: { ...c, args },
       ...!call.created && actor ? { created: { ...actor } } : {},
       ...opts.process ? { process: opts.process } : {},
     }
-    let made = await tool.run(asking, host)
+    // What the tool starts answers it, and the session that called it.
+    let made = await asking(
+      { door: tool.name, ...actor?.via && { session: actor.via } },
+      () => tool.run(called, host),
+    )
     if (!tool.applied) made = signed(made, actor)
     measured(made, opts.most ?? MOST)
     // A rehearsal: `check: true` to a tool that writes runs the write's

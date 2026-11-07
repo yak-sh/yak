@@ -115,6 +115,7 @@ import { during, outcome, peek as tracing, type Span } from '@yaks/trace'
 import { compositionAnatomy, secretNames } from '@yaks/host/anatomy'
 import { AsyncLocalStorage } from 'node:async_hooks'
 import { type Context as TraceContext, installContext } from '@yaks/trace'
+import { type Asker, installAsker } from '@yaks/graph/asker'
 import { spool } from '@yaks/tracker/report'
 import { CallError } from '@yaks/tools/errors'
 import { persist } from '@yaks/tools/persist'
@@ -136,6 +137,22 @@ let supervisor = () => import('@yaks/process')
 installContext({
   get: () => traceLocal.getStore(),
   run: (ctx, work) => traceLocal.run(ctx, work),
+})
+let askerLocal = new AsyncLocalStorage<Asker | undefined>()
+installAsker({
+  get: () => askerLocal.getStore(),
+  run: (asker, work) => askerLocal.run(asker, work),
+})
+
+// A read that ran on, named by who asked it: its door and page as tags, its
+// session as what it ran during.
+let asked = (asker?: Asker) => ({
+  tags: {
+    step: 'read',
+    ...(asker && { door: asker.door }),
+    ...(asker?.page && { page: asker.page }),
+  },
+  ...(asker?.session && { during: { session: asker.session } }),
 })
 
 export { type Declared, facet, type Words, words } from './words.ts'
@@ -267,8 +284,8 @@ export type ComposeOpts = {
     search?: Search
     meaning?: Meaning
     close?: () => void | Promise<void>
-    /** where the reader tells of a read that runs on */
-    overrun?: (tell: (error: Error) => void) => void
+    /** where the reader tells of a read that runs on, and who asked it */
+    overrun?: (tell: (error: Error, asker?: Asker) => void) => void
   }
   /** what the host carries as {@link Host.warm} */
   warm?: () => Promise<void>
@@ -401,9 +418,7 @@ let composed = async (
       : undefined,
     { command: command(process.args), roles: roles.join(',') },
   )
-  opts.reader?.overrun?.((error) =>
-    void report(error, { tags: { step: 'read' } })
-  )
+  opts.reader?.overrun?.((error, asker) => void report(error, asked(asker)))
   let cleanup = async (step: string, release: () => void | Promise<void>) => {
     try {
       await release()
