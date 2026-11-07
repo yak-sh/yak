@@ -80,6 +80,8 @@ export type Tail = {
   operatorStored?: boolean
   /** the lines read so far */
   line: number
+  /** the line the file's `consumed` stands at */
+  marked: number
   /** the byte the next read starts at */
   at: number
   rest: string
@@ -493,6 +495,7 @@ export let tail = async (
     own: await owns(g, o.session, file.entity.eid),
     known: !!held,
     line,
+    marked: line,
     at: o.stream ? 0 : after(path, line),
     ...(o.stream ? { skip: line } : {}),
     rest: o.prefix ?? '',
@@ -660,8 +663,6 @@ export let pull = async (
   o: Pull = {},
 ): Promise<number> => {
   let from = t.line
-  // The line the session's `consumed` stands at.
-  let marked = t.line
   let breath = performance.now()
   let all = await lines(t, o.final)
   if (all.length && !o.prose) await follow(t, read, o)
@@ -684,7 +685,7 @@ export let pull = async (
       ),
       { trusted: true },
     )
-    marked = last.line
+    t.marked = last.line
     t.known = true
     if (person && t.operator == null) t.operator = true
     t.operatorStored = t.operator
@@ -749,14 +750,10 @@ export let pull = async (
     if (signed || run.length >= RUN || text >= RUN_TEXT) await flush()
   }
   await flush()
-  // Lines past the last that made an entry, or refused ones: read all the
-  // same, so a resume starts after them.
-  if (t.line > marked) {
-    t.session ??= await created(g, t)
-    await settle(g, t)
-    await g.apply(marks(t, t.line), { trusted: true })
-    t.known = true
-  }
+  // Lines past the last that made an entry, or refused ones, are marked read
+  // where the file is done or not yet known; a file still being written has
+  // its next entry carry the mark, or `rest` write it once the file is quiet.
+  if (o.final || o.prose || t.stream?.done || !t.known) await rest(g, t)
   if (t.stream?.done && !behind(t) && !t.skip && t.version) {
     await g.apply([{
       entity: t.file.entity,
@@ -764,6 +761,26 @@ export let pull = async (
     }], { trusted: true })
   }
   return t.line - from
+}
+
+/**
+ * Mark a tail's file read to the line the tail stands at, so a resume starts
+ * after it and a quiet file reads as imported to its end: what lines that made
+ * no entry leave unwritten while the file is still being written (`pull`).
+ *
+ * ```ts
+ * import { rest } from '@yaks/session/tail'
+ *
+ * // await rest(graph, t) // once its file has gone quiet
+ * ```
+ */
+export let rest = async (g: Graph, t: Tail): Promise<void> => {
+  if (t.line <= t.marked) return
+  t.session ??= await created(g, t)
+  await settle(g, t)
+  await g.apply(marks(t, t.line), { trusted: true })
+  t.known = true
+  t.marked = t.line
 }
 
 // What an earlier reading of a line put on an entry that a request now

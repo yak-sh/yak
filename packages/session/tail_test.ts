@@ -7,7 +7,7 @@ import { toolEid } from '@yaks/tools'
 import { ids, locked, pages, store, transcriptGraph } from './testing.ts'
 import { sessions } from './plugin.ts'
 import { claude } from './readers.ts'
-import { callOf, pull, tail } from './tail.ts'
+import { callOf, pull, rest, tail } from './tail.ts'
 
 let c = (b: Bundle | undefined, name: string) => b?.[name] as Comp | undefined
 
@@ -268,6 +268,22 @@ test('a resume starts where the log was read, whatever became of its entries', (
     await pull(g, await tail(g, quiet, { id: 'quiet' }), claude)
     let [s] = await g.read('.session.id=quiet')
     assertEquals((await tail(g, quiet, { session: s.entity.eid })).line, 1)
+  }))
+
+test('lines that make nothing ride the next write, or are marked once the file is quiet', () =>
+  file(async (g, log, path) => {
+    let resumes = async () => (await tail(g, path, { session: ids.run1 })).line
+    log(typed('one'))
+    let t = await tail(g, path, { session: ids.run1 })
+    await pull(g, t, claude)
+    log('not json at all')
+    await pull(g, t, claude)
+    assertEquals(await resumes(), 1)
+    log(typed('two'), 'not json either')
+    await pull(g, t, claude)
+    assertEquals(await resumes(), 3)
+    await rest(g, t)
+    assertEquals(await resumes(), 4)
   }))
 
 test('prose alone: what was typed and what the model said', () =>

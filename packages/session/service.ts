@@ -55,6 +55,7 @@ import {
   callOf,
   pull,
   recount,
+  rest,
   type Tail,
   tail,
   transcriptOf,
@@ -349,6 +350,10 @@ let pending = (t: Tail, size: number) =>
  * milliseconds. */
 export let SLICE = 100
 
+/** How long a transcript is unwritten before a look marks the lines it read
+ * that made no entry (./tail.ts `rest`), in milliseconds. */
+export let QUIET = 5000
+
 /** How long one look reads in all, in milliseconds. */
 export let BUDGET = 1000
 
@@ -445,7 +450,12 @@ export let look = async (
     }
     if ((seen.retry?.get(f.path) ?? 0) > now) continue
     let at = st?.mtime?.getTime() ?? 0
-    if (!st || t === null || (t && !pending(t, st.size))) continue
+    if (!st || t === null) continue
+    if (t && !pending(t, st.size)) {
+      // Read to a file now quiet: its last lines are marked read.
+      if (now - at >= QUIET) await rest(g, t).catch(o.report ?? console.error)
+      continue
+    }
     if (now - at >= full) {
       if (!seen.done.has(f.path)) old ??= { f, at, prose: true }
       continue
@@ -722,6 +732,7 @@ let through = async (
       await pull(g, t, format(f, t), { ...o, prose })
       if (t.at == at && !behind(t) && !t.stream) break
     }
+    await rest(g, t)
     return await requests(g, t.session) - had
   } catch (error) {
     if (!f.path.endsWith('.zst')) throw error
