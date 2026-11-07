@@ -116,6 +116,7 @@ import { answer as seo } from './seo.ts'
 import {
   ADDRESS,
   aimedAt,
+  askable,
   foreign,
   guarded,
   hostOf,
@@ -653,6 +654,8 @@ let router = {
       // One door is open to every page anyway, and this is where it opens:
       // the app's read door, asked with GET, served with the credentials
       // stripped off and marked readable by any origin (route.ts `shared`).
+      // So is asking for a sign-in code, to the pages of ours that ask for
+      // one (route.ts `askable`).
       //
       // And a sandboxed app's page, on the path that carries its token: its
       // origin is opaque, so it is a stranger to every page, and its request
@@ -666,7 +669,10 @@ let router = {
         guarded(req.method, asked) &&
         !sameOrigin(host, req.headers.get('origin'), env)
       ) {
-        if (!shared(req.method, asked)) return stranger()
+        if (
+          !shared(req.method, asked) &&
+          !askable(req.method, asked, req.headers.get('origin'))
+        ) return stranger()
         req = uncredentialed(req)
         anyone = true
       }

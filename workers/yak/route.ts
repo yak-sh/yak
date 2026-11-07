@@ -587,6 +587,33 @@ export let shared = (method: string, pathname: string) =>
   (method == 'GET' || method == 'HEAD') &&
   /^(?:\/[^/]+)?\/api\/query$/.test(pathname)
 
+// The pages of ours at other addresses that ask the sign-in door for a code
+// (D-138669): yak.sh's "Get set up on yaks.app" section posts the address
+// typed there, and the letter it asks for is the Operator's (signin.ts
+// `codeLetter`).
+export let ASKERS = ['yak.sh']
+
+/** Which of {@link ASKERS} a request's `Origin` names, if any. */
+export let asker = (origin: string | null) => {
+  try {
+    let host = new URL(origin ?? '').hostname.toLowerCase()
+    return ASKERS.includes(host) ? host : null
+  } catch {
+    return null
+  }
+}
+
+// The second door a page elsewhere may reach, opened the way the first is,
+// with the credentials taken off (kernel.ts `uncredentialed`): asking for a
+// code reads no cookie, and answers a page exactly what it answers curl. Only
+// for {@link ASKERS}, so no other page can spread its asks over its visitors'
+// addresses.
+export let askable = (
+  method: string,
+  pathname: string,
+  origin: string | null,
+) => method == 'POST' && pathname == '/login' && !!asker(origin)
+
 // A sandboxed app's page asking its own doors (installed.ts, D-37901): the
 // path carries its page token as `/<app>/~<token>/…`, or `/~<token>/…` for a
 // front page or an app on its own domain. Such a page has an opaque origin,

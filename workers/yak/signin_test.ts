@@ -11,6 +11,7 @@ import {
   called,
   canon,
   chose,
+  codeLetter,
   LIFE,
   mac,
   mayText,
@@ -390,4 +391,27 @@ test('five texted codes an hour from one visitor, and no more', async () => {
   assert(forgotten(old.wrote))
   // A request from inside is never counted.
   assert(await mayText(asking(() => []).at, ''))
+})
+
+// The code is what a person opens the letter for, so it leads both letters.
+// The Operator's, asked for from yak.sh, is from the Operator and answers to
+// the sign-up address, whose reply signs them up (inbox.ts `signingUp`).
+test('a code letter leads with the code, and the Operator invites a reply', () => {
+  let link = 'https://yaks.app/login/link?t=x'
+  let plain = codeLetter('dana@example.com', '123456', link)
+  let mine = codeLetter('dana@example.com', '123456', link, true)
+  for (let l of [plain, mine]) {
+    assertEquals(l.subject, '123456 is your yaks.app code')
+    assertMatch(
+      l.body,
+      /sign-in code is 123456\.\n\nOr sign in with one click: https:\/\/yaks\.app\/login\/link\?t=x\n/,
+    )
+  }
+  assertEquals([plain.name, plain.replyTo], [undefined, undefined])
+  assertEquals([mine.name, mine.replyTo], [
+    'yaks.app Operator',
+    'signup@yaks.app',
+  ])
+  assertMatch(mine.body, /^Hi, I'm your Operator/)
+  assertMatch(mine.body, /just reply to this email/)
 })

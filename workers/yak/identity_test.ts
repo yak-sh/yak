@@ -928,6 +928,39 @@ test('a connector keeps its door until the person closes it', async () => {
 // them on — to the page they were headed for when it is ours to send them to,
 // and to where a fresh sign-in lands when it is nowhere or a stranger's, which
 // is the same guard closing the same open redirect.
+// yak.sh asks for the code from its own page (D-138669): the door takes it
+// with no cookie, and the letter is the Operator's, answered at the sign-up
+// address. Any other page is still a stranger.
+test('a code asked for from yak.sh comes from the Operator', async () => {
+  let k = await kernel()
+  try {
+    let ask = (origin: string, email: string) =>
+      k.at('yaks.app', '/login', {
+        method: 'POST',
+        headers: {
+          'content-type': 'application/x-www-form-urlencoded',
+          origin,
+        },
+        body: new URLSearchParams({ email }).toString(),
+      })
+    let email = `probe-${crypto.randomUUID().slice(0, 8)}@yaks.app`
+    let sent = await ask('https://yak.sh', email)
+    assertEquals(sent.status, 200)
+    assertEquals(sent.headers.get('access-control-allow-origin'), '*')
+    await sent.body?.cancel()
+    let got = await letter(k, email, 'just reply to this email')
+    assertEquals(
+      [got.name, got.replyTo, got.from],
+      ['yaks.app Operator', 'signup@yaks.app', 'hello@bot.yak.sh'],
+    )
+    let forged = await ask('https://evil.example', email)
+    assertEquals(forged.status, 403)
+    await forged.body?.cancel()
+  } finally {
+    await k.stop()
+  }
+})
+
 test('/login never draws the box for a browser already signed in', async () => {
   let k = await kernel()
   try {

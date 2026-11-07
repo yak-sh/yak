@@ -14,6 +14,9 @@ export type Letter = {
   subject: string
   body: string
   replyTo?: string
+  // Who the reader sees it from, where not the platform (signin.ts
+  // `codeLetter`, the Operator's).
+  name?: string
 }
 export type Mail = (l: Letter) => Promise<void>
 
@@ -35,7 +38,7 @@ export let sending = (
 async (l) => {
   let message = {
     from: FROM,
-    name: 'yaks.app',
+    name: l.name ?? 'yaks.app',
     to: l.to,
     replyAddress: l.replyTo ?? replyTo(env),
     subject: l.subject,

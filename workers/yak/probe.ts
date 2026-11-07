@@ -445,6 +445,8 @@ export let connector = (
 // A letter may be addressed to several readers at once (mail.ts `Letter`), so
 // "to this address" is membership, not equality.
 export type Letter = {
+  from?: string
+  name?: string
   to: string | string[]
   subject: string
   body: string
@@ -774,11 +776,21 @@ export let cloudflare = (log = crypto.randomUUID()) => {
     subject: string,
     body = '',
     replyTo?: string,
+    from?: { address: string; name: string },
   ) =>
     logs.set(
       log,
       (logs.get(log) ?? '') +
-        `yak-mail ${JSON.stringify({ to, subject, body, replyTo })}\n`,
+        `yak-mail ${
+          JSON.stringify({
+            to,
+            subject,
+            body,
+            replyTo,
+            from: from?.address,
+            name: from?.name,
+          })
+        }\n`,
     )
   let service = endpoint(async (req) => {
     let url = new URL(req.url)
@@ -848,8 +860,8 @@ export let cloudflare = (log = crypto.randomUUID()) => {
       return ok({ script: { id: name }, version_id: held.version })
     }
     if (url.pathname.endsWith('/email/sending/send')) {
-      let { to, subject, text, reply_to } = await req.json()
-      wrote(to, subject, text, reply_to)
+      let { to, subject, text, reply_to, from } = await req.json()
+      wrote(to, subject, text, reply_to, from)
       return ok({})
     }
     if (req.method == 'POST') {

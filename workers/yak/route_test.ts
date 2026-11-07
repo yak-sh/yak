@@ -3,6 +3,7 @@ import { test } from '@yaks/testing'
 import { assertEquals } from '@std/assert'
 import {
   aimedAt,
+  askable,
   foreign,
   guarded,
   hostOf,
@@ -323,6 +324,28 @@ test('shared: the read door, and nothing a write could ride on', () => {
   ]
   for (let [method, path, want] of doors) {
     assertEquals(shared(method, path), want, `${method} ${path}`)
+  }
+})
+
+// The sign-in door, asked from yak.sh (route.ts `askable`), and from nowhere
+// else that is not the page itself.
+test('askable: asking for a code, from the pages of ours that ask', () => {
+  let doors: [string, string, string | null, boolean][] = [
+    ['POST', '/login', 'https://yak.sh', true],
+    ['POST', '/login', 'https://YAK.SH', true],
+    ['POST', '/login', 'https://evil.example', false],
+    ['POST', '/login', 'https://yak.sh.evil.example', false],
+    ['POST', '/login', 'null', false],
+    ['POST', '/login', null, false],
+    ['POST', '/login/code', 'https://yak.sh', false],
+    ['GET', '/login', 'https://yak.sh', false],
+  ]
+  for (let [method, path, origin, want] of doors) {
+    assertEquals(
+      askable(method, path, origin),
+      want,
+      `${method} ${path} ${origin}`,
+    )
   }
 })
 

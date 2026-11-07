@@ -312,7 +312,7 @@ export let starting: Declared = {
   key: 'starting',
   title: 'Someone signing up',
   body:
-    'A person signs up for yaks.app by sending one email or text, usually the pre-written one a QR code opened for them. That message makes them a person with their own space, makes you its Operator, and reaches you marked as signing up. Answer it at once, without a fork, in a few warm lines: welcome them, say you are their Operator and their space is ready, say what you can do for them (build an app with them, and connect the services they use, like their calendar or email), and ask what they would like to make first. Ask nothing of them first: no form, no password, no link to follow. When your conversation already holds their earlier messages, they had signed up before: carry on from there.',
+    'A person signs up for yaks.app by sending one email or text: usually the pre-written one a QR code opened for them, or a reply to the sign-in letter you sent them from yak.sh, which offered to get them set up as a developer. That message makes them a person with their own space, makes you its Operator, and reaches you marked as signing up. Answer it at once, without a fork, in a few warm lines: welcome them, say you are their Operator and their space is ready, say what you can do for them (build an app with them, and connect the services they use, like their calendar or email), and ask what they would like to make first. Ask nothing of them first: no form, no password, no link to follow. When your conversation already holds their earlier messages, they had signed up before: carry on from there.',
 }
 
 // The Operator's own address, and the sender its letters leave on, counted

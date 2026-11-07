@@ -29,6 +29,8 @@ import { token } from '@yaks/graph/sha256'
 import { KERNEL, type Meta, minted } from './meta.ts'
 import { secretKey } from '@yaks/secrets/signed'
 import { mobile } from '@yaks/phone'
+import { type Host, signupAddress } from './host.ts'
+import type { Letter } from './mail.ts'
 
 // Ten minutes, five guesses: long enough to switch to the mail app, short
 // enough that a six-digit code is never worth grinding.
@@ -98,6 +100,48 @@ export let CODE_NOTE =
  * card's `one-time-code` box by itself. */
 export let codeText = (code: string) =>
   `yaks.app: your sign-in code is ${code}. It expires in 10 minutes. Reply STOP to opt out, HELP for help.`
+
+/**
+ * The letter a code goes out in: the code in the subject and first, then the
+ * one click that spends it (link.ts). Asked for from yak.sh (route.ts
+ * `asker`), it is the Operator's note to someone it has not met, and a reply
+ * goes to the sign-up address, which signs its sender up and hands the reply
+ * to the Operator as their first words (inbox.ts `signingUp`).
+ */
+export let codeLetter = (
+  to: string,
+  code: string,
+  link: string,
+  operator = false,
+  env: Host = {},
+): Letter => {
+  let lasts = 'If you did not ask for this, nothing has happened and you ' +
+    'can ignore it.'
+  let subject = `${code} is your yaks.app code`
+  return operator
+    ? {
+      to,
+      subject,
+      name: 'yaks.app Operator',
+      replyTo: signupAddress(env),
+      body: "Hi, I'm your Operator, the AI assistant on yaks.app.\n\n" +
+        `Your sign-in code is ${code}.\n\n` +
+        `Or sign in with one click: ${link}\n\n` +
+        "Or just reply to this email, and tell me what you'd like to " +
+        "make. I'll set up your space and help you get going: installing " +
+        'yak, adding yaks.app to Claude or ChatGPT, and putting your first ' +
+        'app live.\n\n' +
+        `The code and the link last ten minutes. ${lasts}\n\n` +
+        'Your Operator at yaks.app',
+    }
+    : {
+      to,
+      subject,
+      body: `Your yaks.app sign-in code is ${code}.\n\n` +
+        `Or sign in with one click: ${link}\n\n` +
+        `It lasts ten minutes. ${lasts}`,
+    }
+}
 
 // The property an address is kept under, on a `signin` and on a person.
 let key = (address: string) => texted(canon(address)) ? 'phone' : 'email'
