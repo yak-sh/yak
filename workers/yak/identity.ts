@@ -149,7 +149,7 @@ import { bound, type Env } from './env.ts'
 import { door } from './invite.ts'
 import { mail, mailable } from './mail.ts'
 import { fault } from './unseen.ts'
-import { clock, timed } from './timing.ts'
+import { type Clock, clock, timed } from './timing.ts'
 
 // What the sign-in card says when no letter can leave: the deploy's operator
 // reads which secret is missing, and a visitor reads that nothing is wrong
@@ -812,20 +812,27 @@ let landed = async (
   q: string,
   back: string,
   via?: 'code' | 'link',
+  c: Clock = clock(),
 ) => {
   let store = meta(env)
   let dir = dirOf(env)
-  await keep(env, dir, await browser(env, req), person)
-  await settle(env, person)
+  await c.time(
+    'keep',
+    async () => keep(env, dir, await browser(env, req), person),
+  )
+  await c.time('settle', () => settle(env, person))
   if (via) {
     // A person who has never signed in before is the funnel's sign-up
     // (funnel.ts): the first time, whether their row came from this sign-in
     // or from somebody inviting them.
-    let [row] = await store.query(`.entity.eid=${person} ?signed_in ?email`)
-    await store.apply([{
-      entity: { eid: person },
-      signed_in: { at: new Date().toISOString(), via },
-    }], KERNEL)
+    let [row] = await c.time('signed', async () => {
+      let read = await store.query(`.entity.eid=${person} ?signed_in ?email`)
+      await store.apply([{
+        entity: { eid: person },
+        signed_in: { at: new Date().toISOString(), via },
+      }], KERNEL)
+      return read
+    })
     let who = addressIn(row)
     step(env, 'signed_in', req, { who })
     if (!row?.signed_in) {
@@ -833,13 +840,15 @@ let landed = async (
       ads.after(env, 'signup', req)
     }
   }
-  await claimed(req, env, person)
+  await c.time('claimed', () => claimed(req, env, person))
   let set = await minted(req, env, secret(env), person)
   // A customer's own hostname asks for a click before receiving a session:
   // proving the account on our site does not authorize signing into theirs.
   // Other returns are our own zone or the fallback, decided by `backTo`.
   if (q) return allow(req, env, q, person, set)
-  let at = back ? await destination(dir, back, env) : null
+  let at = back
+    ? await c.time('destination', () => destination(dir, back, env))
+    : null
   if (at) {
     let page = askHandoff(
       at.host,
@@ -1367,27 +1376,34 @@ let ours = async (req: Request, env: Env): Promise<Response> => {
     let address = canon(field('address') || field('email'))
     let q = field('q')
     let back = field('return')
-    let refused = await codeCheck(
-      meta(env),
-      address,
-      await mac(address, field('code'), secret(env)),
-      q,
-      back,
-      env,
-    )
-    if (refused) return refused
-    // Nothing here asks what to call them (T-34236), so the front of their
-    // address does — written, not merely derived, because a member row names a
-    // person by their title and a titleless one reads back as a bare eid
-    // (T-32733). It is theirs to change on their own space page. A number is
-    // no name, and a person found by one is the one wearing it.
-    let person = await personOf(
-      meta(env),
-      address,
-      called(address),
-      await newcomerAt(env, req),
-    )
-    return landed(req, env, person, q, back, 'code')
+    // Each wait a named stage on the answer's `Server-Timing`, as asking
+    // for the code has: this is the second thing a new person waits on.
+    let c = clock()
+    return c.counting(async () => {
+      let refused = await c.time('check', async () =>
+        codeCheck(
+          meta(env),
+          address,
+          await mac(address, field('code'), secret(env)),
+          q,
+          back,
+          env,
+        ))
+      if (refused) return timed(refused, c)
+      // Nothing here asks what to call them (T-34236), so the front of their
+      // address does — written, not merely derived, because a member row
+      // names a person by their title and a titleless one reads back as a
+      // bare eid (T-32733). It is theirs to change on their own space page. A
+      // number is no name, and a person found by one is the one wearing it.
+      let person = await c.time('person', async () =>
+        personOf(
+          meta(env),
+          address,
+          called(address),
+          await newcomerAt(env, req),
+        ))
+      return timed(await landed(req, env, person, q, back, 'code', c), c)
+    })
   }
 
   // One click instead of six digits (link.ts): the letter's own link, or a
