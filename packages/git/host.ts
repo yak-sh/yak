@@ -557,8 +557,13 @@ export let keepSpare = async (
     let dir = at.slice(0, at.lastIndexOf('/'))
     for await (let e of io.readDir(dir)) {
       if (!e.name.startsWith('.spare-')) continue
-      await quiet(source, ['worktree', 'remove', '--force', `${dir}/${e.name}`])
-      await io.remove(`${dir}/${e.name}`, { recursive: true })
+      let left = `${dir}/${e.name}`
+      // Git deletes a cut it registered; one it never knew is deleted here,
+      // and one already gone is the outcome either way.
+      await quiet(source, ['worktree', 'remove', '--force', left])
+      await io.remove(left, { recursive: true }).catch((e) => {
+        if (!io.isNotFound(e)) throw e
+      })
     }
     let cut = `${at}-${crypto.randomUUID()}`
     await git(source, ['worktree', 'add', '--detach', cut, base])
