@@ -2,7 +2,7 @@
 
 import { equal, test } from '@yaks/testing'
 import type { Run } from './land.ts'
-import { trees } from './source.ts'
+import { commitsOf, trees } from './source.ts'
 
 let sha = 'c'.repeat(40)
 // Git, as `ls-tree` answers for a commit holding a.ts, refusing while `down`.
@@ -46,4 +46,43 @@ test('a read Git refused is asked again', async () => {
   state.down = false
   equal(Object.fromEntries(await tree(sha, ['a.ts'])), { 'a.ts': 'b1' })
   equal(asked, [['a.ts'], ['a.ts']])
+})
+
+// Git, holding the commits and the tree its objects map to their kinds.
+let holding = (objects: Record<string, 'commit' | 'tree'>): Run => (args) => {
+  let found = (p: string) =>
+    Object.keys(objects).filter((id) => id.startsWith(p))
+  let said = (out: string[]) =>
+    Promise.resolve(
+      out.length
+        ? { ok: true, code: 0, out: out.join('\n') + '\n', err: '' }
+        : { ok: false, code: 1, out: '', err: '' },
+    )
+  let wants = args.find((a) => a.startsWith('--disambiguate='))
+  if (wants) {
+    return said(found(wants.split('=')[1])).then((r) => ({ ...r, ok: true }))
+  }
+  let commits = found(args.at(-1)!.replace('^{commit}', ''))
+    .filter((id) => objects[id] == 'commit')
+  return said(commits.length == 1 ? commits : [])
+}
+
+test('a sha names the commits it starts, as Git reads it', async () => {
+  let [a, b, t] = [
+    'abc1234' + '1'.repeat(33),
+    'abc1234' + '2'.repeat(33),
+    'abd' + '3'.repeat(37),
+  ]
+  let ask = holding({ [a]: 'commit', [b]: 'commit', [t]: 'tree' })
+  let named = (sha: string) => commitsOf('/repo', sha, ask)
+  equal(
+    await Promise.all(['abc12341', 'abc1234', 'abd3', 'abe0', 'zz'].map(named)),
+    [
+      [a],
+      [a, b],
+      [],
+      [],
+      [],
+    ],
+  )
 })

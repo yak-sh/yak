@@ -23,7 +23,7 @@ import {
 } from '@yaks/query'
 import { CallError } from '@yaks/tools/errors'
 import { valued } from '@yaks/tools/value'
-import { commitOf } from '@yaks/git/source'
+import { commitsOf } from '@yaks/git/source'
 import { comp, str } from './model.ts'
 import { type Options, read } from './routes.ts'
 import { mark as upstream, retry } from './remote.ts'
@@ -201,12 +201,31 @@ export let runs = (
   let box = (g: Graph, call?: Bundle): Store =>
     options.box ? wire(options.box, g.vocab, go, call && who(call)?.via) : g
   let cwd = options.code?.cwd
-  // A resolution's commits by their full shas; one Git cannot read stays as
-  // said, for the graph to refuse.
+  // A resolution's commits by their full shas, a short one read as Git reads
+  // it: 7 or more characters that start one commit in the checkout. One that
+  // starts none or several is refused, saying which; a full sha is taken as
+  // said. Without a checkout the commits stay as said, for the graph to read.
   let full = async (said: Partial<Explanation>) => {
     for (let k of ['since', 'fix'] as const) {
-      let sha = said[k] && cwd && await commitOf(cwd, said[k])
-      if (sha) said[k] = sha
+      let sha = said[k]
+      if (!sha || !cwd || /^(?:[0-9a-f]{40}|[0-9a-f]{64})$/.test(sha)) continue
+      if (!/^[0-9a-f]{7,63}$/.test(sha)) {
+        throw new CallError(
+          k,
+          `${k} ${sha} is not 7 or more hex characters of a sha`,
+        )
+      }
+      let named = await commitsOf(cwd, sha)
+      if (named.length > 1) {
+        throw new CallError(
+          k,
+          `${k} ${sha} starts ${named.length} commits (${
+            named.join(', ')
+          }); give more of its sha`,
+        )
+      }
+      if (!named.length) throw new CallError(k, `${k} ${sha} names no commit`)
+      said[k] = named[0]
     }
     return said
   }

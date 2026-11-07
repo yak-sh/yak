@@ -434,6 +434,20 @@ test('a resolution names its commits by full sha, read from a short one', async 
   let { since, fix } = row.resolved as Record<string, unknown>
   equal([since, fix], [head, head])
 })
+test('a short sha that names no one commit is refused, saying why', async () => {
+  let said = (fix: string) =>
+    platformHome.call('bug_resolve', { bug: ids[0], fix }).then(
+      () => 'taken',
+      (e) => e.message,
+    )
+  equal(
+    await Promise.all(['feedfacefeedfacefeed', head.slice(0, 5)].map(said)),
+    [
+      'fix feedfacefeedfacefeed names no commit',
+      `fix ${head.slice(0, 5)} is not 7 or more hex characters of a sha`,
+    ],
+  )
+})
 
 // A config naming the box tracker's graph reads and marks its bugs there, by
 // the references that graph keeps, and writes nothing to its own.

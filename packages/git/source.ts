@@ -75,21 +75,28 @@ export let trees = (
   }
 }
 
-/// await commitOf('.', 'zz') -> undefined
-/** The full sha of the commit an abbreviated or full sha names in the
- * repository at `cwd`, as Git reads one, or undefined where it names none or
- * more than one. */
-export let commitOf = async (
+/// await commitsOf('.', 'zz') -> []
+/** Every commit an abbreviated or full sha names in the repository at `cwd`,
+ * by its full sha, as Git reads one: the one it names, none, or each of
+ * several that start that way, which Git refuses to choose between. */
+export let commitsOf = async (
   cwd: string,
   sha: string,
   ask: Run = run,
-): Promise<string | undefined> => {
-  if (!/^[0-9a-f]{4,64}$/.test(sha)) return
-  let got = await ask(
-    ['rev-parse', '--verify', '--quiet', `${sha}^{commit}`],
-    cwd,
+): Promise<string[]> => {
+  if (!/^[0-9a-f]{4,64}$/.test(sha)) return []
+  let commit = (id: string) =>
+    ask(['rev-parse', '--verify', '--quiet', `${id}^{commit}`], cwd)
+  let one = await commit(sha)
+  if (one.ok) return [one.out.trim()]
+  // A prefix Git would not read lists every object it starts, of any type;
+  // the commits among them are the ones it names.
+  let all = await ask(['rev-parse', `--disambiguate=${sha}`], cwd)
+  if (!all.ok) return []
+  let peeled = await Promise.all(
+    all.out.split('\n').filter(Boolean).map(commit),
   )
-  return got.ok ? got.out.trim() : undefined
+  return [...new Set(peeled.filter((p) => p.ok).map((p) => p.out.trim()))]
 }
 
 /** All checkout roots, including the primary; observation never prunes Git. */
