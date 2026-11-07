@@ -30,9 +30,13 @@ export let toolCall = async (
   let listed = await ask('tools/list') as { tools: Listed[] }
   let tool = listed.tools.find((t) => t.name == name)
   if (tool) {
+    // The selected app is an argument only to a tool that takes one, and the
+    // tool's own words come after it, so its own --app wins.
+    let spelt = spelling(tool)
+    let takes = o.app && spelt.inputSchema?.properties?.app
     let args = await argsFor(
-      { name, ...spelling(tool) },
-      [...words, ...o.app ? ['--app', o.app] : []],
+      { name, ...spelt },
+      [...takes ? ['--app', o.app!] : [], ...words],
       o.reads,
     )
     return await ask('tools/call', { name, arguments: args }) as Result

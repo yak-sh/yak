@@ -118,6 +118,29 @@ test('a forwarded connector call keeps bare named arguments', async () => {
   )
 })
 
+test('the selected app reaches only a connector that takes one, after its own words', async () => {
+  let tool = (name: string, ...props: string[]): Listed => ({
+    name,
+    inputSchema: {
+      type: 'object',
+      properties: Object.fromEntries(props.map((p) => [p, { type: 'string' }])),
+    },
+  })
+  let cases: [Listed, string[], Record<string, unknown>][] = [
+    [tool('operator_read', 'space'), ['--space=jeff'], { space: 'jeff' }],
+    [tool('app_files', 'space', 'app'), ['--space=jeff'], {
+      space: 'jeff',
+      app: 'call',
+    }],
+    [tool('app_files', 'space', 'app'), ['--app=vale'], { app: 'vale' }],
+  ]
+  for (let [listed, words, args] of cases) {
+    let { ask, calls } = door([listed])
+    assertEquals(await toolCall(ask, listed.name, words, { app: 'call' }), done)
+    assertEquals(calls.at(-1), executed(listed.name, args))
+  }
+})
+
 test('a connector takes named arguments but no guessed positionals', async () => {
   for (let words of [['matt'], ['--unknown=1'], []]) {
     let { ask, calls } = door([{
