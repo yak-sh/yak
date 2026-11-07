@@ -27,6 +27,7 @@ import type { Bundle } from '@yaks/graph'
 import { Stale } from '@yaks/graph/errors'
 import { token } from '@yaks/graph/sha256'
 import { KERNEL, type Meta, minted } from './meta.ts'
+import { background, caught } from './defects.ts'
 import { secretKey } from '@yaks/secrets/signed'
 import { mobile } from '@yaks/phone'
 import { type Host, signupAddress } from './host.ts'
@@ -311,12 +312,15 @@ export let guess = async (
     let rows = await sent(store, address)
     let live = rows.filter((r) => open(r, now()))
     if (!live.length) return false
+    // A right guess closes every open code in the same guarded write a wrong
+    // one takes its try in, so it opens once however many race it.
+    let hit = live.some((r) => r.signin.code == want)
     try {
       await apply(
         store,
         live.map((r) => ({
           entity: { eid: r.entity.eid },
-          signin: { tries: (r.signin.tries ?? 0) + 1 },
+          signin: { tries: hit ? TRIES : (r.signin.tries ?? 0) + 1 },
           $was: { signin: { tries: counted(r.signin.tries) } },
         })),
       )
@@ -324,9 +328,18 @@ export let guess = async (
       if (e instanceof Stale) continue
       throw e
     }
-    if (!live.some((r) => r.signin.code == want)) return false
-    await forget(store, rows.map((r) => r.entity.eid))
-    return true
+    // Burying the rows is a delete, which asks the store what else dies with
+    // them, and was most of a sign-in's wait (T-34158): it goes after the
+    // answer, and a closed code opens nothing meanwhile.
+    if (hit) {
+      background(
+        forget(store, rows.map((r) => r.entity.eid)).then(
+          () => {},
+          (e) => caught(e, { request: 'sign-in sweep' }),
+        ),
+      )
+    }
+    return hit
   }
 }
 

@@ -82,6 +82,8 @@ test('the live code opens, and is spent', async () => {
   )
   let d = door([row(ME, CODE, soon())])
   assert(await spend(d.at, SECRET, ME, '123456'))
+  // Closed in the guarded write that took the guess, buried after.
+  assertEquals(tries(d.wrote), [TRIES])
   assert(forgotten(d.wrote))
 })
 
