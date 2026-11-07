@@ -8,6 +8,7 @@ import { ram } from '@yaks/ram'
 import {
   BACKSTOP,
   drain,
+  FITTED,
   operatorGraph,
   operatorStore,
   operatorVocab,
@@ -142,8 +143,11 @@ let written = (version: string) => {
   return said.filter((q) => !/^\s*(select|pragma|savepoint|release)\b/i.test(q))
 }
 
-test('a wake under the Worker version that fitted its store runs no DDL and writes nothing, and another version fits it again', () => {
+test('a wake whose schema its store was fitted to runs no DDL and writes nothing, under any Worker version, and one fitted to another schema fits it again', () => {
   assertEquals(written('v1'), [])
-  assertEquals(written('v2').length > 0, true)
   assertEquals(written('v2'), [])
+  // What a release that fitted once a Worker version recorded.
+  fitted.sql.exec(`update server_meta set v = 'v1' where k = '${FITTED}'`)
+  assertEquals(written('v2').length > 0, true)
+  assertEquals(written('v3'), [])
 })

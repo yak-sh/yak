@@ -227,8 +227,9 @@ A query that works on the box can be refused in a store.
   observability, by `$metadata.traceId`) beside the invocation's
   `cpu_time_ms`. Everything run before a handler returns is the caller's to
   wait for, and so is the confirmation of every write made before it. So a
-  read does only what its answer needs first: a schema is fitted once a
-  Worker version (graph.ts `#stood`, operator-store.ts `FITTED`), a
+  read does only what its answer needs first: a schema is fitted once (a
+  Store once a Worker version, graph.ts `#stood`; the Operator's store once
+  a schema print, operator-store.ts `FITTED`), a
   migration that finished says so once (channel-move.ts `CHANNELED`), and
   the rest starts in a timer once the answer has returned (build.ts
   `#behind`, running.ts `behindAnswer`).

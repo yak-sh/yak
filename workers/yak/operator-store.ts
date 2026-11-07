@@ -44,8 +44,8 @@ import { topics } from '@yaks/topic/graph'
 import { wakeDoc } from '@yaks/wake/vocab'
 import { due, soonest, tick, wakes } from '@yaks/wake'
 import { caught } from './defects.ts'
-import { adopt, indexed, search } from '@yaks/fts'
-import { installed, type Meta, meta } from '@yaks/sqlite'
+import { adopt, indexed, schema as ftsSchema, search } from '@yaks/fts'
+import { installed, type Meta, meta, printOf } from '@yaks/sqlite'
 
 export let operatorVocab = loadVocab([
   kernelDoc,
@@ -88,17 +88,27 @@ export let operatorVocab = loadVocab([
   wakeDoc,
 ], [kernelKeywords, edgeKeywords, blobKeywords])
 
-/** Where the file keeps the Worker version whose schema it stands at. */
+/** Where the file keeps the print of the schema it was last fitted to. */
 export let FITTED = 'operator:fitted'
+
+// What the store reads a stored value through, and what the Operator finds
+// what was said in its own work by: an entry's text, a doc's title and body,
+// a memory (@yaks/fts). Pure in the vocabulary, so made once an isolate, and
+// with them the schema's print (`operatorStore`).
+let derived = { ...blobRead(operatorVocab), ...sessionDerived(operatorVocab) }
+let text = indexed(operatorVocab)
+let print: string | undefined
 
 /**
  * The Operator's store over its object's storage. Its schema is the code's,
- * so it is fitted once a Worker version (`options.version`, the version the
- * pool's runs are cut under too): a wake under the version that fitted it runs
- * no DDL and writes nothing, as a Store's does (graph.ts `#stood`). Fitting
- * on every wake read the schema four times over and wrote its receipt before
- * the first request's answer.
- * With no version (a test's runtime names none) every wake fits.
+ * so it is fitted once a schema: a wake whose print (the storage's own, which
+ * carries its fitting's revision, and the blob and search statements beside
+ * it, @yaks/sqlite `follow`) the file recorded runs no DDL and writes
+ * nothing, under a new Worker version too. Fitted once a Worker version, the
+ * first wake on each deploy wrote its receipt before its answer, and a write
+ * holds an object's answer until storage confirms it: a chat page's first
+ * visit had the answer 117-135 ms after it was read, against 56 with nothing
+ * written (T-150377). The print is rendered once an isolate, about 12 ms.
  */
 export let operatorStore = (
   durable: DurableStorage,
@@ -107,23 +117,22 @@ export let operatorStore = (
   let vocab = operatorVocab
   let sql = driver(durable)
   let kept = sqliteBlobs(sql)
-  let derived = { ...blobRead(vocab), ...sessionDerived(vocab) }
-  // The Operator finds what was said in its own work by its words: an
-  // entry's text, a doc's title and body, a memory (@yaks/fts).
-  let text = indexed(vocab)
-  let { version } = options
-  let stood = !!version && installed(sql) != null &&
-    meta(sql).get(FITTED) == version
+  let stood = false
   let store = storage(durable, vocab, {
     derived,
     extend: [search(text, sql)],
-    ...stood ? { schemaReady: () => true } : {},
+    schemaReady: () => stood,
   })
+  print ??= printOf(`operator:${store.print()}`, [
+    ...blobSchema(),
+    ...ftsSchema(text, derived),
+  ])
+  stood = installed(sql) != null && meta(sql).get(FITTED) == print
   if (!stood) {
     for (let stmt of blobSchema()) sql.query(stmt)
     let left = store.install()
     adopt(sql, text, derived, { heal: false })
-    if (version && !left.length) meta(sql).set(FITTED, version)
+    if (!left.length) meta(sql).set(FITTED, print)
   }
   return {
     ...operatorGraph(store, blobs({ vocab, blobs: kept }), options),
