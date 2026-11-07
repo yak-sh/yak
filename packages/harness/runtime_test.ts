@@ -13,7 +13,7 @@ import type { Agent } from './agent.ts'
 import { elapsed, RuntimePanel } from './RuntimePanel.ts'
 import { harness } from './testing.ts'
 import { h as node } from 'preact'
-import { mount } from '../tui/testing.ts'
+import { mount } from '@yaks/tui/testing'
 import { frontend } from './frontend.ts'
 import { Keyboard } from './keyboard.ts'
 

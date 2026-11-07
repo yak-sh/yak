@@ -126,6 +126,16 @@ yak inspect T-9 --config /path/to/yak.json
 yak inspect '.task .count' --config /path/to/yak.json
 ```
 
+`yak open` opens a yaks app built on the kits in the terminal, over its own rows
+on yaks.app, as the signed-in person (kit.ts). Its view is loaded from the app
+by `@yaks/native/remote`, as the iOS shell loads it, and painted by @yaks/tui:
+the first field holds the focus, Tab walks the controls, Enter and Space press,
+and q outside a field quits.
+
+```sh
+yak open yourname.yaks.app/packing
+```
+
 With @yaks/canvas installed, canvas entities remain reachable by their ids.
 Without it, canvas views, actions and screen subscriptions are omitted; stored
 canvas rows and parked edits remain in place for reinstalling the plugin. If a
@@ -197,13 +207,13 @@ handlers.
 
 ## Exports
 
-| export           | provides                                                 |
-| ---------------- | -------------------------------------------------------- |
-| `.`              | vocabulary learning and graph address normalization      |
-| `./hosting`      | the app's page mount, transport and storage declarations |
-| `./app`, `./web` | source assets contributed to a browser door              |
-| `./cli`          | `yak browse` and `yak inspect`, the terminal door        |
-| `./main`         | browser entry served by the browser door                 |
+| export           | provides                                                       |
+| ---------------- | -------------------------------------------------------------- |
+| `.`              | vocabulary learning and graph address normalization            |
+| `./hosting`      | the app's page mount, transport and storage declarations       |
+| `./app`, `./web` | source assets contributed to a browser door                    |
+| `./cli`          | `yak browse`, `yak inspect` and `yak open`, the terminal doors |
+| `./main`         | browser entry served by the browser door                       |
 
 The source URLs let a door bundle the app without importing its page state into
 the server process:

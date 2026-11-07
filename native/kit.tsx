@@ -1,4 +1,5 @@
-// A kit-built app drawn natively: its view (loaded from the app, remote.ts)
+// A kit-built app drawn natively: its view (loaded from the app by
+// @yaks/native/remote)
 // renders through Preact into the in-memory DOM, @yaks/native paints that as
 // plain nodes, and this file is the one place they become React Native views.
 import { useEffect, useState } from 'react'
@@ -13,8 +14,8 @@ import {
 } from 'react-native'
 import { h } from 'preact'
 import { type Colors, look, mount, type Node, type Run } from '@yaks/native'
-import type { NativeView } from './remote.ts'
-import { type App, store } from './yaks.ts'
+import { type NativeView, store } from '@yaks/native/remote'
+import type { App } from './yaks.ts'
 
 /** The phone's palette: yak.sh's gouache, on its dark floor. */
 export let colors: Colors = {
@@ -133,7 +134,7 @@ let Draw = ({ node }: { node: Node }) => {
 export let Kit = ({ app, view }: { app: App; view: NativeView }) => {
   let [node, setNode] = useState<Node | null>(null)
   useEffect(
-    () => mount(h(view, { store: store(app) }), looks, setNode),
+    () => mount(h(view, { store: store(`${app.url}api`) }), looks, setNode),
     [app.url, view],
   )
   return (

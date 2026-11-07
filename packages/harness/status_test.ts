@@ -4,7 +4,7 @@ import { resolve } from '@yaks/render'
 import type { Bundle } from '@yaks/graph'
 import { statusBundle, statusViews, statusVocab } from './status.ts'
 import { h } from 'preact'
-import { mount } from '../tui/testing.ts'
+import { mount } from '@yaks/tui/testing'
 import { panels } from './panels.ts'
 
 test('sidebar indicator queries cover states and owner joins', () => {

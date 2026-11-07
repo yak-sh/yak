@@ -1,7 +1,7 @@
 // What the shell asks of yaks.app, through the doors a browser uses: the
 // sign-in card's two posts, which leave the platform's session cookie in the
-// phone's cookie store (every web view shares it), the connector's tools at
-// `/mcp`, and an app's own store at `<app>/api/`.
+// phone's cookie store (every web view shares it), and the connector's tools at
+// `/mcp`; an app's own store is @yaks/native/remote's.
 export let APEX = 'https://yaks.app'
 
 /** One app of a space, as `app_list` answers it. */
@@ -59,24 +59,3 @@ export let tool = async <T>(name: string, args: object = {}): Promise<T> => {
 /** Every space the person is in, with its apps. */
 export let spaces = async () =>
   (await tool<{ spaces: Space[] }>('app_list')).spaces
-
-/** An app's store over HTTP, as its page's `./api/client.js` offers it. */
-export let store = (app: App) => ({
-  query: async (filter: string) => {
-    let r = await fetch(`${app.url}api/query?${filter}`)
-    if (!r.ok) throw new Error(`Could not read ${app.title}.`)
-    return r.json()
-  },
-  apply: async (bundles: object[]) => {
-    let r = await fetch(`${app.url}api/apply`, {
-      method: 'POST',
-      headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ entities: bundles }),
-    })
-    let said = await r.json()
-    if (!r.ok) {
-      throw new Error(said.message ?? `Could not save in ${app.title}.`)
-    }
-    return said
-  },
-})

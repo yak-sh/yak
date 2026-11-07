@@ -32,6 +32,15 @@ mounting.
 A node's style is its tag's defaults merged with the native style of each class
 it wears, read from a `Look`. Words take the text style (colour, size, weight)
 of the boxes around them, which a native box does not pass on by itself.
+`@yaks/native/remote` is what a host outside a browser needs of the app itself:
+`nativeOf(page, fetch)` is the view its front page names
+(`<link rel="yaks-native" href="view.ts">`), `viewAt(url, carried, fetch)` loads
+that module and what it imports by relative path, compiled from TypeScript, with
+the host's own copies of the app's `"platform"` packages (`carried`) standing in
+for them, and `store(api, fetch)` is the app's store over HTTP. The module's
+default export is a component taking that `store`. The iOS shell and `yak open`
+in a terminal (@yaks/browse) are its two hosts, each with its own `fetch`.
+
 `look(colors)` is the native look of the @yaks/ui parts a first app wears, over
 a theme's colours; each entry moves beside its part's terminal `sheet` in
 @yaks/ui (T-148415).

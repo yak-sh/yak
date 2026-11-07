@@ -16,7 +16,8 @@ import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context'
 import { StatusBar } from 'expo-status-bar'
 import { WebView } from 'react-native-webview'
 import { colors, Kit } from './kit.tsx'
-import { nativeOf, type NativeView, viewAt } from './remote.ts'
+import { nativeOf, type NativeView, viewAt } from '@yaks/native/remote'
+import { carried } from './remote.ts'
 import {
   APEX,
   type App as AppRow,
@@ -199,8 +200,8 @@ let Opened = ({ app }: { app: AppRow }) => {
   let [view, setView] = useState<NativeView | null | 'web'>(null)
   useEffect(() => {
     setView(null)
-    nativeOf(app)
-      .then((url) => url ? viewAt(url) : 'web' as const)
+    nativeOf(app.url)
+      .then((url) => url ? viewAt(url, carried) : 'web' as const)
       .then(setView, (e) => {
         console.warn(`${app.url} opens on the web: ${e.message}`)
         setView('web')

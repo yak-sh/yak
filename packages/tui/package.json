@@ -8,7 +8,8 @@
     "./theme": "./theme.ts",
     "./history": "./history.ts",
     "./interaction": "./interaction.ts",
-    "./dom": "./dom.ts"
+    "./dom": "./dom.ts",
+    "./testing": "./testing.ts"
   },
   "license": "Apache-2.0",
   "description": "Renders Preact trees in a terminal through a replaceable backend, with a diffing ANSI painter and scrolling, input, and layout widgets.",

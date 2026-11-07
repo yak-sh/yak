@@ -9,16 +9,12 @@ view holding the same session (D-148409).
 
 - `App.tsx`: sign-in, the three tabs, and what each opens.
 - `yaks.ts`: the doors it asks yaks.app at, the ones a browser uses: the sign-in
-  card's posts, the connector's tools at `/mcp`, and an app's store at
-  `<app>/api/`.
-- `remote.ts`: loads a kit-built app's view from the app itself, so a deploy
-  reaches the phone without a new shell. An app names its view in its front
-  page, `<link rel="yaks-native" href="view.ts">`. The shell fetches that module
-  and what it imports by relative path, compiles each from TypeScript (sucrase),
-  and runs it with the packages the shell carries (`preact`, `preact/hooks`,
-  `@yaks/ui`) standing in for the app's `"platform"` ones. Its default export is
-  a component taking the app's `store`. An app that names no view, or imports a
-  package the shell does not carry, opens as its web page.
+  card's posts and the connector's tools at `/mcp`.
+- `remote.ts`: the packages the shell carries (`preact`, `preact/hooks`,
+  `@yaks/ui`) for a kit-built app's view, which `@yaks/native/remote` loads from
+  the app itself, so a deploy reaches the phone without a new shell. An app that
+  names no view, or imports a package the shell does not carry, opens as its web
+  page. `yak open` loads the same view the same way in a terminal.
 - `kit.tsx`: the React Native host for @yaks/native's nodes.
 - `globals.ts`: the `Event` and window @yaks/tui's DOM reaches for, which Hermes
   lacks.
@@ -52,4 +48,4 @@ npx eas-cli update --channel main --platform ios --environment preview --message
 ```
 
 A kit-built app's view needs no publish: the shell loads it from the deployed
-app (`remote.ts`).
+app (`@yaks/native/remote`).

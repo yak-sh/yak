@@ -2996,6 +2996,7 @@
             "npm:@yaks/memory@0.2.23",
             "npm:@yaks/model@0.2.32",
             "npm:@yaks/names@0.2.23",
+            "npm:@yaks/native@0.2.24",
             "npm:@yaks/notify@0.2.28",
             "npm:@yaks/page@0.2.30",
             "npm:@yaks/persona@0.2.23",
@@ -4076,7 +4077,8 @@
             "npm:@yaks/testing@0.2.30",
             "npm:@yaks/tui@0.2.24",
             "npm:@yaks/ui@0.2.30",
-            "npm:preact@10.29.7"
+            "npm:preact@10.29.7",
+            "npm:sucrase@3.35.1"
           ]
         }
       },

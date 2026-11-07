@@ -144,6 +144,15 @@ export class TElement extends TNode {
   set value(text: string) {
     this.setAttribute('value', text)
   }
+  /** Whether a check box or radio is on, kept as its attribute, which the
+   * painter reads. */
+  get checked(): boolean {
+    return this.attrs.has('checked')
+  }
+  set checked(on: boolean) {
+    if (on) this.setAttribute('checked', '')
+    else this.removeAttribute('checked')
+  }
   get ownerDocument(): typeof doc {
     return doc
   }
@@ -173,9 +182,20 @@ export class TElement extends TNode {
     if (held) this.dispatchEvent(new Event('focusout', { bubbles: true }))
     touch()
   }
-  /** Press it, as a primary-button click does: a link no listener took is
-   * followed (`onNavigate`). */
+  /** Press it, as a primary-button click does: a check box flips and a
+   * radio turns on (back again when a listener cancels the click, else
+   * telling its `input` and `change`), a submit button submits its form, and
+   * a link no listener took is followed (`onNavigate`). */
   click() {
+    let mark = this.matches('input') && this.attr('type')
+    let was = this.checked
+    let group = mark == 'radio' ? radios(this) : []
+    let on = group.find((r) => r.checked)
+    if (mark == 'checkbox') this.checked = !was
+    if (mark == 'radio') {
+      for (let r of group) r.checked = false
+      this.checked = true
+    }
     let e = Object.assign(
       new Event('click', { bubbles: true, cancelable: true }),
       {
@@ -187,7 +207,22 @@ export class TElement extends TNode {
         altKey: false,
       },
     )
-    if (!dispatch(this, e)) return
+    let taken = dispatch(this, e)
+    if (mark == 'checkbox' || mark == 'radio') {
+      if (!taken) {
+        this.checked = was
+        if (on) on.checked = true
+      } else if (this.checked != was) {
+        for (let type of ['input', 'change']) {
+          dispatch(this, new Event(type, { bubbles: true }))
+        }
+      }
+    }
+    if (!taken) return
+    let form = submits(this) && this.closest('form')
+    if (form) {
+      dispatch(form, new Event('submit', { bubbles: true, cancelable: true }))
+    }
     let href = this.closest('a')?.attr('href') ?? this.attr('data-href')
     if (href) follow(href)
   }
@@ -423,6 +458,24 @@ export class TElement extends TNode {
     if (!this.listeners.get(t)?.size) this.handlers.delete(t)
   }
 }
+
+// The radios a radio turns off when it turns on: those of its name in its
+// form, or under the same root when it has none.
+let radios = (el: TElement): TElement[] => {
+  let name = el.attr('name')
+  if (!name) return [el]
+  let top: TElement = el
+  while (top.parentNode && top.localName != 'form') top = top.parentNode
+  return top.querySelectorAll('input')
+    .filter((r) => r.attr('type') == 'radio' && r.attr('name') == name)
+}
+
+// Whether pressing it submits its form, as a browser's button does.
+let submits = (el: TElement) =>
+  el.attr('disabled') == null && (
+    el.localName == 'button' && (el.attr('type') ?? 'submit') == 'submit' ||
+    el.matches('input') && el.attr('type') == 'submit'
+  )
 
 /** Deliver DOM events through capture, target, bubble and the host window. */
 export let dispatch = (target: TElement, event: Event): boolean => {

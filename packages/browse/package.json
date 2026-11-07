@@ -36,6 +36,7 @@
     "@yaks/match": "0.2.30",
     "@yaks/memory": "0.2.23",
     "@yaks/names": "0.2.23",
+    "@yaks/native": "0.2.24",
     "@yaks/preact": "0.2.24",
     "@yaks/process": "0.2.28",
     "@yaks/query": "0.2.32",

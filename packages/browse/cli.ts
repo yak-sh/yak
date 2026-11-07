@@ -27,7 +27,78 @@ let listen = async (host: Host) => {
   }
 }
 
-export let commands: CliCommand[] = ['browse', 'inspect'].map((name) => ({
+/** The app a person names, as the account door resolves it: `space/app` or
+ * a slug, or the app's address on the host (`yourname.yaks.app/packing`).
+ *
+ * ```ts
+ * import { assertEquals } from '@std/assert'
+ * assertEquals(named('https://yourname.yaks.app/packing/', 'yaks.app'), 'yourname/packing')
+ * assertEquals(named('yourname/packing', 'yaks.app'), 'yourname/packing')
+ * ```
+ */
+export let named = (app: string, host: string): string => {
+  let at = app.replace(/^https?:\/\//, '').replace(/\/+$/, '')
+  let [domain, slug] = at.split('/')
+  let space = domain.endsWith(`.${host}`) && domain.slice(0, -host.length - 1)
+  return space && slug ? `${space}/${slug}` : at
+}
+
+// Only the app's own origin hears the token.
+let signed =
+  (origin: string, headers: Record<string, string>): typeof fetch =>
+  (input, init) => {
+    let url = new URL(input instanceof Request ? input.url : input)
+    if (url.origin != origin) return fetch(input, init)
+    let given = new Headers(init?.headers)
+    for (let [k, v] of Object.entries(headers)) given.set(k, v)
+    return fetch(input, { ...init, headers: given })
+  }
+
+let open: CliCommand = {
+  name: 'open',
+  description:
+    'Open a yaks app built on the kits in this terminal, over its own rows: ' +
+    'Tab walks its controls, Enter and Space press, q quits.',
+  inputSchema: {
+    type: 'object',
+    additionalProperties: false,
+    required: ['app'],
+    properties: {
+      app: {
+        type: 'string',
+        description:
+          'the app: space/app, a slug, or its address (yourname.yaks.app/packing)',
+      },
+    },
+  },
+  positional: ['app'],
+  run: async (args, host, context) => {
+    try {
+      let { url, wire } = await (await import('./remote.ts')).remote(
+        named(String(args.app), context.host),
+        context.host,
+        context.state,
+        undefined,
+        { config: context.config, as: context.as },
+      )
+      let page = url.replace(/api\/?$/, '')
+      let go = signed(
+        new URL(url).origin,
+        wire.headers as Record<string, string>,
+      )
+      await (await import('./kit.ts')).open(page, url.replace(/\/$/, ''), go)
+      return 0
+    } catch (error) {
+      await host.report?.(error, {
+        tags: { step: 'terminal', command: 'yak open' },
+      })
+      context.note(error instanceof Error ? error.message : String(error))
+      return 1
+    }
+  },
+}
+
+let browsers: CliCommand[] = ['browse', 'inspect'].map((name) => ({
   name,
   description: name == 'browse'
     ? 'Browse the graph in this terminal.'
@@ -93,3 +164,5 @@ export let commands: CliCommand[] = ['browse', 'inspect'].map((name) => ({
     }
   },
 }))
+
+export let commands: CliCommand[] = [...browsers, open]

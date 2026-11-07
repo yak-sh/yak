@@ -17,8 +17,9 @@ const hosted = {
   '@yaks/ui/parts': 'packages/ui/parts.ts',
   '@yaks/tui/dom': 'packages/tui/dom.ts',
   '@yaks/native': 'packages/native/mod.ts',
+  '@yaks/native/remote': 'packages/native/remote.ts',
 }
-const own = ['preact', 'react', 'react-native', 'lucide']
+const own = ['preact', 'react', 'react-native', 'lucide', 'sucrase']
 const here = path.join(__dirname, 'index.ts')
 
 config.resolver.resolveRequest = (context, name, platform) => {

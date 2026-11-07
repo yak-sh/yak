@@ -21,7 +21,6 @@ import {
   onPaint,
   type TElement,
   type TNode,
-  touch,
   TText,
 } from '@yaks/tui/dom'
 
@@ -139,17 +138,10 @@ let pressable = (el: TElement) =>
   el.localName == 'button' || el.hasAttribute('href') ||
   el.hasAttribute('data-href') || el.handlers.has('click')
 
-// A press clicks it; a submit button not stopped submits its form, which a
-// browser does for it and a native host does not.
+// A press clicks it, which submits a submit button's form and flips a box,
+// as a browser's click does (@yaks/tui/dom).
 let pressOf = (el: TElement) =>
-  pressable(el) && !el.hasAttribute('disabled')
-    ? () => {
-      let form = el.localName == 'button' &&
-        (el.getAttribute('type') ?? 'submit') == 'submit' && el.closest('form')
-      el.click()
-      if (form) dispatch(form, event('submit', true))
-    }
-    : undefined
+  pressable(el) && !el.hasAttribute('disabled') ? () => el.click() : undefined
 
 // Whether everything inside is words: text nodes and inline elements only.
 let worded = (el: TElement): boolean =>
@@ -170,12 +162,6 @@ let text = (el: TElement, look: Look, around: Style): Text => ({
   runs: runs(el, look),
   ...pressOf(el) && { press: pressOf(el) },
 })
-
-// What a checkbox is: a browser keeps `checked` as a property, which Preact
-// writes once the element has one, and as an attribute before.
-let checked = (el: TElement) =>
-  (el as unknown as { checked?: boolean }).checked ??
-    el.hasAttribute('checked')
 
 let event = (type: string, cancelable = false) =>
   new Event(type, { bubbles: true, cancelable })
@@ -207,16 +193,9 @@ let toggle = (el: TElement, label: Run[], look: Look): Toggle => ({
   kind: 'toggle',
   key: keyOf(el),
   style: styleOf(el, look),
-  on: checked(el),
+  on: el.checked,
   label,
-  flip: () => {
-    ;(el as unknown as { checked: boolean }).checked = !checked(el)
-    dispatch(el, event('click', true))
-    dispatch(el, event('input'))
-    dispatch(el, event('change'))
-    // A property is no mutation of the tree, so it asks for its paint.
-    touch()
-  },
+  flip: () => el.click(),
 })
 
 let isBox = (el: TElement, type: string) =>

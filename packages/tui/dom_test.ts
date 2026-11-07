@@ -65,3 +65,69 @@ test('install swaps the document and free puts back what was there', () => {
   assertEquals((globalThis as { document?: unknown }).document, prior)
   delete (globalThis as { document?: unknown }).document
 })
+
+// A form of controls, each listening as a page would: what reached it.
+let form = () => {
+  let heard: string[] = []
+  let el = (tag: string, attrs: Record<string, string> = {}) => {
+    let n = new TElement(tag)
+    for (let [k, v] of Object.entries(attrs)) n.setAttribute(k, v)
+    for (let type of ['click', 'input', 'change', 'submit']) {
+      n.addEventListener(type, (e: Event) => {
+        if (e.target == n) heard.push(`${type} ${attrs.id ?? tag}`)
+      })
+    }
+    return n
+  }
+  let root = el('form')
+  let kids = {
+    box: el('input', { type: 'checkbox', id: 'box' }),
+    a: el('input', { type: 'radio', name: 'r', id: 'a' }),
+    b: el('input', { type: 'radio', name: 'r', id: 'b' }),
+    go: el('button', { id: 'go' }),
+    plain: el('button', { type: 'button', id: 'plain' }),
+  }
+  for (let k of Object.values(kids)) root.appendChild(k)
+  return { ...kids, root, heard }
+}
+
+test('a click does what a browser does for a control by itself', () => {
+  let f = form()
+  f.box.click()
+  assert(f.box.checked && f.box.hasAttribute('checked'))
+  f.box.click()
+  assert(!f.box.checked)
+  f.a.click()
+  f.b.click()
+  assertEquals([f.a.checked, f.b.checked], [false, true])
+  f.go.click()
+  f.plain.click()
+  assertEquals(f.heard, [
+    'click box',
+    'input box',
+    'change box',
+    'click box',
+    'input box',
+    'change box',
+    'click a',
+    'input a',
+    'change a',
+    'click b',
+    'input b',
+    'change b',
+    'click go',
+    'submit form',
+    'click plain',
+  ])
+})
+
+test('a cancelled click leaves a control as it was', () => {
+  let f = form()
+  f.b.checked = true
+  for (let n of [f.box, f.a, f.go]) {
+    n.addEventListener('click', (e: Event) => e.preventDefault())
+    n.click()
+  }
+  assertEquals([f.box.checked, f.a.checked, f.b.checked], [false, false, true])
+  assertEquals(f.heard, ['click box', 'click a', 'click go'])
+})
