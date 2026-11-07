@@ -1,4 +1,5 @@
 /** @jsxImportSource preact */
+import type { ComponentChildren } from 'preact'
 import { Button, Card } from '@yaks/ui'
 import { GET_PLAN } from '../route.ts'
 import { Data, Page, Yours } from './frame.tsx'
@@ -106,7 +107,7 @@ let data = {
 
 // The apps the carousel turns through: each one's address in yourname's
 // space, its name and what it is for.
-let EXAMPLES = [
+export let EXAMPLES = [
   ['garden', 'Garden Diary', 'Note what you planted and how it grew.'],
   ['bookclub', 'Book Club', 'Choose books and plan your next meeting.'],
   ['trip', 'Travel Planner', "Plan the days, who's coming and what to pack."],
@@ -133,6 +134,55 @@ let EXAMPLES = [
     'A fantasy world to play in the browser, with quests and crafting.',
   ],
 ]
+
+/** The examples, one card at a time (carousel.js): the apps in yourname's
+ * space, which the served page swaps for the gallery's cards (gallery.ts
+ * `showcase`), and under them what a visitor can do with one. */
+export let Examples = ({ children }: { children: ComponentChildren }) => (
+  <section
+    class='Demo'
+    aria-labelledby='examples'
+    aria-roledescription='carousel'
+    data-carousel=''
+  >
+    <h2 class='Demo_Title' id='examples'>Apps made with yaks.app</h2>
+    <ul class='Demo_Slides'>
+      {EXAMPLES.map(([slug, title, sub]) => (
+        <Card as='li' class='Make_Card'>
+          <Card.Head>
+            <Card.Title as='h3'>
+              <a href={`https://yourname.yaks.app/${slug}/`}>
+                {title} <span aria-hidden='true'>↗</span>
+              </a>
+            </Card.Title>
+          </Card.Head>
+          <Card.Sub>{sub}</Card.Sub>
+        </Card>
+      ))}
+    </ul>
+    <div class='Demo_Controls' hidden>
+      <Button
+        class='Demo_Step'
+        type='button'
+        data-step='-1'
+        aria-label='Previous app'
+      >
+        ‹
+      </Button>{' '}
+      <div class='Demo_Dots' />{' '}
+      <Button
+        class='Demo_Step'
+        type='button'
+        data-step='1'
+        aria-label='Next app'
+      >
+        ›
+      </Button>{' '}
+      <Button class='Demo_Pause' type='button'>Pause</Button>
+    </div>
+    <p class='Note Note-small'>{children}</p>
+  </section>
+)
 
 export let Home = () => (
   <Page
@@ -174,53 +224,11 @@ export let Home = () => (
           Free to start, or <a href='#cost'>$9 a month</a> for more.
         </p>
       </div>
-      <section
-        class='Demo'
-        aria-labelledby='examples'
-        aria-roledescription='carousel'
-        data-carousel=''
-      >
-        <h2 class='Demo_Title' id='examples'>Apps made with yaks.app</h2>
-        <ul class='Demo_Slides'>
-          {EXAMPLES.map(([slug, title, sub]) => (
-            <Card as='li' class='Make_Card'>
-              <Card.Head>
-                <Card.Title as='h3'>
-                  <a href={`https://yourname.yaks.app/${slug}/`}>
-                    {title} <span aria-hidden='true'>↗</span>
-                  </a>
-                </Card.Title>
-              </Card.Head>
-              <Card.Sub>{sub}</Card.Sub>
-            </Card>
-          ))}
-        </ul>
-        <div class='Demo_Controls' hidden>
-          <Button
-            class='Demo_Step'
-            type='button'
-            data-step='-1'
-            aria-label='Previous app'
-          >
-            ‹
-          </Button>{' '}
-          <div class='Demo_Dots' />{' '}
-          <Button
-            class='Demo_Step'
-            type='button'
-            data-step='1'
-            aria-label='Next app'
-          >
-            ›
-          </Button>{' '}
-          <Button class='Demo_Pause' type='button'>Pause</Button>
-        </div>
-        <p class='Note Note-small'>
-          Each of these apps runs on yaks.app. Open one to try it, or get a copy
-          of your own and ask the assistant you use to change the copy.{' '}
-          <a href='/gallery'>See more in the gallery</a>.
-        </p>
-      </section>
+      <Examples>
+        Each of these apps runs on yaks.app. Open one to try it, or get a copy
+        of your own and ask the assistant you use to change the copy.{' '}
+        <a href='/gallery'>See more in the gallery</a>.
+      </Examples>
     </section>
     <section class='For' aria-labelledby='for'>
       <h2 class='Title' id='for'>For your work, your ideas and your home</h2>

@@ -1,4 +1,5 @@
 import { equal, test } from '@yaks/testing'
+import { COOKIE as HOME } from './variant.ts'
 import type { Env } from './env.ts'
 import { HANDOFF } from './handoff.ts'
 import { handler } from './kernel.ts'
@@ -29,7 +30,9 @@ for (let host of ['yaks.app', 'hsts.yaks.app']) {
   for (let status of [200, 302, 404, 503, 101]) {
     test(`HSTS covers ${host} responses with status ${status}`, async () => {
       let res = await handler.fetch(
-        new Request(`https://${host}/`),
+        // Holding today's home page, so the split (variant.ts) keeps no
+        // cookie of its own.
+        new Request(`https://${host}/`, { headers: { cookie: `${HOME}=ask` } }),
         env(() =>
           new Response(status == 101 ? null : 'answer', {
             status,

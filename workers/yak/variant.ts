@@ -23,9 +23,13 @@ export let DAYS = 90
  * of the visitors drawn. */
 export type Variant = { name: string; path: string; share: number }
 
+/** The page that pitches the Operator (site/operator.tsx). */
+export let OPERATOR = '/operator'
+
 /** The home pages `/` is split between. */
 export let VARIANTS: Variant[] = [
   { name: 'ask', path: '/', share: 1 },
+  { name: 'operator', path: OPERATOR, share: 1 },
 ]
 
 /** The pages Site keeps for the home page (kept-page.ts `LISTINGS`). */

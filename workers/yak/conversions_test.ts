@@ -1,6 +1,7 @@
 // What an ad network is told of a visit its click brought (conversions.ts),
 // through the kernel's own doors: a page of the site, then a sign-up.
 import { test } from '@yaks/testing'
+import { COOKIE as HOME } from './variant.ts'
 import { assert, assertEquals, assertStringIncludes } from '@std/assert'
 import { kernel, mailed, toldMeta, unique } from './probe.ts'
 import { COOKIE } from './arrival.ts'
@@ -62,8 +63,11 @@ test('a visit an ad brought is told as a page seen, and its sign-up as a registr
   assertEquals(signup.user_data.fbc, event.user_data.fbc)
   assertEquals(JSON.stringify(signup).includes(email), false)
 
-  // A visit no ad sent tells nobody, and keeps no arrival.
-  let plain = await k.at(k.host, '/', { headers: { 'user-agent': BROWSER } })
+  // A visit no ad sent tells nobody, and keeps no arrival. It holds today's
+  // home page, so the split (variant.ts) keeps nothing either.
+  let plain = await k.at(k.host, '/', {
+    headers: { 'user-agent': BROWSER, cookie: `${HOME}=ask` },
+  })
   await plain.body?.cancel()
   assertEquals(plain.headers.get('set-cookie'), null)
   assertEquals((await told()).length, 2)

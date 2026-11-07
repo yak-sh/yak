@@ -30,7 +30,8 @@ import { cardTag, SITE_TAG } from './purge.ts'
 import { sheeted } from './sheets.ts'
 import { type Clock, clock, timed } from './timing.ts'
 import { COUNTED, counted } from './views.ts'
-import { PATHS } from './variant.ts'
+import { textable } from './phones.ts'
+import { OPERATOR, PATHS } from './variant.ts'
 
 let uncached = (page: Response) => {
   let headers = new Headers(page.headers)
@@ -86,6 +87,12 @@ export let fetch = async (req: Request, env: Env): Promise<Response> => {
   return c.counting(() => rendered(req, env, path, c))
 }
 
+// The file a variant is drawn from. The Operator's page asks for a number,
+// and until a code can be texted to one (phones.ts `textable`) its other
+// drawing asks for an email.
+export let drawn = async (env: Env, path: string) =>
+  path == OPERATOR && !await textable(env) ? `${OPERATOR}-email` : path
+
 let rendered = async (
   req: Request,
   env: Env,
@@ -116,7 +123,8 @@ let rendered = async (
     // A home page variant (variant.ts): its own file, with the showcase.
     let file = await c.time(
       'assets',
-      () => env.ASSETS.fetch(new Request(url(env, path))),
+      async () =>
+        env.ASSETS.fetch(new Request(url(env, await drawn(env, path)))),
     )
     page = file.status == 404
       ? lost(env)

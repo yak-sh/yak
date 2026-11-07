@@ -117,7 +117,7 @@ test('the funnel reads each step, a share of the one it follows, and where visit
     assertEquals(f.from, [{ site: 'news.example.com', n: 3 }])
     // A button the page no longer has is no call to action.
     assertEquals(f.buttons, [
-      { button: 'start', say: 'Start free, in the hero', n: 6 },
+      { button: 'start', say: CTAS[0].say, n: 6 },
     ])
     assertEquals(f.campaigns, [
       { name: 'meta//pilot', home: 9, click: 4, signup: 2, checkout: 1 },

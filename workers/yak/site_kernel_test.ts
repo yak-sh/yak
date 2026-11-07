@@ -10,6 +10,7 @@ import { kernel } from './probe.ts'
 import { ADDRESSES } from './seo.ts'
 import type { Env } from './env.ts'
 import * as site from './site.ts'
+import { OPERATOR } from './variant.ts'
 
 // The generated addresses, through the kernel, at the apex and not on a space's
 // hostname — where robots.txt is the customer's own file (route.ts) and always
@@ -200,8 +201,12 @@ test('the apex answers the crawler and the model', async () => {
       let etag = first.headers.get('etag') ?? ''
       assert(etag.startsWith('W/"'), path)
       await first.body?.cancel()
+      // The home page is split (variant.ts): the visitor keeps the variant
+      // they were drawn by its cookie, as a browser does.
+      let cookie = first.headers.getSetCookie().map((c) => c.split(';')[0])
+        .join('; ')
       let again = await k.at('yaks.app', path, {
-        headers: { 'if-none-match': etag },
+        headers: { 'if-none-match': etag, cookie },
       })
       assertEquals(again.status, 304, path)
       assertEquals(await again.text(), '', path)
@@ -323,4 +328,17 @@ test('an unchanged site page revalidates against its new deployment', async () =
   )
   assertEquals(validated.status, 304)
   assertEquals(validated.headers.get('x-yak-version'), wanted)
+})
+
+// The Operator's page (site/operator.tsx) asks for a number once one can be
+// texted a code, and for an email until then.
+test("the Operator's page is drawn asking for a number only where a code can be texted", async () => {
+  let texting = {
+    TEXT_SIGNUP: 'on',
+    TELNYX_API_KEY: 'a-key',
+    PHONE_SENDER: { via: 'telnyx', number: '+18885550100' },
+  } as unknown as Env
+  assertEquals(await site.drawn({} as Env, OPERATOR), `${OPERATOR}-email`)
+  assertEquals(await site.drawn(texting, OPERATOR), OPERATOR)
+  assertEquals(await site.drawn({} as Env, '/'), '/')
 })

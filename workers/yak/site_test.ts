@@ -33,6 +33,7 @@ import { sheeted } from './sheets.ts'
 import { WORN } from './sheet-assets.ts'
 import { kit, pencil } from '@yaks/ui'
 import { CAP } from './invite.ts'
+import { CODE_NOTE } from './signin.ts'
 import type { Tier } from './directory.ts'
 import { quoted, rate } from './sell.ts'
 import { DRAWN, MARKDOWN } from './docs.ts'
@@ -1032,4 +1033,38 @@ test('pricing cards offer signup and omit build quotas', () => {
     )
     for (let card of cards) assert(!/\bbuild/i.test(card.textContent!), page)
   }
+})
+
+// The Operator's page, drawn asking for a number and, until one can be texted
+// a code, for an email (site.ts `drawn`). Either posts to sign-in, whose code
+// lands a new person in their space's chat with their Operator.
+test("the Operator's page asks for a number first, with what giving it agrees to", () => {
+  let asks = (name: string) => {
+    let document = parseHTML(site.page(name)).document
+    let form = document.querySelector('.Hello form')!
+    let box = form.querySelector('input[name="address"]')!
+    return {
+      sends: [form.getAttribute('method'), form.getAttribute('action')],
+      type: box.getAttribute('type'),
+      hint: document.getElementById(box.getAttribute('aria-describedby')!)!
+        .textContent!,
+      again: document.querySelector('.Join a.Button-go')?.getAttribute('href'),
+      ctas: [...document.querySelectorAll('[data-cta]')]
+        .map((b) => b.getAttribute('data-cta')),
+      canonical: document.querySelector('link[rel="canonical"]')
+        ?.getAttribute('href'),
+    }
+  }
+  let number = asks('operator.html'), email = asks('operator-email.html')
+  assertEquals(number.sends, ['post', '/login'])
+  assertEquals(number.type, 'tel')
+  assertStringIncludes(number.hint, CODE_NOTE)
+  assertEquals(number.again, '#start')
+  // A home page of the split (variant.ts): counted and indexed as the home
+  // page is.
+  assertEquals(number.ctas, ['start', 'join'])
+  assertEquals(number.canonical, 'https://yaks.app/')
+  assertEquals(email.sends, ['post', '/login'])
+  assertEquals(email.type, 'email')
+  assertEquals(email.hint.includes(CODE_NOTE), false)
 })

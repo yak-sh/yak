@@ -1,5 +1,6 @@
 // The connector through the whole kernel (probe.ts `kernel`), by subject.
 import { listable } from './shelf.ts'
+import { COOKIE as HOME } from './variant.ts'
 import { test } from '@yaks/testing'
 import {
   assert,
@@ -523,7 +524,9 @@ test('an app reaches the gallery only when yaks.app says yes', async () => {
       'withdraw the gallery listing',
     )
     // Gallery approval does not replace the chosen demos on the home page.
-    let home = await k.at('yaks.app', '/').then((r) => r.text())
+    let home = await k.at('yaks.app', '/', {
+      headers: { cookie: `${HOME}=ask` },
+    }).then((r) => r.text())
     assertStringIncludes(home, 'A recipe box')
     assertStringIncludes(home, 'Garden Diary')
 

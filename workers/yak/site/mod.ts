@@ -11,6 +11,7 @@ import { AcceptableUse } from './acceptable-use.tsx'
 import { Cookies } from './cookies.tsx'
 import { Help } from './help.tsx'
 import { Home } from './home.tsx'
+import { Operator } from './operator.tsx'
 import { Pricing } from './pricing.tsx'
 import { Privacy } from './privacy.tsx'
 import { StyleGuide } from './style-guide.tsx'
@@ -19,6 +20,10 @@ import { Terms } from './terms.tsx'
 /** Each page by the file it is served from. */
 export let PAGES: Record<string, FunctionComponent> = {
   'index.html': Home,
+  // The Operator's home page, asking for a number or, until one can be
+  // texted, an email (site.ts `drawn`).
+  'operator.html': () => h(Operator, { by: 'text' }),
+  'operator-email.html': () => h(Operator, { by: 'email' }),
   'pricing.html': Pricing,
   'help.html': Help,
   'terms.html': Terms,

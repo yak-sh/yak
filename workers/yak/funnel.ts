@@ -53,13 +53,14 @@ export let STEPS = [
 export type Step = typeof STEPS[number]['name']
 
 /** Each call to action on the home page, by the name its `data-cta` gives it
- * (site/home.tsx), and what the admin calls it. */
+ * (site/home.tsx), and what the admin calls it. The Operator's page
+ * (site/operator.tsx) names its hero's and closing card's alike. */
 export let CTAS = [
-  { name: 'start', say: 'Start free, in the hero' },
+  { name: 'start', say: 'Start free, or the code, in the hero' },
   { name: 'examples', say: 'See examples' },
   { name: 'plus', say: "The Plus plan's Get Started" },
   { name: 'organization', say: "The Organization plan's Get Started" },
-  { name: 'join', say: 'Start free, in the closing card' },
+  { name: 'join', say: 'Start, in the closing card' },
 ] as const
 
 /**
