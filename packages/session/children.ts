@@ -1,5 +1,6 @@
 import { derivedEid } from '@yaks/graph/identity'
 import { appendEntry } from './append.ts'
+import { workedOn } from './lease.ts'
 // Delegation is transcript structure, not a process handle. A spawned session
 // names its parent and originating call; a fork additionally names a prefix.
 // Submission is serialized per graph (across parents and tool tables). The
@@ -519,10 +520,11 @@ export let deliverChild = async (g: Graph, child: Eid): Promise<void> => {
   let [tail] = await g.read(
     '.entry.session=' + child + '&.order=-entry.seq&.limit=1&*',
   )
+  // The task it was given, which lets go of the child's claim once done.
   let tasks = g.vocab.comps.includes('task')
-    ? await g.read(`.task .claim.session=${child} *`)
+    ? await g.get(await workedOn(g, child))
     : []
-  let task = tasks.find((b) => b.task)
+  let task = tasks.find((b) => b?.task)
   let ready = task &&
     await done(g, task.entity.eid)
   let last = tail ?? await newestOf(g, child)

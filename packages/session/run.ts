@@ -28,6 +28,7 @@ import {
 } from './admission.ts'
 import { type ChildLimits, deliverChild } from './children.ts'
 import { CLAIM } from './comp.ts'
+import { takers } from './lease.ts'
 import { STOP_ENTRY } from './native.ts'
 import {
   currentStatus,
@@ -630,12 +631,16 @@ let about = async (g: Graph, e: Event): Promise<Eid[]> => {
   for (let t of [...tasks]) {
     for (let from of await dependents(g, t)) tasks.add(from)
   }
+  // A helper that took the work still reports on it after its claim is gone
+  // (`release`), so a change wakes it as well as whoever holds the work.
   let rows = await g.get([...tasks], [CLAIM])
+  let helpers = await g.get(await takers(g, [...tasks]), ['spawned'])
   return [
-    ...new Set(
-      rows.map((t) => comp(t, 'claim')?.session)
+    ...new Set([
+      ...rows.map((t) => comp(t, 'claim')?.session)
         .filter((s): s is string => typeof s == 'string'),
-    ),
+      ...helpers.filter((b) => b?.spawned).map((b) => b.entity.eid),
+    ]),
   ]
 }
 

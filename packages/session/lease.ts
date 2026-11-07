@@ -25,7 +25,7 @@
 // The batch is checked as a whole, because a batch may take two locks, and the
 // verdict has to be about the batch rather than about each bundle in turn.
 
-import type { Bundle, Comp, Eid, Hook } from '@yaks/graph'
+import type { Bundle, Comp, Eid, Graph, Hook } from '@yaks/graph'
 import type { Vocab } from '@yaks/vocab'
 import { after } from '@yaks/fp'
 import { EDGE, link } from '@yaks/edge'
@@ -54,6 +54,29 @@ export let takes = (bundles: Bundle[]): [Eid, Eid][] =>
 
 /** The relation a take leaves from its session to what it took. */
 export let WORKED = 'worked'
+
+// One end of the `worked` edges whose other end is among `ids`. A claim goes
+// once its task is done or cancelled (./run.ts), so who worked what is read
+// here; a vocabulary without the relation has no such edges.
+let across = async (
+  g: Graph,
+  end: 'from' | 'to',
+  ids: Eid[],
+): Promise<Eid[]> => {
+  if (!ids.length || !g.vocab.comp(WORKED)) return []
+  let far = end == 'from' ? 'to' : 'from'
+  let rows = await g.rows(
+    `.${WORKED}&.${EDGE}.${end}=${ids.join(',')}&.fields=${EDGE}.${far}`,
+  )
+  return [...new Set(rows.map((r) => String(r[`${EDGE}.${far}`])))]
+}
+
+/** What `session` took, whether or not it still holds it. */
+export let workedOn = (g: Graph, session: Eid): Promise<Eid[]> =>
+  across(g, 'from', [session])
+
+/** The sessions that took any of `on`, whether or not they still hold it. */
+export let takers = (g: Graph, on: Eid[]): Promise<Eid[]> => across(g, 'to', on)
 
 /**
  * The `precondition` hook: refuse a take of a held lock ({@link Bounced}),
