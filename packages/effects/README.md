@@ -398,7 +398,8 @@ claims. Abort the live `work` signal to end its loop.
 ### What a worker says
 
 A worker with an `owner` entity says what it is doing while its live `work`
-runs, about once a second, as a `worker` component on that entity:
+runs, every fifteen seconds (`SAY`, as often as it renews its presence lease),
+as a `worker` component on that entity:
 `worker{at, running, runs, ran, errors, history, cpu, lag}`. `running` counts
 its runs going and `runs` lists the oldest twenty, each with its handler, target
 and when it started; `ran` and `errors` count the runs it finished since it
@@ -408,7 +409,8 @@ many runs it takes at once: `cpu` is the share of a core its process used since
 it last said (from the `cpu` option, the process's CPU time in ms; absent
 without one), and `lag` the most its thread ran a timer late, in ms, which
 climbs as its event loop fills. A row whose `at` stops moving is a worker that
-stopped saying; a worker leaving the pool removes its row.
+stopped saying; a worker leaving the pool removes its row, and a worker starting
+removes the rows of workers `gone` says are over.
 
 ### Single-owner stores
 

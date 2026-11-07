@@ -90,9 +90,10 @@
 // lending one effect its code (a terminal running its own transcripts) works
 // that one, and says nothing about the rest.
 //
-// A worker that stays up also says what it is doing, about once a second, on
+// A worker that stays up also says what it is doing, every fifteen seconds, on
 // its own process entity: the runs it has going, how many it has finished and
-// how busy it is (./worker.ts). Where it leaves the pool, the row goes too.
+// how busy it is (./worker.ts). Where it leaves the pool, the row goes too, and
+// a worker starting clears the rows of those `gone` says were killed first.
 
 import type { Access, Bundle, Comp, Eid, HookContext, Tx } from '@yaks/graph'
 import { after, type Clock, system } from '@yaks/fp'
@@ -115,7 +116,7 @@ import type { Write } from './write.ts'
 import { HOLD, LEASE, leaseEid, sleep, take } from './lease.ts'
 import { finishedRun } from './cleanup.ts'
 import { except, ready } from './ready.ts'
-import { lagging, seconds, SHOWN, WORKER } from './worker.ts'
+import { lagging, SAY, seconds, SHOWN, WORKER } from './worker.ts'
 
 export { effectDoc } from './docs.ts'
 
@@ -901,7 +902,7 @@ export let pool = (ctx: Ctx, opts: Partial<PoolOpts> = {}): Pool => {
         handler: POOL,
         event: { kind: 'created', entity: { eid: me }, name: EFFECT },
       })
-    // What it says of itself, about once a second (./worker.ts): busy as the
+    // What it says of itself, every SAY (./worker.ts): busy as the
     // CPU its process used and how late its thread ran a timer, both over
     // the time since it last said, by the wall's clock rather than the pool's.
     let speaks = !opts.singleOwner && !!opts.owner && !!g.vocab.comp(WORKER)
@@ -938,6 +939,22 @@ export let pool = (ctx: Ctx, opts: Partial<PoolOpts> = {}): Pool => {
         },
       }], { trusted: true })
     }
+    // The rows of workers killed before they could take them.
+    let clear = async () => {
+      let rows = (await g.read(`.${WORKER}`)) as Bundle[]
+      let over = []
+      for (let b of rows) {
+        if (b.entity.eid != me && await opts.gone?.(b.entity.eid)) over.push(b)
+      }
+      if (over.length) {
+        let gone = over.map((b) => ({
+          entity: { eid: b.entity.eid },
+          [WORKER]: null,
+        }))
+        await g.apply(gone, { trusted: true })
+      }
+    }
+    if (speaks && opts.gone) await clear().catch(told)
     // A wake before the first pass is answered by it.
     if (!nap || nap.signal.aborted) nap = new AbortController()
     // A worker that cannot hear other processes still finds their runs, a
@@ -962,7 +979,7 @@ export let pool = (ctx: Ctx, opts: Partial<PoolOpts> = {}): Pool => {
           more = (await pass(g, budget)).more
           budget = page
           await renew(g)
-          if (speaks && clock() - spoke >= CAP) {
+          if (speaks && clock() - spoke >= SAY) {
             spoke = clock()
             await say()
           }

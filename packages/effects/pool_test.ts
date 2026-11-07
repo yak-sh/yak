@@ -812,9 +812,11 @@ test('a worker serving every enabled effect keeps the pool presence lease', asyn
 })
 
 // The graph as the pool alone sees it (`Access`): the runs owed, kept as it
-// writes them, and each `worker` row it says, in order. Every read answers
-// alike, so a pass here examines one candidate (`page: 1`).
-let bare = (owed: string[]) => {
+// writes them, other workers' rows, and each `worker` row it says, in order.
+// Every read of runs answers alike, so a pass here examines one candidate
+// (`page: 1`).
+let bare = (owed: string[], others: string[] = []) => {
+  let workers = new Set(others)
   let runs = new Map<string, Comp>(owed.map((eid) => [eid, {
     handler: 'post_note',
     target: eid,
@@ -827,15 +829,18 @@ let bare = (owed: string[]) => {
   let heard = () => {}
   let g = {
     vocab: pooledBlog,
-    read: () =>
-      [...runs].filter(([, r]) => !r.lease_owner && !r.next)
-        .map(([eid, effect]) => ({ entity: { eid }, effect })),
+    read: (q: string) =>
+      q == '.worker'
+        ? [...workers].map((eid) => ({ entity: { eid }, worker: { at: 'x' } }))
+        : [...runs].filter(([, r]) => !r.lease_owner && !r.next)
+          .map(([eid, effect]) => ({ entity: { eid }, effect })),
     get: () => [],
     outside: { get: () => [] },
     apply: (bundles: Bundle[]) => {
       for (let b of bundles) {
         let eid = b.entity.eid
-        if (b.worker !== undefined) {
+        if (workers.has(eid)) workers.delete(eid)
+        else if (b.worker !== undefined) {
           said.push(b.worker as Comp | null)
           heard()
         } else if (b.$delete) runs.delete(eid)
@@ -845,7 +850,7 @@ let bare = (owed: string[]) => {
     },
   } as unknown as Access
   let says = () => new Promise<void>((done) => heard = done)
-  return { g, runs, said, says }
+  return { g, runs, said, says, workers }
 }
 
 test('a worker that stays says what it is running and what ended, and takes its row when it leaves', async () => {
@@ -892,4 +897,25 @@ test('a worker that stays says what it is running and what ended, and takes its 
     await fx.stop()
   }
   assertEquals(said.at(-1), null)
+})
+
+test('a worker starting clears the rows of workers killed before they took them', async () => {
+  let fx = effects(pooledBlog, {
+    owner: 'server',
+    gone: (eid) => eid == 'killed',
+    report: () => {},
+  })
+  fx.handle({ post_note: () => {} })
+  let { g, says, workers } = bare([], ['killed', 'alive'])
+  let up = new AbortController()
+  let first = says()
+  let serving = fx.work(g, up.signal)
+  try {
+    await first
+    assertEquals([...workers], ['alive'])
+  } finally {
+    up.abort()
+    await serving
+    await fx.stop()
+  }
 })

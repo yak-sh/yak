@@ -2,7 +2,7 @@
  * The page the browsing app's sidebar offers as Effects: the processes
  * working the effect pool, how busy each is and what it is running, how fast
  * runs end, and the runs owed behind them, by handler. It moves as the
- * workers do, about once a second.
+ * workers say themselves, every fifteen seconds (./worker.ts `SAY`).
  *
  * Where each number comes from:
  * - workers, what each is running, runs a second and how busy each is: the
@@ -29,11 +29,11 @@ import {
 } from '@yaks/inspect'
 import { Head, Loading, Meter, Metrics, Section, Spark, Table } from '@yaks/ui'
 import { effectsIn } from '@yaks/vocab'
-import { rate, said, type Worker } from './worker.ts'
+import { rate, said, SAY, type Worker } from './worker.ts'
 
-/** How long a worker may say nothing before it reads as silent (ms): it says
- * something about once a second. */
-export let QUIET = 5_000
+/** How long a worker may say nothing before it reads as silent (ms): two of
+ * its turns to say something. */
+export let QUIET = 2 * SAY
 
 /** How long a silent worker is still shown (ms); past this it is long gone,
  * whatever its process row says. */

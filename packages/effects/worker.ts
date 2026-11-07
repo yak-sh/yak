@@ -1,5 +1,5 @@
 // What a worker says about itself. A process working the pool (./pool.ts)
-// writes a `worker` component on its own process entity about once a second
+// writes a `worker` component on its own process entity every {@link SAY}
 // while it works:
 //
 //   worker{at, running, runs, ran, errors, history, cpu, lag}
@@ -7,7 +7,13 @@
 // so anyone reading the graph sees how many workers are up, what each is
 // running, how fast runs end and how busy each process is, without asking the
 // process. A row whose `at` stops moving is a worker that stopped saying: it
-// ended, or its thread is stuck. One leaving the pool takes its row with it.
+// ended, or its thread is stuck. One leaving the pool takes its row with it,
+// and one killed before it could is cleared by the next worker to start.
+//
+// Saying is a commit every reader of the graph's feed handles, so a worker
+// says itself no more often than its presence lease is renewed (./lease.ts
+// `HOLD`): `history` keeps each second, so the runs a second still read by
+// the second, a few seconds late.
 //
 // How busy is said in two ways that hold however many runs a worker takes at
 // once: `cpu`, the share of a core its process used, and `lag`, how late its
@@ -18,6 +24,10 @@
 /** The component a worker says itself in, by the name ./vocab.json declares
  * it. */
 export let WORKER = 'worker'
+
+/** How often a worker says itself (ms): as often as it renews its presence
+ * lease. */
+export let SAY = 15_000
 
 /** How many seconds of `history` a worker keeps. */
 export let SPAN = 60

@@ -163,7 +163,7 @@
       "component": true,
       "type": "object",
       "journal": false,
-      "description": "what a process working the effect pool says about itself, on its own process entity, about once a second while it works: how many runs it has going and the oldest of them, how many it has finished, and how busy it is. A row whose `at` stops moving is a worker that stopped saying, because it ended or its thread is stuck; one leaving the pool takes its row with it",
+      "description": "what a process working the effect pool says about itself, on its own process entity, every fifteen seconds while it works: how many runs it has going and the oldest of them, how many it has finished, and how busy it is. A row whose `at` stops moving is a worker that stopped saying, because it ended or its thread is stuck; one leaving the pool takes its row with it, and the next worker to start clears the row of one that was killed",
       "properties": {
         "at": {
           "type": "string",
