@@ -92,3 +92,19 @@ test('a drain past its slice starts nothing and answers now; the next works on',
   assertEquals(await drain(store), null)
   assertEquals(ran, ['1', '2', '3'])
 })
+
+// The store keeps its vocabulary's retention, as a local host's daily duty
+// does: a row past its declared expiry goes on the next wake.
+test('a drain expires what the vocabulary declares expired', async () => {
+  let store = operatorGraph(ram(operatorVocab), [])
+  let row = (at: string) => ({
+    announced: { call: crypto.randomUUID() },
+    created: { at },
+  })
+  let old = row(new Date(Date.now() - 2 * 86_400_000).toISOString())
+  let fresh = row(new Date().toISOString())
+  await store.g.apply([old, fresh] as never, { trusted: true, stamp: false })
+  await drain(store)
+  let left = await store.g.read('.announced')
+  assertEquals(left.map((b) => b.announced), [fresh.announced])
+})

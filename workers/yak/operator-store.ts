@@ -1,5 +1,5 @@
 // The space's private work stays beside its builder, outside app restores.
-import { graph, type Plugin, type Storage } from '@yaks/graph'
+import { type Graph, graph, type Plugin, type Storage } from '@yaks/graph'
 import { driver, type DurableStorage, storage } from '@yaks/durable-object'
 import { loadVocab } from '@yaks/vocab'
 import { kernelDoc, kernelKeywords } from '@yaks/kernel/vocab'
@@ -14,7 +14,7 @@ import { providerDocs } from './providers.ts'
 import { toolsDoc } from '@yaks/tools/vocab'
 import { sessionDerived } from '@yaks/session/status'
 import { contextDoc } from '@yaks/context'
-import { effectDoc, effects } from '@yaks/effects'
+import { effectDoc, effects, expireDaily } from '@yaks/effects'
 import { edgeDoc, edgeKeywords } from '@yaks/edge'
 import {
   artifactDoc,
@@ -203,6 +203,7 @@ export let drain = async (
     caught(error, { request: 'operator wake', wake: wake.entity.eid })
   }
   let run = await working({ g, fx }, until)
+  await expiring(g, until)
   // One that came due while the pool worked fires on the next alarm; one a
   // tick refused waits RETRY, rather than ringing the alarm at once again.
   let now = Date.now()
@@ -212,6 +213,29 @@ export let drain = async (
   return run == null ? wake : wake == null ? run : Math.min(run, wake)
 }
 
+/** This process, as the retention pass's lease names its holder. */
+let holder = crypto.randomUUID()
+
+/**
+ * The store's daily retention pass (@yaks/effects `expireDaily`) in what the
+ * slice leaves: what the vocabulary declares expired goes (a session's
+ * context parts and tool results after thirty days), and the graves every
+ * finished run leaves are pruned thirty days after it. A pass the slice cuts
+ * off goes on at the next wake, which holds it as the same process.
+ */
+let expiring = async (g: Graph, until: number) => {
+  let left = until - Date.now()
+  if (left <= 0) return
+  try {
+    await expireDaily(g, {
+      owner: holder,
+      signal: AbortSignal.timeout(left),
+    })
+  } catch (e) {
+    caught(e, { request: 'operator expire' })
+  }
+}
+
 let working = async (
   { g, fx }: Pick<ReturnType<typeof operatorStore>, 'g' | 'fx'>,
   until: number,
@@ -219,6 +243,7 @@ let working = async (
   // A pending run no handler here takes arms nothing: words declared before
   // their handler was (sessions' were, until the Operator ran on them).
   let handled = fx.slots().filter((s) => s.effect && s.run).map((s) => s.id)
+  if (!handled.length) return null
   let seen = ''
   for (;;) {
     await fx.work(g, undefined, { until })
