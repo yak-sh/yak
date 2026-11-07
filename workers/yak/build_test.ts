@@ -28,7 +28,7 @@ import { directory } from './directory.ts'
 import * as dirPart from './directory.ts'
 import type { Env } from './env.ts'
 import { ai, modelPage, platform, state, type Turn } from './testing.ts'
-import { test, until } from '@yaks/testing'
+import { clock, test, until } from '@yaks/testing'
 import { sign } from './lib/token.ts'
 
 let SECRET = 'a probe secret'
@@ -401,10 +401,13 @@ test('a new incarnation makes its store while a seat read is under way', async (
   assert(held > (ran - held) / 2, `${held} of ${ran} ran before the seat`)
 })
 
-// Behind the answer its caller has read, not the handler's return: what the
-// owed work runs and writes before the runtime sends the answer on holds it.
-test('an object works its Operator once its first answer has been read, so a step a deploy reset runs again at once', async () => {
+// Behind the answer its caller has read, and a beat after it: what the owed
+// work runs and writes before the runtime has sent the answer on holds it.
+test('an object works its Operator a beat after its first answer has been read, so a step a deploy reset runs again at once', async () => {
   let o = await seeded()
+  let time = clock(Date.now())
+  o.env.CLOCK = time
+  let armed = async () => (await o.ctx.storage.getAlarm()) != null
   let answer = await o.object.fetch(
     new Request('https://builder/operator/conversation', {
       method: 'POST',
@@ -412,14 +415,14 @@ test('an object works its Operator once its first answer has been read, so a ste
       body: '{}',
     }),
   )
-  await tick()
-  let unread = await o.ctx.storage.getAlarm()
+  await time.advance(1000)
+  let unread = await armed()
   await answer.text()
+  await time.advance(99)
+  let read = await armed()
+  await time.advance(1)
   await Promise.all(o.ctx.pending)
-  assertEquals([unread, (await o.ctx.storage.getAlarm()) != null], [
-    null,
-    true,
-  ])
+  assertEquals([unread, read, await armed()], [false, false, true])
 })
 
 test('an object takes the space and seat the kernel read, and reads them itself only for a caller that read none', async () => {

@@ -69,6 +69,7 @@ import {
   type Wire,
 } from '@yaks/durable-object'
 import type { Alarms } from './operator-store.ts'
+import { system } from '@yaks/fp'
 import { level, writes } from '@yaks/member'
 import {
   col,
@@ -147,6 +148,10 @@ type Socket = Watching | Lent
 // line of it, and not much of that. A tool answers a paragraph; a page draws a
 // row.
 let CUT = 120
+
+/** How long an incarnation's owed work waits once its answers have been
+ * read, so the runtime has sent them on (`#behind`). */
+let BEAT = 100
 export let line = (text: string): string => {
   let first = text.trim().split('\n')[0] ?? ''
   return first.length > CUT ? `${first.slice(0, CUT - 1)}…` : first
@@ -736,16 +741,17 @@ export class Builder {
     owed?.()
   }
 
-  // Work started once the answer has gone, held by the object. Started
-  // before its caller has read the answer, it goes first: the page waits for
-  // its CPU (the pool's start-up runs) and for what it writes (the alarm
-  // armed, their rows) to be confirmed. A first visit to /manage/checks
-  // waited 81-98 ms between the handler's end and the kernel's answer for it
-  // when it began on a timer as the handler returned (T-149700).
+  // Work started once the answer has gone, held by the object. The runtime
+  // sends an answer on in turns of its own event loop, after its caller has
+  // read it from the object, and code run meanwhile holds them until it
+  // yields; writes made meanwhile hold it until they are confirmed. So the
+  // work waits a beat (`BEAT`): begun on a timer as the handler returned, or
+  // as the answer was read, the Operator's start-up held a first visit to
+  // /manage/checks 81-140 ms after its answer was read (T-149700).
   #behind(work: () => void) {
     this.#ctx.waitUntil?.(
       new Promise<void>((done) =>
-        setTimeout(() => {
+        (this.#env.CLOCK ?? system).after(BEAT, () => {
           try {
             work()
           } catch (e) {
@@ -753,7 +759,7 @@ export class Builder {
           } finally {
             done()
           }
-        }, 0)
+        })
       ),
     )
   }
