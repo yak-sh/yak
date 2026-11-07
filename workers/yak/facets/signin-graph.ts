@@ -23,9 +23,19 @@ import { hook } from '@yaks/graph/plugin'
 import { Refused } from '@yaks/graph/errors'
 import { after, each } from '@yaks/fp'
 import type { Options } from './store.ts'
-import { asked, guessed, line, type Signin } from '../signin.ts'
+import {
+  arriving,
+  asked,
+  called,
+  guessed,
+  line,
+  type Person,
+  personLine,
+  type Signin,
+} from '../signin.ts'
+import { newcomerIs, type Row } from '../directory.ts'
 
-type Guess = { email?: string; phone?: string; code: string }
+type Guess = { email?: string; phone?: string; code: string; newcomer?: string }
 
 // Every row an address's codes left.
 let rows = (tx: Tx, address: string) =>
@@ -36,6 +46,26 @@ let rows = (tx: Tx, address: string) =>
 
 let addressOf = (s: { email?: string; phone?: string }) =>
   s.email ?? s.phone ?? ''
+
+// Who signs in at an address, as the write finds them: the newcomer is
+// theirs only while nobody wears the address and they are still a newcomer.
+// Nothing asks what to call them (T-34236), so the front of their address
+// does (`called`), written, not merely derived, because a member row names a
+// person by their title and a titleless one reads back as a bare eid
+// (T-32733). It is theirs to change on their own space page. A number is no
+// name, and a person found by one is the one wearing it.
+let arrival = (tx: Tx, address: string, eid: string, newcomer?: string) =>
+  after(tx.read(personLine(address)), ([found]) =>
+    after(
+      found || !newcomer ? [] : tx.read(`.entity.eid=${newcomer}`),
+      ([row]) =>
+        arriving(
+          address,
+          called(address),
+          found as Person | undefined,
+          newcomerIs(row as Row | undefined) ? newcomer : eid,
+        ),
+    ))
 
 // An ask is a new code: a `signin` carrying one.
 let asking = (b: Bundle) => !!(b.signin as { code?: string } | undefined)?.code
@@ -52,7 +82,15 @@ export let plugins = (_host: unknown, options: Options): Plugin[] => [{
     let decide = (b: Bundle): Bundle[] | Promise<Bundle[]> => {
       if (b.$guess) {
         let g = b.$guess as Guess
-        return after(rows(tx, addressOf(g)), (all) => guessed(all, g.code, now))
+        let address = addressOf(g)
+        return after(rows(tx, address), (all) => {
+          let wrote = guessed(all, g.code, now)
+          if (!wrote.some((w) => w.tombstone)) return wrote
+          return after(
+            arrival(tx, address, b.entity.eid, g.newcomer),
+            (who) => [...wrote, { ...who, $alias: b.$alias }],
+          )
+        })
       }
       if (asking(b)) {
         return after(

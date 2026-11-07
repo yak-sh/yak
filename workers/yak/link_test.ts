@@ -74,7 +74,7 @@ test('following the link spends the code, and nothing spends it twice', async ()
   let pass = await passOf(t, SECRET)
   assert(await spend(at, SECRET, pass!.once!.email, pass!.once!.code))
   // The same link again, and the code it was said as: both dead.
-  assertEquals(await spend(at, SECRET, ME, code), false)
+  assertEquals(await spend(at, SECRET, ME, code), null)
 })
 
 test('a standing link lives to its expiry, and not past it', async () => {

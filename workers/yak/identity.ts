@@ -167,7 +167,6 @@ import { chatPath, hostOf, LOGOUT, MANAGE, OAUTH, onZone } from './route.ts'
 import { INVITE, LINK, SLUG } from '@yaks/platform/names'
 import { counted, FULL, keep, oneBuild, START } from './newcomer.ts'
 import {
-  called,
   canon,
   codeLetter,
   codeText,
@@ -772,7 +771,9 @@ let begun = async (req: Request, env: Env, said: string) => {
 // The longest idea the box takes, in characters: a few paragraphs.
 let SAID = 4000
 
-/** A code attempt either opens or returns the same closed sign-in card. */
+/** A code attempt either signs its person in, answering who that is, or
+ * returns the same closed sign-in card. `newcomer` is who the browser is
+ * signed in as (signin.ts `guess`). */
 export let codeCheck = async (
   store: Meta,
   address: string,
@@ -780,8 +781,9 @@ export let codeCheck = async (
   q = '',
   back = '',
   env: Host = {},
-): Promise<Response | null> =>
-  await guess(store, address, digest) ? null : askCode({
+  newcomer?: string,
+): Promise<string | Response> =>
+  await guess(store, address, digest, newcomer) ?? askCode({
     address,
     q,
     back,
@@ -805,24 +807,18 @@ let signCard = async (env: Env, at: Parameters<typeof askEmail>[0] = {}) =>
 // A letter's one click, spent: the very code the form would have spent
 // (signin.ts), so following the link is single use, dies with the code, and
 // costs a try on every code standing for the address exactly as a mistyped one
-// does. The person is found or minted here and nowhere earlier, which is what
-// keeps asking for a code from writing a person for every address anyone types.
+// does. The person is found or minted in the write that spends it and nowhere
+// earlier, which is what keeps asking for a code from writing a person for
+// every address anyone types; an address new here that a newcomer proves
+// becomes theirs (signin.ts `arriving`).
 let spent = async (env: Env, req: Request, once: Once) =>
-  await spend(meta(env), secret(env), once.email, once.code)
-    ? await personOf(
-      meta(env),
-      once.email,
-      called(once.email),
-      await newcomerAt(env, req),
-    )
-    : null
-
-// The newcomer this browser is signed in as, if it is one (newcomer.ts): an
-// address new here that they prove becomes theirs (signin.ts `addressee`).
-let newcomerAt = async (env: Env, req: Request) => {
-  let was = await browser(env, req)
-  return was && await dirOf(env).newcomer(was) ? was : undefined
-}
+  await spend(
+    meta(env),
+    secret(env),
+    once.email,
+    once.code,
+    await browser(env, req) ?? undefined,
+  )
 
 // A pass followed: it lands where a spent code lands, and one that has been
 // spent, revoked or expired is the sign-in card again, still carrying whatever
@@ -1236,7 +1232,9 @@ let ours = async (req: Request, env: Env): Promise<Response> => {
     // for the code has: this is the second thing a new person waits on.
     let c = clock()
     return c.counting(async () => {
-      let refused = await c.time('check', async () =>
+      // The guess that opens the code finds or mints whoever signs in
+      // (signin.ts `guess`), so a new person waits on one trip for both.
+      let person = await c.time('check', async () =>
         codeCheck(
           meta(env),
           address,
@@ -1244,20 +1242,9 @@ let ours = async (req: Request, env: Env): Promise<Response> => {
           q,
           back,
           env,
+          await browser(env, req) ?? undefined,
         ))
-      if (refused) return timed(refused, c)
-      // Nothing here asks what to call them (T-34236), so the front of their
-      // address does — written, not merely derived, because a member row
-      // names a person by their title and a titleless one reads back as a
-      // bare eid (T-32733). It is theirs to change on their own space page. A
-      // number is no name, and a person found by one is the one wearing it.
-      let person = await c.time('person', async () =>
-        personOf(
-          meta(env),
-          address,
-          called(address),
-          await newcomerAt(env, req),
-        ))
+      if (person instanceof Response) return timed(person, c)
       return timed(await landed(req, env, person, q, back, 'code', c), c)
     })
   }

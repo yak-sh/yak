@@ -345,10 +345,11 @@ export let mint = async (
   return minted(applied).$code ? code : null
 }
 
-// Spend a code. True for any code still open on this address — several can
-// stand at once — and signing in ends the address's whole story: the codes and
-// the records that counted them go together, in the write that took the
-// guess, so a person who gets in starts over with a full three.
+// Spend a code: the person it signs in for any code still open on this
+// address — several can stand at once — else null. Signing in ends the
+// address's whole story: the codes and the records that counted them go
+// together, in the write that took the guess, so a person who gets in starts
+// over with a full three.
 //
 // The try is taken before the guess is compared, in the store's own
 // transaction, and each count on the precondition that it is still the count
@@ -361,20 +362,31 @@ export let spend = async (
   secret: string,
   address: string,
   code: string,
-) => {
-  return guess(store, address, await mac(address, code, secret))
-}
+  newcomer?: string,
+) => guess(store, address, await mac(address, code, secret), newcomer)
 
 /** Spend a prepared code digest: one trip, which the store answers with the
- * address's rows buried when it opened (`guessed`). */
-export let guess = async (store: Meta, address: string, want: string) => {
+ * address's rows buried when it opened (`guessed`), and the person signing
+ * in, found or minted (`arriving`), at `$who`: their eid, or null when the
+ * code did not open. `newcomer` is who this browser is signed in as, taken
+ * when they are a newcomer and nobody holds the address yet. */
+export let guess = async (
+  store: Meta,
+  address: string,
+  want: string,
+  newcomer?: string,
+) => {
   for (;;) {
     try {
       let applied = await apply(store, [{
-        entity: { eid: '$guess' },
-        $guess: { [key(address)]: canon(address), code: want },
+        entity: { eid: '$who' },
+        $guess: {
+          [key(address)]: canon(address),
+          code: want,
+          ...(newcomer ? { newcomer } : {}),
+        },
       }])
-      return applied.some((b) => b.tombstone)
+      return minted(applied).$who ?? null
     } catch (e) {
       if (e instanceof Stale) continue
       throw e
@@ -382,16 +394,19 @@ export let guess = async (store: Meta, address: string, want: string) => {
   }
 }
 
-type Person = { entity: { eid: string }; doc?: { title?: string } }
+export type Person = { entity: { eid: string }; doc?: { title?: string } }
 
-let personAt = async (store: Meta, typed: string) => {
+/** The filter line that reads the person wearing an address, and what they
+ * are called. */
+export let personLine = (typed: string) => {
   let address = canon(typed)
-  return (await store.query(
-    texted(address)
-      ? `.person&.phone.number=${JSON.stringify(address)}&?doc`
-      : `.person&.email.address=${address}&?doc`,
-  ))[0] as Person | undefined
+  return texted(address)
+    ? `.person&.phone.number=${JSON.stringify(address)}&?doc`
+    : `.person&.email.address=${address}&?doc`
 }
+
+let personAt = async (store: Meta, typed: string) =>
+  (await store.query(personLine(typed)))[0] as Person | undefined
 
 // An address is not a name. A person minted before anyone was asked wears
 // their address as `doc.title` (T-32627), so that title reads as no name at
@@ -426,56 +441,75 @@ export let nameAt = async (store: Meta, email: string) =>
 // written only where there is no name yet — an invitation never renames
 // someone who has one — and a person nobody has named keeps no title until
 // their first sign-in. They change it under Settings (apps.ts `saved`).
-//
+
+/**
+ * Who arrives at an address, as the one bundle that has them: the person
+ * `found` wearing it, named `name` if nobody has; else the person at `eid`
+ * minted wearing it. A bundle naming nothing but its eid writes nothing.
+ * A sign-in decides it inside the guess that opens (facets/signin-graph.ts),
+ * with `eid` the newcomer whose browser asked (newcomer.ts), so they stay who
+ * they were, and their space, its chat and everything else said to be theirs
+ * stays so.
+ *
+ * ```ts
+ * import { arriving } from './signin.ts'
+ * import { assertEquals } from '@std/assert'
+ * let dana = { entity: { eid: 'p1' }, doc: { title: 'Dana' } }
+ * assertEquals(arriving('dana@b.c', 'dana', dana), { entity: { eid: 'p1' } })
+ * assertEquals(arriving('Dana@b.c', 'dana', undefined, 'p2'), {
+ *   entity: { eid: 'p2' },
+ *   doc: { title: 'dana' },
+ *   person: {},
+ *   email: { address: 'dana@b.c' },
+ * })
+ * ```
+ */
+export let arriving = (
+  address: string,
+  name?: string,
+  found?: Person,
+  eid = '$who',
+): Bundle => {
+  if (found) {
+    return {
+      entity: { eid: found.entity.eid },
+      ...name && !chose(found.doc?.title) ? { doc: { title: name } } : {},
+    }
+  }
+  let at = canon(address)
+  return {
+    entity: { eid },
+    ...name ? { doc: { title: name } } : {},
+    person: {},
+    ...texted(at) ? { phone: { number: at } } : { email: { address: at } },
+  }
+}
+
+// Whether a bundle writes anything beside naming its entity.
+let writes = (b: Bundle) => Object.keys(b).some((k) => k != 'entity')
+
 // `addressee` reads who that is and says what a batch must write to have
 // them: nothing, a name, or the person minted under `$who`, so a caller can
 // write them beside rows that name them (member_add's invitation), in one
-// batch. `personOf` writes it alone.
-//
-// `newcomer` is the person with no address yet who asked (newcomer.ts): an
-// address nobody holds becomes theirs, so they stay who they were, and their
-// space, its chat and everything else said to be theirs stays so.
+// batch. `personOf` writes it alone. An eid the batch mints is a `$alias`, and
+// the reply says what it became: a bundle names an existing entity by eid, so
+// a client cannot hand the store a uuid it invented (D-23827).
 export let addressee = async (
   store: Meta,
   address: string,
   name?: string,
-  newcomer?: string,
 ) => {
-  let at = canon(address)
-  let row = await personAt(store, at)
-  if (row) {
-    let eid = row.entity.eid
-    return {
-      eid,
-      fresh: false,
-      write: name && !chose(row.doc?.title)
-        ? [{ entity: { eid }, doc: { title: name } }]
-        : [],
-    }
-  }
-  // An eid the batch mints is a `$alias`, and the reply says what it became:
-  // a bundle names an existing entity by eid, so a client cannot hand the
-  // store a uuid it invented (D-23827).
-  let eid = newcomer ?? '$who'
+  let found = await personAt(store, address)
+  let who = arriving(address, name, found)
   return {
-    eid,
-    fresh: !newcomer,
-    write: [{
-      entity: { eid },
-      ...(name ? { doc: { title: name } } : {}),
-      person: {},
-      ...texted(at) ? { phone: { number: at } } : { email: { address: at } },
-    }],
+    eid: who.entity.eid,
+    fresh: !found,
+    write: writes(who) ? [who] : [],
   }
 }
 
-export let personOf = async (
-  store: Meta,
-  address: string,
-  name?: string,
-  newcomer?: string,
-) => {
-  let who = await addressee(store, address, name, newcomer)
+export let personOf = async (store: Meta, address: string, name?: string) => {
+  let who = await addressee(store, address, name)
   if (!who.write.length) return who.eid
   let applied = await apply(store, who.write)
   if (!who.fresh) return who.eid

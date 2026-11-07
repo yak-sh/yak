@@ -93,10 +93,61 @@ test('the live code opens, and is spent', async () => {
     '4b16a8c088351316c93cd7b715ff2bb70e1e34901046eab1b9c6d8d19a952e02',
   )
   let d = await held([row(ME, CODE, soon())])
-  assert(await spend(d.at, SECRET, ME, '123456'))
-  // Buried in the write that took the guess: one trip.
+  let eid = await spend(d.at, SECRET, ME, '123456')
+  // Buried in the write that took the guess, which signs its person in: one
+  // trip, and they are called the front of their address.
   assertEquals(d.trips(), 1)
   assertEquals(await d.rows(), [])
+  assertEquals(await d.graph.read(`.entity.eid=${eid}&?person&?email&?doc`), [{
+    entity: { eid: eid! },
+    person: {},
+    email: { address: ME },
+    doc: { title: 'me' },
+  }])
+})
+
+// Who a right code signs in (T-148969), decided in the write that spends it:
+// whoever wears the address, named if nobody has; else the newcomer whose
+// browser asked; else somebody new.
+let signsIn = async (rows: Bundle[], newcomer?: string) => {
+  let d = await held([row(ME, CODE, soon()), ...rows])
+  let eid = await spend(d.at, SECRET, ME, '123456', newcomer)
+  let [who] = await d.graph.read(`.entity.eid=${eid}&?doc&?email&?newcomer`)
+  return {
+    eid,
+    title: (who?.doc as { title?: string } | undefined)?.title,
+    email: (who?.email as { address?: string } | undefined)?.address,
+    trips: d.trips(),
+  }
+}
+let at = { at: '2026-11-07T12:00:00Z' }
+
+test('a right code signs in whoever wears the address, named once', async () => {
+  let named = { ...person('Dana'), email: { address: ME } }
+  assertEquals(await signsIn([named], 'n1'), {
+    eid: 'p1',
+    title: 'Dana',
+    email: ME,
+    trips: 1,
+  })
+  let unnamed = { ...person(), email: { address: ME } }
+  assertEquals((await signsIn([unnamed])).title, 'me')
+})
+
+test("a newcomer's browser takes an address new here, and only a newcomer's", async () => {
+  let newcomer = { entity: { eid: 'n1' }, person: {}, newcomer: at }
+  assertEquals(await signsIn([newcomer], 'n1'), {
+    eid: 'n1',
+    title: 'me',
+    email: ME,
+    trips: 1,
+  })
+  // Somebody with an address of their own is no newcomer: the address gets a
+  // person of its own.
+  let kept = { ...newcomer, email: { address: 'you@yaks.app' } }
+  let minted = await signsIn([kept], 'n1')
+  assert(minted.eid && minted.eid != 'n1')
+  assertEquals(minted.email, ME)
 })
 
 test('a wrong guess costs a try, not the code', async () => {
@@ -334,7 +385,9 @@ test('a number signs in with its code, and a person wears the number', async () 
     entity: { eid: 'e1' },
     signin: { phone: NUMBER, code, expires: soon(), tries: 0 },
   }])
-  assert(await spend(d.at, SECRET, '(269) 555-0142', '123456'))
+  let eid = await spend(d.at, SECRET, '(269) 555-0142', '123456')
+  let [wearing] = await d.graph.read(`.person&.phone.number="${NUMBER}"`)
+  assertEquals(wearing?.entity.eid, eid)
   let fresh = asking(() => [])
   assertEquals(await personOf(fresh.at, NUMBER), 'p1')
   assertEquals(fresh.asked, [`.person&.phone.number="${NUMBER}"&?doc`])

@@ -268,7 +268,7 @@ import { argsOf, who } from '@yaks/graph/call'
 import { comps, dead as deleted, TOMBSTONE } from '@yaks/graph/bundle'
 import { hook, type HookContext } from '@yaks/graph/plugin'
 import { doomed } from '@yaks/graph/read'
-import { applyOptions, graph, identityEid } from '@yaks/graph'
+import { applyOptions, graph, identityEid, REQUESTS } from '@yaks/graph'
 import { actorOf as writerOf } from '@yaks/graph/provenance'
 import { Refused } from '@yaks/graph/errors'
 import { DELIVER, MAIL } from '@yaks/mail'
@@ -772,15 +772,38 @@ installContext({
 // A stamp on any other entity is as fenced as what it stamps. Any other
 // delete or component fences.
 //
-// So does a request a plugin decides inside the write whose rows a copied
-// line names, though the batch carries none of them until it runs: `$own`
-// mints a person's space and seat (facets/directory-graph.ts). A guess
-// writes nothing but sign-in rows, and fences nothing.
+// A request a plugin decides inside the write carries none of the rows it
+// writes until it runs, so it is tried under no fence, and run again under
+// one when what it decided names what a copied line does (`Unraised`): a
+// guess that opens writes the person signing in only when it mints or names
+// them (facets/signin-graph.ts), and a wrong one writes nothing but sign-in
+// rows. `$own` mints a person's space and seat (facets/directory-graph.ts)
+// whenever it is asked, so it fences from the start.
 let UNNAMED = new Set(['signin'])
 let STAMPS = new Set(['created', 'updated'])
 let UNFENCED = new Set([...RECEIPTS, 'archetype', ...UNNAMED])
 let UNHELD = new Set([...UNFENCED, 'effect', ...STAMPS])
 let DECIDED = ['$own']
+let CORE = new Set(REQUESTS)
+let deciding = (bundles: Bundle[]) =>
+  bundles.some((b) => Object.keys(b).some((k) => k[0] == '$' && !CORE.has(k)))
+
+/** A write raised no serving fence and committed what a copied line names.
+ * Nothing of it was written. */
+class Unraised extends Error {}
+
+// `write`, else `fence` when it committed nothing for want of a fence.
+let refenced = <T>(write: () => T | Promise<T>, fence: () => Promise<T>) => {
+  let raise = (e: unknown) =>
+    e instanceof Unraised ? fence() : Promise.reject(e)
+  try {
+    let out = write()
+    return isPromise(out) ? out.catch(raise) : out
+  } catch (e) {
+    if (e instanceof Unraised) return fence()
+    throw e
+  }
+}
 let UNREAD = -2
 let unfenced = (bundles: Bundle[], words = UNFENCED): boolean => {
   let unnamed = new Set(
@@ -1571,7 +1594,7 @@ export class Store {
                       let named = rest.flatMap((b) =>
                         deleted(b) ? ['$delete'] : comps(b).map(([n]) => n)
                       )
-                      throw new Error(
+                      throw new Unraised(
                         `An unfenced write committed ${named}`,
                       )
                     }
@@ -1674,13 +1697,18 @@ export class Store {
           // fence. Only explicit synchronous mover batches reuse an epoch.
           let fence = () =>
             fenced(copy, under, this.#committed, clockOf(this.#time))
-          // A write no authorization reads raises no fence (`unfenced`).
+          // A write no authorization reads raises no fence (`unfenced`), and
+          // one decided inside raises it once it turns out to (`deciding`).
+          let unread = () =>
+            deciding(bundles)
+              ? refenced(() => under(UNREAD), fence)
+              : under(UNREAD)
           let gone = killed(bundles)
           if (unfenced(bundles.filter((b) => !deleted(b)))) {
-            if (!gone.length) return under(UNREAD)
+            if (!gone.length) return unread()
             return after(
               g.get(gone),
-              (rows) => unheld(rows) ? under(UNREAD) : fence(),
+              (rows) => unheld(rows) ? unread() : fence(),
             )
           }
           if (hold(bundles)) return under(HOLD)

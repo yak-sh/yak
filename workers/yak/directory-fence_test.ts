@@ -250,23 +250,39 @@ await proof(
 
 // A sign-in code's rows are read only by spending and asking, from the
 // directory itself, never from the copy (T-148651): asking, guessing and the
-// burial a right guess writes hold back no serving check.
+// burial a right guess writes hold back no serving check. The person a right
+// guess signs in is decided in the same write (T-148969), and fences only
+// when it is minted or named: someone the directory already holds, named,
+// signs in under none.
 await proof(
   "a sign-in code's whole life leaves serving checks standing",
   async () => {
     let f = await fixture()
     let at = 'fence@example.com'
-    let code = (await mint(f.at, 'secret', at))!
-    let spent = [
-      await spend(f.at, 'secret', at, code == '000000' ? '000001' : '000000'),
-      await spend(f.at, 'secret', at, code),
-    ]
+    let signIn = async () => {
+      let code = (await mint(f.at, 'secret', at))!
+      let wrong = code == '000000' ? '000001' : '000000'
+      let before = f.begins.length
+      let spent = [
+        await spend(f.at, 'secret', at, wrong),
+        await spend(f.at, 'secret', at, code),
+      ]
+      return { spent, fences: f.begins.length - before }
+    }
+    let first = await signIn(), again = await signIn()
+    let [person] = await f.at.query(`.person&.email.address=${at}&?doc`)
     let left = (await f.at.query(`.signin.email=${at}`)).length
     return () =>
-      equal({ spent, left, fences: f.begins.length }, {
-        spent: [false, true],
+      equal({
+        first,
+        again,
+        left,
+        title: (person?.doc as { title?: string })?.title,
+      }, {
+        first: { spent: [null, person?.entity.eid], fences: 1 },
+        again: { spent: [null, person?.entity.eid], fences: 0 },
         left: 0,
-        fences: 0,
+        title: 'fence',
       })
   },
 )

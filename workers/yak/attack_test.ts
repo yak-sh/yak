@@ -173,12 +173,12 @@ test(
         tries: 0,
       },
     }])
-    let attempt = (digest: string) =>
-      codeCheck(d.at, codeEmail, digest, '', '', {})
+    let attempt = async (digest: string) =>
+      await codeCheck(d.at, codeEmail, digest, '', '', {}) as Response
     let guessed = await Promise.all(
       codeDigests.slice(1).map((digest) => guess(d.at, codeEmail, digest)),
     )
-    assertEquals(guessed, Array(40).fill(false))
+    assertEquals(guessed, Array(40).fill(null))
     let wrong = await attempt(codeDigests[1])
     assertEquals(wrong?.status, 400)
     assertEquals(wrong?.headers.get('set-cookie'), null)
