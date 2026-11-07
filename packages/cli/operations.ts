@@ -36,6 +36,7 @@ export let operations = (
           await restart({
             runtimeDir,
             processes: host.config.processes,
+            replace: argsOf(call).replace as string[] | undefined,
             ...options,
           }),
         )]

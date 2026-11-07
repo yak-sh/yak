@@ -199,7 +199,11 @@ plan, but it is never the main thread's to wait on.
 `yak restart` is the agent's restart door: a replacement for every worker and
 web is ready first, then the old units' stops are enqueued. It doesn't wait in
 a shell for shutdown. A web's replacement shares its port, so the handover
-refuses no request.
+refuses no request. It keeps a role whose units already run this code; `yak
+restart --replace yak-work` (the restart tool's `replace`) hands that role over
+anyway, to restart one on purpose. Never `systemctl --user restart` a unit: it
+stops the only instance before starting it again, so nothing serves its roles
+meanwhile, and the unit's stop hook reports that (SystemdUnitAlone).
 
 Every process winds down one way (`@yaks/process/wind`). The first interrupt (a
 signal, or Ctrl-C in a terminal app) stops its hosts, so the pool claims

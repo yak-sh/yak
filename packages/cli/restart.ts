@@ -39,6 +39,9 @@ export type RestartOptions = {
    * and config a replacement would ({@link stale}). */
   stale?: (unit: string) => Promise<string | undefined>
   sleep?: (milliseconds: number) => Promise<void>
+  /** Role units (`yak-work`) to hand over even when they run this code, the
+   * way to restart one role on purpose. */
+  replace?: string[]
 }
 
 export type Held = {
@@ -88,7 +91,7 @@ let run: NonNullable<RestartOptions['run']> = async (command, args) => {
  * ExecStopPost reports failures even if systemd kills the handover. */
 export let queueRestart = async (
   launch: string[],
-  config?: string,
+  { config, replace = [] }: { config?: string; replace?: string[] } = {},
   execute: NonNullable<RestartOptions['run']> = run,
 ): Promise<string> => {
   let aimed = config ? [...launch, '--config', config] : launch
@@ -117,6 +120,7 @@ export let queueRestart = async (
     ...aimed,
     'restart',
     '--handover',
+    ...replace.flatMap((role) => ['--replace', role]),
   ])
   if (result.code) {
     throw new Error(`Could not queue restart: ${result.stderr.trim()}`)
@@ -200,7 +204,8 @@ export let restart = async (options: RestartOptions): Promise<string> => {
     let last: { began: number; said: string } | undefined = text
       ? JSON.parse(text)
       : undefined
-    if (last && last.began > asked) {
+    // A later handover may have kept a role this call asks to replace.
+    if (last && last.began > asked && !options.replace?.length) {
       return `Coalesced into the restart that began at ${
         new Date(last.began).toISOString()
       }, after this call:\n${last.said}`
@@ -242,6 +247,15 @@ let handover = async (options: RestartOptions): Promise<string> => {
     old: [`${p.unit}@*.service`],
     optional: p.optional,
   })) ?? ROLES
+  let asked = new Set(options.replace)
+  let unknown = [...asked].filter((unit) => !roles.some((r) => r.unit == unit))
+  if (unknown.length) {
+    throw new Error(
+      `No role ${unknown.join(', ')} to replace; the roles are ${
+        roles.map((r) => r.unit).join(', ')
+      }`,
+    )
+  }
   let deadline = now() + PATIENCE
   // Snapshot every role first: no candidate can be mistaken for an old unit.
   let listed = await call(
@@ -264,7 +278,11 @@ let handover = async (options: RestartOptions): Promise<string> => {
     ((unit: string) => stale(options.runtimeDir, unit))
   let why = await Promise.all(
     running.map((r) =>
-      Promise.all(r.old.map((unit) => judge(unit).catch(String)))
+      Promise.all(
+        r.old.map((unit) =>
+          asked.has(r.unit) ? 'asked to replace' : judge(unit).catch(String)
+        ),
+      )
     ),
   )
   let replacing = running.filter((r, i) =>

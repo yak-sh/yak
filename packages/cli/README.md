@@ -928,7 +928,9 @@ its template with no other active instance ready (its
 only web in place with `systemctl` is that: every connection is refused until
 another listens. A `yak restart` handover stops old units only once their
 replacements are ready, and a user manager that is stopping stops everything, so
-neither reports.
+neither reports. `yak restart` keeps a role whose units already run its code;
+`yak restart --replace yak-work` hands that role over anyway, the ready-first
+way to restart one role.
 
 Install `yak-unit-failure.conf` as `tracker.conf` in each user unit template's
 drop-in directory (`yak-web@.service.d`, `yak-work@.service.d`,

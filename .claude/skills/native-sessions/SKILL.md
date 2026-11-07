@@ -164,6 +164,8 @@ bodies or name their files. What it can't find anywhere is two things:
 - **Restarting**: `yak restart` is the agent's restart door. It waits for a new
   independent `yak-work@` worker and a new `yak-web@` web to be ready, then
   queues the old units' stops; it doesn't sit in a shell waiting for shutdown.
+  A role already on this code is kept; `--replace yak-work` hands it over
+  anyway. A hand `systemctl --user restart` leaves the role unserved.
   The web runs `yak serve --no-duties`, so web and session work are separate,
   and the new web shares the port with the old, so no request is refused. A
   draining worker takes no new step and lets its step in flight finish, a model

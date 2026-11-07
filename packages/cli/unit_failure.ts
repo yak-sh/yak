@@ -8,7 +8,8 @@ import { command as launchCommand } from '@yaks/process/command'
 // ready: an in-place `systemctl restart` of the only web refuses every
 // connection until the new one listens, and an MCP client that retries for
 // seconds gives up for good. `yak restart` stops old units only once their
-// replacements are ready (./restart.ts), so a handover reports nothing.
+// replacements are ready (./restart.ts), so a handover reports nothing; its
+// `--replace` hands over a role that already runs current code.
 import type { Command } from './run.ts'
 import { names, read } from './config.ts'
 import { reporter } from './report.ts'

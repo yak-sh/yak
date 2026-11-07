@@ -20,7 +20,15 @@
     "restart": {
       "tool": true,
       "description": "Hand this box’s processes to ready replacements.",
-      "input": {}
+      "input": {
+        "replace": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "Role units to hand over even when they run this code, such as yak-work; the ready-first way to restart one role."
+        }
+      }
     }
   }
 }

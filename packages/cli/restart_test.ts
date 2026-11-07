@@ -146,6 +146,26 @@ test('restart keeps a role whose every unit runs the code a replacement would', 
   assertEquals(f.events, ['list'])
 })
 
+test('restart replaces a role it is asked to even when it runs this code', async () => {
+  let f = fixture()
+  f.options.stale = () => Promise.resolve(undefined)
+  f.options.replace = ['yak-work']
+  let said = await restart(f.options)
+  let [work, ...rest] = started(f)
+  assertMatch(work, /^yak-work@/)
+  assertEquals(rest, [])
+  assertEquals(stopped(f), [['yak-work@old.service', 'yak-work@older.service']])
+  assertEquals(
+    said,
+    `${work} ready in 0.0s; stopping yak-work@old.service (asked to replace), yak-work@older.service (asked to replace)\n` +
+      'yak-web@old.service runs this code; kept',
+  )
+  f = fixture()
+  f.options.replace = ['yak-wrok']
+  await assertRejects(() => restart(f.options), Error, 'No role yak-wrok')
+  assertEquals(f.calls, [])
+})
+
 test('restart replaces a unit whose code it cannot judge', async () => {
   let f = fixture()
   f.options.stale = (unit) =>
@@ -396,7 +416,7 @@ test('restart queues the handover and its failure reporter without waiting for r
   let calls: [string, string[]][] = []
   let said = await queueRestart(
     launch,
-    '/config/a b%".json',
+    { config: '/config/a b%".json', replace: ['yak-work'] },
     (command, args) => {
       calls.push([command, args])
       return Promise.resolve({ code: 0, stdout: '', stderr: '' })
@@ -411,6 +431,8 @@ test('restart queues the handover and its failure reporter without waiting for r
     '/config/a b%".json',
     'restart',
     '--handover',
+    '--replace',
+    'yak-work',
   ])
   assert(!args.includes('--wait'))
   let unit = args.find((a) => a.startsWith('--unit='))!.slice(7)
@@ -427,7 +449,7 @@ test('a rejected background restart is reported to its caller', async () => {
     () =>
       queueRestart(
         ['/yak'],
-        undefined,
+        {},
         () =>
           Promise.resolve({
             code: 1,

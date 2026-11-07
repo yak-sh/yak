@@ -345,6 +345,12 @@ export let own: Command[] = [
           type: 'boolean',
           description: 'Run the supervised handover',
         },
+        replace: {
+          type: 'array',
+          items: { type: 'string' },
+          description:
+            'Role units to hand over even when they run this code, such as yak-work; the ready-first way to restart one role',
+        },
       },
     },
     run: async (args, c) => {
@@ -352,6 +358,7 @@ export let own: Command[] = [
       if (!runtimeDir) throw new Usage('yak restart needs $XDG_RUNTIME_DIR')
       let { restart, queueRestart } = await import('./restart.ts')
       let path = configPath(c.config)
+      let replace = Array.isArray(args.replace) ? args.replace.map(String) : []
       if (!args.handover) {
         let { launching } = await import('./release.ts')
         let { runtimeSource, FLAGS } = await import('./runtime.ts')
@@ -371,12 +378,12 @@ export let own: Command[] = [
           source('./yak.ts'),
         ]
         c.out(
-          await queueRestart(
-            launch,
-            path
+          await queueRestart(launch, {
+            config: path
               ? new URL(path, `file://${system.cwd()}/`).pathname
               : undefined,
-          ),
+            replace,
+          }),
         )
         return 0
       }
@@ -384,6 +391,7 @@ export let own: Command[] = [
         await restart({
           runtimeDir,
           processes: path ? read(path).processes : undefined,
+          replace,
         }),
       )
       return 0
