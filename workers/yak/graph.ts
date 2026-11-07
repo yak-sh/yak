@@ -353,7 +353,7 @@ import {
 import { PLATFORM_STORE } from '@yaks/platform/names'
 import { type Mark, type Stamp, type Standing } from '@yaks/platform/mover'
 import { borrows } from '@yaks/reach'
-import { behindAnswer, owed, ran, reading, skewed } from './running.ts'
+import { owed, ran, refused, skewed } from './running.ts'
 import { type Relocating, relocation } from './relocate.ts'
 import { type Meta, metaOf, minted } from './meta.ts'
 import { caught, defect, refusing } from './defects.ts'
@@ -3930,21 +3930,19 @@ export class Store {
     let waking = this.#started.holds, woke = this.#now()
     let named = request.headers.get('x-store')
     if (waking && named) this.#prepare(named).catch(() => {})
-    // A caller on a later deploy restarts this object, so a door the deploy
-    // added answers (running.ts). A read is answered first, on the code this
-    // object has, and the restart follows it; a write restarts it first.
-    let restart = await owed(
+    // A caller on a later deploy is answered on the code this object has,
+    // and Cloudflare moves the object onto the new code itself. Only a
+    // refusal restarts it, since what it refused may be a door or a word only
+    // the caller's deploy has: the request fails as evicted and its door sends
+    // it again to the new code (running.ts `owed`, T-150897).
+    let restart = owed(
       request.headers,
       this.#bind.CF_VERSION_METADATA,
       this.#ctx,
     )
-    if (!restart) return this.#door(request, waking, woke)
-    if (!reading(request)) restart()
-    return behindAnswer(
-      await this.#door(request, waking, woke),
-      restart,
-      clockOf(this.#time),
-    )
+    let answer = await this.#door(request, waking, woke)
+    if (restart && refused(answer)) await restart()
+    return answer
   }
 
   async #door(

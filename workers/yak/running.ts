@@ -1,28 +1,27 @@
 // Which deploy of this Worker an isolate runs, and whether a caller's is newer
 // (T-123372, T-123489).
 //
-// Cloudflare leaves a Durable Object on the code it started with for minutes
-// after a deploy, so a door the deploy added answers "no route" to the new
-// code calling it until the runtime gets round to restarting the object. Every
-// request to an object therefore carries the version its caller runs (door.ts
-// `doorOf` for a store, `fetchOf` for the Wire and the Builder), and an object
-// that a newer caller reaches restarts itself on the spot (`behind`); the
-// caller's retry of an evicted request (@yaks/durable-object `evicted`) then
-// meets the new code. A store answers a read on the code it has and restarts
-// behind the answer (`behindAnswer`), so no reader waits for the restart. The
-// new code comes up unless Cloudflare is still deferring the deploy for it
-// (wrangler.toml `code_update_strategy`, up to five minutes), when it starts
-// again on the code it had. A store still behind its caller after its
-// restart answers a refusal as a failure the caller sends again, and reports
-// it (`skewed`, T-140262).
+// Cloudflare leaves a busy Durable Object on the code it started with for up
+// to five minutes after a deploy (wrangler.toml `code_update_strategy`) and
+// moves an idle one within seconds. Every request to an object carries the
+// version its caller runs (door.ts `doorOf` for a store, `fetchOf` for the
+// Wire and the Builder), so an object knows when a newer caller reaches it.
+// A store answers that caller on the code it has, which keeps every call of
+// the deploy before working, and restarts itself only when that code refused
+// the caller (`owed`), since what it refused may be a door or a word only the
+// caller's deploy has; the caller's retry of the evicted request
+// (@yaks/durable-object `evicted`) then meets the new code. A restart is not
+// free: twice on 2026-11-07 the instance after one waited 21 and 32 s to run
+// its first line, where Cloudflare's own moves started in under a second
+// (T-150897). The Wire and the Builder restart before anything (`behind`). A
+// store still behind its caller after its restart answers a refusal as a
+// failure the caller sends again, and reports it (`skewed`, T-140262).
 //
 // The version is the runtime's own (`CF_VERSION_METADATA`): a fresh id and
 // upload time on every deploy, the same for the Worker and every object it
 // binds. An isolate runs one version for its whole life, so the first
 // invocation's is everyone's (defects-runtime.ts `entry`). Under `wrangler
 // dev` and the test kernels there is none, and nothing is stamped or compared.
-
-import { type Clock, system } from '@yaks/fp'
 
 /** A Worker version: the runtime's id for it and when it was uploaded. */
 // The platform's release, as a person reads it: what a connector says it runs
@@ -148,28 +147,29 @@ export let ran = async (
 
 /**
  * The restart this object owes its caller, when the caller runs a later deploy
- * than both the one it runs and the one it last restarted for; null when it
- * owes none. The deploy it restarts for is kept first, so restarts only move
+ * than the one it runs; null when it owes none. Nothing is read or written
+ * until the restart runs, so an object that never needs it pays nothing. The
+ * restart keeps the deploy it restarts for first, so restarts only move
  * forward and callers on two new deploys never take turns restarting it: an
  * object the runtime starts again on older code is where the runtime means it
  * to be, and it serves every caller no newer than the deploy it last restarted
  * for, refusing a newer one nothing (`skewed`). Running the restart fails the
- * request in flight in the runtime's own words.
+ * requests in flight in the runtime's own words.
  */
-export let owed = async (
+export let owed = (
   headers: Headers,
   mine: Meta | null | undefined,
   ctx: Restartable,
-): Promise<(() => void) | null> => {
+): (() => Promise<void>) | null => {
   let theirs = caller(headers), s = ctx.storage, abort = ctx.abort
   if (
     !theirs || !newer(theirs, versionOf(mine)) || !abort || !s.get || !s.put
   ) return null
-  let last = await restartedFor(s)
-  if (last && !newer(theirs, last)) return null
-  await s.put(RESTARTED, theirs)
-  await s.sync?.()
-  return () => {
+  return async () => {
+    let last = await restartedFor(s)
+    if (last && !newer(theirs, last)) return
+    await s.put!(RESTARTED, theirs)
+    await s.sync?.()
     retiring.add(ctx)
     abort.call(ctx, `${BEHIND} ${theirs.id}`)
   }
@@ -207,68 +207,20 @@ export let behind = async (
   headers: Headers,
   mine: Meta | null | undefined,
   ctx: Restartable,
-): Promise<void> => (await owed(headers, mine, ctx))?.()
+): Promise<void> => {
+  await owed(headers, mine, ctx)?.()
+}
 
-/** Whether a request only reads, so the code an object has may answer it
- * before the object restarts for its caller's deploy. A socket is held open,
- * so it is no read. */
-export let reading = (request: Request): boolean =>
-  (request.method == 'GET' || request.method == 'HEAD') &&
-  !request.headers.has('upgrade')
+/** Whether an answer refuses its caller: what an object on an older deploy
+ * may say only because its code does not know what the caller's does. */
+export let refused = (answer: Response): boolean =>
+  answer.status >= 400 && answer.status < 500
 
 /** How long an object's work behind an answer waits once its caller has read
  * the answer through (`onceRead`), so the runtime has sent it on: the runtime
  * sends an answer on in turns of its own event loop, and what runs meanwhile
  * holds it, or, for a restart, cuts it off (T-149700, T-150814). */
 export let BEAT = 100
-
-/**
- * A read's answer from an object that owes its caller a restart, with the
- * restart behind it (T-148194): a beat (`BEAT`) after its caller has read the
- * answer through. Restarting first made the read wait for a new instance: a
- * cold start of a few hundred milliseconds after each deploy, and once 32 s
- * that Cloudflare took to start one. A restart on a timer set as the handler
- * returned ran before the runtime had sent the answer on, so the read failed
- * as evicted and its door's resend waited 21 s for the new instance
- * (T-150814). A refusal may be a door only the caller's deploy has, so the
- * object restarts at once instead, and the caller's door sends the read again
- * to the new code.
- *
- * ```ts
- * import { assertEquals, assertThrows } from '@std/assert'
- * import { clock } from '@yaks/testing'
- * let restarts = 0
- * let restart = () => {
- *   restarts++
- *   throw new Error('reset')
- * }
- * let time = clock()
- * let answer = behindAnswer(new Response('ok'), restart, time)
- * await time.advance(1000)
- * assertEquals([answer.status, restarts], [200, 0])
- * assertEquals(await answer.text(), 'ok')
- * await time.advance(BEAT - 1)
- * assertEquals(restarts, 0)
- * await time.advance(1)
- * assertEquals(restarts, 1)
- * assertThrows(() => behindAnswer(new Response('', { status: 404 }), restart))
- * assertEquals(restarts, 2)
- * ```
- */
-export let behindAnswer = (
-  answer: Response,
-  restart: () => void,
-  clock: Clock = system,
-): Response => {
-  if (answer.status >= 400 && answer.status < 500) restart()
-  // The restart throws as it resets the object, with nothing in flight.
-  return onceRead(answer, () =>
-    clock.after(BEAT, () => {
-      try {
-        restart()
-      } catch { /* the reset */ }
-    }))
-}
 
 /**
  * `answer`, calling `gone` once its caller has read its body through, or let
@@ -364,7 +316,7 @@ export let skewed = async (
   (Error & { retryable: true; running: string; caller: string }) | null
 > => {
   let theirs = caller(headers), here = versionOf(mine)
-  if (answer.status < 400 || answer.status >= 500) return null
+  if (!refused(answer)) return null
   if (!theirs || !here || !newer(theirs, here)) return null
   let said = await answer.clone().json().catch(() => null) as
     | { message?: unknown }

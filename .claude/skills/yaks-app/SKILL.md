@@ -161,12 +161,16 @@ to the new version on its own, seconds later; Cloudflare releases them
 eventually consistently. A busy object finishes on the code it has for up to
 five minutes before taking up a deploy (wrangler.toml `[durable_objects]
 code_update_strategy`, deferred, `max_delay = 300`), so an Operator is not
-reset under its reply (T-145428). A store a newer Worker reaches restarts for its deploy:
-a write first, a read behind its answer, on the code it has (running.ts
-`behindAnswer`), since the restart's new instance can take seconds to start.
-Work an object starts behind an answer waits until its caller has read the
-answer through, and a beat more (running.ts `onceRead`, `BEAT`): on a timer set
-as the handler returns it runs before the runtime has sent the answer on. A
+reset under its reply (T-145428). A store a newer Worker reaches answers it on
+the code it has, and restarts itself only when that code refused the caller
+(running.ts `owed`, graph.ts `#fetch`): the refusal may be a door or a word
+only the new deploy has, and the caller's door sends it again to the new code.
+Never restart an object to hurry a deploy along: the instance after a
+`ctx.abort()` waited 21 and 32 s to run its first line twice on 2026-11-07,
+where Cloudflare's own moves started in under a second (T-150897). Work an
+object starts behind an answer waits until its caller has read the answer
+through, and a beat more (running.ts `onceRead`, `BEAT`): on a timer set as the
+handler returns it runs before the runtime has sent the answer on. A
 store still behind its caller answers a refusal as a failure the caller's door
 retries, and reports it (running.ts `skewed`). So a call from the new Worker can reach a store
 still on the previous code: a new store route or RPC answers as missing for a
@@ -237,7 +241,7 @@ A query that works on the box can be refused in a store.
   a schema print, operator-store.ts `FITTED`), a
   migration that finished says so once (channel-move.ts `CHANNELED`), and
   the rest starts in a timer once the answer has returned (build.ts
-  `#behind`, running.ts `behindAnswer`). An object's clock stands still
+  `#behind`). An object's clock stands still
   while its code runs and reads a timer's own deadline when it fires, so no
   time read inside an object shows how long its code ran (T-150377).
 - **128 MB per isolate**, shared by every object in it (`HELD` in

@@ -13,7 +13,6 @@ import { Wire } from './stream.ts'
 import { Builder } from './build.ts'
 import type { Env } from './env.ts'
 import {
-  BEAT,
   behind,
   learn,
   ran,
@@ -68,9 +67,10 @@ test('an older caller, the same deploy, or no version never restarts it', async 
   assertEquals(o.restarts, [])
 })
 
-// A store's own door: a write restarts it first, a read is answered on the
-// code it has and the restart follows the answer (T-148194), a beat after its
-// caller has read it through, so the runtime has sent it on (T-150814).
+// A store's own door: a newer caller is answered on the code the store has,
+// and only a refusal restarts it (T-150897). Twice on 2026-11-07 the instance
+// after a restart waited 21 and 32 s before it ran a line, where Cloudflare's
+// own moves to a new deploy started in under a second.
 let older = (o: ReturnType<typeof object>, CLOCK = clock()) =>
   new Store(Object.assign(state(), { abort: o.abort }) as never, {
     CF_VERSION_METADATA: A,
@@ -83,44 +83,34 @@ let asked = (path: string, method = 'GET') =>
     body: method == 'POST' ? '{}' : undefined,
   })
 
-test("a store restarts at its door before it does anything for a newer caller's write", async () => {
-  let o = object()
-  let e = await assertRejects(() => older(o).fetch(asked('/restore', 'POST')))
-  assert(evicted(e))
-  assertEquals(o.restarts.length, 1)
-})
-
-test("a store answers a newer caller's read on the code it has, and restarts a beat after the answer is read", async () => {
+test("a store answers a newer caller's read and write on the code it has, and keeps running", async () => {
   let o = object(), time = clock()
-  let answer = await older(o, time).fetch(asked('/restore'))
-  await time.advance(1000)
+  let store = older(o, time)
+  let read = await store.fetch(asked('/restore'))
+  assertEquals(await read.json(), { from: 'at-0', to: '' })
+  let wrote = await store.fetch(
+    new Request('http://store/apply', {
+      method: 'POST',
+      headers: { ...Object.fromEntries(from(B)), 'x-yak-kernel': '1' },
+      body: JSON.stringify([{ entity: { eid: crypto.randomUUID() } }]),
+    }),
+  )
+  assertEquals(wrote.status, 200, await wrote.clone().text())
+  await time.advance(60_000)
   assertEquals(o.restarts, [])
-  assertEquals(await answer.json(), { from: 'at-0', to: '' })
-  await time.advance(BEAT - 1)
-  assertEquals(o.restarts, [])
-  await time.advance(1)
-  assertEquals(o.restarts.length, 1)
 })
 
 // The uptime probe's query at 23:22:39Z: the kernel's door read a store still
-// on the old deploy, which restarted before its answer had left, and the
-// door's resend waited 21 s for the new instance (T-150814).
+// on the old deploy, which restarted behind its answer, and the door's resend
+// waited 21 s for the new instance (T-150814, T-150897).
 test("the kernel's read of a store on the old deploy is answered by it, sent once", async () => {
   learn(B)
   let o = object(), time = clock(), sent = 0
   let old = older(o, time)
-  // The runtime sends an answer on a turn after the handler returns, and a
-  // restart before then fails the request as evicted.
   let ns = {
     idFromName: (name: string) => name,
     get: () => ({
-      fetch: async (req: Request) => {
-        sent++
-        let before = o.restarts.length, answer = await old.fetch(req)
-        await new Promise((r) => setTimeout(r, 0))
-        if (o.restarts.length > before) throw new Error(o.restarts.at(-1))
-        return answer
-      },
+      fetch: (req: Request) => (sent++, old.fetch(req)),
     }),
   }
   let answer = await storeOf(ns, 'ada/cookbook', undefined, unpaused)(
@@ -129,8 +119,8 @@ test("the kernel's read of a store on the old deploy is answered by it, sent onc
     KERNEL,
   )
   assertEquals(await answer.json(), { from: 'at-0', to: '' })
-  await time.advance(BEAT)
-  assertEquals([sent, o.restarts.length], [1, 1])
+  await time.advance(60_000)
+  assertEquals([sent, o.restarts.length], [1, 0])
 })
 
 test('a read the older code has no door for restarts the store at once', async () => {
@@ -166,10 +156,10 @@ test('an object says the version it runs and the deploy it restarted for', async
   })
 })
 
-test('a call that reaches a store on the old deploy is answered by the new one', async () => {
+test('a call the old deploy refuses is answered by the new one', async () => {
   learn(B)
   let o = object()
-  let old = new Store(o.ctx as never, { CF_VERSION_METADATA: A })
+  let old = older(o)
   // The runtime starts the next incarnation on the new code, which answers.
   let next = {
     fetch: () => Promise.resolve(new Response('', { status: 404 })),
@@ -179,7 +169,7 @@ test('a call that reaches a store on the old deploy is answered by the new one',
     get: () => o.restarts.length ? next : old,
   }
   let answer = await storeOf(ns, 'ada/cookbook', undefined, unpaused)(
-    '/restore',
+    '/nowhere',
     { method: 'POST', body: '{}' },
   )
   assertEquals(answer.status, 404)
