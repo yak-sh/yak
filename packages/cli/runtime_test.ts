@@ -83,12 +83,15 @@ test('a slot follows its checkout: a landing rewrites only what landed, edits ri
     let first = await tree()
     equal(first.found, { 'a.ts': 'a1', 'b.ts': 'b1', 'kept.ts': 'k' })
     let kept = (await disk.stat(`${first.dir}/kept.ts`)).mtime
+    // A file something else left beside the slots is none of them.
+    await disk.writeTextFile(`${cache}/res.ts`, '')
     await new Promise((r) => setTimeout(r, 20))
     await commit({ 'a.ts': 'a2', 'c.ts': 'c1' }, ['b.ts'])
     let landed = await tree()
     equal(landed.dir, first.dir)
     equal(landed.found, { 'a.ts': 'a2', 'c.ts': 'c1', 'kept.ts': 'k' })
     equal((await disk.stat(`${landed.dir}/kept.ts`)).mtime, kept)
+    equal(await disk.readTextFile(`${cache}/res.ts`), '')
     await write({ 'a.ts': 'edited', 'new.ts': 'n' })
     equal((await tree()).found, {
       'a.ts': 'edited',

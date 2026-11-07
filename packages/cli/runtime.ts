@@ -205,8 +205,14 @@ export let snapshot = async (
   }
   try {
     let entries = []
-    for await (let { name } of disk.readDir(cache)) {
+    for await (let { name, isDirectory } of disk.readDir(cache)) {
       if (name == '.lock') continue
+      // Every slot is a directory a launch made. Anything else was put here
+      // by something else: no slot, and not this launcher's to remove.
+      if (!isDirectory) {
+        console.error(`yak: ${cache}/${name} is no runtime slot; left alone`)
+        continue
+      }
       let mark = await disk.readTextFile(`${cache}/${name}/.hash`)
         .catch(() => undefined)
       entries.push({ name, hash: mark })
