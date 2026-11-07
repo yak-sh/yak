@@ -408,8 +408,14 @@ let byArchetype = (
 // where a LEFT JOIN tested for a row is planned without them as a walk of the
 // whole entity table probing the component per row — and a Durable Object's
 // SQLite has none. `where` narrows to the rows holding a property.
+//
+// The component a page walks (`inOrder`) is the row in hand: its owning set,
+// built beside a backlink, read every one of the box's 3.5 million `created`
+// rows through its visibility, 74 s for a page of one (T-148995).
 let owned = (ctx: Ctx, comp: string, where?: string): Cond => {
-  if ((ctx.correlated || ctx.present) && !ctx.owner) {
+  if (
+    (ctx.correlated || ctx.present || ctx.walk?.comp == comp) && !ctx.owner
+  ) {
     ctx.tables.add(comp)
     return cond({
       sql: `${ctx.d.ownerKey(comp)} is not null${
@@ -1509,10 +1515,10 @@ let union = (ctx: Ctx, alts: Clause[]): Cond => {
       return { branch, where, joins: joinsOf(branch), x }
     })
   })
-  // A correlated row, one of a few named owners, or a row a bounded seek found
-  // is already in hand: its alternatives are tests of that row, never
-  // selections of their own.
-  if (ctx.correlated || ctx.bounded || ctx.row) {
+  // A correlated row, one of a few named owners, a row a bounded seek found or
+  // one a page walks (`inOrder`) is already in hand: its alternatives are tests
+  // of that row, never selections of their own.
+  if (ctx.correlated || ctx.bounded || ctx.row || ctx.walk) {
     for (let { branch } of branches) {
       for (let table of branch.tables) ctx.tables.add(table)
     }
@@ -3792,8 +3798,8 @@ let inOrder = (ast: And, ctx: Ctx): Frag | undefined => {
       c.kind == 'pred' && !c.not && (indexable(ctx, c) || !!gram(ctx, c))
     )
   ) return
-  let page = (walk: Ctx['walk'], has: Pred, n: Cond | number): Query => {
-    let q = lower({ kind: 'and', clauses: [...filters, has, order] }, {
+  let page = (walk: Ctx['walk'], has: Pred[], n: Cond | number): Query => {
+    let q = lower({ kind: 'and', clauses: [...filters, ...has, order] }, {
       ...ctx,
       walk,
       tables: new Set(),
@@ -3809,28 +3815,41 @@ let inOrder = (ast: And, ctx: Ctx): Frag | undefined => {
       from: from(raw(arm.sql, arm.params, arm.table, arm.origin)),
     })
   }
-  let held: Pred = { kind: 'pred', path, op: '!', value: null }
-  // Blank, so it holds an empty text too, which the held half may also read.
+  let holding: Pred = { kind: 'pred', path, op: '!', value: null }
+  // Blank, so it holds an empty text too, which the holding half may also read.
   let lacking: Pred = {
     kind: 'pred',
     path,
     op: '=',
     value: { kind: 'scalar', raw: '' },
   }
-  let [first, rest]: [Ctx['walk'], Pred][] = desc
-    ? [[{ comp, index }, held], [null, lacking]]
-    : [[null, lacking], [{ comp, index }, held]]
-  let lead = page(first[0], first[1], limit.n), led = render(lead)
+  let [first, rest]: [Ctx['walk'], Pred[]][] = desc
+    ? [[{ comp, index }, [holding]], [null, [lacking]]]
+    : [[null, [lacking]], [{ comp, index }, [holding]]]
+  // A backlink page walks the index only for an entity with many referrers
+  // (`MANY`, as `lower`'s backlink page chooses). For one with few, the walk
+  // passes every entity holding the property, and then every one lacking it,
+  // to find so few: 102 s on a copy of the box's graph for a task's two
+  // (T-148995). Those seek their referrers and sort them instead, a road of
+  // its own whose limit is 0 where the walk runs, and the walk's where it
+  // does not.
+  let backlink = filters.find((c): c is Refs =>
+    c.kind == 'refs' && c.op == '=' && !!c.value
+  )
+  let held = backlink && referrers(ctx, backlink.value!)
+  let few = held && raw(
+    `not exists (${held.sql} limit 1 offset ${MANY})`,
+    held.params,
+  )
+  let lead = page(first[0], first[1], few ?? limit.n), led = render(lead)
   let full = raw(
     `exists (${led.sql} limit 1 offset ${limit.n - 1})`,
     led.params,
   )
+  let parts = [lead, page(rest[0], rest[1], few ? or(few, full) : full)]
+  if (few) parts.push(page(null, [], not(few)))
   return render(select({
-    from: from({
-      t: 'compound',
-      op: 'union',
-      parts: [lead, page(rest[0], rest[1], full)],
-    }),
+    from: from({ t: 'compound', op: 'union', parts }),
   }))
 }
 

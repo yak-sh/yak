@@ -24,6 +24,10 @@ let vocab = loadVocab({
       component: true,
       properties: { body: { type: 'string' } },
     },
+    link: {
+      component: true,
+      properties: { to: { type: 'string', ref: 'entity' } },
+    },
   },
 })
 let db = new Database(':memory:'), sql = driver(db)
@@ -33,6 +37,7 @@ let tables: Record<string, string[]> = {
   comment: [],
   created: ['at'],
   content: ['body'],
+  link: ['to'],
   tombstone: [],
 }
 for (let [name, cols] of Object.entries(tables)) {
@@ -43,7 +48,9 @@ for (let [name, cols] of Object.entries(tables)) {
       { name: name == 'entity' ? 'id' : 'entity', type: 'integer', pk: true },
       ...cols.map((name) => ({
         name,
-        type: name == 'num' ? 'integer' as const : 'text' as const,
+        type: ['num', 'to'].includes(name)
+          ? 'integer' as const
+          : 'text' as const,
       })),
     ],
   })
@@ -54,6 +61,13 @@ sql.query({
   on: 'created',
   cols: [col('at')],
 })
+sql.query({
+  t: 'create index',
+  name: 'entity_eid',
+  on: 'entity',
+  cols: [col('eid')],
+})
+sql.query({ t: 'create index', name: 'link_to', on: 'link', cols: [col('to')] })
 // Two entities share each moment, numbered against their ids, so the number
 // breaks a tie in the other order than the index keeps; every thousandth has
 // no moment, one has an empty one, and the newest few are no entry.
@@ -68,6 +82,10 @@ for (let id = 1; id <= 4096; id++) {
   }
   if (id <= 4000) sql.query(insert('entry', { entity: id }))
   if (id == 50 || id == 3000) sql.query(insert('comment', { entity: id }))
+  // Three entities, one with no moment, point at the first.
+  if ([20, 1000, 2001].includes(id)) {
+    sql.query(insert('link', { entity: id, to: 1 }))
+  }
   sql.query(
     insert('content', { entity: id, body: id == 7 ? 'rare' : 'common' }),
   )
@@ -122,6 +140,21 @@ let pages: [string, string, string[]][] = [
   ['one rare match', '.entry .content.body~=rare .order=-created.at .limit=3', [
     'row-7',
   ]],
+  ['either of two', '.entry|.comment .order=-created.at .limit=3', [
+    'row-3998',
+    'row-3999',
+    'row-3996',
+  ]],
+  ['beside no component', '!comment .order=-created.at .limit=3', [
+    'row-4096',
+    'row-4094',
+    'row-4095',
+  ]],
+  ['what few point at', '.refs=row-1 .order=-created.at .limit=3', [
+    'row-2001',
+    'row-20',
+    'row-1000',
+  ]],
 ]
 for (let [name, line, eids] of pages) {
   test(`a page in an indexed order: ${name}`, () =>
@@ -133,6 +166,10 @@ test('a page in an indexed order stops at the page', () => {
     let line of [
       '.entry ?created .order=-created.at .limit=3',
       '.entry .content.body~=common .order=-created.at .limit=3',
+      '.content.body~=common .order=-created.at .limit=3',
+      '.entry|.comment .order=-created.at .limit=3',
+      '!comment .order=-created.at .limit=3',
+      '.refs=row-1 .order=-created.at .limit=3',
     ]
   ) {
     let { steps } = read(line)
