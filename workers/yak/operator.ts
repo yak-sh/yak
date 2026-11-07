@@ -487,18 +487,27 @@ let workingOf = async ({ g }: Store, session: string) => {
   let [row] = await g.get([session], ['operator_session'])
   return comp(row, 'operator_session') as Working | undefined
 }
+// Whether a conversation has begun: its row is a session. Presence is
+// counted, so its computed status is never read.
+let conversed = async ({ g }: Store, session: string) =>
+  Number((await g.rows(`.entity.eid=${session}&.session&.count`))[0]?.n ?? 0) >
+    0
 // The space an ask is charged to: its session's, or for an exchange a session
 // has on its own behalf (a compaction's summary, whose session is sourced by a
 // call from an entry of the one it compacts), the space of that session.
 let payerOf = async ({ g }: Store, ask?: string) => {
   for (let eid = ask, hops = 0; eid && hops < 4; hops++) {
-    let [row] = await g.get([eid])
+    let [row] = await g.get([eid], ['entry'])
     let session = comp(row, 'entry')?.session
-    let [held] = session ? await g.get([String(session)]) : []
+    let [held] = session
+      ? await g.read(
+        `.entity.eid=${session}&.fields=operator_session.space,session.source`,
+      )
+      : []
     let o = comp(held, 'operator_session') as Working | undefined
     if (o) return o.space
     let source = comp(held, 'session')?.source
-    let [call] = source ? await g.get([String(source)]) : []
+    let [call] = source ? await g.get([String(source)], ['call']) : []
     eid = comp(call, 'call')?.source as string | undefined
   }
 }
@@ -1109,7 +1118,9 @@ export let operating = (
     let [{ space, ctx, files }, task, [row]] = await Promise.all([
       working(env, store, session, options.directory),
       taskOf(store, session),
-      g.get([session]),
+      g.read(
+        `.entity.eid=${session}&.fields=spawned.parent,fork.from,session.topic`,
+      ),
     ])
     reached('working', space)
     let persona = await spaced(g.storage, space)
@@ -1188,7 +1199,7 @@ export let operating = (
       instructions: async (session) => {
         let [{ space, ctx }, [row]] = await Promise.all([
           working(env, store, session, options.directory),
-          g.get([session]),
+          g.read(`.entity.eid=${session}&.fields=session.topic`),
         ])
         let topic = topicOf(row)
         let [map, google] = await Promise.all([
@@ -1289,7 +1300,7 @@ export let operating = (
     if (!named) {
       let session = rootOf(space.eid, held.person)
       if ((await g.get([input]))[0]) return { task: '', session, input }
-      if (!(await g.get([session]))[0]?.session) {
+      if (!await conversed(store, session)) {
         await started(session, held.person, space)
       }
       await g.apply([
@@ -1387,7 +1398,7 @@ export let operating = (
   // then what it carries on with, for the caller's write to apply.
   let conversing = async (held: Asker, space: Space) => {
     let session = rootOf(space.eid, held.person)
-    if ((await g.get([session]))[0]?.session) return { session }
+    if (await conversed(store, session)) return { session }
     await readying(held, space)
     await started(session, held.person, space)
     return { session, fresh: await carrying(session, held, space, {}) }

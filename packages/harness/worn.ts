@@ -17,7 +17,9 @@ export let personaOf = async (
 ): Promise<Eid | undefined> => {
   let at: Eid | undefined = session
   for (let i = 0; at && i < STARTERS; i++) {
-    let [row]: Bundle[] = await g.get([at], ['session', 'spawned'])
+    let [row]: Bundle[] = await g.read(
+      `.entity.eid=${at}&.fields=session.persona,spawned.parent`,
+    )
     let persona = (row?.session as Comp | undefined)?.persona
     if (persona) return String(persona)
     let parent = (row?.spawned as Comp | undefined)?.parent

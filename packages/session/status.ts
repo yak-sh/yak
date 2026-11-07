@@ -699,6 +699,15 @@ export let sessionStatus = {
         order: [desc(col('seq', 'e'))],
         limit: lit(1),
       }))
+    // Only a transcript holding an entry written before entries were
+    // sequenced is searched for one: one seek of its own entries answers for
+    // the rest, where the search reads the store's asks while they are few.
+    let legacy = exists(select({
+      cols: [lit(1)],
+      from: table('entry', 'old'),
+      where: and(mine('old'), isNull(col('seq', 'old'))),
+      limit: lit(1),
+    }))
     let ask = {
       ...unionAll(
         askAt(and(mine('e'), notNull(col('seq', 'e')))),
@@ -707,17 +716,21 @@ export let sessionStatus = {
           eq(
             col('entity', 'e'),
             iff(
-              exists(select({
-                cols: [lit(1)],
-                from: table(ASK),
-                limit: lit(1),
-                offset: lit(64),
-              })),
-              unsequenced(table('entry', 'e'), [], true),
-              unsequenced(table(ASK, 'a'), [{
-                ...cross(table('entry', 'e')),
-                on: onAsk,
-              }]),
+              legacy,
+              iff(
+                exists(select({
+                  cols: [lit(1)],
+                  from: table(ASK),
+                  limit: lit(1),
+                  offset: lit(64),
+                })),
+                unsequenced(table('entry', 'e'), [], true),
+                unsequenced(table(ASK, 'a'), [{
+                  ...cross(table('entry', 'e')),
+                  on: onAsk,
+                }]),
+              ),
+              lit(null),
             ),
           ),
         )),
