@@ -953,6 +953,17 @@ test('a build leaves a newer version live when it activates during preparation',
   assertEquals(await b.door.still(), false)
 })
 
+test('a build leaves its own commit live when another build of it went live first', async () => {
+  let main = {
+    at: null as string | null,
+    live: undefined as string | undefined,
+  }
+  let b = await build(main)
+  main.live = 'a'.repeat(40)
+  assertEquals([await b.deploy(), b.uploads()], [0, 0])
+  assertEquals(b.notes.at(-1), 'not deploying: aaaaaaaa is already live')
+})
+
 test('a retry leaves a newer version live when it activates after an attempt', async () => {
   let main = {
     at: null as string | null,

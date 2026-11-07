@@ -468,3 +468,44 @@ What is left is a long tail. The largest third-party pieces are `yaml` (~102
 KB), `@cloudflare/workers-oauth-provider` (~80 KB) and `postal-mime` (~75 KB);
 the largest workspace package is `@yaks/session` (~139 KB), measured before
 minification from esbuild's metafile.
+
+## Most cold isolates are deploys: T-148604
+
+November 7, 2026. Production, 24 hours of kernel invocations, synthetic probes
+excluded, wait = first byte minus wall time, 75 ms or more counted (the T-133988
+method, `.scratch` copies of its scripts). Bucketed by how long the invocation's
+version had been serving:
+
+| Class         | First 30 s: n, waited | 30 s–2 min |  2–10 min | Over 10 min | Wait p50 |
+| ------------- | --------------------: | ---------: | --------: | ----------: | -------: |
+| Space gateway |              853, 48% |  1839, 15% |  2438, 9% |    772, 11% |  ~290 ms |
+| MCP gateway   |              354, 55% |   578, 21% |   587, 5% |     209, 5% |  ~260 ms |
+| Site (a miss) |             1118, 88% |  1574, 52% | 2636, 30% |    666, 33% |  ~280 ms |
+
+68% of the 4,320 waits came within 2 minutes of a new version, and a wait is the
+same size whenever it comes. 394 kernel versions served 291 commits that day:
+100 commits were uploaded twice, 1 to 119 s apart, with byte-identical scripts
+(one etag), once by Workers Builds and once by the box's deploy. The deploy door
+refused only a newer commit live; it now also leaves its own commit live when
+another build put it there (`superseded`, wrangler.ts).
+
+What a cold isolate itself runs, measured in Node over the built kernel with
+`cloudflare:workers` stubbed (`node --cpu-prof`, a fresh process each): compile
+about 160 ms and top-level evaluation about 90 ms on this box, against
+Cloudflare's own 53–65 ms `startup_time_ms`. The eager chunk is 3.31 MB of the
+3.82 MB of modules. No top-level statement stands out:
+
+- The largest, `Intl` formatters built at module level (html.ts, 22 ms), cost
+  that once per process for ICU's data: a second isolate in the same process
+  builds the same formatters in 0.2 ms, so deferring them saves nothing in
+  workerd.
+- The 368 KB of JSON (the vocab.json files) shipped as `JSON.parse` strings
+  instead of object literals: compile 157 → 155 ms, evaluation 90 → 94 ms over 8
+  alternating rounds, so it was not kept.
+- What is left is spread thin: esbuild's `__name` for `keepNames` 7 ms, marked's
+  rules 6 ms, the rest under 4 ms each.
+
+The handler itself is quick on a cold isolate (`gateway;dur=16`), so most of a
+cold request's 200–450 ms comes before our code runs. What the platform does in
+that time is not measured here; how often a new version starts every isolate is
+what this repository decides.

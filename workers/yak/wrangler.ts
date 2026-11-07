@@ -929,7 +929,7 @@ export let descendants = (pid: number): number[] => {
 // ---- which commit may go live ----------------------------------------------
 //
 // Builds finish in any order. A completed build may deploy unless a newer
-// commit is already live. Read live versions again before each upload and
+// commit, or its own, is already live. Read live versions again before each upload and
 // retry: a newer build can finish while this one prepares or waits. A check
 // before an upload cannot see a newer build that goes live during it, so two
 // builds that both looked before either went live both deploy, and the last
@@ -947,11 +947,15 @@ export type Seen = {
 
 let short = (sha: string) => sha.slice(0, 8)
 
-/** Why this commit must not go live, or null when it may. */
+/** Why this commit must not go live, or null when it may. A commit another
+ * build already put live is not uploaded again: the same bytes as a new
+ * version would start every isolate cold a second time. */
 export let superseded = ({ head, live }: Seen): string | null => {
   let newer = live.find((l) => l.ahead)
   return newer
     ? `${short(newer.sha)} is live and ahead of ${short(head)}`
+    : live.length == 1 && live[0].sha == head
+    ? `${short(head)} is already live`
     : null
 }
 
