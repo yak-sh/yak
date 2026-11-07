@@ -23,7 +23,9 @@
 // put back into the eid's own shape and read as a range: every eid that starts
 // that way (`starting`). A content-addressed eid has no dashes, so the bare hex
 // is asked for as well. Two entities starting the same way are answered with
-// both, and the graph refuses the handle naming them. A handle carries no
+// both, and the graph refuses the handle naming them. A deleted entity keeps
+// its handle as it keeps its number, so the handle still names it, unless a
+// live entity starts the same way and takes it. A handle carries no
 // letter, so one written with a letter (`T#47e9678bdf`) names nothing and is
 // refused, rather than taken for an eid of that spelling. The same handle
 // copied without its `#` is the graph's to resolve, after every other name
@@ -47,7 +49,8 @@ let dashed = (hex: string): string =>
   [...hex].map((c, i) => ([8, 12, 16, 20].includes(i) ? '-' : '') + c)
     .join('')
 
-/** Every eid that starts as this lowercase hex does, in either shape: a read
+/** Every eid that starts as this lowercase hex does, the deleted too when no
+ * live one does, in either shape: a read
  * of the range from the prefix to just past it (`g` sorts after every hex
  * digit and the dash), once with a uuid's dashes put back and once as bare
  * hex. A bound of digits alone reads as a number, which an eid is never
@@ -58,14 +61,16 @@ export let starting = (
   hex: string,
 ): Eid[] | Promise<Eid[]> => {
   let reads = [...new Set([dashed(hex), hex])].map((p) =>
-    tx.read(`.entity.eid=${p}${/^\d+$/.test(p) ? '-' : ''}..${p}g`)
+    tx.read(`.entity.eid=${p}${/^\d+$/.test(p) ? '-' : ''}..${p}g`, {
+      graves: true,
+    })
   )
-  let held = (found: Bundle[][]) => [
-    ...new Set(
-      found.flat().map((b) => b.entity.eid)
-        .filter((eid) => eid.replaceAll('-', '').startsWith(hex)),
-    ),
-  ]
+  let held = (found: Bundle[][]) => {
+    let fit = found.flat()
+      .filter((b) => b.entity.eid.replaceAll('-', '').startsWith(hex))
+    let live = fit.filter((b) => !b.tombstone)
+    return [...new Set((live.length ? live : fit).map((b) => b.entity.eid))]
+  }
   return reads.some((r) => r instanceof Promise)
     ? Promise.all(reads).then(held)
     : held(reads as Bundle[][])

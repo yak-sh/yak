@@ -29,6 +29,9 @@ let rows: Bundle[] = [
   { entity: { eid: '47e9678b-df12-4000-8000-000000000001' }, task: {} },
   { entity: { eid: '47e9678b-df99-4000-8000-000000000002' }, memory: {} },
   { entity: { eid: 'c0ffee0123456789' }, doc: {} },
+  // Deleted: one alone with its handle, one sharing it with a live task.
+  { entity: { eid: '0810bfec-8d00-4000-8000-000000000003' }, tombstone: true },
+  { entity: { eid: '47e9678b-df12-4000-8000-000000000004' }, tombstone: true },
 ]
 let asked: string[] = []
 let tx = {
@@ -94,6 +97,15 @@ test('a short handle is the entity whose eid starts that way', async () => {
   assertEquals(await at('#47e9678bdf1'), { '#47e9678bdf1': task })
   assertEquals(await at('#47E9678BDF1'), { '#47E9678BDF1': task })
   assertEquals(await at('#c0ffee01'), { '#c0ffee01': 'c0ffee0123456789' })
+})
+
+test('a deleted entity keeps its handle, unless a live one shares it', async () => {
+  assertEquals(await at('#0810bfec8d'), {
+    '#0810bfec8d': '0810bfec-8d00-4000-8000-000000000003',
+  })
+  assertEquals(await at('#47e9678bdf12'), {
+    '#47e9678bdf12': '47e9678b-df12-4000-8000-000000000001',
+  })
 })
 
 test('a handle two entities share is answered with both', async () => {

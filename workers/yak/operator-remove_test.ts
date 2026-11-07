@@ -1,8 +1,10 @@
 import { test } from '@yaks/testing'
 import { assertEquals } from '@std/assert'
-import type { Bundle } from '@yaks/graph'
+import { addressed, type Bundle } from '@yaks/graph'
 import { derivedEid } from '@yaks/graph/identity'
+import { short } from '@yaks/id'
 import { operatorMemory } from './operator-testing.ts'
+import { owns } from './operator-access.ts'
 import { remove } from './operator-remove.ts'
 
 let store = operatorMemory()
@@ -63,4 +65,26 @@ test('removing a task takes its comments, sessions and their lines, and its requ
 
 test('removing a wake-up takes the requests it fired and what they told in Updates', () => {
   assertEquals([wakeRequest, told].every((e) => removed.includes(e)), true)
+})
+
+test('a cancelled subscription, named by its handle, is its owner to remove with what it fired', async () => {
+  let [sub, fired] = [id(), id()]
+  let tells = derivedEid('operator-told|' + fired)
+  await store.g.apply([
+    {
+      entity: { eid: sub },
+      operator_ask: { space, person, say: 'look' },
+      operator_subscription: { query: '.doc' },
+    },
+    request(fired, { about: sub, channel: 'subscription' }),
+    { entity: { eid: tells }, notification: {}, deliver: { to: person } },
+  ], { trusted: true })
+  await store.g.apply([{ entity: { eid: sub }, $delete: true }], {
+    trusted: true,
+  })
+  let [named] = await addressed(store.g, [short(sub)])
+  assertEquals(named, sub)
+  assertEquals(await owns(store, sub, { space, person }), true)
+  assertEquals(await owns(store, sub, { space, person: id() }), false)
+  assertEquals((await remove(store, [sub])).sort(), [fired, tells].sort())
 })

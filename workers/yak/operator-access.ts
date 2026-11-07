@@ -4,8 +4,9 @@ import type { operatorStore } from './operator-store.ts'
 type Store = ReturnType<typeof operatorStore>
 type Owner = Pick<Held, 'person' | 'space'>
 
-// Ownership comes from the stored request or session, including the parent
-// a helper works for. An id, including a derived conversation id, grants none.
+// Ownership comes from the stored request, session, wake-up or subscription,
+// including the parent a helper works for. An id, including a derived
+// conversation id, grants none.
 export let ownerOf = async (
   store: Store,
   open: string,
@@ -22,17 +23,23 @@ export let ownerOf = async (
       seen,
     )
   }
-  let owner = (row.session ? row.operator_session : row.operator_request) as
-    | Owner
-    | undefined
+  let owner =
+    (row.session
+      ? row.operator_session
+      : row.operator_request ?? row.operator_ask) as Owner | undefined
   if (owner?.person && owner.space) return owner
-  if (!row.task) return
-  let links = await store.g.read(`.contains .edge.from=${open}`)
-  let sessions = (await store.g.get(
-    links.map((b) => String((b.edge as { to: string }).to)),
-  )).filter((b) => b?.session)
+  // A task is its sessions' owner's, and a deleted wake-up or subscription
+  // the owner's of the requests it fired, when they all agree.
+  let by = row.task
+    ? (await store.g.get(
+      (await store.g.read(`.contains .edge.from=${open}`))
+        .map((b) => String((b.edge as { to: string }).to)),
+    )).filter((b) => b?.session)
+    : row.tombstone
+    ? await store.g.read(`.operator_request.about=${open}`)
+    : []
   let owners = await Promise.all(
-    sessions.map((b) => ownerOf(store, b.entity.eid, new Set(seen))),
+    by.map((b) => ownerOf(store, b.entity.eid, new Set(seen))),
   )
   let first = owners[0]
   return first &&
