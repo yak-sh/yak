@@ -835,6 +835,17 @@ claimed-work comments stay unmarked by the bus. A listener on an outside
 transcript uses the claimed-work exception; it does not hear comments merely
 addressed to that session.
 
+## When the bus looks
+
+The `@yaks/session/service` duty follows the graph's commits, its own and,
+through the host's feed, every other process's (`follow` in
+[`bus.ts`](./bus.ts)). A pass asks about what was written since the last one: a
+written item alone, and a transcript entry's own session, which may have come to
+work and so hear what its project holds. A claim, a session, a persona, a
+process or a filing written asks about everything again, as the first pass does.
+A quiet graph costs the bus no read, and what is written is said at once. A host
+with no feed asks about everything every second.
+
 ## Replies to a session's letters
 
 A letter answering one a session wrote (`mail.reply_to` naming a letter whose

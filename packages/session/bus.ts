@@ -3,8 +3,21 @@
 // that tool's reply, or, when its harness reports to the hook door, the
 // context that harness adds after a call of its own (./routes.ts). The
 // listener for an outside harness uses listen.ts.
+//
+// The native side follows the graph's commits ({@link follow}): its own
+// graph's, and through the host's feed every other process's. A pass looks at
+// what was written since the last one, so its cost follows what can be said,
+// not the unsaid history (thousands of agents' comments and letters nobody
+// hears), and a quiet graph reads nothing. A written item is asked about
+// alone. A transcript entry asks again about its own session, which may have
+// come to work and so hear what is held for its project. Any other way an
+// item reaches a session (a claim, a session's persona, where a record is
+// filed) changes rarely, and the pass after it asks about everything, as the
+// first pass does.
 
 import type { Bundle, Comp, Eid, Graph } from '@yaks/graph'
+import type { Feed } from '@yaks/host'
+import { sleep } from '@yaks/fp'
 import { derivedEid } from '@yaks/graph/identity'
 import { who } from '@yaks/graph/call'
 import {
@@ -35,11 +48,59 @@ import { sessionFor } from './who.ts'
 
 let comp = (b: Bundle, name: string): Comp => (b[name] ?? {}) as Comp
 
+/** What a pass looks at: every unsaid item, or the items written and the
+ * sessions whose transcripts moved since the last pass. */
+export type Scope = { all: boolean; items: Set<Eid>; sessions: Set<Eid> }
+
+/** A scope with nothing in it, or with everything. */
+export let scope = (all = false): Scope => ({
+  all,
+  items: new Set(),
+  sessions: new Set(),
+})
+
+let idle = (s: Scope) => !s.all && !s.items.size && !s.sessions.size
+
+// The components an item is, and those that route one to a session.
+let ITEMS = ['comment', 'knock', 'deliver', 'mail', 'notified']
+let ROUTES = [
+  CLAIM,
+  SESSION,
+  'process',
+  'persona',
+  'filed',
+  'project',
+  'using',
+  'email',
+]
+
+/** Add to `into` what these committed bundles give a pass to look at. */
+export let noted = (into: Scope, bundles: Bundle[]): Scope => {
+  for (let b of bundles) {
+    if (ROUTES.some((c) => c in b)) into.all = true
+    else if (ITEMS.some((c) => c in b)) into.items.add(b.entity.eid)
+    let session = comp(b, 'entry').session
+    if (typeof session == 'string') into.sessions.add(session)
+  }
+  return into
+}
+
+let merge = (into: Scope, from: Scope): Scope => {
+  into.all ||= from.all
+  for (let id of from.items) into.items.add(id)
+  for (let id of from.sessions) into.sessions.add(id)
+  return into
+}
+
+let among = (ids?: Eid[]): Clause[] =>
+  ids ? [eq('entity.eid', ids.length == 1 ? ids[0] : list(...ids))] : []
+
 // Find pending items first. Most sessions have no bus work, so a timer never
-// needs to scan their transcripts.
+// needs to scan their transcripts. `ids` keeps to those items.
 let candidates = async (
   g: Graph,
   news: News,
+  ids?: Eid[],
 ): Promise<Eid[]> => {
   let route = (...props: string[]) =>
     fields(...props.filter((p) => {
@@ -47,7 +108,7 @@ let candidates = async (
       return g.vocab.prop(c, key)
     }))
   let unsaid = (component: string, ...clauses: Clause[]) =>
-    and(present(component), ...clauses, absent('notified'))
+    and(present(component), ...among(ids), ...clauses, absent('notified'))
   let queries = [
     ...g.vocab.comp('knock')
       ? [
@@ -71,11 +132,17 @@ let candidates = async (
   // the start.
   let reached = g.vocab.comp('mail')
     ? await g.read(
-      and(...arrived().clauses, route('mail.target', 'mail.reply_to')),
+      and(
+        ...among(ids),
+        ...arrived().clauses,
+        route('mail.target', 'mail.reply_to'),
+      ),
     )
     : []
   let projects = g.vocab.comp('knock') && g.vocab.comp('project')
-    ? await g.read(and(...knocked().clauses, route('knock.target')))
+    ? await g.read(
+      and(...among(ids), ...knocked().clauses, route('knock.target')),
+    )
     : []
   // First select unsaid human comments, then inspect only their targets.
   // Following target.created.via.session inside the global comment scan made
@@ -165,12 +232,18 @@ let hearing = async (g: Graph, ids: Eid[]): Promise<Eid[]> => {
 export type Due = { session: Eid; item: Bundle; line: string }
 
 /** What one pass over native sessions owes them, read and not yet said: the
- * lines {@link feed} appends. */
-export let due = async (g: Graph): Promise<Due[]> => {
+ * lines {@link feed} appends. A scope keeps the pass to the items it names and
+ * the sessions it names, each asked about all it is owed. */
+export let due = async (g: Graph, at: Scope = scope(true)): Promise<Due[]> => {
   if (!g.vocab.comp('notified')) return []
   let out: Due[] = []
-  let news = { comments: await comments(g), replies: await replyRoutes(g) }
-  for (let id of await hearing(g, await candidates(g, news))) {
+  let ids = at.all ? undefined : [...at.items]
+  let news = {
+    comments: await comments(g, ids),
+    replies: await replyRoutes(g, ids),
+  }
+  let found = !ids || ids.length ? await candidates(g, news, ids) : []
+  for (let id of await hearing(g, [...new Set([...found, ...at.sessions])])) {
     for (let said of await pending(g, id, news)) {
       out.push({ session: id, ...said })
     }
@@ -182,9 +255,9 @@ export let due = async (g: Graph): Promise<Due[]> => {
  * input. A failed append leaves the item unmarked, so the next pass can retry
  * it, and an item another session was given first is not said twice.
  * `attention` wakes the effects role's runner. */
-export let feed = async (g: Graph): Promise<number> => {
+export let feed = async (g: Graph, at?: Scope): Promise<number> => {
   let count = 0
-  for (let { session, item, line } of await due(g)) {
+  for (let { session, item, line } of await due(g, at)) {
     let entry: Bundle = {
       entity: { eid: derivedEid(`session bus ${session} ${item.entity.eid}`) },
       entry: { session },
@@ -194,6 +267,64 @@ export let feed = async (g: Graph): Promise<number> => {
     if (await deliver(g, null, item, entry)) count++
   }
   return count
+}
+
+/** Feed native sessions until `signal` aborts: a first pass over everything,
+ * then a pass each time a commit gives one something to look at, at once. A
+ * host with no feed cannot hear other processes' commits, so it asks about
+ * everything every `every` ms. A pass that fails is reported and its scope
+ * asked about again after `every` ms; `wait` is the clock that waits. */
+export let follow = async (
+  host: {
+    graph: Graph
+    feed?: Feed
+    report?: (error: unknown) => void | Promise<void>
+  },
+  signal: AbortSignal,
+  options: {
+    every?: number
+    wait?: (ms: number, signal: AbortSignal) => Promise<unknown>
+  } = {},
+): Promise<void> => {
+  let { every = 1000, wait = sleep } = options
+  let next = scope(true)
+  let bell = Promise.withResolvers<void>()
+  let ring = () => bell.resolve()
+  signal.addEventListener('abort', ring, { once: true })
+  let hear = (bundles: Bundle[], missed = false) => {
+    if (signal.aborted) return
+    noted(next, bundles).all ||= missed
+    if (!idle(next)) ring()
+  }
+  let stop = signal.aborted ? undefined : host.feed?.((news) => {
+    hear(news.applied.flat(), news.missed)
+  })
+  if (stop) {
+    host.graph.use({
+      name: '@yaks/session/bus',
+      hooks: { effect: (bundles) => (hear(bundles), bundles) },
+    })
+  }
+  try {
+    while (true) {
+      let now = stop ? next : scope(true)
+      next = scope()
+      try {
+        if (!idle(now)) await feed(host.graph, now)
+      } catch (error) {
+        await (host.report?.(error) ?? console.error('session bus —', error))
+        merge(next, now)
+        await wait(every, signal)
+      }
+      if (signal.aborted) return
+      if (!stop) await wait(every, signal)
+      else if (idle(next)) await bell.promise
+      bell = Promise.withResolvers()
+    }
+  } finally {
+    stop?.()
+    signal.removeEventListener('abort', ring)
+  }
 }
 
 // Every line owed to an outside session, each marked said as it is taken.

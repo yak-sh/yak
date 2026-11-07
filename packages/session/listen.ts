@@ -481,8 +481,14 @@ let routed = async (
   query: And,
   name: string,
   prop: string,
+  ids?: Eid[],
 ): Promise<Routes> => {
-  let items = graph.vocab.comp(name) ? await graph.read(query) : []
+  if (ids && !ids.length) return { items: [], creators: new Map() }
+  let items = graph.vocab.comp(name)
+    ? await graph.read(
+      ids ? and(eq('entity.eid', value(ids)), ...query.clauses) : query,
+    )
+    : []
   let targets = [...new Set(items.map((b) => str(comp(b, name)[prop])))]
   let rows = targets.length
     ? await graph.read(and(
@@ -498,8 +504,12 @@ let routed = async (
   }
 }
 
-/** Unread human comments and their targets' creators, through the caller's scope. */
-export let comments = (graph: Pick<Graph, 'vocab' | 'read'>): Promise<Routes> =>
+/** Unread human comments and their targets' creators, through the caller's
+ * scope: every one, or those among `ids`. */
+export let comments = (
+  graph: Pick<Graph, 'vocab' | 'read'>,
+  ids?: Eid[],
+): Promise<Routes> =>
   routed(
     graph,
     and(
@@ -510,10 +520,15 @@ export let comments = (graph: Pick<Graph, 'vocab' | 'read'>): Promise<Routes> =>
     ),
     'comment',
     'target',
+    ids,
   )
 
-/** Unread replies and the writers they answer, without walking a writer's work. */
-export let replies = (graph: Pick<Graph, 'vocab' | 'read'>): Promise<Routes> =>
+/** Unread replies and the writers they answer, without walking a writer's
+ * work: every one, or those among `ids`. */
+export let replies = (
+  graph: Pick<Graph, 'vocab' | 'read'>,
+  ids?: Eid[],
+): Promise<Routes> =>
   routed(
     graph,
     and(
@@ -523,6 +538,7 @@ export let replies = (graph: Pick<Graph, 'vocab' | 'read'>): Promise<Routes> =>
     ),
     'mail',
     'reply_to',
+    ids,
   )
 
 /** What this session has yet to hear, as the item and its readable line. */

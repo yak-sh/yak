@@ -1,7 +1,8 @@
 // The duty a host runs at `@yaks/session/service` for as long as it is up:
 // every session a harness ran on this machine, read into the graph from the
 // transcript file the harness keeps (./tail.ts), and pending addressed items
-// delivered to native sessions (./bus.ts).
+// delivered to native sessions as the graph's commits make them due
+// (./bus.ts `follow`), beside the transcripts and never waiting on them.
 //
 // The duty opens by freeing the locks whose holder is gone (./reap.ts). Start-up
 // is the one moment that answer is fresh, and holding the duty is what makes
@@ -42,8 +43,9 @@ import * as fs from '@yaks/file/io'
 
 import { sleep } from '@yaks/fp'
 import type { Bundle, Comp, Eid, Graph } from '@yaks/graph'
+import type { Feed } from '@yaks/host'
 import { TOMBSTONE } from '@yaks/graph/bundle'
-import { feed } from './bus.ts'
+import { follow } from './bus.ts'
 import { SESSION } from './comp.ts'
 import { claude, codexRollout, type Reader, subagent } from './readers.ts'
 import { reapLeases } from './reap.ts'
@@ -611,12 +613,18 @@ let HOUR = 60 * 60 * 1000
  * made again on the next, where the transcript stands. What the config's
  * `person` typed is signed with them. */
 export let service = async (
-  host: { graph: Graph; config?: { person?: string } },
+  host: {
+    graph: Graph
+    config?: { person?: string }
+    feed?: Feed
+    report?: (error: unknown) => void | Promise<void>
+  },
   options: Options = {},
   signal: AbortSignal = AbortSignal.abort(),
 ): Promise<void> => {
   await reapLeases(host.graph.storage)
   if (signal.aborted) return
+  let bus = follow(host, signal, { every: options.every })
   let said = host.config?.person
   let person = said && ((await host.graph.address([said])).get(said) ?? said)
   let seen: Seen = { tails: new Map(), done: new Set() }
@@ -629,7 +637,6 @@ export let service = async (
   try {
     while (!signal.aborted) {
       try {
-        await feed(host.graph)
         // The accounts are found again as often as transcripts are listed,
         // so one signed in while the server runs is read too.
         if (Date.now() >= found) {
@@ -682,6 +689,7 @@ export let service = async (
       await sleep(options.every ?? 1000, signal)
     }
   } finally {
+    await bus
     await Promise.all([...seen.tails.values()].map((t) => t?.stream?.close()))
   }
 }
