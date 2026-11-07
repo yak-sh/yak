@@ -1310,73 +1310,76 @@ let ours = async (req: Request, env: Env): Promise<Response> => {
     if (!text && !(await mailable(env))) {
       return signCard(env, { q, back, why: NO_MAIL, status: 503 })
     }
-    // Each wait a named stage on the answer's `Server-Timing` (timing.ts):
-    // this is the first thing a new person waits on.
+    // Each wait a named stage on the answer's `Server-Timing` (timing.ts),
+    // with its store hops and waits, as spending the code has: this is the
+    // first thing a new person waits on.
     let c = clock()
-    // Per source, before `mint`, so a loop spends none of any address's
-    // letters: the address cap above protects an inbox, this one the
-    // platform's mail from somebody asking for a code at every address. A
-    // text is counted per visitor by the hour as well (signin.ts VISITS),
-    // since this one is by the minute and a text costs.
-    let from = text ? await visitor(secret(env), source(req)) : ''
-    if (
-      !await c.time(
-        'rate',
-        async () =>
-          (await Promise.all([
-            within(env.SIGNIN_RATE, source(req)),
-            mayText(meta(env), from),
-          ])).every(Boolean),
+    return c.counting(async () => {
+      // Per source, before `mint`, so a loop spends none of any address's
+      // letters: the address cap above protects an inbox, this one the
+      // platform's mail from somebody asking for a code at every address. A
+      // text is counted per visitor by the hour as well (signin.ts VISITS),
+      // since this one is by the minute and a text costs.
+      let from = text ? await visitor(secret(env), source(req)) : ''
+      if (
+        !await c.time(
+          'rate',
+          async () =>
+            (await Promise.all([
+              within(env.SIGNIN_RATE, source(req)),
+              mayText(meta(env), from),
+            ])).every(Boolean),
+        )
+      ) {
+        return signCard(env, { q, back, why: TOO_MANY, status: 429 })
+      }
+      let code = await c.time(
+        'mint',
+        () => mint(meta(env), secret(env), address, from),
       )
-    ) {
-      return signCard(env, { q, back, why: TOO_MANY, status: 429 })
-    }
-    let code = await c.time(
-      'mint',
-      () => mint(meta(env), secret(env), address, from),
-    )
-    if (code && text) {
-      // The text goes after the answer, as the letter does, from the
-      // platform's number (operator-texts.ts `tell`).
-      step(env, 'code_sent', req, { who: address })
-      let { tell } = await import('./operator-texts.ts')
-      background(
-        tell(
-          env,
-          { to: address, text: codeText(code) },
-          'POST /login',
-        ),
-      )
-    } else if (code) {
-      // The letter carries the code and the one click that spends it
-      // (link.ts): the same code said as a link, so it lasts the same ten
-      // minutes and dies the moment either one is used. Somebody reading this
-      // on a phone should not have to retype anything. It is the Operator's,
-      // wherever it was asked for, greeting someone who has a space as met, and a reply to it signs them up as following the link does
-      // (signin.ts `codeLetter`).
-      let link = await onceLink(secret(env), {
-        email: address,
-        code,
-        q: q || undefined,
-        back: back || undefined,
-      }, apex(env))
-      // The letter goes after the answer (T-124082): posting it was a second
-      // of the wait, the longest in signing up, and the card says nothing
-      // that depends on it. One that will not leave is a break for us to
-      // read, and the card's "Send a new code" is the person's way to ask
-      // again.
-      step(env, 'code_sent', req, { who: address })
-      background(
-        met(env, address)
-          .then((met) =>
-            mail(env)(
-              codeLetter(address, code, link, met ? 'back' : 'new', env),
+      if (code && text) {
+        // The text goes after the answer, as the letter does, from the
+        // platform's number (operator-texts.ts `tell`).
+        step(env, 'code_sent', req, { who: address })
+        let { tell } = await import('./operator-texts.ts')
+        background(
+          tell(
+            env,
+            { to: address, text: codeText(code) },
+            'POST /login',
+          ),
+        )
+      } else if (code) {
+        // The letter carries the code and the one click that spends it
+        // (link.ts): the same code said as a link, so it lasts the same ten
+        // minutes and dies the moment either one is used. Somebody reading this
+        // on a phone should not have to retype anything. It is the Operator's,
+        // wherever it was asked for, greeting someone who has a space as met, and a reply to it signs them up as following the link does
+        // (signin.ts `codeLetter`).
+        let link = await onceLink(secret(env), {
+          email: address,
+          code,
+          q: q || undefined,
+          back: back || undefined,
+        }, apex(env))
+        // The letter goes after the answer (T-124082): posting it was a second
+        // of the wait, the longest in signing up, and the card says nothing
+        // that depends on it. One that will not leave is a break for us to
+        // read, and the card's "Send a new code" is the person's way to ask
+        // again.
+        step(env, 'code_sent', req, { who: address })
+        background(
+          met(env, address)
+            .then((met) =>
+              mail(env)(
+                codeLetter(address, code, link, met ? 'back' : 'new', env),
+              )
             )
-          )
-          .catch((e) => fault(env, 'POST /login', e)),
-      )
-    }
-    return timed(askCode({ address, q, back }, env), c)
+            .catch((e) => fault(env, 'POST /login', e)),
+        )
+      }
+      return timed(askCode({ address, q, back }, env), c)
+    })
   }
 
   if (path == '/login/code' && req.method == 'POST') {
