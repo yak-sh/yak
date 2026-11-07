@@ -379,15 +379,18 @@ let memos = appVocab({
   },
 })
 let searched = fields(memos)
+// Each field finds no wearer of a `found: false` component (@yaks/kernel's
+// `quarantined`), an app's words as much as the platform's.
 test('a searched property of an app reaches the index fields', () => {
+  let not = ['quarantined']
   assertEquals(
     searched.filter((f) => f.comp == 'memo'),
-    [{ comp: 'memo', prop: 'note' }],
+    [{ comp: 'memo', prop: 'note', not }],
   )
   // And the platform's own words are declared, not assumed.
   assertEquals(searched.filter((f) => f.comp == 'doc'), [
-    { comp: 'doc', prop: 'title' },
-    { comp: 'doc', prop: 'body' },
+    { comp: 'doc', prop: 'title', not },
+    { comp: 'doc', prop: 'body', not },
   ])
 })
 
