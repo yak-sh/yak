@@ -17,11 +17,11 @@ the owner to read in a couple of minutes.
 
 He told us, about D-124238: "that design is too long for me to read". Designs
 written for him had grown to 10,000 to 15,000 characters. So the body is what
-he reads, and it holds three things: the proposal in a few sentences, what
-changes for a person, and his questions at the end, each with your
-recommendation. The detail an agent needs to build it (components, package
-boundaries, migration) goes into the tasks of the task tree, where the agent
-who builds it will look.
+he reads: the problem, how things work now, the new design, and his questions
+at the end, each with your recommendation (see the shape of the body below).
+The detail an agent needs to build it (components, package boundaries,
+migration) goes into the tasks of the task tree, where the agent who builds it
+will look.
 
 He doesn't read them all and never blocks on one. When it looks good, decide it
 yourself, build, and adapt afterwards. Only a refactor of something key the
@@ -77,17 +77,34 @@ design drifts unless it's held against the code. The pulls to feel for:
 
 ## The shape of the body
 
-What he reads, in order, in a page or less:
+He read D-148821 and wrote:
 
-1. The proposal: what changes and why, in a few sentences.
-2. What changes for a person: what they see or do differently.
-3. Open questions only he can answer, each with a recommendation.
+> i can't even tell if the language here is describing what is already or what
+> will be after this design. this doc is incomprehensible to me, because it's
+> using non-idiomatic terms like "fence" and "standing". what problem is this
+> solving? what is this?
+
+And then:
+
+> probably document that for all design docs. they should state the problem
+> being solved, how things work now, and then describe the new design
+
+So every body, in a page or less, goes in this order:
+
+1. The problem being solved, and why it matters.
+2. How things work now, marked as today, so a reader never has to guess
+   whether a sentence describes what exists or what is proposed.
+3. The new design: what changes, including what a person sees or does
+   differently, then the open questions only he can answer, each with a
+   recommendation.
+
+The doc uses idiomatic terms: the codebase's own names and the platform's own
+words, never coined ones.
 
 Everything else (the model, where things live, migration with one shape after
 and no yaks app taken down, his words) is in the task tree's tasks and the
-comments, each task carrying what its builder needs. The body is plain prose
-about what will be, with no dates or history; provenance lives in the commits
-and the quotes.
+comments, each task carrying what its builder needs. Provenance lives in the
+commits and the quotes.
 
 ## Filing it
 
