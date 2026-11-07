@@ -1,7 +1,13 @@
-/** A decision's question, choices and answer, shared by browser and terminal. */
+/**
+ * A decision's question, choices and answer, shared by browser and terminal.
+ * The question, labels and descriptions are Markdown. An answer of one's own
+ * takes several lines: Shift-Enter types a new one, and Enter or the button
+ * sends it, as in a chat box.
+ */
 import { type ComponentChildren, h, type JSX } from 'preact'
 import type { Bundle, Comp } from '@yaks/graph'
 import type { Drafts } from '@yaks/draft'
+import { Markdown, MarkdownInline } from '@yaks/markdown'
 import { Button, Field, Notes, Say, Section } from '@yaks/ui'
 import { answer, type Decision } from './decision.ts'
 
@@ -46,7 +52,7 @@ export let DecisionForm = (
           : 'answered',
       ),
     ),
-    h('p', {}, d.question),
+    h(Markdown, { source: d.question }),
     h(
       Notes,
       {},
@@ -55,13 +61,23 @@ export let DecisionForm = (
           Notes.Item,
           { key: c.label },
           open
-            ? h(Button, {
-              type: 'button',
-              onClick: () => apply(answer(eid, c.label)),
-            }, `${i + 1}. ${c.label}`)
-            : h('span', {}, `${i + 1}. ${c.label}`),
+            ? h(
+              Button,
+              {
+                type: 'button',
+                onClick: () => apply(answer(eid, c.label)),
+              },
+              `${i + 1}. `,
+              h(MarkdownInline, { source: c.label }),
+            )
+            : h(
+              'span',
+              {},
+              `${i + 1}. `,
+              h(MarkdownInline, { source: c.label }),
+            ),
           c.label == d.recommended && h(Section.Note, {}, 'recommended'),
-          h('p', {}, c.description),
+          h(Markdown, { source: c.description }),
         )
       ),
     ),
@@ -83,12 +99,24 @@ export let DecisionForm = (
         },
       },
       h(Field, {
+        lines: true,
+        rows: 2,
         value: text,
         caret,
         placeholder: 'Your own answer…',
         'aria-label': 'Your own answer',
         onInput: (event: Event) =>
-          drafts.type(place, (event.currentTarget as HTMLInputElement).value),
+          drafts.type(
+            place,
+            (event.currentTarget as HTMLTextAreaElement).value,
+          ),
+        onKeyDown: (event: KeyboardEvent) => {
+          if (event.key != 'Enter' || event.shiftKey || event.isComposing) {
+            return
+          }
+          event.preventDefault()
+          send()
+        },
       }),
       h(Button, {
         type: 'submit',

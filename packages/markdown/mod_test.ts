@@ -2,7 +2,15 @@ import { test } from '@yaks/testing'
 import { h } from 'preact'
 import { mount } from '../preact/testing.ts'
 import { assert, assertEquals } from '@std/assert'
-import { blocks, headings, Markdown, parse, render, safeHref } from './mod.ts'
+import {
+  blocks,
+  headings,
+  Markdown,
+  MarkdownInline,
+  parse,
+  render,
+  safeHref,
+} from './mod.ts'
 import type { H } from '@yaks/render'
 
 type Tree = {
@@ -100,6 +108,18 @@ test('Markdown mounts as safe semantic browser DOM', () => {
     )
     assertEquals(ui.root.querySelector('script'), null)
     assert(ui.root.textContent?.includes('<script>bad</script>'))
+  } finally {
+    ui.free()
+  }
+})
+
+test('a line of Markdown keeps its inline markup and takes no block', () => {
+  let ui = mount(h(MarkdownInline, { source: '# **Train** and `bus`' }))
+  try {
+    assertEquals(ui.root.querySelector('span')?.textContent, '# Train and bus')
+    assertEquals(ui.root.querySelector('strong')?.textContent, 'Train')
+    assertEquals(ui.root.querySelector('code')?.textContent, 'bus')
+    assertEquals(ui.root.querySelector('p, h1, div.Markdown'), null)
   } finally {
     ui.free()
   }

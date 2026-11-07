@@ -17,9 +17,9 @@ let question: Bundle = {
   entity: { eid: 'ask' },
   task: {},
   decision: {
-    question: 'Which route?',
+    question: 'Which **route**?',
     choices: [
-      { label: 'Train', description: 'Arrive earlier' },
+      { label: 'Train', description: 'Arrive *earlier*' },
       { label: 'Bus', description: 'Spend less' },
     ],
     recommended: 'Train',
@@ -62,8 +62,9 @@ let form = async () => {
       root,
     )
   let row = () => (g.get(['ask']) as Bundle[])[0]
+  let field = () => root.querySelector('textarea')!
   let type = (text: string) => {
-    let field = root.querySelector('input')!
+    let field = root.querySelector('textarea')!
     field.value = text
     field.dispatchEvent(
       new document.defaultView!.Event('input', { bubbles: true }),
@@ -76,7 +77,7 @@ let form = async () => {
     else delete (globalThis as { document?: unknown }).document
   }
   mount()
-  return { root, words, mount, row, type, free }
+  return { root, words, mount, row, field, type, free }
 }
 
 test('the decision form shows recommendations, answers as its reader, and keeps unused drafts', async () => {
@@ -87,7 +88,7 @@ test('the decision form shows recommendations, answers as its reader, and keeps 
     f.type('Walk together')
     render(null, f.root)
     f.mount()
-    assertEquals(f.root.querySelector('input')!.value, 'Walk together')
+    assertEquals(f.field().value, 'Walk together')
     f.root.querySelectorAll('button')[1].click()
     await until(() => !!f.row().decided)
     assertEquals((f.row().decided as Comp).choice, 'Bus')
@@ -106,7 +107,7 @@ test('the decision form shows recommendations, answers as its reader, and keeps 
 test('a custom answer spends its draft with the answer, while a refused answer keeps it', async () => {
   let f = await form()
   try {
-    f.type('Walk together')
+    f.type('Walk\ntogether')
     await tick()
     f.mount()
     f.root.querySelector('form')!.dispatchEvent(
@@ -116,7 +117,7 @@ test('a custom answer spends its draft with the answer, while a refused answer k
       }),
     )
     await until(() => !!f.row().decided)
-    assertEquals((f.row().decided as Comp).choice, 'Walk together')
+    assertEquals((f.row().decided as Comp).choice, 'Walk\ntogether')
     assertEquals((f.row().completed as Comp).by, 'reader')
     await until(() => f.words.text(answerPlace('ask')) == '')
     f.type('Another answer')
@@ -124,7 +125,35 @@ test('a custom answer spends its draft with the answer, while a refused answer k
     f.mount()
     f.root.querySelectorAll('button')[2].click()
     await until(() => f.words.text(answerPlace('ask')) == 'Another answer')
-    assertEquals((f.row().decided as Comp).choice, 'Walk together')
+    assertEquals((f.row().decided as Comp).choice, 'Walk\ntogether')
+  } finally {
+    f.free()
+  }
+})
+
+test('a decision renders its Markdown, and Enter sends an answer of several lines', async () => {
+  let f = await form()
+  try {
+    assertEquals(f.root.querySelector('strong')?.textContent, 'route')
+    assertEquals(f.root.querySelector('em')?.textContent, 'earlier')
+    let press = (shiftKey: boolean) =>
+      f.field().dispatchEvent(
+        Object.assign(
+          new document.defaultView!.Event('keydown', {
+            bubbles: true,
+            cancelable: true,
+          }),
+          { key: 'Enter', shiftKey },
+        ),
+      )
+    f.type('Walk\nand talk')
+    await tick()
+    f.mount()
+    press(true)
+    assertEquals(f.row().decided, undefined)
+    press(false)
+    await until(() => !!f.row().decided)
+    assertEquals((f.row().decided as Comp).choice, 'Walk\nand talk')
   } finally {
     f.free()
   }

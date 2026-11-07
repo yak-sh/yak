@@ -1,7 +1,7 @@
 // Preact components over the shared structural Markdown renderer.
 import { type ComponentChildren, h, type VNode } from 'preact'
 import type { H } from '@yaks/render'
-import { parse, render, safeHref } from './structural.ts'
+import { blocks, parse, parseInline, render, safeHref } from './structural.ts'
 export * from './structural.ts'
 
 type Props = { children?: ComponentChildren }
@@ -32,3 +32,8 @@ export let Link = (
 /** Preact component shared by browser DOM and the terminal's Preact DOM. */
 export let Markdown = ({ source }: { source: string }): VNode =>
   render(parse(source), h as H<ReturnType<typeof h>>)
+
+/** A line of Markdown in the line it stands in, such as a label in a button:
+ * its inline markup, in a `span`. */
+export let MarkdownInline = ({ source }: { source: string }): VNode =>
+  h('span', null, ...blocks(parseInline(source), h as H<VNode>))

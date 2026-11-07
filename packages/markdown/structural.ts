@@ -14,6 +14,11 @@ export let parse = (
   { breaks = true }: { breaks?: boolean } = {},
 ): Token[] => Lexer.lex(source, { gfm: true, breaks })
 
+/** Parse a line of GFM, such as a label or a title: its inline markup only,
+ * with no paragraph around it. */
+export let parseInline = (source: string): Token[] =>
+  Lexer.lexInline(source, { gfm: true })
+
 /** The words a heading is made of, with the markup dropped: a reader sees
  * these words, so the anchor is named after them. */
 let words = (tokens: Token[]): string =>
