@@ -33,6 +33,7 @@ import { edgeEid, link } from '@yaks/edge'
 import { MOVED } from '@yaks/sync'
 import type { Comp } from '@yaks/graph'
 import { Stale } from '@yaks/graph/errors'
+import { cookieValue } from '@yaks/platform/cookie'
 import {
   type App,
   type Directory,
@@ -48,7 +49,7 @@ import { KERNEL, meta } from './meta.ts'
 import { COPY } from './relocate.ts'
 import { installAt, signInAt } from './route.ts'
 import { cleared, sampling } from './sample.ts'
-import type { Who } from './session.ts'
+import { domainOf, SESSION, type Who } from './session.ts'
 
 /** A browser's own store of an app: its handle, where its uploads go, when it
  * was last used, and the app it became once installed. */
@@ -233,6 +234,80 @@ export let visitOf = async (
     `.entity.eid=${edgeOf(via, app)} .visit`,
   )
   return visitOfRow(row?.visit as Comp | undefined)
+}
+
+// ── The stores a browser says it holds ───────────────────────────────────
+//
+// Almost no stranger holds a store of the app they look at, yet each of their
+// requests (the page, each file, each query) asked the directory whether they
+// did: 35 of the 50 ms each one spent at ORD (T-133873). The browser says so
+// itself instead, in cookies set on the answers that learn it: `yak_stores`
+// once all its stores were read, and `yak_store_<app>` for each one, every
+// cookie holding the instrument it speaks for. The directory is still asked
+// about a store the cookies name, so a cookie only ever spares a read, and
+// cookies of another instrument, or none at all, mean its stores are read
+// whole, once. A cookie of its own per store, because the answer that read
+// the stores and the one that made a store can cross: each sets only its own
+// names, and neither undoes the other.
+
+/** The cookie saying a browser's stores were read, and so that each store it
+ * holds has a cookie of its own. */
+export let STORES = 'yak_stores'
+
+let tag = (eid: string) => eid.replaceAll('-', '').slice(0, 16)
+
+/** The cookie naming a browser's store of one app. */
+export let storeCookie = (app: string) => `yak_store_${tag(app)}`
+
+// What each answer has to tell its browser, by the request it answers.
+let telling = new WeakMap<Request, { via: string; names: string[] }>()
+let tell = (req: Request, via: string, names: string[]) => {
+  let held = telling.get(req)
+  telling.set(req, { via, names: [...held?.names ?? [], ...names] })
+}
+
+/**
+ * This browser's own store of the app, as {@link visitOf} answers it, read
+ * only where its cookies leave the answer open. `req` is the request as the
+ * browser sent it: its cookies are what it says.
+ */
+export let ownOf = async (
+  env: Pick<Env, 'STORE'>,
+  req: Request,
+  via: string,
+  app: string,
+): Promise<Visit | null> => {
+  let me = tag(instrumentEid(via)), header = req.headers.get('cookie')
+  if (cookieValue(header, STORES) == me) {
+    return cookieValue(header, storeCookie(app)) == me
+      ? await visitOf(env, via, app)
+      : null
+  }
+  let held = given(
+    await meta(env).query(`.visit .edge.from=${instrumentEid(via)} ?edge`),
+  )
+  tell(req, via, [STORES, ...held.map((g) => storeCookie(g.app))])
+  return held.find((g) => g.app == app)?.visit ?? null
+}
+
+/** The store just made for this browser, told to it on the answer. */
+export let tellBorn = (req: Request, via: string, app: string) =>
+  tell(req, via, [storeCookie(app)])
+
+/** The answer to `req`, carrying the cookies it has to tell its browser. */
+export let toldStores = (req: Request, res: Response, env: Host): Response => {
+  let said = telling.get(req)
+  if (!said || res.status == 101) return res
+  let me = tag(instrumentEid(said.via)), domain = domainOf(req, env)
+  let out = new Response(res.body, res)
+  for (let name of said.names) {
+    out.headers.append(
+      'set-cookie',
+      `${name}=${me}; ${domain ? `Domain=${domain}; ` : ''}` +
+        `Path=/; Max-Age=${SESSION}; Secure; HttpOnly; SameSite=Lax`,
+    )
+  }
+  return out
 }
 
 // The births under way in this isolate, by app and browser: a page that sends

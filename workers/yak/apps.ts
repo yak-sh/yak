@@ -209,13 +209,15 @@ import {
   due,
   MOVED,
   onSample,
+  ownOf,
   type Release,
   releaseFor,
+  tellBorn,
+  toldStores,
   used,
   visitable,
   type Visiting,
   visiting,
-  visitOf,
 } from './visit.ts'
 import { full, fullFiles } from './usage.ts'
 import { budget, free, gauges, spent } from './meter.ts'
@@ -3263,14 +3265,17 @@ export let fetch = (req: Request, env: Env): Promise<Response> => {
     // Bytes the same for everyone (kept-page.ts `fixed`) set none either: a
     // cookie would keep them out of every cache, and no door of theirs uses
     // the instrument.
+    // The browser's own cookies are kept, and told which stores it holds
+    // (visit.ts `ownOf`), only where it is the browser asking.
+    let remember = !pagePath(new URL(req.url).pathname) && !bearing(req) &&
+      !req.headers.has('authorization') && !fixed(new URL(req.url).pathname)
     let res = await browsing(
       req,
       env,
       (r) => served(r, env, c, false, undefined, req),
-      !pagePath(new URL(req.url).pathname) && !bearing(req) &&
-        !req.headers.has('authorization') && !fixed(new URL(req.url).pathname),
+      remember,
     )
-    return timed(told(res, c), c)
+    return timed(told(remember ? toldStores(req, res, env) : res, c), c)
   })
 }
 
@@ -3721,7 +3726,7 @@ let served = async (
   if (!itself && !walls && visitable(app, who)) {
     let [own, release, invited] = await c.time('visit', () =>
       Promise.all([
-        visitOf(env, who.via!, app!.eid),
+        ownOf(env, visitor, who.via!, app!.eid),
         releaseFor(dir, app!),
         who.person
           ? waiting(dir, space!, app!, who.person, 'not_a_reader')
@@ -3860,6 +3865,7 @@ let served = async (
         'birth',
         () => born(env, space!, stranger.app, who.via!, who.person),
       )
+      tellBorn(visitor, who.via!, stranger.app.eid)
       ;({ app, who, visit } = visiting(
         space,
         stranger.app,

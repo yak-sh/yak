@@ -9,7 +9,15 @@ import { directoryOf } from './directory.ts'
 import type { Env } from './env.ts'
 import { client, connector, fresh, signIn, txt, vocabFile } from './probe.ts'
 import { meta } from './meta.ts'
-import { crowded, KEPT, lapsed, MOVED, visits } from './visit.ts'
+import {
+  crowded,
+  KEPT,
+  lapsed,
+  MOVED,
+  storeCookie,
+  STORES,
+  visits,
+} from './visit.ts'
 import { stores } from './sweep.ts'
 import { closed, collected } from './erase.ts'
 import { BOT } from '@yaks/platform/bots'
@@ -200,6 +208,69 @@ await collected(env, later)
 let afterSweep = (await visits(env)).length
 let adaAgain = await titles(ada)
 let adoptedSwept = await titles(adopted)
+
+// A browser that keeps the cookies its answers set, which say which stores it
+// holds (visit.ts `ownOf`), and how many store hops each answer took.
+let browser = (...start: string[]) => {
+  let jar = new Map<string, string>()
+  let keep = (c: string) => {
+    let [pair] = c.split(';'), at = pair.indexOf('=')
+    jar.set(pair.slice(0, at), pair.slice(at + 1))
+  }
+  start.forEach(keep)
+  let at = async (path: string, init: RequestInit = {}) => {
+    let cookie = [...jar].map(([n, v]) => `${n}=${v}`).join('; ')
+    let res = await k.at(host, `/notes${path}`, {
+      ...init,
+      headers: { ...init.headers as object, ...cookie ? { cookie } : {} },
+    })
+    res.headers.getSetCookie().forEach(keep)
+    let hops = Number(
+      res.headers.get('server-timing')?.match(/(?:^|, )hops;dur=(\d+)/)?.[1],
+    )
+    return { res, hops }
+  }
+  let rows = async () => {
+    let { res, hops } = await at('/api/query?q=.note')
+    let titles = ((await res.json()) as { note: { title: string } }[])
+      .map((r) => r.note.title).sort()
+    return { titles, hops }
+  }
+  let write = async (title: string) => {
+    let { res } = await at('/api/apply', {
+      method: 'POST',
+      body: JSON.stringify([{ entity: { eid: '$w' }, note: { title } }]),
+    })
+    await res.body?.cancel()
+    return res.headers.get(MOVED)
+  }
+  return { at, rows, write, jar }
+}
+let dee = browser()
+await (await dee.at('/')).res.body?.cancel()
+let deeListed = [dee.jar.has(STORES), dee.jar.has(storeCookie(app.eid))]
+let deeSample = await dee.rows()
+let deeMoved = await dee.write('Dee')
+let deeHolds = dee.jar.get(storeCookie(app.eid)) == dee.jar.get(STORES)
+let deeOwn = await dee.rows()
+// Bo's store is from before the cookies: his browser has none.
+let boBrowser = browser(boIn.cookie)
+let boFirst = await boBrowser.rows()
+let boListed =
+  boBrowser.jar.get(storeCookie(app.eid)) == boBrowser.jar.get(STORES)
+let boNext = await boBrowser.rows()
+// Cookies another instrument was given say nothing about this one.
+let crossed = browser(
+  boIn.cookie,
+  `${STORES}=${dee.jar.get(STORES)}`,
+)
+let boCrossed = await crossed.rows()
+// The same browser asking the same thing, with and without its cookies.
+let eve = browser()
+await (await eve.at('/')).res.body?.cancel()
+let eveSaid = await eve.rows()
+let eveSilent = await browser(`yak_session=${eve.jar.get('yak_session')}`)
+  .rows()
 await k.stop()
 
 test('a stranger reads the sample and hears they may write', () => {
@@ -303,4 +374,21 @@ test('installing twice is the one app, and the demo sends them to it', () => {
 
 test('an installed visit is its app’s, and no sweep takes it', () => {
   assertEquals(adoptedSwept, ['Kept', 'Mine', 'Sample, changed', 'Two'])
+})
+
+test('a browser says which stores it holds, and is read whole once when it says nothing', () => {
+  assertEquals(deeListed, [true, false])
+  assertEquals(deeSample.titles, ['Sample'])
+  assertEquals(deeMoved, '1')
+  assert(deeHolds)
+  assertEquals(deeOwn.titles, ['Dee', 'Sample'])
+  assertEquals(boFirst.titles, ['Sample', 'X', 'Y'])
+  assert(boListed)
+  assertEquals(boNext.titles, ['Sample', 'X', 'Y'])
+  assertEquals(boCrossed.titles, ['Sample', 'X', 'Y'])
+})
+
+test('a browser whose cookies say it holds no store of the app asks the directory nothing', () => {
+  assertEquals([eveSaid.titles, eveSilent.titles], [['Sample'], ['Sample']])
+  assertEquals(eveSaid.hops + 1, eveSilent.hops)
 })
