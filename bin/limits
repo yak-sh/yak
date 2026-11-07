@@ -5,7 +5,8 @@
 #
 #   bin/limits
 #
-# Run it once per box, and again to change a number. It needs sudo.
+# Run it once per box, and again to change a number. It needs sudo, and root
+# over ssh on the Proxmox host the box runs on (`pve` in ~/.ssh/config).
 #
 # Any process an agent or cron starts lands in a scope under app.slice or in
 # cron.service by default, so a session, its tests, a copy, restore or download
@@ -42,14 +43,32 @@
 #
 # Measured on this box, an LXC volume on LVM thin over a SATA SSD: a cold page read
 # from the servers' slice averages 2 ms through a whole copy beside another bulk
-# job, worst page 175 ms, against 0.25 ms idle. Uncapped writes took it to 5-22 ms. IO pressure stops being a useful
-# reading here, since a job waiting at its cap counts as pressure.
+# job, worst page 175 ms, against 0.25 ms idle. Uncapped writes took it to
+# 5-22 ms, and one uncapped 4 GB write held the servers' main threads 13-16 s:
+# the disk takes about 80 MB/s. IO pressure stops being a useful reading here,
+# since a job waiting at its cap counts as pressure.
 #
 # Only a bandwidth limit does this. IOWeight needs BFQ or io.cost, and this box
 # has mq-deadline and no access to the host's root cgroup. A limit on `/` catches
 # buffered writes too, since ext4 charges writeback to the cgroup that dirtied the
 # page. The user manager re-executes to see the io controller; its units and
 # processes keep running. The servers move to yak.slice at their next `yak restart`.
+#
+# The dirty pages, set on the host. A cap holds a job's writeback, not its
+# writes, so a job could dirty as much as its memory let it (a session's 6 GB
+# let about a gigabyte) and leave it queued at its cap. ext4's journal is
+# shared: a capped thread that runs the journal's checkpoint writes metadata as
+# the job, behind that queue, and every writer on the disk waits for journal
+# space. A bare `sqlite3 .backup` of yak.db held a server's read 11 s that way,
+# in __jbd2_log_wait_for_space (T-133694). A dirty limit on the device ends it:
+# strict_limit holds each cgroup to its share of max_bytes, so a writer waits
+# in write() and its queue stays a few MB. On a scratch ext4 on the host, an
+# fsync's worst beside a bare `.backup` at the 30 MB/s cap went from 0.16-2.9 s
+# to 2-10 ms, at the same 30 MB/s; on the box, a session's 600 MB write at its
+# cap queues 2 MB. 256 MB lets a server's 64 MiB checkpoint through unpaced,
+# where 64 MB doubled its time. The container cannot write /sys, so the host's
+# udev sets the limit on this volume whenever it appears, and this sets it now.
+# To undo it, delete the rule and write 0 to strict_limit and 100 to max_ratio.
 set -eu
 all="IOWriteBandwidthMax=/ 80M
 IOReadBandwidthMax=/ 150M"
@@ -59,6 +78,9 @@ sessions="MemoryMax=16G"
 session="MemoryMax=6G
 MemorySwapMax=2G
 OOMPolicy=continue"
+dirty=$((256 << 20))
+host=pve
+volume=$(basename "$(findmnt -no SOURCE /)")
 export XDG_RUNTIME_DIR="${XDG_RUNTIME_DIR:-/run/user/$(id -u)}"
 user="${XDG_CONFIG_HOME:-$HOME/.config}/systemd/user"
 
@@ -82,3 +104,13 @@ printf '[Unit]\nDescription=the yak servers\n\n[Slice]\nCPUWeight=1000\n' >"$use
 printf '[Service]\nSlice=yak.slice\n' >"$user/yak-.service.d/slice.conf"
 printf '[Service]\nCPUWeight=100\n' >"$user/yak-.service.d/cpu.conf"
 systemctl --user daemon-reload
+
+ssh "$host" sh -s "$volume" "$dirty" <<'EOF'
+set -eu
+printf 'ACTION=="add|change", SUBSYSTEM=="block", ENV{DM_NAME}=="%s", ATTR{bdi/max_bytes}="%s", ATTR{bdi/strict_limit}="1"\n' \
+  "$1" "$2" >/etc/udev/rules.d/61-yak-dirty.rules
+udevadm control --reload
+bdi=/sys/block/$(basename "$(readlink -f "/dev/mapper/$1")")/bdi
+echo "$2" >"$bdi/max_bytes"
+echo 1 >"$bdi/strict_limit"
+EOF

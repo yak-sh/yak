@@ -137,7 +137,7 @@ patient: prove it composes first, with no server, by copying the edited file
 beside a scratch graph (`yak init --config <dir>/yak.json` makes one; keep
 its `"db"`) and running any command over it, `yak --config
 
-<dir>/yak.json graph schema`. Keep a copy of the old file and a `.backup` of
+<dir>/yak.json graph schema`. Keep a copy of the old file and a `bin/copy-db` copy of
 its db, then edit it and run `yak restart`, the agent restart door. The file
 is plain JSON on disk, so a
 key in `with` is `{"secret": "NAME"}` and the value lives in the vault

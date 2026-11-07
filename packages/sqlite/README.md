@@ -560,13 +560,14 @@ another connection holds refuses at once, `retryable: true`, and @yaks/graph
 waits for that writer between tries, the same minute, with the thread free. A
 connection closes without checkpointing, so a command ends without syncing and
 the next one appends to the log it left; SQLite checkpoints on its own when the
-log reaches 64 MiB, and a copy of the file takes its `-wal` beside it (or uses
-`.backup`, which reads it). A new file starts in incremental auto-vacuum mode,
-so the pages a delete frees can be given back (`reclaim`, under Owed work). A
-file made before keeps its mode until a `VACUUM`. It honors `DENO_SQLITE_PATH`,
-otherwise selecting the platform's system library. This module uses Deno
-environment/FFI APIs. The root adapter can instead receive another runtime's
-synchronous SQLite driver.
+log reaches 64 MiB, and a copy of the file takes its `-wal` beside it, or is a
+`.backup` inside one read transaction (`bin/copy-db`): a bare `.backup` starts
+over whenever another connection commits, and on a busy file never ends. A new
+file starts in incremental auto-vacuum mode, so the pages a delete frees can be
+given back (`reclaim`, under Owed work). A file made before keeps its mode until
+a `VACUUM`. It honors `DENO_SQLITE_PATH`, otherwise selecting the platform's
+system library. This module uses Deno environment/FFI APIs. The root adapter can
+instead receive another runtime's synchronous SQLite driver.
 
 A file driver also has `watch`: every 5 ms it reads the file's `data_version`,
 which moves when another connection commits, and calls back when it moved. A
