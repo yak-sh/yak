@@ -205,7 +205,7 @@ export let kept = (
       )
     }
     // The page's scripts ask its store next, and a store asleep takes longer
-    // to start than they take to load (page-cache.ts `shown`).
+    // to start and boot than they take to load (page-cache.ts `shown`).
     if (at.store && opens(answer)) {
       ctx.waitUntil(
         Promise.resolve(env.USES.wake(at.store)).catch((e) =>

@@ -7,7 +7,7 @@ import { test } from '@yaks/testing'
 import { assertEquals } from '@std/assert'
 import { connector, fresh, recording, signIn } from './probe.ts'
 import { Store } from './graph.ts'
-import { WARM } from './door.ts'
+import { WAKE, WARM } from './door.ts'
 import { KERNEL } from './meta.ts'
 import { state } from './testing.ts'
 
@@ -86,4 +86,28 @@ test('a warmed store reads and writes nothing it holds', async () => {
     }),
   )
   assertEquals([r.status, touched], [204, []])
+})
+
+// A page's wake (used.ts `wake`) boots the store its scripts ask next, so
+// their first call finds it up and waits on no start (`x-yak-wake`), and one
+// in the trash wakes to nothing.
+test('a woken store is up for the request behind it, unless it is in the trash', async () => {
+  let name = 'ada/cookbook.abcdef'
+  let asks = async (woken: boolean, trashed = false) => {
+    let ctx = state(name)
+    if (trashed) await ctx.storage.put('dormant', true)
+    let store = new Store(ctx)
+    let send = (path: string) =>
+      store.fetch(
+        new Request(`http://store${path}`, {
+          headers: { ...KERNEL, 'x-store': name },
+        }),
+      )
+    let wake = woken ? (await send(WAKE)).status : null
+    let read = await send('/query?q=.doc')
+    return [wake, read.status, read.headers.has('x-yak-wake')]
+  }
+  assertEquals(await asks(false), [null, 200, true])
+  assertEquals(await asks(true), [204, 200, false])
+  assertEquals(await asks(true, true), [404, 404, false])
 })

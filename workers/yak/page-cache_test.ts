@@ -20,6 +20,7 @@ import {
 } from './page-cache.ts'
 import { clock } from './timing.ts'
 import { within } from './defects.ts'
+import { WAKE } from './door.ts'
 import { dataset } from './testing.ts'
 
 let space = { eid: 's', slug: 'ada', store: 'ada.5e1f00' }
@@ -169,7 +170,7 @@ test('a page the gateway answers from the edge starts its store', async () => {
     return reached.splice(0).filter((to) => to.startsWith('ada/'))
   }
   let first = await get()
-  assertEquals(first, ['ada/cookbook.abc123 /warm'])
+  assertEquals(first, [`ada/cookbook.abc123 ${WAKE}`])
   assertEquals(
     await get(undefined, { headers: { 'if-none-match': '"one"' } }),
     first,

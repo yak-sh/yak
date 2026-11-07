@@ -158,6 +158,12 @@ export let USES = 'x-yak-uses'
  * object nobody goes on to use keeps nothing. A birth sends it while the
  * directory writes the app's row (tools.ts `warmed`, T-143307). */
 export let WARM = '/warm'
+/** The store path a caller about to ask a store that stands sends ahead of
+ * it: the store comes up as any request brings it up (its boot, the release
+ * it serves, the writes it owes) and answers nothing else, so the request
+ * behind it finds the store booted. A page sends it for its scripts (used.ts
+ * `wake`, T-150366); a birth sends WARM, since its store holds nothing yet. */
+export let WAKE = '/wake'
 /** Typed directory reads depend on stored data, never the clock or caller code. */
 export let STATIC_QUERY = 'x-yak-static-query'
 

@@ -6,7 +6,7 @@
 import type { Comp, Plugin } from '@yaks/graph'
 import type { Handler } from '@yaks/effects'
 import { parse, retired } from '@yaks/query'
-import { type Namespace, storeOf, WARM } from './door.ts'
+import { type Namespace, storeOf, WAKE, WARM } from './door.ts'
 import { PLATFORM_STORE } from '@yaks/platform/names'
 import { answered, KERNEL } from './meta.ts'
 import { background, caught, defect, within } from './defects.ts'
@@ -134,13 +134,13 @@ export let scheduleUse = (
   retain?: (work: Promise<void>) => void,
 ): void => schedule(env, used(eid), retain)
 
-/** Start the object `store` names (door.ts `WARM`) for a caller about to ask
- * it something: a page's scripts, whose first `/api/` call would otherwise wait
- * out the whole start (T-149697), or a birth's first write (T-143307). A new
- * object takes 150 to 500 ms to start before any code of ours runs in it, and
- * the start reads nothing it holds, so one nobody follows up keeps nothing.
- * Nothing waits on it, so it is no trip of the answer's (hops.ts `apart`). */
-export let wake = (
+// A caller about to ask a store something sends a start ahead of it, so the
+// object is up when it asks. A new object takes 150 to 500 ms to start before
+// any code of ours runs in it, and an isolate's first boot of a store spends
+// as long again on CPU (T-149696). Nothing waits on either, so neither is a
+// trip of the answer's (hops.ts `apart`).
+let starting = (path: string, request: string) =>
+(
   env: Partial<Env>,
   store: string,
   retain?: (work: Promise<void>) => void,
@@ -149,13 +149,23 @@ export let wake = (
   if (!STORE) return
   ;(retain ?? background)(
     apart(() =>
-      storeOf(STORE, store)(WARM, {}, KERNEL).then(
+      storeOf(STORE, store)(path, {}, KERNEL).then(
         (r) => r.body?.cancel(),
-        (e) => caught(e, { request: 'store warm', store }),
+        (e) => caught(e, { request, store }),
       )
     ),
   )
 }
+
+/** Boot the store `store` names (door.ts `WAKE`) for a page's scripts, whose
+ * first `/api/` call would otherwise wait out its whole start and boot
+ * (T-149697, T-150366). */
+export let wake = starting(WAKE, 'store wake')
+
+/** Start the object a birth names (door.ts `WARM`) for its first write
+ * (T-143307). Its store holds nothing yet, and the start reads nothing, so one
+ * nobody follows up keeps nothing. */
+export let start = starting(WARM, 'store warm')
 
 /** A write changed this app's store, or its code reported an error. */
 export let scheduleMark = (

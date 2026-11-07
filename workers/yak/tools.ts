@@ -254,7 +254,7 @@ import {
 } from './seed.ts'
 import { said as sentence } from './writes.ts'
 import { archive, breaks, folds, line, serve, trackedIn } from './unseen.ts'
-import { scheduleUse, wake } from './used.ts'
+import { scheduleUse, start } from './used.ts'
 import {
   atCeiling,
   ceilings,
@@ -2005,7 +2005,7 @@ let born = (
  * birth refused after it leaves nothing.
  */
 let warmed = (env: Env, row: Bundle) =>
-  wake(env, (row.app as { store: string }).store)
+  start(env, (row.app as { store: string }).store)
 
 /**
  * The manifest an app declares, as the bytes it is stored in, whichever

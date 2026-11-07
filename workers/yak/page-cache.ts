@@ -68,7 +68,7 @@ import { seen, viewed } from './views.ts'
 export { KEPT, pageAt, personal, shareable, visitor } from './kept-page.ts'
 
 /** What a page of an app owes as the gateway answers it: its count
- * (views.ts), and its store started where a browser goes on to run it, since
+ * (views.ts), and its store booted where a browser goes on to run it, since
  * the page's scripts ask the store next (used.ts `wake`). yak-front does the
  * same for a page it answers from the edge (front.ts `kept`). */
 export let shown = (env: Env, req: Request, page: Response, at: Seen) => {

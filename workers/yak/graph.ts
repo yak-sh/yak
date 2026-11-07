@@ -347,6 +347,7 @@ import {
   placed,
   STATIC_QUERY,
   USES,
+  WAKE,
   WARM,
 } from './door.ts'
 import { PLATFORM_STORE } from '@yaks/platform/names'
@@ -4473,6 +4474,8 @@ export class Store {
   async #serve(request: Request): Promise<Response> {
     let path = new URL(request.url).pathname
     let kernel = request.headers.get('x-yak-kernel') == '1'
+    // Brought up for the request behind it (door.ts `WAKE`), and nothing more.
+    if (path == WAKE && kernel) return new Response(null, { status: 204 })
     if (path == '/notices' && kernel) {
       return subscription(request, this.#stored(this.#graph))
     }

@@ -208,10 +208,12 @@ A query that works on the box can be refused in a store.
   first request. Prove a cache hits live before counting on it.
 - **A new object takes 150 to 500 ms to start** before any code of ours runs
   in it (T-143307). Start it beside what the request already waits on, with
-  `WARM` (door.ts, used.ts `wake`), which touches no storage, so a start
-  nobody follows up leaves nothing behind. A page view wakes its app's store
-  for the scripts that ask it next, from the edge too (page-cache.ts `shown`,
-  front.ts through `Uses`).
+  `WARM` (door.ts, used.ts `start`), which touches no storage, so a start
+  nobody follows up leaves nothing behind: a birth's. A store that stands is
+  sent `WAKE` (used.ts `wake`), which brings it up as any request does (boot,
+  release, owed writes) and answers nothing else, so the call behind it finds
+  it booted. A page view wakes its app's store for the scripts that ask it
+  next, from the edge too (page-cache.ts `shown`, front.ts through `Uses`).
 - **An isolate's first wake runs every path cold.** Its boot and first read
   cost a store 130-320 ms of CPU against a warm wake's 5-15 ms (T-148354):
   each function runs for the first time, and each per-isolate derivation (a
