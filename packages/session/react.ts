@@ -625,8 +625,16 @@ let summarize = async (
   results?: Map<Eid, string>,
   tasks: Bundle[] = [],
 ): Promise<string> => {
+  // A cap on output counts reasoning too, and a provider's default effort can
+  // spend any cap on it, so a summary asks for none: it asks for the lowest
+  // effort the model declares, and ends where its text does.
+  let name = deps.compactModel!.name
+  let [row] = await g.get([identityEid(MODEL, [name])], [MODEL])
+  let [effort] = String(comp(row ?? {} as Bundle, MODEL)?.efforts ?? '')
+    .split(/\s+/).filter(Boolean)
   let req: Request = {
-    model: deps.compactModel!.name,
+    model: name,
+    ...effort ? { effort } : {},
     instructions: 'Summarize this transcript for its next model turn. ' +
       'Preserve the current goal, decisions, exact identifiers, open ' +
       'work, and recent user instructions. Persona, admitted skills and ' +
@@ -648,7 +656,6 @@ let summarize = async (
       ),
     }],
     tools: [],
-    tokens: 4096,
     signal: deps.signal,
   }
   let compacted = await compactAsk(g, parent, source, deps.compactModel!, req)

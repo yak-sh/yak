@@ -611,6 +611,7 @@ test('a checkpoint keeps a call whose result followed an input', async () => {
 test('a long native transcript writes a checkpoint before continuing', async () => {
   let g = world()
   await windowed(g, 20)
+  await g.apply([{ entity: { eid: ids.m }, model: { efforts: 'low high' } }])
   await g.apply([{
     entity: { eid: 'later' },
     entry: { session: ids.s },
@@ -633,6 +634,9 @@ test('a long native transcript writes a checkpoint before continuing', async () 
   assertEquals((mark.checkpoint as Comp).through, 'later')
   assertEquals((mark.checkpoint as Comp).seq, 2)
   assertEquals(asked.length, 2)
+  // A reasoning summarizer is held to its lowest effort, never to a cap its
+  // reasoning could spend.
+  assertEquals([asked[0].effort, asked[0].tokens], ['low', undefined])
   assertEquals(asked[1].items, [{
     kind: 'instruction',
     text: 'Keep the blue bridge.',
