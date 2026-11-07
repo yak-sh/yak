@@ -69,8 +69,9 @@ export type CoreOpts = {
 }
 
 /**
- * A refusal naming a property this graph does not declare, with a pointer to
- * `graph_schema` appended — the tool that reports what this graph declares.
+ * The pointer a refusal naming a property this graph does not declare is
+ * said with: to `graph_schema`, the tool that reports what this graph
+ * declares. Any other refusal has none.
  * The write tool's input schema is the generic bundle, so the server is the
  * only authority on what a component accepts, and this refusal is where a
  * caller that guessed learns where to read it.
@@ -80,10 +81,10 @@ export type CoreOpts = {
  * and a graph may be composed over stores of its own, where admission ran on
  * the far side of a network hop and only its message comes back.
  */
-export let pointing = (said: string): string =>
+export let pointer = (said: string): string | undefined =>
   /unknown propert(y|ies)\b/.test(said)
-    ? `${said}. graph_schema reports what this graph declares.`
-    : said
+    ? 'graph_schema reports what this graph declares.'
+    : undefined
 
 // The generic tier's former argument names, each onto the one that takes it
 // now. A client lists the tools once, when it connects, and sends what that

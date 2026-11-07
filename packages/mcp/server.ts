@@ -24,6 +24,7 @@ import { toolsOf } from '@yaks/graph'
 import type { Opts as RunnerOpts, Runner } from '@yaks/tools'
 import {
   answerOf,
+  aside,
   faulted,
   structured,
   texts,
@@ -32,13 +33,13 @@ import {
 } from '@yaks/tools/result'
 import { CallError } from '@yaks/tools/errors'
 import { type Registry, registry, runner } from '@yaks/tools'
-import { answerSchema } from '@yaks/tools/schema'
+import { answerSchema, saying } from '@yaks/tools/schema'
 import { imagesIn } from '@yaks/tools/value'
 import {
   core,
   type CoreOpts,
   inputSchemaOf,
-  pointing,
+  pointer,
   type Search,
   translated,
 } from './tools.ts'
@@ -242,23 +243,31 @@ export { answerSchema, answerWith } from '@yaks/tools/schema'
 // bundles are nested under `result` — the shape {@link answerSchema}
 // publishes.
 //
+// Claude Code and Codex give the model a reply's structured content alone
+// whenever it has one, and claude.ai the text, so each half carries the whole
+// answer: whatever the text says that the data does not hold (@yaks/tools
+// `aside`, a refusal's pointer, the roster's news) rides in the data too, as
+// `said`, the one property every tool is listed with beside its own
+// ({@link saying}). Images are blocks of their own, which Claude Code shows
+// beside the data and Codex does not.
+//
 // Bundles carrying a `refusal` or an `exception` component are the tool's
 // refusal, and come back as an error rather than a success that reads like an
 // apology. A refusal from a tool that declared its own output schema carries
 // no structured content: a client checks whatever it is sent against that
 // schema, and fault bundles are not in its shape.
 let said = (t: Tool, answer: Bundle[], failed: boolean): CallToolResult => {
-  return {
-    // A refusal points at the tool that has the current answer: a client
-    // holding a tool list from before a property was added or removed finds out
-    // here and nowhere else.
+  // A refusal points at the tool that has the current answer: a client
+  // holding a tool list from before a property was added or removed finds out
+  // here and nowhere else.
+  let refused = failed ? worded(answer) : ''
+  let point = failed ? pointer(refused) : undefined
+  let out: CallToolResult = {
     // Data and the words beside it go in blocks of their own, data first, so
     // a client parsing the first block finds JSON (@yaks/tools `texts`).
     content: [
-      ...(failed ? [pointing(worded(answer))] : texts(answer)).map((text) => ({
-        type: 'text' as const,
-        text,
-      })),
+      ...(failed ? [point ? `${refused}. ${point}` : refused] : texts(answer))
+        .map((text) => ({ type: 'text' as const, text })),
       ...imagesIn(answer).map(({ data, mime_type }) => ({
         type: 'image' as const,
         data,
@@ -270,6 +279,24 @@ let said = (t: Tool, answer: Bundle[], failed: boolean): CallToolResult => {
       : { structuredContent: structured(t, answer) }),
     ...(failed ? { isError: true } : {}),
   }
+  return beside(out, failed ? point : aside(t, answer))
+}
+
+// Words the data is told beside what it holds, joined onto any it already has.
+let beside = (
+  out: CallToolResult,
+  line: string | undefined,
+): CallToolResult => {
+  let data = out.structuredContent as Record<string, unknown> | undefined
+  return line && data && !Array.isArray(data)
+    ? {
+      ...out,
+      structuredContent: {
+        ...data,
+        said: data.said ? `${data.said}\n${line}` : line,
+      },
+    }
+    : out
 }
 
 // A refusal is an error: `isError` is set on the reply so a client counts it
@@ -282,13 +309,16 @@ let failed = (err: unknown): CallToolResult => ({
   isError: true,
 })
 
-// One more sentence at the end of a reply, as its own content block. It is not
-// appended to the existing text because that text may be JSON — the generic
-// tier returns a typed value — and a sentence glued onto it would leave the
-// caller with something it can no longer parse.
+// One more sentence at the end of a reply, as its own content block, and in
+// its data's `said`. It is not appended to the existing text because that
+// text may be JSON — the generic tier returns a typed value — and a sentence
+// glued onto it would leave the caller with something it can no longer parse.
 let noting = (out: CallToolResult, line: string | undefined): CallToolResult =>
   line
-    ? { ...out, content: [...out.content, { type: 'text', text: line }] }
+    ? beside({
+      ...out,
+      content: [...out.content, { type: 'text', text: line }],
+    }, line)
     : out
 
 // The `_meta` a tool is listed with, beside its schemas: whatever the tool
@@ -464,7 +494,7 @@ export let server = (
     ...opts.reply ? { reply: opts.reply } : {},
   })
   let answer = opts.answer ?? answerSchema
-  let schemaOf = (t: NamedTool) => t.outputSchema ?? answer
+  let schemaOf = (t: NamedTool) => saying(t.outputSchema ?? answer)
   // The check a client makes of every answer, made here first, against the
   // schema the tool is listed with. A client refuses an answer that does not
   // fit after this server has answered, so nothing here would ever hear of

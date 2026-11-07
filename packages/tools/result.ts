@@ -238,6 +238,54 @@ export let structured = (
 ): Record<string, unknown> =>
   (tool.outputSchema ? valueIn(answer) : undefined) ?? { result: answer }
 
+// A bundle that says nothing once its value and images are taken out: the
+// spine every row has, and the call it was aimed at.
+let SPINE = new Set(['entity', 'created', 'updated'])
+let bare = (b: Bundle): boolean =>
+  Object.entries(b).every(([k, c]) =>
+    SPINE.has(k) || k[0] == '$' || c === undefined ||
+    (k == 'output' && Object.keys(c ?? {}).every((p) => p == 'source'))
+  )
+
+/**
+ * What a tool's {@link texts} say that its {@link structured} answer does not
+ * hold, worded, for a door that sends both to a reader that reads only the
+ * data. An answer of entities holds every bundle under `result`, so nothing;
+ * a value holds only itself, so the words beside it and every other bundle
+ * are said here. Images are sent as images, not words.
+ *
+ * ```ts
+ * import { assertEquals } from '@std/assert'
+ * let schema = { outputSchema: { type: 'object' } }
+ * let said = {
+ *   entity: { eid: '$said' },
+ *   content: { body: 'Two components.' },
+ *   output: { source: 'c1', value: { n: 2 } },
+ * }
+ * assertEquals(aside(schema, [said]), 'Two components.')
+ * assertEquals(aside(schema, [{ ...said, content: undefined }]), undefined)
+ * assertEquals(aside({}, [said]), undefined)
+ * ```
+ */
+export let aside = (
+  tool: { outputSchema?: Record<string, unknown> },
+  answer: Bundle[],
+  most = WORDS,
+): string | undefined => {
+  let value = tool.outputSchema ? valueIn(answer) : undefined
+  if (value === undefined) return undefined
+  let rest = answer.flatMap((b) => {
+    if (!b.output) return [b]
+    let { value: v, images: _, ...output } = b.output as Comp
+    let left = {
+      ...b,
+      output: v === value || v === undefined ? output : { ...output, value: v },
+    }
+    return bare(left) ? [] : [left]
+  })
+  return rest.length ? texts(rest, most).join('\n') : undefined
+}
+
 // The runner's own record of one call, told apart from the answer by identity,
 // never by shape: a tool that reads transcripts answers other calls and their
 // results, and those are the answer.

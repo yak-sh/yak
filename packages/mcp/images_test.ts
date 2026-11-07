@@ -31,7 +31,11 @@ let expected = {
     { type: 'image', data: images[1].data, mimeType: 'image/jpeg' },
     { type: 'text', text: 'Tool list changed.' },
   ],
-  structuredContent: { width: 390 },
+  // Claude Code and Codex read this part alone, so it says the words too.
+  structuredContent: {
+    width: 390,
+    said: 'Preview captured.\nTool list changed.',
+  },
 }
 let options = {
   tools: [tool],

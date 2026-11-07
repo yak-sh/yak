@@ -248,6 +248,16 @@ with base64 image bytes. MCP sends each as an image content block beside the
 text. Images leave `output.value` and its declared schema unchanged, so the
 structured answer can describe the image without repeating its bytes.
 
+Claude Code and Codex give the model a reply's `structuredContent` alone
+whenever it has one, so the structured answer also says, as `said`, whatever the
+text says that the data does not hold: the words beside a tool's own value (such
+as `graph_schema`'s markdown), a refusal's pointer to `graph_schema`, and the
+roster's news. An answer of entities needs no words there, since every bundle is
+under `result`. Every listed output schema declares `said` (`saying` from
+`@yaks/tools/schema`), except one whose answer is not an object. Claude Code
+still shows image blocks beside the structured answer; Codex shows only the
+structured answer, so it does not see images.
+
 Every key on a bundle beside `entity` and the `$` sugars is read as a component,
 an object or null. A host whose rows carry words of their own beside their
 components passes `answer: answerWith({kind: {type: 'string'}})`, and every tool

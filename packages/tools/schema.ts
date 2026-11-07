@@ -94,3 +94,39 @@ export let answerWith = (
  */
 export let answerSchema: { type: 'object'; [key: string]: unknown } =
   answerWith({})
+
+let saids = new WeakMap<object, Json>()
+
+/**
+ * A tool's output schema as a door lists it when its structured answer also
+ * carries `said`: the words its text says beside the data (@yaks/tools/result
+ * `aside`) and any news the door adds, for a client that gives a model the
+ * structured answer alone. A schema whose answer is not an object has nowhere
+ * to say it, and is listed as declared. The same schema is answered with the
+ * same object, so a check compiled from it is compiled once.
+ *
+ * ```ts
+ * import { assertEquals } from '@std/assert'
+ * let listed = saying(answerSchema)
+ * assertEquals((listed.properties as Record<string, unknown>).said, { type: 'string' })
+ * assertEquals(saying(answerSchema), listed)
+ * ```
+ */
+export let saying = (
+  schema: Json,
+): Json => {
+  if (schema.type != null && schema.type != 'object') return schema
+  let held = saids.get(schema)
+  if (!held) {
+    held = {
+      ...schema,
+      type: 'object',
+      properties: {
+        ...(schema.properties as Json | undefined),
+        said: { type: 'string' },
+      },
+    }
+    saids.set(schema, held)
+  }
+  return held
+}
