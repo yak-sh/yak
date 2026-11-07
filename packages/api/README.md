@@ -116,14 +116,14 @@ because they span transactions; unkeyed requests keep their ordinary behavior.
 
 ## Exports
 
-| Import             | Exports                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                              |
-| ------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `@yaks/api`        | `api`, `Options`, `Handler`, `Route`, `routed`, `Filter`; `Authenticate`, `asking`, `signed`, `PeerWriter`; `ask`, `write`, `pour`, `poured`, `CHUNK`, `WriteContext`; `published`; `subscriptions`, `Subs`, `Ask`, `Frame`, `Sink`, `Opening`, `Timer`; `attach`, `clockReply`, `decode`, `Incoming`, `queue`, `receive`, `sink`, `Socket`, `Upgrade`; `denoUpgrade`, `denoListen`, `Listen`, `Listener`, `Addr`; `json`, `refusal`, `refuse`, `fault`, `faults`, `Refusal`, `Unauthorized`; `served`, `requested`, `agent`, `Report`, `Watch`, `Answered`; `timed` |
-| `@yaks/api/vocab`  | `apiDoc`, `docs`, `description`                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                      |
-| `@yaks/api/routes` | `handler`, `Hosting`                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                 |
-| `@yaks/api/tools`  | `runs`, `Serving`, `PORT`, `HOSTNAME`                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                |
-| `@yaks/api/refuse` | `json`, `refusal`, `refuse`, `fault`, `faults`, `Refusal`, `Unauthorized`                                                                                                                                                                                                                                                                                                                                                                                                                                                                                            |
-| `@yaks/api/asset`  | `text`, `bytes`: a file a package ships, read through the module loader                                                                                                                                                                                                                                                                                                                                                                                                                                                                                              |
+| Import             | Exports                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                       |
+| ------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `@yaks/api`        | `api`, `Options`, `Handler`, `Route`, `routed`, `Filter`; `Authenticate`, `asking`, `signed`, `PeerWriter`; `ask`, `write`, `pour`, `poured`, `CHUNK`, `WriteContext`; `published`; `subscriptions`, `Subs`, `Ask`, `Frame`, `Sink`, `Opening`, `Timer`; `attach`, `clockReply`, `decode`, `Incoming`, `queue`, `receive`, `sink`, `Socket`, `Upgrade`; `denoUpgrade`, `denoListen`, `Listen`, `Listener`, `Addr`; `json`, `refusal`, `refuse`, `fault`, `faults`, `FILED`, `Refusal`, `Unauthorized`; `served`, `requested`, `agent`, `Report`, `Watch`, `Answered`; `timed` |
+| `@yaks/api/vocab`  | `apiDoc`, `docs`, `description`                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                               |
+| `@yaks/api/routes` | `handler`, `Hosting`                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                          |
+| `@yaks/api/tools`  | `runs`, `Serving`, `PORT`, `HOSTNAME`                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                         |
+| `@yaks/api/refuse` | `json`, `refusal`, `refuse`, `fault`, `faults`, `FILED`, `Refusal`, `Unauthorized`                                                                                                                                                                                                                                                                                                                                                                                                                                                                                            |
+| `@yaks/api/asset`  | `text`, `bytes`: a file a package ships, read through the module loader                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                       |
 
 ## Query answers
 
@@ -648,14 +648,23 @@ reporter a host installed with `faults`, which returns its removal, or to the
 console while none is. Every failure this package catches goes there: a socket
 message, a subscription refresh, a streamed import's failed line, and a server
 failure `refuse` answers. Under `served`, that last one is reported with its
-request instead, once.
+request instead, once. While a host's reporter hears them, an answer at 500 or
+over that was reported carries the `FILED` header (`x-yak-filed`), so a caller
+relaying it, another server or a page, files it no second time.
 
 These are also `@yaks/api/refuse`, which loads none of the server: a process
 that serves nothing, such as a `yak` command, installs its reporter with
 `faults` from there.
 
 ```ts
-import { faults, json, refusal, refuse, Unauthorized } from '@yaks/api/refuse'
+import {
+  faults,
+  FILED,
+  json,
+  refusal,
+  refuse,
+  Unauthorized,
+} from '@yaks/api/refuse'
 import { Misfit } from '@yaks/graph/errors'
 import { equal } from '@yaks/testing'
 
@@ -667,10 +676,14 @@ const error = new Unauthorized('sign in')
 equal(refusal(error), { error: 'Unauthorized', message: 'sign in' })
 equal(refuse(error).status, 401)
 const gone = new Request('https://shop.test/books?token=x', { method: 'PUT' })
-equal(refuse(new Error('disk gone'), gone).status, 500)
+const broke = refuse(new Error('disk gone'), gone)
+equal(broke.status, 500)
 remove()
-// The failure reached the reporter, named by where; the refusal did not.
+// The failure reached the reporter, named by where; the refusal did not. Its
+// answer says so, and a caller relaying it files it no second time.
 equal(caught, ['PUT /books'])
+equal(broke.headers.get(FILED), '1')
+equal(refuse(new Error('disk gone')).headers.has(FILED), false)
 equal(await json({ ready: true }).json(), { ready: true })
 // A write that did not fit the vocabulary is a `Refused` that says so.
 const misfit = new Misfit('book.pages is a number')

@@ -328,10 +328,10 @@ let crumbs = (sent: unknown): Crumb[] | undefined => {
   return kept.length ? kept : undefined
 }
 
-/** The header a server sets on an answer whose failure it has already
- * reported, where it caught it; the page reporter carries it as `filed`, and
- * {@link broken} files that answer no second time. */
-export let FILED = 'x-yak-filed'
+// The header a server sets on an answer whose failure it has already reported,
+// where it caught it (@yaks/api `FILED`): the page reporter carries it as
+// `filed`, and {@link broken} files that answer no second time.
+export { FILED } from '@yaks/api/refuse'
 
 // A fetch of the page's own origin that never had an answer, as the reporter's
 // fetch wrapper says it (`<path>: <message>`) in the words of the browser that

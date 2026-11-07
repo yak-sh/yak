@@ -16,6 +16,8 @@ import {
   within,
 } from './defects.ts'
 import { Pending } from './writes.ts'
+import { written } from './meta.ts'
+import { faults, refuse as answer } from '@yaks/api/refuse'
 import { type Own, replaced } from '@yaks/durable-object'
 
 let recorded = () => {
@@ -163,6 +165,41 @@ test('a door keeps a refusal, a hung-up caller or relayed answer at its status a
     [
       ['store fell over', { request: 'door' }],
       ['fell over', { request: 'door' }],
+    ],
+  )
+})
+
+test('a failure one object answers another with is filed once, where it was caught, and the caller files its own', async () => {
+  let { rows, time, env } = recorded()
+  let stop = faults((error, where) => caught(error, { request: where }))
+  try {
+    // A store's write catch (graph.ts `#commit`), answered to its caller.
+    let filed = await within(env, {}, () => {
+      let lost = said(new Error('Directory write lost its serving fence'))
+      caught(lost, { request: 'write' })
+      return answer(lost)
+    }, time)
+    let unfiled = Response.json({ error: 'Error', message: 'fell over' }, {
+      status: 502,
+    })
+    await within(env, {}, async () => {
+      for (let said of [filed, unfiled]) {
+        caught(await written(said).catch((e) => e), { request: 'answered' })
+      }
+      caught(said(new TypeError('the wake fell over')), { request: 'wake' })
+    }, time)
+  } finally {
+    stop()
+  }
+  equal(
+    rows.map(([row]) => [
+      (row.exception as { value: string }).value,
+      (row.error as { tags: { request: string } }).tags.request,
+    ]),
+    [
+      ['Directory write lost its serving fence', 'write'],
+      ['fell over', 'answered'],
+      ['the wake fell over', 'wake'],
     ],
   )
 })

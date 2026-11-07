@@ -16,7 +16,15 @@
 import type { Bundle } from '@yaks/graph'
 import { status } from '@yaks/graph/errors'
 import { during, link, parent, peek, unlink } from '@yaks/trace'
-import { cause, fault, json, refusal, watch } from './refuse.ts'
+import {
+  cause,
+  fault,
+  FILED,
+  json,
+  refusal,
+  reporting,
+  watch,
+} from './refuse.ts'
 import type { Handler } from './route.ts'
 import { receive } from './requests.ts'
 
@@ -156,7 +164,8 @@ export type Watch = {
  * bundle under that id, with the error thrown or the one `refuse` answered.
  * A thrown error is answered as its refusal body. An answer that already
  * carries an `x-request-id` was reported by whoever answered it, so a watched
- * handler inside another is reported once.
+ * handler inside another is reported once; one reported to a host's reporter
+ * says so to its caller ({@link FILED}).
  */
 export let served =
   (handle: Handler, o: Watch = {}): Handler => async (request) => {
@@ -211,5 +220,6 @@ export let served =
     }
     let out = new Response(answer.body, answer)
     out.headers.set('x-request-id', id)
+    if (o.report || reporting()) out.headers.set(FILED, '1')
     return out
   }

@@ -5,6 +5,7 @@ import { AsyncLocalStorage } from 'node:async_hooks'
 import { type Bundle, type Comp } from '@yaks/graph'
 import { status } from '@yaks/graph/errors'
 import { CallError } from '@yaks/tools/errors'
+import { FILED } from '@yaks/api/refuse'
 import { refused as toolRefusal } from '@yaks/tools/routes'
 import {
   type Break,
@@ -156,10 +157,6 @@ export let reported = (error: unknown) => {
   if (error && typeof error == 'object') context.getStore()?.seen.add(error)
 }
 
-// Only internal service bindings carry this answer. A failure is reported at
-// its source; the gateway receives its cause without filing the relay too.
-let REPORTED = 'x-yak-reported'
-
 // Observe a storage stream in the invocation that opened it. Buffered HTTP
 // bodies stay native: wrapping one changes how a cache can clone and cancel it.
 export let streaming = (
@@ -197,13 +194,15 @@ export let responding = async (
       stack: cause.stack,
     }, {
       status: 500,
-      headers: { [REPORTED]: '1', 'cache-control': 'private, no-store' },
+      headers: { [FILED]: '1', 'cache-control': 'private, no-store' },
     })
   }
 }
 
+// Only internal service bindings carry this answer. A failure is reported at
+// its source; the gateway receives its cause without filing the relay too.
 export let relayed = async (answer: Response): Promise<Response> => {
-  if (!answer.headers.has(REPORTED) || answer.status < 500) return answer
+  if (!answer.headers.has(FILED) || answer.status < 500) return answer
   let cause = await answer.json() as {
     name: string
     message: string

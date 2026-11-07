@@ -26,6 +26,8 @@ import { PLATFORM_STORE } from '@yaks/platform/names'
 import { jittered } from '@yaks/durable-object'
 import type { Clock } from '@yaks/fp'
 import { Pending, said } from './writes.ts'
+import { reported } from './defects.ts'
+import { FILED } from '@yaks/api/refuse'
 
 /** The meta store, in the graph's own wire. */
 export type Meta = {
@@ -56,19 +58,25 @@ export let KERNEL: Record<string, string> = { 'x-yak-kernel': '1' }
 // The original body and status also travel with the error so a catch that
 // answers a JSON client can return the door's refusal intact, and so do the
 // fields the refusal carried: a write that did not fit the store's vocabulary
-// still says `misfit` (@yaks/graph `misfit`).
-export let answeredBody = (status: number, text: string) => {
+// still says `misfit` (@yaks/graph `misfit`). A failure the door reported
+// where it caught it (@yaks/api `FILED`) is that one occurrence, relayed, and
+// no caller's catch files it again (defects.ts `reported`).
+export let answeredBody = (r: Response, text: string) => {
   let { error, message, ...carried } = refusal(text)
-  return Object.assign(new Error(typeof message == 'string' ? message : text), {
-    ...carried,
-    status,
-    body: text,
-    ...(typeof error == 'string' ? { name: error } : {}),
-  })
+  let no = Object.assign(
+    new Error(typeof message == 'string' ? message : text),
+    {
+      ...carried,
+      status: r.status,
+      body: text,
+      ...(typeof error == 'string' ? { name: error } : {}),
+    },
+  )
+  if (r.headers.has(FILED)) reported(no)
+  return no
 }
 
-export let answered = async (r: Response) =>
-  answeredBody(r.status, await r.text())
+export let answered = async (r: Response) => answeredBody(r, await r.text())
 
 // A store's `{error, message, …}`, or nothing when the body is not one.
 let refusal = (text: string): Record<string, unknown> => {

@@ -69,6 +69,13 @@ export let faults = (
   }
 }
 
+/** The header on an answer whose failure was reported where it was caught:
+ * a caller that relays the answer files it no second time. */
+export let FILED = 'x-yak-filed'
+
+/** Whether a host's reporter hears this package's failures ({@link faults}). */
+export let reporting = (): boolean => reporters.length > 0
+
 /** A server failure, reported with where it happened to the host's reporter
  * ({@link faults}), or said on the console while none is installed; a refusal
  * (below 500) is the caller's and says nothing. */
@@ -102,9 +109,11 @@ export let json = (body: unknown, code = 200): Response =>
  * server failure is reported once: by the watch the request is answered under
  * (`served`), with its request, or else here ({@link fault}), with the method
  * and path when a request is supplied, never the query string, headers or
- * body. An expected client refusal is not reported at all. */
+ * body, and its answer says so ({@link FILED}) while a host's reporter hears
+ * it. An expected client refusal is not reported at all. */
 export let refuse = (err: unknown, request?: Request): Response => {
   let code = status(err)
+  let answer = json(refusal(err), code)
   if (request && watched.has(request)) {
     if (code >= 500) watched.set(request, err)
   } else {
@@ -114,6 +123,7 @@ export let refuse = (err: unknown, request?: Request): Response => {
         ? `${request.method} ${new URL(request.url).pathname}`
         : 'request',
     )
+    if (code >= 500 && reporting()) answer.headers.set(FILED, '1')
   }
-  return json(refusal(err), code)
+  return answer
 }

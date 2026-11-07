@@ -176,7 +176,7 @@ export let vocabularyAnswer = async (
 ) => {
   if (response.ok) return { docs: await response.json() as VocabDoc[] }
   let body = await response.text()
-  caught(answeredBody(response.status, body), tags)
+  caught(answeredBody(response, body), tags)
   return { failed: new Response(body, response) }
 }
 
