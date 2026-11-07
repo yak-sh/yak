@@ -108,9 +108,10 @@ export let filed = async (
   let sha = await sha256(bytes)
   let file = await described(graph, app, sha, bytes, mime, name)
   admit(accepts, bytes.byteLength, file.mime)
-  let blobs = r2Objects(env.BLOBS)
-  let key = blobKey(space, app, sha)
-  if (!(await blobs.has(key))) await blobs.put(key, bytes)
+  // Put without asking first: the key is the bytes' own name, so the same
+  // file again writes what is already there, and a new one, the usual
+  // arrival, saves the bucket's round trip of a look (T-124298).
+  await r2Objects(env.BLOBS).put(blobKey(space, app, sha), bytes)
   return file
 }
 

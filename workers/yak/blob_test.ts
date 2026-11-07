@@ -209,6 +209,24 @@ let pngSha = await hex(png)
 let page = new TextEncoder().encode('<h1>hi</h1>')
 let pageSha = await hex(page)
 
+test('a small upload is one trip to the bucket', async () => {
+  let k = await kernel()
+  let slug = unique('tripbox')
+  let them = await seed(k, [{ slug, apps: ['photos'] }])
+  let trips = async (body: Uint8Array<ArrayBuffer>) => {
+    let res = await k.at(`${slug}.yaks.app`, '/photos/api/blob', {
+      method: 'POST',
+      headers: { cookie: them.cookie, 'content-type': 'image/jpeg' },
+      body,
+    })
+    assertEquals(res.status, 200)
+    await res.body?.cancel()
+    return /(?:^|, )r2;dur=(\d+)/.exec(res.headers.get('server-timing')!)?.[1]
+  }
+  assertEquals(await trips(jpg), '1')
+  assertEquals(await trips(jpg), '1', 'the same file again')
+})
+
 test('the file door: a page uploads bytes and gets an address', async () => {
   let { k, jeff5, dir, them, mine, anyone, mod } = pageDoor
   try {
