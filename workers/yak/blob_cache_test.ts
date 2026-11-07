@@ -32,12 +32,18 @@ test('private app blobs keep the cache behind authorization', async () => {
   )
   assertEquals(upload.status, 200)
   let file: { url: string } = await upload.json()
+  // Files answers as Cloudflare's cache in front of it does on a hit.
   let asked: Request[] = [], calls: Request[] = []
   env.FILES = {
-    fetch: (req) => {
+    fetch: async (req) => {
       asked.push(req)
       if (new URL(req.url).pathname.startsWith('/blob/')) calls.push(req)
-      return files.fetch(req, env)
+      let res = await files.fetch(req, env)
+      let hit = new Response(res.body, res)
+      hit.headers.set('cf-cache-status', 'HIT')
+      hit.headers.set('age', '42')
+      hit.headers.set('cache-tag', 'files')
+      return hit
     },
   }
   let get = (headers: Record<string, string> = {}, method = 'GET') =>
@@ -56,6 +62,10 @@ test('private app blobs keep the cache behind authorization', async () => {
     whole.headers.get('cache-control'),
     'private, max-age=31536000, immutable',
   )
+  // Nothing of Files' cache reaches the private answer (T-134925).
+  for (let name of ['cf-cache-status', 'age', 'cache-tag']) {
+    assertEquals(whole.headers.get(name), null)
+  }
   let etag = whole.headers.get('etag')!
   assertEquals(new Uint8Array(await whole.arrayBuffer()), body)
   assertEquals(calls.length, 1)

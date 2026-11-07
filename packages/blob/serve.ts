@@ -172,6 +172,19 @@ export let servedOpen = (
   request: Request = new Request('https://blob.invalid/'),
 ): Promise<Response> => rangedOpen(object, request, headersOf(meta))
 
+/** An answer's own `headers` and, of a read through a cache or another
+ * object store, only what describes the bytes. The rest of the read's
+ * headers are the store's or its cache's (`cf-cache-status`, `age`,
+ * `cache-tag`, a `public` policy), never this answer's. */
+export let carried = (read: Response, headers: HeadersInit): Headers => {
+  let head = new Headers(headers)
+  for (let key of ['content-length', 'content-range']) {
+    let value = read.headers.get(key)
+    if (value != null) head.set(key, value)
+  }
+  return head
+}
+
 /** Fence a byte response fetched through a cache or another object store. */
 export let servedVia = async (
   read: (request: Request) => Promise<Response>,
@@ -196,9 +209,7 @@ export let servedVia = async (
     }),
   )
   if (![200, 206, 416].includes(bytes.status)) return bytes
-  let head = new Headers(bytes.headers)
-  for (let [key, value] of headers) head.set(key, value)
-  head.delete('cache-tag')
+  let head = carried(bytes, headers)
   if (request.method == 'HEAD') await bytes.body?.cancel()
   return new Response(
     request.method == 'HEAD'

@@ -27,7 +27,7 @@ import { ownedPrefix } from './file-root.ts'
 //
 // Each answers `{path, url, sha, mime, size}`, `url` being where the file
 // answers for the address the request came in on.
-import { mimeOf } from '@yaks/blob'
+import { carried, mimeOf } from '@yaks/blob'
 import { identityEid } from '@yaks/graph/identity'
 import { caught } from './defects.ts'
 import type { App, Directory, PublicFile, Space } from './directory.ts'
@@ -256,7 +256,7 @@ export let served = async (ask: Ask, path: string, stale = false) => {
     })
     return null
   }
-  let headers = new Headers(bytes.headers)
+  let headers = carried(bytes, { 'accept-ranges': 'bytes' })
   headers.set('content-type', file.mime)
   headers.set('cache-control', 'public, no-cache')
   headers.set('etag', `"${file.sha}"`)
