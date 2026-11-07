@@ -93,11 +93,14 @@ test('sheets: a static page answers 304 to the bytes it last answered with', asy
   assertEquals(again.status, 304)
 })
 
-test('sheets: a HEAD names no etag of bytes it did not send', async () => {
+test('sheets: a HEAD names the etag of the bytes a GET answers with', async () => {
   let k = await kernel()
+  let get = await k.at('yaks.app', '/terms')
+  await get.body?.cancel()
   let head = await k.at('yaks.app', '/terms', { method: 'HEAD' })
   assertEquals(head.status, 200)
-  assertEquals(head.headers.get('etag'), null)
+  assert(get.headers.get('etag'))
+  assertEquals(head.headers.get('etag'), get.headers.get('etag'))
 })
 
 test('sheets: a deploy excepts exactly the files it holds, in every environment', () => {
