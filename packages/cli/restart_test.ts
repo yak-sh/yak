@@ -48,6 +48,7 @@ let fixture = (extra: string[] = []) => {
       events.push('ready')
       return Promise.resolve(true)
     },
+    stale: () => Promise.resolve('a.ts differs'),
     now: () => elapsed,
     sleep: (milliseconds) => {
       elapsed += milliseconds
@@ -110,9 +111,51 @@ test('restart starts every replacement at once and retires the old units only af
   assertEquals(f.paths, [file(work), file(web), file(work)])
   assertEquals(
     said,
-    `${work} ready in 0.1s; stopping yak-work@old.service, yak-work@older.service\n` +
-      `${web} ready in 0.0s; stopping yak-web@old.service`,
+    `${work} ready in 0.1s; stopping yak-work@old.service (a.ts differs), yak-work@older.service (a.ts differs)\n` +
+      `${web} ready in 0.0s; stopping yak-web@old.service (a.ts differs)`,
   )
+})
+
+test('restart keeps a role whose every unit runs the code a replacement would', async () => {
+  let f = fixture()
+  let differs: Record<string, string | undefined> = {
+    'yak-work@old.service': undefined,
+    'yak-work@older.service': 'packages/effects/pool.ts differs',
+  }
+  f.options.stale = (unit) => Promise.resolve(differs[unit])
+  let said = await restart(f.options)
+  let [work, ...rest] = started(f)
+  assertMatch(work, /^yak-work@/)
+  assertEquals(rest, [])
+  assertEquals(stopped(f), [['yak-work@old.service', 'yak-work@older.service']])
+  assertEquals(
+    said,
+    `${work} ready in 0.0s; stopping yak-work@old.service, yak-work@older.service (packages/effects/pool.ts differs)\n` +
+      'yak-web@old.service runs this code; kept',
+  )
+  f = fixture()
+  f.options.stale = () => Promise.resolve(undefined)
+  assertEquals(
+    await restart(f.options),
+    [
+      'yak-work@old.service runs this code; kept',
+      'yak-work@older.service runs this code; kept',
+      'yak-web@old.service runs this code; kept',
+    ].join('\n'),
+  )
+  assertEquals(f.events, ['list'])
+})
+
+test('restart replaces a unit whose code it cannot judge', async () => {
+  let f = fixture()
+  f.options.stale = (unit) =>
+    unit.startsWith('yak-web')
+      ? Promise.reject(new Error('unreadable'))
+      : Promise.resolve(undefined)
+  let said = await restart(f.options)
+  let [web] = started(f)
+  assertMatch(web, /^yak-web@/)
+  assertMatch(said, /stopping yak-web@old\.service \(Error: unreadable\)/)
 })
 
 test('restart starts unique replacements and stops nothing on a bare box', async () => {

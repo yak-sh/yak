@@ -78,6 +78,14 @@ export let start = async (argv: string[]): Promise<void> => {
     let { open } = await import('node:inspector')
     open(inspector(port), '127.0.0.1')
   }
+  // A supervised process keeps what it runs beside its ready file, for the
+  // next restart to compare (./code.ts).
+  let ready = flag(argv, 'ready')
+  let forget = async () => {}
+  if (ready) {
+    let { codeFile, record } = await import('./code.ts')
+    forget = record(codeFile(ready), flag(argv, 'config')).stop
+  }
   let [{ closeAccounts }, held, { main }] = await Promise.all([
     import('./accounts.ts'),
     import('./held.ts'),
@@ -91,9 +99,23 @@ export let start = async (argv: string[]): Promise<void> => {
   wind.done.then(async (code) => {
     await held.close(code)
     await closeAccounts()
+    await forget()
     system.exit(code)
   })
-  ran.then(system.exit)
+  ran.then(async (code) => {
+    await forget()
+    system.exit(code)
+  })
+}
+
+/// flag(['work', '--ready', '/r/a.ready'], 'ready') -> '/r/a.ready'
+/// flag(['serve', '--config=yak.json'], 'config') -> 'yak.json'
+/// flag(['serve'], 'ready') -> undefined
+/** The value a command line gives `--name`. */
+export let flag = (argv: string[], name: string): string | undefined => {
+  let at = argv.indexOf(`--${name}`)
+  if (at >= 0) return argv[at + 1]
+  return argv.find((a) => a.startsWith(`--${name}=`))?.slice(name.length + 3)
 }
 
 if (import.meta.main) start(Deno.args)

@@ -1,12 +1,16 @@
 import * as disk from '@yaks/file/io'
 import { command as launchCommand } from '@yaks/process/command'
-// Ready-first handover for the box's processes. Every role's replacement is
-// started at once from its unit template and waited on until it says it is
-// ready (its readiness file); only once every replacement is ready are the old
-// units asked to stop, without waiting for them. A worker is ready once its pool and graph
-// are assembled, and its old one drains its steps in flight. A web is ready
-// once it is listening: it shares its port with the one it replaces
-// (`yak serve --share`), so nothing is refused while the old one stops.
+import { codeFile, stale as codeStale } from './code.ts'
+import { runtimeTree } from './runtime.ts'
+// Ready-first handover for the box's processes. A role whose running units
+// run the code and config a replacement would (./code.ts) keeps them. Every
+// other role's replacement is started at once from its unit template and
+// waited on until it says it is ready (its readiness file); only once every
+// replacement is ready are the old units asked to stop, without waiting for
+// them. A worker is ready once its pool and graph are assembled, and its old
+// one drains its steps in flight. A web is ready once it is listening: it
+// shares its port with the one it replaces (`yak serve --share`), so nothing
+// is refused while the old one stops.
 
 export type Role = {
   unit: string
@@ -31,6 +35,9 @@ export type RestartOptions = {
   /** Wall-clock milliseconds, finer than one, shared by every caller on the
    * box. */
   clock?: () => number
+  /** Why a running unit must be replaced, or undefined when it runs the code
+   * and config a replacement would ({@link stale}). */
+  stale?: (unit: string) => Promise<string | undefined>
   sleep?: (milliseconds: number) => Promise<void>
 }
 
@@ -135,6 +142,22 @@ export let ready = async (path: string): Promise<boolean> => {
   }
 }
 
+/** Why `unit` must be replaced: what differs between the code its record
+ * says it runs (./code.ts) and this process's tree, or that either can't be
+ * said. */
+export let stale = async (
+  runtimeDir: string,
+  unit: string,
+): Promise<string | undefined> => {
+  let tree = runtimeTree()
+  if (!tree) return 'this restart runs from no pinned tree'
+  let [, template, instance] = /^(.+)@(.+)\.service$/.exec(unit) ?? []
+  if (!instance) return 'no instance'
+  let file = codeFile(readyFile(runtimeDir, template, instance))
+  let code = await disk.readTextFile(file).then(JSON.parse, () => undefined)
+  return code ? await codeStale(code, tree) : 'it keeps no code record'
+}
+
 let matches = (pattern: string, unit: string) => {
   let [before, after] = pattern.split('*')
   return after == null
@@ -189,9 +212,10 @@ export let restart = async (options: RestartOptions): Promise<string> => {
   }
 }
 
-/** Hand every role over through user systemd, and say what was done: each
- * replacement, how long it took to be ready, and the units it replaces. A
- * failure rejects; optional roles are rolled only when active. */
+/** Hand every role whose code changed over through user systemd, and say
+ * what was done: each replacement, how long it took to be ready, the units it
+ * replaces and why, and the units kept. A failure rejects; optional roles are
+ * rolled only when active. */
 let handover = async (options: RestartOptions): Promise<string> => {
   let execute = options.run ?? run
   let exists = options.ready ?? ready
@@ -228,10 +252,29 @@ let handover = async (options: RestartOptions): Promise<string> => {
   )
   let active = listed.split('\n').map((line) => line.trim().split(/\s+/)[0])
     .filter((unit) => unit.endsWith('.service'))
-  let replacing = roles.map((r) => ({
+  let running = roles.map((r) => ({
     ...r,
     old: active.filter((unit) => r.old.some((p) => matches(p, unit))),
   })).filter((r) => !r.optional || r.old.length)
+  // A role whose every unit runs what a replacement would keeps running: a
+  // landing that touched one package interrupts only what loads it.
+  let judge = options.stale ??
+    ((unit: string) => stale(options.runtimeDir, unit))
+  let why = await Promise.all(
+    running.map((r) =>
+      Promise.all(r.old.map((unit) => judge(unit).catch(String)))
+    ),
+  )
+  let replacing = running.filter((r, i) =>
+    !r.old.length || why[i].some((w) => w !== undefined)
+  )
+  let kept = running.filter((r) => !replacing.includes(r))
+    .flatMap((r) => r.old.map((unit) => `${unit} runs this code; kept`))
+  let reasons = new Map(
+    running.flatMap((r, i) =>
+      r.old.map((unit, j) => [unit, why[i][j]] as const)
+    ),
+  )
   // Every replacement starts at once and readies beside the old units, so the
   // handover takes as long as its slowest role, not the sum of them.
   let candidates = replacing.map((role) => {
@@ -282,10 +325,18 @@ let handover = async (options: RestartOptions): Promise<string> => {
     }
     let old = replacing.flatMap((r) => r.old)
     if (old.length) await call('--no-block', 'stop', ...old)
-    return candidates.map(({ unit, took, role }) =>
-      `${unit} ready in ${(took / 1000).toFixed(1)}s` +
-      (role.old.length ? `; stopping ${role.old.join(', ')}` : '')
-    ).join('\n')
+    return [
+      ...candidates.map(({ unit, took, role }) =>
+        `${unit} ready in ${(took / 1000).toFixed(1)}s` +
+        (role.old.length
+          ? `; stopping ${
+            role.old.map((u) => reasons.get(u) ? `${u} (${reasons.get(u)})` : u)
+              .join(', ')
+          }`
+          : '')
+      ),
+      ...kept,
+    ].join('\n')
   } catch (error) {
     // A ready replacement survives later failures. Never retire old units
     // until every replacement is ready; a failed start may still have queued

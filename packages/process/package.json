@@ -15,6 +15,7 @@
     "./env": "./env.ts",
     "./platform": "./platform.ts",
     "./command": "./command.ts",
+    "./modules": "./modules.ts",
     "./socket": "./socket.ts",
     "./clock": "./clock.ts"
   },

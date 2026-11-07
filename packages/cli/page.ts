@@ -24,6 +24,7 @@
 
 import { fault } from '@yaks/api/refuse'
 import * as disk from '@yaks/file/io'
+import { importing } from '@yaks/fp/imports'
 import { settling } from './held.ts'
 
 /** A body a page loads. */
@@ -168,9 +169,15 @@ export type Kept = ((request: Request) => Promise<Response>) & {
  * `code`, whose imports resolve as they would in a module at `at`. */
 export type Written = { code: string; at: URL }
 
+/** What a build made: its output, and what it read where it says. */
+export type Built = {
+  outputFiles?: { text: string }[]
+  metafile?: { inputs: { [path: string]: unknown } }
+}
+
 /** The operations one build owns, independent of its compiler's service. */
 export type Build = {
-  rebuild: () => Promise<{ outputFiles?: { text: string }[] }>
+  rebuild: () => Promise<Built>
   cancel: () => Promise<void>
   dispose: () => Promise<void>
 }
@@ -179,6 +186,7 @@ export type Build = {
 export let compiled = async (
   build: Build,
   signal?: AbortSignal,
+  done: (built: Built) => void = () => {},
 ): Promise<string> => {
   let cancel = () => {
     void build.cancel()
@@ -188,6 +196,7 @@ export let compiled = async (
     if (signal?.aborted) throw new Error('browser bundle was stopped')
     let result = await build.rebuild()
     if (signal?.aborted) throw new Error('browser bundle was stopped')
+    done(result)
     return result.outputFiles![0].text
   } finally {
     signal?.removeEventListener('abort', cancel)
@@ -215,6 +224,6 @@ export let bundle = async (
   if (signal?.aborted) throw new Error('browser bundle was stopped')
   let at = entry instanceof URL ? entry : entry.at
   let from = at.protocol == 'file:' ? bundlers.local : bundlers.remote
-  let bundler: { bundle: typeof bundle } = await import(from.href)
+  let bundler: { bundle: typeof bundle } = await importing(from.href)
   return bundler.bundle(entry, signal)
 }

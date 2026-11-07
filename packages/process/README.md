@@ -183,6 +183,11 @@ starts listening. A child's `kill()` signals it by pid and leaves that channel
 open, so a child told to drain is not also told its parent is gone.
 `detached: true` gives the child its own process group.
 
+`@yaks/process/modules` says which modules a set of roots reaches:
+`modules(roots, cwd)` runs `deno info` in the tree at `cwd`, under its config
+and a copy of its lock, and answers the graph, literal dynamic imports included,
+or undefined when deno cannot say.
+
 ## Winding down
 
 `@yaks/process/wind` is how a process ends when it is asked to. An interrupt is

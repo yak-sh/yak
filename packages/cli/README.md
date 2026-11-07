@@ -575,6 +575,19 @@ and waits for its readiness file in the background. Once every replacement is
 ready, it queues the old units' stops without waiting for them. Its journal says
 which units it started, how long each took and which it is stopping.
 
+A role whose running units already run what a replacement would is left running,
+so a landing that touched one package interrupts only the processes that load
+it. A process given `--ready` keeps a code record beside its ready file
+(`<unit>-<instance>.code`, ./code.ts): the tree it runs from, the modules it
+imported by a computed specifier (a plugin's facets, the bundler and the browser
+modules it bundled), the files it read in that tree, and its config's digest.
+The handover proves the record against its own tree as the test runner proves a
+pass: the module graph of the record's roots, literal dynamic imports included,
+computed by `deno info` in the tree the process runs from, with every file it
+reaches, the `deno.json` and `package.json` over each, the lock and every file
+read, compared byte for byte. A unit with no record, or one that cannot be
+proved, is replaced, and its journal line says why each old unit went.
+
 A worker is ready once its pool and graph are assembled; the old worker drains
 its steps in flight. A web listens on the old web's shared port before that web
 stops taking requests ([@yaks/api](../api/README.md)). Inactive optional units

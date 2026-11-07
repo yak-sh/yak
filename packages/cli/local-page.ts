@@ -2,6 +2,7 @@
 // workspace. ./page.ts imports this only when it makes a body, so a host that
 // makes none never loads esbuild.
 import { context } from 'esbuild'
+import { imported } from '@yaks/fp/imports'
 import { fileURLToPath } from 'node:url'
 import { compiled, type Written } from './page.ts'
 
@@ -10,8 +11,9 @@ export let bundle = async (
   signal?: AbortSignal,
 ): Promise<string> => {
   let at = entry instanceof URL ? entry : entry.at
+  let dir = new URL('./', at)
   let build = await context({
-    absWorkingDir: fileURLToPath(new URL('./', at)),
+    absWorkingDir: fileURLToPath(dir),
     ...entry instanceof URL ? { entryPoints: [fileURLToPath(entry)] } : {
       stdin: {
         contents: entry.code,
@@ -37,7 +39,14 @@ export let bundle = async (
     jsxImportSource: 'preact',
     minify: true,
     write: false,
+    metafile: true,
     logLevel: 'silent',
   })
-  return compiled(build, signal)
+  // The modules bundled are loaded for the browser, by this loader: what
+  // watches this process's imports sees them too (./code.ts).
+  return compiled(build, signal, ({ metafile }) =>
+    imported(
+      Object.keys(metafile?.inputs ?? {}).filter((i) => i != '<stdin>')
+        .map((i) => new URL(i, dir).href),
+    ))
 }

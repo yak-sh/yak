@@ -1,6 +1,6 @@
 import * as io from '@yaks/file/io'
 import * as system from '@yaks/process/system'
-import { command as processCommand } from '@yaks/process/command'
+import { type Info, modules } from '@yaks/process/modules'
 // Which files a run can leave out: one whose tests all passed, when nothing
 // it depends on has changed since. Before it runs, a file depends on its
 // module graph, as `deno info` resolves it (a dynamic import of a literal
@@ -23,28 +23,7 @@ import { createHash } from 'node:crypto'
 import { written } from './find.ts'
 import { append, byStatus, cache, load, put, stores, write } from './kept.ts'
 
-/** A module graph, as `deno info --json` says one. */
-export type Info = {
-  modules: {
-    specifier: string
-    local?: string
-    kind?: string
-    mediaType?: string
-    npmPackage?: string
-    dependencies?: {
-      specifier?: string
-      code?: { specifier?: string }
-      type?: { specifier?: string }
-      isDynamic?: boolean
-    }[]
-  }[]
-  redirects: Record<string, string>
-  npmPackages?: Record<string, {
-    name: string
-    dependencies: string[]
-    localPath: string
-  }>
-}
+export type { Info }
 
 let hex = (data: string | Uint8Array): string =>
   createHash('sha256').update(data).digest('hex')
@@ -89,32 +68,11 @@ export let location = (cwd: string = system.cwd()): Location => {
 }
 let code = (path: string) => /\.[mc]?[jt]sx?$/.test(path)
 
-/** The module graph reached from `roots`, or undefined when deno cannot
- * say. Deno resolves it by the checkout's lock, and writes what it resolved
- * anew (a module's `/// <reference types>`) to a copy: the lock is in every
- * key, and a run that wrote it would leave its own passes behind. */
-export let graph = async (roots: string[]): Promise<Info | undefined> => {
-  let { url } = location()
-  let dir = await io.makeTempDir({ prefix: 'yaks-testing-' })
-  try {
-    let entry = `${dir}/entry.ts`
-    await io.writeTextFile(
-      entry,
-      roots.map((r) => `import ${JSON.stringify(url(r))}`).join('\n'),
-    )
-    let lock = await io.copyFile('deno.lock', `${dir}/deno.lock`)
-      .then(() => `--lock=${dir}/deno.lock`, () => '--no-lock')
-    let out = await processCommand(system.execPath(), {
-      args: ['info', '--json', lock, entry],
-      stdout: 'piped',
-      stderr: 'null',
-    }).output()
-    return out.success
-      ? JSON.parse(new TextDecoder().decode(out.stdout))
-      : undefined
-  } finally {
-    await io.remove(dir, { recursive: true })
-  }
+/** The module graph reached from `roots`, checkout paths or URLs, or
+ * undefined when deno cannot say (@yaks/process/modules). */
+export let graph = (roots: string[]): Promise<Info | undefined> => {
+  let { cwd, url } = location()
+  return modules(roots.map(url), cwd)
 }
 
 /** What a graph's caller can say of a path: what it holds now (`digest`). */
