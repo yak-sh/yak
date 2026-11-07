@@ -1,9 +1,10 @@
 // Drive declared files through the executor. Loading and dependency observation
 // belong to the caller; the executor owns assertions, timing and failures.
-import { file, type Outcome } from './run.ts'
+import { apart, file, type Outcome } from './run.ts'
 import type { Test } from './suite.ts'
 
-/** Load each file, then run its tests before loading the next. Says what
+/** Load each file, then run its tests before loading the next, each file
+ * with its own global error events (./run.ts `apart`). Says what
  * loading took in all and each file's load, and what each file took whole. */
 export let drive = async (
   paths: string[],
@@ -16,6 +17,7 @@ export let drive = async (
   let took: Record<string, number> = {}
   for (let path of paths) {
     console.log(`loading ${path}`)
+    apart()
     let begun = performance.now()
     let tests = await load(path)
     let loaded = performance.now() - begun

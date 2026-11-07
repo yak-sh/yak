@@ -41,16 +41,80 @@ export let took = (ms: number) =>
 // A rejection nobody handled, or an error nobody caught, fails the test
 // running when it surfaces, which is the nearest a single runtime can place
 // it: often the test that left it, sometimes the one after.
+//
+// Each file has its own global error events, as a runtime of its own would:
+// what it listens for on the global `error` and `unhandledrejection` events,
+// by listener or by `onerror` and `onunhandledrejection`, hears a copy of
+// each, and one it cancels is handled, not stray. The runner hears the event
+// first and cancels it, so the runtime never ends over it. A file's listeners
+// end with it.
 let stray: unknown[] = []
-let heard = (error: unknown) => stray.push(error)
-globalThis.addEventListener?.('unhandledrejection', (e) => {
+let events = new EventTarget()
+let pass = (e: Event, copy: Event, error: unknown) => {
   e.preventDefault()
-  heard(e.reason)
+  if (events.dispatchEvent(copy)) stray.push(error)
+}
+globalThis.addEventListener?.('unhandledrejection', (e) => {
+  let { promise, reason } = e
+  pass(
+    e,
+    new PromiseRejectionEvent(e.type, { promise, reason, cancelable: true }),
+    reason,
+  )
 })
 globalThis.addEventListener?.('error', (e) => {
-  e.preventDefault()
-  heard(e.error)
+  let { message, filename, lineno, colno, error } = e
+  pass(
+    e,
+    new ErrorEvent(e.type, {
+      message,
+      filename,
+      lineno,
+      colno,
+      error,
+      cancelable: true,
+    }),
+    error,
+  )
 })
+let TYPES = ['error', 'unhandledrejection']
+let target = globalThis as unknown as EventTarget
+let { addEventListener: add, removeEventListener: remove } = target
+if (add) {
+  target.addEventListener = function (type, listener, options) {
+    TYPES.includes(type)
+      ? events.addEventListener(type, listener, options)
+      : add.call(this ?? target, type, listener, options)
+  }
+  target.removeEventListener = function (type, listener, options) {
+    TYPES.includes(type)
+      ? events.removeEventListener(type, listener, options)
+      : remove.call(this ?? target, type, listener, options)
+  }
+  let handlers = new Map<string, EventListener | null>()
+  for (let type of TYPES) {
+    Object.defineProperty(globalThis, `on${type}`, {
+      configurable: true,
+      enumerable: true,
+      get: () => handlers.get(type) ?? null,
+      set: (handler: EventListener | null) => {
+        let was = handlers.get(type)
+        if (was) events.removeEventListener(type, was)
+        handlers.set(type, handler)
+        if (handler) events.addEventListener(type, handler)
+      },
+    })
+  }
+}
+
+/** Gives the file loaded next its own global error events: what the one
+ * before listened for there hears no more. */
+export let apart = () => {
+  events = new EventTarget()
+  for (let type of TYPES) {
+    if (`on${type}` in globalThis) Reflect.set(globalThis, `on${type}`, null)
+  }
+}
 
 /** Runs one test, failing it once `timeout` passes without an end. */
 export let one = async (

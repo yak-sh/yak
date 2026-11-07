@@ -154,12 +154,13 @@ test('each interface in the doors band makes its own change to the one graph, dr
 
 test("a band's call that fails is reported, for the tracker", async () => {
   let { page } = await whole()
-  // Heard at reportError, where the tracker's page reporter hears it: the
-  // test runner's own error listener counts every error event as uncaught.
   let heard: string[] = []
-  let report = globalThis.reportError
-  globalThis.reportError = (e) => heard.push(String((e as Error).message))
-  cleanup(() => globalThis.reportError = report)
+  let hear = (e: ErrorEvent) => {
+    e.preventDefault()
+    heard.push(String(e.error?.message))
+  }
+  globalThis.addEventListener('error', hear)
+  cleanup(() => globalThis.removeEventListener('error', hear))
   await page.term.reach(steps, steps.length)
   page.turns.band('lost', [{
     title: 'Lost',

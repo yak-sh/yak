@@ -259,6 +259,12 @@ own time (`own`: the runtime's and every process it started) fails and the
 runner continues; the timeout does not cancel its body. A failed test sets exit
 code 1; an unknown flag sets exit code 2.
 
+An error nobody caught or a rejection nobody handled fails the test running when
+it surfaces. Each file has its own global `error` and `unhandledrejection`
+events: what it listens for there, by `addEventListener` or `onerror` and
+`onunhandledrejection`, hears each, and one it cancels with `preventDefault()`
+fails no test. A file's listeners end with it.
+
 The runner says each test as it runs (`adds ... ok (120µs)`), a failed test's
 errors right after its line, so a runtime that dies before it ends has still
 said them, then a closing report: each failed test's name and file with its
