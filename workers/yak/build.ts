@@ -526,7 +526,7 @@ export class Builder {
       )
     }
     if (new URL(request.url).pathname == '/operator/ws') {
-      return this.#accept({
+      let watching = {
         person,
         role,
         space: spaceId,
@@ -534,7 +534,16 @@ export class Builder {
         called: space.operator,
         opens: managePath('operator', space.slug),
         operator: true,
-      })
+      }
+      // The conversation the page was drawn with, whose standing its `ready`
+      // says, read once the socket hears every step after it.
+      let talk = new URL(request.url).searchParams.get('talk')
+      let { standingAt } = await import('./operator-host.ts')
+      return this.#accept(
+        watching,
+        undefined,
+        talk ? () => standingAt(operator.store, talk, watching) : undefined,
+      )
     }
     let args = await request.json() as Record<string, unknown>
     let { operatorRequest } = await import('./operator-host.ts')
@@ -672,14 +681,33 @@ export class Builder {
 
   // The 101, and the socket handed to the runtime so it outlives this object.
   // A browser's socket speaks the platform's subprotocol, which the 101 names
-  // as a browser requires (identity.ts `PROTOCOL`).
-  #accept(held: Socket, request?: Request): Response {
+  // as a browser requires (identity.ts `PROTOCOL`). A page watching the
+  // Operator is told it is ready with where the conversation it shows stands,
+  // so it reads it again only when that moved (operator-host.ts `standingAt`).
+  #accept(
+    held: Socket,
+    request?: Request,
+    standing?: () => Promise<string | undefined>,
+  ): Response {
     let pair = new WebSocketPair()
     this.#ctx.acceptWebSocket(pair[1])
     if ('browser' in held) pair[1].serializeAttachment(held)
     else if (held.operator) {
-      pair[1].serializeAttachment(held)
-      pair[1].send(JSON.stringify({ ready: true }))
+      let ws = pair[1]
+      ws.serializeAttachment(held)
+      let ready = (at?: string) =>
+        ws.send(
+          JSON.stringify(
+            at == null ? { ready: true } : { ready: true, standing: at },
+          ),
+        )
+      if (!standing) ready()
+      else {
+        void standing().then(ready, (e) => {
+          caught(e, { request: 'operator socket' })
+          ready()
+        })
+      }
     } else this.joined(pair[1], held)
     return new Response(
       null,

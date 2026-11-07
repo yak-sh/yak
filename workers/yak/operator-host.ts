@@ -506,6 +506,42 @@ const NONE = {
   html: '',
   waiting: [] as Bundle[],
   making: null,
+  standing: '',
+}
+
+// Where a conversation stands: each of its sessions by the newest of its
+// lines drawn, so a page drawn with it can tell whether one landed since
+// (`standingAt`). A helper's lines are not counted: its next line draws the
+// step that started it again.
+let standing = (sessions: Bundle[], entries: Bundle[]) =>
+  sessions.map(({ entity: { eid } }) => {
+    let seqs = entries.filter((b) => comp(b, 'entry')?.session == eid)
+      .map((b) => Number(comp(b, 'entry')?.seq ?? 0))
+    return `${eid}:${Math.max(0, ...seqs)}`
+  }).join(',')
+
+/** Where the conversation `open` stands now, as {@link conversationOf} drew
+ * it, when it is `who`'s: a page's socket opening asks it for the one the
+ * page was drawn with, which reads the conversation again only when a line
+ * landed meanwhile. */
+export let standingAt = async (
+  store: Store,
+  open: string,
+  who: Pick<Held, 'person' | 'space'>,
+) => {
+  if (!await owns(store, open, who)) return undefined
+  let found = await openedOf(store, open)
+  let sessions = found.session
+    ? [found.session]
+    : found.task
+    ? await sessionsOf(store, found.task.entity.eid)
+    : []
+  let newest = await Promise.all(sessions.map((b) =>
+    store.g.read(
+      `.entry.session=${b.entity.eid}&.order=-entry.seq&.limit=1&.fields=entry.session,entry.seq`,
+    )
+  ))
+  return standing(sessions, newest.flat())
 }
 
 export let conversationOf = async (
@@ -523,6 +559,7 @@ export let conversationOf = async (
   html: string
   waiting: Bundle[]
   making: Underway | null
+  standing: string
 }> => {
   let found = await openedOf(store, open)
   if (found.session) {
@@ -556,6 +593,7 @@ export let conversationOf = async (
       ),
       waiting: [],
       making: making(entries, seen.helpers),
+      standing: standing([row], entries),
     }
   }
   if (found.waiting) {
@@ -566,6 +604,7 @@ export let conversationOf = async (
       html: '',
       waiting: found.waiting,
       making: null,
+      standing: '',
     }
   }
   let held = found.task
@@ -599,6 +638,7 @@ export let conversationOf = async (
     ),
     waiting: [],
     making: making(entries, seen.helpers),
+    standing: standing(sessions, entries),
   }
 }
 

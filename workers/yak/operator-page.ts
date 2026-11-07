@@ -634,7 +634,15 @@ export let operatorAnswer = async (
         status: 426,
       })
     }
-    return socketTo(env, space, req, who, '/operator/ws')
+    // The conversation the page shows, for its socket to say where it stands.
+    let talk = q.get('talk')
+    return socketTo(
+      env,
+      space,
+      req,
+      who,
+      '/operator/ws' + (talk ? '?talk=' + encodeURIComponent(talk) : ''),
+    )
   }
   // A browser lent to the Operator (operator-browser.ts), signed in by the
   // token it bears (apps.ts `manage`).
@@ -661,6 +669,7 @@ export let operatorAnswer = async (
       html: talked.html,
       making: ours(space, talked.making),
       started: !!talked.making?.started,
+      standing: talked.standing,
     }, { headers: { 'cache-control': 'private, no-store' } })
   }
   // An app beside the chat drawn again as the Operator works on it, and the
@@ -723,26 +732,29 @@ export let conversationOf = async (
     title: '',
     html: '',
     making: null,
+    standing: '',
   }
   if (open == 'new') return none
-  let { root, task, begun, title, html, waiting, making } = await operatorDoor(
-    env,
-    space,
-    who,
-    'conversation',
-    { at, open, ...everyone ? { everyone } : {}, ...opens ? { opens } : {} },
-  ).catch((e) => {
-    if (e.status != 404) throw e
-    return { ...none, waiting: [] }
-  }) as {
-    root: string
-    task: string
-    begun: string
-    title: string
-    html: string
-    waiting: Bundle[]
-    making: Underway | null
-  }
+  let { root, task, begun, title, html, waiting, making, standing } =
+    await operatorDoor(
+      env,
+      space,
+      who,
+      'conversation',
+      { at, open, ...everyone ? { everyone } : {}, ...opens ? { opens } : {} },
+    ).catch((e) => {
+      if (e.status != 404) throw e
+      return { ...none, waiting: [] }
+    }) as {
+      root: string
+      task: string
+      begun: string
+      title: string
+      html: string
+      waiting: Bundle[]
+      making: Underway | null
+      standing: string
+    }
   return {
     root,
     task,
@@ -750,6 +762,7 @@ export let conversationOf = async (
     title,
     html: html + conversation(waiting),
     making,
+    standing,
   }
 }
 
@@ -1594,6 +1607,7 @@ export let chatPage = async (
       root,
       talked.begun || open,
       follows,
+      talked.standing,
     ),
     app,
   })
@@ -1713,6 +1727,7 @@ let chatScript = (
   root: string,
   talk: string,
   follows: Follows,
+  standing: string,
 ) =>
   `<script type="module">
 import { browserDrafts } from '/_draft.js'
@@ -1912,6 +1927,10 @@ document.addEventListener('click', async (e) => {
     said(error)
   }
 })
+// Where the conversation stood when the page last drew it (operator-host.ts
+// \`standingAt\`), until a step is heard; the socket says where it stands as
+// it opens, and the page reads it again only when that moved.
+let standing = ${JSON.stringify(standing)}
 // One read at a time; a step heard during one reads once more after it.
 let reading, again = false
 let read = async () => {
@@ -1923,6 +1942,7 @@ let read = async () => {
       let response = await ask('${at}?talk=' + encodeURIComponent(open))
       if (!response.ok) throw new Error('This page could not be brought up to date. Your conversation is saved; reload to try again.')
       let got = await response.json()
+      standing = got.standing
       let was = near()
       if (got.html) redraw(box, got.html), redrawn()
       if (got.title) heading.textContent = got.title
@@ -1938,12 +1958,14 @@ let read = async () => {
 let live = false, opened = false
 let hear = (frame) => {
   if (frame.drafts) for (let heard of hearing) heard(frame.drafts)
+  if (frame.ready && (frame.standing == null || frame.standing !== standing)) read().catch(said)
   let o = frame.operator
   if (!o) return
   changing(o)
   let card = thread()
   if (!card) return void read().catch(said)
   if (card.dataset.task != o.task) return
+  standing = undefined
   let was = near()
   let rows = card.querySelector('[data-rows]')
   // A reply as it is written, until the step that wrote it lands.
@@ -1978,13 +2000,13 @@ let hear = (frame) => {
   follow(was)
 }
 let listen = () => {
-  let socket = new WebSocket(location.origin.replace(/^http/, 'ws') + '${at}?live=1')
+  let socket = new WebSocket(location.origin.replace(/^http/, 'ws') + '${at}?live=1' + (open == 'new' ? '' : '&talk=' + encodeURIComponent(open)))
   // A socket still opening after the wait is closed, and so opened again.
   let opening = setTimeout(() => socket.close(), WAIT)
   // A socket opening again may follow a deploy, which the page then moves onto
   // (public/deploy.js).
   socket.onopen = () => {
-    clearTimeout(opening); live = true; readDrafts(); read().catch(said)
+    clearTimeout(opening); live = true; readDrafts()
     let app = canvas()
     if (app) remake(app.dataset.app)
     if (opened) dispatchEvent(new Event('yak-reconnect'))

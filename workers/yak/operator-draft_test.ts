@@ -114,11 +114,13 @@ let load = async (
   let reads = 0
   let holding = network == 'held'
   let failed = new Set<string>()
-  // Each draft read the page asks, answered or not.
-  let asked = 0
+  // Each draft read the page asks, answered or not, and each read of the
+  // conversation.
+  let asked = 0, talks = 0
   let fetch = async (url: string, init?: RequestInit) => {
     if (cut && init?.method == 'POST') return new Promise<Response>(() => {})
     if (url.includes('draft=1') && !init?.method) asked++
+    if (url.includes('?talk=')) talks++
     if (network == 'down' && url.includes('draft=1') && !init?.method) {
       throw new TypeError('Failed to fetch')
     }
@@ -159,8 +161,14 @@ let load = async (
       set: () => void loads.app++,
     })
   }
-  // The page's socket, which a test speaks for.
-  let sockets: { onmessage?: (e: { data: string }) => void }[] = []
+  // The page's socket, which a test speaks for, or carries to the Builder
+  // object as the edge does (`connect`).
+  type Page = {
+    url: string
+    onopen?: () => void
+    onmessage?: (e: { data: string }) => void
+  }
+  let sockets: Page[] = []
   let source = document.querySelector('script[type=module]')!.textContent!
     .replace(/^import .*$/gm, '')
   new Function(
@@ -194,7 +202,7 @@ let load = async (
       onopen?: () => void
       onmessage?: () => void
       onclose?: () => void
-      constructor() {
+      constructor(public url: string) {
         sockets.push(this)
       }
       close() {
@@ -213,8 +221,40 @@ let load = async (
     status: () => document.querySelector('[data-send-status]')!.textContent,
     failed,
     asked: () => asked,
+    talks: () => talks,
     // The Operator's socket opening, as after a deploy restarted it.
     open: () => (sockets[0] as { onopen: () => void }).onopen(),
+    // The page's newest socket upgraded through the Builder object, which
+    // speaks for it from then on.
+    connect: async () => {
+      let page = sockets.at(-1)!
+      let held: unknown = null, opened = false
+      // What the Builder says before the page hears its socket open comes
+      // after, as a browser delivers it.
+      let early: string[] = []
+      let factory = globalThis as { WebSocketPair?: unknown }
+      factory.WebSocketPair = function () {
+        return {
+          0: {},
+          1: {
+            send: (data: string) =>
+              opened ? page.onmessage?.({ data }) : void early.push(data),
+            serializeAttachment: (v: unknown) =>
+              void (held = structuredClone(v)),
+            deserializeAttachment: () => held,
+          },
+        }
+      }
+      try {
+        let url = page.url.replace(/^ws/, 'http')
+        await serve(url, { headers: { upgrade: 'websocket' } }, as)
+      } finally {
+        delete factory.WebSocketPair
+      }
+      page.onopen?.()
+      opened = true
+      for (let data of early.splice(0)) page.onmessage?.({ data })
+    },
     // A frame the Operator's socket sends the page.
     hear: (frame: unknown) =>
       sockets[0].onmessage!({ data: JSON.stringify(frame) }),
@@ -573,12 +613,33 @@ test('a page whose reads meet a deploy’s 502 reads again and catches up quietl
   let box = page.document.querySelector('[data-conversation]')!
   box.innerHTML = ''
   page.open()
+  // where the conversation stands, moved by a line the page has not drawn
+  page.hear({ ready: true, standing: 'moved' })
   await page.heard()
   for (let i = 0; i < 200 && !box.innerHTML; i++) await settle()
   assertEquals(page.failed.size, 2, 'the draft and the conversation met it')
   assertEquals(!!box.innerHTML, true, 'the conversation is drawn again')
   assertEquals(page.status(), '')
   page.leave()
+})
+
+// The page is served with the conversation drawn, and its socket opening
+// reads it again only when a line landed between the two.
+test('opening the chat app reads the conversation once, with the page', async () => {
+  let page = await load(storage(), false, park)
+  await page.connect()
+  await settle()
+  let still = page.talks()
+  page.leave()
+  let landed = await load(storage(), false, park)
+  let box = landed.document.querySelector('[data-conversation]')!
+  await begun('Ask for the north shelter as well')
+  await landed.connect()
+  for (let i = 0; i < 100 && !landed.talks(); i++) await settle()
+  await settle()
+  landed.leave()
+  assertEquals([still, landed.talks()], [0, 1])
+  assertStringIncludes(box.innerHTML, 'Ask for the north shelter as well')
 })
 
 test('a page reads its draft only as it opens and as its socket opens, never on a timer', async () => {
