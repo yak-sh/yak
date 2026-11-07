@@ -73,13 +73,9 @@ past the graph leaves archetype pointers stale, and filters and whole reads
 then answer wrong; where SQL can't be avoided, `reclassify(driver, eids)`
 inside its transaction sets them right (packages/sqlite/README.md).
 
-Prove it on a copy first. `bin/copy-db <scratch>/copy.db` copies the pages as
-one read transaction saw them, in a scope with its memory capped so the rest of
-the box keeps its page cache. Everything but the servers shares one disk cap
-(`bin/limits`), so this takes about 5 minutes for 10 GB alone and longer
-beside other bulk work; background it. Copy this way and not with `sqlite3 .backup` or
-`VACUUM INTO` directly: `.backup` has no memory cap, and `VACUUM INTO` writes a
-compacted copy, not the pages as they stood. Point a
+Prove it on a copy first, made by `bin/copy-db <scratch>/copy.db` run in the
+background (about 5 minutes for 10 GB), never by `cp`, a bare `sqlite3 .backup`
+or `VACUUM INTO`. Point a
 scratch config's `db` at the copy, run the script over it in one process (no
 server; `end-to-end-checks` has the doors), compare counts before and after,
 and run it again to show the second run changes nothing. A script that parses sqlite3's output names its
