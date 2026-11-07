@@ -10,7 +10,10 @@
  * diagnostic and is never a fallback for a missing CPU reading.
  *
  * Both revisions run this checkout's driver (bench/*.ts and @yaks/benchmark)
- * over their own product code. When the older code cannot run today's driver
+ * over their own product code. A module the driver imports that an older
+ * revision predates and that reaches no other @yaks package, such as
+ * @yaks/file/io, travels with the driver (./driver.ts `boundaries`). When the
+ * older code cannot run today's driver
  * the comparison is inconclusive; when the current code's bench fails, it
  * failed. This is evidence for the monitor: it banks nothing and gates
  * nothing.
@@ -30,7 +33,14 @@ import {
   type Samples,
 } from '@yaks/benchmark'
 import { standalone } from './standalone.ts'
-import { configured, support } from './driver.ts'
+import {
+  boundaries,
+  CARRIED,
+  carry,
+  configured,
+  exported,
+  support,
+} from './driver.ts'
 import { throughput } from './throughput.ts'
 import { combined, grouped, references } from './references.ts'
 
@@ -417,7 +427,59 @@ export let collect = async (
   }
 }
 
-type Driver = { root: string; files: string[]; identity: string }
+type Driver = {
+  root: string
+  files: string[]
+  /** The driver's modules an older revision may lack, with their files. */
+  boundaries: Record<string, string[]>
+  identity: string
+}
+
+let copy = async (from: string, to: string) => {
+  await Deno.mkdir(to.slice(0, to.lastIndexOf('/')), { recursive: true })
+  await Deno.copyFile(from, to)
+}
+
+/** The TypeScript modules of the driver snapshot at `root`, by path. */
+let walked = async (root: string, dir = ''): Promise<string[]> => {
+  let files: string[] = []
+  for await (let entry of Deno.readDir(`${root}/${dir}`)) {
+    let path = dir ? `${dir}/${entry.name}` : entry.name
+    if (entry.isDirectory && entry.name != 'node_modules') {
+      files.push(...await walked(root, path))
+    } else if (/\.tsx?$/.test(entry.name)) files.push(path)
+  }
+  return files
+}
+
+/** Every export the packages at `root` declare, in deno.json or
+ * package.json, mapped to its file. */
+let manifests = async (root: string): Promise<Record<string, string>> => {
+  let exports: Record<string, string> = {}
+  for (let parent of ['packages', 'workers']) {
+    let dirs: string[] = []
+    try {
+      for await (let entry of Deno.readDir(`${root}/${parent}`)) {
+        if (entry.isDirectory) dirs.push(`${parent}/${entry.name}`)
+      }
+    } catch (error) {
+      if (!(error instanceof Deno.errors.NotFound)) throw error
+    }
+    for (let dir of dirs) {
+      for (let name of ['package.json', 'deno.json']) {
+        try {
+          let manifest = JSON.parse(
+            await Deno.readTextFile(`${root}/${dir}/${name}`),
+          )
+          exports = { ...exported(dir, manifest), ...exports }
+        } catch (error) {
+          if (!(error instanceof Deno.errors.NotFound)) throw error
+        }
+      }
+    }
+  }
+  return exports
+}
 let captureDriver = async (root: string): Promise<Driver> => {
   let target = await Deno.makeTempDir({ prefix: 'bench-driver-' })
   try {
@@ -439,20 +501,38 @@ let captureDriver = async (root: string): Promise<Driver> => {
     ).trim().split('\n').filter((file) =>
       file.endsWith('_bench.ts') || support(file)
     )
-    for (let file of files) {
-      await Deno.mkdir(`${target}/${file.slice(0, file.lastIndexOf('/'))}`, {
-        recursive: true,
-      })
-      await Deno.copyFile(`${root}/${file}`, `${target}/${file}`)
+    for (let file of files) await copy(`${root}/${file}`, `${target}/${file}`)
+    let read = (file: string) => {
+      try {
+        return Deno.readTextFileSync(`${root}/${file}`)
+      } catch (error) {
+        if (error instanceof Deno.errors.NotFound) return undefined
+        throw error
+      }
     }
-    return { root: target, files, identity: await driverIdentity(root, target) }
+    let sources = (await walked(target)).map((file) => read(file) ?? '')
+    let carried = boundaries(sources, await manifests(root), read)
+    let travelling = [...new Set(Object.values(carried).flat())]
+    for (let file of travelling) {
+      await copy(`${root}/${file}`, `${target}/${file}`)
+    }
+    return {
+      root: target,
+      files,
+      boundaries: carried,
+      identity: await driverIdentity(root, target, travelling),
+    }
   } catch (error) {
     await Deno.remove(target, { recursive: true })
     throw error
   }
 }
 
-let driverIdentity = async (root: string, snapshot: string) => {
+let driverIdentity = async (
+  root: string,
+  snapshot: string,
+  carried: string[],
+) => {
   let files = text.decode(
     await command(root, 'git', [
       'ls-files',
@@ -467,7 +547,7 @@ let driverIdentity = async (root: string, snapshot: string) => {
       'workers',
     ]),
   ).split('\0').filter((file) =>
-    file == 'deno.json' || support(file) ||
+    file == 'deno.json' || support(file) || carried.includes(file) ||
     ((file.startsWith('bench/') || file.startsWith('packages/benchmark/') ||
       file.endsWith('_bench.ts')) &&
       ((/\.tsx?$/.test(file) && !/_test\.tsx?$/.test(file)) ||
@@ -531,20 +611,31 @@ let collectAt = async (
       ])
       // The timing library is part of the driver overlay, including on
       // revisions whose workspace predates the benchmark package.
+      for (let file of driver.files) {
+        await copy(`${driver.root}/${file}`, `${target}/${file}`)
+      }
+      // The modules the driver reaches that this revision predates travel
+      // with it, beside the revision's own tree rather than over it.
       let config = JSON.parse(await Deno.readTextFile(`${target}/deno.json`))
       let driverConfig = JSON.parse(
         await Deno.readTextFile(`${driver.root}/deno.json`),
       )
+      let carried = carry(
+        driver.boundaries,
+        new Set([
+          ...Object.keys(config.imports ?? {}),
+          ...Object.keys(await manifests(target)),
+        ]),
+      )
+      for (let specifier of Object.keys(carried)) {
+        for (let file of driver.boundaries[specifier]) {
+          await copy(`${driver.root}/${file}`, `${target}/${CARRIED}/${file}`)
+        }
+      }
       await Deno.writeTextFile(
         `${target}/deno.json`,
-        JSON.stringify(configured(config, driverConfig)),
+        JSON.stringify(configured(config, driverConfig, carried)),
       )
-      for (let file of driver.files) {
-        await Deno.mkdir(`${target}/${file.slice(0, file.lastIndexOf('/'))}`, {
-          recursive: true,
-        })
-        await Deno.copyFile(`${driver.root}/${file}`, `${target}/${file}`)
-      }
       // Reuse dependencies, not generated product assets or a graph.
       await Deno.symlink(`${root}/node_modules`, `${target}/node_modules`)
         .catch((e) => {
