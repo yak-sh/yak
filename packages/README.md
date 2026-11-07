@@ -537,9 +537,11 @@ grouped approximately by function, **not** by dependency order.
   machine opened, and `./service`, which keeps `cloudflared` running there.
 - **[@yaks/platform](./platform)** — what a hosting platform keeps about the
   apps it serves: `space`, `app`, `deploy`, `published`, `hostname`,
-  `installed`, `plan`, `meter`, `signin` and `report`. Membership of a space is
-  [@yaks/member](./member)'s `member`, and the access level on top of it is its
-  `grant` — two separate facts, not one enum.
+  `installed`, `plan`, `meter`, `signin` and `report`, and the names and rules
+  the kernel and `yak admin` share: `./names`, `./cookie`, `./bots`, `./budget`
+  and `./mover`. Membership of a space is [@yaks/member](./member)'s `member`,
+  and the access level on top of it is its `grant` — two separate facts, not one
+  enum.
 - **[@yaks/esbuild](./esbuild)** — compiles a web app's TypeScript and npm
   imports at deploy: `plan` reads an app's files and says what must be compiled
   (the server source, each page's module scripts), or nothing, and `./compile`

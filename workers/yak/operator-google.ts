@@ -28,7 +28,7 @@ import { type Ctx, refuse } from './tool.ts'
 import { addingAt, ctxOf, ownConnection } from './connections.ts'
 import { vaulted, vaultOf } from './vault.ts'
 import { recall } from './lib/hops.ts'
-import { PLATFORM_STORE } from './door.ts'
+import { PLATFORM_STORE } from '@yaks/platform/names'
 
 /** The integrations a person's calendar and mail connect through. */
 export let CALENDAR = 'google-calendar'

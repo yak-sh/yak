@@ -2,7 +2,7 @@
 // Entity ids and property values stay fixed, including kept deploy pointers.
 import type { Comp } from '@yaks/graph'
 import { token } from '@yaks/graph/sha256'
-import { PLATFORM_STORE } from './door.ts'
+import { PLATFORM_STORE } from '@yaks/platform/names'
 import type { Rule } from './mover.ts'
 
 let words = [

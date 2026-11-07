@@ -11,13 +11,14 @@
 // an agent on a test account unless the argv says otherwise, and the
 // platform, which skips what exists only for a person when nobody is one:
 // feedback is kept and never mailed, and a space nobody else is in is deleted
-// without a confirmation letter (workers/yak/tools.ts).
+// without a confirmation letter (workers/yak tools.ts).
 //
 // A visitor is nobody when Cloudflare verified it as a company's bot: a
 // search engine's or an AI company's crawler, a link previewer, a monitor.
 // Cloudflare checks the network it came from, so the list is Cloudflare's to
 // keep, never a list of user agents here to rot. Nobody looks at a page one
-// renders, so nothing it says broke is a person's break (apps.ts `/report`).
+// renders, so nothing it says broke is a person's break (workers/yak apps.ts
+// `/report`).
 
 export let BOT = '@bot.yak.sh'
 export let ADMIN = `admin${BOT}`

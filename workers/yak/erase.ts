@@ -64,7 +64,7 @@ import { token } from '@yaks/graph/sha256'
 import { declarationOf, keepDeclaration } from './declaration.ts'
 import { sandboxed } from './installed.ts'
 import { componentsOf } from './vocab.ts'
-import { isTestAddress } from './lib/bots.ts'
+import { isTestAddress } from '@yaks/platform/bots'
 import {
   CENSUS,
   expendable,
@@ -200,7 +200,7 @@ export let doomed = async (
 }
 
 // A space that is nobody's work: everyone with a way in is a test account
-// (lib/bots.ts). The letter exists so an assistant cannot delete a person's
+// (@yaks/platform/bots). The letter exists so an assistant cannot delete a person's
 // work on its own; with no person in the space there is nobody to ask, so the
 // act asked for happens at once (tools.ts `space_delete`). A protected space
 // has somebody waiting on it even with only test accounts in it, a directory's
@@ -908,7 +908,7 @@ export let collected = async (env: Env, now = new Date()) => {
 // ---- an account's end ----
 //
 // A test account goes for good, with no trash and no letter: nothing it holds
-// is a person's work (lib/bots.ts). A space only test accounts are in goes with
+// is a person's work (@yaks/platform/bots). A space only test accounts are in goes with
 // its owner; its seat anywhere else goes with the person row, whose death
 // cascades to every membership and grant naming it (member's vocabulary). A
 // person's own account is never closed here, and neither is a fixture.

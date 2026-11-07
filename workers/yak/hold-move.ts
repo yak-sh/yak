@@ -4,7 +4,7 @@
 // nothing in it. Each is dropped only while it holds none of its properties.
 // Only the directory holds spaces.
 import type { Bundle } from '@yaks/graph'
-import { PLATFORM_STORE } from './door.ts'
+import { PLATFORM_STORE } from '@yaks/platform/names'
 import type { Rule } from './mover.ts'
 
 let EMPTY: Record<string, string[]> = {

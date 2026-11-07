@@ -48,7 +48,7 @@ import { broken, mediaTypeOf, type Objects } from '@yaks/blob'
 import { blobPrefix } from './blob-key.ts'
 import { r2Objects, r2RawObjects } from './lib/objects.ts'
 import { filesAt, staged, viewOf } from './release.ts'
-import { isTestAddress } from './lib/bots.ts'
+import { isTestAddress } from '@yaks/platform/bots'
 import { fullFiles } from './usage.ts'
 import { TOOLS_EXAMPLE, viewsOf } from '@yaks/tools/declared'
 import { appTools } from './tool-grammar.ts'
@@ -231,7 +231,8 @@ import {
   spaceHost,
   url as hostUrl,
 } from './host.ts'
-import { foreign, planSettings, SLUG } from './route.ts'
+import { foreign, planSettings } from './route.ts'
+import { SLUG } from '@yaks/platform/names'
 import { globs } from './router.ts'
 import { vocabAt } from './reach.ts'
 import { applying, seeding } from './release-seed.ts'
@@ -6406,7 +6407,7 @@ let OURS: Row[] = [
       let where = app && space
         ? `${space.slug}/${app.slug}${app.version ? ` v${app.version}` : ''}`
         : space?.slug ?? ''
-      // A test account's words are kept and go nowhere (lib/bots.ts): a
+      // A test account's words are kept and go nowhere (@yaks/platform/bots): a
       // letter in a person's mailbox is a thing a person has to read.
       let test = isTestAddress(email ?? '')
       let sent = !test && await mail(ctx.env)({

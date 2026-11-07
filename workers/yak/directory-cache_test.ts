@@ -1,5 +1,6 @@
 import { equal, ok, test } from '@yaks/testing'
-import { PLATFORM_STORE, STATIC_QUERY, storeOf } from './door.ts'
+import { STATIC_QUERY, storeOf } from './door.ts'
+import { PLATFORM_STORE } from '@yaks/platform/names'
 import { KERNEL } from './meta.ts'
 import { platform, seeded } from './serving-probe.ts'
 

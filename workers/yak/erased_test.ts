@@ -10,7 +10,7 @@ import { connector, fresh, signIn } from './probe.ts'
 import { ledger, mint } from './grants.ts'
 import { meta } from './meta.ts'
 import { closed } from './erase.ts'
-import { BOT } from './lib/bots.ts'
+import { BOT } from '@yaks/platform/bots'
 
 let env!: Env
 let k = await fresh({}, (e) => env = e)

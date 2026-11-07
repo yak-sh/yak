@@ -4,7 +4,7 @@
 // none, and is nobody's to change (@yaks/connections `set`). Only the
 // directory holds integrations.
 import type { Comp } from '@yaks/graph'
-import { PLATFORM_STORE } from './door.ts'
+import { PLATFORM_STORE } from '@yaks/platform/names'
 import type { Rule } from './mover.ts'
 
 export let integrationOwnerRule: Rule = {

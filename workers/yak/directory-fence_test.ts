@@ -4,12 +4,14 @@ import { backoff } from '@yaks/durable-object'
 import { select, table } from '@yaks/sql'
 import { clock, equal, ok, test } from '@yaks/testing'
 import type { Clock } from '@yaks/fp'
-import { doorOf, IDEMPOTENCY, PLATFORM_STORE } from './door.ts'
+import { doorOf, IDEMPOTENCY } from './door.ts'
+import { PLATFORM_STORE } from '@yaks/platform/names'
+import type { Rehearsal } from '@yaks/platform/mover'
 import { EPOCH, type ServingCopyDoor } from './directory-copy.ts'
 import type { Env } from './env.ts'
 import { Store } from './graph.ts'
 import { KERNEL, metaOf } from './meta.ts'
-import type { Rehearsal, Rule } from './mover.ts'
+import type { Rule } from './mover.ts'
 import {
   ServingCopy,
   type ServingCopyState,

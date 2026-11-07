@@ -21,7 +21,7 @@ import { ddl as journalDdl } from '@yaks/journal'
 import { Store } from './graph.ts'
 import { loadVocab } from '@yaks/vocab'
 import { documented, install, respelled, unholed, unworded } from './migrate.ts'
-import { PLATFORM_STORE } from './door.ts'
+import { PLATFORM_STORE } from '@yaks/platform/names'
 import { db, keep, slot } from './testing.ts'
 
 // One object's whole state, kept across incarnations: its storage and the

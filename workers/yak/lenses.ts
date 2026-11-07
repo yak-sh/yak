@@ -9,7 +9,8 @@ import type { App, Directory, Space } from './directory.ts'
 import { storeName } from './directory.ts'
 import type { Objects } from '@yaks/blob'
 import { pins } from './versions.ts'
-import type { Mark, Rule } from './mover.ts'
+import type { Rule } from './mover.ts'
+import type { Mark } from '@yaks/platform/mover'
 
 export let declaredLenses = (doc: VocabDoc): boolean =>
   Object.values(doc.$defs ?? {}).some((s) => s.lens === true)

@@ -1,7 +1,7 @@
 // App storage's two host effects: a committed write reports its measured
 // size, and erasure clears the storage before planting a fresh graph.
 import { Refused } from '@yaks/graph/errors'
-import { PLATFORM_STORE } from './door.ts'
+import { PLATFORM_STORE } from '@yaks/platform/names'
 
 /** One report in flight; sub-MiB movement waits for a later committed write. */
 export let weighing = (host: {

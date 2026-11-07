@@ -6,7 +6,7 @@ import { preparedDriver, snapshot } from '../../packages/sqlite/testing.ts'
 import { loadVocab } from '@yaks/vocab'
 import { install, passed } from './migrate.ts'
 import { fitSchema } from './store-schema.ts'
-import { PLATFORM_STORE } from './door.ts'
+import { PLATFORM_STORE } from '@yaks/platform/names'
 
 let ONE = '10000000-0000-4000-8000-000000000001'
 let TWO = '20000000-0000-4000-8000-000000000002'

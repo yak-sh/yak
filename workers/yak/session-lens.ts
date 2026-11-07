@@ -35,7 +35,7 @@ export let sessionVersions = () => versions([sessionLens])
 export let sessionBridge = () => compile(sessionRows(), { [sessionPackage]: 0 })
 
 export let sessionMove = (): import('./mover.ts').Rule => ({
-  mark: 'yak/store/session-sending/2' as import('./mover.ts').Mark,
+  mark: 'yak/store/session-sending/2' as import('@yaks/platform/mover').Mark,
   live: 'apps',
   stores: 'apps',
   source: sessionSource,

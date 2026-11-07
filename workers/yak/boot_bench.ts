@@ -14,7 +14,7 @@
 // Gated by bin/bench-gate.ts, which ratchets each ratio down.
 import { durable } from '../../packages/durable-object/testing.ts'
 import type { Wire } from '@yaks/durable-object'
-import { PLATFORM_STORE } from './door.ts'
+import { PLATFORM_STORE } from '@yaks/platform/names'
 import { Store } from './graph.ts'
 
 // One object's state: storage that outlives an incarnation, and the sockets

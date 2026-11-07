@@ -4,7 +4,12 @@
   "type": "module",
   "exports": {
     ".": "./mod.ts",
-    "./vocab": "./vocab.ts"
+    "./vocab": "./vocab.ts",
+    "./names": "./names.ts",
+    "./cookie": "./cookie.ts",
+    "./bots": "./bots.ts",
+    "./budget": "./budget.ts",
+    "./mover": "./mover.ts"
   },
   "license": "Apache-2.0",
   "description": "What a hosting platform keeps about the apps it serves — spaces, apps, deploys, hostnames, plans and meters.",

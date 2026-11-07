@@ -7,10 +7,10 @@ import {
   doorOf,
   type Namespace,
   PLATFORM_OBJECT,
-  PLATFORM_STORE,
   storeOf as door,
   STORES_AT,
 } from './door.ts'
+import { PLATFORM_STORE } from '@yaks/platform/names'
 import { backoff } from '@yaks/durable-object'
 import { retry as retryWrite } from './write-log.ts'
 import { counts, tallying } from './lib/hops.ts'

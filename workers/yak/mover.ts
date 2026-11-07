@@ -37,7 +37,9 @@ import { token } from '@yaks/graph/sha256'
 import { isPromise } from '@yaks/fp'
 import { and, conjoin, parse, type Query } from '@yaks/query'
 import { Unknown, type VocabDoc } from '@yaks/vocab'
-import { GIT_STORE, PLATFORM_STORE } from './door.ts'
+import { GIT_STORE } from './door.ts'
+import { PLATFORM_STORE } from '@yaks/platform/names'
+import type { Mark, Rehearsal, Stamp } from '@yaks/platform/mover'
 import { deadMailInboxRule } from './migrate.ts'
 import { doneRun } from '../../packages/effects/cleanup.ts'
 import { frozenMove, takeMove } from '@yaks/builders'
@@ -53,10 +55,6 @@ import { phoneRule } from './phone-move.ts'
 import { operatorNameRule } from './operator-name.ts'
 import { sellerRule } from './seller-move.ts'
 import { describedRule } from './described-move.ts'
-/** A rule's name: where its stamp is kept in a store's memory, and the
- * `BOUNDARIES` entry its live release adds. */
-export type Mark = `yak/store/${string}`
-
 export type MoveContext = { store: string; app?: string; space?: string }
 
 export type Rule = {
@@ -186,35 +184,6 @@ export let RULES: Rule[] = [
   sellerRule,
   describedRule,
 ]
-
-/** How far one rule got in one store. `after` is the last row it moved past;
- * `unspoken` is a word the rule reads that this store does not declare, so
- * it held nothing to move. */
-export type Stamp = {
-  moved: number
-  /** Durable destination records; present only for forwarding rules. */
-  forwarded?: number
-  at: string
-  after?: string
-  done?: string
-  unspoken?: string
-  failed?: string
-}
-
-/** Where one rule stands in one store, as a wake answers it. */
-export type Standing = Partial<Stamp> & { mark: Mark; live: boolean }
-
-/** What one rule's rehearsal found in one store: the rows it would move, and
- * how many it moved, in how many batches, before its bound. */
-export type Rehearsal = {
-  mark: Mark
-  rows: number
-  moved: number
-  forwarded?: number
-  batches: number
-  unspoken?: string
-  failed?: string
-}
 
 /** The store as the mover reaches it, all of it synchronous: a batch is one
  * transaction, and a transaction cannot wait. `apply` holds its effects for

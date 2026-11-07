@@ -17,7 +17,7 @@
 import { received } from '@yaks/tracker/report'
 import { defect } from './defects.ts'
 import { apex, type Host } from './host.ts'
-import { isVerifiedBot } from './lib/bots.ts'
+import { isVerifiedBot } from '@yaks/platform/bots'
 import { flood } from './lib/flood.ts'
 import { refusal } from './unseen.ts'
 

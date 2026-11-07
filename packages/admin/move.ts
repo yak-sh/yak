@@ -6,8 +6,7 @@
 // wake is paced, a few stores a minute, so the platform is never woken all at
 // once; a rehearsal holds one store at a time and needs no pace. A store that
 // fails is said and the sweep goes on: the report is the point.
-import type { Rehearsal, Standing } from '../../workers/yak/mover.ts'
-import type { Swept } from '../../workers/yak/sweep.ts'
+import type { Rehearsal, Standing, Swept } from '@yaks/platform/mover'
 
 /** What one store answers the sweep: woken, also the alarm it then holds. */
 export type Asked = {

@@ -269,13 +269,13 @@ through the tracker independently of the kernel.
 
 Each defect carries its tags (`tool`, `space`, `app`, `client`, `store`,
 `request`) and the person's eid as `user_id`, with `account` set to `person` or
-`test` (lib/bots.ts). Space and app slugs are tags; platform defects stay in the
-platform tracker. The commit is the Workers version id and `ENVIRONMENT` records
-`production` or `staging`. A refusal of the caller's input is never sent. Tests
-and `wrangler dev` without an `ERRORS` binding send nothing. Wrangler preserves
-function names in the minified bundle. To prove a deploy's failures arrive, a
-test account POSTs `/api/defect` at the apex: that is a defect tagged
-`tool:canary`, `account:test` (mcp.ts `canary`).
+`test` (@yaks/platform/bots). Space and app slugs are tags; platform defects
+stay in the platform tracker. The commit is the Workers version id and
+`ENVIRONMENT` records `production` or `staging`. A refusal of the caller's input
+is never sent. Tests and `wrangler dev` without an `ERRORS` binding send
+nothing. Wrangler preserves function names in the minified bundle. To prove a
+deploy's failures arrive, a test account POSTs `/api/defect` at the apex: that
+is a defect tagged `tool:canary`, `account:test` (mcp.ts `canary`).
 
 **Update the dashboard Deploy command to `../../bin/build-yak deploy`.** The
 previous `npx wrangler deploy` bypasses the repo's deploy wrapper; changing the

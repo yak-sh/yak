@@ -20,7 +20,7 @@ import { INTEGRATIONS } from './integrations.ts'
 import type { Env } from './env.ts'
 import { PAGES, uriOf, whole } from './guide.ts'
 import { type Host, hosted, replyTo, spaceHost, url } from './host.ts'
-import { PLATFORM } from './route.ts'
+import { PLATFORM } from '@yaks/platform/names'
 import { publicPage } from './public-cache.ts'
 
 export let SITE_URL = url({})

@@ -17,7 +17,7 @@ import { directory, type Space, stamp } from './directory.ts'
 import { bound, type Env } from './env.ts'
 import { adminWho } from './identity.ts'
 import { added, budget, monthOf, starterOf } from './meter.ts'
-import type { SpaceBudget } from './lib/budget-lines.ts'
+import type { SpaceBudget } from '@yaks/platform/budget'
 
 let dirOf = (env: Env) => directory(bound(env.DIRECTORY, dirPart.fetch, env))
 

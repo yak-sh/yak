@@ -12,7 +12,7 @@ import { meta } from './meta.ts'
 import { crowded, KEPT, lapsed, MOVED, visits } from './visit.ts'
 import { stores } from './sweep.ts'
 import { closed, collected } from './erase.ts'
-import { BOT } from './lib/bots.ts'
+import { BOT } from '@yaks/platform/bots'
 
 let env!: Env
 let k = await fresh({}, (e) => env = e)

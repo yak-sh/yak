@@ -22,7 +22,9 @@
 // rather than waking an object nobody made.
 import * as dirPart from './directory.ts'
 import { directory, storeName } from './directory.ts'
-import { GIT_STORE, PLATFORM_STORE, storeOf } from './door.ts'
+import { GIT_STORE, storeOf } from './door.ts'
+import { PLATFORM_STORE } from '@yaks/platform/names'
+import type { Swept } from '@yaks/platform/mover'
 import { bound, type Env } from './env.ts'
 import { KERNEL } from './meta.ts'
 import { adminWho } from './identity.ts'
@@ -34,9 +36,6 @@ export let PATH = '/api/move'
 export let RELOCATE_PATH = '/api/relocate'
 export let IDLE_PATH = '/api/idle-spaces'
 export let ACCOUNT_PATH = '/api/account'
-
-/** One store a sweep asks: its name, and what a person calls it. */
-export type Swept = { store: string; at: string }
 
 let dirOf = (env: Env) => directory(bound(env.DIRECTORY, dirPart.fetch, env))
 

@@ -1,7 +1,8 @@
 // Fixed store compositions survive unrelated app declarations in the isolate.
 import { assertStrictEquals } from '@std/assert'
 import { test } from '@yaks/testing'
-import { GIT_STORE, PLATFORM_STORE } from './door.ts'
+import { GIT_STORE } from './door.ts'
+import { PLATFORM_STORE } from '@yaks/platform/names'
 import { shapeOf } from './graph.ts'
 
 let fixed = [PLATFORM_STORE, GIT_STORE, 'cache/core'].map((name) =>

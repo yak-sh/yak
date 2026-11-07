@@ -6,6 +6,7 @@
 // Pure: only the configured host, no store.
 import type { Env } from './env.ts'
 import { apex, type Host, spaceHost, url } from './host.ts'
+import { PLATFORM, SLUG } from '@yaks/platform/names'
 
 /** A request before the router splits the hostname into an app path. */
 export type Arrived = {
@@ -17,10 +18,6 @@ export type Arrived = {
 
 /** A hostname's door, or null when the path belongs elsewhere. */
 export type Door = (at: Arrived) => Promise<Response | null> | Response | null
-
-export let PLATFORM = apex()
-
-export let SLUG = /^[a-z0-9][a-z0-9-]{0,62}$/
 
 // The dashboard: a person's account and the spaces they work in, at the apex
 // rather than on any space's hostname, so no app sharing a space's origin can
@@ -202,18 +199,11 @@ export let enabling = (to: string, enable: string[] = []) =>
 // the apex.
 export let OURS = '/_yaks'
 
-// Where a sign-in link is spent (link.ts). Under `/login/`, so index.ts
-// already routes it to the identity part with the rest of the sign-in surface.
-export let LINK = '/login/link'
-
 /** The platform admin's directory, on the platform's own host (admin.ts). */
 export let ADMIN = '/admin'
 
 /** Where signing out is posted (identity.ts). */
 export let LOGOUT = '/logout'
-
-/** Where an invitation is accepted, on the platform's own host (invite.ts). */
-export let INVITE = '/invite'
 
 // What the plans cost, as a page (site/pricing.tsx, D-32751). It lives here
 // — beside the platform's own name, in the module with no dependencies —

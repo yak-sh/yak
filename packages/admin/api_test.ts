@@ -16,7 +16,7 @@ import { docDoc } from '@yaks/doc'
 import { mailDoc } from '@yaks/mail/vocab'
 import { CallError } from '@yaks/tools'
 import { lined } from '../../workers/yak/wire.ts'
-import { PLATFORM_STORE } from '../../workers/yak/door.ts'
+import { PLATFORM_STORE } from '@yaks/platform/names'
 import {
   acceptInvite,
   claimsOf,

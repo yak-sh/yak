@@ -5,7 +5,7 @@
 // row has always said it: this copies that word onto the app.
 import type { Bundle, Comp } from '@yaks/graph'
 import { token } from '@yaks/graph/sha256'
-import { PLATFORM_STORE } from './door.ts'
+import { PLATFORM_STORE } from '@yaks/platform/names'
 import type { Rule } from './mover.ts'
 
 /**

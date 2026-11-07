@@ -330,11 +330,12 @@ import {
   IDEMPOTENCY,
   type Namespace,
   placed,
-  PLATFORM_STORE,
   STATIC_QUERY,
   USES,
   WARM,
 } from './door.ts'
+import { PLATFORM_STORE } from '@yaks/platform/names'
+import { type Mark, type Stamp, type Standing } from '@yaks/platform/mover'
 import { borrows } from './reach.ts'
 import { behind, ran, skewed } from './running.ts'
 import { type Relocating, relocation } from './relocate.ts'
@@ -353,7 +354,6 @@ import { headed } from './timing.ts'
 import {
   batch,
   BATCHES,
-  type Mark,
   type Moving,
   PAUSE,
   rehearse,
@@ -361,8 +361,6 @@ import {
   RULES,
   runs,
   SIZE,
-  type Stamp,
-  type Standing,
   step,
 } from './mover.ts'
 import { weighed } from './meter.ts'

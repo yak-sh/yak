@@ -8,7 +8,7 @@ import { loadVocab } from '@yaks/vocab'
 import { integrationEid } from '@yaks/connections/identity'
 import { ramVault, reveal, secretEid } from '@yaks/secrets'
 import { CallError, Interrupted } from '@yaks/tools'
-import { ADMIN } from '../../workers/yak/lib/bots.ts'
+import { ADMIN } from '@yaks/platform/bots'
 import { door as trackerDoor } from '../../workers/tracker/door.ts'
 import {
   options as trackerOptions,

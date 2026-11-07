@@ -1,7 +1,7 @@
 // Verify the directory's canonical commits before shedding their duplicate sha.
 // Repository targets were prepared by yak/store/git-repositories/1.
 import type { Comp } from '@yaks/graph'
-import { PLATFORM_STORE } from './door.ts'
+import { PLATFORM_STORE } from '@yaks/platform/names'
 import type { Rule } from './mover.ts'
 
 export let commitRule: Rule = {

@@ -1,7 +1,7 @@
 // Test-space eligibility, from directory evidence of use. Lifecycle stamps
 // and monthly bills describe platform work too; neither is a use clock.
 // Creation gives a new record its grace period, and used survives bookkeeping.
-import { isTestAddress } from './lib/bots.ts'
+import { isTestAddress } from '@yaks/platform/bots'
 
 // `checks` is the agents' own space for live checks, its Operator included
 // (checks@bot.yak.sh): a check runs there, never in a person's space.

@@ -3,7 +3,7 @@
 // (directory.ts `mint`), and the store mover gave every space from before the
 // word one (`operatorNameRule`). Its people change it on its settings page.
 import type { Bundle, Comp } from '@yaks/graph'
-import { PLATFORM_STORE } from './door.ts'
+import { PLATFORM_STORE } from '@yaks/platform/names'
 import type { Rule } from './mover.ts'
 import { CallError } from '@yaks/tools/errors'
 

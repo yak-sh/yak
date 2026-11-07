@@ -44,7 +44,7 @@ import {
 } from './directory.ts'
 import { budget, dollars, monthOf, starterOf } from './meter.ts'
 import { DAILY, opened, PER_BUILD, PER_SOURCE } from './newcomer.ts'
-import { isTestAddress } from './lib/bots.ts'
+import { isTestAddress } from '@yaks/platform/bots'
 import { sessionAt } from './session.ts'
 import { drawn } from './render/mod.ts'
 import { personName, type Ref, type Uses } from './render/directory.ts'

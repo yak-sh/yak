@@ -28,8 +28,8 @@ import {
   MANAGE,
   managePath,
   manifestPath,
-  SLUG,
 } from './route.ts'
+import { SLUG } from '@yaks/platform/names'
 import { PLATFORM_BACKGROUND } from './apps.ts'
 import {
   type File,

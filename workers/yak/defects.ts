@@ -19,7 +19,7 @@ import {
   type WindowClock,
 } from '@yaks/tracker/report'
 import type { Env } from './env.ts'
-import { isTestAddress } from './lib/bots.ts'
+import { isTestAddress } from '@yaks/platform/bots'
 import { Pending } from './writes.ts'
 import { moved } from '@yaks/durable-object'
 import type { Ctx } from './tools.ts'

@@ -1,5 +1,6 @@
 // A space's monthly model and voice budget as a person reads it, the same on
-// the box's admin_budget and the platform admin's Operator (budget.ts).
+// the box's admin_budget and the platform admin's Operator (workers/yak
+// budget.ts).
 
 /** The dollars set on a space, null where its plan's stands, the limit it
  * answers to, what it spent this month, and what is left of its starter as

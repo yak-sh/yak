@@ -46,7 +46,7 @@ import { emptied, trash, trashSpace } from './erase.ts'
 import { call, type Ctx, type Listed, wrote } from './tools.ts'
 import { archive, openIn, serve } from './unseen.ts'
 import { KERNEL, metaOf } from './meta.ts'
-import { PLATFORM_STORE } from './door.ts'
+import { PLATFORM_STORE } from '@yaks/platform/names'
 import { sweep } from './usage.ts'
 import { FREE, monthOf, PLUS, size } from './meter.ts'
 import {

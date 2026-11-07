@@ -21,7 +21,7 @@
 import { toBase64url } from '@yaks/fp'
 import { parts, post, type Sender, Unsent } from '@yaks/mail'
 import type { Built } from '@yaks/host/senders'
-import { SLUG } from './route.ts'
+import { SLUG } from '@yaks/platform/names'
 import { apex, type Host } from './host.ts'
 import type { Env } from './env.ts'
 import { type Post, posts } from './config.ts'

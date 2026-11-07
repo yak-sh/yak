@@ -178,15 +178,13 @@ import {
 import {
   chatPath,
   hostOf,
-  INVITE,
-  LINK,
   LOGOUT,
   MANAGE,
   OAUTH,
   onZone,
   says,
-  SLUG,
 } from './route.ts'
+import { INVITE, LINK, SLUG } from '@yaks/platform/names'
 import { counted, FULL, keep, oneBuild, START } from './newcomer.ts'
 import {
   called,

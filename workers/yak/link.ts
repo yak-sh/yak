@@ -44,7 +44,8 @@
 // defend a 256-bit mac.
 import { opened, seal } from './lib/token.ts'
 import { type Row, shelf } from './grants.ts'
-import { LINK, onZone, PLATFORM } from './route.ts'
+import { onZone } from './route.ts'
+import { LINK, PLATFORM } from '@yaks/platform/names'
 import type { Host } from './host.ts'
 import { refuse } from './tool.ts'
 

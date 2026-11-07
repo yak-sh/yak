@@ -9,9 +9,9 @@
 // The home page is split only while two variants or more have a share. Until
 // then `/` shows the one that has, no cookie is kept, and no step counts under
 // a variant. A variant whose share is 0 is drawn by nobody new, but whoever
-// holds it keeps it. Nothing here imports past lib/cookie.ts, so yak-front
+// holds it keeps it. Nothing here imports past @yaks/platform/cookie, so yak-front
 // (front/) holds it.
-import { cookieValue } from './lib/cookie.ts'
+import { cookieValue } from '@yaks/platform/cookie'
 
 /** The cookie a visitor's variant is kept in. */
 export let COOKIE = 'yak_home'

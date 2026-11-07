@@ -7,7 +7,7 @@
 // serves, then handed on in a short hold, the directory naming the new object.
 // Every entity the store held is read again through the new object before the
 // sweep goes on, and one missing stops it.
-import type { Swept } from '../../workers/yak/sweep.ts'
+import type { Swept } from '@yaks/platform/mover'
 
 /** The colos an object hinted to eastern North America stands in. */
 export let NEAR = new Set(['ATL', 'EWR', 'IAD', 'MIA', 'ORD'])

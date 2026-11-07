@@ -4,7 +4,7 @@ import type { Bundle, Comp } from '@yaks/graph'
 import { Refused } from '@yaks/graph/errors'
 import { type Mode, mode } from '@yaks/member'
 import { EPOCH, FENCE_WAIT } from './directory-copy.ts'
-import { PLATFORM_STORE } from './door.ts'
+import { PLATFORM_STORE } from '@yaks/platform/names'
 import { type Vouch, vouchOf } from './app-authority.ts'
 
 type Word = 'name' | 'app' | 'access' | 'mail' | 'phone' | 'policy'

@@ -1,7 +1,7 @@
 // One page view as Analytics Engine keeps it: what views.ts counts and reads
 // back, and what yak-front (front/) writes for a page it answers from the edge.
 // Nothing here imports past arrival.ts, crawlers.ts and variant.ts, which
-// import only lib/cookie.ts, so the front Worker can hold it.
+// import only @yaks/platform/cookie, so the front Worker can hold it.
 import { arrival, campaign } from './arrival.ts'
 import { classed, isPerson, type Visited } from './crawlers.ts'
 import { variant } from './variant.ts'

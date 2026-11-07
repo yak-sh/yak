@@ -55,7 +55,8 @@ import type { Load } from '@yaks/host'
 import { cleanup } from '@yaks/testing'
 import type { Env } from './env.ts'
 import { Store } from './graph.ts'
-import { PLATFORM_OBJECT, PLATFORM_STORE } from './door.ts'
+import { PLATFORM_OBJECT } from './door.ts'
+import { PLATFORM_STORE } from '@yaks/platform/names'
 
 /**
  * Point-in-time recovery, faked (recover.ts, T-34507).

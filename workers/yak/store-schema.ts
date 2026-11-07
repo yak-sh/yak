@@ -21,7 +21,8 @@ import {
 } from '@yaks/sql'
 import { FIT, printFor, printOf, schema } from '@yaks/sqlite'
 import type { Vocab } from '@yaks/vocab'
-import { GIT_STORE, PLATFORM_STORE } from './door.ts'
+import { GIT_STORE } from './door.ts'
+import { PLATFORM_STORE } from '@yaks/platform/names'
 import {
   documented,
   INSTALL,

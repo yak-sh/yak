@@ -7,9 +7,9 @@
 //
 // The funnel counts its steps by the campaign (funnel.ts), and an ad network is
 // told of a visit its click brought (conversions.ts). Nothing here imports past
-// lib/cookie.ts and crawlers.ts, so yak-front (front/) holds it.
+// @yaks/platform/cookie and crawlers.ts, so yak-front (front/) holds it.
 import { isPerson } from './crawlers.ts'
-import { cookieValue } from './lib/cookie.ts'
+import { cookieValue } from '@yaks/platform/cookie'
 
 /** The cookie an arrival is kept in, apart from the session's. */
 export let COOKIE = 'yak_came'

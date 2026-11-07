@@ -11,7 +11,7 @@
 import type { Bundle, Comp } from '@yaks/graph'
 import { token } from '@yaks/graph/sha256'
 import type { VocabDoc } from '@yaks/vocab'
-import { PLATFORM_STORE } from './door.ts'
+import { PLATFORM_STORE } from '@yaks/platform/names'
 import { bool, owned, text } from './facets/schema.ts'
 import type { Rule } from './mover.ts'
 

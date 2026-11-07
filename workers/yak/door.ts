@@ -14,6 +14,7 @@ import type { Caller } from '@yaks/egress'
 import { elapsed, heard, hop, WAITS, writing } from './lib/hops.ts'
 import { defect } from './defects.ts'
 import { stamp } from './running.ts'
+import { PLATFORM_STORE } from '@yaks/platform/names'
 import { evicted, killed, opaque, retried, starved } from '@yaks/durable-object'
 
 // A store reports the statements it ran for this fetch, including any store
@@ -73,14 +74,8 @@ export type Dispatch = {
   ): Fetcher
 }
 
-/** The store the directory lives in, named the way every app's store is. Its
- * slugs are the platform's own and never move, so the name is a constant.
- *
- * A store's name is addressing rather than vocabulary: consumers can name
- * the directory without importing its words or its store composition. */
-export let PLATFORM_STORE = 'yak/platform'
-
-/** Where the directory's file stands. Its name above is what the directory is;
+/** Where the directory's file stands. Its name, @yaks/platform/names
+ * `PLATFORM_STORE`, is what the directory is;
  * this is the object holding it, first reached from a Worker in ORD so that it
  * stands near Chicago (relocate.ts, T-134094). An object can't move, so a move
  * is a new name here. */

@@ -43,11 +43,11 @@ import {
   type Door,
   type Fetcher,
   type Namespace,
-  PLATFORM_STORE,
   STATIC_QUERY,
   storeOf,
 } from './door.ts'
-import { ADMIN } from './lib/bots.ts'
+import { PLATFORM_STORE, SLUG } from '@yaks/platform/names'
+import { ADMIN } from '@yaks/platform/bots'
 import { recall, writing } from './lib/hops.ts'
 import { refusal } from '@yaks/api'
 import { CallError } from '@yaks/tools/errors'
@@ -60,7 +60,6 @@ import {
 } from './meta.ts'
 import { caught, refusing } from './defects.ts'
 import { mailFrom } from './post.ts'
-import { SLUG } from './route.ts'
 import { payments } from './config.ts'
 import { firstOf } from './router.ts'
 import { nameOf } from './signin.ts'

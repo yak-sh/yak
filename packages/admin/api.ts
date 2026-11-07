@@ -26,11 +26,16 @@ import { type Registered, registration } from '@yaks/connections'
 import { CallError } from '@yaks/tools/errors'
 import { valueIn } from '@yaks/tools/value'
 import { claimed } from '@yaks/secrets/signed'
-import { PLATFORM_STORE } from '../../workers/yak/door.ts'
-import type { Swept } from '../../workers/yak/sweep.ts'
+import {
+  INVITE,
+  LINK,
+  PLATFORM,
+  PLATFORM_STORE,
+  SLUG,
+} from '@yaks/platform/names'
+import type { Swept } from '@yaks/platform/mover'
 import type { Asked } from './move.ts'
-import { INVITE, LINK, PLATFORM, SLUG } from '../../workers/yak/route.ts'
-import { COOKIE } from '../../workers/yak/lib/cookie.ts'
+import { COOKIE } from '@yaks/platform/cookie'
 
 // The zone this client points at, so a probe can aim somewhere else.
 export let zone = () => systemProcess.env.get('YAKS_ZONE') ?? PLATFORM
@@ -252,8 +257,8 @@ export let setFee = (session: string, bps: number): Promise<Fee> =>
   said(posted(apex(FEE), { bps: String(bps) }, session))
 
 /** A space's monthly model and voice budget (workers/yak/budget.ts). */
-export type { SpaceBudget } from '../../workers/yak/lib/budget-lines.ts'
-import type { SpaceBudget } from '../../workers/yak/lib/budget-lines.ts'
+export type { SpaceBudget } from '@yaks/platform/budget'
+import type { SpaceBudget } from '@yaks/platform/budget'
 
 export let BUDGET = '/api/budget'
 

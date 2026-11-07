@@ -12,7 +12,8 @@ import {
   STALL,
 } from './directory-copy.ts'
 import { GRANT } from './dispatch.ts'
-import { PLATFORM_OBJECT, PLATFORM_STORE } from './door.ts'
+import { PLATFORM_OBJECT } from './door.ts'
+import { PLATFORM_STORE } from '@yaks/platform/names'
 import { Store } from './graph.ts'
 import { fetch as mcpFetch } from './mcp.ts'
 import { KERNEL } from './meta.ts'

@@ -10,9 +10,9 @@ import {
   IDEMPOTENCY,
   type Namespace,
   PLATFORM_OBJECT,
-  PLATFORM_STORE,
   storeOf,
 } from './door.ts'
+import { PLATFORM_STORE } from '@yaks/platform/names'
 import { KERNEL, meta } from './meta.ts'
 import { platform } from './testing.ts'
 import { Store } from './graph.ts'

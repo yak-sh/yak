@@ -142,9 +142,9 @@ import {
   paged as pagePath,
   route,
   signInAt,
-  SLUG,
   type SpaceView,
 } from './route.ts'
+import { SLUG } from '@yaks/platform/names'
 import { covers, PLATFORM_PATHS } from './router.ts'
 import {
   browsing,
@@ -193,7 +193,7 @@ import {
 } from './unseen.ts'
 import { broken } from '@yaks/tracker/report'
 import { flood } from './lib/flood.ts'
-import { isVerifiedBot } from './lib/bots.ts'
+import { isVerifiedBot } from '@yaks/platform/bots'
 import { drafted, fullAt, hashed, recoverRelease, TOOLS } from './tools.ts'
 import { stale } from './toolkit.ts'
 import { ask } from './remake.ts'
@@ -1656,7 +1656,7 @@ export let api = async (
   // stranger to sign in first would lose exactly the breaks nobody sees.
   if (path == '/report') {
     if (req.method != 'POST') return json(405, 'method_not_allowed')
-    // A page a verified bot renders, nobody is looking at (lib/bots.ts). It
+    // A page a verified bot renders, nobody is looking at (@yaks/platform/bots). It
     // loads on budgets and through proxies of its own, which drop loads our
     // doors answered, so a miss it reports is the bot's: filed, it reads as
     // the app's break, and a module it cut off would roll the release back

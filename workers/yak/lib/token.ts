@@ -33,7 +33,7 @@ import {
   secretKey,
   signedWith,
 } from '@yaks/secrets/signed'
-import { COOKIE, cookieValue } from './cookie.ts'
+import { COOKIE, cookieValue } from '@yaks/platform/cookie'
 import { oldUse, today } from './token_legacy.ts'
 
 export type Claims = {

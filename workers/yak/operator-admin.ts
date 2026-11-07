@@ -11,7 +11,7 @@ import { type Options, read } from '@yaks/tracker/routes'
 import { type Directory, META } from './directory.ts'
 import type { Env } from './env.ts'
 import { standing } from './budget.ts'
-import { budgetLines } from './lib/budget-lines.ts'
+import { budgetLines } from '@yaks/platform/budget'
 import { rate } from './sell.ts'
 import { refuse } from './tool.ts'
 

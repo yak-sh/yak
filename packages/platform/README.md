@@ -2,8 +2,9 @@
 
 Defines graph components for a hosting platform's applications, deployments,
 customer spaces, billing usage, sign-ins, and error reports. It also compares
-releases without storage or runtime calls; it is not a deployment server or
-billing implementation.
+releases and holds the names and rules the platform and its clients share,
+without storage or runtime calls; it is not a deployment server or billing
+implementation.
 
 `space` is what a customer owns; `app` is what lives in it; `deploy` is one
 release of that app, and `published` is the name it was released under;
@@ -49,6 +50,19 @@ This example uses in-memory storage. Application slugs are unique within a
 space; deployment versions are unique within an app. `plan` and `signin`
 properties are stamped, so trusted application code supplies them rather than
 ordinary client writes.
+
+## What the platform and its clients share
+
+The kernel (`workers/yak`) and `yak admin` (@yaks/admin) both import these, so
+neither restates the other's names. Each is pure.
+
+| export                  | holds                                                                                                                                                                                          |
+| ----------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `@yaks/platform/names`  | `PLATFORM`, the platform's own host; `SLUG`, a space's or an app's slug; `PLATFORM_STORE`, the store the directory lives in; `LINK` and `INVITE`, the sign-in link's and an invitation's paths |
+| `@yaks/platform/cookie` | `COOKIE`, the cookie a platform session rides in, and `cookieValue(header, name?)`, one cookie out of a `Cookie` header                                                                        |
+| `@yaks/platform/bots`   | which accounts and visitors are nobody's: `BOT`, the fleet's bot domain, `ADMIN` and `DEMO`, its two addresses that are not throwaways, `isTestAddress` and `isVerifiedBot`                    |
+| `@yaks/platform/budget` | `SpaceBudget`, a space's monthly model and voice budget, and `budgetLines`, the lines a person reads it in                                                                                     |
+| `@yaks/platform/mover`  | what the store mover answers: `Swept`, a store a sweep asks; `Mark`, a rule's name; `Stamp`, `Standing` and `Rehearsal`, where a rule stands in a store and what a rehearsal found             |
 
 ## Compatibility
 

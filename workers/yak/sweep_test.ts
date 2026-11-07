@@ -8,6 +8,7 @@ import { KERNEL, metaOf } from './meta.ts'
 import * as dirPart from './directory.ts'
 import { sign } from './lib/token.ts'
 import * as sweep from './sweep.ts'
+import type { Swept } from '@yaks/platform/mover'
 import { platform } from './testing.ts'
 
 let SECRET = 'a probe secret'
@@ -76,10 +77,10 @@ test('the platform’s owner sweeps every store, one at a time', async () => {
   let { scenario, door } = await spaces()
   await using _ = scenario
   let listed = await door(JEFF)
-  let handles = listed.body.map((s: sweep.Swept) => s.store)
+  let handles = listed.body.map((s: Swept) => s.store)
   assertEquals(handles, [...new Set(handles)])
   assertEquals(
-    listed.body.map((s: sweep.Swept) => s.at).filter((at: string) =>
+    listed.body.map((s: Swept) => s.at).filter((at: string) =>
       at == 'ada/notes' || at == 'git' || at == 'directory'
     ),
     ['ada/notes', 'git', 'directory'],

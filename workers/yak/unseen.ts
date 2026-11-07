@@ -38,7 +38,7 @@ import {
 } from '@yaks/tracker/report'
 import { errorsAt, errorsIn, type Send } from './app-errors.ts'
 import { refuse } from './tool.ts'
-import { isTestAddress } from './lib/bots.ts'
+import { isTestAddress } from '@yaks/platform/bots'
 import { flood } from './lib/flood.ts'
 
 // A refusal is NOT a break (C-32652 item 3, T-32655; C-32869 item 5) — one
@@ -111,7 +111,7 @@ let pushes = flood(10)
 let hushed = (space: Space, app: App) => pushes(`${space.slug}/${app.slug}`)
 
 // Whose a space is, as a failure's `account` tag: `test` when every member is
-// a test account (lib/bots.ts), so the owner's letter says a probe broke, not
+// a test account (@yaks/platform/bots), so the owner's letter says a probe broke, not
 // a person's app. Asked once a space per ten minutes in an isolate; a lookup
 // that fails leaves the tag off rather than guessing.
 let owners = new Map<string, { until: number; account: string }>()

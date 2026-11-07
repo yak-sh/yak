@@ -24,7 +24,7 @@ import {
   type Timer,
   UNKEPT_AT,
 } from '../kept-page.ts'
-import { cookieValue } from '../lib/cookie.ts'
+import { cookieValue } from '@yaks/platform/cookie'
 import {
   isHome,
   isPage,
