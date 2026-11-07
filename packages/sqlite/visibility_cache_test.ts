@@ -108,6 +108,11 @@ presence.store.rows('.pointer.to', visitor)
 let queryOpts = { visibility: { entity: '!private|.private.by=alice' } }
 // A scope that sees no entity holding nothing, so no deleted one.
 let owned = { visibility: { entity: '.pointer|.private.by=alice' } }
+// Compile a removal and the scoped read after it before the timed cases.
+fixture().store.tx((tx) => {
+  tx.remove([{ eid: 'draft' }])
+  tx.read('.pointer.to=draft', owned)
+})
 selected.store.rows('.pointer.to=draft', queryOpts)
 selected.store.rows('.pointer.to=draft', queryOpts)
 unchanged.store.rows('.pointer.to=draft', queryOpts)

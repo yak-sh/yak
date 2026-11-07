@@ -1,7 +1,7 @@
 /// <reference lib="deno.ns" />
 import { test } from '@yaks/testing'
 import { assertEquals } from '@std/assert'
-import { type Bundle, graph } from '@yaks/graph'
+import { type Bundle, graph, type Storage } from '@yaks/graph'
 import { loadVocab } from '@yaks/vocab'
 import { parse } from '@yaks/query'
 import { col, eq, select, sub, table } from '@yaks/sql'
@@ -41,18 +41,21 @@ let derived = {
   },
 }
 let base = { derived }
-let sql = preparedStore(vocab, base, snapshot(vocab, base))
 let stores = {
-  RAM: ram(vocab, {
-    computed: {
-      'public.value': (b, among) =>
-        (among.of(b.entity.eid)?.private as Record<string, unknown>)?.text ??
-          null,
-    },
-  }),
-  SQL: sql,
+  RAM: () =>
+    ram(vocab, {
+      computed: {
+        'public.value': (b, among) =>
+          (among.of(b.entity.eid)?.private as Record<string, unknown>)
+            ?.text ??
+            null,
+      },
+    }),
+  SQL: () => preparedStore(vocab, base, snapshot(vocab, base)),
 }
-for (let [name, storage] of Object.entries(stores)) {
+// A secret, an owner's own text and a pointer at the secret, each read
+// through a graph of its own scope.
+let seeded = (storage: Storage) => {
   storage.tx((tx) =>
     tx.patch([{
       entity: { eid: 'other' },
@@ -68,7 +71,6 @@ for (let [name, storage] of Object.entries(stores)) {
       scope: () => ({ components: { private: '.entity.eid=owner' } }),
     }],
   })
-  let value = (rows: Bundle[]) => rows[0].public
   storage.tx((tx) =>
     tx.patch([{
       entity: { eid: 'owner-1' },
@@ -97,6 +99,16 @@ for (let [name, storage] of Object.entries(stores)) {
       scope: () => ({ entity: '!private|.entity.eid=owner-1' }),
     }],
   })
+  return { g, owner, refs }
+}
+for (let [name, make] of Object.entries(stores)) {
+  // Compile this store's scoped read before the timed cases, in a store of
+  // its own, so no case reads an answer it kept. Asked twice: a shape's
+  // second ask proves its kept statement (@yaks/sql kept.ts).
+  let warm = seeded(make()).refs
+  for (let n = 0; n < 2; n++) warm.rows('.pointer.to')
+  let { g, owner, refs } = seeded(make())
+  let value = (rows: Bundle[]) => rows[0].public
   test(`${name} reference presence excludes a hidden target`, () =>
     assertEquals(refs.rows('.pointer.to'), []))
   test(`${name} reference presence counts exclude hidden targets`, () =>
