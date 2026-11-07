@@ -2,7 +2,7 @@
 // wait a token out when it is empty, and carry every tag owed meanwhile.
 import { test } from '@yaks/testing'
 import { assertEquals, assertRejects } from '@std/assert'
-import { purger, Unpurged } from './purge.ts'
+import { purger, SPREAD, Unpurged } from './purge.ts'
 
 // A Site that refuses the purges `refuses` names (by count) for rate, on a
 // clock that moves only when the purger waits. Every purge is held in flight
@@ -34,6 +34,7 @@ let site = (refuses: number[] = []) => {
     sent,
     go: () => held.resolve(),
     flying: flying.promise,
+    now: () => t,
   }
 }
 
@@ -68,4 +69,15 @@ test('the third refusal is reported to every writer waiting on it', async () => 
   // The next writer starts afresh once a token is back.
   await purge(['app:c'])
   assertEquals(sent.at(-1), { at: 36_000, tags: ['app:c'] })
+})
+
+test('a purge asked to spread resolves SPREAD past the acknowledgement it shares', async () => {
+  let { purge, sent, go, now } = site()
+  go()
+  let at = (p: Promise<void>) => p.then(now)
+  let [plain, spread] = await Promise.all([
+    at(purge(['app:a'])),
+    at(purge(['app:b'], true)),
+  ])
+  assertEquals([sent.length, plain, spread], [1, 0, SPREAD])
 })

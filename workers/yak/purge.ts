@@ -17,15 +17,22 @@
 //
 // An acknowledged purge has not reached every cache yet. Over about ninety
 // deploys measured from the box, four times a page kept in a colo other than
-// the purge's still answered a second or more after the purge was
-// acknowledged (T-124483); its short lifetime (page-cache.ts `KEPT`) bounds
-// it.
+// the purge's still answered one to two seconds after the purge was
+// acknowledged (T-124483). Cloudflare says nothing of when a purge has spread,
+// so a purge that must be gone everywhere before its caller answers (a
+// release's, tools.ts `released`) waits `SPREAD` past its acknowledgement
+// (T-124694). Any other purge's page keeps its short lifetime (page-cache.ts
+// `KEPT`) as the bound.
 
 /** What Cloudflare answers a purge with. */
 export type Purged = {
   success: boolean
   errors: { code: number; message: string }[]
 }
+
+/** How long past its acknowledgement a purge waits to have reached every
+ * colo, where its caller asks it to: past the longest seen (T-124483). */
+export let SPREAD = 2_500
 
 /** The Site entrypoint, as far as purging asks of it. */
 export type Purges = { purge(tags: string[]): Promise<Purged> }
@@ -78,9 +85,10 @@ let merge = (r: Round, later: Round | null) => {
 
 /**
  * Purges for one Site: `purge(tags)` resolves once those tags are gone from
- * the cache, sharing a purge with every tag owed beside them. One purge is in
- * flight at a time, each spends a token of the bucket, and with none left the
- * next waits for one.
+ * the cache, sharing a purge with every tag owed beside them, or `spread`
+ * after that once they are gone from every colo's. One purge is in flight at
+ * a time, each spends a token of the bucket, and with none left the next
+ * waits for one.
  *
  * ```ts
  * import { purger } from './purge.ts'
@@ -148,7 +156,7 @@ export let purger = (site: Purges, wait = sleep, now = Date.now) => {
     }
     flying = false
   }
-  return (tags: string[]): Promise<void> => {
+  return (tags: string[], spread = false): Promise<void> => {
     if (!tags.length) return Promise.resolve()
     owed ??= round()
     for (let tag of tags) owed.tags.add(tag)
@@ -156,21 +164,26 @@ export let purger = (site: Purges, wait = sleep, now = Date.now) => {
       flying = true
       void fly()
     }
-    return owed.done.promise
+    let done = owed.done.promise
+    return spread ? done.then(() => wait(SPREAD)) : done
   }
 }
 
 /** The Purger binding: the one Durable Object every purge goes through. */
 export type Purgers = {
   idFromName(name: string): unknown
-  get(id: unknown): { purge(tags: string[]): Promise<void> }
+  get(id: unknown): { purge(tags: string[], spread?: boolean): Promise<void> }
 }
 
-/** Purge `tags` from Site's cache, through the Purger. Where Site has no
- * cache (a test run, `wrangler dev`) none is bound, so there is nothing to
- * do. */
-export let purge = (env: { PURGER?: Purgers }, tags: string[]) => {
+/** Purge `tags` from Site's cache, through the Purger, and with `spread`, wait
+ * until they are gone from every colo's. Where Site has no cache (a test run,
+ * `wrangler dev`) none is bound, so there is nothing to do. */
+export let purge = (
+  env: { PURGER?: Purgers },
+  tags: string[],
+  spread = false,
+) => {
   let { PURGER } = env
   if (!PURGER || !tags.length) return Promise.resolve()
-  return PURGER.get(PURGER.idFromName('purger')).purge(tags)
+  return PURGER.get(PURGER.idFromName('purger')).purge(tags, spread)
 }

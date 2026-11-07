@@ -263,16 +263,21 @@ let boot = async (
 }
 
 /** A Purger that writes down each tag it is asked to purge (`purged`), and
- * purges nothing: the edge is Cloudflare's. */
+ * purges nothing: the edge is Cloudflare's. A purge asked to spread to every
+ * colo waits on `spreading` while one is set. */
 export let recording = () => {
   let purged: string[] = []
+  let held: { spreading?: Promise<void> } = {}
   let PURGER: Purgers = {
     idFromName: () => 'purger',
     get: () => ({
-      purge: (tags) => Promise.resolve(void purged.push(...tags)),
+      purge: async (tags, spread) => {
+        purged.push(...tags)
+        if (spread) await held.spreading
+      },
     }),
   }
-  return { purged, PURGER }
+  return { purged, PURGER, held }
 }
 
 // This process's kernel, started by the first test that asks for one.

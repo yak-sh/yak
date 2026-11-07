@@ -227,8 +227,8 @@ export class Purger extends DurableObject<Env> {
   declare env: Env
   #purge = purger({ purge: (tags) => this.env.SITE!.purge!(tags) })
 
-  purge(tags: string[]): Promise<void> {
-    return this.#purge(tags)
+  purge(tags: string[], spread = false): Promise<void> {
+    return this.#purge(tags, spread)
   }
 }
 
