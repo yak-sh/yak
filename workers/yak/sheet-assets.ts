@@ -1,9 +1,9 @@
-// The site's stylesheets as the browser fetches them: each root with its
-// `@import`s written in place, so a page waits on one fetch instead of a chain,
-// under a name made of its bytes, so a later page never asks again. What a sheet
-// points at (the pencil, the paper, the fonts) gets a name of its bytes too,
-// beside it. public/ keeps the sources, and those keep answering at their own
-// addresses.
+// The site's files as the browser fetches them, each under a name made of its
+// bytes, so a later page never asks again: the stylesheets, each root with its
+// `@import`s written in place, so a page waits on one fetch instead of a chain;
+// what a sheet points at (the pencil, the paper, the fonts); and the scripts and
+// icons the pages name (`FILES`). public/ keeps the sources, and those keep
+// answering at their own addresses.
 //
 // One source is made, not kept: `_ui.css`, the kit's share of the look
 // (@yaks/ui's linen theme and pencil skin, and the parts the pages wear),
@@ -18,6 +18,21 @@ import { fileURLToPath } from 'node:url'
 
 let ROOTS = ['style.css', 'pages.css']
 let DIR = '_yak'
+
+/** What the pages name besides their sheets, named as they are. */
+export let FILES = [
+  'report.js',
+  'deploy.js',
+  'drop.js',
+  'idle.js',
+  'chart.js',
+  'menu.js',
+  'cta.js',
+  'carousel.js',
+  'wander.js',
+  'favicon-32.png',
+  'apple-touch-icon.png',
+]
 
 /** The kit's sheet among the sources. */
 export let UI = '_ui.css'
@@ -130,6 +145,7 @@ export let plan = (read: Read) => {
     )
     place(root, new TextEncoder().encode(css))
   }
+  for (let file of FILES) place(file, read(file))
   return { files, names }
 }
 

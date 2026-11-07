@@ -10,7 +10,7 @@
 import type { VNode } from 'preact'
 import { esc, markup } from './html.ts'
 import { type Host, url } from './host.ts'
-import { links } from './sheets.ts'
+import { asset, links } from './sheets.ts'
 import { island, signedIn } from './signed.ts'
 import { idle } from './mascot.ts'
 
@@ -44,8 +44,9 @@ ${
 <meta name="twitter:title" content="${esc(title)}">
 <meta name="twitter:description" content="${esc(description)}">
 <meta name="twitter:image" content="${url(env, '/og.png')}">
-<link rel="apple-touch-icon" href="/apple-touch-icon.png">
+<link rel="apple-touch-icon" href="${asset(env, 'apple-touch-icon.png')}">
 ${links(env, 'style.css')}
+<script src="${asset(env, 'idle.js')}" defer></script>
 ${island}`
 
 export let top = `<header class="Top">
@@ -93,6 +94,6 @@ export let drawn = <P>(
   html(
     `${heads}\n</head>\n<body${body ? ` class="${body}"` : ''}>\n${top}\n${
       markup(main)
-    }\n${foot}\n<script src="/idle.js" defer></script>\n</body>\n</html>`,
+    }\n${foot}\n</body>\n</html>`,
     status,
   )

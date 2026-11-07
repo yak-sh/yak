@@ -24,7 +24,9 @@
   let slot = document.querySelector('[data-wander]')
   let still = slot?.querySelector('img')
   let calm = matchMedia('(prefers-reduced-motion: reduce)')
-  let base = document.currentScript.src
+  // The site's root, wherever this script is served from (a name of its
+  // bytes under /_yak, sheet-assets.ts).
+  let base = new URL('/', document.currentScript.src)
   const STRIPS = ['down', 'up', 'plop'] // mascot/wander-<strip>-128.webp, six frames across
   const FRAMES = 6
   const MIN = 72, PAD = 12 // his smallest size in the margin, and his room from the words, in css px

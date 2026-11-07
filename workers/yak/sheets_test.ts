@@ -1,12 +1,18 @@
 // What a page makes the browser wait on before it paints, read from the head a
 // person gets and the sheets it names.
-import { assert, assertEquals, assertStringIncludes } from '@std/assert'
+import {
+  assert,
+  assertEquals,
+  assertMatch,
+  assertStringIncludes,
+} from '@std/assert'
 import { test } from '@yaks/testing'
 import { halved } from '@yaks/ui'
 import { kernel } from './probe.ts'
 import { lost } from './pages.ts'
-import { from, plan } from './sheet-assets.ts'
-import { links, named, sheeted } from './sheets.ts'
+import { parseHTML } from 'linkedom'
+import { FILES, from, plan } from './sheet-assets.ts'
+import { asset, links, named, sheeted } from './sheets.ts'
 import { direct } from './wrangler.ts'
 
 let PUBLIC = new URL('./public/', import.meta.url).pathname
@@ -86,6 +92,60 @@ test('sheets: a static page, the home page and a kernel page wait on no other si
     assertStringIncludes(page, 'rel="preload"')
     assertEquals(page.match(/rel="icon"/g)?.length, 1)
     assertStringIncludes(page, 'favicon-32.png')
+  }
+})
+
+test('sheets: each file the pages name is kept under a name of its bytes, as it is', () => {
+  for (let file of FILES) {
+    assertMatch(names[file], /^_yak\/.+\.[0-9a-f]{10}\.\w+$/)
+    assertEquals(files.get(names[file]), Deno.readFileSync(`${PUBLIC}${file}`))
+    assertEquals(named(`/${names[file]}`), `/${file}`)
+  }
+  assertEquals(
+    asset({}, 'drop.js', names),
+    `https://yaks.app/${names['drop.js']}`,
+  )
+  assertEquals(asset({}, 'og.png', names), 'https://yaks.app/og.png')
+})
+
+// The addresses of the site's own files a page leaves with.
+let fetched = (html: string) => {
+  let { document } = parseHTML(html)
+  return [...document.querySelectorAll('script[src], link[href]')]
+    .map((el) => el.getAttribute('src') ?? el.getAttribute('href')!)
+    .filter((at) => !/^https?:/.test(at) || at.startsWith('https://yaks.app/'))
+    .filter((at) => /\.(?:js|css|png|woff2)$/.test(at))
+}
+
+test('sheets: a static page names every file of the site it fetches by its bytes', () => {
+  let page = '<link rel="apple-touch-icon" href="apple-touch-icon.png" />' +
+    '<link rel="stylesheet" href="style.css" />' +
+    '<script src=\'idle.js\' defer></script><script src="/cta.js"></script>' +
+    '<a href="pricing">Pricing</a><script src="nothing.js"></script>'
+  let served = sheeted(page, {}, names)
+  assertEquals(
+    fetched(served).toSorted(),
+    [
+      ...['report.js', 'favicon-32.png', 'nunito-latin.woff2', 'style.css']
+        .concat(['apple-touch-icon.png', 'idle.js', 'cta.js'])
+        .map((name) => `https://yaks.app/${names[name]}`),
+      'nothing.js',
+    ].toSorted(),
+  )
+  assertStringIncludes(served, '<a href="pricing">')
+})
+
+test('sheets: what the pages fetch of the site is all named by its bytes', async () => {
+  let k = await kernel()
+  let pages = await Promise.all(
+    ['/', '/pricing', '/style-guide', '/docs', '/gallery', '/login']
+      .map(async (path) => await (await k.at('yaks.app', path)).text()),
+  )
+  for (let page of [...pages, await lost().text()]) {
+    for (let at of fetched(page)) {
+      let file = at.replace(/^https:\/\/yaks\.app\//, '').replace(/^\//, '')
+      assert(names[file] || file.startsWith('_yak/'), `${file} is not named`)
+    }
   }
 })
 

@@ -61,7 +61,7 @@ import { versionOf } from './running.ts'
 
 import { Yak, yak } from './mascot.ts'
 
-import { links } from './sheets.ts'
+import { asset, links } from './sheets.ts'
 
 import {
   BLOCK,
@@ -163,7 +163,7 @@ let script = (value: unknown) =>
 let deployed = (env: Host) => {
   let v = versionOf(env.CF_VERSION_METADATA)
   return v
-    ? `<script src="${url(env, '/deploy.js')}" data-deploy="${
+    ? `<script src="${asset(env, 'deploy.js')}" data-deploy="${
       esc(v.id)
     }" data-deploy-at="${esc(v.at)}" defer></script>`
     : ''
@@ -192,23 +192,23 @@ ${links(env, 'pages.css')}${
       head.includes('rel="apple-touch-icon"')
         ? ''
         : `\n<link rel="apple-touch-icon" href="${
-          url(env, '/apple-touch-icon.png')
+          asset(env, 'apple-touch-icon.png')
         }">`
     }${head ? `\n${head}` : ''}
 </head>
 <body${layout ? ` class="${layout}"` : ''}><main>${main}</main>${
       main.includes('data-chart')
-        ? `<script src="${url(env, '/chart.js')}" defer></script>`
+        ? `<script src="${asset(env, 'chart.js')}" defer></script>`
         : ''
     }${
       main.includes('data-menu')
-        ? `<script src="${url(env, '/menu.js')}" defer></script>`
+        ? `<script src="${asset(env, 'menu.js')}" defer></script>`
         : ''
     }${
       main.includes('data-idle')
-        ? `<script src="${url(env, '/idle.js')}" defer></script>`
+        ? `<script src="${asset(env, 'idle.js')}" defer></script>`
         : ''
-    }<script src="${url(env, '/drop.js')}" defer></script>${
+    }<script src="${asset(env, 'drop.js')}" defer></script>${
       deployed(env)
     }</body>
 </html>`,
