@@ -29,9 +29,12 @@ import { type Ctx, refuse } from './tool.ts'
 type Env = { STORE: Namespace }
 
 /** The dollars one newcomer's build may spend. Every Operator turn holds
- * its most before it starts (model-spend.ts `reserved`), which for a prompt
- * its size is a few dollars, so less than this answers no turn at all. */
-export let PER_BUILD = 5
+ * its most before it starts (model-spend.ts `reserved`): twice the prompt's
+ * bytes in tokens at the dearest input rate (@yaks/model `promptBound`),
+ * which grows with the conversation to about $6. A turn that does not fit
+ * what is left is refused, so this is what a build spends plus one such
+ * hold. */
+export let PER_BUILD = 10
 /** Newcomers' spaces opened a day (UTC), across everybody. */
 export let DAILY = 10
 /** The same, from one address. */
