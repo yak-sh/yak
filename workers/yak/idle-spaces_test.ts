@@ -34,7 +34,7 @@ test('only an unpublished test space with seven days of recorded inactivity goes
     assertEquals(selected((rows) => delete rows[i].created), [])
   }
   assertEquals(selected((rows) => rows[1].published = { name: 'probe' }), [])
-  assertEquals(selected((rows) => rows.splice(2, 1)), [])
+  assertEquals(selected((rows) => rows.splice(2, 1)), ['space'])
   for (let address of ['admin@bot.yak.sh', 'person@example.com', '']) {
     assertEquals(selected((rows) => rows[3].email = { address }), [])
   }

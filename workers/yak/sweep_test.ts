@@ -193,6 +193,40 @@ test('erasing a test account takes its spaces, seats and grants, and keeps the r
   assertEquals((await ask(JEFF, 'probe@bot.yak.sh')).status, 404)
 })
 
+// A space is never left without an owner: one whose last owner is a test
+// account passes to whoever else sits in it, a person before a test account.
+test('erasing a test account hands a space it owns on to the person left in it', async () => {
+  let { scenario, env, dir, ask, GUEST } = await accounts()
+  await using _ = scenario
+  let probe = (await dir.space('probe'))!
+  await stamp(env, {
+    entities: [{
+      entity: { eid: '$ada' },
+      member: { space: probe.eid, person: ADA, role: 'editor' },
+    }],
+  })
+  let checked = await ask(JEFF, 'probe@bot.yak.sh', 'GET')
+  assertEquals(checked.body.spaces, [])
+  assertEquals(checked.body.seats.sort(), ['ada', 'probe'])
+  await ask(JEFF, 'probe@bot.yak.sh')
+  assertEquals(await dir.owners(probe), [ADA])
+  assertEquals((await dir.members(probe)).sort(), [GUEST, ADA].sort())
+})
+
+test('erasing a test account hands a space it owns on to a test account left in a kept space', async () => {
+  let { scenario, env, dir, ask, GUEST } = await accounts()
+  await using _ = scenario
+  let probe = (await dir.space('probe'))!
+  await stamp(env, {
+    entities: [{
+      entity: { eid: probe.eid },
+      space: { slug: 'checks', store: 'probe' },
+    }],
+  })
+  await ask(JEFF, 'probe@bot.yak.sh')
+  assertEquals(await dir.owners((await dir.space('checks'))!), [GUEST])
+})
+
 test('only the admin, or the account itself, erases it; never a person or fixture', async () => {
   let { scenario, dir, ask, PROBE } = await accounts()
   await using _ = scenario

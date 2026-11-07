@@ -89,12 +89,14 @@ yak admin relocate ada --move --as admin@bot.yak.sh
 
 ## Erasing a test account
 
-`erase` removes a test account from yaks.app for good: the spaces where it is an
-owner and only test accounts sit, and its seats and grants everywhere else. An
-owner of `yak` may erase any test account, and an account may erase itself. A
-person's account and a reviewer's fixture are refused. Every connection this box
-keeps to the account ends with it, and erasing an account that is already gone,
-as the sweep leaves one, ends them too. `--check` says what would go and changes
+`erase` removes a test account from yaks.app for good: the spaces where it is
+the last owner and only test accounts sit, and its seats and grants everywhere
+else. No space is left without an owner: one it is the last owner of where
+someone else sits passes to them, a person before a test account. An owner of
+`yak` may erase any test account, and an account may erase itself. A person's
+account and a reviewer's fixture are refused. Every connection this box keeps to
+the account ends with it, and erasing an account that is already gone, as the
+sweep leaves one, ends them too. `--check` says what would go and changes
 nothing.
 
 ```sh

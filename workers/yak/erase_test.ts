@@ -736,3 +736,18 @@ test('the sweep erases a test account left idle, and leaves a person', async () 
   assertEquals(await dir.emailAt(bot), null)
   assertEquals(await dir.emailAt(human), 'kept@example.com')
 })
+
+test('the sweep erases an idle space nobody is seated in', async () => {
+  let scenario = platform('a probe secret')
+  await using _ = scenario
+  let { env } = scenario
+  let dir = directory({ fetch: (r) => dirPart.fetch(r, env) })
+  let space = await makes(dir, 'seatless')
+  let seat = (await dir.member(space, ADA))!
+  await meta(env).apply([{ entity: { eid: seat.eid }, tombstone: {} }], KERNEL)
+  assertEquals(await dir.members(space), [])
+  await collected(env)
+  assert(await dir.space('seatless'))
+  await collected(env, new Date(Date.now() + 8 * day))
+  assertEquals(await dir.space('seatless'), null)
+})

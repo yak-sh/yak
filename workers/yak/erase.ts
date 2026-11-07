@@ -89,7 +89,6 @@ import {
   draftStore,
   due,
   type Host,
-  idOf,
   META,
   overdue,
   type PhoneLine,
@@ -200,17 +199,18 @@ export let doomed = async (
 }
 
 // A space that is nobody's work: everyone with a way in is a test account
-// (@yaks/platform/bots). The letter exists so an assistant cannot delete a person's
-// work on its own; with no person in the space there is nobody to ask, so the
-// act asked for happens at once (tools.ts `space_delete`). A protected space
-// has somebody waiting on it even with only test accounts in it, a directory's
-// next reviewer, so it takes the letter, which only the fleet can read.
+// (@yaks/platform/bots), or nobody has one at all. The letter exists so an
+// assistant cannot delete a person's work on its own; with no person in the
+// space there is nobody to ask, so the act asked for happens at once (tools.ts
+// `space_delete`). A protected space has somebody waiting on it even with only
+// test accounts in it, a directory's next reviewer, so it takes the letter,
+// which only the fleet can read.
 export let nobodys = async (dir: Directory, d: Doomed) => {
   if (PROTECTED.has(d.space.slug)) return false
   for (let m of d.members) {
     if (!isTestAddress(await dir.emailAt(m.person) ?? '')) return false
   }
-  return d.members.length > 0
+  return true
 }
 
 // Why this space may not be deleted at all, or empty. Two of them, and both
@@ -841,7 +841,7 @@ export let collected = async (env: Env, now = new Date()) => {
         !d.apps.some((a) => a.published)
       ) {
         await erase(env, dir, d, {
-          person: d.members[0].person,
+          person: d.members[0]?.person ?? null,
           role: 'owner',
         })
         gone++
@@ -908,15 +908,19 @@ export let collected = async (env: Env, now = new Date()) => {
 // ---- an account's end ----
 //
 // A test account goes for good, with no trash and no letter: nothing it holds
-// is a person's work (@yaks/platform/bots). A space only test accounts are in goes with
-// its owner; its seat anywhere else goes with the person row, whose death
-// cascades to every membership and grant naming it (member's vocabulary). A
-// person's own account is never closed here, and neither is a fixture.
+// is a person's work (@yaks/platform/bots). Its row's death cascades to every
+// seat and grant naming it (member's vocabulary), so no space it leaves may be
+// left without an owner: one it is the last owner of goes with it when only
+// test accounts are left in it, and otherwise passes to who is left, a person
+// before a test account. A space still owned by someone else just loses the
+// seat. A person's own account is never closed here, and neither is a fixture.
 export type Closing = {
   person: string
   address: string
   spaces: Space[]
   seats: Space[]
+  /** The seat each kept space's ownership passes to. */
+  heirs: { space: Space; seat: string }[]
 }
 
 export let closing = async (
@@ -935,17 +939,31 @@ export let closing = async (
     )
   }
   let person = row.entity.eid
-  let held = await meta(env).query(
-    `.member.person=${person}`,
-  ) as unknown as Row[]
-  let spaces = await dir.all()
-  let out: Closing = { person, address, spaces: [], seats: [] }
-  for (let seat of held) {
-    let space = spaces.find((s) => s.eid == idOf(seat.member!.space))
-    if (!space) continue
-    let alone = seat.member!.role == 'owner' &&
-      await nobodys(dir, await doomed(dir, space))
-    ;(alone ? out.spaces : out.seats).push(space)
+  let out: Closing = { person, address, spaces: [], seats: [], heirs: [] }
+  for (let { space } of await dir.seated(person)) {
+    if ((await dir.owners(space)).some((p) => p != person)) {
+      out.seats.push(space)
+      continue
+    }
+    let left = (await dir.members(space)).filter((p) => p != person)
+    let people = []
+    for (let p of left) {
+      if (!isTestAddress(await dir.emailAt(p) ?? '')) people.push(p)
+    }
+    if (!people.length && !PROTECTED.has(space.slug)) {
+      out.spaces.push(space)
+      continue
+    }
+    let heir = people[0] ?? left[0]
+    if (!heir) {
+      throw refuse(
+        'conflict',
+        `${address} is the only one in ${space.slug}, which the platform ` +
+          'keeps: seat its fixture there first',
+      )
+    }
+    out.seats.push(space)
+    out.heirs.push({ space, seat: (await dir.member(space, heir))!.eid })
   }
   return out
 }
@@ -961,6 +979,14 @@ export let closed = async (
   if (!c) return null
   for (let space of c.spaces) {
     await erase(env, dir, await doomed(dir, space), who)
+  }
+  if (c.heirs.length) {
+    await dir.stamp({
+      entities: c.heirs.map(({ seat }) => ({
+        entity: { eid: seat },
+        member: { role: 'owner' },
+      })),
+    }, vouched(who))
   }
   await buried(env, dir, c.person, who)
   return c

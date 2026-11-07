@@ -60,10 +60,9 @@ export let idleSpaces = (rows: Row[], now = Date.now()): string[] => {
     let apps = rows.filter((r) => r.app && id(r.app.space) == eid)
     if (apps.some((r) => r.published != null)) return false
     let appIds = new Set(apps.map((r) => r.entity.eid))
+    // A space nobody is seated in is nobody's: no person can reach it.
     let members = rows.filter((r) => r.member && id(r.member.space) == eid)
-    if (!members.length || !members.every((r) => test(r.member!.person))) {
-      return false
-    }
+    if (!members.every((r) => test(r.member!.person))) return false
     let related = rows.filter((r) =>
       (r.grant && appIds.has(id(r.grant.app))) ||
       (r.invite && (id(r.invite.to) == eid || appIds.has(id(r.invite.to)))) ||
