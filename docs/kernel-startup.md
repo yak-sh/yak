@@ -623,3 +623,20 @@ directory.ts reaches through signin.ts `nameOf`: its `canon` spells a typed
 number in E.164 for every caller, though the directory's rows name a person by
 an email address. Then `@yaks/sql` and `@yaks/sqlite` (240 KB together, through
 defects.ts and @yaks/durable-object) and `@yaks/graph`'s errors (76 KB).
+
+Deployed with `fe4978f3c` at 17:53 UTC. Production, kernel spans, probes
+included (T-133988's `measure.mjs`, its copy and `cold.mjs` in
+`/home/yaks/bench-T-148886/prod/`), a cold request being one of 100 ms of CPU or
+more, which only an isolate's first request spends:
+
+| Space gateway                      | Requests | Cold | Cold CPU p50 | Cold first byte p50 / p90 |
+| ---------------------------------- | -------: | ---: | -----------: | ------------------------: |
+| 16:58–17:52, T-148770's 7 versions |      158 |   28 |       250 ms |             182 / 2377 ms |
+| 17:53–18:18, 4 versions with this  |       88 |    5 |       202 ms |             500 / 2263 ms |
+
+Five cold requests say nothing about their first byte; the CPU they spent is the
+direction the Node measure gives. The saving in compile holds only under
+`new_module_registry`, which compiles a module on its first import: the legacy
+registry compiles every uploaded module at startup, so without it what this
+leaves out of a page's isolate is its evaluation (70 → 36 ms), not its compile.
+T-148980 is weighing that registry against the CPU a cold Store call now spends.
