@@ -19,7 +19,7 @@ import { type Application, application } from './app.ts'
 // inline, ahead of its own code, as yaks.app weaves it into every app's page
 // (workers/yak/page-script.ts). What it catches it posts to `/api/report`,
 // which reads the body as yaks.app's door does (@yaks/tracker/report
-// `broken`) and hands each break to the host's own telemetry.
+// `received`) and hands each break to the host's own telemetry.
 
 import { queryRedirect } from '@yaks/query'
 import { type Authenticate, type Route, write } from '@yaks/api'
@@ -34,7 +34,7 @@ import { page as html } from './page.ts'
 import { preload } from './preload.ts'
 import { person } from '@yaks/cli/host'
 import type { Config } from '@yaks/cli/config'
-import { broken, type Context } from '@yaks/tracker/report'
+import { type Context, received } from '@yaks/tracker/report'
 import type { Vault } from '@yaks/secrets'
 import { authorization } from './authorize.ts'
 
@@ -263,10 +263,9 @@ export let routes = (host: Hosting, options: Options = {}): Route[] => {
       // reporter caps what one page load sends. A page telling of its own
       // outdated code (./outlived.ts `OUTDATED`) is no break.
       handle: async (request) => {
-        let breaks = broken(await request.text())
+        let breaks = (await received(request))
           .filter((b) => !b.message.includes(OUTDATED.message))
         let by = breaks.length ? await owner() : undefined
-        let agent = request.headers.get('user-agent')
         for (let b of breaks) {
           await host.report?.(
             Object.assign(
@@ -280,7 +279,7 @@ export let routes = (host: Hosting, options: Options = {}): Route[] => {
                 entrypoint: 'browser report',
                 request: b.request,
                 ...by ? { user_id: by } : {},
-                ...agent ? { agent } : {},
+                ...b.agent ? { agent: b.agent } : {},
               },
             },
           )

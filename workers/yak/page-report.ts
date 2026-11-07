@@ -1,8 +1,9 @@
 // What breaks in the platform's own pages: the reporter (public/report.js),
 // named first in every page's head (sheets.ts `links`), posts here, at the
 // apex's `/api/report`, and each break enters the tracker as a platform
-// defect tagged with the page it happened on. An app's page runs the same
-// reporter and `broken` reads both, but reports to its own door (apps.ts),
+// defect tagged with the page it happened on and the browser that sent it
+// (`agent`, its user agent, as the box's door tags it). An app's page runs the
+// same reporter and @yaks/tracker/report reads both, but reports to its own door (apps.ts),
 // where the break is the app's and its owner's to fix.
 //
 // Every defect notifies, so only what our own scripts threw is filed. Each
@@ -13,7 +14,7 @@
 // rule, and a post no page of ours made is a stranger's: each is answered as
 // if filed and dropped. A repeat of a break is one more occurrence of its bug
 // in the tracker, which groups it (@yaks/tracker `faultKey`) and notifies once.
-import { broken } from '@yaks/tracker/report'
+import { received } from '@yaks/tracker/report'
 import { defect } from './defects.ts'
 import { apex, type Host } from './host.ts'
 import { isVerifiedBot } from './lib/bots.ts'
@@ -65,12 +66,13 @@ export let answer = async (req: Request, env: Host): Promise<Response> => {
     await req.body?.cancel()
     return new Response(null, { status: 204 })
   }
-  for (let broke of broken(await req.text(), refusal)) {
+  for (let broke of await received(req, refusal)) {
     if (!ours(broke, env) || over('platform')) continue
-    let { request, message, stack, mechanism, breadcrumbs } = broke
+    let { request, message, stack, mechanism, breadcrumbs, agent } = broke
     defect(Object.assign(Error(message), { stack }), {
       request,
       page: request.slice(request.indexOf(' ') + 1),
+      agent,
     }, { page: { mechanism, breadcrumbs } })
   }
   return new Response(null, { status: 204 })

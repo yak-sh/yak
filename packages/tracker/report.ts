@@ -280,6 +280,8 @@ export type Break = {
   cause?: string
   mechanism?: Mechanism
   breadcrumbs?: Crumb[]
+  /** the browser that sent it, its user agent ({@link received}) */
+  agent?: string
 }
 type Mechanism = NonNullable<Context['mechanism']>
 let MECHANISMS = new Set<unknown>([
@@ -462,6 +464,33 @@ export let broken = (
       ...breadcrumbs ? { breadcrumbs } : {},
     }]
   })
+}
+
+/**
+ * The breaks a report door was sent ({@link broken}), each carrying the
+ * browser that sent them: its user agent, which tells one Safari from another.
+ *
+ * ```ts
+ * import { equal } from '@yaks/testing'
+ * import { received } from '@yaks/tracker/report'
+ *
+ * let [one] = await received(
+ *   new Request('https://box.test/api/report', {
+ *     method: 'POST',
+ *     body: JSON.stringify({ message: 'x is undefined' }),
+ *     headers: { 'user-agent': 'Mozilla/5.0 Version/18.2 Safari/605.1.15' },
+ *   }),
+ * )
+ * equal(one.agent, 'Mozilla/5.0 Version/18.2 Safari/605.1.15')
+ * ```
+ */
+export let received = async (
+  request: Request,
+  refusal?: (answer: string, status: number) => boolean,
+): Promise<Break[]> => {
+  let agent = request.headers.get('user-agent')?.slice(0, 1000)
+  let breaks = broken(await request.text(), refusal)
+  return agent ? breaks.map((b) => ({ ...b, agent })) : breaks
 }
 
 export let queue =

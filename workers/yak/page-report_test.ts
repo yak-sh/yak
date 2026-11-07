@@ -112,6 +112,15 @@ test('a throw in a platform page reaches the tracker, tagged with the page', asy
   ok(JSON.stringify(row).includes('m$1 is not defined'))
 })
 
+test('a break is tagged with the browser that sent it', async () => {
+  let safari = 'Mozilla/5.0 (iPhone) Version/18.2 Mobile/15E148 Safari/604.1'
+  let [row] = await filed(await sole('<script>m$1()</script>'), {
+    'sec-fetch-site': 'same-origin',
+    'user-agent': safari,
+  })
+  equal((row.error as { tags: Record<string, string> }).tags.agent, safari)
+})
+
 test('a page that does not break sends nothing', async () => {
   equal((await ran('<script>let fine = 1</script>')).sent, [])
 })
