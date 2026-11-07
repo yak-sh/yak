@@ -82,13 +82,16 @@ export let moment = (at: string): string =>
     hour12: false,
   })
 
-// Made once: a number's `toLocaleString('en-US')` builds a formatter on every
-// call, which a letter that counts a few things paid for each time.
-let digits = new Intl.NumberFormat('en-US')
+// Made once, at the first number: a number's `toLocaleString('en-US')` builds
+// a formatter on every call, which a letter that counts a few things paid for
+// each time, and making one loads the locale's data (about 19 ms), which every
+// command importing this module paid at its start.
+let digits: Intl.NumberFormat | undefined
 
 /// figure(1200) -> '1,200'
 /** A number with its thousands marked, as people read it. */
-export let figure = (n: number): string => digits.format(n)
+export let figure = (n: number): string =>
+  (digits ??= new Intl.NumberFormat('en-US')).format(n)
 
 /// count(1, 'hit') -> '1 hit'
 /// count(1200, 'hit') -> '1,200 hits'

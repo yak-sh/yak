@@ -3,8 +3,7 @@
 // are portable renderers through the host's hyperscript, so `yak bug list`
 // prints the same rows a browser lists. A message reads as its headline; the
 // whole of it is on the page (./inspect.ts), one press away.
-import { type ByDay, series } from '@yaks/ui/chart'
-import { bars } from '@yaks/ui'
+import { bars, type ByDay, series } from '@yaks/ui/chart'
 import { parse } from '@yaks/query/core'
 import { define, type H, type RenderContext } from '@yaks/render'
 import type { Shown } from '@yaks/render/views'

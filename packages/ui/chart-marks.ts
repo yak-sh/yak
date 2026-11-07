@@ -1,7 +1,8 @@
 /**
  * What a chart draws, through whichever `h` the page renders with: a
  * sparkline, a few characters wide beside the number it explains, and day
- * columns, as wide as the page. Both are SVG with no library. Each carries its
+ * columns, as wide as the page. Both are SVG with no library. A series drawn
+ * in characters instead, for a line of text, is its `bars`. Each carries its
  * series in `data-` attributes, so a page's one listener (yaks.app's
  * public/chart.js) answers a pointer, a finger or an arrow key with the point
  * there, and a chart costs nothing until somebody asks it.
@@ -50,6 +51,30 @@ export let series = (
   }
   return { from: ymd(now - (days - 1) * DAY), values }
 }
+
+let BARS = '▁▂▃▄▅▆▇█'
+
+/**
+ * The characters a series draws: an eighth of a cell for each eighth of the
+ * top, at least one for anything at all.
+ *
+ * ```ts
+ * import { bars } from '@yaks/ui/chart'
+ * import { equal } from '@yaks/testing'
+ *
+ * equal(bars([0, 1, 2, 4]), '▁▂▄█')
+ * equal(bars([1, 2], 16), '▁▁')
+ * ```
+ */
+export let bars = (
+  values: number[],
+  max: number = Math.max(0, ...values),
+): string =>
+  values.map((v) =>
+    v > 0 && max > 0
+      ? BARS[Math.min(7, Math.max(0, Math.ceil(v / max * 8) - 1))]
+      : BARS[0]
+  ).join('')
 
 /** Several rows' days added up: a person's spend over the spaces they own. */
 export let summed = (all: (ByDay | null | undefined)[]): ByDay => {

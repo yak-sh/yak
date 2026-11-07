@@ -10,6 +10,7 @@
 
 import type { Sheet } from '@yaks/tui/theme'
 import { type FunctionComponent, h } from 'preact'
+import { bars } from './chart-marks.ts'
 import { block, type Part, type Props } from './el.ts'
 import type { Colors, Specimen } from './theme.ts'
 
@@ -17,30 +18,6 @@ let Base: Part & Record<'Bar' | 'Floor', Part> = block('span', 'Spark', {
   Bar: 'span',
   Floor: 'span',
 })
-
-let BARS = '▁▂▃▄▅▆▇█'
-
-/**
- * The characters a series draws: an eighth of a cell for each eighth of the
- * top, at least one for anything at all.
- *
- * ```ts
- * import { bars } from './Spark.ts'
- * import { equal } from '@yaks/testing'
- *
- * equal(bars([0, 1, 2, 4]), '▁▂▄█')
- * equal(bars([1, 2], 16), '▁▁')
- * ```
- */
-export let bars = (
-  values: number[],
-  max: number = Math.max(0, ...values),
-): string =>
-  values.map((v) =>
-    v > 0 && max > 0
-      ? BARS[Math.min(7, Math.max(0, Math.ceil(v / max * 8) - 1))]
-      : BARS[0]
-  ).join('')
 
 /** What a spark is drawn with: its values, the top they are read against,
  * and anything a part takes. */

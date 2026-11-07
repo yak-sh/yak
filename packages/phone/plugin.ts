@@ -13,7 +13,8 @@
 // ```
 
 import type { Graph } from '@yaks/graph'
-import { fault, json, refuse, type Route } from '@yaks/api'
+import type { Route } from '@yaks/api'
+import { fault, json, refuse } from '@yaks/api/refuse'
 import { Refused } from '@yaks/graph/errors'
 import type { Transport } from './options.ts'
 import { kept, settled } from './received.ts'
