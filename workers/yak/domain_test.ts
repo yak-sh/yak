@@ -40,8 +40,9 @@ let mine: [string, string][] = [
 
 // The recipe box her domain will serve, made as the file loads: a person, her
 // space with two apps, and two releases of the box. The first is whole; the
-// second loads a script it never shipped, and is live until a report from a
-// page that broke takes it back.
+// second loads a script it never shipped, by an address it computes, which
+// the deploy cannot read (tools.ts `unfound`), and is live until a report from
+// a page that broke takes it back.
 let box = await (async () => {
   let k = await kernel()
   let jeff9 = unique('jeff9')
@@ -66,7 +67,7 @@ let box = await (async () => {
     ...mine,
   ])
   await deploy([
-    ['/main.js', "import './missing.js'"],
+    ['/main.js', "import(['.', 'missing.js'].join('/'))"],
     ['/index.html', '<script type="module" src="./main.js"></script>'],
   ])
   let apex = await (await k.at('yaks.app', '/')).text()

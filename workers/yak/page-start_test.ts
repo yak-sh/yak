@@ -56,7 +56,7 @@ let opened = (html: string, page: string) => {
     }
     window.dispatchEvent(e)
   }
-  return { main, raise, sent }
+  return { document, main, raise, sent }
 }
 
 test('a page whose module will not link or load reports it, tagged with the page', async () => {
@@ -73,9 +73,13 @@ test('a page whose module will not link or load reports it, tagged with the page
     )
     await files.put('/main.js', 'import { show } from "./answer.js"\nshow()\n')
     await files.put('/answer.js', 'export let said = 1\n')
+    // A page adding a script the release never shipped, by an address it
+    // computes, which the deploy cannot read (asset_url.ts `unfound`).
     await files.put(
       '/gone.html',
-      '<!doctype html><script type="module" src="gone.js"></script>',
+      '<!doctype html><script>document.head.append(Object.assign(' +
+        "document.createElement('script'), { src: ['gone', 'js'].join('.') }" +
+        '))</script>',
     )
     await agent.tool('app_deploy', app)
     let served = async (path: string) =>
@@ -100,7 +104,10 @@ test('a page whose module will not link or load reports it, tagged with the page
     // A script that 404s, as the door answers it.
     assertEquals((await k.at(host, '/site/gone.js')).status, 404)
     let gone = await served('gone.html')
-    gone.raise({}, gone.main)
+    let added = gone.document.createElement('script')
+    added.setAttribute('src', new URL('gone.js', site).href)
+    gone.document.head.append(added)
+    gone.raise({}, added)
 
     let bodies = [...linked.sent, ...gone.sent]
     assertEquals(bodies.length, 3)

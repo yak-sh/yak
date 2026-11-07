@@ -442,12 +442,13 @@ test('a page that dies on its first import says so', async () => {
     let app = { space: jeff62, app: 'weather' }
 
     // The installed copy's own shape: a shell, and a module beside it that is
-    // not there.
+    // not there, named by an address the page computes, which the deploy
+    // cannot read (asset_url.ts `unfound`).
     await files.put(
       '/index.html',
       '<!doctype html><html><head><title>W</title></head><body>' +
-        '<h1>Weather</h1><script type="module" src="app.js"></script>' +
-        '</body></html>',
+        '<h1>Weather</h1><script type="module">' +
+        "import(['.', 'app.js'].join('/'))</script></body></html>",
     )
     await agent.tool('app_deploy', app)
     let page = await k.at(`${jeff62}.yaks.app`, '/weather/')

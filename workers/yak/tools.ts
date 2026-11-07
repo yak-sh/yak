@@ -41,7 +41,7 @@ import { ownedPrefix, rootedPrefix } from './file-root.ts'
 import { declarationOf, keepDeclaration } from './declaration.ts'
 import type { Reload } from '@yaks/platform'
 import { configured, deployWorker } from './deploy_worker.ts'
-import type { Config } from './wrangler_app.ts'
+import { type Config, sourceOf } from './wrangler_app.ts'
 import { compiled } from './esbuild.ts'
 import { bindingLines, boundOf } from './bindings.ts'
 import { broken, mediaTypeOf, type Objects } from '@yaks/blob'
@@ -87,7 +87,7 @@ import {
 } from './files.ts'
 import { perusal, peruse } from './files_read.ts'
 import { drawn, ICON_SVG } from './raster.ts'
-import { failedScript } from './asset_url.ts'
+import { failedScript, type Unfound, unfound } from './asset_url.ts'
 import { told as notify } from './stream.ts'
 import {
   type Access,
@@ -234,7 +234,7 @@ import {
 } from './host.ts'
 import { foreign, planSettings } from './route.ts'
 import { SLUG } from '@yaks/platform/names'
-import { globs } from './router.ts'
+import { globs, platformPath } from './router.ts'
 import { vocabAt } from './reach.ts'
 import { applying, seeding } from './release-seed.ts'
 import { sampled, unsampled } from './sample.ts'
@@ -965,6 +965,19 @@ export let releaseNotice = async (
   }
 }
 
+// The refusal of a release whose pages load files it does not have, in the
+// caller's terms: which file names which reference, and what is not there.
+let unfoundSaid = (missing: Unfound[]) => {
+  let lines = missing.slice(0, 20).map((m) =>
+    `${m.file} ${m.imports ? 'imports' : 'loads'} ${m.ref}, and there is ` +
+    `no ${m.missing}`
+  )
+  if (missing.length > 20) lines.push(`and ${missing.length - 20} more`)
+  return 'nothing went live: this release is missing files its pages ' +
+    `load:\n${lines.join('\n')}\nWrite each one with app_files, or change ` +
+    'the reference, then app_deploy again.'
+}
+
 let published = async (
   ctx: Ctx,
   space: Space,
@@ -1039,6 +1052,31 @@ let published = async (
         'the folder it is in',
     )
   }
+  // A new release is read for what its pages load, beside the compile: an
+  // element's file or a module imported by address that the release does not
+  // hold is a page broken for every visitor (bug 2badcf95), refused here with
+  // the file and the reference rather than heard from a visitor's console.
+  // Only plain pages and modules are read; what the compile bundles it
+  // resolves itself. An app with a worker is left alone, since the worker may
+  // answer any address no file does, and a release put back or installed was
+  // already somebody's live release.
+  let paths = own(keys)
+  let present = new Set(paths)
+  let scripted = present.has(sourceOf(parsed.config, (p) => present.has(p)))
+  let broken = target || preserve || scripted
+    ? Promise.resolve([])
+    : c.time('references', () =>
+      unfound(
+        paths,
+        async (path) => {
+          let bytes = await bytesAt(path)
+          return bytes && decoded(bytes)
+        },
+        dir,
+        !!app.rooted,
+        platformPath,
+      ))
+  broken.catch(() => {})
   // Compile in the private release candidate. A failure leaves serving alone.
   let made = kept ? { lines: [] } : await c.time(
     'compile',
@@ -1056,6 +1094,8 @@ let published = async (
         recompile ? 'platform' : 'space',
       ),
   )
+  let unloaded = await broken
+  if (unloaded.length) throw refuse('arguments', unfoundSaid(unloaded))
   // The release's index is complete once the compile has written into it, and
   // nothing selects it until `record` moves the pointers, so it goes to the
   // bucket now, beside everything below rather than after it (T-124005).

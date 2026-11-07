@@ -65,6 +65,7 @@ test('an app declares its own commands, and command runs them', async () => {
             '<link rel="stylesheet" href="./style.css" /></head>' +
             '<body><ol id=board></ol></body></html>',
         },
+        { path: 'style.css', content: 'ol { margin: 0 }' },
         // A page in the same app that no tool names: this door is not a way
         // to read an app's files.
         { path: 'secret.html', content: '<!doctype html><p>not a view' },

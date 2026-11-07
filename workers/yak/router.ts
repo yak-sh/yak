@@ -56,6 +56,10 @@ export let PLATFORM_PATHS = [
   `${OURS}/*`,
 ]
 
+/** Whether the platform answers this path rather than any app. */
+export let platformPath = (path: string) =>
+  PLATFORM_PATHS.some((p) => covers(p, path))
+
 // A glob's witness: the pattern with its wildcards filled by a character no
 // path may hold, so only another wildcard can match it. Two globs overlap when
 // either answers the other's witness — which catches both directions with one

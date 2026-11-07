@@ -40,6 +40,8 @@ import {
   assetMaps,
   assetPath,
   assetUrl,
+  linked,
+  LOADS,
   releaseId,
 } from './asset_url.ts'
 import * as files from './files.ts'
@@ -114,7 +116,7 @@ import {
   route,
   signInAt,
 } from './route.ts'
-import { covers, PLATFORM_PATHS } from './router.ts'
+import { covers, platformPath } from './router.ts'
 import {
   browsing,
   nobody,
@@ -538,8 +540,6 @@ export let reported = async (
 // address without rewriting their contents. Authenticated API calls and page
 // navigation keep their ordinary addresses.
 let hasBase = (html: string) => /<base[\s>][^>]*\bhref\b/i.test(html)
-let assetReserved = (path: string) =>
-  path == `${BUILD}.js` || PLATFORM_PATHS.some((p) => covers(p, path))
 let mapped = (
   html: string,
   at: string,
@@ -549,7 +549,7 @@ let mapped = (
 ) => {
   let id = releaseId(source)
   return id && !hasBase(html)
-    ? assetMaps(html, at, bare, id, assetReserved, base, client())
+    ? assetMaps(html, at, bare, id, platformPath, base, client())
     : html
 }
 let released = (
@@ -570,25 +570,16 @@ let released = (
     }) => {
       let ref = el.getAttribute(attr)
       if (!ref) return
-      let next = assetUrl(ref, at, bare, id, assetReserved, base)
+      let next = assetUrl(ref, at, bare, id, platformPath, base)
       if (next != ref) el.setAttribute(attr, next)
     },
   })
-  rewrite.on('script[src]', move('src'))
-  rewrite.on('img[src]', move('src'))
-  rewrite.on('audio[src]', move('src'))
-  rewrite.on('video[src]', move('src'))
-  rewrite.on('video[poster]', move('poster'))
-  rewrite.on('source[src]', move('src'))
+  for (let [tag, attr] of LOADS) rewrite.on(`${tag}[${attr}]`, move(attr))
   rewrite.on('link[href]', {
     element: (el) => {
-      let rel = (el.getAttribute('rel') ?? '').split(/\s+/)
-      let as = el.getAttribute('as') ?? ''
-      if (
-        rel.includes('stylesheet') || rel.includes('modulepreload') ||
-        (rel.includes('preload') &&
-          ['style', 'script', 'font', 'image', 'audio', 'video'].includes(as))
-      ) move('href').element(el)
+      if (linked(el.getAttribute('rel') ?? '', el.getAttribute('as') ?? '')) {
+        move('href').element(el)
+      }
     },
   })
   return rewrite.transform(page)
@@ -2379,7 +2370,7 @@ export let closed = async (
 // Whether the home app's router asked to see this path first (`home.first`),
 // which it never may for a platform path.
 let claims = (home: App | null, path: string): home is App =>
-  !PLATFORM_PATHS.some((p) => covers(p, path)) &&
+  !platformPath(path) &&
   !!home?.first.some((g) => covers(g, path))
 
 let firstly = async (

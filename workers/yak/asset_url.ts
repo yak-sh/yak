@@ -169,10 +169,16 @@ let mapEntries = (
     : entries
 
 let SCRIPT = /<script\b([^>]*)>([\s\S]*?)<\/script\s*>/gi
-let typeOf = (attrs: string) => {
-  let type = /\btype\s*=\s*(?:"([^"]*)"|'([^']*)'|([^\s>]+))/i.exec(attrs)
-  return (type?.[1] ?? type?.[2] ?? type?.[3] ?? '').trim().toLowerCase()
+// An attribute's value in a tag's attributes, as written, or null.
+let attrOf = (attrs: string, name: string) => {
+  let found = new RegExp(
+    `(?:^|\\s)${name}\\s*=\\s*(?:"([^"]*)"|'([^']*)'|([^\\s>]+))`,
+    'i',
+  ).exec(attrs)
+  return found ? found[1] ?? found[2] ?? found[3] : null
 }
+let typeOf = (attrs: string) =>
+  (attrOf(attrs, 'type') ?? '').trim().toLowerCase()
 let SCRIPTS = new Set([
   '',
   'module',
@@ -304,4 +310,143 @@ export let assetMaps = (
   return page.slice(0, at) +
     `<script type="importmap">${mapJson({ imports })}</script>` +
     preload(imports) + page.slice(at)
+}
+
+/** The elements whose address a page loads as a file of its release, and the
+ * attribute naming it: what the page's serving points at its release (apps.ts
+ * `released`), and what a deploy finds missing (`unfound`). A `<link>` loads
+ * one when `linked` says so. */
+export let LOADS = [
+  ['script', 'src'],
+  ['img', 'src'],
+  ['audio', 'src'],
+  ['video', 'src'],
+  ['video', 'poster'],
+  ['source', 'src'],
+] as const
+
+/** Whether a `<link>` of this rel and `as` loads the file it names. */
+export let linked = (rel: string, as: string) => {
+  let rels = rel.split(/\s+/)
+  return rels.includes('stylesheet') || rels.includes('modulepreload') ||
+    rels.includes('preload') &&
+      ['style', 'script', 'font', 'image', 'audio', 'video'].includes(as)
+}
+
+/** A reference a release's page or module makes to a file the release does
+ * not hold: `file` is the one that names it, `ref` the address as written,
+ * `missing` the release path it resolves to, and `imports` whether a module
+ * imports it rather than an element loading it. */
+export type Unfound = {
+  file: string
+  ref: string
+  missing: string
+  imports: boolean
+}
+
+let TAG = /<(img|audio|video|source|link|script)\b([^>]*)>/gi
+let HTML_COMMENT = /<!--[\s\S]*?-->/g
+let JS_COMMENT = /\/\*[\s\S]*?\*\/|^\s*\/\/.*$/gm
+let MODULE = /\.m?js$/i
+let folderOf = (path: string) => path.slice(0, path.lastIndexOf('/') + 1)
+
+// What a page loads by address: each element's file, and what its inline
+// scripts import.
+let loads = (html: string): [string, boolean][] => {
+  let page = html.replace(HTML_COMMENT, '')
+  let refs: [string, boolean][] = []
+  for (let [, tag, attrs] of page.matchAll(TAG)) {
+    let name = tag.toLowerCase()
+    if (
+      name == 'link' &&
+      !linked(attrOf(attrs, 'rel') ?? '', attrOf(attrs, 'as') ?? '')
+    ) continue
+    let names = name == 'link'
+      ? ['href']
+      : LOADS.filter(([t]) => t == name).map(([, a]) => a)
+    for (let attr of names) {
+      let ref = attrOf(attrs, attr)
+      if (ref) refs.push([ref, false])
+    }
+  }
+  for (let [, attrs, body] of page.matchAll(SCRIPT)) {
+    if (SCRIPTS.has(typeOf(attrs))) refs.push(...imports(body))
+  }
+  return refs
+}
+
+let imports = (code: string): [string, boolean][] =>
+  [...code.replace(JS_COMMENT, '').matchAll(SPECIFIER)]
+    .map(([, , ref]) => [ref, true])
+
+/** Every reference the release's pages make to a file it does not hold, and
+ * those its modules make in turn: an element's file (`LOADS`, `linked`) and a
+ * module imported by address, each resolved the way the browser resolves it
+ * from the page's `<base>`, or its folder (the root when `rooted`, files.ts
+ * `baseOf`), or the module's own. `paths` are the release's files from the app's root and
+ * `text` reads one; `folder` is the one the app serves (wrangler's
+ * `assets.directory`), and `reserved` the addresses the platform answers. A
+ * page address (no file type, or .html) is a page or a route, never missing,
+ * and the platform's API and its packages are not the release's to hold. */
+export let unfound = async (
+  paths: string[],
+  text: (path: string) => Promise<string | null>,
+  folder = '',
+  rooted = false,
+  reserved: (path: string) => boolean = () => false,
+): Promise<Unfound[]> => {
+  let root = folder ? `${folder}/` : ''
+  let has = new Set(paths)
+  let seen = new Set<string>()
+  let found = new Map<string, Unfound>()
+  let follow = async (
+    file: string,
+    refs: [string, boolean][],
+    base: string,
+  ) => {
+    let next: string[] = []
+    for (let [ref, imports] of refs) {
+      let at = local(ref.trim(), '/', '/', reserved, base)
+      if (!at || !/\.[a-z0-9]+$/i.test(at.path) || /\.html?$/i.test(at.path)) {
+        continue
+      }
+      if (at.path.startsWith('__packages/') || at.path == 'icon.png') continue
+      let path
+      try {
+        path = root + decodeURIComponent(at.path)
+      } catch {
+        continue
+      }
+      if (!has.has(path)) {
+        found.set(`${file}\n${ref}`, { file, ref, missing: path, imports })
+      } else if (MODULE.test(path) && !seen.has(path)) {
+        seen.add(path)
+        next.push(path)
+      }
+    }
+    await Promise.all(next.map(async (path) => {
+      let code = await text(path)
+      if (code == null) return
+      await follow(path, imports(code), '/' + folderOf(path.slice(root.length)))
+    }))
+  }
+  await Promise.all(
+    paths.filter((p) => p.startsWith(root) && /\.html?$/i.test(p)).map(
+      async (page) => {
+        let html = await text(page)
+        if (html == null) return
+        let base = '/' + (rooted ? '' : folderOf(page.slice(root.length)))
+        // A page carrying its own `<base>` resolves from it, and one based
+        // on another origin loads nothing of the release's by address.
+        let href = attrOf(/<base\b([^>]*)>/i.exec(html)?.[1] ?? '', 'href')
+        if (href) {
+          let from = URL.parse(href, `https://app.invalid${base}`)
+          if (from?.origin != 'https://app.invalid') return
+          base = from.pathname
+        }
+        await follow(page, loads(html), base)
+      },
+    ),
+  )
+  return [...found.keys()].sort().map((key) => found.get(key)!)
 }

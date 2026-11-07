@@ -640,10 +640,10 @@ test('deploy keeps every break open until explicitly fixed', async () => {
 
     await agent.tool('app_files', {
       ...app,
-      files: [{
-        path: 'index.html',
-        content: '<h1>W</h1><script src="app.js">',
-      }],
+      files: [
+        { path: 'index.html', content: '<h1>W</h1><script src="app.js">' },
+        { path: 'app.js', content: '// W' },
+      ],
     })
     assertMatch(await agent.tool('app_deploy', app), /v1/)
 
@@ -681,6 +681,49 @@ test('deploy keeps every break open until explicitly fixed', async () => {
       await agent.tool('app_errors', app),
       'weather v2: page /weather/ — boom is not a function',
     )
+  } finally {
+    await k.stop()
+  }
+})
+
+// Bug 2badcf95: a module importing a file nobody deployed broke /admin/ for
+// every visitor until one of them reported it. The deploy reads what its pages
+// load and refuses the release that lacks one, naming the file and the
+// reference, and what was live keeps serving.
+test('a deploy whose page loads a file it lacks is refused, and the live release serves on', async () => {
+  let k = await kernel()
+  try {
+    let space = unique('unfound')
+    let { cookie } = await seed(k, [{ slug: space, apps: ['math'] }])
+    let agent = connector(k, cookie)
+    let app = { space, app: 'math' }
+    let write = (files: { path: string; content: string }[]) =>
+      agent.tool('app_files', { ...app, files })
+    await write([{ path: 'index.html', content: '<h1>Math</h1>' }])
+    assertMatch(await agent.tool('app_deploy', app), /v1/)
+
+    await write([
+      {
+        path: 'admin/index.html',
+        content: '<script type="module" src="admin.js"></script>',
+      },
+      { path: 'admin/admin.js', content: "import './queue.js'" },
+    ])
+    await assertRejects(
+      () => agent.tool('app_deploy', app),
+      Error,
+      'admin/admin.js imports ./queue.js, and there is no admin/queue.js',
+    )
+    let served = async () => {
+      let res = await k.at(`${space}.yaks.app`, '/math/admin/admin.js')
+      await res.body?.cancel()
+      return res.status
+    }
+    assertEquals(await served(), 404)
+
+    await write([{ path: 'admin/queue.js', content: 'export let q = []' }])
+    assertMatch(await agent.tool('app_deploy', app), /v2/)
+    assertEquals(await served(), 200)
   } finally {
     await k.stop()
   }

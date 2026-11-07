@@ -10,7 +10,9 @@ import {
   assetUrl,
   failedScript,
   releaseId,
+  unfound,
 } from './asset_url.ts'
+import { platformPath } from './router.ts'
 
 test("a script failure is the release's when it lacks the refused file, the platform's when it holds it", () => {
   let id = '3c92f71b-848e-4492-95e7-c73402b90ffc'
@@ -321,5 +323,109 @@ test('a page of modules imports the store client by its bytes, asked for beside 
   assertEquals(
     [unnamed.imports['/guestbook/api/client.js'], unnamed.preloads],
     [undefined, []],
+  )
+})
+
+// What a release's pages load that it does not hold, as `file names ref`, so
+// each case is its files and what they leave missing.
+let missing = async (
+  files: Record<string, string>,
+  folder = '',
+  rooted = false,
+) =>
+  (await unfound(
+    Object.keys(files),
+    (path) => Promise.resolve(files[path] ?? null),
+    folder,
+    rooted,
+    platformPath,
+  )).map((m) => `${m.file} ${m.imports ? 'imports' : 'loads'} ${m.missing}`)
+
+test("a release's pages and modules name every file they load", async () => {
+  // The case of bug 2badcf95: a module importing a sibling nobody deployed.
+  assertEquals(
+    await missing({
+      'admin/index.html': '<script type="module" src="admin.js"></script>',
+      'admin/admin.js': "import { queue } from './queue.js'\nqueue()",
+    }),
+    ['admin/admin.js imports admin/queue.js'],
+  )
+  // Every element that loads a file, and an inline module's imports.
+  assertEquals(
+    await missing({
+      'index.html': [
+        '<link rel="stylesheet" href="/style.css">',
+        '<link rel="icon" href="favicon.png">',
+        '<link rel="preload" as="font" href="font.woff2">',
+        '<img src="logo.png"><video poster="still.jpg"></video>',
+        "<script type=\"module\">import './main.js'; import('./later.js')</script>",
+      ].join(''),
+      'main.js': "export * from '../lib/util.mjs'",
+    }),
+    [
+      'index.html imports later.js',
+      'index.html loads style.css',
+      'index.html loads font.woff2',
+      'index.html loads logo.png',
+      'index.html loads still.jpg',
+      'main.js imports lib/util.mjs',
+    ],
+  )
+  // What is present, or not the release's to hold, is no gap: pages and
+  // routes, other origins, the app's API and the platform's paths, npm names,
+  // the compile's packages, and what a comment says.
+  assertEquals(
+    await missing({
+      'index.html': [
+        '<a href="missing.png">',
+        '<script src="app.js"></script><script src="main.ts"></script>',
+        '<img src="https://cdn.example/x.png"><img src="//cdn.example/y.png">',
+        '<img src="data:image/png;base64,AA"><img src="about"><img src="">',
+        '<script type="module" src="./api/client.js"></script>',
+        '<script src="/_yaks/badge.js"></script><img src="/icon.png">',
+        '<!-- <img src="old.png"> -->',
+        '<script type="importmap">{"imports": {"x": "./gone.js"}}</script>',
+      ].join(''),
+      'app.js': [
+        "import { h } from 'preact'",
+        "import '/__packages/preact/mod.js'",
+        "// import './old.js'",
+        "/* import './older.js' */",
+        "import './app.js'",
+      ].join('\n'),
+      'main.ts': "import './missing.ts'",
+    }),
+    [],
+  )
+  // A served folder holds what its pages load, and what is outside it is
+  // source; a rooted app's folder pages resolve from the root.
+  assertEquals(
+    await missing({
+      'dist/index.html': '<script src="app.js"></script>',
+      'app.js': '',
+      'dist/docs/index.html': '<img src="../logo.png">',
+      'dist/logo.png': '',
+    }, 'dist'),
+    ['dist/index.html loads dist/app.js'],
+  )
+  assertEquals(
+    await missing(
+      {
+        'docs/index.html': '<img src="logo.png">',
+        'logo.png': '',
+      },
+      '',
+      true,
+    ),
+    [],
+  )
+  // A page's own `<base>` is where its addresses resolve from.
+  assertEquals(
+    await missing({
+      'docs/a.html': '<base href="/"><img src="logo.png">',
+      'docs/b.html': '<base href="https://cdn.example/"><img src="gone.png">',
+      'logo.png': '',
+    }),
+    [],
   )
 })
