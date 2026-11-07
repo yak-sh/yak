@@ -1243,6 +1243,18 @@
   .Talk_Show {
     display: none;
   }
+  /* The bar's button to the app, named for it: a button is one line tall,
+     so a long name is cut short rather than wrapped out of it on a phone. */
+  .Talk_Show {
+    min-width: 0;
+    max-width: 50%;
+  }
+  .Talk_ShowName {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
   .Talk_Main {
     display: flex;
     flex-direction: column;

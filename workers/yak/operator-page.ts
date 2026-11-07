@@ -1310,9 +1310,14 @@ let opens = (follows: Follows, made: Underway | null) =>
 let ours = (space: Space, worked: Changed | null) =>
   worked && (!worked.space || worked.space == space.slug) ? worked.app : null
 
-// The bar's way to the app on a phone, named for it.
+// The bar's way to the app on a phone, named for it in one line, cut short
+// where the bar is narrow (pages.css).
 let showing = (app: Shown) =>
-  h(Button, { href: '#app', class: 'Talk_Show' }, app.title || app.slug)
+  h(
+    Button,
+    { href: '#app', class: 'Talk_Show' },
+    h('span', { class: 'Talk_ShowName' }, app.title || app.slug),
+  )
 
 // The Operator page installs to a home screen as a web app (D-136811): each
 // space's own manifest (`installing`), named for its Operator and opening its
