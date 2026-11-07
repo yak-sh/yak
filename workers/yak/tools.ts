@@ -1724,13 +1724,17 @@ let released = async (
   }
 }
 
-/** Recover from the browser failure just accepted by the app_errors intake.
- * Intake is queued, so rereading the tracker here could miss that occurrence. */
+/** Recover from the browser failure just accepted by the app_errors intake:
+ * a release whose script loads a file the release lacks is put back to the
+ * one before, and its owners are told which file. A file it holds that was
+ * refused anyway is the platform's failure, filed to the platform's tracker
+ * by the intake, and moves nothing (asset_url.ts `failedScript`). Intake is
+ * queued, so rereading the tracker here could miss that occurrence. */
 export let recoverRelease = async (
   ctx: Ctx,
   space: Space,
   app: App,
-  report: { version: number | null; message: string },
+  report: { version: number | null; message: string; file?: string },
   request: string,
   mount: string,
 ) => {
@@ -1749,8 +1753,8 @@ export let recoverRelease = async (
   let folder = live.source
     ? (await configOf(r2Objects(ctx.env.BLOBS), live.source)).assets?.directory
     : undefined
-  let path = failedScript(report, live, request, mount, folder)
-  if (!path) return
+  let failed = failedScript(report, live, request, mount, folder)
+  if (!failed) return
   let target = deployedOver(all, await ctx.dir.switches(current), live)
   if (!target) return
   let who: Who = { person: null, role: 'owner', administrative: true }
@@ -1767,7 +1771,7 @@ export let recoverRelease = async (
   )
   for (let person of await ctx.dir.owners(space)) {
     let data =
-      `${space.slug}/${app.slug} automatically rolled back v${live.version} to v${target.version}: failed to load its own script ${path}`
+      `${space.slug}/${app.slug} automatically rolled back v${live.version} to v${target.version}: its script ${failed.script} loads ${failed.missing}, which v${live.version} does not have`
     await notify(ctx.env, person, 'notifications/message', {
       level: 'warning',
       logger: `${space.slug}/${app.slug}`,

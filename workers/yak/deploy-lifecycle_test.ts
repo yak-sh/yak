@@ -409,15 +409,23 @@ test('rollback selects kept bytes without minting or changing deploys, then depl
       }),
     },
   } as Env
+  // The reporter names the page, and the file refused beside the script.
+  let missing = 'https://ada.yaks.app/recipes/missing.js'
   let report = async (
     version: number | null,
     src: string,
     message = `failed to load script ${src}`,
+    file = missing,
   ) => {
     let res = await apps.fetch(
       new Request('https://ada.yaks.app/recipes/api/report', {
         method: 'POST',
-        body: JSON.stringify({ version, url: src, message }),
+        body: JSON.stringify({
+          version,
+          page: 'https://ada.yaks.app/recipes/',
+          url: file,
+          message,
+        }),
       }),
       env,
     )
@@ -426,16 +434,19 @@ test('rollback selects kept bytes without minting or changing deploys, then depl
   }
   let src = 'https://ada.yaks.app/recipes/main.js'
   for (
-    let [version, address, message] of [
+    let [version, address, message, file] of [
       [1, src],
       [null, src],
       [2, 'https://elsewhere.test/recipes/main.js'],
       [2, 'https://ada.yaks.app/another/main.js'],
       [2, 'https://ada.yaks.app/recipes/api/client.js'],
       [2, src, 'x is not a function'],
-    ] as [number | null, string, string?][]
+      // v2 holds the file it was refused: the platform failed to serve it,
+      // and putting v2 back would blame the app for it (T-136081).
+      [2, src, undefined, src],
+    ] as [number | null, string, string?, string?][]
   ) {
-    await report(version, address, message)
+    await report(version, address, message, file)
   }
   let space = (await f.dir.space('ada'))!
   assertEquals((await f.dir.app(space, 'recipes'))!.version, 2)
@@ -448,7 +459,9 @@ test('rollback selects kept bytes without minting or changing deploys, then depl
   assertEquals(await f.history(), before)
   assertEquals(
     notices.some((n) =>
-      JSON.stringify(n).includes('automatically rolled back v2 to v1')
+      JSON.stringify(n).includes(
+        'automatically rolled back v2 to v1: its script main.js loads missing.js, which v2 does not have',
+      )
     ),
     true,
   )

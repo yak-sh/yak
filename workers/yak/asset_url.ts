@@ -15,11 +15,43 @@ export let assetPath = (path: string) => {
   return found ? { release: found[1], path: `/${found[2]}` } : null
 }
 
-/** A browser resource failure naming a file of this release. The entry
- * script is reported even when a dependency, rather than the entry, is absent.
- * `folder` is the one the app serves (wrangler's `assets.directory`). */
+// A browser address's file in this release, as the app's files name it, or
+// null when it is not one of the app's own static files: another origin, a
+// sibling app, the platform's API, another release.
+let releaseFile = (
+  address: string,
+  release: { source?: string | null },
+  request: string,
+  mount: string,
+  folder: string,
+) => {
+  try {
+    let base = new URL(mount, request)
+    let url = new URL(address, base)
+    if (url.origin != base.origin || !url.pathname.startsWith(base.pathname)) {
+      return null
+    }
+    let path = url.pathname.slice(base.pathname.length)
+    if (path.startsWith('api/')) {
+      let asset = assetPath('/' + path.slice(4))
+      if (!asset || asset.release != releaseId(release.source)) return null
+      path = asset.path.slice(1)
+    }
+    return (folder ? `${folder}/` : '') + decodeURIComponent(path)
+  } catch {
+    return null
+  }
+}
+
+/** A release that cannot run because it lacks a file its page loads: the
+ * script the page names (the module's entry) and `missing`, the file that
+ * was refused (the report's `file`, the entry itself by default) and that the
+ * release does not hold. A refused file the release does hold was the
+ * platform's to serve, not the app's to fix, so it answers null, as does any
+ * report that is not this release's script failure. `folder` is the one the
+ * app serves (wrangler's `assets.directory`). */
 export let failedScript = (
-  report: { version?: number | null; message: string },
+  report: { version?: number | null; message: string; file?: string },
   release: {
     version: number
     source?: string | null
@@ -32,23 +64,14 @@ export let failedScript = (
   if (report.version != release.version) return null
   let match = /^failed to load script (\S+)$/.exec(report.message)
   if (!match) return null
-  try {
-    let base = new URL(mount, request)
-    let url = new URL(match[1], base)
-    if (url.origin != base.origin || !url.pathname.startsWith(base.pathname)) {
-      return null
-    }
-    let path = url.pathname.slice(base.pathname.length)
-    if (path.startsWith('api/')) {
-      let asset = assetPath('/' + path.slice(4))
-      if (!asset || asset.release != releaseId(release.source)) return null
-      path = asset.path.slice(1)
-    }
-    path = (folder ? `${folder}/` : '') + decodeURIComponent(path)
-    return Object.hasOwn(release.files, path) ? path : null
-  } catch {
-    return null
-  }
+  let file = (address: string) =>
+    releaseFile(address, release, request, mount, folder)
+  let script = file(match[1])
+  if (script == null || !Object.hasOwn(release.files, script)) return null
+  let missing = file(report.file ?? match[1])
+  return missing == null || Object.hasOwn(release.files, missing)
+    ? null
+    : { script, missing }
 }
 
 /** Where a release asset's reference to the app's API belongs. A release

@@ -98,13 +98,14 @@ test('a hostname finds its app, and only one app', async () => {
     }])
 
     // A page that broke on the domain is reported there, and reaches the
-    // app's store: the live release failed to load its own script, so the
-    // store takes it back to the release before.
+    // app's store: the live release's script loads a file the release lacks,
+    // so the store takes it back to the release before.
     let failed = await k.at(herbusiness101, '/api/report', {
       method: 'POST',
       body: JSON.stringify({
         version: 2,
-        url: `https://${herbusiness101}/main.js`,
+        page: `https://${herbusiness101}/`,
+        url: `https://${herbusiness101}/missing.js`,
         message: `failed to load script https://${herbusiness101}/main.js`,
       }),
     })

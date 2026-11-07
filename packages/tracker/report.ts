@@ -280,6 +280,9 @@ export type Break = {
   cause?: string
   mechanism?: Mechanism
   breadcrumbs?: Crumb[]
+  /** the file the reporter named apart from its page: for a resource that
+   * failed to load, the one that was refused */
+  file?: string
   /** the browser that sent it, its user agent ({@link received}) */
   agent?: string
 }
@@ -386,7 +389,7 @@ export let meant = (_answer: string, status: number): boolean =>
  *   url: 'https://box.test/a.webp',
  *   page: 'https://box.test/T-9',
  * }))
- * equal(missed.request, 'page /T-9')
+ * equal([missed.request, missed.file], ['page /T-9', 'https://box.test/a.webp'])
  * let [wrapped] = broken(JSON.stringify({
  *   message: 'live client — Dropped: wss://box.test/ws closed (1006)',
  *   cause: 'it has not reopened: 7 attempts',
@@ -462,6 +465,9 @@ export let broken = (
         ? { mechanism: b.mechanism as Mechanism }
         : {},
       ...breadcrumbs ? { breadcrumbs } : {},
+      ...b.page != null && typeof b.url == 'string' && b.url
+        ? { file: b.url }
+        : {},
     }]
   })
 }
