@@ -202,16 +202,23 @@ test('an answer restarts the five minutes', async () => {
   ])
 })
 
-test('a poll that never settles is unanswered too', async () => {
-  let time = clock(), filed: unknown[] = []
+test('a poll that never settles is filed as hung, once, and the next one runs', async () => {
+  let time = clock(), filed: unknown[] = [], asked = 0
   let open = poll(remote, '.bug', {
     timer: (fn, ms) => time.after(ms, fn),
-    doors: { bugs: () => new Promise(() => {}), mark: () => Promise.resolve() },
+    doors: {
+      bugs: () => (asked++, new Promise(() => {})),
+      mark: () => Promise.resolve(),
+    },
     report: (error) => filed.push(String(error)),
   })
   await time.advance(300_000)
+  await time.advance(30_000)
   open.close()
-  equal(filed, ['Error: Remote tracker has not answered for 5 minutes'])
+  equal({ filed, asked }, {
+    filed: ['Error: A pass has run for 5 minutes without finishing'],
+    asked: 2,
+  })
 })
 
 test('any other failed poll is filed at once', async () => {

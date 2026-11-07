@@ -1,7 +1,7 @@
 // Local admission keeps working while the remote outbox is unavailable. The
 // spool here is in memory with file.ts's contract (file_test.ts holds the
 // files to it): a record is admitted once and leaves only when acknowledged.
-import { equal, test, throws, until } from '@yaks/testing'
+import { clock, equal, test, throws, until } from '@yaks/testing'
 import type { Bundle } from '@yaks/graph'
 import { type Record, service } from './service.ts'
 import { capture } from './report.ts'
@@ -286,4 +286,72 @@ let cancelled = await (async () => {
 })()
 test('stopping a standing read settles the service without a tracker outage', () => {
   equal(cancelled, { notices: [], failure: '' })
+})
+
+// A delivery the tracker cannot answer stops at that batch, and the rest
+// waits for the next pass, so a pass ends within a request's minute.
+let unanswered = await (async () => {
+  let g = fixture(), spool = memory(), calls = 0
+  for (let n = 0; n < 205; n++) spool.append(`down-${n}`)
+  await service({ graph: g }, {
+    source: spool.source,
+    remote,
+    notice: async () => {},
+    fetch: ((_url, init) => {
+      if (init?.method != 'POST') return Promise.resolve(Response.json([]))
+      calls++
+      return Promise.resolve(new Response(null, { status: 503 }))
+    }) as typeof fetch,
+  }).catch(() => {})
+  return { calls, left: spool.held.size }
+})()
+test('a delivery the tracker cannot answer sends no later batch in that pass', () => {
+  equal(unanswered, { calls: 1, left: 205 })
+})
+
+// A standing sync whose pass hangs on the box, on a held clock: the graph
+// read for the bug the tracker answered never settles, once.
+let hung = await (async () => {
+  let stop = new AbortController(), g = fixture(), time = clock()
+  let eid = '00000000-0000-4000-8000-000000000001'
+  let reads = 0, notices: string[] = [], logged: string[] = []
+  let entered = Promise.withResolvers<void>()
+  let graph = {
+    ...g,
+    get: (eids: string[]) => {
+      if (!eids.includes(eid) || reads++) return g.get(eids)
+      entered.resolve()
+      return new Promise<never>(() => {})
+    },
+  }
+  let running = service({ graph }, {
+    source: async function* () {},
+    remote,
+    every: 3_600_000,
+    reconcileEvery: 0,
+    timer: (run, ms) => time.after(ms, run),
+    log: (line) => logged.push(line),
+    notice: (error) => {
+      notices.push(error.message)
+      return Promise.resolve()
+    },
+    fetch: (() =>
+      Promise.resolve(
+        Response.json([{ entity: { eid }, bug: { fault: 'hung' } }]),
+      )) as typeof fetch,
+  }, stop.signal)
+  await entered.promise
+  await time.advance(300_000)
+  await until(() => reads > 2, { poll: 0 })
+  stop.abort()
+  await running
+  return { notices, logged }
+})()
+test('a standing sync that hangs on the box is told as a hang, once, and the next pass runs', () => {
+  equal(hung, {
+    notices: [
+      'Tracker standing sync failed: A pass has run for 5 minutes without finishing',
+    ],
+    logged: [],
+  })
 })

@@ -6,9 +6,10 @@
 // (it threw `Unavailable`, ./remote.ts) is a line in the log, and its
 // answering again another; the next pass tries again. Only a tracker that has
 // not answered for OUTAGE is reported, once, with the last failure as its
-// cause, since the box is the witness when the platform tracker is down. Any
-// other failure (a refusal of what was asked, a bad answer, a failure on this
-// side) is a bug now, and reports at once.
+// cause, since the box is the witness when the platform tracker is down. A
+// pass that has not finished in OUTAGE has hung on this side, and reports
+// that, once. Any other failure (a refusal of what was asked, a bad answer, a
+// failure on this side) is a bug now, and reports at once.
 import { Unavailable } from './remote.ts'
 
 /** How a wait is set, returning what cancels it. */
@@ -34,7 +35,8 @@ export type Watching = {
   /** time between passes, in ms */
   every: number
   /** a failure to fix: a pass that failed other than by `Unavailable`, at
-   * once, and the tracker not answering for OUTAGE, once */
+   * once, the tracker not answering for OUTAGE, once, and a pass running
+   * for OUTAGE, once */
   report?: (error: unknown) => void
   /** a pass the tracker could not answer, and its answering again (default:
    * `console.warn`) */
@@ -46,12 +48,14 @@ export type Watching = {
 }
 
 /** Runs one pass and keeps its outcome; `close` ends the outage it may be
- * riding out, and the report owed for it. */
-export type Outage = (<T>(pass: () => Promise<T>) => Promise<T>) & {
-  close: () => void
-}
+ * riding out, and the report owed for it. The pass is handed a signal that
+ * aborts once it has hung. */
+export type Outage =
+  & (<T>(pass: (signal: AbortSignal) => Promise<T>) => Promise<T>)
+  & { close: () => void }
 
 let failed = (n: number) => `${n} failed ${n == 1 ? 'pass' : 'passes'}`
+let minutes = `${OUTAGE / 60_000} minutes`
 
 /** The passes of one asker of the platform tracker, each deciding what its
  * failure is. */
@@ -66,46 +70,71 @@ export let outage = (
   }: Watching,
 ): Outage => {
   // Since the tracker last answered: the passes it could not answer, the last
-  // one's failure, and what cancels the report owed once that lasts OUTAGE.
-  // Its clock starts with the pass, so one that hangs is unanswered too.
+  // one's failure, and what cancels the report owed once that lasts OUTAGE,
+  // counted from the start of the first of them.
   let down: { failed: number; error?: unknown; cancel: () => void } | undefined
   let over = () => {
     down?.cancel()
     down = undefined
   }
-  let pass = async <T>(run: () => Promise<T>): Promise<T> => {
-    let since = down ??= {
-      failed: 0,
-      cancel: timer(() => {
-        if (signal?.aborted) return
+  let pass = async <T>(
+    run: (signal: AbortSignal) => Promise<T>,
+  ): Promise<T> => {
+    // Each pass sets its own clock as it starts. A pass still running when it
+    // rings has hung: each request to the tracker ends within a minute
+    // (./remote.ts), so the hold-up is this side's. It is reported as that,
+    // and let go, so the next pass runs. A pass the tracker could not answer
+    // keeps its clock when it is the first since the tracker last answered,
+    // and the outage is reported when it rings.
+    let running = true
+    let hang = new AbortController()
+    let hung = Promise.withResolvers<never>()
+    let cancel = timer(() => {
+      if (signal?.aborted) return
+      if (!running) {
         report(
-          Error(
-            `Remote tracker has not answered for ${OUTAGE / 60_000} minutes`,
-            { cause: since.error },
-          ),
+          Error(`Remote tracker has not answered for ${minutes}`, {
+            cause: down?.error,
+          }),
         )
-      }, OUTAGE),
-    }
+        return
+      }
+      let error = Error(`A pass has run for ${minutes} without finishing`)
+      hang.abort(error)
+      report(error)
+      hung.reject(error)
+    }, OUTAGE)
     try {
-      let value = await run()
-      if (since.failed) {
+      let value = await Promise.race([
+        run(signal ? AbortSignal.any([signal, hang.signal]) : hang.signal),
+        hung.promise,
+      ])
+      running = false
+      cancel()
+      if (down) {
         log(
-          `${name}: Remote tracker answered again after ${
-            failed(since.failed)
-          }`,
+          `${name}: Remote tracker answered again after ${failed(down.failed)}`,
         )
       }
       over()
       return value
     } catch (error) {
-      if (signal?.aborted) throw error
+      running = false
+      if (hang.signal.aborted || signal?.aborted) {
+        cancel()
+        throw error
+      }
       if (error instanceof Unavailable) {
-        if (!since.failed++) {
+        if (down) cancel()
+        else {
+          down = { failed: 0, cancel }
           log(`${name}: ${error.message}; trying again every ${every / 1000} s`)
         }
-        since.error = error
+        down.failed++
+        down.error = error
       } else {
         // It answered, wrongly, or this side failed: a bug now, not an outage.
+        cancel()
         over()
         report(error)
       }

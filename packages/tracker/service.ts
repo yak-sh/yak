@@ -67,9 +67,9 @@ export let service = async (
       else yield record
     }
   }
-  let forward = async () => {
+  let forward = async (signal: AbortSignal) => {
     if (!send) return
-    let pending: Record[] = [], bundles = 0
+    let pending: Record[] = [], bundles = 0, unanswered = false
     let flush = async () => {
       if (!pending.length) return
       let batch = pending
@@ -86,9 +86,13 @@ export let service = async (
         await flush()
       } catch (error) {
         failures.push(error)
+        // The tracker could not answer: the rest waits for the next pass,
+        // which ends a pass within a request's minute while it is down.
+        if (error instanceof Unavailable) unanswered = true
       }
     }
-    await each(source, stop, async (record) => {
+    await each(source, signal, async (record) => {
+      if (unanswered) return
       let rows = errors(record)
       if (!rows.some((row) => row.error)) return
       let admitted = record.admitted ?? (record.admit ? false : undefined)
@@ -166,8 +170,8 @@ export let service = async (
     } while (!signal.aborted)
   }
   let standing = () =>
-    inward(() =>
-      reconcile(host.graph, options.remote!, options.fetch, stop, seen)
+    inward((signal) =>
+      reconcile(host.graph, options.remote!, options.fetch, signal, seen)
     )
   try {
     if (signal.aborted) {
