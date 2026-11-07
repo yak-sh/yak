@@ -69,7 +69,7 @@ import {
   type Wire,
 } from '@yaks/durable-object'
 import type { Alarms } from './operator-store.ts'
-import { heard, system } from '@yaks/fp'
+import { system } from '@yaks/fp'
 import { level, writes } from '@yaks/member'
 import {
   col,
@@ -150,10 +150,8 @@ type Socket = Watching | Lent
 let CUT = 120
 
 /** How long an incarnation's owed work waits once its answers have been
- * read, so the runtime has sent them on (`#behind`), counted in turns of
- * TURN ms. */
-let BEAT = 100
-let TURN = 25
+ * read, so the runtime has sent them on (`#behind`). */
+let BEAT = 1000
 export let line = (text: string): string => {
   let first = text.trim().split('\n')[0] ?? ''
   return first.length > CUT ? `${first.slice(0, CUT - 1)}…` : first
@@ -765,30 +763,23 @@ export class Builder {
   // as the answer was read, the Operator's start-up held a first visit to
   // /manage/checks 81-140 ms after its answer was read (T-149700).
   //
-  // The beat is time the object heard go by (@yaks/fp `heard`), not a plain
-  // timer: an object's clock stands still while its code runs, so on a new
-  // isolate the read path's own CPU (about 100 ms, compiling its modules) had
-  // used the beat up by the time the answer was read, and the start-up ran
-  // at once, holding the answer about 100 ms more (T-150377). A turn that
-  // comes more than a turn late counts nothing, so the beat starts when the
-  // clock has caught up.
+  // The beat is counted by the object's clock, which stands still while its
+  // code runs and reads a timer's deadline when it fires, so the read path's
+  // own CPU on a new isolate (about 100 ms compiling its modules) is time the
+  // beat cannot see: a beat of 100 ms began the start-up as the answer was
+  // read (T-150377).
   #behind(work: () => void) {
     this.#ctx.waitUntil?.(
       new Promise<void>((done) =>
-        heard(
-          BEAT,
-          () => {
-            try {
-              work()
-            } catch (e) {
-              caught(e, { request: 'operator resume' })
-            } finally {
-              done()
-            }
-          },
-          this.#env.CLOCK ?? system,
-          TURN,
-        )
+        (this.#env.CLOCK ?? system).after(BEAT, () => {
+          try {
+            work()
+          } catch (e) {
+            caught(e, { request: 'operator resume' })
+          } finally {
+            done()
+          }
+        })
       ),
     )
   }

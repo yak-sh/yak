@@ -403,49 +403,27 @@ test('a new incarnation makes its store while a seat read is under way', async (
 
 // Behind the answer its caller has read, and a beat after it: what the owed
 // work runs and writes before the runtime has sent the answer on holds it.
-// An object's clock stands still while its code runs, and catches up on the
-// next turn of its event loop: `stalled` is how long the read path ran before
-// its answer was read, which the clock did not see (a new isolate compiling
-// its modules).
-let stalling = (stalled: number) => {
+test('an object works its Operator a beat after its first answer has been read, so a step a deploy reset runs again at once', async () => {
+  let o = await seeded()
   let time = clock(Date.now())
-  let behind = 0
-  return {
-    ...time,
-    now: () => time.now() - behind,
-    after: (ms: number, fn: () => void) =>
-      time.after(ms - behind, () => {
-        behind = 0
-        fn()
-      }),
-    stall: () => void (behind = stalled),
-  }
-}
-
-for (let stalled of [0, 100]) {
-  test(`an object works its Operator a beat after its first answer has been read, so a step a deploy reset runs again at once (its read path ran ${stalled} ms)`, async () => {
-    let o = await seeded()
-    let time = stalling(stalled)
-    o.env.CLOCK = time
-    let armed = async () => (await o.ctx.storage.getAlarm()) != null
-    let answer = await o.object.fetch(
-      new Request('https://builder/operator/conversation', {
-        method: 'POST',
-        headers: { 'x-space-eid': o.space.eid, 'x-yak-person': ADA },
-        body: '{}',
-      }),
-    )
-    await time.advance(1000)
-    let unread = await armed()
-    time.stall()
-    await answer.text()
-    await time.advance(99)
-    let read = await armed()
-    await time.advance(1)
-    await Promise.all(o.ctx.pending)
-    assertEquals([unread, read, await armed()], [false, false, true])
-  })
-}
+  o.env.CLOCK = time
+  let armed = async () => (await o.ctx.storage.getAlarm()) != null
+  let answer = await o.object.fetch(
+    new Request('https://builder/operator/conversation', {
+      method: 'POST',
+      headers: { 'x-space-eid': o.space.eid, 'x-yak-person': ADA },
+      body: '{}',
+    }),
+  )
+  await time.advance(1000)
+  let unread = await armed()
+  await answer.text()
+  await time.advance(999)
+  let read = await armed()
+  await time.advance(1)
+  await Promise.all(o.ctx.pending)
+  assertEquals([unread, read, await armed()], [false, false, true])
+})
 
 // Its first request, before the beat that makes the Operator: the write owes
 // the Operator's run all the same.
@@ -463,7 +441,7 @@ test('a request a new incarnation receives before it has made its Operator is ca
   )
   assertEquals(r.status, 202)
   await r.body?.cancel()
-  await time.advance(100)
+  await time.advance(1000)
   while (o.ctx.pending.size) await Promise.all(o.ctx.pending)
   assertEquals(model.asked.length, 1)
 })
