@@ -938,10 +938,22 @@ let signCard = async (env: Env, at: Parameters<typeof askEmail>[0] = {}) =>
 // costs a try on every code standing for the address exactly as a mistyped one
 // does. The person is found or minted here and nowhere earlier, which is what
 // keeps asking for a code from writing a person for every address anyone types.
-let spent = async (env: Env, once: Once) =>
+let spent = async (env: Env, req: Request, once: Once) =>
   await spend(meta(env), secret(env), once.email, once.code)
-    ? await personOf(meta(env), once.email, called(once.email))
+    ? await personOf(
+      meta(env),
+      once.email,
+      called(once.email),
+      await newcomerAt(env, req),
+    )
     : null
+
+// The newcomer this browser is signed in as, if it is one (newcomer.ts): an
+// address new here that they prove becomes theirs (signin.ts `addressee`).
+let newcomerAt = async (env: Env, req: Request) => {
+  let was = await browser(env, req)
+  return was && await dirOf(env).newcomer(was) ? was : undefined
+}
 
 // A pass followed: it lands where a spent code lands, and one that has been
 // spent, revoked or expired is the sign-in card again, still carrying whatever
@@ -949,7 +961,7 @@ let spent = async (env: Env, once: Once) =>
 let followed = async (req: Request, env: Env, pass: Pass | null) => {
   let once = pass?.once
   let person = once
-    ? await spent(env, once)
+    ? await spent(env, req, once)
     : pass?.standing
     ? await whose(pass.standing, links(env.OAUTH_KV))
     : null
@@ -1360,7 +1372,12 @@ let ours = async (req: Request, env: Env): Promise<Response> => {
     // person by their title and a titleless one reads back as a bare eid
     // (T-32733). It is theirs to change on their own space page. A number is
     // no name, and a person found by one is the one wearing it.
-    let person = await personOf(meta(env), address, called(address))
+    let person = await personOf(
+      meta(env),
+      address,
+      called(address),
+      await newcomerAt(env, req),
+    )
     return landed(req, env, person, q, back, 'code')
   }
 

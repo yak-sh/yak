@@ -379,10 +379,15 @@ export let nameAt = async (store: Meta, email: string) =>
 // them: nothing, a name, or the person minted under `$who`, so a caller can
 // write them beside rows that name them (member_add's invitation), in one
 // batch. `personOf` writes it alone.
+//
+// `newcomer` is the person with no address yet who asked (newcomer.ts): an
+// address nobody holds becomes theirs, so they stay who they were, and their
+// space, its chat and everything else said to be theirs stays so.
 export let addressee = async (
   store: Meta,
   address: string,
   name?: string,
+  newcomer?: string,
 ) => {
   let at = canon(address)
   let row = await personAt(store, at)
@@ -399,11 +404,12 @@ export let addressee = async (
   // An eid the batch mints is a `$alias`, and the reply says what it became:
   // a bundle names an existing entity by eid, so a client cannot hand the
   // store a uuid it invented (D-23827).
+  let eid = newcomer ?? '$who'
   return {
-    eid: '$who',
-    fresh: true,
+    eid,
+    fresh: !newcomer,
     write: [{
-      entity: { eid: '$who' },
+      entity: { eid },
       ...(name ? { doc: { title: name } } : {}),
       person: {},
       ...texted(at) ? { phone: { number: at } } : { email: { address: at } },
@@ -415,8 +421,9 @@ export let personOf = async (
   store: Meta,
   address: string,
   name?: string,
+  newcomer?: string,
 ) => {
-  let who = await addressee(store, address, name)
+  let who = await addressee(store, address, name, newcomer)
   if (!who.write.length) return who.eid
   let applied = await apply(store, who.write)
   if (!who.fresh) return who.eid

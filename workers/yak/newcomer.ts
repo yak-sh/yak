@@ -24,7 +24,7 @@ import { token } from '@yaks/graph'
 import type { Bundle, Comp, Tool } from '@yaks/graph'
 import { Stale } from '@yaks/graph/errors'
 import { derivedEid } from '@yaks/graph/identity'
-import { type Directory, newcomerIs, stamp } from './directory.ts'
+import { type Directory, idOf, newcomerIs, stamp } from './directory.ts'
 import type { Row, Space } from './directory.ts'
 import type { Namespace } from './door.ts'
 import type { Env as Platform } from './env.ts'
@@ -197,15 +197,19 @@ export let oneBuild = (env: Env, space: Space, now = new Date()) =>
   })
 
 /**
- * A newcomer keeping what they built (D-146737): signing in on the browser a
- * newcomer `was`, as `person`, moves the newcomer's owner seats to them, so
- * the spaces, their apps and their chats are theirs, and the browsers the
- * newcomer held too, so the guest work and the visits made on them are
- * theirs (attribution.ts, visit.ts). Each space is lifted to its plan's
- * budget, and to the starter too when this is the first space `person` has
- * started. A space is their own only when they own none yet. The newcomer
- * then holds nothing and goes (erase.ts `vacated`), and the browser is
- * signed in as `person`. Nothing happens for anyone who was not a newcomer.
+ * A newcomer keeping what they built (D-146737), once they signed in on the
+ * browser a newcomer `was`, as `person`. An address new here became the
+ * newcomer's own (signin.ts `addressee`), so `person` is `was`: they stay
+ * who they were, and their space, its apps, its chat and their Updates stay
+ * theirs; they only stop being a newcomer. An address somebody already held
+ * moves the newcomer's owner seats to them, so the spaces, their apps and
+ * their chats are theirs, and the browsers the newcomer held too, so the
+ * guest work and the visits made on them are theirs (attribution.ts,
+ * visit.ts). Each space is lifted to its plan's budget, and to the starter
+ * too when this is the first space `person` has started. A space is their
+ * own only when they own none yet. The newcomer then holds nothing and goes
+ * (erase.ts `vacated`), and the browser is signed in as `person`. Nothing
+ * happens for anyone who was not a newcomer.
  */
 export let keep = async (
   env: Platform,
@@ -213,7 +217,26 @@ export let keep = async (
   was: string | null,
   person: string,
 ) => {
-  if (!was || was == person || !await dir.newcomer(was)) return
+  if (!was) return
+  let [came] = await meta(env).query(
+    `.entity.eid=${was}&.newcomer&?email&?phone&?started`,
+  ) as Row[]
+  if (!came) return
+  if (was == person) {
+    let started = came.started?.space ? idOf(came.started.space) : ''
+    let theirs = await dir.seats(person, 'owner')
+    return await stamp(env, {
+      entities: [
+        ...theirs.map((s) => ({
+          entity: { eid: s.space.eid },
+          budget: null,
+          ...s.space.eid == started ? { starter: null } : {},
+        })),
+        { entity: { eid: person }, newcomer: null },
+      ],
+    })
+  }
+  if (!newcomerIs(came)) return
   let [theirs, mine, [row], browsers] = await Promise.all([
     dir.seats(was, 'owner'),
     dir.seats(person, 'owner'),

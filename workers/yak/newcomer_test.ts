@@ -8,7 +8,7 @@ import { assert, assertEquals, assertRejects } from '@std/assert'
 import { parseHTML } from 'linkedom'
 import { cleanup, test } from '@yaks/testing'
 import type { Tool } from '@yaks/graph'
-import { fresh } from './probe.ts'
+import { fresh, mailed } from './probe.ts'
 import type { Env } from './env.ts'
 import { atCeiling, dollars, limitOf, unaffordable, UNKEPT } from './meter.ts'
 import {
@@ -82,9 +82,10 @@ let card = chat.querySelector('form.Talk_Keep')
 let newcomer = await k.dir.newcomer(owner)
 let known = await k.dir.known(owner)
 
-// Keeping: Dana, new here, keeps the first space and the browser the
-// newcomer built it on; Ana, who has a space of her own, keeps the second
-// beside it.
+// Keeping: Dana, new here, gives her address in the first chat's card and
+// spends the code the letter brings, on the browser she built on; Ana, who
+// has a space of her own, keeps the second beside it, and the browser its
+// newcomer built on.
 let person = async (address: string) => {
   let eid = crypto.randomUUID()
   await k.dir.stamp({
@@ -93,19 +94,43 @@ let person = async (address: string) => {
   return eid
 }
 let row = (eid: string) => meta(env).query(`.entity.eid=${eid}`)
-let browser = crypto.randomUUID()
-await k.dir.stamp({ entities: [{ entity: { eid: browser }, browser: {} }] })
-await k.dir.stamp({
-  entities: [{ entity: { eid: browser }, browser: { by: owner } }],
+let signIn = (path: string, fields: Record<string, string>) =>
+  k.at('yaks.app', path, {
+    method: 'POST',
+    redirect: 'manual',
+    headers: {
+      'content-type': 'application/x-www-form-urlencoded',
+      cookie,
+    },
+    body: new URLSearchParams(fields).toString(),
+  })
+let back = new URL(first.headers.get('location')!).pathname
+await (await signIn('/login', { address: 'dana@example.com', return: back }))
+  .body?.cancel()
+let signedIn = await signIn('/login/code', {
+  address: 'dana@example.com',
+  code: await mailed(k, 'dana@example.com'),
+  return: back,
 })
-let dana = await person('dana@example.com')
-await keep(env, k.dir, owner, dana)
-let keptBrowser = (await row(browser))[0]?.browser
-let keptNewcomer = await row(owner)
+let dana = (await k.dir.owners(space))[0]
+let danaRow = (await row(dana))[0]
+let chatAfter = await k.at('yaks.app', back, {
+  headers: { cookie: cookieOf(signedIn) },
+})
+let chatAfterSaid = parseHTML(await chatAfter.text()).document.body
+  .textContent ?? ''
 let ana = await person('ana@example.com')
 let anas = await k.dir.own(ana)
 let other = (await k.dir.space(spaceOf(second)))!
-await keep(env, k.dir, (await k.dir.owners(other))[0], ana)
+let otherNewcomer = (await k.dir.owners(other))[0]
+let browser = crypto.randomUUID()
+await k.dir.stamp({ entities: [{ entity: { eid: browser }, browser: {} }] })
+await k.dir.stamp({
+  entities: [{ entity: { eid: browser }, browser: { by: otherNewcomer } }],
+})
+await keep(env, k.dir, otherNewcomer, ana)
+let keptBrowser = (await row(browser))[0]?.browser
+let keptNewcomer = await row(otherNewcomer)
 let danaSeats = await k.dir.seats(dana, 'owner')
 let anaSeats = await k.dir.seats(ana, 'owner')
 let kept = (await k.dir.space(space.slug))!
@@ -192,8 +217,8 @@ test('a newcomer is a person with no address yet', () => {
   assertEquals(known, null)
 })
 
-test("keeping takes the newcomer's browser, and their row goes", () => {
-  assertEquals(keptBrowser, { by: dana })
+test("keeping into an account takes the newcomer's browser, and their row goes", () => {
+  assertEquals(keptBrowser, { by: ana })
   assertEquals(keptNewcomer, [])
 })
 
@@ -218,6 +243,20 @@ test("a newcomer's chat asks for their email, to come back to it", () => {
     card!.querySelector('input[name="return"]')?.getAttribute('value'),
     new URL(first.headers.get('location')!).pathname,
   )
+})
+
+test("an address new here becomes the newcomer's own, and their chat stays theirs", () => {
+  assertEquals(signedIn.status, 303)
+  assertEquals(
+    new URL(signedIn.headers.get('location')!, 'https://yaks.app').pathname,
+    back,
+  )
+  assertEquals(dana, owner)
+  assertEquals(danaRow.email, { address: 'dana@example.com' })
+  assertEquals(danaRow.newcomer, undefined)
+  assertEquals(chatAfter.status, 200)
+  assert(!chatAfterSaid.includes('This chat is not here'), chatAfterSaid)
+  assert(!chatAfterSaid.includes('Keep this app'), 'nothing left to keep')
 })
 
 test('an address new here keeps the space as its own, at its plan', async () => {
