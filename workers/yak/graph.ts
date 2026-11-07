@@ -315,7 +315,7 @@ import {
   type Prepared,
 } from '@yaks/host/assembly'
 import { type Host as PluginHost, type Load } from '@yaks/host'
-import { meet } from '@yaks/host/config'
+import { type Config, given, meet, used } from '@yaks/host/config'
 import { configs } from './config.ts'
 import { load } from './load.ts'
 import { metering } from './meter.ts'
@@ -453,6 +453,13 @@ export let vocabOfStore = (name: string, declared: unknown = {}): Vocab =>
 
 let storeKind = (name: string): keyof typeof configs =>
   name == PLATFORM_STORE ? 'directory' : name == GIT_STORE ? 'git' : 'app'
+// The components a store's journal keeps, as its config's @yaks/journal entry
+// names them (`with.components`); absent, every one its words keep.
+let journaled = (config: Config): string[] | undefined => {
+  let plug = config.plugins?.find((p) => used(p) == '@yaks/journal')
+  let named = plug && given(plug).components
+  return Array.isArray(named) ? named.map(String) : undefined
+}
 // Plans retain only declarations and modules. Each Store binds its own options,
 // capabilities and observation state to the plan for this kind and shape.
 let assemblies = new WeakMap<Prepared, WeakMap<Shape, Assembly>>()
@@ -1444,7 +1451,11 @@ export class Store {
           ...(own ? {} : { teach: teach(this.#bind) }),
           plugins: [
             ...(vocab.comp('_tx')
-              ? [journal(log({ rows: (s) => drive.query(s), derived }), vocab)]
+              ? [
+                journal(log({ rows: (s) => drive.query(s), derived }), vocab, {
+                  components: journaled(config),
+                }),
+              ]
               : []),
             ...(!own || declaredLenses(declaration)
               ? [

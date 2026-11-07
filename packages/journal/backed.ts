@@ -212,6 +212,7 @@ let registry = (vocab: Vocab, derived: Derived): Backings => {
           as(jc('tx'), 'tx'),
           as(jc('entity'), 'target'),
           as(comp, 'comp'),
+          as(jc('component'), 'component'),
           as(value, 'value'),
         ],
         from: table('journal_change', 'jc'),

@@ -151,8 +151,8 @@ export let bareLog = (): Log => {
 /** An embedded database with the wiki's tables, the journal's and the feed's,
  * and a log and a feed bound to it — what a graph and a test both read
  * through. The statement capability is returned beside them so the tools use
- * the same storage. */
-export let wikiLog = (): {
+ * the same storage. `components` narrows what the journal records. */
+export let wikiLog = (components?: string[]): {
   g: (p?: Options['plugins']) => Graph
   j: Log
   f: Feed
@@ -179,7 +179,7 @@ export let wikiLog = (): {
         storage: store,
         vocab: wiki,
         plugins: [
-          journal(j, wiki, { now: () => NOW }),
+          journal(j, wiki, { now: () => NOW, components }),
           edges(wiki),
           texts,
           feeder(f),
@@ -204,8 +204,9 @@ export let wikiLog = (): {
  * brings — with the log it writes to beside it. */
 export let wikiGraph = (
   plugins: Options['plugins'] = [],
+  components?: string[],
 ): { g: Graph; j: Log; storage: { statements: Statements } } => {
-  let held = wikiLog()
+  let held = wikiLog(components)
   return { g: held.g(plugins), j: held.j, storage: held.storage }
 }
 

@@ -22,8 +22,8 @@ import { bareLog, NOW, sync, wiki, wikiGraph, wikiLog } from './testing.ts'
 let ada = { by: 'ada' }
 let bob = { by: 'bob', via: 'cli' }
 
-let fixture = () => {
-  let { g, j } = wikiGraph()
+let fixture = (components?: string[]) => {
+  let { g, j } = wikiGraph([], components)
   return { g, j, apply: (bundles: Bundle[]) => sync(g.apply(bundles)) }
 }
 
@@ -151,6 +151,17 @@ test('an entity holding only what is kept out is deleted without a trace', () =>
   f.apply([{ entity: { eid: 'p1' }, $delete: true }])
   assertEquals(told(f), ['1 p1 page', '2 p1 entity'])
   assertEquals(f.j.history('r1'), [])
+})
+
+test('a journal given its components records those alone', () => {
+  let f = fixture(['note'])
+  f.apply([
+    { entity: { eid: 'p1' }, page: { title: 'One' } },
+    { entity: { eid: 'n1' }, note: { text: 'hi', page: 'p1' } },
+  ])
+  f.apply([{ entity: { eid: 'p1' }, page: { title: 'Two' } }])
+  f.apply([{ entity: { eid: 'n1' }, $delete: true }])
+  assertEquals(told(f), ['1 n1 note', '2 n1 entity'])
 })
 
 test('a cascade casualty is recorded, whole, under its own entity', () => {

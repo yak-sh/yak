@@ -67,6 +67,10 @@
           "death": "keep",
           "description": "the component it wrote or removed; entity for a deletion"
         },
+        "component": {
+          "type": "string",
+          "description": "that component's name, which a graph that does not describe its vocabulary as _comp rows reads in place of comp"
+        },
         "value": {
           "type": "object",
           "description": "the properties it wrote; absent where it removed the component"

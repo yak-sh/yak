@@ -171,6 +171,20 @@ export let renamed = async (k: Kernel) => {
     (await k.at(`${adakitchen46}.yaks.app`, '/cookbook/')).status,
     200,
   )
+  // Both moves are read back from the directory's own journal (T-135993):
+  // each address the space held, in order, and who moved it from each.
+  let changes = await meta(k).query(
+    `._change.target=${them.eids[ada46]}&._change.component=space`,
+  ) as unknown as { _change: { tx: string; value: { slug?: string } } }[]
+  assertEquals(changes.map((c) => c._change.value.slug), [
+    ada46,
+    adacooks46,
+    adakitchen46,
+  ])
+  let hers = new Set(
+    (await meta(k).query(`._tx.by=${them.person}`)).map((t) => t.entity.eid),
+  )
+  assert(changes.slice(1).every((c) => hers.has(c._change.tx)))
 
   // Forgotten (T-34659): the subdomain stops redirecting at once, and the
   // answer names what it costs.

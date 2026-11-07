@@ -68,6 +68,11 @@ either, so it leaves no trace at all; the plugin's one read before a write, on
 the `precondition` phase, is what each entity a bundle deletes holds. A
 transaction with nothing left to record writes no row.
 
+A store whose history is about a few of its components, beside others it writes
+often, names them: `journal(log, vocab, { components: ['space'] })`, or
+`{"use": "@yaks/journal", "with": {"components": ["space"]}}` in a config. Every
+other component is left out as a `journal: false` one is.
+
 ```ts
 import { assertEquals } from '@std/assert'
 import { graph } from '@yaks/graph'
@@ -107,18 +112,19 @@ assertEquals(j.since(0).map((e) => e.patches.map((p) => p.target)), [['p1']])
 The vocabulary declares two computed components, read from these tables and
 never written:
 
-| Component | Properties                               | One per                                |
-| --------- | ---------------------------------------- | -------------------------------------- |
-| `_tx`     | `seq`, `at`, `by`, `via`, `host`, `note` | row of `journal_tx`: a transaction     |
-| `_change` | `tx`, `target`, `comp`, `value`          | row of `journal_change`: one operation |
+| Component | Properties                                   | One per                                |
+| --------- | -------------------------------------------- | -------------------------------------- |
+| `_tx`     | `seq`, `at`, `by`, `via`, `host`, `note`     | row of `journal_tx`: a transaction     |
+| `_change` | `tx`, `target`, `comp`, `component`, `value` | row of `journal_change`: one operation |
 
 `_change.value` is the operation's after-image, the properties it wrote as one
 object; it is absent where the operation removed the component. `comp` refers to
 the `_comp` entity describing the component (@yaks/vocab), found by its name,
 and a deletion is the change whose `comp` is `entity`'s; where the graph
 describes no such component (no @yaks/vocab, or a component since renamed) a
-change has no `comp`. `tx` refers to the `_tx` entity, and `target`, `by` and
-`via` to entities of the graph.
+change has no `comp`. `component` is the component's name whatever the graph
+describes, `entity` for a deletion. `tx` refers to the `_tx` entity, and
+`target`, `by` and `via` to entities of the graph.
 
 A scoped read (a person's on yaks.app, or the API's on the box) sees a change
 when its scope admits the change's target and the component it wrote, and a

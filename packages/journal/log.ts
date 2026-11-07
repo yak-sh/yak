@@ -1021,14 +1021,25 @@ let UNRECORDED = '$unrecorded'
  * trace at all. That is the one thing read before the write: on the
  * `precondition` phase, what each entity a bundle deletes holds, gathered with
  * the batch's other reads (`wants`).
+ *
+ * `components` narrows it to the ones named, for a store whose history is
+ * about a few of its words while the rest are written often: the others are
+ * left out as `journal: false` ones are.
  */
 export let journal = (
   n: Log,
   vocab: Vocab,
-  opts: { now?: () => string; name?: string; record?: Recording } = {},
+  opts: {
+    now?: () => string
+    name?: string
+    record?: Recording
+    components?: string[]
+  } = {},
 ): Plugin => {
   let clock = opts.now ?? (() => new Date().toISOString())
-  let kept = (comp: string) => vocab.comp(comp)?.journal !== false
+  let named = opts.components && new Set(opts.components)
+  let kept = (comp: string) =>
+    (!named || named.has(comp)) && vocab.comp(comp)?.journal !== false
   let deleting = (bundles: Bundle[]): Eid[] => [
     ...new Set(
       bundles.filter((b) => b.$delete === true).map((b) => b.entity.eid),

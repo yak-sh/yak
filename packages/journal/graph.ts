@@ -96,6 +96,8 @@ export let schema = (): Stmt[] => [...ddl(), ...feedDdl()]
  * `{"use": "@yaks/journal", "with": {"versions": true}}`. Naming neither is
  * the journal before versions, attribution with every value as a
  * `journal_field` row, until the box's journal moves into versions.
+ * `{"with": {"components": ["space", "member"]}}` keeps the history of those
+ * components alone.
  */
 export type Aspects = {
   attribution: boolean
@@ -153,8 +155,11 @@ export let plugins = (
     values: a.values,
     ...mode && 'branch' in mode ? { branch: mode.branch } : {},
   }
+  let components = Array.isArray(options?.components)
+    ? options.components.map(String)
+    : undefined
   return [
-    journal(logFor(host), host.vocab, { record }),
+    journal(logFor(host), host.vocab, { record, components }),
     ...mode ? [] : [feeder(feedFor(host))],
   ]
 }

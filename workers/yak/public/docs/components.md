@@ -668,8 +668,8 @@ one is refused entirely:
 
 The complete list of reserved names:
 
-    _pace about access account_alert account_usage alias answer app
-    archetype archived artifact ask attachment attempt attribute_writes
+    _change _pace _tx about access account_alert account_usage alias answer
+    app archetype archived artifact ask attachment attempt attribute_writes
     belief binding blob bounced browser budget build build_of builder
     builder_answer builder_dep builder_edit builder_model_answer
     builder_open builder_ring built call call_ready call_woken called calls

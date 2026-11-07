@@ -182,6 +182,18 @@ export let directoryConfig: Config = {
       words: [...spine, ...relations, ...marks, 'completed'],
     },
     provenance,
+    // Who changed a space's or an app's address or title, its seats and
+    // invitations, when and from what (T-135993): read as `_change` and `_tx`
+    // rows. Only these words: the rest of the directory is written on every
+    // visit, spend and deploy.
+    {
+      use: '@yaks/journal',
+      facets: ['vocab'],
+      words: ['_tx', '_change'],
+      with: {
+        components: ['space', 'doc', 'former', 'member', 'grant', 'invite'],
+      },
+    },
     // The directory keeps the persona every Operator is worn on
     // (operator-persona.ts).
     ...machine(['person', 'persona']),
