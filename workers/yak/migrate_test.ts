@@ -759,13 +759,17 @@ departed.query(insert('lapsed', { entity: 1, agent: 'browser' }))
 departed.query(insert('kept', { entity: 1, name: 'survives' }))
 
 let departure = install(departed, remainingWords, {}, true)
-let repeatedDeparture = install(departed, remainingWords, {}, true)
+let held = catalogue(departed, { name: 'lapsed' }).length
+  ? scan(departed, 'lapsed')
+  : []
+if (held.length) departed.query({ t: 'delete', from: 'lapsed' })
+let emptied = install(departed, remainingWords, {}, true)
 
-test('a removed component takes its stored rows on the next schema installation', () => {
-  equal(departure, [])
+test('a removed component keeps its rows for a migration, and its table goes once empty', () => {
+  equal([departure, emptied], [[], []])
+  equal(held, [{ entity: 1, agent: 'browser' }])
   equal(catalogue(departed, { name: 'lapsed' }), [])
   equal(scan(departed, 'kept').map((r) => r.name), ['survives'])
-  equal(repeatedDeparture, [])
 })
 
 let wakeDeparture = await (async () => {
@@ -792,7 +796,10 @@ let wakeDeparture = await (async () => {
   let fresh = newer(ctx, PLATFORM_STORE)
   await fresh.query('.person')
   return {
-    remaining: catalogue(d, { name: 'lapsed' }),
+    remaining: catalogue(d, { name: 'lapsed' }).length
+      ? scan(d, 'lapsed').map((r) => r.entity)
+      : [],
+    ids,
     kinds: ids.map((id) => {
       let [owner] = scan(d, 'entity', by({ id: Number(id) }))
       let [kind] = scan(d, 'archetype', by({ entity: Number(owner.archetype) }))
@@ -801,9 +808,9 @@ let wakeDeparture = await (async () => {
   }
 })()
 
-test('a platform wake removes departed aspects and repairs their archetypes', () => {
-  equal(wakeDeparture.remaining, [])
-  for (let kind of wakeDeparture.kinds) assert(!kind.includes('lapsed'))
+test('a platform wake keeps a departed aspect that holds rows, and their archetypes say so', () => {
+  equal(wakeDeparture.remaining, wakeDeparture.ids)
+  for (let kind of wakeDeparture.kinds) assert(kind.includes('lapsed'))
 })
 
 // A pre-print/older writer can leave the declaration smaller than the physical

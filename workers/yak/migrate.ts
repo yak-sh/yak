@@ -44,7 +44,7 @@ import {
   retired,
   statements,
 } from '@yaks/sqlite'
-import { build } from '@yaks/sqlite/owe'
+import { build, holds as rowed } from '@yaks/sqlite/owe'
 import type { Index, Vocab } from '@yaks/vocab'
 
 import type { Bundle, Comp } from '@yaks/graph'
@@ -494,10 +494,13 @@ export let install = (
   // Only the platform owns the complete vocabulary of its own stores. An
   // app declaration can shrink without contracting its data (old releases,
   // restored vocab keys): only its explicit contract door may remove rows.
-  // A removed platform word takes its stored aspect with it. Discover component
-  // tables structurally, not by name: the object also holds infrastructure,
-  // search shadows and migration work which are not vocabulary.
-  for (let name of own ? componentTables(d, [...vocab.all, 'tombstone']) : []) {
+  // A removed platform word's table goes once it is empty: until a mover rule
+  // has moved or deleted its rows, they are the rule's to read, and a release
+  // rolled back reads them again. Discover component tables structurally, not
+  // by name: the object also holds infrastructure, search shadows and
+  // migration work which are not vocabulary.
+  let departed = own ? componentTables(d, [...vocab.all, 'tombstone']) : []
+  for (let name of departed.filter((name) => !rowed(d, name, 1))) {
     d.query({ t: 'drop', kind: 'table', name })
   }
   if (vocab.comp('archetype')) {

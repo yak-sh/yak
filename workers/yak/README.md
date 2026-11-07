@@ -499,8 +499,11 @@ few a minute and says where each rule stands in each.
 A rule can declare retired source properties for its migration reads. Those
 properties remain private to the mover and contract after the final batch; the
 serving vocabulary keeps one shape. A retired component a store holds no table
-for is unspoken there, so the rule is done with nothing to move. A core rule
-skips components owned by an app's own declaration.
+for is unspoken there, so the rule is done with nothing to move. The directory
+and the git store, which speak only the platform's words, keep a retired
+component's table while it holds rows, for a rule to move or delete them, and
+drop it at the first install that finds it empty. A core rule skips components
+owned by an app's own declaration.
 
 A rule can also forward records to the durable tracker queue. The mover prepares
 a bounded source snapshot, waits for every queue acknowledgement, then commits

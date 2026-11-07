@@ -643,6 +643,43 @@ test('a rebuild is given up once the table fits its vocabulary again', () => {
   assertEquals([aside(db), owed(db)], [[], []])
 })
 
+// Five foxes, each with a note, whose vocabulary then drops hens and forgets
+// the note before any migration moved it: the rebuild it owes, worked off.
+let noted = (kinds: string[], note: boolean) =>
+  loadVocab({
+    $defs: {
+      entity: { component: true, type: 'object', wire: false, properties: {} },
+      creature: {
+        component: true,
+        type: 'object',
+        properties: {
+          x: { type: 'string', enum: kinds },
+          ...note ? { note: { type: 'string' } } : {},
+        },
+      },
+    },
+  })
+let [forgot, owedFor] = stage((db) => {
+  let s = storage(db, noted(['fox', 'owl', 'hen'], true), { sizes: tiny })
+  s.install()
+  s.raise()
+  rows(db, 'entity', 5, fn('printf', lit('c%d'), col('i')))
+  rows(db, 'creature', 5, lit('fox'))
+  db.query({ t: 'update', table: 'creature', set: { note: col('entity') } })
+  storage(db, noted(['fox', 'owl'], false), { sizes: tiny }).install()
+  let names = owed(db).map((w) => w.name)
+  drain(db)
+  return names
+})
+
+test('a rebuild owed by a vocabulary that forgot a column keeps its values', () => {
+  using db = copy(forgot)
+  let notes = db.query(select({ cols: [col('note')], from: table('creature') }))
+  assertEquals(owedFor, ['creature'])
+  assertEquals(notes.map((r) => Number(r.note)), [1, 2, 3, 4, 5])
+  assertEquals(owed(db), [])
+})
+
 // A file whose forty rows, a page each, were all deleted, in `mode`.
 let freed = (mode: string) =>
   imaged((db) => {

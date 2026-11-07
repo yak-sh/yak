@@ -93,27 +93,21 @@ ten minutes under a lock; each run is in ~/.tasks-backup.log, ending
 `backup: <night>: <n> entities, done in <s>s`. When one finished recently, it
 will do; otherwise run `bin/backup` before the migration.
 
-The live run belongs to the moment the code that reads the new shape goes
-live. Expansion can precede the handover; contraction waits until every old
-reader and writer has exited. `yak restart` is ready-first: its return says
-replacements are ready and old units were asked to stop, while their in-flight
-steps can still be draining. Capture the old unit names before restarting and
-check that those units have stopped before dropping a column or renaming a
-table. Back-to-back migration and restart commands leave a window where a
-pinned worker still asks for a column that no longer exists. If the replacement
-cannot serve before contraction, stop and drain the affected roles, migrate,
-then start them. A short planned pause preserves the graph's contract.
-
-A pause is held, not just begun. `lsof ~/.yak/yak.db` names every process
-holding the file, and `ps -o uunit= -p <pid>` tells a unit's own from a
-session's, which needs handling before the stop. Stopping the units fences
-nothing: any `yak restart` starts fresh ones from the templates (T-131297). A
-drop-in on each, `yak-{work,web,mail}@.service.d/<name>.conf` holding
-`[Unit]` `ConditionPathExists=!<file>`, keeps a started unit down until the
-file and the drop-in go (then `systemctl --user daemon-reload` and
-`yak restart`). bench-monitor probes the web at :00, :15, :30 and :45, so a
-pause between those ticks files no false regression. Letters wait at the edge
-and are pulled after it; one that waited past a minute is reported as late.
+No schema install drops what a migration has yet to move, so the order is
+expand, move, contract, and nothing needs fencing. A table rebuild keeps every
+column its vocabulary stopped naming (packages/sqlite/ddl.ts `refitting`), and
+a platform store keeps a retired component's table until it is empty
+(workers/yak/migrate.ts `install`). So land the code that reads the new shape
+first: any process's install, on old code or new, leaves the old column and
+its values standing. Then move the rows while everything serves; a
+`yak restart` meanwhile starts new code, which never writes the old shape.
+Contraction, the script dropping the emptied column, is the one step with an
+order: it waits until every old-code process has exited, since one still
+writes the old shape. `yak restart` is ready-first, its old units draining
+after it returns, so capture their names before restarting and check they
+have stopped before the drop. A drop the engine refuses because an owed
+rebuild's triggers name the column waits for `work` (@yaks/sqlite/owe) to
+finish it.
 
 A patch keeps what it omits. A repair that puts a component back to an older
 value names every property, `null` for one the older value lacks, or what the
