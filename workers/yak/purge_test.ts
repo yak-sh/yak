@@ -5,9 +5,10 @@ import { assertEquals, assertRejects } from '@std/assert'
 import { purger, SPREAD, Unpurged } from './purge.ts'
 
 // A Site that refuses the purges `refuses` names (by count) for rate, on a
-// clock that moves only when the purger waits. Every purge is held in flight
-// until `go`, and `flying` settles once the first one is.
-let site = (refuses: number[] = []) => {
+// clock that moves only when the purger waits and as each purge is
+// acknowledged, `ack` past its send. Every purge is held in flight until `go`,
+// and `flying` settles once the first one is.
+let site = (refuses: number[] = [], ack = 0) => {
   let t = 0, sent: { at: number; tags: string[] }[] = []
   let held = Promise.withResolvers<void>()
   let flying = Promise.withResolvers<void>()
@@ -18,6 +19,7 @@ let site = (refuses: number[] = []) => {
         sent.push({ at: t, tags })
         flying.resolve()
         await held.promise
+        t += ack
         return (refused
           ? {
             success: false,
@@ -71,13 +73,13 @@ test('the third refusal is reported to every writer waiting on it', async () => 
   assertEquals(sent.at(-1), { at: 36_000, tags: ['app:c'] })
 })
 
-test('a purge asked to spread resolves SPREAD past the acknowledgement it shares', async () => {
-  let { purge, sent, go, now } = site()
+test('a purge asked to spread resolves SPREAD past the send it shares, its acknowledgement inside the wait', async () => {
+  let { purge, sent, go, now } = site([], 300)
   go()
   let at = (p: Promise<void>) => p.then(now)
   let [plain, spread] = await Promise.all([
     at(purge(['app:a'])),
     at(purge(['app:b'], true)),
   ])
-  assertEquals([sent.length, plain, spread], [1, 0, SPREAD])
+  assertEquals([sent.length, plain, spread], [1, 300, SPREAD])
 })

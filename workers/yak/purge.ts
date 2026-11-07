@@ -15,12 +15,15 @@
 // (facets/pages-graph.ts), and a release, which purges its app as it raises
 // its fence (tools.ts `released`), send theirs there.
 //
-// An acknowledged purge has not reached every cache yet. Over about ninety
-// deploys measured from the box, four times a page kept in a colo other than
-// the purge's still answered one to two seconds after the purge was
-// acknowledged (T-124483). Cloudflare says nothing of when a purge has spread,
-// so a purge that must be gone everywhere before its caller answers (a
-// release's, tools.ts `released`) waits `SPREAD` past its acknowledgement
+// An acknowledged purge has not reached every cache yet. Cloudflare
+// acknowledges one in about 60 ms, and it is gone from most colos within
+// 200 ms of that, but in about one purge in twenty a colo answers the page a
+// second or two longer: four times in about ninety deploys measured from the
+// box (T-124483), and once in 21 purges watched from a colo in each of nine
+// regions, where two colos sharing an upper tier answered it 2.4 s after it
+// was sent (T-150618). Cloudflare says nothing of when a purge has spread, so
+// a purge that must be gone everywhere before its caller answers (a
+// release's, tools.ts `released`) waits until `SPREAD` past when it was sent
 // (T-124694). Any other purge's page keeps its short lifetime (page-cache.ts
 // `KEPT`) as the bound.
 
@@ -30,8 +33,8 @@ export type Purged = {
   errors: { code: number; message: string }[]
 }
 
-/** How long past its acknowledgement a purge waits to have reached every
- * colo, where its caller asks it to: past the longest seen (T-124483). */
+/** How long past when it was sent a purge waits to have reached every colo,
+ * where its caller asks it to: past the longest seen (T-150618). */
 export let SPREAD = 2_500
 
 /** The Site entrypoint, as far as purging asks of it. */
@@ -64,29 +67,36 @@ let sleep = (ms: number) => new Promise<void>((done) => setTimeout(done, ms))
 /** A purge refused, and why. */
 export class Unpurged extends Error {}
 
-// Tags owed together, and the writers waiting on them.
+// Tags owed together, the writers waiting on them, and when the purge that
+// took the last of them was sent.
 type Round = {
   tags: Set<string>
   done: PromiseWithResolvers<void>
   refused: number
+  sent: number
 }
 let round = (): Round => ({
   tags: new Set(),
   done: Promise.withResolvers(),
   refused: 0,
+  sent: 0,
 })
 // A round going again takes in the one owed since, and settles it with its own.
 let merge = (r: Round, later: Round | null) => {
   if (!later) return r
   for (let tag of later.tags) r.tags.add(tag)
-  r.done.promise.then(later.done.resolve, later.done.reject)
+  r.done.promise.then(() => {
+    later.sent = r.sent
+    later.done.resolve()
+  }, later.done.reject)
   return r
 }
 
 /**
  * Purges for one Site: `purge(tags)` resolves once those tags are gone from
- * the cache, sharing a purge with every tag owed beside them, or `spread`
- * after that once they are gone from every colo's. One purge is in flight at
+ * the cache, sharing a purge with every tag owed beside them, or with
+ * `spread`, once they are gone from every colo's: `SPREAD` past when that
+ * purge was sent, its acknowledgement inside the wait. One purge is in flight at
  * a time, each spends a token of the bucket, and with none left the next
  * waits for one.
  *
@@ -128,6 +138,7 @@ export let purger = (site: Purges, wait = sleep, now = Date.now) => {
   }
   let send = async (r: Round) => {
     let batch = [...r.tags].slice(0, BATCH)
+    r.sent = now()
     let said = await site.purge(batch)
     if (said.success) { for (let tag of batch) r.tags.delete(tag) }
     else {
@@ -164,8 +175,10 @@ export let purger = (site: Purges, wait = sleep, now = Date.now) => {
       flying = true
       void fly()
     }
-    let done = owed.done.promise
-    return spread ? done.then(() => wait(SPREAD)) : done
+    let r = owed
+    return spread
+      ? r.done.promise.then(() => wait(Math.max(0, r.sent + SPREAD - now())))
+      : r.done.promise
   }
 }
 
