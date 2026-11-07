@@ -248,6 +248,61 @@ export let behindAnswer = (answer: Response, restart: () => void): Response => {
   return answer
 }
 
+/**
+ * `answer`, calling `gone` once its caller has read its body through, or let
+ * it go: the moment the answer has left the object. Work an object starts on
+ * a timer as its handler returns runs before the runtime has sent the answer
+ * on, which then waits out that work's CPU and has its writes confirmed
+ * first (T-149700). An answer with no body (a socket's 101) is gone as it
+ * returns.
+ *
+ * ```ts
+ * import { assertEquals } from '@std/assert'
+ * let gone = 0
+ * let answer = onceRead(new Response('ok'), () => gone++)
+ * await new Promise((r) => setTimeout(r, 0))
+ * assertEquals(gone, 0)
+ * assertEquals([await answer.text(), gone], ['ok', 1])
+ * onceRead(new Response(null, { status: 204 }), () => gone++)
+ * assertEquals(gone, 2)
+ * ```
+ */
+export let onceRead = (answer: Response, gone: () => void): Response => {
+  let body = answer.body
+  if (!body) {
+    gone()
+    return answer
+  }
+  let went = false
+  let go = () => {
+    if (!went) gone()
+    went = true
+  }
+  let reader = body.getReader()
+  let read = new ReadableStream<Uint8Array>({
+    async pull(into) {
+      try {
+        let { done, value } = await reader.read()
+        if (!done) return into.enqueue(value)
+        into.close()
+        go()
+      } catch (e) {
+        into.error(e)
+        go()
+      }
+    },
+    cancel(why) {
+      go()
+      return reader.cancel(why)
+    },
+  }, { highWaterMark: 0 })
+  return new Response(read, {
+    status: answer.status,
+    statusText: answer.statusText,
+    headers: answer.headers,
+  })
+}
+
 // The words a store that runs an older deploy than its caller answers a
 // refusal in. The caller's door sends a `retryable` answer again (door.ts
 // `thrown`), so its retries wait for the runtime to start the store on the

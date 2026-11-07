@@ -1,7 +1,7 @@
 // The kernel's door to a space's Builder: its request protocol and socket
 // frames, independent of the Durable Object that keeps the conversation.
 import { jittered } from '@yaks/durable-object'
-import type { Level } from '@yaks/member'
+import { type Level, level } from '@yaks/member'
 import { fetchOf } from './door.ts'
 import type { Space } from './directory.ts'
 import type { Env } from './env.ts'
@@ -26,6 +26,41 @@ export type Held = {
 /** The header the kernel names the space with at the handshake — the object's
  * own name is that eid, and this is how it learns it. */
 export let SPACE = 'x-space-eid'
+
+/** The header the kernel says the space it read in, beside its vouch for the
+ * asker's seat there (session.ts `vouched`): the object takes the kernel's
+ * word for both, as a store does, rather than reading them again. */
+export let SEAT = 'x-yak-seat'
+
+/** The headers saying `space` and `who`'s seat in it (`SEAT`). */
+export let seated = (space: Space, who: Who): Record<string, string> => ({
+  [SPACE]: space.eid,
+  // A header holds Latin-1 alone, and a title or a name may not.
+  [SEAT]: encodeURIComponent(JSON.stringify(space)),
+  ...vouched(who),
+})
+
+/** The space and seat the kernel said (`seated`), or null where it said
+ * none: a caller that read no seat, whose word is only who is asking. */
+export let seatOf = (headers: Headers) => {
+  let space = headers.get(SEAT)
+  let role = headers.get('x-yak-role')
+  return space == null ? null : {
+    space: JSON.parse(decodeURIComponent(space)) as Space,
+    role: role ? level(role) : null,
+    administrative: headers.get('x-yak-administrative') == '1',
+  }
+}
+
+/** A request carried on to the object, with none of the words the kernel
+ * vouches in left from its caller: the kernel says those itself. */
+export let carried = (url: string, req: Request): Request => {
+  let out = new Request(url, req)
+  for (let [h] of [...out.headers]) {
+    if (h == SPACE || h.startsWith('x-yak-')) out.headers.delete(h)
+  }
+  return out
+}
 
 /** Where the page finds it: a space's own address, ahead of every app in it
  * (router.ts PLATFORM_PATHS `/api/*`), because a person with no app yet is
@@ -65,10 +100,7 @@ export let builderOf = (env: Env, space: string) =>
  */
 export let joining = (env: Env, space: string, req: Request, who: Who) =>
   builderOf(env, space)(() => {
-    let out = new Request('http://builder/ws', req)
-    for (let h of [SPACE, 'x-yak-person', 'x-yak-role', 'x-yak-kernel']) {
-      out.headers.delete(h)
-    }
+    let out = carried('http://builder/ws', req)
     out.headers.set(SPACE, space)
     if (who.person) out.headers.set('x-yak-person', who.person)
     if (who.role) out.headers.set('x-yak-role', who.role)
@@ -136,8 +168,9 @@ export let posting = async (
   return building({ space: space.slug, frames }, env)
 }
 
-/** A request to a space's Operator, in its builder object, as `who`
- * (operator-host.ts `operatorRequest`): its answer, or the refusal thrown. */
+/** A request to a space's Operator, in its builder object, as `who` in
+ * `space`, both as the caller read them (operator-host.ts
+ * `operatorRequest`): its answer, or the refusal thrown. */
 export let operatorDoor = async (
   env: Env,
   space: Space,
@@ -150,8 +183,7 @@ export let operatorDoor = async (
       method: 'POST',
       headers: {
         'content-type': 'application/json',
-        [SPACE]: space.eid,
-        ...vouched(who),
+        ...seated(space, who),
       },
       body: JSON.stringify(args),
     })

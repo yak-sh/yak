@@ -16,7 +16,7 @@ import {
 import type { Env } from './env.ts'
 import { directoryOf, type Reach, type Space, walkTo } from './directory.ts'
 import { reachOf } from './operator-reach.ts'
-import { builderOf, operatorDoor, SPACE } from './build-door.ts'
+import { builderOf, carried, operatorDoor, seated } from './build-door.ts'
 import { vouched, type Who } from './session.ts'
 import { PROTOCOL, protocolled, upgrading } from './protocol.ts'
 import { esc, type Picked, shell } from './pages.ts'
@@ -868,15 +868,11 @@ let socketTo = (
   path: string,
 ) =>
   builderOf(env, space.eid)(() => {
-    let out = new Request(`https://builder${path}`, req)
-    for (let [h] of [...out.headers]) {
-      if (h.startsWith('x-yak-')) out.headers.delete(h)
-    }
+    let out = carried(`https://builder${path}`, req)
     out.headers.delete('authorization')
     if (protocolled(req)) out.headers.set('sec-websocket-protocol', PROTOCOL)
     else out.headers.delete('sec-websocket-protocol')
-    out.headers.set(SPACE, space.eid)
-    for (let [h, v] of Object.entries(vouched(who))) out.headers.set(h, v)
+    for (let [h, v] of Object.entries(seated(space, who))) out.headers.set(h, v)
     return out
   })
 

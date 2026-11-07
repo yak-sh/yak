@@ -244,12 +244,9 @@ export let streamDoor = async (req: Request, env: Env, now = Date.now()) => {
     defect(new Error(`A call's stream was refused: ${refused}`), CALL)
     return new Response(null, { status: 404 })
   }
-  let { builderOf } = await import('./build-door.ts')
+  let { builderOf, carried } = await import('./build-door.ts')
   return builderOf(env, ticket.space)(() => {
-    let out = new Request('http://builder/operator/call', req)
-    for (let h of [SPACE, 'x-yak-person', 'x-yak-role', 'x-yak-call']) {
-      out.headers.delete(h)
-    }
+    let out = carried('http://builder/operator/call', req)
     out.headers.set(SPACE, ticket.space)
     out.headers.set('x-yak-person', ticket.person)
     out.headers.set('x-yak-call', JSON.stringify(ticket))

@@ -80,7 +80,7 @@ import {
 } from '@yaks/sql'
 import type { Beat, Line } from './builder.ts'
 import { directory, type Space } from './directory.ts'
-import { behind, type Restartable } from './running.ts'
+import { behind, onceRead, type Restartable } from './running.ts'
 import * as dirPart from './directory.ts'
 import type { Env } from './env.ts'
 import type { Who } from './session.ts'
@@ -95,6 +95,7 @@ import {
   type Held,
   NOBODY,
   NOT_A_WRITER,
+  seatOf,
   SPACE,
   WAIT,
 } from './build-door.ts'
@@ -411,20 +412,26 @@ export class Builder {
     let answer
     try {
       answer = await tallying(tally, () => this.#answer(request))
-    } finally {
-      this.#asked--
+    } catch (e) {
+      this.#gone()
+      throw e
     }
-    // Behind every answer under way, not only this one: a page asks for two
-    // things at once, and the owed work run between them is the second's to
-    // wait for.
-    this.#behind(() => {
-      if (!this.#asked) this.#resume()
-    })
     let headers = new Headers(answer.headers)
     for (let [name, value] of Object.entries(reported(tally))) {
       headers.set(name, value)
     }
-    return headed(answer, headers)
+    // Under way until its caller has read it (`onceRead`).
+    return onceRead(headed(answer, headers), () => this.#gone())
+  }
+
+  // An answer gone. The owed work waits behind every answer under way, not
+  // only this one: a page asks for two things at once, and the owed work run
+  // between them is the second's to wait for.
+  #gone() {
+    this.#asked--
+    this.#behind(() => {
+      if (!this.#asked) this.#resume()
+    })
   }
 
   async #answer(request: Request): Promise<Response> {
@@ -523,12 +530,14 @@ export class Builder {
     let person = request.headers.get('x-yak-person')
     let spaceId = request.headers.get(SPACE)
     if (!person || !spaceId) return no(401, NOBODY)
-    // The Operator made beside the read it waits on: a new incarnation's CPU
-    // spent while the directory answers, not after.
     let working = this.#work()
     working.catch(() => {})
-    // The space and the person's seat in it, fresh, in one read.
-    let access = await directory({
+    // The space and the person's seat in it, as the kernel read them; read
+    // here, in one read, for a caller that read none. Read here for every
+    // request, it was a round trip on each chat page, asked only once a new
+    // incarnation had made its Operator: a runtime sends a request when the
+    // code before it yields (T-149700).
+    let access = seatOf(request.headers) ?? await directory({
       fetch: (req: Request) => dirPart.fetch(req, this.#env),
     }).seat(
       spaceId,
@@ -700,9 +709,11 @@ export class Builder {
   }
 
   // Work started once the answer has gone, held by the object. Started
-  // before the answer returns, it goes first: the page waits for its CPU
-  // (the pool's start-up runs) and for what it writes (the alarm armed, their
-  // rows) to be confirmed.
+  // before its caller has read the answer, it goes first: the page waits for
+  // its CPU (the pool's start-up runs) and for what it writes (the alarm
+  // armed, their rows) to be confirmed. A first visit to /manage/checks
+  // waited 81-98 ms between the handler's end and the kernel's answer for it
+  // when it began on a timer as the handler returned (T-149700).
   #behind(work: () => void) {
     this.#ctx.waitUntil?.(
       new Promise<void>((done) =>

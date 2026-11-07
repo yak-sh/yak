@@ -23,6 +23,7 @@ import {
   NOBODY,
   NOT_A_WRITER,
 } from './build.ts'
+import { seated } from './build-door.ts'
 import { directory } from './directory.ts'
 import * as dirPart from './directory.ts'
 import type { Env } from './env.ts'
@@ -345,7 +346,11 @@ let holding = (o: { env: Env }, held: number) => {
       } as typeof stub
     },
   }
-  return { asked: () => reads > held, go: () => gate.resolve() }
+  return {
+    asked: () => reads > held,
+    reads: () => reads,
+    go: () => gate.resolve(),
+  }
 }
 
 let asking =
@@ -396,22 +401,48 @@ test('a new incarnation makes its Operator while the seat read is under way', as
   assert(held > (ran - held) / 2, `${held} of ${ran} ran before the seat`)
 })
 
-// Behind the answer, not before it: what the owed work writes would hold
-// the answer until storage confirmed it.
-test('an object works its Operator once its first answer has gone, so a step a deploy reset runs again at once', async () => {
+// Behind the answer its caller has read, not the handler's return: what the
+// owed work runs and writes before the runtime sends the answer on holds it.
+test('an object works its Operator once its first answer has been read, so a step a deploy reset runs again at once', async () => {
   let o = await seeded()
-  let read = await o.object.fetch(
+  let answer = await o.object.fetch(
     new Request('https://builder/operator/conversation', {
       method: 'POST',
       headers: { 'x-space-eid': o.space.eid, 'x-yak-person': ADA },
       body: '{}',
     }),
   )
-  await read.body?.cancel()
-  let answered = await o.ctx.storage.getAlarm()
+  await tick()
+  let unread = await o.ctx.storage.getAlarm()
+  await answer.text()
   await Promise.all(o.ctx.pending)
-  assertEquals([answered, (await o.ctx.storage.getAlarm()) != null], [
+  assertEquals([unread, (await o.ctx.storage.getAlarm()) != null], [
     null,
     true,
   ])
+})
+
+test('an object takes the space and seat the kernel read, and reads them itself only for a caller that read none', async () => {
+  let o = await seeded()
+  let seat = holding(o, Infinity)
+  let ask = async (headers: Record<string, string>) => {
+    let r = await o.object.fetch(
+      new Request('https://builder/operator/conversation', {
+        method: 'POST',
+        headers: {
+          'x-space-eid': o.space.eid,
+          'x-yak-person': ADA,
+          ...headers,
+        },
+        body: '{}',
+      }),
+    )
+    await r.body?.cancel()
+    return [r.status, seat.reads()]
+  }
+  assertEquals([
+    await ask(seated(o.space, { person: ADA, role: 'owner' })),
+    await ask(seated(o.space, { person: ADA, role: 'viewer' })),
+    await ask({}),
+  ], [[200, 0], [403, 0], [200, 1]])
 })
