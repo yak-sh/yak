@@ -60,15 +60,23 @@
 # shared: a capped thread that runs the journal's checkpoint writes metadata as
 # the job, behind that queue, and every writer on the disk waits for journal
 # space. A bare `sqlite3 .backup` of yak.db held a server's read 11 s that way,
-# in __jbd2_log_wait_for_space (T-133694). A dirty limit on the device ends it:
-# strict_limit holds each cgroup to its share of max_bytes, so a writer waits
-# in write() and its queue stays a few MB. On a scratch ext4 on the host, an
-# fsync's worst beside a bare `.backup` at the 30 MB/s cap went from 0.16-2.9 s
-# to 2-10 ms, at the same 30 MB/s; on the box, a session's 600 MB write at its
-# cap queues 2 MB. 256 MB lets a server's 64 MiB checkpoint through unpaced,
-# where 64 MB doubled its time. The container cannot write /sys, so the host's
-# udev sets the limit on this volume whenever it appears, and this sets it now.
-# To undo it, delete the rule and write 0 to strict_limit and 100 to max_ratio.
+# in __jbd2_log_wait_for_space (T-133694). The host's dirty limit is 256 MB,
+# and the kernel gives each cgroup the share of it its memory is of the host's,
+# so a session's 6 GB may leave about 60 MB dirty: it waits in write() and its
+# queue drains in two seconds at its cap. A server's own share passes its
+# 64 MiB checkpoint unpaced. On a scratch ext4 on the host, an fsync's worst
+# beside a capped bulk write went from 174 to 30 ms.
+#
+# Never strict_limit on the volume. It holds each writer to a share of the
+# volume's limit sized by how much it wrote lately, so beside a bulk job a
+# server, which writes in bursts, has a share near nothing and its main thread
+# waits in balance_dirty_pages for the pages it writes: beside a session's bench
+# the tracker's waited 32.8 s and yak-work's 10.6 s (T-133091).
+#
+# The limit is the host's, for every guest on it, since the container cannot
+# write sysctls. This also clears the strict_limit an earlier version set on
+# the volume. To undo it, delete /etc/sysctl.d/61-yak-dirty.conf on the host and
+# set vm.dirty_ratio=20 and vm.dirty_background_ratio=10.
 set -eu
 all="IOWriteBandwidthMax=/ 80M
 IOReadBandwidthMax=/ 150M"
@@ -107,10 +115,12 @@ systemctl --user daemon-reload
 
 ssh "$host" sh -s "$volume" "$dirty" <<'EOF'
 set -eu
-printf 'ACTION=="add|change", SUBSYSTEM=="block", ENV{DM_NAME}=="%s", ATTR{bdi/max_bytes}="%s", ATTR{bdi/strict_limit}="1"\n' \
-  "$1" "$2" >/etc/udev/rules.d/61-yak-dirty.rules
+rm -f /etc/udev/rules.d/61-yak-dirty.rules
 udevadm control --reload
 bdi=/sys/block/$(basename "$(readlink -f "/dev/mapper/$1")")/bdi
-echo "$2" >"$bdi/max_bytes"
-echo 1 >"$bdi/strict_limit"
+echo 0 >"$bdi/strict_limit"
+echo 100 >"$bdi/max_ratio"
+printf 'vm.dirty_bytes = %s\nvm.dirty_background_bytes = %s\n' "$2" $(($2 / 4)) \
+  >/etc/sysctl.d/61-yak-dirty.conf
+sysctl -q -p /etc/sysctl.d/61-yak-dirty.conf
 EOF
