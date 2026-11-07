@@ -101,17 +101,41 @@ export let take = async (
   o: HoldOpts,
 ): Promise<boolean> => {
   if (!contested(g)) return true
-  let eid = leaseEid(name)
-  let now = (o.now ?? Date.now)()
-  let held = await leaseOf(g, eid)
-  let until = held?.until ? Date.parse(String(held.until)) : 0
-  // Somebody else's, and their take still stands: they are not known gone.
-  if (
-    held?.holder && held.holder != o.holder && until > now &&
-    !await o.gone?.(held.holder)
-  ) return false
+  let [taken] = await taking(g, [name], o)
+  if (!taken) return false
   try {
-    await g.apply([{
+    await g.apply([taken])
+    return true
+  } catch (error) {
+    // Another process got there first, inside the transaction. That is the
+    // answer, not a failure.
+    if (error instanceof Stale) return false
+    throw error
+  }
+}
+
+// The write that takes each of `names`, or `undefined` for one somebody else
+// holds, read in one look.
+let taking = async (
+  g: Access,
+  names: string[],
+  o: HoldOpts,
+): Promise<(Bundle | undefined)[]> => {
+  let eids = names.map(leaseEid)
+  let rows = new Map(
+    (await g.get(eids)).map((row) => [row.entity.eid, row[LEASE] as Lease]),
+  )
+  let now = (o.now ?? Date.now)()
+  return Promise.all(names.map(async (name, i) => {
+    let eid = eids[i]
+    let held = rows.get(eid)
+    let until = held?.until ? Date.parse(String(held.until)) : 0
+    // Somebody else's, and their take still stands: they are not known gone.
+    if (
+      held?.holder && held.holder != o.holder && until > now &&
+      !await o.gone?.(held.holder)
+    ) return undefined
+    return {
       entity: { eid },
       [LEASE]: {
         name,
@@ -127,14 +151,8 @@ export let take = async (
           until: token(held?.until ?? null),
         },
       },
-    } as Bundle])
-    return true
-  } catch (error) {
-    // Another process got there first, inside the transaction. That is the
-    // answer, not a failure.
-    if (error instanceof Stale) return false
-    throw error
-  }
+    } as Bundle
+  }))
 }
 
 /**
@@ -252,6 +270,90 @@ export type HoldingOpts = HoldOpts & {
   report?: (err: unknown) => void
 }
 
+// A lease held while its work runs: what renews it, what aborts when another
+// process has it, and where a store that failed to answer is told.
+type Renewal = {
+  name: string
+  ask: HoldOpts & { hold: number }
+  lost: AbortController
+  report: (err: unknown) => void
+}
+type Beat = {
+  renewals: Set<Renewal>
+  beating: boolean
+  timer?: ReturnType<typeof setInterval>
+}
+
+// The leases one holder holds in one graph for one length of hold, renewed on
+// one timer in one commit: a process holding fifteen duties writes once a beat,
+// not fifteen times.
+let beats = new WeakMap<Access, Map<string, Beat>>()
+
+// Renew `r` beside the others its holder holds, until the answer is called.
+// Renewed on a timer while the work runs: a holder still at it never expires,
+// and one that stops existing does. One renewal at a time, so two of this
+// process's own cannot refuse each other.
+let beside = (g: Access, r: Renewal): () => void => {
+  let held = beats.get(g) ?? new Map<string, Beat>()
+  beats.set(g, held)
+  let key = `${r.ask.holder}|${r.ask.hold}`
+  let beat = held.get(key)
+  if (!beat) {
+    let b: Beat = beat = { renewals: new Set(), beating: false }
+    held.set(key, b)
+    // A third of the hold, however short: a renewal later than the hold would
+    // let the lease lapse under work still running.
+    b.timer = setInterval(async () => {
+      if (b.beating) return
+      b.beating = true
+      try {
+        await renew(g, [...b.renewals])
+      } finally {
+        b.beating = false
+      }
+    }, Math.max(1, Math.floor(r.ask.hold / 3)))
+  }
+  let b = beat
+  b.renewals.add(r)
+  return () => {
+    b.renewals.delete(r)
+    if (b.renewals.size) return
+    clearInterval(b.timer)
+    held.delete(key)
+  }
+}
+
+// One commit renewing every lease a beat holds. One somebody else holds now is
+// lost; a commit refused is asked again a lease at a time, and a refusal is
+// read back before it counts, since only another holder means it is gone.
+let renew = async (g: Access, all: Renewal[]): Promise<void> => {
+  if (!all.length) return
+  let { ask, report } = all[0]
+  try {
+    let bundles = await taking(g, all.map((r) => r.name), ask)
+    all.forEach((r, i) => bundles[i] || r.lost.abort())
+    let taken = bundles.filter((b): b is Bundle => !!b)
+    if (!taken.length) return
+    try {
+      await g.apply(taken)
+      return
+    } catch (error) {
+      if (!(error instanceof Stale)) throw error
+    }
+  } catch (e) {
+    return report(e)
+  }
+  for (let r of all) {
+    if (r.lost.signal.aborted) continue
+    try {
+      if (await take(g, r.name, r.ask)) continue
+      if ((await held(g, r.name))?.holder != r.ask.holder) r.lost.abort()
+    } catch (e) {
+      r.report(e)
+    }
+  }
+}
+
 /**
  * Run a duty for as long as this process is up: take the lease, renew it
  * while the work runs, and release it at the end. Answers what the work last
@@ -309,30 +411,11 @@ export let holding = async <T = void>(
       if (signal.aborted) return out
     }
     let lost = new AbortController()
-    let beating = false
-    // Renewed on a timer while the work runs: a holder still at it never
-    // expires, and one that stops existing does. One renewal at a time, so
-    // two of this process's own cannot refuse each other; and a refusal is
-    // read back before it counts, since only another holder means it is gone.
-    let renew = async () => {
-      if (beating) return
-      beating = true
-      try {
-        if (await take(g, name, ask)) return
-        if ((await held(g, name))?.holder != o.holder) lost.abort()
-      } catch (e) {
-        report(e)
-      } finally {
-        beating = false
-      }
-    }
-    // A third of the hold, however short: a renewal later than the hold would
-    // let the lease lapse under work still running.
-    let beat = setInterval(renew, Math.max(1, Math.floor(hold / 3)))
+    let leave = beside(g, { name, ask, lost, report })
     try {
       out = await work(AbortSignal.any([signal, lost.signal]))
     } finally {
-      clearInterval(beat)
+      leave()
       await drop(g, name, { holder: o.holder }).catch(report)
     }
     if (signal.aborted || !lost.signal.aborted) return out

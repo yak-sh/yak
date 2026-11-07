@@ -391,6 +391,29 @@ test('a pass on its way out is renewed while it runs', async () => {
   })
 })
 
+test("one holder's leases are renewed together, in one commit", async () => {
+  let graph = g()
+  let commits: number[] = []
+  let counted: Graph = {
+    ...graph,
+    apply: (bundles, o) => {
+      commits.push(bundles.length)
+      return graph.apply(bundles, o)
+    },
+  }
+  let renewed = () => commits.includes(2)
+  await Promise.all(
+    ['wake', 'mail'].map((name) =>
+      holding(
+        counted,
+        name,
+        { holder: 'p1', hold: 15 },
+        () => soon(renewed, { label: 'one renewal of both' }),
+      )
+    ),
+  )
+})
+
 test("not waiting, a take the store fails is the caller's to hear", async () => {
   let flaky: Graph = {
     ...g(),
