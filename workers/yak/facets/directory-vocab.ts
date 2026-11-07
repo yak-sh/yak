@@ -466,7 +466,7 @@ export let directoryDoc: VocabDoc = {
     visitor_build: {
       component: true,
       type: 'object',
-      properties: { at: owned(time) },
+      properties: { at: time },
     },
     // What a space just spent on its month: a letter, a build, a model call, a
     // voice's lease, an app's text, container seconds. The directory adds it to the `meter`
