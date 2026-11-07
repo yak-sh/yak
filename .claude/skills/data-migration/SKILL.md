@@ -73,7 +73,7 @@ past the graph leaves archetype pointers stale, and filters and whole reads
 then answer wrong; where SQL can't be avoided, `reclassify(driver, eids)`
 inside its transaction sets them right (packages/sqlite/README.md).
 
-Prove it on a copy first, made by `bin/copy-db <scratch>/copy.db` run in the
+Prove it on a copy first, made by `bin/copy-db .scratch/copy.db` run in the
 background (about 5 minutes for 10 GB), never by `cp`, a bare `sqlite3 .backup`
 or `VACUUM INTO`. Point a
 scratch config's `db` at the copy, run the script over it in one process (no
@@ -82,8 +82,9 @@ and run it again to show the second run changes nothing. A script that parses sq
 mode (`-list`, `-json`): a ~/.sqliterc can set `.mode box`, and its borders
 then read as data, eids included. A copy is as big as the live file
 (`ls -lh ~/.yak/yak.db`) and sits on the disk the live graph writes to. Copies
-left behind have filled that disk, so the copy and its scratch config go once
-the proof is done.
+left behind have filled that disk: one in the checkout's `.scratch/` goes with
+the checkout once its session ends, and one anywhere else is removed once the
+proof is done.
 
 `bin/backup` puts a snapshot of the box's databases in R2 every night and
 keeps the newest seven; `bin/backup restore <new dir>` brings the newest back

@@ -61,7 +61,7 @@ in your process.
 - **Data shaped like the owner's.** Read entities from the live graph
   (`graph_show`, `graph_query`) and apply them to your in-memory graph; reading
   the live graph costs nothing, and a write to it lands in his day. For the
-  whole of the box's data, run `bin/copy-db <scratch>/copy.db` in the
+  whole of the box's data, run `bin/copy-db .scratch/copy.db` in the
   background (about 5 minutes for 10 GB) and name the copy as a scratch config's
   `db`; the first writer that opens it brings it to the schema your code
   expects. Copy no other way: `cp` of a live file is torn by its writes, and a
