@@ -12,14 +12,15 @@ test("a published app's release purges its card and not the listings, and a new 
   try {
     let agent = connector(k, (await signIn(k)).cookie)
     let app = 'garden'
-    // The tags a call purged, but its app's own pages.
+    // The tags a call purged, but its app's and its space's own pages.
     let purges = async (tool: string, args: Record<string, unknown> = {}) => {
       await k.settled()
       purged.length = 0
       await agent.tool(tool, { app, ...args })
       await k.settled()
-      return [...new Set(purged.filter((tag) => !tag.startsWith('app:')))]
-        .sort()
+      return [
+        ...new Set(purged.filter((tag) => !/^(app|space):/.test(tag))),
+      ].sort()
     }
     let release = async () => {
       await agent.tool('app_files', {

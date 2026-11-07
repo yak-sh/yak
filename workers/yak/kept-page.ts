@@ -115,6 +115,9 @@ export let shareable = (req: Request, path = new URL(req.url).pathname) => {
 
 /** What a page may say of itself as it answers from the edge. */
 export type Seen = { app: string; space: string; slug: string }
+// What Site says of a kept page: that, and whether it is a stranger's alone
+// (a space's index).
+type Said = Partial<Seen> & { stranger?: boolean }
 
 /** The part of a request clock this path uses; the front Worker keeps none. */
 export type Timer = {
@@ -129,7 +132,8 @@ export type Timer = {
 let HITS = ['HIT', 'UPDATING', 'STALE']
 
 /** The kept page for this request, or null when Site passed and the caller
- * serves it itself. A page view is the caller's to count (`count`). */
+ * serves it itself, as it does a stranger's page when a `person` asks. A page
+ * view is the caller's to count (`count`). */
 export let asked = async (
   req: Request,
   site: Pick<Fetcher, 'fetch'>,
@@ -137,6 +141,7 @@ export let asked = async (
   mount: string | null,
   c: Timer,
   count: (answer: Response, at: Seen) => void,
+  person = false,
 ) => {
   let path = new URL(req.url).pathname
   if (!shareable(req, path)) return null
@@ -171,6 +176,12 @@ export let asked = async (
     if (got.headers.get('cache-control') != UNKEPT) remember(site, key)
     return null
   }
+  // Not a pass: the next stranger is answered from it.
+  let at = JSON.parse(said) as Said
+  if (at.stranger && person) {
+    await got.body?.cancel()
+    return null
+  }
   let headers = new Headers(got.headers)
   headers.set('cache-control', headers.get(BROWSER) || 'private, no-cache')
   for (
@@ -198,7 +209,6 @@ export let asked = async (
       headers,
     })
   if (!answer.body) await got.body?.cancel()
-  let at = JSON.parse(said) as Partial<Seen>
   if (at.app && at.slug && at.space) count(answer, at as Seen)
   return answer
 }

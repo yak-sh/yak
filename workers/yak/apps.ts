@@ -2308,10 +2308,14 @@ let returned = (q: URLSearchParams) =>
     : null
 
 // A space's apps, the ones in the trash left in (only its owner is shown
-// those), and the ones whoever is asking may open.
+// those), and the ones whoever is asking may open. An app before its first
+// release answers nothing at its address (facets/pages-graph.ts), so only
+// those who may write it are shown it.
 let shelf = (apps: App[], space: Space, who: Who) => {
   let here = apps.filter((a) => !kernels(space, a.slug))
-  let all = here.filter((a) => !a.trashed)
+  let all = here.filter((a) =>
+    !a.trashed && (writes(who.role) || !!a.version || !!a.publishing?.length)
+  )
   let mine = all.filter((a) => reads(mode(a.access), who.role))
   return { here, all, mine }
 }
@@ -3366,7 +3370,7 @@ let served = async (
   ])
   let person = authenticated?.who?.person ?? cookied
   if (!edge) {
-    let page = await asked(visitor, env, c)
+    let page = await asked(visitor, env, c, !!person)
     if (page) return page
   }
   let routing = c.time('route', () => dir.page(r.space!, r.app, person))
@@ -3511,7 +3515,10 @@ let served = async (
         let none = nothingAt(url.pathname, env)
         return edge ? keep(none, space, null) : none
       }
-      return await index(req, env, space, (await routing).roster!, seatOf)
+      // A stranger's view is the same for every stranger, so Site keeps it
+      // for them, and a person is never answered it (kept-page.ts `asked`).
+      let listed = await index(req, env, space, (await routing).roster!, seatOf)
+      return edge ? marked(keep(listed, space, null, [200], true)) : listed
     }
     // `/<x>/api/…` named an app that is not here. That is a wrong address,
     // not one of the front page's own paths: a page asking a store there has

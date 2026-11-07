@@ -343,6 +343,29 @@ test('a cookie that owes something from the kernel routes there', () => {
   assertEquals(asked('yak_session=!!!'), false)
 })
 
+// A space's index as a stranger sees it is kept for strangers, and a person
+// signed in, who is shown their own, goes on to the kernel.
+test("a space's index answers a stranger from the edge, never a person", async () => {
+  let f = front(() =>
+    page({ [SEEN]: JSON.stringify({ space: 'ada', stranger: true }) })
+  )
+  let home = 'https://ada.yaks.app/'
+  assertEquals(await (await f.go(home)).text(), '<body>kept</body>')
+  let browser = `yak_session=${body({ via: 'v', exp: days(80) })}`
+  let person = `yak_session=${body({ person: 'p', via: 'v', exp: days(80) })}`
+  assertEquals(
+    await (await f.go(home, { headers: { cookie: browser } })).text(),
+    '<body>kept</body>',
+  )
+  assertEquals(
+    await (await f.go(home, { headers: { cookie: person } })).text(),
+    'kernel',
+  )
+  assertEquals([f.asked.length, f.forwarded.length, f.used], [3, 1, []])
+  // The page stays a stranger's: the next one is answered from it.
+  assertEquals(await (await f.go(home)).text(), '<body>kept</body>')
+})
+
 test("an app the kernel says is never kept isn't asked about again", async () => {
   let f = front(() => {
     throw new Error('Site was asked')

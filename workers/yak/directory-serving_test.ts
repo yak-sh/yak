@@ -8,6 +8,7 @@ import * as dirPart from './directory.ts'
 import { EPOCH, type ServingCopyDoor, STALL } from './directory-copy.ts'
 import type { Env } from './env.ts'
 import { pageAt } from './page-cache.ts'
+import { SEEN } from './kept-page.ts'
 import { fetch as siteFetch } from './site.ts'
 import { ServingCopy, type ServingCopyState } from './serving-copy.ts'
 import { ADA_OWNS, platform, seeded, visit } from './serving-probe.ts'
@@ -305,6 +306,35 @@ test("directory serving: Site keeps a readable app's forward to its slash", () =
     ['public', 302, '/cookbook/', 'app:a,space:s'],
     ['open', 302, '/cookbook/', 'app:a,space:s'],
     ['private', 204, null, null],
+  ])
+})
+
+// A space with no front page lists its apps at `/`. A stranger's listing is
+// the same for every stranger, so Site keeps it under the space's tag, and
+// it names no private app and no app before its first release.
+let listings = []
+for (let access of ['public', 'private'] as const) {
+  for (let version of [1, 0]) {
+    let f = fixture(access)
+    f.rows[1].app!.version = version
+    let answer = await f.site('/')
+    listings.push([
+      access,
+      version,
+      answer.status,
+      answer.headers.get('cache-tag'),
+      JSON.parse(answer.headers.get(SEEN) ?? 'null'),
+      (await answer.text()).includes('href="/cookbook/"'),
+    ])
+  }
+}
+test("directory serving: Site keeps a space's index as a stranger sees it", () => {
+  let stranger = { space: 'ada', stranger: true }
+  equal(listings, [
+    ['public', 1, 200, 'space:s', stranger, true],
+    ['public', 0, 200, 'space:s', stranger, false],
+    ['private', 1, 200, 'space:s', stranger, false],
+    ['private', 0, 200, 'space:s', stranger, false],
   ])
 })
 

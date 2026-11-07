@@ -13,7 +13,8 @@
 // when it is the same answer for everyone: the own file or 404 of an app
 // anyone may read (public or open), with no worker of its own, no sandbox, no
 // router claiming the path and no cookie, the release files of a private one
-// anyone may install (`keepable`), or a space's 404 where no app answers.
+// anyone may install (`keepable`), a space's 404 where no app answers, or its
+// index as a stranger sees it, which no person is answered.
 // Anything else is a pass, kept as briefly as a page.
 //
 // The gateway remembers, as briefly, every address Site passed and every app
@@ -61,9 +62,10 @@ import { seen, viewed } from './views.ts'
 export { KEPT, pageAt, shareable, visitor } from './kept-page.ts'
 
 /** An answer Site may keep: which app it was a page of (none, for a space's
- * own 404), for the gateway's count, and the tags its purge names. A missing
- * space uses the site tag, purged when a space is created or renamed. A page or
- * a 404, unless the caller names other `statuses` the same for everyone. An
+ * own 404 or index), for the gateway's count, and the tags its purge names. A
+ * missing space uses the site tag, purged when a space is created or renamed. A
+ * page or a 404, unless the caller names other `statuses` the same for
+ * everyone, and for everyone unless it is a `stranger`'s alone. An
  * app mid-release (its fence up, versions.ts `fenced`) had its pages purged
  * as the release began (tools.ts `released`), and its commit purges nothing
  * more (facets/pages-graph.ts), so a page of it kept now would outlive the
@@ -73,6 +75,7 @@ export let keep = (
   space: { eid: string; slug: string } | null,
   app: { eid: string; slug: string; fence?: string | null } | null,
   statuses = [200, 404],
+  stranger = false,
 ) => {
   if (!statuses.includes(page.status) || page.headers.has('set-cookie')) {
     return passed()
@@ -86,7 +89,10 @@ export let keep = (
   )
   headers.set(
     SEEN,
-    JSON.stringify(space ? app ? seen(space, app) : { space: space.slug } : {}),
+    JSON.stringify({
+      ...space ? app ? seen(space, app) : { space: space.slug } : {},
+      ...stranger ? { stranger } : {},
+    }),
   )
   return new Response(page.body, { status: page.status, headers })
 }
@@ -172,8 +178,9 @@ export let kept = async (answer: Response) => {
 }
 
 /** The gateway's half: the kept page for this request, counted, or null
- * when Site passed and the gateway serves it itself. */
-export let asked = (req: Request, env: Env, c: Clock) =>
+ * when Site passed and the gateway serves it itself, as it does a stranger's
+ * page when a `person` asks. */
+export let asked = (req: Request, env: Env, c: Clock, person = false) =>
   env.SITE
     ? askedOf(
       req,
@@ -185,5 +192,6 @@ export let asked = (req: Request, env: Env, c: Clock) =>
         viewed(env, req, answer, at)
         if (answer.status < 400) scheduleUse(env, at.app)
       },
+      person,
     )
     : Promise.resolve(null)

@@ -102,6 +102,10 @@ test('the front page moves, and only the owner moves it', async () => {
   try {
     let them = await seed(k, [{ slug: frontSpace, apps: ['first', 'second'] }])
     let agent = connector(k, them.cookie)
+    // Released, so the list shows them to a stranger.
+    for (let app of ['first', 'second']) {
+      await agent.tool('app_deploy', { space: frontSpace, app })
+    }
     let bare = () => k.at(`${frontSpace}.yaks.app`, '/', { redirect: 'manual' })
     // Which app the bare hostname IS, read off the store answering there —
     // the front page is served at that address, not redirected to. Nothing
@@ -298,6 +302,10 @@ test('deleting the front page puts the space back to the default', async () => {
   try {
     let them = await seed(k, [{ slug: reset48, apps: ['site', 'garden'] }])
     let agent = connector(k, them.cookie)
+    // Released, so the list shows them to a stranger.
+    for (let app of ['site', 'garden']) {
+      await agent.tool('app_deploy', { space: reset48, app })
+    }
     let bare = () => k.at(`${reset48}.yaks.app`, '/', { redirect: 'manual' })
     let front = async () => {
       let r = await k.at(`${reset48}.yaks.app`, '/api/graph')

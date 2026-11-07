@@ -51,6 +51,11 @@ test('a space with no front page lists what you may open', async () => {
       { slug: bare21Space, apps: [] },
     ])
     let agent = connector(k, them.cookie)
+    // A stranger is shown an app once it is released: before, it answers
+    // nothing at its address.
+    for (let app of ['recipes', 'garden']) {
+      await agent.tool('app_deploy', { space: jeff21, app })
+    }
     await agent.tool('app_set', {
       space: jeff21,
       app: 'garden',
@@ -412,6 +417,7 @@ test("a space's listing reads the directory in one trip", async () => {
   let k = await kernel()
   let slug = unique('listed')
   let { cookie } = await seed(k, [{ slug, apps: ['one', 'two'] }])
+  await connector(k, cookie).tool('app_deploy', { space: slug, app: 'two' })
   for (let headers of [{}, { cookie }] as Record<string, string>[]) {
     await k.settled()
     let page = await k.at(`${slug}.yaks.app`, '/', { headers })

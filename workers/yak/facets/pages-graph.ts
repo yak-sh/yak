@@ -2,8 +2,9 @@
 // edge before the write answers (T-124418). A page Site keeps (page-cache.ts)
 // is tagged with the app that answered it and its space, so a deploy or a
 // setting of one app purges that app's pages, and a change to how a space
-// routes its paths (an app born, renamed, trashed or made home, the space
-// renamed, its plan or its quota) purges the whole space.
+// routes its paths (an app renamed, trashed or made home, the space
+// renamed, its plan or its quota), or what its index lists of an app (its
+// title, its gallery pill, who may open it), purges the whole space.
 //
 // After the commit and before the answer, because the writer's next look at
 // the address must be what it wrote: app_deploy, app_set and the rest answer
@@ -35,9 +36,9 @@ import { APP_PARTS, idOf, publishingOf, SPACE_PARTS } from '../directory.ts'
 import { appTag, cardTag, purge, SITE_TAG, spaceTag } from '../purge.ts'
 
 // What a row is made of (directory.ts) is what its pages can show, except
-// these: an app's draft, its counters and its gallery listing, and a space's
-// bills and letters. A part added to either row is purged until it is named
-// here.
+// these: an app's draft, its counters and its gallery listing (but for the
+// pill its space's index shows, `indexed`), and a space's bills and letters.
+// A part added to either row is purged until it is named here.
 let UNSEEN = [
   'meter',
   'gallery',
@@ -61,6 +62,13 @@ let LISTED = ['gallery', 'screenshot', 'integration', 'listed', 'fee']
 let LISTING = ['published', 'doc', 'installed', 'demo', ...ROUTING]
 let lists = (b: Bundle) =>
   has(b, LISTING) || sets(b.app, ['slug', 'space', 'access'])
+// What a space's index lists of an app beside its routing (apps.ts `shelf`):
+// its title, its gallery pill and who may open it. Before its first release a
+// stranger is shown it only once it publishes a file.
+let indexed = (b: Bundle) =>
+  has(b, ['doc', 'gallery']) || sets(b.app, ['access'])
+let released = (row: Bundle) =>
+  !!(row.app as { version?: number | null }).version
 let PARTS = [...new Set(['app', 'space', ...APP_PARTS, ...SPACE_PARTS])]
 let SHOWN = PARTS.filter((part) => !UNSEEN.includes(part))
 
@@ -74,7 +82,7 @@ let lowers = (b: Bundle) =>
 // Whether a patch leaves an app that shows nothing: never released, and
 // publishing no file.
 let unshown = (b: Bundle, row: Bundle) =>
-  !(row.app as { version?: number | null }).version && !('publishing' in b) &&
+  !released(row) && !('publishing' in b) &&
   !publishingOf(row.publishing as { paths?: string | null }).length
 // Whether an app's row has a chosen screenshot.
 let shot = (row: Bundle) =>
@@ -133,10 +141,10 @@ let shows = (b: Bundle) =>
  *   }))
  * let born = { entity: { eid: 'y' }, app: { slug: 'b', space: 's', version: 0 } }
  * assertEquals(await owed([born], unreleased), [])
- * // Until it publishes a file there.
+ * // Until it publishes a file there, which its space's index lists.
  * assertEquals(
  *   await owed([{ entity: { eid: 'y' }, publishing: { paths: '["p"]' } }], unreleased),
- *   ['app:y'],
+ *   ['space:s'],
  * )
  * // A published app's release moves its card, and nothing the listings say;
  * // retitling it changes them.
@@ -150,7 +158,7 @@ let shows = (b: Bundle) =>
  * assertEquals(await owed([release], offered), ['card:x'])
  * assertEquals(
  *   await owed([{ entity: { eid: 'x' }, doc: { title: 'b' } }], offered),
- *   ['site', 'app:x'],
+ *   ['site', 'space:s'],
  * )
  * // A new fee changes what /pricing quotes.
  * assertEquals(await owed([{ entity: { eid: 'm' }, fee: { bps: 250 } }], offered), ['site'])
@@ -167,7 +175,9 @@ export let owed = async (
     tags.add(appTag(b.entity.eid))
     tags.add(spaceTag(b.entity.eid))
   }
-  let touched = applied.filter((b) => !b.tombstone && shows(b))
+  let touched = applied.filter((b) =>
+    !b.tombstone && (shows(b) || 'gallery' in b)
+  )
   let now = new Map(
     (touched.length ? await rows(touched.map((b) => b.entity.eid)) : [])
       .map((row) => [row.entity.eid, row]),
@@ -183,7 +193,10 @@ export let owed = async (
       }
       if (unshown(b, row)) continue
       let app = row.app as { space: string | { eid: string } }
-      if (has(b, ROUTING) || sets(b.app, ['slug', 'space'])) {
+      if (
+        has(b, ROUTING) || sets(b.app, ['slug', 'space']) || indexed(b) ||
+        'publishing' in b && !released(row)
+      ) {
         tags.add(spaceTag(idOf(app.space)))
       } else if (shows(b) && !lowers(b)) tags.add(appTag(b.entity.eid))
     } else if (row?.space) {

@@ -95,7 +95,12 @@ test('the kernel routes, vouches, serves, and surfaces', async () => {
       apps: ['recipes', 'garden'],
     }])
     // No app claims the bare hostname by being first (T-33040), so it lists
-    // what is here — a page, not a 404. home_test.ts holds that page.
+    // what is here, once released: a page, not a 404. home_test.ts holds
+    // that page.
+    await connector(k, cookie).tool('app_deploy', {
+      space: jeff69,
+      app: 'recipes',
+    })
     let bare = await k.at(`${jeff69}.yaks.app`, '/', { redirect: 'manual' })
     assertEquals(bare.status, 200)
     assertStringIncludes(await bare.text(), 'href="/recipes/"')

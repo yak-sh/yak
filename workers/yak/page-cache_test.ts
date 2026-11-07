@@ -144,12 +144,23 @@ test('a deploy, a setting and a plan change are each seen at once', async () => 
   ])
 })
 
+// Its space's index lists it by title, pill and who may open it, so each
+// purges the space, the app's own pages with it.
+test("what a space's index lists of an app is seen at once", async () => {
+  for (
+    let b of [{ doc: { title: 'b' } }, { gallery: { listedAt: 'now' } }]
+  ) {
+    assertEquals(
+      (await owes({ entity: { eid: 'a' }, ...b })).at(-1),
+      'space:s',
+    )
+  }
+})
+
 test('a page made private leaves the edge, and is no longer asked of Site', async () => {
   assertEquals(
     await owes({ entity: { eid: 'a' }, app: { access: 'private' } }),
-    [
-      'app:a',
-    ],
+    ['space:s'],
   )
   let g = gateway(() => keep(page('one'), space, app))
   assertEquals((await g.get())!.status, 200)

@@ -84,6 +84,13 @@ export let settled = (req: Request, now = Date.now()) => {
     claims.exp - now / 1000 > HALF_LIFE
 }
 
+/** Whether this request's cookie names a person, read only to route: a page
+ * kept for strangers is not theirs (kept-page.ts `asked`). */
+let personal = (req: Request) => {
+  let token = cookieValue(req.headers.get('cookie'))
+  return !!token && !!claimed(token)?.person
+}
+
 // What an answer from here says about the time it took, under the same names
 // the gateway uses for its own.
 let served = 0
@@ -189,7 +196,7 @@ export let kept = (
         ),
       )
     }
-  })
+  }, personal(req))
 }
 
 let report = (
