@@ -281,7 +281,7 @@ await proof(
       let before = f.begins.length
       let spent = [
         await spend(f.at, 'secret', at, wrong),
-        await spend(f.at, 'secret', at, code),
+        (await spend(f.at, 'secret', at, code))?.person,
       ]
       return { spent, fences: f.begins.length - before }
     }

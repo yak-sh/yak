@@ -522,16 +522,19 @@ export let directoryDoc: VocabDoc = {
         checkout: owned(text),
       },
     },
-    // When this person last got in, and how (identity.ts `landed`, T-34351).
+    // When this person last got in, and how (signin.ts `stamped`, T-34351).
     // One row, so it holds the last way in rather than a trail — which is the
-    // question a standing sign-in link raises: has anybody used it at all. Not
-    // `kind`: it is a mark a person wears, never a thing of its own.
+    // question a standing sign-in link raises: has anybody used it at all —
+    // and `first`, when they first got in, written once by that first
+    // sign-in, which is the funnel's sign-up (T-149011). Not `kind`: it is a
+    // mark a person wears, never a thing of its own.
     signed_in: {
       component: true,
       type: 'object',
       properties: {
         at: owned(time),
         via: owned({ type: 'string', enum: ['code', 'link'] }),
+        first: owned(time),
       },
     },
     // A build of yaks.app the kernel asked main's deploy hook for, and the

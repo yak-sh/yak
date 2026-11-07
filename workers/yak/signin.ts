@@ -362,20 +362,30 @@ export let spend = async (
   secret: string,
   address: string,
   code: string,
-  newcomer?: string,
-) => guess(store, address, await mac(address, code, secret), newcomer)
+  opts: Arrival = {},
+) => guess(store, address, await mac(address, code, secret), opts)
+
+/** How a guess arrives: `newcomer` is who this browser is signed in as, taken
+ * when they are a newcomer and nobody holds the address yet, and `via` is how
+ * the code came, a code typed or a letter's link followed (link.ts). */
+export type Arrival = { newcomer?: string; via?: Via }
+
+export type Via = 'code' | 'link'
+
+/** Who a code signed in, and whether it is the first time they ever got in,
+ * which is the funnel's sign-up (funnel.ts). */
+export type Arrived = { person: string; first: boolean }
 
 /** Spend a prepared code digest: one trip, which the store answers with the
  * address's rows buried when it opened (`guessed`), and the person signing
- * in, found or minted (`arriving`), at `$who`: their eid, or null when the
- * code did not open. `newcomer` is who this browser is signed in as, taken
- * when they are a newcomer and nobody holds the address yet. */
+ * in, found or minted (`arriving`) and stamped as signed in (`stamped`), at
+ * `$who`; or null when the code did not open. */
 export let guess = async (
   store: Meta,
   address: string,
   want: string,
-  newcomer?: string,
-) => {
+  { newcomer, via = 'code' }: Arrival = {},
+): Promise<Arrived | null> => {
   for (;;) {
     try {
       let applied = await apply(store, [{
@@ -383,10 +393,14 @@ export let guess = async (
         $guess: {
           [key(address)]: canon(address),
           code: want,
+          via,
           ...(newcomer ? { newcomer } : {}),
         },
       }])
-      return minted(applied).$who ?? null
+      let who = applied.find((b) => b.$alias == '$who')
+      if (!who) return null
+      let signed = who.signed_in as Person['signed_in']
+      return { person: who.entity.eid, first: !!signed?.first }
     } catch (e) {
       if (e instanceof Stale) continue
       throw e
@@ -394,15 +408,40 @@ export let guess = async (
   }
 }
 
-export type Person = { entity: { eid: string }; doc?: { title?: string } }
+export type Person = {
+  entity: { eid: string }
+  doc?: { title?: string }
+  signed_in?: { at?: string; via?: Via; first?: string }
+}
 
-/** The filter line that reads the person wearing an address, and what they
- * are called. */
+/**
+ * A person's sign-in stamp at `at`, given the one they wore: when and how
+ * they got in, and, the first time, `first` beside it. A stamp merges onto
+ * the one it follows, so `first` stays the first sign-in's, and a stamp that
+ * writes it is how the write that signs somebody in says it was their first.
+ *
+ * ```ts
+ * import { stamped } from './signin.ts'
+ * import { assertEquals } from '@std/assert'
+ * let at = '2026-11-07T12:00:00.000Z'
+ * assertEquals(stamped(undefined, at, 'code'), { at, via: 'code', first: at })
+ * assertEquals(stamped({ at: '2026-01-01' }, at, 'link'), { at, via: 'link' })
+ * ```
+ */
+export let stamped = (
+  before: Person['signed_in'],
+  at: string,
+  via: Via,
+): NonNullable<Person['signed_in']> =>
+  before ? { at, via } : { at, via, first: at }
+
+/** The filter line that reads the person wearing an address, what they are
+ * called, and when they last got in. */
 export let personLine = (typed: string) => {
   let address = canon(typed)
   return texted(address)
-    ? `.person&.phone.number=${JSON.stringify(address)}&?doc`
-    : `.person&.email.address=${address}&?doc`
+    ? `.person&.phone.number=${JSON.stringify(address)}&?doc&?signed_in`
+    : `.person&.email.address=${address}&?doc&?signed_in`
 }
 
 let personAt = async (store: Meta, typed: string) =>

@@ -177,7 +177,10 @@ test('a sign-in code is minted, spent once, and gone', async () => {
   assertEquals((row.signin as { code: string }).code == code, false)
 
   assertEquals(await spend(at, SECRET, DANA, '000000'), null)
-  assertEquals(await spend(at, SECRET, DANA, code), await personOf(at, DANA))
+  assertEquals(
+    (await spend(at, SECRET, DANA, code))?.person,
+    await personOf(at, DANA),
+  )
   // Signing in ends the address's whole story.
   assertEquals((await at.query(`.signin.email=${DANA}`)).length, 0)
 })

@@ -93,7 +93,7 @@ test('the live code opens, and is spent', async () => {
     '4b16a8c088351316c93cd7b715ff2bb70e1e34901046eab1b9c6d8d19a952e02',
   )
   let d = await held([row(ME, CODE, soon())])
-  let eid = await spend(d.at, SECRET, ME, '123456')
+  let eid = (await spend(d.at, SECRET, ME, '123456'))?.person
   // Buried in the write that took the guess, which signs its person in: one
   // trip, and they are called the front of their address.
   assertEquals(d.trips(), 1)
@@ -111,7 +111,7 @@ test('the live code opens, and is spent', async () => {
 // browser asked; else somebody new.
 let signsIn = async (rows: Bundle[], newcomer?: string) => {
   let d = await held([row(ME, CODE, soon()), ...rows])
-  let eid = await spend(d.at, SECRET, ME, '123456', newcomer)
+  let eid = (await spend(d.at, SECRET, ME, '123456', { newcomer }))?.person
   let [who] = await d.graph.read(`.entity.eid=${eid}&?doc&?email&?newcomer`)
   return {
     eid,
@@ -148,6 +148,41 @@ test("a newcomer's browser takes an address new here, and only a newcomer's", as
   let minted = await signsIn([kept], 'n1')
   assert(minted.eid && minted.eid != 'n1')
   assertEquals(minted.email, ME)
+})
+
+// The write that signs somebody in stamps them as signed in and says whether
+// it was their first time, the funnel's sign-up (T-149011): somebody new, or
+// invited and never in, is; whoever got in before is not, and keeps their
+// first sign-in's time.
+test('a right code says whether it is their first sign-in, in its one trip', async () => {
+  let arrive = async (rows: Bundle[], via?: 'link') => {
+    let d = await held([row(ME, CODE, soon()), ...rows])
+    let arrived = await spend(d.at, SECRET, ME, '123456', { via })
+    let [who] = await d.graph.read(`.entity.eid=${arrived?.person}&?signed_in`)
+    let { at, ...signed } = who?.signed_in as Record<string, string>
+    assert(at)
+    return { first: arrived?.first, signed, trips: d.trips(), at }
+  }
+  let fresh = await arrive([])
+  assertEquals(fresh, {
+    first: true,
+    signed: { via: 'code', first: fresh.at },
+    trips: 1,
+    at: fresh.at,
+  })
+  let invited = { ...person(), email: { address: ME } }
+  assertEquals((await arrive([invited])).first, true)
+  let back = {
+    ...invited,
+    signed_in: { at: past(), via: 'code', first: '2026-01-01T00:00:00.000Z' },
+  }
+  let again = await arrive([back], 'link')
+  assertEquals(again, {
+    first: false,
+    signed: { via: 'link', first: '2026-01-01T00:00:00.000Z' },
+    trips: 1,
+    at: again.at,
+  })
 })
 
 test('a wrong guess costs a try, not the code', async () => {
@@ -385,12 +420,14 @@ test('a number signs in with its code, and a person wears the number', async () 
     entity: { eid: 'e1' },
     signin: { phone: NUMBER, code, expires: soon(), tries: 0 },
   }])
-  let eid = await spend(d.at, SECRET, '(269) 555-0142', '123456')
+  let eid = (await spend(d.at, SECRET, '(269) 555-0142', '123456'))?.person
   let [wearing] = await d.graph.read(`.person&.phone.number="${NUMBER}"`)
   assertEquals(wearing?.entity.eid, eid)
   let fresh = asking(() => [])
   assertEquals(await personOf(fresh.at, NUMBER), 'p1')
-  assertEquals(fresh.asked, [`.person&.phone.number="${NUMBER}"&?doc`])
+  assertEquals(fresh.asked, [
+    `.person&.phone.number="${NUMBER}"&?doc&?signed_in`,
+  ])
   assertEquals(fresh.wrote, [{
     entity: { eid: '$who' },
     person: {},

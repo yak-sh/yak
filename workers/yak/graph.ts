@@ -762,7 +762,10 @@ installContext({
 })
 
 // A directory write that changes nothing an authorization reads raises no
-// serving fence: use receipts (used.ts), the archetype descriptor a
+// serving fence: use receipts (used.ts), a person's sign-in stamp
+// (`signed_in`, signin.ts `stamped`), which a returning person's guess
+// writes (T-149011) and only the admin's census and the idle sweep read, the
+// archetype descriptor a
 // receipt's new set of components mints (@yaks/sqlite archetype.ts), and the
 // delete of an entity holding nothing an authorization reads, such as an
 // effect's run, which deletes itself once it finishes (@yaks/effects
@@ -795,7 +798,7 @@ installContext({
 // start.
 let UNNAMED = new Set(['signin'])
 let STAMPS = new Set(['created', 'updated'])
-let UNFENCED = new Set([...RECEIPTS, 'archetype', ...UNNAMED])
+let UNFENCED = new Set([...RECEIPTS, 'signed_in', 'archetype', ...UNNAMED])
 let UNHELD = new Set([...UNFENCED, 'effect', ...STAMPS])
 let DECIDED = ['$own']
 let CORE = new Set(REQUESTS)

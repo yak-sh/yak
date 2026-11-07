@@ -129,6 +129,7 @@ import {
   passOf,
   revoke,
   stand,
+  type Standing,
   whose,
 } from './link.ts'
 import * as dirPart from './directory.ts'
@@ -167,6 +168,7 @@ import { chatPath, hostOf, LOGOUT, MANAGE, OAUTH, onZone } from './route.ts'
 import { INVITE, LINK, SLUG } from '@yaks/platform/names'
 import { counted, FULL, keep, oneBuild, START } from './newcomer.ts'
 import {
+  type Arrived,
   canon,
   codeLetter,
   codeText,
@@ -175,8 +177,10 @@ import {
   mayText,
   mint,
   nameOf,
+  type Person,
   personOf,
   spend,
+  stamped,
   texted,
   visitor,
 } from './signin.ts'
@@ -643,21 +647,20 @@ export let textedIn = async (
 // The person is known: the cookie, the space that is theirs, the first-owner
 // bootstrap, and wherever they were going.
 //
-// `via` is how they proved it, when this visit proved anything — a code typed
-// or a link followed (link.ts). It is stamped on the person, one row, so it
-// says the last way in rather than a trail, which is the question a standing
-// link raises: has anybody used it at all. An already-signed-in browser lands
-// here too and names none, because nothing was proved.
+// `proved` is what this visit proved, when it proved anything: a code typed
+// or a link followed (link.ts), already stamped on the person as their last
+// way in (signin.ts `stamped`), and whether it was their first. An
+// already-signed-in browser lands here too and names none, because nothing
+// was proved.
 let landed = async (
   req: Request,
   env: Env,
   person: string,
   q: string,
   back: string,
-  via?: 'code' | 'link',
+  proved?: Proved,
   c: Clock = clock(),
 ) => {
-  let store = meta(env)
   let dir = dirOf(env)
   await c.time(
     'keep',
@@ -673,23 +676,11 @@ let landed = async (
   )
   // A person who has never signed in before is the funnel's sign-up
   // (funnel.ts): the first time, whether their row came from this sign-in or
-  // from somebody inviting them. The stamp is written after the answer,
-  // which says nothing that depends on it (T-34158).
-  if (via) {
-    let [row] = await c.time(
-      'signed',
-      () => store.query(`.entity.eid=${person} ?signed_in ?email`),
-    )
-    background(
-      store.apply([{
-        entity: { eid: person },
-        signed_in: { at: new Date().toISOString(), via },
-      }], KERNEL).then(() => {}, (e) => fault(env, 'signed_in', e)),
-    )
-    let who = addressIn(row)
-    step(env, 'signed_in', req, { who })
-    if (!row?.signed_in) {
-      step(env, 'signup', req, { who })
+  // from somebody inviting them.
+  if (proved) {
+    step(env, 'signed_in', req, { who: proved.who })
+    if (proved.first) {
+      step(env, 'signup', req, { who: proved.who })
       ads.after(env, 'signup', req)
     }
   }
@@ -771,9 +762,9 @@ let begun = async (req: Request, env: Env, said: string) => {
 // The longest idea the box takes, in characters: a few paragraphs.
 let SAID = 4000
 
-/** A code attempt either signs its person in, answering who that is, or
- * returns the same closed sign-in card. `newcomer` is who the browser is
- * signed in as (signin.ts `guess`). */
+/** A code attempt either signs its person in, answering who that is and
+ * whether it is their first time, or returns the same closed sign-in card.
+ * `newcomer` is who the browser is signed in as (signin.ts `guess`). */
 export let codeCheck = async (
   store: Meta,
   address: string,
@@ -782,8 +773,8 @@ export let codeCheck = async (
   back = '',
   env: Host = {},
   newcomer?: string,
-): Promise<string | Response> =>
-  await guess(store, address, digest, newcomer) ?? askCode({
+): Promise<Arrived | Response> =>
+  await guess(store, address, digest, { newcomer }) ?? askCode({
     address,
     q,
     back,
@@ -791,6 +782,34 @@ export let codeCheck = async (
       'That code has expired or was mistyped. Type it again, or send a new one.',
     status: 400,
   }, env)
+
+// What a sign-in proved, for the funnel (`landed`): whether it was their
+// first, and the address it is for (funnel.ts `step`).
+type Proved = { first: boolean; who: string | null }
+
+let proving = (arrived: Arrived, address: string) => {
+  let proved: Proved = { first: arrived.first, who: canon(address) }
+  return { person: arrived.person, proved }
+}
+
+// A standing link spends no code, so no guess stamps its person: they are
+// read and stamped here, the stamp after the answer, which says nothing that
+// depends on it (T-34158).
+let stood = async (env: Env, standing: Standing) => {
+  let person = await whose(standing, links(env.OAUTH_KV))
+  if (!person) return null
+  let store = meta(env)
+  let [row] = await store.query(`.entity.eid=${person} ?signed_in ?email`)
+  let before = (row as Person | undefined)?.signed_in
+  background(
+    store.apply([{
+      entity: { eid: person },
+      signed_in: stamped(before, new Date().toISOString(), 'link'),
+    }], KERNEL).then(() => {}, (e) => fault(env, 'signed_in', e)),
+  )
+  let proved: Proved = { first: !before, who: addressIn(row) }
+  return { person, proved }
+}
 
 // The number a person wears, for one with no address.
 let phoneAt = async (env: Env, person: string) => {
@@ -811,26 +830,25 @@ let signCard = async (env: Env, at: Parameters<typeof askEmail>[0] = {}) =>
 // earlier, which is what keeps asking for a code from writing a person for
 // every address anyone types; an address new here that a newcomer proves
 // becomes theirs (signin.ts `arriving`).
-let spent = async (env: Env, req: Request, once: Once) =>
-  await spend(
-    meta(env),
-    secret(env),
-    once.email,
-    once.code,
-    await browser(env, req) ?? undefined,
-  )
+let spent = async (env: Env, req: Request, once: Once) => {
+  let arrived = await spend(meta(env), secret(env), once.email, once.code, {
+    newcomer: await browser(env, req) ?? undefined,
+    via: 'link',
+  })
+  return arrived && proving(arrived, once.email)
+}
 
 // A pass followed: it lands where a spent code lands, and one that has been
 // spent, revoked or expired is the sign-in card again, still carrying whatever
 // the link was going to finish.
 let followed = async (req: Request, env: Env, pass: Pass | null) => {
   let once = pass?.once
-  let person = once
+  let arrived = once
     ? await spent(env, req, once)
     : pass?.standing
-    ? await whose(pass.standing, links(env.OAUTH_KV))
+    ? await stood(env, pass.standing)
     : null
-  if (!person) {
+  if (!arrived) {
     return signCard(env, {
       q: once?.q,
       back: once?.back,
@@ -838,8 +856,9 @@ let followed = async (req: Request, env: Env, pass: Pass | null) => {
       status: 400,
     })
   }
+  let { person, proved } = arrived
   return quiet(
-    await landed(req, env, person, once?.q ?? '', once?.back ?? '', 'link'),
+    await landed(req, env, person, once?.q ?? '', once?.back ?? '', proved),
   )
 }
 
@@ -1232,9 +1251,11 @@ let ours = async (req: Request, env: Env): Promise<Response> => {
     // for the code has: this is the second thing a new person waits on.
     let c = clock()
     return c.counting(async () => {
-      // The guess that opens the code finds or mints whoever signs in
-      // (signin.ts `guess`), so a new person waits on one trip for both.
-      let person = await c.time('check', async () =>
+      // The guess that opens the code finds or mints whoever signs in and
+      // stamps them signed in (signin.ts `guess`), so a new person waits on
+      // one trip for the code, who they are and whether it is their first
+      // sign-in.
+      let arrived = await c.time('check', async () =>
         codeCheck(
           meta(env),
           address,
@@ -1244,8 +1265,9 @@ let ours = async (req: Request, env: Env): Promise<Response> => {
           env,
           await browser(env, req) ?? undefined,
         ))
-      if (person instanceof Response) return timed(person, c)
-      return timed(await landed(req, env, person, q, back, 'code', c), c)
+      if (arrived instanceof Response) return timed(arrived, c)
+      let { person, proved } = proving(arrived, address)
+      return timed(await landed(req, env, person, q, back, proved, c), c)
     })
   }
 
