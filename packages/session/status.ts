@@ -147,7 +147,7 @@ export let sessionStatus = {
     let wanted = values.map((v) => (v as { v: string }).v)
     if (
       !wanted.every((v) =>
-        ['pending', 'running', 'queued', 'stopped'].includes(v)
+        ['pending', 'running', 'queued', 'stopped', 'empty'].includes(v)
       )
     ) return undefined
     let owner = col('entity', 'candidate')
@@ -194,15 +194,17 @@ export let sessionStatus = {
       limit: lit(1),
     }))
     let stopped = wanted.includes('stopped')
+    // A transcript with no entry a passive notice leaves is empty, ended or not.
+    let empty = wanted.includes('empty')
     // Nothing ended owes anything, so the mark answers before any entry is read.
     let candidates = select({
       cols: [col('entity', 's'), col('ended', 's'), as(latest, 'latest')],
       from: table('session', 's'),
-      ...stopped ? {} : {
+      ...stopped || empty ? {} : {
         where: not(fn('coalesce', col('ended', 's'), lit(false))),
       },
     })
-    let actionable = wanted.some((v) => v != 'stopped')
+    let actionable = wanted.some((v) => v != 'stopped' && v != 'empty')
     let newest = col('latest', 'candidate')
     let ended = fn('coalesce', col('ended', 'candidate'), lit(false))
     // A stopped transcript must either be ended or contain a stop/control.
@@ -428,6 +430,7 @@ export let sessionStatus = {
       ),
     )
     let eligible = or(
+      empty ? isNull(newest) : lit(false),
       stopped
         ? or(
           wears('stop', newest),
@@ -488,9 +491,11 @@ export let sessionStatus = {
       cols: [col('entity', 'chosen')],
       from: table('__status_candidates', 'chosen'),
       where: among(
-        iff(
-          wears('stop', col('latest', 'chosen')),
-          lit('stopped'),
+        when(
+          [
+            [isNull(col('latest', 'chosen')), lit('empty')],
+            [wears('stop', col('latest', 'chosen')), lit('stopped')],
+          ],
           sessionStatus.expr(col('entity', 'chosen'), dispatch, declared, text),
         ),
         values,

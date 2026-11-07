@@ -225,6 +225,12 @@ export let windows = async (
 // tens of thousands of finished ones, more than one answer may hold. The mark
 // answers this without reading an entry (@yaks/session/ended).
 let LIVE = '.session !session.ended'
+// What a row of the page carries: the session, its status among it, when and by
+// whom it began, what it was spawned under, its title and how its process
+// exited. Its command line and the sizes of its context are kilobytes each, so
+// they are read from the session itself (`graph_show`), or by a query naming
+// `*`.
+let SHOWN = '?created ?spawned ?doc ?exit'
 
 // One page of sessions, newest first unless the query orders them, and a last
 // row saying how to read on when more match. The page reads one row past its
@@ -240,7 +246,7 @@ let sessionList: Runs[string] = async (call, graph) => {
       query,
       '.order=-created.at',
       `.limit=${size + 1}`,
-      '*',
+      SHOWN,
     ),
   )
   if (rows.length <= size) return rows

@@ -4362,22 +4362,32 @@ export let visibleDerived = (vocab: Vocab, opts: BindOpts): Derived => {
     }
     return name
   }
+  let admitted = rowAdmits(
+    vocab,
+    opts.visibility?.entity,
+    {
+      ...opts,
+      visibility: undefined,
+      backed: opts.backed && visibleBacked(vocab, opts),
+    },
+    dialectOf(opts),
+  )
   let source = (name: string, alias = name): Source => {
     if (!vocab.comp(name)) return table(name, alias)
     let screen = screens.has(name) ? screens.get(name) : entity
+    let row = col(name == 'entity' ? 'id' : 'entity', alias)
     return screen
       ? from(
         select({
           cols: [star(alias)],
           from: table(name, alias),
-          where: exists(select({
-            cols: [lit(1)],
-            from: table(shared(screen), '__allowed'),
-            where: eq(
-              col('id', '__allowed'),
-              col(name == 'entity' ? 'id' : 'entity', alias),
-            ),
-          })),
+          where: admitted && name != 'entity' && !screens.has(name)
+            ? admitted(row)
+            : exists(select({
+              cols: [lit(1)],
+              from: table(shared(screen), '__allowed'),
+              where: eq(col('id', '__allowed'), row),
+            })),
         }),
         alias,
       )
@@ -4733,6 +4743,101 @@ let scopedTally = (
   }
 }
 
+// Whether every clause reads one stored component of the owner, so a scope
+// can be asked of an owner in hand rather than joined to the spine.
+let ownerKeyed = (vocab: Vocab, opts: BindOpts, c: Clause): boolean => {
+  if (c.kind == 'and' || c.kind == 'or') {
+    return c.clauses.every((d) => ownerKeyed(vocab, opts, d))
+  }
+  if (c.kind != 'pred' || c.where || c.path[0] == 'kind') return false
+  let hops = vocab.aim(c.path.join('.'), bare(c)), h = hops[0]
+  return hops.length == 1 && h.comp != 'entity' &&
+    !vocab.comp(h.comp)?.computed &&
+    (!h.prop || !vocab.prop(h.comp, h.prop)?.computed &&
+        !opts.derived?.[`${h.comp}.${h.prop}`])
+}
+
+let parsed = (scope: string | And): And =>
+  typeof scope == 'string' ? parse(scope) : scope
+
+// Whether the entity `owner` is one `scope` admits, read through `base`, with
+// `opts` naming no visibility of its own.
+let admitting = (
+  vocab: Vocab,
+  opts: BindOpts,
+  scope: string | And,
+  owner: Cond,
+  base: Dialect,
+): Cond => {
+  let query = parsed(scope)
+  let key = inline(owner)
+  let read = (comp: string, expr: string) =>
+    `(select ${expr} from ${base.table(comp)} where ${
+      base.ownerKey(comp)
+    } = ${key})`
+  let direct = ownerKeyed(vocab, opts, query)
+  let keyedTo: Dialect = {
+    ...base,
+    indexed: undefined,
+    owned: undefined,
+    archetype: undefined,
+    ...direct
+      ? {
+        live: () => base.live(key),
+        ownerKey: (comp: string) =>
+          comp == 'entity' ? key : read(comp, base.ownerKey(comp)),
+        col: (comp: string, prop: string, v: Vocab) => {
+          let expr = base.col(comp, prop, v)
+          return expr == null ? null : read(comp, expr)
+        },
+        refCol: (comp: string, prop: string) =>
+          read(comp, base.refCol!(comp, prop)),
+      }
+      : {},
+  }
+  let owners = bound(
+    query,
+    vocab,
+    {
+      ...opts,
+      exactIds: true,
+      eids: undefined,
+      references: undefined,
+      archetypes: undefined,
+      extend: [],
+      graves: undefined,
+    },
+    keyedTo,
+    [],
+    { correlated: true },
+  )
+  return exists({
+    ...owners,
+    ...direct ? { from: undefined, joins: [] } : {},
+    cols: [val(1)],
+    where: direct
+      ? owners.where
+      : and(owners.where ?? TRUE, eq(raw(base.ownerKey('entity')), owner)),
+    order: [],
+  })
+}
+
+// A component's rows belong to live entities, since a deleted one keeps only
+// its `entity` row. So an entity scope keyed to the owner is asked of a row's
+// owner where the row is read, sparing a seek of the owner's identity and its
+// grave for every row: a derived property reads thousands. Undefined for any
+// other scope, which a row passes through the entities it admits.
+let rowAdmits = (
+  vocab: Vocab,
+  scope: string | And | undefined,
+  plain: BindOpts,
+  base: Dialect,
+): ((owner: Cond) => Cond) | undefined => {
+  if (!scope || !ownerKeyed(vocab, plain, parsed(scope))) return undefined
+  let alive = { ...base, live: () => ({ sql: '1', params: [] }) }
+  return (owner) => admitting(vocab, plain, scope, owner, alive)
+}
+
 let visible = (
   ast: And,
   vocab: Vocab,
@@ -4763,69 +4868,9 @@ let visible = (
     let alive = permitted(scope, owner, base)
     return graves && ghost ? or(alive, permitted(scope, owner, ghost)) : alive
   }
-  // Whether the entity `owner` is one `scope` admits, read through `base`.
-  let permitted = (scope: string | And, owner: Cond, base: Dialect): Cond => {
-    let query = typeof scope == 'string' ? parse(scope) : scope
-    let keyed = (c: Clause): boolean => {
-      if (c.kind == 'and' || c.kind == 'or') return c.clauses.every(keyed)
-      if (c.kind != 'pred' || c.where || c.path[0] == 'kind') return false
-      let hops = vocab.aim(c.path.join('.'), bare(c)), h = hops[0]
-      return hops.length == 1 && h.comp != 'entity' &&
-        !vocab.comp(h.comp)?.computed &&
-        (!h.prop || !vocab.prop(h.comp, h.prop)?.computed &&
-            !plain.derived?.[`${h.comp}.${h.prop}`])
-    }
-    let key = inline(owner)
-    let read = (comp: string, expr: string) =>
-      `(select ${expr} from ${base.table(comp)} where ${
-        base.ownerKey(comp)
-      } = ${key})`
-    let direct = keyed(query)
-    let keyedTo: Dialect = {
-      ...base,
-      indexed: undefined,
-      owned: undefined,
-      archetype: undefined,
-      ...direct
-        ? {
-          live: () => base.live(key),
-          ownerKey: (comp: string) =>
-            comp == 'entity' ? key : read(comp, base.ownerKey(comp)),
-          col: (comp: string, prop: string, v: Vocab) => {
-            let expr = base.col(comp, prop, v)
-            return expr == null ? null : read(comp, expr)
-          },
-          refCol: (comp: string, prop: string) =>
-            read(comp, base.refCol!(comp, prop)),
-        }
-        : {},
-    }
-    let owners = bound(
-      query,
-      vocab,
-      {
-        ...plain,
-        exactIds: true,
-        eids: undefined,
-        references: undefined,
-        archetypes: undefined,
-        extend: [],
-        graves: undefined,
-      },
-      keyedTo,
-      [],
-      { correlated: true },
-    )
-    return exists({
-      ...owners,
-      ...direct ? { from: undefined, joins: [] } : {},
-      cols: [val(1)],
-      where: direct
-        ? owners.where
-        : and(owners.where ?? TRUE, eq(raw(base.ownerKey('entity')), owner)),
-      order: [],
-    })
-  }
+  let permitted = (scope: string | And, owner: Cond, base: Dialect): Cond =>
+    admitting(vocab, plain, scope, owner, base)
+  let ownerAdmitted = rowAdmits(vocab, visibility.entity, plain, base)
   let source = (comp: string): string => {
     let scope = comp == 'entity'
       ? visibility.entity
@@ -4882,11 +4927,15 @@ let visible = (
     }
     let where = []
     if (comp != 'entity' && visibility.entity) {
-      where.push(exists(select({
-        cols: [val(1)],
-        from: raw(`${source('entity')} as "__owner"`),
-        where: eq(raw('"__owner"."id"'), raw('"__visible"."entity"')),
-      })))
+      where.push(
+        ownerAdmitted
+          ? ownerAdmitted(raw('"__visible"."entity"'))
+          : exists(select({
+            cols: [val(1)],
+            from: raw(`${source('entity')} as "__owner"`),
+            where: eq(raw('"__owner"."id"'), raw('"__visible"."entity"')),
+          })),
+      )
     }
     if (scope) {
       where.push(permits(
